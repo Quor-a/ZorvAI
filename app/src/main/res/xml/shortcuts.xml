@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ① 语音球：长按图标 → 一键唤起/显示悬浮语音球 -->
+    <shortcut
+        android:shortcutId="voice_ball"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_voice"
+        android:shortcutShortLabel="@string/sc_voice_short"
+        android:shortcutLongLabel="@string/sc_voice_long"
+        android:shortcutDisabledMessage="@string/sc_voice_disabled">
+        <intent
+            android:action="com.ai.assistance.quro.action.SHORTCUT_VOICE_BALL"
+            android:targetPackage="com.ai.assistance.quro"
+            android:targetClass="com.ai.assistance.quro.activity.QuroMainActivity" />
+    </shortcut>
+
+    <!-- ② 小窗对话：长按图标 → 直接进入对话 -->
+    <shortcut
+        android:shortcutId="chat"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_chat"
+        android:shortcutShortLabel="@string/sc_chat_short"
+        android:shortcutLongLabel="@string/sc_chat_long"
+        android:shortcutDisabledMessage="@string/sc_chat_disabled">
+        <intent
+            android:action="com.ai.assistance.quro.action.SHORTCUT_CHAT"
+            android:targetPackage="com.ai.assistance.quro"
+            android:targetClass="com.ai.assistance.quro.activity.QuroMainActivity" />
+    </shortcut>
+
+</shortcuts>

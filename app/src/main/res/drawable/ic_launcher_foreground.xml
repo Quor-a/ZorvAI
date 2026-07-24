@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 外发光环（低透明度青） -->
+    <path
+        android:pathData="M16,54 A38,38 0 1,1 92,54 A38,38 0 1,1 16,54 Z"
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="2"
+        android:strokeAlpha="0.25"
+        android:fillColor="#00000000" />
+    <!-- 主 Q 环（霓虹青） -->
+    <path
+        android:pathData="M24,54 A30,30 0 1,1 84,54 A30,30 0 1,1 24,54 Z"
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="7"
+        android:fillColor="#00000000" />
+    <!-- 内环（紫色低透明度，增加细节） -->
+    <path
+        android:pathData="M36,54 A18,18 0 1,1 72,54 A18,18 0 1,1 36,54 Z"
+        android:strokeColor="#A855F7"
+        android:strokeWidth="3"
+        android:strokeAlpha="0.55"
+        android:fillColor="#00000000" />
+    <!-- Q 尾巴 -->
+    <path
+        android:pathData="M75,75 L92,94"
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+</vector>

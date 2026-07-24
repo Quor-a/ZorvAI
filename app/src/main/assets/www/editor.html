@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Quro Code Editor</title>
+<link rel="stylesheet" href="codemirror.min.css">
+<link rel="stylesheet" href="material-darker.min.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #212121; color: #eee; font-family: monospace; }
+  #bar { display: flex; gap: 6px; align-items: center; padding: 6px 8px; background: #171717; border-bottom: 1px solid #333; }
+  select, button { background: #2b2b2b; color: #eee; border: 1px solid #444; border-radius: 6px; padding: 6px 10px; font-size: 14px; }
+  button:active { background: #37474f; }
+  #run { background: #1b5e20; color: #fff; border-color: #2e7d32; }
+  #done { background: #0d47a1; color: #fff; border-color: #1565c0; }
+  .spacer { flex: 1; }
+  .CodeMirror { height: calc(100% - 92px); font-size: 14px; }
+  #result { height: 44px; overflow: auto; background: #171717; border-top: 1px solid #333; color: #aed581; font-size: 12px; padding: 4px 8px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <select id="lang">
+    <option value="javascript">JavaScript</option>
+    <option value="python">Python</option>
+    <option value="htmlmixed">HTML</option>
+    <option value="application/json">JSON</option>
+    <option value="css">CSS</option>
+    <option value="xml">XML</option>
+    <option value="clike">C / C++ / Java</option>
+  </select>
+  <button id="run">▶ 运行</button>
+  <button id="copy">复制</button>
+  <span class="spacer"></span>
+  <button id="done">完成 ✓</button>
+</div>
+<textarea id="code"></textarea>
+<div id="result">// 运行结果将显示在这里</div>
+<script src="codemirror.min.js"></script>
+<script src="mode/javascript/javascript.min.js"></script>
+<script src="mode/python/python.min.js"></script>
+<script src="mode/xml/xml.min.js"></script>
+<script src="mode/css/css.min.js"></script>
+<script src="mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="mode/clike/clike.min.js"></script>
+<script src="addon/edit/closebrackets.min.js"></script>
+<script src="addon/edit/matchbrackets.min.js"></script>
+<script src="addon/comment/comment.min.js"></script>
+<script>
+  var editor = CodeMirror.fromTextArea(document.getElementById('code'), {
+    lineNumbers: true,
+    theme: 'material-darker',
+    mode: 'javascript',
+    autoCloseBrackets: true,
+    matchBrackets: true,
+    indentUnit: 4,
+    tabSize: 4,
+    extraKeys: { 'Ctrl-Space': 'autocomplete', 'Cmd-/' : 'toggleComment', 'Ctrl-/' : 'toggleComment' }
+  });
+  function setLang(m) { editor.setOption('mode', m); }
+  function showResult(r) { document.getElementById('result').textContent = r; }
+  document.getElementById('lang').addEventListener('change', function (e) { setLang(e.target.value); });
+  document.getElementById('copy').addEventListener('click', function () {
+    navigator.clipboard.writeText(editor.getValue()).then(function () { showResult('(已复制到剪贴板)'); });
+  });
+  document.getElementById('done').addEventListener('click', function () {
+    if (window.AndroidBridge) AndroidBridge.onDone(editor.getValue());
+  });
+  document.getElementById('run').addEventListener('click', function () {
+    var btn = this; btn.disabled = true; btn.textContent = '运行中…';
+    setTimeout(function () {
+      var r = window.AndroidBridge ? AndroidBridge.onRun(editor.getValue(), document.getElementById('lang').value) : '(无桥)';
+      showResult(r);
+      btn.disabled = false; btn.textContent = '▶ 运行';
+    }, 10);
+  });
+  // 由 Kotlin 在页面加载完成后调用，注入初始内容/语言
+  window.loadCode = function (content, lang) {
+    if (lang) { document.getElementById('lang').value = lang; setLang(lang); }
+    editor.setValue(content || '');
+    editor.refresh();
+    editor.focus();
+  };
+  window.getCode = function () { return editor.getValue(); };
+</script>
+</body>
+</html>

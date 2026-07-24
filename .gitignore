@@ -1,0 +1,55 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+build/
+release/
+
+# Gradle files
+.gradle/
+gradle/wrapper/gradle-wrapper.jar
+
+# Local configuration (SDK path, etc.)
+local.properties
+gradle.properties.local
+
+# Log/Output files
+*.log
+build_*.log
+
+# IDE / Editor
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.project
+.classpath
+.settings/
+.DS_Store
+Thumbs.db
+
+# Kotlin / Compose
+.kotlin/
+buildTmp/
+
+# Native / NDK
+.externalNativeBuild/
+.cxx/
+*.so.tmp
+
+# OS / misc
+nul
+*.tmp

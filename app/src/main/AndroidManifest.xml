@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- 工具子系统所需权限（运行时权限按需授予；工具在缺失时会返回友好提示） -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.SET_ALARM" />
+
+    <!-- 权限管理：电池优化豁免引导 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- 包可见性：Android 11+ 默认隐藏其他 app；TTS 引擎是跨 app 的 TTS_SERVICE 远端服务，
+         必须拥有足够包可见性才能绑定，确保 TextToSpeech 能发现并连接引擎。 -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- 使用情况访问（特殊权限）：get_foreground_app 需读取顶层 Activity 类名。
+         声明后本应用才会出现在「设置→安全→使用情况访问」列表里供用户授予；
+         此为 appop 类特殊权限，无法运行时弹窗，必须由用户手动在系统设置开启。 -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+
+    <!-- 所有文件访问权限（Android 11+ 特殊 appop）：全文件系统读写。
+         声明后本应用才会出现在「设置→特殊应用权限→所有文件访问权限」里供用户授予。
+         配合 READ_MEDIA_* 覆盖 Android 13+ 分区存储。 -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+
+    <!-- 后台定位权限（Android 10+ 敏感权限）：App 在后台仍可持续获取位置。
+         需在运行时弹窗请求（与 ACCESS_FINE_LOCATION 一起）。 -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- 音频媒体文件（Android 13+ 分离的媒体权限）：配合 READ_MEDIA_IMAGES / _VIDEO 完整覆盖三种媒体类型。
+         缺少它时无法通过 MediaStore 读取音频库（如录音文件、音乐文件）。 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
+    <!-- 文件写入权限（Android 9 及以下）：Android 10+ 由 Scoped Storage 接管，
+         但对低版本设备（minSdk=26）仍需声明才能往外部存储写文件/文档。 -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+
+    <!-- 通话状态与移动网络信息：获取 SIM 运营商、蜂窝网络类型、IMEI 等设备标识，
+         补充 get_network_info 的能力（目前只能判断 WIFI/CELLULAR，拿不到运营商细节）。 -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <!-- ===== 以下为对照手机「其他权限 / 特殊应用权限」页面补齐的缺失项（v66 漏加，v67 补全）===== -->
+
+    <!-- 短信：接收 / 彩信收发（此前仅有 READ_SMS / SEND_SMS，缺接收与彩信类） -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_MMS" />
+    <uses-permission android:name="android.permission.SEND_MMS" />
+
+    <!-- 电话：拨打电话 / 读取本机号码（READ_PHONE_STATE 已覆盖部分，READ_PHONE_NUMBERS 为 API29+ 本机号专用） -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+
+    <!-- 通话记录：读取 / 写入删除（「其他权限」页「通话记录」分组） -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.WRITE_CALL_LOG" />
+
+    <!-- 联系人：写入或删除联系人 / 访问账号列表（此前仅有 READ_CONTACTS） -->
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
+
+    <!-- 日历：写入或删除日程表（此前仅有 READ_CALENDAR） -->
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
+    <!-- 特殊应用权限：修改系统设置（声明后才出现在「特殊应用权限→修改系统设置」供手动授予） -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
+    <!-- 特殊应用权限：WLAN 控制（开关 Wi-Fi） -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- 特殊应用权限：唤醒屏幕 / 保持唤醒（对应「开启屏幕」项） -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 特殊应用权限：NFC 启动控制（对应「NFC 启动控制」项） -->
+    <uses-permission android:name="android.permission.NFC" />
+    <!-- 特殊应用权限：勿扰/通知策略访问（对应「设备和应用通知」项，允许读取/设置 DND 状态） -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
+    <!-- 包可见性：Android 11+ 默认隐藏大部分已装应用，必须显式声明才能查询/反查包名、启动应用。
+         否则 getInstalledApplications / getPackageInfo 只能看到自身，导致「查看软件包名」「启动应用」失效。 -->
+    <queries>
+        <!-- 暴露所有带桌面入口（LAUNCHER）的应用，覆盖「查包名 / 打开应用」场景 -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- TTS 引擎是跨 app 的 TTS_SERVICE 远端服务；Android 11+ 包可见性限制下
+             必须显式声明，否则 TextToSpeech 因看不到引擎包而 OnInit 返回 ERROR。 -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".activity.QuroApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Quro"
+        android:networkSecurityConfig="@xml/network_security_config">
+
+        <activity
+            android:name=".activity.QuroMainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Quro"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustPan">
+
+            <!-- v196 起由 MainActivity 直接作为 LAUNCHER，开屏改为应用内 800ms 覆盖层，
+                 避免挂后台被系统回收进程后重新进软件又重放开屏 -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- 应用快捷方式：长按图标弹出的菜单（语音球 / 小窗对话） -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/*" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".service.QuroVoiceBallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- 本地 MCP Server：环回地址 127.0.0.1，仅本机可访问 -->
+        <service
+            android:name=".service.QuroMcpService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- 百分百开源本地音乐播放器：前台媒体播放服务 -->
+        <service
+            android:name=".service.QuroMediaService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- 端侧 ASR 引擎：独立 :asr 进程。Sherpa-ONNX 原生层偶发 SIGSEGV，
+             隔离后崩溃只杀 :asr 进程，主进程通过 DeathRecipient 优雅降级、不闪退。 -->
+        <service
+            android:name=".core.tools.QuroAsrService"
+            android:exported="false"
+            android:process=":asr" />
+
+        <!-- 裁剪 Activity：覆盖为 AppCompat 透明主题，否则继承 Theme.Quro(平台 Material) 会崩溃 -->
+        <activity
+            android:name="com.canhub.cropper.CropImageActivity"
+            android:theme="@style/Theme.Quro.Crop"
+            tools:replace="android:theme" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- 无障碍服务（权限管理：无障碍权限引导） -->
+        <service
+            android:name=".service.QuroAccessibilityService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/quro_accessibility_service" />
+        </service>
+
+        <!-- 设备管理员（权限管理：设备管理员权限引导） -->
+        <receiver
+            android:name=".receiver.QuroDeviceAdminReceiver"
+            android:exported="false"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/quro_device_admin" />
+        </receiver>
+
+        <!-- 桌面卡片（AppWidget）：展示最近一条 AI 回复摘要，点击进入应用 -->
+        <receiver
+            android:name=".core.QuroReplyWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quro_reply_widget_info" />
+        </receiver>
+
+        <!-- 开机自启动：监听 BOOT_COMPLETED，按偏好拉起常住语音球服务 -->
+        <receiver
+            android:name=".receiver.QuroBootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 定时任务触发接收器（内部，不导出） -->
+        <receiver
+            android:name=".core.tools.QuroScheduleReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.SCHEDULED_TASK_TRIGGER" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 定时任务开机重排程接收器 -->
+        <receiver
+            android:name=".core.tools.QuroScheduleBootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, "Noto Sans SC", sans-serif; padding: 16px; margin: 0; background:#faf8f6; }
+  .card { background:#fff; border-radius:12px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,.12); max-width:480px; margin:0 auto; }
+  .count { font-size:32px; font-weight:700; margin:8px 0; color:#1c1b1f; }
+  .row { display:flex; gap:8px; align-items:center; margin:8px 0; }
+  button { padding:8px 14px; border:none; border-radius:8px; background:#6750a4; color:#fff; font-size:14px; }
+  input { flex:1; padding:8px; border:1px solid #ccc; border-radius:8px; }
+  .list { margin-top:8px; }
+  .item { display:flex; gap:8px; padding:6px 0; border-bottom:1px solid #eee; }
+  .done { text-decoration:line-through; color:#999; }
+  .scrollview { max-height:240px; overflow-y:auto; border:1px solid #eee; border-radius:8px; margin-top:8px; position:relative; -webkit-overflow-scrolling:touch; }
+  .vlist-spacer { width:1px; }
+  .modal-mask { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:50; }
+  .modal-panel { background:#fff; border-radius:14px; padding:20px; max-width:320px; width:84%; box-shadow:0 8px 30px rgba(0,0,0,.25); }
+  .modal-panel h3 { margin:0 0 8px; }
+  .modal-panel p { color:#444; font-size:14px; line-height:1.5; }
+  .modal-close { margin-top:14px; }
+  .richtext { font-size:14px; line-height:1.6; color:#222; margin-top:8px; }
+  .richtext a { color:#6750a4; }
+  .richtext b { font-weight:700; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+  <div id="app" class="card"></div>
+
+<script>
+/* =========================================================================
+ * 渲染层（只跑在 WebView 内）：组件完备版。
+ *  - 接收 render spec（内联 __uiSpec）+ path-diff，patch DOM。
+ *  - 用户事件经 sendEvent 交给 NativeBridge.callEvent（Kotlin -> QuickJS 沙箱）。
+ *  - 数据来自 QuickJS 逻辑层经 hostSetData 回传（window.RenderRuntime.applyDiff）。
+ * 生产环境逻辑层 = QuickJS（每插件 JSRuntime 沙箱），渲染层协议不变。
+ * ========================================================================= */
+
+const root = document.getElementById('app');
+let dataStore = {};
+let modalEls = {};
+
+function sendEvent(method, dataset, value) {
+  if (!method) return;
+  // 原生桥：把事件交给 Kotlin -> QuickJsEngine.invokeMethod(method, datasetJson, value)
+  // 注意：原生 invokeMethod 只把 value 传给页面方法，因此 tap 事件把 dataset 作为 value 传回。
+  const payload = (value !== undefined && value !== null) ? value : (dataset || {});
+  if (window.NativeBridge && window.NativeBridge.callEvent) {
+    NativeBridge.callEvent(method, JSON.stringify(dataset || {}), JSON.stringify(payload));
+  }
+}
+
+function build(n) {
+  let el;
+  switch (n.tag) {
+    case 'scrollview':
+      el = document.createElement('div'); el.className = 'scrollview'; break;
+    case 'list':
+      el = document.createElement('div'); el.className = 'scrollview'; el._isList = true; break;
+    case 'modal':
+      el = document.createElement('div'); el.className = 'modal-mask hidden';
+      const panel = document.createElement('div'); panel.className = 'modal-panel';
+      (n.children || []).forEach(c => panel.appendChild(build(c)));
+      const closeBtn = document.createElement('button'); closeBtn.className = 'modal-close';
+      closeBtn.textContent = (n.props && n.props.closeText) || '关闭';
+      closeBtn.addEventListener('click', () => sendEvent(n.on && n.on.close, n.dataset || {}));
+      panel.appendChild(closeBtn); el.appendChild(panel);
+      if (n.bind) { el._isModal = true; el.dataset.bind = n.bind; modalEls[n.bind] = el; }
+      return el;
+    case 'richtext':
+      el = document.createElement('div'); el.className = 'richtext'; el._isRich = true; break;
+    case 'input':
+      el = document.createElement('input');
+      el.placeholder = (n.props && n.props.placeholder) || '';
+      el.addEventListener('input', () => sendEvent(n.on && n.on.input, null, el.value)); break;
+    case 'button':
+      el = document.createElement('button'); el.textContent = n.text || '';
+      el.addEventListener('click', () => sendEvent(n.on && n.on.tap, n.dataset || {})); break;
+    case 'row':
+      el = document.createElement('div'); el.className = 'row'; break;
+    default:
+      el = document.createElement('div');
+  }
+  if (n.id) el.dataset.id = n.id;
+  if (n.cls) el.className = (el.className ? el.className + ' ' : '') + n.cls;
+  if (n.bind && !el._isModal) el.dataset.bind = n.bind;
+  if ((n.tag === 'text' || !n.tag) && !el._isRich) {
+    if (!el.dataset.bind && n.bind) el.dataset.bind = n.bind;
+    el.textContent = n.text || '';
+  }
+  if (n.children) n.children.forEach(c => el.appendChild(build(c)));
+  return el;
+}
+
+function render(spec) {
+  root.innerHTML = ''; modalEls = {};
+  spec.forEach(n => root.appendChild(build(n)));
+  applyAll();
+}
+function fmt(v){ return v===false?'☐':v===true?'☑':String(v==null?'':v); }
+function resolve(path){ let v=dataStore; path.split('.').forEach(k=>{v=v==null?undefined:v[k];}); return v; }
+function safeRich(html){
+  const tpl=document.createElement('template'); tpl.innerHTML=html;
+  const walk=(node)=>{ [...node.childNodes].forEach(ch=>{
+    if(ch.nodeType===1){ const tag=ch.tagName.toLowerCase();
+      if(!['b','i','u','a','br','p','div','span'].includes(tag)){ ch.replaceWith(...ch.childNodes); return; }
+      [...ch.attributes].forEach(at=>{ if(at.name!=='href') ch.removeAttribute(at.name); });
+      if(tag==='a'){ ch.setAttribute('target','_blank'); ch.setAttribute('rel','noopener'); }
+      walk(ch); } }); };
+  walk(tpl.content); return tpl.innerHTML;
+}
+function appendItem(listEl,item,idx){
+  const row=document.createElement('div'); row.className='item';
+  const cb=document.createElement('span'); cb.textContent=item.done?'☑':'☐'; cb.style.cursor='pointer';
+  cb.addEventListener('click',()=>sendEvent('toggle',{index:idx}));
+  const txt=document.createElement('span'); txt.textContent=item.text; if(item.done) txt.className='done';
+  row.appendChild(cb); row.appendChild(txt); listEl.appendChild(row);
+}
+function rebuildList(listEl,arr,itemH){
+  itemH=itemH||48; const overscan=3; const h=listEl.clientHeight||240; const top=listEl.scrollTop;
+  const start=Math.max(0,Math.floor(top/itemH)-overscan);
+  const end=Math.min(arr.length-1,Math.ceil((top+h)/itemH)+overscan);
+  listEl.innerHTML='';
+  const ts=document.createElement('div'); ts.className='vlist-spacer'; ts.style.height=(start*itemH)+'px'; listEl.appendChild(ts);
+  for(let i=start;i<=end;i++) appendItem(listEl,arr[i],i);
+  const bs=document.createElement('div'); bs.className='vlist-spacer'; bs.style.height=Math.max(0,(arr.length-1-end)*itemH)+'px'; listEl.appendChild(bs);
+}
+function applyAll(){
+  root.querySelectorAll('[data-bind]').forEach(el=>{
+    const p=el.dataset.bind; const v=resolve(p);
+    if(el._isList){
+      if(!el._bound){ el._bound=true; const ih=el.dataset.itemH?parseInt(el.dataset.itemH):48;
+        el.addEventListener('scroll',()=>rebuildList(el,resolve(p)||[],ih)); }
+      rebuildList(el,v||[],el.dataset.itemH?parseInt(el.dataset.itemH):48);
+    } else if(el._isModal){ if(v) el.classList.remove('hidden'); else el.classList.add('hidden'); }
+    else if(el._isRich){ el.innerHTML=safeRich(String(v==null?'':v)); }
+    else if(el.tagName==='INPUT'){ if(document.activeElement!==el) el.value=(v==null?'':v); }
+    else { el.textContent=fmt(v); }
+  });
+}
+function setPath(o,path,v){ const ks=path.split('.'); let c=o;
+  for(let i=0;i<ks.length-1;i++){ if(c[ks[i]]==null)c[ks[i]]={}; c=c[ks[i]]; } c[ks[ks.length-1]]=v; }
+
+/* ---------- 渲染层对外接口（供 Kotlin 经 evaluateJavascript 调用）---------- */
+window.RenderRuntime = {
+  // 逻辑层经 hostSetData 回传一个 path-diff
+  applyDiff(path, valueJson){
+    try { setPath(dataStore, path, JSON.parse(valueJson)); applyAll(); }
+    catch(e){ console.error('applyDiff error', path, e); }
+  }
+};
+
+/* ---------- 示例插件 UI 规格（等效 .mext 的 uiSpec，内联以便 Demo 直接可见）---------- */
+window.__uiSpec = [
+  { tag:'button', text:'打开关于', on:{ tap:'openModal' } },
+  { tag:'modal', bind:'data.modalOpen', on:{ close:'closeModal' }, props:{ closeText:'知道了' }, children:[
+      { tag:'text', text:'关于本插件' },
+      { tag:'richtext', bind:'data.about' }
+  ]},
+  { tag:'row', children:[
+    { tag:'input', bind:'data.input', on:{ input:'onInput' }, props:{ placeholder:'添加待办' } },
+    { tag:'button', text:'添加', on:{ tap:'addTodo' } }
+  ]},
+  { tag:'list', bind:'data.todos', dataset:{ itemH:'48' } },
+  { tag:'richtext', bind:'data.notes' }
+];
+
+// 初始渲染（数据随后由 QuickJS 逻辑层经 applyDiff 填充）
+render(window.__uiSpec);
+</script>
+</body>
+</html>

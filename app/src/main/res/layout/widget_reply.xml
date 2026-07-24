@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Quro AI 桌面卡片 v2（功能桌面卡 + 聊天功能卡）
+  上半区：品牌 + 快捷操作按钮（打开对话 / 语音球）
+  下半区：最近一条 AI 回复预览
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:padding="0dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="14dp">
+
+        <!-- ═══ 品牌头 + 快捷操作 ═══ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="10dp">
+
+            <!-- 品牌图标 -->
+            <ImageView
+                android:id="@+id/widget_icon"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/quro_logo"
+                android:contentDescription="Quro AI"
+                android:scaleType="fitCenter" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="10dp">
+
+                <TextView
+                    android:id="@+id/widget_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Quro AI"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF"
+                    android:letterSpacing="0.03" />
+
+                <TextView
+                    android:id="@+id/widget_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="AI 执行体"
+                    android:textSize="11sp"
+                    android:textColor="#A0E9FF"
+                    android:layout_marginTop="1dp" />
+            </LinearLayout>
+
+            <!-- 快捷：打开对话按钮 -->
+            <FrameLayout
+                android:id="@+id/widget_btn_chat"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:background="@drawable/widget_btn_bg">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="💬"
+                    android:textSize="16sp" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:id="@+id/widget_btn_voice"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/widget_btn_bg">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="🎤"
+                    android:textSize="16sp" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- ═══ 分割线 ═══ -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#20FFFFFF"
+            android:layout_marginBottom="10dp" />
+
+        <!-- ═══ 聊天预览区（最近一条回复） ═══ -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="最近回复"
+            android:textSize="10sp"
+            android:textColor="#80C0C0C0"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/widget_text"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:text="暂无新回复"
+            android:textSize="12sp"
+            android:textColor="#D0D0D0"
+            android:maxLines="4"
+            android:ellipsize="end"
+            android:lineSpacingExtra="2dp" />
+
+    </LinearLayout>
+</FrameLayout>
