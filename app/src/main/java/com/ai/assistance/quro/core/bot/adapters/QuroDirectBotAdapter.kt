@@ -59,6 +59,9 @@ abstract class QuroDirectBotAdapter(
     var connected: Boolean = false
         protected set
 
+    /** 最近一次连接/投递失败的可读原因，供 UI 直接展示（无需翻 logcat）。 */
+    override var lastError: String? = null
+
     /** 实现接口公共访问器：UI 可读真实连接态。 */
     override val isConnected: Boolean get() = connected
 

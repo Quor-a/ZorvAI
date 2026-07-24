@@ -12,6 +12,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -39,6 +40,8 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     /** WS 真实连接状态（onOpen→true, onClosed/onFailure→false），供 UI 读取。 */
     val wsConnected = AtomicBoolean(false)
     private val lastSeq = AtomicLong(0)
+    /** 被动回复去重序号（QQ 官方要求 msg_seq 必填，自增即可）。 */
+    private val msgSeq = AtomicInteger(1)
     private var heartbeatJob: kotlinx.coroutines.Job? = null
 
     override fun isConfigured(): Boolean = appId.isNotBlank() && appSecret.isNotBlank()
@@ -77,15 +80,24 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                         put("appId", appId)
                         put("clientSecret", appSecret)
                     }.toString(),
-                ) ?: run { alive.set(false); backoff(retries++); continue }
+                ) ?: run {
+                    lastError = "获取 QQ access_token 失败（appid/secret 错误或网络不通）"
+                    alive.set(false); backoff(retries++); continue
+                }
                 accessToken = tokenJson.optString("access_token").also {
-                    if (it.isBlank()) { alive.set(false); backoff(retries++); continue }
+                    if (it.isBlank()) {
+                        lastError = "获取 QQ access_token 返回为空（appid/secret 无效）"
+                        alive.set(false); backoff(retries++); continue
+                    }
                 }
 
                 val gw = httpGetString(
                     "https://api.sgroup.qq.com/gateway/bot",
                     headers = mapOf("Authorization" to "QQBot $accessToken"),
-                ) ?: run { alive.set(false); backoff(retries++); continue }
+                ) ?: run {
+                    lastError = "获取 QQ WS 网关失败（token 无效或网络不通）"
+                    alive.set(false); backoff(retries++); continue
+                }
                 val wsUrl = JSONObject(gw).optString("url").also {
                     if (it.isBlank()) { alive.set(false); backoff(retries++); continue }
                 }
@@ -116,21 +128,25 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     }
 
     override suspend fun deliver(reply: QuroOutboundMessage) {
-        // ---- 构建请求体（与平台无关，只构建一次）----
+        // ---- 构建请求体（对齐 QQ 官方 OpenAPI：content 裸文本、msg_type 数字、msg_seq 必填）----
+        // 参考 Operit examples/qqbot/src/shared/qqbot_openapi.ts#buildSendMessageBody
+        val seq = msgSeq.getAndIncrement()
         val endpoint: String
         val body = if (reply.groupId != null) {
             endpoint = "https://api.sgroup.qq.com/v2/groups/${reply.groupId}/messages"
             JSONObject().apply {
-                put("msg_type", "markdown")
-                put("content", JSONObject().put("markdown", reply.text).toString())
+                put("msg_type", 0)            // 0=text（对齐 Operit 默认，最稳）
+                put("content", reply.text)    // 裸文本，不包 JSON
+                put("msg_seq", seq)           // 被动回复去重序号（必填）
                 reply.msgId?.let { put("msg_id", it) }
                 reply.eventId?.let { put("event_id", it) }
             }.toString()
         } else {
             endpoint = "https://api.sgroup.qq.com/v2/users/${reply.userId}/messages"
             JSONObject().apply {
-                put("msg_type", "text")
-                put("content", JSONObject().put("text", reply.text).toString())
+                put("msg_type", 0)            // 0=text
+                put("content", reply.text)    // 裸文本
+                put("msg_seq", seq)
                 reply.msgId?.let { put("msg_id", it) }
                 reply.eventId?.let { put("event_id", it) }
             }.toString()
@@ -140,7 +156,10 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
         fun doSend(token: String): Triple<Int, String, JSONObject?> {
             return httpPostWithStatus(
                 endpoint,
-                headers = mapOf("Authorization" to "QQBot $token"),
+                headers = mapOf(
+                    "Authorization" to "QQBot $token",
+                    "X-Union-Appid" to appId,   // Operit 固定携带，标识机器人 appid
+                ),
                 json = body,
             )
         }
@@ -176,8 +195,10 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
 
         // ---- 结果判定 ----
         if (json != null) {
+            lastError = null
             Log_i("✅ deliver 成功 → QQ ${if (reply.groupId != null) "群 ${reply.groupId}" else "用户 ${reply.userId}"}")
         } else {
+            lastError = "回复发送失败（HTTP=$code：${respBody.take(200)}）"
             Log_e("❌ deliver 最终失败 → $endpoint | HTTP=$code | 响应=${respBody.take(500)} | token长度=${accessToken.length}")
         }
     }
@@ -196,6 +217,7 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     private inner class QqWsListener : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
             Log_i("WS 已连接（真实握手成功）")
+            lastError = null
             wsConnected.set(true)
             connected = true
         }
@@ -211,7 +233,7 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                             put("op", 2)
                             put("d", JSONObject().apply {
                                 put("token", "QQBot $accessToken")
-                                put("intents", 1 shl 25)
+                                put("intents", (1 shl 30) or (1 shl 25))  // C2C_MESSAGE_CREATE | GROUP_AT_MESSAGE_CREATE
                             })
                         }.toString()
                         webSocket.send(identify)
@@ -268,10 +290,15 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             Log_w("WS closed $code $reason")
             wsConnected.set(false)
             connected = false
+            if (code != 1000 && code != 1001) {
+                lastError = "WS 已断开（code=$code ${reason.ifBlank { "无原因" }}）"
+            }
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            Log_e("WS failure: ${t.message}")
+            val httpInfo = response?.let { "HTTP ${it.code}" } ?: ""
+            Log_e("WS failure: ${t.message} $httpInfo")
+            lastError = "WS 连接失败：${t.message ?: "未知"} $httpInfo"
             wsConnected.set(false)
             connected = false
         }

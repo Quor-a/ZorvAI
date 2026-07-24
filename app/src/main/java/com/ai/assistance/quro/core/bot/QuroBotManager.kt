@@ -106,6 +106,8 @@ interface QuroBotAdapter {
     suspend fun deliver(reply: QuroOutboundMessage)
     /** 当前是否真实连接（WS 已握手 / 长轮询已启动），供 UI 读取。默认返回 false，子类覆写。 */
     val isConnected: Boolean get() = false
+    /** 最近一次连接/投递失败的可读原因，供 UI 直接展示（无需翻 logcat）。默认 null。 */
+    val lastError: String? get() = null
 }
 
 /**

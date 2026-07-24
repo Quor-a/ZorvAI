@@ -66,9 +66,15 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                         put("app_id", appId)
                         put("app_secret", appSecret)
                     }.toString(),
-                ) ?: run { alive.set(false); backoff(retries++); continue }
+                ) ?: run {
+                    lastError = "获取飞书 tenant_access_token 失败（app_id/secret 错误或网络不通）"
+                    alive.set(false); backoff(retries++); continue
+                }
                 tenantToken = tkn.optString("tenant_access_token").also {
-                    if (it.isBlank()) { alive.set(false); backoff(retries++); continue }
+                    if (it.isBlank()) {
+                        lastError = "获取飞书 tenant_access_token 返回为空（app_id/secret 无效）"
+                        alive.set(false); backoff(retries++); continue
+                    }
                 }
 
                 val wsUrl = "wss://open.feishu.cn/open-apis/ws/v1?access_token=${tenantToken.urlEncode()}"
@@ -103,6 +109,7 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             )
             tenantToken = tkn?.optString("tenant_access_token").orEmpty()
             if (tenantToken.isBlank()) {
+                lastError = "回复发送失败：飞书 token 刷新为空（app_id/secret 无效）"
                 Log_e("deliver 失败：token 刷新也为空，无法发送回复给 chat=${reply.userId}")
                 return
             }
@@ -119,13 +126,19 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             headers = mapOf("Authorization" to "Bearer $tenantToken"),
             json = body,
         )
-        if (json == null) Log_e("deliver 失败 chat=${reply.userId}（HTTP 错误或网络异常）")
-        else Log_i("deliver 已发往飞书会话 ${reply.userId}")
+        if (json == null) {
+            lastError = "回复发送失败 chat=${reply.userId}（HTTP 错误或网络异常）"
+            Log_e("deliver 失败 chat=${reply.userId}（HTTP 错误或网络异常）")
+        } else {
+            lastError = null
+            Log_i("deliver 已发往飞书会话 ${reply.userId}")
+        }
     }
 
     private inner class FeishuWsListener : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
             Log_i("WS 已连接（真实握手成功）")
+            lastError = null
             wsConnected.set(true)
             connected = true
         }
@@ -166,10 +179,15 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             Log_w("WS closed $code $reason")
             wsConnected.set(false)
             connected = false
+            if (code != 1000 && code != 1001) {
+                lastError = "WS 已断开（code=$code ${reason.ifBlank { "无原因" }}）"
+            }
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            Log_e("WS failure: ${t.message}")
+            val httpInfo = response?.let { "HTTP ${it.code}" } ?: ""
+            Log_e("WS failure: ${t.message} $httpInfo")
+            lastError = "WS 连接失败：${t.message ?: "未知"} $httpInfo"
             wsConnected.set(false)
             connected = false
         }

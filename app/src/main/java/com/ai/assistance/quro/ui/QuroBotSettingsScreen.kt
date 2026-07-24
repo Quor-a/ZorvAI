@@ -177,6 +177,8 @@ private fun BotPlatformCard(
     // ---- 连接状态（实时读取 adapter 真实状态）----
     var statusText by remember { mutableStateOf("未启动") }
     var statusColor by remember { mutableStateOf(Color.Gray) }
+    // 最近一次失败的可读原因（来自 adapter.lastError），无需翻 logcat 即可看到为什么连不上
+    var detailText by remember { mutableStateOf("") }
 
     // 会话绑定模式：none=不写入 App 会话；auto=为每个平台用户自动创建新会话；fixed=绑定到指定会话
     var bindMode by remember { mutableStateOf(prefs.getString("bind_mode_${platform.name}", "auto") ?: "auto") }
@@ -222,6 +224,9 @@ private fun BotPlatformCard(
                 statusText.contains("等待") || statusText.contains("扫码") -> Color(0xFFFF9800)
                 else -> Color.Gray
             }
+
+            // 把 adapter 最近一次失败原因同步到 UI
+            detailText = if (!sw || adapter == null) "" else (adapter.lastError ?: "")
 
             // 同步微信扫码数据到 UI
             if (platform == QuroBotPlatform.WECHAT) {
@@ -293,6 +298,16 @@ private fun BotPlatformCard(
                         Spacer(Modifier.width(4.dp))
                         Text("重连", fontSize = 11.sp)
                     }
+                }
+                // 失败原因（红色小字，无需翻 logcat）
+                if (detailText.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "⚠ $detailText",
+                        fontSize = 11.sp,
+                        color = Color(0xFFE53935),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
 
