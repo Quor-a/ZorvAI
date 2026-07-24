@@ -27,6 +27,9 @@ import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.ai.assistance.quro.core.tools.QuroKnowledgeFiles
+import com.ai.assistance.quro.core.knowledge.buildRagPipeline
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.File
 
 /**
@@ -66,7 +69,9 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
     var selected by remember { mutableStateOf<File?>(null) }
     var selectedText by remember { mutableStateOf("") }
     var showAdd by remember { mutableStateOf(false) }
+    var showSources by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
 
     val filtered = remember(files, query) {
         if (query.isBlank()) files
@@ -83,6 +88,7 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                     IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, "返回") }
                 },
                 actions = {
+                    TextButton(onClick = { showSources = true }) { Text("云盘") }
                     IconButton(onClick = { importLauncher.launch(arrayOf("*/*")) }) {
                         Icon(Icons.Filled.FileDownload, "导入文档")
                     }
@@ -130,6 +136,7 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                                     f.delete()
                                     files = listKnowledgeFiles(dir)
                                     if (selected == f) { selected = null; selectedText = "" }
+                                    scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
                                 }) {
                                     Icon(Icons.Filled.Delete, null, tint = MaterialTheme.colorScheme.error)
                                 }
@@ -181,8 +188,15 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                 }
                 files = listKnowledgeFiles(dir)
                 showAdd = false
+                scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
             }
         )
+    }
+
+    if (showSources) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            QuroKnowledgeSourcesScreen(onClose = { showSources = false })
+        }
     }
 }
 

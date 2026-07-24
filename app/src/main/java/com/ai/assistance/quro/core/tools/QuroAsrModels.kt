@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.core.tools
 
+import android.content.Context
+import android.os.Build
 import com.k2fsa.sherpa.ncnn.FeatureConfig
 import com.k2fsa.sherpa.ncnn.OfflineModelConfig
 import com.k2fsa.sherpa.ncnn.OfflineRecognizerConfig
@@ -33,6 +35,42 @@ fun deployedDirMaxFileBytes(dir: String?): Long {
     val d = dir?.let { File(it) } ?: return 0L
     if (!d.isDirectory) return 0L
     return d.walkTopDown().filter { it.isFile }.maxOfOrNull { it.length() } ?: 0L
+}
+
+/**
+ * 端侧 ASR 引擎（Sherpa-NCNN）设备兼容性。
+ *
+ * 关键约束：本工程 [app/build.gradle.kts] 的 `abiFilters` 仅编入 `arm64-v8a`，
+ * 即 `libsherpa-ncnn-jni.so` / `libncnn.so` 等原生库只打包了 arm64 版本。
+ * 非 arm64 设备（armeabi-v7a / x86 / x86_64 模拟器等）没有对应 .so，引擎
+ * `System.loadLibrary` 会抛 `UnsatisfiedLinkError`，模型永远无法加载——
+ * 这正是用户反馈「模型不支持手机」的根因之一。
+ *
+ * 部署/下载前必须先做 ABI 前置校验：不匹配则明确报错并禁用，不再假装可部署。
+ */
+object AsrDeviceCompat {
+    /** 引擎原生库支持的设备 ABI 集合（与 abiFilters 保持一致）。 */
+    val SUPPORTED_ABIS: Set<String> = setOf("arm64-v8a")
+
+    /** 当前设备 ABI 是否命中引擎支持集合。 */
+    fun isAbiSupported(): Boolean =
+        Build.SUPPORTED_ABIS.any { it in SUPPORTED_ABIS }
+
+    /** 引擎原生库是否已随安装包落地（非 arm64 设备不会被抽取到 nativeLibraryDir）。 */
+    fun isNativeLibPresent(ctx: Context): Boolean {
+        val dir = runCatching { ctx.applicationContext.applicationInfo.nativeLibraryDir }
+            .getOrNull() ?: return false
+        return File(dir, "libsherpa-ncnn-jni.so").exists()
+    }
+
+    /** 综合判定：当前设备能否运行端侧离线识别。 */
+    fun isSupported(ctx: Context): Boolean = isAbiSupported() && isNativeLibPresent(ctx)
+
+    /** 不支持时给 UI 的人类可读原因。 */
+    fun unsupportedReason(ctx: Context): String {
+        val abis = Build.SUPPORTED_ABIS.joinToString(", ")
+        return "本机 CPU 架构（$abis）不支持端侧离线识别引擎（需 arm64-v8a）。请改用「本地识别」或「AI 模型」引擎。"
+    }
 }
 
 enum class AsrModelType(val label: String) {
@@ -108,8 +146,19 @@ data class AsrModelSpec(
     val displayName: String,
     val type: AsrModelType,
     val downloadUrl: String,
-    /** 下载后最小字节数；小于此值视为链接失效 / 返回错误页，直接拒绝部署。 */
-    val minSizeBytes: Long = 100_000_000,
+    /**
+     * 下载压缩包的最小字节数下限，**仅用于拒绝 HTML 错误页等明显坏文件**（链接失效时
+     * 服务器常返回几 KB 的错误页，而非真实模型）。
+     *
+     * ⚠️ 历史坑：此前此处误用了「模型解压后体积」量级（100~250MB）去卡「下载压缩包体积」，
+     * 但 .tar.bz2 压缩后远小于该值（int8 的 model.ncnn.bin 解压后 222MB，bz2 仅约 80~100MB），
+     * 导致**每一个真实下载都被误判为失败、文件被删、部署记录写不进去**，表现为
+     * 「部署后不能保存、返回又重新下载」的死循环。
+     *
+     * 现改为统一的 1MB 错误页下限；模型是否真的可用以**解压后 NCNN 布局校验**为准
+     * （见 [QuroOnDeviceModelManager.downloadAndDeploy] 的 detectAsrLayout 判断）。
+     */
+    val minSizeBytes: Long = MIN_VALID_MODEL_BYTES,
     val language: String = "auto",
     val numThreads: Int = 4,
 )
@@ -127,28 +176,28 @@ object AsrModelCatalog {
             id = "sense-voice-int8-2024", displayName = "SenseVoice int8 · 中英日韩粤 · 离线 · 推荐 · ~206MB",
             type = AsrModelType.SENSE_VOICE,
             downloadUrl = "https://github.com/k2-fsa/sherpa-ncnn/releases/download/asr-models/sherpa-ncnn-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2",
-            minSizeBytes = 120_000_000,
+            minSizeBytes = MIN_VALID_MODEL_BYTES,
             language = "auto",
         ),
         AsrModelSpec(
             id = "sense-voice-int8-2025", displayName = "SenseVoice int8 (2025-09) · 中英日韩粤 · 离线 · ~209MB",
             type = AsrModelType.SENSE_VOICE,
             downloadUrl = "https://github.com/k2-fsa/sherpa-ncnn/releases/download/asr-models/sherpa-ncnn-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09.tar.bz2",
-            minSizeBytes = 120_000_000,
+            minSizeBytes = MIN_VALID_MODEL_BYTES,
             language = "auto",
         ),
         AsrModelSpec(
             id = "sense-voice-fp16-2024", displayName = "SenseVoice fp16 · 更准更大 · 中英日韩粤 · ~417MB",
             type = AsrModelType.SENSE_VOICE,
             downloadUrl = "https://github.com/k2-fsa/sherpa-ncnn/releases/download/asr-models/sherpa-ncnn-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2",
-            minSizeBytes = 250_000_000,
+            minSizeBytes = MIN_VALID_MODEL_BYTES,
             language = "auto",
         ),
         AsrModelSpec(
             id = "sense-voice-fp16-2025", displayName = "SenseVoice fp16 (2025-09) · 更准更大 · ~421MB",
             type = AsrModelType.SENSE_VOICE,
             downloadUrl = "https://github.com/k2-fsa/sherpa-ncnn/releases/download/asr-models/sherpa-ncnn-sense-voice-zh-en-ja-ko-yue-2025-09-09.tar.bz2",
-            minSizeBytes = 250_000_000,
+            minSizeBytes = MIN_VALID_MODEL_BYTES,
             language = "auto",
         ),
     )

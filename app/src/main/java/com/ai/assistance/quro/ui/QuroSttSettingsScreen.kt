@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import com.ai.assistance.quro.core.model.QuroModelConfig
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
@@ -45,9 +46,11 @@ import com.ai.assistance.quro.core.tools.QuroSttPrefs
 import com.ai.assistance.quro.core.tools.QuroOnDeviceAsr
 import com.ai.assistance.quro.core.tools.QuroOnDeviceModelManager
 import com.ai.assistance.quro.core.tools.QuroOnDeviceModelPrefs
+import com.ai.assistance.quro.core.tools.AsrDeviceCompat
 import com.ai.assistance.quro.core.tools.AsrModelCatalog
 import com.ai.assistance.quro.core.tools.AsrModelSpec
 import com.ai.assistance.quro.core.tools.AsrModelType
+import com.ai.assistance.quro.core.tools.MIN_VALID_MODEL_BYTES
 import com.ai.assistance.quro.ui.theme.Accent
 import com.ai.assistance.quro.ui.theme.Line
 import com.ai.assistance.quro.ui.theme.Sage
@@ -130,6 +133,9 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
     var deployedType by remember { mutableStateOf(QuroOnDeviceModelPrefs.getDeployedType(ctx)) }
     var specMenu by remember { mutableStateOf(false) }
     var customTypeMenu by remember { mutableStateOf(false) }
+
+    // ── 端侧引擎设备兼容性（仅 arm64-v8a 支持；其余架构禁用下载/部署，不再假装可部署） ──
+    val asrSupported = remember { AsrDeviceCompat.isSupported(ctx) }
 
     // ── Bug 日志区域 ──
     var sttLogs by remember { mutableStateOf(listOf<String>()) }
@@ -243,9 +249,28 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
     fun refreshDeployStatus() {
         val key = currentKey()
         val e = QuroOnDeviceModelPrefs.getDeployedEntry(ctx, key)
-        deployStatus = e?.status ?: QuroOnDeviceModelPrefs.STATUS_NONE
-        deployedName = e?.name
-        deployedType = e?.type?.takeIf { it != "UNKNOWN" }
+        if (e == null) {
+            deployStatus = QuroOnDeviceModelPrefs.STATUS_NONE
+            deployedName = null
+            deployedType = null
+            return
+        }
+        // 二次进入闭环校验：若记录为「已部署」，但磁盘文件缺失/损坏（被删、解压不完整），
+        // 则降级为 ERROR 并提示重新下载，避免「记录说已部署、实际不可用」导致的误判/卡死；
+        // 若文件完整（大小 + NCNN 布局齐全）则保持 DEPLOYED，不重复下载。
+        if (e.status == QuroOnDeviceModelPrefs.STATUS_DEPLOYED &&
+            !QuroOnDeviceModelManager.verifyDeployedDir(e.dir)
+        ) {
+            QuroOnDeviceModelPrefs.setEntryStatus(ctx, key, QuroOnDeviceModelPrefs.STATUS_ERROR)
+            deployStatus = QuroOnDeviceModelPrefs.STATUS_ERROR
+            deployedName = e.name
+            deployedType = e.type.takeIf { it != "UNKNOWN" }
+            addLog("⚠️ 已部署记录存在，但磁盘模型不完整，需重新下载：${e.dir}")
+            return
+        }
+        deployStatus = e.status
+        deployedName = e.name
+        deployedType = e.type.takeIf { it != "UNKNOWN" }
     }
 
     LaunchedEffect(Unit) {
@@ -269,6 +294,12 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
 
     /** 下载并自动部署端侧模型（内置目录或自定义链接 + 选定类型）。 */
     fun downloadAndDeployModel() {
+        // 设备兼容性前置校验：架构不支持则明确报错并禁用，不再假装可部署
+        if (!asrSupported) {
+            dlState = "本机架构不支持端侧识别（需 arm64-v8a）"
+            addLog("❌ 本机架构不支持端侧离线识别，已禁用下载：${AsrDeviceCompat.unsupportedReason(ctx)}")
+            return
+        }
         val spec: AsrModelSpec = if (customMode) {
             if (customLink.isBlank()) {
                 dlState = "请先粘贴模型下载链接"
@@ -280,7 +311,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                 displayName = "自定义模型",
                 type = customType,
                 downloadUrl = customLink,
-                minSizeBytes = 5_000_000,
+                minSizeBytes = MIN_VALID_MODEL_BYTES,
             )
         } else {
             AsrModelCatalog.byId(selectedSpecId) ?: run {
@@ -725,6 +756,19 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                     style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant,
                 )
+                if (asrSupported) {
+                    InfoBox(
+                        text = "✅ 本机架构 arm64-v8a，支持端侧离线识别引擎。",
+                        tone = Sage,
+                    )
+                } else {
+                    val warnColor = Color(android.graphics.Color.parseColor("#C0432F"))
+                    InfoBox(
+                        text = "⚠️ ${AsrDeviceCompat.unsupportedReason(ctx)} 下载与部署已禁用，请改用「本地识别」或「AI 模型」引擎。",
+                        tone = warnColor,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
                 SetGroup {
                     Column(
                         Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -817,9 +861,13 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                         // 操作按钮
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PrimaryButton(
-                                text = if (downloading) "部署中…" else "下载并部署",
+                                text = when {
+                                    !asrSupported -> "本机不支持"
+                                    downloading -> "部署中…"
+                                    else -> "下载并部署"
+                                },
                                 onClick = { downloadAndDeployModel() },
-                                enabled = !downloading,
+                                enabled = !downloading && asrSupported,
                                 modifier = Modifier.weight(1f),
                             )
                             if (deployStatus == QuroOnDeviceModelPrefs.STATUS_DEPLOYED) {

@@ -22,9 +22,7 @@ object QuroVoiceFeaturePrefs {
     private const val K_VOICE_BALL = "voice_ball"
     private const val K_AUTO_READ = "auto_read"
     private const val K_DIALOG_VOICE = "dialog_voice_button"
-    private const val K_SOURCE = "source"
     private const val K_VOICE_NAME = "voice_name"
-    private const val K_SPEED = "speed"
     private const val K_VOICE_BALL_SESSION = "voice_ball_session"
     private const val K_AUTOSTART = "autostart"
 
@@ -37,14 +35,16 @@ object QuroVoiceFeaturePrefs {
     fun getDialogVoiceButton(ctx: Context) = prefs(ctx).getBoolean(K_DIALOG_VOICE, false)
     fun setDialogVoiceButton(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean(K_DIALOG_VOICE, v).apply()
 
-    fun getSource(ctx: Context) = prefs(ctx).getString(K_SOURCE, "local") ?: "local"
-    fun setSource(ctx: Context, v: String) = prefs(ctx).edit().putString(K_SOURCE, v).apply()
+    /** 默认语音来源：统一复用 [QuroTtsPrefs]（语音播放链路实际读取的唯一数据源），避免「改了不生效」。 */
+    fun getSource(ctx: Context) = QuroTtsPrefs.getSource(ctx)
+    fun setSource(ctx: Context, v: String) = QuroTtsPrefs.setSource(ctx, v)
 
     fun getVoiceName(ctx: Context) = prefs(ctx).getString(K_VOICE_NAME, "") ?: ""
     fun setVoiceName(ctx: Context, v: String) = prefs(ctx).edit().putString(K_VOICE_NAME, v).apply()
 
-    fun getSpeed(ctx: Context) = prefs(ctx).getFloat(K_SPEED, 1.0f)
-    fun setSpeed(ctx: Context, v: Float) = prefs(ctx).edit().putFloat(K_SPEED, v).apply()
+    /** 默认语速：统一复用 [QuroTtsPrefs.getRate]（语音播放链路实际读取的唯一数据源）。 */
+    fun getSpeed(ctx: Context) = QuroTtsPrefs.getRate(ctx)
+    fun setSpeed(ctx: Context, v: Float) = QuroTtsPrefs.setRate(ctx, v)
 
     /** 语音球绑定的对话框 id；空串表示「跟随当前正在看的对话框」（自动）。 */
     fun getVoiceBallSessionId(ctx: Context) = prefs(ctx).getString(K_VOICE_BALL_SESSION, "") ?: ""

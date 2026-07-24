@@ -25,6 +25,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.quro.core.skill.QuroSkill
 import com.ai.assistance.quro.core.skill.QuroSkillStore
+import com.ai.assistance.quro.core.skill.DEFAULT_SKILL_PARAMS
 import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
@@ -134,7 +135,7 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
         SkillEditorDialog(
             initial = editing,
             onDismiss = { showEditor = false; editing = null },
-            onSave = { name, description, prompt, enabled ->
+            onSave = { name, description, prompt, enabled, trigger, parametersJson, callable, alwaysOn ->
                 val base = editing ?: QuroSkill(id = UUID.randomUUID().toString(), name = "")
                 QuroSkillStore.addOrUpdate(
                     ctx,
@@ -143,6 +144,10 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
                         description = description,
                         prompt = prompt,
                         enabled = enabled,
+                        trigger = trigger,
+                        parametersJson = parametersJson,
+                        callable = callable,
+                        alwaysOn = alwaysOn,
                         updatedAt = System.currentTimeMillis(),
                     )
                 )
@@ -187,11 +192,15 @@ private fun SkillRow(
 private fun SkillEditorDialog(
     initial: QuroSkill?,
     onDismiss: () -> Unit,
-    onSave: (name: String, description: String, prompt: String, enabled: Boolean) -> Unit,
+    onSave: (name: String, description: String, prompt: String, enabled: Boolean, trigger: String, parametersJson: String, callable: Boolean, alwaysOn: Boolean) -> Unit,
 ) {
     var name by remember { mutableStateOf(TextFieldValue(initial?.name ?: "")) }
     var description by remember { mutableStateOf(TextFieldValue(initial?.description ?: "")) }
     var prompt by remember { mutableStateOf(TextFieldValue(initial?.prompt ?: "")) }
+    var trigger by remember { mutableStateOf(TextFieldValue(initial?.trigger ?: "")) }
+    var parametersJson by remember { mutableStateOf(TextFieldValue(initial?.parametersJson ?: DEFAULT_SKILL_PARAMS)) }
+    var callable by remember { mutableStateOf(initial?.callable ?: true) }
+    var alwaysOn by remember { mutableStateOf(initial?.alwaysOn ?: true) }
     var enabled by remember { mutableStateOf(initial?.enabled ?: true) }
     val cs = MaterialTheme.colorScheme
 
@@ -200,7 +209,7 @@ private fun SkillEditorDialog(
         confirmButton = {
             Button(onClick = {
                 val n = name.text.trim()
-                if (n.isNotEmpty()) onSave(n, description.text.trim(), prompt.text, enabled)
+                if (n.isNotEmpty()) onSave(n, description.text.trim(), prompt.text, enabled, trigger.text.trim(), parametersJson.text.ifBlank { DEFAULT_SKILL_PARAMS }, callable, alwaysOn)
             }) { Text("保存") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
@@ -225,6 +234,30 @@ private fun SkillEditorDialog(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp),
                     maxLines = 12,
                 )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = trigger, onValueChange = { trigger = it },
+                    label = { Text("触发词 / trigger（可选，逗号分隔，用于将来自动匹配）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = parametersJson, onValueChange = { parametersJson = it },
+                    label = { Text("参数 Schema (JSON，function calling 入参)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("可作为工具调用（注册为 AI 可调用函数）", modifier = Modifier.weight(1f))
+                    Switch(checked = callable, onCheckedChange = { callable = it })
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("常驻系统提示词（关闭则仅触发词命中时注入）", modifier = Modifier.weight(1f))
+                    Switch(checked = alwaysOn, onCheckedChange = { alwaysOn = it })
+                }
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("启用（关闭则不会注入系统提示词）", modifier = Modifier.weight(1f))
@@ -262,6 +295,9 @@ private fun parseSkillJson(json: String): List<QuroSkill> {
                 prompt = o.optString("prompt", "").trim(),
                 enabled = o.optBoolean("enabled", true),
                 trigger = o.optString("trigger", "").trim(),
+                parametersJson = o.optString("parametersJson", DEFAULT_SKILL_PARAMS),
+                callable = o.optBoolean("callable", true),
+                alwaysOn = o.optBoolean("alwaysOn", true),
                 updatedAt = System.currentTimeMillis(),
             )
         )

@@ -75,6 +75,12 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())
         ) {
             GroupCaption("为各类 AI 能力绑定模型")
+            val warnColor = Color(android.graphics.Color.parseColor("#B26A00"))
+            InfoBox(
+                text = "⚠️ 实验性功能 · 当前版本尚未接入引擎：本页的开关与模型绑定暂不生效，仅作配置入口保留，不会改变 AI 的实际行为。",
+                tone = warnColor,
+            )
+            Spacer(Modifier.height(10.dp))
             SetGroup {
                 FeatureModelKey.values().forEachIndexed { idx, key ->
                     if (idx > 0) HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
@@ -91,7 +97,7 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
             }
             Spacer(Modifier.height(12.dp))
             Text(
-                "提示：默认所有能力跟随主模型（设置 → 模型配置）。视频 / 图片生成建议独立指定对应模型，AI 将直接调用。",
+                "提示：默认所有能力跟随主模型（设置 → 模型配置）。视频 / 图片生成建议独立指定对应模型。注意：本页为实验性配置，尚未接入引擎，开关与绑定暂不生效。",
                 fontSize = 11.sp, color = Muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
         }
@@ -169,6 +175,7 @@ private fun FeatureModelRow(
     onPick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val warnColor = Color(android.graphics.Color.parseColor("#B26A00"))
     Column(Modifier.fillMaxWidth().padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(featureIcon(key), null, Modifier.size(20.dp), tint = Accent)
@@ -176,6 +183,7 @@ private fun FeatureModelRow(
             Column(Modifier.weight(1f)) {
                 Text(key.label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
                 Text(key.desc, fontSize = 11.sp, color = Muted, modifier = Modifier.padding(top = 2.dp))
+                Text("⚠️ 未接入引擎，开关暂不生效", fontSize = 10.sp, color = warnColor, modifier = Modifier.padding(top = 2.dp))
             }
         }
         Spacer(Modifier.height(8.dp))

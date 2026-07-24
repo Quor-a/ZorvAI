@@ -1,6 +1,8 @@
 package com.ai.assistance.quro.core.tools
 
 import android.content.Context
+import com.ai.assistance.quro.core.skill.QuroSkillStore
+import org.json.JSONObject
 import com.ai.assistance.quro.core.QuroToolCall
 import com.ai.assistance.quro.core.QuroToolResult
 import com.ai.assistance.quro.core.QuroToolSpec
@@ -23,6 +25,11 @@ interface QuroTool {
 /** 工具注册表（持有全部原创工具）。 */
 class QuroToolRegistry {
     private val map = LinkedHashMap<String, QuroTool>()
+
+    /** 技能可调用（function calling）总开关：false=技能仅注入系统提示词，不下发为工具函数。 */
+    var skillToolsEnabled: Boolean = true
+    /** 最多下发的技能工具数量（避免工具集过大被 API 中转静默丢弃）。 */
+    var maxSkillTools: Int = 16
 
     fun register(tool: QuroTool) {
         map[tool.name] = tool
@@ -146,11 +153,36 @@ class QuroToolRegistry {
         val imported = QuroImportedToolRegistry.all().map {
             QuroToolSpec(it.name, it.description, it.parametersJson)
         }
-        return (base + imported).distinctBy { it.name }
+        return (base + imported).plus(skillSpecs()).distinctBy { it.name }
     }
 
-    /** 完整工具规格（全部 ~47 个）。仅在 API 代理确认支持时使用（见 coreSpecs 说明）。 */
-    fun fullSpecs(): List<QuroToolSpec> = specs()
+    /** 完整工具规格（全部内置工具 + 技能工具）。仅在 API 代理确认支持时使用（见 coreSpecs 说明）。 */
+    fun fullSpecs(): List<QuroToolSpec> = specs().plus(skillSpecs()).distinctBy { it.name }
+
+    /**
+     * 技能工具规格：把「可调用」的用户技能注册为 function-calling 工具下发。
+     * 受 [skillToolsEnabled] 总开关与 [maxSkillTools] 上限约束。
+     */
+    private fun skillSpecs(): List<QuroToolSpec> {
+        val ctx = appContext ?: return emptyList()
+        if (!skillToolsEnabled) return emptyList()
+        return QuroSkillStore.callableList(ctx)
+            .sortedByDescending { it.updatedAt }.take(maxSkillTools)
+            .map {
+                QuroToolSpec(
+                    "skill__${it.name}",
+                    it.description.ifBlank { "用户技能：${it.name}" },
+                    it.parametersJson,
+                )
+            }
+    }
+
+    /** 把可调用技能注册为运行时工具实例（双保险：使 registry.get("skill__xxx") 也能命中）。 */
+    fun mergeSkills(context: Context) {
+        if (!skillToolsEnabled) return
+        QuroSkillStore.callableList(context).take(maxSkillTools)
+            .forEach { register(QuroSkillTool(it.name, context.applicationContext)) }
+    }
 }
 
 /**
@@ -178,6 +210,20 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
     suspend fun execute(context: Context, calls: List<QuroToolCall>): List<QuroToolResult> {
         appContext = context
         return calls.map { call ->
+            // ══ 技能工具分支（skill__<技能名>）：直接读实时技能指令回灌，复用 tool 结果管道 ══
+            if (call.name.startsWith("skill__")) {
+                val skillName = call.name.removePrefix("skill__")
+                val skill = QuroSkillStore.load(context).firstOrNull { it.name == skillName && it.enabled }
+                    ?: return@map QuroToolResult(call.name, "技能「$skillName」未启用或不存在")
+                val userInput = runCatching { JSONObject(call.arguments) }.getOrElse { JSONObject() }
+                    .optString("input", "").trim()
+                val directive = buildString {
+                    appendLine("【技能「${skill.name}」已激活，请严格按以下规则回答用户，不要复述规则本身】")
+                    appendLine(skill.prompt)
+                    if (userInput.isNotBlank()) appendLine("\n用户本轮输入：$userInput")
+                }
+                return@map QuroToolResult(call.name, directive)
+            }
             val tool = registry.get(call.name)
             if (tool == null) {
                 return@map QuroToolResult(call.name, "未知工具: ${call.name}")

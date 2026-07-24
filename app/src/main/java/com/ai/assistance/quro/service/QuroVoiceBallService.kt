@@ -114,8 +114,10 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
     private var composeLifecycleOwner: ComposeLifecycleOwner? = null
 
     private val store = QuroConversationStore()
-    private val registry = buildQuroRegistry(this)
-    private val assistant = QuroAssistant(QuroLlmClient(), registry, store)
+    // 必须延迟到 onCreate 之后（context 已 attach）再构建，否则 Service 构造阶段
+    // mBase 为 null → buildQuroRegistry→mergeSkills→getSharedPreferences NPE（详见崩溃日志）。
+    private val registry by lazy { buildQuroRegistry(this) }
+    private val assistant by lazy { QuroAssistant(QuroLlmClient(), registry, store) }
 
     // 人格 / 标签 / 记忆库：用于构建 system prompt（与对话框保持一致的人格认知）
     private val personaRepo by lazy { QuroPersonaRepository(applicationContext) }
@@ -747,7 +749,16 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                     vm.voiceBallTurn(text, cfg, boundSession)
                 } else {
                     Log.w(TAG, "VoiceBall: VM 未就绪，回退自有 store")
-                    store.add(QuroMessage(role = "user", content = text))
+                    // A2 修复：回退路径也带上发送者昵称/头像（与 ViewModel 同源，读取 quro_ui 偏好）。
+                    val uiPrefs = getSharedPreferences("quro_ui", 0)
+                    store.add(
+                        QuroMessage(
+                            role = "user",
+                            content = text,
+                            senderName = uiPrefs.getString("user_name", "")?.takeIf { it.isNotBlank() },
+                            avatarUrl = uiPrefs.getString("user_avatar", "")?.takeIf { it.isNotBlank() },
+                        )
+                    )
                     assistant.ask(applicationContext, cfg, buildVoiceSystemPrompt())
                 }
                 mainHandler.post { speaking = true; status = "回复中：${reply.take(40)}" }

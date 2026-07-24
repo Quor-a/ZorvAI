@@ -35,9 +35,15 @@ private const val TAG = "QuroLlm"
 class QuroLlmClient(
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
         .build(),
 ) {
+    companion object {
+        /** 单次响应体最大 4MB；超过此限制的响应（如 MiMo 超长 reasoning）直接截断，
+         * 作为内存护栏，避免超大响应直接 OOM。 */
+        const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+    }
+
     fun chat(
         baseUrl: String,
         apiKey: String,
@@ -83,7 +89,7 @@ class QuroLlmClient(
         Log.i(TAG, ">>> REQUEST  model=$model url=$url messages=${messages.size} tools=${tools.size} maxTokens=$maxTokens body=${bodyStr.length}ch")
         if (tools.isNotEmpty()) {
             Log.d(TAG, "    tool_names=[${tools.joinToString(", ") { it.name }}]")
-            if (tools.size > 25) Log.w(TAG, "    ⚠️ 工具数量 ${tools.size} 偏多！部分 API 中转可能静默丢弃 tools 字段，导致模型无法调用工具。")
+            if (tools.size > 25) Log.w(TAG, "    ⚠️ 工具数量 ${tools.size} 偏多（内置工具+技能）！部分 API 中转可能静默丢弃 tools 字段，导致模型无法调用工具。可考虑关闭部分技能的「常驻系统提示词」或在设置关闭「完整工具集」。")
         }
         val req = Request.Builder().url(url)
             .addHeader("Authorization", "Bearer $apiKey")
@@ -104,7 +110,16 @@ class QuroLlmClient(
             }
             try {
                 client.newCall(req).execute().use { resp ->
-                    val text = resp.body?.string().orEmpty()
+                    val rawBody = resp.body?.string().orEmpty()
+                    // 🛡️ 响应体超限截断：MiMo 等推理模型可能返回数 MB 的 reasoning_content，
+                    // org.json 递归解析时 StackOverflowError → "stack size 8188KB"。
+                    // 截断到 MAX_RESPONSE_BYTES 后仍可解析出 choices[0]（尾部被裁的是 reasoning）。
+                    val text = if (rawBody.length > MAX_RESPONSE_BYTES) {
+                        Log.w(TAG, "⚠️ 响应体超限 ${rawBody.length}ch > ${MAX_RESPONSE_BYTES}ch，截断处理")
+                        rawBody.take(MAX_RESPONSE_BYTES)
+                    } else {
+                        rawBody
+                    }
                     // ===== 调试日志：响应概览 =====
                     val preview = text.take(300).replace("\n", "\\n")
                     Log.i(TAG, "<<< RESPONSE HTTP=${resp.code} body=${text.length}ch preview=$preview")

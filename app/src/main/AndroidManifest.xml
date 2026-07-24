@@ -29,6 +29,9 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.SET_ALARM" />
+    <!-- 精确闹钟（Android 12+）：声明后 canScheduleExactAlarms() 才可能返回 true；
+         即便不授权，QuroScheduledTask 也已降级为 setWindow 避免 SecurityException 崩溃。 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- 权限管理：电池优化豁免引导 -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />

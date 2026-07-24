@@ -6,6 +6,7 @@ import com.ai.assistance.quro.core.QuroCrashLogger
 import com.ai.assistance.quro.core.mcp.QuroLocalMcpManager
 import com.ai.assistance.quro.core.tools.QuroImportedToolRegistry
 import com.ai.assistance.quro.core.tools.QuroScheduledTaskScheduler
+import com.ai.assistance.quro.core.bot.QuroBotManager
 import com.ai.assistance.quro.ui.QuroPersonaViewModel
 
 /**
@@ -32,6 +33,8 @@ class QuroApplication : Application() {
         // 恢复所有定时任务调度（开机/重启后自动重新排程）
         QuroScheduledTaskScheduler.ensureChannel(applicationContext)
         QuroScheduledTaskScheduler.scheduleAll(applicationContext)
+        // 机器人框架（C2）：注册默认适配器并在「已启用且已配置」的平台启动（本地测试默认启用）
+        QuroBotManager.instance(applicationContext).startEnabled(applicationContext)
         // 心跳孵化：偏好就绪后启动全局后台循环（AtomicBoolean 守卫避免重复启动；默认开启）
         QuroPersonaViewModel.initHeartbeat(applicationContext)
         if (QuroPersonaViewModel.heartbeatEnabled.value) {

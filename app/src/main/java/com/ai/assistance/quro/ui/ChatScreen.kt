@@ -116,6 +116,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -281,6 +282,21 @@ fun ChatScreen(
     val personas by personaVm.personas.collectAsState()
     val cfg by modelVm.cfg.collectAsState()
 
+    // ── 执行轨迹总线：全局只在此处订阅一次，去重后存入共享状态，三个面板统一读取；
+    //    切换会话时清空，避免跨会话污染；add 前按 id 去重，避免重复 key / 重复事件。 ──
+    val traceLines = remember { mutableStateListOf<QuroAgentTrace.AgentTraceEvent>() }
+    LaunchedEffect(Unit) {
+        QuroAgentTrace.flow.collect { ev ->
+            if (traceLines.none { it.id == ev.id }) {
+                traceLines.add(ev)
+                if (traceLines.size > 200) traceLines.removeAt(0)
+            }
+        }
+    }
+    LaunchedEffect(currentId) {
+        traceLines.clear()
+    }
+
     // ---- 本地 UI 偏好（单一真相源：QuroChatViewModel.quro_ui，落盘持久化） ----
     val fontTier by vm.fontTierPref.collectAsState()
     val soundOn by vm.soundOnPref.collectAsState()
@@ -291,7 +307,7 @@ fun ChatScreen(
 
     // 回复完成提示音：监听 busy 由 true→false 的下降沿（首帧 prevBusy=false 不触发）
     var prevBusy by remember { mutableStateOf(false) }
-    LaunchedEffect(busy) {
+    LaunchedEffect(busy, currentId) {
         if (prevBusy && !busy && vm.isSoundOn()) {
             runCatching {
                 val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
@@ -471,6 +487,8 @@ fun ChatScreen(
     var showSchedule by remember { mutableStateOf(false) }
     // 知识库管理页（从设置页入口进入：浏览 / 查看 / 新建 / 删除 knowledge_base 文档）
     var showKnowledge by remember { mutableStateOf(false) }
+    // 机器人设置页（C2）：从工具箱「机器人」入口进入
+    var showBots by remember { mutableStateOf(false) }
     // ONLYOFFICE 文档（开源移动办公套件入口，替代原 Collabora WebView 壳；已整合原「文档中心」）
     var showOnlyOffice by remember { mutableStateOf(false) }
     var showTerminal by remember { mutableStateOf(false) }
@@ -522,6 +540,7 @@ fun ChatScreen(
             "ui_open_plugins" -> showPlugins = true
             "ui_open_skills" -> showSkills = true
             "ui_open_schedule" -> showSchedule = true
+            "ui_open_bots" -> showBots = true
             "ui_open_cms" -> showCms = true
             "ui_open_system_status" -> showSystemStatus = true
             "ui_open_permission" -> showPermission = true
@@ -706,6 +725,7 @@ fun ChatScreen(
                     MessageList(
                         messages = uiMessages,
                         scaled = { scaled(it) },
+                        traceLines = traceLines,
                         onOpenLink = { browserUrl = it },
                         onCommand = { handleCardCommand(it) },
                         onAskFollowup = { txt ->
@@ -746,7 +766,7 @@ fun ChatScreen(
                     fun toggleAutoRead() { autoRead = !autoRead; QuroVoiceFeaturePrefs.setAutoRead(ctx, autoRead) }
                     var lastSpokenId by remember { mutableStateOf("") }
                     var wasBusy by remember { mutableStateOf(false) }
-                    LaunchedEffect(busy) {
+                    LaunchedEffect(busy, currentId) {
                         if (wasBusy && !busy) {
                             val msgs = vm.messages.value
                             val last = msgs.lastOrNull()
@@ -887,7 +907,7 @@ fun ChatScreen(
 
         // 任意「设置子页」浮层是否开着：用于禁用设置 sheet 的返回回调，保证逐级返回
         val settingsChildOpen = showModelConfig || showToolbox || showVoice || showAbout || showAppearance ||
-            showPermission || showCms || showPlugins || showKnowledge || showTerminal || showSchedule ||
+            showPermission || showCms || showPlugins || showKnowledge || showTerminal || showSchedule || showBots ||
             showTts || showStt || showVoiceService || showSystemStatus || showFeatureModelConfig
         // 底部弹层（自定义，统一遮罩 + 上滑）
         SheetOverlay(
@@ -982,6 +1002,7 @@ fun ChatScreen(
             onOpenTerminal = { showTerminal = true },
             onOpenPlugins = { showPlugins = true },
             onOpenSkills = { showSkills = true },
+            onOpenBots = { showBots = true },
             onOpenSchedule = { showSchedule = true },
             settingsUseFullTools = useFullTools,
             onSettingsToggleFullTools = {
@@ -1254,6 +1275,14 @@ fun ChatScreen(
             }
         }
 
+        // 机器人设置页（C2）：全屏覆盖层（从工具箱「机器人」入口进入，返回关页回工具箱）
+        if (showBots) {
+            BackHandler { showBots = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+                QuroBotSettingsScreen(onClose = { showBots = false })
+            }
+        }
+
         // ONLYOFFICE 文档（开源移动办公套件）：全屏覆盖层（从工具栏「WPS文档」进入；已整合原「文档中心」）
         if (showOnlyOffice) {
             BackHandler { showOnlyOffice = false }
@@ -1468,6 +1497,7 @@ private fun PersonaBar(
 private fun MessageList(
     messages: List<Message>,
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
+    traceLines: SnapshotStateList<QuroAgentTrace.AgentTraceEvent>,
     onOpenLink: (String) -> Unit,
     onCommand: (String) -> Unit,
     onAskFollowup: (String) -> Unit = {},
@@ -1490,15 +1520,8 @@ private fun MessageList(
             listState.animateScrollToItem(lastIndex)
         }
     }
-    // 执行轨迹事件收集提升到列表作用域之外（避免每条消息 lambda 内重复订阅）。
-    // 仅当确有事件时，才在末尾兜底显示追踪卡，避免空闲对话出现空的「执行追踪」面板。
-    val traceLines = remember { mutableStateListOf<QuroAgentTrace.AgentTraceEvent>() }
-    LaunchedEffect(Unit) {
-        QuroAgentTrace.flow.collect { ev ->
-            traceLines.add(ev)
-            if (traceLines.size > 200) traceLines.removeAt(0)
-        }
-    }
+    // 注意：执行轨迹事件已统一在 ChatScreen 顶层订阅一次（单一真相源 traceLines），
+    // 此处不再各自 collect 全局流，避免重复订阅 / 跨会话污染。
     val lastToolIdx = messages.indexOfLast { !it.mine && !it.tools.isNullOrEmpty() }
     LazyColumn(
         modifier = modifier
@@ -1562,7 +1585,7 @@ private fun AgentTracePanel(lines: MutableList<QuroAgentTrace.AgentTraceEvent>) 
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                items(lines) { ev -> TraceRow(ev) }
+                items(lines, key = { it.id }) { ev -> TraceRow(ev) }
             }
         }
     }
@@ -1608,6 +1631,7 @@ private fun TraceRow(ev: QuroAgentTrace.AgentTraceEvent) {
         val cleanTrace = rawTrace
             .replace(Regex("<[^>]*>"), " ")
             .replace(Regex("\\s+"), " ")
+            .replace("`", "")
             .trim()
         Text(
             cleanTrace,
@@ -1687,7 +1711,7 @@ private fun MessageRow(
 
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, bottom = if (hasThinkOrTools && (showThink || showTools)) 2.dp else 4.dp)) {
                 Text(
-                    if (msg.mine) "你 · ${msg.time}" else "${msg.author} · ${msg.time}",
+                    "${msg.author} · ${msg.time}",
                     fontSize = scaled(11), color = Muted,
                 )
                 // 仅 AI 消息且含有思考/工具数据时显示小按钮
@@ -1918,6 +1942,7 @@ private fun ToolCallBlock(
     tools: List<ToolCallUi>,
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
     withTrace: Boolean = false,
+    traceLines: SnapshotStateList<QuroAgentTrace.AgentTraceEvent> = mutableStateListOf(),
 ) {
     val cs = MaterialTheme.colorScheme
     var expanded by remember { mutableStateOf(false) }
@@ -1986,13 +2011,6 @@ private fun ToolCallBlock(
                     HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.25f))
                     Spacer(Modifier.height(8.dp))
 
-                    val traceLines = remember { mutableStateListOf<QuroAgentTrace.AgentTraceEvent>() }
-                    LaunchedEffect(Unit) {
-                        QuroAgentTrace.flow.collect { ev ->
-                            traceLines.add(ev)
-                            if (traceLines.size > 200) traceLines.removeAt(0)
-                        }
-                    }
                     var traceExpanded by remember { mutableStateOf(true) }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -2446,6 +2464,7 @@ private fun ThinkingWithToolsBubble(
     tools: List<ToolCallUi>,
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
     withTrace: Boolean = false,
+    traceLines: SnapshotStateList<QuroAgentTrace.AgentTraceEvent> = mutableStateListOf(),
 ) {
     val cs = MaterialTheme.colorScheme
     var expanded by remember { mutableStateOf(false) }
@@ -2515,13 +2534,6 @@ private fun ThinkingWithToolsBubble(
                         Spacer(Modifier.height(8.dp))
                         HorizontalDivider(color = Line2.copy(alpha = 0.25f))
                         Spacer(Modifier.height(6.dp))
-                        val traceLines = remember { mutableStateListOf<QuroAgentTrace.AgentTraceEvent>() }
-                        LaunchedEffect(Unit) {
-                            QuroAgentTrace.flow.collect { ev ->
-                                traceLines.add(ev)
-                                if (traceLines.size > 200) traceLines.removeAt(0)
-                            }
-                        }
                         var traceExpanded by remember { mutableStateOf(true) }
                         Row(verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.clickable { traceExpanded = !traceExpanded }) {
@@ -2939,6 +2951,7 @@ private fun SheetOverlay(
     onOpenTerminal: () -> Unit,
     onOpenPlugins: () -> Unit,
     onOpenSkills: () -> Unit,
+    onOpenBots: () -> Unit,
     settingsUseFullTools: Boolean,
     onSettingsToggleFullTools: () -> Unit,
     onManagePersona: () -> Unit,
@@ -3011,7 +3024,8 @@ private fun SheetOverlay(
                         onOpenStt,
                         { q -> onSendText(q) },
                         scaled,
-                        onOpenSchedule = onOpenSchedule
+                        onOpenSchedule = onOpenSchedule,
+                        onOpenBots = onOpenBots
                     )
                     SheetType.Voice -> VoiceSheetContent(onOpenTts, onOpenStt, onOpenVoice, scaled)
                     SheetType.Settings -> SettingsSheetContent(
@@ -3447,6 +3461,7 @@ private fun UploadSheetContent(
     onAiSearch: (String) -> Unit,
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
     onOpenSchedule: () -> Unit = {},
+    onOpenBots: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
@@ -3475,6 +3490,7 @@ private fun UploadSheetContent(
             ToolTile({ LucideIcon("trash_2", "清屏", Modifier.size(22.dp), tint = cs.primary) }, "清屏", onClearChat, scaled)
             ToolTile({ LucideIcon("sparkles", "技能", Modifier.size(22.dp), tint = cs.primary) }, "技能", onOpenSkills, scaled)
             ToolTile({ LucideIcon("clock", "定时", Modifier.size(22.dp), tint = cs.primary) }, "定时", onOpenSchedule, scaled)
+            ToolTile({ LucideIcon("bot", "机器人", Modifier.size(22.dp), tint = cs.primary) }, "机器人", onOpenBots, scaled)
         }
     }
     showMediaBrowser?.let { k ->
@@ -4254,9 +4270,11 @@ private fun QuroMessage.toMessage(
     return Message(
         id = id.hashCode(),
         mine = mine,
-        author = if (mine) userName.ifBlank { "你" } else assistantName,
-        avatar = if (mine) userName.ifBlank { "我" } else assistantAvatar,
-        avatarUri = if (mine) userAvatarUri else assistantAvatarUri,
+        // A2 修复：用户消息气泡显示发送者昵称——优先用消息自带 senderName，回退到当前资料昵称，最终回退"我"；
+        // 不再死写"你"。头像同理优先用消息自带 avatarUrl。
+        author = if (mine) (senderName ?: userName).ifBlank { "我" } else assistantName,
+        avatar = if (mine) (senderName ?: userName).ifBlank { "我" } else assistantAvatar,
+        avatarUri = if (mine) (avatarUrl ?: userAvatarUri) else assistantAvatarUri,
         time = formatChatTime(createdAt),
         text = content.ifBlank { null },
         attachment = attachment,

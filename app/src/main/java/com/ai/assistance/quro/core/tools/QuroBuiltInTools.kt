@@ -2,6 +2,9 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import android.os.Build
+import com.ai.assistance.quro.core.model.QuroModelConfigRepository
+import com.ai.assistance.quro.core.knowledge.QuroRagKnowledgeTool
+import com.ai.assistance.quro.core.knowledge.QuroKnowledgeSyncTool
 import com.ai.assistance.quro.core.cms.QuroCmsCallTool
 import com.ai.assistance.quro.core.cms.QuroCmsDeployTool
 import com.ai.assistance.quro.core.cms.QuroCmsListTool
@@ -280,6 +283,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(AiBrowserTool())
     // 升级版知识库（add / search / list，后台可用）
     r.register(KnowledgeManageTool())
+    // 知识库 C3 重做：本地自包含向量语义检索（RAG），零重依赖，离线可用（无 API Key 时降级本地词法检索）
+    r.register(QuroRagKnowledgeTool())
+    // 知识库 #590/#591：第三方云盘知识源接入（list/sync/sync_one），与 RAG 检索联动
+    r.register(QuroKnowledgeSyncTool())
     // aiWPS 文档生成（docx / xlsx / pptx，后台生成真实可打开文件）
     r.register(AiwpsCreateTool())
     // UI 动作工具：把对话框界面/弹层/开关注册为 AI 可调用工具（走 QuroUiActionBridge 回调 ChatScreen）
@@ -298,5 +305,15 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(McpListLocalTool())
     // 并入「导入工具」（AI 自写 / 用户粘贴 JSON 导入），使其可被 AI 调用
     context?.let { r.attach(it) }
+    // 并入「可调用技能」：把用户技能注册为 AI 工具函数（function calling），与导入工具同理
+    context?.let { r.mergeSkills(it) }
+    // 同步技能可调用开关（来自模型配置）：使 QuroModelConfig.skillToolsEnabled 生效
+    context?.let { ctx ->
+        runCatching {
+            val cfg = QuroModelConfigRepository(ctx).load()
+            r.skillToolsEnabled = cfg.skillToolsEnabled
+            r.maxSkillTools = cfg.maxSkillTools
+        }
+    }
     return r
 }

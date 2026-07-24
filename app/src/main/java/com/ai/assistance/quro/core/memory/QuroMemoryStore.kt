@@ -26,6 +26,13 @@ data class QuroMemoryEntry(
 )
 
 class QuroMemoryRepository(context: Context) {
+    companion object {
+        // C1 修复：进程级写锁。QuroMemoryRepository 在多处（ViewModel / 语音球服务 / 记忆工具）各自 new 实例，
+        // 但都指向同一个 quro_memory.json。用 companion 锁保证跨实例的 loadAll()→saveAll() 临界区原子，
+        // 杜绝并发/连续写互相覆盖（表现为「有时保存有时不保存」）。
+        private val writeLock = Any()
+    }
+
     private val file = File(context.filesDir, "quro_memory.json")
 
     fun loadAll(): List<QuroMemoryEntry> {
@@ -51,15 +58,22 @@ class QuroMemoryRepository(context: Context) {
     }
 
     fun add(entry: QuroMemoryEntry) {
-        saveAll(loadAll() + entry)
+        synchronized(writeLock) {
+            // 临界区内重新 loadAll()，拿最新全量再合并新增项，避免覆盖同窗口内的其它写。
+            saveAll(loadAll() + entry)
+        }
     }
 
     fun update(entry: QuroMemoryEntry) {
-        saveAll(loadAll().map { if (it.id == entry.id) entry.copy(updatedAt = System.currentTimeMillis()) else it })
+        synchronized(writeLock) {
+            saveAll(loadAll().map { if (it.id == entry.id) entry.copy(updatedAt = System.currentTimeMillis()) else it })
+        }
     }
 
     fun delete(id: String) {
-        saveAll(loadAll().filter { it.id != id })
+        synchronized(writeLock) {
+            saveAll(loadAll().filter { it.id != id })
+        }
     }
 
     /** 检索：匹配内容 / 标题 / 标签 / 分组（不区分大小写）。空查询返回全部。 */
@@ -98,10 +112,13 @@ class QuroMemoryRepository(context: Context) {
 
     /** 导入：与现有记忆按 id 合并（相同 id 以导入内容覆盖，否则追加）。返回导入条数。 */
     fun mergeImport(entries: List<QuroMemoryEntry>): Int {
-        val existing = loadAll().associateBy { it.id }
-        val merged = (entries + existing.values).distinctBy { it.id }
-        saveAll(merged)
-        return entries.size
+        return synchronized(writeLock) {
+            // 临界区内重新 loadAll()，保证与并发写不互相覆盖
+            val existing = loadAll().associateBy { it.id }
+            val merged = (entries + existing.values).distinctBy { it.id }
+            saveAll(merged)
+            entries.size
+        }
     }
 
     /** 导出为 {"memories":[...]} 格式文本。 */

@@ -61,7 +61,9 @@ object QuroOnDeviceModelManager {
                 return@withContext false
             }
             Log.i(TAG, "下载完成: ${tmpFile.length()} bytes -> $fileName")
-            // 关键校验：拒绝 3452 字节之类的假模型（链接失效 / 返回错误页）
+            // 错误页下限校验：仅拒绝明显坏文件（链接失效 / 返回几 KB 错误页）。
+            // 注意：这里用「下载压缩包体积」下限（默认 1MB，见 AsrModelSpec.minSizeBytes），
+            // 不再用解压后的模型体积去卡压缩包；模型是否真的可用以解压后的 NCNN 布局校验为准。
             if (spec.minSizeBytes > 0 && tmpFile.length() < spec.minSizeBytes) {
                 tmpFile.delete()
                 fail(appCtx, deployKey, onState, "下载文件仅 ${tmpFile.length()} 字节，疑似链接失效或返回错误页（需 ≥ ${spec.minSizeBytes} 字节）")
@@ -257,5 +259,19 @@ object QuroOnDeviceModelManager {
         } catch (_: Throwable) {
             false
         }
+    }
+
+    /**
+     * 校验已部署目录的磁盘完整性（二次进入设置页时调用，解决「记录写着已部署、但文件被删/损坏」
+     * 导致 UI 误判可用或不断重复下载的问题）。
+     *
+     * 判定可用：目录存在 + 目录内最大文件 ≥ [MIN_VALID_MODEL_BYTES]（排除错误页/空目录）
+     * + 布局为 [AsrModelLayout.NCNN]（模型文件齐全）。三者皆满足才视为「已可用、无需重下」。
+     */
+    fun verifyDeployedDir(dir: String?): Boolean {
+        val d = dir?.let { File(it) } ?: return false
+        if (!d.isDirectory) return false
+        if (deployedDirMaxFileBytes(dir) < MIN_VALID_MODEL_BYTES) return false
+        return detectAsrLayout(d) == AsrModelLayout.NCNN
     }
 }

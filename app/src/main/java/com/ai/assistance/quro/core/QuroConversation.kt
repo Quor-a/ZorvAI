@@ -24,6 +24,10 @@ data class QuroMessage(
     val attachments: List<QuroAttachment>? = null,
     /** 气泡内富组件（AI 经 ui_widget / ui_card 下发，合体进聊天气泡，而非底部独立卡片栏）。 */
     val cards: List<QuroChatCard> = emptyList(),
+    /** 发送者昵称（用户消息气泡显示用；为空则回退到当前用户资料昵称「我」）。默认 null 以保证旧消息反序列化向后兼容。 */
+    val senderName: String? = null,
+    /** 发送者头像 URL/Uri（用户消息气泡头像用；为空则回退到当前用户资料头像）。默认 null 以保证向后兼容。 */
+    val avatarUrl: String? = null,
     /** 内部管道消息标记：true 时 UI 层不渲染此消息（LLM 上下文仍包含）。默认 false。 */
     val hidden: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),

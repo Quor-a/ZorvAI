@@ -21,6 +21,8 @@ data class QuroModelConfig(
     val customProviderName: String = "",   // 自定义厂商展示名（provider=="OTHER" 时有效）
     val localModelPath: String = "",       // 本地离线模型路径（provider 为 MNN/LLAMA_CPP 时有效）
     val useFullTools: Boolean = false,     // 完整工具集开关：false=只下发 coreSpecs（14 个，兼容多数 API 中转）；true=下发 fullSpecs（~50 个，需代理支持大 tools 负载）
+    val skillToolsEnabled: Boolean = true, // 技能可调用（function calling）总开关：true=将用户技能注册为 AI 可调用工具；false=技能仅注入系统提示词、不可被调用
+    val maxSkillTools: Int = 16,           // 最多下发的技能工具数量（避免工具集过大被 API 中转静默丢弃）
 )
 
 class QuroModelConfigRepository(context: Context) {
@@ -40,6 +42,7 @@ class QuroModelConfigRepository(context: Context) {
         customProviderName = prefs.getString(KEY_CUSTOM_PROVIDER, "") ?: "",
         localModelPath = prefs.getString(KEY_LOCAL_PATH, "") ?: "",
         useFullTools = prefs.getBoolean(KEY_FULL_TOOLS, false),
+        skillToolsEnabled = prefs.getBoolean(KEY_SKILL_TOOLS, true),
     )
 
     fun save(cfg: QuroModelConfig) = prefs.edit {
@@ -55,6 +58,7 @@ class QuroModelConfigRepository(context: Context) {
         putString(KEY_CUSTOM_PROVIDER, cfg.customProviderName)
         putString(KEY_LOCAL_PATH, cfg.localModelPath)
         putBoolean(KEY_FULL_TOOLS, cfg.useFullTools)
+        putBoolean(KEY_SKILL_TOOLS, cfg.skillToolsEnabled)
     }
 
     companion object {
@@ -70,5 +74,6 @@ class QuroModelConfigRepository(context: Context) {
         private const val KEY_CUSTOM_PROVIDER = "custom_provider_name"
         private const val KEY_LOCAL_PATH = "local_model_path"
         private const val KEY_FULL_TOOLS = "use_full_tools"
+        private const val KEY_SKILL_TOOLS = "skill_tools_enabled"
     }
 }

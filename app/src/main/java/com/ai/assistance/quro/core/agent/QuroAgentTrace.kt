@@ -3,6 +3,7 @@ package com.ai.assistance.quro.core.agent
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import java.util.UUID
 
 /**
  * AI 行动轨迹总线（原创，对应「终端即 AI 思考+行动可视化」的纯净架构）。
@@ -28,6 +29,8 @@ object QuroAgentTrace {
         val summary: String,
         val detail: String = "",
         val ts: Long = System.currentTimeMillis(),
+        /** 稳定唯一 id：发射时生成，UI 去重与 LazyColumn key 使用，避免重复/跨会话污染。 */
+        val id: String = UUID.randomUUID().toString(),
     )
 
     private val _flow = MutableSharedFlow<AgentTraceEvent>(replay = 128, extraBufferCapacity = 256)

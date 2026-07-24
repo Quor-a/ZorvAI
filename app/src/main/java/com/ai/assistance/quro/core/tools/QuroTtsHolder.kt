@@ -414,18 +414,18 @@ object QuroTtsPrefs {
     private const val KEY_LANG = "tts_language"; private const val KEY_VOICE = "tts_voice"
     private const val KEY_RATE = "tts_rate"; private const val KEY_PITCH = "tts_pitch"
     private const val KEY_SOURCE = "tts_source"
-    const val SOURCE_LOCAL = "local"; const val SOURCE_MODEL = "model"; const val SOURCE_CLOUD = "cloud"
+    const val SOURCE_LOCAL = "local"; const val SOURCE_MODEL = "model"; const val SOURCE_CLOUD = "cloud"; const val SOURCE_MIMO = "mimo"
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     fun getSource(ctx: Context): String {
         return when (val v = prefs(ctx).getString(KEY_SOURCE, SOURCE_LOCAL)) {
-            SOURCE_MODEL, SOURCE_CLOUD -> v
+            SOURCE_MODEL, SOURCE_CLOUD, SOURCE_MIMO -> v
             else -> SOURCE_LOCAL
         }
     }
     fun setSource(ctx: Context, s: String) =
         prefs(ctx).edit().putString(KEY_SOURCE, when (s) {
-            SOURCE_MODEL, SOURCE_CLOUD -> s
+            SOURCE_MODEL, SOURCE_CLOUD, SOURCE_MIMO -> s
             else -> SOURCE_LOCAL
         }).apply()
     fun getLanguage(ctx: Context) = prefs(ctx).getString(KEY_LANG, "zh-CN") ?: "zh-CN"

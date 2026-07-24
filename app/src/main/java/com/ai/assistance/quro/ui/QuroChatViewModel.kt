@@ -44,6 +44,9 @@ import com.ai.assistance.quro.core.tools.QuroTtsProviderPrefs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -83,7 +86,10 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     private val _conversationsMeta = MutableStateFlow<List<QuroConversationMeta>>(emptyList())
     private val _currentId = MutableStateFlow("")
     private val _messages = MutableStateFlow<List<QuroMessage>>(emptyList())
-    private val _busy = MutableStateFlow(false)
+    // A4 修复：每个会话独立的「生成中」状态。原全局 _busy 会导致切换会话后打断按钮残留，
+    // 现改为按 conversationId 记录，UI 仅对【当前可见会话】显示打断按钮。
+    private val _busyMap = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    fun isBusy(conversationId: String): Boolean = _busyMap.value[conversationId] == true
     private var sendJob: Job? = null
     // 当前选中的会话 id（供外部组件如语音球读取，把语音球对话写入此对话框）
     var activeConversationId: String = ""
@@ -100,7 +106,9 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     val conversations: StateFlow<List<QuroConversationMeta>> = _conversationsMeta.asStateFlow()
     val currentId: StateFlow<String> = _currentId.asStateFlow()
     val messages: StateFlow<List<QuroMessage>> = _messages.asStateFlow()
-    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+    // 仅反映【当前可见会话】是否正在生成（随切换会话自动变化），供 UI 显示打断按钮。
+    val busy: StateFlow<Boolean> = combine(_busyMap, _currentId) { map, id -> map[id] == true }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val thinking: StateFlow<Boolean> = _thinking.asStateFlow()
 
     fun setThinking(on: Boolean) {
@@ -228,6 +236,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         store.clear()
         conv.messages.forEach { store.add(it) }
         _messages.value = store.all()
+        // A4：打断状态已改为按会话隔离（_busyMap），busy 仅反映【当前可见会话】是否生成中。
+        // 切换会话后无需复位全局状态——切走时打断按钮随当前会话自动隐藏，切回仍在生成的会话会重新显示。
     }
 
     fun deleteConversation(id: String) {
@@ -259,10 +269,10 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         cfg: QuroModelConfig = repo.load(),
     ) {
         val t = text.trim()
-        if ((t.isEmpty() && attachments.isEmpty()) || _busy.value) return
+        if ((t.isEmpty() && attachments.isEmpty()) || isBusy(_currentId.value)) return
         // 接住对话协程里逃逸的异常，转成可见报错而非界面卡死/进程崩溃。
         sendJob = viewModelScope.launch(QuroCrashReporter.handler) {
-            _busy.value = true
+            _busyMap.value = _busyMap.value + (_currentId.value to true)
             try {
                 val firstUser = store.all().none { it.role == "user" }
                 store.add(
@@ -270,8 +280,23 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         role = "user",
                         content = t,
                         attachments = if (attachments.isNotEmpty()) attachments else null,
+                        // A2 修复：把发送者昵称/头像随消息一并带出，供气泡渲染显示（与 system prompt 昵称同源）。
+                        senderName = userProfile.value.name.takeIf { it.isNotBlank() },
+                        avatarUrl = userProfile.value.avatarUri.takeIf { it.isNotBlank() },
                     ),
                 )
+                // 触发词自动激活：匹配到的非常驻（alwaysOn=false）技能按隐藏消息预注入，供 AI 本轮作答
+                val onDemand = QuroSkillStore.matchTriggerSkills(t, appContext).filter { !it.alwaysOn }
+                if (onDemand.isNotEmpty()) {
+                    val inject = onDemand.joinToString("\n\n") { "### ${it.name}\n${it.prompt}" }
+                    store.add(
+                        QuroMessage(
+                            role = "user",
+                            content = "[本轮已根据触发词自动激活以下技能，请按其对用户消息作答]\n$inject",
+                            hidden = true,
+                        ),
+                    )
+                }
                 commitCurrent(updateTitle = firstUser)
                 if (cfg.apiKey.isBlank()) {
                     store.add(
@@ -298,7 +323,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         store.add(
                             QuroMessage(
                                 role = "assistant",
-                                content = "⚠️ 回复生成失败：${e.message ?: "未知错误"}",
+                                content = "⚠️ 回复生成失败：${(e.message ?: "未知错误").take(200)}",
                             ),
                         )
                     }
@@ -311,16 +336,16 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     store.all().lastOrNull { it.role == "assistant" && !it.hidden && it.content.isNotBlank() }
                         ?.let { fireReplyNotification("Quro AI", it.content) }
                 }
-            } catch (e: Exception) {
-                store.add(
-                    QuroMessage(
-                        role = "assistant",
-                        content = "⚠️ 发生错误：${e.message ?: "未知错误"}",
-                    ),
-                )
-                commitCurrent()
-            } finally {
-                _busy.value = false
+                } catch (e: Exception) {
+                    store.add(
+                        QuroMessage(
+                            role = "assistant",
+                            content = "⚠️ 发生错误：${(e.message ?: "未知错误").take(200)}",
+                        ),
+                    )
+                    commitCurrent()
+                } finally {
+                _busyMap.value = _busyMap.value - _currentId.value
             }
         }
     }
@@ -331,7 +356,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     fun stop() {
         sendJob?.cancel()
         sendJob = null
-        _busy.value = false   // 立即复位：让 UI 马上切回发送按钮
+        _busyMap.value = _busyMap.value - activeConversationId   // 立即复位【当前会话】：打断按钮马上切回发送
     }
 
     /**
@@ -349,7 +374,19 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // 目标即当前可见会话：走原路径
         if (targetId == _currentId.value) {
             activeConversationId = targetId
-            store.add(QuroMessage(role = "user", content = text))
+            store.add(QuroMessage(role = "user", content = text, senderName = userProfile.value.name.takeIf { it.isNotBlank() }, avatarUrl = userProfile.value.avatarUri.takeIf { it.isNotBlank() }))
+            // 触发词自动激活（当前可见会话路径）：与 send() 同源逻辑
+            val onDemand = QuroSkillStore.matchTriggerSkills(text, appContext).filter { !it.alwaysOn }
+            if (onDemand.isNotEmpty()) {
+                val inject = onDemand.joinToString("\n\n") { "### ${it.name}\n${it.prompt}" }
+                store.add(
+                    QuroMessage(
+                        role = "user",
+                        content = "[本轮已根据触发词自动激活以下技能，请按其对用户消息作答]\n$inject",
+                        hidden = true,
+                    ),
+                )
+            }
             commitCurrent()
             val reply = runVoiceAsk(cfg) { commitCurrent() }
             commitCurrent()
@@ -364,7 +401,19 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         return try {
             store.clear()
             conv.messages.forEach { store.add(it) }
-            store.add(QuroMessage(role = "user", content = text))
+            store.add(QuroMessage(role = "user", content = text, senderName = userProfile.value.name.takeIf { it.isNotBlank() }, avatarUrl = userProfile.value.avatarUri.takeIf { it.isNotBlank() }))
+            // 触发词自动激活（绑定其它会话路径）：与 send() 同源逻辑
+            val onDemand = QuroSkillStore.matchTriggerSkills(text, appContext).filter { !it.alwaysOn }
+            if (onDemand.isNotEmpty()) {
+                val inject = onDemand.joinToString("\n\n") { "### ${it.name}\n${it.prompt}" }
+                store.add(
+                    QuroMessage(
+                        role = "user",
+                        content = "[本轮已根据触发词自动激活以下技能，请按其对用户消息作答]\n$inject",
+                        hidden = true,
+                    ),
+                )
+            }
             val reply = runVoiceAsk(cfg) { /* 绑定会话不中途落盘当前视图，结束后整段写回目标会话 */ }
             val finalMsgs = store.all().toList()
             _convs.value = _convs.value.map { c ->
@@ -678,7 +727,8 @@ $recent
         appendCapabilityAwareness(sb, activeSpecs)
 
         // ══════════════ 用户技能 SKILL（已启用的自定义指令注入系统提示词） ══════════════
-        val skills = QuroSkillStore.enabledList(appContext)
+        // alwaysOn=false 的技能不再常驻系统提示词（改为触发词命中时按需注入，避免重复）
+        val skills = QuroSkillStore.enabledList(appContext).filter { it.alwaysOn }
         if (skills.isNotEmpty()) {
             sb.append("\n## 已启用技能（Skills）\n")
             sb.append("以下是用户已启用的自定义技能，请将其指令作为额外的行为约束 / 能力说明，在合适时主动按技能行事：\n")

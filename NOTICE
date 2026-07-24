@@ -50,16 +50,26 @@ Sherpa-NCNN (k2-fsa)
 GeckoView (Mozilla)
   License: MPL-2.0 (file-level copyleft; source provided with the build)
 
-libVLC (VideoLAN)
-  License: GPL v2/v3 (STRONG COPYLEFT)
-  Note:    As required by the GPL, the corresponding source code of the
-           version of libVLC used is available from the project repository
-           and release artifacts.
+libVLC (VideoLAN) — org.videolan.android:libvlc-all:3.6.5
+  License: LGPL-2.1 (WEAK COPYLEFT) for the core engine (libVLC / libvlccore)
+  Note:    libVLC (the embeddable multimedia engine) is licensed by VideoLAN
+           under the LGPL-2.1-or-later. This is COMPATIBLE with the Apache-2.0
+           main license when libVLC is dynamically linked (it is loaded on
+           Android as a native .so). As required by the LGPL, the corresponding
+           source code of the libVLC version used is available from the project
+           repository and release artifacts.
+  Caveat:  The "-all" artifact bundles VLC modules; per VideoLAN some modules
+           are GPLv2/v3. Verify the actually-linked module set. If any GPL
+           module is used, either switch to org.videolan.android:libvlc:3.6.5
+           (core engine only, LGPL-2.1) or comply with GPL for those modules.
 
-org.json
-  License: JSON License
-  Note:    Provided by the Android platform; terms include the clause
-           "The Software shall be used for Good, not Evil."
+org.json — org.json:json:20240303
+  License: Public Domain
+  Note:    Upstream removed the "The Software shall be used for Good, not Evil"
+           JSON License clause in version 20220924; this pinned version
+           (20240303) is released to the public domain. The Android platform
+           also bundles org.json under AOSP Apache-2.0, so this explicit Maven
+           dependency is optional for compile-time.
 
 ----------------------------------------------------------------------
 TRADEMARKS

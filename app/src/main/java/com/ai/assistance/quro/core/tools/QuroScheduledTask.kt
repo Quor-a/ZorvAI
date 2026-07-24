@@ -14,6 +14,16 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
 import java.util.UUID
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import com.ai.assistance.quro.activity.QuroMainActivity
+import com.ai.assistance.quro.ui.QuroChatViewModel
+
+/** 定时任务「完成推送」独立协程作用域：不随 BroadcastReceiver 销毁，app 生命周期内常驻。 */
+private val scheduleCompletionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 // ============================================================
 // 数据模型
@@ -147,9 +157,14 @@ object QuroScheduledTaskScheduler {
 
     /** 排程所有启用的任务 */
     fun scheduleAll(context: Context) {
-        val tasks = QuroScheduledTaskStore.load(context).filter { it.enabled }
-        tasks.forEach { schedule(context, it) }
-        Log.i(TAG, "已排程 ${tasks.size} 个定时任务")
+        // 包 runCatching 防止启动期（Application.onCreate / BootReceiver）排程崩溃拖垮应用
+        runCatching {
+            val tasks = QuroScheduledTaskStore.load(context).filter { it.enabled }
+            tasks.forEach { schedule(context, it) }
+            Log.i(TAG, "已排程 ${tasks.size} 个定时任务")
+        }.onFailure { e ->
+            Log.w(TAG, "scheduleAll 失败: ${e.message}")
+        }
     }
 
     /** 排程单个任务 */
@@ -171,7 +186,19 @@ object QuroScheduledTaskScheduler {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+        // 精确闹钟在 Android 12+ 需要 SCHEDULE_EXACT_ALARM 权限，否则抛 SecurityException；
+        // 无权限时降级为 setWindow（非精确窗口），保证不崩溃且仍能在目标时间附近触发。
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && am.canScheduleExactAlarms()) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            } else {
+                am.setWindow(AlarmManager.RTC_WAKEUP, triggerAt, 10 * 60 * 1000L, pi)
+            }
+        }.onFailure { e ->
+            Log.w(TAG, "任务[${task.title}] 精确排程失败，降级窗口闹钟: ${e.message}")
+            // 兜底再试一次窗口闹钟（极端情况下 setWindow 也可能因 PendingIntent 等问题抛错）
+            runCatching { am.setWindow(AlarmManager.RTC_WAKEUP, triggerAt, 10 * 60 * 1000L, pi) }
+        }
         Log.i(TAG, "任务[${task.title}] 下次触发: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(triggerAt))}")
     }
 
@@ -268,32 +295,107 @@ object QuroScheduledTaskScheduler {
 // 广播接收器
 // ============================================================
 
-/** 定时任务触发接收器：发通知 + 重新排程下一次 */
+/** 定时任务触发接收器：写入目标会话自动执行 + 发通知（点击回应用）+ 重新排程下一次 */
 class QuroScheduleReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val taskId = intent.getStringExtra(QuroScheduledTaskScheduler.EXTRA_TASK_ID) ?: return
         val tasks = QuroScheduledTaskStore.load(context)
         val task = tasks.find { it.id == taskId } ?: return
 
-        // 发送通知
+        // 1) 自动执行：把任务内容作为一条用户消息写入目标会话，并真正触发 AI 执行。
+        //    仅当对话 ViewModel 已就绪（应用在前台/最近后台）时执行；若应用未运行，
+        //    instance 尚未初始化 → 退化为仅通知，点击通知进入应用（最小可行方案）。
+        runCatching {
+            val vm = QuroChatViewModel.instance
+            // 记录本次任务内容写入的会话 id（用于 AI 处理完成后补发「已完成」通知）
+            var targetConvId: String? = null
+            if (vm.currentId.value.isBlank()) {
+                // 没有当前会话：优先切到最近更新的会话，否则新建一个，避免误写空会话
+                val recent = vm.conversations.value.maxByOrNull { it.updatedAt }?.id
+                if (recent != null) { vm.selectConversation(recent); targetConvId = recent }
+                else { vm.newConversation(); targetConvId = vm.currentId.value }
+            } else {
+                targetConvId = vm.currentId.value
+            }
+            if (task.content.isNotBlank()) {
+                vm.send(task.content)
+                // B3 完成推送：AI 处理完成后（对应会话 busy 由 true 转 false）补发「已完成」通知
+                val cid = targetConvId
+                if (cid != null) notifyTaskCompletion(context, task, cid)
+            }
+        }.onFailure { e ->
+            Log.w("QuroScheduler", "定时任务[${task.title}] 自动执行失败: ${e.message}")
+        }
+
+        // 2) 通知：点击跳转回应用（便于查看/补执行）
         QuroScheduledTaskScheduler.ensureChannel(context)
         val nm = context.getSystemService(NotificationManager::class.java)
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            taskId.hashCode(),
+            Intent(context, QuroMainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val notif = NotificationCompat.Builder(context, "quro_scheduled_task")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(task.title)
             .setContentText(task.content.ifBlank { "定时任务提醒" })
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setContentIntent(contentIntent)
             .build()
         nm.notify(taskId.hashCode(), notif)
 
-        // 更新最后触发时间
+        // 3) 更新最后触发时间
         QuroScheduledTaskStore.updateLastTriggered(context, taskId)
 
-        // 如果是重复任务，重新排程下一次
+        // 4) 如果是重复任务，重新排程下一次
         if (task.repeatType != TaskRepeatType.ONCE && task.enabled) {
             QuroScheduledTaskScheduler.schedule(context, task)
         }
+    }
+}
+
+/**
+ * B3 完成推送：定时任务触发 AI 执行后，轮询目标会话的生成状态，
+ * 待 busy 由 true 转 false（AI 处理完成）后，补发一条「定时任务已完成」通知。
+ *
+ * 仅当应用进程常驻（vm.instance 可用）时生效；应用未运行则退化为仅触发通知（见 onReceive 注释）。
+ * 超时（默认 6 分钟）或从未进入生成态（如未配置 API Key、内容为空）则静默跳过，不重复打扰。
+ */
+private fun notifyTaskCompletion(context: Context, task: QuroScheduledTask, targetConvId: String) {
+    scheduleCompletionScope.launch {
+        try {
+            val deadline = System.currentTimeMillis() + 6 * 60_000L
+            var sawBusy = false
+            while (System.currentTimeMillis() < deadline) {
+                if (QuroChatViewModel.instance.isBusy(targetConvId)) sawBusy = true
+                else if (sawBusy) break   // 曾进入生成态且现已结束 → 完成
+                delay(700)
+            }
+            if (!sawBusy) return@launch   // 未真正执行（无 Key / 空内容 / 被占忙），不补发
+            QuroScheduledTaskScheduler.ensureChannel(context)
+            val nm = context.getSystemService(NotificationManager::class.java)
+            val piId = (task.id + "_done").hashCode()
+            val contentIntent = PendingIntent.getActivity(
+                context, piId,
+                Intent(context, QuroMainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val notif = NotificationCompat.Builder(context, "quro_scheduled_task")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("✅ 定时任务已完成")
+                .setContentText("「${task.title}」AI 已处理完成，点击查看回复")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setContentIntent(contentIntent)
+                .build()
+            nm.notify(piId, notif)
+        } catch (_: Throwable) { /* 完成推送失败不影响主流程 */ }
     }
 }
 

@@ -46,6 +46,7 @@ private fun iconRes(name: String): Int = when (name) {
     "corner_down_left"  -> R.drawable.ic_corner_down_left
     "download"         -> R.drawable.ic_download
     "trash_2"         -> R.drawable.ic_trash_2
+    "bot"             -> R.drawable.ic_bot
     "table"            -> R.drawable.ic_table
     "bookmark"         -> R.drawable.ic_bookmark
     "square"           -> R.drawable.ic_square

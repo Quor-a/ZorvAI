@@ -235,7 +235,7 @@ private fun DefaultVoicePage(
         showToggle = false,
     )
     Text("默认语音来源", style = MaterialTheme.typography.titleSmall)
-    val sources = listOf("local" to "本地 TTS", "cloud" to "云端模型", "mimo" to "小米 MiMo")
+    val sources = listOf("local" to "本地 TTS", "cloud" to "云端模型", "model" to "小米 MiMo")
     sources.forEach { (id, label) ->
         Row(
             Modifier.fillMaxWidth().clickable { onSource(id) }.padding(vertical = 10.dp),

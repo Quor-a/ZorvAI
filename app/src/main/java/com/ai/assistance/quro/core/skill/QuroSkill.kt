@@ -5,6 +5,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
+/** 技能默认参数 Schema（function calling 用）：技能作为可被调用工具时，模型传入的入参。 */
+internal const val DEFAULT_SKILL_PARAMS =
+    """{"type":"object","properties":{"input":{"type":"string","description":"用户希望按此技能处理的输入内容"}}}"""
+
 /**
  * 用户自定义「技能 / SKILL」数据模型。
  *
@@ -23,6 +27,12 @@ data class QuroSkill(
     /** 触发关键词（可选，仅作说明/将来自动匹配用，不参与注入）。 */
     val trigger: String = "",
     val updatedAt: Long = 0L,
+    /** function calling 参数 Schema（JSON-Schema 字符串），AI 调用此技能工具时按此填参。 */
+    val parametersJson: String = DEFAULT_SKILL_PARAMS,
+    /** 是否注册为可被 AI tool_calls 调用的函数（false=仅注入系统提示词，不可被调用）。 */
+    val callable: Boolean = true,
+    /** 是否常驻系统提示词（true=默认进系统提示词；false=仅在触发词命中时按需注入，避免与常驻重复）。 */
+    val alwaysOn: Boolean = true,
 )
 
 /** 技能持久化（SharedPreferences，JSON 数组）。 */
@@ -35,8 +45,13 @@ object QuroSkillStore {
     fun ensureSeeded(context: Context) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getBoolean(KEY_SEEDED, false)) return
-        val existing = load(context)
-        if (existing.isNotEmpty()) {
+        // ⚠️ 关键修复：此前此处调用 load(context)，而 load() 首行又调 ensureSeeded()，
+        //   形成互相无限递归 → 主线程 StackOverflowError（"stack size 8188KB"）。
+        //   改为直接读原始 JSON 长度判断是否为空，彻底打破递归。
+        val existingCount = runCatching {
+            JSONArray(prefs.getString(KEY, "[]") ?: "[]").length()
+        }.getOrDefault(0)
+        if (existingCount > 0) {
             prefs.edit().putBoolean(KEY_SEEDED, true).apply()
             return
         }
@@ -61,6 +76,9 @@ object QuroSkillStore {
                         enabled = o.optBoolean("enabled", true),
                         trigger = o.optString("trigger", ""),
                         updatedAt = o.optLong("updatedAt", 0L),
+                        parametersJson = o.optString("parametersJson", DEFAULT_SKILL_PARAMS),
+                        callable = o.optBoolean("callable", true),
+                        alwaysOn = o.optBoolean("alwaysOn", true),
                     )
                 )
             }
@@ -81,6 +99,9 @@ object QuroSkillStore {
                         put("enabled", s.enabled)
                         put("trigger", s.trigger)
                         put("updatedAt", s.updatedAt)
+                        put("parametersJson", s.parametersJson)
+                        put("callable", s.callable)
+                        put("alwaysOn", s.alwaysOn)
                     }
                 )
             }
@@ -104,10 +125,23 @@ object QuroSkillStore {
     fun enabledList(context: Context): List<QuroSkill> =
         load(context).filter { it.enabled && it.prompt.isNotBlank() }
 
+    /** 当前「可调用」技能（启用 + callable + 含指令正文），用于注册为 AI 工具函数。 */
+    fun callableList(context: Context): List<QuroSkill> =
+        load(context).filter { it.enabled && it.callable && it.prompt.isNotBlank() }
+
+    /** 按触发词匹配当前启用的技能（用于 send / voiceBallTurn 的按需预注入）。 */
+    fun matchTriggerSkills(userText: String, context: Context): List<QuroSkill> {
+        val t = userText.lowercase()
+        return enabledList(context).filter { s ->
+            s.trigger.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+                .any { t.contains(it) }
+        }
+    }
+
     /** 内置默认技能集（22 款实用技能）。 */
     private fun defaultSkills(): List<QuroSkill> {
         val now = System.currentTimeMillis()
-        fun skill(name: String, desc: String, prompt: String, trigger: String = "", enabled: Boolean = false): QuroSkill =
+        fun skill(name: String, desc: String, prompt: String, trigger: String = "", enabled: Boolean = true): QuroSkill =
             QuroSkill(
                 id = UUID.randomUUID().toString(),
                 name = name,
