@@ -73,9 +73,11 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
         "X-WECHAT-UIN" to randomWechatUin(),
     )
 
-    /** 不带 token 的基础头（获取二维码时用）。 */
+    /** 不带 token 的基础头（获取二维码 / 轮询状态用）。 */
     private fun baseHeaders(): Map<String, String> = mapOf(
         "Content-Type" to "application/json",
+        // 元宝/协议文档明确要求：状态轮询必须带此头，无 iLink- 头会被微信拦截/拒轮询
+        "iLink-App-ClientVersion" to "1",
     )
 
     // ==================== 扫码登录 ====================
@@ -111,7 +113,10 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
             }
             // 从 body 里提取可能的详细原因（如 DNS 失败名、超时信息）
             val detail = qrBody.take(300).ifBlank { "(无详细信息)" }
-            val msg = "请求二维码失败[$errType]：$BASE_URL → $detail\n可能原因：①手机无法访问该域名(需公网/非代理) ②iLink 服务仅限企业微信 ③先手动填写 bot token 绕过扫码"
+            val msg = "请求二维码失败[$errType]：$BASE_URL → $detail\n" +
+                "可能原因：①手机网络(运营商/校园网/公司内网)拦截或限速该域名 ②DNS 解析不到 ③当前 WiFi 需切移动数据或开 VPN\n" +
+                "绕过法：在能访问该域名的电脑上执行  curl \"$BASE_URL/ilink/bot/get_bot_qrcode?bot_type=3\"  拿二维码扫码取 token，" +
+                "再在 App「手动填 token」处粘贴即可（无需扫码）"
             qrError = msg
             Log_e("扫码登录 Step1: $msg")
             return false
@@ -148,13 +153,14 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
 
         // ---- Step 2: 轮询扫码状态 ----
         loginPollJob = scope.launch {
+            var statusBase = BASE_URL  // 支持 scaned_but_redirect 跨机房切换
             val maxPolls = 100 // 5 分钟（每 3s 一次）
             for (polled in 0 until maxPolls) {
                 if (loginState != LoginState.WAITING_SCAN || stopped.get()) break
                 delay(3000)
 
                 try {
-                    val statusUrl = "$BASE_URL/ilink/bot/get_qrcode_status?qrcode=$qrcodeToken"
+                    val statusUrl = "$statusBase/ilink/bot/get_qrcode_status?qrcode=$qrcodeToken"
                     val (stCode, stBody, _) = httpGetWithStatus(statusUrl)
                     if (stCode !in 200..299) {
                         if (polled % 10 == 0) Log_w("扫码轮询 HTTP $stCode: ${stBody.take(150)}")
@@ -166,6 +172,16 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                     when {
                         status == "wait" -> { /* 继续等 */ }
                         status == "scaned" -> Log_i("扫码登录: 已扫描，等待手机确认...")
+                        status == "scaned_but_redirect" -> {
+                            // 元宝/协议文档：跨机房调度，需把后续轮询切到 redirect_host
+                            val redirectHost = statusJson.optString("redirect_host").ifBlank {
+                                statusJson.optString("redirect").ifBlank { statusJson.optString("host") }
+                            }
+                            if (redirectHost.isNotBlank()) {
+                                statusBase = "https://$redirectHost"
+                                Log_i("扫码轮询切换到 redirect_host: $statusBase")
+                            }
+                        }
                         status == "confirmed" -> {
                             val token = statusJson.optString("bot_token").ifBlank {
                                 statusJson.optString("token").orEmpty()
@@ -345,6 +361,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
         val body = JSONObject().apply {
             put("msg", JSONObject().apply {
                 put("to_user_id", reply.userId)
+                put("from_user_id", "")   // iLink 必填（空串），缺了服务端 HTTP 200 但静默丢弃
                 put("client_id", randomClientId())
                 put("message_type", 2)     // MessageTypeBot（发出）
                 put("message_state", 2)    // MessageStateFinish
