@@ -116,6 +116,22 @@ abstract class QuroDirectBotAdapter(
         Triple(0, e.message ?: "exception", null)
     }
 
+    protected fun httpGetWithStatus(
+        url: String,
+        headers: Map<String, String> = emptyMap(),
+    ): Triple<Int, String, String?> = try {
+        val req = Request.Builder().url(url)
+            .also { h -> headers.forEach { (k, v) -> h.addHeader(k, v) } }
+            .get().build()
+        client.newCall(req).execute().use { resp ->
+            val b = resp.body?.string().orEmpty()
+            Triple(resp.code, b, if (resp.isSuccessful) b else null)
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "$platform GET $url 异常: ${e.javaClass.simpleName}: ${e.message}")
+        Triple(0, e.javaClass.simpleName + ": " + (e.message ?: "exception"), null)
+    }
+
     protected fun httpGetString(
         url: String,
         headers: Map<String, String> = emptyMap(),

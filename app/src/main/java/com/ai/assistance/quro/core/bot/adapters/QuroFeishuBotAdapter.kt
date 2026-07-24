@@ -77,9 +77,11 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                     }
                 }
 
-                val wsUrl = "wss://open.feishu.cn/open-apis/ws/v1?tenant_access_token=${tenantToken.urlEncode()}"
+                // 飞书 WS 端点必须带 trailing slash（v1/ 后的 /），否则部分网关版本返回 404
+                // 参照：开源 Rust 实现 feishu_adapter.rs 用 wss://open.feishu.cn/open-apis/ws/v1/?tenant_access_token=...
+                val wsUrl = "wss://open.feishu.cn/open-apis/ws/v1/?tenant_access_token=${tenantToken.urlEncode()}"
                 retries = 0
-                Log_i("WS 连接中: wss://open.feishu.cn/open-apis/ws/v1?tenant_access_token=***(len=${tenantToken.length})")
+                Log_i("WS 连接中: wss://open.feishu.cn/open-apis/ws/v1/?tenant_access_token=***(len=${tenantToken.length})")
                 val req = Request.Builder().url(wsUrl).build()
                 ws = client.newWebSocket(req, FeishuWsListener())
                 while (alive.get() && !stopped.get()) delay(1000)
@@ -193,9 +195,19 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            val httpInfo = response?.let { "HTTP ${it.code}" } ?: ""
-            Log_e("WS failure: ${t.message} $httpInfo")
-            lastError = "WS 连接失败：${t.message ?: "未知"} $httpInfo"
+            val httpInfo = response?.let { "HTTP ${it.code} ${it.message}" } ?: ""
+            val respBody = response?.body?.string().orEmpty().take(300)
+            // 404 最常见原因：应用未启用「长连接接收事件」或未发布
+            if (response?.code == 404) {
+                Log_e("WS 404: 飞书应用可能未启用「长连接接收事件」模式！请到飞书开放后台→应用→事件订阅→选「长连接」→保存并发布。$httpInfo body=$respBody")
+            } else {
+                Log_e("WS failure: ${t.javaClass.simpleName}: ${t.message} $httpInfo")
+            }
+            lastError = when (response?.code) {
+                404 -> "WS 被拒(404)：请确认飞书后台已启用「长连接接收事件」并发布应用"
+                401, 403 -> "WS 被拒(${response.code})：token 无效或应用无权限"
+                else -> "WS 连接失败：${t.message ?: "未知"} $httpInfo"
+            }
             wsConnected.set(false)
             connected = false
         }

@@ -97,10 +97,28 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
         qrCodeData = null
         qrError = null
 
-        // ---- Step 1: GET 获取二维码 ----
+        // ---- Step 1: GET 获取二维码（用 httpGetWithStatus 保留原始错误详情）----
         val qrUrl = "$BASE_URL/ilink/bot/get_bot_qrcode?bot_type=$BOT_TYPE"
-        val qrJson = httpGetJson(qrUrl) ?: run {
-            val msg = "请求二维码失败：无法连接到 $BASE_URL（请检查网络，或先手动填写 bot token）"
+        val (qrCode, qrBody, _) = httpGetWithStatus(qrUrl)
+        if (qrCode !in 200..299) {
+            // 区分网络层失败(DNS/连接/超时) vs HTTP 错误(404/403/500)
+            val errType = when {
+                qrCode == 0 -> "网络不可达"  // 异常：DNS/连接/SSL
+                qrCode == 404 -> "接口不存在(404)"
+                qrCode in 400..499 -> "客户端错误($qrCode)"
+                qrCode in 500..599 -> "服务端错误($qrCode)"
+                else -> "HTTP $qrCode"
+            }
+            // 从 body 里提取可能的详细原因（如 DNS 失败名、超时信息）
+            val detail = qrBody.take(300).ifBlank { "(无详细信息)" }
+            val msg = "请求二维码失败[$errType]：$BASE_URL → $detail\n可能原因：①手机无法访问该域名(需公网/非代理) ②iLink 服务仅限企业微信 ③先手动填写 bot token 绕过扫码"
+            qrError = msg
+            Log_e("扫码登录 Step1: $msg")
+            return false
+        }
+        // qrBody 此时是成功响应的 JSON 字符串
+        val qrJson = runCatching { JSONObject(qrBody) }.getOrNull() ?: run {
+            val msg = "二维码响应解析失败（非JSON）：${qrBody.take(200)}"
             qrError = msg
             Log_e("扫码登录 Step1: $msg")
             return false
@@ -137,7 +155,12 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
 
                 try {
                     val statusUrl = "$BASE_URL/ilink/bot/get_qrcode_status?qrcode=$qrcodeToken"
-                    val statusJson = httpGetJson(statusUrl) ?: continue
+                    val (stCode, stBody, _) = httpGetWithStatus(statusUrl)
+                    if (stCode !in 200..299) {
+                        if (polled % 10 == 0) Log_w("扫码轮询 HTTP $stCode: ${stBody.take(150)}")
+                        continue
+                    }
+                    val statusJson = runCatching { JSONObject(stBody) }.getOrNull() ?: continue
                     val status = statusJson.optString("status", "").lowercase()
 
                     when {
