@@ -77,8 +77,9 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                     }
                 }
 
-                val wsUrl = "wss://open.feishu.cn/open-apis/ws/v1?access_token=${tenantToken.urlEncode()}"
+                val wsUrl = "wss://open.feishu.cn/open-apis/ws/v1?tenant_access_token=${tenantToken.urlEncode()}"
                 retries = 0
+                Log_i("WS 连接中: wss://open.feishu.cn/open-apis/ws/v1?tenant_access_token=***(len=${tenantToken.length})")
                 val req = Request.Builder().url(wsUrl).build()
                 ws = client.newWebSocket(req, FeishuWsListener())
                 while (alive.get() && !stopped.get()) delay(1000)
@@ -156,6 +157,13 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                     "message" -> {
                         val event = msg.optJSONObject("event") ?: return@runCatching
                         val message = event.optJSONObject("message") ?: return@runCatching
+                        // 过滤机器人自身发出的消息，避免回复死循环
+                        // （im.message.receive_v1 会把机器人自己的回复也回投为事件）
+                        val sender = event.optJSONObject("sender")
+                        if (sender?.optString("sender_type", "") == "app") {
+                            Log_i("忽略机器人自身消息（sender_type=app），避免回环")
+                            return@runCatching
+                        }
                         val contentStr = message.optString("content", "")
                         val textBody = if (contentStr.isNotBlank()) {
                             runCatching { JSONObject(contentStr).optString("text", "") }.getOrDefault("")
