@@ -5,6 +5,7 @@ import com.ai.assistance.quro.core.bot.QuroBotPlatform
 import com.ai.assistance.quro.core.bot.QuroOutboundMessage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
@@ -33,7 +34,123 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
     /** 按 chat_id 缓存 inbound 的 context_token，sendmessage 必须回带。 */
     private val contextTokens = ConcurrentHashMap<String, String>()
 
+    // ---- 扫码登录状态 ----
+    private var loginPollJob: kotlinx.coroutines.Job? = null
+    enum class LoginState { IDLE, WAITING_SCAN, CONFIRMED, DENIED, EXPIRED }
+    @Volatile var loginState = LoginState.IDLE
+        private set
+    /** 二维码内容（base64 图片数据或 URL），供 UI 渲染。 */
+    @Volatile var qrCodeData: String? = null
+        private set
+
     override fun isConfigured(): Boolean = botToken.isNotBlank()
+
+    // ==================== 扫码登录 ====================
+
+    /**
+     * 发起扫码登录：请求二维码 → 轮询扫描状态 → 成功后自动写入 botToken 并启动长轮询。
+     *
+     * @return true 表示已成功发起（QR 数据在 [qrCodeData]），false 表示请求失败
+     */
+    fun startQrLogin(): Boolean {
+        if (loginState == LoginState.WAITING_SCAN) return true // 已在等扫
+        loginPollJob?.cancel()
+        loginState = LoginState.IDLE
+        qrCodeData = null
+
+        // 1. 请求二维码
+        val qrJson = httpPostJson(
+            "https://ilinkai.weixin.qq.com/ilink/bot/login",
+            headers = mapOf("Content-Type" to "application/json"),
+            json = "{}",
+        ) ?: run { Log_e("扫码登录：请求二维码失败"); return false }
+
+        // 二维码数据可能在不同字段：qr_code / qr_image / url / data / base64
+        val qr = qrJson.optString("qr_code").ifBlank {
+            qrJson.optString("qr_image").ifBlank {
+                qrJson.optString("url").ifBlank {
+                    qrJson.optString("data").ifBlank {
+                        qrJson.optString("base64").orEmpty()
+                    }
+                }
+            }
+        }
+        if (qr.isBlank()) {
+            Log_e("扫码登录：响应中未找到二维码数据，原始响应: ${qrJson.toString().take(500)}")
+            return false
+        }
+
+        qrCodeData = qr
+        loginState = LoginState.WAITING_SCAN
+        Log_i("扫码登录：二维码已获取，等待用户微信扫码...")
+
+        // 2. 启动轮询
+        loginPollJob = scope.launch {
+            var polled = 0
+            val maxPolls = 120 // 2 分钟（每秒一次）
+            while (polled < maxPolls && loginState == LoginState.WAITING_SCAN && !stopped.get()) {
+                delay(1000)
+                polled++
+                try {
+                    val statusJson = httpGetJson(
+                        "https://ilinkai.weixin.qq.com/ilink/bot/login/status",
+                        headers = emptyMap(),
+                    ) ?: continue
+                    val status = statusJson.optString("status", "").lowercase()
+                    when {
+                        status.contains("scan") || status.contains("wait") || status.contains("pending") -> {
+                            // 继续等待
+                        }
+                        status.contains("confirm") || status.contains("success") || status.contains("ok") -> {
+                            val token = statusJson.optString("bot_token").ifBlank {
+                                statusJson.optString("token").ifBlank { statusJson.optString("access_token").orEmpty() }
+                            }
+                            if (token.isNotBlank()) {
+                                prefs.edit().putString("wechat_token", token).apply()
+                                loginState = LoginState.CONFIRMED
+                                Log_i("扫码登录成功！token 已保存，启动长轮询...")
+                                // 自动启动连接（在独立协程中，不阻塞轮询）
+                                scope.launch { runCatching { start() } }
+                            } else {
+                                loginState = LoginState.DENIED
+                                Log_w("扫码确认但未返回 token: ${statusJson.toString().take(300)}")
+                            }
+                            return@launch
+                        }
+                        status.contains("deny") || status.contains("cancel") || status.contains("reject") -> {
+                            loginState = LoginState.DENIED
+                            Log_w("扫码登录被用户取消")
+                            return@launch
+                        }
+                        status.contains("expire") || status.contains("timeout") -> {
+                            loginState = LoginState.EXPIRED
+                            Log_w("扫码登录二维码已过期")
+                            return@launch
+                        }
+                        else -> {
+                            // 未知状态，继续轮询
+                            if (polled % 10 == 0) Log_w("扫码轮询中... 状态=$status ($polled/$maxPolls)")
+                        }
+                    }
+                } catch (_: Exception) {
+                    // 网络抖动，继续
+                }
+            }
+            if (loginState == LoginState.WAITING_SCAN) {
+                loginState = LoginState.EXPIRED
+                Log_w("扫码登录超时")
+            }
+        }
+        return true
+    }
+
+    /** 取消当前扫码登录。 */
+    fun cancelQrLogin() {
+        loginPollJob?.cancel()
+        loginPollJob = null
+        loginState = LoginState.IDLE
+        qrCodeData = null
+    }
 
     override suspend fun runConnection() {
         var retries = 0

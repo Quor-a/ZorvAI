@@ -51,13 +51,16 @@ abstract class QuroDirectBotAdapter(
         .build()
 
     protected val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var connJob: Job? = null
+    protected var connJob: Job? = null
 
     /** 用户/管理器主动停止标志：置 true 后连接循环不再重连。 */
     protected val stopped = AtomicBoolean(false)
 
     var connected: Boolean = false
         protected set
+
+    /** 实现接口公共访问器：UI 可读真实连接态。 */
+    override val isConnected: Boolean get() = connected
 
     /** 子类偏好读取的凭据键（按 platform.name 小写前缀）。 */
     protected fun pref(key: String): String = prefs.getString(key, "") ?: ""
@@ -99,6 +102,27 @@ abstract class QuroDirectBotAdapter(
                 Log.w(TAG, "$platform GET $url -> HTTP ${resp.code}: ${b.take(200)}")
                 null
             } else b
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "$platform GET $url 失败: ${e.message}")
+        null
+    }
+
+    /** GET 请求并解析为 JSONObject（404/非JSON 返回 null）。 */
+    protected fun httpGetJson(
+        url: String,
+        headers: Map<String, String> = emptyMap(),
+    ): JSONObject? = try {
+        val req = Request.Builder().url(url)
+            .also { headers.forEach { (k, v) -> it.addHeader(k, v) } }
+            .get().build()
+        client.newCall(req).execute().use { resp ->
+            val b = resp.body?.string().orEmpty()
+            when {
+                !resp.isSuccessful -> { Log.w(TAG, "$platform GET $url -> HTTP ${resp.code}"); null }
+                b.isBlank() -> null
+                else -> try { JSONObject(b) } catch (_: Exception) { null }
+            }
         }
     } catch (e: Exception) {
         Log.e(TAG, "$platform GET $url 失败: ${e.message}")

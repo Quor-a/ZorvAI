@@ -36,10 +36,35 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     private var accessToken: String = ""
     private var ws: WebSocket? = null
     private val alive = AtomicBoolean(false)
+    /** WS 真实连接状态（onOpen→true, onClosed/onFailure→false），供 UI 读取。 */
+    val wsConnected = AtomicBoolean(false)
     private val lastSeq = AtomicLong(0)
     private var heartbeatJob: kotlinx.coroutines.Job? = null
 
     override fun isConfigured(): Boolean = appId.isNotBlank() && appSecret.isNotBlank()
+
+    /** 覆盖基类：不立即标 connected=true，等 WS onOpen 后再标真实状态。 */
+    override suspend fun start() {
+        if (!isConfigured()) {
+            Log_w("QQ 未配置，跳过 start")
+            connected = false
+            return
+        }
+        if (connJob?.isActive == true) return
+        stopped.set(false)
+        wsConnected.set(false)
+        connJob = scope.launch {
+            try {
+                runConnection()
+            } catch (e: Exception) {
+                Log_e("连接循环异常退出: ${e.message}")
+            } finally {
+                connected = false
+                wsConnected.set(false)
+            }
+        }
+        Log_i("QQ 适配器已启动（等待 WS 连接...）")
+    }
 
     override suspend fun runConnection() {
         var retries = 0
@@ -91,7 +116,22 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     }
 
     override suspend fun deliver(reply: QuroOutboundMessage) {
-        if (accessToken.isBlank()) return
+        // token 为空时尝试刷新一次（可能 WS 重连后 token 丢失/过期）
+        if (accessToken.isBlank()) {
+            Log_w("deliver 时 accessToken 为空，尝试刷新...")
+            val tokenJson = httpPostJson(
+                "https://bots.qq.com/app/getAppAccessToken",
+                json = JSONObject().apply {
+                    put("appId", appId)
+                    put("clientSecret", appSecret)
+                }.toString(),
+            )
+            accessToken = tokenJson?.optString("access_token").orEmpty()
+            if (accessToken.isBlank()) {
+                Log_e("deliver 失败：token 刷新也为空，无法发送回复给 user=${reply.userId}")
+                return
+            }
+        }
         // 被动回复：POST /v2/users/{openid}/messages，msg_type=text；
         // QQBot 要求 content 为 JSON 字符串（{"text":"..."}），裸文本会被拒
         val body = JSONObject().apply {
@@ -103,7 +143,7 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             headers = mapOf("Authorization" to "QQBot $accessToken"),
             json = body,
         )
-        if (json == null) Log_e("deliver 失败 user=${reply.userId}")
+        if (json == null) Log_e("deliver 失败 user=${reply.userId}（HTTP 错误或网络异常）")
         else Log_i("deliver 已发往 QQ 用户 ${reply.userId}")
     }
 
@@ -120,7 +160,9 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
 
     private inner class QqWsListener : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
-            Log_i("WS 已连接")
+            Log_i("WS 已连接（真实握手成功）")
+            wsConnected.set(true)
+            connected = true
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -168,18 +210,20 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
             Log_w("WS closing $code $reason")
-            alive.set(false)
+            wsConnected.set(false)
             webSocket.cancel()
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             Log_w("WS closed $code $reason")
-            alive.set(false)
+            wsConnected.set(false)
+            connected = false
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             Log_e("WS failure: ${t.message}")
-            alive.set(false)
+            wsConnected.set(false)
+            connected = false
         }
     }
 

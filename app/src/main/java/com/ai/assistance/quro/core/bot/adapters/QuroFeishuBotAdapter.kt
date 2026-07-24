@@ -33,8 +33,27 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     private var tenantToken: String = ""
     private var ws: WebSocket? = null
     private val alive = AtomicBoolean(false)
+    /** WS 真实连接状态（onOpen→true, onClosed/onFailure→false），供 UI 读取。 */
+    val wsConnected = AtomicBoolean(false)
 
     override fun isConfigured(): Boolean = appId.isNotBlank() && appSecret.isNotBlank()
+
+    /** 覆盖基类：不立即标 connected=true，等 WS onOpen 后再标真实状态。 */
+    override suspend fun start() {
+        if (!isConfigured()) {
+            Log_w("飞书 未配置，跳过 start")
+            connected = false
+            return
+        }
+        if (connJob?.isActive == true) return
+        stopped.set(false)
+        wsConnected.set(false)
+        connJob = scope.launch {
+            try { runConnection() } catch (e: Exception) { Log_e("连接循环异常退出: ${e.message}") }
+            finally { connected = false; wsConnected.set(false) }
+        }
+        Log_i("飞书 适配器已启动（等待 WS 连接...）")
+    }
 
     override suspend fun runConnection() {
         var retries = 0
@@ -75,7 +94,19 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     }
 
     override suspend fun deliver(reply: QuroOutboundMessage) {
-        if (tenantToken.isBlank()) return
+        // token 为空时尝试刷新一次
+        if (tenantToken.isBlank()) {
+            Log_w("deliver 时 tenantToken 为空，尝试刷新...")
+            val tkn = httpPostJson(
+                "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+                json = JSONObject().apply { put("app_id", appId); put("app_secret", appSecret) }.toString(),
+            )
+            tenantToken = tkn?.optString("tenant_access_token").orEmpty()
+            if (tenantToken.isBlank()) {
+                Log_e("deliver 失败：token 刷新也为空，无法发送回复给 chat=${reply.userId}")
+                return
+            }
+        }
         // receive_id 用 chat_id（reply.userId 即聊天 id）；content 必须是 JSON 字符串
         val content = JSONObject().put("text", reply.text).toString()
         val body = JSONObject().apply {
@@ -88,13 +119,15 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             headers = mapOf("Authorization" to "Bearer $tenantToken"),
             json = body,
         )
-        if (json == null) Log_e("deliver 失败 chat=${reply.userId}")
+        if (json == null) Log_e("deliver 失败 chat=${reply.userId}（HTTP 错误或网络异常）")
         else Log_i("deliver 已发往飞书会话 ${reply.userId}")
     }
 
     private inner class FeishuWsListener : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
-            Log_i("WS 已连接")
+            Log_i("WS 已连接（真实握手成功）")
+            wsConnected.set(true)
+            connected = true
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -124,15 +157,21 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-            Log_w("WS closing $code $reason"); alive.set(false); webSocket.cancel()
+            Log_w("WS closing $code $reason")
+            wsConnected.set(false)
+            webSocket.cancel()
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-            Log_w("WS closed $code $reason"); alive.set(false)
+            Log_w("WS closed $code $reason")
+            wsConnected.set(false)
+            connected = false
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            Log_e("WS failure: ${t.message}"); alive.set(false)
+            Log_e("WS failure: ${t.message}")
+            wsConnected.set(false)
+            connected = false
         }
     }
 

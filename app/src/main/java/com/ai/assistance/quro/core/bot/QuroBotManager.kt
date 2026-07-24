@@ -72,6 +72,8 @@ interface QuroBotAdapter {
     suspend fun stop()
     /** 把 AI 回复投递回平台（QQBot/飞书/企业微信经 RelayClient 发往后端）。 */
     suspend fun deliver(reply: QuroOutboundMessage)
+    /** 当前是否真实连接（WS 已握手 / 长轮询已启动），供 UI 读取。默认返回 false，子类覆写。 */
+    val isConnected: Boolean get() = false
 }
 
 /**
