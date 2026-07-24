@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -65,15 +64,13 @@ import com.ai.assistance.quro.core.bot.QuroBotPlatform
 import com.ai.assistance.quro.core.bot.adapters.QuroFeishuBotAdapter
 import com.ai.assistance.quro.core.bot.adapters.QuroLocalBotAdapter
 import com.ai.assistance.quro.core.bot.adapters.QuroQqBotAdapter
-import com.ai.assistance.quro.core.bot.adapters.QuroWechatIlinkBotAdapter
 
 /**
- * 机器人设置页（v250 增强版）：真实连接状态 + 微信扫码登录 + 重连按钮。
+ * 机器人设置页（v257 精简版）：真实连接状态 + 重连按钮。
  *
  * 每个平台卡片新增：
- *  - 状态行：显示 WS/轮询真实连接态（绿色=已连 / 灰色=未连 / 黄色=等待中）
+ *  - 状态行：显示 WS 真实连接态（绿色=已连 / 灰色=未连 / 黄色=等待中）
  *  - 重连按钮：断线后一键重连（不依赖开关 toggle）
- *  - 微信专属：「扫码登录」按钮 → 弹二维码 → 轮询 → 自动填 token → 启动长轮询
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,7 +105,7 @@ fun QuroBotSettingsScreen(onClose: () -> Unit) {
         ) {
             item {
                 Text(
-                    "QQ / 飞书 / 微信 iLink 均直连官方网关，App 持密钥出站收消息，无需自建后端。本地测试可在 App 内直接验证。",
+                    "QQ / 飞书均直连官方网关，App 持密钥出站收消息，无需自建后端。本地测试可在 App 内直接验证。",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -146,10 +143,9 @@ fun QuroBotSettingsScreen(onClose: () -> Unit) {
                 }
             }
 
-            // 直连型平台（QQ / 飞书 / 微信 iLink）
+            // 直连型平台（QQ / 飞书）
             item { BotPlatformCard(QuroBotPlatform.QQ, prefs, manager = manager) }
             item { BotPlatformCard(QuroBotPlatform.FEISHU, prefs, manager = manager) }
-            item { BotPlatformCard(QuroBotPlatform.WECHAT, prefs, manager = manager) }
         }
     }
 }
@@ -169,7 +165,6 @@ private fun BotPlatformCard(
     val fields: List<Pair<String, String>> = when (platform) {
         QuroBotPlatform.QQ -> listOf("qq_appid" to "AppID", "qq_secret" to "Secret")
         QuroBotPlatform.FEISHU -> listOf("feishu_appid" to "App ID", "feishu_secret" to "App Secret")
-        QuroBotPlatform.WECHAT -> listOf("wechat_token" to "Bot Token (扫码后自动填或手动粘贴)")
         else -> emptyList()
     }
     val values = fields.associate { (k, _) -> k to remember { mutableStateOf(prefs.getString(k, "") ?: "") } }
@@ -185,12 +180,6 @@ private fun BotPlatformCard(
     var bindConvId by remember { mutableStateOf(prefs.getString("bind_conv_${platform.name}", null) ?: "") }
     var showConvPicker by remember { mutableStateOf(false) }
 
-    // 微信扫码状态
-    var showQr by remember { mutableStateOf(false) }
-    var qrData by remember { mutableStateOf<String?>(null) }
-    var qrStatus by remember { mutableStateOf("") }
-    var qrError by remember { mutableStateOf<String?>(null) }
-
     // 定期刷新状态显示
     androidx.compose.runtime.LaunchedEffect(Unit) {
         while (true) {
@@ -204,16 +193,6 @@ private fun BotPlatformCard(
                     when (adapter) {
                         is QuroQqBotAdapter -> if (adapter.wsConnected.get()) "WS 已连接" else "WS 断开"
                         is QuroFeishuBotAdapter -> if (adapter.wsConnected.get()) "WS 已连接" else "WS 断开"
-                        is QuroWechatIlinkBotAdapter -> {
-                            val wechat = adapter as QuroWechatIlinkBotAdapter
-                            when (wechat.loginState) {
-                                QuroWechatIlinkBotAdapter.LoginState.WAITING_SCAN -> "等待扫码..."
-                                QuroWechatIlinkBotAdapter.LoginState.CONFIRMED -> "扫码成功 ✓"
-                                QuroWechatIlinkBotAdapter.LoginState.DENIED -> "已取消"
-                                QuroWechatIlinkBotAdapter.LoginState.EXPIRED -> "二维码过期"
-                                else -> if (adapter.isConnected) "长轮询中" else "未连接"
-                            }
-                        }
                         else -> "已连接"
                     }
                 }
@@ -221,31 +200,12 @@ private fun BotPlatformCard(
             statusColor = when {
                 !sw || adapter == null -> Color.Gray
                 statusText.contains("已连接") || statusText.contains("成功") || statusText.contains("轮询") -> Color(0xFF4CAF50)
-                statusText.contains("等待") || statusText.contains("扫码") -> Color(0xFFFF9800)
+                statusText.contains("等待") -> Color(0xFFFF9800)
                 else -> Color.Gray
             }
 
             // 把 adapter 最近一次失败原因同步到 UI
             detailText = if (!sw || adapter == null) "" else (adapter.lastError ?: "")
-
-            // 同步微信扫码数据到 UI
-            if (platform == QuroBotPlatform.WECHAT) {
-                val wechat = adapter as? QuroWechatIlinkBotAdapter
-                if (wechat != null) {
-                    qrData = wechat.qrCodeData
-                    qrError = wechat.qrError
-                    showQr = wechat.loginState == QuroWechatIlinkBotAdapter.LoginState.WAITING_SCAN || wechat.qrError != null
-                    qrStatus = when (wechat.loginState) {
-                        QuroWechatIlinkBotAdapter.LoginState.IDLE -> ""
-                        QuroWechatIlinkBotAdapter.LoginState.WAITING_SCAN -> "请用手机微信扫描下方二维码"
-                        QuroWechatIlinkBotAdapter.LoginState.CONFIRMED -> "✓ 登录成功！token 已保存"
-                        QuroWechatIlinkBotAdapter.LoginState.DENIED -> "✗ 已取消"
-                        QuroWechatIlinkBotAdapter.LoginState.EXPIRED -> "✗ 二维码已过期，请重试"
-                    }
-                    // 扫码成功后 qrStatus 已显示"✓ 登录成功"，无需再同步输入框（输入框保留手动编辑能力）
-                    Unit
-                }
-            }
 
             delay(1500L)
         }
@@ -314,26 +274,20 @@ private fun BotPlatformCard(
             if (isRelay) {
                 Spacer(Modifier.height(8.dp))
 
-                // 凭据输入框（微信有 token 时也允许编辑）
-                if (platform != QuroBotPlatform.WECHAT || !showQr) {
-                    fields.forEach { (key, label) ->
+                // 凭据输入框
+                fields.forEach { (key, label) ->
                         OutlinedTextField(
                             value = values[key]?.value ?: "",
                             onValueChange = { v ->
                                 values[key]?.value = v
                                 prefs.edit().putString(key, v).apply()
-                                // 微信 token 手动输入后也尝试启动
-                                if (platform == QuroBotPlatform.WECHAT && v.isNotBlank() && sw) {
-                                    CoroutineScope(Dispatchers.IO).launch { runCatching { manager.getAdapter(platform)?.start() } }
-                                }
                             },
                             label = { Text(label) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = if (platform == QuroBotPlatform.WECHAT) KeyboardType.Text else KeyboardType.Password),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         )
                     }
-                }
 
                 // 会话绑定模式（仅直连平台）
                 Spacer(Modifier.height(4.dp))
@@ -412,101 +366,10 @@ private fun BotPlatformCard(
                     }
                 }
 
-                // 微信扫码登录区域
-                if (platform == QuroBotPlatform.WECHAT) {
-                    Spacer(Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Button(
-                            onClick = {
-                                val wechat = manager.getAdapter(QuroBotPlatform.WECHAT) as? QuroWechatIlinkBotAdapter
-                                if (wechat != null) {
-                                    if (wechat.loginState == QuroWechatIlinkBotAdapter.LoginState.WAITING_SCAN) {
-                                        wechat.cancelQrLogin()
-                                        qrError = null
-                                        qrData = null
-                                        showQr = false
-                                    } else {
-                                        qrError = null
-                                        showQr = true
-                                        val ok = wechat.startQrLogin()
-                                        // 立即同步一次状态，避免等轮询周期
-                                        qrData = wechat.qrCodeData
-                                        qrError = wechat.qrError
-                                        showQr = wechat.loginState == QuroWechatIlinkBotAdapter.LoginState.WAITING_SCAN || wechat.qrError != null
-                                    }
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (showQr) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                            ),
-                        ) {
-                            Icon(Icons.Filled.QrCodeScanner, "扫码", modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (showQr) "取消扫码" else "扫码登录")
-                        }
-                    }
-
-                    // 二维码展示 / 错误提示
-                    if (showQr) {
-                        Spacer(Modifier.height(8.dp))
-                        ElevatedCard(
-                            Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        ) {
-                            Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                val err = qrError
-                                if (err != null) {
-                                    Text("扫码失败", fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(err, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
-                                    Spacer(Modifier.height(8.dp))
-                                    Text("可先在上方手动粘贴 bot token，再开启开关启动长轮询。", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                } else {
-                                    Text(qrStatus, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
-                                    Spacer(Modifier.height(8.dp))
-                                    // 二维码图片（base64 或 URL）
-                                    val data = qrData
-                                    if (data == null) {
-                                        Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                                            Text("正在获取二维码…", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                    } else {
-                                        Box(
-                                            Modifier.fillMaxWidth().height(200.dp),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            when {
-                                                data.startsWith("http", ignoreCase = true) -> {
-                                                    // URL 形式：提示用户在浏览器打开或用其他方式查看
-                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                        Text("请在浏览器中打开此链接查看二维码：", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                        Text(data, fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, maxLines = 2)
-                                                    }
-                                                }
-                                                data.length > 200 -> {
-                                                    // base64 图片数据
-                                                    Text("二维码已生成（${data.length} 字符 base64）\n（真机可渲染为图片，预览环境暂显示文字）", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                }
-                                                else -> {
-                                                    // 短文本（可能是 QR 内容字符串）
-                                                    Text("QR: $data", fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-                                                }
-                                            }
-                                        }
-                                    }
-                                    Spacer(Modifier.height(4.dp))
-                                    Text("打开微信 → 扫一扫 → 确认登录", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        }
-                    }
-                }
-
                 Spacer(Modifier.height(4.dp))
                 val hint = when (platform) {
                     QuroBotPlatform.QQ -> "QQ 开放平台建机器人拿 AppID/Secret；沙箱期需加自己为测试成员。IP 白名单在 QQ 后台管理：不填 = 所有 IP 均可调用，本 App 不做额外限制。"
                     QuroBotPlatform.FEISHU -> "飞书开放平台建自建应用拿 App ID/Secret；事件订阅选「长连接接收」免填回调。"
-                    QuroBotPlatform.WECHAT -> "微信 iLink 个人号：点击「扫码登录」获取二维码，用手机微信扫后自动填入 token；若二维码接口不可用，可直接手动粘贴 bot token。"
                     else -> ""
                 }
                 Text(hint, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)

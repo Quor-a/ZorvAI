@@ -32,8 +32,10 @@ import java.util.Base64
  *   Authorization:      Bearer {bot_token}
  *   X-WECHAT-UIN:      {base64(random_uint32)}       防重放
  */
+@Deprecated("微信 iLink 已从 UI 和 Manager 移除，本文件保留作参考不再使用")
 class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
-    override val platform = QuroBotPlatform.WECHAT
+    // WECHAT 枚举已删除，暂用 LOCAL 占位（本类不再被注册，不影响运行）
+    override val platform = QuroBotPlatform.LOCAL
 
     companion object {
         private const val BASE_URL = "https://ilinkai.weixin.qq.com"

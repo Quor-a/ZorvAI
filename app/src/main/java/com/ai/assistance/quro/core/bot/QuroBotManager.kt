@@ -5,7 +5,6 @@ import android.util.Log
 import com.ai.assistance.quro.core.bot.adapters.QuroFeishuBotAdapter
 import com.ai.assistance.quro.core.bot.adapters.QuroLocalBotAdapter
 import com.ai.assistance.quro.core.bot.adapters.QuroQqBotAdapter
-import com.ai.assistance.quro.core.bot.adapters.QuroWechatIlinkBotAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,10 +20,8 @@ import java.util.concurrent.ConcurrentHashMap
  *    在独立会话里跑 ReAct 循环，得到回复文本（不触碰 UI 层）。
  *  - 回复经对应 [QuroBotAdapter.deliver] 回传平台。
  *  - 三家平台均支持「手机端零公网端点」收消息（元宝核实）：QQBot / 飞书走官方 WebSocket 长连，
- *    微信 iLink 走 HTTP 长轮询（35s）；App 持密钥【出站】直连官方网关，无需任何自备服务器 / Webhook。
+ *    App 持密钥【出站】直连官方网关，无需任何自备服务器 / Webhook。
  *  - [QuroLocalBotAdapter] 保留为纯 App 内链路，用于免凭据端到端联调。
- *
- * 微信 Bot 走 iLink 个人号通道（非企业微信）——企业微信需公网回调，不符合「零端点」原则。
  *
  * 接入位置：
  *  - App 启动：activity/QuroApplication.onCreate 调 QuroBotManager.instance(app).registerDefaults(app) 并 startEnabled(app)。
@@ -36,7 +33,6 @@ enum class QuroBotPlatform(val label: String) {
     LOCAL("本地测试"),
     QQ("QQ 机器人"),
     FEISHU("飞书机器人"),
-    WECHAT("微信 iLink 机器人"),
 }
 
 /** 平台 → Quro 的入站消息。 */
@@ -147,13 +143,12 @@ class QuroBotManager(
 
     fun registeredPlatforms(): List<QuroBotPlatform> = adapters.keys.toList()
 
-    /** 注册默认适配器集合（本地 + QQ + 飞书 + 微信 iLink）。 */
+    /** 注册默认适配器集合（本地 + QQ + 飞书）。 */
     fun registerDefaults(ctx: Context) {
         if (adapters.isEmpty()) {
             registerAdapter(QuroLocalBotAdapter())
             registerAdapter(QuroQqBotAdapter(ctx.applicationContext))
             registerAdapter(QuroFeishuBotAdapter(ctx.applicationContext))
-            registerAdapter(QuroWechatIlinkBotAdapter(ctx.applicationContext))
         }
     }
 
