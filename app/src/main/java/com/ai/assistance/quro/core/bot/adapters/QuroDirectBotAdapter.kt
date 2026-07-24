@@ -80,13 +80,37 @@ abstract class QuroDirectBotAdapter(
         client.newCall(req).execute().use { resp ->
             val b = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
-                Log.w(TAG, "$platform POST $url -> HTTP ${resp.code}: ${b.take(200)}")
+                Log.w(TAG, "$platform POST $url -> HTTP ${resp.code}: ${b.take(500)}")
                 null
             } else JSONObject(b)
         }
     } catch (e: Exception) {
         Log.e(TAG, "$platform POST $url 失败: ${e.message}")
         null
+    }
+
+    /**
+     * 带完整状态信息的 POST（供 deliver 等需区分 401/403/429 等场景）。
+     * 返回 Triple<statusCode, responseBody, json?>，永远不抛异常。
+     */
+    protected fun httpPostWithStatus(
+        url: String,
+        headers: Map<String, String> = emptyMap(),
+        json: String,
+    ): Triple<Int, String, JSONObject?> = try {
+        val req = Request.Builder().url(url)
+            .addHeader("Content-Type", "application/json")
+            .also { h -> headers.forEach { (k, v) -> h.addHeader(k, v) } }
+            .post(json.toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(req).execute().use { resp ->
+            val b = resp.body?.string().orEmpty()
+            val parsed = if (resp.isSuccessful && b.isNotBlank()) try { JSONObject(b) } catch (_: Exception) { null } else null
+            Triple(resp.code, b, parsed)
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "$platform POST $url 异常: ${e.message}")
+        Triple(0, e.message ?: "exception", null)
     }
 
     protected fun httpGetString(
@@ -168,9 +192,19 @@ abstract class QuroDirectBotAdapter(
     protected open fun onDisconnect() {}
 
     /** 子类在收到平台消息时调用：统一经 QuroBotManager 驱动回复引擎。 */
-    protected fun onInbound(userId: String, userName: String, text: String) {
+    protected fun onInbound(
+        userId: String,
+        userName: String,
+        text: String,
+        msgId: String? = null,
+        eventId: String? = null,
+        groupId: String? = null,
+    ) {
         QuroBotManager.instance(appContext).handleInbound(
-            QuroInboundMessage(platform, userId, userName, text),
+            QuroInboundMessage(
+                platform, userId, userName, text,
+                msgId = msgId, eventId = eventId, groupId = groupId,
+            ),
         )
     }
 

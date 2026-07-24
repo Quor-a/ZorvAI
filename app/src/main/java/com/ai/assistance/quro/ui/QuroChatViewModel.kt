@@ -16,6 +16,9 @@ import com.ai.assistance.quro.core.memory.QuroMemoryRepository
 import com.ai.assistance.quro.core.QuroMessage
 import com.ai.assistance.quro.core.QuroChatMessage
 import com.ai.assistance.quro.core.QuroLlmResult
+import com.ai.assistance.quro.core.bot.BotConversationBinder
+import com.ai.assistance.quro.core.bot.QuroBotManager
+import com.ai.assistance.quro.core.bot.QuroBotPlatform
 import com.ai.assistance.quro.core.QuroToolSpec
 import com.ai.assistance.quro.core.QuroPersistedConversation
 import com.ai.assistance.quro.core.QuroPersona
@@ -210,9 +213,88 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         latest.messages.forEach { store.add(it) }
         _messages.value = store.all()
         emitMeta()
+
+        // 注册机器人会话绑定器：把平台用户消息按设置写入 App 持久化会话
+        QuroBotManager.instance(appContext).conversationBinder = BotConversationBinder { platform, userId, userName, userText, replyText, mode, fixedConvId ->
+            when (mode) {
+                "none" -> Unit
+                "fixed" -> {
+                    val targetId = fixedConvId?.takeIf { id -> _convs.value.any { it.id == id } }
+                        ?: createBotConversation(platform, userId)
+                    appendToConversation(
+                        targetId,
+                        listOf(
+                            QuroMessage(role = "user", content = userText, senderName = userName),
+                            QuroMessage(role = "assistant", content = replyText),
+                        ),
+                    )
+                }
+                else -> { // auto
+                    val convId = findBotConversation(platform, userId)?.id
+                        ?: createBotConversation(platform, userId)
+                    appendToConversation(
+                        convId,
+                        listOf(
+                            QuroMessage(role = "user", content = userText, senderName = userName),
+                            QuroMessage(role = "assistant", content = replyText),
+                        ),
+                    )
+                }
+            }
+        }
     }
 
     // ---- 会话操作 ----
+
+    /** 查找某平台用户对应的机器人自动会话（按标题匹配）。 */
+    private fun findBotConversation(platform: QuroBotPlatform, userId: String): QuroPersistedConversation? {
+        val prefix = "[${platform.label}] "
+        return _convs.value.firstOrNull { it.title == "$prefix$userId" }
+    }
+
+    /** 为某平台用户新建一个自动会话，返回其 ID。 */
+    private fun createBotConversation(platform: QuroBotPlatform, userId: String): String {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        val welcome = QuroMessage(
+            role = "assistant",
+            content = "这是来自 ${platform.label} 用户 $userId 的机器人对话。",
+        )
+        val conv = QuroPersistedConversation(id, "[${platform.label}] $userId", now, now, listOf(welcome))
+        _convs.value = _convs.value + conv
+        convRepo.saveAll(_convs.value)
+        emitMeta()
+        return id
+    }
+
+    /** 把消息追加到指定会话并持久化；若该会话正好是当前可见会话，也同步刷新 UI。 */
+    private fun appendToConversation(
+        conversationId: String,
+        messages: List<QuroMessage>,
+        updateTitle: Boolean = false,
+    ) {
+        val idx = _convs.value.indexOfFirst { it.id == conversationId }
+        if (idx < 0) return
+        val conv = _convs.value[idx]
+        val title = if (updateTitle) {
+            messages.firstOrNull { it.role == "user" }?.content?.take(20)?.let { if (it.isNotBlank()) it else conv.title } ?: conv.title
+        } else conv.title
+        val updated = conv.copy(
+            messages = conv.messages + messages,
+            updatedAt = System.currentTimeMillis(),
+            title = title,
+        )
+        val newList = _convs.value.toMutableList()
+        newList[idx] = updated
+        _convs.value = newList
+        convRepo.saveAll(_convs.value)
+        emitMeta()
+        // 如果追加的是当前可见会话，同步刷新 _messages
+        if (_currentId.value == conversationId) {
+            messages.forEach { store.add(it) }
+            _messages.value = store.all()
+        }
+    }
 
     fun newConversation() {
         val id = UUID.randomUUID().toString()

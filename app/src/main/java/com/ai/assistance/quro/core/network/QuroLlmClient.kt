@@ -13,8 +13,20 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 
 private const val TAG = "QuroLlm"
+
+/**
+ * 单次 HTTP 调用的硬超时护栏（毫秒）。
+ * 作用：OkHttp 自带 connect/read 超时在「代理挂起 / 端点假死」时仍可能长时间不返回，
+ * 导致整条对话协程卡在「思考中」、bot 永远不回复且无任何报错（用户感知为「完全没反应」）。
+ * 这里用 withTimeout 在 NET_CALL_TIMEOUT_MS 后强制取消本次调用并转成明确错误气泡，
+ * 杜绝「永久静默」——最坏情况用户也会看到「⚠️ 连接模型服务超时」而非无限转圈。
+ * 设 90s，比 OkHttp 的 120s readTimeout 更早触发，确保本护栏是最终裁决者。
+ */
+private const val NET_CALL_TIMEOUT_MS = 90_000L
 
 /**
  * Quro LLM 客户端（原创）：对接 OpenAI 兼容的 /chat/completions，
@@ -44,7 +56,7 @@ class QuroLlmClient(
         const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
     }
 
-    fun chat(
+    suspend fun chat(
         baseUrl: String,
         apiKey: String,
         model: String,
@@ -109,29 +121,37 @@ class QuroLlmClient(
                 Thread.sleep(backoff)
             }
             try {
-                client.newCall(req).execute().use { resp ->
-                    val rawBody = resp.body?.string().orEmpty()
-                    // 🛡️ 响应体超限截断：MiMo 等推理模型可能返回数 MB 的 reasoning_content，
-                    // org.json 递归解析时 StackOverflowError → "stack size 8188KB"。
-                    // 截断到 MAX_RESPONSE_BYTES 后仍可解析出 choices[0]（尾部被裁的是 reasoning）。
-                    val text = if (rawBody.length > MAX_RESPONSE_BYTES) {
-                        Log.w(TAG, "⚠️ 响应体超限 ${rawBody.length}ch > ${MAX_RESPONSE_BYTES}ch，截断处理")
-                        rawBody.take(MAX_RESPONSE_BYTES)
-                    } else {
-                        rawBody
-                    }
-                    // ===== 调试日志：响应概览 =====
-                    val preview = text.take(300).replace("\n", "\\n")
-                    Log.i(TAG, "<<< RESPONSE HTTP=${resp.code} body=${text.length}ch preview=$preview")
-                    if (!resp.isSuccessful) {
-                        lastErr = "HTTP ${resp.code}"
-                        if (resp.code in retryableCodes && attempt < maxRetries) {
-                            return@use // 临时故障 → 进入下一次重试
+                val callResult = withTimeout(NET_CALL_TIMEOUT_MS) {
+                    client.newCall(req).execute().use { resp ->
+                        val rawBody = resp.body?.string().orEmpty()
+                        // 🛡️ 响应体超限截断：MiMo 等推理模型可能返回数 MB 的 reasoning_content，
+                        // org.json 递归解析时 StackOverflowError → "stack size 8188KB"。
+                        // 截断到 MAX_RESPONSE_BYTES 后仍可解析出 choices[0]（尾部被裁的是 reasoning）。
+                        val text = if (rawBody.length > MAX_RESPONSE_BYTES) {
+                            Log.w(TAG, "⚠️ 响应体超限 ${rawBody.length}ch > ${MAX_RESPONSE_BYTES}ch，截断处理")
+                            rawBody.take(MAX_RESPONSE_BYTES)
+                        } else {
+                            rawBody
                         }
-                        return QuroLlmResult.Error(friendlyHttpError(resp.code, text))
+                        // ===== 调试日志：响应概览 =====
+                        val preview = text.take(300).replace("\n", "\\n")
+                        Log.i(TAG, "<<< RESPONSE HTTP=${resp.code} body=${text.length}ch preview=$preview")
+                        if (!resp.isSuccessful) {
+                            lastErr = "HTTP ${resp.code}"
+                            if (resp.code in retryableCodes && attempt < maxRetries) {
+                                return@use null // 临时故障 → 进入下一次重试
+                            }
+                            return@use QuroLlmResult.Error(friendlyHttpError(resp.code, text))
+                        }
+                        return@use parse(text)
                     }
-                    return parse(text)
                 }
+                if (callResult != null) return callResult
+                // callResult == null：临时故障（5xx/429），lastErr 已记录，进入下一轮重试
+            } catch (e: TimeoutCancellationException) {
+                // 硬超时：单次调用 90s 内无响应（端点假死 / 代理挂起）→ 转成明确报错气泡，
+                // 杜绝「思考中」永久卡死、bot 完全没反应且无任何提示。
+                return QuroLlmResult.Error("连接模型服务超时（${NET_CALL_TIMEOUT_MS / 1000} 秒无响应），请检查网络或模型服务地址后重试")
             } catch (e: Exception) {
                 lastErr = e.message
                 Log.e(TAG, "<<< NETWORK ERROR attempt=$attempt: ${e.message}", e)

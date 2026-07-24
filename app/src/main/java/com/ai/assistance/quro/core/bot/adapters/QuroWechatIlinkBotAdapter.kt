@@ -42,6 +42,9 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
     /** 二维码内容（base64 图片数据或 URL），供 UI 渲染。 */
     @Volatile var qrCodeData: String? = null
         private set
+    /** 最近一次扫码失败的错误信息，供 UI 提示。 */
+    @Volatile var qrError: String? = null
+        private set
 
     override fun isConfigured(): Boolean = botToken.isNotBlank()
 
@@ -57,13 +60,19 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
         loginPollJob?.cancel()
         loginState = LoginState.IDLE
         qrCodeData = null
+        qrError = null
 
         // 1. 请求二维码
         val qrJson = httpPostJson(
             "https://ilinkai.weixin.qq.com/ilink/bot/login",
             headers = mapOf("Content-Type" to "application/json"),
             json = "{}",
-        ) ?: run { Log_e("扫码登录：请求二维码失败"); return false }
+        ) ?: run {
+            val msg = "请求二维码失败：无法连接到 ilinkai.weixin.qq.com（请检查网络，或先手动填写 bot token）"
+            qrError = msg
+            Log_e("扫码登录：$msg")
+            return false
+        }
 
         // 二维码数据可能在不同字段：qr_code / qr_image / url / data / base64
         val qr = qrJson.optString("qr_code").ifBlank {
@@ -76,10 +85,13 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
             }
         }
         if (qr.isBlank()) {
-            Log_e("扫码登录：响应中未找到二维码数据，原始响应: ${qrJson.toString().take(500)}")
+            val msg = "响应中未找到二维码数据，原始响应: ${qrJson.toString().take(500)}"
+            qrError = msg
+            Log_e("扫码登录：$msg")
             return false
         }
 
+        qrError = null
         qrCodeData = qr
         loginState = LoginState.WAITING_SCAN
         Log_i("扫码登录：二维码已获取，等待用户微信扫码...")
@@ -150,6 +162,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
         loginPollJob = null
         loginState = LoginState.IDLE
         qrCodeData = null
+        qrError = null
     }
 
     override suspend fun runConnection() {

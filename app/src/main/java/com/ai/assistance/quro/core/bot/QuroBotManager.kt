@@ -47,13 +47,45 @@ data class QuroInboundMessage(
     val text: String,
     /** 平台原始事件体（JSON 字符串 / Map 等），中继层透传，供 adapter 做验签/解密。 */
     val raw: Any? = null,
+    /** QQ 被动回复所需的原始消息 ID（不带则网关拒收回复）。 */
+    val msgId: String? = null,
+    /** QQ 被动回复所需的事件 ID。 */
+    val eventId: String? = null,
+    /** QQ 群消息的目标群 ID（GROUP_AT_MESSAGE_CREATE 时非空，回复走 /v2/groups/ 端点）。 */
+    val groupId: String? = null,
 )
+
+/**
+ * 机器人消息与 App 会话的绑定器。
+ * 由 [QuroChatViewModel] 实现并注册，负责把机器人对话写入持久化会话。
+ */
+fun interface BotConversationBinder {
+    /**
+     * @param mode "none" | "auto" | "fixed"
+     * @param fixedConvId mode="fixed" 时指定的目标会话 ID
+     */
+    fun append(
+        platform: QuroBotPlatform,
+        userId: String,
+        userName: String,
+        userText: String,
+        replyText: String,
+        mode: String,
+        fixedConvId: String?,
+    )
+}
 
 /** Quro → 平台的出站回复。 */
 data class QuroOutboundMessage(
     val platform: QuroBotPlatform,
     val userId: String,
     val text: String,
+    /** QQ 被动回复所需的原始消息 ID（透传自入站消息）。 */
+    val msgId: String? = null,
+    /** QQ 被动回复所需的事件 ID。 */
+    val eventId: String? = null,
+    /** QQ 群消息的目标群 ID（透传自入站消息）。 */
+    val groupId: String? = null,
 )
 
 /**
@@ -89,6 +121,21 @@ class QuroBotManager(
 
     /** UI 镜像回调：把每条 bot 回复同时推给前台（可选，如写入主对话）。 */
     var uiMirror: ((QuroOutboundMessage) -> Unit)? = null
+
+    /** 会话绑定器：把机器人对话写入 App 持久化会话。 */
+    var conversationBinder: BotConversationBinder? = null
+
+    /** 读取某平台的会话绑定模式：none / auto / fixed。 */
+    fun bindMode(platform: QuroBotPlatform): String {
+        val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return prefs.getString("bind_mode_${platform.name}", "auto")?.lowercase() ?: "auto"
+    }
+
+    /** 读取 fixed 模式下的目标会话 ID。 */
+    fun bindConvId(platform: QuroBotPlatform): String? {
+        val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return prefs.getString("bind_conv_${platform.name}", null)
+    }
 
     fun registerAdapter(adapter: QuroBotAdapter) {
         adapters[adapter.platform] = adapter
@@ -127,12 +174,41 @@ class QuroBotManager(
         scope.launch {
             try {
                 val reply = replyEngine.reply(message.platform, message.userId, message.text)
-                val out = QuroOutboundMessage(message.platform, message.userId, reply)
+                val out = QuroOutboundMessage(
+                    message.platform,
+                    message.userId,
+                    reply,
+                    msgId = message.msgId,
+                    eventId = message.eventId,
+                    groupId = message.groupId,
+                )
+
+                // 按平台配置，把用户消息 + 机器人回复写入 App 持久化会话
+                val mode = bindMode(message.platform)
+                if (mode != "none") {
+                    conversationBinder?.append(
+                        platform = message.platform,
+                        userId = message.userId,
+                        userName = message.userName.ifBlank { message.userId },
+                        userText = message.text,
+                        replyText = reply,
+                        mode = mode,
+                        fixedConvId = bindConvId(message.platform),
+                    )
+                }
+
                 adapters[message.platform]?.deliver(out)
                 uiMirror?.invoke(out)
             } catch (e: Exception) {
                 Log.e(TAG, "handleInbound failed platform=${message.platform} user=${message.userId}: ${e.message}")
-                val err = QuroOutboundMessage(message.platform, message.userId, "（机器人暂时无法回复：${e.message}）")
+                val err = QuroOutboundMessage(
+                    message.platform,
+                    message.userId,
+                    "（机器人暂时无法回复：${e.message}）",
+                    msgId = message.msgId,
+                    eventId = message.eventId,
+                    groupId = message.groupId,
+                )
                 adapters[message.platform]?.let { runCatching { it.deliver(err) } }
             }
         }

@@ -116,35 +116,70 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     }
 
     override suspend fun deliver(reply: QuroOutboundMessage) {
-        // token 为空时尝试刷新一次（可能 WS 重连后 token 丢失/过期）
-        if (accessToken.isBlank()) {
-            Log_w("deliver 时 accessToken 为空，尝试刷新...")
-            val tokenJson = httpPostJson(
+        // ---- 构建请求体（与平台无关，只构建一次）----
+        val endpoint: String
+        val body = if (reply.groupId != null) {
+            endpoint = "https://api.sgroup.qq.com/v2/groups/${reply.groupId}/messages"
+            JSONObject().apply {
+                put("msg_type", "markdown")
+                put("content", JSONObject().put("markdown", reply.text).toString())
+                reply.msgId?.let { put("msg_id", it) }
+                reply.eventId?.let { put("event_id", it) }
+            }.toString()
+        } else {
+            endpoint = "https://api.sgroup.qq.com/v2/users/${reply.userId}/messages"
+            JSONObject().apply {
+                put("msg_type", "text")
+                put("content", JSONObject().put("text", reply.text).toString())
+                reply.msgId?.let { put("msg_id", it) }
+                reply.eventId?.let { put("event_id", it) }
+            }.toString()
+        }
+
+        // ---- 发送辅助函数（闭包复用）----
+        fun doSend(token: String): Triple<Int, String, JSONObject?> {
+            return httpPostWithStatus(
+                endpoint,
+                headers = mapOf("Authorization" to "QQBot $token"),
+                json = body,
+            )
+        }
+
+        fun refreshToken(): Boolean {
+            Log_w("deliver 刷新 token...")
+            val tj = httpPostJson(
                 "https://bots.qq.com/app/getAppAccessToken",
                 json = JSONObject().apply {
                     put("appId", appId)
                     put("clientSecret", appSecret)
                 }.toString(),
             )
-            accessToken = tokenJson?.optString("access_token").orEmpty()
-            if (accessToken.isBlank()) {
-                Log_e("deliver 失败：token 刷新也为空，无法发送回复给 user=${reply.userId}")
-                return
+            accessToken = tj?.optString("access_token").orEmpty()
+            val ok = accessToken.isNotBlank()
+            if (ok) Log_i("deliver token 刷新成功（长度=${accessToken.length}）")
+            else Log_e("deliver token 刷新失败：${tj?.toString()?.take(200)}")
+            return ok
+        }
+
+        // ---- 第一次尝试：用当前 token 直接发 ----
+        if (accessToken.isBlank()) refreshToken()
+        var (code, respBody, json) = doSend(accessToken)
+
+        // ---- 失败时判断是否需要刷新重试（401=过期/无效, 403=无权限, 429=限流等）----
+        if (json == null && code in listOf(401, 403, 0)) {
+            Log_w("deliver 首次失败 HTTP $code，尝试刷新 token 后重试...（响应: ${respBody.take(300)}）")
+            if (refreshToken()) {
+                val (code2, body2, json2) = doSend(accessToken)
+                code = code2; respBody = body2; json = json2
             }
         }
-        // 被动回复：POST /v2/users/{openid}/messages，msg_type=text；
-        // QQBot 要求 content 为 JSON 字符串（{"text":"..."}），裸文本会被拒
-        val body = JSONObject().apply {
-            put("msg_type", "text")
-            put("content", JSONObject().put("text", reply.text).toString())
-        }.toString()
-        val json = httpPostJson(
-            "https://api.sgroup.qq.com/v2/users/${reply.userId}/messages",
-            headers = mapOf("Authorization" to "QQBot $accessToken"),
-            json = body,
-        )
-        if (json == null) Log_e("deliver 失败 user=${reply.userId}（HTTP 错误或网络异常）")
-        else Log_i("deliver 已发往 QQ 用户 ${reply.userId}")
+
+        // ---- 结果判定 ----
+        if (json != null) {
+            Log_i("✅ deliver 成功 → QQ ${if (reply.groupId != null) "群 ${reply.groupId}" else "用户 ${reply.userId}"}")
+        } else {
+            Log_e("❌ deliver 最终失败 → $endpoint | HTTP=$code | 响应=${respBody.take(500)} | token长度=${accessToken.length}")
+        }
     }
 
     private fun startHeartbeat(intervalMs: Long) {
@@ -193,8 +228,23 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                             var content = d.optString("content", "").trim()
                             // C2C 内容可能带前导 "/" 指令 token，去掉
                             content = content.removePrefix("/").trim()
+                            val msgId = d.optString("msg_id").ifBlank { null }
+                            val eventId = d.optString("event_id").ifBlank { null }
                             if (openid.isNotBlank() && content.isNotBlank()) {
-                                onInbound(openid, openid, content)
+                                onInbound(openid, openid, content, msgId, eventId)
+                            }
+                        } else if (t == "GROUP_AT_MESSAGE_CREATE") {
+                            // 群内 @机器人：content 形如「@ bot名称 <真正的消息>」，去掉 @ 提及前缀。
+                            val groupOpenid = d.optString("group_openid").ifBlank { null }
+                            val openid = d.optJSONObject("author")?.optString("user_openid").orEmpty()
+                            var content = d.optString("content", "").trim()
+                            // 去掉开头的 @ 提及（直到第一个空格）
+                            content = content.replace(Regex("^@\\S+\\s*"), "").trim()
+                            val msgId = d.optString("msg_id").ifBlank { null }
+                            val eventId = d.optString("event_id").ifBlank { null }
+                            if (groupOpenid != null && content.isNotBlank()) {
+                                // userId 仍用发消息人 openid 便于会话绑定；groupId 标记群回复端点
+                                onInbound(openid, openid, content, msgId, eventId, groupId = groupOpenid)
                             }
                         }
                     }

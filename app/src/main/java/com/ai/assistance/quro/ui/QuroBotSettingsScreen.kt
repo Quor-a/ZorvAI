@@ -3,6 +3,7 @@ package com.ai.assistance.quro.ui
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,10 +17,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
@@ -30,6 +34,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -37,6 +42,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -172,10 +178,16 @@ private fun BotPlatformCard(
     var statusText by remember { mutableStateOf("未启动") }
     var statusColor by remember { mutableStateOf(Color.Gray) }
 
+    // 会话绑定模式：none=不写入 App 会话；auto=为每个平台用户自动创建新会话；fixed=绑定到指定会话
+    var bindMode by remember { mutableStateOf(prefs.getString("bind_mode_${platform.name}", "auto") ?: "auto") }
+    var bindConvId by remember { mutableStateOf(prefs.getString("bind_conv_${platform.name}", null) ?: "") }
+    var showConvPicker by remember { mutableStateOf(false) }
+
     // 微信扫码状态
     var showQr by remember { mutableStateOf(false) }
     var qrData by remember { mutableStateOf<String?>(null) }
     var qrStatus by remember { mutableStateOf("") }
+    var qrError by remember { mutableStateOf<String?>(null) }
 
     // 定期刷新状态显示
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -216,7 +228,8 @@ private fun BotPlatformCard(
                 val wechat = adapter as? QuroWechatIlinkBotAdapter
                 if (wechat != null) {
                     qrData = wechat.qrCodeData
-                    showQr = wechat.loginState == QuroWechatIlinkBotAdapter.LoginState.WAITING_SCAN
+                    qrError = wechat.qrError
+                    showQr = wechat.loginState == QuroWechatIlinkBotAdapter.LoginState.WAITING_SCAN || wechat.qrError != null
                     qrStatus = when (wechat.loginState) {
                         QuroWechatIlinkBotAdapter.LoginState.IDLE -> ""
                         QuroWechatIlinkBotAdapter.LoginState.WAITING_SCAN -> "请用手机微信扫描下方二维码"
@@ -307,6 +320,83 @@ private fun BotPlatformCard(
                     }
                 }
 
+                // 会话绑定模式（仅直连平台）
+                Spacer(Modifier.height(4.dp))
+                Text("会话绑定", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(4.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("none" to "不绑定", "auto" to "自动创建", "fixed" to "绑定会话").forEach { (mode, label) ->
+                        val selected = bindMode == mode
+                        OutlinedButton(
+                            onClick = {
+                                bindMode = mode
+                                prefs.edit().putString("bind_mode_${platform.name}", mode).apply()
+                                if (mode != "fixed") {
+                                    bindConvId = ""
+                                    prefs.edit().remove("bind_conv_${platform.name}").apply()
+                                }
+                            },
+                            modifier = Modifier.weight(1f).height(34.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                            ),
+                        ) {
+                            Text(label, fontSize = 11.sp, maxLines = 1)
+                        }
+                    }
+                }
+                if (bindMode == "fixed") {
+                    Spacer(Modifier.height(4.dp))
+                    val convs = QuroChatViewModel.instance.conversations.collectAsState()
+                    val selectedTitle = convs.value.firstOrNull { it.id == bindConvId }?.title ?: "选择要绑定的会话"
+                    OutlinedButton(
+                        onClick = { showConvPicker = true },
+                        modifier = Modifier.fillMaxWidth().height(36.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+                    ) {
+                        Text(selectedTitle, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Icon(Icons.Filled.ChevronRight, null, Modifier.size(16.dp))
+                    }
+                    // 会话选择对话框
+                    if (showConvPicker) {
+                        val convsList = convs.value
+                        AlertDialog(
+                            onDismissRequest = { showConvPicker = false },
+                            title = { Text("选择会话") },
+                            text = {
+                                Column {
+                                    if (convsList.isEmpty()) {
+                                        Text("暂无可选会话，请先新建一个对话。", fontSize = 13.sp)
+                                    } else {
+                                        convsList.forEach { conv ->
+                                            Row(
+                                                Modifier.fillMaxWidth().clickable {
+                                                    bindConvId = conv.id
+                                                    prefs.edit().putString("bind_conv_${platform.name}", conv.id).apply()
+                                                    showConvPicker = false
+                                                }.padding(vertical = 10.dp, horizontal = 4.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                RadioButton(selected = conv.id == bindConvId, onClick = {
+                                                    bindConvId = conv.id
+                                                    prefs.edit().putString("bind_conv_${platform.name}", conv.id).apply()
+                                                    showConvPicker = false
+                                                })
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(conv.title, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                OutlinedButton(onClick = { showConvPicker = false }) { Text("关闭") }
+                            },
+                        )
+                    }
+                }
+
                 // 微信扫码登录区域
                 if (platform == QuroBotPlatform.WECHAT) {
                     Spacer(Modifier.height(4.dp))
@@ -317,8 +407,17 @@ private fun BotPlatformCard(
                                 if (wechat != null) {
                                     if (wechat.loginState == QuroWechatIlinkBotAdapter.LoginState.WAITING_SCAN) {
                                         wechat.cancelQrLogin()
+                                        qrError = null
+                                        qrData = null
+                                        showQr = false
                                     } else {
-                                        wechat.startQrLogin()
+                                        qrError = null
+                                        showQr = true
+                                        val ok = wechat.startQrLogin()
+                                        // 立即同步一次状态，避免等轮询周期
+                                        qrData = wechat.qrCodeData
+                                        qrError = wechat.qrError
+                                        showQr = wechat.loginState == QuroWechatIlinkBotAdapter.LoginState.WAITING_SCAN || wechat.qrError != null
                                     }
                                 }
                             },
@@ -332,42 +431,57 @@ private fun BotPlatformCard(
                         }
                     }
 
-                    // 二维码展示
-                    if (showQr && qrData != null) {
+                    // 二维码展示 / 错误提示
+                    if (showQr) {
                         Spacer(Modifier.height(8.dp))
                         ElevatedCard(
                             Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
                         ) {
                             Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(qrStatus, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.height(8.dp))
-                                // 二维码图片（base64 或 URL）
-                                val data = qrData!!
-                                Box(
-                                    Modifier.fillMaxWidth().height(200.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    when {
-                                        data.startsWith("http", ignoreCase = true) -> {
-                                            // URL 形式：提示用户在浏览器打开或用其他方式查看
-                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                Text("请在浏览器中打开此链接查看二维码：", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                Text(data, fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, maxLines = 2)
+                                val err = qrError
+                                if (err != null) {
+                                    Text("扫码失败", fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(err, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                                    Spacer(Modifier.height(8.dp))
+                                    Text("可先在上方手动粘贴 bot token，再开启开关启动长轮询。", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                } else {
+                                    Text(qrStatus, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                                    Spacer(Modifier.height(8.dp))
+                                    // 二维码图片（base64 或 URL）
+                                    val data = qrData
+                                    if (data == null) {
+                                        Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                                            Text("正在获取二维码…", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    } else {
+                                        Box(
+                                            Modifier.fillMaxWidth().height(200.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            when {
+                                                data.startsWith("http", ignoreCase = true) -> {
+                                                    // URL 形式：提示用户在浏览器打开或用其他方式查看
+                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                        Text("请在浏览器中打开此链接查看二维码：", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                        Text(data, fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, maxLines = 2)
+                                                    }
+                                                }
+                                                data.length > 200 -> {
+                                                    // base64 图片数据
+                                                    Text("二维码已生成（${data.length} 字符 base64）\n（真机可渲染为图片，预览环境暂显示文字）", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                                else -> {
+                                                    // 短文本（可能是 QR 内容字符串）
+                                                    Text("QR: $data", fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                                                }
                                             }
                                         }
-                                        data.length > 200 -> {
-                                            // base64 图片数据
-                                            Text("二维码已生成（${data.length} 字符 base64）\n（真机可渲染为图片，预览环境暂显示文字）", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                        else -> {
-                                            // 短文本（可能是 QR 内容字符串）
-                                            Text("QR: $data", fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-                                        }
                                     }
+                                    Spacer(Modifier.height(4.dp))
+                                    Text("打开微信 → 扫一扫 → 确认登录", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Spacer(Modifier.height(4.dp))
-                                Text("打开微信 → 扫一扫 → 确认登录", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -375,9 +489,9 @@ private fun BotPlatformCard(
 
                 Spacer(Modifier.height(4.dp))
                 val hint = when (platform) {
-                    QuroBotPlatform.QQ -> "QQ 开放平台建机器人拿 AppID/Secret；沙箱期需加自己为测试成员 + 配 IP 白名单。"
+                    QuroBotPlatform.QQ -> "QQ 开放平台建机器人拿 AppID/Secret；沙箱期需加自己为测试成员。IP 白名单在 QQ 后台管理：不填 = 所有 IP 均可调用，本 App 不做额外限制。"
                     QuroBotPlatform.FEISHU -> "飞书开放平台建自建应用拿 App ID/Secret；事件订阅选「长连接接收」免填回调。"
-                    QuroBotPlatform.WECHAT -> "微信 iLink 个人号：点击「扫码登录」获取二维码，用手机微信扫后自动填入 token。"
+                    QuroBotPlatform.WECHAT -> "微信 iLink 个人号：点击「扫码登录」获取二维码，用手机微信扫后自动填入 token；若二维码接口不可用，可直接手动粘贴 bot token。"
                     else -> ""
                 }
                 Text(hint, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
