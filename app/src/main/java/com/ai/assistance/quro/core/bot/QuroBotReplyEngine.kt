@@ -4,6 +4,8 @@ import android.content.Context
 import com.ai.assistance.quro.core.QuroAssistant
 import com.ai.assistance.quro.core.QuroConversationStore
 import com.ai.assistance.quro.core.QuroMessage
+import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionType
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
 import com.ai.assistance.quro.core.network.QuroLlmClient
 import com.ai.assistance.quro.core.tools.buildQuroRegistry
@@ -21,6 +23,18 @@ import java.util.concurrent.ConcurrentHashMap
  * 接入点：core/QuroAssistant.kt:27（构造器）、core/tools/QuroBuiltInTools.kt:149（buildQuroRegistry）、
  *        core/model/QuroModelConfig.kt:28（模型配置，含 apiKey/baseUrl）。
  */
+
+/**
+ * 机器人一次回复：以文本为主，可附带一张要发送的图片（字节 + 文件名）。
+ * imageBytes 非空时，支持图片的平台（飞书）优先发图，文字作为附言补发。
+ */
+@Suppress("ArrayInDataClass")
+data class QuroReply(
+    val text: String,
+    val imageBytes: ByteArray? = null,
+    val imageFileName: String? = null,
+)
+
 class QuroBotReplyEngine(private val appContext: Context) {
     private val registry = buildQuroRegistry(appContext.applicationContext)
     private val client = QuroLlmClient()
@@ -53,23 +67,26 @@ class QuroBotReplyEngine(private val appContext: Context) {
      * 给定一条用户消息，返回 AI 回复文本。
      * 异常向上抛，由 [QuroBotManager.handleInbound] 兜底成友好报错。
      */
-    suspend fun reply(platform: QuroBotPlatform, userId: String, text: String): String =
+    suspend fun reply(platform: QuroBotPlatform, userId: String, text: String): QuroReply =
         withContext(Dispatchers.IO) {
-            val cfg = QuroModelConfigRepository(appContext).load()
-            if (cfg.apiKey.isBlank()) {
-                return@withContext "（未配置模型 API Key，机器人无法回复；请到「模型设置」填写 baseUrl / apiKey / model。）"
+            val baseCfg = QuroModelConfigRepository(appContext).load()
+            if (baseCfg.apiKey.isBlank()) {
+                return@withContext QuroReply("（未配置模型 API Key，机器人无法回复；请到「模型设置」填写 baseUrl / apiKey / model。）")
             }
+            // 机器人回复属于 CHAT 调用：接入「功能模型配置」的 CHAT 独立模型绑定，让开关真正生效
+            val cfg = QuroFunctionModelConfigRepository(appContext).resolveConfig(QuroFunctionType.CHAT, baseCfg)
             val assistant = sessionOf(platform, userId)
             val store = stores["${platform.name}:$userId"] ?: QuroConversationStore().also {
                 stores["${platform.name}:$userId"] = it
             }
             store.add(QuroMessage(role = "user", content = text))
-            assistant.ask(
+            val result = assistant.ask(
                 context = appContext,
                 cfg = cfg,
                 systemPrompt = systemPrompt(platform, userId),
                 autoSaveMemory = false,
             )
+            QuroReply(result)
         }
 
     /** 清空某用户的多轮上下文（切换/重置时用）。 */

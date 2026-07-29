@@ -36,7 +36,8 @@ class QuroCmsListTool : QuroTool {
         caps.forEach { (m, c) ->
             val risk = c.requiresPermissions.mapNotNull { m.findPermission(it)?.level?.name }.distinct()
                 .joinToString("/").ifBlank { "Normal" }
-            sb.append("- [${m.name}] ${c.id}：${c.summary}（风险级别：$risk）\n")
+            val hosts = c.runOn.joinToString("/") { it.label }
+            sb.append("- [${m.name}] ${c.id}：${c.summary}（风险级别：$risk 宿主：$hosts）\n")
         }
         val policy = QuroPolicyStore.getCms(context)
         sb.append("\n当前 CMS v2 权限模式：${policy.name}（允许/禁止/询问）。用 cms_call 调用具体能力。")
@@ -52,8 +53,9 @@ class QuroCmsCallTool : QuroTool {
     override val parametersJson = """{
         "type":"object",
         "properties":{
-            "capability_id":{"type":"string","description":"能力 id，例如 echo_text / device_info / root_id"},
-            "args":{"type":"object","description":"能力所需参数，键为 ${'$'}{参数名}，例如 {\"text\":\"hello\"}"}
+            "capability_id":{"type":"string","description":"能力 id，例如 echo_text / device_info / run_code_dual"},
+            "args":{"type":"object","description":"能力所需参数，键为 ${'$'}{参数名}，例如 {\"text\":\"hello\"}"},
+            "target":{"type":"string","description":"运行宿主：auto(默认,按电量/锁屏/proot就绪自动选)/app(前端应用内)/terminal(后端 proot 终端)。能力声明了 runOn 才支持对应宿主"}
         },
         "required":["capability_id"]
     }"""
@@ -73,6 +75,13 @@ class QuroCmsCallTool : QuroTool {
         val argsObj = obj.optJSONObject("args")
         argsObj?.keys()?.forEach { k -> argsMap[k] = argsObj.optString(k, "") }
 
+        val target = InvocationTarget.parse(obj.optString("target", "auto"))
+        val resolution = CmsHostRouter.resolve(cap, target, context)
+        if (resolution.host == null) {
+            return resolution.guidance ?: "⛔ 无法解析运行宿主"
+        }
+        val host = resolution.host
+
         val policy = QuroPolicyStore.getCms(context)
         val taskId = CmsStateStore.newTask("call", "$capId")
         val result: CmsExecResult = when (policy) {
@@ -82,7 +91,7 @@ class QuroCmsCallTool : QuroTool {
             }
             QuroPolicy.ASK -> runBlocking {
                 val res = QuroCmsExecutor(context).execute(
-                    module = module, cap = cap, args = argsMap, uiRequest = { null },
+                    module = module, cap = cap, args = argsMap, uiRequest = { null }, host = host,
                 )
                 if (res.startsWith("⛔ 权限被拒绝")) {
                     CmsStateStore.finishTask(taskId, false, "需授权（询问模式被拦截）")
@@ -99,7 +108,7 @@ class QuroCmsCallTool : QuroTool {
                 }
             }
             QuroPolicy.ALLOW -> runBlocking {
-                CmsExecutionEngine.execute(context, module, cap, argsMap, { AuthorizationLevel.Temporary }, taskId)
+                CmsExecutionEngine.execute(context, module, cap, argsMap, { AuthorizationLevel.Temporary }, target, taskId)
             }
         }
         // 返回结构化结果 + task_id，便于 AI 后续用 cms_result / cms_logs 回查（反馈环）
@@ -107,6 +116,7 @@ class QuroCmsCallTool : QuroTool {
             append(result.stdout)
             if (!result.stdout.endsWith("\n")) append("\n")
             append("\n[CMS 执行反馈] task_id=${result.taskId} 状态=${if (result.ok) "success" else "failed"} 耗时=${result.durationMs}ms")
+            append("\n[宿主] ${host.label}（target=${target.label}）")
             append("\n可用 cms_status / cms_logs / cms_result 查询进度与结构化结果。")
         }.trimEnd()
     }
@@ -288,7 +298,7 @@ class QuroPrivStatusTool : QuroTool {
             sb.append("\n可用能力（共 ${caps.size} 项）：\n")
             caps.take(30).forEach { (m, c) -> sb.append("- ${c.id}：${c.summary}\n") }
         }
-        sb.append("\n提示：直接调用 cms_call 执行能力；cms_deploy_terminal 把模块部署到 proot 终端并运行。")
+        sb.append("\n提示：cms_call 可带 target=auto/app/terminal 指定运行宿主（auto 按电量/锁屏/proot 就绪自动选前端或后端）；cms_deploy_terminal 把模块部署到 proot 终端并运行。")
         return sb.toString().trim()
     }
 }
@@ -361,5 +371,41 @@ class QuroCmsUndeployTool : QuroTool {
         val moduleId = obj.optString("module_id", "").trim()
         if (moduleId.isEmpty()) return "缺少 module_id 参数。"
         return CmsTerminalDeployer.undeploy(context, moduleId)
+    }
+}
+
+/**
+ * CMS 引擎（系统资源包）状态查询工具（原创）：让 AI 回查「CMS 引擎」这个一级运行引擎的
+ * 部署就绪态/健康/版本/共享服务/部署进度/日志。对应 [CmsEngineStore]（区别于 [cms_status] 查的模块态）。
+ */
+class QuroCmsEngineStatusTool : QuroTool {
+    override val name = "cms_engine_status"
+    override val description =
+        "查询「CMS 引擎（系统资源包）」的部署就绪态、健康度、版本、拉起的共享服务（NODE/PYTHON/SSH/JAVA/RUST/GO 等运行时）、部署进度与日志。" +
+            "这是 CMS 的一级运行引擎（区别于能力模块），是模块运行的基础底座。当用户问「CMS 引擎状态/部署好没/引擎就绪了吗/引擎拉起了哪些服务」时使用。参数为空 {}。"
+    override val parametersJson = """{"type":"object","properties":{}}"""
+
+    override fun run(context: Context, arguments: String): String {
+        CmsEngineStore.init(context)
+        val s = CmsEngineStore.snapshot.value
+        val df = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+        val lastDeploy = if (s.lastDeployAt > 0) df.format(java.util.Date(s.lastDeployAt)) else "从未"
+        val deploying = if (s.deploying) "（部署中… 当前步骤：${s.deployStep}）" else ""
+        val status = when {
+            s.ready && s.health -> "● 就绪且健康"
+            s.ready && !s.health -> "○ 已部署但健康检查未通过"
+            s.deploying -> "◐ 部署中"
+            else -> "○ 未部署"
+        }
+        return buildString {
+            append("CMS 引擎（系统资源包）状态：$status$deploying\n")
+            append("- 版本：${if (s.engineVersion.isNotBlank()) s.engineVersion else "未部署"}\n")
+            append("- 就绪=$s.ready 健康=$s.health\n")
+            append("- 共享服务（运行时）：${if (s.services.isNotEmpty()) s.services.joinToString(" / ") else "无（未就绪）"}\n")
+            append("- 最近部署时间：$lastDeploy\n")
+            if (s.lastError.isNotBlank()) append("- 最近错误：${s.lastError}\n")
+            if (s.logs.isNotEmpty()) append("\n部署日志（最近）：\n" + s.logs.takeLast(15).joinToString("\n") + "\n")
+            append("\n说明：CMS 引擎是整套终端运行引擎（区别于能力模块），提供 NODE/PYTHON/SSH/JAVA/RUST/GO 等共享运行时；引擎就绪后，依赖这些运行时的能力模块才能运行。")
+        }.trimEnd()
     }
 }

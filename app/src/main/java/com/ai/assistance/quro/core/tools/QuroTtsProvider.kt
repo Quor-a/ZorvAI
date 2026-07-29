@@ -451,6 +451,7 @@ object QuroTtsProviderPrefs {
                     put(JSONObject().apply {
                         put("name", it.name); put("type", it.type)
                         put("designText", it.designText); put("cloneUri", it.cloneUri)
+                        put("cloneText", it.cloneText); put("registeredId", it.registeredId)
                     })
                 }
             })
@@ -459,6 +460,15 @@ object QuroTtsProviderPrefs {
     }
 
     fun getActiveConfig(ctx: Context): QuroTtsProviderConfig = getConfig(ctx, getProvider(ctx))
+
+    /**
+     * 删除某服务商的已保存配置（删除已配置模型 / 服务商）。
+     * 仅移除该服务商独立的配置 JSON，不影响其它服务商与当前选中服务商标记。
+     * 调用后该服务商回落到「未配置」状态（无必填项的服务商如 Edge 仍为默认可用）。
+     */
+    fun clearConfig(ctx: Context, id: String) {
+        prefs(ctx).edit().remove(cfgKey(id)).apply()
+    }
 
     /** 是否已配置：必填字段全部非空（Edge 无需字段 → 恒 true）。 */
     fun isConfigured(ctx: Context): Boolean {
@@ -507,6 +517,8 @@ object QuroTtsProviderPrefs {
                         type = jo.optString("type", "design"),
                         designText = jo.optString("designText", ""),
                         cloneUri = jo.optString("cloneUri", ""),
+                        cloneText = jo.optString("cloneText", ""),
+                        registeredId = jo.optString("registeredId", ""),
                     ),
                 )
             }

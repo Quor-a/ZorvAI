@@ -29,7 +29,7 @@ class QuroModelConfigViewModel(context: Context) : ViewModel() {
     private val _cfg = MutableStateFlow(repo.load())
     val cfg: StateFlow<QuroModelConfig> = _cfg.asStateFlow()
 
-    private val _modelList = MutableStateFlow<QuroModelListResult?>(null)
+    private val _modelList = MutableStateFlow<QuroModelListResult?>(repo.loadModelListCache(_cfg.value.baseUrl))
     val modelList: StateFlow<QuroModelListResult?> = _modelList.asStateFlow()
 
     private val _isFetchingModels = MutableStateFlow(false)
@@ -49,7 +49,12 @@ class QuroModelConfigViewModel(context: Context) : ViewModel() {
         _cfg.value = repo.load()
     }
 
-    /** 按当前 Base URL + API Key 拉取可用模型列表。 */
+    /** 进入模型面板时调用：只读本地缓存，不联网（v396 改为手动拉取）。 */
+    fun loadCachedModels() {
+        _modelList.value = repo.loadModelListCache(_cfg.value.baseUrl)
+    }
+
+    /** 按当前 Base URL + API Key 拉取可用模型列表（手动触发）。 */
     fun fetchModels() {
         val c = _cfg.value
         _isFetchingModels.value = true
@@ -58,10 +63,13 @@ class QuroModelConfigViewModel(context: Context) : ViewModel() {
             try {
                 val res = fetcher.fetch(c.baseUrl, c.apiKey)
                 _modelList.value = res
+                repo.saveModelListCache(c.baseUrl, res) // 持久化缓存，下次进入直接读
             } catch (e: Exception) {
                 // 网络/解析异常不得上抛到 coroutine 作用域：降级成 Error 结果，
                 // 否则未捕获的异常会经 SupervisorJob 冒泡到线程未捕获处理器 → 整个 App 崩溃。
-                _modelList.value = QuroModelListResult.Error(e.message ?: "拉取失败")
+                val res = QuroModelListResult.Error(e.message ?: "拉取失败")
+                _modelList.value = res
+                repo.saveModelListCache(c.baseUrl, res)
             } finally {
                 _isFetchingModels.value = false
             }

@@ -332,6 +332,8 @@ fun QuroBrowserScreen(
         val wanted = listOf(
             "开源地址（Iceraven 浏览器）" to "https://github.com/fork-maintainers/iceraven-browser",
             "元宝回答·开源浏览器清单" to "https://yb.tencent.com/s/NFdWa3f1zpSk",
+            "元宝回答·百分百开源安卓数字人" to "https://yb.tencent.com/s/I9x5hnu8zJqm",
+            "元宝回答·3D 全离线（LLM+ASR+TTS+A2BS+渲染都在手机）" to "https://yb.tencent.com/s/TsfOddkjerlh",
         )
         val oldSeedTitles = setOf("开源地址（点击查看元宝的回答）", "元宝·开源浏览器参考")
         var next = bookmarks.filterNot { (t, u) ->

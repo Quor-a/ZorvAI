@@ -30,10 +30,34 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.quro.core.cms.*
+import com.ai.assistance.quro.core.tools.QuroDownloadUtil
 import com.ai.assistance.quro.ui.theme.Line
 import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
+
+/**
+ * 「怎么添加 CMS v2 模块」说明（开发者文档，可一键下载到本地）。
+ */
+private val CMS_ADD_MODULE_GUIDE = """
+CMS v2 模块 = 一个能力包（cms.io/v2 规范），可部署到「手机端（应用内执行）」或「终端（proot/Alpine Linux 沙箱内执行）」。
+
+一、点「+ 添加模块」填写：
+• 名称 / 简介：一眼看懂用途。
+• 宿主分类：app=手机端执行；terminal=终端 Linux 内执行；dual=双端皆可。
+• 能力（Capabilities）：模块对外暴露的能力点，每个含 id / 描述 / 是否需用户确认。
+• 依赖（Dependencies）：声明运行所需环境，kind 选 NODE / PYTHON / SSH / JAVA / RUST / GO（由 CmsEnvProvisioner 自动 provision），或 CAPABILITY（依赖另一个模块的能力）。
+
+二、依赖与运行：
+• 终端模块首次部署前，先在「终端」页安装 Linux 环境（约需联网下载 30MB），部署时按需 apk add 基础包。
+• 阻塞依赖（非 optional 且非 CAPABILITY）未满足时会提示先 provision。
+
+三、导入 / 导出：
+• 右上「导出模块」生成 cms-package.json；「导入模块」可粘贴他人分享的模块 JSON 恢复。
+
+四、部署：
+• 在模块卡片点「部署」，终端模块会写入 proot 宿主目录并启动；手机模块直接在应用内注册能力。
+"""
 
 /**
  * CMSv2模块 — 管理界面（原创，对应 Rust 版 CLI/UI）。
@@ -52,9 +76,53 @@ fun QuroCmsScreen(onClose: () -> Unit) {
     LaunchedEffect(Unit) {
         repo.ensureSeed()
         CmsStateStore.init(ctx)
+        CmsEngineStore.init(ctx)
+        CmsEngineStore.checkStale() // 进入即检查是否有卡死的部署态（#911 看门狗）
+        if (CmsEngineStore.snapshot.value.ready) CmsEngineStore.probeHealth(ctx)
     }
     // 订阅状态系统：部署进度/明确终态/日志实时刷新（解决「装包无实时 UI / 返回不知成功否」）
     val store by CmsStateStore.snapshot.collectAsState()
+    // 订阅CMS引擎状态（部署就绪/健康/共享服务）
+    val engineStore by CmsEngineStore.snapshot.collectAsState()
+
+    val scope = rememberCoroutineScope()
+    var busyDeployEngine by remember { mutableStateOf(false) }
+
+    // 部署官方CMS引擎（quro-engine）
+    fun deployEngine() {
+        busyDeployEngine = true
+        scope.launch(Dispatchers.IO) {
+            try {
+                val res = CmsEngineDeployer.deployEngine(ctx, CmsEnginePackage.builtin())
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(ctx, res.lines().firstOrNull() ?: res, Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                withContext(Dispatchers.Main) { busyDeployEngine = false }
+            }
+        }
+    }
+    // 导出官方CMS引擎到 Download/Quro（.cmsengine，可分享/本地留存）
+    fun exportEngine() {
+        val r = QuroDownloadUtil.saveTextToDownloads(ctx, "QuroEngine.cmsengine", "application/json", CmsEngineDeployer.exportPackage(CmsEnginePackage.builtin()))
+        Toast.makeText(ctx, if (r.startsWith("OK:")) "已保存CMS引擎到 Download/Quro/" else r, Toast.LENGTH_LONG).show()
+    }
+    // 导入CMS引擎（.cmsengine）→ 解析后一键部署
+    val importEngineLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        runCatching {
+            val text = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return@runCatching
+            val pkg = CmsEngineDeployer.importPackage(text)
+            scope.launch(Dispatchers.IO) {
+                val res = CmsEngineDeployer.deployEngine(ctx, pkg)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(ctx, res.lines().firstOrNull() ?: res, Toast.LENGTH_LONG).show()
+                }
+            }
+        }.onFailure {
+            Toast.makeText(ctx, "CMS引擎导入失败：${it.message}", Toast.LENGTH_LONG).show()
+        }
+    }
 
     var section by remember { mutableStateOf("modules") }
     var modules by remember { mutableStateOf(repo.load()) }
@@ -64,9 +132,10 @@ fun QuroCmsScreen(onClose: () -> Unit) {
     var infoModule by remember { mutableStateOf<QuroCmsModule?>(null) }
     var callPair by remember { mutableStateOf<Pair<QuroCmsModule, QuroCmsCapability>?>(null) }
     var showAudit by remember { mutableStateOf(false) }
+    var showExportPicker by remember { mutableStateOf(false) }
+    var pendingExport by remember { mutableStateOf<List<QuroCmsModule>>(emptyList()) }
     var pendingPerm by remember { mutableStateOf<QuroCmsPermission?>(null) }
     var permDeferred = remember { mutableStateOf<CompletableDeferred<AuthorizationLevel?>?>(null) }
-    val scope = rememberCoroutineScope()
 
     fun refresh() {
         modules = repo.load()
@@ -104,6 +173,29 @@ fun QuroCmsScreen(onClose: () -> Unit) {
         }
     }
 
+    // 模块导出 / 导入（SAF）
+    val exportModulesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val list = if (pendingExport.isNotEmpty()) pendingExport else modules
+        runCatching {
+            ctx.contentResolver.openOutputStream(uri)?.use { it.write(repo.exportModules(list).toByteArray()) }
+            refresh()
+        }.onFailure {
+            Toast.makeText(ctx, "模块导出失败：${it.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+    val importModulesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        runCatching {
+            val text = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return@runCatching
+            val n = repo.importModules(text)
+            Toast.makeText(ctx, if (n > 0) "已导入 $n 个模块" else "未识别到有效的 cms.io/v2 模块", Toast.LENGTH_LONG).show()
+            refresh()
+        }.onFailure {
+            Toast.makeText(ctx, "模块导入失败：${it.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -126,10 +218,17 @@ fun QuroCmsScreen(onClose: () -> Unit) {
                 "modules" -> ModulesSection(
                     modules = modules,
                     store = store,
+                    engineStore = engineStore,
+                    busyDeployEngine = busyDeployEngine,
+                    onDeployEngine = { deployEngine() },
+                    onImportEngine = { importEngineLauncher.launch(arrayOf("application/json")) },
+                    onExportEngine = { exportEngine() },
                     onAdd = { showAdd = true },
                     onInfo = { infoModule = it },
                     onUninstall = { repo.uninstall(it.id); refresh() },
                     onDeployed = { modules = repo.load() },
+                    onExport = { showExportPicker = true },
+                    onImport = { importModulesLauncher.launch(arrayOf("application/json")) },
                 )
                 "auth" -> AuthSection(
                     auths = auths,
@@ -165,29 +264,127 @@ fun QuroCmsScreen(onClose: () -> Unit) {
     pendingPerm?.let { perm ->
         PermissionRequestDialog(perm, onChoose = { completeChoice(it) }, onDeny = { completeChoice(null) })
     }
+    // 导出模块选择（#912）：弹窗勾选要导出的模块，再经 SAF 存盘，不再一股脑导出全部
+    if (showExportPicker) {
+        var selected by remember(showExportPicker) { mutableStateOf(modules.map { it.id }.toSet()) }
+        AlertDialog(
+            onDismissRequest = { showExportPicker = false },
+            confirmButton = {
+                Button(onClick = {
+                    val pick = modules.filter { it.id in selected }
+                    showExportPicker = false
+                    if (pick.isEmpty()) {
+                        Toast.makeText(ctx, "未选择任何模块", Toast.LENGTH_SHORT).show()
+                    } else {
+                        pendingExport = pick
+                        exportModulesLauncher.launch("cms-modules-${pick.size}.json")
+                    }
+                }) { Text("导出选中 (${selected.size})") }
+            },
+            dismissButton = { TextButton(onClick = { showExportPicker = false }) { Text("取消") } },
+            title = { Text("选择要导出的模块") },
+            text = {
+                if (modules.isEmpty()) {
+                    Text("当前没有可导出的模块。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                        items(modules) { m ->
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clickable { selected = if (m.id in selected) selected - m.id else selected + m.id }
+                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(checked = m.id in selected, onCheckedChange = { selected = if (it) selected + m.id else selected - m.id })
+                                Spacer(Modifier.width(8.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(m.name, style = MaterialTheme.typography.bodyMedium)
+                                    Text(m.id, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+        )
+    }
 }
 
 // ---------------- 模块 ----------------
+
+/** 按能力 runOn 推导模块所属宿主分组：app(手机) / terminal(终端) / dual(双端)。 */
+private fun cmsHostCategory(m: QuroCmsModule): String {
+    val hasApp = m.capabilities.any { it.runOn.contains(RuntimeHost.APP) }
+    val hasTerm = m.capabilities.any { it.runOn.contains(RuntimeHost.TERMINAL) }
+    return when {
+        hasTerm && hasApp -> "dual"
+        hasTerm -> "terminal"
+        else -> "app"
+    }
+}
+
+/** 宿主分组中文标签（用于卡片徽标）。 */
+private fun cmsHostLabel(m: QuroCmsModule): String = when (cmsHostCategory(m)) {
+    "terminal" -> "🖥 终端"
+    "dual" -> "🔁 双端"
+    else -> "📱 手机"
+}
 
 @Composable
 private fun ModulesSection(
     modules: List<QuroCmsModule>,
     store: CmsStateStore.Snapshot,
+    engineStore: CmsEngineStore.EngineSnapshot,
+    busyDeployEngine: Boolean,
+    onDeployEngine: () -> Unit,
+    onImportEngine: () -> Unit,
+    onExportEngine: () -> Unit,
     onAdd: () -> Unit,
     onInfo: (QuroCmsModule) -> Unit,
     onUninstall: (QuroCmsModule) -> Unit,
     onDeployed: () -> Unit,
+    onExport: () -> Unit,
+    onImport: () -> Unit,
 ) {
     val ctx = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
     var busyOneClick by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
+        // ---- CMS引擎状态卡（一级部署单元，区别于模块）----
+        val es = engineStore
+        val (eLabel, eColor) = when {
+            es.deploying -> "● 部署中…" to MaterialTheme.colorScheme.primary
+            es.ready && es.health -> "● 引擎已就绪" to MaterialTheme.colorScheme.primary
+            es.ready && !es.health -> "● 已部署（健康检查异常）" to MaterialTheme.colorScheme.error
+            es.lastError.isNotBlank() -> "⛔ 部署失败" to MaterialTheme.colorScheme.error
+            else -> "○ 未部署引擎" to MaterialTheme.colorScheme.onSurfaceVariant
+        }
+        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).border(1.dp, Line, RoundedCornerShape(12.dp))) {
+            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("🔧 CMS引擎", style = MaterialTheme.typography.bodyLarge)
+                    Text("${es.engineVersion.ifBlank { "-" }} · ${es.services.size} 个共享服务", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(eLabel, style = MaterialTheme.typography.labelSmall, color = eColor)
+                    if (es.lastError.isNotBlank())
+                        Text(es.lastError, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, maxLines = 2)
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                PrimaryButton(text = if (busyDeployEngine) "部署中…" else "部署CMS引擎", modifier = Modifier.fillMaxWidth(), enabled = !busyDeployEngine, onClick = onDeployEngine)
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onImportEngine, modifier = Modifier.weight(1f)) { Text("导入CMS引擎") }
+                OutlinedButton(onClick = onExportEngine, modifier = Modifier.weight(1f)) { Text("导出CMS引擎") }
+            }
+            if (es.services.isNotEmpty()) {
+                Text("共享服务：${es.services.joinToString(", ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp))
+            }
+            Spacer(Modifier.height(4.dp))
+        }
+        Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PrimaryButton(text = "添加模块", modifier = Modifier.weight(1f), onClick = onAdd)
-            PrimaryButton(
-                text = if (busyOneClick) "部署中…" else "一键部署到终端",
-                modifier = Modifier.weight(1f),
-                enabled = !busyOneClick,
+            OutlinedButton(
                 onClick = {
                     busyOneClick = true
                     scope.launch(Dispatchers.IO) {
@@ -206,7 +403,14 @@ private fun ModulesSection(
                         }
                     }
                 },
-            )
+                modifier = Modifier.weight(1f),
+                enabled = !busyOneClick,
+            ) { Text(if (busyOneClick) "部署中…" else "一键部署到终端") }
+        }
+        // 模块导入 / 导出（SAF）
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onExport, modifier = Modifier.weight(1f)) { Text("导出模块") }
+            OutlinedButton(onClick = onImport, modifier = Modifier.weight(1f)) { Text("导入模块") }
         }
         Spacer(Modifier.height(6.dp))
         Text(
@@ -215,10 +419,44 @@ private fun ModulesSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))
+        var showAddGuide by remember { mutableStateOf(false) }
         if (modules.isEmpty()) {
-            Text("还没有模块。点上方「添加模块」创建一个能力模块（cms.io/v2）。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                Text("还没有模块。点上方「添加模块」创建一个能力模块（cms.io/v2）。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { showAddGuide = true }, modifier = Modifier.weight(1f)) { Text("查看添加说明") }
+                    Button(onClick = {
+                        val r = QuroDownloadUtil.saveTextToDownloads(ctx, "CMSv2_添加模块说明.md", "text/markdown", CMS_ADD_MODULE_GUIDE)
+                        Toast.makeText(ctx, if (r.startsWith("OK:")) "已保存说明到 Download/Quro/" else r, Toast.LENGTH_LONG).show()
+                    }, modifier = Modifier.weight(1f)) { Text("下载说明") }
+                }
+            }
         }
-        modules.forEach { m ->
+        if (showAddGuide) {
+            AlertDialog(
+                onDismissRequest = { showAddGuide = false },
+                confirmButton = { TextButton(onClick = { showAddGuide = false }) { Text("知道了") } },
+                title = { Text("怎么添加 CMS v2 模块") },
+                text = {
+                    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                        Text(CMS_ADD_MODULE_GUIDE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
+            )
+        }
+        // 按宿主（手机 / 终端 / 双端）分组渲染，落实「手机模块与终端模块分开」
+        val groups = listOf(
+            "app" to "📱 手机模块（应用内执行）",
+            "terminal" to "🖥 终端模块（proot 内执行）",
+            "dual" to "🔁 双端模块（手机 / 终端皆可）",
+        )
+        val byCat = modules.groupBy { cmsHostCategory(it) }
+        groups.forEach { (cat, title) ->
+            val grpList = byCat[cat].orEmpty()
+            if (grpList.isNotEmpty()) {
+                Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
+                grpList.forEach { m ->
             val rec = store.modules[m.id]
             val deployedFile = CmsTerminalDeployer.hostDir(ctx, m.id).resolve("cms-package.json").exists()
             val deployStatus = rec?.deployStatus ?: if (deployedFile) "deployed" else "idle"
@@ -229,7 +467,18 @@ private fun ModulesSection(
             Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).border(1.dp, Line, RoundedCornerShape(12.dp))) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(m.name, style = MaterialTheme.typography.bodyLarge)
+                        val (bLabel, bColor) = when (cmsHostCategory(m)) {
+                            "terminal" -> "🖥 终端" to Color(0xFFE6794A)
+                            "dual" -> "🔁 双端" to Color(0xFF7A5CFF)
+                            else -> "📱 手机" to Color(0xFF34C759)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(m.name, style = MaterialTheme.typography.bodyLarge)
+                            Spacer(Modifier.width(6.dp))
+                            Box(Modifier.background(bColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                                Text(bLabel, style = MaterialTheme.typography.labelSmall, color = bColor)
+                            }
+                        }
                         Text("${m.id} · v${m.version} · ${m.state.name}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         val ats = m.capabilities.map { it.actionType }.distinct().joinToString("/")
                         Text("权限 ${m.permissions.size} · 能力 ${m.capabilities.size}${if (m.dependencies.isNotEmpty()) " · 依赖 ${m.dependencies.size}" else ""}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -269,7 +518,7 @@ private fun ModulesSection(
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.End) {
                     val scope = rememberCoroutineScope()
                     var busy by remember { mutableStateOf(false) }
-                    Button(
+                    OutlinedButton(
                         onClick = {
                             busy = true
                             scope.launch(Dispatchers.IO) {
@@ -290,7 +539,10 @@ private fun ModulesSection(
                     }
                 }
             }
-            // 终端已部署但不在模块库的插件（如 demo-py / 外部导入包）——对应「终端插件没更新到UI」：
+            // 终端已部署但不在模块库的插件（如 demo-py / 外部导入包）——对            }
+        }
+        }
+        // 终端已部署但不在模块库的插件（如 demo-py / 外部导入包）——对应「终端插件没更新到UI」：
             // 此前这类模块仅写入状态系统、却不在模块库列表，用户在 UI 看不到。现单独列出并带实时状态。
             val repoIds = modules.map { it.id }.toSet()
             val terminalDeployed = store.modules.filter { (id, rec) ->
@@ -339,7 +591,7 @@ private fun ModuleInfoDialog(module: QuroCmsModule, onDismiss: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 Text("能力 (${module.capabilities.size})：", style = MaterialTheme.typography.labelMedium)
                 module.capabilities.forEach { c ->
-                    Text("• ${c.id} [${c.actionType}]：${c.summary}", style = MaterialTheme.typography.bodySmall)
+                    Text("• ${c.id} [${c.actionType}] ${c.runOn.joinToString("/") { it.label }}：${c.summary}", style = MaterialTheme.typography.bodySmall)
                     if (c.requiresPermissions.isNotEmpty())
                         Text("  需权限：${c.requiresPermissions.joinToString(", ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     val con = c.constraints
@@ -540,6 +792,7 @@ private fun CapsSection(
                     Column(Modifier.weight(1f)) {
                         Text(c.id, style = MaterialTheme.typography.bodyMedium)
                         Text("${m.name} · ${c.summary}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("宿主：${c.runOn.joinToString("/") { it.label }}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         if (c.requiresPermissions.isNotEmpty())
                             Text("需权限：${c.requiresPermissions.joinToString(", ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

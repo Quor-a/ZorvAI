@@ -1,6 +1,8 @@
 package com.ai.assistance.quro.ui
 
 import android.webkit.WebView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -60,7 +62,10 @@ fun QuroDocumentViewer(
 
     LaunchedEffect(editing, file) {
         if (editing && isEditableText) {
-            runCatching { editText = file.readText(Charsets.UTF_8) }.onFailure { loadErr = it.message }
+            // ★ 全面排查修复（v316）：LaunchedEffect 默认跑在主线程，大文件 readText 会 ANR。
+            //   移至 IO 线程读取，结果回写主线程安全的 State。
+            val res = withContext(Dispatchers.IO) { runCatching { file.readText(Charsets.UTF_8) } }
+            res.onSuccess { editText = it }.onFailure { loadErr = it.message }
         }
     }
 

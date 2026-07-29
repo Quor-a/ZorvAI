@@ -36,19 +36,25 @@ data class QuroMessage(
 /** 会话存储（原创，内存版；v1 不做落盘以控制风险）。 */
 class QuroConversationStore {
     private val messages = mutableListOf<QuroMessage>()
+    // 🔧 #765 修复：流式 onToken 在 IO 线程写、UI 在主线程读 → 裸 mutableListOf 跨线程并发损坏
+    // （ConcurrentModificationException / IndexOutOfBoundsException），异常被 streamChat catch 吞掉
+    // 返回截断文本。改用统一锁保护所有读写，保证线程安全。
+    private val lock = Any()
 
-    fun all(): List<QuroMessage> = messages.toList()
+    fun all(): List<QuroMessage> = synchronized(lock) { messages.toList() }
     fun add(msg: QuroMessage) {
-        messages.add(msg)
+        synchronized(lock) { messages.add(msg) }
     }
 
     /** 按 id 原地更新某条消息（工具执行完后回填结果到 assistant 的 toolCalls）。 */
     fun update(id: String, transform: (QuroMessage) -> QuroMessage) {
-        val idx = messages.indexOfFirst { it.id == id }
-        if (idx >= 0) messages[idx] = transform(messages[idx])
+        synchronized(lock) {
+            val idx = messages.indexOfFirst { it.id == id }
+            if (idx >= 0) messages[idx] = transform(messages[idx])
+        }
     }
 
-    fun clear() = messages.clear()
+    fun clear() = synchronized(lock) { messages.clear() }
 
     /**
      * 转为发送给 LLM 的消息列表（保留工具调用/结果上下文）。
@@ -61,7 +67,9 @@ class QuroConversationStore {
     fun toLlmMessages(system: QuroMessage? = null, contextWindow: Int = 0): List<QuroChatMessage> {
         val built = mutableListOf<QuroChatMessage>()
         system?.let { built.add(QuroChatMessage(it.role, it.content)) }
-        messages.forEach { m ->
+        // 🔧 #765：先取锁快照，后续遍历快照，避免与 IO 线程的 add/update 并发修改冲突。
+        val snapshot = synchronized(lock) { messages.toList() }
+        snapshot.forEach { m ->
             // 🔑 思考仅用于界面展示，绝不替代/混入发送给模型的 content（v201 修正）。
             // 旧逻辑在 assistant 带 reasoning 时把 content 整体替换为 reasoning（常含 HTML 标签），
             // 导致：(a) 真实正文丢失；(b) HTML 泄漏进对话上下文，污染后续回复（用户截图确诊）。
@@ -83,18 +91,35 @@ class QuroConversationStore {
             // 预算连 system 都不够：仅保留 system + 最后一条消息，避免空请求
             return (built.filter { it.role == "system" } + nonSys.takeLast(1))
         }
-        // 从最新往最旧遍历，优先保留最近轮次
+
+        // ═══ 串台防御（v429+）：巨型消息降权裁剪 ═══
+        // HTML/代码/长文本输出（>3000字符）最容易导致 LLM 上下文混淆（把旧任务结果当当前回复）。
+        // 策略：先填普通消息（高优先级），剩余预算再填巨型消息（低优先级）。
+        // 这样预算紧张时巨型旧内容率先被裁剪，大幅降低"继续之前任务"类串台。
+        val GIANT_THRESHOLD = 3000
+        val (giantMsgs, normalMsgs) = nonSys.partition { it.content.length > GIANT_THRESHOLD }
+
         val kept = mutableListOf<QuroChatMessage>()
-        for (m in nonSys.asReversed()) {
+        // 第一轮：填充普通消息（从最新往最旧）
+        for (m in normalMsgs.asReversed()) {
             val t = estTokens(m.content) + (m.toolCalls?.sumOf { estTokens(it.arguments) } ?: 0)
             if (kept.isEmpty() && t > budget) {
-                kept.add(m) // 至少保留一条，避免请求体为空
+                kept.add(m)
             } else if (t <= budget) {
                 kept.add(m)
                 budget -= t
             } else {
-                break // 这条都放不下，更旧的更放不下，停止裁剪
+                break
             }
+        }
+        // 第二轮：用剩余预算填充巨型消息（如果还有空间）
+        for (m in giantMsgs.asReversed()) {
+            val t = estTokens(m.content) + (m.toolCalls?.sumOf { estTokens(it.arguments) } ?: 0)
+            if (t <= budget) {
+                kept.add(m)
+                budget -= t
+            }
+            // 巨型消息放不下就跳过，不 break（后面可能有小一点的巨型消息能放下）
         }
         return (built.filter { it.role == "system" } + kept.asReversed())
     }

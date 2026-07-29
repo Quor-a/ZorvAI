@@ -337,17 +337,12 @@ fun PersonaEditDialog(
     var opening by remember { mutableStateOf(initial.opening) }
     var chatSetting by remember { mutableStateOf(initial.chatSetting) }
     var voiceSetting by remember { mutableStateOf(initial.voiceSetting) }
-    // 结构化语音组合默认开启（用户要求情绪标签默认全开 + LLM 自动组合自然语音）
+    // 结构化语音组合：默认严格跟随已存数据（initial.voiceProfile 可能为 null）。
+    // 关键修复：不再为 null 时自动重建默认值，否则用户「明确删除/关闭组合」保存后，
+    // 重新打开编辑框会因默认值被再次填上而表现为「刚删掉又被恢复」。
+    // 用户主动打开开关时才在下方 onCheckedChange 中创建默认配置。
     var voiceProfile by remember {
-        mutableStateOf<com.ai.assistance.quro.core.QuroVoiceProfile?>(
-            initial.voiceProfile ?: com.ai.assistance.quro.core.QuroVoiceProfile(
-                providerId = "edge",
-                voiceId = "zh-CN-XiaoxiaoNeural",
-                emotionEnabled = false,
-                emotionTags = emptyList(),
-                speed = 1.0f,
-            )
-        )
+        mutableStateOf(initial.voiceProfile)
     }
     var selectedTags by remember { mutableStateOf(initial.tags) }   // 仅存全局标签名称
     var showTagManager by remember { mutableStateOf(false) }
@@ -386,7 +381,10 @@ fun PersonaEditDialog(
             opening = s.opening
             chatSetting = s.chatSetting
             voiceSetting = s.voiceSetting
-            if (s.voiceProfile != null) voiceProfile = s.voiceProfile
+            // #890 修复：孵化结果不再覆盖已存在的语音组合选择。
+            // 仅「新建卡」(isNew) 才用 AI 推荐值播种；已存在卡若用户已明确关闭组合(voiceProfile=null)，
+            // 孵化不得回灌，否则表现为「刚删掉又被恢复」。
+            if (isNew && s.voiceProfile != null) voiceProfile = s.voiceProfile
             vm.clearIncubateResult()
         }
     }
@@ -395,7 +393,7 @@ fun PersonaEditDialog(
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize()) {
                 TopAppBar(
-                    title = { Text(if (isNew) "新建灵魂卡" else "编辑灵魂卡") },
+                    title = { Text(if (isNew) "灵魂注入" else "灵魂编辑") },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) { Icon(Icons.Filled.ArrowBack, null) }
                     },
@@ -898,7 +896,6 @@ private fun VoiceProfileEditor(
     var expandedProvider by remember(profile.providerId) { mutableStateOf(false) }
     var expandedVoice by remember(profile.voiceId) { mutableStateOf(false) }
     val def = QuroTtsProviders.byId(profile.providerId) ?: providers.first()
-    val emotionSuggestions = def.providerTags
 
     Surface(
         tonalElevation = 2.dp,
@@ -968,74 +965,6 @@ private fun VoiceProfileEditor(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-            }
-
-            // 情绪卡：一键总开关（开启即一键全选所有标签）+ 一键全选/全不选 + 标签微调
-            // 语义（v232）："启用但 LLM 决定自由使用"——开启时把全部情绪/风格标签交给 LLM 按需取用，
-            // 不是默认每条 TTS 都强制套用全部标签。
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("情绪卡", style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer)
-                    Text("开启即一键启用全部情绪/风格标签，交给 LLM 按需自由组合自然语音（非每条强制全用）",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
-                }
-                Spacer(Modifier.width(8.dp))
-                Switch(
-                    checked = profile.emotionEnabled,
-                    onCheckedChange = {
-                        onChanged(profile.copy(
-                            emotionEnabled = it,
-                            // 一键全选：开启时直接选中全部标签；关闭时清空
-                            emotionTags = if (it) emotionSuggestions.take(24) else emptyList(),
-                        ))
-                    },
-                )
-            }
-            if (profile.emotionEnabled && emotionSuggestions.isNotEmpty()) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("情绪 / 风格标签（开启已默认全选，可单独取消）",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
-                        modifier = Modifier.weight(1f))
-                    val all = emotionSuggestions.take(24)
-                    TextButton(
-                        onClick = {
-                            onChanged(profile.copy(
-                                emotionTags = if (profile.emotionTags.containsAll(all)) emptyList() else all
-                            ))
-                        },
-                    ) {
-                        Text(if (profile.emotionTags.containsAll(all)) "全不选" else "一键全选", fontSize = 11.sp)
-                    }
-                }
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    maxItemsInEachRow = 4,
-                ) {
-                    emotionSuggestions.take(24).forEach { tag ->
-                        val on = profile.emotionTags.contains(tag)
-                        FilterChip(
-                            selected = on,
-                            onClick = {
-                                onChanged(profile.copy(
-                                    emotionTags = if (on) profile.emotionTags - tag else profile.emotionTags + tag
-                                ))
-                            },
-                            label = { Text(tag, fontSize = 11.sp) },
-                            modifier = Modifier.height(28.dp),
-                        )
-                    }
-                }
             }
 
             // 语速

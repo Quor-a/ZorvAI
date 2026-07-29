@@ -185,7 +185,7 @@ fun QuroModelConfigForm(
         QuroField("模型名", cfg.model, KeyboardOptions.Default) { vm.update { copy(model = it) } }
         Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = { vm.fetchModels() }, enabled = !isFetchingModels) {
+            TextButton(onClick = { vm.fetchModels() }, enabled = !isFetchingModels && cfg.baseUrl.isNotBlank()) {
                 Text(if (isFetchingModels) "拉取中…" else "拉取模型列表")
             }
             if (isFetchingModels) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -310,7 +310,6 @@ fun QuroModelConfigForm(
                     c
                 }
                 showProviderDialog = false
-                vm.fetchModels()
             },
             onCustomSelected = { cp ->
                 vm.update {

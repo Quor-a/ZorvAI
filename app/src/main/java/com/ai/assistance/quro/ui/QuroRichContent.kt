@@ -13,6 +13,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -107,11 +108,17 @@ fun ImageAttachmentCard(att: QuroAttachment) {
             .padding(vertical = 2.dp),
     ) {
         if (bitmap != null) {
+            // 自适应比例：按图片原始宽高比决定气泡高度，铺满宽度；
+            // 超高（竖图）时在 260dp 上限内裁切，避免被拉成统一高度框。
+            val bmp = bitmap!!.asImageBitmap()
+            val ratio = bmp.width.toFloat() / bmp.height.toFloat().coerceAtLeast(1f)
             Image(
-                bitmap = bitmap!!.asImageBitmap(),
+                bitmap = bmp,
                 contentDescription = att.name,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .aspectRatio(ratio)
                     .heightIn(max = 260.dp)
                     .clip(RoundedCornerShape(12.dp)),
             )

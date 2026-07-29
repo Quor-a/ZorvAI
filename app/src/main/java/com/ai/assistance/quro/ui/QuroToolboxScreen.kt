@@ -3,6 +3,7 @@
 package com.ai.assistance.quro.ui
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,6 +31,8 @@ import com.ai.assistance.quro.core.tools.GetPackageNameTool
 import com.ai.assistance.quro.core.tools.AiwpsCreateTool
 import com.ai.assistance.quro.core.tools.ImportedToolDef
 import com.ai.assistance.quro.core.tools.QuroTool
+import com.ai.assistance.quro.core.tools.QuroToolRegistry
+import com.ai.assistance.quro.core.tools.QuroImportedToolRegistry
 import com.ai.assistance.quro.ui.theme.Accent
 import com.ai.assistance.quro.ui.theme.AccentSoft
 import com.ai.assistance.quro.ui.theme.Line
@@ -39,6 +42,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import com.ai.assistance.quro.core.media.QuroDocLauncher
+import com.ai.assistance.quro.service.QuroPasteKeyboardService
 import java.io.File
 
 /**
@@ -58,6 +62,7 @@ fun QuroToolboxScreen(
 ) {
     var screen by remember { mutableStateOf("home") }
     val cs = MaterialTheme.colorScheme
+    val ctx = LocalContext.current
     val scaled: (Int) -> androidx.compose.ui.unit.TextUnit = { it.sp }
     var showDocGen by remember { mutableStateOf(false) }
     var showToolsList by remember { mutableStateOf(false) }
@@ -88,10 +93,12 @@ fun QuroToolboxScreen(
                 onOpenOnlyOffice = onOpenOnlyOffice,
                 onOpenMusic = onOpenMusic,
                 onOpenVideo = onOpenVideo,
+                onOpenAvatar = { screen = "avatar" },
             )
             "files" -> QuroFileManager(onExitToHome = { screen = "home" })
             "package" -> PackageNameFinder()
             "workspace" -> WorkspaceScreen(onExitToHome = { screen = "home" })
+            "avatar" -> QuroDigitalHumanScreen(onExitToHome = { screen = "home" })
         }
     }
 
@@ -114,6 +121,7 @@ fun QuroToolboxScreen(
             "报表" to "| 项目 | 数值 |\n| --- | --- |\n| 收入 | 0 |\n| 支出 | 0 |"
         )
         val ctx = LocalContext.current
+        val scope = rememberCoroutineScope()
         AlertDialog(
             onDismissRequest = { showDocGen = false },
             confirmButton = {
@@ -123,9 +131,14 @@ fun QuroToolboxScreen(
                         put("title", docTitle)
                         put("content", docContent)
                     }.toString()
-                    docResult = runCatching {
-                        AiwpsCreateTool().run(ctx, json)
-                    }.getOrElse { "生成失败：$it" }
+                    // ★ ANR 修复：aiWPS 文档生成是重 I/O（写 zip/OOXML），
+                    // 原本在点击回调（主线程）同步执行 → 阻塞 UI 线程触发「Quro AI 没有响应」。
+                    // 改为 IO 协程执行，结果回主线程落 state。
+                    scope.launch(Dispatchers.IO) {
+                        val r = runCatching { AiwpsCreateTool().run(ctx, json) }
+                            .getOrElse { "生成失败：$it" }
+                        withContext(Dispatchers.Main) { docResult = r }
+                    }
                 }) { Text("生成") }
             },
             dismissButton = { TextButton(onClick = { showDocGen = false }) { Text("关闭") } },
@@ -198,20 +211,35 @@ fun QuroToolboxScreen(
     }
 
     if (showToolsList) {
+        // 可删除范围：技能工具（skill__<name>，删除会级联删技能）+ 导入工具（删除会持久化移除，防重启复活）
+        val importedNames = remember(allTools) { QuroImportedToolRegistry.all().map { it.name }.toSet() }
+        var toolList by remember(allTools) { mutableStateOf(allTools) }
         AlertDialog(
             onDismissRequest = { showToolsList = false },
             confirmButton = {},
-            title = { Text("已注册工具（${allTools.size}）") },
+            title = { Text("已注册工具（${toolList.size}）") },
             text = {
                 Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                    if (allTools.isEmpty()) {
+                    if (toolList.isEmpty()) {
                         Text("暂无已注册工具。", fontSize = scaled(12), color = Muted)
                     }
-                    allTools.forEach { t ->
+                    toolList.forEach { t ->
+                        val deletable = t.name.startsWith("skill__") || t.name in importedNames
                         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(t.name, fontSize = scaled(12), color = cs.onSurface, modifier = Modifier.widthIn(min = 120.dp, max = 150.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text(t.description.take(48), fontSize = scaled(11), color = Muted, maxLines = 1)
+                            Text(t.description.take(48), fontSize = scaled(11), color = Muted, maxLines = 1, modifier = Modifier.weight(1f))
+                            if (deletable) {
+                                IconButton(onClick = {
+                                    // 反向级联：删 skill__ 工具 → QuroToolRegistry.remove 同步删技能；
+                                    // 删导入工具 → 同步持久化移除，防重启复活（#913）
+                                    QuroToolRegistry.active?.remove(t.name)
+                                    if (t.name in importedNames) QuroImportedToolRegistry.remove(ctx, t.name)
+                                    toolList = toolList.filter { it.name != t.name }
+                                }) {
+                                    Icon(Icons.Filled.Delete, "删除", Modifier.size(18.dp), tint = cs.error)
+                                }
+                            }
                         }
                         HorizontalDivider(Modifier.padding(vertical = 2.dp))
                     }
@@ -288,7 +316,9 @@ private fun ToolboxHome(
     onOpenOnlyOffice: () -> Unit,
     onOpenMusic: () -> Unit,
     onOpenVideo: (String, String) -> Unit,
+    onOpenAvatar: () -> Unit,
 ) {
+    val ctx = LocalContext.current
     val tools = listOf(
         ToolItem(Icons.Filled.Folder, "文件管理", "浏览应用文件、查看文本/代码内容", onOpenFiles),
         ToolItem(Icons.Filled.Apps, "查看软件包名", "输入应用显示名，反查其精确包名", onOpenPackage),
@@ -298,6 +328,15 @@ private fun ToolboxHome(
         ToolItem(Icons.Filled.Description, "WPS文档", "用 ONLYOFFICE 打开 / 编辑 Office 文档", onOpenOnlyOffice),
         ToolItem(Icons.Filled.MusicNote, "音乐播放器", "在应用内播放本地音乐（后台持续播放）", onOpenMusic),
         ToolItem(Icons.Filled.Movie, "视频播放器", "在应用内全功能视频播放器播放本地视频", { onOpenVideo("", "") }),
+        ToolItem(Icons.Filled.Person, "数字人", "云端口/离线可选·可自制 3D 模型·语音→LLM→TTS 闭环", onClick = onOpenAvatar),
+        ToolItem(Icons.Filled.Keyboard, "AI 键盘", "AI 替你打字·注册为系统输入法·任意 App 可用", onClick = {
+            // 打开系统输入法设置页，引导用户启用 Quro AI 键盘
+            try {
+                ctx.startActivity(android.content.Intent("android.settings.INPUT_METHOD_SETTINGS"))
+            } catch (_: Exception) {
+                ctx.startActivity(android.content.Intent("android.settings.INPUT_METHOD_SUBTYPE_SETTINGS"))
+            }
+        }),
     )
     // 使用手动 Row+weight 布局替代 LazyVerticalGrid（GridCells.Fixed(2) 在某些容器内退化为单列）
     Column(

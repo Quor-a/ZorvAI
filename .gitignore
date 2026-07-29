@@ -53,3 +53,6 @@ buildTmp/
 # OS / misc
 nul
 *.tmp
+
+# Dev scratch / temp
+_novaterm_temp/

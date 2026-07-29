@@ -12,7 +12,11 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.ParseException
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,23 +43,37 @@ enum class TaskRepeatType(val label: String) {
     YEARLY("每年");
 }
 
-/** 定时任务数据模型 */
+/**
+ * 定时任务 / 自动化提醒数据模型（对齐 WorkBuddy automation_update 语义）：
+ * - scheduleType: "once"（仅一次）/ "recurring"（重复）
+ * - scheduledAt:  ISO 8601 本地时间 "yyyy-MM-dd HH:mm"；once 的触发时刻、recurring 的起始锚点
+ * - rrule:        RFC 5545 重复规则，如 FREQ=DAILY / FREQ=WEEKLY;BYDAY=MO,WE,FR /
+ *                FREQ=MONTHLY;BYMONTHDAY=1 / FREQ=YEARLY;BYMONTH=1;BYMONTHDAY=1
+ * - content:      触发时写入会话、由 AI 执行的指令（= prompt）；留空则仅弹通知
+ * - cwds:         目标会话 id（可选；留空→沿用绑定/默认会话）
+ * 旧版 hour/minute/repeatType/dayOfWeek/dayOfMonth/month 仅用于「无 rrule 且无 scheduledAt」的旧任务兼容回退，新任务不再写入。
+ */
 data class QuroScheduledTask(
     val id: String,
     val title: String,
     val content: String = "",
-    val hour: Int = 8,
-    val minute: Int = 0,
-    val repeatType: TaskRepeatType = TaskRepeatType.ONCE,
-    /** 每周/每双周时生效：1=周一 ... 7=周日 */
-    val dayOfWeek: Int = 1,
-    /** 每月生效日：1-31 */
-    val dayOfMonth: Int = 1,
-    /** 每年生效月：1-12 */
-    val month: Int = 1,
+    val scheduleType: String = "recurring",
+    val scheduledAt: String = "",
+    val rrule: String = "",
+    val cwds: String = "",
+    val autoNew: Boolean = false,
     val enabled: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
     val lastTriggered: Long = 0L,
+    // —— 兼容旧版：rrule/scheduledAt 均空时回退此逻辑（新任务不再写入这些值）——
+    val repeatType: TaskRepeatType = TaskRepeatType.ONCE,
+    val hour: Int = 8,
+    val minute: Int = 0,
+    val dayOfWeek: Int = 1,
+    val dayOfMonth: Int = 1,
+    val month: Int = 1,
+    /** 重复任务的结束日期（yyyy-MM-dd，可选；留空=永久重复）。达到该日期后不再排程。 */
+    val endAt: String = "",
 )
 
 // ============================================================
@@ -79,6 +97,11 @@ object QuroScheduledTaskStore {
                         id = o.optString("id", UUID.randomUUID().toString()),
                         title = o.optString("title", ""),
                         content = o.optString("content", ""),
+                        scheduleType = o.optString("scheduleType", if (o.optString("repeatType", "ONCE") == "ONCE" && o.optString("rrule", "").isBlank() && o.optString("scheduledAt", "").isBlank()) "once" else "recurring"),
+                        scheduledAt = o.optString("scheduledAt", ""),
+                        rrule = o.optString("rrule", ""),
+                        cwds = o.optString("cwds", ""),
+                        autoNew = o.optBoolean("autoNew", false),
                         hour = o.optInt("hour", 8),
                         minute = o.optInt("minute", 0),
                         repeatType = runCatching {
@@ -87,6 +110,7 @@ object QuroScheduledTaskStore {
                         dayOfWeek = o.optInt("dayOfWeek", 1),
                         dayOfMonth = o.optInt("dayOfMonth", 1),
                         month = o.optInt("month", 1),
+                        endAt = o.optString("endAt", ""),
                         enabled = o.optBoolean("enabled", true),
                         createdAt = o.optLong("createdAt", 0L),
                         lastTriggered = o.optLong("lastTriggered", 0L),
@@ -106,12 +130,18 @@ object QuroScheduledTaskStore {
                         put("id", t.id)
                         put("title", t.title)
                         put("content", t.content)
+                        put("scheduleType", t.scheduleType)
+                        put("scheduledAt", t.scheduledAt)
+                        put("rrule", t.rrule)
+                        put("cwds", t.cwds)
+                        put("autoNew", t.autoNew)
                         put("hour", t.hour)
                         put("minute", t.minute)
                         put("repeatType", t.repeatType.name)
                         put("dayOfWeek", t.dayOfWeek)
                         put("dayOfMonth", t.dayOfMonth)
                         put("month", t.month)
+                        put("endAt", t.endAt)
                         put("enabled", t.enabled)
                         put("createdAt", t.createdAt)
                         put("lastTriggered", t.lastTriggered)
@@ -218,8 +248,36 @@ object QuroScheduledTaskScheduler {
         am.cancel(pi)
     }
 
-    /** 计算下次触发时间（毫秒时间戳） */
+    /**
+     * 计算下次触发时间（毫秒时间戳）；无法计算返回 null。
+     * 优先级：rrule（新模型）> once(scheduledAt) > 旧版 calendar 模型。
+     */
     fun nextTriggerTime(task: QuroScheduledTask): Long? {
+        val now = System.currentTimeMillis()
+        // —— 一次性优先：明确 once 即只触发一次（即使误带 rrule 也忽略），避免被当成重复无限重排 ——
+        if (task.scheduleType == "once") {
+            val at = if (task.scheduledAt.isNotBlank()) parseLocal(task.scheduledAt) else null
+            if (at == null) return null
+            // 略过期（1 分钟内）仍立即触发，避免错过提醒；过久则视为过期跳过
+            return if (at >= now - 60_000L) at else null
+        }
+        // —— 新模型：RRULE 重复 ——
+        if (task.rrule.isNotBlank()) {
+            val anchor = if (task.scheduledAt.isNotBlank()) parseLocal(task.scheduledAt) ?: now else now
+            val next = nextRruleOccurrence(task.rrule, anchor) ?: return null
+            // —— 结束日期截断：超过 endAt 则不再排程（重复任务终止机制）——
+            if (task.endAt.isNotBlank()) {
+                val endMs = parseLocal(task.endAt) ?: parseLocal("${task.endAt} 23:59")
+                if (endMs != null && next > endMs) return null
+            }
+            return next
+        }
+        // —— 兼容旧版 calendar 模型 ——
+        return nextTriggerLegacy(task)
+    }
+
+    /** 旧版 hour/minute/repeatType 模型的下次触发（供无 rrule 旧任务回退）。 */
+    private fun nextTriggerLegacy(task: QuroScheduledTask): Long? {
         val now = Calendar.getInstance()
         val cal = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, task.hour)
@@ -227,33 +285,22 @@ object QuroScheduledTaskScheduler {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-
         when (task.repeatType) {
             TaskRepeatType.ONCE -> {
-                if (cal.timeInMillis <= now.timeInMillis) {
-                    // 如果已过时，设为明天
-                    cal.add(Calendar.DAY_OF_YEAR, 1)
-                }
+                if (cal.timeInMillis <= now.timeInMillis) cal.add(Calendar.DAY_OF_YEAR, 1)
             }
             TaskRepeatType.DAILY -> {
-                while (cal.timeInMillis <= now.timeInMillis) {
-                    cal.add(Calendar.DAY_OF_YEAR, 1)
-                }
+                while (cal.timeInMillis <= now.timeInMillis) cal.add(Calendar.DAY_OF_YEAR, 1)
             }
             TaskRepeatType.WEEKLY -> {
-                // dayOfWeek: 1=周一...7=周日 → Calendar: 2=周一...1=周日
-                val calDayOfWeek = if (task.dayOfWeek == 7) Calendar.SUNDAY else task.dayOfWeek + 1
-                cal.set(Calendar.DAY_OF_WEEK, calDayOfWeek)
-                while (cal.timeInMillis <= now.timeInMillis) {
-                    cal.add(Calendar.WEEK_OF_YEAR, 1)
-                }
+                val d = if (task.dayOfWeek == 7) Calendar.SUNDAY else task.dayOfWeek + 1
+                cal.set(Calendar.DAY_OF_WEEK, d)
+                while (cal.timeInMillis <= now.timeInMillis) cal.add(Calendar.WEEK_OF_YEAR, 1)
             }
             TaskRepeatType.BIWEEKLY -> {
-                val calDayOfWeek = if (task.dayOfWeek == 7) Calendar.SUNDAY else task.dayOfWeek + 1
-                cal.set(Calendar.DAY_OF_WEEK, calDayOfWeek)
-                while (cal.timeInMillis <= now.timeInMillis) {
-                    cal.add(Calendar.WEEK_OF_YEAR, 2)
-                }
+                val d = if (task.dayOfWeek == 7) Calendar.SUNDAY else task.dayOfWeek + 1
+                cal.set(Calendar.DAY_OF_WEEK, d)
+                while (cal.timeInMillis <= now.timeInMillis) cal.add(Calendar.WEEK_OF_YEAR, 2)
             }
             TaskRepeatType.MONTHLY -> {
                 cal.set(Calendar.DAY_OF_MONTH, minOf(task.dayOfMonth, cal.getActualMaximum(Calendar.DAY_OF_MONTH)))
@@ -263,14 +310,133 @@ object QuroScheduledTaskScheduler {
                 }
             }
             TaskRepeatType.YEARLY -> {
-                cal.set(Calendar.MONTH, task.month - 1) // Calendar.MONTH is 0-based
+                cal.set(Calendar.MONTH, task.month - 1)
                 cal.set(Calendar.DAY_OF_MONTH, minOf(task.dayOfMonth, cal.getActualMaximum(Calendar.DAY_OF_MONTH)))
-                while (cal.timeInMillis <= now.timeInMillis) {
-                    cal.add(Calendar.YEAR, 1)
-                }
+                while (cal.timeInMillis <= now.timeInMillis) cal.add(Calendar.YEAR, 1)
             }
         }
         return cal.timeInMillis
+    }
+
+    /** 解析本地时间 "yyyy-MM-dd HH:mm"（兼容 "yyyy-MM-dd'T'HH:mm"）→ 毫秒。失败返回 null。 */
+    fun parseLocal(s: String): Long? = runCatching {
+        val t = s.trim()
+        val fmt = if (t.contains("T")) SimpleDateFormat("yyyy-MM-dd'T'HH:mm", Locale.getDefault())
+        else SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        fmt.parse(t)?.time
+    }.getOrNull()
+
+    /** 把旧版参数转换为 RRULE 字符串（供 AI 工具兼容旧入参）。 */
+    fun rruleFromLegacy(hour: Int, minute: Int, repeatType: String, dayOfWeek: Int = 1, dayOfMonth: Int = 1, month: Int = 1): String {
+        return when (repeatType.uppercase()) {
+            "DAILY" -> "FREQ=DAILY"
+            "WEEKLY" -> "FREQ=WEEKLY;BYDAY=${legacyDayToRrule(dayOfWeek)}"
+            "BIWEEKLY" -> "FREQ=WEEKLY;INTERVAL=2;BYDAY=${legacyDayToRrule(dayOfWeek)}"
+            "MONTHLY" -> "FREQ=MONTHLY;BYMONTHDAY=$dayOfMonth"
+            "YEARLY" -> "FREQ=YEARLY;BYMONTH=$month;BYMONTHDAY=$dayOfMonth"
+            else -> "FREQ=DAILY"
+        }
+    }
+
+    private fun legacyDayToRrule(d: Int): String = when (d) {
+        1 -> "MO"; 2 -> "TU"; 3 -> "WE"; 4 -> "TH"; 5 -> "FR"; 6 -> "SA"; else -> "SU"
+    }
+
+    /**
+     * 计算 RRULE 的下一个发生时刻（>= fromInclusive 且 >= now）。
+     * 支持 FREQ ∈ {DAILY,WEEKLY,MONTHLY,YEARLY}，可选 INTERVAL / BYDAY / BYMONTHDAY / BYMONTH。
+     * 采用「逐日推进 + 频率过滤 + interval 对齐」算法，覆盖常见自动化场景且不易出错。
+     */
+    fun nextRruleOccurrence(rrule: String, fromInclusive: Long): Long? {
+        val p = rrule.split(";").mapNotNull { kv ->
+            val i = kv.indexOf("=")
+            if (i < 0) null else kv.substring(0, i).trim().uppercase() to kv.substring(i + 1).trim()
+        }.toMap()
+        val freq = p["FREQ"] ?: return null
+        val interval = (p["INTERVAL"]?.toIntOrNull() ?: 1).coerceAtLeast(1)
+        val byDay = p["BYDAY"]?.split(",")?.map { it.trim().uppercase() }?.filter { it.isNotEmpty() } ?: emptyList()
+        val byMonthDay = p["BYMONTHDAY"]?.split(",")?.mapNotNull { it.toIntOrNull() } ?: emptyList()
+        val byMonth = p["BYMONTH"]?.split(",")?.mapNotNull { it.toIntOrNull() } ?: emptyList()
+        val anchorCal = Calendar.getInstance().apply { timeInMillis = fromInclusive }
+        val anchorWeekday = toRruleDay(anchorCal.get(Calendar.DAY_OF_WEEK))
+        val anchorMonthDay = anchorCal.get(Calendar.DAY_OF_MONTH)
+        val anchorMonth = anchorCal.get(Calendar.MONTH) + 1
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = fromInclusive
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
+        val now = System.currentTimeMillis()
+        var matched = 0
+        repeat(4000) {
+            if (matchesRrule(cal, freq, byDay, byMonthDay, byMonth, anchorWeekday, anchorMonthDay, anchorMonth)) {
+                if (cal.timeInMillis >= now) {
+                    if (matched % interval == 0) return cal.timeInMillis
+                    matched++
+                } else {
+                    matched++ // 历史匹配也计入 interval 对齐，保证周期间隔稳定
+                }
+            }
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        return null
+    }
+
+    private fun matchesRrule(
+        cal: Calendar, freq: String,
+        byDay: List<String>, byMonthDay: List<Int>, byMonth: List<Int>,
+        anchorWeekday: String, anchorMonthDay: Int, anchorMonth: Int,
+    ): Boolean = when (freq) {
+        "DAILY" -> true
+        "WEEKLY" -> {
+            val days = if (byDay.isEmpty()) listOf(anchorWeekday) else byDay
+            toRruleDay(cal.get(Calendar.DAY_OF_WEEK)) in days
+        }
+        "MONTHLY" -> {
+            val days = if (byMonthDay.isEmpty()) listOf(anchorMonthDay) else byMonthDay
+            cal.get(Calendar.DAY_OF_MONTH) in days
+        }
+        "YEARLY" -> {
+            val months = if (byMonth.isEmpty()) listOf(anchorMonth) else byMonth
+            val days = if (byMonthDay.isEmpty()) listOf(anchorMonthDay) else byMonthDay
+            cal.get(Calendar.MONTH) + 1 in months && cal.get(Calendar.DAY_OF_MONTH) in days
+        }
+        else -> false
+    }
+
+    private fun toRruleDay(calDay: Int): String = when (calDay) {
+        Calendar.MONDAY -> "MO"; Calendar.TUESDAY -> "TU"; Calendar.WEDNESDAY -> "WE"
+        Calendar.THURSDAY -> "TH"; Calendar.FRIDAY -> "FR"; Calendar.SATURDAY -> "SA"
+        else -> "SU"
+    }
+
+    /** 把 RRULE 转成人话（用于 UI 展示）。 */
+    fun humanRrule(rrule: String): String {
+        val p = rrule.split(";").mapNotNull { kv ->
+            val i = kv.indexOf("="); if (i < 0) null else kv.substring(0, i).trim().uppercase() to kv.substring(i + 1).trim()
+        }.toMap()
+        val freq = p["FREQ"] ?: return rrule
+        val interval = p["INTERVAL"]?.toIntOrNull() ?: 1
+        return when (freq) {
+            "DAILY" -> if (interval > 1) "每${interval}天" else "每天"
+            "WEEKLY" -> {
+                val days = p["BYDAY"]?.split(",")?.map { rruleDayLabel(it.trim()) }?.filter { it.isNotBlank() }
+                if (days.isNullOrEmpty()) "每周" else "每${if (interval > 1) interval else ""}周${days.joinToString("、")}"
+            }
+            "MONTHLY" -> {
+                val d = p["BYMONTHDAY"]?.toIntOrNull()
+                "每月${d ?: ""}号"
+            }
+            "YEARLY" -> {
+                val m = p["BYMONTH"]?.toIntOrNull(); val d = p["BYMONTHDAY"]?.toIntOrNull()
+                "每年${if (m != null) "${m}月" else ""}${if (d != null) "${d}号" else ""}"
+            }
+            else -> rrule
+        }
+    }
+
+    private fun rruleDayLabel(d: String): String = when (d.uppercase()) {
+        "MO" -> "一"; "TU" -> "二"; "WE" -> "三"; "TH" -> "四"; "FR" -> "五"; "SA" -> "六"; "SU" -> "日"
+        else -> ""
     }
 
     /** 创建通知渠道 */
@@ -309,7 +475,13 @@ class QuroScheduleReceiver : BroadcastReceiver() {
             val vm = QuroChatViewModel.instance
             // 记录本次任务内容写入的会话 id（用于 AI 处理完成后补发「已完成」通知）
             var targetConvId: String? = null
-            if (vm.currentId.value.isBlank()) {
+            if (task.autoNew) {
+                // 自动新建会话：每次触发都开一个独立会话，避免污染当前/历史对话
+                vm.newConversation(); targetConvId = vm.currentId.value
+            } else if (task.cwds.isNotBlank() && vm.conversations.value.any { it.id == task.cwds }) {
+                // 指定目标会话（cwds）：直接定位，保证提醒落在用户设定的对话里
+                vm.selectConversation(task.cwds); targetConvId = task.cwds
+            } else if (vm.currentId.value.isBlank()) {
                 // 没有当前会话：优先切到最近更新的会话，否则新建一个，避免误写空会话
                 val recent = vm.conversations.value.maxByOrNull { it.updatedAt }?.id
                 if (recent != null) { vm.selectConversation(recent); targetConvId = recent }
@@ -351,9 +523,19 @@ class QuroScheduleReceiver : BroadcastReceiver() {
         // 3) 更新最后触发时间
         QuroScheduledTaskStore.updateLastTriggered(context, taskId)
 
-        // 4) 如果是重复任务，重新排程下一次
-        if (task.repeatType != TaskRepeatType.ONCE && task.enabled) {
-            QuroScheduledTaskScheduler.schedule(context, task)
+        // 4) 排程下一次 / 终止任务
+        if (task.scheduleType == "once") {
+            // 一次性任务触发后即终止：取消闹钟并从列表移除，避免「任务还在继续」
+            QuroScheduledTaskScheduler.cancel(context, task.id)
+            QuroScheduledTaskStore.remove(context, task.id)
+        } else if (task.enabled) {
+            // 重复任务：检查是否已到达结束日期；到期则停排并禁用
+            val next = QuroScheduledTaskScheduler.nextTriggerTime(task)
+            if (next == null) {
+                QuroScheduledTaskStore.addOrUpdate(context, task.copy(enabled = false))
+            } else {
+                QuroScheduledTaskScheduler.schedule(context, task)
+            }
         }
     }
 }
@@ -415,40 +597,72 @@ class QuroScheduleBootReceiver : BroadcastReceiver() {
 // AI 工具
 // ============================================================
 
-/** 创建定时任务（AI 可调用） */
+/** 创建定时任务（AI 可调用，对齐 WorkBuddy automation_update 语义） */
 class ScheduleTaskTool : QuroTool {
     override val name = "schedule_task"
-    override val description = "创建一条定时任务/自动化提醒（当用户要设定时提醒/定时任务时使用）。参数：{\"title\":\"晨会提醒\",\"content\":\"该开晨会了\",\"hour\":8,\"minute\":30,\"repeatType\":\"DAILY\",\"dayOfWeek\":1,\"dayOfMonth\":1,\"month\":1}。repeatType 可选：ONCE(仅一次)/DAILY(每天)/WEEKLY(每周)/BIWEEKLY(每双周)/MONTHLY(每月)/YEARLY(每年)。dayOfWeek(1-7 周一至周日，WEEKLY/BIWEEKLY时用)、dayOfMonth(1-31，MONTHLY/YEARLY时用)、month(1-12，YEARLY时用)。"
-    override val parametersJson = """{"type":"object","properties":{"title":{"type":"string","description":"任务标题"},"content":{"type":"string","description":"任务内容/提醒详情"},"hour":{"type":"integer","description":"小时0-23"},"minute":{"type":"integer","description":"分钟0-59"},"repeatType":{"type":"string","description":"重复类型: ONCE/DAILY/WEEKLY/BIWEEKLY/MONTHLY/YEARLY"},"dayOfWeek":{"type":"integer","description":"周几1-7(周一至周日)，WEEKLY/BIWEEKLY时用"},"dayOfMonth":{"type":"integer","description":"几号1-31，MONTHLY/YEARLY时用"},"month":{"type":"integer","description":"几月1-12，YEARLY时用"}},"required":["title","hour","minute","repeatType"]}"""
+    override val description = "创建一条定时任务/自动化提醒（对齐 WorkBuddy 自动化）。参数：{\"title\":\"晨会提醒\",\"prompt\":\"该开晨会了\",\"scheduleType\":\"recurring|once\",\"scheduledAt\":\"2026-07-27 09:30\",\"rrule\":\"FREQ=DAILY 或 FREQ=WEEKLY;BYDAY=MO,WE,FR 或 FREQ=MONTHLY;BYMONTHDAY=1 或 FREQ=YEARLY;BYMONTH=1;BYMONTHDAY=1\",\"cwds\":\"<目标会话id,可选>\",\"hour\":9,\"minute\":30,\"repeatType\":\"DAILY\",\"dayOfWeek\":1,\"dayOfMonth\":1,\"month\":1}。优先用 scheduleType+rrule；若只给了旧式 hour/minute/repeatType，会自动换算成 rrule。scheduleType=once 时 scheduledAt 为触发时刻；recurring 时 scheduledAt 可空（用当前时间作锚点）。prompt 为触发时写入会话让 AI 执行的指令，可留空（仅提醒）。autoNew:true 表示每次触发自动新建独立会话（优先级高于 cwds）。endAt:\"2026-08-01\" 为重复任务的结束日期（可选，yyyy-MM-dd），到达后自动停止重复（仅 recurring 生效）。"
+    override val parametersJson = """{"type":"object","properties":{"title":{"type":"string","description":"任务标题"},"prompt":{"type":"string","description":"触发时写入会话让 AI 执行的指令（内容），可留空"},"scheduleType":{"type":"string","description":"recurring(重复)/once(仅一次)"},"scheduledAt":{"type":"string","description":"触发时刻 yyyy-MM-dd HH:mm（once 必填）"},"rrule":{"type":"string","description":"RRULE 重复规则，如 FREQ=DAILY / FREQ=WEEKLY;BYDAY=MO,WE,FR / FREQ=MONTHLY;BYMONTHDAY=1 / FREQ=YEARLY;BYMONTH=1;BYMONTHDAY=1"},"cwds":{"type":"string","description":"目标会话 id（可选，留空则沿用绑定/默认会话）"},"autoNew":{"type":"boolean","description":"true=每次触发自动新建独立会话(不与cwds同用)"},"hour":{"type":"integer","description":"小时0-23(旧式兼容)"},"minute":{"type":"integer","description":"分钟0-59(旧式兼容)"},"repeatType":{"type":"string","description":"旧式重复类型 ONCE/DAILY/WEEKLY/BIWEEKLY/MONTHLY/YEARLY(兼容用)"},"dayOfWeek":{"type":"integer","description":"周几1-7(周一至周日，旧式 WEEKLY 用)"},"dayOfMonth":{"type":"integer","description":"几号1-31(旧式 MONTHLY/YEARLY 用)"},"month":{"type":"integer","description":"几月1-12(旧式 YEARLY 用)"},"endAt":{"type":"string","description":"重复任务结束日期 yyyy-MM-dd（可选，留空=永久重复，仅 recurring 生效）"}},"required":["title"]}"""
     override val requiredPermissions = listOf(android.Manifest.permission.POST_NOTIFICATIONS)
     override fun run(context: Context, arguments: String): String {
         val jo = JSONObject(arguments)
         val title = jo.optString("title", "")
         if (title.isBlank()) return "title 不能为空"
-        val hour = jo.optInt("hour", -1)
-        val minute = jo.optInt("minute", -1)
-        if (hour !in 0..23 || minute !in 0..59) return "hour(0-23) 与 minute(0-59) 非法"
-        val repeatType = runCatching {
-            TaskRepeatType.valueOf(jo.optString("repeatType", "ONCE"))
-        }.getOrDefault(TaskRepeatType.ONCE)
+        val scheduleType = jo.optString("scheduleType",
+            if (jo.optString("rrule", "").isNotBlank()) "recurring" else "once"
+        ).lowercase()
+        val content = jo.optString("prompt", jo.optString("content", ""))
+        val cwds = jo.optString("cwds", "").trim()
+        val autoNew = jo.optBoolean("autoNew", false)
+
+        // rrule：优先用新字段；否则用旧式 hour/minute/repeatType 换算
+        val rrule = jo.optString("rrule", "").trim().ifBlank {
+            val rt = jo.optString("repeatType", "")
+            if (rt.isNotBlank()) QuroScheduledTaskScheduler.rruleFromLegacy(
+                jo.optInt("hour", 8), jo.optInt("minute", 0), rt,
+                jo.optInt("dayOfWeek", 1), jo.optInt("dayOfMonth", 1), jo.optInt("month", 1)
+            ) else ""
+        }
+
+        // scheduledAt：优先用新字段；否则按类型兜底构造
+        val scheduledAt = jo.optString("scheduledAt", "").trim().ifBlank {
+            if (scheduleType == "once") {
+                val h = jo.optInt("hour", -1); val m = jo.optInt("minute", -1)
+                if (h in 0..23 && m in 0..59) {
+                    val c = Calendar.getInstance().apply {
+                        set(Calendar.HOUR_OF_DAY, h); set(Calendar.MINUTE, m)
+                        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                    }
+                    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(c.timeInMillis))
+                } else ""
+            } else {
+                SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(System.currentTimeMillis()))
+            }
+        }
+
+        if (scheduleType == "once" && scheduledAt.isBlank()) {
+            return "scheduleType=once 时必须提供 scheduledAt（或 hour/minute）"
+        }
+
         val task = QuroScheduledTask(
             id = UUID.randomUUID().toString(),
             title = title,
-            content = jo.optString("content", ""),
-            hour = hour,
-            minute = minute,
-            repeatType = repeatType,
-            dayOfWeek = jo.optInt("dayOfWeek", 1),
-            dayOfMonth = jo.optInt("dayOfMonth", 1),
-            month = jo.optInt("month", 1),
+            content = content,
+            scheduleType = scheduleType,
+            scheduledAt = scheduledAt,
+            rrule = rrule,
+            cwds = cwds,
+            autoNew = autoNew,
             enabled = true,
+            endAt = if (scheduleType == "recurring") jo.optString("endAt", "").trim() else "",
         )
         QuroScheduledTaskStore.addOrUpdate(context, task)
         QuroScheduledTaskScheduler.ensureChannel(context)
         QuroScheduledTaskScheduler.schedule(context, task)
-        return "已创建定时任务「$title」(${repeatType.label} ${"%02d:%02d".format(hour, minute)})，将在 ${QuroScheduledTaskScheduler.nextTriggerTime(task)?.let {
-            java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(it))
-        } ?: "未知时间"} 首次触发"
+        val next = QuroScheduledTaskScheduler.nextTriggerTime(task)
+        val nextStr = next?.let { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(it)) } ?: "未知"
+        val ruleStr = if (scheduleType == "once") "一次性 @ $scheduledAt"
+        else QuroScheduledTaskScheduler.humanRrule(rrule).takeIf { it.isNotBlank() } ?: rrule
+        return "已创建定时任务「$title」（$ruleStr，下次触发 $nextStr）"
     }
 }
 
@@ -463,9 +677,10 @@ class ListScheduledTasksTool : QuroTool {
         val sb = StringBuilder("定时任务列表（共 ${tasks.size} 条）：\n")
         tasks.forEachIndexed { i, t ->
             sb.append("${i + 1}. [${if (t.enabled) "启用" else "禁用"}] ${t.title}")
-            sb.append(" - ${"%02d:%02d".format(t.hour, t.minute)}")
-            sb.append(" (${t.repeatType.label})")
-            if (t.content.isNotBlank()) sb.append(" | ${t.content}")
+            if (t.scheduleType == "once") sb.append(" - 一次性 @ ${t.scheduledAt}")
+            else sb.append(" - ${QuroScheduledTaskScheduler.humanRrule(t.rrule).takeIf { it.isNotBlank() } ?: t.rrule}")
+            if (t.content.isNotBlank()) sb.append(" | 指令:${t.content}")
+            if (t.cwds.isNotBlank()) sb.append(" | 会话:${t.cwds}")
             sb.append(" | id=${t.id}\n")
         }
         return sb.toString()

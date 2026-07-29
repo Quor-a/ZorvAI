@@ -17,6 +17,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -169,6 +170,38 @@ abstract class QuroDirectBotAdapter(
         }
     } catch (e: Exception) {
         Log.e(TAG, "$platform GET $url 失败: ${e.message}")
+        null
+    }
+
+    /**
+     * 带文件的 multipart 上传（飞书图片消息等场景）。
+     * 成功返回解析好的 JSONObject，HTTP 失败/解析异常返回 null（永不抛出）。
+     */
+    protected fun httpUploadMultipart(
+        url: String,
+        headers: Map<String, String> = emptyMap(),
+        formFields: Map<String, String> = emptyMap(),
+        fileField: String,
+        fileName: String,
+        bytes: ByteArray,
+        mediaType: String = "application/octet-stream",
+    ): JSONObject? = try {
+        val mp = MultipartBody.Builder().setType(MultipartBody.FORM)
+        formFields.forEach { (k, v) -> mp.addFormDataPart(k, v) }
+        mp.addFormDataPart(fileField, fileName, bytes.toRequestBody(mediaType.toMediaType()))
+        val req = Request.Builder().url(url)
+            .also { h -> headers.forEach { (k, v) -> h.addHeader(k, v) } }
+            .post(mp.build())
+            .build()
+        client.newCall(req).execute().use { resp ->
+            val b = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) {
+                Log.w(TAG, "$platform UPLOAD $url -> HTTP ${resp.code}: ${b.take(500)}")
+                null
+            } else runCatching { JSONObject(b) }.getOrNull()
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "$platform UPLOAD $url 失败: ${e.message}")
         null
     }
 

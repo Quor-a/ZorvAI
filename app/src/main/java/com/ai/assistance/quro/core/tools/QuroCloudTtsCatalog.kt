@@ -151,12 +151,38 @@ object QuroCloudTtsCatalog {
 
     /** 全部标签分组（段级 + 行内），供语音服务屏分组折叠展示。 */
     val ALL_TAG_GROUPS = EMOTION_TAG_GROUPS + INLINE_TAG_GROUPS
+
+    /**
+     * 语色路由调色板：AI 可自由选用的「语色」友好名 → 真实 voice id。
+     * 仅小米 MiMo 拥有命名预置音色（见 [PRESET_VOICES]），故映射指向其预置 id；
+     * 其它服务商若其 [QuroTtsProviderDef.voices] 含该 id 才生效，否则回落全局音色（语色标记被忽略，仅影响音色不报错）。
+     * 这是 AI 自由组合时的「可选语色白名单」，扩展只需在此追加。
+     */
+    val VOICE_COLOR_PALETTE: Map<String, String> = mapOf(
+        "旁白" to "白桦", "唐僧" to "白桦", "悟空" to "苏打", "孙悟空" to "苏打",
+        "林黛玉" to "茉莉", "御姐音" to "冰糖", "大叔音" to "白桦", "正太音" to "苏打",
+        "甜美" to "茉莉", "磁性" to "白桦", "苍老" to "白桦", "俏皮" to "冰糖",
+        "温柔" to "茉莉", "活泼" to "冰糖", "沉稳" to "白桦",
+    )
+
+    /** 把语色名解析为当前服务商的真实 voice id；找不到则 null（回落全局音色）。 */
+    fun voiceColorToVoice(providerId: String, colorName: String): String? {
+        val c = VOICE_COLOR_PALETTE[colorName] ?: return null
+        val def = QuroTtsProviders.byId(providerId) ?: return null
+        return when {
+            def.kind == QuroTtsProviderKind.MIMO -> c
+            def.voices.any { it.id == c } -> c
+            else -> null
+        }
+    }
 }
 
-/** 自定义音色条目（设计=文字描述；复刻=音频样本路径）。 */
+/** 自定义音色条目（设计=文字描述；复刻=音频样本路径 + 旁白文本 + 注册回填 ID）。 */
 data class CloudCustomVoice(
     val name: String,
     val type: String, // "design" | "clone"
     val designText: String = "",
     val cloneUri: String = "",
+    val cloneText: String = "",     // 参考音频旁白文本（硅基流动 CosyVoice 注册必需）
+    val registeredId: String = "",  // 注册式复刻后回填的克隆音色 ID/URI（MiniMax voice_id / 硅基流动 speech: uri）
 )

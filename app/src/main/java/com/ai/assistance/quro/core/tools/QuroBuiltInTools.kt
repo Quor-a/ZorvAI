@@ -4,7 +4,6 @@ import android.content.Context
 import android.os.Build
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
 import com.ai.assistance.quro.core.knowledge.QuroRagKnowledgeTool
-import com.ai.assistance.quro.core.knowledge.QuroKnowledgeSyncTool
 import com.ai.assistance.quro.core.cms.QuroCmsCallTool
 import com.ai.assistance.quro.core.cms.QuroCmsDeployTool
 import com.ai.assistance.quro.core.cms.QuroCmsListTool
@@ -12,8 +11,11 @@ import com.ai.assistance.quro.core.cms.QuroCmsLogsTool
 import com.ai.assistance.quro.core.cms.QuroCmsResultTool
 import com.ai.assistance.quro.core.cms.QuroCmsRunDagTool
 import com.ai.assistance.quro.core.cms.QuroCmsStatusTool
+import com.ai.assistance.quro.core.cms.QuroCmsEngineStatusTool
 import com.ai.assistance.quro.core.cms.QuroCmsUndeployTool
 import com.ai.assistance.quro.core.cms.QuroPrivStatusTool
+import com.ai.assistance.quro.core.aci.QuroAciCallTool
+import com.ai.assistance.quro.core.aci.QuroAciListTool
 import com.ai.assistance.quro.core.tools.TerminalDriveTool
 import com.ai.assistance.quro.core.tools.ReadScreenTool
 import com.ai.assistance.quro.core.tools.GetForegroundAppTool
@@ -43,6 +45,10 @@ import com.ai.assistance.quro.core.tools.LinuxStartTool
 import com.ai.assistance.quro.core.tools.LinuxStopTool
 import com.ai.assistance.quro.core.tools.LinuxStatusTool
 import com.ai.assistance.quro.core.tools.AiwpsCreateTool
+import com.ai.assistance.quro.core.tools.QuroExperienceLogTool
+import com.ai.assistance.quro.core.tools.QuroExperienceQueryTool
+import com.ai.assistance.quro.core.tools.QuroExperienceCorrectTool
+import com.ai.assistance.quro.core.tools.QuroExperienceVersionCheckTool
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -175,6 +181,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(ReadContactsTool())
     // 日历
     r.register(ReadCalendarTool())
+    r.register(WriteCalendarTool())
     // 文件（应用专属目录，无权限）
     r.register(ListFilesTool())
     r.register(ReadTextFileTool())
@@ -216,19 +223,30 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // CMS v2 终端部署/卸载（原创运行时）：把模块推到 proot 终端并运行
     r.register(QuroCmsDeployTool())
     r.register(QuroCmsUndeployTool())
+    // ACI（Agent Capability Interface）：让 AI 作为控制方发现并调用第三方 App 暴露的能力
+    r.register(QuroAciListTool())
+    r.register(QuroAciCallTool())
     // 特权通道状态查询：AI 调用高风险能力前自查可用通道、自行选择
     r.register(QuroPrivStatusTool())
     // CMS v2 反馈环：状态/日志/结构化结果查询（让 AI 自我确认「部署/调用是否成功」）
     r.register(QuroCmsStatusTool())
+    r.register(QuroCmsEngineStatusTool())
     r.register(QuroCmsLogsTool())
     r.register(QuroCmsResultTool())
     // CMS v2 DAG 编排：按依赖执行一组 terminal 命令
     r.register(QuroCmsRunDagTool())
+    // QuroTerm 自研沙盒终端能力（集成 NovaTerm，去品牌化为 QuroTerm）
+    r.register(QuroTermTool())
     // 记忆库：AI 自动沉淀长期记忆（保存/列出/检索/删除）
     r.register(QuroMemorySaveTool())
     r.register(QuroMemoryListTool())
     r.register(QuroMemorySearchTool())
     r.register(QuroMemoryDeleteTool())
+    // AI 经验笔记 & 自我进化系统（App 本地沙盒，零隐私风险）
+    r.register(QuroExperienceLogTool())
+    r.register(QuroExperienceQueryTool())
+    r.register(QuroExperienceCorrectTool())
+    r.register(QuroExperienceVersionCheckTool())
     // ═════════════ L1 无障碍控屏（CapOS 通道，需无障碍服务已授权）══════════════
     // 屏幕感知：读取界面 / 前台应用 / 屏幕状态
     r.register(ReadScreenTool())
@@ -238,6 +256,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(TapScreenTool())
     r.register(SwipeScreenTool())
     r.register(InputTextTool())
+    // AI 智能体键盘（Agent IME）：ai_type_text / ai_press_enter，走 IME 通道把文本打入聚焦输入框
+    r.register(AiKeyboardTypeTool())
+    r.register(AiKeyboardPressEnterTool())
     r.register(ScrollScreenTool())
     r.register(GlobalActionTool())
     // 文件知识库（Path ②）：本地文档检索 + 写入，零基建覆盖日常知识检索
@@ -285,8 +306,6 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(KnowledgeManageTool())
     // 知识库 C3 重做：本地自包含向量语义检索（RAG），零重依赖，离线可用（无 API Key 时降级本地词法检索）
     r.register(QuroRagKnowledgeTool())
-    // 知识库 #590/#591：第三方云盘知识源接入（list/sync/sync_one），与 RAG 检索联动
-    r.register(QuroKnowledgeSyncTool())
     // aiWPS 文档生成（docx / xlsx / pptx，后台生成真实可打开文件）
     r.register(AiwpsCreateTool())
     // UI 动作工具：把对话框界面/弹层/开关注册为 AI 可调用工具（走 QuroUiActionBridge 回调 ChatScreen）

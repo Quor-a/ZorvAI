@@ -33,22 +33,34 @@ object CmsExecutionEngine {
         cap: QuroCmsCapability,
         args: Map<String, String>,
         uiRequest: suspend (QuroCmsPermission) -> AuthorizationLevel?,
+        target: InvocationTarget = InvocationTarget.AUTO,
         taskId: String? = null,
     ): CmsExecResult {
         CmsStateStore.init(context)
         val tid = taskId ?: CmsStateStore.newTask("call", "${module.id}:${cap.id}")
-        CmsStateStore.updateTask(tid, 10, "执行能力 ${cap.id}（${cap.actionType}）")
+        // 解析运行宿主（元宝 Runtime Host 路由）
+        val resolution = CmsHostRouter.resolve(cap, target, context)
+        if (resolution.host == null) {
+            val msg = resolution.guidance ?: "⛔ 无法解析运行宿主"
+            CmsStateStore.updateTask(tid, 5, msg)
+            CmsStateStore.appendLog(module.id, msg)
+            CmsStateStore.finishTask(tid, false, msg, exitCode = 2, stdout = msg, durationMs = 0)
+            CmsStateStore.setRunning(module.id, false)
+            return CmsExecResult(false, 2, msg, "", emptyList(), 0, tid)
+        }
+        val host = resolution.host
+        CmsStateStore.updateTask(tid, 10, "宿主=${host.label} 执行能力 ${cap.id}（target=${target.label}）")
         CmsStateStore.setRunning(module.id, true)
         val t0 = System.currentTimeMillis()
         val res: String = try {
-            QuroCmsExecutor(context).execute(module, cap, args, uiRequest)
+            QuroCmsExecutor(context).execute(module, cap, args, uiRequest, host)
         } catch (e: Exception) {
             "⛔ 执行异常：${e.message}"
         }
         val dur = System.currentTimeMillis() - t0
         val ok = !res.startsWith("⛔")
         val exitCode = if (ok) 0 else 1
-        CmsStateStore.appendLog(module.id, "→ ${cap.id}: ${if (ok) "成功" else "失败"} (${dur}ms)")
+        CmsStateStore.appendLog(module.id, "→ [${host.label}] ${cap.id}: ${if (ok) "成功" else "失败"} (${dur}ms)")
         CmsStateStore.appendLog(module.id, res.take(2000))
         CmsStateStore.finishTask(tid, ok, res.take(200), exitCode, res, "", dur)
         CmsStateStore.setRunning(module.id, false)

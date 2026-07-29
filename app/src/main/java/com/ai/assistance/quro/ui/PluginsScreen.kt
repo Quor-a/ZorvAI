@@ -22,6 +22,8 @@ import com.ai.assistance.quro.plugin.QuickJsEngine
 import com.ai.assistance.quro.plugin.QuickJsLogicBackend
 import org.json.JSONObject
 import java.util.concurrent.Executors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 插件运行时入口屏。
@@ -40,9 +42,15 @@ import java.util.concurrent.Executors
 fun PluginsScreen(onClose: () -> Unit) {
     val ctx = LocalContext.current
     val store = remember { mutableMapOf<String, String>() }
-    // 探测 QuickJS 原生库是否可用（触发 System.loadLibrary）
-    val useQuickJs = remember { QuickJsEngine.isAvailable() }
-    val backend = remember { if (useQuickJs) QuickJsLogicBackend() else null }
+    // 原生库可用性探测 + 初始化完成标记：必须在后台线程触发 System.loadLibrary，
+    // 否则会在 UI 合成期主线程同步加载 libquroplugin.so → 冻结主线程 → ANR（v304+ 插件屏根因）。
+    var useQuickJs by remember { mutableStateOf(false) }
+    var initReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { useQuickJs = QuickJsEngine.isAvailable() }
+        initReady = true
+    }
+    val backend = remember(useQuickJs) { if (useQuickJs) QuickJsLogicBackend() else null }
     // QuickJS 引擎单线程串行，避免 JSRuntime 跨线程并发
     val engineThread = remember { Executors.newSingleThreadExecutor() }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
@@ -75,6 +83,18 @@ fun PluginsScreen(onClose: () -> Unit) {
             backend?.destroy()
             engineThread.shutdownNow()
         }
+    }
+
+    // 初始化未完成前只显示占位，避免在主线程创建 WebView / 触发 loadLibrary（ANR 根因）
+    if (!initReady) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator()
+                Spacer(Modifier.height(8.dp))
+                Text("插件运行时初始化中…", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        return
     }
 
     Column(Modifier.fillMaxSize()) {

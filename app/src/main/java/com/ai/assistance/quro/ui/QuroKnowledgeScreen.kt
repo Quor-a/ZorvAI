@@ -3,8 +3,9 @@ package com.ai.assistance.quro.ui
 import android.content.Context
 import android.content.Intent
 import android.provider.OpenableColumns
+import android.widget.Toast
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,14 +17,18 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.ai.assistance.quro.core.tools.QuroKnowledgeFiles
@@ -33,11 +38,14 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * 知识库管理界面（Path ② 文件知识库的可视化门面）。
+ * 知识库管理界面（Path ② 文件知识库的可视化门面，本地 RAG）。
  *
  * 与 [com.ai.assistance.quro.core.tools.QuroToolsKnowledge] 共用 `knowledge_base/` 目录：
  * 这里手动浏览/查看/新建/追加/删除文档，AI 侧则通过 knowledge_search / knowledge_add 工具读写同一目录。
  * 两侧共享同一份数据，互不影响。
+ *
+ * UI 重写（v329）：改为移动端单栏卡片式（复用 SetGroup / SetRowClickable / InfoBox / UnderlineField 等
+ * 设置风组件），点击文件进入详情预览，遵循「一层一层返回」导航；彻底移除已删除的云盘知识来源入口。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,12 +74,33 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
             files = listKnowledgeFiles(dir)
         }
     }
+    // 协程作用域（声明在 exportLauncher 之前，供 lambda 内 launch 使用）
+    val scope = rememberCoroutineScope()
+    // 导出：把 knowledge_base/ 整库打包为 zip 经 SAF 写出
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                ctx.contentResolver.openOutputStream(uri)?.use { os ->
+                    java.util.zip.ZipOutputStream(os).use { zos ->
+                        dir.walkTopDown().filter { it.isFile }.forEach { f ->
+                            val entryName = runCatching { f.relativeTo(dir).path }.getOrDefault(f.name)
+                            zos.putNextEntry(java.util.zip.ZipEntry(entryName))
+                            f.inputStream().use { it.copyTo(zos) }
+                            zos.closeEntry()
+                        }
+                    }
+                }
+                withContext(Dispatchers.Main) { Toast.makeText(ctx, "知识库已导出", Toast.LENGTH_SHORT).show() }
+            }.onFailure {
+                withContext(Dispatchers.Main) { Toast.makeText(ctx, "导出失败：${it.message}", Toast.LENGTH_LONG).show() }
+            }
+        }
+    }
     var selected by remember { mutableStateOf<File?>(null) }
     var selectedText by remember { mutableStateOf("") }
     var showAdd by remember { mutableStateOf(false) }
-    var showSources by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
-    val scope = rememberCoroutineScope()
 
     val filtered = remember(files, query) {
         if (query.isBlank()) files
@@ -80,98 +109,146 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
         }
     }
 
+    fun rel(f: File) = runCatching { f.relativeTo(dir).path }.getOrDefault(f.name)
+
+    fun loadFile(f: File) {
+        selected = f
+        selectedText = "读取中…"
+        // 点击回调跑在主线程，大文档 OOXML 解析/读盘会 ANR → 移至 IO 线程，先给占位文案避免界面假死。
+        scope.launch(Dispatchers.IO) {
+            selectedText = if (f.extension.lowercase() in setOf("docx", "xlsx", "pptx"))
+                extractOfficeText(f) else runCatching { f.readText() }.getOrDefault("（无法读取内容）")
+        }
+    }
+
+    fun deleteFile(f: File) {
+        f.delete()
+        files = listKnowledgeFiles(dir)
+        if (selected == f) { selected = null; selectedText = "" }
+        scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
+    }
+
+    // 分层返回：详情视图下，硬件返回键先回到列表（不选 清空 selected）；列表态下本 BackHandler 失效，
+    // 由父层（ChatScreen 的 showKnowledge）BackHandler 关闭整个知识库屏。保证「详情→列表→关闭」逐层返回。
+    BackHandler(enabled = selected != null) {
+        selected = null
+        selectedText = ""
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("知识库") },
+                title = {
+                    Text(
+                        if (selected != null) selected!!.name else "知识库",
+                        maxLines = 1,
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, "返回") }
+                    IconButton(onClick = { if (selected != null) { selected = null; selectedText = "" } else onClose() }) {
+                        Icon(Icons.Filled.ArrowBack, "返回")
+                    }
                 },
                 actions = {
-                    TextButton(onClick = { showSources = true }) { Text("云盘") }
-                    IconButton(onClick = { importLauncher.launch(arrayOf("*/*")) }) {
-                        Icon(Icons.Filled.FileDownload, "导入文档")
+                    if (selected == null) {
+                        IconButton(onClick = { exportLauncher.launch("quro_knowledge_${System.currentTimeMillis()}.zip") }) {
+                            Icon(Icons.Filled.Share, "导出知识库（ZIP）")
+                        }
+                        IconButton(onClick = { importLauncher.launch(arrayOf("*/*")) }) {
+                            Icon(Icons.Filled.FileDownload, "导入文档")
+                        }
+                        IconButton(onClick = { showAdd = true }) { Icon(Icons.Filled.Add, "添加文档") }
+                    } else {
+                        IconButton(onClick = { selected?.let { deleteFile(it) } }) {
+                            Icon(Icons.Filled.Delete, "删除文档", tint = MaterialTheme.colorScheme.error)
+                        }
                     }
-                    IconButton(onClick = { showAdd = true }) { Icon(Icons.Filled.Add, "添加文档") }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
     ) { pad ->
-        Row(Modifier.fillMaxSize().padding(pad)) {
-            // 左栏：文件列表 + 搜索
-            Column(Modifier.weight(0.42f).fillMaxHeight()) {
+        if (selected == null) {
+            // —— 列表视图（单栏卡片式）——
+            Column(
+                Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                InfoBox(
+                    "本地知识库（RAG）。文档保存在应用私有 knowledge_base/ 目录，仅在你的设备上做向量化检索，" +
+                            "不上传任何云端。你也可以直接对 AI 说「把 XX 存进知识库」。",
+                )
+                Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
                     placeholder = { Text("搜索文件名…") },
                     leadingIcon = { Icon(Icons.Filled.Search, null) },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(8.dp)
+                    modifier = Modifier.fillMaxWidth()
                 )
-                LazyColumn(
-                    Modifier.fillMaxSize().padding(horizontal = 8.dp),
-                    contentPadding = PaddingValues(bottom = 12.dp)
-                ) {
-                    if (files.isEmpty()) {
-                        item {
-                            Text(
-                                "知识库为空。点右上角 + 添加文档，或直接对 AI 说「把 XX 存进知识库」。",
-                                Modifier.padding(16.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                    items(filtered, key = { it.absolutePath }) { f ->
-                        val rel = runCatching { f.relativeTo(dir).path }.getOrDefault(f.name)
-                        ListItem(
-                            headlineContent = { Text(f.name, fontSize = 14.sp) },
-                            supportingContent = {
-                                Text(rel, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            },
-                            leadingContent = { Icon(Icons.Filled.Description, null, tint = MaterialTheme.colorScheme.primary) },
-                            trailingContent = {
-                                IconButton(onClick = {
-                                    f.delete()
-                                    files = listKnowledgeFiles(dir)
-                                    if (selected == f) { selected = null; selectedText = "" }
-                                    scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
-                                }) {
-                                    Icon(Icons.Filled.Delete, null, tint = MaterialTheme.colorScheme.error)
-                                }
-                            },
-                            modifier = Modifier.clickable {
-                                selected = f
-                                selectedText = if (f.extension.lowercase() in setOf("docx", "xlsx", "pptx"))
-                                    extractOfficeText(f) else runCatching { f.readText() }.getOrDefault("（无法读取内容）")
-                            }
-                        )
-                        HorizontalDivider()
-                    }
-                }
-            }
-            // 右栏：内容预览
-            Box(
-                Modifier.weight(0.58f).fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-            ) {
-                if (selected != null) {
-                    Column(Modifier.fillMaxSize().padding(14.dp)) {
-                        Text(selected!!.name, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-                        Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
+                GroupCaption("文档（${filtered.size}）")
+                if (files.isEmpty()) {
+                    SetGroup {
                         Text(
-                            selectedText,
-                            Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            "知识库为空。点右上角 + 添加文档，或从系统文件选择器导入。",
+                            Modifier.padding(16.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 } else {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("选择左侧文件查看内容", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                    SetGroup {
+                        filtered.forEachIndexed { i, f ->
+                            SetRowClickable(
+                                icon = Icons.Filled.Description,
+                                name = f.name,
+                                sub = rel(f),
+                                onClick = { loadFile(f) },
+                            )
+                            if (i < filtered.lastIndex) HorizontalDivider()
+                        }
                     }
                 }
+                Spacer(Modifier.height(8.dp))
+                SetGroup {
+                    SetRowClickable(
+                        icon = Icons.Filled.Refresh,
+                        name = "重建索引",
+                        sub = "重新扫描并向量化全部文档",
+                        onClick = {
+                            scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
+                        },
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+        } else {
+            // —— 详情预览视图（一层一层返回）——
+            Column(
+                Modifier.fillMaxSize().padding(pad).padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    selected!!.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+                Text(
+                    rel(selected!!),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    selectedText,
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    lineHeight = 19.sp,
+                )
             }
         }
     }
@@ -192,12 +269,6 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
             }
         )
     }
-
-    if (showSources) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            QuroKnowledgeSourcesScreen(onClose = { showSources = false })
-        }
-    }
 }
 
 /** 列出 knowledge_base 下的文档（Markdown/JSON/TXT + Office/WPS：docx/xlsx/pptx，递归、按相对路径排序）。 */
@@ -215,7 +286,7 @@ private fun listKnowledgeFiles(dir: File): List<File> {
 @Composable
 private fun AddDocDialog(
     onDismiss: () -> Unit,
-    onConfirm: (path: String, content: String, append: Boolean) -> Unit
+    onConfirm: (path: String, content: String, append: Boolean) -> Unit,
 ) {
     var path by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
@@ -223,36 +294,38 @@ private fun AddDocDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(enabled = path.isNotBlank(), onClick = { onConfirm(path, content, append) }) { Text("保存") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        confirmButton = {},
+        dismissButton = {},
         title = { Text("添加知识文档") },
         text = {
             Column(
-                Modifier.fillMaxWidth().heightIn(max = 440.dp).verticalScroll(rememberScrollState())
+                Modifier.fillMaxWidth().heightIn(max = 460.dp).verticalScroll(rememberScrollState())
             ) {
-                OutlinedTextField(
+                UnderlineField(
+                    label = "路径",
                     value = path,
                     onValueChange = { path = it },
-                    label = { Text("路径（如 规范/编码风格.md）") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    placeholder = "如 规范/编码风格.md",
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
                     label = { Text("文档内容") },
                     modifier = Modifier.fillMaxWidth().height(200.dp),
-                    maxLines = 12
+                    maxLines = 12,
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = append, onCheckedChange = { append = it })
                     Text("追加模式（不勾 = 覆盖原文件）", fontSize = 13.sp)
                 }
+                Spacer(Modifier.height(12.dp))
+                DialogActions(
+                    onCancel = onDismiss,
+                    onConfirm = { if (path.isNotBlank()) onConfirm(path, content, append) },
+                )
             }
-        }
+        },
     )
 }

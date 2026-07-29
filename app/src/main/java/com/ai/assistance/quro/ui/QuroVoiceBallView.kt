@@ -226,9 +226,9 @@ fun QuroVoiceBall(listening: Boolean, speaking: Boolean, paused: Boolean, status
             color = Color.White,
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier
-                .background(Color(0x80000000), CircleShape)
+                .background(ringColor.copy(alpha = 0.85f), CircleShape)
                 .clip(CircleShape)
-                .padding(6.dp, 2.dp),
+                .padding(8.dp, 3.dp),
         )
     }
 }

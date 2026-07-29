@@ -44,6 +44,7 @@ private val UI_ACTIONS = listOf(
     UiActionSpec("ui_open_plugins", "插件", "打开插件管理"),
     UiActionSpec("ui_open_skills", "技能", "打开技能 SKILL 管理（查看/新增/编辑/启用用户自定义技能）"),
     UiActionSpec("ui_open_cms", "能力模块(CMS)", "打开 CMS 能力模块"),
+    UiActionSpec("ui_open_aci", "ACI 管理中心", "打开 ACI 管理中心：浏览已发现的第三方 App、查看绑定状态与能力清单、手动注册 / 刷新 / 重绑"),
     UiActionSpec("ui_open_permission", "权限中心", "打开 CapOS 权限中心（L1-L4）"),
     UiActionSpec("ui_open_model_config", "模型配置", "打开模型配置"),
     UiActionSpec("ui_open_voice", "语音服务", "打开语音服务设置（TTS/STT）"),

@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Quro AI 桌面卡片 v2（功能桌面卡 + 聊天功能卡）
+  Quro AI 桌面卡片（v331 重写）
   上半区：品牌 + 快捷操作按钮（打开对话 / 语音球）
-  下半区：最近一条 AI 回复预览
+  下半区：最近一条 AI 回复预览（最多 5 行）
+  视觉：深色科技卡 + cyan accent 分隔线，与圆角按钮一致。
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_bg"
-    android:padding="0dp">
+    android:padding="0dp"
+    android:contentDescription="Quro AI 桌面卡片">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -25,11 +27,10 @@
             android:gravity="center_vertical"
             android:layout_marginBottom="10dp">
 
-            <!-- 品牌图标 -->
             <ImageView
                 android:id="@+id/widget_icon"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
                 android:src="@drawable/quro_logo"
                 android:contentDescription="Quro AI"
                 android:scaleType="fitCenter" />
@@ -61,7 +62,7 @@
                     android:layout_marginTop="1dp" />
             </LinearLayout>
 
-            <!-- 快捷：打开对话按钮 -->
+            <!-- 快捷：打开对话 -->
             <FrameLayout
                 android:id="@+id/widget_btn_chat"
                 android:layout_width="38dp"
@@ -73,7 +74,8 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
                     android:text="💬"
-                    android:textSize="16sp" />
+                    android:textSize="16sp"
+                    android:contentDescription="打开对话" />
             </FrameLayout>
 
             <FrameLayout
@@ -88,15 +90,17 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
                     android:text="🎤"
-                    android:textSize="16sp" />
+                    android:textSize="16sp"
+                    android:contentDescription="语音球" />
             </FrameLayout>
         </LinearLayout>
 
-        <!-- ═══ 分割线 ═══ -->
+        <!-- ═══ accent 分隔线 ═══ -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#20FFFFFF"
+            android:background="#2DD4EE"
+            android:alpha="0.45"
             android:layout_marginBottom="10dp" />
 
         <!-- ═══ 聊天预览区（最近一条回复） ═══ -->
@@ -114,11 +118,11 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:text="暂无新回复"
-            android:textSize="12sp"
-            android:textColor="#D0D0D0"
-            android:maxLines="4"
+            android:textSize="12.5sp"
+            android:textColor="#D8D8D8"
+            android:maxLines="5"
             android:ellipsize="end"
-            android:lineSpacingExtra="2dp" />
+            android:lineSpacingExtra="3dp" />
 
     </LinearLayout>
 </FrameLayout>

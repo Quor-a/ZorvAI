@@ -2,6 +2,7 @@
     <string name="app_name">Quro AI</string>
     <string name="quro_accessibility_desc">Quro AI 无障碍服务：用于界面自动化与屏幕内容读取等高级能力。当前版本仅完成权限声明，不会收集任何隐私数据。</string>
     <string name="quro_device_admin_desc">Quro AI 设备管理员：用于锁屏、远程管理等高级系统能力。</string>
+    <string name="ime_label">Quro AI 键盘</string>
 
     <!-- 应用快捷方式（长按图标菜单） -->
     <string name="sc_voice_short">语音球</string>

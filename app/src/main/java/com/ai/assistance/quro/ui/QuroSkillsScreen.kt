@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -16,6 +17,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Help
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,9 +29,47 @@ import androidx.compose.ui.unit.dp
 import com.ai.assistance.quro.core.skill.QuroSkill
 import com.ai.assistance.quro.core.skill.QuroSkillStore
 import com.ai.assistance.quro.core.skill.DEFAULT_SKILL_PARAMS
+import com.ai.assistance.quro.core.tools.QuroToolRegistry
+import com.ai.assistance.quro.core.tools.QuroDownloadUtil
 import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
+
+/**
+ * 「如何添加技能」说明（开发者文档，可一键下载到本地）。
+ */
+private val SKILL_AUTHOR_GUIDE = """
+技能（SKILL）让你的 AI 多出可注入系统提示词的指令，或注册成 AI 可调用函数。
+
+一、最小可用技能（SKILL.md 风格）：
+---
+name: 示例技能
+description: 一句话说清这个技能做什么，AI 据此决定是否启用
+---
+# 指令正文
+当用户说 XXX 时，你应当……（注入系统提示词的内容）
+
+二、应用内字段对照：
+• 名称（必填）：技能的 key，建议小写蛇形。
+• 简介：对应 description，影响 AI 自动匹配。
+• 技能指令：注入系统提示词的正文（留空则启用也不生效）。
+• 触发词：逗号分隔，未来用于自动匹配（如「订票,买火车票」）。
+• 参数 Schema (JSON)：当「可作为工具调用」开启时，这是 function calling 的入参定义，必须是标准 JSON Schema：
+  {"type":"object","properties":{"city":{"type":"string","description":"城市名"}},"required":["city"]}
+• 可作为工具调用：开启后 AI 能直接调用该技能（注册为函数）；关闭则只注入提示词。
+• 常驻系统提示词：开启则始终注入；关闭则仅触发词命中时注入。
+• 启用：总开关，关闭则不注入。
+
+三、参数怎么写（JSON Schema 要点）：
+• 根必须是 {"type":"object","properties":{...},"required":[...]}。
+• 每个参数：type ∈ string/integer/number/boolean/array/object；用 description 说明含义。
+• required 数组列出必填参数名。
+• 例：{"type":"object","properties":{"a":{"type":"string"},"n":{"type":"integer"}},"required":["a"]}
+
+四、导入 / 导出 / 转换：
+• 右上「导入」支持开源 SKILL.md、应用内技能 JSON、工具规格 JSON（工具→技能转换）。
+• 单技能可导出为标准 SKILL.md，与 anthropics/skills 等生态兼容。
+"""
 
 /**
  * 技能 SKILL 管理页。
@@ -42,7 +83,10 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
     val ctx = LocalContext.current
     var skills by remember { mutableStateOf(QuroSkillStore.load(ctx)) }
     var showEditor by remember { mutableStateOf(false) }
+    var showAuthorGuide by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<QuroSkill?>(null) }
+    var showExportPicker by remember { mutableStateOf(false) }
+    var pendingExport by remember { mutableStateOf<List<QuroSkill>>(emptyList()) }
 
     fun refresh() { skills = QuroSkillStore.load(ctx) }
 
@@ -56,17 +100,41 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
             Toast.makeText(ctx, "读取文件失败或内容为空", Toast.LENGTH_SHORT).show()
             return@rememberLauncherForActivityResult
         }
-        val imported = runCatching { parseSkillJson(text) }.getOrElse {
-            Toast.makeText(ctx, "JSON 解析失败：${it.message}", Toast.LENGTH_LONG).show()
-            return@rememberLauncherForActivityResult
-        }
-        if (imported.isEmpty()) {
-            Toast.makeText(ctx, "未识别到有效技能（需含 name 字段的 JSON）", Toast.LENGTH_LONG).show()
+        // 宽松导入策略：依次尝试 SKILL.md 解析（兼容 anthropics/skills 等生态）→ 应用内技能 JSON →
+        // 工具规格 JSON（"技能转换"：工具 → 技能）。三者均失败才报错。
+        val toolSpecSkill = runCatching { QuroSkill.fromToolSpec(text) }.getOrNull()
+        val imported = QuroSkillStore.parseSkillMd(text).takeIf { it.isNotEmpty() }
+            ?: runCatching { parseSkillJson(text) }.getOrNull()?.takeIf { it.isNotEmpty() }
+            ?: toolSpecSkill?.let { listOf(it) }
+        if (imported.isNullOrEmpty()) {
+            Toast.makeText(ctx, "导入失败：内容不是有效的 SKILL.md / 技能 JSON / 工具规格 JSON", Toast.LENGTH_LONG).show()
             return@rememberLauncherForActivityResult
         }
         imported.forEach { QuroSkillStore.addOrUpdate(ctx, it) }
         refresh()
         Toast.makeText(ctx, "已导入 ${imported.size} 个技能", Toast.LENGTH_SHORT).show()
+    }
+
+    // ═══ 导出技能 ═══
+    var pendingSkill by remember { mutableStateOf<QuroSkill?>(null) }
+    // 单个技能导出为开放标准 SKILL.md（与 anthropics/skills 等生态兼容）
+    val exportMdLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val s = pendingSkill ?: return@rememberLauncherForActivityResult
+        pendingSkill = null
+        runCatching {
+            ctx.contentResolver.openOutputStream(uri)?.use { it.write(s.toSkillMd().toByteArray()) }
+        }.onFailure { Toast.makeText(ctx, "导出失败：${it.message}", Toast.LENGTH_LONG).show() }
+    }
+    // 选择部分技能导出为应用内 JSON 数组（可被本 App 重新导入）
+    val exportSelectedLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val list = pendingExport
+        runCatching {
+            val arr = JSONArray()
+            list.forEach { arr.put(it.toExportJson()) }
+            ctx.contentResolver.openOutputStream(uri)?.use { it.write(arr.toString(2).toByteArray()) }
+        }.onFailure { Toast.makeText(ctx, "导出失败：${it.message}", Toast.LENGTH_LONG).show() }
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -82,8 +150,14 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
                     IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") }
                     Text("技能 SKILL", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp))
                     Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { showExportPicker = true }) {
+                        Icon(Icons.Filled.Share, contentDescription = "导出全部技能（JSON）", tint = MaterialTheme.colorScheme.primary)
+                    }
                     IconButton(onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }) {
-                        Icon(Icons.Filled.FileDownload, contentDescription = "导入技能", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Filled.FileDownload, contentDescription = "从 SKILL.md / JSON / 工具规格导入技能", tint = MaterialTheme.colorScheme.primary)
+                    }
+                    IconButton(onClick = { showAuthorGuide = true }) {
+                        Icon(Icons.Filled.Help, contentDescription = "如何添加技能（说明）", tint = MaterialTheme.colorScheme.primary)
                     }
                     Text(
                         "${skills.count { it.enabled }} 启用 / ${skills.size} 共",
@@ -97,7 +171,7 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
             if (skills.isEmpty()) {
                 Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                     Text(
-                        "还没有技能。\n点右下角 + 新增一个，或在对话框里让 AI 帮你写。",
+                        "还没有技能。\n点右上角导入按钮，从开源 SKILL.md 粘贴导入；\n或点右下角 + 新增一个，也可在对话框里让 AI 帮你写。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -114,7 +188,12 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
                                 refresh()
                             },
                             onEdit = { editing = s; showEditor = true },
-                            onDelete = { QuroSkillStore.remove(ctx, s.id); refresh() },
+                            onExport = { pendingSkill = s; exportMdLauncher.launch("${s.name}.skill.md") },
+                            onDelete = {
+                                QuroSkillStore.remove(ctx, s.id)
+                                QuroToolRegistry.active?.remove("skill__${s.name}")
+                                refresh()
+                            },
                         )
                         HorizontalDivider()
                     }
@@ -129,6 +208,51 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
         ) {
             Icon(Icons.Filled.Add, contentDescription = "新增技能", tint = MaterialTheme.colorScheme.onPrimary)
         }
+    }
+
+    if (showExportPicker) {
+        var selected by remember(showExportPicker) { mutableStateOf(skills.map { it.id }.toSet()) }
+        AlertDialog(
+            onDismissRequest = { showExportPicker = false },
+            confirmButton = {
+                Button(onClick = {
+                    val pick = skills.filter { it.id in selected }
+                    showExportPicker = false
+                    if (pick.isEmpty()) {
+                        Toast.makeText(ctx, "未选择任何技能", Toast.LENGTH_SHORT).show()
+                    } else {
+                        pendingExport = pick
+                        exportSelectedLauncher.launch("quro_skills_${pick.size}_${System.currentTimeMillis()}.json")
+                    }
+                }) { Text("导出选中 (${selected.size})") }
+            },
+            dismissButton = { TextButton(onClick = { showExportPicker = false }) { Text("取消") } },
+            title = { Text("选择要导出的技能") },
+            text = {
+                if (skills.isEmpty()) {
+                    Text("当前没有可导出的技能。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                        items(skills) { s ->
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clickable { selected = if (s.id in selected) selected - s.id else selected + s.id }
+                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(checked = s.id in selected, onCheckedChange = { selected = if (it) selected + s.id else selected - s.id })
+                                Spacer(Modifier.width(8.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(s.name, style = MaterialTheme.typography.bodyMedium)
+                                    if (s.description.isNotBlank())
+                                        Text(s.description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+        )
     }
 
     if (showEditor) {
@@ -157,6 +281,19 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
             },
         )
     }
+
+    if (showAuthorGuide) {
+        AlertDialog(
+            onDismissRequest = { showAuthorGuide = false },
+            confirmButton = { TextButton(onClick = { showAuthorGuide = false }) { Text("知道了") } },
+            title = { Text("如何添加技能") },
+            text = {
+                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                    Text(SKILL_AUTHOR_GUIDE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -164,6 +301,7 @@ private fun SkillRow(
     skill: QuroSkill,
     onToggle: (Boolean) -> Unit,
     onEdit: () -> Unit,
+    onExport: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -182,6 +320,7 @@ private fun SkillRow(
                 color = if (skill.prompt.isBlank()) cs.error else cs.onSurfaceVariant,
             )
         }
+        IconButton(onClick = onExport) { Icon(Icons.Filled.FileDownload, contentDescription = "导出 SKILL.md", tint = cs.primary) }
         IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = cs.primary) }
         IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "删除", tint = cs.error) }
         Switch(checked = skill.enabled, onCheckedChange = onToggle)
@@ -245,8 +384,8 @@ private fun SkillEditorDialog(
                 OutlinedTextField(
                     value = parametersJson, onValueChange = { parametersJson = it },
                     label = { Text("参数 Schema (JSON，function calling 入参)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 80.dp),
+                    maxLines = 8,
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {

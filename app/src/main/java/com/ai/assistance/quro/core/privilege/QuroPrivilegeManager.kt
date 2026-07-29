@@ -73,7 +73,7 @@ class QuroPrivilegeManager(private val context: Context) {
         os.writeBytes("echo 'root_check'\n")
         os.writeBytes("exit\n")
         os.flush()
-        val ok = p.waitFor() == 0
+        val ok = p.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)
         PrivilegeState(PrivilegeLevel.L4, ok, if (ok) "Root 访问可用" else "未获取 Root")
     } catch (e: Exception) {
         PrivilegeState(PrivilegeLevel.L4, false, "未获取 Root")

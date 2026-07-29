@@ -98,4 +98,29 @@ object QuroDownloadUtil {
         out.writeBytes(bytes)
         return out.absolutePath
     }
+
+    /**
+     * 把一段文本写入公共 Download/Quro 目录（Android Q+ 走 MediaStore，低版本回退公共目录）。
+     * 供「开发者文档 / 依赖模板 / 说明」等一键保存到本地复用。
+     * 返回 "OK:<name>" 表示成功，其余为错误信息。
+     */
+    fun saveTextToDownloads(ctx: Context, fileName: String, mime: String, text: String): String = try {
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        val uri: Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Quro")
+            }
+            ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        } else {
+            val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            Uri.fromFile(File(dir, fileName))
+        }
+        if (uri == null) return "保存失败：无法获取写入 URI"
+        ctx.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+        "OK:$fileName"
+    } catch (e: Exception) {
+        "保存失败：${e.message}"
+    }
 }

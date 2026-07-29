@@ -250,10 +250,24 @@ object QuroLinuxEnv {
             }
             pb.redirectErrorStream(true)
             val p = pb.start()
-            val out = p.inputStream.bufferedReader().readText()
+            // 关键修复（#911 根因）：必须先 waitFor(timeout) 再读输出。原先 readText() 会阻塞到
+            // 进程退出，导致 timeoutMs 永不触发，hang 住的 bootstrap/provision 让部署永久卡「部署中」。
+            // 改为后台线程读 stdout，主线程 waitFor 超时后强杀进程，读取线程随 stdout 关闭自然结束。
+            val outBuilder = StringBuilder()
+            val reader = p.inputStream.bufferedReader()
+            val readThread = Thread {
+                try { reader.use { r -> r.forEachLine { outBuilder.appendLine(it) } } } catch (_: Throwable) {}
+            }
+            readThread.start()
             val finished = p.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-            val code = if (finished) p.exitValue() else { p.destroy(); -1 }
-            val trimmed = out.trim()
+            val code = if (finished) {
+                p.exitValue()
+            } else {
+                try { p.destroyForcibly() } catch (_: Throwable) {}
+                -1
+            }
+            try { readThread.join(2000) } catch (_: Throwable) {} // 进程已结束/被强杀，stdout 已关闭，回收读取线程
+            val trimmed = outBuilder.toString().trim()
             code to (if (trimmed.isBlank()) (if (finished) "(no output, exit $code)" else "⏱ 命令超时(${timeoutMs}ms)") else trimmed)
         } catch (e: Exception) {
             -1 to "❌ proot 执行失败: ${e.message}"

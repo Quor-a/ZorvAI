@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>QuroAI · 天气 / 可视化 设计库 · 第 1 批</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --ink:#e8ecf3; --muted:#9aa4b2;
+    --line:#262b35; --accent:#6ea8fe; --radius:16px; --shadow:0 10px 30px rgba(0,0,0,.35);
+    font-synthesis:none;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#eef1f6; --panel:#ffffff; --ink:#1a1f29; --muted:#5b6472; --line:#e2e7ef; --shadow:0 10px 30px rgba(20,30,60,.12);}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
+  header.top{padding:48px 28px 28px;max-width:1200px;margin:0 auto;}
+  header.top h1{font-size:30px;margin:0 0 8px;letter-spacing:.5px}
+  header.top p{color:var(--muted);margin:6px 0;line-height:1.6;max-width:760px}
+  .pill{display:inline-block;background:var(--panel);border:1px solid var(--line);
+    color:var(--muted);padding:4px 12px;border-radius:999px;font-size:12px;margin-right:8px}
+  section{max-width:1200px;margin:0 auto;padding:8px 28px 40px}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;
+    border-bottom:1px solid var(--line);padding:18px 0 10px;margin-bottom:18px}
+  .sec-head h2{font-size:20px;margin:0}
+  .sec-head span{color:var(--muted);font-size:13px}
+  .grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+  .grid.icons{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+  .grid.btns{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+  .cell{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;box-shadow:var(--shadow)}
+  .cell .tag{font-size:11px;color:var(--muted);margin-bottom:10px;display:block;
+    text-transform:uppercase;letter-spacing:.6px}
+  .cell .name{font-size:13px;font-weight:600;margin-top:10px;display:block}
+  .swatch{height:150px;display:flex;align-items:center;justify-content:center;border-radius:12px;overflow:hidden;position:relative}
+  .ico-box{height:96px;display:flex;align-items:center;justify-content:center;background:
+    radial-gradient(120% 120% at 50% 30%, rgba(255,255,255,.04), transparent);border-radius:12px}
+  .btn-box{height:96px;display:flex;align-items:center;justify-content:center}
+
+  /* ============ WEATHER CARD BASE ============ */
+  .wc{width:100%;max-width:240px;border-radius:18px;padding:16px;color:#fff;position:relative;
+    overflow:hidden;font-family:inherit;display:flex;flex-direction:column;gap:10px;min-height:200px}
+  .wc .city{font-weight:700;font-size:15px}
+  .wc .cond{font-size:12px;opacity:.85}
+  .wc .tem{font-size:46px;font-weight:800;line-height:1;letter-spacing:-1px}
+  .wc .unit{font-size:18px;vertical-align:top;opacity:.7}
+  .wc .foot{display:flex;gap:12px;font-size:11px;opacity:.9;flex-wrap:wrap}
+  .wc .pic{font-size:30px;line-height:1}
+  .wc .row{display:flex;align-items:center;justify-content:space-between}
+
+  /* 1 Aurora Glass */
+  .wc--aurora{background:linear-gradient(135deg,#2b5876,#4e4376);
+    backdrop-filter:blur(6px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 14px 30px rgba(40,30,90,.5)}
+  .wc--aurora::after{content:"";position:absolute;inset:0;background:
+    radial-gradient(60% 50% at 80% 10%,rgba(255,255,255,.25),transparent)}
+  /* 2 Neon Night */
+  .wc--neon{background:#0a0e17;box-shadow:inset 0 0 0 1px #1b3a5b,0 0 24px rgba(0,200,255,.25)}
+  .wc--neon .tem{color:#5ff0ff;text-shadow:0 0 16px rgba(95,240,255,.7)}
+  .wc--neon .cond{color:#7ad7ff}
+  /* 3 Editorial */
+  .wc--edit{background:#f3ede2;color:#211c14;font-family:"Georgia","Songti SC",serif;
+    box-shadow:inset 0 0 0 1px #d8cdb8}
+  .wc--edit .tem{font-size:54px}
+  .wc--edit .cond{font-style:italic;opacity:.7}
+  .wc--edit .foot{border-top:1px solid #d8cdb8;padding-top:8px}
+  /* 4 Gradient Mesh */
+  .wc--mesh{background:
+    radial-gradient(40% 50% at 20% 20%,#ff9a9e,transparent),
+    radial-gradient(50% 60% at 80% 30%,#a18cd1,transparent),
+    radial-gradient(60% 70% at 50% 90%,#84fab0,transparent),#222}
+  /* 5 Neumorphic */
+  .wc--neu{background:#2a2f3a;color:#e7ecf5;
+    box-shadow:8px 8px 18px rgba(0,0,0,.45),-8px -8px 18px rgba(255,255,255,.05);border-radius:22px}
+  .wc--neu .tem{color:#cdd6e6}
+  /* 6 Retro Terminal */
+  .wc--term{background:#02110a;color:#39ff14;font-family:"Courier New",monospace;
+    box-shadow:inset 0 0 0 1px #0c3b22;text-shadow:0 0 6px rgba(57,255,20,.6)}
+  .wc--term::before{content:"";position:absolute;inset:0;background:
+    repeating-linear-gradient(transparent 0 3px,rgba(0,0,0,.25) 3px 4px);opacity:.4}
+  .wc--term .foot{opacity:.8}
+  /* 7 Minimal Mono */
+  .wc--min{background:#111418;color:#f5f7fa;box-shadow:inset 0 0 0 1px #2a2f38}
+  .wc--min .tem{font-weight:300}
+  .wc--min .foot{opacity:.6}
+  /* 8 Split Day/Night */
+  .wc--split{background:linear-gradient(90deg,#ffd86b 0 50%,#1f2a52 50% 100%);color:#222}
+  .wc--split .night{color:#cdd8ff}
+  .wc--split .foot{background:rgba(0,0,0,.18);border-radius:8px;padding:6px 8px}
+  /* 9 Ring Gauge */
+  .wc--ring{background:#10243a;color:#dff;align-items:center;justify-content:center;text-align:center}
+  .wc--ring .ring{width:90px;height:90px;border-radius:50%;
+    background:conic-gradient(#37e0c8 0 72%,rgba(255,255,255,.12) 72% 100%);
+    display:flex;align-items:center;justify-content:center;margin:4px 0}
+  .wc--ring .ring i{width:64px;height:64px;border-radius:50%;background:#10243a;display:flex;
+    align-items:center;justify-content:center;font-style:normal;font-size:24px;font-weight:800}
+  /* 10 Dashboard */
+  .wc--dash{background:#0e1620;color:#e6edf6;gap:8px}
+  .wc--dash .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px}
+  .wc--dash .stat{background:rgba(255,255,255,.05);border-radius:8px;padding:6px;text-align:center}
+  .wc--dash .stat b{display:block;font-size:15px}.wc--dash .stat s{font-size:9px;color:#8aa;text-decoration:none}
+  /* 11 Watercolor */
+  .wc--wash{background:#fbfcff;color:#33405a;
+    background-image:radial-gradient(50% 40% at 20% 20%,#cfe3ff,transparent),
+      radial-gradient(40% 40% at 80% 30%,#ffd9ec,transparent),
+      radial-gradient(60% 50% at 50% 90%,#d7ffe6,transparent)}
+  /* 12 Isometric */
+  .wc--iso{background:#1b2230;color:#fff;transform:rotateX(8deg) rotateY(-10deg);
+    transform-style:preserve-3d;box-shadow:12px 12px 0 rgba(0,0,0,.35),inset 0 0 0 1px #2e3a4f}
+  /* 13 Bold Pop */
+  .wc--pop{background:#ff5a5f;color:#fff}
+  .wc--pop .tem{color:#fff}.wc--pop .foot{background:rgba(0,0,0,.15);border-radius:8px;padding:6px 8px}
+  /* 14 Soft Pastel */
+  .wc--pastel{background:#eaf2ff;color:#3a4a6b;border-radius:26px;box-shadow:0 10px 24px rgba(120,150,220,.25)}
+  .wc--pastel .tem{color:#3a4a6b}
+  /* 15 Mono Line */
+  .wc--line{background:#fff;color:#222;box-shadow:inset 0 0 0 1px #d9dee6}
+  .wc--line *{border-color:#d9dee6}
+  .wc--line .foot{border-top:1px dashed #d9dee6;padding-top:8px}
+  /* 16 Sunset Fade */
+  .wc--sun{background:linear-gradient(160deg,#ff9966,#ff5e62 60%,#5b2a86);
+    color:#fff;box-shadow:0 14px 30px rgba(255,94,98,.4)}
+
+  /* 17 Holographic Foil */
+  .wc--holo{background:linear-gradient(135deg,#ff9a9e,#a18cd1,#84fab0,#fbc2eb,#6ea8fe);
+    background-size:200% 200%;color:#1a1a2a;box-shadow:inset 0 0 0 1px rgba(255,255,255,.5),0 14px 30px rgba(120,80,200,.4)}
+  /* 18 Brutalist */
+  .wc--brut{background:#101010;color:#fff;box-shadow:6px 6px 0 #ff5a5f;border-radius:0}
+  .wc--brut .foot{opacity:.8}
+  /* 19 Clay */
+  .wc--clay{background:#f6d9c0;color:#5a3a2a;border-radius:28px;box-shadow:inset 0 -8px 0 rgba(0,0,0,.08),0 14px 24px rgba(180,120,80,.35)}
+  .wc--clay .tem{color:#5a3a2a}
+  /* 20 Vaporwave */
+  .wc--vapor{background:linear-gradient(160deg,#2a1a4a,#5a2a6a);color:#f5a6ff;
+    box-shadow:0 0 0 2px #ff6ad5,0 14px 30px rgba(120,30,160,.5)}
+  .wc--vapor .tem{color:#6ef0ff;text-shadow:2px 2px 0 #ff6ad5}
+  .wc--vapor .cond{color:#6ef0ff}
+  /* 21 Blueprint */
+  .wc--blue{background:#0a2a5a;color:#bfe0ff;font-family:"Courier New",monospace;
+    box-shadow:inset 0 0 0 1px #4f8fd0;border-radius:4px}
+  .wc--blue *{border-color:#4f8fd0}
+  .wc--blue .foot{border-top:1px solid #4f8fd0;padding-top:8px}
+  /* 22 Newspaper */
+  .wc--news{background:#f4f1ea;color:#1a1a1a;font-family:"Georgia","Songti SC",serif;
+    box-shadow:inset 0 0 0 1px #ccc;border-radius:2px}
+  .wc--news .tem{font-size:52px}.wc--news .cond{font-style:italic}
+  .wc--news .foot{border-top:1px solid #999;padding-top:8px}
+  /* 23 Oil Paint */
+  .wc--oil{background:radial-gradient(60% 70% at 30% 20%,#1d6e6e,transparent),linear-gradient(160deg,#0c2a3a,#7a5a1e);
+    color:#fff}
+  .wc--oil .tem{color:#f0d090}
+  /* 24 Origami */
+  .wc--orig{background:#e8e2d0;color:#333;border-radius:0;box-shadow:inset 0 0 0 2px #b06030}
+  .wc--orig .tem{color:#b06030}
+  /* 25 Bento Grid */
+  .wc--bento{background:#1b1b22;color:#fff;gap:8px}
+  .wc--bento .stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}
+  .wc--bento .stat{background:rgba(255,255,255,.06);border-radius:8px;padding:6px}
+  .wc--bento .stat b{display:block;font-size:14px}.wc--bento .stat s{font-size:9px;color:#8aa;text-decoration:none}
+  /* 26 Film Grain */
+  .wc--film{background:#2b2620;color:#e8d8c0;font-family:"Georgia",serif;border-radius:6px;
+    box-shadow:inset 0 0 0 1px #5a4a30}
+  .wc--film::after{content:"";position:absolute;inset:0;opacity:.25;background-image:
+    repeating-conic-gradient(#000 0 0.0008%,#fff 0 0.0016%);mix-blend-mode:overlay}
+  /* 27 Duotone */
+  .wc--duo{background:#10243a;color:#37e0c8;box-shadow:inset 0 0 0 1px #1b6fa8}
+  .wc--duo .tem{color:#37e0c8}.wc--duo .cond{color:#1b9fd0}
+  /* 28 Marble */
+  .wc--marble{background:#f7f7f9;color:#3a3a44;
+    background-image:linear-gradient(115deg,transparent 40%,rgba(180,180,190,.5) 41% 43%,transparent 44%),
+      radial-gradient(40% 30% at 70% 20%,rgba(200,200,210,.6),transparent);box-shadow:0 14px 30px rgba(0,0,0,.12)}
+  .wc--marble .tem{color:#3a3a44}
+  /* 29 Sticker */
+  .wc--sticker{background:#6ea8fe;color:#fff;box-shadow:0 0 0 6px #fff,0 14px 30px rgba(110,168,254,.5);border-radius:18px}
+  .wc--sticker .tem{color:#fff}
+  /* 30 Pixel */
+  .wc--pixel{background:#121212;color:#39ff14;font-family:"Courier New",monospace;border-radius:0;
+    box-shadow:inset 0 0 0 2px #2aa00f}
+  .wc--pixel .tem{color:#39ff14;text-shadow:2px 2px 0 #2aa00f}
+  /* 31 Sketch */
+  .wc--sketch{background:#fffbf0;color:#222;box-shadow:inset 0 0 0 2px #222;border-radius:10px;
+    border:2px dashed #222}
+  .wc--sketch .tem{font-weight:300}
+  /* 32 Aurora Dark */
+  .wc--aurorad{background:linear-gradient(135deg,#0b1020,#1a1040);color:#bfd0ff;
+    box-shadow:0 0 30px rgba(80,80,200,.4),inset 0 0 0 1px rgba(122,162,255,.3)}
+  .wc--aurorad .tem{color:#dce6ff}
+
+  /* ============ VIZ ICONS (inline svg styled) ============ */
+  .vi{width:54px;height:54px}
+  .vi svg{width:100%;height:100%;display:block}
+  .vi--filled svg{fill:#6ea8fe}
+  .vi--line svg{fill:none;stroke:#7aa2ff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+  .vi--duo svg .a{fill:#7aa2ff}.vi--duo svg .b{fill:rgba(122,162,255,.25)}
+  .vi--geo svg{fill:none;stroke:#ffb86b;stroke-width:3}
+  .vi--bold svg{fill:#ff6b9d}
+  .vi--hand svg{fill:none;stroke:#5fd0c5;stroke-width:3.5;stroke-linecap:round}
+  .vi--layer svg .l1{fill:#9aa4b2}.vi--layer svg .l2{fill:#6ea8fe}.vi--layer svg .l3{fill:#4a8fe7}
+  .vi--badge{background:#1f6feb;border-radius:14px;padding:6px}.vi--badge svg{fill:#fff}
+  .vi--neon svg{fill:none;stroke:#39ff14;stroke-width:3;filter:drop-shadow(0 0 4px #39ff14)}
+  .vi--grad svg{fill:url(#g1)}
+  .vi--mini svg{fill:none;stroke:#888;stroke-width:2.5}
+  .vi--soft svg{fill:#bcd2ff}
+  .vi--mono svg{fill:none;stroke:#cfd6e4;stroke-width:2.5}
+  .vi--stroke svg{fill:none;stroke:#ff8a5b;stroke-width:3.5;stroke-linecap:round}
+  .vi--dot svg circle{fill:#9aa4b2}.vi--dot svg .hl{fill:#6ea8fe}
+  .vi--holographic svg{fill:url(#gh)}
+  .vi--brutal svg{fill:#101010}
+  .vi--clay svg{fill:#f6a36b}
+  .vi--vapor svg{fill:none;stroke:#ff6ad5;stroke-width:3;filter:drop-shadow(0 0 4px #6ef0ff);stroke-linecap:round;stroke-linejoin:round}
+  .vi--blueprint svg{fill:none;stroke:#bfe0ff;stroke-width:2.5;stroke-linecap:round}
+  .vi--news svg{fill:#1a1a1a}
+  .vi--duotone svg .a{stroke:#37e0c8;fill:none;stroke-width:3}.vi--duotone svg .b{stroke:#1b6fa8;fill:none;stroke-width:3}
+  .vi--marble svg{fill:none;stroke:#9aa0ac;stroke-width:3;stroke-linecap:round}
+  .vi--sticker{background:#6ea8fe;border-radius:14px;padding:6px}.vi--sticker svg{fill:#fff}
+  .vi--pixel svg{fill:#39ff14;shape-rendering:crispEdges}
+  .vi--sketch svg{fill:none;stroke:#222;stroke-width:2.5;stroke-dasharray:4 3;stroke-linecap:round}
+  .vi--glow svg{fill:#6ea8fe;filter:drop-shadow(0 0 6px #6ea8fe)}
+  .vi--outline svg{fill:rgba(110,168,254,.15);stroke:#6ea8fe;stroke-width:3;stroke-linejoin:round}
+  .vi--hatch svg{fill:none;stroke:#ff8a5b;stroke-width:3;stroke-dasharray:2 4;stroke-linecap:round}
+  .vi--emboss svg{fill:none;stroke:#cfd6e4;stroke-width:3;filter:drop-shadow(1px 1px 0 #888);stroke-linecap:round}
+  .vi--sweep svg{fill:none;stroke:url(#gs);stroke-width:3;stroke-linecap:round}
+
+  /* ============ VIZ BUTTONS ============ */
+  .vb{font-family:inherit;cursor:pointer;border:none;font-weight:600;font-size:14px;
+    display:inline-flex;align-items:center;gap:8px;transition:.18s}
+  .vb--glass{background:rgba(255,255,255,.12);color:#fff;padding:10px 20px;border-radius:999px;
+    border:1px solid rgba(255,255,255,.3);backdrop-filter:blur(6px)}
+  .vb--grad{background:linear-gradient(90deg,#6ea8fe,#a18cd1);color:#fff;padding:11px 22px;border-radius:12px}
+  .vb--ghost{background:transparent;color:#6ea8fe;padding:10px 20px;border-radius:10px;border:1.5px solid #6ea8fe}
+  .vb--icon{background:#1f6feb;color:#fff;padding:10px 18px;border-radius:12px}
+  .vb--toggle{background:#2a2f3a;color:#fff;padding:8px 14px 8px 8px;border-radius:999px;align-items:center}
+  .vb--toggle .knob{width:34px;height:20px;border-radius:999px;background:#39d98a;position:relative;margin-right:8px}
+  .vb--toggle .knob::after{content:"";position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff}
+  .vb--neon{background:#04130a;color:#39ff14;padding:11px 22px;border-radius:10px;
+    border:1px solid #39ff14;box-shadow:0 0 14px rgba(57,255,20,.5)}
+  .vb--3d{background:#ffb020;color:#3a2a00;padding:11px 22px;border-radius:12px;
+    box-shadow:0 5px 0 #c98a00;transform:translateY(-1px)}
+  .vb--link{background:none;color:#6ea8fe;padding:8px 4px;text-decoration:underline;text-underline-offset:4px}
+  .vb--seg{background:#1a1f29;color:#fff;padding:0;border-radius:10px;overflow:hidden;display:inline-flex}
+  .vb--seg span{padding:9px 16px}.vb--seg .on{background:#6ea8fe;color:#06122a}
+  .vb--fab{width:54px;height:54px;border-radius:50%;background:#ff5a5f;color:#fff;justify-content:center;
+    font-size:24px;box-shadow:0 8px 20px rgba(255,90,95,.5)}
+  .vb--sq{background:#fff;color:#222;padding:10px 18px;border-radius:4px;border:1.5px solid #222}
+  .vb--anim{background:linear-gradient(90deg,#ff6b9d,#6ea8fe,#39d98a);background-size:200% 100%;
+    color:#06122a;padding:11px 22px;border-radius:12px;animation:shift 3s linear infinite}
+  @keyframes shift{to{background-position:200% 0}}
+  .vb--chip{background:#eef2ff;color:#3a4a6b;padding:7px 16px;border-radius:999px;font-size:13px}
+  .vb--split{background:#1f6feb;color:#fff;border-radius:12px;overflow:hidden;display:inline-flex}
+  .vb--split b{padding:11px 18px}.vb--split em{background:rgba(0,0,0,.18);padding:11px 12px;font-style:normal}
+  .vb--dash{background:transparent;color:#6ea8fe;padding:10px 18px;border-radius:10px;border:1.5px dashed #6ea8fe}
+  .vb--soft{background:#e7f0ff;color:#2a5bd7;padding:11px 22px;border-radius:14px;box-shadow:0 6px 16px rgba(110,168,254,.3)}
+  .vb--holographic{background:linear-gradient(90deg,#ff9a9e,#a18cd1,#84fab0,#6ea8fe);background-size:200% 100%;color:#1a1a2a;padding:11px 22px;border-radius:12px}
+  .vb--brutal{background:#101010;color:#fff;padding:11px 22px;border-radius:0;box-shadow:5px 5px 0 #ff5a5f}
+  .vb--clay{background:#f6d9c0;color:#5a3a2a;padding:11px 22px;border-radius:24px;box-shadow:inset 0 -5px 0 rgba(0,0,0,.1)}
+  .vb--vapor{background:linear-gradient(160deg,#2a1a4a,#5a2a6a);color:#f5a6ff;padding:11px 22px;border-radius:12px;box-shadow:0 0 0 2px #ff6ad5}
+  .vb--blueprint{background:#0a2a5a;color:#bfe0ff;padding:10px 20px;border-radius:4px;font-family:"Courier New",monospace;border:1px solid #4f8fd0}
+  .vb--news{background:#f4f1ea;color:#1a1a1a;padding:10px 20px;border-radius:2px;font-family:Georgia,serif;border:1px solid #ccc}
+  .vb--duotone{background:#10243a;color:#37e0c8;padding:11px 22px;border-radius:12px;box-shadow:inset 0 0 0 1px #1b6fa8}
+  .vb--marble{background:#f7f7f9;color:#3a3a44;padding:11px 22px;border-radius:14px;box-shadow:0 6px 16px rgba(0,0,0,.12)}
+  .vb--sticker{background:#6ea8fe;color:#fff;padding:11px 22px;border-radius:18px;box-shadow:0 0 0 5px #fff,0 10px 24px rgba(110,168,254,.5)}
+  .vb--pixel{background:#121212;color:#39ff14;padding:11px 22px;border-radius:0;font-family:"Courier New",monospace;box-shadow:inset 0 0 0 2px #2aa00f}
+  .vb--sketch{background:#fffbf0;color:#222;padding:10px 20px;border-radius:10px;border:2px dashed #222}
+  .vb--glow{background:#6ea8fe;color:#06122a;padding:11px 22px;border-radius:12px;box-shadow:0 0 16px rgba(110,168,254,.7)}
+  .vb--outline{background:rgba(110,168,254,.15);color:#6ea8fe;padding:10px 20px;border-radius:12px;border:2px solid #6ea8fe}
+  .vb--hatch{background:repeating-linear-gradient(45deg,#ff8a5b 0 6px,#fff 6px 12px);color:#a33;padding:11px 22px;border-radius:12px}
+  .vb--emboss{background:#cfd6e4;color:#3a3a44;padding:11px 22px;border-radius:12px;box-shadow:inset -2px -2px 4px rgba(0,0,0,.2),inset 2px 2px 4px #fff}
+  .vb--sweep{background:linear-gradient(90deg,#6ea8fe,#a18cd1,#39d98a,#ff6b9d);background-size:300% 100%;color:#06122a;padding:11px 22px;border-radius:12px;animation:shift2 4s linear infinite}
+  @keyframes shift2{to{background-position:300% 0}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>QuroAI · 天气 / 可视化 设计库</h1>
+  <p>为 QuroAI 原创构建的「天气预报卡片 / 可视化图标 / 可视化按钮」三库。本页为 <b>第 1 批评审稿</b>：每款都是<b>独立视觉语言</b>，非同一模板换字。</p>
+  <span class="pill">第 2 批 / 目标 100×3</span>
+  <span class="pill">交付：HTML 展示页 + Compose 组件</span>
+  <span class="pill">零依赖自包含</span>
+  <p style="margin-top:14px">扩展方式：每款一个独立 variant（class / sealed style），按「布局结构 × 视觉处理 × 气象语义」三维交叉生成 100 款，保证彼此不雷同。HTML 先行评审，Compose 同批次映射。</p>
+</header>
+
+<!-- ===================== WEATHER CARDS ===================== -->
+<section>
+  <div class="sec-head"><h2>① 天气预报卡片 · Weather Cards</h2><span>32 / 100 款 · 第 2 批</span></div>
+  <div class="grid" id="wcGrid"></div>
+</section>
+
+<!-- ===================== VIZ ICONS ===================== -->
+<section>
+  <div class="sec-head"><h2>② 可视化图标 · Viz Icons</h2><span>31 / 100 款 · 第 2 批</span></div>
+  <div class="grid icons" id="viGrid"></div>
+</section>
+
+<!-- ===================== VIZ BUTTONS ===================== -->
+<section>
+  <div class="sec-head"><h2>③ 可视化按钮 · Viz Buttons</h2><span>32 / 100 款 · 第 2 批</span></div>
+  <div class="grid btns" id="vbGrid"></div>
+</section>
+
+<script>
+const SUN='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><g stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/><line x1="4" y1="4" x2="6" y2="6"/><line x1="18" y1="18" x2="20" y2="20"/><line x1="4" y1="20" x2="6" y2="18"/><line x1="18" y1="4" x2="20" y2="6"/></g></svg>';
+const CLOUD='<svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6 9.5 4.2 4.2 0 0 0 7 18z"/></svg>';
+
+// ---- Weather card data + variants (batch 1) ----
+const wcData=[
+ {v:'aurora',city:'上海',cond:'晴 Clear',tem:24,hi:28,lo:19,hum:60,icon:'☀️',foot:['H 28°','L 19°','Hum 60%']},
+ {v:'neon',city:'Tokyo',cond:'Clear Night',tem:18,hi:21,lo:14,hum:55,icon:'🌙',foot:['H 21°','L 14°','Wind 3']},
+ {v:'edit',city:'Paris',cond:'Partly Cloudy',tem:21,hi:24,lo:16,hum:48,icon:'⛅',foot:['H 24°','L 16°','UV 5']},
+ {v:'mesh',city:'Bali',cond:'Tropical',tem:31,hi:33,lo:27,hum:78,icon:'🌴',foot:['H 33°','L 27°','Rain 20%']},
+ {v:'neu',city:'Berlin',cond:'Cloudy',tem:15,hi:17,lo:11,hum:66,icon:'☁️',foot:['H 17°','L 11°','Pres 1013']},
+ {v:'term',city:'SYS://HK',cond:'STORM_DETECT',tem:12,hi:14,lo:9,hum:88,icon:'⛈️',foot:['H 14°','L 09°','LIGHT 92%']},
+ {v:'min',city:'Oslo',cond:'Snow',tem:-3,hi:0,lo:-7,hum:80,icon:'❄️',foot:['H 0°','L -7°','Wind 6']},
+ {v:'split',city:'Dubai',cond:'Day / Night',tem:34,hi:38,lo:26,hum:30,icon:'🌗',foot:['Day 38°','Night 26°','Arid']},
+ {v:'ring',city:'Sydney',cond:'Comfort',tem:23,hi:26,lo:20,hum:50,icon:'🌤️',foot:['H 26°','L 20°','Idx 72']},
+ {v:'dash',city:'New York',cond:'Mixed',tem:19,hi:22,lo:15,hum:58,icon:'🌦️',foot:null,stats:[['22°','Hi'],['15°','Lo'],['58%','Hum'],['12km','Vis'],['1012','Pres'],['3','Wind']]},
+ {v:'wash',city:'Hangzhou',cond:'Light Rain',tem:20,hi:23,lo:17,hum:72,icon:'🌧️',foot:['H 23°','L 17°','Rain 70%']},
+ {v:'iso',city:'Reykjavik',cond:'Windy',tem:6,hi:9,lo:2,hum:64,icon:'💨',foot:['H 9°','L 2°','Gust 14']},
+ {v:'pop',city:'Bangkok',cond:'Hot',tem:36,hi:38,lo:29,hum:70,icon:'🔥',foot:['H 38°','L 29°','Feels 42°']},
+ {v:'pastel',city:'Kyoto',cond:'Spring',tem:17,hi:20,lo:12,hum:54,icon:'🌸',foot:['H 20°','L 12°','Pollen Low']},
+ {v:'line',city:'Zurich',cond:'Fog',tem:9,hi:12,lo:6,hum:90,icon:'🌫️',foot:['H 12°','L 6°','Vis 0.5k']},
+ {v:'sun',city:'Lisbon',cond:'Sunset',tem:25,hi:27,lo:19,hum:45,icon:'🌅',foot:['H 27°','L 19°','Dusk 20:14']},
+ {v:'holo',city:'Reykjavik',cond:'Aurora',tem:2,hi:5,lo:-3,hum:70,icon:'🌌',foot:['H 5°','L -3°','Aur 88%']},
+ {v:'brut',city:'Berlin',cond:'RAW',tem:14,hi:16,lo:9,hum:60,icon:'🔲',foot:['H 16°','L 09°','BRUT']},
+ {v:'clay',city:'Cusco',cond:'Soft',tem:19,hi:22,lo:14,hum:55,icon:'🟤',foot:['H 22°','L 14°','Clay']},
+ {v:'vapor',city:'Miami',cond:'Retro',tem:29,hi:31,lo:25,hum:75,icon:'🌴',foot:['H 31°','L 25°','VHS']},
+ {v:'blue',city:'Oslo',cond:'TECH',tem:4,hi:7,lo:0,hum:68,icon:'❄️',foot:['H 07°','L 00°','SPEC']},
+ {v:'news',city:'London',cond:'Print',tem:12,hi:14,lo:8,hum:80,icon:'🌧️',foot:['H 14°','L 08°','Ed 1']},
+ {v:'oil',city:'Venice',cond:'Paint',tem:17,hi:20,lo:13,hum:65,icon:'🎨',foot:['H 20°','L 13°','Oil']},
+ {v:'orig',city:'Kyoto',cond:'Fold',tem:16,hi:19,lo:11,hum:50,icon:'📐',foot:['H 19°','L 11°','Ori']},
+ {v:'bento',city:'Seoul',cond:'Grid',tem:22,hi:25,lo:18,hum:52,icon:'🌤️',foot:null,stats:[['25°','Hi'],['18°','Lo'],['52%','Hum'],['14km','Vis']]},
+ {v:'film',city:'Rome',cond:'Grain',tem:23,hi:26,lo:19,hum:58,icon:'🎞️',foot:['H 26°','L 19°','35mm']},
+ {v:'duo',city:'Lisbon',cond:'Duotone',tem:26,hi:28,lo:21,hum:48,icon:'🌅',foot:['H 28°','L 21°','2Tone']},
+ {v:'marble',city:'Athens',cond:'Stone',tem:28,hi:30,lo:24,hum:40,icon:'🏛️',foot:['H 30°','L 24°','Marb']},
+ {v:'sticker',city:'Taipei',cond:'Fun',tem:27,hi:29,lo:24,hum:66,icon:'⛅',foot:['H 29°','L 24°','Stk']},
+ {v:'pixel',city:'Akihabara',cond:'8BIT',tem:21,hi:24,lo:18,hum:55,icon:'👾',foot:['H 24°','L 18°','PX']},
+ {v:'sketch',city:'Porto',cond:'Draft',tem:20,hi:23,lo:16,hum:62,icon:'✏️',foot:['H 23°','L 16°','Skch']},
+ {v:'aurorad',city:'Tromso',cond:'Night',tem:-5,hi:-2,lo:-9,hum:72,icon:'🌌',foot:['H -2°','L -9°','Aur']},
+];
+const wcNames={aurora:'极光玻璃',neon:'霓虹夜',edit:'杂志编辑',mesh:'渐变网格',neu:'新拟态',term:'复古终端',min:'极简单色',split:'昼夜分屏',ring:'温度环',dash:'数据仪表盘',wash:'水彩晕染',iso:'等距3D',pop:'撞色波普',pastel:'柔粉彩',line:'细线描边',sun:'日落渐变'};
+const wcGrid=document.getElementById('wcGrid');
+wcData.forEach(d=>{
+  const el=document.createElement('div');el.className='cell';
+  let inner=`<div class="swatch"><div class="wc wc--${d.v}">`;
+  if(d.v==='ring'){
+    inner+=`<div class="city">${d.city}</div><div class="cond">${d.cond}</div>
+      <div class="ring"><i>${d.tem}°</i></div>
+      <div class="foot">${d.foot.map(x=>'<span>'+x+'</span>').join('')}</div></div>`;
+  }else if(d.v==='dash'){
+    inner+=`<div class="city">${d.city}</div><div class="cond">${d.cond}</div>
+      <div class="row"><span class="pic">${d.icon}</span><span class="tem">${d.tem}<span class="unit">°</span></span></div>
+      <div class="stats">${d.stats.map(s=>'<div class="stat"><b>'+s[0]+'</b><s>'+s[1]+'</s></div>').join('')}</div></div>`;
+  }else if(d.v==='split'){
+    inner+=`<div class="row"><div><div class="city">${d.city}</div><div class="cond">${d.cond}</div></div><span class="pic">${d.icon}</span></div>
+      <div class="tem">${d.tem}<span class="unit">°</span></div>
+      <div class="foot night">${d.foot.map(x=>'<span>'+x+'</span>').join('')}</div></div>`;
+  }else if(d.v==='iso'){
+    inner+=`<div class="city">${d.city}</div><div class="cond">${d.cond}</div>
+      <div class="row"><span class="pic">${d.icon}</span><span class="tem">${d.tem}<span class="unit">°</span></span></div>
+      <div class="foot">${d.foot.map(x=>'<span>'+x+'</span>').join('')}</div></div>`;
+  }else if(d.v==='bento'){
+    inner+=`<div class="city">${d.city}</div><div class="cond">${d.cond}</div>
+      <div class="row"><span class="pic">${d.icon}</span><span class="tem">${d.tem}<span class="unit">°</span></span></div>
+      <div class="stats">${d.stats.map(s=>'<div class="stat"><b>'+s[0]+'</b><s>'+s[1]+'</s></div>').join('')}</div></div>`;
+  }else{
+    inner+=`<div class="row"><div class="city">${d.city}</div><div class="cond">${d.cond}</div></div>
+      <div class="row"><span class="pic">${d.icon}</span><span class="tem">${d.tem}<span class="unit">°</span></span></div>
+      <div class="foot">${d.foot.map(x=>'<span>'+x+'</span>').join('')}</div></div>`;
+  }
+  inner+=`</div></div><span class="name">${wcNames[d.v]} · <span style="color:var(--muted);font-weight:400">wc--${d.v}</span></span>`;
+  el.innerHTML=inner;wcGrid.appendChild(el);
+});
+
+// ---- Viz icons (batch 1) ----
+const viData=[
+ {c:'filled',svg:SUN,n:'实心太阳'},
+ {c:'line',svg:'<svg viewBox="0 0 24 24"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8z"/></svg>',n:'细线月亮'},
+ {c:'line',svg:CLOUD,n:'描边云'},
+ {c:'duo',svg:'<svg viewBox="0 0 24 24"><path class="b" d="M7 14h9a3.5 3.5 0 0 0 .4-6.97A5 5 0 0 0 6 8.5 3.6 3.6 0 0 0 7 14z"/><g class="a"><line x1="8" y1="17" x2="7" y2="21"/><line x1="12" y1="17" x2="11" y2="21"/><line x1="16" y1="17" x2="15" y2="21"/></g></svg>',n:'双色雨'},
+ {c:'geo',svg:'<svg viewBox="0 0 24 24"><path d="M12 2v18M4 7l8 5 8-5M4 17l8-5 8 5"/></svg>',n:'几何雪'},
+ {c:'bold',svg:'<svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>',n:'粗体闪电'},
+ {c:'hand',svg:'<svg viewBox="0 0 24 24"><path d="M3 9c3-3 6-3 9 0s6 3 9 0M3 14c3-3 6-3 9 0s6 3 9 0M3 19c3-3 6-3 9 0s6 3 9 0"/></svg>',n:'手绘风'},
+ {c:'layer',svg:'<svg viewBox="0 0 24 24"><path class="l1" d="M12 3 3 8l9 5 9-5z"/><path class="l2" d="M3 12l9 5 9-5"/><path class="l3" d="M3 16l9 5 9-5"/></svg>',n:'层叠雾'},
+ {c:'badge',svg:'<svg viewBox="0 0 24 24"><path d="M14 3a4 4 0 0 0-4 4v7a4 4 0 1 0 4 0V7a4 4 0 0 0 0-4z"/></svg>',n:'徽章温度计'},
+ {c:'neon',svg:'<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9" /><path d="M12 7v5l3 2"/></svg>',n:'霓虹伞'},
+ {c:'grad',svg:'<svg viewBox="0 0 24 24"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff6b9d"/><stop offset="1" stop-color="#6ea8fe"/></linearGradient></defs><path d="M3 18a9 9 0 0 1 18 0" fill="none" stroke="url(#g1)" stroke-width="3"/><rect x="11" y="3" width="2" height="6" fill="url(#g1)"/></svg>',n:'渐变彩虹'},
+ {c:'mini',svg:'<svg viewBox="0 0 24 24"><path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/></svg>',n:'极简水滴'},
+ {c:'soft',svg:SUN,n:'柔光太阳'},
+ {c:'mono',svg:'<svg viewBox="0 0 24 24"><path d="M20 14a5 5 0 0 0-1-9.9A7 7 0 0 0 5 9a4.5 4.5 0 0 0 1 9z"/></svg>',n:'单色月云'},
+ {c:'stroke',svg:'<svg viewBox="0 0 24 24"><path d="M12 3v10M12 13l-3 4M12 13l3 4M9 21h6"/></svg>',n:'描边龙卷'},
+ {c:'dot',svg:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><circle class="hl" cx="12" cy="4" r="1.6"/><circle cx="5" cy="8" r="1.6"/><circle cx="19" cy="8" r="1.6"/><circle cx="5" cy="16" r="1.6"/><circle cx="19" cy="16" r="1.6"/></svg>',n:'点阵晴'},
+ {c:'holographic',svg:'<svg viewBox="0 0 24 24"><defs><linearGradient id="gh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9a9e"/><stop offset=".5" stop-color="#a18cd1"/><stop offset="1" stop-color="#6ea8fe"/></linearGradient></defs><circle cx="12" cy="12" r="5" fill="url(#gh)"/><g stroke="url(#gh)" stroke-width="2"><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/><line x1="4" y1="4" x2="6" y2="6"/><line x1="18" y1="18" x2="20" y2="20"/><line x1="4" y1="20" x2="6" y2="18"/><line x1="18" y1="4" x2="20" y2="6"/></g></svg>',n:'全息太阳'},
+ {c:'brutal',svg:'<svg viewBox="0 0 24 24"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8z"/></svg>',n:'粗野月亮'},
+ {c:'clay',svg:'<svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6 8.5 3.6 3.6 0 0 0 7 18z"/></svg>',n:'黏土云'},
+ {c:'vapor',svg:'<svg viewBox="0 0 24 24"><path d="M7 14h9a3.5 3.5 0 0 0 .4-6.97A5 5 0 0 0 6 8.5 3.6 3.6 0 0 0 7 14z"/><g><line x1="9" y1="17" x2="8" y2="21" stroke="#ff6ad5" stroke-width="2"/><line x1="14" y1="17" x2="13" y2="21" stroke="#ff6ad5" stroke-width="2"/></g></svg>',n:'蒸汽波雨'},
+ {c:'blueprint',svg:'<svg viewBox="0 0 24 24"><path d="M12 2v18M4 7l8 5 8-5M4 17l8-5 8 5"/></svg>',n:'蓝图雪'},
+ {c:'news',svg:'<svg viewBox="0 0 24 24"><path d="M7 14h9a3.5 3.5 0 0 0 .4-6.97A5 5 0 0 0 6 8.5 3.6 3.6 0 0 0 7 14z"/><path d="M11 14l-3 5 4-1-2 4 5-6-3 1z"/></svg>',n:'报纸闪电'},
+ {c:'duotone',svg:'<svg viewBox="0 0 24 24"><path class="a" d="M3 9c3-3 6-3 9 0s6 3 9 0" fill="none"/><path class="b" d="M3 15c3-3 6-3 9 0s6 3 9 0" fill="none"/></svg>',n:'双色风'},
+ {c:'marble',svg:'<svg viewBox="0 0 24 24"><path d="M4 8h16M4 12h16M4 16h16"/></svg>',n:'大理石雾'},
+ {c:'sticker',svg:SUN,n:'贴纸太阳'},
+ {c:'pixel',svg:'<svg viewBox="0 0 24 24" shape-rendering="crispEdges"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8z"/></svg>',n:'像素月亮'},
+ {c:'sketch',svg:CLOUD,n:'草图云'},
+ {c:'glow',svg:'<svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="4"/><g><line x1="9" y1="15" x2="8" y2="20" stroke="#6ea8fe" stroke-width="2"/><line x1="14" y1="15" x2="13" y2="20" stroke="#6ea8fe" stroke-width="2"/></g></svg>',n:'发光雨'},
+ {c:'outline',svg:'<svg viewBox="0 0 24 24"><path d="M12 2v18M4 7l8 5 8-5M4 17l8-5 8 5"/></svg>',n:'描边雪'},
+ {c:'hatch',svg:'<svg viewBox="0 0 24 24"><path d="M7 14h9a3.5 3.5 0 0 0 .4-6.97A5 5 0 0 0 6 8.5 3.6 3.6 0 0 0 7 14z"/><path d="M11 14l-3 5 4-1-2 4 5-6-3 1z"/></svg>',n:'排线风暴'},
+ {c:'emboss',svg:'<svg viewBox="0 0 24 24"><path d="M3 9c3-3 6-3 9 0s6 3 9 0M3 15c3-3 6-3 9 0s6 3 9 0"/></svg>',n:'浮雕风'},
+ {c:'sweep',svg:'<svg viewBox="0 0 24 24"><defs><linearGradient id="gs" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6ea8fe"/><stop offset=".5" stop-color="#a18cd1"/><stop offset="1" stop-color="#39d98a"/></linearGradient></defs><path d="M4 8h16M4 12h16M4 16h16" stroke="url(#gs)" stroke-width="3" fill="none" stroke-linecap="round"/></svg>',n:'流光雾'},
+];
+const viGrid=document.getElementById('viGrid');
+viData.forEach(d=>{
+  const el=document.createElement('div');el.className='cell';
+  el.innerHTML=`<div class="ico-box"><div class="vi vi--${d.c}">${d.svg}</div></div><span class="name">${d.n}</span>`;
+  viGrid.appendChild(el);
+});
+
+// ---- Viz buttons (batch 1) ----
+const vbData=[
+ {c:'glass',html:'玻璃胶囊',n:'玻璃拟态'},
+ {c:'grad',html:'Gradient CTA',n:'渐变主行动'},
+ {c:'ghost',html:'Ghost',n:'幽灵描边'},
+ {c:'icon',html:'🔍 搜索',n:'图标+文字'},
+ {c:'toggle',html:'<span class="knob"></span>已开启',n:'开关态'},
+ {c:'neon',html:'NEON',n:'霓虹发光'},
+ {c:'3d',html:'PRESS ME',n:'3D 按压'},
+ {c:'link',html:'文字链接',n:'下划线链接'},
+ {c:'seg',html:'<span class="on">日</span><span>周</span><span>月</span>',n:'分段控件'},
+ {c:'fab',html:'+',n:'悬浮圆钮'},
+ {c:'sq',html:'SQUARE',n:'方角描边'},
+ {c:'anim',html:'Animated',n:'流光动画'},
+ {c:'chip',html:'# Chip',n:'标签胶囊'},
+ {c:'split',html:'<b>保存</b><em>⌄</em>',n:'分裂按钮'},
+ {c:'dash',html:'Dashed',n:'虚线描边'},
+ {c:'soft',html:'Soft',n:'柔影按钮'},
+ {c:'holographic',html:'Holo',n:'全息'},
+ {c:'brutal',html:'BRUTAL',n:'粗野'},
+ {c:'clay',html:'Clay',n:'黏土'},
+ {c:'vapor',html:'Vapor',n:'蒸汽波'},
+ {c:'blueprint',html:'BLUEPRINT',n:'蓝图'},
+ {c:'news',html:'News',n:'报纸'},
+ {c:'duotone',html:'Duotone',n:'双色调'},
+ {c:'marble',html:'Marble',n:'大理石'},
+ {c:'sticker',html:'Sticker',n:'贴纸'},
+ {c:'pixel',html:'PIXEL',n:'像素'},
+ {c:'sketch',html:'Sketch',n:'草图'},
+ {c:'glow',html:'Glow',n:'发光'},
+ {c:'outline',html:'Outline',n:'描边'},
+ {c:'hatch',html:'Hatch',n:'排线'},
+ {c:'emboss',html:'Emboss',n:'浮雕'},
+ {c:'sweep',html:'Sweep',n:'流光'},
+];
+const vbGrid=document.getElementById('vbGrid');
+vbData.forEach(d=>{
+  const el=document.createElement('div');el.className='cell';
+  el.innerHTML=`<div class="btn-box"><button class="vb vb--${d.c}">${d.html}</button></div><span class="name">${d.n} · <span style="color:var(--muted);font-weight:400">vb--${d.c}</span></span>`;
+  vbGrid.appendChild(el);
+});
+</script>
+</body>
+</html>

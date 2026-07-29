@@ -13,6 +13,8 @@ import com.ai.assistance.quro.core.QuroVoiceProfile
 import com.ai.assistance.quro.core.QuroPersonaRepository
 import com.ai.assistance.quro.core.model.QuroModelConfig
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionType
 import com.ai.assistance.quro.core.QuroTag
 import com.ai.assistance.quro.core.QuroTagRepository
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +26,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
+import android.util.Log
+import com.ai.assistance.quro.util.QuroDiag
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -104,10 +110,17 @@ class QuroPersonaViewModel(context: Context) : ViewModel() {
 
     /** 手动「AI 孵化」按钮（保留）：依据名称/描述/标签生成设定并回填编辑对话框，不自动持久化。 */
     fun incubate(name: String, description: String, tags: List<QuroTag>) {
-        viewModelScope.launch {
+        // ⚠️ 必须用 Dispatchers.IO：distill → QuroLlmClient.chat 内部 client.newCall(req).execute()
+        // 是 OkHttp 同步阻塞网络 I/O，若在 viewModelScope 默认的 Main 调度器上跑会直接 ANR。
+        // （v371 已修 maybeAutoIncubate 同款问题；手动「孵化」按钮这条路此前漏改，本次补齐。）
+        viewModelScope.launch(Dispatchers.IO) {
             _incubating.value = true
             _incubateResult.value = null
-            val r = distill(name, description, tags)
+            val r = try {
+                withTimeout(INCUBATE_TIMEOUT_MS) { distill(name, description, tags) }
+            } catch (e: TimeoutCancellationException) {
+                IncubateResult.Error("孵化超时(${INCUBATE_TIMEOUT_MS}ms)")
+            }
             _incubating.value = false
             _incubateResult.value = r
         }
@@ -205,13 +218,36 @@ class QuroPersonaViewModel(context: Context) : ViewModel() {
             }
         }
 
+        /** #820：孵化调用超时阈值，避免 LLM 卡死导致 UI 久转无响应。 */
+        private const val INCUBATE_TIMEOUT_MS = 60_000L
+
+        /** #820：孵化超时/失败时复用 AnrMonitor 同款 Download 双写路径，落诊断报告便于手机端自查。 */
+        private fun writeIncubationDiag(p: QuroPersona, msg: String) {
+            runCatching {
+                val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                val fileName = "incubate_diag_${p.id}_$ts.txt"
+                val content = buildString {
+                    append("===== 人格孵化诊断 =====\n")
+                    append("时间: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}\n")
+                    append("人格 id: ${p.id}\n")
+                    append("人格名: ${p.name}\n")
+                    append("描述: ${p.description}\n")
+                    append("问题: $msg\n")
+                    append("（由孵化超时/失败触发，与 ANR 监控共用 Download/QuroAI_logs 双写路径，无需 adb 即可在文件管理器取阅）\n")
+                }
+                QuroDiag.writeFile(fileName, content)?.let { Log.w("PersonaIncubate", "孵化诊断已双写Download: $it") }
+            }.onFailure { Log.w("PersonaIncubate", "孵化诊断双写失败: ${it.message}") }
+        }
+
         /** 单卡孵化：在心跳作用域内执行，蒸馏后独立持久化 incubation + lastIncubatedAt。 */
         private fun incubatePersona(p: QuroPersona) {
             if (_incubatingStates.value[p.id] == true) return
             heartbeatScope.launch {
                 _incubatingStates.value = _incubatingStates.value + (p.id to true)
                 try {
-                    val r = distill(p.name, p.description, hbTagRepo.resolve(p.tags))
+                    val r = withTimeout(INCUBATE_TIMEOUT_MS) {
+                        distill(p.name, p.description, hbTagRepo.resolve(p.tags))
+                    }
                     if (r is IncubateResult.Success) {
                         val now = System.currentTimeMillis()
                         // 重新读取最新记录，避免覆盖并发编辑；每卡独立写入
@@ -223,7 +259,11 @@ class QuroPersonaViewModel(context: Context) : ViewModel() {
                                 lastIncubatedAt = now,
                             ),
                         )
+                    } else if (r is IncubateResult.Error) {
+                        writeIncubationDiag(p, "孵化返回错误: ${(r as IncubateResult.Error).message}")
                     }
+                } catch (e: TimeoutCancellationException) {
+                    writeIncubationDiag(p, "孵化超时(${INCUBATE_TIMEOUT_MS}ms)，疑似 LLM 调用卡死，已中止该卡孵化")
                 } catch (_: Exception) {
                     // 单卡失败静默
                 } finally {
@@ -240,6 +280,8 @@ class QuroPersonaViewModel(context: Context) : ViewModel() {
                 return IncubateResult.Error("请先在「模型」设置中填写 API Key")
             }
             val prompt = buildIncubatePrompt(name, description, tags)
+            // 功能模型配置接入引擎：人格蒸馏使用 PERSONA_INCUBATE 绑定的模型（覆盖在本仓库配置之上）
+            val effModel = QuroFunctionModelConfigRepository(hbContext).resolveConfig(QuroFunctionType.PERSONA_INCUBATE, cfg).model
             val maxRetries = 1
             var lastError: IncubateResult? = null
             for (attempt in 0..maxRetries) {
@@ -248,7 +290,7 @@ class QuroPersonaViewModel(context: Context) : ViewModel() {
                     hbClient.chat(
                         cfg.baseUrl,
                         cfg.apiKey,
-                        cfg.model,
+                        effModel,
                         listOf(QuroChatMessage("user", prompt)),
                         cfg.temperature,
                         cfg.maxTokens,

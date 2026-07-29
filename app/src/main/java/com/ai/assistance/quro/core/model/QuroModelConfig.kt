@@ -3,6 +3,9 @@ package com.ai.assistance.quro.core.model
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import com.ai.assistance.quro.core.network.QuroModelListResult
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * 模型配置：描述一个 OpenAI 兼容的聊天模型接入点。
@@ -20,7 +23,7 @@ data class QuroModelConfig(
     val contextWindow: Int = 16000,       // 上下文窗口（输入 token 预算）：0=不限制；非 0 时按预算从最旧轮次裁剪历史，始终保留 system（身份/人格/工具指引），避免长对话撑爆窗口被网关静默丢弃前部上下文或 tools 字段
     val customProviderName: String = "",   // 自定义厂商展示名（provider=="OTHER" 时有效）
     val localModelPath: String = "",       // 本地离线模型路径（provider 为 MNN/LLAMA_CPP 时有效）
-    val useFullTools: Boolean = false,     // 完整工具集开关：false=只下发 coreSpecs（14 个，兼容多数 API 中转）；true=下发 fullSpecs（~50 个，需代理支持大 tools 负载）
+    val useFullTools: Boolean = true,      // 完整工具集开关：默认开启（全面开放，下发 fullSpecs ~50 个）；设置入口已移除，由默认全开保证工具可用
     val skillToolsEnabled: Boolean = true, // 技能可调用（function calling）总开关：true=将用户技能注册为 AI 可调用工具；false=技能仅注入系统提示词、不可被调用
     val maxSkillTools: Int = 16,           // 最多下发的技能工具数量（避免工具集过大被 API 中转静默丢弃）
 )
@@ -41,7 +44,7 @@ class QuroModelConfigRepository(context: Context) {
         contextWindow = prefs.getInt(KEY_CONTEXT_WINDOW, QuroModelConfig().contextWindow),
         customProviderName = prefs.getString(KEY_CUSTOM_PROVIDER, "") ?: "",
         localModelPath = prefs.getString(KEY_LOCAL_PATH, "") ?: "",
-        useFullTools = prefs.getBoolean(KEY_FULL_TOOLS, false),
+        useFullTools = prefs.getBoolean(KEY_FULL_TOOLS, true),
         skillToolsEnabled = prefs.getBoolean(KEY_SKILL_TOOLS, true),
     )
 
@@ -61,6 +64,50 @@ class QuroModelConfigRepository(context: Context) {
         putBoolean(KEY_SKILL_TOOLS, cfg.skillToolsEnabled)
     }
 
+    /**
+     * 持久化最近一次从接口拉取到的模型列表（按 baseUrl 校验失效）。
+     * 进入模型面板时读缓存即可展示，无需每次联网拉取。
+     */
+    fun saveModelListCache(baseUrl: String, result: QuroModelListResult) {
+        prefs.edit {
+            val obj = JSONObject().apply {
+                put("baseUrl", baseUrl)
+                when (result) {
+                    is QuroModelListResult.Success -> {
+                        put("ok", true)
+                        val arr = JSONArray()
+                        result.models.forEach { arr.put(it) }
+                        put("models", arr)
+                    }
+                    is QuroModelListResult.Error -> {
+                        put("ok", false)
+                        put("error", result.message)
+                    }
+                }
+            }
+            putString(KEY_MODELS_CACHE, obj.toString())
+        }
+    }
+
+    /**
+     * 读取缓存的模型列表；若 baseUrl 与当前不符（用户改了接入点）则返回 null，视为缓存失效。
+     */
+    fun loadModelListCache(baseUrl: String): QuroModelListResult? {
+        val raw = prefs.getString(KEY_MODELS_CACHE, null) ?: return null
+        return runCatching {
+            val obj = JSONObject(raw)
+            if (obj.optString("baseUrl", "") != baseUrl) return null
+            if (obj.optBoolean("ok", false)) {
+                val arr = obj.optJSONArray("models") ?: JSONArray()
+                val models = mutableListOf<String>()
+                for (i in 0 until arr.length()) models.add(arr.optString(i))
+                QuroModelListResult.Success(models)
+            } else {
+                QuroModelListResult.Error(obj.optString("error", "缓存的拉取结果无效"))
+            }
+        }.getOrNull()
+    }
+
     companion object {
         private const val KEY_PROVIDER = "provider"
         private const val KEY_BASE_URL = "base_url"
@@ -75,5 +122,6 @@ class QuroModelConfigRepository(context: Context) {
         private const val KEY_LOCAL_PATH = "local_model_path"
         private const val KEY_FULL_TOOLS = "use_full_tools"
         private const val KEY_SKILL_TOOLS = "skill_tools_enabled"
+        private const val KEY_MODELS_CACHE = "models_cache_json"
     }
 }

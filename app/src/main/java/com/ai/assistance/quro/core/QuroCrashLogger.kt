@@ -60,6 +60,44 @@ object QuroCrashLogger {
         writeFile(context, report)
     }
 
+    private const val DIAG_NAME = "quro_diag.txt"
+
+    /**
+     * 记录一条运行期诊断事件（非崩溃），用于无 adb 取回真机行为数据。
+     * 追加到 app 私有目录并镜像到「下载」目录（MediaStore，Android 11+ 文件管理器可见），
+     * 便于排查「HTML 渲染 / 切换会话续跑 / 头像即时」等难以静态定位的问题。
+     */
+    fun logEvent(context: Context, tag: String, msg: String) {
+        val ts = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
+        val line = "[$ts][$tag] $msg\n"
+        val f = File(context.filesDir, DIAG_NAME)
+        runCatching { f.appendText(line) }
+        runCatching { upsertDownload(context, DIAG_NAME, f.readText()) }
+    }
+
+    /** 把诊断文件（全量）写入「下载」目录：先删同名再插入，保证 Download 中始终是最新全量。 */
+    private fun upsertDownload(context: Context, name: String, content: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            runCatching {
+                val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                File(dir, name).writeText(content)
+            }
+            return
+        }
+        val resolver = context.contentResolver
+        val coll = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        runCatching {
+            resolver.delete(coll, "${MediaStore.Downloads.DISPLAY_NAME} = ?", arrayOf(name))
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, name)
+                put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+            val uri = resolver.insert(coll, values) ?: return@runCatching
+            resolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) }
+        }
+    }
+
     private fun buildReport(thread: Thread, throwable: Throwable): String {
         val sw = StringWriter()
         sw.append("QuroAI 崩溃报告\n")

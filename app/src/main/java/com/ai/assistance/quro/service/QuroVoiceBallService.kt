@@ -39,17 +39,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
-import androidx.savedstate.SavedStateRegistry
-import androidx.savedstate.SavedStateRegistryController
-import androidx.savedstate.SavedStateRegistryOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.ai.assistance.quro.core.QuroAssistant
+import com.ai.assistance.quro.core.util.QuroServiceLifecycleOwner
 import com.ai.assistance.quro.core.tools.QuroSttHolder
 import com.ai.assistance.quro.core.QuroPlatformManifest
 import com.ai.assistance.quro.core.QuroConversationStore
 import com.ai.assistance.quro.core.network.QuroLlmClient
+import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionType
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
 import com.ai.assistance.quro.core.QuroMessage
 import com.ai.assistance.quro.core.QuroPersona
@@ -83,35 +83,11 @@ import kotlinx.coroutines.launch
  * 防御性 try/catch 避免任意异常导致进程闪退
  * （Service 中不强制需要 LifecycleOwner）。
  */
-/**
- * 给 Service 内的 ComposeView 提供最小生命周期宿主。
- * Service 本身没有 LifecycleOwner；若直接对 ComposeView.setContent 后挂到
- * WindowManager，挂载时 resolveParentCompositionContext 找不到 ViewTreeLifecycleOwner
- * 会抛「ViewTreeLifecycleOwner not found」。这里手动建一个并挂到 ComposeView 上。
- */
-private class ComposeLifecycleOwner :
-    LifecycleOwner,
-    SavedStateRegistryOwner {
-    private val lifecycleRegistry = LifecycleRegistry(this)
-    private val savedStateRegistryController = SavedStateRegistryController.create(this)
-
-    override val lifecycle: Lifecycle get() = lifecycleRegistry
-    override val savedStateRegistry: SavedStateRegistry
-        get() = savedStateRegistryController.savedStateRegistry
-
-    fun create() {
-        savedStateRegistryController.performRestore(null)
-        lifecycleRegistry.currentState = Lifecycle.State.CREATED
-    }
-    fun resume() { lifecycleRegistry.currentState = Lifecycle.State.RESUMED }
-    fun destroy() { lifecycleRegistry.currentState = Lifecycle.State.DESTROYED }
-}
-
 class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatchers.Main + SupervisorJob()) {
 
     private lateinit var windowManager: WindowManager
     private var composeView: ComposeView? = null
-    private var composeLifecycleOwner: ComposeLifecycleOwner? = null
+    private var composeLifecycleOwner: QuroServiceLifecycleOwner? = null
 
     private val store = QuroConversationStore()
     // 必须延迟到 onCreate 之后（context 已 attach）再构建，否则 Service 构造阶段
@@ -130,6 +106,8 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
     // 实时对话主开关 / 播报中 / 连续空或错计数
     private var conversationActive by mutableStateOf(false)
     private var speaking by mutableStateOf(false)
+    /** 语音球 TTS 是否正在播报中（防止 process 重入再次 speak 造成重复/并发播报）。 */
+    @Volatile private var ttsBusy = false
     private var emptyCount = 0
     /** 悬浮球是否已挂载（由通知栏「语音球」按钮 / 设置开关控制，与服务/通知栏常驻解耦）。 */
     private var ballShown by mutableStateOf(false)
@@ -221,22 +199,19 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
     }
 
     private fun addBall() {
-        val lifecycleOwner = ComposeLifecycleOwner().apply { create(); resume() }
+        val lifecycleOwner = QuroServiceLifecycleOwner().apply { create(); resume() }
         composeLifecycleOwner = lifecycleOwner
         val context = ContextThemeWrapper(this, getAppThemeRes())
         val ball = ComposeView(context).apply {
-            // 关键修复：Service 自身不是 LifecycleOwner。ComposeView 挂到
-            // WindowManager（SYSTEM_ALERT_WINDOW）时，onAttachedToWindow 会顺着
-            // 视图树找 ViewTreeLifecycleOwner，找不到就抛
-            // 「ViewTreeLifecycleOwner not found」。
-            // 注意：androidx.lifecycle.ViewTreeLifecycleOwner / androidx.savedstate
-            // .ViewTreeSavedStateRegistryOwner 的 object 在本 Compose BOM
-            // (2026.01.01) + lifecycle 2.9.4 组合下对「外部 module」是
-            // internal 的，Kotlin 编译器拒绝 import / FQN 引用。
-            // 因此这里不引用该符号，而是复刻它内部唯一的逻辑——
-            // 用框架自带的资源 id 把 owner setTag 到 ComposeView 上，
-            // Compose 内部 ViewTreeLifecycleOwner.get 同样会读到它。
-            setViewTreeOwners(this, lifecycleOwner)
+            // 官方公开静态 API 直接绑定 owner（operit 同款，无需反射）。
+            // 此前误以为 ViewTreeLifecycleOwner 在 Compose BOM + lifecycle 2.9.4 下
+            // 是 internal 不可引用，故走了脆弱的反射桥 → 运行期经常失败 →
+            // owner 缺失 → "ViewTreeLifecycleOwner not found" 闪退。
+            // 实际 androidx.lifecycle.ViewTreeLifecycleOwner.set / .get 是自 lifecycle 2.x
+            // 起就一直 public 的静态方法，直接调用即可。
+            setViewTreeLifecycleOwner(lifecycleOwner)
+            setViewTreeViewModelStoreOwner(lifecycleOwner)
+            setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             setContent {
                 QuroVoiceBall(listening, speaking, !conversationActive, status)
             }
@@ -298,52 +273,6 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 else -> false
             }
         }
-    }
-
-    /**
-     * 复刻 AndroidX 内部的 ViewTree*Owner.set 逻辑。
-     * 由于 androidx.lifecycle.ViewTreeLifecycleOwner 与
-     * androidx.savedstate.ViewTreeSavedStateRegistryOwner 的 object 在当前
-     * Compose BOM (2026.01.01) + lifecycle 2.9.4 组合下对外部 module 是
-     * internal 的，Kotlin 编译器拒绝 import / FQN 引用。
-     * 因此这里不引用该符号，而是用框架自带的资源 id 把 owner setTag 到
-     * ComposeView 上——Compose 内部 ViewTreeXxxOwner.get 读取的是同一个 tag。
-     * ComposeLifecycleOwner 同时实现 LifecycleOwner 与 SavedStateRegistryOwner，
-     * 故同一个对象可同时挂到两个 tag 上。
-     */
-    private fun setViewTreeOwners(view: View, owner: ComposeLifecycleOwner) {
-        val lifecycleId = resolveViewTreeId("view_tree_lifecycle_owner", "androidx.lifecycle")
-        if (lifecycleId != 0) view.setTag(lifecycleId, owner)
-
-        val savedStateId = resolveViewTreeId(
-            "view_tree_saved_state_registry_owner", "androidx.savedstate"
-        )
-        if (savedStateId != 0) view.setTag(savedStateId, owner)
-    }
-
-    /**
-     * 解析 AndroidX 内部 view-tree owner 的资源 id。
-     * Compose 内部通过 androidx.lifecycle.R.id.view_tree_lifecycle_owner（编译期
-     * 链接的 androidx.lifecycle 的 R 类）读取该 tag；我们必须对**同一个整数 id**
-     * setTag 才能被它读到。最终 APK 里这些 id 资源已被合并进 app 包名，
-     * 用 "androidx.lifecycle"/"androidx.savedstate" 作 package 调 getIdentifier
-     * 会返回 0（资源表中已无这两个库包），于是 setTag 不执行、ComposeView 挂载时
-     * findViewTreeLifecycleOwner() 拿到 null 抛 IllegalStateException。
-     * 这里依次尝试：app 包名 getIdentifier → library 包名 getIdentifier →
-     * 反射读取 library R 类的字段值（非 namespaced 构建下字段保留为最终 id）。
-     */
-    private fun resolveViewTreeId(name: String, libPkg: String): Int {
-        val res = applicationContext.resources
-        var id = res.getIdentifier(name, "id", applicationContext.packageName)
-        if (id == 0) id = res.getIdentifier(name, "id", libPkg)
-        if (id == 0) {
-            try {
-                id = Class.forName("$libPkg.R\$id").getField(name).getInt(null)
-            } catch (_: Throwable) {
-                id = 0
-            }
-        }
-        return id
     }
 
     private fun getAppThemeRes(): Int {
@@ -408,6 +337,8 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
     private fun stopConversation(reason: String? = null) {
         conversationActive = false; listening = false; speaking = false
         onDeviceRecording = false
+        ttsBusy = false
+        QuroTtsHolder.voiceBallOwnsSpeech = false
         QuroSttHolder.stopListening(); stopCloudRecording(); updateStatus(reason ?: "已暂停")
     }
 
@@ -731,12 +662,14 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(v).array()
 
     private fun process(text: String) {
-        val cfg = QuroModelConfigRepository(applicationContext).load()
-        if (cfg.apiKey.isBlank()) {
+        val baseCfg = QuroModelConfigRepository(applicationContext).load()
+        if (baseCfg.apiKey.isBlank()) {
             updateStatus("未配置 API Key")
             speak("请先在模型配置页填写 API Key")
             return
         }
+        // 语音球问答属于 CHAT 调用：接入「功能模型配置」的 CHAT 独立模型绑定，让开关真正生效
+        val cfg = QuroFunctionModelConfigRepository(applicationContext).resolveConfig(QuroFunctionType.CHAT, baseCfg)
         updateStatus("思考中…")
         // 绑定到「选中的对话框」：若 ViewModel 已就绪，把语音球对话写入用户当前正在看的那个对话框，
         // 并实时落盘；否则回退到服务自有 store（不与任何对话框绑定，仅保底）。
@@ -816,21 +749,25 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
             if (tagHints.isNotEmpty()) {
                 sb.append("\n### 语气标签\n").append(tagHints.joinToString("；")).append("\n")
             }
-            // 语音风格标注：云 TTS 下把风格标签池交给 LLM 自由组合（决定权在 LLM）。
-            // 用户手动选择了标签 → 用用户选择的子集；未选择 → 默认开放完整标签池供 LLM 按需取用。
-            // 与 QuroSpeechStyleDeriver 的自然语言控制互补，让朗读像人一样有情绪/语速/语气。
-            if (QuroTtsPrefs.getSource(applicationContext) == QuroTtsPrefs.SOURCE_CLOUD) {
-                val tags = QuroTtsProviderPrefs.getSelectedStyleTags(applicationContext)
-                val pool = if (tags.isNotEmpty()) tags else QuroCloudTtsCatalog.ALL_EMOTION_TAGS
-                sb.append("\n").append(QuroVoiceStyle.systemHint(pool)).append("\n")
+            // 语音风格标注：与对话框共用 QuroVoiceStyle.hintForContext（尊重用户在「LLM 情绪标签」页的显式选择，
+            // 按有效服务商种类自动分派标记式/自然语言提示）。修复旧逻辑写死只认 SOURCE_CLOUD、
+            // 且对非 MiMo 源误用标记式 systemHint（会输出被念成字面的括号）。
+            QuroVoiceStyle.hintForContext(applicationContext)?.let { hint ->
+                sb.append("\n").append(hint).append("\n")
             }
         }
 
         // 语音球可用工具：必须与 API 的 tools 字段（registry.coreSpecs）严格一致，
         // 否则 AI 在语音模式下会"不敢用/不会用"大部分功能（此前硬编码 15 个导致大面积失效）。
         sb.append("\n## 可用工具（与 API tools 字段完全一致）\n")
-        sb.append("以下是你当前真实可调用的全部工具（工具名：用途），当用户意图匹配任一工具时必须真正调用执行：\n")
-        registry.coreSpecs().forEach { s -> sb.append("- ${s.name}：${s.description}\n") }
+        sb.append(com.ai.assistance.quro.core.tools.QuroToolUsageHints.buildToolUseDirective())
+        sb.append("\n### 工具清单（格式：工具名：用途 [· 常见说法/多用途]）\n")
+        registry.coreSpecs().forEach { s ->
+            sb.append("- ${s.name}：${s.description}\n")
+            com.ai.assistance.quro.core.tools.QuroToolUsageHints.TOOL_USAGE_HINTS[s.name]?.let { hint ->
+                sb.append("    · 常见说法/多用途：$hint\n")
+            }
+        }
         sb.append("\n## 规则\n- 用户想打开应用 → search_and_launch_app\n- 查信息/电量/WiFi/时间 → 调用查询工具\n- 多个独立动作可在一轮内并行发起多个 tool_calls\n- 你拥有记忆库（memory_save/list/search/delete），可在用户透露持久信息时主动保存\n- 纯聊天 → 直接回答\n")
 
         // 长期记忆
@@ -852,12 +789,28 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         // onDone 经 mainHandler 切回主线程，供 Service 在播完后续听。
         // 用 AtomicBoolean 一次性守卫：speak 入队失败时回退 speakMinimal，onDone 只触发一次，
         // 避免「TTS 失败瞬间立即续听」+「回退播放再次续听」造成双重 startListening / 回声。
+        // 新增 ttsBusy 重入守卫：正在播报时忽略新的 speak 请求，避免「识别回调重复 / 续听时序重叠」
+        // 导致同一段或多段语音被重复/并发播报。
+        if (ttsBusy) { Log.w(TAG, "speak: 正在播报中，忽略重复请求，避免重复/并发播报"); return }
+        ttsBusy = true
+        QuroTtsHolder.voiceBallOwnsSpeech = true
         val fired = java.util.concurrent.atomic.AtomicBoolean(false)
-        val doneOnce = { if (fired.compareAndSet(false, true)) mainHandler.post(onDone) }
+        val doneOnce = {
+            if (fired.compareAndSet(false, true)) {
+                ttsBusy = false
+                QuroTtsHolder.voiceBallOwnsSpeech = false
+                mainHandler.post(onDone)
+            }
+        }
         launch {
-            QuroTtsHolder.ensureReady(this@QuroVoiceBallService)
-            val r = QuroTtsHolder.speak(text, doneOnce)
-            if (r != 0) QuroTtsHolder.speakMinimal(text, doneOnce)
+            try {
+                QuroTtsHolder.ensureReady(this@QuroVoiceBallService)
+                val r = QuroTtsHolder.speak(text, doneOnce)
+                if (r != 0) QuroTtsHolder.speakMinimal(text, doneOnce)
+            } catch (e: Throwable) {
+                Log.e(TAG, "speak 异常: ${e.message}")
+                doneOnce()
+            }
         }
     }
 

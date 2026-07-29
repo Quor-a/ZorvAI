@@ -48,7 +48,7 @@ import com.ai.assistance.quro.ui.theme.Line
 fun QuroAboutScreen(onBack: () -> Unit = {}) {
     val ctx = LocalContext.current
     val versionName = remember { BuildConfig.VERSION_NAME }
-    val repoUrl = "https://github.com/QuroAI/QuroAI"
+    val repoUrl = "https://github.com/Quor-a/QuorAI"
     var showLicense by remember { mutableStateOf(false) }
     val openUrl: (String) -> Unit = { url ->
         try {
@@ -169,7 +169,6 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
             Triple("QuickJS", "MIT", "Fabrice Bellard"),
             Triple("Sherpa-NCNN", "Apache-2.0 / BSD-3", "k2-fsa"),
             Triple("GeckoView", "MPL-2.0", "Mozilla（文件级 Copyleft，源码随包提供）"),
-            Triple("libVLC", "GPL v2/v3", "⚠️ 强 Copyleft：已按 GPL 义务提供对应源码"),
             Triple("org.json", "JSON License", "随 Android 平台附带，条款含 \"not for Evil\""),
         )
         AlertDialog(

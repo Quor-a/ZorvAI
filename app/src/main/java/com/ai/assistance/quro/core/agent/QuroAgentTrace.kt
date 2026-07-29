@@ -31,6 +31,11 @@ object QuroAgentTrace {
         val ts: Long = System.currentTimeMillis(),
         /** 稳定唯一 id：发射时生成，UI 去重与 LazyColumn key 使用，避免重复/跨会话污染。 */
         val id: String = UUID.randomUUID().toString(),
+        /**
+         * 预清洗展示文本：HTML 标签剥离 + 空白压缩 + 反引号去除，仅在发射时计算一次。
+         * 避免 UI 每次重组对每一行重跑正则（几百事件 × 200 行 × 2 次正则会打爆主线程 → ANR）。
+         */
+        val display: String = "",
     )
 
     private val _flow = MutableSharedFlow<AgentTraceEvent>(replay = 128, extraBufferCapacity = 256)
@@ -54,8 +59,20 @@ object QuroAgentTrace {
     fun status(tag: String, summary: String, detail: String = "") =
         emit(TraceKind.STATUS, tag, summary, detail)
 
+    /** 预编译正则：仅编译一次，供 cleanTrace 复用。 */
+    private val RE_HTML = Regex("<[^>]*>")
+    private val RE_WS = Regex("\\s+")
+
+    /** 一次性清洗展示文本（HTML 剥离 + 空白压缩 + 反引号去除），发射时调用。 */
+    private fun cleanTrace(summary: String, detail: String): String {
+        val raw = summary + if (detail.isNotBlank()) " · ${detail.take(200)}" else ""
+        return raw.replace(RE_HTML, " ").replace(RE_WS, " ").replace("`", "").trim()
+    }
+
     /** 安全发射：任何异常都被吞掉，绝不外抛，保证插桩点零风险。 */
     private fun emit(kind: TraceKind, tag: String, summary: String, detail: String) {
-        runCatching { _flow.tryEmit(AgentTraceEvent(kind, tag, summary, detail)) }
+        runCatching {
+            _flow.tryEmit(AgentTraceEvent(kind, tag, summary, detail, display = cleanTrace(summary, detail)))
+        }
     }
 }

@@ -41,11 +41,18 @@ class QuroAssistant(
         cfg: QuroModelConfig,
         systemPrompt: String = "",
         autoSaveMemory: Boolean = true,
+        stream: Boolean = false,
         onUpdate: (() -> Unit)? = null,
     ): String =
         withContext(Dispatchers.IO) {
             val system = QuroMessage(role = "system", content = systemPrompt)
             var lastText = ""
+            // 流式占位：首个 token 到达时创建可见气泡，后续 token 增量更新其内容。
+            // 工具调用轮不会触发 content token，因此不会误建气泡。
+            var streamPlaceholderId: String? = null
+            var lastStreamEmitMs = 0L
+            // 🔧 #765 防御：记录流式累计文本，终态 result.content 异常空白时回退到此，避免正文被截断覆盖。
+            var streamedContent: String = ""
             val emit = { onUpdate?.invoke() }
             QuroAgentTrace.status("assistant", "AI 开始响应")
             // 工具集选择（原创）：默认 coreSpecs（14 个，token 占用小，兼容绝大多数 API 中转，
@@ -81,6 +88,7 @@ class QuroAssistant(
                         // 本地离线模型（MNN / llama.cpp）：走本地推理引擎，不发起 HTTP 请求
                         routeLocal(context, cfg, llmMessages)
                     } else {
+                        val streaming = stream && cfg.provider != "MNN" && cfg.provider != "LLAMA_CPP"
                         client.chat(
                             baseUrl = cfg.baseUrl,
                             apiKey = cfg.apiKey,
@@ -89,6 +97,32 @@ class QuroAssistant(
                             temperature = cfg.temperature,
                             maxTokens = cfg.maxTokens,
                             tools = effectiveSpecs,
+                            stream = streaming,
+                            onToken = if (streaming) { acc ->
+                                // 首个 token：创建可见占位气泡；其后增量更新内容。
+                                // 节流 emit 到 ~100ms（≈10 帧/秒）：既让 AI 回复「一点一点」顺滑冒字，
+                                // 又不至于每个 token 都触发一次重组把低端机拖卡。
+                                // 注意：v384 已根除重组期重编译正则的 ANR 真凶，此处无需再用 500ms 粗节流保命。
+                                // 🔧 #765 防御：store 已线程安全；这里再包 runCatching，万一对 store 的写仍抛异常，
+                                //   仅跳过本次 emit 而不让 streamChat 的 catch 把整段输出吞成截断文本。
+                                streamedContent = acc
+                                runCatching {
+                                    if (streamPlaceholderId == null) {
+                                        val p = QuroMessage(role = "assistant", content = acc)
+                                        store.add(p)
+                                        streamPlaceholderId = p.id
+                                        lastStreamEmitMs = System.currentTimeMillis()
+                                        emit()
+                                    } else {
+                                        store.update(streamPlaceholderId!!) { it.copy(content = acc) }
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastStreamEmitMs >= 100L) {
+                                            lastStreamEmitMs = now
+                                            emit()
+                                        }
+                                    }
+                                }
+                            } else null,
                         )
                     }
                 }.getOrElse { e ->
@@ -119,9 +153,20 @@ class QuroAssistant(
                         //   表现为「有时候会、有时候不会」地把思考混进回复。现在思考只走 reasoning 字段
                         //   （独立 ThinkBlock 渲染），content 始终干净；若模型最终确实没给正文，仅给极简占位，
                         //   思考过程照常在「思考中」里可见。
-                        val safeContent = result.content.takeIf { it.isNotBlank() } ?: "(已思考完毕)"
+                        val safeContent = result.content.takeIf { it.isNotBlank() }
+                            ?: streamedContent.takeIf { it.isNotBlank() }
+                            ?: "(已思考完毕)"
                         val safeReasoning = result.reasoning?.takeIf { it.isNotBlank() }
                         lastText = safeContent
+                        if (streamPlaceholderId != null) {
+                            // 流式已逐字把内容写入占位气泡：这里仅补回 reasoning 字段并做终态收尾，
+                            // 不再重复落库，避免「双气泡」。
+                            store.update(streamPlaceholderId!!) { it.copy(content = lastText, reasoning = safeReasoning) }
+                            emit()
+                            return@withContext lastText
+                        }
+                        // 非流式（或流式未触发任何 content token，如纯 reasoning 的 MiMo reason 模式）：
+                        // 按原逻辑落一条新气泡。
                         store.add(
                             QuroMessage(
                                 role = "assistant",

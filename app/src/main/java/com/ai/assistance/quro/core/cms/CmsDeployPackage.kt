@@ -126,9 +126,27 @@ data class CmsDeployPackage(
          * - 包经 [signed] 填 sha256，满足部署前完整性校验（P0）。
          */
         fun fromModule(m: QuroCmsModule): CmsDeployPackage {
+            // 若模块自带真实终端入口脚本（terminalEntry），直接作为 entry.sh 部署——
+            // 真正实现「一键部署 CMS v2 系统构架到终端的包」（在 proot/Alpine 内可运行的后端），
+            // 而非仅部署 manifest 的空壳。依赖按 LINUX(pip: 前缀→pip / 其余→apk) 与 ENV 分类装配。
+            if (m.terminalEntry.isNotBlank()) {
+                return signed(
+                    CmsDeployPackage(
+                        moduleId = m.id,
+                        name = m.name.ifBlank { m.id },
+                        version = m.version.ifBlank { "1.0.0" },
+                        entry = "entry.sh",
+                        entryContent = m.terminalEntry,
+                        apkDeps = m.dependencies.filter { it.kind == DepKind.LINUX && !it.target().startsWith("pip") }.map { it.target() },
+                        pipDeps = m.dependencies.filter { it.kind == DepKind.LINUX && it.target().startsWith("pip") }.map { it.target().removePrefix("pip:") },
+                        envProfiles = m.dependencies.filter { it.kind == DepKind.ENV }.map { it.target() },
+                    )
+                )
+            }
+            // 兼容旧路径：仅当存在 terminal 类型能力时写真实命令，否则写占位脚本（仅部署 manifest）。
             val termCaps = m.capabilities.filter { it.actionType == "terminal" }
             val sb = StringBuilder()
-            sb.appendLine("#!/system/bin/sh")
+            sb.appendLine("#!/bin/sh")
             sb.appendLine("# CMS module: ${m.id} (${m.name} v${m.version})")
             sb.appendLine("echo \"[cms] module ${m.id} deployed\"")
             if (termCaps.isNotEmpty()) {

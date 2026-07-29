@@ -24,6 +24,11 @@ interface QuroTool {
 
 /** 工具注册表（持有全部原创工具）。 */
 class QuroToolRegistry {
+    companion object {
+        /** 当前进程主注册表实例（由 QuroChatViewModel 在构建后写入，供技能管理等 UI 立即注销已注册工具）。 */
+        @Volatile var active: QuroToolRegistry? = null
+    }
+
     private val map = LinkedHashMap<String, QuroTool>()
 
     /** 技能可调用（function calling）总开关：false=技能仅注入系统提示词，不下发为工具函数。 */
@@ -33,6 +38,23 @@ class QuroToolRegistry {
 
     fun register(tool: QuroTool) {
         map[tool.name] = tool
+    }
+
+    /**
+     * 删除已注册工具（含技能工具 skill__<name>、导入工具等）。返回是否确有移除。
+     * 反向级联：删除「技能工具」（skill__<name>）时，同步删除对应的用户技能定义，
+     * 否则下次 mergeSkills 会把该技能重新注册为工具「复活」，造成「工具删了技能还在」的悬挂（#913）。
+     */
+    fun remove(name: String): Boolean {
+        val removed = map.remove(name) != null
+        if (removed && name.startsWith("skill__")) {
+            val skillName = name.removePrefix("skill__")
+            appContext?.let { ctx ->
+                QuroSkillStore.load(ctx).firstOrNull { it.name == skillName }
+                    ?.let { QuroSkillStore.remove(ctx, it.id) }
+            }
+        }
+        return removed
     }
 
     fun get(name: String): QuroTool? = map[name]
@@ -78,8 +100,7 @@ class QuroToolRegistry {
         // 若你的代理确认支持完整工具（直连 OpenAI / DeepSeek / SiliconFlow 等），
         // 可在 QuroAssistant.ask 中将 registry.coreSpecs() 改为 registry.fullSpecs() 解锁全部 ~47 个。
         // 扩展核心集：覆盖 95%+ 日常口语指令，让模型「知道有什么工具、该用哪个」。
-        // 默认（useFullTools=false）即下发此集；仅少数高危/小众工具（文件写删改、Intent 广播、
-        // 媒体库列举）留在 fullSpecs，由用户在设置开启「完整工具集」后解锁。
+        // 默认（useFullTools=false）即下发此集；fullSpecs 在其基础上再并入其余高级/小众工具。
         // 注意：菜单（appendCapabilityAwareness）与 tools 字段都由此集生成，二者严格一致，
         // 避免模型选了菜单里有、字段里没有的工具而报「未知工具」。
         val coreNames = setOf(
@@ -94,8 +115,10 @@ class QuroToolRegistry {
             "get_active_notifications", "get_bluetooth_status", "toggle_flashlight",
             // 通信
             "read_sms", "send_sms", "read_contacts",
+            // Intent / 系统广播（唤起其他 App 的 Activity/Service、发系统广播）
+            "execute_intent", "send_broadcast",
             // 日历 / 位置
-            "read_calendar", "get_location", "geocode",
+            "read_calendar", "write_calendar", "get_location", "geocode",
             // 文件（只读类，安全）
             "list_files", "read_text_file", "browse_files", "file_read",
             // 文件写/改/删（IDE 集成后默认开放；为高危工具，用户可在设置关闭「完整工具集」回退到只读集）
@@ -105,7 +128,7 @@ class QuroToolRegistry {
             // 代码执行
             "run_code",
             // 终端（应用沙盒内 PTY / shell，免权限，无 root/Shizuku）
-            "terminal_run", "terminal_exec", "terminal_write", "terminal_kill", "terminal_status",
+            "terminal_run", "terminal_exec", "terminal_write", "terminal_kill", "terminal_status", "quroterm_exec",
             // TTS
             "speak", "stop_speak",
             // 闹钟
@@ -114,8 +137,10 @@ class QuroToolRegistry {
             "schedule_task", "list_scheduled_tasks", "delete_scheduled_task",
             // 记忆库
             "memory_save", "memory_list", "memory_search", "memory_delete",
+            // AI 经验闭环（自我进化：报错/方案/工具模式/版本差异 的沉淀与复用）
+            "experience_log", "experience_query", "experience_correct", "experience_version_check",
             // 文件知识库（Path ②）
-            "knowledge_search", "knowledge_add", "knowledge_manage",
+            "knowledge_search", "knowledge_add", "knowledge_manage", "knowledge_rag_search",
             // 文档生成（aiWPS：本地生成 WPS / Office 兼容 .docx/.xlsx/.pptx，零外部依赖）
             "aiwps_create",
             // 对话框富卡片（AI 下发可交互卡片：待办/图表/笔记/动作）
@@ -127,10 +152,14 @@ class QuroToolRegistry {
             // 第三方服务授权保险库
             "auth_service_add", "auth_service_list", "auth_service_remove",
             // CMS v2 能力模块 + 特权通道自查
-            "cms_list", "cms_call", "cms_status", "cms_logs", "cms_result", "cms_run_dag", "cms_deploy_terminal", "cms_undeploy_terminal", "priv_status",
+            "cms_list", "cms_call", "cms_status", "cms_logs", "cms_result", "cms_run_dag", "cms_deploy_terminal", "cms_undeploy_terminal", "priv_status", "cms_engine_status",
+            // ACI（Agent Capability Interface）：AI 作为控制方调用第三方 App 暴露的能力（发现 + 调用）
+            "aci_list", "aci_call",
             // L1 无障碍控屏（CapOS 通道）
             "read_screen", "get_foreground_app", "get_screen_state",
             "tap_screen", "swipe_screen", "input_text", "scroll_screen", "global_action",
+            // AI 智能体键盘（Agent IME）：把文本直接打字进聚焦输入框（需启用并切到『Quro AI 键盘』）
+            "ai_type_text", "ai_press_enter",
             // 媒体：百分百开源本地音乐 / 视频播放器（后台可用，对话框显示播放卡片）
             "local_music_player", "local_video_player", "list_media", "music_play",
             // 真实执行链路（L1-L4 CapOS 通道已恢复 v115，L5 Linux v116 恢复）：
@@ -231,11 +260,24 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
             // 危险权限前置申请：工具运行在 Application Context 上无法弹框，交由 Activity 注入的网关处理。
             val perms = tool.requiredPermissions
             if (perms.isNotEmpty() && !QuroPermissionHolder.isGranted(context, perms)) {
-                val granted = QuroPermissionHolder.requester?.ensure(perms) ?: false
-                if (!granted) {
+                val requester = QuroPermissionHolder.requester
+                if (requester != null) {
+                    // 拉起系统授权对话框（ensure 内部只请求真正缺失的项）。
+                    val granted = runCatching { requester.ensure(perms) }.getOrElse { false }
+                    // 🔧 #766 修复：对话框成功后系统已授权，但 ensure 的 continuation 可能因 Activity 失焦/
+                    //   重建而返回 false；此时以系统真实状态二次核验，已授权即放行，不再误拒。
+                    if (!QuroPermissionHolder.isGranted(context, perms)) {
+                        return@map QuroToolResult(
+                            call.name,
+                            "需要权限：${perms.joinToString()}，请在系统设置或弹出的对话框中授予后重试。",
+                        )
+                    }
+                } else {
+                    // 没有可拉起对话框的网关（如工具在后台/非 Activity 场景执行）：
+                    // 系统未授予且无法自动补全授权，明确返回需要权限。
                     return@map QuroToolResult(
                         call.name,
-                        "需要权限：${perms.joinToString()}，请在弹出的系统对话框中授予后重试。",
+                        "需要权限：${perms.joinToString()}，请在「设置 → 权限」中授予后重试。",
                     )
                 }
             }

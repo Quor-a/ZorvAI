@@ -14,7 +14,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withTimeout
+import kotlin.coroutines.coroutineContext
 
 private const val TAG = "QuroLlm"
 
@@ -32,7 +35,7 @@ private const val NET_CALL_TIMEOUT_MS = 90_000L
  * Quro LLM 客户端（原创）：对接 OpenAI 兼容的 /chat/completions，
  * 支持 function/tool calling。仅用 OkHttp + org.json，无第三方序列化依赖。
  *
- * 设计取舍（对齐 Calw OS 稳定方案）：
+ * 设计取舍（对齐 QuroAI 稳定方案）：
  *  - 采用「同步一次性请求」：模型完整生成后一次性返回，UI 拿到完整回复再渲染。
  *    不自行实现 SSE 逐字写回——后者会高频触发 UI 重组，破坏对话框的
  *    思考气泡 / 工具块 / 卡片 / 复制 / 重生成等功能，且不同模型流式字段结构
@@ -64,6 +67,8 @@ class QuroLlmClient(
         temperature: Float,
         maxTokens: Int,
         tools: List<QuroToolSpec> = emptyList(),
+        stream: Boolean = false,
+        onToken: ((String) -> Unit)? = null,
     ): QuroLlmResult {
         val normalized = baseUrl.trim().trimEnd('/')
         val url =
@@ -95,6 +100,7 @@ class QuroLlmClient(
                 })
                 put("tool_choice", "auto")
             }
+            if (stream) put("stream", true)
         }
         val bodyStr = body.toString()
         // ===== 调试日志：请求体概览（Logcat tag=QuroLlm）=====
@@ -108,6 +114,10 @@ class QuroLlmClient(
             .addHeader("Content-Type", "application/json")
             .post(bodyStr.toRequestBody("application/json".toMediaType()))
             .build()
+        // 流式路径：逐字回调，不走重试（避免半截 token 后重试造成内容错乱）。
+        if (stream && onToken != null) {
+            return streamChat(req, onToken)
+        }
         // 重试策略：网关类临时故障（5xx / 429）与网络异常（超时/连接失败）自动重试，
         // 避免 openresty 等反向代理偶发 502/503 直接把原始错误甩给用户。
         // 4xx（鉴权/参数错误）不重试——属于确定性失败。
@@ -118,7 +128,7 @@ class QuroLlmClient(
             if (attempt > 0) {
                 val backoff = 800L * attempt
                 Log.w(TAG, "<<< RETRY attempt=$attempt/${maxRetries} after ${backoff}ms (prev=${lastErr ?: "n/a"})")
-                Thread.sleep(backoff)
+                delay(backoff)
             }
             try {
                 val callResult = withTimeout(NET_CALL_TIMEOUT_MS) {
@@ -281,5 +291,123 @@ class QuroLlmClient(
         if (!o.has(key)) return null
         if (o.isNull(key)) return null
         return try { o.getString(key) } catch (_: Exception) { null }?.takeIf { it != "null" }
+    }
+
+    /**
+     * 流式对话：解析 OpenAI 兼容的 SSE（server-sent events），逐块回调已累计的文本内容，
+     * 让上层 UI 实时刷新 AI 回复气泡（修复「发出消息后很久才看到回复」的体感问题）。
+     *
+     * 设计取舍：
+     *  - onToken 回传的是「截至当前的完整累计文本」，上层直接 store.update(content=累计) 即可，
+     *    无需在上层再做增量拼接，避免重复累加。
+     *  - 流式模式不走重试：一旦开始吐字再重试会造内容错乱。若中途断流且已有内容，
+     *    按「已生成内容」兜底返回成功（截断），而非甩报错。
+     *  - 不套 withTimeout：依赖 OkHttp 的 readTimeout（每次收到字节都会重置），只有「连接假死」才会超时，
+     *    长但正常的生成不会被误杀。
+     */
+    private suspend fun streamChat(req: Request, onToken: (String) -> Unit): QuroLlmResult {
+        val contentAcc = StringBuilder()
+        val reasoningAcc = StringBuilder()
+        // 🔧 v291 修复：流式响应里模型返回的 tool_calls 也以 delta 形式下发，必须按 index 累计
+        // （function.name / function.arguments 常分片到达）。否则工具调用被当成「空文本」→
+        // AI 不执行工具、空回复、工具卡消失（用户报「AI 挂了 / 不执行 / 不回复 / 空回复」的根因）。
+        val toolAcc = mutableListOf<StreamToolAcc>()
+        fun ensureSlot(idx: Int) {
+            while (toolAcc.size <= idx) toolAcc.add(StreamToolAcc())
+        }
+        return try {
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    return QuroLlmResult.Error(friendlyHttpError(resp.code, resp.body?.string().orEmpty()))
+                }
+                val source = resp.body?.source()
+                    ?: return QuroLlmResult.Error("模型返回了空响应体")
+                while (true) {
+                    val line = source.readUtf8Line() ?: break
+                    // 🔧 取消点：用户「停止生成」或切换会话时 sendJob 被取消，此处每行读完后立即抛取消，
+                    // 避免阻塞在 readUtf8Line 上把旧会话的生成一直"流"到结束（切对话停不掉的真正根因）。
+                    coroutineContext.ensureActive()
+                    val trimmed = line.trim()
+                    if (trimmed.isEmpty() || !trimmed.startsWith("data:")) continue
+                    val data = trimmed.removePrefix("data:").trim()
+                    if (data.isEmpty() || data == "[DONE]") {
+                        if (data == "[DONE]") break
+                        continue
+                    }
+                    runCatching {
+                        val root = JSONObject(data)
+                        val delta = root.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta")
+                        if (delta != null) {
+                            val c = safeString(delta, "content")
+                            if (!c.isNullOrEmpty()) {
+                                contentAcc.append(c)
+                                onToken(contentAcc.toString())
+                            }
+                            val r = safeString(delta, "reasoning_content")
+                                ?: safeString(delta, "reasoning")
+                                ?: safeString(delta, "thinking")
+                            if (!r.isNullOrEmpty()) reasoningAcc.append(r)
+                            // 🔧 累计流式 tool_calls（index 槽位 + name/arguments 拼接）
+                            val tcs = delta.optJSONArray("tool_calls")
+                            if (tcs != null) {
+                                for (j in 0 until tcs.length()) {
+                                    val tc = tcs.getJSONObject(j)
+                                    val idx = if (tc.has("index")) tc.optInt("index", toolAcc.size) else toolAcc.size
+                                    ensureSlot(idx)
+                                    val slot = toolAcc[idx]
+                                    if (tc.has("id") && !tc.isNull("id")) slot.id = tc.optString("id")
+                                    val fn = tc.optJSONObject("function")
+                                    if (fn != null) {
+                                        if (fn.has("name") && !fn.isNull("name")) slot.name += fn.getString("name")
+                                        if (fn.has("arguments") && !fn.isNull("arguments")) slot.arguments += fn.optString("arguments", "")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // 与 parse() 一致：tool_calls 优先于 content
+                buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc)
+            }
+        } catch (e: Exception) {
+            // 🔧 取消信号必须原样向上抛：否则会被当成"断流截断"兜底成成功文本，
+            // 导致「停止生成/切换会话」不出现"⏹ 已停止生成"提示。
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e(TAG, "<<< STREAM ERROR: ${e.message}", e)
+            // 已累计到工具调用 → 仍返回工具调用（避免丢失已下发的工具请求）；
+            // 否则已吐出部分内容 → 截断兜底为成功；都没有 → 报错。
+            if (toolAcc.isNotEmpty()) {
+                buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc)
+            } else if (contentAcc.isNotEmpty()) {
+                QuroLlmResult.Text(contentAcc.toString(), reasoningAcc.toString().takeIf { it.isNotBlank() })
+            } else {
+                QuroLlmResult.Error(friendlyNetError(e))
+            }
+        }
+    }
+
+    /** 流式累计结束后，按是否含工具调用产出 ToolCalls 或 Text（与 parse() 同语义）。 */
+    private fun buildToolCallsOrText(
+        toolAcc: List<StreamToolAcc>,
+        contentAcc: StringBuilder,
+        reasoningAcc: StringBuilder,
+    ): QuroLlmResult {
+        val reasoning = reasoningAcc.toString().takeIf { it.isNotBlank() }
+        return if (toolAcc.isNotEmpty()) {
+            val calls = toolAcc.mapIndexed { i, t ->
+                QuroToolCall(id = t.id ?: "call_$i", name = t.name, arguments = t.arguments.ifBlank { "{}" })
+            }
+            Log.i(TAG, "<<< STREAM tool_calls=${calls.size} reasoningBlank=${reasoning.isNullOrBlank()} first=${calls.firstOrNull()?.name}")
+            QuroLlmResult.ToolCalls(calls, reasoning)
+        } else {
+            QuroLlmResult.Text(contentAcc.toString(), reasoning)
+        }
+    }
+
+    /** 流式 tool_calls 累计槽（name / arguments 跨 delta 分片拼接）。 */
+    private class StreamToolAcc {
+        var id: String? = null
+        var name: String = ""
+        var arguments: String = ""
     }
 }

@@ -1,8 +1,11 @@
 package com.ai.assistance.quro.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
+import rikka.shizuku.Shizuku
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityManager
 import android.widget.Toast
@@ -38,6 +41,7 @@ import com.ai.assistance.quro.core.permissions.QuroPermissionHelper
 import com.ai.assistance.quro.core.permissions.QuroPermissionItem
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
 import com.ai.assistance.quro.core.privilege.*
+import com.ai.assistance.quro.core.shizuku.QuroShizuku
 import com.ai.assistance.quro.service.QuroAccessibilityService
 import com.ai.assistance.quro.ui.theme.QuroTheme
 import com.ai.assistance.quro.ui.theme.Accent
@@ -46,6 +50,7 @@ import com.ai.assistance.quro.ui.theme.Sage
 import com.ai.assistance.quro.ui.theme.Muted
 import com.ai.assistance.quro.ui.theme.Line
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
 
@@ -80,6 +85,11 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
         stdItems = stdPerms(ctx)
     }
 
+    // 轻量刷新：仅重探 Shizuku(L2)，避免每次轮询都跑 L4 的 su 检测（#915）
+    fun refreshL2() {
+        states = states + (PrivilegeLevel.L2 to QuroShizukuBridge.state(ctx))
+    }
+
     // 运行时权限真实请求（存储 / 位置）
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { refresh() }
 
@@ -110,6 +120,15 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
 
     OnResume { refresh() }
 
+    // 轮询重探 L2 Shizuku：Shizuku 在自身应用内授权后不会触发本应用 onResume / Binder 事件，
+    // 导致权限页状态不刷新、看起来「没修复」。每隔 1.5s 轻量重探一次，授权后立即反映（#915）。
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1500)
+            refreshL2()
+        }
+    }
+
     // 无障碍状态变化即时刷新：用户在系统设置开启/关闭无障碍服务时，此处监听到就重探状态，
     // 解决「授权已开但软件没更新状态」的问题（部分机型开启无障碍不会触发 Activity onResume）。
     DisposableEffect(ctx) {
@@ -117,6 +136,14 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
         val listener = AccessibilityManager.AccessibilityStateChangeListener { refresh() }
         am.addAccessibilityStateChangeListener(listener)
         onDispose { am.removeAccessibilityStateChangeListener(listener) }
+    }
+
+    // Shizuku Binder 就绪时即时刷新：用户在 Shizuku 应用中授权/启动后，Binder 到达即重探状态，
+    // 解决「授权已完成但权限页仍显示未授权」的问题（部分机型不会触发 Activity onResume）。
+    DisposableEffect(ctx) {
+        val l = Shizuku.OnBinderReceivedListener { refresh() }
+        Shizuku.addBinderReceivedListener(l)
+        onDispose { Shizuku.removeBinderReceivedListener(l) }
     }
 
     if (showAudit) {
@@ -187,7 +214,81 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                 channel = "Shizuku / ADB Bridge",
                 state = states[PrivilegeLevel.L2]!!,
                 rationale = "系统 API 调用 / 静默安装 / 冻结应用（免 Root）。",
-                onRequest = { requestElevation(PrivilegeLevel.L2, "需要 Shizuku 权限以调用系统级 API（静默安装/冻结应用）。") },
+                onRequest = {
+                    // 🔧 立即可见反馈：杜绝"点了按钮完全没反应"的体感
+                    Toast.makeText(ctx, "正在请求 Shizuku 授权…", Toast.LENGTH_SHORT).show()
+
+                    // 拉起 Shizuku 应用本身，让用户在应用内把本应用加入允许列表并授权（最可靠的兜底路径，
+                    // 因为 Shizuku 的权限本来就是在 Shizuku Manager 应用里授予的；程序化 requestPermission
+                    // 在部分机型/版本会"静默失败"——既不弹框也不报错，正是之前"没反应"的真凶）。
+                    fun openShizukuManager() {
+                        val permIntent = android.content.Intent("moe.shizuku.manager.intent.action.REQUEST_PERMISSION")
+                            .setPackage("moe.shizuku.manager")
+                        val resolved = runCatching { permIntent.resolveActivity(ctx.packageManager) }.getOrNull()
+                        if (resolved != null) {
+                            try { ctx.startActivity(permIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); return } catch (_: Exception) {}
+                        }
+                        val launch = ctx.packageManager.getLaunchIntentForPackage("moe.shizuku.manager")
+                        if (launch != null) {
+                            try { ctx.startActivity(launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+                        } else {
+                            // getLaunchIntentForPackage 返回 null 不代表未安装——
+                            // Shizuku Manager 的 Launcher Activity 可能被隐藏或受 ROM 限制。
+                            // 此时 isInstalled() 已确认包存在，应引导用户手动打开。
+                            Toast.makeText(ctx, "无法自动打开 Shizuku 管理器，请手动打开 Shizuku 应用并授权本应用", Toast.LENGTH_LONG).show()
+                            // 尝试用通用 ACTION 启动（不依赖 launcher intent）
+                            try {
+                                ctx.startActivity(android.content.Intent("moe.shizuku.manager.intent.action.MAIN")
+                                    .setPackage("moe.shizuku.manager")
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                            } catch (_: Exception) { /* 静默 */ }
+                        }
+                    }
+
+                    if (!QuroShizuku.isInstalled(ctx)) {
+                        Toast.makeText(ctx, "未检测到 Shizuku，请先安装后再授权", Toast.LENGTH_LONG).show()
+                        return@PrivilegeCard
+                    }
+                    if (QuroShizuku.isReady) {
+                        Toast.makeText(ctx, "Shizuku 已授权 ✓ 可直接使用", Toast.LENGTH_SHORT).show()
+                        return@PrivilegeCard
+                    }
+                    // 解包 ContextWrapper 获取真实 Activity（Compose LocalContext 可能返回包装层）
+                    fun unwrapActivity(c: android.content.Context): Activity? {
+                        var cur = c
+                        while (cur is android.content.ContextWrapper) {
+                            if (cur is Activity) return cur
+                            cur = cur.baseContext
+                        }
+                        return if (cur is Activity) cur else null
+                    }
+                    val act = unwrapActivity(ctx)
+                    if (act == null) {
+                        // 取不到 Activity（极少见）：直接打开 Shizuku 应用授权，不依赖系统弹框
+                        Toast.makeText(ctx, "当前上下文无法弹系统框，已打开 Shizuku 应用授权", Toast.LENGTH_SHORT).show()
+                        openShizukuManager()
+                        return@PrivilegeCard
+                    }
+                    // 优先尝试程序化授权（弹 Shizuku 授权框，体验最佳）
+                    try {
+                        val listener = Shizuku.OnRequestPermissionResultListener { _req, _grant ->
+                            refresh()
+                            Toast.makeText(ctx, if (_grant == android.content.pm.PackageManager.PERMISSION_GRANTED) "Shizuku 授权成功 ✓" else "Shizuku 授权被拒绝", Toast.LENGTH_SHORT).show()
+                        }
+                        QuroShizuku.requestPermission(act, 1024, listener)
+                        // 兜底：若 3s 后仍未授权（requestPermission 静默失败/用户没看到弹框），自动拉起 Shizuku 应用
+                        scope.launch {
+                            kotlinx.coroutines.delay(3000)
+                            if (!QuroShizuku.isReady) {
+                                Toast.makeText(ctx, "未弹出授权框，已为你打开 Shizuku 应用，请手动授权本应用", Toast.LENGTH_LONG).show()
+                                openShizukuManager()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(ctx, "程序化授权失败，已改为在 Shizuku 应用中授权", Toast.LENGTH_SHORT).show()
+                        openShizukuManager()
+                    }
+                },
                 testLabel = if (states[PrivilegeLevel.L2]!!.available) "状态" else null,
                 onTest = if (states[PrivilegeLevel.L2]!!.available) {
                     { QuroShizukuBridge.state(ctx).details }

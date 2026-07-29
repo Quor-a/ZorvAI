@@ -34,6 +34,11 @@ object QuroReplyNotifier {
     private const val CHANNEL_ID = "quro_ai_reply"        // 离开软件：重要级 HIGH → heads-up 弹窗
     private const val NOTIF_ID = 2001
 
+    /** IM（飞书 / QQ 等机器人）入站消息渠道：同样 HIGH → heads-up 弹窗。 */
+    private const val CHANNEL_IM_ID = "quro_im"
+    internal const val NOTIF_IM_INBOUND = 2002              // 收到 IM 消息
+    internal const val NOTIF_IM_REPLY = 2003                // 机器人回复（同会话）
+
     /** 应用是否处于前台（由 MainActivity 维护）。前台时 [notifyReply] 直接 return，不弹系统通知。 */
     @Volatile var isAppForeground: Boolean = false
 
@@ -93,6 +98,54 @@ object QuroReplyNotifier {
                 .build()
             val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.notify(NOTIF_ID, notif)
+        }
+    }
+
+    private fun ensureImChannel(ctx: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (nm.getNotificationChannel(CHANNEL_IM_ID) == null) {
+                val ch = NotificationChannel(
+                    CHANNEL_IM_ID,
+                    "IM 消息通知",
+                    NotificationManager.IMPORTANCE_HIGH,
+                ).apply {
+                    description = "来自飞书 / QQ 等机器人的消息（离开软件时系统弹窗）"
+                    setShowBadge(true)
+                }
+                nm.createNotificationChannel(ch)
+            }
+        }
+    }
+
+    /**
+     * IM（机器人）消息系统弹窗：离开软件时弹 heads-up，前台时不弹（用户能在绑定对话里看到）。
+     * 用于「飞书 / QQ 收到消息 → 系统级弹窗提醒」与「机器人回复 → 系统级弹窗提醒」两个场景。
+     * @param id 通知 id：入站用 [NOTIF_IM_INBOUND]、回复用 [NOTIF_IM_REPLY]，避免两类通知互相覆盖。
+     */
+    fun notifyImMessage(ctx: Context, sender: String, text: String, id: Int = NOTIF_IM_INBOUND) {
+        if (isAppForeground) return
+        runCatching {
+            ensureImChannel(ctx)
+            val tapIntent = Intent(ctx, QuroMainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pi = PendingIntent.getActivity(
+                ctx, id, tapIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val snippet = text.lineSequence().firstOrNull { it.isNotBlank() }?.take(200) ?: "（空消息）"
+            val notif = NotificationCompat.Builder(ctx, CHANNEL_IM_ID)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(sender)
+                .setContentText(snippet)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setAutoCancel(true)
+                .setContentIntent(pi)
+                .build()
+            val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.notify(id, notif)
         }
     }
 }

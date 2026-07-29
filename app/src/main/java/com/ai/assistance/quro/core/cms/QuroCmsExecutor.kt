@@ -3,11 +3,14 @@ package com.ai.assistance.quro.core.cms
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Build
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.core.QuroBrowserBridge
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.tools.AiBrowserTool
 import com.ai.assistance.quro.core.tools.QuroJsExecutor
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
@@ -36,6 +39,7 @@ class QuroCmsExecutor(context: Context) {
         cap: QuroCmsCapability,
         args: Map<String, String>,
         uiRequest: suspend (QuroCmsPermission) -> AuthorizationLevel?,
+        host: RuntimeHost = RuntimeHost.APP,
     ): String {
         // 1) 逐项仲裁所需权限
         val perms = cap.requiresPermissions.mapNotNull { module.findPermission(it) }
@@ -45,20 +49,21 @@ class QuroCmsExecutor(context: Context) {
         }
         val maxLevel = if (perms.isEmpty()) PermissionLevel.Normal else perms.maxOf { it.level.ordinal }.let { PermissionLevel.values()[it] }
 
-        // 2) 解析动作（统一做 ${...} 代入：intent/json/js/api 都支持）
-        val resolved = cap.resolveAction(args)
+        // 2) 解析动作（按选定宿主取模板，统一做 ${...} 代入）
+        val (tpl, type) = cap.effectiveFor(host)
+        val resolved = cap.resolveTemplate(tpl, args)
 
         // 3) trace：记录 AI 内部 action
-        QuroAgentTrace.action("cms", "调用能力 ${cap.id}", "module=${module.id} args=${args.keys.joinToString()}")
+        QuroAgentTrace.action("cms", "调用能力 ${cap.id}", "host=${host.label} module=${module.id} args=${args.keys.joinToString()}")
 
-        // 4) 执行（仅应用内通道）
+        // 4) 执行（按宿主通道）
         val result = try {
-            when (cap.actionType) {
+            when (type) {
                 "intent" -> runIntent(resolved)
                 "js" -> QuroJsExecutor.eval(resolved, 10_000)
                 "api" -> runApi(resolved, args)
                 "terminal" -> runTerminal(resolved)
-                else -> "⛔ 不支持的执行类型：${cap.actionType}（已禁用 shell/root/无障碍等真实执行通道）"
+                else -> "⛔ 不支持的执行类型：$type（已禁用 shell/root/无障碍等真实执行通道）"
             }
         } catch (e: Exception) {
             "⛔ 执行异常：${e.message}"
@@ -158,6 +163,73 @@ class QuroCmsExecutor(context: Context) {
                 "path=${f.absolutePath}（${items.size} 项）:\n" + items.joinToString("\n")
             }
             "echo" -> "workflow: ${args["text"] ?: ""}"
+
+            // ---- 自动化浏览器（AI 自动化研究 / 抓取正文，接 AiBrowserTool 引擎）----
+            "ai.browser.automate" -> {
+                val query = args["query"] ?: return@runCatching "⛔ 缺少 query 参数"
+                val depth = args["depth"]?.toIntOrNull()?.coerceIn(1, 8) ?: 4
+                val argJson = JSONObject().apply {
+                    put("action", "automate"); put("query", query); put("depth", depth)
+                }.toString()
+                AiBrowserTool().run(appContext, argJson)
+            }
+            "ai.browser.read" -> {
+                val url = args["url"] ?: return@runCatching "⛔ 缺少 url 参数"
+                val argJson = JSONObject().apply { put("action", "read"); put("url", url) }.toString()
+                AiBrowserTool().run(appContext, argJson)
+            }
+
+            // ---- 系统：电量信息（应用内 BatteryManager，只读）----
+            "battery.info" -> {
+                val bm = appContext.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+                    ?: return@runCatching "⛔ 电量信息不可用（无 BatteryManager）"
+                val capacity = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                buildString {
+                    append("电量=${capacity}%\n")
+                    append("充电中=${bm.isCharging}")
+                }
+            }
+
+            // ---- 文件：沙箱内写入（仅应用沙箱，绝不触达系统文件）----
+            "file.write" -> {
+                val path = args["path"] ?: return@runCatching "⛔ 缺少 path 参数"
+                val content = args["content"] ?: ""
+                val f = safeSandboxFile(path) ?: return@runCatching "⛔ 仅允许写入应用沙箱内文件"
+                runCatching {
+                    f.parentFile?.mkdirs()
+                    f.writeText(content)
+                    "已写入 ${f.absolutePath}（${content.length} 字节）"
+                }.getOrElse { "⛔ 写入失败：${it.message}" }
+            }
+
+            // ---- 时间：按指定格式输出（默认 yyyy-MM-dd HH:mm:ss）----
+            "time.format" -> {
+                val pattern = args["format"]?.takeIf { it.isNotBlank() } ?: "yyyy-MM-dd HH:mm:ss"
+                val epoch = args["epoch"]?.toLongOrNull() ?: System.currentTimeMillis()
+                val fmt = runCatching { SimpleDateFormat(pattern, Locale.getDefault()) }
+                    .getOrElse { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
+                "epoch=$epoch\n${fmt.format(Date(epoch))}"
+            }
+
+            // ---- 工作流：本地编排多步内置能力（递归分发，真实执行）----
+            "workflow.sequence" -> {
+                val stepsJson = args["steps"] ?: args["plan"] ?: return@runCatching "⛔ 缺少 steps 参数"
+                val arr = runCatching { JSONArray(stepsJson) }.getOrNull()
+                    ?: return@runCatching "⛔ steps 不是合法 JSON 数组"
+                val sb = StringBuilder()
+                var ok = 0
+                for (i in 0 until arr.length()) {
+                    val step = runCatching { arr.getJSONObject(i) }.getOrNull() ?: continue
+                    val sop = step.optString("op", "")
+                    val sargs = jsonObjToMap(step.optJSONObject("args"))
+                    val out = runApi(sop, sargs)
+                    if (!out.startsWith("⛔")) ok++
+                    sb.append("步骤 ${i + 1} [$sop]:\n$out\n\n")
+                }
+                sb.insert(0, "工作流完成：共 ${arr.length()} 步，成功 $ok 步。\n\n")
+                sb.toString()
+            }
+
             else -> "⛔ 未知 API 能力：$op"
         }
     }.getOrElse { "⛔ API 执行失败：${it.message}" }
@@ -184,5 +256,13 @@ class QuroCmsExecutor(context: Context) {
             .mapNotNull { it?.canonicalPath }
         val can = f.canonicalPath
         return if (roots.any { can.startsWith(it) }) f else null
+    }
+
+    /** 把 JSONObject 摊平为 String→String 参数表（供工作流步骤递归分发）。 */
+    private fun jsonObjToMap(o: JSONObject?): Map<String, String> {
+        if (o == null) return emptyMap()
+        val m = mutableMapOf<String, String>()
+        o.keys().forEach { k -> m[k] = o.optString(k, "") }
+        return m
     }
 }

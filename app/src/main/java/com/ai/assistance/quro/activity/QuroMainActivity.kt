@@ -8,6 +8,10 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
+import android.os.Process
+import android.os.StrictMode
+import androidx.lifecycle.lifecycleScope
+import com.ai.assistance.quro.BuildConfig
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -21,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.ai.assistance.quro.core.tools.QuroPermissionHolder
+import com.ai.assistance.quro.util.AnrMonitor
 import com.ai.assistance.quro.core.tools.QuroPermissionRequester
 import com.ai.assistance.quro.service.QuroVoiceBallService
 import com.ai.assistance.quro.core.tools.QuroVoiceFeaturePrefs
@@ -48,9 +53,39 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
 
     private lateinit var permLauncher: ActivityResultLauncher<Array<String>>
     @Volatile private var permContinuation: Continuation<Boolean>? = null
+    // ★ #763 ANR 诊断：主线程看门狗（移植自上游项目的 AnrMonitor）。
+    // 每 100ms 探测主线程是否响应，超过 1s 即抓取主线程当前堆栈并落盘到
+    // getExternalFilesDir("anr_reports")/anr_report_*.txt，同时打 logcat。
+    private lateinit var anrMonitor: AnrMonitor
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // ★ #763 ANR 诊断：开启 StrictMode 主线程策略（仅 debug 构建）。
+        // 一旦主线程出现磁盘读/写、网络访问或资源泄漏，会在 logcat 打印完整调用栈（penaltyLog）。
+        // 用户用 LogFox 抓取日志即可定位「突然出现的 ANR」的真实主线程阻塞点，便于精确修复。
+        if (BuildConfig.DEBUG) {
+            StrictMode.setThreadPolicy(
+                StrictMode.ThreadPolicy.Builder()
+                    .detectDiskReads()
+                    .detectDiskWrites()
+                    .detectNetwork()
+                    .penaltyLog()
+                    .build()
+            )
+            StrictMode.setVmPolicy(
+                StrictMode.VmPolicy.Builder()
+                    .detectActivityLeaks()
+                    .detectLeakedClosableObjects()
+                    .detectLeakedRegistrationObjects()
+                    .penaltyLog()
+                    .build()
+            )
+        }
+        // ★ #763 ANR 诊断：启动主线程看门狗（移植自上游项目）。debug 构建常驻，
+        // 真实用户反馈「对话框区域突然 ANR」时，本机复现不了、又读不到截图，
+        // 靠它抓出卡死那一行的精确堆栈，比读代码猜根因可靠。报告在 anr_reports/。
+        anrMonitor = AnrMonitor(this, lifecycleScope)
+        anrMonitor.start()
         // 让崩溃上报器尽早能把日志落盘（甚至在 QuroApp 组合之前发生的崩溃也能留痕）。
         QuroCrashReporter.crashDir = filesDir
         // 全局兜底：把主线程（含 Compose 组合）里未捕获的异常记录下来，
@@ -197,6 +232,7 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
     }
 
     override fun onDestroy() {
+        if (::anrMonitor.isInitialized) anrMonitor.stop()
         QuroPermissionHolder.requester = null
         super.onDestroy()
     }

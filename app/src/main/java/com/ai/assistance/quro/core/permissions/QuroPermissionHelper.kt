@@ -10,6 +10,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import androidx.core.content.ContextCompat
+import com.ai.assistance.quro.core.privilege.QuroShizukuBridge
 import com.ai.assistance.quro.receiver.QuroDeviceAdminReceiver
 import com.ai.assistance.quro.service.QuroAccessibilityService
 import java.io.File
@@ -140,19 +141,24 @@ object QuroPermissionHelper {
     // 6) Shizuku 服务
     private fun shizuku(ctx: Context): QuroPermissionItem {
         val installed = isPackageInstalled(ctx, SHIZUKU_PKG)
+        val authorized = installed && QuroShizukuBridge.isAuthorized(ctx)
         return QuroPermissionItem(
             id = "shizuku",
             title = "Shizuku 服务",
             desc = "通过 Shizuku 获取 adb/系统级能力（免 root）",
-            granted = installed,
-            guideIntent = if (installed) {
-                ctx.packageManager.getLaunchIntentForPackage(SHIZUKU_PKG)
-            } else {
-                Intent(Intent.ACTION_VIEW).apply {
+            granted = authorized,
+            guideIntent = when {
+                !installed -> Intent(Intent.ACTION_VIEW).apply {
                     data = Uri.parse("market://details?id=$SHIZUKU_PKG")
                 }
+                !authorized -> ctx.packageManager.getLaunchIntentForPackage(SHIZUKU_PKG)
+                else -> null
             },
-            note = if (installed) "请在 Shizuku 中授权 Quro AI" else "未安装 Shizuku，请先在应用商店安装",
+            note = when {
+                !installed -> "未安装 Shizuku，请先在应用商店安装"
+                authorized -> "已授权，可正常调用"
+                else -> "请在 Shizuku 中授权 Quro AI 并确保其正在运行"
+            },
         )
     }
 

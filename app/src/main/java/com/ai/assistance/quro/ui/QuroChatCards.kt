@@ -32,6 +32,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.Image
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -202,8 +205,8 @@ private fun CardShell(title: String, content: @Composable ColumnScope.() -> Unit
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant),
-        border = if (dismiss != null) BorderStroke(1.dp, cs.outlineVariant) else null,
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        border = null,
     ) {
         Column(Modifier.padding(14.dp)) {
             if (title.isNotBlank() || dismiss != null) {
@@ -402,13 +405,19 @@ private fun TableCardView(card: QuroChatCard.TableCard) {
                     }
                 }
             }
-            card.rows.forEachIndexed { ri, row ->
+            // ★ ANR 防御：大表（工具/查询返回上百行）原 Column+forEach 主线程一次性布局 → 卡顿/ANR。
+            // 上限渲染 80 行，超出显示脚注（完整数据仍在卡片 JSON 中）。
+            val shownRows = card.rows.take(80)
+            shownRows.forEachIndexed { ri, row ->
                 Row(Modifier.padding(vertical = 6.dp).then(if (ri % 2 == 1) Modifier.background(cs.outlineVariant.copy(alpha = 0.18f)) else Modifier)) {
                     row.forEach { cell ->
                         Text(cell, color = cs.onSurfaceVariant, fontSize = 12.sp,
                             modifier = Modifier.widthIn(min = 80.dp, max = 220.dp).padding(horizontal = 8.dp))
                     }
                 }
+            }
+            if (card.rows.size > shownRows.size) {
+                Text("… 还有 ${card.rows.size - shownRows.size} 行已省略渲染", color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp, horizontal = 8.dp))
             }
         }
     }
@@ -419,7 +428,10 @@ private fun TableCardView(card: QuroChatCard.TableCard) {
 private fun ListCardView(card: QuroChatCard.ListCard, onCommand: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
-        card.items.forEachIndexed { i, it ->
+        // ★ ANR 防御：大列表（工具/查询返回上百项）原 Column+forEach 主线程一次性布局 → 卡顿/ANR。
+        // 上限渲染 80 项，超出显示脚注（完整数据仍在卡片 JSON 中）。
+        val shownItems = card.items.take(80)
+        shownItems.forEachIndexed { i, it ->
             Row(
                 Modifier.fillMaxWidth()
                     .clickable {
@@ -439,7 +451,10 @@ private fun ListCardView(card: QuroChatCard.ListCard, onCommand: (String) -> Uni
                     if (it.sub.isNotBlank()) Text(it.sub, color = cs.onSurfaceVariant, fontSize = 11.sp)
                 }
             }
-            if (i < card.items.lastIndex) HorizontalDivider(color = cs.outlineVariant)
+            if (i < shownItems.lastIndex) HorizontalDivider(color = cs.outlineVariant)
+        }
+        if (card.items.size > shownItems.size) {
+            Text("… 还有 ${card.items.size - shownItems.size} 项已省略渲染", color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
         }
     }
 }
@@ -712,22 +727,29 @@ private fun GaugeCardView(card: QuroChatCard.GaugeCard) {
 @Composable
 private fun MediaCardView(card: QuroChatCard.MediaCard) {
     val cs = MaterialTheme.colorScheme
-    CardShell(card.title) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                when (card.mediaType.lowercase()) {
-                    "audio" -> Icons.Filled.Audiotrack
-                    "video" -> Icons.Filled.PlayCircle
-                    else -> Icons.Filled.Image
-                }, null, tint = cs.primary, modifier = Modifier.size(28.dp)
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(card.mediaType.uppercase(), color = cs.onSurfaceVariant, fontSize = 11.sp)
-                Text(card.mediaUrl, color = cs.onSurfaceVariant, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            TextButton(onClick = { QuroBrowserBridge.open(card.mediaUrl) }) {
-                Text("打开", color = cs.primary, fontSize = 12.sp)
+    if (card.mediaType.lowercase() == "image") {
+        // AI 内联图片（{"type":"media","mediaType":"image","mediaUrl":...}）：直接渲染成自适应图片气泡
+        CardShell(card.title) {
+            NetworkImageBubble(url = card.mediaUrl, modifier = Modifier.fillMaxWidth())
+        }
+    } else {
+        CardShell(card.title) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    when (card.mediaType.lowercase()) {
+                        "audio" -> Icons.Filled.Audiotrack
+                        "video" -> Icons.Filled.PlayCircle
+                        else -> Icons.Filled.Image
+                    }, null, tint = cs.primary, modifier = Modifier.size(28.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(card.mediaType.uppercase(), color = cs.onSurfaceVariant, fontSize = 11.sp)
+                    Text(card.mediaUrl, color = cs.onSurfaceVariant, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                TextButton(onClick = { QuroBrowserBridge.open(card.mediaUrl) }) {
+                    Text("打开", color = cs.primary, fontSize = 12.sp)
+                }
             }
         }
     }
@@ -923,6 +945,7 @@ private fun NoteCardView(card: QuroChatCard.NoteCard) {
             fontFamily = if (card.lang != null) FontFamily.Monospace else FontFamily.Default,
             modifier = Modifier.fillMaxWidth()
                 .background(cs.outlineVariant.copy(alpha = 0.18f)).clip(RoundedCornerShape(8.dp)).padding(8.dp)
+                .heightIn(max = 240.dp)
                 .verticalScroll(rememberScrollState()),
         )
         Spacer(Modifier.height(6.dp))
@@ -1033,21 +1056,27 @@ private fun TimelineCardView(card: QuroChatCard.TimelineCard) {
     CardShell(card.title) {
         if (card.events.isEmpty()) { Text("（无事件）", color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
         Column(Modifier.fillMaxWidth()) {
-            card.events.forEachIndexed { i, ev ->
+            // ★ ANR 防御：大时间线（工具/日志返回上百事件）原 Column+forEach 主线程一次性布局 → 卡顿/ANR。
+            // 上限渲染 60 事件，超出显示脚注。
+            val shownEvents = card.events.take(60)
+            shownEvents.forEachIndexed { i, ev ->
                 Row(Modifier.fillMaxWidth()) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(54.dp)) {
                         Text(ev.time, color = cs.onSurfaceVariant, fontSize = 11.sp, maxLines = 1)
                         Spacer(Modifier.height(4.dp))
                         Box(Modifier.size(10.dp).clip(CircleShape).background(if (ev.status == "todo") cs.outline else cs.primary))
-                        if (i < card.events.lastIndex) Spacer(Modifier.height(4.dp))
-                        if (i < card.events.lastIndex) Box(Modifier.width(2.dp).height(22.dp).background(cs.outlineVariant))
+                        if (i < shownEvents.lastIndex) Spacer(Modifier.height(4.dp))
+                        if (i < shownEvents.lastIndex) Box(Modifier.width(2.dp).height(22.dp).background(cs.outlineVariant))
                     }
                     Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f).padding(bottom = if (i < card.events.lastIndex) 12.dp else 0.dp)) {
+                    Column(Modifier.weight(1f).padding(bottom = if (i < shownEvents.lastIndex) 12.dp else 0.dp)) {
                         Text(ev.title, color = cs.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         if (ev.desc.isNotBlank()) Text(ev.desc, color = cs.onSurfaceVariant, fontSize = 12.sp)
                     }
                 }
+            }
+            if (card.events.size > shownEvents.size) {
+                Text("… 还有 ${card.events.size - shownEvents.size} 个事件已省略渲染", color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
             }
         }
     }
@@ -1210,39 +1239,72 @@ private fun KanbanCardView(card: QuroChatCard.KanbanCard) {
     CardShell(card.title) {
         if (card.columns.isEmpty()) { Text("（无看板）", color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            card.columns.forEach { col ->
+            // ★ ANR 防御：大看板（多列多卡）原 Column+forEach 主线程一次性布局 → 卡顿/ANR。
+            // 上限渲染 12 列、每列 40 张卡，超出显示脚注。
+            card.columns.take(12).forEach { col ->
                 Column(Modifier.width(150.dp).background(cs.outlineVariant.copy(alpha = 0.18f)).clip(RoundedCornerShape(10.dp)).padding(8.dp)) {
                     Text(col.name, color = cs.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(6.dp))
-                    col.items.forEach { it2 ->
+                    col.items.take(40).forEach { it2 ->
                         Surface(color = cs.surface, shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, cs.outlineVariant), modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                             Text(it2, color = cs.onSurface, fontSize = 12.sp, modifier = Modifier.padding(8.dp))
                         }
                     }
+                    if (col.items.size > 40) Text("… +${col.items.size - 40}", color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp))
                 }
             }
+        }
+        if (card.columns.size > 12) {
+            Text("… 还有 ${card.columns.size - 12} 列已省略渲染", color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
         }
     }
 }
 
-/** 元宝回答链接预览卡：点击在应用内浏览器打开元宝回答（原生安卓点击查看体验）。 */
+/** 元宝回答预设清单（用户逐项登记的「点击查看元宝的回答」链接）。
+ *  卡片无可用链接时兜底展示，确保已登记的话题永远有去处。 */
+private val PRESET_YUANBAO_LINKS = listOf(
+    QuroChatCard.YuanbaoLink(
+        "百分百开源安卓数字人",
+        "https://yb.tencent.com/s/I9x5hnu8zJqm",
+    ),
+    QuroChatCard.YuanbaoLink(
+        "二、3D 全离线（LLM+ASR+TTS+A2BS+渲染都在手机）",
+        "https://yb.tencent.com/s/TsfOddkjerlh",
+    ),
+)
+
+/** 元宝回答链接预览卡：点击在应用内浏览器打开元宝回答（原生安卓点击查看体验）。
+ *  v294：支持多条链接，逐行可点；无链接时兜底展示预设清单。 */
 @Composable
 private fun YuanbaoCardView(card: QuroChatCard.YuanbaoCard) {
     val cs = MaterialTheme.colorScheme
+    val items = when {
+        card.links.isNotEmpty() -> card.links
+        card.url.isNotBlank() -> listOf(QuroChatCard.YuanbaoLink(card.title.ifBlank { "腾讯元宝回答" }, card.url))
+        else -> PRESET_YUANBAO_LINKS
+    }
     CardShell(card.title.ifBlank { "腾讯元宝回答" }) {
-        Row(
-            Modifier.fillMaxWidth().clickable { QuroBrowserBridge.open(card.url) }.padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Filled.Chat, null, tint = cs.primary, modifier = Modifier.size(26.dp))
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text("点击查看元宝回答", color = cs.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(2.dp))
-                Text(card.url, color = cs.onSurfaceVariant, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("需要点击查看元宝的回答", color = cs.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(6.dp))
+        items.forEach { link ->
+            Row(
+                Modifier.fillMaxWidth()
+                    .clickable { QuroBrowserBridge.open(link.url.ifBlank { PRESET_YUANBAO_LINKS.first().url }) }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.Chat, null, tint = cs.primary, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    if (link.title.isNotBlank()) {
+                        Text(link.title, color = cs.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(2.dp))
+                    }
+                    Text(link.url, color = cs.onSurfaceVariant, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.width(6.dp))
+                Icon(Icons.Filled.OpenInBrowser, null, tint = cs.primary, modifier = Modifier.size(20.dp))
             }
-            Spacer(Modifier.width(6.dp))
-            Icon(Icons.Filled.OpenInBrowser, null, tint = cs.primary, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -1386,6 +1448,86 @@ private fun AvatarGroupCardView(card: QuroChatCard.AvatarGroupCard, onCommand: (
                 ) {
                     Text(initial, color = cs.onPrimaryContainer, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
+            }
+        }
+    }
+}
+
+/**
+ * AI 网络图片气泡：通过 HttpURLConnection 下载 URL 图片并渲染。
+ * 使用 inSampleSize 降采样避免 OOM，限制最大高度 260dp。
+ */
+@Composable
+private fun NetworkImageBubble(url: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var bitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf(false) }
+
+    LaunchedEffect(url) {
+        loading = true
+        error = false
+        bitmap = null
+        runCatching {
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 8000
+            conn.readTimeout = 10000
+            conn.doInput = true
+            conn.connect()
+            if (conn.responseCode == 200) {
+                val inputStream = conn.inputStream
+                val opts = android.graphics.BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                }
+                android.graphics.BitmapFactory.decodeStream(inputStream, null, opts)
+                inputStream.close()
+                val targetW = (context.resources.displayMetrics.density * 280).toInt()
+                val targetH = (context.resources.displayMetrics.density * 260).toInt()
+                var sampleSize = 1
+                while (opts.outWidth / (sampleSize * 2) >= targetW && opts.outHeight / (sampleSize * 2) >= targetH) {
+                    sampleSize *= 2
+                }
+                val conn2 = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                conn2.connectTimeout = 8000
+                conn2.readTimeout = 10000
+                conn2.doInput = true
+                conn2.connect()
+                if (conn2.responseCode == 200) {
+                    val decodeOpts = android.graphics.BitmapFactory.Options().apply {
+                        inSampleSize = sampleSize
+                    }
+                    bitmap = android.graphics.BitmapFactory.decodeStream(conn2.inputStream, null, decodeOpts)
+                }
+                conn2.disconnect()
+            }
+            conn.disconnect()
+        }.onFailure {
+            error = true
+        }
+        loading = false
+    }
+
+    Box(
+        modifier
+            .heightIn(max = 260.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFFF0F0F0))
+    ) {
+        when {
+            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+            }
+            error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.BrokenImage, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(32.dp))
+            }
+            bitmap != null -> {
+                val b = bitmap!!
+                Image(
+                    bitmap = b.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         }
     }

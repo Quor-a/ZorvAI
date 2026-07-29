@@ -24,9 +24,16 @@ import com.ai.assistance.quro.ui.QuroShareBridge
 import com.ai.assistance.quro.service.QuroMediaService
 import com.ai.assistance.quro.core.tools.QuroMediaController
 import com.ai.assistance.quro.core.QuroBrowserBridge
+import android.app.Activity
+import android.content.ContextWrapper
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.view.Gravity
+import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.TextView
 import android.provider.OpenableColumns
 import android.content.ContentValues
 import android.widget.Toast
@@ -34,6 +41,10 @@ import java.io.File
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
+import com.canhub.cropper.CropImageContract
+import com.canhub.cropper.CropImageContractOptions
+import com.canhub.cropper.CropImageOptions
+import com.canhub.cropper.CropImageView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -94,12 +105,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+
 import androidx.compose.material3.Button
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.webkit.WebSettings
 import android.view.ViewGroup
 import androidx.compose.ui.viewinterop.AndroidView
@@ -107,6 +120,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
@@ -157,6 +171,7 @@ import com.ai.assistance.quro.core.policy.QuroPolicyStore
 import com.ai.assistance.quro.core.QuroAttachmentKit
 import com.ai.assistance.quro.core.QuroConversationMeta
 import com.ai.assistance.quro.core.QuroPersona
+import com.ai.assistance.quro.core.QuroCrashLogger
 import com.ai.assistance.quro.ui.QuroChatViewModel
 import com.ai.assistance.quro.core.tools.QuroVoiceStyle
 import com.ai.assistance.quro.core.tools.QuroSttHolder
@@ -213,6 +228,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Download
@@ -242,6 +258,7 @@ import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Icon
 import androidx.compose.material3.AssistChip
@@ -274,6 +291,7 @@ fun ChatScreen(
     // ---- QuroAI 后端状态（单一真相源） ----
     val messages by vm.messages.collectAsState()
     val busy by vm.busy.collectAsState()
+    val generatingIds by vm.generatingIds.collectAsState()
     val conversations by vm.conversations.collectAsState()
     val currentId by vm.currentId.collectAsState()
     val thinking by vm.thinking.collectAsState()
@@ -456,6 +474,8 @@ fun ChatScreen(
     // 模型配置仓库：在可组合作用域直接创建（LocalContext.current 不能放进 remember/普通 lambda）
     val modelConfigRepo = QuroModelConfigRepository(LocalContext.current)
     var showAbout by remember { mutableStateOf(false) }
+    // ACI 管理中心屏：从设置「功能 → ACI 管理中心」进入（此前仅有 AI 工具 ui_open_aci 可打开，无手动按钮）
+    var showAci by remember { mutableStateOf(false) }
     // 功能模型配置屏（从设置「功能模型配置」进入）：为 5 类 AI 子能力各自绑定模型
     var showFeatureModelConfig by remember { mutableStateOf(false) }
     var showAppearance by remember { mutableStateOf(false) }
@@ -466,9 +486,6 @@ fun ChatScreen(
     var showVoiceService by remember { mutableStateOf(false) }
     // 云模型配置屏（语音合成 TTS 的真实配置界面：选服务商 + 填参数 + 音色 + 风格标签）
     var showCloudTts by remember { mutableStateOf(false) }
-    var useFullTools by remember {
-        mutableStateOf(modelConfigRepo.load().useFullTools)
-    }
     // 独立模型配置屏（从设置底部弹层「模型配置」或「添加模型」进入）
     var showModelConfig by remember { mutableStateOf(false) }
     // 追踪模型配置屏是否从设置页进入（用于返回键正确导航：设置→模型配置→返回→回到设置）
@@ -551,6 +568,7 @@ fun ChatScreen(
             "ui_open_voice_service" -> showVoiceService = true
             "ui_open_doc_viewer" -> showOnlyOffice = true
             "ui_open_about" -> showAbout = true
+            "ui_open_aci" -> showAci = true
             "ui_open_appearance" -> showAppearance = true
             "ui_open_soul" -> showSoulSheet = true
             "ui_open_memory" -> showMemoryDialog = true
@@ -608,6 +626,7 @@ fun ChatScreen(
 
     // 应用上下文：提前声明，供 handleUiAction / handleCardCommand 等局部函数捕获
     val ctx = LocalContext.current
+    quroDiagCtx = ctx
 
     // 卡片动作命令分发：ui_* 走 UI 桥；linux:install 触发沙箱安装；run:<cmd> 喂给终端。
     fun handleCardCommand(cmd: String) {
@@ -691,7 +710,10 @@ fun ChatScreen(
                     onNew = { vm.newConversation(); scope.launch { drawerState.close() } },
                     onPick = { id -> vm.selectConversation(id); scope.launch { drawerState.close() } },
                     onCopyAll = { copyConversation(ctx, uiMessages) },
-                    scaled = { scaled(it) }
+                    onDelete = { vm.deleteConversation(it) },
+                    onDeleteAll = { vm.deleteAllConversations() },
+                    scaled = { scaled(it) },
+                    generatingIds = generatingIds,
                 )
             }
         ) {
@@ -703,6 +725,8 @@ fun ChatScreen(
                         onMenu = openDrawer,
                         onModel = { sheet = SheetType.Model },
                         onSettings = { sheet = SheetType.Settings },
+                        persona = selectedPersona,
+                        onPick = { sheet = SheetType.Persona },
                         scaled = { scaled(it) }
                     )
                 }
@@ -712,19 +736,10 @@ fun ChatScreen(
                         .fillMaxSize()
                         .padding(pad)
                 ) {
-                    PersonaBar(
-                        persona = selectedPersona,
-                        onPick = { sheet = SheetType.Persona },
-                        scaled = { scaled(it) }
-                    )
-                    // 用户资料条（显示在对话框顶部，让用户看到自己的身份）
-                    val currentUserProfile by vm.userProfile.collectAsState()
-                    if (currentUserProfile.name.isNotBlank()) {
-                        UserProfileBar(profile = currentUserProfile, scaled = { scaled(it) })
-                    }
                     MessageList(
                         messages = uiMessages,
                         scaled = { scaled(it) },
+                        currentId = currentId,
                         traceLines = traceLines,
                         onOpenLink = { browserUrl = it },
                         onCommand = { handleCardCommand(it) },
@@ -764,21 +779,34 @@ fun ChatScreen(
                     // 自动朗读：AI 回复完成后 TTS 朗读（受「语音设置 · 自动朗读」开关控制）
                     var autoRead by remember { mutableStateOf(QuroVoiceFeaturePrefs.getAutoRead(ctx)) }
                     fun toggleAutoRead() { autoRead = !autoRead; QuroVoiceFeaturePrefs.setAutoRead(ctx, autoRead) }
-                    var lastSpokenId by remember { mutableStateOf("") }
+                    // #411 TTS 去重提升到 ViewModel：remember 是纯内存态，退出对话框 Compose 树销毁即重置为 "" →
+                    // 重进入时 last.id != "" 永远成立 → 重复播放已播过的消息。改用 ViewModel 的 StateFlow，
+                    // 生命周期跟随 ViewModel（Activity 重建也不丢）。
+                    val lastSpokenId by vm.lastSpokenMsgId.collectAsState()
                     var wasBusy by remember { mutableStateOf(false) }
+                    var busyConvId by remember { mutableStateOf<String?>(null) }
+                    val ttsScope = rememberCoroutineScope()
                     LaunchedEffect(busy, currentId) {
-                        if (wasBusy && !busy) {
+                        // 记录「正在生成的是哪个会话」，切走其它会话时不该误触发朗读
+                        if (busy) busyConvId = currentId
+                        if (wasBusy && !busy && busyConvId == currentId) {
                             val msgs = vm.messages.value
                             val last = msgs.lastOrNull()
                             if (autoRead && last != null && last.role == "assistant" && last.id != lastSpokenId) {
-                                lastSpokenId = last.id
-                                QuroTtsHolder.ensureReady(ctx)
-                                QuroTtsHolder.speak(last.content) {}
+                                vm.markSpoken(last.id)
+                                // ★ v414 修复「语音朗读不播 / 语音合成播不完」：
+                                //   ensureReady/speak 是挂起调用，若直接写在随 busy/currentId 取消的 LaunchedEffect 内，
+                                //   挂起过程被取消 → 要么不播、要么播到一半被掐断。改由稳定 scope 承接播放，UI 状态变化不再杀掉朗读。
+                                ttsScope.launch {
+                                    QuroTtsHolder.ensureReady(ctx)
+                                    QuroTtsHolder.speak(last.content) {}
+                                }
                             }
                         }
                         wasBusy = busy
                     }
 
+                    val visionOn by vm.visionEnabled.collectAsState()
                     Composer(
                         deepThink = thinking,
                         onToggleThink = { vm.setThinking(!thinking) },
@@ -795,8 +823,11 @@ fun ChatScreen(
                         onOpenMusicPlayer = { showMusicPlayer = true },
                         autoRead = autoRead,
                         onToggleAutoRead = { toggleAutoRead() },
+                        visionEnabled = visionOn,
+                        onToggleVision = { vm.setVisionEnabled(!vm.visionEnabled.value) },
                         voiceInputEnabled = voiceInputEnabled,
                         onVoiceInput = { startDialogStt() },
+                        onOpenSkills = { showSkills = true },
                         scaled = { scaled(it) }
                     )
                 }
@@ -877,10 +908,9 @@ fun ChatScreen(
                 savedProfiles = profileRepo.loadAll()
                 customProviders = customProviderRepo.loadAll()
                 localModels = localModelRepo.loadAll()
-                // 若尚未拉取且已配置接入点，自动拉取真实模型列表
-                if (modelList == null && cfg.baseUrl.isNotBlank()) {
-                    modelVm.fetchModels()
-                }
+                // v396：改为手动拉取——进入模型面板只加载本地缓存，不自动联网；
+                // 用户点「从 API 拉取可用模型」按钮才请求，结果会持久化缓存。
+                modelVm.loadCachedModels()
             }
         }
 
@@ -908,7 +938,7 @@ fun ChatScreen(
         // 任意「设置子页」浮层是否开着：用于禁用设置 sheet 的返回回调，保证逐级返回
         val settingsChildOpen = showModelConfig || showToolbox || showVoice || showAbout || showAppearance ||
             showPermission || showCms || showPlugins || showKnowledge || showTerminal || showSchedule || showBots ||
-            showTts || showStt || showVoiceService || showSystemStatus || showFeatureModelConfig
+            showTts || showStt || showVoiceService || showSystemStatus || showFeatureModelConfig || showAci
         // 底部弹层（自定义，统一遮罩 + 上滑）
         SheetOverlay(
             sheet = sheet, lastSheet = lastSheet,
@@ -967,6 +997,7 @@ fun ChatScreen(
             onAddModel = { _, _ -> showModelConfig = true },  // 添加模型 → 独立模型配置屏（保留设置弹层，返回回设置）
             isFetchingModels = isFetchingModels,
             modelFetchError = modelFetchError,
+            onFetchModels = { modelVm.fetchModels() },
             personaList = personaList,
             selectedPersona = selectedPersona,
             onSelectPersona = { p -> if (p.id.isNotBlank()) personaVm.setActive(p.id); sheet = null },
@@ -1004,12 +1035,6 @@ fun ChatScreen(
             onOpenSkills = { showSkills = true },
             onOpenBots = { showBots = true },
             onOpenSchedule = { showSchedule = true },
-            settingsUseFullTools = useFullTools,
-            onSettingsToggleFullTools = {
-                val c = modelConfigRepo.load().copy(useFullTools = !useFullTools)
-                modelConfigRepo.save(c)
-                useFullTools = c.useFullTools
-            },
             onManagePersona = { sheet = null; showSoulSheet = true },
             onOpenVoice = { showVoice = true },
             onOpenTts = { showTts = true },
@@ -1022,6 +1047,7 @@ fun ChatScreen(
             settingsAiReplyNotify = aiReplyNotify,
             onSettingsToggleAiReplyNotify = { vm.setAiReplyNotify(!aiReplyNotify) },
             onOpenAbout = { showAbout = true },
+            onOpenAci = { showAci = true },
             onOpenMcp = { showMcp = true },
             onOpenSystemStatus = { showSystemStatus = true },
             onOpenComponentGallery = { showComponentGallery = true },
@@ -1161,6 +1187,14 @@ fun ChatScreen(
             BackHandler { showMcp = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
                 QuroMcpSettingsScreen(onBack = { showMcp = false })
+            }
+        }
+
+        // ACI 管理中心页：全屏覆盖层（从设置「功能 → ACI 管理中心」进入，AI 工具 ui_open_aci 亦可打开）
+        if (showAci) {
+            BackHandler { showAci = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+                QuroAciCenterScreen(onClose = { showAci = false })
             }
         }
 
@@ -1374,6 +1408,8 @@ private fun TopBar(
     onMenu: () -> Unit,
     onModel: () -> Unit,
     onSettings: () -> Unit,
+    persona: Persona? = null,
+    onPick: () -> Unit = {},
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -1387,14 +1423,9 @@ private fun TopBar(
         IconButton(onClick = onMenu, Modifier.size(40.dp)) {
             LucideIcon("panel_left", "对话历史", Modifier.size(22.dp), tint = cs.onBackground)
         }
-        Column(Modifier.padding(start = 4.dp)) {
-            Text(
-                "Quro AI", style = TextStyle(
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
-                    fontWeight = FontWeight.SemiBold, fontSize = scaled(20), color = cs.onBackground
-                )
-            )
-            Text("开源 AI 助手 · 原创构建", fontSize = scaled(11), color = Muted, letterSpacing = 0.4.sp)
+        // 灵魂卡（人格卡）内嵌顶栏
+        if (persona != null) {
+            PersonaBar(persona = persona, onPick = onPick, scaled = scaled)
         }
         Spacer(Modifier.weight(1f))
         // 模型 chip
@@ -1470,7 +1501,6 @@ private fun PersonaBar(
     val cs = MaterialTheme.colorScheme
     Row(
         Modifier
-            .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1503,37 +1533,59 @@ private fun MessageList(
     onAskFollowup: (String) -> Unit = {},
     onShare: (String) -> Unit = {},
     onRegenerate: () -> Unit = {},
+    currentId: String,
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
     val listState = rememberLazyListState()
-    // 首次加载（含已有历史的会话）直接定位到最新一条；之后仅当用户已停在底部附近时，
-    // 才平滑跟进到底部，避免打断阅读历史消息。
-    var initialScrolled by remember { mutableStateOf(false) }
-    LaunchedEffect(messages.size) {
+    val scope = rememberCoroutineScope()
+    val lastMsg = messages.lastOrNull()
+
+    // 触发①：进入 / 切换会话 → 无条件落到底部（看最新一条），取代原先「只滚一次」的一次性标志
+    LaunchedEffect(currentId) {
         if (messages.isEmpty()) return@LaunchedEffect
-        val lastIndex = messages.size // 表头占 index 0，最后一条消息位于 messages.size
-        if (!initialScrolled) {
-            listState.scrollToItem(lastIndex)
-            initialScrolled = true
-        } else if (listState.firstVisibleItemIndex >= lastIndex - 2) {
-            listState.animateScrollToItem(lastIndex)
+        listState.scrollToItem(messages.size)
+    }
+
+    // 触发②：用户刚发出新消息（最后一条是用户消息）→ 强制跳到底部看回复，即使此前在中部上滑
+    LaunchedEffect(lastMsg?.id) {
+        if (lastMsg != null && lastMsg.mine) {
+            listState.scrollToItem(messages.size)
+        }
+    }
+
+    // 触发③：流式回复增长（同条消息 content 变）→ 仅当用户已停在底部附近才平滑跟随，不打扰阅读历史
+    val lastContentLen = (lastMsg?.text ?: "").length
+    LaunchedEffect(lastContentLen) {
+        if (messages.isEmpty()) return@LaunchedEffect
+        val lastIndex = messages.size - 1
+        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+        // 仅当用户已停在底部（最后一条消息可见）才跟随流式增长；
+        // 改用「最后可见项」判定，长消息项也不会误判为「不在底部近处」而停止跟随（#914）
+        if (lastVisible >= lastIndex) {
+            listState.animateScrollToItem(messages.size)
         }
     }
     // 注意：执行轨迹事件已统一在 ChatScreen 顶层订阅一次（单一真相源 traceLines），
     // 此处不再各自 collect 全局流，避免重复订阅 / 跨会话污染。
     val lastToolIdx = messages.indexOfLast { !it.mine && !it.tools.isNullOrEmpty() }
+    // 互动条（参考 operit 的 scrollToBottom 交互）：用户上滑离开底部时浮出「回到底部」按钮，
+    // 点击即跳到最新一条。与上方三触发自动滚底互补，作手动兜底。
+    val isAtBottom by remember { derivedStateOf { !listState.canScrollForward } }
+    Box(modifier) {
     LazyColumn(
-        modifier = modifier
-            .fillMaxWidth()
+        modifier = Modifier
+            .fillMaxSize()
             .padding(horizontal = 16.dp),
         state = listState,
         contentPadding = PaddingValues(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item { Text("今天", fontSize = scaled(12), color = Muted, modifier = Modifier.padding(start = 2.dp, bottom = 2.dp)) }
-        // 执行轨迹已「融和升级」进工具调用输出：仅在没有工具调用消息时，
-        // 才作为末尾独立的追踪卡兜底显示；否则轨迹会内嵌到最近一次助手工具调用卡内。
+        // 执行轨迹已「融和升级」进工具调用输出：
+        // 轨迹不再作为底部独立面板，而是内嵌到最近一次助手工具调用卡内（见 ToolsInlineContent）。
+        // 纯文本（无工具卡可融）回复不再渲染独立追踪卡，避免与工具卡重复 /「旧 UI 重显」。
+        val visibleTraces = traceLines.filter { it.kind != QuroAgentTrace.TraceKind.STATUS }
         itemsIndexed(messages) { index, msg ->
             AnimatedVisibility(
                 visible = true,
@@ -1542,6 +1594,7 @@ private fun MessageList(
                 MessageRow(
                     msg, scaled, onOpenLink,
                     isLastToolMsg = index == lastToolIdx,
+                    embeddedTrace = if (index == lastToolIdx) visibleTraces else emptyList(),
                     onCommand = { onCommand(it) },
                     onAskFollowup = onAskFollowup,
                     onShare = onShare,
@@ -1549,47 +1602,33 @@ private fun MessageList(
                 )
             }
         }
-        if (lastToolIdx < 0 && messages.isNotEmpty() && traceLines.isNotEmpty()) {
-            item { AgentTracePanel(traceLines) }
+    }
+    // ── 互动条：回到底部（紧凑悬浮按钮，右下角贴边，不遮挡内容）──
+    AnimatedVisibility(
+        visible = !isAtBottom && messages.isNotEmpty(),
+        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 80.dp),
+        enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+        exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
+    ) {
+        Surface(
+            onClick = { scope.launch { listState.animateScrollToItem(messages.size) } },
+            shape = CircleShape,
+            color = cs.surface.copy(alpha = 0.92f),
+            contentColor = cs.onSurface,
+            modifier = Modifier.size(36.dp).shadow(4.dp, CircleShape),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                LucideIcon("chevron-down", "回到底部", Modifier.size(18.dp), tint = cs.onSurfaceVariant)
+            }
         }
+    }
     }
 }
 
 /**
- * 对话框内嵌「执行追踪」面板：订阅 [QuroAgentTrace] 事件流，实时渲染 AI 的思考 / 行动 / 结果，
- * 实现「旧终端（执行轨迹）合体到对话框」+「工具执行动态输出」。
+ * 执行追踪已从「底部独立面板」迁移为「内嵌到工具调用卡」：见 MessageRow / ToolsInlineContent。
+ * 旧 AgentTracePanel 已删除，避免与工具卡重复渲染 / 旧 UI 重显。
  */
-@Composable
-private fun AgentTracePanel(lines: MutableList<QuroAgentTrace.AgentTraceEvent>) {
-    var expanded by remember { mutableStateOf(true) }
-    val listState = rememberLazyListState()
-    LaunchedEffect(lines.size) {
-        if (lines.isNotEmpty()) runCatching { listState.scrollToItem(lines.lastIndex) }
-    }
-    Column(
-        Modifier.fillMaxWidth().heightIn(max = 120.dp)
-            .background(Color(0xFFF2F2F7))
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("执行追踪", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = { lines.clear() }) { Text("清空", style = MaterialTheme.typography.labelSmall) }
-            TextButton(onClick = { expanded = !expanded }) {
-                Text(if (expanded) "收起" else "展开", style = MaterialTheme.typography.labelSmall)
-            }
-        }
-        if (expanded) {
-            LazyColumn(
-                Modifier.fillMaxWidth().heightIn(max = 90.dp),
-                state = listState,
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                items(lines, key = { it.id }) { ev -> TraceRow(ev) }
-            }
-        }
-    }
-}
 
 @Composable
 private fun TraceRow(ev: QuroAgentTrace.AgentTraceEvent) {
@@ -1626,15 +1665,10 @@ private fun TraceRow(ev: QuroAgentTrace.AgentTraceEvent) {
                 .padding(horizontal = 5.dp, vertical = 1.dp)
         )
         Spacer(Modifier.width(6.dp))
-        // 内容文字（截断）：先剥离 HTML 标签并压缩空白，避免「执行轨迹」里出现原始 ``/`` 等异常文本
-        val rawTrace = ev.summary + if (ev.detail.isNotBlank()) " · ${ev.detail.take(200)}" else ""
-        val cleanTrace = rawTrace
-            .replace(Regex("<[^>]*>"), " ")
-            .replace(Regex("\\s+"), " ")
-            .replace("`", "")
-            .trim()
+        // 内容文字：展示文本已在发射时一次性清洗（QuroAgentTrace.cleanTrace → ev.display），
+        // 此处直接复用，绝不在重组时跑正则，避免几百事件 × 全量行重组打爆主线程 → ANR。
         Text(
-            cleanTrace,
+            ev.display,
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2,
@@ -1668,6 +1702,7 @@ private fun MessageRow(
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
     onOpenLink: (String) -> Unit,
     isLastToolMsg: Boolean = false,
+    embeddedTrace: List<QuroAgentTrace.AgentTraceEvent> = emptyList(),
     onCommand: (String) -> Unit = {},
     onAskFollowup: (String) -> Unit = {},
     onShare: (String) -> Unit = {},
@@ -1706,7 +1741,7 @@ private fun MessageRow(
             // ── 名字行 + 思考/工具小按钮 ──────────────────────────────
             // 状态提升到 Column 作用域（展开内容在 Row 外渲染）
             var showThink by remember { mutableStateOf(false) }
-            var showTools by remember { mutableStateOf(false) }
+            var showTools by remember { mutableStateOf(isLastToolMsg) }
             val hasThinkOrTools = !msg.mine && (msg.think != null || !msg.tools.isNullOrEmpty())
 
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, bottom = if (hasThinkOrTools && (showThink || showTools)) 2.dp else 4.dp)) {
@@ -1749,7 +1784,7 @@ private fun MessageRow(
             }
             // 展开的工具卡片
             if (showTools && !msg.tools.isNullOrEmpty()) {
-                ToolsInlineContent(msg.tools, scaled)
+                ToolsInlineContent(msg.tools, scaled, embeddedTrace = embeddedTrace)
                 Spacer(Modifier.height(6.dp))
             }
             if (msg.attachment != null) {
@@ -1765,29 +1800,37 @@ private fun MessageRow(
                 val displayText = QuroVoiceStyle.strip(msg.text ?: "")
                 // 从文本中抽离 AI 内联下发的组件 JSON（如 {"type":"info",...}），剥离泄露的原文并就地渲染为富卡片
                 val (cleanText, inlineCards) = remember(displayText) { extractInlineComponents(displayText) }
-                val bubbleColor = if (msg.mine) AccentSoft else cs.surface
-                val borderColor = if (msg.mine) Color(android.graphics.Color.parseColor("#EAD3C8")) else Line
-                val textColor = if (msg.mine) Color(android.graphics.Color.parseColor("#5A3322")) else cs.onSurface
-                Box(
+                val isMine = msg.mine
+                val bubbleShape = RoundedCornerShape(16.dp, if (isMine) 4.dp else 16.dp, 16.dp, 16.dp)
+                val bubbleColor = if (isMine) AccentSoft else cs.surface
+                val borderColor = if (isMine) Color(android.graphics.Color.parseColor("#EAD3C8")) else Line
+                val textColor = if (isMine) Color(android.graphics.Color.parseColor("#5A3322")) else cs.onBackground
+                // [v382] AI 输出（非 mine）不渲染聊天气泡：仅保留内边距，无背景/边框；用户消息保留气泡。
+                val bubbleModifier = if (isMine) {
                     Modifier
-                        .clip(RoundedCornerShape(16.dp, if (msg.mine) 4.dp else 16.dp, 16.dp, 16.dp))
-                        .border(1.dp, borderColor, RoundedCornerShape(16.dp, if (msg.mine) 4.dp else 16.dp, 16.dp, 16.dp))
+                        .clip(bubbleShape)
+                        .border(1.dp, borderColor, bubbleShape)
                         .background(bubbleColor)
                         .padding(12.dp, 10.dp)
+                } else {
+                    Modifier.padding(12.dp, 10.dp)
+                }
+                Box(
+                    bubbleModifier
                         .combinedClickable(
                             onClick = {},
                             onLongClick = { if (!msg.text.isNullOrBlank()) copyToClipboard(msg.text) }
                         )
                 ) {
-                    val blocks = parseBlocks(cleanText)
+                    val blocks = remember(cleanText) { parseBlocks(cleanText) }
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         blocks.forEach { blk ->
                             when (blk) {
                                 is MsgBlock.Text -> {
-                                    val rich = buildRich(blk.text, TextStyle(fontSize = scaled(15), color = textColor, lineHeight = scaled(23)),
+                                    val rich = remember(blk.text, textColor) { buildRich(blk.text, TextStyle(fontSize = scaled(15), color = textColor, lineHeight = scaled(23)),
                                         boldColor = if (msg.mine) AccentPress else cs.primary,
                                         linkColor = cs.primary,
-                                        codeBackground = cs.surfaceVariant.copy(alpha = 0.5f))
+                                        codeBackground = cs.surfaceVariant.copy(alpha = 0.5f)) }
                                     ClickableText(
                                         text = rich,
                                         style = TextStyle(fontSize = scaled(15), color = textColor, lineHeight = scaled(23)),
@@ -1803,9 +1846,9 @@ private fun MessageRow(
                                         1 -> scaled(22); 2 -> scaled(19); 3 -> scaled(17)
                                         4 -> scaled(16); 5 -> scaled(15); else -> scaled(14)
                                     }
-                                    val rich = buildRich(blk.text, TextStyle(fontSize = size, fontWeight = FontWeight.Bold, color = textColor, lineHeight = size),
+                                    val rich = remember(blk.text, textColor) { buildRich(blk.text, TextStyle(fontSize = size, fontWeight = FontWeight.Bold, color = textColor, lineHeight = size),
                                         boldColor = if (msg.mine) AccentPress else cs.primary, linkColor = cs.primary,
-                                        codeBackground = cs.surfaceVariant.copy(alpha = 0.5f))
+                                        codeBackground = cs.surfaceVariant.copy(alpha = 0.5f)) }
                                     ClickableText(text = rich, style = TextStyle(fontSize = size, color = textColor, lineHeight = size),
                                         onClick = { offset -> rich.getStringAnnotations("link", offset, offset).firstOrNull()?.item?.let { onOpenLink(it) } },
                                         modifier = Modifier.fillMaxWidth())
@@ -1816,9 +1859,9 @@ private fun MessageRow(
                                         shape = RoundedCornerShape(8.dp),
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                                     ) {
-                                        val rich = buildRich(blk.text, TextStyle(fontSize = scaled(15), color = textColor, lineHeight = scaled(23), fontStyle = FontStyle.Italic),
+                                        val rich = remember(blk.text, textColor) { buildRich(blk.text, TextStyle(fontSize = scaled(15), color = textColor, lineHeight = scaled(23), fontStyle = FontStyle.Italic),
                                             boldColor = if (msg.mine) AccentPress else cs.primary, linkColor = cs.primary,
-                                            codeBackground = cs.surfaceVariant.copy(alpha = 0.5f))
+                                            codeBackground = cs.surfaceVariant.copy(alpha = 0.5f)) }
                                         ClickableText(text = rich, style = TextStyle(fontSize = scaled(15), color = textColor, lineHeight = scaled(23), fontStyle = FontStyle.Italic),
                                             onClick = { offset -> rich.getStringAnnotations("link", offset, offset).firstOrNull()?.item?.let { onOpenLink(it) } },
                                             modifier = Modifier.fillMaxWidth().padding(start = 10.dp, top = 6.dp, bottom = 6.dp, end = 8.dp))
@@ -2046,7 +2089,8 @@ private fun ToolCallBlock(
                                     Text("等待 AI 行动…", fontSize = 11.sp, color = Muted)
                                 }
                             } else {
-                                traceLines.forEach { ev -> TraceRow(ev) }
+                                // 封顶渲染最近 100 条，避免几百条事件全量重组打爆主线程
+                            traceLines.takeLast(100).forEach { ev -> TraceRow(ev) }
                             }
                         }
                     }
@@ -2114,7 +2158,7 @@ private fun toolCategory(name: String): ToolCategory = when {
 data class RiskLevel(val label: String, val color: Color, val bgAlpha: Float)
 
 private fun parseRiskLevel(text: String): RiskLevel? {
-    val regex = Regex("""风险级别[：:]\s*(\S+)""")
+    val regex = RE_RISK_LEVEL
     val match = regex.find(text) ?: return null
     return when (match.groupValues[1].lowercase()) {
         "critical", "高危" -> RiskLevel("高危", Color(0xFFEF4444), 0.18f)
@@ -2344,7 +2388,7 @@ private fun FormattedResultContent(result: String, scaled: (Int) -> androidx.com
 /** 渲染带 [方括号] 标签的内联文本 */
 @Composable
 private fun renderInlineFormatted(text: String, scaled: (Int) -> androidx.compose.ui.unit.TextUnit, cs: androidx.compose.material3.ColorScheme) {
-    val bracketPattern = Regex("""\[([^\]]+)\]\s*(.*)""")
+    val bracketPattern = RE_BRACKET
     val match = bracketPattern.matchEntire(text)
     if (match != null) {
         val tag = match.groupValues[1]
@@ -2614,7 +2658,11 @@ private fun ThinkInlineContent(think: ThinkBlock, scaled: (Int) -> androidx.comp
  * 紧凑型工具调用展开区：点击名字行「·N 工具」按钮后显示在按钮下方。
  */
 @Composable
-private fun ToolsInlineContent(tools: List<ToolCallUi>, scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
+private fun ToolsInlineContent(
+    tools: List<ToolCallUi>,
+    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
+    embeddedTrace: List<QuroAgentTrace.AgentTraceEvent> = emptyList(),
+) {
     val cs = MaterialTheme.colorScheme
     Column(
         Modifier
@@ -2652,6 +2700,19 @@ private fun ToolsInlineContent(tools: List<ToolCallUi>, scaled: (Int) -> android
                 Spacer(Modifier.height(4.dp))
                 HorizontalDivider(color = Line.copy(alpha = 0.2f))
             }
+        }
+        // ── 执行轨迹（内嵌到工具卡，作为本次工具调用的「过程轨迹」，不再独立浮层）──
+        if (embeddedTrace.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = Line.copy(alpha = 0.25f))
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                LucideIcon("sparkles", null, Modifier.size(13.dp), tint = cs.primary)
+                Spacer(Modifier.width(5.dp))
+                Text("执行轨迹", fontSize = scaled(11), color = cs.primary, fontWeight = FontWeight.Medium)
+            }
+            Spacer(Modifier.height(4.dp))
+            embeddedTrace.forEach { ev -> TraceRow(ev) }
         }
     }
 }
@@ -2720,8 +2781,11 @@ private fun Composer(
     onOpenMusicPlayer: () -> Unit = {},
     autoRead: Boolean = false,
     onToggleAutoRead: () -> Unit = {},
+    visionEnabled: Boolean = false,
+    onToggleVision: () -> Unit = {},
     voiceInputEnabled: Boolean = false,
     onVoiceInput: () -> Unit = {},
+    onOpenSkills: () -> Unit = {},
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -2740,6 +2804,8 @@ private fun Composer(
             onToggleAutoSave = onToggleAutoSave,
             autoRead = autoRead,
             onToggleAutoRead = onToggleAutoRead,
+            visionEnabled = visionEnabled,
+            onToggleVision = onToggleVision,
         )
         Spacer(Modifier.height(10.dp))
         // 正在播放（内联指示卡）：当前有音乐在后台播放时显示，点击打开全屏播放器
@@ -2780,6 +2846,10 @@ private fun Composer(
         ) {
             IconButton(onClick = onAttach, Modifier.size(44.dp).padding(2.dp)) {
                 Icon(Icons.Filled.Add, "上传文件", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
+            }
+            // [v382] 输入框技能按钮：恢复被 v373 checkout 冲掉的 sparkles「选择技能」入口（v372 Composer 输入行原在 上传 与 语音 之间）
+            IconButton(onClick = onOpenSkills, Modifier.size(44.dp).padding(2.dp)) {
+                LucideIcon("sparkles", "选择技能", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
             }
             if (voiceInputEnabled) {
                 IconButton(onClick = onVoiceInput, Modifier.size(44.dp).padding(2.dp)) {
@@ -2843,10 +2913,15 @@ private fun HistoryDrawer(
     onNew: () -> Unit,
     onPick: (String) -> Unit,
     onCopyAll: () -> Unit = {},
-    scaled: (Int) -> androidx.compose.ui.unit.TextUnit
+    onDelete: (String) -> Unit,
+    onDeleteAll: () -> Unit,
+    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
+    generatingIds: Set<String> = emptySet(),
 ) {
     val cs = MaterialTheme.colorScheme
     var lastGroup by remember { mutableStateOf("") }
+    var pendingDeleteId by remember { mutableStateOf<String?>(null) }
+    var showDeleteAllConfirm by remember { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxHeight()
@@ -2863,6 +2938,9 @@ private fun HistoryDrawer(
             Spacer(Modifier.weight(1f))
             IconButton(onClick = onCopyAll, Modifier.size(36.dp)) {
                 Icon(Icons.Filled.ContentCopy, "复制全部对话", Modifier.size(20.dp), tint = cs.onSurface)
+            }
+            IconButton(onClick = { showDeleteAllConfirm = true }, Modifier.size(36.dp)) {
+                Icon(Icons.Filled.Delete, "删除全部对话", Modifier.size(20.dp), tint = cs.error)
             }
             IconButton(onClick = onClose, Modifier.size(36.dp)) {
                 LucideIcon("x", "关闭", Modifier.size(20.dp), tint = cs.onSurface)
@@ -2903,10 +2981,55 @@ private fun HistoryDrawer(
                         Text(item.sub, fontSize = scaled(12), color = Muted,
                             maxLines = 1, modifier = Modifier.padding(top = 2.dp))
                     }
+                    // #862：该会话仍在后台生成时显示「生成中」徽标，让切走后续跑可见
+                    if (item.id in generatingIds) {
+                        Surface(
+                            color = AccentSoft,
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.padding(start = 8.dp)
+                        ) {
+                            Text("生成中", fontSize = scaled(11), color = AccentPress,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                        }
+                    }
                     Text(item.time, fontSize = scaled(11), color = Muted, modifier = Modifier.padding(start = 8.dp))
+                    IconButton(onClick = { pendingDeleteId = item.id }, Modifier.size(32.dp)) {
+                        Icon(Icons.Filled.Delete, "删除", Modifier.size(18.dp), tint = cs.onSurfaceVariant)
+                    }
                 }
             }
         }
+    }
+
+    if (pendingDeleteId != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDeleteId = null },
+            title = { Text("删除对话") },
+            text = { Text("确定删除这条对话记录吗？删除后不可恢复。") },
+            confirmButton = {
+                TextButton(onClick = { onDelete(pendingDeleteId!!); pendingDeleteId = null }) {
+                    Text("删除", color = cs.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteId = null }) { Text("取消") }
+            }
+        )
+    }
+    if (showDeleteAllConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllConfirm = false },
+            title = { Text("清空全部对话") },
+            text = { Text("确定删除全部对话记录吗？此操作不可恢复。") },
+            confirmButton = {
+                TextButton(onClick = { onDeleteAll(); showDeleteAllConfirm = false }) {
+                    Text("全部删除", color = cs.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteAllConfirm = false }) { Text("取消") }
+            }
+        )
     }
 }
 
@@ -2925,6 +3048,7 @@ private fun SheetOverlay(
     onAddModel: (String, String) -> Unit,
     isFetchingModels: Boolean = false,
     modelFetchError: String? = null,
+    onFetchModels: () -> Unit = {},
     personaList: List<Persona>,
     selectedPersona: Persona,
     onSelectPersona: (Persona) -> Unit,
@@ -2952,8 +3076,6 @@ private fun SheetOverlay(
     onOpenPlugins: () -> Unit,
     onOpenSkills: () -> Unit,
     onOpenBots: () -> Unit,
-    settingsUseFullTools: Boolean,
-    onSettingsToggleFullTools: () -> Unit,
     onManagePersona: () -> Unit,
     onOpenVoice: () -> Unit,
     onOpenTts: () -> Unit,
@@ -2966,6 +3088,7 @@ private fun SheetOverlay(
     settingsAiReplyNotify: Boolean,
     onSettingsToggleAiReplyNotify: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenAci: () -> Unit,
     onOpenMcp: () -> Unit,
     onOpenSystemStatus: () -> Unit,
     onOpenComponentGallery: () -> Unit,
@@ -3015,8 +3138,9 @@ private fun SheetOverlay(
                     .background(surfaceColor)
                     .border(1.dp, Line, sheetShape)
             ) {
+                val settingsCtx = LocalContext.current
                 when (shown) {
-                    SheetType.Model -> ModelSheetContent(modelGroups, selectedModel, onSelectModel, onAddModel, scaled, isFetchingModels, modelFetchError)
+                    SheetType.Model -> ModelSheetContent(modelGroups, selectedModel, onSelectModel, onAddModel, scaled, isFetchingModels, modelFetchError, onFetch = onFetchModels)
                     SheetType.Persona -> PersonaSheetContent(personaList, selectedPersona, onSelectPersona, onAddPersona, scaled)
                     SheetType.Upload -> UploadSheetContent(
                         onPickFile, onOpenBrowser, onClear,
@@ -3034,11 +3158,10 @@ private fun SheetOverlay(
                         settingsEnterSend, onSettingsToggleEnter,
                         settingsFontName, onSettingsCycleFont,
                         onOpenModelConfig, onOpenFeatureModelConfig, onOpenPermission, onOpenCms, onOpenToolbox, onOpenKnowledge, onOpenTerminal, onOpenPlugins, onOpenSkills,
-                        settingsUseFullTools, onSettingsToggleFullTools,
                         onManagePersona, onOpenVoiceService,
                         onClearChat, settingsVoiceBallEnabled, onSettingsToggleVoiceBall,
                     settingsAiReplyNotify, onSettingsToggleAiReplyNotify,
-                        onOpenAbout, onOpenMcp, onOpenSystemStatus, onOpenComponentGallery, onOpenAppearance, onExport, onClear, scaled
+                        onOpenAbout, onOpenAci, onOpenMcp, onOpenSystemStatus, onOpenComponentGallery, onOpenAppearance, onExport, onClear, scaled
                     )
                     else -> {}
                 }
@@ -3077,13 +3200,13 @@ private fun SettingsSheetContent(
     onOpenTerminal: () -> Unit,
     onOpenPlugins: () -> Unit,
     onOpenSkills: () -> Unit,
-    useFullTools: Boolean, onToggleFullTools: () -> Unit,
     onManagePersona: () -> Unit,
     onOpenVoiceService: () -> Unit,
     onClearChat: () -> Unit,
     voiceBallEnabled: Boolean, onToggleVoiceBall: (Boolean) -> Unit,
     settingsAiReplyNotify: Boolean, onSettingsToggleAiReplyNotify: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenAci: () -> Unit,
     onOpenMcp: () -> Unit,
     onOpenSystemStatus: () -> Unit,
     onOpenComponentGallery: () -> Unit,
@@ -3119,13 +3242,11 @@ private fun SettingsSheetContent(
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Extension, "插件运行时", "小程序式插件 Demo", "", onOpenPlugins, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRow(Icons.Filled.Extension, "完整工具集", "关闭=14 核心 · 开启=~50 全量", useFullTools, onToggleFullTools, scaled)
-            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Person, "灵魂注入", "灵魂注入 · 灵魂卡 · 记忆库", "", onManagePersona, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Info, "关于 Quro AI", "项目地址 / 开源许可 / 开发者", "", onOpenAbout, scaled)
-            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Hub, "MCP 服务", "把内置工具以 MCP 协议暴露给本机客户端", "", onOpenMcp, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(Icons.Filled.Public, "ACI 管理中心", "已发现第三方 App / 绑定状态 / 能力清单 / 手动注册刷新重绑", "", onOpenAci, scaled)
         }
         GroupCaption("通知")
         SetGroup {
@@ -3137,9 +3258,14 @@ private fun SettingsSheetContent(
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.DeleteSweep, "清除全部对话", "", "", onClear, scaled, danger = true)
         }
+        GroupCaption("关于")
+        SetGroup {
+            SetRowClickable(Icons.Filled.Info, "关于 Quro AI", "项目地址 / 开源许可 / 开发者", "", onOpenAbout, scaled)
+        }
         Text("Quro AI · v${BuildConfig.VERSION_NAME}",
             fontSize = scaled(11), color = Muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
     }
+
 }
 
 /**
@@ -3225,17 +3351,29 @@ private fun UserProfileEditDialog(
     var bio by remember(initial.bio) { mutableStateOf(initial.bio) }
 
     val ctx = LocalContext.current
+    val cropLauncher = rememberLauncherForActivityResult(CropImageContract()) { result ->
+        if (result.isSuccessful) {
+            result.uriContent?.let { cropped ->
+                runCatching {
+                    val dir = File(ctx.filesDir, "avatars")
+                    dir.mkdirs()
+                    val dest = File(dir, "user_avatar.jpg")
+                    ctx.contentResolver.openInputStream(cropped)?.use { input ->
+                        dest.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    avatarUri = dest.absolutePath
+                }
+            }
+        }
+    }
     val pickAvatar = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        runCatching {
-            val dir = File(ctx.filesDir, "avatars")
-            dir.mkdirs()
-            val dest = File(dir, "user_avatar.jpg")
-            ctx.contentResolver.openInputStream(uri)?.use { input ->
-                dest.outputStream().use { output -> input.copyTo(output) }
-            }
-            avatarUri = dest.absolutePath
-        }
+        cropLauncher.launch(
+            CropImageContractOptions(
+                uri,
+                CropImageOptions(guidelines = CropImageView.Guidelines.ON, cropShape = CropImageView.CropShape.OVAL)
+            )
+        )
     }
 
     AlertDialog(
@@ -3302,6 +3440,7 @@ private fun ModelSheetContent(
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
     isFetching: Boolean = false,
     fetchError: String? = null,
+    onFetch: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
 
@@ -3310,11 +3449,25 @@ private fun ModelSheetContent(
             .verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
     ) {
         SheetHeader("选择模型", "「当前配置」为你在设置中配置的真实模型；「可用模型」为从接口拉取到的真实列表，点选即切换。", scaled)
-        // 拉取状态：加载中 / 失败 / 仅当前配置（无可用预设）
-        if (isFetching) {
-            Text("正在拉取可用模型…", fontSize = scaled(12), color = Accent,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+        // 手动拉取入口：v396 起进入不再自动联网，需用户点此按钮才拉取，结果会本地缓存
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(AccentSoft)
+                .clickable(enabled = !isFetching) { onFetch() }
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            LucideIcon(if (isFetching) "loader" else "refresh_cw", null, Modifier.size(18.dp), tint = Accent)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (isFetching) "正在拉取可用模型…" else "从 API 拉取可用模型（手动）",
+                fontSize = scaled(13), color = AccentPress, fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.weight(1f))
+            LucideIcon("chevron_right", null, Modifier.size(15.dp), tint = Muted)
         }
+        // 拉取状态：失败 / 仅当前配置（无可用预设）
         if (fetchError != null) {
             Text("拉取失败：$fetchError。请到「模型配置」填写正确的 Base URL / API Key 后重试。",
                 fontSize = scaled(12), color = Color(android.graphics.Color.parseColor("#C0432F")),
@@ -3396,7 +3549,7 @@ private fun PersonaSheetContent(
         Modifier.fillMaxWidth().heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
     ) {
-        SheetHeader("选择人格", "每个人格是不同语气与专长的「对话伙伴」，切换即换一种相处方式。", scaled)
+        SheetHeader("选择灵魂", "每个灵魂是不同语气与专长的「对话伙伴」，切换即换一种相处方式。", scaled)
         list.forEach { p ->
             val sel = p.name == selected.name
             Row(
@@ -3434,7 +3587,7 @@ private fun PersonaSheetContent(
                 Text("+", fontSize = scaled(16), color = Color.White, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.width(8.dp))
-            Text("新建灵魂卡 · 完整设定（头像/角色/语气/标签）", fontSize = scaled(13), color = AccentPress, fontWeight = FontWeight.SemiBold)
+            Text("灵魂注入 · 完整设定（头像/角色/语气/标签）", fontSize = scaled(13), color = AccentPress, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             LucideIcon("chevron_right", null, Modifier.size(15.dp), tint = Muted)
         }
@@ -3489,7 +3642,7 @@ private fun UploadSheetContent(
             ToolTile({ Icon(Icons.Filled.Terminal, "终端", Modifier.size(22.dp), tint = cs.primary) }, "终端", onOpenTerminal, scaled)
             ToolTile({ LucideIcon("trash_2", "清屏", Modifier.size(22.dp), tint = cs.primary) }, "清屏", onClearChat, scaled)
             ToolTile({ LucideIcon("sparkles", "技能", Modifier.size(22.dp), tint = cs.primary) }, "技能", onOpenSkills, scaled)
-            ToolTile({ LucideIcon("clock", "定时", Modifier.size(22.dp), tint = cs.primary) }, "定时", onOpenSchedule, scaled)
+            ToolTile({ Icon(Icons.Filled.Schedule, "定时", Modifier.size(22.dp), tint = cs.primary) }, "定时", onOpenSchedule, scaled)
             ToolTile({ LucideIcon("bot", "机器人", Modifier.size(22.dp), tint = cs.primary) }, "机器人", onOpenBots, scaled)
         }
     }
@@ -3630,20 +3783,19 @@ private fun parseInlineHtml(raw: String, defaultColor: Color, linkColor: Color, 
     val decoded = decodeHtmlEntities(raw)
     // 2) 块级标签转换行
     val text = decoded
-        .replace("<br\\s*/?>".toRegex(RegexOption.IGNORE_CASE), "\n")
-        .replace("</?p>".toRegex(RegexOption.IGNORE_CASE), "\n")
-        .replace("</?div>".toRegex(RegexOption.IGNORE_CASE), "\n")
-        .replace("</(h[1-6])>".toRegex(RegexOption.IGNORE_CASE), "\n")
-        .replace("<li>".toRegex(RegexOption.IGNORE_CASE), "\n• ")
-        .replace("</li>".toRegex(RegexOption.IGNORE_CASE), "")
-        .replace("</(ul|ol)>".toRegex(RegexOption.IGNORE_CASE), "\n")
-        .replace("</pre>".toRegex(RegexOption.IGNORE_CASE), "\n")
-        .replace("</blockquote>".toRegex(RegexOption.IGNORE_CASE), "\n")
+        .replace(RE_INLINE_BR, "\n")
+        .replace(RE_INLINE_P, "\n")
+        .replace(RE_INLINE_DIV, "\n")
+        .replace(RE_INLINE_H, "\n")
+        .replace(RE_INLINE_LI_OPEN, "\n• ")
+        .replace(RE_INLINE_LI_CLOSE, "")
+        .replace(RE_INLINE_LIST_CLOSE, "\n")
+        .replace(RE_INLINE_PRE, "\n")
+        .replace(RE_INLINE_BLOCKQUOTE, "\n")
 
     return buildAnnotatedString {
         // 用正则拆分：HTML标签 + 文本交替处理（含 u / s / del）
-        val tagPattern = Regex("(</?(?:b|strong|em|i|u|s|del|code|a|span|pre|h[1-6])[^>]*>)|([^<]+)")
-        val matches = tagPattern.findAll(text)
+        val matches = RE_INLINE_TAG.findAll(text)
 
         data class Seg(val isTag: Boolean, val text: String)
         val segs = matches.map { m ->
@@ -3709,12 +3861,12 @@ private fun parseInlineHtml(raw: String, defaultColor: Color, linkColor: Color, 
                     tag == "<code>" -> { stack.addLast(state); state = state.copy(code = true) }
                     tag == "</code>" -> { state = stack.removeLastOrNull() ?: FmtState() }
                     tag.startsWith("<a ") || tag == "<a>" -> {
-                        val href = Regex("href=\"([^\"]+)\"").find(tag)?.groupValues?.get(1)
+                        val href = RE_HREF.find(tag)?.groupValues?.get(1)
                         stack.addLast(state); state = state.copy(link = href)
                     }
                     tag == "</a>" -> { state = stack.removeLastOrNull() ?: FmtState() }
                     tag.startsWith("<span") -> {
-                        val c = Regex("(?i)color:\\s*([#\\w]+)").find(tag)?.groupValues?.get(1)?.let { parseColorOrNull(it) }
+                        val c = RE_SPAN_COLOR.find(tag)?.groupValues?.get(1)?.let { parseColorOrNull(it) }
                         stack.addLast(state); state = state.copy(color = c ?: state.color)
                     }
                     tag == "</span>" -> { state = stack.removeLastOrNull() ?: FmtState() }
@@ -3793,7 +3945,7 @@ private fun extractInlineComponents(text: String): Pair<String, List<QuroChatCar
     }
     // v150：腾讯元宝回答链接 → 气泡内预览卡（原生安卓点击查看体验）。
     // 仅元宝域名走预览卡；其余外链保留既有内联 ClickableText 行为。
-    val yuanbaoRe = Regex("""https?://(?:yb|yuanbao)\.tencent\.com/\S+""")
+    val yuanbaoRe = RE_YUANBAO
     val seen = mutableSetOf<String>()
     val out = StringBuilder()
     var last = 0
@@ -3844,46 +3996,148 @@ private fun findBalancedBrace(text: String, start: Int): Int {
     return -1
 }
 
+// ── ANR 修复（v384）：以下正则全部预编译为文件级常量，只编译一次。
+//    原实现在各解析函数内 `Regex(...)` / `.toRegex()`，每次 Compose 重组都重新编译，
+//    走 ICU native PatternNative.compileImpl；几百消息 × 多正则 × 每帧重组 → 主线程卡死（见 ANR 报告）。
+private val RE_FENCE = Regex("```(\\w*)\\n?([\\s\\S]*?)```")
+private val RE_BLOCK = Regex("(?is)<h([1-6])>(.*?)</h\\1>|<blockquote>(.*?)</blockquote>|<hr\\s*/?>|<table>(.*?)</table>|<(ul|ol)>(.*?)</\\6>")
+private val RE_HR = Regex("(?i)<hr")
+private val RE_LI = Regex("(?is)<li>(.*?)</li>")
+private val RE_P = Regex("(?i)</?p>")
+private val RE_BR = Regex("(?i)<br\\s*/?>")
+private val RE_HEADING_LINE = Regex("^\\s*#{1,6}\\s+.+")
+private val RE_HEADING_STRIP = Regex("^\\s*#{1,6}\\s+")
+private val RE_QUOTE_LINE = Regex("^\\s*>\\s?.+")
+private val RE_QUOTE_STRIP = Regex("^\\s*>\\s?")
+private val RE_LIST_LINE = Regex("^\\s*[-*]\\s+.+")
+private val RE_LIST_STRIP = Regex("^\\s*[-*]\\s+")
+private val RE_TR = Regex("(?is)<tr>(.*?)</tr>")
+private val RE_TD = Regex("(?is)<t[hd]>(.*?)</t[hd]>")
+private val RE_INLINE_BR = Regex("<br\\s*/?>", RegexOption.IGNORE_CASE)
+private val RE_INLINE_P = Regex("</?p>", RegexOption.IGNORE_CASE)
+private val RE_INLINE_DIV = Regex("</?div>", RegexOption.IGNORE_CASE)
+private val RE_INLINE_H = Regex("</(h[1-6])>", RegexOption.IGNORE_CASE)
+private val RE_INLINE_LI_OPEN = Regex("<li>", RegexOption.IGNORE_CASE)
+private val RE_INLINE_LI_CLOSE = Regex("</li>", RegexOption.IGNORE_CASE)
+private val RE_INLINE_LIST_CLOSE = Regex("</(ul|ol)>", RegexOption.IGNORE_CASE)
+private val RE_INLINE_PRE = Regex("</pre>", RegexOption.IGNORE_CASE)
+private val RE_INLINE_BLOCKQUOTE = Regex("</blockquote>", RegexOption.IGNORE_CASE)
+private val RE_INLINE_TAG = Regex("(</?(?:b|strong|em|i|u|s|del|code|a|span|pre|h[1-6])[^>]*>)|([^<]+)")
+private val RE_HREF = Regex("href=\"([^\"]+)\"")
+private val RE_SPAN_COLOR = Regex("(?i)color:\\s*([#\\w]+)")
+// 以下为消息渲染/卡片热路径中残留的逐次编译正则，同样预编译（同一条 ANR 根因）。
+private val RE_RISK_LEVEL = Regex("""风险级别[：:]\s*(\S+)""")
+private val RE_BRACKET = Regex("""\[([^\]]+)\]\s*(.*)""")
+private val RE_YUANBAO = Regex("""https?://(?:yb|yuanbao)\.tencent\.com/\S+""")
+private val RE_HTML_HEAD_BODY = Regex("""<(head|body)\b""", RegexOption.IGNORE_CASE)
+private val RE_HTML_TAG = Regex("""<(html|head|body|div|span|p|a|button|h1|h2|h3|ul|ol|li|table|form|style|script|img|section|header|footer|main|nav)\b""", RegexOption.IGNORE_CASE)
+
+/** 判断整段文本是否为「完整独立的 HTML 文档」（无围栏时也应走预览代码块）。 */
+// v404 诊断：ChatScreen 内诊断上下文与去重键（供 parseBlocks 记录 AI 回复 HTML 判定）
+private var quroDiagCtx: android.content.Context? = null
+private var lastDiagHtmlKey: String? = null
+
+private fun isFullHtmlDocument(text: String): Boolean {
+    val t = text.trim()
+    if (!t.startsWith("<!DOCTYPE html", ignoreCase = true) && !t.startsWith("<html", ignoreCase = true)) return false
+    return t.contains("</html>", ignoreCase = true) || RE_HTML_HEAD_BODY.containsMatchIn(t)
+}
+
+/** 仅匹配「开围栏」（` ```lang ` 行首），用于流式生成中围栏尚未闭合的情况。 */
+private val RE_FENCE_OPEN = Regex("""(?m)^```([a-zA-Z0-9+#-]*)[ \t]*\n""")
+
 /** 解析 ```lang ... ``` 围栏代码块；其余文本走 HTML/Markdown 块级解析。 */
 private fun parseBlocks(text: String): List<MsgBlock> {
-    val blocks = mutableListOf<MsgBlock>()
-    val fence = Regex("```(\\w*)\\n?([\\s\\S]*?)```")
-    var last = 0
-    for (m in fence.findAll(text)) {
-        if (m.range.first > last) {
-            blocks.addAll(parseRichBlocks(text.substring(last, m.range.first)))
+    // v404 诊断：记录 AI 回复是否含 HTML 及其判定结果（排查「HTML 裸文本」问题）
+    val trimmed = text.trim()
+    if (quroDiagCtx != null && (trimmed.startsWith("<") || trimmed.contains("```html") || isFullHtmlDocument(text) || looksLikeHtmlStrict(trimmed))) {
+        val key = trimmed.take(200)
+        if (key != lastDiagHtmlKey) {
+            lastDiagHtmlKey = key
+            val detected = isFullHtmlDocument(text) || looksLikeHtmlStrict(trimmed)
+            QuroCrashLogger.logEvent(
+                quroDiagCtx!!, "HTML",
+                "startsWith< =${trimmed.startsWith("<")} fenceHtml=${trimmed.contains("```html")} fullDoc=${isFullHtmlDocument(text)} segHtml=${looksLikeHtmlStrict(trimmed)} detected=$detected | head=${trimmed.take(180).replace("\n", "\\n")}",
+            )
         }
+    }
+    // 整段完整 HTML 文档（AI 未加围栏直接贴源码）也路由到预览代码块，避免裸 HTML 当纯文本
+    if (isFullHtmlDocument(text)) return listOf(MsgBlock.Code("html", text))
+    val blocks = mutableListOf<MsgBlock>()
+    var last = 0
+    val fences = RE_FENCE.findAll(text).toList()
+    for (m in fences) {
+        if (m.range.first > last) blocks.addAll(parseTail(text.substring(last, m.range.first)))
         blocks.add(MsgBlock.Code(m.groupValues[1].trim(), m.groupValues[2].removeSuffix("\n")))
         last = m.range.last + 1
     }
-    if (last < text.length) blocks.addAll(parseRichBlocks(text.substring(last)))
+    if (last < text.length) blocks.addAll(parseTail(text.substring(last)))
     return if (blocks.isEmpty()) listOf(MsgBlock.Text(text)) else blocks
+}
+
+/**
+ * 处理围栏之间的尾段：若含「未闭合的开围栏」（流式生成中常见），
+ * 把开围栏之后的内容直接当代码块渲染（带边框），实现「边写边出框」；
+ * 否则走原 HTML 片段嗅探 / Markdown 解析。
+ */
+private fun parseTail(seg: String): List<MsgBlock> {
+    val open = RE_FENCE_OPEN.find(seg)
+    if (open != null) {
+        val before = seg.substring(0, open.range.first)
+        val after = seg.substring(open.range.last + 1)
+        val lang = open.groupValues[1].trim()
+        // 语言非空，或虽为空但有后续内容 → 视为开围栏（流式未闭合，而非孤立的闭合围栏）
+        if (lang.isNotBlank() || after.trim().isNotEmpty()) {
+            val out = mutableListOf<MsgBlock>()
+            if (before.isNotBlank()) out.addAll(parseSegments(before))
+            out.add(MsgBlock.Code(lang.ifBlank { "text" }, after))
+            return out
+        }
+    }
+    return parseSegments(seg)
+}
+
+/**
+ * 把一段非围栏文本拆成块：若整段明显是「独立 HTML 片段」（非行内/散文），
+ * 整体作为 html 预览代码块（点「预览」即可 WebView 渲染）；否则走原 Markdown/HTML 块级解析。
+ * 判定需以 < 开头 + 含块级标签且标签总数较多，避免把散文里的 <b> 也误判成代码块。
+ */
+private fun parseSegments(seg: String): List<MsgBlock> {
+    val t = seg.trim()
+    if (t.isNotEmpty() && t.startsWith("<") && looksLikeHtmlStrict(t)) {
+        return listOf(MsgBlock.Code("html", seg.trim()))
+    }
+    return parseRichBlocks(seg)
+}
+
+/** 判定整段是否为「独立 HTML 片段」而非行内/散文：需以 < 开头，且含块级标签且标签总数较多。 */
+private fun looksLikeHtmlStrict(s: String): Boolean {
+    val t = s.trim()
+    if (t.startsWith("<!DOCTYPE html", ignoreCase = true)) return true
+    if (t.startsWith("<html", ignoreCase = true)) return true
+    if (RE_HTML_HEAD_BODY.containsMatchIn(t)) return true
+    val blockTags = Regex("(?i)<(div|section|article|table|form|ul|ol|header|footer|main|nav|body|html|style|script|iframe|head)\\b").findAll(t).count()
+    val totalTags = RE_HTML_TAG.findAll(t).count()
+    return blockTags >= 1 && totalTags >= 4
 }
 
 /** 识别块级 HTML（h1-6 / blockquote / hr / table / ul-ol）与 Markdown 块（# 标题、> 引用），其余按段落切分。 */
 private fun parseRichBlocks(seg: String): List<MsgBlock> {
     val out = mutableListOf<MsgBlock>()
-    val blockRegex = Regex(
-        "(?is)<h([1-6])>(.*?)</h\\1>|" +
-        "<blockquote>(.*?)</blockquote>|" +
-        "<hr\\s*/?>|" +
-        "<table>(.*?)</table>|" +
-        "<(ul|ol)>(.*?)</\\6>",
-    )
     var pos = 0
-    for (m in blockRegex.findAll(seg)) {
+    for (m in RE_BLOCK.findAll(seg)) {
         if (m.range.first > pos) out.addAll(parseParagraphs(seg.substring(pos, m.range.first)))
         when {
             m.groupValues[1].isNotBlank() ->
                 out.add(MsgBlock.Heading(m.groupValues[1].toInt(), m.groupValues[2].trim()))
             m.groupValues[3].isNotBlank() ->
                 out.add(MsgBlock.Quote(m.groupValues[3].trim()))
-            m.groupValues[4].matches(Regex("(?i)<hr")) ->
+            m.groupValues[4].matches(RE_HR) ->
                 out.add(MsgBlock.Rule())
             m.groupValues[5].isNotBlank() ->
                 out.add(parseTable(m.groupValues[5]))
             m.groupValues[6].isNotBlank() -> {
-                val items = Regex("(?is)<li>(.*?)</li>").findAll(m.groupValues[7])
+                val items = RE_LI.findAll(m.groupValues[7])
                     .map { it.groupValues[1].trim() }.toList()
                 if (items.isNotEmpty()) out.add(MsgBlock.Text(items.joinToString("\n") { "• $it" }))
             }
@@ -3896,28 +4150,28 @@ private fun parseRichBlocks(seg: String): List<MsgBlock> {
 
 /** 普通段落 / Markdown 块切分：识别 # 标题、> 引用、无序列表；其余按空行分段，保留行内 HTML。 */
 private fun parseParagraphs(s: String): List<MsgBlock> {
-    val lines = s.replace(Regex("(?i)</?p>"), "\n").replace(Regex("(?i)<br\\s*/?>"), "\n").split("\n")
+    val lines = s.replace(RE_P, "\n").replace(RE_BR, "\n").split("\n")
     val out = mutableListOf<MsgBlock>()
     var i = 0
     while (i < lines.size) {
         val line = lines[i]
         when {
-            line.matches(Regex("^\\s*#{1,6}\\s+.+")) -> {
+            line.matches(RE_HEADING_LINE) -> {
                 val level = line.takeWhile { it == '#' }.length
-                out.add(MsgBlock.Heading(level, line.replaceFirst(Regex("^\\s*#{1,6}\\s+"), "").trim()))
+                out.add(MsgBlock.Heading(level, line.replaceFirst(RE_HEADING_STRIP, "").trim()))
                 i++
             }
-            line.matches(Regex("^\\s*>\\s?.+")) -> {
+            line.matches(RE_QUOTE_LINE) -> {
                 val sb = StringBuilder()
-                while (i < lines.size && lines[i].matches(Regex("^\\s*>\\s?.+"))) {
-                    sb.appendLine(lines[i].replaceFirst(Regex("^\\s*>\\s?"), "")); i++
+                while (i < lines.size && lines[i].matches(RE_QUOTE_LINE)) {
+                    sb.appendLine(lines[i].replaceFirst(RE_QUOTE_STRIP, "")); i++
                 }
                 out.add(MsgBlock.Quote(sb.toString().trimEnd()))
             }
-            line.matches(Regex("^\\s*[-*]\\s+.+")) -> {
+            line.matches(RE_LIST_LINE) -> {
                 val items = mutableListOf<String>()
-                while (i < lines.size && lines[i].matches(Regex("^\\s*[-*]\\s+.+"))) {
-                    items.add(lines[i].replaceFirst(Regex("^\\s*[-*]\\s+"), "")); i++
+                while (i < lines.size && lines[i].matches(RE_LIST_LINE)) {
+                    items.add(lines[i].replaceFirst(RE_LIST_STRIP, "")); i++
                 }
                 out.add(MsgBlock.Text(items.joinToString("\n") { "• $it" }))
             }
@@ -3925,9 +4179,9 @@ private fun parseParagraphs(s: String): List<MsgBlock> {
             else -> {
                 val sb = StringBuilder()
                 while (i < lines.size && lines[i].isNotBlank()
-                    && !lines[i].matches(Regex("^\\s*#{1,6}\\s+"))
-                    && !lines[i].matches(Regex("^\\s*>\\s?"))
-                    && !lines[i].matches(Regex("^\\s*[-*]\\s+"))
+                    && !lines[i].matches(RE_HEADING_LINE)
+                    && !lines[i].matches(RE_QUOTE_LINE)
+                    && !lines[i].matches(RE_LIST_LINE)
                 ) {
                     sb.appendLine(lines[i]); i++
                 }
@@ -3941,9 +4195,9 @@ private fun parseParagraphs(s: String): List<MsgBlock> {
 
 /** 解析 <table>：每行 <tr>，单元格 <td>/<th>；首行作为表头。 */
 private fun parseTable(html: String): MsgBlock.Table {
-    val rows = Regex("(?is)<tr>(.*?)</tr>").findAll(html)
+    val rows = RE_TR.findAll(html)
         .map { tr ->
-            Regex("(?is)<t[hd]>(.*?)</t[hd]>").findAll(tr.groupValues[1])
+            RE_TD.findAll(tr.groupValues[1])
                 .map { it.groupValues[1].trim() }.toList()
         }.toList()
     val header = rows.firstOrNull() ?: emptyList()
@@ -3990,12 +4244,9 @@ private fun looksLikeHtml(code: String): Boolean {
     val t = code.trim()
     if (t.startsWith("<!DOCTYPE html", ignoreCase = true)) return true
     if (t.startsWith("<html", ignoreCase = true)) return true
-    if (Regex("""<(head|body)\b""", RegexOption.IGNORE_CASE).containsMatchIn(t)) return true
+    if (RE_HTML_HEAD_BODY.containsMatchIn(t)) return true
     // 含 2 个以上常见 HTML 标签即判定为 HTML
-    val tagCount = Regex(
-        """<(html|head|body|div|span|p|a|button|h1|h2|h3|ul|ol|li|table|form|style|script|img|section|header|footer|main|nav)\b""",
-        RegexOption.IGNORE_CASE
-    ).findAll(t).count()
+    val tagCount = RE_HTML_TAG.findAll(t).count()
     return tagCount >= 2
 }
 
@@ -4020,13 +4271,16 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
         lang.equals("htm", ignoreCase = true) ||
         lang.equals("markup", ignoreCase = true) ||
         looksLikeHtml(code)
-    var showPreview by remember { mutableStateOf(false) }
+    var showPreview by remember { mutableStateOf(isHtml) }
     var showFullscreen by remember { mutableStateOf(false) }
+    // v405：WebView 在 AndroidView + WRAP_CONTENT 下高度不随内容展开，预览常空白。
+    // 用状态高度：初始固定值，onPageFinished 读实际内容高度动态扩容（上限 640dp）。
+    var webHeight by remember { mutableStateOf(220.dp) }
 
     Surface(
         color = cs.surfaceVariant,
         shape = RoundedCornerShape(10.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().border(1.dp, cs.outlineVariant, RoundedCornerShape(10.dp)),
     ) {
         Column(Modifier.fillMaxWidth()) {
             // 头部：语言标签 + 操作按钮（HTML 时多一个 代码/预览 切换）
@@ -4077,13 +4331,13 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                 }  // end of inner action row
             }
 
-            // 内容区：源码 or 预览（所有代码块均可切预览；HTML 自动渲染，非 HTML 用 <pre> 展示）
+            // 内容区：源码 or 预览（HTML 默认直接渲染，无需手动点「预览」）
             if (showPreview) {
-                // 预览模式：WebView 渲染
+                // 预览模式：WebView 渲染（高度由 webHeight 状态驱动，避免空白）
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 350.dp)
+                        .height(webHeight)
                         .clip(RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp))
                         .background(Color.White)
                 ) {
@@ -4092,50 +4346,58 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
                             settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                            settings.useWideViewPort = false
+                            settings.loadWithOverviewMode = true
                             layoutParams = ViewGroup.LayoutParams(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.WRAP_CONTENT
+                                ViewGroup.LayoutParams.MATCH_PARENT
                             )
-                            val t = code.trim()
-                            val isFullDoc = t.startsWith("<!DOCTYPE html", ignoreCase = true) ||
-                                t.startsWith("<html", ignoreCase = true)
-                            val finalHtml = if (isFullDoc || isHtml) {
-                                // 完整 HTML 或嗅探到 HTML → 直接渲染 / 包裹为完整文档
-                                if (isFullDoc) code else buildString {
-                                    append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
-                                    append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
-                                    append("<style>body{margin:8px;padding:0;font-family:sans-serif;word-wrap:break-word;}")
-                                    append("img{max-width:100%;height:auto;}")
-                                    append("</style></head><body>")
-                                    append(code)
-                                    append("</body></html>")
-                                }
-                            } else {
-                                // 非 HTML 代码 → 用 <pre> 等宽展示（保留缩进与格式）
-                                buildString {
-                                    append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
-                                    append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
-                                    append("<style>body{margin:8px;padding:0;background:#f5f5f5;}pre{white-space:pre-wrap;word-break:break-word;font-family:monospace;font-size:14px;color:#222;padding:12px;margin:0;}</style></head><body><pre>")
-                                    // HTML 转义防止 XSS + 标签被吃掉
-                                    append(escapeHtml(code))
-                                    append("</pre></body></html>")
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    super.onPageFinished(view, url)
+                                    val density = view?.context?.resources?.displayMetrics?.density ?: return
+                                    view.evaluateJavascript("document.documentElement.scrollHeight") { value ->
+                                        val px = value?.replace("\"", "")?.toIntOrNull() ?: return@evaluateJavascript
+                                        val dp = (px / density).toInt().coerceIn(120, 640)
+                                        webHeight = dp.dp
+                                    }
                                 }
                             }
-                            loadDataWithBaseURL(null, finalHtml, "text/html", "UTF-8", null)
+                            // 初始加载（流式时后续由 update 跟随重载，避免预览冻结在首帧）
+                            val html = buildPreviewHtml(code, isHtml)
+                            tag = html
+                            loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
                         }
-                    }, update = { /* 切换时已重建 */ })
+                    }, modifier = Modifier.fillMaxSize(), update = { wv ->
+                        // 流式生成：code 变化时重新加载，预览随写随更新
+                        val html = buildPreviewHtml(code, isHtml)
+                        if (wv.tag != html) {
+                            wv.tag = html
+                            wv.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+                        }
+                    })
                 }
             } else {
-                // 默认：源码文本展示（限制最大高度 + 垂直滚动，避免长代码占满屏幕）
+                // 默认：源码文本展示（双向滚动 + 裁剪到圆角框内，避免长代码/HTML 撑出卡片）
+                // v396 修复：长单行代码/HTML 不再横向溢出——改为水平滚动 + 裁剪，
+                // softWrap=false 让长行保持单行、由 horizontalScroll 承载。
                 SelectionContainer(
                     Modifier
                         .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
                         .heightIn(max = 300.dp)
                         .verticalScroll(rememberScrollState())
+                        .horizontalScroll(rememberScrollState())
                         .padding(horizontal = 10.dp)
                         .padding(bottom = 8.dp)
                 ) {
-                    Text(code, fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = cs.onSurface)
+                    Text(
+                        code,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp,
+                        color = cs.onSurface,
+                        softWrap = false
+                    )
                 }
             }
 
@@ -4158,6 +4420,11 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
 // 全屏预览覆盖层（CodeBlock 内点击 🔲 全屏按钮触发）—— 用 Dialog 真正覆盖全屏
 @Composable
 private fun FullscreenPreview(code: String, isHtml: Boolean, onDismiss: () -> Unit) {
+    // #877 修复全屏白屏：Compose Dialog 是 overlay window，内部 WebView 在多 ROM 上无法正确
+    // 合成 → 白屏。改用挂在真实 Activity window 上的传统 Dialog，WebView 用 Activity context
+    // 创建，能稳定渲染。若取不到 Activity（极端），兜底仍用 Compose Dialog。
+    val ctx = LocalContext.current
+    val activity = ctx.findActivity()
     val finalHtml = if (isHtml) {
         val t = code.trim()
         val isFullDoc = t.startsWith("<!DOCTYPE html", ignoreCase = true) || t.startsWith("<html", ignoreCase = true)
@@ -4178,51 +4445,127 @@ private fun FullscreenPreview(code: String, isHtml: Boolean, onDismiss: () -> Un
         }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = false,
-        ),
-    ) {
-        Box(Modifier.fillMaxSize().background(Color.White)) {
-            AndroidView(factory = { ctx ->
-                WebView(ctx).apply {
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.cacheMode = WebSettings.LOAD_NO_CACHE
-                    settings.loadWithOverviewMode = true
-                    settings.useWideViewPort = true
-                    loadDataWithBaseURL(null, finalHtml, "text/html", "UTF-8", null)
-                }
-            }, modifier = Modifier.fillMaxSize())
-            // 顶部半透明关闭栏
-            Surface(
-                color = Color.Black.copy(alpha = 0.45f),
-                modifier = Modifier.align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .statusBarsPadding(),
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-                ) {
-                    IconButton(onClick = onDismiss, Modifier.size(36.dp)) {
-                        LucideIcon("x", "关闭全屏", Modifier.size(22.dp), tint = Color.White)
+    if (activity == null) {
+        // 兜底路径（理论上 ChatScreen 必在 Activity 内，不会走到）
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(Modifier.fillMaxSize().background(Color.White)) {
+                AndroidView(factory = {
+                    WebView(ctx).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                        settings.loadWithOverviewMode = true
+                        settings.useWideViewPort = true
+                        loadDataWithBaseURL(null, finalHtml, "text/html", "UTF-8", null)
                     }
+                }, modifier = Modifier.fillMaxSize())
+                IconButton(onClick = onDismiss, Modifier.align(Alignment.TopEnd).padding(12.dp).size(36.dp)) {
+                    LucideIcon("x", "关闭全屏", Modifier.size(22.dp), tint = Color.White)
                 }
             }
-            // 返回键关闭
-            BackHandler { onDismiss() }
         }
+        return
     }
+
+    DisposableEffect(Unit) {
+        val host = activity
+        val dialog = android.app.Dialog(host, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        dialog.window?.apply {
+            // 全屏三件套：全屏标志 + 允许延伸到系统栏区域 + 沉浸式隐藏导航栏
+            setFlags(
+                WindowManager.LayoutParams.FLAG_FULLSCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+            )
+            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            // 沉浸式：隐藏状态栏和导航栏（兼容 API 30+）
+            @Suppress("DEPRECATION")
+            decorView.systemUiVisibility = (
+                android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+                    or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    or android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    or android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            )
+        }
+        val webView = WebView(host).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.cacheMode = WebSettings.LOAD_NO_CACHE
+            settings.loadWithOverviewMode = true
+            settings.useWideViewPort = true
+            loadDataWithBaseURL(null, finalHtml, "text/html", "UTF-8", null)
+        }
+        // 右上角半透明关闭按钮（传统 View，避免再套一层 Compose）
+        val closeBtn = TextView(host).apply {
+            text = "✕"
+            textSize = 22f
+            setTextColor(android.graphics.Color.WHITE)
+            background = GradientDrawable().apply { setColor(0x73000000.toInt()); cornerRadius = 22f }
+            setPadding(22, 10, 22, 10)
+            setOnClickListener { dialog.dismiss() }
+        }
+        val frame = FrameLayout(host)
+        frame.addView(webView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val closeLp = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+            topMargin = 56; rightMargin = 28
+        }
+        frame.addView(closeBtn, closeLp)
+        dialog.setContentView(frame)
+        dialog.setOnDismissListener { onDismiss() }
+        dialog.show()
+        onDispose { dialog.dismiss() }
+    }
+}
+
+// 从 Context 中安全取出宿主 Activity（兼容 ContextWrapper 多层包装）。
+// 与 QuroBrowserScreen.findActivity 同逻辑，但本文件需独立定义（原实现为 private 不可跨文件见）。
+private fun Context.findActivity(): Activity? {
+    var c: Context? = this
+    while (c != null) {
+        if (c is Activity) return c
+        c = if (c is ContextWrapper) c.baseContext else null
+    }
+    return null
 }
 
 private fun copyPlain(ctx: Context, text: String) {
     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
     cm.setPrimaryClip(android.content.ClipData.newPlainText("Quro", text))
     Toast.makeText(ctx, "已复制", Toast.LENGTH_SHORT).show()
+}
+
+/** 构造 WebView 预览用 HTML：完整文档直接渲染，HTML 片段包裹为完整文档，非 HTML 代码用 <pre> 转义防 XSS。 */
+private fun buildPreviewHtml(code: String, isHtml: Boolean): String {
+    val t = code.trim()
+    val isFullDoc = t.startsWith("<!DOCTYPE html", ignoreCase = true) || t.startsWith("<html", ignoreCase = true)
+    return if (isFullDoc || isHtml) {
+        if (isFullDoc) code else buildString {
+            append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
+            append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
+            append("<style>body{margin:8px;padding:0;font-family:sans-serif;word-wrap:break-word;}img{max-width:100%;height:auto;}</style></head><body>")
+            append(code)
+            append("</body></html>")
+        }
+    } else {
+        buildString {
+            append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
+            append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
+            append("<style>body{margin:8px;padding:0;background:#f5f5f5;}pre{white-space:pre-wrap;word-break:break-word;font-family:monospace;font-size:14px;color:#222;padding:12px;margin:0;}</style></head><body><pre>")
+            append(escapeHtml(code))
+            append("</pre></body></html>")
+        }
+    }
 }
 
 /** 复制整段对话全文（全部复制）。 */
@@ -4411,6 +4754,8 @@ private fun PermissionModeBar(
     onToggleAutoSave: () -> Unit = {},
     autoRead: Boolean = false,
     onToggleAutoRead: () -> Unit = {},
+    visionEnabled: Boolean = false,
+    onToggleVision: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
     QuroPolicyStore.getCms(ctx)
@@ -4448,6 +4793,11 @@ private fun PermissionModeBar(
                 if (autoRead) {
                     Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
                         Text("朗读", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                    }
+                }
+                if (visionEnabled) {
+                    Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
+                        Text("看懂屏幕", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                     }
                 }
                 Surface(shape = RoundedCornerShape(999.dp), color = when (cmsPolicy) {
@@ -4517,6 +4867,22 @@ private fun PermissionModeBar(
                         Spacer(Modifier.width(6.dp))
                         Text("自动朗读", fontSize = 13.sp, color = if (autoRead) AccentPress else Muted, fontWeight = if (autoRead) FontWeight.SemiBold else FontWeight.Normal)
                         Text(" — AI 回复自动朗读", fontSize = 11.sp, color = Muted)
+                    }
+                    Spacer(Modifier.height(6.dp))
+
+                    // 看懂屏幕开关
+                    Row(
+                        Modifier.clip(RoundedCornerShape(999.dp))
+                            .border(1.dp, if (visionEnabled) Color(android.graphics.Color.parseColor("#EAD3C8")) else Line, RoundedCornerShape(999.dp))
+                            .background(if (visionEnabled) AccentSoft else cs.surface)
+                            .clickable(onClick = onToggleVision)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(if (visionEnabled) Accent else Muted))
+                        Spacer(Modifier.width(6.dp))
+                        Text("看懂屏幕", fontSize = 13.sp, color = if (visionEnabled) AccentPress else Muted, fontWeight = if (visionEnabled) FontWeight.SemiBold else FontWeight.Normal)
+                        Text(" — AI 实时理解当前屏幕", fontSize = 11.sp, color = Muted)
                     }
                     Spacer(Modifier.height(6.dp))
 

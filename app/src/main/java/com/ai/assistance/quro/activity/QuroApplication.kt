@@ -7,6 +7,8 @@ import com.ai.assistance.quro.core.mcp.QuroLocalMcpManager
 import com.ai.assistance.quro.core.tools.QuroImportedToolRegistry
 import com.ai.assistance.quro.core.tools.QuroScheduledTaskScheduler
 import com.ai.assistance.quro.core.bot.QuroBotManager
+import com.ai.assistance.quro.core.aci.QuroAciManager
+import com.ai.assistance.quro.core.shizuku.QuroShizuku
 import com.ai.assistance.quro.ui.QuroPersonaViewModel
 
 /**
@@ -26,6 +28,10 @@ class QuroApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // L2 Shizuku：进程启动即注册 Binder 监听（官方推荐做法）。
+        // 确保 Shizuku 在应用存活期间任意时刻连接/授权都能被即时探知，
+        // 修复「Shizuku 已装/已授权但权限页一直检测为未连接」的时序盲区（#915）。
+        try { QuroShizuku.ensureInit() } catch (_: Throwable) {}
         // 载入持久化的「导入工具」（AI 自写 / 用户粘贴 JSON 导入），使其在所有会话默认可用
         QuroImportedToolRegistry.load(applicationContext)
         // 自动拉起 AI 部署的本地 MCP 服务器，使其随应用启动即恢复可用（界面自动拉取注册）
@@ -35,6 +41,15 @@ class QuroApplication : Application() {
         QuroScheduledTaskScheduler.scheduleAll(applicationContext)
         // 机器人框架（C2）：注册默认适配器并在「已启用且已配置」的平台启动（本地测试默认启用）
         QuroBotManager.instance(applicationContext).startEnabled(applicationContext)
+        // ACI（Agent Capability Interface）：让 QuroAI 成为 ACI 控制方（AI 中枢），
+        // 启动即发现并绑定设备上已安装的第三方 ACI App，使其能力可被 AI 调用。
+        // 整体包在 try 中，避免 ACI 异常影响应用正常启动。
+        try {
+            QuroAciManager.init(applicationContext)
+            QuroAciManager.getInstance().discover()
+        } catch (e: Throwable) {
+            android.util.Log.e("QuroApplication", "ACI 初始化失败（不影响主流程）", e)
+        }
         // 心跳孵化：偏好就绪后启动全局后台循环（AtomicBoolean 守卫避免重复启动；默认开启）
         QuroPersonaViewModel.initHeartbeat(applicationContext)
         if (QuroPersonaViewModel.heartbeatEnabled.value) {

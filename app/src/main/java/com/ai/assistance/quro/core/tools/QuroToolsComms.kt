@@ -18,9 +18,11 @@ class ReadSmsTool : QuroTool {
         val limit = JSONObject(arguments).optInt("limit", 20).coerceIn(1, 100)
         return try {
             val proj = arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE)
+            // 🔧 #768 修复：同媒体库，去掉 sortOrder 里的 "LIMIT $limit"（部分实现不支持 → Invalid token LIMIT），
+            //   数量由下方 while(out.size < limit) 截断。
             context.contentResolver.query(
                 Telephony.Sms.Inbox.CONTENT_URI, proj, null, null,
-                "${Telephony.Sms.DATE} DESC LIMIT $limit",
+                "${Telephony.Sms.DATE} DESC",
             )?.use { c ->
                 val out = mutableListOf<String>()
                 while (c.moveToNext() && out.size < limit) {

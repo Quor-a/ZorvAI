@@ -6,6 +6,8 @@ import com.ai.assistance.quro.core.QuroChatMessage
 import com.ai.assistance.quro.core.QuroLlmResult
 import com.ai.assistance.quro.core.QuroPersonaRepository
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionType
 import com.ai.assistance.quro.core.network.QuroLlmClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -120,8 +122,10 @@ object QuroSpeechStyleDeriver {
             QuroChatMessage("system", sys),
             QuroChatMessage("user", "待朗读文本：\n$text"),
         )
+        // 功能模型配置接入引擎：语音风格推导使用 UI_CONTROL 绑定的模型
+        val effModel = QuroFunctionModelConfigRepository(ctx).resolveConfig(QuroFunctionType.UI_CONTROL, cfg).model
         val res = withTimeoutOrNull(DERIVE_TIMEOUT_MS) {
-            QuroLlmClient(fastClient).chat(baseUrl, cfg.apiKey, cfg.model, messages, 0.5f, 48, emptyList())
+            QuroLlmClient(fastClient).chat(baseUrl, cfg.apiKey, effModel, messages, 0.5f, 48, emptyList())
         } ?: return null
         when (res) {
             is QuroLlmResult.Text -> res.content.trim().lines().firstOrNull { it.isNotBlank() }?.take(40)

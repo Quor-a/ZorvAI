@@ -15,8 +15,8 @@ android {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 257
-        versionName = "1.0.257"
+        versionCode = 432
+        versionName = "1.0.432"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -104,6 +104,12 @@ dependencies {
     // 插件运行时：PluginRuntime.kt（manifest 解析 / 权限网关）依赖 org.json
     implementation(libs.org.json)
 
+    // ACI（Agent Capability Interface）协议层：让 QuroAI 成为 ACI 控制方（AI 中枢），
+    // 发现并调用第三方 App 通过 ACI Service 暴露的能力。AAR 仅含协议层
+    // （ai.aci.core.*：IACIService / IACICallback AIDL、ACIRequest / ACIResponse / Capability）。
+    // 控制方客户端 QuroAciManager 为 QuroAI 内 Kotlin 单例（端口自 aci-aihub 的 ACIManager）。
+    implementation(files("libs/aci-core-debug.aar"))
+
     // 头像裁剪（原创集成，用于人格卡上传图片后裁剪）
     // 注意：canhub 已将库移交 vanniktech，坐标已变更（包名 com.canhub.cropper.* 不变）
     implementation("com.vanniktech:android-image-cropper:4.7.0")
@@ -127,10 +133,13 @@ dependencies {
 
     // Shizuku（L2 通道：ADB 级 IPC，免 Root 系统命令执行 / 应用冻结 / 静默安装）
     implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
 
-    // 视频播放器引擎：VLC for Android 开源引擎（libVLC，VideoLAN，GPLv2/v3）
-    // 开源地址：https://code.videolan.org/videolan/vlc-android
-    implementation("org.videolan.android:libvlc-all:3.6.5")
+    // 视频/音频播放引擎：经全量源码 grep 确认，本工程从未引用 org.videolan.*，
+    // 实际播放走 android.media.MediaPlayer（框架层，Apache-2.0，已 100% 开源）。
+    // 原 libvlc-all:3.6.5（GPLv2/v3，强 copyleft）为「声明但零使用」的死依赖，
+    // 仅带来无谓的 GPL 义务 → 已移除（见 license-audit-full-2026-07-28.md P1）。
+    // 若后续需更强格式/流式支持，再单独评估引入 Media3 ExoPlayer（Apache-2.0）并迁移播放层。
 
     // 内置浏览器引擎：GeckoView（Mozilla 开源浏览器引擎，Apache-2.0）
     // 用开源引擎替换系统 WebView，对应元宝清单里 Firefox 系开源浏览器（Iceraven/IronFox）。

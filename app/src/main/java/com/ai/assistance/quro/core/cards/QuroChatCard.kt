@@ -369,11 +369,16 @@ sealed interface QuroChatCard {
         data class KanbanColumn(val name: String, val items: List<String>)
     }
 
-    /** 元宝回答链接预览卡：气泡内点击即在应用内浏览器打开元宝回答（原生安卓点击查看体验）。 */
+    /** 元宝回答单条链接（多链接卡片里的一行）。 */
+    data class YuanbaoLink(val title: String, val url: String)
+
+    /** 元宝回答链接预览卡：气泡内点击即在应用内浏览器打开元宝回答（原生安卓点击查看体验）。
+     *  v294：支持多链接——[links] 非空时渲染多行，否则回退单 [url]；二者皆空时由渲染层用预设清单兜底。 */
     data class YuanbaoCard(
         override val id: String,
         override val title: String,
         val url: String,
+        val links: List<YuanbaoLink> = emptyList(),
     ) : QuroChatCard
 
     // ───────────── v221 富事件 / 声明式目录新增卡片 ─────────────
@@ -936,7 +941,12 @@ fun serializeCard(card: QuroChatCard): JSONObject {
         is QuroChatCard.KanbanCard -> o.put("columns", JSONArray().also { a ->
             card.columns.forEach { c -> a.put(JSONObject().apply { put("name", c.name); put("items", strArr(c.items)) }) }
         })
-        is QuroChatCard.YuanbaoCard -> o.put("url", card.url)
+        is QuroChatCard.YuanbaoCard -> {
+            o.put("url", card.url)
+            o.put("links", JSONArray().also { a ->
+                card.links.forEach { l -> a.put(JSONObject().apply { put("title", l.title); put("url", l.url) }) }
+            })
+        }
         is QuroChatCard.ColorCard -> {
             o.put("colors", strArr(card.colors))
             o.put("label", card.label); o.put("command", card.command)
@@ -1051,7 +1061,16 @@ fun parseCard(o: JSONObject): QuroChatCard? {
                 val it = o.optJSONArray("columns")!!.optJSONObject(i)
                 QuroChatCard.KanbanCard.KanbanColumn(it.optString("name", ""), arrStr(it.optJSONArray("items")))
             })
-            "yuanbao" -> QuroChatCard.YuanbaoCard(id, title, o.optString("url", ""))
+            "yuanbao" -> {
+                val linksArr = o.optJSONArray("links")
+                val links = if (linksArr != null) {
+                    (0 until linksArr.length()).map { i ->
+                        val it = linksArr.optJSONObject(i)
+                        QuroChatCard.YuanbaoLink(it.optString("title", ""), it.optString("url", ""))
+                    }
+                } else emptyList()
+                QuroChatCard.YuanbaoCard(id, title, o.optString("url", ""), links)
+            }
             "color" -> QuroChatCard.ColorCard(
                 id, title, arrStr(o.optJSONArray("colors")), o.optString("label", ""), o.optString("command", ""),
             )

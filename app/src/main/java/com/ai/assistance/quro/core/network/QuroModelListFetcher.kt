@@ -23,9 +23,11 @@ sealed interface QuroModelListResult {
 }
 
 class QuroModelListFetcher(
+    connectTimeout: Long = 30,
+    readTimeout: Long = 60,
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(connectTimeout, TimeUnit.SECONDS)
+        .readTimeout(readTimeout, TimeUnit.SECONDS)
         .build(),
 ) {
     /**

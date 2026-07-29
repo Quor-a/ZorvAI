@@ -23,6 +23,7 @@ import android.content.ClipData
 import androidx.core.content.ContextCompat
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
+import android.os.Build
 import org.json.JSONObject
 
 /** 电量与充电状态（无权限）。 */
@@ -92,14 +93,31 @@ class VibrateTool : QuroTool {
     }
 }
 
-/** 读取剪贴板文本。 */
+/** 读取剪贴板文本。
+ *  Android 10+ 后台读取返回 null；Android 12+ 前台读取会弹 toast 通知用户。
+ *  本工具仅在用户主动触发（AI 对话中调用）时执行，此时 App 通常在前台。
+ *  若仍读不到，提示用户在前台重试（这是 Android 隐私保护机制，非 bug）。
+ */
 class GetClipboardTool : QuroTool {
     override val name = "get_clipboard"
-    override val description = "读取系统剪贴板文本，参数为空 {}。"
+    override val description = "读取系统剪贴板文本，参数为空 {}。注意：Android 12+ 仅允许前台应用读取剪贴板，若返回空请用户在前台重新复制后重试。"
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String {
+        // 前台检测：若 App 不在前台，明确告知而非静默返回空
+        val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        val isInteractive = pm?.isInteractive ?: true // 无法判断时默认允许尝试
+        if (!isInteractive) {
+            return "⚠️ 剪贴板读取失败：当前不在前台。Android 12+ 仅允许前台应用读取剪贴板，请在屏幕亮起且 App 在前台时重试。"
+        }
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        return cm.primaryClip?.getItemAt(0)?.text?.toString() ?: "（剪贴板为空或不可读）"
+        if (!cm.hasPrimaryClip()) return "（剪贴板为空）"
+        val item = cm.primaryClip?.getItemAt(0) ?: return "（剪贴板无内容）"
+        val text = item.text?.toString()
+        // Android 12+：即使在前台，某些 ROM/安全策略也可能拦截
+        if (text.isNullOrBlank()) {
+            return "⚠️ 剪贴板内容不可读（可能被系统隐私保护拦截）。建议：① 在前台重新复制一次文本 ② 复制后立即让 AI 读取 ③ 部分国产 ROM 需在「设置→隐私→剪贴板访问」中授权"
+        }
+        return text
     }
 }
 
@@ -257,14 +275,24 @@ class GetNotificationsTool : QuroTool {
     }
 }
 
-/** 蓝牙状态（BLUETOOTH_CONNECT 运行时权限）。 */
-class GetBluetoothTool : QuroTool {
-    override val name = "get_bluetooth_status"
-    override val description = "获取蓝牙开关状态与已配对设备，参数为空 {}。"
-    override val parametersJson = """{"type":"object","properties":{}}"""
-    override val requiredPermissions = listOf(Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_CONNECT)
-    override fun run(context: Context, arguments: String): String {
-        needsPermission(context, Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_CONNECT)?.let { return it }
+    /** 蓝牙状态（API 31+ 用 BLUETOOTH_CONNECT；API 30- 用 legacy BLUETOOTH）。 */
+    class GetBluetoothTool : QuroTool {
+        override val name = "get_bluetooth_status"
+        override val description = "获取蓝牙开关状态与已配对设备，参数为空 {}。"
+        override val parametersJson = """{"type":"object","properties":{}}"""
+        // 🔧 #768 修复：原 listOf(BLUETOOTH, BLUETOOTH_CONNECT) 在 API 31+ 上 BLUETOOTH 是 legacy 权限
+        //   （Manifest 中 maxSdkVersion=30），checkSelfPermission 恒 DENIED → 既让门禁 isGranted 误判、
+        //   又让 run() 内 needsPermission 直接短路返回「需要权限」，即便 BLUETOOTH_CONNECT 已授权也被拒。
+        //   改为按 API 版本只声明真正需要的权限（与 #766 媒体库修复同源）。
+        private val perms: List<String>
+            get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                listOf(Manifest.permission.BLUETOOTH_CONNECT)
+            } else {
+                listOf(Manifest.permission.BLUETOOTH)
+            }
+        override val requiredPermissions get() = perms
+        override fun run(context: Context, arguments: String): String {
+            needsPermission(context, *perms.toTypedArray())?.let { return it }
         val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
             ?: return "不支持蓝牙"
         val paired = try { adapter.bondedDevices.map { "${it.name}(${it.address})" } } catch (e: Exception) { emptyList() }

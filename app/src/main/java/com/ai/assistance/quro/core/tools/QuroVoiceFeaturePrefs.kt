@@ -2,6 +2,8 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * 语音功能开关与默认配置的统一持久化层。
@@ -16,6 +18,8 @@ import android.content.SharedPreferences
  * - voiceName: 默认音色（自然语言描述，供 TTS 使用）
  * - speed: 默认语速 0.5x–2.0x
  * - voiceBallSessionId: 语音球绑定的对话框 id（"" = 跟随当前正在看的对话框）
+ * - emotionTagsEnabled: LLM 自动组合情绪标签总开关（一键拉取已配置的 TTS 情绪标签）
+ * - emotionProviderId: 情绪标签来源服务商（云 TTS 提供商 id；"" = 自动取全局已选风格标签）
  */
 object QuroVoiceFeaturePrefs {
     private const val PREFS = "quro_voice_features"
@@ -25,6 +29,9 @@ object QuroVoiceFeaturePrefs {
     private const val K_VOICE_NAME = "voice_name"
     private const val K_VOICE_BALL_SESSION = "voice_ball_session"
     private const val K_AUTOSTART = "autostart"
+    private const val K_EMOTION_TAGS_ENABLED = "emotion_tags_enabled"
+    private const val K_EMOTION_PROVIDER_ID = "emotion_provider_id"
+    private const val K_VOICE_COLOR_ROUTING = "voice_color_routing"
 
     private fun prefs(ctx: Context): SharedPreferences =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -33,7 +40,21 @@ object QuroVoiceFeaturePrefs {
     fun setAutoRead(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean(K_AUTO_READ, v).apply()
 
     fun getDialogVoiceButton(ctx: Context) = prefs(ctx).getBoolean(K_DIALOG_VOICE, false)
-    fun setDialogVoiceButton(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean(K_DIALOG_VOICE, v).apply()
+
+    /**
+     * 可观察的「对话框语音按钮」开关。
+     * 修复 #817：ChatScreen 是常驻根屏，原先 [getDialogVoiceButton] 被 remember 一次性缓存，
+     * 在「语音设置」里切换后必须退出重进才生效。改为暴露 StateFlow，让常驻界面即时重组成。
+     */
+    private val _dialogVoiceButtonFlow = MutableStateFlow(false)
+    fun dialogVoiceButtonFlow(ctx: Context): StateFlow<Boolean> {
+        _dialogVoiceButtonFlow.value = getDialogVoiceButton(ctx)
+        return _dialogVoiceButtonFlow
+    }
+    fun setDialogVoiceButton(ctx: Context, v: Boolean) {
+        prefs(ctx).edit().putBoolean(K_DIALOG_VOICE, v).apply()
+        _dialogVoiceButtonFlow.value = v
+    }
 
     /** 默认语音来源：统一复用 [QuroTtsPrefs]（语音播放链路实际读取的唯一数据源），避免「改了不生效」。 */
     fun getSource(ctx: Context) = QuroTtsPrefs.getSource(ctx)
@@ -58,4 +79,29 @@ object QuroVoiceFeaturePrefs {
     /** 悬浮语音球总开关（持久化）：true=显示可拖拽语音球。通知栏常驻与此无关。 */
     fun getVoiceBall(ctx: Context) = prefs(ctx).getBoolean(K_VOICE_BALL, false)
     fun setVoiceBall(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean(K_VOICE_BALL, v).apply()
+
+    /**
+     * LLM 自动组合情绪标签总开关：开启后，构建系统提示词时会注入来自所选服务商的 TTS 情绪标签，
+     * 让 AI 在回复里自然地穿插情绪/语气标签（如 [开心]、[严肃]）。
+     */
+    fun getEmotionTagsEnabled(ctx: Context) = prefs(ctx).getBoolean(K_EMOTION_TAGS_ENABLED, false)
+    fun setEmotionTagsEnabled(ctx: Context, v: Boolean) =
+        prefs(ctx).edit().putBoolean(K_EMOTION_TAGS_ENABLED, v).apply()
+
+    /**
+     * 情绪标签来源服务商 id（云 TTS 提供商 id）。空串表示「自动」：
+     * 回落到全局已选风格标签，再回落到云 TTS 兜底词库。
+     */
+    fun getEmotionProviderId(ctx: Context) = prefs(ctx).getString(K_EMOTION_PROVIDER_ID, "") ?: ""
+    fun setEmotionProviderId(ctx: Context, id: String) =
+        prefs(ctx).edit().putString(K_EMOTION_PROVIDER_ID, id).apply()
+
+    /**
+     * 语色路由（AI 自动分配角色音色）总开关：开启后，AI 在朗读时按内容自由为不同段落分配不同音色
+     * （如旁白 / 角色音），并「边播边合成」实现无缝衔接。仅在使用云端 / 小米 MiMo 语音合成时生效。
+     * 默认开（功能即为此开关服务），用户可随时关闭回落到单一全局音色。
+     */
+    fun getVoiceColorRoutingEnabled(ctx: Context) = prefs(ctx).getBoolean(K_VOICE_COLOR_ROUTING, true)
+    fun setVoiceColorRoutingEnabled(ctx: Context, v: Boolean) =
+        prefs(ctx).edit().putBoolean(K_VOICE_COLOR_ROUTING, v).apply()
 }

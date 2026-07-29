@@ -40,6 +40,14 @@
          必须拥有足够包可见性才能绑定，确保 TextToSpeech 能发现并连接引擎。 -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
 
+    <!-- ACI（Agent Capability Interface）：QuroAI 作为控制方需持有基础调用/发现权限，
+         才能绑定并调用第三方 App 暴露的 ACI Service。该权限由 aci-core 库 Manifest 定义
+         （protectionLevel=normal，随 AAR 合并进本应用），此处声明即获系统授予；
+         否则 bindService 会被系统以 SecurityException 拒绝，导致 discover 后绑定失败、aci_list 永远为空。
+         真实的调用方鉴权仍由被调用方 BaseACIService.onCheckPermission（Binder UID 反查 + 白名单）把关。 -->
+    <uses-permission android:name="ai.aci.permission.CALL" />
+    <uses-permission android:name="ai.aci.permission.DISCOVER" />
+
     <!-- 使用情况访问（特殊权限）：get_foreground_app 需读取顶层 Activity 类名。
          声明后本应用才会出现在「设置→安全→使用情况访问」列表里供用户授予；
          此为 appop 类特殊权限，无法运行时弹窗，必须由用户手动在系统设置开启。 -->
@@ -77,6 +85,13 @@
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
 
+    <!-- Shizuku：声明其 API 权限。
+         只声明 API_V23 时，旧版 Shizuku 管理器（v13 之前，仅认 moe.shizuku.manager.permission.API）
+         不会把本 App 列入「可授权应用」列表，表现为「在 Shizuku 软件里看不到 QuroAI」。
+         同时声明两个权限以兼容新旧管理器：新版认 API_V23、旧版认 API，互不冲突、零风险。 -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API" tools:ignore="MissingPermission" />
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" tools:ignore="MissingPermission" />
+
     <!-- 通话记录：读取 / 写入删除（「其他权限」页「通话记录」分组） -->
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.WRITE_CALL_LOG" />
@@ -111,6 +126,12 @@
              必须显式声明，否则 TextToSpeech 因看不到引擎包而 OnInit 返回 ERROR。 -->
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <!-- ACI（Agent Capability Interface）控制方发现第三方 ACI App 的绑定意图；
+             Android 11+ 包可见性限制下显式声明，确保 queryIntentServices 能发现 ACI Service。
+             （本应用已声明 QUERY_ALL_PACKAGES，此处为显式语义声明，双保险。） -->
+        <intent>
+            <action android:name="ai.aci.core.ACTION_BIND" />
         </intent>
     </queries>
 
@@ -196,6 +217,26 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- 粘贴键盘：悬浮窗（TYPE_APPLICATION_OVERLAY）+ 无障碍粘贴，非前台服务 -->
+        <service
+            android:name=".service.QuroPasteKeyboardService"
+            android:exported="false" />
+
+        <!-- Quro AI 输入法（IME）：注册为系统键盘，用户可在任意输入框切换使用。
+             需 android.permission.BIND_INPUT_METHOD 权限（系统级签名保护）。
+             用户需在「系统设置 → 语言和输入法」中启用。 -->
+        <service
+            android:name=".service.QuroAiKeyboardService"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
+
         <!-- 本地 MCP Server：环回地址 127.0.0.1，仅本机可访问 -->
         <service
             android:name=".service.QuroMcpService"
@@ -220,6 +261,16 @@
             android:name="com.canhub.cropper.CropImageActivity"
             android:theme="@style/Theme.Quro.Crop"
             tools:replace="android:theme" />
+
+        <!-- Shizuku 客户端 Provider：Shizuku 管理器经此 binder 端点与本应用建立连接。
+             缺失时表现为「Shizuku 里看不到 / 连不上 QuroAI」（对照上游项目的已验证配置补齐）。 -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
