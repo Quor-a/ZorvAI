@@ -1,6 +1,6 @@
 # Quro AI
 
-> 开源 AI 助手 · 原创构建。
+> 开源 AI 助手
 > 一个运行在 Android 上的原生 AI 助手，具备工具调用、灵魂注入（人格卡）、记忆库、CMS v2 能力模块、终端/开发环境、语音交互与完整内置工具箱。
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
