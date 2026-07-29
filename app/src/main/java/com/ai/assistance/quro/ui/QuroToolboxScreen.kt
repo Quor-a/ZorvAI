@@ -132,7 +132,7 @@ fun QuroToolboxScreen(
                         put("content", docContent)
                     }.toString()
                     // ★ ANR 修复：aiWPS 文档生成是重 I/O（写 zip/OOXML），
-                    // 原本在点击回调（主线程）同步执行 → 阻塞 UI 线程触发「Quro AI 没有响应」。
+                    // 原本在点击回调（主线程）同步执行 → 阻塞 UI 线程触发「Zorv AI 没有响应」。
                     // 改为 IO 协程执行，结果回主线程落 state。
                     scope.launch(Dispatchers.IO) {
                         val r = runCatching { AiwpsCreateTool().run(ctx, json) }
@@ -330,7 +330,7 @@ private fun ToolboxHome(
         ToolItem(Icons.Filled.Movie, "视频播放器", "在应用内全功能视频播放器播放本地视频", { onOpenVideo("", "") }),
         ToolItem(Icons.Filled.Person, "数字人", "云端口/离线可选·可自制 3D 模型·语音→LLM→TTS 闭环", onClick = onOpenAvatar),
         ToolItem(Icons.Filled.Keyboard, "AI 键盘", "AI 替你打字·注册为系统输入法·任意 App 可用", onClick = {
-            // 打开系统输入法设置页，引导用户启用 Quro AI 键盘
+            // 打开系统输入法设置页，引导用户启用 Zorv AI 键盘
             try {
                 ctx.startActivity(android.content.Intent("android.settings.INPUT_METHOD_SETTINGS"))
             } catch (_: Exception) {

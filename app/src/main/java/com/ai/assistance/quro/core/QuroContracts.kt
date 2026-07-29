@@ -1,7 +1,7 @@
 package com.ai.assistance.quro.core
 
 /**
- * Quro AI 核心契约。
+ * Zorv AI 核心契约。
  * 统一描述对话消息、工具调用、工具规格与 LLM 返回结果。
  */
 

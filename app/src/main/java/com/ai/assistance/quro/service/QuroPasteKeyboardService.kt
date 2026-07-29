@@ -164,7 +164,7 @@ class QuroPasteKeyboardService : Service(), CoroutineScope by CoroutineScope(Dis
     }
 
     private fun buildSystemPrompt(): String =
-        "你是 Quro AI 的「粘贴键盘」助手。用户会给出一段指令，请直接生成可粘贴到任意 App 输入框/评论区的成品文本。" +
+        "你是 Zorv AI 的「粘贴键盘」助手。用户会给出一段指令，请直接生成可粘贴到任意 App 输入框/评论区的成品文本。" +
         "只输出最终文本本身，不要解释、不要加引号、不要 Markdown 代码块，除非用户明确要求格式。"
 
     @Composable

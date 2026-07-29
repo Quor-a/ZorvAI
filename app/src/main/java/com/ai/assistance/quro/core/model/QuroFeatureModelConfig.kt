@@ -9,7 +9,7 @@ import androidx.core.content.edit
  *
  * 设计要点（与对齐）：
  * - 每个 [QuroFunctionType] 可「跟随主模型」(useGlobal=true) 或指定独立模型 (useGlobal=false, model=具体模型名)。
- * - QuroAI 当前为单接入点架构（全局只有一个 baseUrl/apiKey/provider），因此「功能级配置」在
+ * - Zorv AI 当前为单接入点架构（全局只有一个 baseUrl/apiKey/provider），因此「功能级配置」在
  *   语义上等价于 FunctionType→(configId, modelIndex)：configId 退化为全局主配置，
  *   modelIndex 退化为 model 字符串覆写。该约束下这是与接口规范一致的忠实实现。
  * - 引擎消费入口统一为 [QuroFunctionModelConfigRepository.resolveConfig]：跟随主模型时原样返回

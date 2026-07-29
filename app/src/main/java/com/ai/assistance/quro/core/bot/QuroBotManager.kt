@@ -228,7 +228,7 @@ class QuroBotManager(
                 runCatching {
                     QuroReplyNotifier.notifyImMessage(
                         appContext,
-                        "Quro · ${message.platform.label}",
+                        "Zorv · ${message.platform.label}",
                         reply.text,
                         id = QuroReplyNotifier.NOTIF_IM_REPLY,
                     )

@@ -55,7 +55,7 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "把 QuroAI 的 $toolCount 个内置工具以 MCP（Model Context Protocol）协议暴露给本机其它 AI 客户端" +
+                "把 Zorv AI 的 $toolCount 个内置工具以 MCP（Model Context Protocol）协议暴露给本机其它 AI 客户端" +
                         "（Claude Desktop / Cursor / MCP Inspector 等）。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

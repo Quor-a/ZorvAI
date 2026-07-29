@@ -32,7 +32,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 /**
- * ACI 被控方（第三方 App）开发手册 —— 接 QuroAI 作为控制方时，被调方应如何开发。
+ * ACI 被控方（第三方 App）开发手册 —— 接 Zorv AI 作为控制方时，被调方应如何开发。
  * 放在 ACI 管理中心内，供第三方 App 开发者直接照做。
  */
 /**
@@ -90,7 +90,7 @@ ACI 被控方（第三方 App）开发手册
 ══════════════════════════════════════════
 一、ACI 是什么
 • 本地、无 Root 的 App 间 AIDL 调用框架；不依赖 Shizuku / dumpsys / ROOT / 无障碍 / 设备管理员。
-• 控制方（AI 中枢，如 QuroAI）发现并调用第三方 App 暴露的能力；你作为「被控方」按本协议暴露能力。
+• 控制方（AI 中枢，如 Zorv AI）发现并调用第三方 App 暴露的能力；你作为「被控方」按本协议暴露能力。
 • 一次调用 = 一个 capability（能力）：带 id、描述、参数清单、是否需用户确认。
 
 二、被控方接入 5 步
@@ -98,7 +98,7 @@ ACI 被控方（第三方 App）开发手册
 2) AndroidManifest 声明权限与 Service（见第三节）。
 3) 写一个 Service 继承 ai.aci.core.BaseACIService，重写 onCreateCapabilities() 声明能力、onCall() 处理逻辑。
 4) 在 Application/Activity 里把 Service 跑起来（或被 ACI 唤醒广播拉起，见第四节）。
-5) 打包安装 → 在 QuroAI「ACT 关联启动」点刷新即可发现；或本页「按名称搜索」找到后「注册并启动」。
+5) 打包安装 → 在 Zorv AI「ACT 关联启动」点刷新即可发现；或本页「按名称搜索」找到后「注册并启动」。
 
 三、AndroidManifest 配置
 <uses-permission android:name="ai.aci.permission.CALL" />
@@ -158,14 +158,14 @@ class MyAciService : BaseACIService() {
 • 危险能力务必 setUserConfirm(true)，并在 onCall 内校验 user_confirmed（服务端兜底，防被绕过）。
 
 六、控制方如何调用（供你联调）
-• QuroAI 用 aci_call 调用：aci_call(packageName, capability, params)。
+• Zorv AI 用 aci_call 调用：aci_call(packageName, capability, params)。
 • 危险能力调用前控制方会弹确认框；被控方 onCall 仍要查 user_confirmed。
 
 七、打包与测试清单
 ☐ AAR 依赖正确，BaseACIService 可继承
 ☐ Manifest 权限 + Service + intent-filter + queries 齐全
 ☐ 有可启动 Activity 与有效图标
-☐ 安装后在 QuroAI ACT 关联启动「刷新」可见
+☐ 安装后在 Zorv AI ACT 关联启动「刷新」可见
 ☐ echo 类能力能正常返回值
 ☐ 危险能力在两侧都做了确认
 

@@ -58,7 +58,7 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
     var rate by remember { mutableFloatStateOf(QuroTtsPrefs.getRate(ctx)) }
     var pitch by remember { mutableFloatStateOf(QuroTtsPrefs.getPitch(ctx)) }
 
-    var previewText by remember { mutableStateOf("这是一条语音合成测试，Quro AI 正在朗读。") }
+    var previewText by remember { mutableStateOf("这是一条语音合成测试，Zorv AI 正在朗读。") }
     var speakStatus by remember { mutableStateOf<String?>(null) }
 
     // ── Bug 日志区域 ──

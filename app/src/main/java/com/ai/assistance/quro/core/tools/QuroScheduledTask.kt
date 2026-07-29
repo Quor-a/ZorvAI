@@ -449,7 +449,7 @@ object QuroScheduledTaskScheduler {
                     "定时任务提醒",
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
-                    description = "QuroAI 定时任务到时提醒"
+                    description = "Zorv AI 定时任务到时提醒"
                 }
                 nm.createNotificationChannel(channel)
             }

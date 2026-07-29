@@ -15,7 +15,7 @@ import android.widget.FrameLayout
 import android.widget.TextView
 
 /**
- * Quro AI 智能体键盘（Agent IME）。
+ * Zorv AI 智能体键盘（Agent IME）。
  *
  * 这是「给 AI agent 用的工具执行端」，不是给人手打的键盘：
  * - UI 极简：键盘区只显示一颗 🤖 悬浮球，点击弹出系统输入法选择器以便切回普通键盘，不干扰目标 App。

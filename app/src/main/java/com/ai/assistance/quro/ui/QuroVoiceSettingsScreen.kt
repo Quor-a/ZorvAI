@@ -235,7 +235,7 @@ fun QuroVoiceSettingsScreen(
                     )
                     HorizontalDivider()
                     Text(
-                        "开启后，设备开机完成会尝试启动前台语音球服务（仅挂通知栏、不主动录音）。若厂商 ROM 限制了自启动，请在系统「电池 / 自启动管理」里允许 QuroAI。",
+                        "开启后，设备开机完成会尝试启动前台语音球服务（仅挂通知栏、不主动录音）。若厂商 ROM 限制了自启动，请在系统「电池 / 自启动管理」里允许 Zorv AI。",
                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                     )

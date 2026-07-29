@@ -24,7 +24,7 @@ import java.util.UUID
 import kotlin.coroutines.resume
 
 /**
- * QuroAI TTS 朗读工具（v37 — 引擎诊断 + 简化重试）。
+ * Zorv AI TTS 朗读工具（v37 — 引擎诊断 + 简化重试）。
  *
  * v36 Bug 日志证据：
  *   OnInit status=-1 → engine=null → available=0 voices

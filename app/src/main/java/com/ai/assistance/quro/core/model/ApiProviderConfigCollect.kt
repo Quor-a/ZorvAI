@@ -5,7 +5,7 @@ import java.net.URI
 /**
  * 单条「端点选项」：一个可选的预设 endpoint 与其展示标签。
  *
- * 注意：本工程（QuroAI）的 [com.ai.assistance.quro.core.network.QuroLlmClient]
+ * 注意：本工程（Zorv AI）的 [com.ai.assistance.quro.core.network.QuroLlmClient]
  * 会自行在 baseUrl 之后追加 `/chat/completions`，因此这里存储的 endpoint 一律只保留
  * **基址**（去掉尾部 `/chat/completions`）。例如 OPENAI 存 `https://api.openai.com/v1`，
  * 由 QuroLlmClient 追加后恰好得到 `https://api.openai.com/v1/chat/completions`。

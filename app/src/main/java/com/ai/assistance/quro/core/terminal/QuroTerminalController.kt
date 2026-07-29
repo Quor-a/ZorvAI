@@ -50,7 +50,7 @@ object QuroTerminalController {
                 File(Environment.getExternalStorageDirectory().absolutePath)
             )
             // ★ ANR/挂死修复：原 p.waitFor() 无超时；若命令不退出（交互式、无计数的 ping、python REPL 等），
-            // 会永久阻塞 IO 线程 → 整条 ask() 循环卡死 → 用户看到「Quro AI 没有响应」。
+            // 会永久阻塞 IO 线程 → 整条 ask() 循环卡死 → 用户看到「Zorv AI 没有响应」。
             // 改为：后台读流（避免 stdout 不关闭导致 readText 永久阻塞）+ 带超时 waitFor，超时强行销毁。
             val outB = StringBuilder()
             val errB = StringBuilder()

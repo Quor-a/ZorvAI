@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="logo.svg" alt="QuroAI" width="168" height="168" />
+<img src="logo.svg" alt="Zorv AI" width="168" height="168" />
 
-# QuroAI
+# Zorv AI
 
 ### 运行在 Android 上的设备端 AI Agent · 智能体助手
 
@@ -13,7 +13,7 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF.svg)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-1.7-4285F4.svg)](https://developer.android.com/compose)
 [![GeckoView](https://img.shields.io/badge/GeckoView-MPL--2.0-success.svg)](https://mozilla.github.io/geckoview/)
-[![Release](https://img.shields.io/github/v/release/Quor-a/QuroAI?label=release)](https://github.com/Quor-a/QuroAI/releases)
+[![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI?label=release)](https://github.com/Quor-a/ZorvAI/releases)
 [![minSdk](https://img.shields.io/badge/minSdk-26-API.svg)](https://developer.android.com/about/versions/oreo)
 [![compileSdk](https://img.shields.io/badge/compileSdk-36-API.svg)](https://developer.android.com)
 
@@ -21,7 +21,7 @@
 
 > **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin + Jetpack Compose ｜ **compileSdk 36 / minSdk 26 / targetSdk 34**
 >
-> QuroAI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用内置工具，运行 Node / Python / SSH / Java / Rust / Go 共享运行时，并通过飞书、QQ、微信与你保持在线。
+> Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用内置工具，运行 Node / Python / SSH / Java / Rust / Go 共享运行时，并通过飞书、QQ、微信与你保持在线。
 
 ---
 
@@ -135,7 +135,7 @@ CMS 引擎是一套**共享运行时**供给机制，按需在设备上提供 **
 
 | 层级 | 是什么 | 用途 | 前置条件 |
 |------|--------|------|----------|
-| **L1** 无障碍 | `AccessibilityService` | 点击 / 输入 / 读屏（`read_screen` 读取无障碍节点树，非截图） | 在系统设置中开启 QuroAI 的无障碍服务 |
+| **L1** 无障碍 | `AccessibilityService` | 点击 / 输入 / 读屏（`read_screen` 读取无障碍节点树，非截图） | 在系统设置中开启 Zorv AI 的无障碍服务 |
 | **L2** Shizuku | uid 0/2000，AIDL `UserService` 主路径，反射 `newProcess` 备选 | 高权限 shell 命令执行 | 安装并运行 Shizuku App，完成配对授权 |
 | **L3** 设备管理员 | `DeviceAdmin` | 设备策略级能力（锁定 / 擦除等） | 在设置中激活设备管理员 |
 | **L4** ROOT | `su` | 完整 root 权限，命令走 `sh -c` 执行 | 设备已 root |
@@ -154,7 +154,7 @@ CMS 引擎是一套**共享运行时**供给机制，按需在设备上提供 **
 
 ```bash
 # 克隆仓库
-git clone https://github.com/Quor-a/QuroAI.git
+git clone https://github.com/Quor-a/ZorvAI
 cd QuroAI
 
 # 准备环境
@@ -174,7 +174,7 @@ cd QuroAI
 
 | 现象 | 说明 / 处理 |
 |------|-------------|
-| **Shizuku 相关能力不可用** | 必须**先打开 Shizuku App 并启动其服务 / 完成配对**，再在 QuroAI 中授权；Shizuku 未运行时 L2 通道不会启用。 |
+| **Shizuku 相关能力不可用** | 必须**先打开 Shizuku App 并启动其服务 / 完成配对**，再在 Zorv AI 中授权；Shizuku 未运行时 L2 通道不会启用。 |
 | **ROOT 模式命令不执行** | ROOT 模式命令走 `sh -c` 执行，需确认设备已 root 且已授予 su 权限。 |
 | **应用内 Linux（L5）无法运行** | 真执行依赖**用户自备的 `proot` 二进制**与 Alpine rootfs，请先准备好这些外部资源。 |
 | **网页 / HTML 预览不显示** | 确认已随包集成 GeckoView（MPL-2.0）运行时。 |
@@ -186,11 +186,11 @@ cd QuroAI
 
 ## 📦 Download · 下载 / APK
 
-[![Release](https://img.shields.io/github/v/release/Quor-a/QuroAI)](https://github.com/Quor-a/QuroAI/releases)
+[![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
 直接从 Release 页面下载最新 APK：
 
-- **v1.0.2（debug）**：[QuroAI-v1.0.2-debug.apk](https://github.com/Quor-a/QuroAI/releases/download/v1.0.2/QuroAI-v1.0.2-debug.apk)
+- **v1.0.2（debug）**：[QuroAI-v1.0.2-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.2/QuroAI-v1.0.2-debug.apk)
 
 > ⚠️ 请务必从官方 Release 页面下载本应用。通过未知渠道获取的安装包可能被篡改，存在隐私泄露风险。
 
@@ -198,7 +198,7 @@ cd QuroAI
 
 ## 📜 License · 许可证
 
-QuroAI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICENSE)）。
+Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICENSE)）。
 
 - **主许可**：Apache-2.0（应用全部源码）。
 - **GeckoView（Mozilla）**：以 **MPL-2.0** 分发（file-level copyleft）。其对应源代码随构建提供，符合该许可证义务。
@@ -230,7 +230,7 @@ QuroAI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICEN
 
 ## 💬 Feedback · 问题反馈
 
-遇到问题或有建议？欢迎 [提交 Issue](https://github.com/Quor-a/QuroAI/issues)。
+遇到问题或有建议？欢迎 [提交 Issue](https://github.com/Quor-a/ZorvAI/issues)。
 请尽量提供：清晰描述、复现步骤、设备型号与系统版本、相关截图。
 
 如果觉得项目不错，欢迎点个 ⭐ Star 支持我们！
@@ -239,6 +239,6 @@ QuroAI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICEN
 
 <div align="center">
 
-Made with ❤️ by the QuroAI Team
+Made with ❤️ by the Zorv AI Team
 
 </div>

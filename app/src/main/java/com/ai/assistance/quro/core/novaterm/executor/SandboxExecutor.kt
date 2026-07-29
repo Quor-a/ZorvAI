@@ -69,7 +69,7 @@ class SandboxExecutor(
     /**
      * 执行并等待结果（同步风格）。带超时，避免命令挂死（如 ping 无计数 / 死循环）
      * 永久阻塞调用方协程（QuroTermTool 在 ask() 的 IO 线程上 runBlocking 等待本方法，
-     * 一旦无超时，整条对话循环卡死 → 用户感知「Quro AI 没有响应」）。
+     * 一旦无超时，整条对话循环卡死 → 用户感知「Zorv AI 没有响应」）。
      */
     suspend fun executeBlocking(input: String): CommandResult = withContext(Dispatchers.IO) {
         try {

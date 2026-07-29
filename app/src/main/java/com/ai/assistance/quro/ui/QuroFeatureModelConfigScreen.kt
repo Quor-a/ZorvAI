@@ -49,7 +49,7 @@ import kotlinx.coroutines.launch
  *
  * 消费机制：引擎入口 [com.ai.assistance.quro.core.QuroAssistant.ask] 经
  * [QuroFunctionModelConfigRepository.resolveConfig] 取各功能最终模型；主对话 (CHAT) 恒用主模型，
- * 其余功能的独立模型绑定将在对应次级调用接入后自动生效（当前 QuroAI 单接入点架构下，
+ * 其余功能的独立模型绑定将在对应次级调用接入后自动生效（当前 Zorv AI 单接入点架构下，
  * 独立绑定 = 复用主接入点的 baseUrl/apiKey、仅替换 model 名）。
  */
 @OptIn(ExperimentalMaterial3Api::class)

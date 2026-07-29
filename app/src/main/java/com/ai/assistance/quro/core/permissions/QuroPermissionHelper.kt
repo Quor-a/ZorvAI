@@ -157,7 +157,7 @@ object QuroPermissionHelper {
             note = when {
                 !installed -> "未安装 Shizuku，请先在应用商店安装"
                 authorized -> "已授权，可正常调用"
-                else -> "请在 Shizuku 中授权 Quro AI 并确保其正在运行"
+                else -> "请在 Shizuku 中授权 Zorv AI 并确保其正在运行"
             },
         )
     }
@@ -169,7 +169,7 @@ object QuroPermissionHelper {
         val active = dpm.isAdminActive(cn)
         val intent = Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
             putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, cn)
-            putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "授予 Quro AI 设备管理员以启用高级系统管理能力")
+            putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "授予 Zorv AI 设备管理员以启用高级系统管理能力")
         }
         return QuroPermissionItem(
             id = "admin",
@@ -177,7 +177,7 @@ object QuroPermissionHelper {
             desc = "锁定屏幕、远程管理等高级系统能力",
             granted = active,
             guideIntent = intent,
-            note = if (active) "" else "在系统「设备管理员」中激活 Quro AI",
+            note = if (active) "" else "在系统「设备管理员」中激活 Zorv AI",
         )
     }
 

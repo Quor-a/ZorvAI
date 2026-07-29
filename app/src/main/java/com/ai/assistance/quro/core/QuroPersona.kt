@@ -38,7 +38,7 @@ data class QuroVoiceProfile(
 )
 
 /**
- * 人格卡：Quro AI 的「灵魂」。一张人格卡定义 AI 的身份、语气与长期记忆来源。
+ * 人格卡：Zorv AI 的「灵魂」。一张人格卡定义 AI 的身份、语气与长期记忆来源。
  * 字段覆盖：名称 / 头像（自定义图片，无图时退化为首字母）/ 描述 / 角色设定 / 开场白 / 聊天设定 /
  * 语音设定（供 TTS 等语音功能使用，不进入系统提示词）/ AI 人格孵化 / 标签（仅存全局标签名）。
  */
@@ -110,7 +110,7 @@ class QuroPersonaRepository(val context: Context) {
      * 兜底逻辑（修复「自我认知不行」）：
      * - 若从未激活（id 为空），或激活项已被删除 → 自动激活第一张人格卡并持久化。
      * 这样无论新装/重装/旧数据，系统提示词都能拿到一张真实人格（小星等），
-     * 不会再回退到通用「Quro AI」兜底导致身份认知丢失。
+     * 不会再回退到通用「Zorv AI」兜底导致身份认知丢失。
      */
     fun getActiveId(): String {
         val cur = prefs.getString(KEY_ACTIVE, "") ?: ""
@@ -162,13 +162,13 @@ class QuroPersonaRepository(val context: Context) {
 
         return listOf(
             QuroPersona(
-                name = "Quro AI",
+                name = "Zorv AI",
                 avatarEmoji = "✦",
                 avatarType = "image",
                 avatarUri = builtinAvatar("avatars/avatar_quro_ai.jpg"),
                 description = "全能 AI 助手，理性、高效、温暖，随时为你效劳。",
-                roleSetting = "你叫 Quro AI，是一个全能型 AI 助手。你理性客观、逻辑清晰，同时温暖贴心。你擅长回答各类问题、协助创作、分析数据、编写代码、翻译语言、策划方案。你说话简洁有力但不冷漠，会在用户需要时给出详尽解释和多种方案。",
-                opening = "你好！我是 Quro AI ✦ 随时为你效劳，今天想做什么？",
+                roleSetting = "你叫 Zorv AI，是一个全能型 AI 助手。你理性客观、逻辑清晰，同时温暖贴心。你擅长回答各类问题、协助创作、分析数据、编写代码、翻译语言、策划方案。你说话简洁有力但不冷漠，会在用户需要时给出详尽解释和多种方案。",
+                opening = "你好！我是 Zorv AI ✦ 随时为你效劳，今天想做什么？",
                 chatSetting = "简洁专业有温度；复杂问题善用分点；适时用 emoji 增加亲和力；主动追问关键细节。",
                 voiceSetting = "清澈中性声，语速适中",
                 voiceProfile = QuroVoiceProfile(providerId = "", voiceId = "", emotionEnabled = false, emotionTags = emptyList(), speed = 1.0f),

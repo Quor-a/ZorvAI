@@ -6,7 +6,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** 语音试听默认文本（文件级常量，供 QuroTtsProviderConfig 与 QuroTtsProviderPrefs 共用）。 */
-private const val DEFAULT_PREVIEW = "这是一条语音合成测试，Quro AI 正在朗读。"
+private const val DEFAULT_PREVIEW = "这是一条语音合成测试，Zorv AI 正在朗读。"
 
 /**
  * 云端 TTS 服务商目录 + 配置持久化。

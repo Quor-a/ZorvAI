@@ -19,7 +19,7 @@ import java.util.Base64
 import java.util.concurrent.TimeUnit
 
 /**
- * QuroAI STT 语音识别工具（Phase 1，v41）。
+ * Zorv AI STT 语音识别工具（Phase 1，v41）。
  *
  * 镜像 QuroTtsHolder 的「注入式日志」模式：Holder 不持有内存日志列表，
  * 只通过 setLogCallback 把日志推给调用方（设置页的 sttLogs 状态），由 UI 负责展示。

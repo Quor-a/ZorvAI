@@ -261,7 +261,7 @@ ${sheets.mapIndexed { i, _ -> "<Relationship Id=\"rId${i + 1}\" Type=\"http://sc
 
         val NS = "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\""
         fun slideXml(t: String, body: List<String>): String {
-            val titleXml = """<p:sp><p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="zh-CN"/><a:t>${xmlEsc(t.ifBlank { "Quro AI" })}</a:t></a:r></a:p></p:txBody></p:sp>"""
+            val titleXml = """<p:sp><p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="zh-CN"/><a:t>${xmlEsc(t.ifBlank { "Zorv AI" })}</a:t></a:r></a:p></p:txBody></p:sp>"""
             val bodyXml = body.joinToString("") { b -> "<a:p><a:r><a:rPr lang=\"zh-CN\"/><a:t>${xmlEsc(b)}</a:t></a:r></a:p>" }
             return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld $NS>
@@ -401,12 +401,12 @@ ${sheets.mapIndexed { i, _ -> "<Relationship Id=\"rId${i + 1}\" Type=\"http://sc
         val core = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dc:title>${xmlEsc(title)}</dc:title>
-  <dc:creator>Quro AI</dc:creator>
-  <cp:lastModifiedBy>Quro AI</cp:lastModifiedBy>
+  <dc:creator>Zorv AI</dc:creator>
+  <cp:lastModifiedBy>Zorv AI</cp:lastModifiedBy>
 </cp:coreProperties>"""
         val app = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
-  <Application>Quro AI</Application>
+  <Application>Zorv AI</Application>
 </Properties>"""
         return body + mapOf(
             "/[Content_Types].xml" to ct,

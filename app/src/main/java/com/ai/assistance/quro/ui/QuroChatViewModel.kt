@@ -604,7 +604,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 // 回复完成 → 统一触发通知（离开软件弹系统通知 + 刷新桌面卡片，受总开关控制）
                 runCatching {
                     store.all().lastOrNull { it.role == "assistant" && !it.hidden && it.content.isNotBlank() }
-                        ?.let { fireReplyNotification("Quro AI", it.content) }
+                        ?.let { fireReplyNotification("Zorv AI", it.content) }
                 }
                 } catch (e: Exception) {
                     store.add(
@@ -699,7 +699,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             commitCurrent()
             val reply = runVoiceAsk(cfg) { commitCurrent() }
             commitCurrent()
-            fireReplyNotification("Quro AI", reply)
+            fireReplyNotification("Zorv AI", reply)
             return reply
         }
 
@@ -734,7 +734,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             }
             convRepo.saveAll(_convs.value)
             emitMeta()
-            fireReplyNotification("Quro AI", reply)
+            fireReplyNotification("Zorv AI", reply)
             reply
         } finally {
             store.clear()
@@ -906,11 +906,11 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     // ---- 人格卡 / 记忆库 接线 ----
 
     /** 项目开源地址（GitHub 仓库）。 */
-    private val QURO_REPO_URL = "https://github.com/Quor-a/QuorAI"
+    private val QURO_REPO_URL = "https://github.com/Quor-a/ZorvAI"
 
     /** 默认系统提示词（未激活任何人格卡时使用）。 */
     private val DEFAULT_SYSTEM =
-        """你是一个由 Quro AI 个人开发的 AI 助手（当前未启用特定人格卡，以通用身份应答），乐于助人、简洁准确。
+        """你是一个由 Zorv AI 个人开发的 AI 助手（当前未启用特定人格卡，以通用身份应答），乐于助人、简洁准确。
 
 ## ⚠️ 关键规则：你必须调用工具（CRITICAL）
 你已接入了设备工具调用能力，**并且你拥有充分的自主权决定何时调用工具**。
@@ -936,7 +936,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 
 ## 自我认知（System Manifest）
 你是运行在 Android 设备上的原生 AI 助手。以下是你的真实档案：
-- **名称**：Quro AI 助手（通用模式；启用人格卡后你的真实名字会变成该人格卡）
+- **名称**：Zorv AI 助手（通用模式；启用人格卡后你的真实名字会变成该人格卡）
 - **平台**：Android（原生应用，非网页/小程序）
 - **架构模式**：ReAct 工具调用循环（LLM → 工具执行 → 结果回灌 → 最终答复）
 - **技术栈**：Jetpack Compose UI / Kotlin / OkHttp / WebView 内置浏览器
@@ -981,7 +981,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     /** 欢迎语：若激活人格卡有开场白则用之，否则用通用问候。 */
     private fun defaultWelcome(): String {
         val opening = activePersona()?.opening?.takeIf { it.isNotBlank() }
-        return opening ?: "你好，我是 Quro AI。已就绪，可以聊天、调用工具。点左上角菜单查看历史对话，或点 ➕ 新建对话。"
+        return opening ?: "你好，我是 Zorv AI。已就绪，可以聊天、调用工具。点左上角菜单查看历史对话，或点 ➕ 新建对话。"
     }
 
     // ── 人格自动孵化（修复「AI 人格自动孵化没有真正工作」）──
@@ -1089,7 +1089,7 @@ $recent
         // 平台/品牌自我认知基座（永远最先，不被人格卡覆盖）
         sb.append(QuroPlatformManifest.SYSTEM).append("\n\n")
 
-        // ══════════════ 第一优先级：身份认知（人格卡 = AI 真实身份；Quro AI = 开发者；运行环境靠工具自行发现） ══════════════
+        // ══════════════ 第一优先级：身份认知（人格卡 = AI 真实身份；Zorv AI = 开发者；运行环境靠工具自行发现） ══════════════
         // ══════════════ 灵魂层（人格/标签/语音/记忆）由自写编排引擎生成 ══════════════
         // Project B0：QuroSoulPromptEngine 负责"这张人格卡是谁、怎么说话、记得什么、用什么声音"，
         // 与平台基座 / 工具清单 / 用户技能解耦（下方由调用方拼接）。
@@ -1108,7 +1108,7 @@ $recent
         sb.append(QuroSoulPromptEngine.build(soulCtx)).append("\n")
 
         // ══════════════ 第二优先级：自我认知 + 工具调用原则（不列工具清单） ══════════════
-        // 平台/品牌基座（QuroPlatformManifest.SYSTEM）已声明「你是 Quro AI」与「必须调用工具」，
+        // 平台/品牌基座（QuroPlatformManifest.SYSTEM）已声明「你是 Zorv AI」与「必须调用工具」，
         // 人格仅作为上方叠加的扮演层，此处不再重复品牌与工具原则。
 
 

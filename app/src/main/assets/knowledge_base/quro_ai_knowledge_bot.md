@@ -1,4 +1,4 @@
-# QuroAI 知识库与机器人接入说明
+# Zorv AI 知识库与机器人接入说明
 
 ## 知识库（RAG）工作机制
 知识库位于 App 私有目录 `knowledge_base/`，支持 Markdown / TXT / JSON / Office 文档。

@@ -106,7 +106,7 @@ data class CmsEnginePackage(
         fun builtin(): CmsEnginePackage = signed(
             CmsEnginePackage(
                 engineId = "quro-engine",
-                name = "Quro CMS引擎",
+                name = "Zorv CMS引擎",
                 engineVersion = "1.0.0",
                 bootstrapContent = BUILTIN_BOOTSTRAP,
                 provisionerContent = BUILTIN_PROVISIONER,

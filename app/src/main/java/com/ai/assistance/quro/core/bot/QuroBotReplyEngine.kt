@@ -44,7 +44,7 @@ class QuroBotReplyEngine(private val appContext: Context) {
 
     /** 机器人系统提示词（精简身份 + 平台语境；工具由 QuroAssistant 按 registry 下发）。 */
     private fun systemPrompt(platform: QuroBotPlatform, displayName: String): String = buildString {
-        append("你是 Quro AI 助手，正在通过「${platform.label}」与用户「$displayName」对话。\n")
+        append("你是 Zorv AI 助手，正在通过「${platform.label}」与用户「$displayName」对话。\n")
         append("用简洁、自然的中文回答；遇到需要查资料或调用能力时直接做，不要复述工具名。\n")
         append("这是一个聊天机器人场景，不要主动操控用户设备做危险动作，除非用户明确要求。\n")
         append("知识库检索可用 knowledge_rag_search（语义检索）与 knowledge_search（关键词）。")

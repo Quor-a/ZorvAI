@@ -248,19 +248,46 @@ class QuroAssistant(
                         callsWithId.zip(results).forEach { (c, r) ->
                             QuroAgentTrace.result("tool", c.name, r.result)
                         }
-                        // 🔁 死循环检测（真正的「无限制但防卡死」机制）：
-                        // 若模型连续向回请求「完全相同的同一组工具调用」（name+arguments 完全一致），
-                        // 说明已陷入重复循环（典型为某工具结果异常，模型反复重试同一动作）。
-                        // 此时主动断开，避免无限占用把界面卡死；本轮工具结果已回灌，上下文仍完整。
-                        // 正常任务的「不同步骤」永远签名不同，不会被误伤 → 可一直链式编排。
+                        // 🔁 工具调用重复 → 区分「成功重复」与「失败重试」（非代码强制中断）：
+                        // 模型「连续请求完全相同的同一组工具调用」（name+arguments 一致）本身不等于出错——
+                        // 成功的任务也可能合法地多次调用同一工具（如批量 input_text 逐字输入、连续 tap_screen 点击）。
+                        // 真正需要干预的信号是：调用重复「且」工具返回结果本身呈现失败特征
+                        // （含「失败/错误/异常/超时」或 error/exception/timeout 等关键词），说明该调用未生效、模型在盲目重试。
+                        // 此时才把「工具失败」信号作为 hidden system 提示回灌，由 AI 自决结束旧尝试、换思路继续；代码不直接中断。
+                        // 结果正常的重复调用（合法成功场景）完全不干预，连计数都不累积，避免误伤。
+                        // 仅保留极高兜底（repeatStreak>=10 且持续失败）：AI 长时间收到提示仍不纠正才强制停止防卡死。
                         val sig = result.calls.joinToString("|") { "${it.name}:${it.arguments}" }
                         if (sig == prevCallSig) {
-                            repeatStreak++
-                            if (repeatStreak >= 2) {
-                                lastText = "⚠️ 检测到工具调用陷入重复循环（连续相同调用），已停止以避免卡死。可调整指令或检查工具返回结果后重试。"
-                                store.add(QuroMessage(role = "assistant", content = lastText))
-                                emit()
-                                return@withContext lastText
+                            // 仅当本次重复调用的工具结果确实带失败特征时，才视为「失败重试」：
+                            val anyFailed = results.any { r ->
+                                r.result.contains("失败") || r.result.contains("错误")
+                                    || r.result.contains("异常") || r.result.contains("超时")
+                                    || r.result.contains("error", ignoreCase = true)
+                                    || r.result.contains("exception", ignoreCase = true)
+                                    || r.result.contains("timeout", ignoreCase = true)
+                            }
+                            if (anyFailed) {
+                                repeatStreak++
+                                val failedTool = result.calls.firstOrNull()?.name ?: "工具"
+                                store.add(
+                                    QuroMessage(
+                                        role = "system",
+                                        content = "[系统提示] 你连续多次调用了完全相同的工具「$failedTool」（参数也相同），" +
+                                            "且其返回结果持续包含失败/错误信息，说明该调用很可能未生效。" +
+                                            "请主动结束当前尝试，重新思考任务目标，换用不同的工具或方法，不要继续重试同一调用。",
+                                        hidden = true,
+                                    ),
+                                )
+                                if (repeatStreak >= 10) {
+                                    lastText = "⚠️ 检测到工具调用长时间陷入重复失败（未自行纠正），已停止以避免卡死。可调整指令或检查工具后重试。"
+                                    store.add(QuroMessage(role = "assistant", content = lastText))
+                                    emit()
+                                    return@withContext lastText
+                                }
+                            } else {
+                                // 结果正常：合法的「成功重复调用」，完全不干预，重置计数避免误累积
+                                repeatStreak = 0
+                                prevCallSig = sig
                             }
                         } else {
                             repeatStreak = 0

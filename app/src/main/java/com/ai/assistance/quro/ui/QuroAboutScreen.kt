@@ -22,6 +22,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -39,7 +45,7 @@ import com.ai.assistance.quro.ui.theme.Muted
 import com.ai.assistance.quro.ui.theme.Line
 
 /**
- * 关于 Quro AI（纸感重设计）：品牌 hero + SetGroup/SetRowClickable 分组。
+ * 关于 Zorv AI（纸感重设计）：品牌 hero + SetGroup/SetRowClickable 分组。
  * 「项目地址」「在 GitHub 点个 Star」跳转到开源仓库；
  * 「开源许可声明」弹出本应用所用第三方依赖的许可证清单。
  */
@@ -48,7 +54,8 @@ import com.ai.assistance.quro.ui.theme.Line
 fun QuroAboutScreen(onBack: () -> Unit = {}) {
     val ctx = LocalContext.current
     val versionName = remember { BuildConfig.VERSION_NAME }
-    val repoUrl = "https://github.com/Quor-a/QuorAI"
+    val scope = rememberCoroutineScope()
+    val repoUrl = "https://github.com/Quor-a/ZorvAI"
     var showLicense by remember { mutableStateOf(false) }
     val openUrl: (String) -> Unit = { url ->
         try {
@@ -64,7 +71,7 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
             TopAppBar(
                 title = {
                     Text(
-                        "关于 Quro AI",
+                        "关于 Zorv AI",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontFamily = FontFamily.Serif,
                             fontWeight = FontWeight.SemiBold,
@@ -93,7 +100,7 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
-                    "Quro AI",
+                    "Zorv AI",
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontFamily = FontFamily.Serif,
                         fontWeight = FontWeight.SemiBold,
@@ -114,7 +121,42 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
                     name = "检查更新",
                     sub = "当前版本 v$versionName",
                     onClick = {
-                        Toast.makeText(ctx, "已是最新版本 v$versionName", Toast.LENGTH_SHORT).show()
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                val url = URL("https://api.github.com/repos/Quor-a/ZorvAI/releases/latest")
+                                val conn = url.openConnection() as HttpURLConnection
+                                conn.requestMethod = "GET"
+                                conn.setRequestProperty("Accept", "application/vnd.github+json")
+                                conn.connectTimeout = 10000
+                                conn.readTimeout = 10000
+                                val code = conn.responseCode
+                                if (code == 200) {
+                                    val text = conn.inputStream.bufferedReader().use { it.readText() }
+                                    val json = org.json.JSONObject(text)
+                                    val tag = json.optString("tag_name", "")
+                                    val latest = tag.removePrefix("v").trim()
+                                    val htmlUrl = json.optString("html_url", repoUrl)
+                                    val hasUpdate = isVersionNewer(latest, versionName)
+                                    withContext(Dispatchers.Main) {
+                                        if (hasUpdate) {
+                                            Toast.makeText(ctx, "发现新版本 v$latest，前往发布页下载", Toast.LENGTH_LONG).show()
+                                            openUrl(htmlUrl)
+                                        } else {
+                                            Toast.makeText(ctx, "已是最新版本 v$versionName", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                } else {
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(ctx, "检查更新失败（HTTP $code）", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                conn.disconnect()
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(ctx, "检查更新失败：${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
                     },
                 )
                 SetRowClickable(
@@ -126,7 +168,7 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
                 SetRowClickable(
                     icon = Icons.Filled.Star,
                     name = "在 GitHub 点个 Star",
-                    sub = "如果喜欢 Quro AI，欢迎点个 Star ⭐",
+                    sub = "如果喜欢 Zorv AI，欢迎点个 Star ⭐",
                     onClick = { openUrl("$repoUrl/stargazers") },
                 )
                 SetRowClickable(
@@ -142,13 +184,13 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
                 SetRowClickable(
                     icon = Icons.Filled.Code,
                     name = "开发者",
-                    sub = "Quro AI",
+                    sub = "Zorv AI",
                     onClick = { },
                 )
                 SetRowClickable(
                     icon = Icons.Filled.Copyright,
                     name = "版权",
-                    sub = "© 2025 - 2026 Quro AI. 保留所有权利。",
+                    sub = "© 2025 - 2026 Zorv AI. 保留所有权利。",
                     onClick = { },
                 )
             }
@@ -157,7 +199,7 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
 
     if (showLicense) {
         val licenses = listOf(
-            Triple("Quro AI（本应用）", "Apache-2.0", "源码以 Apache-2.0 开源，见仓库 LICENSE 文件"),
+            Triple("Zorv AI（本应用）", "Apache-2.0", "源码以 Apache-2.0 开源，见仓库 LICENSE 文件"),
             Triple("AndroidX / Jetpack", "Apache-2.0", "Google"),
             Triple("Jetpack Compose", "Apache-2.0", "Google"),
             Triple("Material Components", "Apache-2.0", "Google"),
@@ -212,4 +254,21 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
             },
         )
     }
+}
+
+
+/**
+ * 比较「最新发布版本号」是否高于「当前版本号」（按点分数字逐段比较）。
+ */
+private fun isVersionNewer(latest: String, current: String): Boolean {
+    val a = latest.split('.').map { it.toIntOrNull() ?: 0 }
+    val b = current.split('.').map { it.toIntOrNull() ?: 0 }
+    val n = if (a.size > b.size) a.size else b.size
+    for (i in 0 until n) {
+        val x = a.getOrElse(i) { 0 }
+        val y = b.getOrElse(i) { 0 }
+        if (x > y) return true
+        if (x < y) return false
+    }
+    return false
 }

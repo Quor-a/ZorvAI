@@ -93,7 +93,7 @@ class QuroShellSession private constructor(
     private val writer = BufferedWriter(OutputStreamWriter(process.outputStream, StandardCharsets.UTF_8))
 
     init {
-        appendLine("— QuroAI 终端已启动 (${if (mode == ShellMode.LINUX) "proot/Linux · Alpine aarch64" else "设备 · Toybox sh"}) —")
+        appendLine("— Zorv AI 终端已启动 (${if (mode == ShellMode.LINUX) "proot/Linux · Alpine aarch64" else "设备 · Toybox sh"}) —")
         appendLine(promptPrefix())
         launch { drain() }
     }

@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 
 /**
- * QuroAI MCP 客户端：让 AI 调用「外部 MCP 服务器」暴露的工具（MCP 给 AI 使用的能力）。
+ * Zorv AI MCP 客户端：让 AI 调用「外部 MCP 服务器」暴露的工具（MCP 给 AI 使用的能力）。
  *
  * 传输：JSON-RPC 2.0 over HTTP（单 POST + JSON / SSE 流式响应，与 [QuroMcpHttpServer] 同源协议）。
  * 主要 method：tools/list（枚举外部工具）、tools/call（调用外部工具）。
@@ -160,7 +160,7 @@ object QuroMcpClient {
         val params = JSONObject()
             .put("protocolVersion", "2025-03-26")
             .put("capabilities", JSONObject())
-            .put("clientInfo", JSONObject().put("name", "QuroAI").put("version", "1.0"))
+            .put("clientInfo", JSONObject().put("name", "Zorv AI").put("version", "1.0"))
         val (root, _) = rpcRaw(config, "initialize", params, captureSession = true)
         if (root.has("error")) return false
         // 部分服务器要求握手后发送 initialized 通知（best-effort）

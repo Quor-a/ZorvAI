@@ -1,6 +1,6 @@
-# QuroAI 产品概览
+# Zorv AI 产品概览
 
-QuroAI 是一款运行在 Android 端的本地优先 AI 助手应用，包名为 `com.ai.assistance.quro`。
+Zorv AI 是一款运行在 Android 端的本地优先 AI 助手应用，包名为 `com.ai.assistance.quro`。
 
 ## 核心定位
 - 本地优先：核心推理、工具调用、知识库检索均可在设备端完成，无需强制联网。

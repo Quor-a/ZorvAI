@@ -288,7 +288,7 @@ fun ChatScreen(
     val fontTiers = listOf(0.92f, 1f, 1.14f)
     val fontNames = listOf("小", "标准", "大")
 
-    // ---- QuroAI 后端状态（单一真相源） ----
+    // ---- Zorv AI 后端状态（单一真相源） ----
     val messages by vm.messages.collectAsState()
     val busy by vm.busy.collectAsState()
     val generatingIds by vm.generatingIds.collectAsState()
@@ -467,7 +467,7 @@ fun ChatScreen(
     var lastSheet by remember { mutableStateOf<SheetType?>(null) }
     SideEffect { if (sheet != null) lastSheet = sheet }
 
-    // 人格编辑对话框（QuroAI 完整流程：图片上传头像 / 描述 / 角色设定 / 开场白 / 聊天设定 / 标签 / AI孵化 / 保存）
+    // 人格编辑对话框（Zorv AI 完整流程：图片上传头像 / 描述 / 角色设定 / 开场白 / 聊天设定 / 标签 / AI孵化 / 保存）
     var personaToEdit by remember { mutableStateOf<QuroPersona?>(null) }
     var personaEditIsNew by remember { mutableStateOf(false) }
     var showSoulSheet by remember { mutableStateOf(false) }
@@ -649,7 +649,7 @@ fun ChatScreen(
             cmd.startsWith("copy:") -> {
                 val text = cmd.removePrefix("copy:").trim()
                 val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                cm.setPrimaryClip(android.content.ClipData.newPlainText("quro", text))
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("Zorv", text))
                 Toast.makeText(ctx, "已复制", Toast.LENGTH_SHORT).show()
             }
             cmd.startsWith("ai:") -> {
@@ -1011,12 +1011,12 @@ fun ChatScreen(
                     tags = emptyList(), incubation = "", createdAt = 0L, updatedAt = 0L,
                 )
                 personaEditIsNew = true
-            },  // 打开 QuroAI 完整人格创建对话框
+            },  // 打开 Zorv AI 完整人格创建对话框
             onPickFile = { mime -> pickLauncher.launch(mime) },
             onExport = { /* 原型：仅占位 */ },
             onClear = { vm.clear() },
             onOpenBrowser = { browserUrl = it },
-            // 设置底部弹层：UI 取自 MoWenApp，功能接 QuroAI 现有状态/页面
+            // 设置底部弹层：UI 取自 MoWenApp，功能接 Zorv AI 现有状态/页面
             settingsDarkMode = darkMode,
             onSettingsToggleDark = onToggleDark,
             settingsSoundOn = soundOn,
@@ -1126,7 +1126,7 @@ fun ChatScreen(
             }
         }
 
-        // 人格创建/编辑对话框（QuroAI 完整流程）
+        // 人格创建/编辑对话框（Zorv AI 完整流程）
         personaToEdit?.let { p ->
             PersonaEditDialog(
                 initial = p,
@@ -1136,7 +1136,7 @@ fun ChatScreen(
             )
         }
 
-        // 灵魂注入 / 人格管理（旧 QuroAI 设置功能，经设置页入口唤出）
+        // 灵魂注入 / 人格管理（旧 Zorv AI 设置功能，经设置页入口唤出）
         if (showSoulSheet) {
             SoulInjectionSheet(
                 vm = personaVm,
@@ -1166,7 +1166,7 @@ fun ChatScreen(
             MemoryDialog(personaVm = personaVm, onDismiss = { showMemoryDialog = false })
         }
 
-        // 关于页：全屏覆盖层（从设置「关于 Quro AI」进入）
+        // 关于页：全屏覆盖层（从设置「关于 Zorv AI」进入）
         if (showAbout) {
             // 拦截系统返回键：先关闭关于页回到设置（showSettings 仍 true），而非 finish Activity
             BackHandler { showAbout = false }
@@ -1717,7 +1717,7 @@ private fun MessageRow(
     // 长按复制反馈：将文本写入剪贴板并显示短暂提示
     fun copyToClipboard(text: String) {
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        cm.setPrimaryClip(android.content.ClipData.newPlainText("Quro", text))
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("Zorv", text))
         copiedText = if (text.length > 30) text.take(30) + "…" else text
         showCopyMenu = true
     }
@@ -2876,7 +2876,7 @@ private fun Composer(
                 ),
                 decorationBox = { inner ->
                         if (text.text.isEmpty()) {
-                            Text("和 Quro 说点什么…", fontSize = scaled(15), color = Muted)
+                            Text("和 Zorv 说点什么…", fontSize = scaled(15), color = Muted)
                         }
                     inner()
                 },
@@ -3058,7 +3058,7 @@ private fun SheetOverlay(
     onExport: () -> Unit,
     onClear: () -> Unit,
     onOpenBrowser: (String) -> Unit,
-    // 设置底部弹层（UI 结构来自 MoWenApp，功能保留 QuroAI 现有设置项）
+    // 设置底部弹层（UI 结构来自 MoWenApp，功能保留 Zorv AI 现有设置项）
     settingsDarkMode: Boolean,
     onSettingsToggleDark: () -> Unit,
     settingsSoundOn: Boolean,
@@ -3184,7 +3184,7 @@ private fun SheetHeader(title: String, sub: String, scaled: (Int) -> androidx.co
     }
 }
 
-// ---------------- 设置底部弹层（UI 结构照搬 MoWenApp，功能保留 QuroAI 现有设置项） ----------------
+// ---------------- 设置底部弹层（UI 结构照搬 MoWenApp，功能保留 Zorv AI 现有设置项） ----------------
 
 @Composable
 private fun SettingsSheetContent(
@@ -3261,9 +3261,9 @@ private fun SettingsSheetContent(
         }
         GroupCaption("关于")
         SetGroup {
-            SetRowClickable(Icons.Filled.Info, "关于 Quro AI", "项目地址 / 开源许可 / 开发者", "", onOpenAbout, scaled)
+            SetRowClickable(Icons.Filled.Info, "关于 Zorv AI", "项目地址 / 开源许可 / 开发者", "", onOpenAbout, scaled)
         }
-        Text("Quro AI · v${BuildConfig.VERSION_NAME}",
+        Text("Zorv AI · v${BuildConfig.VERSION_NAME}",
             fontSize = scaled(11), color = Muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
     }
 
@@ -3576,7 +3576,7 @@ private fun PersonaSheetContent(
                 }
             }
         }
-        // 新建人格（打开完整 QuroAI 人格创建对话框：头像/描述/角色设定/开场白/聊天设定/标签/AI孵化）
+        // 新建人格（打开完整 Zorv AI 人格创建对话框：头像/描述/角色设定/开场白/聊天设定/标签/AI孵化）
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                 .border(1.dp, Line2, RoundedCornerShape(12.dp))
@@ -3598,7 +3598,7 @@ private fun PersonaSheetContent(
 }
 
 // 注：底部快捷设置（深色模式/字号/提示音/回车发送/悬浮语音球）已合并进设置底部弹层，
-// 通过 SheetType.Settings 呈现，UI 结构取自 MoWenApp，功能保留 QuroAI 现有设置项。
+// 通过 SheetType.Settings 呈现，UI 结构取自 MoWenApp，功能保留 Zorv AI 现有设置项。
 
 @Composable
 private fun UploadSheetContent(
@@ -4542,7 +4542,7 @@ private fun Context.findActivity(): Activity? {
 
 private fun copyPlain(ctx: Context, text: String) {
     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-    cm.setPrimaryClip(android.content.ClipData.newPlainText("Quro", text))
+    cm.setPrimaryClip(android.content.ClipData.newPlainText("Zorv", text))
     Toast.makeText(ctx, "已复制", Toast.LENGTH_SHORT).show()
 }
 
@@ -4579,10 +4579,10 @@ private fun copyConversation(ctx: Context, messages: List<Message>) {
     copyPlain(ctx, sb.toString().trim())
 }
 
-// ---------------- QuroAI 后端 → MoWen UI 适配器 ----------------
+// ---------------- Zorv AI 后端 → MoWen UI 适配器 ----------------
 
 /** 无激活人格时的兜底人格。 */
-private fun fallbackPersona() = QuroPersona(name = "Quro", description = "智能助手", avatarEmoji = "🤖")
+private fun fallbackPersona() = QuroPersona(name = "Zorv", description = "智能助手", avatarEmoji = "🤖")
 
 /** QuroMessage → MoWen Message（mine 由 role 决定）。 */
 /** 判断工具结果是否为已知的垃圾值（旧版 bug 残留 / 异常调用）。渲染期与持久化迁移共用。 */
@@ -4630,7 +4630,7 @@ private fun QuroMessage.toMessage(
 /** QuroPersona → MoWen Persona（含 id 以便回写激活状态）。 */
 private fun QuroPersona.toPersona(): Persona {
     // 头像：emoji 类型用 emoji；图片/无图退化为名称首字母（与 QuroSoulUi.AvatarContent 一致）
-    val safeName = name.ifBlank { "Quro" }
+    val safeName = name.ifBlank { "Zorv" }
     val name1 = (if (safeName == "?") "Q" else safeName).first().toString()  // 永远非空（fallback "Q"，绝不返回 "?"）
     val ava = when {
         avatarType == "emoji" && avatarEmoji.isNotBlank() -> avatarEmoji
@@ -4638,7 +4638,7 @@ private fun QuroPersona.toPersona(): Persona {
     }
     return Persona(
         id = id,
-        name = name.ifBlank { "Quro" },
+        name = name.ifBlank { "Zorv" },
         role = description.ifBlank { "智能助手" },
         desc = description.ifBlank { "你的 AI 助手，随时待命。" },
         ava = ava,

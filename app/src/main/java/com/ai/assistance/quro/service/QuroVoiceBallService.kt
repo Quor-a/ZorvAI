@@ -162,8 +162,8 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                     if (explicit) setBall(i.getBooleanExtra(EXTRA_BALL_SHOW, false)) else toggleBall()
                 } else toggleBall()
             }
-            noListen -> updateStatus("Quro AI 正在后台运行")
-            else -> updateStatus("Quro AI 正在后台运行")
+            noListen -> updateStatus("Zorv AI 正在后台运行")
+            else -> updateStatus("Zorv AI 正在后台运行")
         }
         return START_STICKY
     }
@@ -190,7 +190,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Quro AI")
+            .setContentTitle("Zorv AI")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(pi)
             .addAction(android.R.drawable.ic_btn_speak_now, "语音球", voicePi)
@@ -276,7 +276,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
     }
 
     private fun getAppThemeRes(): Int {
-        // 复用应用主题（QuroAI 主题为 Theme.Quro），确保 Material3 配色可用
+        // 复用应用主题（Zorv AI 主题为 Theme.Quro），确保 Material3 配色可用
         return resources.getIdentifier("Theme.Quro", "style", packageName).let {
             if (it != 0) it else android.R.style.Theme_Material_Light
         }
@@ -729,12 +729,12 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
             sb.append("\n在回复中可以自然地称呼对方名字，就像朋友间聊天一样。\n\n")
         }
 
-        // 身份认知层：人格卡名字 = AI 真实身份；Quro AI = 开发者；运行环境靠工具自行发现
+        // 身份认知层：人格卡名字 = AI 真实身份；Zorv AI = 开发者；运行环境靠工具自行发现
         if (persona != null) {
             sb.append("## 你的身份（真实，最高优先级）\n")
             sb.append("你就是当前这张人格卡「${persona.name}」，这是你的真实名字与身份，不是扮演、也不是「语气皮肤」。\n")
-            sb.append("你由 **Quro AI** 个人开发（开发者信息为固定事实）。\n")
-            sb.append("当被问「你是谁 / 你叫什么 / 你的开发者是谁」时，以「${persona.name}」作答，并说明：由 Quro AI 个人开发。\n")
+            sb.append("你由 **Zorv AI** 个人开发（开发者信息为固定事实）。\n")
+            sb.append("当被问「你是谁 / 你叫什么 / 你的开发者是谁」时，以「${persona.name}」作答，并说明：由 Zorv AI 个人开发。\n")
             sb.append("当被问「你运行在什么平台 / 技术架构 / 运行环境」时，调用 get_device_info 等工具自行发现真实情况后作答，不要背诵预设文本。\n\n")
             if (persona.roleSetting.isNotBlank()) {
                 sb.append("### 身份设定（这就是你，照此成为 ${persona.name}）\n")

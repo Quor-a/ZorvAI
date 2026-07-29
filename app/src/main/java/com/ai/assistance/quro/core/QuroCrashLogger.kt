@@ -16,7 +16,7 @@ import java.util.Locale
 /**
  * 全局崩溃收集器（原创，v73 加入，v74 改进取回方式）。
  *
- * 目的：QuroAI 在真机上出现启动期闪退，但开发机（Windows）无法运行 aarch64 真机，
+ * 目的：Zorv AI 在真机上出现启动期闪退，但开发机（Windows）无法运行 aarch64 真机，
  * 也难以要求用户使用 adb 抓取日志。此收集器在 Application.attachBaseContext 阶段
  * （早于任何 ContentProvider.onCreate，包括 ShizukuProvider）安装 UncaughtExceptionHandler，
  * 把崩溃栈同时打到 logcat 与文件，便于无 adb 经验也能取回日志定位根因。
@@ -50,7 +50,7 @@ object QuroCrashLogger {
      */
     fun logError(context: Context, tag: String, t: Throwable) {
         val sw = StringWriter()
-        sw.append("QuroAI 运行期错误 [$tag]\n")
+        sw.append("Zorv AI 运行期错误 [$tag]\n")
         sw.append("时间: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}\n")
         sw.append("设备: ${Build.MANUFACTURER} ${Build.MODEL} / Android API ${Build.VERSION.SDK_INT}\n")
         sw.append("===== 异常栈 =====\n")
@@ -100,7 +100,7 @@ object QuroCrashLogger {
 
     private fun buildReport(thread: Thread, throwable: Throwable): String {
         val sw = StringWriter()
-        sw.append("QuroAI 崩溃报告\n")
+        sw.append("Zorv AI 崩溃报告\n")
         sw.append("时间: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}\n")
         sw.append("线程: ${thread.name}\n")
         sw.append("设备: ${Build.MANUFACTURER} ${Build.MODEL} / Android API ${Build.VERSION.SDK_INT}\n")

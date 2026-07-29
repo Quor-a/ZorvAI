@@ -121,7 +121,7 @@ class QuroCmsRepository(context: Context) {
             name = "Web 搜索与浏览",
             version = "1.0.0",
             description = "网络搜索、打开任意网址（应用内嵌 WebView 浏览器，不跳转外部浏览器）；并内置 AI 自动化浏览器：后台自动研究（搜索→抓取→合并简报）与单页正文抓取。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("net.access", PermissionLevel.Normal, "访问网络（搜索/打开网页）", "*", AuthorizationLevel.Session),
@@ -149,7 +149,7 @@ class QuroCmsRepository(context: Context) {
             name = "系统信息",
             version = "1.0.0",
             description = "只读设备信息、列出已安装应用（均通过应用内 Android API，不执行 shell / 不控制系统）。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("sys.info", PermissionLevel.Normal, "读取设备属性", "*", AuthorizationLevel.Session),
@@ -173,7 +173,7 @@ class QuroCmsRepository(context: Context) {
             name = "文件工具",
             version = "1.0.0",
             description = "在应用自身沙箱内列目录、读文件、写文件（不读取系统文件，不执行 shell）。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("fs.read", PermissionLevel.Normal, "读取应用沙箱文件", "*", AuthorizationLevel.Session),
@@ -197,7 +197,7 @@ class QuroCmsRepository(context: Context) {
             name = "代码运行",
             version = "1.0.0",
             description = "在应用进程内置 QuickJS 沙箱内执行 JS 脚本（应用内逻辑执行，不触达系统）。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("code.run", PermissionLevel.Normal, "在应用内执行脚本", "*", AuthorizationLevel.Session),
@@ -225,7 +225,7 @@ class QuroCmsRepository(context: Context) {
             name = "时间",
             version = "1.0.0",
             description = "读取当前系统时间（应用内 API）。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("time.read", PermissionLevel.Normal, "读取系统时间", "*", AuthorizationLevel.Session),
@@ -246,7 +246,7 @@ class QuroCmsRepository(context: Context) {
             name = "AI 绘图",
             version = "1.0.0",
             description = "打开各厂商文生图平台（实际生成由对话框内 AI 经 API 完成，此处仅登记能力并打开对应平台）。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("net.api", PermissionLevel.Normal, "调用绘图平台（需联网）", "*", AuthorizationLevel.Session),
@@ -269,7 +269,7 @@ class QuroCmsRepository(context: Context) {
             name = "GitHub",
             version = "1.0.0",
             description = "打开仓库、查看项目主页（intent）。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("net.access", PermissionLevel.Normal, "访问网络", "*", AuthorizationLevel.Session),
@@ -286,7 +286,7 @@ class QuroCmsRepository(context: Context) {
             name = "日常助手",
             version = "1.0.0",
             description = "日历、闹钟等日常操作（应用内派发 Intent 拉起系统界面）。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("daily.intent", PermissionLevel.Normal, "启动系统日历/闹钟", "*", AuthorizationLevel.Session),
@@ -306,7 +306,7 @@ class QuroCmsRepository(context: Context) {
             name = "工作流",
             version = "1.0.0",
             description = "组合多步能力编排简单工作流（应用内真实执行：echo 单步 + 多步序列编排内置能力）。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("wf.run", PermissionLevel.Normal, "运行本地工作流", "*", AuthorizationLevel.Session),
@@ -327,7 +327,7 @@ class QuroCmsRepository(context: Context) {
             name = "记忆库",
             version = "1.0.0",
             description = "长期记忆的登记与权限通道（实际读写由 memory_* 工具完成）。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("mem.access", PermissionLevel.Normal, "读写本地记忆库", "*", AuthorizationLevel.Session),
@@ -344,7 +344,7 @@ class QuroCmsRepository(context: Context) {
             name = "12306 出行",
             version = "1.0.0",
             description = "打开铁路 12306 官网（intent）。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("net.access", PermissionLevel.Normal, "访问网络", "*", AuthorizationLevel.Session),
@@ -361,7 +361,7 @@ class QuroCmsRepository(context: Context) {
             name = "终端",
             version = "1.0.0",
             description = "在应用内 PTY（/system/bin/sh）执行 shell 命令（纯用户空间，无 root/Shizuku）。执行过程经 QuroAgentTrace 实时可视化。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("term.run", PermissionLevel.Normal, "在应用内执行 shell 命令", "*", AuthorizationLevel.Session),
@@ -378,7 +378,7 @@ class QuroCmsRepository(context: Context) {
             name = "终端·Python运行时",
             version = "1.0.0",
             description = "在 proot/Alpine 终端内运行 Python（bootstrap 已装 python3）。模块自带真实入口脚本：部署后在终端拉起一个本地 HTTP 后端（监听 0.0.0.0 端口），本 App 作为前端通过 cms_call/ACI 调用，实现「终端是后端、本软是前端」的互为主从。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("term.python.exec", PermissionLevel.Normal, "在终端 proot 内执行 Python", "*", AuthorizationLevel.Session),
@@ -426,7 +426,7 @@ PYEOF
             name = "终端·Node运行时",
             version = "1.0.0",
             description = "在 proot/Alpine 终端内运行 Node.js（bootstrap 已装 nodejs）。自带真实入口脚本：部署后拉起本地 HTTP 后端，作为「终端是后端」的另一实现，与 Python 后端可并存。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("term.node.exec", PermissionLevel.Normal, "在终端 proot 内执行 Node", "*", AuthorizationLevel.Session),
@@ -468,7 +468,7 @@ JSEOF
             name = "终端·静态HTTP服务",
             version = "1.0.0",
             description = "在 proot 内启动一个静态文件 HTTP 服务（python3 -m http.server），把终端变成一个可对外提供文件的后端。本 App 作为前端向其请求资源，落实「互为主从」。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("term.httpd.exec", PermissionLevel.Normal, "在终端 proot 内启动 HTTP 服务", "*", AuthorizationLevel.Session),
@@ -501,7 +501,7 @@ exec python3 -m http.server "${'$'}PORT" --bind 0.0.0.0
             name = "启动器",
             version = "1.0.0",
             description = "打开指定应用、回到桌面等应用级操作（应用内派发 Intent，不控制系统）。",
-            author = "Quro AI", license = "Apache-2.0",
+            author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
                 QuroCmsPermission("launch.app", PermissionLevel.Normal, "启动其他应用", "*", AuthorizationLevel.Session),

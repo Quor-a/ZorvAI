@@ -17,7 +17,7 @@ import org.json.JSONArray
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * QuroAciManager —— QuroAI 作为 ACI 控制方（AI 中枢）的核心管理器。
+ * QuroAciManager —— Zorv AI 作为 ACI 控制方（AI 中枢）的核心管理器。
  * 端口自 aci-aihub 的 ACIManager（Java），改写为 Kotlin 单例。
  *
  * ACI（Agent Capability Interface）协议层由 aci-core AAR 提供

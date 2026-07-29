@@ -35,7 +35,7 @@ private const val NET_CALL_TIMEOUT_MS = 90_000L
  * Quro LLM 客户端（原创）：对接 OpenAI 兼容的 /chat/completions，
  * 支持 function/tool calling。仅用 OkHttp + org.json，无第三方序列化依赖。
  *
- * 设计取舍（对齐 QuroAI 稳定方案）：
+ * 设计取舍（对齐 Zorv AI 稳定方案）：
  *  - 采用「同步一次性请求」：模型完整生成后一次性返回，UI 拿到完整回复再渲染。
  *    不自行实现 SSE 逐字写回——后者会高频触发 UI 重组，破坏对话框的
  *    思考气泡 / 工具块 / 卡片 / 复制 / 重生成等功能，且不同模型流式字段结构

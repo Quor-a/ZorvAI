@@ -39,7 +39,7 @@ class SetAlarmTool : QuroTool {
                     context.startActivity(intent)
                     return "⚠️ 精确闹钟权限未授予。已打开系统设置页，请开启「允许设置精确闹钟」后重试。"
                 } catch (e: Exception) {
-                    return "⚠️ 精确闹钟权限未授予（Android 12+ 需要 SCHEDULE_EXACT_ALARM）。请到 设置→应用→Quro AI→权限 中开启「闹钟和提醒」，或手动允许精确闹钟。"
+                    return "⚠️ 精确闹钟权限未授予（Android 12+ 需要 SCHEDULE_EXACT_ALARM）。请到 设置→应用→Zorv AI→权限 中开启「闹钟和提醒」，或手动允许精确闹钟。"
                 }
             }
         }

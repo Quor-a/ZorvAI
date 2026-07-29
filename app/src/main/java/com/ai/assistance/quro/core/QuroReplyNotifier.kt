@@ -63,7 +63,7 @@ object QuroReplyNotifier {
      * 收到 AI 回复时调用。**仅当 app 不在前台时**才弹出系统通知（离开软件才能收到）；
      * app 在前台（用户在对话框/软件内）直接 return，不重复打扰。
      * @param ctx   上下文（通常用 ApplicationContext）
-     * @param sender 发送者显示名（人格名或 "Quro AI"）
+     * @param sender 发送者显示名（人格名或 "Zorv AI"）
      * @param text  回复正文（自动取首非空行并截断）
      */
     fun notifyReply(ctx: Context, sender: String, text: String) {

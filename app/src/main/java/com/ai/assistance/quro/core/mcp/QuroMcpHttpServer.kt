@@ -19,7 +19,7 @@ import com.ai.assistance.quro.core.tools.jsonToMap
 import com.ai.assistance.quro.core.tools.toMcpTool
 
 /**
- * QuroAI 本地 MCP Server（零依赖实现）。
+ * Zorv AI 本地 MCP Server（零依赖实现）。
  *
  * ⚠️ 关于传输层：Android 运行时**不含** `com.sun.net.httpserver.HttpServer`（它不是 Android
  * 核心库的一部分，运行时必抛 ClassNotFound）。因此这里直接基于 [java.net.ServerSocket]
@@ -160,7 +160,7 @@ class QuroMcpHttpServer(private val appContext: Context) {
                 "initialize" -> JSONObject()
                     .put("protocolVersion", "2024-11-05")
                     .put("capabilities", JSONObject().put("tools", JSONObject()))
-                    .put("serverInfo", JSONObject().put("name", "QuroAI").put("version", BuildConfig.VERSION_NAME))
+                    .put("serverInfo", JSONObject().put("name", "Zorv AI").put("version", BuildConfig.VERSION_NAME))
                 "ping" -> JSONObject()
                 "tools/list" -> JSONObject().put("tools", JSONArray(droidMcp.listToolsJson()))
                 "tools/call" -> {

@@ -45,7 +45,7 @@ import java.util.Locale
  *   3) 模块运行态：订阅 CmsStateStore.snapshot，列出模块部署态 + 最近任务终态
  *   4) 人格心跳：从 QuroPersonaViewModel 读心跳总开关与每卡孵化态（lastIncubatedAt + incubatingStates）
  *
- * 风格沿用现有 QuroAI Material3：卡片用 surface + 1.dp Line 描边，分区标题用 GroupCaption 同款字色。
+ * 风格沿用现有 Zorv AI Material3：卡片用 surface + 1.dp Line 描边，分区标题用 GroupCaption 同款字色。
  * 不引入任何新依赖。
  */
 @OptIn(ExperimentalMaterial3Api::class)

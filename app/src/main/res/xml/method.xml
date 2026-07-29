@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Quro AI 输入法（IME）方法描述 -->
+<!-- Zorv AI 输入法（IME）方法描述 -->
 <input-method xmlns:android="http://schemas.android.com/apk/res/android"
     android:settingsActivity="com.ai.assistance.quro.ui.QuroPermissionScreen"
     android:supportsSwitchingToNextInputMethod="true">

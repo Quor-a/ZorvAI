@@ -55,7 +55,7 @@ class QuroReplyWidget : AppWidgetProvider() {
         private fun build(ctx: Context, sender: String, text: String): RemoteViews {
             val rv = RemoteViews(ctx.packageName, R.layout.widget_reply)
             // 品牌头
-            rv.setTextViewText(R.id.widget_title, if (sender.isBlank()) "Quro AI" else sender)
+            rv.setTextViewText(R.id.widget_title, if (sender.isBlank()) "Zorv AI" else sender)
             rv.setTextViewText(R.id.widget_status, "AI 执行体 · ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
             // 聊天预览
             rv.setTextViewText(R.id.widget_text, if (text.isBlank()) "暂无新回复，点击 💬 开始对话" else text)
