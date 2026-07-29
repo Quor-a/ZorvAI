@@ -3,7 +3,7 @@
 > 开源 AI 助手 · 原创构建。
 > 一个运行在 Android 上的原生 AI 助手，具备工具调用、灵魂注入（人格卡）、记忆库、CMS v2 能力模块、终端/开发环境、语音交互与完整内置工具箱。
 
-- **开源地址**：https://github.com/QuroAI/QuroAI
+- **开源地址**：https://github.com/Quor-a/QuroAI
 - **许可证**：[Apache-2.0](./LICENSE)（本应用源码）；第三方依赖各自保留其许可证，详见 [NOTICE](./NOTICE)
 
 ---
@@ -34,7 +34,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/QuroAI/QuroAI.git
+git clone https://github.com/Quor-a/QuroAI.git
 cd QuroAI
 
 # 准备环境
@@ -72,12 +72,11 @@ AI 默认可见并可在应用沙箱内调用能力；更高层级的系统级�
 Quro AI 以 **百分百开源** 为目标：应用全部源码公开，欢迎参与共建。
 
 - 本应用源码采用 **Apache-2.0** 许可证。
-- 我们参考了开源 Android AI Agent 生态（如 Operit 采用 LGPLv3、Kai9000 的终端/Linux
-  Sandbox 思路）的开源实践，但 Quro AI 为**独立原创实现**，不搬运上游源码。
-- 对于随包分发、带 Copyleft 义务的组件（libVLC → GPL v2/v3、GeckoView → MPL-2.0），
+- Quro AI 为**独立原创实现**，不搬运任何上游项目源码。
+- 对于随包分发、带 Copyleft 义务的组件（GeckoView → MPL-2.0），
   我们按对应许可证要求提供相应源代码。完整第三方许可证清单见 [NOTICE](./NOTICE)。
 
-如果你希望以 **LGPLv3**（与 Operit 一致）发布本应用，可将 `LICENSE` 替换为
+如需以 **LGPLv3** 发布本应用，可将 `LICENSE` 替换为
 LGPLv3 文本并在 `NOTICE` 中同步说明——这是一处可一键切换的许可选择。
 
 ---
@@ -96,7 +95,7 @@ LGPLv3 文本并在 `NOTICE` 中同步说明——这是一处可一键切换的
 
 ## 📝 问题反馈
 
-遇到问题或有建议？欢迎 [提交 Issue](https://github.com/QuroAI/QuroAI/issues)。
+遇到问题或有建议？欢迎 [提交 Issue]（https://github.com/Quor-a/QuroAI/issues）。
 请尽量提供：清晰描述、复现步骤、设备型号与系统版本、相关截图。
 
 如果觉得项目不错，欢迎点个 ⭐ Star 支持我们！

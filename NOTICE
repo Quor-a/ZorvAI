@@ -14,7 +14,7 @@ THIRD-PARTY COMPONENTS AND LICENSES
 
 Quro AI (this application)
   License: Apache-2.0
-  Source:  https://github.com/QuroAI/QuroAI
+  Source:  https://github.com/Quor-a/QuroAI
 
 AndroidX / Jetpack / Jetpack Compose / Material Components
   License: Apache-2.0
@@ -50,18 +50,6 @@ Sherpa-NCNN (k2-fsa)
 GeckoView (Mozilla)
   License: MPL-2.0 (file-level copyleft; source provided with the build)
 
-libVLC (VideoLAN) — org.videolan.android:libvlc-all:3.6.5
-  License: LGPL-2.1 (WEAK COPYLEFT) for the core engine (libVLC / libvlccore)
-  Note:    libVLC (the embeddable multimedia engine) is licensed by VideoLAN
-           under the LGPL-2.1-or-later. This is COMPATIBLE with the Apache-2.0
-           main license when libVLC is dynamically linked (it is loaded on
-           Android as a native .so). As required by the LGPL, the corresponding
-           source code of the libVLC version used is available from the project
-           repository and release artifacts.
-  Caveat:  The "-all" artifact bundles VLC modules; per VideoLAN some modules
-           are GPLv2/v3. Verify the actually-linked module set. If any GPL
-           module is used, either switch to org.videolan.android:libvlc:3.6.5
-           (core engine only, LGPL-2.1) or comply with GPL for those modules.
 
 org.json — org.json:json:20240303
   License: Public Domain
@@ -78,10 +66,3 @@ TRADEMARKS
 not grant rights to use these trademarks except as required to describe
 the origin of the software.
 
-----------------------------------------------------------------------
-UPSTREAM ATTRIBUTION
-----------------------------------------------------------------------
-Quro AI is an original, de-branded build inspired by the open-source
-Android AI agent ecosystem (e.g. Operit, which is licensed under LGPLv3).
-Quro AI does not incorporate upstream source code; it is an independent
-implementation. We thank the open-source community for paving the way.

@@ -129,13 +129,13 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
 
     override suspend fun deliver(reply: QuroOutboundMessage) {
         // ---- 构建请求体（对齐 QQ 官方 OpenAPI：content 裸文本、msg_type 数字、msg_seq 必填）----
-        // 参考上游 examples/qqbot/src/shared/qqbot_openapi.ts#buildSendMessageBody
+        // 参考 QQ 机器人开放平台官方示例 buildSendMessageBody
         val seq = msgSeq.getAndIncrement()
         val endpoint: String
         val body = if (reply.groupId != null) {
             endpoint = "https://api.sgroup.qq.com/v2/groups/${reply.groupId}/messages"
             JSONObject().apply {
-                put("msg_type", 0)            // 0=text（对齐上游默认，最稳）
+                put("msg_type", 0)            // 0=text（官方默认，最稳）
                 put("content", reply.text)    // 裸文本，不包 JSON
                 put("msg_seq", seq)           // 被动回复去重序号（必填）
                 reply.msgId?.let { put("msg_id", it) }
@@ -158,7 +158,7 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                 endpoint,
                 headers = mapOf(
                     "Authorization" to "QQBot $token",
-                    "X-Union-Appid" to appId,   // 上游实现固定携带，标识机器人 appid
+                    "X-Union-Appid" to appId,   // 官方实现固定携带，标识机器人 appid
                 ),
                 json = body,
             )

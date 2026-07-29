@@ -1569,7 +1569,7 @@ private fun MessageList(
     // 注意：执行轨迹事件已统一在 ChatScreen 顶层订阅一次（单一真相源 traceLines），
     // 此处不再各自 collect 全局流，避免重复订阅 / 跨会话污染。
     val lastToolIdx = messages.indexOfLast { !it.mine && !it.tools.isNullOrEmpty() }
-    // 互动条（参考 operit 的 scrollToBottom 交互）：用户上滑离开底部时浮出「回到底部」按钮，
+    // 互动条（scroll-to-bottom 交互）：用户上滑离开底部时浮出「回到底部」按钮，
     // 点击即跳到最新一条。与上方三触发自动滚底互补，作手动兜底。
     val isAtBottom by remember { derivedStateOf { !listState.canScrollForward } }
     Box(modifier) {

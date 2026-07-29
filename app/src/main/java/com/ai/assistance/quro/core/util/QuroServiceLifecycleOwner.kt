@@ -15,7 +15,7 @@ import androidx.savedstate.SavedStateRegistryOwner
  * 给「非 Activity/Fragment 宿主」（Service 内的 ComposeView、IME 输入视图、悬浮窗等）
  * 提供完整的生命周期宿主：LifecycleOwner + ViewModelStoreOwner + SavedStateRegistryOwner。
  *
- * 移植自上游 operit 的 com.calw.os.services.ServiceLifecycleOwner（已在真实工程中验证）。
+ * 基于已验证的 Service LifecycleOwner 模式实现（已在真实工程中验证）。
  * 搭配官方 AndroidX 公开静态 API 使用：
  *   androidx.lifecycle.ViewTreeLifecycleOwner.set(view, owner)
  *   androidx.lifecycle.ViewTreeViewModelStoreOwner.set(view, owner)
@@ -27,7 +27,7 @@ import androidx.savedstate.SavedStateRegistryOwner
  * 1. performRestore 在主线程执行；若当前不在主线程则 post 到主线程，避免 SavedStateRegistry
  *    非主线程初始化的线程校验异常。
  * 2. handleLifecycleEvent 同样主线程安全。
- * 3. 实现 ViewModelStoreOwner，使 ComposeView 内的 viewModel() 可正常工作（与 operit 对齐）。
+ * 3. 实现 ViewModelStoreOwner，使 ComposeView 内的 viewModel() 可正常工作。
  */
 class QuroServiceLifecycleOwner : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
     private val lifecycleRegistry = LifecycleRegistry(this)

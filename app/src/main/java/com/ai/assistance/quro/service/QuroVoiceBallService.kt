@@ -203,7 +203,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         composeLifecycleOwner = lifecycleOwner
         val context = ContextThemeWrapper(this, getAppThemeRes())
         val ball = ComposeView(context).apply {
-            // 官方公开静态 API 直接绑定 owner（operit 同款，无需反射）。
+            // 官方公开静态 API 直接绑定 owner，无需反射。
             // 此前误以为 ViewTreeLifecycleOwner 在 Compose BOM + lifecycle 2.9.4 下
             // 是 internal 不可引用，故走了脆弱的反射桥 → 运行期经常失败 →
             // owner 缺失 → "ViewTreeLifecycleOwner not found" 闪退。

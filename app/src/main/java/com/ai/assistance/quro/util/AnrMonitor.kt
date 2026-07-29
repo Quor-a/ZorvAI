@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicLong
 import android.util.Log
 
 /**
- * ANR监控器（移植自上游项目的 AnrMonitor）。
+ * ANR监控器。
  *
  * 机制：每 100ms 往主线程 post 一个空 runnable；若主线程在 1s(ANR_THRESHOLD_MS) 内未消费，
  * 即判定主线程被阻塞，立刻抓取主线程当前堆栈并落盘 + 打日志。阈值 500ms 起预警。

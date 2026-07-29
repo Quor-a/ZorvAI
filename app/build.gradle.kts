@@ -141,7 +141,7 @@ dependencies {
     // 仅带来无谓的 GPL 义务 → 已移除（见 license-audit-full-2026-07-28.md P1）。
     // 若后续需更强格式/流式支持，再单独评估引入 Media3 ExoPlayer（Apache-2.0）并迁移播放层。
 
-    // 内置浏览器引擎：GeckoView（Mozilla 开源浏览器引擎，Apache-2.0）
+    // 内置浏览器引擎：GeckoView（Mozilla 开源浏览器引擎，MPL-2.0）
     // 用开源引擎替换系统 WebView，对应元宝清单里 Firefox 系开源浏览器（Iceraven/IronFox）。
     // 开源地址：https://github.com/fork-maintainers/iceraven-browser
     implementation("org.mozilla.geckoview:geckoview:140.0.20250707120347")

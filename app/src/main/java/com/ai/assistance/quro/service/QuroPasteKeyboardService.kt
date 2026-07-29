@@ -86,7 +86,7 @@ class QuroPasteKeyboardService : Service(), CoroutineScope by CoroutineScope(Dis
         val lo = QuroServiceLifecycleOwner()
         composeLifecycleOwner = lo
         val view = ComposeView(this).apply {
-            // 官方公开扩展函数直接绑定 owner（operit 同款，无需反射）。
+            // 官方公开扩展函数直接绑定 owner，无需反射。
             // 必须在 addView 之前完成，否则 onAttachedToWindow 时 Compose 找不到
             // ViewTreeLifecycleOwner 直接抛 IllegalStateException 导致闪退。
             setViewTreeLifecycleOwner(lo)

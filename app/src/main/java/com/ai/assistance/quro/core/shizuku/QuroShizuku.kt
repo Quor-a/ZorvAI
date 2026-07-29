@@ -13,7 +13,7 @@ import java.io.InputStreamReader
 /**
  * Quro Shizuku 真实集成层（CapOS L2 通道）。
  *
- * ## 执行架构（v429 重构，对齐 alian-android）
+ * ## 执行架构（v429 重构）
  *
  * **主路径 — AIDL UserService**（推荐，稳定）：
  *   通过 [Shizuku.bindUserService] 将 [QuroShellService] 绑定到 Shizuku 特权进程。

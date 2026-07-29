@@ -16,8 +16,7 @@ import java.io.InputStreamReader
  *   - Shizuku 调用 destroy() 时进程退出
  *   - Shizuku 服务断开时自动解绑
  *
- * 对齐 alian-android ShellService 架构
- * (https://github.com/xlb1130/alian-android/blob/main/app/src/main/java/com/alian/assistant/infrastructure/device/service/ShellService.kt)
+ * ShellService 架构：通过 AIDL UserService 在 Shizuku 特权进程内执行命令。
  */
 class QuroShellService : IQuroShellService.Stub() {
 

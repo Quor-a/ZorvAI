@@ -263,7 +263,7 @@
             tools:replace="android:theme" />
 
         <!-- Shizuku 客户端 Provider：Shizuku 管理器经此 binder 端点与本应用建立连接。
-             缺失时表现为「Shizuku 里看不到 / 连不上 QuroAI」（对照上游项目的已验证配置补齐）。 -->
+             缺失时表现为「Shizuku 里看不到 / 连不上 QuroAI」（已补齐 Shizuku provider 配置）。 -->
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"

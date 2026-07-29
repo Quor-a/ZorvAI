@@ -53,7 +53,7 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
 
     private lateinit var permLauncher: ActivityResultLauncher<Array<String>>
     @Volatile private var permContinuation: Continuation<Boolean>? = null
-    // ★ #763 ANR 诊断：主线程看门狗（移植自上游项目的 AnrMonitor）。
+    // ★ #763 ANR 诊断：主线程看门狗。
     // 每 100ms 探测主线程是否响应，超过 1s 即抓取主线程当前堆栈并落盘到
     // getExternalFilesDir("anr_reports")/anr_report_*.txt，同时打 logcat。
     private lateinit var anrMonitor: AnrMonitor
@@ -81,7 +81,7 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
                     .build()
             )
         }
-        // ★ #763 ANR 诊断：启动主线程看门狗（移植自上游项目）。debug 构建常驻，
+        // ★ #763 ANR 诊断：启动主线程看门狗。debug 构建常驻，
         // 真实用户反馈「对话框区域突然 ANR」时，本机复现不了、又读不到截图，
         // 靠它抓出卡死那一行的精确堆栈，比读代码猜根因可靠。报告在 anr_reports/。
         anrMonitor = AnrMonitor(this, lifecycleScope)
