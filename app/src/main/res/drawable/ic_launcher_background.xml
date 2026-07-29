@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 深空底色 -->
+    <path
+        android:pathData="M0,0 H108 V108 H0 Z"
+        android:fillColor="#0B1020" />
+    <!-- 低透明度紫色斜向光带，增加层次 -->
+    <path
+        android:pathData="M0,108 L108,0 L108,34 L34,108 Z"
+        android:fillColor="#A855F7"
+        android:fillAlpha="0.10" />
+    <!-- 低透明度青色对角点缀 -->
+    <path
+        android:pathData="M0,0 L60,0 L0,60 Z"
+        android:fillColor="#22D3EE"
+        android:fillAlpha="0.08" />
+</vector>

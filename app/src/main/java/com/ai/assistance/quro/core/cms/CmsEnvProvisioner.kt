@@ -1,0 +1,134 @@
+package com.ai.assistance.quro.core.cms
+
+import android.content.Context
+import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+
+/**
+ * CMS v2 终端环境供给器（原创运行时 · 开发环境栈补齐）。
+ *
+ * 把"开发环境栈"作为可声明依赖（[DepKind.ENV]）落到 proot/Alpine aarch64 沙箱：
+ * 模块在「添加模块」对话框勾选所需环境档（Node/Python/SSH/Java/Rust/Go），
+ * 部署到终端时由本供给器按需装配。装配幂等（标记文件 + command -v 探活），
+ * 且**非致命**：任一档失败仅记日志继续，避免单档网络问题阻断整包部署。
+ *
+ * 执行通道唯一 = proot（与 CmsTerminalDeployer 一致）；终端未就绪直接拒绝。
+ *
+ * 注意：installScript 内所有 shell `$` 必须以 `${'$'}` 转义——Kotlin 原始字符串
+ * 仍会按模板解析裸 `$`，否则编译报 "Unresolved reference"。
+ */
+enum class EnvProfile(
+    /** 人类可读档名（UI 展示）。 */
+    val profileName: String,
+    /** 就绪探测命令（sh -c，全部成立返回 0 才算就绪）。 */
+    val checkCmd: String,
+    /** 装配脚本（sh -c，best-effort，失败不阻断）。 */
+    val installScript: String,
+) {
+    NODE(
+        "Node.js 前端栈 (Node + PNPM + TypeScript)",
+        "command -v node >/dev/null 2>&1 && command -v pnpm >/dev/null 2>&1 && command -v tsc >/dev/null 2>&1",
+        """
+        |apk add --no-cache nodejs npm 2>&1 | tail -2 || true
+        |npm install -g pnpm typescript 2>&1 | tail -3 || true
+        |echo "[env] node=${'$'}(node --version 2>&1) pnpm=${'$'}(pnpm --version 2>&1) tsc=${'$'}(tsc --version 2>&1)
+        """.trimMargin(),
+    ),
+    PYTHON(
+        "Python 栈 (python→python3 链接 / venv / pip / UV)",
+        "command -v python >/dev/null 2>&1 && (command -v pip >/dev/null 2>&1 || command -v pip3 >/dev/null 2>&1) && command -v uv >/dev/null 2>&1",
+        """
+        |apk add --no-cache python3 py3-pip 2>&1 | tail -2 || true
+        |if ! command -v python >/dev/null 2>&1; then ln -sf ${'$'}(command -v python3) /usr/local/bin/python; fi
+        |python3 -m ensurepip --upgrade 2>/dev/null || true
+        |if ! command -v uv >/dev/null 2>&1; then
+        |  curl -LsSf https://astral.sh/uv/install.sh | sh 2>&1 | tail -3 || true
+        |  ln -sf "${'$'}HOME/.local/bin/uv" /usr/local/bin/uv 2>/dev/null || true
+        |fi
+        |python3 -m venv /root/cms-venv 2>/dev/null || true
+        |echo "[env] python=${'$'}(python --version 2>&1) uv=${'$'}(uv --version 2>&1)
+        """.trimMargin(),
+    ),
+    SSH(
+        "SSH 工具链 (openssh + sshpass + sshd 反向隧道)",
+        "command -v ssh >/dev/null 2>&1 && command -v sshpass >/dev/null 2>&1 && command -v sshd >/dev/null 2>&1",
+        """
+        |apk add --no-cache openssh sshpass 2>&1 | tail -2 || true
+        |if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then ssh-keygen -A 2>/dev/null || true; fi
+        |echo "[env] ssh=${'$'}(ssh -V 2>&1) sshpass=${'$'}(sshpass -V 2>&1 | head -1)
+        """.trimMargin(),
+    ),
+    JAVA(
+        "Java 栈 (OpenJDK 17 + Gradle)",
+        "command -v java >/dev/null 2>&1 && command -v gradle >/dev/null 2>&1",
+        """
+        |apk add --no-cache openjdk17 2>&1 | tail -2 || true
+        |ln -sf ${'$'}(command -v java) /usr/local/bin/java 2>/dev/null || true
+        |if ! command -v gradle >/dev/null 2>&1; then apk add --no-cache gradle 2>&1 | tail -2 || true; fi
+        |echo "[env] java=${'$'}(java -version 2>&1 | head -1)
+        """.trimMargin(),
+    ),
+    RUST(
+        "Rust / Cargo (rustup)",
+        "command -v cargo >/dev/null 2>&1",
+        """
+        |if ! command -v cargo >/dev/null 2>&1; then
+        |  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal 2>&1 | tail -5 || true
+        |  . "${'$'}HOME/.cargo/env" 2>/dev/null || true
+        |  ln -sf "${'$'}HOME/.cargo/bin/cargo" /usr/local/bin/cargo 2>/dev/null || true
+        |  ln -sf "${'$'}HOME/.cargo/bin/rustc" /usr/local/bin/rustc 2>/dev/null || true
+        |fi
+        |echo "[env] cargo=${'$'}(cargo --version 2>&1)
+        """.trimMargin(),
+    ),
+    GO(
+        "Go 语言栈 (Go)",
+        "command -v go >/dev/null 2>&1",
+        """
+        |apk add --no-cache go 2>&1 | tail -2 || true
+        |ln -sf ${'$'}(command -v go) /usr/local/bin/go 2>/dev/null || true
+        |echo "[env] go=${'$'}(go version 2>&1)
+        """.trimMargin(),
+    );
+
+    companion object {
+        /** 按档名（不区分大小写）解析；无法识别返回 null。 */
+        fun parse(name: String): EnvProfile? = entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
+    }
+}
+
+object CmsEnvProvisioner {
+
+    private const val MARKER_DIR = "/root/.cms-env"
+
+    /** 单个档是否已就绪（proot 内：标记文件优先，否则 command -v 探活）。 */
+    fun isReady(context: Context, profile: EnvProfile): Boolean {
+        val st = QuroLinuxEnv.probe(context)
+        if (!st.available) return false
+        val (mc, _) = QuroLinuxEnv.run(context, "[ -f $MARKER_DIR/${profile.name}.done ]", timeoutMs = 10_000)
+        if (mc == 0) return true
+        val (c, _) = QuroLinuxEnv.run(context, profile.checkCmd, timeoutMs = 20_000)
+        return c == 0
+    }
+
+    /** 供给单个档：已就绪/已标记则跳过；否则跑装配脚本（best-effort）。返回人类可读结果。 */
+    fun provision(context: Context, profile: EnvProfile): String {
+        val st = QuroLinuxEnv.probe(context)
+        if (!st.available) return "⛔ 终端环境未就绪，无法供给 ${profile.name}"
+        if (isReady(context, profile)) return "✅ ${profile.name} 已就绪（跳过安装）"
+        val (c, out) = QuroLinuxEnv.run(context, profile.installScript, timeoutMs = 300_000)
+        val ok = c == 0 || isReady(context, profile)
+        if (ok) {
+            QuroLinuxEnv.run(context, "mkdir -p $MARKER_DIR && touch $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
+            return "✅ ${profile.name} 装配完成"
+        }
+        return "⚠️ ${profile.name} 装配异常(exit $c): ${out.take(200)}（非致命，继续）"
+    }
+
+    /** 供给多个档（按档名），逐个执行并汇总（非致命）。返回 (档名, 结果)。 */
+    fun provisionAll(context: Context, profiles: List<String>): List<Pair<String, String>> {
+        return profiles.mapNotNull { name ->
+            val p = EnvProfile.parse(name) ?: return@mapNotNull null
+            p.name to provision(context, p)
+        }
+    }
+}

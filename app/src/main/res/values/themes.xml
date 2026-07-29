@@ -1,0 +1,20 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.Quro" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/quro_splash_bg</item>
+    </style>
+
+    <!-- 裁剪 Activity 专用：CropImageActivity 继承自 AppCompatActivity，必须使用 AppCompat 系主题 -->
+    <style name="Theme.Quro.Crop" parent="Theme.AppCompat">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <!-- 品牌启动页（v128）：深色无动作栏，避免白屏闪烁 -->
+    <style name="Theme.Quro.Splash" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/quro_splash_bg</item>
+        <item name="android:statusBarColor">@color/quro_splash_bg</item>
+        <item name="android:navigationBarColor">@color/quro_splash_bg</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 聊天附件（相机输出 / 文件查看）所用的应用私有上传目录 -->
+    <files-path
+        name="quro_uploads"
+        path="quro_uploads/" />
+    <!-- aiWPS 生成的 Office 文档（getExternalFilesDir(Documents)/QuroDocs） -->
+    <external-files-path
+        name="quro_docs"
+        path="Documents/QuroDocs/" />
+    <!-- 文件知识库目录（getExternalFilesDir(null)/knowledge_base） -->
+    <external-files-path
+        name="quro_kb"
+        path="knowledge_base/" />
+</paths>
