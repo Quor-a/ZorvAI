@@ -1,43 +1,154 @@
-# Quro AI
+<div align="center">
 
-> 开源 AI 助手 · 原创构建。
-> 一个运行在 Android 上的原生 AI 助手，具备工具调用、灵魂注入（人格卡）、记忆库、CMS v2 能力模块、终端/开发环境、语音交互与完整内置工具箱。
+<img src="logo.svg" alt="QuroAI" width="168" height="168" />
+
+# QuroAI
+
+### 运行在 Android 上的设备端 AI Agent · 智能体助手
+
+*On-device AI Agent for Android — tools, personas, memory, and a shared runtime, all on your phone.*
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/github/v/release/Quor-a/QuroAI)](https://github.com/Quor-a/QuroAI/releases)
+[![Platform](https://img.shields.io/badge/platform-Android-3DDC84.svg)](https://www.android.com)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF.svg)](https://kotlinlang.org)
+[![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-1.7-4285F4.svg)](https://developer.android.com/compose)
+[![GeckoView](https://img.shields.io/badge/GeckoView-MPL--2.0-success.svg)](https://mozilla.github.io/geckoview/)
+[![Release](https://img.shields.io/github/v/release/Quor-a/QuroAI?label=release)](https://github.com/Quor-a/QuroAI/releases)
+[![minSdk](https://img.shields.io/badge/minSdk-26-API.svg)](https://developer.android.com/about/versions/oreo)
+[![compileSdk](https://img.shields.io/badge/compileSdk-36-API.svg)](https://developer.android.com)
 
-- **开源地址**：https://github.com/Quor-a/QuroAI
-- **许可证**：[Apache-2.0](./LICENSE)（本应用源码）；第三方依赖各自保留其许可证，详见 [NOTICE](./NOTICE)
+</div>
 
----
-
-## ✨ 核心特性
-
-- 🤖 **主动工具调用**：AI 可自主判断并调用设备能力（打开应用、查设备信息、文件操作、HTTP、TTS、内置浏览器等），无需你逐条下令。
-- 🎭 **灵魂注入（人格卡）**：每张卡是独立真实身份，可切换；支持 AI 自动孵化、记忆库沉淀、语音风格组合。
-- 🧩 **CMS v2 能力模块**：可扩展的能力插件系统，AI 可在应用沙箱内调用。
-- 💻 **终端与开发环境**：应用内终端、Node/Python/SSH/Java/Rust/Go 等多语言开发环境供给。
-- 🗣️ **语音交互**：本地/云端 TTS、多服务商音色与情绪标签、语音球悬浮窗随时唤醒。
-- 🔌 **丰富工具生态**：40+ 内置工具 + 内置浏览器 + 知识库 + 代码运行 + 媒体播放。
-- 🎨 **原创 UI**：Jetpack Compose 重设计，支持主题/字体/深浅色。
-- 💾 **记忆库**：AI 自动分类管理长期记忆，智能搜索历史对话。
+> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin + Jetpack Compose ｜ **compileSdk 36 / minSdk 26 / targetSdk 34**
+>
+> QuroAI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用内置工具，运行 Node / Python / SSH / Java / Rust / Go 共享运行时，并通过飞书、QQ、微信与你保持在线。
 
 ---
 
-## 📱 系统要求
+## ✨ Features · 功能亮点
 
-- Android 8.0+ (API 26+)
-- 建议 4GB+ 内存，存储空间 200MB+
+| 能力域 | 关键能力 |
+|--------|----------|
+| **对话 UI（Compose）** | ChatScreen 对话框、PersonaBar 人格卡、PermissionModeBar（「AI 自动保存记忆」+「深度思考」并排胶囊）、回到底部浮动按钮、全屏预览、Markdown 与代码块渲染 |
+| **Agent 核心** | 多会话隔离（`liveBuffers` 按会话独立）、种子快照（`convBase`）、显示刷新闸门（`canUpdateDisplay`）、多轮 `[第N轮]` hidden 标记防串台、系统提示词构建、工具注册表（`QuroToolRegistry.active`）、技能系统（`QuroSkill` → 注册为 `skill__{name}` 工具） |
+| **工具 / 能力层** | `launch_app`、无障碍 `input_text`/`tap_screen`/`read_screen`（节点树，非截图）、`cms_*` 模块调用、`cms_engine_status`、`Agent 键盘 ai_type_text`/`ai_press_enter`/`ai_press_send`（注册为系统输入法的极简 IME，向其他 App 灌字）、`scheduler` 定时任务、`memory_*` 记忆工具 |
+| **特权层 L1–L5** | 无障碍 → Shizuku(uid 0/2000) → 设备管理员 → ROOT(su) → 应用内 Linux(proot + Alpine) |
+| **引擎 / 运行时** | CMS 引擎共享运行时（NODE / PYTHON / SSH / JAVA / RUST / GO）、CMS v2 模块、GeckoView 浏览器（MPL-2.0）、本地语音 STT / TTS |
+| **IM 通道** | 飞书（WebSocket）/ QQBot（官方 WS）/ 微信 iLink（HTTP 长轮询 35s）；三家手机端均无公网端点 |
+| **数据 / 持久化** | `QuroConversationStore` 磁盘会话仓库、启动自愈 `DATA_REPAIR` 去重、诊断日志写入手机公共 `Download/QuroAI_logs/` |
+| **定时任务** | `QuroScheduler`：`once` / `recurring`（rrule）、`endAt` 结束机制 |
 
 ---
 
-## 🚀 快速开始
+## 🏗️ Functional Architecture · 功能构架
 
-### 下载安装（推荐）
+```mermaid
+flowchart TB
+    subgraph UI["UI 层 · Jetpack Compose"]
+        direction TB
+        A1["ChatScreen 对话框"]
+        A2["PersonaBar 人格卡"]
+        A3["PermissionModeBar · 权限胶囊"]
+        A4["Markdown / 代码块渲染 · 全屏预览"]
+    end
+    subgraph CORE["Agent 核心 · QuroChatViewModel"]
+        B1["多会话隔离 liveBuffers"]
+        B2["种子快照 convBase"]
+        B3["显示刷新闸门 canUpdateDisplay"]
+        B4["工具注册表 QuroToolRegistry"]
+        B5["技能系统 skill__{name}"]
+    end
+    subgraph TOOLS["工具 / 能力层 · core/tools"]
+        C1["launch_app"]
+        C2["无障碍 input_text / tap_screen / read_screen"]
+        C3["cms_* 模块调用"]
+        C4["cms_engine_status"]
+        C5["Agent 键盘 ai_type_text / press_enter / press_send"]
+        C6["scheduler 定时任务"]
+        C7["memory_* 记忆工具"]
+    end
+    subgraph PRIV["特权 / 权限层 · L1–L5"]
+        D1["L1 无障碍 AccessibilityService"]
+        D2["L2 Shizuku uid 0/2000"]
+        D3["L3 设备管理员 DeviceAdmin"]
+        D4["L4 ROOT su"]
+        D5["L5 应用内 Linux proot + Alpine"]
+    end
+    subgraph ENGINE["引擎 / 运行时层"]
+        E1["CMS 引擎 共享运行时 NODE / PYTHON / SSH / JAVA / RUST / GO"]
+        E2["CMS v2 模块 QuroCmsRepository"]
+        E3["GeckoView 浏览器 MPL-2.0"]
+        E4["本地语音 sherpa-onnx STT / TTS"]
+    end
+    subgraph IM["IM 通道层 · 手机端均无公网端点"]
+        F1["飞书 WebSocket"]
+        F2["QQBot 官方 WS"]
+        F3["微信 iLink HTTP 长轮询 35s"]
+    end
+    subgraph DATA["数据 / 持久化"]
+        G1["QuroConversationStore 磁盘会话仓库"]
+        G2["启动自愈 DATA_REPAIR 去重"]
+        G3["诊断日志 Download/QuroAI_logs/"]
+    end
 
-直接从 [Release 页面](https://github.com/Quor-a/QuroAI/releases) 下载最新 APK，安装后启动并按应用内引导完成设置（配置你的模型 API Key 等）。
+    UI --> CORE
+    CORE --> TOOLS
+    TOOLS --> PRIV
+    TOOLS --> ENGINE
+    PRIV --> ENGINE
+    CORE --> IM
+    CORE --> DATA
+```
 
-> 请务必从官方 Release 页面下载本应用，通过未知渠道获取的安装包可能被篡改，存在隐私泄露风险。
+---
+
+## ⚙️ Engine · 引擎详解
+
+### CMS 引擎（系统资源包）
+
+CMS 引擎是一套**共享运行时**供给机制，按需在设备上提供 **NODE / PYTHON / SSH / JAVA / RUST / GO** 等环境（`DepKind.ENV` + `CmsEnvProvisioner` 按需供给）。你可以用 `cms_engine_status` 查询：
+
+- 各运行时**就绪态**；
+- 当前**共享服务**；
+- **部署进度**（provisioning 进行到哪一步）。
+
+> 🔑 **引擎 ≠ 模块**
+> - **CMS 引擎**是底层「运行时骨架」——它负责把 NODE/PYTHON/SSH/JAVA/RUST/GO 这些环境供给到设备上，是能力运行的基础设施。
+> - **CMS v2 模块**（`QuroCmsRepository`）是用户自建的、**可复用**的上层能力单元，通过 `serializeModule` / `parseModule` 导入导出，运行在引擎提供的运行时之上。
+>
+> 二者是「地基」与「楼栋」的关系：引擎提供环境，模块消费环境。
+
+### GeckoView 浏览器引擎（MPL-2.0）
+
+内置 [GeckoView](https://mozilla.github.io/geckoview/) 作为系统 WebView 的替代，用于渲染网页与 HTML 预览。GeckoView 以 **MPL-2.0**（file-level copyleft）分发，其对应源代码随构建提供（见 [NOTICE](./NOTICE)）。
+
+### 本地语音
+
+- **本地 STT**：`sherpa-onnx-whisper-tiny` 本地语音识别（约 85MB onnx 模型，离线可用）。
+- **TTS**：单例 `QuroTtsHolder`，支持多服务商（如小米 MiMo 真情感合成），情绪标签跟随文本。
+
+---
+
+## 🔐 Privilege Tiers · 特权 / 权限层（L1–L5）
+
+更高层级的系统级执行通道**均需用户显式授权**后才会启用；未授权时返回引导提示，不会静默越权。
+
+| 层级 | 是什么 | 用途 | 前置条件 |
+|------|--------|------|----------|
+| **L1** 无障碍 | `AccessibilityService` | 点击 / 输入 / 读屏（`read_screen` 读取无障碍节点树，非截图） | 在系统设置中开启 QuroAI 的无障碍服务 |
+| **L2** Shizuku | uid 0/2000，AIDL `UserService` 主路径，反射 `newProcess` 备选 | 高权限 shell 命令执行 | 安装并运行 Shizuku App，完成配对授权 |
+| **L3** 设备管理员 | `DeviceAdmin` | 设备策略级能力（锁定 / 擦除等） | 在设置中激活设备管理员 |
+| **L4** ROOT | `su` | 完整 root 权限，命令走 `sh -c` 执行 | 设备已 root |
+| **L5** 应用内 Linux | `proot` + Alpine rootfs | 真 Linux 用户态执行 | 用户自备 `proot` 二进制与 Alpine rootfs |
+
+---
+
+## 🧰 Requirements & Quick Start · 系统要求与快速开始
+
+### 系统要求
+
+- Android 8.0+（API 26+）
+- 建议 4GB+ 内存，存储空间 200MB+（本地语音模型另需约 85MB）
 
 ### 从源码构建
 
@@ -57,54 +168,67 @@ cd QuroAI
 
 构建产物：`app/build/outputs/apk/debug/app-debug.apk`
 
-> 注：部分原生模块（如 QuickJS 沙箱、Sherpa-NCNN 语音识别、GeckoView 内置浏览器）
-> 以源码或预编译库形式集成，无需额外下载外部依赖包。
+---
+
+## 🔎 Troubleshooting · 排查与故障排查
+
+| 现象 | 说明 / 处理 |
+|------|-------------|
+| **Shizuku 相关能力不可用** | 必须**先打开 Shizuku App 并启动其服务 / 完成配对**，再在 QuroAI 中授权；Shizuku 未运行时 L2 通道不会启用。 |
+| **ROOT 模式命令不执行** | ROOT 模式命令走 `sh -c` 执行，需确认设备已 root 且已授予 su 权限。 |
+| **应用内 Linux（L5）无法运行** | 真执行依赖**用户自备的 `proot` 二进制**与 Alpine rootfs，请先准备好这些外部资源。 |
+| **网页 / HTML 预览不显示** | 确认已随包集成 GeckoView（MPL-2.0）运行时。 |
+| **本地语音识别不可用** | 本地 STT 模型为约 85MB 的 onnx 文件，首次使用需下载 / 放置到指定目录。 |
+| **会话出现重复或异常** | 启动自愈 `DATA_REPAIR` 会在启动时去重清洗，重启 App 即可。 |
+| **需要诊断日志** | 日志写到手机公共目录 `Download/QuroAI_logs/`，无需 adb 即可取出。 |
 
 ---
 
-## 🔐 权限模型
+## 📦 Download · 下载 / APK
 
-AI 默认可见并可在应用沙箱内调用能力；更高层级的系统级执行通道
-（无障碍 / Shizuku / 设备管理员 / ROOT / 应用内 Linux）**均需用户显式授权**后
-才会启用，未授权时返回引导提示，绝不静默越权。
+[![Release](https://img.shields.io/github/v/release/Quor-a/QuroAI)](https://github.com/Quor-a/QuroAI/releases)
+
+直接从 Release 页面下载最新 APK：
+
+- **v1.0.2（debug）**：[QuroAI-v1.0.2-debug.apk](https://github.com/Quor-a/QuroAI/releases/download/v1.0.2/QuroAI-v1.0.2-debug.apk)
+
+> ⚠️ 请务必从官方 Release 页面下载本应用。通过未知渠道获取的安装包可能被篡改，存在隐私泄露风险。
 
 ---
 
-## 📌 版本历程
+## 📜 License · 许可证
+
+QuroAI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICENSE)）。
+
+- **主许可**：Apache-2.0（应用全部源码）。
+- **GeckoView（Mozilla）**：以 **MPL-2.0** 分发（file-level copyleft）。其对应源代码随构建提供，符合该许可证义务。
+- **其余第三方依赖**（AndroidX / Jetpack Compose、Kotlin、OkHttp、Shizuku、QuickJS、Sherpa-NCNN 等）各自保留其原有许可证，完整清单见 [NOTICE](./NOTICE)。
+
+> 本仓库仅就**实际随包分发**的组件声明其许可证义务；未随包分发的组件不产生额外的 Copyleft 义务。
+
+---
+
+## 🗓️ Changelog · 版本历程
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| v1.0.2 | 2026-07-29 | 初始开源版本：Shizuku 授权按钮修复、AI 键盘输入通道、权限模型引导、GeckoView 内置浏览器、记忆库与 CMS v2 能力模块 |
+| v1.0.2 | 2026-07-29 | Shizuku 授权按钮修复、AI 键盘输入通道、权限模型引导、GeckoView 内置浏览器、记忆库与 CMS v2 能力模块 |
 
 ---
 
-## 📄 开源声明
-
-Quro AI 以 **百分百开源** 为目标：应用全部源码公开，欢迎参与共建。
-
-- 本应用源码采用 **Apache-2.0** 许可证。
-- Quro AI 为**独立原创实现**，不搬运任何上游项目源码。
-- 对于随包分发、带 Copyleft 义务的组件（GeckoView → MPL-2.0），
-  我们按对应许可证要求提供相应源代码。完整第三方许可证清单见 [NOTICE](./NOTICE)。
-
-如需以 **LGPLv3** 发布本应用，可将 `LICENSE` 替换为
-LGPLv3 文本并在 `NOTICE` 中同步说明——这是一处可一键切换的许可选择。
-
----
-
-## 🤝 贡献
+## 🤝 Contributing · 贡献
 
 欢迎各种贡献：核心功能开发、内置工具、CMS 模块、文档与翻译。
 
 1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/xxx`)
-3. 提交变更 (`git commit -m 'feat: xxx'`)
-4. 推送分支 (`git push origin feature/xxx`)
+2. 创建特性分支（`git checkout -b feature/xxx`）
+3. 提交变更（`git commit -m 'feat: xxx'`）
+4. 推送分支（`git push origin feature/xxx`）
 5. 提交 Pull Request
 
 ---
 
-## 📝 问题反馈
+## 💬 Feedback · 问题反馈
 
 遇到问题或有建议？欢迎 [提交 Issue](https://github.com/Quor-a/QuroAI/issues)。
 请尽量提供：清晰描述、复现步骤、设备型号与系统版本、相关截图。
@@ -113,15 +237,8 @@ LGPLv3 文本并在 `NOTICE` 中同步说明——这是一处可一键切换的
 
 ---
 
-## 🌐 English
+<div align="center">
 
-**Quro AI** is a fully open-source, on-device AI agent app for Android, built natively with Kotlin and Jetpack Compose.
+Made with ❤️ by the QuroAI Team
 
-- Runs locally on your device; cloud models are called directly from the device using your own API Key / endpoint — Quro AI does not proxy your chats.
-- Features: autonomous tool use, persona cards ("soul injection"), memory库, CMS v2 capability modules, an in-app terminal & multi-language dev environment (Node/Python/SSH/Java/Rust/Go), voice interaction, 40+ built-in tools, and an embedded GeckoView browser.
-- **License**: [Apache-2.0](./LICENSE). Quro AI is an independent, original implementation and does not incorporate any upstream project source code. Components shipped with copyleft obligations (GeckoView → MPL-2.0) have their source provided per their license; see [NOTICE](./NOTICE).
-- Download the latest APK from [Releases](https://github.com/Quor-a/QuroAI/releases).
-
----
-
-Made with ❤️ by the Quro AI Team
+</div>
