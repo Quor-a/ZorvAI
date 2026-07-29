@@ -159,7 +159,7 @@ class QuroToolRegistry {
             "read_screen", "get_foreground_app", "get_screen_state",
             "tap_screen", "swipe_screen", "input_text", "scroll_screen", "global_action",
             // AI 智能体键盘（Agent IME）：把文本直接打字进聚焦输入框（需启用并切到『Quro AI 键盘』）
-            "ai_type_text", "ai_press_enter",
+            "ai_type_text", "ai_press_enter", "ai_press_send",
             // 媒体：百分百开源本地音乐 / 视频播放器（后台可用，对话框显示播放卡片）
             "local_music_player", "local_video_player", "list_media", "music_play",
             // 真实执行链路（L1-L4 CapOS 通道已恢复 v115，L5 Linux v116 恢复）：

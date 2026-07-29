@@ -59,3 +59,23 @@ class AiKeyboardPressEnterTool : QuroTool {
         return if (svc.pressEnter()) "✅ 已发送回车" else "❌ 发送回车失败"
     }
 }
+
+/** AI 智能体键盘：触发输入框的「发送」动作（如聊天/评论框右下角发送键）。 */
+class AiKeyboardSendTool : QuroTool {
+    override val name = "ai_press_send"
+    override val description =
+        "通过 Quro AI 智能体键盘触发当前输入框的『发送』动作（EditorInfo.IME_ACTION_SEND），" +
+        "适用于聊天/评论框（右下角动作是『发送』而非回车的场景）。" +
+        "若输入框没有 SEND 动作，则自动降级为回车提交。" +
+        "前置条件同 ai_type_text：已启用并切到『Quro AI 键盘』且目标 App 输入框已聚焦。"
+    override val parametersJson = """{"type":"object","properties":{}}"""
+
+    override fun run(context: Context, arguments: String): String {
+        val svc = QuroAiKeyboardService.instance
+            ?: return "❌ 智能体键盘未运行：请在系统设置启用『Quro AI 键盘』"
+        if (!svc.isInputActive()) {
+            return "⚠️ 当前没有可输入的焦点：请先切到『Quro AI 键盘』并确保目标 App 输入框已聚焦，再重试"
+        }
+        return if (svc.pressSend()) "✅ 已触发发送（或降级回车提交）" else "❌ 发送失败"
+    }
+}

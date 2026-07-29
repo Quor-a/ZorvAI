@@ -8,6 +8,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.inputmethodservice.InputMethodService
 import android.widget.FrameLayout
@@ -18,7 +19,7 @@ import android.widget.TextView
  *
  * 这是「给 AI agent 用的工具执行端」，不是给人手打的键盘：
  * - UI 极简：键盘区只显示一颗 🤖 悬浮球，点击弹出系统输入法选择器以便切回普通键盘，不干扰目标 App。
- * - AI 通过同进程单例 [instance] 调用 [typeText] / [pressEnter] / [clearText]，
+ * - AI 通过同进程单例 [instance] 调用 [typeText] / [pressEnter] / [pressSend] / [clearText]，
  *   把文本直接 commitText 进当前聚焦的输入框（如 WPS 文档）。
  *
  * 系统限制（Android 固有）：用户需在「系统设置 → 语言与输入法」启用本键盘并切到它，
@@ -88,6 +89,25 @@ class QuroAiKeyboardService : InputMethodService() {
         ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
         ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
         return true
+    }
+
+    /**
+     * AI 调用：触发输入框的「发送」动作（EditorInfo.IME_ACTION_SEND）。
+     * 适用于聊天/评论框（右下角动作是「发送」而非回车换行的场景）。
+     * 若该输入框没有 SEND 动作（例如只是普通文本域），降级为 [pressEnter]。
+     * 返回是否成功。
+     */
+    fun pressSend(): Boolean {
+        val ic = currentInputConnection ?: return false
+        val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
+            ?: EditorInfo.IME_ACTION_UNSPECIFIED
+        return if (action == EditorInfo.IME_ACTION_SEND) {
+            ic.performEditorAction(EditorInfo.IME_ACTION_SEND)
+            true
+        } else {
+            // 无 SEND 动作时降级回车，保证「提交」语义不丢失
+            pressEnter()
+        }
     }
 
     /** AI 调用：清空当前输入框已有内容（删除光标前/后全部文本）。返回是否成功。 */

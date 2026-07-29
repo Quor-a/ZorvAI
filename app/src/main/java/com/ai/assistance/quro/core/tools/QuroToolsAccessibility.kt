@@ -40,12 +40,39 @@ class ReadScreenTool : QuroTool {
             val root = svc.rootInActiveWindow ?: return "⚠️ 无法获取当前窗口根节点（可能被系统限制）"
             val sb = StringBuilder()
             appendNode(root, sb, 0)
-            // 限制输出长度避免 token 爆炸
-            val text = sb.toString()
-            if (text.length > 4000) "${text.take(4000)}\n... (截断)" else text
+            // 另收集可交互元素（clickable/editable/scrollable）做索引，便于 AI 定位「发送/输入框」等
+            val interactive = mutableListOf<String>()
+            collectInteractive(root, interactive, 0)
+            val tree = sb.toString()
+            val cappedTree = if (tree.length > 6000) {
+                "${tree.take(6000)}\n... (节点树截断，见下方可交互元素索引)"
+            } else tree
+            val inter = if (interactive.isNotEmpty())
+                "\n\n## 可交互元素索引（clickable/editable/scrollable，共 ${interactive.size}）\n" +
+                    interactive.joinToString("\n")
+            else ""
+            cappedTree + inter
         } catch (e: Exception) {
             "❌ 读取屏幕失败: ${e.message}"
         }
+    }
+
+    /** 收集可交互节点（点击/编辑/滚动），输出带坐标的紧凑索引，便于 AI 直接定位「发送」按钮或输入框。 */
+    private fun collectInteractive(node: AccessibilityNodeInfo?, out: MutableList<String>, depth: Int) {
+        if (node == null || out.size >= 80) return
+        if (node.isClickable || node.isEditable || node.isScrollable) {
+            val text = node.text?.toString()?.take(40)?.ifBlank { null }
+            val desc = node.contentDescription?.toString()?.take(40)?.ifBlank { null }
+            val rid = node.viewIdResourceName?.toString()?.substringAfterLast(":")?.take(40)?.ifBlank { null }
+            val b = Rect().also { node.getBoundsInScreen(it) }
+            val label = text ?: desc ?: rid ?: (node.className?.toString()?.substringAfterLast(".") ?: "?")
+            val tag = buildString {
+                if (node.isEditable) append(" [editable]")
+                if (node.isScrollable) append(" [scroll]")
+            }
+            out.add("· $label [${b.left},${b.top}][${b.right},${b.bottom}]$tag")
+        }
+        for (i in 0 until node.childCount.coerceAtMost(50)) collectInteractive(node.getChild(i), out, depth + 1)
     }
 
     private fun appendNode(node: AccessibilityNodeInfo?, sb: StringBuilder, depth: Int) {
@@ -172,29 +199,27 @@ class TapScreenTool : QuroTool {
             return "❌ 坐标越界(屏幕 ${dm.widthPixels}×${dm.heightPixels}): (${x.toInt()},${y.toInt()})"
 
         val root = svc.rootInActiveWindow ?: return "⚠️ 无法获取当前窗口根节点（可能被系统限制）"
+        // 坐标模式：用户给了明确坐标 → 在 (x,y) 精确派发触摸。
+        // 关键修复：不再重定向到「可点击祖先的中心」。此前命中一个整行宽度的列表项时，
+        // 会去点该容器的中心，导致指定 x=980 实际点中 x=540（系统性坐标偏移）。
         val hit = hitTestNode(root, x, y)
-        if (hit == null) {
-            // 该坐标无任何节点（如状态栏外/空白）→ 退化手势，诚实标注无法确认命中
-            val dispatched = tapGestureAt(svc, x, y)
-            return if (dispatched) "⚠️ 坐标(${x.toInt()},${y.toInt()})处无节点，已派发轻触手势（是否命中无法确认）"
-            else "❌ 轻触手势被系统拒绝派发"
-        }
-        // 向上回溯到真正可点击的祖先（解决「文本在子节点、点击在父容器」导致点了没反应）
-        val target = findClickableAncestor(hit) ?: hit
-        val r = Rect().also { target.getBoundsInScreen(it) }
-        val cx = (r.left + r.right) / 2f
-        val cy = (r.top + r.bottom) / 2f
-        val label = (target.text?.toString() ?: target.contentDescription?.toString()
-            ?: target.className?.toString()?.substringAfterLast(".") ?: "节点")
-        // 首选：在节点真实中心派发真触摸（最可靠）；系统拒绝派发时降级 performAction
-        val dispatched = tapGestureAt(svc, cx, cy)
+        val label = hit?.let {
+            (it.text?.toString() ?: it.contentDescription?.toString()
+                ?: it.className?.toString()?.substringAfterLast(".") ?: "节点")
+        } ?: "坐标(${x.toInt()},${y.toInt()})"
+        val dispatched = tapGestureAt(svc, x, y)
         return if (dispatched) {
-            if (target.isCheckable) verifyToggle(svc, cx, cy, target.isChecked)
-            else "✅ 已点击「$label」(坐标 ${cx.toInt()},${cy.toInt()}，真实节点中心触摸)"
+            val target = hit?.let { findClickableAncestor(it) } ?: hit
+            if (target?.isCheckable == true) verifyToggle(svc, x, y, target.isChecked)
+            else "✅ 已点击「$label」(坐标 ${x.toInt()},${y.toInt()}，精确坐标触摸)"
         } else {
-            val ok = target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            if (ok) "✅ 已点击「$label」(performAction 降级)"
-            else "❌ 点击「$label」失败（手势与 performAction 均被拒，可能 UI 未就绪）"
+            // 手势被拒：降级到 performAction（不认坐标，只能点元素本身）
+            val target = hit?.let { findClickableAncestor(it) } ?: hit
+            if (target != null) {
+                val ok = target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                if (ok) "✅ 已点击「$label」(performAction 降级，坐标 ${x.toInt()},${y.toInt()})"
+                else "❌ 点击「$label」失败（手势与 performAction 均被拒，可能 UI 未就绪）"
+            } else "❌ 轻触手势被系统拒绝派发且坐标处无节点"
         }
     }
 

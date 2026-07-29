@@ -269,14 +269,37 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                         openShizukuManager()
                         return@PrivilegeCard
                     }
-                    // 优先尝试程序化授权（弹 Shizuku 授权框，体验最佳）
-                    try {
-                        val listener = Shizuku.OnRequestPermissionResultListener { _req, _grant ->
-                            refresh()
-                            Toast.makeText(ctx, if (_grant == android.content.pm.PackageManager.PERMISSION_GRANTED) "Shizuku 授权成功 ✓" else "Shizuku 授权被拒绝", Toast.LENGTH_SHORT).show()
+                    // 授权结果监听（两路复用）
+                    val listener = Shizuku.OnRequestPermissionResultListener { _req, _grant ->
+                        refresh()
+                        Toast.makeText(ctx, if (_grant == android.content.pm.PackageManager.PERMISSION_GRANTED) "Shizuku 授权成功 ✓" else "Shizuku 授权被拒绝", Toast.LENGTH_SHORT).show()
+                    }
+                    // ═══ 关键修复（v436）：requestPermission 仅在 Shizuku Binder 存活（服务运行中）时才会弹系统授权框；
+                    // 若 Shizuku 已装但未运行（Binder dead / 服务未启动），调用会「静默失败」——既不弹框也不报错，
+                    // 正是之前「点了按钮只打开 App、不弹授权框」的真凶。故先确认 isAlive，未运行则先拉起 Shizuku 并
+                    // 等待 Binder 就绪，再授权；避免落入无意义的 fallback。
+                    if (!QuroShizuku.isAlive) {
+                        Toast.makeText(ctx, "Shizuku 未运行，正在打开并等待服务启动…", Toast.LENGTH_SHORT).show()
+                        openShizukuManager()
+                        // 轮询等待 Binder 就绪（用户在 Shizuku 应用中通过 ADB/无线调试启动服务后 Binder 才会 ping 通），最多约 12s
+                        scope.launch {
+                            var alive = false
+                            repeat(24) {
+                                kotlinx.coroutines.delay(500)
+                                if (QuroShizuku.isAlive) { alive = true; return@repeat }
+                            }
+                            if (alive) {
+                                QuroShizuku.requestPermission(act, 1024, listener)
+                            } else {
+                                Toast.makeText(ctx, "Shizuku 仍未就绪：请先在该应用中启动服务（ADB 无线调试/配对），再点此按钮授权", Toast.LENGTH_LONG).show()
+                            }
                         }
+                        return@PrivilegeCard
+                    }
+                    // Binder 已存活：直接弹系统授权框（体验最佳）
+                    try {
                         QuroShizuku.requestPermission(act, 1024, listener)
-                        // 兜底：若 3s 后仍未授权（requestPermission 静默失败/用户没看到弹框），自动拉起 Shizuku 应用
+                        // 兜底：若 3s 后仍未授权（极少数机型 requestPermission 仍静默失败），自动拉起 Shizuku 应用
                         scope.launch {
                             kotlinx.coroutines.delay(3000)
                             if (!QuroShizuku.isReady) {

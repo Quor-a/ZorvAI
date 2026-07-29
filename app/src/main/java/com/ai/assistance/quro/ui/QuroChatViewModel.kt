@@ -498,15 +498,14 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         val liveSeed = liveBuffers[convId]?.all()
         val persistedSeed = _convs.value.firstOrNull { it.id == convId }?.messages
         val convBase = (liveSeed ?: persistedSeed ?: emptyList()).toList()
-        // ★ 串台防御（v430+）：计算本轮次号，注入 [第N轮] 标记到发给 LLM 的种子消息中，
-        //   帮助模型区分新旧上下文、严格针对最新一轮回复。UI 显示用的 userMsg 不带标记。
+        // ★ 串台防御（v434+ 修复）：轮次信息通过【隐藏 system 消息】传给 LLM，
+        //   不再注入 userMsg.content（旧方案会导致 seededUserMsg 进入 buf→liveBuffer→commitCurrent 刷屏，
+        //   使用户 UI 看到内部 [第N轮] 标记泄露）。
         val roundNumber = convBase.count { it.role == "user" } + 1
-        // 带回合标记的种子副本（仅用于 LLM 上下文，不进入 UI 显示 store）
-        val seededUserMsg = userMsg.copy(content = "[第${roundNumber}轮]\n$t")
         val firstUser = convBase.none { it.role == "user" }
+        val initialMessages = convBase + userMsg
         store.add(userMsg)  // 仅用于即时显示（commitCurrent 默认用 store 刷屏/首存）
         QuroCrashLogger.logEvent(appContext, "USERMSG", "senderName=[${(userProfile.value.name ?: "").take(20)}] avatarUrl=[${(userProfile.value.avatarUri ?: "").take(60)}]")
-        val initialMessages = convBase + seededUserMsg
         QuroDiag.log("SEED", "convId=$convId seedMsgs=${initialMessages.size} hasAssistant=${initialMessages.any { it.role == "assistant" }} busyBefore=${isBusy(convId)} liveSeed=${liveSeed != null}")
         commitCurrent(convId, updateTitle = firstUser)  // 外部立即显示（首条用户消息同步衍化对话标题）
 
@@ -550,6 +549,16 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 }
                 // 落盘技能隐藏消息到 buf（用户消息与标题更新已在 launch 外的 commitCurrent 处理）
                 commitCurrent(convId, buf)
+                // ★ 串台防御（v434+）：轮次标记改为【隐藏 user 消息】注入 buf，
+                //   不再污染 userMsg.content（旧方案导致 [第N轮] 泄露到 UI）。
+                //   hidden=true 确保 UI 渲染层不显示、落盘后可追溯调试。
+                store.add(
+                    QuroMessage(
+                        role = "user",
+                        content = "[第${roundNumber}轮] 请严格针对本轮（最新一条）用户消息作答，忽略更早轮次的用户消息。",
+                        hidden = true,
+                    ),
+                )
                 if (cfg.apiKey.isBlank()) {
                     store.add(
                         QuroMessage(
@@ -1226,6 +1235,15 @@ $recent
                 sb.append("    · 常见说法/多用途：$hint\n")
             }
         }
+        // ═══ AI 键盘通道专项指引（v436 新增）：让 LLM 知道何时走 IME 键盘通道而非无障碍 input_text ═══
+        sb.append("\n### AI 键盘通道（ai_type_text / ai_press_enter / ai_press_send）\n")
+        sb.append(
+            "这三个工具走本应用注册的「系统键盘 IME 单例」QuroAiKeyboardService，用于向「其他 App 的聚焦输入框」像真人打字一样注入文字、回车或发送。" +
+            "触发时机：当用户要你在某个 App（如微信、备忘录、WPS 搜索框、浏览器地址栏）的输入框里填字、换行、或触发发送键时，优先用它们，而不是无障碍 input_text。" +
+            "前提与限制：①目标 App 的输入框必须「已聚焦」（当前有光标）；②本 AI 键盘必须已设为该输入框的「活动输入法」（首次使用会引导用户在输入法设置里启用并切换）。" +
+            "若 isInputActive() 为 false（无聚焦输入框），工具会返回明确引导而非静默失败。" +
+            "它与无障碍 input_text 是「两条独立通道」：需要「模拟真人逐字输入、触发 IME 的发送/回车动作」时走键盘通道；需要「直接覆盖或设置控件文本、不依赖输入法」时走无障碍通道。\n"
+        )
         sb.append("\n（其中 `ui_open_*` / `ui_toggle_*` / `ui_clear_*` / `ui_new_*` 为**界面控制工具**：调用后会在当前对话框直接打开对应界面/弹层/开关，例如 ui_open_onlyoffice 打开 WPS/文档中心、ui_toggle_deepthink 切换深度思考、ui_clear_chat 清空对话。它们同样可由你并行发起，让用户无需手动点击即可导航应用。）\n")
         sb.append("\n（CMS 模块与大部分能力在应用沙箱内执行（intent/js/api）；另有系统级通道 L1 无障碍控屏 / L2 Shizuku / L3 设备管理员 / L4 ROOT / L5 Linux，对应工具已包含在上方清单中，运行时由系统授权与资产可用性把关，未授权时工具会返回明确引导，无需你做通道自查。）\n")
         sb.append("\n### 在对话框里「展示」UI（重要）\n")

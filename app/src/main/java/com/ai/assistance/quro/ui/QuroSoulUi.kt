@@ -337,13 +337,6 @@ fun PersonaEditDialog(
     var opening by remember { mutableStateOf(initial.opening) }
     var chatSetting by remember { mutableStateOf(initial.chatSetting) }
     var voiceSetting by remember { mutableStateOf(initial.voiceSetting) }
-    // 结构化语音组合：默认严格跟随已存数据（initial.voiceProfile 可能为 null）。
-    // 关键修复：不再为 null 时自动重建默认值，否则用户「明确删除/关闭组合」保存后，
-    // 重新打开编辑框会因默认值被再次填上而表现为「刚删掉又被恢复」。
-    // 用户主动打开开关时才在下方 onCheckedChange 中创建默认配置。
-    var voiceProfile by remember {
-        mutableStateOf(initial.voiceProfile)
-    }
     var selectedTags by remember { mutableStateOf(initial.tags) }   // 仅存全局标签名称
     var showTagManager by remember { mutableStateOf(false) }
 
@@ -381,10 +374,6 @@ fun PersonaEditDialog(
             opening = s.opening
             chatSetting = s.chatSetting
             voiceSetting = s.voiceSetting
-            // #890 修复：孵化结果不再覆盖已存在的语音组合选择。
-            // 仅「新建卡」(isNew) 才用 AI 推荐值播种；已存在卡若用户已明确关闭组合(voiceProfile=null)，
-            // 孵化不得回灌，否则表现为「刚删掉又被恢复」。
-            if (isNew && s.voiceProfile != null) voiceProfile = s.voiceProfile
             vm.clearIncubateResult()
         }
     }
@@ -443,39 +432,6 @@ fun PersonaEditDialog(
                     OutlinedTextField(opening, { opening = it }, label = { Text("开场白") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                     OutlinedTextField(chatSetting, { chatSetting = it }, label = { Text("聊天设定") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                     OutlinedTextField(voiceSetting, { voiceSetting = it }, label = { Text("语音设定（自然语言，可选）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-
-                    // ── 结构化语音组合（B3 交互选择器：覆盖语音设定）──
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("🎙 结构化语音组合", style = MaterialTheme.typography.labelMedium)
-                            Text(
-                                "指定服务商/音色/情绪/语速，激活时 LLM 自动组合情绪标签形成自然人类语音（覆盖上方自然语言设定）",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Switch(
-                            checked = voiceProfile != null,
-                            onCheckedChange = {
-                                voiceProfile = if (it) {
-                                    voiceProfile ?: com.ai.assistance.quro.core.QuroVoiceProfile(
-                                        providerId = "edge",
-                                        voiceId = "zh-CN-XiaoxiaoNeural",
-                                        emotionEnabled = false,
-                                        emotionTags = emptyList(),
-                                        speed = 1.0f,
-                                    )
-                                } else null
-                            },
-                        )
-                    }
-                    if (voiceProfile != null) {
-                        VoiceProfileEditor(
-                            profile = voiceProfile!!,
-                            onChanged = { voiceProfile = it },
-                        )
-                    }
 
                                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         OutlinedButton(
@@ -542,7 +498,6 @@ fun PersonaEditDialog(
                                 opening = opening.trim(),
                                 chatSetting = chatSetting.trim(),
                                 voiceSetting = voiceSetting.trim(),
-                                voiceProfile = voiceProfile,
                                 tags = selectedTags,
                                 createdAt = if (isNew) now else initial.createdAt,
                                 updatedAt = now,
@@ -884,101 +839,3 @@ private fun MemoryEditDialog(
     )
 }
 
-// ==================== 结构化语音组合交互选择器（B3） ====================
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun VoiceProfileEditor(
-    profile: com.ai.assistance.quro.core.QuroVoiceProfile,
-    onChanged: (com.ai.assistance.quro.core.QuroVoiceProfile) -> Unit,
-) {
-    val providers = QuroTtsProviders.ALL
-    var expandedProvider by remember(profile.providerId) { mutableStateOf(false) }
-    var expandedVoice by remember(profile.voiceId) { mutableStateOf(false) }
-    val def = QuroTtsProviders.byId(profile.providerId) ?: providers.first()
-
-    Surface(
-        tonalElevation = 2.dp,
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-    ) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // 服务商下拉
-            ExposedDropdownMenuBox(expanded = expandedProvider, onExpandedChange = { expandedProvider = it }) {
-                OutlinedTextField(
-                    value = def.name,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("服务商") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedProvider) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                )
-                ExposedDropdownMenu(expanded = expandedProvider, onDismissRequest = { expandedProvider = false }) {
-                    providers.forEach { p ->
-                        DropdownMenuItem(
-                            text = { Text(p.name) },
-                            onClick = {
-                                val firstVoice = p.voices.firstOrNull()?.id ?: ""
-                                onChanged(profile.copy(providerId = p.id, voiceId = firstVoice))
-                                expandedProvider = false
-                            },
-                        )
-                    }
-                }
-            }
-
-            // 音色：有预设则下拉，否则自由输入
-            if (def.voices.isNotEmpty()) {
-                ExposedDropdownMenuBox(expanded = expandedVoice, onExpandedChange = { expandedVoice = it }) {
-                    val label = def.voices.firstOrNull { it.id == profile.voiceId }?.let { "${it.name}（${it.id}）" } ?: profile.voiceId
-                    OutlinedTextField(
-                        value = label,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("音色") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedVoice) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        ),
-                    )
-                    ExposedDropdownMenu(expanded = expandedVoice, onDismissRequest = { expandedVoice = false }) {
-                        def.voices.forEach { v ->
-                            DropdownMenuItem(
-                                text = { Text("${v.name}（${v.id}）") },
-                                onClick = { onChanged(profile.copy(voiceId = v.id)); expandedVoice = false },
-                            )
-                        }
-                    }
-                }
-            } else {
-                OutlinedTextField(
-                    value = profile.voiceId,
-                    onValueChange = { onChanged(profile.copy(voiceId = it)) },
-                    label = { Text("音色 ID（按服务商文档填写）") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            // 语速
-            Text(
-                "语速：${"%.2f".format(profile.speed)}x",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-            Slider(
-                value = profile.speed,
-                onValueChange = { onChanged(profile.copy(speed = it)) },
-                valueRange = 0.5f..2.0f,
-                steps = 15,
-            )
-        }
-    }
-}

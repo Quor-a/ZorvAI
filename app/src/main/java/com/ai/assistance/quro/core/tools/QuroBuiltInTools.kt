@@ -256,9 +256,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(TapScreenTool())
     r.register(SwipeScreenTool())
     r.register(InputTextTool())
-    // AI 智能体键盘（Agent IME）：ai_type_text / ai_press_enter，走 IME 通道把文本打入聚焦输入框
+    // AI 智能体键盘（Agent IME）：ai_type_text / ai_press_enter / ai_press_send，走 IME 通道把文本打入聚焦输入框
     r.register(AiKeyboardTypeTool())
     r.register(AiKeyboardPressEnterTool())
+    r.register(AiKeyboardSendTool())
     r.register(ScrollScreenTool())
     r.register(GlobalActionTool())
     // 文件知识库（Path ②）：本地文档检索 + 写入，零基建覆盖日常知识检索
