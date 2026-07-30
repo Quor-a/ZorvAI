@@ -29,6 +29,8 @@
 
 > **本项目完全开源，双平台托管 · GitHub：[github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI) ｜ Gitee：[gitee.com/ZorvAI/ZorvAI](https://gitee.com/ZorvAI/ZorvAI)**
 >
+> **🔌 受控端浏览器（ZorvAI 浏览器）已独立开源 · GitHub：[github.com/Quor-a/ZorvBrowser](https://github.com/Quor-a/ZorvBrowser) ｜ Gitee：[gitee.com/ZorvAI/ZorvBrowser](https://gitee.com/ZorvAI/ZorvBrowser)**（独立仓库，含 v1.0.12 源码与 APK）
+>
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
 > - 🔗 主程序 APK 直链（v1.0.6，已发布）：[ZorvAI-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvAI-debug-v1.0.6.apk)
 > - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.7，已发布）：[ZorvBrowser-aci-debug-v1.0.7.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.7/ZorvBrowser-aci-debug-v1.0.7.apk)
@@ -253,6 +255,7 @@ cd QuroAI
 
 - **v1.0.12（debug，主程序，最新 · 已发布）**：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
 - **v1.0.12（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 已发布）**：[ZorvBrowser-aci-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12-browser/ZorvBrowser-aci-debug-v1.0.12.apk)
+- **🧩 受控端浏览器·独立仓库（源码 + v1.0.12 APK）**：[github.com/Quor-a/ZorvBrowser](https://github.com/Quor-a/ZorvBrowser) ｜ [gitee.com/ZorvAI/ZorvBrowser](https://gitee.com/ZorvAI/ZorvBrowser)
 - **v1.0.10（debug，主程序 · 待发版）**：[ZorvAI-debug-v1.0.10.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.10/ZorvAI-debug-v1.0.10.apk)
 - **v1.0.9（debug，主程序 · 待发版）**：[ZorvAI-debug-v1.0.9.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.9/ZorvAI-debug-v1.0.9.apk)
 - **v1.0.9（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 待发版）**：[ZorvBrowser-aci-debug-v1.0.9.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.9/ZorvBrowser-aci-debug-v1.0.9.apk)
