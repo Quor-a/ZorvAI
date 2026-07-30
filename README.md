@@ -25,6 +25,18 @@
 
 ---
 
+## 🌐 开源地址 · Open Source
+
+> **本项目完全开源，仓库地址：[github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI)**
+>
+> - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
+> - 🔗 最新版 APK 直链：[ZorvAI-debug-v1.0.5.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.5/ZorvAI-debug-v1.0.5.apk)
+> - 🐛 问题反馈：[github.com/Quor-a/ZorvAI/issues](https://github.com/Quor-a/ZorvAI/issues)
+>
+> 关键词：**Zorv AI 开源 / 安卓 AI 助手 开源 / Android AI agent open source / 本地 AI 智能体 / 设备端 AI Agent / Kotlin Compose LLM 助手**
+
+---
+
 ## ✨ Features · 功能亮点
 
 | 能力域 | 关键能力 |
@@ -190,6 +202,7 @@ cd QuroAI
 
 直接从 Release 页面下载最新 APK：
 
+- **v1.0.5（debug，最新）**：[ZorvAI-debug-v1.0.5.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.5/ZorvAI-debug-v1.0.5.apk)
 - **v1.0.2（debug）**：[QuroAI-v1.0.2-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.2/QuroAI-v1.0.2-debug.apk)
 
 > ⚠️ 请务必从官方 Release 页面下载本应用。通过未知渠道获取的安装包可能被篡改，存在隐私泄露风险。
@@ -212,6 +225,7 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v1.0.5 | 2026-07-30 | 仓库更名 ZorvAI、品牌视觉统一、关于页「检查更新」真实联网检测、全仓 URL 修正、开源地址与搜索可见性优化 |
 | v1.0.2 | 2026-07-29 | Shizuku 授权按钮修复、AI 键盘输入通道、权限模型引导、GeckoView 内置浏览器、记忆库与 CMS v2 能力模块 |
 
 ---
@@ -234,6 +248,17 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 请尽量提供：清晰描述、复现步骤、设备型号与系统版本、相关截图。
 
 如果觉得项目不错，欢迎点个 ⭐ Star 支持我们！
+
+---
+
+## 🔎 关键词 · 便于搜索（SEO）
+
+为了让大家在 GitHub 探索、Google、Bing、百度等搜索引擎更容易找到本项目，这里列出常用检索词：
+
+- **中文**：Zorv AI 开源、安卓 AI 助手 开源、Android AI 智能体、本地 AI 助手、设备端 AI Agent、手机 AI 助手、Kotlin Compose AI 聊天机器人、离线 AI 助手、语音 AI 助手、安卓自动化助手、AI 工具调用、飞书 QQ 微信 AI 机器人
+- **English**：Zorv AI open source, Android AI assistant open source, on-device AI agent, local AI chatbot, Kotlin Jetpack Compose LLM, Android automation agent, voice AI assistant, TTS STT assistant, AI tool use, Feishu QQ WeChat AI bot
+
+> 仓库主页：[github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI) ｜ 最新下载：[Releases](https://github.com/Quor-a/ZorvAI/releases)
 
 ---
 
