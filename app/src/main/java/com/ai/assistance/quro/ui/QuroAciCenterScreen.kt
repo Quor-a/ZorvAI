@@ -42,47 +42,39 @@ import java.util.*
  * 开发者可把它直接保存到本地作为接入起点（替代手写样板）。
  */
 private val ACI_STUB_SOURCE = """
-package ai.aci.core
+package com.example.aci
 
+import ai.aci.core.*
 import android.app.Service
 import android.content.Intent
+import android.os.Bundle
 import android.os.IBinder
-import android.os.RemoteException
 
-/** ACI 请求：能力 id + 参数(JSON) + 用户确认标记 */
-data class ACIRequest(val capability: String, val params: String, val userConfirmed: Boolean)
+/**
+ * 最小可运行被控端 Service（依赖 aci-core AAR）。
+ * 把本文件放进你的模块、改包名与能力即可编译。
+ * 注意：BaseACIService / Capability / ACIResponse / ACIError 都由 AAR 提供，不要自己重写。
+ */
+class MyAciService : BaseACIService() {
 
-/** ACI 响应：code(0=成功) + 结果(JSON) + 错误信息 */
-data class ACIResponse(val code: Int, val result: String, val error: String?)
-
-/** 能力声明 */
-data class Capability(val id: String, val description: String, val requireUserConfirm: Boolean)
-
-/** 控制方调用被控方能力的 AIDL 接口（由 aci-core AAR 提供，此处仅为自写依赖示意） */
-interface IACIService {
-    fun call(req: ACIRequest): ACIResponse
-    fun listCapabilities(): List<Capability>
-}
-
-/** 被控方 BaseACIService 骨架：继承后声明能力、实现 onCall */
-abstract class BaseACIService : Service() {
-    abstract fun onCreateCapabilities(): List<Capability>
-    abstract fun onCall(req: ACIRequest): ACIResponse
-
-    private val binder = object : IACIService.Stub() {
-        override fun call(req: ACIRequest): ACIResponse {
-            // 危险能力务必校验 userConfirmed（服务端兜底，防被绕过）
-            val caps = onCreateCapabilities()
-            val cap = caps.firstOrNull { it.id == req.capability }
-                ?: return ACIResponse(-1, "{}", "未知能力：${'$'}{req.capability}")
-            if (cap.requireUserConfirm && !req.userConfirmed)
-                return ACIResponse(-2, "{}", "需要用户确认")
-            return onCall(req)
-        }
-        override fun listCapabilities(): List<Capability> = onCreateCapabilities()
+    override fun onCreateCapabilities(caps: MutableList<Capability>) {
+        caps.add(
+            Capability.create("echo", "回显文本")   // 第 1 参=id，第 2 参=描述（不是版本号！）
+                .addParam("text", "string", true, "要回显的内容")
+                .addResult("reply", "string", "回显结果")
+        )
     }
 
-    override fun onBind(intent: Intent?): IBinder = binder
+    override fun onCall(req: ACIRequest?): ACIResponse {
+        val capability = req?.capability ?: return ACIResponse.error(ACIError.REQUEST_NULL, "null")
+        return when (capability) {
+            "echo" -> {
+                val text = req.params?.getString("text") ?: ""
+                ACIResponse.success(Bundle()).putResult("reply", "你发了：${'$'}text")
+            }
+            else -> ACIResponse.error(ACIError.CAPABILITY_NOT_FOUND, "未知能力：${'$'}capability")
+        }
+    }
 }
 """
 
@@ -95,14 +87,26 @@ ACI 被控方（第三方 App）开发手册
 • 控制方（AI 中枢，如 Zorv AI）发现并调用第三方 App 暴露的能力；你作为「被控方」按本协议暴露能力。
 • 一次调用 = 一个 capability（能力）：带 id、描述、参数清单、是否需用户确认。
 
-二、被控方接入 5 步
-1) 依赖 aci-core AAR（提供 ai.aci.core.*：IACIService / ACIRequest / ACIResponse / Capability / BaseACIService）。
-2) AndroidManifest 声明权限与 Service（见第三节）。
-3) 写一个 Service 继承 ai.aci.core.BaseACIService，重写 onCreateCapabilities() 声明能力、onCall() 处理逻辑。
-4) 在 Application/Activity 里把 Service 跑起来（或被 ACI 唤醒广播拉起，见第四节）。
+二、依赖获取（aci-core AAR）
+• AAR 下载（GitHub Release，免登录）：
+  https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/aci-core-release.aar
+• Gradle 依赖：implementation(files("libs/aci-core-release.aar"))（把 AAR 放进模块 libs/）
+• ACI 核心库独立开源分支：https://github.com/Quor-a/ZorvAI/tree/aci-core
+• 完整开发者手册（网页版）：https://github.com/Quor-a/ZorvAI/blob/main/docs/ACI_DEVELOPER_GUIDE.md
+
+三、被控方接入 5 步
+1) 依赖 aci-core AAR（提供 ai.aci.core.*：IACIService / ACIRequest / ACIResponse / Capability / BaseACIService / ACIError）。
+2) AndroidManifest 声明 3 个 <permission> 定义 + uses-permission + Service（见第四节）。⚠️ 3 个权限定义必须写，否则 Service 的 android:permission 指向不存在的权限 → 绑定必失败。
+3) 写一个 Service 继承 ai.aci.core.BaseACIService，重写 onCreateCapabilities(caps) 声明能力、onCall(req) 返回 ACIResponse。
+4) 在 Application/Activity 里把 Service 跑起来（或被 ACI 唤醒广播拉起，见第五节）。
 5) 打包安装 → 在 Zorv AI「ACT 关联启动」点刷新即可发现；或本页「按名称搜索」找到后「注册并启动」。
 
-三、AndroidManifest 配置
+四、AndroidManifest 配置
+<!-- ① 必须声明 3 个权限定义（CALL 普通 / DISCOVER 普通 / CALL_DANGEROUS 危险）。缺任一，绑定会被系统拒绝 -->
+<permission android:name="ai.aci.permission.CALL" android:protectionLevel="normal" />
+<permission android:name="ai.aci.permission.DISCOVER" android:protectionLevel="normal" />
+<permission android:name="ai.aci.permission.CALL_DANGEROUS" android:protectionLevel="dangerous" />
+
 <uses-permission android:name="ai.aci.permission.CALL" />
 <uses-permission android:name="ai.aci.permission.DISCOVER" />
 <!-- 包可见性（Android 11+）：让控制方能发现你 -->
@@ -122,59 +126,65 @@ ACI 被控方（第三方 App）开发手册
 <!-- 必须有一个可启动的 Activity + 有效图标，否则装了也无桌面入口、启不动。
      图标不要引用已删除的 @android:drawable/* 资源。 -->
 
-四、Kotlin 代码示例
+五、Kotlin 代码示例
+import ai.aci.core.*
 class MyAciService : BaseACIService() {
-    override fun onCreateCapabilities(): List<Capability> = listOf(
-        Capability.create("echo")
-            .setDescription("回显文本")
-            .addParam("text", "string", true, "要回显的内容"),
-        Capability.create("danger_action")
-            .setDescription("危险操作示例")
-            .setUserConfirm(true)   // 需用户在控制方确认
-    )
-    override fun onCall(req: ACIRequest, res: ACIResponse) {
-        when (req.capability) {
+    override fun onCreateCapabilities(caps: MutableList<Capability>) {
+        caps.add(
+            Capability.create("echo", "回显文本")   // 第 1 参=id，第 2 参=描述（不是版本号！）
+                .addParam("text", "string", true, "要回显的内容")
+                .addResult("reply", "string", "回显结果")
+        )
+        caps.add(
+            Capability.create("danger_action", "危险操作示例")
+                .setUserConfirm(true)   // 需用户在控制方确认
+                .addResult("ok", "boolean", "是否执行成功")
+        )
+    }
+    override fun onCall(req: ACIRequest?): ACIResponse {
+        val capability = req?.capability ?: return ACIResponse.error(ACIError.REQUEST_NULL, "null")
+        return when (capability) {
             "echo" -> {
-                val text = req.params.getString("text") ?: ""
-                res.success("你发了：${'$'}text")
+                val text = req.params?.getString("text") ?: ""
+                ACIResponse.success(android.os.Bundle())
+                    .putResult("reply", "你发了：${'$'}text")
             }
             "danger_action" -> {
-                // 服务端兜底：基类不会自动拦截 isRequireUserConfirm，
-                // 必须自己查 user_confirmed 再执行真实动作。
-                if (!req.params.getBoolean("user_confirmed", false)) {
-                    res.denied("需要用户确认")
-                    return
-                }
-                res.success("已执行危险动作")
+                // 服务端兜底：危险能力务必在 onCall 内校验 user_confirmed，防被绕过
+                val confirmed = req.params?.getBoolean("user_confirmed", false) ?: false
+                if (!confirmed) return ACIResponse.error(ACIError.BAD_REQUEST, "需要用户确认")
+                ACIResponse.success(android.os.Bundle()).putResult("ok", true)
             }
-            else -> res.notFound("未知能力：${'$'}{req.capability}")
+            else -> ACIResponse.error(ACIError.CAPABILITY_NOT_FOUND, "未知能力：${'$'}capability")
         }
     }
 }
-// 被控 App 处于 stopped 态时，注册会发 ACI 唤醒广播（FLAG_INCLUDE_STOPPED_PACKAGES）拉起进程；
+// 被控 App 处于 stopped 态时，控制方注册会发 ACI 唤醒广播（FLAG_INCLUDE_STOPPED_PACKAGES）拉起进程；
 // 你也可在 MainActivity 里直接 startService(MyAciService::class.java) 预热。
 
-五、能力声明规范
-• id 用小写蛇形（如 open_door）；description 一句话说清用途。
+六、能力声明规范
+• id 用小写蛇形（如 open_door）；Capability.create(id, description) 第 2 参是「描述」，不是版本号。
 • 每个参数 addParam(name, type, required, desc)；type ∈ string/int/boolean/float。
+• 每个返回 addResult(name, type, desc)。
 • 危险能力务必 setUserConfirm(true)，并在 onCall 内校验 user_confirmed（服务端兜底，防被绕过）。
 
-六、控制方如何调用（供你联调）
+七、控制方如何调用（供你联调）
 • Zorv AI 用 aci_call 调用：aci_call(packageName, capability, params)。
 • 危险能力调用前控制方会弹确认框；被控方 onCall 仍要查 user_confirmed。
 
-七、打包与测试清单
+八、打包与测试清单
 ☐ AAR 依赖正确，BaseACIService 可继承
-☐ Manifest 权限 + Service + intent-filter + queries 齐全
+☐ Manifest 声明 3 个 <permission> + 2 个 uses-permission + Service + intent-filter + queries
 ☐ 有可启动 Activity 与有效图标
 ☐ 安装后在 Zorv AI ACT 关联启动「刷新」可见
 ☐ echo 类能力能正常返回值
 ☐ 危险能力在两侧都做了确认
 
-八、排障铁律
+九、排障铁律
 • aci_list 为空：别用 Shizuku / dumpsys / ROOT 排查，确认你已装且 Service 带 ACTION_BIND。
 • 返回 503：绑定生命周期抖动，框架自动重绑，直接重试即可。
-• 能力不出现：确认 onCreateCapabilities 正确返回，且 Service 已运行（stopped 态会被唤醒广播拉起）。
+• 能力不出现：确认 onCreateCapabilities 用「参数式 caps.add(...)」正确填充，且 Service 已运行（stopped 态会被唤醒广播拉起）。
+• 绑定直接失败/秒拒：99% 是 Manifest 漏写 <permission> 定义（CALL / DISCOVER / CALL_DANGEROUS），补上即可。
 """
 
 /**
