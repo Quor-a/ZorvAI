@@ -33,7 +33,7 @@
 > - 🔗 主程序 APK 直链（v1.0.6，已发布）：[ZorvAI-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvAI-debug-v1.0.6.apk)
 > - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.7，已发布）：[ZorvBrowser-aci-debug-v1.0.7.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.7/ZorvBrowser-aci-debug-v1.0.7.apk)
 > - 🔗 主程序 APK（v1.0.12，已发布）：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
-> - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.11，已发布）：[ZorvBrowser-aci-debug-v1.0.11.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.11/ZorvBrowser-aci-debug-v1.0.11.apk)
+> - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.12，已发布）：[ZorvBrowser-aci-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvBrowser-aci-debug-v1.0.12.apk)
 > - 🔗 主程序 APK（v1.0.9，待发版）：[ZorvAI-debug-v1.0.9.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.9/ZorvAI-debug-v1.0.9.apk)
 > - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.9，待发版）：[ZorvBrowser-aci-debug-v1.0.9.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.9/ZorvBrowser-aci-debug-v1.0.9.apk)
 > - 🧩 ACI 核心库 AAR：[aci-core-release.aar](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/aci-core-release.aar)
@@ -252,7 +252,7 @@ cd QuroAI
 直接从 Release 页面下载最新 APK：
 
 - **v1.0.12（debug，主程序，最新 · 已发布）**：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
-- **v1.0.11（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 已发布）**：[ZorvBrowser-aci-debug-v1.0.11.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.11/ZorvBrowser-aci-debug-v1.0.11.apk)
+- **v1.0.12（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 已发布）**：[ZorvBrowser-aci-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvBrowser-aci-debug-v1.0.12.apk)
 - **v1.0.10（debug，主程序 · 待发版）**：[ZorvAI-debug-v1.0.10.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.10/ZorvAI-debug-v1.0.10.apk)
 - **v1.0.9（debug，主程序 · 待发版）**：[ZorvAI-debug-v1.0.9.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.9/ZorvAI-debug-v1.0.9.apk)
 - **v1.0.9（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 待发版）**：[ZorvBrowser-aci-debug-v1.0.9.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.9/ZorvBrowser-aci-debug-v1.0.9.apk)
@@ -285,6 +285,7 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v1.0.12（浏览器） | 2026-07-30 | **修复 v1.0.11 读取全 500 的静默失败回归**：`browser_open` 不再丢弃 `awaitWebView` 结果、WebView 未就绪时如实返回启动失败（而非谎报 launched=true）；读取守卫超时放宽至 5s 并写入诊断日志；`BrowserActivity.onResume` 增加防御性重注册，防止 Activity 重建后 `BrowserCore` 持有已销毁的 WebView 实例。受控端浏览器同步升级至 v1.0.12 |
 | v1.0.12 | 2026-07-30 | **ACI 被控方接入手册修正 + AAR 链接**：对齐真实 AAR API（`Capability.create(id, 描述)`、`onCreateCapabilities(caps)` 参数式、`onCall(req): ACIResponse` 返回值式）；补 3 个 `<permission>` 必须声明（缺则绑定必失败）；新增「二、依赖获取（aci-core AAR）」段含 AAR 直链、Gradle 依赖、`aci-core` 分支与网页手册；排障铁律补「绑定秒拒=漏写权限定义」 |
 | v1.0.11（浏览器） | 2026-07-30 | **修复 v1.0.10 严重回归（所有读取返回空）+ 地址栏搜索**：根因是 `browser_open` 的 `startActivity` 异步返回、与后续 `browser_read/list/script/crawl/search` 读取 `BrowserCore.displayWv` 的竞态 —— v1.0.10 的 WebSettings 改动拖慢 Activity 启动使竞态必现（open 后立刻读拿到 null → url/title/HTML 全空）。新增 `BrowserCore.awaitWebView(timeoutMs)` 让 `handleOpen` 等 WebView 注册就绪再返回，所有读取操作未就绪时返回明确错误而非空串；另修复地址栏直接输入文字（如「百度」）被当域名补 `https://` 前缀导致 `ERR_NAME_NOT_RESOLVED` → 改为「非 URL 文本走搜索引擎（默认 bing）」 |
 | v1.0.11 | 2026-07-30 | **关于页「检查更新」健壮性增强**：新增「检查中…」可见状态；GitHub API 不可达时自动回退 Gitee 镜像 API（国内网络适配）；失败给出明确报错而非静默；其余保持 v1.0.10 镜像选择流程 |

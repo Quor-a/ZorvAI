@@ -213,19 +213,25 @@ class QuroControlledAciService : BaseACIService() {
         DiagBuffer.append(TAG, "browser_open: url=$url")
         if (url.isEmpty()) return ACIResponse.error(ACIError.BAD_REQUEST, "no url")
 
-        BrowserCore.loadUrl(url)
-
         try {
             startActivity(Intent(this, BrowserActivity::class.java).apply {
                 action = Intent.ACTION_VIEW
                 putExtra("url", url)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             })
+            DiagBuffer.append(TAG, "browser_open: Activity 启动意图已发出")
         } catch (e: Throwable) {
-            DiagBuffer.append(TAG, "browser_open: Activity启动失败 ${e.message}")
+            DiagBuffer.append(TAG, "browser_open: ❌ Activity 启动失败 ${e.message}")
+            return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器 Activity 启动失败：${e.message}")
         }
-        // 【v1.0.11 回归修复】等 WebView 注册就绪再返回，避免后续读取竞态拿到 null
-        BrowserCore.awaitWebView(3000)
+        // 【v1.0.12 修复】实实在在地等 WebView 注册就绪；超时则如实返回失败，
+        // 不再假装 launched=true（v1.0.11 丢弃 await 结果 → 「launched=true 但读取全 500」）。
+        val wv = BrowserCore.awaitWebView(5000)
+        if (wv == null) {
+            DiagBuffer.append(TAG, "browser_open: ❌ 超时(5s) displayWv 仍为空，Activity 可能未创建或已销毁")
+            return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器启动超时：Activity 未在 5s 内就绪（displayWv 为空），请确认 ZorvAI 浏览器已安装且未被系统回收")
+        }
+        DiagBuffer.append(TAG, "browser_open: ✅ WebView 已就绪 (launched=true)")
         return ACIResponse.success(Bundle()).putResult("launched", true)
     }
 
@@ -237,7 +243,8 @@ class QuroControlledAciService : BaseACIService() {
      */
     private fun handleRead(): ACIResponse {
         // 【v1.0.11 回归修复】读前先确认 WebView 已就绪，否则给明确错误而非返回空串
-        if (BrowserCore.awaitWebView(2000) == null) {
+        if (BrowserCore.awaitWebView(5000) == null) {
+            DiagBuffer.append(TAG, "read-guard: ❌ displayWv 为空（await 5000 超时）—— browser_open 的 Activity 可能未启动或已销毁")
             return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：无活动页面，请先调用 browser_open")
         }
         val raw = BrowserCore.readHtml()
@@ -291,7 +298,8 @@ class QuroControlledAciService : BaseACIService() {
 
     /** 爬虫：抓取当前页结构化数据。 */
     private fun handleCrawl(): ACIResponse {
-        if (BrowserCore.awaitWebView(2000) == null) {
+        if (BrowserCore.awaitWebView(5000) == null) {
+            DiagBuffer.append(TAG, "read-guard: ❌ displayWv 为空（await 5000 超时）—— browser_open 的 Activity 可能未启动或已销毁")
             return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：无活动页面，请先调用 browser_open")
         }
         val raw = BrowserCore.crawlPage()
@@ -327,7 +335,8 @@ class QuroControlledAciService : BaseACIService() {
             else -> "https://www.bing.com/search?q=$enc"
         }
         // 【v1.0.11 回归修复】检索需要先把结果页载入 WebView，先确认就绪
-        if (BrowserCore.awaitWebView(2000) == null) {
+        if (BrowserCore.awaitWebView(5000) == null) {
+            DiagBuffer.append(TAG, "read-guard: ❌ displayWv 为空（await 5000 超时）—— browser_open 的 Activity 可能未启动或已销毁")
             return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：无活动页面，请先调用 browser_open")
         }
         BrowserCore.loadUrl(url)
@@ -351,7 +360,8 @@ class QuroControlledAciService : BaseACIService() {
         val code = params?.getString("code") ?: ""
         DiagBuffer.append(TAG, "browser_script: codeLen=${code.length}")
         if (code.isEmpty()) return ACIResponse.error(ACIError.BAD_REQUEST, "no code")
-        if (BrowserCore.awaitWebView(2000) == null) {
+        if (BrowserCore.awaitWebView(5000) == null) {
+            DiagBuffer.append(TAG, "read-guard: ❌ displayWv 为空（await 5000 超时）—— browser_open 的 Activity 可能未启动或已销毁")
             return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：无活动页面，请先调用 browser_open")
         }
         val raw = BrowserCore.evalScript(code)
@@ -373,7 +383,8 @@ class QuroControlledAciService : BaseACIService() {
     }
 
     private fun handleList(): ACIResponse {
-        if (BrowserCore.awaitWebView(2000) == null) {
+        if (BrowserCore.awaitWebView(5000) == null) {
+            DiagBuffer.append(TAG, "read-guard: ❌ displayWv 为空（await 5000 超时）—— browser_open 的 Activity 可能未启动或已销毁")
             return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：无活动页面，请先调用 browser_open")
         }
         return ACIResponse.success(Bundle())

@@ -231,6 +231,13 @@ class BrowserActivity : Activity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 【v1.0.12 防御】每次回到前台都确保 displayWv 指向当前 WebView，
+        // 防止 Activity 被系统重建后 BrowserCore 仍持有已销毁的旧实例 → 读取 500。
+        webView?.let { BrowserCore.registerDisplayWebView(it) }
+    }
+
     override fun onDestroy() {
         BrowserCore.aiEyeListener = null
         BrowserCore.unregisterDisplayWebView()
