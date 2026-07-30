@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicReference
 import org.json.JSONObject
 
 /**
- * 浏览器内核（v6 · 权限自动授权 + 引擎信息 + AI 眼睛事件通道 + 读取时序/标题修正）。
+ * 浏览器内核（v7 · 权限自动授权 + 引擎信息 + AI 眼睛事件通道 + 读取时序/标题修正 + 爬虫/脚本）。
  *
  * 职责：
  * 1. 持有 Activity 传来的显示 WebView 引用（供 ACI readHtml / getUrl / getTitle 使用）。
@@ -228,5 +228,70 @@ object BrowserCore {
         return try {
             JSONObject("{\"_v\":$s}").getString("_v")
         } catch (_: Throwable) { s }
+    }
+
+    /**
+     * 爬虫核心（v7 新增）：抓取当前页结构化数据 —— 标题 + 可读正文 + 出站链接。
+     * 在页内用 DOM 提取并 JSON.stringify 返回，正文超 200k 字符先在 JS 侧截断，
+     * 避免 WebView evaluateJavascript 返回值上限；出站链接上限 500 条。
+     */
+    fun crawlPage(): String {
+        val ref = AtomicReference("")
+        val latch = CountDownLatch(1)
+        mainHandler.post {
+            val wv = displayWv
+            if (wv == null) { latch.countDown(); return@post }
+            val start = System.currentTimeMillis()
+            val grab: () -> Unit = {
+                val js = """
+(function(){
+  try {
+    var title = document.title || '';
+    var url = location.href || '';
+    var root = document.querySelector('article') || document.querySelector('main') || document.body;
+    var text = (root ? root.innerText : '') || '';
+    text = text.replace(/\s+/g, ' ').trim();
+    if (text.length > 200000) text = text.slice(0, 200000);
+    var as = document.querySelectorAll('a');
+    var max = Math.min(as.length, 500);
+    var links = [];
+    for (var i = 0; i < max; i++) {
+      var a = as[i];
+      var href = a.href || '';
+      var t = (a.innerText || a.textContent || '').trim();
+      if (href && t) links.push({text: t, href: href});
+    }
+    return JSON.stringify({url:url, title:title, text:text, links:links, linkCount:as.length});
+  } catch(e) { return JSON.stringify({error:String(e)}); }
+})()
+"""
+                wv.evaluateJavascript(js) { res -> ref.set(jsonUnescape(res ?: "")); latch.countDown() }
+            }
+            val poll = object : Runnable {
+                override fun run() {
+                    wv.evaluateJavascript("(function(){return document.readyState;})()") { state ->
+                        val s = jsonUnescape(state ?: "")
+                        if (s == "complete" || s == "interactive" || System.currentTimeMillis() - start >= 3000) grab()
+                        else mainHandler.postDelayed(this, 150)
+                    }
+                }
+            }
+            poll.run()
+        }
+        try { latch.await() } catch (_: InterruptedException) {}
+        return ref.get() ?: ""
+    }
+
+    /** 在当前页面执行任意 JavaScript 并返回结果（v7 脚本能力）。 */
+    fun evalScript(code: String): String {
+        val ref = AtomicReference("")
+        val latch = CountDownLatch(1)
+        mainHandler.post {
+            val wv = displayWv
+            if (wv == null) { latch.countDown(); return@post }
+            wv.evaluateJavascript(code) { res -> ref.set(jsonUnescape(res ?: "")); latch.countDown() }
+        }
+        try { latch.await() } catch (_: InterruptedException) {}
+        return ref.get() ?: ""
     }
 }

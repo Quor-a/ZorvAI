@@ -7,9 +7,11 @@ import ai.aci.core.BaseACIService
 import ai.aci.core.Capability
 import android.content.Intent
 import android.os.Bundle
+import org.json.JSONObject
+import java.net.URLEncoder
 
 /**
- * ACI 受控端 Service（v6 · Binder 溢出修复：html 安全截断 + gzip 二进制回传）。
+ * ACI 受控端 Service（v7 · 新增 browser_crawl / browser_search / browser_script 三类能力）。
  *
  * 核心改进（针对 v4 诊断结果：Activity 正常但 Service 可能 onCreate 崩溃导致绑不上）：
  * 1. super.onCreate() 也包 try-catch —— 基类内部调 onCreateCapabilities，任何异常都会炸掉整个 Service
@@ -80,6 +82,60 @@ class QuroControlledAciService : BaseACIService() {
             fail++; DiagBuffer.append(TAG, "✗ browser_read: ${e.message}")
         }
 
+        // browser_crawl（v7 新增：爬虫）
+        try {
+            caps.add(
+                Capability.create("browser_crawl", "抓取当前页结构化数据：标题 + 可读正文 + 出站链接（AI 检索/爬虫用）")
+                    .addResult("url", "string", "当前网址")
+                    .addResult("title", "string", "页面标题")
+                    .addResult("text", "string", "页面正文（截断到约15万字符）")
+                    .addResult("links", "string", "出站链接 JSON 数组 [{text,href}]")
+                    .addResult("link_count", "string", "页面链接总数")
+                    .addResult("truncated", "boolean", "正文是否被截断")
+                    .addFlag(Capability.FLAG_BACKGROUND)
+                    .addFlag(Capability.FLAG_NO_UI)
+            )
+            ok++; DiagBuffer.append(TAG, "✓ browser_crawl")
+        } catch (e: Throwable) {
+            fail++; DiagBuffer.append(TAG, "✗ browser_crawl: ${e.message}")
+        }
+
+        // browser_search（v7 新增：检索/搜索）
+        try {
+            caps.add(
+                Capability.create("browser_search", "用搜索引擎检索关键词，返回结果页的标题/正文/链接")
+                    .addParam("query", "string", true, "检索词")
+                    .addParam("engine", "string", false, "搜索引擎：bing/google/baidu/ddg，默认 bing")
+                    .addResult("query", "string", "检索词")
+                    .addResult("engine", "string", "实际使用的引擎")
+                    .addResult("url", "string", "实际打开的检索 URL")
+                    .addResult("title", "string", "结果页标题")
+                    .addResult("text", "string", "结果页正文（截断）")
+                    .addResult("links", "string", "结果链接 JSON 数组")
+                    .addResult("truncated", "boolean", "是否截断")
+                    .addFlag(Capability.FLAG_BACKGROUND)
+                    .addFlag(Capability.FLAG_NO_UI)
+            )
+            ok++; DiagBuffer.append(TAG, "✓ browser_search")
+        } catch (e: Throwable) {
+            fail++; DiagBuffer.append(TAG, "✗ browser_search: ${e.message}")
+        }
+
+        // browser_script（v7 新增：脚本/执行 JS）
+        try {
+            caps.add(
+                Capability.create("browser_script", "在当前页面执行任意 JavaScript 并返回结果（脚本能力）")
+                    .addParam("code", "string", true, "要执行的 JS 代码（表达式或 IIFE 返回结果）")
+                    .addResult("result", "string", "JS 执行结果（JSON 字符串形式，已截断）")
+                    .addResult("truncated", "boolean", "结果是否被截断")
+                    .addFlag(Capability.FLAG_BACKGROUND)
+                    .addFlag(Capability.FLAG_NO_UI)
+            )
+            ok++; DiagBuffer.append(TAG, "✓ browser_script")
+        } catch (e: Throwable) {
+            fail++; DiagBuffer.append(TAG, "✗ browser_script: ${e.message}")
+        }
+
         // browser_list
         try {
             caps.add(
@@ -134,6 +190,9 @@ class QuroControlledAciService : BaseACIService() {
             when (cap) {
                 "browser_open" -> handleOpen(req.params)
                 "browser_read" -> handleRead()
+                "browser_crawl" -> handleCrawl()
+                "browser_search" -> handleSearch(req.params)
+                "browser_script" -> handleScript(req.params)
                 "browser_list" -> handleList()
                 "browser_info" -> handleInfo()
                 else -> {
@@ -199,6 +258,92 @@ class QuroControlledAciService : BaseACIService() {
             }
         }
         return resp
+    }
+
+    /** 把 crawlPage 返回的 JSON 拆成结构化字段（容错：缺字段/解析失败给 error）。 */
+    private data class CrawlResult(
+        val url: String, val title: String, val text: String, val links: String, val linkCount: Int, val err: String?
+    )
+    private fun parseCrawl(raw: String): CrawlResult {
+        if (raw.isEmpty()) return CrawlResult("", "", "", "[]", 0, "empty")
+        return try {
+            val o = JSONObject(raw)
+            if (o.has("error")) return CrawlResult("", "", "", "[]", 0, o.optString("error"))
+            val linksArr = o.optJSONArray("links")
+            CrawlResult(
+                o.optString("url", ""),
+                o.optString("title", ""),
+                o.optString("text", ""),
+                linksArr?.toString() ?: "[]",
+                o.optInt("linkCount", 0),
+                null
+            )
+        } catch (e: Throwable) {
+            CrawlResult("", "", "", "[]", 0, "parse:${e.message}")
+        }
+    }
+
+    /** 爬虫：抓取当前页结构化数据。 */
+    private fun handleCrawl(): ACIResponse {
+        val raw = BrowserCore.crawlPage()
+        DiagBuffer.append(TAG, "browser_crawl: rawLen=${raw.length}")
+        val c = parseCrawl(raw)
+        val resp = ACIResponse.success(Bundle())
+        if (c.err != null) {
+            resp.putResult("error", c.err)
+            return resp
+        }
+        val truncated = c.text.length > 150_000
+        val safe = if (truncated) c.text.take(150_000) + "\n…[正文已截断，完整内容见 browser_read]" else c.text
+        resp.putResult("url", c.url)
+            .putResult("title", c.title)
+            .putResult("text", safe)
+            .putResult("links", c.links)
+            .putResult("link_count", "${c.linkCount}")
+            .putResult("truncated", truncated)
+        return resp
+    }
+
+    /** 检索：用搜索引擎查词，返回结果页结构化数据。 */
+    private fun handleSearch(params: Bundle?): ACIResponse {
+        val q = params?.getString("query") ?: ""
+        DiagBuffer.append(TAG, "browser_search: query=$q")
+        if (q.isEmpty()) return ACIResponse.error(ACIError.BAD_REQUEST, "no query")
+        val engine = (params?.getString("engine") ?: "bing").lowercase()
+        val enc = URLEncoder.encode(q, "UTF-8")
+        val url = when (engine) {
+            "google" -> "https://www.google.com/search?q=$enc"
+            "baidu" -> "https://www.baidu.com/s?wd=$enc"
+            "ddg", "duckduckgo" -> "https://duckduckgo.com/?q=$enc"
+            else -> "https://www.bing.com/search?q=$enc"
+        }
+        BrowserCore.loadUrl(url)
+        val raw = BrowserCore.crawlPage()
+        val c = parseCrawl(raw)
+        val resp = ACIResponse.success(Bundle())
+            .putResult("query", q)
+            .putResult("engine", engine)
+            .putResult("url", if (c.url.isEmpty()) url else c.url)
+            .putResult("title", c.title)
+        val truncated = c.text.length > 150_000
+        resp.putResult("text", if (truncated) c.text.take(150_000) else c.text)
+            .putResult("links", c.links)
+            .putResult("truncated", truncated)
+        if (c.err != null) resp.putResult("error", c.err)
+        return resp
+    }
+
+    /** 脚本：在当前页执行任意 JS 并返回结果。 */
+    private fun handleScript(params: Bundle?): ACIResponse {
+        val code = params?.getString("code") ?: ""
+        DiagBuffer.append(TAG, "browser_script: codeLen=${code.length}")
+        if (code.isEmpty()) return ACIResponse.error(ACIError.BAD_REQUEST, "no code")
+        val raw = BrowserCore.evalScript(code)
+        val truncated = raw.length > 150_000
+        val safe = if (truncated) raw.take(150_000) + "\n…[结果已截断]" else raw
+        return ACIResponse.success(Bundle())
+            .putResult("result", safe)
+            .putResult("truncated", truncated)
     }
 
     /** gzip 压缩（受控端用，绕过 AIDL ~1MB 限制）。 */
