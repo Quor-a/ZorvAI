@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 应用名（v8 · 改名 ZorvAI 浏览器） -->
+    <string name="app_name">ZorvAI 浏览器</string>
+    <string name="browser_label">ZorvAI 浏览器</string>
+    <string name="address_hint">输入网址，如 https://…</string>
+</resources>

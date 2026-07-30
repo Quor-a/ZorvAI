@@ -1,29 +1,161 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- BrowserActivity 布局：根层 FrameLayout + 内嵌 WebView。
-     用 XML 而非代码创建 View 是 Android 最可靠的渲染路径，
-     避免程序化创建 WebView 在某些 ROM 上的兼容性问题。 -->
+<!-- ZorvAI 浏览器 v8 布局：
+     - 顶部工具栏（可收缩）：≡折叠钮 + 地址栏 + Go + 刷新 + 日志钮
+     - 中部 WebView（占满剩余空间）
+     - 底部 AI「眼睛」面板：眼睛指示灯 + AI 状态 + 「发给 AI」按钮
+     - 收缩后浮出右上角展开钮
+     - 顶部可切换调试 HUD（旧黄色诊断条升级版）
+     全部使用平台 Widget（本模块不依赖 AppCompat），避免 WebView 在某些 ROM 崩溃。 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/browser_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#FFFFFF">
 
-    <WebView
-        android:id="@+id/webview"
+    <LinearLayout
+        android:id="@+id/main_ui"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-    <!-- 诊断状态条（v4 · 默认可见，便于用户截图反馈，不依赖文件日志） -->
-    <TextView
-        android:id="@+id/status_text"
+        <!-- 顶部工具栏（可收缩） -->
+        <LinearLayout
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="#0B2A3A"
+            android:padding="6dp"
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/btn_collapse"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:text="≡"
+                android:textSize="22sp"
+                android:textColor="#FFFFFF"
+                android:background="@android:color/transparent" />
+
+            <EditText
+                android:id="@+id/address_bar"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="4dp"
+                android:background="#FFFFFF"
+                android:paddingHorizontal="10dp"
+                android:textSize="14sp"
+                android:textColor="#0A0A0A"
+                android:hint="@string/address_hint"
+                android:inputType="textUri"
+                android:imeOptions="actionGo"
+                android:singleLine="true" />
+
+            <Button
+                android:id="@+id/btn_go"
+                android:layout_width="48dp"
+                android:layout_height="40dp"
+                android:text="Go"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:background="@android:color/transparent" />
+
+            <Button
+                android:id="@+id/btn_reload"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:text="⟳"
+                android:textSize="18sp"
+                android:textColor="#FFFFFF"
+                android:background="@android:color/transparent" />
+
+            <Button
+                android:id="@+id/btn_log"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:text="⌗"
+                android:textSize="18sp"
+                android:textColor="#FFFFFF"
+                android:background="@android:color/transparent" />
+        </LinearLayout>
+
+        <!-- 主WebView -->
+        <WebView
+            android:id="@+id/webview"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- 底部 AI 眼睛面板 -->
+        <LinearLayout
+            android:id="@+id/eye_panel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="#06121F"
+            android:padding="8dp"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/eye_indicator"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="👁"
+                android:textSize="22sp"
+                android:textColor="#556070" />
+
+            <TextView
+                android:id="@+id/ai_status"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="8dp"
+                android:textColor="#CFE8F0"
+                android:textSize="12sp"
+                android:text="AI 状态：待命（可被 ZorvAI 经 ACI 远程控制）" />
+
+            <Button
+                android:id="@+id/btn_share_ai"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="发给 AI"
+                android:textSize="12sp"
+                android:textColor="#22D3EE"
+                android:background="@android:color/transparent" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 收缩后浮出的展开钮 -->
+    <Button
+        android:id="@+id/btn_expand"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="12dp"
+        android:text="≡"
+        android:textSize="22sp"
+        android:textColor="#FFFFFF"
+        android:background="#0B2A3A"
+        android:visibility="gone" />
+
+    <!-- 可切换调试 HUD（旧诊断条升级：默认隐藏，点 ⌗ 显示） -->
+    <ScrollView
+        android:id="@+id/debug_panel"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="170dp"
         android:layout_gravity="top"
-        android:padding="10dp"
-        android:textSize="11sp"
-        android:textColor="#0A0A0A"
-        android:gravity="start"
-        android:visibility="visible"
-        android:background="#CCFFEB3B" />
+        android:layout_marginTop="56dp"
+        android:background="#CCFFEB3B"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/status_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:textSize="11sp"
+            android:textColor="#0A0A0A" />
+    </ScrollView>
 
 </FrameLayout>

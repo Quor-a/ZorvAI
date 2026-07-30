@@ -31,7 +31,7 @@
 >
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
 > - 🔗 最新版主程序 APK 直链：[ZorvAI-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvAI-debug-v1.0.6.apk)
-> - 🔗 受控端浏览器 APK：[ZorvBrowser-aci-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvBrowser-aci-debug-v1.0.6.apk)
+> - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.7）：[ZorvBrowser-aci-debug-v1.0.7.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.7/ZorvBrowser-aci-debug-v1.0.7.apk)
 > - 🧩 ACI 核心库 AAR：[aci-core-release.aar](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/aci-core-release.aar)
 > - 📖 ACI 开发者手册：[docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md)
 > - 🐛 问题反馈：[github.com/Quor-a/ZorvAI/issues](https://github.com/Quor-a/ZorvAI/issues)
@@ -232,7 +232,7 @@ cd QuroAI
 直接从 Release 页面下载最新 APK：
 
 - **v1.0.6（debug，主程序，最新）**：[ZorvAI-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvAI-debug-v1.0.6.apk)
-- **v1.0.6（debug，受控端浏览器 ACI）**：[ZorvBrowser-aci-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvBrowser-aci-debug-v1.0.6.apk)
+- **v1.0.7（debug，受控端浏览器 ACI · ZorvAI 浏览器）**：[ZorvBrowser-aci-debug-v1.0.7.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.7/ZorvBrowser-aci-debug-v1.0.7.apk)
 - **v1.0.6 附带的 ACI 核心库 AAR**：[aci-core-release.aar](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/aci-core-release.aar)
 - **v1.0.5（debug）**：[ZorvAI-debug-v1.0.5.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.5/ZorvAI-debug-v1.0.5.apk)
 - **v1.0.2（debug）**：[QuroAI-v1.0.2-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.2/QuroAI-v1.0.2-debug.apk)
@@ -260,6 +260,7 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | v1.0.6 | 2026-07-30 | **开放 ACI（Agent Capability Interface）**：新增受控端浏览器模块 `aci-browser`、控制端 `QuroAciManager` 修复 stopped-state 唤醒（bindWithWake）、`Capability.create` 描述修复、ACI 开发者手册与 `aci-core` 开源分支/AAR、Gitee 镜像推送 |
+| v1.0.7 | 2026-07-30 | **受控端浏览器升级为「ZorvAI 浏览器」**：同源深青渐变「Z」图标 + 应用改名；新增顶部工具栏折叠/展开、底部 AI「眼睛」面板（ACI 调用时点亮）、「发给 AI」内容传输管道；WebView 站点权限（定位/相机/麦克风）自动授权；暴露引擎信息（UA / WebView 版本）；修复 `gradle-wrapper.jar` 缺失使 `./gradlew` 恢复可用 |
 | v1.0.5 | 2026-07-30 | 仓库更名 ZorvAI、品牌视觉统一、关于页「检查更新」真实联网检测、全仓 URL 修正、开源地址与搜索可见性优化 |
 | v1.0.2 | 2026-07-29 | Shizuku 授权按钮修复、AI 键盘输入通道、权限模型引导、GeckoView 内置浏览器、记忆库与 CMS v2 能力模块 |
 

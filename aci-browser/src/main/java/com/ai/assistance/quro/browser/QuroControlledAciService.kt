@@ -127,6 +127,8 @@ class QuroControlledAciService : BaseACIService() {
         }
         val cap = req.capability
         DiagBuffer.append(TAG, "onCall: capability=$cap")
+        // 点亮 AI「眼睛」：通知 Activity 底部指示灯进入「控制中」状态
+        BrowserCore.reportAiActivity("ACI 调用能力：$cap")
 
         return try {
             when (cap) {

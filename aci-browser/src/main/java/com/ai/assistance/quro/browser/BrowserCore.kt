@@ -1,18 +1,27 @@
 package com.ai.assistance.quro.browser
 
 import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.webkit.GeolocationPermissions
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * 浏览器内核（v3 · 简化版）。
+ * 浏览器内核（v4 · 权限自动授权 + 引擎信息 + AI 眼睛事件通道）。
  *
  * 职责：
  * 1. 持有 Activity 传来的显示 WebView 引用（供 ACI readHtml / getUrl / getTitle 使用）。
  * 2. 后台 loadUrl 操作（经主线程 Handler 切到 UI 线程）。
+ * 3. 【v4 新增】注册时为 WebView 挂 WebChromeClient，对站点请求的 定位 / 相机 / 麦克风
+ *    权限统一「自动授予」并写入诊断日志 —— 对应「没有权限又先网站需要权限」的场景。
+ * 4. 【v4 新增】暴露引擎信息（getUserAgent / getEngineInfo）。
+ * 5. 【v4 新增】AI「眼睛」事件通道：Service 在 ACI onCall 时调用 reportAiActivity()，
+ *    BrowserActivity 注册的 AiEyeListener 收到后点亮底部眼睛指示灯。
  *
  * 不再自己创建/管理 WebView 实例 —— 创建和生命周期全交给 BrowserActivity（XML 布局）。
  * 这消除了 v1/v2 中「applicationContext WebView → Activity 不渲染」的根因。
@@ -23,15 +32,74 @@ object BrowserCore {
     @Volatile private var displayWv: WebView? = null   // Activity 的显示 WebView
     @Volatile private var appContext: Context? = null
 
+    // ── AI「眼睛」事件通道 ──
+    interface AiEyeListener {
+        /** active=true 表示 AI 正在控制；message 为可读的当前动作描述。 */
+        fun onAiEyeChange(active: Boolean, message: String)
+    }
+
+    @Volatile var aiEyeListener: AiEyeListener? = null
+    private val eyeIdleHandler = Handler(Looper.getMainLooper())
+    private val eyeResetRunnable = Runnable { aiEyeListener?.onAiEyeChange(false, "") }
+
+    /** Service 在收到 ACI 调用时调用，点亮眼睛；4 秒无新活动自动熄灭。 */
+    fun reportAiActivity(message: String) {
+        mainHandler.post {
+            aiEyeListener?.onAiEyeChange(true, message)
+            eyeIdleHandler.removeCallbacks(eyeResetRunnable)
+            eyeIdleHandler.postDelayed(eyeResetRunnable, 4000)
+        }
+    }
+
     @Synchronized
     fun init(context: Context) {
         if (appContext == null) appContext = context.applicationContext
     }
 
-    /** BrowserActivity 把 XML 里的 WebView 注册过来，供 ACI 调用读取。 */
+    /** BrowserActivity 把 XML 里的 WebView 注册过来，并挂上权限自动授权的 WebChromeClient。 */
     @Synchronized
     fun registerDisplayWebView(wv: WebView) {
         displayWv = wv
+        try {
+            val s = wv.settings
+            s.javaScriptEnabled = true
+            s.domStorageEnabled = true
+            // 定位权限需要 geolocation 数据库支持
+            s.setGeolocationEnabled(true)
+            s.loadsImagesAutomatically = true
+
+            wv.webChromeClient = object : WebChromeClient() {
+                // 站点请求定位 → 自动授予（不弹系统授权框）
+                override fun onGeolocationPermissionsShowPrompt(
+                    origin: String?,
+                    callback: GeolocationPermissions.Callback?
+                ) {
+                    callback?.invoke(origin, true, false)
+                    DiagBuffer.append("Perm", "🌐 自动授权定位: ${origin ?: "?"}")
+                    reportAiActivity("站点请求定位，已自动授权")
+                }
+
+                // 站点请求相机 / 麦克风等 → 自动授予
+                override fun onPermissionRequest(request: PermissionRequest?) {
+                    if (request == null) return
+                    try {
+                        val res = request.resources
+                        request.grant(res)
+                        DiagBuffer.append("Perm", "🎥 自动授权媒体权限: ${res.joinToString()}")
+                        reportAiActivity("站点请求媒体权限，已自动授权")
+                    } catch (e: Throwable) {
+                        DiagBuffer.append("Perm", "⚠️ 授权失败: ${e.message}")
+                        try { request.deny() } catch (_: Throwable) {}
+                    }
+                }
+
+                override fun onPermissionRequestCanceled(request: PermissionRequest?) {
+                    DiagBuffer.append("Perm", "↩ 媒体权限请求已取消")
+                }
+            }
+        } catch (e: Throwable) {
+            DiagBuffer.append("Core", "⚠️ 挂 WebChromeClient 失败: ${e.message}")
+        }
     }
 
     /** Activity 销毁时注销。 */
@@ -42,6 +110,39 @@ object BrowserCore {
 
     /** 获取当前显示 WebView（可能为 null，如果 Activity 未创建/已销毁）。 */
     fun getWebView(): WebView? = displayWv
+
+    // ── 引擎信息（对应「看看还有哪些引擎构架的适合浏览器的都用」）──
+
+    /** 当前 UA 串。 */
+    fun getUserAgent(): String {
+        val ref = AtomicReference("")
+        val latch = CountDownLatch(1)
+        mainHandler.post { ref.set(displayWv?.settings?.userAgentString ?: ""); latch.countDown() }
+        try { latch.await() } catch (_: InterruptedException) {}
+        return ref.get() ?: ""
+    }
+
+    /** 引擎诊断：当前用的是系统 WebView 还是其它内核，含版本。 */
+    fun getEngineInfo(): String {
+        val ref = AtomicReference("")
+        val latch = CountDownLatch(1)
+        mainHandler.post {
+            try {
+                val pkg = WebView.getCurrentWebViewPackage()
+                val ver = pkg?.versionName ?: "unknown"
+                val pkgName = pkg?.packageName ?: "unknown"
+                ref.set(
+                    "engine=SystemWebView | package=$pkgName | version=$ver | " +
+                    "androidApi=${Build.VERSION.SDK_INT} | ua=${displayWv?.settings?.userAgentString ?: ""}"
+                )
+            } catch (e: Throwable) {
+                ref.set("engineErr=${e.message}")
+            }
+            latch.countDown()
+        }
+        try { latch.await() } catch (_: InterruptedException) {}
+        return ref.get() ?: ""
+    }
 
     // ── ACI 调用入口 ──
 
