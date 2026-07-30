@@ -27,13 +27,16 @@
 
 ## 🌐 开源地址 · Open Source
 
-> **本项目完全开源，仓库地址：[github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI)**
+> **本项目完全开源，GitHub 仓库：[github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI) ｜ Gitee 镜像：[gitee.com/Quor-a/ZorvAI](https://gitee.com/Quor-a/ZorvAI)**
 >
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
-> - 🔗 最新版 APK 直链：[ZorvAI-debug-v1.0.5.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.5/ZorvAI-debug-v1.0.5.apk)
+> - 🔗 最新版主程序 APK 直链：[ZorvAI-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvAI-debug-v1.0.6.apk)
+> - 🔗 受控端浏览器 APK：[ZorvBrowser-aci-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvBrowser-aci-debug-v1.0.6.apk)
+> - 🧩 ACI 核心库 AAR：[aci-core-release.aar](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/aci-core-release.aar)
+> - 📖 ACI 开发者手册：[docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md)
 > - 🐛 问题反馈：[github.com/Quor-a/ZorvAI/issues](https://github.com/Quor-a/ZorvAI/issues)
 >
-> 关键词：**Zorv AI 开源 / 安卓 AI 助手 开源 / Android AI agent open source / 本地 AI 智能体 / 设备端 AI Agent / Kotlin Compose LLM 助手**
+> 关键词：**Zorv AI 开源 / 安卓 AI 助手 开源 / Android AI agent open source / 本地 AI 智能体 / 设备端 AI Agent / Kotlin Compose LLM 助手 / ACI 跨应用调用**
 
 ---
 
@@ -141,6 +144,32 @@ CMS 引擎是一套**共享运行时**供给机制，按需在设备上提供 **
 
 ---
 
+## 🔌 ACI · 智能体能力接口（开放调用）
+
+Zorv AI 内置 **ACI（Agent Capability Interface）** —— 一套同设备、无 Root、基于 AIDL Binder 的本地跨应用调用框架。任何 Android App 都能通过 `aci-core` 库把自己暴露成「可被 AI 调用的能力」，由 Zorv AI 的 LLM 自动编排。
+
+- 📖 **开发者手册**：[docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md) —— 受控端 5 步接入、能力定义、权限模型、真实踩坑。
+- 📦 **`aci-core` AAR**：随 **v1.0.6+ Release** 提供 `aci-core-release.aar`；开源独立分支 `aci-core` 提供完整可构建源码。
+- 🌿 **开源分支**：`git checkout aci-core` 即可拿到一个可独立 `./gradlew assembleRelease` 的 Android 库工程。
+
+**受控端最小接入（Kotlin）：**
+
+```kotlin
+class MyAciService : BaseACIService() {
+    override fun onCreateCapabilities(caps: MutableList<Capability>) {
+        caps.add(Capability.create("open_url", "在浏览器打开指定网址")
+            .addParam("url", "string", true, "目标网址")
+            .addFlag(Capability.FLAG_BACKGROUND))
+    }
+    override fun onCall(req: ACIRequest): ACIResponse =
+        ACIResponse.success().putResult("ok", true)
+}
+```
+
+> ⚠️ `Capability.create(id, description)` 的**第 2 参是给 LLM 的自然语言描述，不是版本号**（方法内部固定 `version="1.0"`）。受控端还需在 Manifest 写 `<queries>` 声明 `ACTION_BIND`/`ACTION_WAKE`，否则 Android 11+ 控制端发现不到。
+
+---
+
 ## 🔐 Privilege Tiers · 特权 / 权限层（L1–L5）
 
 更高层级的系统级执行通道**均需用户显式授权**后才会启用；未授权时返回引导提示，不会静默越权。
@@ -202,8 +231,13 @@ cd QuroAI
 
 直接从 Release 页面下载最新 APK：
 
-- **v1.0.5（debug，最新）**：[ZorvAI-debug-v1.0.5.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.5/ZorvAI-debug-v1.0.5.apk)
+- **v1.0.6（debug，主程序，最新）**：[ZorvAI-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvAI-debug-v1.0.6.apk)
+- **v1.0.6（debug，受控端浏览器 ACI）**：[ZorvBrowser-aci-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvBrowser-aci-debug-v1.0.6.apk)
+- **v1.0.6 附带的 ACI 核心库 AAR**：[aci-core-release.aar](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/aci-core-release.aar)
+- **v1.0.5（debug）**：[ZorvAI-debug-v1.0.5.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.5/ZorvAI-debug-v1.0.5.apk)
 - **v1.0.2（debug）**：[QuroAI-v1.0.2-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.2/QuroAI-v1.0.2-debug.apk)
+
+> 💡 v1.0.6 起开放 **ACI（Agent Capability Interface）**：主程序作为控制端，可调用任意接入 `aci-core` 的受控端 App；受控端浏览器 APK 与 `aci-core-release.aar` 随 Release 一并提供。详见 [ACI 开发者手册](./docs/ACI_DEVELOPER_GUIDE.md)。
 
 > ⚠️ 请务必从官方 Release 页面下载本应用。通过未知渠道获取的安装包可能被篡改，存在隐私泄露风险。
 
@@ -225,6 +259,7 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v1.0.6 | 2026-07-30 | **开放 ACI（Agent Capability Interface）**：新增受控端浏览器模块 `aci-browser`、控制端 `QuroAciManager` 修复 stopped-state 唤醒（bindWithWake）、`Capability.create` 描述修复、ACI 开发者手册与 `aci-core` 开源分支/AAR、Gitee 镜像推送 |
 | v1.0.5 | 2026-07-30 | 仓库更名 ZorvAI、品牌视觉统一、关于页「检查更新」真实联网检测、全仓 URL 修正、开源地址与搜索可见性优化 |
 | v1.0.2 | 2026-07-29 | Shizuku 授权按钮修复、AI 键盘输入通道、权限模型引导、GeckoView 内置浏览器、记忆库与 CMS v2 能力模块 |
 

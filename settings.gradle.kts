@@ -19,4 +19,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Quro AI"
-include(":app")
+include(":app", ":aci-browser")

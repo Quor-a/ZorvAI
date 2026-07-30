@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 受控浏览器专用主题：平台 Material 浅色无标题栏（本模块不依赖 AppCompat）。
+         必须有主题：无主题的 Activity 创建 WebView 时在某些 ROM 上会因资源解析失败而崩溃，
+         进而导致整个进程死亡、ACI Service 随之失活 → ZorvAI 侧显示“未绑定”。 -->
+    <style name="Theme.Browser" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:statusBarColor">@android:color/white</item>
+    </style>
+</resources>

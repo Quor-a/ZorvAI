@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BrowserActivity 布局：根层 FrameLayout + 内嵌 WebView。
+     用 XML 而非代码创建 View 是 Android 最可靠的渲染路径，
+     避免程序化创建 WebView 在某些 ROM 上的兼容性问题。 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/browser_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF">
+
+    <WebView
+        android:id="@+id/webview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- 诊断状态条（v4 · 默认可见，便于用户截图反馈，不依赖文件日志） -->
+    <TextView
+        android:id="@+id/status_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:padding="10dp"
+        android:textSize="11sp"
+        android:textColor="#0A0A0A"
+        android:gravity="start"
+        android:visibility="visible"
+        android:background="#CCFFEB3B" />
+
+</FrameLayout>

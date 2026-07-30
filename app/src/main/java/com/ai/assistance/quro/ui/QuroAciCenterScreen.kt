@@ -26,8 +26,10 @@ import com.ai.assistance.quro.core.tools.QuroDownloadUtil
 import com.ai.assistance.quro.ui.theme.Card as PaperCard
 import com.ai.assistance.quro.ui.theme.Line
 import com.ai.assistance.quro.ui.theme.Muted
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -257,7 +259,13 @@ fun QuroAciCenterScreen(onClose: () -> Unit) {
                             text = "搜索",
                             onClick = {
                                 searched = true
-                                searchResults = mgr.searchInstalledApps(pkgInput.trim())
+                                val kw = pkgInput.trim()
+                                // 后台线程执行（getInstalledApplications + loadLabel 在主线程会 ANR）
+                                scope.launch {
+                                    searchResults = withContext(Dispatchers.IO) {
+                                        mgr.searchInstalledApps(kw)
+                                    }
+                                }
                             },
                             modifier = Modifier.weight(1f),
                         )

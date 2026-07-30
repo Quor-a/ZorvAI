@@ -83,7 +83,7 @@ class QuroAciManager private constructor(private val appContext: Context) {
             result.add(DiscoveredApp(pkg, cls, label))
             nameMap[pkg] = label
             classMap[pkg] = cls
-            doBind(pkg, cls)
+            bindWithWake(pkg, cls)   // 改裸 doBind → 带唤醒，修复停止态绑不上
         }
         return result
     }
@@ -149,6 +149,33 @@ class QuroAciManager private constructor(private val appContext: Context) {
                 Log.i(TAG, "🔄 重绑：$pkg")
                 doBind(pkg, cls)
             }
+        }.start()
+    }
+
+    /**
+     * 带唤醒的绑定（修复「未绑定 / 能力(0)」根因）。
+     *
+     * 旧逻辑：discover()/rebind() 直接调裸 bindService —— 对「停止态」被控 App
+     * （新装 / 重装后从未冷启动）在 ColorOS / Android 11+ 上无法拉起进程，bindService
+     * 静默失败，ACI 中心永远显示未绑定、能力(0)。这正是用户「之前能成现在不行」的症结：
+     * 反复重装受控端使其长期处于 stopped-state，而控制端从不发唤醒广播。
+     *
+     * 新逻辑：先尝试直绑（进程已运行 / 非停止态秒连）；失败则发 ACTION_WAKE
+     * （FLAG_INCLUDE_STOPPED_PACKAGES）把进程拉起，稍候重试绑定。
+     * 全程后台线程，不阻塞调用方（discover/rebind 多由 UI 触发）。
+     */
+    private fun bindWithWake(packageName: String, className: String) {
+        Thread {
+            // 1) 直绑（进程已在跑 / 非停止态直接成功）
+            doBind(packageName, className)
+            try { Thread.sleep(500) } catch (ignored: InterruptedException) {}
+            if (serviceMap[packageName] != null) return@Thread
+
+            // 2) 停止态：唤醒广播拉起进程后再绑
+            Log.i(TAG, "📡 $packageName 初次绑定未成，发唤醒广播后重试")
+            wakeCallee(packageName)
+            try { Thread.sleep(900) } catch (ignored: InterruptedException) {}
+            if (serviceMap[packageName] == null) doBind(packageName, className)
         }.start()
     }
 
@@ -457,7 +484,7 @@ class QuroAciManager private constructor(private val appContext: Context) {
     /** 强制对指定包重绑（供 UI「重绑」按钮；类名缓存缺失则返回 false）。 */
     fun rebind(packageName: String): Boolean {
         val cls = classMap[packageName] ?: return false
-        doBind(packageName, cls)
+        bindWithWake(packageName, cls)   // 改裸 doBind → 带唤醒，重绑按钮也能拉起停止态 App
         return true
     }
 
