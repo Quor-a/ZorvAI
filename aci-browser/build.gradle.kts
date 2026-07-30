@@ -14,8 +14,8 @@ android {
         applicationId = "com.ai.assistance.quro.browser"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.0.9"
+        versionCode = 10
+        versionName = "1.0.10"
         ndk {
             abiFilters += "arm64-v8a"
         }

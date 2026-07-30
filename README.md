@@ -32,6 +32,8 @@
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
 > - 🔗 主程序 APK 直链（v1.0.6，已发布）：[ZorvAI-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvAI-debug-v1.0.6.apk)
 > - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.7，已发布）：[ZorvBrowser-aci-debug-v1.0.7.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.7/ZorvBrowser-aci-debug-v1.0.7.apk)
+> - 🔗 主程序 APK（v1.0.10，待发版）：[ZorvAI-debug-v1.0.10.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.10/ZorvAI-debug-v1.0.10.apk)
+> - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.10，待发版）：[ZorvBrowser-aci-debug-v1.0.10.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.10/ZorvBrowser-aci-debug-v1.0.10.apk)
 > - 🔗 主程序 APK（v1.0.9，待发版）：[ZorvAI-debug-v1.0.9.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.9/ZorvAI-debug-v1.0.9.apk)
 > - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.9，待发版）：[ZorvBrowser-aci-debug-v1.0.9.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.9/ZorvBrowser-aci-debug-v1.0.9.apk)
 > - 🧩 ACI 核心库 AAR：[aci-core-release.aar](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/aci-core-release.aar)
@@ -249,7 +251,9 @@ cd QuroAI
 
 直接从 Release 页面下载最新 APK：
 
-- **v1.0.9（debug，主程序，最新 · 待发版）**：[ZorvAI-debug-v1.0.9.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.9/ZorvAI-debug-v1.0.9.apk)
+- **v1.0.10（debug，主程序，最新 · 待发版）**：[ZorvAI-debug-v1.0.10.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.10/ZorvAI-debug-v1.0.10.apk)
+- **v1.0.10（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 待发版）**：[ZorvBrowser-aci-debug-v1.0.10.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.10/ZorvBrowser-aci-debug-v1.0.10.apk)
+- **v1.0.9（debug，主程序 · 待发版）**：[ZorvAI-debug-v1.0.9.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.9/ZorvAI-debug-v1.0.9.apk)
 - **v1.0.9（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 待发版）**：[ZorvBrowser-aci-debug-v1.0.9.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.9/ZorvBrowser-aci-debug-v1.0.9.apk)
 - **v1.0.8（debug，主程序 · 待发版）**：[ZorvAI-debug-v1.0.8.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.8/ZorvAI-debug-v1.0.8.apk)
 - **v1.0.7（debug，受控端浏览器 ACI · ZorvAI 浏览器，已发布）**：[ZorvBrowser-aci-debug-v1.0.7.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.7/ZorvBrowser-aci-debug-v1.0.7.apk)
@@ -280,6 +284,7 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v1.0.10 | 2026-07-30 | **关于页更新流程增强 + 受控浏览器移动端适配**：检测到新版本后弹出「GitHub / Gitee 镜像」选择框（不再直接跳转）；受控端浏览器 WebView 新增 `useWideViewPort` + `loadWithOverviewMode` + `NARROW_COLUMNS` 布局，页面缩放适配手机窄屏、消除横向溢出 |
 | v1.0.9 | 2026-07-30 | **受控端浏览器新增三类 AI 能力**：`browser_crawl`（结构化正文 + 出站链接抓取）、`browser_search`（搜索引擎检索并返回结果页）、`browser_script`（页面内任意 JS 执行）；控制端协议零改动，LLM 自动编排 |
 | v1.0.8 | 2026-07-30 | **修复 `browser_read` Binder ~1MB 溢出**：采用「安全截断 HTML(≤15 万字符) + 大页面 gzip(byte[]) 经 `html_gz` 回传」混合方案，控制端解压还原完整 HTML；顺带修复标题延迟、读取时序与 AAR 依赖路径 |
 | v1.0.6 | 2026-07-30 | **开放 ACI（Agent Capability Interface）**：新增受控端浏览器模块 `aci-browser`、控制端 `QuroAciManager` 修复 stopped-state 唤醒（bindWithWake）、`Capability.create` 描述修复、ACI 开发者手册与 `aci-core` 开源分支/AAR、Gitee 镜像推送 |

@@ -7,6 +7,7 @@ import android.os.Looper
 import android.webkit.GeolocationPermissions
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
+import android.webkit.WebSettings
 import android.webkit.WebView
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
@@ -68,6 +69,13 @@ object BrowserCore {
             // 定位权限需要 geolocation 数据库支持
             s.setGeolocationEnabled(true)
             s.loadsImagesAutomatically = true
+            // 【v1.0.10 移动端适配】让页面缩放适配手机窄屏，消除横向溢出
+            s.useWideViewPort = true
+            s.loadWithOverviewMode = true
+            s.layoutAlgorithm = WebSettings.LayoutAlgorithm.NARROW_COLUMNS
+            s.setSupportZoom(true)
+            s.builtInZoomControls = true
+            s.displayZoomControls = false
 
             wv.webChromeClient = object : WebChromeClient() {
                 // 站点请求定位 → 自动授予（不弹系统授权框）

@@ -57,6 +57,8 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
     val scope = rememberCoroutineScope()
     val repoUrl = "https://github.com/Quor-a/ZorvAI"
     var showLicense by remember { mutableStateOf(false) }
+    var updateDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var updateVersion by remember { mutableStateOf("") }
     val openUrl: (String) -> Unit = { url ->
         try {
             val i = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -139,8 +141,12 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
                                     val hasUpdate = isVersionNewer(latest, versionName)
                                     withContext(Dispatchers.Main) {
                                         if (hasUpdate) {
-                                            Toast.makeText(ctx, "发现新版本 v$latest，前往发布页下载", Toast.LENGTH_LONG).show()
-                                            openUrl(htmlUrl)
+                                            updateVersion = latest
+                                            updateDialog = Pair(
+                                                htmlUrl.ifBlank { "$repoUrl/releases/latest" },
+                                                "https://gitee.com/ZorvAI/ZorvAI/releases"
+                                            )
+                                            Toast.makeText(ctx, "发现新版本 v$latest，请选择下载镜像", Toast.LENGTH_LONG).show()
                                         } else {
                                             Toast.makeText(ctx, "已是最新版本 v$versionName", Toast.LENGTH_SHORT).show()
                                         }
@@ -250,6 +256,28 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
                         }
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     }
+                }
+            },
+        )
+    }
+
+    if (updateDialog != null) {
+        val (gh, ge) = updateDialog!!
+        AlertDialog(
+            onDismissRequest = { updateDialog = null },
+            confirmButton = { TextButton(onClick = { updateDialog = null }) { Text("取消") } },
+            title = { Text("发现新版本 v$updateVersion", style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("检测到新版本，请选择下载镜像：")
+                    Button(
+                        onClick = { openUrl(gh); updateDialog = null },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("GitHub 镜像") }
+                    Button(
+                        onClick = { openUrl(ge); updateDialog = null },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Gitee 镜像") }
                 }
             },
         )
