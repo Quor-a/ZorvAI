@@ -262,7 +262,7 @@ cd QuroAI
 - **v1.0.5（debug）**：[ZorvAI-debug-v1.0.5.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.5/ZorvAI-debug-v1.0.5.apk)
 - **v1.0.2（debug）**：[QuroAI-v1.0.2-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.2/QuroAI-v1.0.2-debug.apk)
 
-> 💡 v1.0.6 起开放 **ACI（Agent Capability Interface）**：主程序作为控制端，可调用任意接入 `aci-core` 的受控端 App；受控端浏览器 APK 与 `aci-core-release.aar` 随 Release 一并提供。详见 [ACI 开发者手册](./docs/ACI_DEVELOPER_GUIDE.md)。
+> 💡 v1.0.6 起开放 **ACI（Agent Capability Interface）**：主程序作为控制端，可调用任意接入 `aci-core` 的受控端 App（官方参考实现「ZorvAI 浏览器」已独立开源，见上方独立仓库链接）；`aci-core-release.aar` 随本仓库 Release 提供。详见 [ACI 开发者手册](./docs/ACI_DEVELOPER_GUIDE.md)。
 
 > ⚠️ 请务必从官方 Release 页面下载本应用。通过未知渠道获取的安装包可能被篡改，存在隐私泄露风险。
 
@@ -284,15 +284,11 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| v1.0.12（浏览器） | 2026-07-30 | **修复 v1.0.11 读取全 500 的静默失败回归**：`browser_open` 不再丢弃 `awaitWebView` 结果、WebView 未就绪时如实返回启动失败（而非谎报 launched=true）；读取守卫超时放宽至 5s 并写入诊断日志；`BrowserActivity.onResume` 增加防御性重注册，防止 Activity 重建后 `BrowserCore` 持有已销毁的 WebView 实例。受控端浏览器同步升级至 v1.0.12 |
 | v1.0.12 | 2026-07-30 | **ACI 被控方接入手册修正 + AAR 链接**：对齐真实 AAR API（`Capability.create(id, 描述)`、`onCreateCapabilities(caps)` 参数式、`onCall(req): ACIResponse` 返回值式）；补 3 个 `<permission>` 必须声明（缺则绑定必失败）；新增「二、依赖获取（aci-core AAR）」段含 AAR 直链、Gradle 依赖、`aci-core` 分支与网页手册；排障铁律补「绑定秒拒=漏写权限定义」 |
-| v1.0.11（浏览器） | 2026-07-30 | **修复 v1.0.10 严重回归（所有读取返回空）+ 地址栏搜索**：根因是 `browser_open` 的 `startActivity` 异步返回、与后续 `browser_read/list/script/crawl/search` 读取 `BrowserCore.displayWv` 的竞态 —— v1.0.10 的 WebSettings 改动拖慢 Activity 启动使竞态必现（open 后立刻读拿到 null → url/title/HTML 全空）。新增 `BrowserCore.awaitWebView(timeoutMs)` 让 `handleOpen` 等 WebView 注册就绪再返回，所有读取操作未就绪时返回明确错误而非空串；另修复地址栏直接输入文字（如「百度」）被当域名补 `https://` 前缀导致 `ERR_NAME_NOT_RESOLVED` → 改为「非 URL 文本走搜索引擎（默认 bing）」 |
 | v1.0.11 | 2026-07-30 | **关于页「检查更新」健壮性增强**：新增「检查中…」可见状态；GitHub API 不可达时自动回退 Gitee 镜像 API（国内网络适配）；失败给出明确报错而非静默；其余保持 v1.0.10 镜像选择流程 |
 | v1.0.10 | 2026-07-30 | **关于页更新流程增强 + 受控浏览器移动端适配**：检测到新版本后弹出「GitHub / Gitee 镜像」选择框（不再直接跳转）；受控端浏览器 WebView 新增 `useWideViewPort` + `loadWithOverviewMode` + `NARROW_COLUMNS` 布局，页面缩放适配手机窄屏、消除横向溢出 |
-| v1.0.9 | 2026-07-30 | **受控端浏览器新增三类 AI 能力**：`browser_crawl`（结构化正文 + 出站链接抓取）、`browser_search`（搜索引擎检索并返回结果页）、`browser_script`（页面内任意 JS 执行）；控制端协议零改动，LLM 自动编排 |
 | v1.0.8 | 2026-07-30 | **修复 `browser_read` Binder ~1MB 溢出**：采用「安全截断 HTML(≤15 万字符) + 大页面 gzip(byte[]) 经 `html_gz` 回传」混合方案，控制端解压还原完整 HTML；顺带修复标题延迟、读取时序与 AAR 依赖路径 |
 | v1.0.6 | 2026-07-30 | **开放 ACI（Agent Capability Interface）**：新增受控端浏览器模块 `aci-browser`、控制端 `QuroAciManager` 修复 stopped-state 唤醒（bindWithWake）、`Capability.create` 描述修复、ACI 开发者手册与 `aci-core` 开源分支/AAR、Gitee 镜像推送 |
-| v1.0.7 | 2026-07-30 | **受控端浏览器升级为「ZorvAI 浏览器」**：同源深青渐变「Z」图标 + 应用改名；新增顶部工具栏折叠/展开、底部 AI「眼睛」面板（ACI 调用时点亮）、「发给 AI」内容传输管道；WebView 站点权限（定位/相机/麦克风）自动授权；暴露引擎信息（UA / WebView 版本）；修复 `gradle-wrapper.jar` 缺失使 `./gradlew` 恢复可用 |
 | v1.0.5 | 2026-07-30 | 仓库更名 ZorvAI、品牌视觉统一、关于页「检查更新」真实联网检测、全仓 URL 修正、开源地址与搜索可见性优化 |
 | v1.0.2 | 2026-07-29 | Shizuku 授权按钮修复、AI 键盘输入通道、权限模型引导、GeckoView 内置浏览器、记忆库与 CMS v2 能力模块 |
 
