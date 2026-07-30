@@ -27,7 +27,7 @@
 
 ## 🌐 开源地址 · Open Source
 
-> **本项目完全开源，GitHub 仓库：[github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI) ｜ Gitee 镜像：[gitee.com/Quor-a/ZorvAI](https://gitee.com/Quor-a/ZorvAI)**
+> **本项目完全开源，GitHub 仓库：[github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI) ｜ Gitee 镜像：[gitee.com/ZorvAI/ZorvAI](https://gitee.com/ZorvAI/ZorvAI)**
 >
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
 > - 🔗 最新版主程序 APK 直链：[ZorvAI-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvAI-debug-v1.0.6.apk)
