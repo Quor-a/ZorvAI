@@ -1,6 +1,6 @@
 # Zorv AI · ACI 开发者手册（Agent Capability Interface）
 
-> 版本：v1.0 ｜ 适用 SDK：`aci-core` ｜ 最后更新：2026-07-30
+> 版本：v1.0.9（能力清单同步 ZorvAI 浏览器 v1.0.9）｜ 适用 SDK：`aci-core` ｜ 最后更新：2026-07-30
 >
 > 本文档面向**希望让自己的 Android App 被 Zorv AI（或其他 ACI 控制端）调用**的第三方开发者，也适用于**想基于 `aci-core` 自建控制端**的开发者。
 
@@ -378,6 +378,7 @@ override fun onCallAsync(request: ACIRequest, callback: IACICallback) {
 | `onCreateCapabilities` 抛异常 | Service 启动即崩溃、无能力 | `onCreate()` 用 try-catch 包 `super.onCreate()` |
 | stopped-state 不唤醒 | 之前能绑、更新后不能 | 控制端 `bindWithWake`（先发 `ACTION_WAKE` 广播） |
 | 权限名不一致 | `SecurityException` / 绑定被拒 | 受控端定义权限与控制端 `uses-permission` 完全一致 |
+| `browser_read` 直接传完整大 HTML | `TransactionTooLargeException`，调用失败 | 截断 ≤15 万字符 + 大页面 gzip(byte[]) 经 `html_gz` 回传，控制端解压还原（见 §13.3） |
 
 ---
 
@@ -390,6 +391,61 @@ override fun onCallAsync(request: ACIRequest, callback: IACICallback) {
 | 2.0（规划） | — | LocalSocket 高速通道 |
 
 `aci-core` v1.0.x 同时实现 1.0 + 1.1（`call` 与 `callAsync` 均可用），`Capability.version` 固定为 `"1.0"`。
+
+---
+
+## 13. 官方受控端能力清单（ZorvAI 浏览器）
+
+ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 7 个能力。控制端 `QuroAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
+
+### 13.1 能力总览
+
+| 能力 id | 入参 | 出参 | 说明 |
+|---------|------|------|------|
+| `browser_open` | `url`(string, 必填) | `launched`(boolean) | 打开并导航到指定网址 |
+| `browser_read` | — | `url` / `title` / `html`(string) + `truncated`(boolean)；大页面额外返回 `html_gz`(byte[]) + `html_len`(int) | 读取当前页 HTML。**v1.0.8 修复 Binder ~1MB 溢出**（见 13.3） |
+| `browser_crawl` | — | `url` / `title` / `text` / `links`(string) + `link_count`(string) + `truncated`(boolean) | **🆕 v1.0.9** 抓取结构化正文（取 `article/main/body` 的 innerText）+ 出站链接 `[{text,href}]` |
+| `browser_search` | `query`(string, 必填) / `engine`(string, 可选：bing/google/baidu/ddg，默认 bing) | `query` / `engine` / `url` / `title` / `text` / `links`(string) + `truncated`(boolean) | **🆕 v1.0.9** 用搜索引擎检索关键词，返回结果页结构化数据 |
+| `browser_script` | `code`(string, 必填) | `result`(string) + `truncated`(boolean) | **🆕 v1.0.9** 在当前页面执行任意 JavaScript 并返回结果 |
+| `browser_list` | — | `tabs`(string) | 列出当前打开的标签页 |
+| `browser_info` | — | `package` / `versionName` / `versionCode`(string) | 查询受控端包名与版本信息 |
+
+> 所有能力均带 `FLAG_BACKGROUND` + `FLAG_NO_UI`，可在后台、无需 UI 执行。`browser_crawl` / `browser_search` 的正文与 `browser_script` 结果均**截断到约 15 万字符**（返回 `truncated=true` 表示被截断）。
+
+### 13.2 调用示例（控制端视角）
+
+```kotlin
+// 检索「如何部署 ACI 受控端」
+val resp = stub.call(
+    ACIRequest.Builder()
+        .capability("browser_search")
+        .param("query", "如何部署 ACI 受控端")
+        .param("engine", "bing")
+        .build()
+)
+val text  = resp.result.getString("text")   // 结果页正文（已截断到 ~15 万字符）
+val links = resp.result.getString("links")  // JSON 数组：[{text,href}]
+
+// 在已打开的页面执行 JS，抽取所有图片 src
+val js = """JSON.stringify(
+    Array.from(document.images).map { i -> i.src }
+)"""
+val r2 = stub.call(
+    ACIRequest.Builder().capability("browser_script").param("code", js).build()
+)
+val imgs = r2.result.getString("result")
+```
+
+### 13.3 关于 `browser_read` 的 Binder 1MB 溢出修复（v1.0.8）
+
+AIDL Binder 单次事务上限约 **1MB**。早期实现直接 `putResult("html", fullHtml)` 传完整大页面 HTML，会在 `transact` 时抛 `TransactionTooLargeException` 导致调用失败。
+
+**修复方案（混合绕过，向后兼容）：**
+- 受控端 `handleRead` **始终**返回「安全截断的 html 字符串」（≤150,000 字符），永不过 Binder；
+- 当原始 HTML 超过阈值时，额外用 `GZIPOutputStream` 压成 `byte[]`，经 `html_gz` 回传；控制端 `QuroAciCallTool` 检测到 `html_gz` 即 `GZIPInputStream` 解压，还原完整 HTML 交给 LLM；
+- gzip 后若仍 >900KB，放弃 `html_gz`，仅返回截断预览（极端大页面兜底）。
+
+> 这是**受控端 + 控制端**双侧改动：受控端负责截断/压缩，控制端负责解压还原。第三方受控端若也要回传大结果，建议复用同一模式。
 
 ---
 
