@@ -11,6 +11,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.net.URLEncoder
 
 /**
  * 可见浏览器界面（v8 · 折叠工具栏 + AI 眼睛面板 + 发给 AI 管道）。
@@ -144,7 +145,9 @@ class BrowserActivity : Activity() {
         val go: () -> Unit = {
             val u = addressBar?.text?.toString()?.trim() ?: ""
             if (u.isNotEmpty()) {
-                val finalUrl = if (u.startsWith("http://") || u.startsWith("https://")) u else "https://$u"
+                // 【v1.0.11 地址栏搜索修复】非 URL 文本（含空格 / 无点关键词）走搜索引擎，
+                // 而非被当作域名补 https:// 前缀导致 ERR_NAME_NOT_RESOLVED
+                val finalUrl = smartNavigate(u)
                 webView?.loadUrl(finalUrl)
                 showStatus("🌐 打开: $finalUrl")
             }
@@ -238,6 +241,26 @@ class BrowserActivity : Activity() {
     // ══════════════════════════════════
     //  内部方法
     // ══════════════════════════════════
+
+    /**
+     * 地址栏智能导航（v1.0.11 修复）：
+     * - 已带 http(s):// 协议 → 原样打开；
+     * - 含点且无空格（看起来像域名/IP，如 example.com / 192.168.1.1）→ 补 https:// 打开；
+     * - 其它（含空格的短语 / 无点的关键词，如「百度」）→ 走搜索引擎（默认 bing）。
+     */
+    private fun smartNavigate(input: String): String {
+        return when {
+            input.startsWith("http://") || input.startsWith("https://") -> input
+            input.contains(" ") -> searchUrl(input)
+            input.contains(".") && !input.contains(" ") -> "https://$input"
+            else -> searchUrl(input)
+        }
+    }
+
+    private fun searchUrl(q: String): String {
+        val enc = URLEncoder.encode(q, "UTF-8")
+        return "https://www.bing.com/search?q=$enc"
+    }
 
     private fun loadLandingPage() {
         webView?.loadUrl("about:blank")

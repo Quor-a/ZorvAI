@@ -224,6 +224,8 @@ class QuroControlledAciService : BaseACIService() {
         } catch (e: Throwable) {
             DiagBuffer.append(TAG, "browser_open: Activity启动失败 ${e.message}")
         }
+        // 【v1.0.11 回归修复】等 WebView 注册就绪再返回，避免后续读取竞态拿到 null
+        BrowserCore.awaitWebView(3000)
         return ACIResponse.success(Bundle()).putResult("launched", true)
     }
 
@@ -234,6 +236,10 @@ class QuroControlledAciService : BaseACIService() {
      * 彻底绕开 1MB 事务限制。gzip 仍超 900KB 时放弃 html_gz，仅返回截断预览。
      */
     private fun handleRead(): ACIResponse {
+        // 【v1.0.11 回归修复】读前先确认 WebView 已就绪，否则给明确错误而非返回空串
+        if (BrowserCore.awaitWebView(2000) == null) {
+            return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：无活动页面，请先调用 browser_open")
+        }
         val raw = BrowserCore.readHtml()
         DiagBuffer.append(TAG, "browser_read: rawLen=${raw.length}")
         val url = BrowserCore.getUrl() ?: ""
@@ -285,6 +291,9 @@ class QuroControlledAciService : BaseACIService() {
 
     /** 爬虫：抓取当前页结构化数据。 */
     private fun handleCrawl(): ACIResponse {
+        if (BrowserCore.awaitWebView(2000) == null) {
+            return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：无活动页面，请先调用 browser_open")
+        }
         val raw = BrowserCore.crawlPage()
         DiagBuffer.append(TAG, "browser_crawl: rawLen=${raw.length}")
         val c = parseCrawl(raw)
@@ -317,6 +326,10 @@ class QuroControlledAciService : BaseACIService() {
             "ddg", "duckduckgo" -> "https://duckduckgo.com/?q=$enc"
             else -> "https://www.bing.com/search?q=$enc"
         }
+        // 【v1.0.11 回归修复】检索需要先把结果页载入 WebView，先确认就绪
+        if (BrowserCore.awaitWebView(2000) == null) {
+            return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：无活动页面，请先调用 browser_open")
+        }
         BrowserCore.loadUrl(url)
         val raw = BrowserCore.crawlPage()
         val c = parseCrawl(raw)
@@ -338,6 +351,9 @@ class QuroControlledAciService : BaseACIService() {
         val code = params?.getString("code") ?: ""
         DiagBuffer.append(TAG, "browser_script: codeLen=${code.length}")
         if (code.isEmpty()) return ACIResponse.error(ACIError.BAD_REQUEST, "no code")
+        if (BrowserCore.awaitWebView(2000) == null) {
+            return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：无活动页面，请先调用 browser_open")
+        }
         val raw = BrowserCore.evalScript(code)
         val truncated = raw.length > 150_000
         val safe = if (truncated) raw.take(150_000) + "\n…[结果已截断]" else raw
@@ -357,6 +373,9 @@ class QuroControlledAciService : BaseACIService() {
     }
 
     private fun handleList(): ACIResponse {
+        if (BrowserCore.awaitWebView(2000) == null) {
+            return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：无活动页面，请先调用 browser_open")
+        }
         return ACIResponse.success(Bundle())
             .putResult("tabs", "url=${BrowserCore.getUrl()} title=${BrowserCore.getTitle()}")
     }

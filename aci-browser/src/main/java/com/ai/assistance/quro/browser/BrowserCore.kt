@@ -120,6 +120,22 @@ object BrowserCore {
     /** 获取当前显示 WebView（可能为 null，如果 Activity 未创建/已销毁）。 */
     fun getWebView(): WebView? = displayWv
 
+    /**
+     * 等待显示 WebView 就绪（被 Activity 注册）。
+     * 用于避免 browser_open 拉起 Activity 与后续读取之间的竞态：startActivity 是异步的，
+     * 若读取跑得太快、Activity 的 onCreate 还没注册 WebView，displayWv 为 null → 读到空。
+     * 这里在调用线程（ACI binder 线程）轮询最多 timeoutMs，返回非 null 表示就绪。
+     */
+    fun awaitWebView(timeoutMs: Long = 3000): WebView? {
+        if (displayWv != null) return displayWv
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (displayWv != null) return displayWv
+            try { Thread.sleep(80) } catch (_: InterruptedException) { break }
+        }
+        return displayWv
+    }
+
     // ── 引擎信息（对应「看看还有哪些引擎构架的适合浏览器的都用」）──
 
     /** 当前 UA 串。 */
