@@ -1,0 +1,9 @@
+# Built artifacts
+build/
+.gradle/
+local.properties
+
+# OS / editor
+*.iml
+.idea/
+.DS_Store

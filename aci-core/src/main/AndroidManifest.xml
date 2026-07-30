@@ -1,0 +1,19 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ACI 权限定义：随 AAR 合并进消费方 Manifest -->
+    <permission
+        android:name="ai.aci.permission.CALL"
+        android:label="ACI Call Permission"
+        android:protectionLevel="normal" />
+
+    <permission
+        android:name="ai.aci.permission.CALL_DANGEROUS"
+        android:label="ACI Dangerous Call Permission"
+        android:protectionLevel="dangerous" />
+
+    <permission
+        android:name="ai.aci.permission.DISCOVER"
+        android:label="ACI Discover Permission"
+        android:protectionLevel="normal" />
+
+</manifest>
