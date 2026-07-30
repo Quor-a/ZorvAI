@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.aci
 
 import android.content.Context
 import android.os.Bundle
+import java.util.zip.GZIPInputStream
 import com.ai.assistance.quro.core.tools.QuroTool
 import org.json.JSONObject
 
@@ -95,19 +96,47 @@ class QuroAciCallTool : QuroTool {
 
         val resp = mgr.call(target, cap, bundle)
         return if (resp.isSuccess) {
-            val sb = StringBuilder("✅ ACI 调用成功（$target / $cap）\n")
             val result = resp.result
-            if (result != null && result.keySet().isNotEmpty()) {
-                sb.append("返回结果：\n")
-                for (key in result.keySet()) {
-                    sb.append("  - $key = ${result.get(key)}\n")
-                }
+            if (result == null || result.keySet().isEmpty()) {
+                "✅ ACI 调用成功（$target / $cap）\n（无返回数据）"
             } else {
-                sb.append("（无返回数据）")
+                // 若受控端经 html_gz 回传 gzip 二进制，先解压拿完整 HTML
+                var fullHtml: String? = null
+                if (result.containsKey("html_gz") && result.get("html_gz") is ByteArray) {
+                    fullHtml = runCatching { String(gunzip(result.get("html_gz") as ByteArray), Charsets.UTF_8) }.getOrNull()
+                }
+                val url = result.getString("url") ?: ""
+                val title = result.getString("title") ?: ""
+                val htmlPreview = result.getString("html") ?: ""
+                val truncated = result.getBoolean("truncated", false)
+                val sb = StringBuilder()
+                sb.append("✅ ACI 调用成功（$target / $cap）\n")
+                sb.append("URL: $url\n")
+                sb.append("标题: $title\n")
+                if (fullHtml != null) {
+                    sb.append("HTML（完整内容，经 gzip 解压，共 ${fullHtml.length} 字符）:\n")
+                    sb.append(fullHtml)
+                } else {
+                    if (truncated) sb.append("⚠️ 仅返回截断预览（Binder 限制，完整内容未传输）。\n")
+                    sb.append("HTML（共 ${htmlPreview.length} 字符）:\n")
+                    sb.append(htmlPreview)
+                }
+                // 输出其余未在上面专门处理的键（html_gz 不打印原始字节数组）
+                val handled = setOf("url", "title", "html", "html_gz", "truncated")
+                for (key in result.keySet()) {
+                    if (key in handled) continue
+                    sb.append("\n  - $key = ${result.get(key)}\n")
+                }
+                sb.toString().trim()
             }
-            sb.toString().trim()
         } else {
             "⛔ ACI 调用失败（错误码=${resp.errorCode}）：${resp.errorMessage}"
         }
+    }
+
+    /** gzip 解压（控制端用，还原受控端经 html_gz 回传的完整 HTML）。 */
+    private fun gunzip(data: ByteArray): ByteArray {
+        val gz = GZIPInputStream(java.io.ByteArrayInputStream(data))
+        return gz.readBytes()
     }
 }

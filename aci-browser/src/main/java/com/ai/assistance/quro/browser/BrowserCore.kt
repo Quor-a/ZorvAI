@@ -10,9 +10,10 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
+import org.json.JSONObject
 
 /**
- * 浏览器内核（v4 · 权限自动授权 + 引擎信息 + AI 眼睛事件通道）。
+ * 浏览器内核（v6 · 权限自动授权 + 引擎信息 + AI 眼睛事件通道 + 读取时序/标题修正）。
  *
  * 职责：
  * 1. 持有 Activity 传来的显示 WebView 引用（供 ACI readHtml / getUrl / getTitle 使用）。
@@ -166,12 +167,27 @@ object BrowserCore {
     fun getTitle(): String? {
         val ref = AtomicReference<String?>()
         val latch = CountDownLatch(1)
-        mainHandler.post { ref.set(displayWv?.title); latch.countDown() }
+        mainHandler.post {
+            val wv = displayWv
+            if (wv == null) {
+                latch.countDown()
+            } else {
+                // v6：改读 document.title，比 WebView.title 更新更及时，缓解标题延迟
+                wv.evaluateJavascript("document.title") { t ->
+                    ref.set(jsonUnescape(t ?: ""))
+                    latch.countDown()
+                }
+            }
+        }
         try { latch.await() } catch (_: InterruptedException) {}
         return ref.get()
     }
 
-    /** 读取当前页面完整 HTML。 */
+    /**
+     * 读取当前页面完整 HTML（v6 修复 Binder 溢出根因）。
+     * - 先轮询 document.readyState 等待加载完成（最多 3s），避免页未加载完返回空。
+     * - 抓取 outerHTML 后经 jsonUnescape 还原 evaluateJavascript 返回的 JSON 转义串。
+     */
     fun readHtml(): String {
         val ref = AtomicReference("")
         val latch = CountDownLatch(1)
@@ -179,14 +195,38 @@ object BrowserCore {
             val wv = displayWv
             if (wv == null) {
                 latch.countDown()
-            } else {
+                return@post
+            }
+            val start = System.currentTimeMillis()
+            val grab: () -> Unit = {
                 wv.evaluateJavascript("document.documentElement.outerHTML") { html ->
-                    ref.set(html ?: "")
+                    ref.set(jsonUnescape(html ?: ""))
                     latch.countDown()
                 }
             }
+            val poll = object : Runnable {
+                override fun run() {
+                    wv.evaluateJavascript("(function(){return document.readyState;})()") { state ->
+                        val s = jsonUnescape(state ?: "")
+                        if (s == "complete" || s == "interactive" || System.currentTimeMillis() - start >= 3000) {
+                            grab()
+                        } else {
+                            mainHandler.postDelayed(this, 150)
+                        }
+                    }
+                }
+            }
+            poll.run()
         }
         try { latch.await() } catch (_: InterruptedException) {}
         return ref.get() ?: ""
+    }
+
+    /** 把 evaluateJavascript 回调返回的 JSON 字符串字面量（带引号/转义）还原为真实字符串。 */
+    private fun jsonUnescape(s: String): String {
+        if (s.isEmpty()) return s
+        return try {
+            JSONObject("{\"_v\":$s}").getString("_v")
+        } catch (_: Throwable) { s }
     }
 }

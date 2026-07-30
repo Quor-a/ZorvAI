@@ -15,8 +15,8 @@ android {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 443
-        versionName = "1.0.6"
+        versionCode = 444
+        versionName = "1.0.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -108,7 +108,7 @@ dependencies {
     // 发现并调用第三方 App 通过 ACI Service 暴露的能力。AAR 仅含协议层
     // （ai.aci.core.*：IACIService / IACICallback AIDL、ACIRequest / ACIResponse / Capability）。
     // 控制方客户端 QuroAciManager 为 QuroAI 内 Kotlin 单例（端口自 aci-aihub 的 ACIManager）。
-    implementation(files("libs/aci-core-debug.aar"))
+    implementation(files("../aci-browser/libs/aci-core-debug.aar"))
 
     // 头像裁剪（原创集成，用于人格卡上传图片后裁剪）
     // 注意：canhub 已将库移交 vanniktech，坐标已变更（包名 com.canhub.cropper.* 不变）

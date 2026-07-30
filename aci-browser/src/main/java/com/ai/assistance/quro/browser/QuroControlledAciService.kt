@@ -9,7 +9,7 @@ import android.content.Intent
 import android.os.Bundle
 
 /**
- * ACI 受控端 Service（v5 · 全包围崩溃保护 + 共享诊断缓冲区）。
+ * ACI 受控端 Service（v6 · Binder 溢出修复：html 安全截断 + gzip 二进制回传）。
  *
  * 核心改进（针对 v4 诊断结果：Activity 正常但 Service 可能 onCreate 崩溃导致绑不上）：
  * 1. super.onCreate() 也包 try-catch —— 基类内部调 onCreateCapabilities，任何异常都会炸掉整个 Service
@@ -168,13 +168,47 @@ class QuroControlledAciService : BaseACIService() {
         return ACIResponse.success(Bundle()).putResult("launched", true)
     }
 
+    /**
+     * 读取当前页 URL/标题/HTML（v6 修复 Binder ~1MB 溢出）。
+     * 策略：始终返回「安全截断的 html 字符串」（≤150k 字符，永不过 Binder，向后兼容）；
+     * 若原始 HTML 过大，额外 gzip 压成 byte[] 经 html_gz 回传，控制端解压拿到完整内容，
+     * 彻底绕开 1MB 事务限制。gzip 仍超 900KB 时放弃 html_gz，仅返回截断预览。
+     */
     private fun handleRead(): ACIResponse {
-        val html = BrowserCore.readHtml()
-        DiagBuffer.append(TAG, "browser_read: htmlLen=${html.length}")
-        return ACIResponse.success(Bundle())
-            .putResult("url", BrowserCore.getUrl() ?: "")
-            .putResult("title", BrowserCore.getTitle() ?: "")
-            .putResult("html", html)
+        val raw = BrowserCore.readHtml()
+        DiagBuffer.append(TAG, "browser_read: rawLen=${raw.length}")
+        val url = BrowserCore.getUrl() ?: ""
+        val title = BrowserCore.getTitle() ?: ""
+        val truncated = raw.length > 150_000
+        val safe = if (truncated) {
+            raw.take(150_000) + "\n…[内容已截断，完整 HTML 见 html_gz，共 ${raw.length} 字符]"
+        } else raw
+        val resp = ACIResponse.success(Bundle())
+            .putResult("url", url)
+            .putResult("title", title)
+            .putResult("html", safe)
+            .putResult("truncated", truncated)
+        if (truncated) {
+            val gz = gzip(raw.toByteArray())
+            DiagBuffer.append(TAG, "browser_read: gzipLen=${gz.size}")
+            if (gz.size <= 900_000) {
+                resp.putResult("html_gz", gz)
+                resp.putResult("html_len", raw.length)
+            } else {
+                DiagBuffer.append(TAG, "browser_read: gzip 仍超 Binder(${gz.size})，放弃 html_gz，仅返回截断预览")
+            }
+        }
+        return resp
+    }
+
+    /** gzip 压缩（受控端用，绕过 AIDL ~1MB 限制）。 */
+    private fun gzip(data: ByteArray): ByteArray {
+        val bos = java.io.ByteArrayOutputStream()
+        val gz = java.util.zip.GZIPOutputStream(bos)
+        gz.write(data)
+        gz.finish()
+        gz.close()
+        return bos.toByteArray()
     }
 
     private fun handleList(): ACIResponse {
