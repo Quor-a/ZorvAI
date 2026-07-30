@@ -59,6 +59,7 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
     var showLicense by remember { mutableStateOf(false) }
     var updateDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
     var updateVersion by remember { mutableStateOf("") }
+    var checking by remember { mutableStateOf(false) }
     val openUrl: (String) -> Unit = { url ->
         try {
             val i = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -121,45 +122,45 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
                 SetRowClickable(
                     icon = Icons.Filled.Refresh,
                     name = "检查更新",
-                    sub = "当前版本 v$versionName",
+                    sub = if (checking) "检查中…" else "当前版本 v$versionName",
                     onClick = {
+                        if (checking) return@SetRowClickable
+                        checking = true
                         scope.launch(Dispatchers.IO) {
-                            try {
-                                val url = URL("https://api.github.com/repos/Quor-a/ZorvAI/releases/latest")
-                                val conn = url.openConnection() as HttpURLConnection
-                                conn.requestMethod = "GET"
-                                conn.setRequestProperty("Accept", "application/vnd.github+json")
-                                conn.connectTimeout = 10000
-                                conn.readTimeout = 10000
-                                val code = conn.responseCode
-                                if (code == 200) {
-                                    val text = conn.inputStream.bufferedReader().use { it.readText() }
-                                    val json = org.json.JSONObject(text)
-                                    val tag = json.optString("tag_name", "")
-                                    val latest = tag.removePrefix("v").trim()
-                                    val htmlUrl = json.optString("html_url", repoUrl)
-                                    val hasUpdate = isVersionNewer(latest, versionName)
-                                    withContext(Dispatchers.Main) {
-                                        if (hasUpdate) {
-                                            updateVersion = latest
-                                            updateDialog = Pair(
-                                                htmlUrl.ifBlank { "$repoUrl/releases/latest" },
-                                                "https://gitee.com/ZorvAI/ZorvAI/releases"
-                                            )
-                                            Toast.makeText(ctx, "发现新版本 v$latest，请选择下载镜像", Toast.LENGTH_LONG).show()
-                                        } else {
-                                            Toast.makeText(ctx, "已是最新版本 v$versionName", Toast.LENGTH_SHORT).show()
-                                        }
+                            var latest: String? = null
+                            var htmlUrl: String? = null
+                            var errMsg: String? = null
+                            // 1) 先试 GitHub（国内网络常不可达）
+                            val gh = runCatching { fetchLatestRelease("https://api.github.com/repos/Quor-a/ZorvAI/releases/latest") }
+                            if (gh.isSuccess && gh.getOrNull()?.first?.isNotBlank() == true) {
+                                latest = gh.getOrNull()!!.first
+                                htmlUrl = gh.getOrNull()!!.second
+                            } else {
+                                // 2) GitHub 不可达 → 回退 Gitee 镜像
+                                val ge = runCatching { fetchLatestRelease("https://gitee.com/api/v5/repos/ZorvAI/ZorvAI/releases/latest") }
+                                if (ge.isSuccess && ge.getOrNull()?.first?.isNotBlank() == true) {
+                                    latest = ge.getOrNull()!!.first
+                                    htmlUrl = ge.getOrNull()!!.second.ifBlank { "https://gitee.com/ZorvAI/ZorvAI/releases" }
+                                } else {
+                                    errMsg = gh.exceptionOrNull()?.message ?: ge.exceptionOrNull()?.message ?: "未知错误"
+                                }
+                            }
+                            withContext(Dispatchers.Main) {
+                                checking = false
+                                if (latest != null) {
+                                    val lv = latest!!.removePrefix("v").trim()
+                                    if (isVersionNewer(lv, versionName)) {
+                                        updateVersion = lv
+                                        updateDialog = Pair(
+                                            htmlUrl ?: "$repoUrl/releases/latest",
+                                            "https://gitee.com/ZorvAI/ZorvAI/releases"
+                                        )
+                                        Toast.makeText(ctx, "发现新版本 v$lv，请选择下载镜像", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        Toast.makeText(ctx, "已是最新版本 v$versionName", Toast.LENGTH_SHORT).show()
                                     }
                                 } else {
-                                    withContext(Dispatchers.Main) {
-                                        Toast.makeText(ctx, "检查更新失败（HTTP $code）", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                                conn.disconnect()
-                            } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(ctx, "检查更新失败：${e.message}", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(ctx, "检查更新失败：$errMsg", Toast.LENGTH_LONG).show()
                                 }
                             }
                         }
@@ -284,6 +285,29 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
     }
 }
 
+
+/**
+ * 拉取 latest release 的 tag_name 与 html_url。GitHub 与 Gitee v5 API 字段一致（tag_name / html_url）。
+ */
+private fun fetchLatestRelease(apiUrl: String): Pair<String, String> {
+    val url = URL(apiUrl)
+    val conn = url.openConnection() as HttpURLConnection
+    conn.requestMethod = "GET"
+    conn.setRequestProperty("Accept", "application/json")
+    conn.connectTimeout = 10000
+    conn.readTimeout = 10000
+    try {
+        val code = conn.responseCode
+        if (code != 200) throw RuntimeException("HTTP $code")
+        val text = conn.inputStream.bufferedReader().use { it.readText() }
+        val json = org.json.JSONObject(text)
+        val tag = json.optString("tag_name", "")
+        val html = json.optString("html_url", "")
+        return tag to html
+    } finally {
+        conn.disconnect()
+    }
+}
 
 /**
  * 比较「最新发布版本号」是否高于「当前版本号」（按点分数字逐段比较）。
