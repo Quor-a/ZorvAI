@@ -195,12 +195,12 @@ class MyAciService : BaseACIService() {
 • 能力不出现：确认 onCreateCapabilities 用「参数式 caps.add(...)」正确填充，且 Service 已运行（stopped 态会被唤醒广播拉起）。
 • 绑定直接失败/秒拒：99% 是 Manifest 漏写 <permission> 定义（CALL / DISCOVER / CALL_DANGEROUS），补上即可。
 
-十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的 28 项能力（官方参考实现之一，非浏览器专属手册）
+十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的 29 项能力（官方参考实现之一，非浏览器专属手册）
 （官方参考被控方。控制方 Zorv AI 经 ACI 调用它，第三方开发者可直接照抄这套能力声明范式（注意：这是示例，你的后端可声明任意能力，不必照搬此列表）：
  全部能力均在 onCreateCapabilities 用 Capability.create 参数式声明、onCall 内 when 分发。）
 
 基础能力（13）：
-• browser_open(url)        —— 打开指定网址；带空格自动转搜索引擎查询。
+• browser_open(url, title?) —— 打开并导航到指定网址（v1.0.12 回归修复：先登记多标签、再启动 Activity、等待 WebView 注册与页面 onPageFinished 完成后返回 ready/url，约 15s 上限不卡死）；带空格自动转搜索引擎查询。
 • browser_info             —— 返回包名 + 版本号。
 • browser_list             —— 列出当前打开的浏览器标签页。
 • browser_read             —— 读取当前页 URL + 标题 + 完整 HTML（SPA 大页已切片防静默丢弃）；增 `mode` 参数：full(默认) / clean（去脚本样式、可交互元素打 data-ai-id、标视口，供 AI 直接理解页面结构）。
@@ -235,6 +235,9 @@ agentic 增强（新增 7 · 元素级操控 + 状态/事件/审计）：
 • browser_tabs             —— 轻量多标签·列出（含 active 标记）+ active_id。
 • browser_tab(id)         —— 轻量多标签·切换到指定标签（重载其 URL）。
 • browser_tabclose(id)    —— 轻量多标签·关闭（激活标签关闭后自动回退最近一个）。
+
+第四波增强（新增 1 · 虚拟鼠标，回应元宝「完整虚拟鼠标」）：
+• browser_mouse(action, x, y, dx?, dy?, button?) —— 在页面「屏幕坐标」模拟鼠标：action ∈ move(悬停)/click/dblclick/right/down/up/drag/scroll；后端按 WebView 在屏位置自动换算视图坐标后派发 MotionEvent（主线程 dispatchTouchEvent / dispatchGenericMotionEvent）。覆盖无稳定ID、无 CSS 选择器的元素与画布交互，与 browser_action(id/selector) 形成「坐标 + 语义」双通道。注：系统 WebView 将触摸事件按触摸处理，右键为尽力而为。
 
 ⚠️ 调用约束（与上文一致）：所有 WebView 操作（goBack/reload/canGoBack/canGoForward/evaluateJavascript 等）必须由被控方
 在主线程执行（mainHandler.post + CountDownLatch 同步等待），禁止在 ACI Binder 工作线程直接调用 WebView，

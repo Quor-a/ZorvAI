@@ -396,15 +396,15 @@ override fun onCallAsync(request: ACIRequest, callback: IACICallback) {
 
 ## 13. 官方受控端能力清单（ZorvAI 浏览器）
 
-ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 28 个能力（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案）。控制端 `QuroAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
+ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 29 个能力（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标）。控制端 `QuroAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
 
-### 13.1 能力总览（共 28 项：13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案）
+### 13.1 能力总览（共 29 项：13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标）
 
 **基础能力（13）**
 
 | 能力 id | 入参 | 出参 | 说明 |
 |---------|------|------|------|
-| `browser_open` | `url`(string, 必填) | `launched`(boolean) | 打开并导航到指定网址（带空格自动转搜索引擎查询） |
+| `browser_open` | `url`(string, 必填) / `title`(string, 可选) | `launched`(boolean) + `ready`(boolean) + `url`(string) | 打开并导航到指定网址；**v1.0.12 回归修复**：先登记多标签、再启动 Activity、等待 WebView 注册与页面 `onPageFinished` 完成才返回 `ready`（约 15s 上限，不卡死 binder） |
 | `browser_read` | `mode`(string, 可选：full 默认 / clean) | `url` / `title` / `html`(string) + `truncated`(boolean)；大页面额外 `html_gz`(byte[]) + `html_len`(int)；`mode=clean` 额外返回 `cleaned_html`(精简 DOM：去脚本样式、可交互元素打 `data-ai-id`、标视口) | 读取当前页 HTML。**v1.0.8 修复 Binder ~1MB 溢出**（见 13.3） |
 | `browser_crawl` | — | `url` / `title` / `text` / `links`(string) + `link_count`(string) + `truncated`(boolean) | 抓取结构化正文（取 `article/main/body` 的 innerText）+ 出站链接 `[{text,href}]` |
 | `browser_search` | `query`(string, 必填) / `engine`(string, 可选：bing/google/baidu/ddg，默认 bing) | `query` / `engine` / `url` / `title` / `text` / `links`(string) + `truncated`(boolean) | 用搜索引擎检索关键词，返回结果页结构化数据 |
@@ -447,6 +447,12 @@ ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，�
 | `browser_tabs` | — | `count`(int) + `tabs`(string JSON) + `active_id`(string) | 轻量多标签·列出（含 active 标记） |
 | `browser_tab` | `id`(string, 必填) | `ok`(boolean) + `url` + `id` | 轻量多标签·切换到指定标签（重载其 URL） |
 | `browser_tabclose` | `id`(string, 必填) | `ok`(boolean) + `remaining`(int) | 轻量多标签·关闭（激活标签关闭后自动回退最近一个） |
+
+**第四波增强（1 · 虚拟鼠标，回应元宝「完整虚拟鼠标」）**
+
+| 能力 id | 入参 | 出参 | 说明 |
+|---------|------|------|------|
+| `browser_mouse` | `action`(string, 必填：move/click/dblclick/right/down/up/drag/scroll) / `x`(int, 必填 屏幕绝对像素 X) / `y`(int, 必填 屏幕绝对像素 Y) / `dx`(int, 可选) / `dy`(int, 可选) / `button`(string, 可选：left 默认/right/middle) | `ok`(boolean) + `action` + `x` + `y` | 在页面屏幕坐标模拟鼠标动作；后端按 WebView 在屏位置自动换算视图坐标后派发 `MotionEvent`（主线程 `dispatchTouchEvent` / `dispatchGenericMotionEvent`）。覆盖无稳定ID、无 CSS 选择器的元素与画布交互，与 `browser_action`(id/selector) 构成「坐标 + 语义」双通道。注：系统 WebView 将触摸事件按触摸处理，右键为尽力而为 |
 
 > 注：`browser_action` 在第三波新增 `selector`(CSS 选择器) 参数（与 `id` 二选一，优先级低于 `id`），可直接用选择器定位操作，免去先 `browser_elements` 注入稳定 ID。
 
