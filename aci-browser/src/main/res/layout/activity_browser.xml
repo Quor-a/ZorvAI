@@ -124,6 +124,103 @@
                 android:textColor="#22D3EE"
                 android:background="@android:color/transparent" />
         </LinearLayout>
+
+        <!-- 手动控制台（人可直接驱动，无需经 AI；折叠式） -->
+        <LinearLayout
+            android:id="@+id/console_panel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#0A1622"
+            android:padding="6dp">
+
+            <Button
+                android:id="@+id/btn_console_toggle"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:text="⌨ 手动控制台"
+                android:textSize="13sp"
+                android:textColor="#FFD479"
+                android:background="@android:color/transparent" />
+
+            <ScrollView
+                android:id="@+id/console_body"
+                android:layout_width="match_parent"
+                android:layout_height="220dp"
+                android:fillViewport="true"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <EditText
+                        android:id="@+id/console_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="40dp"
+                        android:background="#FFFFFF"
+                        android:paddingHorizontal="10dp"
+                        android:textSize="13sp"
+                        android:textColor="#0A0A0A"
+                        android:hint="URL / JS 代码 / 查找关键词"
+                        android:inputType="text"
+                        android:singleLine="false" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="4dp">
+                        <Button android:id="@+id/btn_c_open" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="打开" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
+                        <Button android:id="@+id/btn_c_read" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="读HTML" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
+                        <Button android:id="@+id/btn_c_crawl" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="爬取" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
+                        <Button android:id="@+id/btn_c_js" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="运行JS" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="4dp">
+                        <Button android:id="@+id/btn_c_find" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="查找" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
+                        <Button android:id="@+id/btn_c_findnext" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="下一个" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
+                        <Button android:id="@+id/btn_c_findclear" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="清查找" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="4dp">
+                        <Button android:id="@+id/btn_c_back" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="后退" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
+                        <Button android:id="@+id/btn_c_fwd" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="前进" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
+                        <Button android:id="@+id/btn_c_reload" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="刷新" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="4dp">
+                        <Button android:id="@+id/btn_c_shot" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="截图" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
+                        <Button android:id="@+id/btn_c_capture" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="抓包:关" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
+                        <Button android:id="@+id/btn_c_capclear" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="清抓包" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/console_output"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:padding="8dp"
+                        android:background="#06121F"
+                        android:textColor="#CFE8F0"
+                        android:textSize="11sp"
+                        android:text="（结果将显示在此）" />
+                </LinearLayout>
+            </ScrollView>
+        </LinearLayout>
     </LinearLayout>
 
     <!-- 收缩后浮出的展开钮 -->

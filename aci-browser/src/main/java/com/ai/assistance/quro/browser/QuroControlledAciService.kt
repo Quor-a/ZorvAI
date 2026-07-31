@@ -164,6 +164,72 @@ class QuroControlledAciService : BaseACIService() {
             fail++; DiagBuffer.append(TAG, "✗ browser_info: ${e.message}")
         }
 
+        // browser_capture（v1.0.12-capture 新增：抓包 / 流量拦截）
+        try {
+            caps.add(
+                Capability.create("browser_capture", "抓包：拦截并列出当前页发出的网络请求（URL/方法/请求头/是否主框架），用于流量分析")
+                    .addParam("action", "string", false, "操作：list(默认)/clear/enable/disable")
+                    .addParam("limit", "string", false, "返回条数上限，默认200")
+                    .addParam("filter", "string", false, "按 url/方法/请求头 关键字过滤")
+                    .addResult("requests", "string", "请求记录 JSON 数组")
+                    .addResult("count", "string", "命中条数")
+                    .addResult("enabled", "boolean", "抓包开关状态")
+                    .addResult("note", "string", "版本说明")
+                    .addFlag(Capability.FLAG_BACKGROUND)
+                    .addFlag(Capability.FLAG_NO_UI)
+            )
+            ok++; DiagBuffer.append(TAG, "✓ browser_capture")
+        } catch (e: Throwable) {
+            fail++; DiagBuffer.append(TAG, "✗ browser_capture: ${e.message}")
+        }
+
+        // browser_find（完整功能：页面内查找 Ctrl+F）
+        try {
+            caps.add(
+                Capability.create("browser_find", "在页面内查找文本（高亮 + 返回命中数）")
+                    .addParam("text", "string", true, "要查找的文本")
+                    .addParam("action", "string", false, "find(默认)/next/prev/clear")
+                    .addParam("forward", "string", false, "next/prev 方向，默认 true")
+                    .addResult("found", "boolean", "是否有命中")
+                    .addResult("count", "string", "命中数量")
+                    .addFlag(Capability.FLAG_BACKGROUND)
+                    .addFlag(Capability.FLAG_NO_UI)
+            )
+            ok++; DiagBuffer.append(TAG, "✓ browser_find")
+        } catch (e: Throwable) {
+            fail++; DiagBuffer.append(TAG, "✗ browser_find: ${e.message}")
+        }
+
+        // browser_nav（完整功能：前进/后退/刷新）
+        try {
+            caps.add(
+                Capability.create("browser_nav", "浏览器导航：后退 / 前进 / 刷新")
+                    .addParam("action", "string", true, "back / forward / reload")
+                    .addResult("url", "string", "操作后当前网址")
+                    .addResult("can_back", "boolean", "是否可后退")
+                    .addResult("can_forward", "boolean", "是否可前进")
+                    .addFlag(Capability.FLAG_BACKGROUND)
+                    .addFlag(Capability.FLAG_NO_UI)
+            )
+            ok++; DiagBuffer.append(TAG, "✓ browser_nav")
+        } catch (e: Throwable) {
+            fail++; DiagBuffer.append(TAG, "✗ browser_nav: ${e.message}")
+        }
+
+        // browser_screenshot（完整功能：截图当前可视区域，存 PNG 返回路径）
+        try {
+            caps.add(
+                Capability.create("browser_screenshot", "截取当前页面可视区域，保存 PNG 到应用外部存储 Pictures/QuroAI_screenshots/，返回文件路径")
+                    .addResult("path", "string", "截图文件绝对路径（空=失败）")
+                    .addResult("url", "string", "截图时网址")
+                    .addFlag(Capability.FLAG_BACKGROUND)
+                    .addFlag(Capability.FLAG_NO_UI)
+            )
+            ok++; DiagBuffer.append(TAG, "✓ browser_screenshot")
+        } catch (e: Throwable) {
+            fail++; DiagBuffer.append(TAG, "✗ browser_screenshot: ${e.message}")
+        }
+
         // console_ui（v1.0.12 新增：SDUI 控制台快照，后端驱动 UI）
         try {
             caps.add(
@@ -225,6 +291,10 @@ class QuroControlledAciService : BaseACIService() {
                 "browser_script" -> handleScript(req.params)
                 "browser_list" -> handleList()
                 "browser_info" -> handleInfo()
+                "browser_capture" -> handleCapture(req.params)
+                "browser_find" -> handleFind(req.params)
+                "browser_nav" -> handleNav(req.params)
+                "browser_screenshot" -> handleScreenshot()
                 "console_ui" -> handleConsoleUi()
                 "console_action" -> handleConsoleAction(req.params)
                 else -> {
@@ -273,7 +343,7 @@ class QuroControlledAciService : BaseACIService() {
             return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：无活动页面，请先调用 browser_open")
         }
         val raw = BrowserCore.readHtml()
-        DiagBuffer.append(TAG, "browser_read: rawLen=${raw.length}")
+        DiagBuffer.append(TAG, "browser_read: beforeRead getUrl=${BrowserCore.getUrl()} rawLen=${raw.length}")
         val url = BrowserCore.getUrl() ?: ""
         val title = BrowserCore.getTitle() ?: ""
         val truncated = raw.length > 150_000
@@ -327,7 +397,7 @@ class QuroControlledAciService : BaseACIService() {
             return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：无活动页面，请先调用 browser_open")
         }
         val raw = BrowserCore.crawlPage()
-        DiagBuffer.append(TAG, "browser_crawl: rawLen=${raw.length}")
+        DiagBuffer.append(TAG, "browser_crawl: beforeCrawl getUrl=${BrowserCore.getUrl()} rawLen=${raw.length}")
         val c = parseCrawl(raw)
         val resp = ACIResponse.success(Bundle())
         if (c.err != null) {
@@ -392,6 +462,102 @@ class QuroControlledAciService : BaseACIService() {
         return ACIResponse.success(Bundle())
             .putResult("result", safe)
             .putResult("truncated", truncated)
+    }
+
+    /** 抓包：list/clear/enable/disable 当前页网络请求拦截记录。 */
+    private fun handleCapture(params: Bundle?): ACIResponse {
+        val action = (params?.getString("action") ?: "list").lowercase()
+        when (action) {
+            "enable" -> { BrowserCore.setCaptureEnabled(true); DiagBuffer.append(TAG, "browser_capture: enabled") }
+            "disable" -> { BrowserCore.setCaptureEnabled(false); DiagBuffer.append(TAG, "browser_capture: disabled") }
+            "clear" -> { BrowserCore.clearCapture(); DiagBuffer.append(TAG, "browser_capture: cleared") }
+        }
+        val limit = (params?.getString("limit")?.toIntOrNull() ?: 200).coerceIn(1, 1000)
+        val filter = params?.getString("filter") ?: ""
+        val items = BrowserCore.getCaptureSnapshot(limit, filter)
+        val arr = org.json.JSONArray()
+        for (it in items) {
+            val o = org.json.JSONObject()
+            o.put("url", it.url)
+            o.put("method", it.method)
+            o.put("headers", it.headers)
+            o.put("is_main_frame", it.isMainFrame)
+            o.put("time", it.time)
+            arr.put(o)
+        }
+        DiagBuffer.append(TAG, "browser_capture: action=$action count=${items.size} enabled=${BrowserCore.isCaptureEnabled()}")
+        return ACIResponse.success(Bundle())
+            .putResult("requests", arr.toString())
+            .putResult("count", "${items.size}")
+            .putResult("enabled", BrowserCore.isCaptureEnabled())
+            .putResult("note", "v1 抓包=请求侧拦截(WebView shouldInterceptRequest)，可看 URL/方法/请求头；响应状态码与响应体需 Chrome DevTools 协议，后续支持")
+    }
+
+    /** 页面内查找（find / next / prev / clear）。 */
+    private fun handleFind(params: Bundle?): ACIResponse {
+        val text = params?.getString("text") ?: ""
+        val action = (params?.getString("action") ?: "find").lowercase()
+        val forward = (params?.getString("forward") ?: "true").lowercase() != "false"
+        if (BrowserCore.awaitWebView(2000) == null) {
+            return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：请先调用 browser_open")
+        }
+        return when (action) {
+            "next" -> {
+                BrowserCore.findNext(forward)
+                ACIResponse.success(Bundle()).putResult("found", true).putResult("count", "-1")
+            }
+            "prev" -> {
+                BrowserCore.findNext(false)
+                ACIResponse.success(Bundle()).putResult("found", true).putResult("count", "-1")
+            }
+            "clear" -> {
+                BrowserCore.clearFind()
+                ACIResponse.success(Bundle()).putResult("found", false).putResult("count", "0")
+            }
+            else -> {
+                if (text.isEmpty()) return ACIResponse.error(ACIError.BAD_REQUEST, "no text")
+                val n = BrowserCore.findInPage(text)
+                ACIResponse.success(Bundle()).putResult("found", n > 0).putResult("count", "$n")
+            }
+        }
+    }
+
+    /** 导航：后退 / 前进 / 刷新。 */
+    private fun handleNav(params: Bundle?): ACIResponse {
+        val action = (params?.getString("action") ?: "reload").lowercase()
+        if (BrowserCore.awaitWebView(2000) == null) {
+            return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：请先调用 browser_open")
+        }
+        when (action) {
+            "back" -> BrowserCore.navBack()
+            "forward" -> BrowserCore.navForward()
+            else -> BrowserCore.navReload()
+        }
+        val url = BrowserCore.getUrl() ?: ""
+        return ACIResponse.success(Bundle())
+            .putResult("url", url)
+            .putResult("can_back", BrowserCore.canGoBack())
+            .putResult("can_forward", BrowserCore.canGoForward())
+    }
+
+    /** 截图当前可视区域，保存到应用外部存储 Pictures/QuroAI_screenshots/，返回路径。 */
+    private fun handleScreenshot(): ACIResponse {
+        if (BrowserCore.awaitWebView(2000) == null) {
+            return ACIResponse.error(ACIError.INTERNAL_ERROR, "浏览器尚未就绪：请先调用 browser_open")
+        }
+        val base = try {
+            applicationContext.getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)?.absolutePath
+                ?: cacheDir.absolutePath
+        } catch (_: Throwable) { cacheDir.absolutePath }
+        val dir = "$base/QuroAI_screenshots"
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+        val path = "$dir/screenshot_$stamp.png"
+        val got = BrowserCore.screenshot(path)
+        return if (got.isNotEmpty()) {
+            ACIResponse.success(Bundle()).putResult("path", got).putResult("url", BrowserCore.getUrl() ?: "")
+        } else {
+            ACIResponse.error(ACIError.INTERNAL_ERROR, "截图失败（WebView 尺寸为 0 或无权限）")
+        }
     }
 
     /** gzip 压缩（受控端用，绕过 AIDL ~1MB 限制）。 */

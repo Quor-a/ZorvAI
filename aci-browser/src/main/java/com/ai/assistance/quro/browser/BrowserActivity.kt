@@ -7,11 +7,15 @@ import android.os.Bundle
 import android.view.View
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import java.net.URLEncoder
+import kotlin.concurrent.thread
 
 /**
  * 可见浏览器界面（v8 · 折叠工具栏 + AI 眼睛面板 + 发给 AI 管道）。
@@ -43,6 +47,11 @@ class BrowserActivity : Activity() {
     private var aiStatus: TextView? = null
     private var btnShareAi: Button? = null
 
+    // 手动控制台（人可直接驱动，无需经 AI）
+    private var consoleInput: EditText? = null
+    private var consoleOutput: TextView? = null
+    private var captureOn = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -64,12 +73,35 @@ class BrowserActivity : Activity() {
         eyeIndicator = findViewById(R.id.eye_indicator)
         aiStatus = findViewById(R.id.ai_status)
         btnShareAi = findViewById(R.id.btn_share_ai)
+        consoleInput = findViewById(R.id.console_input)
+        consoleOutput = findViewById(R.id.console_output)
 
         if (webView == null) { showStatus("❌ 找不到WebView"); return }
 
         // ── 2. 配置 WebView ──
         try {
-            webView?.webViewClient = WebViewClient()
+            webView?.webViewClient = object : WebViewClient() {
+                /**
+                 * 抓包拦截点（v1.0.12-capture 新增）：捕获每个请求的 URL / 方法 / 请求头 / 是否主框架。
+                 * 返回 null = 放行，不修改/阻止任何响应，对正常浏览零影响。
+                 * 仅记录元数据，不读响应体（响应体需 Chrome DevTools 协议，后续版本支持）。
+                 */
+                override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                    request?.let { req ->
+                        try {
+                            val sb = StringBuilder()
+                            req.requestHeaders?.forEach { (k, v) -> sb.append("$k: $v\n") }
+                            BrowserCore.captureRequest(
+                                url = req.url?.toString() ?: "",
+                                method = req.method ?: "GET",
+                                headers = sb.toString(),
+                                isMainFrame = req.isForMainFrame
+                            )
+                        } catch (_: Throwable) {}
+                    }
+                    return null
+                }
+            }
             webView?.settings?.javaScriptEnabled = true
             webView?.settings?.domStorageEnabled = true
             webView?.settings?.loadsImagesAutomatically = true
@@ -91,6 +123,7 @@ class BrowserActivity : Activity() {
 
         // ── 5. 连线交互 ──
         wireControls()
+        wireConsole()
 
         // ── 6. 【v8 核心】显式启动 ACI Service ──
         showStatus("🚀 正在启动 ACI Service...")
@@ -177,6 +210,136 @@ class BrowserActivity : Activity() {
         btnShareAi?.setOnClickListener { shareToAi() }
     }
 
+    /**
+     * 手动控制台（v8.1 新增）：让使用者不经由 AI、直接驱动浏览器。
+     * 凡是会阻塞在 BrowserCore latch 上的方法（loadUrl / readHtml / crawlPage /
+     * evalScript / findInPage / screenshot）都必须在后台线程调用，否则会与 UI 线程的
+     * evaluateJavascript 回调死锁 → 返回空。其余方法（nav* / findNext / clearFind /
+     * setCaptureEnabled / clearCapture）仅向 mainHandler post，UI 线程直接调也安全。
+     */
+    private fun wireConsole() {
+        val consoleBody = findViewById<ScrollView>(R.id.console_body)
+        val consoleToggle = findViewById<Button>(R.id.btn_console_toggle)
+        val btnCOpen = findViewById<Button>(R.id.btn_c_open)
+        val btnCRead = findViewById<Button>(R.id.btn_c_read)
+        val btnCCrawl = findViewById<Button>(R.id.btn_c_crawl)
+        val btnCJs = findViewById<Button>(R.id.btn_c_js)
+        val btnCFind = findViewById<Button>(R.id.btn_c_find)
+        val btnCFindNext = findViewById<Button>(R.id.btn_c_findnext)
+        val btnCFindClear = findViewById<Button>(R.id.btn_c_findclear)
+        val btnCBack = findViewById<Button>(R.id.btn_c_back)
+        val btnCFwd = findViewById<Button>(R.id.btn_c_fwd)
+        val btnCReload = findViewById<Button>(R.id.btn_c_reload)
+        val btnCShot = findViewById<Button>(R.id.btn_c_shot)
+        val btnCCapture = findViewById<Button>(R.id.btn_c_capture)
+        val btnCCapClear = findViewById<Button>(R.id.btn_c_capclear)
+
+        val input: () -> String = { consoleInput?.text?.toString()?.trim() ?: "" }
+
+        consoleToggle?.setOnClickListener {
+            val show = consoleBody?.visibility != View.VISIBLE
+            consoleBody?.visibility = if (show) View.VISIBLE else View.GONE
+            showStatus(if (show) "⌨ 手动控制台已展开" else "⌨ 手动控制台已收起")
+        }
+
+        // 打开 URL（smartNavigate 同地址栏）
+        btnCOpen?.setOnClickListener {
+            val u = input()
+            if (u.isEmpty()) { showStatus("⚠ 控制台：请输入 URL"); return@setOnClickListener }
+            val finalUrl = smartNavigate(u)
+            thread(name = "c-open") {
+                BrowserCore.loadUrl(finalUrl)
+                runOnUiThread {
+                    showStatus("🌐 打开: $finalUrl")
+                    addressBar?.setText(finalUrl)
+                }
+            }
+        }
+
+        // 读 HTML（SPA 已修复：JS 端切片 + 8s 超时）
+        btnCRead?.setOnClickListener {
+            thread(name = "c-read") {
+                val html = runCatching { BrowserCore.readHtml() }.getOrDefault("")
+                runOnUiThread { showConsole("读HTML（${html.length} 字）：\n${html.take(8000)}") }
+            }
+        }
+
+        // 爬取正文 + 链接
+        btnCCrawl?.setOnClickListener {
+            thread(name = "c-crawl") {
+                val text = runCatching { BrowserCore.crawlPage() }.getOrDefault("")
+                runOnUiThread { showConsole("爬取（${text.length} 字）：\n${text.take(8000)}") }
+            }
+        }
+
+        // 运行 JS
+        btnCJs?.setOnClickListener {
+            val code = input()
+            if (code.isEmpty()) { showStatus("⚠ 控制台：请输入 JS 代码"); return@setOnClickListener }
+            thread(name = "c-js") {
+                val r = runCatching { BrowserCore.evalScript(code) }.getOrDefault("")
+                runOnUiThread { showConsole("JS 结果：\n${r.take(8000)}") }
+            }
+        }
+
+        // 页内查找
+        btnCFind?.setOnClickListener {
+            val t = input()
+            if (t.isEmpty()) { showStatus("⚠ 控制台：请输入关键词"); return@setOnClickListener }
+            thread(name = "c-find") {
+                val n = runCatching { BrowserCore.findInPage(t) }.getOrDefault(0)
+                runOnUiThread {
+                    showStatus("🔍 命中 $n 处")
+                    showConsole("查找「$t」命中 $n 处")
+                }
+            }
+        }
+        btnCFindNext?.setOnClickListener { BrowserCore.findNext(true); showStatus("🔍 下一个匹配") }
+        btnCFindClear?.setOnClickListener { BrowserCore.clearFind(); showStatus("🔍 清除查找"); showConsole("已清除查找高亮") }
+
+        // 导航
+        btnCBack?.setOnClickListener { BrowserCore.navBack(); showStatus("◀ 后退") }
+        btnCFwd?.setOnClickListener { BrowserCore.navForward(); showStatus("▶ 前进") }
+        btnCReload?.setOnClickListener { BrowserCore.navReload(); showStatus("⟳ 刷新") }
+
+        // 截图（存外部存储 Pictures 子目录，返回路径）
+        btnCShot?.setOnClickListener {
+            thread(name = "c-shot") {
+                val dir = getExternalFilesDir(null)
+                val path = java.io.File(dir, "quro_shots/shot_${System.currentTimeMillis()}.png").absolutePath
+                val res = runCatching { BrowserCore.screenshot(path) }.getOrDefault("")
+                runOnUiThread {
+                    if (res.isNotEmpty()) {
+                        showStatus("📸 截图: $res")
+                        showConsole("截图已保存：\n$res")
+                    } else {
+                        showStatus("⚠ 截图失败")
+                        showConsole("截图失败（WebView 尺寸可能为 0，或页面尚未渲染）")
+                    }
+                }
+            }
+        }
+
+        // 抓包开关（请求经 WebViewClient.shouldInterceptRequest 写入 CaptureBuffer）
+        btnCCapture?.setOnClickListener {
+            captureOn = !captureOn
+            BrowserCore.setCaptureEnabled(captureOn)
+            btnCCapture.text = if (captureOn) "抓包:开" else "抓包:关"
+            showStatus(if (captureOn) "🐟 抓包已开启" else "🐟 抓包已关闭")
+            if (captureOn) showConsole("抓包已开启：浏览网页后，记录经 ACI console_ui 暴露；点「清抓包」可重置。")
+        }
+        btnCCapClear?.setOnClickListener {
+            BrowserCore.clearCapture()
+            showStatus("🐟 抓包记录已清空")
+            showConsole("抓包记录已清空")
+        }
+    }
+
+    /** 把控制台结果追加到 console_output 文本框（UI 线程安全）。 */
+    private fun showConsole(msg: String) {
+        runOnUiThread { consoleOutput?.append("\n• $msg") }
+    }
+
     /** AI「眼睛」指示灯与控制文本。 */
     private fun updateEye(active: Boolean, message: String) {
         runOnUiThread {
@@ -229,6 +392,13 @@ class BrowserActivity : Activity() {
             webView?.loadUrl(url)
             addressBar?.setText(url)
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 【v1.0.12 防御】每次回到前台都确保 displayWv 指向当前 WebView，
+        // 防止 Activity 被系统重建后 BrowserCore 仍持有已销毁的旧实例 → 读取 500。
+        webView?.let { BrowserCore.registerDisplayWebView(it) }
     }
 
     override fun onDestroy() {
