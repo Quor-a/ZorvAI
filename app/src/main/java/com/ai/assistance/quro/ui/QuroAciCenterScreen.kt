@@ -22,9 +22,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ai.assistance.quro.core.aci.QuroAciManager
-import com.ai.assistance.quro.lanui.LanScreen
-import com.ai.assistance.quro.lanui.LanUiModel
-import com.ai.assistance.quro.lanui.LanUiScreen
+import com.ai.assistance.quro.core.aci.AciConsoleModel
+import com.ai.assistance.quro.core.aci.AciConsoleScreen
+import com.ai.assistance.quro.core.aci.AciScreen
 import org.json.JSONObject
 import androidx.compose.ui.window.Dialog
 import com.ai.assistance.quro.core.tools.QuroDownloadUtil
@@ -215,9 +215,9 @@ fun QuroAciCenterScreen(onClose: () -> Unit) {
     var searched by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<QuroAciManager.InstalledApp>>(emptyList()) }
 
-    // 受控端「控制台」SDUI 渲染：复用既有 LanUiScreen 渲染 console_ui 快照，不新增业务逻辑
+    // 受控端「控制台」SDUI 渲染：复用本地 ACI 控制台渲染器（AciConsoleScreen）渲染 console_ui 快照，不新增业务逻辑
     var consolePkg by remember { mutableStateOf<String?>(null) }
-    var consoleScreen by remember { mutableStateOf<LanScreen?>(null) }
+    var consoleScreen by remember { mutableStateOf<AciScreen?>(null) }
     var consoleLoading by remember { mutableStateOf(false) }
     var consoleError by remember { mutableStateOf<String?>(null) }
 
@@ -230,7 +230,7 @@ fun QuroAciCenterScreen(onClose: () -> Unit) {
             val resp = withContext(Dispatchers.IO) { mgr.call(pkg, "console_ui", android.os.Bundle()) }
             if (resp.isSuccess) {
                 val snap = resp.result?.getString("snapshot") ?: ""
-                consoleScreen = runCatching { LanUiModel.parse(JSONObject(snap)) }.getOrElse {
+                consoleScreen = runCatching { AciConsoleModel.parse(JSONObject(snap)) }.getOrElse {
                     consoleError = "控制台 JSON 解析失败：${it.message}"
                     null
                 }
@@ -252,7 +252,7 @@ fun QuroAciCenterScreen(onClose: () -> Unit) {
             val r2 = withContext(Dispatchers.IO) { mgr.call(pkg, "console_ui", android.os.Bundle()) }
             if (r2.isSuccess) {
                 val snap = r2.result?.getString("snapshot") ?: ""
-                consoleScreen = runCatching { LanUiModel.parse(JSONObject(snap)) }.getOrNull()
+                consoleScreen = runCatching { AciConsoleModel.parse(JSONObject(snap)) }.getOrNull()
             }
         }
     }
@@ -471,7 +471,7 @@ fun QuroAciCenterScreen(onClose: () -> Unit) {
             }
         }
     }
-    // 受控端「控制台」SDUI 弹层：复用 LanUiScreen 渲染 console_ui 快照
+    // 受控端「控制台」SDUI 弹层：复用本地 ACI 控制台渲染器（AciConsoleScreen）渲染 console_ui 快照
     if (consolePkg != null) {
         Dialog(onDismissRequest = { consolePkg = null; consoleScreen = null; consoleError = null }) {
             Surface(
@@ -496,7 +496,7 @@ fun QuroAciCenterScreen(onClose: () -> Unit) {
                     when {
                         consoleLoading -> CircularProgressIndicator()
                         consoleError != null -> Text(consoleError ?: "", color = MaterialTheme.colorScheme.error)
-                        else -> LanUiScreen(consoleScreen, onAction = { a, p -> consoleAction(a, p) })
+                        else -> AciConsoleScreen(consoleScreen, onAction = { a, p -> consoleAction(a, p) })
                     }
                 }
             }
