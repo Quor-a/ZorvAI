@@ -195,7 +195,7 @@ class MyAciService : BaseACIService() {
 • 能力不出现：确认 onCreateCapabilities 用「参数式 caps.add(...)」正确填充，且 Service 已运行（stopped 态会被唤醒广播拉起）。
 • 绑定直接失败/秒拒：99% 是 Manifest 漏写 <permission> 定义（CALL / DISCOVER / CALL_DANGEROUS），补上即可。
 
-十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的 20 项能力（官方参考实现之一，非浏览器专属手册）
+十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的 22 项能力（官方参考实现之一，非浏览器专属手册）
 （官方参考被控方。控制方 Zorv AI 经 ACI 调用它，第三方开发者可直接照抄这套能力声明范式（注意：这是示例，你的后端可声明任意能力，不必照搬此列表）：
  全部能力均在 onCreateCapabilities 用 Capability.create 参数式声明、onCall 内 when 分发。）
 
@@ -203,7 +203,7 @@ class MyAciService : BaseACIService() {
 • browser_open(url)        —— 打开指定网址；带空格自动转搜索引擎查询。
 • browser_info             —— 返回包名 + 版本号。
 • browser_list             —— 列出当前打开的浏览器标签页。
-• browser_read             —— 读取当前页 URL + 标题 + 完整 HTML（SPA 大页已切片防静默丢弃）。
+• browser_read             —— 读取当前页 URL + 标题 + 完整 HTML（SPA 大页已切片防静默丢弃）；增 `mode` 参数：full(默认) / clean（去脚本样式、可交互元素打 data-ai-id、标视口，供 AI 直接理解页面结构）。
 • browser_crawl            —— 返回结构化数据：标题 + 可读正文 + 出站链接（article/main/body 逐级回退）。
 • browser_search(kw)       —— 调用搜索引擎检索关键词，返回结果页标题/正文/链接。
 • browser_script(code)     —— 在当前页执行任意 JavaScript 并返回结果（核心能力，等价于给 AI 一个完整浏览器控制台）。
@@ -222,6 +222,10 @@ agentic 增强（新增 7 · 元素级操控 + 状态/事件/审计）：
 • browser_restore(id)      —— 页面状态回滚：导航回指定快照记录的 URL。
 • browser_events(limit?)   —— 页面事件总线：返回 page_started / page_finished / request / load_resource 等事件流。
 • browser_audit(limit?)    —— ACI 调用审计：每次外部调用（能力/参数/成败）一条记录。
+
+第二波增强（新增 2 · 资源回传 + 分享）：
+• browser_media           —— 扫描当前页 video/audio/source/a[download]/img 资源，返回结构化列表：绝对直链 + 类型 + 文本；video/audio 额外含 current_time/duration/paused/poster；a[download] 含 download。控制方可直接拿直链播放或下载。
+• browser_share(type, text?) —— 调起系统分享面板：type ∈ page(分享当前页 URL) / text(分享自定义文本)，返回 launched。
 
 ⚠️ 调用约束（与上文一致）：所有 WebView 操作（goBack/reload/canGoBack/canGoForward/evaluateJavascript 等）必须由被控方
 在主线程执行（mainHandler.post + CountDownLatch 同步等待），禁止在 ACI Binder 工作线程直接调用 WebView，

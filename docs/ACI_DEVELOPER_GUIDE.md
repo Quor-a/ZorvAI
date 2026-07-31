@@ -396,21 +396,48 @@ override fun onCallAsync(request: ACIRequest, callback: IACICallback) {
 
 ## 13. 官方受控端能力清单（ZorvAI 浏览器）
 
-ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 7 个能力。控制端 `QuroAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
+ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 22 个能力（13 基础 + 7 agentic + 2 资源/分享）。控制端 `QuroAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
 
-### 13.1 能力总览
+### 13.1 能力总览（共 22 项：13 基础 + 7 agentic + 2 资源/分享）
+
+**基础能力（13）**
 
 | 能力 id | 入参 | 出参 | 说明 |
 |---------|------|------|------|
-| `browser_open` | `url`(string, 必填) | `launched`(boolean) | 打开并导航到指定网址 |
-| `browser_read` | — | `url` / `title` / `html`(string) + `truncated`(boolean)；大页面额外返回 `html_gz`(byte[]) + `html_len`(int) | 读取当前页 HTML。**v1.0.8 修复 Binder ~1MB 溢出**（见 13.3） |
-| `browser_crawl` | — | `url` / `title` / `text` / `links`(string) + `link_count`(string) + `truncated`(boolean) | **🆕 v1.0.9** 抓取结构化正文（取 `article/main/body` 的 innerText）+ 出站链接 `[{text,href}]` |
-| `browser_search` | `query`(string, 必填) / `engine`(string, 可选：bing/google/baidu/ddg，默认 bing) | `query` / `engine` / `url` / `title` / `text` / `links`(string) + `truncated`(boolean) | **🆕 v1.0.9** 用搜索引擎检索关键词，返回结果页结构化数据 |
-| `browser_script` | `code`(string, 必填) | `result`(string) + `truncated`(boolean) | **🆕 v1.0.9** 在当前页面执行任意 JavaScript 并返回结果 |
-| `browser_list` | — | `tabs`(string) | 列出当前打开的标签页 |
+| `browser_open` | `url`(string, 必填) | `launched`(boolean) | 打开并导航到指定网址（带空格自动转搜索引擎查询） |
+| `browser_read` | `mode`(string, 可选：full 默认 / clean) | `url` / `title` / `html`(string) + `truncated`(boolean)；大页面额外 `html_gz`(byte[]) + `html_len`(int)；`mode=clean` 额外返回 `cleaned_html`(精简 DOM：去脚本样式、可交互元素打 `data-ai-id`、标视口) | 读取当前页 HTML。**v1.0.8 修复 Binder ~1MB 溢出**（见 13.3） |
+| `browser_crawl` | — | `url` / `title` / `text` / `links`(string) + `link_count`(string) + `truncated`(boolean) | 抓取结构化正文（取 `article/main/body` 的 innerText）+ 出站链接 `[{text,href}]` |
+| `browser_search` | `query`(string, 必填) / `engine`(string, 可选：bing/google/baidu/ddg，默认 bing) | `query` / `engine` / `url` / `title` / `text` / `links`(string) + `truncated`(boolean) | 用搜索引擎检索关键词，返回结果页结构化数据 |
+| `browser_script` | `code`(string, 必填) | `result`(string) + `truncated`(boolean) | 在当前页面执行任意 JavaScript 并返回结果（核心能力，等价于给 AI 一个完整浏览器控制台） |
+| `browser_list` | — | `tabs`(string) | 列出当前打开的浏览器标签页 |
 | `browser_info` | — | `package` / `versionName` / `versionCode`(string) | 查询受控端包名与版本信息 |
+| `browser_find` | `text`(string, 必填) | `count`(int) | 页面内查找文本并高亮，返回命中数 |
+| `browser_nav` | `action`(string, 必填：back / forward / reload) | `ok`(boolean) | 导航控制（WebView 操作已主线程安全封装） |
+| `browser_screenshot` | — | `path`(string) | 截当前可视区域存 PNG，返回文件路径（无需存储权限） |
+| `browser_capture` | `action`(string, 必填：list / clear / enable / disable) | `requests`(string) | 抓包：请求侧拦截，返回请求 URL/方法/请求头/是否主框架 |
+| `console_ui` | — | `snapshot`(string, JSON) | 返回控制台 SDUI 快照（组件 JSON），供控制端通用渲染，与手动控制台共用同一 ConsoleBackend |
+| `console_action` | `action`(string, 必填) / `payload`(string, 可选 JSON) | `ok`(boolean) + `action`(string) | 执行控制台动作（点击 / JS / 导航等），与手动控制台单一事实源 |
 
-> 所有能力均带 `FLAG_BACKGROUND` + `FLAG_NO_UI`，可在后台、无需 UI 执行。`browser_crawl` / `browser_search` 的正文与 `browser_script` 结果均**截断到约 15 万字符**（返回 `truncated=true` 表示被截断）。
+**agentic 增强（7 · 元素级操控 + 状态/事件/审计）**
+
+| 能力 id | 入参 | 出参 | 说明 |
+|---------|------|------|------|
+| `browser_elements` | — | `count`(int) + `elements`(string JSON) | 扫描可交互元素，自动标注稳定 ID（`data-aci-eid`），返回元素树：id/标签/类型/文本/值/链接/位置(x,y,w,h)/可见性 |
+| `browser_action` | `id`(string, 必填) / `op`(string, 必填：click/type/scroll_to/select) / `arg`(string, 可选) | `ok`(boolean) + `op` | 按元素稳定 ID 执行操作（type 兼容 React/Vue 受控输入） |
+| `browser_wait` | `cond`(string, 必填：visible/hidden/text_contains/network_idle) / `id`(string, 可选) / `arg`(string, 可选) / `timeout_ms`(int, 可选) | `ok`(boolean) + `cond` + `waited_ms` | 条件等待引擎（network_idle 自动打桩 XHR/fetch 计数判定 SPA 加载完成） |
+| `browser_snapshot` | `action`(string, 必填：save/list) / `label`(string, 可选) | `id`(string) 或 `list`(string) | 页面状态快照（save 按 label 覆盖 / list 列出） |
+| `browser_restore` | `id`(string, 必填) | `ok`(boolean) | 页面状态回滚：导航回指定快照记录的 URL |
+| `browser_events` | `limit`(int, 可选) | `events`(string JSON) | 页面事件总线：page_started / page_finished / request / load_resource |
+| `browser_audit` | `limit`(int, 可选) | `audit`(string JSON) | ACI 调用审计：每次外部调用（能力/参数/成败）一条记录 |
+
+**第二波增强（2 · 资源回传 + 分享）**
+
+| 能力 id | 入参 | 出参 | 说明 |
+|---------|------|------|------|
+| `browser_media` | — | `count`(int) + `resources`(string JSON) | 扫描当前页 `video/audio/source/a[download]/img`，返回绝对直链 + 类型 + 文本；`video/audio` 额外含 `current_time`/`duration`/`paused`/`poster`；`a[download]` 含 `download`。控制方可直接拿直链播放或下载 |
+| `browser_share` | `type`(string, 必填：page/text) / `text`(string, 可选) | `launched`(boolean) + `type` | 调起系统分享面板：page 分享当前页 URL / text 分享自定义文本 |
+
+> 所有能力均带 `FLAG_BACKGROUND` + `FLAG_NO_UI`，可在后台、无需 UI 执行。`browser_crawl` / `browser_search` / `browser_script` 的正文与结果均**截断到约 15 万字符**（返回 `truncated=true` 表示被截断）。`browser_read` 大页面额外 gzip 经 `html_gz` 回传（见 13.3）。⚠️ 所有 WebView 操作须在主线程执行（见 §11 坑表），受控端已封装 `mainHandler.post + CountDownLatch`，禁止在 ACI Binder 线程直接调用 WebView。
 
 ### 13.2 调用示例（控制端视角）
 
