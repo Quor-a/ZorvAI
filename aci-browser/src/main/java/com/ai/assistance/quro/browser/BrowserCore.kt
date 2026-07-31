@@ -10,6 +10,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import org.json.JSONObject
 
@@ -208,9 +209,13 @@ object BrowserCore {
     }
 
     /**
-     * 读取当前页面完整 HTML（v6 修复 Binder 溢出根因）。
-     * - 先轮询 document.readyState 等待加载完成（最多 3s），避免页未加载完返回空。
-     * - 抓取 outerHTML 后经 jsonUnescape 还原 evaluateJavascript 返回的 JSON 转义串。
+     * 读取当前页面完整 HTML（v7 SPA 大页修复）。
+     * 修复要点：
+     * 1) 在 JS 侧先把 outerHTML 切片到安全上限(~1MB)再返回，确保回调必拿到非空串；
+     *    控制端仍按 150k 内联 + html_gz 处理（gzip 后约数百 KB，远小于 Binder 1MB）。
+     * 2) 单次 evaluateJavascript（与 browser_script 同机制，后者在 SPA 下已证明稳定可读），
+     *    去掉会偶发穿透到空占位的重试/isBlankDoc 链。
+     * 3) latch.await 加 8s 超时，避免超大返回被静默丢弃时线程永久阻塞。
      */
     fun readHtml(): String {
         val ref = AtomicReference("")
@@ -221,28 +226,25 @@ object BrowserCore {
                 latch.countDown()
                 return@post
             }
-            val start = System.currentTimeMillis()
-            val grab: () -> Unit = {
-                wv.evaluateJavascript("document.documentElement.outerHTML") { html ->
-                    ref.set(jsonUnescape(html ?: ""))
+            val js = "(function(){try{var h=document.documentElement?document.documentElement.outerHTML:'';if(h.length>1000000)h=h.slice(0,1000000);return h;}catch(e){return '';}})()"
+            wv.evaluateJavascript(js) { html ->
+                val h = jsonUnescape(html ?: "")
+                DiagBuffer.append("Read", "outerHTML len=${h.length} url=${wv.url}")
+                if (h.isNotBlank()) {
+                    ref.set(h)
                     latch.countDown()
-                }
-            }
-            val poll = object : Runnable {
-                override fun run() {
-                    wv.evaluateJavascript("(function(){return document.readyState;})()") { state ->
-                        val s = jsonUnescape(state ?: "")
-                        if (s == "complete" || s == "interactive" || System.currentTimeMillis() - start >= 3000) {
-                            grab()
-                        } else {
-                            mainHandler.postDelayed(this, 150)
-                        }
+                } else {
+                    // 兜底：抓 body.innerHTML（同样切片），避免大页 outerHTML 失败时彻底空
+                    wv.evaluateJavascript("(function(){try{var b=document.body?document.body.innerHTML:'';if(b.length>1000000)b=b.slice(0,1000000);return b;}catch(e){return '';}})()") { inner ->
+                        val b = jsonUnescape(inner ?: "")
+                        DiagBuffer.append("Read", "fallback body.innerHTML len=${b.length}")
+                        ref.set(if (b.isNotBlank()) "<!DOCTYPE html><html><head></head><body>$b</body></html>" else "")
+                        latch.countDown()
                     }
                 }
             }
-            poll.run()
         }
-        try { latch.await() } catch (_: InterruptedException) {}
+        try { latch.await(8, TimeUnit.SECONDS) } catch (_: InterruptedException) {}
         return ref.get() ?: ""
     }
 
@@ -255,9 +257,13 @@ object BrowserCore {
     }
 
     /**
-     * 爬虫核心（v7 新增）：抓取当前页结构化数据 —— 标题 + 可读正文 + 出站链接。
-     * 在页内用 DOM 提取并 JSON.stringify 返回，正文超 200k 字符先在 JS 侧截断，
-     * 避免 WebView evaluateJavascript 返回值上限；出站链接上限 500 条。
+     * 爬虫核心（v7 新增，SPA 大页修复）：抓取当前页结构化数据 —— 标题 + 可读正文 + 出站链接。
+     * 修复要点：
+     * 1) 提取正文时若 article/main 为空（SPA 常见：正文在 body 下），回退到 document.body.innerText，
+     *    避免「优先 article/main 但拿到空节点」导致 text 恒为空。
+     * 2) 正文超 200k 字符先在 JS 侧截断，避免 evaluateJavascript 返回值上限；出站链接上限降到 200 条。
+     * 3) 单次 evaluateJavascript（与 browser_script 同机制）；latch.await 加 8s 超时防永久阻塞。
+     * 4) 主抓取为空/报错时，兜底抓 body 文本 + 标题 + url，绝不返回纯空结果。
      */
     fun crawlPage(): String {
         val ref = AtomicReference("")
@@ -265,19 +271,18 @@ object BrowserCore {
         mainHandler.post {
             val wv = displayWv
             if (wv == null) { latch.countDown(); return@post }
-            val start = System.currentTimeMillis()
-            val grab: () -> Unit = {
-                val js = """
+            val js = """
 (function(){
   try {
     var title = document.title || '';
     var url = location.href || '';
     var root = document.querySelector('article') || document.querySelector('main') || document.body;
     var text = (root ? root.innerText : '') || '';
-    text = text.replace(/\s+/g, ' ').trim();
+    if (!text && document.body) text = document.body.innerText || '';
+    text = (text || '').replace(/\s+/g, ' ').trim();
     if (text.length > 200000) text = text.slice(0, 200000);
     var as = document.querySelectorAll('a');
-    var max = Math.min(as.length, 500);
+    var max = Math.min(as.length, 200);
     var links = [];
     for (var i = 0; i < max; i++) {
       var a = as[i];
@@ -289,20 +294,23 @@ object BrowserCore {
   } catch(e) { return JSON.stringify({error:String(e)}); }
 })()
 """
-                wv.evaluateJavascript(js) { res -> ref.set(jsonUnescape(res ?: "")); latch.countDown() }
-            }
-            val poll = object : Runnable {
-                override fun run() {
-                    wv.evaluateJavascript("(function(){return document.readyState;})()") { state ->
-                        val s = jsonUnescape(state ?: "")
-                        if (s == "complete" || s == "interactive" || System.currentTimeMillis() - start >= 3000) grab()
-                        else mainHandler.postDelayed(this, 150)
+            wv.evaluateJavascript(js) { res ->
+                val r = jsonUnescape(res ?: "")
+                DiagBuffer.append("Crawl", "len=${r.length} err=${r.contains("error")}")
+                if (r.isNotBlank() && !r.contains("error")) {
+                    ref.set(r)
+                    latch.countDown()
+                } else {
+                    // 兜底：主抓取失败/报错时直接抓 body 文本 + 标题 + url，绝不返回纯空
+                    wv.evaluateJavascript("(function(){try{return JSON.stringify({url:location.href,title:document.title,text:((document.body?document.body.innerText:'').replace(/\\s+/g,' ').trim()),links:'[]',linkCount:(document.links?document.links.length:0)});}catch(e){return JSON.stringify({url:location.href,title:document.title,text:'',links:'[]',linkCount:0});}})()") { fb ->
+                        DiagBuffer.append("Crawl", "fallback: len=${(fb ?: "").length}")
+                        ref.set(jsonUnescape(fb ?: ""))
+                        latch.countDown()
                     }
                 }
             }
-            poll.run()
         }
-        try { latch.await() } catch (_: InterruptedException) {}
+        try { latch.await(8, TimeUnit.SECONDS) } catch (_: InterruptedException) {}
         return ref.get() ?: ""
     }
 
