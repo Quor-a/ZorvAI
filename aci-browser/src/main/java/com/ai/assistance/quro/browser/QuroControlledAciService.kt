@@ -164,6 +164,36 @@ class QuroControlledAciService : BaseACIService() {
             fail++; DiagBuffer.append(TAG, "✗ browser_info: ${e.message}")
         }
 
+        // console_ui（v1.0.12 新增：SDUI 控制台快照，后端驱动 UI）
+        try {
+            caps.add(
+                Capability.create("console_ui", "获取受控浏览器控制台的 UI 描述 JSON（组件化，前端渲染）")
+                    .addResult("snapshot", "string", "UI 描述 JSON 字符串")
+                    .addResult("title", "string", "控制台标题")
+                    .addFlag(Capability.FLAG_BACKGROUND)
+                    .addFlag(Capability.FLAG_NO_UI)
+            )
+            ok++; DiagBuffer.append(TAG, "✓ console_ui")
+        } catch (e: Throwable) {
+            fail++; DiagBuffer.append(TAG, "✗ console_ui: ${e.message}")
+        }
+
+        // console_action（v1.0.12 新增：处理控制台前端回传的动作）
+        try {
+            caps.add(
+                Capability.create("console_action", "处理控制台前端回传的动作（increment/reset/submit_note）")
+                    .addParam("action", "string", true, "动作 id")
+                    .addParam("payload", "string", false, "动作参数 JSON 字符串")
+                    .addResult("ok", "boolean", "是否成功")
+                    .addResult("action", "string", "实际处理的动作")
+                    .addFlag(Capability.FLAG_BACKGROUND)
+                    .addFlag(Capability.FLAG_NO_UI)
+            )
+            ok++; DiagBuffer.append(TAG, "✓ console_action")
+        } catch (e: Throwable) {
+            fail++; DiagBuffer.append(TAG, "✗ console_action: ${e.message}")
+        }
+
         DiagBuffer.append(TAG, "onCreateCapabilities 完成: $ok 成功 / $fail 失败 / 总计=${caps.size}")
 
         // 持久化一份到文件（备用）
@@ -195,6 +225,8 @@ class QuroControlledAciService : BaseACIService() {
                 "browser_script" -> handleScript(req.params)
                 "browser_list" -> handleList()
                 "browser_info" -> handleInfo()
+                "console_ui" -> handleConsoleUi()
+                "console_action" -> handleConsoleAction(req.params)
                 else -> {
                     DiagBuffer.append(TAG, "onCall: 未知能力 $cap")
                     ACIResponse.error(ACIError.CAPABILITY_NOT_FOUND, "unknown: $cap")
@@ -385,5 +417,32 @@ class QuroControlledAciService : BaseACIService() {
             .putResult("package", packageName)
             .putResult("versionName", try { packageManager.getPackageInfo(packageName, 0).versionName } catch (_: Throwable) { "?" })
             .putResult("versionCode", try { "${packageManager.getPackageInfo(packageName, 0).longVersionCode}" } catch (_: Throwable) { "0" })
+    }
+
+    /** SDUI 控制台：返回后端驱动的 UI 描述 JSON（前端渲染，后端免发版）。 */
+    private fun handleConsoleUi(): ACIResponse {
+        val snap = ConsoleBackend.buildUiSnapshot()
+        DiagBuffer.append(TAG, "console_ui: 返回快照（${snap.optJSONArray("components")?.length() ?: 0} 组件）")
+        return ACIResponse.success(Bundle())
+            .putResult("snapshot", snap.toString())
+            .putResult("title", snap.optString("title", ""))
+    }
+
+    /** SDUI 控制台：处理前端回传的动作（increment/reset/submit_note）。 */
+    private fun handleConsoleAction(params: Bundle?): ACIResponse {
+        val action = params?.getString("action") ?: ""
+        DiagBuffer.append(TAG, "console_action: action=$action")
+        if (action.isEmpty()) return ACIResponse.error(ACIError.BAD_REQUEST, "no action")
+        val payloadStr = params?.getString("payload") ?: ""
+        val payload = try {
+            if (payloadStr.isNotEmpty()) JSONObject(payloadStr) else null
+        } catch (e: Throwable) {
+            DiagBuffer.append(TAG, "console_action: payload 解析失败 ${e.message}")
+            null
+        }
+        val r = ConsoleBackend.applyAction(action, payload)
+        return ACIResponse.success(Bundle())
+            .putResult("ok", r.optBoolean("ok", false))
+            .putResult("action", r.optString("action", action))
     }
 }

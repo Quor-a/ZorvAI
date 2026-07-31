@@ -212,6 +212,19 @@
             </intent-filter>
         </activity>
 
+        <!-- LAN 控制台前端入口：原生安卓前端壳，连本地/局域网后端，与原 UI / ACI 解耦 -->
+        <activity
+            android:name=".lanui.LanUiActivity"
+            android:exported="true"
+            android:label="@string/sc_lan_long"
+            android:theme="@style/Theme.Quro"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.SHORTCUT_LAN_CONSOLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".service.QuroVoiceBallService"
             android:exported="false"
@@ -240,6 +253,12 @@
         <!-- 本地 MCP Server：环回地址 127.0.0.1，仅本机可访问 -->
         <service
             android:name=".service.QuroMcpService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- 本地 LAN 后端（demo）：环回地址 127.0.0.1，仅本机可访问，下发 UI 描述 JSON -->
+        <service
+            android:name=".lanui.LanBackendService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 

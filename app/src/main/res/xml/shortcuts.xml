@@ -29,4 +29,18 @@
             android:targetClass="com.ai.assistance.quro.activity.QuroMainActivity" />
     </shortcut>
 
+    <!-- ③ LAN 控制台：长按图标 → 进入原生前端壳，连本地/局域网后端（与 ACI 独立） -->
+    <shortcut
+        android:shortcutId="lan_console"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_chat"
+        android:shortcutShortLabel="@string/sc_lan_short"
+        android:shortcutLongLabel="@string/sc_lan_long"
+        android:shortcutDisabledMessage="@string/sc_lan_disabled">
+        <intent
+            android:action="com.ai.assistance.quro.action.SHORTCUT_LAN_CONSOLE"
+            android:targetPackage="com.ai.assistance.quro"
+            android:targetClass="com.ai.assistance.quro.lanui.LanUiActivity" />
+    </shortcut>
+
 </shortcuts>

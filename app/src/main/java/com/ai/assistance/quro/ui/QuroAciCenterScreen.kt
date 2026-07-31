@@ -22,6 +22,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ai.assistance.quro.core.aci.QuroAciManager
+import com.ai.assistance.quro.lanui.LanScreen
+import com.ai.assistance.quro.lanui.LanUiModel
+import com.ai.assistance.quro.lanui.LanUiScreen
+import org.json.JSONObject
+import androidx.compose.ui.window.Dialog
 import com.ai.assistance.quro.core.tools.QuroDownloadUtil
 import com.ai.assistance.quro.ui.theme.Card as PaperCard
 import com.ai.assistance.quro.ui.theme.Line
@@ -210,6 +215,48 @@ fun QuroAciCenterScreen(onClose: () -> Unit) {
     var searched by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<QuroAciManager.InstalledApp>>(emptyList()) }
 
+    // 受控端「控制台」SDUI 渲染：复用既有 LanUiScreen 渲染 console_ui 快照，不新增业务逻辑
+    var consolePkg by remember { mutableStateOf<String?>(null) }
+    var consoleScreen by remember { mutableStateOf<LanScreen?>(null) }
+    var consoleLoading by remember { mutableStateOf(false) }
+    var consoleError by remember { mutableStateOf<String?>(null) }
+
+    fun openConsole(pkg: String) {
+        consolePkg = pkg
+        consoleLoading = true
+        consoleError = null
+        consoleScreen = null
+        scope.launch {
+            val resp = withContext(Dispatchers.IO) { mgr.call(pkg, "console_ui", android.os.Bundle()) }
+            if (resp.isSuccess) {
+                val snap = resp.result?.getString("snapshot") ?: ""
+                consoleScreen = runCatching { LanUiModel.parse(JSONObject(snap)) }.getOrElse {
+                    consoleError = "控制台 JSON 解析失败：${it.message}"
+                    null
+                }
+            } else {
+                consoleError = "打开控制台失败（错误码=${resp.errorCode}）：${resp.errorMessage}"
+            }
+            consoleLoading = false
+        }
+    }
+
+    fun consoleAction(action: String, payload: Map<String, String>) {
+        val pkg = consolePkg ?: return
+        scope.launch {
+            val b = android.os.Bundle().apply {
+                putString("action", action)
+                putString("payload", JSONObject(payload).toString())
+            }
+            withContext(Dispatchers.IO) { mgr.call(pkg, "console_action", b) }
+            val r2 = withContext(Dispatchers.IO) { mgr.call(pkg, "console_ui", android.os.Bundle()) }
+            if (r2.isSuccess) {
+                val snap = r2.result?.getString("snapshot") ?: ""
+                consoleScreen = runCatching { LanUiModel.parse(JSONObject(snap)) }.getOrNull()
+            }
+        }
+    }
+
     fun reload() { statuses = mgr.getAppStatuses() }
 
     LaunchedEffect(Unit) { reload() }
@@ -357,6 +404,7 @@ fun QuroAciCenterScreen(onClose: () -> Unit) {
                 statuses.forEach { s ->
                     AciAppCard(
                         s,
+                        onOpenConsole = { openConsole(s.packageName) },
                         onRebind = {
                             mgr.rebind(s.packageName)
                             scope.launch { delay(600); reload() }
@@ -423,6 +471,37 @@ fun QuroAciCenterScreen(onClose: () -> Unit) {
             }
         }
     }
+    // 受控端「控制台」SDUI 弹层：复用 LanUiScreen 渲染 console_ui 快照
+    if (consolePkg != null) {
+        Dialog(onDismissRequest = { consolePkg = null; consoleScreen = null; consoleError = null }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp,
+                modifier = Modifier.fillMaxWidth(0.92f).wrapContentHeight()
+            ) {
+                Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            consoleScreen?.title ?: "控制台",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { consolePkg = null; consoleScreen = null; consoleError = null }) {
+                            Icon(Icons.Filled.Close, "关闭")
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    when {
+                        consoleLoading -> CircularProgressIndicator()
+                        consoleError != null -> Text(consoleError ?: "", color = MaterialTheme.colorScheme.error)
+                        else -> LanUiScreen(consoleScreen, onAction = { a, p -> consoleAction(a, p) })
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -430,6 +509,7 @@ private fun AciAppCard(
     s: QuroAciManager.AciAppStatus,
     onRebind: () -> Unit,
     onLaunch: () -> Unit,
+    onOpenConsole: (String) -> Unit,
 ) {
     val boundColor = Color(0xFF34C759)
     val unboundColor = Color(0xFFFF3B30)
@@ -472,6 +552,13 @@ private fun AciAppCard(
                     Icon(Icons.Filled.PlayArrow, null, Modifier.size(16.dp))
                     Spacer(Modifier.width(2.dp))
                     Text("启动")
+                }
+                if (s.capabilities.any { it.id == "console_ui" }) {
+                    TextButton(onClick = { onOpenConsole(s.packageName) }) {
+                        Icon(Icons.Filled.Dashboard, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(2.dp))
+                        Text("打开控制台")
+                    }
                 }
                 if (s.lastSeen > 0) {
                     Spacer(Modifier.width(8.dp))
