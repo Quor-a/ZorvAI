@@ -396,9 +396,9 @@ override fun onCallAsync(request: ACIRequest, callback: IACICallback) {
 
 ## 13. 官方受控端能力清单（ZorvAI 浏览器）
 
-ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 22 个能力（13 基础 + 7 agentic + 2 资源/分享）。控制端 `QuroAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
+ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 28 个能力（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案）。控制端 `QuroAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
 
-### 13.1 能力总览（共 22 项：13 基础 + 7 agentic + 2 资源/分享）
+### 13.1 能力总览（共 28 项：13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案）
 
 **基础能力（13）**
 
@@ -436,6 +436,19 @@ ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，�
 |---------|------|------|------|
 | `browser_media` | — | `count`(int) + `resources`(string JSON) | 扫描当前页 `video/audio/source/a[download]/img`，返回绝对直链 + 类型 + 文本；`video/audio` 额外含 `current_time`/`duration`/`paused`/`poster`；`a[download]` 含 `download`。控制方可直接拿直链播放或下载 |
 | `browser_share` | `type`(string, 必填：page/text) / `text`(string, 可选) | `launched`(boolean) + `type` | 调起系统分享面板：page 分享当前页 URL / text 分享自定义文本 |
+
+**第三波增强（6 · 完整方案：控制台捕获 + 选择器操控 + 轻量多标签）**
+
+| 能力 id | 入参 | 出参 | 说明 |
+|---------|------|------|------|
+| `browser_console` | `action`(string, 可选：list 默认/clear/enable/disable) / `limit`(int, 可选) / `filter`(string, 可选) | `entries`(string JSON) + `count`(int) + `enabled`(boolean) | 抓取当前页 console.* 输出（log/warn/error/info）；原生 `WebChromeClient.onConsoleMessage` 钩取，默认开启 |
+| `browser_query` | `selector`(string, 必填 CSS 选择器) | `count`(int) + `matches`(string JSON) | 按 CSS 选择器查询 DOM，返回匹配元素：index/标签/文本/值/链接/id/class/位置/可见性 |
+| `browser_tabnew` | `url`(string, 必填) / `title`(string, 可选) | `tab_id`(string) + `url` + `active`(boolean) | 轻量多标签·新建并打开（单引擎，标签记录 URL + 切换重载） |
+| `browser_tabs` | — | `count`(int) + `tabs`(string JSON) + `active_id`(string) | 轻量多标签·列出（含 active 标记） |
+| `browser_tab` | `id`(string, 必填) | `ok`(boolean) + `url` + `id` | 轻量多标签·切换到指定标签（重载其 URL） |
+| `browser_tabclose` | `id`(string, 必填) | `ok`(boolean) + `remaining`(int) | 轻量多标签·关闭（激活标签关闭后自动回退最近一个） |
+
+> 注：`browser_action` 在第三波新增 `selector`(CSS 选择器) 参数（与 `id` 二选一，优先级低于 `id`），可直接用选择器定位操作，免去先 `browser_elements` 注入稳定 ID。
 
 > 所有能力均带 `FLAG_BACKGROUND` + `FLAG_NO_UI`，可在后台、无需 UI 执行。`browser_crawl` / `browser_search` / `browser_script` 的正文与结果均**截断到约 15 万字符**（返回 `truncated=true` 表示被截断）。`browser_read` 大页面额外 gzip 经 `html_gz` 回传（见 13.3）。⚠️ 所有 WebView 操作须在主线程执行（见 §11 坑表），受控端已封装 `mainHandler.post + CountDownLatch`，禁止在 ACI Binder 线程直接调用 WebView。
 

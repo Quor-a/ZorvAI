@@ -195,7 +195,7 @@ class MyAciService : BaseACIService() {
 • 能力不出现：确认 onCreateCapabilities 用「参数式 caps.add(...)」正确填充，且 Service 已运行（stopped 态会被唤醒广播拉起）。
 • 绑定直接失败/秒拒：99% 是 Manifest 漏写 <permission> 定义（CALL / DISCOVER / CALL_DANGEROUS），补上即可。
 
-十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的 22 项能力（官方参考实现之一，非浏览器专属手册）
+十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的 28 项能力（官方参考实现之一，非浏览器专属手册）
 （官方参考被控方。控制方 Zorv AI 经 ACI 调用它，第三方开发者可直接照抄这套能力声明范式（注意：这是示例，你的后端可声明任意能力，不必照搬此列表）：
  全部能力均在 onCreateCapabilities 用 Capability.create 参数式声明、onCall 内 when 分发。）
 
@@ -227,13 +227,22 @@ agentic 增强（新增 7 · 元素级操控 + 状态/事件/审计）：
 • browser_media           —— 扫描当前页 video/audio/source/a[download]/img 资源，返回结构化列表：绝对直链 + 类型 + 文本；video/audio 额外含 current_time/duration/paused/poster；a[download] 含 download。控制方可直接拿直链播放或下载。
 • browser_share(type, text?) —— 调起系统分享面板：type ∈ page(分享当前页 URL) / text(分享自定义文本)，返回 launched。
 
+第三波增强（新增 6 · 元宝 TermBrowser「完整方案」落地：控制台捕获 + 选择器操控 + 轻量多标签）+ browser_action selector 增强：
+• browser_console(action?, limit?, filter?) —— 抓取当前页 console.* 输出（log/warn/error/info）：action ∈ list(默认)/clear/enable/disable，返回 entries[{level,text,source,line,time}] + count + enabled。原生 WebChromeClient.onConsoleMessage 钩取（默认开启）。
+• browser_query(selector)  —— 按 CSS 选择器查询当前页 DOM，返回匹配列表：count + matches[{index,tag,text,value,href,id,cls,x,y,w,h,visible}]。供 AI 直接按选择器定位元素。
+• browser_action 增强 —— 原按 data-aci-eid 操作；现新增 `selector`(CSS 选择器) 参数（与 id 二选一，优先级低于 id），可直接用 "#main button" 之类定位操作，免去先 browser_elements 注入。
+• browser_tabnew(url, title?) —— 轻量多标签·新建并打开（单引擎，标签记录 URL + 切换重载）。
+• browser_tabs             —— 轻量多标签·列出（含 active 标记）+ active_id。
+• browser_tab(id)         —— 轻量多标签·切换到指定标签（重载其 URL）。
+• browser_tabclose(id)    —— 轻量多标签·关闭（激活标签关闭后自动回退最近一个）。
+
 ⚠️ 调用约束（与上文一致）：所有 WebView 操作（goBack/reload/canGoBack/canGoForward/evaluateJavascript 等）必须由被控方
 在主线程执行（mainHandler.post + CountDownLatch 同步等待），禁止在 ACI Binder 工作线程直接调用 WebView，
 否则抛 "A WebView method was called on thread 'binder'"。
 
 十一、规划方向（尚未实现，供参考）
-元宝「TermBrowser」方案提出的其余被控浏览器增强方向，可作为后续迭代参考（未实装前请勿在 onCall 中声明）：
-• 多标签页独立管理（tabnew / tabclose / tabswitch）。
+元宝「TermBrowser」方案其余尚未落地的增强方向（轻量多标签 tabnew/tabclose/tabs/tab 已在第三波以「单引擎轻量版」落地；真·并行隔离仍属架构级改造）：
+• 隔离 Profile 沙盒 / 敏感操作人工接管浮窗 / 后台持续渲染 / 多实例并行隔离 / 速率限制熔断。
 • console.log 实时捕获（hook console，供 AI 读取页面运行日志；当前已有 page 级事件 browser_events，尚未 hook console）。
 • 自编译 Chromium / CDP 深度控制（拦截响应体、改写响应头、自定义协议）。
 • 命令录制 / 重放（自动化操作序列）。
