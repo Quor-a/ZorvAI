@@ -11,9 +11,6 @@
     <string name="sc_chat_short">小窗对话</string>
     <string name="sc_chat_long">直接进入对话</string>
     <string name="sc_chat_disabled">对话已禁用</string>
-    <string name="sc_lan_short">LAN 控制台</string>
-    <string name="sc_lan_long">ZorvAI LAN 控制台</string>
-    <string name="sc_lan_disabled">LAN 控制台已禁用</string>
     <string name="sc_browser_short">浏览器控制台</string>
     <string name="sc_browser_long">ZorvAI 浏览器控制台</string>
     <string name="sc_browser_disabled">浏览器控制台已禁用</string>

@@ -11,8 +11,8 @@ import androidx.compose.ui.unit.dp
  * 本地 ACI 控制台 SDUI 的 Compose 渲染器（递归渲染 [AciComponent]）。
  * 纯 UI，不持有任何网络/Binder 逻辑；数据来自 AciConsoleModel.parse(console_ui 快照)。
  *
- * 与 lanui.LanUiScreen 的渲染逻辑一致，但归属 aci 包、语义为「本地 ACI 控制台」，
- * 从而与「LAN/WiFi 远程控制台」范式彻底解耦。
+ * 语义为「本地 ACI 控制台」，通过 Binder 拉取受控端（浏览器）的 console_ui 快照并回传
+ * console_action，与「LAN/WiFi 远程控制台」范式彻底解耦。
  */
 @Composable
 fun AciConsoleScreen(

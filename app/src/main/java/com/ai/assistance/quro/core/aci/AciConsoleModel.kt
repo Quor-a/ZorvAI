@@ -4,15 +4,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 本地 ACI 控制台 SDUI 模型（从 lanui 包解耦，纯本地、零网络依赖）。
+ * 本地 ACI 控制台 SDUI 模型（纯本地、零网络依赖）。
  *
  * ACI（Agent Capability Interface）是同设备无 Root 的 App 间 Binder 调用框架，
  * 其控制台 UI 经受控端 console_ui 能力返回的 JSON 快照驱动前端渲染。
  * 组件词汇与被控浏览器 ConsoleBackend.buildUiSnapshot() 保持一致，
  * 以便任何通用前端都能直接渲染。
  *
- * ⚠️ 与 lanui 的区别：lanui 是「LAN/WiFi 远程控制台」范式（自带 ServerSocket/HTTP 客户端），
- *    而本模型只描述 UI 数据、不持任何网络能力 —— ACI 控制台从构造上就是本地、离线渲染。
+ * 与早期「LAN/WiFi 远程控制台」范式（自带 ServerSocket/HTTP 客户端、自连本地环回）不同，
+ * 本模型只描述 UI 数据、不持任何网络能力 —— ACI 控制台从构造上就是本地、离线渲染。
  */
 data class AciScreen(
     val title: String,
