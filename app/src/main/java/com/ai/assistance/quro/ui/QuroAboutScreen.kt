@@ -219,6 +219,7 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
             Triple("Sherpa-NCNN", "Apache-2.0 / BSD-3", "k2-fsa"),
             Triple("GeckoView", "MPL-2.0", "Mozilla（文件级 Copyleft，源码随包提供）"),
             Triple("org.json", "JSON License", "随 Android 平台附带，条款含 \"not for Evil\""),
+            Triple("ACI 控制台 UI（LAN 控制台·本地 SDUI 渲染）", "Apache-2.0", "本应用自研（core/aci + consolekit），无第三方依赖"),
         )
         AlertDialog(
             onDismissRequest = { showLicense = false },

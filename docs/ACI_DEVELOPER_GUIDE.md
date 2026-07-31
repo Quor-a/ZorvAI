@@ -1,6 +1,6 @@
 # Zorv AI · ACI 开发者手册（Agent Capability Interface）
 
-> 版本：v1.0.9（能力清单同步 ZorvAI 浏览器 v1.0.9）｜ 适用 SDK：`aci-core` ｜ 最后更新：2026-07-30
+> 版本：v1.0.13（能力清单同步 ZorvAI 浏览器 v1.0.12；新增 §14 LAN 控制台 / 控制台后台接入）｜ 适用 SDK：`aci-core` ｜ 最后更新：2026-07-31
 >
 > 本文档面向**希望让自己的 Android App 被 Zorv AI（或其他 ACI 控制端）调用**的第三方开发者，也适用于**想基于 `aci-core` 自建控制端**的开发者。
 
@@ -446,6 +446,91 @@ AIDL Binder 单次事务上限约 **1MB**。早期实现直接 `putResult("html"
 - gzip 后若仍 >900KB，放弃 `html_gz`，仅返回截断预览（极端大页面兜底）。
 
 > 这是**受控端 + 控制端**双侧改动：受控端负责截断/压缩，控制端负责解压还原。第三方受控端若也要回传大结果，建议复用同一模式。
+
+---
+
+---
+
+## 14. LAN 控制台 / 控制台后台接入 ZorvAI
+
+> 本节对应主程序「设置 → ACI 管理中心 → ACI 被控方接入手册」中的「控制台后台（ConsoleBackend）开发接入 ZorvAI」一节，面向**想让自己的受控端在 Zorv AI 里显示一个可交互控制台**的开发者。
+
+Zorv AI 的控制台 UI 采用 **SDUI（Server-Driven UI）** 模式：受控端只暴露两个能力——`console_ui`（返回界面快照 JSON）与 `console_action`（处理用户操作），控制端负责**纯本地渲染**，**不经过任何网络**（同设备 Binder 调用，WiFi / 移动网络均不影响）。早期版本曾误建「app 自连 `127.0.0.1` 环回 HTTP 控制台」（`lanui` 模块），已于 2026-07-31 彻底移除；现行方案即本节所述。
+
+### 14.1 接入方式
+
+受控端二选一：
+
+- **方式 A（推荐）**：实现 `AciConsoleContract` 接口（`buildUiSnapshot(): JSONObject` + `applyAction(action, payload): JSONObject`），并注册 `console_ui` / `console_action` 两个 ACI 能力，在 `onCall` 中转发到你的 `ConsoleBackend` 实现。
+- **方式 B（极简）**：不实现接口，直接在 `onCall` 里处理 `console_ui` / `console_action` 两个 capability，返回约定的 JSON。
+
+### 14.2 快照 JSON Schema（`console_ui` 返回）
+
+```json
+{
+  "title": "受控端控制台",
+  "subtitle": "可选副标题",
+  "updatedAt": "2026-07-31T12:00:00",
+  "components": [
+    { "type": "heading", "text": "标题" },
+    { "type": "text", "text": "一段说明文字" },
+    { "type": "card", "title": "卡片", "body": "卡片内容" },
+    { "type": "button", "key": "reset", "text": "重置" },
+    { "type": "divider" },
+    { "type": "spacer", "height": 8 },
+    { "type": "input", "key": "note", "hint": "请输入备注", "value": "" },
+    { "type": "listitem", "title": "项", "subtitle": "子项" }
+  ]
+}
+```
+
+组件类型：`heading` / `text` / `card` / `button` / `divider` / `spacer` / `input` / `listitem`。
+
+### 14.3 动作契约（`console_action` 入参）
+
+- **按钮点击**：`payload` 为空 `{}`（或仅含 `action=按钮 key`）；受控端按 `key` 执行对应逻辑。
+- **输入框提交**：`payload` 为 `{ "<input 的 key>": "<用户输入值>" }`，例如 `{ "note": "hello" }`。
+
+> ⚠️ **兼容性铁律**：控制端（Zorv AI 主程序）的 Compose 控制台在输入框提交时回传 `{ "value": "...", "key": "..." }`，而受控端 `ConsoleBackend.applyAction` 是按**输入框 key** 读取参数的（`p.optString(key)`）。受控端务必以 `key` 为准读取入参，不要依赖 `value` 字段，否则会收不到输入。
+
+### 14.4 最小 Kotlin 示例
+
+```kotlin
+// ConsoleBackend.kt（受控端内部）
+object ConsoleBackend {
+    var count = 0
+    var lastNote = ""
+    fun buildUiSnapshot(): JSONObject = JSONObject().apply {
+        put("title", "我的控制台")
+        put("components", JSONArray().apply {
+            put(JSONObject().put("type", "heading").put("text", "计数器"))
+            put(JSONObject().put("type", "text").put("text", "当前：$count"))
+            put(JSONObject().put("type", "button").put("key", "inc").put("text", "加一"))
+            put(JSONObject().put("type", "input").put("key", "note").put("hint", "备注"))
+        })
+    }
+    fun applyAction(action: String, payload: JSONObject): JSONObject {
+        when (action) {
+            "inc" -> count++
+            "note" -> lastNote = payload.optString("note")
+        }
+        return buildUiSnapshot()
+    }
+}
+```
+
+### 14.5 复用 `consolekit`（可选）
+
+Zorv AI 主程序内置 `consolekit` 包，受控端或控制端都可复用：
+
+- `LocalConsoleEndpoint`：同进程直连 `ConsoleBackend`；
+- `RemoteConsoleEndpoint`：跨进程 `bindService` 到目标包名（可替换 `targetPackage`）；
+- `AciConsoleRenderer`：纯 `View` 实现的 SDUI 渲染器（不依赖 Compose）；
+- `ManualConsolePanel`：单线程 worker，避免 WebView 主线程 `evaluateJavascript` 死锁。
+
+### 14.6 控制端如何驱动
+
+控制端 `QuroAciCenterScreen` 按 capability id `console_ui` 发现「打开控制台」入口；点击后通过 Binder 拉取 `console_ui` 快照，用本地 `AciConsoleScreen`（`core/aci` 包）渲染；按钮 / 输入经 `console_action` 回传并刷新快照。**全程纯接线、零侵入、零网络。**
 
 ---
 

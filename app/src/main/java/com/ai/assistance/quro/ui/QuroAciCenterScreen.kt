@@ -87,6 +87,10 @@ private val ACI_DEV_DOC = """
 ══════════════════════════════════════════
 ACI 被控方（第三方 App）开发手册
 ══════════════════════════════════════════
+📌 本文档是「通用被控方开发手册」，面向任何想接入 ZorvAI 的第三方 App 开发者，并非 ZorvAI 浏览器专属。
+   受控浏览器（com.ai.assistance.quro.browser）只是其中一个「官方参考实现示例」；其能力清单（第十节）仅供照抄声明范式，
+   你完全可以用自己的业务后端照此接入，不必局限于浏览器。
+
 一、ACI 是什么
 • 本地、无 Root 的 App 间 AIDL 调用框架；不依赖 Shizuku / dumpsys / ROOT / 无障碍 / 设备管理员。
 • 控制方（AI 中枢，如 Zorv AI）发现并调用第三方 App 暴露的能力；你作为「被控方」按本协议暴露能力。
@@ -190,6 +194,127 @@ class MyAciService : BaseACIService() {
 • 返回 503：绑定生命周期抖动，框架自动重绑，直接重试即可。
 • 能力不出现：确认 onCreateCapabilities 用「参数式 caps.add(...)」正确填充，且 Service 已运行（stopped 态会被唤醒广播拉起）。
 • 绑定直接失败/秒拒：99% 是 Manifest 漏写 <permission> 定义（CALL / DISCOVER / CALL_DANGEROUS），补上即可。
+
+十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的 20 项能力（官方参考实现之一，非浏览器专属手册）
+（官方参考被控方。控制方 Zorv AI 经 ACI 调用它，第三方开发者可直接照抄这套能力声明范式（注意：这是示例，你的后端可声明任意能力，不必照搬此列表）：
+ 全部能力均在 onCreateCapabilities 用 Capability.create 参数式声明、onCall 内 when 分发。）
+
+基础能力（13）：
+• browser_open(url)        —— 打开指定网址；带空格自动转搜索引擎查询。
+• browser_info             —— 返回包名 + 版本号。
+• browser_list             —— 列出当前打开的浏览器标签页。
+• browser_read             —— 读取当前页 URL + 标题 + 完整 HTML（SPA 大页已切片防静默丢弃）。
+• browser_crawl            —— 返回结构化数据：标题 + 可读正文 + 出站链接（article/main/body 逐级回退）。
+• browser_search(kw)       —— 调用搜索引擎检索关键词，返回结果页标题/正文/链接。
+• browser_script(code)     —— 在当前页执行任意 JavaScript 并返回结果（核心能力，等价于给 AI 一个完整浏览器控制台）。
+• browser_find(text)       —— 页面内查找文本并高亮，返回命中数。
+• browser_nav(action)      —— 导航：action ∈ back / forward / reload（WebView 操作已主线程安全封装）。
+• browser_screenshot       —— 截当前可视区域存 PNG，返回文件路径（无需存储权限）。
+• browser_capture(action)  —— 抓包：action ∈ list / clear / enable / disable，返回请求 URL/方法/请求头/是否主框架。
+• console_ui               —— 返回控制台 SDUI 快照（组件 JSON），供控制端通用渲染，与手动控制台共用同一 ConsoleBackend。
+• console_action(action, payload) —— 执行控制台动作（点击 / JS / 导航等），与手动控制台单一事实源。
+
+agentic 增强（新增 7 · 元素级操控 + 状态/事件/审计）：
+• browser_elements         —— 扫描当前页可交互元素，自动标注稳定ID（data-aci-eid），返回元素树：id/标签/类型/文本/值/链接/位置(x,y,w,h)/可见性。
+• browser_action(id, op, arg) —— 按元素稳定ID执行操作：click 点击 / type 输入（兼容 React/Vue 受控输入）/ scroll_to 滚动居中 / select 选择下拉项。
+• browser_wait(cond, id?, arg?, timeout_ms?) —— 条件等待引擎：visible / hidden / text_contains（按元素ID）/ network_idle（SPA 加载完成，自动打桩 XHR/fetch 计数）。
+• browser_snapshot(action, label?) —— 页面状态快照：save 保存当前 URL/标题/HTML 到快照库（按 label 覆盖）/ list 列出已有快照。
+• browser_restore(id)      —— 页面状态回滚：导航回指定快照记录的 URL。
+• browser_events(limit?)   —— 页面事件总线：返回 page_started / page_finished / request / load_resource 等事件流。
+• browser_audit(limit?)    —— ACI 调用审计：每次外部调用（能力/参数/成败）一条记录。
+
+⚠️ 调用约束（与上文一致）：所有 WebView 操作（goBack/reload/canGoBack/canGoForward/evaluateJavascript 等）必须由被控方
+在主线程执行（mainHandler.post + CountDownLatch 同步等待），禁止在 ACI Binder 工作线程直接调用 WebView，
+否则抛 "A WebView method was called on thread 'binder'"。
+
+十一、规划方向（尚未实现，供参考）
+元宝「TermBrowser」方案提出的其余被控浏览器增强方向，可作为后续迭代参考（未实装前请勿在 onCall 中声明）：
+• 多标签页独立管理（tabnew / tabclose / tabswitch）。
+• console.log 实时捕获（hook console，供 AI 读取页面运行日志；当前已有 page 级事件 browser_events，尚未 hook console）。
+• 自编译 Chromium / CDP 深度控制（拦截响应体、改写响应头、自定义协议）。
+• 命令录制 / 重放（自动化操作序列）。
+• 隔离 Profile 沙盒 / 敏感操作拦截 + 人工接管 / 后台持续渲染 / 多实例（架构级改造，暂未实装）。
+• 速率限制与熔断（防止 AI 高频调用压垮页面）。
+
+十二、控制台后台（ConsoleBackend）开发接入 ZorvAI
+（本文档此前缺失的部分：你的 App 如何提供一个「后端驱动 UI」的控制台，让 ZorvAI 主程序 / 手动控制台无需为每个 App 重写 UI 就能驱动它。）
+
+【概念】控制台后台是一个「业务状态机」：
+• buildUiSnapshot() 生成一份 UI 描述 JSON（SDUI，组件化），前端（ZorvAI / 手动控制台）拿到后通用渲染；
+  后端想改 UI 不用发版前端，只要改快照 JSON 即可。
+• applyAction(action, payload) 处理前端回传的动作，真正驱动你的业务。
+• 经两个 ACI 能力暴露给通用前端：console_ui（返回快照 JSON）/ console_action（处理动作）。
+  手动控制台与 AI 走的是同一个后端 → 一份真相、统一通道。
+
+【接入方式 A：实现契约 + 暴露两个能力（推荐）】
+1) 实现通用契约 AciConsoleContract（或直接写两个 ACI 能力）：
+   - getSnapshot(): JSONObject          // 返回 SDUI 快照 JSON（必须在非 UI 线程调用）
+   - sendAction(action: String, payload: Map<String,String>): JSONObject
+2) 在 onCreateCapabilities 注册：
+   - console_ui：result "snapshot"（String，快照 JSON 字符串）
+   - console_action：param "action"（String）+ "payload"（String，JSON 字符串）；result "ok"（boolean）+ "action"（String）
+3) 在 onCall 分发：
+   - console_ui  → 返回 buildUiSnapshot().toString()
+   - console_action → 解析 payload JSON，调用 applyAction，返回 {ok, action, message}
+
+【快照 JSON Schema】
+{
+  "title": "我的控制台",
+  "subtitle": "后端驱动渲染 · 免发版",
+  "updatedAt": 1700000000000,
+  "components": [ ... ]
+}
+组件类型（与 ZorvAI 渲染器一一对应，任意通用前端都能渲染）：
+• heading{text}            标题
+• text{text}               说明文字
+• card{title, body}        卡片
+• button{action, label}    按钮（点击 → 回传 action）
+• divider{}                分隔线
+• spacer{}                 间距
+• input{key, label, placeholder, value, action}   输入框（提交 → 回传 action + 输入值）
+• listitem{text}           列表项
+
+【动作契约】
+• 按钮：回传 payload 为空 Map，后端按 action 字符串区分（如 "nav_back" / "read" / "screenshot"）。
+• 输入框：提交时回传 { <input.key>: <输入文本> }。⚠️ 兼容注意：ZorvAI 主程序 Compose 控制台当前额外回传 {"value":..., "key":...}，
+  建议后端取值用 payload["value"] ?: payload[inputKey] 兜底，避免取不到。
+• applyAction 返回 {ok:true, action:"<原action>", message:"<可读结果>"}，前端据此刷新快照 / 显示结果。
+
+【最小 Kotlin 示例】
+class MyConsoleBackend : AciConsoleContract {
+    override fun getSnapshot(): JSONObject {
+        val comps = JSONArray()
+        comps.put(JSONObject().put("type","heading").put("text","我的 App 控制台"))
+        comps.put(JSONObject().put("type","button").put("action","do_thing").put("label","执行操作"))
+        comps.put(JSONObject().put("type","input").put("key","name").put("label","名字")
+            .put("placeholder","输入").put("value","").put("action","greet"))
+        return JSONObject().put("title","我的控制台").put("components",comps)
+    }
+    override fun sendAction(action: String, payload: Map<String,String>): JSONObject {
+        val msg = when(action) {
+            "do_thing" -> "已执行"
+            "greet" -> "你好, " + (payload["value"] ?: payload["name"] ?: "?")
+            else -> "未知 action"
+        }
+        return JSONObject().put("ok",true).put("action",action).put("message",msg)
+    }
+}
+// 在 MyAciService 中：console_ui → MyConsoleBackend.getSnapshot().toString()；
+// console_action → 解析 payload 后 MyConsoleBackend.sendAction(...)。
+
+【复用 consolekit（可选：给受控 App 自带一个手动控制台，无需自己写 UI）】
+你的受控 App 想自带一个「手动控制台」面板，直接用通用组件即可，不用写业务 UI：
+• AciConsoleContract：通用契约（前端只认它，不认你的业务）；
+• LocalConsoleEndpoint(backend)：同进程直接委派（手动控制台与 AI 共用同一后端）；
+• RemoteConsoleEndpoint(ctx, targetPackage)：跨进程 bind 第 2 / 3 … 个受控 App 的 console_ui / console_action，
+  换 targetPackage 即复用同一套控制台 UI，零改动；
+• AciConsoleRenderer：纯 View 的 SDUI 渲染器（无 Compose 依赖），把快照渲染成原生控件；
+• ManualConsolePanel：单线程 worker 编排（避开 WebView 主线程死锁），接 AciConsoleContract 到 UI。
+开发第 2、第 3 个受控软件时，控制台 UI 完全不用重写 —— 只要它们暴露 console_ui / console_action。
+
+【ZorvAI 如何驱动你】
+ZorvAI「设置 → ACI 管理中心」列出已发现的受控 App；点「打开控制台」即经 Binder 拉取你的 console_ui 快照，
+用 AciConsoleScreen（Compose）渲染；按钮 / 输入回传 console_action。你无需为 ZorvAI 写任何前端代码。
 """
 
 /**

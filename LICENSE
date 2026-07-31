@@ -188,3 +188,15 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+----------------------------------------------------------------------
+
+许可证补充说明 · LAN 控制台 / ACI 控制台 子系统
+
+本仓库的「LAN 控制台」（即 ACI 控制台 UI，对应 app/src/main/java/com/ai/assistance/quro/core/aci/
+与 consolekit/ 包）为 Zorv AI 原创自研代码，随主应用以 Apache-2.0 许可证（见上文）整体发布，
+不引入任何第三方专有或强 Copyleft 依赖。
+
+该子系统通过 ACI 框架以 console_ui / console_action 两个能力暴露 SDUI 快照与动作处理，
+控制端仅做本地渲染，不依赖任何网络组件。其许可证义务已完全由本仓库主许可证
+（Apache-2.0）覆盖，无需另行声明。
