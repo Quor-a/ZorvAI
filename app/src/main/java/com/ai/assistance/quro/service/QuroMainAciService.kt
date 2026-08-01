@@ -9,6 +9,8 @@ import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import com.ai.assistance.quro.core.aci.QuroAciCredentialVault
+import com.ai.assistance.quro.core.aci.QuroAciErrors
+import com.ai.assistance.quro.core.aci.QuroAciProtocol
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -94,6 +96,17 @@ class QuroMainAciService : BaseACIService() {
                 .addFlag(Capability.FLAG_BACKGROUND)
                 .addFlag(Capability.FLAG_NO_UI)
         )
+        caps.add(
+            Capability.create(
+                "aci_protocol",
+                "返回本端 ACI 协议版本信息（aci-protocol-v1），供控制端协商兼容版本。" +
+                    "属于 ACI 2.0 协议版本化层，依托 aci-core 的 Capability 机制暴露。"
+            )
+                .addResult("protocol_version", "string", "当前协议标识，如 aci-protocol-v1")
+                .addResult("semver", "string", "协议 SemVer，如 1.0.0")
+                .addResult("supported", "string", "本端支持的全部协议版本（逗号分隔）")
+                .addFlag(Capability.FLAG_NO_UI)
+        )
     }
 
     override fun onCheckPermission(req: ACIRequest?, callerPkg: String?): Boolean {
@@ -107,17 +120,18 @@ class QuroMainAciService : BaseACIService() {
         return try {
             when (req.capability) {
                 "http_request" -> handleHttpRequest(req.params)
+                "aci_protocol" -> handleProtocol()
                 else -> ACIResponse.error(ACIError.CAPABILITY_NOT_FOUND, "unknown: ${req.capability}")
             }
         } catch (e: Throwable) {
             Log.e(TAG, "onCall 异常: ${e.message}")
-            ACIResponse.error(ACIError.INTERNAL_ERROR, e.message ?: "err")
+            aciError(QuroAciErrors.E_INTERNAL, "onCall 异常", "受控端处理调用时抛异常：${e.message}。请查看被控端日志。", QuroAciErrors.LAYER_BINDER)
         }
     }
 
     private fun handleHttpRequest(params: Bundle?): ACIResponse {
         val url = params?.getString("url") ?: ""
-        if (url.isEmpty()) return ACIResponse.error(ACIError.BAD_REQUEST, "no url")
+        if (url.isEmpty()) return aciError(QuroAciErrors.E_BAD_REQUEST, "缺少 url 参数", "调用 http_request 必须传 url 参数。", QuroAciErrors.LAYER_PROTOCOL)
         val method = (params?.getString("method") ?: "GET").uppercase()
         val headersStr = params?.getString("headers") ?: ""
         val body = params?.getString("body")  // 可能为 null
@@ -133,7 +147,7 @@ class QuroMainAciService : BaseACIService() {
             try {
                 result = doHttp(method, url, headersStr, body, tlsVerify, tlsCaPem)
             } catch (e: Throwable) {
-                result = ACIResponse.error(ACIError.INTERNAL_ERROR, "http_failed: ${e.message}")
+                result = aciHttpError(e.message)
             } finally {
                 latch.countDown()
             }
@@ -141,9 +155,9 @@ class QuroMainAciService : BaseACIService() {
         val done = latch.await(HARD_TIMEOUT_S, TimeUnit.SECONDS)
         executor.shutdownNow()
         return if (done) {
-            result ?: ACIResponse.error(ACIError.INTERNAL_ERROR, "no result")
+            result ?: aciError(QuroAciErrors.E_INTERNAL, "内部错误：无结果", "服务内部状态异常，请重试或重启目标 App。", QuroAciErrors.LAYER_BINDER)
         } else {
-            ACIResponse.error(ACIError.INTERNAL_ERROR, "http timeout (>$HARD_TIMEOUT_S s, 控制器上限 15s)")
+            aciError(QuroAciErrors.E_TIMEOUT, "http_request 超时", "目标未在 ${HARD_TIMEOUT_S}s 内响应（控制器上限 15s）。请确认目标可达、网络正常；超大响应建议改用分块/下载能力。", QuroAciErrors.LAYER_HTTP)
         }
     }
 
@@ -192,7 +206,7 @@ class QuroMainAciService : BaseACIService() {
             }
             builtBuilder.build()
         } catch (e: Throwable) {
-            return ACIResponse.error(ACIError.BAD_REQUEST, "bad method/body: ${e.message}")
+            return aciError(QuroAciErrors.E_BAD_REQUEST, "HTTP 方法/请求体非法", "请使用合法 HTTP 方法（GET/POST/PUT/DELETE/PATCH/HEAD）并确认请求体为合法字符串。", QuroAciErrors.LAYER_PROTOCOL)
         }
 
         return try {
@@ -243,8 +257,32 @@ class QuroMainAciService : BaseACIService() {
             }
         } catch (e: Throwable) {
             Log.e(TAG, "doHttp 异常: ${e.message}")
-            ACIResponse.error(ACIError.INTERNAL_ERROR, "http_failed: ${e.message}")
+            return aciHttpError(e.message)
         }
+    }
+
+    /**
+     * 构造「结构化错误」响应：用 aci-protocol 语义码作为 wire 错误码，
+     * errorMessage 内嵌 {code,message,suggestion,layer} JSON（控制端可解析自助纠错）。
+     * 依托 aci-core 的 ACIResponse.error(int,String) 公开 API，不改内核。
+     */
+    private fun aciError(code: Int, message: String, suggestion: String, layer: String): ACIResponse =
+        ACIResponse.error(code, QuroAciErrors.of(code, message, suggestion, layer).toJson())
+
+    /** HTTP 层失败：按异常特征区分 TLS / 通用客户端错误，给出可解析建议。 */
+    private fun aciHttpError(cause: String?): ACIResponse =
+        if (QuroAciErrors.isTlsError(cause))
+            aciError(QuroAciErrors.E_HTTP_TLS, "HTTPS 证书校验失败", QuroAciErrors.httpSuggestion(cause), QuroAciErrors.LAYER_HTTP)
+        else
+            aciError(QuroAciErrors.E_HTTP_CLIENT, "HTTP 请求失败", QuroAciErrors.httpSuggestion(cause), QuroAciErrors.LAYER_HTTP)
+
+    /** 受控端协议版本握手：返回 aci-protocol 标识 + SemVer + 支持列表（aci-core Capability 暴露）。 */
+    private fun handleProtocol(): ACIResponse {
+        val b = Bundle()
+        b.putString("protocol_version", QuroAciProtocol.PROTOCOL_VERSION)
+        b.putString("semver", QuroAciProtocol.PROTOCOL_SEMVER)
+        b.putString("supported", QuroAciProtocol.SUPPORTED.joinToString(","))
+        return ACIResponse.success(b)
     }
 
     /**

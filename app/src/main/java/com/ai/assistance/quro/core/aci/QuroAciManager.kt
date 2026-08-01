@@ -3,6 +3,9 @@ package com.ai.assistance.quro.core.aci
 import ai.aci.core.ACIRequest
 import ai.aci.core.ACIResponse
 import ai.aci.core.Capability
+import com.ai.assistance.quro.core.aci.QuroAciErrors
+import com.ai.assistance.quro.core.aci.QuroAciEvents
+import com.ai.assistance.quro.core.aci.QuroAciProtocol
 import ai.aci.core.IACICallback
 import ai.aci.core.IACIService
 import android.content.ComponentName
@@ -59,6 +62,8 @@ class QuroAciManager private constructor(private val appContext: Context) {
     private val nameMap = ConcurrentHashMap<String, String>()
     private val classMap = ConcurrentHashMap<String, String>()   // pkg → service class（用于断线后重绑）
     private val lastSeenMap = ConcurrentHashMap<String, Long>()
+    /** 协商后的协议版本（pkg → 协议标识），由 fetchCapabilities 阶段 best-effort 协商写入。 */
+    private val protocolMap = ConcurrentHashMap<String, String>()
     /** 每个包的 Binder 死亡监听（DeathRecipient），用于远端进程死亡时即时触发重绑。 */
     private val deathRecipients = ConcurrentHashMap<String, android.os.IBinder.DeathRecipient>()
 
@@ -110,6 +115,7 @@ class QuroAciManager private constructor(private val appContext: Context) {
                 serviceMap[packageName] = service
                 lastSeenMap[packageName] = System.currentTimeMillis()
                 Log.i(TAG, "✅ 已绑定：$packageName")
+                QuroAciEvents.emit(QuroAciEvents.EVT_SERVICE_BOUND, packageName, "")
                 // 注册 Binder 死亡监听：远端进程死亡时立即（比 onServiceDisconnected 更早）触发重绑，
                 // 把断线感知从「800ms 轮询」升级为「事件驱动」。
                 if (binder != null) {
@@ -126,6 +132,7 @@ class QuroAciManager private constructor(private val appContext: Context) {
                 serviceMap.remove(packageName)
                 deathRecipients.remove(packageName)   // 断开即弃旧监听，避免悬空引用
                 Log.w(TAG, "⚠️ 断开：$packageName（已保留能力缓存，待自动重绑）")
+                QuroAciEvents.emit(QuroAciEvents.EVT_SERVICE_UNBOUND, packageName, "")
                 scheduleRebind(packageName)
             }
         }
@@ -267,6 +274,25 @@ class QuroAciManager private constructor(private val appContext: Context) {
                 capMap[pkg] = list
                 Log.i(TAG, "📋 $pkg → ${list.size} 项能力")
                 for (c in list) Log.d(TAG, "    • ${c.id}: ${c.description}")
+                // ACI 2.0 协议协商：对端若暴露 aci_protocol 能力，best-effort 取版本并协商（独立线程，不阻塞绑定）
+                if (list.any { it.id == "aci_protocol" }) {
+                    Thread {
+                        try {
+                            val pr = call(pkg, "aci_protocol", android.os.Bundle())
+                            if (pr.isSuccess()) {
+                                val peer = pr.getResult()?.getString("protocol_version")
+                                val neg = QuroAciProtocol.negotiate(peer)
+                                protocolMap[pkg] = neg ?: QuroAciProtocol.PROTOCOL_VERSION
+                                QuroAciEvents.emit(
+                                    QuroAciEvents.EVT_PROTOCOL_NEGOTIATED, pkg,
+                                    "peer=$peer negotiated=${neg ?: "null→default"}"
+                                )
+                            }
+                        } catch (e: Throwable) {
+                            Log.w(TAG, "协议协商失败($pkg): ${e.message}")
+                        }
+                    }.start()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "拉取 $pkg 能力失败", e)
             }
@@ -322,6 +348,12 @@ class QuroAciManager private constructor(private val appContext: Context) {
             appContext, targetPackage, capability, resp.getErrorCode(),
             resp.isSuccess(), System.currentTimeMillis() - t0
         )
+        if (!resp.isSuccess()) {
+            QuroAciErrors.parse(resp.getErrorMessage())?.let { se ->
+                Log.w(TAG, "🔧 结构化错误 [${se.code}] ${se.layer}: ${se.suggestion}")
+            }
+            QuroAciEvents.emit(QuroAciEvents.EVT_CALL_FAILED, targetPackage, "$capability:${resp.getErrorCode()}")
+        }
         return resp
     }
 
@@ -342,11 +374,13 @@ class QuroAciManager private constructor(private val appContext: Context) {
             serviceMap.remove(targetPackage)   // 清掉可能已失效的引用
             val rebound = ensureBound(targetPackage)
             if (rebound == null) {
+                QuroAciEvents.emit(QuroAciEvents.EVT_CALL_FAILED, targetPackage, "$capability: 重绑失败")
                 ACIResponse.error(503, "服务在调用途中丢失且重绑失败：$targetPackage")
             } else {
                 try {
                     rebound.call(req)
                 } catch (e2: RemoteException) {
+                    QuroAciEvents.emit(QuroAciEvents.EVT_CALL_FAILED, targetPackage, "$capability: ${e2.message}")
                     ACIResponse.error(500, "Remote（重绑重试后仍失败）：${e2.message}")
                 }
             }
@@ -393,6 +427,9 @@ class QuroAciManager private constructor(private val appContext: Context) {
     //  ⑥ 能力索引
     // ═══════════════════════════════════
     fun getCapabilityIndex(): Map<String, List<Capability>> = HashMap(capMap)
+
+    /** 返回某包协商后的 ACI 协议版本（未协商返回 null）。 */
+    fun getNegotiatedProtocol(packageName: String): String? = protocolMap[packageName]
 
     /**
      * 生成可直接拼进 LLM System Prompt 的能力清单（仿 ACIManager.getCapabilityPrompt）。
