@@ -77,23 +77,24 @@ dependencies {
 
 ### 4.2 声明权限与清单（受控端 `AndroidManifest.xml`）
 
-受控端需在 `<manifest>` 中**自定义并声明 ACI 权限**，并**声明 `<queries>` 让系统能发现自身**（Android 11+ 包可见性）：
+> ⚠️ **权限定义权归控制端（Zorv AI）**。受控端**绝不能**用 `<permission>` 定义 `ai.aci.permission.*`——控制端 ZorvAI 已定义这些权限，受控端只需**引用**（`uses-permission`）。受控端若也定义同名权限，会因「同名 + 异签名 + 双方都定义」触发 `INSTALL_FAILED_CONFLICTING_PERMISSION` 冲突（详见 §16）。受控端只需**声明 `<uses-permission>` 引用 + 在 service 上用 `android:permission` 做第一层 Manifest 鉴权**，并**声明 `<queries>` 让系统能发现自身**（Android 11+ 包可见性）：
 
 ```xml
-<manifest ...>
+<manifest ...
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ACI 权限定义（受控端定义，控制端需声明 uses-permission 才能调用） -->
-    <permission android:name="ai.aci.permission.CALL"
-        android:protectionLevel="normal" />
-    <permission android:name="ai.aci.permission.CALL_DANGEROUS"
-        android:protectionLevel="dangerous" />
-    <permission android:name="ai.aci.permission.DISCOVER"
-        android:protectionLevel="normal" />
-
+    <!-- ❌ 禁止：受控端不要 <permission> 定义 ai.aci.permission.*（定义权归控制端 ZorvAI） -->
+    <!-- ✅ 仅引用：用 uses-permission 引用控制端已定义的权限 -->
     <uses-permission android:name="ai.aci.permission.CALL" />
     <uses-permission android:name="ai.aci.permission.DISCOVER" />
     <uses-permission android:name="ai.aci.permission.CALL_DANGEROUS" />
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- 若 aci-core 库模块带入了 <permission> 定义，用 tools:node="remove" 在消费端剥除，
+         否则合并后会重复定义（同名异签名冲突）。下面三条只为「删除」，不是定义。 -->
+    <permission android:name="ai.aci.permission.CALL"           tools:node="remove" />
+    <permission android:name="ai.aci.permission.CALL_DANGEROUS" tools:node="remove" />
+    <permission android:name="ai.aci.permission.DISCOVER"      tools:node="remove" />
 
     <!-- 包可见性：声明本 App 提供/响应的 ACI 意图 -->
     <queries>
@@ -109,7 +110,7 @@ dependencies {
         <service
             android:name=".QuroControlledAciService"
             android:exported="true"
-            android:permission="ai.aci.permission.CALL">
+            android:permission="ai.aci.permission.CALL">   <!-- 第一层 Manifest 鉴权：引用控制端定义的权限 -->
             <intent-filter>
                 <action android:name="ai.aci.core.ACTION_BIND" />
             </intent-filter>
@@ -283,7 +284,7 @@ class QuroAciWakeReceiver : BroadcastReceiver() {
 
 ACI 采用纵深防御，调用需依次通过：
 
-1. **Android Manifest 权限**：受控端 Service 声明 `android:permission="ai.aci.permission.CALL"`，调用方须声明 `<uses-permission android:name="ai.aci.permission.CALL" />`。
+1. **Android Manifest 权限（第一层）**：受控端 Service 上的 `android:permission="ai.aci.permission.CALL"` 是**引用**控制端 ZorvAI 已定义的权限，作为第一层 Manifest 鉴权；**权限定义权归控制端，受控端只用 `<uses-permission>` 引用，绝不自行 `<permission>` 定义**（否则同名异签名冲突，见 §16）。调用方（控制端）须声明 `<uses-permission android:name="ai.aci.permission.CALL" />`。
 2. **Binder UID 校验**：受控端可通过 `Binder.getCallingUid()` 校验调用方身份。
 3. **`onCheckPermission(request, callerPkg)`**：受控端自定义业务级白名单。
 4. **能力级 `requirePermission`**：单个能力可要求额外权限（`setPermission`）。
@@ -365,7 +366,7 @@ override fun onCallAsync(request: ACIRequest, callback: IACICallback) {
 
 - **受控端**：必须写 `<queries>`（ACTION_BIND + ACTION_WAKE），否则 Android 11+ 控制端发现不到。
 - **控制端**：若需发现任意受控端，也要在自身 `<queries>` 声明 `ACTION_BIND`（本项目 `QuroAciManager` 已处理）。
-- **权限**：受控端定义权限、控制端声明 `uses-permission`，二者包名/权限名必须完全一致。
+- **权限**：受控端**不要定义** `ai.aci.permission.*`，只声明 `<uses-permission>` 引用控制端已定义的权限（定义权归控制端 ZorvAI）；若 `aci-core` 库带入 `<permission>`，用 `tools:node="remove"` 剥除。二者权限名必须一致（受控端引用的是控制端定义的同名权限）。详见 §16。
 
 ---
 
@@ -377,7 +378,7 @@ override fun onCallAsync(request: ACIRequest, callback: IACICallback) {
 | 漏写 `<queries>` | 发现为空 / 绑定失败（Android 11+） | 受控端 Manifest 补 `<queries>` |
 | `onCreateCapabilities` 抛异常 | Service 启动即崩溃、无能力 | `onCreate()` 用 try-catch 包 `super.onCreate()` |
 | stopped-state 不唤醒 | 之前能绑、更新后不能 | 控制端 `bindWithWake`（先发 `ACTION_WAKE` 广播） |
-| 权限名不一致 | `SecurityException` / 绑定被拒 | 受控端定义权限与控制端 `uses-permission` 完全一致 |
+| 受控端定义 `ai.aci.permission.*` | `INSTALL_FAILED_CONFLICTING_PERMISSION` / 同名异签名冲突 | 受控端**不要定义**，只 `uses-permission` 引用；库带入的用 `tools:node="remove"` 剥除（见 §16） |
 | `browser_read` 直接传完整大 HTML | `TransactionTooLargeException`，调用失败 | 截断 ≤15 万字符 + 大页面 gzip(byte[]) 经 `html_gz` 回传，控制端解压还原（见 §13.3） |
 
 ---
@@ -621,6 +622,60 @@ Android NSC **只能按域名或整体 base-config 放开明文，无法按「�
 ### 15.5 安全权衡
 
 明文放开后，公网明文 HTTP（`http://` 公网域名）也会一并放行。请**仅在可信局域网内**用 `http_request` 访问内网地址，不要经它请求公网明文站点；远程生产通信（HTTPS）不受影响。
+
+---
+
+## 16. 受控端自定义权限「签名冲突」真实案例（必读）
+
+> 本节来自一个第三方受控端（WorkflowACI，`com.workflowaci`）接入 Zorv AI 时踩到的**真实生产 bug**，已修复并验证。凡是自己写受控端的人，务必先读本节再写 Manifest。
+
+### 16.1 现象
+
+- 安装 / 覆盖安装受控端时，因自定义权限 `ai.aci.permission.*` 的「同名 + 异签名 + 双方都定义」冲突，触发 `INSTALL_FAILED_CONFLICTING_PERMISSION`；或旧版（Debug 签名）与新版（Release 签名）互更时触发 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。
+- 根因一句话：**受控端不该定义 `ai.aci.permission.*`，定义权归控制端 ZorvAI**；受控端却用 `<permission>` 定义了同名权限，且与控制端签名不同。
+
+### 16.2 根因
+
+Android 的自定义权限由「权限名 + 定义者签名」唯一确定。当两个 App 都 `<permission>` 定义**同名**自定义权限、且**签名不同**时，后安装的那个会因权限归属冲突而安装失败——**与 `protectionLevel`（normal / dangerous）无关**。
+
+更隐蔽的变种：受控端引入的 `aci-core` 库模块（`aci-core/src/main/AndroidManifest.xml`）本身就带入了 `<permission>` 定义；若消费端 Manifest 不做 `tools:node="remove"` 剥除，合并后受控端 APK 里就**重复定义**了这些权限，同样会和控制端冲突。
+
+### 16.3 正确做法（三句话）
+
+1. **定义权归控制端**：`ai.aci.permission.*` 只由 ZorvAI（控制端）定义，受控端**永不 `<permission>` 定义**。
+2. **受控端只引用**：用 `<uses-permission android:name="ai.aci.permission.*" />` 引用控制端已定义的权限；受控端 Service 上的 `android:permission="ai.aci.permission.CALL"` **保留**——它是第一层 Manifest 鉴权，引用的是控制端定义的权限，逻辑有效。
+3. **剥除库带入的定义**：若 `aci-core` 库带入了 `<permission>`，在受控端 Manifest 用 `<permission android:name="ai.aci.permission.*" tools:node="remove" />` 三条指令剥除（需在 `<manifest>` 声明 `xmlns:tools="http://schemas.android.com/tools"`）。
+
+修复后，合并 Manifest 里**只剩 AGP 自动生成的 `com.workflowaci.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`**（带本应用包名前缀，与 ZorvAI 不同名，不冲突），`ai.aci.permission.*` 全部退化为纯 `uses-permission` 引用。
+
+### 16.4 发布前用 aapt2 校验（必做）
+
+```bash
+# 预期：只出现本应用命名空间的 DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION，
+#       不得出现任何 ai.aci.permission.* 的 <permission> 定义节点
+aapt2 dump xmltree --file AndroidManifest.xml \
+  app/build/outputs/apk/release/app-release.apk | grep -E "E: permission"
+
+# 预期：仅 uses-permission 行，无 E: permission 行
+aapt2 dump xmltree --file AndroidManifest.xml \
+  app/build/outputs/apk/release/app-release.apk | grep -i "ai.aci"
+```
+
+若 `grep -E "E: permission"` 仍打出 `ai.aci.permission.*`，说明库带入的定义没剥干净，回去补 `tools:node="remove"`。
+
+### 16.5 安装 / 发布注意事项
+
+- **升级前先卸载旧版受控端**：旧版定义了冲突权限；且若旧版是 Debug 签名、新版是 Release 签名，异签名覆盖安装会 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。彻底卸载最稳妥。
+- **同签名可覆盖**：Release→Release（同一 `release-key.jks`）可正常覆盖更新；Debug→Release 异签名必须卸载后重装。
+- **ACI 生效前提**：控制端 ZorvAI 已安装并授权；受控端通过 `uses-permission` 引用其权限，绑定 service 时由系统校验调用方是否持有该权限。
+
+### 16.6 给开发者文档的更新要点（摘要）
+
+1) 自定义权限「同名 + 异签名 + 双方都定义」必冲突，与 `protectionLevel` 无关。
+2) ACI 受控端不应定义 `ai.aci.permission.*`，定义权归控制端；受控端仅 `uses-permission` 引用 + service 上 `android:permission` 校验。
+3) 库模块带入的 `<permission>` 必须用 `tools:node="remove"` 在消费端 Manifest 剥除，否则合并后重复定义。
+4) 发布前用 `aapt2` 校验合并 Manifest，确认无 `ai.aci.permission.*` 定义节点。
+5) 版本升级注意 Debug/Release 签名差异，跨签名安装需先卸载。
 
 ---
 
