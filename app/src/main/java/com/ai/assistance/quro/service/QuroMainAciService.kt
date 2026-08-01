@@ -5,19 +5,35 @@ import ai.aci.core.ACIRequest
 import ai.aci.core.ACIResponse
 import ai.aci.core.BaseACIService
 import ai.aci.core.Capability
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
+import com.ai.assistance.quro.core.aci.QuroAciCredentialVault
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.security.KeyStore
+import java.security.SecureRandom
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPOutputStream
-import java.io.ByteArrayOutputStream
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509TrustManager
 
 /**
  * 主应用 ACI 受控端 Service（新增 http_request 能力）。
@@ -67,8 +83,10 @@ class QuroMainAciService : BaseACIService() {
             )
                 .addParam("url", "string", true, "目标 URL")
                 .addParam("method", "string", false, "HTTP 方法，默认 GET")
-                .addParam("headers", "string", false, "请求头 JSON 对象，如 {\"Authorization\":\"Bearer x\"}")
+                .addParam("headers", "string", false, "请求头 JSON 对象，如 {\"Authorization\":\"Bearer x\"}。值可写 \"\$vault:NAME\" 引用已托管凭证（详见 aci_credentials）")
                 .addParam("body", "string", false, "请求体（原样发送，字符串）")
+                .addParam("tls_verify", "string", false, "是否校验 HTTPS 证书，默认 \"true\"；自签/LAN HTTPS 设 \"false\" 放行（仅限可信内网）")
+                .addParam("tls_ca_pem", "string", false, "自定义 CA 的 PEM 文本，用于固定自签证书（优先级高于 tls_verify）")
                 .addResult("status_code", "int", "HTTP 响应状态码")
                 .addResult("response_headers", "string", "响应头 JSON 对象")
                 .addResult("response_body", "string", "响应体（>15万字符截断，完整内容见 response_body_gz）")
@@ -103,13 +121,17 @@ class QuroMainAciService : BaseACIService() {
         val method = (params?.getString("method") ?: "GET").uppercase()
         val headersStr = params?.getString("headers") ?: ""
         val body = params?.getString("body")  // 可能为 null
+        // P0 治理：HTTPS 证书校验策略（自签 / LAN 可信内网放行）
+        val tlsRaw = params?.getString("tls_verify") ?: "true"
+        val tlsVerify = tlsRaw.equals("true", ignoreCase = true)
+        val tlsCaPem = params?.getString("tls_ca_pem")  // 自定义 CA 固定
 
         val latch = CountDownLatch(1)
         val executor = Executors.newSingleThreadExecutor()
         var result: ACIResponse? = null
         executor.execute {
             try {
-                result = doHttp(method, url, headersStr, body)
+                result = doHttp(method, url, headersStr, body, tlsVerify, tlsCaPem)
             } catch (e: Throwable) {
                 result = ACIResponse.error(ACIError.INTERNAL_ERROR, "http_failed: ${e.message}")
             } finally {
@@ -125,12 +147,16 @@ class QuroMainAciService : BaseACIService() {
         }
     }
 
-    private fun doHttp(method: String, url: String, headersStr: String, body: String?): ACIResponse {
-        val client = OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(14, TimeUnit.SECONDS)
-            .writeTimeout(14, TimeUnit.SECONDS)
-            .build()
+    private fun doHttp(
+        method: String,
+        url: String,
+        headersStr: String,
+        body: String?,
+        tlsVerify: Boolean,
+        tlsCaPem: String?
+    ): ACIResponse {
+        val client = buildHttpClient(tlsVerify, tlsCaPem)
+        val t0 = System.currentTimeMillis()
 
         val reqBuilder = Request.Builder().url(url)
         if (headersStr.isNotEmpty()) {
@@ -139,7 +165,10 @@ class QuroMainAciService : BaseACIService() {
                 val it = h.keys()
                 while (it.hasNext()) {
                     val k = it.next()
-                    reqBuilder.addHeader(k, h.optString(k))
+                    val rawVal = h.optString(k)
+                    // P0 治理：凭证托管 —— "$vault:NAME" 解析为已加密托管的真实凭证
+                    val resolved = QuroAciCredentialVault.resolve(this, rawVal) ?: rawVal
+                    reqBuilder.addHeader(k, resolved)
                 }
             } catch (ignored: Throwable) {
                 Log.w(TAG, "headers 解析失败，忽略: $headersStr")
@@ -166,48 +195,97 @@ class QuroMainAciService : BaseACIService() {
             return ACIResponse.error(ACIError.BAD_REQUEST, "bad method/body: ${e.message}")
         }
 
-        val response = client.newCall(okReq).execute()
-        try {
-            val code = response.code
-            val headers = JSONObject()
-            for (i in 0 until response.headers.size) {
-                headers.put(response.headers.name(i), response.headers.value(i))
-            }
+        return try {
+            val response = client.newCall(okReq).execute()
+            try {
+                val code = response.code
+                val headers = JSONObject()
+                for (i in 0 until response.headers.size) {
+                    headers.put(response.headers.name(i), response.headers.value(i))
+                }
 
-            // 大响应体保护：Content-Length > 2MB 不载入内存，直接标记截断
-            val contentLength = response.header("Content-Length")?.toLongOrNull() ?: -1L
-            if (contentLength > 2_000_000L) {
-                return ACIResponse.success(Bundle())
+                // 大响应体保护：Content-Length > 2MB 不载入内存，直接标记截断
+                val contentLength = response.header("Content-Length")?.toLongOrNull() ?: -1L
+                if (contentLength > 2_000_000L) {
+                    HttpCallAudit.log(this, url, method, code, System.currentTimeMillis() - t0)
+                    return ACIResponse.success(Bundle())
+                        .putResult("status_code", code)
+                        .putResult("response_headers", headers.toString())
+                        .putResult("response_body", "")
+                        .putResult("truncated", true)
+                        .putResult(
+                            "truncated_reason",
+                            "响应体超过 2MB，未载入内存（如需大文件请改用受控浏览器或文件下载能力）"
+                        )
+                }
+
+                val raw = response.body?.string() ?: ""
+                val truncated = raw.length > 150_000
+                val safe = if (truncated) {
+                    raw.take(150_000) + "\n…[响应体已截断，完整内容见 response_body_gz，共 ${raw.length} 字符]"
+                } else raw
+                val r = ACIResponse.success(Bundle())
                     .putResult("status_code", code)
                     .putResult("response_headers", headers.toString())
-                    .putResult("response_body", "")
-                    .putResult("truncated", true)
-                    .putResult(
-                        "truncated_reason",
-                        "响应体超过 2MB，未载入内存（如需大文件请改用受控浏览器或文件下载能力）"
-                    )
-            }
-
-            val raw = response.body?.string() ?: ""
-            val truncated = raw.length > 150_000
-            val safe = if (truncated) {
-                raw.take(150_000) + "\n…[响应体已截断，完整内容见 response_body_gz，共 ${raw.length} 字符]"
-            } else raw
-            val r = ACIResponse.success(Bundle())
-                .putResult("status_code", code)
-                .putResult("response_headers", headers.toString())
-                .putResult("response_body", safe)
-                .putResult("truncated", truncated)
-            if (truncated) {
-                val gz = gzip(raw.toByteArray())
-                if (gz.size <= 900_000) {
-                    r.putResult("response_body_gz", gz)
-                    r.putResult("response_body_len", raw.length)
+                    .putResult("response_body", safe)
+                    .putResult("truncated", truncated)
+                if (truncated) {
+                    val gz = gzip(raw.toByteArray())
+                    if (gz.size <= 900_000) {
+                        r.putResult("response_body_gz", gz)
+                        r.putResult("response_body_len", raw.length)
+                    }
                 }
+                HttpCallAudit.log(this, url, method, code, System.currentTimeMillis() - t0)
+                return r
+            } finally {
+                response.close()
             }
-            return r
-        } finally {
-            response.close()
+        } catch (e: Throwable) {
+            Log.e(TAG, "doHttp 异常: ${e.message}")
+            ACIResponse.error(ACIError.INTERNAL_ERROR, "http_failed: ${e.message}")
+        }
+    }
+
+    /**
+     * 构造 OkHttpClient，按 HTTPS 信任策略配置：
+     * - tlsCaPem 非空：固定自定义 CA（自签证书精准信任，最安全）；
+     * - tlsVerify=false：放行所有证书（仅限可信内网 / 自签调试，有明确风险）；
+     * - 默认（两者皆否）：系统证书校验（标准公开 HTTPS）。
+     */
+    private fun buildHttpClient(tlsVerify: Boolean, tlsCaPem: String?): OkHttpClient {
+        val builder = OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(14, TimeUnit.SECONDS)
+            .writeTimeout(14, TimeUnit.SECONDS)
+        return when {
+            !tlsCaPem.isNullOrBlank() -> {
+                try {
+                    val cf = CertificateFactory.getInstance("X.509")
+                    val ca = cf.generateCertificate(tlsCaPem.toByteArray(Charsets.UTF_8).inputStream()) as X509Certificate
+                    val ks = KeyStore.getInstance(KeyStore.getDefaultType()).apply { load(null) }
+                    ks.setCertificateEntry("aci_ca", ca)
+                    val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+                    tmf.init(ks)
+                    val ssl = SSLContext.getInstance("TLS").apply { init(null, tmf.trustManagers, SecureRandom()) }
+                    builder.sslSocketFactory(ssl.socketFactory, tmf.trustManagers[0] as X509TrustManager)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "自定义 CA 解析失败，回退系统校验: ${e.message}")
+                }
+                builder.build()
+            }
+            !tlsVerify -> {
+                val trustAll = arrayOf<TrustManager>(object : X509TrustManager {
+                    override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
+                    override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
+                    override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+                })
+                val ssl = SSLContext.getInstance("TLS").apply { init(null, trustAll, SecureRandom()) }
+                builder.sslSocketFactory(ssl.socketFactory, trustAll[0] as X509TrustManager)
+                builder.hostnameVerifier(HostnameVerifier { _, _ -> true })
+                builder.build()
+            }
+            else -> builder.build()
         }
     }
 
@@ -221,5 +299,33 @@ class QuroMainAciService : BaseACIService() {
         gz.finish()
         gz.close()
         return bos.toByteArray()
+    }
+
+    /**
+     * HTTP 调用审计（原创，P0 治理项）。
+     * 持久化每一次经 http_request 发出的真实 HTTP 请求（URL/方法/状态码/耗时），
+     * 供用户在控制台或文件管理器事后审查「AI 昨天发了哪些 HTTP 请求」。
+     * 存储 filesDir/http_call_audit.json，{"audit":[...]}，最多保留最近 500 条。
+     */
+    private object HttpCallAudit {
+        private const val FILE = "http_call_audit.json"
+        private const val MAX = 500
+        private val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+
+        fun log(ctx: Context, url: String, method: String, code: Int, durationMs: Long) {
+            runCatching {
+                val file = File(ctx.filesDir, FILE)
+                val arr = runCatching { JSONArray(file.readText()) }.getOrDefault(JSONArray())
+                val obj = JSONObject()
+                obj.put("timestamp", fmt.format(Date()))
+                obj.put("method", method)
+                obj.put("url", url)
+                obj.put("code", code)
+                obj.put("durationMs", durationMs)
+                arr.put(obj)
+                while (arr.length() > MAX) arr.remove(0)
+                file.writeText(JSONObject().put("audit", arr).toString())
+            }
+        }
     }
 }

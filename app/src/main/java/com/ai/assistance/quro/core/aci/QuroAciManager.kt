@@ -277,9 +277,15 @@ class QuroAciManager private constructor(private val appContext: Context) {
     //  ④ 同步调用（带超时）
     // ═══════════════════════════════════
     fun call(targetPackage: String, capability: String, params: android.os.Bundle): ACIResponse {
+        val t0 = System.currentTimeMillis()
         val service = ensureBound(targetPackage)
         if (service == null) {
-            return ACIResponse.error(503, "服务未绑定：$targetPackage。请先确认目标 App 已安装且声明了 ACI Service；可重试 aci_list 触发重新发现。")
+            val resp = ACIResponse.error(
+                503,
+                "服务未绑定：$targetPackage。请先确认目标 App 已安装且声明了 ACI Service；可重试 aci_list 触发重新发现。"
+            )
+            QuroAciCallAudit.log(appContext, targetPackage, capability, resp.getErrorCode(), false, System.currentTimeMillis() - t0)
+            return resp
         }
         val req = ACIRequest(capability, params)
         req.setCallerPkg(appContext.packageName)
@@ -304,13 +310,19 @@ class QuroAciManager private constructor(private val appContext: Context) {
             }
         }
 
-        if (!holder.done) {
+        val resp = if (!holder.done) {
             Log.w(TAG, "⏰ 调用超时：$targetPackage/$capability")
-            return ACIResponse.error(504, "超时（>${callTimeoutMs}ms）")
+            ACIResponse.error(504, "超时（>${callTimeoutMs}ms）")
+        } else {
+            lastSeenMap[targetPackage] = System.currentTimeMillis()
+            Log.d(TAG, "call($targetPackage/$capability) → ${holder.response}")
+            holder.response ?: ACIResponse.error(500, "内部错误：回调为空")
         }
-        lastSeenMap[targetPackage] = System.currentTimeMillis()
-        Log.d(TAG, "call($targetPackage/$capability) → ${holder.response}")
-        return holder.response ?: ACIResponse.error(500, "内部错误：回调为空")
+        QuroAciCallAudit.log(
+            appContext, targetPackage, capability, resp.getErrorCode(),
+            resp.isSuccess(), System.currentTimeMillis() - t0
+        )
+        return resp
     }
 
     /**
