@@ -51,7 +51,7 @@ dependencies {
 | aci-core 2026-08-01 | 2026-08-01 | **ACI 2.0 治理层错误模型 + 协议版本常量**：`ACIError` 纯增量新增语义错误码命名空间——15xx 服务/协议治理层（`SERVICE_UNBOUND=1503` / `PROTOCOL_NEGOTIATE_FAIL=1505` / `CALL_FAILED=1506`）、24xx 请求语义层（`BAD_REQUEST_PARAM=2400` / `MISSING_FIELD=2401` / `UNSUPPORTED_PROTOCOL=2403`）、25xx HTTP 传输层（`HTTP_CLIENT_ERROR=2500` / `HTTP_SERVER_ERROR=2510` / `HTTP_DNS_FAILED=2521` / `HTTP_TLS_ERROR=2522` / `HTTP_CONNECT_FAILED=2523` / `HTTP_TOO_LARGE=2524` / `HTTP_UNKNOWN=2599`）；新增 `message(int)` 对应文案与 `isAciProtocol(int)` 判定；新增协议版本常量 `PROTOCOL_V1="aci-protocol-v1"` / `PROTOCOL_LATEST`。**不改动任何既有错误码与公开 API**，向后兼容。消费方（如 ZorvAI 主程序 `QuroAciErrors`）复用同一命名空间，避开内核标准码 0/400/403/404/500/503/504/505 |
 | aci-core 2026-01 | 2026-01 | 初始开源分支：AIDL Binder 框架、`BaseACIService` / `Capability` / 内核标准错误码、`aci-core-release.aar` 可构建源码 |
 
-> ⚠️ 本分支为 **SDK 源码分支（本地）**，不推送远端。消费方通过主仓库 Release 附带的 `aci-core-release.aar` 引用。如需本地联编，切到本分支 `./gradlew :aci-core:assembleRelease` 构建 AAR。
+> ℹ️ 本分支为 **SDK 源码分支**，已推送至 GitHub(`origin/aci-core`) 与 Gitee(`gitee/aci-core`) 双远端。消费方通过主仓库 Release 附带的 `aci-core-release.aar` 引用；如需本地联编，切到本分支 `./gradlew :aci-core:assembleRelease` 构建 AAR。
 
 ## 许可证
 
