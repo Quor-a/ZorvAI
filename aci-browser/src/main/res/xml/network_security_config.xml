@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Zorv 受控浏览器网络安全策略：
+     放开全部明文 HTTP，以支持 ACI http_request 访问同网段（LAN）设备，
+     例如 http://192.168.x.x、http://10.x 以及 *.local（mDNS）等离线/局域网服务。
+     说明：Android NSC 无法按「私有网段（如 192.168.0.0/16）」写白名单，
+     只能对 base-config 整体放开明文——这是平台限制，非代码缺陷。
+     受控浏览器定位为本地调试/自动化工具，明文风险由使用者在可信 LAN 内自行把控。 -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>  <!-- Android 模拟器回环 -->
+        <domain includeSubdomains="true">local</domain>      <!-- mDNS 局域网设备，如 device.local -->
+    </domain-config>
+    <!-- 基线：允许全部明文（含私有网段），以支持本地组网 HTTP。
+         受控浏览器仅用于可信局域网/本机调试，不承载敏感远程通信。 -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

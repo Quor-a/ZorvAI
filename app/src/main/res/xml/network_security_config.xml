@@ -1,14 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Zorv AI 网络安全策略：允许对本地回环地址使用明文 HTTP（供 Ollama / LM Studio 等离线模型服务）。
-     远程地址仍强制 HTTPS，不影响生产安全性。 -->
+<!-- Zorv AI 网络安全策略：
+     原有：仅对本地回环地址放开明文 HTTP（供 Ollama / LM Studio 等离线模型服务）。
+     本次扩展：放开全部明文以支持 ACI http_request 访问同网段（LAN）设备
+     （http://192.168.x.x、http://10.x、*.local mDNS 等）。
+     说明：Android NSC 无法按「私有网段」写白名单，只能对 base-config 整体放开明文——平台限制。
+     权衡：放开后远程明文 HTTP（http://公网域名）也会一并放行；
+     请务必仅在可信局域网内使用 ACI http_request 访问内网地址，不要经由它请求公网明文站点。
+     远程生产通信（HTTPS）不受影响。 -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>  <!-- Android 模拟器回环 -->
+        <domain includeSubdomains="true">local</domain>      <!-- mDNS 局域网设备 -->
     </domain-config>
-    <!-- 基线配置：其他域名默认禁止明文（Android 9+ 默认行为） -->
-    <base-config cleartextTrafficPermitted="false">
+    <!-- 基线：允许全部明文（含私有网段），以支持本地组网 HTTP。
+         安全权衡见文件头注释；仅建议在可信 LAN 内使用。 -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

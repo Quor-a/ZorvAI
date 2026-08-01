@@ -80,9 +80,9 @@
                 android:background="@android:color/transparent" />
         </LinearLayout>
 
-        <!-- 主WebView -->
-        <WebView
-            android:id="@+id/webview"
+        <!-- 主WebView 容器（WebView 由 BrowserCore 进程级常驻创建，Activity 仅挂载同一实例） -->
+        <FrameLayout
+            android:id="@+id/webview_container"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1" />
@@ -155,58 +155,12 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
-                    <EditText
-                        android:id="@+id/console_input"
-                        android:layout_width="match_parent"
-                        android:layout_height="40dp"
-                        android:background="#FFFFFF"
-                        android:paddingHorizontal="10dp"
-                        android:textSize="13sp"
-                        android:textColor="#0A0A0A"
-                        android:hint="URL / JS 代码 / 查找关键词"
-                        android:inputType="text"
-                        android:singleLine="false" />
-
+                    <!-- SDUI 渲染容器：由 AciConsoleRenderer 按 console_ui 快照动态填充控件（解耦 BrowserCore，通用可复用） -->
                     <LinearLayout
+                        android:id="@+id/console_controls"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginTop="4dp">
-                        <Button android:id="@+id/btn_c_open" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="打开" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
-                        <Button android:id="@+id/btn_c_read" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="读HTML" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
-                        <Button android:id="@+id/btn_c_crawl" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="爬取" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
-                        <Button android:id="@+id/btn_c_js" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="运行JS" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginTop="4dp">
-                        <Button android:id="@+id/btn_c_find" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="查找" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
-                        <Button android:id="@+id/btn_c_findnext" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="下一个" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
-                        <Button android:id="@+id/btn_c_findclear" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="清查找" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginTop="4dp">
-                        <Button android:id="@+id/btn_c_back" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="后退" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
-                        <Button android:id="@+id/btn_c_fwd" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="前进" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
-                        <Button android:id="@+id/btn_c_reload" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="刷新" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginTop="4dp">
-                        <Button android:id="@+id/btn_c_shot" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="截图" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
-                        <Button android:id="@+id/btn_c_capture" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="抓包:关" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
-                        <Button android:id="@+id/btn_c_capclear" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="清抓包" android:textSize="12sp" android:textColor="#FFFFFF" android:background="@android:color/transparent" />
-                    </LinearLayout>
+                        android:orientation="vertical" />
 
                     <TextView
                         android:id="@+id/console_output"

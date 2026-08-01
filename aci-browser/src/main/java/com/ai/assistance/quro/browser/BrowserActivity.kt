@@ -5,7 +5,9 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.WebView
+import android.widget.FrameLayout
 import android.webkit.WebViewClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -14,6 +16,8 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.ai.assistance.quro.browser.consolekit.LocalConsoleEndpoint
+import com.ai.assistance.quro.browser.consolekit.ManualConsolePanel
 import java.net.URLEncoder
 import kotlin.concurrent.thread
 
@@ -47,10 +51,9 @@ class BrowserActivity : Activity() {
     private var aiStatus: TextView? = null
     private var btnShareAi: Button? = null
 
-    // 手动控制台（人可直接驱动，无需经 AI）
-    private var consoleInput: EditText? = null
+    // 手动控制台（走 ACI 通道：渲染 console_ui 快照 / 经 console_action 驱动，通用可复用）
     private var consoleOutput: TextView? = null
-    private var captureOn = false
+    private var consolePanel: ManualConsolePanel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,7 +64,6 @@ class BrowserActivity : Activity() {
 
         // 绑定控件
         statusView = findViewById(R.id.status_text)
-        webView = findViewById(R.id.webview)
         toolbar = findViewById(R.id.toolbar)
         btnCollapse = findViewById(R.id.btn_collapse)
         btnExpand = findViewById(R.id.btn_expand)
@@ -73,10 +75,16 @@ class BrowserActivity : Activity() {
         eyeIndicator = findViewById(R.id.eye_indicator)
         aiStatus = findViewById(R.id.ai_status)
         btnShareAi = findViewById(R.id.btn_share_ai)
-        consoleInput = findViewById(R.id.console_input)
         consoleOutput = findViewById(R.id.console_output)
 
-        if (webView == null) { showStatus("❌ 找不到WebView"); return }
+        // WebView 改为代码创建、进程级常驻（BrowserCore 持有），Activity 仅挂载/卸载同一实例。
+        // 这样 Activity 被系统回收后 displayWv 仍有效，browser_read/crawl/script 不再 500「无活动页面」。
+        val wvContainer = findViewById<FrameLayout>(R.id.webview_container)
+        val held = BrowserCore.getOrCreateWebView(applicationContext)
+        if (held.parent != null) (held.parent as? ViewGroup)?.removeView(held)
+        wvContainer.addView(held, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        webView = held
+        if (webView == null) { showStatus("❌ WebView 创建失败"); return }
 
         // ── 2. 配置 WebView ──
         try {
@@ -97,9 +105,27 @@ class BrowserActivity : Activity() {
                                 headers = sb.toString(),
                                 isMainFrame = req.isForMainFrame
                             )
+                            BrowserCore.reportPageEvent("request", req.url?.toString() ?: "")
                         } catch (_: Throwable) {}
                     }
                     return null
+                }
+
+                /** 页面开始加载 → 记录事件（供 browser_events 查询 / agentic 主动推送）。 */
+                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                    BrowserCore.reportPageEvent("page_started", url ?: "")
+                }
+
+                /** 页面加载完成 → 记录事件，并解除 browser_open 的就绪等待闸门。 */
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    BrowserCore.reportPageEvent("page_finished", url ?: "")
+                    BrowserCore.notifyPageFinished(url)
+                }
+
+                /** 主框架 URL 即将变化（如 SPA 路由 / 重定向）→ 记录事件。 */
+                override fun onLoadResource(view: WebView?, url: String?) {
+                    // 仅记录主框架资源，避免子资源刷屏
+                    if (view?.url == url) BrowserCore.reportPageEvent("load_resource", url ?: "")
                 }
             }
             webView?.settings?.javaScriptEnabled = true
@@ -111,6 +137,7 @@ class BrowserActivity : Activity() {
         // ── 3. 注册到 BrowserCore（内含权限自动授权 WebChromeClient + 引擎信息）──
         try {
             BrowserCore.init(applicationContext)
+            ConsoleBackend.attachContext(applicationContext)
             webView?.let { BrowserCore.registerDisplayWebView(it) }
         } catch (e: Throwable) { showStatus("⚠️ BrowserCore: ${e.message}") }
 
@@ -211,133 +238,37 @@ class BrowserActivity : Activity() {
     }
 
     /**
-     * 手动控制台（v8.1 新增）：让使用者不经由 AI、直接驱动浏览器。
-     * 凡是会阻塞在 BrowserCore latch 上的方法（loadUrl / readHtml / crawlPage /
-     * evalScript / findInPage / screenshot）都必须在后台线程调用，否则会与 UI 线程的
-     * evaluateJavascript 回调死锁 → 返回空。其余方法（nav* / findNext / clearFind /
-     * setCaptureEnabled / clearCapture）仅向 mainHandler post，UI 线程直接调也安全。
+     * 手动控制台（重构：走 ACI 通道，不再硬编码 BrowserCore）。
+     *
+     * 设计（参考 operit「外部 HTTP 调用」解耦范式）：
+     * - 控制台 UI 只认识 AciConsoleContract 契约，不认识任何业务细节；
+     * - 这里用 LocalConsoleEndpoint 同进程委派给 ConsoleBackend（与 AI 经 console_ui /
+     *   console_action 走的是同一个后端），因此手动操作与 AI 操作行为完全一致；
+     * - 若日后开发第 2 / 3 个受控 App，只需把 endpoint 换成
+     *   RemoteConsoleEndpoint(目标包名) 即可复用同一套 UI，控制台无需重写。
+     * 所有快照拉取与 action 执行都在 ManualConsolePanel 的后台线程进行，避免 WebView 主线程死锁。
      */
     private fun wireConsole() {
         val consoleBody = findViewById<ScrollView>(R.id.console_body)
         val consoleToggle = findViewById<Button>(R.id.btn_console_toggle)
-        val btnCOpen = findViewById<Button>(R.id.btn_c_open)
-        val btnCRead = findViewById<Button>(R.id.btn_c_read)
-        val btnCCrawl = findViewById<Button>(R.id.btn_c_crawl)
-        val btnCJs = findViewById<Button>(R.id.btn_c_js)
-        val btnCFind = findViewById<Button>(R.id.btn_c_find)
-        val btnCFindNext = findViewById<Button>(R.id.btn_c_findnext)
-        val btnCFindClear = findViewById<Button>(R.id.btn_c_findclear)
-        val btnCBack = findViewById<Button>(R.id.btn_c_back)
-        val btnCFwd = findViewById<Button>(R.id.btn_c_fwd)
-        val btnCReload = findViewById<Button>(R.id.btn_c_reload)
-        val btnCShot = findViewById<Button>(R.id.btn_c_shot)
-        val btnCCapture = findViewById<Button>(R.id.btn_c_capture)
-        val btnCCapClear = findViewById<Button>(R.id.btn_c_capclear)
+        val consoleControls = findViewById<LinearLayout>(R.id.console_controls)
 
-        val input: () -> String = { consoleInput?.text?.toString()?.trim() ?: "" }
+        consolePanel = ManualConsolePanel(
+            container = consoleControls,
+            outputLog = consoleOutput,
+            endpoint = LocalConsoleEndpoint(ConsoleBackend)
+        )
 
         consoleToggle?.setOnClickListener {
             val show = consoleBody?.visibility != View.VISIBLE
             consoleBody?.visibility = if (show) View.VISIBLE else View.GONE
-            showStatus(if (show) "⌨ 手动控制台已展开" else "⌨ 手动控制台已收起")
-        }
-
-        // 打开 URL（smartNavigate 同地址栏）
-        btnCOpen?.setOnClickListener {
-            val u = input()
-            if (u.isEmpty()) { showStatus("⚠ 控制台：请输入 URL"); return@setOnClickListener }
-            val finalUrl = smartNavigate(u)
-            thread(name = "c-open") {
-                BrowserCore.loadUrl(finalUrl)
-                runOnUiThread {
-                    showStatus("🌐 打开: $finalUrl")
-                    addressBar?.setText(finalUrl)
-                }
+            if (show) {
+                showStatus("⌨ 手动控制台已展开（走 ACI 通道）")
+                consolePanel?.refresh()
+            } else {
+                showStatus("⌨ 手动控制台已收起")
             }
         }
-
-        // 读 HTML（SPA 已修复：JS 端切片 + 8s 超时）
-        btnCRead?.setOnClickListener {
-            thread(name = "c-read") {
-                val html = runCatching { BrowserCore.readHtml() }.getOrDefault("")
-                runOnUiThread { showConsole("读HTML（${html.length} 字）：\n${html.take(8000)}") }
-            }
-        }
-
-        // 爬取正文 + 链接
-        btnCCrawl?.setOnClickListener {
-            thread(name = "c-crawl") {
-                val text = runCatching { BrowserCore.crawlPage() }.getOrDefault("")
-                runOnUiThread { showConsole("爬取（${text.length} 字）：\n${text.take(8000)}") }
-            }
-        }
-
-        // 运行 JS
-        btnCJs?.setOnClickListener {
-            val code = input()
-            if (code.isEmpty()) { showStatus("⚠ 控制台：请输入 JS 代码"); return@setOnClickListener }
-            thread(name = "c-js") {
-                val r = runCatching { BrowserCore.evalScript(code) }.getOrDefault("")
-                runOnUiThread { showConsole("JS 结果：\n${r.take(8000)}") }
-            }
-        }
-
-        // 页内查找
-        btnCFind?.setOnClickListener {
-            val t = input()
-            if (t.isEmpty()) { showStatus("⚠ 控制台：请输入关键词"); return@setOnClickListener }
-            thread(name = "c-find") {
-                val n = runCatching { BrowserCore.findInPage(t) }.getOrDefault(0)
-                runOnUiThread {
-                    showStatus("🔍 命中 $n 处")
-                    showConsole("查找「$t」命中 $n 处")
-                }
-            }
-        }
-        btnCFindNext?.setOnClickListener { BrowserCore.findNext(true); showStatus("🔍 下一个匹配") }
-        btnCFindClear?.setOnClickListener { BrowserCore.clearFind(); showStatus("🔍 清除查找"); showConsole("已清除查找高亮") }
-
-        // 导航
-        btnCBack?.setOnClickListener { BrowserCore.navBack(); showStatus("◀ 后退") }
-        btnCFwd?.setOnClickListener { BrowserCore.navForward(); showStatus("▶ 前进") }
-        btnCReload?.setOnClickListener { BrowserCore.navReload(); showStatus("⟳ 刷新") }
-
-        // 截图（存外部存储 Pictures 子目录，返回路径）
-        btnCShot?.setOnClickListener {
-            thread(name = "c-shot") {
-                val dir = getExternalFilesDir(null)
-                val path = java.io.File(dir, "quro_shots/shot_${System.currentTimeMillis()}.png").absolutePath
-                val res = runCatching { BrowserCore.screenshot(path) }.getOrDefault("")
-                runOnUiThread {
-                    if (res.isNotEmpty()) {
-                        showStatus("📸 截图: $res")
-                        showConsole("截图已保存：\n$res")
-                    } else {
-                        showStatus("⚠ 截图失败")
-                        showConsole("截图失败（WebView 尺寸可能为 0，或页面尚未渲染）")
-                    }
-                }
-            }
-        }
-
-        // 抓包开关（请求经 WebViewClient.shouldInterceptRequest 写入 CaptureBuffer）
-        btnCCapture?.setOnClickListener {
-            captureOn = !captureOn
-            BrowserCore.setCaptureEnabled(captureOn)
-            btnCCapture.text = if (captureOn) "抓包:开" else "抓包:关"
-            showStatus(if (captureOn) "🐟 抓包已开启" else "🐟 抓包已关闭")
-            if (captureOn) showConsole("抓包已开启：浏览网页后，记录经 ACI console_ui 暴露；点「清抓包」可重置。")
-        }
-        btnCCapClear?.setOnClickListener {
-            BrowserCore.clearCapture()
-            showStatus("🐟 抓包记录已清空")
-            showConsole("抓包记录已清空")
-        }
-    }
-
-    /** 把控制台结果追加到 console_output 文本框（UI 线程安全）。 */
-    private fun showConsole(msg: String) {
-        runOnUiThread { consoleOutput?.append("\n• $msg") }
     }
 
     /** AI「眼睛」指示灯与控制文本。 */
@@ -402,8 +333,10 @@ class BrowserActivity : Activity() {
     }
 
     override fun onDestroy() {
+        consolePanel?.destroy()
         BrowserCore.aiEyeListener = null
-        BrowserCore.unregisterDisplayWebView()
+        // 仅从布局 detach，保留 WebView 在 BrowserCore 常驻（不销毁、不注销 displayWv）
+        webView?.let { (it.parent as? ViewGroup)?.removeView(it) }
         webView = null
         super.onDestroy()
     }

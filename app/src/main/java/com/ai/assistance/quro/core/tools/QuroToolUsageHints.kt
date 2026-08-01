@@ -151,8 +151,8 @@ object QuroToolUsageHints {
         "priv_status" to "「我现在能用 Shizuku/ROOT 吗」「哪些高危通道可用」都调用（调用高风险能力前先自查）",
 
         // ── ACI ──
-        "aci_list" to "「有哪些第三方 App 能让我调用」「可控制的外部能力」都调用",
-        "aci_call" to "「让 XX App 帮我做 YY」「调起外部 App 的能力」都调用",
+        "aci_list" to "「有哪些第三方 App 能让我调用」「可控制的外部能力」都调用；想用受控浏览器访问局域网（LAN）HTTP 服务（路由器/NAS/智能家居后台/私有 API）也先 aci_list 看它是否暴露 http_request",
+        "aci_call" to "「让 XX App 帮我做 YY」「调起外部 App 的能力」都调用；可自由组合多个能力（如 browser_open 打开网页 → browser_script 执行 JS 取数 → browser_read 回读结果，其间用 browser_wait 等加载），也能调 http_request 让受控浏览器访问同网段 LAN 明文服务（http://192.168.x.x、http://10.x、*.local mDNS），不必死板地按固定步骤走",
 
         // ── L1 无障碍控屏 ──
         "read_screen" to "「看看现在屏幕上是啥」「读一下当前界面」「这个 App 现在显示啥」都调用",

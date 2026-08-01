@@ -33,9 +33,9 @@
 >
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
 > - 🔗 主程序 APK 直链（v1.0.6）：[ZorvAI-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvAI-debug-v1.0.6.apk)
-> - 🔗 主程序 APK（v1.0.13，最新）：[ZorvAI-debug-v1.0.13.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.13/ZorvAI-debug-v1.0.13.apk)
+> - 🔗 主程序 APK（v1.0.14，最新）：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
 - 🔗 主程序 APK（v1.0.12）：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
-> - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.12 · 独立仓）：[ZorvBrowser-aci-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.12-browser/ZorvBrowser-aci-debug-v1.0.12.apk)
+> - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.14 · 独立仓，最新）：[ZorvBrowser-aci-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.14/ZorvBrowser-aci-debug-v1.0.14.apk)
 > - 🧩 ACI 核心库 AAR：[aci-core-release.aar](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/aci-core-release.aar)
 > - 📖 ACI 开发者手册：[docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md)
 > - 🐛 问题反馈：[github.com/Quor-a/ZorvAI/issues](https://github.com/Quor-a/ZorvAI/issues)
@@ -175,7 +175,7 @@ class MyAciService : BaseACIService() {
 
 **ZorvAI 浏览器（官方受控端）已暴露的能力：**
 
-作为官方参考实现，ZorvAI 浏览器向控制端（主程序 LLM）暴露以下 7 个能力，可直接被 AI 编排调用：
+作为官方参考实现，ZorvAI 浏览器向控制端（主程序 LLM）暴露 **30 个能力**（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输），下表节选常用项，完整契约见 [ACI 开发者手册 §13](./docs/ACI_DEVELOPER_GUIDE.md#13-官方受控端能力清单zorvai-浏览器)：
 
 | 能力 | 入参 | 返回 | 说明 |
 |------|------|------|------|
@@ -186,8 +186,9 @@ class MyAciService : BaseACIService() {
 | `browser_script` | `code`(必填) | `result` / `truncated` | **🆕 v1.0.9** 在当前页面执行任意 JavaScript 并返回结果 |
 | `browser_list` | — | `tabs` | 列出当前打开的标签页 |
 | `browser_info` | — | `package` / `versionName` / `versionCode` | 查询受控端版本信息 |
+| `http_request` | `url`(必填) / `method`(可选) / `headers`(可选) / `body`(可选) | `status_code` / `response_headers` / `response_body` / `truncated`（大响应体附 `response_body_gz` gzip） | **🆕 v1.0.14** 经 ACI 让受控浏览器发起任意 HTTP 请求，**支持同网段 LAN 明文**（http://192.168.x.x、http://10.x、*.local mDNS），访问路由器/NAS/智能家居/私有 API 等局域网设备 |
 
-> 💡 `browser_crawl` / `browser_search` 让 AI 能做「网页检索 / 信息抽取 / 爬虫」类任务；`browser_script` 提供页面内任意 JS 执行（高危能力，仅在受信任会话中使用）。完整契约见 [ACI 开发者手册 §13](./docs/ACI_DEVELOPER_GUIDE.md#13-官方受控端能力清单zorvai-浏览器)。
+> 💡 `browser_crawl` / `browser_search` 让 AI 能做「网页检索 / 信息抽取 / 爬虫」类任务；`browser_script` 提供页面内任意 JS 执行（高危能力，仅在受信任会话中使用）；`http_request` 让 AI 经受控浏览器发起 HTTP 请求，重点支持**局域网明文**（LAN），用于访问同网段设备/私有 API。完整契约见 [ACI 开发者手册 §13](./docs/ACI_DEVELOPER_GUIDE.md#13-官方受控端能力清单zorvai-浏览器) 与 [§15 HTTP 传输](./docs/ACI_DEVELOPER_GUIDE.md#15-http-传输能力http_request--局域网本地组网)。
 
 ---
 
@@ -205,6 +206,40 @@ class MyAciService : BaseACIService() {
 接入细节（快照 JSON Schema、动作契约、最小示例、`consolekit` 复用）见 [ACI 开发者手册 §14](./docs/ACI_DEVELOPER_GUIDE.md#14-lan-控制台--控制台后台接入-zorvai)。
 
 > 📌 早期版本曾误建「app 自连 `127.0.0.1` 环回 HTTP 控制台」（`lanui` 模块），已于 2026-07-31 彻底移除；现行方案改为受控端经 ACI 提供快照、控制端纯本地渲染，正确且零网络依赖。
+
+---
+
+## 🌐 ACI HTTP 传输（http_request · 局域网/本地组网）
+
+ZorvAI 浏览器（受控端）在 v1.0.14 新增 `http_request` 能力：AI 可经 ACI 让受控浏览器代为发起任意 HTTP 请求，**重点是「本地组网（相同网络下）」**——直接访问同网段设备的明文 HTTP 服务，无需因公网明文限制而却步。
+
+**能做什么**
+- 调用 Web API / 私有接口、抓取网页、对接第三方服务；
+- 访问路由器后台、NAS、智能家居（HomeAssistant 等）、IoT 设备、树莓派等局域网 HTTP 服务（http://192.168.x.x、http://10.x、*.local mDNS）；
+- GET/POST/PUT/DELETE/PATCH/HEAD 及任意自定义方法，支持自定义请求头与请求体。
+
+**为什么能通 LAN 明文（平台要点）**
+- Android 9+ 默认禁止明文 HTTP（`targetSdk≥28` 直接拦 `http://`）；受控浏览器通过 `networkSecurityConfig` 把 `base-config` 的 `cleartextTrafficPermitted` 设为 `true`，并对 `localhost`/`127.0.0.1`/`10.0.2.2`/`local` 放开，因此 LAN 明文可通。
+- Android NSC **无法按「私有网段」写白名单**（如不能写 `192.168.0.0/16`），只能整体放开——这是平台限制，非缺陷。
+
+**契约（参数 / 返回）**
+
+| 项 | 说明 |
+|----|------|
+| 入参 `url` | 目标 URL（必填） |
+| 入参 `method` | HTTP 方法，默认 GET |
+| 入参 `headers` | 请求头 JSON 字符串 |
+| 入参 `body` | 请求体（原样发送） |
+| 返回 `status_code` | HTTP 状态码（int） |
+| 返回 `response_headers` | 响应头 JSON |
+| 返回 `response_body` | 响应体（>15 万字符截断，附 `response_body_gz`） |
+| 返回 `truncated` | 是否截断（boolean） |
+
+控制端 `QuroAciTools.renderHttpResult` 自动解压 `response_body_gz` 并把「状态码 / 响应头 / 响应体」喂给 LLM。
+
+> ⚠️ 安全权衡：明文放开后公网明文 HTTP 也会一并放行。**仅在可信局域网内**用 `http_request` 访问内网地址，不要经它请求公网明文站点；远程生产通信（HTTPS）不受影响。
+
+开发者接入细节（受控端如何自己加 `http_request`、NSC 配置、gzip 解压）见 [ACI 开发者手册 §15](./docs/ACI_DEVELOPER_GUIDE.md#15-http-传输能力http_request--局域网本地组网)。
 
 ---
 
@@ -269,7 +304,9 @@ cd QuroAI
 
 直接从 Release 页面下载最新 APK：
 
-- **v1.0.13（debug，主程序，最新）**：[ZorvAI-debug-v1.0.13.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.13/ZorvAI-debug-v1.0.13.apk)
+- **v1.0.14（debug，主程序，最新）**：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
+- **v1.0.14（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 独立仓，最新）**：[ZorvBrowser-aci-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.14/ZorvBrowser-aci-debug-v1.0.14.apk)
+- **v1.0.13（debug，主程序）**：[ZorvAI-debug-v1.0.13.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.13/ZorvAI-debug-v1.0.13.apk)
 - **v1.0.12（debug，主程序）**：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
 - **v1.0.12（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 独立仓）**：[ZorvBrowser-aci-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.12-browser/ZorvBrowser-aci-debug-v1.0.12.apk)
 - **v1.0.12（debug，主程序 · ACI 控制台 UI 版）**：[ZorvAI-debug-v1.0.12-console.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12-console/ZorvAI-debug-v1.0.12-console.apk)
@@ -302,6 +339,7 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v1.0.14 | 2026-08-01 | **HTTP 传输（http_request · 局域网/本地组网）+ 文档与版本齐步**：受控浏览器新增 `http_request` 能力并经 ACI 暴露（支持同网段 LAN 明文 http://192.168.x.x、*.local）；受控端 `networkSecurityConfig` 放开局域网明文（base-config cleartextTrafficPermitted=true + localhost/127.0.0.1/10.0.2.2/local 域名放开）；主程序系统提示词 ACI 部分柔性化（可自由组合/链式调用能力）并补 HTTP(LAN) 说明；ACI 开发者手册新增 §15 HTTP 传输、应用内「被控方接入手册」补 HTTP(LAN) 小节、能力数 29→30；主程序版本号 versionCode 449→450 / versionName 1.0.13→1.0.14，受控浏览器 versionCode 13→14 / versionName 1.0.13→1.0.14 |
 | v1.0.13 | 2026-07-31 | **文档与许可对齐（LAN 控制台 / ACI 控制台）**：「设置 → 关于 Zorv AI → 开源许可声明」新增 ACI 控制台 UI（LAN 控制台）许可条目；README 新增「ACI 控制台 UI（LAN 控制台）」专节；开源 ACI 开发者手册新增 §14「LAN 控制台 / 控制台后台接入」；LICENSE 追加 LAN 控制台子系统许可说明；版本号升级至 versionCode 449 / versionName 1.0.13（受控浏览器保持 v1.0.12，未随本次发布） |
 | v1.0.12-console | 2026-07-31 | **ACI 控制台 UI（新增功能，未升版号）**：受控浏览器 `ConsoleBackend` 新增 `console_ui`(SDUI 快照) / `console_action`(increment/reset/submit_note) 能力；控制端 `QuroAciCenterScreen` 按 capability 显示「打开控制台」并复用本地 `AciConsoleScreen` 渲染器（已从 `lanui` LAN 范式解耦到 `core/aci` 本地包，纯本地零网络——同设备 Binder 调用，不管 WiFi 还是移动网络均可用）；拆除错误的 `browserui` 自循环前端（端口 8081 本地 HTTP），清理 Manifest/shortcuts 声明；主程序与浏览器均保持 versionCode 448 / versionName 1.0.12 |
 | v1.0.12 | 2026-07-30 | **ACI 被控方接入手册修正 + AAR 链接**：对齐真实 AAR API（`Capability.create(id, 描述)`、`onCreateCapabilities(caps)` 参数式、`onCall(req): ACIResponse` 返回值式）；补 3 个 `<permission>` 必须声明（缺则绑定必失败）；新增「二、依赖获取（aci-core AAR）」段含 AAR 直链、Gradle 依赖、`aci-core` 分支与网页手册；排障铁律补「绑定秒拒=漏写权限定义」 |

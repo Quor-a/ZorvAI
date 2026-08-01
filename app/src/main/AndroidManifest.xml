@@ -133,6 +133,11 @@
         <intent>
             <action android:name="ai.aci.core.ACTION_BIND" />
         </intent>
+        <!-- ACI 唤醒广播：Android 11+ 包可见性限制下显式声明，确保 sendBroadcast(ACTION_WAKE)
+             能穿透停止态把被控进程（含本应用自身作为受控端）拉起，便于 bindService 成功。 -->
+        <intent>
+            <action android:name="ai.aci.core.ACTION_WAKE" />
+        </intent>
     </queries>
 
     <application
@@ -346,6 +351,27 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 主应用 ACI 受控端：暴露 http_request 能力（HTTP 传输，传+收）。
+             控制方（含本应用 AI 经 aci_call）可经 ACI 调用本 Service 发起 HTTP 请求。
+             权限 ai.aci.permission.CALL 由 aci-core AAR 定义（protectionLevel=normal）。 -->
+        <service
+            android:name=".service.QuroMainAciService"
+            android:exported="true"
+            android:permission="ai.aci.permission.CALL">
+            <intent-filter>
+                <action android:name="ai.aci.core.ACTION_BIND" />
+            </intent-filter>
+        </service>
+
+        <!-- 主应用 ACI 唤醒接收器：收到 ACTION_WAKE 后拉起主应用 ACI Service（进程唤醒，便于绑定）。 -->
+        <receiver
+            android:name=".service.QuroAciWakeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="ai.aci.core.ACTION_WAKE" />
             </intent-filter>
         </receiver>
 

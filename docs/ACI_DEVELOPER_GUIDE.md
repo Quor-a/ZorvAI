@@ -1,6 +1,6 @@
 # Zorv AI · ACI 开发者手册（Agent Capability Interface）
 
-> 版本：v1.0.13（能力清单同步 ZorvAI 浏览器 v1.0.12；新增 §14 LAN 控制台 / 控制台后台接入）｜ 适用 SDK：`aci-core` ｜ 最后更新：2026-07-31
+> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）｜ 适用 SDK：`aci-core` ｜ 最后更新：2026-08-01
 >
 > 本文档面向**希望让自己的 Android App 被 Zorv AI（或其他 ACI 控制端）调用**的第三方开发者，也适用于**想基于 `aci-core` 自建控制端**的开发者。
 
@@ -396,9 +396,9 @@ override fun onCallAsync(request: ACIRequest, callback: IACICallback) {
 
 ## 13. 官方受控端能力清单（ZorvAI 浏览器）
 
-ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 29 个能力（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标）。控制端 `QuroAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
+ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 30 个能力（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输）。控制端 `QuroAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
 
-### 13.1 能力总览（共 29 项：13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标）
+### 13.1 能力总览（共 30 项：13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输）
 
 **基础能力（13）**
 
@@ -453,6 +453,7 @@ ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，�
 | 能力 id | 入参 | 出参 | 说明 |
 |---------|------|------|------|
 | `browser_mouse` | `action`(string, 必填：move/click/dblclick/right/down/up/drag/scroll) / `x`(int, 必填 屏幕绝对像素 X) / `y`(int, 必填 屏幕绝对像素 Y) / `dx`(int, 可选) / `dy`(int, 可选) / `button`(string, 可选：left 默认/right/middle) | `ok`(boolean) + `action` + `x` + `y` | 在页面屏幕坐标模拟鼠标动作；后端按 WebView 在屏位置自动换算视图坐标后派发 `MotionEvent`（主线程 `dispatchTouchEvent` / `dispatchGenericMotionEvent`）。覆盖无稳定ID、无 CSS 选择器的元素与画布交互，与 `browser_action`(id/selector) 构成「坐标 + 语义」双通道。注：系统 WebView 将触摸事件按触摸处理，右键为尽力而为 |
+| `http_request` | `url`(string, 必填) / `method`(string, 可选：GET/POST/PUT/DELETE/PATCH/HEAD，默认 GET) / `headers`(string, 可选 JSON) / `body`(string, 可选 原样发送) | `status_code`(int) + `response_headers`(string JSON) + `response_body`(string) + `truncated`(boolean)；大响应体附 `response_body_gz`(byte[]) | HTTP 传输：经 ACI 让受控浏览器代为发起任意 HTTP 请求。**重点支持同网段 LAN 明文**（http://192.168.x.x、http://10.x、*.local mDNS），访问路由器/NAS/智能家居/私有 API 等局域网设备；受控浏览器已放开局域网明文（networkSecurityConfig base-config 整体允许明文），无需因公网明文限制而犹豫，公网请求仍走 HTTPS。响应体 >15 万字符自动 gzip（response_body_gz），控制端解压还原 |
 
 > 注：`browser_action` 在第三波新增 `selector`(CSS 选择器) 参数（与 `id` 二选一，优先级低于 `id`），可直接用选择器定位操作，免去先 `browser_elements` 注入稳定 ID。
 
@@ -577,6 +578,49 @@ Zorv AI 主程序内置 `consolekit` 包，受控端或控制端都可复用：
 ### 14.6 控制端如何驱动
 
 控制端 `QuroAciCenterScreen` 按 capability id `console_ui` 发现「打开控制台」入口；点击后通过 Binder 拉取 `console_ui` 快照，用本地 `AciConsoleScreen`（`core/aci` 包）渲染；按钮 / 输入经 `console_action` 回传并刷新快照。**全程纯接线、零侵入、零网络。**
+
+---
+
+## 15. HTTP 传输能力（http_request · 局域网/本地组网）
+
+> 对应主程序「设置 → ACI 管理中心 → ACI 被控方接入手册」中的「HTTP 传输（http_request · 局域网/本地组网）」一节，以及主程序系统提示词对 ACI 的 HTTP/LAN 说明。面向**想让自己的受控端也提供 HTTP 传输能力**的开发者。
+
+受控浏览器新增 `http_request` 能力，让 AI 能经 ACI 让浏览器发起任意 HTTP 请求，重点是「本地组网（相同网络下）」：
+
+### 15.1 LAN 明文支持（核心）
+
+Android 9（API 28）+ 默认禁止明文 HTTP（`cleartextTrafficPermitted=false`），`targetSdk≥28` 的 App 直接访问 `http://` 会被系统拦截（`ERR_CLEARTEXT_NOT_PERMITTED`）。受控浏览器通过 `res/xml/network_security_config.xml` 解除该限制：
+
+- `base-config` 的 `cleartextTrafficPermitted="true"`：**整体放开明文**（含私有网段 192.168.0.0/16、10.0.0.0/8）；
+- `domain-config` 对 `localhost` / `127.0.0.1` / `10.0.2.2`（模拟器回环）/ `local`（mDNS）单独放开，便于本机与局域网设备互访。
+
+### 15.2 平台限制（重要）
+
+Android NSC **只能按域名或整体 base-config 放开明文，无法按「私有网段」写白名单**（如不能写 `192.168.0.0/16` 一条规则）。要支持 LAN 明文，只能把 `base-config` 整体放开——这是平台限制，不是代码缺陷。受控浏览器定位为本地调试/自动化工具，明文风险由使用者在可信 LAN 内自行把控。
+
+### 15.3 契约（参数 / 返回）
+
+受控端 `onCall("http_request")` 透传 URL 给 OkHttp（无 scheme 校验，明文是否通完全由 NSC 决定）：
+
+| 项 | 说明 |
+|----|------|
+| 入参 `url` | 目标 URL（必填） |
+| 入参 `method` | HTTP 方法，默认 GET；支持 GET/POST/PUT/DELETE/PATCH/HEAD 及任意自定义 |
+| 入参 `headers` | 请求头 JSON 对象字符串，如 `{"Authorization":"Bearer x"}` |
+| 入参 `body` | 请求体（原样发送，字符串） |
+| 返回 `status_code` | HTTP 响应状态码（int） |
+| 返回 `response_headers` | 响应头 JSON 对象 |
+| 返回 `response_body` | 响应体（字符串；>15 万字符截断，附 `response_body_gz`） |
+| 返回 `truncated` | 响应体是否被截断（boolean） |
+| 返回 `response_body_gz` | 大响应体 gzip(byte[])，控制端解压还原（Binder ≤900KB 才回传） |
+
+### 15.4 控制端如何渲染
+
+主程序 `QuroAciTools.renderHttpResult` 检测到 `response_body_gz` 即 GZIPInputStream 解压，把「状态码 / 响应头 / 响应体」整理成干净文本喂给 LLM；无 gzip 时直接用截断预览。
+
+### 15.5 安全权衡
+
+明文放开后，公网明文 HTTP（`http://` 公网域名）也会一并放行。请**仅在可信局域网内**用 `http_request` 访问内网地址，不要经它请求公网明文站点；远程生产通信（HTTPS）不受影响。
 
 ---
 

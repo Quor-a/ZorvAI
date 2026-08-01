@@ -195,7 +195,7 @@ class MyAciService : BaseACIService() {
 • 能力不出现：确认 onCreateCapabilities 用「参数式 caps.add(...)」正确填充，且 Service 已运行（stopped 态会被唤醒广播拉起）。
 • 绑定直接失败/秒拒：99% 是 Manifest 漏写 <permission> 定义（CALL / DISCOVER / CALL_DANGEROUS），补上即可。
 
-十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的 29 项能力（官方参考实现之一，非浏览器专属手册）
+十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的 30 项能力（29 个 browser_* + http_request，官方参考实现之一，非浏览器专属手册）
 （官方参考被控方。控制方 Zorv AI 经 ACI 调用它，第三方开发者可直接照抄这套能力声明范式（注意：这是示例，你的后端可声明任意能力，不必照搬此列表）：
  全部能力均在 onCreateCapabilities 用 Capability.create 参数式声明、onCall 内 when 分发。）
 
@@ -238,10 +238,20 @@ agentic 增强（新增 7 · 元素级操控 + 状态/事件/审计）：
 
 第四波增强（新增 1 · 虚拟鼠标，回应元宝「完整虚拟鼠标」）：
 • browser_mouse(action, x, y, dx?, dy?, button?) —— 在页面「屏幕坐标」模拟鼠标：action ∈ move(悬停)/click/dblclick/right/down/up/drag/scroll；后端按 WebView 在屏位置自动换算视图坐标后派发 MotionEvent（主线程 dispatchTouchEvent / dispatchGenericMotionEvent）。覆盖无稳定ID、无 CSS 选择器的元素与画布交互，与 browser_action(id/selector) 形成「坐标 + 语义」双通道。注：系统 WebView 将触摸事件按触摸处理，右键为尽力而为。
+• http_request(url, method?, headers?, body?) —— HTTP 传输：经 ACI 让受控浏览器代为发起任意 HTTP 请求（GET/POST/PUT/DELETE/PATCH/HEAD 等），返回 status_code / response_headers / response_body。用于调用 Web API、抓取网页、对接第三方服务；**重点支持同网段 LAN 明文**（http://192.168.x.x、http://10.x、*.local mDNS），访问路由器/NAS/智能家居/私有 API 等局域网设备——受控浏览器已放开局域网明文，无需因公网明文限制而犹豫；公网请求仍走 HTTPS。响应体 >15 万字符自动 gzip（response_body_gz），控制端解压还原。
 
 ⚠️ 调用约束（与上文一致）：所有 WebView 操作（goBack/reload/canGoBack/canGoForward/evaluateJavascript 等）必须由被控方
 在主线程执行（mainHandler.post + CountDownLatch 同步等待），禁止在 ACI Binder 工作线程直接调用 WebView，
 否则抛 "A WebView method was called on thread 'binder'"。
+
+【HTTP 传输（http_request · 局域网/本地组网）】
+受控浏览器新增 http_request 能力，让 AI 能经 ACI 让浏览器发起任意 HTTP 请求，重点是「本地组网（相同网络下）」：
+• LAN 明文支持：Android 9+ 默认禁明文 HTTP（targetSdk≥28），但受控浏览器通过 networkSecurityConfig 把 base-config 的 cleartextTrafficPermitted 设为 true，并对 localhost/127.0.0.1/10.0.2.2/local 放开，因此可直接访问 http://192.168.x.x、http://10.x、*.local（mDNS）等局域网 HTTP 服务。
+• 平台限制：Android NSC 只能按域名或整体 base-config 放开明文，无法按「私有网段（如 192.168.0.0/16）」写白名单——这是平台限制，非缺陷。
+• 参数：url（必填）、method（默认 GET）、headers（JSON 字符串）、body（原样发送字符串）。
+• 返回：status_code(int) / response_headers(JSON) / response_body(字符串，>15 万字符截断并附 response_body_gz gzip) / truncated(boolean)。
+• 控制端：主程序 QuroAciTools.renderHttpResult 自动解压 gzip，并把状态码/响应头/响应体喂给 LLM。
+• 安全权衡：明文放开后，公网明文 HTTP（http:// 公网域名）也会一并放行；请仅在可信局域网内用 http_request 访问内网地址，不要经它请求公网明文站点；远程生产通信（HTTPS）不受影响。
 
 十一、规划方向（尚未实现，供参考）
 元宝「TermBrowser」方案其余尚未落地的增强方向（轻量多标签 tabnew/tabclose/tabs/tab 已在第三波以「单引擎轻量版」落地；真·并行隔离仍属架构级改造）：

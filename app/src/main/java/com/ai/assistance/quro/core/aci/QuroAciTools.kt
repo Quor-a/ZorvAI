@@ -38,12 +38,14 @@ class QuroAciListTool : QuroTool {
 class QuroAciCallTool : QuroTool {
     override val name = "aci_call"
     override val description =
-        "调用一个第三方 App 通过 ACI（Agent Capability Interface）暴露的能力（如发消息 / 查未读 / 建群）。" +
-            "参数：{\"target_package\":\"第三方 App 包名（用 aci_list 查到的 pkg）\",\"capability\":\"能力 id（如 send_message）\",\"args\":{参数名:参数值}}。" +
+        "调用一个第三方 App 通过 ACI（Agent Capability Interface）暴露的能力（如发消息 / 查未读 / 建群 / 打开网页 / 执行网页 JS / 发起 HTTP 请求）。" +
+            "参数：{\"target_package\":\"第三方 App 包名（用 aci_list 查到的 pkg）\",\"capability\":\"能力 id（如 send_message / browser_open / http_request）\",\"args\":{参数名:参数值}}。" +
             "调用会跨进程发往目标 App 的 ACI Service 并同步等待结果（最长约 15 秒）。" +
             "调用前请勿伪造包名——目标 App 会用 Binder 真实 UID 鉴权。" +
             "若目标能力 requireUserConfirm（aci_list 会标注「需要用户确认」），必须先征询用户明确同意，并在 args 中带 confirm:true 才允许调用。" +
-            "若返回 503（服务未绑定），属绑定生命周期问题，框架会自动重绑——直接重试一次即可，禁止用 Shizuku/dumpsys/ROOT 去\"修复\"。其他错误码原样转告用户，不要臆测为权限不足。"
+            "若返回 503（服务未绑定），属绑定生命周期问题，框架会自动重绑——直接重试一次即可，禁止用 Shizuku/dumpsys/ROOT 去\"修复\"。其他错误码原样转告用户，不要臆测为权限不足。" +
+            "【自由组合】你可以把多个 ACI 能力像积木一样链式编排，而不是死板地一步步来：例如先 browser_open 打开页面 → browser_script 执行 JS 取数 → browser_read 回读结果；或先 browser_elements 标注稳定ID → browser_action 按ID操作；需要等页面加载则 browser_wait。" +
+            "【HTTP / 局域网】受控浏览器（ZorvAI 浏览器）暴露 http_request 能力：可经 ACI 让浏览器代为发起任意 HTTP 请求，包括同网段 LAN 明文（http://192.168.x.x、http://10.x、*.local mDNS 等），用于访问路由器/NAS/智能家居后台、私有 API、物联网设备等——受控浏览器已放开局域网明文，无需因公网明文限制而犹豫；公网请求仍走 HTTPS。"
     override val parametersJson = """{
         "type":"object",
         "properties":{
@@ -99,6 +101,8 @@ class QuroAciCallTool : QuroTool {
             val result = resp.result
             if (result == null || result.keySet().isEmpty()) {
                 "✅ ACI 调用成功（$target / $cap）\n（无返回数据）"
+            } else if (cap == "http_request") {
+                renderHttpResult(result)
             } else {
                 // 若受控端经 html_gz 回传 gzip 二进制，先解压拿完整 HTML
                 var fullHtml: String? = null
@@ -138,5 +142,37 @@ class QuroAciCallTool : QuroTool {
     private fun gunzip(data: ByteArray): ByteArray {
         val gz = GZIPInputStream(java.io.ByteArrayInputStream(data))
         return gz.readBytes()
+    }
+
+    /**
+     * 渲染 http_request 的控制端结果（让 AI 拿到干净的 状态码/响应头/响应体）。
+     * 若受控端经 response_body_gz 回传 gzip 二进制，先解压拿完整响应体。
+     */
+    private fun renderHttpResult(result: android.os.Bundle): String {
+        var fullBody: String? = null
+        if (result.containsKey("response_body_gz") && result.get("response_body_gz") is ByteArray) {
+            fullBody = runCatching {
+                String(gunzip(result.get("response_body_gz") as ByteArray), Charsets.UTF_8)
+            }.getOrNull()
+        }
+        val status = result.getInt("status_code", -1)
+        val headers = result.getString("response_headers") ?: ""
+        val bodyPreview = result.getString("response_body") ?: ""
+        val truncated = result.getBoolean("truncated", false)
+        val sb = StringBuilder()
+        sb.append("✅ HTTP 请求成功\n")
+        sb.append("状态码: $status\n")
+        sb.append("响应头:\n$headers\n")
+        if (fullBody != null) {
+            sb.append("响应体（完整内容，经 gzip 解压，共 ${fullBody.length} 字符）:\n")
+            sb.append(fullBody)
+        } else {
+            val reason = result.getString("truncated_reason") ?: ""
+            if (truncated && reason.isNotEmpty()) sb.append("⚠️ $reason\n")
+            else if (truncated) sb.append("⚠️ 响应体已截断（Binder 限制，完整内容见 response_body_gz）。\n")
+            sb.append("响应体（共 ${bodyPreview.length} 字符）:\n")
+            sb.append(bodyPreview)
+        }
+        return sb.toString().trim()
     }
 }
