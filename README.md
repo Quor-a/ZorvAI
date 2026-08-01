@@ -33,7 +33,8 @@
 >
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
 > - 🔗 主程序 APK 直链（v1.0.6）：[ZorvAI-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvAI-debug-v1.0.6.apk)
-> - 🔗 主程序 APK（v1.0.14，最新）：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
+> - 🔗 主程序 APK（v1.0.15，最新）：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
+> - 🔗 主程序 APK（v1.0.14）：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
 - 🔗 主程序 APK（v1.0.12）：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
 > - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.14 · 独立仓，最新）：[ZorvBrowser-aci-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.14/ZorvBrowser-aci-debug-v1.0.14.apk)
 > - 🧩 ACI 核心库 AAR：[aci-core-release.aar](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/aci-core-release.aar)
@@ -328,7 +329,8 @@ cd QuroAI
 
 直接从 Release 页面下载最新 APK：
 
-- **v1.0.14（debug，主程序，最新）**：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
+- **v1.0.15（debug，主程序，最新）**：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
+- **v1.0.14（debug，主程序）**：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
 - **v1.0.14（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 独立仓，最新）**：[ZorvBrowser-aci-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.14/ZorvBrowser-aci-debug-v1.0.14.apk)
 - **v1.0.13（debug，主程序）**：[ZorvAI-debug-v1.0.13.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.13/ZorvAI-debug-v1.0.13.apk)
 - **v1.0.12（debug，主程序）**：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
@@ -363,6 +365,7 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v1.0.15 | 2026-08-01 | **ACI 2.0 治理层（错误模型 / 协议版本化 / 事件总线）+ 真机全能力 42/42 通过**：新增 `QuroAciErrors`（ACI 2.0 标准化错误模型 `{code,message,suggestion,layer}`，aci-protocol 命名空间 15xx/24xx/25xx，避开 aci-core 标准码 0/400/403/404/500/503/504/505）+ `QuroAciProtocol`（`aci-protocol-v1` 协议版本化与 `negotiate(peer)` 协商）+ `QuroAciEvents`（进程内事件总线，含 SERVICE_BOUND/UNBOUND/CALL_FAILED/DISCOVERED/PROTOCOL_NEGOTIATED）；受控端 `QuroMainAciService` 新增 `aci_protocol` 能力暴露并统一错误码/超时/坏请求返回；控制端 `QuroAciManager` 接入协议协商、错误解析与事件下发；真机测试 42/42 全过 0 失败（浏览器 30 + WorkflowACI 10 + 主程序 2）；版本号 versionCode 450→451 / versionName 1.0.14→1.0.15 |
 | v1.0.14 | 2026-08-01 | **HTTP 传输（http_request · 局域网/本地组网）+ 文档与版本齐步**：受控浏览器新增 `http_request` 能力并经 ACI 暴露（支持同网段 LAN 明文 http://192.168.x.x、*.local）；受控端 `networkSecurityConfig` 放开局域网明文（base-config cleartextTrafficPermitted=true + localhost/127.0.0.1/10.0.2.2/local 域名放开）；主程序系统提示词 ACI 部分柔性化（可自由组合/链式调用能力）并补 HTTP(LAN) 说明；ACI 开发者手册新增 §15 HTTP 传输、应用内「被控方接入手册」补 HTTP(LAN) 小节、能力数 29→30；主程序版本号 versionCode 449→450 / versionName 1.0.13→1.0.14，受控浏览器 versionCode 13→14 / versionName 1.0.13→1.0.14 |
 | v1.0.13 | 2026-07-31 | **文档与许可对齐（LAN 控制台 / ACI 控制台）**：「设置 → 关于 Zorv AI → 开源许可声明」新增 ACI 控制台 UI（LAN 控制台）许可条目；README 新增「ACI 控制台 UI（LAN 控制台）」专节；开源 ACI 开发者手册新增 §14「LAN 控制台 / 控制台后台接入」；LICENSE 追加 LAN 控制台子系统许可说明；版本号升级至 versionCode 449 / versionName 1.0.13（受控浏览器保持 v1.0.12，未随本次发布） |
 | v1.0.12-console | 2026-07-31 | **ACI 控制台 UI（新增功能，未升版号）**：受控浏览器 `ConsoleBackend` 新增 `console_ui`(SDUI 快照) / `console_action`(increment/reset/submit_note) 能力；控制端 `QuroAciCenterScreen` 按 capability 显示「打开控制台」并复用本地 `AciConsoleScreen` 渲染器（已从 `lanui` LAN 范式解耦到 `core/aci` 本地包，纯本地零网络——同设备 Binder 调用，不管 WiFi 还是移动网络均可用）；拆除错误的 `browserui` 自循环前端（端口 8081 本地 HTTP），清理 Manifest/shortcuts 声明；主程序与浏览器均保持 versionCode 448 / versionName 1.0.12 |
