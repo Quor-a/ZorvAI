@@ -60,6 +60,30 @@
 
 ---
 
+## 📱 Screenshots · 截图预览
+
+> 以下截图来自真机（Android），展示 ZorvAI 的核心界面与能力验证结果。
+
+<table>
+  <tr>
+    <td align="center"><img src="screenshots/aci-capabilities.jpg" width="220"/><br><sub>ACI 关联启动 · 受控端 30 项能力清单</sub></td>
+    <td align="center"><img src="screenshots/aci-test-report.jpg" width="220"/><br><sub>ACI 能力模块全量测试报告（28/30 通过）</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="screenshots/cms-modules.jpg" width="220"/><br><sub>CMSv2 模块 · CMS 引擎</sub></td>
+    <td align="center"><img src="screenshots/terminal-proot.jpg" width="220"/><br><sub>终端 · proot / Alpine Linux 沙箱</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="screenshots/plugins-mcp-aci.jpg" width="220"/><br><sub>插件运行时 / MCP 服务 / ACI 管理中心</sub></td>
+    <td align="center"><img src="screenshots/capabilities-list.jpg" width="220"/><br><sub>能力分类列表（设备控制 / 信息管理 / 文件操作 等）</sub></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><img src="screenshots/chat-example.jpg" width="220"/><br><sub>Quro AI 对话示例</sub></td>
+  </tr>
+</table>
+
+---
+
 ## 🏗️ Functional Architecture · 功能构架
 
 ```mermaid
