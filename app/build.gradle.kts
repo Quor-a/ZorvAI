@@ -34,6 +34,7 @@ android {
         create("full") {
             dimension = "distribution"
             // 默认风味：包含 src/full/jniLibs 下的预编译原生库（ncnn / sherpa / proot / talloc）
+            // 同时接入源码编译的本地离线 LLM 引擎（:mnn + :llama，即 MNN / llama.cpp）
         }
         create("fdroid") {
             dimension = "distribution"
@@ -73,9 +74,9 @@ android {
         }
     }
 
-        aaptOptions {
+        androidResources {
             // 端侧 ASR 模型在运行期下载到应用私有目录（不再内置 assets）。此处 noCompress 以备 ncnn 文件误入 assets
-            noCompress("onnx", "txt", "ncnn", "param", "bin", "gz", "crt", "so")
+            noCompress += listOf("onnx", "txt", "ncnn", "param", "bin", "gz", "crt", "so")
             // 注：早期 Sherpa-ONNX AAR 会自带约百 MB 示例模型，曾用 ignoreAssetsPattern = "sherpa*" 剔除；
             // 现引擎改为源码打入 + jniLibs 预编译 .so，不再有 AAR 内置模型，故移除该忽略规则。
         }
@@ -123,6 +124,12 @@ dependencies {
     // （ai.aci.core.*：IACIService / IACICallback AIDL、ACIRequest / ACIResponse / Capability），
     // 不再依赖任何跨仓预编译 AAR。受控端 aci-browser 同样依赖 :aci-core，保证协议一致。
     implementation(project(":aci-core"))
+
+    // 本地离线 LLM 引擎（MNN / llama.cpp）：仅 full 风味依赖，源码编译，满足 F-Droid 红线
+    // 注意：fullImplementation 访问器此前因 kotlin-dsl 配置探针死锁（deprecation error 阻断脚本编译 → 访问器永不生成）而
+    // unresolved；改用 DependencyHandler.add() 显式按配置名注入，绕过访问器依赖，确保脚本成功编译一次后死锁解除。
+    add("fullImplementation", project(":mnn"))
+    add("fullImplementation", project(":llama"))
 
     // 头像裁剪（原创集成，用于人格卡上传图片后裁剪）
     // 注意：canhub 已将库移交 vanniktech，坐标已变更（包名 com.canhub.cropper.* 不变）

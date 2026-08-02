@@ -4,6 +4,7 @@ import android.content.Context
 import com.ai.assistance.quro.core.model.QuroModelConfig
 import com.ai.assistance.quro.core.model.QuroLocalModelRepository
 import com.ai.assistance.quro.core.network.QuroLlmClient
+import com.ai.assistance.quro.core.network.QuroLocalEngine
 import com.ai.assistance.quro.core.network.QuroLocalEnginePlaceholder
 import com.ai.assistance.quro.core.QuroLlmResult
 import com.ai.assistance.quro.core.tools.QuroToolEngine
@@ -314,7 +315,8 @@ class QuroAssistant(
 
     /**
      * 本地离线模型路由（原创）：根据 cfg.provider（MNN / LLAMA_CPP）找到已登记的本地模型，
-     * 交给 [QuroLocalEnginePlaceholder] 执行（原生运行时未接入时给出明确提示，不崩溃）。
+     * 通过反射交给 full 风味的原生引擎 [QuroLocalEngineNative] 执行；fdroid 风味回退
+     * [QuroLocalEnginePlaceholder]（原生运行时未编入，给出明确提示，不崩溃）。
      */
     private fun routeLocal(
         context: Context,
@@ -330,6 +332,19 @@ class QuroAssistant(
                 "未找到已登记的本地模型（${cfg.provider}）。请到「模型配置 → 本地离线模型」添加并选择。"
             )
         }
-        return QuroLocalEnginePlaceholder.run(local, cfg.model, messages, cfg.temperature, cfg.maxTokens)
+        return resolveLocalEngine().run(local, cfg.model, messages, cfg.temperature, cfg.maxTokens)
+    }
+
+    /**
+     * 在 full 风味下通过反射实例化原生本地引擎 [QuroLocalEngineNative]；
+     * fdroid 风味未编译该类，反射失败回退 [QuroLocalEnginePlaceholder]（明确提示、不崩溃）。
+     */
+    private fun resolveLocalEngine(): QuroLocalEngine {
+        return try {
+            val clazz = Class.forName("com.ai.assistance.quro.core.network.QuroLocalEngineNative")
+            clazz.getDeclaredConstructor().newInstance() as QuroLocalEngine
+        } catch (_: Throwable) {
+            QuroLocalEnginePlaceholder
+        }
     }
 }

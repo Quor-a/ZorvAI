@@ -8,7 +8,8 @@ import java.io.File
 /**
  * 本地离线模型管理：
  *
- * - MNN：用户下载/上传一个 `.mnn` 模型文件，选择该文件后记录其绝对路径即可被加载使用。
+ * - MNN：用户添加一个**模型目录**（含 `llm_config.json` 与权重文件，通常是从模型发布包解压出的文件夹）。
+ *   记录该目录的绝对路径即可被加载使用（若只选了目录内的 `.mnn` 文件，适配层会回退到其父目录）。
  * - llama.cpp：用户添加一个**文件夹**，从该文件夹扫描出 `.gguf` 模型文件，
  *   每个 .gguf 文件名即为一个可用模型。
  *
@@ -24,7 +25,7 @@ data class QuroLocalModel(
     val id: String = "",                 // UUID
     val type: QuroLocalModelType = QuroLocalModelType.MNN,
     val name: String = "",               // 展示名
-    val path: String = "",               // MNN: .mnn 文件绝对路径；LLAMA_CPP: 文件夹绝对路径
+    val path: String = "",               // MNN: 含 llm_config.json 的模型目录绝对路径（或目录内 .mnn 文件）；LLAMA_CPP: 文件夹绝对路径
     val modelNames: List<String> = emptyList(), // 该来源下可用的模型名（llama.cpp 扫描 .gguf 得到）
 )
 
