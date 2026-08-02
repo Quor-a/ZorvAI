@@ -51,8 +51,8 @@ kotlin {
 }
 
 dependencies {
-    // ACI 协议层（受控端）：与 ZorvAI 主工程同一个 AAR，保证协议一致、可直接 Gradle 依赖
-    implementation(files("libs/aci-core-debug.aar"))
+    // ACI 协议层（受控端）：与主工程同一个 :aci-core 模块（本仓源码），保证协议一致
+    implementation(project(":aci-core"))
     // HTTP 传输能力（http_request）：与主应用对称，复用同一 okhttp 版本（libs.versions.toml）
     implementation(libs.okhttp)
 }

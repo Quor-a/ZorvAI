@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.core.aci
 
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -14,11 +15,16 @@ import org.json.JSONObject
  * 与早期「LAN/WiFi 远程控制台」范式（自带 ServerSocket/HTTP 客户端、自连本地环回）不同，
  * 本模型只描述 UI 数据、不持任何网络能力 —— ACI 控制台从构造上就是本地、离线渲染。
  */
+/** 当前 SDUI 快照 JSON Schema 版本（向前/向后兼容基石；缺失视为 v1）。 */
+const val ACI_SDUI_SCHEMA_VERSION = "aci-sdui-v1"
+
 data class AciScreen(
     val title: String,
     val subtitle: String,
     val updatedAt: Long,
-    val components: List<AciComponent>
+    val components: List<AciComponent>,
+    /** SDUI 快照 schema 版本；受控端未下发时为空串（按 [ACI_SDUI_SCHEMA_VERSION] 兼容处理）。 */
+    val schemaVersion: String = ""
 )
 
 sealed interface AciComponent {
@@ -65,11 +71,17 @@ object AciConsoleModel {
                 else -> AciComponent.Text("[未知组件: ${o.optString("type", "?")}]")
             }
         }
+        val schemaVersion = json.optString("schema_version", "")
+        if (schemaVersion.isNotEmpty() && schemaVersion != ACI_SDUI_SCHEMA_VERSION) {
+            // 版本不一致：向后兼容——仍解析，仅告警（未来可在此做字段映射/降级）
+            Log.w("AciConsoleModel", "⚠️ SDUI schema 版本不一致：收到=$schemaVersion，本端=$ACI_SDUI_SCHEMA_VERSION，按兼容模式解析")
+        }
         return AciScreen(
             title = json.optString("title", "ACI 控制台"),
             subtitle = json.optString("subtitle", ""),
             updatedAt = json.optLong("updatedAt", 0),
-            components = components
+            components = components,
+            schemaVersion = schemaVersion
         )
     }
 }

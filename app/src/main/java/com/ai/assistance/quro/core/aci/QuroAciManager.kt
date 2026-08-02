@@ -272,7 +272,8 @@ class QuroAciManager private constructor(private val appContext: Context) {
                     }
                 }
                 capMap[pkg] = list
-                Log.i(TAG, "📋 $pkg → ${list.size} 项能力")
+                QuroAciRegistry.syncFromCapabilities(pkg, list)
+                Log.i(TAG, "📋 $pkg → ${list.size} 项能力（注册表已同步，标签检索可用）")
                 for (c in list) Log.d(TAG, "    • ${c.id}: ${c.description}")
                 // ACI 2.0 协议协商：对端若暴露 aci_protocol 能力，best-effort 取版本并协商（独立线程，不阻塞绑定）
                 if (list.any { it.id == "aci_protocol" }) {
@@ -430,6 +431,22 @@ class QuroAciManager private constructor(private val appContext: Context) {
 
     /** 返回某包协商后的 ACI 协议版本（未协商返回 null）。 */
     fun getNegotiatedProtocol(packageName: String): String? = protocolMap[packageName]
+
+    /**
+     * 返回某包的 ACI Adapter（当前为 Binder 实现）；未绑定活体服务返回 null。
+     * 这是 SDK 2.0「契约与运行时分离」的入口：调用方面向 [AciAdapter] 编程，
+     * 不感知底层是 Binder / WS / HTTP。
+     */
+    fun adapterFor(packageName: String): AciAdapter? {
+        val svc = serviceMap[packageName] ?: return null
+        return BinderAciAdapter(
+            pkg = packageName,
+            service = svc,
+            callFunc = { cap, params -> call(packageName, cap, params) },
+            capsProvider = { capMap[packageName] ?: emptyList() },
+            protocolProvider = { protocolMap[packageName] }
+        )
+    }
 
     /**
      * 生成可直接拼进 LLM System Prompt 的能力清单（仿 ACIManager.getCapabilityPrompt）。
@@ -593,6 +610,7 @@ class QuroAciManager private constructor(private val appContext: Context) {
             try { appContext.unbindService(conn) } catch (ignored: Exception) {}
             deathRecipients[pkg]?.let { recv -> serviceMap[pkg]?.asBinder()?.unlinkToDeath(recv, 0) }
         }
+        for (pkg in capMap.keys) QuroAciRegistry.clearPackage(pkg)
         connMap.clear()
         serviceMap.clear()
         capMap.clear()

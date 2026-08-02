@@ -27,6 +27,20 @@ android {
         }
     }
 
+    // F-Droid 合规：fdroid 风味剔除预编译原生库（离线 ASR + 应用内 Linux 沙箱），
+    // 仅保留源码编出的 libquroplugin.so；full 风味保持完整原生特性（Google Play / 自有分发）。
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("full") {
+            dimension = "distribution"
+            // 默认风味：包含 src/full/jniLibs 下的预编译原生库（ncnn / sherpa / proot / talloc）
+        }
+        create("fdroid") {
+            dimension = "distribution"
+            // F-Droid 构建风味：不含任何预编译原生库，满足「仓库内无预编译二进制」红线
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -105,10 +119,10 @@ dependencies {
     implementation(libs.org.json)
 
     // ACI（Agent Capability Interface）协议层：让 QuroAI 成为 ACI 控制方（AI 中枢），
-    // 发现并调用第三方 App 通过 ACI Service 暴露的能力。AAR 仅含协议层
-    // （ai.aci.core.*：IACIService / IACICallback AIDL、ACIRequest / ACIResponse / Capability）。
-    // 控制方客户端 QuroAciManager 为 QuroAI 内 Kotlin 单例（端口自 aci-aihub 的 ACIManager）。
-    implementation(files("../aci-browser/libs/aci-core-debug.aar"))
+    // 发现并调用第三方 App 通过 ACI Service 暴露的能力。源码现已收进本仓 :aci-core 模块
+    // （ai.aci.core.*：IACIService / IACICallback AIDL、ACIRequest / ACIResponse / Capability），
+    // 不再依赖任何跨仓预编译 AAR。受控端 aci-browser 同样依赖 :aci-core，保证协议一致。
+    implementation(project(":aci-core"))
 
     // 头像裁剪（原创集成，用于人格卡上传图片后裁剪）
     // 注意：canhub 已将库移交 vanniktech，坐标已变更（包名 com.canhub.cropper.* 不变）

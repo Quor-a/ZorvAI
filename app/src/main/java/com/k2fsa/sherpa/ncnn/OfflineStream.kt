@@ -26,7 +26,10 @@ class OfflineStream(var ptr: Long) {
 
     companion object {
         init {
-            System.loadLibrary("sherpa-ncnn-jni")
+            // F-Droid 风味不含离线 ASR 原生库，跳过加载避免 UnsatisfiedLinkError
+            if (com.ai.assistance.quro.BuildConfig.FLAVOR != "fdroid") {
+                System.loadLibrary("sherpa-ncnn-jni")
+            }
         }
     }
 }

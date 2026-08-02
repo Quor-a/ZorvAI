@@ -1,22 +1,15 @@
 # ============================================================================
 # F-Droid metadata — Zorv AI (com.ai.assistance.quro)
 #
-# STATUS: BLOCKED — do NOT open the MR to f-droid/data until the two
-# repository fixes marked [RED LINE] below are applied and tag v1.0.15 is
-# pushed to the public repo. This file is the *ready-to-submit* draft; the
-# `Gradle: [fdroid]` flavor and the in-repo :aci-core module must exist first.
-#
-#   [RED LINE 1] The 6 prebuilt .so under app/src/main/jniLibs/arm64-v8a/
-#     (libncnn / libsherpa-ncnn-jni / libproot / libproot-loader /
-#      libproot-loader32 / libtalloc) are NOT built from source. F-Droid
-#     forbids prebuilt native binaries. The `fdroid` product flavor excludes
-#     these features (offline ASR + in-app Linux sandbox) and `scandelete`
-#     strips the binaries. See F-DROID-SUBMISSION.md → "Fix plan".
-#
-#   [RED LINE 2] app depends on a prebuilt cross-repo AAR:
-#     implementation(files("../aci-browser/libs/aci-core-debug.aar"))
-#     Replace with an in-repo Gradle module `:aci-core` (project(":aci-core")).
-#     The `aci-core/` folder currently has NO build.gradle and is not a module.
+# STATUS: READY — both [RED LINE] fixes are now applied in-repo:
+#   * `fdroid` product flavor added; the 6 prebuilt .so moved to
+#     app/src/full/jniLibs/arm64-v8a/ (excluded from the fdroid build and
+#     stripped via scandelete). The fdroid build only ships the source-built
+#     libquroplugin.so.
+#   * :aci-core Gradle module created (ai.aci.core.* rebuilt from source,
+#     replacing the cross-repo prebuilt AAR). app + aci-browser now depend on
+#     project(":aci-core").
+# Remaining before opening the MR: commit these changes, tag v1.0.15, push.
 # ============================================================================
 
 Categories:
@@ -72,10 +65,9 @@ Builds:
     Gradle:
       - fdroid
     scandelete:
-      - app/src/main/jniLibs/arm64-v8a
-    # Requires: a `fdroid` product flavor that does NOT load ncnn/sherpa/proot/
-    # talloc, and a :aci-core Gradle module replacing the prebuilt AAR.
-    # See F-DROID-SUBMISSION.md → "Fix plan".
+      # 预编译原生库仅存在于 full 风味源集，fdroid 构建不会编入；
+      # 此处仍 scandelete，以防 F-Droid 扫描器在源码树中标记预编译二进制。
+      - app/src/full/jniLibs/arm64-v8a
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
