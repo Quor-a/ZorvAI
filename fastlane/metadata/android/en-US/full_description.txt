@@ -1,0 +1,18 @@
+Zorv AI is an on-device AI assistant hub for Android. It puts a configurable large-language-model chat, an open-source browser, and a local automation runtime in one app — without accounts, analytics, or advertising.
+
+Highlights of this F-Droid build:
+• Configurable LLM chat — connect your own API key for Gemini, OpenAI, Claude, Qwen, or any OpenAI-compatible endpoint. Your keys stay on the device.
+• Built-in open-source browser engine (GeckoView by Mozilla, MPL-2.0) instead of the system WebView, so page rendering is isolated and updatable.
+• ACI (Agent Capability Interface) — discover and call capabilities that other installed apps expose through an ACI Service.
+• Shizuku L2 channel — ADB-level IPC for advanced device actions without root.
+• QuickJS-based local plugin runtime — run small automation scripts on the device.
+
+Privacy first:
+• No account required to use the core app.
+• No telemetry, no crash-tracking SDKs, no ads.
+• The only network dependency is the LLM endpoint you configure yourself (declared as the NonFreeNet anti-feature).
+
+About what is not in this build:
+Offline speech recognition (Sherpa-NCNN) and the in-app Linux sandbox (proot) are omitted here because their native libraries are not compiled from source in this distribution. Every other feature matches the main release.
+
+Zorv AI is free software released under the Apache-2.0 license.

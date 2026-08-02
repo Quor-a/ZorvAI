@@ -1,0 +1,83 @@
+# ============================================================================
+# F-Droid metadata — Zorv AI (com.ai.assistance.quro)
+#
+# STATUS: BLOCKED — do NOT open the MR to f-droid/data until the two
+# repository fixes marked [RED LINE] below are applied and tag v1.0.15 is
+# pushed to the public repo. This file is the *ready-to-submit* draft; the
+# `Gradle: [fdroid]` flavor and the in-repo :aci-core module must exist first.
+#
+#   [RED LINE 1] The 6 prebuilt .so under app/src/main/jniLibs/arm64-v8a/
+#     (libncnn / libsherpa-ncnn-jni / libproot / libproot-loader /
+#      libproot-loader32 / libtalloc) are NOT built from source. F-Droid
+#     forbids prebuilt native binaries. The `fdroid` product flavor excludes
+#     these features (offline ASR + in-app Linux sandbox) and `scandelete`
+#     strips the binaries. See F-DROID-SUBMISSION.md → "Fix plan".
+#
+#   [RED LINE 2] app depends on a prebuilt cross-repo AAR:
+#     implementation(files("../aci-browser/libs/aci-core-debug.aar"))
+#     Replace with an in-repo Gradle module `:aci-core` (project(":aci-core")).
+#     The `aci-core/` folder currently has NO build.gradle and is not a module.
+# ============================================================================
+
+Categories:
+  - Internet
+  - Productivity
+  - Science
+  - System
+
+License: Apache-2.0
+
+AuthorName: Quor-a
+WebSite: https://zorv-ai.pages.dev
+SourceCode: https://jihulab.com/quor-a-group/ZorvAI
+IssueTracker: https://jihulab.com/quor-a-group/ZorvAI/-/issues
+Changelog: https://jihulab.com/quor-a-group/ZorvAI/-/releases
+
+AutoName: Zorv AI
+
+# The assistant only connects to user-configured LLM endpoints
+# (Gemini / OpenAI / Claude / Qwen / etc.). No tracking, no ads,
+# no other non-free code or network dependency.
+AntiFeatures:
+  - NonFreeNet
+
+Description: |
+  Zorv AI is an on-device AI assistant hub for Android.
+
+  Core features in the F-Droid build:
+  * Configurable LLM chat — bring your own API key for Gemini, OpenAI, Claude, Qwen, and more.
+  * Built-in open-source browser engine (GeckoView by Mozilla, MPL-2.0) — not the system WebView.
+  * ACI (Agent Capability Interface): discover and invoke capabilities exposed by other apps.
+  * Shizuku L2 channel for ADB-level IPC without root.
+  * QuickJS-based local plugin runtime for automation scripts.
+
+  Privacy:
+  * No account required. No analytics, no telemetry, no advertising SDKs.
+  * Your API keys are stored only on the device.
+
+  Note on this F-Droid build:
+  Offline speech recognition (Sherpa-NCNN) and the in-app Linux sandbox
+  (proot) are not included, because their native libraries are not compiled
+  from source in this distribution. All other functionality is identical to
+  the main release.
+
+RepoType: git
+Repo: https://jihulab.com/quor-a-group/ZorvAI.git
+
+Builds:
+  - Version: 1.0.15
+    VersionCode: 451
+    Commit: cdb2b71e93d208bc8ef3d88d2025b53fbe64c4f8
+    Subdir: app
+    Gradle:
+      - fdroid
+    scandelete:
+      - app/src/main/jniLibs/arm64-v8a
+    # Requires: a `fdroid` product flavor that does NOT load ncnn/sherpa/proot/
+    # talloc, and a :aci-core Gradle module replacing the prebuilt AAR.
+    # See F-DROID-SUBMISSION.md → "Fix plan".
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.0.15
+CurrentVersionCode: 451
