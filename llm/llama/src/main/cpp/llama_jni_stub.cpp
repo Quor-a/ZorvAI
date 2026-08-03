@@ -4,9 +4,23 @@
 
 #include <atomic>
 #include <cstdint>
+#include <cstdio>   // snprintf（SET_ERR 宏格式化错误原因）
 #include <mutex>
 #include <string>
 #include <vector>
+
+// Crash diagnostics: capture native aborts (SIGSEGV/SIGBUS/SIGABRT/SIGILL/SIGFPE)
+// that Java try/catch and the UncaughtExceptionHandler cannot catch, and write a
+// minimal tombstone (signal + fault address + PC) to Download/QuroAI_logs/ so the
+// user can retrieve it without adb.
+#include <signal.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <ucontext.h>
+#include <unwind.h>
+#include <dlfcn.h>
 
 #if defined(OPERIT_HAS_LLAMA_CPP) && OPERIT_HAS_LLAMA_CPP
 #include "chat.h"
@@ -15,6 +29,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <algorithm>
+#include <chrono>
 #include <exception>
 #include <memory>
 #include <sstream>
@@ -360,6 +375,13 @@ Java_com_ai_assistance_llama_LlamaNative_nativeParseToolCallResponse(JNIEnv * en
     return nullptr;
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_ai_assistance_llama_LlamaNative_nativeGetLastError(JNIEnv * env, jclass clazz, jlong sessionPtr) {
+    (void) clazz;
+    (void) sessionPtr;
+    return env->NewStringUTF("llama.cpp 运行时未编入本构建（fdroid 风味）");
+}
+
 #else
 
 namespace {
@@ -385,12 +407,154 @@ struct LlamaSessionNative {
     common_chat_parser_params toolCallParserParams;
     bool hasToolCallParser = false;
     std::atomic_bool cancel{false};
+    // 🔎 最近一次失败的**人类可读原因**。
+    // 背景：此前 native 的所有失败都只走 LOGE 进 logcat，用户端表现统一为"没反应/不回复"，
+    // 排障必须依赖 adb 或翻 Download/QuroAI_logs —— 用户拿不到日志，我就只能靠猜，
+    // 已经因此白跑了三轮修复。现在把原因回传 Java，直接显示在聊天气泡里。
+    // 访问方：genLock 已把同一 session 的 generate 串行化，故不额外加锁。
+    std::string lastError;
 };
+
+// 记录失败原因（同时打 LOGE，保留 logcat 链路）
+#define SET_ERR(sess, ...)                                        \
+    do {                                                          \
+        char _errbuf[512];                                        \
+        snprintf(_errbuf, sizeof(_errbuf), __VA_ARGS__);          \
+        LOGE("%s", _errbuf);                                      \
+        if ((sess) != nullptr) (sess)->lastError = _errbuf;       \
+    } while (0)
 
 static std::once_flag gBackendInitOnce;
 
+// ---- Native crash tombstone writer (async-signal-safe subset) -------------------
+static void quroCrashWriteStr(int fd, const char * s) {
+    if (s == nullptr) return;
+    size_t n = strlen(s);
+    if (n > 0) write(fd, s, n);
+}
+
+static void quroCrashWriteNum(int fd, long v) {
+    char buf[24];
+    int i = 0;
+    if (v < 0) { buf[i++] = '-'; v = -v; }
+    char tmp[20];
+    int j = 0;
+    if (v == 0) tmp[j++] = '0';
+    while (v > 0) { tmp[j++] = (char)('0' + (v % 10)); v /= 10; }
+    while (j > 0) buf[i++] = tmp[--j];
+    write(fd, buf, i);
+}
+
+// Minimal signal handler: write a symbolized backtrace (signal + fault address +
+// fault PC + a backtrace resolved to lib!function+offset) to Download/QuroAI_logs/
+// so the user can retrieve it without adb, then re-raise so the OS still produces
+// a real tombstone. Only best-effort async-signal-safe-ish calls are used:
+// backtrace/backtrace_symbols_fd/dladdr are commonly used in crash handlers;
+// write/open/close are async-signal-safe. No C++ streams / STL formatting.
+static void quroNativeCrashSigHandler(int sig, siginfo_t * info, void * uctx) {
+    mkdir("/sdcard/Download/QuroAI_logs", 0755);
+
+    int fd = open("/sdcard/Download/QuroAI_logs/quro_native_crash.log",
+                  O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (fd >= 0) {
+        quroCrashWriteStr(fd, "[QuroNativeCrash] signal=");
+        quroCrashWriteNum(fd, sig);
+        quroCrashWriteStr(fd, " si_addr=");
+        quroCrashWriteNum(fd, info ? reinterpret_cast<long>(info->si_addr) : 0L);
+
+        // Faulting PC from the ucontext (the most useful single address).
+        ucontext_t * uc = reinterpret_cast<ucontext_t *>(uctx);
+        uintptr_t faultPc = 0;
+#if defined(__aarch64__)
+        faultPc = (uintptr_t) uc->uc_mcontext.pc;
+#elif defined(__x86_64__)
+        faultPc = (uintptr_t) uc->uc_mcontext.gregs[REG_RIP];
+#elif defined(__arm__)
+        faultPc = (uintptr_t) uc->uc_mcontext.arm_pc;
+#endif
+        quroCrashWriteStr(fd, " fault_pc=");
+        quroCrashWriteNum(fd, (long) faultPc);
+        quroCrashWriteStr(fd, " (use with addr2line / ndk-stack)\n");
+        quroCrashWriteStr(fd, "[QuroNativeCrash] backtrace:\n");
+
+        // bionic has no glibc backtrace(); use the Itanium _Unwind_Backtrace API
+        // (available via <unwind.h>) and resolve each frame with dladdr so we get
+        // lib!function+offset (ASLR-stripped), which maps directly to addr2line.
+        struct QuroUnwindState {
+            void * frames[32];
+            int count;
+        };
+        QuroUnwindState st;
+        st.count = 0;
+        auto quroUnwindCb = +[](struct _Unwind_Context * ctx, void * arg) -> _Unwind_Reason_Code {
+            auto * s = static_cast<QuroUnwindState *>(arg);
+            if (s->count >= 32) return _URC_END_OF_STACK;
+            uintptr_t ip = static_cast<uintptr_t>(_Unwind_GetIP(ctx));
+            // _Unwind_GetIP returns the return address (next insn); subtract 1 so
+            // the address falls inside the calling instruction for symbolization.
+            s->frames[s->count++] = reinterpret_cast<void *>(ip ? ip - 1 : ip);
+            return _URC_NO_REASON;
+        };
+        _Unwind_Backtrace(quroUnwindCb, &st);
+        // Skip frame 0 (our signal handler) and frame 1 (the libc raise/abort
+        // trampoline) so the first printed frame is the real llama.cpp call site.
+        for (int i = 2; i < st.count; i++) {
+            Dl_info dlinfo;
+            memset(&dlinfo, 0, sizeof(dlinfo));
+            dladdr(st.frames[i], &dlinfo);
+            quroCrashWriteStr(fd, "  #");
+            quroCrashWriteNum(fd, i);
+            quroCrashWriteStr(fd, " ");
+            if (dlinfo.dli_fname) {
+                quroCrashWriteStr(fd, dlinfo.dli_fname);
+            } else {
+                quroCrashWriteStr(fd, "<unknown>");
+            }
+            quroCrashWriteStr(fd, "!");
+            if (dlinfo.dli_sname) {
+                quroCrashWriteStr(fd, dlinfo.dli_sname);
+            } else {
+                quroCrashWriteStr(fd, "??");
+            }
+            if (dlinfo.dli_fbase) {
+                quroCrashWriteStr(fd, "+0x");
+                quroCrashWriteNum(fd, (long)((uintptr_t)st.frames[i] - (uintptr_t)dlinfo.dli_fbase));
+            } else {
+                quroCrashWriteStr(fd, " @0x");
+                quroCrashWriteNum(fd, (long)(uintptr_t)st.frames[i]);
+            }
+            if ((uintptr_t)st.frames[i] == faultPc) {
+                quroCrashWriteStr(fd, "   <-- fault");
+            }
+            quroCrashWriteStr(fd, "\n");
+        }
+        close(fd);
+    }
+
+    // Restore default disposition and re-raise so the system still produces a tombstone.
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = SIG_DFL;
+    sigaction(sig, &sa, nullptr);
+    raise(sig);
+}
+
+static void installNativeCrashHandler() {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_sigaction = quroNativeCrashSigHandler;
+    sa.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGSEGV, &sa, nullptr);
+    sigaction(SIGBUS, &sa, nullptr);
+    sigaction(SIGABRT, &sa, nullptr);
+    sigaction(SIGILL, &sa, nullptr);
+    sigaction(SIGFPE, &sa, nullptr);
+}
+
 static void ensureBackendInit() {
     std::call_once(gBackendInitOnce, []() {
+        installNativeCrashHandler();
         llama_backend_init();
         std::srand(static_cast<unsigned int>(std::time(nullptr)));
         LOGI("llama_backend_init done");
@@ -700,7 +864,12 @@ Java_com_ai_assistance_llama_LlamaNative_nativeCreateSession(
     // llama.cpp now exposes model memory mapping through load_mode; the old
     // use_mmap/use_mlock fields no longer exist in llama_model_params.
     mparams.load_mode = effectiveUseMmap ? LLAMA_LOAD_MODE_MMAP : LLAMA_LOAD_MODE_NONE;
-    mparams.use_extra_bufts = true;
+    // 【#1116】关闭 extra buffer types（ARM CPU repack）。
+    // repack 会把量化权重重排成 Q4_0_4x8 / Q4_K_8x8 等布局，走独立的 NEON/i8mm
+    // gemm kernel。这条路径依赖运行时 HWCAP 探测，在 big.LITTLE 机型上大小核能力
+    // 不一致时可能选到当前核不支持的 kernel，真机崩溃点（ggml mul_mat）正落在这里。
+    // 手机上 repack 的收益有限，稳定性优先，先关掉。
+    mparams.use_extra_bufts = false;
 
     LOGI(
         "Creating llama session. model=%s threads=%d n_ctx=%d n_batch=%d n_ubatch=%d gpu_layers=%d use_mmap=%d flash_attn=%d kv_unified=%d offload_kqv=%d gpu_support=%d",
@@ -751,6 +920,11 @@ Java_com_ai_assistance_llama_LlamaNative_nativeCreateSession(
         effectiveFlashAttention ? LLAMA_FLASH_ATTN_TYPE_ENABLED : LLAMA_FLASH_ATTN_TYPE_DISABLED;
     cparams.offload_kqv = effectiveOffloadKqv;
     cparams.kv_unified = effectiveKvUnified;
+    // 计算类型（KV 缓存精度）：对齐 PocketPal 默认 F16。若不显式设置，llama.cpp 按模型原生类型
+    // 可能落到 F32 —— KV 缓存体积翻倍，手机上 4096+ 上下文极易在 llama_init_from_model 阶段
+    // OOM / 分配超时，表现为「模型加载不完整 / 卡在加载」。F16 是稳定且省内存的默认值。
+    cparams.type_k = GGML_TYPE_F16;
+    cparams.type_v = GGML_TYPE_F16;
     cparams.abort_callback = abortCallback;
     cparams.abort_callback_data = session;
 
@@ -964,11 +1138,17 @@ Java_com_ai_assistance_llama_LlamaNative_nativeApplyChatTemplate(
 
     if (sessionPtr == 0 || roles == nullptr || contents == nullptr) return nullptr;
     auto * session = reinterpret_cast<LlamaSessionNative *>(sessionPtr);
-    if (!session->model || !session->chatTemplates) return nullptr;
+    if (!session->model || !session->chatTemplates) {
+        SET_ERR(session, "模型未就绪或该 GGUF 未内嵌聊天模板（chat template 缺失）");
+        return nullptr;
+    }
 
     const jsize nRoles = env->GetArrayLength(roles);
     const jsize nContents = env->GetArrayLength(contents);
-    if (nRoles <= 0 || nContents <= 0 || nRoles != nContents) return nullptr;
+    if (nRoles <= 0 || nContents <= 0 || nRoles != nContents) {
+        SET_ERR(session, "消息数组非法（roles=%d contents=%d）", (int) nRoles, (int) nContents);
+        return nullptr;
+    }
 
     std::vector<std::string> roleBuf;
     std::vector<std::string> contentBuf;
@@ -986,6 +1166,7 @@ Java_com_ai_assistance_llama_LlamaNative_nativeApplyChatTemplate(
 
     std::vector<common_chat_msg> messages;
     if (!buildChatMessages(roleBuf, contentBuf, messages)) {
+        SET_ERR(session, "构建聊天消息失败（角色/内容为空或非法）");
         return nullptr;
     }
 
@@ -997,14 +1178,15 @@ Java_com_ai_assistance_llama_LlamaNative_nativeApplyChatTemplate(
     try {
         const common_chat_params params = common_chat_templates_apply(session->chatTemplates.get(), inputs);
         if (params.prompt.empty()) {
+            SET_ERR(session, "聊天模板渲染结果为空（模板与消息不匹配）");
             return nullptr;
         }
         return bytesUtf8ToJstring(env, params.prompt);
     } catch (const std::exception & e) {
-        LOGE("Failed to apply chat template: %s", e.what());
+        SET_ERR(session, "聊天模板渲染异常：%s", e.what());
         return nullptr;
     } catch (...) {
-        LOGE("Failed to apply chat template: unknown error");
+        SET_ERR(session, "聊天模板渲染异常（未知错误）");
         return nullptr;
     }
 }
@@ -1128,8 +1310,15 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
 
     if (sessionPtr == 0 || callback == nullptr) return JNI_FALSE;
     auto * session = reinterpret_cast<LlamaSessionNative *>(sessionPtr);
-    if (!session->model || !session->ctx || !session->sampler) return JNI_FALSE;
+    if (!session->model || !session->ctx || !session->sampler) {
+        if (session != nullptr) {
+            session->lastError = "会话内部对象缺失（model/ctx/sampler 为空），模型可能已被卸载";
+        }
+        return JNI_FALSE;
+    }
 
+    // 每次生成开始先清空上轮错误，避免把旧原因误报给这一轮。
+    session->lastError.clear();
     session->cancel.store(false);
 
     // reset KV + sampler for a clean generation per request
@@ -1148,21 +1337,46 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
 
     // Resolve callback method
     jclass cbCls = env->GetObjectClass(callback);
-    if (!cbCls) return JNI_FALSE;
+    if (!cbCls) {
+        session->lastError = "无法解析生成回调对象";
+        return JNI_FALSE;
+    }
     jmethodID midOnToken = env->GetMethodID(cbCls, "onToken", "(Ljava/lang/String;)Z");
-    if (!midOnToken) return JNI_FALSE;
+    if (!midOnToken) {
+        session->lastError = "回调缺少 onToken 方法";
+        return JNI_FALSE;
+    }
+    // 可选进度回调：prefill 阶段在手机 CPU 上可能耗时数十秒，期间一个 token 都吐不出来，
+    // UI 全程空白 → 用户观感就是"卡死/不回复"。有它就能把"正在处理提示词 x/y"实时上屏。
+    // 找不到该方法时静默降级（老版本 Java 侧接口无此方法），不影响生成。
+    jmethodID midOnProgress = env->GetMethodID(cbCls, "onProgress", "(Ljava/lang/String;II)V");
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        midOnProgress = nullptr;
+    }
 
     // Tokenize prompt
     int32_t capacity = static_cast<int32_t>(promptStr.size()) + 8;
     std::vector<llama_token> promptTokens;
     promptTokens.resize(std::max(16, capacity));
+    // ⚠️ BOS/EOS 处理（本地模型"答非所问 / 首 token 即 EOG"的根因之一）
+    //
+    // llama_tokenize 的 add_special 只有两种极端：
+    //   true  → 无条件按词表元数据补 BOS。模板本身已含 <|begin_of_text|> 的模型（Llama-3 系）
+    //           会得到**双 BOS**，模型会当成两段对话的拼接，轻则答非所问、重则立刻吐 EOG。
+    //   false → 一律不补。模板不含 BOS 但词表要求 BOS 的模型（Llama-2 / Mistral / Gemma 系）
+    //           会**丢 BOS**，首 token 分布严重跑偏。
+    // 两个值都会在某类模型上出错，所以这里先用 false 分词，再按词表元数据
+    // （llama_vocab_get_add_bos）**检查首 token 是否已经是 BOS**，缺了才补一个——
+    // 既不双 BOS 也不丢 BOS，对 Qwen / Llama-2 / Llama-3 / Gemma 一致正确。
+    // parse_special 恒为 true：模板里的 <|im_start|> 等必须解析成真正的特殊 token 而非字面量。
     int32_t nPrompt = llama_tokenize(
         vocab,
         promptStr.c_str(),
         static_cast<int32_t>(promptStr.size()),
         promptTokens.data(),
         static_cast<int32_t>(promptTokens.size()),
-        true,
+        false,
         true
     );
     if (nPrompt < 0) {
@@ -1173,22 +1387,36 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
             static_cast<int32_t>(promptStr.size()),
             promptTokens.data(),
             static_cast<int32_t>(promptTokens.size()),
-            true,
+            false,
             true
         );
     }
     if (nPrompt <= 0) {
-        LOGE("Tokenize prompt failed");
+        SET_ERR(session, "提示词分词失败（tokenize 返回 %d，prompt 长度 %zu 字节）", (int) nPrompt, promptStr.size());
         return JNI_FALSE;
     }
     promptTokens.resize(static_cast<size_t>(nPrompt));
+
+    // —— BOS 补齐（见上方注释）：词表要求 BOS 且模板没渲染出 BOS 时，手动在最前面补一个。
+    const bool vocabWantsBos = llama_vocab_get_add_bos(vocab);
+    const llama_token bosTok = llama_vocab_bos(vocab);
+    bool bosInjected = false;
+    if (vocabWantsBos && bosTok != LLAMA_TOKEN_NULL) {
+        if (promptTokens.empty() || promptTokens.front() != bosTok) {
+            promptTokens.insert(promptTokens.begin(), bosTok);
+            bosInjected = true;
+        }
+    }
+    LOGI("tokenize | nPrompt=%d | vocabWantsBos=%d | bos=%d | injected=%d | firstTok=%d | eos=%d",
+         (int) promptTokens.size(), (int) vocabWantsBos, (int) bosTok, (int) bosInjected,
+         promptTokens.empty() ? -1 : (int) promptTokens.front(), (int) llama_vocab_eos(vocab));
 
     // Avoid prompts that end with EOG/EOS tokens (some vocabs add EOS automatically when add_special=true)
     while (!promptTokens.empty() && llama_vocab_is_eog(vocab, promptTokens.back())) {
         promptTokens.pop_back();
     }
     if (promptTokens.empty()) {
-        LOGE("Prompt tokenization resulted in only EOG/EOS tokens");
+        SET_ERR(session, "提示词分词后只剩结束符（EOG/EOS），聊天模板可能与该 GGUF 不匹配");
         return JNI_FALSE;
     }
 
@@ -1206,65 +1434,128 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
     }
 
     if (promptTokens.empty()) {
-        LOGE("Prompt became empty after truncation");
+        SET_ERR(session, "提示词按上下文窗口截断后为空（n_ctx=%d 太小）", (int) n_ctx);
         return JNI_FALSE;
     }
 
-    LOGI(
-        "Prefill decode start: prompt_tokens=%zu n_ctx=%d n_batch=%u max_new=%d",
-        promptTokens.size(),
-        n_ctx,
-        llama_n_batch(session->ctx),
-        maxNew
-    );
+    const auto prefillStart = std::chrono::steady_clock::now();
 
+    // Prefill in chunks of n_batch. Use an EXPLICIT, writable batch (llama_batch_init)
+    // and set pos/seq_id/logits per token — do NOT rely on llama_batch_validate's
+    // null-default behavior, which falls back to pos=0 when KV memory is null and
+    // mis-places chunked tokens (KV overwrite at position 0 -> garbage context ->
+    // first sampled token is EOG -> empty output). This matches PocketPal's
+    // chunk-prefill范式 and is robust regardless of KV memory state.
+    const uint32_t n_batch = llama_n_batch(session->ctx);
+    // 手机 CPU prefill 大 chunk 单段可能 >30s，被系统/库层超时掐死；改小到 256 让每段
+    // 更快完成、进度条更频繁更新，同时仍保持合理效率（256 是 llama.cpp 常见 ubatch 量级）。
+    const int32_t effectiveChunk = static_cast<int32_t>(std::min<uint32_t>(n_batch, 256u));
+    const int32_t totalPrompt = static_cast<int32_t>(promptTokens.size());
     int32_t n_past = 0;
 
-    // Evaluate prompt
-    llama_batch batch = llama_batch_get_one(promptTokens.data(), static_cast<int32_t>(promptTokens.size()));
-    // llama_batch_get_one() may leave batch.logits == nullptr (default behavior is: only last token outputs logits)
-    // so never write to it unless it's allocated.
-    if (batch.logits != nullptr && batch.n_tokens > 0) {
-        batch.logits[batch.n_tokens - 1] = 1;
+    LOGI(
+        "Prefill decode start: prompt_tokens=%zu n_ctx=%d n_batch=%u effective_chunk=%d max_new=%d",
+        promptTokens.size(),
+        n_ctx,
+        n_batch,
+        effectiveChunk,
+        maxNew
+    );
+    const llama_seq_id seq0 = 0;
+    llama_batch pbatch = llama_batch_init(n_batch, 0, 1);
+    bool prefillFailed = false;
+    int32_t offset = 0;
+    while (offset < totalPrompt) {
+        const int32_t chunk = std::min<int32_t>(effectiveChunk, totalPrompt - offset);
+        for (int32_t i = 0; i < chunk; i++) {
+            pbatch.token[i] = promptTokens[offset + i];
+            pbatch.pos[i] = offset + i;
+            pbatch.n_seq_id[i] = 1;
+            // ⚠️ 致命坑（本次崩溃真根因）：绝不能写成 `pbatch.seq_id[i] = &seq0`。
+            // llama_batch_init 已为每个 token 槽 malloc 了 seq_id[i]（大小 n_seq_max），
+            // llama_batch_free 会遍历到 nullptr 哨兵并**逐个 free(batch.seq_id[i])**。
+            // 覆写指针 = ①泄漏原 malloc 块 ②让 free() 去释放一个**栈地址**
+            // → bionic malloc 判定非法指针直接 abort（SIGABRT signal=6 @ free/llama_batch_free），
+            // 侥幸不 abort 时也已污染堆元数据 → 后续随机 SIGSEGV（如 ggml_vec_dot_q5_K_q8_K）
+            // 与 ggml_abort @ llama_context::decode。单线程发一条消息即必现，与并发无关。
+            // 正确做法同官方 common_batch_add：往已分配的槽里**写值**。
+            pbatch.seq_id[i][0] = seq0;
+            // only the very last token across the whole prompt outputs logits
+            pbatch.logits[i] = (offset + i == totalPrompt - 1) ? 1 : 0;
+        }
+        pbatch.n_tokens = chunk;
+        LOGI("Prefill chunk: offset=%d chunk=%d last=%d", (int) offset, (int) chunk,
+             (offset + chunk >= totalPrompt) ? 1 : 0);
+
+        const auto chunkStart = std::chrono::steady_clock::now();
+
+        // 把 prefill 进度实时推给 UI（首 token 到达后会被真实文本覆盖）。
+        if (midOnProgress != nullptr) {
+            jstring jstage = env->NewStringUTF("prefill");
+            if (jstage != nullptr) {
+                env->CallVoidMethod(callback, midOnProgress, jstage, (jint) offset, (jint) totalPrompt);
+                env->DeleteLocalRef(jstage);
+                if (env->ExceptionCheck()) env->ExceptionClear();
+            }
+        }
+
+        int32_t ret = llama_decode(session->ctx, pbatch);
+        const auto chunkMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now() - chunkStart)
+                                 .count();
+        LOGI("Prefill chunk done: offset=%d chunk=%d ret=%d time=%lldms", (int) offset, (int) chunk,
+             (int) ret, (long long) chunkMs);
+        // ⚠️ 返回码语义（include/llama.h）：0=成功；1=**找不到 KV slot（失败！）**；
+        // 2=aborted；-1=非法 batch；<-1=致命。
+        // 旧代码写的是 `ret != 0 && ret != 1`，等于把 1 当成功继续跑 ——
+        // 该 chunk 的 KV 根本没写进去，上下文残缺 → 采样出的首 token 直接是 EOG
+        // → 生成循环立刻 break → 输出空字符串（"不闪退但一个字都不回"的独立根因之一）。
+        if (ret != 0) {
+            if (ret == 2) {
+                SET_ERR(session, "提示词处理被中断（模型正在卸载或已取消）");
+            } else if (ret == 1) {
+                SET_ERR(session,
+                        "提示词处理失败：KV 缓存放不下（提示词 %d token / n_ctx=%d / n_batch=%u）。"
+                        "请减少上下文或换更小的模型",
+                        (int) totalPrompt, (int) n_ctx, (unsigned) n_batch);
+            } else {
+                SET_ERR(session, "提示词解码失败 llama_decode ret=%d（offset=%d/%d）",
+                        (int) ret, (int) offset, (int) totalPrompt);
+            }
+            prefillFailed = true;
+            break;
+        }
+        // 让 unload/cancel 能快速打断 prefill：在每段 chunk 解码后检查 cancel 标志。
+        if (session->cancel.load()) {
+            SET_ERR(session, "提示词处理被取消（cancel）");
+            prefillFailed = true;
+            break;
+        }
+        offset += chunk;
     }
-
-    if (llama_model_has_encoder(session->model)) {
-        if (llama_encode(session->ctx, batch) != 0) {
-            LOGE("llama_encode failed");
-            return JNI_FALSE;
-        }
-
-        llama_token decoder_start_token_id = llama_model_decoder_start_token(session->model);
-        if (decoder_start_token_id == -1) {
-            decoder_start_token_id = llama_vocab_bos(vocab);
-        }
-
-        batch = llama_batch_get_one(&decoder_start_token_id, 1);
-        if (batch.logits != nullptr) {
-            batch.logits[0] = 1;
-        }
-    }
-
-    int32_t ret = llama_decode(session->ctx, batch);
-    if (ret != 0 && ret != 1) {
-        // 1 is a warning; 2 is aborted
-        if (ret == 2) {
-            LOGI("decode aborted (prompt)");
-        } else {
-            LOGE("llama_decode failed for prompt ret=%d", ret);
-        }
+    llama_batch_free(pbatch);
+    const auto prefillTotalMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                    std::chrono::steady_clock::now() - prefillStart)
+                                    .count();
+    LOGI("Prefill phase total: %lldms (tokens=%d)", (long long) prefillTotalMs, totalPrompt);
+    if (prefillFailed) {
         return JNI_FALSE;
     }
 
     // n_past for subsequent single-token decoding
-    n_past = llama_model_has_encoder(session->model)
-        ? 1
-        : static_cast<int32_t>(promptTokens.size());
+    n_past = static_cast<int32_t>(promptTokens.size());
 
     prefillToolCallGenerationPrompt(session);
 
     // Generation loop
     std::vector<llama_token> generatedTokens;
+
+    // Reusable single-token batch with EXPLICIT pos/seq_id (same rationale as prefill):
+    // never rely on llama_batch_validate null-defaults.
+    llama_batch gbatch = llama_batch_init(1, 0, 1);
+    gbatch.n_seq_id[0] = 1;
+    // 同 prefill：写值，不覆写指针（否则 llama_batch_free 会 free 栈地址 → SIGABRT）。
+    gbatch.seq_id[0][0] = seq0;
     generatedTokens.reserve(static_cast<size_t>(maxNew));
     std::string prevDecoded;
     std::vector<char> detokBuf;
@@ -1283,6 +1574,17 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
         }
 
         if (llama_vocab_is_eog(vocab, newToken)) {
+            // ⚠️ 关键可观测性缺口（此前完全没记录）：
+            // 若**第一个**采样 token 就是 EOG，循环立刻 break，generatedTokens 为空，
+            // 但函数仍返回 JNI_TRUE → Kotlin 侧 ok=true 且 sb 为空 → QuroLlmResult.Text("")
+            // → 聊天气泡纯空白、无任何报错，用户只能看到"不回复"，日志里也毫无痕迹。
+            // 这是"能跑但一个字都不吐"最典型的形态，必须显式记录成可见错误。
+            if (i == 0) {
+                SET_ERR(session,
+                        "模型在第一个 token 就输出了结束符（EOG token=%d）。"
+                        "通常意味着聊天模板与该 GGUF 不匹配，或提示词格式有误",
+                        (int) newToken);
+            }
             break;
         }
 
@@ -1352,27 +1654,48 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
         }
 
         llama_token next = newToken;
-        batch = llama_batch_get_one(&next, 1);
-        if (batch.pos != nullptr) {
-            batch.pos[0] = n_past;
-        }
-        if (batch.logits != nullptr) {
-            batch.logits[0] = 1;
-        }
-        ret = llama_decode(session->ctx, batch);
-        if (ret != 0 && ret != 1) {
+        gbatch.token[0] = next;
+        gbatch.pos[0] = n_past;
+        gbatch.logits[0] = 1;
+        gbatch.n_tokens = 1;
+        LOGI("generation decode #%d n_past=%d", i, (int) n_past);
+        int32_t ret = llama_decode(session->ctx, gbatch);
+        if (ret != 0) {
             if (ret == 2) {
                 LOGI("decode aborted");
                 break;
             }
-            LOGE("llama_decode failed ret=%d", ret);
+            if (ret == 1) {
+                // KV 满：已生成的内容仍然有效，正常收尾 break 而不是整段判失败。
+                LOGI("no KV slot during generation (context full) n_past=%d n_ctx=%d", n_past, n_ctx);
+                break;
+            }
+            SET_ERR(session, "生成阶段解码失败 llama_decode ret=%d（已生成 %d token）", (int) ret, i);
+            llama_batch_free(gbatch);
             return JNI_FALSE;
         }
 
         n_past += 1;
     }
 
+    llama_batch_free(gbatch);
     return JNI_TRUE;
+}
+
+/**
+ * 取回本会话最近一次失败的人类可读原因。
+ *
+ * 存在意义：native 侧的失败此前只进 logcat，用户端一律表现为"没反应"，
+ * 而用户拿不到 adb / 日志文件 → 我只能靠猜，已经因此白跑三轮。
+ * 现在 Kotlin 侧在推理失败或输出为空时调用它，把真正原因直接写进聊天气泡。
+ */
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_ai_assistance_llama_LlamaNative_nativeGetLastError(JNIEnv * env, jclass clazz, jlong sessionPtr) {
+    (void) clazz;
+    if (sessionPtr == 0) return nullptr;
+    auto * session = reinterpret_cast<LlamaSessionNative *>(sessionPtr);
+    if (session->lastError.empty()) return nullptr;
+    return bytesUtf8ToJstring(env, session->lastError);
 }
 
 #endif

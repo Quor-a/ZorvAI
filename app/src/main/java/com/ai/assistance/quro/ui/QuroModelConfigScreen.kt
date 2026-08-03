@@ -65,7 +65,10 @@ import com.ai.assistance.quro.core.model.QuroLocalModelType
 import com.ai.assistance.quro.core.model.QuroSavedProfile
 import com.ai.assistance.quro.core.model.QuroSavedProfileRepository
 import com.ai.assistance.quro.core.model.toProfile
+import com.ai.assistance.quro.core.network.LocalModelLoaders
+import com.ai.assistance.quro.core.network.LocalModelLoader
 import com.ai.assistance.quro.core.network.QuroModelListResult
+import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.ui.theme.Accent
 import com.ai.assistance.quro.ui.theme.AccentSoft
 import com.ai.assistance.quro.ui.theme.Line
@@ -74,6 +77,7 @@ import com.ai.assistance.quro.ui.theme.Muted
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.LocalContext
 
@@ -152,45 +156,88 @@ fun QuroModelConfigForm(
         LocalModelEntryRow(vm = vm, onClick = { showLocalDialog = true })
         Spacer(Modifier.height(18.dp))
 
-        // ====== 02 服务商 ======
-        val selectedProvider = ApiProviderType.fromProviderTypeId(cfg.provider) ?: ApiProviderType.OPENAI
+        // ====== 02 服务商 / 03 连接 ======
+        // 本地离线模型（MNN / llama.cpp）与云端模型严格隔离：本地模式隐藏「服务商 / Base URL / Api Key」，
+        // 仅在 01 导入模型管理器里配置，避免和云端模型混在一起。
         val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
-        val selectedName = if (isLocal) {
-            ""
-        } else if (cfg.provider == "OTHER" && cfg.customProviderName.isNotBlank()) {
-            cfg.customProviderName
+        if (isLocal) {
+            Box(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(cs.surface).border(1.dp, Accent, RoundedCornerShape(14.dp)).padding(14.dp)
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(AccentSoft), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Folder, null, Modifier.size(20.dp), tint = Accent)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("本地离线模式", fontSize = 14.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
+                            Text("${cfg.provider} · ${cfg.model.ifBlank { "未选模型" }}", fontSize = 11.sp, color = Muted, modifier = Modifier.padding(top = 2.dp))
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "模型路径：${cfg.localModelPath.ifBlank { "未设置" }}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "该模型在设备本地离线运行，不经过任何云端服务，无需 Base URL / Api Key。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = {
+                        vm.update {
+                            copy(provider = "OPENAI", localModelPath = "", model = "gpt-4o-mini",
+                                baseUrl = "https://api.openai.com/v1", customProviderName = "")
+                        }
+                    }) { Text("切换回云端模型") }
+                }
+            }
+            Spacer(Modifier.height(18.dp))
         } else {
-            getProviderDisplayName(selectedProvider)
-        }
-        ChapterLabel("02", "服务商")
-        SettingsSelectorRow(
-            title = "服务商",
-            subtitle = if (cfg.provider == "OTHER" && cfg.customProviderName.isNotBlank())
-                "已选自定义厂商：${cfg.customProviderName}" else "选择或自定义 API 服务商以自动填入默认地址",
-            value = selectedName,
-            color = getProviderColor(selectedProvider),
-            onClick = { showProviderDialog = true },
-        )
-        Spacer(Modifier.height(18.dp))
+            val selectedProvider = ApiProviderType.fromProviderTypeId(cfg.provider) ?: ApiProviderType.OPENAI
+            val selectedName = if (cfg.provider == "OTHER" && cfg.customProviderName.isNotBlank()) {
+                cfg.customProviderName
+            } else {
+                getProviderDisplayName(selectedProvider)
+            }
+            ChapterLabel("02", "服务商")
+            SettingsSelectorRow(
+                title = "服务商",
+                subtitle = if (cfg.provider == "OTHER" && cfg.customProviderName.isNotBlank())
+                    "已选自定义厂商：${cfg.customProviderName}" else "选择或自定义 API 服务商以自动填入默认地址",
+                value = selectedName,
+                color = getProviderColor(selectedProvider),
+                onClick = { showProviderDialog = true },
+            )
+            Spacer(Modifier.height(18.dp))
 
-        // ====== 03 连接 ======
-        ChapterLabel("03", "连接")
-        QuroField("Base URL", cfg.baseUrl, KeyboardOptions.Default) { vm.update { copy(baseUrl = it) } }
-        Spacer(Modifier.height(12.dp))
-        ApiKeyField(value = cfg.apiKey, onValueChange = { vm.update { copy(apiKey = it) } })
-        Spacer(Modifier.height(18.dp))
+            // ====== 03 连接 ======
+            ChapterLabel("03", "连接")
+            QuroField("Base URL", cfg.baseUrl, KeyboardOptions.Default) { vm.update { copy(baseUrl = it) } }
+            Spacer(Modifier.height(12.dp))
+            ApiKeyField(value = cfg.apiKey, onValueChange = { vm.update { copy(apiKey = it) } })
+            Spacer(Modifier.height(18.dp))
+        }
 
         // ====== 04 参数 ======
         ChapterLabel("04", "参数")
         QuroField("模型名", cfg.model, KeyboardOptions.Default) { vm.update { copy(model = it) } }
         Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = { vm.fetchModels() }, enabled = !isFetchingModels && cfg.baseUrl.isNotBlank()) {
-                Text(if (isFetchingModels) "拉取中…" else "拉取模型列表")
+        if (!isLocal) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { vm.fetchModels() }, enabled = !isFetchingModels && cfg.baseUrl.isNotBlank()) {
+                    Text(if (isFetchingModels) "拉取中…" else "拉取模型列表")
+                }
+                if (isFetchingModels) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
             }
-            if (isFetchingModels) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.height(14.dp))
         }
-        Spacer(Modifier.height(14.dp))
 
         // 温度（滑块）
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -441,28 +488,91 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
     val ctx = LocalContext.current
     val repo = remember { QuroLocalModelRepository(ctx.applicationContext) }
     var models by remember { mutableStateOf(repo.loadAll()) }
+    var importing by remember { mutableStateOf<String?>(null) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+    // 正在编辑运行参数的模型（null = 未打开参数面板）
+    var paramsTarget by remember { mutableStateOf<QuroLocalModel?>(null) }
+    val scope = rememberCoroutineScope()
 
-    // MNN：选择 .mnn 文件 → 复制到私有目录
-    val mnnPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        uri?.let {
+    // 选文件夹（MNN 模型目录 / llama.cpp 含 .gguf 目录）→ 递归复制到私有目录存真实路径。
+    // 类型按内容自动判定：含 llm_config.json → MNN；含 .gguf → llama.cpp。
+    // 关键修复（#1109）：所有 Compose state 改写（models / importing / errorMsg）必须回到主线程，
+    // 原先在 Dispatchers.IO 协程里直接改 state 触发 IllegalStateException: Cannot mutate state
+    // without a snapshot → 未捕获 → 进程崩溃（用户所见「闪退」）。现已用 withContext(Dispatchers.IO)
+    // 只做 IO，state 改写回到主线程，并整体 try/catch 兜底，失败时仅在 UI 提示而非崩溃。
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { treeUri: Uri? ->
+        treeUri?.let { uri ->
+            importing = "正在导入模型，请稍候…"
+            errorMsg = null
+            val treeName = DocumentFile.fromTreeUri(ctx, uri)?.name ?: "local-model"
             val id = UUID.randomUUID().toString()
-            val fileName = queryDisplayName(ctx, it).removeSuffix(".mnn").removeSuffix(".MNN").ifBlank { id }
-            val path = copyLocalModelFile(ctx, it, id, "mnn")
-            if (path != null) {
-                repo.upsert(QuroLocalModel(id = id, type = QuroLocalModelType.MNN, name = fileName, path = path, modelNames = listOf(fileName)))
-                models = repo.loadAll()
+            val dstDir = File(ctx.filesDir, "quro_local_models/$id")
+            scope.launch {
+                try {
+                    val ok = withContext(Dispatchers.IO) {
+                        val okCopy = copyDocumentTree(ctx, uri, dstDir)
+                        if (okCopy) {
+                            val hasMnnConfig = File(dstDir, "llm_config.json").exists()
+                            val gguf = dstDir.walkTopDown()
+                                .filter { f -> f.isFile && f.name.endsWith(".gguf", ignoreCase = true) }
+                                .map { it.name.removeSuffix(".gguf").removeSuffix(".GGUF") }
+                                .toList()
+                            val type = if (hasMnnConfig) QuroLocalModelType.MNN else QuroLocalModelType.LLAMA_CPP
+                            val modelNames = if (hasMnnConfig) listOf(treeName) else gguf
+                            repo.upsert(
+                                QuroLocalModel(
+                                    id = id, type = type, name = treeName,
+                                    path = dstDir.absolutePath, modelNames = modelNames,
+                                )
+                            )
+                        }
+                        okCopy
+                    }
+                    models = repo.loadAll()
+                    importing = null
+                    if (!ok) errorMsg = "复制失败：目录可能为空或无法访问，请重新选择。"
+                } catch (e: Exception) {
+                    QuroDiag.log("LocalModel", "folder import error: ${e.stackTraceToString()}")
+                    importing = null
+                    errorMsg = "导入失败：${e.message ?: e.javaClass.simpleName}"
+                }
             }
         }
     }
-    // llama.cpp：选择文件夹 → 扫描 .gguf
-    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
-        uri?.let {
+
+    // 参考 PocketPal AI：直接选单个 .gguf 文件（最简单直观），复制到私有目录按绝对路径加载。
+    val ggufPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { fileUri: Uri? ->
+        fileUri?.let { uri ->
+            importing = "正在导入模型，请稍候…"
+            errorMsg = null
             val id = UUID.randomUUID().toString()
-            val folderName = DocumentFile.fromTreeUri(ctx, it)?.name ?: "llama-folder"
-            val gguf = scanGgufFromTree(ctx, it)
-            repo.upsert(QuroLocalModel(id = id, type = QuroLocalModelType.LLAMA_CPP, name = folderName,
-                path = it.toString(), modelNames = gguf))
-            models = repo.loadAll()
+            val rawName = DocumentFile.fromSingleUri(ctx, uri)?.name ?: "model.gguf"
+            val fileName = if (rawName.endsWith(".gguf", ignoreCase = true)) rawName else "$rawName.gguf"
+            val dstDir = File(ctx.filesDir, "quro_local_models/$id")
+            val dstFile = File(dstDir, fileName)
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        dstDir.mkdirs()
+                        ctx.contentResolver.openInputStream(uri)?.use { input ->
+                            dstFile.outputStream().use { out -> input.copyTo(out) }
+                        }
+                    }
+                    val modelName = dstFile.name.removeSuffix(".gguf").removeSuffix(".GGUF")
+                    repo.upsert(
+                        QuroLocalModel(
+                            id = id, type = QuroLocalModelType.LLAMA_CPP, name = modelName,
+                            path = dstDir.absolutePath, modelNames = listOf(modelName),
+                        )
+                    )
+                    models = repo.loadAll()
+                    importing = null
+                } catch (e: Exception) {
+                    QuroDiag.log("LocalModel", "gguf import error: ${e.stackTraceToString()}")
+                    importing = null
+                    errorMsg = "导入失败：${e.message ?: e.javaClass.simpleName}"
+                }
+            }
         }
     }
 
@@ -471,24 +581,51 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
         confirmButton = {},
         title = { Text("本地离线模型") },
         text = {
-            Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { mnnPicker.launch("*/*") }, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("添加 MNN 模型")
-                    }
-                    Button(onClick = { folderPicker.launch(null) }, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Filled.Folder, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("llama.cpp 文件夹")
-                    }
+            Column(Modifier.fillMaxWidth().heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
+                Text(
+                    "导入方式任选其一：① MNN 选含 llm_config.json 的模型目录；② llama.cpp 选含 .gguf 的文件夹；" +
+                        "③ 直接选单个 .gguf 文件（最简单，推荐）。模型会完整复制到应用私有目录，完全离线运行。",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(onClick = { folderPicker.launch(null) }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.Folder, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("MNN 模型目录（选文件夹）")
+                }
+                Spacer(Modifier.height(6.dp))
+                OutlinedButton(onClick = { folderPicker.launch(null) }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.Folder, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("llama.cpp 文件夹（选文件夹）")
+                }
+                Spacer(Modifier.height(6.dp))
+                Button(onClick = { ggufPicker.launch("application/octet-stream") }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("选 .gguf 文件（推荐）")
                 }
                 Spacer(Modifier.height(8.dp))
+                if (importing != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(importing!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+                if (errorMsg != null) {
+                    Text(errorMsg!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.height(8.dp))
+                }
                 if (models.isEmpty()) {
-                    Text("还没有本地模型。添加 MNN 的 .mnn 文件，或选择含 .gguf 的 llama.cpp 文件夹。",
+                    Text("还没有本地模型。按上面任一方式导入后，点列表项即可设为当前对话模型。",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                val loader = LocalModelLoaders.get()
+                var loadTick by remember { mutableStateOf(0) }
+                // 标记正在后台加载的模型 id，避免主线程被 nativeCreateSession 堵死（#ANR 修复）。
+                var loadingId by remember { mutableStateOf<String?>(null) }
                 models.forEach { m ->
+                    val _r = loadTick // 订阅 loadTick，使「加载/卸载」状态变化触发本区域重组
+                    val active = loader.isLoaded(m)
                     Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)
                         .clickable {
-                            // 选为当前模型：写入 cfg（provider=类型, 模型名=首个可用模型, 路径）
+                            // 选为当前模型：写入 cfg（provider=类型, 模型名=首个可用模型, 真实路径）
                             vm.update {
                                 copy(provider = m.type.name, localModelPath = m.path,
                                     model = m.modelNames.firstOrNull() ?: m.name, customProviderName = "")
@@ -501,47 +638,289 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
                                     style = MaterialTheme.typography.bodyMedium)
                                 Text("可用模型：${if (m.modelNames.isEmpty()) "（无）" else m.modelNames.joinToString(", ")}",
                                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                Text("路径：${m.path}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                if (active) {
+                                    Text("● 已激活（常驻内存，对话跨轮复用）",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary, maxLines = 1)
+                                }
                             }
-                            IconButton(onClick = {
-                                repo.delete(m.id); models = repo.loadAll()
-                            }) {
-                                Icon(Icons.Filled.Delete, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                if (active) {
+                                    TextButton(onClick = {
+                                        // ⚠️ #ANR 修复：unload 内部会调原生 release，必须离主线程。
+                                        scope.launch(Dispatchers.IO) {
+                                            loader.unload()
+                                            withContext(Dispatchers.Main) { loadTick++ }
+                                        }
+                                    }) {
+                                        Text("卸载")
+                                    }
+                                } else {
+                                    TextButton(
+                                        enabled = loadingId != m.id,
+                                        onClick = {
+                                            // ⚠️ #ANR 修复：loader.load() 内部 LlamaSession.create→nativeCreateSession
+                                            // 是把 GGUF 整包读进内存的重活，必须在 IO 线程执行，否则主线程被堵死 → ANR。
+                                            scope.launch(Dispatchers.IO) {
+                                                loadingId = m.id
+                                                val res = loader.load(m)
+                                                withContext(Dispatchers.Main) {
+                                                    loadingId = null
+                                                    loadTick++
+                                                    if (res is LocalModelLoader.LoadResult.Failure) errorMsg = res.message
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        if (loadingId == m.id) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp), strokeWidth = 2.dp
+                                            )
+                                        } else {
+                                            Text("加载")
+                                        }
+                                    }
+                                }
+                                Row {
+                                    // 运行参数（线程数 / 上下文 / 计算精度 / 后端 …）。
+                                    // 以前这些只能吃硬编码默认值，MNN 只跑单后端、llama 窗口固定，
+                                    // 这里给出可视化入口，改完需重新「加载」才生效。
+                                    IconButton(onClick = { paramsTarget = m }) {
+                                        Icon(Icons.Filled.Edit, "运行参数", Modifier.size(18.dp))
+                                    }
+                                    IconButton(onClick = {
+                                        scope.launch {
+                                            withContext(Dispatchers.IO) { runCatching { repo.delete(m.id) } }
+                                            models = repo.loadAll()
+                                        }
+                                    }) {
+                                        Icon(Icons.Filled.Delete, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                                    }
+                                }
                             }
                         }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text("提示：本地模型需接入原生推理运行时（MNN / llama.cpp AAR）才能真正执行；当前已登记并可在模型选择中切换，执行待接入。",
+                Text("提示：本地模型经原生推理运行时（MNN / llama.cpp）在设备端离线执行，选中后即以该模型对话，无需联网。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+    )
+
+    // 运行参数面板（叠在上面这层对话框之上）
+    paramsTarget?.let { target ->
+        LocalModelParamsDialog(
+            model = target,
+            onDismiss = { paramsTarget = null },
+            onSave = { updated ->
+                scope.launch {
+                    withContext(Dispatchers.IO) { runCatching { repo.upsert(updated) } }
+                    models = repo.loadAll()
+                    paramsTarget = null
+                }
+            },
+        )
+    }
+}
+
+/**
+ * 本地模型「运行参数」编辑面板。
+ *
+ * 覆盖用户点名缺失的那几项：**计算精度（计算类型）、线程数、上下文长度、计算后端、GPU 层数**。
+ * 全部留空/0 即"自动"，与 [QuroLocalModel.resolveThreads] 等方法给出的安全默认值一致。
+ * 参数写进 `quro_local_models.json`，下次「加载」模型时由 LocalModelSessionHolder 读取生效。
+ */
+@Composable
+private fun LocalModelParamsDialog(
+    model: QuroLocalModel,
+    onDismiss: () -> Unit,
+    onSave: (QuroLocalModel) -> Unit,
+) {
+    val isLlama = model.type == QuroLocalModelType.LLAMA_CPP
+    var threads by remember { mutableStateOf(if (model.threads > 0) model.threads.toString() else "") }
+    var ctxSize by remember { mutableStateOf(if (model.contextSize > 0) model.contextSize.toString() else "") }
+    var gpuLayers by remember { mutableStateOf(if (model.gpuLayers > 0) model.gpuLayers.toString() else "") }
+    var useMmap by remember { mutableStateOf(model.useMmap) }
+    var kvUnified by remember { mutableStateOf(model.kvUnified) }
+    var backend by remember { mutableStateOf(model.backend.ifBlank { "cpu" }) }
+    var precision by remember { mutableStateOf(model.precision.ifBlank { "low" }) }
+    var memoryMode by remember { mutableStateOf(model.memoryMode) }
+
+    val autoThreads = Runtime.getRuntime().availableProcessors().coerceIn(2, 8)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("运行参数 · ${model.name}") },
+        confirmButton = {
+            TextButton(onClick = {
+                onSave(
+                    model.copy(
+                        threads = threads.toIntOrNull()?.coerceIn(1, 16) ?: 0,
+                        contextSize = ctxSize.toIntOrNull()?.coerceIn(512, 32768) ?: 0,
+                        gpuLayers = gpuLayers.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+                        useMmap = useMmap,
+                        kvUnified = kvUnified,
+                        backend = backend,
+                        precision = precision,
+                        memoryMode = memoryMode,
+                    )
+                )
+            }) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        text = {
+            Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                Text(
+                    "留空 / 0 表示自动。修改后需要重新点「加载」才会生效。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = threads, onValueChange = { s -> threads = s.filter { it.isDigit() }.take(2) },
+                    label = { Text("线程数（自动：$autoThreads）") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true, modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+
+                if (isLlama) {
+                    OutlinedTextField(
+                        value = ctxSize, onValueChange = { s -> ctxSize = s.filter { it.isDigit() }.take(5) },
+                        label = { Text("上下文长度 n_ctx（自动：按提示词估算）") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "越大越吃内存：3B 模型 n_ctx=8192 的 KV-Cache 约 300MB，分配本身就要数秒。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = gpuLayers, onValueChange = { s -> gpuLayers = s.filter { it.isDigit() }.take(3) },
+                        label = { Text("GPU 卸载层数 n_gpu_layers（默认 0 = 纯 CPU）") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(checked = useMmap, onCheckedChange = { useMmap = it })
+                        Spacer(Modifier.width(8.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("使用 mmap 映射权重", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "建议关闭。开启后在外部存储上的大 GGUF 会逐页读盘，常表现为「一直卡在模型加载」。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(checked = kvUnified, onCheckedChange = { kvUnified = it })
+                        Spacer(Modifier.width(8.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("统一 KV 缓存", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "建议开启。单序列推理只分配一份 KV，省内存、加载更快。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                } else {
+                    Text("计算后端", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(4.dp))
+                    ParamChipRow(
+                        options = listOf("cpu", "opencl", "opengl", "vulkan"),
+                        selected = backend,
+                        onSelect = { backend = it },
+                    )
+                    Text(
+                        "GPU 后端（opencl/vulkan）不是所有机型都可用，失败会退回 CPU。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+
+                    Text("计算精度", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(4.dp))
+                    ParamChipRow(
+                        options = listOf("low", "normal", "high"),
+                        selected = precision,
+                        onSelect = { precision = it },
+                    )
+                    Text(
+                        "手机端建议 low（半精度/量化算子最快）；输出明显跑偏时再调高。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+
+                    Text("内存模式", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(4.dp))
+                    ParamChipRow(
+                        options = listOf("", "low", "normal"),
+                        labels = listOf("自动", "low", "normal"),
+                        selected = memoryMode,
+                        onSelect = { memoryMode = it },
+                    )
+                }
             }
         },
     )
 }
 
-/** 查询 content uri 的显示名。 */
-private fun queryDisplayName(ctx: Context, uri: Uri): String {
-    return runCatching {
-        ctx.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
-            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
-    }.getOrNull() ?: ""
+/** 参数选项的一行小胶囊选择器。 */
+@Composable
+private fun ParamChipRow(
+    options: List<String>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    labels: List<String> = options,
+) {
+    Row(Modifier.fillMaxWidth()) {
+        options.forEachIndexed { i, opt ->
+            FilterChip(
+                selected = selected == opt,
+                onClick = { onSelect(opt) },
+                label = { Text(labels.getOrElse(i) { opt }, style = MaterialTheme.typography.bodySmall) },
+                modifier = Modifier.padding(end = 6.dp),
+            )
+        }
+    }
 }
 
-/** 复制选中的本地模型文件到私有目录，返回绝对路径。 */
-private fun copyLocalModelFile(ctx: Context, uri: Uri, id: String, ext: String): String? {
+/** 递归复制整个 document tree 到目标私有目录，返回是否成功。 */
+private fun copyDocumentTree(ctx: Context, treeUri: Uri, dstDir: File): Boolean {
     return runCatching {
-        val dir = File(ctx.filesDir, "quro_local_models"); dir.mkdirs()
-        val dst = File(dir, "$id.$ext")
-        ctx.contentResolver.openInputStream(uri)?.use { input -> dst.outputStream().use { out -> input.copyTo(out) } }
-        dst.absolutePath
-    }.getOrNull()
+        val tree = DocumentFile.fromTreeUri(ctx, treeUri) ?: return@runCatching false
+        dstDir.mkdirs()
+        copyDocumentRecursive(ctx, tree, dstDir)
+        true
+    }.getOrDefault(false)
 }
 
-/** 从 document tree 扫描 .gguf 文件名（不含扩展名）。 */
-private fun scanGgufFromTree(ctx: Context, treeUri: Uri): List<String> {
-    val tree = DocumentFile.fromTreeUri(ctx, treeUri) ?: return emptyList()
-    return tree.listFiles()
-        .filter { it.isFile && (it.name ?: "").endsWith(".gguf", ignoreCase = true) }
-        .map { (it.name ?: "").removeSuffix(".gguf").removeSuffix(".GGUF") }
+/** 递归复制：文件直接拷贝内容，目录递归展开。 */
+private fun copyDocumentRecursive(ctx: Context, src: DocumentFile, dst: File) {
+    if (src.isFile) {
+        dst.parentFile?.mkdirs()
+        ctx.contentResolver.openInputStream(src.uri)?.use { input ->
+            dst.outputStream().use { out -> input.copyTo(out) }
+        }
+    } else if (src.isDirectory) {
+        dst.mkdirs()
+        src.listFiles().forEach { child ->
+            copyDocumentRecursive(ctx, child, File(dst, child.name ?: "file"))
+        }
+    }
 }
 
 // ==================== 服务商选择对话框（内置 + 自定义「其他供应商」） ====================
@@ -557,7 +936,12 @@ private fun ApiProviderDialogWithCustom(
     val ctx = LocalContext.current
     val customRepo = remember { QuroCustomProviderRepository(ctx.applicationContext) }
     var customProviders by remember { mutableStateOf(customRepo.loadAll()) }
-    val builtIn = remember { ApiProviderType.values().filter { it != ApiProviderType.OTHER } }
+    // 本地离线引擎（MNN / llama.cpp）不走云端服务商列表，仅在「本地离线模型」管理器配置，避免与云端模型混排。
+    val builtIn = remember {
+        ApiProviderType.values().filter {
+            it != ApiProviderType.OTHER && it != ApiProviderType.MNN && it != ApiProviderType.LLAMA_CPP
+        }
+    }
     var searchQuery by remember { mutableStateOf("") }
     var showCustomForm by remember { mutableStateOf(false) }
 

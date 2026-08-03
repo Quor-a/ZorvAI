@@ -15,12 +15,25 @@ import com.ai.assistance.quro.core.model.QuroLocalModel
  * 接入原生库后，只需替换 [run] 实现即可（无界面改动）。
  */
 interface QuroLocalEngine {
+    /**
+     * 执行一次本地推理。
+     *
+     * @param contextWindow 会话上下文窗口（token）。**必须**由调用方传入与
+     *   [com.ai.assistance.quro.core.model.QuroModelConfig.contextWindow] 一致的值：
+     *   此前本地会话把 n_ctx 硬编码成 2048，而上层按 16000 token 预算拼 prompt，
+     *   原生层只能从**头部**把 prompt 砍到 1536 token（system 提示词被腰斩）。
+     * @param onToken 流式增量回调，参数为**累计**文本（与云端 onToken 语义一致）。
+     *   传 null 表示不需要流式。本地推理在手机 CPU 上单次可达数分钟，
+     *   不接流式则 UI 全程空白 → 用户观感即「不闪退但也不回复」。
+     */
     fun run(
         model: QuroLocalModel,
         modelName: String,
         messages: List<QuroChatMessage>,
         temperature: Float,
         maxTokens: Int,
+        contextWindow: Int = 0,
+        onToken: ((String) -> Unit)? = null,
     ): QuroLlmResult
 }
 
@@ -32,6 +45,8 @@ object QuroLocalEnginePlaceholder : QuroLocalEngine {
         messages: List<QuroChatMessage>,
         temperature: Float,
         maxTokens: Int,
+        contextWindow: Int,
+        onToken: ((String) -> Unit)?,
     ): QuroLlmResult {
         val typeName = if (model.type == com.ai.assistance.quro.core.model.QuroLocalModelType.LLAMA_CPP) "llama.cpp" else "MNN"
         return QuroLlmResult.Error(

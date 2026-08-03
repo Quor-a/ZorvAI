@@ -753,7 +753,9 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 val effCfg = QuroFunctionModelConfigRepository(appContext).resolveConfig(QuroFunctionType.CHAT, cfg)
                 // ★ ANR 修复：与对话框主路径一致，buildSystemPrompt 放到 IO 线程求值，避免语音球问答在主线程做存储读取。
                 val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effCfg) }
-                assistant.ask(appContext, effCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, onUpdate = onTick)
+                // #1110：语音球问答原默认 stream=false → 整段回、不逐层；与主对话（stream=true）行为不一致，
+                // 表现为「部分返回不是一层一层返回、自己回到对话框」。云模型改为流式，与文本框主路径一致。
+                assistant.ask(appContext, effCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true, onUpdate = onTick)
             }.getOrElse { e ->
                 if (e is CancellationException) "⏹ 已停止生成。" else "⚠️ 语音球出错了：${e.message ?: "未知错误"}"
             }
@@ -1086,8 +1088,19 @@ $recent
         val persona = activePersona()
         val sb = StringBuilder()
 
+        // ══════════════ #1113：本地离线小模型走「极简提示词」 ══════════════
+        // 完整版 system prompt 静态部分约 16,000 字符 ≈ 11,500 token（基座 3.6k + 工具清单 5.3k
+        // + 工具用法提示 6.2k + 经验库 0.5k，尚不含人格卡 / 记忆 / CMS 清单 / 对话历史）。
+        // 手机端 GGUF 会话 n_ctx 上限 8192，原生层可用 prompt 仅 n_ctx - reserve ≈ 6,144 token：
+        //   → prompt 从**头部**被截断，品牌/身份/人格整段丢失；
+        //   → 剩余 6k token 还要在手机 CPU 上逐 chunk prefill，几十秒~数分钟不出首 token。
+        // 用户观感即「一直进行中、一个字都不回」。本地模型也不走 function calling（tools 字段
+        // 只下发给云端），塞 47 个工具清单纯属烧上下文，故本地一律裁掉。
+        val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
+
         // 平台/品牌自我认知基座（永远最先，不被人格卡覆盖）
-        sb.append(QuroPlatformManifest.SYSTEM).append("\n\n")
+        sb.append(if (isLocal) QuroPlatformManifest.SYSTEM_COMPACT else QuroPlatformManifest.SYSTEM)
+            .append("\n\n")
 
         // ══════════════ 第一优先级：身份认知（人格卡 = AI 真实身份；Zorv AI = 开发者；运行环境靠工具自行发现） ══════════════
         // ══════════════ 灵魂层（人格/标签/语音/记忆）由自写编排引擎生成 ══════════════
@@ -1120,15 +1133,18 @@ $recent
         // ══════════════ 工具菜单：必须与下方实际下发的 tools 字段严格一致 ══════════════
         // 直接由「当前生效的工具集」生成，避免菜单与字段不一致导致模型选了不存在的工具。
         // 记忆开关关闭时，从工具集里摘除 memory_* 工具，确保 AI 既不提示也不调用记忆类工具。
-        val baseSpecs = if (cfg.useFullTools) registry.fullSpecs() else registry.coreSpecs()
-        val activeSpecs = if (autoSaveMemory.value) baseSpecs else baseSpecs.filter {
-            !it.name.startsWith("memory_") && !it.name.startsWith("experience_")
+        // 本地模型不下发 tools 字段、也无法真正执行工具 → 跳过整份能力清单（省 ~11,000 字符）。
+        if (!isLocal) {
+            val baseSpecs = if (cfg.useFullTools) registry.fullSpecs() else registry.coreSpecs()
+            val activeSpecs = if (autoSaveMemory.value) baseSpecs else baseSpecs.filter {
+                !it.name.startsWith("memory_") && !it.name.startsWith("experience_")
+            }
+            appendCapabilityAwareness(sb, activeSpecs)
         }
-        appendCapabilityAwareness(sb, activeSpecs)
 
         // ══════════════ 用户技能 SKILL（已启用的自定义指令注入系统提示词） ══════════════
         // alwaysOn=false 的技能不再常驻系统提示词（改为触发词命中时按需注入，避免重复）
-        val skills = QuroSkillStore.enabledList(appContext).filter { it.alwaysOn }
+        val skills = if (isLocal) emptyList() else QuroSkillStore.enabledList(appContext).filter { it.alwaysOn }
         if (skills.isNotEmpty()) {
             sb.append("\n## 已启用技能（Skills）\n")
             sb.append("以下是用户已启用的自定义技能，请将其指令作为额外的行为约束 / 能力说明，在合适时主动按技能行事：\n")
@@ -1149,13 +1165,15 @@ $recent
 
         // ══════════════ AI 经验闭环（受「AI 自动保存记忆」开关控制） ══════════════
         // 关闭记忆开关时，experience_* 工具已从 activeSpecs 摘除且此处不注入，AI 既不读取也不沉淀经验。
-        if (autoSaveMemory.value) appendExperienceAwareness(sb)
+        if (!isLocal && autoSaveMemory.value) appendExperienceAwareness(sb)
 
         // ══════════════ 人格自动孵化笔记本（让孵化真正闭环：AI 能读到基于近期对话提炼的演进备忘） ══════════════
         // 本地使用者孵化自己的 AI，无外部注入风险；incubation 是"笔记本"而非覆盖角色设定。
         val incubation = persona?.incubation?.takeIf { it.isNotBlank() }
         if (incubation != null) {
-            val noteLines = incubation.lineSequence().filter { it.isNotBlank() }.toList().takeLast(20)
+            // 本地小模型上下文紧张：孵化笔记只保留最近 5 条（云端仍保留 20 条）。
+            val noteLines = incubation.lineSequence().filter { it.isNotBlank() }.toList()
+                .takeLast(if (isLocal) 5 else 20)
             if (noteLines.any()) {
                 sb.append("\n\n## 人格孵化笔记本（基于近期对话自动提炼的演进备忘，仅供参考，不覆盖上面的角色设定）\n")
                 sb.append("以下是你与这位用户近期相处中沉淀的观察笔记，可自然融入你的语气与关注点，但不要机械复述：\n")
@@ -1169,16 +1187,28 @@ $recent
         // - 引用历史上下文中与当前用户消息无关的内容作为主要回复
         // - 把旧轮次中生成的 HTML/代码/长文本当成当前回复
         // 每条用户消息前有 [第N轮] 标记，最新一条 = 最大 N 值 → 只回应那条。
-        sb.append("""
+        if (isLocal) {
+            // 本地：一行纪律即可，不铺陈（每多 100 字 ≈ 70 token，手机端 prefill 都是钱）。
+            sb.append("\n\n## 回复纪律\n只针对**最新一条**用户消息作答，历史仅作背景，不要复述旧轮次的内容。\n")
+        } else {
+            sb.append("""
             
             ## ⚠️ 回复纪律（强制约束）
             - 你必须**仅针对最新一条带 [第N轮] 标记的用户消息**作答
             - 如果用户消息是「全面测试」「测试一下」等简短测试指令，就按字面意思执行测试并报告结果，**绝不能**回复之前任何任务（如创建应用、生成网页、部署模块等）的完成通知
             - 历史上下文仅作为参考背景，你的回复主体必须是**对当前这条消息的直接回应**
             - 违反此纪律会导致用户体验严重受损（串台），请务必遵守
-        """.trimIndent())
+            """.trimIndent())
+        }
 
-        return sb.toString().trim()
+        val out = sb.toString().trim()
+        // #1113 诊断：把 system prompt 实际规模写进日志，避免再靠猜。
+        // 本地路径应稳定在 ~1,000 字符以内；若日志里看到上万，说明有别的入口绕过了 isLocal 分支。
+        QuroDiag.log(
+            "SysPrompt",
+            "built | local=$isLocal | provider=${cfg.provider} | chars=${out.length} | ~tokens=${out.length / 3 * 2}"
+        )
+        return out
     }
 
     /**

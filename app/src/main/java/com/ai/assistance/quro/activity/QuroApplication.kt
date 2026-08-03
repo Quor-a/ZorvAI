@@ -21,8 +21,26 @@ import com.ai.assistance.quro.ui.QuroPersonaViewModel
  *    L3 设备管理员 / L4 ROOT / L5 应用内 Linux(proot) 全部工具，运行时由系统权限授予把关。
  */
 class QuroApplication : Application() {
+
+    companion object {
+        /**
+         * 进程级 Application Context。
+         *
+         * 存在原因：本地推理链路（full 风味的 QuroLocalEngineNative / LocalModelSessionHolder）
+         * 是被 QuroAssistant 反射实例化的无参对象，拿不到任何 Context，但 MNN 必须传入一个
+         * **应用私有可写目录**做算子缓存（tmp_path）。没有它 MNN 会把缓存写向模型所在目录
+         * （通常在 /storage/emulated/0/Download/... 不可写）→ 每次推理都重新编译算子 → 极慢。
+         * attachBaseContext 阶段即赋值，早于任何 ContentProvider / Activity。
+         */
+        @Volatile
+        @JvmStatic
+        var appCtx: Context? = null
+            private set
+    }
+
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
+        appCtx = base.applicationContext ?: base
         QuroCrashLogger.install(this)
     }
 

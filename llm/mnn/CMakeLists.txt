@@ -2,6 +2,19 @@ cmake_minimum_required(VERSION 3.22.1)
 
 project("mnn_jni")
 
+# ---------------------------------------------------------------------------
+# 【#1116】原生层永远以 -O3 编译，即使 app 走 debug 构建。
+# AGP 对 debug buildType 默认传 CMAKE_BUILD_TYPE=Debug → MNN 全部 -O0，
+# 手机上推理慢几十倍，用户侧表现为「点了没反应 / 卡死」。与 llm/llama 保持一致。
+# ---------------------------------------------------------------------------
+# ⚠️ 必须用「普通 set」而非 CACHE FORCE：NDK toolchain 的同名普通变量会遮蔽 cache 值。
+set(CMAKE_C_FLAGS_DEBUG "-O3 -g")
+set(CMAKE_CXX_FLAGS_DEBUG "-O3 -g")
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O3 -g")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/quro_git_source.cmake")
 
 quro_prepare_git_source(

@@ -210,6 +210,23 @@ class AnrMonitor(
             val message = "主线程可能未响应，已等待 ${timeSinceLastResponse}ms"
 
             if (timeSinceLastResponse > ANR_THRESHOLD_MS) {
+                // 🔧 防误报（2026-08-03 实测：realme RMX8899 上本地推理开满核 → 主线程被 CPU 饿死、
+                // 健康 ping 延迟 >5s → 被误判 ANR；但抓到的主线程栈全是 nativePollOnce 空闲态，
+                // 说明主线程并未被应用代码卡死，只是没抢到 CPU）。此处同步读取主线程栈：
+                // 若处于 Looper 空闲（nativePollOnce / MessageQueue.next / Looper.loop），
+                // 判定为"CPU 争用饿死"而非真 ANR —— 只记警告、不计入 ANR 次数、不落 ANR 报告，
+                // 避免污染排查。仅当主线程确实卡在应用代码里时才算真 ANR。
+                val mainStack = mainThread?.stackTrace
+                    ?.joinToString("\n") { "    at $it" } ?: ""
+                val idle = mainStack.contains("nativePollOnce") ||
+                        mainStack.contains("MessageQueue.next") ||
+                        mainStack.contains("Looper.loop")
+                if (idle) {
+                    Log.w(tag, "$message - 主线程空闲(疑似 CPU 争用饿死)，不计为 ANR")
+                    warningCount.incrementAndGet()
+                    return
+                }
+
                 // 已超过ANR阈值
                 Log.e(tag, "$message - 可能发生ANR!")
                 anrCount.incrementAndGet()

@@ -75,7 +75,25 @@ object LlamaNative {
         content: String
     ): String?
 
+    /**
+     * 取回本会话最近一次失败的人类可读原因，无失败时返回 null。
+     *
+     * 存在意义：原生层的失败以前只写 logcat，用户端一律只看到"没反应"，
+     * 排障必须依赖 adb —— 用户拿不到，就只能靠猜。有了它，失败原因能直接进聊天气泡。
+     */
+    @JvmStatic
+    external fun nativeGetLastError(sessionPtr: Long): String?
+
     interface GenerationCallback {
         fun onToken(token: String): Boolean
+
+        /**
+         * 生成前各阶段的进度（目前只有 stage="prefill"）。
+         *
+         * prefill 在手机 CPU 上可能耗时数十秒，期间一个 token 都吐不出来，UI 全程空白，
+         * 用户观感就是"卡死/不回复"。有了它就能把"正在处理提示词 x/y"实时上屏。
+         * 默认空实现：原生层用 GetMethodID 探测，找不到会静默降级，不影响生成。
+         */
+        fun onProgress(stage: String, current: Int, total: Int) {}
     }
 }

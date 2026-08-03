@@ -13,6 +13,7 @@ import com.ai.assistance.quro.core.QuroToolResult
 import android.util.Log
 import com.ai.assistance.quro.core.QuroToolSpec
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
+import com.ai.assistance.quro.util.QuroDiag
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -84,12 +85,54 @@ class QuroAssistant(
                 round++
                 // 任何一步抛异常都兜底成错误文本，绝不让协程崩掉导致界面「卡死在思考中」
                 val llmMessages = runCatching { store.toLlmMessages(system, cfg.contextWindow) }.getOrElse { emptyList() }
+                // 流式增量回调（云端 / 本地离线模型**共用**）。参数 acc 为「累计文本」。
+                // ⚠️ #1112 修复：此前本地（MNN / llama.cpp）路径压根不传 onToken，且下方 streaming
+                //   还对本地强制置 false —— 本地推理整条链零流式。手机 CPU 上一次生成动辄数十秒到
+                //   数分钟，UI 在跑完之前一个字都拿不到，用户观感就是「不闪退但也不回复」。
+                //   PocketPal 每 token 即时上屏，所以同款 GGUF 在它那里"有反应"。现在两条路一致。
+                val emitStreamToken: (String) -> Unit = { acc ->
+                    // 首个 token：创建可见占位气泡；其后增量更新内容。
+                    // 节流 emit 到 ~100ms（≈10 帧/秒）：既让 AI 回复「一点一点」顺滑冒字，
+                    // 又不至于每个 token 都触发一次重组把低端机拖卡。
+                    // 🔧 #765 防御：store 已线程安全；这里再包 runCatching，万一对 store 的写仍抛异常，
+                    //   仅跳过本次 emit 而不让 streamChat 的 catch 把整段输出吞成截断文本。
+                    streamedContent = acc
+                    runCatching {
+                        if (streamPlaceholderId == null) {
+                            val p = QuroMessage(role = "assistant", content = acc)
+                            store.add(p)
+                            streamPlaceholderId = p.id
+                            lastStreamEmitMs = System.currentTimeMillis()
+                            emit()
+                        } else {
+                            store.update(streamPlaceholderId!!) { it.copy(content = acc) }
+                            val now = System.currentTimeMillis()
+                            if (now - lastStreamEmitMs >= 100L) {
+                                lastStreamEmitMs = now
+                                emit()
+                            }
+                        }
+                    }
+                    Unit
+                }
                 val result = runCatching {
                     if (cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP") {
-                        // 本地离线模型（MNN / llama.cpp）：走本地推理引擎，不发起 HTTP 请求
-                        routeLocal(context, cfg, llmMessages)
+                        // 本地离线模型（MNN / llama.cpp）：走本地推理引擎，不发起 HTTP 请求。
+                        // contextWindow 必须下传：本地会话据此决定 n_ctx，否则原生层按 2048 截断 prompt。
+                        //
+                        // ⏳ #1113：本地路径在「加载 GGUF → 建 context → prefill 整段 prompt」这段时间里
+                        // 一个 token 都不会产出，手机 CPU 上常需 5~60 秒。此前 UI 全程空白，用户无法区分
+                        // 「正在算」和「已经死了」（观感就是"一直进行中却不回复"）。这里先推一条占位文案，
+                        // 首个真 token 到达时会被 emitStreamToken 的累计文本整体覆盖，不会残留。
+                        if (stream) emitStreamToken("⏳ 正在加载本地模型并处理上下文…")
+                        routeLocal(
+                            context,
+                            cfg,
+                            llmMessages,
+                            if (stream) emitStreamToken else null,
+                        )
                     } else {
-                        val streaming = stream && cfg.provider != "MNN" && cfg.provider != "LLAMA_CPP"
+                        val streaming = stream
                         client.chat(
                             baseUrl = cfg.baseUrl,
                             apiKey = cfg.apiKey,
@@ -99,38 +142,30 @@ class QuroAssistant(
                             maxTokens = cfg.maxTokens,
                             tools = effectiveSpecs,
                             stream = streaming,
-                            onToken = if (streaming) { acc ->
-                                // 首个 token：创建可见占位气泡；其后增量更新内容。
-                                // 节流 emit 到 ~100ms（≈10 帧/秒）：既让 AI 回复「一点一点」顺滑冒字，
-                                // 又不至于每个 token 都触发一次重组把低端机拖卡。
-                                // 注意：v384 已根除重组期重编译正则的 ANR 真凶，此处无需再用 500ms 粗节流保命。
-                                // 🔧 #765 防御：store 已线程安全；这里再包 runCatching，万一对 store 的写仍抛异常，
-                                //   仅跳过本次 emit 而不让 streamChat 的 catch 把整段输出吞成截断文本。
-                                streamedContent = acc
-                                runCatching {
-                                    if (streamPlaceholderId == null) {
-                                        val p = QuroMessage(role = "assistant", content = acc)
-                                        store.add(p)
-                                        streamPlaceholderId = p.id
-                                        lastStreamEmitMs = System.currentTimeMillis()
-                                        emit()
-                                    } else {
-                                        store.update(streamPlaceholderId!!) { it.copy(content = acc) }
-                                        val now = System.currentTimeMillis()
-                                        if (now - lastStreamEmitMs >= 100L) {
-                                            lastStreamEmitMs = now
-                                            emit()
-                                        }
-                                    }
-                                }
-                            } else null,
+                            // 注意：v384 已根除重组期重编译正则的 ANR 真凶，此处无需再用 500ms 粗节流保命。
+                            onToken = if (streaming) emitStreamToken else null,
                         )
                     }
                 }.getOrElse { e ->
                     // 🔑 关键：取消信号（CancellationException）必须原样向上抛，
                     // 否则会被包成「请求失败」假错误，导致「停止生成」后仍落一条报错气泡。
                     if (e is CancellationException) throw e
-                    QuroLlmResult.Error("请求失败：${e.message}")
+                    // 🔧 #1113-3：错误必须自报家门。此前文案只有「请求失败：xxx」，
+                    // 分不清是本地推理挂了还是云端连不上 —— 用户看到 SocketTimeout
+                    // 「after 30000ms」时，我方连"到底走的哪条路"都判断不了，白烧几轮。
+                    val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
+                    val srcTag = if (isLocal) "本地·${cfg.provider}" else "云端·${cfg.provider}"
+                    val hint = if (!isLocal && (e is java.net.SocketTimeoutException ||
+                            e is java.net.UnknownHostException || e is java.net.ConnectException)) {
+                        "\n\n⚠️ 这是**云端网络**请求失败，说明当前会话用的是云模型（provider=${cfg.provider}），" +
+                            "不是本地离线模型。若你本意是用本地模型，请到「模型配置」重新选中本地模型并确认已「加载」。"
+                    } else ""
+                    QuroDiag.log(
+                        "AskFail",
+                        "provider=${cfg.provider} model=${cfg.model} local=$isLocal " +
+                            "err=${e.javaClass.simpleName}: ${e.message}"
+                    )
+                    QuroLlmResult.Error("请求失败[$srcTag]：${e.message}$hint")
                 }
 
                 when (result) {
@@ -298,7 +333,14 @@ class QuroAssistant(
                     is QuroLlmResult.Error -> {
                         // 纯同步：chat() 自带 5xx/429 重试与友好错误提示，失败即明确展示报错气泡。
                         lastText = "⚠️ ${result.message}"
-                        store.add(QuroMessage(role = "assistant", content = lastText))
+                        // #1113：若流式占位气泡已创建（本地路径的「⏳ 正在加载…」或云端已冒出的半截文本），
+                        // 必须**复用**它写入错误，否则会残留一条占位气泡 + 再多一条错误气泡（两条并排）。
+                        val ph = streamPlaceholderId
+                        if (ph != null) {
+                            runCatching { store.update(ph) { it.copy(content = lastText) } }
+                        } else {
+                            store.add(QuroMessage(role = "assistant", content = lastText))
+                        }
                         emit()
                         return@withContext lastText
                     }
@@ -322,6 +364,7 @@ class QuroAssistant(
         context: Context,
         cfg: QuroModelConfig,
         messages: List<QuroChatMessage>,
+        onToken: ((String) -> Unit)? = null,
     ): QuroLlmResult {
         val repo = QuroLocalModelRepository(context.applicationContext)
         val all = repo.loadAll()
@@ -332,7 +375,74 @@ class QuroAssistant(
                 "未找到已登记的本地模型（${cfg.provider}）。请到「模型配置 → 本地离线模型」添加并选择。"
             )
         }
-        return resolveLocalEngine().run(local, cfg.model, messages, cfg.temperature, cfg.maxTokens)
+        return resolveLocalEngine().run(
+            local,
+            cfg.model,
+            compactForLocal(messages),
+            cfg.temperature,
+            cfg.maxTokens,
+            cfg.contextWindow,
+            onToken,
+        )
+    }
+
+    /**
+     * 本地路径**兜底**瘦身（#1113）。
+     *
+     * [QuroChatViewModel.buildSystemPrompt] 已针对本地 provider 走极简分支，这里是第二道闸门，
+     * 覆盖两类漏网情况：
+     *   1. 其它入口（语音球 / 键盘 / 未来新增调用方）直接拼了一份完整版 system prompt；
+     *   2. 人格卡正文 / 记忆条目本身就写得很长，即便走了极简分支仍然超预算。
+     *
+     * 为什么必须自己截：原生层 `nativeGenerateStream` 超长时是从 **头部** 丢 token
+     * （`promptTokens.erase(begin, begin+drop)`），会把身份/人格整段砍掉、只留尾巴，
+     * 模型直接失忆。这里反过来 **保头部丢尾部**，让身份始终活下来。
+     *
+     * 预算取值：system ≤ 4,000 字符（≈2,700 token），全部消息合计 ≤ 9,000 字符（≈6,000 token），
+     * 与 llama 会话 n_ctx=8192 扣掉生成预留后的 ~6,144 token 对齐。
+     */
+    private fun compactForLocal(messages: List<QuroChatMessage>): List<QuroChatMessage> {
+        // ⚠️ #1113-2 回滚：上一轮误判「after 30000ms」是 prefill 超时，把预算砍到 800/2000，
+        // 结果把用户配置好的人设/系统提示词腰斩。真凶是 OkHttp SocketTimeoutException
+        // （failed to connect ... after 30000ms），与 prompt 长度无关。恢复原预算，
+        // 不再拿用户的人设去换一个根本不存在的超时。
+        val maxSystemChars = 4_000
+        val maxTotalChars = 9_000
+        val rawTotal = messages.sumOf { it.content.length }
+
+        // 1) system 超预算 → 保留头部（身份在最前），尾部裁掉并留一行说明
+        var out = messages.map { m ->
+            if (m.role.equals("system", true) && m.content.length > maxSystemChars) {
+                m.copy(content = m.content.take(maxSystemChars).trimEnd() + "\n（后续设定因本地上下文限制已省略）")
+            } else {
+                m
+            }
+        }
+
+        // 2) 总量仍超预算 → 从**最旧的非 system 消息**开始丢，保住 system 与最新几轮对话
+        if (out.sumOf { it.content.length } > maxTotalChars) {
+            val kept = ArrayDeque<QuroChatMessage>()
+            var used = out.filter { it.role.equals("system", true) }.sumOf { it.content.length }
+            for (m in out.asReversed()) {
+                if (m.role.equals("system", true)) continue
+                if (used + m.content.length > maxTotalChars && kept.isNotEmpty()) break
+                kept.addFirst(m)
+                used += m.content.length
+            }
+            out = out.filter { it.role.equals("system", true) } + kept
+        }
+
+        val finalTotal = out.sumOf { it.content.length }
+        if (finalTotal != rawTotal || out.size != messages.size) {
+            QuroDiag.log(
+                "LocalPrompt",
+                "⚠ 本地兜底瘦身 | msgs ${messages.size}→${out.size} | chars $rawTotal→$finalTotal " +
+                    "(超出本地预算，已保头部裁尾部)"
+            )
+        } else {
+            QuroDiag.log("LocalPrompt", "本地 prompt 规模 OK | msgs=${out.size} | chars=$finalTotal")
+        }
+        return out
     }
 
     /**
