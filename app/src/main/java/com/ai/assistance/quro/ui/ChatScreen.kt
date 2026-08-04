@@ -1515,30 +1515,54 @@ private fun MessageList(
     val scope = rememberCoroutineScope()
     val lastMsg = messages.lastOrNull()
 
-    // 触发①：进入 / 切换会话 → 无条件落到底部（看最新一条），取代原先「只滚一次」的一次性标志
-    LaunchedEffect(currentId) {
-        if (messages.isEmpty()) return@LaunchedEffect
-        listState.scrollToItem(messages.lastIndex)
+    /**
+     * 把「最后一条消息的底部」贴住视口底部（而非把消息顶部对齐视口顶部）。
+     *
+     * 关键修复（#auto-follow）：长流式 AI 回复往往比一屏还高，旧逻辑 scrollToItem(lastIndex)
+     * 只把消息顶部对齐视口顶，最新涌出的 token 仍在输入框下方看不见。这里按
+     * 「视口高度 − 最后项高度」计算底部的对齐偏移（项比视口高时偏移为负，scrollToItem
+     * 会钳制到最大滚动 → 底部贴底），确保输入框下方的内容始终可见。
+     *
+     * ⚠️ 索引映射：LazyColumn 第 0 项是顶部日期头，messages[i] 实际位于 LazyList index = i+1，
+     * 因此最后一条消息的 LazyList 索引是 messages.size（不是 messages.lastIndex）。
+     */
+    suspend fun pinToBottom() {
+        if (messages.isEmpty()) return
+        val lastItemIndex = messages.size
+        listState.scrollToItem(lastItemIndex)
+        val layoutInfo = listState.layoutInfo
+        val lastInfo = layoutInfo.visibleItemsInfo.lastOrNull { it.index == lastItemIndex } ?: return
+        val viewportH = layoutInfo.viewportSize.height
+        val offset = if (lastInfo.size > viewportH) (viewportH - lastInfo.size) else 0
+        listState.scrollToItem(lastItemIndex, offset)
     }
 
-    // 触发②：用户刚发出新消息（最后一条是用户消息）→ 强制跳到底部看回复，即使此前在中部上滑
+    // 触发①：进入 / 切换会话 → 无条件落到底部看最新一条。
+    LaunchedEffect(currentId) {
+        pinToBottom()
+    }
+
+    // 触发②：用户刚发出新消息（最后一条是用户消息）→ 强制跳到底部，即使此前在中部上滑。
     LaunchedEffect(lastMsg?.id) {
         if (lastMsg != null && lastMsg.mine) {
-            listState.scrollToItem(messages.lastIndex)
+            pinToBottom()
         }
     }
 
-    // 触发③：流式回复增长（同条消息 content 变）→ 仅当用户已停在底部附近才平滑跟随，不打扰阅读历史
+    // 触发③：流式回复增长（同条消息 content 变）→ 仅当用户停在底部附近才跟随，不打扰阅读历史；
+    // 跟随的是「最后一项底部」而非顶部，长消息也不会漏掉输入框下方涌出的新内容。
     val lastContentLen = (lastMsg?.text ?: "").length
     LaunchedEffect(lastContentLen) {
         if (messages.isEmpty()) return@LaunchedEffect
-        val lastIndex = messages.size - 1
-        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-        // 仅当用户已停在底部（最后一条消息可见）才跟随流式增长；
-        // 改用「最后可见项」判定，长消息项也不会误判为「不在底部近处」而停止跟随（#914）
-        if (lastVisible >= lastIndex) {
-            listState.animateScrollToItem(messages.lastIndex)
-        }
+        val lastItemIndex = messages.size
+        val layoutInfo = listState.layoutInfo
+        // 最后一条消息至少部分可见时才跟随（用户上滑看历史时不打扰）。
+        val lastInfo = layoutInfo.visibleItemsInfo.lastOrNull { it.index == lastItemIndex } ?: return@LaunchedEffect
+        val viewportH = layoutInfo.viewportSize.height
+        // 项比视口高时把其底部贴住视口底部（offset 为负，scrollToItem 钳制到最大滚动）；
+        // 否则项能整屏容纳，顶部对齐即可。
+        val offset = if (lastInfo.size > viewportH) (viewportH - lastInfo.size) else 0
+        listState.scrollToItem(lastItemIndex, offset)
     }
     // 注意：执行轨迹事件已统一在 ChatScreen 顶层订阅一次（单一真相源 traceLines），
     // 此处不再各自 collect 全局流，避免重复订阅 / 跨会话污染。
@@ -1593,7 +1617,7 @@ private fun MessageList(
         exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
     ) {
         Surface(
-            onClick = { scope.launch { listState.animateScrollToItem(messages.size) } },
+            onClick = { scope.launch { pinToBottom() } },
             shape = CircleShape,
             color = cs.surface.copy(alpha = 0.92f),
             contentColor = cs.onSurface,

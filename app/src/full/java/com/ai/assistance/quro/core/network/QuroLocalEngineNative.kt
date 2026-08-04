@@ -147,6 +147,13 @@ private class StreamingThinkStripper {
 }
 
 /**
+ * 流式展示内容映射：思考段内部（[visible] 为空）时给出「思考中」占位，
+ * 避免气泡在长思考阶段长时间冻结在 prefill 进度文案（如"正在处理提示词 1%"）上。
+ */
+private fun streamDisplay(visible: String): String =
+    if (visible.isNotEmpty()) visible else "本地模型思考中…"
+
+/**
  * 原生本地推理引擎（full 风味专用实现）。
  *
  * 职责：直接驱动移植进来的 MNN / llama.cpp JNI 会话（[MNNLlmSession] / [LlamaSession]），
@@ -341,7 +348,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     tokenCount++
                     // 流式阶段即剥离 <think> 块，避免用户实时看到思考原文（症状 1 流式侧）。
                     val visible = stripper.accept(token)
-                    onToken?.let { cb -> runCatching { cb(visible) } }
+                    onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
                     true
                 }
                 if (!structuredOk || stripper.rawText().isEmpty()) {
@@ -359,7 +366,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                         if (firstTokenMs == null) firstTokenMs = (System.nanoTime() - t0) / 1_000_000
                         tokenCount++
                         val visible = stripper.accept(token)
-                        onToken?.let { cb -> runCatching { cb(visible) } }
+                        onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
                         true
                     }
                     fallbackOk
@@ -373,7 +380,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     if (firstTokenMs == null) firstTokenMs = (System.nanoTime() - t0) / 1_000_000
                     tokenCount++
                     val visible = stripper.accept(token)
-                    onToken?.let { cb -> runCatching { cb(visible) } }
+                    onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
                     true
                 }
             }
@@ -418,6 +425,11 @@ class QuroLocalEngineNative : QuroLocalEngine {
                             if (split.answerFromReasoning) " | ⚠ 正文为空，已回退展示思考内容" else ""
                     )
                     finalText = split.answer
+                }
+
+                // 模型只吐了思考、正文为空：兜底说明，避免气泡空白 / 残留"思考中"占位（#offline-empty-answer）。
+                if (finalText.isEmpty()) {
+                    finalText = "（本地模型仅完成了思考过程，未生成可展示的回复。）"
                 }
 
                 // 把清洗后的干净文本（已切走思考段 / 裁掉退化尾巴）**无条件**补推给 UI，
@@ -800,7 +812,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 sb.append(token)
                 // 🧠 流式阶段即剥离 <think> 块，避免用户实时看到思考原文（与 MNN 对齐）。
                 val visible = stripper.accept(token)
-                onToken?.let { cb -> runCatching { cb(visible) } }
+                onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
                 true
             }
             val ms = (System.nanoTime() - t0) / 1_000_000
@@ -834,7 +846,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     )
                 }
                 // 终态无条件把干净正文（已切走思考段）补推给 UI，确保气泡最终态不含 <think> 残留。
-                val finalText = split.answer
+                val finalText = if (split.answer.isEmpty()) "（本地模型仅完成了思考过程，未生成可展示的回复。）" else split.answer
                 onToken?.let { cb -> runCatching { cb(finalText) } }
 
                 // 结构化路径：原生 parseToolCallResponse 优先；未命中（模板无 parser / 思考段内 <tool_call>）

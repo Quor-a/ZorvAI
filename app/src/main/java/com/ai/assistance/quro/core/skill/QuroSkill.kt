@@ -110,6 +110,26 @@ object QuroSkillStore {
         "美食推荐", "健康建议", "读书笔记", "实时翻译", "成语词典", "职场建议", "故事创作", "提问优化",
     )
 
+    /**
+     * 按 id 去重：保留首次出现，丢弃后续重复项。
+     *
+     * 背景（崩溃修复 #3）：旧版本 manifest 曾短暂播种过重复 id（如 zorv_ff8e876ec646），
+     * 部分设备 SharedPreferences 里残留两条同 id 记录。本 App 技能页 LazyColumn 用 skill.id
+     * 作 key，重复 key 直接抛 `IllegalArgumentException: Key "xxx" was already used` 崩进程。
+     * 播种是幂等的（KEY_BUILTIN_ZORV 守卫）不会主动清理，所以在此对读出数据做兜底去重，
+     * 让任何残留重复都无法抵达 UI。
+     */
+    private fun dedupeById(list: List<QuroSkill>): List<QuroSkill> {
+        val seen = mutableSetOf<String>()
+        val out = mutableListOf<QuroSkill>()
+        for (s in list) {
+            if (s.id in seen) continue
+            seen.add(s.id)
+            out.add(s)
+        }
+        return out
+    }
+
     /** 仅读存储、不触发迁移（供迁移逻辑内部调用，避免递归）。 */
     private fun loadRaw(context: Context): List<QuroSkill> {
         val out = mutableListOf<QuroSkill>()
@@ -134,7 +154,7 @@ object QuroSkillStore {
                 )
             }
         }
-        return out.sortedBy { it.name }
+        return dedupeById(out).sortedBy { it.name }
     }
 
     /**
@@ -238,7 +258,7 @@ object QuroSkillStore {
                 )
             }
         }
-        return out.sortedBy { it.name }
+        return dedupeById(out).sortedBy { it.name }
     }
 
     fun save(context: Context, list: List<QuroSkill>) {

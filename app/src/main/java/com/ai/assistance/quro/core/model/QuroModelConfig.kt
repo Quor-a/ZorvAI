@@ -32,7 +32,8 @@ data class QuroModelConfig(
     // enableTools，改了离线就把云端也带歪。现拆出独立字段，本地路径（routeLocal）优先读这些。
     val localTemperature: Float = 0.7f,
     val localMaxTokens: Int = 512,         // 本地生成 token 上限默认 512（手机 CPU 每 token 几十~几百 ms，4096 会跑好几分钟）
-    val localEnableTools: Boolean = false, // 本地工具调用默认关闭——1.2B 模型 context 紧张，默认只看人格卡；用户需要工具时手动开
+    val localEnableTools: Boolean = true,  // 离线工具调用默认开启——但离线路径只下发 memory_* 工具（见 QuroAssistant.routeLocal），
+                                            // 不会把 60+ 技能工具塞给 1.2B 模型（那是之前卡死/乱码的根因）。如需彻底关闭可在此关。
 )
 
 class QuroModelConfigRepository(context: Context) {
