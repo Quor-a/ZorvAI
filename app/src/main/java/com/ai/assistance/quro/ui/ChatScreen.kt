@@ -1555,8 +1555,13 @@ private fun MessageList(
     LaunchedEffect(lastContentLen) {
         if (messages.isEmpty()) return@LaunchedEffect
         val lastItemIndex = messages.size
+        // 流式增长时无条件把最后一项底部贴住视口底（与 pinToBottom 一致的两步法）：
+        // 先 scrollToItem 把最后一项带入布局，再按「视口高 − 项高」算底部对齐偏移。
+        // ⚠️ 修复：旧实现要求最后一项已出现在 visibleItemsInfo 才滚动，导致流式回复一长高、
+        // 最后一项滑出视口后就不再跟随 →「自动定位最新内容」在中长回复上完全失效。
+        // 现在改为无条件先滚入，再算偏移，长回复/输入框下方涌出的新内容始终可见。
+        listState.scrollToItem(lastItemIndex)
         val layoutInfo = listState.layoutInfo
-        // 最后一条消息至少部分可见时才跟随（用户上滑看历史时不打扰）。
         val lastInfo = layoutInfo.visibleItemsInfo.lastOrNull { it.index == lastItemIndex } ?: return@LaunchedEffect
         val viewportH = layoutInfo.viewportSize.height
         // 项比视口高时把其底部贴住视口底部（offset 为负，scrollToItem 钳制到最大滚动）；
