@@ -1,6 +1,6 @@
 # ZorvAI：一个真正能「操作手机」的安卓端 AI Agent 开源项目
 
-> **关键词**：Android AI Agent、安卓智能体、本地优先 AI、Kotlin Jetpack Compose、ACI 跨应用调用、设备端 LLM 助手、开源 AI 助手
+> **关键词**：Android AI Agent、安卓智能体、开源 AI Agent、Kotlin Jetpack Compose、ACI 跨应用调用、设备端 LLM 助手、开源 AI 助手
 >
 > **项目地址**：[GitHub](https://github.com/Quor-a/ZorvAI) · [Gitee（国内镜像）](https://gitee.com/ZorvAI/ZorvAI) · [APK 下载（v1.0.14）](https://github.com/Quor-a/ZorvAI/releases/tag/v1.0.14)
 
@@ -18,7 +18,7 @@ ZorvAI 的出发点很简单：**如果 AI 真的要成为你的「助手」，�
 
 ## 一、ZorvAI 是什么？
 
-**ZorvAI（Zorv AI）** 是一个完全开源的、运行在 Android 端的**本地优先 AI Agent 智能体助手**。
+**ZorvAI（Zorv AI）** 是一个完全开源的、运行在 Android 端的**开源 AI Agent 智能体助手**。
 
 核心特点：
 
@@ -236,7 +236,7 @@ cd QuroAI
 | 对比维度 | ZorvAI | 普通 AI 助手 App |
 |---------|--------|------------------|
 | 能否操作手机 | ✅ 30+ 种操控能力 | ❌ 只能聊天 |
-| 是否本地优先 | ✅ 核心能力全部本地 | ☁️ 依赖云端 API |
+| 是否设备端离线 | ✅ 核心能力可设备端运行 | ☁️ 依赖云端 API |
 | 是否开源 | ✅ Apache 2.0 完全开源 | ❌ 闭源/套壳 |
 | 跨应用调用 | ✅ ACI 协议 | ❌ 无 |
 | 多通道接入 | ✅ 飞书/QQ/微信 | ❌ 单一 App |

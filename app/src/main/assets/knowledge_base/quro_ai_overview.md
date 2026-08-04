@@ -1,9 +1,9 @@
 # Zorv AI 产品概览
 
-Zorv AI 是一款运行在 Android 端的本地优先 AI 助手应用，包名为 `com.ai.assistance.quro`。
+Zorv AI 是一款运行在 Android 端的开源 AI Agent 智能体助手应用，包名为 `com.ai.assistance.quro`。
 
 ## 核心定位
-- 本地优先：核心推理、工具调用、知识库检索均可在设备端完成，无需强制联网。
+- 设备端离线运行：核心推理、工具调用、知识库检索均可在设备端完成，无需强制联网。
 - 多引擎：支持云端大模型、端侧小模型（Sherpa-NCNN）、以及本地 Linux 沙箱（proot + Alpine）执行环境。
 - 工具生态：内置文件读写、终端、定时任务、知识库检索、机器人平台接入等能力。
 
