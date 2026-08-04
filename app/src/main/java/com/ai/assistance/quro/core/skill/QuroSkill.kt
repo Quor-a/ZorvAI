@@ -154,7 +154,11 @@ object QuroSkillStore {
     /**
      * 首次启动把 assets/skills/zorv/ 下随包内置的 Zorv AI 技能播种进用户技能库。
      * 用 manifest.json 里的稳定 id（zorv_<sha1>），幂等：已存在则跳过，用户删过也不会被强制加回。
-     * 内置技能默认 enabled=true / callable=true / alwaysOn=false（不污染全局系统提示词，按需选择或触发注入）。
+     *
+     * ⚠️ 默认 enabled=false / callable=false / alwaysOn=false：
+     * - 内置技能的定位是「注入系统提示词的行为约束 / 能力说明」，不应默认全部开启、更不应
+     *   默认注册成 function-calling 工具（否则离线模型会被 60+ 技能工具压垮 → 调一次工具就卡死/乱码）。
+     * - 用户需要哪个技能，到「技能」页手动开启即可；开启后仍 alwaysOn=false（按需/触发注入，不污染全局提示词）。
      */
     private const val KEY_BUILTIN_ZORV = "builtin_zorv_v1"
 
@@ -175,15 +179,43 @@ object QuroSkillStore {
                 if (id.isEmpty() || file.isEmpty() || id in existing) continue
                 val md = am.open("skills/zorv/$file").bufferedReader().readText()
                 val parsed = parseSkillMd(md).firstOrNull() ?: continue
-                list.add(parsed.copy(id = id, enabled = true, callable = true, alwaysOn = false, updatedAt = System.currentTimeMillis()))
+                list.add(parsed.copy(id = id, enabled = false, callable = false, alwaysOn = false, updatedAt = System.currentTimeMillis()))
             }
             save(context, list)
         }
     }
 
+    /**
+     * 一次性迁移（离线模型卡死修复配套）：把历史已播种的内置 Zorv 技能（id 以 "zorv_" 开头）
+     * 翻转为 enabled=false / callable=false / alwaysOn=false。
+     *
+     * 背景：旧版本 seedBuiltinZorvSkills 把 62 个内置技能默认 enabled=true && callable=true，
+     * 导致它们被注册成 skill__* function-calling 工具。一旦用户在「本地模型」开启工具调用，
+     * 整套云端工具集（含 60+ 技能工具）被塞给 1.2B 本地模型 → 一直"正在处理提示词"卡死 /
+     * 调一次工具就乱码。内置技能的定位本是「注入系统提示词的行为约束」，不该默认成为工具。
+     * 幂等（KEY_BUILTIN_ZORV_CALLABLE_FIX 守卫）；新装设备由 seedBuiltinZorvSkills 的新默认值兜底。
+     */
+    private const val KEY_BUILTIN_ZORV_CALLABLE_FIX = "builtin_zorv_offline_callable_fix_v1"
+
+    fun migrateBuiltinSkillsOff(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_BUILTIN_ZORV_CALLABLE_FIX, false)) return
+        prefs.edit().putBoolean(KEY_BUILTIN_ZORV_CALLABLE_FIX, true).apply()
+        val list = loadRaw(context)
+        var changed = false
+        val out = list.map { s ->
+            if (s.id.startsWith("zorv_") && (s.enabled || s.callable || s.alwaysOn)) {
+                changed = true
+                s.copy(enabled = false, callable = false, alwaysOn = false, updatedAt = System.currentTimeMillis())
+            } else s
+        }
+        if (changed) save(context, out)
+    }
+
     fun load(context: Context): List<QuroSkill> {
         clearBuiltinSkillsOnce(context)
         seedBuiltinZorvSkills(context)
+        migrateBuiltinSkillsOff(context)
         val out = mutableListOf<QuroSkill>()
         runCatching {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

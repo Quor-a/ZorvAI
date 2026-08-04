@@ -104,7 +104,9 @@ class QuroAssistant(
             // **没有步数上限，可一直链式编排直到任务真正完成**。
             // 仅保留一个极高的安全天花板（默认 2000，真实任务远不会触及）作最后兜底；
             // 真正防死循环的机制是下方的「重复调用检测」，而非低轮次封顶。
-            val roundLimit = if (cfg.maxToolRounds <= 0) 2000 else cfg.maxToolRounds
+            // 离线模型（1.2B）工具编排能力弱，一旦进入工具循环极易卡死/乱码；
+            // 单独收紧上限到 12 轮（云端仍是 2000 兜底），保证离线工具任务必定终止、不冻结。
+            val roundLimit = if (isLocal) 12 else if (cfg.maxToolRounds <= 0) 2000 else cfg.maxToolRounds
             var round = 0
             var prevCallSig: String? = null   // 上一轮工具调用签名，用于死循环检测
             var repeatStreak = 0
@@ -171,9 +173,18 @@ class QuroAssistant(
                             cfg,
                             llmMessages,
                             if (stream) emitStreamToken else null,
-                            if (effEnableTools && effectiveSpecs.isNotEmpty())
+                            if (effEnableTools && isLocal) {
+                                // 离线模型专用精简工具集（离线卡死修复核心）：
+                                // 只暴露「记忆库」工具（与云端共享），人格卡/用户资料走系统提示词注入（不注册为工具）；
+                                // 云端其余工具（含 skill__* 技能工具）一律不塞给 1.2B 本地模型，
+                                // 否则工具数过多 → 一直"正在处理提示词"卡死 / 调一次工具就乱码。
+                                val offlineSpecs = if (autoSaveMemory)
+                                    registry.fullSpecs().filter { it.name.startsWith("memory_") }
+                                else emptyList()
+                                if (offlineSpecs.isNotEmpty()) QuroLocalToolsCodec.encodeTools(offlineSpecs) else null
+                            } else if (effEnableTools && effectiveSpecs.isNotEmpty()) {
                                 QuroLocalToolsCodec.encodeTools(effectiveSpecs)
-                            else null,
+                            } else null,
                         )
                     } else {
                         val streaming = stream

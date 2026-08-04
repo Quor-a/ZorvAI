@@ -23,9 +23,6 @@ package com.ai.assistance.mnn
  */
 object MnnThinkContent {
 
-    private const val OPEN_TAG = "<think>"
-    private const val CLOSE_TAG = "</think>"
-
     /**
      * 切分结果。
      *
@@ -49,33 +46,40 @@ object MnnThinkContent {
      * @return 切分结果；[raw] 为空时 answer / reasoning 均为空串。
      */
     fun split(raw: String): Split {
-        if (raw.isEmpty() || !raw.contains(OPEN_TAG)) {
-            return Split(answer = raw, reasoning = "")
+        if (raw.isEmpty()) {
+            return Split(answer = "", reasoning = "")
         }
-
+        // 🛡 归一化：1.2B 本地模型常把思考标签输出成全角 ＜think＞／＜/think＞ 或大小写变体，
+        // 导致精确匹配漏判、思考段泄漏进正文。先统一成半角小写再扫描（仅用于定位，
+        // 正文/思考内容仍从原始 raw 按相同下标截取，保留原文本大小写与全角字符）。
+        val norm = raw.replace('＜', '<').replace('＞', '>').replace('／', '/')
+        val low = norm.lowercase()
         val answerBuilder = StringBuilder(raw.length)
         val reasoningBuilder = StringBuilder()
         var cursor = 0
+        val OPEN = "<think"
+        val CLOSE = "</think>"
 
-        while (cursor < raw.length) {
-            val open = raw.indexOf(OPEN_TAG, cursor)
+        while (cursor < low.length) {
+            val open = low.indexOf(OPEN, cursor)
             if (open < 0) {
                 answerBuilder.append(raw, cursor, raw.length)
                 break
             }
             // 开标签之前的内容属于正文。
             answerBuilder.append(raw, cursor, open)
-
-            val contentStart = open + OPEN_TAG.length
-            val close = raw.indexOf(CLOSE_TAG, contentStart)
+            // 标签结束于下一个 '>'（兼容 <think> / <think > / <think\n 等写法）。
+            val gt = low.indexOf('>', open)
+            val contentStart = if (gt >= 0) gt + 1 else open + OPEN.length
+            val close = low.indexOf(CLOSE, contentStart)
             if (close < 0) {
                 // 未闭合：剩下全是思考内容（生成被截断的典型形态）。
                 appendReasoning(reasoningBuilder, raw.substring(contentStart))
-                cursor = raw.length
+                cursor = low.length
                 break
             }
             appendReasoning(reasoningBuilder, raw.substring(contentStart, close))
-            cursor = close + CLOSE_TAG.length
+            cursor = close + CLOSE.length
         }
 
         val reasoning = reasoningBuilder.toString().trim()
