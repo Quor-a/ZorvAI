@@ -32,7 +32,7 @@
 > **🔌 受控端浏览器（ZorvAI 浏览器）已独立开源 · GitHub：[github.com/Quor-a/ZorvBrowser](https://github.com/Quor-a/ZorvBrowser) ｜ Gitee：[gitee.com/ZorvAI/ZorvBrowser](https://gitee.com/ZorvAI/ZorvBrowser)**（独立仓库，含 v1.0.12 源码与 APK）
 >
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
-> - 🔗 主程序 APK（v1.0.16，full 风味，含离线引擎，最新）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.16/app-full-debug.apk)
+> - 🔗 主程序 APK（v1.0.16，含离线引擎，最新）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.16/app-full-debug.apk)
 > - 🔗 主程序 APK（v1.0.15）：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
 > - 🔗 主程序 APK（v1.0.14）：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
 > - 🔗 主程序 APK（v1.0.12）：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
@@ -52,7 +52,7 @@
 | **对话 UI（Compose）** | ChatScreen 对话框、PersonaBar 人格卡、PermissionModeBar（「AI 自动保存记忆」+「深度思考」并排胶囊）、回到底部浮动按钮、全屏预览、Markdown 与代码块渲染 |
 | **Agent 核心** | 多会话隔离（`liveBuffers` 按会话独立）、种子快照（`convBase`）、显示刷新闸门（`canUpdateDisplay`）、多轮 `[第N轮]` hidden 标记防串台、系统提示词构建、工具注册表（`QuroToolRegistry.active`）、技能系统（`QuroSkill` → 注册为 `skill__{name}` 工具） |
 | **工具 / 能力层** | **120+ 内置工具**（`buildQuroRegistry` 注册 123 项 + 导入工具 + 可调用技能）：无障碍 `input_text`/`tap_screen`/`read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text`/`ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
-| **离线 LLM 引擎** | `full` 风味内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 剥离、本地工具调用、会话复用；离线也能对话 |
+| **离线 LLM 引擎** | 应用内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 剥离、本地工具调用、会话复用；离线也能对话 |
 | **特权层 L1–L5** | 无障碍 → Shizuku(uid 0/2000) → 设备管理员 → ROOT(su) → 应用内 Linux(proot + Alpine) |
 | **终端 / Linux 沙箱** | NovaTerm 自研沙盒 + proot/Alpine 应用内 Linux 环境，终端 UI 直接操作 |
 | **MCP（Model Context Protocol）** | MCP 客户端（WebSocket / HTTP 传输）、应用内本地 MCP 服务，可由 AI 部署/调用 |
@@ -89,9 +89,8 @@
 - 技能方向（部分）：前端/设计、部署/云、内容/创作、搜索/情报、IM/媒体、效率/工程、短视频/爬虫、写作/文档、付费咨询等
 
 ### 3. 离线 LLM 引擎（MNN / llama.cpp）
-- **仅 `full` 风味**：`QuroLocalEngineNative` 驱动 `MNNLlmSession` / `LlamaSession`，支持流式、`<think>` 剥离、本地工具调用解析、会话常驻与门禁
+- 应用**内置**本地推理运行时（`QuroLocalEngineNative`），驱动 `MNNLlmSession` / `LlamaSession`，支持流式、`<think>` 剥离、本地工具调用解析、会话常驻与门禁；离线（无网络、无 API Key）也能对话
 - `core/model/QuroLocalModelRepository.kt` 负责本地模型仓库/加载
-- `fdroid` 风味通过 `QuroLocalEnginePlaceholder` 降级（提示原生推理未接入），因此**离线对话需安装 full 风味包**
 
 ### 4. 应用内终端 & Linux 沙箱
 - `core/terminal/QuroTerminalController`：proot 优先、否则设备 `sh` 的会话控制器
@@ -301,7 +300,7 @@ flowchart TB
         E2["CMS v2 模块 QuroCmsRepository"]
         E3["GeckoView 浏览器 MPL-2.0"]
         E4["本地语音 sherpa-onnx STT / 多供应商 TTS"]
-        E5["MNN / llama.cpp 离线 LLM (full 风味)"]
+        E5["MNN / llama.cpp 离线 LLM (内置)"]
     end
     subgraph IM["IM 通道层 · 手机端均无公网端点"]
         F1["飞书 WebSocket"]
@@ -343,13 +342,10 @@ CMS 引擎是一套**共享运行时**供给机制，按需在设备上提供 **
 
 ### 离线 LLM 引擎（MNN / llama.cpp）
 
-`full` 风味内置本地推理运行时（`QuroLocalEngineNative`），驱动 **MNN**（`llm/mnn`）与 **llama.cpp**（`llm/llama`）两个后端：
+应用**内置**本地推理运行时（`QuroLocalEngineNative`），驱动 **MNN**（`llm/mnn`）与 **llama.cpp**（`llm/llama`）两个后端：
 
 - 支持流式输出、`<think>` 思考段剥离、本地工具调用解析、会话常驻复用与门禁；
-- 离线（无网络、无 API Key）也能对话；
-- `fdroid` 风味不含原生库，经 `QuroLocalEnginePlaceholder` 降级提示。
-
-> 安装包需选择 **full 风味** 才具备离线对话能力。
+- 离线（无网络、无 API Key）也能对话，无需额外配置。
 
 ### GeckoView 浏览器引擎（MPL-2.0）
 
@@ -476,17 +472,7 @@ ZorvAI 浏览器（受控端）在 v1.0.14 新增 `http_request` 能力：AI 可
 
 - **Android 8.0+（API 26+）** 设备
 - **开发机**：JDK **17+**（AGP 8.13 要求；本机用 JDK 21 验证通过）、Android SDK（compileSdk 36 / minSdk 26 / targetSdk 34）、Gradle（用仓库自带 wrapper `./gradlew`）
-- **`full` 风味额外需要 NDK**（side-by-side，任意较新版本均可）：用于源码编译 MNN / llama.cpp 原生库；fdroid 风味不需要
-
-### 项目结构（Gradle 模块）
-
-```
-:app          # 主程序（含 main / full 两种源码集；fdroid 风味剔除离线原生库）
-:aci-core     # ACI 框架核心库（AAR 形式供受控端接入）
-:aci-browser  # 官方受控端浏览器（独立仓同步源码）
-:mnn          # 离线 LLM 后端 MNN（仅 full 风味依赖）
-:llama        # 离线 LLM 后端 llama.cpp（仅 full 风味依赖）
-```
+- **离线引擎原生编译需要 NDK**（side-by-side，任意较新版本均可）：用于源码编译 MNN / llama.cpp 原生库
 
 ### 构建命令
 
@@ -497,22 +483,15 @@ cd QuroAI
 
 # 2. 准备环境
 #    - 安装 JDK 17+，并在 local.properties 配置 sdk.dir=/path/to/Android/Sdk
-#    - 如需构建 full 风味（含离线引擎），确保 SDK 中已安装 NDK（side-by-side）
+#    - 确保 Android SDK 中已安装 NDK（side-by-side，离线引擎原生库编译所需）
 
-# 3. 构建（两种风味，二选一）
-#    full 风味：含离线 MNN/llama.cpp 原生引擎，包体约 350MB+，需要 NDK
-./gradlew assembleFullDebug
-#    产物：app/build/outputs/apk/full/debug/app-full-debug.apk
-
-#    fdroid 风味：无离线原生库、纯在线，体积精简，符合 F-Droid 合规
-./gradlew assembleFdroidDebug
-#    产物：app/build/outputs/apk/fdroid/debug/app-fdroid-debug.apk
+# 3. 构建 debug 包
+./gradlew assembleDebug
+#    产物：app/build/outputs/apk/*/debug/app-*-debug.apk
 
 # 清理
 ./gradlew clean
 ```
-
-> ⏱️ **首次构建耗时说明**：`full` 风味需源码编译 arm64 的 MNN / llama.cpp 原生库。若 `app/.cxx` 原生缓存缺失，会触发**全量重编**（几十分钟，CPU 满载、落盘较少属正常），并非卡死；缓存存在时增量构建很快。fdroid 风味无原生编译，构建显著更快。
 
 > 💡 若克隆后 `./gradlew` 报「没有主清单属性 / 找不到主类」，是 `gradle-wrapper.jar` 的 MANIFEST 缺失 `Main-Class`，需修复 wrapper 后再构建（此文件被 `.gitignore` 排除，属本地环境修复项）。
 
@@ -522,12 +501,12 @@ cd QuroAI
 
 | 现象 | 说明 / 处理 |
 |------|-------------|
-| **full 风味构建特别久** | 首编需编译 MNN/llama.cpp 原生库（见上方「首次构建耗时说明」），CPU 满载、落盘少属正常；`app/.cxx` 缓存存在时增量很快。 |
+| **构建耗时较长** | 首次构建需编译 MNN/llama.cpp 原生库，CPU 满载、落盘较少属正常，并非卡死；`app/.cxx` 缓存存在时增量构建很快。 |
 | **`./gradlew` 无法启动** | wrapper jar 缺失 `Main-Class` 时需修复；或改用本机已安装的 Gradle 直接构建。 |
 | **Shizuku 相关能力不可用** | 必须**先打开 Shizuku App 并启动其服务 / 完成配对**，再在 Zorv AI 中授权；Shizuku 未运行时 L2 通道不会启用。 |
 | **ROOT 模式命令不执行** | ROOT 模式命令走 `sh -c` 执行，需确认设备已 root 且已授予 su 权限。 |
 | **应用内 Linux（L5）无法运行** | 真执行依赖**用户自备的 `proot` 二进制**与 Alpine rootfs，请先准备好这些外部资源。 |
-| **离线对话不可用** | 离线 LLM 仅在 **full 风味** 包中提供；fdroid 风味降级为占位提示。 |
+| **离线对话不可用** | 离线 LLM 随发布包内置；若所用构建不含离线引擎原生库则会提示未接入，请使用包含离线引擎的版本。 |
 | **网页 / HTML 预览不显示** | 确认已随包集成 GeckoView（MPL-2.0）运行时。 |
 | **本地语音识别不可用** | 本地 STT 模型为约 85MB 的 onnx 文件，首次使用需下载 / 放置到指定目录。 |
 | **会话出现重复或异常** | 启动自愈 `DATA_REPAIR` 会在启动时去重清洗，重启 App 即可。 |
@@ -541,7 +520,7 @@ cd QuroAI
 
 直接从 Release 页面下载最新 APK：
 
-- **v1.0.16（full 风味 debug，含离线 MNN/llama.cpp 引擎，最新）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.16/app-full-debug.apk)（随 v1.0.16 Release 上传；约 350MB+，构建完成后可用）
+- **v1.0.16（debug，含离线 MNN/llama.cpp 引擎，最新）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.16/app-full-debug.apk)（随 v1.0.16 Release 上传；约 350MB+，构建完成后可用）
 - **v1.0.15（debug，主程序，最新）**：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
 - **v1.0.14（debug，主程序）**：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
 - **v1.0.14（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 独立仓，最新）**：[ZorvBrowser-aci-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.14/ZorvBrowser-aci-debug-v1.0.14.apk)
