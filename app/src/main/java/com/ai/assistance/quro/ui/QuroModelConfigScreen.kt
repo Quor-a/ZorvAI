@@ -66,6 +66,7 @@ import com.ai.assistance.quro.core.model.QuroLocalModelType
 import com.ai.assistance.quro.core.model.QuroSavedProfile
 import com.ai.assistance.quro.core.model.QuroSavedProfileRepository
 import com.ai.assistance.quro.core.model.toProfile
+import com.ai.assistance.quro.core.model.localModelCapabilitySummary
 import com.ai.assistance.quro.core.network.LocalModelLoaders
 import com.ai.assistance.quro.core.network.LocalModelLoader
 import com.ai.assistance.quro.core.network.QuroModelListResult
@@ -709,6 +710,7 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
                                 Text("可用模型：${if (m.modelNames.isEmpty()) "（无）" else m.modelNames.joinToString(", ")}",
                                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                                 Text("路径：${m.path}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                Text(localModelCapabilitySummary(m), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
                                 if (active) {
                                     Text("● 已激活（常驻内存，对话跨轮复用）",
                                         style = MaterialTheme.typography.bodySmall,

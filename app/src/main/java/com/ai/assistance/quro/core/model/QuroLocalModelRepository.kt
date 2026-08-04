@@ -236,3 +236,69 @@ class QuroLocalModelRepository(context: Context) {
         }
     }
 }
+
+// ---------- 离线模型能力识别（#模型识别）：给用户可见的「架构 / 思考 / 工具」摘要 ----------
+// 复刻 llm/mnn 模块 MnnModelCapabilities 的核心判定（main 源码集无法依赖 full 专属的 :mnn 模块），
+// 并对 llama.cpp 用文件名家族做最佳推断。判定保守，仅用于 UI 展示，不参与推理路径决策。
+
+/** 解析 MNN 模型目录：path 可能是含 llm_config.json 的目录，也可能是目录内的 .mnn 文件。 */
+private fun resolveMnnModelDir(path: String): File? {
+    val f = File(path)
+    if (!f.exists()) return null
+    return if (f.isDirectory) f else f.parentFile
+}
+
+/**
+ * 返回模型能力摘要（给用户看）：
+ * - MNN：读 llm_config.json 的 chat_template，判定是否支持思考 / 工具。
+ * - llama.cpp：按 .gguf 文件名家族推断架构与是否可能支持思考（GGUF 二进制元数据读取成本过高）。
+ */
+fun localModelCapabilitySummary(model: QuroLocalModel): String {
+    return when (model.type) {
+        QuroLocalModelType.MNN -> mnnCapabilitySummary(model.path)
+        QuroLocalModelType.LLAMA_CPP -> llamaCapabilitySummary(model.path, model.modelNames)
+    }
+}
+
+private fun mnnCapabilitySummary(path: String): String {
+    val dir = resolveMnnModelDir(path) ?: return "MNN · 目录缺失"
+    val cfg = File(dir, "llm_config.json")
+    if (!cfg.isFile) return "MNN · 无 llm_config.json（无法识别能力）"
+    val root = runCatching { JSONObject(cfg.readText()) }.getOrNull() ?: return "MNN · 配置解析失败"
+    val jinja = root.optJSONObject("jinja")
+    val tpl = (jinja?.optString("chat_template") ?: root.optString("chat_template", "")).orEmpty().lowercase()
+    if (tpl.isBlank()) return "MNN · 普通模型（无思考/工具模板）"
+    val thinking = tpl.contains("enable_thinking") || tpl.contains("<think>")
+    val tools = listOf("{% if tools", "tools is defined", "for tool in tools", "<tool_call", "tool_calls")
+        .any { tpl.contains(it) }
+    val parts = mutableListOf<String>()
+    parts += if (thinking) "支持思考" else "无思考"
+    parts += if (tools) "支持工具" else "无工具"
+    return "MNN · " + parts.joinToString(" / ")
+}
+
+private fun llamaCapabilitySummary(path: String, modelNames: List<String>): String {
+    val stem = (modelNames.firstOrNull() ?: File(path).name).let { name ->
+        name.removeSuffix(".gguf").removeSuffix(".GGUF")
+    }
+    val lower = stem.lowercase()
+    val family = when {
+        lower.contains("qwen") -> "Qwen"
+        lower.contains("deepseek") -> "DeepSeek"
+        lower.contains("llama") -> "Llama"
+        lower.contains("gemma") -> "Gemma"
+        lower.contains("phi") -> "Phi"
+        lower.contains("mistral") -> "Mistral"
+        lower.contains("yi") -> "Yi"
+        lower.contains("chatglm") || lower.contains("glm") -> "GLM"
+        lower.contains("baichuan") -> "Baichuan"
+        lower.contains("internlm") -> "InternLM"
+        lower.contains("minicpm") || lower.contains("mini") -> "MiniCPM"
+        else -> "未知架构"
+    }
+    val thinking = lower.contains("think") || lower.contains("reason") ||
+        lower.contains("qwq") || lower.contains("deepseek")
+    val parts = mutableListOf("llama.cpp · $family")
+    parts += if (thinking) "可能支持思考" else "普通（无思考）"
+    return parts.joinToString(" · ")
+}

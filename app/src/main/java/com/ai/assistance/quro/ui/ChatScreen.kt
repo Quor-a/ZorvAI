@@ -1514,6 +1514,8 @@ private fun MessageList(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val lastMsg = messages.lastOrNull()
+    // 是否贴底（决定是否自动跟随流式输出）：列表还能继续向下滚 = 不在底部。
+    val isAtBottom by remember { derivedStateOf { !listState.canScrollForward } }
 
     /**
      * 把「最后一条消息的底部」贴住视口底部（而非把消息顶部对齐视口顶部）。
@@ -1529,12 +1531,19 @@ private fun MessageList(
     suspend fun pinToBottom() {
         if (messages.isEmpty()) return
         val lastItemIndex = messages.size
+        // 先把最后一项滚入视口。scrollToItem 在内部滚动块里只触发重排，真实测量高度要等下一帧布局落地。
         listState.scrollToItem(lastItemIndex)
+        // 关键修复（#滚动对齐）：等一帧让布局稳定，再读真实 item 高度——否则取到的是滚动前的旧布局，
+        // 导致「高于一屏的长消息」底部算不到位、最新 token 被推到视口下方看不见（即内容能到哪里 vs 滚动只到哪里）。
+        kotlinx.coroutines.delay(0)
         val layoutInfo = listState.layoutInfo
         val lastInfo = layoutInfo.visibleItemsInfo.lastOrNull { it.index == lastItemIndex } ?: return
         val viewportH = layoutInfo.viewportSize.height
-        val offset = if (lastInfo.size > viewportH) (viewportH - lastInfo.size) else 0
-        listState.scrollToItem(lastItemIndex, offset)
+        // 项比一屏高：用负偏移把「该项底部」对齐视口底部（scrollToItem 钳制到最大滚动），
+        // 保证输入框上方的最新内容始终可见；项比一屏矮时无需额外偏移（同样钳制到底部）。
+        if (lastInfo.size > viewportH) {
+            listState.scrollToItem(lastItemIndex, viewportH - lastInfo.size)
+        }
     }
 
     // 触发①：进入 / 切换会话 → 无条件落到底部看最新一条。
@@ -1549,32 +1558,20 @@ private fun MessageList(
         }
     }
 
-    // 触发③：流式回复增长（同条消息 content 变）→ 仅当用户停在底部附近才跟随，不打扰阅读历史；
-    // 跟随的是「最后一项底部」而非顶部，长消息也不会漏掉输入框下方涌出的新内容。
+    // 触发③：流式回复增长（同条消息 content 变）→ 仅当用户「停在底部」时才自动跟随；
+    // 用户若上滑阅读历史，isAtBottom=false，跳过自动滚动，由下方「回到底部」按钮兜底，
+    // 避免流式 token 持续把视口拽回底部、导致无法阅读上方内容（#auto-follow 回归修复）。
     val lastContentLen = (lastMsg?.text ?: "").length
     LaunchedEffect(lastContentLen) {
         if (messages.isEmpty()) return@LaunchedEffect
-        val lastItemIndex = messages.size
-        // 流式增长时无条件把最后一项底部贴住视口底（与 pinToBottom 一致的两步法）：
-        // 先 scrollToItem 把最后一项带入布局，再按「视口高 − 项高」算底部对齐偏移。
-        // ⚠️ 修复：旧实现要求最后一项已出现在 visibleItemsInfo 才滚动，导致流式回复一长高、
-        // 最后一项滑出视口后就不再跟随 →「自动定位最新内容」在中长回复上完全失效。
-        // 现在改为无条件先滚入，再算偏移，长回复/输入框下方涌出的新内容始终可见。
-        listState.scrollToItem(lastItemIndex)
-        val layoutInfo = listState.layoutInfo
-        val lastInfo = layoutInfo.visibleItemsInfo.lastOrNull { it.index == lastItemIndex } ?: return@LaunchedEffect
-        val viewportH = layoutInfo.viewportSize.height
-        // 项比视口高时把其底部贴住视口底部（offset 为负，scrollToItem 钳制到最大滚动）；
-        // 否则项能整屏容纳，顶部对齐即可。
-        val offset = if (lastInfo.size > viewportH) (viewportH - lastInfo.size) else 0
-        listState.scrollToItem(lastItemIndex, offset)
+        if (!isAtBottom) return@LaunchedEffect
+        pinToBottom()
     }
     // 注意：执行轨迹事件已统一在 ChatScreen 顶层订阅一次（单一真相源 traceLines），
     // 此处不再各自 collect 全局流，避免重复订阅 / 跨会话污染。
     val lastToolIdx = messages.indexOfLast { !it.mine && !it.tools.isNullOrEmpty() }
     // 互动条（scroll-to-bottom 交互）：用户上滑离开底部时浮出「回到底部」按钮，
     // 点击即跳到最新一条。与上方三触发自动滚底互补，作手动兜底。
-    val isAtBottom by remember { derivedStateOf { !listState.canScrollForward } }
     Box(modifier) {
     LazyColumn(
         modifier = Modifier
