@@ -10,6 +10,7 @@ import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
+import com.ai.assistance.quro.core.shizuku.QuroShizukuPkg
 import com.ai.assistance.quro.receiver.QuroDeviceAdminReceiver
 import com.ai.assistance.quro.service.QuroAccessibilityService
 import kotlinx.coroutines.Dispatchers
@@ -190,9 +191,20 @@ class QuroPrivilegeManager(private val context: Context) {
             putExtra("EXTRA_FRAGMENT_ARG_KEY", cn)
         }
         PrivilegeLevel.L2 -> {
-            val shizukuPkg = "moe.shizuku.manager"
-            context.packageManager.getLaunchIntentForPackage(shizukuPkg)
-                ?: Intent(Intent.ACTION_VIEW).apply { data = android.net.Uri.parse("market://details?id=$shizukuPkg") }
+            // 必须用设备上「实际安装」的包名拉起 Shizuku。旧代码写死 v11 旧包 moe.shizuku.manager，
+            // 在装了主流 v12+（moe.shizuku.privileged.api）的机器上 getLaunchIntentForPackage 返回 null，
+            // 于是跳去商店安装一个根本不存在的应用 —— 这正是「请求授权点了没反应」的直接原因。
+            val installed = QuroShizukuPkg.installed(context)
+            if (installed != null) {
+                context.packageManager.getLaunchIntentForPackage(installed)
+                    // 已安装但 Launcher Activity 被 ROM 隐藏时，用协议 action 兜底拉起
+                    ?: Intent(QuroShizukuPkg.Action.MAIN_ACTIVITY).setPackage(installed)
+            } else {
+                // 确实未安装：引导到商店安装 v12+ 主流包
+                Intent(Intent.ACTION_VIEW).apply {
+                    data = android.net.Uri.parse("market://details?id=${QuroShizukuPkg.storePackage()}")
+                }
+            }
         }
         PrivilegeLevel.L3 -> Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
             putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, ComponentName(context, QuroDeviceAdminReceiver::class.java))

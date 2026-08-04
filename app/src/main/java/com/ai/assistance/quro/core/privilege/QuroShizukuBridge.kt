@@ -3,6 +3,7 @@ package com.ai.assistance.quro.core.privilege
 import android.content.Context
 import android.content.pm.PackageManager
 import com.ai.assistance.quro.core.shizuku.QuroShizuku
+import com.ai.assistance.quro.core.shizuku.QuroShizukuPkg
 import rikka.shizuku.Shizuku
 
 /**
@@ -17,17 +18,15 @@ import rikka.shizuku.Shizuku
  */
 object QuroShizukuBridge {
 
-    private const val SHIZUKU_PKG = "moe.shizuku.manager"
-    private const val SHIZUKU_PKG_LEGACY = "moe.shizuku.privileged.api"
-
-    /** Shizuku 应用是否已安装。 */
-    fun isInstalled(ctx: Context): Boolean {
-        val pm = ctx.packageManager
-        // 优先判定用户实际安装的 Shizuku 管理器应用（v396 修复误报「未安装」）
-        if (runCatching { pm.getPackageInfo(SHIZUKU_PKG, 0) }.getOrNull() != null) return true
-        // 兜底：隐藏的系统配对组件（部分 ROM 上可能独立存在）
-        return runCatching { pm.getPackageInfo(SHIZUKU_PKG_LEGACY, 0) }.getOrNull() != null
-    }
+    /**
+     * Shizuku 应用是否已安装。
+     *
+     * 包名判定统一走 [QuroShizukuPkg]（v12+ `moe.shizuku.privileged.api` 优先，
+     * 回退 v11 旧包 `moe.shizuku.manager`），禁止在此硬编码。
+     * 注：旧代码这里的两个常量命名恰好写反了（把 privileged.api 标成 LEGACY），
+     * 虽然双探测逻辑上不影响结果，但极易误导后来者，故一并收敛掉。
+     */
+    fun isInstalled(ctx: Context): Boolean = QuroShizukuPkg.isInstalled(ctx)
 
     /** Shizuku 服务(ContentProvider)是否就绪——即 Shizuku 应用已在运行、可提供 Binder。 */
     fun isProviderReady(ctx: Context): Boolean {

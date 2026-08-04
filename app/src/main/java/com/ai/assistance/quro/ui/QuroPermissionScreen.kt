@@ -37,11 +37,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.ai.assistance.quro.core.permissions.QuroPermissionHelper
 import com.ai.assistance.quro.core.permissions.QuroPermissionItem
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
 import com.ai.assistance.quro.core.privilege.*
 import com.ai.assistance.quro.core.shizuku.QuroShizuku
+import com.ai.assistance.quro.core.shizuku.QuroShizukuPkg
 import com.ai.assistance.quro.service.QuroAccessibilityService
 import com.ai.assistance.quro.ui.theme.QuroTheme
 import com.ai.assistance.quro.ui.theme.Accent
@@ -50,9 +52,26 @@ import com.ai.assistance.quro.ui.theme.Sage
 import com.ai.assistance.quro.ui.theme.Muted
 import com.ai.assistance.quro.ui.theme.Line
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.collectAsState
+
+/** L2 轮询兜底间隔（主路径是 Binder 事件监听，故可放宽）。 */
+private const val L2_POLL_INTERVAL_MS = 2500L
+
+/** 异步探测尚未返回时的占位文案。 */
+private const val PROBING_HINT = "正在探测…"
+
+/**
+ * 生成「探测中」占位状态，保证 states 在任何时刻都含全部四个等级。
+ *
+ * 必要性：UI 用 states[LEVEL] 取值渲染卡片，而真正的 probeAsync() 要等首帧组合之后
+ * 的 LaunchedEffect 才执行。若初值为 emptyMap()，首帧就会取不到值。
+ */
+private fun probingStates(): Map<PrivilegeLevel, PrivilegeState> =
+    PrivilegeLevel.entries.associateWith { PrivilegeState(it, false, PROBING_HINT) }
 
 /**
  * 权限管理子系统。
@@ -72,12 +91,20 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
     val mgr = remember { QuroPrivilegeManager(ctx) }
 
     // FIX P0-2: 旧代码 mgr.probe() 在组合期同步调用 → checkRoot() 阻塞主线程最多 5s → ANR。
-    // 改为初始空 map + LaunchedEffect 异步探测。
-    var states by remember { mutableStateOf<Map<PrivilegeLevel, PrivilegeState>>(emptyMap()) }
+    // 改为「探测中」占位 map + LaunchedEffect 异步探测。
+    //
+    // ⚠️ 必须用占位而不是 emptyMap()：下方 PrivilegeCard 用 states[LEVEL]!! 取值，
+    // 而 LaunchedEffect 在首帧组合「之后」才执行 → 首帧拿到 emptyMap 会直接 NPE 崩溃。
+    // 用 probing() 保证任何时刻四个等级都有值。
+    var states by remember { mutableStateOf(probingStates()) }
     var stdItems by remember { mutableStateOf(stdPerms(ctx)) }
     var pending by remember { mutableStateOf<Pair<PrivilegeLevel, String>?>(null) }
     var deferred = remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
     var showAudit by remember { mutableStateOf(false) }
+
+    /** 安全取值：即便某等级缺失也不崩，退化为「探测中」。 */
+    fun st(level: PrivilegeLevel): PrivilegeState =
+        states[level] ?: PrivilegeState(level, false, PROBING_HINT)
 
     // 首次进入：异步探测（checkRoot 在 IO 线程跑，不阻塞 UI）
     LaunchedEffect(Unit) { states = mgr.probeAsync() }
@@ -90,9 +117,14 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
         stdItems = stdPerms(ctx)
     }
 
-    // 轻量刷新：仅重探 Shizuku(L2)，避免每次轮询都跑 L4 的 su 检测（#915）
+    // 轻量刷新：仅重探 Shizuku(L2)，避免每次轮询都跑 L4 的 su 检测（#915）。
+    // state() 内部要查 PackageManager + ping Binder，属于 IO，放到 Dispatchers.IO 上做，
+    // 只把结果切回主线程赋值，避免在主线程/组合期做阻塞调用。
     fun refreshL2() {
-        states = states + (PrivilegeLevel.L2 to QuroShizukuBridge.state(ctx))
+        scope.launch {
+            val l2 = withContext(Dispatchers.IO) { QuroShizukuBridge.state(ctx) }
+            states = states + (PrivilegeLevel.L2 to l2)
+        }
     }
 
     // 运行时权限真实请求（存储 / 位置）
@@ -125,12 +157,20 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
 
     OnResume { refresh() }
 
-    // 轮询重探 L2 Shizuku：Shizuku 在自身应用内授权后不会触发本应用 onResume / Binder 事件，
-    // 导致权限页状态不刷新、看起来「没修复」。每隔 1.5s 轻量重探一次，授权后立即反映（#915）。
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1500)
-            refreshL2()
+    // 重探 L2 Shizuku：用户在 Shizuku 应用内单独授权时不一定触发本应用 onResume 或 Binder 事件。
+    //
+    // FIX（E-4）：旧实现是 LaunchedEffect(Unit){ while(true){ delay(1500); refreshL2() } } ——
+    // 无任何生命周期守卫，页面切后台/被覆盖时照跑，且 refreshL2 现已走 IO，等于每 1.5s 白起一个协程。
+    // 改为 repeatOnLifecycle(STARTED)：不可见即取消，回到前台自动重启；间隔放宽到 2500ms。
+    // 主路径是下方的 Binder 事件监听（addBinderReceivedListener / addBinderDeadListener），
+    // 此处轮询仅作兜底：Shizuku 已连接、用户仅在其应用内改授权时不会发 binder 事件。
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                delay(L2_POLL_INTERVAL_MS)
+                refreshL2()
+            }
         }
     }
 
@@ -143,12 +183,23 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
         onDispose { am.removeAccessibilityStateChangeListener(listener) }
     }
 
-    // Shizuku Binder 就绪时即时刷新：用户在 Shizuku 应用中授权/启动后，Binder 到达即重探状态，
-    // 解决「授权已完成但权限页仍显示未授权」的问题（部分机型不会触发 Activity onResume）。
+    // Shizuku Binder 事件驱动刷新（E-4 的「更优解」，轮询降级为兜底）：
+    //  - onBinderReceived：用户在 Shizuku 应用中启动服务/授权后 Binder 到达，立即重探
+    //  - onBinderDead：Shizuku 服务被杀时立刻把 L2 打回不可用，避免 UI 停留在「已就绪」的假象
+    // 两个 listener 都在 onDispose 里移除，反复进出页面不会累积。
     DisposableEffect(ctx) {
-        val l = Shizuku.OnBinderReceivedListener { refresh() }
-        Shizuku.addBinderReceivedListener(l)
-        onDispose { Shizuku.removeBinderReceivedListener(l) }
+        val received = Shizuku.OnBinderReceivedListener { refresh() }
+        val dead = Shizuku.OnBinderDeadListener { refreshL2() }
+        runCatching {
+            Shizuku.addBinderReceivedListener(received)
+            Shizuku.addBinderDeadListener(dead)
+        }
+        onDispose {
+            runCatching {
+                Shizuku.removeBinderReceivedListener(received)
+                Shizuku.removeBinderDeadListener(dead)
+            }
+        }
     }
 
     if (showAudit) {
@@ -201,11 +252,11 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                 level = PrivilegeLevel.L1,
                 title = "无障碍服务",
                 channel = "AccessibilityService",
-                state = states[PrivilegeLevel.L1]!!,
+                state = st(PrivilegeLevel.L1),
                 rationale = "UI 交互 / 屏幕内容读取（基础自动化）。",
                 onRequest = { requestElevation(PrivilegeLevel.L1, "需要无障碍权限以执行界面自动化与屏幕读取。") },
-                testLabel = if (states[PrivilegeLevel.L1]!!.available) "测试" else null,
-                onTest = if (states[PrivilegeLevel.L1]!!.available) {
+                testLabel = if (st(PrivilegeLevel.L1).available) "测试" else null,
+                onTest = if (st(PrivilegeLevel.L1).available) {
                     {
                         val ok = QuroAccessibilityService.instance
                             ?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) ?: false
@@ -217,7 +268,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                 level = PrivilegeLevel.L2,
                 title = "Shizuku 服务",
                 channel = "Shizuku / ADB Bridge",
-                state = states[PrivilegeLevel.L2]!!,
+                state = st(PrivilegeLevel.L2),
                 rationale = "系统 API 调用 / 静默安装 / 冻结应用（免 Root）。",
                 onRequest = {
                     // 🔧 立即可见反馈：杜绝"点了按钮完全没反应"的体感
@@ -227,31 +278,58 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                     // 因为 Shizuku 的权限本来就是在 Shizuku Manager 应用里授予的；程序化 requestPermission
                     // 在部分机型/版本会"静默失败"——既不弹框也不报错，正是之前"没反应"的真凶）。
                     fun openShizukuManager() {
-                        val permIntent = android.content.Intent("moe.shizuku.manager.intent.action.REQUEST_PERMISSION")
-                            .setPackage("moe.shizuku.manager")
+                        // FIX（E-2）：这里原来把 setPackage 写死成 v11 旧包 "moe.shizuku.manager"，
+                        // 在装了主流 v12+（moe.shizuku.privileged.api）的机器上 startActivity 抛
+                        // ActivityNotFoundException → 落进 catch → 按钮静默失败，就是「点了没反应」。
+                        // 必须用设备上实际安装的包名。
+                        // 注意：action 字符串里的 moe.shizuku.manager.* 是协议命名空间不是包名，保持原样。
+                        val pkg = QuroShizukuPkg.installed(ctx)
+                        if (pkg == null) {
+                            Toast.makeText(ctx, "未检测到 Shizuku，请先安装后再授权", Toast.LENGTH_LONG).show()
+                            runCatching {
+                                ctx.startActivity(
+                                    android.content.Intent(android.content.Intent.ACTION_VIEW)
+                                        .setData(android.net.Uri.parse("market://details?id=${QuroShizukuPkg.storePackage()}"))
+                                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                            }.onFailure {
+                                // 无商店（F-Droid / 无 GMS 设备）：退回官网
+                                runCatching {
+                                    ctx.startActivity(
+                                        android.content.Intent(android.content.Intent.ACTION_VIEW)
+                                            .setData(android.net.Uri.parse(QuroShizukuPkg.HOMEPAGE))
+                                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                }
+                            }
+                            return
+                        }
+                        val permIntent = android.content.Intent(QuroShizukuPkg.Action.REQUEST_PERMISSION)
+                            .setPackage(pkg)
                         val resolved = runCatching { permIntent.resolveActivity(ctx.packageManager) }.getOrNull()
                         if (resolved != null) {
                             try { ctx.startActivity(permIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); return } catch (_: Exception) {}
                         }
-                        val launch = ctx.packageManager.getLaunchIntentForPackage("moe.shizuku.manager")
+                        val launch = ctx.packageManager.getLaunchIntentForPackage(pkg)
                         if (launch != null) {
                             try { ctx.startActivity(launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
                         } else {
                             // getLaunchIntentForPackage 返回 null 不代表未安装——
                             // Shizuku Manager 的 Launcher Activity 可能被隐藏或受 ROM 限制。
-                            // 此时 isInstalled() 已确认包存在，应引导用户手动打开。
+                            // 此时 installed() 已确认包存在，应引导用户手动打开。
                             Toast.makeText(ctx, "无法自动打开 Shizuku 管理器，请手动打开 Shizuku 应用并授权本应用", Toast.LENGTH_LONG).show()
                             // 尝试用通用 ACTION 启动（不依赖 launcher intent）
                             try {
-                                ctx.startActivity(android.content.Intent("moe.shizuku.manager.intent.action.MAIN")
-                                    .setPackage("moe.shizuku.manager")
+                                ctx.startActivity(android.content.Intent(QuroShizukuPkg.Action.MAIN_ACTIVITY)
+                                    .setPackage(pkg)
                                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
                             } catch (_: Exception) { /* 静默 */ }
                         }
                     }
 
-                    if (!QuroShizuku.isInstalled(ctx)) {
-                        Toast.makeText(ctx, "未检测到 Shizuku，请先安装后再授权", Toast.LENGTH_LONG).show()
+                    if (!QuroShizukuPkg.isInstalled(ctx)) {
+                        // 未安装：openShizukuManager 内部会跳商店（无商店则跳官网），不再只弹一个 Toast 了事
+                        openShizukuManager()
                         return@PrivilegeCard
                     }
                     if (QuroShizuku.isReady) {
@@ -317,8 +395,8 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                         openShizukuManager()
                     }
                 },
-                testLabel = if (states[PrivilegeLevel.L2]!!.available) "状态" else null,
-                onTest = if (states[PrivilegeLevel.L2]!!.available) {
+                testLabel = if (st(PrivilegeLevel.L2).available) "状态" else null,
+                onTest = if (st(PrivilegeLevel.L2).available) {
                     { QuroShizukuBridge.state(ctx).details }
                 } else null,
             )
@@ -326,24 +404,24 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                 level = PrivilegeLevel.L3,
                 title = "设备管理员",
                 channel = "DevicePolicyManager",
-                state = states[PrivilegeLevel.L3]!!,
+                state = st(PrivilegeLevel.L3),
                 rationale = "锁屏 / 清除数据 / 禁用摄像头。",
                 onRequest = { requestElevation(PrivilegeLevel.L3, "需要设备管理员权限以启用锁屏等高级系统管理能力。") },
-                testLabel = if (states[PrivilegeLevel.L3]!!.available) "状态" else null,
-                onTest = if (states[PrivilegeLevel.L3]!!.available) {
-                    { "设备管理员：${states[PrivilegeLevel.L3]!!.details}（纯净架构下不主动锁屏）" }
+                testLabel = if (st(PrivilegeLevel.L3).available) "状态" else null,
+                onTest = if (st(PrivilegeLevel.L3).available) {
+                    { "设备管理员：${st(PrivilegeLevel.L3).details}（纯净架构下不主动锁屏）" }
                 } else null,
             )
             PrivilegeCard(
                 level = PrivilegeLevel.L4,
                 title = "ROOT 访问",
                 channel = "su / Magisk",
-                state = states[PrivilegeLevel.L4]!!,
+                state = st(PrivilegeLevel.L4),
                 rationale = "内核级操作 / 系统文件修改 / SELinux（最高风险）。",
                 onRequest = { Toast.makeText(ctx, "请在 Root 管理器中允许 CapOS", Toast.LENGTH_LONG).show() },
-                testLabel = if (states[PrivilegeLevel.L4]!!.available) "状态" else null,
-                onTest = if (states[PrivilegeLevel.L4]!!.available) {
-                    { "ROOT：${states[PrivilegeLevel.L4]!!.details}（纯净架构下不执行 root 命令）" }
+                testLabel = if (st(PrivilegeLevel.L4).available) "状态" else null,
+                onTest = if (st(PrivilegeLevel.L4).available) {
+                    { "ROOT：${st(PrivilegeLevel.L4).details}（纯净架构下不执行 root 命令）" }
                 } else null,
             )
 

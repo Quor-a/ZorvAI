@@ -207,16 +207,21 @@ object QuroShizuku {
             Shizuku.requestPermission(requestCode)
         } catch (_: Exception) {
             Log.w(TAG, "Shizuku API 调用失败，请手动授权")
-            try { activity.startActivity(android.content.Intent("moe.shizuku.manager.intent.action.REQUEST_PERMISSION")) }
-            catch (_: Exception) { /* 忽略 */ }
+            // action 是协议常量（v12+ 依然以 moe.shizuku.manager. 为前缀），但 setPackage 必须用
+            // 设备上实际安装的包名，否则在主流 Shizuku 上抛 ActivityNotFoundException。
+            val pkg = QuroShizukuPkg.installed(activity)
+            if (pkg != null) {
+                try {
+                    activity.startActivity(
+                        android.content.Intent(QuroShizukuPkg.Action.REQUEST_PERMISSION).setPackage(pkg)
+                    )
+                } catch (_: Exception) { /* 忽略 */ }
+            }
         }
     }
 
-    fun isInstalled(ctx: Context): Boolean {
-        val pm = ctx.packageManager
-        if (runCatching { pm.getPackageInfo("moe.shizuku.manager", 0) }.getOrNull() != null) return true
-        return runCatching { pm.getPackageInfo("moe.shizuku.privileged.api", 0) }.getOrNull() != null
-    }
+    /** Shizuku 是否已安装。包名判定统一走 [QuroShizukuPkg]，禁止在此硬编码。 */
+    fun isInstalled(ctx: Context): Boolean = QuroShizukuPkg.isInstalled(ctx)
 
     // ════════════════════════════════════════
     // 命令执行（双路径：AIDL 优先 → 反射降级）

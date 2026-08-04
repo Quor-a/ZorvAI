@@ -11,6 +11,7 @@ import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import androidx.core.content.ContextCompat
 import com.ai.assistance.quro.core.privilege.QuroShizukuBridge
+import com.ai.assistance.quro.core.shizuku.QuroShizukuPkg
 import com.ai.assistance.quro.receiver.QuroDeviceAdminReceiver
 import com.ai.assistance.quro.service.QuroAccessibilityService
 import java.io.File
@@ -33,8 +34,6 @@ data class QuroPermissionItem(
 )
 
 object QuroPermissionHelper {
-
-    private const val SHIZUKU_PKG = "moe.shizuku.manager"
 
     /** 探测 su 二进制常见路径（不真正请求 root，避免弹窗/风险）。 */
     private val ROOT_BINARIES = listOf(
@@ -140,7 +139,11 @@ object QuroPermissionHelper {
 
     // 6) Shizuku 服务
     private fun shizuku(ctx: Context): QuroPermissionItem {
-        val installed = isPackageInstalled(ctx, SHIZUKU_PKG)
+        // 包名判定统一走 QuroShizukuPkg：主流 v12+ 是 moe.shizuku.privileged.api，
+        // 旧代码写死 v11 的 moe.shizuku.manager，在主流机器上会误报「未安装」并把用户
+        // 导去商店安装一个不存在的应用。
+        val installedPkg = QuroShizukuPkg.installed(ctx)
+        val installed = installedPkg != null
         val authorized = installed && QuroShizukuBridge.isAuthorized(ctx)
         return QuroPermissionItem(
             id = "shizuku",
@@ -149,9 +152,11 @@ object QuroPermissionHelper {
             granted = authorized,
             guideIntent = when {
                 !installed -> Intent(Intent.ACTION_VIEW).apply {
-                    data = Uri.parse("market://details?id=$SHIZUKU_PKG")
+                    data = Uri.parse("market://details?id=${QuroShizukuPkg.storePackage()}")
                 }
-                !authorized -> ctx.packageManager.getLaunchIntentForPackage(SHIZUKU_PKG)
+                // 已安装但未授权：拉起实际安装的那个包；Launcher Activity 被 ROM 隐藏时用协议 action 兜底
+                !authorized -> ctx.packageManager.getLaunchIntentForPackage(installedPkg!!)
+                    ?: Intent(QuroShizukuPkg.Action.MAIN_ACTIVITY).setPackage(installedPkg)
                 else -> null
             },
             note = when {
@@ -203,13 +208,6 @@ object QuroPermissionHelper {
         val am = ctx.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
         val enabled = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
         return enabled.any { it.id == serviceFlatName }
-    }
-
-    private fun isPackageInstalled(ctx: Context, pkg: String): Boolean {
-        return runCatching {
-            ctx.packageManager.getPackageInfo(pkg, 0)
-            true
-        }.getOrDefault(false)
     }
 
     // ---- 实际能力调用（已授权后真实执行，非占位） ----
