@@ -6,11 +6,11 @@
 
 ### 运行在 Android 上的设备端 AI Agent · 智能体助手
 
-*On-device AI Agent for Android — tools, personas, memory, and a shared runtime, all on your phone.*
+*On-device AI Agent for Android — tools, personas, memory, an offline LLM engine, and a shared runtime, all on your phone.*
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android-3DDC84.svg)](https://www.android.com)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF.svg)](https://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF.svg)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-1.7-4285F4.svg)](https://developer.android.com/compose)
 [![GeckoView](https://img.shields.io/badge/GeckoView-MPL--2.0-success.svg)](https://mozilla.github.io/geckoview/)
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI?label=release)](https://github.com/Quor-a/ZorvAI/releases)
@@ -19,23 +19,23 @@
 
 </div>
 
-> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin + Jetpack Compose ｜ **compileSdk 36 / minSdk 26 / targetSdk 34**
+> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose ｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34**
 >
-> Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用内置工具，运行 Node / Python / SSH / Java / Rust / Go 共享运行时，并通过飞书、QQ、微信与你保持在线。
+> Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **120+ 内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
 
 ---
 
 ## 🌐 开源地址 · Open Source
 
-> **本项目完全开源，双平台托管 · GitHub：[github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI) ｜ Gitee：[gitee.com/ZorvAI/ZorvAI](https://gitee.com/ZorvAI/ZorvAI)**
+> **本项目完全开源，多平台托管 · GitHub：[github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI) ｜ Gitee：[gitee.com/ZorvAI/ZorvAI](https://gitee.com/ZorvAI/ZorvAI) ｜ GitLab：[jihulab.com/quor-a-group/ZorvAI](https://jihulab.com/quor-a-group/ZorvAI)**
 >
 > **🔌 受控端浏览器（ZorvAI 浏览器）已独立开源 · GitHub：[github.com/Quor-a/ZorvBrowser](https://github.com/Quor-a/ZorvBrowser) ｜ Gitee：[gitee.com/ZorvAI/ZorvBrowser](https://gitee.com/ZorvAI/ZorvBrowser)**（独立仓库，含 v1.0.12 源码与 APK）
 >
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
-> - 🔗 主程序 APK 直链（v1.0.6）：[ZorvAI-debug-v1.0.6.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/ZorvAI-debug-v1.0.6.apk)
-> - 🔗 主程序 APK（v1.0.15，最新）：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
+> - 🔗 主程序 APK（v1.0.16，full 风味，含离线引擎，最新）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.16/app-full-debug.apk)
+> - 🔗 主程序 APK（v1.0.15）：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
 > - 🔗 主程序 APK（v1.0.14）：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
-- 🔗 主程序 APK（v1.0.12）：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
+> - 🔗 主程序 APK（v1.0.12）：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
 > - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.14 · 独立仓，最新）：[ZorvBrowser-aci-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.14/ZorvBrowser-aci-debug-v1.0.14.apk)
 > - 🧩 ACI 核心库 AAR：[aci-core-release.aar](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/aci-core-release.aar)
 > - 📖 ACI 开发者手册：[docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md)
@@ -51,13 +51,153 @@
 |--------|----------|
 | **对话 UI（Compose）** | ChatScreen 对话框、PersonaBar 人格卡、PermissionModeBar（「AI 自动保存记忆」+「深度思考」并排胶囊）、回到底部浮动按钮、全屏预览、Markdown 与代码块渲染 |
 | **Agent 核心** | 多会话隔离（`liveBuffers` 按会话独立）、种子快照（`convBase`）、显示刷新闸门（`canUpdateDisplay`）、多轮 `[第N轮]` hidden 标记防串台、系统提示词构建、工具注册表（`QuroToolRegistry.active`）、技能系统（`QuroSkill` → 注册为 `skill__{name}` 工具） |
-| **工具 / 能力层** | `launch_app`、无障碍 `input_text`/`tap_screen`/`read_screen`（节点树，非截图）、`cms_*` 模块调用、`cms_engine_status`、`Agent 键盘 ai_type_text`/`ai_press_enter`/`ai_press_send`（注册为系统输入法的极简 IME，向其他 App 灌字）、`scheduler` 定时任务、`memory_*` 记忆工具 |
+| **工具 / 能力层** | **120+ 内置工具**（`buildQuroRegistry` 注册 123 项 + 导入工具 + 可调用技能）：无障碍 `input_text`/`tap_screen`/`read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text`/`ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
+| **离线 LLM 引擎** | `full` 风味内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 剥离、本地工具调用、会话复用；离线也能对话 |
 | **特权层 L1–L5** | 无障碍 → Shizuku(uid 0/2000) → 设备管理员 → ROOT(su) → 应用内 Linux(proot + Alpine) |
+| **终端 / Linux 沙箱** | NovaTerm 自研沙盒 + proot/Alpine 应用内 Linux 环境，终端 UI 直接操作 |
+| **MCP（Model Context Protocol）** | MCP 客户端（WebSocket / HTTP 传输）、应用内本地 MCP 服务，可由 AI 部署/调用 |
 | **引擎 / 运行时** | CMS 引擎共享运行时（NODE / PYTHON / SSH / JAVA / RUST / GO）、CMS v2 模块、GeckoView 浏览器（MPL-2.0）、本地语音 STT / TTS |
 | **IM 通道** | 飞书（WebSocket）/ QQBot（官方 WS）/ 微信 iLink（HTTP 长轮询 35s）；三家手机端均无公网端点 |
-| **ACI 控制台 UI（LAN 控制台）** | 控制端 `QuroAciCenterScreen` 按 `console_ui` 能力拉取 SDUI 快照、复用本地 `AciConsoleScreen` 渲染器（`core/aci` 包，已从 `lanui` LAN 范式解耦，纯本地零网络）；受控浏览器 `ConsoleBackend` 提供 `console_ui`(快照) / `console_action`(increment/reset/submit_note)；纯接线、零侵入 |
+| **语音** | 多供应商 TTS（EDGE_TTS / OPENAI_COMPAT / MINIMAX / SILICONFLOW / 阿里云 等）、端侧 Whisper STT、语音悬浮球 |
+| **知识 / 记忆 / 人格 / Bot** | 向量语义 RAG 知识库、记忆库、人格/灵魂配置、多通道机器人（QQ/飞书/微信/本地） |
+| **ACI 控制台 UI（LAN 控制台）** | 控制端 `QuroAciCenterScreen` 按 `console_ui` 能力拉取 SDUI 快照、复用本地 `AciConsoleScreen` 渲染器（`core/aci` 包，纯本地零网络） |
 | **数据 / 持久化** | `QuroConversationStore` 磁盘会话仓库、启动自愈 `DATA_REPAIR` 去重、诊断日志写入手机公共 `Download/QuroAI_logs/` |
+| **插件系统** | QuickJS / WebView 双后端插件运行时，插件管理与市场 |
 | **定时任务** | `QuroScheduler`：`once` / `recurring`（rrule）、`endAt` 结束机制 |
+
+---
+
+## 🗺️ 功能全览 · Feature Map
+
+下面按模块列出 Zorv AI **已在代码中实现**的全部能力（每项均可在 `app/src/main/java/com/ai/assistance/quro/` 下查证）。
+
+### 1. 智能对话核心（Chat & Messages）
+- 消息流 + **流式输出**（云端/本地共用 `onToken` 增量回调）
+- **Markdown / 代码渲染**：围栏代码块、标题、引用、列表、行内 HTML；代码块支持「代码 / 预览」双 Tab、复制、运行（预览用 WebView 且已禁用 JS）
+- **ThinkBlock 思考段可视化**：受「深度思考」开关控制，折叠展示 `<think>` 推理链路
+- **ToolCallBlock 工具调用可视化**：AI 经 ReAct 循环调用的工具以结构化卡片内嵌在气泡中，展示参数、状态（运行/成功/警告/失败）、**执行耗时（ms / s）** 与执行轨迹
+- **消息操作栏**：每条 AI 回复下方提供 `复制 / 追问 / 分享 / 删除 / 重试`——删除可精确移除单条消息或聚合气泡对应的全部底层消息（含连带清理隐藏 tool 结果消息），实时同步内存 store 与磁盘
+- **多轮聚合**：同一回合连续的 assistant(+隐藏 tool) 消息聚合成单个气泡流式增长
+- **富组件融进气泡（QuroChatCard）**：AI 经 `ui_widget` / `ui_card` 下发的图表、待办、表单、进度等可视化组件直接合体进气泡
+- **历史会话管理**：创建 / 删除单条 / 清空全部、侧栏会话列表
+- **会话导出**：设置入口「导出对话 → 导出为文本」
+
+### 2. 内置技能 Skills（63 个 · 首次启动自动注入）
+- 轻量技能系统：`QuroSkill` → 注册为 `skill__{name}` 工具，可被 LLM 自动编排
+- v1.0.16 起将 WorkBuddy 技能库全部 **63 个技能**转化为 Zorv AI 品牌版本，打包进 `app/src/main/assets/skills/zorv/`（含 `manifest.json`，每个技能含稳定 id `zorv_<sha1>`、名称、描述与正文）
+- 首次启动经 `QuroSkillStore.seedBuiltinZorvSkills` **幂等注入**为默认启用、可调用内置技能；用户在「设置 → 技能」可查看/启停
+- 技能方向（部分）：前端/设计、部署/云、内容/创作、搜索/情报、IM/媒体、效率/工程、短视频/爬虫、写作/文档、付费咨询等
+
+### 3. 离线 LLM 引擎（MNN / llama.cpp）
+- **仅 `full` 风味**：`QuroLocalEngineNative` 驱动 `MNNLlmSession` / `LlamaSession`，支持流式、`<think>` 剥离、本地工具调用解析、会话常驻与门禁
+- `core/model/QuroLocalModelRepository.kt` 负责本地模型仓库/加载
+- `fdroid` 风味通过 `QuroLocalEnginePlaceholder` 降级（提示原生推理未接入），因此**离线对话需安装 full 风味包**
+
+### 4. 应用内终端 & Linux 沙箱
+- `core/terminal/QuroTerminalController`：proot 优先、否则设备 `sh` 的会话控制器
+- `core/linux/QuroLinuxEnv`：从镜像下载 Alpine minirootfs + `libproot.so`，提供应用内 Linux 环境
+- `core/novaterm/`：NovaTerm 自研沙盒（FileSystem / ProcessWatcher / RootExecutor / SandboxExecutor / CommandDispatcher / BuiltinCommand 等）
+- 终端 UI：`QuroTerminalScreen`（集成 NovaTerm）、工具栏入口
+
+### 5. MCP（Model Context Protocol）
+- `core/mcp/QuroMcpClient`：外部 MCP 服务器客户端，`initialize` 握手（2025-03-26 协议）、`listTools` / `callTool`
+- 传输层：WebSocket（`QuroMcpWsClient`）、本地 HTTP（`QuroMcpHttpServer`）
+- 应用内本地 MCP 服务：`QuroLocalMcpManager` / `QuroLocalMcpServer` / `QuroLocalMcpDispatcher`（`McpDeployTool` / `McpUndeployTool` 可让 AI 把 MCP 服务部署到应用内）
+- 设置 UI：`QuroMcpSettingsScreen`
+
+### 6. 工具系统（120+ 内置工具）
+注册入口 `core/tools/QuroBuiltInTools.kt : buildQuroRegistry()`，实际注册 **123** 项（另含导入工具与可调用技能，运行时更多）。按能力归类：
+
+| 类别 | 代表工具 |
+|------|----------|
+| 基础/演示 | Clock、DeviceInfo、Calculator |
+| 系统/设备（L0） | GetBattery、GetWifi、GetNetwork、GetSensors、Vibrate、Clipboard、ListApps、LaunchApp、GetNotifications、Bluetooth、ToggleFlashlight |
+| 通信 | ReadSms、SendSms、ReadContacts |
+| 日历 | ReadCalendar、WriteCalendar |
+| 文件 | ListFiles、ReadTextFile、WriteFile、DeleteFile、MakeDirectory、MoveFile、CopyFile、FindFiles、FileInfo、BrowseFiles |
+| 位置 | GetLocation、Geocode |
+| 媒体 | ListMedia、LocalMusicPlayer、MusicPlay、LocalVideoPlayer |
+| 闹钟/定时 | SetAlarm、ScheduleTask、ListScheduledTasks、DeleteScheduledTask |
+| 网络/Web | HttpRequest、OpenWeb、AiBrowser |
+| 语音合成 | Speak、StopSpeak（TTS 工具） |
+| Intent/广播 | ExecuteIntent、SendBroadcast、RunCode |
+| CMS v2 模块 | QuroCmsList/Call/Deploy/Undeploy/Status/EngineStatus/Logs/Result/RunDag |
+| ACI / 特权 | QuroAciList/Call、QuroPrivStatus |
+| 记忆/经验 | QuroMemorySave/List/Search/Delete、QuroExperienceLog/Query/Correct/VersionCheck |
+| L1 无障碍控屏 | ReadScreen、GetForegroundApp、TapScreen、SwipeScreen、InputText、AiKeyboardType/PressEnter/Send、ScrollScreen、GlobalAction |
+| L2 Shizuku | ShizukuExec、ShizukuRootExec、FreezeApp、InstallApp、ShizukuStatus |
+| L3 设备管理员 | LockScreen、DeviceAdminStatus、SetCameraDisabled |
+| L4 Root | RootExec、RootStatus |
+| L5 应用内 Linux | LinuxRun/Install/Start/Stop/Status |
+| 终端驱动 | TerminalDrive/Exec/Write/Kill/Status/Interrupt |
+| 知识库 | KnowledgeSearch/Add、KnowledgeManage、QuroRagKnowledge（向量语义 RAG，无 Key 降级词法检索） |
+| 文档 | AiwpsCreate/Read/Edit（docx/xlsx/pptx/pdf…） |
+| UI 动作/卡片/组件 | UiAction 系列、UiCard、UiWidget（可交互内联 UI） |
+| MCP | McpServers/ListTools/Call、McpDeploy/Undeploy/ListLocal |
+
+### 7. 语音 / TTS / STT
+- **TTS 合成（多供应商）**：`QuroTtsProvider` 支持 EDGE_TTS、OPENAI_COMPAT、MINIMAX、SILICONFLOW、TTS302、COZECN、GIZWITS、ACGN、ALIYUN 等；情绪标签跟随文本
+- **STT 语音识别**：Android `SpeechRecognizer` + 端侧 `QuroOnDeviceAsr`（sherpa-onnx-whisper-tiny 本地 Whisper，约 85MB onnx，离线可用）
+- **悬浮球**：`QuroVoiceBallView`，语音输入入口，由 `voiceBallEnabled` 开关控制
+
+### 8. 媒体 / 浏览器 / 文档
+- **内置浏览器**：`QuroBrowserScreen`（GeckoView）
+- **媒体浏览器 / 音乐 / 视频**：`QuroMediaBrowser`、`QuroMusicPlayerScreen`、`QuroVideoPlayerScreen`
+- **文档查看**：`QuroDocumentViewer` / `QuroDocOpener`（分发 docx/xlsx/pptx/pdf 等）
+- **OnlyOffice**：`QuroOnlyOfficeScreen`
+
+### 9. 知识库 / 记忆 / 人格 / 机器人
+- **知识库（RAG）**：`core/knowledge/QuroKnowledgeRag.kt`，离线可用的向量语义检索，无 API Key 降级词法检索
+- **记忆库**：`core/memory/QuroMemoryStore.kt`（MemorySave/List/Search/Delete）
+- **人格 / 灵魂**：`core/soul/QuroSoulPrompt.kt`、`QuroSoulUi`、`QuroPersonaViewModel`
+- **机器人 Bot**：`core/bot/`（QQ / 飞书 / 微信 iLink / 本地适配器），`QuroBotSettingsScreen` 配置
+
+### 10. 设备控制 / 权限 / Shizuku / ACI
+- **Shizuku 集成**：`core/shizuku/`（QuroShizuku、QuroShellService），工具 ShizukuExec/FreezeApp/InstallApp
+- **特权管理**：`core/privilege/`（Root/Shizuku 桥、审计）
+- **ACI（Agent Capability Interface）**：`core/aci/`（Manager/Registry/Protocol/Adapter/CredentialVault/CallAudit），工具 QuroAciList/Call，`QuroAciCenterScreen`
+- **权限管理**：`core/permissions/QuroPermissionHelper`、`QuroPermissionScreen`（含审计入口）
+
+### 11. 模型配置
+- **在线多供应商**：`core/model/ApiProviderType`（OPENAI / ANTHROPIC / GEMINI / MOONSHOT / DEEPSEEK / OLLAMA / OPENAI_LOCAL 等），`QuroModelConfigScreen` / `QuroFeatureModelConfigScreen`
+- **离线本地模型**：`QuroLocalModelRepository`、`QuroLocalModelType`（MNN / LLAMA_CPP）
+- **数字人模型**：`QuroDigitalHumanConfig`、`QuroDigitalHumanScreen`
+
+### 12. 定时 / 日程 / 天气 / 数字人 / 插件 / 关于 等
+- **日程/定时**：`QuroScheduleScreen`（对应 SetAlarm/ScheduleTask 工具）
+- **天气**：`ui/weather/WeatherCard`（与天气技能联动）
+- **数字人**：`QuroDigitalHumanScreen`
+- **插件系统**：`plugin/PluginRuntime`（QuickJS 原生 `nativeEvalPlugin` + WebView 双后端），`PluginsScreen`
+- **关于 / 审计 / 系统状态 / 工具箱 / 分享桥 / 组件库**：`QuroAboutScreen`、`QuroAuditScreen`、`QuroSystemStatusScreen`、`QuroToolboxScreen`、`QuroShareBridge`（接收系统分享）、`QuroComponentGalleryScreen`
+- **主界面导航**：`QuroMainScreen`（全屏 ChatScreen + 设置覆盖层 + 崩溃自报告 `CrashViewerScreen`），二级屏由 ChatScreen 的 `show*` 标志位承载
+
+---
+
+## 📱 界面导航总览 · Screens
+
+| 屏幕（文件） | 功能 |
+|------|------|
+| `QuroMainScreen` / `QuroApp` | 主壳：全屏聊天 + 设置覆盖层 + 崩溃自报告 |
+| `ChatScreen` | 聊天主界面、消息流/流式/Markdown/Think/ToolCall、消息操作、所有二级屏入口 |
+| `QuroSkillsScreen` | 内置/自定义技能管理（63 个内置） |
+| `QuroTerminalScreen` | 应用内终端（NovaTerm/Linux 沙箱） |
+| `QuroBrowserScreen` | 内置 GeckoView 浏览器 |
+| `QuroMediaBrowser` / `QuroMusicPlayerScreen` / `QuroVideoPlayerScreen` | 媒体浏览 / 音乐 / 视频播放 |
+| `QuroDocumentViewer` / `QuroDocOpener` / `QuroOnlyOfficeScreen` | 文档查看 / 分发 / OnlyOffice |
+| `QuroKnowledgeScreen` | 知识库（RAG）管理 |
+| `QuroModelConfigScreen` / `QuroFeatureModelConfigScreen` | 在线模型 / 专项模型 / API Key 配置 |
+| `QuroMcpSettingsScreen` | MCP 服务器连接管理 |
+| `QuroPermissionScreen` / `QuroAuditScreen` | 权限管理 / 能力审计 |
+| `QuroAciCenterScreen` | ACI 设备能力中心 / LAN 控制台 |
+| `QuroBotSettingsScreen` | 机器人（QQ/飞书/微信/本地）配置 |
+| `QuroVoiceSettingsScreen` / `QuroTtsSettingsScreen` / `QuroCloudTtsConfigScreen` / `QuroSttSettingsScreen` / `QuroVoiceServiceScreen` / `QuroVoiceBallView` | 语音总设置 / TTS / 云端 TTS / STT / 语音服务 / 悬浮球 |
+| `QuroDigitalHumanScreen` | 数字人 / 虚拟形象 |
+| `QuroScheduleScreen` | 日程 / 定时 |
+| `PluginsScreen` | 插件管理与市场 |
+| `QuroCmsScreen` | CMS v2 模块 / 引擎管理 |
+| `EditorScreen` | 内置代码 / 文本编辑器 |
+| `QuroSoulUi` | 人格 / 灵魂配置 |
+| `QuroSystemStatusScreen` / `QuroToolboxScreen` / `QuroShareBridge` / `QuroComponentGalleryScreen` / `QuroAboutScreen` | 系统状态 / 工具箱 / 分享桥 / 组件库 / 关于 |
 
 ---
 
@@ -130,22 +270,24 @@ flowchart TB
         A2["PersonaBar 人格卡"]
         A3["PermissionModeBar · 权限胶囊"]
         A4["Markdown / 代码块渲染 · 全屏预览"]
+        A5["终端 / 浏览器 / 媒体 / 文档 / 技能 / 知识库 等二级屏"]
     end
     subgraph CORE["Agent 核心 · QuroChatViewModel"]
         B1["多会话隔离 liveBuffers"]
         B2["种子快照 convBase"]
         B3["显示刷新闸门 canUpdateDisplay"]
-        B4["工具注册表 QuroToolRegistry"]
+        B4["工具注册表 QuroToolRegistry (123+ 工具)"]
         B5["技能系统 skill__{name}"]
+        B6["离线 LLM 引擎 QuroLocalEngineNative"]
     end
     subgraph TOOLS["工具 / 能力层 · core/tools"]
         C1["launch_app"]
         C2["无障碍 input_text / tap_screen / read_screen"]
         C3["cms_* 模块调用"]
-        C4["cms_engine_status"]
-        C5["Agent 键盘 ai_type_text / press_enter / press_send"]
-        C6["scheduler 定时任务"]
-        C7["memory_* 记忆工具"]
+        C4["Agent 键盘 ai_type_text / press_enter / press_send"]
+        C5["scheduler 定时任务"]
+        C6["memory_* 记忆工具"]
+        C7["knowledge_* RAG 知识库"]
     end
     subgraph PRIV["特权 / 权限层 · L1–L5"]
         D1["L1 无障碍 AccessibilityService"]
@@ -158,7 +300,8 @@ flowchart TB
         E1["CMS 引擎 共享运行时 NODE / PYTHON / SSH / JAVA / RUST / GO"]
         E2["CMS v2 模块 QuroCmsRepository"]
         E3["GeckoView 浏览器 MPL-2.0"]
-        E4["本地语音 sherpa-onnx STT / TTS"]
+        E4["本地语音 sherpa-onnx STT / 多供应商 TTS"]
+        E5["MNN / llama.cpp 离线 LLM (full 风味)"]
     end
     subgraph IM["IM 通道层 · 手机端均无公网端点"]
         F1["飞书 WebSocket"]
@@ -197,6 +340,16 @@ CMS 引擎是一套**共享运行时**供给机制，按需在设备上提供 **
 > - **CMS v2 模块**（`QuroCmsRepository`）是用户自建的、**可复用**的上层能力单元，通过 `serializeModule` / `parseModule` 导入导出，运行在引擎提供的运行时之上。
 >
 > 二者是「地基」与「楼栋」的关系：引擎提供环境，模块消费环境。
+
+### 离线 LLM 引擎（MNN / llama.cpp）
+
+`full` 风味内置本地推理运行时（`QuroLocalEngineNative`），驱动 **MNN**（`llm/mnn`）与 **llama.cpp**（`llm/llama`）两个后端：
+
+- 支持流式输出、`<think>` 思考段剥离、本地工具调用解析、会话常驻复用与门禁；
+- 离线（无网络、无 API Key）也能对话；
+- `fdroid` 风味不含原生库，经 `QuroLocalEnginePlaceholder` 降级提示。
+
+> 安装包需选择 **full 风味** 才具备离线对话能力。
 
 ### GeckoView 浏览器引擎（MPL-2.0）
 
@@ -317,30 +470,51 @@ ZorvAI 浏览器（受控端）在 v1.0.14 新增 `http_request` 能力：AI 可
 
 ---
 
-## 🧰 Requirements & Quick Start · 系统要求与快速开始
+## 🧰 Requirements & Build · 系统要求与从源码构建
 
 ### 系统要求
 
-- Android 8.0+（API 26+）
-- 建议 4GB+ 内存，存储空间 200MB+（本地语音模型另需约 85MB）
+- **Android 8.0+（API 26+）** 设备
+- **开发机**：JDK **17+**（AGP 8.13 要求；本机用 JDK 21 验证通过）、Android SDK（compileSdk 36 / minSdk 26 / targetSdk 34）、Gradle（用仓库自带 wrapper `./gradlew`）
+- **`full` 风味额外需要 NDK**（side-by-side，任意较新版本均可）：用于源码编译 MNN / llama.cpp 原生库；fdroid 风味不需要
 
-### 从源码构建
+### 项目结构（Gradle 模块）
+
+```
+:app          # 主程序（含 main / full 两种源码集；fdroid 风味剔除离线原生库）
+:aci-core     # ACI 框架核心库（AAR 形式供受控端接入）
+:aci-browser  # 官方受控端浏览器（独立仓同步源码）
+:mnn          # 离线 LLM 后端 MNN（仅 full 风味依赖）
+:llama        # 离线 LLM 后端 llama.cpp（仅 full 风味依赖）
+```
+
+### 构建命令
 
 ```bash
-# 克隆仓库
+# 1. 克隆仓库
 git clone https://github.com/Quor-a/ZorvAI
 cd QuroAI
 
-# 准备环境
-# - JDK 17
-# - Android SDK（compileSdk 36 / minSdk 26 / targetSdk 34）
-# - 在 local.properties 中配置 sdk.dir
+# 2. 准备环境
+#    - 安装 JDK 17+，并在 local.properties 配置 sdk.dir=/path/to/Android/Sdk
+#    - 如需构建 full 风味（含离线引擎），确保 SDK 中已安装 NDK（side-by-side）
 
-# 构建 debug 包
-./gradlew clean assembleDebug
+# 3. 构建（两种风味，二选一）
+#    full 风味：含离线 MNN/llama.cpp 原生引擎，包体约 350MB+，需要 NDK
+./gradlew assembleFullDebug
+#    产物：app/build/outputs/apk/full/debug/app-full-debug.apk
+
+#    fdroid 风味：无离线原生库、纯在线，体积精简，符合 F-Droid 合规
+./gradlew assembleFdroidDebug
+#    产物：app/build/outputs/apk/fdroid/debug/app-fdroid-debug.apk
+
+# 清理
+./gradlew clean
 ```
 
-构建产物：`app/build/outputs/apk/debug/app-debug.apk`
+> ⏱️ **首次构建耗时说明**：`full` 风味需源码编译 arm64 的 MNN / llama.cpp 原生库。若 `app/.cxx` 原生缓存缺失，会触发**全量重编**（几十分钟，CPU 满载、落盘较少属正常），并非卡死；缓存存在时增量构建很快。fdroid 风味无原生编译，构建显著更快。
+
+> 💡 若克隆后 `./gradlew` 报「没有主清单属性 / 找不到主类」，是 `gradle-wrapper.jar` 的 MANIFEST 缺失 `Main-Class`，需修复 wrapper 后再构建（此文件被 `.gitignore` 排除，属本地环境修复项）。
 
 ---
 
@@ -348,9 +522,12 @@ cd QuroAI
 
 | 现象 | 说明 / 处理 |
 |------|-------------|
+| **full 风味构建特别久** | 首编需编译 MNN/llama.cpp 原生库（见上方「首次构建耗时说明」），CPU 满载、落盘少属正常；`app/.cxx` 缓存存在时增量很快。 |
+| **`./gradlew` 无法启动** | wrapper jar 缺失 `Main-Class` 时需修复；或改用本机已安装的 Gradle 直接构建。 |
 | **Shizuku 相关能力不可用** | 必须**先打开 Shizuku App 并启动其服务 / 完成配对**，再在 Zorv AI 中授权；Shizuku 未运行时 L2 通道不会启用。 |
 | **ROOT 模式命令不执行** | ROOT 模式命令走 `sh -c` 执行，需确认设备已 root 且已授予 su 权限。 |
 | **应用内 Linux（L5）无法运行** | 真执行依赖**用户自备的 `proot` 二进制**与 Alpine rootfs，请先准备好这些外部资源。 |
+| **离线对话不可用** | 离线 LLM 仅在 **full 风味** 包中提供；fdroid 风味降级为占位提示。 |
 | **网页 / HTML 预览不显示** | 确认已随包集成 GeckoView（MPL-2.0）运行时。 |
 | **本地语音识别不可用** | 本地 STT 模型为约 85MB 的 onnx 文件，首次使用需下载 / 放置到指定目录。 |
 | **会话出现重复或异常** | 启动自愈 `DATA_REPAIR` 会在启动时去重清洗，重启 App 即可。 |
@@ -364,6 +541,7 @@ cd QuroAI
 
 直接从 Release 页面下载最新 APK：
 
+- **v1.0.16（full 风味 debug，含离线 MNN/llama.cpp 引擎，最新）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.16/app-full-debug.apk)（随 v1.0.16 Release 上传；约 350MB+，构建完成后可用）
 - **v1.0.15（debug，主程序，最新）**：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
 - **v1.0.14（debug，主程序）**：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
 - **v1.0.14（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 独立仓，最新）**：[ZorvBrowser-aci-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.14/ZorvBrowser-aci-debug-v1.0.14.apk)
@@ -377,7 +555,6 @@ cd QuroAI
 - **v1.0.6 附带的 ACI 核心库 AAR**：[aci-core-release.aar](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/aci-core-release.aar)
 - **v1.0.5（debug）**：[ZorvAI-debug-v1.0.5.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.5/ZorvAI-debug-v1.0.5.apk)
 - **v1.0.2（debug）**：[QuroAI-v1.0.2-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.2/QuroAI-v1.0.2-debug.apk)
-- **v1.0.16（源码已推送 · 本地构建）**：本次更新（对话框 B1–B8 修复、单条消息删除、工具耗时、内置 63 技能）已提交至 `main`。APK 由本地 `./gradlew assembleFullDebug` 构建，产物位于 `app/build/outputs/apk/full/debug/app-full-debug.apk`（full 风味含离线 MNN/llama.cpp 原生引擎，约 350MB+；如需精简可构建 `assembleFdroidDebug`）。
 
 > 💡 v1.0.6 起开放 **ACI（Agent Capability Interface）**：主程序作为控制端，可调用任意接入 `aci-core` 的受控端 App（官方参考实现「ZorvAI 浏览器」已独立开源，见上方独立仓库链接）；`aci-core-release.aar` 随本仓库 Release 提供。详见 [ACI 开发者手册](./docs/ACI_DEVELOPER_GUIDE.md)。
 
@@ -444,7 +621,7 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 - **中文**：Zorv AI 开源、安卓 AI 助手 开源、Android AI 智能体、本地 AI 助手、设备端 AI Agent、手机 AI 助手、Kotlin Compose AI 聊天机器人、离线 AI 助手、语音 AI 助手、安卓自动化助手、AI 工具调用、飞书 QQ 微信 AI 机器人
 - **English**：Zorv AI open source, Android AI assistant open source, on-device AI agent, local AI chatbot, Kotlin Jetpack Compose LLM, Android automation agent, voice AI assistant, TTS STT assistant, AI tool use, Feishu QQ WeChat AI bot
 
-> 仓库主页：GitHub [github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI) ｜ Gitee [gitee.com/ZorvAI/ZorvAI](https://gitee.com/ZorvAI/ZorvAI) ｜ 最新下载：[Releases](https://github.com/Quor-a/ZorvAI/releases)
+> 仓库主页：GitHub [github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI) ｜ Gitee [gitee.com/ZorvAI/ZorvAI](https://gitee.com/ZorvAI/ZorvAI) ｜ GitLab [jihulab.com/quor-a-group/ZorvAI](https://jihulab.com/quor-a-group/ZorvAI) ｜ 最新下载：[Releases](https://github.com/Quor-a/ZorvAI/releases)
 
 > 🤖 **AI 友好入口**：根目录 `llms.txt` 与 `llms-full.txt` 供 LLM 检索接口（ChatGPT / Perplexity / 元宝联网搜 / Claude 等）直接读取项目上下文；`robots.txt` 已放行 AI 爬虫。
 
