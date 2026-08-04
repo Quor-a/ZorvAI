@@ -193,7 +193,8 @@ class QuroPrivilegeManager(private val context: Context) {
         }
         PrivilegeLevel.L3 -> Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
             putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, ComponentName(context, QuroDeviceAdminReceiver::class.java))
-            putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "授予 CapOS 设备管理员以启用高级系统管理能力")
+            // E-11：文案与 quro_device_admin.xml 声明的策略逐条对应，不宽泛表述。
+            putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "仅用于两项操作：锁定屏幕、禁用或恢复摄像头。")
         }
         PrivilegeLevel.L4 -> null
     }

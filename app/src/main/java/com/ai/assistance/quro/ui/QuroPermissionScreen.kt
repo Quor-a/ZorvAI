@@ -405,10 +405,10 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                 title = "设备管理员",
                 channel = "DevicePolicyManager",
                 state = st(PrivilegeLevel.L3),
-                // E-5：已从 device admin policy 中删除 wipe-data / reset-password，
-                // 文案同步收敛，不再对用户宣称「清除数据」这个实际并不提供的能力。
-                rationale = "锁屏 / 禁用摄像头。",
-                onRequest = { requestElevation(PrivilegeLevel.L3, "需要设备管理员权限以启用锁屏等高级系统管理能力。") },
+                // E-5/E-11：device admin policy 已收敛到 force-lock + disable-camera 两条，
+                // 文案必须逐条对应，不得出现「等高级系统管理能力」这类无实现的宽泛表述。
+                rationale = "锁屏 / 禁用摄像头（仅此两项）。",
+                onRequest = { requestElevation(PrivilegeLevel.L3, "需要设备管理员权限，仅用于锁定屏幕和禁用/恢复摄像头两项操作。") },
                 testLabel = if (st(PrivilegeLevel.L3).available) "状态" else null,
                 onTest = if (st(PrivilegeLevel.L3).available) {
                     { "设备管理员：${st(PrivilegeLevel.L3).details}（纯净架构下不主动锁屏）" }

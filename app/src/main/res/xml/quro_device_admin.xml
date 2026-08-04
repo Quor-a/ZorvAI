@@ -1,26 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <device-admin xmlns:android="http://schemas.android.com/apk/res/android">
     <!--
-      仅声明「确有实现的工具」所需的最小策略集（E-5）。
+      「声明即最小化」：本文件只允许出现「代码里确有调用、且该调用必须依赖此声明才能工作」
+      的策略。新增任何一条前，必须先能指出具体调用点。
 
-      已删除 <wipe-data /> 与 <reset-password />：
-        1. 代码里根本没有对应实现（QuroToolsDeviceAdmin 只有 lock_screen /
-           device_admin_status / set_camera_disabled 三个工具）；
-        2. 声明 wipe-data 会让系统「设备管理员」激活页向用户展示
-           「可以清除设备所有数据」，是严重的信任风险，也是 F-Droid 审核的重点关注项。
+      ── 当前保留（各有唯一调用点）────────────────────────────────────
+        force-lock      → DevicePolicyManager.lockNow()
+                          调用点：QuroToolsDeviceAdmin.kt LockScreenTool.run()
+                                  QuroDeviceAdminReceiver.kt lockScreen()
+                                  QuroPermissionHelper.kt lockScreen()
+        disable-camera  → DevicePolicyManager.setCameraDisabled()
+                          调用点：QuroToolsDeviceAdmin.kt SetCameraDisabledTool.run()
 
-      保留说明：
-        - force-lock      → LockScreenTool (dpm.lockNow)
-        - disable-camera  → SetCameraDisabledTool (dpm.setCameraDisabled)
-      其余口令策略（limit-password / watch-login / expire-password /
-      encrypted-storage）为只读展示类，不授予破坏性能力，暂予保留。
+      ── E-5 已删除（声明了破坏性能力但代码里根本没有实现）──────────────
+        wipe-data       无调用。声明它会让系统激活页向用户展示「可以清除设备所有
+                        数据」，是严重的信任风险，也是 F-Droid 审核重点。
+        reset-password  无调用。同上。
+
+      ── E-11 已删除（全仓查无实据，纯冗余声明）────────────────────────
+        limit-password       需 setPasswordQuality / setPasswordMinimum* 才有意义。
+                             全仓 grep：0 处调用。
+        watch-login          需 onPasswordFailed / onPasswordSucceeded 回调或
+                             getCurrentFailedPasswordAttempts。
+                             QuroDeviceAdminReceiver 未覆写任何口令回调；全仓 grep：0 处。
+        expire-password      需 setPasswordExpirationTimeout / onPasswordExpiring。
+                             全仓 grep：0 处调用。
+        encrypted-storage    仅 setStorageEncryption()（强制类）需要本声明；
+                             getStorageEncryptionStatus()（只读类）本就不需要。
+                             两者全仓 grep 均为 0 处调用。
+
+      注：策略集「收缩」对已激活的设备管理员是安全的，用户无需重新激活；
+          反向「扩张」才可能要求重新授权。
     -->
     <uses-policies>
         <force-lock />
-        <limit-password />
-        <watch-login />
-        <expire-password />
-        <encrypted-storage />
         <disable-camera />
     </uses-policies>
 </device-admin>

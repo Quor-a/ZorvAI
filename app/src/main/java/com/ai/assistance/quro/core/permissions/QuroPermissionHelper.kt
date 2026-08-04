@@ -175,12 +175,13 @@ object QuroPermissionHelper {
         val active = dpm.isAdminActive(cn)
         val intent = Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
             putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, cn)
-            putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "授予 Zorv AI 设备管理员以启用高级系统管理能力")
+            // E-11：文案与 quro_device_admin.xml 声明的策略逐条对应，不宽泛表述。
+            putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "仅用于两项操作：锁定屏幕、禁用或恢复摄像头。")
         }
         return QuroPermissionItem(
             id = "admin",
             title = "设备管理员权限",
-            desc = "锁定屏幕、禁用摄像头等系统管理能力",
+            desc = "锁定屏幕、禁用/恢复摄像头（仅此两项）",
             granted = active,
             guideIntent = intent,
             note = if (active) "" else "在系统「设备管理员」中激活 Zorv AI",
