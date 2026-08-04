@@ -167,6 +167,8 @@ import com.ai.assistance.quro.ui.data.SAMPLE_PERSONAS
 import com.ai.assistance.quro.ui.data.ThinkBlock
 import com.ai.assistance.quro.ui.data.ToolCallUi
 import com.ai.assistance.quro.ui.icons.LucideIcon
+import com.ai.assistance.quro.ui.chat.ChatPermissionModeBar
+import com.ai.assistance.quro.ui.chat.ChatTopBar
 import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
 import com.ai.assistance.quro.core.QuroAttachmentKit
@@ -722,7 +724,7 @@ fun ChatScreen(
             Scaffold(
                 containerColor = cs.background,
                 topBar = {
-                    TopBar(
+                    ChatTopBar(
                         modelName = modelLabel,
                         onMenu = openDrawer,
                         onModel = { sheet = SheetType.Model },
@@ -1402,56 +1404,8 @@ fun ChatScreen(
 }
 
 // ---------------- 顶栏 ----------------
-
-@Composable
-private fun TopBar(
-    modelName: String,
-    onMenu: () -> Unit,
-    onModel: () -> Unit,
-    onSettings: () -> Unit,
-    persona: Persona? = null,
-    onPick: () -> Unit = {},
-    scaled: (Int) -> androidx.compose.ui.unit.TextUnit
-) {
-    val cs = MaterialTheme.colorScheme
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(cs.background)
-            .padding(top = 20.dp, bottom = 12.dp, start = 16.dp, end = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = onMenu, Modifier.size(40.dp)) {
-            LucideIcon("panel_left", "对话历史", Modifier.size(22.dp), tint = cs.onBackground)
-        }
-        // 灵魂卡（人格卡）内嵌顶栏
-        if (persona != null) {
-            PersonaBar(persona = persona, onPick = onPick, scaled = scaled)
-        }
-        // 用 weighted Box 占剩余空间并右对齐 chip，防止模型名过长撑爆 Row 把设置图标推出屏幕
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-            // 模型 chip
-            Row(
-                Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .border(1.dp, Line, RoundedCornerShape(999.dp))
-                    .clickable(onClick = onModel)
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(Modifier.size(7.dp).clip(CircleShape).background(Accent))
-                Spacer(Modifier.width(7.dp))
-                Text(modelName, fontSize = scaled(13), color = cs.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                Spacer(Modifier.width(4.dp))
-                LucideIcon("chevron_down", null, Modifier.size(15.dp), tint = Muted)
-            }
-        }
-        Spacer(Modifier.width(6.dp))
-        IconButton(onClick = onSettings, Modifier.size(40.dp)) {
-            LucideIcon("settings", "设置", Modifier.size(21.dp), tint = cs.onBackground)
-        }
-    }
-}
+// TopBar / PersonaBar 已抽到 ui/chat/ChatTopBar.kt（ChatTopBar），修复「长模型名 / 长人格名
+// 把设置图标测量成 0 宽」的布局塌陷根因。此处仅保留引用。
 
 // ---------------- 人格快捷条 ----------------
 
@@ -1485,41 +1439,14 @@ private fun UserProfileBar(
             )
         }
         Spacer(Modifier.width(8.dp))
-        // 名字 + 签名
+        // 名字 + 签名（长名字/长签名各自省略号截断，不挤压彼此）
         Column(Modifier.weight(1f)) {
-            Text(profile.name, fontSize = scaled(12), fontWeight = FontWeight.Medium, color = cs.onBackground, maxLines = 1)
+            Text(profile.name, fontSize = scaled(12), fontWeight = FontWeight.Medium, color = cs.onBackground,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (profile.bio.isNotBlank()) {
-                Text(profile.bio, fontSize = scaled(10), color = cs.onSurfaceVariant, maxLines = 1)
+                Text(profile.bio, fontSize = scaled(10), color = cs.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-        }
-    }
-}
-
-@Composable
-private fun PersonaBar(
-    persona: Persona,
-    onPick: () -> Unit,
-    scaled: (Int) -> androidx.compose.ui.unit.TextUnit
-) {
-    val cs = MaterialTheme.colorScheme
-    Row(
-        Modifier
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .border(1.dp, Line, RoundedCornerShape(999.dp))
-                .clickable(onClick = onPick)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AvatarContent(persona.avatarUri, persona.name, 20)
-            Spacer(Modifier.width(8.dp))
-            Text(persona.name, fontSize = scaled(13), color = cs.onBackground, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-            Spacer(Modifier.width(4.dp))
-            LucideIcon("chevron_down", null, Modifier.size(15.dp), tint = Muted)
         }
     }
 }
@@ -1593,7 +1520,9 @@ private fun MessageList(
         // 轨迹不再作为底部独立面板，而是内嵌到最近一次助手工具调用卡内（见 ToolsInlineContent）。
         // 纯文本（无工具卡可融）回复不再渲染独立追踪卡，避免与工具卡重复 /「旧 UI 重显」。
         val visibleTraces = traceLines.filter { it.kind != QuroAgentTrace.TraceKind.STATUS }
-        itemsIndexed(messages) { index, msg ->
+        // 稳定 key：每条消息的 Message.id 来自 QuroMessage.id（UUID）的 hashCode，唯一且流式更新时不变，
+        // 避免流式增量刷新时按 index 重组导致的整段闪烁/错位。
+        itemsIndexed(messages, key = { _, msg -> msg.id }) { index, msg ->
             AnimatedVisibility(
                 visible = true,
                 enter = fadeIn(initialAlpha = 0.35f) + slideInVertically(initialOffsetY = { it / 10 }),
@@ -2804,7 +2733,7 @@ private fun Composer(
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
         // 深度思考 + 权限模式（合并为一条可收起控制条）
-        PermissionModeBar(
+        ChatPermissionModeBar(
             deepThink = deepThink,
             onToggleThink = onToggleThink,
             autoSaveMemory = autoSaveMemory,
@@ -4749,207 +4678,5 @@ private fun fallbackCopy(ctx: Context, src: File, name: String) {
     }
 }
 
-/**
- * 对话内控制条（收起/展开）：深度思考 + 权限模式(CMS + 特权)。
- * 默认只显示一行摘要，点击展开全部选项。
- */
-@Composable
-private fun PermissionModeBar(
-    deepThink: Boolean = false,
-    onToggleThink: () -> Unit = {},
-    autoSaveMemory: Boolean = true,
-    onToggleAutoSave: () -> Unit = {},
-    autoRead: Boolean = false,
-    onToggleAutoRead: () -> Unit = {},
-    visionEnabled: Boolean = false,
-    onToggleVision: () -> Unit = {},
-) {
-    val ctx = LocalContext.current
-    QuroPolicyStore.getCms(ctx)
-    val cmsPolicy by QuroPolicyStore.cmsFlow.collectAsState()
-    val privPolicy by QuroPolicyStore.privFlow.collectAsState()
-    val cs = MaterialTheme.colorScheme
-    var expanded by remember { mutableStateOf(false) }
-
-    Surface(
-        color = cs.surfaceVariant.copy(alpha = 0.5f),
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Column(Modifier.fillMaxWidth()) {
-            // 收起状态：一行摘要，点击展开
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded }
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // 内层 Row 占剩余空间，溢出裁剪，保证 chevron 始终可见
-                Row(
-                    Modifier.weight(1f).clipToBounds(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("权限模式", fontSize = 11.sp, color = Muted, fontWeight = FontWeight.Medium)
-                    // 当前状态摘要标签
-                    if (deepThink) {
-                        Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
-                            Text("深度思考", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                        }
-                    }
-                    if (autoSaveMemory) {
-                        Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
-                            Text("记忆", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                        }
-                    }
-                    if (autoRead) {
-                        Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
-                            Text("朗读", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                        }
-                    }
-                    if (visionEnabled) {
-                        Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
-                            Text("看懂屏幕", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                        }
-                    }
-                    Surface(shape = RoundedCornerShape(999.dp), color = when (cmsPolicy) {
-                        QuroPolicy.ALLOW -> Color(0xFF34C759).copy(alpha = 0.18f)
-                        QuroPolicy.DENY -> Color(0xFFFF3B30).copy(alpha = 0.18f)
-                        else -> cs.primaryContainer
-                    }) {
-                        Text("CMS:${when(cmsPolicy){QuroPolicy.ALLOW->"允许";QuroPolicy.DENY->"禁止";else->"询问"}}",
-                            fontSize = 10.sp,
-                            color = when(cmsPolicy){
-                                QuroPolicy.ALLOW->Color(0xFF1A7A38);QuroPolicy.DENY->Color(0xFFFF3B30);else->cs.primary},
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                    }
-                }
-                Spacer(Modifier.width(8.dp))
-                LucideIcon(if (expanded) "chevron_up" else "chevron_down", null, Modifier.size(14.dp), tint = Muted)
-            }
-            // 展开状态：所有选项
-            androidx.compose.animation.AnimatedVisibility(visible = expanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()) {
-                Column(Modifier.padding(start = 10.dp, end = 10.dp, bottom = 8.dp)) {
-                    HorizontalDivider(color = Line.copy(alpha = 0.3f))
-                    Spacer(Modifier.height(6.dp))
-
-                    // 深度思考开关
-                    Row(
-                        Modifier.clip(RoundedCornerShape(999.dp))
-                            .border(1.dp, if (deepThink) Color(android.graphics.Color.parseColor("#EAD3C8")) else Line, RoundedCornerShape(999.dp))
-                            .background(if (deepThink) AccentSoft else cs.surface)
-                            .clickable(onClick = onToggleThink)
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(if (deepThink) Accent else Muted))
-                        Spacer(Modifier.width(6.dp))
-                        Text("深度思考", fontSize = 13.sp, color = if (deepThink) AccentPress else Muted, fontWeight = if (deepThink) FontWeight.SemiBold else FontWeight.Normal)
-                        Text(" — 显示 AI 推理过程", fontSize = 11.sp, color = Muted)
-                    }
-                    Spacer(Modifier.height(6.dp))
-
-                    // 自动保存记忆开关
-                    Row(
-                        Modifier.clip(RoundedCornerShape(999.dp))
-                            .border(1.dp, if (autoSaveMemory) Color(android.graphics.Color.parseColor("#EAD3C8")) else Line, RoundedCornerShape(999.dp))
-                            .background(if (autoSaveMemory) AccentSoft else cs.surface)
-                            .clickable(onClick = onToggleAutoSave)
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(if (autoSaveMemory) Accent else Muted))
-                        Spacer(Modifier.width(6.dp))
-                        Text("自动保存记忆", fontSize = 13.sp, color = if (autoSaveMemory) AccentPress else Muted, fontWeight = if (autoSaveMemory) FontWeight.SemiBold else FontWeight.Normal)
-                        Text(" — AI 自动沉淀长期记忆", fontSize = 11.sp, color = Muted)
-                    }
-                    Spacer(Modifier.height(6.dp))
-
-                    // 自动朗读开关
-                    Row(
-                        Modifier.clip(RoundedCornerShape(999.dp))
-                            .border(1.dp, if (autoRead) Color(android.graphics.Color.parseColor("#EAD3C8")) else Line, RoundedCornerShape(999.dp))
-                            .background(if (autoRead) AccentSoft else cs.surface)
-                            .clickable(onClick = onToggleAutoRead)
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(if (autoRead) Accent else Muted))
-                        Spacer(Modifier.width(6.dp))
-                        Text("自动朗读", fontSize = 13.sp, color = if (autoRead) AccentPress else Muted, fontWeight = if (autoRead) FontWeight.SemiBold else FontWeight.Normal)
-                        Text(" — AI 回复自动朗读", fontSize = 11.sp, color = Muted)
-                    }
-                    Spacer(Modifier.height(6.dp))
-
-                    // 看懂屏幕开关
-                    Row(
-                        Modifier.clip(RoundedCornerShape(999.dp))
-                            .border(1.dp, if (visionEnabled) Color(android.graphics.Color.parseColor("#EAD3C8")) else Line, RoundedCornerShape(999.dp))
-                            .background(if (visionEnabled) AccentSoft else cs.surface)
-                            .clickable(onClick = onToggleVision)
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(if (visionEnabled) Accent else Muted))
-                        Spacer(Modifier.width(6.dp))
-                        Text("看懂屏幕", fontSize = 13.sp, color = if (visionEnabled) AccentPress else Muted, fontWeight = if (visionEnabled) FontWeight.SemiBold else FontWeight.Normal)
-                        Text(" — AI 实时理解当前屏幕", fontSize = 11.sp, color = Muted)
-                    }
-                    Spacer(Modifier.height(6.dp))
-
-                    // CMS 权限
-                    PolicyChipGroup(
-                        label = "CMS",
-                        current = cmsPolicy,
-                        onSet = { QuroPolicyStore.setCms(ctx, it) },
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    // 特权权限
-                    PolicyChipGroup(
-                        label = "特权",
-                        current = privPolicy,
-                        onSet = { QuroPolicyStore.setPriv(ctx, it) },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PolicyChipGroup(
-    label: String,
-    current: QuroPolicy,
-    onSet: (QuroPolicy) -> Unit,
-) {
-    val cs = MaterialTheme.colorScheme
-    val options = listOf(
-        QuroPolicy.ALLOW to "允许",
-        QuroPolicy.DENY to "禁止",
-        QuroPolicy.ASK to "询问",
-    )
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, fontSize = 11.sp, color = Muted)
-        options.forEach { (policy, text) ->
-            val selected = current == policy
-            FilterChip(
-                selected = selected,
-                onClick = { onSet(policy) },
-                label = { Text(text, fontSize = 11.sp) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = if (policy == QuroPolicy.DENY) Color(0xFFFF3B30).copy(alpha = 0.18f)
-                    else if (policy == QuroPolicy.ALLOW) Color(0xFF34C759).copy(alpha = 0.18f)
-                    else cs.primaryContainer,
-                    selectedLabelColor = if (policy == QuroPolicy.DENY) Color(0xFFFF3B30)
-                    else if (policy == QuroPolicy.ALLOW) Color(0xFF1A7A38)
-                    else cs.primary,
-                ),
-                border = null,
-                modifier = Modifier.height(28.dp),
-            )
-        }
-    }
-}
-
+// PermissionModeBar / PolicyChipGroup 已抽到 ui/chat/ChatPermissionModeBar.kt（ChatPermissionModeBar），
+// 修复「权限模式全选后收起/返回按钮被测量成 0 宽而消失」的布局塌陷根因。
