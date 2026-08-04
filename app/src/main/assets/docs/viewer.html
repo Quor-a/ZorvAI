@@ -95,7 +95,7 @@ window.GD = {
         content.innerHTML = html || '<div class="hint">（空表格）</div>';
       } else if (type==='pdf'){
         if (typeof pdfjsLib==='undefined'){ content.innerHTML='<div class="err">pdf.js 未加载</div>'; return; }
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+        try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js'; } catch(e){}
         pdfjsLib.getDocument({data: b64ToU8(b64)}).promise.then(function(pdf){
           content.innerHTML='';
           var chain = Promise.resolve();
@@ -113,9 +113,20 @@ window.GD = {
             }.bind(null, p));
           }
           return chain;
-        }).catch(function(e){ content.innerHTML='<div class="err">PDF 打开失败：'+(e&&e.message?e.message:e)+'</div>'; });
+        }).catch(function(e){ content.innerHTML='<div class="err">PDF 打开失败：'+(e&&e.message?e.message:e)+'<br>（部分 Android WebView 禁止从 file:// 加载 PDF Worker，可点「其他应用」用 WPS/Office 打开）</div>'; });
       } else if (type.indexOf('image/')===0 || type==='image'){
         content.innerHTML = '<div style="text-align:center"><img src="data:'+type+';base64,'+b64+'"></div>';
+      } else if (type==='csv'){
+        if (typeof XLSX==='undefined'){ content.innerHTML='<div class="err">xlsx.js 未加载</div>'; return; }
+        try {
+          var wb = XLSX.read(utf8FromB64(b64), {type:'binary'});
+          var html='';
+          wb.SheetNames.forEach(function(name){
+            html += '<h3>'+name+'</h3>';
+            html += XLSX.utils.sheet_to_html(wb.Sheets[name]);
+          });
+          content.innerHTML = html || '<div class="hint">（空表格）</div>';
+        } catch(e){ content.innerHTML='<div class="err">CSV 渲染失败：'+e+'</div>'; }
       } else if (type==='md'){
         content.innerHTML = mdToHtml(utf8FromB64(b64));
       } else {

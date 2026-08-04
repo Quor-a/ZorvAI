@@ -325,7 +325,7 @@ private fun ToolboxHome(
         ToolItem(Icons.Filled.FolderOpen, "工作区", "在应用沙箱内创建/编辑文件与文件夹", onOpenWorkspace),
         ToolItem(Icons.Filled.Article, "文档生成", "生成 Word/Excel/PPT/PDF 等真实文档", onOpenDocGen),
         ToolItem(Icons.Filled.List, "已有工具", "查看已注册工具，可导入 AI 自写工具", onOpenToolsList),
-        ToolItem(Icons.Filled.Description, "WPS文档", "用 ONLYOFFICE 打开 / 编辑 Office 文档", onOpenOnlyOffice),
+        ToolItem(Icons.Filled.Description, "WPS文档", "在应用内查看 / 编辑本地与生成文档（Word/Excel/PPT/PDF/文本）", onOpenOnlyOffice),
         ToolItem(Icons.Filled.MusicNote, "音乐播放器", "在应用内播放本地音乐（后台持续播放）", onOpenMusic),
         ToolItem(Icons.Filled.Movie, "视频播放器", "在应用内全功能视频播放器播放本地视频", { onOpenVideo("", "") }),
         ToolItem(Icons.Filled.Person, "数字人", "云端口/离线可选·可自制 3D 模型·语音→LLM→TTS 闭环", onClick = onOpenAvatar),

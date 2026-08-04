@@ -510,7 +510,7 @@ fun ChatScreen(
     var showKnowledge by remember { mutableStateOf(false) }
     // 机器人设置页（C2）：从工具箱「机器人」入口进入
     var showBots by remember { mutableStateOf(false) }
-    // ONLYOFFICE 文档（开源移动办公套件入口，替代原 Collabora WebView 壳；已整合原「文档中心」）
+    // 应用内文档查看器（本地渲染引擎，替代原 Collabora/外跳 ONLYOFFICE；已整合原「文档中心」）
     var showOnlyOffice by remember { mutableStateOf(false) }
     var showTerminal by remember { mutableStateOf(false) }
     var showMcp by remember { mutableStateOf(false) }
@@ -598,7 +598,7 @@ fun ChatScreen(
             QuroDocLauncher.file.collect { f ->
                 if (f != null) {
                     if (!QuroDocOpener.open(appCtx, f)) {
-                        Toast.makeText(appCtx, "未找到可打开 WPS / Office 的应用，建议安装 ONLYOFFICE Documents", Toast.LENGTH_LONG).show()
+                        Toast.makeText(appCtx, "未找到可打开该文档的应用，可尝试用应用内文档查看器或安装 WPS / Office", Toast.LENGTH_LONG).show()
                     }
                     QuroDocLauncher.consume()
                 }
@@ -1320,7 +1320,7 @@ fun ChatScreen(
             }
         }
 
-        // ONLYOFFICE 文档（开源移动办公套件）：全屏覆盖层（从工具栏「WPS文档」进入；已整合原「文档中心」）
+        // 应用内文档查看器：全屏覆盖层（从工具栏「WPS文档」进入；已整合原「文档中心」）
         if (showOnlyOffice) {
             BackHandler { showOnlyOffice = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {

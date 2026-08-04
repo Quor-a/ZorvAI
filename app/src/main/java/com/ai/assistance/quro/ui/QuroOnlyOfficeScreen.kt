@@ -24,6 +24,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import com.ai.assistance.quro.core.tools.AiwpsCreateTool
 import java.io.File
 
 /**
@@ -39,6 +47,8 @@ fun QuroOnlyOfficeScreen(onClose: () -> Unit) {
     val ctx = LocalContext.current
     var files by remember { mutableStateOf(listOfficeFiles(ctx)) }
     var viewerFile by remember { mutableStateOf<File?>(null) }
+    var showCreate by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     // 进入即刷新列表
     LaunchedEffect(Unit) { files = listOfficeFiles(ctx) }
@@ -79,6 +89,29 @@ fun QuroOnlyOfficeScreen(onClose: () -> Unit) {
         return
     }
 
+    if (showCreate) {
+        CreateDocDialog(
+            onDismiss = { showCreate = false },
+            onCreate = { type, title, content ->
+                scope.launch(Dispatchers.IO) {
+                    val json = JSONObject().apply {
+                        put("type", type)
+                        put("title", title)
+                        put("content", content)
+                    }.toString()
+                    val r = runCatching { AiwpsCreateTool().run(ctx, json) }.getOrDefault("生成失败")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(ctx, if (r.startsWith("已生成")) "已新建文档" else r, Toast.LENGTH_LONG).show()
+                        showCreate = false
+                        files = listOfficeFiles(ctx)
+                        val path = Regex("""文档：(.+?)（""").find(r)?.groupValues?.getOrNull(1)
+                        path?.let { viewerFile = File(it.trim()) }
+                    }
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -96,19 +129,25 @@ fun QuroOnlyOfficeScreen(onClose: () -> Unit) {
             )
             Spacer(Modifier.height(12.dp))
 
-            Button(
-                onClick = {
-                    pickLauncher.launch(
-                        arrayOf(
-                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                            "application/pdf", "text/plain", "text/markdown"
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = {
+                        pickLauncher.launch(
+                            arrayOf(
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                "application/pdf", "text/plain", "text/markdown"
+                            )
                         )
-                    )
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("选择本地文档…") }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) { Text("选择本地文档…") }
+                OutlinedButton(
+                    onClick = { showCreate = true },
+                    modifier = Modifier.weight(1f)
+                ) { Text("新建文档") }
+            }
 
             Spacer(Modifier.height(20.dp))
             HorizontalDivider()
@@ -158,4 +197,55 @@ private fun listOfficeFiles(ctx: Context): List<File> {
     }.filter { it.isFile && it.extension.lowercase() in exts }
         .sortedByDescending { it.lastModified() }
         .take(200)
+}
+
+/**
+ * 新建文档对话框：复用 [AiwpsCreateTool] 自研 OOXML 生成能力，产出真实可打开的
+ * .docx / .xlsx / .txt / .md（文本级撰写，非富文本回写）。生成成功后由调用方刷新列表并打开。
+ */
+@Composable
+private fun CreateDocDialog(
+    onDismiss: () -> Unit,
+    onCreate: (type: String, title: String, content: String) -> Unit,
+) {
+    var type by remember { mutableStateOf("docx") }
+    var title by remember { mutableStateOf("") }
+    var content by remember { mutableStateOf("") }
+    val types = listOf("docx" to "Word", "xlsx" to "Excel", "txt" to "文本", "md" to "Markdown")
+    val cs = MaterialTheme.colorScheme
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { if (content.isNotBlank()) onCreate(type, title, content) }) { Text("生成") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        title = { Text("新建文档") },
+        text = {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                Text("格式", fontSize = 13.sp, color = cs.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+                    types.forEach { (t, label) ->
+                        val sel = type == t
+                        Text(
+                            label,
+                            color = if (sel) cs.onPrimary else cs.onSurface,
+                            fontSize = 13.sp,
+                            modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                                .background(if (sel) cs.primary else cs.surfaceVariant)
+                                .clickable { type = t }.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(title, { title = it }, label = { Text("标题（可选）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    content, { content = it }, label = { Text("正文") }, minLines = 4, modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("docx 按换行分段；xlsx 按换行分行、制表/逗号分列；md/txt 原样写入") }
+                )
+                Spacer(Modifier.height(6.dp))
+                Text("保存位置：应用私有 Documents/QuroDocs，生成后自动出现在下方列表并打开。当前为文本级撰写（非富文本回写）。", fontSize = 12.sp, color = cs.onSurfaceVariant)
+            }
+        }
+    )
 }

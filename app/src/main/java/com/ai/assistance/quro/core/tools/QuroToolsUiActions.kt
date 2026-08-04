@@ -36,7 +36,7 @@ private data class UiActionSpec(
 
 /** 全部可被 AI 打开/控制的界面、弹层与开关（对话框内 UI 组件 → 工具）。 */
 private val UI_ACTIONS = listOf(
-    UiActionSpec("ui_open_onlyoffice", "ONLYOFFICE 文档", "打开 ONLYOFFICE Documents（开源移动办公套件，可离线编辑 Office 文档；已整合原文档中心）"),
+    UiActionSpec("ui_open_onlyoffice", "文档查看器", "打开应用内文档查看器（本地渲染引擎，支持 Word/Excel/PPT/PDF/文本预览与编辑，无需联网、不依赖第三方）"),
     UiActionSpec("ui_open_knowledge", "知识库", "打开知识库，浏览/导入/检索本地知识文档"),
     UiActionSpec("ui_open_terminal", "终端", "打开应用内终端 shell"),
     UiActionSpec("ui_open_editor", "代码编辑器", "打开内置代码编辑器"),

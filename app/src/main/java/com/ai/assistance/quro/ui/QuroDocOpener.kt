@@ -18,7 +18,7 @@ object QuroDocOpener {
         if (!file.exists()) return false
         val uri: Uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
         val mime = guessMime(file.name)
-        // 优先用 ONLYOFFICE Documents（开源移动办公套件，com.onlyoffice.documents）打开
+        // 优先尝试已安装的开源办公套件 ONLYOFFICE Documents（若已安装则直接打开；否则回退系统选择器）
         val onlyOffice = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, mime)
             setPackage("com.onlyoffice.documents")

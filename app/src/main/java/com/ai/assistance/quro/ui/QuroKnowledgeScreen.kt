@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Refresh
@@ -54,28 +55,44 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
     val dir = remember { QuroKnowledgeFiles.dir(ctx) }
     // 文件列表状态（声明在 importLauncher 之前，确保 lambda 内可见，避免前向引用歧义）
     var files by remember { mutableStateOf(listKnowledgeFiles(dir)) }
+    // 协程作用域（供 导入/导出/加载 的 lambda 内 launch 使用，必须在各 launcher 之前声明）
+    val scope = rememberCoroutineScope()
     // 导入：从系统文件选择器挑选文档，复制到 knowledge_base（支持任意类型，按原名落盘）
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { u ->
-            runCatching { ctx.contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            val name = runCatching {
-                ctx.contentResolver.query(u, null, null, null, null)?.use { c ->
-                    val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (c.moveToFirst() && idx >= 0) c.getString(idx) else null
-                }
-            }.getOrNull() ?: "imported_${System.currentTimeMillis()}"
-            val safe = name.replace(Regex("[\\\\/:*?\"<>|]"), "_")
-            val target = File(dir, safe)
-            runCatching {
-                ctx.contentResolver.openInputStream(u)?.use { input ->
-                    target.outputStream().use { out -> input.copyTo(out) }
-                }
+        uri ?: return@rememberLauncherForActivityResult
+        val name = runCatching {
+            ctx.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (c.moveToFirst() && idx >= 0) c.getString(idx) else null
             }
+        }.getOrNull()
+        if (name == null) {
+            Toast.makeText(ctx, "无法读取所选文件，导入失败", Toast.LENGTH_LONG).show()
+            return@rememberLauncherForActivityResult
+        }
+        val ext = name.substringAfterLast('.', "").lowercase()
+        val supported = setOf("md", "txt", "json", "csv", "docx", "xlsx", "pptx")
+        if (ext !in supported) {
+            Toast.makeText(ctx, "暂不支持导入该类型：$ext（仅支持 md/txt/json/csv/docx/xlsx/pptx）", Toast.LENGTH_LONG).show()
+            return@rememberLauncherForActivityResult
+        }
+        // takePersistableUriPermission 仅用于长期持久化，失败不影响本次读取，故忽略异常
+        runCatching { ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        val safe = name.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+        val target = File(dir, safe)
+        val ok = runCatching {
+            ctx.contentResolver.openInputStream(uri)?.use { input ->
+                target.outputStream().use { out -> input.copyTo(out) }
+            }
+        }.onFailure {
+            Toast.makeText(ctx, "导入失败：${it.message}", Toast.LENGTH_LONG).show()
+        }.isSuccess
+        if (ok) {
             files = listKnowledgeFiles(dir)
+            Toast.makeText(ctx, "已导入：$safe", Toast.LENGTH_SHORT).show()
+            scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
         }
     }
-    // 协程作用域（声明在 exportLauncher 之前，供 lambda 内 launch 使用）
-    val scope = rememberCoroutineScope()
     // 导出：把 knowledge_base/ 整库打包为 zip 经 SAF 写出
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         uri ?: return@rememberLauncherForActivityResult
@@ -100,6 +117,8 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
     var selected by remember { mutableStateOf<File?>(null) }
     var selectedText by remember { mutableStateOf("") }
     var showAdd by remember { mutableStateOf(false) }
+    var showRename by remember { mutableStateOf(false) }
+    var renameTarget by remember { mutableStateOf<File?>(null) }
     var query by remember { mutableStateOf("") }
 
     val filtered = remember(files, query) {
@@ -126,6 +145,25 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
         files = listKnowledgeFiles(dir)
         if (selected == f) { selected = null; selectedText = "" }
         scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
+    }
+
+    fun renameFile(f: File, newName: String) {
+        val raw = newName.trim()
+        if (raw.isBlank()) return
+        val safe = raw.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+        val target = File(f.parentFile, if (safe.contains('.')) safe else "$safe.${f.extension}")
+        if (target.exists()) {
+            Toast.makeText(ctx, "已存在同名文件，无法重命名", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (f.renameTo(target)) {
+            files = listKnowledgeFiles(dir)
+            if (selected == f) selected = target
+            Toast.makeText(ctx, "已重命名为：${target.name}", Toast.LENGTH_SHORT).show()
+            scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
+        } else {
+            Toast.makeText(ctx, "重命名失败", Toast.LENGTH_SHORT).show()
+        }
     }
 
     // 分层返回：详情视图下，硬件返回键先回到列表（不选 清空 selected）；列表态下本 BackHandler 失效，
@@ -159,6 +197,9 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                         }
                         IconButton(onClick = { showAdd = true }) { Icon(Icons.Filled.Add, "添加文档") }
                     } else {
+                        IconButton(onClick = { selected?.let { renameTarget = it; showRename = true } }) {
+                            Icon(Icons.Filled.Edit, "重命名文档")
+                        }
                         IconButton(onClick = { selected?.let { deleteFile(it) } }) {
                             Icon(Icons.Filled.Delete, "删除文档", tint = MaterialTheme.colorScheme.error)
                         }
@@ -269,10 +310,22 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
             }
         )
     }
+
+    if (showRename && renameTarget != null) {
+        RenameDialog(
+            initial = renameTarget!!.name,
+            onDismiss = { showRename = false; renameTarget = null },
+            onConfirm = { newName ->
+                renameTarget?.let { renameFile(it, newName) }
+                showRename = false
+                renameTarget = null
+            }
+        )
+    }
 }
 
 /** 列出 knowledge_base 下的文档（Markdown/JSON/TXT + Office/WPS：docx/xlsx/pptx，递归、按相对路径排序）。 */
-private val KB_TEXT_EXTS = setOf("md", "txt", "json")
+private val KB_TEXT_EXTS = setOf("md", "txt", "json", "csv")
 private val KB_OFFICE_EXTS = setOf("docx", "xlsx", "pptx")
 private fun listKnowledgeFiles(dir: File): List<File> {
     if (!dir.exists()) dir.mkdirs()
@@ -326,6 +379,32 @@ private fun AddDocDialog(
                     onConfirm = { if (path.isNotBlank()) onConfirm(path, content, append) },
                 )
             }
+        },
+    )
+}
+
+@Composable
+private fun RenameDialog(
+    initial: String,
+    onDismiss: () -> Unit,
+    onConfirm: (newName: String) -> Unit,
+) {
+    var name by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { if (name.isNotBlank()) onConfirm(name) }) { Text("确定") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        title = { Text("重命名文档") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("新文件名") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
         },
     )
 }

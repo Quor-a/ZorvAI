@@ -55,6 +55,11 @@ fun QuroDocumentViewer(
     val isPptx = ext == "pptx"
     val isWebView = ext in setOf("docx", "xlsx", "pdf", "txt", "md", "markdown", "json", "csv", "xml", "log", "kt", "kts", "py", "js", "ts", "html", "css", "java", "png", "jpg", "jpeg", "gif", "webp", "bmp")
     val imageType = if (ext in setOf("png","jpg","jpeg","gif","webp","bmp")) "image/$ext" else null
+    // 大文件保护：base64 注入 WebView 有长度上限，超阈值会静默白屏/崩溃
+    val sizeBytes = file.length()
+    val WARN_SIZE = 8L * 1024 * 1024       // 8 MB：超过则提示预览可能卡顿
+    val MAX_SIZE = 30L * 1024 * 1024       // 30 MB：超过则直接转外部打开，避免崩溃
+    val tooLarge = sizeBytes > MAX_SIZE
 
     var editing by remember { mutableStateOf(false) }
     var editText by remember { mutableStateOf("") }
@@ -99,6 +104,9 @@ fun QuroDocumentViewer(
             loadErr != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("无法读取文档：$loadErr", color = cs.error, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
             }
+            tooLarge -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("文件过大（约 ${sizeBytes / 1024 / 1024} MB），应用内预览可能崩溃。请点右上角「其他应用」用 WPS / Office 打开。", color = cs.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+            }
             editing && isEditableText -> {
                 OutlinedTextField(
                     value = editText,
@@ -108,7 +116,7 @@ fun QuroDocumentViewer(
                 )
             }
             isPptx -> PptxDeck(file)
-            isWebView -> BuiltInWebView(file = file, type = imageType ?: ext)
+            isWebView -> BuiltInWebView(file = file, type = imageType ?: ext, warnLarge = sizeBytes > WARN_SIZE)
             else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("不支持的文档类型：$ext\n请用「其他应用」打开。", color = cs.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
             }
@@ -116,41 +124,59 @@ fun QuroDocumentViewer(
     }
 }
 
-/** 进程内 WebView 渲染（docx / xlsx / pdf / 文本 / 图片）。 */
+/** 进程内 WebView 渲染（docx / xlsx / pdf / 文本 / 图片 / csv）。 */
 @Composable
-private fun BuiltInWebView(file: File, type: String) {
+private fun BuiltInWebView(file: File, type: String, warnLarge: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     var loadErr by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(true) }
 
-    AndroidView(
-        modifier = Modifier.fillMaxSize().background(Color(0xFF0F1115)),
-        factory = { c ->
-            WebView(c).apply {
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.allowFileAccess = true
-                settings.allowContentAccess = true
-                settings.loadsImagesAutomatically = true
-                webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        val b64 = runCatching {
-                            android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP)
-                        }.getOrNull()
-                        if (b64 == null) { loadErr = "读取文件失败"; return }
-                        view?.loadUrl("javascript:GD.render('$type','$b64')")
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize().background(Color(0xFF0F1115)),
+            factory = { c ->
+                WebView(c).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.allowFileAccess = true
+                    settings.allowContentAccess = true
+                    settings.loadsImagesAutomatically = true
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            val b64 = runCatching {
+                                android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP)
+                            }.getOrNull()
+                            if (b64 == null) { loadErr = "读取文件失败"; loading = false; return }
+                            // 用 evaluateJavascript 注入，规避 loadUrl("javascript:...") 的 URL 长度上限（大文件会静默失败/白屏）
+                            runCatching { view?.evaluateJavascript("GD.render('$type','$b64')", null) }
+                                .onFailure { loadErr = "渲染脚本注入失败：${it.message}" }
+                            loading = false
+                        }
+                        override fun onReceivedError(view: WebView?, request: android.webkit.WebResourceRequest?, error: android.webkit.WebResourceError?) {
+                            if (request?.isForMainFrame == true) {
+                                loadErr = error?.description?.toString() ?: "加载错误"
+                                loading = false
+                            }
+                        }
                     }
-                    override fun onReceivedError(view: WebView?, request: android.webkit.WebResourceRequest?, error: android.webkit.WebResourceError?) {
-                        loadErr = error?.description?.toString() ?: "加载错误"
-                    }
+                    loadUrl("file:///android_asset/docs/viewer.html")
                 }
-                loadUrl("file:///android_asset/docs/viewer.html")
+            },
+        )
+        if (warnLarge) {
+            Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(cs.errorContainer.copy(alpha = 0.18f)).padding(8.dp)) {
+                Text("文件较大，应用内预览可能较慢；若长时间无响应，请点「其他应用」打开。", color = cs.onSurfaceVariant, fontSize = 12.sp)
             }
-        },
-    )
-
-    if (loadErr != null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("文档渲染失败：$loadErr", color = cs.error, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+        }
+        if (loading && loadErr == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = cs.primary)
+            }
+        }
+        if (loadErr != null) {
+            Box(Modifier.fillMaxSize().background(cs.background), contentAlignment = Alignment.Center) {
+                Text("文档渲染失败：$loadErr\n可尝试用「其他应用」打开。", color = cs.error, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+            }
         }
     }
 }
