@@ -63,37 +63,6 @@ data class QuroSkill(
         put("parameters", runCatching { JSONObject(parametersJson) }.getOrDefault(JSONObject(DEFAULT_SKILL_PARAMS)))
     }
 
-    // ===== 内置 Zorv AI 技能（随包 assets/skills/zorv/，首次启动播种，幂等）=====
-    private const val KEY_BUILTIN_ZORV = "builtin_zorv_v1"
-
-    /**
-     * 首次启动把 assets/skills/zorv/ 下随包内置的 Zorv AI 技能播种进用户技能库。
-     * 用 manifest.json 里的稳定 id（zorv_<sha1>），幂等：已存在则跳过，用户删过也不会被强制加回。
-     * 内置技能默认 enabled=true / callable=true / alwaysOn=false（不污染全局系统提示词，按需选择或触发注入）。
-     */
-    fun seedBuiltinZorvSkills(context: Context) {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (prefs.getBoolean(KEY_BUILTIN_ZORV, false)) return
-        prefs.edit().putBoolean(KEY_BUILTIN_ZORV, true).apply()
-        runCatching {
-            val am = context.assets
-            val manifest = JSONObject(am.open("skills/zorv/manifest.json").bufferedReader().readText())
-            val arr = manifest.optJSONArray("skills") ?: return@runCatching
-            val existing = loadRaw(context).map { it.id }.toSet()
-            val list = loadRaw(context).toMutableList()
-            for (i in 0 until arr.length()) {
-                val o = arr.optJSONObject(i) ?: continue
-                val id = o.optString("id", "")
-                val file = o.optString("file", "")
-                if (id.isEmpty() || file.isEmpty() || id in existing) continue
-                val md = am.open("skills/zorv/$file").bufferedReader().readText()
-                val parsed = parseSkillMd(md).firstOrNull() ?: continue
-                list.add(parsed.copy(id = id, enabled = true, callable = true, alwaysOn = false, updatedAt = System.currentTimeMillis()))
-            }
-            save(context, list)
-        }
-    }
-
     companion object {
         /**
          * 工具规格 JSON → 技能（"技能转换"的反向：工具 → 技能）。
@@ -180,6 +149,36 @@ object QuroSkillStore {
         val list = loadRaw(context)
         val remaining = list.filter { it.name !in BUILTIN_NAMES }
         if (remaining.size != list.size) save(context, remaining)
+    }
+
+    /**
+     * 首次启动把 assets/skills/zorv/ 下随包内置的 Zorv AI 技能播种进用户技能库。
+     * 用 manifest.json 里的稳定 id（zorv_<sha1>），幂等：已存在则跳过，用户删过也不会被强制加回。
+     * 内置技能默认 enabled=true / callable=true / alwaysOn=false（不污染全局系统提示词，按需选择或触发注入）。
+     */
+    private const val KEY_BUILTIN_ZORV = "builtin_zorv_v1"
+
+    fun seedBuiltinZorvSkills(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_BUILTIN_ZORV, false)) return
+        prefs.edit().putBoolean(KEY_BUILTIN_ZORV, true).apply()
+        runCatching {
+            val am = context.assets
+            val manifest = JSONObject(am.open("skills/zorv/manifest.json").bufferedReader().readText())
+            val arr = manifest.optJSONArray("skills") ?: return@runCatching
+            val existing = loadRaw(context).map { it.id }.toSet()
+            val list = loadRaw(context).toMutableList()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val id = o.optString("id", "")
+                val file = o.optString("file", "")
+                if (id.isEmpty() || file.isEmpty() || id in existing) continue
+                val md = am.open("skills/zorv/$file").bufferedReader().readText()
+                val parsed = parseSkillMd(md).firstOrNull() ?: continue
+                list.add(parsed.copy(id = id, enabled = true, callable = true, alwaysOn = false, updatedAt = System.currentTimeMillis()))
+            }
+            save(context, list)
+        }
     }
 
     fun load(context: Context): List<QuroSkill> {
