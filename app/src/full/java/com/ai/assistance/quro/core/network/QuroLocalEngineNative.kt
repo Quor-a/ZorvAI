@@ -362,6 +362,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     // 流式阶段即剥离 <think> 块，避免用户实时看到思考原文（症状 1 流式侧）。
                     val visible = stripper.accept(token)
                     onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
+                    onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
                     true
                 }
                 if (!structuredOk || stripper.rawText().isEmpty()) {
@@ -380,6 +381,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                         tokenCount++
                         val visible = stripper.accept(token)
                         onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
+                        onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
                         true
                     }
                     fallbackOk
@@ -394,6 +396,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     tokenCount++
                     val visible = stripper.accept(token)
                     onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
+                    onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
                     true
                 }
             }
