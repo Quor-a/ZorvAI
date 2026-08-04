@@ -48,6 +48,9 @@ private class StreamingThinkStripper {
     /** 已确认的可见文本（已丢掉完整思考块）。 */
     private val visible: StringBuilder = StringBuilder()
 
+    /** 累积的思考文本（<think>…</think> 内部内容），用于流式实时透传给 UI。 */
+    private val thinking: StringBuilder = StringBuilder()
+
     /** 尚未能判定归属的尾部缓冲（可能含未闭合标签前缀或思考内容）。 */
     private val pending: StringBuilder = StringBuilder()
 
@@ -101,15 +104,18 @@ private class StreamingThinkStripper {
                 // 在思考块内：找闭合标签 "</think>"。
                 val closeStart = pendLow.indexOf(CLOSE_TAG)
                 if (closeStart >= 0) {
+                    thinking.append(pending, 0, closeStart) // 思考内容累积（流式透传给 UI）
                     pending.delete(0, closeStart + CLOSE_TAG.length) // 丢弃闭合标签及其前的思考内容
                     inThink = false
                     continue
                 }
-                // 没找到闭合：保留可能构成 "</think>" 前缀的尾部，其余思考内容直接丢弃。
+                // 没找到闭合：保留可能构成 "</think>" 前缀的尾部，其余思考内容累积进 thinking。
                 val hold = tailPrefixLen(pendLow, CLOSE_TAG)
                 if (hold > 0) {
+                    if (pending.length - hold > 0) thinking.append(pending, 0, pending.length - hold)
                     pending.delete(0, pending.length - hold)
                 } else {
+                    thinking.append(pending) // 整个 pending 都是思考内容
                     pending.setLength(0)
                 }
                 break
@@ -132,10 +138,14 @@ private class StreamingThinkStripper {
     /** 完整原始文本（含思考段），供终态解析。 */
     fun rawText(): String = raw.toString()
 
+    /** 当前累积的思考文本（流式阶段实时更新），供 UI 边想边展示。 */
+    fun thinkingText(): String = thinking.toString()
+
     /** 复位所有状态（降级重试结构化生成时调用，避免旧缓冲污染新路径）。 */
     fun reset() {
         raw.setLength(0)
         visible.setLength(0)
+        thinking.setLength(0)
         pending.setLength(0)
         inThink = false
     }
@@ -190,6 +200,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         contextWindow: Int,
         toolSpecsJson: String?,
         onToken: ((String) -> Unit)?,
+        onThinking: ((String) -> Unit)?,
     ): QuroLlmResult {
         // 🛡️ #1114 聊天门禁：本地模型必须先经「模型配置」显式加载进内存（常驻会话），
         // 才能对话。否则会退化为「每条消息重建 GGUF / MNN 会话」——手机上要几十秒到数分钟，
@@ -230,9 +241,9 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 "ctxWindow=$contextWindow | stream=${onToken != null}"
         )
         val result = when (model.type) {
-            QuroLocalModelType.MNN -> runMnn(model, messages, maxTokens, onToken, toolSpecsJson)
+            QuroLocalModelType.MNN -> runMnn(model, messages, maxTokens, onToken, toolSpecsJson, onThinking)
             QuroLocalModelType.LLAMA_CPP ->
-                runLlama(model, modelName, messages, temperature, maxTokens, contextWindow, onToken, toolSpecsJson)
+                runLlama(model, modelName, messages, temperature, maxTokens, contextWindow, onToken, toolSpecsJson, onThinking)
         }
         val ms = (System.nanoTime() - t0) / 1_000_000
         when (result) {
@@ -263,6 +274,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         maxTokens: Int,
         onToken: ((String) -> Unit)?,
         toolSpecsJson: String? = null,
+        onThinking: ((String) -> Unit)? = null,
     ): QuroLlmResult {
         // 优先复用常驻会话
         val held = (LocalModelLoaders.get() as? LocalModelSessionHolder)?.takeIf { it.isLoaded(model) }?.borrowMnn()
@@ -271,7 +283,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
             // 串行化常驻会话生成；结束时归还计数，unload 才能安全 free。
             genLock.lock()
             try {
-                return generateMnn(held, model, messages, maxTokens, onToken, toolSpecsJson)
+                return generateMnn(held, model, messages, maxTokens, onToken, toolSpecsJson, onThinking)
             } finally {
                 genLock.unlock()
                 (LocalModelLoaders.get() as? LocalModelSessionHolder)?.returnMnn()
@@ -303,7 +315,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         }
 
         return try {
-            generateMnn(session, model, messages, maxTokens, onToken, toolSpecsJson)
+            generateMnn(session, model, messages, maxTokens, onToken, toolSpecsJson, onThinking)
         } finally {
             // 不跨 run 缓存会话：每次重建以保证多轮历史正确性（KV-Cache 不会被旧上下文污染）。
             runCatching { session.release() }
@@ -317,6 +329,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         maxTokens: Int,
         onToken: ((String) -> Unit)?,
         toolSpecsJson: String? = null,
+        onThinking: ((String) -> Unit)? = null,
     ): QuroLlmResult {
         return try {
             val t0 = System.nanoTime()
@@ -599,6 +612,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         contextWindow: Int,
         onToken: ((String) -> Unit)?,
         toolSpecsJson: String? = null,
+        onThinking: ((String) -> Unit)? = null,
     ): QuroLlmResult {
         // 优先复用常驻会话
         val held = (LocalModelLoaders.get() as? LocalModelSessionHolder)?.takeIf { it.isLoaded(model) }?.borrowLlama()
@@ -608,7 +622,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
             // 结束时归还计数，unload 才能安全 free。
             genLock.lock()
             try {
-                return generateLlama(held, model, modelName, messages, temperature, maxTokens, onToken, toolSpecsJson)
+                return generateLlama(held, model, modelName, messages, temperature, maxTokens, onToken, toolSpecsJson, onThinking)
             } finally {
                 genLock.unlock()
                 (LocalModelLoaders.get() as? LocalModelSessionHolder)?.returnLlama()
@@ -676,7 +690,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         }
 
         return try {
-            generateLlama(session, model, modelName, messages, temperature, maxTokens, onToken, toolSpecsJson)
+            generateLlama(session, model, modelName, messages, temperature, maxTokens, onToken, toolSpecsJson, onThinking)
         } finally {
             runCatching { session.release() }
             QuroDiag.log("LocalEngine", "✓ llama session released")
@@ -692,6 +706,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         maxTokens: Int,
         onToken: ((String) -> Unit)?,
         toolSpecsJson: String? = null,
+        onThinking: ((String) -> Unit)? = null,
     ): QuroLlmResult {
         return try {
             // 🔧 回归 #3：每轮生成前先把 KV / 上下文前缀缓存清掉，确保本轮是**纯无状态**生成。
@@ -813,6 +828,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 // 🧠 流式阶段即剥离 <think> 块，避免用户实时看到思考原文（与 MNN 对齐）。
                 val visible = stripper.accept(token)
                 onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
+                onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
                 true
             }
             val ms = (System.nanoTime() - t0) / 1_000_000

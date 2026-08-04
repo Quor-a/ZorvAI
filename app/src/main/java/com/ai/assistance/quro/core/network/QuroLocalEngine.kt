@@ -35,6 +35,7 @@ interface QuroLocalEngine {
         contextWindow: Int = 0,
         toolSpecsJson: String? = null,
         onToken: ((String) -> Unit)? = null,
+        onThinking: ((String) -> Unit)? = null,
     ): QuroLlmResult
 }
 
@@ -49,6 +50,7 @@ object QuroLocalEnginePlaceholder : QuroLocalEngine {
         contextWindow: Int,
         toolSpecsJson: String?,
         onToken: ((String) -> Unit)?,
+        onThinking: ((String) -> Unit)?,
     ): QuroLlmResult {
         val typeName = if (model.type == com.ai.assistance.quro.core.model.QuroLocalModelType.LLAMA_CPP) "llama.cpp" else "MNN"
         return QuroLlmResult.Error(

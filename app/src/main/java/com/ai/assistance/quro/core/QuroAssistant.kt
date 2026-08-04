@@ -147,6 +147,28 @@ class QuroAssistant(
                     }
                     Unit
                 }
+                // 🧠 流式思考回调：思考段边产出边实时上屏（与可见文本双通道并行）。
+                // 思考流可能先于可见文本到达，此时先建一条空 content 占位气泡；
+                // 后续可见文本流到达时 emitStreamToken 会接着填 content（copy 只改 content，不丢 reasoning）。
+                val emitThinkingToken: (String) -> Unit = { acc ->
+                    runCatching {
+                        if (streamPlaceholderId == null) {
+                            val p = QuroMessage(role = "assistant", content = "", reasoning = acc)
+                            store.add(p)
+                            streamPlaceholderId = p.id
+                            lastStreamEmitMs = System.currentTimeMillis()
+                            emit()
+                        } else {
+                            store.update(streamPlaceholderId!!) { it.copy(reasoning = acc) }
+                            val now = System.currentTimeMillis()
+                            if (now - lastStreamEmitMs >= 100L) {
+                                lastStreamEmitMs = now
+                                emit()
+                            }
+                        }
+                    }
+                    Unit
+                }
                 val result = runCatching {
                     if (cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP") {
                         // 本地离线模型（MNN / llama.cpp）：走本地推理引擎，不发起 HTTP 请求。
@@ -199,6 +221,7 @@ class QuroAssistant(
                             } else if (effEnableTools && effectiveSpecs.isNotEmpty()) {
                                 QuroLocalToolsCodec.encodeTools(effectiveSpecs)
                             } else null,
+                            if (stream) emitThinkingToken else null,
                         )
                     } else {
                         val streaming = stream
@@ -451,6 +474,7 @@ class QuroAssistant(
         messages: List<QuroChatMessage>,
         onToken: ((String) -> Unit)? = null,
         toolSpecsJson: String? = null,
+        onThinking: ((String) -> Unit)? = null,
     ): QuroLlmResult {
         val repo = QuroLocalModelRepository(context.applicationContext)
         val all = repo.loadAll()
@@ -475,6 +499,7 @@ class QuroAssistant(
             cfg.contextWindow,
             toolSpecsJson,
             onToken,
+            onThinking,
         )
     }
 
