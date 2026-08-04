@@ -135,7 +135,7 @@ fun QuroVoiceSettingsScreen(
                         val options = listOf(
                             QuroSttPrefs.SOURCE_LOCAL to "本地识别（设备原生 SpeechRecognizer）",
                             QuroSttPrefs.SOURCE_MODEL to "云端模型（已配置的 AI 转写）",
-                            QuroSttPrefs.SOURCE_ONDEVICE to "端侧模型（离线 Sherpa-ONNX）",
+                            QuroSttPrefs.SOURCE_ONDEVICE to "端侧模型（离线 Sherpa-NCNN）",
                         )
                         options.forEachIndexed { i, (id, label) ->
                             Row(

@@ -127,6 +127,9 @@ dependencies {
     // 插件运行时：PluginRuntime.kt（manifest 解析 / 权限网关）依赖 org.json
     implementation(libs.org.json)
 
+    // 应用内文档预览：WebViewAssetLoader（RC-A 内存炸弹 + RC-B pdf.js Worker 同源修复）
+    implementation(libs.androidx.webkit)
+
     // ACI（Agent Capability Interface）协议层：让 QuroAI 成为 ACI 控制方（AI 中枢），
     // 发现并调用第三方 App 通过 ACI Service 暴露的能力。源码现已收进本仓 :aci-core 模块
     // （ai.aci.core.*：IACIService / IACICallback AIDL、ACIRequest / ACIResponse / Capability），
@@ -148,7 +151,7 @@ dependencies {
     // 全部构建失败：仓库根仅含 CMake，无 Gradle 库模块）。官方 Android 集成方式即把 Kotlin 封装源码
     // 直接拷入工程（见 app/src/main/java/com/k2fsa/sherpa/ncnn/），并把预编译 native 库
     //   libsherpa-ncnn-jni.so / libsherpa-ncnn-core.so / libncnn.so / libkaldi-native-fbank-core.so
-    // 放入 app/src/main/jniLibs/arm64-v8a/（从 release 的 sherpa-ncnn-v2.1.15-android.tar.bz2 取，
+    // 放入 app/src/full/jniLibs/arm64-v8a/（从 release 的 sherpa-ncnn-v2.1.15-android.tar.bz2 取，
     // 或用 ./build-android-arm64-v8a.sh 自编译）。本工程 abiFilters 仅 arm64-v8a，故只需该目录。
     // 因此此处不需要 implementation(...) 依赖；如改用第三方/自托管 AAR，请把坐标加在此处。
     // 端侧模型压缩包解压（zip / tar.gz / tar.bz2 / tar）

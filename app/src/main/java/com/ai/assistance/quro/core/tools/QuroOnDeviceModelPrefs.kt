@@ -46,17 +46,19 @@ object QuroOnDeviceModelPrefs {
     /** 单个镜像源。 */
     data class ModelMirror(val name: String, val url: String, val builtIn: Boolean = true)
 
-    /** 内置镜像源（可在此继续扩展预设）。均为 Sherpa-NCNN SenseVoice（中英日韩粤，离线）。 */
-    val BUILTIN_MIRRORS: List<ModelMirror> = listOf(
-        ModelMirror(
-            "GitHub · sherpa-ncnn-sense-voice int8（中英日韩粤 · 离线 · ~206MB）",
-            "https://github.com/k2-fsa/sherpa-ncnn/releases/download/asr-models/sherpa-ncnn-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2"
-        ),
-        ModelMirror(
-            "GitHub · sherpa-ncnn-sense-voice fp16（中英日韩粤 · 更准更大 · ~417MB）",
-            "https://github.com/k2-fsa/sherpa-ncnn/releases/download/asr-models/sherpa-ncnn-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2"
-        ),
-    )
+    /**
+     * 内置镜像源。
+     *
+     * ⚠️ 历史坑：原本内置 Sherpa-NCNN **SenseVoice** 模型（中英日韩粤，206/417MB）。
+     * 但本构建随包的 libsherpa-ncnn-jni.so 仅导出流式 transducer 符号（SherpaNcnn_*），
+     * 不含 OfflineRecognizer / SenseVoice 所需的 OfflineStream 符号；用户下载后调用
+     * OfflineRecognizer.newFromFile() 必抛 UnsatisfiedLinkError，端侧识别永远起不来。
+     *
+     * 故此处不再内置任何「下载了也加载不了」的镜像。端侧识别统一走流式 zipformer
+     * （见 QuroAsrModels 内置目录，模型自带下载逻辑）。用户仍可用「自定义链接」填入
+     * 可加载的流式 transducer 模型（encoder/decoder/joiner .ncnn + tokens.txt）。
+     */
+    val BUILTIN_MIRRORS: List<ModelMirror> = emptyList()
 
     /** 自定义链接的占位标识（下拉里选中它进入自由输入模式）。 */
     const val CUSTOM_ENTRY = "__custom__"

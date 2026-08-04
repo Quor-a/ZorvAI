@@ -66,6 +66,4 @@ class SetCameraDisabledTool : QuroTool {
             "❌ 操作失败: ${e.message}"
         }
     }
-
-    override val requiredPermissions: List<String> get() = listOf(android.Manifest.permission.CAMERA)
 }

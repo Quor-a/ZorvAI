@@ -423,7 +423,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                 onRequest = { Toast.makeText(ctx, "请在 Root 管理器中允许 CapOS", Toast.LENGTH_LONG).show() },
                 testLabel = if (st(PrivilegeLevel.L4).available) "状态" else null,
                 onTest = if (st(PrivilegeLevel.L4).available) {
-                    { "ROOT：${st(PrivilegeLevel.L4).details}（纯净架构下不执行 root 命令）" }
+                    { "ROOT：${st(PrivilegeLevel.L4).details}（root 命令经 root_exec / shizuku_root_exec 工具真实执行，受「权限模式」策略约束）" }
                 } else null,
             )
 
@@ -484,9 +484,6 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                     deferred.value = null
                     // 用户确认后引导开启（L1/L2/L3 跳转系统界面；L4 仅提示）
                     mgr.launchIntentFor(level)?.let { ctx.startActivity(it) }
-                    if (level == PrivilegeLevel.L4) {
-                        Toast.makeText(ctx, "请在 Root 管理器中允许 CapOS", Toast.LENGTH_LONG).show()
-                    }
                     scope.launch {
                         // confirm 回调只认捕获到的那个 d；d 为 null 说明已确认过，直接放行
                         mgr.requestElevation("capos.kernel", level, rationale) { d?.await() ?: true }

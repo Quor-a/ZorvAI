@@ -2,6 +2,8 @@ package com.ai.assistance.quro.core.network
 
 import com.ai.assistance.llama.LlamaSession
 import com.ai.assistance.mnn.MNNLlmSession
+import com.ai.assistance.mnn.MnnModelCapabilities
+import com.ai.assistance.mnn.MnnThinkContent
 import com.ai.assistance.mnn.RepetitionGuard
 import com.ai.assistance.quro.core.QuroChatMessage
 import com.ai.assistance.quro.core.QuroLlmResult
@@ -21,6 +23,128 @@ import java.io.File
  * "每轮都弹 正在处理提示词… X%"。
  */
 private const val LOCAL_PREFILL_PROGRESS_TOKEN_THRESHOLD = 256
+
+/**
+ * 流式 `<think>` 思考段剥离器（回归 #1 流式侧修复）。
+ *
+ * 原生 MNN 会在生成过程中把 `<think>…</think>` 思考原文实时吐给回调；旧逻辑直接把累积缓冲
+ * `sb.toString()` 推给 UI，导致用户能在打字机上**实时看到**思考过程（甚至未闭合的残留
+ * `<think>` 标签一直挂在气泡里）。本类在每次 [accept] 时增量维护两份状态：
+ *
+ * - [raw]：完整原始文本（含思考段），供终态 [MnnThinkContent.split] / [RepetitionGuard] 使用；
+ * - 可见文本：剔除已完成 `<think>…</think>` 块、且**丢弃当前未闭合 `<think>` 尾部**的干净文本，
+ *   作为流式回调的返回值实时上屏。
+ *
+ * 终态仍由 [MnnThinkContent.split] 做最终清洗（`generateMnn` 末尾无条件补推 [finalText]），
+ * 二者互补：流式阶段让用户“看不到”思考，终态保证气泡最终态一定是干净答案。
+ *
+ * 增量扫描用状态机处理 token 被标签边界劈开的情况（如 `"<thi"` + `"nk>world"`），并保守地
+ * 暂缓提交可能构成 `<think>` / `</think>` 前缀的尾部，避免标签泄漏。
+ */
+private class StreamingThinkStripper {
+    /** 完整原始累积文本（保留思考段），终态解析用。 */
+    private val raw: StringBuilder = StringBuilder()
+
+    /** 已确认的可见文本（已丢掉完整思考块）。 */
+    private val visible: StringBuilder = StringBuilder()
+
+    /** 尚未能判定归属的尾部缓冲（可能含未闭合标签前缀或思考内容）。 */
+    private val pending: StringBuilder = StringBuilder()
+
+    /** 当前是否处于 `<think>` 块内部（该段内容需最终丢弃）。 */
+    private var inThink: Boolean = false
+
+    /**
+     * 喂入一个增量 token，返回**当前完整可见文本**（剔除思考块及未闭合思考尾部）。
+     *
+     * @param chunk 原生本次吐出的文本片段（可能为空）。
+     * @return 截至当前的可见文本，可直接推给 UI 流式展示。
+     */
+    fun accept(chunk: String): String {
+        if (chunk.isNotEmpty()) {
+            raw.append(chunk)
+            pending.append(chunk)
+        }
+        drainPending()
+        return visible.toString()
+    }
+
+    /**
+     * 增量扫描 [pending]：把能确定的可见字符提交到 [visible]、把思考内容丢弃，
+     * 并把可能构成标签前缀的尾部保留在 [pending] 中等待后续 chunk。
+     */
+    private fun drainPending() {
+        while (pending.isNotEmpty()) {
+            val pendLow = pending.toString().lowercase()
+            if (!inThink) {
+                // 找开标签 "<think"（含 "<think>" / "<think >" 等变体），遇到 '>' 即视为开标签结束。
+                val openStart = pendLow.indexOf(OPEN_MARKER)
+                if (openStart >= 0) {
+                    if (openStart > 0) visible.append(pending, 0, openStart)
+                    val gt = pending.indexOf('>', openStart)
+                    if (gt < 0) break // 形如 "<think"（尚未见到 '>'）：保留整个 pending 等待后续
+                    pending.delete(0, gt + 1)
+                    inThink = true
+                    continue
+                }
+                // 没找到完整开标签：提交除“可能构成 <think 前缀”的尾部外的所有内容，避免标签泄漏。
+                val hold = tailPrefixLen(pendLow, OPEN_MARKER)
+                if (hold > 0) {
+                    visible.append(pending, 0, pending.length - hold)
+                    pending.delete(0, pending.length - hold)
+                } else {
+                    visible.append(pending)
+                    pending.setLength(0)
+                }
+                break
+            } else {
+                // 在思考块内：找闭合标签 "</think>"。
+                val closeStart = pendLow.indexOf(CLOSE_TAG)
+                if (closeStart >= 0) {
+                    pending.delete(0, closeStart + CLOSE_TAG.length) // 丢弃闭合标签及其前的思考内容
+                    inThink = false
+                    continue
+                }
+                // 没找到闭合：保留可能构成 "</think>" 前缀的尾部，其余思考内容直接丢弃。
+                val hold = tailPrefixLen(pendLow, CLOSE_TAG)
+                if (hold > 0) {
+                    pending.delete(0, pending.length - hold)
+                } else {
+                    pending.setLength(0)
+                }
+                break
+            }
+        }
+    }
+
+    /**
+     * 返回 [low] 尾部有多少字符是 [marker] 的**前缀**（大小写不敏感）。
+     * 用于在标签被 chunk 边界劈开时保守地暂缓提交，避免 `<` 等字符泄漏上屏。
+     */
+    private fun tailPrefixLen(low: String, marker: String): Int {
+        val max = low.length.coerceAtMost(marker.length - 1)
+        for (len in max downTo 1) {
+            if (low.endsWith(marker.substring(0, len))) return len
+        }
+        return 0
+    }
+
+    /** 完整原始文本（含思考段），供终态解析。 */
+    fun rawText(): String = raw.toString()
+
+    /** 复位所有状态（降级重试结构化生成时调用，避免旧缓冲污染新路径）。 */
+    fun reset() {
+        raw.setLength(0)
+        visible.setLength(0)
+        pending.setLength(0)
+        inThink = false
+    }
+
+    private companion object {
+        private const val OPEN_MARKER = "<think"
+        private const val CLOSE_TAG = "</think>"
+    }
+}
 
 /**
  * 原生本地推理引擎（full 风味专用实现）。
@@ -191,65 +315,236 @@ class QuroLocalEngineNative : QuroLocalEngine {
             val t0 = System.nanoTime()
             var firstTokenMs: Long? = null
             var tokenCount = 0
-            val sb = StringBuilder()
+            // 🔧 4D：把透传给原生的 maxTokens 钳制到一个合理上限。
+            // 旧代码直接透传调用方给的 maxTokens，而 MNN 原生上限是 8192（mnnllmnative.cpp:1012），
+            // 手机 CPU 上对 8192 token 解码要数分钟 → 离线推理卡死/永久转圈（症状 4 主因）。
+            // 但 1024 对思考模型偏紧（思考+回答易截断），上调到 2048：思考模型有真实余量，
+            // 非思考模型也仍在可控解码时长内（MNN 原生上限 8192，留有富余）。
+            val effMaxTokens = maxTokens.coerceIn(128, 2048)
+            // 🧠 1.A：流式思考剥离器——增量维护「可见文本」（剔除 <think> 块，含未闭合尾部），
+            // 同时累积原始全文供终态解析。这样生成过程中用户不会实时看到思考原文。
+            val stripper = StreamingThinkStripper()
+            // 工具指令（system 文本降级注入）只在此处算一次，结构化与降级路径共用，避免重复注入。
+            val effectiveMessages = if (toolSpecsJson != null) {
+                maybeInjectToolInstruction(model, messages, toolSpecsJson)
+            } else {
+                messages
+            }
             val ok = if (toolSpecsJson != null) {
                 // 结构化路径：把工具描述注入 prompt，让模型能触发工具调用。
                 // MNN 原生无 parseToolCallResponse，回调收到的是 raw 模型文本（含 <tool_call> 标签），
-                // 生成结束后由 QuroLocalToolsCodec.parseToolCalls 解析。
-                val messagesJson = QuroLocalToolsCodec.encodeMessages(messages)
-                QuroDiag.log("LocalEngine", "▶ MNN generateStreamStructured | tools=${toolSpecsJson.length} chars")
-                session.generateStreamStructured(messagesJson, toolSpecsJson, maxTokens) { token ->
+                // 生成结束后由 QuroLocalToolsCodec.parseDetailed 解析。
+                val messagesJson = QuroLocalToolsCodec.encodeMessages(effectiveMessages)
+                QuroDiag.log("LocalEngine", "▶ MNN generateStreamStructured | tools=${toolSpecsJson.length} chars | effMax=$effMaxTokens")
+                val structuredOk = session.generateStreamStructured(messagesJson, toolSpecsJson, effMaxTokens) { token ->
                     if (firstTokenMs == null) firstTokenMs = (System.nanoTime() - t0) / 1_000_000
                     tokenCount++
-                    sb.append(token)
-                    // 实时把「累计文本」推给 UI（与云端 onToken 语义一致）。
-                    onToken?.let { cb -> runCatching { cb(sb.toString()) } }
+                    // 流式阶段即剥离 <think> 块，避免用户实时看到思考原文（症状 1 流式侧）。
+                    val visible = stripper.accept(token)
+                    onToken?.let { cb -> runCatching { cb(visible) } }
                     true
+                }
+                if (!structuredOk || stripper.rawText().isEmpty()) {
+                    // 🔧 2.B 降级兜底（健壮性）：结构化渲染失败 / 无输出（ok=false 或空）——直接卡死
+                    // 比无声失败更糟。退回普通 generateStream，把已注入 system 文本的工具定义再试一次。
+                    // effectiveMessages 已含工具指令，此处绝不重复注入。
+                    QuroDiag.log(
+                        "LocalEngine",
+                        "⚠ MNN 结构化生成未产出（ok=$structuredOk, chars=${stripper.rawText().length}），" +
+                            "降级为普通 generateStream 重试（工具定义已注入 system 文本）"
+                    )
+                    stripper.reset()
+                    val history = buildMnnHistory(effectiveMessages)
+                    val fallbackOk = session.generateStream(history, effMaxTokens) { token ->
+                        if (firstTokenMs == null) firstTokenMs = (System.nanoTime() - t0) / 1_000_000
+                        tokenCount++
+                        val visible = stripper.accept(token)
+                        onToken?.let { cb -> runCatching { cb(visible) } }
+                        true
+                    }
+                    fallbackOk
+                } else {
+                    structuredOk
                 }
             } else {
                 // 非结构化路径：原有 (role, content) 历史拼接。
-                val history = buildMnnHistory(messages)
-                session.generateStream(history, maxTokens) { token ->
+                val history = buildMnnHistory(effectiveMessages)
+                session.generateStream(history, effMaxTokens) { token ->
                     if (firstTokenMs == null) firstTokenMs = (System.nanoTime() - t0) / 1_000_000
                     tokenCount++
-                    sb.append(token)
-                    onToken?.let { cb -> runCatching { cb(sb.toString()) } }
+                    val visible = stripper.accept(token)
+                    onToken?.let { cb -> runCatching { cb(visible) } }
                     true
                 }
             }
             val ms = (System.nanoTime() - t0) / 1_000_000
             QuroDiag.log(
                 "LocalEngine",
-                "MNN generate | ${ms}ms | firstToken=${firstTokenMs ?: -1}ms | tokens=$tokenCount | ok=$ok | chars=${sb.length} | structured=${toolSpecsJson != null}"
+                "MNN generate | ${ms}ms | firstToken=${firstTokenMs ?: -1}ms | tokens=$tokenCount | ok=$ok | chars=${stripper.rawText().length} | structured=${toolSpecsJson != null}"
             )
-            if (sb.isEmpty()) {
-                QuroLlmResult.Error("MNN 推理未产生任何输出（ok=$ok）。")
+            if (stripper.rawText().isEmpty()) {
+                // 🛡️ B-1：不再用「未产生任何输出（ok=false）」糊弄用户。
+                // 原生层失败时会把具体原因写进 last-error 通道（模板渲染为空 / 分词为 0 /
+                // 原生异常……），这里取回已翻译好的中文提示直接展示。
+                val nativeError = session.lastNativeError
+                val reason = nativeError?.message ?: buildMnnEmptyOutputHint(toolSpecsJson != null)
+                QuroDiag.log(
+                    "LocalEngine",
+                    "✗ MNN 无输出 | ok=$ok | code=${nativeError?.code ?: "(无)"} | " +
+                        "detail=${nativeError?.detail ?: "(无)"}"
+                )
+                QuroLlmResult.Error(reason)
             } else {
                 // 复读兜底命中时裁掉退化尾巴，只保留少量重复；未命中则原样返回。
                 val degeneration = session.lastDegeneration
-                val finalText = RepetitionGuard.trimDegenerateTail(sb.toString(), degeneration)
+                var finalText = RepetitionGuard.trimDegenerateTail(stripper.rawText(), degeneration)
                 if (degeneration != null) {
                     QuroDiag.log(
                         "LocalEngine",
-                        "✂ MNN 退化尾巴已裁剪 | ${sb.length} → ${finalText.length} 字符"
+                        "✂ MNN 退化尾巴已裁剪 | ${stripper.rawText().length} → ${finalText.length} 字符"
                     )
-                    // 把裁剪后的干净文本补推给 UI，避免界面上残留复读片段。
-                    onToken?.let { cb -> runCatching { cb(finalText) } }
                 }
+
+                // 🧠 B-4：切出 <think>…</think> 思考段。
+                // 必须在工具解析之前做——思考段里常常有"示例性"的 <tool_call> 片段，
+                // 不切掉会被当成真实调用触发一次莫名其妙的工具执行。
+                val split = MnnThinkContent.split(finalText)
+                val reasoning: String? = split.reasoning.takeIf { it.isNotEmpty() }
+                if (reasoning != null) {
+                    QuroDiag.log(
+                        "LocalEngine",
+                        "🧠 MNN thinking 段已分离 | reasoning=${reasoning.length} 字符 | " +
+                            "answer=${split.answer.length} 字符" +
+                            if (split.answerFromReasoning) " | ⚠ 正文为空，已回退展示思考内容" else ""
+                    )
+                    finalText = split.answer
+                }
+
+                // 把清洗后的干净文本（已切走思考段 / 裁掉退化尾巴）**无条件**补推给 UI，
+                // 确保界面最终态永远是干净答案，永远不会残留原始流缓冲里的 <think> 标签或复读片段。
+                // ⚠️ 必须是无条件：旧逻辑仅在 reasoning/degeneration != null 时才补推，但
+                // MnnThinkContent.split 没认出思考标签时 reasoning 为 null → 条件不成立 → 漏推，
+                // UI 一直挂着含 <think> 的原始流缓冲 → "思考泄漏"回归（症状 1）。
+                onToken?.let { cb -> runCatching { cb(finalText) } }
+
                 // 结构化路径：检查模型输出是否包含工具调用。
                 if (toolSpecsJson != null) {
-                    val calls = QuroLocalToolsCodec.parseToolCalls(finalText)
-                    if (calls.isNotEmpty()) {
-                        QuroDiag.log("LocalEngine", "✓ MNN tool calls detected | calls=${calls.size}")
-                        return QuroLlmResult.ToolCalls(calls)
+                    // 先解析已剥离思考段的正文（常规：<tool_call> 在 </think> 之后）
+                    var parsed = QuroLocalToolsCodec.parseDetailed(finalText)
+                    // 🧠 修复（离线工具+思考不可用）：思考模型常把真实 <tool_call> 放在 <think> 块内输出，
+                    // 上面的 split 已把思考段切走，会导致工具调用被一并丢弃 → "有思考+工具却不能用"。
+                    // 若正文里没解析到调用、但原始全文（含思考段）里有，则从全文恢复真实工具调用。
+                    if (parsed.calls.isEmpty() && reasoning != null) {
+                        val fromFull = QuroLocalToolsCodec.parseDetailed(stripper.rawText())
+                        if (fromFull.calls.isNotEmpty()) {
+                            QuroDiag.log(
+                                "LocalEngine",
+                                "✓ MNN 从思考段内恢复工具调用 | calls=${fromFull.calls.size} | " +
+                                    "names=${fromFull.calls.joinToString(",") { it.name }}"
+                            )
+                            parsed = fromFull
+                        }
+                    }
+                    if (parsed.calls.isNotEmpty()) {
+                        QuroDiag.log(
+                            "LocalEngine",
+                            "✓ MNN tool calls detected | calls=${parsed.calls.size} | " +
+                                "names=${parsed.calls.joinToString(",") { it.name }}" +
+                                (parsed.diagnostic?.let { " | 诊断=$it" } ?: "")
+                        )
+                        return QuroLlmResult.ToolCalls(parsed.calls, reasoning = reasoning)
+                    }
+                    // 🛡️ B-2：模型看起来想调工具却没解析出来 —— 这种"无声失败"以前完全不可见。
+                    if (parsed.sawMarker) {
+                        QuroDiag.log(
+                            "LocalEngine",
+                            "⚠ MNN 疑似工具调用解析失败 | 诊断=${parsed.diagnostic ?: "(无)"} | " +
+                                "原文前 200 字=${finalText.take(200)}"
+                        )
+                        finalText = finalText + "\n\n⚠️ 模型尝试调用工具但输出格式不规范，" +
+                            "本次未能执行（${parsed.diagnostic ?: "格式无法识别"}）。" +
+                            "该模型可能未针对工具调用训练，建议在模型配置里关闭「本地工具调用」。"
+                        onToken?.let { cb -> runCatching { cb(finalText) } }
+                    }
+                    // 🔎 回归 #2 诊断（model did not emit tool_call）：工具已配置、模型也没吐
+                    // <tool_call> 标记，说明模板并未真正把工具描述交付给模型
+                    // （caps.supportsTools 误判的典型症状）。这一诊断替代此前"开了工具调用却
+                    // 毫无反应"的完全无声失败；结合上面的 withToolInstruction 注入，绝大多数
+                    // 模型现在应能拿到工具描述。
+                    if (!parsed.sawMarker) {
+                        QuroDiag.log(
+                            "LocalEngine",
+                            "⚠ MNN 工具未触发 | 模型未输出 <tool_call> 标记（sawMarker=false），" +
+                                "模板可能未真正交付工具描述 | 诊断=${parsed.diagnostic ?: "(无)"}"
+                        )
                     }
                 }
-                QuroLlmResult.Text(finalText)
+                QuroLlmResult.Text(finalText, reasoning = reasoning)
             }
         } catch (e: Throwable) {
             QuroDiag.log("LocalEngine", "✗ MNN 推理异常 | ${e.message}\n${e.stackTraceToString()}")
             QuroLlmResult.Error("MNN 推理异常：${e.message}")
         }
+    }
+
+    /**
+     * 始终把工具定义注入 MNN 的 system 指令（回归 #2 修复）。
+     *
+     * 判定依据来自 [MnnModelCapabilities.probe]（读模型自带 llm_config.json 的 chat_template），
+     * 但不是按它来决定"要不要注入"——[MnnModelCapabilities.probe] 仅在 chat_template 字符串
+     * **包含** "tools" 子串时就乐观置 `supportsTools=true`，而很多模型的模板提到 "tools"
+     * 却并不真正渲染 jinja 的 tools 上下文，于是原生 `set_config(tools)` 路径被静默丢弃，
+     * 模型永远看不到工具描述 → 不吐 `<tool_call>`，且无 ok=false、无崩溃，表现为"开了工具调用
+     * 却毫无反应"的无声失败。
+     *
+     * 因此这里**不依赖 `caps.supportsTools` 这个不可靠信号**：无论 caps 怎么说，都走
+     * [QuroLocalToolsCodec.withToolInstruction] 把工具定义作为 system 文本降级注入一份
+     * （belt-and-suspenders，与原生 jinja context 那条路径并行生效），保证模型至少能从 system
+     * 文本里读到工具描述。仅在无法定位模型目录 / 能力探测彻底失败时，才回退原样返回（此时本就无法注入）。
+     *
+     * @param model 当前本地模型（用于定位模型目录）。
+     * @param messages 原始消息列表。
+     * @param toolSpecsJson OpenAI 兼容的 tools JSON 数组字符串。
+     * @return 注入了 system 工具指令的新消息列表；无法定位模型时原样返回。
+     */
+    private fun maybeInjectToolInstruction(
+        model: QuroLocalModel,
+        messages: List<QuroChatMessage>,
+        toolSpecsJson: String,
+    ): List<QuroChatMessage> {
+        // 仅用于打一行诊断，不再决定注入与否。
+        val dir = resolveMnnDirStatic(model.path) ?: return messages
+        val caps = runCatching { MnnModelCapabilities.probe(dir) }.getOrNull()
+
+        val note = when {
+            caps == null -> "（能力探测失败，仍注入 system 指令）"
+            !caps.hasChatTemplate -> "（无 jinja.chat_template，已用内置 ChatML 兜底，仍注入 system 指令）"
+            caps.supportsTools -> "（模板含 tools 子串，仍额外注入 system 指令做双保险）"
+            else -> "（模板不消费 tools，已降级为 system 指令注入）"
+        }
+        QuroDiag.log(
+            "LocalEngine",
+            "🔧 MNN 工具指令注入 | $note"
+        )
+        return QuroLocalToolsCodec.withToolInstruction(messages, toolSpecsJson)
+    }
+
+    /**
+     * 原生层没留下具体原因时的兜底提示。
+     *
+     * 之所以还要分「是否开了工具调用」两版：这两条路径在原生侧走的是**完全不同**的函数
+     * （结构化模板 vs 直接历史拼接），排查方向也不一样，给一句笼统的话等于什么都没说。
+     *
+     * @param structured 本轮是否走了带工具定义的结构化路径。
+     * @return 面向用户的中文提示。
+     */
+    private fun buildMnnEmptyOutputHint(structured: Boolean): String = if (structured) {
+        "开启工具调用后，MNN 推理没有产生任何内容，且原生层未返回具体原因。" +
+            "多数情况是该模型没有针对工具调用训练（llm_config.json 的 chat_template 不处理 tools）。" +
+            "建议：在「模型配置」里关闭「本地工具调用」后重试；若关闭后能正常对话，即可确认是模型能力问题。"
+    } else {
+        "MNN 推理没有产生任何内容，且原生层未返回具体原因。" +
+            "请确认模型目录完整（llm_config.json、权重、tokenizer 文件齐全），或尝试重新加载模型。"
     }
 
     /**
@@ -336,7 +631,8 @@ class QuroLocalEngineNative : QuroLocalEngine {
         // 中文约 1.5 char/token，英文约 4 char/token；取保守的 1.5 避免低估。
         val estPromptTokens = (promptChars * 2 / 3) + 64
         // 本地生成上限：手机 CPU 每 token 几十~几百毫秒，放任 4096 会跑好几分钟。
-        val effMaxTokens = maxTokens.coerceIn(128, 1024)
+        // 但 1024 对思考模型偏紧（思考+回答易截断），上调到 2048 给思考模型真实余量。
+        val effMaxTokens = maxTokens.coerceIn(128, 2048)
         val needed = estPromptTokens + effMaxTokens + 256
         val nCtx = ((needed + 1023) / 1024 * 1024).coerceIn(2048, 8192)
         // 线程数：原硬编码 4，现代手机 6~8 核，prefill 是纯 CPU 密集型，提上去直接缩短首 token 时延。
@@ -386,6 +682,17 @@ class QuroLocalEngineNative : QuroLocalEngine {
         toolSpecsJson: String? = null,
     ): QuroLlmResult {
         return try {
+            // 🔧 回归 #3：每轮生成前先把 KV / 上下文前缀缓存清掉，确保本轮是**纯无状态**生成。
+            // Kotlin 侧本来就每轮把完整历史重新交给模板从头 prefill（llama.cpp 无状态），
+            // 而原生层（llama_jni_stub.cpp 的 Plan A KV 前缀复用）会在轮间复用 KV——
+            // 当模板把共享前缀重渲染出 token 漂移（addAssistant=true 平移尾部）或触发头部截断时，
+            // 复用的 KV 错位 → 模型在陈旧/残缺 KV 上续写 → 复读旧答案（history loop）。
+            // 既然 Kotlin 已每轮重发全量历史，原生 KV 复用纯属冗余且有害，这里直接 invalidate。
+            // 代价仅是放弃 Plan A 的 prefill 加速，换取多轮历史不再错位——可接受。
+            QuroDiag.log("LocalEngine", "▶ llama resetContext start (无状态化本轮)")
+            runCatching { session.resetContext() }
+            QuroDiag.log("LocalEngine", "✓ llama resetContext done")
+
             QuroDiag.log("LocalEngine", "▶ llama setSamplingParams start")
             // 设置采样参数（仅 temperature 来自调用方，其余取保守默认值）。
             runCatching {
@@ -438,7 +745,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     "firstUser=[$diagFirstUser] | lastUser=[$diagLastUser]"
             )
 
-            val effMaxTokens = maxTokens.coerceIn(128, 1024)
+            val effMaxTokens = maxTokens.coerceIn(128, 2048)
             QuroDiag.log("LocalEngine", "▶ llama generateStream start | maxTokens=$effMaxTokens")
             // 截断估算：如果 prompt 估算 token 数超过 nCtx - effMaxTokens，原生层会从头部截断，
             // system/人格身份会被吃掉。记一条诊断日志，便于排查"第二轮失忆"问题。
@@ -455,6 +762,11 @@ class QuroLocalEngineNative : QuroLocalEngine {
             var tokenCount = 0
             var progressReported = false
             val sb = StringBuilder()
+            // 🧠 思考段流式剥离（与 MNN 对齐）：llama.cpp 思考模型（Qwen3 / DeepSeek-R1 系）会把
+            // <think>…</think> 直接吐进 token 流，若不剥离，思考原文会实时上屏并最终残留在气泡里
+            // （"有思考但是不能用"的 CPP 侧观感）。复用 MNN 路径同款 StreamingThinkStripper，
+            // 仅把剔除思考块后的可见文本推给 UI；终态再统一清洗。
+            val stripper = StreamingThinkStripper()
             val ok = session.generateStream(
                 prompt,
                 effMaxTokens,
@@ -486,10 +798,9 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 }
                 tokenCount++
                 sb.append(token)
-                // ⚠️ #1112 修复其一（决定性）：把「累计文本」实时推给 UI。
-                // 手机 CPU 上 prefill + 解码常需数十秒到数分钟，此前本地路径完全不回吐 token，
-                // UI 在整段生成结束前一个字都拿不到 → 用户观感就是「不闪退但也不回复」。
-                onToken?.let { cb -> runCatching { cb(sb.toString()) } }
+                // 🧠 流式阶段即剥离 <think> 块，避免用户实时看到思考原文（与 MNN 对齐）。
+                val visible = stripper.accept(token)
+                onToken?.let { cb -> runCatching { cb(visible) } }
                 true
             }
             val ms = (System.nanoTime() - t0) / 1_000_000
@@ -497,13 +808,9 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 "LocalEngine",
                 "✓ llama generate done | ${ms}ms | firstToken=${firstTokenMs ?: -1}ms | tokens=$tokenCount | ok=$ok | chars=${sb.length}"
             )
-            // ⚠️ 这里以前写的是 `if (!ok && sb.isEmpty())` —— 只有原生返回 false 才报错。
-            // 但最常见的"不回复"恰恰是 **ok=true 且 sb 为空**：模型第一个 token 就吐 EOG，
-            // 生成循环立刻 break，原生认为"正常结束"返回 true → 走到 Text("") →
-            // 聊天气泡纯空白、无任何提示，日志里也看不出所以然。
-            // 现在只要没有任何输出就判失败，并把原生记录的真实原因带出来给用户看。
+            // ⚠️ 只要没有任何输出就判失败（ok=true 且空输出 = 首个 token 即 EOG，旧逻辑漏判）。
             val nativeErr = runCatching { session.lastError() }.getOrNull()
-            if (sb.isEmpty()) {
+            if (stripper.rawText().isEmpty()) {
                 val reason = nativeErr
                     ?: if (!ok) "原生会话返回失败且无输出" else "模型未产生任何输出（首个 token 即结束符）"
                 QuroDiag.log("LocalEngine", "✗ llama 无输出 | ok=$ok | nativeErr=$nativeErr")
@@ -515,20 +822,60 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 if (nativeErr != null) {
                     QuroDiag.log("LocalEngine", "⚠ llama 部分输出但有原生错误 | $nativeErr")
                 }
-                // 结构化路径：用原生 parseToolCallResponse 检查模型输出是否包含工具调用。
-                // llama.cpp 的 common_chat_parse 能识别多种 tool call 格式（JSON / Hermes / Mistral 等），
-                // 返回 OpenAI 兼容 JSON；QuroLocalToolsCodec.parseToolCalls 负责提取 QuroToolCall 列表。
+                // 🧠 切出 <think>…</think> 思考段（与 MNN 对齐）。必须在工具解析之前做，
+                // 否则思考段里示例性的 <tool_call> 会被误当成真实调用。
+                val split = MnnThinkContent.split(stripper.rawText())
+                val reasoning: String? = split.reasoning.takeIf { it.isNotEmpty() }
+                if (reasoning != null) {
+                    QuroDiag.log(
+                        "LocalEngine",
+                        "🧠 llama thinking 段已分离 | reasoning=${reasoning.length} 字符 | answer=${split.answer.length} 字符" +
+                            if (split.answerFromReasoning) " | ⚠ 正文为空，已回退展示思考内容" else ""
+                    )
+                }
+                // 终态无条件把干净正文（已切走思考段）补推给 UI，确保气泡最终态不含 <think> 残留。
+                val finalText = split.answer
+                onToken?.let { cb -> runCatching { cb(finalText) } }
+
+                // 结构化路径：原生 parseToolCallResponse 优先；未命中（模板无 parser / 思考段内 <tool_call>）
+                // 时回退通用文本解析，避免工具调用被吞。
                 if (toolSpecsJson != null) {
-                    val toolCallJson = runCatching { session.parseToolCallResponse(sb.toString()) }.getOrNull()
-                    if (toolCallJson != null) {
-                        val calls = QuroLocalToolsCodec.parseToolCalls(toolCallJson)
-                        if (calls.isNotEmpty()) {
-                            QuroDiag.log("LocalEngine", "✓ llama tool calls detected | calls=${calls.size}")
-                            return QuroLlmResult.ToolCalls(calls)
+                    val detailed = QuroLocalToolsCodec.parseDetailed(finalText)
+                    val toolCallJson = runCatching { session.parseToolCallResponse(stripper.rawText()) }.getOrNull()
+                    var calls = if (toolCallJson != null) QuroLocalToolsCodec.parseToolCalls(toolCallJson) else emptyList()
+                    if (calls.isEmpty()) {
+                        calls = detailed.calls
+                        // 正文无调用但思考段内有真实 <tool_call>：从全文恢复（与 MNN 对齐）。
+                        if (calls.isEmpty() && reasoning != null) {
+                            val fromFull = QuroLocalToolsCodec.parseDetailed(stripper.rawText())
+                            if (fromFull.calls.isNotEmpty()) {
+                                QuroDiag.log(
+                                    "LocalEngine",
+                                    "✓ llama 从思考段内恢复工具调用 | calls=${fromFull.calls.size} | names=${fromFull.calls.joinToString(",") { it.name }}"
+                                )
+                                calls = fromFull.calls
+                            }
                         }
                     }
+                    if (calls.isNotEmpty()) {
+                        QuroDiag.log(
+                            "LocalEngine",
+                            "✓ llama tool calls detected | calls=${calls.size} | names=${calls.joinToString(",") { it.name }}"
+                        )
+                        return QuroLlmResult.ToolCalls(calls, reasoning = reasoning)
+                    }
+                    if (detailed.sawMarker) {
+                        QuroDiag.log(
+                            "LocalEngine",
+                            "⚠ llama 疑似工具调用解析失败 | 诊断=${detailed.diagnostic ?: "(无)"} | 原文前 200 字=${finalText.take(200)}"
+                        )
+                        val withNote = finalText + "\n\n⚠️ 模型尝试调用工具但输出格式不规范，本次未能执行（${detailed.diagnostic ?: "格式无法识别"}）。建议关闭「本地工具调用」。"
+                        onToken?.let { cb -> runCatching { cb(withNote) } }
+                        return QuroLlmResult.Text(withNote, reasoning = reasoning)
+                    }
+                    QuroDiag.log("LocalEngine", "⚠ llama 工具未触发 | 模型未输出 <tool_call>（sawMarker=false）")
                 }
-                QuroLlmResult.Text(sb.toString())
+                QuroLlmResult.Text(finalText, reasoning = reasoning)
             }
         } catch (e: Throwable) {
             QuroDiag.log("LocalEngine", "✗ llama 推理异常 | ${e.message}\n${e.stackTraceToString()}")
@@ -745,6 +1092,29 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 )
             }
             QuroDiag.log("LocalEngine", "✓ MNN 抗复读已启用 | 采样层 penalty 注入 + 流式重复检测兜底")
+
+            // 🔎 B-4：从模型自带 llm_config.json 探测真实能力（不按模型名猜白名单）。
+            // 这条日志是排查「有工具调用/思考但是不能用」的第一现场：
+            // tools=✗ 说明模型模板压根不消费 tools，开工具调用只会得到垃圾输出或 0 输出。
+            val caps = MnnModelCapabilities.probe(dir)
+            QuroDiag.log("LocalEngine", "🔎 MNN 模型能力探测 | ${caps.summary()}")
+            if (!caps.hasChatTemplate) {
+                QuroDiag.log(
+                    "LocalEngine",
+                    "⚠ 该模型没有 jinja.chat_template，结构化（工具调用）路径将使用内置 ChatML 兜底模板；" +
+                        "若模型不是 ChatML 体系，输出质量会明显下降。"
+                )
+            }
+            // 思考模型：显式打开 enable_thinking。以前这个开关写好了却从来没人调用，
+            // 导致 Qwen3 一类模型在 MNN 上永远拿不到思考段（"有思考但是不能用"）。
+            if (caps.supportsThinkingToggle) {
+                val applied = runCatching { session.setThinkingMode(true) }.getOrDefault(false)
+                QuroDiag.log(
+                    "LocalEngine",
+                    if (applied) "🧠 MNN thinking 模式已开启（模板支持 enable_thinking）"
+                    else "⚠ MNN thinking 模式开启失败（enable_thinking 注入被原生层拒绝），按普通模型继续"
+                )
+            }
             return session
         }
 

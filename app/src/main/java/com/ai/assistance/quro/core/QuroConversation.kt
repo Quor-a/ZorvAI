@@ -56,6 +56,11 @@ class QuroConversationStore {
 
     fun clear() = synchronized(lock) { messages.clear() }
 
+    /** 按 id 删除某条消息（如本地模型加载占位气泡在工具调用轮需清除，避免残留可见）。 */
+    fun remove(id: String) {
+        synchronized(lock) { messages.removeAll { it.id == id } }
+    }
+
     /**
      * 转为发送给 LLM 的消息列表（保留工具调用/结果上下文）。
      *
@@ -64,7 +69,7 @@ class QuroConversationStore {
      *   只丢弃过旧的聊天轮次。这样长对话不会把上下文窗口撑爆 → 避免网关/模型静默丢弃
      *   前部上下文或整个 tools 字段（表现为「丢失上下文 / 回复变水 / 工具调用失效」）。
      */
-    fun toLlmMessages(system: QuroMessage? = null, contextWindow: Int = 0): List<QuroChatMessage> {
+    fun toLlmMessages(system: QuroMessage? = null, contextWindow: Int = 0, historyRounds: Int = 0): List<QuroChatMessage> {
         val built = mutableListOf<QuroChatMessage>()
         system?.let { built.add(QuroChatMessage(it.role, it.content)) }
         // 🔧 #765：先取锁快照，后续遍历快照，避免与 IO 线程的 add/update 并发修改冲突。
@@ -82,14 +87,17 @@ class QuroConversationStore {
             }
             built.add(QuroChatMessage(m.role, content, m.toolCalls, m.toolCallId, m.attachments))
         }
-        if (contextWindow <= 0) return built
+        // 「保留对话轮数」对话框级覆盖：仅保留最近 N 个 (用户+助手) 轮次，其余丢弃。
+        // 仅当 historyRounds > 0 时生效；0/未设置则跳过（与历史行为完全一致）。
+        val capped = if (historyRounds > 0) capRecentRounds(built, historyRounds) else built
+        if (contextWindow <= 0) return capped
 
         val sysTokens = system?.let { estTokens(it.content) } ?: 0
         var budget = contextWindow - sysTokens
-        val nonSys = built.filter { it.role != "system" }
+        val nonSys = capped.filter { it.role != "system" }
         if (budget <= 0) {
             // 预算连 system 都不够：仅保留 system + 最后一条消息，避免空请求
-            return (built.filter { it.role == "system" } + nonSys.takeLast(1))
+            return (capped.filter { it.role == "system" } + nonSys.takeLast(1))
         }
 
         // ═══ 串台防御（v429+）：巨型消息降权裁剪 ═══
@@ -121,7 +129,18 @@ class QuroConversationStore {
             }
             // 巨型消息放不下就跳过，不 break（后面可能有小一点的巨型消息能放下）
         }
-        return (built.filter { it.role == "system" } + kept.asReversed())
+        return (capped.filter { it.role == "system" } + kept.asReversed())
+    }
+
+    /**
+     * 保留最近 N 个 (用户+助手) 轮次：始终保留 system 提示，再从 body 中取最后 N*2 条消息。
+     * 既限制历史轮数，又不破坏 system 提示与工具上下文（contextWindow 仍作为单条超大消息的安全网）。
+     */
+    private fun capRecentRounds(built: List<QuroChatMessage>, rounds: Int): List<QuroChatMessage> {
+        val sys = built.filter { it.role == "system" }
+        val body = built.filter { it.role != "system" }
+        val keep = body.takeLast(rounds * 2)
+        return sys + keep
     }
 
     /** token 估算（中文/英文混合取 char/4 近似）。 */

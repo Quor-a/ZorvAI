@@ -51,6 +51,7 @@ import com.ai.assistance.quro.core.tools.AsrModelCatalog
 import com.ai.assistance.quro.core.tools.AsrModelSpec
 import com.ai.assistance.quro.core.tools.AsrModelType
 import com.ai.assistance.quro.core.tools.MIN_VALID_MODEL_BYTES
+import com.ai.assistance.quro.core.tools.formatBytes
 import com.ai.assistance.quro.ui.theme.Accent
 import com.ai.assistance.quro.ui.theme.Line
 import com.ai.assistance.quro.ui.theme.Sage
@@ -123,14 +124,18 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
     var selectedSpecId by remember { mutableStateOf(QuroOnDeviceModelPrefs.getSelectedSpecId(ctx)) }
     var customMode by remember { mutableStateOf(QuroOnDeviceModelPrefs.getCustomMode(ctx)) }
     var customLink by remember { mutableStateOf(QuroOnDeviceModelPrefs.getCustomLink(ctx)) }
-    var customType by remember { mutableStateOf(runCatching { AsrModelType.valueOf(QuroOnDeviceModelPrefs.getCustomType(ctx)) }.getOrNull() ?: AsrModelType.SENSE_VOICE) }
+    // 自定义链接的模型类型：当前引擎只跑流式 transducer，保留下拉仅为将来扩展
+    var customType by remember { mutableStateOf(AsrModelType.STREAMING_TRANSDUCER) }
     var downloading by remember { mutableStateOf(false) }
     var dlDownloaded by remember { mutableStateOf(0L) }
     var dlTotal by remember { mutableStateOf(0L) }
     var dlState by remember { mutableStateOf<String?>(null) }
     var deployStatus by remember { mutableStateOf(QuroOnDeviceModelPrefs.getStatus(ctx)) }
     var deployedName by remember { mutableStateOf(QuroOnDeviceModelPrefs.getDeployedName(ctx)) }
-    var deployedType by remember { mutableStateOf(QuroOnDeviceModelPrefs.getDeployedType(ctx)) }
+    /** 已部署模型占用的磁盘空间，用户最关心的「到底吃我多少存储」。 */
+    var deployedSize by remember { mutableStateOf(0L) }
+    /** 已部署目录是本机引擎跑不动的旧模型（SenseVoice / ONNX）。 */
+    var legacyDeployed by remember { mutableStateOf(false) }
     var specMenu by remember { mutableStateOf(false) }
     var customTypeMenu by remember { mutableStateOf(false) }
 
@@ -248,11 +253,12 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
     // 进入页面时按「当前选中模型」刷新端侧部署状态（选中项已从 prefs 恢复）
     fun refreshDeployStatus() {
         val key = currentKey()
+        legacyDeployed = QuroOnDeviceModelManager.isLegacyIncompatible(ctx)
+        deployedSize = QuroOnDeviceModelManager.deployedSizeBytes(ctx)
         val e = QuroOnDeviceModelPrefs.getDeployedEntry(ctx, key)
         if (e == null) {
             deployStatus = QuroOnDeviceModelPrefs.STATUS_NONE
             deployedName = null
-            deployedType = null
             return
         }
         // 二次进入闭环校验：若记录为「已部署」，但磁盘文件缺失/损坏（被删、解压不完整），
@@ -264,13 +270,11 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             QuroOnDeviceModelPrefs.setEntryStatus(ctx, key, QuroOnDeviceModelPrefs.STATUS_ERROR)
             deployStatus = QuroOnDeviceModelPrefs.STATUS_ERROR
             deployedName = e.name
-            deployedType = e.type.takeIf { it != "UNKNOWN" }
-            addLog("⚠️ 已部署记录存在，但磁盘模型不完整，需重新下载：${e.dir}")
+            addLog("⚠️ 已部署记录存在，但磁盘模型不完整/与引擎不兼容，需重新下载：${e.dir}")
             return
         }
         deployStatus = e.status
         deployedName = e.name
-        deployedType = e.type.takeIf { it != "UNKNOWN" }
     }
 
     LaunchedEffect(Unit) {
@@ -309,8 +313,10 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             AsrModelSpec(
                 id = "custom-${customLink.hashCode()}",
                 displayName = "自定义模型",
+                note = "自定义链接，需为 Sherpa-NCNN 流式 transducer 压缩包",
                 type = customType,
                 downloadUrl = customLink,
+                downloadBytes = 0L,
                 minSizeBytes = MIN_VALID_MODEL_BYTES,
             )
         } else {
@@ -401,9 +407,19 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
     /** 端侧（本地模型）测试：录音最长 8 秒 → QuroOnDeviceAsr 离线识别。 */
     fun startOnDeviceTest() {
         addLog("━━━ 端侧模型测试 ━━━")
+        if (!asrSupported) {
+            testStatus = "本机不支持端侧识别 ❌"
+            addLog("❌ ${AsrDeviceCompat.unsupportedReason(ctx)}")
+            return
+        }
+        if (QuroOnDeviceModelManager.isLegacyIncompatible(ctx)) {
+            testStatus = "已部署的是旧模型，引擎跑不了 ❌"
+            addLog("❌ 当前部署的是旧版模型（SenseVoice / ONNX），本机引擎无对应实现——这正是此前「端侧识别一直没反应」的根因。请删除后重新下载推荐模型。")
+            return
+        }
         if (!QuroOnDeviceAsr.isModelAvailable(ctx)) {
             testStatus = "未找到端侧模型 ❌"
-            addLog("❌ 未找到已部署的端侧模型")
+            addLog("❌ 还没有下载语音识别模型，请在上方「下载并部署」（推荐 22MB 的中文 14M 模型）")
             return
         }
         recording = true
@@ -444,8 +460,9 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                     withContext(Dispatchers.Main) { testStatus = "模型加载中…"; addLog("⏳ 加载端侧模型") }
                     addLog("调用 QuroOnDeviceAsr.ensureLoaded()（独立 :asr 进程）…")
                     if (!QuroOnDeviceAsr.ensureLoaded(ctx)) {
+                        val reason = QuroOnDeviceAsr.lastError.ifBlank { "引擎未给出原因" }
                         withContext(Dispatchers.Main) {
-                            recording = false; testStatus = "模型加载失败 ❌"; addLog("❌ ensureLoaded 返回 false（引擎进程崩溃或模型不兼容，详见 Logcat）")
+                            recording = false; testStatus = "模型加载失败 ❌"; addLog("❌ $reason")
                         }
                         return@launch
                     }
@@ -491,12 +508,18 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                     try { rec.release() } catch (_: Throwable) {}
                 }
                 addLog("录音结束 (${pcm.size()} bytes)，开始识别…")
+                val startedAt = System.currentTimeMillis()
                 val text = QuroOnDeviceAsr.recognize(pcm.toByteArray())
+                val costMs = System.currentTimeMillis() - startedAt
+                val failReason = QuroOnDeviceAsr.lastError
                 withContext(Dispatchers.Main) {
                     recording = false
                     resultText = text
-                    testStatus = if (text.isNotBlank()) "识别完成 ✅" else "没听清，再试一次"
-                    addLog(if (text.isNotBlank()) "最终识别: $text" else "⚠️ 未识别到文字")
+                    testStatus = if (text.isNotBlank()) "识别完成 ✅（耗时 ${costMs} ms）" else "识别未成功 ❌"
+                    addLog(
+                        if (text.isNotBlank()) "最终识别（${costMs} ms）: $text"
+                        else "❌ ${failReason.ifBlank { "未识别到文字" }}"
+                    )
                 }
             } catch (e: Throwable) {
                 android.util.Log.e("QuroSttSettings", "端侧测试异常", e)
@@ -672,7 +695,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             Modifier.padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("语音转文字配置，设置后悬浮语音球的识别语言生效。可切换「本地识别 / AI 模型 / 本地模型（端侧）」引擎；本地模型为手机离线运行、多语言、高准确率的 Sherpa-NCNN（SenseVoice）。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text("语音转文字配置，设置后悬浮语音球的识别语言生效。可切换「本地识别 / AI 模型 / 本地模型（端侧）」引擎；本地模型为手机离线运行的 Sherpa-NCNN 流式模型，最小 22MB，说完自动断句。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             HorizontalDivider()
 
             // ── 识别引擎选择 ───────────────────────────────────────────────
@@ -742,7 +765,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                         Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
                             Text("本地模型（端侧）", style = MaterialTheme.typography.bodyMedium)
-                            Text("手机离线运行 Sherpa-NCNN（SenseVoice），多语言、高准确率", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            Text("手机离线运行 Sherpa-NCNN 流式模型，22MB 起、低延迟、说完自动断句", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                     }
                 }
@@ -752,7 +775,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             if (source == QuroSttPrefs.SOURCE_ONDEVICE) {
                 ChapterLabel("02", "端侧模型下载与部署")
                 Text(
-                    "手机离线运行的 Sherpa-NCNN 模型需先下载。内置多种主流类型（自动识别布局），也可粘贴任意链接并选择类型。下载后自动解压部署并立即可用。",
+                    "手机离线运行的模型需先下载。内置全部为流式 transducer（encoder/decoder/joiner 三件套），已按手机适配程度排序，第一项即推荐项。下载后自动解压部署并立即可用。",
                     style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant,
                 )
@@ -776,7 +799,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                     ) {
                         val statusText = when (deployStatus) {
                             QuroOnDeviceModelPrefs.STATUS_DEPLOYED ->
-                                "已部署：$deployedName" + (deployedType?.let { "（${runCatching { AsrModelType.valueOf(it).label }.getOrNull() ?: it}）" } ?: "")
+                                "已部署：$deployedName（占用 ${formatBytes(deployedSize)}）"
                             QuroOnDeviceModelPrefs.STATUS_DOWNLOADING -> "部署中…"
                             QuroOnDeviceModelPrefs.STATUS_ERROR -> "上一次部署失败"
                             else -> "尚未部署模型"
@@ -786,13 +809,24 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                             tone = if (deployStatus == QuroOnDeviceModelPrefs.STATUS_DEPLOYED) Sage else cs.onSurfaceVariant,
                         )
 
+                        // 历史遗留部署迁移提示：旧 SenseVoice / ONNX 目录本机引擎跑不了，
+                        // 这正是用户此前「端侧识别一直没反应」的根因，必须显式告知而不是静默失败。
+                        if (legacyDeployed) {
+                            val warnColor = Color(android.graphics.Color.parseColor("#C0432F"))
+                            InfoBox(
+                                text = "⚠️ 当前部署的是旧版模型（SenseVoice / ONNX），本机引擎没有对应实现，识别会一直没反应。" +
+                                    "请点「删除模型」后重新下载上方推荐模型（约 22MB）。",
+                                tone = warnColor,
+                            )
+                        }
+
                         // 模型选择（内置目录）
                         SetRowClickable(
                             icon = Icons.Filled.Memory,
                             name = "选择模型",
                             sub = run {
                                 val selSpec = if (customMode) null else AsrModelCatalog.byId(selectedSpecId)
-                                if (customMode) "自定义链接" else (selSpec?.let { "${it.displayName} · ${it.type.label}" } ?: selectedSpecId)
+                                if (customMode) "自定义链接" else (selSpec?.displayName ?: selectedSpecId.ifBlank { "（未选择）" })
                             },
                             onClick = { specMenu = true },
                         )
@@ -804,7 +838,8 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                                     text = {
                                         Column {
                                             Text(spec.displayName, style = MaterialTheme.typography.bodyMedium)
-                                            Text("类型：${spec.type.label}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                                            Text(spec.note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                                            Text("下载体积：${formatBytes(spec.downloadBytes)}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                                             if (deployedKeys.contains(QuroOnDeviceModelPrefs.deployedKeyFor(spec.id, spec.downloadUrl)))
                                                 Text("✅ 已部署", style = MaterialTheme.typography.bodySmall, color = Sage)
                                         }
@@ -814,7 +849,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                             }
                             HorizontalDivider()
                             DropdownMenuItem(
-                                text = { Text("➕ 自定义链接（自行选类型）", style = MaterialTheme.typography.bodyMedium) },
+                                text = { Text("➕ 自定义链接（需为 Sherpa-NCNN 流式模型）", style = MaterialTheme.typography.bodyMedium) },
                                 onClick = { selectSpec("", true) },
                             )
                         }
@@ -834,7 +869,8 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                                 onClick = { customTypeMenu = true },
                             )
                             DropdownMenu(expanded = customTypeMenu, onDismissRequest = { customTypeMenu = false }) {
-                                AsrModelType.values().filter { it != AsrModelType.UNKNOWN }.forEach { t ->
+                                // 只列出引擎真正能跑的类型：随包 .so 仅实现流式 transducer
+                                listOf(AsrModelType.STREAMING_TRANSDUCER).forEach { t ->
                                     DropdownMenuItem(
                                         text = { Text(t.label, style = MaterialTheme.typography.bodyMedium) },
                                         onClick = { customType = t; customTypeMenu = false; QuroOnDeviceModelPrefs.setCustomType(ctx, t.name) },
@@ -845,10 +881,18 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
 
                         // 下载进度
                         if (downloading) {
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            if (dlTotal > 0) {
+                                LinearProgressIndicator(
+                                    progress = { (dlDownloaded.toFloat() / dlTotal.toFloat()).coerceIn(0f, 1f) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            } else {
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            }
                             val pct = if (dlTotal > 0) (dlDownloaded * 100 / dlTotal).toInt() else 0
                             Text(
-                                if (dlTotal > 0) "已下载 $pct%  ($dlDownloaded / $dlTotal 字节)" else (dlState ?: "下载中…"),
+                                if (dlTotal > 0) "已下载 $pct%  (${formatBytes(dlDownloaded)} / ${formatBytes(dlTotal)})"
+                                else (dlState ?: "下载中…"),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = cs.onSurfaceVariant,
                             )

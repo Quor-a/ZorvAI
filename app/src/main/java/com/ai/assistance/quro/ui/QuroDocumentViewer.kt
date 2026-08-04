@@ -1,10 +1,19 @@
 package com.ai.assistance.quro.ui
 
 import android.webkit.WebView
+import android.content.Context
+import android.content.Intent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import android.webkit.WebViewClient
 import android.widget.Toast
+import android.net.Uri
+import android.content.pm.PackageManager
+import androidx.core.content.FileProvider
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceError
+import android.webkit.WebResourceResponse
+import androidx.webkit.WebViewAssetLoader
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -55,22 +64,40 @@ fun QuroDocumentViewer(
     val isPptx = ext == "pptx"
     val isWebView = ext in setOf("docx", "xlsx", "pdf", "txt", "md", "markdown", "json", "csv", "xml", "log", "kt", "kts", "py", "js", "ts", "html", "css", "java", "png", "jpg", "jpeg", "gif", "webp", "bmp")
     val imageType = if (ext in setOf("png","jpg","jpeg","gif","webp","bmp")) "image/$ext" else null
-    // 大文件保护：base64 注入 WebView 有长度上限，超阈值会静默白屏/崩溃
+    // 大文件保护：限制来自 JS 侧解析库（mammoth / SheetJS / pdf.js）的内存与耗时，
+    // 与「注入通道」无关——现已改用 WebViewAssetLoader 流式返回文件，不再有 base64 内存炸弹
     val sizeBytes = file.length()
-    val WARN_SIZE = 8L * 1024 * 1024       // 8 MB：超过则提示预览可能卡顿
-    val MAX_SIZE = 30L * 1024 * 1024       // 30 MB：超过则直接转外部打开，避免崩溃
+    val WARN_SIZE = 5L * 1024 * 1024       // 5 MB：超过则提示预览可能较慢
+    val MAX_SIZE = 50L * 1024 * 1024       // 50 MB：超过则直接转外部打开（JS 解析保护）
     val tooLarge = sizeBytes > MAX_SIZE
 
     var editing by remember { mutableStateOf(false) }
     var editText by remember { mutableStateOf("") }
+    var dirty by remember { mutableStateOf(false) }
     var loadErr by remember { mutableStateOf<String?>(null) }
+
+    // 写回原文件：仅在可编辑文本类型且非 readOnly 时持久化，并给出明确状态提示。
+    val saveEdits: () -> Unit = {
+        if (isEditableText && !readOnly) {
+            runCatching {
+                file.writeText(editText, Charsets.UTF_8)
+                Toast.makeText(ctx, "已保存修改", Toast.LENGTH_SHORT).show()
+                dirty = false
+            }.onFailure { Toast.makeText(ctx, "保存失败: ${it.message}", Toast.LENGTH_SHORT).show() }
+        }
+    }
+    // 返回键：若处于编辑态且有未保存改动，先写回再关闭（尊重 readOnly）。
+    val handleClose: () -> Unit = {
+        if (editing && dirty) saveEdits()
+        onClose()
+    }
 
     LaunchedEffect(editing, file) {
         if (editing && isEditableText) {
             // ★ 全面排查修复（v316）：LaunchedEffect 默认跑在主线程，大文件 readText 会 ANR。
             //   移至 IO 线程读取，结果回写主线程安全的 State。
             val res = withContext(Dispatchers.IO) { runCatching { file.readText(Charsets.UTF_8) } }
-            res.onSuccess { editText = it }.onFailure { loadErr = it.message }
+            res.onSuccess { editText = it; dirty = false }.onFailure { loadErr = it.message }
         }
     }
 
@@ -79,7 +106,7 @@ fun QuroDocumentViewer(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, "关闭", tint = cs.onSurface) }
+            IconButton(onClick = handleClose) { Icon(Icons.Filled.ArrowBack, "关闭", tint = cs.onSurface) }
             Text(
                 file.name,
                 color = cs.onSurface, fontSize = 15.sp, maxLines = 1,
@@ -87,14 +114,13 @@ fun QuroDocumentViewer(
             )
             if (isEditableText && !readOnly) {
                 TextButton(onClick = {
-                    if (editing) {
-                        runCatching {
-                            file.writeText(editText, Charsets.UTF_8)
-                            Toast.makeText(ctx, "已保存", Toast.LENGTH_SHORT).show()
-                        }.onFailure { Toast.makeText(ctx, "保存失败: ${it.message}", Toast.LENGTH_SHORT).show() }
-                    }
+                    if (editing) saveEdits()
                     editing = !editing
                 }) { Text(if (editing) "保存" else "编辑", color = cs.primary) }
+            }
+            // ★ 真·WPS 深链：优先用已安装的 WPS 打开，未安装则回退通用选择器。
+            TextButton(onClick = { openWithWpsOrFallback(ctx, file) }) {
+                Text("用 WPS 打开", color = cs.primary.copy(alpha = 0.9f))
             }
             TextButton(onClick = onExternal) { Text("其他应用", color = cs.onSurface.copy(alpha = 0.7f)) }
         }
@@ -105,12 +131,12 @@ fun QuroDocumentViewer(
                 Text("无法读取文档：$loadErr", color = cs.error, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
             }
             tooLarge -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("文件过大（约 ${sizeBytes / 1024 / 1024} MB），应用内预览可能崩溃。请点右上角「其他应用」用 WPS / Office 打开。", color = cs.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+                Text("文件过大（约 ${sizeBytes / 1024 / 1024} MB），应用内预览可能较慢或内存占用较大。请点右上角「其他应用」用 WPS / Office 打开。", color = cs.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
             }
             editing && isEditableText -> {
                 OutlinedTextField(
                     value = editText,
-                    onValueChange = { editText = it },
+                    onValueChange = { editText = it; dirty = true },
                     modifier = Modifier.fillMaxSize().padding(12.dp),
                     textStyle = LocalTextStyle.current.copy(fontSize = 13.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
                 )
@@ -124,42 +150,90 @@ fun QuroDocumentViewer(
     }
 }
 
-/** 进程内 WebView 渲染（docx / xlsx / pdf / 文本 / 图片 / csv）。 */
+/** 进程内 WebView 渲染（docx / xlsx / pdf / 文本 / 图片 / csv）。
+ *
+ * RC-A + RC-B 修复方案（WebViewAssetLoader）：
+ *  - 把 assets 与目标文件都挂到 https://appassets.androidplatform.net 同源下。
+ *    · /assets/ -> AssetsPathHandler：viewer.html / mammoth.js / xlsx.full.min.js / pdf.min.js / pdf.worker.min.js
+ *    · /doc/    -> 自定义 PathHandler：以流（FileInputStream）返回目标文件，零整读、不进内存
+ *  - WebView 因此拿到「非 opaque origin（https）」，pdf.js 的 Worker 才能启动（RC-B 真因修复）；
+ *  - viewer.html 用 fetch(url) -> arrayBuffer() 把文件流式喂给渲染库，彻底去掉「整文件 base64 注入」（RC-A 内存炸弹修复）。
+ */
 @Composable
 private fun BuiltInWebView(file: File, type: String, warnLarge: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     var loadErr by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
 
+    // /doc/<filename>：自定义 PathHandler 仅放行本次文件，防止任意路径穿越
+    val docPath = "/doc/${file.name}"
+
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize().background(Color(0xFF0F1115)),
             factory = { c ->
+                val assetLoader = WebViewAssetLoader.Builder()
+                    .setDomain("appassets.androidplatform.net")
+                    .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(c))
+                    .addPathHandler("/doc/", object : WebViewAssetLoader.PathHandler {
+                        override fun handle(url: String): WebResourceResponse? {
+                            val reqPath = url
+                            // 仅放行本次传入的单个文件，避免任意路径穿越
+                            if (Uri.decode(reqPath.removePrefix("/doc/")) != file.name) return null
+                            val mime = when (file.extension.lowercase()) {
+                                "pdf" -> "application/pdf"
+                                "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                "png" -> "image/png"
+                                "jpg", "jpeg" -> "image/jpeg"
+                                "gif" -> "image/gif"
+                                "webp" -> "image/webp"
+                                "bmp" -> "image/bmp"
+                                "csv" -> "text/csv; charset=utf-8"
+                                "txt", "md", "markdown", "json", "xml", "log",
+                                "kt", "kts", "py", "js", "ts", "html", "css", "java" -> "text/plain; charset=utf-8"
+                                else -> "application/octet-stream"
+                            }
+                            // 以流方式返回文件体：不整读进内存，彻底避免大文件 OOM
+                            return runCatching { WebResourceResponse(mime, null, file.inputStream()) }
+                                .getOrNull()
+                        }
+                    })
+                    .build()
+
+                val viewerUrl = "https://appassets.androidplatform.net/assets/docs/viewer.html" +
+                        "?doc=" + Uri.encode(docPath) + "&type=" + Uri.encode(type)
+
                 WebView(c).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
-                    settings.allowFileAccess = true
-                    settings.allowContentAccess = true
-                    settings.loadsImagesAutomatically = true
+                    settings.allowFileAccess = false
+                    settings.allowContentAccess = false
                     webViewClient = object : WebViewClient() {
+                        override fun shouldInterceptRequest(
+                            view: WebView?,
+                            request: WebResourceRequest
+                        ): WebResourceResponse? {
+                            // 交由 WebViewAssetLoader 路由 /assets/ 与 /doc/ 两类请求
+                            return assetLoader.shouldInterceptRequest(request.url)
+                        }
+
                         override fun onPageFinished(view: WebView?, url: String?) {
-                            val b64 = runCatching {
-                                android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP)
-                            }.getOrNull()
-                            if (b64 == null) { loadErr = "读取文件失败"; loading = false; return }
-                            // 用 evaluateJavascript 注入，规避 loadUrl("javascript:...") 的 URL 长度上限（大文件会静默失败/白屏）
-                            runCatching { view?.evaluateJavascript("GD.render('$type','$b64')", null) }
-                                .onFailure { loadErr = "渲染脚本注入失败：${it.message}" }
                             loading = false
                         }
-                        override fun onReceivedError(view: WebView?, request: android.webkit.WebResourceRequest?, error: android.webkit.WebResourceError?) {
+
+                        override fun onReceivedError(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                            error: WebResourceError?
+                        ) {
                             if (request?.isForMainFrame == true) {
                                 loadErr = error?.description?.toString() ?: "加载错误"
                                 loading = false
                             }
                         }
                     }
-                    loadUrl("file:///android_asset/docs/viewer.html")
+                    loadUrl(viewerUrl)
                 }
             },
         )
@@ -313,4 +387,49 @@ private fun colRow(ref: String): Pair<Int, Int> {
     var n = 0
     colStr.forEach { n = n * 26 + (it - 'A' + 1) }
     return n to row
+}
+
+/**
+ * 真·WPS 深链：若系统已安装 WPS Office（cn.wps.moffice_eng 或 com.kingsoft.wpsoffice），
+ * 通过 ACTION_VIEW + 应用既有 FileProvider（${applicationId}.fileprovider）授权将其打开；
+ * 未安装则回退到 QuroDocOpener 的通用选择器（系统/ONLYOFFICE）。
+ *
+ * 复用 QuroDocOpener 的 FileProvider authority 与 guessMime，不新增 Provider。
+ */
+private fun openWithWpsOrFallback(context: Context, file: File) {
+    if (!file.exists()) {
+        Toast.makeText(context, "文件不存在", Toast.LENGTH_SHORT).show()
+        return
+    }
+    val uri = QuroDocOpener.safeUri(context, file) ?: run {
+        Toast.makeText(context, "无法共享该文件（路径未被允许）", Toast.LENGTH_SHORT).show()
+        return
+    }
+    val mime = QuroDocOpener.guessMime(file.name)
+    val pm = context.packageManager
+    val wpsPackages = listOf("cn.wps.moffice_eng", "com.kingsoft.wpsoffice")
+    val wpsPkg = wpsPackages.firstOrNull { pkg ->
+        runCatching { pm.getPackageInfo(pkg, 0) }.isSuccess
+    }
+    if (wpsPkg != null) {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mime)
+            setPackage(wpsPkg)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching {
+            context.startActivity(intent)
+            Toast.makeText(context, "已用 WPS 打开", Toast.LENGTH_SHORT).show()
+        }.onFailure {
+            // WPS 无法处理该类型，回退通用选择器
+            if (!QuroDocOpener.open(context, file)) {
+                Toast.makeText(context, "无法打开该文件", Toast.LENGTH_SHORT).show()
+            }
+        }
+    } else {
+        // 未安装 WPS：回退到系统/通用选择器
+        if (!QuroDocOpener.open(context, file)) {
+            Toast.makeText(context, "未找到可打开该文件的应用", Toast.LENGTH_SHORT).show()
+        }
+    }
 }

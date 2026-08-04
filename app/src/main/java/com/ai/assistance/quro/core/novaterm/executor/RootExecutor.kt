@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.novaterm.executor
 
 import com.ai.assistance.quro.core.novaterm.command.CommandResult
 import com.ai.assistance.quro.core.privilege.QuroRootGateway
+import com.ai.assistance.quro.core.shizuku.QuroShizuku
 import java.io.BufferedReader
 import java.io.DataOutputStream
 import java.util.UUID
@@ -74,6 +75,36 @@ object RootExecutor {
     fun invalidateRootCache() {
         isRootAvailable = null
         QuroRootGateway.invalidateCache()
+    }
+
+    // ════════════════════════════════════════
+    // 真实特权后端能力探测（透明化）
+    // ════════════════════════════════════════
+
+    /**
+     * 是否存在**真实**的特权执行后端（不阻塞、即时）。
+     *
+     * 复用既有校验，不另造权限体系：
+     *  - Shizuku 已绑定且已授予 shell 权限 → [QuroShizuku.isReady] 即时为真；
+     *  - 否则看 [QuroRootGateway.cachedRootAvailable]（此前已实测过的 su 探测结果）。
+     *
+     * 仅当 Shizuku 未就绪**且** su 尚未实测时返回 false；
+     * 调用方应改用 [probeRealBackend] 做一次阻塞实测来确认。
+     */
+    fun isRealBackendAvailableInstant(): Boolean =
+        QuroShizuku.isReady || QuroRootGateway.cachedRootAvailable() == true
+
+    /**
+     * 阻塞实测：是否存在真实特权后端（**必须在 IO 线程调用**）。
+     *
+     *  - Shizuku 已就绪 → 立即返回 true（无需弹框、无需 su 探测）；
+     *  - 否则探测真实 `su -c echo root_ok`（带 5s 超时与缓存，复用 [QuroRootGateway]）。
+     *
+     * 结果同时回写 [QuroRootGateway] 缓存，避免重复探测。
+     */
+    fun probeRealBackend(): Boolean {
+        if (QuroShizuku.isReady) return true
+        return QuroRootGateway.isRootAvailable()
     }
 
     // ════════════════════════════════════════

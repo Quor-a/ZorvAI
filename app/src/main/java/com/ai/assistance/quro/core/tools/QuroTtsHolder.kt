@@ -314,7 +314,15 @@ object QuroTtsHolder {
                 }
                 return@withContext if (segs.any { it.voiceColor != null }) speakCloudSegments(ctx, segs, wrapped) else speakCloud(text, wrapped)
             }
-            if (!ensureReady(ctx)) return@withContext -1.also { log("playOne: 未就绪 ❌") }
+            if (!ensureReady(ctx)) {
+                // P0-A 修复：本地 TTS 不可用（系统无引擎 / 初始化失败）时，若用户已配置云端服务商，
+                // 则自动回退云端，避免「明明配了云端却始终静默无声」。仅当云端也未配置时才如实返回失败。
+                if (QuroTtsProviderPrefs.isConfigured(ctx)) {
+                    log("playOne: 本地 TTS 未就绪，自动回退云端 TTS ✅")
+                    return@withContext speakCloud(text, wrapped)
+                }
+                return@withContext -1.also { log("playOne: 未就绪且无云端兜底 ❌") }
+            }
             val t = tts ?: return@withContext -1.also { log("playOne: tts=null") }
             runCatching { t.stop() }
             if (!minimal) runCatching { applyParams(t, ctx) }
@@ -425,7 +433,7 @@ object QuroTtsHolder {
         val providerId = QuroTtsProviderPrefs.getProvider(ctx)
         val def = QuroTtsProviders.byId(providerId) ?: return (-2).also { log("speakCloudSegments: 未知服务商 ❌"); onDone?.invoke() }
         val isMimo = def.kind == QuroTtsProviderKind.MIMO
-        var prefetched: Pair<ByteArray, String>? = null
+        var prefetched: QuroCloudTts.SynthResult? = null
         return try {
             segs.forEachIndexed { i, seg ->
                 val voiceOverride = seg.voiceColor?.let { QuroCloudTtsCatalog.voiceColorToVoice(providerId, it) }
@@ -442,7 +450,7 @@ object QuroTtsHolder {
                     val p = prefetched
                         ?: withTimeoutOrNull(CLOUD_TTS_TIMEOUT_MS) { QuroCloudTts.synthBytes(ctx, segText, voiceOverride) }
                         ?: throw java.util.concurrent.TimeoutException("云 TTS 合成超时（第 $i 段）")
-                    withTimeoutOrNull(CLOUD_TTS_TIMEOUT_MS) { QuroCloudTts.playBytes(ctx, p.first, p.second) }
+                    withTimeoutOrNull(CLOUD_TTS_TIMEOUT_MS) { QuroCloudTts.playBytes(ctx, p) }
                         ?: throw java.util.concurrent.TimeoutException("云 TTS 播放超时（第 $i 段）")
                 }
                 prefetched = prefetchJob?.await()?.getOrNull()

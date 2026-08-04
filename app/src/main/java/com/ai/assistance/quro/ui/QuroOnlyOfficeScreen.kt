@@ -35,7 +35,7 @@ import com.ai.assistance.quro.core.tools.AiwpsCreateTool
 import java.io.File
 
 /**
- * 统一 WPS / 文档中心（v142 重写为「完全内置」，不再外跳 ONLYOFFICE、不再要求下载安装任何第三方应用）。
+ * 统一文档查看 / 管理（v142 重写为「完全内置」，不再外跳 ONLYOFFICE、不再要求下载安装任何第三方应用）。
  *
  * 文档（.docx / .xlsx / .pptx / .pdf / .txt / .md / 代码 / 图片）一律在应用内
  * [QuroDocumentViewer] 中打开与查看；txt / md / 代码类支持内置编辑并写回原文件。
@@ -43,7 +43,7 @@ import java.io.File
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun QuroOnlyOfficeScreen(onClose: () -> Unit) {
+fun QuroDocScreen(onClose: () -> Unit) {
     val ctx = LocalContext.current
     var files by remember { mutableStateOf(listOfficeFiles(ctx)) }
     var viewerFile by remember { mutableStateOf<File?>(null) }
@@ -115,7 +115,7 @@ fun QuroOnlyOfficeScreen(onClose: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("WPS / 文档") },
+                title = { Text("文档") },
                 navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, "返回") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
@@ -211,7 +211,10 @@ private fun CreateDocDialog(
     var type by remember { mutableStateOf("docx") }
     var title by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
-    val types = listOf("docx" to "Word", "xlsx" to "Excel", "txt" to "文本", "md" to "Markdown")
+    val types = listOf(
+        "docx" to "Word", "xlsx" to "Excel", "pptx" to "PPT",
+        "pdf" to "PDF", "md" to "Markdown", "txt" to "文本", "csv" to "表格", "html" to "网页"
+    )
     val cs = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -223,17 +226,19 @@ private fun CreateDocDialog(
         text = {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                 Text("格式", fontSize = 13.sp, color = cs.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
-                    types.forEach { (t, label) ->
-                        val sel = type == t
-                        Text(
-                            label,
-                            color = if (sel) cs.onPrimary else cs.onSurface,
-                            fontSize = 13.sp,
-                            modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                                .background(if (sel) cs.primary else cs.surfaceVariant)
-                                .clickable { type = t }.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
+                types.chunked(4).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+                        row.forEach { (t, label) ->
+                            val sel = type == t
+                            Text(
+                                label,
+                                color = if (sel) cs.onPrimary else cs.onSurface,
+                                fontSize = 13.sp,
+                                modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                                    .background(if (sel) cs.primary else cs.surfaceVariant)
+                                    .clickable { type = t }.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -241,10 +246,10 @@ private fun CreateDocDialog(
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     content, { content = it }, label = { Text("正文") }, minLines = 4, modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("docx 按换行分段；xlsx 按换行分行、制表/逗号分列；md/txt 原样写入") }
+                    placeholder = { Text("docx 按换行分段（`**加粗**`/表格）；xlsx 按换行分行、制表/逗号分列（`### 表名` 多表）；pptx 首行标题+要点（`---` 分页）；pdf/md/txt/csv/html 原样写入") }
                 )
                 Spacer(Modifier.height(6.dp))
-                Text("保存位置：应用私有 Documents/QuroDocs，生成后自动出现在下方列表并打开。当前为文本级撰写（非富文本回写）。", fontSize = 12.sp, color = cs.onSurfaceVariant)
+                Text("保存位置：应用私有 Documents/QuroDocs，生成后自动出现在下方列表并打开。当前为文本级撰写（结构化生成真实 OOXML，非富文本回写）。", fontSize = 12.sp, color = cs.onSurfaceVariant)
             }
         }
     )

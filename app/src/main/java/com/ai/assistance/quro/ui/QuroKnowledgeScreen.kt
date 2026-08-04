@@ -5,6 +5,7 @@ import android.content.Intent
 import android.provider.OpenableColumns
 import android.widget.Toast
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,7 +17,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -120,6 +123,12 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
     var showRename by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<File?>(null) }
     var query by remember { mutableStateOf("") }
+    // 内容编辑（仅文本类文档 md/txt/json/csv 支持内联编辑；Office 文档走重新导入覆盖）
+    var showEdit by remember { mutableStateOf(false) }
+    var editTarget by remember { mutableStateOf<File?>(null) }
+    // 富预览：用应用内 QuroDocumentViewer 渲染（docx/xlsx/pptx 走 WebView 富文本，txt/md 可编辑），
+    // 解决"知识库不支持多种文档预览"——此前详情仅展示纯文本提取，Office 文档看不出结构。
+    var viewFile by remember { mutableStateOf<File?>(null) }
 
     val filtered = remember(files, query) {
         if (query.isBlank()) files
@@ -173,6 +182,24 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
         selectedText = ""
     }
 
+    // 富预览优先：点击「打开预览」后用应用内渲染器展示（docx/xlsx/pptx 富文本、txt/md 可编辑），
+    // 纯预览态 readOnly=true，避免在知识库里误改文件（编辑请用上方编辑按钮，会自动重建 RAG 索引）。
+    if (viewFile != null) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            QuroDocumentViewer(
+                file = viewFile!!,
+                onClose = { viewFile = null },
+                onExternal = {
+                    if (!QuroDocOpener.open(ctx, viewFile!!)) {
+                        Toast.makeText(ctx, "未找到可打开该文档的其他应用", Toast.LENGTH_LONG).show()
+                    } else viewFile = null
+                },
+                readOnly = true,
+            )
+        }
+        return
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -197,6 +224,14 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                         }
                         IconButton(onClick = { showAdd = true }) { Icon(Icons.Filled.Add, "添加文档") }
                     } else {
+                        IconButton(onClick = { selected?.let { viewFile = it } }) {
+                            Icon(Icons.Filled.OpenInNew, "打开预览（富文本/可编辑）")
+                        }
+                        if (selected!!.extension.lowercase() in KB_TEXT_EXTS) {
+                            IconButton(onClick = { selected?.let { editTarget = it; showEdit = true } }) {
+                                Icon(Icons.Filled.EditNote, "编辑内容")
+                            }
+                        }
                         IconButton(onClick = { selected?.let { renameTarget = it; showRename = true } }) {
                             Icon(Icons.Filled.Edit, "重命名文档")
                         }
@@ -290,6 +325,14 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurface,
                     lineHeight = 19.sp,
                 )
+                if (selected!!.extension.lowercase() in KB_OFFICE_EXTS) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Office 文档（docx/xlsx/pptx）为只读预览（纯文本提取）。要修改请在外部编辑后，于列表页「导入」同名文件覆盖，或导出整库修改后重新导入。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -319,6 +362,23 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                 renameTarget?.let { renameFile(it, newName) }
                 showRename = false
                 renameTarget = null
+            }
+        )
+    }
+
+    if (showEdit && editTarget != null) {
+        EditDocDialog(
+            file = editTarget!!,
+            onDismiss = { showEdit = false; editTarget = null },
+            onConfirm = { newContent ->
+                editTarget?.let { f ->
+                    runCatching { f.writeText(newContent) }
+                    files = listKnowledgeFiles(dir)
+                    selectedText = newContent
+                    scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
+                }
+                showEdit = false
+                editTarget = null
             }
         )
     }
@@ -404,6 +464,34 @@ private fun RenameDialog(
                 label = { Text("新文件名") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
+            )
+        },
+    )
+}
+
+@Composable
+private fun EditDocDialog(
+    file: File,
+    onDismiss: () -> Unit,
+    onConfirm: (content: String) -> Unit,
+) {
+    var content by remember {
+        mutableStateOf(runCatching { file.readText() }.getOrDefault(""))
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { onConfirm(content) }) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        title = { Text("编辑内容 · ${file.name}") },
+        text = {
+            OutlinedTextField(
+                value = content,
+                onValueChange = { content = it },
+                label = { Text("文档内容") },
+                modifier = Modifier.fillMaxWidth().height(320.dp),
+                maxLines = 20,
             )
         },
     )

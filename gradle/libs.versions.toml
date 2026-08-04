@@ -12,6 +12,7 @@ coroutines = "1.9.0"
 orgjson = "20240303"
 shizuku = "13.1.5"
 shizukuProvider = "13.1.5"
+androidxWebkit = "1.12.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -38,6 +39,10 @@ org-json = { group = "org.json", name = "json", version.ref = "orgjson" }
 # Shizuku（L2 通道：ADB 级 IPC / 免 Root 系统执行）
 shizuku-api = { group = "dev.rikka.shizuku", name = "api", version.ref = "shizuku" }
 shizuku-provider = { group = "dev.rikka.shizuku", name = "provider", version.ref = "shizukuProvider" }
+
+# 应用内文档预览：WebViewAssetLoader 把 assets 与目标文件挂到同源 https，
+# 让 WebView 拿到非 opaque origin（pdf.js Worker 可启动），并以流方式返回文件（去 base64 内存炸弹）
+androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "androidxWebkit" }
 
 # 端侧 ASR 引擎 Sherpa-NCNN：未使用版本目录条目。
 # 原因：Sherpa-NCNN 无 Maven Central / JitPack AAR（仓库根仅含 CMake，JitPack 构建全部失败）。

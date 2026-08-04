@@ -15,6 +15,9 @@ class MNNLlmSession private constructor(
     companion object {
         private const val TAG = "MNNLlmSession"
         
+        /** release() 等待在飞调用的最长时间；超时后强制释放，避免某个原生调用永不返回导致永久冻结。 */
+        private const val WAIT_TIMEOUT_MS = 30_000L
+        
         /**
          * 从模型目录创建 LLM 会话
          * @param modelDir 模型目录（包含 llm_config.json）
@@ -211,6 +214,16 @@ class MNNLlmSession private constructor(
     var lastDegeneration: RepetitionGuard.Detection? = null
         private set
 
+    /**
+     * 最近一次结构化生成失败时，原生层留下的**已翻译**中文原因；成功或未失败为 null。
+     *
+     * 每次 [generateStreamStructured] 开始时重置，失败时从 `nativeGetLastError` 取回并翻译。
+     * 上层（QuroLocalEngineNative）用它替换掉笼统的「推理未产生任何输出」。
+     */
+    @Volatile
+    var lastNativeError: MnnNativeError.Parsed? = null
+        private set
+
     private val lock = Any()
 
     private var activeCalls = 0
@@ -398,16 +411,46 @@ class MNNLlmSession private constructor(
         }
     }
 
+    /**
+     * 结构化流式生成（工具调用路径）。
+     *
+     * 与 [generateStream] 的区别：消息以 JSON 数组形式下发，工具定义注入 jinja context，
+     * 由原生层套用模型自带 chat_template（渲染为空时回退内置 ChatML）。
+     *
+     * 失败时（返回 false）会把原生层的具体原因取回并翻译，存进 [lastNativeError]，
+     * 上层据此给出人能看懂的提示，而不是「推理未产生任何输出」。
+     *
+     * @param messagesJson `[{"role":..,"content":..}]` 形式的消息数组。
+     * @param toolsJson OpenAI 兼容的 tools 数组字符串；null 表示本轮不带工具。
+     * @param maxTokens 最大生成 token 数；-1 表示用引擎默认值。
+     * @param onToken 增量回调，返回 false 可中止生成。
+     * @return 原生是否成功执行完一轮生成。
+     */
     fun generateStreamStructured(
         messagesJson: String,
         toolsJson: String? = null,
         maxTokens: Int = -1,
         onToken: (String) -> Boolean
     ): Boolean {
+        lastNativeError = null
         val callback = guardedCallback("structured token callback", onToken)
 
         return withActiveCall { ptr ->
-            MNNLlmNative.nativeGenerateStreamStructured(ptr, messagesJson, toolsJson, maxTokens, callback)
+            val ok = MNNLlmNative.nativeGenerateStreamStructured(
+                ptr, messagesJson, toolsJson, maxTokens, callback
+            )
+            if (!ok) {
+                // 读后即清：native 侧 takeLastError 会移除该条，避免下一轮串味。
+                val raw = runCatching { MNNLlmNative.nativeGetLastError(ptr) }.getOrNull()
+                val parsed = MnnNativeError.parse(
+                    raw = raw,
+                    fallback = "推理引擎未返回任何内容，且没有留下具体原因。" +
+                        "请检查模型文件是否完整，或尝试关闭工具调用后重试。"
+                )
+                lastNativeError = parsed
+                Log.e(TAG, "Structured generation failed: code=${parsed.code} detail=${parsed.detail}")
+            }
+            ok
         }
     }
 
@@ -589,14 +632,26 @@ class MNNLlmSession private constructor(
 
         MNNLlmNative.nativeCancel(ptr)
 
+        // 🔧 回归 #4A：把无超时的 wait 改成有界等待，防止某个原生调用永不返回时永久挂死 release()
+        // （进而 unload / 模型切换被卡住 → 离线模型冻结/卡死）。
+        val deadline = System.currentTimeMillis() + WAIT_TIMEOUT_MS
         synchronized(lock) {
-            while (activeCalls > 0) {
+            while (activeCalls > 0 && System.currentTimeMillis() < deadline) {
                 try {
-                    (lock as java.lang.Object).wait()
+                    (lock as java.lang.Object).wait(1000)
                 } catch (e: InterruptedException) {
                     Thread.currentThread().interrupt()
                     break
                 }
+            }
+            // 超时后仍有在飞调用：不继续死等，记一条告警强制释放（避免无限冻结），
+            // 由下方 nativeReleaseLlm 真正回收原生资源。
+            if (activeCalls > 0) {
+                Log.w(
+                    TAG,
+                    "release() 等待在飞调用超时（>${WAIT_TIMEOUT_MS}ms，仍有 $activeCalls 个在飞），" +
+                        "强制释放会话（可能存在原生调用未完成）"
+                )
             }
         }
 

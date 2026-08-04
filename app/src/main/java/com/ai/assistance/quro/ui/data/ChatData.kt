@@ -53,10 +53,14 @@ data class ToolCallUi(
     val name: String,
     val args: String,
     val result: String? = null,
+    /** 工具执行耗时（毫秒），展示用。 */
+    val durationMs: Long = 0,
 )
 
 data class Message(
     val id: Int,
+    /** 底层 QuroMessage 的原始 id 列表（聚合气泡含多个），用于精确删除。 */
+    val uids: List<String> = emptyList(),
     val mine: Boolean,
     val author: String,
     val avatar: String,

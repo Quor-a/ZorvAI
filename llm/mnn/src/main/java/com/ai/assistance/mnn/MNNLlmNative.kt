@@ -190,6 +190,20 @@ object MNNLlmNative {
      */
     @JvmStatic
     external fun nativeCancel(llmPtr: Long)
+
+    /**
+     * 取走最近一次原生失败的原因（读后即清）。
+     *
+     * 存在原因：[nativeGenerateStreamStructured] 只能返回 boolean，失败细节全落在 logcat，
+     * 而手机侧没有 adb，用户只能看到「未产生任何输出」这种没有信息量的提示。
+     *
+     * @param llmPtr LLM 指针
+     * @return `"错误码|英文补充说明"`，无错误时返回 null。错误码见
+     *   [MnnNativeError]（E_MNN_NO_MESSAGES / E_MNN_BAD_MESSAGES / E_MNN_NO_VALID_MESSAGE /
+     *   E_MNN_TEMPLATE_THROW / E_MNN_TEMPLATE_EMPTY / E_MNN_EMPTY_TOKENS / E_MNN_STREAM_THROW）。
+     */
+    @JvmStatic
+    external fun nativeGetLastError(llmPtr: Long): String?
     
     /**
      * 生成回调接口

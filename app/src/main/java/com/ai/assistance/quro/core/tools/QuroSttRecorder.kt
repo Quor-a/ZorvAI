@@ -150,26 +150,33 @@ object QuroSttRecorder {
             return
         }
         scope.launch {
+            // 设备前置校验：非 arm64 / 无预编译 .so 时直接给结论，别让用户在「聆听中」里空等
+            if (!AsrDeviceCompat.isSupported(ctx)) {
+                main { onError(-1, AsrDeviceCompat.unsupportedReason(ctx)) }
+                return@launch
+            }
             if (!QuroOnDeviceAsr.isModelAvailable(ctx)) {
-                main { onError(-1, "未找到端侧模型，请在 STT 设置下载并部署") }
+                main { onError(-1, "还没有下载语音识别模型，请到「语音服务 → 语音识别」下载推荐模型（约 22MB）") }
                 return@launch
             }
             if (!QuroOnDeviceAsr.isReady()) {
                 onStatus("端侧模型加载中…")
                 if (!QuroOnDeviceAsr.ensureLoaded(ctx)) {
-                    main { onError(-1, "端侧模型加载失败") }
+                    // 把引擎给出的具体原因原样透出，不再只有「加载失败」四个字
+                    main { onError(-1, QuroOnDeviceAsr.lastError.ifBlank { "端侧模型加载失败" }) }
                     return@launch
                 }
             }
             onStatus("聆听中（端侧）…")
             val pcm = recordUtterance(ctx, onStatus) ?: run {
-                main { onError(-2, "未识别到语音") }
+                main { onError(-2, "没有听到说话内容（可能离麦太远或环境太吵）") }
                 return@launch
             }
             onStatus("识别中…")
             val text = QuroOnDeviceAsr.recognize(pcm)
             main {
-                if (text.isNotBlank()) onFinal(text) else onError(-2, "未识别到文字")
+                if (text.isNotBlank()) onFinal(text)
+                else onError(-2, QuroOnDeviceAsr.lastError.ifBlank { "未识别到文字" })
             }
         }
     }
@@ -184,16 +191,11 @@ object QuroSttRecorder {
             REC_SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
         )
         if (minBuf <= 0) { onStatus("录音缓冲初始化失败"); return null }
-        val rec = try {
-            AudioRecord(
-                MediaRecorder.AudioSource.MIC, REC_SAMPLE_RATE,
-                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minBuf * 2
-            )
-        } catch (e: Throwable) { onStatus("无法创建录音器"); return null }
-        if (rec.state != AudioRecord.STATE_INITIALIZED) {
-            try { rec.release() } catch (_: Throwable) {}
-            onStatus("录音器不可用"); return null
-        }
+        // VOICE_RECOGNITION 音源由厂商针对识别场景调过降噪/AGC，识别率明显优于裸 MIC；
+        // 少数机型不提供该音源，回退 MIC。
+        val rec = createRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, minBuf)
+            ?: createRecord(MediaRecorder.AudioSource.MIC, minBuf)
+        if (rec == null) { onStatus("无法创建录音器（麦克风可能被其他应用占用）"); return null }
 
         onStatus("聆听中…")
         val pcm = ByteArrayOutputStream()
@@ -236,6 +238,25 @@ object QuroSttRecorder {
             onStatus("没听清"); return null
         }
         return pcm.toByteArray()
+    }
+
+    /**
+     * 创建 [AudioRecord]；音源不可用或初始化失败时返回 null（并确保不泄漏半初始化实例）。
+     */
+    private fun createRecord(audioSource: Int, minBuf: Int): AudioRecord? {
+        val rec = try {
+            AudioRecord(
+                audioSource, REC_SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minBuf * 2
+            )
+        } catch (_: Throwable) {
+            return null
+        }
+        if (rec.state != AudioRecord.STATE_INITIALIZED) {
+            try { rec.release() } catch (_: Throwable) {}
+            return null
+        }
+        return rec
     }
 
     /** 把 PCM 16bit little-endian 裸流写成标准 WAV 文件。 */

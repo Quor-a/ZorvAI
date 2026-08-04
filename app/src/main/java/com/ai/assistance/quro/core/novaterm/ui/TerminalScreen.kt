@@ -40,6 +40,7 @@ fun TerminalScreen(viewModel: TerminalViewModel) {
     val isExecuting by viewModel.isExecuting.collectAsState()
     val cursorBlink by viewModel.cursorBlink.collectAsState()
     val metrics by viewModel.metrics.collectAsState()
+    val rootBackend by viewModel.rootBackendAvailable.collectAsState()
 
     val focusRequester = remember { FocusRequester() }
     val listState = rememberLazyListState()
@@ -67,9 +68,12 @@ fun TerminalScreen(viewModel: TerminalViewModel) {
             TerminalToolbar(
                 theme = theme,
                 onCycleTheme = { viewModel.cycleTheme() },
-                onClear = { /* handled by VM */ },
+                onClear = { viewModel.clearAll() },
                 metrics = metrics
             )
+
+            // ===== ROOT 后端透明化横幅 =====
+            RootNoticeBanner(theme = theme, state = rootBackend)
 
             // ===== 终端输出区域 =====
             TerminalOutput(
@@ -169,6 +173,40 @@ private fun TerminalToolbar(
     }
 
     // 分割线
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(theme.divider)
+    )
+}
+
+/**
+ * ROOT 后端透明化横幅：常驻展示 su/root 的真实执行能力，绝不误导用户。
+ *
+ * - true  ：已连接真实 ROOT 后端（Shizuku / su）
+ * - false ：无真实 ROOT，su/root 输出为沙箱模拟（[模拟] 标注）
+ * - null  ：探测中
+ */
+@Composable
+private fun RootNoticeBanner(theme: TerminalTheme, state: Boolean?) {
+    val (fg: Color, text: String) = when (state) {
+        true -> theme.outputSuccess to
+            "✓ 已连接真实 ROOT 后端（Shizuku / su）：su/root 命令将以真实 root 身份执行"
+        false -> theme.outputWarning to
+            "⚠ 本环境无 ROOT 权限：su/root 以下输出为沙箱模拟（[模拟] 标注），并非真实提权"
+        null -> theme.outputDim to
+            "… 正在检测 ROOT 后端（Shizuku / su）…"
+    }
+    Surface(color = theme.toolbarBg, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = text,
+            color = fg,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+        )
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()

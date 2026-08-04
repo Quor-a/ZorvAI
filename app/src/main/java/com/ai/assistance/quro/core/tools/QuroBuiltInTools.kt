@@ -46,6 +46,8 @@ import com.ai.assistance.quro.core.tools.LinuxStartTool
 import com.ai.assistance.quro.core.tools.LinuxStopTool
 import com.ai.assistance.quro.core.tools.LinuxStatusTool
 import com.ai.assistance.quro.core.tools.AiwpsCreateTool
+import com.ai.assistance.quro.core.tools.AiwpsReadTool
+import com.ai.assistance.quro.core.tools.AiwpsEditTool
 import com.ai.assistance.quro.core.tools.QuroExperienceLogTool
 import com.ai.assistance.quro.core.tools.QuroExperienceQueryTool
 import com.ai.assistance.quro.core.tools.QuroExperienceCorrectTool
@@ -310,8 +312,11 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(KnowledgeManageTool())
     // 知识库 C3 重做：本地自包含向量语义检索（RAG），零重依赖，离线可用（无 API Key 时降级本地词法检索）
     r.register(QuroRagKnowledgeTool())
-    // aiWPS 文档生成（docx / xlsx / pptx，后台生成真实可打开文件）
+    // aiWPS 文档生成（docx / xlsx / pptx / pdf / md / txt / csv / html，后台生成真实可打开文件）
     r.register(AiwpsCreateTool())
+    // aiWPS 文档读取 / 改写：补全「读-写-改」闭环，让 AI 能真正重写已有文档（解决"重写功能几乎没有"）
+    r.register(AiwpsReadTool())
+    r.register(AiwpsEditTool())
     // UI 动作工具：把对话框界面/弹层/开关注册为 AI 可调用工具（走 QuroUiActionBridge 回调 ChatScreen）
     allUiActionTools.forEach { r.register(it) }
     // 对话框富卡片工具：AI 下发可交互卡片（待办/图表/笔记/动作）

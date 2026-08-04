@@ -41,7 +41,7 @@ class KnowledgeSearchTool : QuroTool {
         val kb = QuroKnowledgeFiles.dir(context)
         if (!kb.exists()) kb.mkdirs()
         val files = kb.walkTopDown()
-            .filter { it.isFile && it.extension.lowercase() in setOf("md", "txt", "json", "docx", "xlsx", "pptx") && it.length() <= 5_000_000L }
+            .filter { it.isFile && it.extension.lowercase() in setOf("md", "txt", "json", "csv", "docx", "xlsx", "pptx") && it.length() <= 5_000_000L }
             .toList()
         if (files.isEmpty()) {
             return "知识库为空（目录：${kb.absolutePath}）。可用 knowledge_add 添加文件，或直接把 Markdown/JSON/TXT 放进该目录；" +

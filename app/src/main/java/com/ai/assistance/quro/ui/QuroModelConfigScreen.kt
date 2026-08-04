@@ -144,6 +144,9 @@ fun QuroModelConfigForm(
     val profileRepo = remember { QuroSavedProfileRepository(ctx.applicationContext) }
     var savedProfiles by remember { mutableStateOf(profileRepo.loadAll()) }
 
+    // 进入模型配置界面时只读取本地缓存的模型列表，不自动联网（手动拉取仍由 fetchModels() 触发）。
+    LaunchedEffect(Unit) { vm.loadCachedModels() }
+
     val cs = MaterialTheme.colorScheme
 
     Column(

@@ -366,7 +366,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                     return
                 }
                 source == QuroSttPrefs.SOURCE_ONDEVICE -> {
-                    // 端侧（本地模型）模式：Sherpa-ONNX 离线识别，不依赖原生识别/云端
+                    // 端侧（本地模型）模式：Sherpa-NCNN 离线识别，不依赖原生识别/云端
                     startOnDeviceListening()
                     return
                 }

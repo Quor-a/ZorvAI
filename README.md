@@ -61,6 +61,41 @@
 
 ---
 
+## 💬 对话框与消息能力 · Chat & Messages
+
+Zorv AI 的对话框（ChatScreen）是 Agent 与用户交互的主界面，强调「工具调用可见化」「多轮聚合」「操作可达」：
+
+- **消息操作栏（AI 消息专用）**：每条 AI 回复气泡下方提供 `复制 / 追问 / 分享 / 删除 / 重试` 五个动作——复制全文到剪贴板、基于该回复一键发起追问、分享文本、精确删除该条消息（含聚合气泡对应的全部底层消息，并连带清理隐藏的 tool 结果消息）、以最后一条用户消息重新生成。
+- **工具调用可见化（ToolCallBlock）**：AI 经 ReAct 循环调用的工具（launch_app / 无障碍操作 / cms_* / scheduler / memory_* 等）以结构化卡片内嵌在气泡中，展示参数、状态（运行/成功/警告/失败，按结果前 200 字启发式判定，避免正文误判）、**执行耗时（ms / s）** 与执行轨迹，不再是隐藏管道或独立浮层。
+- **思考过程（ThinkBlock）**：受「深度思考」开关控制，折叠展示 `<think>` 推理链路。
+- **多轮聚合**：同一回合（相邻用户消息之间）连续的 assistant(+隐藏 tool) 消息聚合成单个气泡流式增长，避免「每段输出重开一个气泡」。
+- **富组件融进气泡（QuroChatCard）**：AI 经 `ui_widget` / `ui_card` 下发的图表、待办、表单、进度等可视化组件直接合体进聊天气泡，而非浮层。
+- **代码块 / Markdown 渲染**：围栏代码块、标题、引用、列表与行内 HTML 渲染，代码块支持点「预览」以 WebView（已禁用 JS）渲染 HTML 片段。
+- **回到底部**：内容超出一屏时右下角浮现回底浮动按钮；列表滚动使用 `lastIndex` 精准定位，避免越界。
+
+> 所有消息持久化于 `QuroConversationStore`，删除/重试等操作实时同步内存 store 与磁盘，重启不丢失。
+
+---
+
+## 🧩 内置技能 Skills（63 个 · 首次启动自动注入）
+
+Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{name}` 工具，可被 LLM 自动编排）。v1.0.16 起将 WorkBuddy 技能库全部 **63 个技能**转化为 Zorv AI 品牌版本，打包进 `app/src/main/assets/skills/zorv/`（含 `manifest.json`，每个技能含稳定 id `zorv_<sha1>`、名称、描述与正文），**首次启动经 `QuroSkillStore.seedBuiltinZorvSkills` 幂等注入**为默认启用、可被调用的内置技能。
+
+技能覆盖以下方向（部分列举）：
+
+| 方向 | 代表技能 |
+|------|----------|
+| 前端 / 设计 | `frontend-design`、`frontend-dev`、`ui-design-system`、`awesome-design-md`、`landing-page-generator`、`product-showcase-site`、`algorithmic-poster-philosophy`、`page-editor`、`html-deploy`、`static-app`、`responsiveness-check`、`web-performance-audit` |
+| 部署 / 云 | `cloudflare`、`cloudflare-worker-builder`、`edgeone`、`edgeone-pages-deploy`、`netlify-deploy`、`vercel-deploy`、`web-deploy`、`web-deploy-github`、`shippage`、`github-pages-auto-deploy` |
+| 内容 / 创作 | `tomato-novelist`、`ppt-generator`、`processon-mindmap-generator`、`patent-disclosure-skill`、`official-document-skill`、`contract-review`、`humanizer`、`humanizer-zh`、`yourself-skill` |
+| 搜索 / 情报 | `aihot`、`news-summary`、`github-ai-trends`、`github-trending-cn`、`multi-search-engine`、`overseas-trending-search`、`perplexity`、`tavily`、`web-search-exa`、`tencent-yuanbao-standard-search`、`tencent-weather`、`weather-open-meteo` |
+| IM / 媒体 | `qq-bot-messaging`、`qqmusic`、`kugou-skill`、`douyin-video-downloader`、`douyin-works-crawler`、`douyin_copy_extract`、`tiktok-video-downloader`、`twitter-video-downloader`、`wechat-article-search`、`视频号账号诊断与拆解` |
+| 效率 / 工程 | `memory-manager-v2`、`Docker`、`evolution-engine`、`agent-mbti`、`ima-skill`、`uniapp-expert`、`wxa-skills-generate`、`code-reviewer` |
+
+> 用户在「设置 → 技能」中可查看/启停这些内置技能；LLM 会根据对话上下文自动选择合适的 `skill__{name}` 注入系统提示词来辅助完成任务。
+
+---
+
 ## 📱 Screenshots · 截图预览
 
 > 以下截图来自真机（Android），展示 ZorvAI 的核心界面与能力验证结果。
@@ -342,6 +377,7 @@ cd QuroAI
 - **v1.0.6 附带的 ACI 核心库 AAR**：[aci-core-release.aar](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/aci-core-release.aar)
 - **v1.0.5（debug）**：[ZorvAI-debug-v1.0.5.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.5/ZorvAI-debug-v1.0.5.apk)
 - **v1.0.2（debug）**：[QuroAI-v1.0.2-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.2/QuroAI-v1.0.2-debug.apk)
+- **v1.0.16（源码已推送 · 本地构建）**：本次更新（对话框 B1–B8 修复、单条消息删除、工具耗时、内置 63 技能）已提交至 `main`。APK 由本地 `./gradlew assembleFullDebug` 构建，产物位于 `app/build/outputs/apk/full/debug/app-full-debug.apk`（full 风味含离线 MNN/llama.cpp 原生引擎，约 350MB+；如需精简可构建 `assembleFdroidDebug`）。
 
 > 💡 v1.0.6 起开放 **ACI（Agent Capability Interface）**：主程序作为控制端，可调用任意接入 `aci-core` 的受控端 App（官方参考实现「ZorvAI 浏览器」已独立开源，见上方独立仓库链接）；`aci-core-release.aar` 随本仓库 Release 提供。详见 [ACI 开发者手册](./docs/ACI_DEVELOPER_GUIDE.md)。
 
@@ -365,6 +401,7 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v1.0.16 | 2026-08-04 | **对话框全面修复 + 单条消息删除 + 内置 63 技能**：① 对话框 BUG 修复——**B1** 离线/工具调用场景下流式 loading 占位气泡残留（生成结束未清除占位，已先 `store.remove` 再落终态）；**B2** 跨会话卡片串台（后台会话延迟卡片误挂当前可见会话，已按「后台且非可见则丢弃」拦截）；**B3** 流式内容兜底（`content` 为空时回落 `streamedContent`，不再显示「(已思考完毕)」空壳）；**B5** 工具结果状态启发式误判（仅扫描结果前 200 字，避免正文中含「失败/error」被误标为错误）+ 工具调用**耗时展示**（`QuroToolCall→ToolCallUi` 全链路 `durationMs`，气泡内显示 `ms`/`s`）；**B6** 列表滚动越界（`scrollToItem` 改用 `lastIndex`）；**B8** 代码预览 WebView 关闭 JavaScript（`settings.javaScriptEnabled=false`，防止不可信 AI 生成 HTML 执行脚本）；② UI 新增——单条消息操作栏「复制 / 追问 / 分享 / 删除 / 重试」，**删除**可精确移除单条消息或聚合气泡对应的全部底层消息（含连带清理隐藏 tool 结果消息），实时同步内存 store 与磁盘持久化；③ 内置技能——将 WorkBuddy 技能库全部 **63 个技能**转化为 Zorv AI 品牌版本（`app/src/main/assets/skills/zorv/`，含 `manifest.json`），首次启动经 `QuroSkillStore.seedBuiltinZorvSkills` 自动注入为内置 `skill__{name}` 工具可被 LLM 编排；④ **B4** `QuroChatCard` JSON 解析已由 `runCatching` 守护（缺字段不崩溃，仅忽略该卡片）；**B7** 双 Markdown 渲染路径（RichText + 块级解析）标记待统一，无崩溃；版本号保持 versionCode 452 / versionName 1.0.16 |
 | v1.0.15 | 2026-08-01 | **ACI 2.0 治理层（错误模型 / 协议版本化 / 事件总线）+ 真机全能力 42/42 通过**：新增 `QuroAciErrors`（ACI 2.0 标准化错误模型 `{code,message,suggestion,layer}`，aci-protocol 命名空间 15xx/24xx/25xx，避开 aci-core 标准码 0/400/403/404/500/503/504/505）+ `QuroAciProtocol`（`aci-protocol-v1` 协议版本化与 `negotiate(peer)` 协商）+ `QuroAciEvents`（进程内事件总线，含 SERVICE_BOUND/UNBOUND/CALL_FAILED/DISCOVERED/PROTOCOL_NEGOTIATED）；受控端 `QuroMainAciService` 新增 `aci_protocol` 能力暴露并统一错误码/超时/坏请求返回；控制端 `QuroAciManager` 接入协议协商、错误解析与事件下发；真机测试 42/42 全过 0 失败（浏览器 30 + WorkflowACI 10 + 主程序 2）；版本号 versionCode 450→451 / versionName 1.0.14→1.0.15 |
 | v1.0.14 | 2026-08-01 | **HTTP 传输（http_request · 局域网/本地组网）+ 文档与版本齐步**：受控浏览器新增 `http_request` 能力并经 ACI 暴露（支持同网段 LAN 明文 http://192.168.x.x、*.local）；受控端 `networkSecurityConfig` 放开局域网明文（base-config cleartextTrafficPermitted=true + localhost/127.0.0.1/10.0.2.2/local 域名放开）；主程序系统提示词 ACI 部分柔性化（可自由组合/链式调用能力）并补 HTTP(LAN) 说明；ACI 开发者手册新增 §15 HTTP 传输、应用内「被控方接入手册」补 HTTP(LAN) 小节、能力数 29→30；主程序版本号 versionCode 449→450 / versionName 1.0.13→1.0.14，受控浏览器 versionCode 13→14 / versionName 1.0.13→1.0.14 |
 | v1.0.13 | 2026-07-31 | **文档与许可对齐（LAN 控制台 / ACI 控制台）**：「设置 → 关于 Zorv AI → 开源许可声明」新增 ACI 控制台 UI（LAN 控制台）许可条目；README 新增「ACI 控制台 UI（LAN 控制台）」专节；开源 ACI 开发者手册新增 §14「LAN 控制台 / 控制台后台接入」；LICENSE 追加 LAN 控制台子系统许可说明；版本号升级至 versionCode 449 / versionName 1.0.13（受控浏览器保持 v1.0.12，未随本次发布） |

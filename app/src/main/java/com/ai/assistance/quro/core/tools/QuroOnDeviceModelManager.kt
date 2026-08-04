@@ -22,7 +22,8 @@ import java.net.URL
  *  - 支持多个镜像源 / 自定义链接（URL 由调用方从 QuroOnDeviceModelPrefs 取得）。
  *  - 支持 zip / tar.gz(.tgz) / tar.bz2(.tbz2) / tar 压缩格式（Apache Commons Compress）。
  *  - 下载完成后自动解压到应用私有目录 filesDir/ondevice_model/<模型名>/，
- *    校验 NCNN 的 .ncnn.param/.ncnn.bin + tokens.txt 齐全后，写入部署状态，识别引擎直接可用。
+ *    校验流式 transducer 三件套（encoder/decoder/joiner 的 .ncnn.param + .ncnn.bin）
+ *    与 tokens.txt 齐全后，写入部署状态，识别引擎直接可用。
  */
 object QuroOnDeviceModelManager {
     private const val TAG = "QuroOnDeviceMgr"
@@ -83,15 +84,25 @@ object QuroOnDeviceModelManager {
 
             onState("正在校验模型文件…")
             val layout = detectAsrLayout(destDir)
-            if (layout != AsrModelLayout.NCNN) {
+            if (layout != AsrModelLayout.TRANSDUCER) {
                 destDir.deleteRecursively()
                 fail(
                     appCtx, deployKey, onState,
-                    if (layout == AsrModelLayout.ONNX_LEGACY)
-                        "压缩包内是旧 ONNX 模型（model.onnx），与 NCNN 引擎不兼容，请改用 Sherpa-NCNN 模型"
-                    else
-                        "压缩包内未找到 NCNN 模型文件（需 .ncnn.param / .ncnn.bin + tokens.txt）",
+                    when (layout) {
+                        AsrModelLayout.ONNX_LEGACY ->
+                            "压缩包内是 ONNX 模型，与本机 NCNN 引擎不兼容，请改用 Sherpa-NCNN 流式模型"
+                        AsrModelLayout.SENSE_VOICE_LEGACY ->
+                            "压缩包内是旧版 SenseVoice 布局，缺少 encoder/decoder/joiner 三件套，引擎无法加载"
+                        else ->
+                            "压缩包内未找到流式模型文件（需 encoder/decoder/joiner 的 .ncnn.param + .ncnn.bin 与 tokens.txt）"
+                    },
                 )
+                return@withContext false
+            }
+            // 三件套齐全但成对关系可能残缺（例如 .param 有而 .bin 缺），这里再做一次严格定位
+            if (findAsrFiles(destDir, AsrModelType.STREAMING_TRANSDUCER) == null) {
+                destDir.deleteRecursively()
+                fail(appCtx, deployKey, onState, "模型文件不完整：encoder / decoder / joiner 的 .param 与 .bin 必须成对存在，且需要 tokens.txt")
                 return@withContext false
             }
 
@@ -101,11 +112,11 @@ object QuroOnDeviceModelManager {
                 QuroOnDeviceModelPrefs.DeployedEntry(
                     destDir.absolutePath,
                     modelName,
-                    spec.type.name,
+                    AsrModelType.STREAMING_TRANSDUCER.name,
                     QuroOnDeviceModelPrefs.STATUS_DEPLOYED,
                 ),
             )
-            onState("部署完成：$modelName（类型：${spec.type.label}）")
+            onState("部署完成：$modelName（占用 ${formatBytes(deployedDirTotalBytes(destDir.absolutePath))}）")
             Log.i(TAG, "模型部署成功 -> ${destDir.absolutePath} 类型=${spec.type}")
             true
         } catch (e: Throwable) {
@@ -233,18 +244,31 @@ object QuroOnDeviceModelManager {
         val dir = QuroOnDeviceModelPrefs.getDeployedDir(ctx.applicationContext) ?: return null
         // 大小兜底：最大文件 < 1MB 直接视为坏目录，返回 null（避免 UI 误判可用而进 ensureLoaded 卡 60s）
         if (deployedDirMaxFileBytes(dir) < MIN_VALID_MODEL_BYTES) return null
-        val typeName = QuroOnDeviceModelPrefs.getDeployedType(ctx.applicationContext)
-        val type = typeName?.let { runCatching { AsrModelType.valueOf(it) }.getOrNull() }
-        return if (type != null) {
-            findAsrFiles(File(dir), type)
-        } else {
-            when (detectAsrLayout(File(dir))) {
-                AsrModelLayout.NCNN -> findAsrFiles(File(dir), AsrModelType.SENSE_VOICE)
-                AsrModelLayout.ONNX_LEGACY -> null // 旧 ONNX 部署，与 NCNN 引擎不兼容，需重新添加并下载 NCNN 模型
-                AsrModelLayout.NONE -> null
-            }
+        // 类型记录只作参考：旧安装可能写着 SENSE_VOICE 之类的历史值，一律以磁盘实际布局为准
+        return when (detectAsrLayout(File(dir))) {
+            AsrModelLayout.TRANSDUCER -> findAsrFiles(File(dir), AsrModelType.STREAMING_TRANSDUCER)
+            // 旧 ONNX / 旧 SenseVoice 部署与当前引擎不兼容，需重新下载流式模型
+            AsrModelLayout.ONNX_LEGACY -> null
+            AsrModelLayout.SENSE_VOICE_LEGACY -> null
+            AsrModelLayout.NONE -> null
         }
     }
+
+    /**
+     * 已部署目录的历史遗留判定：目录里是引擎跑不动的旧模型（旧 SenseVoice / ONNX）。
+     * 设置页据此提示用户「一键换成推荐模型」，而不是让他对着「识别没反应」干瞪眼。
+     */
+    fun isLegacyIncompatible(ctx: Context): Boolean {
+        val dir = QuroOnDeviceModelPrefs.getDeployedDir(ctx.applicationContext) ?: return false
+        return when (detectAsrLayout(File(dir))) {
+            AsrModelLayout.SENSE_VOICE_LEGACY, AsrModelLayout.ONNX_LEGACY -> true
+            else -> false
+        }
+    }
+
+    /** 已部署模型占用的磁盘空间（字节）；未部署返回 0。 */
+    fun deployedSizeBytes(ctx: Context): Long =
+        deployedDirTotalBytes(QuroOnDeviceModelPrefs.getDeployedDir(ctx.applicationContext))
 
     /** 删除已部署模型，释放空间。 */
     fun deleteDeployed(ctx: Context): Boolean {
@@ -266,12 +290,13 @@ object QuroOnDeviceModelManager {
      * 导致 UI 误判可用或不断重复下载的问题）。
      *
      * 判定可用：目录存在 + 目录内最大文件 ≥ [MIN_VALID_MODEL_BYTES]（排除错误页/空目录）
-     * + 布局为 [AsrModelLayout.NCNN]（模型文件齐全）。三者皆满足才视为「已可用、无需重下」。
+     * + 布局为 [AsrModelLayout.TRANSDUCER] 且三件套成对齐全。全部满足才视为「已可用、无需重下」。
      */
     fun verifyDeployedDir(dir: String?): Boolean {
         val d = dir?.let { File(it) } ?: return false
         if (!d.isDirectory) return false
         if (deployedDirMaxFileBytes(dir) < MIN_VALID_MODEL_BYTES) return false
-        return detectAsrLayout(d) == AsrModelLayout.NCNN
+        if (detectAsrLayout(d) != AsrModelLayout.TRANSDUCER) return false
+        return findAsrFiles(d, AsrModelType.STREAMING_TRANSDUCER) != null
     }
 }

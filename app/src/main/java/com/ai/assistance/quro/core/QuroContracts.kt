@@ -23,6 +23,8 @@ data class QuroToolCall(
      *  UI 直接从单条 assistant 消息读出「工具名 + 参数 + 结果」三件套，
      *  不再依赖跨消息 resultMap 匹配 role=tool 结果 → 彻底消除「工具调用展示缺失」。 */
     val result: String? = null,
+    /** 工具本次执行耗时（毫秒），由 [QuroAssistant] 在 engine.execute 前后计时回填，UI 展示用。 */
+    val durationMs: Long = 0,
 )
 
 /** 工具规格（下发给 LLM 的 function 描述）。 */

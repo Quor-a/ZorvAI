@@ -1,6 +1,8 @@
 package com.ai.assistance.quro.core.tools
 
 import android.content.Context
+import com.ai.assistance.quro.core.policy.QuroPolicy
+import com.ai.assistance.quro.core.policy.QuroPolicyStore
 import com.ai.assistance.quro.core.privilege.QuroRootGateway
 import org.json.JSONObject
 
@@ -29,6 +31,11 @@ class RootExecTool : QuroTool {
 
     override fun run(context: Context, arguments: String): String {
         val cmd = JSONObject(arguments).optString("command", "").ifBlank { return "❌ 缺少 command 参数" }
+        // BUG-E 修复：权限模式=禁止（DENY）时，root 命令必须被策略拦截，
+        // 否则「权限模式」对 L4 形同虚设（AI 仍可经 root_exec 执行任意 root 命令）。
+        if (QuroPolicyStore.getPriv(context) == QuroPolicy.DENY) {
+            return "❌ 权限模式为「禁止」，root_exec 已被策略拦截。请到 CapOS 权限子系统 → 权限模式 调整为允许/询问后再执行。"
+        }
         // E-7：统一走 QuroRootGateway（Shizuku-root → su 降级链 + quoting + 超时 + 审计）。
         // 旧实现在这里自己写了一遍降级和读流：没有超时（命令不退出就永久卡住 ReAct 循环）、
         // 不写审计、FD 也不回收。全部由网关接管。

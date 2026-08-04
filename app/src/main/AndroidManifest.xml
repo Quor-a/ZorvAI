@@ -254,7 +254,7 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
-        <!-- 端侧 ASR 引擎：独立 :asr 进程。Sherpa-ONNX 原生层偶发 SIGSEGV，
+        <!-- 端侧 ASR 引擎：独立 :asr 进程。Sherpa-NCNN 原生层偶发 SIGSEGV，
              隔离后崩溃只杀 :asr 进程，主进程通过 DeathRecipient 优雅降级、不闪退。 -->
         <service
             android:name=".core.tools.QuroAsrService"
@@ -299,6 +299,17 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/quro_accessibility_service" />
         </service>
+
+        <!--
+          Shizuku UserService（特权执行通道）：运行于 Shizuku 提供的特权进程，承载 AIDL 命令执行。
+          必须在 manifest 声明，否则 Shizuku.bindUserService() 抛 IllegalArgumentException 被 runCatching 吞掉，
+          aidlBound 永 false、AIDL 主路径永远失效，永远退化为脆弱的反射 newProcess 降级路径。
+          权限 moe.shizuku.manager.permission.API_V23 与上方 uses-permission 一致（Shizuku 13.x 要求）。
+        -->
+        <service
+            android:name=".core.shizuku.QuroShellService"
+            android:exported="false"
+            android:permission="moe.shizuku.manager.permission.API_V23" />
 
         <!--
           设备管理员（E-12 根因修复）。

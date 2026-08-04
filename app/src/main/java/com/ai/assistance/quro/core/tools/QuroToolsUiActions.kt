@@ -9,7 +9,7 @@ import com.ai.assistance.quro.core.cards.QuroChatCard
  * 设计：UI 与 AI 工具原本正交——UI 走 `sheet` / `showX` 状态，工具走 `QuroToolRegistry`。
  * 本层用一座「桥」[QuroUiActionBridge] 把两者接起来：工具 `run()` 仅把 action 名回调给
  * 对话框组合作用域（ChatScreen 注入的 `dispatch`），由对话框设置对应状态真正打开界面。
- * 这样 AI 就能「打开 WPS 文档中心 / 切换深度思考 / 清空对话」等，等价于点对应按钮。
+ * 这样 AI 就能「打开文档查看器 / 切换深度思考 / 清空对话」等，等价于点对应按钮。
  *
  * 工具名约定：
  * - `ui_open_<surface>`：打开某个全屏界面或底部弹层（如 ui_open_onlyoffice）

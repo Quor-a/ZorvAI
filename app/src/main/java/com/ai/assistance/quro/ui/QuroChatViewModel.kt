@@ -76,6 +76,10 @@ import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
 
+import android.util.Log
+
+private const val TAG = "QuroChatViewModel"
+
 /**
  * 对话 ViewModel（原创）：支持多会话、历史记录持久化、新建/切换/删除会话。
  * 同一份内存 [store] 实例贯穿生命周期，避免 QuroAssistant 持有过期引用。
@@ -117,6 +121,10 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     // 现改为按 conversationId 记录，UI 仅对【当前可见会话】显示打断按钮。
     private val _busyMap = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     fun isBusy(conversationId: String): Boolean = _busyMap.value[conversationId] == true
+    // [D5] 统一错误通道：ViewModel 捕获的异常经此暴露给 UI（错误横幅），并配合 Log.e 记录上下文。
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+    fun clearError() { _error.value = null }
     private val sendJobs = mutableMapOf<String, Job>()
     /** 每个会话的「在线生成缓冲」：生成中或刚结束的会话，其最新内容优先从此处取，
      *  使切换回该会话时即时看到最新（含在途 token），无需等 ≤2s 落盘快照。 */
@@ -194,6 +202,23 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     fun isEnterSend(): Boolean = _enterSend.value
     fun setEnterSend(on: Boolean) { _enterSend.value = on; uiPrefs.edit { putBoolean("enter_send", on) } }
 
+    // 外观与对话设置：保留对话轮数（对话框级覆盖模型 contextWindow 的轮次语义）。
+    // null = 跟随模型默认（contextWindow）；N>0 = 仅保留最近 N 个 (用户+助手) 轮次。
+    private val _historyRounds = MutableStateFlow<Int?>(null)
+    val historyRoundsPref: StateFlow<Int?> = _historyRounds.asStateFlow()
+    fun setHistoryRounds(n: Int?) {
+        _historyRounds.value = n
+        // 立即把设置写回当前会话并落盘，避免「改了设置但没发消息就关应用」导致设置丢失。
+        val id = _currentId.value
+        val idx = _convs.value.indexOfFirst { it.id == id }
+        if (idx >= 0) {
+            _convs.value = _convs.value.toMutableList().also { list ->
+                list[idx] = list[idx].copy(historyRounds = n)
+            }
+            runCatching { convRepo.saveAll(_convs.value) }
+        }
+    }
+
     // AI 回复通知总开关（离开软件时的系统通知 / 桌面卡片均受它控制）
     private val _aiReplyNotify = MutableStateFlow(uiPrefs.getBoolean("ai_reply_notify", true))
     val aiReplyNotifyPref: StateFlow<Boolean> = _aiReplyNotify.asStateFlow()
@@ -250,7 +275,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     role = "assistant",
                     content = defaultWelcome(),
                 )
-                loaded.add(QuroPersistedConversation(id, "新对话", now, now, listOf(welcome)))
+                loaded.add(QuroPersistedConversation(id = id, title = "新对话", createdAt = now, updatedAt = now, messages = listOf(welcome)))
                 convRepo.saveAll(loaded)
             }
             _convs.value = loaded
@@ -333,7 +358,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             role = "assistant",
             content = "这是来自 ${platform.label} 用户 $userId 的机器人对话。",
         )
-        val conv = QuroPersistedConversation(id, "[${platform.label}] $userId", now, now, listOf(welcome))
+        val conv = QuroPersistedConversation(id = id, title = "[${platform.label}] $userId", createdAt = now, updatedAt = now, messages = listOf(welcome))
         _convs.value = _convs.value + conv
         convRepo.saveAll(_convs.value)
         emitMeta()
@@ -377,10 +402,11 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         val id = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
         val welcome = QuroMessage(role = "assistant", content = defaultWelcome())
-        val conv = QuroPersistedConversation(id, "新对话", now, now, listOf(welcome))
+        val conv = QuroPersistedConversation(id = id, title = "新对话", createdAt = now, updatedAt = now, messages = listOf(welcome))
         _convs.value = _convs.value + conv
         _currentId.value = id
         activeConversationId = id
+        _historyRounds.value = null
         store.clear()
         store.add(welcome)
         _messages.value = store.all()
@@ -398,6 +424,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         _currentId.value = id
         activeConversationId = id
         store.clear()
+        // 载入该会话已保存的「保留对话轮数」设置（null=跟随模型默认）
+        _historyRounds.value = conv.historyRounds
         // 优先取在线缓冲（生成中/刚结束）→ 即时看到最新；否则取持久化消息。
         val live = liveBuffers[id]
         if (live != null) live.all().forEach { store.add(it) }
@@ -418,6 +446,36 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 return
             }
             selectConversation(remaining.maxByOrNull { it.updatedAt }!!.id)
+        }
+        convRepo.saveAll(_convs.value)
+        emitMeta()
+    }
+
+    /**
+     * 删除单条/聚合气泡对应的底层消息（v417 对话框缺失功能补全）。
+     * ids 为该气泡携带的全部 QuroMessage 原始 id；删除助手消息时，连带清理其隐藏的
+     * tool 结果消息（role=="tool" 且 toolCallId 命中被删消息的 toolCall），避免孤儿消息残留。
+     */
+    fun deleteMessage(ids: List<String>) {
+        val cid = _currentId.value ?: return
+        if (ids.isEmpty()) return
+        // 若正在生成，先停掉本轮，避免过时缓冲把被删消息重新写回。
+        sendJobs[cid]?.cancel(); sendJobs.remove(cid)
+        val removeSet = ids.toSet()
+        val all = store.all()
+        val toolCallIds = all.filter { it.id in removeSet }
+            .flatMap { it.toolCalls?.map { tc -> tc.id } ?: emptyList() }.toSet()
+        val toRemove = all.filter {
+            it.id in removeSet || (it.role == "tool" && it.toolCallId != null && it.toolCallId in toolCallIds)
+        }.map { it.id }.toSet()
+        toRemove.forEach { store.remove(it) }
+        val msgs = store.all()
+        _messages.value = msgs
+        val convs = _convs.value.toMutableList()
+        val idx = convs.indexOfFirst { it.id == cid }
+        if (idx >= 0) {
+            convs[idx] = convs[idx].copy(messages = msgs, updatedAt = System.currentTimeMillis())
+            _convs.value = convs
         }
         convRepo.saveAll(_convs.value)
         emitMeta()
@@ -501,7 +559,6 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // ★ 串台防御（v434+ 修复）：轮次信息通过【隐藏 system 消息】传给 LLM，
         //   不再注入 userMsg.content（旧方案会导致 seededUserMsg 进入 buf→liveBuffer→commitCurrent 刷屏，
         //   使用户 UI 看到内部 [第N轮] 标记泄露）。
-        val roundNumber = convBase.count { it.role == "user" } + 1
         val firstUser = convBase.none { it.role == "user" }
         val initialMessages = convBase + userMsg
         store.add(userMsg)  // 仅用于即时显示（commitCurrent 默认用 store 刷屏/首存）
@@ -549,26 +606,10 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 }
                 // 落盘技能隐藏消息到 buf（用户消息与标题更新已在 launch 外的 commitCurrent 处理）
                 commitCurrent(convId, buf)
-                // ★ 串台防御（v434+）：轮次标记改为【隐藏 user 消息】注入 buf，
-                //   不再污染 userMsg.content（旧方案导致 [第N轮] 泄露到 UI）。
-                //   hidden=true 确保 UI 渲染层不显示、落盘后可追溯调试。
-                // ★ #1116 多轮修复：本地（LLAMA_CPP / MNN）小模型会照字面理解"忽略更早轮次"，
-                //   丢弃全部上下文、退化到"永远答第一条"（本次 Bug 现象 B）。故本地路径改为
-                //   【多轮友好】指令：允许结合前面历史（含上一轮回复）理解并作答最新一条，
-                //   仅禁止原样复述旧回复。云端模型能力强、依赖这条纪律防串台，保持原指令不变。
-                val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
-                store.add(
-                    QuroMessage(
-                        role = "user",
-                        content = if (isLocal) {
-                            "[第${roundNumber}轮] 多轮对话：请结合前面的历史（含你上一轮的回复）理解上下文，" +
-                                "并针对本轮最新一条用户消息作答；可以引用历史信息，但不要原样重复之前已给出的回复或旧轮次的任务结果。"
-                        } else {
-                            "[第${roundNumber}轮] 请严格针对本轮（最新一条）用户消息作答，忽略更早轮次的用户消息。"
-                        },
-                        hidden = true,
-                    ),
-                )
+                // ★ 多轮上下文纪律统一只靠系统提示词的「回复纪律」约束，
+                //   不再每轮注入 [第N轮] 隐藏 user 消息（旧方案会被小本地模型回显/改写，
+                //   表现为「（多轮对话上下文理解：…[第N轮] 你好）」泄漏、乱回复、不回复）。
+                //   系统提示词已含等价多轮纪律，移除冗余注入即可根治该泄漏。
                 if (cfg.apiKey.isBlank()) {
                     store.add(
                         QuroMessage(
@@ -587,7 +628,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         // 原为 ask 的实参在 viewModelScope(主线程) 上求值 → 主线程重 I/O/计算 → 触发系统 ANR 对话框。
                         // 改为在 IO 线程先把提示词算好，再交给 ask（ask 自身仍切 IO 执行 ReAct 循环）。
                         val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effectiveCfg) + (screenCtx ?: "") }
-                        genAssistant.ask(appContext, effectiveCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true) {
+                        genAssistant.ask(appContext, effectiveCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true, historyRounds = _historyRounds.value ?: 0) {
                         // 工具调用/结果产生、以及流式 token 到达时实时刷新并落盘（退出生效），
                         // 退出也能保留中间过程；commitCurrent 内部已对落盘做 ≤1s 节流。
                             commitCurrent(convId, buf)
@@ -617,6 +658,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         ?.let { fireReplyNotification("Zorv AI", it.content) }
                 }
                 } catch (e: Exception) {
+                    Log.e(TAG, "生成回复异常 convId=$convId", e)
+                    _error.value = "回复生成失败：${e.message ?: "未知错误"}"
                     store.add(
                         QuroMessage(
                             role = "assistant",
@@ -733,7 +776,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     ),
                 )
             }
-            val reply = runVoiceAsk(cfg) { /* 绑定会话不中途落盘当前视图，结束后整段写回目标会话 */ }
+            val reply = runVoiceAsk(cfg) { commitCurrent(targetId) }
             val finalMsgs = store.all().toList()
             _convs.value = _convs.value.map { c ->
                 if (c.id == targetId) c.copy(
@@ -765,7 +808,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effCfg) }
                 // #1110：语音球问答原默认 stream=false → 整段回、不逐层；与主对话（stream=true）行为不一致，
                 // 表现为「部分返回不是一层一层返回、自己回到对话框」。云模型改为流式，与文本框主路径一致。
-                assistant.ask(appContext, effCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true, onUpdate = onTick)
+                assistant.ask(appContext, effCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true, historyRounds = _historyRounds.value ?: 0, onUpdate = onTick)
             }.getOrElse { e ->
                 if (e is CancellationException) "⏹ 已停止生成。" else "⚠️ 语音球出错了：${e.message ?: "未知错误"}"
             }
@@ -827,9 +870,12 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 if (activeBuf != null && activeBuf !== buf) return@launch
                 val existing = _convs.value.firstOrNull { it.id == id }
                 val title = if (updateTitle && existing != null) deriveTitle(msgs) else existing?.title ?: "新对话"
+                // 仅在写入「当前可见会话」时落盘用户设置的保留轮数；其它会话（后台生成 / 语音球绑定会话）
+                // 保留其自身已存的 historyRounds，避免把当前会话的设置串台覆盖到其它会话。
+                val rounds = if (id == _currentId.value) _historyRounds.value else existing?.historyRounds
                 _convs.value = _convs.value.toMutableList().also { list ->
                     val idx = list.indexOfFirst { it.id == id }
-                    if (idx >= 0) list[idx] = list[idx].copy(messages = msgs, updatedAt = System.currentTimeMillis(), title = title)
+                    if (idx >= 0) list[idx] = list[idx].copy(messages = msgs, updatedAt = System.currentTimeMillis(), title = title, historyRounds = rounds)
                 }
                 QuroDiag.log("SAVE", "convId=$id msgs=${msgs.size} activeBufSame=${liveBuffers[id] === buf} force=$forceSave")
                 emitMeta()
@@ -873,6 +919,13 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         //   `_messages.value = store.all()`，会把屏幕回退到过时内容 → 表现为「内容消失 / 工具重负载时完全错乱」。
         //   因此：优先用 liveBuffer 作为卡片载体与显示源；无 liveBuffer（非生成中）才退回 store。
         val live = liveBuffers[ownerId]
+        // #879 防污染补充：后台会话若在卡片到达时 liveBuffer 已回收（生成早已结束，延迟异步卡片），
+        // 且并非当前可见会话，则【绝不】触碰共享 store —— 否则会把卡片写入错误的当前会话（串台）。
+        // 直接丢弃该延迟卡片（比污染当前会话安全），可见会话仍走下方 store 分支正常挂载。
+        if (live == null && !visible) {
+            QuroDiag.log("CARD", "丢弃后台延迟卡片 ownerId=$ownerId（非可见且无 liveBuffer，避免串台）")
+            return
+        }
         val storeForCard: QuroConversationStore = live ?: store
         val msgs = storeForCard.all()
         QuroDiag.log("CARD", "ownerId=$ownerId visible=$visible fromLive=${live != null}")
@@ -1017,7 +1070,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
         if (!isLocal) {
             // 对话结束 → 触发心跳孵化扫描（事件驱动，替代旧 15 分钟轮询）
-            try { QuroPersonaViewModel.pulse() } catch (_: Exception) {}
+            try { QuroPersonaViewModel.pulse() } catch (e: Exception) { Log.e(TAG, "人格心跳孵化(pulse)失败", e); _error.value = "人格孵化失败：${e.message ?: "未知错误"}" }
         }
         val persona = activePersona() ?: return
         if (persona.id.isBlank()) return
@@ -1052,8 +1105,9 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         personaRepo.upsert(latest.copy(incubation = mergeIncubation(latest.incubation, note)))
                     }
                 }
-            } catch (_: Exception) {
-                // 孵化失败静默：不影响主对话
+            } catch (e: Exception) {
+                Log.e(TAG, "人格自动孵化失败", e)
+                _error.value = "人格自动孵化失败：${e.message ?: "未知错误"}"
             } finally {
                 _autoIncubating.value = false
             }
@@ -1242,13 +1296,13 @@ $recent
         // - 继续/重复之前某轮任务的回复（如"xxx已创建完成"）
         // - 引用历史上下文中与当前用户消息无关的内容作为主要回复
         // - 把旧轮次中生成的 HTML/代码/长文本当成当前回复
-        // 每条用户消息前有 [第N轮] 标记，最新一条 = 最大 N 值 → 只回应那条。
-        // 串台防御（v429+）：本地/MNN 路径已在上方 1121 处 early-return 块中注入精简版回复纪律，
-        // 此处仅补充云端严格版（本地不会到达这里，因为 isLocal 在 1121 处已 return）。
+        // 用户消息不再携带 [第N轮] 标记（旧注入方案已废弃，见 580 行注释），模型按消息顺序自然理解多轮。
+        // 串台防御（v429+）：本地/MNN 路径已在上方 1144 处 early-return 块中注入精简版回复纪律，
+        // 此处仅补充云端严格版（本地不会到达这里，因为 isLocal 在 1144 处已 return）。
         sb.append("""
         
         ## ⚠️ 回复纪律（强制约束）
-        - 你必须**仅针对最新一条带 [第N轮] 标记的用户消息**作答
+        - 你必须**仅针对最新一条用户消息**作答（不要回应历史中已处理过的旧消息）
         - 如果用户消息是「全面测试」「测试一下」等简短测试指令，就按字面意思执行测试并报告结果，**绝不能**回复之前任何任务（如创建应用、生成网页、部署模块等）的完成通知
         - 历史上下文仅作为参考背景，你的回复主体必须是**对当前这条消息的直接回应**
         - 违反此纪律会导致用户体验严重受损（串台），请务必遵守
@@ -1327,7 +1381,7 @@ $recent
             "若 isInputActive() 为 false（无聚焦输入框），工具会返回明确引导而非静默失败。" +
             "它与无障碍 input_text 是「两条独立通道」：需要「模拟真人逐字输入、触发 IME 的发送/回车动作」时走键盘通道；需要「直接覆盖或设置控件文本、不依赖输入法」时走无障碍通道。\n"
         )
-        sb.append("\n（其中 `ui_open_*` / `ui_toggle_*` / `ui_clear_*` / `ui_new_*` 为**界面控制工具**：调用后会在当前对话框直接打开对应界面/弹层/开关，例如 ui_open_onlyoffice 打开 WPS/文档中心、ui_toggle_deepthink 切换深度思考、ui_clear_chat 清空对话。它们同样可由你并行发起，让用户无需手动点击即可导航应用。）\n")
+        sb.append("\n（其中 `ui_open_*` / `ui_toggle_*` / `ui_clear_*` / `ui_new_*` 为**界面控制工具**：调用后会在当前对话框直接打开对应界面/弹层/开关，例如 ui_open_onlyoffice 打开文档查看器、ui_toggle_deepthink 切换深度思考、ui_clear_chat 清空对话。它们同样可由你并行发起，让用户无需手动点击即可导航应用。）\n")
         sb.append("\n（CMS 模块与大部分能力在应用沙箱内执行（intent/js/api）；另有系统级通道 L1 无障碍控屏 / L2 Shizuku / L3 设备管理员 / L4 ROOT / L5 Linux，对应工具已包含在上方清单中，运行时由系统授权与资产可用性把关，未授权时工具会返回明确引导，无需你做通道自查。）\n")
         sb.append("\n### 在对话框里「展示」UI（重要）\n")
         sb.append(

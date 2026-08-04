@@ -37,6 +37,26 @@ class QuroAssistant(
     private val engine = QuroToolEngine(registry)
 
     /**
+     * 兜底清洗：部分小本地模型会把内部多轮上下文控制指令回显进正文
+     * （如「（多轮对话上下文理解：…[第5轮] 你好）」）。这些并非真实回复，
+     * 必须从最终展示文本里剥离，避免泄漏到气泡（多轮泄漏防御层）。
+     * 根因修复在 QuroChatViewModel：已不再注入 [第N轮] 隐藏 user 消息，
+     * 此处仅作二次保险，应对任何残留/其它来源的指令回显。
+     */
+    private fun sanitizeLeakedInstruction(text: String): String {
+        if (text.isEmpty() || text == "(已思考完毕)") return text
+        var out = text
+        // 剥掉包含特征短语的整段括号（兼容中英文全角/半角括号）
+        out = out.replace(
+            Regex("[（(][^）)]*?(多轮对话上下文理解|系统发起了新的回复|不要重复前几轮的内容)[^）)]*?[）)]"),
+            ""
+        )
+        // 剥掉独立的 [第N轮] 轮次标记
+        out = out.replace(Regex("\\[第\\d+轮\\]"), "")
+        return out.trim()
+    }
+
+    /**
      * 用户已在外部把 user 消息写入 store。这里执行编排，返回最终答复文本。
      * @param onUpdate 每次会话状态变更（含中间的工具调用 / 工具结果）后回调，
      *                 用于驱动界面实时刷新（如对话气泡即时显示「正在调用工具…」）。
@@ -47,6 +67,7 @@ class QuroAssistant(
         systemPrompt: String = "",
         autoSaveMemory: Boolean = true,
         stream: Boolean = false,
+        historyRounds: Int = 0,
         onUpdate: (() -> Unit)? = null,
     ): String =
         withContext(Dispatchers.IO) {
@@ -93,7 +114,7 @@ class QuroAssistant(
                 coroutineContext[Job]?.ensureActive()
                 round++
                 // 任何一步抛异常都兜底成错误文本，绝不让协程崩掉导致界面「卡死在思考中」
-                val llmMessages = runCatching { store.toLlmMessages(system, cfg.contextWindow) }.getOrElse { emptyList() }
+                val llmMessages = runCatching { store.toLlmMessages(system, cfg.contextWindow, historyRounds) }.getOrElse { emptyList() }
                 // 流式增量回调（云端 / 本地离线模型**共用**）。参数 acc 为「累计文本」。
                 // ⚠️ #1112 修复：此前本地（MNN / llama.cpp）路径压根不传 onToken，且下方 streaming
                 //   还对本地强制置 false —— 本地推理整条链零流式。手机 CPU 上一次生成动辄数十秒到
@@ -212,9 +233,14 @@ class QuroAssistant(
                         //   表现为「有时候会、有时候不会」地把思考混进回复。现在思考只走 reasoning 字段
                         //   （独立 ThinkBlock 渲染），content 始终干净；若模型最终确实没给正文，仅给极简占位，
                         //   思考过程照常在「思考中」里可见。
-                        val safeContent = result.content.takeIf { it.isNotBlank() }
-                            ?: streamedContent.takeIf { it.isNotBlank() }
-                            ?: "(已思考完毕)"
+                        // 🔧 #879-B3：#765 防御记录的流式累计文本适时兜底——若客户端流式正常产出、
+                        // 但最终 QuroLlmResult.Text.content 却为空（与 QuroLlmClient 行为不一致，多见于
+                        // 本地离线引擎边界），用 streamedContent 回退，避免正文被「(已思考完毕)」覆盖。
+                        val safeContent = sanitizeLeakedInstruction(
+                            result.content.takeIf { it.isNotBlank() }
+                                ?: streamedContent.takeIf { it.isNotBlank() }
+                                ?: "(已思考完毕)"
+                        )
                         val safeReasoning = result.reasoning?.takeIf { it.isNotBlank() }
                         lastText = safeContent
                         if (streamPlaceholderId != null) {
@@ -263,6 +289,14 @@ class QuroAssistant(
                             reasoning = roundReasoning,
                             hidden = true,
                         )
+                        // 🔧 #879-B1：本地模型首次加载时推过一条「⏳ 正在加载本地模型…」可见占位气泡
+                        // （streamPlaceholderId）。若本轮直接是工具调用（无正文 token），该占位不会被
+                        // 终态 Text 覆盖 → 残留为可见气泡。工具调用轮的真实内容落在 hidden 占位里，
+                        // 故此处显式删除加载占位，绝不残留「⏳ 正在加载本地模型并处理上下文…」。
+                        if (streamPlaceholderId != null) {
+                            store.remove(streamPlaceholderId!!)
+                            streamPlaceholderId = null
+                        }
                         store.add(assistantMsg)
                         emit()
                         Log.i("QuroAssistant", "TOOLCALL round=$round storedCalls=${callsWithId.size} reasoningBlank=${roundReasoning.isNullOrBlank()} ids=${callsWithId.joinToString(","){it.id}}")
@@ -281,13 +315,16 @@ class QuroAssistant(
                         }
                         // 工具执行异常不得上抛：降级为每个 call 各一条错误结果，保持 id 配对正确，
                         // 让 LLM 能看到错误并自行兜底答复。
+                        val t0 = System.currentTimeMillis()
                         val results = runCatching { engine.execute(context, callsWithId) }
                             .getOrElse { e -> callsWithId.map { QuroToolResult(it.name, "工具执行异常：${e.message}") } }
+                        val dur = System.currentTimeMillis() - t0
                         // 🔑 关键：把执行结果**回填进 assistant 消息的 toolCalls**（自包含）。
                         // UI 之后直接从这一条 assistant 消息读出「工具名 + 参数 + 结果」三件套，
                         // 彻底不再依赖「跨消息 resultMap 按 toolCallId 匹配 role=tool 结果」这种脆弱写法——
                         // 后者一旦 role=tool 消息被丢 / 被迁移裁剪 / id 错位，工具块就会「缺失结果」。
-                        val enrichedCalls = callsWithId.zip(results) { call, r -> call.copy(result = r.result) }
+                        // 🔧 #879：同时回填本次执行耗时 durationMs，供 UI 展示「耗时 Xms」。
+                        val enrichedCalls = callsWithId.zip(results) { call, r -> call.copy(result = r.result, durationMs = dur) }
                         store.update(assistantMsg.id) { it.copy(toolCalls = enrichedCalls) }
                         emit()
                         // 仍为 LLM 保留 role=tool 结果管道（下一轮上下文需要，与 UI 展示解耦）。
@@ -479,6 +516,23 @@ class QuroAssistant(
             )
         } else {
             QuroDiag.log("LocalPrompt", "本地 prompt 规模 OK | msgs=${out.size} | chars=$finalTotal")
+        }
+
+        // 🔧 孤儿工具消息清理：上面「丢最旧非 system 消息」可能把 tool 配对的一方裁掉，
+        // 留下孤儿（role=tool 结果找不到对应 assistant 调用，或 assistant 调用找不到对应 tool 结果）。
+        // 孤儿会让下游模型把非法上下文当成正常轮次 → 表现为「乱回复 / 不回复」。
+        // 压缩后成对校验，剔除残缺配对，保证下发给模型的工具上下文自洽。
+        val callIds = out.filter { !it.toolCalls.isNullOrEmpty() }
+            .flatMap { it.toolCalls!!.map { c -> c.id } }.toSet()
+        val resultIds = out.filter { it.role == "tool" }
+            .mapNotNull { it.toolCallId }.toSet()
+        val beforeOrphan = out.size
+        out = out.filterNot { m ->
+            (m.role == "tool" && m.toolCallId != null && m.toolCallId !in callIds) ||
+            (m.toolCalls.orEmpty().any { it.id !in resultIds })
+        }
+        if (out.size != beforeOrphan) {
+            QuroDiag.log("LocalPrompt", "🔧 剔除孤儿工具消息 | ${beforeOrphan - out.size} 条（call/result 配对残缺）")
         }
         return out
     }

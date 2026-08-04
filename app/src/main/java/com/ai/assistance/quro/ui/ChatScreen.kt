@@ -140,6 +140,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -176,6 +177,7 @@ import com.ai.assistance.quro.core.QuroConversationMeta
 import com.ai.assistance.quro.core.QuroPersona
 import com.ai.assistance.quro.core.QuroCrashLogger
 import com.ai.assistance.quro.ui.QuroChatViewModel
+import com.ai.assistance.quro.ui.dialog.RichText
 import com.ai.assistance.quro.core.tools.QuroVoiceStyle
 import com.ai.assistance.quro.core.tools.QuroSttHolder
 import com.ai.assistance.quro.core.tools.QuroSttPrefs
@@ -262,6 +264,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.History
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Icon
 import androidx.compose.material3.AssistChip
@@ -302,6 +305,8 @@ fun ChatScreen(
     val activePersona by personaVm.activePersona.collectAsState()
     val personas by personaVm.personas.collectAsState()
     val cfg by modelVm.cfg.collectAsState()
+    // [D5] 收集 ViewModel 错误通道，供顶部错误横幅展示（异常不再被静默吞掉）。
+    val errorState by vm.error.collectAsState()
 
     // ── 执行轨迹总线：全局只在此处订阅一次，去重后存入共享状态，三个面板统一读取；
     //    切换会话时清空，避免跨会话污染；add 前按 id 去重，避免重复 key / 重复事件。 ──
@@ -367,6 +372,7 @@ fun ChatScreen(
         //   不再为每个 assistant 轮次各开一个气泡。单轮纯文本回复不受影响（仍是 1 气泡）。
         val out = mutableListOf<Message>()
         var aggId = 0
+        val aggIds = mutableListOf<String>()
         var aggTime = ""
         var hasAgg = false
         val aggThinkLines = mutableListOf<String>()
@@ -382,6 +388,7 @@ fun ChatScreen(
                 out.add(
                     Message(
                         id = aggId,
+                        uids = aggIds.toList(),
                         mine = false,
                         author = selectedPersona.name,
                         avatar = selectedPersona.ava,
@@ -395,7 +402,7 @@ fun ChatScreen(
                 )
             }
             hasAgg = false
-            aggThinkLines.clear(); aggTools.clear(); aggText.clear(); aggCards.clear()
+            aggThinkLines.clear(); aggTools.clear(); aggText.clear(); aggCards.clear(); aggIds.clear()
         }
 
         for (m in messages) {
@@ -409,6 +416,7 @@ fun ChatScreen(
                 else -> {
                     // 隐藏且无任何可见内容的纯管道占位 → 跳过；否则参与聚合（含隐藏但有工具/推理/文本/卡片）
                     if (m.hidden && m.toolCalls.isNullOrEmpty() && m.reasoning.isNullOrBlank() && m.content.isBlank() && m.cards.isEmpty()) continue
+                    aggIds.add(m.id)
                     if (!hasAgg) {
                         hasAgg = true
                         aggId = m.id.hashCode()
@@ -418,7 +426,7 @@ fun ChatScreen(
                         ?.filter { it.isNotBlank() }?.forEach { aggThinkLines.add(it) }
                     m.toolCalls?.forEach { c ->
                         val r = (c.result ?: fallbackMap[c.id])?.takeIf { !isGarbageToolResult(it) }
-                        aggTools.add(ToolCallUi(c.name, c.arguments, r))
+                        aggTools.add(ToolCallUi(c.name, c.arguments, r, c.durationMs))
                     }
                     if (m.content.isNotBlank()) {
                         if (aggText.isNotEmpty()) aggText.append("\n\n")
@@ -740,6 +748,25 @@ fun ChatScreen(
                         .fillMaxSize()
                         .padding(pad)
                 ) {
+                    // [D5] 错误横幅：ViewModel 捕获的异常经 error StateFlow 暴露，这里以顶部横幅呈现并在数秒后自动消失。
+                    errorState?.let { err ->
+                        LaunchedEffect(err) {
+                            kotlinx.coroutines.delay(4000L)
+                            vm.clearError()
+                        }
+                        Surface(
+                            color = cs.errorContainer,
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("⚠️ $err", color = cs.onErrorContainer, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                                TextButton(onClick = { vm.clearError() }) { Text("关闭", color = cs.onErrorContainer) }
+                            }
+                        }
+                    }
                     MessageList(
                         messages = uiMessages,
                         scaled = { scaled(it) },
@@ -757,6 +784,7 @@ fun ChatScreen(
                             val lastUser = uiMessages.lastOrNull { it.mine }?.text
                             if (!lastUser.isNullOrBlank()) send(lastUser)
                         },
+                        onDelete = { vm.deleteMessage(it) },
                         modifier = Modifier.weight(1f)
                     )
                     // 语音：对话框语音输入按钮（受「语音设置 · 对话框按钮」开关控制）
@@ -1016,7 +1044,19 @@ fun ChatScreen(
                 personaEditIsNew = true
             },  // 打开 Zorv AI 完整人格创建对话框
             onPickFile = { mime -> pickLauncher.launch(mime) },
-            onExport = { /* 原型：仅占位 */ },
+            onExport = {
+                val path = exportConversation(ctx, uiMessages)
+                if (path != null) {
+                    Toast.makeText(ctx, "已导出对话：$path", Toast.LENGTH_LONG).show()
+                    val share = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, "QuroAI 对话导出，文件已保存至：$path")
+                    }
+                    runCatching { ctx.startActivity(Intent.createChooser(share, "分享对话")) }
+                } else {
+                    Toast.makeText(ctx, "导出失败，请重试", Toast.LENGTH_SHORT).show()
+                }
+            },
             onClear = { vm.clear() },
             onOpenBrowser = { browserUrl = it },
             // 设置底部弹层：UI 取自 MoWenApp，功能接 Zorv AI 现有状态/页面
@@ -1320,11 +1360,11 @@ fun ChatScreen(
             }
         }
 
-        // 应用内文档查看器：全屏覆盖层（从工具栏「WPS文档」进入；已整合原「文档中心」）
+        // 应用内文档查看器：全屏覆盖层（从工具栏「文档」进入；已整合原「文档中心」）
         if (showOnlyOffice) {
             BackHandler { showOnlyOffice = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
-                QuroOnlyOfficeScreen(onClose = { showOnlyOffice = false })
+                QuroDocScreen(onClose = { showOnlyOffice = false })
             }
         }
 
@@ -1349,6 +1389,8 @@ fun ChatScreen(
                     enterSend = enterSend, onToggleEnter = { vm.setEnterSend(!enterSend) },
                     fontName = fontNames[fontTier], onCycleFont = { vm.setFontTier((fontTier + 1) % 3) },
                     voiceBallEnabled = voiceBallEnabled, onToggleVoiceBall = onToggleVoiceBall,
+                    historyRounds = vm.historyRoundsPref.collectAsState().value,
+                    onSetHistoryRounds = { vm.setHistoryRounds(it) },
                     userProfile = liveProfile,
                     onSaveProfile = { vm.saveProfile(it) },
                     onClose = { showAppearance = false },
@@ -1463,10 +1505,12 @@ private fun MessageList(
     onAskFollowup: (String) -> Unit = {},
     onShare: (String) -> Unit = {},
     onRegenerate: () -> Unit = {},
+    onDelete: (List<String>) -> Unit = {},
     currentId: String,
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
+    val narrow = LocalConfiguration.current.screenWidthDp < 400
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val lastMsg = messages.lastOrNull()
@@ -1474,13 +1518,13 @@ private fun MessageList(
     // 触发①：进入 / 切换会话 → 无条件落到底部（看最新一条），取代原先「只滚一次」的一次性标志
     LaunchedEffect(currentId) {
         if (messages.isEmpty()) return@LaunchedEffect
-        listState.scrollToItem(messages.size)
+        listState.scrollToItem(messages.lastIndex)
     }
 
     // 触发②：用户刚发出新消息（最后一条是用户消息）→ 强制跳到底部看回复，即使此前在中部上滑
     LaunchedEffect(lastMsg?.id) {
         if (lastMsg != null && lastMsg.mine) {
-            listState.scrollToItem(messages.size)
+            listState.scrollToItem(messages.lastIndex)
         }
     }
 
@@ -1493,7 +1537,7 @@ private fun MessageList(
         // 仅当用户已停在底部（最后一条消息可见）才跟随流式增长；
         // 改用「最后可见项」判定，长消息项也不会误判为「不在底部近处」而停止跟随（#914）
         if (lastVisible >= lastIndex) {
-            listState.animateScrollToItem(messages.size)
+            listState.animateScrollToItem(messages.lastIndex)
         }
     }
     // 注意：执行轨迹事件已统一在 ChatScreen 顶层订阅一次（单一真相源 traceLines），
@@ -1506,7 +1550,7 @@ private fun MessageList(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = if (narrow) 8.dp else 16.dp),
         state = listState,
         contentPadding = PaddingValues(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -1532,10 +1576,12 @@ private fun MessageList(
                     isLastToolMsg = index == lastToolIdx,
                     embeddedTrace = if (index == lastToolIdx) visibleTraces else emptyList(),
                     onCommand = { onCommand(it) },
-                    onAskFollowup = onAskFollowup,
-                    onShare = onShare,
-                    onRegenerate = onRegenerate,
-                )
+                        onAskFollowup = onAskFollowup,
+                        onShare = onShare,
+                        onRegenerate = onRegenerate,
+                        onDelete = onDelete,
+                        narrow = narrow,
+                    )
             }
         }
     }
@@ -1643,9 +1689,12 @@ private fun MessageRow(
     onAskFollowup: (String) -> Unit = {},
     onShare: (String) -> Unit = {},
     onRegenerate: () -> Unit = {},
+    onDelete: (List<String>) -> Unit = {},
+    narrow: Boolean = false,
 ) {
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
+    val avatarSize = if (narrow) 28 else 34
     var showCopyMenu by remember { mutableStateOf(false) }
     var copiedText by remember { mutableStateOf("") }
 
@@ -1662,7 +1711,7 @@ private fun MessageRow(
             // AI 头像可点击 → 编辑灵魂卡
             var showAvatarMenu by remember { mutableStateOf(false) }
             Box(Modifier.clickable { showAvatarMenu = true }) {
-                AvatarContent(msg.avatarUri, msg.avatar, 34)
+                AvatarContent(msg.avatarUri, msg.avatar, avatarSize)
                 DropdownMenu(expanded = showAvatarMenu, onDismissRequest = { showAvatarMenu = false }) {
                     DropdownMenuItem(
                         text = { Text("编辑灵魂卡", fontSize = 14.sp) },
@@ -1673,7 +1722,7 @@ private fun MessageRow(
             }
             Spacer(Modifier.width(10.dp))
         }
-        Column(Modifier.widthIn(max = 280.dp)) {
+        Column(Modifier.widthIn(max = if (narrow) 260.dp else 280.dp)) {
             // ── 名字行 + 思考/工具小按钮 ──────────────────────────────
             // 状态提升到 Column 作用域（展开内容在 Row 外渲染）
             var showThink by remember { mutableStateOf(false) }
@@ -1747,14 +1796,14 @@ private fun MessageRow(
                         .clip(bubbleShape)
                         .border(1.dp, borderColor, bubbleShape)
                         .background(bubbleColor)
-                        .padding(12.dp, 10.dp)
+                        .padding(if (narrow) 10.dp else 12.dp, if (narrow) 8.dp else 10.dp)
                 } else {
-                    Modifier.padding(12.dp, 10.dp)
+                    Modifier.padding(if (narrow) 10.dp else 12.dp, if (narrow) 8.dp else 10.dp)
                 }
                 Box(
                     bubbleModifier
                         .combinedClickable(
-                            onClick = {},
+                            onClick = { copyPlain(ctx, displayText) },
                             onLongClick = { if (!msg.text.isNullOrBlank()) copyToClipboard(msg.text) }
                         )
                 ) {
@@ -1763,17 +1812,12 @@ private fun MessageRow(
                         blocks.forEach { blk ->
                             when (blk) {
                                 is MsgBlock.Text -> {
-                                    val rich = remember(blk.text, textColor) { buildRich(blk.text, TextStyle(fontSize = scaled(15), color = textColor, lineHeight = scaled(23)),
-                                        boldColor = if (msg.mine) AccentPress else cs.primary,
-                                        linkColor = cs.primary,
-                                        codeBackground = cs.surfaceVariant.copy(alpha = 0.5f)) }
-                                    ClickableText(
-                                        text = rich,
-                                        style = TextStyle(fontSize = scaled(15), color = textColor, lineHeight = scaled(23)),
-                                        onClick = { offset ->
-                                            rich.getStringAnnotations("link", offset, offset)
-                                                .firstOrNull()?.item?.let { onOpenLink(it) }
-                                        },
+                                    // [D1] 接入项目统一富文本渲染器 RichText（ui/dialog/RichText.kt）：
+                                    // 原生支持加粗/斜体/行内代码/链接/标题/引用/代码块，主题色自适应，零第三方依赖。
+                                    RichText(
+                                        text = blk.text,
+                                        baseStyle = TextStyle(fontSize = scaled(15), color = textColor, lineHeight = scaled(23)),
+                                        onLinkClick = onOpenLink,
                                         modifier = Modifier.fillMaxWidth(),
                                     )
                                 }
@@ -1841,22 +1885,32 @@ private fun MessageRow(
                 // 气泡操作任务栏（仅 AI 消息）：复制 / 追问 / 分享 / 重试
                 if (!msg.mine) {
                     Spacer(Modifier.height(6.dp))
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Start,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+                    val bubbleActions: @Composable () -> Unit = {
                         BubbleActionButton("复制", Muted) { copyToClipboard(displayText) }
                         BubbleActionButton("追问", cs.primary) { onAskFollowup(msg.text ?: "") }
                         BubbleActionButton("分享", Muted) { onShare(msg.text ?: "") }
+                        BubbleActionButton("删除", Muted) { onDelete(msg.uids) }
                         BubbleActionButton("重试", Muted) { onRegenerate() }
+                    }
+                    if (narrow) {
+                        FlowRow(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) { bubbleActions() }
+                    } else {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) { bubbleActions() }
                     }
                 }
             }
         }
         if (msg.mine) {
             Spacer(Modifier.width(10.dp))
-            AvatarContent(msg.avatarUri, msg.avatar, 34)
+            AvatarContent(msg.avatarUri, msg.avatar, avatarSize)
         }
     }
 }
@@ -1964,6 +2018,26 @@ private fun ToolCallBlock(
                         .clip(CircleShape)
                         .background(cs.primaryContainer.copy(alpha = 0.4f))
                         .padding(horizontal = 5.dp, vertical = 1.dp))
+            }
+            // 🔧 #879-B5：折叠态标题栏也显示工具结果状态色点（失败红/警告黄/成功绿），
+            // 不必展开即可一眼识别异常（此前必须展开 SingleToolCard 才看得到）。
+            val aggStatus = run {
+                val statuses = tools.mapNotNull { t -> t.result?.let { detectResultStatus(it) } }
+                when {
+                    statuses.contains(ResultStatus.ERROR) -> ResultStatus.ERROR
+                    statuses.contains(ResultStatus.WARNING) -> ResultStatus.WARNING
+                    statuses.any { it == ResultStatus.SUCCESS } -> ResultStatus.SUCCESS
+                    else -> null
+                }
+            }
+            aggStatus?.let { st ->
+                val dotColor = when (st) {
+                    ResultStatus.ERROR -> Color(0xFFEF4444)
+                    ResultStatus.WARNING -> Color(0xFFF59E0B)
+                    else -> Color(0xFF22C55E)
+                }
+                Box(Modifier.size(8.dp).clip(CircleShape).background(dotColor))
+                Spacer(Modifier.width(8.dp))
             }
             Spacer(Modifier.weight(1f))
             LucideIcon(if (expanded) "chevron_up" else "chevron_down", null, Modifier.size(14.dp), tint = Muted)
@@ -2107,11 +2181,16 @@ private fun parseRiskLevel(text: String): RiskLevel? {
 
 enum class ResultStatus { SUCCESS, ERROR, WARNING, INFO }
 
-private fun detectResultStatus(result: String): ResultStatus = when {
-    result.startsWith("\u274C") || result.startsWith("\u2717") || result.contains("失败") || result.contains("error", ignoreCase = true) -> ResultStatus.ERROR
-    result.startsWith("\u26A0\uFE0F") || result.startsWith("\u26A0") || result.contains("警告") || result.contains("warning", ignoreCase = true) -> ResultStatus.WARNING
-    result.startsWith("\u2705") || result.startsWith("\u2714") || result.contains("成功") -> ResultStatus.SUCCESS
-    else -> ResultStatus.INFO
+private fun detectResultStatus(result: String): ResultStatus {
+    // 🔧 #879-B5：仅扫描前 200 字符判定状态，避免正文里偶然出现「失败/error」字样（如"本操作不会失败"）
+    // 的成功结果被误标红。显式 ❌/✗ 前缀优先，仍兜底关键词。
+    val head = result.take(200)
+    return when {
+        result.startsWith("\u274C") || result.startsWith("\u2717") || head.contains("失败") || head.contains("error", ignoreCase = true) -> ResultStatus.ERROR
+        result.startsWith("\u26A0\uFE0F") || result.startsWith("\u26A0") || head.contains("警告") || head.contains("warning", ignoreCase = true) -> ResultStatus.WARNING
+        result.startsWith("\u2705") || result.startsWith("\u2714") || head.contains("成功") -> ResultStatus.SUCCESS
+        else -> ResultStatus.INFO
+    }
 }
 
 /** 单个工具的渲染卡片 */
@@ -2146,6 +2225,14 @@ private fun SingleToolCard(t: ToolCallUi, scaled: (Int) -> androidx.compose.ui.u
                     .background(cat.color.copy(alpha = 0.1f))
                     .padding(horizontal = 4.dp, vertical = 1.dp))
             Spacer(Modifier.weight(1f))
+            // 🔧 #879：工具执行耗时（仅当 >0 时显示）
+            if (t.durationMs > 0) {
+                Text(
+                    text = if (t.durationMs >= 1000) "%.1fs".format(t.durationMs / 1000.0) else "${t.durationMs}ms",
+                    fontSize = 9.sp, color = Muted, fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.width(6.dp))
+            }
             if (!t.result.isNullOrBlank()) {
                 val statusColor = when (status) {
                     ResultStatus.SUCCESS -> Color(0xFF22C55E)
@@ -3216,6 +3303,7 @@ private fun QuroAppearanceSettingsScreen(
     enterSend: Boolean, onToggleEnter: () -> Unit,
     fontName: String, onCycleFont: () -> Unit,
     voiceBallEnabled: Boolean, onToggleVoiceBall: (Boolean) -> Unit,
+    historyRounds: Int? = null, onSetHistoryRounds: (Int?) -> Unit = {},
     userProfile: QuroChatViewModel.UserProfile,
     onSaveProfile: (QuroChatViewModel.UserProfile) -> Unit,
     onClose: () -> Unit,
@@ -3223,6 +3311,7 @@ private fun QuroAppearanceSettingsScreen(
 ) {
     val cs = MaterialTheme.colorScheme
     var showUserProfileEditor by remember { mutableStateOf(false) }
+    var showHistoryPicker by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(cs.background)) {
         TopAppBar(
             title = { Text("外观与对话") },
@@ -3247,6 +3336,16 @@ private fun QuroAppearanceSettingsScreen(
                 SetRow(Icons.Filled.Keyboard, "回车发送", "关闭后回车换行", enterSend, onToggleEnter, scaled)
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 SetRow(Icons.Filled.Mic, "悬浮语音球", "STT → LLM → TTS 随时语音对话", voiceBallEnabled, { onToggleVoiceBall(!voiceBallEnabled) }, scaled)
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                SetRowClickable(
+                    Icons.Filled.History, "保留对话轮数", "限制发给模型的近期轮次",
+                    value = when (historyRounds) {
+                        null -> "跟随模型默认"
+                        else -> "${historyRounds} 轮"
+                    },
+                    onClick = { showHistoryPicker = true },
+                    scaled = scaled,
+                )
             }
             GroupCaption("用户资料")
             SetGroup {
@@ -3265,6 +3364,37 @@ private fun QuroAppearanceSettingsScreen(
                 },
                 onDismiss = { showUserProfileEditor = false },
                 scaled = scaled,
+            )
+        }
+        // 保留对话轮数选择器：预设 10 / 20 / 50 轮，或「全部」(null = 跟随模型默认)
+        if (showHistoryPicker) {
+            AlertDialog(
+                onDismissRequest = { showHistoryPicker = false },
+                confirmButton = {},
+                title = { Text("保留对话轮数") },
+                text = {
+                    Column {
+                        val presets = listOf(
+                            10 to "10 轮",
+                            20 to "20 轮",
+                            50 to "50 轮",
+                            null to "全部（跟随模型默认）",
+                        )
+                        presets.forEach { (n, label) ->
+                            val selected = historyRounds == n
+                            Row(
+                                Modifier.fillMaxWidth().clickable { onSetHistoryRounds(n); showHistoryPicker = false }
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (selected) Icon(Icons.Filled.Check, null, Modifier.size(18.dp), tint = cs.primary)
+                                else Spacer(Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(label, fontSize = scaled(14), color = cs.onSurface)
+                            }
+                        }
+                    }
+                },
             )
         }
     }
@@ -4278,8 +4408,10 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                         .background(Color.White)
                 ) {
                     AndroidView(factory = { context ->
-                        WebView(context).apply {
-                            settings.javaScriptEnabled = true
+                            WebView(context).apply {
+                            // 安全加固：预览内容来自 AI 生成（不可信），默认禁用 JS 执行，防止脚本注入。
+                            // 纯代码预览无需 JS；若未来需要渲染含 JS 的可信 HTML 工件，应单独加来源校验后再开。
+                            settings.javaScriptEnabled = false
                             settings.domStorageEnabled = true
                             settings.cacheMode = WebSettings.LOAD_NO_CACHE
                             settings.useWideViewPort = false
@@ -4514,6 +4646,32 @@ private fun copyConversation(ctx: Context, messages: List<Message>) {
     copyPlain(ctx, sb.toString().trim())
 }
 
+/** [D2] 导出当前对话为 Markdown 文件，保存到应用外部私有目录 QuroAI_exports/，返回保存路径；失败返回 null。不发起任何网络请求。 */
+private fun exportConversation(ctx: Context, messages: List<Message>): String? {
+    return runCatching {
+        val dir = File(ctx.getExternalFilesDir(null), "QuroAI_exports").apply { if (!exists()) mkdirs() }
+        val stamp = java.time.format.DateTimeFormatter
+            .ofPattern("yyyyMMdd_HHmmss")
+            .format(java.time.LocalDateTime.now())
+        val file = File(dir, "QuroAI_对话_$stamp.md")
+        val sb = StringBuilder()
+        sb.append("# QuroAI 对话导出\n\n")
+        sb.append("_导出时间：${java.time.LocalDateTime.now()}_\n\n")
+        messages.forEach { m ->
+            val who = if (m.mine) "我" else m.author
+            val body = (m.text ?: "").trim()
+            if (body.isNotBlank()) {
+                sb.append("**$who**：\n\n$body\n\n---\n\n")
+            }
+        }
+        file.writeText(sb.toString())
+        file.absolutePath
+    }.getOrElse { e ->
+        Log.e("ChatScreen", "导出对话失败", e)
+        null
+    }
+}
+
 // ---------------- Zorv AI 后端 → MoWen UI 适配器 ----------------
 
 /** 无激活人格时的兜底人格。 */
@@ -4548,6 +4706,7 @@ private fun QuroMessage.toMessage(
     }
     return Message(
         id = id.hashCode(),
+        uids = listOf(id),
         mine = mine,
         // A2 修复：用户消息气泡显示发送者昵称——优先用消息自带 senderName，回退到当前资料昵称，最终回退"我"；
         // 不再死写"你"。头像同理优先用消息自带 avatarUrl。

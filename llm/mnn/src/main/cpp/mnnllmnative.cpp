@@ -59,6 +59,50 @@ void clearCancelFlag(jlong llmPtr) {
 }
 
 // =======================
+// Last Error Channel (B-1 防御)
+// =======================
+//
+// 背景：结构化（工具调用）生成失败时，JNI 只能返回 jboolean=FALSE，具体原因全烂在 logcat 里。
+// 手机侧没有 adb，用户只能看到 Kotlin 层那句笼统的「MNN 推理未产生任何输出（ok=false）」。
+// 这里加一条 per-llmPtr 的最近错误通道：native 失败时写入「错误码|人类可读补充」，
+// Kotlin 侧通过 nativeGetLastError 取走（取走即清空），拼成能看懂的提示。
+//
+// 错误码约定（Kotlin 侧 MnnNativeError 负责翻译，保持字符串稳定，不要随意改名）：
+//   E_MNN_NO_MESSAGES      传入的 messages JSON 为空
+//   E_MNN_BAD_MESSAGES     messages JSON 解析失败 / 不是数组
+//   E_MNN_NO_VALID_MESSAGE messages 数组里没有一条可用消息
+//   E_MNN_TEMPLATE_THROW   apply_chat_template 抛异常
+//   E_MNN_TEMPLATE_EMPTY   模板渲染 + ChatML 回退后 prompt 仍为空
+//   E_MNN_EMPTY_TOKENS     prompt 非空但 tokenizer 编码结果为空
+//   E_MNN_STREAM_THROW     推理阶段抛异常
+static std::mutex gLastErrorMutex;
+static std::map<jlong, std::string> gLastErrors;
+
+// 记录最近一次错误（覆盖式：只保留最新一条，避免陈旧信息误导）
+void setLastError(jlong llmPtr, const std::string& message) {
+    std::lock_guard<std::mutex> lock(gLastErrorMutex);
+    gLastErrors[llmPtr] = message;
+}
+
+// 清除最近一次错误（每次生成开始时调用，保证读到的一定是本轮的）
+void clearLastError(jlong llmPtr) {
+    std::lock_guard<std::mutex> lock(gLastErrorMutex);
+    gLastErrors.erase(llmPtr);
+}
+
+// 取走最近一次错误（读后即清，避免下一轮读到上一轮的残留）
+std::string takeLastError(jlong llmPtr) {
+    std::lock_guard<std::mutex> lock(gLastErrorMutex);
+    auto it = gLastErrors.find(llmPtr);
+    if (it == gLastErrors.end()) {
+        return "";
+    }
+    std::string value = it->second;
+    gLastErrors.erase(it);
+    return value;
+}
+
+// =======================
 // Audio Callback Support
 // =======================
 
@@ -208,8 +252,11 @@ ChatMessages parseChatHistory(JNIEnv* env, jobject jhistory) {
 // =====================
 // Structured chat template (tool-calling support)
 // =====================
-// 旧实现依赖 minja/chat_template.hpp（通过 MNN_HAS_MINJA 宏条件编译），但当前 MNN checkout
-// 不含该头文件 → MNN_HAS_MINJA=0 → stub 恒返回 "" → JNI 返回 FALSE → "MNN 推理未产生任何输出"。
+// 历史沿革（供后来者判断，别再回头找 minja）：
+//   - 提交 a87104a 时，本函数依赖 minja/chat_template.hpp，通过 MNN_HAS_MINJA 宏条件编译。
+//     本地 MNN checkout 从来没有 transformers/llm/engine/src/minja/ 这个目录，
+//     于是 MNN_HAS_MINJA=0 → stub 恒返回 "" → JNI 返回 FALSE → "MNN 推理未产生任何输出"。
+//   - 现在已彻底移除对 minja 的依赖（不 vendor 第三方头文件，保住 F-Droid 可复现构建）。
 //
 // 正确路径：MNN 自带 vendored jinja 引擎（transformers/llm/engine/src/tokenizer/jinja.hpp），
 // 已通过 LLM_USE_JINJA 宏启用（engine/CMakeLists.txt:46）。用公开 API Llm::set_config() 注入
@@ -224,18 +271,156 @@ ChatMessages parseChatHistory(JNIEnv* env, jobject jhistory) {
 //   - llm.hpp:39-40  using ChatMessage = std::pair<std::string,std::string>; using ChatMessages = std::vector<ChatMessage>;
 //   - MNN 文档 llm.md:636  消息含 tool_calls 等额外字段时，ChatMessage first 设为 "json"，second 设为完整 JSON 字符串
 //   - Kotlin 层已有 MNNLlmSession.kt:545-556 setThinkingMode() 用完全相同的 set_config 模式
-std::string applyStructuredChatTemplate(Llm* llm, const std::string& messagesJson, const std::string& toolsJson) {
-    if (llm == nullptr || messagesJson.empty()) {
-        LOGE("applyStructuredChatTemplate: llm null or messages empty");
+
+// ---------------------------------------------------------------------------------------------
+// 内置 ChatML 回退渲染（B-1 方案甲的兜底部分）
+// ---------------------------------------------------------------------------------------------
+// 何时用：模型 llm_config.json 没配 jinja.chat_template（tokenizer.cpp:981-1017 会退化为
+// "只把 content 首尾相接"，既没有角色分隔也没有 generation prompt），或 jinja 渲染抛异常。
+// 那种 prompt 喂进去，模型不知道该由 assistant 接话，往往一个 token 都不吐 → ok=false。
+//
+// 这里按业界事实标准 ChatML（Qwen / Hermes 系）拼一版最小可用 prompt：
+//   <|im_start|>{role}\n{content}<|im_end|>\n ... <|im_start|>assistant\n
+// 工具定义按 Hermes/Qwen 约定塞进 system 段，并显式要求用 <tool_call> 包裹返回，
+// 与 Kotlin 侧 QuroLocalToolsCodec.parseToolCalls 的解析格式对齐。
+//
+// 注意：这是**回退**，不是主路径。主路径仍然优先用模型自带 chat_template（jinja 渲染），
+// 只有主路径产出空串时才启用，避免覆盖模型作者精心设计的模板。
+static std::string buildToolsInstruction(const rapidjson::Document& toolsDoc) {
+    if (!toolsDoc.IsArray() || toolsDoc.Empty()) {
         return "";
+    }
+    std::ostringstream oss;
+    oss << "\n\n# Tools\n\n"
+        << "You may call one or more functions to assist with the user query.\n\n"
+        << "You are provided with function signatures within <tools></tools> XML tags:\n<tools>\n";
+    for (const auto& tool : toolsDoc.GetArray()) {
+        rapidjson::StringBuffer buf;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
+        tool.Accept(writer);
+        oss << buf.GetString() << "\n";
+    }
+    oss << "</tools>\n\n"
+        << "For each function call, return a json object with function name and arguments "
+        << "within <tool_call></tool_call> XML tags:\n"
+        << "<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call>";
+    return oss.str();
+}
+
+static std::string renderChatMlFallback(const rapidjson::Document& messagesDoc,
+                                        const std::string& toolsField) {
+    rapidjson::Document toolsDoc;
+    toolsDoc.Parse(toolsField.c_str());
+    const std::string toolsInstruction = buildToolsInstruction(toolsDoc);
+
+    // 先探一遍有没有 system 消息，决定工具说明是"挂到已有 system"还是"新造一条 system"。
+    bool hasSystem = false;
+    for (const auto& msg : messagesDoc.GetArray()) {
+        if (msg.IsObject() && msg.HasMember("role") && msg["role"].IsString() &&
+            std::string(msg["role"].GetString()) == "system") {
+            hasSystem = true;
+            break;
+        }
+    }
+
+    std::ostringstream oss;
+    if (!hasSystem && !toolsInstruction.empty()) {
+        oss << "<|im_start|>system\nYou are a helpful assistant." << toolsInstruction << "<|im_end|>\n";
+    }
+
+    bool toolsAttached = hasSystem ? false : true;  // 无 system 时上面已挂载
+    bool anyMessage = false;
+    for (const auto& msg : messagesDoc.GetArray()) {
+        if (!msg.IsObject() || !msg.HasMember("role") || !msg["role"].IsString()) {
+            continue;
+        }
+        const std::string role = msg["role"].GetString();
+        const std::string content = (msg.HasMember("content") && msg["content"].IsString())
+            ? msg["content"].GetString() : "";
+
+        if (role == "tool") {
+            // 工具执行结果：ChatML 里没有 tool 角色，按 Qwen 约定降级为 user + <tool_response>。
+            oss << "<|im_start|>user\n<tool_response>\n" << content << "\n</tool_response><|im_end|>\n";
+            anyMessage = true;
+            continue;
+        }
+
+        if (role == "assistant" && msg.HasMember("tool_calls") && msg["tool_calls"].IsArray()) {
+            // 助手上一轮发起的工具调用：回放成 <tool_call> 包裹，保证多轮上下文自洽。
+            oss << "<|im_start|>assistant\n";
+            if (!content.empty()) {
+                oss << content << "\n";
+            }
+            for (const auto& call : msg["tool_calls"].GetArray()) {
+                const rapidjson::Value* fn = nullptr;
+                if (call.IsObject() && call.HasMember("function")) {
+                    fn = &call["function"];
+                } else if (call.IsObject()) {
+                    fn = &call;
+                }
+                if (fn == nullptr) continue;
+                rapidjson::StringBuffer buf;
+                rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
+                fn->Accept(writer);
+                oss << "<tool_call>\n" << buf.GetString() << "\n</tool_call>\n";
+            }
+            oss << "<|im_end|>\n";
+            anyMessage = true;
+            continue;
+        }
+
+        if (role == "system") {
+            oss << "<|im_start|>system\n" << content;
+            if (!toolsAttached && !toolsInstruction.empty()) {
+                oss << toolsInstruction;
+                toolsAttached = true;
+            }
+            oss << "<|im_end|>\n";
+            anyMessage = true;
+            continue;
+        }
+
+        // user / 其它未知角色统一按 user 处理，避免把模型没见过的角色名喂进去。
+        const std::string safeRole = (role == "assistant") ? "assistant" : "user";
+        oss << "<|im_start|>" << safeRole << "\n" << content << "<|im_end|>\n";
+        anyMessage = true;
+    }
+
+    if (!anyMessage) {
+        return "";
+    }
+    // generation prompt：告诉模型「轮到你说话了」，缺这一句是 0 token 输出的头号原因。
+    oss << "<|im_start|>assistant\n";
+    return oss.str();
+}
+
+std::string applyStructuredChatTemplate(Llm* llm,
+                                        const std::string& messagesJson,
+                                        const std::string& toolsJson,
+                                        std::string* errorOut = nullptr) {
+    auto fail = [&errorOut](const char* code, const std::string& detail) -> std::string {
+        LOGE("applyStructuredChatTemplate failed: %s | %s", code, detail.c_str());
+        if (errorOut != nullptr) {
+            *errorOut = std::string(code) + "|" + detail;
+        }
+        return "";
+    };
+
+    if (llm == nullptr) {
+        return fail("E_MNN_NO_MESSAGES", "llm handle is null");
+    }
+    if (messagesJson.empty()) {
+        return fail("E_MNN_NO_MESSAGES", "messages json is empty");
     }
 
     // Parse messages JSON array
     rapidjson::Document messagesDoc;
     messagesDoc.Parse(messagesJson.c_str());
     if (messagesDoc.HasParseError() || !messagesDoc.IsArray()) {
-        LOGE("applyStructuredChatTemplate: invalid messages json");
-        return "";
+        return fail("E_MNN_BAD_MESSAGES", "messages json is not a valid JSON array");
+    }
+    if (messagesDoc.Empty()) {
+        return fail("E_MNN_NO_VALID_MESSAGE", "messages array is empty");
     }
 
     // Validate tools JSON (if present) — invalid tools are silently ignored.
@@ -255,15 +440,32 @@ std::string applyStructuredChatTemplate(Llm* llm, const std::string& messagesJso
     // Inject jinja context via set_config (same pattern as MNNLlmSession.setThinkingMode).
     // The vendored jinja engine (LLM_USE_JINJA) picks up "tools" from the context when
     // apply_chat_template is called.
+    // 🛡️ B-5 防御：set_config 注入 jinja tools 上下文必须在 try 内保护。
+    // 旧代码未加保护：在部分 MNN 构建（未定义 LLM_USE_JINJA，或 chat_template_context_
+    // 管线缺失）下该调用会抛异常，异常穿透 applyStructuredChatTemplate 逃逸到
+    // nativeGenerateStreamStructured 的 catch → E_MNN_STREAM_THROW → JNI_FALSE，
+    // 即上层看到的「MNN 推理未产生任何输出（ok=false）」。这是工具调用路径独有的崩溃点，
+    // 非工具路径根本不调 set_config，因此只有开启工具调用才触发。
+    // 即便注入失败也绝不阻断：主路径 apply_chat_template 仍会渲染 prompt；
+    // 若主路径因缺 tools 渲染为空，renderChatMlFallback 会把工具描述写进 system，
+    // 模型依旧能看到工具，而不是整条链路崩成 ok=false。
     std::string configStr = "{\"jinja\":{\"context\":{\"tools\":" + toolsField + "}}}";
-    llm->set_config(configStr);
+    try {
+        llm->set_config(configStr);
+    } catch (const std::exception& e) {
+        LOGE("applyStructuredChatTemplate: set_config(tools) threw (ignored, "
+             "falling back to ChatML tool injection): %s", e.what());
+    } catch (...) {
+        LOGE("applyStructuredChatTemplate: set_config(tools) threw unknown "
+             "(ignored, falling back to ChatML tool injection)");
+    }
 
     // Build ChatMessages from messages JSON.
     // Per MNN docs (llm.md:636): messages with extra fields (tool_calls, reasoning_content,
     // tool_call_id) or tool role use "json" as first, full JSON object string as second.
     ChatMessages chatMessages;
     for (const auto& msg : messagesDoc.GetArray()) {
-        if (!msg.IsObject() || !msg.HasMember("role")) continue;
+        if (!msg.IsObject() || !msg.HasMember("role") || !msg["role"].IsString()) continue;
         std::string role = msg["role"].GetString();
 
         bool hasExtras = msg.HasMember("tool_calls") || msg.HasMember("reasoning_content") ||
@@ -281,12 +483,46 @@ std::string applyStructuredChatTemplate(Llm* llm, const std::string& messagesJso
         }
     }
 
-    // Apply chat template via public API (picks up tools from jinja context)
-    std::string prompt = llm->apply_chat_template(chatMessages);
+    if (chatMessages.empty()) {
+        return fail("E_MNN_NO_VALID_MESSAGE",
+                    "no usable message after filtering (all entries missing role)");
+    }
+
+    // Apply chat template via public API (picks up tools from jinja context).
+    // 主路径：模型自带 chat_template + vendored jinja。异常不再向上抛，转回退。
+    std::string prompt;
+    std::string templateError;
+    try {
+        prompt = llm->apply_chat_template(chatMessages);
+    } catch (const std::exception& e) {
+        templateError = e.what();
+        LOGE("applyStructuredChatTemplate: apply_chat_template threw: %s", e.what());
+        prompt.clear();
+    } catch (...) {
+        templateError = "unknown exception";
+        LOGE("applyStructuredChatTemplate: apply_chat_template threw unknown exception");
+        prompt.clear();
+    }
+
+    // 回退路径：主路径没产出可用 prompt 时，用内置 ChatML 兜底，避免直接 0 输出。
+    if (prompt.empty()) {
+        LOGE("applyStructuredChatTemplate: primary template produced empty prompt, "
+             "falling back to built-in ChatML");
+        prompt = renderChatMlFallback(messagesDoc, toolsField);
+        if (!prompt.empty()) {
+            LOGI("applyStructuredChatTemplate: ChatML fallback produced %zu chars", prompt.size());
+        }
+    }
 
     if (prompt.empty()) {
-        LOGE("applyStructuredChatTemplate: apply_chat_template returned empty "
-             "(model may have no chat_template configured)");
+        if (!templateError.empty()) {
+            return fail("E_MNN_TEMPLATE_THROW",
+                        "chat_template threw: " + templateError +
+                        "; built-in ChatML fallback also produced nothing");
+        }
+        return fail("E_MNN_TEMPLATE_EMPTY",
+                    "model chat_template rendered empty and built-in ChatML fallback "
+                    "also produced nothing");
     }
 
     return prompt;
@@ -471,6 +707,8 @@ Java_com_ai_assistance_mnn_MNNLlmNative_nativeReleaseLlm(
     try {
         clearAudioCallback(env, llmPtr);
         clearCancelFlag(llmPtr);
+        // 指针会被复用（新会话可能拿到同一地址），残留的错误串会串味，这里一并清掉。
+        clearLastError(llmPtr);
         Llm::destroy(llm);
         LOGI("LLM released successfully");
     } catch (const std::exception& e) {
@@ -1085,18 +1323,58 @@ Java_com_ai_assistance_mnn_MNNLlmNative_nativeGenerateStreamStructured(
     std::string messagesJson = jstringToString(env, jmessagesJson);
     std::string toolsJson = jstringToString(env, jtoolsJson);
 
+    // 每轮开始先清掉上一轮的残留，保证 Kotlin 侧读到的一定是本轮的原因。
+    clearLastError(llmPtr);
+
     try {
-        std::string prompt = applyStructuredChatTemplate(llm, messagesJson, toolsJson);
+        std::string templateError;
+        std::string prompt = applyStructuredChatTemplate(llm, messagesJson, toolsJson, &templateError);
+        // 🛡️ B-1 防御：prompt 为空**禁止**进入推理。空 prompt 喂进去只会得到 0 token，
+        // 上层就只能报「未产生任何输出」这种毫无信息量的话。这里直接带原因返回。
         if (prompt.empty()) {
-            LOGE("Failed to apply structured chat template");
+            if (templateError.empty()) {
+                templateError = "E_MNN_TEMPLATE_EMPTY|rendered prompt is empty";
+            }
+            setLastError(llmPtr, templateError);
+            LOGE("Refusing to run inference with empty prompt: %s", templateError.c_str());
             return JNI_FALSE;
         }
+
         std::vector<int> inputTokens = llm->tokenizer_encode(prompt);
+        if (inputTokens.empty()) {
+            std::ostringstream oss;
+            oss << "E_MNN_EMPTY_TOKENS|prompt has " << prompt.size()
+                << " chars but tokenizer produced 0 tokens (tokenizer files may be missing or mismatched)";
+            setLastError(llmPtr, oss.str());
+            LOGE("%s", oss.str().c_str());
+            return JNI_FALSE;
+        }
+
+        LOGI("Structured prompt ready: %zu chars -> %zu tokens", prompt.size(), inputTokens.size());
         return runStreamGenerationWithInputIds(env, llmPtr, inputTokens, maxTokens, callback);
     } catch (const std::exception& e) {
+        setLastError(llmPtr, std::string("E_MNN_STREAM_THROW|") + e.what());
         LOGE("Exception preparing structured stream generation: %s", e.what());
         return JNI_FALSE;
+    } catch (...) {
+        setLastError(llmPtr, "E_MNN_STREAM_THROW|unknown native exception");
+        LOGE("Unknown exception preparing structured stream generation");
+        return JNI_FALSE;
     }
+}
+
+/**
+ * 取走最近一次结构化生成失败的原因（读后即清）。
+ * 返回格式："错误码|英文补充说明"；无错误时返回 nullptr。
+ */
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_ai_assistance_mnn_MNNLlmNative_nativeGetLastError(
+    JNIEnv* env, jclass clazz, jlong llmPtr) {
+
+    if (llmPtr == 0) return nullptr;
+    std::string err = takeLastError(llmPtr);
+    if (err.empty()) return nullptr;
+    return stringToJstring(env, err);
 }
 
 // =======================

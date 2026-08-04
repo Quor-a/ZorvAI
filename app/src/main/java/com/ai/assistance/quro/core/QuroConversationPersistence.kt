@@ -30,6 +30,8 @@ data class QuroPersistedConversation(
     val title: String,
     val createdAt: Long,
     val updatedAt: Long,
+    /** 保留对话轮数：null = 跟随模型默认（contextWindow）；N>0 = 仅保留最近 N 个 (用户+助手) 轮次。 */
+    val historyRounds: Int? = null,
     val messages: List<QuroMessage>,
 )
 
@@ -139,6 +141,7 @@ class QuroConversationRepository(context: Context) {
             put("title", c.title)
             put("createdAt", c.createdAt)
             put("updatedAt", c.updatedAt)
+            put("historyRounds", c.historyRounds ?: JSONObject.NULL)
             put("messages", msgs)
         }
     }
@@ -205,11 +208,14 @@ class QuroConversationRepository(context: Context) {
         for (i in 0 until msgsArr.length()) {
             runCatching { parseMsg(msgsArr.getJSONObject(i)) }.getOrNull()?.let { msgs.add(it) }
         }
+        // 旧 JSON 无 historyRounds 字段 → null → 跟随模型默认（向后兼容）
+        val historyRounds = if (o.has("historyRounds") && !o.isNull("historyRounds")) o.optInt("historyRounds", -1).let { if (it < 0) null else it } else null
         return QuroPersistedConversation(
             id = o.optString("id", UUID.randomUUID().toString()),
             title = o.optString("title", "新对话"),
             createdAt = o.optLong("createdAt", System.currentTimeMillis()),
             updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
+            historyRounds = historyRounds,
             messages = msgs,
         )
     }

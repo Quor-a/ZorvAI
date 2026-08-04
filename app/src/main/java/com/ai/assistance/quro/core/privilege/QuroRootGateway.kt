@@ -109,6 +109,13 @@ object QuroRootGateway {
     @Volatile
     private var cachedRootAvailable: Boolean? = null
 
+    /** 最近一次真实探测的时间戳（毫秒），用于 TTL 短路，避免每次进权限页都弹 su 授权框（BUG C）。 */
+    @Volatile
+    private var lastProbeMs: Long = 0L
+
+    /** 缓存有效期：在此窗口内的重复探测直接复用上次结果，不再 spawn `su`。 */
+    private const val ROOT_PROBE_CACHE_TTL_MS = 60_000L
+
     /**
      * 读取缓存的 root 可用性，**不发起任何进程**、不阻塞。
      *
@@ -129,9 +136,17 @@ object QuroRootGateway {
      * Magisk 首次弹框等用户点允许常常超时（误报不可用）。
      */
     fun isRootAvailable(): Boolean {
+        val now = System.currentTimeMillis()
+        val cached = cachedRootAvailable
+        // TTL 短路：缓存窗口内直接复用，避免「设置→权限」页每次进入/回到前台都弹一次 su 授权框。
+        // invalidateCache() 会把 cachedRootAvailable 置 null，绕过此短路，确保用户在 Root 管理器改授权后能立即重探。
+        if (cached != null && (now - lastProbeMs) < ROOT_PROBE_CACHE_TTL_MS) {
+            return cached
+        }
         val r = runSu("echo '$PROBE_TOKEN'", PROBE_TIMEOUT_MS)
         val ok = r.exitCode == 0 && r.output.trim() == PROBE_TOKEN
         cachedRootAvailable = ok
+        lastProbeMs = now
         return ok
     }
 

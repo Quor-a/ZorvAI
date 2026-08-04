@@ -38,8 +38,11 @@ fun ByteArray.toFloatArray(): FloatArray {
     return out
 }
 
-/** 索引覆盖的文档扩展名。 */
-private val KB_INDEX_EXTS = setOf("md", "txt", "json", "docx", "xlsx", "pptx")
+/** 索引覆盖的文档扩展名。
+ * 含 csv：生成器（AiwpsCreateTool）可产出 csv，知识库 UI 也会列出 csv，
+ * 若索引器不收录则与「看得见搜不到」不一致（#7 已知 bug）。csv 为纯文本，
+ * 按行分块 + 词法检索即可正常索引，无需特殊解析。 */
+private val KB_INDEX_EXTS = setOf("md", "txt", "json", "csv", "docx", "xlsx", "pptx")
 
 /**
  * Quro 知识库 RAG（C3 重做 + #589 增强）。

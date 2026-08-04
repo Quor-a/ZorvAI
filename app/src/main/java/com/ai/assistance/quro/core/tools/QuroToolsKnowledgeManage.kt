@@ -44,9 +44,9 @@ class KnowledgeManageTool : QuroTool {
         val kb = QuroKnowledgeFiles.dir(context)
         if (!kb.exists()) kb.mkdirs()
         val files = kb.walkTopDown()
-            .filter { it.isFile && it.extension.lowercase() in setOf("md", "txt", "json", "docx", "xlsx", "pptx") }
+            .filter { it.isFile && it.extension.lowercase() in setOf("md", "txt", "json", "csv", "docx", "xlsx", "pptx") }
             .toList()
-        if (files.isEmpty()) return "知识库为空（目录：${kb.absolutePath}）。可用 action=add 写入文档，或 action=import 导入 Markdown/Office(WPS) 文档。"
+        if (files.isEmpty()) return "知识库为空（目录：${kb.absolutePath}）。可用 action=add 写入文档，或 action=import 导入 Markdown/CSV/Office(WPS) 文档。"
         return buildString {
             append("知识库共 ${files.size} 个文档：\n")
             files.sortedBy { it.relativeTo(kb).path }.forEach {
