@@ -6,6 +6,7 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
 import com.ai.assistance.quro.IQuroShellService
+import com.ai.assistance.quro.core.privilege.QuroShellQuote
 import rikka.shizuku.Shizuku
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -197,12 +198,20 @@ object QuroShizuku {
         try {
             // 先移除旧的 listener（防止累积泄漏）
             permissionListener?.let { Shizuku.removeRequestPermissionResultListener(it) }
-            // 注册新 listener
+            permissionListener = null
+            // 注册新 listener。用自注销包装：结果回来后立刻把自己摘掉，
+            // 这样既保证「点 N 次只有 1 个 listener、只弹 1 个 Toast」，
+            // 又不会在授权完成后继续持有调用方（Activity / Composable 闭包）造成泄漏。
             if (listener != null) {
-                Shizuku.addRequestPermissionResultListener(listener)
-                permissionListener = listener
-            } else {
-                permissionListener = null
+                val selfRemoving = object : Shizuku.OnRequestPermissionResultListener {
+                    override fun onRequestPermissionResult(code: Int, grantResult: Int) {
+                        runCatching { Shizuku.removeRequestPermissionResultListener(this) }
+                        if (permissionListener === this) permissionListener = null
+                        listener.onRequestPermissionResult(code, grantResult)
+                    }
+                }
+                Shizuku.addRequestPermissionResultListener(selfRemoving)
+                permissionListener = selfRemoving
             }
             Shizuku.requestPermission(requestCode)
         } catch (_: Exception) {
@@ -271,8 +280,9 @@ object QuroShizuku {
                 // FIX P2-2: 旧代码 "su -c $command" 经 QuroShellService.exec → sh -c "su -c ls -la /sdcard"
                 // → su -c 只吃第一个词 "ls"，"-la /sdcard" 变成 su 的多余参数。
                 // 用单引号包裹 command，使 su -c 拿到完整命令字符串。
+                // E-7：转义实现统一用 QuroShellQuote.quote，不再各处手写 replace。
                 // 反射路径（execAsRootViaReflection）用 arrayOf("su","-c",command) 不受此影响。
-                val cmd = if (uid == 0) command else "su -c '" + command.replace("'", "'\\''") + "'"
+                val cmd = if (uid == 0) command else "su -c " + QuroShellQuote.quote(command)
                 val result = shellService!!.exec(cmd)
                 Log.d(TAG, "[AIDL] execAsRoot OK: ${result.take(80)}")
                 result

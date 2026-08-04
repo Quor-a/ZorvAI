@@ -1,7 +1,7 @@
 package com.ai.assistance.quro.core.tools
 
 import android.content.Context
-import com.ai.assistance.quro.core.shizuku.QuroShizuku
+import com.ai.assistance.quro.core.privilege.QuroRootGateway
 import org.json.JSONObject
 
 /**
@@ -29,24 +29,10 @@ class RootExecTool : QuroTool {
 
     override fun run(context: Context, arguments: String): String {
         val cmd = JSONObject(arguments).optString("command", "").ifBlank { return "❌ 缺少 command 参数" }
-        // 优先尝试 Shizuku root（更稳定、输出完整）
-        if (QuroShizuku.isReady) {
-            val r = QuroShizuku.execAsRoot(cmd)
-            if (!r.startsWith("❌")) return "[shizuku-root] $r"
-        }
-        // 降级：Runtime.exec su
-        return try {
-            val p = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
-            val out = p.inputStream.bufferedReader().use { it.readText() }
-            val err = p.errorStream.bufferedReader().use { it.readText() }
-            val code = p.waitFor()
-            val body = (out + err).trim()
-            "exit=$code\n${if (body.isBlank()) "(无输出)" else body}"
-        } catch (e: SecurityException) {
-            "❌ ROOT 不可用：su 被拒绝（设备未 Root 或 Root 管理器未授权本 App）"
-        } catch (e: Exception) {
-            "❌ ROOT 执行失败: ${e.message}"
-        }
+        // E-7：统一走 QuroRootGateway（Shizuku-root → su 降级链 + quoting + 超时 + 审计）。
+        // 旧实现在这里自己写了一遍降级和读流：没有超时（命令不退出就永久卡住 ReAct 循环）、
+        // 不写审计、FD 也不回收。全部由网关接管。
+        return QuroRootGateway.execText(context, cmd, capsuleId = "tool.root_exec")
     }
 }
 
@@ -70,11 +56,9 @@ class RootStatusTool : QuroTool {
         // 方法2: Magisk 探测
         if (java.io.File("/data/adb/magisk").exists()) {
             method = if (method.isEmpty()) "Magisk" else "$method + Magisk"
-            try {
-                val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "magisk -v"))
-                version = p.inputStream.bufferedReader().use { it.readText() }.trim()
-                p.waitFor()
-            } catch (_: Exception) {}
+            // E-7：经网关执行，自带超时（旧写法 waitFor() 无超时，su 卡住时整个工具挂死）
+            version = QuroRootGateway.exec(context, "magisk -v", capsuleId = "tool.root_status")
+                .output.trim()
         }
         // 方法3: KernelSU 探测
         if (java.io.File("/data/adb/ksud").exists() || java.io.File("/data/adb/ksu").exists()) {
@@ -84,12 +68,8 @@ class RootStatusTool : QuroTool {
         if (java.io.File("/data/local/tmp/apd").exists()) {
             method = if (method.isEmpty()) "APatch" else "$method + APatch"
         }
-        // 实际 su 测试
-        val hasSuAccess = try {
-            val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "echo 'root_ok'"))
-            val out = p.inputStream.bufferedReader().use { it.readText() }.trim()
-            p.waitFor(); out == "root_ok"
-        } catch (_: Exception) { false }
+        // 实际 su 测试（E-7：统一走网关，校验真实回显 + 5s 超时 + 回收 FD）
+        val hasSuAccess = QuroRootGateway.isRootAvailable()
 
         val ver = version.trim()
         return org.json.JSONObject().apply {

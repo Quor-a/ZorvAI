@@ -60,7 +60,7 @@ class QuroPrivilegeManager(private val context: Context) {
         )
     }
 
-    // L3: 设备管理员（锁屏 / 清除数据 / 禁用摄像头）
+    // L3: 设备管理员（锁屏 / 禁用摄像头；E-5 起不再声明 wipe-data / reset-password）
     private fun checkDeviceAdmin(): PrivilegeState {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         val admin = ComponentName(context, QuroDeviceAdminReceiver::class.java)
@@ -73,38 +73,23 @@ class QuroPrivilegeManager(private val context: Context) {
     }
 
     // L4: ROOT（内核级操作 / 系统文件修改）
+    //
     // 修复 P0-2：旧实现只看 p.waitFor(2,SECONDS) 是否在 2s 内退出 →
     //   1) su 被拒绝时秒退 → ok=true → 误报「Root 可用」
     //   2) Magisk 首次弹框等用户点「允许」常超 2s → ok=false → 误报「未获取 Root」
     //   3) 跑在主线程 → 最多阻塞 2s → 卡顿/ANR
     //   4) 进程与流从不关闭 → 泄漏
-    // 正确做法（参考 QuroToolsRoot.kt RootStatusTool）：执行 su -c echo 'root_ok' 并校验输出，
-    // 5s 超时 + 后台线程读流 + destroyForcibly（参考 QuroTerminalController.kt:55-69 模式）。
+    //
+    // E-7：判定逻辑（校验 echo 真实回显 + 5s 超时 + 后台读流 + FD 回收）已统一收敛到
+    // QuroRootGateway，此处只做状态封装，不再维护第四份 su 执行实现。
     // 主线程阻塞由 probeAsync() 解决（withContext(Dispatchers.IO)）。
-    private fun checkRoot(): PrivilegeState = try {
-        val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "echo 'root_ok'"))
-
-        // 后台线程读流（避免 stdout 不关闭导致 readText 永久阻塞）
-        val outB = StringBuilder()
-        val errB = StringBuilder()
-        val tOut = Thread { runCatching { p.inputStream.bufferedReader().use { outB.append(it.readText()) } } }.also { it.start() }
-        val tErr = Thread { runCatching { p.errorStream.bufferedReader().use { errB.append(it.readText()) } } }.also { it.start() }
-
-        // 5s 超时（Magisk 首次弹框可能需数秒等用户点「允许」）
-        val finished = p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
-        if (!finished) {
-            p.destroyForcibly()
-            tOut.join(500); tErr.join(500)
-            PrivilegeState(PrivilegeLevel.L4, false, "Root 检测超时（若 Magisk 弹框请先允许，再重试）")
-        } else {
-            tOut.join(1000); tErr.join(1000)
-            p.destroy()
-            val output = outB.toString().trim()
-            val ok = output == "root_ok"
-            PrivilegeState(PrivilegeLevel.L4, ok, if (ok) "Root 访问可用" else "未获取 Root（su 被拒绝或设备未 Root）")
-        }
-    } catch (e: Exception) {
-        PrivilegeState(PrivilegeLevel.L4, false, "未获取 Root")
+    private fun checkRoot(): PrivilegeState {
+        val ok = QuroRootGateway.isRootAvailable()
+        return PrivilegeState(
+            PrivilegeLevel.L4,
+            ok,
+            if (ok) "Root 访问可用" else "未获取 Root（su 被拒绝或设备未 Root）",
+        )
     }
 
     private fun isAccessibilityEnabled(): Boolean {
