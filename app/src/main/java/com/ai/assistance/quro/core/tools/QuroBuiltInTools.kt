@@ -39,6 +39,7 @@ import com.ai.assistance.quro.core.tools.TerminalExecTool
 import com.ai.assistance.quro.core.tools.TerminalWriteTool
 import com.ai.assistance.quro.core.tools.TerminalKillTool
 import com.ai.assistance.quro.core.tools.TerminalStatusTool
+import com.ai.assistance.quro.core.tools.TerminalInterruptTool
 import com.ai.assistance.quro.core.tools.LinuxRunTool
 import com.ai.assistance.quro.core.tools.LinuxInstallTool
 import com.ai.assistance.quro.core.tools.LinuxStartTool
@@ -275,6 +276,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(TerminalWriteTool())
     r.register(TerminalKillTool())
     r.register(TerminalStatusTool())
+    // E-9：两段式中断（先 ETX，再强杀重建会话）
+    r.register(TerminalInterruptTool())
 
     // ═════════════ L2 Shizuku 执行（CapOS 通道，需 Shizuku 已授权+运行中）══════════════
     r.register(ShizukuExecTool())
