@@ -405,7 +405,9 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                 title = "设备管理员",
                 channel = "DevicePolicyManager",
                 state = st(PrivilegeLevel.L3),
-                rationale = "锁屏 / 清除数据 / 禁用摄像头。",
+                // E-5：已从 device admin policy 中删除 wipe-data / reset-password，
+                // 文案同步收敛，不再对用户宣称「清除数据」这个实际并不提供的能力。
+                rationale = "锁屏 / 禁用摄像头。",
                 onRequest = { requestElevation(PrivilegeLevel.L3, "需要设备管理员权限以启用锁屏等高级系统管理能力。") },
                 testLabel = if (st(PrivilegeLevel.L3).available) "状态" else null,
                 onTest = if (st(PrivilegeLevel.L3).available) {
@@ -451,7 +453,9 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
         val (level, rationale) = pending!!
         AlertDialog(
             onDismissRequest = {
-                scope.launch { deferred.value?.complete(false) }
+                // complete() 不是挂起函数，无需再包一层 scope.launch
+                deferred.value?.complete(false)
+                deferred.value = null
                 pending = null
             },
             title = { Text("权限提升确认 · ${level.name}") },
@@ -468,16 +472,24 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    // FIX: 必须先 complete(true)，否则 requestElevation → confirm() → deferred.await() 永久挂起
+                    // FIX（E-3①）：必须先 complete(true)，否则 requestElevation → confirm() → await() 永久挂起
                     // （默认 ASK 策略下走这条路径，每点一次泄漏一个协程）。
-                    deferred.value?.complete(true)
+                    //
+                    // 补充修复：这里必须把 deferred **捕获成局部变量**再用。
+                    // 旧写法在协程里读 deferred.value!!，若用户在协程跑完前又触发一次提升，
+                    // deferred.value 已被换成新的未完成 Deferred → 老协程 await 到新对象上 → 又挂住；
+                    // 且 !! 在 value 被置空时会直接 NPE。
+                    val d = deferred.value
+                    d?.complete(true)
+                    deferred.value = null
                     // 用户确认后引导开启（L1/L2/L3 跳转系统界面；L4 仅提示）
                     mgr.launchIntentFor(level)?.let { ctx.startActivity(it) }
                     if (level == PrivilegeLevel.L4) {
                         Toast.makeText(ctx, "请在 Root 管理器中允许 CapOS", Toast.LENGTH_LONG).show()
                     }
                     scope.launch {
-                        val granted = mgr.requestElevation("capos.kernel", level, rationale) { deferred.value!!.await() }
+                        // confirm 回调只认捕获到的那个 d；d 为 null 说明已确认过，直接放行
+                        mgr.requestElevation("capos.kernel", level, rationale) { d?.await() ?: true }
                         refresh()
                     }
                     pending = null
@@ -485,7 +497,8 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
             },
             dismissButton = {
                 TextButton(onClick = {
-                    scope.launch { deferred.value?.complete(false) }
+                    deferred.value?.complete(false)
+                    deferred.value = null
                     pending = null
                 }) { Text("拒绝") }
             },

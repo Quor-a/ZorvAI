@@ -1,9 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      仅声明「确有实现的工具」所需的最小策略集（E-5）。
+
+      已删除 <wipe-data /> 与 <reset-password />：
+        1. 代码里根本没有对应实现（QuroToolsDeviceAdmin 只有 lock_screen /
+           device_admin_status / set_camera_disabled 三个工具）；
+        2. 声明 wipe-data 会让系统「设备管理员」激活页向用户展示
+           「可以清除设备所有数据」，是严重的信任风险，也是 F-Droid 审核的重点关注项。
+
+      保留说明：
+        - force-lock      → LockScreenTool (dpm.lockNow)
+        - disable-camera  → SetCameraDisabledTool (dpm.setCameraDisabled)
+      其余口令策略（limit-password / watch-login / expire-password /
+      encrypted-storage）为只读展示类，不授予破坏性能力，暂予保留。
+    -->
     <uses-policies>
         <force-lock />
-        <wipe-data />
-        <reset-password />
         <limit-password />
         <watch-login />
         <expire-password />

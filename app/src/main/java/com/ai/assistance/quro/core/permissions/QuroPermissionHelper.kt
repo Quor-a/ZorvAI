@@ -10,6 +10,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import androidx.core.content.ContextCompat
+import com.ai.assistance.quro.core.privilege.QuroRootGateway
 import com.ai.assistance.quro.core.privilege.QuroShizukuBridge
 import com.ai.assistance.quro.core.shizuku.QuroShizukuPkg
 import com.ai.assistance.quro.receiver.QuroDeviceAdminReceiver
@@ -179,7 +180,7 @@ object QuroPermissionHelper {
         return QuroPermissionItem(
             id = "admin",
             title = "设备管理员权限",
-            desc = "锁定屏幕、远程管理等高级系统能力",
+            desc = "锁定屏幕、禁用摄像头等系统管理能力",
             granted = active,
             guideIntent = intent,
             note = if (active) "" else "在系统「设备管理员」中激活 Zorv AI",
@@ -187,15 +188,35 @@ object QuroPermissionHelper {
     }
 
     // 8) ROOT 访问权限
+    /**
+     * ROOT 状态**如实**上报。
+     *
+     * 旧实现把「/system/bin/su 文件存在」直接当作 `granted = true`——但 su 存在
+     * 只说明设备刷过 Root 管理器，本应用完全可能没被授权（甚至被明确拒绝），
+     * 这是典型的谎报可用。
+     *
+     * 现在的判定：
+     *  - 只有 [QuroRootGateway] **实测**通过（`su -c echo root_ok` 有真实回显）才算 granted；
+     *  - 从未实测过时如实标注「未验证」，而不是猜一个 true；
+     *  - 本函数是同步的（会在权限列表构建时调用），所以只读缓存、绝不发起 su 进程。
+     */
     private fun root(ctx: Context): QuroPermissionItem {
-        val hasRoot = ROOT_BINARIES.any { File(it).exists() }
+        val suBinaryPresent = ROOT_BINARIES.any { File(it).exists() }
+        val verified: Boolean? = QuroRootGateway.cachedRootAvailable()
+        val note = when {
+            verified == true -> "已实测：su 授权可用"
+            verified == false && suBinaryPresent -> "检测到 su 二进制，但本应用未获授权（请在 Magisk/KernelSU 中允许 Zorv AI）"
+            verified == false -> "未检测到可用的 su"
+            suBinaryPresent -> "检测到 su 二进制，但尚未验证授权 —— 打开「系统权限 → L4 Root」可实测"
+            else -> "需设备已 root 并授权本应用；无法在应用内直接获取"
+        }
         return QuroPermissionItem(
             id = "root",
             title = "ROOT 访问权限",
             desc = "最高系统权限，可执行任意 shell 命令",
-            granted = hasRoot,
+            granted = verified == true,
             guideIntent = null,
-            note = if (hasRoot) "已检测到 root 环境" else "需设备已 root 并授权终端；无法在应用内直接获取",
+            note = note,
         )
     }
 
@@ -221,13 +242,14 @@ object QuroPermissionHelper {
         "已发送锁屏指令"
     }.getOrElse { "锁屏失败：${it.message}" }
 
-    /** 经 ROOT（su）真实执行一条 shell 命令，返回 exit code + 输出。 */
-    fun runRootCommand(command: String): String = runCatching {
-        val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
-        val out = proc.inputStream.bufferedReader().use { it.readText() }
-        val err = proc.errorStream.bufferedReader().use { it.readText() }
-        val code = proc.waitFor()
-        val body = (out + err).trim()
-        "exit=$code\n${if (body.isBlank()) "(无输出)" else body}"
-    }.getOrElse { "ROOT 命令执行失败：${it.message}" }
+    /**
+     * 经 ROOT 真实执行一条 shell 命令，返回 exit code + 输出。
+     *
+     * E-7：统一走 [QuroRootGateway]。旧实现是项目里第 4 套并行 root 执行，
+     * 且 `proc.waitFor()` 不带超时——su 卡住（Magisk 弹框没人点）时会永久阻塞调用线程。
+     *
+     * **阻塞**调用，需在 IO 线程执行。
+     */
+    fun runRootCommand(context: Context?, command: String): String =
+        QuroRootGateway.execText(context, command, capsuleId = "permissions.root_cmd")
 }

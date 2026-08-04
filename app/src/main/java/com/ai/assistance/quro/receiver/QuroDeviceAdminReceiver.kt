@@ -24,6 +24,27 @@ class QuroDeviceAdminReceiver : DeviceAdminReceiver() {
         QuroPrivilegeAudit.log(context, "capos.kernel", PrivilegeLevel.L3, "device-admin disabled", false)
     }
 
+    /**
+     * 用户在系统设置里点「停用设备管理员」时回调（E-6）。
+     *
+     * 返回的文案会显示在系统的停用确认页上。此前未实现该回调，用户看到的是一个
+     * 没有任何影响说明的空白确认框，停用后 lock_screen / set_camera_disabled
+     * 会直接失效却不知道为什么。这里明确告知代价，并顺带记一条审计。
+     */
+    override fun onDisableRequested(context: Context, intent: Intent): CharSequence {
+        QuroPrivilegeAudit.log(
+            context,
+            "capos.kernel",
+            PrivilegeLevel.L3,
+            "device-admin disable requested",
+            false,
+        )
+        return "停用后将失去以下能力：\n" +
+            "• 锁定屏幕（lock_screen）\n" +
+            "• 禁用 / 恢复摄像头（set_camera_disabled）\n\n" +
+            "AI 助手届时无法再执行这些系统管理操作。你随时可以在「系统权限 → L3 设备管理员」重新激活。"
+    }
+
     /** 强制执行锁屏（需已激活设备管理员）。 */
     fun lockScreen(context: Context): String = runCatching {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
