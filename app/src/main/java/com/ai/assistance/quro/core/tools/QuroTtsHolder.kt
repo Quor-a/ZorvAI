@@ -10,6 +10,7 @@ import android.speech.tts.Voice
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -18,6 +19,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.util.Locale
 import java.util.UUID
@@ -41,6 +43,8 @@ object QuroTtsHolder {
     // 故按句分块入队。MIN 避免碎片过多，MAX 规避单段过大被引擎截断。
     private const val TTS_MIN_CHUNK = 30
     private const val TTS_MAX_CHUNK = 160
+    private const val WATCHDOG_TIMEOUT_MS = 30_000L  // 30s 看门狗，引擎挂起时强制释放 isSpeaking
+    private const val CLOUD_TTS_TIMEOUT_MS = 60_000L  // 云 TTS 单次调用 60s 超时
 
     private var tts: TextToSpeech? = null
     @Volatile private var ready = false
@@ -227,7 +231,14 @@ object QuroTtsHolder {
                 override fun onStart(u: String?) { log("onStart: $u") }
                 override fun onDone(u: String?) { u?.let { doneCallbacks.remove(it)?.invoke() }; log("onDone: $u") }
                 @Deprecated("Deprecated in Java")
-                override fun onError(u: String?) { Log.w(TAG, "onError: $u") }
+                override fun onError(u: String?) {
+                    Log.w(TAG, "onError: $u")
+                    u?.let { doneCallbacks.remove(it)?.invoke() }
+                }
+                override fun onError(utteranceId: String?, errorCode: Int) {
+                    Log.w(TAG, "onError: $utteranceId code=$errorCode")
+                    utteranceId?.let { doneCallbacks.remove(it)?.invoke() }
+                }
             })
             instance?.setSpeechRate(currentRate)
             instance?.setPitch(currentPitch)
@@ -275,7 +286,11 @@ object QuroTtsHolder {
     /** 真正执行一段播报；播放期间 isSpeaking=true，完成后翻转并泵取下一段。 */
     private suspend fun playOne(text: String, onDone: (() -> Unit)?, minimal: Boolean): Int {
         isSpeaking = true
-        val wrapped: (() -> Unit)? = {
+        var watchdogJob: Job? = null
+        // 非空声明：本地必然是一个 lambda 字面量，声明为可空会导致 wrapped.invoke() 编译失败；
+        // 传给形参为 (() -> Unit)? 的 speakCloud / enqueueChunks 时可自动向上转型，行为不变。
+        val wrapped: () -> Unit = {
+            watchdogJob?.cancel()
             runCatching { onDone?.invoke() }
             isSpeaking = false
             holderScope.launch { pumpNext() }
@@ -288,6 +303,15 @@ object QuroTtsHolder {
                 // 语色路由：若文本含 (语色:xxx) 标记且路由开启，则逐段分配音色 + 边播边合成；否则走原单一音色路径
                 val routing = QuroVoiceFeaturePrefs.getVoiceColorRoutingEnabled(ctx)
                 val segs = if (routing) QuroVoiceStyle.parseVoiceRouting(text) else emptyList()
+                // 看门狗：防止云 TTS 引擎挂起不回调导致 isSpeaking 永久 true
+                watchdogJob = holderScope.launch {
+                    kotlinx.coroutines.delay(WATCHDOG_TIMEOUT_MS)
+                    if (isSpeaking) {
+                        log("⚠️ 看门狗超时（${WATCHDOG_TIMEOUT_MS}ms 无回调），强制释放 isSpeaking")
+                        doneCallbacks.clear()
+                        runCatching { wrapped.invoke() }
+                    }
+                }
                 return@withContext if (segs.any { it.voiceColor != null }) speakCloudSegments(ctx, segs, wrapped) else speakCloud(text, wrapped)
             }
             if (!ensureReady(ctx)) return@withContext -1.also { log("playOne: 未就绪 ❌") }
@@ -299,9 +323,21 @@ object QuroTtsHolder {
             val chunks = splitTextForTts(spoken)
             log("playOne: 分 ${chunks.size} 段")
             enqueueChunks(t, chunks, wrapped)
+            // 看门狗：防止系统 TTS 引擎挂起不回调导致 isSpeaking 永久 true
+            watchdogJob = holderScope.launch {
+                kotlinx.coroutines.delay(WATCHDOG_TIMEOUT_MS)
+                if (isSpeaking) {
+                    log("⚠️ 看门狗超时（${WATCHDOG_TIMEOUT_MS}ms 无回调），强制释放 isSpeaking")
+                    doneCallbacks.clear()
+                    runCatching { wrapped.invoke() }
+                }
+            }
             0
         }
-        if (rc != 0) isSpeaking = false
+        if (rc != 0) {
+            watchdogJob?.cancel()
+            isSpeaking = false
+        }
         return rc
     }
 
@@ -363,10 +399,16 @@ object QuroTtsHolder {
     private suspend fun speakCloud(text: String, onDone: (() -> Unit)? = null): Int = withContext(Dispatchers.IO) {
         val ctx = appCtx ?: return@withContext -1.also { log("speakCloud: 无 appCtx ❌"); onDone?.invoke() }
         return@withContext try {
-            QuroCloudTts.play(ctx, text)
-            log("speakCloud: 播放完成 ✅")
-            onDone?.invoke()
-            0
+            val success = withTimeoutOrNull(CLOUD_TTS_TIMEOUT_MS) { QuroCloudTts.play(ctx, text); true } ?: false
+            if (success) {
+                log("speakCloud: 播放完成 ✅")
+                onDone?.invoke()
+                0
+            } else {
+                log("speakCloud: 超时 ❌")
+                onDone?.invoke()
+                -2
+            }
         } catch (e: Exception) {
             Log.e(TAG, "speakCloud 失败: ${e.message}")
             onDone?.invoke()
@@ -394,10 +436,14 @@ object QuroTtsHolder {
                 val nextText = nextSeg?.let { ns -> if (isMimo && ns.tags.isNotEmpty()) "(${ns.tags.joinToString(" ")}) ${ns.text}" else ns.text }
                 val prefetchJob = if (nextSeg != null) holderScope.async { runCatching { QuroCloudTts.synthBytes(ctx, nextText!!, nextVoice) } } else null
                 if (i == 0) {
-                    QuroCloudTts.play(ctx, segText, voiceOverride)
+                    withTimeoutOrNull(CLOUD_TTS_TIMEOUT_MS) { QuroCloudTts.play(ctx, segText, voiceOverride) }
+                        ?: throw java.util.concurrent.TimeoutException("云 TTS 播放超时（第 $i 段）")
                 } else {
-                    val p = prefetched ?: QuroCloudTts.synthBytes(ctx, segText, voiceOverride)
-                    QuroCloudTts.playBytes(ctx, p.first, p.second)
+                    val p = prefetched
+                        ?: withTimeoutOrNull(CLOUD_TTS_TIMEOUT_MS) { QuroCloudTts.synthBytes(ctx, segText, voiceOverride) }
+                        ?: throw java.util.concurrent.TimeoutException("云 TTS 合成超时（第 $i 段）")
+                    withTimeoutOrNull(CLOUD_TTS_TIMEOUT_MS) { QuroCloudTts.playBytes(ctx, p.first, p.second) }
+                        ?: throw java.util.concurrent.TimeoutException("云 TTS 播放超时（第 $i 段）")
                 }
                 prefetched = prefetchJob?.await()?.getOrNull()
             }
@@ -465,6 +511,7 @@ object QuroTtsHolder {
 
     fun stop() {
         pendingQueue.clear()
+        doneCallbacks.clear()
         isSpeaking = false
         QuroCloudTts.abortAll()
         tts?.stop()

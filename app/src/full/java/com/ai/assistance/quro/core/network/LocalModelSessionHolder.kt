@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * full 风味专属：常驻内存的本地模型会话持有器（进程级单例）。
  *
- * 对应 PocketPal 的 `ModelStore`：用户经 UI 显式 [load] 后，原生会话
+ * 用户经 UI 显式 [load] 后，原生会话
  * （[LlamaSession] / [MNNLlmSession]）常驻内存，**跨多轮对话复用同一个会话对象**，
  * 不再每条消息都重新把 GGUF 模型 load 进内存（那一步在手机上是秒级~十秒级的卡顿）。
  *
@@ -46,6 +46,8 @@ object LocalModelSessionHolder : LocalModelLoader {
     private var _llama: LlamaSession? = null
     private var _mnn: MNNLlmSession? = null
     private var _model: QuroLocalModel? = null
+    @Volatile
+    private var _nCtx: Int = 0
 
     private fun isLlamaLoaded(): Boolean =
         _state is LocalModelLoader.State.Loaded && _model?.type == QuroLocalModelType.LLAMA_CPP
@@ -55,14 +57,101 @@ object LocalModelSessionHolder : LocalModelLoader {
 
     override fun getState(): LocalModelLoader.State = synchronized(gate) { _state }
 
+    /**
+     * 身份判定（门禁的判据）。
+     *
+     * **ID 才是模型的唯一身份**：`id` 是导入时生成的持久化 UUID（MNN / llama.cpp 共用同一生成
+     * 逻辑，写进 `filesDir/quro_local_models.json`）。两条记录只要 `id` 相同，就是同一个模型。
+     *
+     * ⚠️ 为何不再用「目录路径」做回退（第二轮回归收紧，F2）：
+     * 此前为兼容「记录删了重导 / 配置重建」场景，加了「id 不等但类型 + 规范化路径相等 → 视为同一模型」。
+     * QA 证伪该回退并定位两处问题：
+     *  1. 会让「同目录两个不同 id 的权重记录」被判成同一模型，重开「加载 A 拿 B」的口子
+     *     （本应被门禁拦下，却静默走到 A 的常驻权重上去答 B 的对话）；
+     *  2. 声称要解决的「删了重导 → 旧 id 匹配不上」其实不成立——重导会生成新 uuid **且** 新 dstDir，
+     *     路径也不同，回退同样命中不了，是条无效分支。
+     * 因此收紧为「仅比 id」。代价：删了重导的旧记录确实需要重新点一次加载，但这正确且安全；
+     * 而用户正常导入流程（每条记录独立 uuid + 独立 dstDir）构造不出「同目录多 id」记录，
+     * 门禁语义（拒绝张冠李戴）完整保留。
+     *
+     * 空白 id 仍正确拦截：两边 id 都为空时 `held.id.isNotBlank()` 为 false → 返回 false → 走"未加载"，
+     * 不会因 `"" == ""` 误放行。
+     */
+    private fun sameModel(held: QuroLocalModel?, incoming: QuroLocalModel): Boolean {
+        if (held == null) return false
+        // ID 才是唯一身份：已保存配置（持久化 UUID）不受影响，无需迁移。
+        return held.id.isNotBlank() && held.id == incoming.id
+    }
+
     override fun isLoaded(model: QuroLocalModel): Boolean =
-        synchronized(gate) { _state is LocalModelLoader.State.Loaded && _model?.id == model.id }
+        synchronized(gate) { _state is LocalModelLoader.State.Loaded && sameModel(_model, model) }
+
+    override fun residentCtxTokens(): Int =
+        if (_state is LocalModelLoader.State.Loaded) _nCtx else 0
+
+    /**
+     * 门禁取证快照（**设备侧无 adb**，这是唯一能判读"到底为什么被拦"的途径）。
+     *
+     * 门禁以前只记了"被拦截的 model 是谁"，完全没记"holder 当时持有的是什么"，
+     * 导致日志里只能看到"未加载"四个字，压根分不清：
+     *   - 压根没加载（State.None）
+     *   - 加载过但失败了（State.Failed，且带着真实失败原因）
+     *   - 正在加载（State.Loading）
+     *   - 加载了但不是这个模型（State.Loaded 但 id/path 对不上）
+     *   - 进程重启过（pid 与加载成功那行日志里的 pid 不同 → 原生崩溃/被系统回收）
+     */
+    data class Snapshot(
+        val state: LocalModelLoader.State,
+        val heldModel: QuroLocalModel?,
+        val nCtx: Int,
+        val activeGen: Int,
+        val closing: Boolean,
+        val pid: Int,
+    ) {
+        /** 状态短名（含 Failed 的真实原因）。 */
+        fun stateText(): String = when (val s = state) {
+            is LocalModelLoader.State.None -> "None(从未加载/已卸载)"
+            is LocalModelLoader.State.Loading -> "Loading(加载中)"
+            is LocalModelLoader.State.Loaded -> "Loaded"
+            is LocalModelLoader.State.Failed -> "Failed(${s.message})"
+        }
+
+        /** 单行日志文本，直接拼进 QuroDiag。 */
+        fun describe(): String =
+            "state=${stateText()} | held.id=${heldModel?.id ?: "-"} | held.type=${heldModel?.type ?: "-"} | " +
+                "held.name=${heldModel?.name ?: "-"} | held.path=${heldModel?.path ?: "-"} | " +
+                "nCtx=$nCtx | activeGen=$activeGen | closing=$closing | pid=$pid"
+    }
+
+    /** 取当前持有状态的一致性快照（加锁读，字段之间不会撕裂）。 */
+    fun snapshot(): Snapshot = synchronized(gate) {
+        Snapshot(
+            state = _state,
+            heldModel = _model,
+            nCtx = _nCtx,
+            activeGen = activeGen.get(),
+            closing = closing,
+            pid = android.os.Process.myPid(),
+        )
+    }
+
+    /** 统一的失败出口：置 Failed 态 + 落盘取证 + 返回 Failure。 */
+    private fun fail(msg: String): LocalModelLoader.LoadResult.Failure {
+        synchronized(gate) { _state = LocalModelLoader.State.Failed(msg) }
+        QuroDiag.log("LocalModel", "✗ load 失败 | $msg | pid=${android.os.Process.myPid()}")
+        return LocalModelLoader.LoadResult.Failure(msg)
+    }
 
     override fun load(model: QuroLocalModel): LocalModelLoader.LoadResult {
-        QuroDiag.log("LocalModel", "▶ load 请求 | type=${model.type} | name=${model.name} | id=${model.id}")
-        // 已加载同一个模型 → 直接视为成功（幂等）。
+        QuroDiag.log(
+            "LocalModel",
+            "▶ load 请求 | type=${model.type} | name=${model.name} | id=${model.id} | path=${model.path} | " +
+                "modelNames=${model.modelNames} | pid=${android.os.Process.myPid()}"
+        )
+        // 已加载同一个模型 → 直接视为成功（幂等）。判据与门禁 [isLoaded] 完全一致，
+        // 避免"门禁认为没加载、load 却认为已加载"这种两边打架的死角。
         synchronized(gate) {
-            if (_state is LocalModelLoader.State.Loaded && _model?.id == model.id) {
+            if (_state is LocalModelLoader.State.Loaded && sameModel(_model, model)) {
                 return LocalModelLoader.LoadResult.Success
             }
         }
@@ -73,47 +162,38 @@ object LocalModelSessionHolder : LocalModelLoader {
             when (model.type) {
                 QuroLocalModelType.MNN -> {
                     val dir = QuroLocalEngineNative.resolveMnnDirStatic(model.path)
-                    if (dir == null) {
-                        synchronized(gate) { _state = LocalModelLoader.State.Failed("MNN 模型路径无效：${model.path}") }
-                        return LocalModelLoader.LoadResult.Failure((_state as LocalModelLoader.State.Failed).message)
-                    }
+                        ?: return fail("MNN 模型路径无效：${model.path}")
                     val configFile = File(dir, "llm_config.json")
                     if (!configFile.isFile || configFile.length() <= 0L) {
-                        synchronized(gate) { _state = LocalModelLoader.State.Failed("MNN 模型目录缺少 llm_config.json：${dir.absolutePath}") }
-                        return LocalModelLoader.LoadResult.Failure((_state as LocalModelLoader.State.Failed).message)
+                        return fail("MNN 模型目录缺少 llm_config.json：${dir.absolutePath}")
                     }
                     // ⚠️ 必须走 createMnnSessionStatic：它会传入用户配置的后端/线程/精度，并把
                     // 算子缓存指向应用私有可写目录。以前这里是无参 create → 缓存写不进模型目录
                     // → 每次加载重编译算子（"MNN 能回复但很慢"的直接原因）。
                     val session = QuroLocalEngineNative.createMnnSessionStatic(dir, model)
-                    if (session == null) {
-                        synchronized(gate) { _state = LocalModelLoader.State.Failed("MNN 会话创建失败：${dir.absolutePath}") }
-                        return LocalModelLoader.LoadResult.Failure((_state as LocalModelLoader.State.Failed).message)
-                    }
+                        ?: return fail("MNN 会话创建失败：${dir.absolutePath}")
                     _mnn = session
                 }
 
                 QuroLocalModelType.LLAMA_CPP -> {
-                    val file = QuroLocalEngineNative.resolveLlamaModelFileStatic(
-                        model.path, model.modelNames.firstOrNull() ?: model.name
-                    )
-                    if (file == null) {
-                        synchronized(gate) { _state = LocalModelLoader.State.Failed("llama.cpp 模型文件未找到：${model.path}") }
-                        return LocalModelLoader.LoadResult.Failure((_state as LocalModelLoader.State.Failed).message)
-                    }
+                    val wanted = model.modelNames.firstOrNull() ?: model.name
+                    val file = QuroLocalEngineNative.resolveLlamaModelFileStatic(model.path, wanted)
+                        ?: return fail(
+                            "llama.cpp 模型文件未找到：目录 ${model.path} 下找不到 \"$wanted\" 对应的 .gguf" +
+                                "（已登记 modelNames=${model.modelNames}）。请重新导入该模型。"
+                        )
                     val pre = QuroLocalEngineNative.precheckLlamaFileStatic(file)
-                    if (pre != null) {
-                        synchronized(gate) { _state = LocalModelLoader.State.Failed(pre) }
-                        return LocalModelLoader.LoadResult.Failure(pre)
-                    }
-                    // 常驻会话窗口：用户没配就开 4096（8192 的 KV-Cache 在手机上动辄数百 MB，
-                    // 分配本身就要好几秒，是"点加载后一直转圈"的推手之一）。
+                    if (pre != null) return fail(pre)
+                    // 常驻会话窗口：用户没配就开 6144（4096 下 maxSystemChars 只能给 ~1600，
+                    // 而极简 system prompt 已占 838 字符，人格卡被腰斩 → 第二轮起失忆。
+                    // 6144 是 4096 和 8192 的折中：够装身份+人格+最近几轮，KV-Cache 仍可控）。
                     val nThreads = model.resolveThreads()
-                    val nCtx = if (model.contextSize > 0) model.contextSize.coerceIn(512, 32768) else 4096
+                    val nCtx = if (model.contextSize > 0) model.contextSize.coerceIn(512, 32768) else 6144
+                    _nCtx = nCtx
                     val cfg = LlamaSession.Config(
                         nThreads = nThreads,
                         nCtx = nCtx,
-                        // 线层数：对齐 PocketPal 默认 offload 全部层到 GPU（n_gpu_layers=99）。
+                        // GPU 层数：默认 offload 全部层（n_gpu_layers=99）。
                         // 原生层在 !gpuOffloadSupported 时会把请求值钳为 0，所以这里给大值安全。
                         // 用户若手动在参数面板设了具体层数（>0）则尊重其设置。
                         nGpuLayers = if (model.gpuLayers > 0) model.gpuLayers else 99,
@@ -133,28 +213,27 @@ object LocalModelSessionHolder : LocalModelLoader {
                         "· llama 加载返回 | ${(System.nanoTime() - t0) / 1_000_000}ms | ok=${session != null}"
                     )
                     if (session == null) {
-                        synchronized(gate) {
-                            _state = LocalModelLoader.State.Failed(
-                                "llama.cpp 会话创建失败：${file.absolutePath}（${LlamaSession.getUnavailableReason()}）"
-                            )
-                        }
-                        return LocalModelLoader.LoadResult.Failure((_state as LocalModelLoader.State.Failed).message)
+                        return fail(
+                            "llama.cpp 会话创建失败：${file.absolutePath}（${LlamaSession.getUnavailableReason()}）"
+                        )
                     }
                     _llama = session
                 }
             }
+            // ⚠️ _model 必须在 _state 之前写：_state 是 volatile，其写入构成 happens-before 屏障，
+            // 保证任何读到 Loaded 的线程都能看到已写好的 _model（门禁读的就是这一对）。
             _model = model
             synchronized(gate) { _state = LocalModelLoader.State.Loaded(model) }
             QuroDiag.log(
                 "LocalModel",
-                "✓ 模型已加载并常驻 | type=${model.type} | name=${model.name} | path=${model.path}"
+                "✓ 模型已加载并常驻 | type=${model.type} | name=${model.name} | id=${model.id} | " +
+                    "path=${model.path} | nCtx=$_nCtx | pid=${android.os.Process.myPid()}"
             )
             return LocalModelLoader.LoadResult.Success
         } catch (e: Throwable) {
             QuroDiag.log("LocalModel", "✗ load 异常 | ${e.message}\n${e.stackTraceToString()}")
             unload()
-            synchronized(gate) { _state = LocalModelLoader.State.Failed(e.message ?: e.javaClass.simpleName) }
-            return LocalModelLoader.LoadResult.Failure((_state as LocalModelLoader.State.Failed).message)
+            return fail(e.message ?: e.javaClass.simpleName)
         }
     }
 
@@ -175,6 +254,7 @@ object LocalModelSessionHolder : LocalModelLoader {
             _llama = null
             _mnn = null
             _model = null
+            _nCtx = 0
             _state = LocalModelLoader.State.None
             closing = false
             l to m
@@ -182,7 +262,7 @@ object LocalModelSessionHolder : LocalModelLoader {
         // 在锁外真正释放原生资源：此刻 activeGen 已归零，没有任何线程还在用这些 ctx。
         runCatching { toRelease.first?.release() }
         runCatching { toRelease.second?.release() }
-        QuroDiag.log("LocalModel", "✓ 会话已卸载释放（在飞生成已退出）")
+        QuroDiag.log("LocalModel", "✓ 会话已卸载释放（在飞生成已退出） | pid=${android.os.Process.myPid()}")
     }
 
     /**

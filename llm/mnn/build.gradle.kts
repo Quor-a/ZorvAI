@@ -75,6 +75,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    // JVM 单元测试：抗复读兜底（RepetitionGuard）与采样配置键名（buildSamplerConfigs）
+    // 都是纯 JVM 逻辑，必须能脱离真机做回归。android.util.Log 走 mockable android.jar
+    // 的默认返回值，避免 "Method ... not mocked" 异常。
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 kotlin {
@@ -86,5 +93,11 @@ kotlin {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
+
+    testImplementation("junit:junit:4.13.2")
+    // 真实 org.json 实现：mockable android.jar 里的 org.json 是桩（返回默认值），
+    // 会让 JSONObject.quote() 返回 null。显式引入真实实现，AGP 把 mockable jar 排在
+    // classpath 末尾，因此这里的实现优先生效（测试内有前置断言兜底校验）。
+    testImplementation(libs.org.json)
 }
 

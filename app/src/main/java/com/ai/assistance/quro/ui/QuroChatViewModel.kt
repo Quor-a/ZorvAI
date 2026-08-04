@@ -552,10 +552,20 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 // ★ 串台防御（v434+）：轮次标记改为【隐藏 user 消息】注入 buf，
                 //   不再污染 userMsg.content（旧方案导致 [第N轮] 泄露到 UI）。
                 //   hidden=true 确保 UI 渲染层不显示、落盘后可追溯调试。
+                // ★ #1116 多轮修复：本地（LLAMA_CPP / MNN）小模型会照字面理解"忽略更早轮次"，
+                //   丢弃全部上下文、退化到"永远答第一条"（本次 Bug 现象 B）。故本地路径改为
+                //   【多轮友好】指令：允许结合前面历史（含上一轮回复）理解并作答最新一条，
+                //   仅禁止原样复述旧回复。云端模型能力强、依赖这条纪律防串台，保持原指令不变。
+                val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
                 store.add(
                     QuroMessage(
                         role = "user",
-                        content = "[第${roundNumber}轮] 请严格针对本轮（最新一条）用户消息作答，忽略更早轮次的用户消息。",
+                        content = if (isLocal) {
+                            "[第${roundNumber}轮] 多轮对话：请结合前面的历史（含你上一轮的回复）理解上下文，" +
+                                "并针对本轮最新一条用户消息作答；可以引用历史信息，但不要原样重复之前已给出的回复或旧轮次的任务结果。"
+                        } else {
+                            "[第${roundNumber}轮] 请严格针对本轮（最新一条）用户消息作答，忽略更早轮次的用户消息。"
+                        },
                         hidden = true,
                     ),
                 )
@@ -997,11 +1007,21 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     private val AUTO_INCUBATE_THRESHOLD = 3
 
     private fun maybeAutoIncubate() {
-        // 对话结束 → 触发心跳孵化扫描（事件驱动，替代旧 15 分钟轮询）
-        try { QuroPersonaViewModel.pulse() } catch (_: Exception) {}
+        val cfg = repo.load()
+        // 🔒 本地会话（MNN / llama.cpp）不触发人格孵化：
+        //   ① 孵化走 QuroPersonaViewModel.hbClient（OkHttp 云端 HTTP），会把最近 18 轮对话摘要
+        //      POST 到云端，与本地模式「数据不出设备」的承诺（QuroPlatformManifest.SYSTEM_COMPACT
+        //      首句）直接冲突；
+        //   ② 本地用户通常没配 apiKey，孵化必然失败 → 60s 超时 → 每轮弹「人格孵化诊断」。
+        //   注意 pulse() 原先写在本函数第一行、在 apiKey 闸门之前，故那道闸门根本挡不住它。
+        val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
+        if (!isLocal) {
+            // 对话结束 → 触发心跳孵化扫描（事件驱动，替代旧 15 分钟轮询）
+            try { QuroPersonaViewModel.pulse() } catch (_: Exception) {}
+        }
         val persona = activePersona() ?: return
         if (persona.id.isBlank()) return
-        val cfg = repo.load()
+        if (isLocal) return
         if (cfg.apiKey.isBlank()) return
         sinceIncubate++
         if (sinceIncubate < AUTO_INCUBATE_THRESHOLD) return
@@ -1098,9 +1118,45 @@ $recent
         // 只下发给云端），塞 47 个工具清单纯属烧上下文，故本地一律裁掉。
         val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
 
+        if (isLocal) {
+            // ══════════════ 本地模型极简策略：只注入人格卡核心 ══════════════
+            // 1.2B 模型 context 极度紧张，QuroSoulPromptEngine.build 会塞入记忆条目、记忆能力说明、
+            // 标签 JSON、语音风格提示等，轻松吃掉 3000+ token。本地路径只保留人格卡核心：
+            // 名字 + 身份设定 + 聊天风格约束，其余全部跳过。
+            // 工具调用时，工具描述由 GGUF 的 Jinja 模板渲染（toolSpecsJson 已传到 applyStructuredChatTemplate）。
+            val out = if (persona == null) {
+                ""
+            } else {
+                buildString {
+                    append("你是").append(persona.name).append("。\n")
+                    if (persona.roleSetting.isNotBlank()) {
+                        append(persona.roleSetting).append("\n")
+                    }
+                    if (persona.chatSetting.isNotBlank()) {
+                        append(persona.chatSetting).append("\n")
+                    }
+                    // 多轮友好纪律：本地小 GGUF 无状态、每轮全量重 prefill，
+                    // 仅靠 send() 内构造的 [第N轮] 隐藏 user 消息不足以稳住上下文，
+                    // 故把"结合历史、针对最新一条作答、不复述旧回复"的纪律直接写进 system，
+                    // 让本地/MNN 模型真正拿到。此前该纪律误放在下方云端分支(1237 行)，
+                    // 因本函数在 1144 已提前 return，对本地永远不可达——属死代码，已此处补回。
+                    append("\n\n## 回复纪律\n")
+                    append("这是多轮对话：请结合前面的历史（含你之前的回复）理解用户意图，")
+                    append("并针对最新一条用户消息作答；可以引用历史中的信息，")
+                    append("但不要原样重复之前已经给出过的回复或旧轮次的任务结果。\n")
+                }.trimEnd()
+            }
+            QuroDiag.log(
+                "SysPrompt",
+                "built | local=true | persona-core-only | chars=${out.length} | ~tokens=${out.length / 3 * 2}"
+            )
+            return out
+        }
+
+        // ══════════════ 以下为云端模型的完整系统提示词 ══════════════
+
         // 平台/品牌自我认知基座（永远最先，不被人格卡覆盖）
-        sb.append(if (isLocal) QuroPlatformManifest.SYSTEM_COMPACT else QuroPlatformManifest.SYSTEM)
-            .append("\n\n")
+        sb.append(QuroPlatformManifest.SYSTEM).append("\n\n")
 
         // ══════════════ 第一优先级：身份认知（人格卡 = AI 真实身份；Zorv AI = 开发者；运行环境靠工具自行发现） ══════════════
         // ══════════════ 灵魂层（人格/标签/语音/记忆）由自写编排引擎生成 ══════════════
@@ -1187,19 +1243,16 @@ $recent
         // - 引用历史上下文中与当前用户消息无关的内容作为主要回复
         // - 把旧轮次中生成的 HTML/代码/长文本当成当前回复
         // 每条用户消息前有 [第N轮] 标记，最新一条 = 最大 N 值 → 只回应那条。
-        if (isLocal) {
-            // 本地：一行纪律即可，不铺陈（每多 100 字 ≈ 70 token，手机端 prefill 都是钱）。
-            sb.append("\n\n## 回复纪律\n只针对**最新一条**用户消息作答，历史仅作背景，不要复述旧轮次的内容。\n")
-        } else {
-            sb.append("""
-            
-            ## ⚠️ 回复纪律（强制约束）
-            - 你必须**仅针对最新一条带 [第N轮] 标记的用户消息**作答
-            - 如果用户消息是「全面测试」「测试一下」等简短测试指令，就按字面意思执行测试并报告结果，**绝不能**回复之前任何任务（如创建应用、生成网页、部署模块等）的完成通知
-            - 历史上下文仅作为参考背景，你的回复主体必须是**对当前这条消息的直接回应**
-            - 违反此纪律会导致用户体验严重受损（串台），请务必遵守
-            """.trimIndent())
-        }
+        // 串台防御（v429+）：本地/MNN 路径已在上方 1121 处 early-return 块中注入精简版回复纪律，
+        // 此处仅补充云端严格版（本地不会到达这里，因为 isLocal 在 1121 处已 return）。
+        sb.append("""
+        
+        ## ⚠️ 回复纪律（强制约束）
+        - 你必须**仅针对最新一条带 [第N轮] 标记的用户消息**作答
+        - 如果用户消息是「全面测试」「测试一下」等简短测试指令，就按字面意思执行测试并报告结果，**绝不能**回复之前任何任务（如创建应用、生成网页、部署模块等）的完成通知
+        - 历史上下文仅作为参考背景，你的回复主体必须是**对当前这条消息的直接回应**
+        - 违反此纪律会导致用户体验严重受损（串台），请务必遵守
+        """.trimIndent())
 
         val out = sb.toString().trim()
         // #1113 诊断：把 system prompt 实际规模写进日志，避免再靠猜。

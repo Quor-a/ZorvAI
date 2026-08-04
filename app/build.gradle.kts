@@ -81,6 +81,14 @@ android {
             // 现引擎改为源码打入 + jniLibs 预编译 .so，不再有 AAR 内置模型，故移除该忽略规则。
         }
 
+    // JVM 单测（src/test、src/testFull）：被测逻辑是纯 JVM 的（.gguf 路径解析、门禁身份判定、
+    // 提示文案分支），必须能脱离真机回归——用户侧无 adb，真机验证不可用。
+    // android.os.Process.myPid() / android.os.Environment.* 走 mockable android.jar 的默认返回值，
+    // 避免 "Method ... not mocked" 异常打断纯逻辑测试。
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     // 插件运行时：把 QuickJS 引擎 + JNI 桥编进 app（libquroplugin.so）
     externalNativeBuild {
         cmake {

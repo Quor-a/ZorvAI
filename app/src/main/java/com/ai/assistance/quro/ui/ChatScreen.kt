@@ -136,6 +136,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.SolidColor
@@ -1252,14 +1253,13 @@ fun ChatScreen(
 
         // 语音服务 Hub：全屏覆盖（v161 改为全屏，彻底规避底部 Surface 被设置弹层遮挡/约束问题）
         if (showVoiceService) {
-            LaunchedEffect(Unit) { android.widget.Toast.makeText(ctx, "DBG·语音服务面板已渲染", android.widget.Toast.LENGTH_SHORT).show() }
             BackHandler { showVoiceService = false; sheet = SheetType.Settings }
             Box(Modifier.fillMaxSize().zIndex(101f).background(cs.background)) {
                 QuroVoiceServiceScreen(
                     onBack = { showVoiceService = false; sheet = SheetType.Settings },
-                    onOpenTts = { android.widget.Toast.makeText(ctx, "DBG·Hub→TTS", android.widget.Toast.LENGTH_SHORT).show(); showVoiceService = false; showTts = true },
-                    onOpenStt = { android.widget.Toast.makeText(ctx, "DBG·Hub→STT", android.widget.Toast.LENGTH_SHORT).show(); showVoiceService = false; showStt = true },
-                    onOpenVoiceSettings = { android.widget.Toast.makeText(ctx, "DBG·Hub→设置", android.widget.Toast.LENGTH_SHORT).show(); showVoiceService = false; showVoice = true },
+                    onOpenTts = { showVoiceService = false; showTts = true },
+                    onOpenStt = { showVoiceService = false; showStt = true },
+                    onOpenVoiceSettings = { showVoiceService = false; showVoice = true },
                 )
             }
         }
@@ -1428,21 +1428,23 @@ private fun TopBar(
         if (persona != null) {
             PersonaBar(persona = persona, onPick = onPick, scaled = scaled)
         }
-        Spacer(Modifier.weight(1f))
-        // 模型 chip
-        Row(
-            Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .border(1.dp, Line, RoundedCornerShape(999.dp))
-                .clickable(onClick = onModel)
-                .padding(horizontal = 12.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(Modifier.size(7.dp).clip(CircleShape).background(Accent))
-            Spacer(Modifier.width(7.dp))
-            Text(modelName, fontSize = scaled(13), color = cs.onBackground, maxLines = 1)
-            Spacer(Modifier.width(4.dp))
-            LucideIcon("chevron_down", null, Modifier.size(15.dp), tint = Muted)
+        // 用 weighted Box 占剩余空间并右对齐 chip，防止模型名过长撑爆 Row 把设置图标推出屏幕
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            // 模型 chip
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .border(1.dp, Line, RoundedCornerShape(999.dp))
+                    .clickable(onClick = onModel)
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(Accent))
+                Spacer(Modifier.width(7.dp))
+                Text(modelName, fontSize = scaled(13), color = cs.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Spacer(Modifier.width(4.dp))
+                LucideIcon("chevron_down", null, Modifier.size(15.dp), tint = Muted)
+            }
         }
         Spacer(Modifier.width(6.dp))
         IconButton(onClick = onSettings, Modifier.size(40.dp)) {
@@ -1582,7 +1584,11 @@ private fun MessageList(
         contentPadding = PaddingValues(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item { Text("今天", fontSize = scaled(12), color = Muted, modifier = Modifier.padding(start = 2.dp, bottom = 2.dp)) }
+        item {
+            val today = java.time.LocalDate.now()
+            val dateLabel = today.format(java.time.format.DateTimeFormatter.ofPattern("M月d日"))
+            Text(dateLabel, fontSize = scaled(12), color = Muted, modifier = Modifier.padding(start = 2.dp, bottom = 2.dp))
+        }
         // 执行轨迹已「融和升级」进工具调用输出：
         // 轨迹不再作为底部独立面板，而是内嵌到最近一次助手工具调用卡内（见 ToolsInlineContent）。
         // 纯文本（无工具卡可融）回复不再渲染独立追踪卡，避免与工具卡重复 /「旧 UI 重显」。
@@ -4777,42 +4783,48 @@ private fun PermissionModeBar(
                     .clickable { expanded = !expanded }
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("权限模式", fontSize = 11.sp, color = Muted, fontWeight = FontWeight.Medium)
-                // 当前状态摘要标签
-                if (deepThink) {
-                    Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
-                        Text("深度思考", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                // 内层 Row 占剩余空间，溢出裁剪，保证 chevron 始终可见
+                Row(
+                    Modifier.weight(1f).clipToBounds(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("权限模式", fontSize = 11.sp, color = Muted, fontWeight = FontWeight.Medium)
+                    // 当前状态摘要标签
+                    if (deepThink) {
+                        Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
+                            Text("深度思考", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                        }
+                    }
+                    if (autoSaveMemory) {
+                        Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
+                            Text("记忆", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                        }
+                    }
+                    if (autoRead) {
+                        Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
+                            Text("朗读", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                        }
+                    }
+                    if (visionEnabled) {
+                        Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
+                            Text("看懂屏幕", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                        }
+                    }
+                    Surface(shape = RoundedCornerShape(999.dp), color = when (cmsPolicy) {
+                        QuroPolicy.ALLOW -> Color(0xFF34C759).copy(alpha = 0.18f)
+                        QuroPolicy.DENY -> Color(0xFFFF3B30).copy(alpha = 0.18f)
+                        else -> cs.primaryContainer
+                    }) {
+                        Text("CMS:${when(cmsPolicy){QuroPolicy.ALLOW->"允许";QuroPolicy.DENY->"禁止";else->"询问"}}",
+                            fontSize = 10.sp,
+                            color = when(cmsPolicy){
+                                QuroPolicy.ALLOW->Color(0xFF1A7A38);QuroPolicy.DENY->Color(0xFFFF3B30);else->cs.primary},
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                     }
                 }
-                if (autoSaveMemory) {
-                    Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
-                        Text("记忆", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                    }
-                }
-                if (autoRead) {
-                    Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
-                        Text("朗读", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                    }
-                }
-                if (visionEnabled) {
-                    Surface(color = AccentSoft.copy(alpha = 0.7f), shape = RoundedCornerShape(999.dp)) {
-                        Text("看懂屏幕", fontSize = 10.sp, color = AccentPress, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                    }
-                }
-                Surface(shape = RoundedCornerShape(999.dp), color = when (cmsPolicy) {
-                    QuroPolicy.ALLOW -> Color(0xFF34C759).copy(alpha = 0.18f)
-                    QuroPolicy.DENY -> Color(0xFFFF3B30).copy(alpha = 0.18f)
-                    else -> cs.primaryContainer
-                }) {
-                    Text("CMS:${when(cmsPolicy){QuroPolicy.ALLOW->"允许";QuroPolicy.DENY->"禁止";else->"询问"}}",
-                        fontSize = 10.sp,
-                        color = when(cmsPolicy){
-                            QuroPolicy.ALLOW->Color(0xFF1A7A38);QuroPolicy.DENY->Color(0xFFFF3B30);else->cs.primary},
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                }
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
                 LucideIcon(if (expanded) "chevron_up" else "chevron_down", null, Modifier.size(14.dp), tint = Muted)
             }
             // 展开状态：所有选项

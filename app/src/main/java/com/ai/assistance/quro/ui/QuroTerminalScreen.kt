@@ -56,7 +56,10 @@ fun QuroTerminalScreen(onClose: () -> Unit) {
 
     val listState = rememberLazyListState()
     val atBottom by remember {
-        derivedStateOf { listState.firstVisibleItemIndex >= lines.size - 2 }
+        derivedStateOf {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisible >= lines.size - 2
+        }
     }
     LaunchedEffect(lines.size) {
         if (atBottom) listState.scrollToItem(lines.lastIndex.coerceAtLeast(0))

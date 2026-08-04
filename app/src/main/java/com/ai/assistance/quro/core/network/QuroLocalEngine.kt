@@ -33,6 +33,7 @@ interface QuroLocalEngine {
         temperature: Float,
         maxTokens: Int,
         contextWindow: Int = 0,
+        toolSpecsJson: String? = null,
         onToken: ((String) -> Unit)? = null,
     ): QuroLlmResult
 }
@@ -46,6 +47,7 @@ object QuroLocalEnginePlaceholder : QuroLocalEngine {
         temperature: Float,
         maxTokens: Int,
         contextWindow: Int,
+        toolSpecsJson: String?,
         onToken: ((String) -> Unit)?,
     ): QuroLlmResult {
         val typeName = if (model.type == com.ai.assistance.quro.core.model.QuroLocalModelType.LLAMA_CPP) "llama.cpp" else "MNN"

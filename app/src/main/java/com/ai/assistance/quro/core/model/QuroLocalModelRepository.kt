@@ -22,10 +22,71 @@ import java.io.File
 enum class QuroLocalModelType { MNN, LLAMA_CPP }
 
 /**
+ * GGUF 文件命名规约（**导入侧与加载侧共用**）。
+ *
+ * ⚠️ 为什么必须共用：本地模型「导入成功、点加载却静默失败、聊天被门禁拦」的根因，正是
+ * 导入侧（`QuroModelConfigScreen` 的 `walkTopDown`）与加载侧
+ * （`QuroLocalEngineNative.resolveLlamaModelFileStatic` 的 `listFiles`）**各写一套扫描逻辑**
+ * 而彼此不对称。分片模型如果再让两侧各自实现一遍命名解析，必然重蹈覆辙。
+ * 因此把「什么是 stem / 什么是分片 / 一组分片对外叫什么名字」收敛到这里，
+ * 两侧都只准调这里的方法。本对象位于 `main` 源码集，`full` 风味可见。
+ *
+ * 分片（shard）说明：大模型常被切成
+ * `xxx-00001-of-00003.gguf` / `xxx-00002-of-00003.gguf` / `xxx-00003-of-00003.gguf`。
+ * llama.cpp **只接受首分片路径**（内部按 `split.count` 自动找齐其余分片），
+ * 传入非首分片会加载失败。所以一组分片对外只应暴露**一个**模型名（基名），
+ * 且解析时必须归一化到 `-00001-of-`。
+ */
+object QuroGgufNaming {
+
+    /** `<基名>-<5位序号>-of-<5位总数>`，是 llama.cpp / convert 脚本的标准分片命名。 */
+    private val SHARD_REGEX = Regex("""^(.*)-(\d{5})-of-(\d{5})$""")
+
+    /** 去掉 `.gguf` 扩展名（大小写不敏感）；本就没有扩展名时原样返回。 */
+    fun stem(fileName: String): String =
+        if (fileName.endsWith(".gguf", ignoreCase = true)) fileName.dropLast(5) else fileName
+
+    /**
+     * 若 [stem] 是分片名，返回其**基名**（`model-00002-of-00003` → `model`）；否则返回 null。
+     * 入参应是已去扩展名的 stem，传入带扩展名的文件名也能容错（内部再 strip 一次）。
+     */
+    fun shardBase(stem: String): String? =
+        SHARD_REGEX.matchEntire(stem(stem))?.groupValues?.get(1)?.takeIf { it.isNotEmpty() }
+
+    /**
+     * 把 [stem] 归一化为**首分片名**：`model-00002-of-00003` → `model-00001-of-00003`。
+     * 非分片名原样返回。
+     */
+    fun toFirstShard(stem: String): String {
+        val m = SHARD_REGEX.matchEntire(stem(stem)) ?: return stem
+        val base = m.groupValues[1]
+        val total = m.groupValues[3]
+        return if (base.isEmpty()) stem else "$base-00001-of-$total"
+    }
+
+    /** 该 stem 是否是一组分片里的**首片**。 */
+    fun isFirstShard(stem: String): Boolean =
+        SHARD_REGEX.matchEntire(stem(stem))?.groupValues?.get(2) == "00001"
+
+    /**
+     * 把一批 stem 折叠成「对用户可见的模型名」列表：
+     * **同一组分片只保留一个基名**，非分片名原样保留；去重并按字典序排序。
+     *
+     * 排序是刻意的：`LocalModelSessionHolder.load()` 取 `modelNames.first()`，
+     * 而 Android ext4 的 `readdir` 是哈希序、并非字典序，不排序会导致**每台设备选到的
+     * 分片都不一样**（PC 上 NTFS 恰好按字典序返回，纯属巧合，会掩盖这个 Bug）。
+     */
+    fun collapseShards(stems: List<String>): List<String> =
+        stems.map { s -> shardBase(s) ?: stem(s) }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+}
+
+/**
  * 一个已登记的本地模型（含**运行参数**）。
  *
- * 运行参数一律「0 / 空字符串 = 自动」，未配置时由 [resolveThreads] 等方法给出与参考实现
- * （operit）一致的安全默认值。加这些字段的原因：此前引擎侧全部走硬编码默认值，
+ * 运行参数一律「0 / 空字符串 = 自动」，未配置时由 [resolveThreads] 等方法给出安全默认值。
  * 用户无处调线程数 / 计算精度 / 后端类型 / 上下文长度，MNN 只能单核 CPU、
  * llama.cpp 只能 CPU 且窗口固定——这就是「模型配置没搞好」。
  */
@@ -76,7 +137,7 @@ data class QuroLocalModel(
     /** MNN 计算精度，空 → "low"。 */
     fun resolvePrecision(): String = precision.ifBlank { "low" }
 
-    /** MNN 内存模式，空 → GPU 后端 "normal"、CPU "low"（与 operit MNNProvider 一致）。 */
+    /** MNN 内存模式，空 → GPU 后端 "normal"、CPU "low"。 */
     fun resolveMemoryMode(): String = memoryMode.ifBlank {
         if (resolveBackend() == "cpu") "low" else "normal"
     }

@@ -20,7 +20,8 @@ object RootExecutor {
         if (isRootAvailable != null) return isRootAvailable!!
 
         return try {
-            val process = Runtime.getRuntime().exec("su -c id")
+            // FIX P2-2: 用数组形式 exec(arrayOf("su","-c","id"))，避免单字符串按空格拆分。
+            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
             val output = process.inputStream.bufferedReader().readText()
             process.waitFor()
             isRootAvailable = output.contains("uid=0")
@@ -56,7 +57,8 @@ object RootExecutor {
         }
 
         return try {
-            val process = Runtime.getRuntime().exec("su -c $command")
+            // FIX P2-2: 用数组形式，避免 "su -c $command" 被按空格拆分 → su -c 只吃第一个词。
+            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
             val stdout = process.inputStream.bufferedReader().readText()
             val stderr = process.errorStream.bufferedReader().readText()
             process.waitFor()

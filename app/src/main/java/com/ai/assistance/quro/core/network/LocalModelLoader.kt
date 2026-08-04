@@ -30,6 +30,9 @@ interface LocalModelLoader {
     fun isLoaded(model: QuroLocalModel): Boolean
     fun load(model: QuroLocalModel): LoadResult
     fun unload()
+
+    /** 常驻会话实际 n_ctx；0 = 未加载/未知（调用方需回退到保守默认）。 */
+    fun residentCtxTokens(): Int = 0
 }
 
 /** 反射访问器：fdroid 风味无实现类时回退 NoOp，绝不崩溃。 */

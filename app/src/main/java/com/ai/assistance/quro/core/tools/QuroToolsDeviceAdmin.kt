@@ -10,7 +10,6 @@ import org.json.JSONObject
  *   - lock_screen：强制锁屏
  *   - device_admin_status：查询设备管理员激活状态
  *   - set_camera_disabled：禁用/启用摄像头
- *   - wipe_data：清除设备数据（危险操作！需二次确认）
  *
  * 所有操作都需要 L3 设备管理员已在 CapOS 权限子系统中激活。
  */
@@ -38,7 +37,7 @@ class DeviceAdminStatusTool : QuroTool {
         val admin = android.content.ComponentName(context, "com.ai.assistance.quro.receiver.QuroDeviceAdminReceiver")
         val active = dpm.isAdminActive(admin)
         return if (active) {
-            """{"active":true,"capabilities":["lock_now","wipe_data","set_camera_disabled","reset_password","set_time_out"]}"""
+            """{"active":true,"capabilities":["lock_now","set_camera_disabled"]}"""
         } else {
             """{"active":false,"message":"L3 设备管理员未激活，请到 CapOS 权限子系统 → L3 设备管理员 → 请求授权"}"""
         }

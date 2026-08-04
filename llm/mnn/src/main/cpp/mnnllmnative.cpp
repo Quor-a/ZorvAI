@@ -15,17 +15,13 @@
 #include <map>
 #include <mutex>
 #include <rapidjson/document.h>
+#include <rapidjson/writer.h>
+#include <rapidjson/stringbuffer.h>
 
 // MNN LLM headers
 #include <MNN/expr/Expr.hpp>
 #include <MNN/expr/Module.hpp>
 #include <llm/llm.hpp>
-#if defined(LLM_USE_MINJA) && __has_include("minja/chat_template.hpp")
-#include "minja/chat_template.hpp"
-#define MNN_HAS_MINJA 1
-#else
-#define MNN_HAS_MINJA 0
-#endif
 
 #define TAG "MNNLlmNative"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
@@ -209,97 +205,92 @@ ChatMessages parseChatHistory(JNIEnv* env, jobject jhistory) {
     return history;
 }
 
-#if MNN_HAS_MINJA
-std::string readTemplateToken(const rapidjson::Value& value) {
-    if (value.IsString()) {
-        return value.GetString();
-    }
-    if (value.IsObject() && value.HasMember("content") && value["content"].IsString()) {
-        return value["content"].GetString();
-    }
-    return "";
-}
-
-bool parseJsonArrayDocument(const std::string& json, rapidjson::Document& document) {
-    document.Parse(json.c_str());
-    return !document.HasParseError() && document.IsArray();
-}
-
+// =====================
+// Structured chat template (tool-calling support)
+// =====================
+// 旧实现依赖 minja/chat_template.hpp（通过 MNN_HAS_MINJA 宏条件编译），但当前 MNN checkout
+// 不含该头文件 → MNN_HAS_MINJA=0 → stub 恒返回 "" → JNI 返回 FALSE → "MNN 推理未产生任何输出"。
+//
+// 正确路径：MNN 自带 vendored jinja 引擎（transformers/llm/engine/src/tokenizer/jinja.hpp），
+// 已通过 LLM_USE_JINJA 宏启用（engine/CMakeLists.txt:46）。用公开 API Llm::set_config() 注入
+// jinja.context（含 tools），再调 Llm::apply_chat_template(ChatMessages)。
+// 证据链：
+//   - llm.hpp:185  bool set_config(const std::string& content)
+//   - llm.cpp:127-129  set_config → mConfig->config_.merge(parse(content)) → setChatTemplate()
+//   - llm.cpp:112-124  setChatTemplate() → mTokenizer->set_chat_template_context(jinja["context"].dump())
+//   - tokenizer.cpp:981-1017  apply_chat_template → 读 chat_template_context_ 作为 extra_ctx
+//   - jinja.hpp:2210-2212  context = extra_context; context["messages"] = msgs; if(!tools.empty()) context["tools"] = tools
+//   - ujson.hpp:292-301  merge 是对象深合并、数组直接替换 → 传 "tools":[] 可靠清残留
+//   - llm.hpp:39-40  using ChatMessage = std::pair<std::string,std::string>; using ChatMessages = std::vector<ChatMessage>;
+//   - MNN 文档 llm.md:636  消息含 tool_calls 等额外字段时，ChatMessage first 设为 "json"，second 设为完整 JSON 字符串
+//   - Kotlin 层已有 MNNLlmSession.kt:545-556 setThinkingMode() 用完全相同的 set_config 模式
 std::string applyStructuredChatTemplate(Llm* llm, const std::string& messagesJson, const std::string& toolsJson) {
     if (llm == nullptr || messagesJson.empty()) {
+        LOGE("applyStructuredChatTemplate: llm null or messages empty");
         return "";
     }
 
+    // Parse messages JSON array
     rapidjson::Document messagesDoc;
-    if (!parseJsonArrayDocument(messagesJson, messagesDoc)) {
-        LOGE("Invalid structured messages json");
+    messagesDoc.Parse(messagesJson.c_str());
+    if (messagesDoc.HasParseError() || !messagesDoc.IsArray()) {
+        LOGE("applyStructuredChatTemplate: invalid messages json");
         return "";
     }
 
-    rapidjson::Document configDoc;
-    std::string configJson = llm->dump_config();
-    configDoc.Parse(configJson.c_str());
-    if (configDoc.HasParseError() || !configDoc.IsObject()) {
-        LOGE("Invalid llm config json");
-        return "";
-    }
-
-    if (!configDoc.HasMember("jinja") || !configDoc["jinja"].IsObject()) {
-        LOGE("LLM config has no jinja section");
-        return "";
-    }
-
-    const auto& jinja = configDoc["jinja"];
-    if (!jinja.HasMember("chat_template")) {
-        LOGE("LLM config has no jinja.chat_template");
-        return "";
-    }
-
-    std::string chatTemplate = readTemplateToken(jinja["chat_template"]);
-    if (chatTemplate.empty()) {
-        LOGE("LLM config jinja.chat_template is empty");
-        return "";
-    }
-
-    std::string bosToken;
-    std::string eosToken;
-    if (jinja.HasMember("bos")) {
-        bosToken = readTemplateToken(jinja["bos"]);
-    }
-    if (jinja.HasMember("eos")) {
-        eosToken = readTemplateToken(jinja["eos"]);
-    }
-
-    minja::chat_template tmpl(chatTemplate, bosToken, eosToken);
-    minja::chat_template_inputs inputs;
-    inputs.messages.CopyFrom(messagesDoc, inputs.messages.GetAllocator());
-    inputs.add_generation_prompt = true;
-
+    // Validate tools JSON (if present) — invalid tools are silently ignored.
+    // Empty array "[]" reliably clears stale tools from previous calls
+    // (ujson merge replaces arrays, see ujson.hpp:292-301).
+    std::string toolsField = "[]";
     if (!toolsJson.empty()) {
         rapidjson::Document toolsDoc;
-        if (!parseJsonArrayDocument(toolsJson, toolsDoc)) {
-            LOGE("Invalid structured tools json");
-            return "";
+        toolsDoc.Parse(toolsJson.c_str());
+        if (!toolsDoc.HasParseError() && toolsDoc.IsArray()) {
+            toolsField = toolsJson;
+        } else {
+            LOGE("applyStructuredChatTemplate: invalid tools json, ignoring");
         }
-        inputs.tools.CopyFrom(toolsDoc, inputs.tools.GetAllocator());
-    } else {
-        inputs.tools.SetNull();
     }
 
-    if (jinja.HasMember("context") && jinja["context"].IsObject()) {
-        inputs.extra_context.CopyFrom(jinja["context"], inputs.extra_context.GetAllocator());
-    } else {
-        inputs.extra_context.SetNull();
+    // Inject jinja context via set_config (same pattern as MNNLlmSession.setThinkingMode).
+    // The vendored jinja engine (LLM_USE_JINJA) picks up "tools" from the context when
+    // apply_chat_template is called.
+    std::string configStr = "{\"jinja\":{\"context\":{\"tools\":" + toolsField + "}}}";
+    llm->set_config(configStr);
+
+    // Build ChatMessages from messages JSON.
+    // Per MNN docs (llm.md:636): messages with extra fields (tool_calls, reasoning_content,
+    // tool_call_id) or tool role use "json" as first, full JSON object string as second.
+    ChatMessages chatMessages;
+    for (const auto& msg : messagesDoc.GetArray()) {
+        if (!msg.IsObject() || !msg.HasMember("role")) continue;
+        std::string role = msg["role"].GetString();
+
+        bool hasExtras = msg.HasMember("tool_calls") || msg.HasMember("reasoning_content") ||
+                         msg.HasMember("tool_call_id") || role == "tool";
+
+        if (hasExtras) {
+            rapidjson::StringBuffer msgBuffer;
+            rapidjson::Writer<rapidjson::StringBuffer> msgWriter(msgBuffer);
+            msg.Accept(msgWriter);
+            chatMessages.push_back({"json", std::string(msgBuffer.GetString())});
+        } else {
+            std::string content = (msg.HasMember("content") && msg["content"].IsString())
+                ? msg["content"].GetString() : "";
+            chatMessages.push_back({role, content});
+        }
     }
 
-    return tmpl.apply(inputs);
+    // Apply chat template via public API (picks up tools from jinja context)
+    std::string prompt = llm->apply_chat_template(chatMessages);
+
+    if (prompt.empty()) {
+        LOGE("applyStructuredChatTemplate: apply_chat_template returned empty "
+             "(model may have no chat_template configured)");
+    }
+
+    return prompt;
 }
-#else
-std::string applyStructuredChatTemplate(Llm* llm, const std::string& messagesJson, const std::string& toolsJson) {
-    LOGE("Structured chat template requires minja/chat_template.hpp");
-    return "";
-}
-#endif
 
 std::string jsonEscape(const std::string& input) {
     std::string output;

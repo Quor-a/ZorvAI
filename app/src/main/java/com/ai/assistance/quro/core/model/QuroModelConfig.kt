@@ -26,6 +26,13 @@ data class QuroModelConfig(
     val useFullTools: Boolean = true,      // 完整工具集开关：默认开启（全面开放，下发 fullSpecs ~50 个）；设置入口已移除，由默认全开保证工具可用
     val skillToolsEnabled: Boolean = true, // 技能可调用（function calling）总开关：true=将用户技能注册为 AI 可调用工具；false=技能仅注入系统提示词、不可被调用
     val maxSkillTools: Int = 16,           // 最多下发的技能工具数量（避免工具集过大被 API 中转静默丢弃）
+
+    // ---- 本地离线模型独立设置（与云端隔离，互不影响） ----
+    // 用户反馈"设置应该和云模型分开避免影响云模型"：此前离线和云端共用 temperature / maxTokens /
+    // enableTools，改了离线就把云端也带歪。现拆出独立字段，本地路径（routeLocal）优先读这些。
+    val localTemperature: Float = 0.7f,
+    val localMaxTokens: Int = 512,         // 本地生成 token 上限默认 512（手机 CPU 每 token 几十~几百 ms，4096 会跑好几分钟）
+    val localEnableTools: Boolean = false, // 本地工具调用默认关闭——1.2B 模型 context 紧张，默认只看人格卡；用户需要工具时手动开
 )
 
 class QuroModelConfigRepository(context: Context) {
@@ -46,6 +53,9 @@ class QuroModelConfigRepository(context: Context) {
         localModelPath = prefs.getString(KEY_LOCAL_PATH, "") ?: "",
         useFullTools = prefs.getBoolean(KEY_FULL_TOOLS, true),
         skillToolsEnabled = prefs.getBoolean(KEY_SKILL_TOOLS, true),
+        localTemperature = prefs.getFloat(KEY_LOCAL_TEMP, QuroModelConfig().localTemperature),
+        localMaxTokens = prefs.getInt(KEY_LOCAL_MAX_TOKENS, QuroModelConfig().localMaxTokens),
+        localEnableTools = prefs.getBoolean(KEY_LOCAL_TOOLS, QuroModelConfig().localEnableTools),
     )
 
     fun save(cfg: QuroModelConfig) = prefs.edit {
@@ -62,6 +72,9 @@ class QuroModelConfigRepository(context: Context) {
         putString(KEY_LOCAL_PATH, cfg.localModelPath)
         putBoolean(KEY_FULL_TOOLS, cfg.useFullTools)
         putBoolean(KEY_SKILL_TOOLS, cfg.skillToolsEnabled)
+        putFloat(KEY_LOCAL_TEMP, cfg.localTemperature)
+        putInt(KEY_LOCAL_MAX_TOKENS, cfg.localMaxTokens)
+        putBoolean(KEY_LOCAL_TOOLS, cfg.localEnableTools)
     }
 
     /**
@@ -122,6 +135,9 @@ class QuroModelConfigRepository(context: Context) {
         private const val KEY_LOCAL_PATH = "local_model_path"
         private const val KEY_FULL_TOOLS = "use_full_tools"
         private const val KEY_SKILL_TOOLS = "skill_tools_enabled"
+        private const val KEY_LOCAL_TEMP = "local_temperature"
+        private const val KEY_LOCAL_MAX_TOKENS = "local_max_tokens"
+        private const val KEY_LOCAL_TOOLS = "local_enable_tools"
         private const val KEY_MODELS_CACHE = "models_cache_json"
     }
 }

@@ -6,6 +6,9 @@ import com.ai.assistance.quro.core.model.QuroLocalModelRepository
 import com.ai.assistance.quro.core.network.QuroLlmClient
 import com.ai.assistance.quro.core.network.QuroLocalEngine
 import com.ai.assistance.quro.core.network.QuroLocalEnginePlaceholder
+import com.ai.assistance.quro.core.network.LocalModelLoaders
+import com.ai.assistance.quro.core.network.LocalModelLoader
+import com.ai.assistance.quro.core.network.QuroLocalToolsCodec
 import com.ai.assistance.quro.core.QuroLlmResult
 import com.ai.assistance.quro.core.tools.QuroToolEngine
 import com.ai.assistance.quro.core.tools.QuroToolRegistry
@@ -57,10 +60,16 @@ class QuroAssistant(
             var streamedContent: String = ""
             val emit = { onUpdate?.invoke() }
             QuroAgentTrace.status("assistant", "AI 开始响应")
+            // 本地离线模型使用独立的设置（localTemperature / localMaxTokens / localEnableTools），
+            // 与云端模型完全隔离——用户改离线设置不影响云端，反之亦然。
+            val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
+            val effTemperature = if (isLocal) cfg.localTemperature else cfg.temperature
+            val effMaxTokens = if (isLocal) cfg.localMaxTokens else cfg.maxTokens
+            val effEnableTools = if (isLocal) cfg.localEnableTools else cfg.enableTools
             // 工具集选择（原创）：默认 coreSpecs（14 个，token 占用小，兼容绝大多数 API 中转，
             // 避免代理因 tools 数量/总 token 超限而静默丢弃整个 tools 字段 → 模型拿不到工具只能纯问答）。
             // 用户在设置开启「完整工具集」后切换为 fullSpecs（~50 个，需代理支持大负载）。
-            val toolSpecs: List<QuroToolSpec> = if (!cfg.enableTools) {
+            val toolSpecs: List<QuroToolSpec> = if (!effEnableTools) {
                 emptyList()
             } else if (cfg.useFullTools) {
                 registry.fullSpecs()
@@ -69,7 +78,7 @@ class QuroAssistant(
             }
             // 记忆开关关闭时摘除 memory_* 工具，与系统提示词中的记忆段保持一致（都不注入）
             val effectiveSpecs = if (autoSaveMemory) toolSpecs else toolSpecs.filter { !it.name.startsWith("memory_") }
-            Log.i("QuroAssistant", "tool mode=${if (!cfg.enableTools) "off" else if (cfg.useFullTools) "full(${toolSpecs.size})" else "core(${toolSpecs.size})"}")
+            Log.i("QuroAssistant", "tool mode=${if (!effEnableTools) "off" else if (cfg.useFullTools) "full(${toolSpecs.size})" else "core(${toolSpecs.size})"}")
             // 工具调用轮次：0=不限制（默认），ReAct 循环持续到模型返回最终 Text 答复，
             // **没有步数上限，可一直链式编排直到任务真正完成**。
             // 仅保留一个极高的安全天花板（默认 2000，真实任务远不会触及）作最后兜底；
@@ -89,7 +98,7 @@ class QuroAssistant(
                 // ⚠️ #1112 修复：此前本地（MNN / llama.cpp）路径压根不传 onToken，且下方 streaming
                 //   还对本地强制置 false —— 本地推理整条链零流式。手机 CPU 上一次生成动辄数十秒到
                 //   数分钟，UI 在跑完之前一个字都拿不到，用户观感就是「不闪退但也不回复」。
-                //   PocketPal 每 token 即时上屏，所以同款 GGUF 在它那里"有反应"。现在两条路一致。
+                //   现在两条路一致，本地也每 token 即时上屏。
                 val emitStreamToken: (String) -> Unit = { acc ->
                     // 首个 token：创建可见占位气泡；其后增量更新内容。
                     // 节流 emit 到 ~100ms（≈10 帧/秒）：既让 AI 回复「一点一点」顺滑冒字，
@@ -124,12 +133,26 @@ class QuroAssistant(
                         // 一个 token 都不会产出，手机 CPU 上常需 5~60 秒。此前 UI 全程空白，用户无法区分
                         // 「正在算」和「已经死了」（观感就是"一直进行中却不回复"）。这里先推一条占位文案，
                         // 首个真 token 到达时会被 emitStreamToken 的累计文本整体覆盖，不会残留。
-                        if (stream) emitStreamToken("⏳ 正在加载本地模型并处理上下文…")
+                        if (stream) {
+                            val resident = runCatching {
+                                LocalModelLoaders.get().getState() is LocalModelLoader.State.Loaded
+                            }.getOrDefault(false)
+                            // 常驻会话复用时不再弹"正在处理上下文"——prefill 进度由 generateLlama
+                            // 的 onProgress 回调实时推送（"⏳ 正在处理提示词… X%"），用户已能看到
+                            // 实时进度，无需再弹一条像在重新加载的占位文案。
+                            // 仅首次加载（非常驻）时提示"正在加载本地模型"。
+                            if (!resident) {
+                                emitStreamToken("⏳ 正在加载本地模型并处理上下文…")
+                            }
+                        }
                         routeLocal(
                             context,
                             cfg,
                             llmMessages,
                             if (stream) emitStreamToken else null,
+                            if (effEnableTools && effectiveSpecs.isNotEmpty())
+                                QuroLocalToolsCodec.encodeTools(effectiveSpecs)
+                            else null,
                         )
                     } else {
                         val streaming = stream
@@ -138,8 +161,8 @@ class QuroAssistant(
                             apiKey = cfg.apiKey,
                             model = cfg.model,
                             messages = llmMessages,
-                            temperature = cfg.temperature,
-                            maxTokens = cfg.maxTokens,
+                            temperature = effTemperature,
+                            maxTokens = effMaxTokens,
                             tools = effectiveSpecs,
                             stream = streaming,
                             // 注意：v384 已根除重组期重编译正则的 ANR 真凶，此处无需再用 500ms 粗节流保命。
@@ -365,10 +388,16 @@ class QuroAssistant(
         cfg: QuroModelConfig,
         messages: List<QuroChatMessage>,
         onToken: ((String) -> Unit)? = null,
+        toolSpecsJson: String? = null,
     ): QuroLlmResult {
         val repo = QuroLocalModelRepository(context.applicationContext)
         val all = repo.loadAll()
-        val local = all.firstOrNull { it.type.name == cfg.provider && it.path == cfg.localModelPath }
+        // 优先用 holder 里已加载的模型——用户在「模型配置」点了「加载」的那个就是 holder 里的。
+        // load() 会先 unload 旧模型再加载新的，所以 holder 里的永远是用户最后加载的。
+        // 不再死按 cfg.localModelPath 匹配——cfg 可能因各种原因没同步（比如卡片选择和加载按钮脱节）。
+        val loader = LocalModelLoaders.get()
+        val local = all.firstOrNull { loader.isLoaded(it) }
+            ?: all.firstOrNull { it.path == cfg.localModelPath }
             ?: all.firstOrNull { it.type.name == cfg.provider }
         if (local == null) {
             return QuroLlmResult.Error(
@@ -379,9 +408,10 @@ class QuroAssistant(
             local,
             cfg.model,
             compactForLocal(messages),
-            cfg.temperature,
-            cfg.maxTokens,
+            cfg.localTemperature,
+            cfg.localMaxTokens,
             cfg.contextWindow,
+            toolSpecsJson,
             onToken,
         )
     }
@@ -398,16 +428,24 @@ class QuroAssistant(
      * （`promptTokens.erase(begin, begin+drop)`），会把身份/人格整段砍掉、只留尾巴，
      * 模型直接失忆。这里反过来 **保头部丢尾部**，让身份始终活下来。
      *
-     * 预算取值：system ≤ 4,000 字符（≈2,700 token），全部消息合计 ≤ 9,000 字符（≈6,000 token），
-     * 与 llama 会话 n_ctx=8192 扣掉生成预留后的 ~6,144 token 对齐。
+     * 预算取值：maxSystemChars / maxTotalChars 按常驻会话实际 n_ctx 推导——
+     * usableTokens = n_ctx - 预留（1/4 n_ctx 或最多 1024，给生成留余量），
+     * maxTotalChars = usableTokens / 0.75 * 0.9（0.75 ≈ chars/token，0.9 留 10% 余量），
+     * maxSystemChars = maxTotalChars * 0.42（system 占比 ≤ 42%，保护对话历史）。
+     * n_ctx 未知时回退到保守默认 3072 token。
      */
     private fun compactForLocal(messages: List<QuroChatMessage>): List<QuroChatMessage> {
         // ⚠️ #1113-2 回滚：上一轮误判「after 30000ms」是 prefill 超时，把预算砍到 800/2000，
         // 结果把用户配置好的人设/系统提示词腰斩。真凶是 OkHttp SocketTimeoutException
         // （failed to connect ... after 30000ms），与 prompt 长度无关。恢复原预算，
         // 不再拿用户的人设去换一个根本不存在的超时。
-        val maxSystemChars = 4_000
-        val maxTotalChars = 9_000
+        //
+        // D2-1a：预算不再硬编码，按常驻会话真实 n_ctx 推导，避免 n_ctx=6144 时
+        // 预算仍按 8192 算导致超截，或 n_ctx=4096 时预算过大导致原生层头部截断。
+        val ctxTokens = runCatching { LocalModelLoaders.get().residentCtxTokens() }.getOrDefault(0)
+        val usableTokens = if (ctxTokens > 0) ctxTokens - maxOf(32, minOf(1024, ctxTokens / 4)) else 3072
+        val maxTotalChars = (usableTokens / 0.75f * 0.9f).toInt()
+        val maxSystemChars = (maxTotalChars * 0.42f).toInt()
         val rawTotal = messages.sumOf { it.content.length }
 
         // 1) system 超预算 → 保留头部（身份在最前），尾部裁掉并留一行说明

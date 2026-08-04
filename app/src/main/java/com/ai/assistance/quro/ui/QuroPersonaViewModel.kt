@@ -220,12 +220,13 @@ class QuroPersonaViewModel(context: Context) : ViewModel() {
 
         /** #820：孵化调用超时阈值，避免 LLM 卡死导致 UI 久转无响应。 */
         private const val INCUBATE_TIMEOUT_MS = 60_000L
+        /** 孵化失败后 10 分钟内不重试（避免每轮对话都卡 60s 超时）。 */
+        private const val FAIL_BACKOFF_MS = 10 * 60 * 1000L
 
         /** #820：孵化超时/失败时复用 AnrMonitor 同款 Download 双写路径，落诊断报告便于手机端自查。 */
         private fun writeIncubationDiag(p: QuroPersona, msg: String) {
             runCatching {
-                val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                val fileName = "incubate_diag_${p.id}_$ts.txt"
+                val fileName = "incubate_diag_${p.id}.txt"
                 val content = buildString {
                     append("===== 人格孵化诊断 =====\n")
                     append("时间: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}\n")
@@ -237,6 +238,13 @@ class QuroPersonaViewModel(context: Context) : ViewModel() {
                 }
                 QuroDiag.writeFile(fileName, content)?.let { Log.w("PersonaIncubate", "孵化诊断已双写Download: $it") }
             }.onFailure { Log.w("PersonaIncubate", "孵化诊断双写失败: ${it.message}") }
+        }
+
+        /** 孵化失败时推进 lastIncubatedAt，使下次节流门在 FAIL_BACKOFF_MS 后才放行。 */
+        private fun markIncubateAttempt(p: QuroPersona) {
+            val now = System.currentTimeMillis()
+            val base = hbRepo.loadAll().firstOrNull { it.id == p.id } ?: p
+            hbRepo.upsert(base.copy(lastIncubatedAt = now - MIN_GAP_MS + FAIL_BACKOFF_MS))
         }
 
         /** 单卡孵化：在心跳作用域内执行，蒸馏后独立持久化 incubation + lastIncubatedAt。 */
@@ -260,11 +268,14 @@ class QuroPersonaViewModel(context: Context) : ViewModel() {
                             ),
                         )
                     } else if (r is IncubateResult.Error) {
+                        markIncubateAttempt(p)
                         writeIncubationDiag(p, "孵化返回错误: ${(r as IncubateResult.Error).message}")
                     }
                 } catch (e: TimeoutCancellationException) {
+                    markIncubateAttempt(p)
                     writeIncubationDiag(p, "孵化超时(${INCUBATE_TIMEOUT_MS}ms)，疑似 LLM 调用卡死，已中止该卡孵化")
                 } catch (_: Exception) {
+                    markIncubateAttempt(p)
                     // 单卡失败静默
                 } finally {
                     _incubatingStates.value = _incubatingStates.value + (p.id to false)
@@ -282,7 +293,8 @@ class QuroPersonaViewModel(context: Context) : ViewModel() {
             val prompt = buildIncubatePrompt(name, description, tags)
             // 功能模型配置接入引擎：人格蒸馏使用 PERSONA_INCUBATE 绑定的模型（覆盖在本仓库配置之上）
             val effModel = QuroFunctionModelConfigRepository(hbContext).resolveConfig(QuroFunctionType.PERSONA_INCUBATE, cfg).model
-            val maxRetries = 1
+            // 60s 预算下 30+3+30=63s 必然超时，去掉重试。
+            val maxRetries = 0
             var lastError: IncubateResult? = null
             for (attempt in 0..maxRetries) {
                 if (attempt > 0) delay(3000L)  // 重试前等 3 秒

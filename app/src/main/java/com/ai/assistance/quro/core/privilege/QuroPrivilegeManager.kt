@@ -12,7 +12,9 @@ import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
 import com.ai.assistance.quro.receiver.QuroDeviceAdminReceiver
 import com.ai.assistance.quro.service.QuroAccessibilityService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * 权限子系统 - 仲裁大脑。
@@ -36,13 +38,16 @@ data class PrivilegeState(
 
 class QuroPrivilegeManager(private val context: Context) {
 
-    /** 获取当前系统可用的所有权限状态（L1-L4）。 */
+    /** 获取当前系统可用的所有权限状态（L1-L4）。同步方法，L4 的 checkRoot 可能阻塞数秒。 */
     fun probe(): Map<PrivilegeLevel, PrivilegeState> = mapOf(
         PrivilegeLevel.L1 to checkAccessibility(),
         PrivilegeLevel.L2 to QuroShizukuBridge.state(context),
         PrivilegeLevel.L3 to checkDeviceAdmin(),
         PrivilegeLevel.L4 to checkRoot(),
     )
+
+    /** 异步探测（把 checkRoot 等阻塞操作放到 IO 线程，避免主线程 ANR）。 */
+    suspend fun probeAsync(): Map<PrivilegeLevel, PrivilegeState> = withContext(Dispatchers.IO) { probe() }
 
     // L1: 无障碍服务（基础自动化：UI 交互 / 屏幕内容读取）
     private fun checkAccessibility(): PrivilegeState {
@@ -67,14 +72,36 @@ class QuroPrivilegeManager(private val context: Context) {
     }
 
     // L4: ROOT（内核级操作 / 系统文件修改）
+    // 修复 P0-2：旧实现只看 p.waitFor(2,SECONDS) 是否在 2s 内退出 →
+    //   1) su 被拒绝时秒退 → ok=true → 误报「Root 可用」
+    //   2) Magisk 首次弹框等用户点「允许」常超 2s → ok=false → 误报「未获取 Root」
+    //   3) 跑在主线程 → 最多阻塞 2s → 卡顿/ANR
+    //   4) 进程与流从不关闭 → 泄漏
+    // 正确做法（参考 QuroToolsRoot.kt RootStatusTool）：执行 su -c echo 'root_ok' 并校验输出，
+    // 5s 超时 + 后台线程读流 + destroyForcibly（参考 QuroTerminalController.kt:55-69 模式）。
+    // 主线程阻塞由 probeAsync() 解决（withContext(Dispatchers.IO)）。
     private fun checkRoot(): PrivilegeState = try {
-        val p = Runtime.getRuntime().exec("su")
-        val os = java.io.DataOutputStream(p.outputStream)
-        os.writeBytes("echo 'root_check'\n")
-        os.writeBytes("exit\n")
-        os.flush()
-        val ok = p.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)
-        PrivilegeState(PrivilegeLevel.L4, ok, if (ok) "Root 访问可用" else "未获取 Root")
+        val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "echo 'root_ok'"))
+
+        // 后台线程读流（避免 stdout 不关闭导致 readText 永久阻塞）
+        val outB = StringBuilder()
+        val errB = StringBuilder()
+        val tOut = Thread { runCatching { p.inputStream.bufferedReader().use { outB.append(it.readText()) } } }.also { it.start() }
+        val tErr = Thread { runCatching { p.errorStream.bufferedReader().use { errB.append(it.readText()) } } }.also { it.start() }
+
+        // 5s 超时（Magisk 首次弹框可能需数秒等用户点「允许」）
+        val finished = p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+        if (!finished) {
+            p.destroyForcibly()
+            tOut.join(500); tErr.join(500)
+            PrivilegeState(PrivilegeLevel.L4, false, "Root 检测超时（若 Magisk 弹框请先允许，再重试）")
+        } else {
+            tOut.join(1000); tErr.join(1000)
+            p.destroy()
+            val output = outB.toString().trim()
+            val ok = output == "root_ok"
+            PrivilegeState(PrivilegeLevel.L4, ok, if (ok) "Root 访问可用" else "未获取 Root（su 被拒绝或设备未 Root）")
+        }
     } catch (e: Exception) {
         PrivilegeState(PrivilegeLevel.L4, false, "未获取 Root")
     }
@@ -118,7 +145,7 @@ class QuroPrivilegeManager(private val context: Context) {
         rationale: String,
         confirm: suspend () -> Boolean,
     ): Boolean {
-        val current = probe()[level] ?: return false
+        val current = probeAsync()[level] ?: return false
         // 阶段2：已拥有则直接通过并记录
         if (current.available) {
             QuroPrivilegeAudit.log(context, capsuleId, level, "auto-grant (already available)", true)
@@ -130,7 +157,7 @@ class QuroPrivilegeManager(private val context: Context) {
                 QuroPrivilegeAudit.log(context, capsuleId, level, "policy=ALLOW auto-grant", true)
                 launchIntentFor(level)?.let { context.startActivity(it) }
                 delay(1000)
-                val after = probe()[level]?.available ?: false
+                val after = probeAsync()[level]?.available ?: false
                 QuroPrivilegeAudit.log(context, capsuleId, level, "post-elevation probe (ALLOW)", after)
                 return after
             }
@@ -150,7 +177,7 @@ class QuroPrivilegeManager(private val context: Context) {
         QuroPrivilegeAudit.log(context, capsuleId, level, "user confirmed elevation", true)
         // 重新探测（用户已在系统界面开启）
         delay(800)
-        val after = probe()[level]?.available ?: false
+        val after = probeAsync()[level]?.available ?: false
         QuroPrivilegeAudit.log(context, capsuleId, level, "post-elevation probe", after)
         return after
     }
@@ -163,7 +190,7 @@ class QuroPrivilegeManager(private val context: Context) {
             putExtra("EXTRA_FRAGMENT_ARG_KEY", cn)
         }
         PrivilegeLevel.L2 -> {
-            val shizukuPkg = "moe.shizuku.privileged.api"
+            val shizukuPkg = "moe.shizuku.manager"
             context.packageManager.getLaunchIntentForPackage(shizukuPkg)
                 ?: Intent(Intent.ACTION_VIEW).apply { data = android.net.Uri.parse("market://details?id=$shizukuPkg") }
         }

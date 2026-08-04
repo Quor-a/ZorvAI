@@ -261,6 +261,15 @@ Java_com_ai_assistance_llama_LlamaNative_nativeCancel(JNIEnv * env, jclass clazz
     (void) sessionPtr;
 }
 
+// Plan A: 与真实分支（OPERIT_HAS_LLAMA_CPP）的 nativeResetKv 配对的空实现。
+// 必须存在——否则未编入 llama.cpp 时 LlamaSession.resetContext() 会抛 UnsatisfiedLinkError。
+extern "C" JNIEXPORT void JNICALL
+Java_com_ai_assistance_llama_LlamaNative_nativeResetKv(JNIEnv * env, jclass clazz, jlong sessionPtr) {
+    (void) env;
+    (void) clazz;
+    (void) sessionPtr;
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_ai_assistance_llama_LlamaNative_nativeCountTokens(JNIEnv * env, jclass clazz, jlong sessionPtr, jstring text) {
     (void) env;
@@ -407,6 +416,14 @@ struct LlamaSessionNative {
     common_chat_parser_params toolCallParserParams;
     bool hasToolCallParser = false;
     std::atomic_bool cancel{false};
+    // Plan A: KV 前缀缓存状态。
+    // kvPrefix : 上一轮生成结束后保留的 KV 前缀（= 上一轮最终 promptTokens）。
+    // kvPast   : kvPrefix 的长度（即上一轮缓存的 KV 位置数）。
+    // kvDirty  : true 表示缓存失效，下轮必须全量重算（失效条件见 nativeGenerateStream 内注释）。
+    // 初始 kvDirty=true：首个请求尚无缓存，等价于全清。
+    std::vector<llama_token> kvPrefix;
+    int32_t kvPast = 0;
+    bool kvDirty = true;
     // 🔎 最近一次失败的**人类可读原因**。
     // 背景：此前 native 的所有失败都只走 LOGE 进 logcat，用户端表现统一为"没反应/不回复"，
     // 排障必须依赖 adb 或翻 Download/QuroAI_logs —— 用户拿不到日志，我就只能靠猜，
@@ -423,6 +440,19 @@ struct LlamaSessionNative {
         LOGE("%s", _errbuf);                                      \
         if ((sess) != nullptr) (sess)->lastError = _errbuf;       \
     } while (0)
+
+// UTF-8 character byte-length from leading byte (0 = invalid/incomplete).
+// Mirrors MNN's utf8CharLength (mnnllmnative.cpp:728-734) for UTF-8 boundary buffering:
+// when a multi-byte CJK character spans two tokens, the streaming detokenize delta may
+// end with an incomplete UTF-8 sequence. Without buffering, bytesUtf8ToJstring replaces
+// those bytes with 0xFFFD (�), producing the garbled text users reported.
+static inline int utf8CharLength(unsigned char byte) {
+    if ((byte & 0x80) == 0) return 1;
+    if ((byte & 0xE0) == 0xC0) return 2;
+    if ((byte & 0xF0) == 0xE0) return 3;
+    if ((byte & 0xF8) == 0xF0) return 4;
+    return 0;
+}
 
 static std::once_flag gBackendInitOnce;
 
@@ -1321,13 +1351,10 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
     session->lastError.clear();
     session->cancel.store(false);
 
-    // reset KV + sampler for a clean generation per request
-    if (session->ctx) {
-        llama_memory_t mem = llama_get_memory(session->ctx);
-        if (mem) {
-            llama_memory_clear(mem, true);
-        }
-    }
+    // Plan A: KV 不再每轮无条件清空。改为 tokenize + 头部截断之后（拿到最终 promptTokens）
+    // 再做条件前缀复用（见下方 "Plan A: KV 前缀缓存" 段）：若本轮 prompt 是上一轮 prompt 的
+    // 严格前缀扩展则续用 KV，否则按情况部分砍尾 / 全清。这里只做采样器复位——llama_sampler_reset
+    // 是生成态、与 KV 无关，保持每轮无条件执行（team-lead 明确要求不要顺手条件化）。
     if (session->sampler) {
         llama_sampler_reset(session->sampler);
     }
@@ -1438,6 +1465,81 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
         return JNI_FALSE;
     }
 
+    // ===================== Plan A: KV 前缀缓存（条件失效） =====================
+    // 前缀失效的完整条件列表（任一满足 → 本轮回退为全量重算）：
+    //   1) session->kvDirty == true（主动失效：nativeResetKv / resetContext()，或本/上轮
+    //      生成失败、取消、abort 时已置位）；
+    //   2) 尚无缓存：kvPrefix 为空（首个请求）；
+    //   3) 本轮 prompt 不是缓存前缀的扩展：reuse == 0（prompt 与 kvPrefix 在首个 token 就分叉，
+    //      或上下文头部被原生截断丢掉了前缀）；
+    //   4) 用户取消：session->cancel 在 prefill 或生成阶段被置位；
+    //   5) 任意 llama_decode 返回非 0（KV 槽不足 ret==1 / 中止 ret==2 / 致命 <-1），prefill 或生成；
+    //   6) 工具轮：applyStructuredChatTemplate 渲染的 prompt（app 层在工具轮调用 resetContext()，
+    //      本机接口已暴露，接线由 team-lead 后续决定）。
+    // 注：原生头部截断（1441 行附近）会丢弃 prompt 头部，若正好丢掉前缀 → reuse 塌为 0，自然全清。
+    llama_memory_t mem = session->ctx ? llama_get_memory(session->ctx) : nullptr;
+    const int32_t promptLen = static_cast<int32_t>(promptTokens.size());
+    int32_t reuse = 0;
+    if (mem != nullptr && !session->kvDirty && !session->kvPrefix.empty()
+        && static_cast<int32_t>(session->kvPrefix.size()) >= session->kvPast) {
+        // 求 promptTokens 与 kvPrefix 的最长公共前缀长度。
+        const int32_t cachedLen = session->kvPast;
+        const int32_t limit = std::min<int32_t>(promptLen, cachedLen);
+        int32_t r = 0;
+        while (r < limit && promptTokens[r] == session->kvPrefix[r]) {
+            r++;
+        }
+        reuse = r;
+    }
+    if (session->kvDirty) {
+        reuse = 0;  // 显式失效：强制不复用
+    }
+
+    // 退化保护（⚠️ 必须在裁剪 KV **之前**做）：若本轮 prompt 与缓存完全一致
+    // （reuse == promptLen），就没有任何新增 token 可 decode → 本轮拿不到 logits，
+    // llama_sampler_sample 会取到上一轮的陈旧 logits（或越界）→ 崩溃/输出垃圾。
+    // 因此强制至少留 1 个 token 给本轮 decode。
+    // 为什么必须先 clamp 再裁剪：若先裁剪后 clamp，reuse == kvPast == promptLen 时走的是
+    // "前缀完全匹配、KV 不动"分支，pos=promptLen-1 的 cell 仍留在 cache 里；紧接着又把
+    // 同一个 token 在同一 pos 重新 decode 一次 —— llama.cpp 的 unified KV 是"找空槽插入"，
+    // 不会按 pos 去重，于是 seq0 出现**两个 pos=promptLen-1 的 cell**：
+    //   ① 注意力重复看到该 token，logits 被污染；
+    //   ② 生成结束后 llama_memory_seq_rm(mem, 0, promptLen, -1) 只删 pos>=promptLen，
+    //      这个重复 cell 删不掉，却被当作干净前缀写进 kvPrefix → 缓存被永久投毒，
+    //      后续每轮复用都在错误 KV 上续写。
+    // 先 clamp 成 promptLen-1，就会落进下面的 `reuse < kvPast` 分支，把 pos>=promptLen-1
+    // 的 cell 先删掉再重新 decode，KV 保持唯一且正确。
+    if (reuse >= promptLen) {
+        reuse = promptLen - 1;
+        if (reuse < 0) reuse = 0;
+    }
+
+    if (mem != nullptr) {
+        if (reuse == 0) {
+            // 完全不复用：全量重算（等价于原无条件 llama_memory_clear 行为）。
+            llama_memory_clear(mem, true);
+        } else if (reuse < session->kvPast) {
+            // 部分复用：砍掉分叉尾部 [reuse, kvPast)，保留 [0, reuse) 作为续写前缀。
+            // llama_memory_seq_rm 语义（include/llama.h:733）：删除 seq 中位置在 [p0, p1) 的 token；
+            // p1 < 0 表示 [p0, inf)。返回 bool，false = 无法删除部分序列。
+            // 返回 false 时必须降级为全清，且 **reuse 要一并归 0** ——
+            // 否则 KV 已被清空、prefill 却仍从 offset=reuse 开始，[0, reuse) 这段 token
+            // 永远不会被 decode，模型在空 KV 上从中间位置续写 → 纯乱码。
+            if (!llama_memory_seq_rm(mem, 0, reuse, -1)) {
+                LOGE("kv prefix partial-rm failed (reuse=%d kvPast=%d); fallback to full clear",
+                     (int) reuse, (int) session->kvPast);
+                llama_memory_clear(mem, true);
+                reuse = 0;
+            }
+        }
+        // reuse == kvPast：前缀完全匹配，KV 不动，直接进入续写（最快路径）。
+    } else {
+        // 没有 KV memory（极端配置）→ 不可能复用。
+        reuse = 0;
+    }
+
+    const int32_t startOffset = reuse;
+
     const auto prefillStart = std::chrono::steady_clock::now();
 
     // Prefill in chunks of n_batch. Use an EXPLICIT, writable batch (llama_batch_init)
@@ -1451,7 +1553,7 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
     // 更快完成、进度条更频繁更新，同时仍保持合理效率（256 是 llama.cpp 常见 ubatch 量级）。
     const int32_t effectiveChunk = static_cast<int32_t>(std::min<uint32_t>(n_batch, 256u));
     const int32_t totalPrompt = static_cast<int32_t>(promptTokens.size());
-    int32_t n_past = 0;
+    int32_t n_past = reuse;
 
     LOGI(
         "Prefill decode start: prompt_tokens=%zu n_ctx=%d n_batch=%u effective_chunk=%d max_new=%d",
@@ -1464,7 +1566,7 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
     const llama_seq_id seq0 = 0;
     llama_batch pbatch = llama_batch_init(n_batch, 0, 1);
     bool prefillFailed = false;
-    int32_t offset = 0;
+    int32_t offset = startOffset;
     while (offset < totalPrompt) {
         const int32_t chunk = std::min<int32_t>(effectiveChunk, totalPrompt - offset);
         for (int32_t i = 0; i < chunk; i++) {
@@ -1493,7 +1595,13 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
         if (midOnProgress != nullptr) {
             jstring jstage = env->NewStringUTF("prefill");
             if (jstage != nullptr) {
-                env->CallVoidMethod(callback, midOnProgress, jstage, (jint) offset, (jint) totalPrompt);
+                // Plan C: 透出"本轮真正要 decode 的新增 token 数"，不是总 prompt 长度。
+                // 原生每轮把 promptTokens 整体下发，但 Plan A 已复用 KV 前缀，实际只 decode
+                // [reuse, totalPrompt) 这段新 token；Kotlin 侧据此阈值（LOCAL_PREFILL_PROGRESS_TOKEN_THRESHOLD）
+                // 决定是否上屏进度条——多轮只新增几十 token 时被挡住，消除"每轮弹 正在处理提示词 X%"。
+                const int32_t effTotal = static_cast<int32_t>(promptTokens.size()) - reuse;
+                const int32_t effCur = std::max<int32_t>(0, offset - reuse);
+                env->CallVoidMethod(callback, midOnProgress, jstage, (jint) effCur, (jint) effTotal);
                 env->DeleteLocalRef(jstage);
                 if (env->ExceptionCheck()) env->ExceptionClear();
             }
@@ -1539,6 +1647,7 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
                                     .count();
     LOGI("Prefill phase total: %lldms (tokens=%d)", (long long) prefillTotalMs, totalPrompt);
     if (prefillFailed) {
+        session->kvDirty = true;  // prefill 未正常完成，KV 状态不可信 → 下轮全清
         return JNI_FALSE;
     }
 
@@ -1557,12 +1666,16 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
     // 同 prefill：写值，不覆写指针（否则 llama_batch_free 会 free 栈地址 → SIGABRT）。
     gbatch.seq_id[0][0] = seq0;
     generatedTokens.reserve(static_cast<size_t>(maxNew));
+    // Plan A: 本轮生成是否被取消/abort/解码失败。若是，KV 含不完整生成尾，不可缓存为前缀。
+    bool generationDirty = false;
     std::string prevDecoded;
+    std::string pendingUtf8;  // incomplete trailing UTF-8 bytes buffered across tokens (CJK mojibake fix)
     std::vector<char> detokBuf;
 
     for (int i = 0; i < maxNew; i++) {
         if (session->cancel.load()) {
             LOGI("generation cancelled");
+            generationDirty = true;
             break;
         }
 
@@ -1631,19 +1744,40 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
         prevDecoded = decodedNow;
 
         if (!delta.empty()) {
-            jstring jdelta = bytesUtf8ToJstring(env, delta);
-            if (jdelta == nullptr || env->ExceptionCheck()) {
-                env->ExceptionClear();
-            } else {
-                const jboolean keepGoing = env->CallBooleanMethod(callback, midOnToken, jdelta);
-                env->DeleteLocalRef(jdelta);
-                if (env->ExceptionCheck()) {
-                    env->ExceptionClear();
-                    LOGE("Java callback threw exception; stopping generation");
-                    break;
+            // UTF-8 boundary buffering: append delta to pendingUtf8, emit only complete characters.
+            // Multi-byte CJK characters can span two tokens; the delta from llama_detokenize may end
+            // with an incomplete UTF-8 sequence. bytesUtf8ToJstring would replace those bytes with
+            // 0xFFFD (�). By buffering incomplete trailing bytes, we hold them until the next token
+            // completes the character — mirroring MNN's extractCompleteUtf8 (mnnllmnative.cpp:746-765).
+            pendingUtf8 += delta;
+            std::string completeChars;
+            size_t ci = 0;
+            while (ci < pendingUtf8.size()) {
+                int charLen = utf8CharLength(static_cast<unsigned char>(pendingUtf8[ci]));
+                if (charLen == 0 || ci + static_cast<size_t>(charLen) > pendingUtf8.size()) {
+                    break;  // invalid byte or incomplete trailing bytes — wait for next token
                 }
-                if (!keepGoing) {
-                    break;
+                completeChars.append(pendingUtf8, ci, static_cast<size_t>(charLen));
+                ci += static_cast<size_t>(charLen);
+            }
+            if (ci > 0) {
+                pendingUtf8.erase(0, ci);
+            }
+            if (!completeChars.empty()) {
+                jstring jdelta = bytesUtf8ToJstring(env, completeChars);
+                if (jdelta == nullptr || env->ExceptionCheck()) {
+                    env->ExceptionClear();
+                } else {
+                    const jboolean keepGoing = env->CallBooleanMethod(callback, midOnToken, jdelta);
+                    env->DeleteLocalRef(jdelta);
+                    if (env->ExceptionCheck()) {
+                        env->ExceptionClear();
+                        LOGE("Java callback threw exception; stopping generation");
+                        break;
+                    }
+                    if (!keepGoing) {
+                        break;
+                    }
                 }
             }
         }
@@ -1663,19 +1797,52 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
         if (ret != 0) {
             if (ret == 2) {
                 LOGI("decode aborted");
+                generationDirty = true;
                 break;
             }
             if (ret == 1) {
                 // KV 满：已生成的内容仍然有效，正常收尾 break 而不是整段判失败。
                 LOGI("no KV slot during generation (context full) n_past=%d n_ctx=%d", n_past, n_ctx);
+                generationDirty = true;
                 break;
             }
             SET_ERR(session, "生成阶段解码失败 llama_decode ret=%d（已生成 %d token）", (int) ret, i);
+            session->kvDirty = true;
             llama_batch_free(gbatch);
             return JNI_FALSE;
         }
 
         n_past += 1;
+    }
+
+    // Flush any remaining buffered UTF-8 bytes (e.g. generation ended mid-character).
+    // These bytes may be incomplete — bytesUtf8ToJstring will replace them with 0xFFFD,
+    // which is the correct behavior for truncated output (better than silently dropping).
+    if (!pendingUtf8.empty()) {
+        jstring jdelta = bytesUtf8ToJstring(env, pendingUtf8);
+        if (jdelta != nullptr && !env->ExceptionCheck()) {
+            env->CallBooleanMethod(callback, midOnToken, jdelta);
+            env->DeleteLocalRef(jdelta);
+        } else {
+            env->ExceptionClear();
+        }
+        pendingUtf8.clear();
+    }
+
+    // ===================== Plan A: 生成结束后的保守尾处理 =====================
+    // 生成期间 KV = promptTokens + 本轮裸 assistant token。但下一轮 prompt 是把这段回复经聊天模板
+    // 重新渲染的（带 <|im_start|>assistant / <|im_end|> 包装 + 后续 user 轮），两者在生成文本结尾处
+    // 必然分叉。若直接续用 KV，下一轮"prefill 前缀"会和真实 prompt 错位 → 上下文错乱。
+    // 采用保守方案：丢弃生成尾（回归到干净的 promptTokens 前缀），把 kvPrefix 记为 promptTokens；
+    // 这样下一轮 prompt 必以 promptTokens 为严格前缀 → 正常复用。代价：每轮多存/算一点，但绝不分叉。
+    // 若本轮被取消/abort/解码失败（generationDirty）→ 不缓存，标记 kvDirty 让下轮全清。
+    if (mem != nullptr && !generationDirty) {
+        llama_memory_seq_rm(mem, 0, static_cast<int32_t>(promptTokens.size()), -1);
+        session->kvPrefix = promptTokens;
+        session->kvPast = static_cast<int32_t>(promptTokens.size());
+        session->kvDirty = false;
+    } else {
+        session->kvDirty = true;
     }
 
     llama_batch_free(gbatch);
@@ -1696,6 +1863,26 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGetLastError(JNIEnv * env, jclass
     auto * session = reinterpret_cast<LlamaSessionNative *>(sessionPtr);
     if (session->lastError.empty()) return nullptr;
     return bytesUtf8ToJstring(env, session->lastError);
+}
+
+// Plan A: 主动让 KV 前缀缓存失效并清空 KV（对应 Kotlin LlamaSession.resetContext()）。
+// 工具轮（applyStructuredChatTemplate 渲染的 prompt）与新模型/新会话切换时由 app 层调用，
+// 确保下一轮不会把错误的 KV 前缀当作上下文续写。
+extern "C" JNIEXPORT void JNICALL
+Java_com_ai_assistance_llama_LlamaNative_nativeResetKv(JNIEnv * env, jclass clazz, jlong sessionPtr) {
+    (void) env;
+    (void) clazz;
+    if (sessionPtr == 0) return;
+    auto * session = reinterpret_cast<LlamaSessionNative *>(sessionPtr);
+    if (session->ctx) {
+        llama_memory_t mem = llama_get_memory(session->ctx);
+        if (mem) {
+            llama_memory_clear(mem, true);
+        }
+    }
+    session->kvPrefix.clear();
+    session->kvPast = 0;
+    session->kvDirty = true;
 }
 
 #endif

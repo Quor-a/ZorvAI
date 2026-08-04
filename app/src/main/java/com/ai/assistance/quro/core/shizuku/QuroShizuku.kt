@@ -184,13 +184,26 @@ object QuroShizuku {
     // 授权 & 安装检测（保留原有逻辑）
     // ════════════════════════════════════════
 
+    // FIX P0-3: 旧代码 requestPermission 只 add 不 remove → 点 N 次挂 N 个 listener →
+    // 授权回来弹 N 个 Toast + Activity 泄漏。改为单例 listener：先 remove 旧的再 add 新的。
+    @Volatile
+    private var permissionListener: Shizuku.OnRequestPermissionResultListener? = null
+
     fun requestPermission(activity: android.app.Activity, requestCode: Int, listener: Shizuku.OnRequestPermissionResultListener?) {
         if (!isInstalled(activity)) {
             Log.w(TAG, "Shizuku 未安装，无法请求权限")
             return
         }
         try {
-            listener?.let { Shizuku.addRequestPermissionResultListener(it) }
+            // 先移除旧的 listener（防止累积泄漏）
+            permissionListener?.let { Shizuku.removeRequestPermissionResultListener(it) }
+            // 注册新 listener
+            if (listener != null) {
+                Shizuku.addRequestPermissionResultListener(listener)
+                permissionListener = listener
+            } else {
+                permissionListener = null
+            }
             Shizuku.requestPermission(requestCode)
         } catch (_: Exception) {
             Log.w(TAG, "Shizuku API 调用失败，请手动授权")
@@ -250,7 +263,11 @@ object QuroShizuku {
         if (isAidlAvailable) {
             return try {
                 val uid = runCatching { Shizuku.getUid() }.getOrDefault(-1)
-                val cmd = if (uid == 0) command else "su -c $command"
+                // FIX P2-2: 旧代码 "su -c $command" 经 QuroShellService.exec → sh -c "su -c ls -la /sdcard"
+                // → su -c 只吃第一个词 "ls"，"-la /sdcard" 变成 su 的多余参数。
+                // 用单引号包裹 command，使 su -c 拿到完整命令字符串。
+                // 反射路径（execAsRootViaReflection）用 arrayOf("su","-c",command) 不受此影响。
+                val cmd = if (uid == 0) command else "su -c '" + command.replace("'", "'\\''") + "'"
                 val result = shellService!!.exec(cmd)
                 Log.d(TAG, "[AIDL] execAsRoot OK: ${result.take(80)}")
                 result

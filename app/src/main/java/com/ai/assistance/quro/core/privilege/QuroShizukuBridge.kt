@@ -60,8 +60,16 @@ object QuroShizukuBridge {
         }
         val granted = runCatching { Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED }.getOrDefault(false)
         return if (granted) {
-            val aidlMark = if (QuroShizuku.isAidlAvailable) " [AIDL]" else " [反射]"
-            PrivilegeState(PrivilegeLevel.L2, true, "Shizuku 已就绪$aidlMark（特权命令通道可用，可执行系统级操作 / 冻结 / 静默安装）")
+            // FIX P2-1: 旧代码不判 UID，而实际执行网关 QuroShizuku.isReady 多一道 UID 校验
+            // （uid != 0 && uid != 2000 → false）→ UID 异常时权限页显示「可用」但所有命令返回「未就绪」。
+            // 此处补齐 UID 校验，与 isReady 对齐。
+            val uid = runCatching { Shizuku.getUid() }.getOrDefault(-1)
+            if (uid != 0 && uid != 2000) {
+                PrivilegeState(PrivilegeLevel.L2, false, "Shizuku UID 异常（uid=$uid），请在 Shizuku 中重新授权")
+            } else {
+                val aidlMark = if (QuroShizuku.isAidlAvailable) " [AIDL]" else " [反射]"
+                PrivilegeState(PrivilegeLevel.L2, true, "Shizuku 已就绪$aidlMark（特权命令通道可用，可执行系统级操作 / 冻结 / 静默安装）")
+            }
         } else {
             PrivilegeState(PrivilegeLevel.L2, false, "Shizuku 已连接但未授权（请在 Shizuku 应用中把本应用加入允许列表并点击授权）")
         }

@@ -210,6 +210,20 @@ class LlamaSession private constructor(
         }
     }
 
+    /**
+     * Plan A: 主动让本会话的 KV 前缀缓存失效并清空 KV，回到"无缓存"状态。
+     * 工具轮（applyStructuredChatTemplate 渲染的 prompt）与新模型/新会话切换时应调用，
+     * 避免下一轮把错误的 KV 前缀当作上下文续写。app 层接线由 team-lead 后续决定。
+     */
+    fun resetContext() {
+        val ptr: Long
+        synchronized(lock) {
+            if (released || sessionPtr == 0L) return
+            ptr = sessionPtr
+        }
+        LlamaNative.nativeResetKv(ptr)
+    }
+
     fun release() {
         val ptr: Long
         synchronized(lock) {

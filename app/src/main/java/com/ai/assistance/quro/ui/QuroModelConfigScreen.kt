@@ -61,6 +61,7 @@ import com.ai.assistance.quro.core.model.QuroCustomProvider
 import com.ai.assistance.quro.core.model.QuroCustomProviderRepository
 import com.ai.assistance.quro.core.model.QuroLocalModel
 import com.ai.assistance.quro.core.model.QuroLocalModelRepository
+import com.ai.assistance.quro.core.model.QuroGgufNaming
 import com.ai.assistance.quro.core.model.QuroLocalModelType
 import com.ai.assistance.quro.core.model.QuroSavedProfile
 import com.ai.assistance.quro.core.model.QuroSavedProfileRepository
@@ -239,52 +240,113 @@ fun QuroModelConfigForm(
             Spacer(Modifier.height(14.dp))
         }
 
-        // 温度（滑块）
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("温度", fontSize = 14.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.weight(1f))
-            Text("%.2f".format(cfg.temperature), fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
-        }
-        Slider(
-            value = cfg.temperature.coerceIn(0f, 1f),
-            onValueChange = { vm.update { copy(temperature = it) } },
-            valueRange = 0f..1f,
-            colors = SliderDefaults.colors(
-                thumbColor = Accent,
-                activeTrackColor = Accent,
-                inactiveTrackColor = Line2,
-            ),
-        )
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (isLocal) {
+            // ══════════════ 本地离线模型独立参数（与云端完全隔离） ══════════════
+            Text(
+                "以下参数仅影响本地离线模型，与云端模型设置互不影响。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            )
+
+            // 本地温度（滑块）
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("温度", fontSize = 14.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                Text("%.2f".format(cfg.localTemperature), fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
+            }
+            Slider(
+                value = cfg.localTemperature.coerceIn(0f, 1f),
+                onValueChange = { vm.update { copy(localTemperature = it) } },
+                valueRange = 0f..1f,
+                colors = SliderDefaults.colors(
+                    thumbColor = Accent,
+                    activeTrackColor = Accent,
+                    inactiveTrackColor = Line2,
+                ),
+            )
+            Spacer(Modifier.height(6.dp))
+
             QuroField(
-                "最大令牌", cfg.maxTokens.toString(),
-                KeyboardOptions(keyboardType = KeyboardType.Number), Modifier.weight(1f),
-            ) { vm.update { copy(maxTokens = it.toIntOrNull() ?: 4096) } }
-            StepperField(
-                "工具轮次", cfg.maxToolRounds,
-                { vm.update { copy(maxToolRounds = it) } }, Modifier.weight(1f),
+                "最大生成令牌", cfg.localMaxTokens.toString(),
+                KeyboardOptions(keyboardType = KeyboardType.Number),
+            ) { vm.update { copy(localMaxTokens = it.toIntOrNull() ?: 512) } }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "本地模型单次回复的最大 token 数。手机 CPU 每 token 几十~几百毫秒，建议 256–1024。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+
+            // 本地工具调用开关
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = cfg.localEnableTools, onCheckedChange = { vm.update { copy(localEnableTools = it) } })
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("启用工具调用", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "开启后本地模型可通过 function calling 调用工具。关闭则纯对话模式，节省上下文窗口。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "提示：线程数、上下文长度、GPU 层数、计算精度等参数请在「导入模型 → 运行参数」中设置。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            // ══════════════ 云端模型参数 ══════════════
+            // 温度（滑块）
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("温度", fontSize = 14.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                Text("%.2f".format(cfg.temperature), fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
+            }
+            Slider(
+                value = cfg.temperature.coerceIn(0f, 1f),
+                onValueChange = { vm.update { copy(temperature = it) } },
+                valueRange = 0f..1f,
+                colors = SliderDefaults.colors(
+                    thumbColor = Accent,
+                    activeTrackColor = Accent,
+                    inactiveTrackColor = Line2,
+                ),
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                QuroField(
+                    "最大令牌", cfg.maxTokens.toString(),
+                    KeyboardOptions(keyboardType = KeyboardType.Number), Modifier.weight(1f),
+                ) { vm.update { copy(maxTokens = it.toIntOrNull() ?: 4096) } }
+                StepperField(
+                    "工具轮次", cfg.maxToolRounds,
+                    { vm.update { copy(maxToolRounds = it) } }, Modifier.weight(1f),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "0 = 不限制（默认）：工具调用不设次数上限，ReAct 循环持续直到模型给出最终答复；填正数则按该值封顶。内置 200 轮安全天花板防失控。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            QuroField(
+                "上下文窗口", cfg.contextWindow.toString(),
+                KeyboardOptions(keyboardType = KeyboardType.Number),
+            ) { vm.update { copy(contextWindow = it.toIntOrNull() ?: 16000) } }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "输入 token 预算（0=不限制）。长对话自动丢弃最旧轮次、始终保留身份/人格/工具指引，避免窗口撑爆导致丢失上下文或工具调用失效。小米 MiMo 建议 16000–32000。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
             )
         }
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "0 = 不限制（默认）：工具调用不设次数上限，ReAct 循环持续直到模型给出最终答复；填正数则按该值封顶。内置 200 轮安全天花板防失控。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-        )
-        Spacer(Modifier.height(8.dp))
-        QuroField(
-            "上下文窗口", cfg.contextWindow.toString(),
-            KeyboardOptions(keyboardType = KeyboardType.Number),
-        ) { vm.update { copy(contextWindow = it.toIntOrNull() ?: 16000) } }
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "输入 token 预算（0=不限制）。长对话自动丢弃最旧轮次、始终保留身份/人格/工具指引，避免窗口撑爆导致丢失上下文或工具调用失效。小米 MiMo 建议 16000–32000。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-        )
 
         Spacer(Modifier.height(18.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -513,10 +575,15 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
                         val okCopy = copyDocumentTree(ctx, uri, dstDir)
                         if (okCopy) {
                             val hasMnnConfig = File(dstDir, "llm_config.json").exists()
-                            val gguf = dstDir.walkTopDown()
-                                .filter { f -> f.isFile && f.name.endsWith(".gguf", ignoreCase = true) }
-                                .map { it.name.removeSuffix(".gguf").removeSuffix(".GGUF") }
-                                .toList()
+                            // 🛡️ 分片归一化：同一组分片只登记一个基名，绝不把 N 个分片当 N 个模型。
+                            // 否则 load() 取 modelNames.first() 时，ext4 哈希序下选片不确定，
+                            // 可能加载到非首分片 → llama.cpp 加载失败 → 聊天被门禁拦（与本次 Bug 同症状）。
+                            val gguf = QuroGgufNaming.collapseShards(
+                                dstDir.walkTopDown()
+                                    .filter { f -> f.isFile && f.name.endsWith(".gguf", ignoreCase = true) }
+                                    .map { QuroGgufNaming.stem(it.name) }
+                                    .toList()
+                            )
                             val type = if (hasMnnConfig) QuroLocalModelType.MNN else QuroLocalModelType.LLAMA_CPP
                             val modelNames = if (hasMnnConfig) listOf(treeName) else gguf
                             repo.upsert(
@@ -540,7 +607,7 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
         }
     }
 
-    // 参考 PocketPal AI：直接选单个 .gguf 文件（最简单直观），复制到私有目录按绝对路径加载。
+    // 直接选单个 .gguf 文件（最简单直观），复制到私有目录按绝对路径加载。
     val ggufPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { fileUri: Uri? ->
         fileUri?.let { uri ->
             importing = "正在导入模型，请稍候…"
@@ -669,6 +736,15 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
                                                     loadingId = null
                                                     loadTick++
                                                     if (res is LocalModelLoader.LoadResult.Failure) errorMsg = res.message
+                                                    // 加载成功时同时选为当前模型，避免
+                                                    // cfg.localModelPath 仍指向旧模型导致
+                                                    // routeLocal 找到的模型与 holder 不匹配。
+                                                    if (res is LocalModelLoader.LoadResult.Success) {
+                                                        vm.update {
+                                                            copy(provider = m.type.name, localModelPath = m.path,
+                                                                model = m.modelNames.firstOrNull() ?: m.name, customProviderName = "")
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }

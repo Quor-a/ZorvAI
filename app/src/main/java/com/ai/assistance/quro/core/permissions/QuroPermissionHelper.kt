@@ -34,7 +34,7 @@ data class QuroPermissionItem(
 
 object QuroPermissionHelper {
 
-    private const val SHIZUKU_PKG = "moe.shizuku.privileged.api"
+    private const val SHIZUKU_PKG = "moe.shizuku.manager"
 
     /** 探测 su 二进制常见路径（不真正请求 root，避免弹窗/风险）。 */
     private val ROOT_BINARIES = listOf(

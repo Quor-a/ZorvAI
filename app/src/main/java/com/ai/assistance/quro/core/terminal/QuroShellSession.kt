@@ -144,6 +144,13 @@ class QuroShellSession private constructor(
             appendLine(promptPrefix())
             return
         }
+        // clear/cls 拦截：clear 靠 ANSI ESC[2J，而 drain() 的 stripAnsi 会把 ANSI 转义全剥掉 →
+        // 发给 shell 也不可见。直接清空缓冲区并补提示符，等价于清屏，不经过 shell。
+        if (trimmed == "clear" || trimmed == "cls") {
+            clear()
+            appendLine(promptPrefix())
+            return
+        }
         appendLine(promptPrefix() + trimmed)
         busy = true
         launch {

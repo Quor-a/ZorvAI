@@ -93,12 +93,6 @@ target_compile_options(MNNWrapper PRIVATE -fno-emulated-tls)
 target_compile_options(MNN PRIVATE -fno-emulated-tls)
 if(TARGET llm)
     target_compile_options(llm PRIVATE -fno-emulated-tls)
-    if(EXISTS "${MNN_SOURCE_DIR}/transformers/llm/engine/src/minja/chat_template.hpp")
-        target_compile_options(MNNWrapper PRIVATE -DLLM_USE_MINJA)
-        target_include_directories(MNNWrapper PRIVATE
-            ${MNN_SOURCE_DIR}/transformers/llm/engine/src
-        )
-    endif()
 endif()
 
 # 链接 MNN 库

@@ -8,7 +8,7 @@ import org.junit.Test
 
 /**
  * JVM 单元测试：验证 CMS v2 内置插件（种子模块）与 Runtime Host 路由。
- * - 13 个内置模块齐全，且 10 个被重写为真实原生能力（含自动化浏览器）。
+ * - 16 个内置模块齐全，且 10 个被重写为真实原生能力（含自动化浏览器）。
  * - 每个能力的 requiresPermissions 都能在所属模块中找到声明（权限配对正确）。
  * - runOn 宿主推导（APP/TERMINAL）与 effectiveFor 模板切换正确。
  * - CmsHostRouter 显式 / auto / 双宿主解析正确（Context 可为 null，便于 JVM 单测）。
@@ -21,9 +21,9 @@ class QuroCmsPluginsTest {
 
     @Test
     fun builtInModules_has13Modules() {
-        assertEquals("内置模块应为 13 个", 13, mods.size)
+        assertEquals("内置模块应为 16 个", 16, mods.size)
         // id 唯一
-        assertEquals("模块 id 应唯一", 13, mods.map { it.id }.toSet().size)
+        assertEquals("模块 id 应唯一", 16, mods.map { it.id }.toSet().size)
         mods.forEach { m ->
             assertTrue("模块 ${m.id} 应有名称", m.name.isNotBlank())
             assertTrue("模块 ${m.id} 应至少含 1 项能力", m.capabilities.isNotEmpty())

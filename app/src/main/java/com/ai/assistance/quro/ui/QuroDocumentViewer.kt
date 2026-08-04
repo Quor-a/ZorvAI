@@ -255,7 +255,7 @@ fun extractOfficeText(file: File): String {
                         shared.add(Regex("<t[^>]*>(.*?)</t>", RegexOption.DOT_MATCHES_ALL).findAll(si.value).map { unesc(it.groupValues[1]) }.joinToString(""))
                     }
                 }
-                Regex("<c [^>]*?/>|<c [^>]*?>*?</c>", RegexOption.DOT_MATCHES_ALL).findAll(parts["xl/worksheets/sheet1.xml"].orEmpty())
+                Regex("<c [^>]*?/>|<c [^>]*?>.*?</c>", RegexOption.DOT_MATCHES_ALL).findAll(parts["xl/worksheets/sheet1.xml"].orEmpty())
                     .map { c ->
                         val ref = Regex("r=\"([A-Z]+\\d+)\"").find(c.value)?.groupValues?.get(1) ?: return@map ""
                         val (col, row) = colRow(ref)

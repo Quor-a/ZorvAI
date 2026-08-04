@@ -71,17 +71,22 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
     val scope = rememberCoroutineScope()
     val mgr = remember { QuroPrivilegeManager(ctx) }
 
-    var states by remember { mutableStateOf(mgr.probe()) }
+    // FIX P0-2: 旧代码 mgr.probe() 在组合期同步调用 → checkRoot() 阻塞主线程最多 5s → ANR。
+    // 改为初始空 map + LaunchedEffect 异步探测。
+    var states by remember { mutableStateOf<Map<PrivilegeLevel, PrivilegeState>>(emptyMap()) }
     var stdItems by remember { mutableStateOf(stdPerms(ctx)) }
     var pending by remember { mutableStateOf<Pair<PrivilegeLevel, String>?>(null) }
     var deferred = remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
     var showAudit by remember { mutableStateOf(false) }
 
+    // 首次进入：异步探测（checkRoot 在 IO 线程跑，不阻塞 UI）
+    LaunchedEffect(Unit) { states = mgr.probeAsync() }
+
     QuroPolicyStore.getPriv(ctx)
     val privPolicy by QuroPolicyStore.privFlow.collectAsState()
 
     fun refresh() {
-        states = mgr.probe()
+        scope.launch { states = mgr.probeAsync() }
         stdItems = stdPerms(ctx)
     }
 
@@ -385,6 +390,9 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
             },
             confirmButton = {
                 TextButton(onClick = {
+                    // FIX: 必须先 complete(true)，否则 requestElevation → confirm() → deferred.await() 永久挂起
+                    // （默认 ASK 策略下走这条路径，每点一次泄漏一个协程）。
+                    deferred.value?.complete(true)
                     // 用户确认后引导开启（L1/L2/L3 跳转系统界面；L4 仅提示）
                     mgr.launchIntentFor(level)?.let { ctx.startActivity(it) }
                     if (level == PrivilegeLevel.L4) {

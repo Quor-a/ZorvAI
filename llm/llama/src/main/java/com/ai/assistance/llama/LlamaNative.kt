@@ -28,6 +28,8 @@ object LlamaNative {
 
     @JvmStatic external fun nativeCancel(sessionPtr: Long)
 
+    @JvmStatic external fun nativeResetKv(sessionPtr: Long)
+
     @JvmStatic external fun nativeCountTokens(sessionPtr: Long, text: String): Int
 
     @JvmStatic
