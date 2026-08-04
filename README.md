@@ -41,7 +41,7 @@
 > - 📖 ACI 开发者手册：[docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md)
 > - 🐛 问题反馈：[github.com/Quor-a/ZorvAI/issues](https://github.com/Quor-a/ZorvAI/issues)
 >
-> 关键词：**Zorv AI 开源 / 安卓 AI 助手 开源 / Android AI agent open source / 本地 AI 智能体 / 设备端 AI Agent / Kotlin Compose LLM 助手 / ACI 跨应用调用**
+> 关键词：**Zorv AI 开源 / 安卓 AI 助手 开源 / Android AI agent open source / 设备端 AI Agent / 手机端 AI 智能体 / Kotlin Compose LLM 助手 / ACI 跨应用调用**
 
 ---
 
@@ -520,7 +520,7 @@ cd QuroAI
 
 直接从 Release 页面下载最新 APK：
 
-- **v1.0.16（debug，含离线 MNN/llama.cpp 引擎，最新）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.16/app-full-debug.apk)（随 v1.0.16 Release 上传；约 350MB+，构建完成后可用）
+- **v1.0.16（debug，含离线 MNN/llama.cpp 引擎，最新）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.16/app-full-debug.apk)（约 350MB+，含离线引擎，已随 v1.0.16 Release 上传）
 - **v1.0.15（debug，主程序，最新）**：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
 - **v1.0.14（debug，主程序）**：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
 - **v1.0.14（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 独立仓，最新）**：[ZorvBrowser-aci-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.14/ZorvBrowser-aci-debug-v1.0.14.apk)
