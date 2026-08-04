@@ -57,3 +57,6 @@ nul
 # Dev scratch / temp
 _novaterm_temp/
 measure_sysprompt.py
+
+# Local gradle cache mirror (never commit)
+gradle_cache/

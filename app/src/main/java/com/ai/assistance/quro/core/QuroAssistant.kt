@@ -174,13 +174,27 @@ class QuroAssistant(
                             llmMessages,
                             if (stream) emitStreamToken else null,
                             if (effEnableTools && isLocal) {
-                                // 离线模型专用精简工具集（离线卡死修复核心）：
-                                // 只暴露「记忆库」工具（与云端共享），人格卡/用户资料走系统提示词注入（不注册为工具）；
-                                // 云端其余工具（含 skill__* 技能工具）一律不塞给 1.2B 本地模型，
-                                // 否则工具数过多 → 一直"正在处理提示词"卡死 / 调一次工具就乱码。
-                                val offlineSpecs = if (autoSaveMemory)
-                                    registry.fullSpecs().filter { it.name.startsWith("memory_") }
-                                else emptyList()
+                                // 离线模型工具集：保留设备/系统工具（应用已获权限，离线也应可用——
+                                // 手电筒、振动、电量、WiFi、网络、传感器、剪贴板、应用、通知、蓝牙、
+                                // 时间、设备信息、计算、TTS、闹钟），并仅在 autoSaveMemory 开启时并入记忆库工具。
+                                // 此前一刀切只留 memory_*，导致「打开手电筒」等离线设备指令完全无法调用
+                                // （用户已确认手机有闪光灯且应用已获 CAMERA 权限）。
+                                // 仍排除 skill__* 技能工具与重型云端专属工具，避免 1.2B 模型工具过多卡死/乱码。
+                                val deviceToolNames = setOf(
+                                    "toggle_flashlight", "vibrate",
+                                    "get_battery", "get_wifi_info", "get_network_info", "get_sensors",
+                                    "get_clipboard", "set_clipboard",
+                                    "list_installed_apps", "launch_app", "search_and_launch_app",
+                                    "get_active_notifications", "get_bluetooth_status",
+                                    "get_current_time", "get_device_info", "calculate",
+                                    "speak", "stop_speak", "set_alarm"
+                                )
+                                val offlineSpecs = buildList {
+                                    addAll(registry.coreSpecs().filter { it.name in deviceToolNames })
+                                    if (autoSaveMemory) {
+                                        addAll(registry.fullSpecs().filter { it.name.startsWith("memory_") })
+                                    }
+                                }
                                 if (offlineSpecs.isNotEmpty()) QuroLocalToolsCodec.encodeTools(offlineSpecs) else null
                             } else if (effEnableTools && effectiveSpecs.isNotEmpty()) {
                                 QuroLocalToolsCodec.encodeTools(effectiveSpecs)
