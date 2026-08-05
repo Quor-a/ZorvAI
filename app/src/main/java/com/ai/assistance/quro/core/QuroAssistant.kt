@@ -179,16 +179,14 @@ class QuroAssistant(
                         // 「正在算」和「已经死了」（观感就是"一直进行中却不回复"）。这里先推一条占位文案，
                         // 首个真 token 到达时会被 emitStreamToken 的累计文本整体覆盖，不会残留。
                         if (stream) {
-                            val resident = runCatching {
-                                LocalModelLoaders.get().getState() is LocalModelLoader.State.Loaded
-                            }.getOrDefault(false)
-                            // 常驻会话复用时不再弹"正在处理上下文"——prefill 进度由 generateLlama
-                            // 的 onProgress 回调实时推送（"⏳ 正在处理提示词… X%"），用户已能看到
-                            // 实时进度，无需再弹一条像在重新加载的占位文案。
-                            // 仅首次加载（非常驻）时提示"正在加载本地模型"。
-                            if (!resident) {
-                                emitStreamToken("⏳ 正在加载本地模型并处理上下文…")
-                            }
+                            // 🔧 v454 修复「等待气泡做不出来」：此前这里离线一上来就 emitStreamToken
+                            // 建了一条「⏳ 正在加载本地模型…」占位气泡 → 聚合时 hasAssistantMsg=true →
+                            // ChatScreen 的 WaitingDots（等等小组件）那条 `if (!hasAssistantMsg)` 永远进不去，
+                            // 跳动圆点永远不显示。现在不再预先建占位气泡：等待期由 ChatScreen 的
+                            // WaitingDots 独立呈现（内容区 loading，头像/名字不变）；首个真 token 到达时
+                            // emitStreamToken 自然建气泡并覆盖。resident 会话的 prefill 进度（"正在处理提示词… X%"）
+                            // 仍由 generateLlama 的 onProgress 实时推送，不冲突。
+                            Unit
                         }
                         routeLocal(
                             context,
@@ -222,6 +220,7 @@ class QuroAssistant(
                                 QuroLocalToolsCodec.encodeTools(effectiveSpecs)
                             } else null,
                             if (stream) emitThinkingToken else null,
+                            isCanceled = { coroutineContext[Job]?.isActive != true },
                         )
                     } else {
                         val streaming = stream
@@ -244,7 +243,15 @@ class QuroAssistant(
                 }.getOrElse { e ->
                     // 🔑 关键：取消信号（CancellationException）必须原样向上抛，
                     // 否则会被包成「请求失败」假错误，导致「停止生成」后仍落一条报错气泡。
-                    if (e is CancellationException) throw e
+                    if (e is CancellationException) {
+                        // 🔧 v454：打断/切走导致生成中止时，清理可能残留的「⏳ 正在处理提示词… X%」
+                        // 占位气泡（其 content 仍是进度文案），避免气泡卡在半截进度上。
+                        // 置空后聚合阶段会因「无可见内容」自动跳过该占位，只留 ViewModel 追加的「⏹ 已停止生成」。
+                        streamPlaceholderId?.let { sid ->
+                            runCatching { store.update(sid) { it.copy(content = "", reasoning = null) } }
+                        }
+                        throw e
+                    }
                     // 🔧 #1113-3：错误必须自报家门。此前文案只有「请求失败：xxx」，
                     // 分不清是本地推理挂了还是云端连不上 —— 用户看到 SocketTimeout
                     // 「after 30000ms」时，我方连"到底走的哪条路"都判断不了，白烧几轮。
@@ -478,6 +485,7 @@ class QuroAssistant(
         onToken: ((String) -> Unit)? = null,
         toolSpecsJson: String? = null,
         onThinking: ((String) -> Unit)? = null,
+        isCanceled: () -> Boolean = { false },
     ): QuroLlmResult {
         val repo = QuroLocalModelRepository(context.applicationContext)
         val all = repo.loadAll()
@@ -503,6 +511,7 @@ class QuroAssistant(
             toolSpecsJson,
             onToken,
             onThinking,
+            isCanceled,
         )
     }
 

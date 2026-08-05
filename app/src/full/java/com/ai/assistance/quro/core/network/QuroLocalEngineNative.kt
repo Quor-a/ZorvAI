@@ -12,6 +12,7 @@ import com.ai.assistance.quro.core.model.QuroGgufNaming
 import com.ai.assistance.quro.core.model.QuroLocalModel
 import com.ai.assistance.quro.core.model.QuroLocalModelType
 import com.ai.assistance.quro.util.QuroDiag
+import kotlinx.coroutines.CancellationException
 import java.io.File
 
 /**
@@ -219,6 +220,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         toolSpecsJson: String?,
         onToken: ((String) -> Unit)?,
         onThinking: ((String) -> Unit)?,
+        isCanceled: () -> Boolean,
     ): QuroLlmResult {
         // 🛡️ #1114 聊天门禁：本地模型必须先经「模型配置」显式加载进内存（常驻会话），
         // 才能对话。否则会退化为「每条消息重建 GGUF / MNN 会话」——手机上要几十秒到数分钟，
@@ -259,9 +261,9 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 "ctxWindow=$contextWindow | stream=${onToken != null}"
         )
         val result = when (model.type) {
-            QuroLocalModelType.MNN -> runMnn(model, messages, maxTokens, onToken, toolSpecsJson, onThinking)
+            QuroLocalModelType.MNN -> runMnn(model, messages, maxTokens, onToken, toolSpecsJson, onThinking, isCanceled)
             QuroLocalModelType.LLAMA_CPP ->
-                runLlama(model, modelName, messages, temperature, maxTokens, contextWindow, onToken, toolSpecsJson, onThinking)
+                runLlama(model, modelName, messages, temperature, maxTokens, contextWindow, onToken, toolSpecsJson, onThinking, isCanceled)
         }
         val ms = (System.nanoTime() - t0) / 1_000_000
         when (result) {
@@ -293,6 +295,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         onToken: ((String) -> Unit)?,
         toolSpecsJson: String? = null,
         onThinking: ((String) -> Unit)? = null,
+        isCanceled: () -> Boolean = { false },
     ): QuroLlmResult {
         // 优先复用常驻会话
         val held = (LocalModelLoaders.get() as? LocalModelSessionHolder)?.takeIf { it.isLoaded(model) }?.borrowMnn()
@@ -301,7 +304,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
             // 串行化常驻会话生成；结束时归还计数，unload 才能安全 free。
             genLock.lock()
             try {
-                return generateMnn(held, model, messages, maxTokens, onToken, toolSpecsJson, onThinking)
+                return generateMnn(held, model, messages, maxTokens, onToken, toolSpecsJson, onThinking, isCanceled)
             } finally {
                 genLock.unlock()
                 (LocalModelLoaders.get() as? LocalModelSessionHolder)?.returnMnn()
@@ -333,7 +336,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         }
 
         return try {
-            generateMnn(session, model, messages, maxTokens, onToken, toolSpecsJson, onThinking)
+            generateMnn(session, model, messages, maxTokens, onToken, toolSpecsJson, onThinking, isCanceled)
         } finally {
             // 不跨 run 缓存会话：每次重建以保证多轮历史正确性（KV-Cache 不会被旧上下文污染）。
             runCatching { session.release() }
@@ -348,6 +351,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         onToken: ((String) -> Unit)?,
         toolSpecsJson: String? = null,
         onThinking: ((String) -> Unit)? = null,
+        isCanceled: () -> Boolean = { false },
     ): QuroLlmResult {
         return try {
             val t0 = System.nanoTime()
@@ -381,6 +385,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     val visible = stripper.accept(token)
                     onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
                     onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
+                    if (isCanceled()) return@generateStreamStructured false
                     true
                 }
                 if (!structuredOk || stripper.rawText().isEmpty()) {
@@ -400,6 +405,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                         val visible = stripper.accept(token)
                         onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
                         onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
+                        if (isCanceled()) return@generateStream false
                         true
                     }
                     fallbackOk
@@ -415,6 +421,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     val visible = stripper.accept(token)
                     onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
                     onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
+                    if (isCanceled()) return@generateStream false
                     true
                 }
             }
@@ -423,6 +430,9 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 "LocalEngine",
                 "MNN generate | ${ms}ms | firstToken=${firstTokenMs ?: -1}ms | tokens=$tokenCount | ok=$ok | chars=${stripper.rawText().length} | structured=${toolSpecsJson != null}"
             )
+            // 🔧 v454：生成中途被取消（用户打断/切走对话）时，把原生"aborted"当成干净停止，
+            // 抛 CancellationException 让上层走「⏹ 已停止生成」，而非「⚠️ MNN 推理异常」错误气泡。
+            if (isCanceled()) throw CancellationException("local generation canceled")
             if (stripper.rawText().isEmpty()) {
                 // 🛡️ B-1：不再用「未产生任何输出（ok=false）」糊弄用户。
                 // 原生层失败时会把具体原因写进 last-error 通道（模板渲染为空 / 分词为 0 /
@@ -532,6 +542,11 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 QuroLlmResult.Text(finalText, reasoning = reasoning)
             }
         } catch (e: Throwable) {
+            // 🔧 v454：取消信号必须原样向上抛，否则会被包成「MNN 推理异常」假错误气泡。
+            if (e is CancellationException) throw e
+            // 🔧 v454：协程已被取消（用户打断/切走对话）时，原生 JNI 中断抛出的 "aborted"
+            // 视为干净停止而非错误：转抛 CancellationException 让上层走「⏹ 已停止生成」。
+            if (isCanceled()) throw CancellationException("local generation canceled", e)
             QuroDiag.log("LocalEngine", "✗ MNN 推理异常 | ${e.message}\n${e.stackTraceToString()}")
             QuroLlmResult.Error("MNN 推理异常：${e.message}")
         }
@@ -638,6 +653,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         onToken: ((String) -> Unit)?,
         toolSpecsJson: String? = null,
         onThinking: ((String) -> Unit)? = null,
+        isCanceled: () -> Boolean = { false },
     ): QuroLlmResult {
         // 优先复用常驻会话
         val held = (LocalModelLoaders.get() as? LocalModelSessionHolder)?.takeIf { it.isLoaded(model) }?.borrowLlama()
@@ -647,7 +663,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
             // 结束时归还计数，unload 才能安全 free。
             genLock.lock()
             try {
-                return generateLlama(held, model, modelName, messages, temperature, maxTokens, onToken, toolSpecsJson, onThinking)
+                return generateLlama(held, model, modelName, messages, temperature, maxTokens, onToken, toolSpecsJson, onThinking, isCanceled)
             } finally {
                 genLock.unlock()
                 (LocalModelLoaders.get() as? LocalModelSessionHolder)?.returnLlama()
@@ -715,7 +731,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         }
 
         return try {
-            generateLlama(session, model, modelName, messages, temperature, maxTokens, onToken, toolSpecsJson, onThinking)
+            generateLlama(session, model, modelName, messages, temperature, maxTokens, onToken, toolSpecsJson, onThinking, isCanceled)
         } finally {
             runCatching { session.release() }
             QuroDiag.log("LocalEngine", "✓ llama session released")
@@ -732,6 +748,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
         onToken: ((String) -> Unit)?,
         toolSpecsJson: String? = null,
         onThinking: ((String) -> Unit)? = null,
+        isCanceled: () -> Boolean = { false },
     ): QuroLlmResult {
         return try {
             // 🔧 回归 #3：每轮生成前先把 KV / 上下文前缀缓存清掉，确保本轮是**纯无状态**生成。
@@ -854,8 +871,16 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 val visible = stripper.accept(token)
                 onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
                 onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
+                // 🔧 v454：取消信号到达 → 终止生成（与 MNN 对齐），避免原生 aborted 被包成错误气泡。
+                if (isCanceled()) {
+                    QuroDiag.log("LocalEngine", "· llama 取消信号到达 | tokens=$tokenCount | 终止生成")
+                    return@generateStream false
+                }
                 true
             }
+            // 🔧 v454：生成中途被取消（用户打断/切走对话）时，把原生 aborted 当干净停止，
+            // 抛 CancellationException 让上层走「⏹ 已停止生成」，而非「⚠️ llama.cpp 推理异常」错误气泡。
+            if (isCanceled()) throw CancellationException("local generation canceled")
             val ms = (System.nanoTime() - t0) / 1_000_000
             QuroDiag.log(
                 "LocalEngine",
@@ -932,6 +957,10 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 QuroLlmResult.Text(finalText, reasoning = reasoning)
             }
         } catch (e: Throwable) {
+            if (e is CancellationException) throw e
+            // 🔧 v454：协程已被取消（用户打断/切走对话）时，原生 JNI 中断抛出的 "aborted"
+            // 视为干净停止而非错误：转抛 CancellationException 让上层走「⏹ 已停止生成」。
+            if (isCanceled()) throw CancellationException("local generation canceled", e)
             QuroDiag.log("LocalEngine", "✗ llama 推理异常 | ${e.message}\n${e.stackTraceToString()}")
             QuroLlmResult.Error("llama.cpp 推理异常：${e.message}")
         }
@@ -1161,14 +1190,16 @@ class QuroLocalEngineNative : QuroLocalEngine {
             }
             // 思考模型：显式打开 enable_thinking。以前这个开关写好了却从来没人调用，
             // 导致 Qwen3 一类模型在 MNN 上永远拿不到思考段（"有思考但是不能用"）。
-            if (caps.supportsThinkingToggle) {
-                val applied = runCatching { session.setThinkingMode(true) }.getOrDefault(false)
-                QuroDiag.log(
-                    "LocalEngine",
-                    if (applied) "🧠 MNN thinking 模式已开启（模板支持 enable_thinking）"
-                    else "⚠ MNN thinking 模式开启失败（enable_thinking 注入被原生层拒绝），按普通模型继续"
-                )
-            }
+            // 🔧 v454 修复「思考没修复」：不再用 `caps.supportsThinkingToggle` 单一探针门控——
+            // 探针只认模板里的字面 "enable_thinking"，QwQ / DeepSeek-R1 等靠 <think> 块触发的模型会被漏判，
+            // 思考段永远打不开。改为无条件尝试：MNN 原生层只对真正支持 thinking 的模板返回 true（安全 no-op），
+            // 非思考模型 setThinkingMode 返回 false，按普通模型继续，不会污染输出。
+            val applied = runCatching { session.setThinkingMode(true) }.getOrDefault(false)
+            QuroDiag.log(
+                "LocalEngine",
+                if (applied) "🧠 MNN thinking 模式已开启 | caps.thinking=${caps.supportsThinking}"
+                else "· MNN 该模型不支持 thinking（setThinkingMode 返回 false），按普通模型继续 | caps.thinking=${caps.supportsThinking}"
+            )
             return session
         }
 

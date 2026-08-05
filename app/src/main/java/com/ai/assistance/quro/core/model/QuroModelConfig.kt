@@ -31,7 +31,7 @@ data class QuroModelConfig(
     // 用户反馈"设置应该和云模型分开避免影响云模型"：此前离线和云端共用 temperature / maxTokens /
     // enableTools，改了离线就把云端也带歪。现拆出独立字段，本地路径（routeLocal）优先读这些。
     val localTemperature: Float = 0.7f,
-    val localMaxTokens: Int = 512,         // 本地生成 token 上限默认 512（手机 CPU 每 token 几十~几百 ms，4096 会跑好几分钟）
+    val localMaxTokens: Int = 2048,        // 本地生成 token 上限默认 2048（原 512 太短，思考模型连思考都不够 → 回复被腰斩；引擎仍以 2048 为硬上限，不会无限跑）
     val localEnableTools: Boolean = true,  // 离线工具调用默认开启——但离线路径只下发 memory_* 工具（见 QuroAssistant.routeLocal），
                                             // 不会把 60+ 技能工具塞给 1.2B 模型（那是之前卡死/乱码的根因）。如需彻底关闭可在此关。
 )
