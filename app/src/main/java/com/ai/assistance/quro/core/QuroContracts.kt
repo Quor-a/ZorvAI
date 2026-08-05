@@ -12,6 +12,10 @@ data class QuroChatMessage(
     val toolCalls: List<QuroToolCall>? = null, // 仅 assistant 且含工具调用时
     val toolCallId: String? = null,            // 仅 role="tool" 时
     val attachments: List<QuroAttachment>? = null, // 仅 user 且含附件时（图片送视觉模型）
+    /** 仅 role="tool" 时携带工具名（function name）。标准 OpenAI 格式里工具名写在前面 assistant
+     * 的 tool_calls[].function.name 上、tool 消息可省略；但 Kimi K3 等严格实现要求 tool 消息
+     * 自身带 name（或靠顺序对齐），否则 400。这里在 toLlmMessages 收尾按 tool_call_id 反查补全。 */
+    val toolName: String? = null,
 )
 
 /** 一次工具调用（LLM 产生；也可由引擎回填 [result] 供 UI 自包含展示）。 */
@@ -44,6 +48,7 @@ sealed interface QuroLlmResult {
     data class ToolCalls(
         val calls: List<QuroToolCall>,
         val reasoning: String? = null,
+        val content: String? = null,
     ) : QuroLlmResult
     data class Error(val message: String) : QuroLlmResult
 }

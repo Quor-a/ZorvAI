@@ -32,7 +32,7 @@
 > **🔌 受控端浏览器（ZorvAI 浏览器）已独立开源 · GitHub：[github.com/Quor-a/ZorvBrowser](https://github.com/Quor-a/ZorvBrowser) ｜ Gitee：[gitee.com/ZorvAI/ZorvBrowser](https://gitee.com/ZorvAI/ZorvBrowser)**（独立仓库，含 v1.0.12 源码与 APK）
 >
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
-> - 🔗 主程序 APK（v1.0.16，含离线引擎，最新）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.16/app-full-debug.apk)
+> - 🔗 主程序 APK（v1.0.20，含离线引擎，最新）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.20/app-full-debug.apk)
 > - 🔗 主程序 APK（v1.0.15）：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
 > - 🔗 主程序 APK（v1.0.14）：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
 > - 🔗 主程序 APK（v1.0.12）：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
@@ -520,8 +520,9 @@ cd QuroAI
 
 直接从 Release 页面下载最新 APK：
 
-- **v1.0.16（debug，含离线 MNN/llama.cpp 引擎，最新）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.16/app-full-debug.apk)（约 350MB+，含离线引擎，已随 v1.0.16 Release 上传）
-- **v1.0.15（debug，主程序，最新）**：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
+- **v1.0.20（debug，含离线 MNN/llama.cpp 引擎，最新）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.20/app-full-debug.apk)（约 356MB，含离线引擎，已随 v1.0.20 Release 上传）
+- **v1.0.16（debug，含离线 MNN/llama.cpp 引擎）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.16/app-full-debug.apk)（约 350MB+，含离线引擎，已随 v1.0.16 Release 上传）
+- **v1.0.15（debug，主程序）**：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
 - **v1.0.14（debug，主程序）**：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
 - **v1.0.14（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 独立仓，最新）**：[ZorvBrowser-aci-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.14/ZorvBrowser-aci-debug-v1.0.14.apk)
 - **v1.0.13（debug，主程序）**：[ZorvAI-debug-v1.0.13.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.13/ZorvAI-debug-v1.0.13.apk)
@@ -557,6 +558,7 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v1.0.20 | 2026-08-06 | **云端工具调用全面修复 + 回复自然化 + 品牌提示词重写**：① **云端端点兼容**（对齐 operit `EndpointCompleter`：裸 host→`/v1/chat/completions`、以 `/v1` 结尾→`/chat/completions`、末尾 `#` 可关闭自动补全，修复裸 host 如 `https://api.openai.com` 被拼成错误 URL 导致静默不回复）；② **Kimi K3 工具协议修复**（`role:"tool"` 消息显式写 `name` 字段，解决 HTTP 400 `tool messages need a resolvable tool name`）；③ **工具配对孤儿清理**（`toLlmMessages` 按轮数/ token 预算裁剪后做 call/result 成对校验，剔除残缺配对，修复长对话或设「保留轮数」后 tool_calls 与结果被切断导致的 400 / 工具卡消失）；④ **工具轮正文保留**（`QuroLlmResult.ToolCalls` 加 `content` 字段，模型"边说边调工具"的前言不再被丢弃，恢复「思考→回复→调用工具→再思考→调用工具→回复」自由组合）；⑤ **回复约束软化**（移除"必须调用工具 / 绝对不能只回复文字"等硬指令，是否调工具、调哪个、调几次交由模型自行判断）；⑥ **深度思考开关真正生效**（透传进引擎，开启注入深度思考指令、关闭注入轻量指令，双向有效，非推理模型也会被真正引导多想）；⑦ **品牌提示词重写**（`QuroPlatformManifest.SYSTEM` 按「身份与人格（依据人格卡）/ 运行环境 / 工具执行环境 / 能力环境 / 技术构架」结构重写为陈述式，去除强制思考/强制调工具的硬写）；版本号 versionCode 455→456 / versionName 1.0.19→1.0.20 |
 | v1.0.16 | 2026-08-04 | **对话框全面修复 + 单条消息删除 + 内置 63 技能**：① 对话框 BUG 修复——**B1** 离线/工具调用场景下流式 loading 占位气泡残留（生成结束未清除占位，已先 `store.remove` 再落终态）；**B2** 跨会话卡片串台（后台会话延迟卡片误挂当前可见会话，已按「后台且非可见则丢弃」拦截）；**B3** 流式内容兜底（`content` 为空时回落 `streamedContent`，不再显示「(已思考完毕)」空壳）；**B5** 工具结果状态启发式误判（仅扫描结果前 200 字，避免正文中含「失败/error」被误标为错误）+ 工具调用**耗时展示**（`QuroToolCall→ToolCallUi` 全链路 `durationMs`，气泡内显示 `ms`/`s`）；**B6** 列表滚动越界（`scrollToItem` 改用 `lastIndex`）；**B8** 代码预览 WebView 关闭 JavaScript（`settings.javaScriptEnabled=false`，防止不可信 AI 生成 HTML 执行脚本）；② UI 新增——单条消息操作栏「复制 / 追问 / 分享 / 删除 / 重试」，**删除**可精确移除单条消息或聚合气泡对应的全部底层消息（含连带清理隐藏 tool 结果消息），实时同步内存 store 与磁盘持久化；③ 内置技能——将 WorkBuddy 技能库全部 **63 个技能**转化为 Zorv AI 品牌版本（`app/src/main/assets/skills/zorv/`，含 `manifest.json`），首次启动经 `QuroSkillStore.seedBuiltinZorvSkills` 自动注入为内置 `skill__{name}` 工具可被 LLM 编排；④ **B4** `QuroChatCard` JSON 解析已由 `runCatching` 守护（缺字段不崩溃，仅忽略该卡片）；**B7** 双 Markdown 渲染路径（RichText + 块级解析）标记待统一，无崩溃；⑤ **离线思考流式上屏 + 离线设备工具集**：打通离线推理 `onThinking` 通道（`StreamingThinkStripper` 实时累积思考文本、`QuroLocalEngine.run` 新增 `onThinking` 回调、`routeLocal` 接入 `emitThinkingToken`），离线模型思考过程现在像云端一样边想边显示（受「深度思考」开关控制）；离线工具集放开设备/系统类工具（手电筒、振动、电量、WiFi、传感器、剪贴板、应用、通知、蓝牙、时间、设备信息、计算、TTS、闹钟），「打开手电筒」等离线设备指令可正常调用（此前一刀切只留 memory_* 导致离线设备指令完全失效）；版本号保持 versionCode 452 / versionName 1.0.16 |
 | v1.0.15 | 2026-08-01 | **ACI 2.0 治理层（错误模型 / 协议版本化 / 事件总线）+ 真机全能力 42/42 通过**：新增 `QuroAciErrors`（ACI 2.0 标准化错误模型 `{code,message,suggestion,layer}`，aci-protocol 命名空间 15xx/24xx/25xx，避开 aci-core 标准码 0/400/403/404/500/503/504/505）+ `QuroAciProtocol`（`aci-protocol-v1` 协议版本化与 `negotiate(peer)` 协商）+ `QuroAciEvents`（进程内事件总线，含 SERVICE_BOUND/UNBOUND/CALL_FAILED/DISCOVERED/PROTOCOL_NEGOTIATED）；受控端 `QuroMainAciService` 新增 `aci_protocol` 能力暴露并统一错误码/超时/坏请求返回；控制端 `QuroAciManager` 接入协议协商、错误解析与事件下发；真机测试 42/42 全过 0 失败（浏览器 30 + WorkflowACI 10 + 主程序 2）；版本号 versionCode 450→451 / versionName 1.0.14→1.0.15 |
 | v1.0.14 | 2026-08-01 | **HTTP 传输（http_request · 局域网/本地组网）+ 文档与版本齐步**：受控浏览器新增 `http_request` 能力并经 ACI 暴露（支持同网段 LAN 明文 http://192.168.x.x、*.local）；受控端 `networkSecurityConfig` 放开局域网明文（base-config cleartextTrafficPermitted=true + localhost/127.0.0.1/10.0.2.2/local 域名放开）；主程序系统提示词 ACI 部分柔性化（可自由组合/链式调用能力）并补 HTTP(LAN) 说明；ACI 开发者手册新增 §15 HTTP 传输、应用内「被控方接入手册」补 HTTP(LAN) 小节、能力数 29→30；主程序版本号 versionCode 449→450 / versionName 1.0.13→1.0.14，受控浏览器 versionCode 13→14 / versionName 1.0.13→1.0.14 |

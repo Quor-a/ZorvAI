@@ -1813,7 +1813,7 @@ private fun MessageRow(
             // 等待指示：「等等」动态小组件（内容区 loading，独立于头像/名字）。
             // 仅在 AI 尚未产出首条内容（busy 占位）时出现，真实回复到达后该占位被移除。
             if (msg.isWaiting) {
-                WaitingDots(scaled)
+                WaitingDots()
                 Spacer(Modifier.height(4.dp))
             }
             // 展开的思考内容（在名字行下方，正文上方）
@@ -2697,12 +2697,14 @@ private fun ThinkingWithToolsBubble(
 // ── 思考/工具内联展开组件（名字行小按钮点击后显示）───────────────────
 
 /**
- * 「等等」动态小组件：AI 尚未产出首条内容时的内容区 loading 指示。
- * 三个跳动圆点 + 「等等」文字，独立于头像/人格名字（头像名字由 MessageRow 的 persona 渲染，不在此处）。
+ * AI 尚未产出首条内容时的内容区 loading 指示（「等等」动态小组件）。
+ * 仅渲染三个跳动圆点，独立于头像/人格名字（头像名字由 MessageRow 的 persona 渲染，不在此处）。
  * 使用 rememberInfiniteTransition 做错相位弹跳，纯 Compose 动画、无 emoji、无图片。
+ * 注：此前静态的「等等」文字已移除，保留动态跳动圆点；AI 消息上的「删除」按钮是独立的
+ * 气泡操作项（BubbleActionButton），不在本组件内，不受影响。
  */
 @Composable
-private fun WaitingDots(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
+private fun WaitingDots() {
     val cs = MaterialTheme.colorScheme
     val transition = rememberInfiniteTransition()
     // 单一进度 0→1 无限循环；三个圆点按 1/3 相位错开，形成依次跳动效果。
@@ -2719,7 +2721,6 @@ private fun WaitingDots(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(vertical = 6.dp),
     ) {
-        Text("等等", fontSize = scaled(13), color = Muted, fontWeight = FontWeight.Medium)
         Spacer(Modifier.width(8.dp))
         repeat(3) { i ->
             val t = (progress + i * (1f / 3f)) % 1f

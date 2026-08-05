@@ -77,13 +77,12 @@ class QuroLlmClient(
         onToken: ((String) -> Unit)? = null,
         onThinking: ((String) -> Unit)? = null,
     ): QuroLlmResult {
-        val normalized = baseUrl.trim().trimEnd('/')
-        val url =
-            if (normalized.endsWith("/chat/completions")) {
-                normalized
-            } else {
-                "$normalized/chat/completions"
-            }
+        // 🔧 云端端点兼容（对齐 operit 的 EndpointCompleter）：用户常把裸 host
+        // （如 https://api.openai.com、https://api.deepseek.com）当成 baseUrl 直接粘贴，
+        // 旧逻辑会拼成 …/chat/completions → 404/401 → 模型「永远不回复」被误判为兼容问题。
+        // 现按规则补全：裸 host → /v1/chat/completions；以 /v1 结尾 → /chat/completions；
+        // 已带完整路径则原样；末尾加 '#' 可关闭自动补全（直达原始 URL）。
+        val url = completeEndpoint(baseUrl)
         // 🔧 OpenAI 官方 reasoning 模型（o1 / o3 / o4 系列）硬伤修复：
         //  这类模型**不支持 max_tokens**，必须发 max_completion_tokens，否则直接 400
         //  「max_tokens is not supported with this model」→ 整轮失败（表现为「部分模型直接不回复」，
@@ -272,11 +271,42 @@ class QuroLlmClient(
         .replace(Regex("""from /[\d./]+"""), "from local")
         .replace(Regex("""to [A-Za-z0-9.\-]+/\d{1,3}(\.\d{1,3}){3}"""), "to host")
 
+    /**
+     * 云端端点 URL 自动补全（对齐 operit EndpointCompleter）。
+     * 规则：
+     *  - 末尾 '#' → 关闭补全，原样返回（适合已带完整路径或非常规路径的中转）。
+     *  - 路径为空（裸 host，如 https://api.openai.com）→ 补全 /v1/chat/completions。
+     *  - 路径以 /v1 结尾（如 https://x/custom/v1）→ 仅补 /chat/completions。
+     *  - 已以 /chat/completions 结尾 → 原样。
+     *  - 其余（带任意子路径）→ 兜底追加 /chat/completions（与旧逻辑一致）。
+     */
+    private fun completeEndpoint(endpoint: String): String {
+        val trimmed = endpoint.trim()
+        if (trimmed.endsWith("#")) return trimmed.removeSuffix("#")
+        val withoutSlash = trimmed.removeSuffix("/")
+        return try {
+            val path = java.net.URL(withoutSlash).path.removeSuffix("/")
+            when {
+                path.isEmpty() -> "$withoutSlash/v1/chat/completions"
+                path.endsWith("/v1", ignoreCase = true) -> "$withoutSlash/chat/completions"
+                path.endsWith("/chat/completions", ignoreCase = true) -> withoutSlash
+                else -> "$withoutSlash/chat/completions"
+            }
+        } catch (_: Exception) {
+            // 非标准 URL（无法解析）→ 兜底追加，绝不因解析失败而让请求裸奔。
+            "$withoutSlash/chat/completions"
+        }
+    }
+
     private fun messageToJson(m: QuroChatMessage): JSONObject {
         val o = JSONObject().put("role", m.role)
         val images = m.attachments?.filter { it.type == "image" } ?: emptyList()
         if (m.toolCallId != null) {
             o.put("tool_call_id", m.toolCallId)
+            // 🔧 Kimi K3 严格协议：tool 消息必须带可解析工具名（name 字段），
+            // 否则直接 400（"tool messages need a resolvable tool name..."）。
+            // 这里用 toLlmMessages 已反查好的 toolName 下发；其它厂商容忍此旧式字段。
+            m.toolName?.let { o.put("name", it) }
             o.put("content", m.content)
         } else if (m.toolCalls != null) {
             o.put("content", m.content.ifBlank { " " })
@@ -337,7 +367,7 @@ class QuroLlmClient(
                 )
             }
             Log.i(TAG, "<<< PARSE tool_calls=${calls.size} reasoningBlank=${reasoning.isNullOrBlank()} first=${calls.firstOrNull()?.name}")
-            QuroLlmResult.ToolCalls(calls, reasoning)
+            QuroLlmResult.ToolCalls(calls, reasoning, safeString(msg, "content")?.takeIf { it.isNotBlank() })
         } else {
             // 小米 MiMo 等推理模型在 reason 模式下 content 可能为空、仅返回 reasoning_content。
             // ⚠️ 不再将 reasoning 兜底到 content！此前 content=reasoning 导致思考文本同时写入
@@ -510,7 +540,7 @@ class QuroLlmClient(
                 QuroToolCall(id = t.id ?: "call_$i", name = t.name, arguments = t.arguments.ifBlank { "{}" })
             }
             Log.i(TAG, "<<< STREAM tool_calls=${calls.size} reasoningBlank=${reasoning.isNullOrBlank()} first=${calls.firstOrNull()?.name}")
-            QuroLlmResult.ToolCalls(calls, reasoning)
+            QuroLlmResult.ToolCalls(calls, reasoning, contentAcc.toString().takeIf { it.isNotBlank() })
         } else {
             QuroLlmResult.Text(contentAcc.toString(), reasoning)
         }

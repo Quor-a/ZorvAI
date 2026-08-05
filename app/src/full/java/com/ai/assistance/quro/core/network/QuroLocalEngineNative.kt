@@ -16,16 +16,6 @@ import kotlinx.coroutines.CancellationException
 import java.io.File
 
 /**
- * Plan C：本地 prefill 进度上屏阈值（token）。
- * 原生每轮上报的 [total] 是"本轮真正要 decode 的新增 token 数"（= promptTokens - 复用的 KV 前缀，
- * 见 llama_jni_stub.cpp 的 Plan A 实现），不是总 prompt 长度。只有超过该阈值才把进度事件透出给 UI，
- * 否则静默等首 token。选 256：手机 CPU 上一次 llama_decode chunk 约 256 token，低于此值的 prefill
- * 通常 <1s，没必要弹进度条；多轮对话（Plan A 后只新增几十 token）正好被挡住，消除用户抱怨的
- * "每轮都弹 正在处理提示词… X%"。
- */
-private const val LOCAL_PREFILL_PROGRESS_TOKEN_THRESHOLD = 256
-
-/**
  * 流式 `<think>` 思考段剥离器（回归 #1 流式侧修复）。
  *
  * 原生 MNN 会在生成过程中把 `<think>…</think>` 思考原文实时吐给回调；旧逻辑直接把累积缓冲
@@ -79,13 +69,17 @@ private class StreamingThinkStripper {
      */
     private fun drainPending() {
         while (pending.isNotEmpty()) {
-            val pendLow = pending.toString().lowercase()
+            // 🧠 归一化全角标签：与终态 MnnThinkContent.split 对齐（＜think＞／→<think>/）。
+            // 否则模型吐全角标签时流式阶段检测不到开/闭标签，思考原文实时上屏泄漏。
+            // 全角→半角为 1:1 字符替换，下标与原始 pending 一致，截取仍从 pending 取原始字符。
+            var pendLow = pending.toString().lowercase()
+                .replace('＜', '<').replace('＞', '>').replace('／', '/')
             if (!inThink) {
                 // 找开标签 "<think"（含 "<think>" / "<think >" 等变体），遇到 '>' 即视为开标签结束。
                 val openStart = pendLow.indexOf(OPEN_MARKER)
                 if (openStart >= 0) {
                     if (openStart > 0) visible.append(pending, 0, openStart)
-                    val gt = pending.indexOf('>', openStart)
+                    val gt = pendLow.indexOf('>', openStart)
                     if (gt < 0) break // 形如 "<think"（尚未见到 '>'）：保留整个 pending 等待后续
                     pending.delete(0, gt + 1)
                     inThink = true
@@ -829,7 +823,6 @@ class QuroLocalEngineNative : QuroLocalEngine {
             val t0 = System.nanoTime()
             var firstTokenMs: Long? = null
             var tokenCount = 0
-            var progressReported = false
             val sb = StringBuilder()
             // 🧠 思考段流式剥离（与 MNN 对齐）：llama.cpp 思考模型（Qwen3 / DeepSeek-R1 系）会把
             // <think>…</think> 直接吐进 token 流，若不剥离，思考原文会实时上屏并最终残留在气泡里
@@ -839,28 +832,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
             val ok = session.generateStream(
                 prompt,
                 effMaxTokens,
-                onProgress = { _, cur, total ->
-                    // Plan C：只有"本轮真正要 decode 的新增 token 数"(total) 超过阈值才上屏进度，
-                    // 否则静默等首 token（避免多轮对话每轮都弹"正在处理提示词… X%"）。
-                    // 阈值基于原生上报的"新增 token 数"(total = promptTokens - 复用的 KV 前缀)，
-                    // 不是总 prompt 长度：Plan A 落地后多轮只新增几十 token，正好被这个阈值挡住。
-                    // latch（progressReported）：一旦开闸上报，本轮不再撤回（避免进度条闪烁）；
-                    // 首个真 token 到达后 tokenCount>0，自然停止上报、由累计文本覆盖。
-                    val opened = progressReported || total > LOCAL_PREFILL_PROGRESS_TOKEN_THRESHOLD
-                    if (tokenCount == 0 && opened && total > 0) {
-                        progressReported = true
-                        val pct = (cur.toLong() * 100L / total.toLong()).toInt().coerceIn(1, 100)
-                        onToken?.let { cb ->
-                            val text = if (pct >= 100) {
-                                "⏳ 上下文处理完毕，正在生成回复…"
-                            } else {
-                                "⏳ 正在处理提示词… $pct%（$cur/$total token）"
-                            }
-                            runCatching { cb(text) }
-                        }
-                    }
-                },
-            ) { token ->
+                onToken = { token ->
                 if (firstTokenMs == null) {
                     firstTokenMs = (System.nanoTime() - t0) / 1_000_000
                     QuroDiag.log("LocalEngine", "· llama first token @${firstTokenMs}ms")
@@ -878,6 +850,7 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 }
                 true
             }
+            )
             // 🔧 v454：生成中途被取消（用户打断/切走对话）时，把原生 aborted 当干净停止，
             // 抛 CancellationException 让上层走「⏹ 已停止生成」，而非「⚠️ llama.cpp 推理异常」错误气泡。
             if (isCanceled()) throw CancellationException("local generation canceled")

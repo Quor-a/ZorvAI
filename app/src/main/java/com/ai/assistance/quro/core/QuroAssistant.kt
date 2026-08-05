@@ -68,6 +68,17 @@ class QuroAssistant(
      * @param onUpdate 每次会话状态变更（含中间的工具调用 / 工具结果）后回调，
      *                 用于驱动界面实时刷新（如对话气泡即时显示「正在调用工具…」）。
      */
+    /**
+     * 深度思考指令：仅当用户显式开启「深度思考」时注入，要求模型在回答前充分推理；
+     * 关闭时注入轻量指令，避免无谓的长篇推理。弥补此前「深度思考」开关只控制 UI 显隐、
+     * 从不真正影响模型行为的缺陷（对所有模型通用：非推理模型被引导多想，推理模型本就在想）。
+     */
+    private fun buildDeepThinkDirective(deepThink: Boolean): String = if (deepThink) {
+        "\n\n## 深度思考（已开启）\n在回答前，请先进行充分、深入的内部思考（可包含逐步推理、方案权衡、自我质疑与纠错），确保回答严谨准确后再输出。简单问题轻量思考即可，复杂问题务必深入，不要为了快而草率作答。"
+    } else {
+        "\n\n## 回答风格（轻量模式）\n请直接、自然地回答，无需展开冗长的推理过程；除非问题本身需要，否则不要铺垫思考步骤。"
+    }
+
     suspend fun ask(
         context: Context,
         cfg: QuroModelConfig,
@@ -75,10 +86,14 @@ class QuroAssistant(
         autoSaveMemory: Boolean = true,
         stream: Boolean = false,
         historyRounds: Int = 0,
+        deepThink: Boolean = false,
         onUpdate: (() -> Unit)? = null,
     ): String =
         withContext(Dispatchers.IO) {
-            val system = QuroMessage(role = "system", content = systemPrompt)
+            val system = QuroMessage(
+                role = "system",
+                content = systemPrompt + buildDeepThinkDirective(deepThink),
+            )
             var lastText = ""
             // 流式占位：首个 token 到达时创建可见气泡，后续 token 增量更新其内容。
             // 工具调用轮不会触发 content token，因此不会误建气泡。
@@ -344,14 +359,14 @@ class QuroAssistant(
                         // 模型能看到自己上一步的推理并在此基础上继续决策。
                         val roundReasoning = result.reasoning?.takeIf { it.isNotBlank() }
                         // 先落 assistant 占位（带工具调用、结果暂空）→ UI 立即显示「🔧 调用工具…」进度。
-                        // ⚠️ 关键修正：工具调用轮的 content 必须为空，思考只走 reasoning 字段。
-                        // 此前 content = roundReasoning 会把「思考文本」同时塞进 content 与 reasoning，
-                        // ChatScreen 聚合渲染时又把 content 并进回复正文 → 思考与回复文本混合显示。
-                        // 且 OpenAI 协议要求带 tool_calls 的 assistant 消息 content 应为空/ null，
-                        // content=reasoning 本身也不合规。真正的回复文本在最终 QuroLlmResult.Text 轮才落库。
+                        // 🔑 工具调用轮保留模型给出的前缀正文（content），与 reasoning 各走各字段：
+                        // 模型常先说一句「好的，我来查一下…」再发起 tool_calls——此前 content 被强制清空，
+                        // 导致工具轮干瘪、无法「回复 + 工具」自由混合（用户报「回复简短/不能组合」的根因）。
+                        // 仅避免把 reasoning 当 content（那才是合规问题）；模型显式给的 content 一律保留，
+                        // ChatScreen 聚合时并入气泡正文，回传时也携带，利于链式多步工具编排。
                         val assistantMsg = QuroMessage(
                             role = "assistant",
-                            content = "",
+                            content = result.content ?: "",
                             toolCalls = callsWithId,
                             reasoning = roundReasoning,
                             hidden = true,

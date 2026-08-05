@@ -89,14 +89,19 @@ class QuroConversationRepository(context: Context) {
                 val isRealToolResult = m.role == "tool" && m.toolCallId != null && m.content.isNotBlank()
                 val isPipeDrop = !hasRealContent && !isRealToolResult
                 if (isPipeDrop) { needsSave = true; continue }
-                // 1.5) 🔧 Bug修复「⏳ 正在处理提示没有清理」：流式阶段提示（prefill 进度 /
-                //    模型加载 / 思考中等占位文案）曾被旧版本作为真实 assistant 消息落盘
-                //    （生成被打断/进程被杀时 commitCurrent 把半截占位持久化）。
-                //    这类消息没有任何信息价值，加载时直接丢弃（但保留携带 reasoning/工具/卡片的）。
-                if (m.role == "assistant" && m.reasoning.isNullOrBlank() &&
-                    m.toolCalls.isNullOrEmpty() && m.attachments.isNullOrEmpty() && m.cards.isEmpty() &&
-                    isTransientStageHint(m.content)
-                ) { needsSave = true; continue }
+                // 1.5) 🔧 Bug修复「⏳ 正在处理残留」【复发根因修复】：
+                //    上一轮（round-1）的过滤条件是「role==assistant 且 无 reasoning/工具/卡片/附件
+                //    且 content 命中阶段提示前缀」才丢弃。但本地 prefill 进度占位
+                //    （「⏳ 正在处理提示词… X%」）在「思考流先于正文流到达」时，会被同一条流式占位气泡
+                //    附带 reasoning（emitThinkingToken 复用 streamPlaceholderId，见 QuroAssistant.kt:162-180），
+                //    导致此处 `m.reasoning.isNullOrBlank()` 为 false → 过滤条件整体不成立 → 占位残留到重开。
+                //    阶段提示占位永远是临时状态、绝非真实消息，故改为「只要 content 命中已知阶段提示
+                //    前缀就无条件丢弃」，彻底摆脱 reasoning/工具/卡片的干扰。
+                //    （真实思考消息的 reasoning 不会以 ⏳ 正在… 开头；真实工具/卡片消息的 content 也不会以
+                //    该前缀开头，故不会误删真实内容。）
+                if (m.role == "assistant" && isTransientStageHint(m.content)) {
+                    needsSave = true; continue
+                }
                 // 2) 工具结果：保留消息，但把已知的垃圾内容清空
                 //    （旧版 bug 曾把 33.333… / "OK" / 纯数字 0-100 当成工具结果落盘，
                 //     重启后会以「→ 33.333…」的形式污染对话气泡）

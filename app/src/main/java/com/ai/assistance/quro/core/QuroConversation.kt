@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core
 
 import com.ai.assistance.quro.core.cards.QuroChatCard
+import com.ai.assistance.quro.util.QuroDiag
 import java.util.UUID
 
 /**
@@ -90,7 +91,7 @@ class QuroConversationStore {
         // 「保留对话轮数」对话框级覆盖：仅保留最近 N 个 (用户+助手) 轮次，其余丢弃。
         // 仅当 historyRounds > 0 时生效；0/未设置则跳过（与历史行为完全一致）。
         val capped = if (historyRounds > 0) capRecentRounds(built, historyRounds) else built
-        if (contextWindow <= 0) return capped
+        if (contextWindow <= 0) return pruneOrphanToolMessages(capped)
 
         val sysTokens = system?.let { estTokens(it.content) } ?: 0
         var budget = contextWindow - sysTokens
@@ -129,7 +130,7 @@ class QuroConversationStore {
             }
             // 巨型消息放不下就跳过，不 break（后面可能有小一点的巨型消息能放下）
         }
-        return (capped.filter { it.role == "system" } + kept.asReversed())
+        return pruneOrphanToolMessages(capped.filter { it.role == "system" } + kept.asReversed())
     }
 
     /**
@@ -141,6 +142,67 @@ class QuroConversationStore {
         val body = built.filter { it.role != "system" }
         val keep = body.takeLast(rounds * 2)
         return sys + keep
+    }
+
+    /**
+     * 剔除「孤儿」工具消息，保证下发给模型的工具上下文自洽（OpenAI 协议合规）。
+     *
+     * 问题背景：上面两步裁剪（capRecentRounds 按轮数 takeLast、contextWindow 按 token 预算丢弃最旧消息）
+     * 都可能把「assistant 的 tool_calls」与紧随其后的「role=tool 结果」从中间切断——
+     * 例如一个工具轮的边界正好落在保留窗口之外。一旦两者被拆散，下发给云端 API 的上下文里
+     * 就会出现「带 tool_calls 却没有对应 tool 结果」或反之的非法组合，触发 400 / 工具调用失效 /
+     * 模型乱回复 / 不回复（用户报「工具调用不完整」的典型根因之一）。
+     *
+     * 本地路径此前已在 [QuroAssistant.compactForLocal] 做了同款保护；但云端路径（toLlmMessages 直发，
+     * 不经过 compactForLocal）一直缺失。这里统一在 toLlmMessages 收尾处补齐，云端/本地双路受益。
+     *
+     * 判定：
+     *   - role=tool 且 tool_call_id 在全部 assistant.tool_calls 的 id 集合里找不到 → 孤儿结果，丢弃；
+     *   - assistant 且 toolCalls 中存在任一 id 在 role=tool 的 tool_call_id 集合里找不到 → 缺结果调用，整条丢弃。
+     * 成对校验、缺一则整组剔除，保证下发前工具上下文完全自洽（system 消息无工具字段，不受影响）。
+     */
+    private fun pruneOrphanToolMessages(list: List<QuroChatMessage>): List<QuroChatMessage> {
+        val callIds = list.filter { !it.toolCalls.isNullOrEmpty() }
+            .flatMap { it.toolCalls!!.map { c -> c.id } }.toSet()
+        val resultIds = list.filter { it.role == "tool" }
+            .mapNotNull { it.toolCallId }.toSet()
+        val before = list.size
+        val out = list.filterNot { m ->
+            (m.role == "tool" && m.toolCallId != null && m.toolCallId !in callIds) ||
+            (m.toolCalls.orEmpty().any { it.id !in resultIds })
+        }
+        if (out.size != before) {
+            QuroDiag.log(
+                "LlmMessages",
+                "🔧 剔除孤儿工具消息 | ${before - out.size} 条（call/result 配对残缺，避免云端 400 / 工具失效）"
+            )
+        }
+        return attachToolNames(out)
+    }
+
+    /**
+     * 为 role="tool" 消息补全工具名（name 字段），满足 Kimi K3 等严格协议厂商。
+     *
+     * 背景：标准 OpenAI 格式里 tool 消息只带 tool_call_id + content，工具名写在
+     * 前一条 assistant.tool_calls[].function.name 上。多数厂商能从 tool_call_id 反查，
+     * 但 Kimi K3 会 400 报错：
+     *   "tool messages need a resolvable tool name: carry `tool`/`name`, or match a preceding assistant tool_call by order."
+     * 这里按 tool_call_id 精确反查 assistant 的 function name 并写入 tool 消息的 name 字段。
+     * 因本函数必在 pruneOrphanToolMessages 之后调用（孤儿 tool 消息已剔除），凡存活的 tool
+     * 消息其 tool_call_id 必能在列表内的 assistant.tool_calls 中找到对应 name，绝不产生 null name。
+     * 对其它厂商无害：name 属 OpenAI 旧式标准字段，可被容忍。
+     */
+    private fun attachToolNames(list: List<QuroChatMessage>): List<QuroChatMessage> {
+        val idToName = list.filter { !it.toolCalls.isNullOrEmpty() }
+            .flatMap { it.toolCalls!!.map { c -> c.id to c.name } }
+            .toMap()
+        return list.map { m ->
+            if (m.role == "tool" && m.toolCallId != null) {
+                idToName[m.toolCallId]?.let { m.copy(toolName = it) } ?: m
+            } else {
+                m
+            }
+        }
     }
 
     /** token 估算（中文/英文混合取 char/4 近似）。 */

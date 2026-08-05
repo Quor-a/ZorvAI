@@ -633,7 +633,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         // 原为 ask 的实参在 viewModelScope(主线程) 上求值 → 主线程重 I/O/计算 → 触发系统 ANR 对话框。
                         // 改为在 IO 线程先把提示词算好，再交给 ask（ask 自身仍切 IO 执行 ReAct 循环）。
                         val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effectiveCfg) + (screenCtx ?: "") }
-                        genAssistant.ask(appContext, effectiveCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true, historyRounds = _historyRounds.value ?: 0) {
+                        genAssistant.ask(appContext, effectiveCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true, historyRounds = _historyRounds.value ?: 0, deepThink = thinking.value) {
                         // 工具调用/结果产生、以及流式 token 到达时实时刷新并落盘（退出生效），
                         // 退出也能保留中间过程；commitCurrent 内部已对落盘做 ≤1s 节流。
                             commitCurrent(convId, buf)
@@ -817,7 +817,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effCfg) }
                 // #1110：语音球问答原默认 stream=false → 整段回、不逐层；与主对话（stream=true）行为不一致，
                 // 表现为「部分返回不是一层一层返回、自己回到对话框」。云模型改为流式，与文本框主路径一致。
-                assistant.ask(appContext, effCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true, historyRounds = _historyRounds.value ?: 0, onUpdate = onTick)
+                assistant.ask(appContext, effCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true, historyRounds = _historyRounds.value ?: 0, deepThink = thinking.value, onUpdate = onTick)
             }.getOrElse { e ->
                 if (e is CancellationException) "⏹ 已停止生成。" else "⚠️ 语音球出错了：${e.message ?: "未知错误"}"
             }
@@ -986,8 +986,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     private val DEFAULT_SYSTEM =
         """你是一个由 Zorv AI 个人开发的 AI 助手（当前未启用特定人格卡，以通用身份应答），乐于助人、简洁准确。
 
-## ⚠️ 关键规则：你必须调用工具（CRITICAL）
-你已接入了设备工具调用能力，**并且你拥有充分的自主权决定何时调用工具**。
+## 工具调用（自主判断，无需被强制）
+你已接入了设备工具调用能力，可按自己的判断自主决定何时调用——无需被强制，也无需等用户明说"帮我打开/查一下"才行动。
 
 ### 主动调用（最重要）
 你**不必等用户明确说"帮我打开 / 查一下 / 调用 XX"才行动**。只要结合上下文判断某项能力能真正帮到用户、或能让你的回答更准更可靠，你就应该**主动**调用对应工具——像人自然使用工具一样，无需先征询、也无需报备"我要调用 XX 工具"。
@@ -999,14 +999,14 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 包括但不限于：打开应用、启动APP、查询设备信息、设闹钟、开手电筒、振动、
 查电量/WiFi/网络、读写应用内文件、运行代码、发HTTP请求、朗读文字（TTS）、打开网页等——
 
-**你绝对不能只回复一段文字描述！你必须调用对应的工具函数去真正执行！**
+**当用户要你执行具体动作时，优先调用对应工具真正执行，而不是只用文字描述；但纯聊天 / 问答直接自然回答文字即可，不必硬调工具。**
 
 示例：
 - 用户说"打开快手" → 调用 search_and_launch_app(app_name="快手")，不要回"好的我来帮你打开"
 - 用户说"电量多少" → 调用 get_battery，不要猜一个数字
 - 用户问"有什么应用" → 调用 list_installed_apps，不要凭空列举
 
-只有纯聊天/问答/创意类问题（如"今天天气如何""帮我写首诗""解释量子力学"）才直接回答文字；其余情况优先用工具获取真实结果，别凭空猜测。
+具体动作优先用工具拿真实结果；纯聊天 / 问答 / 创意类直接自然回答文字。最终怎么回，由你结合语境自行判断，按最自然、最有帮助的方式作答即可。
 
 ## 自我认知（System Manifest）
 你是运行在 Android 设备上的原生 AI 助手。以下是你的真实档案：
@@ -1366,12 +1366,13 @@ $recent
 
         sb.append("\n\n## 我的能力（当前可用的工具函数）\n")
         sb.append(
-            "【强制规则】以下是你**当前真实可调用的工具函数**（与 API 的 tools 字段完全一致）。" +
-            "当用户意图匹配任一工具时，**必须调用它真正执行**，而不是用文字描述你会做什么。" +
+            "【使用指引】以下是你**当前真实可调用的工具函数**（与 API 的 tools 字段完全一致）。" +
+            "当用户意图确实需要某个工具时，**优先调用它真正执行**，而不是用文字描述你会做什么；" +
+            "若只是闲聊或纯问答，直接回答文字、不调工具也完全没问题。" +
             "流程：调用工具 → 拿到结果 → 基于结果回答；若工具返回错误，告诉用户原因。" +
             "**多个相互独立的动作可在同一条回复里一次性发起多个 tool_calls**" +
-            "（例如「打开快手、查电量、设个闹钟」应在一轮里并行调用 search_and_launch_app / get_battery / set_alarm）。" +
-            "**收到工具结果后，只要用户请求还没满足，就继续调用下一个工具，不要提前结束。**\n"
+            "（例如「打开快手、查电量、设个闹钟」可在一轮里并行调用 search_and_launch_app / get_battery / set_alarm）。" +
+            "**收到工具结果后，若用户请求尚未满足，可继续调用下一个工具，直到任务真正完成。**\n"
         )
         sb.append(com.ai.assistance.quro.core.tools.QuroToolUsageHints.buildToolUseDirective())
         sb.append("\n### 工具清单（格式：工具名：用途 [· 常见说法/多用途]）\n")
