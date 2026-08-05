@@ -236,6 +236,9 @@ class QuroAssistant(
                             stream = streaming,
                             // 注意：v384 已根除重组期重编译正则的 ANR 真凶，此处无需再用 500ms 粗节流保命。
                             onToken = if (streaming) emitStreamToken else null,
+                            // 🧠 补齐云模型流式思考上屏通道（此前只有本地路径有，云端被简化掉了）。
+                            // 与 emitThinkingToken 对称：思考先到 → 建 reasoning 占位；content 到达 → 填充正文。
+                            onThinking = if (streaming) emitThinkingToken else null,
                         )
                     }
                 }.getOrElse { e ->

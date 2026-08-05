@@ -49,7 +49,10 @@ private const val NET_CALL_TIMEOUT_MS = 90_000L
  */
 class QuroLlmClient(
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
+        // 连接超时 15s：健康端点通常 <1s 建连，15s 足够；端点不可达时快速失败，
+        // 避免用户在「等等」状态干等 30s 才看到报错（原 30s 偏长）。读取超时保持 120s，
+        // 因为长生成（含 reasoning）可能持续数分钟，不应被误杀。
+        .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .build(),
 ) {
@@ -69,6 +72,7 @@ class QuroLlmClient(
         tools: List<QuroToolSpec> = emptyList(),
         stream: Boolean = false,
         onToken: ((String) -> Unit)? = null,
+        onThinking: ((String) -> Unit)? = null,
     ): QuroLlmResult {
         val normalized = baseUrl.trim().trimEnd('/')
         val url =
@@ -116,7 +120,7 @@ class QuroLlmClient(
             .build()
         // 流式路径：逐字回调，不走重试（避免半截 token 后重试造成内容错乱）。
         if (stream && onToken != null) {
-            return streamChat(req, onToken)
+            return streamChat(req, onToken, onThinking)
         }
         // 重试策略：网关类临时故障（5xx / 429）与网络异常（超时/连接失败）自动重试，
         // 避免 openresty 等反向代理偶发 502/503 直接把原始错误甩给用户。
@@ -191,15 +195,39 @@ class QuroLlmClient(
     }
 
     private fun friendlyNetError(e: Exception): String {
-        val m = e.message ?: "network error"
+        val raw = e.message ?: "network error"
+        val m = raw.lowercase()
+        // 与「超时」区分：建连失败（TCP 连不上 / 被拒 / DNS 失败 / TLS 失败）属于不同根因，
+        // 给出对应提示，且绝不把服务端公网 IP、本机内网 IP 等地址信息泄露到聊天气泡。
         return when {
-            m.contains("timed out", ignoreCase = true) -> "连接模型服务超时，请检查网络后重试"
-            m.contains("Unable to resolve host", ignoreCase = true) ||
-                m.contains("No address associated", ignoreCase = true) ->
-                "无法连接模型服务，请检查网络/地址后重试"
-            else -> "网络错误：$m"
+            m.contains("failed to connect") || m.contains("connection refused") ->
+                "无法连接到模型服务（连接被拒绝或超时），请检查网络或模型服务地址后重试"
+            m.contains("connection reset") || m.contains("connection closed") ||
+                m.contains("broken pipe") || m.contains("stream was reset") ->
+                "与模型服务的连接中断，请稍后重试"
+            m.contains("timed out") || m.contains("timeout") ->
+                "连接模型服务超时，请检查网络后重试"
+            m.contains("unable to resolve host") || m.contains("no address associated") ||
+                m.contains("unknown host") || m.contains("dns") ->
+                "无法解析模型服务地址（DNS 失败），请检查 baseUrl 是否正确"
+            m.contains("certificate") || m.contains("ssl") || m.contains("tls") ||
+                m.contains("handshake") ->
+                "模型服务 TLS/证书校验失败，请检查地址是否为 https 且证书有效"
+            else -> {
+                // 兜底：先脱敏（去掉可能泄露的服务端/本机 IP），再展示精简后的原始信息，
+                // 避免把 api.tokenrouter.com/13.214.26.65 (port 443) from /10.153.56.86 这类
+                // 内部地址串直接甩给用户。
+                val sanitized = stripHostAndIp(raw)
+                "网络错误：${sanitized.take(160)}"
+            }
         }
     }
+
+    /** 脱敏：去掉 IP（含端口）、host/ip 片段，避免把服务端/本机地址泄露进聊天气泡。 */
+    private fun stripHostAndIp(s: String): String = s
+        .replace(Regex("""\d{1,3}(\.\d{1,3}){3}(:\d+)?"""), "***")
+        .replace(Regex("""from /[\d./]+"""), "from local")
+        .replace(Regex("""to [A-Za-z0-9.\-]+/\d{1,3}(\.\d{1,3}){3}"""), "to host")
 
     private fun messageToJson(m: QuroChatMessage): JSONObject {
         val o = JSONObject().put("role", m.role)
@@ -300,12 +328,14 @@ class QuroLlmClient(
      * 设计取舍：
      *  - onToken 回传的是「截至当前的完整累计文本」，上层直接 store.update(content=累计) 即可，
      *    无需在上层再做增量拼接，避免重复累加。
-     *  - 流式模式不走重试：一旦开始吐字再重试会造内容错乱。若中途断流且已有内容，
-     *    按「已生成内容」兜底返回成功（截断），而非甩报错。
      *  - 不套 withTimeout：依赖 OkHttp 的 readTimeout（每次收到字节都会重置），只有「连接假死」才会超时，
      *    长但正常的生成不会被误杀。
+     *  - 🔧 连接/早期失败重试：在建连或首字节到达前若抛网络异常（连接超时 / 被拒 / DNS 失败），
+     *    且尚未吐出任何 token / 工具调用 → 安全重试（重新 DNS + 建连），最多 2 次。
+     *    这与非流式 chat() 的重试策略对齐，也对齐「其他客户端连得上」的体感——
+     *    单次建连因路由/解析抖动失败不该直接判死，给一次重连机会；已吐出内容则不重试（避免错乱）。
      */
-    private suspend fun streamChat(req: Request, onToken: (String) -> Unit): QuroLlmResult {
+    private suspend fun streamChat(req: Request, onToken: (String) -> Unit, onThinking: ((String) -> Unit)? = null): QuroLlmResult {
         val contentAcc = StringBuilder()
         val reasoningAcc = StringBuilder()
         // 🔧 v291 修复：流式响应里模型返回的 tool_calls 也以 delta 形式下发，必须按 index 累计
@@ -315,75 +345,96 @@ class QuroLlmClient(
         fun ensureSlot(idx: Int) {
             while (toolAcc.size <= idx) toolAcc.add(StreamToolAcc())
         }
-        return try {
-            client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) {
-                    return QuroLlmResult.Error(friendlyHttpError(resp.code, resp.body?.string().orEmpty()))
-                }
-                val source = resp.body?.source()
-                    ?: return QuroLlmResult.Error("模型返回了空响应体")
-                while (true) {
-                    val line = source.readUtf8Line() ?: break
-                    // 🔧 取消点：用户「停止生成」或切换会话时 sendJob 被取消，此处每行读完后立即抛取消，
-                    // 避免阻塞在 readUtf8Line 上把旧会话的生成一直"流"到结束（切对话停不掉的真正根因）。
-                    coroutineContext.ensureActive()
-                    val trimmed = line.trim()
-                    if (trimmed.isEmpty() || !trimmed.startsWith("data:")) continue
-                    val data = trimmed.removePrefix("data:").trim()
-                    if (data.isEmpty() || data == "[DONE]") {
-                        if (data == "[DONE]") break
-                        continue
+        // 建连/早期失败重试：对齐非流式路径与主流客户端。仅在尚未吐出任何内容时重连。
+        val maxRetries = 2
+        var lastErr: Exception? = null
+        for (attempt in 0..maxRetries) {
+            if (attempt > 0) {
+                // 已吐出内容 → 不再重试，按已有内容兜底（下方统一处理）。
+                if (contentAcc.isNotEmpty() || toolAcc.isNotEmpty()) break
+                Log.w(TAG, "<<< STREAM RETRY attempt=$attempt/$maxRetries (prev=${lastErr?.message})")
+                delay(800L * attempt)
+            }
+            try {
+                val result = client.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) {
+                        return@use QuroLlmResult.Error(friendlyHttpError(resp.code, resp.body?.string().orEmpty()))
                     }
-                    runCatching {
-                        val root = JSONObject(data)
-                        val delta = root.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta")
-                        if (delta != null) {
-                            val c = safeString(delta, "content")
-                            if (!c.isNullOrEmpty()) {
-                                contentAcc.append(c)
-                                onToken(contentAcc.toString())
-                            }
-                            val r = safeString(delta, "reasoning_content")
-                                ?: safeString(delta, "reasoning")
-                                ?: safeString(delta, "thinking")
-                            if (!r.isNullOrEmpty()) reasoningAcc.append(r)
-                            // 🔧 累计流式 tool_calls（index 槽位 + name/arguments 拼接）
-                            val tcs = delta.optJSONArray("tool_calls")
-                            if (tcs != null) {
-                                for (j in 0 until tcs.length()) {
-                                    val tc = tcs.getJSONObject(j)
-                                    val idx = if (tc.has("index")) tc.optInt("index", toolAcc.size) else toolAcc.size
-                                    ensureSlot(idx)
-                                    val slot = toolAcc[idx]
-                                    if (tc.has("id") && !tc.isNull("id")) slot.id = tc.optString("id")
-                                    val fn = tc.optJSONObject("function")
-                                    if (fn != null) {
-                                        if (fn.has("name") && !fn.isNull("name")) slot.name += fn.getString("name")
-                                        if (fn.has("arguments") && !fn.isNull("arguments")) slot.arguments += fn.optString("arguments", "")
+                    val source = resp.body?.source()
+                        ?: return@use QuroLlmResult.Error("模型返回了空响应体")
+                    while (true) {
+                        val line = source.readUtf8Line() ?: break
+                        // 🔧 取消点：用户「停止生成」或切换会话时 sendJob 被取消，此处每行读完后立即抛取消，
+                        // 避免阻塞在 readUtf8Line 上把旧会话的生成一直"流"到结束（切对话停不掉的真正根因）。
+                        coroutineContext.ensureActive()
+                        val trimmed = line.trim()
+                        if (trimmed.isEmpty() || !trimmed.startsWith("data:")) continue
+                        val data = trimmed.removePrefix("data:").trim()
+                        if (data.isEmpty() || data == "[DONE]") {
+                            if (data == "[DONE]") break
+                            continue
+                        }
+                        runCatching {
+                            val root = JSONObject(data)
+                            val delta = root.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta")
+                            if (delta != null) {
+                                val c = safeString(delta, "content")
+                                if (!c.isNullOrEmpty()) {
+                                    contentAcc.append(c)
+                                    onToken(contentAcc.toString())
+                                }
+                                val r = safeString(delta, "reasoning_content")
+                                    ?: safeString(delta, "reasoning")
+                                    ?: safeString(delta, "thinking")
+                                if (!r.isNullOrEmpty()) {
+                                    reasoningAcc.append(r)
+                                    // 🧠 流式思考实时上屏：与本地路径（onThinking）对称。
+                                    // 此前云端只在终态 result 里带 reasoning，思考段生成期间 UI 完全空白，
+                                    // 体感等同「卡住/不回复」。现在每片 reasoning 增量即回调，UI 边想边显示。
+                                    onThinking?.invoke(reasoningAcc.toString())
+                                }
+                                // 🔧 累计流式 tool_calls（index 槽位 + name/arguments 拼接）
+                                val tcs = delta.optJSONArray("tool_calls")
+                                if (tcs != null) {
+                                    for (j in 0 until tcs.length()) {
+                                        val tc = tcs.getJSONObject(j)
+                                        val idx = if (tc.has("index")) tc.optInt("index", toolAcc.size) else toolAcc.size
+                                        ensureSlot(idx)
+                                        val slot = toolAcc[idx]
+                                        if (tc.has("id") && !tc.isNull("id")) slot.id = tc.optString("id")
+                                        val fn = tc.optJSONObject("function")
+                                        if (fn != null) {
+                                            if (fn.has("name") && !fn.isNull("name")) slot.name += fn.getString("name")
+                                            if (fn.has("arguments") && !fn.isNull("arguments")) slot.arguments += fn.optString("arguments", "")
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    // 与 parse() 一致：tool_calls 优先于 content
+                    buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc)
                 }
-                // 与 parse() 一致：tool_calls 优先于 content
-                buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc)
-            }
-        } catch (e: Exception) {
-            // 🔧 取消信号必须原样向上抛：否则会被当成"断流截断"兜底成成功文本，
-            // 导致「停止生成/切换会话」不出现"⏹ 已停止生成"提示。
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            Log.e(TAG, "<<< STREAM ERROR: ${e.message}", e)
-            // 已累计到工具调用 → 仍返回工具调用（避免丢失已下发的工具请求）；
-            // 否则已吐出部分内容 → 截断兜底为成功；都没有 → 报错。
-            if (toolAcc.isNotEmpty()) {
-                buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc)
-            } else if (contentAcc.isNotEmpty()) {
-                QuroLlmResult.Text(contentAcc.toString(), reasoningAcc.toString().takeIf { it.isNotBlank() })
-            } else {
-                QuroLlmResult.Error(friendlyNetError(e))
+                // HTTP 非成功（如 502/503）属确定性失败，直接返回不重试（避免重复生成/计费）。
+                if (result is QuroLlmResult.Error) return result
+                return result
+            } catch (e: Exception) {
+                // 🔧 取消信号必须原样向上抛：否则会被当成"断流截断"兜底成成功文本，
+                // 导致「停止生成/切换会话」不出现"⏹ 已停止生成"提示。
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                lastErr = e
+                Log.e(TAG, "<<< STREAM ERROR attempt=$attempt: ${e.message}", e)
+                // 已吐出部分内容 → 截断兜底为成功（不重试，避免错乱）。
+                if (contentAcc.isNotEmpty()) {
+                    return QuroLlmResult.Text(contentAcc.toString(), reasoningAcc.toString().takeIf { it.isNotBlank() })
+                }
+                if (toolAcc.isNotEmpty()) {
+                    return buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc)
+                }
+                // 连接/早期失败且无内容 → 进入下一轮重试（若还有次数）。
             }
         }
+        return QuroLlmResult.Error(friendlyNetError(lastErr ?: Exception("stream connection failed")))
     }
 
     /** 流式累计结束后，按是否含工具调用产出 ToolCalls 或 Text（与 parse() 同语义）。 */

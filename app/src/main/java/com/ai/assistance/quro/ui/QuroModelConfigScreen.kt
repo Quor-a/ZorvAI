@@ -350,6 +350,34 @@ fun QuroModelConfigForm(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
             )
+            Spacer(Modifier.height(12.dp))
+            // ═══ 云端工具调用开关（v453 补回：此前云端段缺失 enableTools / useFullTools 开关，
+            //    若活跃配置被置为关闭则无任何入口可重新打开 → 模型拿不到工具、不会主动调用）═══
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = cfg.enableTools, onCheckedChange = { vm.update { copy(enableTools = it) } })
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("启用工具调用", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "开启后云端模型通过 function calling 调用工具；关闭则纯对话模式。若模型「不主动调工具」，先确认此开关为开。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = cfg.useFullTools, onCheckedChange = { vm.update { copy(useFullTools = it) } })
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("完整工具集", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "开启下发全部 ~50 个工具（全面能力）；若你的 API 中转对工具数敏感（>25 可能静默丢弃 tools 字段导致无法调用），可关闭仅发核心 14 个。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.height(18.dp))

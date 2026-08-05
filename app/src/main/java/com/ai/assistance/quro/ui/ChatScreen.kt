@@ -53,6 +53,12 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.background
@@ -447,20 +453,20 @@ fun ChatScreen(
         }
 
         if (busy) {
-            // 🔧 对话框进度反馈（v216 修复 → v230 优化）：
+            // 🔧 对话框进度反馈（v216 修复 → v230 优化 → v453 升级「等等」动态小组件）：
             //   仅当聚合列表中尚无助手消息时才追加占位气泡，避免与已聚合的真实消息重复显示。
             //   聚合逻辑已经把 hidden assistant 消息的 thinking/toolCalls 合并进了同一个气泡，
             //   所以大部分情况下不需要额外占位；占位仅覆盖「纯等待首条响应」的空窗期。
+            //   v453：占位不再用默认收起的「思考中」文字气泡（等于看不见），改为内容区独立的
+            //   「等等」动态小组件（跳动圆点动画）；头像与人格名字保持不变（复用 persona），
+            //   小组件独立于头像/名字，不替代、不隐藏它们。
             val hasAssistantMsg = out.any { !it.mine && it.id != -1 }
             if (!hasAssistantMsg) {
-                val pendingTool = messages.lastOrNull { it.role == "assistant" && it.hidden && it.toolCalls?.isNotEmpty() == true }
-                    ?.toolCalls?.firstOrNull { it.result == null }
-                val hint = if (pendingTool != null) "🔧 正在调用 ${pendingTool.name}…" else "正在思考…"
                 out.add(
                     Message(
                         id = -1, mine = false, author = selectedPersona.name,
-                        avatar = selectedPersona.ava, avatarUri = selectedPersona.avatarUri, time = "", text = null,
-                        think = ThinkBlock(listOf(hint)),
+                        avatar = selectedPersona.ava, avatarUri = selectedPersona.avatarUri,
+                        time = "", text = null, isWaiting = true,
                     )
                 )
             }
@@ -1569,7 +1575,6 @@ private fun MessageList(
     }
     // 注意：执行轨迹事件已统一在 ChatScreen 顶层订阅一次（单一真相源 traceLines），
     // 此处不再各自 collect 全局流，避免重复订阅 / 跨会话污染。
-    val lastToolIdx = messages.indexOfLast { !it.mine && !it.tools.isNullOrEmpty() }
     // 互动条（scroll-to-bottom 交互）：用户上滑离开底部时浮出「回到底部」按钮，
     // 点击即跳到最新一条。与上方三触发自动滚底互补，作手动兜底。
     Box(modifier) {
@@ -1599,8 +1604,7 @@ private fun MessageList(
             ) {
                 MessageRow(
                     msg, scaled, onOpenLink,
-                    isLastToolMsg = index == lastToolIdx,
-                    embeddedTrace = if (index == lastToolIdx) visibleTraces else emptyList(),
+                    embeddedTrace = if (!msg.tools.isNullOrEmpty()) visibleTraces else emptyList(),
                     onCommand = { onCommand(it) },
                         onAskFollowup = onAskFollowup,
                         onShare = onShare,
@@ -1709,7 +1713,6 @@ private fun MessageRow(
     msg: Message,
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
     onOpenLink: (String) -> Unit,
-    isLastToolMsg: Boolean = false,
     embeddedTrace: List<QuroAgentTrace.AgentTraceEvent> = emptyList(),
     onCommand: (String) -> Unit = {},
     onAskFollowup: (String) -> Unit = {},
@@ -1752,7 +1755,10 @@ private fun MessageRow(
             // ── 名字行 + 思考/工具小按钮 ──────────────────────────────
             // 状态提升到 Column 作用域（展开内容在 Row 外渲染）
             var showThink by remember { mutableStateOf(false) }
-            var showTools by remember { mutableStateOf(isLastToolMsg) }
+            // 🔧 v453：工具调用默认【折叠】。此前默认 = isLastToolMsg（true），导致每轮工具调用
+            // 自动展开、且流式刷新时 MessageRow 重挂载会把展开态重置回 true（"手动收起又弹开"）。
+            // 改为默认折叠，仅留「· N 工具」胶囊供用户按需点开；重挂载也稳定保持折叠态。
+            var showTools by remember { mutableStateOf(false) }
             val hasThinkOrTools = !msg.mine && (msg.think != null || !msg.tools.isNullOrEmpty())
 
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, bottom = if (hasThinkOrTools && (showThink || showTools)) 2.dp else 4.dp)) {
@@ -1787,6 +1793,12 @@ private fun MessageRow(
                         }
                     }
                 }
+            }
+            // 等待指示：「等等」动态小组件（内容区 loading，独立于头像/名字）。
+            // 仅在 AI 尚未产出首条内容（busy 占位）时出现，真实回复到达后该占位被移除。
+            if (msg.isWaiting) {
+                WaitingDots(scaled)
+                Spacer(Modifier.height(4.dp))
             }
             // 展开的思考内容（在名字行下方，正文上方）
             if (showThink && msg.think != null) {
@@ -2652,6 +2664,46 @@ private fun ThinkingWithToolsBubble(
 }
 
 // ── 思考/工具内联展开组件（名字行小按钮点击后显示）───────────────────
+
+/**
+ * 「等等」动态小组件：AI 尚未产出首条内容时的内容区 loading 指示。
+ * 三个跳动圆点 + 「等等」文字，独立于头像/人格名字（头像名字由 MessageRow 的 persona 渲染，不在此处）。
+ * 使用 rememberInfiniteTransition 做错相位弹跳，纯 Compose 动画、无 emoji、无图片。
+ */
+@Composable
+private fun WaitingDots(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
+    val cs = MaterialTheme.colorScheme
+    val transition = rememberInfiniteTransition()
+    // 单一进度 0→1 无限循环；三个圆点按 1/3 相位错开，形成依次跳动效果。
+    // 用 tween + 相位偏移，避免 keyframes / StartOffset 在此 Compose 版本的 API 限制。
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 6.dp),
+    ) {
+        Text("等等", fontSize = scaled(13), color = Muted, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.width(8.dp))
+        repeat(3) { i ->
+            val t = (progress + i * (1f / 3f)) % 1f
+            val y = -(Math.abs(Math.sin(t * Math.PI)) * 5f)
+            Box(
+                Modifier
+                    .size(7.dp)
+                    .offset(y = y.dp)
+                    .clip(CircleShape)
+                    .background(cs.primary),
+            )
+            if (i < 2) Spacer(Modifier.width(5.dp))
+        }
+    }
+}
 
 /**
  * 名字行的超紧凑胶囊按钮（思考中 / 工具），高度 ~20dp、9sp，替代默认 32dp 的 AssistChip。
