@@ -17,6 +17,7 @@ import android.util.Log
 import com.ai.assistance.quro.core.QuroToolSpec
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.util.QuroDiag
+import com.ai.assistance.quro.util.QuroStageHints
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +58,12 @@ class QuroAssistant(
     }
 
     /**
+     * 流式阶段提示判定（Bug「⏳ 正在处理残留」防御层）：统一委托共享实现
+     * [com.ai.assistance.quro.util.QuroStageHints]，与持久化迁移的判定严格一致，消除漂移。
+     */
+    private fun isTransientStageHint(text: String): Boolean = QuroStageHints.isTransientStageHint(text)
+
+    /**
      * 用户已在外部把 user 消息写入 store。这里执行编排，返回最终答复文本。
      * @param onUpdate 每次会话状态变更（含中间的工具调用 / 工具结果）后回调，
      *                 用于驱动界面实时刷新（如对话气泡即时显示「正在调用工具…」）。
@@ -83,10 +90,12 @@ class QuroAssistant(
             QuroAgentTrace.status("assistant", "AI 开始响应")
             // 本地离线模型使用独立的设置（localTemperature / localMaxTokens / localEnableTools），
             // 与云端模型完全隔离——用户改离线设置不影响云端，反之亦然。
-            val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
-            val effTemperature = if (isLocal) cfg.localTemperature else cfg.temperature
-            val effMaxTokens = if (isLocal) cfg.localMaxTokens else cfg.maxTokens
-            val effEnableTools = if (isLocal) cfg.localEnableTools else cfg.enableTools
+        val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
+        val effTemperature = if (isLocal) cfg.localTemperature else cfg.temperature
+        val effMaxTokens = if (isLocal) cfg.localMaxTokens else cfg.maxTokens
+        val effEnableTools = if (isLocal) cfg.localEnableTools else cfg.enableTools
+        // 🔧 诊断：云模型 provider / model 打印，便于「部分模型不回复」类问题定位（结合 QuroLlm 日志的 reasoning 分支判断）。
+        Log.i("QuroAssistant", "ask route: provider=${cfg.provider} model=${cfg.model} isLocal=$isLocal stream=$stream")
             // 工具集选择（原创）：默认 coreSpecs（14 个，token 占用小，兼容绝大多数 API 中转，
             // 避免代理因 tools 数量/总 token 超限而静默丢弃整个 tools 字段 → 模型拿不到工具只能纯问答）。
             // 用户在设置开启「完整工具集」后切换为 fullSpecs（~50 个，需代理支持大负载）。
@@ -295,8 +304,8 @@ class QuroAssistant(
                         // 但最终 QuroLlmResult.Text.content 却为空（与 QuroLlmClient 行为不一致，多见于
                         // 本地离线引擎边界），用 streamedContent 回退，避免正文被「(已思考完毕)」覆盖。
                         val safeContent = sanitizeLeakedInstruction(
-                            result.content.takeIf { it.isNotBlank() }
-                                ?: streamedContent.takeIf { it.isNotBlank() }
+                            result.content.takeIf { it.isNotBlank() && !isTransientStageHint(it) }
+                                ?: streamedContent.takeIf { it.isNotBlank() && !isTransientStageHint(it) }
                                 ?: "(已思考完毕)"
                         )
                         val safeReasoning = result.reasoning?.takeIf { it.isNotBlank() }

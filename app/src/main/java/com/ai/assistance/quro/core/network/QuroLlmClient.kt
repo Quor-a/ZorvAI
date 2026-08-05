@@ -13,10 +13,12 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.TimeoutCancellationException
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.launch
 import kotlin.coroutines.coroutineContext
 
 private const val TAG = "QuroLlm"
@@ -25,9 +27,10 @@ private const val TAG = "QuroLlm"
  * 单次 HTTP 调用的硬超时护栏（毫秒）。
  * 作用：OkHttp 自带 connect/read 超时在「代理挂起 / 端点假死」时仍可能长时间不返回，
  * 导致整条对话协程卡在「思考中」、bot 永远不回复且无任何报错（用户感知为「完全没反应」）。
- * 这里用 withTimeout 在 NET_CALL_TIMEOUT_MS 后强制取消本次调用并转成明确错误气泡，
+ * 这里用独立计时器在 NET_CALL_TIMEOUT_MS 后 call.cancel() 强制中止本次调用并转成明确错误气泡，
  * 杜绝「永久静默」——最坏情况用户也会看到「⚠️ 连接模型服务超时」而非无限转圈。
  * 设 90s，比 OkHttp 的 120s readTimeout 更早触发，确保本护栏是最终裁决者。
+ * （v455 起不再用 withTimeout：阻塞式 execute() 无法被协程超时及时取消，改为计时器 + call.cancel()。）
  */
 private const val NET_CALL_TIMEOUT_MS = 90_000L
 
@@ -81,10 +84,22 @@ class QuroLlmClient(
             } else {
                 "$normalized/chat/completions"
             }
+        // 🔧 OpenAI 官方 reasoning 模型（o1 / o3 / o4 系列）硬伤修复：
+        //  这类模型**不支持 max_tokens**，必须发 max_completion_tokens，否则直接 400
+        //  「max_tokens is not supported with this model」→ 整轮失败（表现为「部分模型直接不回复」，
+        //  o 系列全挂，gpt-4o 系列正常）。同时 reasoning 模型**不接收 temperature**
+        //  （o1 固定为 1，传非 1 也 400），统一省略由服务端取默认。
+        //  通过 model 名前缀 o+数字（o1 / o3-mini / o4-mini …）识别；gpt-4o / 4.1 等普通模型不受影响。
+        val isReasoningModel = Regex("(?i)^o[0-9]").containsMatchIn(model.trim())
         val body = JSONObject().apply {
             put("model", model)
-            put("temperature", temperature)
-            put("max_tokens", maxTokens)
+            if (isReasoningModel) {
+                Log.i(TAG, ">>> reasoning model 分支：用 max_completion_tokens，省略 temperature (model=$model)")
+                put("max_completion_tokens", maxTokens)
+            } else {
+                put("temperature", temperature)
+                put("max_tokens", maxTokens)
+            }
             put("messages", JSONArray().also { arr ->
                 messages.forEach { m -> arr.put(messageToJson(m)) }
             })
@@ -134,43 +149,71 @@ class QuroLlmClient(
                 Log.w(TAG, "<<< RETRY attempt=$attempt/${maxRetries} after ${backoff}ms (prev=${lastErr ?: "n/a"})")
                 delay(backoff)
             }
+            // 🔧 Bug修复「取消被当成错误展示」：OkHttp execute() 是阻塞调用，协程取消本身打不断它。
+            //   这里注册两个钩子：
+            //   ① cancelHook：协程被取消（用户停止/切会话）→ 立即 call.cancel() 中止阻塞读写；
+            //   ② timer：90s 硬超时（替代原 withTimeout——阻塞调用无法被 withTimeout 及时取消），
+            //      超时置 timedOut 并中止调用。
+            //   随后在 catch 里按「超时 / 用户取消 / 真实网络错误」三分支区分，绝不再把
+            //   CancellationException 或 OkHttp 的 abort(IOException("Canceled")) 包成网络错误气泡。
+            val call = client.newCall(req)
+            // 3a 加固：计时器协程写、执行线程读，普通 Boolean 存在可见性竞态 → AtomicBoolean
+            // （局部被捕获变量无法标注 @Volatile，AtomicBoolean 是等价且更明确的修法）。
+            val timedOut = AtomicBoolean(false)
+            val cancelHook = coroutineContext[Job]?.invokeOnCompletion { cause ->
+                if (cause is CancellationException) runCatching { call.cancel() }
+            }
+            val timeoutJob = kotlinx.coroutines.CoroutineScope(coroutineContext).launch {
+                delay(NET_CALL_TIMEOUT_MS)
+                timedOut.set(true)
+                runCatching { call.cancel() }
+            }
             try {
-                val callResult = withTimeout(NET_CALL_TIMEOUT_MS) {
-                    client.newCall(req).execute().use { resp ->
-                        val rawBody = resp.body?.string().orEmpty()
-                        // 🛡️ 响应体超限截断：MiMo 等推理模型可能返回数 MB 的 reasoning_content，
-                        // org.json 递归解析时 StackOverflowError → "stack size 8188KB"。
-                        // 截断到 MAX_RESPONSE_BYTES 后仍可解析出 choices[0]（尾部被裁的是 reasoning）。
-                        val text = if (rawBody.length > MAX_RESPONSE_BYTES) {
-                            Log.w(TAG, "⚠️ 响应体超限 ${rawBody.length}ch > ${MAX_RESPONSE_BYTES}ch，截断处理")
-                            rawBody.take(MAX_RESPONSE_BYTES)
-                        } else {
-                            rawBody
-                        }
-                        // ===== 调试日志：响应概览 =====
-                        val preview = text.take(300).replace("\n", "\\n")
-                        Log.i(TAG, "<<< RESPONSE HTTP=${resp.code} body=${text.length}ch preview=$preview")
-                        if (!resp.isSuccessful) {
-                            lastErr = "HTTP ${resp.code}"
-                            if (resp.code in retryableCodes && attempt < maxRetries) {
-                                return@use null // 临时故障 → 进入下一次重试
-                            }
-                            return@use QuroLlmResult.Error(friendlyHttpError(resp.code, text))
-                        }
-                        return@use parse(text)
+                val callResult = call.execute().use { resp ->
+                    val rawBody = resp.body?.string().orEmpty()
+                    // 🛡️ 响应体超限截断：MiMo 等推理模型可能返回数 MB 的 reasoning_content，
+                    // org.json 递归解析时 StackOverflowError → "stack size 8188KB"。
+                    // 截断到 MAX_RESPONSE_BYTES 后仍可解析出 choices[0]（尾部被裁的是 reasoning）。
+                    val text = if (rawBody.length > MAX_RESPONSE_BYTES) {
+                        Log.w(TAG, "⚠️ 响应体超限 ${rawBody.length}ch > ${MAX_RESPONSE_BYTES}ch，截断处理")
+                        rawBody.take(MAX_RESPONSE_BYTES)
+                    } else {
+                        rawBody
                     }
+                    // ===== 调试日志：响应概览 =====
+                    val preview = text.take(300).replace("\n", "\\n")
+                    Log.i(TAG, "<<< RESPONSE HTTP=${resp.code} body=${text.length}ch preview=$preview")
+                    if (!resp.isSuccessful) {
+                        lastErr = "HTTP ${resp.code}"
+                        if (resp.code in retryableCodes && attempt < maxRetries) {
+                            return@use null // 临时故障 → 进入下一次重试
+                        }
+                        return@use QuroLlmResult.Error(friendlyHttpError(resp.code, text))
+                    }
+                    return@use parse(text)
                 }
                 if (callResult != null) return callResult
                 // callResult == null：临时故障（5xx/429），lastErr 已记录，进入下一轮重试
-            } catch (e: TimeoutCancellationException) {
-                // 硬超时：单次调用 90s 内无响应（端点假死 / 代理挂起）→ 转成明确报错气泡，
-                // 杜绝「思考中」永久卡死、bot 完全没反应且无任何提示。
-                return QuroLlmResult.Error("连接模型服务超时（${NET_CALL_TIMEOUT_MS / 1000} 秒无响应），请检查网络或模型服务地址后重试")
             } catch (e: Exception) {
-                lastErr = e.message
-                Log.e(TAG, "<<< NETWORK ERROR attempt=$attempt: ${e.message}", e)
-                if (attempt < maxRetries) continue // 超时/连接失败等网络异常重试
-                return QuroLlmResult.Error(friendlyNetError(e))
+                when {
+                    // 硬超时：timer 中止了调用 → 转成明确报错气泡，杜绝「思考中」永久卡死。
+                    timedOut.get() ->
+                        return QuroLlmResult.Error("连接模型服务超时（${NET_CALL_TIMEOUT_MS / 1000} 秒无响应），请检查网络或模型服务地址后重试")
+                    // 用户主动取消：原样向上抛，由上层走「⏹ 已停止生成」，绝不进错误分支。
+                    e is CancellationException -> throw e
+                    // 协程已取消时 OkHttp 抛 IOException("Canceled"/"Socket closed")：视为干净取消。
+                    coroutineContext[Job]?.isActive == false ->
+                        throw CancellationException("request canceled by caller", e)
+                    else -> {
+                        lastErr = e.message
+                        Log.e(TAG, "<<< NETWORK ERROR attempt=$attempt: ${e.message}", e)
+                        if (attempt < maxRetries) continue // 超时/连接失败等网络异常重试
+                        return QuroLlmResult.Error(friendlyNetError(e))
+                    }
+                }
+            } finally {
+                timeoutJob.cancel()
+                cancelHook?.dispose()
             }
         }
         return QuroLlmResult.Error(lastErr ?: "unknown error")
@@ -356,7 +399,16 @@ class QuroLlmClient(
                 delay(800L * attempt)
             }
             try {
-                val result = client.newCall(req).execute().use { resp ->
+                // 🔧 Bug修复「取消被当成错误展示」：execute()/readUtf8Line() 均为阻塞调用，
+                //   协程取消打不断它们（长思考无 SSE 行时，取消最长要等 readTimeout=120s 才生效，
+                //   且 abort 异常还会被当成「断流/网络错误」）。注册取消钩子：协程一被取消立即
+                //   call.cancel() 中止阻塞读，再在 catch 里把「已取消」统一转抛 CancellationException。
+                val call = client.newCall(req)
+                val cancelHook = coroutineContext[Job]?.invokeOnCompletion { cause ->
+                    if (cause is CancellationException) runCatching { call.cancel() }
+                }
+                val result = try {
+                    call.execute().use { resp ->
                     if (!resp.isSuccessful) {
                         return@use QuroLlmResult.Error(friendlyHttpError(resp.code, resp.body?.string().orEmpty()))
                     }
@@ -415,6 +467,9 @@ class QuroLlmClient(
                     // 与 parse() 一致：tool_calls 优先于 content
                     buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc)
                 }
+                } finally {
+                    cancelHook?.dispose()
+                }
                 // HTTP 非成功（如 502/503）属确定性失败，直接返回不重试（避免重复生成/计费）。
                 if (result is QuroLlmResult.Error) return result
                 return result
@@ -422,6 +477,12 @@ class QuroLlmClient(
                 // 🔧 取消信号必须原样向上抛：否则会被当成"断流截断"兜底成成功文本，
                 // 导致「停止生成/切换会话」不出现"⏹ 已停止生成"提示。
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                // 🔧 协程已取消（用户停止/切会话）时，OkHttp 被 call.cancel() 中止而抛出
+                // IOException("Canceled"/"Socket closed")：视为干净取消而非网络错误/断流，
+                // 转抛 CancellationException 让上层走「⏹ 已停止生成」，绝不落错误气泡。
+                if (coroutineContext[Job]?.isActive == false) {
+                    throw kotlinx.coroutines.CancellationException("stream canceled by caller", e)
+                }
                 lastErr = e
                 Log.e(TAG, "<<< STREAM ERROR attempt=$attempt: ${e.message}", e)
                 // 已吐出部分内容 → 截断兜底为成功（不重试，避免错乱）。
