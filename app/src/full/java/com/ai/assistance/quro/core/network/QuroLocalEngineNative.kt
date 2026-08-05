@@ -164,6 +164,24 @@ private fun streamDisplay(visible: String): String =
     if (visible.isNotEmpty()) visible else "本地模型思考中…"
 
 /**
+ * 终态兜底：无论 [MnnThinkContent.split] 是否识别，都再扫一遍残留的 `<think>…</think>`
+ * （含全角 ＜／＞、大小写变体、未闭合尾随），确保思考段绝不会原样漏进可见正文。
+ *
+ * 思考内容已由 [MnnThinkContent.split] 或流式 [onThinking] 通道单独捕获进 `reasoning`，
+ * 因此这里从可见正文里清掉它是安全的；即便误伤极个别正文里字面出现的 "<think>"，
+ * 代价也远小于把整段自言自语泄漏给用户（"思考泄漏"回归）。
+ */
+private fun stripResidualThink(raw: String): String {
+    val norm = raw.replace('＜', '<').replace('＞', '>').replace('／', '/')
+    // 成对标签（容忍标签内空白 / 换行）
+    var cleaned = norm.replace(Regex("(?is)<think\\s*>.*?</think\\s*>"), " ")
+    // 未闭合：<think 之后到文末全部清掉（生成被 max_tokens 截断的典型形态）
+    val openIdx = cleaned.indexOf("<think", ignoreCase = true)
+    if (openIdx >= 0) cleaned = cleaned.substring(0, openIdx)
+    return cleaned.replace(Regex("[ \\t　]{2,}"), " ").replace(Regex("\n{3,}"), "\n\n").trim()
+}
+
+/**
  * 原生本地推理引擎（full 风味专用实现）。
  *
  * 职责：直接驱动移植进来的 MNN / llama.cpp JNI 会话（[MNNLlmSession] / [LlamaSession]），
@@ -440,8 +458,12 @@ class QuroLocalEngineNative : QuroLocalEngine {
                             "answer=${split.answer.length} 字符" +
                             if (split.answerFromReasoning) " | ⚠ 正文为空，已回退展示思考内容" else ""
                     )
-                    finalText = split.answer
                 }
+                // 🔧 修复「思考泄漏」：无条件取 split.answer 作为可见正文，不再仅在 reasoning!=null
+                // 时才切。此前若该模型思考格式未被 MnnThinkContent.split 识别（reasoning=null），
+                // finalText 仍是含 <think> 的 stripper.rawText()，被原样推上屏 → 用户看到原始思考段。
+                // 再叠加 stripResidualThink 兜底，任何残留 <think> 都不可能漏进正文。
+                finalText = stripResidualThink(split.answer)
 
                 // 模型只吐了思考、正文为空：兜底说明，避免气泡空白 / 残留"思考中"占位（#offline-empty-answer）。
                 if (finalText.isEmpty()) {
@@ -865,7 +887,8 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     )
                 }
                 // 终态无条件把干净正文（已切走思考段）补推给 UI，确保气泡最终态不含 <think> 残留。
-                val finalText = if (split.answer.isEmpty()) "（本地模型仅完成了思考过程，未生成可展示的回复。）" else split.answer
+                val answer = if (split.answer.isEmpty()) "（本地模型仅完成了思考过程，未生成可展示的回复。）" else split.answer
+                val finalText = stripResidualThink(answer)
                 onToken?.let { cb -> runCatching { cb(finalText) } }
 
                 // 结构化路径：原生 parseToolCallResponse 优先；未命中（模板无 parser / 思考段内 <tool_call>）
