@@ -255,6 +255,10 @@ class QuroChatViewModel(context: Context) : ViewModel() {
      */
     private fun fireReplyNotification(sender: String, text: String) {
         if (!_aiReplyNotify.value) return
+        // N1 加固：占位/错误文案（「⏹ 已停止生成。」「⚠️ …」）不触发系统通知与桌面卡片刷新——
+        // 它们不是真实回复，用户主动停止后弹通知纯属打扰。真实回复不受影响。
+        val t = text.trimStart()
+        if (t.startsWith("⏹") || t.startsWith("⚠️")) return
         QuroReplyNotifier.notifyReply(appContext, sender, text)
         QuroReplyWidget.updateLatest(appContext, sender, text)
     }
@@ -395,10 +399,11 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     }
 
     fun newConversation() {
-        // 多会话切换修复：新建会话前先打断【当前可见会话】正在进行的生成，避免孤儿协程污染；
-        // 仅取消当前会话（按 id），不波及后台其它会话——后台续跑的会话不受影响。
-        sendJobs[_currentId.value]?.cancel(); sendJobs.remove(_currentId.value)
-        liveBuffers.remove(_currentId.value)
+        // 🔧 Bug修复「切对话框中断生成」：新建对话【不再打断】当前会话正在进行的生成。
+        // 每条在途生成有独立缓冲 liveBuffers[convId] 与按会话记账的 commitCurrent，
+        // 旧会话协程在后台续跑、按 id 落盘，不会污染新会话（与 selectConversation 同一原则：
+        // 生成任务与对话框生命周期解耦）；切回旧会话可从 liveBuffer 恢复实时进度。
+        // 旧逻辑在此 cancel + 清 liveBuffer，导致用户「新建对话」时旧会话回复被腰斩。
         val id = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
         val welcome = QuroMessage(role = "assistant", content = defaultWelcome())
@@ -658,6 +663,10 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         ?.let { fireReplyNotification("Zorv AI", it.content) }
                 }
                 } catch (e: Exception) {
+                    // 🔧 Bug修复「取消被当成错误展示」：取消信号（用户停止/同会话新消息 barge-in）
+                    // 从收尾段的挂起点逃逸时，绝不能包成「⚠️ 发生错误」红色气泡——
+                    // 原样上抛，走 finally 干净收尾（onFailure 分支已负责「⏹ 已停止生成」反馈）。
+                    if (e is CancellationException) throw e
                     Log.e(TAG, "生成回复异常 convId=$convId", e)
                     _error.value = "回复生成失败：${e.message ?: "未知错误"}"
                     store.add(

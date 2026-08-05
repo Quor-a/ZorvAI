@@ -460,7 +460,13 @@ fun ChatScreen(
             //   v453：占位不再用默认收起的「思考中」文字气泡（等于看不见），改为内容区独立的
             //   「等等」动态小组件（跳动圆点动画）；头像与人格名字保持不变（复用 persona），
             //   小组件独立于头像/名字，不替代、不隐藏它们。
-            val hasAssistantMsg = out.any { !it.mine && it.id != -1 }
+            // 🔧 Bug修复「等待气泡缺失」：原判定 `out.any { !it.mine }` 会把会话首条的
+            //   【欢迎语 assistant 消息】也算进去 → 任何会话恒为 true → 「等等」小组件永远不显示。
+            //   正确语义：仅统计【最后一条用户消息之后】是否已有助手回复（含流式占位）。
+            //   用户刚发出消息、AI 还没产出任何内容时，等待气泡才出现；首个 token/思考到达后消失。
+            val lastUserIdx = out.indexOfLast { it.mine }
+            val hasAssistantMsg = out.drop(if (lastUserIdx >= 0) lastUserIdx + 1 else 0)
+                .any { !it.mine && it.id != -1 }
             if (!hasAssistantMsg) {
                 out.add(
                     Message(
@@ -777,6 +783,7 @@ fun ChatScreen(
                         messages = uiMessages,
                         scaled = { scaled(it) },
                         currentId = currentId,
+                        busy = busy,
                         traceLines = traceLines,
                         onOpenLink = { browserUrl = it },
                         onCommand = { handleCardCommand(it) },
@@ -1513,6 +1520,7 @@ private fun MessageList(
     onRegenerate: () -> Unit = {},
     onDelete: (List<String>) -> Unit = {},
     currentId: String,
+    busy: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
@@ -1611,6 +1619,9 @@ private fun MessageList(
                         onRegenerate = onRegenerate,
                         onDelete = onDelete,
                         narrow = narrow,
+                        // 🔧 Bug修复「思考没有修复」：生成中的最后一条消息默认展开思考内容，
+                        // 让流式 reasoning 实时可见（此前思考只藏在 9sp 收起胶囊后，等于看不见）。
+                        streamingThink = busy && index == messages.lastIndex,
                     )
             }
         }
@@ -1720,6 +1731,8 @@ private fun MessageRow(
     onRegenerate: () -> Unit = {},
     onDelete: (List<String>) -> Unit = {},
     narrow: Boolean = false,
+    /** 该消息是否为「正在生成中的最后一条」：是则默认展开思考内容（流式 reasoning 实时可见）。 */
+    streamingThink: Boolean = false,
 ) {
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
@@ -1754,7 +1767,9 @@ private fun MessageRow(
         Column(Modifier.widthIn(max = if (narrow) 260.dp else 280.dp)) {
             // ── 名字行 + 思考/工具小按钮 ──────────────────────────────
             // 状态提升到 Column 作用域（展开内容在 Row 外渲染）
-            var showThink by remember { mutableStateOf(false) }
+            // 🔧 Bug修复「思考没有修复」：生成中的最后一条消息默认展开思考区，
+            //   流式 reasoning 边产出边上屏；用户仍可手动收起（remember 初始值只在首次组合生效）。
+            var showThink by remember { mutableStateOf(streamingThink) }
             // 🔧 v453：工具调用默认【折叠】。此前默认 = isLastToolMsg（true），导致每轮工具调用
             // 自动展开、且流式刷新时 MessageRow 重挂载会把展开态重置回 true（"手动收起又弹开"）。
             // 改为默认折叠，仅留「· N 工具」胶囊供用户按需点开；重挂载也稳定保持折叠态。
@@ -1777,7 +1792,8 @@ private fun MessageRow(
                         ) {
                             LucideIcon("sparkles", null, Modifier.size(10.dp), tint = Accent)
                             Spacer(Modifier.width(3.dp))
-                            Text("思考中", fontSize = 9.sp, color = Accent)
+                            // 生成中显示「思考中」，完成后显示「思考过程 · N 步」（此前恒为「思考中」，完成后文案误导）
+                            Text(if (streamingThink) "思考中" else "思考过程 · ${msg.think.steps.size}步", fontSize = 9.sp, color = Accent)
                         }
                     }
                     // 工具调用按钮（紧凑胶囊）
@@ -1942,6 +1958,21 @@ private fun MessageRow(
                             horizontalArrangement = Arrangement.Start,
                             verticalAlignment = Alignment.CenterVertically,
                         ) { bubbleActions() }
+                    }
+                }
+            }
+            // 🔧 Bug修复「简短回复（快捷回复卡片）不显示」：此前卡片只在「有正文气泡」分支内
+            //   渲染（见上方 bubbleCards）。AI 只下发卡片、没有正文时（如 quickreply 快捷回复建议、
+            //   attachCardToLastAssistant 兜底建的 content="" 纯卡片消息），整条消息什么都不渲染。
+            //   这里在无正文但带卡片时独立渲染卡片（有正文时仍走气泡内渲染，不重复）。
+            if (!msg.mine && msg.text.isNullOrBlank() && msg.cards.isNotEmpty()) {
+                Column(Modifier.fillMaxWidth()) {
+                    msg.cards.forEach { card ->
+                        QuroChatCardView(card, onCommand)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                        BubbleActionButton("删除", Muted) { onDelete(msg.uids) }
                     }
                 }
             }

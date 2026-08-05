@@ -5,6 +5,7 @@ import android.util.Log
 import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.ai.assistance.quro.core.cards.parseCard
 import com.ai.assistance.quro.core.cards.serializeCard
+import com.ai.assistance.quro.util.QuroStageHints
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -88,6 +89,14 @@ class QuroConversationRepository(context: Context) {
                 val isRealToolResult = m.role == "tool" && m.toolCallId != null && m.content.isNotBlank()
                 val isPipeDrop = !hasRealContent && !isRealToolResult
                 if (isPipeDrop) { needsSave = true; continue }
+                // 1.5) 🔧 Bug修复「⏳ 正在处理提示没有清理」：流式阶段提示（prefill 进度 /
+                //    模型加载 / 思考中等占位文案）曾被旧版本作为真实 assistant 消息落盘
+                //    （生成被打断/进程被杀时 commitCurrent 把半截占位持久化）。
+                //    这类消息没有任何信息价值，加载时直接丢弃（但保留携带 reasoning/工具/卡片的）。
+                if (m.role == "assistant" && m.reasoning.isNullOrBlank() &&
+                    m.toolCalls.isNullOrEmpty() && m.attachments.isNullOrEmpty() && m.cards.isEmpty() &&
+                    isTransientStageHint(m.content)
+                ) { needsSave = true; continue }
                 // 2) 工具结果：保留消息，但把已知的垃圾内容清空
                 //    （旧版 bug 曾把 33.333… / "OK" / 纯数字 0-100 当成工具结果落盘，
                 //     重启后会以「→ 33.333…」的形式污染对话气泡）
@@ -132,6 +141,13 @@ class QuroConversationRepository(context: Context) {
             file.writeText(root.toString())
         }
     }
+
+    /**
+     * 流式阶段提示判定（Bug「⏳ 正在处理残留」）：统一委托共享实现
+     * [com.ai.assistance.quro.util.QuroStageHints]，与 QuroAssistant 的判定严格一致，消除漂移。
+     */
+    private fun isTransientStageHint(content: String): Boolean =
+        QuroStageHints.isTransientStageHint(content)
 
     private fun serializeConv(c: QuroPersistedConversation): JSONObject {
         val msgs = JSONArray()
