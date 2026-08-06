@@ -7,7 +7,7 @@ class LlamaSession private constructor(
     /**
      * llama.cpp 会话参数。
      *
-     * ⚠️ 默认值必须与已验证可用的参考实现（operit `buildAndroidLlamaSessionConfig`）保持一致，
+     * ⚠️ 默认值必须与已验证可用的参考实现（`buildAndroidLlamaSessionConfig`）保持一致，
      * 否则会出现「一直卡在模型加载」：
      * - [useMmap] = **false**：Android 上 GGUF 常放在外部存储 / SAF 挂载点（/storage/emulated/...），
      *   mmap 到这类文件系统会退化成随机页错误逐页读盘，几 GB 的权重能卡几分钟甚至永远不返回。

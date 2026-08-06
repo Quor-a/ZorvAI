@@ -3,7 +3,7 @@ package com.ai.assistance.quro.browser.consolekit
 import org.json.JSONObject
 
 /**
- * 通用 ACI 控制台契约（operit「外部调用」解耦范式）。
+ * 通用 ACI 控制台契约（外部调用解耦范式）。
  *
  * 设计意图：手动控制台 / AI 控制台都只认识这个契约，不认识任何具体业务（BrowserCore / 第 2/3 个 App 的内部实现）。
  * 任意受控 App 只要满足此契约（要么同进程直接实现 [AciConsoleContract]，要么经 ACI 暴露

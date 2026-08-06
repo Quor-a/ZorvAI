@@ -240,7 +240,7 @@ class BrowserActivity : Activity() {
     /**
      * 手动控制台（重构：走 ACI 通道，不再硬编码 BrowserCore）。
      *
-     * 设计（参考 operit「外部 HTTP 调用」解耦范式）：
+     * 设计（外部 HTTP 调用解耦范式）：
      * - 控制台 UI 只认识 AciConsoleContract 契约，不认识任何业务细节；
      * - 这里用 LocalConsoleEndpoint 同进程委派给 ConsoleBackend（与 AI 经 console_ui /
      *   console_action 走的是同一个后端），因此手动操作与 AI 操作行为完全一致；

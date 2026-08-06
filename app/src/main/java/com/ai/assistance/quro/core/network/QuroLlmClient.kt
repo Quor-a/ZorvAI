@@ -77,7 +77,7 @@ class QuroLlmClient(
         onToken: ((String) -> Unit)? = null,
         onThinking: ((String) -> Unit)? = null,
     ): QuroLlmResult {
-        // 🔧 云端端点兼容（对齐 operit 的 EndpointCompleter）：用户常把裸 host
+        // 🔧 云端端点兼容：用户常把裸 host
         // （如 https://api.openai.com、https://api.deepseek.com）当成 baseUrl 直接粘贴，
         // 旧逻辑会拼成 …/chat/completions → 404/401 → 模型「永远不回复」被误判为兼容问题。
         // 现按规则补全：裸 host → /v1/chat/completions；以 /v1 结尾 → /chat/completions；
@@ -272,7 +272,7 @@ class QuroLlmClient(
         .replace(Regex("""to [A-Za-z0-9.\-]+/\d{1,3}(\.\d{1,3}){3}"""), "to host")
 
     /**
-     * 云端端点 URL 自动补全（对齐 operit EndpointCompleter）。
+     * 云端端点 URL 自动补全。
      * 规则：
      *  - 末尾 '#' → 关闭补全，原样返回（适合已带完整路径或非常规路径的中转）。
      *  - 路径为空（裸 host，如 https://api.openai.com）→ 补全 /v1/chat/completions。

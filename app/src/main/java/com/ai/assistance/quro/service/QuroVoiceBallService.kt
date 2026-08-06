@@ -768,7 +768,13 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 sb.append("    · 常见说法/多用途：$hint\n")
             }
         }
-        sb.append("\n## 规则\n- 用户想打开应用 → search_and_launch_app\n- 查信息/电量/WiFi/时间 → 调用查询工具\n- 多个独立动作可在一轮内并行发起多个 tool_calls\n- 你拥有记忆库（memory_save/list/search/delete），可在用户透露持久信息时主动保存\n- 纯聊天 → 直接回答\n")
+        sb.append("\n## 规则\n")
+        sb.append("- 用户想打开应用 → search_and_launch_app\n")
+        sb.append("- 查信息/电量/WiFi/时间/天气/当前状态 → 调用对应查询工具（天气、时间、设备状态、联网信息永远用工具取真实值，不凭记忆瞎编）\n")
+        sb.append("- 多个独立动作可在一轮内并行发起多个 tool_calls\n")
+        sb.append("- 你拥有记忆库（memory_save/list/search/delete），可在用户透露持久信息时主动保存\n")
+        sb.append("- **何时必须调用工具**：任何依赖「实时/当前/外部/最新」信息的问题（天气、当前时间、设备状态、联网信息）必须主动调工具拿真实数据，绝不凭训练截止前的旧知识瞎编；需要真实动作（打开应用、朗读、读写文件、控制设备）时调用对应工具真正执行。\n")
+        sb.append("- **如何组合「说话」与「用工具」**：可在同一条回复里先说一句再发工具调用，也可多轮穿插「思考 → 调用工具 → 看到结果 → 再思考 → 再回答」直到任务完成；纯主观/创意/情感/闲聊可直接文字作答，但凡涉及真实数据或真实动作一律用工具。\n")
 
         // 长期记忆
         val memories = runCatching { memoryRepo.loadForPersona(persona?.id ?: "") }.getOrElse { emptyList() }
