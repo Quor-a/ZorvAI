@@ -420,6 +420,8 @@ fun ChatScreen(
                 }
                 "tool" -> { /* 隐藏内部消息：结果已进 toolCalls.result，不单独渲染、不参与聚合文本 */ }
                 else -> {
+                    // 隐藏的 system 指令（如防死循环的「[系统提示]」）只给模型看，绝不渲染进对话气泡
+                    if (m.role == "system" && m.hidden) { flushAgg(); continue }
                     // 隐藏且无任何可见内容的纯管道占位 → 跳过；否则参与聚合（含隐藏但有工具/推理/文本/卡片）
                     if (m.hidden && m.toolCalls.isNullOrEmpty() && m.reasoning.isNullOrBlank() && m.content.isBlank() && m.cards.isEmpty()) continue
                     aggIds.add(m.id)

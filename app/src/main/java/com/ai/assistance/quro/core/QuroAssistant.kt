@@ -69,6 +69,36 @@ class QuroAssistant(
      *                 用于驱动界面实时刷新（如对话气泡即时显示「正在调用工具…」）。
      */
     /**
+     * 高置信判断工具返回是否「失败」。
+     * 设计目的：原逻辑用裸子串（含「失败/错误/异常/超时」）即判失败，正文里恰好提到这些字样的
+     * 成功结果会被误判，进而误灌「停止重试」提示、打断正常工具调用。
+     * - 优先看明确成功信号（成功/success/ok/done…）→ 不算失败；
+     * - 其次匹配高置信失败短语（「调用失败」「error:」「Traceback」「http 5」…）；
+     * - 兜底：仅当结果很短（≤200 字，纯错误回执）时才接受裸「失败/错误/异常/超时」整词，长文不误判。
+     */
+    private fun toolResultLooksFailed(text: String): Boolean {
+        val t = text.lowercase()
+        if (t.contains("成功") || t.contains("\"ok\"") || t.contains("\"success\"")
+            || t.contains("execution success") || t.contains("操作成功") || t.contains("done")
+        ) return false
+        val strong = arrayOf(
+            "调用失败", "执行失败", "请求失败", "操作失败", "运行失败", "任务失败", "连接失败",
+            "授权失败", "初始化失败", "加载失败", "生成失败", "保存失败", "提交失败", "下载失败",
+            "无法执行", "执行出错", "执行异常", "发生错误", "出现错误", "报错", "未就绪",
+            "不可用", "无响应", "权限不足", "没有权限", "连接超时", "连接被拒绝", "找不到",
+            "error:", "error_code", "[error]", "exception in thread", "traceback",
+            "http 4", "http 5", "timed out", "connection refused", "command not found", "no such file",
+        )
+        if (strong.any { t.contains(it) }) return true
+        if (text.length <= 200) {
+            if (t.contains("失败") || t.contains("错误") || t.contains("异常") || t.contains("超时")
+                || t.contains("error") || t.contains("exception") || t.contains("timeout")
+            ) return true
+        }
+        return false
+    }
+
+    /**
      * 深度思考指令：仅当用户显式开启「深度思考」时注入，要求模型在回答前充分推理；
      * 关闭时注入轻量指令，避免无谓的长篇推理。弥补此前「深度思考」开关只控制 UI 显隐、
      * 从不真正影响模型行为的缺陷（对所有模型通用：非推理模型被引导多想，推理模型本就在想）。
@@ -134,6 +164,7 @@ class QuroAssistant(
             var round = 0
             var prevCallSig: String? = null   // 上一轮工具调用签名，用于死循环检测
             var repeatStreak = 0
+            var warnedForSig: String? = null  // 同一失败签名只提示一次，避免每条重复失败都再灌一条 [系统提示]
             while (round < roundLimit) {
                 // 协作取消点：用户点击「停止生成」取消父 Job 后，下一轮循环立即抛 CancellationException，
                 // 避免生成协程在「思考中」卡死无法中断（配合下方 client.chat 的取消透传）。
@@ -434,43 +465,43 @@ class QuroAssistant(
                         // 此时才把「工具失败」信号作为 hidden system 提示回灌，由 AI 自决结束旧尝试、换思路继续；代码不直接中断。
                         // 结果正常的重复调用（合法成功场景）完全不干预，连计数都不累积，避免误伤。
                         // 仅保留极高兜底（repeatStreak>=10 且持续失败）：AI 长时间收到提示仍不纠正才强制停止防卡死。
-                        val sig = result.calls.joinToString("|") { "${it.name}:${it.arguments}" }
-                        if (sig == prevCallSig) {
-                            // 仅当本次重复调用的工具结果确实带失败特征时，才视为「失败重试」：
-                            val anyFailed = results.any { r ->
-                                r.result.contains("失败") || r.result.contains("错误")
-                                    || r.result.contains("异常") || r.result.contains("超时")
-                                    || r.result.contains("error", ignoreCase = true)
-                                    || r.result.contains("exception", ignoreCase = true)
-                                    || r.result.contains("timeout", ignoreCase = true)
-                            }
-                            if (anyFailed) {
-                                repeatStreak++
-                                val failedTool = result.calls.firstOrNull()?.name ?: "工具"
-                                store.add(
-                                    QuroMessage(
-                                        role = "system",
-                                        content = "[系统提示] 你连续多次调用了完全相同的工具「$failedTool」（参数也相同），" +
-                                            "且其返回结果持续包含失败/错误信息，说明该调用很可能未生效。" +
-                                            "请主动结束当前尝试，重新思考任务目标，换用不同的工具或方法，不要继续重试同一调用。",
-                                        hidden = true,
-                                    ),
-                                )
-                                if (repeatStreak >= 10) {
-                                    lastText = "⚠️ 检测到工具调用长时间陷入重复失败（未自行纠正），已停止以避免卡死。可调整指令或检查工具后重试。"
-                                    store.add(QuroMessage(role = "assistant", content = lastText))
-                                    emit()
-                                    return@withContext lastText
-                                }
-                            } else {
-                                // 结果正常：合法的「成功重复调用」，完全不干预，重置计数避免误累积
-                                repeatStreak = 0
-                                prevCallSig = sig
-                            }
-                        } else {
-                            repeatStreak = 0
-                            prevCallSig = sig
-                        }
+            val sig = result.calls.joinToString("|") { "${it.name}:${it.arguments}" }
+            if (sig == prevCallSig) {
+                // 仅当本次重复调用的工具结果确为「失败」（高置信判定，避免正文提到失败/错误字样就误判）时，才视为失败重试：
+                val anyFailed = results.any { toolResultLooksFailed(it.result) }
+                if (anyFailed) {
+                    repeatStreak++
+                    // 同一失败签名只提示一次，避免每条重复失败都再灌一条 [系统提示] 污染上下文/打扰模型
+                    if (warnedForSig != sig) {
+                        val failedTool = result.calls.firstOrNull()?.name ?: "工具"
+                        store.add(
+                            QuroMessage(
+                                role = "system",
+                                content = "[系统提示] 你连续多次调用了完全相同的工具「$failedTool」（参数也相同），" +
+                                    "且其返回结果持续包含失败/错误信息，说明该调用很可能未生效。" +
+                                    "请主动结束当前尝试，重新思考任务目标，换用不同的工具或方法，不要继续重试同一调用。",
+                                hidden = true,
+                            ),
+                        )
+                        warnedForSig = sig
+                    }
+                    if (repeatStreak >= 10) {
+                        lastText = "⚠️ 检测到工具调用长时间陷入重复失败（未自行纠正），已停止以避免卡死。可调整指令或检查工具后重试。"
+                        store.add(QuroMessage(role = "assistant", content = lastText))
+                        emit()
+                        return@withContext lastText
+                    }
+                } else {
+                    // 结果正常：合法的「成功重复调用」，完全不干预，重置计数避免误累积
+                    repeatStreak = 0
+                    warnedForSig = null
+                    prevCallSig = sig
+                }
+            } else {
+                repeatStreak = 0
+                warnedForSig = null
+                prevCallSig = sig
+            }
                     }
                     is QuroLlmResult.Error -> {
                         // 纯同步：chat() 自带 5xx/429 重试与友好错误提示，失败即明确展示报错气泡。

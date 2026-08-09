@@ -109,7 +109,7 @@
     {
       "id": "zorv_71a4b22a6b22",
       "name": "frontend-dev",
-      "description": "|",
+      "description": "Full-stack frontend development combining premium UI design, cinematic animations, and production-ready code. Use when building or improving web/mobile frontends, components, pages, or apps with high design quality.",
       "file": "frontend-dev.md",
       "size": 19737
     },
@@ -123,7 +123,7 @@
     {
       "id": "zorv_bad6d52bcb63",
       "name": "tomato-novelist",
-      "description": "|",
+      "description": "番茄小说风格分章节创作助手，支持多种题材，每章 2200-2800 字、结尾带悬念钩子。用户要写长篇小说、网文或连载时使用。",
       "file": "tomato-novelist.md",
       "size": 7143
     },
@@ -158,14 +158,14 @@
     {
       "id": "zorv_a2e9e8ce35da",
       "name": "humanizer-zh",
-      "description": "|",
+      "description": "去除中文文本中的 AI 写作痕迹，让文字读起来更像人类书写。检测并修复夸大象征、宣传腔、公式化结构等问题。用户要求去 AI 味、润色或改写更自然时使用。",
       "file": "humanizer-zh.md",
       "size": 21568
     },
     {
       "id": "zorv_95ab683d0afd",
       "name": "ima-skill",
-      "description": "|",
+      "description": "统一的 IMA OpenAPI 技能，支持笔记管理与知识库操作：上传文件、添加网页到知识库、搜索知识库内容、读写笔记。用户提到知识库、笔记或资料库时使用。",
       "file": "ima-skill.md",
       "size": 14541
     },
@@ -193,7 +193,7 @@
     {
       "id": "zorv_1490ab77d235",
       "name": "memory-manager-v2",
-      "description": ">",
+      "description": "AI 记忆加速器 / Token 节流阀：以更小、更准、更省为目标管理记忆文件，提供分析、搜索、去重、缓存清理、Token 统计与节流。用户提到记忆管理、缓存清理或 Token 优化时使用。",
       "file": "memory-manager-v2.md",
       "size": 10033
     },
@@ -270,7 +270,7 @@
     {
       "id": "zorv_ede52f92363c",
       "name": "processon-mindmap-generator",
-      "description": "|",
+      "description": "ProcessOn 官方 AI 脑图生成工具：将自然语言、Markdown、长文本、网页或图片文字一键生成结构清晰、可编辑的专业思维导图。用户要画脑图或思维导图时使用。",
       "file": "processon-mindmap-generator.md",
       "size": 17089
     },
