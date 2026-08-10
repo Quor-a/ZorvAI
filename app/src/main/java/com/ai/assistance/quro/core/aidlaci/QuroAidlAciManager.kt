@@ -155,7 +155,7 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
             override fun onServiceDisconnected(name: ComponentName?) {
                 serviceMap.remove(packageName)
                 deathRecipients.remove(packageName)   // 断开即弃旧监听，避免悬空引用
-                socketOk[packageName] = null          // 复位 socket 探测，便于重连后重探
+                socketOk.remove(packageName)          // 复位 socket 探测，便于重连后重探
                 Log.w(TAG, "⚠️ 断开：$packageName（已保留能力缓存，待自动重绑）")
                 QuroAidlAciEvents.emit(QuroAidlAciEvents.EVT_SERVICE_UNBOUND, packageName, "")
                 scheduleRebind(packageName)
@@ -650,7 +650,7 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
     /**
      * 语义点击：受控端需同时暴露 ui_snapshot（无障碍服务抓取 UI 树）与 tap（坐标点击）能力。
      * 命中时自动从 UI 树解析锚点坐标并调用 tap；未暴露语义能力则返回明确 412 引导，不静默失败。
-     * 这是 元宝 ACI-Vision「视觉锚点」在受控端具备无障碍能力时的落地点。
+     * 这是语义点击在受控端具备无障碍能力时的落地点（视觉锚点）。
      */
     fun clickText(targetPackage: String, text: String): AidlAciResponse {
         val caps = capMap[targetPackage] ?: emptyList()

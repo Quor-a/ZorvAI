@@ -338,7 +338,7 @@ object BrowserCore {
     }
 
     /**
-     * 读取「精简 DOM」：清洗后的当前页结构（对应元宝建议的「HTML 回传·精简模式」）。
+     * 读取「精简 DOM」：清洗后的当前页结构（HTML 回传·精简模式，降低 token 消耗）。
      * 去 script/style/link/meta/noscript，给可交互元素打 data-ai-id，标记 data-in-viewport，
      * 供 AI 控制方直接理解页面结构而非啃原始巨串。返回字符串上限切片到 ~1MB。
      */
@@ -461,7 +461,7 @@ object BrowserCore {
      * 扫描当前页媒体/文件资源（video/audio/source/a[download]/img），返回结构化列表：
      * {count, resources:[{tag,src,type,text,page_url, current_time?,duration?,paused?,poster?,download?}]}
      * src 已解析为绝对 URL —— 控制方可直接拿 video/audio 直链播放，或拿 a[download] 下载链接。
-     * （对应元宝建议的「文件/视频回传」核心能力：页面资源变控制方可播放/可下载的具体资源）
+     * （「文件/视频回传」核心能力：页面资源变控制方可播放/可下载的具体资源）
      */
     fun scanResources(): String {
         val ref = AtomicReference("")
@@ -695,7 +695,7 @@ object BrowserCore {
     }
 
     /**
-     * 按 CSS 选择器查询 DOM 元素（对应元宝 TermBrowser 的 dom 命令）。
+     * 按 CSS 选择器查询 DOM 元素（对应 dom 命令式操控思路）。
      * 返回匹配元素的索引/标签/文本/值/链接/id/class/位置/可见性，便于 AI 直接按选择器理解/定位元素。
      */
     fun queryBySelector(selector: String): String {
@@ -734,7 +734,7 @@ object BrowserCore {
     }
 
     /**
-     * 按 CSS 选择器直接操作元素（对应元宝 dom+click/text；不依赖 browser_elements 注入的 data-aci-eid）。
+     * 按 CSS 选择器直接操作元素（dom+click/text 思路；不依赖 browser_elements 注入的 data-aci-eid）。
      * 用于页面未注入稳定ID、或调用方更想用选择器精确定位的场景。op 同 actionOnElement。
      */
     fun actionBySelector(selector: String, op: String, arg: String): String {

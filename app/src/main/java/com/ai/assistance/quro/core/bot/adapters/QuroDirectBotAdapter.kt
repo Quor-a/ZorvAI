@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
  * 直连型平台适配器基类（QQBot V2 / 飞书 / 微信 iLink 共用）。
  *
  * 与旧版「后端 Relay」脚手架（QuroRelayBotAdapter）的本质区别：
- * 旧版假设必须有一个公网后端中转，而元宝核实——**三家官方都支持「手机端零公网端点」的
+ * 旧版假设必须有一个公网后端中转，而经核实——**三家官方都支持「手机端零公网端点」的
  * 收消息方式**：QQBot / 飞书走官方 WebSocket 长连，微信 iLink 走 HTTP 长轮询（35s）。
  * 因此本 App 直接持密钥【出站】连官方网关即可，无需任何自备服务器 / Webhook。
  *

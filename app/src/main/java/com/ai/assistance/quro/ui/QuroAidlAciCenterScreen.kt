@@ -227,7 +227,7 @@ agentic 增强（新增 7 · 元素级操控 + 状态/事件/审计）：
 • browser_media           —— 扫描当前页 video/audio/source/a[download]/img 资源，返回结构化列表：绝对直链 + 类型 + 文本；video/audio 额外含 current_time/duration/paused/poster；a[download] 含 download。控制方可直接拿直链播放或下载。
 • browser_share(type, text?) —— 调起系统分享面板：type ∈ page(分享当前页 URL) / text(分享自定义文本)，返回 launched。
 
-第三波增强（新增 6 · 元宝 TermBrowser「完整方案」落地：控制台捕获 + 选择器操控 + 轻量多标签）+ browser_action selector 增强：
+第三波增强（新增 6 · 受控浏览器「完整方案」落地：控制台捕获 + 选择器操控 + 轻量多标签）+ browser_action selector 增强：
 • browser_console(action?, limit?, filter?) —— 抓取当前页 console.* 输出（log/warn/error/info）：action ∈ list(默认)/clear/enable/disable，返回 entries[{level,text,source,line,time}] + count + enabled。原生 WebChromeClient.onConsoleMessage 钩取（默认开启）。
 • browser_query(selector)  —— 按 CSS 选择器查询当前页 DOM，返回匹配列表：count + matches[{index,tag,text,value,href,id,cls,x,y,w,h,visible}]。供 AI 直接按选择器定位元素。
 • browser_action 增强 —— 原按 data-aci-eid 操作；现新增 `selector`(CSS 选择器) 参数（与 id 二选一，优先级低于 id），可直接用 "#main button" 之类定位操作，免去先 browser_elements 注入。
@@ -236,7 +236,7 @@ agentic 增强（新增 7 · 元素级操控 + 状态/事件/审计）：
 • browser_tab(id)         —— 轻量多标签·切换到指定标签（重载其 URL）。
 • browser_tabclose(id)    —— 轻量多标签·关闭（激活标签关闭后自动回退最近一个）。
 
-第四波增强（新增 1 · 虚拟鼠标，回应元宝「完整虚拟鼠标」）：
+第四波增强（新增 1 · 虚拟鼠标）：
 • browser_mouse(action, x, y, dx?, dy?, button?) —— 在页面「屏幕坐标」模拟鼠标：action ∈ move(悬停)/click/dblclick/right/down/up/drag/scroll；后端按 WebView 在屏位置自动换算视图坐标后派发 MotionEvent（主线程 dispatchTouchEvent / dispatchGenericMotionEvent）。覆盖无稳定ID、无 CSS 选择器的元素与画布交互，与 browser_action(id/selector) 形成「坐标 + 语义」双通道。注：系统 WebView 将触摸事件按触摸处理，右键为尽力而为。
 • http_request(url, method?, headers?, body?) —— HTTP 传输：经 ACI 让受控浏览器代为发起任意 HTTP 请求（GET/POST/PUT/DELETE/PATCH/HEAD 等），返回 status_code / response_headers / response_body。用于调用 Web API、抓取网页、对接第三方服务；**重点支持同网段 LAN 明文**（http://192.168.x.x、http://10.x、*.local mDNS），访问路由器/NAS/智能家居/私有 API 等局域网设备——受控浏览器已放开局域网明文，无需因公网明文限制而犹豫；公网请求仍走 HTTPS。响应体 >15 万字符自动 gzip（response_body_gz），控制端解压还原。
 
@@ -254,7 +254,7 @@ agentic 增强（新增 7 · 元素级操控 + 状态/事件/审计）：
 • 安全权衡：明文放开后，公网明文 HTTP（http:// 公网域名）也会一并放行；请仅在可信局域网内用 http_request 访问内网地址，不要经它请求公网明文站点；远程生产通信（HTTPS）不受影响。
 
 十一、规划方向（尚未实现，供参考）
-元宝「TermBrowser」方案其余尚未落地的增强方向（轻量多标签 tabnew/tabclose/tabs/tab 已在第三波以「单引擎轻量版」落地；真·并行隔离仍属架构级改造）：
+受控浏览器方案其余尚未落地的增强方向（轻量多标签 tabnew/tabclose/tabs/tab 已在第三波以「单引擎轻量版」落地；真·并行隔离仍属架构级改造）：
 • 隔离 Profile 沙盒 / 敏感操作人工接管浮窗 / 后台持续渲染 / 多实例并行隔离 / 速率限制熔断。
 • console.log 实时捕获（hook console，供 AI 读取页面运行日志；当前已有 page 级事件 browser_events，尚未 hook console）。
 • 自编译 Chromium / CDP 深度控制（拦截响应体、改写响应头、自定义协议）。

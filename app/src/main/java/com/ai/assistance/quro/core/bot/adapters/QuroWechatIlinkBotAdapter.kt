@@ -78,7 +78,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
     /** 不带 token 的基础头（获取二维码 / 轮询状态用）。 */
     private fun baseHeaders(): Map<String, String> = mapOf(
         "Content-Type" to "application/json",
-        // 元宝/协议文档明确要求：状态轮询必须带此头，无 iLink- 头会被微信拦截/拒轮询
+        // 微信 iLink 协议文档明确要求：状态轮询必须带此头，无 iLink- 头会被微信拦截/拒轮询
         "iLink-App-ClientVersion" to "1",
     )
 
@@ -175,7 +175,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                         status == "wait" -> { /* 继续等 */ }
                         status == "scaned" -> Log_i("扫码登录: 已扫描，等待手机确认...")
                         status == "scaned_but_redirect" -> {
-                            // 元宝/协议文档：跨机房调度，需把后续轮询切到 redirect_host
+                            // 微信 iLink 协议文档：跨机房调度，需把后续轮询切到 redirect_host
                             val redirectHost = statusJson.optString("redirect_host").ifBlank {
                                 statusJson.optString("redirect").ifBlank { statusJson.optString("host") }
                             }

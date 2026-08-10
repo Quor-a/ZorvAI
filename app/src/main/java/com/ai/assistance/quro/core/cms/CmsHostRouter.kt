@@ -4,7 +4,7 @@ import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 
 /**
- * CmsHostRouter — 能力运行宿主路由（元宝「Capability-Oriented Architecture」的 Runtime Host 落地）。
+ * CmsHostRouter — 能力运行宿主路由（Capability-Oriented Architecture 的 Runtime Host 落地）。
  *
  * 一个 [QuroCmsCapability] 声明 [QuroCmsCapability.runOn]（可在哪些宿主运行：APP 前端 / TERMINAL 后端）。
  * 调用携带 [InvocationTarget]（auto/app/terminal），本路由按以下策略解析最终宿主：
@@ -12,7 +12,7 @@ import com.ai.assistance.quro.core.linux.QuroLinuxEnv
  * 2) auto 或显式宿主不被支持 → 在 runOn 候选内自动选：
  *    - 候选唯一 → 该宿主；
  *    - 候选双宿主(APP+TERMINAL) → 若 proot 就绪 且 未锁屏 且 (充电中 或 电量≥20%) → TERMINAL，否则 APP
- *      （即 Yuanbao「后台长任务/有算力时迁移到后端，前台/省电时留在前端」的互为主从策略）。
+ *      （即「后台长任务/有算力时迁移到后端，前台/省电时留在前端」的互为主从策略）。
  *
  * 解析失败（请求宿主能力不支持且无可行候选）→ 返回 [HostResolution.guidance] 引导文案，
  * 上层转成「⛔ 引导错误」，不静默失败。
@@ -38,7 +38,7 @@ object CmsHostRouter {
         if (candidates.size == 1) {
             return HostResolution(candidates.first(), null)
         }
-        // 双宿主：按运行时上下文选（元宝互为主从策略）；context 为空（JVM 单测）时按保守策略：不就绪/未锁/中性电量
+        // 双宿主：按运行时上下文选（互为主从策略）；context 为空（JVM 单测）时按保守策略：不就绪/未锁/中性电量
         val terminalReady = if (context == null) false else runCatching { QuroLinuxEnv.probe(context).available }.getOrDefault(false)
         val locked = context != null && isDeviceLocked(context)
         val (level, charging) = if (context == null) (50 to false) else batteryInfo(context)

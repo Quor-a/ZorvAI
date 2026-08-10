@@ -38,7 +38,7 @@ object CmsExecutionEngine {
     ): CmsExecResult {
         CmsStateStore.init(context)
         val tid = taskId ?: CmsStateStore.newTask("call", "${module.id}:${cap.id}")
-        // 解析运行宿主（元宝 Runtime Host 路由）
+        // 解析运行宿主（Runtime Host 路由）
         val resolution = CmsHostRouter.resolve(cap, target, context)
         if (resolution.host == null) {
             val msg = resolution.guidance ?: "⛔ 无法解析运行宿主"

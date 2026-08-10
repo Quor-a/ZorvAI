@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * QQ 机器人 V2 适配器（直连官方网关，零公网端点）。
  *
- * 接入形态（元宝核实）：
+ * 接入形态（已核实）：
  *  - 换 token：POST https://bots.qq.com/app/getAppAccessToken（appId + clientSecret）→ access_token
  *  - 拿 WS 网关：GET https://api.sgroup.qq.com/gateway/bot（Authorization: QQBot {token}）→ wss 地址
  *  - 收消息：WebSocket 长连，op=0 DISPATCH 的 C2C_MESSAGE_CREATE 事件

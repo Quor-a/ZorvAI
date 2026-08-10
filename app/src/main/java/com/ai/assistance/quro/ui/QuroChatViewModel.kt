@@ -699,7 +699,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 // ② 再移除 liveBuffer，避免误删续跑/新轮的缓冲。
                 // ⚠️ 必须用 this@QuroChatViewModel.store 访问类字段：launch 内 line 511 把 `store` 重名遮蔽成本轮 buf。
                 if (liveBuffers[convId] === buf) {
-                    // ★ 多会话串台根因修复（对齐元宝「每会话状态独立、不共享」原则）：
+                    // ★ 多会话串台根因修复（每会话状态独立、不共享）：
                     //   全局单例 store 仅承载【当前可见会话】的工作副本。后台（不可见）会话生成完成时，
                     //   若也把自身内容无条件覆盖进全局 store，会污染下一个可见会话的 send() 首显
                     //   （store.add(userMsg) + commitCurrent 默认用 store 刷 _messages）→ 屏幕串出旧会话内容

@@ -13,7 +13,7 @@ import java.util.UUID
  * 自动复用 / 修正（OODA 闭环的 Feedback）。不打扰用户，纯本地持久化于
  * filesDir/ai_experience.json。
  *
- * 数据模型（对齐腾讯元宝方案，但收敛为单文件 + 进程级写锁，复用 [com.ai.assistance.quro.core.memory.QuroMemoryRepository]
+ * 数据模型（经验沉淀方案，但收敛为单文件 + 进程级写锁，复用 [com.ai.assistance.quro.core.memory.QuroMemoryRepository]
  * 的稳健范式，规避并发写互相覆盖）：
  * - experiences[]：经验条目（type ∈ error / solution / pattern / compatibility）
  * - compatibility[]：版本兼容标记（valid_in / broken_since / workaround）

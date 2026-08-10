@@ -7,7 +7,7 @@ import java.util.Locale
 /**
  * 经验引擎：分类 / 沉淀 / 相关性检索 / 自我纠错 / 版本自检 / 进化指标。
  *
- * 设计对齐腾讯元宝方案的「OODA 自我进化循环」：
+ * 设计采用「OODA 自我进化循环」：
  * - Observe：对话中遇到报错 / 解决 / 工具模式 / 版本差异
  * - Orient：classify 归类 + queryRelevant 找历史经验
  * - Decide / Act：log 沉淀新经验 / correct 修正旧经验 / recordCompat 记版本差异
@@ -138,7 +138,7 @@ class QuroExperienceEngine(private val repo: QuroExperienceRepository) {
         }
     }
 
-    /** 进化指标：对齐元宝方案的 Correction Rate / Reuse Count / Accuracy Trend / Version Drift。 */
+    /** 进化指标：Correction Rate / Reuse Count / Accuracy Trend / Version Drift。 */
     fun metrics(): ExperienceMetrics {
         val (exps, comps, cors) = repo.loadAll()
         val total = exps.size

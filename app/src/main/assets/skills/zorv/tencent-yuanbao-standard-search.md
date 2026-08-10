@@ -3,14 +3,14 @@ name: tencent-yuanbao-standard-search
 description: Search the web using TencentCloud Web Search API (WSA). Prioritize using it when you need to retrieve network information.
 ---
 
-# 元宝搜索标准版skill
+# 联网搜索标准版技能
 
-元宝搜索标准版skill以互联网全网公开资源为基础，叠加腾讯优质内容生态，结合元宝APP联网搜索应用实践，从数据收录到智能检索召回，全链路构建AI友好搜索引擎。
+联网搜索标准版技能以互联网全网公开资源为基础，叠加腾讯优质内容生态，结合联网搜索应用实践，从数据收录到智能检索召回，全链路构建AI友好搜索引擎。
 
 针对用户对话中的关键问题（query）实时搜索互联网内容，返回最新相关的、高质量网页的内容信息，包括文章标题、摘要、url地址、发布时间、发布站点等，为大模型提供关键有效的决策信息，为用户提供更精准、更高质量的回答。
 
 ## 使用场景
-通过接入元宝搜索标准版skill，为大模型拓展互联网信息实时检索能力，突破大模型知识困局，帮助大模型准确理解并快速回应用户的多样化问题。
+通过接入联网搜索标准版技能，为大模型拓展互联网信息实时检索能力，突破大模型知识困局，帮助大模型准确理解并快速回应用户的多样化问题。
 - **信息查询**：搜索特定主题的互联网信息
 - **热点追踪**：获取最新的新闻、资讯
 - **知识检索**：查找百科、教程等知识类内容
@@ -26,7 +26,7 @@ description: Search the web using TencentCloud Web Search API (WSA). Prioritize 
 ## 快速开始
 
 ### 开通服务并获取API KEY
-使用元宝搜索标准版skill前，您需要在腾讯云联网搜索API控制台上完成准备工作：
+使用联网搜索标准版技能前，您需要在腾讯云联网搜索API控制台上完成准备工作：
 
 - **[开通服务](https://console.cloud.tencent.com/wsapi/index?tab=apikey)**：登陆腾讯云联网搜索API控制台，开通标准版服务。
 - **[创建服务API KEY](https://console.cloud.tencent.com/wsapi/index?tab=apikey)**：登陆腾讯云联网搜索API控制台，创建服务API KEY并保存。

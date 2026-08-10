@@ -449,14 +449,14 @@ ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，�
 | `browser_tab` | `id`(string, 必填) | `ok`(boolean) + `url` + `id` | 轻量多标签·切换到指定标签（重载其 URL） |
 | `browser_tabclose` | `id`(string, 必填) | `ok`(boolean) + `remaining`(int) | 轻量多标签·关闭（激活标签关闭后自动回退最近一个） |
 
-**第四波增强（1 · 虚拟鼠标，回应元宝「完整虚拟鼠标」）**
+**第四波增强（1 · 虚拟鼠标）**
 
 | 能力 id | 入参 | 出参 | 说明 |
 |---------|------|------|------|
 | `browser_mouse` | `action`(string, 必填：move/click/dblclick/right/down/up/drag/scroll) / `x`(int, 必填 屏幕绝对像素 X) / `y`(int, 必填 屏幕绝对像素 Y) / `dx`(int, 可选) / `dy`(int, 可选) / `button`(string, 可选：left 默认/right/middle) | `ok`(boolean) + `action` + `x` + `y` | 在页面屏幕坐标模拟鼠标动作；后端按 WebView 在屏位置自动换算视图坐标后派发 `MotionEvent`（主线程 `dispatchTouchEvent` / `dispatchGenericMotionEvent`）。覆盖无稳定ID、无 CSS 选择器的元素与画布交互，与 `browser_action`(id/selector) 构成「坐标 + 语义」双通道。注：系统 WebView 将触摸事件按触摸处理，右键为尽力而为 |
 | `http_request` | `url`(string, 必填) / `method`(string, 可选：GET/POST/PUT/DELETE/PATCH/HEAD，默认 GET) / `headers`(string, 可选 JSON) / `body`(string, 可选 原样发送) | `status_code`(int) + `response_headers`(string JSON) + `response_body`(string) + `truncated`(boolean)；大响应体附 `response_body_gz`(byte[]) | HTTP 传输：经 ACI 让受控浏览器代为发起任意 HTTP 请求。**重点支持同网段 LAN 明文**（http://192.168.x.x、http://10.x、*.local mDNS），访问路由器/NAS/智能家居/私有 API 等局域网设备；受控浏览器已放开局域网明文（networkSecurityConfig base-config 整体允许明文），无需因公网明文限制而犹豫，公网请求仍走 HTTPS。 响应体 >15 万字符自动 gzip（response_body_gz），控制端解压还原 |
 
-**第五波增强（2 · 语义点击闭环，回应元宝 ACI 2.0「视觉锚点 / 感知-执行」）**
+**第五波增强（2 · 语义点击闭环）**
 
 | 能力 id | 入参 | 出参 | 说明 |
 |---------|------|------|------|

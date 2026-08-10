@@ -4342,8 +4342,8 @@ private fun extractInlineComponents(text: String): Pair<String, List<QuroChatCar
             i = end + 1
         }
     }
-    // v150：腾讯元宝回答链接 → 气泡内预览卡（原生安卓点击查看体验）。
-    // 仅元宝域名走预览卡；其余外链保留既有内联 ClickableText 行为。
+    // v150：链接回答 → 气泡内预览卡（原生安卓点击查看体验）。
+    // 仅该域名走预览卡；其余外链保留既有内联 ClickableText 行为。
     val yuanbaoRe = RE_YUANBAO
     val seen = mutableSetOf<String>()
     val out = StringBuilder()
@@ -4355,7 +4355,7 @@ private fun extractInlineComponents(text: String): Pair<String, List<QuroChatCar
             cards.add(
                 QuroChatCard.YuanbaoCard(
                     id = "yb_" + url.hashCode().toString(36).replace("-", "m"),
-                    title = "腾讯元宝回答",
+                    title = "链接回答",
                     url = url,
                 )
             )

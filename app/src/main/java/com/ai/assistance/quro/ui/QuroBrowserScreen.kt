@@ -138,7 +138,7 @@ private fun formatEvalResult(raw: String?): String {
     }
 }
 
-// —— 原生「眼 + 手」自动化工具（对应元宝「眼睛」方案：读 View 树 / PixelCopy 截图 + 模拟触摸）——
+// —— 原生「眼 + 手」自动化工具（读 View 树 / PixelCopy 截图 + 模拟触摸）——
 private fun findViews(root: View): List<View> {
     val out = mutableListOf<View>()
     if (root is ViewGroup) {
@@ -219,7 +219,7 @@ private fun saveBookmarks(ctx: Context, list: List<Pair<String, String>>) {
 
 /**
  * 应用内置浏览器（GeckoView 开源引擎，替换系统 WebView）：
- * 用 Mozilla GeckoView（对应元宝清单 Firefox 系开源浏览器 Iceraven/IronFox）作为内置浏览器引擎，
+ * 用 Mozilla GeckoView（Firefox 系开源浏览器 Iceraven/IronFox）作为内置浏览器引擎，
  * 支持前进/后退/刷新/停止、加载进度、桌面版网站、页内查找、收藏夹、分享/复制链接、
  * 正文抓取、网页自动化脚本（注入 JS 执行并回显结果）、代码编辑器入口。
  */
@@ -327,15 +327,15 @@ fun QuroBrowserScreen(
         running = false
     }
 
-    // 书签：接入「开源地址（Iceraven）」+「元宝回答」两条入口
+    // 书签：接入「开源地址（Iceraven）」+「链接回答」两条入口
     LaunchedEffect(Unit) {
         val wanted = listOf(
             "开源地址（Iceraven 浏览器）" to "https://github.com/fork-maintainers/iceraven-browser",
-            "元宝回答·开源浏览器清单" to "https://yb.tencent.com/s/NFdWa3f1zpSk",
-            "元宝回答·百分百开源安卓数字人" to "https://yb.tencent.com/s/I9x5hnu8zJqm",
-            "元宝回答·3D 全离线（LLM+ASR+TTS+A2BS+渲染都在手机）" to "https://yb.tencent.com/s/TsfOddkjerlh",
+            "链接回答·开源浏览器清单" to "https://yb.tencent.com/s/NFdWa3f1zpSk",
+            "链接回答·百分百开源安卓数字人" to "https://yb.tencent.com/s/I9x5hnu8zJqm",
+            "链接回答·3D 全离线（LLM+ASR+TTS+A2BS+渲染都在手机）" to "https://yb.tencent.com/s/TsfOddkjerlh",
         )
-        val oldSeedTitles = setOf("开源地址（点击查看元宝的回答）", "元宝·开源浏览器参考")
+        val oldSeedTitles = setOf("开源地址（点击查看链接回答）", "链接·开源浏览器参考")
         var next = bookmarks.filterNot { (t, u) ->
             t in oldSeedTitles || u == "https://yb.tencent.com/s/oRnfpcJJ7fic"
         }

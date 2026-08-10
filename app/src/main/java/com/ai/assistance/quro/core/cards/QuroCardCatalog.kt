@@ -68,7 +68,7 @@ val CARD_CATALOG: List<CardTemplate> = listOf(
     CardTemplate("actions", "action", "动作按钮组", """{"type":"actions","actions":[{"label":"复制","command":"copy:文本"},{"label":"打开","command":"open:https://example.com"}]}"""),
     CardTemplate("quickreply", "action", "快捷回复建议", """{"type":"quickreply","replies":["好的","稍等","不行"],"multi":false}"""),
     CardTemplate("quickaction", "action", "快捷动作（带图标）", """{"type":"quickaction","actions":[{"label":"搜索","icon":"search","command":"ai:搜索最新新闻"},{"label":"打开","icon":"open","command":"open:https://example.com"}]}"""),
-    CardTemplate("yuanbao", "action", "腾讯元宝回答跳转", """{"type":"yuanbao","url":"https://yuanbao.tencent.com/abc"}"""),
+    CardTemplate("yuanbao", "action", "链接回答跳转", """{"type":"yuanbao","url":"https://yuanbao.tencent.com/abc"}"""),
     // ── 导航 ──
     CardTemplate("breadcrumb", "nav", "面包屑导航，点击层级触发 command（v221）", """{"type":"breadcrumb","title":"路径","crumbs":[{"label":"首页","command":"screen:home"},{"label":"设置","command":"screen:settings"}]}"""),
     // ── 装饰/可视化 ──

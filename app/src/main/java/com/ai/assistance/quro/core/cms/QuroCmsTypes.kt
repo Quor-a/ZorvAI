@@ -14,7 +14,7 @@ enum class ModuleState {
 }
 
 /**
- * 运行时宿主（对应元宝「能力可前后端互换」架构的 Runtime Host）。
+ * 运行时宿主（能力可前后端互换的 Runtime Host）。
  * - APP：前端宿主，指 Android 应用进程内（intent/js/api 通道）。
  * - TERMINAL：后端宿主，指 proot/Alpine 应用内 Linux 沙箱（terminal 通道），可跑 python3/node/任意二进制。
  * 一个能力声明 [QuroCmsCapability.runOn] 标明可在哪些宿主运行；调用时经 [CmsHostRouter]
@@ -97,7 +97,7 @@ data class QuroCmsCapability(
     val actionType: String,
     /** 执行内容：shell/terminal 为命令模板(${arg} 替换) / intent 为 JSON / js 为脚本。 */
     val action: String,
-    /** 可运行宿主集合（元宝「能力可前后端互换」）。缺省按 actionType 推导；可显式声明同时支持 APP+TERMINAL。 */
+    /** 可运行宿主集合（能力可前后端互换）。缺省按 actionType 推导；可显式声明同时支持 APP+TERMINAL。 */
     val runOn: Set<RuntimeHost> = RuntimeHost.hostsFor(actionType),
     /** 当宿主选为 TERMINAL 时使用的命令模板（默认 null → 退回应用内 action；仅 terminal 类能力本身即在终端跑）。 */
     val terminalAction: String? = null,

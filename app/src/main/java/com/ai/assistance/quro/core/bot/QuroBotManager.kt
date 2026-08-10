@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap
  *    [com.ai.assistance.quro.core.network.QuroLlmClient] + [com.ai.assistance.quro.core.tools.buildQuroRegistry]
  *    在独立会话里跑 ReAct 循环，得到回复文本（不触碰 UI 层）。
  *  - 回复经对应 [QuroBotAdapter.deliver] 回传平台。
- *  - 三家平台均支持「手机端零公网端点」收消息（元宝核实）：QQBot / 飞书走官方 WebSocket 长连，
+ *  - 三家平台均支持「手机端零公网端点」收消息（已核实）：QQBot / 飞书走官方 WebSocket 长连，
  *    App 持密钥【出站】直连官方网关，无需任何自备服务器 / Webhook。
  *  - [QuroLocalBotAdapter] 保留为纯 App 内链路，用于免凭据端到端联调。
  *

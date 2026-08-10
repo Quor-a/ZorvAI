@@ -369,10 +369,10 @@ sealed interface QuroChatCard {
         data class KanbanColumn(val name: String, val items: List<String>)
     }
 
-    /** 元宝回答单条链接（多链接卡片里的一行）。 */
+    /** 链接回答单条链接（多链接卡片里的一行）。 */
     data class YuanbaoLink(val title: String, val url: String)
 
-    /** 元宝回答链接预览卡：气泡内点击即在应用内浏览器打开元宝回答（原生安卓点击查看体验）。
+    /** 链接回答预览卡：气泡内点击即在应用内浏览器打开该回答（原生安卓点击查看体验）。
      *  v294：支持多链接——[links] 非空时渲染多行，否则回退单 [url]；二者皆空时由渲染层用预设清单兜底。 */
     data class YuanbaoCard(
         override val id: String,
@@ -1061,7 +1061,8 @@ fun parseCard(o: JSONObject): QuroChatCard? {
                 val it = o.optJSONArray("columns")!!.optJSONObject(i)
                 QuroChatCard.KanbanCard.KanbanColumn(it.optString("name", ""), arrStr(it.optJSONArray("items")))
             })
-            "yuanbao" -> {
+            "yuanbao", "linkAnswer" -> {
+                // 兼容去品牌化期间发布的 v1.0.26（wire-type 曾为 "linkAnswer"）已保存的卡片
                 val linksArr = o.optJSONArray("links")
                 val links = if (linksArr != null) {
                     (0 until linksArr.length()).map { i ->

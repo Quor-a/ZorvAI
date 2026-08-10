@@ -6,7 +6,7 @@ import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import java.util.concurrent.Executors
 
 /**
- * 全局线程池（按「行为类型」分线程，源自 ANR 全面排查 / 元宝架构框架）。
+ * 全局线程池（按「行为类型」分线程，源自 ANR 全面排查 / 分层架构框架）。
  *
  * 分层原则：
  * - UI 层只负责「点、看、反馈」，永不 new Thread、永不直接做 IO/计算；

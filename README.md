@@ -32,13 +32,16 @@
 > **🔌 受控端浏览器（ZorvAI 浏览器）已独立开源 · GitHub：[github.com/Quor-a/ZorvBrowser](https://github.com/Quor-a/ZorvBrowser) ｜ Gitee：[gitee.com/ZorvAI/ZorvBrowser](https://gitee.com/ZorvAI/ZorvBrowser)**（独立仓库，含 v1.0.12 源码与 APK）
 >
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
-> - 🔗 主程序 APK（v1.0.25，含离线引擎，最新）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.25/app-full-debug.apk)
+> - 🔗 主程序 APK（v1.0.26，含离线引擎，最新）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.26/app-full-debug.apk)
+> - 🔗 主程序 APK（v1.0.26，F-Droid 风味）：[QuroAI-fdroid-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.26/QuroAI-fdroid-debug.apk)
+> - 🔗 主程序 APK（v1.0.25，含离线引擎）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.25/app-full-debug.apk)
 > - 🔗 主程序 APK（v1.0.24，含离线引擎）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.24/app-full-debug.apk)
 > - 🔗 主程序 APK（v1.0.23，含离线引擎）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.23/app-full-debug.apk)
 > - 🔗 主程序 APK（v1.0.15）：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
 > - 🔗 主程序 APK（v1.0.14）：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
 > - 🔗 主程序 APK（v1.0.12）：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
-> - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.14 · 独立仓，最新）：[ZorvBrowser-aci-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.14/ZorvBrowser-aci-debug-v1.0.14.apk)
+> - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.26 · 独立仓，最新）：[QuroAidlAci-browser-debug.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.26/QuroAidlAci-browser-debug.apk)
+> - 🔗 受控端浏览器 APK（ZorvAI 浏览器 v1.0.14 · 独立仓）：[ZorvBrowser-aci-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.14/ZorvBrowser-aci-debug-v1.0.14.apk)
 > - 🧩 ACI 核心库 AAR：[aci-core-release.aar](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.6/aci-core-release.aar)
 > - 📖 ACI 开发者手册：[docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md)
 > - 🐛 问题反馈：[github.com/Quor-a/ZorvAI/issues](https://github.com/Quor-a/ZorvAI/issues)
@@ -415,7 +418,7 @@ class MyAciService : BaseACIService() {
 
 ### 🆕 v1.0.25 · ACI 升级功能技术说明
 
-本轮对 ACI 框架做了一轮「**不依赖系统特权**」的增强（控制端 `QuroAidlAciManager` + 受控端 `QuroControlledAidlAciService` / `aidl-aci-core`），把元宝 ACI 2.0 方案中可落地的部分做成能力，未落地的系统级部分明确标注为待办：
+本轮对 ACI 框架做了一轮「**不依赖系统特权**」的增强（控制端 `QuroAidlAciManager` + 受控端 `QuroControlledAidlAciService` / `aidl-aci-core`），落地以下能力，未落地的系统级部分明确标注为待办：
 
 1. **callId 链路追踪（可观测性基座）**：`AidlAciRequest` / `AidlAciResponse` 已带 `callId` 字段，受控端在成功 / 鉴权失败 / 能力缺失 / 异步各路径统一回显请求侧 `callId`；控制端每次 `call()` 生成 UUID 并随 LocalSocket / AIDL 双通道回填，可把一次 AI 操作完整串成调用链。
 2. **LocalSocket 抽象命名空间高速通道 + 主动探测**：`AidlAciLocalSocketTransport.probe(endpoint)` 仅 connect 不发包（无副作用）；控制端 `fetchCapabilities` 绑定后主动探测，直接决定首调用走 LocalSocket 还是回落 AIDL，不必等到第一次失败才切换。
@@ -670,7 +673,9 @@ cd QuroAI
 
 直接从 Release 页面下载最新 APK：
 
-- **v1.0.25（debug，含离线 MNN/llama.cpp 引擎，最新）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.25/app-full-debug.apk)（约 357MB，含离线引擎，已随 v1.0.25 Release 上传）
+- **v1.0.26（debug，含离线 MNN/llama.cpp 引擎，最新）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.26/app-full-debug.apk)（约 355MB，含离线引擎，已随 v1.0.26 Release 上传）
+- **v1.0.26（debug，F-Droid 风味）**：[QuroAI-fdroid-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.26/QuroAI-fdroid-debug.apk)（F-Droid 风味，已随 v1.0.26 Release 上传）
+- **v1.0.25（debug，含离线 MNN/llama.cpp 引擎）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.25/app-full-debug.apk)（约 357MB，含离线引擎）
 - **v1.0.24（debug，含离线 MNN/llama.cpp 引擎）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.24/app-full-debug.apk)（约 356MB，含离线引擎，已随 v1.0.24 Release 上传）
 - **v1.0.23（debug，含离线 MNN/llama.cpp 引擎）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.23/app-full-debug.apk)（约 356MB，含离线引擎，已随 v1.0.23 Release 上传）
 - **v1.0.22（debug，含离线 MNN/llama.cpp 引擎）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.22/app-full-debug.apk)（约 356MB，含离线引擎，已随 v1.0.22 Release 上传）
@@ -678,7 +683,8 @@ cd QuroAI
 - **v1.0.16（debug，含离线 MNN/llama.cpp 引擎）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.16/app-full-debug.apk)（约 350MB+，含离线引擎，已随 v1.0.16 Release 上传）
 - **v1.0.15（debug，主程序）**：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
 - **v1.0.14（debug，主程序）**：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
-- **v1.0.14（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 独立仓，最新）**：[ZorvBrowser-aci-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.14/ZorvBrowser-aci-debug-v1.0.14.apk)
+- **v1.0.26（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 独立仓，最新）**：[QuroAidlAci-browser-debug.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.26/QuroAidlAci-browser-debug.apk)
+- **v1.0.14（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 独立仓）**：[ZorvBrowser-aci-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.14/ZorvBrowser-aci-debug-v1.0.14.apk)
 - **v1.0.13（debug，主程序）**：[ZorvAI-debug-v1.0.13.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.13/ZorvAI-debug-v1.0.13.apk)
 - **v1.0.12（debug，主程序）**：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
 - **v1.0.12（debug，受控端浏览器 ACI · ZorvAI 浏览器 · 独立仓）**：[ZorvBrowser-aci-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvBrowser/releases/download/v1.0.12-browser/ZorvBrowser-aci-debug-v1.0.12.apk)
@@ -762,7 +768,7 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 > 仓库主页：GitHub [github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI) ｜ Gitee [gitee.com/ZorvAI/ZorvAI](https://gitee.com/ZorvAI/ZorvAI) ｜ GitLab [jihulab.com/quor-a-group/ZorvAI](https://jihulab.com/quor-a-group/ZorvAI) ｜ 最新下载：[Releases](https://github.com/Quor-a/ZorvAI/releases)
 
-> 🤖 **AI 友好入口**：根目录 `llms.txt` 与 `llms-full.txt` 供 LLM 检索接口（ChatGPT / Perplexity / 元宝联网搜 / Claude 等）直接读取项目上下文；`robots.txt` 已放行 AI 爬虫。
+> 🤖 **AI 友好入口**：根目录 `llms.txt` 与 `llms-full.txt` 供 LLM 检索接口（ChatGPT / Perplexity / 联网搜索 / Claude 等）直接读取项目上下文；`robots.txt` 已放行 AI 爬虫。
 
 ---
 

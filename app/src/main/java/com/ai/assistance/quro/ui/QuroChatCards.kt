@@ -1260,7 +1260,7 @@ private fun KanbanCardView(card: QuroChatCard.KanbanCard) {
     }
 }
 
-/** 元宝回答预设清单（用户逐项登记的「点击查看元宝的回答」链接）。
+/** 链接回答预设清单（用户逐项登记的「点击查看链接回答」链接）。
  *  卡片无可用链接时兜底展示，确保已登记的话题永远有去处。 */
 private val PRESET_YUANBAO_LINKS = listOf(
     QuroChatCard.YuanbaoLink(
@@ -1273,18 +1273,18 @@ private val PRESET_YUANBAO_LINKS = listOf(
     ),
 )
 
-/** 元宝回答链接预览卡：点击在应用内浏览器打开元宝回答（原生安卓点击查看体验）。
+/** 链接回答预览卡：点击在应用内浏览器打开该回答（原生安卓点击查看体验）。
  *  v294：支持多条链接，逐行可点；无链接时兜底展示预设清单。 */
 @Composable
 private fun YuanbaoCardView(card: QuroChatCard.YuanbaoCard) {
     val cs = MaterialTheme.colorScheme
     val items = when {
         card.links.isNotEmpty() -> card.links
-        card.url.isNotBlank() -> listOf(QuroChatCard.YuanbaoLink(card.title.ifBlank { "腾讯元宝回答" }, card.url))
+        card.url.isNotBlank() -> listOf(QuroChatCard.YuanbaoLink(card.title.ifBlank { "链接回答" }, card.url))
         else -> PRESET_YUANBAO_LINKS
     }
-    CardShell(card.title.ifBlank { "腾讯元宝回答" }) {
-        Text("需要点击查看元宝的回答", color = cs.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    CardShell(card.title.ifBlank { "链接回答" }) {
+        Text("需要点击查看链接回答", color = cs.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(6.dp))
         items.forEach { link ->
             Row(

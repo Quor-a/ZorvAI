@@ -19,8 +19,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * 定位：作为 AIDL Binder 的「增强型替代传输」——控制端优先尝试 LocalSocket，
  * 失败/不可用时自动回落 AIDL（由 QuroAidlAciManager 的调用路径保证）。
- * 这是「元宝完美方案」中 LocalSocket 高速通道在 ACI 框架内的落地；
- * 元宝方案中配套的 Uinput 内核输入注入因需系统签名 / Root，普通分发 App 不可行，
+ * 本传输层是 LocalSocket 高速通道在 ACI 框架内的落地；
+ * 系统级 Uinput 内核输入注入因需系统签名 / Root，普通分发 App 不可行，
  * 故以 ACI 能力暴露替代（控制端通过 aci_call 调用受控端能力，而非向其它 App 窗口注入事件）。
  *
  * 设计要点：

@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * 飞书（Lark）自建应用机器人适配器（直连官方 WS 网关，零公网端点）。
  *
- * 接入形态（元宝核实）：
+ * 接入形态（已核实）：
  *  - 换 token：POST https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal（app_id + app_secret）→ tenant_access_token
  *  - 收消息：先 POST https://open.feishu.cn/callback/ws/endpoint（AppID+AppSecret）拿到 data.URL，
  *    再连该签名 WS 地址（带 session）；后台「事件订阅」选「使用长连接接收事件」后无需填回调 URL。

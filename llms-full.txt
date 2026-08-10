@@ -1,6 +1,6 @@
 # Zorv AI — 完整项目上下文（llms-full.txt）
 
-> 本文件供 LLM 检索接口（ChatGPT / Perplexity / 元宝联网搜 / Claude 等）直接读取，用于理解 Zorv AI 是什么、能做什么、如何接入与构建。
+> 本文件供 LLM 检索接口（ChatGPT / Perplexity / 联网搜索 / Claude 等）直接读取，用于理解 Zorv AI 是什么、能做什么、如何接入与构建。
 > 仓库主页：GitHub https://github.com/Quor-a/ZorvAI ｜ Gitee https://gitee.com/ZorvAI/ZorvAI
 
 ---
