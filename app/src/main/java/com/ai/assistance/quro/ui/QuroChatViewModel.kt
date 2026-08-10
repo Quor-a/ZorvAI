@@ -56,6 +56,7 @@ import com.ai.assistance.quro.core.tools.QuroImportedToolRegistry
 import com.ai.assistance.quro.core.tools.QuroVoiceStyle
 import com.ai.assistance.quro.core.tools.QuroCloudTtsCatalog
 import com.ai.assistance.quro.core.tools.QuroTtsPrefs
+import com.ai.assistance.quro.core.tools.QuroTtsHolder
 import com.ai.assistance.quro.core.tools.QuroTtsProviderPrefs
 import com.ai.assistance.quro.core.tools.QuroTtsProviders
 import com.ai.assistance.quro.core.tools.QuroTtsProviderKind
@@ -519,6 +520,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // 不再读实时 _currentId，避免切换会话后轮次/忙态/落盘串台。
         val convId = _currentId.value
         activeConversationId = convId
+        // 新一轮生成开始：复位「AI 用 speak 工具播报」标记，避免上一轮残留导致自动朗读误让位
+        QuroTtsHolder.speakToolFiredThisTurn = false
         QuroDiag.log("SEND", "convId=$convId busyBefore=${isBusy(convId)} text=${t.take(80).replace("\n", " ")}")
         // 轮次打断（barge-in）：仅打断【同一会话】正在进行的前一轮，绝不波及后台其它会话。
         // ★ 存话根因修复：仅看 isBusy 标志会在标志错位时漏掉"仍在生成"的会话，
@@ -632,12 +635,18 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         // ★ ANR 修复：buildSystemPrompt 内部同步做 memory/experience/skills 存储读取 + 大字符串拼接，
                         // 原为 ask 的实参在 viewModelScope(主线程) 上求值 → 主线程重 I/O/计算 → 触发系统 ANR 对话框。
                         // 改为在 IO 线程先把提示词算好，再交给 ask（ask 自身仍切 IO 执行 ReAct 循环）。
+                        val spStart = System.currentTimeMillis()
                         val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effectiveCfg) + (screenCtx ?: "") }
+                        QuroDiag.log("GEN_SYSPROMPT_MS", "convId=$convId ms=${System.currentTimeMillis() - spStart}")
+                        val askStart = System.currentTimeMillis()
+                        var firstTokenTs = 0L
                         genAssistant.ask(appContext, effectiveCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true, historyRounds = _historyRounds.value ?: 0, deepThink = thinking.value) {
                         // 工具调用/结果产生、以及流式 token 到达时实时刷新并落盘（退出生效），
                         // 退出也能保留中间过程；commitCurrent 内部已对落盘做 ≤1s 节流。
+                            if (firstTokenTs == 0L) { firstTokenTs = System.currentTimeMillis(); QuroDiag.log("GEN_FIRSTTOKEN", "convId=$convId ttfb=${firstTokenTs - askStart}ms") }
                             commitCurrent(convId, buf)
                         }
+                        QuroDiag.log("GEN_ASK_MS", "convId=$convId total=${System.currentTimeMillis() - askStart}ms")
                     }.onFailure { e ->
                         if (e is CancellationException) {
                             // 用户主动打断生成：不报红错误，附一行明确反馈并保留已生成的部分内容
@@ -814,10 +823,19 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 // 功能模型配置接入引擎：语音球问答使用 CHAT 绑定模型
                 val effCfg = QuroFunctionModelConfigRepository(appContext).resolveConfig(QuroFunctionType.CHAT, cfg)
                 // ★ ANR 修复：与对话框主路径一致，buildSystemPrompt 放到 IO 线程求值，避免语音球问答在主线程做存储读取。
+                val spStart = System.currentTimeMillis()
                 val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effCfg) }
+                QuroDiag.log("VB_SYSPROMPT_MS", "ms=${System.currentTimeMillis() - spStart}")
+                val askStart = System.currentTimeMillis()
+                var firstTokenTs = 0L
                 // #1110：语音球问答原默认 stream=false → 整段回、不逐层；与主对话（stream=true）行为不一致，
                 // 表现为「部分返回不是一层一层返回、自己回到对话框」。云模型改为流式，与文本框主路径一致。
-                assistant.ask(appContext, effCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true, historyRounds = _historyRounds.value ?: 0, deepThink = thinking.value, onUpdate = onTick)
+                val r = assistant.ask(appContext, effCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true, historyRounds = _historyRounds.value ?: 0, deepThink = thinking.value, onUpdate = {
+                    if (firstTokenTs == 0L) { firstTokenTs = System.currentTimeMillis(); QuroDiag.log("VB_FIRSTTOKEN", "ttfb=${firstTokenTs - askStart}ms") }
+                    onTick()
+                })
+                QuroDiag.log("VB_ASK_MS", "total=${System.currentTimeMillis() - askStart}ms")
+                r
             }.getOrElse { e ->
                 if (e is CancellationException) "⏹ 已停止生成。" else "⚠️ 语音球出错了：${e.message ?: "未知错误"}"
             }
@@ -1416,7 +1434,8 @@ $recent
             "- **⑥ 预览型网页禁止用 write_file 写文件**：当你想给用户「能直接在对话框里预览效果的网页」时，**必须**用 ```html 围栏把完整源码写在回复正文里（见 ④，对话框自动提供「代码 | 预览」双标签），**严禁调用 write_file 把网页存成文件再让用户自己打开**——那样用户看不到预览，我们也无法渲染。write_file 只允许用于用户明确要求「把代码/工程保存到文件」的场景（如生成可下载的项目）。若你已用 write_file 写了网页，请同时把完整源码用 ```html 围栏再贴一份在回复里。\n"
         )
         sb.append("- `ai_browser`：联网搜索、抓取网页正文、打开内置浏览器、自动研究简报。研究/查资料类任务【务必用一次 action=automate】（它内部完成搜索+抓取+合并，一次返回）；不要分步调用 search 再 read，那会拖慢对话。需要联网信息时调用。\n")
-        sb.append("- 语音能力：你可通过 `speak` / `stop_speak` 工具进行 **TTS 语音合成输出**（音色/语速等配置见「设置 → 语音」）。**STT 语音识别是用户的输入通道**——用户说的话会被转写成文字作为消息发给你，你无需、也不能去「调用 STT 工具」，直接基于收到的文字消息作答即可。\n")
+        sb.append("- 语音能力：你可通过 `speak` / `stop_speak` 工具进行 **TTS 语音合成输出**（音色/语速等配置见「设置 → 语音」）。**STT 语音识别是用户的输入通道**——用户说的话会被转写成文字作为消息发给你，你无需、也不能去「调用 STT 工具」，直接基于收到的文字消息作答即可。\n" +
+            "  - **`speak` 是与「自动朗读」开关完全独立的语音通道**：无论用户是否开启自动朗读，当你需要主动「出声」（如唱歌、讲故事、朗诵、分角色演绎、或任何希望用声音而非仅文字表达的场景）时，都应主动调用 `speak`；语音播报的文本允许与你回复的文字内容不同（文字回复是一份，语音可以是另一份）。\n")
         sb.append("- **多语色 / 分角色 / 讲故事朗读的编排**：当用户要求「用多语色 / 分角色 / 讲故事」等方式朗读时，你应当**主动编排**而非只产出一段会被统一念出的纯文本——在回复里用 `(语色:任意名称)` 为不同段落 / 角色分配音色，让 TTS 自动切换声音；**语色标记的名称由你按内容自由定**（角色名、情绪、旁白、叙述者、场景等任何类型都可以，不被限定为固定几种），需要时配合 `speak` 显式播报。若用户要「先讲完故事、再朗读某段文本」，就严格按这个顺序组织内容。自动朗读（回复后自动念）与显式 `speak` 调用走同一引擎——你用文本里的语色 / 情绪标记决定「怎么念」，而不是把整段交给系统默认念白；任意类型的内容（含代码 / 表格 / 列表）只要用户要求多语色演绎，都可加语色标记。\n")
 
         sb.append("\n### CMS v2 模块（可扩展）\n")

@@ -841,12 +841,16 @@ fun ChatScreen(
                             val last = msgs.lastOrNull()
                             if (autoRead && last != null && last.role == "assistant" && last.id != lastSpokenId) {
                                 vm.markSpoken(last.id)
-                                // ★ v414 修复「语音朗读不播 / 语音合成播不完」：
-                                //   ensureReady/speak 是挂起调用，若直接写在随 busy/currentId 取消的 LaunchedEffect 内，
-                                //   挂起过程被取消 → 要么不播、要么播到一半被掐断。改由稳定 scope 承接播放，UI 状态变化不再杀掉朗读。
-                                ttsScope.launch {
-                                    QuroTtsHolder.ensureReady(ctx)
-                                    QuroTtsHolder.speak(last.content) {}
+                                // ★ 朗读协调：若本回合 AI 已用 speak 工具主动播报（用户要求"让 AI 控制朗读顺序"），
+                                //   自动朗读让位，不再重复朗读同一回复；AI 的多次 speak 调用由串行队列按调用顺序播放。
+                                if (QuroTtsHolder.consumeSpeakToolFired()) {
+                                    Log.d("TTS", "自动朗读让位：本回合 AI 已用 speak 工具控制播报顺序")
+                                } else {
+                                    // v414 修复：ensureReady/speak 是挂起调用，改由稳定 scope 承接，UI 状态变化不再杀掉朗读。
+                                    ttsScope.launch {
+                                        QuroTtsHolder.ensureReady(ctx)
+                                        QuroTtsHolder.speak(last.content) {}
+                                    }
                                 }
                             }
                         }

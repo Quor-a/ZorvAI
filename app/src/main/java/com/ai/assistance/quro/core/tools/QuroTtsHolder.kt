@@ -59,6 +59,17 @@ object QuroTtsHolder {
     /** 语音球正在播报（保留字段：语音球仍会置位；但对话框不再据此跳过，改为串行入队，实现「两层都播·串行」）。 */
     @Volatile var voiceBallOwnsSpeech = false
 
+    // 标记：本轮对话生成期间 AI 是否通过 speak 工具主动发起了语音。
+    // 自动朗读(朗读)协调用：若 AI 已用 speak 工具控制播报，则自动朗读让位，避免双重朗读 / 顺序错乱。
+    @Volatile var speakToolFiredThisTurn = false
+
+    /** 消费「本轮 AI 是否用 speak 工具播报过」标记（读取并复位为 false）。 */
+    fun consumeSpeakToolFired(): Boolean {
+        val v = speakToolFiredThisTurn
+        speakToolFiredThisTurn = false
+        return v
+    }
+
     // ── 串行播报队列：杜绝「新语音打断/杀掉旧语音 → 有一个不播」──
     // 新请求到来时若已有语音在播，进入 pending 队列，等当前播完再播（"一个播完再播一个"）。
     private data class SpeechJob(val text: String, val onDone: (() -> Unit)?, val minimal: Boolean)
@@ -585,7 +596,7 @@ object QuroTtsPrefs {
 }
 
 class SpeakTool : QuroTool {
-    override val name = "speak"; override val description = "用系统 TTS 朗读文本"
+    override val name = "speak"; override val description = "独立的 AI 语音播报通道，与「自动朗读」开关完全解耦：无论用户是否开启自动朗读，你都应主动用本工具发出语音（如用户让你唱歌、讲故事、朗诵、分角色读等）；可多次调用，按调用顺序依次播放。语音文本可与回复文字不同（文字回复是一份内容，语音播报可以是另一份内容）"
     override val parametersJson = """{"type":"object","properties":{"text":{"type":"string"},"lang":{"type":"string"}},"required":["text"]}"""
     override fun run(context: Context, arguments: String): String {
         val jo = JSONObject(arguments); val text = jo.optString("text", "")
@@ -595,6 +606,8 @@ class SpeakTool : QuroTool {
         // 改为后台异步发起，工具立即返回，歌曲在后台播放，界面不再冻结。
         QuroTtsHolder.prepare(context)
         if (!QuroTtsHolder.speakAsync(text)) return "TTS 未就绪（缺少上下文）"
+        // 标记「AI 本轮主动用 speak 工具播报」→ 自动朗读(朗读)让位，交由 AI 决定播放顺序
+        QuroTtsHolder.speakToolFiredThisTurn = true
         return "已请求朗读（后台播放中）"
     }
 }

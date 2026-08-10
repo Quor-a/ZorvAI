@@ -13,6 +13,9 @@ import android.os.Looper
 import android.util.Base64
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
+import android.webkit.ConsoleMessage
+import com.ai.assistance.quro.util.QuroDiag
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -452,7 +455,7 @@ private fun DigitalHumanSettingsCard(
                 Text("已载入：${dh.customModelPath.substringAfterLast("/")}", fontSize = 11.sp, color = Muted, modifier = Modifier.padding(horizontal = 16.dp))
             }
             Spacer(Modifier.height(4.dp))
-            Text("自定义 3D 预览依赖 Three.js（首次需联网加载，之后走缓存）。", fontSize = 11.sp, color = Muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            Text("自定义 3D 预览已内置离线 Three.js 引擎（assets/www/three/），无需联网即可渲染。", fontSize = 11.sp, color = Muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         }
     }
 }
@@ -466,6 +469,24 @@ private fun copyGlbToCache(ctx: Context, uri: Uri): String? = runCatching {
         out.absolutePath
     }
 }.getOrNull()
+
+/** 从 assets 读取文本内容；失败返回 null 并记录诊断日志。 */
+private fun readAssetText(ctx: Context, path: String): String? = runCatching {
+    ctx.assets.open(path).bufferedReader().use { it.readText() }
+}.onFailure { QuroDiag.log("GLB", "读取 assets/$path 失败：${it.message}") }.getOrNull()
+
+/** 把 Draco 解码器（wasm + js 胶水）从 assets 提取到 cacheDir/three/draco/，供离线 GLTFLoader 解码 Draco 压缩模型。 */
+private fun extractDracoAssets(ctx: Context): Boolean = runCatching {
+    val outDir = File(ctx.cacheDir, "three/draco")
+    outDir.mkdirs()
+    for (name in listOf("draco_decoder.js", "draco_wasm_wrapper.js", "draco_decoder.wasm")) {
+        val out = File(outDir, name)
+        if (!out.exists()) {
+            ctx.assets.open("www/three/draco/$name").use { ins -> out.outputStream().use { os -> ins.copyTo(os) } }
+        }
+    }
+    true
+}.onFailure { QuroDiag.log("GLB", "Draco 资源提取失败：${it.message}") }.getOrDefault(false)
 
 private fun estimatedSpeakMs(text: String): Long = (text.length * 200L).coerceAtLeast(900L)
 
@@ -693,7 +714,7 @@ private fun DigitalHumanAvatar(mouthOpen: Float, phase: String) {
     }
 }
 
-/** 用户自制 GLB 3D 头像：WebView + Three.js 渲染，口型以整体缩放模拟同步。 */
+/** 用户自制 GLB 3D 头像：WebView + 离线内联 Three.js 渲染，口型以整体缩放模拟同步。 */
 @Composable
 private fun GLBAvatarView(modelFile: File?, mouthOpen: Float, phase: String) {
     val pathKey = modelFile?.absolutePath ?: ""
@@ -701,18 +722,56 @@ private fun GLBAvatarView(modelFile: File?, mouthOpen: Float, phase: String) {
         AndroidView(
             modifier = Modifier.size(220.dp).clip(RoundedCornerShape(16.dp)),
             factory = { ctx ->
+                // 诊断：把 JS 控制台与关键节点写入 Download/QuroAI_logs/，用户无需 adb 即可定位问题。
+                QuroDiag.log("GLB", "WebView 创建；modelFile=${modelFile?.absolutePath ?: "null"}；exists=${modelFile?.exists() ?: false}；bytes=${modelFile?.let { runCatching { it.length() }.getOrNull() } ?: 0}")
                 WebView(ctx).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.allowFileAccess = true
-                    webViewClient = WebViewClient()
+                    // 离线加载 Draco 解码器 wasm 需要放开 file:// 跨文件访问（deprecated 但当前 WebView 仍生效）
+                    @Suppress("DEPRECATION")
+                    settings.allowFileAccessFromFileURLs = true
+                    @Suppress("DEPRECATION")
+                    settings.allowUniversalAccessFromFileURLs = true
+                    // 兜底背景：即便 HTML 未成功渲染，也不露出底层浅色舞台。
+                    setBackgroundColor(0xFF15151A.toInt())
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            QuroDiag.log("GLB", "页面加载完成：$url")
+                            super.onPageFinished(view, url)
+                        }
+                    }
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onConsoleMessage(m: ConsoleMessage): Boolean {
+                            val lvl = when (m.messageLevel()) {
+                                ConsoleMessage.MessageLevel.ERROR -> "E"
+                                ConsoleMessage.MessageLevel.WARNING -> "W"
+                                else -> "I"
+                            }
+                            QuroDiag.log("GLB-JS", "[$lvl] ${m.message()} @${m.lineNumber()}")
+                            return super.onConsoleMessage(m)
+                        }
+                    }
                     if (modelFile != null && modelFile.exists()) {
-                        val b64 = Base64.encodeToString(modelFile.readBytes(), Base64.NO_WRAP)
-                        val htmlFile = File(ctx.cacheDir, "quro_dh_gltf.html")
-                        htmlFile.writeText(buildGltfHtml(b64))
-                        loadUrl("file://" + htmlFile.absolutePath)
+                        val threeJs = readAssetText(ctx, "www/three/three.min.js")
+                        val bgUtils = readAssetText(ctx, "www/three/BufferGeometryUtils.js")
+                        val gltfLoader = readAssetText(ctx, "www/three/GLTFLoader.js")
+                        val dracoLoader = readAssetText(ctx, "www/three/DRACOLoader.js")
+                        if (threeJs == null || gltfLoader == null) {
+                            QuroDiag.log("GLB", "离线引擎 assets 读取失败；threeJs=$threeJs gltfLoader=$gltfLoader")
+                            loadDataWithBaseURL(null, "<body style='margin:0;background:#15151a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;font-size:13px;text-align:center;padding:16px'>离线 3D 引擎缺失<br>请确认 APK 包含 assets/www/three/</body>", "text/html", "utf-8", null)
+                        } else {
+                            val dracoOk = extractDracoAssets(ctx)
+                            val dracoPath = "file://" + File(ctx.cacheDir, "three/draco").absolutePath + "/"
+                            QuroDiag.log("GLB", "Draco 提取=$dracoOk；dracoPath=$dracoPath")
+                            val b64 = Base64.encodeToString(modelFile.readBytes(), Base64.NO_WRAP)
+                            val htmlFile = File(ctx.cacheDir, "quro_dh_gltf.html")
+                            htmlFile.writeText(buildGltfHtml(b64, threeJs, bgUtils ?: "", gltfLoader, dracoLoader ?: "", dracoPath))
+                            QuroDiag.log("GLB", "HTML 已写入 ${htmlFile.absolutePath}；engine.len=${threeJs.length}；b64.len=${b64.length}")
+                            loadUrl("file://" + htmlFile.absolutePath)
+                        }
                     } else {
-                        loadDataWithBaseURL(null, "<body style='margin:0;background:#222;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center'>未选择 GLB 模型</body>", "text/html", "utf-8", null)
+                        loadDataWithBaseURL(null, "<body style='margin:0;background:#15151a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;font-size:13px'>未选择 GLB 模型</body>", "text/html", "utf-8", null)
                     }
                 }
             },
@@ -723,41 +782,108 @@ private fun GLBAvatarView(modelFile: File?, mouthOpen: Float, phase: String) {
     }
 }
 
-/** 生成内嵌 base64 GLB 的 Three.js 预览页（渲染库走 CDN，首次需联网）。 */
-private fun buildGltfHtml(base64: String): String = """
+/**
+ * 生成内嵌 base64 GLB 的 Three.js 预览页。
+ *
+ * 关键修复（「上传模型被挡住/看不到」根因）：
+ * 1) 渲染库（three / GLTFLoader / BufferGeometryUtils）改为【离线内联】到单个 HTML，
+ *    不依赖 file:// 相对路径或 CDN，彻底摆脱网络与跨源限制。
+ * 2) 相机按模型包围球自适应取景（lookAt 中心 + 距离随半径计算），保证整体
+ *    可见、居中，解决「位置固定(0,1,3)导致大模型被截顶/挤出画面」的遮挡感。
+ * 3) WebView 设深色兜底背景，避免引擎未就绪时露出底层浅色舞台。
+ * 4) 控制台日志回传 Kotlin（WebViewClient/WebChromeClient）→ QuroDiag 落盘，
+ *    用户无需 adb 即可在 Download/QuroAI_logs/ 看到引擎/模型加载结果。
+ */
+private fun buildGltfHtml(
+    base64: String,
+    threeJs: String,
+    bgUtils: String,
+    gltfLoader: String,
+    dracoLoader: String,
+    dracoPath: String,
+): String = """
 <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>html,body{margin:0;height:100%;background:#1b1b1b;overflow:hidden}#c{width:100%;height:100%;display:block}</style>
-<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
-</head><body><canvas id="c"></canvas>
-<script type="module">
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-const canvas=document.getElementById('c');
-const renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});
-renderer.setPixelRatio(window.devicePixelRatio);
-const scene=new THREE.Scene();
-const camera=new THREE.PerspectiveCamera(45,1,0.1,100);
-camera.position.set(0,1,3);
-scene.add(new THREE.AmbientLight(0xffffff,1.3));
-const dir=new THREE.DirectionalLight(0xffffff,1.1); dir.position.set(2,3,2); scene.add(dir);
-const loader=new GLTFLoader();
-let model=null;
-window.__setBlend=function(open){ if(model){ const s=1+open*0.06; model.scale.setScalar(model.userData.baseScale*(1+open*0.06)); } };
-function resize(){ const w=canvas.clientWidth,h=canvas.clientHeight; if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();} }
-function loop(){ resize(); if(model) model.rotation.y+=0.004; renderer.render(scene,camera); requestAnimationFrame(loop); }
-loop();
-const b64="__B64__";
-try{
-  const bin=atob(b64); const len=bin.length; const arr=new Uint8Array(len);
-  for(let i=0;i<len;i++) arr[i]=bin.charCodeAt(i);
-  loader.parse(arr.buffer, '', (gltf)=>{
-    model=gltf.scene;
-    const box=new THREE.Box3().setFromObject(model); const c=box.getCenter(new THREE.Vector3()); const size=box.getSize(new THREE.Vector3());
-    const maxd=Math.max(size.x,size.y,size.z)||1;
-    model.position.sub(c); model.position.y+=size.y/2;
-    const sc=2.2/maxd; model.userData.baseScale=sc; model.scale.setScalar(sc);
-    scene.add(model);
-  }, (e)=>{ document.body.innerHTML='<p style="color:#fff;font-family:sans-serif;padding:8px">模型加载失败：'+(e&&e.message?e.message:e)+'</p>'; });
-}catch(err){ document.body.innerHTML='<p style="color:#fff;font-family:sans-serif;padding:8px">解析失败：'+err+'</p>'; }
+<style>html,body{margin:0;height:100%;background:radial-gradient(circle at 50% 35%,#2b2b33,#15151a);overflow:hidden}#c{width:100%;height:100%;display:block}#msg{position:fixed;left:0;right:0;bottom:0;color:#fff;font-family:sans-serif;font-size:12px;padding:6px 8px;background:rgba(0,0,0,.6);text-align:center;z-index:9}</style>
+</head><body><canvas id="c"></canvas><div id="msg">正在加载 3D 引擎…</div>
+<script>
+__THREE__
+</script>
+<script>
+__BGUTILS__
+</script>
+<script>
+__GLTFLOADER__
+</script>
+<script>
+__DRACOLOADER__
+</script>
+<script>
+function showMsg(t,err){var m=document.getElementById('msg');if(m){m.textContent=t;m.style.display='block';m.style.background=err?'rgba(170,30,30,.85)':'rgba(0,0,0,.6)';}}
+window.onerror=function(msg,src,line,col){showMsg('脚本错误：'+msg+' @'+line,true);console.error('ONERROR '+msg+' @'+line);return true;};
+function boot(){
+ try{
+  if(typeof THREE==='undefined'){showMsg('Three.js 未加载（离线引擎缺失）',true);console.error('THREE-undefined');return;}
+  var canvas=document.getElementById('c');
+  var W=canvas.clientWidth||220,H=canvas.clientHeight||220;
+  var renderer;
+  try{renderer=new THREE.WebGLRenderer({canvas:canvas,alpha:true,antialias:true});}
+  catch(e){showMsg('WebGL 不可用：'+(e&&e.message?e.message:e),true);console.error('WEBGL_FAIL '+(e&&e.message?e.message:e));return;}
+  renderer.setClearColor(0x000000,0);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  renderer.setSize(W,H,false);
+  var scene=new THREE.Scene();
+  var camera=new THREE.PerspectiveCamera(45,W/H,0.01,1000);
+  scene.add(new THREE.AmbientLight(0xffffff,1.4));
+  var dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(2,3,2);scene.add(dl);
+  var dl2=new THREE.DirectionalLight(0xffffff,0.5);dl2.position.set(-2,-1,-2);scene.add(dl2);
+  var loader=new THREE.GLTFLoader();
+  try{var draco=new THREE.DRACOLoader();draco.setDecoderPath('__DRACO__');loader.setDRACOLoader(draco);console.log('DRACO_READY');}
+  catch(e){console.warn('DRACO_SETUP '+(e&&e.message?e.message:e));}
+  var model=null;
+  window.__setBlend=function(open){if(model){model.scale.setScalar(model.userData.baseScale*(1+open*0.06));}};
+  function fit(){
+    var box=new THREE.Box3().setFromObject(model);
+    if(!isFinite(box.min.x)||box.min.x===box.max.x){console.warn('FIT_degenerate');return;}
+    var center=box.getCenter(new THREE.Vector3());
+    var size=box.getSize(new THREE.Vector3());
+    var sphere=box.getBoundingSphere(new THREE.Sphere());
+    model.position.sub(center);
+    var maxd=Math.max(size.x,size.y,size.z)||1;
+    var sc=2.0/maxd;model.userData.baseScale=sc;model.scale.setScalar(sc);
+    var fov=camera.fov*Math.PI/180;
+    var dist=(sphere.radius*sc)/Math.sin(fov/2)*1.15;
+    if(!isFinite(dist)||dist<=0)dist=3;
+    var dirv=new THREE.Vector3(0,0.25,1).normalize().multiplyScalar(dist);
+    camera.position.copy(dirv);
+    camera.near=Math.max(dist-sphere.radius*sc*2,0.01);
+    camera.far=dist+sphere.radius*sc*4;
+    camera.lookAt(0,0,0);
+    camera.updateProjectionMatrix();
+    console.log('FIT radius='+sphere.radius.toFixed(3)+' dist='+dist.toFixed(3));
+  }
+  function resize(){var w=canvas.clientWidth||W,h=canvas.clientHeight||H;if(w&&h&&(canvas.width!==w||canvas.height!==h)){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}}
+  function loop(){resize();if(model)model.rotation.y+=0.004;renderer.render(scene,camera);requestAnimationFrame(loop);}
+  loop();
+  console.log('THREE-LOADED r'+(THREE.REVISION||'?'));
+  var b64="__B64__";
+  try{
+    var bin=atob(b64);var len=bin.length;var arr=new Uint8Array(len);
+    for(var i=0;i<len;i++)arr[i]=bin.charCodeAt(i);
+    loader.parse(arr.buffer,'',function(gltf){
+      model=gltf.scene;
+      model.traverse(function(o){if(o.isMesh&&o.material){if(Array.isArray(o.material)){o.material.forEach(function(m){m.side=THREE.DoubleSide;});}else{o.material.side=THREE.DoubleSide;}}});
+      fit();scene.add(model);
+      var m=document.getElementById('msg');if(m)m.style.display='none';
+      console.log('GLB_PARSE_OK bytes='+len);
+    },function(e){var t='模型加载失败：'+(e&&e.message?e.message:e);showMsg(t,true);console.error('GLB_PARSE_FAIL '+t);});
+  }catch(err){var t='解析失败：'+err;showMsg(t,true);console.error('GLB_ERR '+t);}
+ }catch(err){var t='初始化失败：'+err;showMsg(t,true);console.error('BOOT_ERR '+t);}
+}
+if(document.readyState==='complete'||document.readyState==='interactive'){setTimeout(boot,0);}else{window.addEventListener('DOMContentLoaded',boot);}
 </script></body></html>
-""".replace("__B64__", base64)
+""".replace("__THREE__", threeJs)
+  .replace("__BGUTILS__", bgUtils)
+  .replace("__GLTFLOADER__", gltfLoader)
+  .replace("__DRACOLOADER__", dracoLoader)
+  .replace("__DRACO__", dracoPath)
+  .replace("__B64__", base64)
