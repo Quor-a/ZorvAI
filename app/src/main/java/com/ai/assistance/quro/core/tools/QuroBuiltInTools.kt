@@ -193,6 +193,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(GeocodeTool())
     // 媒体
     r.register(ListMediaTool())
+    // AI 发文件：把设备文件作为对话框附件（图片/视频/文档直接预览）
+    r.register(AttachFileTool())
     // 闹钟
     r.register(SetAlarmTool())
     // 定时任务/自动化提醒

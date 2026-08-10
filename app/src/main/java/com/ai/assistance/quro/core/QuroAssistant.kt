@@ -13,6 +13,8 @@ import com.ai.assistance.quro.core.QuroLlmResult
 import com.ai.assistance.quro.core.tools.QuroToolEngine
 import com.ai.assistance.quro.core.tools.QuroToolRegistry
 import com.ai.assistance.quro.core.QuroToolResult
+import com.ai.assistance.quro.core.QuroAttachment
+import org.json.JSONObject
 import android.util.Log
 import com.ai.assistance.quro.core.QuroToolSpec
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
@@ -453,6 +455,25 @@ class QuroAssistant(
                             )
                             emit()
                         }
+                        // AI 发文件：工具 attach_file 成功 → 作为可见 AI 气泡附件呈现（图片/视频/文档直接预览）
+                        val aiAttPairs = callsWithId.zip(results).mapNotNull { (call, r) ->
+                            if (call.name != "attach_file") return@mapNotNull null
+                            parseAttachFileResult(r.result)?.let { att ->
+                                val cap = runCatching { JSONObject(r.result).optString("caption", "") }.getOrDefault("")
+                                att to cap
+                            }
+                        }
+                        if (aiAttPairs.isNotEmpty()) {
+                            val caption = aiAttPairs.firstOrNull()?.second ?: ""
+                            store.add(
+                                QuroMessage(
+                                    role = "assistant",
+                                    content = caption,
+                                    attachments = aiAttPairs.map { it.first },
+                                )
+                            )
+                            emit()
+                        }
                         // 轨迹：把工具执行结果写入总线
                         callsWithId.zip(results).forEach { (c, r) ->
                             QuroAgentTrace.result("tool", c.name, r.result)
@@ -666,4 +687,23 @@ class QuroAssistant(
             QuroLocalEnginePlaceholder
         }
     }
+}
+
+/** 解析 attach_file 工具返回的 JSON，构造成可渲染的 QuroAttachment（失败返回 null）。 */
+private fun parseAttachFileResult(result: String): QuroAttachment? {
+    return runCatching {
+        val o = JSONObject(result)
+        if (!o.optBoolean("ok", false)) return null
+        val name = o.optString("name", "")
+        val type = o.optString("type", "file")
+        val path = o.optString("path", "")
+        val size = o.optLong("size", 0)
+        if (name.isBlank() || path.isBlank()) return null
+        val mime = when (type) {
+            "image" -> "image/*"
+            "video" -> "video/*"
+            else -> "application/octet-stream"
+        }
+        QuroAttachment(type = type, uri = path, name = name, mime = mime, size = size)
+    }.getOrNull()
 }

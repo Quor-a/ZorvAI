@@ -226,8 +226,15 @@ import org.json.JSONObject
 import com.ai.assistance.quro.core.tools.RunCodeTool
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.core.content.FileProvider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
@@ -385,12 +392,13 @@ fun ChatScreen(
         val aggTools = mutableListOf<ToolCallUi>()
         val aggText = StringBuilder()
         val aggCards = mutableListOf<QuroChatCard>()
+        val aggAttach = mutableListOf<Attachment>()
 
         fun flushAgg() {
             if (!hasAgg) return
             val think = if (aggThinkLines.isNotEmpty()) ThinkBlock(aggThinkLines.toList()) else null
             val text = aggText.toString().takeIf { it.isNotBlank() }
-            if (think != null || aggTools.isNotEmpty() || text != null || aggCards.isNotEmpty()) {
+            if (think != null || aggTools.isNotEmpty() || text != null || aggCards.isNotEmpty() || aggAttach.isNotEmpty()) {
                 out.add(
                     Message(
                         id = aggId,
@@ -401,6 +409,7 @@ fun ChatScreen(
                         avatarUri = selectedPersona.avatarUri,
                         time = aggTime,
                         text = text,
+                        attachments = aggAttach.toList(),
                         think = think,
                         tools = if (aggTools.isEmpty()) null else aggTools.toList(),
                         cards = aggCards.toList(),
@@ -408,7 +417,7 @@ fun ChatScreen(
                 )
             }
             hasAgg = false
-            aggThinkLines.clear(); aggTools.clear(); aggText.clear(); aggCards.clear(); aggIds.clear()
+            aggThinkLines.clear(); aggTools.clear(); aggText.clear(); aggCards.clear(); aggAttach.clear(); aggIds.clear()
         }
 
         for (m in messages) {
@@ -441,6 +450,9 @@ fun ChatScreen(
                         aggText.append(m.content)
                     }
                     if (m.cards.isNotEmpty()) aggCards.addAll(m.cards)
+                    if (!m.attachments.isNullOrEmpty()) {
+                        aggAttach.addAll(m.attachments.map { Attachment(it.name, formatSize(it.size), path = it.uri, type = it.type) })
+                    }
                 }
             }
         }
@@ -569,6 +581,10 @@ fun ChatScreen(
     var showVideoPlayer by remember { mutableStateOf(false) }
     var videoPlayerUri by remember { mutableStateOf("") }
     var videoPlayerTitle by remember { mutableStateOf("") }
+    // 全屏图片查看器
+    var showImageViewer by remember { mutableStateOf(false) }
+    var imageViewerPath by remember { mutableStateOf("") }
+    var imageViewerName by remember { mutableStateOf("") }
     // 应用内全屏音乐播放器
     var showMusicPlayer by remember { mutableStateOf(false) }
 
@@ -800,6 +816,22 @@ fun ChatScreen(
                             if (!lastUser.isNullOrBlank()) send(lastUser)
                         },
                         onDelete = { vm.deleteMessage(it) },
+                        onAttachmentActivate = { att ->
+                            when (att.type) {
+                                "image" -> {
+                                    imageViewerPath = att.path ?: ""
+                                    imageViewerName = att.name
+                                    showImageViewer = true
+                                }
+                                "video" -> {
+                                    videoPlayerUri = "file://" + (att.path ?: "")
+                                    videoPlayerTitle = att.name
+                                    showVideoPlayer = true
+                                }
+                                else -> openFileWithSystemViewer(ctx, att)
+                            }
+                        },
+                        onAttachmentDownload = { downloadAttachment(ctx, it) },
                         modifier = Modifier.weight(1f)
                     )
                     // 语音：对话框语音输入按钮（受「语音设置 · 对话框按钮」开关控制）
@@ -1447,6 +1479,16 @@ fun ChatScreen(
             }
         }
 
+        // 全屏图片查看器（双击缩放、双指捏合、拖动）
+        if (showImageViewer) {
+            BackHandler { showImageViewer = false }
+            FullScreenImageViewer(
+                path = imageViewerPath,
+                name = imageViewerName,
+                onClose = { showImageViewer = false },
+            )
+        }
+
         // 应用内全屏音乐播放器
         if (showMusicPlayer) {
             BackHandler { showMusicPlayer = false }
@@ -1525,6 +1567,8 @@ private fun MessageList(
     onShare: (String) -> Unit = {},
     onRegenerate: () -> Unit = {},
     onDelete: (List<String>) -> Unit = {},
+    onAttachmentActivate: (Attachment) -> Unit = {},
+    onAttachmentDownload: (Attachment) -> Unit = {},
     currentId: String,
     busy: Boolean = false,
     modifier: Modifier = Modifier
@@ -1625,6 +1669,8 @@ private fun MessageList(
                         onRegenerate = onRegenerate,
                         onDelete = onDelete,
                         narrow = narrow,
+                        onAttachmentActivate = onAttachmentActivate,
+                        onAttachmentDownload = onAttachmentDownload,
                         // 🔧 Bug修复「思考没有修复」：生成中的最后一条消息默认展开思考内容，
                         // 让流式 reasoning 实时可见（此前思考只藏在 9sp 收起胶囊后，等于看不见）。
                         streamingThink = busy && index == messages.lastIndex,
@@ -1737,6 +1783,9 @@ private fun MessageRow(
     onRegenerate: () -> Unit = {},
     onDelete: (List<String>) -> Unit = {},
     narrow: Boolean = false,
+    /** 附件点击：图片→全屏预览 / 视频→播放器 / 文档→系统查看器（由 ChatScreen 处理具体路由）。 */
+    onAttachmentActivate: (Attachment) -> Unit = {},
+    onAttachmentDownload: (Attachment) -> Unit = {},
     /** 该消息是否为「正在生成中的最后一条」：是则默认展开思考内容（流式 reasoning 实时可见）。 */
     streamingThink: Boolean = false,
 ) {
@@ -1832,11 +1881,18 @@ private fun MessageRow(
                 ToolsInlineContent(msg.tools, scaled, embeddedTrace = embeddedTrace)
                 Spacer(Modifier.height(6.dp))
             }
-            if (msg.attachment != null) {
-                AttachmentBubble(msg.attachment, scaled, onDownload = {
-                    // 下载附件到应用私有 Download 目录
-                    downloadAttachment(ctx, msg.attachment)
-                })
+            // 附件：用户与 AI 消息通用，支持一条消息多个文件，图片/视频/文档发出来可直接预览
+            if (msg.attachments.isNotEmpty()) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    msg.attachments.forEach { att ->
+                        AttachmentBubble(
+                            att = att,
+                            scaled = scaled,
+                            onActivate = { onAttachmentActivate(att) },
+                            onDownload = { onAttachmentDownload(att) },
+                        )
+                    }
+                }
                 Spacer(Modifier.height(6.dp))
             }
             // ── 正文气泡（思考/工具已移至名字行小按钮）────────────
@@ -1994,7 +2050,8 @@ private fun MessageRow(
 private fun AttachmentBubble(
     att: Attachment,
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
-    onDownload: (() -> Unit)? = null,
+    onActivate: () -> Unit,
+    onDownload: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     Column(
@@ -2004,42 +2061,202 @@ private fun AttachmentBubble(
             .border(1.dp, Line, RoundedCornerShape(12.dp))
             .padding(10.dp, 8.dp)
     ) {
+        // 预览区（按类型）：点击触发 onActivate（图片全屏 / 视频播放 / 文档打开）
+        when (att.type) {
+            "image" -> AttachmentImagePreview(att, onActivate)
+            "video" -> AttachmentVideoPreview(att, onActivate)
+            else -> AttachmentFilePreview(att, onActivate)
+        }
+        Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            val icon = when (att.type) {
-                "image" -> "image"
-                "video" -> "video"
-                else -> "file_text"
-            }
-            LucideIcon(icon, null, Modifier.size(18.dp), tint = cs.primary)
-            Spacer(Modifier.width(8.dp))
+            LucideIcon(fileTypeIcon(att), null, Modifier.size(16.dp), tint = cs.primary)
+            Spacer(Modifier.width(6.dp))
             Column(Modifier.weight(1f)) {
                 Text(att.name, fontSize = scaled(13), color = cs.onSurface, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 Text(att.meta, fontSize = scaled(11), color = Muted)
             }
-            if (onDownload != null) {
-                IconButton(onClick = onDownload, Modifier.size(32.dp)) {
-                    LucideIcon("download", "下载", Modifier.size(16.dp), tint = cs.primary)
-                }
-            }
-        }
-        // 图片缩略图预览（其余类型仅提供下载入口）
-        if (att.type == "image" && att.path != null) {
-            Spacer(Modifier.height(8.dp))
-            val bmp = remember(att.path) {
-                runCatching { BitmapFactory.decodeFile(att.path).asImageBitmap() }.getOrNull()
-            }
-            if (bmp != null) {
-                Image(
-                    bitmap = bmp,
-                    contentDescription = att.name,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 200.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                )
+            IconButton(onClick = onDownload, Modifier.size(32.dp)) {
+                LucideIcon("download", "下载", Modifier.size(16.dp), tint = cs.primary)
             }
         }
     }
+}
+
+/** 根据附件类型 / 扩展名返回 Lucide 图标名。 */
+private fun fileTypeIcon(att: Attachment): String {
+    if (att.type == "image") return "image"
+    if (att.type == "video") return "video"
+    val ext = att.name.substringAfterLast('.', "").lowercase()
+    return when (ext) {
+        "pdf", "doc", "docx", "txt", "md", "log", "rtf" -> "file_text"
+        else -> "paperclip"
+    }
+}
+
+/** 图片：缩略图（点击查看大图）。 */
+@Composable
+private fun AttachmentImagePreview(att: Attachment, onActivate: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val bmp = remember(att.path) {
+        runCatching { att.path?.let { BitmapFactory.decodeFile(it)?.asImageBitmap() } }.getOrNull()
+    }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(max = 220.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(cs.surface)
+            .clickable { onActivate() },
+        contentAlignment = Alignment.Center
+    ) {
+        if (bmp != null) {
+            Image(
+                bitmap = bmp, contentDescription = att.name, contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp),
+            )
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(6.dp)
+                    .background(Color.Black.copy(alpha = 0.4f), CircleShape).padding(4.dp)
+            ) {
+                LucideIcon("maximize", "查看大图", Modifier.size(14.dp), tint = Color.White)
+            }
+        } else {
+            Text("图片预览不可用", color = Muted, fontSize = 12.sp)
+        }
+    }
+}
+
+/** 视频：首帧 + 播放按钮（点击打开应用内播放器）。 */
+@Composable
+private fun AttachmentVideoPreview(att: Attachment, onActivate: () -> Unit) {
+    val frame = remember(att.path) {
+        runCatching {
+            att.path?.let { p ->
+                val retr = MediaMetadataRetriever()
+                retr.setDataSource(p)
+                val b = retr.frameAtTime ?: retr.getFrameAtTime(0)
+                retr.release()
+                b?.asImageBitmap()
+            }
+        }.getOrNull()
+    }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(max = 220.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.Black)
+            .clickable { onActivate() },
+        contentAlignment = Alignment.Center
+    ) {
+        if (frame != null) {
+            Image(
+                bitmap = frame, contentDescription = att.name, contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp),
+            )
+        }
+        Box(
+            Modifier.size(48.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Filled.PlayArrow, "播放", Modifier.size(28.dp), tint = Color.White)
+        }
+    }
+}
+
+/** 文档 / 文件：类型图标 + 打开提示（点击用系统查看器打开）。 */
+@Composable
+private fun AttachmentFilePreview(att: Attachment, onActivate: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(cs.surface)
+            .clickable { onActivate() }
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(40.dp).background(cs.primaryContainer, RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            LucideIcon(fileTypeIcon(att), null, Modifier.size(22.dp), tint = cs.primary)
+        }
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text("点击预览 / 打开", fontSize = 12.sp, color = cs.primary, fontWeight = FontWeight.Medium)
+            Text("支持 PDF / Office / 文本 / 压缩包等", fontSize = 11.sp, color = Muted)
+        }
+    }
+}
+
+/** 全屏可缩放图片查看器（双击在 1x / 2.5x 间切换，支持双指捏合与拖动）。 */
+@Composable
+private fun FullScreenImageViewer(path: String, name: String, onClose: () -> Unit) {
+    val bmp = remember(path) { runCatching { BitmapFactory.decodeFile(path)?.asImageBitmap() }.getOrNull() }
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    val state = rememberTransformableState { zoom, pan, _ ->
+        scale = (scale * zoom).coerceIn(1f, 5f)
+        offset += pan
+    }
+    Box(Modifier.fillMaxSize().zIndex(130f).background(Color.Black)) {
+        IconButton(onClick = onClose, Modifier.align(Alignment.TopEnd).padding(8.dp).size(40.dp)) {
+            LucideIcon("x", "关闭", Modifier.size(22.dp), tint = Color.White)
+        }
+        if (bmp != null) {
+            Image(
+                bitmap = bmp,
+                contentDescription = name,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y)
+                    .transformable(state)
+                    .clickable { scale = if (scale > 1f) 1f else 2.5f; offset = Offset.Zero },
+            )
+        } else {
+            Text("图片加载失败", color = Color.White, modifier = Modifier.align(Alignment.Center))
+        }
+    }
+}
+
+/** 用系统查看器打开文档 / 视频（FileProvider 共享，无需写权限）。 */
+private fun openFileWithSystemViewer(ctx: Context, att: Attachment) {
+    val file = att.path?.let { File(it) }?.takeIf { it.exists() } ?: run {
+        Toast.makeText(ctx, "源文件不存在", Toast.LENGTH_SHORT).show()
+        return
+    }
+    val mime = when (att.type) {
+        "image" -> "image/*"
+        "video" -> "video/*"
+        else -> fileMimeByExt(file.extension)
+    }
+    runCatching {
+        val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mime)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        ctx.startActivity(Intent.createChooser(intent, "打开文件"))
+    }.onFailure {
+        Toast.makeText(ctx, "无法打开：${it.message}", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun fileMimeByExt(ext: String): String = when (ext.lowercase()) {
+    "pdf" -> "application/pdf"
+    "txt", "log", "md", "json", "csv", "xml", "html", "htm" -> "text/plain"
+    "doc" -> "application/msword"
+    "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    "xls" -> "application/vnd.ms-excel"
+    "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    "ppt" -> "application/vnd.ms-powerpoint"
+    "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    "zip" -> "application/zip"
+    "apk" -> "application/vnd.android.package-archive"
+    else -> "*/*"
 }
 
 @Composable
@@ -4817,9 +5034,9 @@ private fun QuroMessage.toMessage(
                 .filter { l -> l.isNotBlank() }
         )
     }
-    val attachment = attachments?.firstOrNull()?.let {
+    val attachmentList = attachments?.map {
         Attachment(it.name, formatSize(it.size), path = it.uri, type = it.type)
-    }
+    } ?: emptyList()
     return Message(
         id = id.hashCode(),
         uids = listOf(id),
@@ -4831,7 +5048,7 @@ private fun QuroMessage.toMessage(
         avatarUri = if (mine) (avatarUrl ?: userAvatarUri) else assistantAvatarUri,
         time = formatChatTime(createdAt),
         text = content.ifBlank { null },
-        attachment = attachment,
+        attachments = attachmentList,
         think = think,
         cards = cards,
     )

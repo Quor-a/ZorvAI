@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
+import android.view.View
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebChromeClient
@@ -374,24 +375,29 @@ private fun PhaseRing(phase: String, avatarSource: String, avatarFile: File?, mo
         "error" -> 1f
         else -> 0.05f
     }
-    Box(Modifier.size(248.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val cx = size.width / 2
-            val cy = size.height / 2
-            val r = size.minDimension / 2 - 10.dp.toPx()
-            drawCircle(color = ringColor.copy(alpha = 0.16f), radius = r, center = Offset(cx, cy), style = Stroke(6.dp.toPx()))
-            drawArc(
-                color = ringColor,
-                startAngle = -90f,
-                sweepAngle = progress * 360f,
-                useCenter = false,
-                topLeft = Offset(cx - r, cy - r),
-                size = Size(r * 2, r * 2),
-                style = Stroke(6.dp.toPx(), cap = StrokeCap.Round),
-            )
+    // 自定义 GLB 头像给更大的展示框（横向填满舞台、纵向 320dp），避免被固定 220dp 小框裁掉头部；内置 2.5D 维持 248/220。
+    val isCustom = avatarSource == "custom"
+    Box(if (isCustom) Modifier.fillMaxWidth().height(320.dp) else Modifier.size(248.dp), contentAlignment = Alignment.Center) {
+        // 进度环只给内置 2.5D 头像用；自定义 GLB 头像本身已很完整，套圈会像瞄准镜，故不画。
+        if (!isCustom) {
+            Canvas(Modifier.fillMaxSize()) {
+                val cx = size.width / 2
+                val cy = size.height / 2
+                val r = size.minDimension / 2 - 10.dp.toPx()
+                drawCircle(color = ringColor.copy(alpha = 0.16f), radius = r, center = Offset(cx, cy), style = Stroke(6.dp.toPx()))
+                drawArc(
+                    color = ringColor,
+                    startAngle = -90f,
+                    sweepAngle = progress * 360f,
+                    useCenter = false,
+                    topLeft = Offset(cx - r, cy - r),
+                    size = Size(r * 2, r * 2),
+                    style = Stroke(6.dp.toPx(), cap = StrokeCap.Round),
+                )
+            }
         }
-        Box(Modifier.size(220.dp), contentAlignment = Alignment.Center) {
-            if (avatarSource == "custom") GLBAvatarView(avatarFile, mouthOpen, phase)
+        Box(if (isCustom) Modifier.fillMaxSize() else Modifier.size(220.dp), contentAlignment = Alignment.Center) {
+            if (isCustom) GLBAvatarView(avatarFile, mouthOpen, phase)
             else DigitalHumanAvatar(mouthOpen = mouthOpen, phase = phase)
         }
     }
@@ -720,11 +726,14 @@ private fun GLBAvatarView(modelFile: File?, mouthOpen: Float, phase: String) {
     val pathKey = modelFile?.absolutePath ?: ""
     key(pathKey) {
         AndroidView(
-            modifier = Modifier.size(220.dp).clip(RoundedCornerShape(16.dp)),
+            // 填满外层头像框（自定义 GLB 用 300dp），不再锁死 220dp 也不做圆角裁剪，避免头部被固定小框裁掉。
+            modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 // 诊断：把 JS 控制台与关键节点写入 Download/QuroAI_logs/，用户无需 adb 即可定位问题。
                 QuroDiag.log("GLB", "WebView 创建；modelFile=${modelFile?.absolutePath ?: "null"}；exists=${modelFile?.exists() ?: false}；bytes=${modelFile?.let { runCatching { it.length() }.getOrNull() } ?: 0}")
                 WebView(ctx).apply {
+                    // 强制硬件加速层：Android WebView 跑 WebGL 必须走 GPU 合成，否则画面不显示（全黑）。
+                    setLayerType(View.LAYER_TYPE_HARDWARE, null)
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.allowFileAccess = true
@@ -733,8 +742,8 @@ private fun GLBAvatarView(modelFile: File?, mouthOpen: Float, phase: String) {
                     settings.allowFileAccessFromFileURLs = true
                     @Suppress("DEPRECATION")
                     settings.allowUniversalAccessFromFileURLs = true
-                    // 兜底背景：即便 HTML 未成功渲染，也不露出底层浅色舞台。
-                    setBackgroundColor(0xFF15151A.toInt())
+                    // 透明背景：让 HTML 渲染前的短暂瞬间透出舞台，最终由 WebGL 透明画布接管。
+                    setBackgroundColor(0)
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, url: String?) {
                             QuroDiag.log("GLB", "页面加载完成：$url")
@@ -757,8 +766,9 @@ private fun GLBAvatarView(modelFile: File?, mouthOpen: Float, phase: String) {
                         val bgUtils = readAssetText(ctx, "www/three/BufferGeometryUtils.js")
                         val gltfLoader = readAssetText(ctx, "www/three/GLTFLoader.js")
                         val dracoLoader = readAssetText(ctx, "www/three/DRACOLoader.js")
-                        if (threeJs == null || gltfLoader == null) {
-                            QuroDiag.log("GLB", "离线引擎 assets 读取失败；threeJs=$threeJs gltfLoader=$gltfLoader")
+                        val orbit = readAssetText(ctx, "www/three/OrbitControls.js")
+                        if (threeJs == null || gltfLoader == null || orbit == null) {
+                            QuroDiag.log("GLB", "离线引擎 assets 读取失败；threeJs=$threeJs gltfLoader=$gltfLoader orbit=$orbit")
                             loadDataWithBaseURL(null, "<body style='margin:0;background:#15151a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;font-size:13px;text-align:center;padding:16px'>离线 3D 引擎缺失<br>请确认 APK 包含 assets/www/three/</body>", "text/html", "utf-8", null)
                         } else {
                             val dracoOk = extractDracoAssets(ctx)
@@ -766,7 +776,7 @@ private fun GLBAvatarView(modelFile: File?, mouthOpen: Float, phase: String) {
                             QuroDiag.log("GLB", "Draco 提取=$dracoOk；dracoPath=$dracoPath")
                             val b64 = Base64.encodeToString(modelFile.readBytes(), Base64.NO_WRAP)
                             val htmlFile = File(ctx.cacheDir, "quro_dh_gltf.html")
-                            htmlFile.writeText(buildGltfHtml(b64, threeJs, bgUtils ?: "", gltfLoader, dracoLoader ?: "", dracoPath))
+                            htmlFile.writeText(buildGltfHtml(b64, threeJs, bgUtils ?: "", gltfLoader, dracoLoader ?: "", dracoPath, orbit))
                             QuroDiag.log("GLB", "HTML 已写入 ${htmlFile.absolutePath}；engine.len=${threeJs.length}；b64.len=${b64.length}")
                             loadUrl("file://" + htmlFile.absolutePath)
                         }
@@ -801,9 +811,10 @@ private fun buildGltfHtml(
     gltfLoader: String,
     dracoLoader: String,
     dracoPath: String,
+    orbit: String,
 ): String = """
 <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>html,body{margin:0;height:100%;background:radial-gradient(circle at 50% 35%,#2b2b33,#15151a);overflow:hidden}#c{width:100%;height:100%;display:block}#msg{position:fixed;left:0;right:0;bottom:0;color:#fff;font-family:sans-serif;font-size:12px;padding:6px 8px;background:rgba(0,0,0,.6);text-align:center;z-index:9}</style>
+<style>html,body{margin:0;padding:0;height:100%;background:radial-gradient(circle at 50% 35%,#2b2b33,#15151a);overflow:hidden}#c{position:fixed;top:0;left:0;width:100%;height:100%;display:block;touch-action:none}#msg{position:fixed;left:0;right:0;bottom:0;color:#fff;font-family:sans-serif;font-size:12px;padding:6px 8px;background:rgba(0,0,0,.6);text-align:center;z-index:9}</style>
 </head><body><canvas id="c"></canvas><div id="msg">正在加载 3D 引擎…</div>
 <script>
 __THREE__
@@ -818,24 +829,38 @@ __GLTFLOADER__
 __DRACOLOADER__
 </script>
 <script>
+__ORBIT__
+</script>
+<script>
 function showMsg(t,err){var m=document.getElementById('msg');if(m){m.textContent=t;m.style.display='block';m.style.background=err?'rgba(170,30,30,.85)':'rgba(0,0,0,.6)';}}
 window.onerror=function(msg,src,line,col){showMsg('脚本错误：'+msg+' @'+line,true);console.error('ONERROR '+msg+' @'+line);return true;};
 function boot(){
  try{
   if(typeof THREE==='undefined'){showMsg('Three.js 未加载（离线引擎缺失）',true);console.error('THREE-undefined');return;}
+  console.log('THREE-REV '+(THREE.REVISION||'?'));
   var canvas=document.getElementById('c');
-  var W=canvas.clientWidth||220,H=canvas.clientHeight||220;
+  var W=canvas.clientWidth||window.innerWidth||220,H=canvas.clientHeight||window.innerHeight||220;console.log('SIZE_INIT cw='+canvas.clientWidth+' ch='+canvas.clientHeight+' iw='+window.innerWidth+' ih='+window.innerHeight);
   var renderer;
+  // 透明渲染：画布清屏 alpha=0，让 WebView 透明背景下的数字人舞台自然透出。
+  // 之前黑屏根因是 canvas 高度塌成 0（position:fixed + 尺寸日志已证实），不是透明合成问题。
   try{renderer=new THREE.WebGLRenderer({canvas:canvas,alpha:true,antialias:true});}
   catch(e){showMsg('WebGL 不可用：'+(e&&e.message?e.message:e),true);console.error('WEBGL_FAIL '+(e&&e.message?e.message:e));return;}
   renderer.setClearColor(0x000000,0);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
   renderer.setSize(W,H,false);
+  try{renderer.outputEncoding=THREE.sRGBEncoding;}catch(e){console.warn('OENC '+(e&&e.message));}
   var scene=new THREE.Scene();
   var camera=new THREE.PerspectiveCamera(45,W/H,0.01,1000);
+  // 轨道控制器：让用户手动拖拽旋转/双指缩放，自行转到正面、看清所有部位。
+  // 不再硬编码某个朝向（之前猜 180° 仍显示背面，根因是模型正面方向未知）。缺失则降级为固定视角。
+  var controls=null;
+  try{ if(THREE.OrbitControls){controls=new THREE.OrbitControls(camera,renderer.domElement);controls.target.set(0,0,0);controls.enableDamping=true;controls.dampingFactor=0.08;controls.enablePan=false;controls.enableZoom=true;controls.enableRotate=true;controls.autoRotate=false;controls.rotateSpeed=0.9;controls.zoomSpeed=0.9;controls.minDistance=0.1;controls.maxDistance=100;console.log('ORBIT_OK');}else{console.warn('ORBIT_MISSING');} }catch(e){console.warn('ORBIT_FAIL '+(e&&e.message?e.message:e));}
   scene.add(new THREE.AmbientLight(0xffffff,1.4));
   var dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(2,3,2);scene.add(dl);
   var dl2=new THREE.DirectionalLight(0xffffff,0.5);dl2.position.set(-2,-1,-2);scene.add(dl2);
+  // 环境贴图：金属度/物理材质若无 IBL 会渲染成纯黑（在深色舞台上=“看不见”）。用 PMREM 生成一张
+  // 灰色环境，让 PBR 材质有反射，避免“模型加载了但一片黑”的常见误判。背景仍透明（alpha）。
+  try{var pmrem=new THREE.PMREMGenerator(renderer);var envScene=new THREE.Scene();envScene.background=new THREE.Color(0xbfc4cc);scene.environment=pmrem.fromScene(envScene,0.5).texture;console.log('ENV_OK');}catch(e){console.warn('ENV_FAIL '+(e&&e.message?e.message:e));}
   var loader=new THREE.GLTFLoader();
   try{var draco=new THREE.DRACOLoader();draco.setDecoderPath('__DRACO__');loader.setDRACOLoader(draco);console.log('DRACO_READY');}
   catch(e){console.warn('DRACO_SETUP '+(e&&e.message?e.message:e));}
@@ -846,23 +871,33 @@ function boot(){
     if(!isFinite(box.min.x)||box.min.x===box.max.x){console.warn('FIT_degenerate');return;}
     var center=box.getCenter(new THREE.Vector3());
     var size=box.getSize(new THREE.Vector3());
-    var sphere=box.getBoundingSphere(new THREE.Sphere());
     model.position.sub(center);
     var maxd=Math.max(size.x,size.y,size.z)||1;
     var sc=2.0/maxd;model.userData.baseScale=sc;model.scale.setScalar(sc);
+    // 用真实画布宽高比，避免 WebView 实际高度与宽度不一致导致垂直视场被压、头部被推出画面
+    var cw=canvas.clientWidth||window.innerWidth||W;
+    var ch=canvas.clientHeight||window.innerHeight||H;
+    camera.aspect=cw/ch;
     var fov=camera.fov*Math.PI/180;
-    var dist=(sphere.radius*sc)/Math.sin(fov/2)*1.15;
+    // 完整框入模型（盒高与半宽），各留 1.5 倍边距，确保头脚都在画面内；缩放范围也按此距离
+    var halfH=size.y*sc*0.5, halfW=size.x*sc*0.5;
+    var distV=halfH/Math.tan(fov/2)*1.5;
+    var distH=(halfW/Math.tan(fov/2))/camera.aspect*1.5;
+    var dist=Math.max(distV,distH);
     if(!isFinite(dist)||dist<=0)dist=3;
-    var dirv=new THREE.Vector3(0,0.25,1).normalize().multiplyScalar(dist);
+    // 相机从 +Z 略上方看向原点（模型中心），整身入镜
+    var dirv=new THREE.Vector3(0,0.08,1).normalize().multiplyScalar(dist);
     camera.position.copy(dirv);
-    camera.near=Math.max(dist-sphere.radius*sc*2,0.01);
-    camera.far=dist+sphere.radius*sc*4;
+    camera.near=Math.max(dist*0.1,0.01);
+    camera.far=dist+size.y*sc*2;
     camera.lookAt(0,0,0);
     camera.updateProjectionMatrix();
-    console.log('FIT radius='+sphere.radius.toFixed(3)+' dist='+dist.toFixed(3));
+    if(controls){controls.target.set(0,0,0);controls.minDistance=Math.max(dist*0.3,0.1);controls.maxDistance=dist*4;controls.update();}
+    console.log('FIT cw='+cw+' ch='+ch+' aspect='+camera.aspect.toFixed(3)+' dist='+dist.toFixed(3));
   }
-  function resize(){var w=canvas.clientWidth||W,h=canvas.clientHeight||H;if(w&&h&&(canvas.width!==w||canvas.height!==h)){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}}
-  function loop(){resize();if(model)model.rotation.y+=0.004;renderer.render(scene,camera);requestAnimationFrame(loop);}
+  function resize(){var w=canvas.clientWidth||window.innerWidth||W,h=canvas.clientHeight||window.innerHeight||H;if(w&&h){if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();console.log('SIZE_RESIZE w='+w+' h='+h);}}}
+  // 去掉自动旋转；数字人应稳定面向用户，由 OrbitControls 让用户手动旋转/缩放，TTS 说话时 mouthOpen 驱动整体缩放做口型同步。
+  function loop(){resize();if(controls)controls.update();renderer.render(scene,camera);requestAnimationFrame(loop);}
   loop();
   console.log('THREE-LOADED r'+(THREE.REVISION||'?'));
   var b64="__B64__";
@@ -872,9 +907,10 @@ function boot(){
     loader.parse(arr.buffer,'',function(gltf){
       model=gltf.scene;
       model.traverse(function(o){if(o.isMesh&&o.material){if(Array.isArray(o.material)){o.material.forEach(function(m){m.side=THREE.DoubleSide;});}else{o.material.side=THREE.DoubleSide;}}});
-      fit();scene.add(model);
+      fit();      scene.add(model);
+      var meshes=0;model.traverse(function(o){if(o.isMesh)meshes++;});
       var m=document.getElementById('msg');if(m)m.style.display='none';
-      console.log('GLB_PARSE_OK bytes='+len);
+      console.log('GLB_PARSE_OK bytes='+len+' meshes='+meshes);
     },function(e){var t='模型加载失败：'+(e&&e.message?e.message:e);showMsg(t,true);console.error('GLB_PARSE_FAIL '+t);});
   }catch(err){var t='解析失败：'+err;showMsg(t,true);console.error('GLB_ERR '+t);}
  }catch(err){var t='初始化失败：'+err;showMsg(t,true);console.error('BOOT_ERR '+t);}
@@ -886,4 +922,5 @@ if(document.readyState==='complete'||document.readyState==='interactive'){setTim
   .replace("__GLTFLOADER__", gltfLoader)
   .replace("__DRACOLOADER__", dracoLoader)
   .replace("__DRACO__", dracoPath)
+  .replace("__ORBIT__", orbit)
   .replace("__B64__", base64)

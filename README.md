@@ -32,7 +32,8 @@
 > **🔌 受控端浏览器（ZorvAI 浏览器）已独立开源 · GitHub：[github.com/Quor-a/ZorvBrowser](https://github.com/Quor-a/ZorvBrowser) ｜ Gitee：[gitee.com/ZorvAI/ZorvBrowser](https://gitee.com/ZorvAI/ZorvBrowser)**（独立仓库，含 v1.0.12 源码与 APK）
 >
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
-> - 🔗 主程序 APK（v1.0.23，含离线引擎，最新）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.23/app-full-debug.apk)
+> - 🔗 主程序 APK（v1.0.24，含离线引擎，最新）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.24/app-full-debug.apk)
+> - 🔗 主程序 APK（v1.0.23，含离线引擎）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.23/app-full-debug.apk)
 > - 🔗 主程序 APK（v1.0.15）：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
 > - 🔗 主程序 APK（v1.0.14）：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
 > - 🔗 主程序 APK（v1.0.12）：[ZorvAI-debug-v1.0.12.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.12/ZorvAI-debug-v1.0.12.apk)
@@ -62,9 +63,10 @@
 | **知识 / 记忆 / 人格 / Bot** | 向量语义 RAG 知识库、记忆库、人格/灵魂配置、多通道机器人（QQ/飞书/微信/本地） |
 | **ACI 控制台 UI（LAN 控制台）** | 控制端 `QuroAciCenterScreen` 按 `console_ui` 能力拉取 SDUI 快照、复用本地 `AciConsoleScreen` 渲染器（`core/aci` 包，纯本地零网络） |
 | **数据 / 持久化** | `QuroConversationStore` 磁盘会话仓库、启动自愈 `DATA_REPAIR` 去重、诊断日志写入手机公共 `Download/QuroAI_logs/` |
-| **插件系统** | QuickJS / WebView 双后端插件运行时，插件管理与市场 |
+| **插件系统** | QuickJS / WebView 双后端插件运行时，插件管理与市场（详见「🔌 插件运行时 · Plugin Runtime」专节） |
+| **工具箱 / 组件画廊** | 工具箱聚合本地工具能力（文件管理 / 工作区 / 文档生成 / **已有工具查看与导入**）；可视化组件画廊展示全部可交互 Material3 组件（详见「🗃️ 工具箱 · Toolbox」「🎨 组件画廊 · Component Gallery」） |
 | **定时任务** | `QuroScheduler`：`once` / `recurring`（rrule）、`endAt` 结束机制 |
-| **数字人 3D** | `QuroDigitalHumanScreen` GLB/glTF 离线查看器：内置 Three.js(r128)+GLTFLoader+Draco 解码器，断网可用，支持 Draco 压缩模型离线解析 |
+| **数字人 3D** | `QuroDigitalHumanScreen` GLB/glTF 离线查看器：内置 Three.js(r128)+GLTFLoader+Draco 解码器，断网可用，支持 Draco 压缩模型离线解析；支持手指拖拽旋转 / 双指缩放，整体模型自适应取景（头身完整入镜） |
 
 ---
 
@@ -475,6 +477,128 @@ ZorvAI 浏览器（受控端）在 v1.0.14 新增 `http_request` 能力：AI 可
 
 ---
 
+## 🗃️ 工具箱 · Toolbox（已有工具 / 文档生成 / 工作区 / 文件管理…）
+
+入口：**对话框输入框「+」工具 → 工具箱**（亦可从对话框 → 设置底部弹层进入）。首页为 2 列卡片网格，**全部能力在设备上运行，无需联网**即可使用大部分功能。
+
+| 卡片 | 说明 |
+|------|------|
+| 文件管理 | 浏览应用私有内 / 外部存储，查看文本 / 代码内容（>512KB 提示用其他方式） |
+| 查看软件包名 | 输入应用显示名（如「微信」），反查其精确包名 |
+| 工作区 | 在应用沙箱内（`externalFiles/QuroWorkspace`）创建 / 编辑 / 删除文件与文件夹 |
+| 文档生成（aiWPS） | 本地生成真实 `docx / xlsx / pptx / pdf / md / txt / csv / html`（后台 IO 协程执行，避免 ANR），可用应用内查看器或系统 WPS 打开 |
+| **已有工具** | 查看已注册工具清单（内置 120+ + 技能 `skill__*` + 导入工具），可删除技能工具（级联删技能）/ 导入工具（持久化移除防重启复活）；并可「导入工具（AI 自写 / 粘贴 JSON）」——详见下方「开发工具与导入教程」 |
+| 文档 | 应用内预览本地与生成文档，文本可编辑，Office 文档调起系统 WPS 打开 |
+| 音乐 / 视频播放器 | 应用内后台播放本地媒体 |
+| 数字人 | 3D 模型查看器（GLB / glTF，离线 Three.js + Draco） |
+| AI 键盘 | 注册为系统输入法，任意 App 可用 |
+
+> **「已有工具」是工具能力的统一入口**：它把「内置工具 + 用户技能 + 导入工具」合并展示，并支持删除与导入，是扩展 Zorv AI 能力的可视化面板。
+
+## 🛠️ 开发工具与导入教程 · Build & Import Your Own Tool
+
+Zorv AI 的工具（`QuroTool`）是 AI 真正能调用的「动作」。提供两条扩展路径：
+
+### 路径 A — 零代码导入（推荐，无需重新编译）
+
+在 **工具箱 → 已有工具 → 导入工具** 粘贴一段 JSON 即可。字段说明：
+
+| 字段 | 含义 |
+|------|------|
+| `name` | 工具名（全局唯一，AI 据此调用） |
+| `description` | 给 AI 看的自然语言描述（决定 AI 何时调用，**最重要**） |
+| `parametersJson` | OpenAI function-calling 风格的 JSON-Schema，描述入参 |
+| `kind` | `http` / `intent` / `broadcast` 三选一 |
+| `config` | 对应类型的配置 JSON |
+
+**示例 1 · http（调一个外部接口）**
+```json
+{
+  "name": "my_weather",
+  "description": "查询指定城市天气，入参 {\"city\":\"城市名\"}",
+  "parametersJson": "{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\",\"description\":\"城市名，如 北京\"}}}",
+  "kind": "http",
+  "config": "{\"url\":\"https://wttr.in/\",\"method\":\"GET\",\"headers\":\"{\\\"Accept\\\":\\\"application/json\\\"}\"}"
+}
+```
+> http 工具：执行时把 `arguments` 里的 `query` 字段拼到 URL 查询串；`config` 支持 `url / method / headers / body`；返回体截断到 8000 字符。
+
+**示例 2 · intent（拉起一个 Activity）**
+```json
+{
+  "name": "open_example",
+  "description": "打开示例网页，无需参数",
+  "parametersJson": "{\"type\":\"object\",\"properties\":{}}",
+  "kind": "intent",
+  "config": "{\"action\":\"android.intent.action.VIEW\",\"data\":\"https://example.com\"}"
+}
+```
+
+**示例 3 · broadcast（发系统广播）**
+```json
+{
+  "name": "send_my_broadcast",
+  "description": "发送自定义广播，入参 {\"key\":\"值\"}",
+  "parametersJson": "{\"type\":\"object\",\"properties\":{\"key\":{\"type\":\"string\"}}}",
+  "kind": "broadcast",
+  "config": "{\"action\":\"com.example.MY_ACTION\",\"extras\":\"{\\\"key\\\":\\\"val\\\"}\"}"
+}
+```
+
+**持久化**：导入后写入 `filesDir/imported_tools.json`，每次 `buildQuroRegistry()` 自动并入运行时注册表，AI **默认可见可调**；在「已有工具」里删除即持久化移除（防重启复活）。
+
+### 路径 B — 开发 Kotlin 原生工具（需重新构建）
+
+1. 实现 `QuroTool` 接口（4 个成员 + 一个 `run`）：
+```kotlin
+package com.ai.assistance.quro.core.tools
+
+import android.content.Context
+import org.json.JSONObject
+
+class HelloTool : QuroTool {
+    override val name = "hello"
+    override val description = "向用户问好，入参 {\"name\":\"名字\"}"
+    override val parametersJson = """{"type":"object","properties":{"name":{"type":"string"}}}"""
+    // 可选：override val requiredPermissions = listOf("android.permission.XXX")
+    override fun run(context: Context, arguments: String): String {
+        val n = JSONObject(arguments).optString("name", "世界")
+        return JSONObject().put("ok", true).put("msg", "你好, $n!").toString()
+    }
+}
+```
+2. 在 `app/src/main/java/com/ai/assistance/quro/core/tools/QuroBuiltInTools.kt` 的 `buildQuroRegistry()` 中注册一行：`r.register(HelloTool())`。
+3. 重新构建并安装。`run` 的返回字符串（建议 JSON）即 AI 看到的工具执行结果；危险权限通过 `requiredPermissions` 声明，运行前由系统弹窗授予。
+
+> 内置 120+ 工具（`buildQuroRegistry` 注册）与导入工具共用同一份 `QuroTool` 真相源；默认下发给 LLM 的是「核心集」（`coreSpecs()`，约 120 工具名，压低 token 避免代理静默丢弃），直连 OpenAI / DeepSeek / SiliconFlow 等可在 `QuroAssistant.ask` 改用 `fullSpecs()` 解锁全部。
+
+## 🎨 组件画廊 · Component Gallery
+
+入口：**对话框 → 设置底部弹层 → 「可视化组件画廊」**（亦可经 `ui_open_plugins` 类入口直达）。`QuroComponentGalleryScreen` 是一个**全交互**的 Material3 组件 showcase——所有 Demo 真实可点可拖，而非静态截图：
+
+- **卡片组件**：状态卡 / 指标卡 / 人物卡（带「操作」按钮，`onComponentSelected` 回调可回传选中组件名）
+- **按钮组件**：主按钮 / 描边 / 文字 / 色调 / IconButton / FilterChip / AssistChip / 小型 FAB
+- **输入框组件**：文本框 / 搜索栏（带搜索图标）
+- **展示组件**：徽标 Badge / 头像 / 线性进度 / 圆形进度 / 空状态
+- **交互组件**：Switch / Checkbox / Slider / RadioButton（全部带实时状态联动）
+- **覆盖层组件**：信息提示条 / AlertDialog / Snackbar / ModalBottomSheet
+
+用途：既是内部设计系统的可视化参考，也是组件可用性（真实点击 / 滑动手感）的验证场。
+
+## 🔌 插件运行时 · Plugin Runtime
+
+入口：**对话框 → 设置底部弹层 → 「插件运行时」**。`PluginsScreen` 采用 **逻辑层 + 渲染层双后端**架构：
+
+- **逻辑层 = QuickJS 原生沙箱**：每个插件一个 `JSRuntime`，带**内存上限 + 超时中断 + 关闭 `eval`**；引擎编入 `libquroplugin.so`（`app/src/main/cpp`，经 `externalNativeBuild`）。若该原生库未编入（理论上不会发生），自动回退到自包含 `plugin_runtime/plugin_runtime.html`，保证可运行。
+- **渲染层 = WebView DOM**：默认渲染层绕开 Cax 的 `License:None`，直接用 WebView + DOM 渲染，零额外许可负担。
+- **数据流向**：
+  - 逻辑层 `setData` → `hostSetData(path, value)` → Kotlin `onSetData` → `window.RenderRuntime.applyDiff(path, value)` → **增量 patch DOM**
+  - 渲染层事件 → `NativeBridge.callEvent` → `QuickJsEngine.invokeMethod` → `globalThis.__page[method](value)`
+- **宿主能力（`my.*`）**：`storage.get / storage.set`（KV 存储）、`ui.toast`（系统 Toast）；未实现的能力返回错误 JSON。
+- **并发与 ANR 防护**：QuickJS 引擎单线程串行（`Executors.newSingleThreadExecutor`），避免 `JSRuntime` 跨线程并发；原生库可用性探测与 `System.loadLibrary` 在**后台线程**触发，初始化完成前只显示占位，避免主线程冻结 → ANR。
+
+---
+
 ## 🧰 Requirements & Build · 系统要求与从源码构建
 
 ### 系统要求
@@ -529,7 +653,8 @@ cd QuroAI
 
 直接从 Release 页面下载最新 APK：
 
-- **v1.0.23（debug，含离线 MNN/llama.cpp 引擎，最新）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.23/app-full-debug.apk)（约 356MB，含离线引擎，已随 v1.0.23 Release 上传）
+- **v1.0.24（debug，含离线 MNN/llama.cpp 引擎，最新）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.24/app-full-debug.apk)（约 356MB，含离线引擎，已随 v1.0.24 Release 上传）
+- **v1.0.23（debug，含离线 MNN/llama.cpp 引擎）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.23/app-full-debug.apk)（约 356MB，含离线引擎，已随 v1.0.23 Release 上传）
 - **v1.0.22（debug，含离线 MNN/llama.cpp 引擎）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.22/app-full-debug.apk)（约 356MB，含离线引擎，已随 v1.0.22 Release 上传）
 - 💡 完整（含离线引擎）APK 约 356MB；受 GitLab / Gitee 附件体积限制，大体积主程序包**仅 GitHub Releases 提供**，请勿到 GitLab / Gitee 找主程序 APK。
 - **v1.0.16（debug，含离线 MNN/llama.cpp 引擎）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.16/app-full-debug.apk)（约 350MB+，含离线引擎，已随 v1.0.16 Release 上传）
@@ -569,6 +694,7 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v1.0.24 | 2026-08-10 | **数字人 3D 查看器「头被固定边框裁切」修复 + 自由旋转 + AI 发文件工具 + 对话多附件内联预览**：① **数字人头部位裁切修复**——自定义 GLB 容器从固定 220dp 方框放大为自适应且去掉圆角裁剪（此前固定边框限制了头像 WebView 尺寸，导致看不到头）；`fit()` 改用真实画布宽高比 + 整体模型 1.5× 留白取景，保证头身完整入镜；② **自由旋转 / 缩放**——内置离线 `OrbitControls.js`（r128 全局构建，`assets/www/three/`），支持手指拖拽旋转、双指捏合缩放，去掉强制自动旋转；③ **新增 AI 发文件工具 `attach_file`**（`QuroToolsAttachFile.kt`，注册进 `buildQuroRegistry` 并接入助手循环）——AI 可把设备上的图片 / 视频 / 文档作为消息附件发到对话框，用户直接在气泡预览；④ **对话多附件内联预览**——消息附件模型由单附件改为多附件列表，气泡内支持图片 / 视频 / 文档缩略图预览、全屏图片查看器、系统文档打开器；版本号 versionCode 459→460 / versionName 1.0.23→1.0.24 |
 | v1.0.23 | 2026-08-10 | **数字人 3D 查看器黑屏修复 + 语音服务与自动朗读解耦 + 关于页法律合规文档**：① **数字人 3D GLB 查看器黑屏修复**——内置离线 Three.js(r128) + GLTFLoader + **Draco 解码器(wasm)**（`assets/www/three/` 打包，运行时解包到 `cacheDir/three/draco/`），支持 Draco 压缩 GLB 离线加载；WebView 加载失败 / WebGL 不可用 / 首帧画布 0 尺寸 / GLB 解析失败等全部在屏幕可视报错（不再静默黑屏），并写诊断日志到 `Download/QuroAI_logs/`；② **语音服务与「自动朗读」开关解耦**——`speak` 工具改为独立 AI 自主语音通道，无论自动朗读是否开启，AI 均可主动用 `speak` 唱歌 / 讲故事 / 朗诵 / 分角色，且语音文本可与回复文字不同（文字回复是一份、语音是另一份），自动朗读开启时 `speak` 优先、自动朗读自动让位不重复念；③ **关于页新增「法律与合规」**——权限使用声明、用户使用协议（全屏合规文档阅读页 `QuroLegalDocScreen`）；版本号 versionCode 458→459 / versionName 1.0.22→1.0.23 |
 | v1.0.21 | 2026-08-06 | **语音球工具调用引导修复 + 工具调用指令去软化收尾 + 多语色朗读去写死**：① **语音球（语音助手入口）工具调用引导对齐对话框**——移除"纯聊天→直接回答"分类后门（该后门曾让"今天天气怎么样"等实时问题被误判为闲聊而跳过工具），改为"何时必须调用工具"（天气/时间/设备状态/联网信息永远用工具取真实值，不凭记忆瞎编；真实动作调对应工具真正执行）+"如何组合说话与用工具"（同轮先说再调、多轮 思考→调用→再思考→再回答 直到完成），与对话框入口行为一致；② **多语色 / 分角色朗读编排去写死**——语色标记名称由模型按内容自由定（角色名/情绪/旁白/叙述者/场景等任意类型），不再限定固定几种，且任意内容类型只要用户要求多语色演绎都可加标记；③ **工具调用指令去软化收尾**——全链路清除"不必调用 / 不强求"类退路措辞，确保"依赖实时/外部/最新信息的问题必须主动调工具"成为硬约束，不再因问题"看起来简单"就跳过本应调用的工具；版本号 versionCode 456→457 / versionName 1.0.20→1.0.21 |
 | v1.0.20 | 2026-08-06 | **云端工具调用全面修复 + 回复自然化 + 品牌提示词重写**：① **云端端点兼容**（裸 host→`/v1/chat/completions`、以 `/v1` 结尾→`/chat/completions`、末尾 `#` 可关闭自动补全，修复裸 host 如 `https://api.openai.com` 被拼成错误 URL 导致静默不回复）；② **Kimi K3 工具协议修复**（`role:"tool"` 消息显式写 `name` 字段，解决 HTTP 400 `tool messages need a resolvable tool name`）；③ **工具配对孤儿清理**（`toLlmMessages` 按轮数/ token 预算裁剪后做 call/result 成对校验，剔除残缺配对，修复长对话或设「保留轮数」后 tool_calls 与结果被切断导致的 400 / 工具卡消失）；④ **工具轮正文保留**（`QuroLlmResult.ToolCalls` 加 `content` 字段，模型"边说边调工具"的前言不再被丢弃，恢复「思考→回复→调用工具→再思考→调用工具→回复」自由组合）；⑤ **回复约束软化**（移除"必须调用工具 / 绝对不能只回复文字"等硬指令，是否调工具、调哪个、调几次交由模型自行判断）；⑥ **深度思考开关真正生效**（透传进引擎，开启注入深度思考指令、关闭注入轻量指令，双向有效，非推理模型也会被真正引导多想）；⑦ **品牌提示词重写**（`QuroPlatformManifest.SYSTEM` 按「身份与人格（依据人格卡）/ 运行环境 / 工具执行环境 / 能力环境 / 技术构架」结构重写为陈述式，去除强制思考/强制调工具的硬写）；版本号 versionCode 455→456 / versionName 1.0.19→1.0.20 |

@@ -67,7 +67,8 @@ data class Message(
     val avatarUri: String = "",  // 自定义图片头像的内部路径（有图时优先显示图片）
     val time: String,
     val text: String? = null,
-    val attachment: Attachment? = null,
+    /** 一条消息可携带多个附件（图片/视频/文档），用户与 AI 消息通用；发出来可直接预览。 */
+    val attachments: List<Attachment> = emptyList(),
     val think: ThinkBlock? = null,
     val tools: List<ToolCallUi>? = null,  // 本消息关联的工具调用（可见化，而非隐藏管道）
     val cards: List<QuroChatCard> = emptyList(), // 气泡内富组件（一等公民，合体进聊天气泡）
@@ -141,7 +142,7 @@ val SAMPLE_HISTORY = listOf(
 val SAMPLE_MESSAGES = listOf(
     Message(
         id = 1, mine = true, author = "你", avatar = "我", time = "09:32",
-        attachment = Attachment("会议纪要_0716.pdf", "1.8 MB · PDF"),
+        attachments = listOf(Attachment("会议纪要_0716.pdf", "1.8 MB · PDF", type = "file")),
         text = "帮我把这份纪要整理成行动清单，把**需要老板确认**的部分单独标出来。"
     ),
     Message(
