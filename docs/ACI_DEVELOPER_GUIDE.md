@@ -1,6 +1,6 @@
 # Zorv AI · ACI 开发者手册（Agent Capability Interface）
 
-> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）｜ 适用 SDK：`aci-core` ｜ 最后更新：2026-08-01
+> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）｜ 适用 SDK：`aci-core` ｜ 最后更新：2026-08-10（v1.0.25 新增 语义点击闭环 ui_snapshot / tap）
 >
 > 本文档面向**希望让自己的 Android App 被 Zorv AI（或其他 ACI 控制端）调用**的第三方开发者，也适用于**想基于 `aci-core` 自建控制端**的开发者。
 
@@ -24,7 +24,7 @@ ACI 的设计目标是让「手机上的任意 App 能力」成为 AI Agent 可�
 ```
 ┌──────────────────────────┐         AIDL Binder           ┌──────────────────────────┐
 │   控制端（Zorv AI）        │  ─── call / callAsync ───▶   │   受控端（你的 App）       │
-│  QuroAciManager           │  ◀── ACIResponse ───────     │  BaseACIService 子类      │
+│  QuroAidlAciManager           │  ◀── ACIResponse ───────     │  BaseACIService 子类      │
 │  - discover() 发现        │                              │  - onCreateCapabilities   │
 │  - bind() 绑定            │  ─── ACTION_WAKE 广播 ──▶    │  - onCall() 处理          │
 │  - getCapabilities() 取清单│  (唤醒 stopped 进程)         │  - onCheckPermission()    │
@@ -33,7 +33,7 @@ ACI 的设计目标是让「手机上的任意 App 能力」成为 AI Agent 可�
 
 | 角色 | 职责 | 关键类 |
 |------|------|--------|
-| **控制端** | 扫描、绑定、取能力清单、发起调用、把结果喂给 LLM | `QuroAciManager` + `aci-core` 的 `IACIService` 桩 |
+| **控制端** | 扫描、绑定、取能力清单、发起调用、把结果喂给 LLM | `QuroAidlAciManager` + `aci-core` 的 `IACIService` 桩 |
 | **受控端** | 继承 `BaseACIService`，声明能力，实现处理逻辑 | `BaseACIService` / `Capability` / `ACIRequest` / `ACIResponse` |
 | **Binder 契约** | 定义跨进程方法 | `IACIService.aidl` / `IACICallback.aidl` |
 | **权限** | 5 层鉴权 | `aci_permissions.xml` + `onCheckPermission` |
@@ -118,7 +118,7 @@ dependencies {
 
         <!-- stopped-state 唤醒接收器（关键，见 4.6） -->
         <receiver
-            android:name=".QuroAciWakeReceiver"
+            android:name=".QuroAidlAciWakeReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="ai.aci.core.ACTION_WAKE" />
@@ -244,7 +244,7 @@ ACIResponse.error(ACIError.BAD_REQUEST, "missing param: url")
 修复方式：受控端提供 `WakeReceiver`，控制端在 `bindService` 前先发 `ACTION_WAKE` 广播（带 `FLAG_INCLUDE_STOPPED_PACKAGES`）把进程拉起。
 
 ```kotlin
-class QuroAciWakeReceiver : BroadcastReceiver() {
+class QuroAidlAciWakeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == "ai.aci.core.ACTION_WAKE") {
             val launch = context.packageManager
@@ -256,7 +256,7 @@ class QuroAciWakeReceiver : BroadcastReceiver() {
 }
 ```
 
-控制端（`QuroAciManager.bindWithWake()`）已内置该逻辑：先发唤醒广播，再 `bindService(BIND_AUTO_CREATE)`。
+控制端（`QuroAidlAciManager.bindWithWake()`）已内置该逻辑：先发唤醒广播，再 `bindService(BIND_AUTO_CREATE)`。
 
 > 🔑 这是「Zorv AI 之前能绑定、某次更新后不行」的真实根因——修复点在**控制端**的绑定逻辑，而非受控端能力注册。
 
@@ -302,7 +302,7 @@ ACI 采用纵深防御，调用需依次通过：
 
 ## 7. 控制端调用（发现与绑定）
 
-控制端流程（以 `QuroAciManager` 为参考）：
+控制端流程（以 `QuroAidlAciManager` 为参考）：
 
 ```kotlin
 // 1. 发现：扫描声明了 ACTION_BIND 的受控端
@@ -365,7 +365,7 @@ override fun onCallAsync(request: ACIRequest, callback: IACICallback) {
 ## 10. 发布清单配置要点（包可见性）
 
 - **受控端**：必须写 `<queries>`（ACTION_BIND + ACTION_WAKE），否则 Android 11+ 控制端发现不到。
-- **控制端**：若需发现任意受控端，也要在自身 `<queries>` 声明 `ACTION_BIND`（本项目 `QuroAciManager` 已处理）。
+- **控制端**：若需发现任意受控端，也要在自身 `<queries>` 声明 `ACTION_BIND`（本项目 `QuroAidlAciManager` 已处理）。
 - **权限**：受控端**不要定义** `ai.aci.permission.*`，只声明 `<uses-permission>` 引用控制端已定义的权限（定义权归控制端 ZorvAI）；若 `aci-core` 库带入 `<permission>`，用 `tools:node="remove"` 剥除。二者权限名必须一致（受控端引用的是控制端定义的同名权限）。详见 §16。
 
 ---
@@ -397,9 +397,9 @@ override fun onCallAsync(request: ACIRequest, callback: IACICallback) {
 
 ## 13. 官方受控端能力清单（ZorvAI 浏览器）
 
-ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 30 个能力（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输）。控制端 `QuroAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
+ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 32 个能力（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输 + 2 语义点击）。控制端 `QuroAidlAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
 
-### 13.1 能力总览（共 30 项：13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输）
+### 13.1 能力总览（共 32 项：13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输 + 2 语义点击）
 
 **基础能力（13）**
 
@@ -454,7 +454,14 @@ ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，�
 | 能力 id | 入参 | 出参 | 说明 |
 |---------|------|------|------|
 | `browser_mouse` | `action`(string, 必填：move/click/dblclick/right/down/up/drag/scroll) / `x`(int, 必填 屏幕绝对像素 X) / `y`(int, 必填 屏幕绝对像素 Y) / `dx`(int, 可选) / `dy`(int, 可选) / `button`(string, 可选：left 默认/right/middle) | `ok`(boolean) + `action` + `x` + `y` | 在页面屏幕坐标模拟鼠标动作；后端按 WebView 在屏位置自动换算视图坐标后派发 `MotionEvent`（主线程 `dispatchTouchEvent` / `dispatchGenericMotionEvent`）。覆盖无稳定ID、无 CSS 选择器的元素与画布交互，与 `browser_action`(id/selector) 构成「坐标 + 语义」双通道。注：系统 WebView 将触摸事件按触摸处理，右键为尽力而为 |
-| `http_request` | `url`(string, 必填) / `method`(string, 可选：GET/POST/PUT/DELETE/PATCH/HEAD，默认 GET) / `headers`(string, 可选 JSON) / `body`(string, 可选 原样发送) | `status_code`(int) + `response_headers`(string JSON) + `response_body`(string) + `truncated`(boolean)；大响应体附 `response_body_gz`(byte[]) | HTTP 传输：经 ACI 让受控浏览器代为发起任意 HTTP 请求。**重点支持同网段 LAN 明文**（http://192.168.x.x、http://10.x、*.local mDNS），访问路由器/NAS/智能家居/私有 API 等局域网设备；受控浏览器已放开局域网明文（networkSecurityConfig base-config 整体允许明文），无需因公网明文限制而犹豫，公网请求仍走 HTTPS。响应体 >15 万字符自动 gzip（response_body_gz），控制端解压还原 |
+| `http_request` | `url`(string, 必填) / `method`(string, 可选：GET/POST/PUT/DELETE/PATCH/HEAD，默认 GET) / `headers`(string, 可选 JSON) / `body`(string, 可选 原样发送) | `status_code`(int) + `response_headers`(string JSON) + `response_body`(string) + `truncated`(boolean)；大响应体附 `response_body_gz`(byte[]) | HTTP 传输：经 ACI 让受控浏览器代为发起任意 HTTP 请求。**重点支持同网段 LAN 明文**（http://192.168.x.x、http://10.x、*.local mDNS），访问路由器/NAS/智能家居/私有 API 等局域网设备；受控浏览器已放开局域网明文（networkSecurityConfig base-config 整体允许明文），无需因公网明文限制而犹豫，公网请求仍走 HTTPS。 响应体 >15 万字符自动 gzip（response_body_gz），控制端解压还原 |
+
+**第五波增强（2 · 语义点击闭环，回应元宝 ACI 2.0「视觉锚点 / 感知-执行」）**
+
+| 能力 id | 入参 | 出参 | 说明 |
+|---------|------|------|------|
+| `ui_snapshot` | — | `nodes`(string_array，每项 `text\|resId\|left,top,right,bottom` 屏幕像素整数) | 当前可视区域元素快照（屏幕坐标）：遍历页面可交互/可见元素，按 WebView 在屏位置 + CSS→屏幕缩放换算成**屏幕绝对像素**返回；视口外元素自动跳过。供控制端 `clickText`/`clickResourceId` 解析锚点坐标；与 `tap` 同一坐标空间（屏幕绝对像素），**无需 AccessibilityService** |
+| `tap` | `x`(int, 必填 屏幕绝对像素 X) / `y`(int, 必填 屏幕绝对像素 Y) | `x`(int) + `y`(int) | 在屏幕坐标模拟单击：复用 `browser_mouse` 的坐标换算与视图级 `dispatchTouchEvent` 派发（受控端无系统特权也能用），与 `ui_snapshot` 形成「像人一样点页面」的感知-执行闭环。控制端语义点击 `clickText`/`clickResourceId` 会自动先 `ui_snapshot` 取节点、解析锚点、再 `tap` |
 
 > 注：`browser_action` 在第三波新增 `selector`(CSS 选择器) 参数（与 `id` 二选一，优先级低于 `id`），可直接用选择器定位操作，免去先 `browser_elements` 注入稳定 ID。
 
@@ -490,7 +497,7 @@ AIDL Binder 单次事务上限约 **1MB**。早期实现直接 `putResult("html"
 
 **修复方案（混合绕过，向后兼容）：**
 - 受控端 `handleRead` **始终**返回「安全截断的 html 字符串」（≤150,000 字符），永不过 Binder；
-- 当原始 HTML 超过阈值时，额外用 `GZIPOutputStream` 压成 `byte[]`，经 `html_gz` 回传；控制端 `QuroAciCallTool` 检测到 `html_gz` 即 `GZIPInputStream` 解压，还原完整 HTML 交给 LLM；
+- 当原始 HTML 超过阈值时，额外用 `GZIPOutputStream` 压成 `byte[]`，经 `html_gz` 回传；控制端 `QuroAidlAciCallTool` 检测到 `html_gz` 即 `GZIPInputStream` 解压，还原完整 HTML 交给 LLM；
 - gzip 后若仍 >900KB，放弃 `html_gz`，仅返回截断预览（极端大页面兜底）。
 
 > 这是**受控端 + 控制端**双侧改动：受控端负责截断/压缩，控制端负责解压还原。第三方受控端若也要回传大结果，建议复用同一模式。
@@ -578,7 +585,7 @@ Zorv AI 主程序内置 `consolekit` 包，受控端或控制端都可复用：
 
 ### 14.6 控制端如何驱动
 
-控制端 `QuroAciCenterScreen` 按 capability id `console_ui` 发现「打开控制台」入口；点击后通过 Binder 拉取 `console_ui` 快照，用本地 `AciConsoleScreen`（`core/aci` 包）渲染；按钮 / 输入经 `console_action` 回传并刷新快照。**全程纯接线、零侵入、零网络。**
+控制端 `QuroAidlAciCenterScreen` 按 capability id `console_ui` 发现「打开控制台」入口；点击后通过 Binder 拉取 `console_ui` 快照，用本地 `AciConsoleScreen`（`core/aci` 包）渲染；按钮 / 输入经 `console_action` 回传并刷新快照。**全程纯接线、零侵入、零网络。**
 
 ---
 
@@ -617,7 +624,7 @@ Android NSC **只能按域名或整体 base-config 放开明文，无法按「�
 
 ### 15.4 控制端如何渲染
 
-主程序 `QuroAciTools.renderHttpResult` 检测到 `response_body_gz` 即 GZIPInputStream 解压，把「状态码 / 响应头 / 响应体」整理成干净文本喂给 LLM；无 gzip 时直接用截断预览。
+主程序 `QuroAidlAciTools.renderHttpResult` 检测到 `response_body_gz` 即 GZIPInputStream 解压，把「状态码 / 响应头 / 响应体」整理成干净文本喂给 LLM；无 gzip 时直接用截断预览。
 
 ### 15.5 安全权衡
 

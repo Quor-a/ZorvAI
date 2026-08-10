@@ -7,7 +7,7 @@ import com.ai.assistance.quro.core.mcp.QuroLocalMcpManager
 import com.ai.assistance.quro.core.tools.QuroImportedToolRegistry
 import com.ai.assistance.quro.core.tools.QuroScheduledTaskScheduler
 import com.ai.assistance.quro.core.bot.QuroBotManager
-import com.ai.assistance.quro.core.aci.QuroAciManager
+import com.ai.assistance.quro.core.aidlaci.QuroAidlAciManager
 import com.ai.assistance.quro.core.shizuku.QuroShizuku
 import com.ai.assistance.quro.ui.QuroPersonaViewModel
 
@@ -63,8 +63,8 @@ class QuroApplication : Application() {
         // 启动即发现并绑定设备上已安装的第三方 ACI App，使其能力可被 AI 调用。
         // 整体包在 try 中，避免 ACI 异常影响应用正常启动。
         try {
-            QuroAciManager.init(applicationContext)
-            QuroAciManager.getInstance().discover()
+            QuroAidlAciManager.init(applicationContext)
+            QuroAidlAciManager.getInstance().discover()
         } catch (e: Throwable) {
             android.util.Log.e("QuroApplication", "ACI 初始化失败（不影响主流程）", e)
         }

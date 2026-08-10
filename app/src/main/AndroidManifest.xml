@@ -44,7 +44,7 @@
          才能绑定并调用第三方 App 暴露的 ACI Service。该权限由 aci-core 库 Manifest 定义
          （protectionLevel=normal，随 AAR 合并进本应用），此处声明即获系统授予；
          否则 bindService 会被系统以 SecurityException 拒绝，导致 discover 后绑定失败、aci_list 永远为空。
-         真实的调用方鉴权仍由被调用方 BaseACIService.onCheckPermission（Binder UID 反查 + 白名单）把关。 -->
+         真实的调用方鉴权仍由被调用方 BaseAidlAciService.onCheckPermission（Binder UID 反查 + 白名单）把关。 -->
     <uses-permission android:name="ai.aci.permission.CALL" />
     <uses-permission android:name="ai.aci.permission.DISCOVER" />
 
@@ -399,7 +399,7 @@
 
         <!-- 主应用 ACI 唤醒接收器：收到 ACTION_WAKE 后拉起主应用 ACI Service（进程唤醒，便于绑定）。 -->
         <receiver
-            android:name=".service.QuroAciWakeReceiver"
+            android:name=".service.QuroAidlAciWakeReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="ai.aci.core.ACTION_WAKE" />

@@ -38,7 +38,7 @@ import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.core.QuroTagRepository
 import com.ai.assistance.quro.core.QuroCrashReporter
 import com.ai.assistance.quro.core.cms.QuroCmsRepository
-import com.ai.assistance.quro.core.aci.QuroAciManager
+import com.ai.assistance.quro.core.aidlaci.QuroAidlAciManager
 import com.ai.assistance.quro.core.skill.QuroSkill
 import com.ai.assistance.quro.core.skill.QuroSkillStore
 import com.ai.assistance.quro.core.network.QuroLlmClient
@@ -1472,7 +1472,7 @@ $recent
         sb.append("- 官方参考受控端「ZorvAI 浏览器」(包名 com.ai.assistance.quro.browser) 已暴露能力：browser_open(打开网址) / browser_read(读当前页 URL+标题+完整 HTML) / browser_crawl(爬结构化正文+出站链接) / browser_search(检索) / browser_script(执行任意 JS) / browser_list(标签页) / browser_info(版本) / browser_capture(抓包) / browser_find(页内查找) / browser_nav(前进后退刷新) / browser_screenshot(截图存 Pictures/QuroAI_screenshots/) / console_ui(控制台 SDUI 快照) / console_action(控制台动作)。browser_read/browser_crawl 已修复，在 SPA 大页(如 news.sina.cn)也能稳定返回内容。\n")
         sb.append("- 已发现的第三方能力清单：\n")
         try {
-            sb.append(QuroAciManager.getInstance().getCapabilityPrompt())
+            sb.append(QuroAidlAciManager.getInstance().getCapabilityPrompt())
         } catch (e: Throwable) {
             sb.append("（ACI 尚未就绪：${e.message}）\n")
         }

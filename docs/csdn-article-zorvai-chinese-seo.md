@@ -88,7 +88,7 @@ ACI 是一套基于 Android AIDL Binder 的**跨应用能力接口协议**。它
 ```
 控制端 (ZorvAI 主程序)          受控端 (你的 App)
 ┌──────────────────┐    AIDL    ┌──────────────────┐
-│ QuroAciManager   │ ──call──▶ │ BaseACIService   │
+│ QuroAidlAciManager   │ ──call──▶ │ BaseACIService   │
 │ - discover() 发现 │ ◀─response│ - 注册能力        │
 │ - bind() 绑定    │          │ - onCall() 处理   │
 │ - 发起调用       │          │ - 权限校验        │

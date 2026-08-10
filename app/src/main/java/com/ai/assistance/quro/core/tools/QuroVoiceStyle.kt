@@ -116,48 +116,49 @@ object QuroVoiceStyle {
         }
     }
 
-    /**
-     * 语色路由解析结果：一段文本 + 其情绪标签（保留，供 MiMo 真情感合成）+ 语色（可能为 null）。
-     */
-    data class VoiceSeg(val text: String, val tags: List<String>, val voiceColor: String?)
+    // NOTE: 语色（多音色）不再以文本标签 (语色:xxx) 形式内嵌解析 —— 该方案在「语色+情绪混合格式」与长文本下
+    // 解析脆弱，导致换错声/窜英文/不完整。改为：音色由 speak 工具的 voice 参数显式指定，需要多角色就多次调用
+    // speak 工具（每次独立合成，按序串行播放 = 多次合成完成多音色）。情绪标签（(开心) 等）仍按原样留在文本里。
+    // [extractLeadingMarkers] 仍会静默剥除 (语色:xxx)，作为「AI 仍残留旧写法」的安全兜底，避免被念成字面。
 
     /**
-     * 把 LLM 回复按行切分为带「语色」的片段，供 [QuroTtsHolder] 做逐段音色路由 + 边播边合成。
-     * 与 [segment] 不同：这里额外提取每行开头的 (语色:xxx) 语色标记，且不过滤情绪标签白名单
-     * （下游 MiMo / 云引擎按各自逻辑处理情绪标记，路由层只关心「是否有语色」与「每段音色」）。
+     * 多音色（语色）系统提示词片段。
+     *
+     * 设计修正（关键）：音色【不再】写成文本标签 (语色:xxx) —— 旧方案在「语色+情绪混合格式」与长文本下
+     * 解析脆弱，导致换错声 / 窜英文 / 不完整（用户实测复现）。改为【用 speak 工具的 voice 参数】：
+     * 需要多角色就多次调用 speak 工具，每次设 voice 为该角色真实音色，系统逐次独立合成、按序串行播放
+     * （= 多次合成完成多音色）。情绪标签（(开心) 等）仍按原样留在文本里。
+     *
+     * @param catalog 由 [QuroCloudTtsCatalog.voiceColorCatalogText] 生成的完整音色清单（每条带 id + 语言）。
      */
-    fun parseVoiceRouting(input: String): List<VoiceSeg> {
-        return input.split("\n").mapNotNull { line ->
-            val (rawTags, text, vc) = extractLeadingMarkers(line)
-            if (text.isBlank() && rawTags.isEmpty() && vc == null) return@mapNotNull null
-            VoiceSeg(text = text, tags = rawTags, voiceColor = vc)
-        }
-    }
+    fun systemHintVoiceColor(catalog: String): String {
+        return """## 多音色朗读（用 speak 工具的 voice 参数，不要写文本标签）
 
-    /**
-     * 语色（AI 自动分配角色音色）系统提示词片段。
-     * 与情绪提示互补：情绪决定语气，语色决定音色；两者可叠加（如 (语色:旁白)(温柔) ...）。
-     * AI 根据内容【自由组合】每段用的语色，无需用户指定。
-     */
-    fun systemHintVoiceColor(palette: Collection<String>): String {
-        val names = if (palette.isEmpty()) "（未配置语色调色板）" else palette.joinToString(" / ")
-        return """## 语色路由（AI 自动分配角色音色）
-你的回复会被朗读出来。除了情绪，你还可以用「语色」让不同段落用不同的声音 / 角色音色，让人声对话、角色扮演、旁白更有层次。
-**核心原则（像导演选角）：**
-- 你根据内容【自由组合】每段用的语色——无需用户指定，由你决定哪段用旁白、哪段用某个角色音。
-- 同一段可叠加情绪 + 语色，例如：(语色:旁白)(温柔) 故事开始了……
-- 不加语色的段落用默认音色自然朗读（大部分段落不需要语色）。
-**语色标记格式：每行开头半角括号 + 语色名**
-  (语色:旁白) 很久很久以前……
-  (语色:悟空) 俺老孙来也！
-  (语色:唐僧) 贫僧自东土大唐而来。
-**可选语色（只能从下列中选，不要自创）：**
-  $names
-**规则：**
-  - 上述语色由你按需自由选用与组合，切换要自然（如角色对话各自用对应语色）。
-  - 语色标记只用于语音合成，不会显示给用户，放心使用。
-  - 纯代码 / 表格 / 列表段落不要加语色标记。
-  - **目标：让听的人感觉在听一场有角色区分、有层次的真人演绎。**""".trimIndent()
+你的回复会被朗读出来。想让不同【角色 / 旁白】用【不同的声音】，请用「speak 工具的 voice 参数」，而不是在文本里写标签。
+
+⚠️ 最重要：音色【不是文本标签】！
+- 不要写 (语色:xxx) 这类标记，它们不会被解析、还会污染正文。
+- 情绪标签（如 (开心) (温柔)）仍按原样写在文本里（标签在文本中），但不要写进 voice 参数。
+
+**怎么做多音色（多次调用 speak 工具）：**
+- 把整段拆成「每个角色一句/一段」，对每一句【单独调用一次 speak 工具】，并设置 voice 参数为该角色的真实音色名或 id。
+- 每次调用独立合成、按调用顺序串行播放，自然形成多音色演绎。
+- 例（角色对话）：
+    speak("悟空，你又闯祸了！", voice="晓晓（女）")      ← 女声念这句
+    speak("师父饶命！俺老孙再不敢了！", voice="苏打（男）") ← 男声念这句
+    speak("师徒四人继续向西前行。", voice="白桦（男）")     ← 旁白用另一个声
+- voice 参数省略则该句用默认音色。
+
+**可用音色（【必须】从下面清单挑真实名字或 id，一字不差，含其中的全角括号（女）；不要自创）：**
+  $catalog
+
+**关于语言：** 每条清单都标了「语言=xxx」。中文角色用「语言=中文」的音色，英文角色用「语言=英文」的音色，别把中文文本配到英文音色上（会洋腔或失效）。
+
+**克制原则（像导演选角）：**
+- 只在明显的角色 / 旁白切换处换声；同一角色整段固定同一音色；不加 voice 的句子用默认音色。
+- 纯代码 / 表格 / 列表不要调用 speak 朗读。
+
+**记住：多音色靠「多次调用 speak + 每次设 voice」实现，不是靠文本标签。目标：像角色分明、层次清楚的真人演绎。**""".trimIndent()
     }
 
     /**
@@ -272,7 +273,10 @@ object QuroVoiceStyle {
             val src = QuroTtsPrefs.getSource(ctx)
             val isCloudLike = src == QuroTtsPrefs.SOURCE_CLOUD || src == QuroTtsPrefs.SOURCE_MIMO
             if (isCloudLike) {
-                parts.add(systemHintVoiceColor(QuroCloudTtsCatalog.VOICE_COLOR_PALETTE.keys))
+                // 语色路由：跟随「实际播放服务商」的真实音色清单（不再写死 MiMo 调色板，避免非 MiMo 服务商被固定死）
+                val vpDef = QuroTtsProviders.byId(QuroTtsProviderPrefs.getProvider(ctx)) ?: QuroTtsProviders.byId("edge")!!
+                val vpCfg = QuroTtsProviderPrefs.getConfig(ctx, vpDef.id)
+                parts.add(systemHintVoiceColor(QuroCloudTtsCatalog.voiceColorCatalogText(vpDef, vpCfg)))
             }
         }
         return if (parts.isEmpty()) null else parts.joinToString("\n\n")

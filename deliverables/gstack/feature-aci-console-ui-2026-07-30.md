@@ -50,7 +50,7 @@
 |---|--------|------|------|---------|------|---------|
 | 1 | 🟢 | 架构 | aci-browser | 后端 `console_ui`/`console_action` 能力已就绪（v1.0.12） | 真机验证 | 产品/排障 |
 | 2 | 🟢 | 清理 | app/AndroidManifest + shortcuts | 移除错误 `browserui` 自循环入口 | 已移除并编译通过 | 排障 |
-| 3 | 🟢 | 前端 | QuroAciCenterScreen | 接入 `console_ui`→`LanUiScreen` 渲染分支（按 capability id 触发） | 已接线、编译通过 | 设计/产品 |
+| 3 | 🟢 | 前端 | QuroAidlAciCenterScreen | 接入 `console_ui`→`LanUiScreen` 渲染分支（按 capability id 触发） | 已接线、编译通过 | 设计/产品 |
 
 ---
 
@@ -60,7 +60,7 @@
 - 删除 `app/browserui/*`（8 文件，移至可逆备份，非销毁）
 - `app/src/main/AndroidManifest.xml`：移除 `BrowserUiActivity` / `BrowserActivity` / `BrowserBackendService` 三处声明
 - `app/src/main/res/xml/shortcuts.xml`：移除 `browser_console` shortcut
-- `app/src/main/java/com/ai/assistance/quro/ui/QuroAciCenterScreen.kt`：新增 `console_ui`→`LanUiScreen` 弹层（纯接线，无新业务逻辑）
+- `app/src/main/java/com/ai/assistance/quro/ui/QuroAidlAciCenterScreen.kt`：新增 `console_ui`→`LanUiScreen` 弹层（纯接线，无新业务逻辑）
 
 **测试覆盖**
 - 编译验证：`app` + `aci-browser` 均 BUILD SUCCESSFUL

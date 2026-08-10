@@ -19,6 +19,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Quro AI"
-include(":app", ":aci-browser", ":aci-core", ":mnn", ":llama")
+include(":app", ":aidl-aci-browser", ":aidl-aci-core", ":mnn", ":llama")
 project(":mnn").projectDir = file("llm/mnn")
 project(":llama").projectDir = file("llm/llama")

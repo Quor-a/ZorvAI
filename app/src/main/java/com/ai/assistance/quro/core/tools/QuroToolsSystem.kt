@@ -378,7 +378,7 @@ class FileReadTool : QuroTool {
 /** 打开网址（在应用内置浏览器中打开，不跳转系统浏览器）。 */
 class OpenWebTool : QuroTool {
     override val name = "open_web"
-    override val description = "在应用内置浏览器中打开指定 URL。参数 {\"url\":\"网址\"}。当用户需要浏览网页、查看网页内容时使用。会自动在应用内打开网页视图。"
+    override val description = "在应用内置【被动】浏览器中打开指定 URL 供用户查看。参数 {\"url\":\"网址\"}。当用户需要浏览网页、查看网页内容时使用，会自动在应用内打开网页视图。注意：这是被动展示，AI 无法在其中点击链接/填表/翻页/进入子页面——若你(AI)要像人一样真正操作网页(点击进入、填表、读取子页面)，必须用 aci_call 调 ZorvAI 受控浏览器的 browser_open→browser_elements→browser_action→browser_read。"
     override val parametersJson = """{
         "type":"object",
         "properties":{"url":{"type":"string","description":"要打开的完整 URL，如 https://www.example.com"}},
@@ -389,7 +389,7 @@ class OpenWebTool : QuroTool {
         if (url.isEmpty()) return "缺少 url 参数"
         return try {
             QuroBrowserBridge.open(url)
-            "已在应用内置浏览器打开：$url"
+            "已在应用内置浏览器被动打开：$url（仅供查看，AI 无法点击/填表/进入子页面）。如需像人一样真正操作该网页，请用 aci_call 调 ZorvAI 受控浏览器的 browser_open→browser_elements→browser_action→browser_read。"
         } catch (e: Exception) { "打开失败：${e.message}" }
     }
 }

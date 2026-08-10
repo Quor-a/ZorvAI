@@ -72,10 +72,12 @@ object QuroTtsHolder {
 
     // ── 串行播报队列：杜绝「新语音打断/杀掉旧语音 → 有一个不播」──
     // 新请求到来时若已有语音在播，进入 pending 队列，等当前播完再播（"一个播完再播一个"）。
-    private data class SpeechJob(val text: String, val onDone: (() -> Unit)?, val minimal: Boolean)
+    private data class SpeechJob(val text: String, val onDone: (() -> Unit)?, val minimal: Boolean, val voice: String? = null)
     private val pendingQueue = ArrayDeque<SpeechJob>()
     private val pumpLock = Mutex()
     @Volatile private var isSpeaking = false
+    // 队列空闲监听器：供语音球等「等全部播报完毕再续听」场景使用
+    private val idleListeners = mutableListOf<() -> Unit>()
 
     // ── 参数缓存 ──
     private var currentRate: Float = 1.0f
@@ -276,26 +278,26 @@ object QuroTtsHolder {
      * 串行队列：若当前已有语音在播，新请求进入 pending 队列，等当前播完再播（"一个播完再播一个"），
      * 不再用 abortAll/tts.stop 打断上一段，杜绝「两次语音有一个不播」。
      */
-    suspend fun speak(text: String, onDone: (() -> Unit)? = null): Int = enqueueOrPlay(text, onDone, false)
+    suspend fun speak(text: String, onDone: (() -> Unit)? = null, voice: String? = null): Int = enqueueOrPlay(text, onDone, false, voice)
 
     /** 安全模式 speak（不设参数）。同样走串行队列。 */
-    suspend fun speakMinimal(text: String, onDone: (() -> Unit)? = null): Int = enqueueOrPlay(text, onDone, true)
+    suspend fun speakMinimal(text: String, onDone: (() -> Unit)? = null, voice: String? = null): Int = enqueueOrPlay(text, onDone, true, voice)
 
-    private suspend fun enqueueOrPlay(text: String, onDone: (() -> Unit)?, minimal: Boolean): Int {
+    private suspend fun enqueueOrPlay(text: String, onDone: (() -> Unit)?, minimal: Boolean, voice: String? = null): Int {
         val ctx = appCtx ?: return (-1).also { log("enqueueOrPlay: 无 appCtx ❌"); onDone?.invoke() }
         // 串行播报，不再做「跨路径相同文本去重」：该去重会误杀对话框自动朗读（语音球已播同一条 → 对话框再播被丢弃，
         // 表现为「播了 TTS，文本朗读就用不了」），与用户选定的「两层都播·串行」相冲突。
         // 各路径自身已有去重守卫：对话框 lastSpokenId 防同消息重复朗读；语音球 ttsBusy/fired 一次性守卫。
         // 语音球把回复写进对话框后由对话框再播一遍 = 用户选定的「两层都播·串行」，属预期行为，不再拦截。
         // 空闲则立即播；播放中则入队串行，绝不打断当前语音
-        if (!isSpeaking) return playOne(text, onDone, minimal)
-        pumpLock.withLock { pendingQueue.add(SpeechJob(text, onDone, minimal)) }
+        if (!isSpeaking) return playOne(text, onDone, minimal, voice)
+        pumpLock.withLock { pendingQueue.add(SpeechJob(text, onDone, minimal, voice)) }
         log("enqueueOrPlay: 已入队（当前播放中），稍后串行播报")
         return 0
     }
 
     /** 真正执行一段播报；播放期间 isSpeaking=true，完成后翻转并泵取下一段。 */
-    private suspend fun playOne(text: String, onDone: (() -> Unit)?, minimal: Boolean): Int {
+    private suspend fun playOne(text: String, onDone: (() -> Unit)?, minimal: Boolean, voice: String? = null): Int {
         isSpeaking = true
         var watchdogJob: Job? = null
         // 非空声明：本地必然是一个 lambda 字面量，声明为可空会导致 wrapped.invoke() 编译失败；
@@ -311,9 +313,8 @@ object QuroTtsHolder {
             val src = QuroTtsPrefs.getSource(ctx)
             val isCloudLike = src == QuroTtsPrefs.SOURCE_CLOUD || src == QuroTtsPrefs.SOURCE_MIMO
             if (isCloudLike) {
-                // 语色路由：若文本含 (语色:xxx) 标记且路由开启，则逐段分配音色 + 边播边合成；否则走原单一音色路径
-                val routing = QuroVoiceFeaturePrefs.getVoiceColorRoutingEnabled(ctx)
-                val segs = if (routing) QuroVoiceStyle.parseVoiceRouting(text) else emptyList()
+                // 音色不再以文本标签 (语色:xxx) 内嵌解析：由调用方（speak 工具的 voice 参数）显式指定每段音色，
+                // 系统按段独立合成（多次合成完成多音色）。无 voice 时回落全局/人格音色。
                 // 看门狗：防止云 TTS 引擎挂起不回调导致 isSpeaking 永久 true
                 watchdogJob = holderScope.launch {
                     kotlinx.coroutines.delay(WATCHDOG_TIMEOUT_MS)
@@ -323,7 +324,7 @@ object QuroTtsHolder {
                         runCatching { wrapped.invoke() }
                     }
                 }
-                return@withContext if (segs.any { it.voiceColor != null }) speakCloudSegments(ctx, segs, wrapped) else speakCloud(text, wrapped)
+                return@withContext speakCloud(text, wrapped, voice)
             }
             if (!ensureReady(ctx)) {
                 // P0-A 修复：本地 TTS 不可用（系统无引擎 / 初始化失败）时，若用户已配置云端服务商，
@@ -362,9 +363,28 @@ object QuroTtsHolder {
 
     /** 泵取队列中下一段（当前段播完时由 wrapped 回调触发）。 */
     private suspend fun pumpNext() {
-        val job = pumpLock.withLock { pendingQueue.removeFirstOrNull() } ?: return
+        val job = pumpLock.withLock { pendingQueue.removeFirstOrNull() } ?: run {
+            fireIdleListeners()
+            return
+        }
         log("pumpNext: 取出排队语音，开始串行播报")
-        playOne(job.text, job.onDone, job.minimal)
+        playOne(job.text, job.onDone, job.minimal, job.voice)
+    }
+
+    /** 注册「全部语音播报完毕后」回调：若当前队列已空闲则立即在主线程执行，否则等最后一段播完再执行。 */
+    fun runWhenIdle(action: () -> Unit) {
+        mainHandler.post {
+            if (!isSpeaking && pendingQueue.isEmpty()) action()
+            else idleListeners.add(action)
+        }
+    }
+
+    /** 触发并清空队列空闲监听器（在 pumpNext 判定队列空时调用，已在主线程）。 */
+    private fun fireIdleListeners() {
+        if (idleListeners.isEmpty()) return
+        val list = idleListeners.toList()
+        idleListeners.clear()
+        list.forEach { runCatching { it() } }
     }
 
     /**
@@ -415,10 +435,10 @@ object QuroTtsHolder {
     }
 
     /** 云模型服务（小米 TTS）朗读。0=成功 / -1=无上下文 / -2=合成或播放失败。 */
-    private suspend fun speakCloud(text: String, onDone: (() -> Unit)? = null): Int = withContext(Dispatchers.IO) {
+    private suspend fun speakCloud(text: String, onDone: (() -> Unit)? = null, voiceOverride: String? = null): Int = withContext(Dispatchers.IO) {
         val ctx = appCtx ?: return@withContext -1.also { log("speakCloud: 无 appCtx ❌"); onDone?.invoke() }
         return@withContext try {
-            val success = withTimeoutOrNull(CLOUD_TTS_TIMEOUT_MS) { QuroCloudTts.play(ctx, text); true } ?: false
+            val success = withTimeoutOrNull(CLOUD_TTS_TIMEOUT_MS) { QuroCloudTts.play(ctx, text, voiceOverride); true } ?: false
             if (success) {
                 log("speakCloud: 播放完成 ✅")
                 onDone?.invoke()
@@ -436,46 +456,6 @@ object QuroTtsHolder {
     }
 
     /**
-     * 语色路由播放：按段分配音色，并「边播边合成」——当前段播放时后台预合成下一段音频字节，
-     * 当前段结束立刻播放已就绪的下一段，实现无缝衔接（播放仍顺序，绝不两段同时出声）。
-     * 每段：含 (语色:xxx) 则用该语色对应 voice id，否则回落全局音色；情绪标记随文本交给下游引擎。
-     */
-    private suspend fun speakCloudSegments(ctx: Context, segs: List<QuroVoiceStyle.VoiceSeg>, onDone: (() -> Unit)?): Int {
-        val providerId = QuroTtsProviderPrefs.getProvider(ctx)
-        val def = QuroTtsProviders.byId(providerId) ?: return (-2).also { log("speakCloudSegments: 未知服务商 ❌"); onDone?.invoke() }
-        val isMimo = def.kind == QuroTtsProviderKind.MIMO
-        var prefetched: QuroCloudTts.SynthResult? = null
-        return try {
-            segs.forEachIndexed { i, seg ->
-                val voiceOverride = seg.voiceColor?.let { QuroCloudTtsCatalog.voiceColorToVoice(providerId, it) }
-                val segText = if (isMimo && seg.tags.isNotEmpty()) "(${seg.tags.joinToString(" ")}) ${seg.text}" else seg.text
-                // 边播边合成：预取下一段音频字节（当前段播放期间后台合成）
-                val nextSeg = if (i + 1 < segs.size) segs[i + 1] else null
-                val nextVoice = nextSeg?.voiceColor?.let { QuroCloudTtsCatalog.voiceColorToVoice(providerId, it) }
-                val nextText = nextSeg?.let { ns -> if (isMimo && ns.tags.isNotEmpty()) "(${ns.tags.joinToString(" ")}) ${ns.text}" else ns.text }
-                val prefetchJob = if (nextSeg != null) holderScope.async { runCatching { QuroCloudTts.synthBytes(ctx, nextText!!, nextVoice) } } else null
-                if (i == 0) {
-                    withTimeoutOrNull(CLOUD_TTS_TIMEOUT_MS) { QuroCloudTts.play(ctx, segText, voiceOverride) }
-                        ?: throw java.util.concurrent.TimeoutException("云 TTS 播放超时（第 $i 段）")
-                } else {
-                    val p = prefetched
-                        ?: withTimeoutOrNull(CLOUD_TTS_TIMEOUT_MS) { QuroCloudTts.synthBytes(ctx, segText, voiceOverride) }
-                        ?: throw java.util.concurrent.TimeoutException("云 TTS 合成超时（第 $i 段）")
-                    withTimeoutOrNull(CLOUD_TTS_TIMEOUT_MS) { QuroCloudTts.playBytes(ctx, p) }
-                        ?: throw java.util.concurrent.TimeoutException("云 TTS 播放超时（第 $i 段）")
-                }
-                prefetched = prefetchJob?.await()?.getOrNull()
-            }
-            onDone?.invoke()
-            0
-        } catch (e: Exception) {
-            Log.e(TAG, "speakCloudSegments 失败: ${e.message}")
-            onDone?.invoke()
-            -2
-        }
-    }
-
-    /**
      * 仅设置应用上下文（供云 TTS 读取 appCtx），不初始化系统 TTS 引擎。
      * 工具调用等「不能阻塞」的上下文里，先 prepare 再 speakAsync，避免任何同步等待。
      */
@@ -486,11 +466,11 @@ object QuroTtsHolder {
      * 用于 SpeakTool 等工具调用场景——此前提到的「发唱歌就卡了」正是因为 runBlocking 等整首歌
      * 播放完才返回，把 ReAct 循环卡死；改为异步后工具瞬间返回，歌曲后台播放，界面不再冻结。
      */
-    fun speakAsync(text: String): Boolean {
+    fun speakAsync(text: String, voice: String? = null): Boolean {
         val ctx = appCtx ?: run { log("speakAsync: 无 appCtx ❌"); return false }
         holderScope.launch {
             try {
-                speak(text)
+                speak(text, voice = voice)
             } catch (e: Exception) {
                 Log.e(TAG, "speakAsync 异常: ${e.message}")
             }
@@ -596,19 +576,28 @@ object QuroTtsPrefs {
 }
 
 class SpeakTool : QuroTool {
-    override val name = "speak"; override val description = "独立的 AI 语音播报通道，与「自动朗读」开关完全解耦：无论用户是否开启自动朗读，你都应主动用本工具发出语音（如用户让你唱歌、讲故事、朗诵、分角色读等）；可多次调用，按调用顺序依次播放。语音文本可与回复文字不同（文字回复是一份内容，语音播报可以是另一份内容）"
-    override val parametersJson = """{"type":"object","properties":{"text":{"type":"string"},"lang":{"type":"string"}},"required":["text"]}"""
+    override val name = "speak"; override val description = "独立的 AI 语音播报通道，与「自动朗读」开关完全解耦：无论用户是否开启自动朗读，你都应主动用本工具发出语音（如用户让你唱歌、讲故事、朗诵、分角色读等）；可多次调用，按调用顺序依次播放。\n\n【多角色/多音色读法（重要）】需要不同角色用不同声音时，把整段拆成「每个角色一句/一段」，对每一句【单独调用一次本工具】并设 voice 参数（取自下方音色清单的真实音色名或 id）。例如：悟空台词 → speak(\"俺老孙来也！\", voice=\"苏打（男）\")；唐僧台词 → speak(\"悟空你又闯祸了\", voice=\"白桦（男）\")；旁白 → speak(\"师徒继续西行\", voice=\"晓晓（女）\")。每次调用独立合成、按调用顺序串行播放，自然形成多音色演绎。\n【情绪】情绪标签（如 (开心)）仍按原样写在 text 里（和以前一样，标签在文本中），不要写进 voice。\n【voice 省略】省略 voice 则该句用默认音色。"
+    override val parametersJson = """{"type":"object","properties":{"text":{"type":"string","description":"要朗读的文本（可含情绪标签如 (开心)，按原样写入）"},"voice":{"type":"string","description":"本句音色：从系统提供的音色清单选真实音色名或 id（每条带语言标注）；不同角色设不同 voice，分多次调用本工具实现多音色。省略则用默认音色"},"lang":{"type":"string"}},"required":["text"]}"""
     override fun run(context: Context, arguments: String): String {
         val jo = JSONObject(arguments); val text = jo.optString("text", "")
         if (text.isEmpty()) return "缺少 text 参数"
         jo.optString("lang", "").takeIf { it.isNotEmpty() }?.let { QuroTtsPrefs.setLanguage(context, it) }
+        // 解析 voice 参数 → 真实 voice id：预设服务商按名命中 id（如「晓晓（女）」→ zh-CN-XiaoxiaoNeural）；
+        // 自由文本服务商字面透传（AI 写该服务商真实支持的 voice id）。解析不到则原样透传（预设回落默认音）。
+        val rawVoice = jo.optString("voice", "").takeIf { it.isNotEmpty() }
+        val voiceId = rawVoice?.let { v ->
+            val pid = QuroTtsProviderPrefs.getProvider(context)
+            val def = QuroTtsProviders.byId(pid)
+            val cfg = QuroTtsProviderPrefs.getConfig(context, pid)
+            def?.let { QuroCloudTtsCatalog.voiceColorToVoice(it, cfg, v) } ?: v
+        }
         // ★ 修复「发唱歌就卡了」：不再 runBlocking 等整首歌合成+播放完（会把 ReAct 循环卡死且无法取消），
         // 改为后台异步发起，工具立即返回，歌曲在后台播放，界面不再冻结。
         QuroTtsHolder.prepare(context)
-        if (!QuroTtsHolder.speakAsync(text)) return "TTS 未就绪（缺少上下文）"
+        if (!QuroTtsHolder.speakAsync(text, voiceId)) return "TTS 未就绪（缺少上下文）"
         // 标记「AI 本轮主动用 speak 工具播报」→ 自动朗读(朗读)让位，交由 AI 决定播放顺序
         QuroTtsHolder.speakToolFiredThisTurn = true
-        return "已请求朗读（后台播放中）"
+        return "已请求朗读（后台播放中）" + if (voiceId != null) "（音色=$voiceId）" else ""
     }
 }
 

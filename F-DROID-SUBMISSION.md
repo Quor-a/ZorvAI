@@ -82,7 +82,7 @@ implementation(files("../aci-browser/libs/aci-core-debug.aar"))
 ## 3. 其他必须处理项（非阻塞，但提交前要做）
 
 1. **打标签 `v1.0.15`**：当前 HEAD 未打标签，F-Droid `UpdateCheckMode: Tags` 取不到。修完红线后 `git tag v1.0.15 && git push gitlab --tags`（及 origin/gitee 同步）。
-2. **提交未提交的 ACI 改动**：`QuroAciAdapter.kt` / `QuroAciRegistry.kt`（新）+ `AciConsoleModel.kt` / `QuroAciManager.kt`（改）共 4 文件当前未 commit；要么先 commit 进 v1.0.15，要么告知 F-Droid 构建的是不含它们的 `cdb2b71`。
+2. **提交未提交的 ACI 改动**：`QuroAidlAciAdapter.kt` / `QuroAidlAciRegistry.kt`（新）+ `AciConsoleModel.kt` / `QuroAidlAciManager.kt`（改）共 4 文件当前未 commit；要么先 commit 进 v1.0.15，要么告知 F-Droid 构建的是不含它们的 `cdb2b71`。
 3. **仓库须公开**：`jihulab.com/quor-a-group/ZorvAI` 须为 public，且 `cdb2b71`（或新标签提交）已 push 到该远端。三个远端（github / gitee / jihulab）当前都存在，metadata 以 jihulab 为权威源。
 
 ---

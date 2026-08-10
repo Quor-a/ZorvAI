@@ -292,12 +292,15 @@ fun QuroVoiceSettingsScreen(
                         HorizontalDivider()
                         val src = QuroTtsPrefs.getSource(ctx)
                         val isCloudLike = src == QuroTtsPrefs.SOURCE_CLOUD || src == QuroTtsPrefs.SOURCE_MIMO
+                        val vpDef = QuroTtsProviders.byId(QuroTtsProviderPrefs.getProvider(ctx)) ?: QuroTtsProviders.byId("edge")!!
+                        val vpCfg = QuroTtsProviderPrefs.getConfig(ctx, vpDef.id)
+                        val providerLabel = vpDef.name
                         InfoBox(
-                            text = if (isCloudLike) "✅ 当前语音来源为云端 / MiMo，语色路由已可生效（小米 MiMo 命名预置音色支持最佳）。" else "当前语音来源为本地系统 TTS，不解析语色标记，请到「语音服务 → 语音合成 (TTS)」切换为云端服务商（推荐小米 MiMo）。",
+                            text = if (isCloudLike) "✅ 当前播放服务商：$providerLabel。语色路由已可生效——下方为该服务商真实音色清单，AI 会从中自动选角（不再写死单一服务商）。" else "当前语音来源为本地系统 TTS，不解析语色标记，请到「语音服务 → 语音合成 (TTS)」切换为云端服务商。",
                         )
-                        Text("可选语色（AI 自由选用，可在代码 VOICE_COLOR_PALETTE 扩展）：", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 16.dp, top = 10.dp, end = 16.dp))
+                        Text("可选语色（取自当前服务商 $providerLabel 的真实音色，AI 自由选用）：", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 16.dp, top = 10.dp, end = 16.dp))
                         Spacer(Modifier.height(6.dp))
-                        val palette = QuroCloudTtsCatalog.VOICE_COLOR_PALETTE.keys
+                        val palette = QuroCloudTtsCatalog.selectableVoiceNames(vpDef, vpCfg)
                         FlowRow(
                             Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),

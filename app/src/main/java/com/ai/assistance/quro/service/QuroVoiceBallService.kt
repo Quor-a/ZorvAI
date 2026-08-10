@@ -662,6 +662,10 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(v).array()
 
     private fun process(text: String) {
+        // 朗读协调：每轮语音问答起点复位「本轮 AI 是否用 speak 工具播报」标记，
+        // 避免上一轮 speak 工具置位的标记泄漏到本轮，导致语音球误让位 / 误双播。
+        // （对话框走 QuroChatViewModel.send() 起点复位；语音球走本服务、不经 send()，故需在此独立复位。）
+        QuroTtsHolder.speakToolFiredThisTurn = false
         val baseCfg = QuroModelConfigRepository(applicationContext).load()
         if (baseCfg.apiKey.isBlank()) {
             updateStatus("未配置 API Key")
@@ -695,10 +699,21 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                     assistant.ask(applicationContext, cfg, buildVoiceSystemPrompt())
                 }
                 mainHandler.post { speaking = true; status = "回复中：${reply.take(40)}" }
-                speak(reply) {
-                    // 此 lambda 已在 main 线程（见下 speak 包装）
+                // 朗读协调：若本轮 AI 已通过 speak 工具主动控制播报（多音色/分段/唱歌等），
+                // 语音球自动朗读让位，避免与 speak 工具重复播报同一段回复。
+                if (QuroTtsHolder.consumeSpeakToolFired()) {
+                    Log.d(TAG, "语音球让位：本回合 AI 已用 speak 工具控制播报顺序")
                     speaking = false
-                    if (conversationActive) { status = "聆听中…"; startListening() }
+                    // 等 speak 工具的全部语音播报完毕，再续听，避免麦克风在 AI 说话时抢话/回声
+                    QuroTtsHolder.runWhenIdle {
+                        if (conversationActive) { status = "聆听中…"; startListening() }
+                    }
+                } else {
+                    speak(reply) {
+                        // 此 lambda 已在 main 线程（见下 speak 包装）
+                        speaking = false
+                        if (conversationActive) { status = "聆听中…"; startListening() }
+                    }
                 }
             } catch (e: Throwable) {
                 updateStatus("出错了：${e.message}")

@@ -32,7 +32,8 @@
 > **🔌 受控端浏览器（ZorvAI 浏览器）已独立开源 · GitHub：[github.com/Quor-a/ZorvBrowser](https://github.com/Quor-a/ZorvBrowser) ｜ Gitee：[gitee.com/ZorvAI/ZorvBrowser](https://gitee.com/ZorvAI/ZorvBrowser)**（独立仓库，含 v1.0.12 源码与 APK）
 >
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
-> - 🔗 主程序 APK（v1.0.24，含离线引擎，最新）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.24/app-full-debug.apk)
+> - 🔗 主程序 APK（v1.0.25，含离线引擎，最新）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.25/app-full-debug.apk)
+> - 🔗 主程序 APK（v1.0.24，含离线引擎）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.24/app-full-debug.apk)
 > - 🔗 主程序 APK（v1.0.23，含离线引擎）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.23/app-full-debug.apk)
 > - 🔗 主程序 APK（v1.0.15）：[ZorvAI-debug-v1.0.15.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.15/ZorvAI-debug-v1.0.15.apk)
 > - 🔗 主程序 APK（v1.0.14）：[ZorvAI-debug-v1.0.14.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.14/ZorvAI-debug-v1.0.14.apk)
@@ -61,7 +62,7 @@
 | **IM 通道** | 飞书（WebSocket）/ QQBot（官方 WS）/ 微信 iLink（HTTP 长轮询 35s）；三家手机端均无公网端点 |
 | **语音** | 多供应商 TTS（EDGE_TTS / OPENAI_COMPAT / MINIMAX / SILICONFLOW / 阿里云 等）、端侧 Whisper STT、语音悬浮球 |
 | **知识 / 记忆 / 人格 / Bot** | 向量语义 RAG 知识库、记忆库、人格/灵魂配置、多通道机器人（QQ/飞书/微信/本地） |
-| **ACI 控制台 UI（LAN 控制台）** | 控制端 `QuroAciCenterScreen` 按 `console_ui` 能力拉取 SDUI 快照、复用本地 `AciConsoleScreen` 渲染器（`core/aci` 包，纯本地零网络） |
+| **ACI 控制台 UI（LAN 控制台）** | 控制端 `QuroAidlAciCenterScreen` 按 `console_ui` 能力拉取 SDUI 快照、复用本地 `AciConsoleScreen` 渲染器（`core/aci` 包，纯本地零网络） |
 | **数据 / 持久化** | `QuroConversationStore` 磁盘会话仓库、启动自愈 `DATA_REPAIR` 去重、诊断日志写入手机公共 `Download/QuroAI_logs/` |
 | **插件系统** | QuickJS / WebView 双后端插件运行时，插件管理与市场（详见「🔌 插件运行时 · Plugin Runtime」专节） |
 | **工具箱 / 组件画廊** | 工具箱聚合本地工具能力（文件管理 / 工作区 / 文档生成 / **已有工具查看与导入**）；可视化组件画廊展示全部可交互 Material3 组件（详见「🗃️ 工具箱 · Toolbox」「🎨 组件画廊 · Component Gallery」） |
@@ -124,7 +125,7 @@
 | 语音合成 | Speak、StopSpeak（TTS 工具） |
 | Intent/广播 | ExecuteIntent、SendBroadcast、RunCode |
 | CMS v2 模块 | QuroCmsList/Call/Deploy/Undeploy/Status/EngineStatus/Logs/Result/RunDag |
-| ACI / 特权 | QuroAciList/Call、QuroPrivStatus |
+| ACI / 特权 | QuroAidlAciList/Call、QuroPrivStatus |
 | 记忆/经验 | QuroMemorySave/List/Search/Delete、QuroExperienceLog/Query/Correct/VersionCheck |
 | L1 无障碍控屏 | ReadScreen、GetForegroundApp、TapScreen、SwipeScreen、InputText、AiKeyboardType/PressEnter/Send、ScrollScreen、GlobalAction |
 | L2 Shizuku | ShizukuExec、ShizukuRootExec、FreezeApp、InstallApp、ShizukuStatus |
@@ -158,7 +159,7 @@
 ### 10. 设备控制 / 权限 / Shizuku / ACI
 - **Shizuku 集成**：`core/shizuku/`（QuroShizuku、QuroShellService），工具 ShizukuExec/FreezeApp/InstallApp
 - **特权管理**：`core/privilege/`（Root/Shizuku 桥、审计）
-- **ACI（Agent Capability Interface）**：`core/aci/`（Manager/Registry/Protocol/Adapter/CredentialVault/CallAudit），工具 QuroAciList/Call，`QuroAciCenterScreen`
+- **ACI（Agent Capability Interface）**：`core/aci/`（Manager/Registry/Protocol/Adapter/CredentialVault/CallAudit），工具 QuroAidlAciList/Call，`QuroAidlAciCenterScreen`
 - **权限管理**：`core/permissions/QuroPermissionHelper`、`QuroPermissionScreen`（含审计入口）
 
 ### 11. 模型配置
@@ -198,7 +199,7 @@
 | `QuroModelConfigScreen` / `QuroFeatureModelConfigScreen` | 在线模型 / 专项模型 / API Key 配置 |
 | `QuroMcpSettingsScreen` | MCP 服务器连接管理 |
 | `QuroPermissionScreen` / `QuroAuditScreen` | 权限管理 / 能力审计 |
-| `QuroAciCenterScreen` | ACI 设备能力中心 / LAN 控制台 |
+| `QuroAidlAciCenterScreen` | ACI 设备能力中心 / LAN 控制台 |
 | `QuroBotSettingsScreen` | 机器人（QQ/飞书/微信/本地）配置 |
 | `QuroVoiceSettingsScreen` / `QuroTtsSettingsScreen` / `QuroCloudTtsConfigScreen` / `QuroSttSettingsScreen` / `QuroVoiceServiceScreen` / `QuroVoiceBallView` | 语音总设置 / TTS / 云端 TTS / STT / 语音服务 / 悬浮球 |
 | `QuroDigitalHumanScreen` | 数字人 / 虚拟形象 |
@@ -395,7 +396,7 @@ class MyAciService : BaseACIService() {
 
 **ZorvAI 浏览器（官方受控端）已暴露的能力：**
 
-作为官方参考实现，ZorvAI 浏览器向控制端（主程序 LLM）暴露 **30 个能力**（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输），下表节选常用项，完整契约见 [ACI 开发者手册 §13](./docs/ACI_DEVELOPER_GUIDE.md#13-官方受控端能力清单zorvai-浏览器)：
+作为官方参考实现，ZorvAI 浏览器向控制端（主程序 LLM）暴露 **32 个能力**（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输 + 2 语义点击），下表节选常用项，完整契约见 [ACI 开发者手册 §13](./docs/ACI_DEVELOPER_GUIDE.md#13-官方受控端能力清单zorvai-浏览器)：
 
 | 能力 | 入参 | 返回 | 说明 |
 |------|------|------|------|
@@ -407,8 +408,24 @@ class MyAciService : BaseACIService() {
 | `browser_list` | — | `tabs` | 列出当前打开的标签页 |
 | `browser_info` | — | `package` / `versionName` / `versionCode` | 查询受控端版本信息 |
 | `http_request` | `url`(必填) / `method`(可选) / `headers`(可选) / `body`(可选) | `status_code` / `response_headers` / `response_body` / `truncated`（大响应体附 `response_body_gz` gzip） | **🆕 v1.0.14** 经 ACI 让受控浏览器发起任意 HTTP 请求，**支持同网段 LAN 明文**（http://192.168.x.x、http://10.x、*.local mDNS），访问路由器/NAS/智能家居/私有 API 等局域网设备 |
+| `ui_snapshot` | — | `nodes`（`string_array`，每项 `text\|resId\|left,top,right,bottom` 屏幕像素整数） | **🆕 v1.0.25** 当前可视区域元素快照（屏幕坐标），供控制端 `clickText`/`clickResourceId` 语义点击解析锚点坐标；与 `tap` 同一坐标空间 |
+| `tap` | `x`(int,必填) / `y`(int,必填) | `x` / `y` | **🆕 v1.0.25** 在屏幕坐标模拟单击（与 `ui_snapshot` 同一坐标空间）；受控端无系统特权也能派发视图级触摸，配合 `ui_snapshot` 形成「像人一样点页面」的感知-执行闭环 |
 
 > 💡 `browser_crawl` / `browser_search` 让 AI 能做「网页检索 / 信息抽取 / 爬虫」类任务；`browser_script` 提供页面内任意 JS 执行（高危能力，仅在受信任会话中使用）；`http_request` 让 AI 经受控浏览器发起 HTTP 请求，重点支持**局域网明文**（LAN），用于访问同网段设备/私有 API。完整契约见 [ACI 开发者手册 §13](./docs/ACI_DEVELOPER_GUIDE.md#13-官方受控端能力清单zorvai-浏览器) 与 [§15 HTTP 传输](./docs/ACI_DEVELOPER_GUIDE.md#15-http-传输能力http_request--局域网本地组网)。
+
+### 🆕 v1.0.25 · ACI 升级功能技术说明
+
+本轮对 ACI 框架做了一轮「**不依赖系统特权**」的增强（控制端 `QuroAidlAciManager` + 受控端 `QuroControlledAidlAciService` / `aidl-aci-core`），把元宝 ACI 2.0 方案中可落地的部分做成能力，未落地的系统级部分明确标注为待办：
+
+1. **callId 链路追踪（可观测性基座）**：`AidlAciRequest` / `AidlAciResponse` 已带 `callId` 字段，受控端在成功 / 鉴权失败 / 能力缺失 / 异步各路径统一回显请求侧 `callId`；控制端每次 `call()` 生成 UUID 并随 LocalSocket / AIDL 双通道回填，可把一次 AI 操作完整串成调用链。
+2. **LocalSocket 抽象命名空间高速通道 + 主动探测**：`AidlAciLocalSocketTransport.probe(endpoint)` 仅 connect 不发包（无副作用）；控制端 `fetchCapabilities` 绑定后主动探测，直接决定首调用走 LocalSocket 还是回落 AIDL，不必等到第一次失败才切换。
+3. **自愈：健康看护 + 指数退避重绑**：控制端 `startHealthWatch(10s)` 定时 `healthCheck()`，ping 失败即 `ensureBound`（含 wake 广播 + startService + 重绑）；`scheduleRebind` 改为 800ms→…→8s 指数退避，成功绑定清零，避免对不可达端高频空转。
+4. **会话 trace（可观测性面板）**：环形 `traceQueue`（最近 50 条 `AciCallTrace{ts,callId,target,capability,transport,code,success,latencyMs}`）+ `getTrace()/clearTrace()` + `socketStatus(pkg)`，供 ACI 管理中心「诊断」面板展示每次调用的传输路径与耗时。
+5. **语义点击闭环（感知-执行）**：控制端新增 `clickText(target,text)` / `clickResourceId(target,resId)`；受控浏览器新增 `ui_snapshot`（页面元素 DOM 几何桥接 → 屏幕坐标节点）+ `tap`（坐标点击），两者坐标空间一致（屏幕绝对像素），自动解析锚点坐标后调用 `tap` 完成「像人一样点页面」；未暴露语义能力时返回明确 412 引导，不静默失败。
+
+> ⚠️ **待办（需系统特权 / 用户授权，本轮未落地）**：Uinput 内核注入（拟人执行）、Ashmem 零拷贝大块传输、System 级共享工作空间服务、本地 LLM 意图调度。其中「无障碍语义抓取」需受控 App 声明 `AccessibilityService` 并由用户在系统设置开启——但浏览器已用页面 DOM 几何桥接实现同效的 `ui_snapshot`，**无需无障碍服务**即可工作。
+
+> 📦 **ACI 依赖更新**：`ai.aidl.aci.core`（`aidl-aci-core` 模块）本轮新增 `AidlAciResponse.putResult(String, ArrayList<String>)` API（供 `ui_snapshot` 返回节点列表）；主程序 `:app` 与受控浏览器 `:aidl-aci-browser` 均通过 `implementation(project(":aidl-aci-core"))` 引用同一份本仓源码，协议始终一致、自动同步，无需手动升版本号。
 
 ---
 
@@ -419,7 +436,7 @@ class MyAciService : BaseACIService() {
 采用 **SDUI（Server-Driven UI）** 模式：
 
 - 受控端只暴露两个 ACI 能力——`console_ui`（返回界面快照 JSON）与 `console_action`（处理按钮 / 输入）；
-- 控制端 `QuroAciCenterScreen` 按 capability id `console_ui` 显示「打开控制台」入口，点击后通过**同设备 Binder** 拉取快照，用本地 `AciConsoleScreen`（`core/aci` 包）渲染；
+- 控制端 `QuroAidlAciCenterScreen` 按 capability id `console_ui` 显示「打开控制台」入口，点击后通过**同设备 Binder** 拉取快照，用本地 `AciConsoleScreen`（`core/aci` 包）渲染；
 - **纯本地、零网络**：不管 WiFi 还是移动网络均可用，不经过任何服务器；
 - 受控端 `ConsoleBackend` 实现 `AciConsoleContract`（`buildUiSnapshot` + `applyAction`），即可被 Zorv AI 直接驱动。
 
@@ -455,7 +472,7 @@ ZorvAI 浏览器（受控端）在 v1.0.14 新增 `http_request` 能力：AI 可
 | 返回 `response_body` | 响应体（>15 万字符截断，附 `response_body_gz`） |
 | 返回 `truncated` | 是否截断（boolean） |
 
-控制端 `QuroAciTools.renderHttpResult` 自动解压 `response_body_gz` 并把「状态码 / 响应头 / 响应体」喂给 LLM。
+控制端 `QuroAidlAciTools.renderHttpResult` 自动解压 `response_body_gz` 并把「状态码 / 响应头 / 响应体」喂给 LLM。
 
 > ⚠️ 安全权衡：明文放开后公网明文 HTTP 也会一并放行。**仅在可信局域网内**用 `http_request` 访问内网地址，不要经它请求公网明文站点；远程生产通信（HTTPS）不受影响。
 
@@ -653,7 +670,8 @@ cd QuroAI
 
 直接从 Release 页面下载最新 APK：
 
-- **v1.0.24（debug，含离线 MNN/llama.cpp 引擎，最新）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.24/app-full-debug.apk)（约 356MB，含离线引擎，已随 v1.0.24 Release 上传）
+- **v1.0.25（debug，含离线 MNN/llama.cpp 引擎，最新）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.25/app-full-debug.apk)（约 357MB，含离线引擎，已随 v1.0.25 Release 上传）
+- **v1.0.24（debug，含离线 MNN/llama.cpp 引擎）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.24/app-full-debug.apk)（约 356MB，含离线引擎，已随 v1.0.24 Release 上传）
 - **v1.0.23（debug，含离线 MNN/llama.cpp 引擎）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.23/app-full-debug.apk)（约 356MB，含离线引擎，已随 v1.0.23 Release 上传）
 - **v1.0.22（debug，含离线 MNN/llama.cpp 引擎）**：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.22/app-full-debug.apk)（约 356MB，含离线引擎，已随 v1.0.22 Release 上传）
 - 💡 完整（含离线引擎）APK 约 356MB；受 GitLab / Gitee 附件体积限制，大体积主程序包**仅 GitHub Releases 提供**，请勿到 GitLab / Gitee 找主程序 APK。
@@ -694,20 +712,21 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v1.0.25 | 2026-08-10 | **ACI 框架强化 + 受控浏览器语义点击闭环**：① **ACI 可观测性基座**——`AidlAciResponse` 新增 `putResult(String, ArrayList<String>)`，`callId` 在受控端成功/鉴权失败/能力缺失/异步全路径回显，控制端每次 `call()` 生成 UUID 并经 LocalSocket/AIDL 双通道回填；② **LocalSocket 抽象命名空间高速通道 + 主动探测**——`probe()` 仅 connect 不发包，绑定后主动决定首调用走 LocalSocket 还是回落 AIDL；③ **自愈**——`startHealthWatch(10s)` 定时 ping，失败即重绑，`scheduleRebind` 改为 800ms→8s 指数退避；④ **会话 trace**——环形 `traceQueue`（最近 50 条 `AciCallTrace`）+ `getTrace()/clearTrace()` + `socketStatus(pkg)`，供 ACI 管理中心诊断面板；⑤ **语义点击闭环**——控制端新增 `clickText`/`clickResourceId`，受控浏览器新增 `ui_snapshot`（页面 DOM 几何桥接→屏幕坐标节点）+ `tap`（坐标点击），两者同坐标空间，自动解析锚点坐标完成「像人一样点页面」（无需无障碍服务）；版本号 versionCode 460→461 / versionName 1.0.24→1.0.25 |
 | v1.0.24 | 2026-08-10 | **数字人 3D 查看器「头被固定边框裁切」修复 + 自由旋转 + AI 发文件工具 + 对话多附件内联预览**：① **数字人头部位裁切修复**——自定义 GLB 容器从固定 220dp 方框放大为自适应且去掉圆角裁剪（此前固定边框限制了头像 WebView 尺寸，导致看不到头）；`fit()` 改用真实画布宽高比 + 整体模型 1.5× 留白取景，保证头身完整入镜；② **自由旋转 / 缩放**——内置离线 `OrbitControls.js`（r128 全局构建，`assets/www/three/`），支持手指拖拽旋转、双指捏合缩放，去掉强制自动旋转；③ **新增 AI 发文件工具 `attach_file`**（`QuroToolsAttachFile.kt`，注册进 `buildQuroRegistry` 并接入助手循环）——AI 可把设备上的图片 / 视频 / 文档作为消息附件发到对话框，用户直接在气泡预览；④ **对话多附件内联预览**——消息附件模型由单附件改为多附件列表，气泡内支持图片 / 视频 / 文档缩略图预览、全屏图片查看器、系统文档打开器；版本号 versionCode 459→460 / versionName 1.0.23→1.0.24 |
 | v1.0.23 | 2026-08-10 | **数字人 3D 查看器黑屏修复 + 语音服务与自动朗读解耦 + 关于页法律合规文档**：① **数字人 3D GLB 查看器黑屏修复**——内置离线 Three.js(r128) + GLTFLoader + **Draco 解码器(wasm)**（`assets/www/three/` 打包，运行时解包到 `cacheDir/three/draco/`），支持 Draco 压缩 GLB 离线加载；WebView 加载失败 / WebGL 不可用 / 首帧画布 0 尺寸 / GLB 解析失败等全部在屏幕可视报错（不再静默黑屏），并写诊断日志到 `Download/QuroAI_logs/`；② **语音服务与「自动朗读」开关解耦**——`speak` 工具改为独立 AI 自主语音通道，无论自动朗读是否开启，AI 均可主动用 `speak` 唱歌 / 讲故事 / 朗诵 / 分角色，且语音文本可与回复文字不同（文字回复是一份、语音是另一份），自动朗读开启时 `speak` 优先、自动朗读自动让位不重复念；③ **关于页新增「法律与合规」**——权限使用声明、用户使用协议（全屏合规文档阅读页 `QuroLegalDocScreen`）；版本号 versionCode 458→459 / versionName 1.0.22→1.0.23 |
 | v1.0.21 | 2026-08-06 | **语音球工具调用引导修复 + 工具调用指令去软化收尾 + 多语色朗读去写死**：① **语音球（语音助手入口）工具调用引导对齐对话框**——移除"纯聊天→直接回答"分类后门（该后门曾让"今天天气怎么样"等实时问题被误判为闲聊而跳过工具），改为"何时必须调用工具"（天气/时间/设备状态/联网信息永远用工具取真实值，不凭记忆瞎编；真实动作调对应工具真正执行）+"如何组合说话与用工具"（同轮先说再调、多轮 思考→调用→再思考→再回答 直到完成），与对话框入口行为一致；② **多语色 / 分角色朗读编排去写死**——语色标记名称由模型按内容自由定（角色名/情绪/旁白/叙述者/场景等任意类型），不再限定固定几种，且任意内容类型只要用户要求多语色演绎都可加标记；③ **工具调用指令去软化收尾**——全链路清除"不必调用 / 不强求"类退路措辞，确保"依赖实时/外部/最新信息的问题必须主动调工具"成为硬约束，不再因问题"看起来简单"就跳过本应调用的工具；版本号 versionCode 456→457 / versionName 1.0.20→1.0.21 |
 | v1.0.20 | 2026-08-06 | **云端工具调用全面修复 + 回复自然化 + 品牌提示词重写**：① **云端端点兼容**（裸 host→`/v1/chat/completions`、以 `/v1` 结尾→`/chat/completions`、末尾 `#` 可关闭自动补全，修复裸 host 如 `https://api.openai.com` 被拼成错误 URL 导致静默不回复）；② **Kimi K3 工具协议修复**（`role:"tool"` 消息显式写 `name` 字段，解决 HTTP 400 `tool messages need a resolvable tool name`）；③ **工具配对孤儿清理**（`toLlmMessages` 按轮数/ token 预算裁剪后做 call/result 成对校验，剔除残缺配对，修复长对话或设「保留轮数」后 tool_calls 与结果被切断导致的 400 / 工具卡消失）；④ **工具轮正文保留**（`QuroLlmResult.ToolCalls` 加 `content` 字段，模型"边说边调工具"的前言不再被丢弃，恢复「思考→回复→调用工具→再思考→调用工具→回复」自由组合）；⑤ **回复约束软化**（移除"必须调用工具 / 绝对不能只回复文字"等硬指令，是否调工具、调哪个、调几次交由模型自行判断）；⑥ **深度思考开关真正生效**（透传进引擎，开启注入深度思考指令、关闭注入轻量指令，双向有效，非推理模型也会被真正引导多想）；⑦ **品牌提示词重写**（`QuroPlatformManifest.SYSTEM` 按「身份与人格（依据人格卡）/ 运行环境 / 工具执行环境 / 能力环境 / 技术构架」结构重写为陈述式，去除强制思考/强制调工具的硬写）；版本号 versionCode 455→456 / versionName 1.0.19→1.0.20 |
 | v1.0.16 | 2026-08-04 | **对话框全面修复 + 单条消息删除 + 内置 63 技能**：① 对话框 BUG 修复——**B1** 离线/工具调用场景下流式 loading 占位气泡残留（生成结束未清除占位，已先 `store.remove` 再落终态）；**B2** 跨会话卡片串台（后台会话延迟卡片误挂当前可见会话，已按「后台且非可见则丢弃」拦截）；**B3** 流式内容兜底（`content` 为空时回落 `streamedContent`，不再显示「(已思考完毕)」空壳）；**B5** 工具结果状态启发式误判（仅扫描结果前 200 字，避免正文中含「失败/error」被误标为错误）+ 工具调用**耗时展示**（`QuroToolCall→ToolCallUi` 全链路 `durationMs`，气泡内显示 `ms`/`s`）；**B6** 列表滚动越界（`scrollToItem` 改用 `lastIndex`）；**B8** 代码预览 WebView 关闭 JavaScript（`settings.javaScriptEnabled=false`，防止不可信 AI 生成 HTML 执行脚本）；② UI 新增——单条消息操作栏「复制 / 追问 / 分享 / 删除 / 重试」，**删除**可精确移除单条消息或聚合气泡对应的全部底层消息（含连带清理隐藏 tool 结果消息），实时同步内存 store 与磁盘持久化；③ 内置技能——将 WorkBuddy 技能库全部 **63 个技能**转化为 Zorv AI 品牌版本（`app/src/main/assets/skills/zorv/`，含 `manifest.json`），首次启动经 `QuroSkillStore.seedBuiltinZorvSkills` 自动注入为内置 `skill__{name}` 工具可被 LLM 编排；④ **B4** `QuroChatCard` JSON 解析已由 `runCatching` 守护（缺字段不崩溃，仅忽略该卡片）；**B7** 双 Markdown 渲染路径（RichText + 块级解析）标记待统一，无崩溃；⑤ **离线思考流式上屏 + 离线设备工具集**：打通离线推理 `onThinking` 通道（`StreamingThinkStripper` 实时累积思考文本、`QuroLocalEngine.run` 新增 `onThinking` 回调、`routeLocal` 接入 `emitThinkingToken`），离线模型思考过程现在像云端一样边想边显示（受「深度思考」开关控制）；离线工具集放开设备/系统类工具（手电筒、振动、电量、WiFi、传感器、剪贴板、应用、通知、蓝牙、时间、设备信息、计算、TTS、闹钟），「打开手电筒」等离线设备指令可正常调用（此前一刀切只留 memory_* 导致离线设备指令完全失效）；版本号保持 versionCode 452 / versionName 1.0.16 |
-| v1.0.15 | 2026-08-01 | **ACI 2.0 治理层（错误模型 / 协议版本化 / 事件总线）+ 真机全能力 42/42 通过**：新增 `QuroAciErrors`（ACI 2.0 标准化错误模型 `{code,message,suggestion,layer}`，aci-protocol 命名空间 15xx/24xx/25xx，避开 aci-core 标准码 0/400/403/404/500/503/504/505）+ `QuroAciProtocol`（`aci-protocol-v1` 协议版本化与 `negotiate(peer)` 协商）+ `QuroAciEvents`（进程内事件总线，含 SERVICE_BOUND/UNBOUND/CALL_FAILED/DISCOVERED/PROTOCOL_NEGOTIATED）；受控端 `QuroMainAciService` 新增 `aci_protocol` 能力暴露并统一错误码/超时/坏请求返回；控制端 `QuroAciManager` 接入协议协商、错误解析与事件下发；真机测试 42/42 全过 0 失败（浏览器 30 + WorkflowACI 10 + 主程序 2）；版本号 versionCode 450→451 / versionName 1.0.14→1.0.15 |
+| v1.0.15 | 2026-08-01 | **ACI 2.0 治理层（错误模型 / 协议版本化 / 事件总线）+ 真机全能力 42/42 通过**：新增 `QuroAidlAciErrors`（ACI 2.0 标准化错误模型 `{code,message,suggestion,layer}`，aci-protocol 命名空间 15xx/24xx/25xx，避开 aci-core 标准码 0/400/403/404/500/503/504/505）+ `QuroAidlAciProtocol`（`aci-protocol-v1` 协议版本化与 `negotiate(peer)` 协商）+ `QuroAidlAciEvents`（进程内事件总线，含 SERVICE_BOUND/UNBOUND/CALL_FAILED/DISCOVERED/PROTOCOL_NEGOTIATED）；受控端 `QuroMainAciService` 新增 `aci_protocol` 能力暴露并统一错误码/超时/坏请求返回；控制端 `QuroAidlAciManager` 接入协议协商、错误解析与事件下发；真机测试 42/42 全过 0 失败（浏览器 30 + WorkflowACI 10 + 主程序 2）；版本号 versionCode 450→451 / versionName 1.0.14→1.0.15 |
 | v1.0.14 | 2026-08-01 | **HTTP 传输（http_request · 局域网/本地组网）+ 文档与版本齐步**：受控浏览器新增 `http_request` 能力并经 ACI 暴露（支持同网段 LAN 明文 http://192.168.x.x、*.local）；受控端 `networkSecurityConfig` 放开局域网明文（base-config cleartextTrafficPermitted=true + localhost/127.0.0.1/10.0.2.2/local 域名放开）；主程序系统提示词 ACI 部分柔性化（可自由组合/链式调用能力）并补 HTTP(LAN) 说明；ACI 开发者手册新增 §15 HTTP 传输、应用内「被控方接入手册」补 HTTP(LAN) 小节、能力数 29→30；主程序版本号 versionCode 449→450 / versionName 1.0.13→1.0.14，受控浏览器 versionCode 13→14 / versionName 1.0.13→1.0.14 |
 | v1.0.13 | 2026-07-31 | **文档与许可对齐（LAN 控制台 / ACI 控制台）**：「设置 → 关于 Zorv AI → 开源许可声明」新增 ACI 控制台 UI（LAN 控制台）许可条目；README 新增「ACI 控制台 UI（LAN 控制台）」专节；开源 ACI 开发者手册新增 §14「LAN 控制台 / 控制台后台接入」；LICENSE 追加 LAN 控制台子系统许可说明；版本号升级至 versionCode 449 / versionName 1.0.13（受控浏览器保持 v1.0.12，未随本次发布） |
-| v1.0.12-console | 2026-07-31 | **ACI 控制台 UI（新增功能，未升版号）**：受控浏览器 `ConsoleBackend` 新增 `console_ui`(SDUI 快照) / `console_action`(increment/reset/submit_note) 能力；控制端 `QuroAciCenterScreen` 按 capability 显示「打开控制台」并复用本地 `AciConsoleScreen` 渲染器（已从 `lanui` LAN 范式解耦到 `core/aci` 本地包，纯本地零网络——同设备 Binder 调用，不管 WiFi 还是移动网络均可用）；拆除错误的 `browserui` 自循环前端（端口 8081 本地 HTTP），清理 Manifest/shortcuts 声明；主程序与浏览器均保持 versionCode 448 / versionName 1.0.12 |
+| v1.0.12-console | 2026-07-31 | **ACI 控制台 UI（新增功能，未升版号）**：受控浏览器 `ConsoleBackend` 新增 `console_ui`(SDUI 快照) / `console_action`(increment/reset/submit_note) 能力；控制端 `QuroAidlAciCenterScreen` 按 capability 显示「打开控制台」并复用本地 `AciConsoleScreen` 渲染器（已从 `lanui` LAN 范式解耦到 `core/aci` 本地包，纯本地零网络——同设备 Binder 调用，不管 WiFi 还是移动网络均可用）；拆除错误的 `browserui` 自循环前端（端口 8081 本地 HTTP），清理 Manifest/shortcuts 声明；主程序与浏览器均保持 versionCode 448 / versionName 1.0.12 |
 | v1.0.12 | 2026-07-30 | **ACI 被控方接入手册修正 + AAR 链接**：对齐真实 AAR API（`Capability.create(id, 描述)`、`onCreateCapabilities(caps)` 参数式、`onCall(req): ACIResponse` 返回值式）；补 3 个 `<permission>` 必须声明（缺则绑定必失败）；新增「二、依赖获取（aci-core AAR）」段含 AAR 直链、Gradle 依赖、`aci-core` 分支与网页手册；排障铁律补「绑定秒拒=漏写权限定义」 |
 | v1.0.11 | 2026-07-30 | **关于页「检查更新」健壮性增强**：新增「检查中…」可见状态；GitHub API 不可达时自动回退 Gitee 镜像 API（国内网络适配）；失败给出明确报错而非静默；其余保持 v1.0.10 镜像选择流程 |
 | v1.0.10 | 2026-07-30 | **关于页更新流程增强 + 受控浏览器移动端适配**：检测到新版本后弹出「GitHub / Gitee 镜像」选择框（不再直接跳转）；受控端浏览器 WebView 新增 `useWideViewPort` + `loadWithOverviewMode` + `NARROW_COLUMNS` 布局，页面缩放适配手机窄屏、消除横向溢出 |
 | v1.0.8 | 2026-07-30 | **修复 `browser_read` Binder ~1MB 溢出**：采用「安全截断 HTML(≤15 万字符) + 大页面 gzip(byte[]) 经 `html_gz` 回传」混合方案，控制端解压还原完整 HTML；顺带修复标题延迟、读取时序与 AAR 依赖路径 |
-| v1.0.6 | 2026-07-30 | **开放 ACI（Agent Capability Interface）**：新增受控端浏览器模块 `aci-browser`、控制端 `QuroAciManager` 修复 stopped-state 唤醒（bindWithWake）、`Capability.create` 描述修复、ACI 开发者手册与 `aci-core` 开源分支/AAR、Gitee 镜像推送 |
+| v1.0.6 | 2026-07-30 | **开放 ACI（Agent Capability Interface）**：新增受控端浏览器模块 `aci-browser`、控制端 `QuroAidlAciManager` 修复 stopped-state 唤醒（bindWithWake）、`Capability.create` 描述修复、ACI 开发者手册与 `aci-core` 开源分支/AAR、Gitee 镜像推送 |
 | v1.0.5 | 2026-07-30 | 仓库更名 ZorvAI、品牌视觉统一、关于页「检查更新」真实联网检测、全仓 URL 修正、开源地址与搜索可见性优化 |
 | v1.0.2 | 2026-07-29 | Shizuku 授权按钮修复、AI 键盘输入通道、权限模型引导、GeckoView 内置浏览器、记忆库与 CMS v2 能力模块 |
 

@@ -881,7 +881,7 @@ fun ChatScreen(
                                     // v414 修复：ensureReady/speak 是挂起调用，改由稳定 scope 承接，UI 状态变化不再杀掉朗读。
                                     ttsScope.launch {
                                         QuroTtsHolder.ensureReady(ctx)
-                                        QuroTtsHolder.speak(last.content) {}
+                                        QuroTtsHolder.speak(last.content)
                                     }
                                 }
                             }
@@ -1289,7 +1289,7 @@ fun ChatScreen(
         if (showAci) {
             BackHandler { showAci = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
-                QuroAciCenterScreen(onClose = { showAci = false })
+                QuroAidlAciCenterScreen(onClose = { showAci = false })
             }
         }
 

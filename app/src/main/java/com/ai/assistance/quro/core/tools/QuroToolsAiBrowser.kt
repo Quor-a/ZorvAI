@@ -28,12 +28,14 @@ class AiBrowserTool : QuroTool {
         "【关键用法】研究类/资料收集类任务（如「查天气」「查某物资料」「搜索某关键词」）必须且只调用一次 action=\"automate\"，它会在【单个工具调用内】完成「联网搜索→抓取前 depth 个结果正文→合并成带出处的研究简报」并一次性返回；" +
         "严禁把研究拆成先 search 再逐个 read 的多步调用——那样会产生大量重复工具调用、严重拖慢对话并且容易卡死。" +
         "参数 {\"action\":\"automate|search|read|open|download\",\"query\":\"搜索/研究主题(automate/search 用)\",\"url\":\"目标网址(read/open/download 用)\",\"limit\":5,\"depth\":4(automate 抓取前N页,默认4)}。" +
-        "automate=★推荐的研究方式(一次搞定,后台执行)；search=仅返回标题+链接(单步)；read=抓单页正文(单步)；open=应用内浏览器打开；" +
+        "automate=★推荐的研究方式(一次搞定,后台执行)；search=仅返回标题+链接(单步)；read=抓单页正文(单步)；" +
+        "open=在【应用内置被动浏览器】打开网页供用户查看——注意：这是被动展示，AI 无法在其中点击链接/填表/翻页/进入子页面；" +
+        "若你(AI)需要像人一样真正『操作』网页(点击进入链接/填写表单/滚动加载/读取点击后内容)，【必须改用 aci_call 调 ZorvAI 受控浏览器】：browser_open 打开→browser_elements 取稳定ID→browser_action 按ID点击/输入→browser_read 回读，加载中用 browser_wait 等待；" +
         "download=下载文件到 Download/Quro（自研，无需 apl 自动操控）。"
     override val parametersJson = """{
         "type":"object",
         "properties":{
-            "action":{"type":"string","description":"【研究/查资料务必用 automate：一次调用完成搜索+抓取+合并,不要分步search+read】; search=仅搜标题链接(单步) / read=抓单页正文(单步) / open=打开内置浏览器 / automate=自动研究(搜索+抓取+合并,推荐) / download=下载文件"},
+            "action":{"type":"string","description":"【研究/查资料务必用 automate：一次调用完成搜索+抓取+合并,不要分步search+read】; search=仅搜标题链接(单步) / read=抓单页正文(单步) / open=应用内被动浏览器打开(仅供查看,AI 不能点击交互;要真正操作网页请用 aci_call 的 browser_open→browser_elements→browser_action) / automate=自动研究(搜索+抓取+合并,推荐) / download=下载文件"},
             "query":{"type":"string","description":"search/automate 时的搜索词"},
             "url":{"type":"string","description":"read/open/download 时的目标网址"},
             "limit":{"type":"integer","description":"search 返回条数，默认 5"},
@@ -71,7 +73,7 @@ class AiBrowserTool : QuroTool {
                 val url = jo.optString("url", "").trim()
                 if (url.isEmpty()) return "open 缺少 url 参数"
                 QuroBrowserBridge.open(url)
-                "已在应用内置浏览器打开：$url"
+                "已在应用内置浏览器被动打开：$url（仅供查看，AI 无法点击/填表/进入子页面）。如需像人一样真正操作该网页（点击链接、填表、翻页、读取点击后内容），请改用 aci_call 调 ZorvAI 受控浏览器：browser_open 打开 → browser_elements 取稳定ID → browser_action 按ID点击/输入 → browser_read 回读，加载未完成用 browser_wait 等待。"
             }
             "download" -> {
                 val url = jo.optString("url", "").trim()

@@ -14,8 +14,8 @@ import com.ai.assistance.quro.core.cms.QuroCmsStatusTool
 import com.ai.assistance.quro.core.cms.QuroCmsEngineStatusTool
 import com.ai.assistance.quro.core.cms.QuroCmsUndeployTool
 import com.ai.assistance.quro.core.cms.QuroPrivStatusTool
-import com.ai.assistance.quro.core.aci.QuroAciCallTool
-import com.ai.assistance.quro.core.aci.QuroAciListTool
+import com.ai.assistance.quro.core.aidlaci.QuroAidlAciCallTool
+import com.ai.assistance.quro.core.aidlaci.QuroAidlAciListTool
 import com.ai.assistance.quro.core.tools.TerminalDriveTool
 import com.ai.assistance.quro.core.tools.ReadScreenTool
 import com.ai.assistance.quro.core.tools.GetForegroundAppTool
@@ -229,8 +229,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(QuroCmsDeployTool())
     r.register(QuroCmsUndeployTool())
     // ACI（Agent Capability Interface）：让 AI 作为控制方发现并调用第三方 App 暴露的能力
-    r.register(QuroAciListTool())
-    r.register(QuroAciCallTool())
+    r.register(QuroAidlAciListTool())
+    r.register(QuroAidlAciCallTool())
     // 特权通道状态查询：AI 调用高风险能力前自查可用通道、自行选择
     r.register(QuroPrivStatusTool())
     // CMS v2 反馈环：状态/日志/结构化结果查询（让 AI 自我确认「部署/调用是否成功」）

@@ -10,7 +10,7 @@
 - 整体结论：🟢 通过
 - 阻塞项数量：0
 - #804 ACI 管理中心 5 子项全部落地：重命名(ACT→ACI) + 关联启动 / 手动注册+名称搜索 / 合体 / 已发现 App 手动启动 / UI 重做。
-- 底层 `QuroAciManager` 逻辑零改动，仅 UI 层重写（无回归风险面）。
+- 底层 `QuroAidlAciManager` 逻辑零改动，仅 UI 层重写（无回归风险面）。
 - `clean assembleDebug` BUILD SUCCESSFUL（仅历史废弃警告）；APK 桌面 `QuroAI-debug-2026-07-27-v357.apk`（374,280,891 B，cmp 一致）。
 
 ---
@@ -42,22 +42,22 @@
 
 | # | 严重度 | 类别 | 位置 | 问题描述 | 建议 | 来源成员 |
 |---|--------|------|------|---------|------|---------|
-| 1 | 🟢 | 设计 | QuroAciCenterScreen.kt | 原 UI 与纸感设计系统割裂，且「手动注册」「按名称搜索」两卡片功能重叠 | 合体为「添加 ACI 应用」统一入口 | 设计师 |
+| 1 | 🟢 | 设计 | QuroAidlAciCenterScreen.kt | 原 UI 与纸感设计系统割裂，且「手动注册」「按名称搜索」两卡片功能重叠 | 合体为「添加 ACI 应用」统一入口 | 设计师 |
 | 2 | 🟢 | 功能 | 已发现 App 卡片 | 原仅有「重绑」，缺少「手动启动」 | 卡片加「启动」按钮（调用 `mgr.launchApp`） | 设计师 |
 | 3 | 🟢 | 功能 | 添加流程 | 原手动注册仅绑定不启动，无「关联启动」 | 新增「按包名注册并启动」+ 搜索结果「注册并启动」 | 设计师 |
-| 4 | 🟢 | 编译 | QuroAciCenterScreen.kt | 重写漏带 clip/RoundedCornerShape/BorderStroke 导入 | 补回 3 项导入 | 排障手 |
+| 4 | 🟢 | 编译 | QuroAidlAciCenterScreen.kt | 重写漏带 clip/RoundedCornerShape/BorderStroke 导入 | 补回 3 项导入 | 排障手 |
 
 ---
 
 ## 交付清单（代码变更 + 测试覆盖 + 发布检查清单 + 回滚预案）
 
 **代码变更**
-- `app/src/main/java/com/ai/assistance/quro/ui/QuroAciCenterScreen.kt`：全量重写。
+- `app/src/main/java/com/ai/assistance/quro/ui/QuroAidlAciCenterScreen.kt`：全量重写。
   - 结构：01 添加 ACI 应用（UnderlineField 统一入口 + 「搜索」`PrimaryButton` + 「按包名注册并启动」描边按钮 + 搜索结果行含「启动/注册并启动」+ 空结果 `InfoBox`）／02 已发现的 ACI 应用（`InfoBox` 空态引导 + `AciAppCard` 加重绑/启动）／03 开发者文档（可折叠 `SetGroup`）。
   - `AciAppCard` 改用 `CardDefaults.cardColors(containerColor = PaperCard)`（与 `SetGroup` 同纸白底）+ `Line` 描边；新增 `onLaunch` 参数。
   - 移除 `OutlinedTextField`/`Button` 旧控件，全部走设计系统。
 - `app/build.gradle.kts`：`versionCode 356→357`、`versionName "1.0.356"→"1.0.357"`。
-- `QuroAciManager.kt` / `QuroAciTools.kt`：**未改动**（功能已齐备：`registerPackage` / `searchInstalledApps` / `launchApp` / `rebind`）。
+- `QuroAidlAciManager.kt` / `QuroAidlAciTools.kt`：**未改动**（功能已齐备：`registerPackage` / `searchInstalledApps` / `launchApp` / `rebind`）。
 
 **测试覆盖**
 - 编译验证：`compileDebugKotlin` + `assembleDebug` BUILD SUCCESSFUL（1m59s），无本次改动引入的新警告。
@@ -68,7 +68,7 @@
 - C 盘剩余空间 4.1 GB（≥500 MB 阈值，满足装包条件）。
 
 **回滚预案**
-- 如真机验证出现 UI 异常：将 `QuroAciCenterScreen.kt` 回退至 v356 版本 + `versionCode/Name` 回退 356，重新 `assembleDebug` 出包即可，不影响 `QuroAciManager` 运行时逻辑。
+- 如真机验证出现 UI 异常：将 `QuroAidlAciCenterScreen.kt` 回退至 v356 版本 + `versionCode/Name` 回退 356，重新 `assembleDebug` 出包即可，不影响 `QuroAidlAciManager` 运行时逻辑。
 
 ---
 
@@ -92,7 +92,7 @@
 
 ## 📚 成员产出索引
 
-- gstack-designer（设计师）原始产出：QuroAciCenterScreen.kt v357 重写稿（纸感设计系统迁移 + 合体 + 关联启动 + 手动启动）。
+- gstack-designer（设计师）原始产出：QuroAidlAciCenterScreen.kt v357 重写稿（纸感设计系统迁移 + 合体 + 关联启动 + 手动启动）。
 - gstack-investigator（排障手）原始产出：编译 2 失败→补 3 导入→1 成功；APK `cmp` 校验通过。
 
 ---

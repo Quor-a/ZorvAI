@@ -37,7 +37,7 @@
 - **#816 架构评估**：Shizuku 是多模块工程（manager/server/starter/shell/common/api），server 依赖 hidden-api 与 adb/root 启动流程，整体 fork 进 QuroAI 风险高，须分阶段。
 
 ### 🔍 产品官（需求评审 / 命名）
-- **#821 决策**：用户要求把 v357 改名后的「ACI 管理中心」改为「ACT 关联启动」。底层 AIDL 协议名（`QuroAciManager` / `ai.aci.core`）属真实框架标识符，**不动**，仅改可见标题与用户文案，避免破坏 ACI 调用链路。
+- **#821 决策**：用户要求把 v357 改名后的「ACI 管理中心」改为「ACT 关联启动」。底层 AIDL 协议名（`QuroAidlAciManager` / `ai.aci.core`）属真实框架标识符，**不动**，仅改可见标题与用户文案，避免破坏 ACI 调用链路。
 - **#816 范围**：用户明确要 fork `RikkaApps/Shizuku` **App 本体**（不是 v358 只加 provider 权限端点）。这是头条任务，需完整集成 + 去品牌化。
 
 ### 🎨 设计师（纸感 UI 落地）
@@ -63,7 +63,7 @@
 | 2 | 🟡 | UI 错位 | ChatScreen | #822 虾哥人格标签栏（虾哥 + 表情/超问/刀子/羞耻）误显示在消息列表，应仅在对话框头像处 | 待用户确认组件后删除/归位 | 设计师 + 排障手 |
 | 3 | 🟡 | 待做 | 全局 | #818 机器人平台 UI 重做、#819 飞书权限说明、#820 人格心跳孵化 ANR、#823 上下文压缩、#824 慢慢流式、#825 头像上传裁剪 | 按计划逐项 | 产品官 |
 | 4 | 🟢 | Bug 已修 | ChatScreen:775 / QuroVoiceFeaturePrefs | #817 语音开关需重启生效 | 已改 StateFlow + collectAsState | 排障手 |
-| 5 | 🟢 | 改名已做 | QuroAciCenterScreen | #821 ACI→ACT 关联启动 | 已改可见标题与文案 | 产品官 + 设计师 |
+| 5 | 🟢 | 改名已做 | QuroAidlAciCenterScreen | #821 ACI→ACT 关联启动 | 已改可见标题与文案 | 产品官 + 设计师 |
 
 ### #816 威胁建模 + 许可证检查表（STRIDE 简版）
 - **S（伪造）**：自托管 server 绑定到 QuroAI 自身 uid，避免第三方伪造 Shizuku 服务 → 风险低。
@@ -105,7 +105,7 @@
 
 - 排障手（#817 根因 + 修复、#816 架构评估）：`QuroVoiceFeaturePrefs.kt` 新增 `dialogVoiceButtonFlow` + `ChatScreen.kt:775` 改 `collectAsState`；Shizuku 模块结构分析。
 - 产品官（#821 命名决策、#816 范围确认）：决策记录见上。
-- 设计师（#821 UI 落地）：`QuroAciCenterScreen.kt` 标题与文案修改。
+- 设计师（#821 UI 落地）：`QuroAidlAciCenterScreen.kt` 标题与文案修改。
 - 安全卫士（#816 许可证审查）：Apache 2.0 §6 三条禁止项 + 去品牌化策略。
 
 ---

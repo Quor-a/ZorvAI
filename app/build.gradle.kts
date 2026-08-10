@@ -15,8 +15,8 @@ android {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 460
-        versionName = "1.0.24"
+        versionCode = 461
+        versionName = "1.0.25"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -132,9 +132,9 @@ dependencies {
 
     // ACI（Agent Capability Interface）协议层：让 QuroAI 成为 ACI 控制方（AI 中枢），
     // 发现并调用第三方 App 通过 ACI Service 暴露的能力。源码现已收进本仓 :aci-core 模块
-    // （ai.aci.core.*：IACIService / IACICallback AIDL、ACIRequest / ACIResponse / Capability），
+    // （ai.aci.core.*：IAidlAciService / IAidlAciCallback AIDL、AidlAciRequest / AidlAciResponse / Capability），
     // 不再依赖任何跨仓预编译 AAR。受控端 aci-browser 同样依赖 :aci-core，保证协议一致。
-    implementation(project(":aci-core"))
+    implementation(project(":aidl-aci-core"))
 
     // 本地离线 LLM 引擎（MNN / llama.cpp）：仅 full 风味依赖，源码编译，满足 F-Droid 红线
     // 注意：fullImplementation 访问器此前因 kotlin-dsl 配置探针死锁（deprecation error 阻断脚本编译 → 访问器永不生成）而

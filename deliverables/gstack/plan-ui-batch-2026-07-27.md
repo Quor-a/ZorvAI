@@ -29,11 +29,11 @@
 ### #804 ACT/ACI 管理中心重做（5 子项）— 注意：代码实为 **ACI**
 | 子项 | 文件 |
 |------|------|
-| 改名 + ACT 关联启动 | `ui/QuroAciCenterScreen.kt`、`core/aci/QuroAciManager.kt` |
-| 手动注册 ACI App + 按名称搜索 | `core/aci/QuroAciManager.kt`、`core/aci/QuroAciTools.kt` |
-| 合体（合并入口） | `ui/QuroAciCenterScreen.kt` |
-| 已发现 App 添加手动启动 | `core/aci/QuroAciManager.kt`（aci_list 发现逻辑，见 `QuroChatViewModel.kt` L1058） |
-| UI 重做 | `ui/QuroAciCenterScreen.kt` |
+| 改名 + ACT 关联启动 | `ui/QuroAidlAciCenterScreen.kt`、`core/aci/QuroAidlAciManager.kt` |
+| 手动注册 ACI App + 按名称搜索 | `core/aci/QuroAidlAciManager.kt`、`core/aci/QuroAidlAciTools.kt` |
+| 合体（合并入口） | `ui/QuroAidlAciCenterScreen.kt` |
+| 已发现 App 添加手动启动 | `core/aci/QuroAidlAciManager.kt`（aci_list 发现逻辑，见 `QuroChatViewModel.kt` L1058） |
+| UI 重做 | `ui/QuroAidlAciCenterScreen.kt` |
 
 ### #805 对话框体验（2 子项，需 Operit 参考）
 | 子项 | 文件 |
