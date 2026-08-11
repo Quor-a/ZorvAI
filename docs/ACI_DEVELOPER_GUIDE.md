@@ -1,6 +1,6 @@
 # Zorv AI · ACI 开发者手册（Agent Capability Interface）
 
-> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.26** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-08-11（新增 §17：v1.0.25/1.0.26 框架增强 callId 链路追踪 / LocalSocket 主动探测 / 自愈指数退避重绑 / 会话 trace / onServiceDisconnected NPE 修复）
+> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.26** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-08-11（v1.0.26 框架增强 §17；全面审计后补全 §18 主程序受控端 / §19 控制端编排与 LLM 工具 / §20 LocalSocket 线缆协议 / §21 唤醒与诊断；§13 能力清单由 32 修正为 36，新增 `workspace_*` 四能力）
 >
 > 本文档面向**希望让自己的 Android App 被 Zorv AI（或其他 ACI 控制端）调用**的第三方开发者，也适用于**想基于 `aci-core` 自建控制端**的开发者。
 
@@ -397,9 +397,11 @@ override fun onCallAsync(request: ACIRequest, callback: IACICallback) {
 
 ## 13. 官方受控端能力清单（ZorvAI 浏览器）
 
-ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 32 个能力（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输 + 2 语义点击）。控制端 `QuroAidlAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
+ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 36 个能力（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输 + 4 共享工作空间 + 2 语义点击）。控制端 `QuroAidlAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
 
-### 13.1 能力总览（共 32 项：13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输 + 2 语义点击）
+> 注意：主程序自身（`QuroMainAciService`）也作为受控端额外暴露 `http_request`（扩展版，含 `tls_verify`/`tls_ca_pem`/`$vault` 凭证引用）与 `aci_protocol` 两个能力，详见 §18。本 §13 仅列**受控浏览器**能力。
+
+### 13.1 能力总览（共 36 项：13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输 + 4 共享工作空间 + 2 语义点击）
 
 **基础能力（13）**
 
@@ -449,7 +451,7 @@ ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，�
 | `browser_tab` | `id`(string, 必填) | `ok`(boolean) + `url` + `id` | 轻量多标签·切换到指定标签（重载其 URL） |
 | `browser_tabclose` | `id`(string, 必填) | `ok`(boolean) + `remaining`(int) | 轻量多标签·关闭（激活标签关闭后自动回退最近一个） |
 
-**第四波增强（1 · 虚拟鼠标）**
+**第四波增强（2 · 虚拟鼠标 + HTTP 传输）**
 
 | 能力 id | 入参 | 出参 | 说明 |
 |---------|------|------|------|
@@ -464,6 +466,19 @@ ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，�
 | `tap` | `x`(int, 必填 屏幕绝对像素 X) / `y`(int, 必填 屏幕绝对像素 Y) | `x`(int) + `y`(int) | 在屏幕坐标模拟单击：复用 `browser_mouse` 的坐标换算与视图级 `dispatchTouchEvent` 派发（受控端无系统特权也能用），与 `ui_snapshot` 形成「像人一样点页面」的感知-执行闭环。控制端语义点击 `clickText`/`clickResourceId` 会自动先 `ui_snapshot` 取节点、解析锚点、再 `tap` |
 
 > 注：`browser_action` 在第三波新增 `selector`(CSS 选择器) 参数（与 `id` 二选一，优先级低于 `id`），可直接用选择器定位操作，免去先 `browser_elements` 注入稳定 ID。
+
+**第六波增强（4 · 共享工作空间 `workspace_*`）**
+
+> 这组能力让**授权调用方（主程序 ZorvAI）经 ACI 读写受控浏览器沙箱内的 `filesDir/aci_workspace` 目录**，实现「跨 App 文件/状态中转」。严格说它不是操作系统级的共享文件系统——文件仍在受控浏览器自己的应用沙箱里，主程序是**通过 `aci_call` 调浏览器**来读写的（见 `QuroControlledAidlAciService.kt:569` 注释）。`name` 不含路径、禁止 `../` 越权。
+
+| 能力 id | 入参 | 出参 | 说明 |
+|---------|------|------|------|
+| `workspace_list` | — | `entries`(string JSON `[{name,size,is_dir,mtime}]`) + `count`(int) + `dir`(string, 仅诊断) | 列出共享工作空间文件清单 |
+| `workspace_read` | `name`(string, 必填) | `name` / `content`(string, 文本) / `content_b64`(string, 二进制) / `is_binary`(boolean) / `size`(int) | 读取一个文件；文本返回 `content`，二进制返回 `content_b64` |
+| `workspace_write` | `name`(string, 必填) / `content`(string, 可选) / `content_b64`(string, 可选) | `written`(boolean) + `bytes`(int) | 写入一个文件；`content` 与 `content_b64` 二选一 |
+| `workspace_delete` | `name`(string, 必填) | `deleted`(boolean) | 删除一个文件 |
+
+> 典型用法：AI 在主程序侧生成脚本/数据 → `aci_call("com.ai.assistance.quro.browser","workspace_write",{name,content})` 放入工作空间 → 受控浏览器 `browser_script` 读取并执行 → 结果 `workspace_write` 回写 → 主程序 `workspace_read` 取回。
 
 > 所有能力均带 `FLAG_BACKGROUND` + `FLAG_NO_UI`，可在后台、无需 UI 执行。`browser_crawl` / `browser_search` / `browser_script` 的正文与结果均**截断到约 15 万字符**（返回 `truncated=true` 表示被截断）。`browser_read` 大页面额外 gzip 经 `html_gz` 回传（见 13.3）。⚠️ 所有 WebView 操作须在主线程执行（见 §11 坑表），受控端已封装 `mainHandler.post + CountDownLatch`，禁止在 ACI Binder 线程直接调用 WebView。
 
@@ -720,6 +735,183 @@ Java 包 / 模块 / 类名由 `aci` 重命名为 `aidlaci`（去第三方方案�
 | `QuroControlledAciService` | `QuroControlledAidlAciService` |
 
 **不变（线缆协议，请勿改）**：Android Manifest 中的 `android:name="ai.aci.core.ACTION_BIND"` / `ACTION_WAKE` 与权限 `ai.aci.permission.CALL` / `CALL_DANGEROUS` / `DISCOVER` 仍沿用旧字符串——它们是与已发布受控端协商的契约，改名会破坏连通性。
+
+---
+
+---
+
+## 18. 主程序自身作为受控端（QuroMainAciService）
+
+主程序 QuroAI 既是 **控制端**（`QuroAidlAciManager`），也通过 `QuroMainAciService` 同时充当 **受控端**。这让 AI 可以经 `aci_call("com.ai.assistance.quro", "http_request", ...)` 让主程序代为发起任意 HTTP 请求——主程序不再依赖受控浏览器也能做 HTTP 传输。
+
+### 18.1 暴露的能力
+
+| 能力 id | 入参 | 出参 | 说明 |
+|---------|------|------|------|
+| `http_request` | `url`*(string) / `method`(string, 默认 GET) / `headers`(string JSON) / `body`(string) / **`tls_verify`**(string, 默认 `"true"`) / **`tls_ca_pem`**(string, 可选) | `status_code`(int) + `response_headers`(string JSON) + `response_body`(string) + `truncated`(boolean) + （大响应）`response_body_gz`(byte[]) / `response_body_len`(int) | 比浏览器端 `http_request` **多两个安全参数**：`tls_verify=false` 放行自签/LAN HTTPS；`tls_ca_pem` 固定自定义 CA（优先级高于 `tls_verify`）。`headers` 的值可写 `"$vault:NAME"` 引用已托管凭证（见 §19.6） |
+| `aci_protocol` | — | `protocol_version`(string) + `semver`(string) + `supported`(string, 逗号分隔) | ACI 2.0 协议版本协商层：返回 `protocol_version="aci-protocol-v1"`、`semver="1.0.0"`、`supported="aci-protocol-v1"` |
+
+### 18.2 与浏览器端 `http_request` 的差异
+
+| 维度 | 受控浏览器 `http_request` | 主程序 `http_request` |
+|------|--------------------------|----------------------|
+| `tls_verify` / `tls_ca_pem` | 无（依赖 NSC base-config 放开明文） | **有**（OkHttp 层 TLS 策略，自签/LAN 可控） |
+| `$vault:NAME` 凭证引用 | 无 | **有**（`headers` 值经 `QuroAidlAciCredentialVault.resolve` 解析） |
+| 大响应保护 | >15 万字符截断 + gzip | 同；且 `Content-Length > 2MB` 直接不载入内存、标记 `truncated` |
+| 调用方白名单 | 自身 + 主程序 | 自身（`SELF_PKG`）+ 受控浏览器（`BROWSER_PKG`） |
+
+### 18.3 HTTP 调用审计
+
+主程序受控端每次 `http_request` 都会写 `filesDir/http_call_audit.json`（最多 500 条：`timestamp/method/url/code/durationMs`），供用户事后审查「AI 发过哪些 HTTP 请求」。注意它与控制端的 `aci_call_audit.json`（记录 ACI 调用本身）是两份独立审计（见 §21.3）。
+
+---
+
+## 19. 控制端编排与 LLM 工具（自建控制端参考）
+
+> 本节面向**想基于 `aidl-aci-core` 自建控制端**的开发者，梳理 Zorv AI 主程序 `QuroAidlAciManager` 及其辅助类的真实实现。受控端接入见 §4，本节是控制端侧。
+
+### 19.1 发现（Discovery）
+
+`QuroAidlAciManager.discover()` 用 `PackageManager.queryIntentServices(new Intent("ai.aci.core.ACTION_BIND"), GET_META_DATA)` 扫描本机声明了该 Intent 的受控端；命中即缓存包名/类名并立即 `bindWithWake`。**无独立清单缓存文件**，能力清单来自运行时包扫描（Android 11+ 受控端 `<queries>` 缺一不可，见 §10）。
+
+### 19.2 绑定生命周期
+
+- **绑定标志**：`BIND_AUTO_CREATE or BIND_IMPORTANT`。
+- **`onServiceConnected`**：写入 `serviceMap`、清零退避计数、注册 `IBinder.DeathRecipient`（**事件驱动**断线感知，取代轮询）、调用 `fetchCapabilities`。
+- **`onServiceDisconnected`**：清 `serviceMap` 但**保留 `capMap` 能力缓存**（断线期间仍能看到能力列表）、复位 `socketOk`、触发 `scheduleRebind`。
+- **`bindWithWake`**：先直绑；失败则发 `ACTION_WAKE` 广播（带 `FLAG_INCLUDE_STOPPED_PACKAGES`）拉起 stopped 进程再绑（修复 ColorOS/Android 11+ 停止态绑不上，见 §4.6）。
+- **多目标并存**：`capMap: ConcurrentHashMap<包的, List<Capability>>`，一个控制端可同时管理多个受控端；`aci_call` 必须带 `target_package` 指定目标。
+
+### 19.3 健康看护 + 指数退避重绑
+
+- `startHealthWatch(10s)` 定时 `healthCheck()`（`ping()`）；死亡即 `ensureBound()`（含 wake 广播 + `startService` + 重绑）。
+- `scheduleRebind`：**800ms → 1.6s → … → 8s 指数退避**，成功绑定即清零，避免对不可达端高频空转。
+
+### 19.4 LocalSocket 探测与 AIDL 回退
+
+- 绑定后 `fetchCapabilities()` 主动 `AidlAciLocalSocketTransport.probe(pkg)`（仅 connect 不发包），结果存入 `socketOk`。
+- `call()`：`if (socketOk[pkg] != false)` 优先走 LocalSocket；抛异常即置 `socketOk=false` 并**回落 AIDL**，无需等到首次调用失败才切换（线缆细节见 §20）。
+
+### 19.5 调用、超时与重试
+
+- 同步 `call()`：`callTimeoutMs = 15_000ms`，用 `TimeoutResult + wait/notifyAll` 实现超时，超时返回 `504`。
+- `doCallWithRetry()`：途中 `RemoteException` 清引用并 `ensureBound` 重绑后**重试一次**。
+- 异步 `callAsync()`：经 `IAidlAciCallback.onResult` / `onProgress` 回传。
+
+### 19.6 会话 trace 与语义点击脚手架
+
+- **trace**：环形 `traceQueue`（最近 50 条 `AciCallTrace{ts, callId, target, capability, transport, code, success, latencyMs}`），提供 `getTrace()` / `clearTrace()` / `socketStatus(pkg)`；ACI 管理中心「诊断」面板据此展示每次调用的传输路径、耗时与成功率。
+- **语义点击**：`clickText` / `clickResourceId` 依赖 `ui_snapshot` + `tap` 双能力（先取节点→解析锚点→`tap`）；若目标未暴露这两能力则返回 `412`。
+
+### 19.7 LLM 工具：`aci_list` 与 `aci_call`
+
+控制端把 ACI 暴露给 LLM 的不是 JSON-Schema function-calling，而是**自然语言 prompt 注入 + 一个小 JSON Schema 的 CALL 工具**：
+
+- **`aci_list`**（受控能力清单）：`getCapabilityPrompt()` 遍历 `capMap`，输出「【应用名】(包名) - id: 描述 · 参数…」文本喂给 LLM，让模型知道有哪些工具可用。
+- **`aci_call`**（执行调用）：JSON Schema 仅 `target_package` / `capability` / `args` / `confirm` 四键；能力细节靠 prompt 文本承载。运行逻辑含：
+  - `requireUserConfirm` 确认门禁（危险能力需用户确认）；
+  - `$vault:NAME` 凭证自动解析（见下文）；
+  - `html_gz` / `response_body_gz` 自动 GZIP 解压还原完整内容后再交给 LLM。
+
+### 19.8 凭据保险库 `QuroAidlAciCredentialVault`
+
+`store` / `resolve` / `list` / `delete`。真实凭证用 **AndroidKeyStore 主密钥（别名 `aci_cred_kv1`）+ AES-GCM** 加密后落盘 `filesDir/aci_credentials.json`，主密钥永不导出、即使文件被读也无法解密。`resolve(input)` 识别 `"$vault:NAME"` 前缀返回明文，非此前缀原样返回（兼容旧明文用法）。受控端 `http_request` 的 `headers` 值在发出前经此解析，实现「配置里只写 `$vault:NAME`，运行时注入真实 Token」。
+
+### 19.9 能力注册表 `QuroAidlAciRegistry`
+
+`store["$pkg::$id"]` 保存能力元数据；`inferTags(capId, capDesc)` 启发式推断**语义标签**用于检索/分组：`network` / `web` / `fs` / `messaging` / `calendar` / `media` / `location` / `execute` / `ui` / `auth` / `misc`（无匹配归 `misc`）。提供 `byPackage` / `queryByTag` / `queryByTagsAny` / `queryByTagsAll`。注：`aci-core` 的 `Capability` 当前无 tags 字段，标签是控制端侧推断（正式 tags 字段落地在 aci-core 2.0 Roadmap）。
+
+### 19.10 错误模型 `QuroAidlAciErrors`
+
+结构化错误 `aci_error{code, message, suggestion, layer}`，让 LLM 能自助纠错：
+
+| 语义码 | 值 | 含义 |
+|--------|----|------|
+| `E_SERVICE_UNBOUND` | `1503` | 目标未绑定 |
+| `E_TIMEOUT` | `1504` | 调用超时 |
+| `E_BAD_REQUEST` | `2400` | 参数错误 |
+| `E_HTTP_CLIENT` | `2500` | HTTP 请求失败 |
+| `E_HTTP_TLS` | `2520` | HTTPS 证书校验失败 |
+| `E_INTERNAL` | `2599` | 内部错误 |
+
+`layer ∈ {binder, http, protocol}`；`parse()` 可从 `errorMessage` 反解，`fromBinderResponse` / `httpSuggestion` 生成给 LLM 的修复建议。受控端 `QuroMainAciService` 已用此模型产出 `{code,message,suggestion,layer}` JSON 内嵌在 `errorMessage` 中。
+
+### 19.11 事件总线 `QuroAidlAciEvents` 与协议协商 `QuroAidlAciProtocol`
+
+- **事件总线**：进程内 `subscribe` / `emit`，5 类事件：`service_bound` / `service_unbound` / `call_failed` / `discovered` / `protocol_negotiated`。
+- **协议协商**：`PROTOCOL_VERSION="aci-protocol-v1"`、`PROTOCOL_SEMVER="1.0.0"`、`SUPPORTED=["aci-protocol-v1"]`；`negotiate(peer)` 比对双方支持的最高共同版本（主程序 `aci_protocol` 能力即返回这些值）。
+
+### 19.12 传输抽象 `QuroAidlAciAdapter` / `BinderAciAdapter`
+
+`AidlAciAdapter` 接口把传输抽象为 `transport` / `call` / `listCapabilities` / `negotiateProtocol`，当前唯一实现 `BinderAciAdapter`（Binder + LocalSocket 双通道）。这是为未来 WS/HTTP 传输预留的扩展点，不改变现有热路径。
+
+---
+
+## 20. LocalSocket 线缆协议细节（`AidlAciLocalSocketTransport`）
+
+LocalSocket 是 AIDL Binder 的**增强型替代传输**：控制端优先尝试，失败/不可用时自动回落 AIDL。
+
+### 20.1 端点与命名空间
+
+- 抽象命名空间地址前缀 `SOCK_PREFIX = "ai.aidl.aci.core.sock."`，端点 = `前缀 + 自身包名`。
+- `LocalSocketAddress.Namespace.ABSTRACT`：**不落盘、不暴露为文件节点**，仅本机同用户可见。
+
+### 20.2 帧格式
+
+```
+┌────────────┬──────────────────────┬──────────────────────────────────┐
+│ 4 字节魔数  │ 4 字节大端 payload 长度 │ payload（AidlAciRequest/Response 经 Parcel 序列化）│
+└────────────┴──────────────────────┴──────────────────────────────────┘
+```
+
+- 请求魔数 `ACIS`，响应魔数 `ACIR`。
+- `MAX_PAYLOAD = 8MB`，超出即视为畸形帧丢弃，防内存撑爆。
+
+### 20.3 握手与鉴权
+
+- **无独立握手**：受控端 `BaseAidlAciService.onCreate` 起 `Server` 监听，收到帧先校验魔数，非法即关连接；合法则反序列化后复用 `handleCall`（与 AIDL 的 `call()` 走完全相同逻辑）。
+- **鉴权沿用 Binder 链路**：控制端发送前 `setCallerPkg(本包名)`，受控端 `onCheckPermission` 按白名单裁决——LocalSocket 通道不引入独立鉴权。
+- **探测 `probe(pkg)`**：只 `connect` 不发包，成功即 `true`（绑定后判定通道可用性，首调用直接选最优路径）。
+
+### 20.4 与 AIDL 并存
+
+受控端 `BaseAidlAciService.onCreate` **同时**启动 LocalSocket Server，`onDestroy` 关闭；AIDL 与 LocalSocket 共用 `handleCall` 派发。任一通道可用即可通信，互为兜底。
+
+---
+
+## 21. 唤醒接收器与诊断
+
+### 21.1 两处 WakeReceiver 实现差异
+
+两者都靠 `FLAG_INCLUDE_STOPPED_PACKAGES` 穿透 stopped 态，但被拉起的方式不同：
+
+| 文件 | 收到 `ai.aci.core.ACTION_WAKE` 后的行为 |
+|------|------|
+| 浏览器端 `aidl-aci-browser/.../QuroAidlAciWakeReceiver.kt` | `getLaunchIntentForPackage` **启动主 Activity** + 写诊断日志 `quro_browser_diag.log` |
+| 主程序端 `app/.../service/QuroAidlAciWakeReceiver.kt` | 主程序无 Activity 壳，**直接 `startService(QuroMainAciService)`** 拉起 ACI Service，不弹 UI |
+
+### 21.2 DiagBuffer（仅浏览器模块）
+
+进程级共享诊断缓冲（`CopyOnWriteArrayList`），`append(tag, msg)` 带时间戳并同时写 Logcat。覆盖：权限自动授权、WebView 读取/抓取/截图/鼠标/点击、`onCreate` / `onCreateCapabilities` / `onCall` 各步成败。`getAll()` 供 Activity 渲染到屏幕顶部；`persist(ctx)` 落盘 `getExternalFilesDir("QuroAI_logs")/browser_v5_diag_<date>.log`。主程序受控端无 DiagBuffer，诊断改用 `android.util.Log`。
+
+### 21.3 审计落盘
+
+| 文件 | 记录内容 | 上限 |
+|------|----------|------|
+| 控制端 `filesDir/aci_call_audit.json` | 每次 `aci_call`：`timestamp/pkg/capability/code/ok/durationMs` | 500 条 |
+| 主程序受控端 `filesDir/http_call_audit.json` | 每次 `http_request`：`timestamp/method/url/code/durationMs` | 500 条 |
+
+> 二者独立：`aci_call_audit` 记录「AI 调了哪个 App 的哪个能力」，`http_call_audit` 记录「主程序受控端实际发出的 HTTP 请求」。
+
+### 21.4 ACI 管理中心 UI（`QuroAidlAciCenterScreen`）
+
+主程序「设置 → ACI 管理中心」向用户暴露三大区块：
+
+1. **01 添加 ACI 应用**：输入包名/应用名 →「搜索」（模糊匹配本机应用）或「按包名注册并启动」。
+2. **02 已发现的 ACI 应用**：逐卡显示绑定态（已绑定/未绑定）、能力清单（含「⚠️需确认」标记）、最近活动时间，并提供「重绑」「启动」「打开控制台」按钮（控制台需该端暴露 `console_ui`）。
+3. **03 开发者文档**：内嵌 `ACI_DEV_DOC` 长文（可折叠）+ 一键「保存依赖模板 / 下载开发者文档」。
+
+控制台弹层：点「打开控制台」经 Binder 拉 `console_ui` 快照 → `AciConsoleModel.parse` → `AciConsoleScreen`（纯 Compose）渲染。该界面标题显示为「ACT 关联启动」，底层即 ACI。
 
 ---
 
