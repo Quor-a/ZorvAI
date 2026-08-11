@@ -1,6 +1,6 @@
 # Zorv AI · ACI 开发者手册（Agent Capability Interface）
 
-> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）｜ 适用 SDK：`aci-core` ｜ 最后更新：2026-08-10（v1.0.25 新增 语义点击闭环 ui_snapshot / tap）
+> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.26** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-08-11（新增 §17：v1.0.25/1.0.26 框架增强 callId 链路追踪 / LocalSocket 主动探测 / 自愈指数退避重绑 / 会话 trace / onServiceDisconnected NPE 修复）
 >
 > 本文档面向**希望让自己的 Android App 被 Zorv AI（或其他 ACI 控制端）调用**的第三方开发者，也适用于**想基于 `aci-core` 自建控制端**的开发者。
 
@@ -389,7 +389,7 @@ override fun onCallAsync(request: ACIRequest, callback: IACICallback) {
 |----------|--------|----------|
 | 1.0 | API 24 | 同步 `call` / `getCapabilities` / `ping` |
 | 1.1 | API 26 | 异步 `callAsync` + `IACICallback` |
-| 2.0（规划） | — | LocalSocket 高速通道 |
+| 1.1+（已落地） | 控制端 `QuroAidlAciManager` + `aidl-aci-core` | LocalSocket 抽象命名空间高速通道 + 主动探测（`fetchCapabilities` 绑定后 `AidlAciLocalSocketTransport.probe()` 仅 connect 不发包，直接决定首调用走 LocalSocket 还是回落 AIDL） |
 
 `aci-core` v1.0.x 同时实现 1.0 + 1.1（`call` 与 `callAsync` 均可用），`Capability.version` 固定为 `"1.0"`。
 
@@ -686,4 +686,41 @@ aapt2 dump xmltree --file AndroidManifest.xml \
 
 ---
 
-> 本手册由软件工坊基于 `aci-core` 源码与 Zorv AI 真实接入经验整理。协议细节以 [ACI_PROTOCOL.md](https://github.com/Quor-a/ZorvAI)（开源分支）为准。
+## 17. v1.0.25 / v1.0.26 ACI 框架增强（已落地，控制端 + 受控端）
+
+> 本节补记 v1.0.25 落地的框架增强与 v1.0.26 的健壮性修复。完整技术说明见仓库 [README §「v1.0.25 · ACI 升级功能技术说明」](../README.md)。
+> **重要兼容性提示**：v1.0.26 将 Java 包 / 类名由 `aci` 重命名为 `aidlaci`（见 §17.6），但 **Android 运行时 Intent Action 与权限字符串（`ai.aci.core.ACTION_BIND` / `ai.aci.core.ACTION_WAKE` / `ai.aci.permission.*`）属于线缆协议、保持不变**——已发布的受控端 App（含独立仓库 ZorvBrowser）无需修改即可继续连通。
+
+### 17.1 callId 链路追踪（可观测性基座）
+`AidlAciRequest` / `AidlAciResponse` 携带 `callId` 字段；受控端在成功 / 鉴权失败 / 能力缺失 / 异步各返回路径统一回显请求侧 `callId`；控制端每次 `call()` 生成 UUID 并随 LocalSocket / AIDL 双通道回填。一次 AI 操作（发现 → 绑定 → 调用 → 结果）可被完整串成调用链，便于排障与审计。
+
+### 17.2 LocalSocket 抽象命名空间高速通道 + 主动探测
+`aidl-aci-core` 的 `AidlAciLocalSocketTransport` 提供基于 Linux 抽象命名空间 LocalSocket 的高速通道，作为 AIDL Binder 的增强型替代传输；失败 / 不可用时由调用路径自动回落 AIDL。
+控制端 `QuroAidlAciManager.fetchCapabilities()` 在绑定后主动 `probe(endpoint)`（仅 connect 不发包，无副作用），直接决定首调用走 LocalSocket 还是回落 AIDL，**不必等到第一次调用失败才切换**。
+
+### 17.3 自愈：健康看护 + 指数退避重绑
+控制端 `startHealthWatch(10s)` 定时 `healthCheck()`（`ping`）；ping 失败即 `ensureBound()`（含 wake 广播 + `startService` + 重绑）。`scheduleRebind` 改为 **800ms → … → 8s 指数退避**，成功绑定即清零，避免对不可达端高频空转。
+
+### 17.4 会话 trace 可观测性面板
+控制端维护环形 `traceQueue`（最近 50 条 `AciCallTrace{ts, callId, target, capability, transport, code, success, latencyMs}`），并提供 `getTrace()` / `clearTrace()` / `socketStatus(pkg)`。ACI 管理中心「诊断」面板据此展示每次调用的传输路径（LocalSocket / AIDL）、耗时与成功率。
+
+### 17.5 onServiceDisconnected NPE 修复（v1.0.26）
+控制端 `QuroAidlAciManager.onServiceDisconnected(...)` 在断连时清理 `socketOk` 状态。原写法 `socketOk[packageName] = null` 对 `ConcurrentHashMap` 非法（禁止 null value），会在后续读取该探测状态时抛 `NullPointerException`；v1.0.26 改为 `socketOk.remove(packageName)`，彻底消除悬空引用导致的断连后 NPE。
+
+### 17.6 框架重命名落地（v1.0.26，仅标识符、不动线缆协议）
+Java 包 / 模块 / 类名由 `aci` 重命名为 `aidlaci`（去第三方方案归因，功能与协议字段不变）：
+
+| 旧（v1.0.25 及之前） | 新（v1.0.26 起） |
+|---|---|
+| 模块 `aci-core` | 模块 `aidl-aci-core`（受控端 `aci-browser` → `aidl-aci-browser`） |
+| 包 `ai.aci.core` | 包 `ai.aidl.aci.core` |
+| `BaseACIService` | `BaseAidlAciService` |
+| `IACIService` / `IACICallback` | `IAidlAciService` / `IAidlAciCallback` |
+| `ACIRequest` / `ACIResponse` | `AidlAciRequest` / `AidlAciResponse` |
+| `QuroControlledAciService` | `QuroControlledAidlAciService` |
+
+**不变（线缆协议，请勿改）**：Android Manifest 中的 `android:name="ai.aci.core.ACTION_BIND"` / `ACTION_WAKE` 与权限 `ai.aci.permission.CALL` / `CALL_DANGEROUS` / `DISCOVER` 仍沿用旧字符串——它们是与已发布受控端协商的契约，改名会破坏连通性。
+
+---
+
+> 本手册由软件工坊基于 `aidl-aci-core` 源码与 Zorv AI 真实接入经验整理。协议细节以 [ACI_PROTOCOL.md](https://github.com/Quor-a/ZorvAI)（开源分支）为准。
