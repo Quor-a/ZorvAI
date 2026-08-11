@@ -1,6 +1,6 @@
 # Zorv AI · ACI 开发者手册（Agent Capability Interface）
 
-> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.26** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-08-11（v1.0.26 框架增强 §17；全面审计后补全 §18 主程序受控端 / §19 控制端编排与 LLM 工具 / §20 LocalSocket 线缆协议 / §21 唤醒与诊断；§13 能力清单由 32 修正为 36，新增 `workspace_*` 四能力）
+> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.27** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-08-11（v1.0.26 框架增强 §17；全面审计后补全 §18 主程序受控端 / §19 控制端编排与 LLM 工具 / §20 LocalSocket 线缆协议 / §21 唤醒与诊断；§13 能力清单由 32 修正为 36，新增 `workspace_*` 四能力；v1.0.27 再由 37→38 新增 `inject_touch`（Uinput 伪输入设备桥接 · 第八波））
 >
 > 本文档面向**希望让自己的 Android App 被 Zorv AI（或其他 ACI 控制端）调用**的第三方开发者，也适用于**想基于 `aci-core` 自建控制端**的开发者。
 
@@ -397,11 +397,11 @@ override fun onCallAsync(request: ACIRequest, callback: IACICallback) {
 
 ## 13. 官方受控端能力清单（ZorvAI 浏览器）
 
-ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 36 个能力（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输 + 4 共享工作空间 + 2 语义点击）。控制端 `QuroAidlAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
+ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，已向控制端暴露以下 38 个能力（13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输 + 4 共享工作空间 + 2 语义点击 + 1 语义流 + 1 Uinput 桥接）。控制端 `QuroAidlAciManager` 会把它们喂给 LLM，由 LLM 自动决定调用哪个、传什么参数——**控制端协议零改动**，新增能力对 LLM 完全透明。
 
 > 注意：主程序自身（`QuroMainAciService`）也作为受控端额外暴露 `http_request`（扩展版，含 `tls_verify`/`tls_ca_pem`/`$vault` 凭证引用）与 `aci_protocol` 两个能力，详见 §18。本 §13 仅列**受控浏览器**能力。
 
-### 13.1 能力总览（共 36 项：13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输 + 4 共享工作空间 + 2 语义点击）
+### 13.1 能力总览（共 38 项：13 基础 + 7 agentic + 2 资源/分享 + 6 完整方案 + 1 虚拟鼠标 + 1 HTTP 传输 + 4 共享工作空间 + 2 语义点击 + 1 语义流 + 1 Uinput 桥接）
 
 **基础能力（13）**
 
@@ -455,7 +455,7 @@ ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，�
 
 | 能力 id | 入参 | 出参 | 说明 |
 |---------|------|------|------|
-| `browser_mouse` | `action`(string, 必填：move/click/dblclick/right/down/up/drag/scroll) / `x`(int, 必填 屏幕绝对像素 X) / `y`(int, 必填 屏幕绝对像素 Y) / `dx`(int, 可选) / `dy`(int, 可选) / `button`(string, 可选：left 默认/right/middle) | `ok`(boolean) + `action` + `x` + `y` | 在页面屏幕坐标模拟鼠标动作；后端按 WebView 在屏位置自动换算视图坐标后派发 `MotionEvent`（主线程 `dispatchTouchEvent` / `dispatchGenericMotionEvent`）。覆盖无稳定ID、无 CSS 选择器的元素与画布交互，与 `browser_action`(id/selector) 构成「坐标 + 语义」双通道。注：系统 WebView 将触摸事件按触摸处理，右键为尽力而为 |
+| `browser_mouse` | `action`(string, 必填：move/click/dblclick/right/down/up/drag/scroll) / `x`(int, 必填 屏幕绝对像素 X) / `y`(int, 必填 屏幕绝对像素 Y) / `dx`(int, 可选) / `dy`(int, 可选) / `button`(string, 可选：left 默认/right/middle) | `ok`(boolean) + `action` + `x` + `y` | 在页面屏幕坐标模拟鼠标动作；后端按 WebView 在屏位置自动换算视图坐标后派发 `MotionEvent`（主线程 `dispatchTouchEvent` / `dispatchGenericMotionEvent`）。覆盖无稳定ID、无 CSS 选择器的元素与画布交互，与 `browser_action`(id/selector) 构成「坐标 + 语义」双通道。click/drag/dblclick 拟人化：贝塞尔轨迹 + 亚像素高斯抖动 + 可变压力(0.4~0.62) + 可变时序，规避机械直线恒压检测。注：系统 WebView 将触摸事件按触摸处理，右键为尽力而为 |
 | `http_request` | `url`(string, 必填) / `method`(string, 可选：GET/POST/PUT/DELETE/PATCH/HEAD，默认 GET) / `headers`(string, 可选 JSON) / `body`(string, 可选 原样发送) | `status_code`(int) + `response_headers`(string JSON) + `response_body`(string) + `truncated`(boolean)；大响应体附 `response_body_gz`(byte[]) | HTTP 传输：经 ACI 让受控浏览器代为发起任意 HTTP 请求。**重点支持同网段 LAN 明文**（http://192.168.x.x、http://10.x、*.local mDNS），访问路由器/NAS/智能家居/私有 API 等局域网设备；受控浏览器已放开局域网明文（networkSecurityConfig base-config 整体允许明文），无需因公网明文限制而犹豫，公网请求仍走 HTTPS。 响应体 >15 万字符自动 gzip（response_body_gz），控制端解压还原 |
 
 **第五波增强（2 · 语义点击闭环）**
@@ -463,7 +463,23 @@ ZorvAI 浏览器（受控端，与主程序同源）作为官方参考实现，�
 | 能力 id | 入参 | 出参 | 说明 |
 |---------|------|------|------|
 | `ui_snapshot` | — | `nodes`(string_array，每项 `text\|resId\|left,top,right,bottom` 屏幕像素整数) | 当前可视区域元素快照（屏幕坐标）：遍历页面可交互/可见元素，按 WebView 在屏位置 + CSS→屏幕缩放换算成**屏幕绝对像素**返回；视口外元素自动跳过。供控制端 `clickText`/`clickResourceId` 解析锚点坐标；与 `tap` 同一坐标空间（屏幕绝对像素），**无需 AccessibilityService** |
-| `tap` | `x`(int, 必填 屏幕绝对像素 X) / `y`(int, 必填 屏幕绝对像素 Y) | `x`(int) + `y`(int) | 在屏幕坐标模拟单击：复用 `browser_mouse` 的坐标换算与视图级 `dispatchTouchEvent` 派发（受控端无系统特权也能用），与 `ui_snapshot` 形成「像人一样点页面」的感知-执行闭环。控制端语义点击 `clickText`/`clickResourceId` 会自动先 `ui_snapshot` 取节点、解析锚点、再 `tap` |
+| `tap` | `x`(int, 必填 屏幕绝对像素 X) / `y`(int, 必填 屏幕绝对像素 Y) | `x`(int) + `y`(int) | 在屏幕坐标模拟单击：复用 `browser_mouse` 的坐标换算与视图级 `dispatchTouchEvent` 派发（受控端无系统特权也能用），与 `ui_snapshot` 形成「像人一样点页面」的感知-执行闭环。tap 单击拟人化：贝塞尔逼近 + 亚像素抖动 + 可变压力(0.4~0.62) + 可变时序。控制端语义点击 `clickText`/`clickResourceId` 会自动先 `ui_snapshot` 取节点、解析锚点、再 `tap` |
+
+**第七波增强（1 · 语义流差分流 `ui_diff`）**
+
+| 能力 id | 入参 | 出参 | 说明 |
+|---------|------|------|------|
+| `ui_diff` | — | `nodes`(string_array，格式 `text\|resId\|left,top,right,bottom\|reliability`) + `count`(int) + `added`(int) + `removed`(int) + `modified`(int) + `added_nodes`(string_array) + `removed_nodes`(string_array) | 语义流差分流：返回当前可视区域元素（每项附**锚点可靠性 reliability** 评分——多次出现累加饱和、久未出现衰减）与相对上次快照的 `added`/`removed`/`modified` 节点。**事件驱动感知**：控制端据 `added`/`removed` 判断弹窗出现 / 页面变化，无需轮询全量 `ui_snapshot`。`reliability` 高（≥0.75）的锚点更稳定，语义点击优先选用 |
+
+> 注：`ui_diff` 在受控浏览器内维护上一次快照与锚点可靠性表（进程内内存，非持久化）；首次调用 `added`=全量、`reliability` 从 0 起累加。它与 `ui_snapshot`（全量快照）共用同一套元素抓取与屏幕坐标换算逻辑。
+
+**第八波增强（1 · Uinput 伪输入设备桥接 `inject_touch`）**
+
+| 能力 id | 入参 | 出参 | 说明 |
+|---------|------|------|------|
+| `inject_touch` | `action`(string, 必填：down/move/up/click/drag/dblclick，默认 click) / `x`(int, 屏幕像素) / `y`(int, 屏幕像素) / `dx`(int, 可选 drag 终点相对偏移) / `dy`(int, 可选) / `slot`(int, 可选 多点触控 slot，默认 0) / `tracking_id`(int, 可选 MT tracking id，默认 0) / `pressure`(int, 可选 0~255，默认随拟人化抖动) / `major`(int, 可选 触摸主轴 major，默认 8) | `ok`(boolean) + `method`(string, 恒为 `uinput`) + `action`(string) + `events`(int)；不可用附 `error` | 设备级真实触摸注入（**L3 事件面** / 伪输入设备 Uinput）：把语义动作写成内核 `input_event`，经 `/dev/uinput` 输出，作用于**整台设备**（不限于浏览器视图）。与控制面 AIDL / LocalSocket（**L1 控制面**）经 L4 编排协作：信令走 AIDL、内核事件走 Uinput，**二者不是一条线**。仅 root 或系统签名（priv-app + SELinux 放行 `uinput_device`）构建真实生效；普通分发版 `nativeOpen` 失败，本能力明确返回「需 root / 系统签名」而非假装成功（不杜撰功能）。坐标空间 = 屏幕像素（与虚拟设备 ABS 轴范围 1:1）；click/drag/dblclick 做拟人化合成（贝塞尔逼近 + 亚像素高斯抖动 + 可变压力 + 可变时序） |
+
+> 注：`inject_touch` 与 `tap`/`browser_mouse` 是**两套独立通路**：后者在 WebView 视图内派发 `MotionEvent`（无需系统特权，但作用域仅限浏览器自身）；前者向系统注入真实内核触摸事件（需特权，作用域是整个设备）。二者互补而非替代——前者填补「无视图锚点、需系统级真实触摸」的场景（如跨 App 操作、绕过视图级拦截）。原生实现见 `aidl-aci-browser/src/main/cpp/uinput_bridge.c` + `UinputBridge.kt`，由 `build.gradle.kts` 的 `externalNativeBuild` 编入 `libuinput_bridge.so`（arm64-v8a）。
 
 > 注：`browser_action` 在第三波新增 `selector`(CSS 选择器) 参数（与 `id` 二选一，优先级低于 `id`），可直接用选择器定位操作，免去先 `browser_elements` 注入稳定 ID。
 

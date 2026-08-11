@@ -42,6 +42,14 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    // 原生 Uinput 注入器（L3 事件面）：注册虚拟多点触摸屏并写出 /dev/uinput 内核事件。
+    // NDK r27 + arm64-v8a 已在 defaultConfig.ndk 配置。
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
+    }
 }
 
 kotlin {

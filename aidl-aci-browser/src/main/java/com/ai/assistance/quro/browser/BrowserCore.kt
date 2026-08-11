@@ -15,6 +15,7 @@ import android.webkit.WebView
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import java.util.Random
 import org.json.JSONObject
 
 /**
@@ -694,6 +695,120 @@ object BrowserCore {
         return ref.get() ?: "{\"ok\":false}"
     }
 
+    // ── 语义流增强：视觉锚点可靠性 + 差分流（ACI 2.0 等价落地，仍在浏览器沙箱）──
+    private data class UiNode(
+        val text: String, val resId: String,
+        val left: Int, val top: Int, val right: Int, val bottom: Int
+    ) {
+        val key: String get() = if (resId.isNotEmpty()) "id:$resId" else "txt:$text"
+        fun boundsChanged(o: UiNode): Boolean =
+            left != o.left || top != o.top || right != o.right || bottom != o.bottom
+    }
+
+    /** 抓取当前可视区域元素（屏幕坐标），返回节点列表与错误。供 ui_snapshot/ui_diff 复用。 */
+    private fun captureNodes(): Pair<List<UiNode>, String?> {
+        val ref = AtomicReference(Pair<List<UiNode>, String?>(emptyList(), "no webview"))
+        val latch = CountDownLatch(1)
+        mainHandler.post {
+            val wv = displayWv
+            if (wv == null) { latch.countDown(); return@post }
+            try {
+                val loc = IntArray(2); wv.getLocationOnScreen(loc)
+                val js = """
+(function(){
+  try {
+    var SEL = 'a,button,input,select,textarea,label,img,[role=button],[role=link],[tabindex],[onclick],h1,h2,h3,h4,[data-aci-click]';
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var els = document.querySelectorAll(SEL);
+    var out = [];
+    var cap = 400;
+    for (var i = 0; i < els.length && out.length < cap; i++) {
+      var el = els[i];
+      var r = el.getBoundingClientRect();
+      if (!(r.width > 0 && r.height > 0)) continue;
+      if (r.bottom <= 0 || r.top >= vh || r.right <= 0 || r.left >= vw) continue;
+      var text = ((el.innerText || el.textContent || '').trim()).slice(0, 200);
+      var resId = el.id || '';
+      out.push({text: text, resId: resId, left: Math.round(r.left), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom)});
+    }
+    return JSON.stringify({clientWidth: document.documentElement.clientWidth, vw: vw, vh: vh, elements: out});
+  } catch(e) { return JSON.stringify({error: String(e), elements: []}); }
+})()
+"""
+                wv.evaluateJavascript(js) { res ->
+                    val raw = jsonUnescape(res ?: "")
+                    try {
+                        val jo = org.json.JSONObject(raw)
+                        if (jo.has("error")) { ref.set(Pair(emptyList(), jo.optString("error"))); latch.countDown(); return@evaluateJavascript }
+                        val cw = jo.optDouble("clientWidth", wv.width.toDouble())
+                        val scale = if (cw > 0) wv.width.toDouble() / cw else 1.0
+                        val arr = jo.optJSONArray("elements") ?: org.json.JSONArray()
+                        val list = ArrayList<UiNode>()
+                        for (k in 0 until arr.length()) {
+                            val e = arr.getJSONObject(k)
+                            list.add(UiNode(
+                                e.optString("text", ""), e.optString("resId", ""),
+                                (loc[0] + e.optDouble("left", 0.0) * scale).toInt(),
+                                (loc[1] + e.optDouble("top", 0.0) * scale).toInt(),
+                                (loc[0] + e.optDouble("right", 0.0) * scale).toInt(),
+                                (loc[1] + e.optDouble("bottom", 0.0) * scale).toInt()
+                            ))
+                        }
+                        ref.set(Pair(list, null))
+                    } catch (ex: Throwable) { ref.set(Pair(emptyList(), "parse:${ex.message}")) }
+                    latch.countDown()
+                }
+            } catch (e: Throwable) { ref.set(Pair(emptyList(), e.message)); latch.countDown() }
+        }
+        try { latch.await(8, TimeUnit.SECONDS) } catch (_: InterruptedException) {}
+        return ref.get()
+    }
+
+    private var lastUiNodes: List<UiNode> = emptyList()
+    private val anchorReliability = mutableMapOf<String, Float>()
+
+    private fun nodeJson(n: UiNode): org.json.JSONObject {
+        val o = org.json.JSONObject()
+        o.put("text", n.text); o.put("resId", n.resId)
+        o.put("left", n.left); o.put("top", n.top); o.put("right", n.right); o.put("bottom", n.bottom)
+        o.put("reliability", anchorReliability[n.key] ?: 0f)
+        return o
+    }
+
+    /**
+     * 语义流差分流：返回当前元素（含锚点可靠性评分）与相对上次快照的 added/removed/modified。
+     * 控制端据此做事件驱动感知（弹窗出现/页面变化），无需轮询全量快照。
+     */
+    fun uiDiff(): String {
+        val (nodes, err) = captureNodes()
+        if (err != null) return "{\"ok\":false,\"error\":\"$err\"}"
+        val iter = anchorReliability.iterator()
+        while (iter.hasNext()) {
+            val (k, v) = iter.next()
+            val d = (v * 0.85f).coerceAtLeast(0f)
+            if (d <= 0.01f) iter.remove() else anchorReliability[k] = d
+        }
+        for (n in nodes) { if (n.key.isEmpty()) continue; anchorReliability[n.key] = ((anchorReliability[n.key] ?: 0f) + 0.25f).coerceAtMost(1f) }
+        val prevByKey = lastUiNodes.associateBy { it.key }
+        val curByKey = nodes.associateBy { it.key }
+        val addedArr = org.json.JSONArray(); val removedArr = org.json.JSONArray(); val modifiedArr = org.json.JSONArray()
+        for (n in nodes) {
+            val p = prevByKey[n.key]
+            if (p == null) addedArr.put(nodeJson(n)) else if (p.boundsChanged(n)) modifiedArr.put(nodeJson(n))
+        }
+        for (p in lastUiNodes) if (!curByKey.containsKey(p.key)) removedArr.put(nodeJson(p))
+        lastUiNodes = nodes
+        val els = org.json.JSONArray()
+        for (n in nodes) els.put(nodeJson(n))
+        val out = org.json.JSONObject()
+        out.put("ok", true)
+        out.put("count", nodes.size)
+        out.put("elements", els)
+        out.put("added", addedArr.length()); out.put("removed", removedArr.length()); out.put("modified", modifiedArr.length())
+        out.put("added_nodes", addedArr); out.put("removed_nodes", removedArr); out.put("modified_nodes", modifiedArr)
+        return out.toString()
+    }
+
     /**
      * 按 CSS 选择器查询 DOM 元素（对应 dom 命令式操控思路）。
      * 返回匹配元素的索引/标签/文本/值/链接/id/class/位置/可见性，便于 AI 直接按选择器理解/定位元素。
@@ -1104,6 +1219,79 @@ if (!window.__aciNetInstalled) {
         return MotionEvent.obtain(downTime, eventTime, action, x, y, 1.0f, 1.0f, 0, 0.0f, 0.0f, 0, 0)
     }
 
+    // ── 拟人化手势合成（ACI 2.0 等价落地：贝塞尔轨迹 + 亚像素生理噪声 + 可变压力/时序，无需 root）──
+    private val gestureRnd = Random()
+
+    /** 标准正态采样（均值 mean、标准差 std）。 */
+    private fun gauss(mean: Float, std: Float): Float = (gestureRnd.nextGaussian() * std + mean).toFloat()
+
+    /** 二次贝塞尔采样。 */
+    private fun qbezier(p0: Float, p1: Float, p2: Float, t: Float): Float =
+        (1 - t) * (1 - t) * p0 + 2 * (1 - t) * t * p1 + t * t * p2
+
+    /**
+     * 拟人化单击：落指于略偏移起点，沿带高斯偏移控制点的二次贝塞尔逼近目标，
+     * 途中注入亚像素抖动与可变压力（0.4~0.62），DOWN→若干 MOVE→短暂停顿→UP。
+     * 轨迹/压力/时序接近真人，而非完美直线恒压瞬时点击；位移控制在触摸 slop 内仍为单击。
+     */
+    private fun synthClick(wv: WebView, lx: Float, ly: Float, btnState: Int) {
+        val downTime = SystemClock.uptimeMillis()
+        var eventTime = downTime
+        val startX = lx + gauss(0f, 2.5f)
+        val startY = ly + gauss(0f, 2.5f)
+        val ctrlX = lx + gauss(0f, 5f)
+        val ctrlY = ly + gauss(0f, 5f)
+        var e = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_DOWN, startX, startY,
+            (0.5f + gauss(0f, 0.05f)).coerceIn(0.42f, 0.6f), 0.6f, 0, 0f, 0f, 0, 0)
+        wv.dispatchTouchEvent(e); e.recycle()
+        val steps = 4 + gestureRnd.nextInt(4) // 4~7 个中间点
+        for (i in 1..steps) {
+            val t = i.toFloat() / (steps + 1)
+            val px = qbezier(startX, ctrlX, lx, t) + gauss(0f, 0.7f)
+            val py = qbezier(startY, ctrlY, ly, t) + gauss(0f, 0.7f)
+            eventTime += (10 + Math.abs(gauss(0f, 6f))).toLong().coerceAtLeast(6L)
+            val pr = (0.5f + gauss(0f, 0.06f)).coerceIn(0.4f, 0.62f)
+            e = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_MOVE, px, py, pr, 0.6f, 0, 0f, 0f, 0, 0)
+            wv.dispatchTouchEvent(e); e.recycle()
+        }
+        eventTime += (35 + Math.abs(gauss(0f, 20f))).toLong().coerceAtLeast(20L)
+        try { Thread.sleep(30) } catch (_: InterruptedException) {} // wall-clock 也给真实短按间隔
+        e = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_UP, lx, ly,
+            (0.5f + gauss(0f, 0.05f)).coerceIn(0.42f, 0.6f), 0.6f, 0, 0f, 0f, 0, 0)
+        wv.dispatchTouchEvent(e); e.recycle()
+    }
+
+    /**
+     * 拟人化拖拽/滑动：起点→终点沿带高斯偏移控制点的贝塞尔，多采样点注入抖动与可变压力；
+     * 采样数随距离自适应（6~20），避免长滑变直线。
+     */
+    private fun synthDrag(wv: WebView, lx: Float, ly: Float, dx: Float, dy: Float, btnState: Int) {
+        val downTime = SystemClock.uptimeMillis()
+        var eventTime = downTime
+        val endX = lx + dx
+        val endY = ly + dy
+        val ctrlX = lx + dx * 0.5f + gauss(0f, Math.max(8f, Math.abs(dx) * 0.12f))
+        val ctrlY = ly + dy * 0.5f + gauss(0f, Math.max(8f, Math.abs(dy) * 0.12f))
+        var e = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_DOWN, lx, ly,
+            (0.5f + gauss(0f, 0.05f)).coerceIn(0.42f, 0.6f), 0.6f, 0, 0f, 0f, 0, 0)
+        wv.dispatchTouchEvent(e); e.recycle()
+        val dist = Math.hypot(dx.toDouble(), dy.toDouble())
+        val steps = (6 + (dist / 40).toInt()).coerceIn(6, 20)
+        for (i in 1..steps) {
+            val t = i.toFloat() / (steps + 1)
+            val px = qbezier(lx, ctrlX, endX, t) + gauss(0f, 1.2f)
+            val py = qbezier(ly, ctrlY, endY, t) + gauss(0f, 1.2f)
+            eventTime += (8 + Math.abs(gauss(0f, 5f))).toLong().coerceAtLeast(5L)
+            val pr = (0.5f + gauss(0f, 0.06f)).coerceIn(0.4f, 0.62f)
+            e = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_MOVE, px, py, pr, 0.6f, 0, 0f, 0f, 0, 0)
+            wv.dispatchTouchEvent(e); e.recycle()
+        }
+        eventTime += (12 + Math.abs(gauss(0f, 8f))).toLong().coerceAtLeast(6L)
+        e = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_UP, endX, endY,
+            (0.5f + gauss(0f, 0.05f)).coerceIn(0.42f, 0.6f), 0.6f, 0, 0f, 0f, 0, 0)
+        wv.dispatchTouchEvent(e); e.recycle()
+    }
+
     /**
      * 在页面指定「屏幕绝对坐标」模拟鼠标动作。坐标会按 WebView 在屏幕上的位置换算成视图本地坐标后派发。
      * action: move(悬停) / click / dblclick / right / down / up / drag / scroll
@@ -1134,14 +1322,7 @@ if (!window.__aciNetInstalled) {
                     "scroll" -> {
                         wv.scrollBy(dx, dy)
                     }
-                    "drag" -> {
-                        var t = SystemClock.uptimeMillis()
-                        var e = obtainTap(t, t, MotionEvent.ACTION_DOWN, lx, ly, btnState); wv.dispatchTouchEvent(e); e.recycle()
-                        t += 16
-                        e = obtainTap(t, t, MotionEvent.ACTION_MOVE, lx + dx, ly + dy, btnState); wv.dispatchTouchEvent(e); e.recycle()
-                        t += 16
-                        e = obtainTap(t, t, MotionEvent.ACTION_UP, lx + dx, ly + dy, btnState); wv.dispatchTouchEvent(e); e.recycle()
-                    }
+                    "drag" -> synthDrag(wv, lx, ly, dx.toFloat(), dy.toFloat(), btnState)
                     "down" -> { val t = SystemClock.uptimeMillis(); val e = obtainTap(t, t, MotionEvent.ACTION_DOWN, lx, ly, btnState); wv.dispatchTouchEvent(e); e.recycle() }
                     "up" -> { val t = SystemClock.uptimeMillis(); val e = obtainTap(t, t, MotionEvent.ACTION_UP, lx, ly, btnState); wv.dispatchTouchEvent(e); e.recycle() }
                     "right" -> {
@@ -1151,19 +1332,11 @@ if (!window.__aciNetInstalled) {
                         e = obtainTap(t, t, MotionEvent.ACTION_UP, lx, ly, btnState); wv.dispatchTouchEvent(e); e.recycle()
                     }
                     "dblclick" -> {
-                        for (i in 0..1) {
-                            var t = SystemClock.uptimeMillis()
-                            var e = obtainTap(t, t, MotionEvent.ACTION_DOWN, lx, ly, btnState); wv.dispatchTouchEvent(e); e.recycle()
-                            t += 16
-                            e = obtainTap(t, t, MotionEvent.ACTION_UP, lx, ly, btnState); wv.dispatchTouchEvent(e); e.recycle()
-                        }
+                        synthClick(wv, lx, ly, btnState)
+                        try { Thread.sleep(60) } catch (_: InterruptedException) {}
+                        synthClick(wv, lx, ly, btnState)
                     }
-                    else -> { // click（默认）
-                        var t = SystemClock.uptimeMillis()
-                        var e = obtainTap(t, t, MotionEvent.ACTION_DOWN, lx, ly, btnState); wv.dispatchTouchEvent(e); e.recycle()
-                        t += 16
-                        e = obtainTap(t, t, MotionEvent.ACTION_UP, lx, ly, btnState); wv.dispatchTouchEvent(e); e.recycle()
-                    }
+                    else -> synthClick(wv, lx, ly, btnState) // click（默认）：拟人化单击
                 }
                 DiagBuffer.append("Mouse", "action=$action x=$x y=$y lx=$lx ly=$ly btn=$button")
                 ref.set("{\"ok\":true,\"action\":\"$action\",\"x\":$x,\"y\":$y}")

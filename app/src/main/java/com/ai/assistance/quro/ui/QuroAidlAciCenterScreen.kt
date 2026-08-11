@@ -195,7 +195,7 @@ class MyAciService : BaseAidlAciService() {
 • 能力不出现：确认 onCreateCapabilities 用「参数式 caps.add(...)」正确填充，且 Service 已运行（stopped 态会被唤醒广播拉起）。
 • 绑定直接失败/秒拒：99% 是 Manifest 漏写 <permission> 定义（CALL / DISCOVER / CALL_DANGEROUS），补上即可。
 
-十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的能力（完整清单共 36 项，见仓库 docs/ACI_DEVELOPER_GUIDE.md §13；以下为要点示例，非浏览器专属手册）
+十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的能力（完整清单共 38 项，见仓库 docs/ACI_DEVELOPER_GUIDE.md §13；以下为要点示例，非浏览器专属手册）
 （官方参考被控方。控制方 Zorv AI 经 ACI 调用它，第三方开发者可直接照抄这套能力声明范式（注意：这是示例，你的后端可声明任意能力，不必照搬此列表）：
  全部能力均在 onCreateCapabilities 用 Capability.create 参数式声明、onCall 内 when 分发。）
 

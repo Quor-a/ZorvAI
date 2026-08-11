@@ -7,6 +7,9 @@ import ai.aidl.aci.core.BaseAidlAciService
 import ai.aidl.aci.core.Capability
 import android.content.Intent
 import android.os.Bundle
+import android.util.DisplayMetrics
+import android.view.WindowManager
+import java.util.Random
 import org.json.JSONObject
 import java.net.URLEncoder
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -522,7 +525,7 @@ class QuroControlledAidlAciService : BaseAidlAciService() {
         // browser_mouse（虚拟鼠标：坐标级 tap/drag/scroll/hover，覆盖无稳定ID/无选择器的元素与画布）
         try {
             caps.add(
-                Capability.create("browser_mouse", "虚拟鼠标：在页面指定屏幕坐标模拟鼠标动作（move悬停/click单击/dblclick双击/right右键/down按下/up抬起/drag拖拽/scroll滚动）")
+                Capability.create("browser_mouse", "虚拟鼠标：在页面指定屏幕坐标模拟鼠标动作（move悬停/click单击/dblclick双击/right右键/down按下/up抬起/drag拖拽/scroll滚动）。click/drag/dblclick 拟人化：贝塞尔轨迹+亚像素抖动+可变压力(0.4~0.62)+可变时序，规避机械直线恒压检测。")
                     .addParam("action", "string", true, "动作：move/click/dblclick/right/down/up/drag/scroll")
                     .addParam("x", "int", true, "屏幕绝对像素 X（相对 WebView 左上角，由后端自动换算视图坐标）")
                     .addParam("y", "int", true, "屏幕绝对像素 Y")
@@ -664,7 +667,8 @@ class QuroControlledAidlAciService : BaseAidlAciService() {
                 Capability.create(
                     "tap",
                     "在指定屏幕坐标模拟单击（与 ui_snapshot 同一坐标空间：屏幕绝对像素）。" +
-                        "供语义点击闭环 clickText/clickResourceId 在解析出锚点坐标后调用，实现「像人一样点页面」。"
+                        "供语义点击闭环 clickText/clickResourceId 在解析出锚点坐标后调用，实现「像人一样点页面」。" +
+                        "单击拟人化：贝塞尔逼近+亚像素抖动+可变压力(0.4~0.62)+可变时序。"
                 )
                     .addParam("x", "int", true, "屏幕 x 坐标（像素）")
                     .addParam("y", "int", true, "屏幕 y 坐标（像素）")
@@ -676,6 +680,62 @@ class QuroControlledAidlAciService : BaseAidlAciService() {
             ok++; DiagBuffer.append(TAG, "✓ tap")
         } catch (e: Throwable) {
             fail++; DiagBuffer.append(TAG, "✗ tap: ${e.message}")
+        }
+
+        // ui_diff（语义流：视觉锚点可靠性 + 差分流，事件驱动感知）
+        try {
+            caps.add(
+                Capability.create(
+                    "ui_diff",
+                    "语义流差分流：返回当前可视区域元素（含锚点可靠性评分 reliability）与相对上次快照的" +
+                        " added/removed/modified 节点。控制端据此做事件驱动感知（弹窗出现/页面变化），无需轮询全量快照。"
+                )
+                    .addResult("nodes", "string_array", "节点列表，格式 text|resId|left,top,right,bottom|reliability")
+                    .addResult("count", "int", "当前元素数")
+                    .addResult("added", "int", "新增节点数")
+                    .addResult("removed", "int", "消失节点数")
+                    .addResult("modified", "int", "位移/尺寸变化节点数")
+                    .addResult("added_nodes", "string_array", "新增节点明细")
+                    .addResult("removed_nodes", "string_array", "消失节点明细")
+                    .addFlag(Capability.FLAG_BACKGROUND)
+                    .addFlag(Capability.FLAG_NO_UI)
+            )
+            ok++; DiagBuffer.append(TAG, "✓ ui_diff")
+        } catch (e: Throwable) {
+            fail++; DiagBuffer.append(TAG, "✗ ui_diff: ${e.message}")
+        }
+
+        // inject_touch（L3 事件面 · 伪输入设备 Uinput 桥接）
+        try {
+            caps.add(
+                Capability.create(
+                    "inject_touch",
+                    "设备级真实触摸注入（L3 事件面 / 伪输入设备 Uinput）：把语义动作 down/move/up/click/drag/dblclick " +
+                        "写成内核 input_event，经 /dev/uinput 输出，作用于整台设备（不限于浏览器视图）。" +
+                        "与控制面 AIDL / LocalSocket（L1）经 L4 编排协作：信令走 AIDL、内核事件走 Uinput，二者不是一条线。" +
+                        "仅 root 或系统签名（priv-app + SELinux 放行 uinput_device）构建真实生效；" +
+                        "普通分发版 nativeOpen 失败，本能力明确返回『需 root / 系统签名』而非假装成功。"
+                )
+                    .addParam("action", "string", true, "动作：down / move / up / click / drag / dblclick（默认 click）")
+                    .addParam("x", "int", false, "目标 x 坐标（屏幕像素，与虚拟设备轴范围 1:1）")
+                    .addParam("y", "int", false, "目标 y 坐标（屏幕像素）")
+                    .addParam("dx", "int", false, "drag 终点相对偏移 dx（默认 0）")
+                    .addParam("dy", "int", false, "drag 终点相对偏移 dy（默认 0）")
+                    .addParam("slot", "int", false, "多点触控 slot（默认 0）")
+                    .addParam("tracking_id", "int", false, "MT tracking id（默认 0）")
+                    .addParam("pressure", "int", false, "压力 0~255（默认随拟人化抖动）")
+                    .addParam("major", "int", false, "触摸主轴 major（默认 8）")
+                    .addResult("ok", "boolean", "是否成功")
+                    .addResult("method", "string", "注入通道：uinput")
+                    .addResult("action", "string", "实际执行的动作")
+                    .addResult("events", "int", "发出的内核事件数")
+                    .addResult("error", "string", "失败原因（不可用 / 参数错误等）")
+                    .addFlag(Capability.FLAG_BACKGROUND)
+                    .addFlag(Capability.FLAG_NO_UI)
+            )
+            ok++; DiagBuffer.append(TAG, "✓ inject_touch")
+        } catch (e: Throwable) {
+            fail++; DiagBuffer.append(TAG, "✗ inject_touch: ${e.message}")
         }
 
         DiagBuffer.append(TAG, "onCreateCapabilities 完成: $ok 成功 / $fail 失败 / 总计=${caps.size}")
@@ -740,7 +800,9 @@ class QuroControlledAidlAciService : BaseAidlAciService() {
                 "workspace_write" -> handleWorkspaceWrite(req.params)
                 "workspace_delete" -> handleWorkspaceDelete(req.params)
                 "ui_snapshot" -> handleUiSnapshot(req.params)
+                "ui_diff" -> handleUiDiff(req.params)
                 "tap" -> handleTap(req.params)
+                "inject_touch" -> handleInjectTouch(req.params)
                 else -> {
                     DiagBuffer.append(TAG, "onCall: 未知能力 $cap")
                     AidlAciResponse.error(AidlAciError.CAPABILITY_NOT_FOUND, "unknown: $cap")
@@ -1101,6 +1163,50 @@ class QuroControlledAidlAciService : BaseAidlAciService() {
     }
 
     /**
+     * ui_diff：语义流差分流。返回当前元素（含锚点可靠性）与相对上次快照的 added/removed/modified，
+     * 用于事件驱动感知（弹窗出现/页面变化）。节点格式 text|resId|left,top,right,bottom|reliability。
+     */
+    private fun fmtNode(e: org.json.JSONObject): String {
+        val text = e.optString("text", "").replace("|", " ").trim()
+        val resId = e.optString("resId", "").replace("|", " ").trim()
+        val left = e.optInt("left"); val top = e.optInt("top")
+        val right = e.optInt("right"); val bottom = e.optInt("bottom")
+        val rel = String.format("%.2f", e.optDouble("reliability", 0.0))
+        return "$text|$resId|$left,$top,$right,$bottom|$rel"
+    }
+    private fun fmtArr(arr: org.json.JSONArray?): ArrayList<String> {
+        val out = ArrayList<String>()
+        val a = arr ?: org.json.JSONArray()
+        for (i in 0 until a.length()) out.add(fmtNode(a.getJSONObject(i)))
+        return out
+    }
+    private fun handleUiDiff(params: Bundle?): AidlAciResponse {
+        if (BrowserCore.awaitWebView(2000) == null) {
+            return AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "浏览器尚未就绪：请先调用 browser_open")
+        }
+        val raw = BrowserCore.uiDiff()
+        return try {
+            val o = JSONObject(raw)
+            if (!o.optBoolean("ok", false)) {
+                return AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, o.optString("error", "ui_diff failed"))
+            }
+            val arr = o.optJSONArray("elements") ?: org.json.JSONArray()
+            val nodes = ArrayList<String>()
+            for (i in 0 until arr.length()) nodes.add(fmtNode(arr.getJSONObject(i)))
+            AidlAciResponse.success()
+                .putResult("nodes", nodes)
+                .putResult("count", "${arr.length()}")
+                .putResult("added", "${o.optInt("added")}")
+                .putResult("removed", "${o.optInt("removed")}")
+                .putResult("modified", "${o.optInt("modified")}")
+                .putResult("added_nodes", fmtArr(o.optJSONArray("added_nodes")))
+                .putResult("removed_nodes", fmtArr(o.optJSONArray("removed_nodes")))
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "ui_diff parse: ${e.message}")
+        }
+    }
+
+    /**
      * tap：在屏幕坐标模拟单击（与 ui_snapshot 同一坐标空间）。受控端无系统特权，
      * 由 BrowserCore.mouseAction 在 WebView 视图内派发视图级触摸事件实现点击。
      */
@@ -1126,6 +1232,128 @@ class QuroControlledAidlAciService : BaseAidlAciService() {
         } catch (e: Throwable) {
             AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "tap parse: ${e.message}")
         }
+    }
+
+    /**
+     * inject_touch：设备级真实触摸注入（L3 事件面）。
+     * 惰性打开 Uinput 桥（仅一次）；普通分发版 open 失败 → 明确报错「需 root / 系统签名」，绝不假装成功。
+     * 坐标空间 = 屏幕像素（与虚拟设备轴范围 1:1）；click/drag/dblclick 做拟人化合成（贝塞尔 + 亚像素抖动 + 可变时序）。
+     */
+    private val uinput = UinputBridge()
+    private var uinputOpened: Boolean = false
+    private var uinputTried: Boolean = false
+    private val injectRnd = Random()
+
+    private fun injectorReady(): Boolean {
+        if (uinputOpened) return true
+        if (uinputTried) return false
+        uinputTried = true
+        if (!UinputBridge.libLoaded) return false
+        val (w, h) = screenSize()
+        uinputOpened = uinput.open(w, h)
+        return uinputOpened
+    }
+
+    private fun screenSize(): Pair<Int, Int> {
+        return try {
+            val wm = getSystemService(WindowManager::class.java)
+            val dm = DisplayMetrics()
+            wm.defaultDisplay.getRealMetrics(dm)
+            Pair(dm.widthPixels, dm.heightPixels)
+        } catch (_: Throwable) {
+            Pair(0, 0)
+        }
+    }
+
+    private fun gauss(mean: Float, std: Float): Float = (injectRnd.nextGaussian() * std + mean).toFloat()
+    private fun bez(p0: Float, p1: Float, p2: Float, t: Float): Float =
+        (1 - t) * (1 - t) * p0 + 2 * (1 - t) * t * p1 + t * t * p2
+
+    /** 拟人化单击：起点微抖 → 贝塞尔逼近目标 → 多段 move（亚像素抖动 + 可变压力）→ up。返回事件数。 */
+    private fun synthUinputClick(slot: Int, tid: Int, x: Int, y: Int, pressure: Int, major: Int): Int {
+        val sx = (x + gauss(0f, 2.5f)).toInt()
+        val sy = (y + gauss(0f, 2.5f)).toInt()
+        val cx = (x + gauss(0f, 5f)).toInt()
+        val cy = (y + gauss(0f, 5f)).toInt()
+        var ev = 0
+        uinput.down(slot, tid, sx, sy, pressure, major); ev++
+        val steps = 4 + injectRnd.nextInt(4)
+        for (i in 1..steps) {
+            val t = i.toFloat() / (steps + 1)
+            val px = bez(sx.toFloat(), cx.toFloat(), x.toFloat(), t) + gauss(0f, 0.7f)
+            val py = bez(sy.toFloat(), cy.toFloat(), y.toFloat(), t) + gauss(0f, 0.7f)
+            val pr = ((0.5f + gauss(0f, 0.06f)).coerceIn(0.4f, 0.62f) * 255f).toInt()
+            uinput.move(slot, px.toInt(), py.toInt(), pr, major); ev++
+            try { Thread.sleep(Math.abs(gauss(0f, 6f)).toLong().coerceAtLeast(6L)) } catch (_: InterruptedException) {}
+        }
+        try { Thread.sleep(30) } catch (_: InterruptedException) {}
+        uinput.up(slot); ev++
+        return ev
+    }
+
+    /** 拟人化拖拽：起点 → 贝塞尔（中点带横向抖动）→ 终点，距离自适应步数。返回事件数。 */
+    private fun synthUinputDrag(slot: Int, tid: Int, x: Int, y: Int, dx: Int, dy: Int, pressure: Int, major: Int): Int {
+        val ex = x + dx
+        val ey = y + dy
+        val dist = Math.hypot(dx.toDouble(), dy.toDouble())
+        val steps = Math.max(6, Math.min(20, (dist / 24).toInt()))
+        var ev = 0
+        uinput.down(slot, tid, x, y, pressure, major); ev++
+        for (i in 1..steps) {
+            val t = i.toFloat() / (steps + 1)
+            val px = bez(x.toFloat(), ((x + ex) / 2f) + gauss(0f, 8f), ex.toFloat(), t) + gauss(0f, 0.7f)
+            val py = bez(y.toFloat(), ((y + ey) / 2f) + gauss(0f, 8f), ey.toFloat(), t) + gauss(0f, 0.7f)
+            val pr = ((0.5f + gauss(0f, 0.06f)).coerceIn(0.4f, 0.62f) * 255f).toInt()
+            uinput.move(slot, px.toInt(), py.toInt(), pr, major); ev++
+            try { Thread.sleep(Math.abs(gauss(0f, 6f)).toLong().coerceAtLeast(6L)) } catch (_: InterruptedException) {}
+        }
+        uinput.up(slot); ev++
+        return ev
+    }
+
+    private fun handleInjectTouch(params: Bundle?): AidlAciResponse {
+        val action = (params?.getString("action") ?: "click").lowercase()
+        val x = params?.getString("x")?.toIntOrNull() ?: params?.getInt("x", Int.MIN_VALUE)?.takeIf { it != Int.MIN_VALUE } ?: 0
+        val y = params?.getString("y")?.toIntOrNull() ?: params?.getInt("y", Int.MIN_VALUE)?.takeIf { it != Int.MIN_VALUE } ?: 0
+        val dx = params?.getString("dx")?.toIntOrNull() ?: params?.getInt("dx", 0) ?: 0
+        val dy = params?.getString("dy")?.toIntOrNull() ?: params?.getInt("dy", 0) ?: 0
+        val slot = params?.getString("slot")?.toIntOrNull() ?: params?.getInt("slot", 0) ?: 0
+        val tid = params?.getString("tracking_id")?.toIntOrNull() ?: params?.getInt("tracking_id", 0) ?: 0
+        val major = params?.getString("major")?.toIntOrNull() ?: params?.getInt("major", 8) ?: 8
+        val pressure = params?.getString("pressure")?.toIntOrNull()
+            ?: params?.getInt("pressure", Int.MIN_VALUE)?.takeIf { it != Int.MIN_VALUE }
+            ?: ((0.5f + gauss(0f, 0.06f)).coerceIn(0.4f, 0.62f) * 255f).toInt()
+
+        DiagBuffer.append(TAG, "inject_touch: action=$action x=$x y=$y dx=$dx dy=$dy slot=$slot tid=$tid")
+
+        // 优雅降级：注入器不可用（普通分发版）→ 明确报错，不假装成功（不杜撰功能）
+        if (!injectorReady()) {
+            return AidlAciResponse.error(
+                AidlAciError.INTERNAL_ERROR,
+                "Uinput 注入器不可用：/dev/uinput 不可写。需 root 或系统签名（priv-app + SELinux 放行 uinput_device）构建；" +
+                    "本能力不做视图级降级冒充。"
+            )
+        }
+
+        val ev = when (action) {
+            "down" -> { uinput.down(slot, tid, x, y, pressure, major); 1 }
+            "move" -> { uinput.move(slot, x, y, pressure, major); 1 }
+            "up"   -> { uinput.up(slot); 1 }
+            "drag" -> synthUinputDrag(slot, tid, x, y, dx, dy, pressure, major)
+            "dblclick" -> {
+                var n = synthUinputClick(slot, tid, x, y, pressure, major)
+                try { Thread.sleep(60) } catch (_: InterruptedException) {}
+                n += synthUinputClick(slot, tid, x, y, pressure, major)
+                n
+            }
+            else -> synthUinputClick(slot, tid, x, y, pressure, major) // click
+        }
+
+        return AidlAciResponse.success()
+            .putResult("ok", true)
+            .putResult("method", "uinput")
+            .putResult("action", action)
+            .putResult("events", "$ev")
     }
 
     /** 把 crawlPage 返回的 JSON 拆成结构化字段（容错：缺字段/解析失败给 error）。 */
