@@ -15,8 +15,8 @@ android {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 464
-        versionName = "1.0.28"
+        versionCode = 465
+        versionName = "1.0.29"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -135,6 +135,12 @@ dependencies {
     // （ai.aci.core.*：IAidlAciService / IAidlAciCallback AIDL、AidlAciRequest / AidlAciResponse / Capability），
     // 不再依赖任何跨仓预编译 AAR。受控端 aci-browser 同样依赖 :aci-core，保证协议一致。
     implementation(project(":aidl-aci-core"))
+
+    // 旧契约兼容 AAR（ai.aci.core.*）：浏览器等第三方旧受控端在「ACI→AIDL ACI 重命名」重构前
+    // 基于该契约构建，其 Service 描述符为 ai.aci.core.IACIService。控制端必须持有字节一致的旧类，
+    // 才能 IAidlAciService.Stub.asInterface 成功并正确（反）序列化 ACIRequest/ACIResponse。
+    // 用于双契约绑定：新契约优先，旧契约兜底，保证老受控端能力仍可被发现与调用。
+    implementation(files("libs/aci-core-legacy.aar"))
 
     // 本地离线 LLM 引擎（MNN / llama.cpp）：仅 full 风味依赖，源码编译，满足 F-Droid 红线
     // 注意：fullImplementation 访问器此前因 kotlin-dsl 配置探针死锁（deprecation error 阻断脚本编译 → 访问器永不生成）而

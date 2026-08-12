@@ -2,7 +2,6 @@ package com.ai.assistance.quro.core.aidlaci
 
 import ai.aidl.aci.core.AidlAciResponse
 import ai.aidl.aci.core.Capability
-import ai.aidl.aci.core.IAidlAciService
 import android.os.Bundle
 
 /**
@@ -36,7 +35,7 @@ interface AidlAciAdapter {
  */
 class BinderAciAdapter(
     private val pkg: String,
-    @Suppress("UNUSED_PARAMETER") private val service: IAidlAciService,
+    @Suppress("UNUSED_PARAMETER") private val service: AciServiceProxy,
     private val callFunc: (String, Bundle) -> AidlAciResponse,
     private val capsProvider: () -> List<Capability>,
     private val protocolProvider: () -> String?

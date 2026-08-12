@@ -8,6 +8,7 @@ import com.ai.assistance.quro.core.aidlaci.QuroAidlAciEvents
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciProtocol
 import ai.aidl.aci.core.IAidlAciCallback
 import ai.aidl.aci.core.IAidlAciService
+import ai.aci.core.IACIService as LegacyIACIService
 import ai.aidl.aci.core.AidlAciLocalSocketTransport
 import android.content.ComponentName
 import android.content.Context
@@ -66,7 +67,7 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
             sInstance ?: throw IllegalStateException("QuroAidlAciManager 未初始化，请先调用 init(context)")
     }
 
-    private val serviceMap = ConcurrentHashMap<String, IAidlAciService>()
+    private val serviceMap = ConcurrentHashMap<String, AciServiceProxy>()
     private val connMap = ConcurrentHashMap<String, ServiceConnection>()
     private val capMap = ConcurrentHashMap<String, List<Capability>>()
     private val nameMap = ConcurrentHashMap<String, String>()
@@ -134,11 +135,35 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         val intent = Intent(ACI_ACTION).apply { setClassName(packageName, className) }
         val conn = object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-                val service = IAidlAciService.Stub.asInterface(binder)
-                serviceMap[packageName] = service
+                // 双契约兼容：新契约（ai.aidl.aci.core）优先，旧契约（ai.aci.core，浏览器等旧受控端）兜底。
+                // 旧受控端在「ACI→AIDL ACI 重命名」前基于 ai.aci.core.IACIService 构建，描述符不同，
+                // 仅试新契约会因 asInterface 返回 null 而永远拉不到能力。
+                val proxy: AciServiceProxy? = if (binder != null) {
+                    val newSvc = IAidlAciService.Stub.asInterface(binder)
+                    if (newSvc != null) {
+                        Log.i(TAG, "✅ 已绑定：$packageName（新契约 ai.aidl.aci.core）")
+                        NewAciProxy(newSvc)
+                    } else {
+                        val legacy = LegacyIACIService.Stub.asInterface(binder)
+                        if (legacy != null) {
+                            Log.i(TAG, "✅ 已绑定：$packageName（旧契约 ai.aci.core，兼容第三方受控端）")
+                            LegacyAciProxy(legacy)
+                        } else {
+                            Log.e(TAG, "❌ binder 无法识别为 ACI 服务（契约不匹配）：$packageName")
+                            null
+                        }
+                    }
+                } else {
+                    Log.e(TAG, "❌ onServiceConnected 收到 null binder：$packageName")
+                    null
+                }
+                if (proxy == null) {
+                    latch?.countDown()
+                    return
+                }
+                serviceMap[packageName] = proxy
                 rebindAttempts[packageName] = 0   // 成功绑定清零退避计数
                 lastSeenMap[packageName] = System.currentTimeMillis()
-                Log.i(TAG, "✅ 已绑定：$packageName")
                 QuroAidlAciEvents.emit(QuroAidlAciEvents.EVT_SERVICE_BOUND, packageName, "")
                 // 注册 Binder 死亡监听：远端进程死亡时立即（比 onServiceDisconnected 更早）触发重绑，
                 // 把断线感知从「800ms 轮询」升级为「事件驱动」。
@@ -148,7 +173,7 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
                     try { binder.linkToDeath(recipient, 0) }
                     catch (e: Exception) { Log.w(TAG, "linkToDeath 失败（$packageName）：${e.message}") }
                 }
-                fetchCapabilities(packageName, service)
+                fetchCapabilities(packageName, proxy)
                 latch?.countDown()
             }
 
@@ -234,7 +259,7 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
      * 若从未发现过 → 先重新 discover() 再重绑。
      * 这解决了「aci_list 能看到能力、但 aci_call 报 503 服务未绑定」的绑定生命周期问题。
      */
-    private fun ensureBound(pkg: String): IAidlAciService? {
+    private fun ensureBound(pkg: String): AciServiceProxy? {
         serviceMap[pkg]?.let { return it }
         if (classMap[pkg] == null) {
             Log.i(TAG, "🔍 $pkg 未在缓存中，尝试重新发现")
@@ -313,10 +338,10 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
     // ═══════════════════════════════════
     //  ③ 拉取能力
     // ═══════════════════════════════════
-    private fun fetchCapabilities(pkg: String, service: IAidlAciService) {
+    private fun fetchCapabilities(pkg: String, proxy: AciServiceProxy) {
         Thread {
             try {
-                val raw = service.getCapabilities()   // String[]：每项为单个 Capability 的 JSON
+                val raw = proxy.getCapabilities()   // String[]：每项为单个 Capability 的 JSON
                 val list = mutableListOf<Capability>()
                 if (raw != null) {
                     for (json in raw) {
@@ -332,9 +357,13 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
                 }
                 capMap[pkg] = list
                 QuroAidlAciRegistry.syncFromCapabilities(pkg, list)
-                // 绑定后主动探测 LocalSocket 高速通道（无副作用的连通性探针），
-                // 使首次 aci_call 直接走最优路径，不必等到第一次调用失败才回落 AIDL。
-                val sockUp = runCatching { AidlAciLocalSocketTransport.probe(pkg) }.getOrDefault(false)
+                // 旧契约受控端强制走 AIDL（其 LocalSocket 协议可能与控制端新协议不一致），
+                // 不探测、不启用高速通道，避免首次调用误入不匹配的 socket 路径。
+                val sockUp = if (proxy.isLegacy()) {
+                    false
+                } else {
+                    runCatching { AidlAciLocalSocketTransport.probe(pkg) }.getOrDefault(false)
+                }
                 socketOk[pkg] = sockUp
                 Log.i(TAG, "🔌 $pkg LocalSocket 探测：${if (sockUp) "可用（优先）" else "不可用（回落 AIDL）"}")
                 Log.i(TAG, "📋 $pkg → ${list.size} 项能力（注册表已同步，标签检索可用）")
@@ -467,7 +496,7 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
      * 清掉可能已失效的引用并重绑一次后重试；仍失败则返回明确错误。
      */
     private fun doCallWithRetry(
-        service: IAidlAciService,
+        service: AciServiceProxy,
         req: AidlAciRequest,
         targetPackage: String,
         capability: String
