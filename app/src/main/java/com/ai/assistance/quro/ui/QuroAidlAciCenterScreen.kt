@@ -195,7 +195,7 @@ class MyAciService : BaseAidlAciService() {
 • 能力不出现：确认 onCreateCapabilities 用「参数式 caps.add(...)」正确填充，且 Service 已运行（stopped 态会被唤醒广播拉起）。
 • 绑定直接失败/秒拒：99% 是 Manifest 漏写 <permission> 定义（CALL / DISCOVER / CALL_DANGEROUS），补上即可。
 
-十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的能力（完整清单共 38 项，见仓库 docs/ACI_DEVELOPER_GUIDE.md §13；以下为要点示例，非浏览器专属手册）
+十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的能力（实际共 31 项，见仓库 docs/ACI_DEVELOPER_GUIDE.md §13；以下为要点示例，非浏览器专属手册；以 ACI 中心「已发现的第三方能力清单」实时刷新为准，二者应一致）
 （官方参考被控方。控制方 Zorv AI 经 ACI 调用它，第三方开发者可直接照抄这套能力声明范式（注意：这是示例，你的后端可声明任意能力，不必照搬此列表）：
  全部能力均在 onCreateCapabilities 用 Capability.create 参数式声明、onCall 内 when 分发。）
 
@@ -546,6 +546,34 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
 
             // ── 02 已发现的 ACI 应用（含手动启动）────────────────────────────────
             ChapterLabel("02", "已发现的 ACI 应用")
+            if (statuses.isNotEmpty()) {
+                val totalCaps = statuses.sumOf { it.capabilities.size }
+                val boundCount = statuses.count { it.bound }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("发现统计（实时）", fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "App 数：${statuses.size}（已绑定 $boundCount / 未绑定 ${statuses.size - boundCount}）",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text("能力总数：$totalCaps", style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(4.dp))
+                        statuses.forEach { s ->
+                            val suffix = if (s.bound) "" else "（未绑定）"
+                            Text(
+                                "• ${s.appName}: ${s.capabilities.size} 项$suffix",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (s.bound) Color.Unspecified else Muted
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
             if (statuses.isEmpty()) {
                 InfoBox(
                     "未发现任何 ACI App。安装支持 ACI 协议的第三方 App 后点右上「刷新」；" +
