@@ -239,6 +239,7 @@ agentic 增强（新增 7 · 元素级操控 + 状态/事件/审计）：
 第四波增强（新增 1 · 虚拟鼠标）：
 • browser_mouse(action, x, y, dx?, dy?, button?) —— 在页面「屏幕坐标」模拟鼠标：action ∈ move(悬停)/click/dblclick/right/down/up/drag/scroll；后端按 WebView 在屏位置自动换算视图坐标后派发 MotionEvent（主线程 dispatchTouchEvent / dispatchGenericMotionEvent）。覆盖无稳定ID、无 CSS 选择器的元素与画布交互，与 browser_action(id/selector) 形成「坐标 + 语义」双通道。注：系统 WebView 将触摸事件按触摸处理，右键为尽力而为。
 • http_request(url, method?, headers?, body?) —— HTTP 传输：经 ACI 让受控浏览器代为发起任意 HTTP 请求（GET/POST/PUT/DELETE/PATCH/HEAD 等），返回 status_code / response_headers / response_body。用于调用 Web API、抓取网页、对接第三方服务；**重点支持同网段 LAN 明文**（http://192.168.x.x、http://10.x、*.local mDNS），访问路由器/NAS/智能家居/私有 API 等局域网设备——受控浏览器已放开局域网明文，无需因公网明文限制而犹豫；公网请求仍走 HTTPS。响应体 >15 万字符自动 gzip（response_body_gz），控制端解压还原。
+• inject_touch(action?, x?, y?, dx?, dy?, slot?, tracking_id?, pressure?, major?) —— 设备级真实触摸注入（L3 事件面 / Uinput 伪输入设备）：把 down/move/up/click/drag/dblclick 写成内核 input_event 经 /dev/uinput 输出，作用于整台设备（不限于浏览器视图）；与控制面 AIDL/LocalSocket（L1）经 L4 编排协作（信令走 AIDL、内核事件走 Uinput）。仅 root 或系统签名（priv-app + SELinux 放行 uinput_device）构建真实生效；普通分发版 nativeOpen 失败，本能力明确返回「需 root / 系统签名」而非假装成功。
 
 ⚠️ 调用约束（与上文一致）：所有 WebView 操作（goBack/reload/canGoBack/canGoForward/evaluateJavascript 等）必须由被控方
 在主线程执行（mainHandler.post + CountDownLatch 同步等待），禁止在 ACI Binder 工作线程直接调用 WebView，

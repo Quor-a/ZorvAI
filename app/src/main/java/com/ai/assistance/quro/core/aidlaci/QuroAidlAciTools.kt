@@ -46,7 +46,8 @@ class QuroAidlAciCallTool : QuroTool {
             "若返回 503（服务未绑定），属绑定生命周期问题，框架会自动重绑——直接重试一次即可，禁止用 Shizuku/dumpsys/ROOT 去\"修复\"。其他错误码原样转告用户，不要臆测为权限不足。" +
             "【像人一样操作网页（重点）】受控 ZorvAI 浏览器能真正『交互』，而普通 open_web/ai_browser 的 open 只是被动展示、点不进去。你要像真人浏览那样一步步操作：① browser_open 打开目标页 → ② browser_elements 获取页面上带稳定ID的可点击元素（链接/按钮/输入框）→ ③ browser_action 按ID『点击进入链接/填写表单/滚动』（点进去才会跳转子页面，别只停在首页）→ ④ browser_read 读取点击后的页面内容 → 若页面未加载完用 browser_wait 等待。严禁『只打开首页就结束』——用户要的是你点进去拿到里面的内容。" +
             "【自由组合】你可以把多个 ACI 能力像积木一样链式编排，而不是死板地一步步来：例如先 browser_open 打开页面 → browser_script 执行 JS 取数 → browser_read 回读结果；或先 browser_elements 标注稳定ID → browser_action 按ID操作；需要等页面加载则 browser_wait。" +
-            "【HTTP / 局域网】受控浏览器（ZorvAI 浏览器）暴露 http_request 能力：可经 ACI 让浏览器代为发起任意 HTTP 请求，包括同网段 LAN 明文（http://192.168.x.x、http://10.x、*.local mDNS 等），用于访问路由器/NAS/智能家居后台、私有 API、物联网设备等——受控浏览器已放开局域网明文，无需因公网明文限制而犹豫；公网请求仍走 HTTPS。"
+            "【HTTP / 局域网】受控浏览器（ZorvAI 浏览器）暴露 http_request 能力：可经 ACI 让浏览器代为发起任意 HTTP 请求，包括同网段 LAN 明文（http://192.168.x.x、http://10.x、*.local mDNS 等），用于访问路由器/NAS/智能家居后台、私有 API、物联网设备等——受控浏览器已放开局域网明文，无需因公网明文限制而犹豫；公网请求仍走 HTTPS。" +
+            "【真实触摸注入】受控浏览器额外暴露 inject_touch 能力：经 Uinput 伪输入设备向整台设备注入真实触摸事件（action ∈ down/move/up/click/drag/dblclick，参数 x/y/dx/dy/slot/tracking_id/pressure/major），作用于全设备（不限于浏览器视图），与控制面 AIDL/LocalSocket（L1）经 L4 编排协作（信令走 AIDL、内核事件走 Uinput）。仅 root 或系统签名构建真实生效；普通分发版 nativeOpen 失败会明确返回「需 root / 系统签名」，不会假装成功。"
     override val parametersJson = """{
         "type":"object",
         "properties":{
