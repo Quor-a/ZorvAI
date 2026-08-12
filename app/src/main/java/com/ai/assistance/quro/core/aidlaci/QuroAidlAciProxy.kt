@@ -17,9 +17,11 @@ import android.os.RemoteException
  *
  * 背景：控制端在「ACI → AIDL ACI 重命名」重构中将契约包名由 ai.aci.core 改为 ai.aidl.aci.core、
  * 接口/类名同步更名（IACIService→IAidlAciService、ACIRequest→AidlAciRequest 等）。
- * 旧受控端（如浏览器）仍基于旧契约 ai.aci.core.IACIService 构建，其 Binder 描述符与新契约不符，
- * IAidlAciService.Stub.asInterface 会返回 null → 能力永远拉不到（真机「发现 0 个能力」的根因）。
- * 故在此做双契约兼容：新契约优先，旧契约兜底，统一包成 AciServiceProxy。
+ * 旧受控端（如浏览器）仍基于旧契约 ai.aci.core.IACIService 构建，其 Binder 描述符与新契约不符。
+ * 注意：AIDL 的 asInterface 对远端 binder 永远返回非 null 的 Proxy（仅 binder 本身为 null 才返回 null），
+ * 所以「asInterface 返回 null 才试旧契约」的写法会让旧契约分支成为死代码；正确做法是用
+ * binder.getInterfaceDescriptor() 拿远端真实描述符来选契约（见 QuroAidlAciManager 的 onServiceConnected）。
+ * 这里只负责把选中的契约统一包成 AciServiceProxy，屏蔽新/旧差异。
  */
 interface AciServiceProxy {
     /** 拉取能力声明（每项为一个 Capability 的 JSON 字符串），与契约无关。 */

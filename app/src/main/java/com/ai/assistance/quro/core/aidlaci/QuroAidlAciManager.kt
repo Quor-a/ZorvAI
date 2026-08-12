@@ -67,6 +67,10 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
             sInstance ?: throw IllegalStateException("QuroAidlAciManager 未初始化，请先调用 init(context)")
     }
 
+    init {
+        AciDiag.init(appContext)
+    }
+
     private val serviceMap = ConcurrentHashMap<String, AciServiceProxy>()
     private val connMap = ConcurrentHashMap<String, ServiceConnection>()
     private val capMap = ConcurrentHashMap<String, List<Capability>>()
@@ -103,12 +107,15 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         val intent = Intent(ACI_ACTION)
         val services = pm.queryIntentServices(intent, PackageManager.GET_META_DATA)
         Log.i(TAG, "🔍 ACI 发现：${services.size} 个服务")
+        AciDiag.log(TAG, "discover: queryIntentServices($ACI_ACTION) -> ${services.size} 个服务")
+        AciDiag.log(TAG, "discover: browser(com.ai.assistance.quro.browser) installed=${runCatching { pm.getPackageInfo("com.ai.assistance.quro.browser", 0) }.isSuccess}")
         for (info in services) {
             val si = info.serviceInfo ?: continue
             val pkg = si.packageName
             val cls = si.name
             val label = si.loadLabel(pm).toString()
             Log.d(TAG, "  → $label ($pkg/$cls)")
+            AciDiag.log(TAG, "  discovered: $label ($pkg/$cls)")
             result.add(DiscoveredApp(pkg, cls, label))
             nameMap[pkg] = label
             classMap[pkg] = cls
@@ -139,22 +146,48 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
                 // 旧受控端在「ACI→AIDL ACI 重命名」前基于 ai.aci.core.IACIService 构建，描述符不同，
                 // 仅试新契约会因 asInterface 返回 null 而永远拉不到能力。
                 val proxy: AciServiceProxy? = if (binder != null) {
-                    val newSvc = IAidlAciService.Stub.asInterface(binder)
-                    if (newSvc != null) {
-                        Log.i(TAG, "✅ 已绑定：$packageName（新契约 ai.aidl.aci.core）")
-                        NewAciProxy(newSvc)
-                    } else {
-                        val legacy = LegacyIACIService.Stub.asInterface(binder)
-                        if (legacy != null) {
+                    // 关键修复：AIDL 的 asInterface 对远端 binder 永远返回非 null 的 Proxy（仅当 binder
+                    // 本身为 null 才返回 null）。旧写法「asInterface 返回 null 才试旧契约」会让旧契约分支
+                    // 成为死代码 —— 浏览器（旧契约 ai.aci.core.IACIService）的 binder 被当成新契约 Proxy
+                    // 包装，调 getCapabilities() 时事务码对不上抛 RemoteException → 能力永远(0)。
+                    // 正确做法：用 binder.getInterfaceDescriptor() 拿远端真实描述符来选契约。
+                    val desc = runCatching { binder.getInterfaceDescriptor() }.getOrNull()
+                    AciDiag.log(TAG, "onServiceConnected $packageName binderDesc=$desc")
+                    when (desc) {
+                        "ai.aidl.aci.core.IAidlAciService" -> {
+                            Log.i(TAG, "✅ 已绑定：$packageName（新契约 ai.aidl.aci.core）")
+                            AciDiag.log(TAG, "  -> 选新契约 NewAciProxy")
+                            NewAciProxy(IAidlAciService.Stub.asInterface(binder))
+                        }
+                        "ai.aci.core.IACIService" -> {
                             Log.i(TAG, "✅ 已绑定：$packageName（旧契约 ai.aci.core，兼容第三方受控端）")
-                            LegacyAciProxy(legacy)
-                        } else {
-                            Log.e(TAG, "❌ binder 无法识别为 ACI 服务（契约不匹配）：$packageName")
-                            null
+                            AciDiag.log(TAG, "  -> 选旧契约 LegacyAciProxy")
+                            LegacyAciProxy(LegacyIACIService.Stub.asInterface(binder))
+                        }
+                        else -> {
+                            // 未知/拿不到描述符：ping 探测双契约，哪个通选哪个（防御性兜底）
+                            Log.w(TAG, "⚠️ 未知 binder 描述符：$desc，双契约 ping 探测")
+                            AciDiag.log(TAG, "  -> 未知描述符，ping 探测双契约")
+                            val n = IAidlAciService.Stub.asInterface(binder)
+                            if (runCatching { n.ping() }.getOrDefault(false)) {
+                                AciDiag.log(TAG, "  -> 新契约 ping 成功")
+                                NewAciProxy(n)
+                            } else {
+                                val l = LegacyIACIService.Stub.asInterface(binder)
+                                if (runCatching { l.ping() }.getOrDefault(false)) {
+                                    AciDiag.log(TAG, "  -> 旧契约 ping 成功")
+                                    LegacyAciProxy(l)
+                                } else {
+                                    Log.e(TAG, "❌ 双契约 ping 均失败：$packageName")
+                                    AciDiag.log(TAG, "  -> 双契约 ping 均失败")
+                                    null
+                                }
+                            }
                         }
                     }
                 } else {
                     Log.e(TAG, "❌ onServiceConnected 收到 null binder：$packageName")
+                    AciDiag.log(TAG, "onServiceConnected $packageName -> null binder")
                     null
                 }
                 if (proxy == null) {
@@ -182,6 +215,7 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
                 deathRecipients.remove(packageName)   // 断开即弃旧监听，避免悬空引用
                 socketOk.remove(packageName)          // 复位 socket 探测，便于重连后重探
                 Log.w(TAG, "⚠️ 断开：$packageName（已保留能力缓存，待自动重绑）")
+                AciDiag.log(TAG, "onServiceDisconnected $packageName")
                 QuroAidlAciEvents.emit(QuroAidlAciEvents.EVT_SERVICE_UNBOUND, packageName, "")
                 scheduleRebind(packageName)
             }
@@ -190,6 +224,7 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
             val ok = appContext.bindService(intent, conn, Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT)
             if (ok) connMap[packageName] = conn
             else Log.e(TAG, "❌ 绑定失败：$packageName")
+            AciDiag.log(TAG, "doBind $packageName -> bindService=${ok}")
             ok
         } catch (e: SecurityException) {
             Log.e(TAG, "❌ 绑定 SecurityException：${e.message}")
@@ -342,6 +377,7 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         Thread {
             try {
                 val raw = proxy.getCapabilities()   // String[]：每项为单个 Capability 的 JSON
+                AciDiag.log(TAG, "fetchCapabilities $pkg -> raw=${raw?.size ?: "null"} 项 (legacy=${proxy.isLegacy()})")
                 val list = mutableListOf<Capability>()
                 if (raw != null) {
                     for (json in raw) {
@@ -389,6 +425,7 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "拉取 $pkg 能力失败", e)
+                AciDiag.log(TAG, "fetchCapabilities $pkg EXCEPTION: ${e.javaClass.simpleName}: ${e.message}")
             }
         }.start()
     }
