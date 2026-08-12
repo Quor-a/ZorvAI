@@ -121,6 +121,21 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
             classMap[pkg] = cls
             bindWithWake(pkg, cls)   // 改裸 doBind → 带唤醒，修复停止态绑不上
         }
+        // 兜底：确保主程序自身作为受控端（QuroMainAciService 暴露 http_request + aci_protocol）
+        // 始终出现在「已发现能力」中，使清单完整。部分 ROM / 包可见性实现下，
+        // queryIntentServices 不会把调用方自身的 Service 返回出来（独立 App 不受影响），
+        // 导致列表只剩第三方 App、缺主程序自身 2 项能力。此处显式纳入并去重（同源包已被
+        // 返回时不会重复添加）。
+        val selfPkg = appContext.packageName
+        if (!nameMap.containsKey(selfPkg)) {
+            val selfCls = ".service.QuroMainAciService"
+            nameMap[selfPkg] = runCatching { appContext.applicationInfo.loadLabel(pm).toString() }.getOrDefault("ZorvAI")
+            classMap[selfPkg] = selfCls
+            AciDiag.log(TAG, "discover: 兜底纳入自身受控端 $selfPkg/$selfCls")
+            bindWithWake(selfPkg, selfCls)
+        } else {
+            AciDiag.log(TAG, "discover: 自身受控端已被 queryIntentServices 返回，无需兜底（$selfPkg）")
+        }
         return result
     }
 
