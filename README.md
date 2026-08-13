@@ -523,6 +523,31 @@ ZorvAI 浏览器（受控端）在 v1.0.14 新增 `http_request` 能力：AI 可
 
 > 📋 **完整权限与系统能力申请清单（每项用途 / 授予方式 / 隐私边界）见 [PERMISSIONS.md](./PERMISSIONS.md)。**
 
+### 系统能力与权限清单（18 项）
+
+下表即 PERMISSIONS.md 中用户可授权的系统能力，**均已写入 `AndroidManifest.xml` 并在本版本声明**。带 ⚠️ 者为高敏感项，需用户在系统设置中显式授予后才启用，未授权不会静默越权。
+
+| # | 能力 | 权限 / 实现 | 状态 |
+|---|------|------------|------|
+| 1 | 自由浮窗（悬浮窗） | `SYSTEM_ALERT_WINDOW` | ✅ 已声明 |
+| 2 | 发送全屏通知 | `POST_NOTIFICATIONS` + `setFullScreenIntent`（`USE_FULL_SCREEN_INTENT`） | ✅ 已声明 |
+| 3 | 画中画 PiP | `supportsPictureInPicture` | ✅ 已声明 |
+| 4 | 自动填充服务 | `BIND_AUTOFILL_SERVICE`（`QuroAutofillService`） | ✅ 已实现 |
+| 5 | 内容拖拽（工具调用） | DragAndDrop 框架（跨应用走无障碍桥接） | ✅ 已声明 |
+| 6 | 截屏手势（AI 学习各品牌手势） | 端侧知识库 + `MediaProjection` | ✅ 已声明 |
+| 7 | 屏幕录制（工具调用） | `MediaProjection`（`FOREGROUND_SERVICE_MEDIA_PROJECTION`） | ✅ 已声明 |
+| 8 | 设备和应用通知 | `BIND_NOTIFICATION_LISTENER_SERVICE`（`QuroNotificationListenerService`）⚠️ | ✅ 已实现 |
+| 9 | 闹钟和提醒 | `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM` | ✅ 已声明 |
+| 10 | 开启屏幕 | `WAKE_LOCK` + `FLAG_TURN_SCREEN_ON` | ✅ 已声明 |
+| 11 | 媒体管理应用 | `MANAGE_EXTERNAL_STORAGE` + `READ_MEDIA_*` ⚠️ | ✅ 已声明 |
+| 12 | 网页端访问本机（注册成工具） | 轻量 LAN Web 服务 + NSD（`CHANGE_WIFI_MULTICAST_STATE`） | ✅ 已实现 |
+| 13 | Google 服务（GMS） | 平台依赖 | ℹ️ 无 GMS 时核心能力降级可用 |
+| 14 | Android System WebView | 平台依赖 | ℹ️ 依赖系统 WebView |
+| 15 | 多窗口显示不可调整大小应用 | 开发者选项（需用户手动开启） | 🔧 工具箱引导开启 |
+| 16 | 强制桌面模式（辅助显示屏） | 开发者选项（实验性） | 🔧 工具箱引导开启 |
+| 17 | 覆盖「强制启用 SmartDark」 | 开发者选项 | 🔧 工具箱引导开启 |
+| 18 | USB / 无线调试授权（工具箱内直接授权） | ADB 桥 + Shizuku（`moe.shizuku.manager.permission.API_V23`）⚠️ | ✅ 已实现 |
+
 ---
 
 ## 🗃️ 工具箱 · Toolbox（已有工具 / 文档生成 / 工作区 / 文件管理…）

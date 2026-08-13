@@ -12,6 +12,8 @@
     <!-- 屏幕录制（MediaProjection）前台服务类型（Android 14+ 必须为录屏前台服务显式声明，否则 startForeground 抛异常）。 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 发送全屏通知（对应 PERMISSIONS.md #2）：FLAG_FULL_SCREEN_INTENT 随通知弹出覆盖式界面。 -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- 工具子系统所需权限（运行时权限按需授予；工具在缺失时会返回友好提示） -->
