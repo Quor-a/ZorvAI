@@ -440,11 +440,11 @@ class MyAciService : BaseACIService() {
 
 | 受控端 | 仓库 | 强调色 | 版本 | 能力数 | 一句话定位 |
 |--------|------|--------|------|--------|------------|
-| **WeatherAci** | [Quor-a/weather-aci](https://github.com/Quor-a/weather-aci/releases) | 天蓝 `#38BDF8` | v1.4.0 | 8 | 天气查询（实时 / 预报 / 逐时 / 空气 / 预警 / 指数）+ 通用 `http_request` |
-| **DocAci** | [Quor-a/doc-aci](https://github.com/Quor-a/doc-aci/releases) | 紫罗兰 `#A78BFA` | v1.4.0 | 10 | 本地文档管理（增删改查 / 搜索 / 导入导出），对标 WPS 本地文档 |
-| **TermAci** | [Quor-a/term-aci](https://github.com/Quor-a/term-aci/releases) | 翠绿 `#34D399` | v1.4.0 | 9 | 本地终端（前后台命令 / 任务 / 文件 / 状态），对标 Termux |
-| **Zorv 构建台**（BuildAci） | [Quor-a/build-aci](https://github.com/Quor-a/build-aci/releases) | 琥珀 `#FBBF24` | v1.4.0 | 8 | 端侧 APK 构建（工具链检测 / 源码写入 / 编译 / 状态 / 日志），绝不假装能编 |
-| **FileAci** | [Quor-a/file-aci](https://github.com/Quor-a/file-aci/releases) | 粉红 `#F472B6` | v1.4.1 | 12 | 设备文件管理（含 `MANAGE_EXTERNAL_STORAGE` 设备存储 + 复制 / 解压），对标系统文件管理器 |
+| **WeatherAci** | [Quor-a/weather-aci](https://github.com/Quor-a/weather-aci/releases) | 天蓝 `#38BDF8` | v1.5.0 | 8 | 天气查询（实时 / 预报 / 逐时 / 空气 / 预警 / 指数）+ 通用 `http_request` |
+| **DocAci** | [Quor-a/doc-aci](https://github.com/Quor-a/doc-aci/releases) | 紫罗兰 `#A78BFA` | v1.5.0 | 10 | 本地文档管理（增删改查 / 搜索 / 导入导出） |
+| **TermAci** | [Quor-a/term-aci](https://github.com/Quor-a/term-aci/releases) | 翠绿 `#34D399` | v1.5.0 | 9 | 本地终端（前后台命令 / 任务 / 文件 / 状态） |
+| **Zorv 构建台**（BuildAci） | [Quor-a/build-aci](https://github.com/Quor-a/build-aci/releases) | 琥珀 `#FBBF24` | v1.5.0 | 8 | 端侧 APK 构建（工具链检测 / 源码写入 / 编译 / 状态 / 日志），绝不假装能编 |
+| **FileAci** | [Quor-a/file-aci](https://github.com/Quor-a/file-aci/releases) | 粉红 `#F472B6` | v1.4.2 | 12 | 设备文件管理（含 `MANAGE_EXTERNAL_STORAGE` 设备存储 + 复制 / 解压） |
 
 **各受控端暴露的能力（供 LLM 自动编排）：**
 
