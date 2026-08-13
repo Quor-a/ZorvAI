@@ -31,6 +31,8 @@
 >
 > **🔌 受控端浏览器（ZorvAI 浏览器）已独立开源 · GitHub：[github.com/Quor-a/ZorvBrowser](https://github.com/Quor-a/ZorvBrowser) ｜ Gitee：[gitee.com/ZorvAI/ZorvBrowser](https://gitee.com/ZorvAI/ZorvBrowser)**（独立仓库，含 v1.0.12 源码与 APK）
 >
+> **🤖 5 个官方 ACI 受控端 App（天气 / 文档 / 终端 / 构建 / 文件）已独立开源**，仓库与能力清单见下方「📦 ACI 受控端生态」专节。
+>
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
 > - 🔗 主程序 APK（v1.0.26，含离线引擎，最新）：[app-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.26/app-full-debug.apk)
 > - 🔗 主程序 APK（v1.0.26，F-Droid 风味）：[QuroAI-fdroid-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.26/QuroAI-fdroid-debug.apk)
@@ -432,6 +434,30 @@ class MyAciService : BaseACIService() {
 
 ---
 
+### 📦 ACI 受控端生态 · 5 个官方受控端 App
+
+除官方参考实现「ZorvAI 浏览器」外，Zorv AI 还配套 **5 个独立开源的 ACI 受控端 App**（天气 / 文档 / 终端 / 构建 / 文件）。它们各自是独立仓库、独立 Release、独立 ZorvAI 风格自适应图标；安装后 Zorv AI 主程序会在同设备自动发现并按需调用，把对应能力交给 AI 在对话中静默使用，也可在「ACI 管理中心 / LAN 控制台」手动操作。
+
+| 受控端 | 仓库 | 强调色 | 版本 | 能力数 | 一句话定位 |
+|--------|------|--------|------|--------|------------|
+| **WeatherAci** | [Quor-a/weather-aci](https://github.com/Quor-a/weather-aci/releases) | 天蓝 `#38BDF8` | v1.4.0 | 8 | 天气查询（实时 / 预报 / 逐时 / 空气 / 预警 / 指数）+ 通用 `http_request` |
+| **DocAci** | [Quor-a/doc-aci](https://github.com/Quor-a/doc-aci/releases) | 紫罗兰 `#A78BFA` | v1.4.0 | 10 | 本地文档管理（增删改查 / 搜索 / 导入导出），对标 WPS 本地文档 |
+| **TermAci** | [Quor-a/term-aci](https://github.com/Quor-a/term-aci/releases) | 翠绿 `#34D399` | v1.4.0 | 9 | 本地终端（前后台命令 / 任务 / 文件 / 状态），对标 Termux |
+| **Zorv 构建台**（BuildAci） | [Quor-a/build-aci](https://github.com/Quor-a/build-aci/releases) | 琥珀 `#FBBF24` | v1.4.0 | 8 | 端侧 APK 构建（工具链检测 / 源码写入 / 编译 / 状态 / 日志），绝不假装能编 |
+| **FileAci** | [Quor-a/file-aci](https://github.com/Quor-a/file-aci/releases) | 粉红 `#F472B6` | v1.4.1 | 12 | 设备文件管理（含 `MANAGE_EXTERNAL_STORAGE` 设备存储 + 复制 / 解压），对标系统文件管理器 |
+
+**各受控端暴露的能力（供 LLM 自动编排）：**
+
+- **WeatherAci（8）**：`weather_search` · `weather_now` · `weather_forecast` · `weather_hourly` · `weather_air` · `weather_alerts` · `weather_indices` · `http_request`
+- **DocAci（10）**：`doc_list` · `doc_read` · `doc_create` · `doc_update` · `doc_append` · `doc_delete` · `doc_rename` · `doc_search` · `doc_import` · `doc_export`
+- **TermAci（9）**：`term_exec` · `term_exec_bg` · `term_jobs` · `term_job_output` · `term_kill` · `term_read_file` · `term_write_file` · `term_list_dir` · `term_status`
+- **Zorv 构建台（8）**：`build_tools` · `build_init` · `build_set_source` · `build_list` · `build_assemble` · `build_status` · `build_logs` · `build_stop`
+- **FileAci（12）**：`file_roots` · `file_list` · `file_read` · `file_write` · `file_mkdir` · `file_rename` · `file_delete` · `file_move` · `file_copy` · `file_unzip` · `file_info` · `file_search`
+
+> 每个受控端的完整 README（特性 / 图标 / 权限表 / 能力明细 / 操控台 / 构建 / 接入 §16）见各自仓库首页；接入方式统一遵循 [ACI 开发者手册](./docs/ACI_DEVELOPER_GUIDE.md)。受控端仅声明 `ai.aci.permission.*`（normal 级，随 AAR 合并），不含 Android 危险权限，无需运行时弹窗。
+
+---
+
 ## 🖥️ ACI 控制台 UI（LAN 控制台）
 
 > 「LAN 控制台」即 **ACI 控制台 UI**：让受控端 App 在 Zorv AI 里直接显示一个**可交互的控制台**，用于手动操作受控端（如浏览器的打开 / 读 HTML / 爬取 / 运行 JS / 查找 / 截图 / 抓包等），而不必走 LLM 自动编排。
@@ -494,6 +520,8 @@ ZorvAI 浏览器（受控端）在 v1.0.14 新增 `http_request` 能力：AI 可
 | **L3** 设备管理员 | `DeviceAdmin` | 设备策略级能力（锁定 / 擦除等） | 在设置中激活设备管理员 |
 | **L4** ROOT | `su` | 完整 root 权限，命令走 `sh -c` 执行 | 设备已 root |
 | **L5** 应用内 Linux | `proot` + Alpine rootfs | 真 Linux 用户态执行 | 用户自备 `proot` 二进制与 Alpine rootfs |
+
+> 📋 **完整权限与系统能力申请清单（每项用途 / 授予方式 / 隐私边界）见 [PERMISSIONS.md](./PERMISSIONS.md)。**
 
 ---
 

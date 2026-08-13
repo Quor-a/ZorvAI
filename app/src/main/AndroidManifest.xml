@@ -9,12 +9,16 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- 屏幕录制（MediaProjection）前台服务类型（Android 14+ 必须为录屏前台服务显式声明，否则 startForeground 抛异常）。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- 工具子系统所需权限（运行时权限按需授予；工具在缺失时会返回友好提示） -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- 网页端访问本机（LAN Web 服务 / NSD 服务发现，对应 PERMISSIONS.md #12） -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
@@ -32,6 +36,8 @@
     <!-- 精确闹钟（Android 12+）：声明后 canScheduleExactAlarms() 才可能返回 true；
          即便不授权，QuroScheduledTask 也已降级为 setWindow 避免 SecurityException 崩溃。 -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 精确闹钟（闹钟类应用免用户二次授权；与 SCHEDULE_EXACT_ALARM 互补，覆盖「闹钟和提醒」项） -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <!-- 权限管理：电池优化豁免引导 -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -148,6 +154,7 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Quro"
+        android:resizeableActivity="true"
         android:networkSecurityConfig="@xml/network_security_config">
 
         <activity
@@ -156,6 +163,7 @@
             android:label="@string/app_name"
             android:theme="@style/Theme.Quro"
             android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
             android:windowSoftInputMode="adjustPan">
 
             <!-- v196 起由 MainActivity 直接作为 LAUNCHER，开屏改为应用内 800ms 覆盖层，
@@ -298,6 +306,30 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/quro_accessibility_service" />
+        </service>
+
+        <!-- 自动填充服务（对应 PERMISSIONS.md #4）：用户在系统「自动填充服务」中选中 Zorv AI 后启用，
+             可在其它 App 输入框提供 AI 生成的填充建议。
+             权限 BIND_AUTOFILL_SERVICE 为系统签名保护级，第三方无法伪造绑定。 -->
+        <service
+            android:name=".service.QuroAutofillService"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+        </service>
+
+        <!-- 通知侦听服务（对应 PERMISSIONS.md #8）：用户授权「通知访问」后，
+             可读取/清除通知、触发通知按钮、读取/设置 DND。
+             权限 BIND_NOTIFICATION_LISTENER_SERVICE 为系统保护级。 -->
+        <service
+            android:name=".service.QuroNotificationListenerService"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
         </service>
 
         <!--
