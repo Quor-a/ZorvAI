@@ -65,8 +65,23 @@ set(MNN_EVALUATION OFF CACHE BOOL "Build evaluation" FORCE)
 set(MNN_BUILD_CONVERTER OFF CACHE BOOL "Build converter" FORCE)
 set(MNN_BUILD_TRAIN OFF CACHE BOOL "Build train" FORCE)
 
+# 关掉 LLM 引擎自带的 demo 可执行文件（含 qwen3_tts_demo）。
+# 这些 demo 默认 ON 且无视 MNN_BUILD_DEMO；其中 qwen3_tts_demo.cpp 引用
+# audio/audio.hpp（仅 MNN_BUILD_AUDIO=ON 才加 include 路径），本构建未开 AUDIO
+# 会直接 fatal error。App 只用 llm 引擎库，不需要这些 demo，关掉即可。
+set(MNN_LLM_BUILD_DEMO OFF CACHE BOOL "Build LLM demo" FORCE)
+
 # 添加 MNN 主项目
 add_subdirectory(${MNN_SOURCE_DIR} ${QURO_MNN_BINARY_DIR})
+
+# 【QuroAI 构建补丁】把 qwenVideoProcess 兜底桩挂到 MNN 的 llm 目标。
+# 上游 omni.cpp 在 LLM_SUPPORT_VISION/MNN_BUILD_OPENCV 关闭时把 qwenVideoProcess 整函数
+# 编译掉，但同文件 videoProcess 仍调用它，导致 libMNN.so 链接 undefined symbol。
+# 本项目 tarball 拉取 MNN、不含 OpenCV 子模块，无法开启 OpenCV，故在此提供稳定符号。
+# 桩与 omni.cpp.o 同属 llm 目标（链接进 libMNN.so），直接消解引用。
+if(TARGET llm)
+    target_sources(llm PRIVATE ${CMAKE_CURRENT_LIST_DIR}/src/main/cpp/quro_omni_video_stub.cpp)
+endif()
 
 # 包含 JNI 绑定代码（只包含我们需要的文件）
 add_library(

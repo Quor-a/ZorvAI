@@ -33,7 +33,13 @@ android {
                     "-DMNN_BUILD_SHARED_LIBS=ON",
                     "-DMNN_SEP_BUILD=OFF",
                     "-DMNN_BUILD_TOOLS=OFF",
+                    // 注意：当前锁定的 MNN commit（master @ d8fe7c18）已把 LLM 引擎自带 demo 的开关
+                    // 从旧名 MNN_BUILD_DEMO 改名为 MNN_LLM_BUILD_DEMO（默认 ON）。旧名在本版本是 no-op，
+                    // 会导致 qwen3_tts_demo 等 demo 被编译，而 qwen3_tts_demo.cpp 引用 audio/audio.hpp
+                    // （仅 MNN_BUILD_AUDIO=ON 才加 include 路径），本构建未开 AUDIO → fatal error。
+                    // 必须显式关掉新名，app 只用 llm 引擎库，不需要任何 demo 可执行文件。
                     "-DMNN_BUILD_DEMO=OFF",
+                    "-DMNN_LLM_BUILD_DEMO=OFF",
                     "-DMNN_BUILD_CONVERTER=OFF",
                     "-DMNN_USE_LOGCAT=ON",
                     "-DMNN_BUILD_TEST=OFF",

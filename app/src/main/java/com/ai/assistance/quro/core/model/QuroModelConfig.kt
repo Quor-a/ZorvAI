@@ -20,7 +20,7 @@ data class QuroModelConfig(
     val maxTokens: Int = 4096,
     val enableTools: Boolean = true,
     val maxToolRounds: Int = 0,           // 工具调用轮次上限：0=不限制（默认，工具调用不设次数上限，ReAct 循环持续到模型给出最终答复，内置 200 轮安全天花板防失控）；>0 时按该值封顶
-    val contextWindow: Int = 16000,       // 上下文窗口（输入 token 预算）：0=不限制；非 0 时按预算从最旧轮次裁剪历史，始终保留 system（身份/人格/工具指引），避免长对话撑爆窗口被网关静默丢弃前部上下文或 tools 字段
+    val contextWindow: Int = 32000,       // 上下文窗口（输入 token 预算）：0=不限制；非 0 时按预算从最旧轮次裁剪历史，始终保留 system（身份/人格/工具指引），避免长对话撑爆窗口被网关静默丢弃前部上下文或 tools 字段。默认调大到 32000：完整 system prompt（含 50 工具菜单+CMS+ACI+记忆+经验）已占 ~11.5k token，16000 时留给历史对话的预算极少，长对话从前部被裁 → 表现为「记不住上下文」。
     val customProviderName: String = "",   // 自定义厂商展示名（provider=="OTHER" 时有效）
     val localModelPath: String = "",       // 本地离线模型路径（provider 为 MNN/LLAMA_CPP 时有效）
     val useFullTools: Boolean = true,      // 完整工具集开关：默认开启（全面开放，下发 fullSpecs ~50 个）；设置入口已移除，由默认全开保证工具可用

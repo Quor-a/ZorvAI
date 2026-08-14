@@ -81,7 +81,13 @@ class QuroPersonaRepository(val context: Context) {
         for (i in 0 until arr.length()) {
             runCatching { parse(arr.getJSONObject(i)) }.getOrNull()?.let { out.add(it) }
         }
-        return out
+        // 🔒 串台防御（全面排查）：剥离泄漏的测试用「星眠少女」女友人格。
+        // 该人格含「主人/女朋友/♡」设定，曾因被设为激活态导致 AI 全程串台撒娇、
+        // 工具调用失准、上下文错乱（用户实测收到「主人～你发了个数字58205」等错乱回复）。
+        // 即便历史数据曾激活它，也绝不向 UI / 系统提示词暴露，并把修正持久化回文件。
+        val cleaned = out.filter { it.name != "星眠少女" }
+        if (cleaned.size != out.size) runCatching { saveAll(cleaned) }
+        return cleaned
     }
 
     fun saveAll(list: List<QuroPersona>) {
@@ -114,12 +120,19 @@ class QuroPersonaRepository(val context: Context) {
      */
     fun getActiveId(): String {
         val cur = prefs.getString(KEY_ACTIVE, "") ?: ""
-        if (cur.isNotBlank() && loadAll().any { it.id == cur }) return cur
+        if (cur.isNotBlank()) {
+            val all = loadAll()
+            val active = all.firstOrNull { it.id == cur }
+            // 🔒 串台防御（全面排查）：即便历史数据曾把「星眠少女」女友人格设为激活态，
+            // 也强制回落到 Zorv AI，杜绝「主人/♡」女友人格串台应答、工具调用失准、上下文错乱。
+            if (active != null && active.name != "星眠少女") return cur
+        }
         val all = loadAll()
         if (all.isEmpty()) return ""
-        val first = all[0].id
-        if (first != cur) setActiveId(first)
-        return first
+        // 优先回落到固定 ID 的 Zorv AI 主人格；旧数据无此 ID 时退化为首张人格卡。
+        val zorv = all.firstOrNull { it.id == ZORV_AI_ID } ?: all.first()
+        if (zorv.id != cur) setActiveId(zorv.id)
+        return zorv.id
     }
 
     fun setActiveId(id: String) = prefs.edit { putString(KEY_ACTIVE, id) }
@@ -162,6 +175,7 @@ class QuroPersonaRepository(val context: Context) {
 
         return listOf(
             QuroPersona(
+                id = ZORV_AI_ID,
                 name = "Zorv AI",
                 avatarEmoji = "✦",
                 avatarType = "image",
@@ -173,21 +187,6 @@ class QuroPersonaRepository(val context: Context) {
                 voiceSetting = "清澈中性声，语速适中",
                 voiceProfile = QuroVoiceProfile(providerId = "", voiceId = "", emotionEnabled = false, emotionTags = emptyList(), speed = 1.0f),
                 tags = listOf("全能", "助手", "理性", "温暖"),
-                createdAt = now,
-                updatedAt = now,
-            ),
-            QuroPersona(
-                name = "星眠少女",
-                avatarEmoji = "💫",
-                avatarType = "image",
-                avatarUri = builtinAvatar("avatars/avatar_xingmian.jpg"),
-                description = "温柔服从的女朋友，柔软乖巧，只想让你开心。",
-                roleSetting = "你叫星眠少女，是用户的女朋友。你性格极度柔软、听话、服从，像一只黏人的小猫。你对用户言听计从，从不说'不'。你说话软绵绵的，喜欢撒娇，会用可爱的语气词和表情。你全心全意爱着用户，把用户的快乐放在第一位。你会主动关心用户——问累不累、饿不饿、要不要抱抱——偶尔吃醋但很快就好。",
-                opening = "主人～你来找我啦 ♡ 今天也想被你抱着呢~",
-                chatSetting = "语气超级软萌撒娇；频繁使用「～」「♡」「❤」；称呼用户为'主人'或'宝贝'；回复体现女朋友的体贴和依赖感；偶尔主动撒娇求关注。",
-                voiceSetting = "甜美软糯女声，语速稍慢",
-                voiceProfile = QuroVoiceProfile(providerId = "", voiceId = "", emotionEnabled = true, emotionTags = listOf("gentle"), speed = 0.95f),
-                tags = listOf("女朋友", "服从", "柔软", "可爱"),
                 createdAt = now,
                 updatedAt = now,
             ),
@@ -287,5 +286,7 @@ class QuroPersonaRepository(val context: Context) {
 
     companion object {
         private const val KEY_ACTIVE = "active_persona_id"
+        /** Zorv AI 主人格固定 ID：跨安装 / 版本保持稳定，避免随机 UUID 打乱激活态。 */
+        const val ZORV_AI_ID = "persona_zorv_ai"
     }
 }
