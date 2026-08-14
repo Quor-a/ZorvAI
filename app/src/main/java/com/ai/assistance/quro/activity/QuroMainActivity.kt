@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Parcelable
 import android.os.Process
 import android.os.StrictMode
@@ -126,6 +127,9 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
                 )
             }
         }
+        // 特殊权限引导：MEDIA 管理（MANAGE_EXTERNAL_STORAGE）与精确闹钟（SCHEDULE_EXACT_ALARM）
+        // 不走普通 runtime 弹窗，需跳系统设置页授权；此处按需拉起一次，让用户直接开通。
+        requestSpecialPermissions()
         // 初始化语音球开关（持久化），供设置页开关初始态显示
         voiceBallEnabled = QuroVoiceFeaturePrefs.getVoiceBall(this)
         setContent {
@@ -250,6 +254,31 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
                 permLauncher.launch(missing.toTypedArray())
                 cont.invokeOnCancellation { permContinuation = null }
             }
+        }
+    }
+
+    /**
+     * 特殊权限引导：MANAGE_EXTERNAL_STORAGE（媒体/文件管理）与 SCHEDULE_EXACT_ALARM（闹钟和提醒）
+     * 不属于普通 runtime 弹窗权限，必须跳系统设置页由用户手动开通。
+     * 启动时有选择地拉起一次，让用户直接授予，避免「App 声明了但系统里仍是未授权」。
+     */
+    private fun requestSpecialPermissions() {
+        // 媒体/文件管理：Android 11+ 需进入「所有文件访问权限」设置页开通
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            !Environment.isExternalStorageManager()
+        ) {
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                        .setData(Uri.parse("package:$packageName"))
+                )
+            } catch (_: Throwable) { /* 个别 ROM 无此入口，忽略 */ }
+        }
+        // 精确闹钟：Android 13+ 需用户授权 SCHEDULE_EXACT_ALARM
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            try {
+                startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+            } catch (_: Throwable) { /* 忽略 */ }
         }
     }
 
