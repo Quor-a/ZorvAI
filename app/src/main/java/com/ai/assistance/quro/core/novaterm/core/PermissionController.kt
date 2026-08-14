@@ -68,6 +68,7 @@ object PermissionController {
         "theme" to PermissionLevel.USER,
         "alias" to PermissionLevel.USER,
         "export" to PermissionLevel.USER,
+        "getprop" to PermissionLevel.USER,
         "run" to PermissionLevel.USER,
         "ps" to PermissionLevel.DEVELOPER,
         "top" to PermissionLevel.DEVELOPER,

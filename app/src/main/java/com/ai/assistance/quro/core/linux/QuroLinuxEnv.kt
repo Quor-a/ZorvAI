@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.linux
 
 import android.content.Context
+import android.net.ConnectivityManager
 import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
@@ -184,7 +185,7 @@ object QuroLinuxEnv {
 
         _state.value = SandboxState.Installing("初始化…")
         makeWritable(rootfsDir)
-        writeResolvConf(rootfsDir)
+        prepareRuntimeExtras(context, rootfsDir)
 
         var updated = false
         var lastErr = ""
@@ -225,8 +226,11 @@ object QuroLinuxEnv {
         val tmp = tmpPath(context)
         val loader = loaderPath(context)
         val dir = sandboxDir(context)
+        // 运行期资产刷新（resolv.conf 用设备 DNS / getprop 垫片），让 AI 经 linux_* / terminal_*
+        // 工具驱动的命令同样拥有联网能力与 getprop。
+        prepareRuntimeExtras(context, File(rootfs))
         return try {
-            val pb = ProcessBuilder(
+            val args = mutableListOf(
                 proot,
                 "--rootfs=$rootfs",
                 "--bind=/dev",
@@ -234,10 +238,15 @@ object QuroLinuxEnv {
                 "--bind=/sys",
                 "--bind=$home:/root",
                 "--bind=$tmp:/tmp",
-                "-0",
-                "-w", "/root",
-                "/bin/sh", "-c", command,
             )
+            // getprop 垫片可回落读 /system/build.prop，仅当该文件本就可读时绑定（避免整体启动失败）。
+            if (File("/system/build.prop").canRead()) {
+                args.add("--bind=/system/build.prop:/system/build.prop")
+            }
+            args.add("-0")
+            args.add("-w"); args.add("/root")
+            args.add("/bin/sh"); args.add("-c"); args.add(command)
+            val pb = ProcessBuilder(args)
             pb.directory(File(rootfs).parentFile)
             pb.environment().apply {
                 put("HOME", "/root")
@@ -282,7 +291,11 @@ object QuroLinuxEnv {
     fun shellLaunch(context: Context): Pair<String, List<String>>? {
         val st = probe(context)
         if (!st.available || st.prootPath == null || st.rootfsPath == null) return null
-        val args = listOf(
+        val rootfs = File(st.rootfsPath)
+        // 运行期资产（resolv.conf 用设备 DNS / getprop 垫片）随网络与设备状态刷新，
+        // 避免安装时一次性快照过期（如换了 WiFi、或升级后属性变化）。
+        prepareRuntimeExtras(context, rootfs)
+        val args = mutableListOf(
             "--rootfs=${st.rootfsPath}",
             "--bind=/dev",
             "--bind=/proc",
@@ -293,6 +306,11 @@ object QuroLinuxEnv {
             "-w", "/root",
             "/bin/sh",
         )
+        // getprop 垫片可回落读 /system/build.prop，故把宿主真机 build.prop 只读绑进沙箱
+        // （仅当该文件本就可读，避免 proot 因源不存在而整体启动失败）。
+        if (File("/system/build.prop").canRead()) {
+            args.add("--bind=/system/build.prop:/system/build.prop")
+        }
         return st.prootPath to args
     }
 
@@ -469,9 +487,141 @@ object QuroLinuxEnv {
         }
     }
 
-    private fun writeResolvConf(rootfs: File) {
+    /**
+     * 写 rootfs 的 /etc/resolv.conf。
+     *
+     * **网络修复（用户「要完整的」之一）**：旧实现硬编码 `nameserver 8.8.8.8 / 8.8.4.4`，
+     * 在运营商/企业网屏蔽 Google DNS 时终端 `ping`/`apk`/`curl` 全部解析失败。
+     * 改为优先采用**设备当前网络真实 DNS**（由 [deviceDnsServers] 经 ConnectivityManager
+     * 取 LinkProperties.dnsServers），缺失再回落到硬编码的公共 DNS。这样终端联网行为与
+     * 宿主 App 一致，切换 WiFi/数据也不会失效。
+     */
+    private fun writeResolvConf(rootfs: File, context: Context) {
         val etc = File(rootfs, "etc"); etc.mkdirs()
-        File(etc, "resolv.conf").writeText("nameserver 8.8.8.8\nnameserver 8.8.4.4\n")
+        val servers = deviceDnsServers(context)
+        val body = if (servers.isNotEmpty()) {
+            servers.joinToString("\n") { "nameserver $it" }
+        } else {
+            "nameserver 8.8.8.8\nnameserver 8.8.4.4"
+        }
+        File(etc, "resolv.conf").writeText(body + "\n")
+    }
+
+    /**
+     * 取设备当前网络真实 DNS 服务器列表（含 IPv4/IPv6），供 rootfs resolv.conf 使用。
+     * 需要 [android.Manifest.permission.ACCESS_NETWORK_STATE]（已在 app 与 aidl-aci-browser 两处 manifest 声明）。
+     */
+    private fun deviceDnsServers(context: Context): List<String> {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return emptyList()
+            val net = cm.activeNetwork ?: return emptyList()
+            val lp = cm.getLinkProperties(net) ?: return emptyList()
+            lp.dnsServers.mapNotNull { it.hostAddress?.takeIf { h -> h.isNotBlank() } }
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    /**
+     * 终端内 getprop 垫片脚本（Alpine 没有 Android 的 getprop）。
+     * 数据来自 [prepareRuntimeExtras] 写入的 /etc/quro_props.prop，并回落读只读绑入的
+     * /system/build.prop；无参时打印全部属性（与 Android getprop 行为一致）。
+     */
+    private const val GETPROP_SHIM = """#!/bin/sh
+# QuroAI getprop shim (proot/Linux) — 把宿主 App 在启动时抓取的 ro.* 属性暴露给沙箱。
+PROPS="/etc/quro_props.prop"
+if [ ${'$'}# -ge 1 ]; then
+  key="${'$'}1"
+  val=$(grep -m1 "^${'$'}{key}=" "${'$'}PROPS" 2>/dev/null | cut -d= -f2-)
+  if [ -z "${'$'}val" ] && [ -r /system/build.prop ]; then
+    val=$(grep -m1 "^${'$'}{key}=" /system/build.prop 2>/dev/null | cut -d= -f2-)
+  fi
+  if [ -z "${'$'}val" ] && [ ${'$'}# -ge 2 ]; then
+    val="${'$'}2"
+  fi
+  printf '%s\n' "${'$'}val"
+else
+  cat "${'$'}PROPS" 2>/dev/null
+  if [ -r /system/build.prop ]; then cat /system/build.prop; fi
+fi
+"""
+
+    /**
+     * 反射读取隐藏 API `android.os.SystemProperties.get`，用于补全 [Build] 未直接暴露的属性
+     * （如 ro.build.date、ro.serialno、persist.sys.timezone 等）。失败（无权限/API 变动）返回 null。
+     */
+    private fun sysprop(name: String): String? = try {
+        val c = Class.forName("android.os.SystemProperties")
+        val m = c.getMethod("get", String::class.java, String::class.java)
+        val v = m.invoke(null, name, "") as? String
+        v?.takeIf { it.isNotBlank() }
+    } catch (_: Throwable) { null }
+
+    /** 从 [Build] + SystemProperties 反射构造 ro.* 属性快照（最常见的查询全部覆盖）。 */
+    private fun buildProps(context: Context): LinkedHashMap<String, String> {
+        val m = LinkedHashMap<String, String>()
+        fun put(k: String, v: String?) { if (v != null && v.isNotBlank()) m[k] = v }
+        put("ro.build.version.sdk", Build.VERSION.SDK_INT.toString())
+        put("ro.build.version.release", Build.VERSION.RELEASE)
+        put("ro.build.version.incremental", Build.VERSION.INCREMENTAL)
+        put("ro.build.version.codename", Build.VERSION.CODENAME)
+        put("ro.build.version.preview_sdk", Build.VERSION.PREVIEW_SDK_INT.toString())
+        put("ro.build.version.security_patch", Build.VERSION.SECURITY_PATCH)
+        put("ro.build.version.base_os", Build.VERSION.BASE_OS)
+        put("ro.build.id", Build.ID)
+        put("ro.build.display.id", Build.DISPLAY)
+        put("ro.build.user", Build.USER)
+        put("ro.build.host", Build.HOST)
+        put("ro.build.type", Build.TYPE)
+        put("ro.build.tags", Build.TAGS)
+        put("ro.build.fingerprint", Build.FINGERPRINT)
+        put("ro.product.model", Build.MODEL)
+        put("ro.product.brand", Build.BRAND)
+        put("ro.product.name", Build.PRODUCT)
+        put("ro.product.device", Build.DEVICE)
+        put("ro.product.board", Build.BOARD)
+        put("ro.product.manufacturer", Build.MANUFACTURER)
+        put("ro.product.hardware", Build.HARDWARE)
+        put("ro.hardware", Build.HARDWARE)
+        put("ro.product.cpu.abi", Build.SUPPORTED_ABIS.firstOrNull())
+        put("ro.product.cpu.abilist", Build.SUPPORTED_ABIS.joinToString(","))
+        put("ro.product.cpu.abilist32", Build.SUPPORTED_32_BIT_ABIS.joinToString(","))
+        put("ro.product.cpu.abilist64", Build.SUPPORTED_64_BIT_ABIS.joinToString(","))
+        for (k in listOf(
+            "ro.build.date", "ro.build.date.utc", "ro.serialno", "ro.kernel.qemu",
+            "ro.config.low_ram", "persist.sys.timezone", "ro.crypto.state",
+            "ro.crypto.type", "ro.debuggable", "ro.secure", "ro.bootmode",
+            "ro.revision", "ro.build.characteristics",
+        )) {
+            sysprop(k)?.let { put(k, it) }
+        }
+        return m
+    }
+
+    /**
+     * 每次启动终端/执行命令前，把运行期需要的「额外资产」刷进 rootfs：
+     * 1. resolv.conf —— 用设备真实 DNS（网络修复，见 [writeResolvConf]）；
+     * 2. /etc/quro_props.prop —— ro.* 属性快照（getprop 垫片数据源）；
+     * 3. /usr/local/bin/getprop —— 垫片脚本，使 `getprop ro.build.version.sdk` 等可用（[GETPROP_SHIM]）。
+     *
+     * rootfs 在 setup 时已 makeWritable，且均在应用私有目录，写操作安全；任何一步失败都只记日志，不致命。
+     */
+    private fun prepareRuntimeExtras(context: Context, rootfs: File) {
+        try {
+            writeResolvConf(rootfs, context)
+            val props = buildProps(context)
+            File(rootfs, "etc").mkdirs()
+            File(rootfs, "etc/quro_props.prop").writeText(
+                props.entries.joinToString("\n") { "${it.key}=${it.value}" } + "\n"
+            )
+            val bin = File(rootfs, "usr/local/bin"); bin.mkdirs()
+            val shim = File(bin, "getprop")
+            shim.writeText(GETPROP_SHIM)
+            shim.setExecutable(true, false)
+        } catch (e: Exception) {
+            Log.w(TAG, "prepareRuntimeExtras 部分失败（非致命）: ${e.message}")
+        }
     }
 
     private fun writeRepositories(rootfs: File, mirrorBase: String) {

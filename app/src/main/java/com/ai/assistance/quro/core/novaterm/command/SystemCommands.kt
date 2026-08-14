@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.core.novaterm.command
 
+import android.os.Build
 import com.ai.assistance.quro.core.novaterm.core.*
 import com.ai.assistance.quro.core.novaterm.core.PermissionController
 import com.ai.assistance.quro.core.novaterm.core.SessionManager
@@ -156,4 +157,83 @@ private fun parseProcForTop(): List<String> {
             "$pid  $name  $cmdline"
         } else null
     }
+}
+
+/**
+ * 读取 Android 系统属性（QuroTerm 沙盒此前无此命令 —— 故 `getprop` 直接 command not found）。
+ * 数据源优先级：/system/build.prop（若可读）→ Build.* 补全常用 ro.* → SystemProperties 反射兜底任意 key。
+ * 支持 `getprop`（列出全部）与 `getprop <key> [default]`。
+ */
+object GetpropCommand : BuiltinCommand {
+    override val name = "getprop"
+    override fun execute(sessionId: String, cmd: Command): CommandResult {
+        val key = cmd.getArg(0)
+        return try {
+            val props = loadProps()
+            if (key.isEmpty()) {
+                val text = props.entries.sortedBy { it.key }
+                    .joinToString("\n") { "${it.key} = ${it.value}" }
+                CommandResult.ok(text.ifBlank { "(no properties)" })
+            } else {
+                val v = props[key] ?: sysProp(key)
+                if (!v.isNullOrBlank()) {
+                    CommandResult.ok(v)
+                } else {
+                    val def = cmd.getArg(1)
+                    if (def.isNotEmpty()) CommandResult.ok(def)
+                    else CommandResult.err("getprop: property [$key] not found")
+                }
+            }
+        } catch (e: Exception) {
+            CommandResult.err("getprop: ${e.message}")
+        }
+    }
+    override fun help() = "getprop [key] [default]  - 读取 Android 系统属性（ro.build.* 等）"
+
+    private fun loadProps(): MutableMap<String, String> {
+        val map = linkedMapOf<String, String>()
+        // 1) 解析 /system/build.prop（普通应用可读，mode 0644；不可读则跳过）
+        try {
+            val f = java.io.File("/system/build.prop")
+            if (f.canRead()) {
+                f.readLines().forEach { line ->
+                    val t = line.trim()
+                    if (t.isEmpty() || t.startsWith("#")) return@forEach
+                    val idx = t.indexOf('=')
+                    if (idx > 0) map[t.substring(0, idx).trim()] = t.substring(idx + 1).trim()
+                }
+            }
+        } catch (_: Exception) { }
+        // 2) Build.* 补全常用 ro.*（稳定、不依赖文件可读性）
+        map.putIfAbsent("ro.build.version.sdk", Build.VERSION.SDK_INT.toString())
+        map.putIfAbsent("ro.build.version.release", Build.VERSION.RELEASE)
+        map.putIfAbsent("ro.build.version.incremental", Build.VERSION.INCREMENTAL)
+        map.putIfAbsent("ro.build.version.codename", Build.VERSION.CODENAME)
+        map.putIfAbsent("ro.build.version.security_patch", Build.VERSION.SECURITY_PATCH)
+        map.putIfAbsent("ro.build.id", Build.ID)
+        map.putIfAbsent("ro.build.display.id", Build.DISPLAY)
+        map.putIfAbsent("ro.build.fingerprint", Build.FINGERPRINT)
+        map.putIfAbsent("ro.build.type", Build.TYPE)
+        map.putIfAbsent("ro.build.tags", Build.TAGS)
+        map.putIfAbsent("ro.product.brand", Build.BRAND)
+        map.putIfAbsent("ro.product.model", Build.MODEL)
+        map.putIfAbsent("ro.product.device", Build.DEVICE)
+        map.putIfAbsent("ro.product.manufacturer", Build.MANUFACTURER)
+        map.putIfAbsent("ro.product.board", Build.BOARD)
+        map.putIfAbsent("ro.product.hardware", Build.HARDWARE)
+        map.putIfAbsent("ro.hardware", Build.HARDWARE)
+        Build.SUPPORTED_ABIS.firstOrNull()?.let { map.putIfAbsent("ro.product.cpu.abi", it) }
+        map.putIfAbsent("ro.kernel.version", kernelVersion())
+        return map
+    }
+
+    private fun sysProp(key: String): String? = try {
+        val c = Class.forName("android.os.SystemProperties")
+        val m = c.getMethod("get", String::class.java, String::class.java)
+        (m.invoke(null, key, "") as? String)?.ifBlank { null }
+    } catch (_: Exception) { null }
+
+    private fun kernelVersion(): String = try {
+        System.getProperty("os.version") ?: "unknown"
+    } catch (_: Exception) { "unknown" }
 }

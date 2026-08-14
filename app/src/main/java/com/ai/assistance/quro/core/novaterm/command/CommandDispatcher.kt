@@ -32,6 +32,7 @@ object CommandDispatcher {
         register(CpuInfoCommand)      // cpuinfo
         register(BatteryCommand)      // battery
         register(NetStatCommand)      // netstat
+        register(GetpropCommand)      // getprop
 
         register(EchoCommand)         // echo
         register(GrepCommand)         // grep
