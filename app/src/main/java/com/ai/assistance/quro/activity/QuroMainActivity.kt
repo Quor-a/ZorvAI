@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.Parcelable
 import android.os.Process
+import android.app.AlarmManager
 import android.os.StrictMode
 import androidx.lifecycle.lifecycleScope
 import com.ai.assistance.quro.BuildConfig
@@ -274,11 +275,17 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
                 )
             } catch (_: Throwable) { /* 个别 ROM 无此入口，忽略 */ }
         }
-        // 精确闹钟：Android 13+ 需用户授权 SCHEDULE_EXACT_ALARM
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            try {
-                startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
-            } catch (_: Throwable) { /* 忽略 */ }
+        // 精确闹钟：Android 12+ 需用户授权 SCHEDULE_EXACT_ALARM；但本应用同时声明了
+        // USE_EXACT_ALARM（系统自动授予、无需用户操作），故 canScheduleExactAlarms() 在
+        // 绝大多数情况下本就为 true。仅当确实未授权时才跳转设置页——避免每次启动都被无条件
+        // 弹走、又因在那张列表里找不到本应用而陷入「打开→跳设置→找不到→返回→再跳」的死循环。
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val am = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            if (am != null && !am.canScheduleExactAlarms()) {
+                try {
+                    startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                } catch (_: Throwable) { /* 个别 ROM 无此入口，忽略 */ }
+            }
         }
     }
 

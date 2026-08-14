@@ -256,7 +256,13 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         val cls = classMap[pkg] ?: return
         val attempt = (rebindAttempts[pkg] ?: 0) + 1
         rebindAttempts[pkg] = attempt
-        val delay = (800L * (1 shl (attempt - 1))).coerceAtMost(8000L)
+        // 指数退避：800ms × 2^(n-1)，指数上限 4（最多 12.8s），再 clamp 到 [0, 8000]ms。
+        // 关键修复：旧写法 `800L * (1 shl (attempt-1))` 当 attempt-1≥31 时，`1 shl 31` 在 Int
+        // 范围内溢出为负数（-2147483648），乘积变成 -1717986918400；coerceAtMost 只卡上限不卡
+        // 下限，负值漏进 Thread.sleep 抛 IllegalArgumentException（崩溃根因：
+        // millis < 0: -1717986918400）。这里把指数与结果都夹紧，杜绝溢出。
+        val exp = (attempt - 1).coerceAtMost(4)
+        val delay = (800L * (1 shl exp)).coerceIn(0L, 8000L)
         Thread {
             try { Thread.sleep(delay) } catch (ignored: InterruptedException) {}
             if (serviceMap[pkg] == null) {
