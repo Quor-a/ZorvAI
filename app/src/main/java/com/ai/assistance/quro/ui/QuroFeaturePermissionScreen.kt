@@ -3,6 +3,7 @@ package com.ai.assistance.quro.ui
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -182,6 +183,28 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            // 本机自诊断：直接读出「已安装版本 / 系统版本 / 本包是否声明两项特殊权限」，
+            // 避免「应用不在系统列表里」这类无法判断到底是旧包还是系统未索引的扯皮。
+            val pkgInfo = remember(ctx) {
+                runCatching {
+                    ctx.packageManager.getPackageInfo(ctx.packageName, PackageManager.GET_PERMISSIONS)
+                }.getOrNull()
+            }
+            val installedVersion = pkgInfo?.let {
+                val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) it.longVersionCode else it.versionCode.toLong()
+                "${it.versionName} ($code)"
+            } ?: "未知"
+            val declaredPerms = pkgInfo?.requestedPermissions?.toSet().orEmpty()
+            val hasExactAlarm = declaredPerms.contains("android.permission.SCHEDULE_EXACT_ALARM")
+            val hasAllFiles = declaredPerms.contains("android.permission.MANAGE_EXTERNAL_STORAGE")
+            val androidVer = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
+            DiagnosticCard(
+                installedVersion = installedVersion,
+                androidVer = androidVer,
+                hasExactAlarm = hasExactAlarm,
+                hasAllFiles = hasAllFiles,
+            )
+
             if (manager == null) {
                 Text("当前上下文无法初始化权限管理器（缺少 Activity），请联系开发者。", color = Muted)
                 return@Column
@@ -331,6 +354,49 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             )
         }
+    }
+}
+
+/** 本机自诊断卡片：把「到底装了哪个版本 / 系统是否支持 / 本包是否声明特殊权限」直接显示出来。 */
+@Composable
+private fun DiagnosticCard(
+    installedVersion: String,
+    androidVer: String,
+    hasExactAlarm: Boolean,
+    hasAllFiles: Boolean,
+) {
+    val pass = MaterialTheme.colorScheme.primary
+    val fail = MaterialTheme.colorScheme.error
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .border(1.dp, Line, RoundedCornerShape(16.dp))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("本机诊断", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("已安装版本", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(installedVersion, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("系统版本", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(androidVer, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("已声明 SCHEDULE_EXACT_ALARM", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (hasExactAlarm) "是 ✓" else "否 ✗", color = if (hasExactAlarm) pass else fail, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("已声明 MANAGE_EXTERNAL_STORAGE", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (hasAllFiles) "是 ✓" else "否 ✗", color = if (hasAllFiles) pass else fail, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+        }
+        Text(
+            "两项均为「是」但系统「特殊应用权限」列表仍无本应用：① 重开设置页或重启设备让系统重新索引；② 闹钟与提醒列表需 Android 12+，所有文件访问需 Android 11+；③ 确认安装的是本版本而非旧包（旧包仍含 USE_EXACT_ALARM 会被系统隐藏）。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
