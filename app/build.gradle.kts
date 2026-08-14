@@ -184,6 +184,12 @@ dependencies {
     // 开源地址：https://github.com/fork-maintainers/iceraven-browser
     implementation("org.mozilla.geckoview:geckoview:140.0.20250707120347")
 
+    // 健康数据（Health Connect，Android 13+）：Android 14+ 系统内置，旧版经此库桥接，二者 API 一致。
+    // 提供 HealthConnectClient / 权限契约 / Steps·HeartRate·Sleep·Exercise 等 Record 读写。
+    // 注意 artifact 为 connect-client（非 health-connect-client）。
+    // 与 Manifest 的 <meta-data android:name="health_permissions"> + res/values/health_permissions.xml 对应。
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha06")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation(libs.org.json)
 }

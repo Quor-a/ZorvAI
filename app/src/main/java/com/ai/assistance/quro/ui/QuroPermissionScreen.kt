@@ -101,6 +101,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
     var pending by remember { mutableStateOf<Pair<PrivilegeLevel, String>?>(null) }
     var deferred = remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
     var showAudit by remember { mutableStateOf(false) }
+    var showFeature by remember { mutableStateOf(false) }
 
     /** 安全取值：即便某等级缺失也不崩，退化为「探测中」。 */
     fun st(level: PrivilegeLevel): PrivilegeState =
@@ -204,6 +205,10 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
 
     if (showAudit) {
         QuroAuditScreen(onClose = { showAudit = false })
+    }
+
+    if (showFeature) {
+        QuroFeaturePermissionScreen(onClose = { showFeature = false })
     }
 
     QuroTheme {
@@ -434,6 +439,31 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                     StdPermRow(item = item, onClick = { onClickStd(item) })
                     if (idx < stdItems.lastIndex) {
                         HorizontalDivider(color = Line)
+                    }
+                }
+            }
+
+            // ---- 功能权限（媒体 / 健康 / 闹钟 / 数据源）入口 ----
+            GroupCaption("功能权限（AI 助手能力）")
+            SetGroup {
+                Surface(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .clickable { showFeature = true }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                ) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(AccentSoft), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Tune, null, Modifier.size(20.dp), tint = Accent)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("功能权限引导", fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                            Text("媒体读写 · 健康数据 · 精确闹钟 · 数据源优先级", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Icon(Icons.Filled.ChevronRight, null, tint = Muted)
                     }
                 }
             }

@@ -159,6 +159,18 @@
         android:resizeableActivity="true"
         android:networkSecurityConfig="@xml/network_security_config">
 
+        <!-- Health Connect：声明本应用支持读写的数据类型（Android 14+ 系统内置；旧版需集成 health-connect-client 库）。
+             与 res/values/health_permissions.xml 对应，系统据此在授权页展示可授权项。 -->
+        <meta-data
+            android:name="health_permissions"
+            android:resource="@array/health_permissions" />
+
+        <!-- 精确闹钟/健康提醒触发接收器：闹钟到点后弹出通知（内部，不导出） -->
+        <receiver
+            android:name=".permissions.WorkoutAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
         <activity
             android:name=".activity.QuroMainActivity"
             android:exported="true"
@@ -224,6 +236,12 @@
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/*" />
+            </intent-filter>
+
+            <!-- Health Connect 权限说明意图：当用户在 Health Connect 授权页点「为什么需要这些权限」，
+                 系统回调到本 Activity 展示 rationale。声明后此处会被系统拉起。 -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>
         </activity>
 
