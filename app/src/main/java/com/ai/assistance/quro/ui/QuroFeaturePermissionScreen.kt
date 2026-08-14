@@ -69,6 +69,10 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
 
     var mediaState by remember { mutableStateOf<PermState>(PermState.NeedRequest) }
     var alarmState by remember { mutableStateOf<PermState>(PermState.NeedRequest) }
+    var overlayState by remember { mutableStateOf<PermState>(PermState.NeedSettings) }
+    var fitnessState by remember { mutableStateOf<PermState>(PermState.NeedRequest) }
+    var allFilesState by remember { mutableStateOf<PermState>(PermState.NeedSettings) }
+    var assistantState by remember { mutableStateOf<PermState>(PermState.NeedRequest) }
     var healthState by remember { mutableStateOf<PermState?>(null) }   // null = 探测中
     var healthAvail by remember { mutableStateOf<Boolean?>(null) }     // null = 探测中
     var exportMsg by remember { mutableStateOf<String?>(null) }
@@ -84,6 +88,10 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
         val m = manager ?: return
         mediaState = m.mediaState()
         alarmState = m.alarmState()
+        overlayState = m.overlayState()
+        fitnessState = m.fitnessState()
+        allFilesState = m.allFilesState()
+        assistantState = m.assistantState()
         scope.launch {
             val avail = HealthPermissionHelper.isHealthConnectAvailable(ctx)
             healthAvail = avail
@@ -130,6 +138,12 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
     val healthLauncher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) {
         scope.launch { refresh() }
     }
+    val fitnessLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        scope.launch { refresh() }
+    }
+    val assistantLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        scope.launch { refresh() }
+    }
 
     // 首次进入异步探测（Health Connect 状态需 IO）
     LaunchedEffect(Unit) { refresh() }
@@ -163,7 +177,7 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
             }
 
             Text(
-                "AI 助手需要这些权限来读写你的文件、健康数据、并设置提醒。所有请求都走系统标准授权流程，你可随时在系统设置中撤销。",
+                "AI 助手需要这些权限来读写你的文件与文档、健康与健身数据、识别运动状态、常驻锁屏/悬浮窗、设为默认数字助理，并设置精准提醒。所有请求都走系统标准授权流程，你可随时在系统设置中撤销。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -236,7 +250,71 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
                 note = if (alarmState == PermState.NeedSettings) "需到「设置 → 应用 → 精确闹钟」手动开启。" else alarmMsg,
             )
 
-            // ---- 4. 数据源与优先级 ----
+            // ---- 4. 锁屏显示 / 悬浮窗 ----
+            FeaturePermCard(
+                icon = Icons.Filled.Home,
+                title = "锁屏显示",
+                caption = "SYSTEM_ALERT_WINDOW",
+                state = overlayState,
+                rationale = "让 AI 助手以悬浮窗 / 锁屏卡片形式常驻显示，随时唤出对话与快捷操作。该权限为特殊权限，需到设置页开启。",
+                actionLabel = if (overlayState == PermState.Granted) "前往设置（可关闭）" else "开启锁屏显示",
+                onAction = { manager.overlay.openOverlaySettings() },
+                note = if (overlayState == PermState.Granted) "已授权，可在系统设置中关闭。" else "需到「设置 → 应用 → 特殊应用权限 → 显示在其他应用上层」手动开启。",
+            )
+
+            // ---- 5. 健身与运动 ----
+            val fitnessAction = when (fitnessState) {
+                PermState.Granted -> "前往应用设置" to { openAppSettings(ctx) }
+                PermState.NeedRequest -> "请求健身与运动权限" to {
+                    manager.fitness.hasRequested = true
+                    fitnessLauncher.launch(manager.fitness.permissionsNeeded())
+                }
+                else -> "前往应用设置" to { openAppSettings(ctx) }
+            }
+            FeaturePermCard(
+                icon = Icons.Filled.Favorite,
+                title = "健身与运动",
+                caption = "ACTIVITY_RECOGNITION",
+                state = fitnessState,
+                rationale = "读取设备活动识别（步行 / 跑步等），自动记录运动状态、联动健康数据。Android 10+ 需运行时授予。",
+                actionLabel = fitnessAction.first,
+                onAction = fitnessAction.second,
+                note = if (fitnessState == PermState.NeedSettings) "已被永久拒绝，需到「设置 → 应用 → 权限」手动开启。" else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) "当前系统版本无需此权限。" else null,
+            )
+
+            // ---- 6. 文件与文档（所有文件访问）----
+            FeaturePermCard(
+                icon = Icons.Filled.Description,
+                title = "文件与文档",
+                caption = "MANAGE_EXTERNAL_STORAGE",
+                state = allFilesState,
+                rationale = "访问设备全部文件系统（含文档、下载、外部 SD），便于跨目录读取/整理你的文件与资料。该权限为特殊权限，需到设置页开启。",
+                actionLabel = if (allFilesState == PermState.Granted) "前往设置（可关闭）" else "开启所有文件访问",
+                onAction = { manager.allFiles.openAllFilesSettings() },
+                note = if (allFilesState == PermState.Granted) "已授权，可在系统设置中关闭。" else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "需到「设置 → 应用 → 特殊应用权限 → 所有文件访问权限」手动开启。" else "当前系统版本无需此特殊权限。",
+            )
+
+            // ---- 7. 数字助理应用完整功能 ----
+            val assistantAction = when (assistantState) {
+                PermState.Granted -> "前往默认助理设置" to { openAppSettings(ctx) }
+                PermState.NeedRequest -> "设为默认数字助理" to {
+                    val intent = manager.assistant.createRequestIntent()
+                    if (intent != null) assistantLauncher.launch(intent) else openAppSettings(ctx)
+                }
+                else -> "前往应用设置" to { openAppSettings(ctx) }
+            }
+            FeaturePermCard(
+                icon = Icons.Filled.Assistant,
+                title = "数字助理应用完整功能",
+                caption = "ROLE_ASSISTANT",
+                state = assistantState,
+                rationale = "将 Zorv AI 设为系统默认数字助理，接管长按 Home / 侧键唤醒的助手手势，提供全局语音/文本助理能力。经系统角色选择框授予。",
+                actionLabel = assistantAction.first,
+                onAction = assistantAction.second,
+                note = if (assistantState == PermState.Granted) "已是默认数字助理。可在「设置 → 默认应用 → 数字助理」更改。" else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) "当前系统版本不支持数字助理角色。" else "经系统「默认数字助理」选择框授予，确认后即可全局唤醒。",
+            )
+
+            // ---- 8. 数据源与优先级 ----
             DataSourceCard(
                 enabled = healthAvail == true && healthState == PermState.Granted,
                 stepsBySource = stepsBySource,

@@ -76,6 +76,10 @@
          缺少它时无法通过 MediaStore 读取音频库（如录音文件、音乐文件）。 -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
+    <!-- 健身与运动（ACTIVITY_RECOGNITION，Android 10+ 运行时危险权限）：读取步数/活动识别，
+         用于「健身与运动」能力（如自动识别步行/跑步）。API29+ 需运行时弹窗授予。 -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
     <!-- 文件写入权限（Android 9 及以下）：Android 10+ 由 Scoped Storage 接管，
          但对低版本设备（minSdk=26）仍需声明才能往外部存储写文件/文档。 -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
@@ -244,6 +248,15 @@
                  系统回调到本 Activity 展示 rationale。声明后此处会被系统拉起。 -->
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+
+            <!-- 数字助理角色（ROLE_ASSISTANT）入口：声明 ACTION_ASSIST 使本应用可被系统识别为
+                 数字助理候选，用户在「默认数字助理」设置里选择 Zorv AI 后即承担助理职责
+                 （接管长按 Home / 侧键唤醒的助手手势、提供语音/文本助理能力）。
+                 配合 RoleManager.createRequestRoleIntent(ROLE_ASSISTANT) 申请角色。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
