@@ -2,7 +2,11 @@ package com.ai.assistance.quro.ui
 
 import android.content.Context
 import android.content.Intent
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
+import org.json.JSONObject
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -19,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -36,12 +41,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.Image
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.ai.assistance.quro.core.QuroBrowserBridge
 import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.ai.assistance.quro.core.cards.QuroChatCardStore
@@ -195,6 +202,7 @@ fun QuroChatCardView(card: QuroChatCard, onCommand: (String) -> Unit) {
         is QuroChatCard.TagCloudCard -> TagCloudCardView(card, onCommand)
         is QuroChatCard.BadgeCard -> BadgeCardView(card, onCommand)
         is QuroChatCard.AvatarGroupCard -> AvatarGroupCardView(card, onCommand)
+        is QuroChatCard.MermaidCard -> MermaidCardView(card)
     }
 }
 
@@ -1450,6 +1458,71 @@ private fun AvatarGroupCardView(card: QuroChatCard.AvatarGroupCard, onCommand: (
                 }
             }
         }
+    }
+}
+
+/**
+ * AI 自写图表（v300）：用 WebView 加载 assets 内的 Mermaid.js 离线渲染 AI 下发的 Mermaid 文本。
+ *
+ * - 客户端【不内置】任何固定流程图；AI 爱画什么画什么（flowchart / 时序图 / 状态机 / 类图 / 思维导图 / git 图 …）。
+ * - 深浅主题自适应：theme 缺省时按系统深浅色选 default / dark。
+ * - 渲染完成后通过 AndroidBridge.onHeight 回调把真实高度回传给 Compose，WebView 据此自适应高度（无写死裁切）。
+ */
+@Composable
+private fun MermaidCardView(card: QuroChatCard.MermaidCard) {
+    val cs = MaterialTheme.colorScheme
+    val density = LocalDensity.current.density
+    var heightPx by remember(card.id) { mutableStateOf(160) }
+
+    val dark = isSystemInDarkTheme()
+    val theme = run {
+        val t = card.theme.trim().lowercase()
+        if (t in setOf("default", "dark", "forest", "neutral", "base")) t else if (dark) "dark" else "default"
+    }
+
+    CardShell(card.title) {
+        if (card.source.isBlank()) {
+            Text("（无图表内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+            return@CardShell
+        }
+        AndroidView(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height((heightPx / density).dp)
+                .clip(RoundedCornerShape(10.dp)),
+            factory = { context ->
+                WebView(context).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.allowFileAccess = true
+                    settings.loadsImagesAutomatically = true
+                    settings.setSupportZoom(false)
+                    settings.builtInZoomControls = false
+                    setBackgroundColor(0x00000000)
+                    addJavascriptInterface(object {
+                        @JavascriptInterface
+                        fun onHeight(px: Int) {
+                            if (px > 0) heightPx = px
+                        }
+
+                        @JavascriptInterface
+                        fun onReady() {}
+                    }, "AndroidBridge")
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
+                            val src = JSONObject.quote(card.source)
+                            view?.evaluateJavascript("window.__render($src, '$theme')", null)
+                        }
+                    }
+                    loadUrl("file:///android_asset/www/mermaid_render.html")
+                }
+            },
+            update = { wv ->
+                val src = JSONObject.quote(card.source)
+                wv.evaluateJavascript("window.__render($src, '$theme')", null)
+            }
+        )
     }
 }
 

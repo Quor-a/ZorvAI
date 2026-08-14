@@ -439,6 +439,24 @@ sealed interface QuroChatCard {
     ) : QuroChatCard {
         data class Avatar(val name: String, val url: String = "", val command: String = "")
     }
+
+    // ───────────── v300 可视化编程 / AI 自写图表 ─────────────
+
+    /**
+     * AI 自写的可视化图表（v300 新增）：客户端**不内置任何固定流程图**，
+     * 只渲染 AI 通过 `source` 下发的 Mermaid 文本（flowchart / sequenceDiagram /
+     * stateDiagram-v2 / classDiagram / mindmap / gitGraph / pie / timeline …）。
+     * 即「要可视化的 AI 自己写出来，而不是内置」——客户端仅提供通用 Mermaid 渲染器。
+     *
+     * @param source AI 生成的 Mermaid 源码（多行字符串）
+     * @param theme  可选主题：default | dark | forest | neutral | base；缺省时按系统深浅色自动选 default/dark
+     */
+    data class MermaidCard(
+        override val id: String,
+        override val title: String,
+        val source: String,
+        val theme: String = "",
+    ) : QuroChatCard
 }
 
 /**
@@ -755,6 +773,12 @@ fun parseComponentSpec(spec: String): QuroChatCard? {
                     }
                 } ?: emptyList(),
             )
+            // ── v300 可视化编程 / AI 自写图表 ──
+            "mermaid" -> QuroChatCard.MermaidCard(
+                id, title,
+                s.optString("source", "").ifBlank { s.optString("text", "") },
+                s.optString("theme", "").ifBlank { "" },
+            )
             else -> null
         }
     } catch (e: Exception) {
@@ -821,6 +845,7 @@ fun serializeCard(card: QuroChatCard): JSONObject {
         is QuroChatCard.TagCloudCard -> "tagcloud"
         is QuroChatCard.BadgeCard -> "badge"
         is QuroChatCard.AvatarGroupCard -> "avatargroup"
+        is QuroChatCard.MermaidCard -> "mermaid"
     })
     o.put("id", card.id)
     o.put("title", card.title)
@@ -967,6 +992,10 @@ fun serializeCard(card: QuroChatCard): JSONObject {
         is QuroChatCard.AvatarGroupCard -> o.put("avatars", JSONArray().also { a ->
             card.avatars.forEach { av -> a.put(JSONObject().apply { put("name", av.name); put("url", av.url); put("command", av.command) }) }
         })
+        is QuroChatCard.MermaidCard -> {
+            o.put("source", card.source)
+            o.put("theme", card.theme.ifBlank { JSONObject.NULL })
+        }
     }
     return o
 }
@@ -1101,6 +1130,11 @@ fun parseCard(o: JSONObject): QuroChatCard? {
                     val it = o.optJSONArray("avatars")!!.optJSONObject(i)
                     QuroChatCard.AvatarGroupCard.Avatar(it.optString("name", ""), it.optString("url", ""), it.optString("command", ""))
                 },
+            )
+            "mermaid" -> QuroChatCard.MermaidCard(
+                id, title,
+                o.optString("source", ""),
+                if (o.has("theme") && !o.isNull("theme")) o.optString("theme") else "",
             )
             else -> null
         }

@@ -38,6 +38,7 @@ class UiWidgetTool : QuroTool {
         "toolcall{tool,status(pending|running|done|error),progress?,message?}; stream{lines:[...]}; mediaplay{mediaType(audio|video),uri,label?}; " +
 "quickreply{replies:[...],multi?}; quickaction{actions:[{label,icon,command}]}; timeline{events:[{time,title,desc?,status?}]}; heatmap{values:[],weeks?}; compare{left_*,right_*}; radar{axes:[{name,value}]}; timer{seconds,command?}; carousel{slides:[{title,body,color?}]}; kanban{columns:[{name,items:[]}]}; " +
 "color{colors:[hex],label?,command?}; counter{label?,value?,min?,max?,step?,command?}; breadcrumb{crumbs:[{label,command}]}; tagcloud{tags:[{label,weight,command?}]}; badge{badges:[{label,color?,command?}]}; avatargroup{avatars:[{name,url?,command?}]}; " +
+"mermaid{source(多行 Mermaid 文本),theme?(default|dark|forest|neutral|base,缺省按系统深浅色自动选)}：AI 自写的可视化图表（flowchart/时序图/状态机/类图/思维导图/git图…），客户端不内置固定图，只渲染 AI 下发的 Mermaid 源码；" +
 "此外，AI 消息中若含链接（yb.tencent.com / yuanbao.tencent.com），会自动渲染为「链接回答」预览卡，点击在应用内浏览器打开该回答（无需经本工具）。" +
 "legacy: todo{items:[{text,done}]}; chart{chart_type,series:[{label,value}]}; note{body,lang?}; actions{actions:[{label,command}]}。" +
         "command 语法：ui_open_* / ui_toggle_* / linux:install / run:<命令> / widget:<任意自定义>，" +
@@ -49,7 +50,7 @@ class UiWidgetTool : QuroTool {
             val jo = JSONObject(arguments)
             val spec = jo.optString("spec", "").ifBlank { arguments }
             val card = parseComponentSpec(spec)
-                ?: return "❌ 未知组件类型或 spec 解析失败（请检查 type 与字段，支持 button/toggle/slider/progress/stat/alert/table/list/segmented/pie/rating/countdown/tabs/expandable/form/chips/steps/gauge/media/info/toolcall/stream/mediaplay/quickreply/quickaction/timeline/heatmap/compare/radar/timer/carousel/kanban 及 v221 新增 color/counter/breadcrumb/tagcloud/badge/avatargroup，详见 CARD_CATALOG；legacy 仍支持 todo/chart/note/actions；链接 yb.tencent.com 会自动生成预览卡）"
+                ?: return "❌ 未知组件类型或 spec 解析失败（请检查 type 与字段，支持 button/toggle/slider/progress/stat/alert/table/list/segmented/pie/rating/countdown/tabs/expandable/form/chips/steps/gauge/media/info/toolcall/stream/mediaplay/quickreply/quickaction/timeline/heatmap/compare/radar/timer/carousel/kanban 及 v221 新增 color/counter/breadcrumb/tagcloud/badge/avatargroup 与 v300 新增 mermaid（AI 自写 Mermaid 图表），详见 CARD_CATALOG；legacy 仍支持 todo/chart/note/actions；链接 yb.tencent.com 会自动生成预览卡）"
             // 优先挂进聊天气泡（onCard 桥 → 当前助手消息）；桥未连接时退回全局卡片栏兜底
             val bridge = QuroUiActionBridge.onCard
             if (bridge != null) {
