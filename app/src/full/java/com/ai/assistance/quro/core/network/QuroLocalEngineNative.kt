@@ -170,10 +170,181 @@ private fun stripResidualThink(raw: String): String {
     val norm = raw.replace('＜', '<').replace('＞', '>').replace('／', '/')
     // 成对标签（容忍标签内空白 / 换行）
     var cleaned = norm.replace(Regex("(?is)<think\\s*>.*?</think\\s*>"), " ")
+    // 🔧 v1.0.54：裸 </think> 闭合（开标签缺失 / 被流式剥离器吞掉）。
+    // 部分被 SFT 成 reasoning 的小模型在 thinking 模式下只吐「中文/英文独白 … </think> 最终答案」，
+    // 开标签 <think> 不出现在输出流里（MNN 某些 chat template 把 <think> 当 system-injected prefix），
+    // 于是上面的配对正则匹配失败、openIdx 也找不到 → 整段独白 + 裸 </think> 原样泄漏。
+    // 通用修复：把裸 </think> 当作「思考结束、答案开始」的硬分界，删掉其之前（含）全部内容，只留答案。
+    val closeIdx = cleaned.indexOf("</think>", ignoreCase = true)
+    if (closeIdx >= 0) cleaned = cleaned.substring(closeIdx + "</think>".length)
     // 未闭合：<think 之后到文末全部清掉（生成被 max_tokens 截断的典型形态）
     val openIdx = cleaned.indexOf("<think", ignoreCase = true)
     if (openIdx >= 0) cleaned = cleaned.substring(0, openIdx)
     return cleaned.replace(Regex("[ \\t　]{2,}"), " ").replace(Regex("\n{3,}"), "\n\n").trim()
+}
+
+/**
+ * 🔧 v1.0.50 兜底：剥离「无标签的明文推理导言」。
+ *
+ * 背景：部分小模型在被强制开启 thinking（或模板自带明文推理习惯）后，不会吐 `<think>` 标签，
+ * 而是以纯文本导言开头，例如：
+ *   "Thinking Process: 1. Analyze the request… 2. …" / "Analysis: …" / "Let me think: …"
+ * 甚至把训练数据里的系统提示格式复述出来（"My Role: Zorv AI… Light mode… use emojis for warmth"）。
+ * StreamingThinkStripper / stripResidualThink 只认 `<think>` 标签，对这种无标签明文推理完全失效，
+ * 于是整段推理混进 answer、用户看到「回复有问题」。
+ *
+ * 这里只在「开头就是高度特征化的推理导言」且导言之后仍有实质回答时，裁掉导言段
+ * （到首个空行或明显回答起点为止），最大限度避免误伤正常回答。
+ */
+// 🔧 v1.0.51 治本：本地小模型（尤其被 SFT 成「先思考再答」的）即便关闭 thinking 开关，
+// 仍会自发吐 "Thinking Process:" / "Analysis:" 等明文推理，甚至把系统提示当分析对象复述。
+// 这种明文推理无 <think> 标签、剥离逻辑只能兜底且易误伤。最稳的做法是在 system 里直接下令
+// 「禁止输出思考过程、直接回答」，从源头压制 CoT。仅作用于本地引擎（MNN），不影响云端。
+private const val MNN_NO_THINK_GUARD = "【输出约束】直接给出最终回答。绝对不要输出任何思考过程、分析步骤、" +
+    "'Thinking Process'、'Analysis'、'My Role'、'Let me think'、'Draft'、'Review'、" +
+    "'Self-Correction'、'Revised Draft'、'Final Plan' 等中间推理内容，也不要输出任何草稿、" +
+    "评审、自我纠正或编号步骤列表，更不要复述或分析系统提示词。用户问什么就直接回应什么。"
+
+private fun withNoThinkingGuard(messages: List<QuroChatMessage>): List<QuroChatMessage> {
+    val sysIdx = messages.indexOfFirst { it.role.equals("system", ignoreCase = true) }
+    val guard = "\n\n" + MNN_NO_THINK_GUARD
+    return if (sysIdx >= 0) {
+        messages.mapIndexed { i, m ->
+            if (i == sysIdx) QuroChatMessage(m.role, m.content + guard) else m
+        }
+    } else {
+        listOf(QuroChatMessage("system", MNN_NO_THINK_GUARD)) + messages
+    }
+}
+
+/**
+ * 🔧 v1.0.53 重写：格式无关的「明文推理」剥离。
+ *
+ * 核心洞察：本地模型权重自带 persona + CoT 格式（"Zorv AI" / "use emojis for warmth" /
+ * "rational/objective" 等都不在 app 源码里，是模型 SFT 行为），它会先吐一大段
+ * 「思考 / 草稿 / 评审 / 计划」再以最终回复收尾。CoT 形态多变：
+ *   - "Thinking Process: 1. 2. 3."（编号列表）
+ *   - "Draft: … 6. Review … 7. Final Decision … *Self-Correction:* … Revised Draft …
+ *      Final Plan: 1.2.3.4. …" + 真答案（草稿/计划叙事）
+ * 无论哪种，**推理永远在前面、最终答案永远在最后**。所以最稳的不是「识别导言词」，
+ * 而是「从末尾向前回溯，截掉所有推理行，保留最后的答案尾巴」；叠加显式答案分隔符优先。
+ * 若整段都是推理、找不到答案 → 返回空（上层 empty-answer 兜底提示，比泄漏推理好）。
+ */
+private val REASONING_HEADER = Regex(
+    "(?i)(^|\\n)\\s*(thinking\\s*process|thought\\s*process|my\\s+role|analysis|let\\s+me\\s+think|" +
+        "here\\s+is\\s+(my\\s+)?(thinking|analysis)|reasoning|step[- ]?by[- ]?step|step\\s+by\\s+step)\\b[\\s:：]*"
+)
+// 推理行（用于从末尾回溯 keepAnswerTail）：英文导言 / 编号项 / persona 复述。
+// ⚠️ 故意不含项目符号（▫️ / • / - / *）、加粗（**）或缩进续行——
+// 因为最终答案本身常使用这些「呈现型」格式，若把它们当推理行会误删答案。
+private val REASONING_LINE = Regex(
+    "(?i)^\\s*(\\d+[.)、])|" +
+        "^\\s*(thinking|thought|draft|analysis|review|revised\\s+draft|self[- ]?correction|" +
+        "final\\s*(plan|decision|answer)|step\\s*\\d|my\\s+role|let\\s+me\\s+think|" +
+        "here\\s+is\\s+my\\s+thinking|reasoning)\\b|" +
+        "(my\\s+role\\s*[:：]|use\\s+emojis\\s+for\\s+warmth|rational[,/]?\\s*objective)"
+)
+// persona 复述泄漏（命中即视为含 CoT，进入回溯/跳过）
+private val PERSONA_LEAK = Regex("(?i)(my\\s+role\\s*[:：]|use\\s+emojis\\s+for\\s+warmth|rational[,/]?\\s*objective|zorv\\s*ai)")
+// 🔧 v1.0.54：开头独白行判定（用于从开头跳过连续推理段）。涵盖：
+//   英文导言词 / 编号项 / persona 复述 / 中文第一人称元分析（我需要、用户问、回顾、作为Zorv…）。
+//   中文部分只用「高置信元分析短语」，避免把普通回答（含"我"字）误删；且只在开头连续段应用，
+//   答案若在开头之后则不受影响（如本次样本答案以"我能帮你…"开头，不被命中）。
+private val PLAIN_REASONING_LINE = Regex(
+    "(?i)^\\s*(\\d+[.)、]|" +
+        "thinking|thought|draft|analysis|review|revised\\s+draft|self[- ]?correction|" +
+        "final\\s*(plan|decision|answer)|step\\s*\\d|my\\s+role|let\\s+me\\s+think|" +
+        "here\\s+is\\s+my\\s+thinking|reasoning|" +
+        "我需要|我应该|我根据|我打算|用户(现在)?问|回顾|作为\\s*(zorv|ai)|注意|检查|避免|确保|首先|其次|" +
+        "这次(回答|需要|聚焦)|聚焦|根据多轮|不要重复|提供新的|结合|分析|计划|草稿|思考|决定|方案" +
+        ")"
+)
+private val ANSWER_DELIM = Regex(
+    "(?im)\\n\\s*(final\\s*(plan|decision|answer)|answer|response|reply|output|" +
+        "here'?s?\\s+(my|the)\\s+(answer|response)|回复|回答|最终(回答|回复|方案|计划))\\s*[:：]\\s*"
+)
+
+/** 流式阶段用于「前缀预判」：可见文本以小写推理导言短语开头时，提前抑制展示（避免 Thinking 刷屏）。 */
+private val HEADER_PREFIXES = listOf(
+    "thinking process", "thought process", "my role", "analysis:",
+    "let me think", "here is my", "reasoning:", "step by", "step-by-step",
+    "draft", "final plan", "self-correction", "revised draft", "review",
+    // 🔧 v1.0.54：中文独白特征（高置信，正常答案开头极少出现）
+    "好的，用户", "用户现在问", "作为zorv", "回顾一下", "我需要", "首先，"
+)
+
+private fun isReasoningLine(t: String): Boolean {
+    if (t.isEmpty()) return false
+    return REASONING_LINE.containsMatchIn(t) || PERSONA_LEAK.containsMatchIn(t)
+}
+
+/**
+ * 🔧 v1.0.54 综合提取「最终答案」，覆盖目前见过的全部 CoT 形态：
+ *   - `<think>…</think>` 配对（正常 reasoning 模型）
+ *   - 裸 `</think>` 闭合 + 中文/英文独白（本会话新样本：开标签不出现在输出流）
+ *   - "Thinking Process: 1. 2. 3." 编号列表型
+ *   - "Draft → Final Plan → Self-Correction" 叙事型
+ *   - 中文第一人称独白（"好的，用户现在问…我需要…"）
+ *
+ * 多级策略（答案优先，绝不误删呈现型答案 ▫️/•）：
+ *   0) 裸 </think> 分界 → 取其之后；
+ *   1) 显式答案分隔符（Final Plan:/回答：…）取最后出现之后；
+ *   2) 从开头跳过连续独白行（中文元分析/英文导言/编号），取首个非独白行起；
+ *   3) 兜底从末尾向前回溯（仅英文导言/编号/persona，不碰项目符号）。
+ */
+private fun extractCleanAnswer(raw: String): String {
+    val text = raw.replace(Regex("\\r\\n?"), "\n").trim()
+    if (text.isEmpty()) return ""
+
+    // 0) 保险：裸 </think> 闭合（开标签缺失/被吞）——其之前（含）全部当思考丢弃，只留答案。
+    val lastClose = text.indexOf("</think>", ignoreCase = true)
+    if (lastClose >= 0) {
+        val after = cleanTail(text.substring(lastClose + "</think>".length))
+        if (after.isNotEmpty()) return after
+    }
+
+    // 1) 显式答案分隔符优先：取【最后一次】出现之后的内容（CoT 总在答案之前）
+    val delimHit = ANSWER_DELIM.findAll(text).lastOrNull()
+    if (delimHit != null) {
+        val after = cleanTail(text.substring(delimHit.range.last + 1))
+        if (after.isNotEmpty()) return after
+    }
+
+    // 2) 开头连续独白行（中文第一人称元分析 / 英文导言 / 编号）跳过，取首个非独白行起为答案。
+    //    仅作用于开头连续段，答案若在开头之后则完整保留（包括 ▫️/• 呈现型格式）。
+    val lines = text.lines()
+    var i = 0
+    while (i < lines.size) {
+        val t = lines[i].trim()
+        if (t.isEmpty()) { i++; continue }
+        if (PLAIN_REASONING_LINE.containsMatchIn(t)) { i++; continue }
+        break
+    }
+    val headSkip = lines.subList(i, lines.size).joinToString("\n").trim()
+    if (headSkip.isNotEmpty()) return cleanTail(headSkip)
+
+    // 3) 兜底：从末尾向前回溯（答案总在最后），仅以英文导言/编号/persona 判定推理行，绝不误删呈现型答案。
+    return keepAnswerTail(text)
+}
+
+/** 答案尾部清理：再清一遍残留 think 标签 / 多余空白，保证干净。 */
+private fun cleanTail(s: String): String {
+    val t = s.replace(Regex("(?is)</?think\\b[^>]*>"), " ").trim()
+    return t.replace(Regex("[ \\t　]{2,}"), " ").replace(Regex("\n{3,}"), "\n\n").trim()
+}
+
+/** 从末尾向前回溯：丢弃所有「推理行」，保留最后的答案尾巴（允许答案内部有空行）。 */
+private fun keepAnswerTail(text: String): String {
+    val lines = text.lines()
+    var cut = -1
+    for (i in lines.indices.reversed()) {
+        val line = lines[i]
+        if (line.isBlank()) continue
+        if (isReasoningLine(line)) { cut = i; break }
+    }
+    if (cut < 0) return text.trim()   // 无推理行，原样返回
+    val tail = lines.subList(cut + 1, lines.size).joinToString("\n").trim()
+    return if (tail.isEmpty()) "" else tail
 }
 
 /**
@@ -357,15 +528,44 @@ class QuroLocalEngineNative : QuroLocalEngine {
             // 但 1024 对思考模型偏紧（思考+回答易截断），上调到 2048：思考模型有真实余量，
             // 非思考模型也仍在可控解码时长内（MNN 原生上限 8192，留有富余）。
             val effMaxTokens = maxTokens.coerceIn(128, 2048)
+            // 🔧 MNN 无状态化（对齐 llama 路径的 resetContext）：显式清掉常驻会话的累积历史 + KV-Cache，
+            // 确保每轮都按完整 history 从头 prefill，杜绝跨轮「乱恢复」旧上下文。
+            // 原生 generateStream / generateStreamStructured 内部虽也会 llm->reset()，但这里在 Kotlin 层
+            // 再兜底一次，避免任一原生 reset 不彻底（KV 滑动窗口在复用 Llm 对象时未完全清空）导致的状态残留；
+            // reset 只清对话状态、不动已加载权重，常驻会话「免重载」的加速收益不受影响。
+            runCatching { session.reset() }
+            // 🔧 v1.0.50 修复「MNN 回复里混进 Thinking Process: 推理独白」：
+            // 旧逻辑无条件 setThinkingMode(true)，会把部分小模型推进 thinking 模式——
+            // 这些模型不吐 <think> 标签，反而吐纯文本推理导言（"Thinking Process:…"、
+            // 甚至复述训练数据里的系统提示 "My Role: Zorv AI… use emojis for warmth"），
+            // 而 StreamingThinkStripper / stripResidualThink 只认 <think> 标签，对无标签明文推理
+            // 完全失效 → 整段推理混进 answer。
+            // 治本：thinking 只在「模型模板真实会吐 <think> 标签（emitsThinkBlock）」时才开；
+            // 其余模型（含「开了 think 却吐明文」的）一律关掉，直接吐干净回答。
+            // reset 会清掉 enable_thinking，这里按能力重新置位（非思考模型 setThinkingMode 返回 false，无副作用）。
+            val thinkCaps = runCatching { MnnModelCapabilities.probe(java.io.File(model.path)) }.getOrNull()
+            val enableThink = thinkCaps?.emitsThinkBlock == true
+            runCatching { session.setThinkingMode(enableThink) }
+            QuroDiag.log(
+                "LocalEngine",
+                "▶ MNN 无状态化 reset 完成（本轮从头 prefill）| thinking=$enableThink | " +
+                    "emitsThinkBlock=${thinkCaps?.emitsThinkBlock} | thinkingToggle=${thinkCaps?.supportsThinkingToggle}"
+            )
             // 🧠 1.A：流式思考剥离器——增量维护「可见文本」（剔除 <think> 块，含未闭合尾部），
             // 同时累积原始全文供终态解析。这样生成过程中用户不会实时看到思考原文。
             val stripper = StreamingThinkStripper()
+            // 🔧 v1.0.52：流式阶段若检测到「明文推理导言」（Thinking Process: 等），整段抑制实时展示，
+            // 避免用户实时看到推理过程刷屏；终态由 extractCleanAnswer 给出干净答案后一次性补推。
+            var reasoningSuppressed = false
             // 工具指令（system 文本降级注入）只在此处算一次，结构化与降级路径共用，避免重复注入。
-            val effectiveMessages = if (toolSpecsJson != null) {
+            val baseEffective = if (toolSpecsJson != null) {
                 maybeInjectToolInstruction(model, messages, toolSpecsJson)
             } else {
                 messages
             }
+            // 🔧 v1.0.51 治本：本地小模型即便关闭 thinking 开关仍会自发吐 "Thinking Process:" 等明文推理，
+            // 在 system 里直接下令「禁止输出思考过程、直接回答」从源头压制（详见 withNoThinkingGuard）。
+            val effectiveMessages = withNoThinkingGuard(baseEffective)
             val ok = if (toolSpecsJson != null) {
                 // 结构化路径：把工具描述注入 prompt，让模型能触发工具调用。
                 // MNN 原生无 parseToolCallResponse，回调收到的是 raw 模型文本（含 <tool_call> 标签），
@@ -377,7 +577,13 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     tokenCount++
                     // 流式阶段即剥离 <think> 块，避免用户实时看到思考原文（症状 1 流式侧）。
                     val visible = stripper.accept(token)
-                    onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
+                    val lv = visible.trimStart().lowercase()
+                    val isReasoning = REASONING_HEADER.containsMatchIn(visible.trimStart()) ||
+                        HEADER_PREFIXES.any { lv.startsWith(it) }
+                    if (isReasoning) reasoningSuppressed = true
+                    if (!reasoningSuppressed) {
+                        onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
+                    }
                     onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
                     if (isCanceled()) return@generateStreamStructured false
                     true
@@ -413,7 +619,13 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     if (firstTokenMs == null) firstTokenMs = (System.nanoTime() - t0) / 1_000_000
                     tokenCount++
                     val visible = stripper.accept(token)
-                    onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
+                    val lv = visible.trimStart().lowercase()
+                    val isReasoning = REASONING_HEADER.containsMatchIn(visible.trimStart()) ||
+                        HEADER_PREFIXES.any { lv.startsWith(it) }
+                    if (isReasoning) reasoningSuppressed = true
+                    if (!reasoningSuppressed) {
+                        onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
+                    }
                     onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
                     if (isCanceled()) return@generateStream false
                     true
@@ -467,7 +679,18 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 // 时才切。此前若该模型思考格式未被 MnnThinkContent.split 识别（reasoning=null），
                 // finalText 仍是含 <think> 的 stripper.rawText()，被原样推上屏 → 用户看到原始思考段。
                 // 再叠加 stripResidualThink 兜底，任何残留 <think> 都不可能漏进正文。
-                finalText = stripResidualThink(split.answer)
+                finalText = extractCleanAnswer(stripResidualThink(split.answer))
+                // 🔎 MNN 思考分离终态取证：确认 reasoning/answer 是否被正确切开、正文是否还有残留 <think>。
+                // 设备侧无 adb，这是判断「MNN 思考泄漏」是真泄漏还是 UI 渲染问题的唯一一线数据。
+                val residualThink = finalText.contains("<think", ignoreCase = true)
+                QuroDiag.log(
+                    "LocalEngine",
+                    "🧠 MNN 终态 | reasoning.len=${reasoning?.length ?: 0} | answer.len=${split.answer.length} | " +
+                        "finalText.len=${finalText.length} | 正文残留<think>=$residualThink | " +
+                        "caps.thinking=${runCatching { MnnModelCapabilities.probe(java.io.File(model.path)).supportsThinking }.getOrDefault(false)} | " +
+                        "reasoning预览=${(reasoning ?: "(无)").take(80).replace("\n", " ")} | " +
+                        "answer预览=${split.answer.take(80).replace("\n", " ")}"
+                )
 
                 // 模型只吐了思考、正文为空：兜底说明，避免气泡空白 / 残留"思考中"占位（#offline-empty-answer）。
                 if (finalText.isEmpty()) {
@@ -614,7 +837,13 @@ class QuroLocalEngineNative : QuroLocalEngine {
     private fun buildMnnHistory(messages: List<QuroChatMessage>): List<Pair<String, String>> {
         val out = mutableListOf<Pair<String, String>>()
         for (m in messages) {
+            // 🔧 兜底剥离思考块（v1.0.49）：流式阶段已由 StreamingThinkStripper 去除 <think>，
+            // 但凡 stored content 仍夹带 <think>…</think>（含未闭合尾部）即视为污染——
+            // 小本地模型会把「自己的思考」当成上一轮 assistant 正文回放进新上下文，诱发乱恢复。
+            // 这里在进原生前再滤一遍，保证喂给 MNN 的 history 不含任何思考残留。
             val content = m.content
+                .replace(Regex("<think>.*?(</think>|$)", RegexOption.DOT_MATCHES_ALL), "")
+                .trim()
             if (content.isBlank()) continue
             val role = when (m.role.lowercase()) {
                 "system" -> "system"
@@ -884,9 +1113,9 @@ class QuroLocalEngineNative : QuroLocalEngine {
                             if (split.answerFromReasoning) " | ⚠ 正文为空，已回退展示思考内容" else ""
                     )
                 }
-                // 终态无条件把干净正文（已切走思考段）补推给 UI，确保气泡最终态不含 <think> 残留。
+                // 终态无条件把干净正文（已切走思考段 + 剥离明文推理导言）补推给 UI，确保气泡最终态不含 <think> 残留。
                 val answer = if (split.answer.isEmpty()) "（本地模型仅完成了思考过程，未生成可展示的回复。）" else split.answer
-                val finalText = stripResidualThink(answer)
+                val finalText = extractCleanAnswer(stripResidualThink(answer))
                 onToken?.let { cb -> runCatching { cb(finalText) } }
 
                 // 结构化路径：原生 parseToolCallResponse 优先；未命中（模板无 parser / 思考段内 <tool_call>）
@@ -1161,17 +1390,18 @@ class QuroLocalEngineNative : QuroLocalEngine {
                         "若模型不是 ChatML 体系，输出质量会明显下降。"
                 )
             }
-            // 思考模型：显式打开 enable_thinking。以前这个开关写好了却从来没人调用，
-            // 导致 Qwen3 一类模型在 MNN 上永远拿不到思考段（"有思考但是不能用"）。
-            // 🔧 v454 修复「思考没修复」：不再用 `caps.supportsThinkingToggle` 单一探针门控——
-            // 探针只认模板里的字面 "enable_thinking"，QwQ / DeepSeek-R1 等靠 <think> 块触发的模型会被漏判，
-            // 思考段永远打不开。改为无条件尝试：MNN 原生层只对真正支持 thinking 的模板返回 true（安全 no-op），
-            // 非思考模型 setThinkingMode 返回 false，按普通模型继续，不会污染输出。
-            val applied = runCatching { session.setThinkingMode(true) }.getOrDefault(false)
+            // 思考模型：仅当模型模板真实会吐 <think> 标签（emitsThinkBlock）时才显式打开 enable_thinking。
+            // 🔧 v1.0.50 修正「MNN 回复混进 Thinking Process: 推理独白」：旧逻辑无条件 setThinkingMode(true)，
+            // 会把「开了 think 却吐纯文本推理、不吐 <think> 标签」的小模型推进明文推理模式，思考段剥离逻辑
+            // 完全失效。这里改用 emitsThinkBlock 作为唯一开启依据（supportsThinkingToggle 仅表示模板含
+            // "enable_thinking" 字面，正是「开了却吐明文」的元凶，绝不能再作开启条件）；其余模型关掉 thinking，
+            // 直接吐干净回答。非思考模型 setThinkingMode 返回 false，按普通模型继续，不污染输出。
+            val thinkingApplicable = caps.emitsThinkBlock
+            val applied = runCatching { session.setThinkingMode(thinkingApplicable) }.getOrDefault(false)
             QuroDiag.log(
                 "LocalEngine",
-                if (applied) "🧠 MNN thinking 模式已开启 | caps.thinking=${caps.supportsThinking}"
-                else "· MNN 该模型不支持 thinking（setThinkingMode 返回 false），按普通模型继续 | caps.thinking=${caps.supportsThinking}"
+                if (applied) "🧠 MNN thinking 模式已开启（emitsThinkBlock=true） | caps.thinking=${caps.supportsThinking}"
+                else "· MNN thinking 未开启（emitsThinkBlock=${caps.emitsThinkBlock}，避免明文推理污染） | caps.thinking=${caps.supportsThinking}"
             )
             return session
         }

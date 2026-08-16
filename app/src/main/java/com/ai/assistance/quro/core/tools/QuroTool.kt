@@ -155,6 +155,8 @@ class QuroToolRegistry {
             "cms_list", "cms_call", "cms_status", "cms_logs", "cms_result", "cms_run_dag", "cms_deploy_terminal", "cms_undeploy_terminal", "priv_status", "cms_engine_status",
             // ACI（Agent Capability Interface）：AI 作为控制方调用第三方 App 暴露的能力（发现 + 调用）
             "aci_list", "aci_call",
+            // 工作区 AI 工具：AI 直接读写 ZorvAI 自己的 QuroWorkspace（与构建台 ACI 协作写码→编译）
+            "workspace_write", "workspace_read", "workspace_list",
             // L1 无障碍控屏（CapOS 通道）
             "read_screen", "get_foreground_app", "get_screen_state",
             "tap_screen", "swipe_screen", "input_text", "scroll_screen", "global_action",

@@ -156,9 +156,16 @@ object QuroLocalToolsCodec {
             // 工具结果允许空内容；其余角色空内容没有任何信息量，直接跳过。
             if (m.content.isBlank() && !hasToolCalls && role != "tool") continue
 
+            // 🔧 v1.0.49 兜底剥离思考块：assistant 的 stored content 若仍夹带 <think>…</think>
+            // （含未闭合尾部），会被当成上一轮正文回放进新上下文、诱发本地模型乱恢复。
+            val cleanContent = if (role == "assistant") {
+                m.content.replace(Regex("<think>.*?(</think>|$)", RegexOption.DOT_MATCHES_ALL), "").trim()
+            } else {
+                m.content
+            }
             val obj = JSONObject()
                 .put("role", role)
-                .put("content", m.content)
+                .put("content", cleanContent)
 
             if (role == "tool") {
                 // tool_call_id 缺失时给一个稳定占位，避免模板取不到字段直接抛异常。

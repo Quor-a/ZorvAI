@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ClearAll
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
@@ -53,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.terminal.QuroHistoryCursor
+import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.core.terminal.QuroTerminalController
 import com.ai.assistance.quro.core.terminal.QuroTerminalHistory
 import com.ai.assistance.quro.core.terminal.ShellMode
@@ -93,10 +95,45 @@ fun QuroTerminalScreen(onClose: () -> Unit) {
     val sandboxState by QuroLinuxEnv.state.collectAsState()
 
     // Linux 环境就绪且当前仍是设备模式时，重建为 Linux 会话（获得 python3 / 完整写能力）。
+    // 反过来，若环境实际已缺失/失败但会话仍挂在 Linux 模式，必须切回设备 sh，
+    // 否则标题会显示「proot/Linux」而下方却提示安装/部署，造成「完全废了」的错觉。
     LaunchedEffect(sandboxState) {
-        if (sandboxState is QuroLinuxEnv.SandboxState.Ready && session.mode == ShellMode.DEVICE) {
-            QuroTerminalController.destroySession()
-            session = QuroTerminalController.createSession(context)
+        val modeBefore = session.mode
+        when {
+            sandboxState is QuroLinuxEnv.SandboxState.Ready && session.mode == ShellMode.DEVICE -> {
+                QuroTerminalController.destroySession()
+                session = QuroTerminalController.createSession(context)
+                QuroDiag.log("Terminal", "env→Ready 且原会话为设备模式，重建为 Linux 会话 (modeBefore=$modeBefore)")
+            }
+            sandboxState !is QuroLinuxEnv.SandboxState.Ready && session.mode == ShellMode.LINUX -> {
+                QuroTerminalController.destroySession()
+                session = QuroTerminalController.createSession(context)
+                QuroDiag.log(
+                    "Terminal",
+                    "env 非就绪(${sandboxState::class.simpleName}) 但原会话为 Linux 模式，重建为设备会话 " +
+                        "(modeBefore=$modeBefore) —— 修复「标题显示 proot/Linux 却提示安装」的错位"
+                )
+            }
+            else -> {
+                QuroDiag.log(
+                    "Terminal",
+                    "sandboxState=${sandboxState::class.simpleName} session.mode=${session.mode} → 无需重建会话"
+                )
+            }
+        }
+    }
+
+    // 进入终端即按真实文件系统重新探测一次 Linux 环境状态（见 QuroLinuxEnv.probe 说明）：
+    // 若 rootfs 已被删掉而 _state 仍停在旧的 Ready，不重新探测就再也不会弹出「安装 Linux 环境」
+    // 横幅，用户顶栏只剩「导出日志」按钮、无法重新部署。重新探测可让横幅/部署按钮回到正确状态。
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val st = QuroLinuxEnv.probe(context)
+            QuroDiag.log(
+                "Terminal",
+                "进入终端 re-probe | available=${st.available} | mode=${QuroTerminalController.session?.mode} | " +
+                    "reason=${st.reason}"
+            )
         }
     }
 
@@ -193,6 +230,15 @@ fun QuroTerminalScreen(onClose: () -> Unit) {
             Text("终端 · $modeLabel", color = Color.White, fontSize = 14.sp)
             Spacer(Modifier.weight(1f))
             StatusChip(busy = busy, lastExit = lastExit, interrupted = interrupted)
+            // 顶栏常驻「部署 Linux 环境」按钮：环境未就绪（NotInstalled/Error）时直接可点，
+            // 不再依赖下方横幅——避免「部署按钮消失、只剩导出日志」的困境。
+            if (sandboxState is QuroLinuxEnv.SandboxState.NotInstalled
+                || sandboxState is QuroLinuxEnv.SandboxState.Error
+            ) {
+                IconButton(onClick = { QuroLinuxEnv.setup(context) }) {
+                    Icon(Icons.Filled.Download, "部署 Linux 环境", tint = Color(0xFF7BE0A0))
+                }
+            }
             IconButton(onClick = { exportLog() }) {
                 Icon(Icons.Filled.SaveAlt, "export", tint = Color.White)
             }

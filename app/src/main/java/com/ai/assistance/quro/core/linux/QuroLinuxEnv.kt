@@ -20,7 +20,11 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.zip.GZIPInputStream
+import com.ai.assistance.quro.util.QuroDiag
 import kotlin.time.Duration.Companion.milliseconds
+
+/** 把 Windows CRLF 统一为 LF，防止写入 proot/Alpine 的脚本被 sh 解析成非法选项。 */
+private fun String.normalizeLineEndings(): String = this.replace("\r\n", "\n").replace("\r", "\n")
 
 /**
  * 应用内 Linux 环境（proot + Alpine aarch64）后端。
@@ -114,19 +118,67 @@ object QuroLinuxEnv {
         }
     }
 
-    /** 探测环境是否就绪（不触发下载）。 */
+    /**
+     * 探测环境是否就绪（不触发下载）。
+     *
+     * **关键修复（终端「部署按钮变导出日志」根因）**：旧实现只在环境确实存在时把 [_state]
+     * 升级为 [SandboxState.Ready]，却从不降级。一旦 [_state] 进入 Ready，即使 rootfs 被
+     * （沙箱内命令误删 / 系统清理私有目录 / 升级残留）删掉，[_state] 仍停在 Ready，
+     * 终端安装横幅被永久隐藏，用户顶栏只剩「导出日志」按钮、无从重新部署。
+     * 现改为：探测到 proot/rootfs 实际不可用时，若此前被错误标记为 Ready，则降级回 NotInstalled，
+     * 让安装横幅重新出现。下载/安装中间态由 [setup] 自身管理，此处不抢状态。
+     */
     fun probe(context: Context): EnvStatus {
         val proot = File(prootPath(context))
         if (!proot.exists()) {
+            if (_state.value is SandboxState.Ready) _state.value = SandboxState.NotInstalled
             return EnvStatus(false, null, null, "proot 二进制缺失（nativeLibraryDir 未含 libproot.so）")
         }
         val rootfs = File(rootfsPath(context))
-        return if (rootfs.isDirectory && File(prootPath(context)).canExecute()) {
+        // 关键：不仅看目录在不在，还要确认 rootfs 真能用（/bin/sh 存在且可解析）。
+        // 否则「目录在但解压残缺 / 符号链接创建失败 / 上次安装中断残留」会被误判为就绪，
+        // 终端顶栏显示 proot/Linux，实际 proot 启动失败、静默回退设备 sh —— 即「完全废了」的无声根因。
+        // 注意：/bin/sh 是绝对符号链接，必须按 rootfs 边界内解析（见 [rootfsBinRunnable]）。
+        val shOk = rootfs.isDirectory && rootfsBinRunnable(rootfs, "bin/sh")
+        return if (shOk && proot.canExecute()) {
             if (_state.value !is SandboxState.Ready) _state.value = SandboxState.Ready
             EnvStatus(true, proot.absolutePath, rootfs.absolutePath, "环境就绪")
         } else {
-            EnvStatus(false, proot.absolutePath, null, "Alpine rootfs 未安装（请在终端点「安装 Linux 环境」）")
+            // rootfs 缺失/残缺/不可执行：把错误的 Ready 降级回 NotInstalled，恢复安装横幅。
+            if (_state.value is SandboxState.Ready) _state.value = SandboxState.NotInstalled
+            val reason = when {
+                !rootfs.isDirectory ->
+                    "Alpine rootfs 未安装（请在终端点「安装 Linux 环境」）"
+                !rootfsBinRunnable(rootfs, "bin/sh") ->
+                    "rootfs 解压残缺（/bin/sh 无法在 rootfs 内解析，可能符号链接创建失败），请重试安装"
+                else -> "proot 不可执行"
+            }
+            EnvStatus(false, proot.absolutePath, null, reason)
         }
+    }
+
+    /**
+     * 在 rootfs 内部解析一个（可能含绝对/相对符号链接的）路径，判断其最终真实文件是否存在且可执行。
+     *
+     * **不能用 [File.exists]/[File.canExecute] 直接判**：Alpine 的 `/bin/sh` 是「绝对路径」符号链接
+     * （`-> /bin/busybox`）。在宿主 Android 文件系统上 `/bin/busybox` 根本不存在，宿主侧 `exists()`
+     * 会把它误判为缺失；但 proot 进入 rootfs 后 `/bin/busybox` 是存在的、可正常启动 Alpine。
+     * 必须按 rootfs 边界把链接目标解析回 rootfs 内再判定，否则正确解压的 rootfs 会被误报「残缺」。
+     */
+    private fun rootfsBinRunnable(rootfs: File, relPath: String): Boolean {
+        var cur = File(rootfs, relPath)
+        val root = rootfs.canonicalFile
+        val seen = mutableSetOf<File>()
+        repeat(16) {
+            // 先确认解析结果落在 rootfs 内，避免越界；再用 canExecute 判可执行（会跟随链接）。
+            if (cur.canonicalFile.startsWith(root) && cur.canExecute()) return true
+            if (!java.nio.file.Files.isSymbolicLink(cur.toPath())) return false
+            val target = java.nio.file.Files.readSymbolicLink(cur.toPath()).toString()
+            cur = if (target.startsWith("/")) File(root, target.removePrefix("/"))
+                   else File(cur.parentFile ?: root, target)
+            if (!seen.add(cur)) return false // 防环
+        }
+        return false
     }
 
     /**
@@ -168,6 +220,7 @@ object QuroLinuxEnv {
         if (!talloc.exists()) {
             val src = File(context.applicationInfo.nativeLibraryDir, "libtalloc.so")
             if (src.exists()) src.copyTo(talloc, overwrite = true)
+            else QuroDiag.log("LinuxEnv", "⚠ nativeLibraryDir 无 libtalloc.so，libproot-loader 可能加载失败")
         }
 
         val rootfsDir = File(dir, "rootfs")
@@ -183,6 +236,17 @@ object QuroLinuxEnv {
             tarGz.delete()
         }
 
+        // 解压后立即校验 rootfs 真可用：/bin/sh 必须能在 rootfs 内部解析为可执行文件。
+        // 注意 /bin/sh 是「绝对路径」符号链接（-> /bin/busybox），宿主侧 exists() 会误判缺失，
+        // 必须用 [rootfsBinRunnable] 按 rootfs 边界内解析（v1.0.48 修正 v1.0.47 的误报）。
+        // 若解压残缺或符号链接创建失败 → 直接报错，绝不把残缺 rootfs 标成「就绪」。
+        if (!rootfsBinRunnable(rootfsDir, "bin/sh")) {
+            val detail = "rootfs 解压后 /bin/sh 无法在 rootfs 内解析（解压残缺或符号链接创建失败），无法启动 Alpine"
+            QuroDiag.log("LinuxEnv", "⛔ $detail")
+            rootfsDir.deleteRecursively()
+            throw IllegalStateException(detail)
+        }
+
         _state.value = SandboxState.Installing("初始化…")
         makeWritable(rootfsDir)
         prepareRuntimeExtras(context, rootfsDir)
@@ -193,19 +257,36 @@ object QuroLinuxEnv {
             writeRepositories(rootfsDir, mirror)
             val r = runProot(context, "apk update", timeoutMs = 60_000)
             if (r.first == 0) { updated = true; break }
-            lastErr = r.second.take(200)
+            lastErr = r.second // 保留完整输出，便于定位镜像/网络/签名问题（不再截断 200 字）
         }
         if (!updated) {
+            QuroDiag.log("LinuxEnv", "⛔ apk update 在所有镜像失败:\n$lastErr")
             rootfsDir.deleteRecursively()
-            throw IllegalStateException("apk update 在所有镜像失败: $lastErr")
+            throw IllegalStateException("apk update 在所有镜像均失败。最后错误：\n$lastErr")
         }
 
         // bash 是持久 shell 的基础，必须装。
         _state.value = SandboxState.Installing("安装 bash…")
         val bash = runProot(context, "apk add --no-cache bash", timeoutMs = 120_000)
         if (bash.first != 0) {
-            throw IllegalStateException("bash 安装失败：${bash.second.take(200)}")
+            QuroDiag.log("LinuxEnv", "⛔ bash 安装失败(exit ${bash.first}):\n${bash.second}")
+            throw IllegalStateException("bash 安装失败（exit ${bash.first}）：\n${bash.second}")
         }
+
+        // ★ 部署后自检（v1.0.47 根因修复）：装完 bash ≠ 环境真能用。
+        // 必须真正用 proot 在该设备 rootfs 内跑一条命令，确认 proot 能在本机启动并执行。
+        // 否则会出现「bash 装上了、状态标 Ready、但终端一进 proot 就崩、静默回退设备 sh」的「废了」现象。
+        _state.value = SandboxState.Installing("自检 proot 运行环境…")
+        val smoke = runProot(context, "echo QURO_SMOKETEST_OK; id -u; apk --version", timeoutMs = 30_000)
+        if (smoke.first != 0 || !smoke.second.contains("QURO_SMOKETEST_OK")) {
+            val detail = "部署后自检失败：proot 在您的设备上无法在 rootfs 内执行命令。" +
+                "常见原因：系统 SELinux 限制了 ptrace，或 proot loader 加载失败。\n" +
+                "自检输出（exit ${smoke.first}）：\n${smoke.second.take(800)}"
+            QuroDiag.log("LinuxEnv", "⛔ $detail")
+            rootfsDir.deleteRecursively()
+            throw IllegalStateException(detail)
+        }
+
         _state.value = SandboxState.Ready
     }
 
@@ -421,7 +502,11 @@ object QuroLinuxEnv {
                     try {
                         if (outFile.exists()) outFile.delete()
                         java.nio.file.Files.createSymbolicLink(outFile.toPath(), java.nio.file.Paths.get(linkName))
-                    } catch (_: Exception) { }
+                    } catch (e: Exception) {
+                        // 符号链接创建失败（如 SELinux 限制应用私有目录软链）会导致 /bin/sh 等缺失，
+                        // 必须记下来，否则 rootfs 残缺却被当成「解压成功」。
+                        QuroDiag.log("LinuxEnv", "⚠ 符号链接创建失败: $fullName -> $linkName: ${e.message}")
+                    }
                 }
                 '1' -> {
                     val linkTarget = File(targetDir, linkName)
@@ -617,7 +702,8 @@ fi
             )
             val bin = File(rootfs, "usr/local/bin"); bin.mkdirs()
             val shim = File(bin, "getprop")
-            shim.writeText(GETPROP_SHIM)
+            // GETPROP_SHIM 是源码里的原始字符串；Windows 工作区 CRLF 会让 sh 执行出错，强转 LF。
+            shim.writeText(GETPROP_SHIM.normalizeLineEndings())
             shim.setExecutable(true, false)
         } catch (e: Exception) {
             Log.w(TAG, "prepareRuntimeExtras 部分失败（非致命）: ${e.message}")

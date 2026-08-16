@@ -173,7 +173,16 @@ class QuroAssistant(
                 coroutineContext[Job]?.ensureActive()
                 round++
                 // 任何一步抛异常都兜底成错误文本，绝不让协程崩掉导致界面「卡死在思考中」
-                val llmMessages = runCatching { store.toLlmMessages(system, cfg.contextWindow, historyRounds) }.getOrElse { emptyList() }
+                // 🔧 MNN/llama 本地「乱恢复」根治（v1.0.49）：小型本地模型（1.2B~3B）在【无上限的历史】下
+                // 极易把较早轮次的内容当成当前指令「回放 / 续写」——表现为乱回复、继续一个早已完成的任务、
+                // 重复旧答案。原生层 `runStreamGenerationWithHistory` / `runStreamGenerationWithInputIds` 每轮都已
+                // `llm->reset()` 并从完整 history 重新 prefill，所以根因**不在** KV 残留（v1.0.43 的
+                // `session.reset()` 因此是同层冗余、无法修复乱恢复），而在「喂给小模型的上下文过长且无界」。
+                // 这里对本地路径强制一个合理轮数上限（用户未显式设置 historyRounds 时生效），让模型始终只在
+                // 「最近 N 轮」的干净上下文里作答，从源头消除无界历史导致的乱恢复。云端模型上下文窗口大、能力强，
+                // 不受影响。8 轮对 1.2B~3B 模型足够覆盖正常多轮，同时把历史长度压在模型有效注意力范围内。
+                val effHistoryRounds = if (isLocal && historyRounds <= 0) 8 else historyRounds
+                val llmMessages = runCatching { store.toLlmMessages(system, cfg.contextWindow, effHistoryRounds) }.getOrElse { emptyList() }
                 // 流式增量回调（云端 / 本地离线模型**共用**）。参数 acc 为「累计文本」。
                 // ⚠️ #1112 修复：此前本地（MNN / llama.cpp）路径压根不传 onToken，且下方 streaming
                 //   还对本地强制置 false —— 本地推理整条链零流式。手机 CPU 上一次生成动辄数十秒到
@@ -656,6 +665,9 @@ class QuroAssistant(
             QuroDiag.log("LocalPrompt", "本地 prompt 规模 OK | msgs=${out.size} | chars=$finalTotal")
         }
 
+        // 🔧 工具结果就地压缩（与 QuroConversation.toLlmMessages 同款）：本地上下文更紧张，
+        // 超长工具输出（terminal_exec / root_exec 构建日志等）更易被砍成孤儿，先压缩保住工具轮配对。
+        out = compactToolResults(out)
         // 🔧 孤儿工具消息清理：上面「丢最旧非 system 消息」可能把 tool 配对的一方裁掉，
         // 留下孤儿（role=tool 结果找不到对应 assistant 调用，或 assistant 调用找不到对应 tool 结果）。
         // 孤儿会让下游模型把非法上下文当成正常轮次 → 表现为「乱回复 / 不回复」。

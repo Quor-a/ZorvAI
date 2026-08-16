@@ -51,7 +51,11 @@
       var id = 'm' + Date.now() + Math.floor(Math.random() * 1000);
       mermaid.render(id, src).then(function (res) {
         el.innerHTML = (res && res.svg) ? res.svg : '';
+        if (res && res.svg && window.AndroidBridge) { AndroidBridge.onSvg(res.svg); }
         report();
+        // 兜底：部分机型首次测量偏小时，延迟再测一次，确保高度准确、不被裁切
+        setTimeout(report, 250);
+        setTimeout(report, 600);
       }).catch(function (e) {
         var msg = (e && e.message) ? e.message : ('' + e);
         el.innerHTML = '<div class="err">流程图渲染失败：\n' + msg + '</div>';
@@ -63,6 +67,12 @@
       report();
     }
   };
+
+  // 尺寸变化（如 WebView 高度回填导致重排）时再测一次，保证自适应高度始终正确
+  if (window.ResizeObserver) {
+    var ro = new ResizeObserver(function () { report(); });
+    ro.observe(document.getElementById('diagram'));
+  }
 
   if (window.AndroidBridge) { AndroidBridge.onReady(); }
 </script>

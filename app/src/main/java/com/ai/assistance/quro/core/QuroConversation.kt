@@ -4,6 +4,36 @@ import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.ai.assistance.quro.util.QuroDiag
 import java.util.UUID
 
+/** 单条工具结果回传给模型时的最大保留字符数，超出部分就地截断（保留头+尾）。 */
+internal const val TOOL_RESULT_CAP = 1600
+
+/**
+ * 就地压缩超长工具结果（role=tool 的 content），防止命令类工具（terminal_exec / root_exec 等）
+ * 的巨型输出在上下文裁剪时被整条丢弃，进而拆散工具轮、诱发孤儿调用与模型「跑偏 / 乱执行」。
+ * 超 [TOOL_RESULT_CAP] 的结果保留「头部 + 尾部 + 长度说明」，工具轮始终 call↔result 成对。
+ */
+internal fun compactToolResults(list: List<QuroChatMessage>): List<QuroChatMessage> {
+    if (list.none { it.role == "tool" && it.content.length > TOOL_RESULT_CAP }) return list
+    return list.map { m ->
+        if (m.role == "tool" && m.content.length > TOOL_RESULT_CAP) {
+            m.copy(content = truncateToolResult(m.content))
+        } else {
+            m
+        }
+    }
+}
+
+/** 头部 40% + 尾部 60% + 截断说明：错误 / 退出码通常在尾部，故尾部占比更大。 */
+internal fun truncateToolResult(text: String): String {
+    val head = (TOOL_RESULT_CAP * 4 / 10).coerceAtLeast(200)
+    val tail = (TOOL_RESULT_CAP - head).coerceAtLeast(200)
+    return buildString {
+        append(text.take(head))
+        append("\n…\n〔工具输出过长已截断：原文 ${text.length} 字符，仅保留头 $head + 尾 $tail；完整日志见本机文件〕\n…\n")
+        append(text.takeLast(tail))
+    }
+}
+
 /**
  * 会话消息（原创）。role: system|user|assistant|tool。
  * 支持把工具调用（toolCalls）与工具结果（toolCallId）一并记录，供多轮工具编排使用。
@@ -90,7 +120,15 @@ class QuroConversationStore {
         }
         // 「保留对话轮数」对话框级覆盖：仅保留最近 N 个 (用户+助手) 轮次，其余丢弃。
         // 仅当 historyRounds > 0 时生效；0/未设置则跳过（与历史行为完全一致）。
-        val capped = if (historyRounds > 0) capRecentRounds(built, historyRounds) else built
+        var capped = if (historyRounds > 0) capRecentRounds(built, historyRounds) else built
+        // ═══ 工具结果就地压缩（防「跑偏/乱执行」）═══
+        // terminal_exec / root_exec 等命令工具输出可能极长（构建日志、ls -R、长文本）。
+        // 若整条 role=tool 结果在下方「巨型消息降权」被裁掉，而对应的 assistant tool_calls 仍被保留，
+        // 就会形成孤儿调用 → pruneOrphanToolMessages 整条删除 → 模型丢失「我跑过什么 / 结果如何」的记忆，
+        // 下一轮便重发同一条命令、或把上下文碎片当成新指令 → 表现为「跑偏 / 乱执行」。
+        // 这里在裁剪前先把超长工具结果就地截断（保留头 + 尾 + 长度说明），使其始终能留在上下文里，
+        // 工具轮 call↔result 始终成对，从根本上消除孤儿、保住模型对工具执行的历史记忆。
+        capped = compactToolResults(capped)
         if (contextWindow <= 0) return pruneOrphanToolMessages(capped)
 
         val sysTokens = system?.let { estTokens(it.content) } ?: 0

@@ -6,6 +6,14 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.provider.MediaStore
+import android.content.ContentValues
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import java.io.IOException
 import org.json.JSONObject
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -27,6 +35,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -207,11 +217,16 @@ fun QuroChatCardView(card: QuroChatCard, onCommand: (String) -> Unit) {
 }
 
 @Composable
-private fun CardShell(title: String, content: @Composable ColumnScope.() -> Unit) {
+private fun CardShell(
+    title: String,
+    modifier: Modifier = Modifier,
+    headerEnd: @Composable RowScope.() -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val dismiss = LocalCardDismiss.current
     val cs = MaterialTheme.colorScheme
     Card(
-        Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth().then(modifier),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         border = null,
@@ -228,6 +243,8 @@ private fun CardShell(title: String, content: @Composable ColumnScope.() -> Unit
                             modifier = Modifier.weight(1f),
                         )
                     }
+                    Spacer(Modifier.weight(1f))
+                    headerEnd()
                     if (dismiss != null) {
                         IconButton(onClick = dismiss, Modifier.size(28.dp)) {
                             Icon(
@@ -1462,68 +1479,211 @@ private fun AvatarGroupCardView(card: QuroChatCard.AvatarGroupCard, onCommand: (
 }
 
 /**
- * AI 自写图表（v300）：用 WebView 加载 assets 内的 Mermaid.js 离线渲染 AI 下发的 Mermaid 文本。
+ * AI 自写图表（v300→v316）：用 WebView 加载 assets 内的 Mermaid.js 离线渲染 AI 下发的 Mermaid 文本。
  *
  * - 客户端【不内置】任何固定流程图；AI 爱画什么画什么（flowchart / 时序图 / 状态机 / 类图 / 思维导图 / git 图 …）。
  * - 深浅主题自适应：theme 缺省时按系统深浅色选 default / dark。
  * - 渲染完成后通过 AndroidBridge.onHeight 回调把真实高度回传给 Compose，WebView 据此自适应高度（无写死裁切）。
+ * - 顶部操作区提供【全屏 / 下载 SVG / 复制源码】；全屏页同样支持双指缩放与拖动查看完整图。
  */
 @Composable
 private fun MermaidCardView(card: QuroChatCard.MermaidCard) {
     val cs = MaterialTheme.colorScheme
     val density = LocalDensity.current.density
+    val context = LocalContext.current
     var heightPx by remember(card.id) { mutableStateOf(160) }
+    var svgRef by remember(card.id) { mutableStateOf<String?>(null) }
+    var fullscreen by remember(card.id) { mutableStateOf(false) }
+    val title = card.title.ifBlank { "流程图" }
 
+    CardShell(
+        title = title,
+        headerEnd = {
+            IconButton(onClick = { fullscreen = true }, Modifier.size(30.dp)) {
+                Icon(Icons.Filled.Fullscreen, "全屏查看", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = {
+                if (svgRef != null) {
+                    val ok = saveSvgToDownloads(context, "mermaid_${card.id}.svg", svgRef!!)
+                    Toast.makeText(context, if (ok) "已保存 SVG 到 Download 文件夹" else "保存失败", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "图表尚未渲染完成，请稍候", Toast.LENGTH_SHORT).show()
+                }
+            }, Modifier.size(30.dp)) {
+                Icon(Icons.Filled.Download, "下载 SVG", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = { copyText(context, card.source, "已复制 Mermaid 源码") }, Modifier.size(30.dp)) {
+                Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            }
+        },
+    ) {
+        if (card.source.isBlank()) {
+            Text("（无图表内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+            return@CardShell
+        }
+        MermaidWebView(
+            card = card,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height((heightPx / density).dp)
+                .clip(RoundedCornerShape(10.dp)),
+            zoomable = false,
+            onHeight = { heightPx = it },
+            onSvg = { svgRef = it },
+        )
+    }
+
+    if (fullscreen) {
+        MermaidFullscreen(card = card, onDismiss = { fullscreen = false })
+    }
+}
+
+/**
+ * 可复用的 Mermaid WebView：离线城市渲染，渲染完成后回调真实高度与 SVG 文本。
+ * [zoomable]=true 时开启双指缩放（用于全屏页），否则按内容高度自适应（用于内联卡片）。
+ */
+@Composable
+private fun MermaidWebView(
+    card: QuroChatCard.MermaidCard,
+    modifier: Modifier = Modifier,
+    zoomable: Boolean = false,
+    onHeight: (Int) -> Unit = {},
+    onSvg: ((String) -> Unit)? = null,
+) {
     val dark = isSystemInDarkTheme()
     val theme = run {
         val t = card.theme.trim().lowercase()
         if (t in setOf("default", "dark", "forest", "neutral", "base")) t else if (dark) "dark" else "default"
     }
-
-    CardShell(card.title) {
-        if (card.source.isBlank()) {
-            Text("（无图表内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
-            return@CardShell
-        }
-        AndroidView(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height((heightPx / density).dp)
-                .clip(RoundedCornerShape(10.dp)),
-            factory = { context ->
-                WebView(context).apply {
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.allowFileAccess = true
-                    settings.loadsImagesAutomatically = true
-                    settings.setSupportZoom(false)
-                    settings.builtInZoomControls = false
-                    setBackgroundColor(0x00000000)
-                    addJavascriptInterface(object {
-                        @JavascriptInterface
-                        fun onHeight(px: Int) {
-                            if (px > 0) heightPx = px
-                        }
-
-                        @JavascriptInterface
-                        fun onReady() {}
-                    }, "AndroidBridge")
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            super.onPageFinished(view, url)
-                            val src = JSONObject.quote(card.source)
-                            view?.evaluateJavascript("window.__render($src, '$theme')", null)
-                        }
+    AndroidView(
+        modifier = modifier,
+        factory = { context ->
+            WebView(context).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.allowFileAccess = true
+                settings.loadsImagesAutomatically = true
+                settings.setSupportZoom(zoomable)
+                settings.builtInZoomControls = zoomable
+                settings.displayZoomControls = false
+                setBackgroundColor(0x00000000)
+                addJavascriptInterface(object {
+                    @JavascriptInterface
+                    fun onHeight(px: Int) {
+                        if (px > 0) onHeight(px)
                     }
-                    loadUrl("file:///android_asset/www/mermaid_render.html")
+
+                    @JavascriptInterface
+                    fun onSvg(svg: String) {
+                        onSvg?.invoke(svg)
+                    }
+
+                    @JavascriptInterface
+                    fun onReady() {}
+                }, "AndroidBridge")
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        super.onPageFinished(view, url)
+                        val src = JSONObject.quote(card.source)
+                        view?.evaluateJavascript("window.__render($src, '$theme')", null)
+                    }
                 }
-            },
-            update = { wv ->
-                val src = JSONObject.quote(card.source)
-                wv.evaluateJavascript("window.__render($src, '$theme')", null)
+                loadUrl("file:///android_asset/www/mermaid_render.html")
             }
-        )
+        },
+        update = { wv ->
+            val src = JSONObject.quote(card.source)
+            wv.evaluateJavascript("window.__render($src, '$theme')", null)
+        }
+    )
+}
+
+/**
+ * 全屏查看：占据整屏，支持双指缩放 / 拖动查看完整图表，并提供下载 SVG、复制源码、关闭。
+ */
+@Composable
+private fun MermaidFullscreen(card: QuroChatCard.MermaidCard, onDismiss: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    var svgRef by remember(card.id) { mutableStateOf<String?>(null) }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(color = cs.surface, modifier = Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        card.title.ifBlank { "流程图" },
+                        color = cs.onSurface,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = {
+                        if (svgRef != null) {
+                            val ok = saveSvgToDownloads(context, "mermaid_${card.id}.svg", svgRef!!)
+                            Toast.makeText(context, if (ok) "已保存 SVG 到 Download 文件夹" else "保存失败", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "图表尚未渲染完成，请稍候", Toast.LENGTH_SHORT).show()
+                        }
+                    }, Modifier.size(36.dp)) {
+                        Icon(Icons.Filled.Download, "下载 SVG", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = { copyText(context, card.source, "已复制 Mermaid 源码") }, Modifier.size(36.dp)) {
+                        Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = onDismiss, Modifier.size(36.dp)) {
+                        Icon(Icons.Filled.Close, "关闭", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                    }
+                }
+                HorizontalDivider(color = cs.outlineVariant)
+                Box(Modifier.fillMaxSize().padding(8.dp)) {
+                    MermaidWebView(
+                        card = card,
+                        modifier = Modifier.fillMaxSize(),
+                        zoomable = true,
+                        onSvg = { svgRef = it },
+                    )
+                }
+            }
+        }
     }
+}
+
+/** 复制文本到剪贴板并 toast 提示。 */
+private fun copyText(context: Context, text: String, toast: String) {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    cm.setPrimaryClip(ClipData.newPlainText("quro", text))
+    Toast.makeText(context, toast, Toast.LENGTH_SHORT).show()
+}
+
+/** 把 SVG 文本写入公共 Download 目录（API 29+ 用 MediaStore，无需存储权限）。返回是否成功。 */
+private fun saveSvgToDownloads(context: Context, fileName: String, svg: String): Boolean {
+    return runCatching {
+        val resolver = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+            put(MediaStore.Downloads.MIME_TYPE, "image/svg+xml")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+        }
+        val uri: Uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: throw IOException("无法在 Download 目录创建文件")
+        resolver.openOutputStream(uri)?.use { os -> os.write(svg.toByteArray(Charsets.UTF_8)) }
+            ?: throw IOException("无法写入 SVG 文件")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            values.clear()
+            values.put(MediaStore.Downloads.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        }
+        true
+    }.getOrDefault(false)
 }
 
 /**

@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.cms
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.ai.assistance.quro.util.QuroDiag
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -208,6 +209,9 @@ object CmsStateStore {
             list.add("[${ts()}] $line")
             while (list.size > RING) list.removeAt(0)
         }
+        // 🔎 诊断闭环：原 appendLog 只写内存环缓冲，模块部署/启动失败从不进
+        // Download/QuroAI_logs。同步落 QuroDiag，设备侧直接取真机日志。
+        QuroDiag.log("CMS", "[$moduleId] $line")
         emit()
     }
 

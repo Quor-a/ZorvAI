@@ -47,7 +47,12 @@ class QuroAidlAciCallTool : QuroTool {
             "【像人一样操作网页（重点）】受控 ZorvAI 浏览器能真正『交互』，而普通 open_web/ai_browser 的 open 只是被动展示、点不进去。你要像真人浏览那样一步步操作：① browser_open 打开目标页 → ② browser_elements 获取页面上带稳定ID的可点击元素（链接/按钮/输入框）→ ③ browser_action 按ID『点击进入链接/填写表单/滚动』（点进去才会跳转子页面，别只停在首页）→ ④ browser_read 读取点击后的页面内容 → 若页面未加载完用 browser_wait 等待。严禁『只打开首页就结束』——用户要的是你点进去拿到里面的内容。" +
             "【自由组合】你可以把多个 ACI 能力像积木一样链式编排，而不是死板地一步步来：例如先 browser_open 打开页面 → browser_script 执行 JS 取数 → browser_read 回读结果；或先 browser_elements 标注稳定ID → browser_action 按ID操作；需要等页面加载则 browser_wait。" +
             "【HTTP / 局域网】受控浏览器（ZorvAI 浏览器）暴露 http_request 能力：可经 ACI 让浏览器代为发起任意 HTTP 请求，包括同网段 LAN 明文（http://192.168.x.x、http://10.x、*.local mDNS 等），用于访问路由器/NAS/智能家居后台、私有 API、物联网设备等——受控浏览器已放开局域网明文，无需因公网明文限制而犹豫；公网请求仍走 HTTPS。" +
-            "【真实触摸注入】受控浏览器额外暴露 inject_touch 能力：经 Uinput 伪输入设备向整台设备注入真实触摸事件（action ∈ down/move/up/click/drag/dblclick，参数 x/y/dx/dy/slot/tracking_id/pressure/major），作用于全设备（不限于浏览器视图），与控制面 AIDL/LocalSocket（L1）经 L4 编排协作（信令走 AIDL、内核事件走 Uinput）。仅 root 或系统签名构建真实生效；普通分发版 nativeOpen 失败会明确返回「需 root / 系统签名」，不会假装成功。"
+            "【真实触摸注入】受控浏览器额外暴露 inject_touch 能力：经 Uinput 伪输入设备向整台设备注入真实触摸事件（action ∈ down/move/up/click/drag/dblclick，参数 x/y/dx/dy/slot/tracking_id/pressure/major），作用于全设备（不限于浏览器视图），与控制面 AIDL/LocalSocket（L1）经 L4 编排协作（信令走 AIDL、内核事件走 Uinput）。仅 root 或系统签名构建真实生效；普通分发版 nativeOpen 失败会明确返回「需 root / 系统签名」，不会假装成功。" +
+            "【端侧 APK 构建台（BuildAci，包名 com.ai.assistance.quro.build）协作工作流】构建台可在设备内把 Java 源码编译成 APK。推荐与 ZorvAI 工作区（QuroWorkspace）协作的闭环：" +
+            "① 调用构建台 ACI.create_project（args:{project_name:\"工程名\"}）→ 它会在 ZorvAI 工作区建好文件夹并返回绝对路径 path；" +
+            "② 用 ZorvAI 自己的 workspace_write 工具把源码写进该 path 下的 src/（如 path/src/Main.java，用户在「工具箱-工作区」也能看到/改）；" +
+            "③ 调用构建台 ACI.build_apk（args:{project_dir: path 或工作区相对名, package_name?, app_label?, version_name?}）→ 构建台编译 src/ 全部 Java、注入 base.apk 模板并签名，把 APK 回写到该工程目录；" +
+            "④ build_apk 的结果日志经 ACI 回传给你（AI）读取决策——你不要直接去读构建台目录，日志已在返回里。构建台另暴露 build_dex（单文件源码→DEX）、build_project（自带工程→DEX）、build_toolchain（工具链自检）。注意：构建台读写的就是 ZorvAI 工作区目录（它持有全部文件权限），所以 create_project 建的文件夹会直接出现在「工具箱-工作区」里。"
     override val parametersJson = """{
         "type":"object",
         "properties":{
@@ -127,12 +132,15 @@ class QuroAidlAciCallTool : QuroTool {
                     sb.append("HTML（共 ${htmlPreview.length} 字符）:\n")
                     sb.append(htmlPreview)
                 }
-                // 输出其余未在上面专门处理的键（html_gz 不打印原始字节数组）
-                val handled = setOf("url", "title", "html", "html_gz", "truncated")
-                for (key in result.keySet()) {
-                    if (key in handled) continue
-                    sb.append("\n  - $key = ${result.get(key)}\n")
-                }
+            // 输出其余未在上面专门处理的键（html_gz 不打印原始字节数组）
+            val handled = setOf("url", "title", "html", "html_gz", "truncated")
+            for (key in result.keySet()) {
+                if (key in handled) continue
+                val raw = result.get(key)
+                // 构建台日志等超长文本压缩后再回传，避免占满上下文导致多步编排跑偏
+                val rendered = if (key == "log" && raw is String) compactAciLog(raw) else raw
+                sb.append("\n  - $key = $rendered\n")
+            }
                 sb.toString().trim()
             }
         } else {
@@ -144,6 +152,37 @@ class QuroAidlAciCallTool : QuroTool {
     private fun gunzip(data: ByteArray): ByteArray {
         val gz = GZIPInputStream(java.io.ByteArrayInputStream(data))
         return gz.readBytes()
+    }
+
+    /**
+     * 压缩受控端回传的超长文本（典型如构建台 build_dex/build_project 的 ecj/d8 日志）。
+     * 模型只需「成/败 + 为什么失败 + 首尾上下文」来决策下一步，无需整段编译输出。
+     * 压缩后仅几百字符，避免多步编排时撑爆上下文预算导致早期轮次被裁、模型丢主线跑偏。
+     */
+    private fun compactAciLog(text: String): String {
+        val cap = 900
+        if (text.length <= cap) return text
+        val lines = text.lineSequence().toList()
+        val errLines = lines.filter {
+            it.contains("ERROR", ignoreCase = true) ||
+                it.contains("Exception", ignoreCase = true) ||
+                it.contains("错误", ignoreCase = true) ||
+                it.contains("失败", ignoreCase = true) ||
+                it.contains("✗", ignoreCase = true) ||
+                it.contains("⛔", ignoreCase = true)
+        }
+        return buildString {
+            append("〔日志共 ${text.length} 字符，仅保留错误行+首尾〕\n")
+            lines.take(3).forEach { append(it).append("\n") }
+            if (errLines.isNotEmpty()) {
+                append("── 错误/异常行 ──\n")
+                errLines.take(15).forEach { append(it).append("\n") }
+            } else {
+                append("（无 ERROR/Exception 行）\n")
+            }
+            append("── 尾部 ──\n")
+            lines.takeLast(5).forEach { append(it).append("\n") }
+        }.take(cap)
     }
 
     /**

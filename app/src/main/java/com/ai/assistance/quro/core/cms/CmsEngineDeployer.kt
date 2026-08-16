@@ -2,7 +2,11 @@ package com.ai.assistance.quro.core.cms
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.util.QuroDiag
 import java.io.File
+
+/** 把 Windows CRLF 统一为 LF，防止写入 proot/Alpine 的 shell 脚本出现「illegal option -」等诡异解析错误。 */
+private fun String.normalizeLineEndings(): String = this.replace("\r\n", "\n").replace("\r", "\n")
 
 /**
  * CMS v2 CMS引擎部署器（一级部署系统）。
@@ -65,14 +69,16 @@ object CmsEngineDeployer {
         File(dir, "cms-engine.json").writeText(pkg.toJson())
 
         val boot = File(dir, "bootstrap.sh")
-        boot.writeText(pkg.bootstrapContent)
+        // 关键修复：Windows 工作区常见 CRLF，直接写入 Alpine 会让 /bin/sh 把 \r 当参数，
+        // 出现「set: illegal option -」「apk add 包名带 \r」等诡异常；写入前强转 LF。
+        boot.writeText(pkg.bootstrapContent.normalizeLineEndings())
         boot.setExecutable(true)
 
         val provDir = File(dir, "provision").also { it.mkdirs() }
         val prov = File(provDir, "provision.sh")
         prov.writeText(
-            if (pkg.provisionerContent.isBlank()) "#!/bin/sh\necho '[quro-engine] no provisioner'\n"
-            else pkg.provisionerContent,
+            (if (pkg.provisionerContent.isBlank()) "#!/bin/sh\necho '[quro-engine] no provisioner'\n"
+            else pkg.provisionerContent).normalizeLineEndings(),
         )
         prov.setExecutable(true)
 
@@ -81,7 +87,10 @@ object CmsEngineDeployer {
         pkg.sharedServices.forEach { svc ->
             if (!svc.enabled || svc.command.isBlank()) return@forEach
             val f = File(svcDir, "${svc.id}.sh")
-            f.writeText("#!/bin/sh\n# Quro Engine shared service: ${svc.name} (port ${svc.port})\n${svc.command}\n")
+            f.writeText(
+                "#!/bin/sh\n# Quro Engine shared service: ${svc.name} (port ${svc.port})\n${svc.command}\n"
+                    .normalizeLineEndings()
+            )
             f.setExecutable(true)
         }
 
@@ -92,6 +101,9 @@ object CmsEngineDeployer {
         CmsEngineStore.markDeployStep("执行引擎 bootstrap（安装基础运行时）", 40)
         val (bc, bout) = QuroLinuxEnv.run(context, "sh ${engineGuestDir()}/bootstrap.sh", timeoutMs = 300_000)
         if (bc != 0) {
+            // 🔎 诊断闭环：把 bootstrap 完整输出落 QuroDiag，设备侧无需 adb 即可取到
+            // 真实失败原因（如 CRLF 导致的「set: illegal option -」、apk 源 404 等）。
+            QuroDiag.log("CMS", "⛔ 引擎 bootstrap 失败(exit $bc) 完整输出:\n$bout")
             val msg = "⛔ 引擎 bootstrap 失败(exit $bc): ${bout.take(300)}"
             CmsEngineStore.markFailed(msg)
             return sb.appendLine(msg).toString()

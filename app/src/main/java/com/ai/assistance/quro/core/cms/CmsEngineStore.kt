@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.cms
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.util.QuroDiag
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONObject
@@ -107,6 +108,10 @@ object CmsEngineStore {
     }
 
     private fun pushLog(msg: String) {
+        // 🔎 诊断闭环：原 pushLog 只写内存 logBuf，CMS bootstrap 报错从不进
+        // Download/QuroAI_logs，用户「找不到日志」。现在同步落 QuroDiag，
+        // 设备侧无需 adb 即可取到真机失败原因（bootstrap exit code / 输出截取）。
+        QuroDiag.log("CMS", msg)
         synchronized(logBuf) {
             logBuf.add(msg)
             while (logBuf.size > 50) logBuf.removeAt(0)

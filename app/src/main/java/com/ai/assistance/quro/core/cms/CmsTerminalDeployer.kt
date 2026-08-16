@@ -5,6 +5,9 @@ import com.ai.assistance.quro.core.cms.CmsStateStore
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import java.io.File
 
+/** 把 Windows CRLF 统一为 LF，防止写入 proot/Alpine 的 shell 脚本出现「illegal option -」等诡异解析错误。 */
+private fun String.normalizeLineEndings(): String = this.replace("\r\n", "\n").replace("\r", "\n")
+
 /**
  * CMS v2 终端部署器（原创运行时 · 部署系统）。
  *
@@ -52,7 +55,9 @@ object CmsTerminalDeployer {
         CmsStateStore.appendLog("_bootstrap", "▶ 写入内置 bootstrap 脚本")
         val script = File(dir, "bootstrap.sh")
         try {
-            context.assets.open(BOOTSTRAP_ASSET).use { inp -> script.outputStream().use { out -> inp.copyTo(out) } }
+            // 关键修复：assets 文件在 Windows 工作区可能是 CRLF，直接拷进 Alpine 会让 sh 解析出错。
+            val text = context.assets.open(BOOTSTRAP_ASSET).bufferedReader().use { it.readText() }.normalizeLineEndings()
+            script.writeText(text)
             script.setExecutable(true)
         } catch (e: Exception) {
             return "⛔ 内置 bootstrap 脚本读取失败：${e.message}"
@@ -103,7 +108,7 @@ object CmsTerminalDeployer {
 
         if (pkg.entryContent.isNotBlank()) {
             val ef = File(dir, pkg.entry)
-            ef.writeText(pkg.entryContent)
+            ef.writeText(pkg.entryContent.normalizeLineEndings())
             ef.setExecutable(true)
         }
 

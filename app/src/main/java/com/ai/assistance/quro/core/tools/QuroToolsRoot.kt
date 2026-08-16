@@ -39,7 +39,18 @@ class RootExecTool : QuroTool {
         // E-7：统一走 QuroRootGateway（Shizuku-root → su 降级链 + quoting + 超时 + 审计）。
         // 旧实现在这里自己写了一遍降级和读流：没有超时（命令不退出就永久卡住 ReAct 循环）、
         // 不写审计、FD 也不回收。全部由网关接管。
-        return QuroRootGateway.execText(context, cmd, capsuleId = "tool.root_exec")
+        val res = QuroRootGateway.exec(context, cmd, capsuleId = "tool.root_exec")
+        // 🔧 防「乱执行」：ROOT 通道整体不可用（设备未 Root / 未授权 / su 缺失 / Shizuku 未连接）时，
+        // 返回清晰、可执行的结论并明确「请勿重试」，引导模型改用 terminal_exec（应用沙盒免权限 shell），
+        // 避免模型把通用错误当成「偶发失败」而反复重试同一条 root 命令 → 表现为跑偏 / 乱执行。
+        // （旧逻辑直接 render() 出 "❌ ROOT 执行失败：Cannot run program "su"…"，模型读不出「该换工具」，
+        //  会无限重试 root_exec。）
+        if (res.channel == QuroRootGateway.Channel.NONE || res.error.isNotBlank()) {
+            return "❌ 本设备未获取 ROOT 或本应用未获 ROOT 授权，无法执行 root 命令" +
+                "（${res.error.ifBlank { "su 与 Shizuku 通道均不可用" }}）。" +
+                "请勿继续重试 root_exec；请改用 terminal_exec（应用沙盒内免权限 shell）执行同类命令。"
+        }
+        return res.render()
     }
 }
 
