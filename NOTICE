@@ -50,6 +50,36 @@ Sherpa-NCNN (k2-fsa)
 GeckoView (Mozilla)
   License: MPL-2.0 (file-level copyleft; source provided with the build)
 
+----------------------------------------------------------------------
+LIVE2D 栈（工具箱 Live2D 伙伴）
+----------------------------------------------------------------------
+Live2D 伙伴的渲染与模型相关组件，各自保留其原有许可证：
+
+PixiJS (pixi.js 6.5.10)
+  License: MIT
+  Copyright: PixiJS (Good Boy Digital Ltd. / pixijs.com)
+
+pixi-live2d-display (0.4.0)
+  License: MIT
+  Note: Live2D 模型渲染层（基于 PixiJS + Live2D Cubism）
+
+Live2D Cubism Core SDK (live2dcubismcore 1.0.2)
+  License: Live2D Open Software License
+  Copyright: Live2D Inc.
+  Note: Cubism Core 运行时，随 Live2D Cubism SDK 分发；仅可与 Live2D Cubism 产品配合使用。
+
+Hiyori 模型（默认示例模型）
+  License: Live2D Open Software License
+  Copyright: Live2D Inc.
+  Source: Live2D 官方 CubismWebSamples（Samples/Resources/Hiyori）
+  Note: 由 Live2D 官方提供的免费示例模型，可随应用分发。
+
+DesktopFriends（Live2D 情绪/说话逻辑移植来源）
+  License: MIT
+  Copyright: Tosuke-sama
+  Note: 本应用仅移植其 Live2D 渲染交互逻辑（PixiJS + pixi-live2d-display 方案），
+        已做完全去品牌化处理；MIT 许可要求保留上述版权与许可声明。
+
 
 org.json — org.json:json:20240303
   License: Public Domain

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>ZorvAI Live2D</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; background: transparent;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #stage { width: 100%; height: 100%; display: block; touch-action: none; }
+  #loading {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #8a93a6; font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    pointer-events: none;
+  }
+  #loading.hide { display: none; }
+  .spin {
+    width: 30px; height: 30px; margin-right: 10px; border: 3px solid rgba(255,255,255,0.25);
+    border-top-color: #6ea8fe; border-radius: 50%; animation: spin 0.9s linear infinite; display: inline-block; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div id="loading"><span class="spin"></span>正在加载 Live2D 模型…</div>
+
+<script src="pixi.min.js"></script>
+<script src="live2dcubismcore.min.js"></script>
+<script src="cubism4.min.js"></script>
+<script src="pixi-live2d-display.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // 兼容 pixi-live2d-display 对全局 PIXI 的依赖
+  if (typeof PIXI !== "undefined") { window.PIXI = PIXI; }
+
+  var canvas = document.getElementById("stage");
+  var loadingEl = document.getElementById("loading");
+
+  var app = null;
+  var model = null;
+  var baseScale = 1;
+  var defaultModelPath = "models/Hiyori/Hiyori.model3.json";
+
+  // 标准 Cubism 参数情绪映射（无表情文件时作为兜底，适用于任意 Cubism 4 模型）
+  var EMOTION_PARAMS = {
+    neutral:   {},
+    happy:     { ParamMouthForm: -1.0, ParamBrowY: 0.35, ParamCheek: 0.7, ParamEyeLOpen: 1.0, ParamEyeROpen: 1.0 },
+    angry:     { ParamBrowY: -0.8, ParamBrowX: 0.35, ParamMouthForm: 0.5, ParamAngleZ: 0.12 },
+    sad:       { ParamBrowY: 0.6, ParamBrowX: -0.45, ParamMouthForm: 0.55, ParamEyeLOpen: 0.4, ParamEyeROpen: 0.4 },
+    surprised: { ParamBrowY: 0.7, ParamEyeLOpen: 1.0, ParamEyeROpen: 1.0, ParamMouthOpenY: 0.5 },
+    relaxed:   { ParamMouthForm: -0.45, ParamBrowY: 0.15 },
+    thinking:  { ParamBrowY: 0.4, ParamBrowX: 0.2, ParamAngleX: -0.1 }
+  };
+
+  // 情绪 -> 表情文件名尝试（模型自带表情文件时优先）
+  var EMOTION_EXPR = {
+    happy: ["happy", "f01", "joy", "smile"],
+    angry: ["angry", "f02", "mad"],
+    sad: ["sad", "f03", "cry"],
+    surprised: ["surprised", "f04", "shock"],
+    relaxed: ["relaxed", "f05", "calm"],
+    thinking: ["thinking", "f06"],
+    neutral: ["neutral", "f00"]
+  };
+
+  var emotionTarget = {};     // 目标参数值
+  var emotionCurrent = {};    // 当前(已平滑)参数值
+  var speaking = false;
+  var speakUntil = 0;
+  var availableExpressions = [];
+  var availableMotions = {};
+
+  function notify(event, data) {
+    try {
+      if (window.ZorvBridge && window.ZorvBridge.postMessage) {
+        window.ZorvBridge.postMessage(JSON.stringify({ event: event, data: data || {} }));
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function hideLoading() { if (loadingEl) loadingEl.className = "hide"; }
+  function showLoading() { if (loadingEl) loadingEl.className = ""; }
+
+  function applyTransform(scale, offsetX, offsetY) {
+    if (!model || !app) return;
+    var finalScale = baseScale * (scale == null ? 1 : scale);
+    var cx = app.screen.width / 2;
+    var cy = app.screen.height / 2;
+    var ox = (offsetX == null ? 0 : offsetX) / 100 * app.screen.width;
+    var oy = (offsetY == null ? 0 : offsetY) / 100 * app.screen.height;
+    model.scale.set(finalScale);
+    model.position.set(cx + ox, cy + oy);
+  }
+
+  function refreshCanvas() {
+    if (!app || !canvas.parentElement) return;
+    app.renderer.resize(window.innerWidth, window.innerHeight);
+    if (model) {
+      baseScale = Math.min(app.screen.width / model.width, app.screen.height / model.height) * 0.85;
+      applyTransform(1, 0, 0);
+    }
+  }
+
+  function collectModelInfo() {
+    availableExpressions = [];
+    availableMotions = {};
+    try {
+      var mm = model.internalModel && model.internalModel.motionManager;
+      if (mm && mm.definitions) {
+        for (var g in mm.definitions) {
+          if (mm.definitions[g] && mm.definitions[g].length) {
+            availableMotions[g] = mm.definitions[g].length;
+          }
+        }
+      }
+      var em = mm && mm.expressionManager;
+      if (em && em.definitions) {
+        em.definitions.forEach(function (d) { availableExpressions.push(d.name || d.Name || "unknown"); });
+      }
+    } catch (e) { console.warn("collectModelInfo", e); }
+  }
+
+  function loadModel(path) {
+    if (!app || !path) return Promise.resolve(false);
+    showLoading();
+    if (model) { app.stage.removeChild(model); model.destroy(); model = null; }
+    emotionTarget = {}; emotionCurrent = {}; speaking = false;
+
+    return Live2DModel.from(path, { autoInteract: true, autoUpdate: true }).then(function (m) {
+      model = m;
+      baseScale = Math.min(app.screen.width / model.width, app.screen.height / model.height) * 0.85;
+      model.anchor.set(0.5, 0.5);
+      applyTransform(1, 0, 0);
+      app.stage.addChild(model);
+      collectModelInfo();
+      try { model.motion("Idle"); } catch (e) { /* no idle */ }
+
+      model.on("hit", function (areas) {
+        if (areas.indexOf("body") >= 0 || areas.indexOf("Body") >= 0) {
+          try { model.motion("TapBody"); } catch (e) {}
+          setEmotion("happy", 2500);
+        }
+      });
+
+      hideLoading();
+      notify("ready", {
+        path: path,
+        emotions: window.ZorvLive2D.emotions(),
+        expressions: availableExpressions,
+        motions: availableMotions
+      });
+      return true;
+    }).catch(function (e) {
+      console.error("loadModel failed", e);
+      hideLoading();
+      notify("error", { message: String(e && e.message || e) });
+      return false;
+    });
+  }
+
+  // 情绪：优先使用模型自带表情文件，否则回落到标准参数
+  function setEmotion(name, autoResetMs) {
+    name = name || "neutral";
+    // 重置参数目标
+    emotionTarget = {};
+    if (EMOTION_PARAMS[name]) {
+      for (var k in EMOTION_PARAMS[name]) emotionTarget[k] = EMOTION_PARAMS[name][k];
+    }
+    // 尝试表情文件
+    var tried = false;
+    if (availableExpressions.length && EMOTION_EXPR[name]) {
+      for (var i = 0; i < EMOTION_EXPR[name].length; i++) {
+        if (availableExpressions.indexOf(EMOTION_EXPR[name][i]) >= 0) {
+          try { model.expression(EMOTION_EXPR[name][i]); tried = true; } catch (e) {}
+          break;
+        }
+      }
+    }
+    notify("emotion", { name: name, viaExpression: tried });
+    if (autoResetMs && name !== "neutral") {
+      setTimeout(function () { setEmotion("neutral"); }, autoResetMs);
+    }
+  }
+
+  function playMotion(group, index) {
+    if (!model) return;
+    try {
+      if (typeof index === "number") model.motion(group, index);
+      else model.motion(group);
+    } catch (e) { console.warn("playMotion", e); }
+  }
+
+  // 说话：驱动 ParamMouthOpenY 口型包络，可选配合 idle 动作
+  function speak(text, durationMs) {
+    if (!model) return;
+    var ms = durationMs || Math.max(1400, (text || "").length * 70);
+    speaking = true;
+    speakUntil = performance.now() + ms;
+    try { model.motion("Idle"); } catch (e) {}
+  }
+
+  function perFrame() {
+    if (!model || !model.internalModel) return;
+    var cm = model.internalModel.coreModel;
+    if (!cm) return;
+    // 情绪参数平滑应用
+    for (var id in emotionTarget) {
+      var tgt = emotionTarget[id];
+      var cur = emotionCurrent[id] || 0;
+      cur += (tgt - cur) * 0.12;
+      emotionCurrent[id] = cur;
+      if (id !== "ParamMouthOpenY") cm.setParamValue(id, cur);
+    }
+    // 说话口型：仅在未由情绪显式控制嘴部时叠加
+    if (speaking) {
+      var phase = (performance.now() % 380) / 380;
+      var open = (Math.sin(phase * Math.PI * 2) * 0.5 + 0.5) * 0.85;
+      cm.setParamValue("ParamMouthOpenY", open);
+      if (performance.now() > speakUntil) {
+        speaking = false;
+        cm.setParamValue("ParamMouthOpenY", 0);
+      }
+    }
+  }
+
+  window.ZorvLive2D = {
+    loadModel: function (p) { return loadModel(p); },
+    setEmotion: function (n, ms) { setEmotion(n, ms); },
+    playMotion: function (g, i) { playMotion(g, i); },
+    speak: function (t, ms) { speak(t, ms); },
+    setTransform: function (s, ox, oy) { applyTransform(s, ox, oy); },
+    isReady: function () { return !!model; },
+    emotions: function () { return Object.keys(EMOTION_PARAMS); },
+    expressions: function () { return availableExpressions.slice(); },
+    motions: function () { return availableMotions; },
+    defaultModel: function () { return defaultModelPath; }
+  };
+
+  function init() {
+    if (typeof PIXI === "undefined") { notify("error", { message: "PIXI 未加载" }); return; }
+    app = new PIXI.Application({
+      view: canvas,
+      backgroundAlpha: 0,
+      width: window.innerWidth,
+      height: window.innerHeight,
+      antialias: true,
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true
+    });
+    app.ticker.add(perFrame);
+    window.addEventListener("resize", refreshCanvas);
+    window.addEventListener("orientationchange", refreshCanvas);
+    loadModel(defaultModelPath);
+  }
+
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>

@@ -822,6 +822,11 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 - **主许可**：Apache-2.0（应用全部源码）。
 - **GeckoView（Mozilla）**：以 **MPL-2.0** 分发（file-level copyleft）。其对应源代码随构建提供，符合该许可证义务。
+- **Live2D 伙伴（工具箱 Live2D 桌宠）**：相关组件各自保留其许可证，详细说明见 [NOTICE](./NOTICE) 的「Live2D 栈」一节：
+  - 渲染引擎 **PixiJS**（MIT，PixiJS 团队）与 **pixi-live2d-display**（MIT）。
+  - **Live2D Cubism Core SDK**（`live2dcubismcore`）：**Live2D Open Software License**（Live2D Inc.）。
+  - 默认搭载模型 **Hiyori**：**Live2D Open Software License**（Live2D Inc.），取自 Live2D 官方 CubismWebSamples。
+  - 情绪 / 说话逻辑移植自开源项目 **DesktopFriends**（Tosuke-sama，**MIT**），已做完全去品牌化处理，仅保留 MIT 必需的版权与许可声明。
 - **其余第三方依赖**（AndroidX / Jetpack Compose、Kotlin、OkHttp、Shizuku、QuickJS、Sherpa-NCNN 等）各自保留其原有许可证，完整清单见 [NOTICE](./NOTICE)。
 
 > 本仓库仅就**实际随包分发**的组件声明其许可证义务；未随包分发的组件不产生额外的 Copyleft 义务。
