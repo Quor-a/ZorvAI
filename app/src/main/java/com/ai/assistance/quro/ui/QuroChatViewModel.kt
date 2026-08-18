@@ -179,14 +179,6 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         uiPrefs.edit { putBoolean("auto_save_memory", on) }
     }
 
-    // 对话框「IDE 工具条」开关（默认开启；用户可在对话框内收起/展开，或在设置页关闭）
-    private val _ideToolbarEnabled = MutableStateFlow(uiPrefs.getBoolean("ide_toolbar_enabled", true))
-    val ideToolbarEnabled: StateFlow<Boolean> = _ideToolbarEnabled.asStateFlow()
-    fun setIdeToolbarEnabled(on: Boolean) {
-        _ideToolbarEnabled.value = on
-        uiPrefs.edit { putBoolean("ide_toolbar_enabled", on) }
-    }
-
     // 外观与对话设置：深色模式（全局主题，需上提到 QuroApp 根部主题处生效）
     private val _darkMode = MutableStateFlow(uiPrefs.getBoolean("dark_mode", false))
     val darkModePref: StateFlow<Boolean> = _darkMode.asStateFlow()
@@ -1432,7 +1424,8 @@ $recent
             "- **可视化编程 / AI 自写图表（mermaid，重要）**：当用户要你「画流程图 / 架构图 / 时序图 / 状态机 / 类图 / 思维导图 / git 图 / 饼图 / 时间线 / 甘特图 / 关系图」等任何可视化图形，或说「可视化」「画个图」「用图展示」「做个架构图 / 流程图 / 脑图」时，**必须用 `ui_widget` 下发一个 `type:\"mermaid\"` 的组件**，把图用 Mermaid 语法写在 `source` 字段（多行字符串，换行用 \n），客户端会用离线 Mermaid.js 在对话框里直接渲染出可缩放的真图——这是真正的「可视化编程」能力：你要画的图自己用 Mermaid 写出来，客户端只负责渲染，不内置任何固定图。" +
             "示例：用户说「画个登录流程」→ 调用 ui_widget({ \"spec\": { \"type\":\"mermaid\", \"title\":\"登录流程\", \"source\":\"flowchart TD\nA[开始] --> B{已登录?}\nB -- 否 --> C[跳登录页]\nB -- 是 --> D[进首页]\" } })。" +
             "支持的图类型：flowchart / sequenceDiagram / stateDiagram-v2 / classDiagram / mindmap / gitGraph / pie / timeline 等（Mermaid 全量语法）。可选 `theme`：default/dark/forest/neutral/base，缺省按系统深浅色自动选。" +
-            "注意：不要只写纯文本或 Markdown 伪图——要图就发 mermaid 组件，用户才能在对话框里看到真渲染的图。\n"
+            "注意：不要只写纯文本或 Markdown 伪图——要图就发 mermaid 组件，用户才能在对话框里看到真渲染的图。\n" +
+            "补充：除了 `ui_widget` 的 mermaid 组件，**直接写 ` ```mermaid ` 围栏代码块也会被对话框渲染成图**，两种方式等效；而且用户自己也能发 mermaid 围栏画图，对话框同样会渲染——可视化编程对人与 AI 都开放。\n"
         )
         sb.append(
             "- **代码块与 HTML 可视化渲染（重要）**：对话框内置代码块渲染能力，你**应当主动使用围栏格式输出代码**，让结果以精美卡片呈现，而不是甩一大坨纯文本。" +
