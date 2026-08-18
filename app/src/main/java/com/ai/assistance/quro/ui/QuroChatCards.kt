@@ -5,6 +5,7 @@ import android.content.Intent
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebSettings
 import android.widget.Toast
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -213,6 +214,7 @@ fun QuroChatCardView(card: QuroChatCard, onCommand: (String) -> Unit) {
         is QuroChatCard.BadgeCard -> BadgeCardView(card, onCommand)
         is QuroChatCard.AvatarGroupCard -> AvatarGroupCardView(card, onCommand)
         is QuroChatCard.MermaidCard -> MermaidCardView(card)
+        is QuroChatCard.HtmlPreviewCard -> HtmlPreviewCardView(card)
     }
 }
 
@@ -1652,6 +1654,130 @@ private fun MermaidFullscreen(card: QuroChatCard.MermaidCard, onDismiss: () -> U
             }
         }
     }
+}
+
+/**
+ * AI 运行代码产物（run_code lang=html）的网页预览卡片（v1057）。
+ *
+ * 与 MermaidCard 同一思路：客户端不内置任何网页，只渲染 AI 通过 `html` 字段下发的完整 HTML 源码。
+ * - WebView 用 loadDataWithBaseURL 加载，JS 开启（AI 生成的可信工件，需跑 Chart.js / Three.js 等脚本）。
+ * - 渲染完成后按 `document.documentElement.scrollHeight` 自适应高度（上限 720dp，避免无限撑高）。
+ * - 顶部提供【全屏 / 复制源码】：全屏页同样走 WebView 自适应高度。
+ */
+@Composable
+private fun HtmlPreviewCardView(card: QuroChatCard.HtmlPreviewCard) {
+    val cs = MaterialTheme.colorScheme
+    val density = LocalDensity.current.density
+    val context = LocalContext.current
+    var heightPx by remember(card.id) { mutableStateOf(360) }
+    var fullscreen by remember(card.id) { mutableStateOf(false) }
+    val title = card.title.ifBlank { "网页预览（AI 运行产物）" }
+
+    CardShell(
+        title = title,
+        headerEnd = {
+            IconButton(onClick = { fullscreen = true }, Modifier.size(30.dp)) {
+                Icon(Icons.Filled.Fullscreen, "全屏查看", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = { copyText(context, card.html, "已复制网页源码") }, Modifier.size(30.dp)) {
+                Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            }
+        },
+    ) {
+        if (card.html.isBlank()) {
+            Text("（无网页内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+            return@CardShell
+        }
+        HtmlPreviewWebView(
+            html = card.html,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height((heightPx / density).dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.White),
+            onHeight = { heightPx = it },
+        )
+    }
+
+    if (fullscreen) {
+        Dialog(
+            onDismissRequest = { fullscreen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Surface(color = cs.surface, modifier = Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            title,
+                            color = cs.onSurface,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = { copyText(context, card.html, "已复制网页源码") }, Modifier.size(36.dp)) {
+                            Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                        }
+                        IconButton(onClick = { fullscreen = false }, Modifier.size(36.dp)) {
+                            Icon(Icons.Filled.Close, "关闭", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    HorizontalDivider(color = cs.outlineVariant)
+                    Box(Modifier.fillMaxSize().background(Color.White).padding(8.dp)) {
+                        HtmlPreviewWebView(
+                            html = card.html,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 可复用的网页预览 WebView：loadDataWithBaseURL 加载 AI 下发的 HTML，
+ * JS 开启以支持图表/3D 脚本；onPageFinished 读真实内容高度回调（上限 720dp）。
+ */
+@Composable
+private fun HtmlPreviewWebView(
+    html: String,
+    modifier: Modifier = Modifier,
+    onHeight: (Int) -> Unit = {},
+) {
+    AndroidView(
+        modifier = modifier,
+        factory = { context ->
+            WebView(context).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.loadsImagesAutomatically = true
+                settings.useWideViewPort = true
+                settings.loadWithOverviewMode = true
+                settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        super.onPageFinished(view, url)
+                        view?.evaluateJavascript("document.documentElement.scrollHeight") { value ->
+                            val px = value?.replace("\"", "")?.toIntOrNull() ?: return@evaluateJavascript
+                            onHeight(px.coerceIn(160, 1440))
+                        }
+                    }
+                }
+                tag = html
+                loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+            }
+        },
+        update = { wv ->
+            // 仅当 HTML 内容变化时才重载，避免每次 recomposition 重复加载造成闪烁
+            if (wv.tag != html) {
+                wv.tag = html
+                wv.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+            }
+        },
+    )
 }
 
 /** 复制文本到剪贴板并 toast 提示。 */

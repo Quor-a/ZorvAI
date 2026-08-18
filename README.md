@@ -90,7 +90,7 @@
 
 | 能力域 | 关键能力 |
 |--------|----------|
-| **对话 UI（Compose）** | ChatScreen 对话框、PersonaBar 人格卡、PermissionModeBar（「AI 自动保存记忆」+「深度思考」并排胶囊，置于输入框**下方**）、对话框内 **IDE 能力入口**（代码编辑器 / 终端 / 工具箱 / 文件 经输入框「+」菜单与 `ui_open_*` 唤起，不叠加冗余按钮）、**mermaid 围栏即画即渲染**（AI 或用户写的 ` ```mermaid ` 代码块离线渲染成可缩放矢量图）、回到底部浮动按钮、全屏预览、Markdown 与代码块渲染 |
+| **对话 UI（Compose）** | ChatScreen 对话框、PersonaBar 人格卡、PermissionModeBar（「AI 自动保存记忆」+「深度思考」并排胶囊，置于输入框**下方**）、对话框内 **IDE 能力入口**（代码编辑器 / 终端 / 工具箱 / 文件 经输入框「+」菜单与 `ui_open_*` 唤起，不叠加冗余按钮）、**mermaid 围栏即画即渲染**（AI 或用户写的 ` ```mermaid ` 代码块离线渲染成可缩放矢量图）、**AI 自写代码运行（run_code）：AI 直接写/跑代码，html 网页工件在对话框内联实时预览**（手机 AI IDE，可视化产出融入内容区）、回到底部浮动按钮、全屏预览、Markdown 与代码块渲染 |
 | **Agent 核心** | 多会话隔离（`liveBuffers` 按会话独立）、种子快照（`convBase`）、显示刷新闸门（`canUpdateDisplay`）、多轮 `[第N轮]` hidden 标记防串台、系统提示词构建、工具注册表（`QuroToolRegistry.active`）、技能系统（`QuroSkill` → 注册为 `skill__{name}` 工具） |
 | **工具 / 能力层** | **120+ 内置工具**（`buildQuroRegistry` 注册 123 项 + 导入工具 + 可调用技能）：无障碍 `input_text`/`tap_screen`/`read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text`/`ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
 | **离线 LLM 引擎** | 应用内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 剥离、本地工具调用、会话复用；离线也能对话 |
@@ -119,14 +119,22 @@
 - **富组件融进气泡（QuroChatCard）**：AI 经 `ui_widget` / `ui_card` 下发的图表、待办、表单、进度等可视化组件直接合体进气泡
 - **历史会话管理 / 会话导出**：创建 / 删除单条 / 清空全部、侧栏会话列表；设置入口「导出对话 → 导出为文本」
 
-### 1.5 对话框 IDE 能力（v1.0.56 重构）
+### 1.5 对话框 IDE 能力（v1.0.56 重构 → v1.0.57 AI IDE 能力地图）
 对话框本身就是一个可自由使用的轻量 IDE，**不靠额外按钮堆叠**——IDE 级能力直接复用输入框「+」菜单与 AI 侧 `ui_open_*` 工具唤起，避免与已有入口重复：
 - **代码**：内置 CodeMirror 离线代码编辑器（JavaScript / Python / HTML / JSON / CSS / XML / C·C++·Java 语法高亮），「运行」走 App 内置 QuickJS 原生沙箱（JS）或系统 / Termux 的 `python3` 离线执行（入口：输入框「+」→ 工具箱，或 `ui_open_editor`）
 - **终端**：打开 proot / 本地 Shell，可直接跑命令、查设备环境（入口：输入框「+」→ 终端，或 `ui_open_terminal`）
 - **工具箱**：文件 / 包名 / 浏览器等内置工具集合（入口：输入框「+」→ 工具箱，或 `ui_open_toolbox`）
 - **文件**：直接附件 / 上传到对话框（入口：输入框「+」→ 上传，或 `ui_open_upload`）
 - **mermaid 围栏即画即渲染（v1.0.56 新增的「可视化编程」缺口）**：无论是 AI 还是**用户自己**，只要在对话框里写 ` ```mermaid ` 代码块（流程 / 时序 / 状态机 / 思维导图 / 类图 / git 图 / 饼图等），对话框都会用离线 Mermaid.js 直接渲染成可缩放的真图——支持全屏查看、下载 SVG、复制源码。这补齐了此前「可视化编程只走 `ui_widget` JSON」的局限，让对话框真正成为人人可画的自由画布。
-- 系统提示词（[`QuroPlatformManifest`](app/src/main/java/com/ai/assistance/quro/core/QuroPlatformManifest.kt) 「能力环境」段）与 [`QuroChatViewModel`](app/src/main/java/com/ai/assistance/quro/ui/QuroChatViewModel.kt) 的 mermaid 指引已同步：引导 AI 在「写代码 / 改代码 / 跑脚本 / 查环境 / 画图」时主动调用对应 `ui_open_*` 与 mermaid（组件或围栏皆可）。
+- **手机 AI IDE（带可视化）——AI 自写代码并运行（v1.0.57 核心新增）**：`run_code` 工具不只是「给人点运行按钮」，而是 **AI 自己写代码、自己跑、产出物直接渲染在对话框里**的端侧编程能力（解决「手机上人手敲代码体验差」的痛点）。各语言在对话框里能做什么（已写入系统提示词「能力地图」，AI 会自动按此调用）：
+  - `python`（默认）：**数据处理/清洗、网络爬虫（抓真实网页数据）、调用 AI/LLM API、算法计算、自动化脚本**——输出回灌给 AI 推理/总结，再做成图表。
+  - `node`/`javascript`/`js`：App 内置 **QuickJS 原生沙箱离线执行**（无需 Termux），逻辑计算与 JSON/字符串处理。
+  - `shell`：应用沙盒内 sh 命令。
+  - `html`/`htm`/`markup`：把**完整 HTML 源码作为「网页工件」返回**，对话框用 WebView **实时渲染成可交互网页**（支持内联样式/脚本、SVG、离线 Three.js 三维；在线时可用 Chart.js/ECharts 画图）——AI 生成的网页/图表/游戏**直接长在对话框里**，无需用户复制出去打开。
+  - `json`/`xml`：数据/配置/Android 布局/**SVG**（SVG 走 HTML 预览直接成图）。
+  - `java`/`c`/`c++`：撰写与算法逻辑；端侧沙箱不能直接编译，需借助 `workspace_write` + ACI 构建台（云端编译）。
+  - **组合拳**：例如「抓数据(python) → 算指标(python) → 画看板(html 工件)」整条链路 AI 一人完成，全部在对话框呈现。工作流口诀：**算/抓/分析 → `run_code(python)`；画网页/图表/三维 → 返回 `html` 工件（或 ```html 围栏，二者等效）；画流程/架构图 → mermaid**。
+- 系统提示词（[`QuroPlatformManifest`](app/src/main/java/com/ai/assistance/quro/core/QuroPlatformManifest.kt) 「能力环境」段与 [`QuroChatViewModel`](app/src/main/java/com/ai/assistance/quro/ui/QuroChatViewModel.kt) 的「手机 AI IDE 能力地图」指引）已同步：引导 AI 主动用 `run_code` 跑代码、用 html 工件/```html 围栏渲染可视化、用 mermaid 画图，把「说」和「做 / 画 / 跑」自由组合。
 
 ### 2. 内置技能 Skills（63 个 · 首次启动自动注入）
 - 轻量技能系统：`QuroSkill` → 注册为 `skill__{name}` 工具，可被 LLM 自动编排
@@ -773,9 +781,9 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-**最新版本：`v1.0.56`**（2026-08-18，含离线 MNN/llama.cpp 引擎）：
+**最新版本：`v1.0.57`**（2026-08-18，含离线 MNN/llama.cpp 引擎）：
 
-- 🟢 **[QuroAI-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.56/QuroAI-full-debug.apk)**（约 340MB，含离线引擎，**最新**）
+- 🟢 **[QuroAI-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.57/QuroAI-full-debug.apk)**（约 340MB，含离线引擎，**最新**）
 
 > 💡 完整（含离线引擎）APK 体积较大；受 GitLab / Gitee 附件体积限制，大体积主程序包**仅 GitHub Releases 提供**，请勿到 GitLab / Gitee 找主程序 APK。所有历史版本（v1.0.2 起）与受控端浏览器、ACI 核心库 AAR 均在 [Releases 页面](https://github.com/Quor-a/ZorvAI/releases) 提供。
 

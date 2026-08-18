@@ -457,6 +457,25 @@ sealed interface QuroChatCard {
         val source: String,
         val theme: String = "",
     ) : QuroChatCard
+
+    // ───────────── v1057 对话框内联网页预览（AI 运行代码产物） ─────────────
+
+    /**
+     * AI 通过 `run_code`（`lang=html`）运行后下发的**网页工件**：客户端用 WebView 在对话框气泡里
+     * 直接渲染成可交互的实时预览（含移动端 viewport 自适应缩放）。
+     *
+     * 与 ```html 围栏预览共享同一套 WebView 渲染能力，区别在于它是 AI「运行代码」的产物，
+     * 自动随工具调用出现在气泡里，无需用户点开代码块再切「预览」标签——
+     * 即「AI 写网页 → AI 运行 → 网页直接长在对话框里」的完整闭环，把手机 AI IDE 的产出物真正融入对话内容区。
+     *
+     * @param html AI 生成的完整 HTML 源码（可含内联 `<style>`/`<script>`，支持 SVG / Three.js 离线渲染，
+     *             在线时也可用 Chart.js / ECharts 等 CDN 库画图）
+     */
+    data class HtmlPreviewCard(
+        override val id: String,
+        override val title: String,
+        val html: String,
+    ) : QuroChatCard
 }
 
 /**
@@ -846,6 +865,7 @@ fun serializeCard(card: QuroChatCard): JSONObject {
         is QuroChatCard.BadgeCard -> "badge"
         is QuroChatCard.AvatarGroupCard -> "avatargroup"
         is QuroChatCard.MermaidCard -> "mermaid"
+        is QuroChatCard.HtmlPreviewCard -> "htmlpreview"
     })
     o.put("id", card.id)
     o.put("title", card.title)
@@ -996,6 +1016,7 @@ fun serializeCard(card: QuroChatCard): JSONObject {
             o.put("source", card.source)
             o.put("theme", card.theme.ifBlank { JSONObject.NULL })
         }
+        is QuroChatCard.HtmlPreviewCard -> o.put("html", card.html)
     }
     return o
 }
@@ -1135,6 +1156,10 @@ fun parseCard(o: JSONObject): QuroChatCard? {
                 id, title,
                 o.optString("source", ""),
                 if (o.has("theme") && !o.isNull("theme")) o.optString("theme") else "",
+            )
+            "htmlpreview" -> QuroChatCard.HtmlPreviewCard(
+                id, title,
+                o.optString("html", ""),
             )
             else -> null
         }

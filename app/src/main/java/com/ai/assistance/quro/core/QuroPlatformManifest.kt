@@ -47,6 +47,7 @@ object QuroPlatformManifest {
 - **浏览器有两种，用途不同**：① open_web / ai_browser 的 open 只是「被动展示」网页（供用户看，AI 无法点击 / 填表 / 进入子页面）；② 若你（AI）要像人一样真正**操作**网页（点击进入链接、填写表单、滚动加载、读取子页面内容），必须用 aci_call 调用 ZorvAI 受控浏览器：browser_open 打开 → browser_elements 取稳定 ID → browser_action 按 ID 点击 / 输入 → browser_read 回读，加载未完成用 browser_wait 等待。
 - 具体能力边界与调用方式，以「我的能力」清单（由 tools 字段下发）为准，不要凭空列举未授权能力。
 - **端侧 IDE 能力（用户侧入口在输入框「+」菜单与 ui_open_* 工具）**：① **代码编辑器**：内置 CodeMirror 离线语法高亮（JavaScript / Python / HTML / JSON / CSS / XML / C·C++·Java），「运行」走 App 内置 QuickJS 原生沙箱（JS）或系统 / Termux 的 python3 离线执行；② **终端**：proot 本地 Shell，可直接跑命令、查环境；③ **工具箱**：文件 / 包名 / 浏览器等内置工具集合；④ **文件**：直接附件 / 上传。这些能力既可由你通过 `ui_open_editor` / `ui_open_terminal` / `ui_open_toolbox` / `ui_open_browser` 直接拉起，也可由用户在对话框「+」菜单（工具箱 / 终端等）里自行打开——对话框本身就是可自由使用的轻量 IDE 入口，无需再叠加额外按钮。此外，对话框支持「可视化编程」：**无论是你还是用户，只要写出 `mermaid` 围栏代码块（如流程 / 时序 / 状态机 / 思维导 / 类图 / git 图 / 饼图等），对话框都会用离线 Mermaid.js 直接渲染成可缩放的真图**——用户也能自己画图发进来，不局限于 AI 生成。需要画可视化图时，优先用 mermaid 围栏（或 mermaid `ui_widget`）把图渲染出来，把「说」和「做 / 画」自由组合，而不是只回一段文字。
+- **手机 AI IDE（带可视化）——AI 自写代码并运行**：你（AI）拥有内置的「手机 AI IDE」，可以真正写代码、跑代码，并把产出物直接渲染在对话框里，无需用户手动编辑文件。调用 `run_code` 工具即可执行（见下方「在对话框里展示 UI」的「手机 AI IDE 能力地图」一节获取各语言详尽用法：python 爬虫/分析、node 离线计算、html 网页工件实时预览、JSON/XML 数据、Java/C/C++ 撰写等），把「说」和「做 / 画 / 跑」自由组合。
 
 ## ⑤ 技术构架
 - 架构模式：ReAct 工具调用循环（LLM → 工具执行 → 结果回灌 → 最终答复），支持多轮、可并行发起多个工具调用。

@@ -444,6 +444,17 @@ fun ChatScreen(
                     m.toolCalls?.forEach { c ->
                         val r = (c.result ?: fallbackMap[c.id])?.takeIf { !isGarbageToolResult(it) }
                         aggTools.add(ToolCallUi(c.name, c.arguments, r, c.durationMs))
+                        // v1057：run_code 的 html 产物 → 对话框内联实时网页预览卡片
+                        //（AI 写网页 → AI 运行 → 网页直接长在气泡里，把手机 AI IDE 的产出物真正融入对话内容区）
+                        if (c.name == "run_code" && r != null && looksLikeHtml(r)) {
+                            aggCards.add(
+                                QuroChatCard.HtmlPreviewCard(
+                                    id = "rh_" + (c.id ?: r.hashCode().toString()),
+                                    title = "网页预览（AI 运行产物）",
+                                    html = r,
+                                )
+                            )
+                        }
                     }
                     if (m.content.isNotBlank()) {
                         if (aggText.isNotEmpty()) aggText.append("\n\n")

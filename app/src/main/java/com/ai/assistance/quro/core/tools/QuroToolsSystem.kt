@@ -396,17 +396,20 @@ class OpenWebTool : QuroTool {
 
 // ==================== IDE / 代码执行工具 ====================
 
-/** 执行 Python/Node 代码片段（IDE 能力）。 */
+/** 执行代码 / 返回网页工件（AI 自带的「手机 AI IDE」核心工具）。 */
 class RunCodeTool : QuroTool {
     override val name = "run_code"
-    override val description = "执行一段代码并返回输出结果。参数 {\"code\":\"代码内容\",\"lang\":\"python|node|shell\"}。" +
-        "node/js 走 App 内置 QuickJS 原生沙箱离线执行（无需 Termux）；python 优先用 Termux 自带 python，否则回退系统 python3。" +
-        "适用于简单计算、数据处理、文本分析等轻量级任务。"
+    override val description = "在手机端执行一段代码并返回结果，是 AI 自带的「手机 AI IDE（带可视化）」核心工具——你（AI）可以直接写代码并运行，产出物会渲染在对话框里，无需用户手动编辑文件。参数 {\"code\":\"代码内容\",\"lang\":\"语言\"}。各语言用途：\n" +
+        "· python（默认）：数据处理/清洗、网络爬虫（requests/urllib 抓真实网页数据）、调用 AI/LLM API、算法计算、自动化脚本；输出文本结果会回灌给你用于推理与总结。\n" +
+        "· node / javascript / js：App 内置 QuickJS 原生沙箱离线执行（无需 Termux），适合逻辑计算、字符串/JSON 处理、DOM 无关脚本。\n" +
+        "· shell / sh / bash：应用沙盒内 sh 执行命令。\n" +
+        "· html / htm / markup：把完整 HTML 源码作为「网页工件」返回，对话框会用 WebView 实时渲染成可交互网页（支持内联 <style>/<script>、SVG、离线 Three.js；在线时可用 Chart.js / ECharts 等 CDN 画图）——你生成的网页直接长在对话框里。\n" +
+        "用法要点：可视化/网页/图表优先用 lang=html 返回让对话框渲染，或直接用 ```html 围栏写在回复里（同样会预览）；纯计算/爬虫/分析用 python；JSON/XML 是数据/配置（Android 布局、SVG 也走 HTML 预览）；Java/C/C++ 用于撰写与算法逻辑，编译运行请用 workspace/ACI 构建台，端侧沙箱以 python/node 为主。"
     override val parametersJson = """{
         "type":"object",
         "properties":{
-            "code":{"type":"string","description":"要执行的代码"},
-            "lang":{"type":"string","description":"语言：python（默认）、node、shell"}
+            "code":{"type":"string","description":"要执行的代码 / 要返回的完整 HTML 源码"},
+            "lang":{"type":"string","description":"语言：python（默认）| node | javascript | shell | html（网页工件，返回后对话框实时预览）"}
         },
         "required":["code"]
     }"""
@@ -415,6 +418,7 @@ class RunCodeTool : QuroTool {
         val lang = JSONObject(arguments).optString("lang", "python").trim().lowercase()
         if (code.isEmpty()) return "缺少 code 参数"
         return when (lang) {
+            "html", "htm", "markup" -> code  // 网页工件：直接返回 HTML 源码，对话框用 WebView 内联实时预览（HtmlPreviewCard）
             "node", "javascript", "js" -> QuroJsExecutor.eval(code)
             "shell", "sh", "bash" -> execShell(context, code)
             "python", "py" -> runPython(code, context)
