@@ -71,6 +71,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -640,6 +641,11 @@ fun ChatScreen(
     val appCtx = LocalContext.current
     LaunchedEffect(Unit) {
         QuroUiActionBridge.dispatch = { handleUiAction(it) }
+        // 桌面组件/通知在「Activity 已建、Compose 未组合」窗口期下发的打开请求：此刻补派
+        QuroUiActionBridge.pendingAction?.let { a ->
+            handleUiAction(a)
+            QuroUiActionBridge.pendingAction = null
+        }
         // 可视化组件融进聊天气泡：AI 经 ui_widget / ui_card 下发的卡片挂到当前助手消息
         QuroUiActionBridge.onCard = { vm.attachCardToLastAssistant(it) }
         // 文档事件桥 → 打开文档查看器
@@ -1782,6 +1788,32 @@ private fun BubbleActionButton(label: String, tint: Color, onClick: () -> Unit) 
     }
 }
 
+/**
+ * 判断富卡片是否为「紧凑型」：在聊天气泡自由排版（FlowRow）中，紧凑型卡片按内容自然宽度排布、
+ * 可与其他卡片并排成行并自动换行；宽型卡片（图表 / 表格 / 流程图等）独占一整行，避免被挤窄。
+ */
+private fun isCompactQuroCard(card: QuroChatCard): Boolean = when (card) {
+    is QuroChatCard.ButtonCard,
+    is QuroChatCard.ActionCard,
+    is QuroChatCard.ToggleCard,
+    is QuroChatCard.SliderCard,
+    is QuroChatCard.ProgressCard,
+    is QuroChatCard.StatCard,
+    is QuroChatCard.SegmentedCard,
+    is QuroChatCard.RatingCard,
+    is QuroChatCard.CountdownCard,
+    is QuroChatCard.ChipsCard,
+    is QuroChatCard.QuickReplyCard,
+    is QuroChatCard.QuickActionCard,
+    is QuroChatCard.ColorCard,
+    is QuroChatCard.CounterCard,
+    is QuroChatCard.BreadcrumbCard,
+    is QuroChatCard.TagCloudCard,
+    is QuroChatCard.BadgeCard,
+    is QuroChatCard.AvatarGroupCard -> true
+    else -> false
+}
+
 @Composable
 private fun MessageRow(
     msg: Message,
@@ -1988,11 +2020,26 @@ private fun MessageRow(
                                 )
                             }
                         }
-                        // 消息自带富组件（一等公民）+ AI 文本内联下发的组件 JSON，合体进气泡
+                        // 消息自带富组件（一等公民）+ AI 文本内联下发的组件 JSON，合体进气泡。
+                        // 自由排版：富卡片用 FlowRow 流式排布——紧凑型卡片（按钮/开关/标签等）并排成行、自动换行；
+                        // 宽型卡片（图表/表格/流程图等）独占一整行，避免被挤窄。
                         val bubbleCards = remember(msg.cards, inlineCards) { msg.cards + inlineCards }
-                        bubbleCards.forEach { card ->
+                        if (bubbleCards.isNotEmpty()) {
                             Spacer(Modifier.height(8.dp))
-                            QuroChatCardView(card, onCommand)
+                            FlowRow(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                maxItemsInEachRow = Int.MAX_VALUE,
+                            ) {
+                                bubbleCards.forEach { card ->
+                                    QuroChatCardView(
+                                        card,
+                                        onCommand,
+                                        modifier = if (isCompactQuroCard(card)) Modifier.wrapContentWidth() else Modifier.fillMaxWidth(),
+                                    )
+                                }
+                            }
                         }
                     }
                     // 复制成功提示（浮在气泡内右下角）
@@ -2048,14 +2095,24 @@ private fun MessageRow(
             //   attachCardToLastAssistant 兜底建的 content="" 纯卡片消息），整条消息什么都不渲染。
             //   这里在无正文但带卡片时独立渲染卡片（有正文时仍走气泡内渲染，不重复）。
             if (!msg.mine && msg.text.isNullOrBlank() && msg.cards.isNotEmpty()) {
-                Column(Modifier.fillMaxWidth()) {
+                // 自由排版：无正文的纯卡片消息同样用 FlowRow 流式排布（紧凑卡片并排、宽型独占一行）
+                FlowRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    maxItemsInEachRow = Int.MAX_VALUE,
+                ) {
                     msg.cards.forEach { card ->
-                        QuroChatCardView(card, onCommand)
-                        Spacer(Modifier.height(8.dp))
+                        QuroChatCardView(
+                            card,
+                            onCommand,
+                            modifier = if (isCompactQuroCard(card)) Modifier.wrapContentWidth() else Modifier.fillMaxWidth(),
+                        )
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-                        BubbleActionButton("删除", Muted) { onDelete(msg.uids) }
-                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                    BubbleActionButton("删除", Muted) { onDelete(msg.uids) }
                 }
             }
         }

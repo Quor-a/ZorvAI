@@ -30,6 +30,7 @@ import com.ai.assistance.quro.util.AnrMonitor
 import com.ai.assistance.quro.core.tools.QuroPermissionRequester
 import com.ai.assistance.quro.service.QuroVoiceBallService
 import com.ai.assistance.quro.core.tools.QuroVoiceFeaturePrefs
+import com.ai.assistance.quro.core.tools.QuroUiActionBridge
 import com.ai.assistance.quro.core.QuroCrashReporter
 import com.ai.assistance.quro.core.QuroReplyNotifier
 import com.ai.assistance.quro.ui.QuroApp
@@ -213,6 +214,12 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
             QuroVoiceBallService.ACTION_SHORTCUT_CHAT -> {
                 // 应用快捷方式「小窗对话」：已是主界面（对话即主 UI），仅回到前台。
                 // 后续如需真正的悬浮迷你对话窗，可在此拉起 overlay 窗口。
+            }
+            // 桌面组件 / 通知 / 外部入口：携带 ui_action（如 ui_open_schedule）打开对应界面。
+            // 走 QuroUiActionBridge.request：UI 桥就绪立即分发，否则暂存待 ChatScreen 组合后补派。
+            else -> {
+                val uiAction = intent.getStringExtra("ui_action")
+                if (!uiAction.isNullOrBlank()) QuroUiActionBridge.request(uiAction)
             }
         }
     }

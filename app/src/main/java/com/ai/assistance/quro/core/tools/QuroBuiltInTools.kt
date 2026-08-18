@@ -21,6 +21,7 @@ import com.ai.assistance.quro.core.tools.ReadScreenTool
 import com.ai.assistance.quro.core.tools.GetForegroundAppTool
 import com.ai.assistance.quro.core.tools.GetScreenStateTool
 import com.ai.assistance.quro.core.tools.TapScreenTool
+import com.ai.assistance.quro.core.tools.LongPressScreenTool
 import com.ai.assistance.quro.core.tools.SwipeScreenTool
 import com.ai.assistance.quro.core.tools.InputTextTool
 import com.ai.assistance.quro.core.tools.ScrollScreenTool
@@ -261,8 +262,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(ReadScreenTool())
     r.register(GetForegroundAppTool())
     r.register(GetScreenStateTool())
-    // 屏幕操控：点击 / 滑动 / 输入文本 / 滚动 / 全局动作
+    // 屏幕操控：点击 / 长按 / 滑动 / 输入文本 / 滚动 / 全局动作
     r.register(TapScreenTool())
+    r.register(LongPressScreenTool())
     r.register(SwipeScreenTool())
     r.register(InputTextTool())
     // AI 智能体键盘（Agent IME）：ai_type_text / ai_press_enter / ai_press_send，走 IME 通道把文本打入聚焦输入框

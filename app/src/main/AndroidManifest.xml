@@ -260,6 +260,14 @@
             </intent-filter>
         </activity>
 
+        <!-- 息屏/锁屏全屏提醒 Activity：由通知 fullScreenIntent 拉起，覆盖在锁屏之上并自动亮屏 -->
+        <activity
+            android:name=".activity.QuroReminderActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Quro.Reminder"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true" />
+
         <service
             android:name=".service.QuroVoiceBallService"
             android:exported="false"

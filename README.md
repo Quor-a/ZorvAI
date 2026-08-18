@@ -158,6 +158,24 @@
 - 应用内本地 MCP 服务：`QuroLocalMcpManager` / `QuroLocalMcpServer` / `QuroLocalMcpDispatcher`（`McpDeployTool` / `McpUndeployTool` 可让 AI 把 MCP 服务部署到应用内）
 - 设置 UI：`QuroMcpSettingsScreen`
 
+#### 5.1 接入一个外部 MCP 服务器（实操）
+1. 打开 **设置 → MCP**（`QuroMcpSettingsScreen`）；
+2. 新增服务器，填：
+   - **别名 alias**：工具集在 `mcp_call` 里的引用名（如 `weather`）；
+   - **URL**：远端 JSON-RPC 端点（如 `https://example.com/mcp`）或本地 `http://127.0.0.1:<port>/mcp`；
+   - **Token**：Bearer 鉴权（可选，严格 MCP 服务器需要）；
+   - **类型 kind**：`remote`（默认，HTTP/SSE）｜`ws`（走 `QuroMcpWsClient`）｜`local`（AI 部署到本应用内）；
+   - **握手 handshake**：服务器要求 `initialize` 才放行时勾选（开启后会自动跟踪 `Mcp-Session-Id` 并在后续请求携带）。
+3. 保存后系统自动 `listTools` 拉取工具清单；对话中 AI 用 `mcp_call(alias, tool, args)` 调用，**失败会返回带 HTTP 状态码的可读错误**，便于排查。
+
+#### 5.2 让 AI 自己部署本地 MCP（mcp_deploy）
+> 这是「AI 写代码扩展自己能力」的闭环：AI 在对话里提交工具定义 JSON，`QuroLocalMcpManager.deploy` 落地并启动一个监听 `127.0.0.1` 的本地 HTTP Server（`/mcp`），随即被现有 `mcp_call` 按别名发现与调用。
+
+- `mcp_deploy(alias, toolDefs)`：部署/更新一个本地 MCP（工具定义为合法 JSON 数组，每项含 `name`）；
+- `mcp_undeploy(alias)`：停服务 + 删配置；
+- `mcp_list_local`：列出已部署的本地 MCP；
+- 应用启动 `QuroLocalMcpManager.startAll` 自动拉起所有已持久化的本地 MCP，实现「界面自动拉取注册」。
+
 ### 6. 工具系统（120+ 内置工具）
 注册入口 `core/tools/QuroBuiltInTools.kt : buildQuroRegistry()`，实际注册 **123** 项（另含导入工具与可调用技能，运行时更多）。按能力归类：
 
@@ -205,6 +223,11 @@
 - **记忆库**：`core/memory/QuroMemoryStore.kt`（MemorySave/List/Search/Delete）
 - **人格 / 灵魂**：`core/soul/QuroSoulPrompt.kt`、`QuroSoulUi`、`QuroPersonaViewModel`
 - **机器人 Bot**：`core/bot/`（QQ / 飞书 / 微信 iLink / 本地适配器），`QuroBotSettingsScreen` 配置
+  - **QQ 机器人（直连官方网关，零公网端点）**：`QuroQqBotAdapter` + `QuroDirectBotAdapter`，仅用 OkHttp(含 WebSocket) + org.json，不依赖官方 SDK。
+    - 接入：在 `QuroBotSettingsScreen` 填 **AppID / AppSecret**（对应 `qq_appid` / `qq_secret` 偏好）；
+    - 协议：换 token（`bots.qq.com/app/getAppAccessToken`）→ 拿 WS 网关（`api.sgroup.qq.com/gateway/bot`）→ 长连收 `C2C_MESSAGE_CREATE` / `GROUP_AT_MESSAGE_CREATE` → 被动回 `v2/users|groups/{openid}/messages`（5 分钟内，带 `msg_seq` 去重，`event_id` 标记群回复）；
+    - 健壮性：自动心跳、断线退避重连、token 过期(401/403)自动刷新重试、限流(429)退避 2s 重试、发送节流（两次回包≥250ms 规避限流）；
+    - 沙箱期仅私聊(C2C)可用，群@需审核开通（intent `1<<25 | 1<<30`）。
 
 ### 10. 设备控制 / 权限 / Shizuku / ACI
 - **Shizuku 集成**：`core/shizuku/`（QuroShizuku、QuroShellService），工具 ShizukuExec/FreezeApp/InstallApp

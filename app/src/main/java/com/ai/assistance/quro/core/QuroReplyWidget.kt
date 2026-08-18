@@ -58,34 +58,51 @@ class QuroReplyWidget : AppWidgetProvider() {
             rv.setTextViewText(R.id.widget_title, if (sender.isBlank()) "Zorv AI" else sender)
             rv.setTextViewText(R.id.widget_status, "AI 执行体 · ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
             // 聊天预览
-            rv.setTextViewText(R.id.widget_text, if (text.isBlank()) "暂无新回复，点击 💬 开始对话" else text)
-            // 主卡片点击 → 打开应用
+            rv.setTextViewText(R.id.widget_text, if (text.isBlank()) "暂无新回复，点击「对话」开始" else text)
+
+            // 主卡片点击 → 打开应用（默认进入对话）
             val mainIntent = Intent(ctx, QuroMainActivity::class.java).apply {
+                action = Intent.ACTION_MAIN
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
-            val mainPi = PendingIntent.getActivity(
-                ctx, 0, mainIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            rv.setOnClickPendingIntent(
+                R.id.widget_root,
+                PendingIntent.getActivity(ctx, 0, mainIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE),
             )
-            rv.setOnClickPendingIntent(R.id.widget_root, mainPi)
-            // 💬 按钮 → 打开应用对话
-            val chatIntent = Intent(ctx, QuroMainActivity::class.java).apply {
-                action = "android.intent.action.MAIN"
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("open_chat", true)
+
+            // 各功能卡片 → 经 MainActivity 的 ui_action 桥接打开对应界面（或语音球广播）
+            fun featureIntent(requestCode: Int, uiAction: String): PendingIntent {
+                val i = Intent(ctx, QuroMainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra("ui_action", uiAction)
+                }
+                return PendingIntent.getActivity(ctx, requestCode, i,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             }
-            val chatPi = PendingIntent.getActivity(
-                ctx, 1, chatIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-            rv.setOnClickPendingIntent(R.id.widget_btn_chat, chatPi)
-            // 🎤 按钮 → 切换语音球（通过广播通知 Service）
-            val voiceIntent = Intent("com.ai.assistance.quro.TOGGLE_VOICE_BALL")
-            val voicePi = PendingIntent.getBroadcast(
-                ctx, 2, voiceIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-            rv.setOnClickPendingIntent(R.id.widget_btn_voice, voicePi)
+            // 💬 对话：直接打开应用（无 ui_action，落到默认对话界面）
+            rv.setOnClickPendingIntent(R.id.widget_card_chat,
+                PendingIntent.getActivity(ctx, 10,
+                    Intent(ctx, QuroMainActivity::class.java).apply {
+                        action = Intent.ACTION_MAIN
+                        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+            // 🎤 语音：切换语音球（广播通知 Service）
+            rv.setOnClickPendingIntent(R.id.widget_card_voice,
+                PendingIntent.getBroadcast(ctx, 11, Intent("com.ai.assistance.quro.TOGGLE_VOICE_BALL"),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+            // ⏰ 提醒 → 定时任务
+            rv.setOnClickPendingIntent(R.id.widget_card_schedule, featureIntent(12, "ui_open_schedule"))
+            // 📚 知识 → 知识库
+            rv.setOnClickPendingIntent(R.id.widget_card_knowledge, featureIntent(13, "ui_open_knowledge"))
+            // ✨ 技能 → 技能管理
+            rv.setOnClickPendingIntent(R.id.widget_card_skills, featureIntent(14, "ui_open_skills"))
+            // 🧰 工具 → 工具箱
+            rv.setOnClickPendingIntent(R.id.widget_card_toolbox, featureIntent(15, "ui_open_toolbox"))
+            // 💻 终端 → 应用内终端
+            rv.setOnClickPendingIntent(R.id.widget_card_terminal, featureIntent(16, "ui_open_terminal"))
+            // 🧠 记忆 → 记忆管理
+            rv.setOnClickPendingIntent(R.id.widget_card_memory, featureIntent(17, "ui_open_memory"))
             return rv
         }
     }

@@ -48,6 +48,13 @@ object QuroPlatformManifest {
 - 具体能力边界与调用方式，以「我的能力」清单（由 tools 字段下发）为准，不要凭空列举未授权能力。
 - **端侧 IDE 能力（用户侧入口在输入框「+」菜单与 ui_open_* 工具）**：① **代码编辑器**：内置 CodeMirror 离线语法高亮（JavaScript / Python / HTML / JSON / CSS / XML / C·C++·Java），「运行」走 App 内置 QuickJS 原生沙箱（JS）或系统 / Termux 的 python3 离线执行；② **终端**：proot 本地 Shell，可直接跑命令、查环境；③ **工具箱**：文件 / 包名 / 浏览器等内置工具集合；④ **文件**：直接附件 / 上传。这些能力既可由你通过 `ui_open_editor` / `ui_open_terminal` / `ui_open_toolbox` / `ui_open_browser` 直接拉起，也可由用户在对话框「+」菜单（工具箱 / 终端等）里自行打开——对话框本身就是可自由使用的轻量 IDE 入口，无需再叠加额外按钮。此外，对话框支持「可视化编程」：**无论是你还是用户，只要写出 `mermaid` 围栏代码块（如流程 / 时序 / 状态机 / 思维导 / 类图 / git 图 / 饼图等），对话框都会用离线 Mermaid.js 直接渲染成可缩放的真图**——用户也能自己画图发进来，不局限于 AI 生成。需要画可视化图时，优先用 mermaid 围栏（或 mermaid `ui_widget`）把图渲染出来，把「说」和「做 / 画」自由组合，而不是只回一段文字。
 - **手机 AI IDE（带可视化）——AI 自写代码并运行**：你（AI）拥有内置的「手机 AI IDE」，可以真正写代码、跑代码，并把产出物直接渲染在对话框里，无需用户手动编辑文件。调用 `run_code` 工具即可执行（见下方「在对话框里展示 UI」的「手机 AI IDE 能力地图」一节获取各语言详尽用法：python 爬虫/分析、node 离线计算、html 网页工件实时预览、JSON/XML 数据、Java/C/C++ 撰写等），把「说」和「做 / 画 / 跑」自由组合。
+- **操作手机（L1 无障碍控屏，需用户已授权无障碍服务）**：你能像人一样真正操控屏幕——不只是「打开 App / 上下滑」这种粗粒度，还能精确完成细粒度操作。标准作业流：**先 `read_screen` 读取当前界面节点树（含文本/坐标/可点击元素索引）→ 用 `tap_screen`（按文本或 x,y 精确点击）/ `long_press_screen`（长按弹菜单、选择文字、拖拽预备、应用图标卸载等）/ `input_text`（往输入框填字）/ `swipe_screen`（自定义起止坐标滑动，如上滑翻页、或从屏幕顶部下滑 `start_y≈0` 拉出通知栏/状态栏）/ `scroll_screen`（滚动列表）/ `global_action`（系统全局动作）完成动作 → 必要时再 `read_screen` 回读确认结果**。常用细粒度示例，务必按此闭环而不是只说「我去帮你打开」：
+  - 「下拉通知栏 / 看通知」= `global_action` 的 `notifications`（展开通知栏）或 `quick_settings`（下拉状态栏快捷开关）；要进一步点开下拉里的某个开关/通知，先 `read_screen` 找到它的文本，再 `tap_screen` 按文本点。
+  - 「点开/关闭某个 App 里的开关、勾选某一项」= `read_screen` 找到开关文本 → `tap_screen` 按文本精确点（会自动点中该开关的父容器中心，不跑偏）。
+  - 「长按某条消息选择/转发、长按应用图标弹菜单」= `long_press_screen` 按文本长按 → 在弹出的菜单里 `read_screen` 找菜单项 → `tap_screen` 点对应项。
+  - 「在搜索框打字再搜索」= `input_text`（按 hint 定位输入框填入）→ `tap_screen` 点「搜索」/ 用 `ai_keyboard_send`。
+  - 「返回上一级 / 回桌面 / 看最近任务」= `global_action` 的 `back` / `home` / `recents`。
+  - 定位不到时：**优先用文本/描述定位**（tap_screen 的 `text` / `description` 参数），其次才用 `read_screen` 给的 x,y 坐标；点击后如不确定是否生效，再 `read_screen` 一次看状态变化。把「读界面 → 定位元素 → 精细操作 → 回读确认」串成闭环，不要只说「我去帮你打开 App」。
 
 ## ⑤ 技术构架
 - 架构模式：ReAct 工具调用循环（LLM → 工具执行 → 结果回灌 → 最终答复），支持多轮、可并行发起多个工具调用。

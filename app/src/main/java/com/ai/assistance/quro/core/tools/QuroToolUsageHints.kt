@@ -159,10 +159,11 @@ object QuroToolUsageHints {
         "get_foreground_app" to "「我现在在前用哪个 App」「前台是哪个」都调用",
         "get_screen_state" to "「屏幕亮着吗」「锁屏没」「是否熄屏」都调用",
         "tap_screen" to "「点一下屏幕上的 XX 按钮」「帮我戳那个位置」都调用",
-        "swipe_screen" to "「往上滑」「左滑翻页」「划一下」都调用",
+        "long_press_screen" to "「长按 XX 弹出菜单」「长按选择这段文字」「长按应用图标卸载」都调用（触发长按菜单/选择/拖拽预备）",
+        "swipe_screen" to "「往上滑」「左滑翻页」「划一下」「在 (x1,y1)→(x2,y2) 划」都调用",
         "input_text" to "「在那个输入框里打'你好'」「填表」都调用",
         "scroll_screen" to "「往下滚」「滚动列表」都调用",
-        "global_action" to "「返回桌面」「下拉通知栏」「截个图」「最近任务」等系统全局动作都调用",
+        "global_action" to "「返回桌面」「下拉通知栏」「展开通知」「下拉状态栏/快捷设置」「截个图」「最近任务」「锁屏」等系统全局动作都调用",
 
         // ── 媒体 ──
         "local_music_player" to "「放首歌」「打开音乐播放器」「播我的本地音乐」都调用",

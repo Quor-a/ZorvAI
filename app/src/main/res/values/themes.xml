@@ -23,4 +23,17 @@
         <item name="android:navigationBarColor">@color/quro_splash_bg</item>
         <item name="android:windowNoTitle">true</item>
     </style>
+
+    <!-- 息屏/锁屏提醒全屏浮层（v1.0.58）：锁屏之上展示 + 自动亮屏。
+         锁屏显示/自动亮屏由 QuroReminderActivity 在代码里 setShowWhenLocked/setTurnScreenOn（API27+）
+         以及 Manifest 的 android:showOnLockScreen / android:turnScreenOn 活动属性共同保证；
+         此处不写 android:windowShowWhenLocked / windowTurnScreenOn 主题项，避免个别编译 SDK 资源表
+         未导出这两个 attr 导致 aapt2 链接失败（代码 + 活动属性已覆盖该能力）。 -->
+    <style name="Theme.Quro.Reminder" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF10141A</item>
+        <item name="android:statusBarColor">#FF10141A</item>
+        <item name="android:navigationBarColor">#FF10141A</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsTranslucent">false</item>
+    </style>
 </resources>

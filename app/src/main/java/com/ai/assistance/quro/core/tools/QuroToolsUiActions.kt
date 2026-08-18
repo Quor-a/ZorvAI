@@ -22,6 +22,19 @@ object QuroUiActionBridge {
     var dispatch: ((action: String) -> Unit)? = null
 
     /**
+     * 由外部（桌面组件 / 通知 / 快捷方式）请求打开某界面：UI 桥已就绪则立即分发；
+     * 否则暂存为 [pendingAction]，待 ChatScreen 注入 dispatch 时补派——覆盖「Activity 已
+     * 创建但 Compose 尚未组合」的窗口期（桌面组件点击若正好落在窗口期，就不会石沉大海）。
+     */
+    var pendingAction: String? = null
+
+    /** 请求打开某界面（外部入口统一走这里，自动处理就绪/未就绪两种时机）。 */
+    fun request(action: String) {
+        val d = dispatch
+        if (d != null) d(action) else pendingAction = action
+    }
+
+    /**
      * 由 ChatScreen 注入：AI 经 ui_widget / ui_card 下发的富组件 -> 挂到当前助手消息气泡。
      * 工具在运行时调用；未连接时退化为全局 QuroChatCardStore（底部卡片栏）兜底，不丢卡片。
      */

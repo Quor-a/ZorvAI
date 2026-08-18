@@ -1348,6 +1348,7 @@ $recent
         sb.append("  - experience_query：动手前先查相关经验，复用已有结论、避免重复踩坑。\n")
         sb.append("  - experience_correct：某条经验被证明过时 / 错误时，记录自我纠错（was / reason / fix）。\n")
         sb.append("  - experience_version_check：遇到版本相关问题时自检兼容性，或列出已知兼容标记。\n")
+        sb.append("  - **纠错闭环（进化引擎核心）**：当用户明确纠正你（指出你答错 / 给了更准确答案 / 推翻你之前的结论）时，必须主动调用 `experience_correct` 把这条自我纠错沉淀下来（was=你之前的说法，reason=为什么错，fix=正确做法），让下一次不再犯同样的错——这就是「越用越聪明」的自学习机制；不要只在当轮道歉，要把教训写进经验库。\n")
 
         // Feedback 闭环：基于本轮用户消息注入 top-N 相关经验，让 AI 自动复用
         val lastUser = store.all().lastOrNull { it.role == "user" && !it.hidden }?.content ?: ""

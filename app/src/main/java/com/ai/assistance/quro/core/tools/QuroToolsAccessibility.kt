@@ -338,6 +338,103 @@ class TapScreenTool : QuroTool {
     }
 }
 
+/** 长按屏幕元素（x,y 坐标 或 文本/描述查找），用于触发长按菜单（选择/弹出菜单/拖拽预备/应用卸载等）。 */
+class LongPressScreenTool : QuroTool {
+    override val name = "long_press_screen"
+    override val description = "长按屏幕上的元素，触发长按菜单/选择/拖拽预备。支持三种定位：(1) x,y 坐标长按；(2) 按文本内容查找并长按；(3) 按内容描述(description)查找并长按。duration_ms 可选，默认 600ms。"
+    override val parametersJson = """{
+        "type":"object",
+        "properties":{
+            "x":{"type":"number","description":"X 坐标（像素）"},
+            "y":{"type":"number","description":"Y 坐标（像素）"},
+            "text":{"type":"string","description":"要长按的按钮/元素的文本内容"},
+            "description":{"type":"string","description":"要长按的内容描述（contentDescription）"},
+            "duration_ms":{"type":"number","description":"长按持续时间毫秒（默认 600，范围 200-3000）"}
+        }
+    }"""
+
+    override fun run(context: Context, arguments: String): String {
+        val svc = QuroAccessibilityService.instance ?: return "❌ 无障碍服务未连接"
+        val args = JSONObject(arguments)
+        val duration = args.optLong("duration_ms", 600L).coerceIn(200L, 3000L)
+        return try {
+            val (cx, cy, label) = when {
+                args.has("x") && args.has("y") -> {
+                    val x = args.getDouble("x").toFloat()
+                    val y = args.getDouble("y").toFloat()
+                    Triple(x, y, "坐标(${x.toInt()},${y.toInt()})")
+                }
+                args.has("text") -> {
+                    val node = svc.rootInActiveWindow?.let { findNodeLp(it, args.getString("text"), null, 0) }
+                        ?: return "❌ 未找到文本匹配节点: ${args.getString("text")}"
+                    val t = findClickableAncestorLp(node) ?: node
+                    val r = Rect().also { t.getBoundsInScreen(it) }
+                    Triple((r.left + r.right) / 2f, (r.top + r.bottom) / 2f,
+                        (t.text?.toString() ?: t.contentDescription?.toString() ?: args.getString("text")))
+                }
+                args.has("description") -> {
+                    val node = svc.rootInActiveWindow?.let { findNodeLp(it, null, args.getString("description"), 0) }
+                        ?: return "❌ 未找到描述匹配节点: ${args.getString("description")}"
+                    val t = findClickableAncestorLp(node) ?: node
+                    val r = Rect().also { t.getBoundsInScreen(it) }
+                    Triple((r.left + r.right) / 2f, (r.top + r.bottom) / 2f,
+                        (t.contentDescription?.toString() ?: t.text?.toString() ?: args.getString("description")))
+                }
+                else -> return "❌ 缺少参数：需要 x+y / text / description 任一"
+            }
+            // 坐标越界保护
+            val dm = svc.resources.displayMetrics
+            if (cx < 0 || cy < 0 || cx > dm.widthPixels || cy > dm.heightPixels)
+                return "❌ 坐标越界(屏幕 ${dm.widthPixels}×${dm.heightPixels}): (${cx.toInt()},${cy.toInt()})"
+            val dispatched = dispatchLongPress(svc, cx, cy, duration)
+            if (dispatched) "✅ 已长按「$label」(${cx.toInt()},${cy.toInt()}，约 ${duration}ms)"
+            else "❌ 长按手势被系统拒绝派发（建议重试）"
+        } catch (e: Exception) {
+            "❌ 长按失败: ${e.message}"
+        }
+    }
+
+    private fun dispatchLongPress(svc: AccessibilityService, cx: Float, cy: Float, dur: Long): Boolean {
+        // 在同一点保持 dur 毫秒即构成长按手势
+        val path = Path().apply { moveTo(cx, cy); lineTo(cx, cy) }
+        val gd = android.accessibilityservice.GestureDescription.Builder()
+            .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0L, dur))
+            .build()
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return svc.dispatchGesture(gd, null, null)
+        }
+        val done = CountDownLatch(1)
+        val ok = java.util.concurrent.atomic.AtomicBoolean(false)
+        val dispatched = svc.dispatchGesture(gd, object : AccessibilityService.GestureResultCallback() {
+            override fun onCompleted(gd: android.accessibilityservice.GestureDescription?) { ok.set(true); done.countDown() }
+            override fun onCancelled(gd: android.accessibilityservice.GestureDescription?) { ok.set(false); done.countDown() }
+        }, Handler(Looper.getMainLooper()))
+        if (!dispatched) return false
+        done.await(4, TimeUnit.SECONDS)
+        return ok.get()
+    }
+
+    private fun findClickableAncestorLp(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        var cur = node
+        var guard = 0
+        while (cur != null && !cur.isClickable && guard++ < 24) cur = cur.parent
+        return cur
+    }
+
+    private fun findNodeLp(root: AccessibilityNodeInfo, byText: String?, byDesc: String?, depth: Int): AccessibilityNodeInfo? {
+        if (depth > 18) return null
+        val t = root.text?.toString()
+        val d = root.contentDescription?.toString()
+        if (byText != null) { if (t == byText || t?.contains(byText) == true) return root }
+        if (byDesc != null) { if (d == byDesc || d?.contains(byDesc) == true) return root }
+        for (i in 0 until root.childCount.coerceAtMost(40)) {
+            val found = findNodeLp(root.getChild(i), byText, byDesc, depth + 1)
+            if (found != null) return found
+        }
+        return null
+    }
+}
+
 /** 在屏幕上滑动（上滑 / 下滑 / 左滑 / 右滑 / 自定义起止坐标）。 */
 class SwipeScreenTool : QuroTool {
     override val name = "swipe_screen"

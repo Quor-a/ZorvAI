@@ -92,13 +92,25 @@ object QuroMcpClient {
         // 标准 MCP：result.content = [{type:"text", text:"..."}]
         val content = result.optJSONArray("content")
         if (content != null && content.length() > 0) {
-            val first = content.optJSONObject(0) ?: JSONObject()
-            val text = first.optString("text", "")
-            if (text.isNotEmpty()) return truncate(text)
+            // 拼接所有 content 片段（文本/资源等），不再只读第一条
+            val sb = StringBuilder()
+            for (i in 0 until content.length()) {
+                val item = content.optJSONObject(i) ?: continue
+                val piece = when (item.optString("type", "text")) {
+                    "text" -> item.optString("text", "")
+                    "resource" -> item.optString("resource", "")
+                    else -> item.optString("text", "")
+                }
+                if (piece.isNotBlank()) {
+                    if (sb.isNotEmpty()) sb.append("\n")
+                    sb.append(piece)
+                }
+            }
+            if (sb.isNotEmpty()) return truncate(sb.toString())
         }
         // 退路：result 本身可能是直接值或 {result:"..."}
         val direct = result.optString("result", "")
-        if (direct.isNotEmpty()) return truncate(direct)
+        if (direct.isNotBlank()) return truncate(direct)
         return truncate(result.toString())
     }
 
@@ -125,6 +137,12 @@ object QuroMcpClient {
                 val sid = resp.header("Mcp-Session-Id")
                 if (captureSession && sid != null) sessions[config.url] = sid
                 val raw = resp.body?.string() ?: ""
+                if (!resp.isSuccessful) {
+                    // OkHttp 对 4xx/5xx 不抛异常，需主动捕获，否则会当成正常响应去 parse
+                    val msg = "HTTP ${resp.code} ${resp.message}：${raw.take(400)}"
+                    Log.w(TAG, "MCP $method -> $msg")
+                    return JSONObject().put("error", JSONObject().put("message", msg)) to sid
+                }
                 parseBody(raw, resp.header("Content-Type")) to sid
             }
         } catch (e: Exception) {

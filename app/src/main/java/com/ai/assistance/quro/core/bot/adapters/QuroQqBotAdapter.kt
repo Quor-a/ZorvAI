@@ -42,6 +42,8 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     private val lastSeq = AtomicLong(0)
     /** 被动回复去重序号（QQ 官方要求 msg_seq 必填，自增即可）。 */
     private val msgSeq = AtomicInteger(1)
+    /** 上次发送时间戳（用于发送节流，规避服务端限流）。 */
+    private val lastSendMs = AtomicLong(0)
     private var heartbeatJob: kotlinx.coroutines.Job? = null
 
     override fun isConfigured(): Boolean = appId.isNotBlank() && appSecret.isNotBlank()
@@ -180,6 +182,11 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             return ok
         }
 
+        // ---- 发送节流：两次回包至少间隔 250ms，规避 QQ 服务端限流（429）----
+        val gap = 250L - (System.currentTimeMillis() - lastSendMs.get())
+        if (gap > 0) kotlinx.coroutines.delay(gap)
+        lastSendMs.set(System.currentTimeMillis())
+
         // ---- 第一次尝试：用当前 token 直接发 ----
         if (accessToken.isBlank()) refreshToken()
         var (code, respBody, json) = doSend(accessToken)
@@ -191,6 +198,14 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                 val (code2, body2, json2) = doSend(accessToken)
                 code = code2; respBody = body2; json = json2
             }
+        }
+
+        // ---- 429 限流：退避 2s 后重试一次 ----
+        if (json == null && code == 429) {
+            Log_w("deliver 收到 429 限流，退避 2s 后重试一次...（响应: ${respBody.take(200)}）")
+            kotlinx.coroutines.delay(2000)
+            val (code2, body2, json2) = doSend(accessToken)
+            code = code2; respBody = body2; json = json2
         }
 
         // ---- 结果判定 ----

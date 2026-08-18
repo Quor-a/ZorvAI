@@ -24,6 +24,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.ai.assistance.quro.activity.QuroMainActivity
+import com.ai.assistance.quro.activity.QuroReminderActivity
 import com.ai.assistance.quro.ui.QuroChatViewModel
 
 /** 定时任务「完成推送」独立协程作用域：不随 BroadcastReceiver 销毁，app 生命周期内常驻。 */
@@ -499,7 +500,8 @@ class QuroScheduleReceiver : BroadcastReceiver() {
             Log.w("QuroScheduler", "定时任务[${task.title}] 自动执行失败: ${e.message}")
         }
 
-        // 2) 通知：点击跳转回应用（便于查看/补执行）
+        // 2) 通知：息屏/锁屏时以全屏提醒 Activity 弹出（覆盖锁屏之上 + 自动亮屏）；
+        //    亮屏/解锁状态则退化为 heads-up 弹窗，点击回到应用（便于查看/补执行）。
         QuroScheduledTaskScheduler.ensureChannel(context)
         val nm = context.getSystemService(NotificationManager::class.java)
         val contentIntent = PendingIntent.getActivity(
@@ -510,13 +512,28 @@ class QuroScheduleReceiver : BroadcastReceiver() {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        // 全屏提醒意图：息屏/锁屏到达时由系统拉起 QuroReminderActivity 覆盖锁屏展示
+        val reminderIntent = PendingIntent.getActivity(
+            context,
+            (taskId + "_fs").hashCode(),
+            Intent(context, QuroReminderActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                putExtra(QuroReminderActivity.EXTRA_TITLE, task.title)
+                putExtra(QuroReminderActivity.EXTRA_TEXT, task.content.ifBlank { "定时任务提醒" })
+                putExtra(QuroReminderActivity.EXTRA_BADGE, "Zorv AI 定时提醒")
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val notif = NotificationCompat.Builder(context, "quro_scheduled_task")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(task.title)
             .setContentText(task.content.ifBlank { "定时任务提醒" })
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setContentIntent(contentIntent)
+            .setFullScreenIntent(reminderIntent, true)
             .build()
         nm.notify(taskId.hashCode(), notif)
 
@@ -568,13 +585,26 @@ private fun notifyTaskCompletion(context: Context, task: QuroScheduledTask, targ
                 },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
+            val doneReminderIntent = PendingIntent.getActivity(
+                context, (task.id + "_done_fs").hashCode(),
+                Intent(context, QuroReminderActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    putExtra(QuroReminderActivity.EXTRA_TITLE, "定时任务已完成")
+                    putExtra(QuroReminderActivity.EXTRA_TEXT, "「${task.title}」AI 已处理完成，点击查看回复")
+                    putExtra(QuroReminderActivity.EXTRA_BADGE, "Zorv AI 定时提醒")
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
             val notif = NotificationCompat.Builder(context, "quro_scheduled_task")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle("✅ 定时任务已完成")
                 .setContentText("「${task.title}」AI 已处理完成，点击查看回复")
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setAutoCancel(true)
                 .setContentIntent(contentIntent)
+                .setFullScreenIntent(doneReminderIntent, true)
                 .build()
             nm.notify(piId, notif)
         } catch (_: Throwable) { /* 完成推送失败不影响主流程 */ }
