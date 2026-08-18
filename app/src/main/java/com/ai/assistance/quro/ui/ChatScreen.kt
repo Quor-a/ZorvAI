@@ -890,6 +890,7 @@ fun ChatScreen(
                     }
 
                     val visionOn by vm.visionEnabled.collectAsState()
+                    val ideToolbarEnabled by vm.ideToolbarEnabled.collectAsState()
                     Composer(
                         deepThink = thinking,
                         onToggleThink = { vm.setThinking(!thinking) },
@@ -911,6 +912,12 @@ fun ChatScreen(
                         voiceInputEnabled = voiceInputEnabled,
                         onVoiceInput = { startDialogStt() },
                         onOpenSkills = { showSkills = true },
+                        ideToolbarEnabled = ideToolbarEnabled,
+                        onToggleIdeToolbar = { vm.setIdeToolbarEnabled(!ideToolbarEnabled) },
+                        onOpenEditor = { showEditor = true },
+                        onOpenTerminal = { showTerminal = true },
+                        onOpenToolbox = { showToolbox = true },
+                        onOpenUpload = { sheet = SheetType.Upload },
                         scaled = { scaled(it) }
                     )
                 }
@@ -3142,6 +3149,12 @@ private fun Composer(
     voiceInputEnabled: Boolean = false,
     onVoiceInput: () -> Unit = {},
     onOpenSkills: () -> Unit = {},
+    ideToolbarEnabled: Boolean = true,
+    onToggleIdeToolbar: () -> Unit = {},
+    onOpenEditor: () -> Unit = {},
+    onOpenTerminal: () -> Unit = {},
+    onOpenToolbox: () -> Unit = {},
+    onOpenUpload: () -> Unit = {},
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -3164,6 +3177,17 @@ private fun Composer(
             onToggleVision = onToggleVision,
         )
         Spacer(Modifier.height(10.dp))
+        // 对话框 IDE 工具条：把代码编辑器 / 终端 / 工具箱 / 文件等 IDE 能力直接放进输入框，
+        // 用户可一键打开，也可点右上箭头收起（状态持久化），让对话框变成可自定义的轻量 IDE 入口。
+        DialogIdeToolbar(
+            enabled = ideToolbarEnabled,
+            onToggle = onToggleIdeToolbar,
+            onOpenEditor = onOpenEditor,
+            onOpenTerminal = onOpenTerminal,
+            onOpenToolbox = onOpenToolbox,
+            onOpenUpload = onOpenUpload,
+            scaled = scaled
+        )
         // 正在播放（内联指示卡）：当前有音乐在后台播放时显示，点击打开全屏播放器
         QuroMusicPlayerCard(onOpen = onOpenMusicPlayer, scaled = scaled)
         // 附件预览
@@ -3255,6 +3279,84 @@ private fun Composer(
                         tint = if (text.text.isNotBlank() || attachments.isNotEmpty()) cs.primary else Muted)
                 }
             }
+        }
+    }
+}
+
+/**
+ * 对话框内置「IDE 工具条」：把代码编辑器 / 终端 / 工具箱 / 文件等 IDE 能力直接放进输入框。
+ * - 展开态：标题 + 收起箭头（chevron_up）+ 一排可横滑的 IDE 工具胶囊；
+ * - 收起态：仅保留一个「IDE 工具 ▸」入口，点一下重新展开（状态由调用方持久化）。
+ */
+@Composable
+private fun DialogIdeToolbar(
+    enabled: Boolean,
+    onToggle: () -> Unit,
+    onOpenEditor: () -> Unit,
+    onOpenTerminal: () -> Unit,
+    onOpenToolbox: () -> Unit,
+    onOpenUpload: () -> Unit,
+    scaled: (Int) -> androidx.compose.ui.unit.TextUnit
+) {
+    val cs = MaterialTheme.colorScheme
+    if (!enabled) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onToggle() }
+                    .padding(6.dp, 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LucideIcon("chevron_right", "展开 IDE 工具条", Modifier.size(16.dp), tint = cs.onSurfaceVariant)
+                Spacer(Modifier.width(4.dp))
+                Text("IDE 工具", fontSize = scaled(12), color = cs.onSurfaceVariant)
+            }
+        }
+        return
+    }
+
+    @Composable
+    fun IdeToolChip(label: String, icon: String, onClick: () -> Unit) {
+        Row(
+            Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { onClick() }
+                .background(cs.surfaceVariant.copy(alpha = 0.5f))
+                .border(1.dp, Line, RoundedCornerShape(10.dp))
+                .padding(10.dp, 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            LucideIcon(icon, label, Modifier.size(16.dp), tint = cs.primary)
+            Spacer(Modifier.width(6.dp))
+            Text(label, fontSize = scaled(12), color = cs.onSurface)
+        }
+    }
+
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("IDE 工具", fontSize = scaled(12), color = cs.onSurfaceVariant)
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onToggle, Modifier.size(28.dp)) {
+                LucideIcon("chevron_up", "收起 IDE 工具条", Modifier.size(18.dp), tint = cs.onSurfaceVariant)
+            }
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            IdeToolChip("代码", "code", onOpenEditor)
+            IdeToolChip("终端", "corner_down_left", onOpenTerminal)
+            IdeToolChip("工具箱", "settings", onOpenToolbox)
+            IdeToolChip("文件", "file_text", onOpenUpload)
         }
     }
 }

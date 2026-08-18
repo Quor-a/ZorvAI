@@ -179,6 +179,14 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         uiPrefs.edit { putBoolean("auto_save_memory", on) }
     }
 
+    // 对话框「IDE 工具条」开关（默认开启；用户可在对话框内收起/展开，或在设置页关闭）
+    private val _ideToolbarEnabled = MutableStateFlow(uiPrefs.getBoolean("ide_toolbar_enabled", true))
+    val ideToolbarEnabled: StateFlow<Boolean> = _ideToolbarEnabled.asStateFlow()
+    fun setIdeToolbarEnabled(on: Boolean) {
+        _ideToolbarEnabled.value = on
+        uiPrefs.edit { putBoolean("ide_toolbar_enabled", on) }
+    }
+
     // 外观与对话设置：深色模式（全局主题，需上提到 QuroApp 根部主题处生效）
     private val _darkMode = MutableStateFlow(uiPrefs.getBoolean("dark_mode", false))
     val darkModePref: StateFlow<Boolean> = _darkMode.asStateFlow()
