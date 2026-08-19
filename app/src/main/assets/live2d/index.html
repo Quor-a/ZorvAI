@@ -25,8 +25,6 @@
 </style>
 </head>
 <body>
-<!-- 原始 WebGL 诊断：不用 PixiJS，直接用 WebGL 画红色方块，验证 canvas/WebGL 本身是否工作 -->
-<canvas id="diag" style="position:fixed;top:0;left:0;width:200px;height:200px;border:3px solid red;z-index:9999;"></canvas>
 <canvas id="stage"></canvas>
 <div id="loading"><span class="spin"></span>正在加载 Live2D 模型…</div>
 
@@ -389,6 +387,18 @@
         + " display=" + cs.display + " vis=" + cs.visibility + " opacity=" + cs.opacity
         + " zIndex=" + cs.zIndex + " transform=" + cs.transform
         + " attrW=" + canvas.width + " attrH=" + canvas.height);
+
+      // 诊断：强制 render 一次，检查 canvas 内容
+      try {
+        app.render();
+        var dataUrl = canvas.toDataURL("image/png");
+        var hasContent = dataUrl.length > 100; // 空 canvas 的 dataURL 很短
+        window.__l2dLog("canvas toDataURL len=" + dataUrl.length + " hasContent=" + hasContent
+          + " tickerStarted=" + (app.ticker && app.ticker.started)
+          + " stageChildren=" + app.stage.children.length);
+      } catch (e) {
+        window.__l2dLog("canvas 诊断异常: " + e);
+      }
 
       // 诊断：画一个红色方块验证 canvas 是否可见
       var g = new PIXI.Graphics();
