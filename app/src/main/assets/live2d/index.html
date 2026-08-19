@@ -132,20 +132,26 @@
     model.position.set(cx + ox, cy + oy);
   }
 
+  // 缓存模型原始尺寸（PixiJS model.width/height 是经过 scale 变换后的值，不能用于算 baseScale）
+  var modelOriginalSize = null;
+
   function calcModelSize(m) {
-    var w = m.width || 0;
-    var h = m.height || 0;
-    if (!w || !h) {
-      try {
-        var im = m.internalModel;
-        if (im) {
-          var cmw = im.width || (im.coreModel && im.coreModel.getCanvasWidth && im.coreModel.getCanvasWidth());
-          var cmh = im.height || (im.coreModel && im.coreModel.getCanvasHeight && im.coreModel.getCanvasHeight());
-          if (cmw && cmh) { w = cmw; h = cmh; }
-        }
-      } catch (e) { console.warn("calcModelSize fallback", e); }
-    }
-    return { width: w || 1, height: h || 1 };
+    // 优先用缓存的原始尺寸
+    if (modelOriginalSize) return modelOriginalSize;
+    // 其次用 internalModel（Cubism 原始 canvas 尺寸，不受 scale 影响）
+    try {
+      var im = m.internalModel;
+      if (im) {
+        var cmw = im.width || (im.coreModel && im.coreModel.getCanvasWidth && im.coreModel.getCanvasWidth());
+        var cmh = im.height || (im.coreModel && im.coreModel.getCanvasHeight && im.coreModel.getCanvasHeight());
+        if (cmw && cmh) { modelOriginalSize = { width: cmw, height: cmh }; return modelOriginalSize; }
+      }
+    } catch (e) { console.warn("calcModelSize fallback", e); }
+    // 最后用 model.width/height（但这是 scale 后的值，不准确）
+    var w = m.width || 1;
+    var h = m.height || 1;
+    modelOriginalSize = { width: w, height: h };
+    return modelOriginalSize;
   }
 
   function calcBaseScale(m) {
@@ -195,6 +201,7 @@
 
     window.__l2dLog("开始加载模型: " + path);
     var done = false;
+    modelOriginalSize = null;
     setTimeout(function () {
       if (!done) notify("error", { message: "模型加载超时(20s): " + path });
     }, 20000);
