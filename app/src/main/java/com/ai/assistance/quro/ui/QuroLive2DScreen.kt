@@ -159,12 +159,8 @@ private fun createLive2DWebView(context: Context, bridge: Live2dBridge): WebView
     wv.settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true
-        allowFileAccess = false
-        allowContentAccess = false
-        allowFileAccessFromFileURLs = false
-        allowUniversalAccessFromFileURLs = false
-        cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-        setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
+        // 与 DesktopFriends Capacitor WebView 对齐：只启用 JS + DOM storage，其余用默认值
+        // 此前 allowFileAccess=false / LOAD_NO_CACHE / RenderPriority.HIGH 可能导致 WebView 不渲染 WebGL canvas
     }
     wv.addJavascriptInterface(bridge, "ZorvBridge")
     wv.webViewClient = object : WebViewClient() {
