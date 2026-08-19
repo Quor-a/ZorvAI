@@ -215,6 +215,25 @@
       collectModelInfo();
       try { model.motion("Idle"); } catch (e) { /* no idle */ }
 
+      // 诊断：检查纹理状态
+      try {
+        var im = model.internalModel;
+        var texCount = 0;
+        var texInfo = [];
+        if (im && im.coreModel) {
+          // 检查 Cubism 渲染器的纹理
+          var renderer = im.renderer;
+          if (renderer && renderer._textures) {
+            texCount = renderer._textures.length;
+            for (var i = 0; i < Math.min(texCount, 5); i++) {
+              var t = renderer._textures[i];
+              texInfo.push(i + ":" + (t ? (t._texture ? "ok" : "noTexture") : "null"));
+            }
+          }
+        }
+        window.__l2dLog("纹理诊断: count=" + texCount + " info=" + texInfo.join(","));
+      } catch (e) { window.__l2dLog("纹理诊断异常: " + e); }
+
       model.on("hit", function (areas) {
         if (areas.indexOf("body") >= 0 || areas.indexOf("Body") >= 0) {
           try { model.motion("TapBody"); } catch (e) {}
