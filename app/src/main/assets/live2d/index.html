@@ -370,7 +370,8 @@
           backgroundAlpha: 0,
           width: width,
           height: height,
-          antialias: true
+          antialias: true,
+          forceCanvas: true  // 强制用 Canvas 2D renderer，避免 WebGL 合成问题
         });
       } catch (e) {
         notify("error", { message: "PIXI初始化失败: " + String(e && e.message || e) });
