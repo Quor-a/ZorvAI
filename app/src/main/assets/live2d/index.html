@@ -25,6 +25,21 @@
 </style>
 </head>
 <body>
+<!-- 原始 WebGL 诊断：不用 PixiJS，直接用 WebGL 画红色三角形，验证 canvas/WebGL 本身是否工作 -->
+<canvas id="diag" style="position:fixed;top:0;left:0;width:200px;height:200px;border:3px solid red;z-index:9999;"></canvas>
+<script>
+(function(){
+  var c = document.getElementById('diag');
+  if (!c) return;
+  var gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+  if (!gl) { window.__l2dLog('DIAG: WebGL 不可用'); return; }
+  c.width = 200; c.height = 200;
+  gl.viewport(0, 0, 200, 200);
+  gl.clearColor(1, 0, 0, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  window.__l2dLog('DIAG: WebGL 红色方块已绘制 gl=' + !!gl + ' canvas=' + c.width + 'x' + c.height);
+})();
+</script>
 <canvas id="stage"></canvas>
 <div id="loading"><span class="spin"></span>正在加载 Live2D 模型…</div>
 
