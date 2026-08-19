@@ -28,10 +28,39 @@
 <canvas id="stage"></canvas>
 <div id="loading"><span class="spin"></span>正在加载 Live2D 模型…</div>
 
-<script src="pixi.min.js"></script>
-<script src="live2d.min.js"></script>
-<script src="live2dcubismcore.min.js"></script>
-<script src="pixi-live2d-display.min.js"></script>
+<!-- 诊断：全局错误捕获（最先注册，捕获后续脚本加载失败与运行时抛错，直接上报到状态栏 + 调试日志） -->
+<script>
+(function () {
+  function report(msg) {
+    try { console.error("[L2D-DIAG] " + msg); } catch (_) {}
+    try {
+      if (window.ZorvBridge && window.ZorvBridge.postMessage)
+        window.ZorvBridge.postMessage(JSON.stringify({ event: "error", data: { message: msg } }));
+    } catch (_) {}
+  }
+  window.addEventListener("error", function (e) {
+    try {
+      var t = e.target;
+      if (t && t.tagName === "SCRIPT") {
+        report("脚本加载失败: " + String(t.src || "").split("/").pop());
+      } else if (t && (t.tagName === "IMG" || t.tagName === "LINK")) {
+        /* 图片/链接 404 不上报，避免噪音 */
+      } else {
+        report("页面错误: " + (e.message || "unknown") + (e.filename ? " [" + String(e.filename).split("/").pop() + ":" + (e.lineno || 0) + "]" : ""));
+      }
+    } catch (_) {}
+  }, true);
+  window.addEventListener("unhandledrejection", function (e) {
+    try { report("Promise异常: " + String(e.reason && e.reason.message || e.reason || e)); } catch (_) {}
+  });
+  window.__l2dLog = function (msg) { try { console.log("[L2D] " + msg); } catch (_) {} };
+})();
+</script>
+<!-- 运行时优先（与 DesktopFriends 一致：先 Cubism 运行时，再 PixiJS，最后 pixi-live2d-display） -->
+<script src="live2d.min.js" onload="window.__l2dLog('live2d.min.js ok, Live2D='+(typeof window.Live2D))"></script>
+<script src="live2dcubismcore.min.js" onload="window.__l2dLog('live2dcubismcore.min.js ok, Core='+(typeof window.Live2DCubismCore))"></script>
+<script src="pixi.min.js" onload="window.__l2dLog('pixi.min.js ok, PIXI='+(typeof window.PIXI))"></script>
+<script src="pixi-live2d-display.min.js" onload="window.__l2dLog('pixi-live2d-display.min.js ok, L2DM='+(typeof window.Live2DModel))"></script>
 <script>
 (function () {
   "use strict";
@@ -132,7 +161,13 @@
     if (model) { app.stage.removeChild(model); model.destroy(); model = null; }
     emotionTarget = {}; emotionCurrent = {}; speaking = false;
 
+    window.__l2dLog("开始加载模型: " + path);
+    var done = false;
+    setTimeout(function () {
+      if (!done) notify("error", { message: "模型加载超时(20s): " + path });
+    }, 20000);
     return Live2DModel.from(path, { autoInteract: true, autoUpdate: true }).then(function (m) {
+      done = true;
       model = m;
       baseScale = Math.min(app.screen.width / model.width, app.screen.height / model.height) * 0.85;
       model.anchor.set(0.5, 0.5);
@@ -157,6 +192,7 @@
       });
       return true;
     }).catch(function (e) {
+      done = true;
       console.error("loadModel failed", e);
       hideLoading();
       notify("error", { message: String(e && e.message || e) });
@@ -243,16 +279,30 @@
   };
 
   function init() {
-    if (typeof PIXI === "undefined") { notify("error", { message: "PIXI 未加载" }); return; }
-    app = new PIXI.Application({
-      view: canvas,
-      backgroundAlpha: 0,
-      width: window.innerWidth,
-      height: window.innerHeight,
-      antialias: true,
-      resolution: window.devicePixelRatio || 1,
-      autoDensity: true
-    });
+    // 全局对象存在性诊断（输出到调试日志，定位缺失的运行时）
+    var diag = "PIXI=" + (typeof PIXI !== "undefined" ? "ok" : "MISS")
+      + " Live2D=" + (typeof window.Live2D !== "undefined" ? "ok" : "MISS")
+      + " Core=" + (typeof window.Live2DCubismCore !== "undefined" ? "ok" : "MISS")
+      + " L2DM=" + (typeof window.Live2DModel !== "undefined" ? "ok" : "MISS")
+      + " size=" + window.innerWidth + "x" + window.innerHeight;
+    window.__l2dLog("环境检查 " + diag);
+    if (typeof PIXI === "undefined") { notify("error", { message: "PIXI 未加载 (" + diag + ")" }); return; }
+    if (typeof window.Live2DModel === "undefined") { notify("error", { message: "pixi-live2d-display 未加载 (" + diag + ")" }); return; }
+    try {
+      app = new PIXI.Application({
+        view: canvas,
+        backgroundAlpha: 0,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        antialias: true,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true
+      });
+    } catch (e) {
+      notify("error", { message: "PIXI初始化失败: " + String(e && e.message || e) });
+      return;
+    }
+    window.__l2dLog("PIXI Application 就绪");
     app.ticker.add(perFrame);
     window.addEventListener("resize", refreshCanvas);
     window.addEventListener("orientationchange", refreshCanvas);

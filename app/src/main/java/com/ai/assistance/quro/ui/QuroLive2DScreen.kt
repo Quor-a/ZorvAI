@@ -128,7 +128,7 @@ fun QuroLive2DScreen(onExitToHome: () -> Unit) {
                 status,
                 fontSize = 12.sp,
                 color = cs.onSurfaceVariant,
-                maxLines = 1,
+                maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
@@ -137,7 +137,7 @@ fun QuroLive2DScreen(onExitToHome: () -> Unit) {
         debugLog?.let {
             if (it.isNotBlank()) {
                 Box(
-                    Modifier.fillMaxWidth().heightIn(max = 96.dp).background(cs.surfaceVariant)
+                    Modifier.fillMaxWidth().heightIn(max = 180.dp).background(cs.surfaceVariant)
                         .clickable { debugLog = null },
                 ) {
                     androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize().padding(8.dp)) {
