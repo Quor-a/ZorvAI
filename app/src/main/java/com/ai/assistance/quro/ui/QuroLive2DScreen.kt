@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
+import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -65,8 +66,8 @@ fun QuroLive2DScreen(onExitToHome: () -> Unit) {
                 }
             },
             onEmotion = { name -> main.post { status = "情绪：$name" } },
-            onError = { msg -> main.post { status = "加载失败：$msg" } },
-            onLog = { msg -> main.post { debugLog = (debugLog ?: "") + msg + "\n" } },
+            onErrorCb = { msg -> main.post { status = "加载失败：$msg" } },
+            onLogCb = { msg -> main.post { debugLog = (debugLog ?: "") + msg + "\n" } },
         )
     }
 
@@ -160,30 +161,37 @@ private fun emotionLabel(e: String): String = when (e) {
     else -> e
 }
 
+// 用虚拟 https 源加载 Live2D 页面：规避 file:// 页面内 fetch 模型/纹理时的跨域(CORS)限制
+//（file:// 源为 null，fetch 会被浏览器拦截）。所有资源经 shouldInterceptRequest 从 APK assets
+// 提供，并带 Access-Control-Allow-Origin 头，使页面内 fetch 走同源 https，模型得以加载。
+private const val LIVE2D_BASE = "https://live2d.local/live2d/"
+
 @SuppressLint("SetJavaScriptEnabled")
 private fun createLive2DWebView(context: Context, bridge: Live2dBridge): WebView {
     val wv = WebView(context.applicationContext)
     wv.settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true
-        allowFileAccess = true
-        allowContentAccess = true
-        // 允许 file:// 页面内的 JS 通过 fetch/XHR 读取同域 file:// 资源（加载 Live2D 模型必需）
-        allowFileAccessFromFileURLs = true
-        allowUniversalAccessFromFileURLs = true
+        allowFileAccess = false
+        allowContentAccess = false
+        allowFileAccessFromFileURLs = false
+        allowUniversalAccessFromFileURLs = false
         cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
         setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
     }
     wv.addJavascriptInterface(bridge, "ZorvBridge")
     wv.webViewClient = object : WebViewClient() {
-        // 直接从 APK assets 提供文件，规避 file:// fetch 的 CORS / 跨域限制
+        // 把虚拟 https 源的请求映射到 APK assets，并附 CORS 头，使页面内 fetch 模型/纹理可用
         override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
             val url = request?.url?.toString() ?: return null
-            if (url.startsWith("file:///android_asset/")) {
-                val assetPath = url.removePrefix("file:///android_asset/")
+            if (url.startsWith(LIVE2D_BASE)) {
+                val assetPath = url.removePrefix(LIVE2D_BASE)
                 return try {
                     val `is` = context.assets.open(assetPath)
-                    WebResourceResponse(mimeFor(assetPath), "utf-8", `is`)
+                    WebResourceResponse(
+                        mimeFor(assetPath), "utf-8", 200, "OK",
+                        mapOf("Access-Control-Allow-Origin" to "*"), `is`,
+                    )
                 } catch (_: Exception) {
                     null
                 }
@@ -192,16 +200,18 @@ private fun createLive2DWebView(context: Context, bridge: Live2dBridge): WebView
         }
 
         override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
-            bridge.onError("${description ?: "加载错误"} ($errorCode)")
+            bridge.reportError("${description ?: "加载错误"} ($errorCode)")
         }
     }
     wv.webChromeClient = object : WebChromeClient() {
         override fun onConsoleMessage(m: ConsoleMessage?): Boolean {
-            m?.let { bridge.onLog("[${it.line()}] ${it.message()}") }
+            m?.let { bridge.reportLog("[${it.lineNumber()}] ${it.message()}") }
             return true
         }
     }
-    wv.loadUrl("file:///android_asset/live2d/index.html")
+    // 读取 index.html 并以虚拟 https 源加载；相对脚本/模型路径均解析到该源，由上面的拦截器提供
+    val html = context.assets.open("live2d/index.html").bufferedReader(Charsets.UTF_8).use { it.readText() }
+    wv.loadDataWithBaseURL(LIVE2D_BASE, html, "text/html", "utf-8", null)
     return wv
 }
 
@@ -224,11 +234,13 @@ private fun mimeFor(path: String): String = when {
 class Live2dBridge(
     private val onReady: (emotions: List<String>, motions: Map<String, Int>) -> Unit,
     private val onEmotion: (name: String) -> Unit,
-    // internal（非 private）：createLive2DWebView 这一顶层函数需通过 bridge.onError/onLog 调用，
-    // 而成员内 postMessage 同样直接解析到这两个 lambda 属性（无同名成员函数，避免递归）。
-    internal val onError: (message: String) -> Unit,
-    internal val onLog: (message: String) -> Unit,
+    // 用 onErrorCb/onLogCb 命名，避免与对外成员函数 reportError/reportLog 同名导致 Kotlin 类型检查递归（属性/函数同名歧义）。
+    private val onErrorCb: (message: String) -> Unit,
+    private val onLogCb: (message: String) -> Unit,
 ) {
+    // 供顶层 createLive2DWebView 的 WebViewClient/WebChromeClient 回调调用
+    fun reportError(message: String) = onErrorCb(message)
+    fun reportLog(message: String) = onLogCb(message)
     @JavascriptInterface
     fun postMessage(json: String) {
         try {
@@ -246,10 +258,10 @@ class Live2dBridge(
                     onReady(emo, mot)
                 }
                 "emotion" -> onEmotion(data.optString("name", ""))
-                "error" -> onError(data.optString("message", "未知错误"))
+                "error" -> onErrorCb(data.optString("message", "未知错误"))
             }
         } catch (e: Exception) {
-            onLog("bridge parse error: $e")
+            onLogCb("bridge parse error: $e")
         }
     }
 }

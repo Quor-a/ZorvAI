@@ -333,7 +333,7 @@ private fun ToolboxHome(
         ToolItem(Icons.Filled.MusicNote, "音乐播放器", "在应用内播放本地音乐（后台持续播放）", onOpenMusic),
         ToolItem(Icons.Filled.Movie, "视频播放器", "在应用内全功能视频播放器播放本地视频", { onOpenVideo("", "") }),
         ToolItem(Icons.Filled.Person, "数字人", "云端口/离线可选·可自制 3D 模型·语音→LLM→TTS 闭环", onClick = onOpenAvatar),
-        ToolItem(Icons.Filled.Face, "Live2D 伙伴", "Live2D 桌宠·情绪/说话·本地离线运行（移植自开源 DesktopFriends）", onClick = onOpenLive2D),
+        ToolItem(Icons.Filled.Face, "Live2D 伙伴", "Live2D 桌宠 · 情绪表达与说话口型 · 本地离线运行", onClick = onOpenLive2D),
         ToolItem(Icons.Filled.Keyboard, "AI 键盘", "AI 替你打字·注册为系统输入法·任意 App 可用", onClick = {
             // 打开系统输入法设置页，引导用户启用 Zorv AI 键盘
             try {
