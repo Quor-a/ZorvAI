@@ -95,7 +95,7 @@ fun QuroToolboxScreen(
                 onOpenMusic = onOpenMusic,
                 onOpenVideo = onOpenVideo,
                 onOpenAvatar = { screen = "avatar" },
-                onOpenLive2D = onOpenLive2D,
+                onOpenLive2D = { screen = "live2d" },
             )
             "files" -> QuroFileManager(onExitToHome = { screen = "home" })
             "package" -> PackageNameFinder()
