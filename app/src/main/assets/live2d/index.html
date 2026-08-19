@@ -217,14 +217,17 @@
 
       hideLoading();
       var sz = calcModelSize(model);
-      window.__l2dLog("模型就绪: size=" + sz.width + "x" + sz.height
-        + " scale=" + model.scale.x.toFixed(4) + "/" + model.scale.y.toFixed(4)
-        + " pos=" + Math.round(model.position.x) + "," + Math.round(model.position.y));
+      var diagInfo = "size=" + sz.width + "x" + sz.height
+        + " scale=" + model.scale.x.toFixed(4)
+        + " pos=" + Math.round(model.position.x) + "," + Math.round(model.position.y)
+        + " renderer=" + (app.renderer.type === PIXI.RENDERER_TYPE.WEBGL ? "WEBGL" : "CANVAS");
+      window.__l2dLog("模型就绪: " + diagInfo);
       notify("ready", {
         path: path,
         emotions: window.ZorvLive2D.emotions(),
         expressions: availableExpressions,
-        motions: availableMotions
+        motions: availableMotions,
+        diag: diagInfo
       });
       return true;
     }).catch(function (e) {
@@ -337,11 +340,7 @@
           backgroundAlpha: 0,
           width: width,
           height: height,
-          antialias: true,
-          resolution: window.devicePixelRatio || 1,
-          autoDensity: true,
-          // 某些 WebView 需要显式 preference 才稳定创建 WebGL context
-          powerPreference: "high-performance"
+          antialias: true
         });
       } catch (e) {
         notify("error", { message: "PIXI初始化失败: " + String(e && e.message || e) });

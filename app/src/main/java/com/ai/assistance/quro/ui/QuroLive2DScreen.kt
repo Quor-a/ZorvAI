@@ -1,11 +1,13 @@
 package com.ai.assistance.quro.ui
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.webkit.JavascriptInterface
 import android.view.View
+import android.webkit.JavascriptInterface
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -14,20 +16,15 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -59,11 +56,11 @@ fun QuroLive2DScreen(onExitToHome: () -> Unit) {
 
     val bridge = remember {
         Live2dBridge(
-            onReady = { emo, _ ->
+            onReady = { emo, _, diag ->
                 main.post {
                     modelReady = true
                     emotions = emo
-                    status = "就绪 · 模型已加载"
+                    status = if (diag.isNotBlank()) "就绪 · $diag" else "就绪 · 模型已加载"
                 }
             },
             onEmotion = { name -> main.post { status = "情绪：$name" } },
@@ -83,6 +80,13 @@ fun QuroLive2DScreen(onExitToHome: () -> Unit) {
             title = "Live2D 伙伴",
             onBack = onExitToHome,
             trailing = {
+                TextButton(onClick = {
+                    val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Live2D日志", debugLog ?: "(无日志)"))
+                    status = "日志已复制到剪贴板"
+                }) {
+                    Text("复制日志", fontSize = 13.sp)
+                }
                 IconButton(onClick = { callJs("window.ZorvLive2D.loadModel(window.ZorvLive2D.defaultModel())") }) {
                     Icon(Icons.Filled.Refresh, "重载模型", tint = cs.onSurfaceVariant)
                 }
@@ -115,11 +119,16 @@ fun QuroLive2DScreen(onExitToHome: () -> Unit) {
         debugLog?.let {
             if (it.isNotBlank()) {
                 Box(
-                    Modifier.fillMaxWidth().heightIn(max = 180.dp).background(cs.surfaceVariant)
-                        .clickable { debugLog = null },
+                    Modifier.fillMaxWidth().heightIn(max = 200.dp).background(cs.surfaceVariant),
                 ) {
-                    androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize().padding(8.dp)) {
-                        item { Text(it, fontSize = 11.sp, color = cs.onSurfaceVariant, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace) }
+                    SelectionContainer {
+                        Text(
+                            it,
+                            fontSize = 11.sp,
+                            color = cs.onSurfaceVariant,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                        )
                     }
                 }
             }
@@ -214,7 +223,7 @@ private fun mimeFor(path: String): String = when {
  * 收到 {event, data} 消息后回调到 Compose 状态。
  */
 class Live2dBridge(
-    private val onReady: (emotions: List<String>, motions: Map<String, Int>) -> Unit,
+    private val onReady: (emotions: List<String>, motions: Map<String, Int>, diag: String) -> Unit,
     private val onEmotion: (name: String) -> Unit,
     // 用 onErrorCb/onLogCb 命名，避免与对外成员函数 reportError/reportLog 同名导致 Kotlin 类型检查递归（属性/函数同名歧义）。
     private val onErrorCb: (message: String) -> Unit,
@@ -237,7 +246,7 @@ class Live2dBridge(
                     val mot = mutableMapOf<String, Int>()
                     val mo = data.optJSONObject("motions")
                     if (mo != null) mo.keys().forEach { k -> mot[k] = mo.optInt(k, 0) }
-                    onReady(emo, mot)
+                    onReady(emo, mot, data.optString("diag", ""))
                 }
                 "emotion" -> onEmotion(data.optString("name", ""))
                 "error" -> onErrorCb(data.optString("message", "未知错误"))
