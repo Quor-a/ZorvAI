@@ -60,13 +60,18 @@
 <script src="live2d.min.js" onload="window.__l2dLog('live2d.min.js ok, Live2D='+(typeof window.Live2D))"></script>
 <script src="live2dcubismcore.min.js" onload="window.__l2dLog('live2dcubismcore.min.js ok, Core='+(typeof window.Live2DCubismCore))"></script>
 <script src="pixi.min.js" onload="window.__l2dLog('pixi.min.js ok, PIXI='+(typeof window.PIXI))"></script>
-<script src="pixi-live2d-display.min.js" onload="window.__l2dLog('pixi-live2d-display.min.js ok, L2DM='+(typeof window.Live2DModel))"></script>
+<script src="pixi-live2d-display.min.js" onload="window.__l2dLog('pixi-live2d-display.min.js ok, L2DM='+(typeof (window.PIXI&&window.PIXI.live2d&&window.PIXI.live2d.Live2DModel)))"></script>
 <script>
 (function () {
   "use strict";
 
   // 兼容 pixi-live2d-display 对全局 PIXI 的依赖
   if (typeof PIXI !== "undefined") { window.PIXI = PIXI; }
+
+  // pixi-live2d-display 0.4.0 UMD 将 Live2DModel 挂在 PIXI.live2d.Live2DModel（非 window.Live2DModel）
+  var Live2DModel = (typeof PIXI !== "undefined" && PIXI.live2d && PIXI.live2d.Live2DModel)
+    ? PIXI.live2d.Live2DModel
+    : (typeof window.Live2DModel !== "undefined" ? window.Live2DModel : undefined);
 
   var canvas = document.getElementById("stage");
   var loadingEl = document.getElementById("loading");
@@ -283,11 +288,11 @@
     var diag = "PIXI=" + (typeof PIXI !== "undefined" ? "ok" : "MISS")
       + " Live2D=" + (typeof window.Live2D !== "undefined" ? "ok" : "MISS")
       + " Core=" + (typeof window.Live2DCubismCore !== "undefined" ? "ok" : "MISS")
-      + " L2DM=" + (typeof window.Live2DModel !== "undefined" ? "ok" : "MISS")
+      + " L2DM=" + (typeof Live2DModel !== "undefined" ? "ok" : "MISS")
       + " size=" + window.innerWidth + "x" + window.innerHeight;
     window.__l2dLog("环境检查 " + diag);
     if (typeof PIXI === "undefined") { notify("error", { message: "PIXI 未加载 (" + diag + ")" }); return; }
-    if (typeof window.Live2DModel === "undefined") { notify("error", { message: "pixi-live2d-display 未加载 (" + diag + ")" }); return; }
+    if (typeof Live2DModel === "undefined") { notify("error", { message: "pixi-live2d-display 未加载 (" + diag + ")" }); return; }
     try {
       app = new PIXI.Application({
         view: canvas,
