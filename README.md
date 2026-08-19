@@ -825,6 +825,7 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 - **Live2D 伙伴（工具箱 Live2D 桌宠）**：相关组件各自保留其许可证，详细说明见 [NOTICE](./NOTICE) 的「Live2D 栈」一节：
   - 渲染引擎 **PixiJS**（MIT，PixiJS 团队）与 **pixi-live2d-display**（MIT）。
   - **Live2D Cubism Core SDK**（`live2dcubismcore`）：**Live2D Open Software License**（Live2D Inc.）。
+  - **Live2D Cubism 2 SDK Runtime**（`live2d.min.js`）：**Live2D Open Software License**（Live2D Inc.）；pixi-live2d-display 加载时要求其提供 `window.Live2D`/`Live2DMotion` 全局（即便仅用 Cubism 4 模型亦需先行加载）。
   - 默认搭载模型 **Hiyori**：**Live2D Open Software License**（Live2D Inc.），取自 Live2D 官方 CubismWebSamples。
   - 情绪 / 说话逻辑移植自开源项目 **DesktopFriends**（Tosuke-sama，**MIT**），已做完全去品牌化处理，仅保留 MIT 必需的版权与许可声明。
 - **其余第三方依赖**（AndroidX / Jetpack Compose、Kotlin、OkHttp、Shizuku、QuickJS、Sherpa-NCNN 等）各自保留其原有许可证，完整清单见 [NOTICE](./NOTICE)。

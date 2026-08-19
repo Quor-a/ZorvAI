@@ -68,6 +68,12 @@ Live2D Cubism Core SDK (live2dcubismcore 1.0.2)
   Copyright: Live2D Inc.
   Note: Cubism Core 运行时，随 Live2D Cubism SDK 分发；仅可与 Live2D Cubism 产品配合使用。
 
+Live2D Cubism 2 SDK Runtime (live2d.min.js)
+  License: Live2D Open Software License
+  Copyright: Live2D Inc.
+  Note: Cubism 2 运行时，pixi-live2d-display 在脚本加载时要求其提供 window.Live2D / Live2DMotion
+        全局（即便仅使用 Cubism 4 模型亦需先行加载）；随 Live2D Cubism SDK 分发。
+
 Hiyori 模型（默认示例模型）
   License: Live2D Open Software License
   Copyright: Live2D Inc.
