@@ -156,8 +156,6 @@ private const val LIVE2D_BASE = "https://live2d.local/live2d/"
 @SuppressLint("SetJavaScriptEnabled")
 private fun createLive2DWebView(context: Context, bridge: Live2dBridge): WebView {
     val wv = WebView(context.applicationContext)
-    wv.setBackgroundColor(android.graphics.Color.TRANSPARENT)
-    wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
     wv.settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true
