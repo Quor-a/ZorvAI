@@ -354,6 +354,15 @@
         return;
       }
       window.__l2dLog("PIXI Application 就绪, renderer=" + (app.renderer.type === PIXI.RENDERER_TYPE.WEBGL ? "WEBGL" : "CANVAS"));
+
+      // 诊断：画一个红色方块验证 canvas 是否可见
+      var g = new PIXI.Graphics();
+      g.beginFill(0xff0000);
+      g.drawRect(10, 10, 100, 100);
+      g.endFill();
+      app.stage.addChild(g);
+      window.__l2dLog("诊断方块已添加 stage children=" + app.stage.children.length);
+
       app.ticker.add(perFrame);
       window.addEventListener("resize", refreshCanvas);
       window.addEventListener("orientationchange", refreshCanvas);
