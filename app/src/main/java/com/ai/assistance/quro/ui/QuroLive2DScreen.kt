@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
+import android.view.View
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -88,29 +89,6 @@ fun QuroLive2DScreen(onExitToHome: () -> Unit) {
             },
         )
 
-        // 控制栏：情绪 chips + 说话
-        Surface(color = cs.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
-            LazyRow(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                items(emotions) { e ->
-                    FilterChip(
-                        selected = false,
-                        onClick = { callJs("window.ZorvLive2D.setEmotion('$e')") },
-                        label = { Text(emotionLabel(e), fontSize = 13.sp) },
-                        leadingIcon = { Icon(Icons.Filled.Face, null, Modifier.size(16.dp)) },
-                    )
-                }
-                item {
-                    Button(onClick = { callJs("window.ZorvLive2D.speak('你好，我是 Zorv AI 的 Live2D 伙伴，我可以在本地陪你聊天。')") }) {
-                        Text("说话", fontSize = 13.sp)
-                    }
-                }
-            }
-        }
-
         // Live2D 画布
         Box(Modifier.fillMaxWidth().weight(1f)) {
             AndroidView(
@@ -169,6 +147,8 @@ private const val LIVE2D_BASE = "https://live2d.local/live2d/"
 @SuppressLint("SetJavaScriptEnabled")
 private fun createLive2DWebView(context: Context, bridge: Live2dBridge): WebView {
     val wv = WebView(context.applicationContext)
+    wv.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+    wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
     wv.settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true

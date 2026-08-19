@@ -132,11 +132,38 @@
     model.position.set(cx + ox, cy + oy);
   }
 
+  function calcModelSize(m) {
+    var w = m.width || 0;
+    var h = m.height || 0;
+    if (!w || !h) {
+      try {
+        var im = m.internalModel;
+        if (im) {
+          var cmw = im.width || (im.coreModel && im.coreModel.getCanvasWidth && im.coreModel.getCanvasWidth());
+          var cmh = im.height || (im.coreModel && im.coreModel.getCanvasHeight && im.coreModel.getCanvasHeight());
+          if (cmw && cmh) { w = cmw; h = cmh; }
+        }
+      } catch (e) { console.warn("calcModelSize fallback", e); }
+    }
+    return { width: w || 1, height: h || 1 };
+  }
+
+  function calcBaseScale(m) {
+    var size = calcModelSize(m);
+    var s = Math.min(app.screen.width / size.width, app.screen.height / size.height) * 0.8;
+    if (!isFinite(s) || s <= 0) s = 1;
+    window.__l2dLog("baseScale=" + s.toFixed(4) + " model=" + size.width + "x" + size.height + " screen=" + app.screen.width + "x" + app.screen.height);
+    return s;
+  }
+
   function refreshCanvas() {
     if (!app || !canvas.parentElement) return;
-    app.renderer.resize(window.innerWidth, window.innerHeight);
+    var parent = canvas.parentElement;
+    var w = parent.clientWidth || window.innerWidth || app.screen.width;
+    var h = parent.clientHeight || window.innerHeight || app.screen.height;
+    app.renderer.resize(w, h);
     if (model) {
-      baseScale = Math.min(app.screen.width / model.width, app.screen.height / model.height) * 0.85;
+      baseScale = calcBaseScale(model);
       applyTransform(1, 0, 0);
     }
   }
@@ -174,7 +201,7 @@
     return Live2DModel.from(path, { autoInteract: true, autoUpdate: true }).then(function (m) {
       done = true;
       model = m;
-      baseScale = Math.min(app.screen.width / model.width, app.screen.height / model.height) * 0.85;
+      baseScale = calcBaseScale(model);
       model.anchor.set(0.5, 0.5);
       applyTransform(1, 0, 0);
       app.stage.addChild(model);
@@ -189,6 +216,10 @@
       });
 
       hideLoading();
+      var sz = calcModelSize(model);
+      window.__l2dLog("模型就绪: size=" + sz.width + "x" + sz.height
+        + " scale=" + model.scale.x.toFixed(4) + "/" + model.scale.y.toFixed(4)
+        + " pos=" + Math.round(model.position.x) + "," + Math.round(model.position.y));
       notify("ready", {
         path: path,
         emotions: window.ZorvLive2D.emotions(),
@@ -293,25 +324,35 @@
     window.__l2dLog("环境检查 " + diag);
     if (typeof PIXI === "undefined") { notify("error", { message: "PIXI 未加载 (" + diag + ")" }); return; }
     if (typeof Live2DModel === "undefined") { notify("error", { message: "pixi-live2d-display 未加载 (" + diag + ")" }); return; }
-    try {
-      app = new PIXI.Application({
-        view: canvas,
-        backgroundAlpha: 0,
-        width: window.innerWidth,
-        height: window.innerHeight,
-        antialias: true,
-        resolution: window.devicePixelRatio || 1,
-        autoDensity: true
-      });
-    } catch (e) {
-      notify("error", { message: "PIXI初始化失败: " + String(e && e.message || e) });
-      return;
-    }
-    window.__l2dLog("PIXI Application 就绪");
-    app.ticker.add(perFrame);
-    window.addEventListener("resize", refreshCanvas);
-    window.addEventListener("orientationchange", refreshCanvas);
-    loadModel(defaultModelPath);
+
+    // 等待一帧，确保 canvas 父元素尺寸稳定（与 DesktopFriends 一致）
+    requestAnimationFrame(function () {
+      var parent = canvas.parentElement;
+      var width = (parent && parent.clientWidth) || window.innerWidth || 1;
+      var height = (parent && parent.clientHeight) || window.innerHeight || 1;
+      window.__l2dLog("画布容器尺寸 " + width + "x" + height);
+      try {
+        app = new PIXI.Application({
+          view: canvas,
+          backgroundAlpha: 0,
+          width: width,
+          height: height,
+          antialias: true,
+          resolution: window.devicePixelRatio || 1,
+          autoDensity: true,
+          // 某些 WebView 需要显式 preference 才稳定创建 WebGL context
+          powerPreference: "high-performance"
+        });
+      } catch (e) {
+        notify("error", { message: "PIXI初始化失败: " + String(e && e.message || e) });
+        return;
+      }
+      window.__l2dLog("PIXI Application 就绪, renderer=" + (app.renderer.type === PIXI.RENDERER_TYPE.WEBGL ? "WEBGL" : "CANVAS"));
+      app.ticker.add(perFrame);
+      window.addEventListener("resize", refreshCanvas);
+      window.addEventListener("orientationchange", refreshCanvas);
+      loadModel(defaultModelPath);
+    });
   }
 
   if (document.readyState === "loading") {
