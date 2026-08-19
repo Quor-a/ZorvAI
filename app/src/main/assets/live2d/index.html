@@ -170,6 +170,9 @@
     var w = parent.clientWidth || window.innerWidth || app.screen.width;
     var h = parent.clientHeight || window.innerHeight || app.screen.height;
     app.renderer.resize(w, h);
+    // 同步 canvas CSS 尺寸（PixiJS 可能未正确设置）
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
     if (model) {
       baseScale = calcBaseScale(model);
       applyTransform(1, 0, 0);
@@ -375,6 +378,10 @@
         return;
       }
       window.__l2dLog("PIXI Application 就绪, renderer=" + (app.renderer.type === PIXI.RENDERER_TYPE.WEBGL ? "WEBGL" : "CANVAS"));
+
+      // 修复：PixiJS 可能未正确设置 canvas CSS 高度（诊断显示 h=0px），手动同步
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
 
       // 诊断：检查 PixiJS 对 canvas 做了什么 CSS 修改
       var cs = window.getComputedStyle(canvas);
