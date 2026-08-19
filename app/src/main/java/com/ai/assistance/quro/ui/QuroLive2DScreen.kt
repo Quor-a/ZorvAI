@@ -185,7 +185,9 @@ private fun createLive2DWebView(context: Context, bridge: Live2dBridge): WebView
         override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
             val url = request?.url?.toString() ?: return null
             if (url.startsWith(LIVE2D_BASE)) {
-                val assetPath = url.removePrefix(LIVE2D_BASE)
+                // 页面基址为 https://live2d.local/live2d/，但 APK 内资源实际位于 assets/live2d/ 下，
+                // 故需在相对路径前补 "live2d/" 才能正确打开（此前漏掉前缀导致脚本/模型 404 → PIXI 未加载）。
+                val assetPath = "live2d/" + url.removePrefix(LIVE2D_BASE)
                 return try {
                     val `is` = context.assets.open(assetPath)
                     WebResourceResponse(
