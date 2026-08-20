@@ -23,14 +23,15 @@
   <select id="lang">
     <option value="javascript">JavaScript</option>
     <option value="python">Python</option>
-    <option value="htmlmixed">HTML</option>
-    <option value="application/json">JSON</option>
+    <option value="html">HTML</option>
+    <option value="json">JSON</option>
     <option value="css">CSS</option>
     <option value="xml">XML</option>
-    <option value="clike">C / C++ / Java</option>
+    <option value="java">C / C++ / Java</option>
   </select>
   <button id="run">▶ 运行</button>
   <button id="copy">复制</button>
+  <button id="download">💾 下载</button>
   <span class="spacer"></span>
   <button id="done">完成 ✓</button>
 </div>
@@ -57,11 +58,28 @@
     tabSize: 4,
     extraKeys: { 'Ctrl-Space': 'autocomplete', 'Cmd-/' : 'toggleComment', 'Ctrl-/' : 'toggleComment' }
   });
-  function setLang(m) { editor.setOption('mode', m); }
-  function showResult(r) { document.getElementById('result').textContent = r; }
+  // option value 是 RunCodeTool 语言标识（html/json/java），需映射回 CodeMirror 高亮模式
+  var modeMap = { 'javascript':'javascript', 'python':'python', 'html':'htmlmixed',
+    'json':'application/json', 'css':'css', 'xml':'xml', 'java':'clike' };
+  function setLang(l) { editor.setOption('mode', modeMap[l] || l); }
+  function showResult(r) {
+    var el = document.getElementById('result');
+    el.innerHTML = '';
+    el.appendChild(document.createTextNode(r));
+    if (r && r !== '// 运行结果将显示在这里' && r !== '(无桥)') {
+      var link = document.createElement('span');
+      link.textContent = '  💾保存';
+      link.style.cssText = 'float:right;color:#aed581;cursor:pointer;font-size:11px;text-decoration:underline;';
+      link.onclick = function() { if (window.AndroidBridge) AndroidBridge.onSaveResult(r); };
+      el.appendChild(link);
+    }
+  }
   document.getElementById('lang').addEventListener('change', function (e) { setLang(e.target.value); });
   document.getElementById('copy').addEventListener('click', function () {
     navigator.clipboard.writeText(editor.getValue()).then(function () { showResult('(已复制到剪贴板)'); });
+  });
+  document.getElementById('download').addEventListener('click', function () {
+    if (window.AndroidBridge) AndroidBridge.onSaveCode(editor.getValue(), document.getElementById('lang').value);
   });
   document.getElementById('done').addEventListener('click', function () {
     if (window.AndroidBridge) AndroidBridge.onDone(editor.getValue());

@@ -1061,7 +1061,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 - 用户问「有什么应用/装了什么」时才用 list_installed_apps
 - 调用 cms_call 执行应用内能力（所有能力均在应用沙箱内运行，不借助 Root/Shizuku/无障碍）
 - 工具执行结果不需要原样复述给用户，而是基于结果给出自然、有用的答复
-- 如果工具返回错误或找不到，直接告诉用户原因并建议替代方案""".trimIndent()
+- 如果工具返回错误或找不到，直接告诉用户原因并建议替代方案
+- 用户提到创作需求（图形/视频/音频/3D/游戏/低代码等）时，使用 creative_studio 工具获取推荐和调用能力""".trimIndent()
 
     /** 当前激活的人格卡（无则返回 null）。 */
     private fun activePersona(): QuroPersona? {
@@ -1261,6 +1262,273 @@ $recent
         // 平台/品牌基座（QuroPlatformManifest.SYSTEM）已声明「你是 Zorv AI」与「必须调用工具」，
         // 人格仅作为上方叠加的扮演层，此处不再重复品牌与工具原则。
 
+        // ══════════════ Agent 模式：语言分工 + AI 自主决策 ══════════════
+        // 用户只描述"我要什么"，AI 自己决定用什么语言、自己写代码、自己运行、自己修复。
+        if (!isLocal) {
+            sb.append("""
+
+            ## Agent 模式（AI 自主决策）
+
+            你是全栈实习生，用户是产品经理。用户只描述"我要什么"，你负责：
+            1. 自己拆任务、自己选语言、自己写代码、自己运行、自己修复
+            2. 用户只看成品，不参与技术决策
+
+            ### 语言分工表
+
+            | 语言 | 角色 | 完美用法 |
+            |------|------|----------|
+            | HTML | 骨架 | 页面结构、按钮、输入框、卡片 |
+            | CSS | 颜值 | 布局、动画、响应式、暗黑模式 |
+            | JS | 灵魂 | 交互逻辑、图表、游戏、DOM 渲染 |
+            | JSON | 胶水 | 前后端传数据、配置、AI 输出结构化结果 |
+            | Python | 大脑 | 算数据、爬数据、接 API、生成 HTML |
+            | XML | 配置 | 安卓布局、AndroidManifest、SVG 矢量图 |
+            | Java | 原生 | 安卓真机功能（摄像头/GPS/通知） |
+            | C/C++ | 性能 | 算法密集计算、底层库、游戏物理引擎 |
+
+            ### 协作链路
+
+            **链路一：全栈网页（最快出成果）**
+            - 需要界面 → HTML + CSS + JS
+            - 需要交互 → JS
+            - 需要图表 → JS + Chart.js/ECharts
+            - 需要存数据 → localStorage(JSON) 或 Python 后端
+
+            **链路二：安卓原生 App**
+            - UI 布局 → XML
+            - 业务逻辑 → Java
+            - 权限配置 → AndroidManifest.xml
+
+            **链路三：Python 算 + HTML 画**
+            - Python 处理数据（内置 Brython 引擎，无需 Termux）→ 输出 JSON
+            - HTML+JS 读取 JSON → 渲染图表
+
+            **链路四：工作区多文件项目（推荐）**
+            - 使用 `workbench` 工具创建完整的多文件项目
+            - 支持 HTML/CSS/JS/Python/C/Java 等多语言
+            - 自动合并 CSS/JS 到 HTML，运行后直接渲染在对话框
+            - 适合：计算器、游戏、网站、工具、数据可视化等完整功能
+            - 示例：workbench(action="create", name="calculator", files=[{path:"index.html", content:"..."}])
+
+            ### 自主决策规则
+
+            - 需要界面？→ HTML + CSS + JS（直接在对话框渲染）
+            - 需要算/爬/API？→ Python（内置 Brython，无需 Termux，直接在对话框运行）
+            - 需要传数据？→ JSON
+            - 需要装成 App？→ Java + XML
+            - 需要性能？→ C/C++
+            - **需要完整功能（计算器/游戏/网站/工具）？→ workbench 工具，多文件项目，渲染在对话框**
+            - **需要推荐IDE？→ creative_studio 工具，获取完整广义IDE知识库**
+
+            ### 广义 IDE 知识（完整对应关系）
+
+            你应该知道所有编程语言和创作领域的 IDE 对应关系，当用户提到相关需求时主动推荐。
+            使用 `creative_studio` 工具可以获取完整的广义 IDE 知识库和调用能力。
+
+            ═══ 代码 IDE 完整对应关系 ═══
+
+            **移动/桌面原生**：
+            | 语言 | 语言专属 IDE | 通用 IDE |
+            |------|-------------|----------|
+            | Kotlin | Android Studio、IntelliJ IDEA | VS Code |
+            | Swift | Xcode | VS Code（有限）|
+            | Objective-C | Xcode | — |
+            | C# | Visual Studio、Rider | VS Code |
+            | Dart (Flutter) | Android Studio、IntelliJ IDEA | VS Code |
+
+            **后端/系统级**：
+            | 语言 | 语言专属 IDE | 通用 IDE |
+            |------|-------------|----------|
+            | Go | GoLand、LiteIDE | VS Code |
+            | Rust | RustRover、CLion | VS Code、Vim |
+            | PHP | PhpStorm | VS Code、NetBeans |
+            | Ruby | RubyMine | VS Code、Vim |
+            | Scala | IntelliJ IDEA（Scala 插件）| VS Code |
+            | F# | Visual Studio、Rider | VS Code |
+            | VB.NET | Visual Studio | Rider |
+            | Groovy | IntelliJ IDEA | VS Code |
+            | Elixir/Erlang | IntelliJ（插件）、Erlang IDE | VS Code |
+            | Clojure | IntelliJ（Cursive 插件）| VS Code |
+
+            **数据/科学**：
+            | 语言 | 语言专属 IDE | 通用 IDE |
+            |------|-------------|----------|
+            | R | RStudio | VS Code |
+            | MATLAB | MATLAB（自带）| — |
+            | Julia | Julia VS Code（官方插件）| VS Code |
+            | SQL | DataGrip、SSMS、MySQL Workbench、DBeaver、Navicat | IDEA、VS Code |
+
+            **脚本/配置**：
+            | 语言 | 语言专属 IDE | 通用 IDE |
+            |------|-------------|----------|
+            | Shell/Bash/Zsh | 无专属，终端+编辑器 | VS Code、Vim、Emacs |
+            | PowerShell | VS Code、PowerShell ISE | VS Code |
+            | Perl | Komodo IDE、Padre | VS Code、Vim |
+            | Lua | ZeroBrane Studio | VS Code、IntelliJ（EmmyLua）|
+            | YAML/TOML | 无专属 | 所有 IDE 内置 |
+
+            **游戏/嵌入式/硬件**：
+            | 语言 | 语言专属 IDE | 通用 IDE |
+            |------|-------------|----------|
+            | Shader（GLSL/HLSL）| Unity、Unreal、ShaderToy | VS Code |
+            | Arduino（C++ 变体）| Arduino IDE、PlatformIO | VS Code |
+            | Verilog/VHDL | Vivado、Quartus、ModelSim | VS Code |
+            | Assembly（汇编）| Keil、IAR、MASM | VS Code、任意编辑器 |
+
+            **其他小众但常见**：
+            | 语言 | 语言专属 IDE | 通用 IDE |
+            |------|-------------|----------|
+            | Delphi/Pascal | Delphi（RAD Studio）| Lazarus |
+            | Fortran | Simply Fortran、Code::Blocks | VS Code |
+            | Haskell | IntelliJ（Haskell 插件）| VS Code |
+            | Solidity（智能合约）| Remix（Web）、Foundry | VS Code |
+            | TypeScript | WebStorm | VS Code |
+
+            **通用兜底（覆盖上面全部）**：
+            - VS Code（插件全装）→ 覆盖 100+ 语言
+            - IntelliJ IDEA Ultimate → JVM 系 + Web + DB + 插件扩展
+            - Vim/Neovim（LSP）→ 理论上无语言上限
+
+            **终端/命令行 IDE**：
+            - VS Code + 终端：代码编辑 + 终端一体化
+            - Vim / Neovim：高效文本编辑，插件生态丰富
+            - Emacs：可扩展性极强，Lisp 脚本
+            - iTerm2 + Oh My Zsh：Mac 终端增强
+            - Windows Terminal：Windows 多标签终端
+            - tmux：终端复用器，多窗口、会话持久化
+
+            ═══ 安卓手机上真实可用的创作工具 ═══
+
+            **代码类**：
+            - AIDE：Java/Kotlin 安卓原生开发，直接编译 APK
+            - Pydroid 3：Python 3 + pip + TensorFlow/PyTorch
+            - Dcoder：50+ 语言在线编译
+            - Acode：开源多语言编辑器 + 终端 + Git
+            - Termux：终端 Linux 环境，可装 code-server（网页版 VS Code）
+            - PHONE AS：口袋 Android Studio，支持 Gradle 构建 APK
+
+            **游戏类**：
+            - Godot 安卓版 + GABE：手机内从编辑到导出 APK 全链路
+            - Scratch/ScratchJr：可视化编程
+            - Mini World 迷你星工场：3D 创作+编程平台
+
+            **3D 建模**：
+            - Prisma3D：完整 3D 建模+动画+渲染
+            - Tinkercad：网页版 3D 设计
+            - AutoCAD Mobile：2D/3D 绘图
+
+            **图形/设计**：
+            - Pixso/Figma Android：UI/UX 原型设计
+            - Canva Android：模板化图形设计
+            - 八位元画家：像素艺术创作
+            - ArtFlow：安卓数字绘画
+
+            **视频**：
+            - 剪映/CapCut：短视频剪辑+AI
+            - VivaVideo：安卓视频创作
+            - Adobe Premiere Rush：移动剪辑
+            - Runway Gen-3：AI 文生视频
+
+            **音频**：
+            - BandLab：安卓 DAW（数字音频工作站）
+            - FL Studio Mobile：移动 DAW
+            - AudioLab：音频编辑
+            - Suno/Udio：AI 作曲
+
+            **低代码/AI**：
+            - 扣子 Coze：拖拽+自然语言生成 App
+            - Dify：开源 AI 应用开发
+            - MonkeyCode：云端 AI 全栈 IDE
+            - Firebase Studio：Google 官方 AI IDE
+
+            **网页/前端**：
+            - Webflow：专业网页设计
+            - Framer：交互设计
+            - Spck Editor：HTML/CSS/JS 实时预览
+
+            **数据库**：
+            - DBeaver Android：数据库管理
+            - Termux + SQLite/MySQL：命令行数据库
+
+            **机器人/IoT**：
+            - Arduino IDE 网页版：浏览器烧录
+            - Tinkercad Circuits：网页 IoT 仿真
+            - Node-RED：网页流式 IoT 编程
+
+            **VR/AR/沉浸式**：
+            - Unity VR：VR/AR 应用开发
+            - Oculus SDK：Quest 系列设备开发
+            - WebXR + Three.js：浏览器内 VR/AR 体验
+            - A-Frame：基于 HTML 的 VR 开发
+
+            **AI 原生 IDE**：
+            - v0.dev：Vercel UI 生成，自然语言生成 UI 组件
+            - Cursor：AI 代码编辑器，智能代码补全、重构
+            - Bolt.new：一句话生成完整应用
+            - TRAE SOLO：AI Agent 自主编程
+            - GitHub Copilot：AI 编程助手
+
+            **数据库 IDE**：
+            - DataGrip：JetBrains 多数据库管理
+            - DBeaver：开源通用数据库工具
+            - MySQL Workbench：MySQL 官方工具
+            - Navicat：可视化数据库管理
+
+            **合成/VFX/节点式**：
+            - Adobe After Effects：2D 合成、动态图形
+            - Natron：开源节点式 2D 合成
+            - Blackmagic Fusion：专业合成
+            - Houdini：程序化生成、3D 特效
+
+            ### 广义 IDE 工具使用
+
+            当用户提到创作需求（图形/视频/音频/3D/游戏/低代码等）时，使用 `creative_studio` 工具：
+            - `list_categories`：列出所有广义 IDE 分类（代码、图形、视频、音频、3D、游戏、低代码、VR/AR、AI原生、数据库、机器人/IoT、合成/VFX等）
+            - `list_tools`：列出指定分类下的所有工具
+            - `recommend`：根据用户需求推荐合适的工具
+            - `launch`：启动已安装的创作工具
+            - `generate`：生成可直接在对话框渲染的 HTML/CSS/JS 内容
+            - `get_android_tools`：获取安卓手机上真实可用的创作工具清单
+
+            ### 代码运行工具使用
+
+            使用 `run_code` 工具在对话框中直接运行代码：
+            - Python（内置 Brython，无需 Termux）：print输出、函数、类、循环等
+            - JavaScript（内置 QuickJS）：console.log输出、DOM操作等
+            - HTML：直接渲染为可交互网页
+            - JSON：格式化树形显示
+            - CSS：样式预览
+            - XML/SVG：图形渲染
+            - C/C++/Java/Kotlin：语法高亮代码显示
+            - Dart/Go/Rust/PHP/Ruby/Swift等：语法高亮代码显示
+
+            ### 后端工作区工具使用
+
+            使用 `workbench` 工具创建多文件项目：
+            - 支持 HTML/CSS/JS/Python/C/Java 等多语言
+            - 自动合并 CSS/JS 到 HTML
+            - 运行后直接渲染在对话框
+            - 适合：计算器、游戏、网站、工具、数据可视化等完整功能
+
+            ### 多文件生成规则
+
+            当用户说"做一个XX"时，你应该：
+            1. 分析需求，决定需要哪些文件
+            2. 生成多个代码块，每个代码块标记文件名
+            3. 使用格式：`<!-- FILE: 文件名 -->` 标记每个文件
+            4. 自动运行 HTML/JS 代码，展示结果
+            5. 如果报错，自动分析并修复
+
+            ### 避坑规则
+
+            - ❌ Python 写界面 → ✅ Python 算数据，JS 画界面
+            - ❌ Java 写网页 → ✅ Java 只做安卓原生
+            - ❌ C++ 写 UI → ✅ C++ 写算法，Java 调用
+            - ❌ 一种语言干所有 → ✅ 各司其职
+
+            """)
+        }
+
 
 
         // ══════════════ 第三优先级：长期记忆（受「AI 自动保存记忆」开关控制） ══════════════
@@ -1410,6 +1678,18 @@ $recent
         )
         sb.append("\n（其中 `ui_open_*` / `ui_toggle_*` / `ui_clear_*` / `ui_new_*` 为**界面控制工具**：调用后会在当前对话框直接打开对应界面/弹层/开关，例如 ui_open_onlyoffice 打开文档查看器、ui_toggle_deepthink 切换深度思考、ui_clear_chat 清空对话。它们同样可由你并行发起，让用户无需手动点击即可导航应用。）\n")
         sb.append("\n（CMS 模块与大部分能力在应用沙箱内执行（intent/js/api）；另有系统级通道 L1 无障碍控屏 / L2 Shizuku / L3 设备管理员 / L4 ROOT / L5 Linux，对应工具已包含在上方清单中，运行时由系统授权与资产可用性把关，未授权时工具会返回明确引导，无需你做通道自查。）\n")
+
+        // ═══ WorkbenchTool 专项指引（让 AI 知道如何使用工作区工具） ═══
+        sb.append("\n### 🚀 后端工作区（workbench 工具）——快速创建完整功能\n")
+        sb.append(
+            "当你需要**创建一个完整功能**（计算器、游戏、网站、工具、数据可视化、表单、图表等）时，使用 `workbench` 工具：\n" +
+            "1. **创建项目**：workbench(action=\"create\", name=\"项目名\", files=[{path:\"index.html\", content:\"...\"}, {path:\"style.css\", content:\"...\"}, {path:\"app.js\", content:\"...\"}])\n" +
+            "2. **运行并渲染**：workbench(action=\"run\", entry=\"index.html\") → 结果直接渲染在对话框（可交互）\n" +
+            "3. **修改后重新运行**：workbench(action=\"edit\", file=\"app.js\", content:\"新代码\") → workbench(action=\"run\", entry=\"index.html\")\n\n" +
+            "**支持的语言**：HTML/CSS/JS（自动合并到HTML）、Python、C/C++、Java 等\n" +
+            "**适合场景**：计算器、待办事项、游戏、图表、表单、数据可视化、完整网站、工具应用\n" +
+            "**优势**：多文件项目、会话持久化、直接渲染在对话框（可交互）、无需外部部署\n"
+        )
         sb.append("\n### 在对话框里「展示」UI（重要）\n")
         sb.append(
             "- `ui_widget`：当你想给用户**可视化、可交互**的结果时，调用它在对话框内直接渲染组件，而不是只发纯文本。" +
@@ -1440,7 +1720,7 @@ $recent
         )
         sb.append(
             "- **手机 AI IDE（带可视化）能力地图（重要）**：你（AI）自带一个端侧「手机 AI IDE」，可以真正写代码并运行，产出物直接渲染在对话框里——**这是给你（AI）用的能力，不是给用户手动敲代码的**。核心工具是 `run_code`{code, lang}，各语言能做什么：\n" +
-            "  · `python`（默认）：**数据处理/清洗、网络爬虫（用 requests/urllib 抓真实网页数据）、调用 AI/LLM API、算法计算、自动化脚本**。输出文本会回灌给你，用于推理与总结；爬到的数据、算出的结果可以再用 ```html 做成图表/看板给用户看。\n" +
+            "  · `python`（默认）：**内置 Brython 引擎，无需 Termux 即可在对话框运行**——数据处理/清洗、算法计算、print 输出、字符串/列表/字典操作、函数/类定义、循环/条件逻辑等 Python 3 核心语法全部支持。输出直接渲染在对话框里。需要网络爬虫/AI API 调用时，爬到的数据、算出的结果可以再用 ```html 做成图表/看板给用户看。\n" +
             "  · `node` / `javascript` / `js`：App 内置 **QuickJS 原生沙箱离线执行**（无需 Termux），适合逻辑计算、JSON/字符串处理、DOM 无关脚本。\n" +
             "  · `shell` / `sh` / `bash`：应用沙盒内 sh 执行命令（查环境、跑小工具）。\n" +
             "  · `html` / `htm` / `markup`：把**完整 HTML 源码**作为「网页工件」返回，对话框会用 WebView **实时渲染成可交互网页**（支持内联 `<style>`/`<script>`、SVG、离线 **Three.js** 三维；在线时可用 **Chart.js / ECharts** 等 CDN 画图）——你生成的网页直接长在对话框里，无需用户复制出去打开。\n" +
@@ -1448,7 +1728,8 @@ $recent
             "  · `java` / `c` / `c++`：用于**撰写与算法逻辑**；在端侧沙箱里不能直接编译运行（无 GCC/ECJ），需要编译运行请借助 `workspace_write` + ACI 构建台（`aci_call`）在云端编译，端侧沙箱以 python/node 为主。\n" +
             "  · **组合拳（全栈）**：例如「抓数据(python) → 算指标(python) → 画看板(html 工件)」整条链路你一个人完成，全部在对话框里呈现；或「写 Three.js 三维场景(html) → 对话框里实时旋转预览」。\n" +
             "  **工作流口诀**：要「算 / 抓 / 分析」→ `run_code(python)`；要「画网页 / 图表 / 游戏 / 三维」→ 返回 `html` 工件（或 ```html 围栏，二者等效）；要「画流程图 / 架构图」→ mermaid。可视化产出全部融入对话框内容区。\n" +
-            "  注意：你跑出来的网页/图表是**给你向用户展示的成果**，优先用 html 工件或 ```html 围栏让它真正渲染出来，而不是只回一段源码文字。\n"
+            "  注意：你跑出来的网页/图表是**给你向用户展示的成果**，优先用 html 工件或 ```html 围栏让它真正渲染出来，而不是只回一段源码文字。\n" +
+            "  · **广义 IDE 集成**：当用户提到图形/视频/音频/3D/游戏/低代码等创作需求时，使用 `creative_studio` 工具获取完整的广义 IDE 知识库和调用能力。该工具可以：列出所有广义 IDE 分类、推荐适合用户需求的工具、启动已安装的创作工具、生成可直接在对话框渲染的 HTML/CSS/JS 内容。\n"
         )
         sb.append(
             "- **⑥ 预览型网页禁止用 write_file 写文件**：当你想给用户「能直接在对话框里预览效果的网页」时，**必须**用 ```html 围栏把完整源码写在回复正文里（见 ④，对话框自动提供「代码 | 预览」双标签），**严禁调用 write_file 把网页存成文件再让用户自己打开**——那样用户看不到预览，我们也无法渲染。write_file 只允许用于用户明确要求「把代码/工程保存到文件」的场景（如生成可下载的项目）。若你已用 write_file 写了网页，请同时把完整源码用 ```html 围栏再贴一份在回复里。\n"

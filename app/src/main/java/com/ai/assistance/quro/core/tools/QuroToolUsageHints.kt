@@ -193,6 +193,9 @@ object QuroToolUsageHints {
         "linux_start" to "「启动 Linux 环境」都调用",
         "linux_stop" to "「关掉 Linux 环境」都调用",
         "linux_status" to "「Linux 环境状态」「装好了没」都调用",
+
+        // ── 后端工作区 ──
+        "workbench" to "「做个计算器/游戏/网站/应用」「写个多文件项目」「创建前后端分离项目」「做个完整的XX功能」都调用——AI用多种语言写多个文件，完成后渲染在对话框里",
     )
 
     /**

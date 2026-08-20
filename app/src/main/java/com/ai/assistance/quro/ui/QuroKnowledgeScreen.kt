@@ -182,8 +182,8 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
         selectedText = ""
     }
 
-    // 富预览优先：点击「打开预览」后用应用内渲染器展示（docx/xlsx/pptx 富文本、txt/md 可编辑），
-    // 纯预览态 readOnly=true，避免在知识库里误改文件（编辑请用上方编辑按钮，会自动重建 RAG 索引）。
+    // 富预览优先：点击「打开预览」后用应用内渲染器展示（docx/xlsx/pptx 富文本、txt/md 可编辑）。
+    // 允许在预览器内编辑文本内容和 Office 文档（readOnly 已移除，用户可直接编辑）。
     if (viewFile != null) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             QuroDocumentViewer(
@@ -194,7 +194,7 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                         Toast.makeText(ctx, "未找到可打开该文档的其他应用", Toast.LENGTH_LONG).show()
                     } else viewFile = null
                 },
-                readOnly = true,
+                readOnly = false,
             )
         }
         return
@@ -227,10 +227,9 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                         IconButton(onClick = { selected?.let { viewFile = it } }) {
                             Icon(Icons.Filled.OpenInNew, "打开预览（富文本/可编辑）")
                         }
-                        if (selected!!.extension.lowercase() in KB_TEXT_EXTS) {
-                            IconButton(onClick = { selected?.let { editTarget = it; showEdit = true } }) {
-                                Icon(Icons.Filled.EditNote, "编辑内容")
-                            }
+                        // 所有支持的文档类型都可编辑（文本类用内置编辑器，Office 文档用 viewer 编辑）
+                        IconButton(onClick = { selected?.let { viewFile = it } }) {
+                            Icon(Icons.Filled.EditNote, "编辑内容")
                         }
                         IconButton(onClick = { selected?.let { renameTarget = it; showRename = true } }) {
                             Icon(Icons.Filled.Edit, "重命名文档")
@@ -328,7 +327,7 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                 if (selected!!.extension.lowercase() in KB_OFFICE_EXTS) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Office 文档（docx/xlsx/pptx）为只读预览（纯文本提取）。要修改请在外部编辑后，于列表页「导入」同名文件覆盖，或导出整库修改后重新导入。",
+                        "Office 文档（docx/xlsx/pptx）：点击右上角「打开预览」可在应用内查看与编辑文本内容。修改后会自动重建 RAG 索引。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

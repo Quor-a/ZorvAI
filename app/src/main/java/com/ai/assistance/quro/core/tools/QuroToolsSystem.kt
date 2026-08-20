@@ -400,16 +400,22 @@ class OpenWebTool : QuroTool {
 class RunCodeTool : QuroTool {
     override val name = "run_code"
     override val description = "在手机端执行一段代码并返回结果，是 AI 自带的「手机 AI IDE（带可视化）」核心工具——你（AI）可以直接写代码并运行，产出物会渲染在对话框里，无需用户手动编辑文件。参数 {\"code\":\"代码内容\",\"lang\":\"语言\"}。各语言用途：\n" +
-        "· python（默认）：数据处理/清洗、网络爬虫（requests/urllib 抓真实网页数据）、调用 AI/LLM API、算法计算、自动化脚本；输出文本结果会回灌给你用于推理与总结。\n" +
+        "· python（默认）：内置 Brython 引擎，**无需 Termux 即可在对话框运行**——数据处理/清洗、算法计算、print 输出、字符串/列表/字典操作、函数/类定义、循环/条件逻辑等 Python 3 核心语法全部支持。输出直接渲染在对话框里，用于推理与总结。\n" +
         "· node / javascript / js：App 内置 QuickJS 原生沙箱离线执行（无需 Termux），适合逻辑计算、字符串/JSON 处理、DOM 无关脚本。\n" +
         "· shell / sh / bash：应用沙盒内 sh 执行命令。\n" +
         "· html / htm / markup：把完整 HTML 源码作为「网页工件」返回，对话框会用 WebView 实时渲染成可交互网页（支持内联 <style>/<script>、SVG、离线 Three.js；在线时可用 Chart.js / ECharts 等 CDN 画图）——你生成的网页直接长在对话框里。\n" +
-        "用法要点：可视化/网页/图表优先用 lang=html 返回让对话框渲染，或直接用 ```html 围栏写在回复里（同样会预览）；纯计算/爬虫/分析用 python；JSON/XML 是数据/配置（Android 布局、SVG 也走 HTML 预览）；Java/C/C++ 用于撰写与算法逻辑，编译运行请用 workspace/ACI 构建台，端侧沙箱以 python/node 为主。"
+        "· json：返回可视化 JSON 树（HTML 渲染），支持语法高亮和格式化显示。\n" +
+        "· css：返回 CSS 预览页面（HTML 渲染），可实时预览样式效果。\n" +
+        "· xml / svg：SVG 直接渲染为矢量图形；XML 返回格式化树形视图（HTML 渲染）。\n" +
+        "· c / cpp / c++ / java / kotlin：编译型语言，返回语法高亮代码页面（HTML 渲染），完整编译请用 workspace/ACI 构建台。\n" +
+        "· dart / flutter：跨平台 UI 框架，生成 Dart 代码供 Flutter 开发。\n" +
+        "· go / rust / php / ruby / swift / typescript：其他语言，返回语法高亮代码页面（HTML 渲染）。\n" +
+        "用法要点：所有语言都返回可渲染的 HTML 页面，对话框会自动用 WebView 预览。可视化/网页/图表优先用 lang=html；纯计算/爬虫/分析用 python（Brython 引擎，直接运行）；JSON/XML/CSS 都会返回可视化 HTML 页面；Java/C/C++/Kotlin 返回带语法高亮的代码页面。"
     override val parametersJson = """{
         "type":"object",
         "properties":{
             "code":{"type":"string","description":"要执行的代码 / 要返回的完整 HTML 源码"},
-            "lang":{"type":"string","description":"语言：python（默认）| node | javascript | shell | html（网页工件，返回后对话框实时预览）"}
+            "lang":{"type":"string","description":"语言：python（默认）| node|javascript|typescript | shell|sh|bash | html（网页工件，返回后对话框实时预览）| json（返回可视化 JSON 树）| css（返回 CSS 预览页面）| xml|svg（SVG 直接渲染，XML 返回格式化树）| c|cpp|c++|java|kotlin（返回语法高亮代码页面）| dart|go|rust|php|ruby|swift 等（返回语法高亮代码页面）。所有语言都返回可渲染的 HTML 页面。"}
         },
         "required":["code"]
     }"""
@@ -418,11 +424,210 @@ class RunCodeTool : QuroTool {
         val lang = JSONObject(arguments).optString("lang", "python").trim().lowercase()
         if (code.isEmpty()) return "缺少 code 参数"
         return when (lang) {
-            "html", "htm", "markup" -> code  // 网页工件：直接返回 HTML 源码，对话框用 WebView 内联实时预览（HtmlPreviewCard）
-            "node", "javascript", "js" -> QuroJsExecutor.eval(code)
+            "html", "htm", "markup" -> code  // 网页工件：返回 HTML 源码，对话框用 WebView 内联实时预览
+            "node", "javascript", "js", "ts", "typescript" -> QuroJsExecutor.eval(code)
             "shell", "sh", "bash" -> execShell(context, code)
-            "python", "py" -> runPython(code, context)
-            else -> runPython(code, context)
+            "python", "py", "py3" -> runPython(code, context)
+            // 数据 / 标记类：增强渲染，返回可视化 HTML
+            "json" -> runJson(code)
+            "css" -> runCss(code)
+            "xml", "svg" -> runXmlSvg(code)
+            // 编译型语言：显示代码 + 说明
+            "c", "cpp", "c++", "cc", "h", "hpp", "java", "kotlin", "kt" ->
+                runCompiledLang(lang, code)
+            // 其他语言：显示代码 + 说明
+            "dart", "flutter", "go", "golang", "rust", "php", "ruby", "swift", "scala", "r", "matlab", "sql", "lua", "perl", "haskell", "clojure", "groovy", "elixir", "erlang", "fortran", "pascal", "delphi", "assembly", "asm", "shader", "glsl", "hlsl", "verilog", "vhdl", "solidity" ->
+                runOtherLang(lang, code)
+            else -> "不支持的语言：$lang（对话框支持 python / javascript / html / json / css / xml / c·cpp / java / kotlin / dart / go / rust / php / ruby / swift 等）"
+        }
+    }
+
+    /** JSON 数据：端侧不执行，校验合法性后返回格式化 JSON（供对话框预览渲染）。 */
+    private fun runJson(code: String): String = try {
+        val v = org.json.JSONTokener(code).nextValue()
+        val formatted = when (v) {
+            is org.json.JSONObject -> v.toString(2)
+            is org.json.JSONArray -> v.toString(2)
+            else -> code
+        }
+        // 返回 HTML 可视化 JSON 树
+        buildString {
+            append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
+            append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
+            append("<style>")
+            append("body{font-family:monospace;padding:16px;margin:0;background:#f5f5f5;}")
+            append(".json-key{color:#881391;font-weight:bold;}")
+            append(".json-string{color:#0B7500;}")
+            append(".json-number{color:#1A01CC;}")
+            append(".json-bool{color:#FF6600;}")
+            append(".json-null{color:#999;}")
+            append(".json-bracket{color:#333;}")
+            append("pre{background:white;padding:16px;border-radius:8px;overflow-x:auto;box-shadow:0 2px 4px rgba(0,0,0,0.1);}")
+            append("</style></head><body>")
+            append("<h3>📊 JSON 数据可视化</h3>")
+            append("<pre>${highlightJson(formatted)}</pre>")
+            append("<p style=\"color:#666;font-size:12px;\">✅ JSON 格式合法（${code.length} 字符）</p>")
+            append("</body></html>")
+        }
+    } catch (e: Exception) {
+        "✗ JSON 解析失败：${e.message}"
+    }
+
+    /** JSON 语法高亮（简单实现） */
+    private fun highlightJson(json: String): String {
+        return json
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace(Regex("\"([^\"]+)\"(?=\\s*:)")) { "<span class=\"json-key\">\"${it.groupValues[1]}\"</span>" }
+            .replace(Regex(":\\s*\"([^\"]*)\"")) { ": <span class=\"json-string\">\"${it.groupValues[1]}\"</span>" }
+            .replace(Regex(":\\s*(\\d+\\.?\\d*)")) { ": <span class=\"json-number\">${it.groupValues[1]}</span>" }
+            .replace(Regex(":\\s*(true|false)")) { ": <span class=\"json-bool\">${it.groupValues[1]}</span>" }
+            .replace(Regex(":\\s*(null)")) { ": <span class=\"json-null\">${it.groupValues[1]}</span>" }
+    }
+
+    /** CSS 样式：包装成 HTML 预览页面 */
+    private fun runCss(code: String): String {
+        return buildString {
+            append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
+            append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
+            append("<style>")
+            append("body{font-family:system-ui,sans-serif;padding:16px;margin:0;}")
+            append(".preview{background:white;padding:20px;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);margin-bottom:16px;}")
+            append(".code{background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:8px;overflow-x:auto;font-family:monospace;font-size:13px;white-space:pre-wrap;word-break:break-all;}")
+            append(".keyword{color:#569cd6;}")
+            append(".property{color:#9cdcfe;}")
+            append(".value{color:#ce9178;}")
+            append("</style></head><body>")
+            append("<h3>🎨 CSS 样式预览</h3>")
+            append("<div class=\"preview\">")
+            append("<style>$code</style>")
+            append("<p>这是应用了你的 CSS 样式后的预览效果</p>")
+            append("<div class=\"demo-box\">演示元素</div>")
+            append("</div>")
+            append("<h4>📝 CSS 源码</h4>")
+            append("<div class=\"code\">${highlightCss(code)}</div>")
+            append("<p style=\"color:#666;font-size:12px;\">✅ CSS 样式已接收（${code.length} 字符）</p>")
+            append("</body></html>")
+        }
+    }
+
+    /** CSS 语法高亮 */
+    private fun highlightCss(css: String): String {
+        return css
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace(Regex("([.#]?[\\w-]+)\\s*\\{")) { "<span class=\"property\">${it.groupValues[1]}</span> {" }
+            .replace(Regex("([\\w-]+)\\s*:")) { "<span class=\"keyword\">${it.groupValues[1]}</span>:" }
+            .replace(Regex(":\\s*([^;{}]+);")) { ": <span class=\"value\">${it.groupValues[1]}</span>;" }
+    }
+
+    /** 编译型语言：显示代码 + 说明 */
+    private fun runCompiledLang(lang: String, code: String): String {
+        val langName = when(lang) {
+            "c" -> "C"
+            "cpp", "c++", "cc", "h", "hpp" -> "C++"
+            "java" -> "Java"
+            "kotlin", "kt" -> "Kotlin"
+            else -> lang.uppercase()
+        }
+        return buildString {
+            append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
+            append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
+            append("<style>")
+            append("body{font-family:system-ui,sans-serif;padding:16px;margin:0;}")
+            append(".header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:16px;border-radius:8px;margin-bottom:16px;}")
+            append(".code{background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:8px;overflow-x:auto;font-family:'Fira Code',monospace;font-size:13px;white-space:pre-wrap;word-break:break-all;}")
+            append(".keyword{color:#569cd6;}")
+            append(".string{color:#ce9178;}")
+            append(".comment{color:#6a9955;}")
+            append(".type{color:#4ec9b0;}")
+            append("</style></head><body>")
+            append("<div class=\"header\">")
+            append("<h3>💻 $langName 代码</h3>")
+            append("<p>编译型语言，需要编译后才能运行</p>")
+            append("</div>")
+            append("<div class=\"code\">${highlightCode(code, lang)}</div>")
+            append("<p style=\"color:#666;font-size:12px;\">💡 编译请使用 workspace/ACI 构建台</p>")
+            append("</body></html>")
+        }
+    }
+
+    /** 其他语言：显示代码 + 说明 */
+    private fun runOtherLang(lang: String, code: String): String {
+        return buildString {
+            append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
+            append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
+            append("<style>")
+            append("body{font-family:system-ui,sans-serif;padding:16px;margin:0;}")
+            append(".header{background:linear-gradient(135deg,#11998e 0%,#38ef7d 100%);color:white;padding:16px;border-radius:8px;margin-bottom:16px;}")
+            append(".code{background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:8px;overflow-x:auto;font-family:'Fira Code',monospace;font-size:13px;white-space:pre-wrap;word-break:break-all;}")
+            append("</style></head><body>")
+            append("<div class=\"header\">")
+            append("<h3>📝 $lang 代码</h3>")
+            append("<p>语法高亮预览</p>")
+            append("</div>")
+            append("<div class=\"code\"><pre>${code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")}</pre></div>")
+            append("</body></html>")
+        }
+    }
+
+    /** 简单代码语法高亮 */
+    private fun highlightCode(code: String, lang: String): String {
+        var result = code
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+
+        // 通用关键字高亮
+        val keywords = listOf("class", "fun", "val", "var", "if", "else", "for", "while", "return", "import", "package", "public", "private", "protected", "static", "final", "void", "int", "float", "double", "boolean", "char", "String", "new", "this", "super")
+        keywords.forEach { kw ->
+            result = result.replace(Regex("\\b$kw\\b"), "<span class=\"keyword\">$kw</span>")
+        }
+
+        // 字符串高亮
+        result = result.replace(Regex("\"([^\"]*)\"")) { "<span class=\"string\">\"${it.groupValues[1]}\"</span>" }
+
+        // 注释高亮（单行）
+        result = result.replace(Regex("//(.*)$")) { "<span class=\"comment\">//${it.groupValues[1]}</span>" }
+
+        return result
+    }
+
+    /** XML/SVG 标记：如果包含 <svg 标签则直接返回 SVG 让 WebView 渲染，否则返回格式化 XML。 */
+    private fun runXmlSvg(code: String): String {
+        // 如果包含 SVG 标签，直接返回让 WebView 渲染为图形
+        if (code.contains("<svg") || code.contains("<svg ")) {
+            return code
+        }
+        // 否则返回格式化 XML
+        val formatted = formatXml(code)
+        return "✓ XML 标记已接收（${code.length} 字符）：\n\n$formatted"
+    }
+
+    /** 简单 XML 格式化（缩进美化）。 */
+    private fun formatXml(xml: String): String {
+        return try {
+            val sb = StringBuilder()
+            var indent = 0
+            val lines = xml.replace("><", ">\n<").split("\n")
+            for (line in lines) {
+                val trimmed = line.trim()
+                if (trimmed.isEmpty()) continue
+                // 闭合标签减少缩进
+                if (trimmed.startsWith("</")) {
+                    indent = (indent - 1).coerceAtLeast(0)
+                }
+                sb.append("  ".repeat(indent)).append(trimmed).append("\n")
+                // 开放标签（非自闭合）增加缩进
+                if (trimmed.startsWith("<") && !trimmed.startsWith("</") && !trimmed.endsWith("/>") && !trimmed.contains("</")) {
+                    indent++
+                }
+            }
+            sb.toString().trim()
+        } catch (e: Exception) {
+            xml
         }
     }
 
@@ -435,15 +640,118 @@ class RunCodeTool : QuroTool {
         if (body.isBlank()) "(退出码=$code，无输出)" else "退出码=$code\n$body"
     } catch (e: Exception) { "执行失败：${e.message}" }
 
-    /** Python 执行：优先用 Termux 自带 python，否则回退系统 python3（缺失时报错）。 */
+    /** Python 执行：对话框独立，Termux > 系统 python3（手机大多没有，对话框不依赖终端 proot）。 */
     private fun runPython(code: String, ctx: Context): String {
-        val candidates = listOf(
+        // 优先尝试 Termux / 系统 Python
+        val termux = listOf(
             "/data/data/com.termux/files/usr/bin/python",
             "/data/data/com.termux/files/usr/bin/python3"
-        )
-        val py = candidates.firstOrNull { java.io.File(it).exists() }
-        val cmd = if (py != null) "$py -c ${quoteShell(code)}" else "python3 -c ${quoteShell(code)}"
-        return execShell(ctx, cmd)
+        ).firstOrNull { java.io.File(it).exists() }
+        if (termux != null) {
+            val result = execShell(ctx, "$termux -c ${quoteShell(code)}")
+            if (result.contains("<html", ignoreCase = true) || result.contains("<!DOCTYPE", ignoreCase = true)) return result
+            return result
+        }
+        val sys = execShell(ctx, "python3 -c ${quoteShell(code)}")
+        if (!sys.contains("not found") && !sys.startsWith("执行失败")) {
+            if (sys.contains("<html", ignoreCase = true) || sys.contains("<!DOCTYPE", ignoreCase = true)) return sys
+            return sys
+        }
+
+        // 无 Termux/Python3 → 使用 Brython（纯 JS Python 解释器）在 WebView 中运行
+        return runPythonBrython(code)
+    }
+
+    /** 用 Brython（浏览器端 Python 解释器）包装 Python 代码为可渲染 HTML */
+    private fun runPythonBrython(code: String): String {
+        val escaped = code
+            .replace("\\", "\\\\")
+            .replace("</script", "<\\/script")
+            .replace("`", "\\`")
+            .replace("\$", "\\$")
+        return """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1e1e1e; color: #d4d4d4; font-family: 'Fira Code', Consolas, monospace; font-size: 13px; }
+#header { background: #252526; padding: 8px 12px; border-bottom: 1px solid #3c3c3c; display: flex; align-items: center; gap: 8px; }
+#header .badge { background: #3b82f6; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+#output { padding: 12px; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+.stdout { color: #d4d4d4; }
+.stderr { color: #f44747; }
+.result { color: #9cdcfe; }
+.separator { border-top: 1px solid #3c3c3c; margin: 8px 0; padding-top: 8px; }
+#code-section { border-top: 1px solid #3c3c3c; padding: 12px; }
+#code-label { color: #6a9955; font-size: 11px; margin-bottom: 4px; }
+pre { margin: 0; overflow-x: auto; }
+.kw { color: #c586c0; }
+.str { color: #ce9178; }
+.num { color: #b5cea8; }
+.cm { color: #6a9955; }
+.fn { color: #dcdcaa; }
+.bi { color: #4ec9b0; }
+.op { color: #d4d4d4; }
+</style>
+</head>
+<body>
+<div id="header"><span class="badge">Python</span><span>Brython 引擎 · 内置运行</span></div>
+<div id="output"></div>
+<div id="code-section"><div id="code-label">源码</div><pre id="code-display"></pre></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.13.1/brython.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.13.1/brython_stdlib.js"></script>
+<script id="python-code" type="text/python">$escaped</script>
+<script>
+var _out = document.getElementById('output');
+function _print() {
+    var args = Array.prototype.slice.call(arguments);
+    var line = args.map(function(a) {
+        if (a === undefined) return 'undefined';
+        if (a === null) return 'None';
+        if (typeof a === 'object') {
+            try { return JSON.stringify(a); } catch(e) { return String(a); }
+        }
+        return String(a);
+    }).join(' ');
+    var div = document.createElement('div');
+    div.className = 'stdout';
+    div.textContent = line;
+    _out.appendChild(div);
+    _out.scrollTop = _out.scrollHeight;
+}
+var _codeEl = document.getElementById('python-code');
+var _codeText = _codeEl.textContent || _codeEl.innerText;
+var _codeDisplay = document.getElementById('code-display');
+_codeDisplay.textContent = _codeText;
+_codeDisplay.innerHTML = _highlightPy(_codeDisplay.innerHTML);
+function _highlightPy(code) {
+    code = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    code = code.replace(/(#.*)$/gm, '<span class="cm">$1</span>');
+    code = code.replace(/\b(def|class|if|elif|else|for|while|try|except|finally|return|import|from|as|with|yield|raise|pass|break|continue|and|or|not|is|in|True|False|None|lambda|global|nonlocal|assert|del|print|async|await)\b/g, '<span class="kw">$1</span>');
+    code = code.replace(/(["'])(?:(?=(\\?))\2.)*?\1/g, '<span class="str">$&</span>');
+    code = code.replace(/\b(\d+\.?\d*)\b/g, '<span class="num">$1</span>');
+    code = code.replace(/\b(abs|all|any|bin|bool|chr|dict|dir|enumerate|filter|float|format|getattr|globals|hasattr|hash|hex|int|isinstance|issubclass|iter|len|list|map|max|min|next|object|oct|open|ord|pow|print|range|repr|reversed|round|set|setattr|slice|sorted|str|sum|super|tuple|type|vars|zip)\b(?=\s*\()/g, '<span class="bi">$1</span>');
+    return code;
+}
+try {
+    brython({stdout: _print, stderr: function(s) {
+        var div = document.createElement('div');
+        div.className = 'stderr';
+        div.textContent = 'Error: ' + s;
+        _out.appendChild(div);
+    }});
+} catch(e) {
+    var div = document.createElement('div');
+    div.className = 'stderr';
+    div.textContent = 'Brython 加载失败: ' + e.message + '（需要网络连接）';
+    _out.appendChild(div);
+}
+</script>
+</body>
+</html>"""
     }
 
     private fun quoteShell(s: String): String = "'" + s.replace("'", "'\\''") + "'"

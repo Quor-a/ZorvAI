@@ -563,9 +563,13 @@ class QuroLocalEngineNative : QuroLocalEngine {
             } else {
                 messages
             }
-            // 🔧 v1.0.51 治本：本地小模型即便关闭 thinking 开关仍会自发吐 "Thinking Process:" 等明文推理，
-            // 在 system 里直接下令「禁止输出思考过程、直接回答」从源头压制（详见 withNoThinkingGuard）。
-            val effectiveMessages = withNoThinkingGuard(baseEffective)
+            // 🔧 v1.0.54 修复「思考模型空回复」：enable_thinking=true 的思考模型若再被注入
+            // "禁止输出思考过程"系统指令，会与 jinja 的 enable_thinking 自相矛盾——部分模型因此只吐
+            // <think> 块、最终答案为空 → 气泡空白（典型 MNN 无回复症状）。
+            // 仅对【非思考模型】注入 no-think 守卫：这类小模型关掉 thinking 后仍会自发吐明文推理
+            // （"Thinking Process:" / "Analysis:" 等），需从源头压制；思考模型保留 thinking，由
+            // StreamingThinkStripper / MnnThinkContent.split 在终态干净切走思考段，无需自相矛盾的系统指令。
+            val effectiveMessages = if (enableThink) baseEffective else withNoThinkingGuard(baseEffective)
             val ok = if (toolSpecsJson != null) {
                 // 结构化路径：把工具描述注入 prompt，让模型能触发工具调用。
                 // MNN 原生无 parseToolCallResponse，回调收到的是 raw 模型文本（含 <tool_call> 标签），

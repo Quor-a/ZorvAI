@@ -21,8 +21,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
@@ -57,7 +62,6 @@ fun QuroToolboxScreen(
     onOpenOnlyOffice: () -> Unit = {},
     onOpenMusic: () -> Unit = {},
     onOpenVideo: (String, String) -> Unit = { _: String, _: String -> },
-    onOpenLive2D: () -> Unit = {},
     allTools: List<QuroTool> = emptyList(),
     onImportTool: (ImportedToolDef) -> Unit = {},
 ) {
@@ -95,13 +99,11 @@ fun QuroToolboxScreen(
                 onOpenMusic = onOpenMusic,
                 onOpenVideo = onOpenVideo,
                 onOpenAvatar = { screen = "avatar" },
-                onOpenLive2D = { screen = "live2d" },
             )
             "files" -> QuroFileManager(onExitToHome = { screen = "home" })
             "package" -> PackageNameFinder()
             "workspace" -> WorkspaceScreen(onExitToHome = { screen = "home" })
             "avatar" -> QuroDigitalHumanScreen(onExitToHome = { screen = "home" })
-            "live2d" -> QuroLive2DScreen(onExitToHome = { screen = "home" })
         }
     }
 
@@ -112,6 +114,8 @@ fun QuroToolboxScreen(
         var docContent by remember { mutableStateOf("") }
         var docTemplate by remember { mutableStateOf("空白") }
         var docResult by remember { mutableStateOf<String?>(null) }
+        // 编辑器模式：edit = 富文本编辑, preview = 实时预览
+        var editorMode by remember { mutableStateOf("edit") }
         val formats = listOf(
             "docx" to "Word", "xlsx" to "Excel", "pptx" to "PPT",
             "pdf" to "PDF", "md" to "Markdown", "txt" to "文本", "csv" to "表格", "html" to "网页"
@@ -125,6 +129,10 @@ fun QuroToolboxScreen(
         )
         val ctx = LocalContext.current
         val scope = rememberCoroutineScope()
+
+        // 辅助：在光标位置插入 Markdown 格式标记
+        var cursorPos by remember { mutableIntStateOf(0) }
+
         AlertDialog(
             onDismissRequest = { showDocGen = false },
             confirmButton = {
@@ -134,9 +142,6 @@ fun QuroToolboxScreen(
                         put("title", docTitle)
                         put("content", docContent)
                     }.toString()
-                    // ★ ANR 修复：aiWPS 文档生成是重 I/O（写 zip/OOXML），
-                    // 原本在点击回调（主线程）同步执行 → 阻塞 UI 线程触发「Zorv AI 没有响应」。
-                    // 改为 IO 协程执行，结果回主线程落 state。
                     scope.launch(Dispatchers.IO) {
                         val r = runCatching { AiwpsCreateTool().run(ctx, json) }
                             .getOrElse { "生成失败：$it" }
@@ -187,10 +192,144 @@ fun QuroToolboxScreen(
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(docTitle, { docTitle = it }, label = { Text("标题（可选）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        docContent, { docContent = it }, label = { Text("正文") }, minLines = 4, modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("docx 按换行分段；xlsx 按换行分行、制表/逗号分列；pptx 标题+正文；md/txt/csv/html 原样写入") }
-                    )
+
+                    // —— 编辑/预览模式切换 ——
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(cs.surfaceVariant)
+                            .padding(2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        listOf("edit" to "✏️ 编辑", "preview" to "👁️ 预览").forEach { (mode, label) ->
+                            val selected = editorMode == mode
+                            Text(
+                                label,
+                                color = if (selected) cs.onPrimary else cs.onSurfaceVariant,
+                                fontSize = scaled(12),
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                modifier = Modifier.weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (selected) cs.primary else Color.Transparent)
+                                    .clickable { editorMode = mode }
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                                    .wrapContentWidth(Alignment.CenterHorizontally),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+
+                    // —— 富文本格式化工具栏 ——
+                    if (editorMode == "edit") {
+                        val toolbarBtnColor = cs.surfaceVariant
+                        val toolbarTextColor = cs.onSurface
+                        Column(
+                            Modifier.fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(toolbarBtnColor)
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                        ) {
+                            // 第一行：标题 + 加粗 + 斜体 + 列表
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                listOf(
+                                    "H1" to "# ",
+                                    "H2" to "## ",
+                                    "H3" to "### ",
+                                    "**B**" to "**",
+                                    "_I_" to "_",
+                                    "• 列表" to "- ",
+                                    "1." to "1. ",
+                                ).forEach { (label, prefix) ->
+                                    Text(
+                                        label,
+                                        fontSize = scaled(11),
+                                        fontWeight = FontWeight.Medium,
+                                        color = toolbarTextColor,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(cs.background)
+                                            .clickable {
+                                                val insertText = if (prefix.length == 1 && (prefix == "*" || prefix == "_")) {
+                                                    "${prefix}粗体文本${prefix}"
+                                                } else prefix
+                                                docContent = docContent + insertText
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            // 第二行：表格 + 分割线 + 引用 + 链接 + 代码块
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                listOf(
+                                    "📊 表格" to "| 列1 | 列2 |\n| --- | --- |\n| 数据 | 数据 |",
+                                    "━━ 分割" to "\n---\n",
+                                    "> 引用" to "> 引用文本\n",
+                                    "🔗 链接" to "[链接文本](https://)",
+                                    "</> 代码" to "```\n代码\n```\n",
+                                    "☑️ 待办" to "- [ ] 待办事项\n",
+                                ).forEach { (label, insert) ->
+                                    Text(
+                                        label,
+                                        fontSize = scaled(10),
+                                        color = toolbarTextColor,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(cs.background)
+                                            .clickable { docContent = docContent + insert }
+                                            .padding(horizontal = 6.dp, vertical = 5.dp),
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedTextField(
+                            docContent, { docContent = it; cursorPos = it.length },
+                            label = { Text("正文（支持 Markdown 排版）") },
+                            minLines = 6,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp, max = 320.dp),
+                            textStyle = LocalTextStyle.current.copy(
+                                fontSize = 13.sp,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 18.sp,
+                            ),
+                            placeholder = { Text("使用工具栏快速插入格式，docx 按换行分段；xlsx 按换行分行；md/txt/html 原样写入") }
+                        )
+                    } else {
+                        // —— 实时预览区（Markdown 渲染）——
+                        Column(
+                            Modifier.fillMaxWidth()
+                                .heightIn(min = 160.dp, max = 320.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(cs.surface)
+                                .border(1.dp, Line, RoundedCornerShape(10.dp))
+                                .padding(12.dp)
+                                .verticalScroll(rememberScrollState()),
+                        ) {
+                            if (docTitle.isNotBlank()) {
+                                Text(
+                                    docTitle,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = cs.onSurface,
+                                    modifier = Modifier.padding(bottom = 8.dp),
+                                )
+                            }
+                            if (docContent.isBlank()) {
+                                Text("（暂无内容，请切换到编辑模式输入）", color = Muted, fontSize = 13.sp)
+                            } else {
+                                // 简易 Markdown 预览渲染
+                                DocMarkdownPreview(docContent, scaled)
+                            }
+                        }
+                    }
+
                     Spacer(Modifier.height(8.dp))
                     if (docResult != null) {
                         val ok = (docResult ?: "").startsWith("已生成")
@@ -207,7 +346,7 @@ fun QuroToolboxScreen(
                         }
                     }
                     Spacer(Modifier.height(6.dp))
-                    Text("后台生成真实文件（docx/xlsx/pptx/pdf 为二进制格式，md/txt/csv/html 为纯文本），可用应用内查看器或 WPS / Office 打开；AI 也可在对话中直接调用 aiwps_create 工具。", fontSize = scaled(11), color = Muted)
+                    Text("后台生成真实文件（docx/xlsx/pptx/pdf 为二进制格式，md/txt/csv/html 为纯文本），可用应用内查看器或 WPS / Office 打开。", fontSize = scaled(11), color = Muted)
                 }
             }
         )
@@ -320,7 +459,6 @@ private fun ToolboxHome(
     onOpenMusic: () -> Unit,
     onOpenVideo: (String, String) -> Unit,
     onOpenAvatar: () -> Unit,
-    onOpenLive2D: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val tools = listOf(
@@ -332,8 +470,7 @@ private fun ToolboxHome(
         ToolItem(Icons.Filled.Description, "文档", "在应用内预览本地与生成文档（Word/Excel/PPT/PDF/文本）；文本可编辑，Office 文档可调起系统 WPS 打开", onOpenOnlyOffice),
         ToolItem(Icons.Filled.MusicNote, "音乐播放器", "在应用内播放本地音乐（后台持续播放）", onOpenMusic),
         ToolItem(Icons.Filled.Movie, "视频播放器", "在应用内全功能视频播放器播放本地视频", { onOpenVideo("", "") }),
-        ToolItem(Icons.Filled.Person, "数字人", "云端口/离线可选·可自制 3D 模型·语音→LLM→TTS 闭环", onClick = onOpenAvatar),
-        ToolItem(Icons.Filled.Face, "Live2D 伙伴", "Live2D 桌宠 · 情绪表达与说话口型 · 本地离线运行", onClick = onOpenLive2D),
+        ToolItem(Icons.Filled.Person, "数字人", "云端口/离线可选·可自制 3D 模型·Live2D·语音→LLM→TTS 闭环", onClick = onOpenAvatar),
         ToolItem(Icons.Filled.Keyboard, "AI 键盘", "AI 替你打字·注册为系统输入法·任意 App 可用", onClick = {
             // 打开系统输入法设置页，引导用户启用 Zorv AI 键盘
             try {
@@ -674,5 +811,249 @@ private fun WorkspaceScreen(onExitToHome: () -> Unit) {
             },
             dismissButton = { TextButton(onClick = { showNewFolder = false }) { Text("取消") } },
         )
+    }
+}
+
+// ==================== 简易 Markdown 预览渲染 ====================
+
+/**
+ * 简易 Markdown 预览渲染器，用于文档生成器的实时预览。
+ * 支持：标题(h1-h3)、加粗、斜体、代码块、行内代码、表格、列表、引用、分割线。
+ * 纯 Compose Text 实现，不依赖外部库，适合对话框内轻量预览。
+ */
+@Composable
+private fun DocMarkdownPreview(
+    markdown: String,
+    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val lines = markdown.split("\n")
+    var inCodeBlock = false
+    var codeBlockLines = mutableListOf<String>()
+    var inTable = false
+    var tableRows = mutableListOf<List<String>>()
+
+    // 辅助：检测标题级别
+    fun headingLevel(line: String): Int? {
+        val m = Regex("^(#{1,3})\\s+(.+)").find(line.trim())
+        return m?.groupValues?.get(1)?.length
+    }
+
+    // 辅助：检测列表
+    fun listContent(line: String): String? {
+        val trimmed = line.trimStart()
+        if (trimmed.startsWith("- [ ] ")) return "☐ ${trimmed.removePrefix("- [ ] ")}"
+        if (trimmed.startsWith("- [x] ")) return "☑ ${trimmed.removePrefix("- [x] ")}"
+        if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) return "• ${trimmed.drop(2)}"
+        val numMatch = Regex("^(\\d+)\\.\\s+(.+)").find(trimmed)
+        if (numMatch != null) return "${numMatch.groupValues[1]}. ${numMatch.groupValues[2]}"
+        return null
+    }
+
+    // 辅助：检测引用
+    fun quoteContent(line: String): String? {
+        val trimmed = line.trimStart()
+        if (trimmed.startsWith("> ")) return trimmed.removePrefix("> ")
+        return null
+    }
+
+    for (line in lines) {
+        // 代码块处理
+        if (line.trimStart().startsWith("```")) {
+            if (inCodeBlock) {
+                // 结束代码块
+                Text(
+                    codeBlockLines.joinToString("\n"),
+                    fontSize = scaled(11),
+                    fontFamily = FontFamily.Monospace,
+                    color = cs.onSurface,
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(cs.surfaceVariant)
+                        .padding(8.dp),
+                )
+                codeBlockLines = mutableListOf()
+                inCodeBlock = false
+            } else {
+                inCodeBlock = true
+            }
+            continue
+        }
+        if (inCodeBlock) {
+            codeBlockLines.add(line)
+            continue
+        }
+
+        // 表格处理
+        val tableCells = line.trim().let { l ->
+            if (l.startsWith("|") && l.endsWith("|")) {
+                l.split("|").drop(1).dropLast(1).map { it.trim() }
+            } else null
+        }
+        if (tableCells != null && tableCells.isNotEmpty()) {
+            // 跳过分隔行
+            if (tableCells.all { it.matches(Regex("^[-:]+$")) }) continue
+            inTable = true
+            tableRows.add(tableCells)
+            continue
+        } else if (inTable) {
+            // 表格结束，渲染
+            if (tableRows.isNotEmpty()) {
+                Column(
+                    Modifier.fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .border(1.dp, Line, RoundedCornerShape(6.dp)),
+                ) {
+                    tableRows.forEachIndexed { ri, cells ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .background(if (ri == 0) cs.primaryContainer else cs.surface)
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            cells.forEach { cell ->
+                                Text(
+                                    cell,
+                                    fontSize = scaled(11),
+                                    fontWeight = if (ri == 0) FontWeight.Bold else FontWeight.Normal,
+                                    color = cs.onSurface,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            tableRows = mutableListOf()
+            inTable = false
+            // 当前非表格行，继续正常处理
+        }
+
+        val trimmed = line.trim()
+        when {
+            // 空行
+            trimmed.isEmpty() -> Spacer(Modifier.height(4.dp))
+            // 分割线
+            trimmed == "---" || trimmed == "***" || trimmed == "___" -> {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 6.dp),
+                    color = Line,
+                )
+            }
+            // 标题
+            headingLevel(trimmed) != null -> {
+                val level = headingLevel(trimmed)!!
+                val titleText = Regex("^#{1,3}\\s+(.+)").find(trimmed)!!.groupValues[1]
+                Text(
+                    titleText,
+                    fontSize = when (level) { 1 -> scaled(20); 2 -> scaled(17); 3 -> scaled(15); else -> scaled(14) },
+                    fontWeight = FontWeight.Bold,
+                    color = cs.onSurface,
+                    modifier = Modifier.padding(top = if (level == 1) 8.dp else 4.dp, bottom = 2.dp),
+                )
+            }
+            // 引用
+            quoteContent(trimmed) != null -> {
+                Row(
+                    Modifier.fillMaxWidth()
+                        .padding(vertical = 3.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(cs.surfaceVariant.copy(alpha = 0.5f))
+                        .padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                ) {
+                    Text("│", color = cs.primary, fontSize = scaled(14), modifier = Modifier.padding(end = 6.dp))
+                    Text(quoteContent(trimmed)!!, fontSize = scaled(12), color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                }
+            }
+            // 列表
+            listContent(trimmed) != null -> {
+                Text(
+                    listContent(trimmed)!!,
+                    fontSize = scaled(12),
+                    color = cs.onSurface,
+                    modifier = Modifier.padding(start = 8.dp, top = 1.dp, bottom = 1.dp),
+                )
+            }
+            // 加粗标题（## **标题**）
+            trimmed.startsWith("#") -> {
+                Text(trimmed, fontSize = scaled(13), fontWeight = FontWeight.Bold, color = cs.onSurface, modifier = Modifier.padding(top = 4.dp))
+            }
+            // 普通段落（处理行内格式）
+            else -> {
+                // 简易行内 Markdown：**bold**, _italic_, `code`
+                val annotatedText = buildAnnotatedString {
+                    var remaining = trimmed
+                    while (remaining.isNotEmpty()) {
+                        val boldMatch = Regex("^\\*\\*(.+?)\\*\\*|^__(.+?)__").find(remaining)
+                        val italicMatch = Regex("^_(.+?)_|^\\*(.+?)\\*").find(remaining)
+                        val codeMatch = Regex("^`(.+?)`").find(remaining)
+                        when {
+                            boldMatch != null -> {
+                                pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
+                                append(boldMatch.groupValues[1].ifBlank { boldMatch.groupValues[2] })
+                                pop()
+                                remaining = remaining.removeRange(0, boldMatch.range.last + 1)
+                            }
+                            codeMatch != null -> {
+                                pushStyle(SpanStyle(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = scaled(12),
+                                    background = cs.surfaceVariant,
+                                ))
+                                append(codeMatch.groupValues[1])
+                                pop()
+                                remaining = remaining.removeRange(0, codeMatch.range.last + 1)
+                            }
+                            italicMatch != null -> {
+                                pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
+                                append(italicMatch.groupValues[1].ifBlank { italicMatch.groupValues[2] })
+                                pop()
+                                remaining = remaining.removeRange(0, italicMatch.range.last + 1)
+                            }
+                            else -> {
+                                append(remaining)
+                                remaining = ""
+                            }
+                        }
+                    }
+                }
+                Text(
+                    annotatedText,
+                    fontSize = scaled(12),
+                    color = cs.onSurface,
+                    modifier = Modifier.padding(top = 1.dp, bottom = 1.dp),
+                )
+            }
+        }
+    }
+    // 处理末尾未关闭的表格
+    if (inTable && tableRows.isNotEmpty()) {
+        Column(
+            Modifier.fillMaxWidth()
+                .padding(vertical = 4.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .border(1.dp, Line, RoundedCornerShape(6.dp)),
+        ) {
+            tableRows.forEachIndexed { ri, cells ->
+                Row(
+                    Modifier.fillMaxWidth()
+                        .background(if (ri == 0) cs.primaryContainer else cs.surface)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    cells.forEach { cell ->
+                        Text(
+                            cell,
+                            fontSize = scaled(11),
+                            fontWeight = if (ri == 0) FontWeight.Bold else FontWeight.Normal,
+                            color = cs.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
     }
 }

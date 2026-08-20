@@ -63,6 +63,32 @@ class TerminalExecTool : QuroTool {
         QuroAgentTrace.result("terminal", "命令输出", out.take(800))
         return out
     }
+
+    /** 渲染终端输出为可视化 HTML 页面 */
+    private fun renderTerminalOutput(cmd: String, exitCode: Int, output: String, source: String): String {
+        return buildString {
+            append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
+            append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
+            append("<style>")
+            append("body{font-family:'Fira Code',monospace;padding:16px;margin:0;background:#1e1e1e;color:#d4d4d4;}")
+            append(".header{background:#2d2d2d;padding:12px;border-radius:8px;margin-bottom:16px;}")
+            append(".prompt{color:#569cd6;}")
+            append(".cmd{color:#ce9178;}")
+            append(".output{background:#0d1117;padding:16px;border-radius:8px;white-space:pre-wrap;word-break:break-all;}")
+            append(".success{color:#4ec9b0;}")
+            append(".error{color:#f44747;}")
+            append(".hint{color:#808080;font-size:12px;margin-top:12px;}")
+            append("</style></head><body>")
+            append("<div class=\"header\">")
+            append("<span class=\"prompt\">$</span> <span class=\"cmd\">$cmd</span>")
+            append("</div>")
+            append("<div class=\"output ${if (exitCode == 0) "success" else "error"}\">")
+            append(output.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+            append("</div>")
+            append("<div class=\"hint\">退出码: $exitCode | 来源: $source</div>")
+            append("</body></html>")
+        }
+    }
 }
 
 class TerminalWriteTool : QuroTool {

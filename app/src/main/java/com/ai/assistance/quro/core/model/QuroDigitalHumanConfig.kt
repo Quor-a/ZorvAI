@@ -8,14 +8,14 @@ import android.content.SharedPreferences
  * - llmMode：LLM 来源。「cloud」= 跟随全局模型配置（云端口）；「offline」= 用户自建本地端点
  *   （如 LM Studio / 端侧 LLM / Ollama），此时 baseUrl/apiKey/model 由用户填写。
  * - avatarSource：头像渲染来源。「builtin」= 内置 2.5D Canvas；「custom」= 用户自制 GLB 模型
- *   （路径存于 customModelPath，由 SAF 选取后拷贝到缓存目录）。
+ *   （路径存于 customModelPath，由 SAF 选取后拷贝到缓存目录）；「live2d」= Live2D 伙伴模型。
  */
 data class QuroDigitalHumanConfig(
     val llmMode: String = "cloud", // "cloud" | "offline"
     val offlineBaseUrl: String = "",
     val offlineApiKey: String = "",
     val offlineModel: String = "",
-    val avatarSource: String = "builtin", // "builtin" | "custom"
+    val avatarSource: String = "builtin", // "builtin" | "custom" | "live2d"
     val customModelPath: String = "",
 ) {
     companion object {

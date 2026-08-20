@@ -24,6 +24,7 @@ import com.ai.assistance.quro.ui.QuroShareBridge
 import com.ai.assistance.quro.service.QuroMediaService
 import com.ai.assistance.quro.core.tools.QuroMediaController
 import com.ai.assistance.quro.core.QuroBrowserBridge
+import com.ai.assistance.quro.util.QuroDiag
 import android.app.Activity
 import android.content.ContextWrapper
 import android.graphics.drawable.GradientDrawable
@@ -125,6 +126,7 @@ import android.view.ViewGroup
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -264,6 +266,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
@@ -447,14 +450,31 @@ fun ChatScreen(
                         aggTools.add(ToolCallUi(c.name, c.arguments, r, c.durationMs))
                         // v1057：run_code 的 html 产物 → 对话框内联实时网页预览卡片
                         //（AI 写网页 → AI 运行 → 网页直接长在气泡里，把手机 AI IDE 的产出物真正融入对话内容区）
-                        if (c.name == "run_code" && r != null && looksLikeHtml(r)) {
-                            aggCards.add(
-                                QuroChatCard.HtmlPreviewCard(
-                                    id = "rh_" + (c.id ?: r.hashCode().toString()),
-                                    title = "网页预览（AI 运行产物）",
-                                    html = r,
-                                )
-                            )
+                        if (c.name == "run_code" && r != null) {
+                            when {
+                                // HTML/SVG 内容 → 网页预览卡片
+                                looksLikeHtml(r) || r.contains("<svg") -> {
+                                    aggCards.add(
+                                        QuroChatCard.HtmlPreviewCard(
+                                            id = "rh_" + (c.id ?: r.hashCode().toString()),
+                                            title = "网页预览（AI 运行产物）",
+                                            html = r,
+                                        )
+                                    )
+                                }
+                                // 图片路径 → 媒体卡片
+                                r.startsWith("🖼️ IMAGE_PATH:") -> {
+                                    val imagePath = r.removePrefix("🖼️ IMAGE_PATH:")
+                                    aggCards.add(
+                                        QuroChatCard.MediaCard(
+                                            id = "ri_" + (c.id ?: r.hashCode().toString()),
+                                            title = "图片预览（AI 运行产物）",
+                                            mediaUrl = imagePath,
+                                            mediaType = "image",
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
                     if (m.content.isNotBlank()) {
@@ -597,6 +617,10 @@ fun ChatScreen(
     var showImageViewer by remember { mutableStateOf(false) }
     var imageViewerPath by remember { mutableStateOf("") }
     var imageViewerName by remember { mutableStateOf("") }
+    // 应用内文档查看器（附件点击 → 用 QuoroDocumentViewer 内联渲染 docx/xlsx/pdf 等）
+    var showDocViewer by remember { mutableStateOf(false) }
+    var docViewerPath by remember { mutableStateOf("") }
+    var docViewerName by remember { mutableStateOf("") }
     // 应用内全屏音乐播放器
     var showMusicPlayer by remember { mutableStateOf(false) }
 
@@ -822,6 +846,7 @@ fun ChatScreen(
                         traceLines = traceLines,
                         onOpenLink = { browserUrl = it },
                         onCommand = { handleCardCommand(it) },
+                        onSend = { send(it) },
                         onAskFollowup = { txt ->
                             inputText = TextFieldValue(
                                 "针对上面的回答，我想追问：\n> " + txt.take(200).replace("\n", "\n> ") + "\n\n"
@@ -845,7 +870,29 @@ fun ChatScreen(
                                     videoPlayerTitle = att.name
                                     showVideoPlayer = true
                                 }
-                                else -> openFileWithSystemViewer(ctx, att)
+                                else -> {
+                                    // 文档/文件：使用应用内 QuoroDocumentViewer 预览，
+                                    // 支持 docx/xlsx/pptx/pdf 等格式的富文本渲染
+                                    val f = att.path?.let { File(it) }
+                                    if (f != null && f.exists()) {
+                                        val ext = f.extension.lowercase()
+                                        val previewableExts = setOf(
+                                            "docx", "xlsx", "pptx", "pdf",
+                                            "txt", "md", "markdown", "json", "csv", "xml",
+                                            "html", "htm", "log", "kt", "kts", "py", "js", "ts", "css", "java",
+                                            "png", "jpg", "jpeg", "gif", "webp", "bmp",
+                                        )
+                                        if (ext in previewableExts) {
+                                            docViewerPath = att.path ?: ""
+                                            docViewerName = att.name
+                                            showDocViewer = true
+                                        } else {
+                                            openFileWithSystemViewer(ctx, att)
+                                        }
+                                    } else {
+                                        openFileWithSystemViewer(ctx, att)
+                                    }
+                                }
                             }
                         },
                         onAttachmentDownload = { downloadAttachment(ctx, it) },
@@ -1445,6 +1492,7 @@ fun ChatScreen(
                 )
             }
         }
+        
 
         // 外观与对话设置页：全屏覆盖层（从设置「外观与对话」进入，返回关页回设置）
         val liveProfile by vm.userProfile.collectAsState()
@@ -1504,6 +1552,34 @@ fun ChatScreen(
                 name = imageViewerName,
                 onClose = { showImageViewer = false },
             )
+        }
+
+        // 应用内文档查看器（附件点击后全屏预览 docx/xlsx/pptx/pdf 等）
+        if (showDocViewer) {
+            BackHandler { showDocViewer = false }
+            Box(Modifier.fillMaxSize().zIndex(130f).background(cs.background)) {
+                val docFile = runCatching { File(docViewerPath) }.getOrNull()
+                if (docFile != null && docFile.exists()) {
+                    QuroDocumentViewer(
+                        file = docFile,
+                        onClose = { showDocViewer = false },
+                        onExternal = {
+                            openFileWithSystemViewer(ctx, Attachment(
+                                name = docViewerName,
+                                meta = "",
+                                path = docViewerPath,
+                                type = "file"
+                            ))
+                            showDocViewer = false
+                        },
+                        readOnly = false,
+                    )
+                } else {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("文件不存在：$docViewerPath", color = cs.error, fontSize = 13.sp)
+                    }
+                }
+            }
         }
 
         // 应用内全屏音乐播放器
@@ -1586,6 +1662,7 @@ private fun MessageList(
     onDelete: (List<String>) -> Unit = {},
     onAttachmentActivate: (Attachment) -> Unit = {},
     onAttachmentDownload: (Attachment) -> Unit = {},
+    onSend: (String) -> Unit = {},
     currentId: String,
     busy: Boolean = false,
     modifier: Modifier = Modifier
@@ -1691,6 +1768,7 @@ private fun MessageList(
                         // 🔧 Bug修复「思考没有修复」：生成中的最后一条消息默认展开思考内容，
                         // 让流式 reasoning 实时可见（此前思考只藏在 9sp 收起胶囊后，等于看不见）。
                         streamingThink = busy && index == messages.lastIndex,
+                        onSend = onSend,
                     )
             }
         }
@@ -1831,6 +1909,8 @@ private fun MessageRow(
     onAttachmentDownload: (Attachment) -> Unit = {},
     /** 该消息是否为「正在生成中的最后一条」：是则默认展开思考内容（流式 reasoning 实时可见）。 */
     streamingThink: Boolean = false,
+    /** 代码块自动修复：发送错误信息给 AI 分析修复 */
+    onSend: (String) -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
@@ -2008,7 +2088,7 @@ private fun MessageRow(
                                 }
                                 is MsgBlock.Rule -> HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 4.dp))
                                 is MsgBlock.Table -> RenderTable(blk.header, blk.rows, scaled, textColor, onOpenLink)
-                                is MsgBlock.Code -> CodeBlock(lang = blk.lang, code = blk.code, scaled = scaled)
+                                is MsgBlock.Code -> CodeBlock(lang = blk.lang, code = blk.code, scaled = scaled, onSend = onSend)
                                 is MsgBlock.Mermaid -> QuroChatCardView(
                                     QuroChatCard.MermaidCard(
                                         id = "mmd_" + blk.source.hashCode().toString(36).replace("-", "m"),
@@ -2165,7 +2245,14 @@ private fun fileTypeIcon(att: Attachment): String {
     if (att.type == "video") return "video"
     val ext = att.name.substringAfterLast('.', "").lowercase()
     return when (ext) {
-        "pdf", "doc", "docx", "txt", "md", "log", "rtf" -> "file_text"
+        "pdf" -> "file_text"
+        "doc", "docx" -> "file_text"
+        "xls", "xlsx" -> "table"
+        "ppt", "pptx" -> "presentation"
+        "txt", "md", "log", "csv", "json", "xml", "html", "htm" -> "file_text"
+        "zip", "rar", "7z" -> "archive"
+        "mp3", "wav", "flac", "aac", "ogg" -> "music"
+        "mp4", "avi", "mov", "mkv" -> "video"
         else -> "paperclip"
     }
 }
@@ -2241,29 +2328,104 @@ private fun AttachmentVideoPreview(att: Attachment, onActivate: () -> Unit) {
     }
 }
 
-/** 文档 / 文件：类型图标 + 打开提示（点击用系统查看器打开）。 */
+/** 文档 / 文件：类型图标 + 内容预览卡片 + 打开提示（点击打开应用内查看器）。 */
 @Composable
 private fun AttachmentFilePreview(att: Attachment, onActivate: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Row(
+    val ext = att.name.substringAfterLast('.', "").lowercase()
+    val isPreviewable = ext in setOf(
+        "docx", "xlsx", "pptx", "pdf",
+        "txt", "md", "markdown", "json", "csv", "xml",
+        "html", "htm", "log", "kt", "kts", "py", "js", "ts", "css", "java",
+    )
+    val isOfficeDoc = ext in setOf("docx", "xlsx", "pptx", "pdf")
+    // 尝试读取文件前几行作为预览
+    val previewText = remember(att.path) {
+        if (!isPreviewable || att.path == null) return@remember null
+        val f = File(att.path)
+        if (!f.exists() || f.length() > 2L * 1024 * 1024) return@remember null
+        runCatching {
+            if (isOfficeDoc) {
+                // Office 文档：提取纯文本前 120 字符作为预览
+                val text = extractOfficeText(f)
+                text.take(120).replace("\n", " ").ifBlank { null }
+            } else {
+                // 文本文件：直接读取前 120 字符
+                f.bufferedReader(Charsets.UTF_8).use { reader ->
+                    val buf = CharArray(256)
+                    val n = reader.read(buf, 0, 256)
+                    if (n > 0) String(buf, 0, n) else ""
+                }.take(120)
+            }
+        }.getOrNull()
+    }
+
+    Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(cs.surface)
+            .border(1.dp, Line, RoundedCornerShape(10.dp))
             .clickable { onActivate() }
             .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            Modifier.size(40.dp).background(cs.primaryContainer, RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            LucideIcon(fileTypeIcon(att), null, Modifier.size(22.dp), tint = cs.primary)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(40.dp).background(cs.primaryContainer, RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                LucideIcon(fileTypeIcon(att), null, Modifier.size(22.dp), tint = cs.primary)
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    att.name,
+                    fontSize = 13.sp, color = cs.onSurface,
+                    fontWeight = FontWeight.SemiBold, maxLines = 1,
+                )
+                Text(
+                    if (isPreviewable) "点击在应用内预览排版" else "点击打开文件",
+                    fontSize = 11.sp, color = cs.primary,
+                )
+            }
+            // 类型徽标
+            if (isOfficeDoc) {
+                Text(
+                    ext.uppercase(),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = cs.primary,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(cs.primaryContainer)
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
         }
-        Spacer(Modifier.width(10.dp))
-        Column {
-            Text("点击预览 / 打开", fontSize = 12.sp, color = cs.primary, fontWeight = FontWeight.Medium)
-            Text("支持 PDF / Office / 文本 / 压缩包等", fontSize = 11.sp, color = Muted)
+        // 文档内容预览卡（仅在有预览文本时显示）
+        if (!previewText.isNullOrBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Column(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(cs.surfaceVariant.copy(alpha = 0.6f))
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    "内容预览",
+                    fontSize = 10.sp,
+                    color = Muted,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    previewText + if (previewText.length >= 120) "…" else "",
+                    fontSize = 11.sp,
+                    color = cs.onSurface.copy(alpha = 0.8f),
+                    lineHeight = 15.sp,
+                    maxLines = 4,
+                )
+            }
         }
     }
 }
@@ -4538,6 +4700,37 @@ private fun parseBlocks(text: String): List<MsgBlock> {
     }
     // 整段完整 HTML 文档（AI 未加围栏直接贴源码）也路由到预览代码块，避免裸 HTML 当纯文本
     if (isFullHtmlDocument(text)) return listOf(MsgBlock.Code("html", text))
+
+    // Agent 模式：检测 <!-- FILE: filename --> 标记，提取多文件
+    val fileMarkerRegex = Regex("<!--\\s*FILE:\\s*(\\S+)\\s*-->")
+    if (fileMarkerRegex.containsMatchIn(text)) {
+        val blocks = mutableListOf<MsgBlock>()
+        val parts = text.split(fileMarkerRegex)
+        var i = 1
+        while (i < parts.size) {
+            val filename = parts[i]
+            val content = if (i + 1 < parts.size) parts[i + 1].trim() else ""
+            if (content.isNotBlank()) {
+                // 根据文件扩展名确定语言
+                val lang = when {
+                    filename.endsWith(".html", true) || filename.endsWith(".htm", true) -> "html"
+                    filename.endsWith(".css", true) -> "css"
+                    filename.endsWith(".js", true) || filename.endsWith(".ts", true) -> "javascript"
+                    filename.endsWith(".json", true) -> "json"
+                    filename.endsWith(".py", true) -> "python"
+                    filename.endsWith(".xml", true) -> "xml"
+                    filename.endsWith(".java", true) -> "java"
+                    filename.endsWith(".kt", true) -> "kotlin"
+                    filename.endsWith(".c", true) || filename.endsWith(".cpp", true) -> "cpp"
+                    filename.endsWith(".sh", true) || filename.endsWith(".bash", true) -> "shell"
+                    else -> "text"
+                }
+                blocks.add(MsgBlock.Code(lang, content))
+            }
+            i += 2
+        }
+        if (blocks.isNotEmpty()) return blocks
+    }
     val blocks = mutableListOf<MsgBlock>()
     var last = 0
     val fences = RE_FENCE.findAll(text).toList()
@@ -4749,17 +4942,77 @@ private fun escapeHtml(text: String): String {
 
 /** 对话内代码块：可复制、可直接运行（IDE 能力）；HTML 代码块额外支持「代码 / 预览」双 Tab 渲染。 */
 @Composable
-private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
+private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.compose.ui.unit.TextUnit, onSend: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
     var output by remember { mutableStateOf<String?>(null) }
+    var isRunning by remember { mutableStateOf(false) }
     val isHtml = lang.equals("html", ignoreCase = true) ||
         lang.equals("htm", ignoreCase = true) ||
         lang.equals("markup", ignoreCase = true) ||
-        looksLikeHtml(code)
-    var showPreview by remember { mutableStateOf(isHtml) }
+        lang.equals("svg", ignoreCase = true) ||
+        lang.equals("xml", ignoreCase = true) ||
+        looksLikeHtml(code) ||
+        code.contains("<svg") ||
+        code.contains("<svg ")
+    val isJs = lang.equals("javascript", ignoreCase = true) ||
+        lang.equals("js", ignoreCase = true) ||
+        lang.equals("typescript", ignoreCase = true) ||
+        lang.equals("ts", ignoreCase = true)
+    var showPreview by remember { mutableStateOf(true) }
     var showFullscreen by remember { mutableStateOf(false) }
+
+    // 错误检测辅助函数
+    fun isErrorCode(result: String): Boolean {
+        return result.startsWith("运行失败") ||
+            result.contains("错误") ||
+            result.contains("error", ignoreCase = true) ||
+            result.contains("Traceback") ||
+            result.contains("not found", ignoreCase = true) ||
+            result.contains("command not found", ignoreCase = true) ||
+            result.contains("Exception") ||
+            result.contains("SyntaxError") ||
+            result.contains("TypeError") ||
+            result.contains("ReferenceError") ||
+            result.contains("NameError") ||
+            result.contains("ValueError") ||
+            result.contains("IndexError") ||
+            result.contains("KeyError") ||
+            result.contains("ImportError") ||
+            result.contains("ModuleNotFoundError") ||
+            result.contains("FileNotFoundError") ||
+            result.contains("PermissionError") ||
+            result.contains("TimeoutError") ||
+            result.contains("ConnectionError") ||
+            result.contains("RuntimeError") ||
+            result.contains("IOError") ||
+            result.contains("OSError") ||
+            result.contains("AttributeError") ||
+            result.contains("ZeroDivisionError") ||
+            result.contains("OverflowError") ||
+            result.contains("MemoryError")
+    }
+
+    // Agent 模式：自动运行 HTML/JS 代码
+    LaunchedEffect(code, lang) {
+        if ((isHtml || isJs) && code.isNotBlank() && output == null && !isRunning) {
+            isRunning = true
+            try {
+                val r = withContext(Dispatchers.IO) {
+                    RunCodeTool().run(
+                        ctx,
+                        JSONObject().put("code", code).put("lang", lang.ifBlank { "html" }).toString(),
+                    )
+                }
+                output = r
+            } catch (e: Exception) {
+                output = "运行失败：${e.message}"
+            } finally {
+                isRunning = false
+            }
+        }
+    }
     // v405：WebView 在 AndroidView + WRAP_CONTENT 下高度不随内容展开，预览常空白。
     // 用状态高度：初始固定值，onPageFinished 读实际内容高度动态扩容（上限 640dp）。
     var webHeight by remember { mutableStateOf(220.dp) }
@@ -4805,15 +5058,71 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                     LucideIcon("corner_down_left", "复制代码", Modifier.size(14.dp), tint = Muted)
                 }
                 IconButton(onClick = {
-                    scope.launch(Dispatchers.IO) {
-                        val r = RunCodeTool().run(
-                            ctx,
-                            JSONObject().put("code", code).put("lang", lang.ifBlank { "python" }).toString(),
-                        )
-                        withContext(Dispatchers.Main) { output = r }
+                    val extension = when (lang.lowercase()) {
+                        "javascript", "js" -> ".js"
+                        "python", "py" -> ".py"
+                        "html", "htm" -> ".html"
+                        "json" -> ".json"
+                        "css" -> ".css"
+                        "xml", "svg" -> ".xml"
+                        "java" -> ".java"
+                        "kotlin", "kt" -> ".kt"
+                        "c", "cpp", "c++" -> ".cpp"
+                        "shell", "sh", "bash" -> ".sh"
+                        else -> ".txt"
+                    }
+                    val fileName = "quro_code_${System.currentTimeMillis()}$extension"
+                    saveCodeToDownloads(ctx, fileName, code)
+                }, Modifier.size(28.dp)) {
+                    LucideIcon("download", "下载代码", Modifier.size(14.dp), tint = Muted)
+                }
+                // 自动修复按钮：仅在有错误输出时显示
+                if (output != null && isErrorCode(output!!)) {
+                    Spacer(Modifier.width(2.dp))
+                    IconButton(onClick = {
+                        val fixPrompt = buildString {
+                            appendLine("代码运行出错，请分析并修复：")
+                            appendLine()
+                            appendLine("语言：$lang")
+                            appendLine("代码：")
+                            appendLine("```$lang")
+                            appendLine(code)
+                            appendLine("```")
+                            appendLine()
+                            appendLine("错误信息：")
+                            appendLine(output)
+                            appendLine()
+                            appendLine("请分析错误原因，提供修复后的完整代码，并解释修复内容。")
+                        }
+                        onSend(fixPrompt)
+                    }, Modifier.size(28.dp)) {
+                        LucideIcon("sparkles", "自动修复", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.error)
+                    }
+                }
+                IconButton(onClick = {
+                    if (!isRunning) {
+                        scope.launch(Dispatchers.IO) {
+                            isRunning = true
+                            output = null
+                            try {
+                                val r = RunCodeTool().run(
+                                    ctx,
+                                    JSONObject().put("code", code).put("lang", lang.ifBlank { "python" }).toString(),
+                                )
+                                withContext(Dispatchers.Main) { output = r }
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) { output = "运行失败：${e.message}" }
+                            } finally {
+                                withContext(Dispatchers.Main) { isRunning = false }
+                            }
+                        }
                     }
                 }, Modifier.size(28.dp)) {
-                    Icon(Icons.Filled.PlayArrow, "运行", Modifier.size(16.dp), tint = cs.primary)
+                    if (isRunning) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = cs.primary)
+                    } else {
+                        Icon(Icons.Filled.PlayArrow, "运行", Modifier.size(16.dp), tint = cs.primary)
+                    }
                 }
                 }  // end of inner action row
             }
@@ -4821,6 +5130,8 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
             // 内容区：源码 or 预览（HTML 默认直接渲染，无需手动点「预览」）
             if (showPreview) {
                 // 预览模式：WebView 渲染（高度由 webHeight 状态驱动，避免空白）
+                // Python/JS 等代码需要 JS 来执行语法高亮，HTML/SVG/JSON 预览也需要 JS
+                val needsJs = true // 所有语言都启用JS以支持交互性
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -4830,13 +5141,19 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                 ) {
                     AndroidView(factory = { context ->
                             WebView(context).apply {
-                            // 安全加固：预览内容来自 AI 生成（不可信），默认禁用 JS 执行，防止脚本注入。
-                            // 纯代码预览无需 JS；若未来需要渲染含 JS 的可信 HTML 工件，应单独加来源校验后再开。
-                            settings.javaScriptEnabled = false
+                            settings.javaScriptEnabled = needsJs
                             settings.domStorageEnabled = true
+                            settings.databaseEnabled = true
+                            settings.allowContentAccess = true
                             settings.cacheMode = WebSettings.LOAD_NO_CACHE
-                            settings.useWideViewPort = false
+                            settings.useWideViewPort = true
                             settings.loadWithOverviewMode = true
+                            settings.setSupportZoom(true)
+                            settings.builtInZoomControls = false
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            }
+                            setBackgroundColor(android.graphics.Color.TRANSPARENT)
                             layoutParams = ViewGroup.LayoutParams(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
                                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -4852,17 +5169,25 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                                     }
                                 }
                             }
+                            // 调试：把 JS console 输出打到诊断日志，方便定位 canvas/脚本问题
+                            webChromeClient = object : android.webkit.WebChromeClient() {
+                                override fun onConsoleMessage(cm: android.webkit.ConsoleMessage?): Boolean {
+                                    cm ?: return super.onConsoleMessage(cm)
+                                    QuroDiag.log("WebView", "[${cm.sourceId()}:${cm.lineNumber()}] ${cm.message()}")
+                                    return true
+                                }
+                            }
                             // 初始加载（流式时后续由 update 跟随重载，避免预览冻结在首帧）
-                            val html = buildPreviewHtml(code, isHtml)
+                            val html = buildPreviewHtml(code, isHtml, lang)
                             tag = html
-                            loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+                            loadDataWithBaseURL("https://localhost/", html, "text/html", "UTF-8", null)
                         }
                     }, modifier = Modifier.fillMaxSize(), update = { wv ->
                         // 流式生成：code 变化时重新加载，预览随写随更新
-                        val html = buildPreviewHtml(code, isHtml)
+                        val html = buildPreviewHtml(code, isHtml, lang)
                         if (wv.tag != html) {
                             wv.tag = html
-                            wv.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+                            wv.loadDataWithBaseURL("https://localhost/", html, "text/html", "UTF-8", null)
                         }
                     })
                 }
@@ -4890,11 +5215,95 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                 }
             }
 
-            output?.let {
+            output?.let { result ->
                 HorizontalDivider(color = Line)
-                Text("运行结果", fontSize = 11.sp, color = Muted, modifier = Modifier.padding(start = 10.dp, top = 6.dp))
-                SelectionContainer(Modifier.fillMaxWidth().padding(10.dp)) {
-                    Text(it, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = cs.onSurface)
+                // 如果结果是HTML，用WebView渲染；否则用纯文本
+                val resultIsHtml = result.trimStart().startsWith("<!DOCTYPE html") ||
+                    result.trimStart().startsWith("<html") ||
+                    result.contains("<html", ignoreCase = true) ||
+                    result.contains("<body", ignoreCase = true)
+                if (resultIsHtml && !isErrorCode(result)) {
+                    // HTML结果用WebView渲染（交互式）
+                    var resultHeight by remember { mutableStateOf(200.dp) }
+                    Surface(
+                        color = cs.surface,
+                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                        shape = RoundedCornerShape(6.dp),
+                    ) {
+                        Column(Modifier.padding(4.dp)) {
+                            Text(
+                                "✅ 运行结果（交互式）",
+                                fontSize = 11.sp,
+                                color = Muted,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                            )
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(resultHeight)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color.White)
+                            ) {
+                                AndroidView(factory = { context ->
+                                    WebView(context).apply {
+                                        settings.javaScriptEnabled = true
+                                        settings.domStorageEnabled = true
+                                        settings.allowContentAccess = true
+                                        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                        layoutParams = ViewGroup.LayoutParams(
+                                            ViewGroup.LayoutParams.MATCH_PARENT,
+                                            ViewGroup.LayoutParams.MATCH_PARENT
+                                        )
+                                        webViewClient = object : WebViewClient() {
+                                            override fun onPageFinished(view: WebView?, url: String?) {
+                                                super.onPageFinished(view, url)
+                                                val density = view?.context?.resources?.displayMetrics?.density ?: return
+                                                view.evaluateJavascript("document.documentElement.scrollHeight") { value ->
+                                                    val px = value?.replace("\"", "")?.toIntOrNull() ?: return@evaluateJavascript
+                                                    val dp = (px / density).toInt().coerceIn(120, 640)
+                                                    resultHeight = dp.dp
+                                                }
+                                            }
+                                        }
+                                        loadDataWithBaseURL("https://localhost/", result, "text/html", "UTF-8", null)
+                                    }
+                                }, modifier = Modifier.fillMaxSize())
+                            }
+                        }
+                    }
+                } else {
+                    // 纯文本结果
+                    Surface(
+                        color = if (isErrorCode(result))
+                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                        else
+                            cs.surface,
+                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                        shape = RoundedCornerShape(6.dp),
+                    ) {
+                        Column(Modifier.padding(10.dp)) {
+                            Text(
+                                if (isErrorCode(result))
+                                    "❌ 运行结果" else "✅ 运行结果",
+                                fontSize = 11.sp,
+                                color = if (isErrorCode(result))
+                                    MaterialTheme.colorScheme.error else Muted,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            SelectionContainer {
+                                Text(
+                                    result,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 12.sp,
+                                    color = cs.onSurface,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -4902,19 +5311,19 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
 
     // 全屏预览覆盖层
     if (showFullscreen) {
-        FullscreenPreview(code = code, isHtml = isHtml, onDismiss = { showFullscreen = false })
+        FullscreenPreview(code = code, isHtml = isHtml, lang = lang, onDismiss = { showFullscreen = false })
     }
 }
 
 // 全屏预览覆盖层（CodeBlock 内点击 🔲 全屏按钮触发）—— 用 Dialog 真正覆盖全屏
 @Composable
-private fun FullscreenPreview(code: String, isHtml: Boolean, onDismiss: () -> Unit) {
+private fun FullscreenPreview(code: String, isHtml: Boolean, lang: String = "", onDismiss: () -> Unit) {
     // #877 修复全屏白屏：Compose Dialog 是 overlay window，内部 WebView 在多 ROM 上无法正确
     // 合成 → 白屏。改用挂在真实 Activity window 上的传统 Dialog，WebView 用 Activity context
     // 创建，能稳定渲染。若取不到 Activity（极端），兜底仍用 Compose Dialog。
     val ctx = LocalContext.current
     val activity = ctx.findActivity()
-    val finalHtml = if (isHtml) {
+    val finalHtml = if (isHtml || code.contains("<svg") || code.contains("<svg ")) {
         val t = code.trim()
         val isFullDoc = t.startsWith("<!DOCTYPE html", ignoreCase = true) || t.startsWith("<html", ignoreCase = true)
         if (isFullDoc) code else buildString {
@@ -4924,13 +5333,29 @@ private fun FullscreenPreview(code: String, isHtml: Boolean, onDismiss: () -> Un
             append("</head><body>").append(code).append("</body></html>")
         }
     } else {
+        // 代码块全屏预览：使用 Highlight.js 语法高亮
         buildString {
             append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
             append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
-            append("<style>body{margin:0;padding:16px;background:#1e1e1e;}")
-            append("pre{white-space:pre-wrap;word-break:break-word;font-family:monospace;font-size:14px;color:#d4d4d4;}</style></head><body><pre>")
+            // Highlight.js CDN
+            append("<link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css\">")
+            append("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js\"></script>")
+            append("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js\"></script>")
+            append("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js\"></script>")
+            append("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js\"></script>")
+            append("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js\"></script>")
+            append("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js\"></script>")
+            append("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js\"></script>")
+            append("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/kotlin.min.js\"></script>")
+            append("<style>")
+            append("body{margin:0;padding:16px;background:#1e1e1e;}")
+            append("pre{margin:0;padding:0;overflow-x:auto;font-family:'Fira Code',Consolas,Monaco,'Courier New',monospace;font-size:14px;line-height:1.6;}")
+            append("code{background:transparent;padding:0;}")
+            append("</style></head><body><pre><code class=\"language-${lang.ifBlank { "plaintext" }}\">")
             append(escapeHtml(code))
-            append("</pre></body></html>")
+            append("</code></pre>")
+            append("<script>hljs.highlightAll();</script>")
+            append("</body></html>")
         }
     }
 
@@ -5034,27 +5459,297 @@ private fun copyPlain(ctx: Context, text: String) {
     Toast.makeText(ctx, "已复制", Toast.LENGTH_SHORT).show()
 }
 
+private fun saveCodeToDownloads(context: Context, fileName: String, content: String) {
+    android.os.Handler(android.os.Looper.getMainLooper()).post {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                }
+                val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                uri?.let {
+                    context.contentResolver.openOutputStream(it)?.use { outputStream ->
+                        outputStream.write(content.toByteArray())
+                    }
+                    Toast.makeText(context, "✅ 已保存到 Downloads/$fileName", Toast.LENGTH_SHORT).show()
+                } ?: Toast.makeText(context, "❌ 保存失败：无法创建文件", Toast.LENGTH_SHORT).show()
+            } else {
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                if (!downloadsDir.exists()) downloadsDir.mkdirs()
+                val file = java.io.File(downloadsDir, fileName)
+                file.writeText(content)
+                Toast.makeText(context, "✅ 已保存到 Downloads/$fileName", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(context, "❌ 保存失败：${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+}
+
 /** 构造 WebView 预览用 HTML：完整文档直接渲染，HTML 片段包裹为完整文档，非 HTML 代码用 <pre> 转义防 XSS。 */
-private fun buildPreviewHtml(code: String, isHtml: Boolean): String {
+private fun buildPreviewHtml(code: String, isHtml: Boolean, lang: String = ""): String {
     val t = code.trim()
     val isFullDoc = t.startsWith("<!DOCTYPE html", ignoreCase = true) || t.startsWith("<html", ignoreCase = true)
+
+    // SVG 内容：直接渲染为图形
+    if (t.contains("<svg") || t.contains("<svg ")) {
+        return buildString {
+            append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
+            append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
+            append("<style>body{margin:0;padding:8px;background:white;display:flex;justify-content:center;align-items:center;}svg{max-width:100%;height:auto;}</style>")
+            append("</head><body>")
+            append(t)
+            append("</body></html>")
+        }
+    }
+
+    // JSON 内容：渲染为格式化的树形视图
+    if (lang.equals("json", ignoreCase = true) || looksLikeJson(t)) {
+        return buildJsonPreviewHtml(t)
+    }
+
     return if (isFullDoc || isHtml) {
         if (isFullDoc) code else buildString {
             append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
             append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
+            append("<base href=\"https://localhost/\">")
             append("<style>body{margin:8px;padding:0;font-family:sans-serif;word-wrap:break-word;}img{max-width:100%;height:auto;}</style></head><body>")
             append(code)
             append("</body></html>")
         }
     } else {
+        // 代码块：使用内联 CSS 高亮 + 简单语法着色（不依赖外部 CDN）
         buildString {
             append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
             append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
-            append("<style>body{margin:8px;padding:0;background:#f5f5f5;}pre{white-space:pre-wrap;word-break:break-word;font-family:monospace;font-size:14px;color:#222;padding:12px;margin:0;}</style></head><body><pre>")
-            append(escapeHtml(code))
-            append("</pre></body></html>")
+            // 内联语法高亮样式
+            append("<style>")
+            append("body{margin:0;padding:0;background:#1e1e1e;}")
+            append("pre{margin:0;padding:16px;overflow-x:auto;font-family:'Fira Code',Consolas,Monaco,'Courier New',monospace;font-size:13px;line-height:1.5;color:#d4d4d4;white-space:pre-wrap;word-break:break-word;}")
+            append("code{background:transparent;padding:0;}")
+            // Python 语法高亮颜色
+            append(".keyword{color:#c586c0;}")  // 关键词
+            append(".string{color:#ce9178;}")   // 字符串
+            append(".number{color:#b5cea8;}")   // 数字
+            append(".comment{color:#6a9955;}")  // 注释
+            append(".function{color:#dcdcaa;}")  // 函数名
+            append(".decorator{color:#dcdcaa;}") // 装饰器
+            append(".builtin{color:#4ec9b0;}")  // 内置函数
+            append(".operator{color:#d4d4d4;}") // 运算符
+            append("</style></head><body><pre><code>")
+            // 简单语法高亮
+            append(highlightCode(escapeHtml(code), lang))
+            append("</code></pre>")
+            append("</body></html>")
         }
     }
+}
+
+/** 检测是否看起来像 JSON 内容。 */
+private fun looksLikeJson(code: String): Boolean {
+    val t = code.trim()
+    return (t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"))
+}
+
+/** 为 JSON 内容构建格式化的树形预览 HTML。 */
+private fun buildJsonPreviewHtml(code: String): String {
+    // 提取实际的 JSON 内容（跳过提示文本）
+    val jsonContent = if (code.contains("\n\n")) {
+        code.substringAfter("\n\n").trim()
+    } else {
+        code.trim()
+    }
+
+    return buildString {
+        append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
+        append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
+        append("<style>")
+        append("body{margin:0;padding:12px;background:#1e1e1e;font-family:'Fira Code',Consolas,Monaco,'Courier New',monospace;font-size:13px;line-height:1.5;}")
+        append(".json-key{color:#9cdcfe;}")   // 键名
+        append(".json-string{color:#ce9178;}") // 字符串值
+        append(".json-number{color:#b5cea8;}") // 数字值
+        append(".json-boolean{color:#569cd6;}") // 布尔值
+        append(".json-null{color:#569cd6;}")   // null 值
+        append(".json-brace{color:#d4d4d4;}")  // 大括号
+        append(".json-bracket{color:#d4d4d4;}") // 中括号
+        append(".json-colon{color:#d4d4d4;}")  // 冒号
+        append(".json-comma{color:#d4d4d4;}")  // 逗号
+        append(".json-indent{display:inline-block;width:20px;}")
+        append("</style></head><body><pre>")
+        // 简单的 JSON 语法高亮
+        append(highlightJsonForPreview(escapeHtml(jsonContent)))
+        append("</pre></body></html>")
+    }
+}
+
+/** 为 JSON 预览添加语法高亮。 */
+private fun highlightJsonForPreview(code: String): String {
+    var result = code
+    // 键名（双引号包裹的键，后面跟冒号）
+    result = result.replace(Regex("(&quot;[^&]*?&quot;)(\\s*:)"), "<span class=\"json-key\">$1</span><span class=\"json-colon\">$2</span>")
+    // 字符串值（冒号后面的双引号包裹的内容）
+    result = result.replace(Regex(":(\\s*)&quot;([^&]*?)&quot;"), ":<span class=\"json-string\">&quot;$2&quot;</span>")
+    // 数字
+    result = result.replace(Regex("\\b(\\d+\\.?\\d*)\\b"), "<span class=\"json-number\">$1</span>")
+    // 布尔值
+    result = result.replace(Regex("\\b(true|false)\\b"), "<span class=\"json-boolean\">$1</span>")
+    // null
+    result = result.replace(Regex("\\b(null)\\b"), "<span class=\"json-null\">$1</span>")
+    return result
+}
+
+/** 简单语法高亮：根据语言类型用正则替换关键词为带样式的 span */
+private fun highlightCode(code: String, lang: String): String {
+    val lower = lang.lowercase()
+    return when {
+        lower == "python" || lower == "py" -> highlightPython(code)
+        lower == "javascript" || lower == "js" || lower == "ts" || lower == "typescript" -> highlightJs(code)
+        lower == "kotlin" || lower == "kt" -> highlightKotlin(code)
+        lower == "java" -> highlightJava(code)
+        lower == "json" -> highlightJson(code)
+        lower == "cpp" || lower == "c" || lower == "c++" || lower == "cc" || lower == "h" || lower == "hpp" -> highlightCpp(code)
+        lower == "css" -> highlightCss(code)
+        lower == "xml" || lower == "svg" -> highlightXml(code)
+        else -> code // 其他语言不处理
+    }
+}
+
+/** Python 语法高亮 */
+private fun highlightPython(code: String): String {
+    var result = code
+    // 注释（# 开头到行尾）
+    result = result.replace(Regex("(#[^\n]*)"), "<span class=\"comment\">$1</span>")
+    // 字符串（单引号/双引号/三引号）
+    result = result.replace(Regex("(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;|(&quot;&quot;&quot;)[\\s\\S]*?(&quot;&quot;&quot;))"), "<span class=\"string\">$1</span>")
+    // 关键词
+    val keywords = listOf("def", "class", "if", "else", "elif", "for", "while", "return", "import", "from", "as", "try", "except", "finally", "with", "lambda", "yield", "pass", "break", "continue", "and", "or", "not", "in", "is", "None", "True", "False", "self", "print")
+    keywords.forEach { kw ->
+        result = result.replace(Regex("\\b($kw)\\b"), "<span class=\"keyword\">$1</span>")
+    }
+    // 数字
+    result = result.replace(Regex("\\b(\\d+\\.?\\d*)\\b"), "<span class=\"number\">$1</span>")
+    // 函数名
+    result = result.replace(Regex("\\b(\\w+)\\s*\\("), "<span class=\"function\">$1</span>(")
+    return result
+}
+
+/** JavaScript 语法高亮 */
+private fun highlightJs(code: String): String {
+    var result = code
+    // 注释
+    result = result.replace(Regex("(//[^\n]*)"), "<span class=\"comment\">$1</span>")
+    // 字符串
+    result = result.replace(Regex("(#[^\n]*)"), "<span class=\"comment\">$1</span>")
+    result = result.replace(Regex("(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;)"), "<span class=\"string\">$1</span>")
+    // 关键词
+    val keywords = listOf("var", "let", "const", "function", "return", "if", "else", "for", "while", "class", "extends", "import", "export", "default", "new", "this", "console", "log", "true", "false", "null", "undefined")
+    keywords.forEach { kw ->
+        result = result.replace(Regex("\\b($kw)\\b"), "<span class=\"keyword\">$1</span>")
+    }
+    // 数字
+    result = result.replace(Regex("\\b(\\d+\\.?\\d*)\\b"), "<span class=\"number\">$1</span>")
+    return result
+}
+
+/** Kotlin 语法高亮 */
+private fun highlightKotlin(code: String): String {
+    var result = code
+    // 注释
+    result = result.replace(Regex("(//[^\n]*)"), "<span class=\"comment\">$1</span>")
+    // 字符串
+    result = result.replace(Regex("(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;)"), "<span class=\"string\">$1</span>")
+    // 关键词
+    val keywords = listOf("fun", "val", "var", "class", "object", "interface", "if", "else", "when", "for", "while", "return", "import", "package", "private", "public", "internal", "protected", "override", "abstract", "data", "sealed", "companion", "suspend", "launch", "with", "this", "super", "true", "false", "null")
+    keywords.forEach { kw ->
+        result = result.replace(Regex("\\b($kw)\\b"), "<span class=\"keyword\">$1</span>")
+    }
+    // 数字
+    result = result.replace(Regex("\\b(\\d+\\.?\\d*)\\b"), "<span class=\"number\">$1</span>")
+    return result
+}
+
+/** Java 语法高亮 */
+private fun highlightJava(code: String): String {
+    var result = code
+    // 注释
+    result = result.replace(Regex("(//[^\n]*)"), "<span class=\"comment\">$1</span>")
+    // 字符串
+    result = result.replace(Regex("(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;)"), "<span class=\"string\">$1</span>")
+    // 关键词
+    val keywords = listOf("public", "private", "protected", "static", "final", "class", "interface", "extends", "implements", "if", "else", "for", "while", "return", "import", "package", "new", "this", "super", "void", "int", "long", "double", "float", "boolean", "char", "byte", "short", "String", "null", "true", "false")
+    keywords.forEach { kw ->
+        result = result.replace(Regex("\\b($kw)\\b"), "<span class=\"keyword\">$1</span>")
+    }
+    // 数字
+    result = result.replace(Regex("\\b(\\d+\\.?\\d*)\\b"), "<span class=\"number\">$1</span>")
+    return result
+}
+
+/** JSON 语法高亮 */
+private fun highlightJson(code: String): String {
+    var result = code
+    // 字符串（键和值）
+    result = result.replace(Regex("(&quot;[^&]*?&quot;)"), "<span class=\"string\">$1</span>")
+    // 数字
+    result = result.replace(Regex("\\b(\\d+\\.?\\d*)\\b"), "<span class=\"number\">$1</span>")
+    // 布尔值
+    result = result.replace(Regex("\\b(true|false|null)\\b"), "<span class=\"keyword\">$1</span>")
+    return result
+}
+
+/** C/C++ 语法高亮 */
+private fun highlightCpp(code: String): String {
+    var result = code
+    // 块注释 /* */
+    result = result.replace(Regex("(/\\*[\\s\\S]*?\\*/)"), "<span class=\"comment\">$1</span>")
+    // 行注释 //
+    result = result.replace(Regex("(//[^\\n]*)"), "<span class=\"comment\">$1</span>")
+    // 字符串
+    result = result.replace(Regex("(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;)"), "<span class=\"string\">$1</span>")
+    // 预处理指令
+    result = result.replace(Regex("(#\\w+)"), "<span class=\"builtin\">$1</span>")
+    // 关键词
+    val keywords = listOf("int", "long", "short", "char", "float", "double", "bool", "void", "auto", "const", "static", "struct", "class", "public", "private", "protected", "virtual", "template", "typename", "namespace", "using", "if", "else", "for", "while", "do", "switch", "case", "return", "break", "continue", "new", "delete", "true", "false", "nullptr", "include", "define", "ifdef", "ifndef", "endif", "std")
+    keywords.forEach { kw ->
+        result = result.replace(Regex("\\b($kw)\\b"), "<span class=\"keyword\">$1</span>")
+    }
+    // 数字
+    result = result.replace(Regex("\\b(\\d+\\.?\\d*)\\b"), "<span class=\"number\">$1</span>")
+    return result
+}
+
+/** CSS 语法高亮 */
+private fun highlightCss(code: String): String {
+    var result = code
+    // 注释
+    result = result.replace(Regex("(/\\*[\\s\\S]*?\\*/)"), "<span class=\"comment\">$1</span>")
+    // 选择器 { 前的高亮
+    result = result.replace(Regex("([.#]?[a-zA-Z_-][\\w-]*)\\s*\\{"), "<span class=\"function\">$1</span> {")
+    // 属性名（冒号前）
+    result = result.replace(Regex("([a-z-]+)\\s*:"), "<span class=\"keyword\">$1</span>:")
+    // 数值 + 单位
+    result = result.replace(Regex("\\b(\\d+\\.?\\d*)(px|em|rem|%|vh|vw|s|ms)?\\b"), "<span class=\"number\">$1$2</span>")
+    // 颜色
+    result = result.replace(Regex("(#[0-9a-fA-F]{3,8})\\b"), "<span class=\"string\">$1</span>")
+    // 字符串
+    result = result.replace(Regex("(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;)"), "<span class=\"string\">$1</span>")
+    return result
+}
+
+/** XML/SVG 语法高亮（输入已 escapeHtml：< → &lt;，> → &gt;，\" → &quot;） */
+private fun highlightXml(code: String): String {
+    var result = code
+    // 注释
+    result = result.replace(Regex("(&lt;!--[\\s\\S]*?--&gt;)"), "<span class=\"comment\">$1</span>")
+    // 标签名
+    result = result.replace(Regex("(&lt;/?)([a-zA-Z][\\w:-]*)"), "$1<span class=\"keyword\">$2</span>")
+    // 属性名
+    result = result.replace(Regex("([a-zA-Z_:][\\w:.-]*)="), "<span class=\"function\">$1</span>=")
+    // 属性值
+    result = result.replace(Regex("=(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;)"), "=<span class=\"string\">$1</span>")
+    return result
 }
 
 /** 复制整段对话全文（全部复制）。 */

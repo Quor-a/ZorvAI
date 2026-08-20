@@ -94,7 +94,7 @@ internal fun ChatTopBar(
                 modifier = Modifier.weight(1f, fill = false),
             )
         }
-        // ③ 右侧固定：设置。无 weight → 与 ① 同批被测量，长模型名/长人格名都挤不掉它
+        // ③ 右侧固定：终端 + 设置。无 weight → 与 ① 同批被测量，长模型名/长人格名都挤不掉它
         Spacer(Modifier.width(4.dp))
         IconButton(onClick = onSettings, modifier = Modifier.size(TOP_BAR_TOUCH)) {
             LucideIcon("settings", "设置", Modifier.size(21.dp), tint = cs.onBackground)

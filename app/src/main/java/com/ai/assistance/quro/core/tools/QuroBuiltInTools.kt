@@ -37,6 +37,8 @@ import com.ai.assistance.quro.core.tools.SetCameraDisabledTool
 import com.ai.assistance.quro.core.tools.RootExecTool
 import com.ai.assistance.quro.core.tools.RootStatusTool
 import com.ai.assistance.quro.core.tools.TerminalExecTool
+import com.ai.assistance.quro.tools.VncTool
+import com.ai.assistance.quro.tools.WorkbenchTool
 import com.ai.assistance.quro.core.tools.TerminalWriteTool
 import com.ai.assistance.quro.core.tools.TerminalKillTool
 import com.ai.assistance.quro.core.tools.TerminalStatusTool
@@ -217,6 +219,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(FileReadTool())
     r.register(OpenWebTool())
     r.register(RunCodeTool())
+    // 后端工作区：多文件多语言项目
+    r.register(WorkbenchTool())
     // TTS 朗读
     r.register(SpeakTool())
     r.register(StopSpeakTool())
@@ -236,6 +240,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(WorkspaceWriteTool())
     r.register(WorkspaceReadTool())
     r.register(WorkspaceListTool())
+    // VNC 桌面环境工具
+    r.register(VncTool())
     // 特权通道状态查询：AI 调用高风险能力前自查可用通道、自行选择
     r.register(QuroPrivStatusTool())
     // CMS v2 反馈环：状态/日志/结构化结果查询（让 AI 自我确认「部署/调用是否成功」）
@@ -339,6 +345,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(McpDeployTool())
     r.register(McpUndeployTool())
     r.register(McpListLocalTool())
+    // 广义 IDE 集成工具：图形/视频/音频/3D/游戏/低代码/代码 IDE 的完整知识库和调用能力
+    r.register(CreativeStudioTool())
     // 并入「导入工具」（AI 自写 / 用户粘贴 JSON 导入），使其可被 AI 调用
     context?.let { r.attach(it) }
     // 并入「可调用技能」：把用户技能注册为 AI 工具函数（function calling），与导入工具同理

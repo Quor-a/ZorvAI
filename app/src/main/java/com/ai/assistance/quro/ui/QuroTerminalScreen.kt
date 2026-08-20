@@ -8,10 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -25,6 +28,8 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -37,27 +42,54 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.JavascriptInterface
+import com.ai.assistance.quro.core.terminal.QuroLanguageRunner
+import android.widget.Toast
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Web
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.linux.QuroDesktopInstaller
 import com.ai.assistance.quro.core.terminal.QuroHistoryCursor
 import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.core.terminal.QuroTerminalController
 import com.ai.assistance.quro.core.terminal.QuroTerminalHistory
 import com.ai.assistance.quro.core.terminal.ShellMode
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -83,10 +115,27 @@ private data class KeyChip(val label: String, val onTap: () -> Unit)
  *  - 非交互 shell 提示横幅，明确告诉用户 stdin 是管道不是 PTY。
  */
 @Composable
-fun QuroTerminalScreen(onClose: () -> Unit) {
+fun QuroTerminalScreen(onClose: () -> Unit, showDesktopLauncher: Boolean = false) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var input by remember { mutableStateOf("") }
+
+    // 语言运行器
+    val languageRunner = remember { QuroLanguageRunner(context) }
+
+    // WebView状态
+    var showWebView by remember { mutableStateOf(false) }
+    var webContent by remember { mutableStateOf("") }
+    var currentLanguage by remember { mutableStateOf<QuroLanguageRunner.Language?>(null) }
+    
+    // 桌面启动器状态
+    var showDesktopMode by remember { mutableStateOf(false) }
+    var showVncView by remember { mutableStateOf(false) }
+    var vncUrl by remember { mutableStateOf("") }
+    val showDesktopInstallerMutable = remember { mutableStateOf(false) }
+    var showDesktopInstaller by showDesktopInstallerMutable
+    val desktopInstallerStateMutable = remember { mutableStateOf<QuroDesktopInstaller.DesktopState>(QuroDesktopInstaller.DesktopState.NotInstalled) }
+    var desktopInstallerState by desktopInstallerStateMutable
 
     // 进入界面即创建（或复用）常驻会话；离开时不销毁，保留滚动历史，便于再次进入继续操作。
     var session by remember {
@@ -179,9 +228,29 @@ fun QuroTerminalScreen(onClose: () -> Unit) {
     /** 提交当前输入框内容：执行 + 落历史 + 清空输入 + 复位游标。 */
     fun submit() {
         val cmd = input
-        QuroTerminalController.sendToShell(cmd)
         input = ""
         cursor.reset()
+        
+        // 检测是否为代码内容（包含多种语言）
+        val language = languageRunner.detectLanguage(cmd)
+        if (language != QuroLanguageRunner.Language.UNKNOWN) {
+            // 运行代码并显示WebView
+            currentLanguage = language
+            scope.launch {
+                val result = languageRunner.runCode(cmd, language)
+                if (result.htmlOutput != null) {
+                    webContent = result.htmlOutput
+                    showWebView = true
+                } else {
+                    // 普通命令，发送到shell
+                    QuroTerminalController.sendToShell(cmd)
+                }
+            }
+        } else {
+            // 普通命令，发送到shell
+            QuroTerminalController.sendToShell(cmd)
+        }
+        
         if (cmd.isNotBlank()) {
             // 写盘同样放到 IO 线程：每敲一条命令都要写，主线程做没必要。
             scope.launch {
@@ -237,6 +306,26 @@ fun QuroTerminalScreen(onClose: () -> Unit) {
             ) {
                 IconButton(onClick = { QuroLinuxEnv.setup(context) }) {
                     Icon(Icons.Filled.Download, "部署 Linux 环境", tint = Color(0xFF7BE0A0))
+                }
+            }
+            if (true) {
+                IconButton(onClick = {
+                    Toast.makeText(context, "启动VNC服务器...", Toast.LENGTH_SHORT).show()
+                    scope.launch {
+                        val result = QuroDesktopInstaller.startDesktop(context)
+                        delay(2000)
+                        Toast.makeText(context, "VNC服务器已启动，正在打开桌面...", Toast.LENGTH_SHORT).show()
+                        vncUrl = "http://localhost:6080/vnc.html"
+                        showVncView = true
+                    }
+                }) {
+                    Icon(Icons.Filled.Web, "启动VNC", tint = Color(0xFF6FA8FF))
+                }
+                IconButton(onClick = {
+                    Toast.makeText(context, "正在部署Linux开发环境...", Toast.LENGTH_SHORT).show()
+                    QuroLinuxEnv.setup(context)
+                }) {
+                    Icon(Icons.Filled.Download, "部署Linux环境", tint = Color(0xFF7BE0A0))
                 }
             }
             IconButton(onClick = { exportLog() }) {
@@ -312,19 +401,85 @@ fun QuroTerminalScreen(onClose: () -> Unit) {
         }
 
         // ═══════════ 滚动输出区 ═══════════
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 8.dp, vertical = 4.dp),
-        ) {
-            items(lines) { line ->
-                Text(
-                    text = line,
-                    color = Color(0xFFD6D6D6),
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                    modifier = Modifier.fillMaxWidth()
+        if (showWebView && webContent.isNotEmpty()) {
+            // WebView显示代码运行结果
+            Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                // WebView顶栏
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(Color(0xFF1B1B1B)).padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${currentLanguage?.name ?: "代码"} 运行结果",
+                        color = Color.White,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    TextButton(onClick = { showWebView = false }) {
+                        Text("返回终端", color = Color(0xFF6FA8FF))
+                    }
+                }
+
+                // WebView内容
+                AndroidView(
+                    factory = { context ->
+                        WebView(context).apply {
+                            webViewClient = WebViewClient()
+                            webChromeClient = WebChromeClient()
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.allowFileAccessFromFileURLs = true
+                            settings.allowUniversalAccessFromFileURLs = true
+                            settings.defaultTextEncodingName = "UTF-8"
+                        }
+                    },
+                    update = { webView ->
+                        webView.loadDataWithBaseURL(
+                            null,
+                            webContent,
+                            "text/html",
+                            "UTF-8",
+                            null
+                        )
+                    },
+                    modifier = Modifier.fillMaxSize()
                 )
+            }
+        } else if (showVncView) {
+            // VNC WebView
+            AndroidView(
+                factory = { context ->
+                    WebView(context).apply {
+                        webViewClient = WebViewClient()
+                        webChromeClient = WebChromeClient()
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.allowFileAccessFromFileURLs = true
+                        settings.allowUniversalAccessFromFileURLs = true
+                        settings.defaultTextEncodingName = "UTF-8"
+                    }
+                },
+                update = { webView ->
+                    webView.loadUrl(vncUrl)
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            // 普通终端输出
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                items(lines) { line ->
+                    Text(
+                        text = line,
+                        color = Color(0xFFD6D6D6),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         }
 
@@ -507,3 +662,465 @@ private fun ProgressBanner(text: String, progress: Float?) {
 
 /** 顶部临时提示条的显示时长。 */
 private const val NOTICE_DURATION_MS: Long = 5000L
+
+/**
+ * 终端桌面启动器模式 - 图形界面
+ *
+ * 在终端内部显示图形化桌面启动器，可以启动各种应用
+ */
+@Composable
+fun DesktopLauncherMode(
+    onRunCode: (String, QuroLanguageRunner.Language) -> Unit,
+    onOpenTerminal: () -> Unit,
+    scope: CoroutineScope,
+    showDesktopInstaller: MutableState<Boolean>,
+    desktopInstallerState: MutableState<QuroDesktopInstaller.DesktopState>
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val languageRunner = remember { QuroLanguageRunner(context) }
+    
+    // VNC视图状态
+    var showVncView by remember { mutableStateOf(false) }
+    var vncUrl by remember { mutableStateOf("") }
+    var isDesktopInstalled by remember { mutableStateOf(false) }
+    
+    // 检测桌面环境是否已安装
+    LaunchedEffect(Unit) {
+        isDesktopInstalled = withContext(Dispatchers.IO) {
+            QuroDesktopInstaller.probe(context)
+        }
+    }
+
+    // 应用列表
+    val apps = listOf(
+        Triple("javascript", Icons.Default.Code, "JavaScript"),
+        Triple("python", Icons.Default.Phone, "Python"),
+        Triple("html", Icons.Default.Web, "HTML"),
+        Triple("json", Icons.Default.Folder, "JSON"),
+        Triple("css", Icons.Default.Star, "CSS"),
+        Triple("xml", Icons.Default.Settings, "XML"),
+        Triple("c", Icons.Default.Terminal, "C/C++"),
+        Triple("java", Icons.Default.Apps, "Java")
+    )
+
+    // 代码模板
+    val codeTemplates = mapOf(
+        "javascript" to """
+            console.log("Hello from JavaScript!");
+            document.body.innerHTML = "<h1 style='color: white;'>JavaScript 运行中</h1>";
+        """.trimIndent(),
+        "python" to """
+            print("Hello from Python!")
+            import sys
+            print(f"Python version: {sys.version}")
+        """.trimIndent(),
+        "html" to """
+            <!DOCTYPE html>
+            <html>
+            <head><title>HTML Preview</title></head>
+            <body style="background: #1e1e1e; color: white; font-family: Arial;">
+                <h1>HTML 预览</h1>
+                <p>这是一个HTML预览页面</p>
+                <button onclick="alert('Hello!')">点击我</button>
+            </body>
+            </html>
+        """.trimIndent(),
+        "json" to """
+            {
+                "name": "ZorvAI",
+                "version": "1.0",
+                "features": ["terminal", "code", "web"]
+            }
+        """.trimIndent(),
+        "css" to """
+            body {
+                background: #1e1e1e;
+                color: white;
+                font-family: Arial;
+                padding: 20px;
+            }
+            h1 { color: #7BE0A0; }
+            button {
+                background: #3d3d5c;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+            }
+        """.trimIndent(),
+        "xml" to """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <config>
+                <app name="ZorvAI">
+                    <version>1.0</version>
+                    <features>
+                        <feature>terminal</feature>
+                        <feature>code</feature>
+                    </features>
+                </app>
+            </config>
+        """.trimIndent(),
+        "c" to """
+            #include <stdio.h>
+
+            int main() {
+                printf("Hello from C!\\n");
+                return 0;
+            }
+        """.trimIndent(),
+        "java" to """
+            public class Main {
+                public static void main(String[] args) {
+                    System.out.println("Hello from Java!");
+                }
+            }
+        """.trimIndent()
+    )
+
+    // 图形界面背景
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF1a1a2e))
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // 顶部状态栏
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .background(Color(0xFF2d2d44))
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "ZorvAI 终端桌面",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                TextButton(onClick = onOpenTerminal) {
+                    Text("终端", color = Color(0xFF6FA8FF))
+                }
+                TextButton(onClick = { showDesktopInstaller.value = !showDesktopInstaller.value }) {
+                    Text(if (isDesktopInstalled) "重新安装" else "安装桌面环境", color = Color(0xFF7BE0A0))
+                }
+                if (isDesktopInstalled) {
+                    TextButton(onClick = {
+                        scope.launch {
+                            val result = QuroDesktopInstaller.startDesktop(context)
+                            delay(2000)
+                            vncUrl = "http://localhost:6080/vnc.html"
+                            showVncView = true
+                        }
+                    }) {
+                        Text("启动VNC", color = Color(0xFF6FA8FF))
+                    }
+                }
+            }
+
+            // 主内容区域
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(16.dp)
+            ) {
+                // 左侧应用面板
+                Column(
+                    modifier = Modifier
+                        .width(200.dp)
+                        .fillMaxHeight()
+                        .background(Color(0xFF2d2d44))
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "应用列表",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 应用列表
+                    apps.forEach { (id, icon, label) ->
+                        DesktopLauncherAppItem(
+                            icon = icon,
+                            label = label,
+                            onClick = {
+                                val code = codeTemplates[id] ?: ""
+                                val language = when (id) {
+                                    "javascript" -> QuroLanguageRunner.Language.JAVASCRIPT
+                                    "python" -> QuroLanguageRunner.Language.PYTHON
+                                    "html" -> QuroLanguageRunner.Language.HTML
+                                    "json" -> QuroLanguageRunner.Language.JSON
+                                    "css" -> QuroLanguageRunner.Language.CSS
+                                    "xml" -> QuroLanguageRunner.Language.XML
+                                    "c" -> QuroLanguageRunner.Language.C
+                                    "java" -> QuroLanguageRunner.Language.JAVA
+                                    else -> QuroLanguageRunner.Language.UNKNOWN
+                                }
+                                onRunCode(code, language)
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // 右侧内容区域
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(Color(0xFF0C0C0C))
+                        .padding(16.dp)
+                ) {
+                    // 代码编辑区域标题
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "代码编辑器",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text(
+                            text = "选择左侧应用运行代码",
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 代码显示区域
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .background(Color(0xFF1e1e2e))
+                            .padding(16.dp)
+                    ) {
+                        if (showVncView) {
+                            // VNC WebView
+                            AndroidView(
+                                factory = { context ->
+                                    WebView(context).apply {
+                                        webViewClient = WebViewClient()
+                                        webChromeClient = WebChromeClient()
+                                        settings.javaScriptEnabled = true
+                                        settings.domStorageEnabled = true
+                                        settings.allowFileAccessFromFileURLs = true
+                                        settings.allowUniversalAccessFromFileURLs = true
+                                        settings.defaultTextEncodingName = "UTF-8"
+                                    }
+                                },
+                                update = { webView ->
+                                    webView.loadUrl(vncUrl)
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else if (showDesktopInstaller.value) {
+                            // 桌面环境安装界面
+                            Column {
+                                Text(
+                                    text = "Linux桌面环境安装",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "安装XFCE桌面环境和VNC服务器，提供完整的图形界面",
+                                    color = Color.Gray,
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "安装内容：\n• XFCE桌面环境\n• VNC服务器（TigerVNC）\n• 额外工具（dbus, xorg等）",
+                                    color = Color(0xFFD6D6D6),
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Row {
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                desktopInstallerState.value = QuroDesktopInstaller.DesktopState.Installing("安装中...")
+                                                QuroDesktopInstaller.install(context)
+                                                desktopInstallerState.value = QuroDesktopInstaller.DesktopState.Ready
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7BE0A0))
+                                    ) {
+                                        Text("安装桌面环境", color = Color.Black)
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                val result = QuroDesktopInstaller.startDesktop(context)
+                                                // 等待服务启动
+                                                delay(2000)
+                                                vncUrl = "http://localhost:6080/vnc.html"
+                                                showVncView = true
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6FA8FF))
+                                    ) {
+                                        Text("启动VNC", color = Color.White)
+                                    }
+                                }
+                            }
+                        } else {
+                            // 代码显示区域
+                            Text(
+                                text = "点击左侧应用图标运行示例代码\n\n支持的语言：\n• JavaScript\n• Python\n• HTML\n• JSON\n• CSS\n• XML\n• C/C++\n• Java\n\n代码运行结果显示在WebView中",
+                                color = Color(0xFFD6D6D6),
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 底部任务栏
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .background(Color(0xFF2d2d44))
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 开始按钮
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color(0xFF3d3d5c))
+                        .clickable { },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Apps,
+                        contentDescription = "开始",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // 快捷方式
+                DesktopLauncherQuickButton(
+                    icon = Icons.Default.Terminal,
+                    label = "终端",
+                    onClick = onOpenTerminal
+                )
+
+                DesktopLauncherQuickButton(
+                    icon = Icons.Default.Code,
+                    label = "代码",
+                    onClick = { }
+                )
+
+                DesktopLauncherQuickButton(
+                    icon = Icons.Default.Web,
+                    label = "浏览器",
+                    onClick = { }
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // 系统托盘
+                Text(
+                    text = "ZorvAI Desktop",
+                    color = Color.White,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 桌面启动器应用项目
+ */
+@Composable
+fun DesktopLauncherAppItem(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color(0xFF3d3d5c))
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = Color.White,
+            modifier = Modifier.size(20.dp)
+        )
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Text(
+            text = label,
+            color = Color.White,
+            fontSize = 14.sp
+        )
+    }
+}
+
+/**
+ * 桌面启动器快捷按钮
+ */
+@Composable
+fun DesktopLauncherQuickButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color(0xFF3d3d5c))
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = Color.White,
+            modifier = Modifier.size(16.dp)
+        )
+
+        Spacer(modifier = Modifier.width(4.dp))
+
+        Text(
+            text = label,
+            color = Color.White,
+            fontSize = 12.sp
+        )
+    }
+}

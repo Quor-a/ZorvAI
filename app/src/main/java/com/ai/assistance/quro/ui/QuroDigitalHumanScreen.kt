@@ -11,10 +11,14 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
+import android.annotation.SuppressLint
 import android.view.View
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.ConsoleMessage
 import com.ai.assistance.quro.util.QuroDiag
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -77,6 +81,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sqrt
+import org.json.JSONObject
 
 /**
  * 数字人屏幕（对应「二、3D 全离线：LLM+ASR+TTS+A2BS+渲染都在手机」）。
@@ -340,6 +345,31 @@ private fun DigitalHumanStage(
 ) {
     val cs = MaterialTheme.colorScheme
     val (pLabel, pColor) = phaseMeta(phase)
+
+    // Live2D 全屏模式
+    if (avatarSource == "live2d") {
+        Box(Modifier.fillMaxSize().background(cs.background)) {
+            Live2DAvatarView(mouthOpen = mouthOpen, phase = phase)
+            // 状态覆盖层
+            Surface(
+                color = cs.surface.copy(alpha = 0.85f),
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+            ) {
+                Column(
+                    Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Surface(color = pColor.copy(alpha = 0.14f), shape = RoundedCornerShape(999.dp)) {
+                        Text(pLabel, fontSize = 12.sp, color = pColor, modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp), fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(statusText, fontSize = 13.sp, color = Muted, maxLines = 2, textAlign = TextAlign.Center)
+                }
+            }
+        }
+        return
+    }
+
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
@@ -447,6 +477,7 @@ private fun DigitalHumanSettingsCard(
         Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = dh.avatarSource == "builtin", onClick = { onAvatarChange("builtin") }, label = { Text("内置 2.5D") })
             FilterChip(selected = dh.avatarSource == "custom", onClick = { onAvatarChange("custom") }, label = { Text("自定义 GLB") })
+            FilterChip(selected = dh.avatarSource == "live2d", onClick = { onAvatarChange("live2d") }, label = { Text("Live2D") })
         }
         if (dh.avatarSource == "custom") {
             Spacer(Modifier.height(10.dp))
@@ -462,6 +493,10 @@ private fun DigitalHumanSettingsCard(
             }
             Spacer(Modifier.height(4.dp))
             Text("自定义 3D 预览已内置离线 Three.js 引擎（assets/www/three/），无需联网即可渲染。", fontSize = 11.sp, color = Muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        }
+        if (dh.avatarSource == "live2d") {
+            Spacer(Modifier.height(8.dp))
+            Text("Live2D 模型全屏显示，口型随语音同步。默认搭载 Hiyori 模型（Live2D Open Software License）。", fontSize = 11.sp, color = Muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         }
     }
 }
@@ -924,3 +959,137 @@ if(document.readyState==='complete'||document.readyState==='interactive'){setTim
   .replace("__DRACO__", dracoPath)
   .replace("__ORBIT__", orbit)
   .replace("__B64__", base64)
+
+
+// ==================== Live2D Avatar ====================
+
+/**
+ * Live2D 头像：复用 GLB 的 WebView 画布，加载 PixiJS + pixi-live2d-display 渲染 Live2D 模型。
+ * 与 GLBAvatarView 共享同一个 WebView 实例，只是加载不同的 HTML 页面。
+ */
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun Live2DAvatarView(mouthOpen: Float, phase: String) {
+    val ctx = LocalContext.current
+    val main = remember { Handler(Looper.getMainLooper()) }
+    var status by remember { mutableStateOf("正在加载 Live2D 模型…") }
+    var modelReady by remember { mutableStateOf(false) }
+    val webViewRef = remember { mutableStateOf<WebView?>(null) }
+
+    val bridge = remember {
+        Live2dBridge(
+            onReady = { emo, _, diag ->
+                main.post {
+                    modelReady = true
+                    status = if (diag.isNotBlank()) "就绪 · $diag" else "就绪 · 模型已加载"
+                }
+            },
+            onEmotion = { name -> main.post { status = "情绪：$name" } },
+            onErrorCb = { msg -> main.post { status = "加载失败：$msg" } },
+            onLogCb = { msg -> /* no-op for digital human */ },
+        )
+    }
+
+    fun callJs(js: String) {
+        webViewRef.value?.evaluateJavascript(js, null)
+    }
+
+    // 根据 phase 驱动 Live2D 情绪/口型
+    LaunchedEffect(phase, mouthOpen) {
+        if (!modelReady) return@LaunchedEffect
+        val emo = when (phase) {
+            "listening" -> "neutral"
+            "thinking" -> "thinking"
+            "speaking" -> "happy"
+            "error" -> "angry"
+            else -> "neutral"
+        }
+        callJs("window.ZorvLive2D.setEmotion('$emo')")
+        // 口型：speaking 时用 mouthOpen 值，否则归零
+        val mouth = if (phase == "speaking") mouthOpen.coerceIn(0f, 1f) else 0f
+        callJs("window.ZorvLive2D.setMouth($mouth)")
+    }
+
+    // 复用 GLB 的 WebView 画布（同一个 WebView 实例）
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { c ->
+                WebView(c.applicationContext).apply {
+                    // 强制硬件加速层：与 GLBAvatarView 对齐
+                    setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.allowFileAccess = true
+                    @Suppress("DEPRECATION")
+                    settings.allowFileAccessFromFileURLs = true
+                    @Suppress("DEPRECATION")
+                    settings.allowUniversalAccessFromFileURLs = true
+                    setBackgroundColor(0) // 透明背景，与 GLB 对齐
+                    addJavascriptInterface(bridge, "ZorvBridge")
+                    webViewClient = object : WebViewClient() {
+                        override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                            val url = request?.url?.toString() ?: return null
+                            if (url.startsWith(LIVE2D_BASE)) {
+                                val assetPath = "live2d/" + url.removePrefix(LIVE2D_BASE)
+                                return try {
+                                    val `is` = c.assets.open(assetPath)
+                                    WebResourceResponse(
+                                        mimeFor(assetPath), "utf-8", 200, "OK",
+                                        mapOf("Access-Control-Allow-Origin" to "*"), `is`,
+                                    )
+                                } catch (_: Exception) {
+                                    null
+                                }
+                            }
+                            return null
+                        }
+                        override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                            bridge.reportError("${description ?: "加载错误"} ($errorCode)")
+                        }
+                    }
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onConsoleMessage(m: ConsoleMessage?): Boolean {
+                            m?.let { bridge.reportLog("[${it.lineNumber()}] ${it.message()}") }
+                            return true
+                        }
+                    }
+                    // 加载 Live2D 页面（与 GLB 共享同一个 WebView 实例）
+                    val html = c.assets.open("live2d/index.html").bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    loadDataWithBaseURL(LIVE2D_BASE, html, "text/html", "utf-8", null)
+                }.also { webViewRef.value = it }
+            },
+            onRelease = { it.destroy() },
+        )
+        // 加载状态
+        if (!modelReady) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                modifier = Modifier.align(Alignment.Center).padding(32.dp),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text(
+                    status,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+        }
+    }
+}
+
+// Live2D WebView 常量
+private const val LIVE2D_BASE = "https://live2d.local/live2d/"
+
+private fun mimeFor(path: String): String = when {
+    path.endsWith(".html", true) -> "text/html"
+    path.endsWith(".js", true) -> "application/javascript"
+    path.endsWith(".json", true) -> "application/json"
+    path.endsWith(".png", true) -> "image/png"
+    path.endsWith(".jpg", true) || path.endsWith(".jpeg", true) -> "image/jpeg"
+    path.endsWith(".moc3", true) -> "application/octet-stream"
+    path.endsWith(".exp3.json", true) -> "application/json"
+    path.endsWith(".motion3.json", true) -> "application/json"
+    else -> "application/octet-stream"
+}
