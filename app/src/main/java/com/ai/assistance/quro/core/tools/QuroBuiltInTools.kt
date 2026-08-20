@@ -26,6 +26,19 @@ import com.ai.assistance.quro.core.tools.SwipeScreenTool
 import com.ai.assistance.quro.core.tools.InputTextTool
 import com.ai.assistance.quro.core.tools.ScrollScreenTool
 import com.ai.assistance.quro.core.tools.GlobalActionTool
+import com.ai.assistance.quro.core.tools.ScreenshotTool
+import com.ai.assistance.quro.core.tools.ScreenshotBase64Tool
+import com.ai.assistance.quro.core.tools.VisualAnalysisTool
+import com.ai.assistance.quro.core.tools.TakePhotoTool
+import com.ai.assistance.quro.core.tools.ScreenRecordTool
+import com.ai.assistance.quro.core.tools.VolumeControlTool
+import com.ai.assistance.quro.core.tools.BrightnessControlTool
+import com.ai.assistance.quro.core.tools.WiFiControlTool
+import com.ai.assistance.quro.core.tools.BluetoothControlTool
+import com.ai.assistance.quro.core.tools.NotificationControlTool
+import com.ai.assistance.quro.core.tools.AirplaneModeTool
+import com.ai.assistance.quro.core.tools.ScreenRotationTool
+import com.ai.assistance.quro.core.tools.OpenAppTool
 import com.ai.assistance.quro.core.tools.ShizukuExecTool
 import com.ai.assistance.quro.core.tools.ShizukuRootExecTool
 import com.ai.assistance.quro.core.tools.FreezeAppTool
@@ -279,6 +292,22 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(AiKeyboardSendTool())
     r.register(ScrollScreenTool())
     r.register(GlobalActionTool())
+    // ═════════════ 屏幕视觉双模感知（截图+视觉分析）══════════════
+    r.register(ScreenshotTool())           // 截图并保存文件
+    r.register(ScreenshotBase64Tool())     // 截图返回Base64（用于视觉模型）
+    r.register(VisualAnalysisTool())       // 截图+视觉模型分析
+    // ═════════════ 系统级控制动作（一等公民）══════════════
+    r.register(TakePhotoTool())            // 拍照
+    r.register(ScreenRecordTool())         // 录屏
+    r.register(VolumeControlTool())        // 音量控制
+    r.register(BrightnessControlTool())    // 亮度控制
+    r.register(WiFiControlTool())          // WiFi控制
+    r.register(BluetoothControlTool())     // 蓝牙控制
+    r.register(NotificationControlTool())  // 通知栏控制
+    r.register(AirplaneModeTool())         // 飞行模式
+    r.register(ScreenRotationTool())       // 屏幕旋转
+    r.register(SetTimerTool())             // 倒计时
+    r.register(OpenAppTool())              // 打开应用
     // 文件知识库（Path ②）：本地文档检索 + 写入，零基建覆盖日常知识检索
     r.register(KnowledgeSearchTool())
     r.register(KnowledgeAddTool())

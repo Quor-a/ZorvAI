@@ -165,6 +165,24 @@ object QuroToolUsageHints {
         "scroll_screen" to "「往下滚」「滚动列表」都调用",
         "global_action" to "「返回桌面」「下拉通知栏」「展开通知」「下拉状态栏/快捷设置」「截个图」「最近任务」「锁屏」等系统全局动作都调用",
 
+        // ── 屏幕视觉双模感知 ──
+        "screenshot" to "「截个图」「截图保存」「把屏幕截下来」都调用——返回截图文件路径",
+        "screenshot_base64" to "「截图发给视觉模型」「截屏分析」都调用——返回Base64编码的图片",
+        "visual_analysis" to "「看看屏幕上是什么」「分析这个页面」「屏幕上有什么按钮/文字/图标」都调用——当read_screen节点树不够用时（游戏/WebView/Flutter/自绘UI），用视觉模型分析截图",
+
+        // ── 系统级控制动作 ──
+        "take_photo" to "「拍照」「打开相机拍一张」「帮我拍照」都调用",
+        "screen_record" to "「录屏」「开始录像」「停止录屏」都调用",
+        "volume_control" to "「调高音量」「静音」「音量调到最大」「把声音关小」都调用",
+        "brightness_control" to "「调亮屏幕」「亮度调高」「开自动亮度」「屏幕太暗了」都调用",
+        "wifi_control" to "「开WiFi」「关掉WiFi」「WiFi开一下」都调用",
+        "bluetooth_control" to "「开蓝牙」「关蓝牙」「蓝牙开一下」都调用",
+        "notification_control" to "「下拉通知栏」「收起通知」「清掉通知」都调用",
+        "airplane_mode" to "「开飞行模式」「关飞行模式」「飞行模式开一下」都调用",
+        "screen_rotation" to "「自动旋转屏幕」「锁竖屏」「锁横屏」都调用",
+        "set_timer" to "「倒计时5分钟」「设个计时器」「煮面计时」都调用",
+        "open_app" to "「打开XX应用」「启动XX」都调用（传包名）",
+
         // ── 媒体 ──
         "local_music_player" to "「放首歌」「打开音乐播放器」「播我的本地音乐」都调用",
         "local_video_player" to "「播这个视频」「打开视频播放器」都调用",

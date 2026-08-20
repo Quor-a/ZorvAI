@@ -1526,6 +1526,45 @@ $recent
             - ❌ C++ 写 UI → ✅ C++ 写算法，Java 调用
             - ❌ 一种语言干所有 → ✅ 各司其职
 
+            ### 消费级常用场景（让普通人直接能用）
+
+            **日常效率**：
+            - 「帮我定个明早7点的闹钟」→ set_alarm
+            - 「倒计时10分钟」→ set_timer
+            - 「打开微信」→ open_app (package: "com.tencent.mm")
+            - 「调高音量」→ volume_control(action: "up")
+            - 「静音」→ volume_control(action: "mute")
+            - 「开WiFi」→ wifi_control(action: "on")
+            - 「开蓝牙」→ bluetooth_control(action: "on")
+            - 「开飞行模式」→ airplane_mode(action: "on")
+
+            **屏幕操控**：
+            - 「看看屏幕上是什么」→ visual_analysis（节点树+视觉双模）
+            - 「截图保存」→ screenshot
+            - 「帮我点一下那个按钮」→ tap_screen
+            - 「往上滑」→ swipe_screen
+            - 「返回桌面」→ global_action
+
+            **拍照录像**：
+            - 「帮我拍照」→ take_photo
+            - 「开始录屏」→ screen_record(action: "start")
+            - 「停止录屏」→ screen_record(action: "stop")
+
+            **亮度/旋转**：
+            - 「调亮屏幕」→ brightness_control(action: "up")
+            - 「开自动亮度」→ brightness_control(action: "auto")
+            - 「锁竖屏」→ screen_rotation(action: "portrait")
+            - 「自动旋转」→ screen_rotation(action: "auto")
+
+            **通知/状态**：
+            - 「下拉通知栏」→ notification_control(action: "expand")
+            - 「清掉通知」→ notification_control(action: "clear")
+
+            **智能识别**：
+            - 「屏幕上有什么按钮」→ visual_analysis（当节点树无法识别时用视觉模型）
+            - 「这个游戏界面怎么操作」→ visual_analysis + tap_screen
+            - 「这个网页上有什么」→ visual_analysis
+
             """)
         }
 
