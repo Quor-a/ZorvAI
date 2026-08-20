@@ -74,14 +74,9 @@ set(MNN_LLM_BUILD_DEMO OFF CACHE BOOL "Build LLM demo" FORCE)
 # 添加 MNN 主项目
 add_subdirectory(${MNN_SOURCE_DIR} ${QURO_MNN_BINARY_DIR})
 
-# 【QuroAI 构建补丁】把 qwenVideoProcess 兜底桩挂到 MNN 的 llm 目标。
-# 上游 omni.cpp 在 LLM_SUPPORT_VISION/MNN_BUILD_OPENCV 关闭时把 qwenVideoProcess 整函数
-# 编译掉，但同文件 videoProcess 仍调用它，导致 libMNN.so 链接 undefined symbol。
-# 本项目 tarball 拉取 MNN、不含 OpenCV 子模块，无法开启 OpenCV，故在此提供稳定符号。
-# 桩与 omni.cpp.o 同属 llm 目标（链接进 libMNN.so），直接消解引用。
-if(TARGET llm)
-    target_sources(llm PRIVATE ${CMAKE_CURRENT_LIST_DIR}/src/main/cpp/quro_omni_video_stub.cpp)
-endif()
+# 【QuroAI 构建补丁】qwenVideoProcess 符号修复。
+# MNN 上游已内置该符号，无需额外 stub。保留注释以供追溯。
+# 若未来上游再次移除，可恢复下方 stub 定义。
 
 # 包含 JNI 绑定代码（只包含我们需要的文件）
 add_library(
