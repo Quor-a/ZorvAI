@@ -811,9 +811,29 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-**最新版本：`v1.0.60`**（2026-08-20，含离线 MNN/llama.cpp 引擎 + 终端集成 + VNC桌面环境 + Brython Python引擎 + WorkbenchTool + 系统提示词更新）：
+**最新版本：`v1.0.61`**（2026-08-20，屏幕视觉双模 + 系统级控制动作 + 消费级闭环）：
 
-- 🟢 **[ZorvAI-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.60/ZorvAI-full-debug.apk)**（约 346MB，含离线引擎，**最新**）
+- 🟢 **[ZorvAI-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.61/ZorvAI-full-release.apk)**（约 334MB，Release 签名，**最新**）
+- 🟢 **[ZorvAI-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.61/ZorvAI-full-debug.apk)**（约 347MB，Debug 版本）
+
+### v1.0.61 新增功能
+
+**屏幕视觉双模感知**：
+- `screenshot` - 截图保存文件
+- `screenshot_base64` - 截图返回 Base64（用于视觉模型）
+- `visual_analysis` - 截图 + 视觉模型分析（游戏/WebView/Flutter 场景）
+
+**系统级控制动作（一等公民）**：
+- `take_photo` - 拍照
+- `screen_record` - 录屏
+- `volume_control` - 音量控制
+- `brightness_control` - 亮度控制
+- `wifi_control` / `bluetooth_control` - WiFi/蓝牙开关
+- `notification_control` - 通知栏控制
+- `airplane_mode` - 飞行模式
+- `screen_rotation` - 屏幕旋转
+- `set_timer` - 倒计时
+- `open_app` - 打开应用
 
 > 💡 完整（含离线引擎）APK 体积较大；受 GitLab / Gitee 附件体积限制，大体积主程序包**仅 GitHub Releases 提供**，请勿到 GitLab / Gitee 找主程序 APK。所有历史版本（v1.0.2 起）与受控端浏览器、ACI 核心库 AAR 均在 [Releases 页面](https://github.com/Quor-a/ZorvAI/releases) 提供。
 
