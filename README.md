@@ -90,7 +90,7 @@
 
 | 能力域 | 关键能力 |
 |--------|----------|
-| **对话 UI（Compose）** | ChatScreen 对话框、PersonaBar 人格卡、PermissionModeBar（「AI 自动保存记忆」+「深度思考」并排胶囊，置于输入框**下方**）、对话框内 **IDE 能力入口**（代码编辑器 / 终端 / 工具箱 / 文件 经输入框「+」菜单与 `ui_open_*` 唤起，不叠加冗余按钮）、**mermaid 围栏即画即渲染**（AI 或用户写的 ` ```mermaid ` 代码块离线渲染成可缩放矢量图）、**AI 自写代码运行（run_code）：AI 直接写/跑代码，html 网页工件在对话框内联实时预览**（手机 AI IDE，可视化产出融入内容区）、回到底部浮动按钮、全屏预览、Markdown 与代码块渲染 |
+| **对话 UI（Compose）** | ChatScreen 对话框、PersonaBar 人格卡、PermissionModeBar（「AI 自动保存记忆」+「深度思考」并排胶囊，置于输入框**下方**）、对话框内 **IDE 能力入口**（代码编辑器 / 终端 / 工具箱 / 文件 经输入框「+」菜单与 `ui_open_*` 唤起，不叠加冗余按钮）、**支持 7 种编程语言**（JavaScript、Python、HTML、JSON、CSS、XML、C/C++/Java）、**mermaid 围栏即画即渲染**（AI 或用户写的 ` ```mermaid ` 代码块离线渲染成可缩放矢量图）、**AI 自写代码运行（run_code）：AI 直接写/跑代码，html 网页工件在对话框内联实时预览**（手机 AI IDE，可视化产出融入内容区）、回到底部浮动按钮、全屏预览、Markdown 与代码块渲染 |
 | **Agent 核心** | 多会话隔离（`liveBuffers` 按会话独立）、种子快照（`convBase`）、显示刷新闸门（`canUpdateDisplay`）、多轮 `[第N轮]` hidden 标记防串台、系统提示词构建、工具注册表（`QuroToolRegistry.active`）、技能系统（`QuroSkill` → 注册为 `skill__{name}` 工具） |
 | **工具 / 能力层** | **120+ 内置工具**（`buildQuroRegistry` 注册 123 项 + 导入工具 + 可调用技能）：无障碍 `input_text`/`tap_screen`/`read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text`/`ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
 | **离线 LLM 引擎** | 应用内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 剥离、本地工具调用、会话复用；离线也能对话 |
@@ -121,7 +121,14 @@
 
 ### 1.5 对话框 IDE 能力（v1.0.56 重构 → v1.0.57 AI IDE 能力地图）
 对话框本身就是一个可自由使用的轻量 IDE，**不靠额外按钮堆叠**——IDE 级能力直接复用输入框「+」菜单与 AI 侧 `ui_open_*` 工具唤起，避免与已有入口重复：
-- **代码**：内置 CodeMirror 离线代码编辑器（JavaScript / Python / HTML / JSON / CSS / XML / C·C++·Java 语法高亮），「运行」走 App 内置 QuickJS 原生沙箱（JS）或系统 / Termux 的 `python3` 离线执行（入口：输入框「+」→ 工具箱，或 `ui_open_editor`）
+- **代码**：内置 CodeMirror 离线代码编辑器，支持以下语言的语法高亮和运行：
+  - **JavaScript**：App 内置 QuickJS 原生沙箱离线执行
+  - **Python**：内置 Brython 引擎，无需 Termux 即可在对话框运行
+  - **HTML**：完整 HTML 源码渲染为可交互网页（支持内联样式/脚本、SVG、Three.js 三维）
+  - **JSON**：数据/配置可视化
+  - **CSS**：样式代码支持
+  - **XML**：数据/配置文件支持
+  - **C/C++/Java**：语法高亮和算法逻辑撰写（端侧沙箱不能直接编译，需借助工作区或 ACI 构建台）
 - **终端**：打开 proot / 本地 Shell，可直接跑命令、查设备环境（入口：输入框「+」→ 终端，或 `ui_open_terminal`）
 - **工具箱**：文件 / 包名 / 浏览器等内置工具集合（入口：输入框「+」→ 工具箱，或 `ui_open_toolbox`）
 - **文件**：直接附件 / 上传到对话框（入口：输入框「+」→ 上传，或 `ui_open_upload`）
@@ -804,9 +811,9 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-**最新版本：`v1.0.57`**（2026-08-18，含离线 MNN/llama.cpp 引擎）：
+**最新版本：`v1.0.60`**（2026-08-20，含离线 MNN/llama.cpp 引擎 + 终端集成 + VNC桌面环境 + Brython Python引擎 + WorkbenchTool + 系统提示词更新）：
 
-- 🟢 **[QuroAI-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.57/QuroAI-full-debug.apk)**（约 340MB，含离线引擎，**最新**）
+- 🟢 **[ZorvAI-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.60/ZorvAI-full-debug.apk)**（约 346MB，含离线引擎，**最新**）
 
 > 💡 完整（含离线引擎）APK 体积较大；受 GitLab / Gitee 附件体积限制，大体积主程序包**仅 GitHub Releases 提供**，请勿到 GitLab / Gitee 找主程序 APK。所有历史版本（v1.0.2 起）与受控端浏览器、ACI 核心库 AAR 均在 [Releases 页面](https://github.com/Quor-a/ZorvAI/releases) 提供。
 
