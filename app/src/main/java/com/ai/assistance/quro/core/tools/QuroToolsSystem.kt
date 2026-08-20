@@ -701,8 +701,7 @@ pre { margin: 0; overflow-x: auto; }
 <div id="output"></div>
 <div id="code-section"><div id="code-label">源码</div><pre id="code-display"></pre></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.13.1/brython.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.13.1/brython_stdlib.js"></script>
+<script src="file:///android_asset/www/brython.min.js"></script>
 <script id="python-code" type="text/python">$escaped</script>
 <script>
 var _out = document.getElementById('output');
@@ -722,6 +721,243 @@ function _print() {
     _out.appendChild(div);
     _out.scrollTop = _out.scrollHeight;
 }
+
+// 提供 http_request 函数给 Python 调用
+function http_request(url, method, headers, body) {
+    return new Promise(function(resolve, reject) {
+        var xhr = new XMLHttpRequest();
+        xhr.open(method || 'GET', url, true);
+        if (headers) {
+            for (var key in headers) {
+                xhr.setRequestHeader(key, headers[key]);
+            }
+        }
+        xhr.onload = function() {
+            resolve({
+                status: xhr.status,
+                statusText: xhr.statusText,
+                response: xhr.responseText,
+                headers: xhr.getAllResponseHeaders()
+            });
+        };
+        xhr.onerror = function() {
+            reject(new Error('Network request failed'));
+        };
+        xhr.send(body || null);
+    });
+}
+
+// 提供同步版本的 http_request（注意：会阻塞页面渲染）
+function http_request_sync(url, method, headers, body) {
+    var xhr = new XMLHttpRequest();
+    xhr.open(method || 'GET', url, false); // false 表示同步
+    if (headers) {
+        for (var key in headers) {
+            xhr.setRequestHeader(key, headers[key]);
+        }
+    }
+    xhr.send(body || null);
+    return {
+        status: xhr.status,
+        statusText: xhr.statusText,
+        response: xhr.responseText,
+        headers: xhr.getAllResponseHeaders()
+    };
+}
+
+// 预加载 Python 完整环境模块
+var _pythonEnv = `
+import json
+import sys
+import os
+import re
+import math
+import datetime
+import collections
+import itertools
+import functools
+import string
+import io
+import hashlib
+import base64
+import urllib.parse
+import time
+import random
+import uuid
+import decimal
+import fractions
+import statistics
+import textwrap
+import unicodedata
+import xml.etree.ElementTree as ET
+import csv
+import struct
+import difflib
+import tempfile
+import glob
+import fnmatch
+import operator
+import contextlib
+import abc
+import copy
+import pprint
+import warnings
+import traceback
+import logging
+
+# 增强的 print 函数
+_original_print = print
+
+def enhanced_print(*args, **kwargs):
+    sep = kwargs.get('sep', ' ')
+    end = kwargs.get('end', '\\n')
+    file = kwargs.get('file', sys.stdout)
+    formatted_args = []
+    for arg in args:
+        if isinstance(arg, (dict, list, set, tuple)):
+            formatted_args.append(json.dumps(arg, indent=2, ensure_ascii=False))
+        else:
+            formatted_args.append(str(arg))
+    message = sep.join(formatted_args) + end
+    _original_print(message, end='', file=file)
+
+print = enhanced_print
+
+# 工具函数
+def json_pretty(obj, indent=2):
+    return json.dumps(obj, indent=indent, ensure_ascii=False, sort_keys=True)
+
+def json_compact(obj):
+    return json.dumps(obj, ensure_ascii=False, separators=(',', ':'))
+
+def string_reverse(s): return s[::-1]
+def string_word_count(s): return len(s.split())
+def string_char_frequency(s): return dict(sorted(((char, s.count(char)) for char in set(s)), key=lambda x: x[1], reverse=True))
+def factorial(n): return math.factorial(n)
+def is_prime(n): return all(n % i != 0 for i in range(2, int(math.sqrt(n)) + 1)) if n > 1 else False
+def gcd(a, b): return math.gcd(a, b)
+def lcm(a, b): return abs(a * b) // math.gcd(a, b)
+def now(): return datetime.datetime.now().isoformat()
+def today(): return datetime.date.today().isoformat()
+def timestamp(): return int(time.time())
+def flatten(lst): return [item for sublist in lst for item in (sublist if isinstance(sublist, list) else [sublist])]
+def chunk(lst, size): return [lst[i:i+size] for i in range(0, len(lst), size)]
+def unique(lst): return list(dict.fromkeys(lst))
+def dict_merge(*dicts): return {k: v for d in dicts for k, v in d.items()}
+def dict_invert(d): return {v: k for k, v in d.items()}
+
+def inspect(obj):
+    return {
+        'type': type(obj).__name__,
+        'value': str(obj)[:100],
+        'repr': repr(obj)[:100],
+        'id': id(obj),
+        'dir': dir(obj)[:15]
+    }
+
+def type_name(obj):
+    return type(obj).__name__
+
+print("✅ ZorvAI Python 完整环境已加载")
+print(f"📦 Python 版本: {sys.version}")
+print("🛠️ 工具函数: 已加载")
+`;
+
+// 预加载 network.py 模块
+var _networkModule = `
+import json
+from browser import window
+
+class Response:
+    def __init__(self, xhr_response):
+        self.status_code = xhr_response['status']
+        self.status_text = xhr_response['statusText']
+        self.text = xhr_response['response']
+        self.headers = self._parse_headers(xhr_response['headers'])
+        
+    def _parse_headers(self, headers_str):
+        headers = {}
+        if headers_str:
+            for line in headers_str.split('\\n'):
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    headers[key.strip()] = value.strip()
+        return headers
+    
+    def json(self):
+        return json.loads(self.text)
+    
+    def __repr__(self):
+        return f"<Response [{self.status_code}]>"
+
+class Session:
+    def __init__(self):
+        self.headers = {}
+        self.timeout = 10
+    
+    def get(self, url, **kwargs):
+        return self._request('GET', url, **kwargs)
+    
+    def post(self, url, **kwargs):
+        return self._request('POST', url, **kwargs)
+    
+    def put(self, url, **kwargs):
+        return self._request('PUT', url, **kwargs)
+    
+    def delete(self, url, **kwargs):
+        return self._request('DELETE', url, **kwargs)
+    
+    def patch(self, url, **kwargs):
+        return self._request('PATCH', url, **kwargs)
+    
+    def _request(self, method, url, **kwargs):
+        headers = kwargs.get('headers', {})
+        data = kwargs.get('data', None)
+        json_data = kwargs.get('json', None)
+        timeout = kwargs.get('timeout', self.timeout)
+        
+        merged_headers = {**self.headers, **headers}
+        
+        if json_data is not None:
+            merged_headers['Content-Type'] = 'application/json'
+            data = json.dumps(json_data)
+        
+        try:
+            xhr = window.XMLHttpRequest.new()
+            xhr.open(method, url, False)
+            
+            for key, value in merged_headers.items():
+                xhr.setRequestHeader(key, value)
+            
+            xhr.send(data if data else None)
+            
+            return Response({
+                'status': xhr.status,
+                'statusText': xhr.statusText,
+                'response': xhr.responseText,
+                'headers': xhr.getAllResponseHeaders()
+            })
+        except Exception as e:
+            raise Exception(f"请求失败: {e}")
+
+session = Session()
+
+def get(url, **kwargs):
+    return session.get(url, **kwargs)
+
+def post(url, **kwargs):
+    return session.post(url, **kwargs)
+
+def put(url, **kwargs):
+    return session.put(url, **kwargs)
+
+def delete(url, **kwargs):
+    return session.delete(url, **kwargs)
+
+def patch(url, **kwargs):
+    return session.patch(url, **kwargs)
+`;
+
 var _codeEl = document.getElementById('python-code');
 var _codeText = _codeEl.textContent || _codeEl.innerText;
 var _codeDisplay = document.getElementById('code-display');
@@ -737,6 +973,12 @@ function _highlightPy(code) {
     return code;
 }
 try {
+    // 预加载 Python 完整环境模块
+    eval(_pythonEnv);
+    
+    // 预加载 network 模块
+    eval(_networkModule);
+    
     brython({stdout: _print, stderr: function(s) {
         var div = document.createElement('div');
         div.className = 'stderr';
@@ -746,7 +988,7 @@ try {
 } catch(e) {
     var div = document.createElement('div');
     div.className = 'stderr';
-    div.textContent = 'Brython 加载失败: ' + e.message + '（需要网络连接）';
+    div.textContent = 'Brython 加载失败: ' + e.message;
     _out.appendChild(div);
 }
 </script>

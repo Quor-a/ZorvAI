@@ -5150,6 +5150,10 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                             settings.loadWithOverviewMode = true
                             settings.setSupportZoom(true)
                             settings.builtInZoomControls = false
+                            settings.setSupportMultipleWindows(false)
+                            settings.setSupportZoom(true)
+                            settings.builtInZoomControls = true
+                            settings.displayZoomControls = false
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                             }
@@ -5231,13 +5235,32 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                         shape = RoundedCornerShape(6.dp),
                     ) {
                         Column(Modifier.padding(4.dp)) {
-                            Text(
-                                "✅ 运行结果（交互式）",
-                                fontSize = 11.sp,
-                                color = Muted,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                            )
+                            val context = LocalContext.current
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "✅ 运行结果（交互式）",
+                                    fontSize = 11.sp,
+                                    color = Muted,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Row {
+                                    // 下载按钮
+                                    IconButton(onClick = {
+                                        val fileName = "quro_html_${System.currentTimeMillis()}.html"
+                                        saveCodeToDownloads(context, fileName, result)
+                                    }, modifier = Modifier.size(24.dp)) {
+                                        LucideIcon("download", "下载HTML", Modifier.size(14.dp), tint = Muted)
+                                    }
+                                    // 全屏按钮
+                                    IconButton(onClick = { showFullscreen = true }, modifier = Modifier.size(24.dp)) {
+                                        LucideIcon("maximize", "全屏预览", Modifier.size(14.dp), tint = Muted)
+                                    }
+                                }
+                            }
                             Box(
                                 Modifier
                                     .fillMaxWidth()
@@ -5249,8 +5272,16 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                                     WebView(context).apply {
                                         settings.javaScriptEnabled = true
                                         settings.domStorageEnabled = true
+                                        settings.databaseEnabled = true
                                         settings.allowContentAccess = true
+                                        settings.allowFileAccess = true
                                         settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                        settings.setSupportMultipleWindows(false)
+                                        settings.setSupportZoom(true)
+                                        settings.builtInZoomControls = true
+                                        settings.displayZoomControls = false
+                                        settings.useWideViewPort = true
+                                        settings.loadWithOverviewMode = true
                                         setBackgroundColor(android.graphics.Color.TRANSPARENT)
                                         layoutParams = ViewGroup.LayoutParams(
                                             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -5267,6 +5298,13 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                                                 }
                                             }
                                         }
+                                        webChromeClient = object : android.webkit.WebChromeClient() {
+                                            override fun onConsoleMessage(cm: android.webkit.ConsoleMessage?): Boolean {
+                                                cm ?: return super.onConsoleMessage(cm)
+                                                QuroDiag.log("WebView", "[${cm.sourceId()}:${cm.lineNumber()}] ${cm.message()}")
+                                                return true
+                                            }
+                                        }
                                         loadDataWithBaseURL("https://localhost/", result, "text/html", "UTF-8", null)
                                     }
                                 }, modifier = Modifier.fillMaxSize())
@@ -5275,6 +5313,7 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                     }
                 } else {
                     // 纯文本结果
+                    val context = LocalContext.current
                     Surface(
                         color = if (isErrorCode(result))
                             MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
@@ -5284,14 +5323,29 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                         shape = RoundedCornerShape(6.dp),
                     ) {
                         Column(Modifier.padding(10.dp)) {
-                            Text(
-                                if (isErrorCode(result))
-                                    "❌ 运行结果" else "✅ 运行结果",
-                                fontSize = 11.sp,
-                                color = if (isErrorCode(result))
-                                    MaterialTheme.colorScheme.error else Muted,
-                                fontWeight = FontWeight.SemiBold,
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    if (isErrorCode(result))
+                                        "❌ 运行结果" else "✅ 运行结果",
+                                    fontSize = 11.sp,
+                                    color = if (isErrorCode(result))
+                                        MaterialTheme.colorScheme.error else Muted,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                // 下载按钮（仅成功结果）
+                                if (!isErrorCode(result)) {
+                                    IconButton(onClick = {
+                                        val fileName = "quro_result_${System.currentTimeMillis()}.txt"
+                                        saveCodeToDownloads(context, fileName, result)
+                                    }, modifier = Modifier.size(24.dp)) {
+                                        LucideIcon("download", "下载结果", Modifier.size(14.dp), tint = Muted)
+                                    }
+                                }
+                            }
                             Spacer(Modifier.height(4.dp))
                             SelectionContainer {
                                 Text(

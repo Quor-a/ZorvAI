@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZorvAI 交互测试</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        .test-section {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            font-size: 18px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        input::placeholder, textarea::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background 0.3s;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+            min-height: 50px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .counter {
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+        }
+        .color-picker {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .color-box {
+            width: 40px;
+            height: 40px;
+            border-radius: 5px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.2s;
+        }
+        .color-box:hover {
+            transform: scale(1.1);
+        }
+        .color-box.selected {
+            border-color: white;
+            transform: scale(1.2);
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress {
+            height: 100%;
+            background: #4CAF50;
+            width: 0%;
+            transition: width 0.5s ease;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 ZorvAI 交互测试</h1>
+        
+        <div class="test-section">
+            <h2>1. 表单输入测试</h2>
+            <div class="form-group">
+                <label for="name">姓名:</label>
+                <input type="text" id="name" placeholder="输入你的名字...">
+            </div>
+            <div class="form-group">
+                <label for="email">邮箱:</label>
+                <input type="email" id="email" placeholder="输入邮箱地址...">
+            </div>
+            <div class="form-group">
+                <label for="message">消息:</label>
+                <textarea id="message" rows="3" placeholder="输入消息..."></textarea>
+            </div>
+            <button onclick="submitForm()">提交表单</button>
+            <div id="formResult" class="result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>2. 计数器测试</h2>
+            <div class="counter" id="counter">0</div>
+            <div style="text-align: center;">
+                <button onclick="decrement()">➖ 减少</button>
+                <button onclick="increment()">➕ 增加</button>
+                <button onclick="reset()">🔄 重置</button>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>3. 颜色选择器</h2>
+            <p>选择背景颜色:</p>
+            <div class="color-picker" id="colorPicker">
+                <div class="color-box" style="background: #FF6B6B" onclick="changeColor('#FF6B6B')"></div>
+                <div class="color-box" style="background: #4ECDC4" onclick="changeColor('#4ECDC4')"></div>
+                <div class="color-box" style="background: #45B7D1" onclick="changeColor('#45B7D1')"></div>
+                <div class="color-box" style="background: #96CEB4" onclick="changeColor('#96CEB4')"></div>
+                <div class="color-box" style="background: #FFEAA7" onclick="changeColor('#FFEAA7')"></div>
+                <div class="color-box" style="background: #DDA0DD" onclick="changeColor('#DDA0DD')"></div>
+            </div>
+            <div id="colorResult" class="result">当前颜色: #667eea</div>
+        </div>
+        
+        <div class="test-section">
+            <h2>4. 进度条测试</h2>
+            <div class="progress-bar">
+                <div class="progress" id="progress"></div>
+            </div>
+            <div style="text-align: center;">
+                <button onclick="startProgress()">▶️ 开始进度</button>
+                <button onclick="resetProgress()">🔄 重置</button>
+            </div>
+            <div id="progressResult" class="result">进度: 0%</div>
+        </div>
+        
+        <div class="test-section">
+            <h2>5. 时间显示</h2>
+            <div id="clock" style="font-size: 36px; text-align: center; font-family: 'Courier New', monospace;">
+                --:--:--
+            </div>
+            <div style="text-align: center; margin-top: 10px;">
+                <button onclick="updateClock()">🔄 更新时间</button>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>6. JavaScript 控制台测试</h2>
+            <button onclick="testConsole()">📤 输出到控制台</button>
+            <button onclick="testAlert()">⚠️ 弹出警告</button>
+            <button onclick="testPrompt()">💬 弹出输入框</button>
+            <div id="consoleResult" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        // 表单提交
+        function submitForm() {
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const message = document.getElementById('message').value;
+            
+            const result = `姓名: ${name || '未输入'}\n邮箱: ${email || '未输入'}\n消息: ${message || '未输入'}\n时间: ${new Date().toLocaleString()}`;
+            document.getElementById('formResult').textContent = result;
+            
+            // 清空表单
+            document.getElementById('name').value = '';
+            document.getElementById('email').value = '';
+            document.getElementById('message').value = '';
+        }
+        
+        // 计数器
+        let count = 0;
+        function increment() {
+            count++;
+            document.getElementById('counter').textContent = count;
+            document.getElementById('counter').style.color = count > 0 ? '#4CAF50' : count < 0 ? '#FF6B6B' : 'white';
+        }
+        
+        function decrement() {
+            count--;
+            document.getElementById('counter').textContent = count;
+            document.getElementById('counter').style.color = count > 0 ? '#4CAF50' : count < 0 ? '#FF6B6B' : 'white';
+        }
+        
+        function reset() {
+            count = 0;
+            document.getElementById('counter').textContent = count;
+            document.getElementById('counter').style.color = 'white';
+        }
+        
+        // 颜色选择器
+        function changeColor(color) {
+            document.body.style.background = color;
+            document.getElementById('colorResult').textContent = `当前颜色: ${color}`;
+            
+            // 更新选中状态
+            document.querySelectorAll('.color-box').forEach(box => {
+                box.classList.remove('selected');
+                if (box.style.background === color || box.style.backgroundColor === color) {
+                    box.classList.add('selected');
+                }
+            });
+        }
+        
+        // 进度条
+        let progressInterval;
+        function startProgress() {
+            resetProgress();
+            let progress = 0;
+            const progressBar = document.getElementById('progress');
+            const result = document.getElementById('progressResult');
+            
+            progressInterval = setInterval(() => {
+                progress += Math.random() * 10;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(progressInterval);
+                    result.textContent = '✅ 进度完成!';
+                }
+                
+                progressBar.style.width = `${progress}%`;
+                result.textContent = `进度: ${Math.round(progress)}%`;
+            }, 200);
+        }
+        
+        function resetProgress() {
+            clearInterval(progressInterval);
+            document.getElementById('progress').style.width = '0%';
+            document.getElementById('progressResult').textContent = '进度: 0%';
+        }
+        
+        // 时钟
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('zh-CN', { hour12: false });
+            document.getElementById('clock').textContent = timeString;
+        }
+        
+        // 每秒更新时钟
+        setInterval(updateClock, 1000);
+        updateClock();
+        
+        // JavaScript 控制台测试
+        function testConsole() {
+            console.log('这是一条日志消息');
+            console.warn('这是一条警告消息');
+            console.error('这是一条错误消息');
+            document.getElementById('consoleResult').textContent = '✅ 已输出到控制台，请查看日志';
+        }
+        
+        function testAlert() {
+            alert('这是一个警告框!');
+            document.getElementById('consoleResult').textContent = '✅ 警告框已显示';
+        }
+        
+        function testPrompt() {
+            const input = prompt('请输入一些文字:', '默认文本');
+            if (input !== null) {
+                document.getElementById('consoleResult').textContent = `你输入了: ${input}`;
+            } else {
+                document.getElementById('consoleResult').textContent = '❌ 用户取消了输入';
+            }
+        }
+        
+        // 初始测试
+        console.log('ZorvAI 交互测试已加载');
+        console.log('所有交互功能正常工作');
+    </script>
+</body>
+</html>
