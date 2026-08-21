@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" >
+
+    <uses-sdk android:minSdkVersion="24" />
+
+    <!--
+        ACI 核心库（aidl-aci-core）AndroidManifest.xml
+
+        ⚠️ 重要：本模块不声明任何 <permission> 权限！
+
+        权限架构设计：
+        1. 主应用（控制方）声明权限定义：
+           <permission android:name="ai.aci.permission.CALL" ... />
+           <permission android:name="ai.aci.permission.CALL_DANGEROUS" ... />
+           <permission android:name="ai.aci.permission.DISCOVER" ... />
+
+        2. 第三方受控端（如浏览器）只引用权限：
+           <uses-permission android:name="ai.aci.permission.CALL" />
+           <uses-permission android:name="ai.aci.permission.DISCOVER" />
+           <uses-permission android:name="ai.aci.permission.CALL_DANGEROUS" />
+
+        3. 原因：Android 不允许两个不同签名的 App 声明相同 <permission>。
+           主应用使用自定义证书签名，第三方使用 debug 证书，因此权限定义必须由主应用持有。
+
+        4. 未来规划：ACI Token 认证（应用层）将完全解耦签名依赖。
+    -->
+
+</manifest>
