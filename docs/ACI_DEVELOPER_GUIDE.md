@@ -449,4 +449,40 @@ AIDL Binder 单次事务上限约 **1MB**。早期实现直接 `putResult("html"
 
 ---
 
+## 十四、常见问题与解决方案
+
+### 14.1 权限冲突问题
+当多个ACI应用声明相同权限（如 `ai.aci.permission.CALL`）时，Android系统会报 `INSTALL_FAILED_DUPLICATE_PERMISSION` 错误。
+
+**解决方案：**
+1. **权限定义分离**：只有主应用（控制方）声明 `<permission>` 定义，第三方受控端只使用 `<uses-permission>` 引用。
+2. **签名一致性**：所有使用相同权限的应用必须使用相同签名证书。
+3. **ACI Token认证**：未来将支持应用层Token认证，完全解耦签名依赖。
+
+### 14.2 API使用说明
+ACI API 通过 `QuroAidlAciManager` 提供以下核心方法：
+- `call(packageName, capability, params)`: 调用指定应用的能力
+- `registerPackage(packageName)`: 注册并发现ACI应用
+- `launchApp(packageName)`: 启动ACI应用
+
+**示例代码：**
+```kotlin
+val mgr = QuroAidlAciManager.getInstance()
+val response = mgr.call("com.example.app", "echo", Bundle().apply {
+    putString("text", "Hello ACI")
+})
+```
+
+### 14.3 API密钥申请
+1. **申请流程**：访问 [GitHub仓库](https://github.com/Quor-a/ZorvAI) 提交Issue，说明应用信息和用途。
+2. **密钥使用**：获得API密钥后，在ACI管理中心「申请API密钥」按钮输入并保存。
+3. **密钥存储**：密钥使用AndroidKeyStore加密存储，安全可靠。
+
+### 14.4 调试与排障
+- **日志查看**：使用 `adb logcat -s QuroAidlAci` 查看ACI相关日志
+- **权限检查**：确保AndroidManifest中声明了必要的权限
+- **服务状态**：确认ACI服务已启动并绑定
+
+---
+
 > 本手册由软件工坊基于 `aci-core` 源码与 Zorv AI 真实接入经验整理。协议细节以 [ACI_PROTOCOL.md](https://github.com/Quor-a/ZorvAI)（开源分支）为准。
