@@ -73,11 +73,13 @@ enum class EnvProfile(
         """
         |echo "[rust] 开始安装 Rust..."
         |if ! command -v cargo >/dev/null 2>&1; then
-        |  echo "[rust] 执行 rustup 安装..."
-        |  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal 2>&1 | tail -5 || true
-        |  . "${'$'}HOME/.cargo/env" 2>/dev/null || true
-        |  ln -sf "${'$'}HOME/.cargo/bin/cargo" /usr/local/bin/cargo 2>/dev/null || true
-        |  ln -sf "${'$'}HOME/.cargo/bin/rustc" /usr/local/bin/rustc 2>/dev/null || true
+        |  echo "[rust] 执行 rustup 安装（可能需要几分钟）..."
+        |  export RUSTUP_HOME="${'$'}HOME/.rustup"
+        |  export CARGO_HOME="${'$'}HOME/.cargo"
+        |  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal 2>&1 | tail -10 || true
+        |  export PATH="${'$'}CARGO_HOME/bin:${'$'}PATH"
+        |  ln -sf "${'$'}CARGO_HOME/bin/cargo" /usr/local/bin/cargo 2>/dev/null || true
+        |  ln -sf "${'$'}CARGO_HOME/bin/rustc" /usr/local/bin/rustc 2>/dev/null || true
         |fi
         |echo "[rust] cargo=${'$'}(cargo --version 2>&1) rustc=${'$'}(rustc --version 2>&1)
         """.trimMargin(),
