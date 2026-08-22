@@ -143,39 +143,77 @@ set -e
 ENGINE_DIR=/root/cms/_engine
 mkdir -p "${'$'}ENGINE_DIR/services"
 
-# ═══ Phase 1: 更新索引 ═══
-echo "[quro-engine] 🔧 updating apk index..."
-apk update || {
-    echo "[quro-engine] WARN: apk update failed, retrying..."
+# ═══ Phase 0: 配置 DNS ═══
+echo "[quro-engine] 🔧 configuring DNS..."
+if [ ! -f /etc/resolv.conf ] || ! grep -q "nameserver" /etc/resolv.conf 2>/dev/null; then
+    mkdir -p /etc
+    cat > /etc/resolv.conf << 'DNS'
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+nameserver 114.114.114.114
+nameserver 223.5.5.5
+DNS
+    echo "[quro-engine] DNS configured"
+fi
+
+# ═══ Phase 0.5: 配置镜像源 ═══
+echo "[quro-engine] 🔧 configuring apk mirrors..."
+cat > /etc/apk/repositories << 'MIRRORS'
+https://mirrors.aliyun.com/alpine/v3.20/main
+https://mirrors.aliyun.com/alpine/v3.20/community
+https://dl-cdn.alpinelinux.org/alpine/v3.20/main
+https://dl-cdn.alpinelinux.org/alpine/v3.20/community
+MIRRORS
+
+# ═══ Phase 1: 更新索引（带重试） ═══
+echo "[quro-engine] 📦 updating apk index..."
+update_apk() {
+    apk update --no-cache 2>&1 && return 0
+    echo "[quro-engine] WARN: apk update failed, trying alternative mirrors..."
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/main" > /etc/apk/repositories
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/repositories
     sleep 2
-    apk update || {
-        echo "[quro-engine] FAILED: cannot reach apk mirror"
-        exit 1
-    }
+    apk update --no-cache 2>&1 && return 0
+    echo "https://mirrors.aliyun.com/alpine/v3.20/main" > /etc/apk/repositories
+    sleep 2
+    apk update --no-cache 2>&1 && return 0
+    return 1
+}
+update_apk || {
+    echo "[quro-engine] ❌ FAILED: apk update failed on all mirrors"
+    exit 1
 }
 
 # ═══ Phase 2: 语言运行时 ═══
 echo "[quro-engine] 📦 installing language runtimes..."
-apk add --no-cache python3 py3-pip nodejs npm || {
-    echo "[quro-engine] First attempt failed, retrying..."
-    sleep 2
-    apk add --no-cache python3 py3-pip nodejs npm || {
-        echo "[quro-engine] FAILED: language runtimes install failed"
-        exit 1
-    }
+install_with_retry() {
+    local pkgs="$1"
+    local max_retries=3
+    local retry=0
+    while [ ${'$'}retry -lt ${'$'}max_retries ]; do
+        apk add --no-cache ${'$'}pkgs 2>&1 && return 0
+        retry=$((${'$'}retry + 1))
+        echo "[quro-engine] WARN: attempt ${'$'}retry/${'$'}max_retries failed, retrying in 3s..."
+        sleep 3
+    done
+    return 1
+}
+install_with_retry "python3 py3-pip nodejs npm" || {
+    echo "[quro-engine] ❌ FAILED: language runtimes install failed"
+    exit 1
 }
 
 # ═══ Phase 3: 编译工具链 ═══
 echo "[quro-engine] 🔨 installing build toolchain..."
-apk add --no-cache gcc g++ make cmake linux-headers || true
+install_with_retry "gcc g++ make cmake linux-headers" || true
 
 # ═══ Phase 4: 开发工具 ═══
 echo "[quro-engine] 🛠️ installing dev tools..."
-apk add --no-cache git vim nano bash || true
+install_with_retry "git vim nano bash" || true
 
 # ═══ Phase 5: 网络与压缩工具 ═══
 echo "[quro-engine] 🌐 installing network & utility tools..."
-apk add --no-cache curl wget jq zip unzip openssh-client || true
+install_with_retry "curl wget jq zip unzip openssh-client" || true
 
 # ═══ Phase 6: Python venv ═══
 if [ ! -x /root/cms-venv/bin/python3 ]; then
