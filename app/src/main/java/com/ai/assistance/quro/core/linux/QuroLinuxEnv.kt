@@ -166,6 +166,7 @@ object QuroLinuxEnv {
     /**
      * 从 assets/linux_env/ 解压 proot 二进制到应用私有目录。
      * 解决 nativeLibraryDir 为空的问题（某些设备/ROM native library 解压失败）。
+     * 添加详细诊断日志，确保文件权限正确设置。
      */
     private fun extractProotFromAssets(context: Context, libName: String): File? {
         return try {
@@ -180,15 +181,48 @@ object QuroLinuxEnv {
             val targetDir = File(context.filesDir, "native-libs")
             targetDir.mkdirs()
             val target = File(targetDir, libName)
-            if (target.exists()) return target
+            
+            Log.i(TAG, "🔍 解压 assets: $assetName -> ${target.absolutePath}")
+            Log.i(TAG, "🔍 目标目录存在=${targetDir.exists()}, 可写=${targetDir.canWrite()}")
+            
+            if (target.exists()) {
+                Log.i(TAG, "🔍 目标文件已存在，大小=${target.length()}, 可执行=${target.canExecute()}")
+                // 即使文件存在，也尝试设置执行权限
+                target.setExecutable(true, false)
+                return target
+            }
+
+            // 检查 assets 文件是否存在
+            try {
+                val assetFiles = context.assets.list("linux_env") ?: emptyArray()
+                Log.i(TAG, "🔍 assets/linux_env/ 目录内容: ${assetFiles.joinToString(", ")}")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠ 无法列出 assets/linux_env/ 目录: ${e.message}")
+            }
 
             context.assets.open(assetName).use { input ->
                 FileOutputStream(target).use { output ->
                     input.copyTo(output)
                 }
             }
-            target.setExecutable(true, false)
+            
+            // 设置文件权限
+            val permResult = target.setExecutable(true, false)
             Log.i(TAG, "✅ 从 assets 解压 $assetName -> ${target.absolutePath} (${target.length()} bytes)")
+            Log.i(TAG, "🔍 文件权限设置: setExecutable=$permResult, canExecute=${target.canExecute()}")
+            
+            // 检查文件权限
+            try {
+                val process = Runtime.getRuntime().exec(arrayOf("ls", "-la", target.absolutePath))
+                val output = process.inputStream.bufferedReader().readText().trim()
+                val exitCode = process.waitFor()
+                if (exitCode == 0) {
+                    Log.i(TAG, "🔍 文件权限详情: $output")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠ 获取文件权限详情失败: ${e.message}")
+            }
+            
             target
         } catch (e: Exception) {
             Log.e(TAG, "❌ 从 assets 解压 $libName 失败: ${e.message}")
@@ -199,6 +233,7 @@ object QuroLinuxEnv {
     /**
      * 确保文件可执行：先试 setExecutable，失败则用 chmod 命令。
      * 从 assets 解压的文件在某些设备上需要显式 chmod 才能执行。
+     * 添加详细诊断日志，帮助定位 SELinux/挂载选项问题。
      */
     private fun ensureExecutable(file: File, label: String): Boolean {
         if (!file.exists()) {
@@ -211,6 +246,39 @@ object QuroLinuxEnv {
         }
 
         Log.i(TAG, "🔧 尝试设置 $label 执行权限: ${file.absolutePath}, size=${file.length()}")
+        Log.i(TAG, "🔍 文件权限: canRead=${file.canRead()}, canWrite=${file.canWrite()}, canExecute=${file.canExecute()}")
+        
+        // 诊断：检查文件所在目录的挂载选项
+        try {
+            val dir = file.parentFile
+            if (dir != null) {
+                val mountInfo = Runtime.getRuntime().exec(arrayOf("mount")).inputStream.bufferedReader().readText()
+                val dirPath = dir.absolutePath
+                // 查找包含该目录的挂载点
+                val lines = mountInfo.lines()
+                for (line in lines) {
+                    if (line.contains(dirPath) || line.contains("/data/user/0/") || line.contains("/data/data/")) {
+                        Log.i(TAG, "🔍 相关挂载信息: $line")
+                    }
+                }
+                // 检查目录本身的权限
+                Log.i(TAG, "🔍 目录权限: ${dir.absolutePath}, canExec=${dir.canExecute()}, canWrite=${dir.canWrite()}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠ 获取挂载信息失败: ${e.message}")
+        }
+
+        // 诊断：检查 SELinux 上下文（需要 shell 权限）
+        try {
+            val process = Runtime.getRuntime().exec(arrayOf("ls", "-Z", file.absolutePath))
+            val output = process.inputStream.bufferedReader().readText().trim()
+            val exitCode = process.waitFor()
+            if (exitCode == 0 && output.isNotEmpty()) {
+                Log.i(TAG, "🔍 SELinux 上下文: $output")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠ 获取 SELinux 上下文失败: ${e.message}")
+        }
 
         // 方法1：Java API 设置权限
         if (file.setExecutable(true, false)) {
@@ -279,6 +347,8 @@ object QuroLinuxEnv {
     fun probe(context: Context): EnvStatus {
         val prootPathStr = prootPath(context)
         val proot = File(prootPathStr)
+        Log.i(TAG, "🔍 probe 开始: prootPath=$prootPathStr, exists=${proot.exists()}")
+        
         if (!proot.exists()) {
             if (_state.value is SandboxState.Ready) _state.value = SandboxState.NotInstalled
             // 诊断：列出 nativeLibraryDir 下的实际文件，帮助定位问题
@@ -295,12 +365,25 @@ object QuroLinuxEnv {
 
         // 修复：如果proot文件存在但没有可执行权限，尝试设置权限
         // Android系统安装APK时应该自动为native库设置可执行权限，但某些设备可能不会
-        ensureExecutable(proot, "proot")
-
+        val prootPermResult = ensureExecutable(proot, "proot")
+        Log.i(TAG, "🔍 proot 权限设置结果: $prootPermResult, canExecute=${proot.canExecute()}")
+        
         // 同样检查loader文件
         val loader = File(loaderPath(context))
         if (loader.exists()) {
-            ensureExecutable(loader, "loader")
+            val loaderPermResult = ensureExecutable(loader, "loader")
+            Log.i(TAG, "🔍 loader 权限设置结果: $loaderPermResult, canExecute=${loader.canExecute()}")
+        }
+
+        // 诊断：检查文件系统挂载选项
+        try {
+            val mountInfo = Runtime.getRuntime().exec(arrayOf("mount")).inputStream.bufferedReader().readText()
+            val dataLines = mountInfo.lines().filter { it.contains("/data/") }
+            for (line in dataLines) {
+                Log.i(TAG, "🔍 /data/ 挂载信息: $line")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠ 获取挂载信息失败: ${e.message}")
         }
 
         val rootfs = File(rootfsPath(context))
@@ -309,7 +392,10 @@ object QuroLinuxEnv {
         // 终端顶栏显示 proot/Linux，实际 proot 启动失败、静默回退设备 sh —— 即「完全废了」的无声根因。
         // 注意：/bin/sh 是绝对符号链接，必须按 rootfs 边界内解析（见 [rootfsBinRunnable]）。
         val shOk = rootfs.isDirectory && rootfsBinRunnable(rootfs, "bin/sh")
-        return if (shOk && proot.canExecute()) {
+        val prootCanExec = proot.canExecute()
+        Log.i(TAG, "🔍 rootfs 存在=${rootfs.isDirectory}, sh 可执行=$shOk, proot 可执行=$prootCanExec")
+        
+        return if (shOk && prootCanExec) {
             if (_state.value !is SandboxState.Ready) _state.value = SandboxState.Ready
             EnvStatus(true, proot.absolutePath, rootfs.absolutePath, "环境就绪")
         } else {
@@ -320,8 +406,11 @@ object QuroLinuxEnv {
                     "Alpine rootfs 未安装（请在终端点「安装 Linux 环境」）"
                 !rootfsBinRunnable(rootfs, "bin/sh") ->
                     "rootfs 解压残缺（/bin/sh 无法在 rootfs 内解析，可能符号链接创建失败），请重试安装"
+                !prootCanExec -> 
+                    "proot 不可执行（权限问题）。可能原因：SELinux 限制、文件系统挂载选项（noexec）、或应用权限不足。"
                 else -> "proot 不可执行"
             }
+            Log.e(TAG, "❌ 环境不可用: $reason")
             EnvStatus(false, proot.absolutePath, null, reason)
         }
     }
@@ -479,7 +568,7 @@ object QuroLinuxEnv {
         return runProot(context, command, timeoutMs)
     }
 
-    /** 内部：构造 proot 参数并执行。 */
+    /** 内部：构造 proot 参数并执行。添加多种执行策略应对权限问题。 */
     private fun runProot(context: Context, command: String, timeoutMs: Long): Pair<Int, String> {
         val proot = prootPath(context)
         val rootfs = rootfsPath(context)
@@ -495,9 +584,9 @@ object QuroLinuxEnv {
             Log.e(TAG, "❌ proot/loader 权限设置失败，prootOk=$prootOk, loaderOk=$loaderOk")
             // 列出目录内容帮助诊断
             try {
-                val dir = File(proot).parentFile
-                if (dir != null && dir.exists()) {
-                    val files = dir.listFiles()?.map { "${it.name}(${it.length()}b,exec=${it.canExecute()})" }?.joinToString(", ")
+                val prootDir = File(proot).parentFile
+                if (prootDir != null && prootDir.exists()) {
+                    val files = prootDir.listFiles()?.map { "${it.name}(${it.length()}b,exec=${it.canExecute()})" }?.joinToString(", ")
                     Log.e(TAG, "📁 目录内容: $files")
                 }
             } catch (_: Throwable) {}
@@ -506,6 +595,30 @@ object QuroLinuxEnv {
         // 运行期资产刷新（resolv.conf 用设备 DNS / getprop 垫片），让 AI 经 linux_* / terminal_*
         // 工具驱动的命令同样拥有联网能力与 getprop。
         prepareRuntimeExtras(context, File(rootfs))
+        
+        // 策略1：直接执行（当前方法）
+        val result1 = tryExecuteDirect(proot, rootfs, home, tmp, loader, dir, command, timeoutMs)
+        if (result1.first == 0 || !result1.second.contains("Permission denied")) {
+            return result1
+        }
+        
+        Log.w(TAG, "⚠ 直接执行失败，尝试通过 shell 包装器执行")
+        
+        // 策略2：通过 shell 包装器执行（sh -c "/path/to/proot ...")
+        val result2 = tryExecuteViaShell(proot, rootfs, home, tmp, loader, dir, command, timeoutMs)
+        if (result2.first == 0 || !result2.second.contains("Permission denied")) {
+            return result2
+        }
+        
+        Log.w(TAG, "⚠ shell 包装器执行失败，尝试复制到临时目录执行")
+        
+        // 策略3：复制到临时目录执行（某些设备允许在 /data/local/tmp 执行）
+        val result3 = tryExecuteFromTmpDir(context, proot, rootfs, home, tmp, loader, dir, command, timeoutMs)
+        return result3
+    }
+
+    /** 策略1：直接执行 proot */
+    private fun tryExecuteDirect(proot: String, rootfs: String, home: String, tmp: String, loader: String, dir: File, command: String, timeoutMs: Long): Pair<Int, String> {
         return try {
             val args = mutableListOf(
                 proot,
@@ -536,9 +649,6 @@ object QuroLinuxEnv {
             }
             pb.redirectErrorStream(true)
             val p = pb.start()
-            // 关键修复（#911 根因）：必须先 waitFor(timeout) 再读输出。原先 readText() 会阻塞到
-            // 进程退出，导致 timeoutMs 永不触发，hang 住的 bootstrap/provision 让部署永久卡「部署中」。
-            // 改为后台线程读 stdout，主线程 waitFor 超时后强杀进程，读取线程随 stdout 关闭自然结束。
             val outBuilder = StringBuilder()
             val reader = p.inputStream.bufferedReader()
             val readThread = Thread {
@@ -552,11 +662,115 @@ object QuroLinuxEnv {
                 try { p.destroyForcibly() } catch (_: Throwable) {}
                 -1
             }
-            try { readThread.join(2000) } catch (_: Throwable) {} // 进程已结束/被强杀，stdout 已关闭，回收读取线程
+            try { readThread.join(2000) } catch (_: Throwable) {}
             val trimmed = outBuilder.toString().trim()
             code to (if (trimmed.isBlank()) (if (finished) "(no output, exit $code)" else "⏱ 命令超时(${timeoutMs}ms)") else trimmed)
         } catch (e: Exception) {
-            -1 to "❌ proot 执行失败: ${e.message}"
+            -1 to "❌ proot 直接执行失败: ${e.message}"
+        }
+    }
+
+    /** 策略2：通过 shell 包装器执行（sh -c "/path/to/proot ...") */
+    private fun tryExecuteViaShell(proot: String, rootfs: String, home: String, tmp: String, loader: String, dir: File, command: String, timeoutMs: Long): Pair<Int, String> {
+        return try {
+            // 构造完整的 proot 命令字符串
+            // 注意：command 可能包含特殊字符，需要正确转义
+            val escapedCommand = command.replace("\"", "\\\"").replace("\$", "\\\$")
+            val prootCmd = buildString {
+                append(proot)
+                append(" --rootfs=$rootfs")
+                append(" --bind=/dev")
+                append(" --bind=/proc")
+                append(" --bind=/sys")
+                append(" --bind=$home:/root")
+                append(" --bind=$tmp:/tmp")
+                if (File("/system/build.prop").canRead()) {
+                    append(" --bind=/system/build.prop:/system/build.prop")
+                }
+                append(" -0 -w /root /bin/sh -c \"$escapedCommand\"")
+            }
+            
+            val args = listOf("sh", "-c", prootCmd)
+            val pb = ProcessBuilder(args)
+            pb.directory(File(rootfs).parentFile)
+            pb.environment().apply {
+                put("HOME", "/root")
+                put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+                put("TERM", "xterm-256color")
+                put("LANG", "C.UTF-8")
+                put("LD_LIBRARY_PATH", dir.absolutePath)
+                put("PROOT_TMP_DIR", tmp)
+                put("PROOT_LOADER", loader)
+            }
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            val outBuilder = StringBuilder()
+            val reader = p.inputStream.bufferedReader()
+            val readThread = Thread {
+                try { reader.use { r -> r.forEachLine { outBuilder.appendLine(it) } } } catch (_: Throwable) {}
+            }
+            readThread.start()
+            val finished = p.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            val code = if (finished) {
+                p.exitValue()
+            } else {
+                try { p.destroyForcibly() } catch (_: Throwable) {}
+                -1
+            }
+            try { readThread.join(2000) } catch (_: Throwable) {}
+            val trimmed = outBuilder.toString().trim()
+            code to (if (trimmed.isBlank()) (if (finished) "(no output, exit $code)" else "⏱ 命令超时(${timeoutMs}ms)") else trimmed)
+        } catch (e: Exception) {
+            -1 to "❌ proot shell 包装器执行失败: ${e.message}"
+        }
+    }
+
+    /** 策略3：复制到临时目录执行 */
+    private fun tryExecuteFromTmpDir(context: Context, proot: String, rootfs: String, home: String, tmp: String, loader: String, dir: File, command: String, timeoutMs: Long): Pair<Int, String> {
+        return try {
+            // 尝试多个可能的临时目录
+            val possibleTmpDirs = listOf(
+                context.codeCacheDir,
+                context.noBackupFilesDir,
+                File(context.filesDir, "tmp"),
+                File("/data/local/tmp"), // 系统临时目录，可能没有写权限
+            )
+            
+            for (tmpDir in possibleTmpDirs) {
+                if (tmpDir == null || !tmpDir.canWrite()) continue
+                
+                try {
+                    // 复制 proot 到临时目录
+                    val tmpProot = File(tmpDir, "proot")
+                    File(proot).copyTo(tmpProot, overwrite = true)
+                    tmpProot.setExecutable(true, false)
+                    
+                    // 复制 loader 到临时目录
+                    val tmpLoader = File(tmpDir, "loader")
+                    File(loader).copyTo(tmpLoader, overwrite = true)
+                    tmpLoader.setExecutable(true, false)
+                    
+                    Log.i(TAG, "✅ 临时目录复制成功: ${tmpDir.absolutePath}")
+                    
+                    // 尝试执行
+                    val result = tryExecuteDirect(
+                        tmpProot.absolutePath, rootfs, home, tmp, 
+                        tmpLoader.absolutePath, dir, command, timeoutMs
+                    )
+                    
+                    // 清理临时文件
+                    try { tmpProot.delete() } catch (_: Throwable) {}
+                    try { tmpLoader.delete() } catch (_: Throwable) {}
+                    
+                    return result
+                } catch (e: Exception) {
+                    Log.w(TAG, "⚠ 临时目录 ${tmpDir.absolutePath} 执行失败: ${e.message}")
+                }
+            }
+            
+            -1 to "❌ 所有临时目录执行策略均失败"
+        } catch (e: Exception) {
+            -1 to "❌ proot 临时目录执行失败: ${e.message}"
         }
     }
 
