@@ -164,46 +164,19 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                             deployLogs = emptyList()
                             scope.launch(Dispatchers.IO) {
                                 try {
-                                    if (isReady) {
-                                        // 已安装：检查更新
-                                        withContext(Dispatchers.Main) {
-                                            deployProgress = "正在检查更新..."
-                                            deployLogs = deployLogs + "[${profile.name}] 检查更新..."
-                                        }
-                                        
-                                        // 先检查当前版本
-                                        val (oldVersion, _) = QuroLinuxEnv.run(ctx, profile.checkCmd, timeoutMs = 10_000)
-                                        
-                                        // 执行更新脚本（幂等，已安装则跳过或更新）
-                                        val result = CmsEnvProvisioner.provision(ctx, profile)
-                                        
-                                        // 检查更新后版本
-                                        val (newVersion, _) = QuroLinuxEnv.run(ctx, profile.checkCmd, timeoutMs = 10_000)
-                                        
-                                        withContext(Dispatchers.Main) {
-                                            if (oldVersion == newVersion) {
-                                                deployLogs = deployLogs + "✅ 已是最新版本"
-                                                Toast.makeText(ctx, "${profile.name} 已是最新版本", Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                deployLogs = deployLogs + result.lines()
-                                                Toast.makeText(ctx, "${profile.name} 已更新", Toast.LENGTH_SHORT).show()
+                                    // 使用实时日志版本
+                                    val result = CmsEnvProvisioner.provisionWithLog(ctx, profile) { line ->
+                                        // 实时回调，更新UI
+                                        kotlinx.coroutines.runBlocking {
+                                            withContext(Dispatchers.Main) {
+                                                deployLogs = deployLogs + line
                                             }
-                                            deployProgress = ""
                                         }
-                                    } else {
-                                        // 未安装：执行安装
-                                        withContext(Dispatchers.Main) {
-                                            deployProgress = "正在安装..."
-                                            deployLogs = deployLogs + "[${profile.name}] 开始安装..."
-                                        }
-                                        
-                                        val result = CmsEnvProvisioner.provision(ctx, profile)
-                                        
-                                        withContext(Dispatchers.Main) {
-                                            deployLogs = deployLogs + result.lines()
-                                            deployProgress = ""
-                                            Toast.makeText(ctx, result.lines().firstOrNull() ?: result, Toast.LENGTH_LONG).show()
-                                        }
+                                    }
+                                    
+                                    withContext(Dispatchers.Main) {
+                                        deployProgress = ""
+                                        Toast.makeText(ctx, result.lines().firstOrNull() ?: result, Toast.LENGTH_LONG).show()
                                     }
                                     val ready = CmsEnvProvisioner.isReady(ctx, profile)
                                     withContext(Dispatchers.Main) {

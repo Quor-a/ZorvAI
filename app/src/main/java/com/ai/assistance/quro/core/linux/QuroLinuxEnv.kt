@@ -430,6 +430,20 @@ object QuroLinuxEnv {
         return runProot(context, command, timeoutMs)
     }
 
+    /** 带实时日志回调的执行命令。每输出一行就回调一次。 */
+    fun runWithLog(
+        context: Context,
+        command: String,
+        timeoutMs: Long = 30000,
+        onLine: (String) -> Unit = {}
+    ): Pair<Int, String> {
+        val st = probe(context)
+        if (!st.available || st.prootPath == null || st.rootfsPath == null) {
+            return -1 to "❌ Linux 环境不可用：${st.reason}"
+        }
+        return runProotWithLog(context, command, timeoutMs, onLine)
+    }
+
     /** 内部：构造 proot 参数并执行。添加多种执行策略应对权限问题。 */
     /** 内部：构造 proot 参数并执行。 */
     private fun runProot(context: Context, command: String, timeoutMs: Long): Pair<Int, String> {
@@ -506,6 +520,87 @@ object QuroLinuxEnv {
         } catch (e: Exception) {
             Log.e(TAG, "proot 执行异常: ${e.message}")
             -1 to "❌ proot 执行失败: ${e.message}"
+        }
+    }
+
+    /** 带实时日志回调的 proot 执行。每输出一行就回调一次。 */
+    private fun runProotWithLog(
+        context: Context,
+        command: String,
+        timeoutMs: Long,
+        onLine: (String) -> Unit
+    ): Pair<Int, String> {
+        val proot = prootPath(context)
+        val rootfs = rootfsPath(context)
+        val home = homePath(context)
+        val tmp = tmpPath(context)
+        val loader = loaderPath(context)
+        val dir = sandboxDir(context)
+        
+        Log.i(TAG, "runProotWithLog 开始执行，超时: ${timeoutMs}ms")
+        
+        prepareRuntimeExtras(context, File(rootfs))
+        return try {
+            val args = mutableListOf(
+                proot,
+                "--rootfs=$rootfs",
+                "--bind=/dev",
+                "--bind=/proc",
+                "--bind=/sys",
+                "--bind=$home:/root",
+                "--bind=$tmp:/tmp",
+            )
+            if (File("/system/build.prop").canRead()) {
+                args.add("--bind=/system/build.prop:/system/build.prop")
+            }
+            args.add("-0")
+            args.add("-w"); args.add("/root")
+            args.add("/bin/sh"); args.add("-c"); args.add(command)
+            val pb = ProcessBuilder(args)
+            pb.directory(File(rootfs).parentFile)
+            pb.environment().apply {
+                put("HOME", "/root")
+                put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+                put("TERM", "xterm-256color")
+                put("LANG", "C.UTF-8")
+                put("LD_LIBRARY_PATH", dir.absolutePath)
+                put("PROOT_TMP_DIR", tmp)
+                put("PROOT_LOADER", loader)
+            }
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            
+            val outBuilder = StringBuilder()
+            val reader = p.inputStream.bufferedReader()
+            // 实时读取并回调每一行
+            val readThread = Thread {
+                try {
+                    reader.use { r ->
+                        r.forEachLine { line ->
+                            outBuilder.appendLine(line)
+                            onLine(line)
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+            readThread.start()
+            val startTime = System.currentTimeMillis()
+            val finished = p.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            val duration = System.currentTimeMillis() - startTime
+            val code = if (finished) {
+                p.exitValue()
+            } else {
+                Log.w(TAG, "proot 执行超时(${timeoutMs}ms)，强杀进程")
+                try { p.destroyForcibly() } catch (_: Throwable) {}
+                -1
+            }
+            try { readThread.join(2000) } catch (_: Throwable) {}
+            val trimmed = outBuilder.toString().trim()
+            Log.i(TAG, "runProotWithLog 执行完成，耗时: ${duration}ms，退出码: $code")
+            code to (if (trimmed.isBlank()) (if (finished) "(no output)" else "⏱ 超时") else trimmed)
+        } catch (e: Exception) {
+            Log.e(TAG, "proot 执行异常: ${e.message}")
+            -1 to "❌ 执行失败: ${e.message}"
         }
     }
 

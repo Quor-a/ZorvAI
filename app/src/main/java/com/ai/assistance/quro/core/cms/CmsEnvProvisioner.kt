@@ -253,6 +253,33 @@ object CmsEnvProvisioner {
         return "❌ ${profile.name} 安装失败(exit $c，耗时 ${duration/1000}秒)\n${out}"
     }
 
+    /** 带实时日志的供给单个档。返回人类可读结果。 */
+    fun provisionWithLog(
+        context: Context,
+        profile: EnvProfile,
+        onLine: (String) -> Unit
+    ): String {
+        val st = QuroLinuxEnv.probe(context)
+        if (!st.available) return "⛔ 终端环境未就绪，无法供给 ${profile.name}"
+        if (isReady(context, profile)) return "✅ ${profile.name} 已就绪（跳过安装）"
+        
+        android.util.Log.i("CmsEnvProvisioner", "开始供给 ${profile.name}，超时: ${profile.timeoutMs}ms")
+        onLine("[${profile.name}] 开始安装...")
+        val startTime = System.currentTimeMillis()
+        val (c, out) = QuroLinuxEnv.runWithLog(context, profile.installScript, timeoutMs = profile.timeoutMs) { line ->
+            onLine(line)
+        }
+        val duration = System.currentTimeMillis() - startTime
+        android.util.Log.i("CmsEnvProvisioner", "${profile.name} 执行完成，耗时: ${duration}ms，退出码: $c")
+        
+        val ok = c == 0 || isReady(context, profile)
+        if (ok) {
+            QuroLinuxEnv.run(context, "mkdir -p $MARKER_DIR && touch $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
+            return "✅ ${profile.name} 安装完成（耗时 ${duration/1000}秒）"
+        }
+        return "❌ ${profile.name} 安装失败(exit $c，耗时 ${duration/1000}秒)"
+    }
+
     /** 供给多个档（按档名），逐个执行并汇总（非致命）。返回 (档名, 结果)。 */
     fun provisionAll(context: Context, profiles: List<String>): List<Pair<String, String>> {
         return profiles.mapNotNull { name ->
