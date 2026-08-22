@@ -378,6 +378,8 @@ object QuroLinuxEnv {
 
         _state.value = SandboxState.Installing("初始化…")
         makeWritable(rootfsDir)
+        // P0 修复：修复 erofs rootfs 的 hardlink 问题
+        fixHardlinks(rootfsDir)
         prepareRuntimeExtras(context, rootfsDir)
 
         var updated = false
@@ -714,6 +716,66 @@ object QuroLinuxEnv {
         rootfs.walkTopDown().forEach { f ->
             if (f.isDirectory && !f.canWrite()) f.setWritable(true, true)
         }
+    }
+
+    /**
+     * 修复 rootfs 中的 hardlink 问题（P0 修复）。
+     *
+     * Alpine rootfs 使用 erofs 格式时，hardlink 无法创建，导致文件为 0 字节空文件。
+     * 本函数扫描 rootfs 中所有 0 字节的可执行文件，创建符号链接指向对应的 busybox。
+     *
+     * 常见受影响文件：gcc、g++、musl-gcc、unzip、zipinfo 等。
+     */
+    private fun fixHardlinks(rootfs: File) {
+        Log.i(TAG, "修复 rootfs hardlink 问题...")
+        var fixed = 0
+
+        // 1. 修复 bin 目录下的 0 字节文件 → 符号链接到 busybox
+        val binDir = File(rootfs, "bin")
+        if (binDir.isDirectory) {
+            binDir.listFiles()?.forEach { f ->
+                if (f.isFile && f.length() == 0L && f.canExecute()) {
+                    try {
+                        f.delete()
+                        java.nio.file.Files.createSymbolicLink(
+                            f.toPath(),
+                            java.nio.file.Paths.get("/bin/busybox")
+                        )
+                        fixed++
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+
+        // 2. 修复 usr/bin 目录下的 0 字节文件 → 符号链接到 busybox
+        val usrBinDir = File(rootfs, "usr/bin")
+        if (usrBinDir.isDirectory) {
+            usrBinDir.listFiles()?.forEach { f ->
+                if (f.isFile && f.length() == 0L) {
+                    try {
+                        f.delete()
+                        java.nio.file.Files.createSymbolicLink(
+                            f.toPath(),
+                            java.nio.file.Paths.get("/bin/busybox")
+                        )
+                        fixed++
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+
+        // 3. 修复 lib 目录下的 0 字节 .so 文件 → 删除（避免加载崩溃）
+        val libDir = File(rootfs, "lib")
+        if (libDir.isDirectory) {
+            libDir.listFiles()?.forEach { f ->
+                if (f.isFile && f.length() == 0L && f.name.endsWith(".so")) {
+                    f.delete()
+                    fixed++
+                }
+            }
+        }
+
+        Log.i(TAG, "修复 hardlink 完成，共修复 $fixed 个文件")
     }
 
     /**
