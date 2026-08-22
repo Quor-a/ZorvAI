@@ -546,6 +546,8 @@ fun ChatScreen(
     var showAbout by remember { mutableStateOf(false) }
     // ACI 管理中心屏：从设置「功能 → ACI 管理中心」进入（此前仅有 AI 工具 ui_open_aci 可打开，无手动按钮）
     var showAci by remember { mutableStateOf(false) }
+    // ACI 应用选择器对话框
+    var showAciSelector by remember { mutableStateOf(false) }
     // 功能模型配置屏（从设置「功能模型配置」进入）：为 5 类 AI 子能力各自绑定模型
     var showFeatureModelConfig by remember { mutableStateOf(false) }
     var showAppearance by remember { mutableStateOf(false) }
@@ -975,6 +977,7 @@ fun ChatScreen(
                         voiceInputEnabled = voiceInputEnabled,
                         onVoiceInput = { startDialogStt() },
                         onOpenSkills = { showSkills = true },
+                        onOpenAciSelector = { showAciSelector = true },
                         scaled = { scaled(it) }
                     )
                 }
@@ -1355,6 +1358,22 @@ fun ChatScreen(
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
                 QuroAidlAciCenterScreen(onClose = { showAci = false })
             }
+        }
+
+        // ACI 应用选择器对话框
+        if (showAciSelector) {
+            AciAppSelectionDialog(
+                onDismiss = { showAciSelector = false },
+                onAppSelected = { packageName, appName ->
+                    // 设置默认 ACI 应用
+                    com.ai.assistance.quro.core.aidlaci.AciAppPreferences.setDefaultApp(
+                        ctx, packageName, appName
+                    )
+                    Toast.makeText(ctx, "已设置默认 ACI 应用: $appName", Toast.LENGTH_SHORT).show()
+                    showAciSelector = false
+                },
+                initialSelectedPackage = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultPackage(ctx),
+            )
         }
 
         // 语音设置页：内嵌对话框底部的紧凑面板（不再是全屏页）
@@ -3381,6 +3400,7 @@ private fun Composer(
     voiceInputEnabled: Boolean = false,
     onVoiceInput: () -> Unit = {},
     onOpenSkills: () -> Unit = {},
+    onOpenAciSelector: () -> Unit = {},
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -3433,6 +3453,10 @@ private fun Composer(
             // [v382] 输入框技能按钮：恢复被 v373 checkout 冲掉的 sparkles「选择技能」入口（v372 Composer 输入行原在 上传 与 语音 之间）
             IconButton(onClick = onOpenSkills, Modifier.size(44.dp).padding(2.dp)) {
                 LucideIcon("sparkles", "选择技能", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
+            }
+            // ACI 应用选择器按钮：选择默认 ACI 应用
+            IconButton(onClick = onOpenAciSelector, Modifier.size(44.dp).padding(2.dp)) {
+                Icon(Icons.Filled.Public, "选择 ACI 应用", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
             }
             if (voiceInputEnabled) {
                 IconButton(onClick = onVoiceInput, Modifier.size(44.dp).padding(2.dp)) {

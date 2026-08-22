@@ -39,7 +39,7 @@ class QuroAidlAciCallTool : QuroTool {
     override val name = "aci_call"
     override val description =
         "调用一个第三方 App 通过 ACI（Agent Capability Interface）暴露的能力（如发消息 / 查未读 / 建群 / 打开网页 / 执行网页 JS / 发起 HTTP 请求 / 共享工作空间读写 workspace_write·workspace_read·workspace_list·workspace_delete）。" +
-            "参数：{\"target_package\":\"第三方 App 包名（用 aci_list 查到的 pkg）\",\"capability\":\"能力 id（如 send_message / browser_open / http_request）\",\"args\":{参数名:参数值}}。" +
+            "参数：{\"target_package\":\"第三方 App 包名（用 aci_list 查到的 pkg，可选，若留空则使用默认 ACI 应用）\",\"capability\":\"能力 id（如 send_message / browser_open / http_request）\",\"args\":{参数名:参数值}}。" +
             "调用会跨进程发往目标 App 的 ACI Service 并同步等待结果（最长约 15 秒）。" +
             "调用前请勿伪造包名——目标 App 会用 Binder 真实 UID 鉴权。" +
             "若目标能力 requireUserConfirm（aci_list 会标注「需要用户确认」），必须先征询用户明确同意，并在 args 中带 confirm:true 才允许调用。" +
@@ -70,9 +70,19 @@ class QuroAidlAciCallTool : QuroTool {
 
         val obj = runCatching { JSONObject(arguments) }
             .getOrElse { return "参数不是合法 JSON：$arguments" }
-        val target = obj.optString("target_package", "").trim()
+        var target = obj.optString("target_package", "").trim()
         val cap = obj.optString("capability", "").trim()
-        if (target.isEmpty()) return "缺少 target_package（要调用的第三方 App 包名，用 aci_list 查）。"
+        
+        // 如果 target_package 为空，使用默认 ACI 应用
+        if (target.isEmpty()) {
+            val defaultPackage = AciAppPreferences.getDefaultPackage(context)
+            if (defaultPackage != null) {
+                target = defaultPackage
+            } else {
+                return "缺少 target_package（要调用的第三方 App 包名，用 aci_list 查）。" +
+                    "或者先在 ACI 管理中心设置默认应用。"
+            }
+        }
         if (cap.isEmpty()) return "缺少 capability（能力 id，用 aci_list 查）。"
 
         val argsObj = obj.optJSONObject("args")
