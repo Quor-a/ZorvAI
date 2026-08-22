@@ -792,15 +792,15 @@ fun ChatScreen(
     fun send(text: String) {
         val t = text.trim()
         if (t.isEmpty() && attachments.isEmpty()) return
-        // 注入上下文元数据：让 AI 直接从用户消息中读到当前工作区、ACI、技能状态
+        // 构建上下文信息（传给 ViewModel 作为隐藏消息注入，不在用户消息里加前缀）
         val ctxParts = mutableListOf<String>()
         val wsPath = currentWorkspace
-        if (wsPath != null) ctxParts.add("工作区: $wsPath")
+        if (wsPath != null) ctxParts.add("工作区根目录: $wsPath")
         val aciName = currentAciName
-        if (aciName != null) ctxParts.add("ACI应用: $aciName")
+        if (aciName != null) ctxParts.add("默认ACI应用: $aciName")
         if (enabledSkillsCount > 0) ctxParts.add("已启用技能: ${enabledSkillsCount}个")
-        val msg = if (ctxParts.isNotEmpty()) "[上下文|${ctxParts.joinToString(" | ")}]\n$t" else t
-        vm.send(msg, attachments.toList(), cfg)
+        val contextStr = ctxParts.joinToString("；").ifBlank { null }
+        vm.send(t, attachments.toList(), cfg, contextMessage = contextStr)
         attachments.clear()
     }
 
@@ -2097,53 +2097,6 @@ private fun MessageRow(
                     }
                 }
                 Spacer(Modifier.height(6.dp))
-            }
-            // ═══ 用户消息上下文标识（类似 AI 的思考/工具调用标记，在气泡内显示） ═══
-            if (msg.mine && !msg.context.isNullOrBlank()) {
-                Row(
-                    Modifier.padding(bottom = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val parts = msg.context.split(" | ")
-                    parts.forEach { part ->
-                        val trimmed = part.trim()
-                        when {
-                            trimmed.startsWith("工作区:") -> {
-                                val wsLabel = trimmed.removePrefix("工作区:").trim().substringAfterLast('/')
-                                TinyChip(
-                                    onClick = {},
-                                    containerColor = cs.primaryContainer.copy(alpha = 0.4f),
-                                ) {
-                                    LucideIcon("folder", null, Modifier.size(9.dp), tint = cs.primary)
-                                    Spacer(Modifier.width(2.dp))
-                                    Text("📂 $wsLabel", fontSize = 8.sp, color = cs.onPrimaryContainer, maxLines = 1)
-                                }
-                            }
-                            trimmed.startsWith("ACI应用:") -> {
-                                val aciLabel = trimmed.removePrefix("ACI应用:").trim()
-                                TinyChip(
-                                    onClick = {},
-                                    containerColor = cs.secondaryContainer.copy(alpha = 0.4f),
-                                ) {
-                                    LucideIcon("link", null, Modifier.size(9.dp), tint = cs.secondary)
-                                    Spacer(Modifier.width(2.dp))
-                                    Text("🔗 $aciLabel", fontSize = 8.sp, color = cs.onSecondaryContainer, maxLines = 1)
-                                }
-                            }
-                            trimmed.startsWith("已启用技能:") -> {
-                                TinyChip(
-                                    onClick = {},
-                                    containerColor = cs.tertiaryContainer.copy(alpha = 0.4f),
-                                ) {
-                                    LucideIcon("sparkles", null, Modifier.size(9.dp), tint = cs.tertiary)
-                                    Spacer(Modifier.width(2.dp))
-                                    Text("🧩 $trimmed", fontSize = 8.sp, color = cs.onTertiaryContainer)
-                                }
-                            }
-                        }
-                    }
-                }
             }
             // ── 正文气泡（思考/工具已移至名字行小按钮）────────────
             if (!msg.text.isNullOrBlank()) {
@@ -6100,28 +6053,18 @@ private fun QuroMessage.toMessage(
     val attachmentList = attachments?.map {
         Attachment(it.name, formatSize(it.size), path = it.uri, type = it.type)
     } ?: emptyList()
-    // 提取上下文标记：从用户消息的 [上下文|...] 前缀中提取，用于气泡内可见化展示
-    val rawContent = content
-    val ctxMarker = if (mine) {
-        val m = Regex("^\\[上下文\\|(.+?)\\]\\n").find(rawContent)
-        m?.groupValues?.get(1)
-    } else null
-    val displayContent = if (ctxMarker != null) rawContent.replaceFirst(Regex("^\\[上下文\\|.+?\\]\\n"), "") else rawContent
     return Message(
         id = id.hashCode(),
         uids = listOf(id),
         mine = mine,
-        // A2 修复：用户消息气泡显示发送者昵称——优先用消息自带 senderName，回退到当前资料昵称，最终回退"我"；
-        // 不再死写"你"。头像同理优先用消息自带 avatarUrl。
         author = if (mine) (senderName ?: userName).ifBlank { "我" } else assistantName,
         avatar = if (mine) (senderName ?: userName).ifBlank { "我" } else assistantAvatar,
         avatarUri = if (mine) (avatarUrl ?: userAvatarUri) else assistantAvatarUri,
         time = formatChatTime(createdAt),
-        text = displayContent.ifBlank { null },
+        text = content.ifBlank { null },
         attachments = attachmentList,
         think = think,
         cards = cards,
-        context = ctxMarker,
     )
 }
 

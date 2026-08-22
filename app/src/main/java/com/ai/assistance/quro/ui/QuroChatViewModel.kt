@@ -513,6 +513,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         cfg: QuroModelConfig = repo.load(),
         /** 用户在本轮对话框「选择技能」里显式选中的技能；非空时其指令仅作用于本轮消息。 */
         skill: QuroSkill? = null,
+        /** 上下文信息字符串（工作区路径/ACI应用/技能数量），作为隐藏消息注入，让 AI 本轮可用。 */
+        contextMessage: String? = null,
     ) {
         val t = text.trim()
         if (t.isEmpty() && attachments.isEmpty()) return
@@ -608,6 +610,16 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         QuroMessage(
                             role = "user",
                             content = "[用户已选择技能「${skill.name}」，请严格按以下指令处理其本条消息]\n### ${skill.name}\n${skill.prompt}",
+                            hidden = true,
+                        ),
+                    )
+                }
+                // 上下文信息（工作区/ACI/技能）：作为隐藏消息注入，让 AI 本轮知道用户选择了什么
+                if (!contextMessage.isNullOrBlank()) {
+                    store.add(
+                        QuroMessage(
+                            role = "system",
+                            content = "[上下文信息 - 用户当前选择的工作区/ACI/技能，供你本轮使用]\n$contextMessage",
                             hidden = true,
                         ),
                     )
