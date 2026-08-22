@@ -37,7 +37,7 @@ class AciHttpServerManager(private val context: Context) {
             isRunning.set(true)
             Log.i(TAG, "ACI HTTP Server started on port $actualPort")
             Log.i(TAG, "Endpoint: ${server.endpoint}")
-            Log.i(TAG, "Mock capabilities: ${server.toolCount}")
+            Log.i(TAG, "Mock capabilities: ${server.getStatus().optJSONObject("data")?.optInt("capabilities_count", 0)}")
             actualPort
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start ACI HTTP Server: ${e.message}")
