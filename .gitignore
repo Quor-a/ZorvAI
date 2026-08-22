@@ -74,9 +74,30 @@ keystore.properties
 .backup/
 outputs/
 *.backup
+*.bak
+*.bak2
 .git-rewrite/
 
-# Large model files (use Git LFS or host externally)
+# Large model files
 *.onnx
 *.tar.gz
 *.tar.xz
+
+# Dev test / scratch files
+test_*.py
+test_*.html
+repro_roundtrip.py
+audit_tools.py
+release-apk-*.md
+measure_sysprompt.py
+
+# Internal deliverables / debug docs
+deliverables/
+
+# Test certificates
+*.pem
+*.pk8
+
+# Keystore variants
+zorvai_release.jks
+debug-for-release.keystore
