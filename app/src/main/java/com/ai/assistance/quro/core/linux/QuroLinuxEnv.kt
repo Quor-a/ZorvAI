@@ -114,7 +114,7 @@ object QuroLinuxEnv {
     fun loaderPath(context: Context): String = findNativeLib(context, "libproot-loader.so")
 
     /**
-     * 多路径探测 native library：先试 nativeLibraryDir，再试常见的备用 ABI 目录。
+     * 多路径探测 native library：先试 nativeLibraryDir，再试备用 ABI 目录，最后从 assets 解压。
      * 返回第一个存在的路径；全部不存在时返回 nativeLibraryDir 下的默认路径（由调用方检查 exists）。
      */
     private fun findNativeLib(context: Context, libName: String): String {
@@ -149,8 +149,51 @@ object QuroLinuxEnv {
             }
         } catch (_: Throwable) { }
 
+        // Fallback：从 assets 解压 proot 二进制到应用私有目录
+        // 某些设备 native library 解压失败（nativeLibraryDir 为空），需要手动解压
+        if (libName in listOf("libproot.so", "libproot-loader.so", "libproot-loader32.so")) {
+            val extracted = extractProotFromAssets(context, libName)
+            if (extracted != null) {
+                Log.i(TAG, "✅ 从 assets 解压 $libName: ${extracted.absolutePath}")
+                return extracted.absolutePath
+            }
+        }
+
         Log.w(TAG, "⚠ $libName 在所有路径均未找到，返回默认路径: ${primary.absolutePath}")
         return primary.absolutePath
+    }
+
+    /**
+     * 从 assets/linux_env/ 解压 proot 二进制到应用私有目录。
+     * 解决 nativeLibraryDir 为空的问题（某些设备/ROM native library 解压失败）。
+     */
+    private fun extractProotFromAssets(context: Context, libName: String): File? {
+        return try {
+            val assetName = when (libName) {
+                "libproot.so" -> "linux_env/proot"
+                "libproot-loader.so" -> "linux_env/libproot-loader.so"
+                "libproot-loader32.so" -> "linux_env/libproot-loader32.so"
+                "libtalloc.so" -> null // talloc 没有独立的 assets 版本
+                else -> null
+            } ?: return null
+
+            val targetDir = File(context.filesDir, "native-libs")
+            targetDir.mkdirs()
+            val target = File(targetDir, libName)
+            if (target.exists()) return target
+
+            context.assets.open(assetName).use { input ->
+                FileOutputStream(target).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            target.setExecutable(true, false)
+            Log.i(TAG, "✅ 从 assets 解压 $assetName -> ${target.absolutePath} (${target.length()} bytes)")
+            target
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ 从 assets 解压 $libName 失败: ${e.message}")
+            null
+        }
     }
 
     private fun getLinuxArch(): String {
