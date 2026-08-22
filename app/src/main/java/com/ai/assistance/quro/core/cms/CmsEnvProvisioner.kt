@@ -127,7 +127,7 @@ enum class EnvProfile(
         "test -x /root/cms-venv/bin/python3",
         """
         |python3 -m venv /root/cms-venv 2>/dev/null || true
-        |echo "[env] venv=${'$'}(/root/cms-venv/bin/python3 --version 2>&1)
+        |echo "[env] venv=${'$'}(/root/cms-venv/bin/python3 --version 2>&1)"
         """.trimMargin(),
     ),
     // ─── Node.js 子环境 ───
