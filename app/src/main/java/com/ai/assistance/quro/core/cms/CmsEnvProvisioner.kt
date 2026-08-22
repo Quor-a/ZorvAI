@@ -70,24 +70,13 @@ enum class EnvProfile(
         """.trimMargin(),
     ),
     RUST(
-        "Rust / Cargo (rustup)",
-        "command -v cargo >/dev/null 2>&1",
+        "Rust / Cargo",
+        "command -v rustc >/dev/null 2>&1 && command -v cargo >/dev/null 2>&1",
         """
         |echo "[rust] 开始安装 Rust..."
-        |if ! command -v cargo >/dev/null 2>&1; then
-        |  echo "[rust] 执行 rustup 安装（首次安装可能需要10-15分钟）..."
-        |  export RUSTUP_HOME="${'$'}HOME/.rustup"
-        |  export CARGO_HOME="${'$'}HOME/.cargo"
-        |  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal 2>&1 || true
-        |  export PATH="${'$'}CARGO_HOME/bin:${'$'}PATH"
-        |  ln -sf "${'$'}CARGO_HOME/bin/cargo" /usr/local/bin/cargo 2>/dev/null || true
-        |  ln -sf "${'$'}CARGO_HOME/bin/rustc" /usr/local/bin/rustc 2>/dev/null || true
-        |else
-        |  echo "[rust] cargo 已存在，跳过安装"
-        |fi
-        |echo "[rust] cargo=${'$'}(cargo --version 2>&1) rustc=${'$'}(rustc --version 2>&1)
+        |apk add --no-cache rust cargo 2>&1 | tail -5 || true
+        |echo "[rust] rustc=${'$'}(rustc --version 2>&1) cargo=${'$'}(cargo --version 2>&1)
         """.trimMargin(),
-        timeoutMs = 1_200_000,  // 20分钟
     ),
     GO(
         "Go 语言栈 (Go)",
