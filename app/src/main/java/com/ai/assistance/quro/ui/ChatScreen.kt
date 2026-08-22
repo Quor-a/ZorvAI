@@ -548,6 +548,8 @@ fun ChatScreen(
     var showAci by remember { mutableStateOf(false) }
     // ACI 应用选择器对话框
     var showAciSelector by remember { mutableStateOf(false) }
+    // 工作区选择器对话框
+    var showWorkspaceSelector by remember { mutableStateOf(false) }
     // 功能模型配置屏（从设置「功能模型配置」进入）：为 5 类 AI 子能力各自绑定模型
     var showFeatureModelConfig by remember { mutableStateOf(false) }
     var showAppearance by remember { mutableStateOf(false) }
@@ -712,6 +714,8 @@ fun ChatScreen(
     // 应用上下文：提前声明，供 handleUiAction / handleCardCommand 等局部函数捕获
     val ctx = LocalContext.current
     quroDiagCtx = ctx
+    // 当前选择的工作区路径（从持久化存储初始化）
+    var currentWorkspace by remember { mutableStateOf(com.ai.assistance.quro.core.tools.WorkspacePreferences.getCurrentWorkspace(ctx)) }
 
     // 卡片动作命令分发：ui_* 走 UI 桥；linux:install 触发沙箱安装；run:<cmd> 喂给终端。
     fun handleCardCommand(cmd: String) {
@@ -979,6 +983,8 @@ fun ChatScreen(
                         onOpenSkills = { showSkills = true },
                         onOpenAciSelector = { showAciSelector = true },
                         onOpenEditor = { showEditor = true },
+                        currentWorkspace = currentWorkspace,
+                        onOpenWorkspaceSelector = { showWorkspaceSelector = true },
                         scaled = { scaled(it) }
                     )
                 }
@@ -1379,6 +1385,24 @@ fun ChatScreen(
                     Toast.makeText(ctx, "已清除默认 ACI 应用", Toast.LENGTH_SHORT).show()
                 },
                 initialSelectedPackage = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultPackage(ctx),
+            )
+        }
+
+        // 工作区选择器对话框
+        if (showWorkspaceSelector) {
+            WorkspaceSelectionDialog(
+                onDismiss = { showWorkspaceSelector = false },
+                onWorkspaceSelected = { path ->
+                    currentWorkspace = path
+                    com.ai.assistance.quro.core.tools.WorkspacePreferences.setCurrentWorkspace(ctx, path)
+                    Toast.makeText(ctx, "已选择工作区: ${path.substringAfterLast('/')}", Toast.LENGTH_SHORT).show()
+                },
+                onClearWorkspace = {
+                    currentWorkspace = null
+                    com.ai.assistance.quro.core.tools.WorkspacePreferences.clearCurrentWorkspace(ctx)
+                    Toast.makeText(ctx, "已恢复默认工作区", Toast.LENGTH_SHORT).show()
+                },
+                initialSelectedPath = currentWorkspace,
             )
         }
 
@@ -3408,6 +3432,8 @@ private fun Composer(
     onOpenSkills: () -> Unit = {},
     onOpenAciSelector: () -> Unit = {},
     onOpenEditor: () -> Unit = {},
+    currentWorkspace: String? = null,
+    onOpenWorkspaceSelector: () -> Unit = {},
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -3558,6 +3584,8 @@ private fun Composer(
             onToggleAutoRead = onToggleAutoRead,
             visionEnabled = visionEnabled,
             onToggleVision = onToggleVision,
+            currentWorkspace = currentWorkspace,
+            onOpenWorkspaceSelector = onOpenWorkspaceSelector,
         )
     }
 }

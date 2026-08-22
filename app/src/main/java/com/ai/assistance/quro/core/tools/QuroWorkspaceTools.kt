@@ -12,11 +12,21 @@ import java.io.File
  *   2) AI 经本组工具把源码写进该文件夹（用户在「工作区」UI 里能看到/手动改）；
  *   3) AI 经 ACI.build_apk（project_dir=该文件夹）让构建台编译打包，结果日志经 ACI 回传 AI 读取。
  *
- * 路径一律以 QuroWorkspace 为根做相对解析，并强制限制在沙箱内（防目录穿越），
- * 因为这里写的是 AI 生成的代码、且会被构建台拿去编译，必须可控。
+ * 路径以用户选择的工作区为根做相对解析；未选择时使用默认 QuroWorkspace。
+ * 用户可在对话框权限模式栏选择工作区（已创建的/创建新的/自定义文件夹）。
  */
-private fun workspaceRoot(context: Context): File =
-    File(context.getExternalFilesDir(null), "QuroWorkspace").apply { mkdirs() }
+private fun workspaceRoot(context: Context): File {
+    // 优先使用用户选择的工作区
+    val customPath = WorkspacePreferences.getCurrentWorkspace(context)
+    if (customPath != null) {
+        val customDir = File(customPath)
+        if (customDir.exists() && customDir.isDirectory) {
+            return customDir
+        }
+    }
+    // 默认工作区
+    return File(context.getExternalFilesDir(null), "QuroWorkspace").apply { mkdirs() }
+}
 
 /** 把相对路径安全解析到 workspace 内；越界（含 ../ 逃逸）返回 null。 */
 private fun resolveInWorkspace(root: File, relative: String): File? {

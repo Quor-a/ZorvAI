@@ -93,6 +93,8 @@ internal fun ChatPermissionModeBar(
     onToggleAutoRead: () -> Unit = {},
     visionEnabled: Boolean = false,
     onToggleVision: () -> Unit = {},
+    currentWorkspace: String? = null,
+    onOpenWorkspaceSelector: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
     // 惰性初始化只做一次：原实现直接在 composition body 调用（等于每次重组都跑一次 SharedPreferences 访问）
@@ -225,6 +227,14 @@ internal fun ChatPermissionModeBar(
                         label = "特权",
                         current = privPolicy,
                         onSet = { QuroPolicyStore.setPriv(ctx, it) },
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    // 工作区选择器
+                    ModeToggleRow(
+                        active = currentWorkspace != null,
+                        title = "工作区",
+                        desc = if (currentWorkspace != null) " — ${currentWorkspace.substringAfterLast('/')}" else " — 选择工作目录",
+                        onClick = onOpenWorkspaceSelector,
                     )
                 }
             }
