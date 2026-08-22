@@ -74,6 +74,8 @@ data class Message(
     val cards: List<QuroChatCard> = emptyList(), // 气泡内富组件（一等公民，合体进聊天气泡）
     /** 等待指示：AI 尚未产出首条内容时的「等等」动态小组件标记（独立于头像/名字，仅内容区 loading）。 */
     val isWaiting: Boolean = false,
+    /** 用户消息的上下文标识（工作区/ACI/技能），从 [上下文|...] 注入标记中提取，用于气泡内可见化展示。 */
+    val context: String? = null,
 )
 
 // ---------- 示例：模型（按提供商分组） ----------

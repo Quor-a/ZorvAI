@@ -2088,6 +2088,53 @@ private fun MessageRow(
                 }
                 Spacer(Modifier.height(6.dp))
             }
+            // ═══ 用户消息上下文标识（类似 AI 的思考/工具调用标记，在气泡内显示） ═══
+            if (msg.mine && !msg.context.isNullOrBlank()) {
+                Row(
+                    Modifier.padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val parts = msg.context.split(" | ")
+                    parts.forEach { part ->
+                        val trimmed = part.trim()
+                        when {
+                            trimmed.startsWith("工作区:") -> {
+                                val wsLabel = trimmed.removePrefix("工作区:").trim().substringAfterLast('/')
+                                TinyChip(
+                                    onClick = {},
+                                    containerColor = cs.primaryContainer.copy(alpha = 0.4f),
+                                ) {
+                                    LucideIcon("folder", null, Modifier.size(9.dp), tint = cs.primary)
+                                    Spacer(Modifier.width(2.dp))
+                                    Text("📂 $wsLabel", fontSize = 8.sp, color = cs.onPrimaryContainer, maxLines = 1)
+                                }
+                            }
+                            trimmed.startsWith("ACI应用:") -> {
+                                val aciLabel = trimmed.removePrefix("ACI应用:").trim()
+                                TinyChip(
+                                    onClick = {},
+                                    containerColor = cs.secondaryContainer.copy(alpha = 0.4f),
+                                ) {
+                                    LucideIcon("link", null, Modifier.size(9.dp), tint = cs.secondary)
+                                    Spacer(Modifier.width(2.dp))
+                                    Text("🔗 $aciLabel", fontSize = 8.sp, color = cs.onSecondaryContainer, maxLines = 1)
+                                }
+                            }
+                            trimmed.startsWith("已启用技能:") -> {
+                                TinyChip(
+                                    onClick = {},
+                                    containerColor = cs.tertiaryContainer.copy(alpha = 0.4f),
+                                ) {
+                                    LucideIcon("sparkles", null, Modifier.size(9.dp), tint = cs.tertiary)
+                                    Spacer(Modifier.width(2.dp))
+                                    Text("🧩 $trimmed", fontSize = 8.sp, color = cs.onTertiaryContainer)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             // ── 正文气泡（思考/工具已移至名字行小按钮）────────────
             if (!msg.text.isNullOrBlank()) {
                 // 去掉 LLM 回复里的语音风格标记 (风格)，仅用于显示与复制，不影响朗读
@@ -6043,6 +6090,13 @@ private fun QuroMessage.toMessage(
     val attachmentList = attachments?.map {
         Attachment(it.name, formatSize(it.size), path = it.uri, type = it.type)
     } ?: emptyList()
+    // 提取上下文标记：从用户消息的 [上下文|...] 前缀中提取，用于气泡内可见化展示
+    val rawContent = content
+    val ctxMarker = if (mine) {
+        val m = Regex("^\\[上下文\\|(.+?)\\]\\n").find(rawContent)
+        m?.groupValues?.get(1)
+    } else null
+    val displayContent = if (ctxMarker != null) rawContent.replaceFirst(Regex("^\\[上下文\\|.+?\\]\\n"), "") else rawContent
     return Message(
         id = id.hashCode(),
         uids = listOf(id),
@@ -6053,10 +6107,11 @@ private fun QuroMessage.toMessage(
         avatar = if (mine) (senderName ?: userName).ifBlank { "我" } else assistantAvatar,
         avatarUri = if (mine) (avatarUrl ?: userAvatarUri) else assistantAvatarUri,
         time = formatChatTime(createdAt),
-        text = content.ifBlank { null },
+        text = displayContent.ifBlank { null },
         attachments = attachmentList,
         think = think,
         cards = cards,
+        context = ctxMarker,
     )
 }
 
