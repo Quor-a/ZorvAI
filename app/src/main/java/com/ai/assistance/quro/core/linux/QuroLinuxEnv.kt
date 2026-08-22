@@ -100,12 +100,58 @@ object QuroLinuxEnv {
     fun tmpPath(context: Context): String =
         File(sandboxDir(context), "tmp").absolutePath
 
-    /** proot 二进制：nativeLibraryDir 内，Android 在此授予 .so 可执行权限。 */
-    fun prootPath(context: Context): String =
-        File(context.applicationInfo.nativeLibraryDir, "libproot.so").absolutePath
+    /**
+     * proot 二进制：nativeLibraryDir 内，Android 在此授予 .so 可执行权限。
+     *
+     * 某些设备/ROM 使用非标准 ABI 目录（如 /lib/arm64/ 而非 /lib/arm64-v8a/），
+     * 导致 nativeLibraryDir 指向的路径下找不到文件。增加多路径探测：
+     * 1. nativeLibraryDir（标准路径）
+     * 2. APK 安装目录下的 lib/arm64/（某些设备的备用路径）
+     * 3. APK 安装目录下的 lib/arm64-v8a/
+     */
+    fun prootPath(context: Context): String = findNativeLib(context, "libproot.so")
 
-    fun loaderPath(context: Context): String =
-        File(context.applicationInfo.nativeLibraryDir, "libproot-loader.so").absolutePath
+    fun loaderPath(context: Context): String = findNativeLib(context, "libproot-loader.so")
+
+    /**
+     * 多路径探测 native library：先试 nativeLibraryDir，再试常见的备用 ABI 目录。
+     * 返回第一个存在的路径；全部不存在时返回 nativeLibraryDir 下的默认路径（由调用方检查 exists）。
+     */
+    private fun findNativeLib(context: Context, libName: String): String {
+        val primary = File(context.applicationInfo.nativeLibraryDir, libName)
+        if (primary.exists()) return primary.absolutePath
+
+        // 备用路径：从 nativeLibraryDir 往上推一层，尝试其他 ABI 目录
+        val parentDir = primary.parentFile
+        if (parentDir != null && parentDir.exists()) {
+            val altAbis = listOf("arm64", "arm", "x86_64", "x86")
+            for (abi in altAbis) {
+                val alt = File(parentDir.parentFile, "$abi/$libName")
+                if (alt.exists()) {
+                    Log.i(TAG, "✅ 在备用 ABI 路径找到 $libName: ${alt.absolutePath}")
+                    return alt.absolutePath
+                }
+            }
+        }
+
+        // 最后尝试 applicationInfo.sourceDir 所在目录的 lib/ 子目录
+        try {
+            val apkDir = File(context.applicationInfo.sourceDir).parentFile
+            if (apkDir != null) {
+                val abis = listOf("arm64-v8a", "arm64", "armeabi-v7a", "arm", "x86_64", "x86")
+                for (abi in abis) {
+                    val alt = File(apkDir, "lib/$abi/$libName")
+                    if (alt.exists()) {
+                        Log.i(TAG, "✅ 在 APK 安装目录找到 $libName: ${alt.absolutePath}")
+                        return alt.absolutePath
+                    }
+                }
+            }
+        } catch (_: Throwable) { }
+
+        Log.w(TAG, "⚠ $libName 在所有路径均未找到，返回默认路径: ${primary.absolutePath}")
+        return primary.absolutePath
+    }
 
     private fun getLinuxArch(): String {
         val abi = Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"
@@ -129,10 +175,20 @@ object QuroLinuxEnv {
      * 让安装横幅重新出现。下载/安装中间态由 [setup] 自身管理，此处不抢状态。
      */
     fun probe(context: Context): EnvStatus {
-        val proot = File(prootPath(context))
+        val prootPathStr = prootPath(context)
+        val proot = File(prootPathStr)
         if (!proot.exists()) {
             if (_state.value is SandboxState.Ready) _state.value = SandboxState.NotInstalled
-            return EnvStatus(false, null, null, "proot 二进制缺失（nativeLibraryDir 未含 libproot.so）")
+            // 诊断：列出 nativeLibraryDir 下的实际文件，帮助定位问题
+            val nativeDir = context.applicationInfo.nativeLibraryDir
+            val nativeFiles = try {
+                File(nativeDir).listFiles()?.map { it.name }?.joinToString(", ") ?: "(目录不可读)"
+            } catch (_: Throwable) { "(访问失败)" }
+            Log.e(TAG, "❌ proot 二进制缺失。nativeLibraryDir=$nativeDir，内容=[$nativeFiles]")
+            return EnvStatus(false, null, null,
+                "proot 二进制缺失。应用库目录($nativeDir)内容: $nativeFiles。" +
+                "可能原因：1) APK 未正确安装（native library 未解压）；2) 设备架构不匹配（需 arm64-v8a）；" +
+                "3) 系统清理了应用数据。请尝试卸载重装。")
         }
 
         // 修复：如果proot文件存在但没有可执行权限，尝试设置权限
@@ -227,9 +283,19 @@ object QuroLinuxEnv {
 
     private suspend fun setupInternal(context: Context) {
         val arch = getLinuxArch()
-        val proot = File(prootPath(context))
+        val prootPathStr = prootPath(context)
+        val proot = File(prootPathStr)
         if (!proot.exists()) {
-            throw IllegalStateException("proot 二进制缺失于 ${proot.absolutePath}")
+            val nativeDir = context.applicationInfo.nativeLibraryDir
+            val nativeFiles = try {
+                File(nativeDir).listFiles()?.map { it.name }?.joinToString(", ") ?: "(目录不可读)"
+            } catch (_: Throwable) { "(访问失败)" }
+            throw IllegalStateException(
+                "proot 二进制缺失于 ${proot.absolutePath}。\n" +
+                "应用库目录($nativeDir)内容: $nativeFiles。\n" +
+                "可能原因：1) APK 未正确安装；2) 设备架构不匹配（需 arm64-v8a）；" +
+                "3) 系统清理了应用数据。请尝试卸载重装。"
+            )
         }
         val dir = sandboxDir(context)
         dir.mkdirs()
@@ -238,7 +304,8 @@ object QuroLinuxEnv {
         // Android 把原生 .so 的 .so.2 后缀剥离，Alpine 内程序按 libtalloc.so.2 找，这里补回。
         val talloc = File(dir, "libtalloc.so.2")
         if (!talloc.exists()) {
-            val src = File(context.applicationInfo.nativeLibraryDir, "libtalloc.so")
+            val tallocPath = findNativeLib(context, "libtalloc.so")
+            val src = File(tallocPath)
             if (src.exists()) src.copyTo(talloc, overwrite = true)
             else QuroDiag.log("LinuxEnv", "⚠ nativeLibraryDir 无 libtalloc.so，libproot-loader 可能加载失败")
         }
