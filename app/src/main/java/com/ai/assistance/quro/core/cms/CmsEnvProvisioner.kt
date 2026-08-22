@@ -23,6 +23,8 @@ enum class EnvProfile(
     val checkCmd: String,
     /** 装配脚本（sh -c，best-effort，失败不阻断）。 */
     val installScript: String,
+    /** 超时时间（毫秒），默认10分钟。 */
+    val timeoutMs: Long = 600_000,
 ) {
     NODE(
         "Node.js 前端栈 (Node + PNPM + TypeScript)",
@@ -73,16 +75,19 @@ enum class EnvProfile(
         """
         |echo "[rust] 开始安装 Rust..."
         |if ! command -v cargo >/dev/null 2>&1; then
-        |  echo "[rust] 执行 rustup 安装（可能需要几分钟）..."
+        |  echo "[rust] 执行 rustup 安装（首次安装可能需要10-15分钟）..."
         |  export RUSTUP_HOME="${'$'}HOME/.rustup"
         |  export CARGO_HOME="${'$'}HOME/.cargo"
-        |  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal 2>&1 | tail -10 || true
+        |  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal 2>&1 || true
         |  export PATH="${'$'}CARGO_HOME/bin:${'$'}PATH"
         |  ln -sf "${'$'}CARGO_HOME/bin/cargo" /usr/local/bin/cargo 2>/dev/null || true
         |  ln -sf "${'$'}CARGO_HOME/bin/rustc" /usr/local/bin/rustc 2>/dev/null || true
+        |else
+        |  echo "[rust] cargo 已存在，跳过安装"
         |fi
         |echo "[rust] cargo=${'$'}(cargo --version 2>&1) rustc=${'$'}(rustc --version 2>&1)
         """.trimMargin(),
+        timeoutMs = 1_200_000,  // 20分钟
     ),
     GO(
         "Go 语言栈 (Go)",
@@ -234,18 +239,18 @@ object CmsEnvProvisioner {
         if (!st.available) return "⛔ 终端环境未就绪，无法供给 ${profile.name}"
         if (isReady(context, profile)) return "✅ ${profile.name} 已就绪（跳过安装）"
         
-        android.util.Log.i("CmsEnvProvisioner", "开始供给 ${profile.name}，脚本长度: ${profile.installScript.length}")
+        android.util.Log.i("CmsEnvProvisioner", "开始供给 ${profile.name}，脚本长度: ${profile.installScript.length}，超时: ${profile.timeoutMs}ms")
         val startTime = System.currentTimeMillis()
-        val (c, out) = QuroLinuxEnv.run(context, profile.installScript, timeoutMs = 600_000)
+        val (c, out) = QuroLinuxEnv.run(context, profile.installScript, timeoutMs = profile.timeoutMs)
         val duration = System.currentTimeMillis() - startTime
         android.util.Log.i("CmsEnvProvisioner", "${profile.name} 执行完成，耗时: ${duration}ms，退出码: $c")
         
         val ok = c == 0 || isReady(context, profile)
         if (ok) {
             QuroLinuxEnv.run(context, "mkdir -p $MARKER_DIR && touch $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
-            return "✅ ${profile.name} 装配完成（耗时 ${duration/1000}秒）"
+            return "✅ ${profile.name} 安装完成（耗时 ${duration/1000}秒）\n${out}"
         }
-        return "⚠️ ${profile.name} 装配异常(exit $c): ${out.take(500)}（非致命，继续）"
+        return "❌ ${profile.name} 安装失败(exit $c，耗时 ${duration/1000}秒)\n${out}"
     }
 
     /** 供给多个档（按档名），逐个执行并汇总（非致命）。返回 (档名, 结果)。 */
