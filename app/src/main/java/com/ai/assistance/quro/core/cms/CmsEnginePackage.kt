@@ -138,24 +138,61 @@ data class EngineSvc(
 /** 内置引擎引导脚本（幂等，与 assets/cms/bootstrap.sh 同源，便于引擎包独立分发）。 */
 private val BUILTIN_BOOTSTRAP = """
 #!/bin/sh
-# Quro Engine bootstrap — one-time base runtime under /root/cms/_engine (proot/Alpine aarch64).
+# Quro Engine bootstrap — one-time full dev environment under /root/cms/_engine (proot/Alpine aarch64).
 set -e
 ENGINE_DIR=/root/cms/_engine
 mkdir -p "${'$'}ENGINE_DIR/services"
-echo "[quro-engine] installing base runtime (python3 / py3-pip / nodejs)..."
-apk add --no-cache python3 py3-pip nodejs || {
-    echo "[quro-engine] FAILED: apk add failed (no network or mirror unavailable)"
-    exit 1
+
+# ═══ Phase 1: 更新索引 ═══
+echo "[quro-engine] 🔧 updating apk index..."
+apk update || {
+    echo "[quro-engine] WARN: apk update failed, retrying..."
+    sleep 2
+    apk update || {
+        echo "[quro-engine] FAILED: cannot reach apk mirror"
+        exit 1
+    }
 }
+
+# ═══ Phase 2: 语言运行时 ═══
+echo "[quro-engine] 📦 installing language runtimes..."
+apk add --no-cache python3 py3-pip nodejs npm || {
+    echo "[quro-engine] First attempt failed, retrying..."
+    sleep 2
+    apk add --no-cache python3 py3-pip nodejs npm || {
+        echo "[quro-engine] FAILED: language runtimes install failed"
+        exit 1
+    }
+}
+
+# ═══ Phase 3: 编译工具链 ═══
+echo "[quro-engine] 🔨 installing build toolchain..."
+apk add --no-cache gcc g++ make cmake linux-headers || true
+
+# ═══ Phase 4: 开发工具 ═══
+echo "[quro-engine] 🛠️ installing dev tools..."
+apk add --no-cache git vim nano bash || true
+
+# ═══ Phase 5: 网络与压缩工具 ═══
+echo "[quro-engine] 🌐 installing network & utility tools..."
+apk add --no-cache curl wget jq zip unzip openssh-client || true
+
+# ═══ Phase 6: Python venv ═══
 if [ ! -x /root/cms-venv/bin/python3 ]; then
     echo "[quro-engine] creating /root/cms-venv..."
     python3 -m venv /root/cms-venv || echo "[quro-engine] WARN: venv creation failed"
 fi
-apk add --no-cache curl wget jq || true
-echo "[quro-engine] base environment ready:"
-echo "  python3 = ${'$'}(python3 --version 2>&1)"
-echo "  node    = ${'$'}(node --version 2>&1)"
-echo "  pip     = ${'$'}(pip3 --version 2>&1 | head -1)"
+
+# ═══ 验证 ═══
+echo "[quro-engine] ✅ dev environment ready:"
+echo "  python3  = ${'$'}(python3 --version 2>&1)"
+echo "  node     = ${'$'}(node --version 2>&1)"
+echo "  npm      = ${'$'}(npm --version 2>&1)"
+echo "  gcc      = ${'$'}(gcc --version 2>&1 | head -1)"
+echo "  cmake    = ${'$'}(cmake --version 2>&1 | head -1)"
+echo "  git      = ${'$'}(git --version 2>&1)"
+echo "  curl     = ${'$'}(curl --version 2>&1 | head -1)"
+
 touch "${'$'}ENGINE_DIR/.engine.ready"
 echo "[quro-engine] marker written: ${'$'}ENGINE_DIR/.engine.ready"
 """
@@ -166,6 +203,6 @@ private val BUILTIN_PROVISIONER = """
 # Quro Engine provisioner — engine-level shared environment (best effort).
 set -e
 echo "[quro-engine] provisioning engine-level tools..."
-apk add --no-cache bash coreutils findutils || true
+apk add --no-cache bash coreutils findutils grep sed gawk || true
 echo "[quro-engine] engine provisioning done"
 """
