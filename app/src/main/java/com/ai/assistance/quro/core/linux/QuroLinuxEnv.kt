@@ -462,8 +462,8 @@ object QuroLinuxEnv {
         val dir = sandboxDir(context)
 
         // 关键修复：执行前强制设置可执行权限（从 assets 解压的文件可能没有权限）
-        ensureExecutable(proot, "proot")
-        ensureExecutable(loader, "loader")
+        ensureExecutable(File(proot), "proot")
+        ensureExecutable(File(loader), "loader")
 
         // 运行期资产刷新（resolv.conf 用设备 DNS / getprop 垫片），让 AI 经 linux_* / terminal_*
         // 工具驱动的命令同样拥有联网能力与 getprop。
