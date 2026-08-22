@@ -1837,6 +1837,24 @@ $recent
         } catch (e: Throwable) {
             sb.append("（ACI 尚未就绪：${e.message}）\n")
         }
+        // ══════════════ 工作区（QuroWorkspace）：AI 持久化读写、用户可浏览的共享目录 ══════════════
+        sb.append("\n### 工作区（QuroWorkspace）· AI 可直接读写、用户可在「工具箱-工作区」浏览的持久目录\n")
+        sb.append("- 这是什么：工作区是设备上的一块**持久存储目录**，AI 能直接读写文本文件，用户在 App 内「工具箱 → 工作区」就能看到、下载、手动编辑这些文件。它是你和用户之间**真正的文件共享通道**，内容跨会话保留。\n")
+        sb.append("- 三个工具：\n")
+        sb.append("  · `workspace_write`{path, content, append?}：把文本（源码/配置/笔记）写入工作区**相对路径**（自动创建缺失父目录）；\n")
+        sb.append("  · `workspace_read`{path}：读取工作区相对路径文件的完整内容；\n")
+        sb.append("  · `workspace_list`{path?}：列出目录内容（默认根目录），看清有哪些工程/文件。\n")
+        val wsPath = com.ai.assistance.quro.core.tools.WorkspacePreferences.getCurrentWorkspace(appContext)
+        val wsRoot = wsPath ?: ((appContext.getExternalFilesDir(null)?.absolutePath ?: "QuroWorkspace") + "/QuroWorkspace")
+        val wsIsCustom = wsPath != null
+        sb.append("- 【当前工作区根目录】$wsRoot${if (wsIsCustom) "（这是用户在对话框权限模式栏**自定义选择**的工作区）" else "（默认工作区，用户尚未自定义）"}。\n")
+        sb.append("- 【主动使用工作区（关键）】遇到下列意图时，主动调用工作区工具，**不要只在对话里贴代码**：\n")
+        sb.append("  · 用户要「保存 / 存下 / 写文件 / 生成工程 / 做个项目 / 把代码留着」→ 用 workspace_write 写进工作区（用户立刻能在「工具箱-工作区」看到、下载、改）；\n")
+        sb.append("  · 用户要「看工作区里有什么 / 我的工程 / 某个文件内容」→ workspace_list / workspace_read；\n")
+        sb.append("  · 与 ACI 构建台协作写码→编译（aci_call 的 create_project / build_apk）：工程文件夹就建在这个工作区里，写源码用 workspace_write、查结构用 workspace_list；\n")
+        sb.append("  · 任何「把产物留下来、以后还找得到」的需求 → 写进工作区，而不是只发在聊天框里。\n")
+        sb.append("- 路径规则：path 是**相对工作区根目录**的路径（如 MyApp/src/Main.java），不要带盘符/绝对路径、不要 .. 逃逸；写完后告诉用户文件在「工具箱-工作区」里，绝对路径是 $wsRoot/相对路径。\n")
+
         sb.append("\n## CMS 权限模式（重要）\n")
         sb.append("- priv_status：查看 CMS v2 权限模式与已授权项；L1-L5 系统级通道已随工具集开放，运行时由系统授权与资产可用性把关，未授权工具会返回明确引导。\n")
         sb.append("- 直接调用 cms_call 即可执行对应能力；若策略=询问且未授权，提示用户在对话底部控制条切到「允许」。\n")

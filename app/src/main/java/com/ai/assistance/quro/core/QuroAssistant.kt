@@ -273,7 +273,11 @@ class QuroAssistant(
                                     "list_installed_apps", "launch_app", "search_and_launch_app",
                                     "get_active_notifications", "get_bluetooth_status",
                                     "get_current_time", "get_device_info", "calculate",
-                                    "speak", "stop_speak", "set_alarm"
+                                    "speak", "stop_speak", "set_alarm",
+                                    // ACI（本地 AIDL，非云端专属）与 工作区（本地文件，非云端专属）
+                                    // 必须进本地工具集，否则离线模型完全看不到这些工具 → 表现为「AI 根本不用」。
+                                    "aci_list", "aci_call",
+                                    "workspace_write", "workspace_read", "workspace_list"
                                 )
                                 val offlineSpecs = buildList {
                                     addAll(registry.coreSpecs().filter { it.name in deviceToolNames })

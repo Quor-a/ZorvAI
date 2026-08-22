@@ -72,6 +72,11 @@ object QuroToolUsageHints {
         "find_files" to "「找一下名字里带'报告'的文件」「全盘搜 xx.pdf」「哪个目录有这个文件」都调用",
         "file_info" to "「这个文件多大」「创建时间」「文件属性」都调用",
 
+        // ── 工作区（QuroWorkspace） ──
+        "workspace_write" to "「把这段代码保存到工作区」「写到我的工程里」「存成文件」「生成个项目放工作区」都调用（工作区即「工具箱-工作区」目录，用户能在 UI 看到/下载/改；path 是相对工作区根的路径，如 MyApp/src/Main.java）",
+        "workspace_read" to "「读一下工作区里的 XX 文件」「看看 MyApp/src/Main.java 现在内容」「工作区那个配置长啥样」都调用（path 为工作区内相对路径）",
+        "workspace_list" to "「工作区里有什么」「列出我的工程」「看下 MyApp 目录结构」「工作区根目录有哪些文件」都调用（path 可选，默认根目录）",
+
         // ── 网络 / Web ──
         "http_request" to "「调一下这个接口」「发个 GET/POST 到 XX」「请求这个 URL」「对接某个 API」都调用",
         "open_web" to "「打开百度」「访问 XX 网址」类请求：若系统提示里已声明【默认 ACI 应用已设置】（通常是受控浏览器），【优先用 aci_call 的 browser_open】（真实可交互、能点进去）；只有在未设默认 ACI 应用时才用 open_web 被动展示（仅供查看，AI 无法点击交互）。真正操作网页（点链接/填表/翻页）一律用 aci_call 的 browser_open→browser_elements→browser_action。",
