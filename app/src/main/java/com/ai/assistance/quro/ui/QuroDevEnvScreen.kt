@@ -162,20 +162,48 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                         onDeploy = {
                             deploying = profile.name
                             deployLogs = emptyList()
-                            deployProgress = "正在检查环境..."
                             scope.launch(Dispatchers.IO) {
                                 try {
-                                    withContext(Dispatchers.Main) {
-                                        deployProgress = "正在执行安装脚本..."
-                                        deployLogs = deployLogs + "[${profile.name}] 开始部署..."
-                                    }
-                                    
-                                    val result = CmsEnvProvisioner.provision(ctx, profile)
-                                    
-                                    withContext(Dispatchers.Main) {
-                                        deployLogs = deployLogs + result.lines()
-                                        deployProgress = ""
-                                        Toast.makeText(ctx, result.lines().firstOrNull() ?: result, Toast.LENGTH_LONG).show()
+                                    if (isReady) {
+                                        // 已安装：检查更新
+                                        withContext(Dispatchers.Main) {
+                                            deployProgress = "正在检查更新..."
+                                            deployLogs = deployLogs + "[${profile.name}] 检查更新..."
+                                        }
+                                        
+                                        // 先检查当前版本
+                                        val (oldVersion, _) = QuroLinuxEnv.run(ctx, profile.checkCmd, timeoutMs = 10_000)
+                                        
+                                        // 执行更新脚本（幂等，已安装则跳过或更新）
+                                        val result = CmsEnvProvisioner.provision(ctx, profile)
+                                        
+                                        // 检查更新后版本
+                                        val (newVersion, _) = QuroLinuxEnv.run(ctx, profile.checkCmd, timeoutMs = 10_000)
+                                        
+                                        withContext(Dispatchers.Main) {
+                                            if (oldVersion == newVersion) {
+                                                deployLogs = deployLogs + "✅ 已是最新版本"
+                                                Toast.makeText(ctx, "${profile.name} 已是最新版本", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                deployLogs = deployLogs + result.lines()
+                                                Toast.makeText(ctx, "${profile.name} 已更新", Toast.LENGTH_SHORT).show()
+                                            }
+                                            deployProgress = ""
+                                        }
+                                    } else {
+                                        // 未安装：执行安装
+                                        withContext(Dispatchers.Main) {
+                                            deployProgress = "正在安装..."
+                                            deployLogs = deployLogs + "[${profile.name}] 开始安装..."
+                                        }
+                                        
+                                        val result = CmsEnvProvisioner.provision(ctx, profile)
+                                        
+                                        withContext(Dispatchers.Main) {
+                                            deployLogs = deployLogs + result.lines()
+                                            deployProgress = ""
+                                            Toast.makeText(ctx, result.lines().firstOrNull() ?: result, Toast.LENGTH_LONG).show()
+                                        }
                                     }
                                     val ready = CmsEnvProvisioner.isReady(ctx, profile)
                                     withContext(Dispatchers.Main) {
@@ -183,7 +211,7 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                                     }
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
-                                        deployLogs = deployLogs + "❌ 部署异常: ${e.message}"
+                                        deployLogs = deployLogs + "❌ 操作异常: ${e.message}"
                                         deployProgress = ""
                                     }
                                 } finally {
@@ -357,8 +385,8 @@ private fun DevEnvCard(
                 Text(
                     when {
                         isDeploying -> "部署中…"
-                        isReady -> "重新安装"
-                        else -> "部署到终端"
+                        isReady -> "检查更新"
+                        else -> "安装"
                     },
                     color = if (isReady) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
                 )
