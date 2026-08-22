@@ -438,6 +438,7 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var searched by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<QuroAidlAciManager.InstalledApp>>(emptyList()) }
+    var showAciTokenDialog by remember { mutableStateOf(false) }
 
     // 受控端「控制台」SDUI 渲染：复用本地 ACI 控制台渲染器（AciConsoleScreen）渲染 console_ui 快照，不新增业务逻辑
     var consolePkg by remember { mutableStateOf<String?>(null) }
@@ -720,7 +721,7 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                         ) { Text("下载开发者文档") }
                         Button(
                             onClick = {
-                                Toast.makeText(ctx, "申请API密钥：请访问 GitHub 仓库提交 Issue，说明您的应用信息和用途。\n仓库地址：https://github.com/Quor-a/ZorvAI", Toast.LENGTH_LONG).show()
+                                showAciTokenDialog = true
                             },
                             modifier = Modifier.weight(1f),
                         ) { Text("申请API密钥") }
@@ -824,6 +825,120 @@ private fun AciAppCard(
                         "最近活动 ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(s.lastSeen))}",
                         color = Color.Gray, style = MaterialTheme.typography.labelSmall
                     )
+                }
+            }
+        }
+    }
+
+    // ACI Token 申请对话框
+    if (showAciTokenDialog) {
+        var tokenInput by remember { mutableStateOf("") }
+        var generatedToken by remember { mutableStateOf("") }
+        var tokenError by remember { mutableStateOf("") }
+
+        Dialog(onDismissRequest = { showAciTokenDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp,
+                modifier = Modifier.fillMaxWidth(0.92f).wrapContentHeight()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        "申请 ACI API 密钥",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        "输入第三方应用包名，系统将生成 ACI Token 用于认证。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = tokenInput,
+                        onValueChange = { tokenInput = it },
+                        label = { Text("第三方应用包名") },
+                        placeholder = { Text("例如：com.example.myapp") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    if (tokenError.isNotEmpty()) {
+                        Text(
+                            tokenError,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+
+                    if (generatedToken.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "生成的 ACI Token：",
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                generatedToken,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                val clipboard = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                val clip = android.content.ClipData.newPlainText("ACI Token", generatedToken)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(ctx, "Token 已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("复制 Token")
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showAciTokenDialog = false }) {
+                            Text("取消")
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                if (tokenInput.isBlank()) {
+                                    tokenError = "请输入包名"
+                                    return@Button
+                                }
+                                if (!tokenInput.contains(".")) {
+                                    tokenError = "包名格式不正确（应包含点号）"
+                                    return@Button
+                                }
+                                try {
+                                    val tokenManager = ai.aidl.aci.core.AciTokenManager.getInstance(ctx)
+                                    generatedToken = tokenManager.getOrCreateToken(tokenInput)
+                                    tokenError = ""
+                                    Toast.makeText(ctx, "Token 生成成功", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    tokenError = "生成失败：${e.message}"
+                                }
+                            }
+                        ) {
+                            Text("生成 Token")
+                        }
+                    }
                 }
             }
         }
