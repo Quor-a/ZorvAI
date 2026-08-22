@@ -79,8 +79,8 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
     var envStates by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
     // 正在部署的环境
     var deploying by remember { mutableStateOf<String?>(null) }
-    // 部署日志
-    var deployLogs by remember { mutableStateOf("") }
+    // 部署实时日志
+    var deployLogs by remember { mutableStateOf<List<String>>(emptyList()) }
     // 部署进度
     var deployProgress by remember { mutableStateOf("") }
 
@@ -161,20 +161,21 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                         enabled = termReady && !isDeploying,
                         onDeploy = {
                             deploying = profile.name
-                            deployLogs = ""
+                            deployLogs = emptyList()
                             deployProgress = "正在检查环境..."
                             scope.launch(Dispatchers.IO) {
                                 try {
                                     withContext(Dispatchers.Main) {
                                         deployProgress = "正在执行安装脚本..."
+                                        deployLogs = deployLogs + "[${profile.name}] 开始部署..."
                                     }
                                     
                                     val result = CmsEnvProvisioner.provision(ctx, profile)
                                     
                                     withContext(Dispatchers.Main) {
-                                        deployLogs = result
+                                        deployLogs = deployLogs + result.lines()
                                         deployProgress = ""
-                                        Toast.makeText(ctx, result, Toast.LENGTH_LONG).show()
+                                        Toast.makeText(ctx, result.lines().firstOrNull() ?: result, Toast.LENGTH_LONG).show()
                                     }
                                     val ready = CmsEnvProvisioner.isReady(ctx, profile)
                                     withContext(Dispatchers.Main) {
@@ -182,7 +183,7 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                                     }
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
-                                        deployLogs = "❌ 部署异常: ${e.message}"
+                                        deployLogs = deployLogs + "❌ 部署异常: ${e.message}"
                                         deployProgress = ""
                                     }
                                 } finally {
@@ -259,19 +260,31 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
             }
 
             // 部署日志
-            if (deployLogs.isNotBlank()) {
+            if (deployLogs.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
-                Text("最近部署结果：", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
-                Text(
-                    deployLogs,
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
+                Text("部署日志：", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
+                Column(
+                    Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(12.dp),
-                )
+                        .padding(12.dp)
+                        .heightIn(max = 200.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    deployLogs.forEach { line ->
+                        Text(
+                            line,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                            color = when {
+                                line.startsWith("✅") -> Color(0xFF34C759)
+                                line.startsWith("❌") -> MaterialTheme.colorScheme.error
+                                line.startsWith("⚠️") -> Color(0xFFFF9500)
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+                }
             }
         }
     }
