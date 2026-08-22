@@ -71,55 +71,15 @@ enum class EnvProfile(
         "Rust / Cargo (rustup)",
         "command -v cargo >/dev/null 2>&1",
         """
-        |echo "[rust] 开始安装 Rust 工具链..."
+        |echo "[rust] 开始安装 Rust..."
         |if ! command -v cargo >/dev/null 2>&1; then
-        |  echo "[rust] cargo 未找到，开始 rustup 安装..."
-        |  # 先测试网络连接
-        |  echo "[rust] 测试网络连接..."
-        |  if ! curl --connect-timeout 10 --max-time 20 -sSf https://sh.rustup.rs >/dev/null 2>&1; then
-        |    echo "[rust] ❌ 无法访问 rustup 安装脚本，检查网络连接"
-        |    echo "[rust] 尝试备用镜像..."
-        |    if ! curl --connect-timeout 10 --max-time 20 -sSf https://mirrors.ustc.edu.cn/rust-static/rustup/dist/aarch64-unknown-linux-gnu/rustup-init >/dev/null 2>&1; then
-        |      echo "[rust] ❌ 所有镜像均不可用，请检查网络连接"
-        |      exit 1
-        |    fi
-        |  fi
-        |  
-        |  # 使用 timeout 命令限制 rustup 安装时间（5分钟）
-        |  echo "[rust] 开始安装（限时5分钟）..."
-        |  if command -v timeout >/dev/null 2>&1; then
-        |    timeout 300 sh -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal' 2>&1 | tail -10 || {
-        |      echo "[rust] ❌ rustup 安装超时或失败"
-        |      exit 1
-        |    }
-        |  else
-        |    # 没有 timeout 命令，使用后台进程+超时检测
-        |    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal 2>&1 | tail -10 || {
-        |      echo "[rust] ❌ rustup 安装失败"
-        |      exit 1
-        |    }
-        |  fi
-        |  
-        |  # 配置环境
-        |  echo "[rust] 配置 Rust 环境..."
+        |  echo "[rust] 执行 rustup 安装..."
+        |  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal 2>&1 | tail -5 || true
         |  . "${'$'}HOME/.cargo/env" 2>/dev/null || true
         |  ln -sf "${'$'}HOME/.cargo/bin/cargo" /usr/local/bin/cargo 2>/dev/null || true
         |  ln -sf "${'$'}HOME/.cargo/bin/rustc" /usr/local/bin/rustc 2>/dev/null || true
-        |  
-        |  # 验证安装
-        |  if command -v cargo >/dev/null 2>&1; then
-        |    echo "[rust] ✅ Rust 安装成功"
-        |    echo "[rust] cargo 版本: ${'$'}(cargo --version 2>&1)"
-        |    echo "[rust] rustc 版本: ${'$'}(rustc --version 2>&1)"
-        |  else
-        |    echo "[rust] ❌ Rust 安装验证失败"
-        |    exit 1
-        |  fi
-        |else
-        |  echo "[rust] cargo 已存在，跳过安装"
-        |  echo "[rust] cargo 版本: ${'$'}(cargo --version 2>&1)"
-        |  echo "[rust] rustc 版本: ${'$'}(rustc --version 2>&1)"
         |fi
+        |echo "[rust] cargo=${'$'}(cargo --version 2>&1) rustc=${'$'}(rustc --version 2>&1)
         """.trimMargin(),
     ),
     GO(
@@ -250,10 +210,19 @@ object CmsEnvProvisioner {
     /** 单个档是否已就绪（proot 内：标记文件优先，否则 command -v 探活）。 */
     fun isReady(context: Context, profile: EnvProfile): Boolean {
         val st = QuroLinuxEnv.probe(context)
-        if (!st.available) return false
+        if (!st.available) {
+            android.util.Log.w("CmsEnvProvisioner", "${profile.name}: 终端环境不可用")
+            return false
+        }
+        // 检查标记文件
         val (mc, _) = QuroLinuxEnv.run(context, "[ -f $MARKER_DIR/${profile.name}.done ]", timeoutMs = 10_000)
-        if (mc == 0) return true
-        val (c, _) = QuroLinuxEnv.run(context, profile.checkCmd, timeoutMs = 20_000)
+        if (mc == 0) {
+            android.util.Log.i("CmsEnvProvisioner", "${profile.name}: 标记文件存在，已就绪")
+            return true
+        }
+        // 运行检查命令
+        val (c, out) = QuroLinuxEnv.run(context, profile.checkCmd, timeoutMs = 20_000)
+        android.util.Log.i("CmsEnvProvisioner", "${profile.name}: checkCmd exit=$c, output=${out.take(100)}")
         return c == 0
     }
 
