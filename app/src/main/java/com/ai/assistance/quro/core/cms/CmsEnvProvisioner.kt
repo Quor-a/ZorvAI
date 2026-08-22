@@ -130,6 +130,111 @@ enum class EnvProfile(
         |ln -sf ${'$'}(command -v go) /usr/local/bin/go 2>/dev/null || true
         |echo "[env] go=${'$'}(go version 2>&1)
         """.trimMargin(),
+    ),
+    // ─── Python 子环境 ───
+    PYTHON_LINK(
+        "Python 链接 (python→python3)",
+        "command -v python >/dev/null 2>&1",
+        """
+        |if ! command -v python >/dev/null 2>&1; then
+        |  ln -sf ${'$'}(command -v python3) /usr/local/bin/python 2>/dev/null || true
+        |fi
+        |echo "[env] python=${'$'}(python --version 2>&1)
+        """.trimMargin(),
+    ),
+    PIP(
+        "Pip (Python 包管理器)",
+        "command -v pip >/dev/null 2>&1 || command -v pip3 >/dev/null 2>&1",
+        """
+        |apk add --no-cache py3-pip 2>&1 | tail -2 || true
+        |python3 -m ensurepip --upgrade 2>/dev/null || true
+        |echo "[env] pip=${'$'}(pip --version 2>&1 || pip3 --version 2>&1)
+        """.trimMargin(),
+    ),
+    UV(
+        "UV (Rust 极速 Python 包安装器)",
+        "command -v uv >/dev/null 2>&1",
+        """
+        |if ! command -v uv >/dev/null 2>&1; then
+        |  curl -LsSf https://astral.sh/uv/install.sh | sh 2>&1 | tail -3 || true
+        |  ln -sf "${'$'}HOME/.local/bin/uv" /usr/local/bin/uv 2>/dev/null || true
+        |fi
+        |echo "[env] uv=${'$'}(uv --version 2>&1)
+        """.trimMargin(),
+    ),
+    VENV(
+        "Python 虚拟环境 (venv)",
+        "test -x /root/cms-venv/bin/python3",
+        """
+        |python3 -m venv /root/cms-venv 2>/dev/null || true
+        |echo "[env] venv=${'$'}(/root/cms-venv/bin/python3 --version 2>&1)
+        """.trimMargin(),
+    ),
+    // ─── Node.js 子环境 ───
+    NODEJS(
+        "Node.js (JavaScript 运行时)",
+        "command -v node >/dev/null 2>&1",
+        """
+        |apk add --no-cache nodejs npm 2>&1 | tail -2 || true
+        |echo "[env] node=${'$'}(node --version 2>&1)
+        """.trimMargin(),
+    ),
+    PNPM(
+        "PNPM (快速包管理器 + TypeScript)",
+        "command -v pnpm >/dev/null 2>&1",
+        """
+        |if ! command -v pnpm >/dev/null 2>&1; then
+        |  npm install -g pnpm 2>&1 | tail -3 || true
+        |fi
+        |if ! command -v tsc >/dev/null 2>&1; then
+        |  npm install -g typescript 2>&1 | tail -3 || true
+        |fi
+        |echo "[env] pnpm=${'$'}(pnpm --version 2>&1) tsc=${'$'}(tsc --version 2>&1)
+        """.trimMargin(),
+    ),
+    // ─── SSH 子环境 ───
+    SSH_CLIENT(
+        "SSH 客户端 (openssh)",
+        "command -v ssh >/dev/null 2>&1",
+        """
+        |apk add --no-cache openssh-client 2>&1 | tail -2 || true
+        |echo "[env] ssh=${'$'}(ssh -V 2>&1)
+        """.trimMargin(),
+    ),
+    SSHPASS(
+        "sshpass (密码认证工具)",
+        "command -v sshpass >/dev/null 2>&1",
+        """
+        |apk add --no-cache sshpass 2>&1 | tail -2 || true
+        |echo "[env] sshpass=${'$'}(sshpass -V 2>&1 | head -1)
+        """.trimMargin(),
+    ),
+    SSH_SERVER(
+        "OpenSSH 服务器 (反向隧道)",
+        "command -v sshd >/dev/null 2>&1",
+        """
+        |apk add --no-cache openssh-server 2>&1 | tail -2 || true
+        |if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then ssh-keygen -A 2>/dev/null || true; fi
+        |echo "[env] sshd=${'$'}(sshd -V 2>&1 | head -1)
+        """.trimMargin(),
+    ),
+    // ─── Java 子环境 ───
+    OPENJDK17(
+        "OpenJDK 17 (Java 开发环境)",
+        "command -v java >/dev/null 2>&1",
+        """
+        |apk add --no-cache openjdk17 2>&1 | tail -2 || true
+        |ln -sf ${'$'}(command -v java) /usr/local/bin/java 2>/dev/null || true
+        |echo "[env] java=${'$'}(java -version 2>&1 | head -1)
+        """.trimMargin(),
+    ),
+    GRADLE(
+        "Gradle (构建自动化工具)",
+        "command -v gradle >/dev/null 2>&1",
+        """
+        |apk add --no-cache gradle 2>&1 | tail -2 || true
+        |echo "[env] gradle=${'$'}(gradle --version 2>&1 | head -3)
+        """.trimMargin(),
     );
 
     companion object {

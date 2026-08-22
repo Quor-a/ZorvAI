@@ -38,17 +38,44 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
 
-    // 每个环境的状态
-    val envProfiles = listOf(
-        EnvProfile.JAVA to DevEnvInfo("☕", "Java 17 开发环境", "OpenJDK 17 + Gradle 构建工具", Color(0xFFE6794A)),
-        EnvProfile.RUST to DevEnvInfo("🦀", "Rust / Cargo 环境", "通过 rustup 安装 Rust 工具链和 Cargo 包管理器", Color(0xFFE65100)),
-        EnvProfile.GO to DevEnvInfo("🐹", "Go 语言环境", "Go 编程语言开发环境", Color(0xFF00ADD8)),
+    // 环境分类
+    data class EnvSection(val title: String, val items: List<Pair<EnvProfile, DevEnvInfo>>)
+
+    val envSections = listOf(
+        EnvSection("🐍 Python 环境", listOf(
+            EnvProfile.PYTHON to DevEnvInfo("🐍", "Python 开发环境", "Python 3 + pip + venv + uv 全套", Color(0xFF3776AB)),
+            EnvProfile.PYTHON_LINK to DevEnvInfo("🔗", "Python 链接", "将 python 命令链接到 python3", Color(0xFF3776AB)),
+            EnvProfile.PIP to DevEnvInfo("📦", "Pip", "Python 包管理器", Color(0xFF3776AB)),
+            EnvProfile.UV to DevEnvInfo("⚡", "UV", "用 Rust 编写的极速 Python 包安装器", Color(0xFFE65100)),
+            EnvProfile.VENV to DevEnvInfo("📁", "虚拟环境", "Python 虚拟环境支持", Color(0xFF3776AB)),
+        )),
+        EnvSection("🟢 Node.js 环境", listOf(
+            EnvProfile.NODEJS to DevEnvInfo("🟢", "Node.js", "JavaScript 运行时", Color(0xFF339933)),
+            EnvProfile.PNPM to DevEnvInfo("📦", "PNPM + TypeScript", "快速的包管理器和 TypeScript", Color(0xFF339933)),
+        )),
+        EnvSection("🌐 SSH 工具", listOf(
+            EnvProfile.SSH to DevEnvInfo("🔑", "SSH 完整工具链", "SSH 客户端 + sshpass + sshd 反向隧道", Color(0xFF0055A5)),
+            EnvProfile.SSH_CLIENT to DevEnvInfo("🔌", "SSH 客户端", "SSH 连接客户端", Color(0xFF0055A5)),
+            EnvProfile.SSHPASS to DevEnvInfo("🔐", "sshpass", "SSH 密码认证工具", Color(0xFF0055A5)),
+            EnvProfile.SSH_SERVER to DevEnvInfo("🖥️", "OpenSSH 服务器", "用于反向隧道挂载本地文件系统", Color(0xFF0055A5)),
+        )),
+        EnvSection("☕ Java 环境", listOf(
+            EnvProfile.JAVA to DevEnvInfo("☕", "Java 完整环境", "OpenJDK 17 + Gradle 构建工具", Color(0xFFE6794A)),
+            EnvProfile.OPENJDK17 to DevEnvInfo("☕", "OpenJDK 17", "Java 17 开发环境", Color(0xFFE6794A)),
+            EnvProfile.GRADLE to DevEnvInfo("🔨", "Gradle", "现代化的构建自动化工具", Color(0xFFE6794A)),
+        )),
+        EnvSection("🦀 Rust 环境", listOf(
+            EnvProfile.RUST to DevEnvInfo("🦀", "Rust / Cargo", "通过 rustup 安装 Rust 工具链和 Cargo 包管理器", Color(0xFFE65100)),
+        )),
+        EnvSection("🐹 Go 环境", listOf(
+            EnvProfile.GO to DevEnvInfo("🐹", "Go", "Go 编程语言开发环境", Color(0xFF00ADD8)),
+        )),
     )
 
     // 终端就绪状态
     var termReady by remember { mutableStateOf(false) }
     // 各环境就绪状态
-    var envStates by remember { mutableStateOf(envProfiles.map { it.first.name to false }.toMap()) }
+    var envStates by remember { mutableStateOf(mutableMapOf<String, Boolean>()) }
     // 正在部署的环境
     var deploying by remember { mutableStateOf<String?>(null) }
     // 部署日志
@@ -62,8 +89,10 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
             val st = QuroLinuxEnv.probe(ctx)
             termReady = st.available
             if (termReady) {
-                envProfiles.forEach { (profile, _) ->
-                    envStates = envStates + (profile.name to CmsEnvProvisioner.isReady(ctx, profile))
+                envSections.forEach { section ->
+                    section.items.forEach { (profile, _) ->
+                        envStates[profile.name] = CmsEnvProvisioner.isReady(ctx, profile)
+                    }
                 }
             }
         }
@@ -102,79 +131,96 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                 Text("终端环境已就绪 ✓", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 8.dp))
             }
 
-            // 各开发环境卡片
-            envProfiles.forEach { (profile, info) ->
-                val isReady = envStates[profile.name] ?: false
-                val isDeploying = deploying == profile.name
+            // 各开发环境分组
+            envSections.forEach { section ->
+                // 分组标题
+                Text(
+                    section.title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+                
+                // 该分组下的环境卡片
+                section.items.forEach { (profile, info) ->
+                    val isReady = envStates[profile.name] ?: false
+                    val isDeploying = deploying == profile.name
 
-                DevEnvCard(
-                    info = info,
-                    isReady = isReady,
-                    isDeploying = isDeploying,
-                    enabled = termReady && !isDeploying,
-                    onDeploy = {
-                        deploying = profile.name
-                        deployLogs = ""
-                        deployProgress = "正在检查环境..."
-                        scope.launch(Dispatchers.IO) {
-                            try {
-                                // 显示进度更新
-                                withContext(Dispatchers.Main) {
-                                    deployProgress = "正在执行安装脚本..."
-                                }
-                                
-                                val result = CmsEnvProvisioner.provision(ctx, profile)
-                                
-                                withContext(Dispatchers.Main) {
-                                    deployLogs = result
-                                    deployProgress = ""
-                                    Toast.makeText(ctx, result, Toast.LENGTH_LONG).show()
-                                }
-                                // 刷新状态
-                                val ready = CmsEnvProvisioner.isReady(ctx, profile)
-                                withContext(Dispatchers.Main) {
-                                    envStates = envStates + (profile.name to ready)
-                                }
-                            } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    deployLogs = "❌ 部署异常: ${e.message}"
-                                    deployProgress = ""
-                                }
-                            } finally {
-                                withContext(Dispatchers.Main) {
-                                    deploying = null
-                                    deployProgress = ""
+                    DevEnvCard(
+                        info = info,
+                        isReady = isReady,
+                        isDeploying = isDeploying,
+                        enabled = termReady && !isDeploying,
+                        onDeploy = {
+                            deploying = profile.name
+                            deployLogs = ""
+                            deployProgress = "正在检查环境..."
+                            scope.launch(Dispatchers.IO) {
+                                try {
+                                    withContext(Dispatchers.Main) {
+                                        deployProgress = "正在执行安装脚本..."
+                                    }
+                                    
+                                    val result = CmsEnvProvisioner.provision(ctx, profile)
+                                    
+                                    withContext(Dispatchers.Main) {
+                                        deployLogs = result
+                                        deployProgress = ""
+                                        Toast.makeText(ctx, result, Toast.LENGTH_LONG).show()
+                                    }
+                                    val ready = CmsEnvProvisioner.isReady(ctx, profile)
+                                    withContext(Dispatchers.Main) {
+                                        envStates[profile.name] = ready
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        deployLogs = "❌ 部署异常: ${e.message}"
+                                        deployProgress = ""
+                                    }
+                                } finally {
+                                    withContext(Dispatchers.Main) {
+                                        deploying = null
+                                        deployProgress = ""
+                                    }
                                 }
                             }
-                        }
-                    },
-                    deployProgress = if (isDeploying) deployProgress else "",
-                )
-                Spacer(Modifier.height(8.dp))
+                        },
+                        deployProgress = if (isDeploying) deployProgress else "",
+                    )
+                    Spacer(Modifier.height(6.dp))
+                }
+                
+                Spacer(Modifier.height(4.dp))
             }
 
             // 一键全部部署
             if (termReady) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(12.dp))
                 var busyAll by remember { mutableStateOf(false) }
                 Button(
                     onClick = {
                         busyAll = true
                         scope.launch(Dispatchers.IO) {
                             try {
-                                envProfiles.forEach { (profile, _) ->
-                                    deploying = profile.name
-                                    CmsEnvProvisioner.provision(ctx, profile)
-                                    val ready = CmsEnvProvisioner.isReady(ctx, profile)
-                                    envStates = envStates + (profile.name to ready)
+                                envSections.forEach { section ->
+                                    section.items.forEach { (profile, _) ->
+                                        deploying = profile.name
+                                        withContext(Dispatchers.Main) {
+                                            deployProgress = "正在部署 ${profile.name}..."
+                                        }
+                                        CmsEnvProvisioner.provision(ctx, profile)
+                                        val ready = CmsEnvProvisioner.isReady(ctx, profile)
+                                        envStates[profile.name] = ready
+                                    }
                                 }
                                 withContext(Dispatchers.Main) {
                                     Toast.makeText(ctx, "全部环境部署完成", Toast.LENGTH_LONG).show()
+                                    deployProgress = ""
                                 }
                             } finally {
                                 withContext(Dispatchers.Main) {
                                     deploying = null
                                     busyAll = false
+                                    deployProgress = ""
                                 }
                             }
                         }
