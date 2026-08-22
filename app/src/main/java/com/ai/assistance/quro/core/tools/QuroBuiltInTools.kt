@@ -16,6 +16,7 @@ import com.ai.assistance.quro.core.cms.QuroCmsUndeployTool
 import com.ai.assistance.quro.core.cms.QuroPrivStatusTool
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciCallTool
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciListTool
+import com.ai.assistance.quro.core.aidlaci.QuroAciHttpServerTool
 import com.ai.assistance.quro.core.tools.TerminalDriveTool
 import com.ai.assistance.quro.core.tools.ReadScreenTool
 import com.ai.assistance.quro.core.tools.GetForegroundAppTool
@@ -249,6 +250,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // ACI（Agent Capability Interface）：让 AI 作为控制方发现并调用第三方 App 暴露的能力
     r.register(QuroAidlAciListTool())
     r.register(QuroAidlAciCallTool())
+    // ACI HTTP 模拟服务器（当真实 API 尚未完成时使用）
+    r.register(QuroAciHttpServerTool())
     // 工作区 AI 工具：AI 直接读写 ZorvAI 自己的 QuroWorkspace（与构建台 ACI 协作）
     r.register(WorkspaceWriteTool())
     r.register(WorkspaceReadTool())

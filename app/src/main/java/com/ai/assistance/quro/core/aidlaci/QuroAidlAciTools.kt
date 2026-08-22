@@ -217,3 +217,84 @@ class QuroAidlAciCallTool : QuroTool {
         return sb.toString().trim()
     }
 }
+
+/**
+ * ACI HTTP 服务器控制工具。
+ *
+ * 当 ACI 真实 API 尚未完成时，可启用模拟 HTTP 服务器供前端/测试使用。
+ * 支持启停服务器、查看状态、添加/移除模拟能力。
+ */
+class QuroAciHttpServerTool : QuroTool {
+    override val name = "aci_http_server"
+    override val description =
+        "控制 ACI HTTP 模拟服务器（当真实 ACI API 尚未完成时使用）。" +
+            "支持操作：start（启动服务器）、stop（停止）、status（查看状态）、add_capability（添加模拟能力）、remove_capability（移除模拟能力）。" +
+            "服务器提供 RESTful API 端点，可供前端/测试调用 ACI 功能。" +
+            "参数：{\"action\":\"start|stop|status|add_capability|remove_capability\",\"port\":8848,\"capability_id\":\"...\",\"capability\":{...}}"
+
+    override val parametersJson = """{
+        "type":"object",
+        "properties":{
+            "action":{"type":"string","enum":["start","stop","status","add_capability","remove_capability"],"description":"操作类型"},
+            "port":{"type":"integer","description":"（可选）服务器端口，默认 8848"},
+            "capability_id":{"type":"string","description":"（add/remove_capability时必填）能力ID"},
+            "capability":{"type":"object","description":"（add_capability时必填）能力定义 JSON"}
+        },
+        "required":["action"]
+    }"""
+
+    override fun run(context: Context, arguments: String): String {
+        val obj = runCatching { JSONObject(arguments) }
+            .getOrElse { return "参数不是合法 JSON：$arguments" }
+
+        val action = obj.optString("action", "").trim()
+        if (action.isEmpty()) return "缺少 action 参数（start/stop/status/add_capability/remove_capability）"
+
+        val mgr = runCatching { QuroAidlAciManager.getInstance() }
+            .getOrElse { return "⚠️ ACI 尚未初始化（QuroAidlAciManager 未启动）。" }
+
+        return when (action) {
+            "start" -> {
+                val port = obj.optInt("port", 8848)
+                val result = mgr.startAciHttpServer(port)
+                if (result > 0) {
+                    "✅ ACI HTTP 服务器已启动\n端口: $result\n端点: http://127.0.0.1:$result\n\nAPI 端点:\n" +
+                        "- GET  /aci/health          → 健康检查\n" +
+                        "- GET  /aci/capabilities    → 列出所有能力\n" +
+                        "- POST /aci/call            → 调用能力\n" +
+                        "- GET  /aci/apps            → 列出已发现的 ACI App\n" +
+                        "- POST /aci/discover        → 触发服务发现\n" +
+                        "- GET  /aci/audit           → 获取调用审计日志\n" +
+                        "- POST /aci/echo            → 回显测试"
+                } else {
+                    "❌ 启动 ACI HTTP 服务器失败"
+                }
+            }
+            "stop" -> {
+                mgr.stopAciHttpServer()
+                "✅ ACI HTTP 服务器已停止"
+            }
+            "status" -> {
+                val status = mgr.getAciHttpServerStatus()
+                "📊 ACI HTTP 服务器状态:\n${status.toString(2)}"
+            }
+            "add_capability" -> {
+                val capId = obj.optString("capability_id", "")
+                val capJson = obj.optJSONObject("capability")
+                if (capId.isEmpty() || capJson == null) {
+                    return "缺少 capability_id 或 capability 参数"
+                }
+                capJson.put("id", capId)
+                mgr.addAciHttpMockCapability(capJson)
+                "✅ 已添加模拟能力: $capId"
+            }
+            "remove_capability" -> {
+                val capId = obj.optString("capability_id", "")
+                if (capId.isEmpty()) return "缺少 capability_id 参数"
+                mgr.removeAciHttpMockCapability(capId)
+                "✅ 已移除模拟能力: $capId"
+            }
+            else -> "未知操作: $action"
+        }
+    }
+}

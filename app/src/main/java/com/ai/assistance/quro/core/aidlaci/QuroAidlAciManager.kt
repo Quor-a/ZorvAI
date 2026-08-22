@@ -99,6 +99,9 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
     @Volatile
     private var callTimeoutMs = 15_000L
 
+    // ACI HTTP 模拟服务器管理器（当真实 API 尚未完成时使用）
+    private val aciHttpServerManager = AciHttpServerManager(appContext)
+
     // ═══════════════════════════════════
     //  ① 服务发现
     // ═══════════════════════════════════
@@ -971,4 +974,52 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         val success: Boolean,
         val latencyMs: Long
     )
+
+    // ═══════════════════════════════════
+    //  ACI HTTP 模拟服务器管理
+    // ═══════════════════════════════════
+
+    /**
+     * 启动 ACI HTTP 模拟服务器
+     * @param port 监听端口，默认 8848
+     * @return 实际监听端口，失败返回 -1
+     */
+    fun startAciHttpServer(port: Int = 8848): Int {
+        return aciHttpServerManager.start(port)
+    }
+
+    /**
+     * 停止 ACI HTTP 服务器
+     */
+    fun stopAciHttpServer() {
+        aciHttpServerManager.stop()
+    }
+
+    /**
+     * 获取 ACI HTTP 服务器状态
+     */
+    fun getAciHttpServerStatus(): org.json.JSONObject {
+        return aciHttpServerManager.getStatus()
+    }
+
+    /**
+     * 添加 ACI HTTP 服务器模拟能力
+     */
+    fun addAciHttpMockCapability(capability: org.json.JSONObject) {
+        aciHttpServerManager.addMockCapability(capability)
+    }
+
+    /**
+     * 移除 ACI HTTP 服务器模拟能力
+     */
+    fun removeAciHttpMockCapability(capabilityId: String) {
+        aciHttpServerManager.removeMockCapability(capabilityId)
+    }
+
+    /**
+     * ACI HTTP 服务器是否运行中
+     */
+    fun isAciHttpServerRunning(): Boolean {
+        return aciHttpServerManager.isRunning()
+    }
 }
