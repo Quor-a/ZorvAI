@@ -200,32 +200,59 @@ object QuroLinuxEnv {
      * 确保文件可执行：先试 setExecutable，失败则用 chmod 命令。
      * 从 assets 解压的文件在某些设备上需要显式 chmod 才能执行。
      */
-    private fun ensureExecutable(file: File, label: String) {
+    private fun ensureExecutable(file: File, label: String): Boolean {
         if (!file.exists()) {
             Log.w(TAG, "⚠ $label 文件不存在: ${file.absolutePath}")
-            return
+            return false
         }
-        if (file.canExecute()) return
+        if (file.canExecute()) {
+            Log.i(TAG, "✅ $label 已可执行: ${file.absolutePath}")
+            return true
+        }
+
+        Log.i(TAG, "🔧 尝试设置 $label 执行权限: ${file.absolutePath}, size=${file.length()}")
 
         // 方法1：Java API 设置权限
         if (file.setExecutable(true, false)) {
-            Log.i(TAG, "✅ $label 执行权限设置成功 (setExecutable)")
-            return
+            if (file.canExecute()) {
+                Log.i(TAG, "✅ $label 执行权限设置成功 (setExecutable)")
+                return true
+            }
+            Log.w(TAG, "⚠ setExecutable 返回 true 但 canExecute 仍为 false")
         }
 
         // 方法2：使用 chmod 命令（某些设备 Java API 受限）
         try {
             val process = Runtime.getRuntime().exec(arrayOf("chmod", "755", file.absolutePath))
             val exitCode = process.waitFor()
-            if (exitCode == 0 && file.canExecute()) {
-                Log.i(TAG, "✅ $label 执行权限设置成功 (chmod)")
-                return
+            val stderr = process.errorStream.bufferedReader().readText()
+            if (exitCode == 0) {
+                if (file.canExecute()) {
+                    Log.i(TAG, "✅ $label 执行权限设置成功 (chmod 755)")
+                    return true
+                }
+                Log.w(TAG, "⚠ chmod 755 成功但 canExecute 仍为 false")
+            } else {
+                Log.w(TAG, "⚠ chmod 755 失败, exitCode=$exitCode, stderr=$stderr")
             }
         } catch (e: Exception) {
-            Log.w(TAG, "⚠ chmod $label 失败: ${e.message}")
+            Log.w(TAG, "⚠ chmod $label 异常: ${e.message}")
         }
 
-        Log.e(TAG, "❌ 无法设置 $label 执行权限: ${file.absolutePath}")
+        // 方法3：chmod 777（宽松权限，某些设备需要）
+        try {
+            val process = Runtime.getRuntime().exec(arrayOf("chmod", "777", file.absolutePath))
+            val exitCode = process.waitFor()
+            if (exitCode == 0 && file.canExecute()) {
+                Log.i(TAG, "✅ $label 执行权限设置成功 (chmod 777)")
+                return true
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠ chmod 777 $label 异常: ${e.message}")
+        }
+
+        Log.e(TAG, "❌ 无法设置 $label 执行权限: ${file.absolutePath}, canExecute=${file.canExecute()}")
+        return false
     }
 
     private fun getLinuxArch(): String {
@@ -462,8 +489,19 @@ object QuroLinuxEnv {
         val dir = sandboxDir(context)
 
         // 关键修复：执行前强制设置可执行权限（从 assets 解压的文件可能没有权限）
-        ensureExecutable(File(proot), "proot")
-        ensureExecutable(File(loader), "loader")
+        val prootOk = ensureExecutable(File(proot), "proot")
+        val loaderOk = ensureExecutable(File(loader), "loader")
+        if (!prootOk || !loaderOk) {
+            Log.e(TAG, "❌ proot/loader 权限设置失败，prootOk=$prootOk, loaderOk=$loaderOk")
+            // 列出目录内容帮助诊断
+            try {
+                val dir = File(proot).parentFile
+                if (dir != null && dir.exists()) {
+                    val files = dir.listFiles()?.map { "${it.name}(${it.length()}b,exec=${it.canExecute()})" }?.joinToString(", ")
+                    Log.e(TAG, "📁 目录内容: $files")
+                }
+            } catch (_: Throwable) {}
+        }
 
         // 运行期资产刷新（resolv.conf 用设备 DNS / getprop 垫片），让 AI 经 linux_* / terminal_*
         // 工具驱动的命令同样拥有联网能力与 getprop。

@@ -1359,7 +1359,7 @@ fun ChatScreen(
 
         // 语音设置页：内嵌对话框底部的紧凑面板（不再是全屏页）
         if (showVoice) {
-            BackHandler { showVoice = false }
+            BackHandler { showVoice = false; showVoiceService = true }
             Box(Modifier.fillMaxSize().zIndex(100f)) {
                 Surface(
                     Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = 560.dp)
@@ -1369,7 +1369,7 @@ fun ChatScreen(
                     shadowElevation = 12.dp,
                 ) {
                     QuroVoiceSettingsScreen(
-                        onBack = { showVoice = false },
+                        onBack = { showVoice = false; showVoiceService = true },
                         onToggleVoiceBall = onToggleVoiceBall,
                         voiceBallEnabled = voiceBallEnabled,
                     )
@@ -1379,7 +1379,7 @@ fun ChatScreen(
 
         // 语音合成 (TTS) 设置页：内嵌底部紧凑面板
         if (showTts) {
-            BackHandler { showTts = false }
+            BackHandler { showTts = false; showVoiceService = true }
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
                 Surface(
                     Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = 560.dp).navigationBarsPadding(),
@@ -1387,7 +1387,7 @@ fun ChatScreen(
                     tonalElevation = 8.dp, shadowElevation = 12.dp,
                 ) {
                     QuroTtsSettingsScreen(
-                        onBack = { showTts = false },
+                        onBack = { showTts = false; showVoiceService = true },
                         onOpenCloudConfig = { showTts = false; sheet = null; showCloudTts = true },
                     )
                 }
@@ -1396,14 +1396,14 @@ fun ChatScreen(
 
         // 语音识别 (STT) 设置页：内嵌底部紧凑面板
         if (showStt) {
-            BackHandler { showStt = false }
+            BackHandler { showStt = false; showVoiceService = true }
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
                 Surface(
                     Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = 560.dp).navigationBarsPadding(),
                     shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                     tonalElevation = 8.dp, shadowElevation = 12.dp,
                 ) {
-                    QuroSttSettingsScreen(onBack = { showStt = false })
+                    QuroSttSettingsScreen(onBack = { showStt = false; showVoiceService = true })
                 }
             }
         }
