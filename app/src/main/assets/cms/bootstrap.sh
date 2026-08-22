@@ -7,8 +7,8 @@ set -e
 
 BOOT_DIR=$(cd "$(dirname "$0")" && pwd)
 
-# ═══ Phase 0: 配置 DNS（proot 环境可能缺少 DNS） ═══
-echo "[cms-bootstrap] 🔧 configuring DNS..."
+# ═══ Phase 0: 确保 DNS 可用 ═══
+echo "[cms-bootstrap] 🔧 checking DNS..."
 if [ ! -f /etc/resolv.conf ] || ! grep -q "nameserver" /etc/resolv.conf 2>/dev/null; then
     mkdir -p /etc
     cat > /etc/resolv.conf << 'DNS'
@@ -17,41 +17,51 @@ nameserver 8.8.4.4
 nameserver 114.114.114.114
 nameserver 223.5.5.5
 DNS
-    echo "[cms-bootstrap] DNS configured (8.8.8.8, 114.114.114.114, 223.5.5.5)"
+    echo "[cms-bootstrap] DNS configured (fallback: 8.8.8.8, 114.114.114.114)"
+else
+    echo "[cms-bootstrap] DNS already configured"
 fi
 
-# ═══ Phase 0.5: 配置镜像源（使用国内镜像 + 官方源） ═══
-echo "[cms-bootstrap] 🔧 configuring apk mirrors..."
-MIRROR_DIR="/etc/apk/repositories.d"
-mkdir -p "$MIRROR_DIR"
-# 使用阿里云镜像（国内快速）+ 官方源作为备用
-cat > /etc/apk/repositories << 'MIRRORS'
+# ═══ Phase 0.5: 确保镜像源可用（不覆盖已有配置，除非为空） ═══
+echo "[cms-bootstrap] 🔧 checking apk mirrors..."
+if [ ! -s /etc/apk/repositories ] || ! grep -q "alpine" /etc/apk/repositories 2>/dev/null; then
+    # 配置文件不存在或为空，写入默认镜像（清华 + 阿里云 + 官方）
+    mkdir -p /etc/apk
+    cat > /etc/apk/repositories << 'MIRRORS'
+https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.20/main
+https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.20/community
 https://mirrors.aliyun.com/alpine/v3.20/main
 https://mirrors.aliyun.com/alpine/v3.20/community
 https://dl-cdn.alpinelinux.org/alpine/v3.20/main
 https://dl-cdn.alpinelinux.org/alpine/v3.20/community
 MIRRORS
-echo "[cms-bootstrap] mirrors configured: aliyun + official"
+    echo "[cms-bootstrap] mirrors configured: tsinghua + aliyun + official"
+else
+    echo "[cms-bootstrap] mirrors already configured (keeping existing)"
+fi
 
 # ═══ Phase 1: 更新索引（带重试） ═══
 echo "[cms-bootstrap] 📦 updating apk index..."
 update_apk() {
-    apk update --no-cache 2>&1 && return 0
-    echo "[cms-bootstrap] WARN: apk update failed, trying alternative mirrors..."
-    # 尝试只用官方源
-    echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/main" > /etc/apk/repositories
-    echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/repositories
-    sleep 2
-    apk update --no-cache 2>&1 && return 0
-    # 最后尝试只用主源
-    echo "https://mirrors.aliyun.com/alpine/v3.20/main" > /etc/apk/repositories
-    sleep 2
-    apk update --no-cache 2>&1 && return 0
+    # 先试当前配置
+    if apk update --no-cache 2>&1; then return 0; fi
+    echo "[cms-bootstrap] WARN: apk update failed, trying fallback mirrors..."
+    # 逐个尝试其他镜像
+    for mirror in \
+        "https://mirrors.tuna.tsinghua.edu.cn/alpine" \
+        "https://mirrors.aliyun.com/alpine" \
+        "https://dl-cdn.alpinelinux.org/alpine"; do
+        echo "https://${mirror#https://}/v3.20/main" > /etc/apk/repositories
+        echo "https://${mirror#https://}/v3.20/community" >> /etc/apk/repositories
+        sleep 1
+        if apk update --no-cache 2>&1; then return 0; fi
+    done
     return 1
 }
 update_apk || {
     echo "[cms-bootstrap] ❌ FAILED: apk update failed on all mirrors"
-    echo "[cms-bootstrap] Check network connectivity in proot environment"
+    echo "[cms-bootstrap] Available repositories:"
+    cat /etc/apk/repositories 2>/dev/null || echo "(none)"
     exit 1
 }
 

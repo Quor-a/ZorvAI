@@ -138,98 +138,86 @@ data class EngineSvc(
 /** 内置引擎引导脚本（幂等，与 assets/cms/bootstrap.sh 同源，便于引擎包独立分发）。 */
 private val BUILTIN_BOOTSTRAP = """
 #!/bin/sh
-# Quro Engine bootstrap — one-time full dev environment under /root/cms/_engine (proot/Alpine aarch64).
+# Quro Engine bootstrap - one-time full dev environment under /root/cms/_engine.
 set -e
 ENGINE_DIR=/root/cms/_engine
 mkdir -p "${'$'}ENGINE_DIR/services"
 
-# ═══ Phase 0: 配置 DNS ═══
-echo "[quro-engine] 🔧 configuring DNS..."
+# Phase 0: DNS
+echo "[quro-engine] checking DNS..."
 if [ ! -f /etc/resolv.conf ] || ! grep -q "nameserver" /etc/resolv.conf 2>/dev/null; then
     mkdir -p /etc
-    cat > /etc/resolv.conf << 'DNS'
-nameserver 8.8.8.8
-nameserver 8.8.4.4
-nameserver 114.114.114.114
-nameserver 223.5.5.5
-DNS
-    echo "[quro-engine] DNS configured"
+    printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\nnameserver 114.114.114.114\n' > /etc/resolv.conf
+    echo "[quro-engine] DNS configured (fallback)"
+else
+    echo "[quro-engine] DNS already configured"
 fi
 
-# ═══ Phase 0.5: 配置镜像源 ═══
-echo "[quro-engine] 🔧 configuring apk mirrors..."
-cat > /etc/apk/repositories << 'MIRRORS'
-https://mirrors.aliyun.com/alpine/v3.20/main
-https://mirrors.aliyun.com/alpine/v3.20/community
-https://dl-cdn.alpinelinux.org/alpine/v3.20/main
-https://dl-cdn.alpinelinux.org/alpine/v3.20/community
-MIRRORS
+# Phase 0.5: mirrors (skip if already configured by Android side)
+echo "[quro-engine] checking apk mirrors..."
+if [ ! -s /etc/apk/repositories ] || ! grep -q "alpine" /etc/apk/repositories 2>/dev/null; then
+    mkdir -p /etc/apk
+    printf 'https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.20/main\nhttps://mirrors.tuna.tsinghua.edu.cn/alpine/v3.20/community\nhttps://mirrors.aliyun.com/alpine/v3.20/main\nhttps://mirrors.aliyun.com/alpine/v3.20/community\nhttps://dl-cdn.alpinelinux.org/alpine/v3.20/main\nhttps://dl-cdn.alpinelinux.org/alpine/v3.20/community\n' > /etc/apk/repositories
+    echo "[quro-engine] mirrors configured"
+else
+    echo "[quro-engine] mirrors already configured"
+fi
 
-# ═══ Phase 1: 更新索引（带重试） ═══
-echo "[quro-engine] 📦 updating apk index..."
-update_apk() {
-    apk update --no-cache 2>&1 && return 0
+# Phase 1: apk update with retry
+echo "[quro-engine] updating apk index..."
+if ! apk update --no-cache 2>&1; then
     echo "[quro-engine] WARN: apk update failed, trying alternative mirrors..."
-    echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/main" > /etc/apk/repositories
-    echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/repositories
-    sleep 2
-    apk update --no-cache 2>&1 && return 0
-    echo "https://mirrors.aliyun.com/alpine/v3.20/main" > /etc/apk/repositories
-    sleep 2
-    apk update --no-cache 2>&1 && return 0
-    return 1
-}
-update_apk || {
-    echo "[quro-engine] ❌ FAILED: apk update failed on all mirrors"
-    exit 1
-}
-
-# ═══ Phase 2: 语言运行时 ═══
-echo "[quro-engine] 📦 installing language runtimes..."
-install_with_retry() {
-    local pkgs="$1"
-    local max_retries=3
-    local retry=0
-    while [ ${'$'}retry -lt ${'$'}max_retries ]; do
-        apk add --no-cache ${'$'}pkgs 2>&1 && return 0
-        retry=$((${'$'}retry + 1))
-        echo "[quro-engine] WARN: attempt ${'$'}retry/${'$'}max_retries failed, retrying in 3s..."
-        sleep 3
+    for m in tsinghua aliyun dl-cdn; do
+        case "${'$'}m" in
+            tsinghua) BASE="https://mirrors.tuna.tsinghua.edu.cn/alpine" ;;
+            aliyun)   BASE="https://mirrors.aliyun.com/alpine" ;;
+            dl-cdn)   BASE="https://dl-cdn.alpinelinux.org/alpine" ;;
+        esac
+        printf '%s/v3.20/main\n%s/v3.20/community\n' "${'$'}BASE" "${'$'}BASE" > /etc/apk/repositories
+        sleep 1
+        if apk update --no-cache 2>&1; then break; fi
     done
-    return 1
+    # final check
+    if ! apk update --no-cache 2>&1; then
+        echo "[quro-engine] FAILED: apk update failed on all mirrors"
+        exit 1
+    fi
+fi
+
+# Phase 2: language runtimes
+echo "[quro-engine] installing language runtimes..."
+apk add --no-cache python3 py3-pip nodejs npm 2>&1 || {
+    sleep 3
+    apk add --no-cache python3 py3-pip nodejs npm 2>&1 || {
+        echo "[quro-engine] FAILED: language runtimes install failed"
+        exit 1
+    }
 }
-install_with_retry "python3 py3-pip nodejs npm" || {
-    echo "[quro-engine] ❌ FAILED: language runtimes install failed"
-    exit 1
-}
 
-# ═══ Phase 3: 编译工具链 ═══
-echo "[quro-engine] 🔨 installing build toolchain..."
-install_with_retry "gcc g++ make cmake linux-headers" || true
+# Phase 3: build toolchain
+echo "[quro-engine] installing build toolchain..."
+apk add --no-cache gcc g++ make cmake linux-headers 2>&1 || true
 
-# ═══ Phase 4: 开发工具 ═══
-echo "[quro-engine] 🛠️ installing dev tools..."
-install_with_retry "git vim nano bash" || true
+# Phase 4: dev tools
+echo "[quro-engine] installing dev tools..."
+apk add --no-cache git vim nano bash 2>&1 || true
 
-# ═══ Phase 5: 网络与压缩工具 ═══
-echo "[quro-engine] 🌐 installing network & utility tools..."
-install_with_retry "curl wget jq zip unzip openssh-client" || true
+# Phase 5: network tools
+echo "[quro-engine] installing network tools..."
+apk add --no-cache curl wget jq zip unzip openssh-client 2>&1 || true
 
-# ═══ Phase 6: Python venv ═══
+# Phase 6: Python venv
 if [ ! -x /root/cms-venv/bin/python3 ]; then
     echo "[quro-engine] creating /root/cms-venv..."
-    python3 -m venv /root/cms-venv || echo "[quro-engine] WARN: venv creation failed"
+    python3 -m venv /root/cms-venv 2>&1 || echo "[quro-engine] WARN: venv creation failed"
 fi
 
-# ═══ 验证 ═══
-echo "[quro-engine] ✅ dev environment ready:"
+# Verify
+echo "[quro-engine] dev environment ready:"
 echo "  python3  = ${'$'}(python3 --version 2>&1)"
 echo "  node     = ${'$'}(node --version 2>&1)"
-echo "  npm      = ${'$'}(npm --version 2>&1)"
 echo "  gcc      = ${'$'}(gcc --version 2>&1 | head -1)"
-echo "  cmake    = ${'$'}(cmake --version 2>&1 | head -1)"
 echo "  git      = ${'$'}(git --version 2>&1)"
-echo "  curl     = ${'$'}(curl --version 2>&1 | head -1)"
 
 touch "${'$'}ENGINE_DIR/.engine.ready"
 echo "[quro-engine] marker written: ${'$'}ENGINE_DIR/.engine.ready"
