@@ -27,6 +27,7 @@ import com.ai.assistance.quro.core.aidlaci.QuroAidlAciManager
 fun AciAppSelector(
     selectedPackage: String?,
     onAppSelected: (String, String) -> Unit, // packageName, appName
+    onClearSelection: () -> Unit = {}, // 取消选择
     modifier: Modifier = Modifier,
     showOnlyBound: Boolean = true,
 ) {
@@ -166,11 +167,24 @@ fun AciAppSelector(
                     )
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            "已选择: ${selectedApp.appName}",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "已选择: ${selectedApp.appName}",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            // 取消选择按钮
+                            TextButton(
+                                onClick = onClearSelection,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            ) {
+                                Text("取消选择", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             "能力 (${selectedApp.capabilities.size}):",
@@ -211,6 +225,7 @@ fun AciAppSelector(
 fun AciAppSelectionDialog(
     onDismiss: () -> Unit,
     onAppSelected: (String, String) -> Unit,
+    onClearSelection: () -> Unit = {},
     initialSelectedPackage: String? = null,
 ) {
     var selectedPackage by remember { mutableStateOf(initialSelectedPackage) }
@@ -228,21 +243,46 @@ fun AciAppSelectionDialog(
                     selectedPackage = pkg
                     selectedAppName = name
                 },
+                onClearSelection = {
+                    selectedPackage = null
+                    selectedAppName = ""
+                    onClearSelection()
+                },
                 modifier = Modifier.fillMaxWidth(),
                 showOnlyBound = false, // 显示所有应用，包括未绑定的
             )
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    if (selectedPackage != null) {
-                        onAppSelected(selectedPackage!!, selectedAppName)
-                        onDismiss()
-                    }
-                },
-                enabled = selectedPackage != null,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("选择")
+                // 取消选择按钮（仅在有选中应用时显示）
+                if (selectedPackage != null) {
+                    TextButton(
+                        onClick = {
+                            selectedPackage = null
+                            selectedAppName = ""
+                            onClearSelection()
+                        },
+                    ) {
+                        Text("取消选择")
+                    }
+                } else {
+                    Spacer(modifier = Modifier)
+                }
+                // 确认按钮
+                Button(
+                    onClick = {
+                        if (selectedPackage != null) {
+                            onAppSelected(selectedPackage!!, selectedAppName)
+                            onDismiss()
+                        }
+                    },
+                    enabled = selectedPackage != null,
+                ) {
+                    Text("选择")
+                }
             }
         },
         dismissButton = {

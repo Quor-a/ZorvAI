@@ -978,6 +978,7 @@ fun ChatScreen(
                         onVoiceInput = { startDialogStt() },
                         onOpenSkills = { showSkills = true },
                         onOpenAciSelector = { showAciSelector = true },
+                        onOpenEditor = { showEditor = true },
                         scaled = { scaled(it) }
                     )
                 }
@@ -1371,6 +1372,11 @@ fun ChatScreen(
                     )
                     Toast.makeText(ctx, "已设置默认 ACI 应用: $appName", Toast.LENGTH_SHORT).show()
                     showAciSelector = false
+                },
+                onClearSelection = {
+                    // 清除默认 ACI 应用
+                    com.ai.assistance.quro.core.aidlaci.AciAppPreferences.clearDefaultApp(ctx)
+                    Toast.makeText(ctx, "已清除默认 ACI 应用", Toast.LENGTH_SHORT).show()
                 },
                 initialSelectedPackage = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultPackage(ctx),
             )
@@ -3401,6 +3407,7 @@ private fun Composer(
     onVoiceInput: () -> Unit = {},
     onOpenSkills: () -> Unit = {},
     onOpenAciSelector: () -> Unit = {},
+    onOpenEditor: () -> Unit = {},
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -3450,13 +3457,47 @@ private fun Composer(
             IconButton(onClick = onAttach, Modifier.size(44.dp).padding(2.dp)) {
                 Icon(Icons.Filled.Add, "上传文件", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
             }
-            // [v382] 输入框技能按钮：恢复被 v373 checkout 冲掉的 sparkles「选择技能」入口（v372 Composer 输入行原在 上传 与 语音 之间）
-            IconButton(onClick = onOpenSkills, Modifier.size(44.dp).padding(2.dp)) {
-                LucideIcon("sparkles", "选择技能", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
-            }
-            // ACI 应用选择器按钮：选择默认 ACI 应用
-            IconButton(onClick = onOpenAciSelector, Modifier.size(44.dp).padding(2.dp)) {
-                Icon(Icons.Filled.Public, "选择 ACI 应用", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
+            // 工具菜单按钮：合并技能选择、ACI 应用选择、编辑器
+            var showToolMenu by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { showToolMenu = true }, Modifier.size(44.dp).padding(2.dp)) {
+                    Icon(Icons.Filled.Build, "工具", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
+                }
+                DropdownMenu(
+                    expanded = showToolMenu,
+                    onDismissRequest = { showToolMenu = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("选择技能") },
+                        onClick = {
+                            showToolMenu = false
+                            onOpenSkills()
+                        },
+                        leadingIcon = {
+                            LucideIcon("sparkles", null, Modifier.size(18.dp), tint = cs.primary)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("选择 ACI 应用") },
+                        onClick = {
+                            showToolMenu = false
+                            onOpenAciSelector()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Public, null, Modifier.size(18.dp), tint = cs.primary)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("编辑器") },
+                        onClick = {
+                            showToolMenu = false
+                            onOpenEditor()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Code, null, Modifier.size(18.dp), tint = cs.primary)
+                        },
+                    )
+                }
             }
             if (voiceInputEnabled) {
                 IconButton(onClick = onVoiceInput, Modifier.size(44.dp).padding(2.dp)) {
