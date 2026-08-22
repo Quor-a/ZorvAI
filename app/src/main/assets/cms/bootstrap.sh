@@ -41,13 +41,11 @@ DNS
     
     # 验证写入是否成功
     if [ ! -f /etc/resolv.conf ] || ! grep -q "nameserver" /etc/resolv.conf 2>/dev/null; then
-        echo "[cms-bootstrap] ERROR: failed to write DNS configuration"
-        echo "[cms-bootstrap] Current /etc directory contents:"
-        ls -la /etc/ 2>/dev/null || echo "(empty)"
-        exit 1
+        echo "[cms-bootstrap] WARN: failed to write DNS configuration, continuing anyway..."
+        # 不退出，继续执行后续步骤
+    else
+        echo "[cms-bootstrap] DNS configured (fallback: 8.8.8.8, 114.114.114.114)"
     fi
-    
-    echo "[cms-bootstrap] DNS configured (fallback: 8.8.8.8, 114.114.114.114)"
 else
     echo "[cms-bootstrap] DNS already configured"
 fi
