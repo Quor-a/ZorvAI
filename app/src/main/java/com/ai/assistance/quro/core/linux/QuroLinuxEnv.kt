@@ -101,11 +101,60 @@ object QuroLinuxEnv {
         File(sandboxDir(context), "tmp").absolutePath
 
     /** proot 二进制：nativeLibraryDir 内，Android 在此授予 .so 可执行权限。 */
-    fun prootPath(context: Context): String =
-        File(context.applicationInfo.nativeLibraryDir, "libproot.so").absolutePath
+    fun prootPath(context: Context): String = findNativeLibWithAssetsFallback(context, "libproot.so")
 
-    fun loaderPath(context: Context): String =
-        File(context.applicationInfo.nativeLibraryDir, "libproot-loader.so").absolutePath
+    fun loaderPath(context: Context): String = findNativeLibWithAssetsFallback(context, "libproot-loader.so")
+    
+    /**
+     * 查找 native library，如果 nativeLibraryDir 为空则从 assets 解压。
+     * 解决某些设备/ROM 的 native library 解压失败问题。
+     */
+    private fun findNativeLibWithAssetsFallback(context: Context, libName: String): String {
+        val primary = File(context.applicationInfo.nativeLibraryDir, libName)
+        if (primary.exists()) return primary.absolutePath
+        
+        // nativeLibraryDir 为空，尝试从 assets 解压
+        Log.w(TAG, "⚠ $libName 在 nativeLibraryDir 中不存在，尝试从 assets 解压")
+        val extracted = extractProotFromAssets(context, libName)
+        if (extracted != null) {
+            Log.i(TAG, "✅ 从 assets 解压 $libName: ${extracted.absolutePath}")
+            return extracted.absolutePath
+        }
+        
+        Log.w(TAG, "⚠ $libName 在所有路径均未找到，返回默认路径: ${primary.absolutePath}")
+        return primary.absolutePath
+    }
+    
+    /**
+     * 从 assets/linux_env/ 解压 proot 二进制到应用私有目录。
+     */
+    private fun extractProotFromAssets(context: Context, libName: String): File? {
+        return try {
+            val assetName = when (libName) {
+                "libproot.so" -> "linux_env/proot"
+                "libproot-loader.so" -> "linux_env/libproot-loader.so"
+                "libproot-loader32.so" -> "linux_env/libproot-loader32.so"
+                else -> null
+            } ?: return null
+            
+            val targetDir = File(context.filesDir, "native-libs")
+            targetDir.mkdirs()
+            val target = File(targetDir, libName)
+            if (target.exists()) return target
+            
+            context.assets.open(assetName).use { input ->
+                FileOutputStream(target).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            target.setExecutable(true, false)
+            Log.i(TAG, "✅ 从 assets 解压 $assetName -> ${target.absolutePath} (${target.length()} bytes)")
+            target
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ 从 assets 解压 $libName 失败: ${e.message}")
+            null
+        }
+    }
 
 
 
@@ -235,10 +284,58 @@ object QuroLinuxEnv {
             val nativeFiles = try {
                 File(nativeDir).listFiles()?.map { it.name }?.joinToString(", ") ?: "(目录不可读)"
             } catch (_: Throwable) { "(访问失败)" }
+            
+            // 详细诊断
+            val diagnosticInfo = buildString {
+                appendLine("=== proot 缺失诊断 ===")
+                appendLine("proot路径: ${proot.absolutePath}")
+                appendLine("nativeLibraryDir: $nativeDir")
+                appendLine("nativeLibraryDir存在: ${File(nativeDir).exists()}")
+                appendLine("nativeLibraryDir可读: ${File(nativeDir).canRead()}")
+                appendLine("nativeLibraryDir内容: $nativeFiles")
+                appendLine("文件大小: ${proot.length()}")
+                appendLine("文件权限: canRead=${proot.canRead()}, canWrite=${proot.canWrite()}, canExecute=${proot.canExecute()}")
+                
+                // 检查 APK 安装目录
+                try {
+                    val apkDir = File(context.applicationInfo.sourceDir).parentFile
+                    if (apkDir != null) {
+                        appendLine("APK安装目录: ${apkDir.absolutePath}")
+                        appendLine("APK安装目录存在: ${apkDir.exists()}")
+                        // 列出 lib 目录
+                        val libDir = File(apkDir, "lib")
+                        if (libDir.exists()) {
+                            val libFiles = libDir.listFiles()?.map { it.name }?.joinToString(", ") ?: "(空)"
+                            appendLine("lib目录内容: $libFiles")
+                            // 检查 arm64-v8a 目录
+                            val arm64Dir = File(libDir, "arm64-v8a")
+                            if (arm64Dir.exists()) {
+                                val arm64Files = arm64Dir.listFiles()?.map { it.name }?.joinToString(", ") ?: "(空)"
+                                appendLine("arm64-v8a目录内容: $arm64Files")
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    appendLine("APK目录检查失败: ${e.message}")
+                }
+                
+                // 检查 assets
+                try {
+                    val assetFiles = context.assets.list("linux_env") ?: emptyArray()
+                    appendLine("assets/linux_env/内容: ${assetFiles.joinToString(", ")}")
+                } catch (e: Exception) {
+                    appendLine("assets检查失败: ${e.message}")
+                }
+                
+                appendLine("========================")
+            }
+            
+            Log.e(TAG, diagnosticInfo)
             throw IllegalStateException(
                 "proot 二进制缺失于 ${proot.absolutePath}。\n" +
                 "应用库目录($nativeDir)内容: $nativeFiles。\n" +
-                "可能原因：1) APK 未正确安装；2) 设备架构不匹配（需 arm64-v8a）；" +
+                "详细诊断信息已记录到日志。\n" +
+                "可能原因：1) APK 未正确安装（native library 未解压）；2) 设备架构不匹配（需 arm64-v8a）；" +
                 "3) 系统清理了应用数据。请尝试卸载重装。"
             )
         }
@@ -249,7 +346,7 @@ object QuroLinuxEnv {
         // Android 把原生 .so 的 .so.2 后缀剥离，Alpine 内程序按 libtalloc.so.2 找，这里补回。
         val talloc = File(dir, "libtalloc.so.2")
         if (!talloc.exists()) {
-            val tallocPath = File(context.applicationInfo.nativeLibraryDir, "libtalloc.so").absolutePath
+            val tallocPath = findNativeLibWithAssetsFallback(context, "libtalloc.so")
             val src = File(tallocPath)
             if (src.exists()) src.copyTo(talloc, overwrite = true)
             else QuroDiag.log("LinuxEnv", "⚠ nativeLibraryDir 无 libtalloc.so，libproot-loader 可能加载失败")
