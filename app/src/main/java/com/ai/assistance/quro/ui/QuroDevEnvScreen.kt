@@ -84,7 +84,7 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
     // 部署进度
     var deployProgress by remember { mutableStateOf("") }
 
-    // 进入时检查终端和环境状态
+    // 进入时检查终端和环境状态（不重置正在部署的状态）
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             val st = QuroLinuxEnv.probe(ctx)
@@ -93,7 +93,13 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                 val states = mutableMapOf<String, Boolean>()
                 envSections.forEach { section ->
                     section.items.forEach { (profile, _) ->
-                        states[profile.name] = CmsEnvProvisioner.isReady(ctx, profile)
+                        // 只检测不在部署中的环境
+                        if (deploying != profile.name) {
+                            states[profile.name] = CmsEnvProvisioner.isReady(ctx, profile)
+                        } else {
+                            // 部署中的环境保持当前状态
+                            states[profile.name] = envStates[profile.name] ?: false
+                        }
                     }
                 }
                 envStates = states
