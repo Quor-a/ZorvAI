@@ -1282,14 +1282,13 @@ fun ChatScreen(
             }
         }
 
-        // 内置代码编辑器：全屏覆盖层（从输入框「代码」按钮进入）
+        // 全屏文本编辑器：编辑对话框长文本
         if (showEditor) {
             BackHandler { showEditor = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(Color(0xFFF2F2F7))) {
-                EditorScreen(
-                    initialCode = inputText.text,
-                    initialLang = "javascript",
-                    onClose = { code -> inputText = TextFieldValue(code); showEditor = false }
+                TextEditorScreen(
+                    initialText = inputText.text,
+                    onClose = { text -> inputText = TextFieldValue(text); showEditor = false }
                 )
             }
         }
@@ -3514,13 +3513,13 @@ private fun Composer(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("编辑器") },
+                        text = { Text("编辑文本") },
                         onClick = {
                             showToolMenu = false
                             onOpenEditor()
                         },
                         leadingIcon = {
-                            Icon(Icons.Filled.Code, null, Modifier.size(18.dp), tint = cs.primary)
+                            Icon(Icons.Filled.Edit, null, Modifier.size(18.dp), tint = cs.primary)
                         },
                     )
                 }
