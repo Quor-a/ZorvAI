@@ -340,7 +340,13 @@ class QuroRagPipeline(
         store.deleteByDoc(docId)
         val chunks = chunkText(text)
         if (chunks.isEmpty()) return
-        val embs = embedder.embed(chunks)
+        // 尝试语义嵌入，失败时降级为词法（零向量）
+        val embs = try {
+            embedder.embed(chunks)
+        } catch (e: Exception) {
+            // Embedding API 失败，使用词法降级（零向量）
+            chunks.map { FloatArray(1) }
+        }
         chunks.zip(embs).forEachIndexed { i, (c, e) ->
             store.upsert(
                 QuroChunk(
