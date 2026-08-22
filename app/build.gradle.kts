@@ -103,6 +103,9 @@ android {
             // 排除 AGP 8.13 自动生成的 .version 文件（部分厂商安装器可能不识别）
             excludes += "META-INF/*.version"
         }
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
         androidResources {
