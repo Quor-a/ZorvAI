@@ -63,7 +63,7 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
     var showLicense by remember { mutableStateOf(false) }
     var showPermissionStatement by remember { mutableStateOf(false) }
     var showUserAgreement by remember { mutableStateOf(false) }
-    var updateDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var updateDialog by remember { mutableStateOf<Triple<String, String, String>?>(null) }
     var updateVersion by remember { mutableStateOf("") }
     var checking by remember { mutableStateOf(false) }
     val openUrl: (String) -> Unit = { url ->
@@ -162,7 +162,7 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
                                         updateVersion = lv
                                         // 自动下载 APK
                                         if (apkUrl != null && apkUrl!!.isNotBlank()) {
-                                            downloadApk(ctx, apkUrl!!, "ZorvAI-v$lv.apk")
+                                            downloadApk(ctx, apkUrl!!, "ZorvAI-v$lv.apk", lv)
                                         } else {
                                             // 如果没有 APK 下载链接，显示对话框让用户选择
                                             updateDialog = Triple(
@@ -435,12 +435,12 @@ private fun isVersionNewer(latest: String, current: String): Boolean {
 /**
  * 自动下载 APK 文件
  */
-private fun downloadApk(context: android.content.Context, apkUrl: String, fileName: String = "ZorvAI-update.apk") {
+private fun downloadApk(context: android.content.Context, apkUrl: String, fileName: String = "ZorvAI-update.apk", version: String = "") {
     try {
         val downloadManager = context.getSystemService(android.content.Context.DOWNLOAD_SERVICE) as DownloadManager
         val request = DownloadManager.Request(Uri.parse(apkUrl))
             .setTitle("下载 ZorvAI 更新")
-            .setDescription("正在下载新版本 v$updateVersion...")
+            .setDescription("正在下载新版本 v$version...")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
             .setAllowedOverMetered(true)

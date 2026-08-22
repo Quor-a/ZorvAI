@@ -74,8 +74,12 @@ keystore.properties
 .backup/
 outputs/
 *.backup
-*.bak
+*.bak*
 *.bak2
+*.orig
+*.swp
+*.swo
+*~
 .git-rewrite/
 
 # Large model files
