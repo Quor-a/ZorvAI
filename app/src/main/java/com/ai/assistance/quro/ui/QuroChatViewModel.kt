@@ -1811,7 +1811,15 @@ $recent
         sb.append("- ACI Token 认证：控制端（ZorvAI）在每次调用时自动添加 Token（_aci_token 参数），受控端可选择验证 Token 以增强安全性。Token 使用 AndroidKeyStore 加密存储，每个目标应用独立 Token。\n")
         sb.append("- ACI 不使用、也不需要：Shizuku / dumpsys / OPLUS 权限 / ROOT / 无障碍 / 设备管理员。遇到任何 ACI 问题时【禁止】用这些系统工具去\"诊断\"或\"修复\"——那会偏离 ACI 的设计，且对解决问题毫无帮助。\n")
         sb.append("- aci_list：列出当前已发现的所有 ACI 第三方 App 及其暴露的能力（id / 说明 / 参数 / 是否需用户确认）。\n")
-        sb.append("- aci_call：调用某个第三方 App 的 ACI 能力，参数 {target_package, capability, args}；会跨进程发往目标 App 并同步返回结果。\n")
+        sb.append("- aci_call：调用某个第三方 App 的 ACI 能力，参数 {target_package(可选), capability, args}；会跨进程发往目标 App 并同步返回结果。\n")
+        // 动态注入当前默认 ACI 应用，让模型明确知道可省略 target_package
+        val defaultAciPkg = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultPackage(appContext)
+        val defaultAciName = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultAppName(appContext)
+        if (defaultAciPkg != null) {
+            sb.append("- 【重要】用户已在 ACI 管理中心设置了默认 ACI 应用：${defaultAciName ?: defaultAciPkg}（包名 $defaultAciPkg）。调用 aci_call 时【可以省略 target_package】，系统会自动使用此默认应用；只有需要调用其它非默认应用时才显式传 target_package。\n")
+        } else {
+            sb.append("- 用户尚未设置默认 ACI 应用；调用 aci_call 时需显式传 target_package（用 aci_list 查到的 pkg）。\n")
+        }
         sb.append("- 应用启动时会自动发现设备上已安装的 ACI App；若 aci_list 为空，仅说明目标 App 未安装或未声明 ACI Service → 直接告知用户去安装该 App，【不要】跑 dumpsys/Shizuku 去查。\n")
         sb.append("- 排障边界（重要）：若 aci_call 返回 503（服务未绑定），这是绑定生命周期问题，框架会自动重绑 → 直接重试一次 aci_call 即可，【不要】去授权任何系统权限。其他错误码请原样转告用户，不要臆测为\"权限不足\"。\n")
         sb.append("- 官方参考受控端「ZorvAI 浏览器」(包名 com.ai.assistance.quro.browser) 已暴露能力：browser_open(打开网址) / browser_read(读当前页URL+标题+HTML) / browser_crawl(爬结构化正文+出站链接) / browser_search(搜索引擎检索) / browser_script(执行任意JS) / browser_list(列出标签页) / browser_info(版本信息) / browser_capture(抓包) / browser_find(页内查找文本) / browser_nav(前进/后退/刷新) / browser_screenshot(截图存Pictures/QuroAI_screenshots/) / console_ui(控制台UI描述JSON) / console_action(控制台动作) / browser_elements(元素树·稳定ID) / browser_action(按ID/CSS操作·点击/输入/滚动) / browser_wait(条件等待·可见/网络空闲) / browser_snapshot(页面状态快照) / browser_restore(快照回滚) / browser_events(页面事件流) / browser_audit(ACI调用审计) / browser_media(媒体/文件资源) / browser_share(系统分享面板) / browser_console(抓取console输出) / browser_query(CSS选择器查DOM) / browser_tabnew(新建标签页) / browser_tabs(列出标签页) / browser_tab(切换标签页) / browser_tabclose(关闭标签页) / browser_mouse(屏幕坐标模拟鼠标) / http_request(代发HTTP·支持LAN明文) / inject_touch(设备级真实触摸注入·Uinput·需root/系统签名)。（此为依据受控端 onCreateCapabilities 的全量参考，共 31 项；完整实时清单与参数以 aci_list / 下方「已发现的第三方能力清单」为准，二者应一致。）browser_read/browser_crawl 已修复，在 SPA 大页(如 news.sina.cn)也能稳定返回内容。\n")
