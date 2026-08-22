@@ -37,7 +37,8 @@ object CmsTerminalDeployer {
      * 确保 CMS 基础运行环境已就绪（proot/Alpine 内）。
      * - proot 未就绪 → 返回引导文案（不静默失败）。
      * - 已就绪但缺 .bootstrap.done 标记 → 从 assets 拷 bootstrap.sh 进 proot 并执行。
-     * - 已标记 → 直接返回就绪（幂等）。
+     * - 已标记但关键工具缺失（proot重启后rootfs重置） → 重新执行 bootstrap。
+     * - 已标记且工具就绪 → 直接返回就绪（幂等）。
      * 返回人类可读状态；以 ⛔ 开头表示失败。
      */
     fun bootstrap(context: Context): String {
@@ -48,9 +49,18 @@ object CmsTerminalDeployer {
         }
         val dir = bootstrapDir(context)
         val marker = File(dir, ".bootstrap.done")
-        if (marker.exists()) {
+        
+        // 检查关键工具是否存在（proot重启后可能丢失）
+        val checkTools = QuroLinuxEnv.run(context, "command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1 && command -v gcc >/dev/null 2>&1", timeoutMs = 10_000)
+        val toolsMissing = checkTools.first != 0
+        
+        if (marker.exists() && !toolsMissing) {
             CmsStateStore.appendLog("_bootstrap", "✅ CMS 基础环境已就绪（跳过 bootstrap）")
             return "✅ CMS 基础环境已就绪（跳过 bootstrap）。"
+        }
+        
+        if (marker.exists() && toolsMissing) {
+            CmsStateStore.appendLog("_bootstrap", "⚠️ 检测到关键工具缺失（proot重启后丢失），重新执行 bootstrap...")
         }
         CmsStateStore.appendLog("_bootstrap", "▶ 写入内置 bootstrap 脚本")
         val script = File(dir, "bootstrap.sh")
