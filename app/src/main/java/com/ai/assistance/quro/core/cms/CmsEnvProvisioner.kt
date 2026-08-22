@@ -236,7 +236,7 @@ object CmsEnvProvisioner {
         
         android.util.Log.i("CmsEnvProvisioner", "开始供给 ${profile.name}，脚本长度: ${profile.installScript.length}")
         val startTime = System.currentTimeMillis()
-        val (c, out) = QuroLinuxEnv.run(context, profile.installScript, timeoutMs = 300_000)
+        val (c, out) = QuroLinuxEnv.run(context, profile.installScript, timeoutMs = 600_000)
         val duration = System.currentTimeMillis() - startTime
         android.util.Log.i("CmsEnvProvisioner", "${profile.name} 执行完成，耗时: ${duration}ms，退出码: $c")
         
