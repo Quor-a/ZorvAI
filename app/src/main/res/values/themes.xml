@@ -1,0 +1,39 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.Quro" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/quro_splash_bg</item>
+        <!-- 双开屏修复：Android 12+ 系统 SplashScreen 默认会先闪 ic_launcher 图标，
+             这里把动画图标设为透明、背景与开屏同色，使系统开屏只剩不可见纯色，
+             由 Compose 的 QuroSplashContent 作为唯一可见的品牌开屏。 -->
+        <item name="android:windowSplashScreenBackground">@color/quro_splash_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_transparent</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+    </style>
+
+    <!-- 裁剪 Activity 专用：CropImageActivity 继承自 AppCompatActivity，必须使用 AppCompat 系主题 -->
+    <style name="Theme.Quro.Crop" parent="Theme.AppCompat">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <!-- 品牌启动页（v128）：深色无动作栏，避免白屏闪烁 -->
+    <style name="Theme.Quro.Splash" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/quro_splash_bg</item>
+        <item name="android:statusBarColor">@color/quro_splash_bg</item>
+        <item name="android:navigationBarColor">@color/quro_splash_bg</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <!-- 息屏/锁屏提醒全屏浮层（v1.0.58）：锁屏之上展示 + 自动亮屏。
+         锁屏显示/自动亮屏由 QuroReminderActivity 在代码里 setShowWhenLocked/setTurnScreenOn（API27+）
+         以及 Manifest 的 android:showOnLockScreen / android:turnScreenOn 活动属性共同保证；
+         此处不写 android:windowShowWhenLocked / windowTurnScreenOn 主题项，避免个别编译 SDK 资源表
+         未导出这两个 attr 导致 aapt2 链接失败（代码 + 活动属性已覆盖该能力）。 -->
+    <style name="Theme.Quro.Reminder" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF10141A</item>
+        <item name="android:statusBarColor">#FF10141A</item>
+        <item name="android:navigationBarColor">#FF10141A</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsTranslucent">false</item>
+    </style>
+</resources>

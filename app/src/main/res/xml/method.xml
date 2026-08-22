@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Zorv AI 输入法（IME）方法描述 -->
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.ai.assistance.quro.ui.QuroPermissionScreen"
+    android:supportsSwitchingToNextInputMethod="true">
+    <subtype
+        android:label="@string/ime_label"
+        android:languageTag="zh"
+        android:imeSubtypeLocale="zh_CN"
+        android:imeSubtypeMode="keyboard"
+        android:isAuxiliary="false"
+        android:overridesImplicitlyEnabledSubtype="true" />
+</input-method>

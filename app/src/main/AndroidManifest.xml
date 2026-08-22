@@ -1,0 +1,501 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ACI 权限定义（主应用作为权限定义者，第三方受控端只需 <uses-permission> 引用） -->
+    <permission
+        android:name="ai.aci.permission.CALL"
+        android:label="ACI Call Permission"
+        android:protectionLevel="normal" />
+    <permission
+        android:name="ai.aci.permission.CALL_DANGEROUS"
+        android:label="ACI Dangerous Call Permission"
+        android:protectionLevel="dangerous" />
+    <permission
+        android:name="ai.aci.permission.DISCOVER"
+        android:label="ACI Discover Permission"
+        android:protectionLevel="normal" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- 屏幕录制（MediaProjection）前台服务类型（Android 14+ 必须为录屏前台服务显式声明，否则 startForeground 抛异常）。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 发送全屏通知（对应 PERMISSIONS.md #2）：FLAG_FULL_SCREEN_INTENT 随通知弹出覆盖式界面。 -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- 工具子系统所需权限（运行时权限按需授予；工具在缺失时会返回友好提示） -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- 网页端访问本机（LAN Web 服务 / NSD 服务发现，对应 PERMISSIONS.md #12） -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.SET_ALARM" />
+    <!-- 精确闹钟（Android 12+）：【仅】声明 SCHEDULE_EXACT_ALARM，使本应用出现在系统
+         「设置 → 应用 → 特殊应用权限 → 闹钟和提醒」列表中，由用户手动授权；
+         canScheduleExactAlarms() 在用户授权前为 false、授权后为 true。
+         注意：【绝不】声明 USE_EXACT_ALARM —— 官方文档明确“持有 USE_EXACT_ALARM 的应用
+         不会出现在闹钟和提醒列表”，这正是此前 ZorvAI 在该列表里看不到、无法授权的根因。
+         未授权时 AlarmPermissionHelper / QuroScheduledTask 已降级为 setWindow / 引导设置页，不崩。 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!-- 权限管理：电池优化豁免引导 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- 包可见性：Android 11+ 默认隐藏其他 app；TTS 引擎是跨 app 的 TTS_SERVICE 远端服务，
+         必须拥有足够包可见性才能绑定，确保 TextToSpeech 能发现并连接引擎。 -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- ACI（Agent Capability Interface）：Zorv AI 作为控制方需持有基础调用/发现权限，
+         才能绑定并调用第三方 App 暴露的 ACI Service。该权限由 aci-core 库 Manifest 定义
+         （protectionLevel=normal，随 AAR 合并进本应用），此处声明即获系统授予；
+         否则 bindService 会被系统以 SecurityException 拒绝，导致 discover 后绑定失败、aci_list 永远为空。
+         真实的调用方鉴权仍由被调用方 BaseAidlAciService.onCheckPermission（Binder UID 反查 + 白名单）把关。 -->
+    <uses-permission android:name="ai.aci.permission.CALL" />
+    <uses-permission android:name="ai.aci.permission.DISCOVER" />
+
+    <!-- 使用情况访问（特殊权限）：get_foreground_app 需读取顶层 Activity 类名。
+         声明后本应用才会出现在「设置→安全→使用情况访问」列表里供用户授予；
+         此为 appop 类特殊权限，无法运行时弹窗，必须由用户手动在系统设置开启。 -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+
+    <!-- 所有文件访问权限（Android 11+ 特殊 appop）：全文件系统读写。
+         声明后本应用才会出现在「设置→特殊应用权限→所有文件访问权限」里供用户授予。
+         配合 READ_MEDIA_* 覆盖 Android 13+ 分区存储。 -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+
+    <!-- 后台定位权限（Android 10+ 敏感权限）：App 在后台仍可持续获取位置。
+         需在运行时弹窗请求（与 ACCESS_FINE_LOCATION 一起）。 -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- 音频媒体文件（Android 13+ 分离的媒体权限）：配合 READ_MEDIA_IMAGES / _VIDEO 完整覆盖三种媒体类型。
+         缺少它时无法通过 MediaStore 读取音频库（如录音文件、音乐文件）。 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
+    <!-- 健身与运动（ACTIVITY_RECOGNITION，Android 10+ 运行时危险权限）：读取步数/活动识别，
+         用于「健身与运动」能力（如自动识别步行/跑步）。API29+ 需运行时弹窗授予。 -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+    <!-- 文件写入权限（Android 9 及以下）：Android 10+ 由 Scoped Storage 接管，
+         但对低版本设备（minSdk=26）仍需声明才能往外部存储写文件/文档。 -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+
+    <!-- 通话状态与移动网络信息：获取 SIM 运营商、蜂窝网络类型、IMEI 等设备标识，
+         补充 get_network_info 的能力（目前只能判断 WIFI/CELLULAR，拿不到运营商细节）。 -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <!-- ===== 以下为对照手机「其他权限 / 特殊应用权限」页面补齐的缺失项（v66 漏加，v67 补全）===== -->
+
+    <!-- 短信：接收 / 彩信收发（此前仅有 READ_SMS / SEND_SMS，缺接收与彩信类） -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_MMS" />
+    <uses-permission android:name="android.permission.SEND_MMS" />
+
+    <!-- 电话：拨打电话 / 读取本机号码（READ_PHONE_STATE 已覆盖部分，READ_PHONE_NUMBERS 为 API29+ 本机号专用） -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+
+    <!-- Shizuku：声明其 API 权限。
+         只声明 API_V23 时，旧版 Shizuku 管理器（v13 之前，仅认 moe.shizuku.manager.permission.API）
+         不会把本 App 列入「可授权应用」列表，表现为「在 Shizuku 软件里看不到 Zorv AI」。
+         同时声明两个权限以兼容新旧管理器：新版认 API_V23、旧版认 API，互不冲突、零风险。 -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API" tools:ignore="MissingPermission" />
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" tools:ignore="MissingPermission" />
+
+    <!-- 通话记录：读取 / 写入删除（「其他权限」页「通话记录」分组） -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.WRITE_CALL_LOG" />
+
+    <!-- 联系人：写入或删除联系人 / 访问账号列表（此前仅有 READ_CONTACTS） -->
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
+
+    <!-- 日历：写入或删除日程表（此前仅有 READ_CALENDAR） -->
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
+    <!-- 特殊应用权限：修改系统设置（声明后才出现在「特殊应用权限→修改系统设置」供手动授予） -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
+    <!-- 特殊应用权限：WLAN 控制（开关 Wi-Fi） -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- 特殊应用权限：唤醒屏幕 / 保持唤醒（对应「开启屏幕」项） -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 特殊应用权限：NFC 启动控制（对应「NFC 启动控制」项） -->
+    <uses-permission android:name="android.permission.NFC" />
+    <!-- 特殊应用权限：勿扰/通知策略访问（对应「设备和应用通知」项，允许读取/设置 DND 状态） -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
+    <!-- 包可见性：Android 11+ 默认隐藏大部分已装应用，必须显式声明才能查询/反查包名、启动应用。
+         否则 getInstalledApplications / getPackageInfo 只能看到自身，导致「查看软件包名」「启动应用」失效。 -->
+    <queries>
+        <!-- 暴露所有带桌面入口（LAUNCHER）的应用，覆盖「查包名 / 打开应用」场景 -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- TTS 引擎是跨 app 的 TTS_SERVICE 远端服务；Android 11+ 包可见性限制下
+             必须显式声明，否则 TextToSpeech 因看不到引擎包而 OnInit 返回 ERROR。 -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <!-- ACI（Agent Capability Interface）控制方发现第三方 ACI App 的绑定意图；
+             Android 11+ 包可见性限制下显式声明，确保 queryIntentServices 能发现 ACI Service。
+             （本应用已声明 QUERY_ALL_PACKAGES，此处为显式语义声明，双保险。） -->
+        <intent>
+            <action android:name="ai.aci.core.ACTION_BIND" />
+        </intent>
+        <!-- ACI 唤醒广播：Android 11+ 包可见性限制下显式声明，确保 sendBroadcast(ACTION_WAKE)
+             能穿透停止态把被控进程（含本应用自身作为受控端）拉起，便于 bindService 成功。 -->
+        <intent>
+            <action android:name="ai.aci.core.ACTION_WAKE" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".activity.QuroApplication"
+        android:allowBackup="true"
+        android:extractNativeLibs="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Quro"
+        android:resizeableActivity="true"
+        android:networkSecurityConfig="@xml/network_security_config">
+
+        <!-- Health Connect：声明本应用支持读写的数据类型（Android 14+ 系统内置；旧版需集成 health-connect-client 库）。
+             与 res/values/health_permissions.xml 对应，系统据此在授权页展示可授权项。 -->
+        <meta-data
+            android:name="health_permissions"
+            android:resource="@array/health_permissions" />
+
+        <!-- 精确闹钟/健康提醒触发接收器：闹钟到点后弹出通知（内部，不导出） -->
+        <receiver
+            android:name=".permissions.WorkoutAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <activity
+            android:name=".activity.QuroMainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Quro"
+            android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
+            android:windowSoftInputMode="adjustPan">
+
+            <!-- v196 起由 MainActivity 直接作为 LAUNCHER，开屏改为应用内 800ms 覆盖层，
+                 避免挂后台被系统回收进程后重新进软件又重放开屏 -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- 应用快捷方式：长按图标弹出的菜单（语音球 / 小窗对话） -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/*" />
+            </intent-filter>
+
+            <!-- Health Connect 权限说明意图：当用户在 Health Connect 授权页点「为什么需要这些权限」，
+                 系统回调到本 Activity 展示 rationale。声明后此处会被系统拉起。 -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+
+            <!-- 数字助理角色（ROLE_ASSISTANT）入口：声明 ACTION_ASSIST 使本应用可被系统识别为
+                 数字助理候选，用户在「默认数字助理」设置里选择 Zorv AI 后即承担助理职责
+                 （接管长按 Home / 侧键唤醒的助手手势、提供语音/文本助理能力）。
+                 配合 RoleManager.createRequestRoleIntent(ROLE_ASSISTANT) 申请角色。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- 息屏/锁屏全屏提醒 Activity：由通知 fullScreenIntent 拉起，覆盖在锁屏之上并自动亮屏 -->
+        <activity
+            android:name=".activity.QuroReminderActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Quro.Reminder"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true" />
+
+        <service
+            android:name=".service.QuroVoiceBallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- 粘贴键盘：悬浮窗（TYPE_APPLICATION_OVERLAY）+ 无障碍粘贴，非前台服务 -->
+        <service
+            android:name=".service.QuroPasteKeyboardService"
+            android:exported="false" />
+
+        <!-- Zorv AI 输入法（IME）：注册为系统键盘，用户可在任意输入框切换使用。
+             需 android.permission.BIND_INPUT_METHOD 权限（系统级签名保护）。
+             用户需在「系统设置 → 语言和输入法」中启用。 -->
+        <service
+            android:name=".service.QuroAiKeyboardService"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
+
+        <!-- 本地 MCP Server：环回地址 127.0.0.1，仅本机可访问 -->
+        <service
+            android:name=".service.QuroMcpService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- 百分百开源本地音乐播放器：前台媒体播放服务 -->
+        <service
+            android:name=".service.QuroMediaService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- 端侧 ASR 引擎：独立 :asr 进程。Sherpa-NCNN 原生层偶发 SIGSEGV，
+             隔离后崩溃只杀 :asr 进程，主进程通过 DeathRecipient 优雅降级、不闪退。 -->
+        <service
+            android:name=".core.tools.QuroAsrService"
+            android:exported="false"
+            android:process=":asr" />
+
+        <!-- 裁剪 Activity：覆盖为 AppCompat 透明主题，否则继承 Theme.Quro(平台 Material) 会崩溃 -->
+        <activity
+            android:name="com.canhub.cropper.CropImageActivity"
+            android:theme="@style/Theme.Quro.Crop"
+            tools:replace="android:theme" />
+
+        <!-- Shizuku 客户端 Provider：Shizuku 管理器经此 binder 端点与本应用建立连接。
+             缺失时表现为「Shizuku 里看不到 / 连不上 Zorv AI」（已补齐 Shizuku provider 配置）。 -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- 无障碍服务（权限管理：无障碍权限引导） -->
+        <service
+            android:name=".service.QuroAccessibilityService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/quro_accessibility_service" />
+        </service>
+
+        <!-- 自动填充服务（对应 PERMISSIONS.md #4）：用户在系统「自动填充服务」中选中 Zorv AI 后启用，
+             可在其它 App 输入框提供 AI 生成的填充建议。
+             权限 BIND_AUTOFILL_SERVICE 为系统签名保护级，第三方无法伪造绑定。 -->
+        <service
+            android:name=".service.QuroAutofillService"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+        </service>
+
+        <!-- 通知侦听服务（对应 PERMISSIONS.md #8）：用户授权「通知访问」后，
+             可读取/清除通知、触发通知按钮、读取/设置 DND。
+             权限 BIND_NOTIFICATION_LISTENER_SERVICE 为系统保护级。 -->
+        <service
+            android:name=".service.QuroNotificationListenerService"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!--
+          Shizuku UserService（特权执行通道）：运行于 Shizuku 提供的特权进程，承载 AIDL 命令执行。
+          必须在 manifest 声明，否则 Shizuku.bindUserService() 抛 IllegalArgumentException 被 runCatching 吞掉，
+          aidlBound 永 false、AIDL 主路径永远失效，永远退化为脆弱的反射 newProcess 降级路径。
+          权限 moe.shizuku.manager.permission.API_V23 与上方 uses-permission 一致（Shizuku 13.x 要求）。
+        -->
+        <service
+            android:name=".core.shizuku.QuroShellService"
+            android:exported="false"
+            android:permission="moe.shizuku.manager.permission.API_V23" />
+
+        <!--
+          设备管理员（E-12 根因修复）。
+
+          原声明缺少 DEVICE_ADMIN_ENABLED 的 intent-filter 且 exported="false"，
+          导致 DevicePolicyManagerService.findAdmin() 用
+              queryBroadcastReceivers(Intent(ACTION_DEVICE_ADMIN_ENABLED), GET_META_DATA)
+          根本解析不到本组件 —— ACTION_ADD_DEVICE_ADMIN 无法激活，
+          onEnabled / onDisableRequested 也永远不会触发。整个 L3 能力此前是死的。
+
+          exported 必须为 true：接收方是系统进程。安全性由
+          android:permission="android.permission.BIND_DEVICE_ADMIN" 保证——
+          该权限为 signature 级，只有系统持有，第三方应用无法向本组件发广播。
+          这是 AOSP 文档给出的标准声明形式。
+        -->
+        <receiver
+            android:name=".receiver.QuroDeviceAdminReceiver"
+            android:label="@string/quro_device_admin_label"
+            android:description="@string/quro_device_admin_desc"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/quro_device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+                <action android:name="android.app.action.DEVICE_ADMIN_DISABLE_REQUESTED" />
+                <action android:name="android.app.action.DEVICE_ADMIN_DISABLED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 桌面卡片（AppWidget）：展示最近一条 AI 回复摘要，点击进入应用 -->
+        <receiver
+            android:name=".core.QuroReplyWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quro_reply_widget_info" />
+        </receiver>
+
+        <!-- 开机自启动：监听 BOOT_COMPLETED，按偏好拉起常住语音球服务 -->
+        <receiver
+            android:name=".receiver.QuroBootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 定时任务触发接收器（内部，不导出） -->
+        <receiver
+            android:name=".core.tools.QuroScheduleReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.SCHEDULED_TASK_TRIGGER" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 定时任务开机重排程接收器 -->
+        <receiver
+            android:name=".core.tools.QuroScheduleBootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 主应用 ACI 受控端：暴露 http_request 能力（HTTP 传输，传+收）。
+             控制方（含本应用 AI 经 aci_call）可经 ACI 调用本 Service 发起 HTTP 请求。
+             权限 ai.aci.permission.CALL 由 aci-core AAR 定义（protectionLevel=normal）。 -->
+        <service
+            android:name=".service.QuroMainAciService"
+            android:exported="true"
+            android:permission="ai.aci.permission.CALL">
+            <intent-filter>
+                <action android:name="ai.aci.core.ACTION_BIND" />
+            </intent-filter>
+        </service>
+
+        <!-- 主应用 ACI 唤醒接收器：收到 ACTION_WAKE 后拉起主应用 ACI Service（进程唤醒，便于绑定）。 -->
+        <receiver
+            android:name=".service.QuroAidlAciWakeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="ai.aci.core.ACTION_WAKE" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

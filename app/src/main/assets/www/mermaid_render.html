@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  #diagram { width: 100%; }
+  #diagram svg { width: 100%; height: auto; max-width: 100%; display: block; }
+  .err {
+    color: #e5484d;
+    font-size: 13px;
+    white-space: pre-wrap;
+    padding: 8px 4px;
+    font-family: monospace;
+    line-height: 1.4;
+  }
+</style>
+<script src="mermaid.min.js"></script>
+</head>
+<body>
+<div id="diagram" class="mermaid"></div>
+<script>
+  function report() {
+    var el = document.getElementById('diagram');
+    var h = el ? (el.scrollHeight || el.offsetHeight) : 0;
+    if (!h || h < 40) h = document.body.scrollHeight || 120;
+    if (window.AndroidBridge) { AndroidBridge.onHeight(Math.ceil(h)); }
+  }
+
+  // AI 在对话框里「自己写出来」的图表：客户端不内置任何固定流程图，
+  // 只负责把 AI 下发的 Mermaid 文本渲染成矢量图。
+  window.__render = function (src, theme) {
+    try {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: (theme || 'default'),
+        securityLevel: 'loose',
+        flowchart: { htmlLabels: true, curve: 'basis' },
+        sequence: { useMaxWidth: true },
+        mindmap: { useMaxWidth: true }
+      });
+      var el = document.getElementById('diagram');
+      el.removeAttribute('data-processed');
+      el.innerHTML = '';
+      var id = 'm' + Date.now() + Math.floor(Math.random() * 1000);
+      mermaid.render(id, src).then(function (res) {
+        el.innerHTML = (res && res.svg) ? res.svg : '';
+        if (res && res.svg && window.AndroidBridge) { AndroidBridge.onSvg(res.svg); }
+        report();
+        // 兜底：部分机型首次测量偏小时，延迟再测一次，确保高度准确、不被裁切
+        setTimeout(report, 250);
+        setTimeout(report, 600);
+      }).catch(function (e) {
+        var msg = (e && e.message) ? e.message : ('' + e);
+        el.innerHTML = '<div class="err">流程图渲染失败：\n' + msg + '</div>';
+        report();
+      });
+    } catch (e) {
+      var msg = (e && e.message) ? e.message : ('' + e);
+      document.getElementById('diagram').innerHTML = '<div class="err">流程图解析失败：\n' + msg + '</div>';
+      report();
+    }
+  };
+
+  // 尺寸变化（如 WebView 高度回填导致重排）时再测一次，保证自适应高度始终正确
+  if (window.ResizeObserver) {
+    var ro = new ResizeObserver(function () { report(); });
+    ro.observe(document.getElementById('diagram'));
+  }
+
+  if (window.AndroidBridge) { AndroidBridge.onReady(); }
+</script>
+</body>
+</html>

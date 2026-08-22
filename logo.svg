@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Zorv AI logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06243C"/>
+      <stop offset="0.55" stop-color="#0E6FA8"/>
+      <stop offset="1" stop-color="#16C9C9"/>
+    </linearGradient>
+    <linearGradient id="zStroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E6FBFF"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#5EEAD4" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#5EEAD4" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- 圆角方形背景 -->
+  <rect x="0" y="0" width="512" height="512" rx="108" fill="url(#bg)"/>
+  <rect x="20" y="20" width="472" height="472" rx="92" fill="none" stroke="#FFFFFF" stroke-opacity="0.10" stroke-width="2"/>
+
+  <!-- 中心「Z」标记（白，粗圆角笔画） -->
+  <path d="M178 178 H334 L178 334 H334"
+        fill="none" stroke="url(#zStroke)" stroke-width="38"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- resident / on-device 节点（亮青点） -->
+  <circle cx="368" cy="150" r="24" fill="#BBF7F2" filter="url(#soft)"/>
+  <circle cx="368" cy="150" r="14" fill="#BBF7F2"/>
+
+  <!-- 神经网络意象：内部节点星座（暗示 Agent / 多通道 / 端侧运行时） -->
+  <g stroke="#9BF3E8" stroke-opacity="0.40" stroke-width="3" fill="none">
+    <path d="M150 400 L210 360 L260 405 L205 440 Z"/>
+    <path d="M150 400 L205 440"/>
+  </g>
+  <g fill="#A5F3FC" filter="url(#soft)">
+    <circle cx="150" cy="400" r="10"/>
+    <circle cx="210" cy="360" r="10"/>
+    <circle cx="260" cy="405" r="10"/>
+    <circle cx="205" cy="440" r="11"/>
+  </g>
+
+  <!-- 右下辉光 -->
+  <circle cx="372" cy="392" r="72" fill="url(#glow)"/>
+</svg>

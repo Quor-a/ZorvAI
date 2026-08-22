@@ -1,0 +1,439 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "id": "zorv_a6d437ca54ec",
+      "name": "frontend-design",
+      "description": "Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, artifacts, posters, or applications (examples include websites, landing pages, dashboards, React components, HTML/CSS layouts, or when styling/beautifying any web UI). Generates creative, polished code and UI design that avoids generic AI aesthetics.",
+      "file": "frontend-design.md",
+      "size": 3956
+    },
+    {
+      "id": "zorv_9d9b1162d0ba",
+      "name": "agent-mbti",
+      "description": "AI Agent personality diagnosis and configuration system based on MBTI framework. Use when users want to (1) test/diagnose an Agent's personality type, (2) understand the gap between Agent's actual personality and user's desired personality, (3) generate configuration recommendations to adjust Agent behavior, (4) customize Agent's communication style, proactivity, reasoning approach, or execution patterns. Supports both free tier (quick assessment) and premium tier (full 93-question assessment with detailed diagnostics).",
+      "file": "agent-mbti.md",
+      "size": 2177
+    },
+    {
+      "id": "zorv_6e17fffaeec4",
+      "name": "aihot",
+      "description": "查询 AI HOT 的中文 AI 资讯、精选、当前热点和日报。用户询问今天或最近的 AI 新闻、AI 圈动态、大模型或产品发布、OpenAI／Anthropic／Google 最新消息、AI 论文、AI 日报、AI HOT 精选、当前最热事件，或需要同步当前全部精选时使用。必须通过 aihot.virxact.com 的匿名只读 API 获取当前数据，不凭训练记忆回答新闻；不需要 API Key 或 MCP server。",
+      "file": "aihot.md",
+      "size": 8509
+    },
+    {
+      "id": "zorv_b0fe9b2fa074",
+      "name": "contract-review",
+      "description": "合同风险识别与条款分析 - 智能合同审查工具，自动识别风险条款、补充缺失条款、对比差异条款",
+      "file": "contract-review.md",
+      "size": 5591
+    },
+    {
+      "id": "zorv_979bd92612b4",
+      "name": "awesome-design-md",
+      "description": "\"Curated collection of 54 DESIGN.md files extracted from real developer-focused websites (Vercel, Stripe, Linear, Notion, Figma, etc.). Use when a user wants to build UI that matches a specific brand's design system, needs a DESIGN.md template, asks for design tokens/color palettes/typography of known products, or says 'make it look like [brand]'. Load the matching reference file and use it as the design spec.\"",
+      "file": "awesome-design-md.md",
+      "size": 9421
+    },
+    {
+      "id": "zorv_f036f579066a",
+      "name": "cloudflare",
+      "description": "Comprehensive Cloudflare platform skill covering Workers, Pages, storage (KV, D1, R2), AI (Workers AI, Vectorize, Agents SDK), feature flags (Flagship), networking (Tunnel, Spectrum), security (WAF, DDoS), and infrastructure-as-code (Terraform, Pulumi). Use for any Cloudflare development task. Biases towards retrieval from Cloudflare docs over pre-trained knowledge.",
+      "file": "cloudflare.md",
+      "size": 8506
+    },
+    {
+      "id": "zorv_12ec20519c51",
+      "name": "cloudflare-worker-builder",
+      "description": "Scaffold and deploy Cloudflare Workers with Hono routing, Vite plugin, and Static Assets. Describe project, scaffold structure, configure bindings, deploy. Use whenever the user wants to create a Worker project, set up Hono on Cloudflare, configure D1 / R2 / KV / Queues bindings, or troubleshoot Worker export syntax, API route conflicts, HMR issues, or deployment failures.",
+      "file": "cloudflare-worker-builder.md",
+      "size": 3346
+    },
+    {
+      "id": "zorv_b4789e4a8253",
+      "name": "code-reviewer",
+      "description": "对指定文件夹内的代码进行全面审查，包含规范性检查、Bug检测、性能优化建议、可读性评估和基于华为Java编程规范的质量评分；当用户需要审查代码质量、发现潜在问题、评估代码规范符合度或生成代码审查报告时使用",
+      "file": "code-reviewer.md",
+      "size": 4789
+    },
+    {
+      "id": "zorv_e982f17bcbe0",
+      "name": "Docker",
+      "description": "\"Docker containers, images, Compose stacks, networking, volumes, debugging, production hardening, and the commands that keep real environments stable. Use when (1) the task touches Docker, Dockerfiles, images, containers, or Compose; (2) build reliability, runtime behavior, logs, ports, volumes, or security matter; (3) the agent needs Docker guidance and should apply it by default.\"",
+      "file": "docker.md",
+      "size": 4127
+    },
+    {
+      "id": "zorv_d9c5bec9a96b",
+      "name": "douyin_copy_extract",
+      "description": "抖音、快手、小红书、视频号公开短视频分享链接",
+      "file": "douyin-copy-extract.md",
+      "size": 2003
+    },
+    {
+      "id": "zorv_7ea514c6d838",
+      "name": "douyin-video-downloader",
+      "description": "抖音账号视频批量下载器 — 输入抖音号，自动拉取账号全部作品并解析无水印下载链接，支持批量一键下载到本地。适用场景：竞品账号内容拆解与逐帧学习、收藏喜欢的创作者全部作品避免被删、批量搬运素材二次剪辑创作、保存自己账号作品做本地备份防丢失、课程/教程类视频离线囤货反复看、甲方要求提供无水印源文件、达人合作前快速拉取对方作品做背调分析。触发词：抖音主页下载、抖音视频下载、抖音批量下载、抖音无水印下载、下载抖音作品、抖音账号视频提取、抖音视频保存、抖音去水印、抖音视频备份、竞品视频下载。",
+      "file": "douyin-video-downloader.md",
+      "size": 10101
+    },
+    {
+      "id": "zorv_49d6c0d7ca04",
+      "name": "douyin-works-crawler",
+      "description": "抖音作品爬取工具，输入抖音名称或抖音ID，输出抖音账号基础信息和近期作品内容列表（最多50条）。当用户提到\"爬取抖音作品\"、\"抖音作品列表\"、\"查看抖音视频\"、\"抖音内容采集\"、\"抓取抖音作品\"时使用。",
+      "file": "douyin-works-crawler.md",
+      "size": 8565
+    },
+    {
+      "id": "zorv_848ace43ffcd",
+      "name": "edgeone",
+      "description": "\"Deploy a single HTML document to Tencent EdgeOne Pages via mcporter with no login or API key, returning a public URL. Use when a user wants generated HTML published quickly as a live webpage.\"",
+      "file": "edgeone.md",
+      "size": 497
+    },
+    {
+      "id": "zorv_1f46439bb652",
+      "name": "edgeone-pages-deploy",
+      "description": "\"Deploy frontend and full-stack projects to Tencent EdgeOne Pages using the EdgeOne CLI. Use when the user wants to publish, launch, redeploy, create a preview deployment, or ship a site to production.\"",
+      "file": "edgeone-pages-deploy.md",
+      "size": 9539
+    },
+    {
+      "id": "zorv_28fc36f193cd",
+      "name": "Evolution Engine",
+      "description": "\"仿生进化引擎。三阶八柱架构，无感触发机制，真正改变智能体行为。从感知到推理到策略，越用越懂你，行为持续精进，能力自主进化。\"",
+      "file": "evolution-engine.md",
+      "size": 10513
+    },
+    {
+      "id": "zorv_71a4b22a6b22",
+      "name": "frontend-dev",
+      "description": "Full-stack frontend development combining premium UI design, cinematic animations, and production-ready code. Use when building or improving web/mobile frontends, components, pages, or apps with high design quality.",
+      "file": "frontend-dev.md",
+      "size": 19737
+    },
+    {
+      "id": "zorv_030784aecdfa",
+      "name": "frontend-spec",
+      "description": "企业级前端开发规范 Skill，包含命名、目录、CSS/JS/TS、Vue/React、Git、构建、性能、安全完整规范",
+      "file": "frontend-spec.md",
+      "size": 3580
+    },
+    {
+      "id": "zorv_bad6d52bcb63",
+      "name": "tomato-novelist",
+      "description": "番茄小说风格分章节创作助手，支持多种题材，每章 2200-2800 字、结尾带悬念钩子。用户要写长篇小说、网文或连载时使用。",
+      "file": "tomato-novelist.md",
+      "size": 7143
+    },
+    {
+      "id": "zorv_e8d6ffb28a4d",
+      "name": "github-ai-trends",
+      "description": "Generate GitHub AI trending project reports as formatted text leaderboards. Fetches top-starred AI/ML/LLM repos by daily, weekly, or monthly period and renders a styled leaderboard. Use when the user asks for AI project trends, GitHub trending, AI leaderboard, or wants to see popular AI repos.",
+      "file": "github-ai-trends.md",
+      "size": 908
+    },
+    {
+      "id": "zorv_ddde4b870729",
+      "name": "github-pages-auto-deploy",
+      "description": "\"Configure automatic website deployment to GitHub Pages with GitHub Actions and custom domain support. Use when a static site should deploy automatically after code is pushed.\"",
+      "file": "github-pages-auto-deploy.md",
+      "size": 3899
+    },
+    {
+      "id": "zorv_b53ae174bdd7",
+      "name": "github-trending-cn",
+      "description": "\"GitHub Trending Monitor. Fetch GitHub trending repos by daily/weekly/monthly period using real GitHub Search API. Runs scripts/github_trending.py (no pip deps, stdlib only). Use when user asks for 今日热门, 本周热门, 本月热门, GitHub trending, 开源动态, or popular repos. Supports language filter (python/javascript/go/rust etc.) and GITHUB_TOKEN for higher rate limits. 触发词：GitHub、trending、开源、热门项目.\"",
+      "file": "github-trending-cn.md",
+      "size": 1998
+    },
+    {
+      "id": "zorv_26bdaf8475b7",
+      "name": "html-deploy",
+      "description": "\"Publish a single self-contained HTML page to htmlcode.fun and return live URLs. Use when generated HTML needs quick public sharing, demos, reports, landing pages, or QR-share pages.\"",
+      "file": "html-deploy.md",
+      "size": 5908
+    },
+    {
+      "id": "zorv_a2e9e8ce35da",
+      "name": "humanizer-zh",
+      "description": "去除中文文本中的 AI 写作痕迹，让文字读起来更像人类书写。检测并修复夸大象征、宣传腔、公式化结构等问题。用户要求去 AI 味、润色或改写更自然时使用。",
+      "file": "humanizer-zh.md",
+      "size": 21568
+    },
+    {
+      "id": "zorv_95ab683d0afd",
+      "name": "ima-skill",
+      "description": "统一的 IMA OpenAPI 技能，支持笔记管理与知识库操作：上传文件、添加网页到知识库、搜索知识库内容、读写笔记。用户提到知识库、笔记或资料库时使用。",
+      "file": "ima-skill.md",
+      "size": 14541
+    },
+    {
+      "id": "zorv_8de3209c6efd",
+      "name": "kugou-skill",
+      "description": "|",
+      "file": "kugou-skill.md",
+      "size": 4545
+    },
+    {
+      "id": "zorv_be68b064e6b9",
+      "name": "landing-page-generator",
+      "description": "\"Generate a complete, deployable landing page from a brief. Produces a single self-contained HTML file with Tailwind CSS (via CDN), responsive design, dark mode, semantic HTML, and OG meta tags. Sections: hero with CTA, features, social proof, pricing (optional), FAQ, footer. Use when building a marketing page, product launch page, coming soon page, or any standalone landing page. Triggers: 'landing page', 'create a page', 'marketing page', 'launch page', 'coming soon page', 'one-page site'.\"",
+      "file": "landing-page-generator.md",
+      "size": 5762
+    },
+    {
+      "id": "zorv_34b33e00b199",
+      "name": "视频号账号诊断与拆解（付费版）【零一数科·出品】",
+      "description": "【零一数科·出品】视频号账号诊断与拆解（付费版）。对标爆款账号，抄一份起号模板——发我一个账号名，几分钟拿到一份完整拆解：粉丝画像、内容矩阵、逐条视频拆解、爆款公式、竞品对标、运营建议，照着他的爆款路径抄出你的起号模板。付费远端分析，输入账号名称即可。",
+      "file": "skill.md",
+      "size": 17058
+    },
+    {
+      "id": "zorv_1490ab77d235",
+      "name": "memory-manager-v2",
+      "description": "AI 记忆加速器 / Token 节流阀：以更小、更准、更省为目标管理记忆文件，提供分析、搜索、去重、缓存清理、Token 统计与节流。用户提到记忆管理、缓存清理或 Token 优化时使用。",
+      "file": "memory-manager-v2.md",
+      "size": 10033
+    },
+    {
+      "id": "zorv_0043c133fded",
+      "name": "multi-search-engine",
+      "description": "Multi search engine integration with 16 engines (7 CN + 9 Global). Supports advanced search operators, time filters, site search, privacy engines, and WolframAlpha knowledge queries. No API keys required.",
+      "file": "multi-search-engine.md",
+      "size": 5945
+    },
+    {
+      "id": "zorv_811afd36f320",
+      "name": "netlify-deploy",
+      "description": "\"Deploy and manage Netlify sites with npx netlify. Use for first deploys, preview deploys, production releases, site linking, authentication checks, and netlify.toml fixes.\"",
+      "file": "netlify-deploy.md",
+      "size": 4807
+    },
+    {
+      "id": "zorv_2c7f0a4937e2",
+      "name": "news-summary",
+      "description": "This skill should be used when the user asks for news updates, daily briefings, or what's happening in the world. Fetches news from trusted international RSS feeds and can create voice summaries.",
+      "file": "news-summary.md",
+      "size": 1853
+    },
+    {
+      "id": "zorv_60705dff620f",
+      "name": "official-document-skill",
+      "description": "Draft, revise, polish, and quality-check Chinese official documents and government-style practical writing (公文、党政机关公文、事务文书、申论应用文、人民日报风格政务表达), producing deliverable drafts with correct document type, format, restrained institutional tone, concrete facts, People's Daily-inspired expression discipline, and reduced AI-flavored phrasing. Use when the user asks for 通知、通报、报告、请示、批复、函、纪要、决定、通告、议案、倡议书、工作方案、工作计划、工作总结、简报、讲话稿、发言稿、汇报材料、调研报告、宣传稿、公开信、感谢信、信访回复、理论评论、政策解读, or asks to 一键生成/润色/改写/降AI味/减少AI味/人民日报风格/检查格式/生成可交付公文.",
+      "file": "official-document-skill.md",
+      "size": 26194
+    },
+    {
+      "id": "zorv_b727b959e5f6",
+      "name": "overseas-trending-search",
+      "description": "\"海外跨平台热文搜索 — 输入任意关键词（中文/英文），一次搜索 X / TikTok / YouTube 三平台热门内容，每平台 Top N（默认5）统一列表（平台/标题/作者/播放/点赞/评论/发布时间/链接），终端分组表格 + CSV 导出 + 交互式 HTML 报告（卡片/表格双视图）。按关键词语言智能优先同语言内容（中文词→中文优先，英文词→英文优先，其余语言兜底）。当用户需要搜索海外平台热点、跨平台内容对比、话题/竞品舆情监控、选题素材采集时使用。\"",
+      "file": "overseas-trending-search.md",
+      "size": 7786
+    },
+    {
+      "id": "zorv_7706d38819c5",
+      "name": "page-editor",
+      "description": "\"像 Figma 一样直接修改真实页面代码，精准有效地让 AI 懂你的设计。【主动触发】用户明确要求启动设计模式、进入编辑模式、可视化编辑、二次编辑时使用（enter design mode, edit this page visually, tweak the UI, visual tweaks）。【AI 预判触发】当用户对同一页面的样式反复提出修改需求且多次迭代仍未满意时——例如连续要求调字号、换颜色、改间距、挪位置、对不齐等视觉类反馈超过 2 轮——应主动建议启用设计模式，让用户通过可视化编辑器直接操作，而非继续用语言描述。\"",
+      "file": "page-editor.md",
+      "size": 18322
+    },
+    {
+      "id": "zorv_d96d188f9e72",
+      "name": "patent-disclosure-skill",
+      "description": "\"中国专利：从项目文档挖掘专利点并生成可交付技术交底书（查新、脱敏成文、自检与迭代）；或将已有专利解读为通俗笔记与 Obsidian 知识图谱（叙事故事线、公开线索辅助）。| China patents: draft technical disclosures from project docs, or read existing patents into plain-language notes and an Obsidian knowledge graph.\"",
+      "file": "patent-disclosure-skill.md",
+      "size": 10358
+    },
+    {
+      "id": "zorv_2441362bc7f2",
+      "name": "perplexity",
+      "description": "Search the web with AI-powered answers via Perplexity API. Returns grounded responses with citations. Supports batch queries.",
+      "file": "perplexity.md",
+      "size": 534
+    },
+    {
+      "id": "zorv_8a49cb62b294",
+      "name": "algorithmic-poster-philosophy",
+      "description": "当用户提到海报、视觉设计、品牌视觉、排版系统、极简风格、设计哲学、美学方案，或说\"帮我做张海报\"时，必须触发此技能。该技能先构建一套设计哲学（Algorithmic Philosophy），再基于该哲学用 show_widget 生成可渲染的 SVG 海报 artifact。即使用户没有明确提到\"哲学\"或\"系统\"，只要涉及视觉设计或海报生成，都应触发。适用于品牌视觉、作品集封面、极简主义海报、AI 生成艺术、任何需要系统性美学表达的场景。",
+      "file": "algorithmic-poster-philosophy.md",
+      "size": 5770
+    },
+    {
+      "id": "zorv_fbc2f5d661b2",
+      "name": "ppt-generator",
+      "description": "将用户讲稿一键生成乔布斯风极简科技感竖屏HTML演示稿。当用户需要生成PPT、演示文稿、Slides、幻灯片，或要求科技风/极简风/乔布斯风格的演示时触发此技能。输出为单个可直接运行的HTML文件。",
+      "file": "ppt-generator.md",
+      "size": 2061
+    },
+    {
+      "id": "zorv_ede52f92363c",
+      "name": "processon-mindmap-generator",
+      "description": "ProcessOn 官方 AI 脑图生成工具：将自然语言、Markdown、长文本、网页或图片文字一键生成结构清晰、可编辑的专业思维导图。用户要画脑图或思维导图时使用。",
+      "file": "processon-mindmap-generator.md",
+      "size": 17089
+    },
+    {
+      "id": "zorv_e6fe16c1faac",
+      "name": "product-showcase-site",
+      "description": "\"Generate a comprehensive marketing website for a web app — multi-page with real screenshots, animated GIF walkthroughs, feature deep-dives, and workflow demonstrations. Browses the running app, captures screens and sequences, and produces a deployable site that actually teaches people what the product does. Especially useful for complex or agentic apps that are hard to explain. Triggers: 'showcase site', 'product page', 'show off the app', 'marketing site', 'demo site', 'product showcase', 'explain the app', 'how do I market this'.\"",
+      "file": "product-showcase-site.md",
+      "size": 19618
+    },
+    {
+      "id": "zorv_35786aefe774",
+      "name": "qq-bot-messaging",
+      "description": "QQ 机器人消息收发框架，基于 qq-botpy SDK。支持三种消息场景：频道 @ 消息、C2C 私聊消息、群 @ 消息。提供完整的收发消息模式、定时推送循环和启动模板。当用户需要开发 QQ 机器人、处理 QQ 频道/群/私聊消息、实现定时推送功能时使用。",
+      "file": "qq-bot-messaging.md",
+      "size": 2911
+    },
+    {
+      "id": "zorv_e368a24da144",
+      "name": "qqmusic",
+      "description": "QQ Music — search songs, albums, playlists, music videos, artists; daily recommendations; music charts & rankings; AI-powered playlists; personalized listening reports & music insights. QQ音乐助手：搜索、每日推荐、排行榜、AI歌单、听歌报告、AI解读。",
+      "file": "qqmusic.md",
+      "size": 8661
+    },
+    {
+      "id": "zorv_b6cb4f918da5",
+      "name": "responsiveness-check",
+      "description": "Test website responsiveness across viewport widths using browser automation. Resizes a single session through breakpoints, screenshots each width, and detects layout transitions (column changes, nav switches, overflow). Produces comparison reports showing exactly where layouts break. Trigger with 'responsiveness check', 'check responsive', 'breakpoint test', 'viewport test', 'responsive sweep', 'check breakpoints', or 'test at mobile'.",
+      "file": "responsiveness-check.md",
+      "size": 6493
+    },
+    {
+      "id": "zorv_d469f504579a",
+      "name": "shippage",
+      "description": "\"Publish HTML or Markdown to a public URL instantly with ShipPage. Use when a user wants to share, preview, host, or deploy generated pages, reports, dashboards, prototypes, docs, or product listings.\"",
+      "file": "shippage.md",
+      "size": 6980
+    },
+    {
+      "id": "zorv_9551a8c257aa",
+      "name": "static-app",
+      "description": "\"Deploy static websites and built frontend apps to Static.app hosting. Use when a user wants to upload, host, update, or manage a static site through Static.app with an API key.\"",
+      "file": "static-app.md",
+      "size": 6200
+    },
+    {
+      "id": "zorv_b2a72334a3ea",
+      "name": "tavily",
+      "description": "AI-optimized web search using Tavily Search API. Use when you need comprehensive web research, current events lookup, domain-specific search, or AI-generated answer summaries. Tavily is optimized for LLM consumption with clean structured results, answer generation, and raw content extraction. Best for research tasks, news queries, fact-checking, and gathering authoritative sources.",
+      "file": "tavily.md",
+      "size": 9565
+    },
+    {
+      "id": "zorv_b2689675cecd",
+      "name": "tencent-weather",
+      "description": "\"Weather lookup tool covering Chinese cities and counties via the tencent-news CLI. Use when the user asks about current weather, forecasts, temperature, precipitation, wind, or air quality for a location in China.\"",
+      "file": "tencent-weather.md",
+      "size": 7479
+    },
+    {
+      "id": "zorv_7d200d6fd747",
+      "name": "tencent-yuanbao-standard-search",
+      "description": "Search the web using TencentCloud Web Search API (WSA). Prioritize using it when you need to retrieve network information.",
+      "file": "tencent-yuanbao-standard-search.md",
+      "size": 9456
+    },
+    {
+      "id": "zorv_58320f83e065",
+      "name": "tiktok-video-downloader",
+      "description": "TikTok视频下载 — 粘贴 TikTok 视频链接，一键解析返回无水印视频下载链接，支持单个或批量链接解析，自动校验 TikTok 链接有效性。当用户需要下载 TikTok 视频、保存 TikTok 视频、获取 TikTok 视频直链、批量下载 TikTok 视频时使用。触发词：TikTok视频下载、TK视频下载、TikTok视频解析、下载TikTok视频、抖音国际版视频下载、批量下载TikTok视频。",
+      "file": "tiktok-video-downloader.md",
+      "size": 4249
+    },
+    {
+      "id": "zorv_e332ec145490",
+      "name": "twitter-video-downloader",
+      "description": "X(Twitter)视频下载 — 粘贴 X(Twitter) 视频链接，一键解析返回无水印视频下载链接。当用户需要下载 X(Twitter) 视频、保存推特视频、获取 X 视频直链时使用。触发词：X视频下载、Twitter视频下载、推特视频下载、X视频解析、Twitter视频解析、下载推特视频。",
+      "file": "twitter-video-downloader.md",
+      "size": 3269
+    },
+    {
+      "id": "zorv_b907d7e575ad",
+      "name": "ui-design-system",
+      "description": "专业UI生成与现有界面优化技能。当用户请求生成UI界面、设计页面、优化现有界面、创建组件库、设计系统、App界面、Web界面、Dashboard、Landing Page、或任何涉及视觉交互设计时必须触发此技能。参考Google Material Design、Apple HIG、以及Pinterest级别审美标准，输出大气简约、高级美学的UI代码。即使用户只是说\"帮我做个界面\"、\"优化一下UI\"、\"设计一个页面\"也必须触发。",
+      "file": "ui-design-system.md",
+      "size": 11382
+    },
+    {
+      "id": "zorv_ff8e876ec646",
+      "name": "humanizer",
+      "description": "\"去除文本中的AI写作痕迹，让文字读起来更像人类写作。当用户要求'去AI味'、'降AI味'、'让回复更像人话'、'润色'、'改写得更自然'时使用。检测并修复：AI高频词汇、过度结构化、虚假客观性、机械化连接词、完美主义陷阱、公式化结尾、过度修饰、情感缺失等问题。\"",
+      "file": "humanizer.md",
+      "size": 13333
+    },
+    {
+      "id": "zorv_2b1b29c74808",
+      "name": "uniapp-expert",
+      "description": "uni-app 跨平台开发专家技能，涵盖 Vue2/Vue3 开发、Vue2→Vue3 迁移实战、微信小程序自动化测试。融合真实项目踩坑经验，提供从开发到测试的完整解决方案。",
+      "file": "uniapp-expert.md",
+      "size": 19379
+    },
+    {
+      "id": "zorv_1ff960535ff9",
+      "name": "vercel-deploy",
+      "description": "\"Deploy and manage Vercel projects from the terminal. Use for Vercel deployments, preview or production releases, environment variables, deployment status, logs, and project operations.\"",
+      "file": "vercel-deploy.md",
+      "size": 3562
+    },
+    {
+      "id": "zorv_b0239650ceca",
+      "name": "weather-open-meteo",
+      "description": "\"通过 open-meteo.com 公共 API 查询指定地点的当前天气和未来预报，无需 API key；当 open-meteo 请求失败时可降级使用 wttr.in。\"",
+      "file": "weather-open-meteo.md",
+      "size": 2806
+    },
+    {
+      "id": "zorv_51a2adf90be9",
+      "name": "web-deploy",
+      "description": "\"Build, preview, and deploy websites, web apps, and APIs using Vercel, Railway, GitHub Pages, or local Canvas environments. Use when a user needs general web deployment guidance across common hosting targets.\"",
+      "file": "web-deploy.md",
+      "size": 2481
+    },
+    {
+      "id": "zorv_ec742c0eee58",
+      "name": "web-deploy-github",
+      "description": "\"Create and deploy single-page static websites to GitHub Pages with an autonomous workflow. Use for portfolios, CV pages, landing pages, or static web projects that need GitHub Pages hosting.\"",
+      "file": "web-deploy-github.md",
+      "size": 3946
+    },
+    {
+      "id": "zorv_27a72a432497",
+      "name": "web-performance-audit",
+      "description": "Analyzes web performance using Chrome DevTools MCP. Measures Core Web Vitals (LCP, INP, CLS) and supplementary metrics (FCP, TBT, Speed Index), identifies render-blocking resources, network dependency chains, layout shifts, caching issues, and accessibility gaps. Use when asked to audit, profile, debug, or optimize page load performance, Lighthouse scores, or site speed. Biases towards retrieval from current documentation over pre-trained knowledge.",
+      "file": "web-performance-audit.md",
+      "size": 7706
+    },
+    {
+      "id": "zorv_9640a66399c3",
+      "name": "web-search-exa",
+      "description": "'Neural web search, content extraction, company and people research, code search, and deep research via the Exa MCP server. Use when you need to: (1) search the web with semantic understanding — not just keywords, (2) find research papers, news, tweets, companies, or people, (3) extract clean content from URLs, (4) find semantically similar pages to a known URL, (5) get code examples and documentation, (6) run deep multi-step research with a report, (7) get a quick synthesized answer with citations. NOT for: local file operations, non-web tasks, or anything that doesn''t involve web search or content retrieval.'",
+      "file": "web-search-exa.md",
+      "size": 11104
+    },
+    {
+      "id": "zorv_c39a6a336216",
+      "name": "wechat-article-search",
+      "description": "\"搜索微信公众号文章技能。通过微信搜索获取文章列表，覆盖科技/AI、社会热点、财经、教育、职场等各类中文资讯；可按关键词检索并返回标题、概要、发布时间、来源公众号与链接。当用户需要查找微信公众号文章、整理参考资料或快速获取文章信息时使用此技能。\"",
+      "file": "wechat-article-search.md",
+      "size": 1846
+    },
+    {
+      "id": "zorv_ff921c485d68",
+      "name": "wxa-skills-generate",
+      "description": "分析小程序项目源代码（含压缩/混淆），识别核心业务步骤，提取网络接口与 JSAPI 调用，生成符合 wx.modelContext 规范的技能分包（含原子接口 + 原子组件），并完成 app.json / project.config.json 配置集成。在以下场景触发：把小程序页面能力改造为小程序 AI 原子接口、生成 skills/ 分包代码、从源项目派生 MCP 工具、小程序 AI 的开发模式代码生成。仅负责静态生成，生成完成后必须交棒 wxa-skills-validate 做校验。",
+      "file": "wxa-skills-generate.md",
+      "size": 55882
+    },
+    {
+      "id": "zorv_b54931651dfe",
+      "name": "yourself-skill",
+      "description": "\"Distill yourself into an AI Skill. Deconstruct chat history, diaries, social media, and photos into a runnable digital self with persona and memory models. Use when user wants to create a digital twin, self-reflection mirror, or personal knowledge archive.\"",
+      "file": "yourself-skill.md",
+      "size": 13323
+    }
+  ]
+}

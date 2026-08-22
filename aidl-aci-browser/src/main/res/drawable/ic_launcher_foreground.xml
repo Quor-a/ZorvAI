@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ZorvAI 浏览器前景：在主应用「Z」字标基础上叠加浏览器地球（白色线框），
+     保留品牌深青色 accent 点，一眼可辨是 ZorvAI 家族的「浏览器」成员。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 浏览器地球：白色圆环 -->
+    <path
+        android:pathData="M54,18 a36,36 0 1,0 0.1,0 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:fillColor="#00000000" />
+
+    <!-- 赤道 -->
+    <path
+        android:pathData="M18,54 H90"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:fillColor="#00000000" />
+
+    <!-- 经线（纵向椭圆） -->
+    <path
+        android:pathData="M54,18 a15,36 0 1,0 0.1,0 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:fillColor="#00000000" />
+
+    <!-- Z 字标记（白，粗圆角笔画，居中安全区） -->
+    <path
+        android:pathData="M36,40 H72 L36,68 H72"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="11"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- 青色 accent 点（与主应用同源） -->
+    <path
+        android:pathData="M83,28 m-6,0 a6,6 0 1,1 12,0 a6,6 0 1,1 -12,0"
+        android:fillColor="#22D3EE" />
+</vector>

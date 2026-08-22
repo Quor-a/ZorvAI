@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 启动页 / 品牌色 -->
+    <color name="quro_splash_bg">#0B1020</color>
+    <color name="quro_splash_text">#E6F9FF</color>
+    <color name="quro_brand_cyan">#22D3EE</color>
+    <color name="quro_brand_purple">#A855F7</color>
+    <color name="quro_brand_bg">#0B1020</color>
+</resources>

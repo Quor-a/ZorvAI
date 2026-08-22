@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Zorv 文档预览</title>
+<style>
+  html,body{margin:0;padding:0;background:#0f1115;color:#e6e6e6;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;}
+  #content{padding:18px;box-sizing:border-box;min-height:100%;}
+  #content h1{font-size:22px;border-bottom:1px solid #2a2f36;padding-bottom:8px;}
+  #content h2{font-size:19px;} #content h3{font-size:16px;color:#9fd0ff;}
+  #content p{line-height:1.7;font-size:15px;}
+  #content code{background:#1b1f26;padding:2px 6px;border-radius:5px;font-family:monospace;font-size:13px;color:#8be0a0;}
+  #content pre{background:#0a0c0f;border:1px solid #23282f;border-radius:9px;padding:12px;
+    overflow:auto;font-family:monospace;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word;}
+  #content blockquote{border-left:3px solid #4a90d9;margin:8px 0;padding:4px 14px;color:#b8c2cc;background:#161b21;}
+  #content table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13px;}
+  #content th,#content td{border:1px solid #2c333c;padding:7px 9px;vertical-align:top;}
+  #content th{background:#1b2027;color:#cfe3ff;text-align:left;}
+  #content tr:nth-child(even) td{background:#14181e;}
+  #content ul,#content ol{padding-left:22px;line-height:1.7;}
+  #content a{color:#6cb6ff;}
+  #content img{max-width:100%;border-radius:8px;}
+  .page{margin:0 auto 14px;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.4);}
+  .hint{color:#7a838c;font-size:13px;padding:24px;text-align:center;}
+  .err{color:#ff8a80;font-family:monospace;font-size:13px;padding:16px;white-space:pre-wrap;}
+</style>
+</head>
+<body>
+<div id="content"><div class="hint">正在加载文档…</div></div>
+
+<script src="mammoth.js"></script>
+<script src="xlsx.full.min.js"></script>
+<script src="pdf.min.js"></script>
+<script>
+function b64ToU8(b64){
+  var bin = atob(b64); var len = bin.length;
+  var bytes = new Uint8Array(len);
+  for (var i=0;i<len;i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+function utf8FromB64(b64){
+  return decodeURIComponent(escape(atob(b64)));
+}
+// ArrayBuffer -> base64（图片走 data URI，不依赖整文件 base64 注入）
+function base64FromArrayBuffer(buf){
+  var bytes = new Uint8Array(buf);
+  var bin = '';
+  var chunk = 0x8000;
+  for (var i=0; i<bytes.length; i+=chunk){
+    var slice = bytes.subarray(i, i+chunk);
+    bin += String.fromCharCode.apply(null, slice);
+  }
+  return btoa(bin);
+}
+function mdToHtml(md){
+  var esc = function(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+  var lines = md.replace(/\r\n/g,'\n').split('\n');
+  var html=''; var inCode=false; var listType=null;
+  function closeList(){ if(listType){ html+=(listType==='ol'?'</ol>':'</ul>'); listType=null; } }
+  for (var i=0;i<lines.length;i++){
+    var ln = lines[i];
+    if (/^```/.test(ln)){ if(inCode){ html+='</code></pre>'; inCode=false; } else { closeList(); html+='<pre><code>'; inCode=true; } continue; }
+    if (inCode){ html+=esc(ln)+'\n'; continue; }
+    var h = ln.match(/^(#{1,6})\s+(.*)$/);
+    if (h){ closeList(); html+='<h'+h[1].length+'>'+esc(h[2])+'</h'+h[1].length+'>'; continue; }
+    var bq = ln.match(/^>\s?(.*)$/);
+    if (bq){ closeList(); html+='<blockquote>'+esc(bq[1])+'</blockquote>'; continue; }
+    var ol = ln.match(/^\s*\d+\.\s+(.*)$/);
+    var ul = ln.match(/^\s*[-*]\s+(.*)$/);
+    if (ol || ul){
+      var t = ol?'ol':'ul';
+      if (listType!==t){ closeList(); html+='<'+t+'>'; listType=t; }
+      var item = (ol?ol[1]:ul[1]);
+      html+='<li>'+esc(item).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`(.+?)`/g,'<code>$1</code>')+'</li>';
+      continue;
+    }
+    if (ln.trim()===''){ closeList(); continue; }
+    closeList();
+    html+='<p>'+esc(ln).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`(.+?)`/g,'<code>$1</code>')+'</p>';
+  }
+  if (inCode) html+='</code></pre>';
+  closeList();
+  return html;
+}
+
+// ── 旧入口：整文件 base64 注入（保留作兼容/兜底，当前 Kotlin 侧已不再调用） ──
+window.GD = {
+  render: function(type, b64){
+    var content = document.getElementById('content');
+    content.innerHTML = '<div class="hint">正在渲染…</div>';
+    try {
+      if (type==='docx'){
+        if (typeof mammoth==='undefined'){ content.innerHTML='<div class="err">mammoth.js 未加载</div>'; return; }
+        mammoth.convertToHtml({arrayBuffer: b64ToU8(b64).buffer}).then(function(r){
+          content.innerHTML = r.value || '<div class="hint">（空文档）</div>';
+          if (r.messages && r.messages.length) console.log(r.messages);
+        }).catch(function(e){ content.innerHTML='<div class="err">DOCX 渲染失败：'+e+'</div>'; });
+      } else if (type==='xlsx'){
+        if (typeof XLSX==='undefined'){ content.innerHTML='<div class="err">xlsx.js 未加载</div>'; return; }
+        var wb = XLSX.read(b64ToU8(b64), {type:'array'});
+        var html='';
+        wb.SheetNames.forEach(function(name){
+          html += '<h3>'+name+'</h3>';
+          html += XLSX.utils.sheet_to_html(wb.Sheets[name]);
+        });
+        content.innerHTML = html || '<div class="hint">（空表格）</div>';
+      } else if (type==='pdf'){
+        if (typeof pdfjsLib==='undefined'){ content.innerHTML='<div class="err">pdf.js 未加载</div>'; return; }
+        try { pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/docs/pdf.worker.min.js'; } catch(e){}
+        // CJK 修复：内置 cMaps（CJK 字符映射表）+ standard_fonts（标准字体回退），
+        // 解决中文/韩文 PDF 显示为方块（tofu）/乱码。路径经 WebViewAssetLoader 同源提供。
+        pdfjsLib.getDocument({
+          data: b64ToU8(b64),
+          cMapUrl: '/assets/docs/cmaps/',
+          cMapPacked: true,
+          standardFontDataUrl: '/assets/docs/standard_fonts/'
+        }).promise.then(function(pdf){
+          content.innerHTML='';
+          var chain = Promise.resolve();
+          for (var p=1; p<=pdf.numPages; p++){
+            chain = chain.then(function(pageNum){
+              return pdf.getPage(pageNum).then(function(page){
+                var scale = Math.min(2, Math.max(1, window.innerWidth/600));
+                var viewport = page.getViewport({scale:scale});
+                var canvas = document.createElement('canvas');
+                canvas.className='page';
+                canvas.width = viewport.width; canvas.height = viewport.height;
+                content.appendChild(canvas);
+                return page.render({canvasContext: canvas.getContext('2d'), viewport: viewport}).promise;
+              });
+            }.bind(null, p));
+          }
+          return chain;
+        }).catch(function(e){ content.innerHTML='<div class="err">PDF 打开失败：'+(e&&e.message?e.message:e)+'</div>'; });
+      } else if (type.indexOf('image/')===0 || type==='image'){
+        content.innerHTML = '<div style="text-align:center"><img src="data:'+type+';base64,'+b64+'"></div>';
+      } else if (type==='csv'){
+        if (typeof XLSX==='undefined'){ content.innerHTML='<div class="err">xlsx.js 未加载</div>'; return; }
+        try {
+          var wb = XLSX.read(utf8FromB64(b64), {type:'binary'});
+          var html='';
+          wb.SheetNames.forEach(function(name){
+            html += '<h3>'+name+'</h3>';
+            html += XLSX.utils.sheet_to_html(wb.Sheets[name]);
+          });
+          content.innerHTML = html || '<div class="hint">（空表格）</div>';
+        } catch(e){ content.innerHTML='<div class="err">CSV 渲染失败：'+e+'</div>'; }
+      } else if (type==='md'){
+        content.innerHTML = mdToHtml(utf8FromB64(b64));
+      } else {
+        var pre = document.createElement('pre');
+        pre.textContent = utf8FromB64(b64);
+        content.innerHTML=''; content.appendChild(pre);
+      }
+    } catch(e){ content.innerHTML='<div class="err">渲染异常：'+(e&&e.message?e.message:e)+'</div>'; }
+  },
+
+  // ── 新入口：流式渲染（RC-A + RC-B 修复）──
+  // 文件体由 Kotlin 侧 WebViewAssetLoader 的 /doc/ PathHandler 以流方式提供，
+  // 此处用 fetch -> arrayBuffer 直接喂给渲染库，全程零 base64、零整文件驻留内存。
+  // 页面本身与 worker 同源（https://appassets.androidplatform.net），故 pdf.js Worker 可启动（RC-B 真因修复）。
+  renderFromUrl: function(type, url){
+    var content = document.getElementById('content');
+    content.innerHTML = '<div class="hint">正在渲染…</div>';
+    fetch(url).then(function(r){
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.arrayBuffer();
+    }).then(function(buf){
+      try {
+        if (type==='docx'){
+          if (typeof mammoth==='undefined'){ content.innerHTML='<div class="err">mammoth.js 未加载</div>'; return; }
+          mammoth.convertToHtml({arrayBuffer: buf}).then(function(r){
+            content.innerHTML = r.value || '<div class="hint">（空文档）</div>';
+            if (r.messages && r.messages.length) console.log(r.messages);
+          }).catch(function(e){ content.innerHTML='<div class="err">DOCX 渲染失败：'+e+'</div>'; });
+        } else if (type==='xlsx'){
+          if (typeof XLSX==='undefined'){ content.innerHTML='<div class="err">xlsx.js 未加载</div>'; return; }
+          var wb = XLSX.read(new Uint8Array(buf), {type:'array'});
+          var html='';
+          wb.SheetNames.forEach(function(name){
+            html += '<h3>'+name+'</h3>';
+            html += XLSX.utils.sheet_to_html(wb.Sheets[name]);
+          });
+          content.innerHTML = html || '<div class="hint">（空表格）</div>';
+        } else if (type==='pdf'){
+          if (typeof pdfjsLib==='undefined'){ content.innerHTML='<div class="err">pdf.js 未加载</div>'; return; }
+          // RC-B 修复：pdf.worker.min.js 经 WebViewAssetLoader 由同源 https 提供
+          // （https://appassets.androidplatform.net/assets/docs/pdf.worker.min.js），
+          // WebView 因此拿到非 opaque origin，Worker 可正常启动。
+          pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/docs/pdf.worker.min.js';
+          // CJK 修复：内置 cMaps（CJK 字符映射表）+ standard_fonts（标准字体回退），
+          // 解决中文/韩文 PDF 显示为方块（tofu）/乱码。路径经 WebViewAssetLoader 同源提供。
+          pdfjsLib.getDocument({
+            data: buf,
+            cMapUrl: '/assets/docs/cmaps/',
+            cMapPacked: true,
+            standardFontDataUrl: '/assets/docs/standard_fonts/'
+          }).promise.then(function(pdf){
+            content.innerHTML='';
+            var chain = Promise.resolve();
+            for (var p=1; p<=pdf.numPages; p++){
+              chain = chain.then(function(pageNum){
+                return pdf.getPage(pageNum).then(function(page){
+                  var scale = Math.min(2, Math.max(1, window.innerWidth/600));
+                  var viewport = page.getViewport({scale:scale});
+                  var canvas = document.createElement('canvas');
+                  canvas.className='page';
+                  canvas.width = viewport.width; canvas.height = viewport.height;
+                  content.appendChild(canvas);
+                  return page.render({canvasContext: canvas.getContext('2d'), viewport: viewport}).promise;
+                });
+              }.bind(null, p));
+            }
+            return chain;
+          }).catch(function(e){ content.innerHTML='<div class="err">PDF 打开失败：'+(e&&e.message?e.message:e)+'</div>'; });
+        } else if (type.indexOf('image/')===0 || type==='image'){
+          var b64 = base64FromArrayBuffer(buf);
+          content.innerHTML = '<div style="text-align:center"><img src="data:'+type+';base64,'+b64+'"></div>';
+        } else if (type==='csv'){
+          if (typeof XLSX==='undefined'){ content.innerHTML='<div class="err">xlsx.js 未加载</div>'; return; }
+          try {
+            var csvText = new TextDecoder('utf-8').decode(buf);
+            var wb = XLSX.read(csvText, {type:'binary'});
+            var html='';
+            wb.SheetNames.forEach(function(name){
+              html += '<h3>'+name+'</h3>';
+              html += XLSX.utils.sheet_to_html(wb.Sheets[name]);
+            });
+            content.innerHTML = html || '<div class="hint">（空表格）</div>';
+          } catch(e){ content.innerHTML='<div class="err">CSV 渲染失败：'+e+'</div>'; }
+        } else if (type==='md'){
+          content.innerHTML = mdToHtml(new TextDecoder('utf-8').decode(buf));
+        } else {
+          var pre = document.createElement('pre');
+          pre.textContent = new TextDecoder('utf-8').decode(buf);
+          content.innerHTML=''; content.appendChild(pre);
+        }
+      } catch(e){ content.innerHTML='<div class="err">渲染异常：'+(e&&e.message?e.message:e)+'</div>'; }
+    }).catch(function(e){
+      content.innerHTML='<div class="err">加载/渲染失败：'+(e&&e.message?e.message:e)+'<br>（可点「其他应用」用 WPS/Office 打开）</div>';
+    });
+  }
+};
+
+// 入口：Kotlin 侧通过 viewer.html?doc=/doc/<name>&type=<ext> 传入目标文件与类型，
+// 此处自动触发流式渲染（同名 /doc/ 由 WebViewAssetLoader 的自定义 PathHandler 提供）。
+(function(){
+  try {
+    var p = new URLSearchParams(location.search);
+    var doc = p.get('doc');
+    var type = p.get('type') || 'txt';
+    if (doc && window.GD) { GD.renderFromUrl(type, doc); }
+  } catch(e) {}
+})();
+</script>
+</body>
+</html>

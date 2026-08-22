@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/reminder_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF10141A"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <!-- 顶部小字：提醒来源 -->
+    <TextView
+        android:id="@+id/reminder_badge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="14dp"
+        android:background="@drawable/reminder_accent_bg"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp"
+        android:text="Zorv AI 提醒"
+        android:textColor="#FF10141A"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <!-- 主卡片 -->
+    <LinearLayout
+        android:id="@+id/reminder_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/reminder_card_bg"
+        android:orientation="vertical"
+        android:padding="22dp">
+
+        <TextView
+            android:id="@+id/reminder_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="提醒标题"
+            android:textColor="#FFEAF2F8"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <View
+            android:layout_width="36dp"
+            android:layout_height="3dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="14dp"
+            android:background="@drawable/reminder_accent_bg" />
+
+        <TextView
+            android:id="@+id/reminder_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:lineSpacingExtra="4dp"
+            android:text="提醒内容"
+            android:textColor="#FFB6C2CC"
+            android:textSize="16sp" />
+
+        <Button
+            android:id="@+id/reminder_dismiss"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="22dp"
+            android:background="@drawable/reminder_accent_bg"
+            android:text="知道了"
+            android:textColor="#FF10141A"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- 二次提示：锁屏下可直接点屏幕任意处关闭 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="点击屏幕任意处关闭"
+        android:textColor="#FF6B7884"
+        android:textSize="12sp" />
+</LinearLayout>

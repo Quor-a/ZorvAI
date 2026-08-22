@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 聊天附件（相机输出 / 文件查看）所用的应用私有上传目录 -->
+    <files-path
+        name="quro_uploads"
+        path="quro_uploads/" />
+    <!-- aiWPS 生成的 Office 文档（getExternalFilesDir(Documents)/QuroDocs） -->
+    <external-files-path
+        name="quro_docs"
+        path="Documents/QuroDocs/" />
+    <!-- 文件知识库目录（getExternalFilesDir(null)/knowledge_base） -->
+    <external-files-path
+        name="quro_kb"
+        path="knowledge_base/" />
+    <!-- 系统 Download 目录：诊断日志 quro_diag.txt / QuroAI_logs/ 等供查看、分享，
+         必须在此声明，否则 FileProvider.getUriForFile 抛
+         "Failed to find configured root" 导致整页崩溃。 -->
+    <external-path
+        name="quro_download"
+        path="Download" />
+</paths>

@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">Zorv AI</string>
+    <string name="quro_accessibility_desc">Zorv AI 无障碍服务：用于界面自动化与屏幕内容读取等高级能力。当前版本仅完成权限声明，不会收集任何隐私数据。</string>
+    <string name="quro_device_admin_label">Zorv AI 设备管理员</string>
+    <!--
+      这段文案会直接显示在系统的「激活设备管理员」确认页上，必须与
+      res/xml/quro_device_admin.xml 里声明的策略逐条对应，不得出现
+      「远程管理」「等高级能力」这类无实现的宽泛表述（E-11）。
+    -->
+    <string name="quro_device_admin_desc">仅用于两项操作：锁定屏幕、禁用或恢复摄像头。不会清除数据，也不会修改锁屏密码。</string>
+    <string name="ime_label">Zorv AI 键盘</string>
+
+    <!-- 应用快捷方式（长按图标菜单） -->
+    <string name="sc_voice_short">语音球</string>
+    <string name="sc_voice_long">唤起悬浮语音球</string>
+    <string name="sc_voice_disabled">语音球已禁用</string>
+    <string name="sc_chat_short">小窗对话</string>
+    <string name="sc_chat_long">直接进入对话</string>
+    <string name="sc_chat_disabled">对话已禁用</string>
+    <string name="sc_browser_short">浏览器控制台</string>
+    <string name="sc_browser_long">ZorvAI 浏览器控制台</string>
+    <string name="sc_browser_disabled">浏览器控制台已禁用</string>
+</resources>

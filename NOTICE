@@ -1,0 +1,193 @@
+Quro AI
+Copyright 2025-2026 Quro AI
+
+This product includes software developed by third parties. The full
+source code of Quro AI is provided under the Apache License, Version 2.0
+(see LICENSE). Bundled third-party components retain their own licenses,
+summarized below. Where a component is distributed under a copyleft license
+(GPL / LGPL / MPL), the corresponding source is made available alongside
+this repository in accordance with that license's obligations.
+
+----------------------------------------------------------------------
+THIRD-PARTY COMPONENTS AND LICENSES
+----------------------------------------------------------------------
+
+Quro AI (this application)
+  License: Apache-2.0
+  Source:  https://github.com/Quor-a/ZorvAI
+
+AndroidX / Jetpack / Jetpack Compose / Material Components
+  License: Apache-2.0
+  Copyright: Google LLC
+
+OkHttp
+  License: Apache-2.0
+  Copyright: Square, Inc.
+
+Kotlin / Kotlin Coroutines
+  License: Apache-2.0
+  Copyright: JetBrains s.r.o.
+
+Shizuku (dev.rikka.shizuku:api / :provider)
+  License: Apache-2.0
+  Copyright: Rikka
+
+android-image-cropper
+  License: Apache-2.0
+  Copyright: Vanniktech
+
+Apache Commons Compress
+  License: Apache-2.0
+  Copyright: The Apache Software Foundation
+
+QuickJS
+  License: MIT
+  Copyright: Fabrice Bellard
+
+Sherpa-NCNN (k2-fsa)
+  License: Apache-2.0 / BSD-3-Clause
+
+ncnn (Tencent)
+  License: BSD-3-Clause
+  Source:  https://github.com/Tencent/ncnn
+
+GeckoView (Mozilla)
+  License: MPL-2.0 (file-level copyleft; source provided with the build)
+
+Health Connect (Google)
+  License: Apache-2.0
+  Copyright: Google LLC
+  Note:    Android health data connection client (connect-client).
+
+JUnit
+  License: EPL-2.0 (Eclipse Public License 2.0)
+  Copyright: JUnit team
+  Note:    Unit testing framework (testImplementation only).
+
+----------------------------------------------------------------------
+OFFLINE AI MODEL ENGINES (source-compiled, full flavor only)
+----------------------------------------------------------------------
+
+MNN (Mobile Neural Network, Alibaba)
+  License: Apache-2.0
+  Copyright: 2018 Alibaba Group
+  Source:  https://github.com/alibaba/MNN
+
+llama.cpp
+  License: MIT
+  Copyright: 2023-2026 The ggml authors
+  Source:  https://github.com/ggml-org/llama.cpp
+
+----------------------------------------------------------------------
+FRONTEND ASSETS (JavaScript libraries bundled in assets/www/)
+----------------------------------------------------------------------
+
+Three.js
+  License: MIT
+  Copyright: 2010-2021 Three.js Authors
+  Source:  https://github.com/mrdoob/three.js
+  Note:    3D rendering engine used for GLB avatar display.
+
+Draco (Google)
+  License: Apache-2.0
+  Copyright: Google LLC
+  Source:  https://github.com/google/draco
+  Note:    3D data compression/decompression library (draco_decoder.wasm).
+
+CodeMirror 5.65.16
+  License: MIT
+  Source:  https://github.com/codemirror/codemirror
+  Note:    Code editor component used in the built-in editor.
+
+Brython
+  License: BSD-3-Clause
+  Copyright: 2017-2023 Pierre Quentel
+  Source:  https://github.com/brython-dev/brython
+  Note:    Browser Python runtime (brython.min.js).
+
+Mermaid
+  License: MIT
+  Source:  https://github.com/mermaid-js/mermaid
+  Note:    Diagram/chart rendering library (mermaid.min.js).
+
+----------------------------------------------------------------------
+DOCUMENT PROCESSING LIBRARIES (bundled in assets/docs/)
+----------------------------------------------------------------------
+
+pdf.js (Mozilla)
+  License: Apache-2.0
+  Copyright: 2023 Mozilla Foundation
+  Source:  https://github.com/nicolo-ribaudo/pdfjs-dist
+  Note:    PDF rendering engine (pdf.min.js, pdf.worker.min.js, cmaps/).
+
+Adobe CMap Resources
+  License: BSD-3-Clause (Adobe Systems BSD-like license)
+  Copyright: 1990-2009 Adobe Systems Incorporated
+  Note:    PDF character map files (assets/docs/cmaps/*.bcmap).
+
+Mammoth.js
+  License: BSD-2-Clause
+  Copyright: 2013-2024 Michael Williamson
+  Source:  https://github.com/mwilliamson/mammoth.js
+  Note:    DOCX to HTML converter (mammoth.js).
+
+SheetJS (xlsx.js)
+  License: Apache-2.0
+  Copyright: 2013-present SheetJS
+  Source:  https://github.com/SheetJS/sheetjs
+  Note:    Spreadsheet parser/writer (xlsx.full.min.js).
+
+----------------------------------------------------------------------
+PDF FONTS (bundled in assets/docs/standard_fonts/)
+----------------------------------------------------------------------
+
+Liberation Sans
+  License: SIL Open Font License 1.1
+  Copyright: 2010 Google Corporation, 2012 Red Hat, Inc.
+  Source:  https://github.com/liberationfonts/liberation-fonts
+  Note:    Standard PDF font (LiberationSans-*.ttf).
+
+Foxit PDF Fonts
+  License: BSD-3-Clause
+  Copyright: 2014 PDFium Authors (Google)
+  Note:    PDF standard fonts (Foxit*.pfb).
+
+----------------------------------------------------------------------
+NATIVE TOOL LIBRARIES (pre-compiled .so, full flavor only)
+----------------------------------------------------------------------
+
+proot
+  License: GPL-2.0-or-later
+  Copyright: 2013 STMicroelectronics
+  Source:  https://github.com/proot-me/proot
+  Note:    Distributed as pre-compiled libproot.so. Corresponding source
+           is available at the upstream repository per GPL-2.0 obligations.
+
+talloc
+  License: LGPL-3.0-or-later
+  Copyright: 2004-2005 Andrew Tridgell, 2006 Stefan Metzmacher
+  Source:  https://talloc.samba.org
+  Note:    Distributed as pre-compiled libtalloc.so, dynamically linked.
+           Source available at upstream per LGPL-3.0 obligations.
+
+Alpine Linux Environment (bundled in assets/linux_env/alpine.tar.gz)
+  License: GPL-2.0+ / MIT / BSD (mixed)
+  Note:    Contains musl libc (MIT), BusyBox (GPL-2.0), apk package
+           manager, and other system utilities for the in-app Linux
+           environment (proot + Alpine aarch64).
+
+org.json — org.json:json:20240303
+  License: Public Domain
+  Note:    Upstream removed the "The Software shall be used for Good, not Evil"
+           JSON License clause in version 20220924; this pinned version
+           (20240303) is released to the public domain. The Android platform
+           also bundles org.json under AOSP Apache-2.0, so this explicit Maven
+           dependency is optional for compile-time.
+
+----------------------------------------------------------------------
+TRADEMARKS
+----------------------------------------------------------------------
+"Quro AI" and the Quro logo are trademarks of Quro AI. This license does
+not grant rights to use these trademarks except as required to describe
+the origin of the software.
+

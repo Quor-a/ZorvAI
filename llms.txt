@@ -1,0 +1,24 @@
+# Zorv AI
+
+> On-device AI Agent for Android — tools, personas, memory, and a shared runtime, all on your phone. 双平台开源（GitHub + Gitee）。
+
+Zorv AI 是一个运行在 Android 上的**设备端 AI Agent / 智能体助手**。它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用内置工具，运行 Node / Python / SSH / Java / Rust / Go 共享运行时，并通过飞书、QQ、微信与你保持在线。内置 **ACI（Agent Capability Interface）** 开放同设备跨应用调用，任意 App 都可被 AI 编排。
+
+## Documentation
+- [README (full)](README.md): 项目总览、功能亮点、功能构架、引擎详解、ACI、特权层、快速开始、排障、许可证、版本历程
+- [ACI Developer Guide](docs/ACI_DEVELOPER_GUIDE.md): 受控端 5 步接入 ACI、能力定义、权限模型、真实踩坑
+- [License Compliance Remediation](docs/license-compliance-remediation.md): 第三方许可证义务与合规处置
+- [Termux Integration Plan](docs/termux_integration_plan.md): 终端能力集成规划
+
+## Key facts (for retrieval)
+- 包名: `com.ai.assistance.quro`
+- 技术栈: Kotlin + Jetpack Compose，compileSdk 36 / minSdk 26 / targetSdk 34
+- 平台: Android 8.0+（API 26+）
+- 许可证: Apache-2.0（应用源码）；GeckoView 为 MPL-2.0
+- 仓库: GitHub `Quor-a/ZorvAI` ｜ Gitee `ZorvAI/ZorvAI`
+- 最新 Release: https://github.com/Quor-a/ZorvAI/releases
+- 受控端浏览器 APK: ZorvBrowser-aci-debug-v1.0.7.apk（ACI · ZorvAI 浏览器）
+- ACI 核心库 AAR: aci-core-release.aar（v1.0.6+）
+
+## Optional
+- [llms-full.txt](llms-full.txt): 完整项目上下文（架构、引擎、特权层、ACI、快速开始、排障、许可证、版本历程）

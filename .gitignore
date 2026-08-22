@@ -1,0 +1,82 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+build/
+release/
+
+# Gradle files
+.gradle/
+gradle/wrapper/gradle-wrapper.jar
+
+# Local configuration (SDK path, etc.)
+local.properties
+gradle.properties.local
+
+# Log/Output files
+*.log
+build_*.log
+
+# IDE / Editor
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.project
+.classpath
+.settings/
+.DS_Store
+Thumbs.db
+
+# Kotlin / Compose
+.kotlin/
+buildTmp/
+
+# Native / NDK
+.externalNativeBuild/
+.cxx/
+*.so.tmp
+
+# OS / misc
+nul
+*.tmp
+
+# Dev scratch / temp
+_novaterm_temp/
+measure_sysprompt.py
+
+# Local gradle cache mirror (never commit)
+gradle_cache/
+
+# Keystore / signing files (never commit)
+*.jks
+*.keystore
+*.p12
+*keystore*
+# 注意：keystore.properties 包含密码，不应提交到 git
+# 但在本地开发时需要保留此文件
+keystore.properties
+
+# Backup / outputs (large files, never commit)
+.backup/
+outputs/
+*.backup
+.git-rewrite/
+
+# Large model files (use Git LFS or host externally)
+*.onnx
+*.tar.gz
+*.tar.xz

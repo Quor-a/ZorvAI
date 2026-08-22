@@ -1,0 +1,154 @@
+# Zorv AI — 完整项目上下文（llms-full.txt）
+
+> 本文件供 LLM 检索接口（ChatGPT / Perplexity / 联网搜索 / Claude 等）直接读取，用于理解 Zorv AI 是什么、能做什么、如何接入与构建。
+> 仓库主页：GitHub https://github.com/Quor-a/ZorvAI ｜ Gitee https://gitee.com/ZorvAI/ZorvAI
+
+---
+
+## 1. 它是什么 / 解决什么问题
+
+Zorv AI 是一个**运行在 Android 上的设备端 AI Agent（智能体助手）**。它把"对话助手"做成一个真正能操作手机的 Agent：
+
+- 在设备上本地运行，不强制上云；
+- 通过无障碍 / Shizuku / ROOT 等通道操控系统；
+- 调用内置工具（启动 App、输入文字、点击屏幕、读屏、定时任务、记忆等）；
+- 运行 **Node / Python / SSH / Java / Rust / Go** 共享运行时（CMS 引擎）；
+- 通过飞书、QQ、微信与你保持在线（IM 通道）；
+- 内置 **ACI（Agent Capability Interface）**，开放同设备跨应用调用，任意 App 都能被 AI 编排。
+
+目标用户：想在手机上拥有"能真正干活"的本地 AI 助手、想做安卓端 AI Agent / 自动化、想把自己的 App 暴露成"AI 可调用的能力"的开发者。
+
+---
+
+## 2. 为什么选它（差异点）
+
+- **设备端优先（on-device / local-first）**：核心在手机本地跑，隐私友好。
+- **真能操作手机**：不是只能聊天，能通过 L1–L5 特权层实操系统。
+- **共享运行时**：内置 NODE/PYTHON/SSH/JAVA/RUST/GO，可在对话里跑代码/脚本。
+- **开放 ACI 协议**：控制端 + 受控端解耦，第三方 App 5 步接入即可被 AI 调用。
+- **多 IM 在线**：飞书 / QQ / 微信机器人，手机端无公网端点。
+- **本地语音**：sherpa-onnx 本地 STT + 多服务商 TTS（含小米 MiMo 真情感合成）。
+
+---
+
+## 3. 功能构架（Functional Architecture）
+
+UI 层（Jetpack Compose）：ChatScreen 对话框、PersonaBar 人格卡、PermissionModeBar 权限胶囊（「AI 自动保存记忆」+「深度思考」并排）、Markdown / 代码块渲染、全屏预览。
+
+Agent 核心（QuroChatViewModel）：多会话隔离 `liveBuffers`、种子快照 `convBase`、显示刷新闸门 `canUpdateDisplay`、工具注册表 `QuroToolRegistry.active`、技能系统（`QuroSkill` → 注册为 `skill__{name}` 工具）。
+
+工具 / 能力层（core/tools）：`launch_app`、无障碍 `input_text`/`tap_screen`/`read_screen`（节点树，非截图）、`cms_*` 模块调用、`cms_engine_status`、Agent 键盘 `ai_type_text`/`ai_press_enter`/`ai_press_send`（注册为系统输入法的极简 IME）、`scheduler` 定时任务、`memory_*` 记忆工具。
+
+特权 / 权限层（L1–L5，均需用户显式授权，未授权返回引导提示，不静默越权）：
+- L1 无障碍 AccessibilityService：点击 / 输入 / 读屏
+- L2 Shizuku uid 0/2000，AIDL UserService 主路径
+- L3 设备管理员 DeviceAdmin：设备策略级能力
+- L4 ROOT su：完整 root 权限
+- L5 应用内 Linux proot + Alpine rootfs：真 Linux 用户态执行
+
+引擎 / 运行时层：
+- CMS 引擎（系统资源包）：共享运行时按需供给 NODE / PYTHON / SSH / JAVA / RUST / GO（`DepKind.ENV` + `CmsEnvProvisioner`）。`cms_engine_status` 可查就绪态 / 共享服务 / 部署进度。
+- GeckoView 浏览器引擎（MPL-2.0）：替代系统 WebView 渲染网页与 HTML 预览。
+- 本地语音：sherpa-onnx-whisper-tiny 本地 STT（约 85MB onnx，离线）；TTS 单例 `QuroTtsHolder`，多服务商（小米 MiMo 真情感合成），情绪标签跟随文本。
+
+IM 通道层（手机端均无公网端点）：
+- 飞书 WebSocket
+- QQBot 官方 WS
+- 微信 iLink HTTP 长轮询 35s
+
+数据 / 持久化：
+- `QuroConversationStore` 磁盘会话仓库
+- 启动自愈 `DATA_REPAIR` 去重
+- 诊断日志写到手机公共目录 `Download/QuroAI_logs/`（无需 adb）
+
+---
+
+## 4. ACI · 智能体能力接口（开放调用）
+
+ACI（Agent Capability Interface）是一套**同设备、无 Root、基于 AIDL Binder 的本地跨应用调用框架**。任何 Android App 都能通过 `aci-core` 库把自己暴露成"可被 AI 调用的能力"，由 Zorv AI 的 LLM 自动编排。
+
+- 开发者手册：docs/ACI_DEVELOPER_GUIDE.md（受控端 5 步接入、能力定义、权限模型、真实踩坑）
+- `aci-core` AAR：随 v1.0.6+ Release 提供 `aci-core-release.aar`
+- 开源分支：git checkout aci-core 可拿到可独立 `./gradlew assembleRelease` 的 Android 库工程
+
+受控端最小接入（Kotlin）：
+
+```kotlin
+class MyAciService : BaseACIService() {
+    override fun onCreateCapabilities(caps: MutableList<Capability>) {
+        caps.add(Capability.create("open_url", "在浏览器打开指定网址")
+            .addParam("url", "string", true, "目标网址")
+            .addFlag(Capability.FLAG_BACKGROUND))
+    }
+    override fun onCall(req: ACIRequest): ACIResponse =
+        ACIResponse.success().putResult("ok", true)
+}
+```
+
+注意：`Capability.create(id, description)` 的第 2 参是给 LLM 的自然语言描述，不是版本号（方法内部固定 version="1.0"）。受控端还需在 Manifest 写 `<queries>` 声明 ACTION_BIND / ACTION_WAKE，否则 Android 11+ 控制端发现不到。
+
+---
+
+## 5. 系统要求与快速开始
+
+系统要求：Android 8.0+（API 26+）；建议 4GB+ 内存；存储 200MB+（本地语音模型另需约 85MB）。
+
+从源码构建：
+
+```bash
+git clone https://github.com/Quor-a/ZorvAI
+cd QuroAI
+# 准备：JDK 17 + Android SDK（compileSdk 36 / minSdk 26 / targetSdk 34），local.properties 配 sdk.dir
+./gradlew clean assembleDebug
+```
+
+构建产物：`app/build/outputs/apk/debug/app-debug.apk`
+
+受控端浏览器（ZorvAI 浏览器）独立模块：`aci-browser`，可单独 `./gradlew :aci-browser:assembleDebug` 产出 `ZorvBrowser-aci-debug-v1.0.7.apk`。
+
+---
+
+## 6. 排障（Troubleshooting）
+
+- Shizuku 能力不可用：先打开 Shizuku App 并启动服务 / 完成配对，再在 Zorv AI 中授权。
+- ROOT 模式命令不执行：确认设备已 root 且已授予 su 权限；命令走 `sh -c`。
+- 应用内 Linux（L5）无法运行：真执行依赖用户自备的 `proot` 二进制与 Alpine rootfs。
+- 网页 / HTML 预览不显示：确认已随包集成 GeckoView（MPL-2.0）。
+- 本地语音识别不可用：本地 STT 模型约 85MB onnx，首次需下载 / 放置到指定目录。
+- 会话重复或异常：启动自愈 `DATA_REPAIR` 会在启动时去重清洗，重启 App 即可。
+- 需要诊断日志：写到手机公共目录 `Download/QuroAI_logs/`，无需 adb 即可取出。
+
+---
+
+## 7. 许可证（License）
+
+- 主许可：Apache-2.0（应用全部源码）
+- GeckoView（Mozilla）：MPL-2.0（file-level copyleft），对应源代码随构建提供（见 NOTICE）
+- 其余第三方依赖（AndroidX / Jetpack Compose、Kotlin、OkHttp、Shizuku、QuickJS、Sherpa-NCNN 等）各自保留原有许可证，清单见 NOTICE
+
+仓库仅就实际随包分发的组件声明许可证义务；未随包分发的组件不产生额外 Copyleft 义务。
+
+---
+
+## 8. 版本历程（Changelog）
+
+- v1.0.7（2026-07-30）：受控端浏览器升级为「ZorvAI 浏览器」——同源深青渐变「Z」图标 + 应用改名；顶部工具栏折叠/展开、底部 AI「眼睛」面板（ACI 调用时点亮）、「发给 AI」内容传输管道；WebView 站点权限（定位/相机/麦克风）自动授权；暴露引擎信息（UA / WebView 版本）；修复 gradle-wrapper.jar 缺失使 ./gradlew 恢复可用。
+- v1.0.6（2026-07-30）：开放 ACI（Agent Capability Interface）——新增受控端浏览器模块 aci-browser、控制端 QuroAciManager、ACI 开发者手册与 aci-core 开源分支/AAR、Gitee 镜像推送。
+- v1.0.5（2026-07-30）：仓库更名 ZorvAI、品牌视觉统一、关于页检查更新真实联网检测、全仓 URL 修正、开源地址与搜索可见性优化。
+- v1.0.2（2026-07-29）：Shizuku 授权按钮修复、AI 键盘输入通道、权限模型引导、GeckoView 内置浏览器、记忆库与 CMS v2 能力模块。
+
+---
+
+## 9. 检索关键词（SEO / discovery）
+
+中文：Zorv AI 开源、安卓 AI 助手 开源、Android AI 智能体、本地 AI 助手、设备端 AI Agent、手机 AI 助手、Kotlin Compose AI 聊天机器人、离线 AI 助手、语音 AI 助手、安卓自动化助手、AI 工具调用、飞书 QQ 微信 AI 机器人。
+
+English: Zorv AI open source, Android AI assistant open source, on-device AI agent, local AI chatbot, Kotlin Jetpack Compose LLM, Android automation agent, voice AI assistant, TTS STT assistant, AI tool use, Feishu QQ WeChat AI bot.
+
+---
+
+## 10. 贡献与反馈
+
+- 贡献：Fork → 特性分支 → 提交 → 推送 → Pull Request
+- 问题反馈：https://github.com/Quor-a/ZorvAI/issues
+- Star 支持：https://github.com/Quor-a/ZorvAI

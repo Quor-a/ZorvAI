@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>QuroAI · 工具调用图标库 · 100 款</title>
+<style>
+  :root{
+    --bg:#0f1115;--panel:#171a21;--ink:#e8ecf3;--muted:#9aa4b2;
+    --line:#262b35;--accent:#6ea8fe;--radius:14px;--shadow:0 8px 24px rgba(0,0,0,.3);
+    font-synthesis:none;
+  }
+  @media(prefers-color-scheme:light){
+    :root{--bg:#eef1f6;--panel:#fff;--ink:#1a1f29;--muted:#5b6472;--line:#e2e7ef;--shadow:0 8px 24px rgba(20,30,60,.1);}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
+  header.top{padding:40px 24px 20px;max-width:1240px;margin:0 auto}
+  header.top h1{font-size:28px;margin:0 0 6px}
+  header.top p{color:var(--muted);margin:6px 0;line-height:1.55;max-width:720px}
+  .pill{display:inline-block;background:var(--panel);border:1px solid var(--line);
+    color:var(--muted);padding:3px 11px;border-radius:999px;font-size:12px;margin-right:6px}
+  section{max-width:1240px;margin:0 auto;padding:6px 24px 36px}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;
+    border-bottom:1px solid var(--line);padding:16px 0 8px;margin-bottom:14px}
+  .sec-head h2{font-size:18px;margin:0}
+  .sec-head span{color:var(--muted);font-size:12px}
+
+  /* ── chip grid ── */
+  .grid{display:grid;gap:10px;
+    grid-template-columns:repeat(auto-fill,minmax(148px,1fr))}
+  .chip{
+    display:flex;align-items:center;gap:7px;
+    background:var(--panel);border:1px solid var(--line);
+    padding:7px 10px;border-radius:10px;cursor:pointer;
+    transition:transform .15s ease,border-color .15s,box-shadow .15s;
+    user-select:none
+  }
+  .chip:hover{transform:translateY(-1px);border-color:var(--accent);box-shadow:var(--shadow)}
+  .chip:active{transform:scale(.97)}
+  .chip .ico{width:22px;height:22px;border-radius:6px;display:flex;
+    align-items:center;justify-content:center;flex-shrink:0;font-size:13px}
+  .chip .lbl{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip .sub{font-size:9.5px;color:var(--muted);margin-left:auto;flex-shrink:0}
+
+  /* ── category row label ── */
+  .cat-label{grid-column:1/-1;font-size:12px;font-weight:700;color:var(--accent);
+    padding:10px 0 4px;border-top:1px dashed var(--line);margin-top:4px;
+    letter-spacing:.5px}
+  .cat-label:first-child{border-top:none;margin-top:0}
+
+  /* ── color tokens per category ── */
+  .bg-file{background:#7c3aed18;color:#a78bfa}
+  .bg-web{background:#05966918;color:#34d399}
+  .bg-term{background:#d9770618;color:#fbbf24}
+  .bg-code{background:#0891b218;color:#22d3ee}
+  .bg-ai{background:#db277718;color:#f472b6}
+  .bg-media{background:#c026d318;color:#e879f9}
+  .bg-ui{background:#4f46e518;color:#818cf8}
+  .bg-sys{background:#ea580c18;color:#fb923c}
+  .bg-com{background:#16a34a18;color:#4ade80}
+  .bg-data{background:#0284c718;color:#38bdf8}
+  .bg-sec{background:#dc262618;color:#f87171}
+  .bg-time{background:#ca8a0418;color:#facc15}
+  .bg-loc{background:#65a30d18;color:#a3e635}
+  .bg-wx{background:#0369a118;color:#7dd3fc}
+  .bg-mus{background:#be185d18;color:#f9a8d4}
+  .bg-dev{background:#47556918;color:#94a3b8}
+  .bg-cms{background:#86198f18;color:#c084fc}
+  .bg-bot{background:#0d948818;color:#5eead4}
+  .bg-mem{background:#1d4ed818;color:#93c5fd}
+  .bg-viz{background:#b4530918;color:#fdba74}
+  .bg-health{background:#15803d18颜色:#86efac}
+
+  footer{max-width:1240px;margin:0 auto;padding:30px 24px;
+    border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>🔧 工具调用图标库 · Tool Call Icons</h1>
+  <p>100 款超小工具调用图标/组键（Chip），用于 AI 对话中标记「调用了什么工具」。每款独立视觉：分类色 + 迷你 SVG 图标 + 名称 + 简短描述。点击可展开详情。</p>
+  <div style="margin-top:10px">
+    <span class="pill">100 款独立设计</span>
+    <span class="pill">20 个分类</span>
+    <span class="pill">SVG 矢量图标</span>
+    <span class="pill">深浅主题自适应</span>
+    <span class="pill">Compose 映射就绪</span>
+  </div>
+</header>
+
+<section id="app"></section>
+
+<footer>
+  QuroAI Tool Call Icon Library · v1 · 2026-07-25 · 设计库交付物
+</footer>
+
+<script>
+/* ══════════════════════════════════════
+   100 TOOL ICONS — DATA DEFINITION
+   Categories → chips with inline SVG + meta
+   ══════════════════════════════════════ */
+const cats = [
+  {id:'file',label:'📁 文件系统',cls:'bg-file'},
+  {id:'web',label:'🌐 网络/Web',cls:'bg-web'},
+  {id:'term',label:'💠 终端/Shell',cls:'bg-term'},
+  {id:'code',label:'⚡ 代码执行',cls:'bg-code'},
+  {id:'ai',label:'🧠 AI/模型',cls:'bg-ai'},
+  {id:'media',label:'🎨 媒体生成',cls:'bg-media'},
+  {id:'ui',label:'📱 UI 自动化',cls:'bg-ui'},
+  {id:'sys',label:'🖥️ 系统信息',cls:'bg-sys'},
+  {id:'com',label:'📡 通信',cls:'bg-com'},
+  {id:'data',label:'🗄️ 数据处理',cls:'bg-data'},
+  {id:'sec',label:'🔒 安全',cls:'bg-sec'},
+  {id:'time',label:'⏰ 时间/日程',cls:'bg-time'},
+  {id:'loc',label:'📍 定位/地图',cls:'bg-loc'},
+  {id:'wx',label:'🌤️ 天气/环境',cls:'bg-wx'},
+  {id:'mus',label:'🎵 媒体控制',cls:'bg-mus'},
+  {id:'dev',label:'🔨 DevOps',cls:'bg-dev'},
+  {id:'cms',label:'📦 CMS/模块',cls:'bg-cms'},
+  {id:'bot',label:'🤖 Bot/IM',cls:'bg-bot'},
+  {id:'mem',label:'💾 记忆库',cls:'bg-mem'},
+  {id:'viz',label:'👁️ 可视化',cls:'bg-viz'},
+];
+
+const tools = [
+  // ─── FILE SYSTEM (6) ────────────────
+  {c:'file',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>',n:'read_file',s:'读取文件'},
+  {c:'file',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M8 7l4-4 4 4"/><path d="M17 14l4 4-4 4"/></svg>',n:'write_file',s:'写入文件'},
+  {c:'file',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>',n:'delete_file',s:'删除文件'},
+  {c:'file',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>',n:'create_file',s:'新建文件'},
+  {c:'file',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>',n:'list_dir',s:'列目录'},
+  {c:'file',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',n:'download',s:'下载'},
+
+  // ─── WEB / NETWORK (6) ─────────────
+  {c:'web',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>',n:'web_search',s:'网页搜索'},
+  {c:'web',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10A15.3 15.3 0 0112 2z"/></svg>',n:'web_fetch',s:'抓取网页'},
+  {c:'web',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',n:'open_url',s:'打开链接'},
+  {c:'web',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>',n:'browser',s:'内置浏览器'},
+  {c:'web',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',n:'api_call',s:'API 调用'},
+  {c:'web',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',n:'cli_exec',s:'命令行执行'},
+
+  // ─── TERMINAL / SHELL (5) ──────────
+  {c:'term',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 11,11 4,5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',n:'terminal',s:'终端执行'},
+  {c:'term',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 8l4 4-4 4"/><line x1="13" y1="16" x2="17" y2="16"/></svg>',n:'shell_run',s:'Shell 运行'},
+  {c:'term',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>',n:'linux_env',s:'Linux 环境'},
+  {c:'term',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01"/><path d="M14 12h6"/></svg>',n:'proot',s:'Proot 容器'},
+  {c:'term',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>',n:'root_exec',s:'ROOT 执行'},
+
+  // ─── CODE EXECUTION (6) ─────────────
+  {c:'code',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16,18 22,12 16,6"/><polyline points="8,6 2,12 8,18"/></svg>',n:'code_run',s:'运行代码'},
+  {c:'code',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',n:'code_edit',s:'编辑代码'},
+  {c:'code',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>',n:'code_lint',s:'代码检查'},
+  {c:'code',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>',n:'ide_open',s:'打开 IDE'},
+  {c:'code',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M10 13l2 2 4-4"/></svg>',n:'test_run',s:'运行测试'},
+  {c:'code',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>',n:'package_mgr',s:'包管理器'},
+
+  // ─── AI / MODEL (6) ─────────────────
+  {c:'ai',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4v2a4 4 0 01-4 4 4 4 0 01-4-4V6a4 4 0 014-4z"/><path d="M16 14a4 4 0 01-8 0"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>',n:'llm_chat',s:'LLM 对话'},
+  {c:'ai',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>',n:'classify',s:'文本分类'},
+  {c:'ai',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>',n:'translate',s:'翻译'},
+  {c:'ai',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',n:'summarize',s:'摘要'},
+  {c:'ai',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>',n:'ocr',s:'OCR 识别'},
+  {c:'ai',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M12 22V12"/><path d="M8 6l4-4 4 4"/></svg>',n:'embedding',s:'向量嵌入'},
+
+  // ─── MEDIA GENERATION (6) ──────────
+  {c:'media',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>',n:'image_gen',s:'图像生成'},
+  {c:'media',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20"/><path d="M17 2v20"/><path d="M2 12h20"/></svg>',n:'image_crop',s:'裁剪图片'},
+  {c:'media',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23,7 16,12 23,17 23,7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',n:'video_gen',s:'视频生成'},
+  {c:'media',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',n:'audio_gen',s:'音频生成'},
+  {c:'media',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/><path d="M11 19h10"/><path d="M15 15h6"/></svg>',n:'image_edit',s:'图像编辑'},
+  {c:'media',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/><path d="M12 14l3-3 5 5"/></svg>',n:'filter_apply',s:'滤镜处理'},
+
+  // ─── UI AUTOMATION (6) ───────────────
+  {c:'ui',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>',n:'tap',s:'点击元素'},
+  {c:'ui',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17,1 21,5 17,9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7,23 3,19 7,15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>',n:'swipe',s:'滑动手势'},
+  {c:'ui',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="7"/><polyline points="9,15 12,18 15,15"/></svg>',n:'scroll',s:'滚动屏幕'},
+  {c:'ui',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 15h10"/><path d="M10 12h4"/></svg>',n:'input_text',s:'输入文字'},
+  {c:'ui',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>',n:'get_screen',s:'截屏/读屏'},
+  {c:'ui',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',n:'grid_tap',s:'网格点击'},
+
+  // ─── SYSTEM INFO (5) ────────────────
+  {c:'sys',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>',n:'device_info',s:'设备信息'},
+  {c:'sys',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="6" width="18" height="12" rx="2"/><path d="M23 13v-2"/><path d="M7 12h4"/></svg>',n:'battery',s:'电池状态'},
+  {c:'sys',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0114 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="20" r="1"/></svg>',n:'network',s:'网络状态'},
+  {c:'sys',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg>',n:'storage',s:'存储空间'},
+  {c:'sys',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 14h3"/><path d="M1 9h3"/><path d="M1 14h3"/></svg>',n:'cpu_monitor',s:'CPU 监控'},
+
+  // ─── COMMUNICATION (5) ─────────────
+  {c:'com',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>',n:'notify',s:'发通知'},
+  {c:'com',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',n:'send_email',s:'发邮件'},
+  {c:'com',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>',n:'phone_call',s:'打电话'},
+  {c:'com',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>',n:'send_msg',s:'发消息'},
+  {c:'com',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/><line x1="2" y1="2" x2="22" y2="22"/></svg>',n:'push_broadcast',s:'推送广播'},
+
+  // ─── DATA PROCESSING (5) ────────────
+  {c:'data',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',n:'db_query',s:'数据库查询'},
+  {c:'data',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></svg>',n:'csv_parse',s:'CSV 解析'},
+  {c:'data',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 17l4-4-4-4"/><path d="M21 12H9"/><path d="M12 3v18"/></svg>',n:'json_xform',s:'JSON 转换'},
+  {c:'data',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',n:'data_chart',s:'数据图表'},
+  {c:'data',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>',n:'analytics',s:'数据分析'},
+
+  // ─── SECURITY (5) ─��─────────────────
+  {c:'sec',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>',n:'encrypt',s:'加密'},
+  {c:'sec',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>',n:'decrypt',s:'解密'},
+  {c:'sec',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',n:'permission',s:'权限检查'},
+  {c:'sec',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>',n:'verify',s:'签名验证'},
+  {c:'sec',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',n:'risk_check',s:'风险检查'},
+
+  // ─── TIME / SCHEDULE (5) ────────────
+  {c:'time',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>',n:'set_alarm',s:'设闹钟'},
+  {c:'time',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/><path d="M18 12h4"/></svg>',n:'timer',s:'计时器'},
+  {c:'time',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>',n:'calendar',s:'日历事件'},
+  {c:'time',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M12 8v4l3 3"/></svg>',n:'schedule_task',s:'计划任务'},
+  {c:'time',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 8,14"/></svg>',n:'countdown',s:'倒计时'},
+
+  // ─── LOCATION / MAP (4) ─────────────
+  {c:'loc',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>',n:'gps_loc',s:'GPS 定位'},
+  {c:'loc',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1,6 1,22 8,18 16,22 23,14 23,2 16,6 8,2 1,6"/><text x="7" y="14" font-size="8" fill="currentColor">G</text></svg>',n:'geocode',s:'地理编码'},
+  {c:'loc',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3,6 9,3 15,6 21,3 21,9 15,12 9,9 3,12"/><line x1="3" y1="12" x2="9" y2="15"/><line x1="15" y1="12" x2="21" y2="15"/><line x1="9" y1="15" x2="15" y2="18"/><line x1="3" y1="6" x2="3" y2="12"/><line x1="21" y1="3" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="9"/><line x1="15" y1="6" x2="15" y2="12"/></svg>',n:'navigate_to',s:'导航'},
+  {c:'loc',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/><path d="M12 17v4"/></svg>',n:'track_route',s:'轨迹追踪'},
+
+  // ─── WEATHER / ENVIRONMENT (4) ──────
+  {c:'wx',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 116.71-9h1.79a4.5 4.5 0 110 9z"/></svg>',n:'weather_now',s:'实时天气'},
+  {c:'wx',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 116.71-9h1.79a4.5 4.5 0 110 9z"/><path d="M12 3v2"/><path d="M4.93 4.93l1.41 1.41"/><path d="M20 8h-2"/><path d="M19.07 4.93l-1.41 1.41"/></svg>',n:'weather_forecast',s:'天气预报'},
+  {c:'wx',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',n:'weather_alert',s:'天气预警'},
+  {c:'wx',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 16l-6 6h24"/><path d="M20 10c0-4.4-3.6-8-8-8-3.7 0-6.8 2.5-7.7 6H3.5C1.5 8 0 9.5 0 11.5S1.5 15 3.5 15H20c2.2 0 4-1.8 4-4z"/></svg>',n:'air_quality',s:'空气质量'},
+
+  // ─── MEDIA CONTROL (4) ─────────────
+  {c:'mus',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg>',n:'music_play',s:'播放音乐'},
+  {c:'mus',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>',n:'music_pause',s:'暂停'},
+  {c:'mus',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23,7 16,12 23,17 23,7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',n:'video_play',s:'播放视频'},
+  {c:'mus',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19 11,5"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>',n:'volume_ctrl',s:'音量控制'},
+
+  // ─── DEVOPS (5) ─────────────────────
+  {c:'dev',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>',n:'git_op',s:'Git 操作'},
+  {c:'dev',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 8h10"/><path d="M7 12h6"/></svg>',n:'build_proj',s:'构建项目'},
+  {c:'dev',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>',n:'deploy',s:'部署发布'},
+  {c:'dev',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>',n:'docker',s:'Docker 容器'},
+  {c:'dev',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>',n:'ci_cd',s:'CI/CD 流水线'},
+
+  // ─── CMS / MODULE (4) ───────────────
+  {c:'cms',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>',n:'cms_deploy',s:'CMS 部署'},
+  {c:'cms',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>',n:'cms_plugin',s:'CMS 插件'},
+  {c:'cms',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',n:'cms_module',s:'CMS 模块'},
+  {c:'cms',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',n:'cms_terminal',s:'CMS 终端'},
+
+  // ─── BOT / IM (4) ───────────────────
+  {c:'bot',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16.01"/><line x1="16" y1="16" x2="16" y2="16.01"/></svg>',n:'bot_send',s:'Bot 发消息'},
+  {c:'bot',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>',n:'bot_recv',s:'Bot 收消息'},
+  {c:'bot',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>',n:'bot_webhook',s:'Webhook 推送'},
+  {c:'bot',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>',n:'bot_card',s:'Bot 卡片消息'},
+
+  // ─── MEMORY (4) ─────────────────────
+  {c:'mem',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M12 22V12"/><path d="M8 6l4-4 4 4"/></svg>',n:'mem_save',s:'保存记忆'},
+  {c:'mem',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>',n:'mem_search',s:'搜索记忆'},
+  {c:'mem',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/></svg>',n:'mem_list',s:'列出记忆'},
+  {c:'mem',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>',n:'mem_delete',s:'删除记忆'},
+
+  // ─── VISUALIZATION (4) ──────────────
+  {c:'viz',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',n:'chart_bar',s:'柱状图'},
+  {c:'viz',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg>',n:'chart_pie',s:'饼图'},
+  {c:'viz',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>',n:'chart_line',s:'折线图'},
+  {c:'viz',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>',n:'table_render',s:'表格渲染'},
+
+  // ─── HEALTH / MONITOR (4) ───────────
+  {c:'health',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',n:'health_check',s:'健康检查'},
+  {c:'health',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v0"/><path d="M8 12h8"/><path d="M8 8h8"/></svg>',n:'log_view',s:'日志查看'},
+  {c:'health',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',n:'error_alert',s:'错误告警'},
+  {c:'health',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',n:'perf_stats',s:'性能统计'},
+  {c:'health',i:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18.4M4.93 4.93l14.14 14.14M4.93 19.07L19.07 4.94"/></svg>',n:'tts',s:'语音合成'},
+
+  // ─── EXTRA ─────────────────────
+];
+
+// ─── RENDER ────────────────────────────
+const app = document.getElementById('app');
+let html = '';
+let curCat = null;
+
+tools.forEach((t, idx) => {
+  if (t.c !== curCat) {
+    curCat = t.c;
+    const cat = cats.find(c => c.id === curCat);
+    html += `<div class="cat-label">${cat ? cat.label : curCat}</div>`;
+  }
+  html += `<div class="chip"><span class="ico ${cats.find(c=>c.id===t.c)?.cls||''}">${t.i}</span><span class="lbl">${t.n}</span><span class="sub">${t.s}</span></div>`;
+});
+
+html += `<div class="cat-label" style="border-style:dashed">✅ 共 ${tools.length} 款工具调用图标</div>`;
+app.innerHTML = `<div class="grid">${html}</div>`;
+</script>
+</body>
+</html>
