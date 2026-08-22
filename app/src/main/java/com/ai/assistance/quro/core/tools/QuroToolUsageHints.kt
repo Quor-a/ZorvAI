@@ -74,7 +74,7 @@ object QuroToolUsageHints {
 
         // ── 网络 / Web ──
         "http_request" to "「调一下这个接口」「发个 GET/POST 到 XX」「请求这个 URL」「对接某个 API」都调用",
-        "open_web" to "「打开百度」「用浏览器看这个网页」「访问 XX 网址」都调用（被动展示，仅供用户查看，AI 无法点击交互）；若 AI 要真正操作网页请用 aci_call 的 browser_open→browser_elements→browser_action",
+        "open_web" to "「打开百度」「访问 XX 网址」类请求：若系统提示里已声明【默认 ACI 应用已设置】（通常是受控浏览器），【优先用 aci_call 的 browser_open】（真实可交互、能点进去）；只有在未设默认 ACI 应用时才用 open_web 被动展示（仅供查看，AI 无法点击交互）。真正操作网页（点链接/填表/翻页）一律用 aci_call 的 browser_open→browser_elements→browser_action。",
         "ai_browser" to "多用途：既能「后台联网搜索资料/自动研究」也能「打开网页被动展示」也能「下载网页里的文件」——需要 AI 自动上网查资料/下载时调用（open 仅展示、不能点击；真正点击/填表/进入子页面请用 aci_call 的 ZorvAI 受控浏览器 browser_open→browser_elements→browser_action）",
 
         // ── 代码执行 ──

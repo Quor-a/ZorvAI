@@ -3,6 +3,7 @@ package com.ai.assistance.quro.ui
 import android.content.Context
 import android.net.Uri
 import android.widget.Toast
+import com.ai.assistance.quro.core.tools.WorkspacePreferences
 import androidx.compose.foundation.clickable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -89,34 +90,39 @@ fun WorkspaceSelectionDialog(
                     Spacer(Modifier.height(12.dp))
                 }
 
+                val workspaceRoot = File(ctx.getExternalFilesDir(null), "QuroWorkspace")
+                workspaceRoot.mkdirs()
+                val defaultPath = workspaceRoot.absolutePath
+
+                // 汇总所有已知工作区：当前选中 + 最近使用 + 已创建子目录，去重后展示
+                val known = LinkedHashSet<String>()
+                initialSelectedPath?.takeIf { it.isNotBlank() }?.let { known.add(it) }
+                known.addAll(WorkspacePreferences.getRecentWorkspaces(ctx))
+                workspaceRoot.listFiles()?.filter { it.isDirectory }?.forEach { known.add(it.absolutePath) }
+
                 // 默认工作区
                 WorkspaceOption(
                     icon = Icons.Filled.Home,
                     title = "默认工作区",
                     subtitle = "QuroWorkspace（应用沙箱）",
+                    selected = selectedPath == defaultPath,
                     onClick = {
-                        val defaultPath = File(ctx.getExternalFilesDir(null), "QuroWorkspace").absolutePath
                         selectedPath = defaultPath
                         onWorkspaceSelected(defaultPath)
                         onDismiss()
                     },
                 )
 
-                // 已创建的工作区
-                val workspaceRoot = File(ctx.getExternalFilesDir(null), "QuroWorkspace")
-                val workspaces = remember {
-                    if (workspaceRoot.exists()) {
-                        workspaceRoot.listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
-                    } else emptyList()
-                }
-
-                workspaces.forEach { name ->
+                // 已选择 / 已创建 / 最近使用的工作区
+                known.forEach { path ->
+                    if (path == defaultPath) return@forEach
+                    val name = path.substringAfterLast('/')
                     WorkspaceOption(
                         icon = Icons.Filled.Folder,
                         title = name,
-                        subtitle = "QuroWorkspace/$name",
+                        subtitle = path,
+                        selected = selectedPath == path,
                         onClick = {
-                            val path = File(workspaceRoot, name).absolutePath
                             selectedPath = path
                             onWorkspaceSelected(path)
                             onDismiss()
@@ -171,14 +177,18 @@ private fun WorkspaceOption(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     subtitle: String,
+    selected: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val cs = MaterialTheme.colorScheme
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 2.dp)
             .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) cs.primaryContainer.copy(alpha = 0.35f) else cs.surface
+        ),
     ) {
         Row(
             modifier = Modifier
@@ -186,13 +196,17 @@ private fun WorkspaceOption(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(icon, null, tint = if (selected) cs.primary else cs.onSurfaceVariant)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
-            Icon(Icons.Filled.ChevronRight, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+            if (selected) {
+                Icon(Icons.Filled.Check, null, tint = cs.primary, modifier = Modifier.size(20.dp))
+            } else {
+                Icon(Icons.Filled.ChevronRight, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+            }
         }
     }
 }

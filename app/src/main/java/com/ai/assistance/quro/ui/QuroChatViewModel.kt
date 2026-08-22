@@ -1812,13 +1812,21 @@ $recent
         sb.append("- ACI 不使用、也不需要：Shizuku / dumpsys / OPLUS 权限 / ROOT / 无障碍 / 设备管理员。遇到任何 ACI 问题时【禁止】用这些系统工具去\"诊断\"或\"修复\"——那会偏离 ACI 的设计，且对解决问题毫无帮助。\n")
         sb.append("- aci_list：列出当前已发现的所有 ACI 第三方 App 及其暴露的能力（id / 说明 / 参数 / 是否需用户确认）。\n")
         sb.append("- aci_call：调用某个第三方 App 的 ACI 能力，参数 {target_package(可选), capability, args}；会跨进程发往目标 App 并同步返回结果。\n")
-        // 动态注入当前默认 ACI 应用，让模型明确知道可省略 target_package
+        // 动态注入当前默认 ACI 应用，并强制模型【主动】调用 aci_call
         val defaultAciPkg = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultPackage(appContext)
         val defaultAciName = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultAppName(appContext)
         if (defaultAciPkg != null) {
-            sb.append("- 【重要】用户已在 ACI 管理中心设置了默认 ACI 应用：${defaultAciName ?: defaultAciPkg}（包名 $defaultAciPkg）。调用 aci_call 时【可以省略 target_package】，系统会自动使用此默认应用；只有需要调用其它非默认应用时才显式传 target_package。\n")
+            sb.append("- 【重要·默认 ACI 应用已设置】用户已在 ACI 管理中心把默认 ACI 应用设为：${defaultAciName ?: defaultAciPkg}（包名 $defaultAciPkg）。\n")
+            sb.append("- 【主动调用 ACI（关键）】既然已设默认应用，遇到下列任何用户意图时，你必须【主动调用 aci_call】真正执行，不要只用文字回答、也不要改用 open_web / ai_browser 的 open 等「被动展示」工具：\n")
+            sb.append("  · 打开 / 访问 / 浏览某个网址、看某个网页 → aci_call({capability:\"browser_open\", args:{url:\"...\"}})（真实可点击交互，远强于 open_web 被动展示）；\n")
+            sb.append("  · 操作网页（点链接 / 填表 / 翻页 / 读取点击后内容）→ browser_open 后用 browser_elements → browser_action → browser_read（加载中 browser_wait）；\n")
+            sb.append("  · 发消息 / 查未读 / 建群 / 读通知 等社交类能力 → aci_call({capability:\"send_message\" 等, args:{...}})（capability 名以 aci_list / 上方清单为准）；\n")
+            sb.append("  · 发起 HTTP 请求（含同网段 LAN 明文 http://192.168.x.x、*.local）→ aci_call({capability:\"http_request\", args:{...}})；\n")
+            sb.append("  · 其它任何「让外部 App 帮你做事」的意图 → 先想 aci_call 能否由默认应用执行，能就直接调。\n")
+            sb.append("- 调用 aci_call 时【可以省略 target_package】，系统会自动使用默认应用 ${defaultAciName ?: defaultAciPkg}；只有要调其它非默认应用才显式传 target_package。\n")
+            sb.append("- 【优先级·网页类请求】一律优先 aci_call 的 browser_open（真实交互），open_web / ai_browser 的 open 仅被动展示、AI 点不进去，不要先用它们。\n")
         } else {
-            sb.append("- 用户尚未设置默认 ACI 应用；调用 aci_call 时需显式传 target_package（用 aci_list 查到的 pkg）。\n")
+            sb.append("- 用户尚未设置默认 ACI 应用；调用 aci_call 时需显式传 target_package（用 aci_list 查到的 pkg）。建议提示用户去「设置 → 功能 → ACI 管理中心」设一个默认应用，之后即可省略 target_package 并主动调用。\n")
         }
         sb.append("- 应用启动时会自动发现设备上已安装的 ACI App；若 aci_list 为空，仅说明目标 App 未安装或未声明 ACI Service → 直接告知用户去安装该 App，【不要】跑 dumpsys/Shizuku 去查。\n")
         sb.append("- 排障边界（重要）：若 aci_call 返回 503（服务未绑定），这是绑定生命周期问题，框架会自动重绑 → 直接重试一次 aci_call 即可，【不要】去授权任何系统权限。其他错误码请原样转告用户，不要臆测为\"权限不足\"。\n")
