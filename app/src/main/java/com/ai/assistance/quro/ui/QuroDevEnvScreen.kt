@@ -75,8 +75,8 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
 
     // 终端就绪状态
     var termReady by remember { mutableStateOf(false) }
-    // 各环境就绪状态
-    var envStates by remember { mutableStateOf(mutableMapOf<String, Boolean>()) }
+    // 各环境就绪状态（使用 mutableStateOf 包装 Map 以触发重组）
+    var envStates by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
     // 正在部署的环境
     var deploying by remember { mutableStateOf<String?>(null) }
     // 部署日志
@@ -90,11 +90,13 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
             val st = QuroLinuxEnv.probe(ctx)
             termReady = st.available
             if (termReady) {
+                val states = mutableMapOf<String, Boolean>()
                 envSections.forEach { section ->
                     section.items.forEach { (profile, _) ->
-                        envStates[profile.name] = CmsEnvProvisioner.isReady(ctx, profile)
+                        states[profile.name] = CmsEnvProvisioner.isReady(ctx, profile)
                     }
                 }
+                envStates = states
             }
         }
     }
@@ -170,7 +172,7 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                                     }
                                     val ready = CmsEnvProvisioner.isReady(ctx, profile)
                                     withContext(Dispatchers.Main) {
-                                        envStates[profile.name] = ready
+                                        envStates = envStates + (profile.name to ready)
                                     }
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
@@ -210,7 +212,9 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                                         }
                                         CmsEnvProvisioner.provision(ctx, profile)
                                         val ready = CmsEnvProvisioner.isReady(ctx, profile)
-                                        envStates[profile.name] = ready
+                                        withContext(Dispatchers.Main) {
+                                            envStates = envStates + (profile.name to ready)
+                                        }
                                     }
                                 }
                                 withContext(Dispatchers.Main) {
