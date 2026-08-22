@@ -156,6 +156,13 @@ class QuroAssistant(
             // 记忆开关关闭时摘除 memory_* 工具，与系统提示词中的记忆段保持一致（都不注入）
             val effectiveSpecs = if (autoSaveMemory) toolSpecs else toolSpecs.filter { !it.name.startsWith("memory_") }
             Log.i("QuroAssistant", "tool mode=${if (!effEnableTools) "off" else if (cfg.useFullTools) "full(${toolSpecs.size})" else "core(${toolSpecs.size})"}")
+            // 诊断日志：确认 aci/workspace 工具是否在下发列表中
+            val aciWsTools = effectiveSpecs.filter { it.name.startsWith("aci_") || it.name.startsWith("workspace_") }
+            if (aciWsTools.isNotEmpty()) {
+                Log.i("QuroAssistant", "aci/workspace tools included: ${aciWsTools.map { it.name }}")
+            } else {
+                Log.w("QuroAssistant", "⚠️ NO aci/workspace tools in effectiveSpecs! total=${effectiveSpecs.size} names=${effectiveSpecs.map { it.name }.take(10)}")
+            }
             // 工具调用轮次：0=不限制（默认），ReAct 循环持续到模型返回最终 Text 答复，
             // **没有步数上限，可一直链式编排直到任务真正完成**。
             // 仅保留一个极高的安全天花板（默认 2000，真实任务远不会触及）作最后兜底；

@@ -716,6 +716,12 @@ fun ChatScreen(
     quroDiagCtx = ctx
     // 当前选择的工作区路径（从持久化存储初始化）
     var currentWorkspace by remember { mutableStateOf(com.ai.assistance.quro.core.tools.WorkspacePreferences.getCurrentWorkspace(ctx)) }
+    // 当前选择的 ACI 应用名称（从持久化存储初始化，用于上下文标识栏）
+    var currentAciName by remember { mutableStateOf(com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultAppName(ctx)) }
+    // 已启用的技能数量（用于上下文标识栏）
+    var enabledSkillsCount by remember { mutableStateOf(
+        com.ai.assistance.quro.core.skill.QuroSkillStore.load(ctx).count { it.enabled }
+    ) }
 
     // 卡片动作命令分发：ui_* 走 UI 桥；linux:install 触发沙箱安装；run:<cmd> 喂给终端。
     fun handleCardCommand(cmd: String) {
@@ -784,7 +790,15 @@ fun ChatScreen(
     fun send(text: String) {
         val t = text.trim()
         if (t.isEmpty() && attachments.isEmpty()) return
-        vm.send(t, attachments.toList(), cfg)
+        // 注入上下文元数据：让 AI 直接从用户消息中读到当前工作区、ACI、技能状态
+        val ctxParts = mutableListOf<String>()
+        val wsPath = currentWorkspace
+        if (wsPath != null) ctxParts.add("工作区: $wsPath")
+        val aciName = currentAciName
+        if (aciName != null) ctxParts.add("ACI应用: $aciName")
+        if (enabledSkillsCount > 0) ctxParts.add("已启用技能: ${enabledSkillsCount}个")
+        val msg = if (ctxParts.isNotEmpty()) "[上下文|${ctxParts.joinToString(" | ")}]\n$t" else t
+        vm.send(msg, attachments.toList(), cfg)
         attachments.clear()
     }
 
@@ -985,6 +999,8 @@ fun ChatScreen(
                         onOpenEditor = { showEditor = true },
                         currentWorkspace = currentWorkspace,
                         onOpenWorkspaceSelector = { showWorkspaceSelector = true },
+                        currentAciName = currentAciName,
+                        enabledSkillsCount = enabledSkillsCount,
                         scaled = { scaled(it) }
                     )
                 }
@@ -1270,7 +1286,11 @@ fun ChatScreen(
         if (showSkills) {
             BackHandler { showSkills = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(Color(0xFFF2F2F7))) {
-                QuroSkillsScreen(onClose = { showSkills = false })
+                QuroSkillsScreen(onClose = {
+                    showSkills = false
+                    // 技能页关闭后刷新已启用技能数量
+                    enabledSkillsCount = com.ai.assistance.quro.core.skill.QuroSkillStore.load(ctx).count { it.enabled }
+                })
             }
         }
 
@@ -1375,12 +1395,14 @@ fun ChatScreen(
                     com.ai.assistance.quro.core.aidlaci.AciAppPreferences.setDefaultApp(
                         ctx, packageName, appName
                     )
+                    currentAciName = appName
                     Toast.makeText(ctx, "已设置默认 ACI 应用: $appName", Toast.LENGTH_SHORT).show()
                     showAciSelector = false
                 },
                 onClearSelection = {
                     // 清除默认 ACI 应用
                     com.ai.assistance.quro.core.aidlaci.AciAppPreferences.clearDefaultApp(ctx)
+                    currentAciName = null
                     Toast.makeText(ctx, "已清除默认 ACI 应用", Toast.LENGTH_SHORT).show()
                 },
                 initialSelectedPackage = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultPackage(ctx),
@@ -3433,6 +3455,8 @@ private fun Composer(
     onOpenEditor: () -> Unit = {},
     currentWorkspace: String? = null,
     onOpenWorkspaceSelector: () -> Unit = {},
+    currentAciName: String? = null,
+    enabledSkillsCount: Int = 0,
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -3468,6 +3492,59 @@ private fun Composer(
                 }
             }
             Spacer(Modifier.height(8.dp))
+        }
+        // ═══ 上下文标识栏：显示当前工作区 / ACI / 技能，让用户一眼看到 AI 能读到什么 ═══
+        val hasCtx = currentWorkspace != null || currentAciName != null || enabledSkillsCount > 0
+        if (hasCtx) {
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (currentWorkspace != null) {
+                    val wsLabel = currentWorkspace.substringAfterLast('/')
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(cs.primaryContainer.copy(alpha = 0.5f))
+                            .clickable { onOpenWorkspaceSelector() }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        LucideIcon("folder", null, Modifier.size(12.dp), tint = cs.primary)
+                        Spacer(Modifier.width(4.dp))
+                        Text("📂 $wsLabel", fontSize = scaled(11), color = cs.onPrimaryContainer, maxLines = 1)
+                    }
+                }
+                if (currentAciName != null) {
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(cs.secondaryContainer.copy(alpha = 0.5f))
+                            .clickable { onOpenAciSelector() }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        LucideIcon("link", null, Modifier.size(12.dp), tint = cs.secondary)
+                        Spacer(Modifier.width(4.dp))
+                        Text("🔗 $currentAciName", fontSize = scaled(11), color = cs.onSecondaryContainer, maxLines = 1)
+                    }
+                }
+                if (enabledSkillsCount > 0) {
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(cs.tertiaryContainer.copy(alpha = 0.5f))
+                            .clickable { onOpenSkills() }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        LucideIcon("sparkles", null, Modifier.size(12.dp), tint = cs.tertiary)
+                        Spacer(Modifier.width(4.dp))
+                        Text("🧩 ${enabledSkillsCount}个技能", fontSize = scaled(11), color = cs.onTertiaryContainer)
+                    }
+                }
+            }
         }
         // 输入条
         Row(
