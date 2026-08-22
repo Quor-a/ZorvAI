@@ -574,6 +574,8 @@ fun ChatScreen(
     var showPlugins by remember { mutableStateOf(false) }
     // 技能 SKILL 管理入口
     var showSkills by remember { mutableStateOf(false) }
+    // 技能选择对话框（从输入框工具菜单/上下文标识栏进入）
+    var showSkillSelector by remember { mutableStateOf(false) }
     // 定时任务管理入口
     var showSchedule by remember { mutableStateOf(false) }
     // 知识库管理页（从设置页入口进入：浏览 / 查看 / 新建 / 删除 knowledge_base 文档）
@@ -994,7 +996,7 @@ fun ChatScreen(
                         onToggleVision = { vm.setVisionEnabled(!vm.visionEnabled.value) },
                         voiceInputEnabled = voiceInputEnabled,
                         onVoiceInput = { startDialogStt() },
-                        onOpenSkills = { showSkills = true },
+                        onOpenSkills = { showSkillSelector = true },
                         onOpenAciSelector = { showAciSelector = true },
                         onOpenEditor = { showEditor = true },
                         currentWorkspace = currentWorkspace,
@@ -1424,6 +1426,14 @@ fun ChatScreen(
                     Toast.makeText(ctx, "已恢复默认工作区", Toast.LENGTH_SHORT).show()
                 },
                 initialSelectedPath = currentWorkspace,
+            )
+        }
+
+        // 技能选择对话框（从输入框工具菜单 / 上下文标识栏进入）
+        if (showSkillSelector) {
+            SkillSelectionDialog(
+                onDismiss = { showSkillSelector = false },
+                onSkillsChanged = { count -> enabledSkillsCount = count },
             )
         }
 
