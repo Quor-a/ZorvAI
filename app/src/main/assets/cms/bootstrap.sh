@@ -9,14 +9,44 @@ BOOT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 # ═══ Phase 0: 确保 DNS 可用 ═══
 echo "[cms-bootstrap] 🔧 checking DNS..."
+
+# 先检查/etc目录是否存在
+if [ ! -d /etc ]; then
+    echo "[cms-bootstrap] WARN: /etc directory does not exist, creating..."
+    mkdir -p /etc || { echo "[cms-bootstrap] ERROR: failed to create /etc directory"; exit 1; }
+fi
+
+# 检查resolv.conf是否存在且包含nameserver
 if [ ! -f /etc/resolv.conf ] || ! grep -q "nameserver" /etc/resolv.conf 2>/dev/null; then
-    mkdir -p /etc
-    cat > /etc/resolv.conf << 'DNS'
+    echo "[cms-bootstrap] DNS not configured, writing resolv.conf..."
+    # 尝试多种方式写入DNS配置
+    if ! cat > /etc/resolv.conf << 'DNS'
 nameserver 8.8.8.8
 nameserver 8.8.4.4
 nameserver 114.114.114.114
 nameserver 223.5.5.5
+nameserver 1.1.1.1
+nameserver 9.9.9.9
 DNS
+    then
+        # 如果cat失败，尝试echo方式
+        echo "[cms-bootstrap] WARN: cat failed, trying echo..."
+        echo "nameserver 8.8.8.8" > /etc/resolv.conf
+        echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+        echo "nameserver 114.114.114.114" >> /etc/resolv.conf
+        echo "nameserver 223.5.5.5" >> /etc/resolv.conf
+        echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+        echo "nameserver 9.9.9.9" >> /etc/resolv.conf
+    fi
+    
+    # 验证写入是否成功
+    if [ ! -f /etc/resolv.conf ] || ! grep -q "nameserver" /etc/resolv.conf 2>/dev/null; then
+        echo "[cms-bootstrap] ERROR: failed to write DNS configuration"
+        echo "[cms-bootstrap] Current /etc directory contents:"
+        ls -la /etc/ 2>/dev/null || echo "(empty)"
+        exit 1
+    fi
+    
     echo "[cms-bootstrap] DNS configured (fallback: 8.8.8.8, 114.114.114.114)"
 else
     echo "[cms-bootstrap] DNS already configured"
