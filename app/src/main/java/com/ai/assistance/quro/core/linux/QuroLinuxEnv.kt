@@ -196,6 +196,38 @@ object QuroLinuxEnv {
         }
     }
 
+    /**
+     * 确保文件可执行：先试 setExecutable，失败则用 chmod 命令。
+     * 从 assets 解压的文件在某些设备上需要显式 chmod 才能执行。
+     */
+    private fun ensureExecutable(file: File, label: String) {
+        if (!file.exists()) {
+            Log.w(TAG, "⚠ $label 文件不存在: ${file.absolutePath}")
+            return
+        }
+        if (file.canExecute()) return
+
+        // 方法1：Java API 设置权限
+        if (file.setExecutable(true, false)) {
+            Log.i(TAG, "✅ $label 执行权限设置成功 (setExecutable)")
+            return
+        }
+
+        // 方法2：使用 chmod 命令（某些设备 Java API 受限）
+        try {
+            val process = Runtime.getRuntime().exec(arrayOf("chmod", "755", file.absolutePath))
+            val exitCode = process.waitFor()
+            if (exitCode == 0 && file.canExecute()) {
+                Log.i(TAG, "✅ $label 执行权限设置成功 (chmod)")
+                return
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠ chmod $label 失败: ${e.message}")
+        }
+
+        Log.e(TAG, "❌ 无法设置 $label 执行权限: ${file.absolutePath}")
+    }
+
     private fun getLinuxArch(): String {
         val abi = Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"
         return when {
@@ -236,21 +268,12 @@ object QuroLinuxEnv {
 
         // 修复：如果proot文件存在但没有可执行权限，尝试设置权限
         // Android系统安装APK时应该自动为native库设置可执行权限，但某些设备可能不会
-        if (!proot.canExecute()) {
-            Log.w(TAG, "proot 文件无执行权限，尝试设置: ${proot.absolutePath}")
-            if (proot.setExecutable(true, false)) {
-                Log.i(TAG, "✅ proot 执行权限设置成功")
-            } else {
-                Log.e(TAG, "❌ 无法设置 proot 执行权限: ${proot.absolutePath}")
-                // 继续检查，让系统尝试执行（某些设备可能有其他机制）
-            }
-        }
+        ensureExecutable(proot, "proot")
 
         // 同样检查loader文件
         val loader = File(loaderPath(context))
-        if (loader.exists() && !loader.canExecute()) {
-            Log.w(TAG, "loader 文件无执行权限，尝试设置: ${loader.absolutePath}")
-            loader.setExecutable(true, false)
+        if (loader.exists()) {
+            ensureExecutable(loader, "loader")
         }
 
         val rootfs = File(rootfsPath(context))
@@ -437,6 +460,11 @@ object QuroLinuxEnv {
         val tmp = tmpPath(context)
         val loader = loaderPath(context)
         val dir = sandboxDir(context)
+
+        // 关键修复：执行前强制设置可执行权限（从 assets 解压的文件可能没有权限）
+        ensureExecutable(proot, "proot")
+        ensureExecutable(loader, "loader")
+
         // 运行期资产刷新（resolv.conf 用设备 DNS / getprop 垫片），让 AI 经 linux_* / terminal_*
         // 工具驱动的命令同样拥有联网能力与 getprop。
         prepareRuntimeExtras(context, File(rootfs))
