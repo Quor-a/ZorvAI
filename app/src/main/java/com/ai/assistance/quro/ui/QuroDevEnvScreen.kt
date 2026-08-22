@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,33 +43,33 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
     data class EnvSection(val title: String, val items: List<Pair<EnvProfile, DevEnvInfo>>)
 
     val envSections = listOf(
-        EnvSection("🐍 Python 环境", listOf(
-            EnvProfile.PYTHON to DevEnvInfo("🐍", "Python 开发环境", "Python 3 + pip + venv + uv 全套", Color(0xFF3776AB)),
-            EnvProfile.PYTHON_LINK to DevEnvInfo("🔗", "Python 链接", "将 python 命令链接到 python3", Color(0xFF3776AB)),
-            EnvProfile.PIP to DevEnvInfo("📦", "Pip", "Python 包管理器", Color(0xFF3776AB)),
-            EnvProfile.UV to DevEnvInfo("⚡", "UV", "用 Rust 编写的极速 Python 包安装器", Color(0xFFE65100)),
-            EnvProfile.VENV to DevEnvInfo("📁", "虚拟环境", "Python 虚拟环境支持", Color(0xFF3776AB)),
+        EnvSection("Python 环境", listOf(
+            EnvProfile.PYTHON to DevEnvInfo(Icons.Filled.Code, "Python 开发环境", "Python 3 + pip + venv + uv 全套", Color(0xFF3776AB)),
+            EnvProfile.PYTHON_LINK to DevEnvInfo(Icons.Filled.Link, "Python 链接", "将 python 命令链接到 python3", Color(0xFF3776AB)),
+            EnvProfile.PIP to DevEnvInfo(Icons.Filled.Inventory2, "Pip", "Python 包管理器", Color(0xFF3776AB)),
+            EnvProfile.UV to DevEnvInfo(Icons.Filled.FlashOn, "UV", "用 Rust 编写的极速 Python 包安装器", Color(0xFFE65100)),
+            EnvProfile.VENV to DevEnvInfo(Icons.Filled.FolderOpen, "虚拟环境", "Python 虚拟环境支持", Color(0xFF3776AB)),
         )),
-        EnvSection("🟢 Node.js 环境", listOf(
-            EnvProfile.NODEJS to DevEnvInfo("🟢", "Node.js", "JavaScript 运行时", Color(0xFF339933)),
-            EnvProfile.PNPM to DevEnvInfo("📦", "PNPM + TypeScript", "快速的包管理器和 TypeScript", Color(0xFF339933)),
+        EnvSection("Node.js 环境", listOf(
+            EnvProfile.NODEJS to DevEnvInfo(Icons.Filled.Javascript, "Node.js", "JavaScript 运行时", Color(0xFF339933)),
+            EnvProfile.PNPM to DevEnvInfo(Icons.Filled.Apps, "PNPM + TypeScript", "快速的包管理器和 TypeScript", Color(0xFF339933)),
         )),
-        EnvSection("🌐 SSH 工具", listOf(
-            EnvProfile.SSH to DevEnvInfo("🔑", "SSH 完整工具链", "SSH 客户端 + sshpass + sshd 反向隧道", Color(0xFF0055A5)),
-            EnvProfile.SSH_CLIENT to DevEnvInfo("🔌", "SSH 客户端", "SSH 连接客户端", Color(0xFF0055A5)),
-            EnvProfile.SSHPASS to DevEnvInfo("🔐", "sshpass", "SSH 密码认证工具", Color(0xFF0055A5)),
-            EnvProfile.SSH_SERVER to DevEnvInfo("🖥️", "OpenSSH 服务器", "用于反向隧道挂载本地文件系统", Color(0xFF0055A5)),
+        EnvSection("SSH 工具", listOf(
+            EnvProfile.SSH to DevEnvInfo(Icons.Filled.VpnKey, "SSH 完整工具链", "SSH 客户端 + sshpass + sshd 反向隧道", Color(0xFF0055A5)),
+            EnvProfile.SSH_CLIENT to DevEnvInfo(Icons.Filled.Terminal, "SSH 客户端", "SSH 连接客户端", Color(0xFF0055A5)),
+            EnvProfile.SSHPASS to DevEnvInfo(Icons.Filled.Password, "sshpass", "SSH 密码认证工具", Color(0xFF0055A5)),
+            EnvProfile.SSH_SERVER to DevEnvInfo(Icons.Filled.Dns, "OpenSSH 服务器", "用于反向隧道挂载本地文件系统", Color(0xFF0055A5)),
         )),
-        EnvSection("☕ Java 环境", listOf(
-            EnvProfile.JAVA to DevEnvInfo("☕", "Java 完整环境", "OpenJDK 17 + Gradle 构建工具", Color(0xFFE6794A)),
-            EnvProfile.OPENJDK17 to DevEnvInfo("☕", "OpenJDK 17", "Java 17 开发环境", Color(0xFFE6794A)),
-            EnvProfile.GRADLE to DevEnvInfo("🔨", "Gradle", "现代化的构建自动化工具", Color(0xFFE6794A)),
+        EnvSection("Java 环境", listOf(
+            EnvProfile.JAVA to DevEnvInfo(Icons.Filled.Coffee, "Java 完整环境", "OpenJDK 17 + Gradle 构建工具", Color(0xFFE6794A)),
+            EnvProfile.OPENJDK17 to DevEnvInfo(Icons.Filled.Coffee, "OpenJDK 17", "Java 17 开发环境", Color(0xFFE6794A)),
+            EnvProfile.GRADLE to DevEnvInfo(Icons.Filled.Build, "Gradle", "现代化的构建自动化工具", Color(0xFFE6794A)),
         )),
-        EnvSection("🦀 Rust 环境", listOf(
-            EnvProfile.RUST to DevEnvInfo("🦀", "Rust / Cargo", "通过 rustup 安装 Rust 工具链和 Cargo 包管理器", Color(0xFFE65100)),
+        EnvSection("Rust 环境", listOf(
+            EnvProfile.RUST to DevEnvInfo(Icons.Filled.Memory, "Rust / Cargo", "通过 rustup 安装 Rust 工具链和 Cargo 包管理器", Color(0xFFE65100)),
         )),
-        EnvSection("🐹 Go 环境", listOf(
-            EnvProfile.GO to DevEnvInfo("🐹", "Go", "Go 编程语言开发环境", Color(0xFF00ADD8)),
+        EnvSection("Go 环境", listOf(
+            EnvProfile.GO to DevEnvInfo(Icons.Filled.SmartToy, "Go", "Go 编程语言开发环境", Color(0xFF00ADD8)),
         )),
     )
 
@@ -268,7 +269,7 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
 
 /** 开发环境信息。 */
 data class DevEnvInfo(
-    val icon: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val name: String,
     val description: String,
     val color: Color,
@@ -297,7 +298,12 @@ private fun DevEnvCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(info.icon, style = MaterialTheme.typography.headlineMedium)
+            Icon(
+                imageVector = info.icon,
+                contentDescription = info.name,
+                tint = info.color,
+                modifier = Modifier.size(32.dp)
+            )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(info.name, style = MaterialTheme.typography.bodyLarge)
