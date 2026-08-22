@@ -39,8 +39,9 @@ class QuroAidlAciCallTool : QuroTool {
     override val name = "aci_call"
     override val description =
         "调用一个第三方 App 通过 ACI（Agent Capability Interface）暴露的能力（如发消息 / 查未读 / 建群 / 打开网页 / 执行网页 JS / 发起 HTTP 请求 / 共享工作空间读写 workspace_write·workspace_read·workspace_list·workspace_delete）。" +
-            "参数：{\"target_package\":\"第三方 App 包名（用 aci_list 查到的 pkg，可选，若留空则使用默认 ACI 应用）\",\"capability\":\"能力 id（如 send_message / browser_open / http_request）\",\"args\":{参数名:参数值}}。" +
+            "参数：{\"target_package\":\"第三方 App 包名（用 aci_list 查到的 pkg，可选，若留空则自动使用用户在 ACI 管理中心设置的默认应用）\",\"capability\":\"能力 id（如 send_message / browser_open / http_request）\",\"args\":{参数名:参数值}}。" +
             "调用会跨进程发往目标 App 的 ACI Service 并同步等待结果（最长约 15 秒）。" +
+            "【重要】target_package 是可选参数！如果用户已经在 ACI 管理中心设置了默认应用，你可以省略 target_package，系统会自动使用默认应用。" +
             "调用前请勿伪造包名——目标 App 会用 Binder 真实 UID 鉴权。" +
             "若目标能力 requireUserConfirm（aci_list 会标注「需要用户确认」），必须先征询用户明确同意，并在 args 中带 confirm:true 才允许调用。" +
             "若返回 503（服务未绑定），属绑定生命周期问题，框架会自动重绑——直接重试一次即可，禁止用 Shizuku/dumpsys/ROOT 去\"修复\"。其他错误码原样转告用户，不要臆测为权限不足。" +
@@ -56,12 +57,12 @@ class QuroAidlAciCallTool : QuroTool {
     override val parametersJson = """{
         "type":"object",
         "properties":{
-            "target_package":{"type":"string","description":"第三方 App 包名，例如 com.example.chat（用 aci_list 查到）"},
+            "target_package":{"type":"string","description":"第三方 App 包名，例如 com.example.chat（用 aci_list 查到）。若留空则自动使用用户在 ACI 管理中心设置的默认应用。"},
             "capability":{"type":"string","description":"能力 id，例如 send_message / get_unread_count / create_group"},
             "args":{"type":"object","description":"能力所需参数，键为参数名，值为字符串/数字/布尔，例如 {\"contact\":\"张三\",\"content\":\"你好\"}"},
             "confirm":{"type":"boolean","description":"（可选）仅当目标能力 requireUserConfirm 时需要：先征得用户同意再设 true。它是控制方令牌，不会作为业务参数传入远端。"}
         },
-        "required":["target_package","capability"]
+        "required":["capability"]
     }"""
 
     override fun run(context: Context, arguments: String): String {
