@@ -53,6 +53,8 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
     var deploying by remember { mutableStateOf<String?>(null) }
     // 部署日志
     var deployLogs by remember { mutableStateOf("") }
+    // 部署进度
+    var deployProgress by remember { mutableStateOf("") }
 
     // 进入时检查终端和环境状态
     LaunchedEffect(Unit) {
@@ -113,11 +115,19 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                     onDeploy = {
                         deploying = profile.name
                         deployLogs = ""
+                        deployProgress = "正在检查环境..."
                         scope.launch(Dispatchers.IO) {
                             try {
+                                // 显示进度更新
+                                withContext(Dispatchers.Main) {
+                                    deployProgress = "正在执行安装脚本..."
+                                }
+                                
                                 val result = CmsEnvProvisioner.provision(ctx, profile)
+                                
                                 withContext(Dispatchers.Main) {
                                     deployLogs = result
+                                    deployProgress = ""
                                     Toast.makeText(ctx, result, Toast.LENGTH_LONG).show()
                                 }
                                 // 刷新状态
@@ -128,14 +138,17 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                             } catch (e: Exception) {
                                 withContext(Dispatchers.Main) {
                                     deployLogs = "❌ 部署异常: ${e.message}"
+                                    deployProgress = ""
                                 }
                             } finally {
                                 withContext(Dispatchers.Main) {
                                     deploying = null
+                                    deployProgress = ""
                                 }
                             }
                         }
                     },
+                    deployProgress = if (isDeploying) deployProgress else "",
                 )
                 Spacer(Modifier.height(8.dp))
             }
@@ -173,6 +186,21 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                 }
             }
 
+            // 部署进度
+            if (deploying != null && deployProgress.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    deployProgress,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .padding(12.dp),
+                )
+            }
+
             // 部署日志
             if (deployLogs.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))
@@ -208,6 +236,7 @@ private fun DevEnvCard(
     isDeploying: Boolean,
     enabled: Boolean,
     onDeploy: () -> Unit,
+    deployProgress: String = "",
 ) {
     Column(
         Modifier
@@ -234,6 +263,9 @@ private fun DevEnvCard(
                     else -> "○ 未安装" to MaterialTheme.colorScheme.onSurfaceVariant
                 }
                 Text(statusText, style = MaterialTheme.typography.labelSmall, color = statusColor)
+                if (isDeploying && deployProgress.isNotBlank()) {
+                    Text(deployProgress, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
         Row(

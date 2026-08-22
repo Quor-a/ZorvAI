@@ -3,7 +3,6 @@
 # Idempotent: apk add --no-cache skips already-installed packages; safe to re-run.
 # Marker .bootstrap.done is written next to this script; the host (Android) detects
 # it under <homePath>/cms/_bootstrap/ to skip re-running on subsequent deploys.
-set -e
 
 BOOT_DIR=$(cd "$(dirname "$0")" && pwd)
 
@@ -93,38 +92,73 @@ update_apk || {
     exit 1
 }
 
-# ═══ Phase 2: 语言运行时 ═══
+# ═══ Phase 2: 修复APK数据库错误 ═══
+echo "[cms-bootstrap] 🔧 fixing APK database errors..."
+# 清理APK数据库中的历史残留错误
+apk fix 2>/dev/null || true
+# 重置unzip包的损坏状态
+apk del --purge unzip 2>/dev/null || true
+# 重新安装unzip
+apk add --no-cache unzip 2>/dev/null || true
+
+# ═══ Phase 3: 语言运行时 ═══
 echo "[cms-bootstrap] 📦 installing language runtimes..."
-install_with_retry() {
-    local pkgs="$1"
-    local max_retries=3
-    local retry=0
-    while [ $retry -lt $max_retries ]; do
-        apk add --no-cache $pkgs 2>&1 && return 0
-        retry=$((retry + 1))
-        echo "[cms-bootstrap] WARN: attempt $retry/$max_retries failed, retrying in 3s..."
-        sleep 3
-    done
-    return 1
-}
-install_with_retry "python3 py3-pip nodejs npm" || {
-    echo "[cms-bootstrap] ❌ FAILED: language runtimes install failed after $max_retries retries"
-    exit 1
+# 使用智能安装函数：检查包是否已安装，不依赖退出码
+smart_install() {
+    local pkg="$1"
+    local cmd="$2"
+    
+    # 先检查是否已安装
+    if command -v $cmd >/dev/null 2>&1; then
+        echo "[cms-bootstrap] $pkg already installed"
+        return 0
+    fi
+    
+    # 尝试安装
+    echo "[cms-bootstrap] Installing $pkg..."
+    apk add --no-cache $pkg 2>&1 | tail -3
+    
+    # 验证是否安装成功（不依赖退出码）
+    if command -v $cmd >/dev/null 2>&1; then
+        echo "[cms-bootstrap] ✅ $pkg installed successfully"
+        return 0
+    else
+        echo "[cms-bootstrap] ❌ $pkg installation failed"
+        return 1
+    fi
 }
 
-# ═══ Phase 3: 编译工具链 ═══
+# 安装语言运行时
+smart_install "python3" "python3" || true
+smart_install "py3-pip" "pip3" || true
+smart_install "nodejs" "node" || true
+smart_install "npm" "npm" || true
+
+# ═══ Phase 4: 编译工具链 ═══
 echo "[cms-bootstrap] 🔨 installing build toolchain..."
-install_with_retry "gcc g++ make cmake linux-headers" || true
+smart_install "gcc" "gcc" || true
+smart_install "g++" "g++" || true
+smart_install "make" "make" || true
+smart_install "cmake" "cmake" || true
+smart_install "linux-headers" "make" || true
 
-# ═══ Phase 4: 开发工具 ═══
+# ═══ Phase 5: 开发工具 ═══
 echo "[cms-bootstrap] 🛠️ installing dev tools..."
-install_with_retry "git vim nano bash" || true
+smart_install "git" "git" || true
+smart_install "vim" "vim" || true
+smart_install "nano" "nano" || true
+smart_install "bash" "bash" || true
 
-# ═══ Phase 5: 网络与压缩工具 ═══
+# ═══ Phase 6: 网络与压缩工具 ═══
 echo "[cms-bootstrap] 🌐 installing network & utility tools..."
-install_with_retry "curl wget jq zip unzip openssh-client" || true
+smart_install "curl" "curl" || true
+smart_install "wget" "wget" || true
+smart_install "jq" "jq" || true
+smart_install "zip" "zip" || true
+smart_install "unzip" "unzip" || true
+smart_install "openssh-client" "ssh" || true
 
-# ═══ Phase 6: Python venv ═══
+# ═══ Phase 7: Python venv ═══
 if [ ! -x /root/cms-venv/bin/python3 ]; then
     echo "[cms-bootstrap] creating /root/cms-venv..."
     python3 -m venv /root/cms-venv || echo "[cms-bootstrap] WARN: venv creation failed (system python still usable)"

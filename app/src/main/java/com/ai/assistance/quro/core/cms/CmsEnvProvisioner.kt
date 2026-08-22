@@ -71,13 +71,55 @@ enum class EnvProfile(
         "Rust / Cargo (rustup)",
         "command -v cargo >/dev/null 2>&1",
         """
+        |echo "[rust] 开始安装 Rust 工具链..."
         |if ! command -v cargo >/dev/null 2>&1; then
-        |  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal 2>&1 | tail -5 || true
+        |  echo "[rust] cargo 未找到，开始 rustup 安装..."
+        |  # 先测试网络连接
+        |  echo "[rust] 测试网络连接..."
+        |  if ! curl --connect-timeout 10 --max-time 20 -sSf https://sh.rustup.rs >/dev/null 2>&1; then
+        |    echo "[rust] ❌ 无法访问 rustup 安装脚本，检查网络连接"
+        |    echo "[rust] 尝试备用镜像..."
+        |    if ! curl --connect-timeout 10 --max-time 20 -sSf https://mirrors.ustc.edu.cn/rust-static/rustup/dist/aarch64-unknown-linux-gnu/rustup-init >/dev/null 2>&1; then
+        |      echo "[rust] ❌ 所有镜像均不可用，请检查网络连接"
+        |      exit 1
+        |    fi
+        |  fi
+        |  
+        |  # 使用 timeout 命令限制 rustup 安装时间（5分钟）
+        |  echo "[rust] 开始安装（限时5分钟）..."
+        |  if command -v timeout >/dev/null 2>&1; then
+        |    timeout 300 sh -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal' 2>&1 | tail -10 || {
+        |      echo "[rust] ❌ rustup 安装超时或失败"
+        |      exit 1
+        |    }
+        |  else
+        |    # 没有 timeout 命令，使用后台进程+超时检测
+        |    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal 2>&1 | tail -10 || {
+        |      echo "[rust] ❌ rustup 安装失败"
+        |      exit 1
+        |    }
+        |  fi
+        |  
+        |  # 配置环境
+        |  echo "[rust] 配置 Rust 环境..."
         |  . "${'$'}HOME/.cargo/env" 2>/dev/null || true
         |  ln -sf "${'$'}HOME/.cargo/bin/cargo" /usr/local/bin/cargo 2>/dev/null || true
         |  ln -sf "${'$'}HOME/.cargo/bin/rustc" /usr/local/bin/rustc 2>/dev/null || true
+        |  
+        |  # 验证安装
+        |  if command -v cargo >/dev/null 2>&1; then
+        |    echo "[rust] ✅ Rust 安装成功"
+        |    echo "[rust] cargo 版本: ${'$'}(cargo --version 2>&1)"
+        |    echo "[rust] rustc 版本: ${'$'}(rustc --version 2>&1)"
+        |  else
+        |    echo "[rust] ❌ Rust 安装验证失败"
+        |    exit 1
+        |  fi
+        |else
+        |  echo "[rust] cargo 已存在，跳过安装"
+        |  echo "[rust] cargo 版本: ${'$'}(cargo --version 2>&1)"
+        |  echo "[rust] rustc 版本: ${'$'}(rustc --version 2>&1)"
         |fi
-        |echo "[env] cargo=${'$'}(cargo --version 2>&1)
         """.trimMargin(),
     ),
     GO(
@@ -115,13 +157,19 @@ object CmsEnvProvisioner {
         val st = QuroLinuxEnv.probe(context)
         if (!st.available) return "⛔ 终端环境未就绪，无法供给 ${profile.name}"
         if (isReady(context, profile)) return "✅ ${profile.name} 已就绪（跳过安装）"
+        
+        android.util.Log.i("CmsEnvProvisioner", "开始供给 ${profile.name}，脚本长度: ${profile.installScript.length}")
+        val startTime = System.currentTimeMillis()
         val (c, out) = QuroLinuxEnv.run(context, profile.installScript, timeoutMs = 300_000)
+        val duration = System.currentTimeMillis() - startTime
+        android.util.Log.i("CmsEnvProvisioner", "${profile.name} 执行完成，耗时: ${duration}ms，退出码: $c")
+        
         val ok = c == 0 || isReady(context, profile)
         if (ok) {
             QuroLinuxEnv.run(context, "mkdir -p $MARKER_DIR && touch $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
-            return "✅ ${profile.name} 装配完成"
+            return "✅ ${profile.name} 装配完成（耗时 ${duration/1000}秒）"
         }
-        return "⚠️ ${profile.name} 装配异常(exit $c): ${out.take(200)}（非致命，继续）"
+        return "⚠️ ${profile.name} 装配异常(exit $c): ${out.take(500)}（非致命，继续）"
     }
 
     /** 供给多个档（按档名），逐个执行并汇总（非致命）。返回 (档名, 结果)。 */

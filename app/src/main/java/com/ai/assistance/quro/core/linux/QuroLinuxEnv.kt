@@ -437,6 +437,9 @@ object QuroLinuxEnv {
         val tmp = tmpPath(context)
         val loader = loaderPath(context)
         val dir = sandboxDir(context)
+        
+        Log.i(TAG, "runProot 开始执行，超时: ${timeoutMs}ms，命令: ${command.take(100)}...")
+        
         // 运行期资产刷新（resolv.conf 用设备 DNS / getprop 垫片），让 AI 经 linux_* / terminal_*
         // 工具驱动的命令同样拥有联网能力与 getprop。
         prepareRuntimeExtras(context, File(rootfs))
@@ -470,6 +473,8 @@ object QuroLinuxEnv {
             }
             pb.redirectErrorStream(true)
             val p = pb.start()
+            Log.i(TAG, "proot 进程已启动")
+            
             // 关键修复（#911 根因）：必须先 waitFor(timeout) 再读输出。原先 readText() 会阻塞到
             // 进程退出，导致 timeoutMs 永不触发，hang 住的 bootstrap/provision 让部署永久卡「部署中」。
             // 改为后台线程读 stdout，主线程 waitFor 超时后强杀进程，读取线程随 stdout 关闭自然结束。
@@ -479,17 +484,25 @@ object QuroLinuxEnv {
                 try { reader.use { r -> r.forEachLine { outBuilder.appendLine(it) } } } catch (_: Throwable) {}
             }
             readThread.start()
+            val startTime = System.currentTimeMillis()
             val finished = p.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            val duration = System.currentTimeMillis() - startTime
             val code = if (finished) {
                 p.exitValue()
             } else {
+                Log.w(TAG, "proot 执行超时(${timeoutMs}ms)，强杀进程")
                 try { p.destroyForcibly() } catch (_: Throwable) {}
                 -1
             }
             try { readThread.join(2000) } catch (_: Throwable) {} // 进程已结束/被强杀，stdout 已关闭，回收读取线程
             val trimmed = outBuilder.toString().trim()
+            Log.i(TAG, "proot 执行完成，耗时: ${duration}ms，退出码: $code，输出长度: ${trimmed.length}")
+            if (trimmed.isNotEmpty()) {
+                Log.i(TAG, "proot 输出前500字符: ${trimmed.take(500)}")
+            }
             code to (if (trimmed.isBlank()) (if (finished) "(no output, exit $code)" else "⏱ 命令超时(${timeoutMs}ms)") else trimmed)
         } catch (e: Exception) {
+            Log.e(TAG, "proot 执行异常: ${e.message}")
             -1 to "❌ proot 执行失败: ${e.message}"
         }
     }
