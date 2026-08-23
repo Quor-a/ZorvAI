@@ -85,10 +85,10 @@ class AiwpsCreateTool : QuroTool {
         "properties":{
             "type":{"type":"string","description":"文档类型：docx / xlsx / pptx / pdf / md / txt / csv / html"},
             "title":{"type":"string","description":"标题（pptx 用作首页标题；docx/xlsx 写入文档属性）"},
-            "content":{"type":"string","description":"正文：docx 支持 `**加粗**` 与 `| 表 |`；xlsx 支持 `### 表名` 多表；pptx 支持 `---` 多页"},
+            "content":{"type":"string","description":"正文：docx 支持 `**加粗**` 与 `| 表 |`；xlsx 支持 `### 表名` 多表；pptx 支持 `---` 多页。可选，为空时创建空白文档"},
             "filename":{"type":"string","description":"可选文件名（不含扩展名），默认按类型+时间戳"}
         },
-        "required":["type","content"]
+        "required":["type"]
     }"""
 
     override fun run(context: Context, arguments: String): String {
@@ -107,40 +107,41 @@ class AiwpsCreateTool : QuroTool {
         if (type !in supported) {
             return "aiwps_create 的 type 必须是 docx / xlsx / pptx / pdf / md / txt / csv / html"
         }
-        if (content.isBlank()) return "aiwps_create 缺少 content 正文"
+        // 允许创建空白文档：content为空时使用默认空白内容
+        val effectiveContent = content.ifBlank { " " }
 
         return try {
             when (type) {
                 "docx" -> {
                     val file = File(dir, "$safeName.docx")
-                    writeZip(file, buildDocx(content, title))
+                    writeZip(file, buildDocx(effectiveContent, title))
                     okMsg("docx", file)
                 }
                 "xlsx" -> {
                     val file = File(dir, "$safeName.xlsx")
-                    writeZip(file, buildXlsx(content, title))
+                    writeZip(file, buildXlsx(effectiveContent, title))
                     okMsg("xlsx", file)
                 }
                 "pptx" -> {
                     val file = File(dir, "$safeName.pptx")
-                    writeZip(file, buildPptx(content, title))
+                    writeZip(file, buildPptx(effectiveContent, title))
                     okMsg("pptx", file)
                 }
                 "pdf" -> {
                     val file = File(dir, "$safeName.pdf")
-                    file.writeBytes(buildPdf(content, title))
+                    file.writeBytes(buildPdf(effectiveContent, title))
                     okMsg("pdf", file)
                 }
                 "html" -> {
                     val file = File(dir, "$safeName.html")
-                    val body = content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                    val body = effectiveContent.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                         .replace("\n", "<br>\n")
                     file.writeText("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>${xmlEsc(title)}</title></head><body>\n$body\n</body></html>")
                     okMsg("html", file)
                 }
                 else -> { // md / txt / csv：纯文本直写
                     val file = File(dir, "$safeName.$type")
-                    file.writeText(content)
+                    file.writeText(effectiveContent)
                     okMsg(type, file)
                 }
             }
