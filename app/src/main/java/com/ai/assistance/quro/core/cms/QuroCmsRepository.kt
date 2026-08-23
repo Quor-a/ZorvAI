@@ -392,7 +392,11 @@ class QuroCmsRepository(context: Context) {
                     "terminal", "python3 --version"),
                 QuroCmsCapability("term_python_serve", "启动 Python 后端(HTTP)", "port:int",
                     listOf("term.python.exec"), PermissionConstraints(maxExecutionTimeSecs = 30, maxMemoryMb = 128),
-                    "terminal", "QURO_HTTP_PORT=\${port} nohup sh /root/cms/quro.term.python/entry.sh > /root/cms/quro.term.python/run.log 2>&1 & echo started"),
+                    "terminal", "exec sh /root/cms/quro.term.python/entry.sh",
+                    resident = true, residentEnv = mapOf("port" to "QURO_HTTP_PORT")),
+                QuroCmsCapability("term_python_stop", "停止 Python 后端(HTTP)", "{}",
+                    listOf("term.python.exec"), PermissionConstraints(),
+                    "terminal", "true", residentStop = true),
             ),
             terminalEntry = """
 #!/bin/sh
@@ -440,7 +444,11 @@ PYEOF
                     "terminal", "node --version"),
                 QuroCmsCapability("term_node_serve", "启动 Node 后端(HTTP)", "port:int",
                     listOf("term.node.exec"), PermissionConstraints(maxExecutionTimeSecs = 30, maxMemoryMb = 128),
-                    "terminal", "QURO_HTTP_PORT=\${port} nohup sh /root/cms/quro.term.node/entry.sh > /root/cms/quro.term.node/run.log 2>&1 & echo started"),
+                    "terminal", "exec sh /root/cms/quro.term.node/entry.sh",
+                    resident = true, residentEnv = mapOf("port" to "QURO_HTTP_PORT")),
+                QuroCmsCapability("term_node_stop", "停止 Node 后端(HTTP)", "{}",
+                    listOf("term.node.exec"), PermissionConstraints(),
+                    "terminal", "true", residentStop = true),
             ),
             terminalEntry = """
 #!/bin/sh
@@ -476,10 +484,14 @@ JSEOF
             capabilities = listOf(
                 QuroCmsCapability("term_httpd_start", "启动静态 HTTP 服务", "port:int,dir:string",
                     listOf("term.httpd.exec"), PermissionConstraints(maxExecutionTimeSecs = 30, maxMemoryMb = 128),
-                    "terminal", "QURO_HTTP_PORT=\${port} QURO_SERVE_DIR=\${dir} nohup sh /root/cms/quro.term.httpd/entry.sh > /root/cms/quro.term.httpd/run.log 2>&1 & echo started"),
+                    "terminal", "exec sh /root/cms/quro.term.httpd/entry.sh",
+                    resident = true, residentEnv = mapOf("port" to "QURO_HTTP_PORT", "dir" to "QURO_SERVE_DIR")),
                 QuroCmsCapability("term_httpd_list", "列出服务目录", "dir:string",
                     listOf("term.httpd.exec"), PermissionConstraints(),
                     "terminal", "ls -la \"\${dir}\""),
+                QuroCmsCapability("term_httpd_stop", "停止静态 HTTP 服务", "{}",
+                    listOf("term.httpd.exec"), PermissionConstraints(),
+                    "terminal", "true", residentStop = true),
             ),
             terminalEntry = """
 #!/bin/sh

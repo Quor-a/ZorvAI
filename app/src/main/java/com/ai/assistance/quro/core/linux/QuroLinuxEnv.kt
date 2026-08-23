@@ -444,53 +444,68 @@ object QuroLinuxEnv {
         return runProotWithLog(context, command, timeoutMs, onLine)
     }
 
-    /** 内部：构造 proot 参数并执行。添加多种执行策略应对权限问题。 */
-    /** 内部：构造 proot 参数并执行。 */
-    private fun runProot(context: Context, command: String, timeoutMs: Long): Pair<Int, String> {
+    /** proot 启动参数与环境（不含最终命令）。一次性执行与常驻进程共用，确保行为一致。 */
+    private data class ProotLaunch(
+        val args: MutableList<String>,
+        val env: MutableMap<String, String>,
+        val workDir: File,
+    )
+
+    /** 构造 proot 启动参数与环境（命令由调用方追加为末参）。 */
+    private fun buildProotLaunch(context: Context): ProotLaunch {
         val proot = prootPath(context)
         val rootfs = rootfsPath(context)
         val home = homePath(context)
         val tmp = tmpPath(context)
         val loader = loaderPath(context)
         val dir = sandboxDir(context)
-        
+        val args = mutableListOf(
+            proot,
+            "--rootfs=$rootfs",
+            "--bind=/dev",
+            "--bind=/proc",
+            "--bind=/sys",
+            "--bind=$home:/root",
+            "--bind=$tmp:/tmp",
+        )
+        // getprop 垫片可回落读 /system/build.prop，仅当该文件本就可读时绑定（避免整体启动失败）。
+        if (File("/system/build.prop").canRead()) {
+            args.add("--bind=/system/build.prop:/system/build.prop")
+        }
+        args.add("-0")
+        args.add("-w"); args.add("/root")
+        args.add("/bin/sh"); args.add("-c")
+        val env = mutableMapOf(
+            "HOME" to "/root",
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            "TERM" to "xterm-256color",
+            "LANG" to "C.UTF-8",
+            "LD_LIBRARY_PATH" to dir.absolutePath,
+            "PROOT_TMP_DIR" to tmp,
+            "PROOT_LOADER" to loader,
+        )
+        return ProotLaunch(args, env, File(rootfs).parentFile)
+    }
+
+    /** 内部：构造 proot 参数并执行。添加多种执行策略应对权限问题。 */
+    private fun runProot(context: Context, command: String, timeoutMs: Long): Pair<Int, String> {
+        val st = probe(context)
+        if (!st.available || st.prootPath == null || st.rootfsPath == null) {
+            return -1 to "❌ Linux 环境不可用：${st.reason}。请在终端点「安装 Linux 环境」。"
+        }
+        prepareRuntimeExtras(context, File(st.rootfsPath))
         Log.i(TAG, "runProot 开始执行，超时: ${timeoutMs}ms，命令: ${command.take(100)}...")
-        
-        // 运行期资产刷新（resolv.conf 用设备 DNS / getprop 垫片），让 AI 经 linux_* / terminal_*
-        // 工具驱动的命令同样拥有联网能力与 getprop。
-        prepareRuntimeExtras(context, File(rootfs))
+
+        val launch = buildProotLaunch(context)
+        launch.args.add(command)
         return try {
-            val args = mutableListOf(
-                proot,
-                "--rootfs=$rootfs",
-                "--bind=/dev",
-                "--bind=/proc",
-                "--bind=/sys",
-                "--bind=$home:/root",
-                "--bind=$tmp:/tmp",
-            )
-            // getprop 垫片可回落读 /system/build.prop，仅当该文件本就可读时绑定（避免整体启动失败）。
-            if (File("/system/build.prop").canRead()) {
-                args.add("--bind=/system/build.prop:/system/build.prop")
-            }
-            args.add("-0")
-            args.add("-w"); args.add("/root")
-            args.add("/bin/sh"); args.add("-c"); args.add(command)
-            val pb = ProcessBuilder(args)
-            pb.directory(File(rootfs).parentFile)
-            pb.environment().apply {
-                put("HOME", "/root")
-                put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
-                put("TERM", "xterm-256color")
-                put("LANG", "C.UTF-8")
-                put("LD_LIBRARY_PATH", dir.absolutePath)
-                put("PROOT_TMP_DIR", tmp)
-                put("PROOT_LOADER", loader)
-            }
+            val pb = ProcessBuilder(launch.args)
+            pb.directory(launch.workDir)
+            pb.environment().putAll(launch.env)
             pb.redirectErrorStream(true)
             val p = pb.start()
             Log.i(TAG, "proot 进程已启动")
-            
+
             // 关键修复（#911 根因）：必须先 waitFor(timeout) 再读输出。原先 readText() 会阻塞到
             // 进程退出，导致 timeoutMs 永不触发，hang 住的 bootstrap/provision 让部署永久卡「部署中」。
             // 改为后台线程读 stdout，主线程 waitFor 超时后强杀进程，读取线程随 stdout 关闭自然结束。
@@ -520,6 +535,42 @@ object QuroLinuxEnv {
         } catch (e: Exception) {
             Log.e(TAG, "proot 执行异常: ${e.message}")
             -1 to "❌ proot 执行失败: ${e.message}"
+        }
+    }
+
+    /**
+     * 启动**常驻** proot 进程（原创运行时 · 修复终端 httpd 被杀）。
+     *
+     * 与 [runProot] 不同：不 waitFor、不超时强杀，直接返回存活的 [Process] 句柄，
+     * 由调用方（[CmsResidentRuntime]）持有并管理生命周期。proot 进程存活期间，
+     * 其内以 `exec` 启动的 server 子进程随之常驻——这正是一次性 [runProot] 做不到的
+     * （一次性 proot 退出后，作为其子进程的 server 因失去 syscall 翻译层而一同被杀）。
+     *
+     * @param command 在 proot 内执行的命令（通常为 `cd <dir> && exec sh ./entry.sh`）。
+     * @param extraEnv 注入到 proot 环境（进而透传给 guest）的额外变量，如 QURO_HTTP_PORT。
+     * @return 已启动的常驻 proot 进程；环境不可用或创建失败返回 null。
+     */
+    fun spawnPersistent(context: Context, command: String, extraEnv: Map<String, String> = emptyMap()): Process? {
+        val st = probe(context)
+        if (!st.available || st.prootPath == null || st.rootfsPath == null) {
+            Log.w(TAG, "spawnPersistent 失败：环境不可用：${st.reason}")
+            return null
+        }
+        prepareRuntimeExtras(context, File(st.rootfsPath))
+        val launch = buildProotLaunch(context)
+        launch.args.add(command)
+        launch.env.putAll(extraEnv)
+        return try {
+            val pb = ProcessBuilder(launch.args)
+            pb.directory(launch.workDir)
+            pb.environment().putAll(launch.env)
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            Log.i(TAG, "spawnPersistent 常驻 proot 已启动，命令: ${command.take(100)}")
+            p
+        } catch (e: Exception) {
+            Log.e(TAG, "spawnPersistent 创建进程失败: ${e.message}")
+            null
         }
     }
 

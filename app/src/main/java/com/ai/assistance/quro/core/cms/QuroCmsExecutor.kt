@@ -62,7 +62,13 @@ class QuroCmsExecutor(context: Context) {
                 "intent" -> runIntent(resolved)
                 "js" -> QuroJsExecutor.eval(resolved, 10_000)
                 "api" -> runApi(resolved, args)
-                "terminal" -> runTerminal(resolved)
+                "terminal" -> when {
+                    // 常驻停止：转去停止对应模块的常驻服务（proot 进程强杀）。
+                    cap.residentStop -> CmsResidentRuntime.stop(appContext, module.id)
+                    // 常驻服务：以常驻 proot 启动（修复 cms_call 一次性调用后服务被杀）。
+                    cap.resident -> CmsResidentRuntime.start(appContext, module, args, cap.residentEnv)
+                    else -> runTerminal(resolved)
+                }
                 else -> "⛔ 不支持的执行类型：$type（已禁用 shell/root/无障碍等真实执行通道）"
             }
         } catch (e: Exception) {

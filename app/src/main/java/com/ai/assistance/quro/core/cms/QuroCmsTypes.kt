@@ -101,6 +101,17 @@ data class QuroCmsCapability(
     val runOn: Set<RuntimeHost> = RuntimeHost.hostsFor(actionType),
     /** 当宿主选为 TERMINAL 时使用的命令模板（默认 null → 退回应用内 action；仅 terminal 类能力本身即在终端跑）。 */
     val terminalAction: String? = null,
+    /**
+     * 常驻服务标记（原创运行时 · 修复终端 httpd 被杀）。
+     * true 时该 terminal 能力不经由一次性 [QuroLinuxEnv.run]，而是由 [CmsResidentRuntime]
+     * 以**常驻 proot 进程**启动（server 以 exec 成为 proot 直接子进程），避免 proot 退出后服务被杀。
+     * 仅对需要长期存活的 server 类能力（*_serve / term_httpd_start）置 true。
+     */
+    val resident: Boolean = false,
+    /** arg 名 → 环境变量名 映射，启动常驻服务时把调用参数注入 proot 环境（如 "port"→"QURO_HTTP_PORT"）。 */
+    val residentEnv: Map<String, String> = emptyMap(),
+    /** 常驻停止标记：true 时该 terminal 能力转去 [CmsResidentRuntime.stop] 停止对应模块常驻服务。 */
+    val residentStop: Boolean = false,
 ) {
     /** 从默认 action 模板解析参数名（${name}）。 */
     fun argNames(): List<String> = argNamesOf(action)
