@@ -243,6 +243,9 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
      * 成功返回 true。
      */
     private fun sendImage(chatId: String, bytes: ByteArray, fileName: String, msgId: String? = null): Boolean {
+        // 确保 token 有效
+        if (!ensureToken(chatId)) return false
+
         val mediaType = when {
             fileName.endsWith(".png", ignoreCase = true) -> "image/png"
             fileName.endsWith(".jpg", ignoreCase = true) || fileName.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
@@ -251,6 +254,7 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             else -> "application/octet-stream"
         }
         // Step 1: 上传图片拿到 image_key
+        Log_i("sendImage 上传图片: chat=$chatId file=$fileName size=${bytes.size} type=$mediaType")
         val up = httpUploadMultipart(
             "https://open.feishu.cn/open-apis/im/v1/images",
             headers = mapOf("Authorization" to "Bearer $tenantToken"),
@@ -262,10 +266,12 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
         )
         val imageKey = up?.optJSONObject("data")?.optString("image_key").orEmpty()
         if (imageKey.isBlank()) {
-            lastError = "图片上传失败 chat=$chatId（未返回 image_key）resp=${(up?.toString() ?: "null").take(200)}"
-            Log_e("图片上传失败 chat=$chatId resp=${(up?.toString() ?: "null").take(200)}")
+            val respStr = up?.toString() ?: "null"
+            lastError = "图片上传失败 chat=$chatId（未返回 image_key）resp=${respStr.take(300)}"
+            Log_e("图片上传失败 chat=$chatId resp=${respStr.take(300)}")
             return false
         }
+        Log_i("sendImage 图片上传成功: image_key=$imageKey")
         // Step 2: 发送图片消息（优先 reply 端点，回退 chat_id 直发）
         val content = JSONObject().put("image_key", imageKey).toString()
         val json = if (!msgId.isNullOrBlank()) {
@@ -295,6 +301,7 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             Log_e("sendImage 消息发送失败 chat=$chatId")
             false
         } else {
+            Log_i("sendImage 图片消息发送成功: chat=$chatId")
             true
         }
     }
@@ -549,6 +556,9 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
      * POST https://open.feishu.cn/open-apis/im/v1/files
      */
     private fun sendFile(chatId: String, bytes: ByteArray, fileName: String, msgId: String? = null): Boolean {
+        // 确保 token 有效
+        if (!ensureToken(chatId)) return false
+
         val mediaType = when {
             fileName.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
             fileName.endsWith(".doc", ignoreCase = true) || fileName.endsWith(".docx", ignoreCase = true) -> "application/msword"
@@ -562,6 +572,7 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             else -> "application/octet-stream"
         }
         // Step 1: 上传文件拿到 file_key
+        Log_i("sendFile 上传文件: chat=$chatId file=$fileName size=${bytes.size} type=$mediaType")
         val up = httpUploadMultipart(
             "https://open.feishu.cn/open-apis/im/v1/files",
             headers = mapOf("Authorization" to "Bearer $tenantToken"),
@@ -573,10 +584,12 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
         )
         val fileKey = up?.optJSONObject("data")?.optString("file_key").orEmpty()
         if (fileKey.isBlank()) {
-            lastError = "文件上传失败 chat=$chatId（未返回 file_key）resp=${(up?.toString() ?: "null").take(200)}"
-            Log_e("文件上传失败 chat=$chatId resp=${(up?.toString() ?: "null").take(200)}")
+            val respStr = up?.toString() ?: "null"
+            lastError = "文件上传失败 chat=$chatId（未返回 file_key）resp=${respStr.take(300)}"
+            Log_e("文件上传失败 chat=$chatId resp=${respStr.take(300)}")
             return false
         }
+        Log_i("sendFile 文件上传成功: file_key=$fileKey")
         // Step 2: 发送文件消息
         val content = JSONObject().put("file_key", fileKey).toString()
         val json = if (!msgId.isNullOrBlank()) {

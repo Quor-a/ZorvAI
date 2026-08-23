@@ -77,8 +77,8 @@ abstract class QuroDirectBotAdapter(
         json: String,
     ): JSONObject? = try {
         val req = Request.Builder().url(url)
-            .addHeader("Content-Type", "application/json")
-            .also { headers.forEach { (k, v) -> it.addHeader(k, v) } }
+            .header("Content-Type", "application/json")
+            .also { headers.forEach { (k, v) -> it.header(k, v) } }
             .post(json.toRequestBody("application/json".toMediaType()))
             .build()
         client.newCall(req).execute().use { resp ->
@@ -103,8 +103,8 @@ abstract class QuroDirectBotAdapter(
         json: String,
     ): Triple<Int, String, JSONObject?> = try {
         val req = Request.Builder().url(url)
-            .addHeader("Content-Type", "application/json")
-            .also { h -> headers.forEach { (k, v) -> h.addHeader(k, v) } }
+            .header("Content-Type", "application/json")
+            .also { h -> headers.forEach { (k, v) -> h.header(k, v) } }
             .post(json.toRequestBody("application/json".toMediaType()))
             .build()
         client.newCall(req).execute().use { resp ->

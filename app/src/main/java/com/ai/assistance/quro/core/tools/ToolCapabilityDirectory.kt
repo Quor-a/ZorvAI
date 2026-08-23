@@ -256,12 +256,15 @@ object ToolCapabilityDirectory {
         "ui_widget" to ToolInfo(
             name = "ui_widget",
             category = ToolCategory.UI_CARDS,
-            description = "在对话框展示可交互UI组件",
-            useCases = listOf("展示一个图表", "做个进度条", "画个流程图", "做个表单", "展示待办清单"),
-            examples = listOf("ui_widget(spec={type:\"progress\", value:75, title:\"完成度\"})"),
-            parameters = mapOf("spec" to "组件配置JSON"),
-            tips = listOf("支持几十种组件类型", "组件可交互", "实时渲染在对话框"),
-            relatedTools = listOf("ui_card", "mermaid"),
+            description = "在对话框展示可交互UI组件（含小程序）",
+            useCases = listOf("展示一个图表", "做个进度条", "画个流程图", "做个表单", "展示待办清单", "渲染AI小程序"),
+            examples = listOf(
+                "ui_widget(spec={type:\"progress\", value:75, title:\"完成度\"})",
+                "ui_widget(spec={type:\"miniapp\", title:\"计算器\", html:\"<div>...</div>\"})"
+            ),
+            parameters = mapOf("spec" to "组件配置JSON（含miniapp类型）"),
+            tips = listOf("支持几十种组件类型", "组件可交互", "实时渲染在对话框", "miniapp支持HTML+JS+CSS小程序"),
+            relatedTools = listOf("ui_card", "mermaid", "visual_custom_popup"),
             priority = 5
         ),
         

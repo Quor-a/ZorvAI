@@ -2,6 +2,8 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -31,6 +33,15 @@ object VisualCustomPopupQueue {
     private const val TAG = "VisualCustomPopupQueue"
     val pendingPopups = mutableListOf<VisualCustomPopupData>()
 
+    // 事件通道：当有新弹窗加入或弹窗关闭时发出信号
+    private val _eventChannel = Channel<PopupEvent>(Channel.BUFFERED)
+    val eventFlow = _eventChannel.receiveAsFlow()
+
+    sealed class PopupEvent {
+        data class PopupAdded(val id: String) : PopupEvent()
+        data class PopupRemoved(val id: String) : PopupEvent()
+    }
+
     fun submitResult(id: String, result: String) {
         synchronized(pendingPopups) {
             val index = pendingPopups.indexOfFirst { it.id == id }
@@ -40,6 +51,8 @@ object VisualCustomPopupQueue {
                 pending.latch.countDown()
                 pendingPopups.removeAt(index)
                 Log.d(TAG, "用户提交自定义弹窗结果: $result")
+                // 发送弹窗关闭事件
+                _eventChannel.trySend(PopupEvent.PopupRemoved(id))
             }
         }
     }
@@ -58,6 +71,24 @@ object VisualCustomPopupQueue {
     fun getPopupById(id: String): VisualCustomPopupData? {
         return synchronized(pendingPopups) {
             pendingPopups.find { it.id == id }
+        }
+    }
+
+    fun addPopup(popup: VisualCustomPopupData) {
+        synchronized(pendingPopups) {
+            pendingPopups.add(popup)
+            // 发送弹窗添加事件
+            _eventChannel.trySend(PopupEvent.PopupAdded(popup.id))
+        }
+    }
+
+    fun removePopup(id: String) {
+        synchronized(pendingPopups) {
+            val index = pendingPopups.indexOfFirst { it.id == id }
+            if (index >= 0) {
+                pendingPopups.removeAt(index)
+                _eventChannel.trySend(PopupEvent.PopupRemoved(id))
+            }
         }
     }
 }
@@ -120,7 +151,8 @@ visual_custom_popup({
             "width":{"type":"integer","description":"弹窗宽度（可选，默认自适应）"},
             "height":{"type":"integer","description":"弹窗高度（可选，默认自适应）"},
             "cancelable":{"type":"boolean","description":"是否允许取消（默认true）"},
-            "timeout":{"type":"integer","description":"超时时间（秒），默认120秒"}
+            "timeout":{"type":"integer","description":"超时时间（秒），默认120秒"},
+            "overlay":{"type":"boolean","description":"是否以系统级悬浮窗显示（默认false，需要悬浮窗权限）"}
         },
         "required":["title","html","card_title"]
     }"""
@@ -139,12 +171,13 @@ visual_custom_popup({
         val height = if (args.has("height")) args.optInt("height") else null
         val cancelable = args.optBoolean("cancelable", true)
         val timeout = args.optInt("timeout", 120)
+        val overlay = args.optBoolean("overlay", false)
 
         // 生成唯一ID
         val popupId = "popup_${System.currentTimeMillis()}_${(Math.random() * 1000).toInt()}"
 
         return try {
-            val result = showCustomPopup(popupId, title, html, cardTitle, cardDescription, width, height, cancelable, timeout)
+            val result = showCustomPopup(popupId, title, html, cardTitle, cardDescription, width, height, cancelable, timeout, overlay, context)
             result ?: "{\"cancelled\":true,\"error\":\"timeout\"}"
         } catch (e: Exception) {
             Log.e(TAG, "自定义弹窗失败", e)
@@ -161,7 +194,9 @@ visual_custom_popup({
         width: Int?,
         height: Int?,
         cancelable: Boolean,
-        timeout: Int
+        timeout: Int,
+        overlay: Boolean,
+        context: Context
     ): String? {
         val latch = CountDownLatch(1)
         val result = AtomicReference<String?>(null)
@@ -180,20 +215,29 @@ visual_custom_popup({
             result = result
         )
 
-        synchronized(VisualCustomPopupQueue.pendingPopups) {
-            VisualCustomPopupQueue.pendingPopups.add(popup)
-        }
+        // 使用新的 addPopup 方法（会发送事件通知 UI）
+        VisualCustomPopupQueue.addPopup(popup)
 
-        Log.d(TAG, "显示自定义弹窗: $title (ID: $id, 超时: ${timeout}s)")
+        Log.d(TAG, "显示自定义弹窗: $title (ID: $id, 超时: ${timeout}s, 悬浮窗: $overlay)")
+
+        // 如果需要悬浮窗模式，启动悬浮窗服务
+        if (overlay) {
+            if (com.ai.assistance.quro.service.VisualPopupOverlayService.hasOverlayPermission(context)) {
+                com.ai.assistance.quro.service.VisualPopupOverlayService.showPopup(context, id)
+            } else {
+                // 没有悬浮窗权限，请求权限并回退到普通模式
+                com.ai.assistance.quro.service.VisualPopupOverlayService.requestOverlayPermission(context)
+                Log.w(TAG, "没有悬浮窗权限，回退到普通模式")
+            }
+        }
 
         val answered = latch.await(timeout.toLong(), TimeUnit.SECONDS)
 
         return if (answered) {
             result.get()
         } else {
-            synchronized(VisualCustomPopupQueue.pendingPopups) {
-                VisualCustomPopupQueue.pendingPopups.remove(popup)
-            }
+            // 超时：从队列中移除
+            VisualCustomPopupQueue.removePopup(id)
             null
         }
     }

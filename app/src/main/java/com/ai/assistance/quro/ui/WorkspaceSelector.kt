@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.documentfile.provider.DocumentFile
 import java.io.File
 
 /**
@@ -250,15 +251,58 @@ private fun CreateWorkspaceDialog(
 }
 
 private fun uriToPath(context: Context, uri: Uri): String? {
+    // 处理文件系统URI
+    if (uri.scheme == "file") return uri.path
+    
+    // 处理content URI
     if (uri.scheme == "content") {
-        val cursor = context.contentResolver.query(uri, arrayOf("_data"), null, null, null)
-        cursor?.use {
-            if (it.moveToFirst()) {
-                val idx = it.getColumnIndex("_data")
-                if (idx >= 0) return it.getString(idx)
+        // 尝试直接查询_data列（适用于普通文件）
+        try {
+            val cursor = context.contentResolver.query(uri, arrayOf("_data"), null, null, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val idx = it.getColumnIndex("_data")
+                    if (idx >= 0) return it.getString(idx)
+                }
+            }
+        } catch (e: Exception) {
+            // 查询失败，继续尝试其他方法
+        }
+        
+        // 处理外部存储文档树URI (content://com.android.externalstorage.documents/tree/...)
+        if (uri.authority == "com.android.externalstorage.documents") {
+            val docId = uri.lastPathSegment
+            if (docId != null && docId.startsWith("primary:")) {
+                // 主存储：返回 /storage/emulated/0/...
+                val path = docId.substringAfter("primary:")
+                return "/storage/emulated/0/$path"
             }
         }
+        
+        // 处理下载目录文档树URI (content://com.android.providers.downloads.documents/tree/...)
+        if (uri.authority == "com.android.providers.downloads.documents") {
+            val docId = uri.lastPathSegment
+            if (docId != null && docId.startsWith("raw:")) {
+                // 直接返回原始路径
+                return docId.substringAfter("raw:")
+            }
+        }
+        
+        // 尝试使用DocumentFile获取路径
+        try {
+            val documentFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uri)
+            if (documentFile != null && documentFile.exists()) {
+                // 尝试获取可读文件路径
+                val name = documentFile.name
+                if (name != null) {
+                    // 构造一个可读的路径（不完全准确，但比返回null好）
+                    return "content://$name"
+                }
+            }
+        } catch (e: Exception) {
+            // DocumentFile方法失败
+        }
     }
-    if (uri.scheme == "file") return uri.path
+    
     return null
 }

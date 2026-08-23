@@ -812,6 +812,18 @@ fun parseComponentSpec(spec: String): QuroChatCard? {
                 s.optString("source", "").ifBlank { s.optString("text", "") },
                 s.optString("theme", "").ifBlank { "" },
             )
+            // ── v1057 小程序（MiniApp）──
+            "miniapp" -> QuroChatCard.MiniAppCard(
+                id, title,
+                s.optString("html", ""),
+                s.optJSONObject("config")?.let { config ->
+                    mutableMapOf<String, Any>().apply {
+                        config.keys().forEach { key ->
+                            put(key, config.get(key) ?: "")
+                        }
+                    }
+                } ?: emptyMap(),
+            )
             else -> null
         }
     } catch (e: Exception) {

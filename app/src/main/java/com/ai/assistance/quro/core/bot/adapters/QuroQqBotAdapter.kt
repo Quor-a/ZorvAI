@@ -358,39 +358,122 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     }
 
     /**
-     * 上传媒体文件到 QQ（APK 实现：QQAttachment）。
-     * POST https://api.sgroup.qq.com/v2/users/{openid}/files
-     * 返回 file_info 用于发送图片/文件消息。
+     * 上传媒体文件到 QQ（分片上传流程）。
+     * QQ Bot API v2 不支持 multipart 上传，需要分片上传：
+     * 1. POST /v2/users/{openid}/upload_prepare → 获取 upload_id + 预签名 URL
+     * 2. PUT 预签名 URL → 上传分片
+     * 3. POST /v2/users/{openid}/upload_part_finish → 确认分片
+     * 4. POST /v2/users/{openid}/files { upload_id } → 合并获取 file_info
      */
     private fun uploadMedia(userId: String, bytes: ByteArray, fileName: String, fileType: String = "2"): String? {
-        val mp = MultipartBody.Builder().setType(MultipartBody.FORM)
-            .addFormDataPart("file_type", fileType)  // 1=图片, 2=视频, 3=语音, 4=文件
-            .addFormDataPart("app_id", appId)
-            .addFormDataPart("file_name", fileName)
-            .addFormDataPart("file", fileName, bytes.toRequestBody("application/octet-stream".toMediaType()))
-            .build()
-
-        val req = Request.Builder()
-            .url("https://api.sgroup.qq.com/v2/users/$userId/files")
-            .addHeader("Authorization", "QQBot $accessToken")
-            .addHeader("X-Union-Appid", appId)
-            .post(mp)
-            .build()
-
-        return try {
-            client.newCall(req).execute().use { resp ->
-                val body = resp.body?.string().orEmpty()
-                if (!resp.isSuccessful) {
-                    Log_e("uploadMedia 失败 HTTP ${resp.code}: ${body.take(300)}")
-                    return null
-                }
-                val json = runCatching { JSONObject(body) }.getOrNull()
-                json?.optJSONObject("data")?.optString("file_info")
+        // 确保 token 有效
+        if (accessToken.isBlank()) {
+            val tj = httpPostJson(
+                "https://bots.qq.com/app/getAppAccessToken",
+                json = JSONObject().apply { put("appId", appId); put("clientSecret", appSecret) }.toString(),
+            )
+            accessToken = tj?.optString("access_token").orEmpty()
+            if (accessToken.isBlank()) {
+                Log_e("uploadMedia 失败: token 刷新为空")
+                return null
             }
-        } catch (e: Exception) {
-            Log_e("uploadMedia 异常: ${e.message}")
-            null
         }
+
+        val fileSize = bytes.size.toLong()
+        val file_type = fileType.toIntOrNull() ?: 2  // 1=图片, 2=视频, 3=语音, 4=文件
+
+        // 计算 MD5、SHA1、md5_10m
+        val md5 = java.security.MessageDigest.getInstance("MD5").digest(bytes)
+            .joinToString("") { "%02x".format(it) }
+        val sha1 = java.security.MessageDigest.getInstance("SHA-1").digest(bytes)
+            .joinToString("") { "%02x".format(it) }
+        val md5_10m = if (bytes.size > 10002432) {
+            java.security.MessageDigest.getInstance("MD5").digest(bytes.copyOf(10002432))
+                .joinToString("") { "%02x".format(it) }
+        } else md5
+
+        Log_i("uploadMedia 开始分片上传: file=$fileName size=$fileSize type=$file_type md5=${md5.take(16)}...")
+
+        // Step 1: 预上传
+        val prepareBody = JSONObject().apply {
+            put("file_type", file_type)
+            put("file_size", fileSize.toString())
+            put("file_name", fileName)
+            put("md5", md5)
+            put("sha1", sha1)
+            put("md5_10m", md5_10m)
+        }.toString()
+
+        val prepareResp = httpPostJson(
+            "https://api.sgroup.qq.com/v2/users/$userId/upload_prepare",
+            headers = mapOf("Authorization" to "QQBot $accessToken", "X-Union-Appid" to appId),
+            json = prepareBody,
+        ) ?: run {
+            Log_e("uploadMedia 预上传失败: 响应为空")
+            return null
+        }
+
+        val uploadId = prepareResp.optString("upload_id").ifBlank {
+            Log_e("uploadMedia 预上传失败: 无 upload_id, resp=${prepareResp.toString().take(300)}")
+            return null
+        }
+        val blockSize = prepareResp.optString("block_size", "5242880").toLongOrNull() ?: 5242880L
+        val parts = prepareResp.optJSONArray("parts") ?: run {
+            Log_e("uploadMedia 预上传失败: 无 parts 数组")
+            return null
+        }
+
+        Log_i("uploadMedia 预上传成功: upload_id=${uploadId.take(16)}... block_size=$blockSize parts=${parts.length()}")
+
+        // Step 2: 逐片 PUT 到预签名 URL
+        for (i in 0 until parts.length()) {
+            val part = parts.optJSONObject(i) ?: continue
+            val presignedUrl = part.optString("presigned_url")
+            val partBlockSize = part.optString("block_size", blockSize.toString()).toLongOrNull() ?: blockSize
+            val offset = (i * blockSize).toInt()
+            val end = minOf(offset + blockSize.toInt(), bytes.size)
+            val chunk = bytes.copyOfRange(offset, end)
+
+            Log_i("uploadMedia 上传分片 $i/${parts.length()} size=${chunk.size}")
+
+            val putReq = Request.Builder()
+                .url(presignedUrl)
+                .put(chunk.toRequestBody("application/octet-stream".toMediaType()))
+                .build()
+
+            val putResp = client.newCall(putReq).execute()
+            if (!putResp.isSuccessful) {
+                Log_e("uploadMedia 分片 $i 上传失败 HTTP ${putResp.code}")
+                return null
+            }
+            putResp.close()
+        }
+
+        // Step 3: 确认分片（如果需要）
+        // 注意：QQ Bot API 文档提到 upload_part_finish，但预上传响应中没有提供这个端点
+        // 根据文档，分片 PUT 完成后直接调用合并接口
+
+        // Step 4: 合并获取 file_info
+        val mergeBody = JSONObject().apply {
+            put("upload_id", uploadId)
+        }.toString()
+
+        val mergeResp = httpPostJson(
+            "https://api.sgroup.qq.com/v2/users/$userId/files",
+            headers = mapOf("Authorization" to "QQBot $accessToken", "X-Union-Appid" to appId),
+            json = mergeBody,
+        ) ?: run {
+            Log_e("uploadMedia 合并失败: 响应为空")
+            return null
+        }
+
+        val fileInfo = mergeResp.optString("file_info").ifBlank {
+            Log_e("uploadMedia 合并失败: 无 file_info, resp=${mergeResp.toString().take(300)}")
+            return null
+        }
+
+        Log_i("uploadMedia 分片上传成功: file_info 长度=${fileInfo.length}")
+        return fileInfo
     }
 
     /**

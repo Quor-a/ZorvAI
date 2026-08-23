@@ -271,6 +271,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.DesktopWindows
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
@@ -3871,6 +3872,30 @@ private fun Composer(
                         },
                         leadingIcon = {
                             Icon(Icons.Filled.Edit, null, Modifier.size(18.dp), tint = cs.primary)
+                        },
+                    )
+                    HorizontalDivider()
+                    // 可视化交互工具
+                    DropdownMenuItem(
+                        text = { Text("可视化弹窗") },
+                        onClick = {
+                            showToolMenu = false
+                            // 发送预设提示词让AI创建可视化弹窗
+                            onSend("请创建一个可视化弹窗，展示一些有趣的交互内容")
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.DesktopWindows, null, Modifier.size(18.dp), tint = cs.primary)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("可视化询问") },
+                        onClick = {
+                            showToolMenu = false
+                            // 发送预设提示词让AI创建可视化询问
+                            onSend("请用可视化方式问我一个问题，让我选择或输入")
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.TouchApp, null, Modifier.size(18.dp), tint = cs.primary)
                         },
                     )
                 }

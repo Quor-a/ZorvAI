@@ -109,14 +109,26 @@ fun VisualCustomPopupDialog() {
     var currentPopup by remember { mutableStateOf<Pair<String, VisualCustomPopupData>?>(null) }
     var webView by remember { mutableStateOf<WebView?>(null) }
 
-    // 定时检查是否有待处理的弹窗
+    // 事件驱动：监听弹窗队列变化
     LaunchedEffect(Unit) {
-        while (true) {
-            val popup = VisualCustomPopupQueue.getCurrentPopup()
-            if (popup != null && currentPopup == null) {
-                currentPopup = popup
+        VisualCustomPopupQueue.eventFlow.collect { event ->
+            when (event) {
+                is VisualCustomPopupQueue.PopupEvent.PopupAdded -> {
+                    // 有新弹窗加入，如果当前没有显示弹窗则显示
+                    if (currentPopup == null) {
+                        val popup = VisualCustomPopupQueue.getCurrentPopup()
+                        if (popup != null) {
+                            currentPopup = popup
+                        }
+                    }
+                }
+                is VisualCustomPopupQueue.PopupEvent.PopupRemoved -> {
+                    // 弹窗被移除
+                    if (currentPopup?.first == event.id) {
+                        currentPopup = null
+                    }
+                }
             }
-            kotlinx.coroutines.delay(500)
         }
     }
 
