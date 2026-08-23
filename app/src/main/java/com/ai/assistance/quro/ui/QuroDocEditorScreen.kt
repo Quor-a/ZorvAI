@@ -372,45 +372,61 @@ fun QuroDocEditorScreen(
                 .background(cs.background)
         ) {
             // 格式化工具栏
-            if (showFormatBar) {
-                FormatToolbar()
-                HorizontalDivider(color = cs.outlineVariant)
-            }
+            // 根据文件类型选择编辑器
+            val isMarkdown = file?.name?.endsWith(".md") == true || file?.name?.endsWith(".markdown") == true
             
-            // 编辑区域
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .weight(1f)
-            ) {
-                SelectionContainer {
-                    OutlinedTextField(
-                        value = content,
-                        onValueChange = { newValue ->
-                            content = newValue
-                            isModified = true
-                        },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        textStyle = TextStyle(
-                            fontSize = 16.sp,
-                            lineHeight = 24.sp,
-                            fontFamily = FontFamily.Monospace
-                        ),
-                        placeholder = {
-                            Text(
-                                text = "开始输入文档内容...",
+            if (isMarkdown) {
+                // Markdown文件使用专业的Markdown编辑器
+                QuroMarkdownEditor(
+                    content = content,
+                    onContentChange = { newValue ->
+                        content = newValue
+                        isModified = true
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                // 其他文件使用普通编辑器
+                if (showFormatBar) {
+                    FormatToolbar()
+                    HorizontalDivider(color = cs.outlineVariant)
+                }
+                
+                // 编辑区域
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f)
+                ) {
+                    SelectionContainer {
+                        OutlinedTextField(
+                            value = content,
+                            onValueChange = { newValue ->
+                                content = newValue
+                                isModified = true
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            textStyle = TextStyle(
                                 fontSize = 16.sp,
-                                color = cs.onSurfaceVariant.copy(alpha = 0.5f)
+                                lineHeight = 24.sp,
+                                fontFamily = FontFamily.Monospace
+                            ),
+                            placeholder = {
+                                Text(
+                                    text = "开始输入文档内容...",
+                                    fontSize = 16.sp,
+                                    color = cs.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedBorderColor = Color.Transparent,
+                                cursorColor = cs.primary
                             )
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color.Transparent,
-                            unfocusedBorderColor = Color.Transparent,
-                            cursorColor = cs.primary
                         )
-                    )
+                    }
                 }
             }
         }
