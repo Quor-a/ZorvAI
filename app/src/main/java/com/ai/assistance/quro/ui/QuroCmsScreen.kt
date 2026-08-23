@@ -4,6 +4,7 @@ import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -249,6 +250,8 @@ fun QuroCmsScreen(onClose: () -> Unit) {
 
     // 开发环境管理页（全屏覆盖层）
     if (showDevEnvPage) {
+        // 拦截系统返回键：先关闭开发环境页，再关闭整个CMS
+        BackHandler { showDevEnvPage = false }
         Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
             QuroDevEnvScreen(onBack = { showDevEnvPage = false })
         }
