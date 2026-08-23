@@ -34,7 +34,7 @@ object QuroReplyNotifier {
     private const val CHANNEL_ID = "quro_ai_reply"        // 离开软件：重要级 HIGH → heads-up 弹窗
     private const val NOTIF_ID = 2001
 
-    /** IM（飞书 / QQ 等机器人）入站消息渠道：同样 HIGH → heads-up 弹窗。 */
+    /** IM（飞书 / QQ / 微信 等机器人）入站消息渠道：同样 HIGH → heads-up 弹窗。 */
     private const val CHANNEL_IM_ID = "quro_im"
     internal const val NOTIF_IM_INBOUND = 2002              // 收到 IM 消息
     internal const val NOTIF_IM_REPLY = 2003                // 机器人回复（同会话）
@@ -111,7 +111,7 @@ object QuroReplyNotifier {
                     "IM 消息通知",
                     NotificationManager.IMPORTANCE_HIGH,
                 ).apply {
-                    description = "来自飞书 / QQ 等机器人的消息（离开软件时系统弹窗）"
+                    description = "来自飞书 / QQ / 微信 等机器人的消息（离开软件时系统弹窗）"
                     setShowBadge(true)
                 }
                 nm.createNotificationChannel(ch)
@@ -121,7 +121,7 @@ object QuroReplyNotifier {
 
     /**
      * IM（机器人）消息系统弹窗：离开软件时弹 heads-up，前台时不弹（用户能在绑定对话里看到）。
-     * 用于「飞书 / QQ 收到消息 → 系统级弹窗提醒」与「机器人回复 → 系统级弹窗提醒」两个场景。
+     * 用于「飞书 / QQ / 微信 收到消息 → 系统级弹窗提醒」与「机器人回复 → 系统级弹窗提醒」两个场景。
      * @param id 通知 id：入站用 [NOTIF_IM_INBOUND]、回复用 [NOTIF_IM_REPLY]，避免两类通知互相覆盖。
      */
     fun notifyImMessage(ctx: Context, sender: String, text: String, id: Int = NOTIF_IM_INBOUND) {

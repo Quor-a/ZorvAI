@@ -5,6 +5,7 @@ import android.util.Log
 import com.ai.assistance.quro.core.QuroReplyNotifier
 import com.ai.assistance.quro.core.bot.adapters.QuroFeishuBotAdapter
 import com.ai.assistance.quro.core.bot.adapters.QuroQqBotAdapter
+import com.ai.assistance.quro.core.bot.adapters.QuroWechatIlinkBotAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,6 +33,7 @@ import java.util.concurrent.ConcurrentHashMap
 enum class QuroBotPlatform(val label: String) {
     QQ("QQ 机器人"),
     FEISHU("飞书机器人"),
+    WECHAT("微信 iLink 机器人"),
 }
 
 /** 平台 → Quro 的入站消息。 */
@@ -149,11 +151,12 @@ class QuroBotManager(
 
     fun registeredPlatforms(): List<QuroBotPlatform> = adapters.keys.toList()
 
-    /** 注册默认适配器集合（QQ + 飞书）。 */
+    /** 注册默认适配器集合（QQ + 飞书 + 微信 iLink）。 */
     fun registerDefaults(ctx: Context) {
         if (adapters.isEmpty()) {
             registerAdapter(QuroQqBotAdapter(ctx.applicationContext))
             registerAdapter(QuroFeishuBotAdapter(ctx.applicationContext))
+            registerAdapter(QuroWechatIlinkBotAdapter(ctx.applicationContext))
         }
     }
 
