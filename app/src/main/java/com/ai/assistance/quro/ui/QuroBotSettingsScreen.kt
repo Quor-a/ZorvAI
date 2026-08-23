@@ -60,6 +60,9 @@ import com.ai.assistance.quro.core.bot.QuroBotPlatform
 import com.ai.assistance.quro.core.bot.adapters.QuroFeishuBotAdapter
 import com.ai.assistance.quro.core.bot.adapters.QuroQqBotAdapter
 import com.ai.assistance.quro.core.bot.adapters.QuroWechatIlinkBotAdapter
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.ai.assistance.quro.ui.theme.Accent
 import com.ai.assistance.quro.ui.theme.AccentSoft
 import com.ai.assistance.quro.ui.theme.Line
@@ -699,27 +702,49 @@ private fun WechatBotPlatformCard(
                         // 显示二维码
                         val qrData = qrCodeData.value
                         if (qrData != null) {
-                            if (qrData.startsWith("data:") || qrData.length > 100) {
-                                // 可能是 base64 图片
-                                val cleanBase64 = qrData.removePrefix("data:image/png;base64,").removePrefix("data:image/jpeg;base64,")
-                                val decodedBytes = Base64.decode(cleanBase64, Base64.DEFAULT)
-                                val bitmap = android.graphics.BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
-                                if (bitmap != null) {
-                                    androidx.compose.foundation.Image(
-                                        bitmap = bitmap.asImageBitmap(),
-                                        contentDescription = "微信登录二维码",
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .aspectRatio(1f)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color.White)
-                                            .padding(16.dp),
+                            // 判断是否为 URL（需要生成 QR 码）
+                            val isUrl = qrData.startsWith("http://") || qrData.startsWith("https://")
+                            val qrContent = if (isUrl) qrData else qrData
+
+                            // 生成 QR 码 Bitmap
+                            val qrBitmap = remember(qrContent) {
+                                try {
+                                    val hints = hashMapOf<com.google.zxing.EncodeHintType, Any>(
+                                        com.google.zxing.EncodeHintType.MARGIN to 1,
+                                        com.google.zxing.EncodeHintType.ERROR_CORRECTION to com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.M,
                                     )
-                                } else {
-                                    Text("二维码加载失败", fontSize = 12.sp, color = Color.Red)
+                                    val matrix = com.google.zxing.qrcode.QRCodeWriter().encode(
+                                        qrContent,
+                                        com.google.zxing.BarcodeFormat.QR_CODE,
+                                        400, 400, hints
+                                    )
+                                    val w = matrix.width
+                                    val h = matrix.height
+                                    val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+                                    for (x in 0 until w) {
+                                        for (y in 0 until h) {
+                                            bmp.setPixel(x, y, if (matrix.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+                                        }
+                                    }
+                                    bmp
+                                } catch (e: Exception) {
+                                    null
                                 }
+                            }
+
+                            if (qrBitmap != null) {
+                                androidx.compose.foundation.Image(
+                                    bitmap = qrBitmap.asImageBitmap(),
+                                    contentDescription = "微信登录二维码",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White)
+                                        .padding(16.dp),
+                                )
                             } else {
-                                Text("二维码 Token: $qrData", fontSize = 11.sp, color = Muted)
+                                Text("二维码生成失败: $qrData", fontSize = 11.sp, color = Color.Red)
                             }
                             Spacer(Modifier.height(4.dp))
                             Text("请用微信扫描二维码完成登录", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)

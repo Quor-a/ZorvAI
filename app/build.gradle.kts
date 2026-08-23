@@ -164,6 +164,7 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
 
     implementation(libs.okhttp)
+    implementation(libs.zxing.core)
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
 
