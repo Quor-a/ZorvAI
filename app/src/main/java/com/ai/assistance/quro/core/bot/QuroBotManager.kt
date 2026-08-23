@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.ai.assistance.quro.core.QuroReplyNotifier
 import com.ai.assistance.quro.core.bot.adapters.QuroFeishuBotAdapter
-import com.ai.assistance.quro.core.bot.adapters.QuroLocalBotAdapter
 import com.ai.assistance.quro.core.bot.adapters.QuroQqBotAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,9 +20,8 @@ import java.util.concurrent.ConcurrentHashMap
  *    [com.ai.assistance.quro.core.network.QuroLlmClient] + [com.ai.assistance.quro.core.tools.buildQuroRegistry]
  *    在独立会话里跑 ReAct 循环，得到回复文本（不触碰 UI 层）。
  *  - 回复经对应 [QuroBotAdapter.deliver] 回传平台。
- *  - 三家平台均支持「手机端零公网端点」收消息（已核实）：QQBot / 飞书走官方 WebSocket 长连，
+ *  - 两家平台均支持「手机端零公网端点」收消息（已核实）：QQBot / 飞书走官方 WebSocket 长连，
  *    App 持密钥【出站】直连官方网关，无需任何自备服务器 / Webhook。
- *  - [QuroLocalBotAdapter] 保留为纯 App 内链路，用于免凭据端到端联调。
  *
  * 接入位置：
  *  - App 启动：activity/QuroApplication.onCreate 调 QuroBotManager.instance(app).registerDefaults(app) 并 startEnabled(app)。
@@ -32,7 +30,6 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** 支持的平台。 */
 enum class QuroBotPlatform(val label: String) {
-    LOCAL("本地测试"),
     QQ("QQ 机器人"),
     FEISHU("飞书机器人"),
 }
@@ -152,10 +149,9 @@ class QuroBotManager(
 
     fun registeredPlatforms(): List<QuroBotPlatform> = adapters.keys.toList()
 
-    /** 注册默认适配器集合（本地 + QQ + 飞书）。 */
+    /** 注册默认适配器集合（QQ + 飞书）。 */
     fun registerDefaults(ctx: Context) {
         if (adapters.isEmpty()) {
-            registerAdapter(QuroLocalBotAdapter())
             registerAdapter(QuroQqBotAdapter(ctx.applicationContext))
             registerAdapter(QuroFeishuBotAdapter(ctx.applicationContext))
         }
@@ -165,7 +161,7 @@ class QuroBotManager(
     fun startEnabled(ctx: Context) {
         val prefs = ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         adapters.values.forEach { a ->
-            val enabled = prefs.getBoolean("enabled_${a.platform.name}", a.platform == QuroBotPlatform.LOCAL)
+            val enabled = prefs.getBoolean("enabled_${a.platform.name}", false)
             if (enabled && a.isConfigured()) {
                 scope.launch { runCatching { a.start() } }
             }
@@ -249,15 +245,9 @@ class QuroBotManager(
         }
     }
 
-    /** 供 UI 设置页直接发送一条「本地测试消息」，验证端到端链路。 */
-    fun sendLocalTest(text: String, userName: String = "本地测试用户") {
-        handleInbound(QuroInboundMessage(QuroBotPlatform.LOCAL, LOCAL_DEV_USER, userName, text))
-    }
-
     companion object {
         const val PREFS = "quro_bots"
         const val TAG = "QuroBot"
-        const val LOCAL_DEV_USER = "local-dev"
 
         @Volatile
         private var _instance: QuroBotManager? = null

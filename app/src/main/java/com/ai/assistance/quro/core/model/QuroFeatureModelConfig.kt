@@ -36,6 +36,8 @@ enum class QuroFunctionType(val label: String, val desc: String) {
 data class QuroFunctionModelBinding(
     val useGlobal: Boolean = true, // true=跟随主模型；false=使用下方独立模型
     val model: String = "",        // 独立模型名（useGlobal=false 时有效）
+    val baseUrl: String = "",      // 独立基础URL（useGlobal=false 时有效）
+    val apiKey: String = "",       // 独立API密钥（useGlobal=false 时有效）
 )
 
 class QuroFunctionModelConfigRepository(context: Context) {
@@ -48,6 +50,8 @@ class QuroFunctionModelConfigRepository(context: Context) {
             QuroFunctionModelBinding(
                 useGlobal = prefs.getBoolean("${key.name}_use_global", true),
                 model = prefs.getString("${key.name}_model", "") ?: "",
+                baseUrl = prefs.getString("${key.name}_base_url", "") ?: "",
+                apiKey = prefs.getString("${key.name}_api_key", "") ?: "",
             )
         }
 
@@ -55,6 +59,8 @@ class QuroFunctionModelConfigRepository(context: Context) {
         map.forEach { (k, b) ->
             putBoolean("${k.name}_use_global", b.useGlobal)
             putString("${k.name}_model", b.model)
+            putString("${k.name}_base_url", b.baseUrl)
+            putString("${k.name}_api_key", b.apiKey)
         }
     }
 
@@ -62,17 +68,23 @@ class QuroFunctionModelConfigRepository(context: Context) {
         QuroFunctionModelBinding(
             useGlobal = prefs.getBoolean("${type.name}_use_global", true),
             model = prefs.getString("${type.name}_model", "") ?: "",
+            baseUrl = prefs.getString("${type.name}_base_url", "") ?: "",
+            apiKey = prefs.getString("${type.name}_api_key", "") ?: "",
         )
 
     fun setBinding(type: QuroFunctionType, binding: QuroFunctionModelBinding) = prefs.edit {
         putBoolean("${type.name}_use_global", binding.useGlobal)
         putString("${type.name}_model", binding.model)
+        putString("${type.name}_base_url", binding.baseUrl)
+        putString("${type.name}_api_key", binding.apiKey)
     }
 
     fun resetAll() = prefs.edit {
         QuroFunctionType.values().forEach { k ->
             putBoolean("${k.name}_use_global", true)
             putString("${k.name}_model", "")
+            putString("${k.name}_base_url", "")
+            putString("${k.name}_api_key", "")
         }
     }
 
@@ -86,6 +98,14 @@ class QuroFunctionModelConfigRepository(context: Context) {
      */
     fun resolveConfig(type: QuroFunctionType, global: QuroModelConfig): QuroModelConfig {
         val b = getBinding(type)
-        return if (b.useGlobal || b.model.isBlank()) global else global.copy(model = b.model)
+        return if (b.useGlobal || (b.model.isBlank() && b.baseUrl.isBlank() && b.apiKey.isBlank())) {
+            global
+        } else {
+            global.copy(
+                model = if (b.model.isNotBlank()) b.model else global.model,
+                baseUrl = if (b.baseUrl.isNotBlank()) b.baseUrl else global.baseUrl,
+                apiKey = if (b.apiKey.isNotBlank()) b.apiKey else global.apiKey,
+            )
+        }
     }
 }

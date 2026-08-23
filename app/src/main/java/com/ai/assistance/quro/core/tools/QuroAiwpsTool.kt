@@ -21,6 +21,57 @@ import java.util.zip.ZipOutputStream
  * AI 可在对话框中直接调用，用户也可通过对话框「+工具 → 文档生成」按钮使用（不打开前台）。
  */
 class AiwpsCreateTool : QuroTool {
+    companion object {
+        /**
+         * 静态方法：创建文档（供其他工具调用）
+         */
+        fun createDocument(type: String, content: String, title: String, filename: String): String {
+            val tool = AiwpsCreateTool()
+            val args = JSONObject().apply {
+                put("type", type)
+                put("content", content)
+                put("title", title)
+                put("filename", filename)
+            }
+            // 这里需要一个 Context，但实际上 AiwpsCreateTool 的 run 方法不使用 Context
+            // 所以我们可以创建一个虚拟的 Context
+            return try {
+                val dir = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS), "QuroDocs")
+                if (!dir.exists()) dir.mkdirs()
+                val safeName = filename.replace(Regex("[\\\\/:*?\"<>|]"), "_").take(80)
+                val file = java.io.File(dir, "$safeName.$type")
+
+                when (type) {
+                    "docx" -> {
+                        val parts = tool.buildDocx(content, title)
+                        tool.writeZip(file, parts)
+                        "已生成 docx 文档：${file.absolutePath}"
+                    }
+                    "xlsx" -> {
+                        val parts = tool.buildXlsx(content, title)
+                        tool.writeZip(file, parts)
+                        "已生成 xlsx 文档：${file.absolutePath}"
+                    }
+                    "pptx" -> {
+                        val parts = tool.buildPptx(content, title)
+                        tool.writeZip(file, parts)
+                        "已生成 pptx 文档：${file.absolutePath}"
+                    }
+                    "pdf" -> {
+                        file.writeBytes(tool.buildPdf(content, title))
+                        "已生成 pdf 文档：${file.absolutePath}"
+                    }
+                    else -> {
+                        file.writeText(content)
+                        "已生成 $type 文档：${file.absolutePath}"
+                    }
+                }
+            } catch (e: Exception) {
+                "生成失败：${e.message}"
+            }
+        }
+    }
+
     override val name = "aiwps_create"
     override val description = "生成文档（.docx/.xlsx/.pptx/.pdf/.md/.txt/.csv/.html），自研构造、无需外部依赖，后台生成真实可打开的文件。" +
         "参数 {\"type\":\"docx|xlsx|pptx|pdf|md|txt|csv|html\",\"title\":\"标题(可选)\",\"content\":\"正文\"," +

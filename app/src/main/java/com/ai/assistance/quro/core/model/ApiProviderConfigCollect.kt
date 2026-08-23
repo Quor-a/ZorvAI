@@ -40,6 +40,41 @@ data class ProviderApiConfig(
  * `requiresApiKey` 对本地回环类端点返回 false。
  */
 object ApiProviderConfigs {
+    /**
+     * 根据URL自动识别云服务提供商
+     */
+    fun detectProviderFromUrl(url: String): ApiProviderType {
+        val lowerUrl = url.lowercase()
+        return when {
+            lowerUrl.contains("api.openai.com") -> ApiProviderType.OPENAI
+            lowerUrl.contains("api.anthropic.com") -> ApiProviderType.ANTHROPIC
+            lowerUrl.contains("generativelanguage.googleapis.com") -> ApiProviderType.GOOGLE
+            lowerUrl.contains("api.deepseek.com") -> ApiProviderType.DEEPSEEK
+            lowerUrl.contains("aip.baidubce.com") -> ApiProviderType.BAIDU
+            lowerUrl.contains("dashscope.aliyuncs.com") -> ApiProviderType.ALIYUN
+            lowerUrl.contains("spark-api-open.xf-yun.com") -> ApiProviderType.XUNFEI
+            lowerUrl.contains("open.bigmodel.cn") -> ApiProviderType.ZHIPU
+            lowerUrl.contains("api.baichuan-ai.com") -> ApiProviderType.BAICHUAN
+            lowerUrl.contains("api.moonshot.cn") || lowerUrl.contains("api.moonshot.ai") -> ApiProviderType.MOONSHOT
+            lowerUrl.contains("api.xiaomimimo.com") -> ApiProviderType.MIMO
+            lowerUrl.contains("codestral.mistral.ai") -> ApiProviderType.MISTRAL
+            lowerUrl.contains("api.siliconflow.cn") -> ApiProviderType.SILICONFLOW
+            lowerUrl.contains("apis.iflow.cn") -> ApiProviderType.IFLOW
+            lowerUrl.contains("openrouter.ai") -> ApiProviderType.OPENROUTER
+            lowerUrl.contains("4router.net") -> ApiProviderType.FOUR_ROUTER
+            lowerUrl.contains("inference-api.nousresearch.com") -> ApiProviderType.NOUS_PORTAL
+            lowerUrl.contains("cloud.infini-ai.com") -> ApiProviderType.INFINIAI
+            lowerUrl.contains("api.tbox.cn") -> ApiProviderType.ALIPAY_BAILING
+            lowerUrl.contains("ark.cn-beijing.volces.com") -> ApiProviderType.DOUBAO
+            lowerUrl.contains("integrate.api.nvidia.com") -> ApiProviderType.NVIDIA
+            lowerUrl.contains("lmstudio") || lowerUrl.contains("localhost:1234") -> ApiProviderType.LMSTUDIO
+            lowerUrl.contains("localhost:11434") || lowerUrl.contains("127.0.0.1:11434") -> ApiProviderType.OLLAMA
+            lowerUrl.contains("api.ppinfra.com") -> ApiProviderType.PPINFRA
+            lowerUrl.contains("api.novita.ai") -> ApiProviderType.NOVITA
+            else -> ApiProviderType.OPENAI_GENERIC
+        }
+    }
+
     private val configs: Map<ApiProviderType, ProviderApiConfig> = listOf(
         ProviderApiConfig(
             providerType = ApiProviderType.OPENAI,

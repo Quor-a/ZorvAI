@@ -18,6 +18,8 @@ import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.terminal.QuroTerminalController
 import com.ai.assistance.quro.ui.QuroChatCardTray
 import com.ai.assistance.quro.ui.QuroChatCardView
+import com.ai.assistance.quro.ui.VisualDialogs
+import com.ai.assistance.quro.ui.VisualPopupDialog
 import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.ai.assistance.quro.core.cards.parseComponentSpec
 import com.ai.assistance.quro.ui.QuroShareBridge
@@ -792,14 +794,27 @@ fun ChatScreen(
     fun send(text: String) {
         val t = text.trim()
         if (t.isEmpty() && attachments.isEmpty()) return
-        // 构建上下文信息（传给 ViewModel 作为隐藏消息注入，不在用户消息里加前缀）
+        // 构建上下文信息（作为隐藏消息注入，用户不可见）
         val ctxParts = mutableListOf<String>()
         val wsPath = currentWorkspace
-        if (wsPath != null) ctxParts.add("工作区根目录: $wsPath")
+        if (wsPath != null) {
+            val wsName = wsPath.substringAfterLast("/").ifBlank { "工作区" }
+            ctxParts.add("工作区: $wsName ($wsPath)")
+        }
         val aciName = currentAciName
-        if (aciName != null) ctxParts.add("默认ACI应用: $aciName")
-        if (enabledSkillsCount > 0) ctxParts.add("已启用技能: ${enabledSkillsCount}个")
-        val contextStr = ctxParts.joinToString("；").ifBlank { null }
+        if (aciName != null) {
+            val pkg = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultPackage(ctx)
+            if (pkg != null) {
+                ctxParts.add("ACI应用: $aciName (包名: $pkg)")
+            }
+        }
+        if (enabledSkillsCount > 0) {
+            val enabledSkills = com.ai.assistance.quro.core.skill.QuroSkillStore.load(ctx)
+                .filter { it.enabled }
+                .map { it.name }
+            ctxParts.add("已启用技能(${enabledSkillsCount}个): ${enabledSkills.joinToString("、")}")
+        }
+        val contextStr = ctxParts.joinToString("\n").ifBlank { null }
         vm.send(t, attachments.toList(), cfg, contextMessage = contextStr)
         attachments.clear()
     }
@@ -822,6 +837,10 @@ fun ChatScreen(
                 )
             }
         ) {
+            // 可视化问答和操作弹窗
+            VisualDialogs()
+            // 自由可视化弹窗
+            VisualPopupDialog()
             Scaffold(
                 containerColor = cs.background,
                 topBar = {
@@ -2967,10 +2986,57 @@ private fun ParsedArgsContent(argsJson: String, scaled: (Int) -> androidx.compos
     }
 }
 
+/** 渲染卡片数据结构 */
+private data class RenderCard(
+    val type: String,
+    val title: String,
+    val content: String,
+    val path: String? = null,
+    val language: String? = null
+)
+
+/** 解析工具结果中的渲染卡片标签 */
+private fun parseRenderCards(result: String): List<RenderCard> {
+    val cards = mutableListOf<RenderCard>()
+    val regex = Regex("""\[渲染卡片\]\s*\n类型：(.+?)\s*\n标题：(.+?)\s*\n(路径：(.+?)\s*\n)?(语言：(.+?)\s*\n)?内容：\s*\n([\s\S]*?)\[/渲染卡片\]""")
+    regex.findAll(result).forEach { match ->
+        val type = match.groupValues[1].trim()
+        val title = match.groupValues[2].trim()
+        val path = match.groupValues[4].trim().ifBlank { null }
+        val language = match.groupValues[6].trim().ifBlank { null }
+        val content = match.groupValues[7].trim()
+        cards.add(RenderCard(type, title, content, path, language))
+    }
+    return cards
+}
+
 /** 格式化输出结果 */
 @Composable
 private fun FormattedResultContent(result: String, scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
     val cs = MaterialTheme.colorScheme
+    
+    // 首先检查是否有渲染卡片
+    val renderCards = remember(result) { parseRenderCards(result) }
+    if (renderCards.isNotEmpty()) {
+        // 渲染卡片模式
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 400.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(cs.surfaceContainerLowest)
+                .verticalScroll(rememberScrollState())
+                .padding(8.dp)
+        ) {
+            renderCards.forEach { card ->
+                RenderCardView(card, scaled)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+        return
+    }
+    
+    // 原有的格式化逻辑
     val lines = result.lines()
     val isListLike = lines.size > 1 && lines.count { it.trimStart().startsWith("- ") || it.trimStart().startsWith("\u2192 ") } >= lines.size / 2
     val isJson = runCatching { org.json.JSONObject(result); true }.getOrElse { false }
@@ -3013,6 +3079,130 @@ private fun FormattedResultContent(result: String, scaled: (Int) -> androidx.com
                             Spacer(Modifier.height(1.dp))
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/** 渲染单个渲染卡片 */
+@Composable
+private fun RenderCardView(card: RenderCard, scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
+    val cs = MaterialTheme.colorScheme
+    
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = cs.surfaceContainerHigh
+        ),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp)
+        ) {
+            // 卡片标题
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // 类型图标
+                val icon = when (card.type) {
+                    "HTML" -> Icons.Filled.Code
+                    "Markdown" -> Icons.Filled.Description
+                    "代码" -> Icons.Filled.Code
+                    "图片" -> Icons.Filled.Description // 使用描述图标作为图片占位
+                    "PDF" -> Icons.Filled.Description // 使用描述图标作为PDF占位
+                    else -> Icons.Filled.Description
+                }
+                Icon(icon, null, tint = cs.primary, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(card.title, fontWeight = FontWeight.Bold, fontSize = scaled(13))
+                Spacer(modifier = Modifier.weight(1f))
+                Text(card.type, fontSize = 9.sp, color = cs.onSurfaceVariant)
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // 根据类型渲染内容
+            when (card.type) {
+                "HTML" -> {
+                    // HTML 渲染
+                    AndroidView(
+                        factory = { context ->
+                            android.webkit.WebView(context).apply {
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                loadDataWithBaseURL(null, card.content, "text/html", "UTF-8", null)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                    )
+                }
+                "Markdown" -> {
+                    // Markdown 渲染（简单实现：保留格式）
+                    Text(
+                        text = card.content,
+                        fontSize = scaled(11),
+                        color = cs.onSurfaceVariant,
+                        lineHeight = scaled(16),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                "代码" -> {
+                    // 代码渲染
+                    Surface(
+                        color = cs.surfaceContainerLowest,
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = card.content,
+                            fontSize = scaled(10),
+                            fontFamily = FontFamily.Monospace,
+                            color = cs.onSurface,
+                            lineHeight = scaled(14),
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+                "图片" -> {
+                    // 图片渲染（如果路径有效）
+                    card.path?.let { path ->
+                        AndroidView(
+                            factory = { context ->
+                                android.widget.ImageView(context).apply {
+                                    setImageURI(android.net.Uri.parse(path))
+                                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(150.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                        )
+                    }
+                }
+                "PDF" -> {
+                    // PDF 说明
+                    Text(
+                        text = "PDF 文件已保存到工作区，可在文件管理器中打开查看",
+                        fontSize = scaled(11),
+                        color = cs.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                else -> {
+                    // 文本渲染
+                    Text(
+                        text = card.content,
+                        fontSize = scaled(11),
+                        color = cs.onSurfaceVariant,
+                        lineHeight = scaled(16),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }

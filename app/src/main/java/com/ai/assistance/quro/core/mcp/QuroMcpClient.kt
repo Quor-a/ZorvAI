@@ -114,6 +114,205 @@ object QuroMcpClient {
         return truncate(result.toString())
     }
 
+    // ── MCP 协议扩展：资源、提示、完成等 ──
+
+    /** 列出服务器暴露的资源（resources/list）。 */
+    fun listResources(config: McpServerConfig): List<McpExternalResource> {
+        ensureInitialized(config)
+        val root = if (config.kind == "ws") {
+            runBlocking { QuroMcpWsClient.callToolWs(config.url, "resources/list", JSONObject(), config.token) }
+        } else {
+            rpcRaw(config, "resources/list", JSONObject()).first
+        }
+        if (root.has("error")) return emptyList()
+        val result = root.optJSONObject("result") ?: return emptyList()
+        val resources = result.optJSONArray("resources") ?: return emptyList()
+        val out = mutableListOf<McpExternalResource>()
+        for (i in 0 until resources.length()) {
+            val r = resources.optJSONObject(i) ?: continue
+            val uri = r.optString("uri", "")
+            if (uri.isEmpty()) continue
+            val name = r.optString("name", uri)
+            val desc = r.optString("description", "")
+            val mimeType = r.optString("mimeType", "")
+            out.add(McpExternalResource(uri, name, desc, mimeType))
+        }
+        return out
+    }
+
+    /** 读取服务器资源内容（resources/read）。 */
+    fun readResource(config: McpServerConfig, uri: String): String {
+        ensureInitialized(config)
+        val params = JSONObject().put("uri", uri)
+        val root = if (config.kind == "ws") {
+            runBlocking { QuroMcpWsClient.callToolWs(config.url, "resources/read", params, config.token) }
+        } else {
+            rpcRaw(config, "resources/read", params).first
+        }
+        if (root.has("error")) {
+            val err = root.optJSONObject("error")
+            return "资源读取失败: ${err?.optString("message", "未知错误") ?: "未知错误"}"
+        }
+        val result = root.optJSONObject("result") ?: return "服务器未返回结果"
+        val contents = result.optJSONArray("contents")
+        if (contents != null && contents.length() > 0) {
+            val sb = StringBuilder()
+            for (i in 0 until contents.length()) {
+                val item = contents.optJSONObject(i) ?: continue
+                val text = item.optString("text", "")
+                if (text.isNotBlank()) {
+                    if (sb.isNotEmpty()) sb.append("\n")
+                    sb.append(text)
+                }
+            }
+            if (sb.isNotEmpty()) return truncate(sb.toString())
+        }
+        return truncate(result.toString())
+    }
+
+    /** 列出服务器提示模板（prompts/list）。 */
+    fun listPrompts(config: McpServerConfig): List<McpExternalPrompt> {
+        ensureInitialized(config)
+        val root = if (config.kind == "ws") {
+            runBlocking { QuroMcpWsClient.callToolWs(config.url, "prompts/list", JSONObject(), config.token) }
+        } else {
+            rpcRaw(config, "prompts/list", JSONObject()).first
+        }
+        if (root.has("error")) return emptyList()
+        val result = root.optJSONObject("result") ?: return emptyList()
+        val prompts = result.optJSONArray("prompts") ?: return emptyList()
+        val out = mutableListOf<McpExternalPrompt>()
+        for (i in 0 until prompts.length()) {
+            val p = prompts.optJSONObject(i) ?: continue
+            val name = p.optString("name", "")
+            if (name.isEmpty()) continue
+            val desc = p.optString("description", "")
+            val args = p.optJSONArray("arguments") ?: JSONArray()
+            out.add(McpExternalPrompt(name, desc, args.toString()))
+        }
+        return out
+    }
+
+    /** 获取服务器提示内容（prompts/get）。 */
+    fun getPrompt(config: McpServerConfig, promptName: String, arguments: JSONObject = JSONObject()): String {
+        ensureInitialized(config)
+        val params = JSONObject().put("name", promptName).put("arguments", arguments)
+        val root = if (config.kind == "ws") {
+            runBlocking { QuroMcpWsClient.callToolWs(config.url, "prompts/get", params, config.token) }
+        } else {
+            rpcRaw(config, "prompts/get", params).first
+        }
+        if (root.has("error")) {
+            val err = root.optJSONObject("error")
+            return "提示获取失败: ${err?.optString("message", "未知错误") ?: "未知错误"}"
+        }
+        val result = root.optJSONObject("result") ?: return "服务器未返回结果"
+        val messages = result.optJSONArray("messages")
+        if (messages != null && messages.length() > 0) {
+            val sb = StringBuilder()
+            for (i in 0 until messages.length()) {
+                val msg = messages.optJSONObject(i) ?: continue
+                val role = msg.optString("role", "")
+                val content = msg.opt("content")
+                if (content is JSONArray) {
+                    for (j in 0 until content.length()) {
+                        val item = content.optJSONObject(j) ?: continue
+                        val text = item.optString("text", "")
+                        if (text.isNotBlank()) {
+                            if (sb.isNotEmpty()) sb.append("\n")
+                            sb.append("[$role] $text")
+                        }
+                    }
+                } else if (content is String && content.isNotBlank()) {
+                    if (sb.isNotEmpty()) sb.append("\n")
+                    sb.append("[$role] $content")
+                }
+            }
+            if (sb.isNotEmpty()) return truncate(sb.toString())
+        }
+        return truncate(result.toString())
+    }
+
+    /** 完成请求（completion/complete）：请求服务器补全。 */
+    fun complete(config: McpServerConfig, ref: JSONObject, argument: JSONObject): String {
+        ensureInitialized(config)
+        val params = JSONObject().put("ref", ref).put("argument", argument)
+        val root = if (config.kind == "ws") {
+            runBlocking { QuroMcpWsClient.callToolWs(config.url, "completion/complete", params, config.token) }
+        } else {
+            rpcRaw(config, "completion/complete", params).first
+        }
+        if (root.has("error")) {
+            val err = root.optJSONObject("error")
+            return "补全失败: ${err?.optString("message", "未知错误") ?: "未知错误"}"
+        }
+        val result = root.optJSONObject("result") ?: return "服务器未返回结果"
+        val values = result.optJSONArray("values")
+        if (values != null && values.length() > 0) {
+            val sb = StringBuilder()
+            for (i in 0 until values.length()) {
+                val value = values.optString(i, "")
+                if (value.isNotBlank()) {
+                    if (sb.isNotEmpty()) sb.append("\n")
+                    sb.append(value)
+                }
+            }
+            if (sb.isNotEmpty()) return truncate(sb.toString())
+        }
+        return truncate(result.toString())
+    }
+
+    /** Ping 检测服务器连通性。 */
+    fun ping(config: McpServerConfig): Boolean {
+        ensureInitialized(config)
+        val root = if (config.kind == "ws") {
+            runBlocking { QuroMcpWsClient.callToolWs(config.url, "ping", JSONObject(), config.token) }
+        } else {
+            rpcRaw(config, "ping", JSONObject()).first
+        }
+        return !root.has("error")
+    }
+
+    /** 取消长时间运行的操作（notifications/cancelled）。 */
+    fun cancelRequest(config: McpServerConfig, requestId: String, reason: String = "") {
+        val params = JSONObject().put("requestId", requestId)
+        if (reason.isNotBlank()) params.put("reason", reason)
+        // 这是通知，不需要响应
+        if (config.kind == "ws") {
+            runBlocking { QuroMcpWsClient.callToolWs(config.url, "notifications/cancelled", params, config.token) }
+        } else {
+            rpcRaw(config, "notifications/cancelled", params)
+        }
+    }
+
+    /** 服务器能力查询（initialize 响应中的 capabilities）。 */
+    fun getServerCapabilities(config: McpServerConfig): JSONObject {
+        ensureInitialized(config)
+        val root = if (config.kind == "ws") {
+            runBlocking { QuroMcpWsClient.callToolWs(config.url, "initialize", JSONObject().put("protocolVersion", "2025-03-26").put("capabilities", JSONObject()).put("clientInfo", JSONObject().put("name", "Zorv AI").put("version", "1.0")), config.token) }
+        } else {
+            rpcRaw(config, "initialize", JSONObject().put("protocolVersion", "2025-03-26").put("capabilities", JSONObject()).put("clientInfo", JSONObject().put("name", "Zorv AI").put("version", "1.0")), captureSession = true).first
+        }
+        if (root.has("error")) return JSONObject()
+        val result = root.optJSONObject("result") ?: return JSONObject()
+        return result.optJSONObject("capabilities") ?: JSONObject()
+    }
+
+    // ── 数据类：资源、提示 ──
+
+    data class McpExternalResource(
+        val uri: String,
+        val name: String,
+        val description: String,
+        val mimeType: String,
+    )
+
+    data class McpExternalPrompt(
+        val name: String,
+        val description: String,
+        val argumentsJson: String,
+    )
+
     // ── 内部：JSON-RPC 2.0（HTTP / SSE）──
 
     /** 发起一次 JSON-RPC 调用，返回（根对象, 本次响应的 Mcp-Session-Id）。 */

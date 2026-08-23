@@ -54,7 +54,6 @@ import androidx.compose.ui.unit.sp
 import com.ai.assistance.quro.core.bot.QuroBotManager
 import com.ai.assistance.quro.core.bot.QuroBotPlatform
 import com.ai.assistance.quro.core.bot.adapters.QuroFeishuBotAdapter
-import com.ai.assistance.quro.core.bot.adapters.QuroLocalBotAdapter
 import com.ai.assistance.quro.core.bot.adapters.QuroQqBotAdapter
 import com.ai.assistance.quro.ui.theme.Accent
 import com.ai.assistance.quro.ui.theme.AccentSoft
@@ -81,17 +80,6 @@ fun QuroBotSettingsScreen(onClose: () -> Unit) {
     val manager = remember { QuroBotManager.instance(ctx) }
     val prefs = remember { ctx.getSharedPreferences(QuroBotManager.PREFS, Context.MODE_PRIVATE) }
 
-    val replies = remember { mutableStateListOf<String>() }
-    DisposableEffect(manager) {
-        val local = manager.getAdapter(QuroBotPlatform.LOCAL) as? QuroLocalBotAdapter
-        val listener: (String) -> Unit = { replies.add(0, it) }
-        local?.addReplyListener(listener)
-        onDispose { local?.removeReplyListener(listener) }
-    }
-
-    var testInput by remember { mutableStateOf("") }
-    val sent = remember { mutableStateListOf<String>() }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -109,30 +97,12 @@ fun QuroBotSettingsScreen(onClose: () -> Unit) {
             // ── 说明条 ──
             item {
                 Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                    InfoBox("QQ / 飞书直连官方网关，App 持密钥出站；本地测试在 App 内验证回复链路。")
+                    InfoBox("QQ / 飞书直连官方网关，App 持密钥出站。")
                 }
             }
 
             // ── 连接状态条（单行紧凑）──
             item { ConnectionStatusBar(manager = manager) }
-
-            // ── 本地测试台 ──
-            item {
-                LocalTestConsole(
-                    testInput = testInput,
-                    onInput = { testInput = it },
-                    onSend = {
-                        val t = testInput.trim()
-                        if (t.isNotBlank()) {
-                            sent.add(0, t)
-                            manager.sendLocalTest(t)
-                            testInput = ""
-                        }
-                    },
-                    replies = replies,
-                    sent = sent,
-                )
-            }
 
             // ── 平台卡 ──
             item { BotPlatformCard(QuroBotPlatform.QQ, prefs, manager = manager) }
@@ -141,12 +111,11 @@ fun QuroBotSettingsScreen(onClose: () -> Unit) {
     }
 }
 
-/** 连接状态条：单行三通道实时状态，紧凑型。 */
+/** 连接状态条：单行双通道实时状态，紧凑型。 */
 @Composable
 private fun ConnectionStatusBar(manager: QuroBotManager) {
     val cs = MaterialTheme.colorScheme
     val items = listOf(
-        Triple(QuroBotPlatform.LOCAL, "本地", Icons.Filled.Android),
         Triple(QuroBotPlatform.QQ, "QQ", Icons.Filled.Chat),
         Triple(QuroBotPlatform.FEISHU, "飞书", Icons.Filled.Forum),
     )
@@ -161,7 +130,6 @@ private fun ConnectionStatusBar(manager: QuroBotManager) {
             items.forEachIndexed { i, (p, _, _) ->
                 val adapter = manager.getAdapter(p)
                 val text = when {
-                    p == QuroBotPlatform.LOCAL -> "常开"
                     adapter == null -> "未注册"
                     !adapter.isConnected -> "未连接"
                     else -> when (adapter) {
@@ -170,7 +138,7 @@ private fun ConnectionStatusBar(manager: QuroBotManager) {
                         else -> "已连接"
                     }
                 }
-                val ok = text == "常开" || text.contains("已连接")
+                val ok = text.contains("已连接")
                 statuses[i] = Triple(text, if (ok) Color(0xFF4CAF50) else if (text.contains("断开") || text.contains("未连接")) Color(0xFFFF9800) else Color.Gray, ok)
             }
             delay(1500L)
@@ -332,17 +300,17 @@ private fun StatusPill(text: String, color: Color) {
 private fun BotPlatformCard(
     platform: QuroBotPlatform,
     prefs: SharedPreferences,
-    enabled: Boolean = prefs.getBoolean("enabled_${platform.name}", platform == QuroBotPlatform.LOCAL),
+    enabled: Boolean = prefs.getBoolean("enabled_${platform.name}", false),
     onToggle: (Boolean) -> Unit = {},
     manager: QuroBotManager,
 ) {
     var sw by remember { mutableStateOf(enabled) }
     var expanded by remember { mutableStateOf(false) } // 默认折叠
-    val isRelay = platform != QuroBotPlatform.LOCAL
+    val isRelay = true
     val icon = when (platform) {
         QuroBotPlatform.QQ -> Icons.Filled.Chat
         QuroBotPlatform.FEISHU -> Icons.Filled.Forum
-        else -> Icons.Filled.Android
+        else -> Icons.Filled.Chat
     }
 
     val fields: List<Pair<String, String>> = when (platform) {

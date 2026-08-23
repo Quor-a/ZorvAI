@@ -301,11 +301,10 @@ class QuroLlmClient(
     private fun messageToJson(m: QuroChatMessage): JSONObject {
         val o = JSONObject().put("role", m.role)
         val images = m.attachments?.filter { it.type == "image" } ?: emptyList()
+        val videos = m.attachments?.filter { it.type == "video" } ?: emptyList()
+        val files = m.attachments?.filter { it.type == "file" } ?: emptyList()
         if (m.toolCallId != null) {
             o.put("tool_call_id", m.toolCallId)
-            // 🔧 Kimi K3 严格协议：tool 消息必须带可解析工具名（name 字段），
-            // 否则直接 400（"tool messages need a resolvable tool name..."）。
-            // 这里用 toLlmMessages 已反查好的 toolName 下发；其它厂商容忍此旧式字段。
             m.toolName?.let { o.put("name", it) }
             o.put("content", m.content)
         } else if (m.toolCalls != null) {
@@ -320,10 +319,42 @@ class QuroLlmClient(
                     )
                 }
             })
-        } else if (images.isNotEmpty()) {
-            // 多模态：文本段 + 图片段（base64 data URI），供视觉模型理解图片
+        } else if (images.isNotEmpty() || videos.isNotEmpty() || files.isNotEmpty()) {
+            // 多模态：文本段 + 图片段 + 视频/文件描述
             val arr = JSONArray()
-            arr.put(JSONObject().put("type", "text").put("text", m.content))
+            // 构建增强文本：包含附件描述信息
+            val enhancedText = buildString {
+                append(m.content)
+                if (videos.isNotEmpty()) {
+                    append("\n\n[附件信息] 用户发送了以下视频文件：")
+                    videos.forEach { att ->
+                        val sizeMB = att.size / (1024 * 1024)
+                        append("\n- 文件名: ${att.name}")
+                        append("\n  路径: ${att.uri}")
+                        append("\n  大小: ${sizeMB}MB")
+                        append("\n  类型: ${att.mime}")
+                        append("\n  提示: 如需分析视频内容，请使用 video_understanding 工具，参数为 {\"video_path\":\"${att.uri}\"}")
+                    }
+                }
+                if (files.isNotEmpty()) {
+                    append("\n\n[附件信息] 用户发送了以下文件：")
+                    files.forEach { att ->
+                        val sizeMB = att.size / (1024 * 1024)
+                        append("\n- 文件名: ${att.name}")
+                        append("\n  路径: ${att.uri}")
+                        append("\n  大小: ${sizeMB}MB")
+                        append("\n  类型: ${att.mime}")
+                        // 对于文档类型，提示AI可以使用 aiwps_read 工具读取
+                        if (att.mime.contains("pdf") || att.mime.contains("document") ||
+                            att.mime.contains("text") || att.name.endsWith(".txt") ||
+                            att.name.endsWith(".md") || att.name.endsWith(".csv")) {
+                            append("\n  💡 你可以使用 aiwps_read 工具读取此文件内容")
+                        }
+                    }
+                }
+            }
+            arr.put(JSONObject().put("type", "text").put("text", enhancedText))
+            // 添加图片
             images.forEach { att ->
                 val dataUri = QuroAttachmentKit.toVisionDataUri(att.uri)
                 if (dataUri != null) {

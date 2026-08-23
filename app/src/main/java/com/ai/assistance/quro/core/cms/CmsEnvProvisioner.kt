@@ -191,6 +191,106 @@ enum class EnvProfile(
         |apk add --no-cache gradle 2>&1 | tail -2 || true
         |echo "[env] gradle=${'$'}(gradle --version 2>&1 | head -3)
         """.trimMargin(),
+    ),
+    // ─── MCP 部署环境 ───
+    MCP_SERVER(
+        "MCP 服务器环境 (Node.js + MCP SDK)",
+        "command -v node >/dev/null 2>&1 && npm list -g @modelcontextprotocol/sdk >/dev/null 2>&1",
+        """
+        |echo "[mcp] 开始安装 MCP 服务器环境..."
+        |apk add --no-cache nodejs npm 2>&1 | tail -2 || true
+        |npm install -g @modelcontextprotocol/sdk 2>&1 | tail -3 || true
+        |echo "[mcp] node=${'$'}(node --version 2>&1) mcp-sdk=${'$'}(npm list -g @modelcontextprotocol/sdk 2>&1 | head -1)
+        """.trimMargin(),
+    ),
+    MCP_CLIENT(
+        "MCP 客户端环境 (Python + MCP Python SDK)",
+        "command -v python >/dev/null 2>&1 && python -c 'import mcp' >/dev/null 2>&1",
+        """
+        |echo "[mcp] 开始安装 MCP 客户端环境..."
+        |apk add --no-cache python3 py3-pip 2>&1 | tail -2 || true
+        |pip install mcp 2>&1 | tail -3 || true
+        |echo "[mcp] python=${'$'}(python --version 2>&1) mcp=${'$'}(python -c 'import mcp; print(mcp.__version__)' 2>&1)
+        """.trimMargin(),
+    ),
+    MCP_TOOLS(
+        "MCP 工具开发环境 (TypeScript + MCP 工具模板)",
+        "command -v tsc >/dev/null 2>&1 && test -d /root/mcp-tools",
+        """
+        |echo "[mcp] 开始安装 MCP 工具开发环境..."
+        |apk add --no-cache nodejs npm 2>&1 | tail -2 || true
+        |npm install -g typescript 2>&1 | tail -3 || true
+        |mkdir -p /root/mcp-tools
+        |cd /root/mcp-tools
+        |cat > package.json << 'EOF'
+        |{
+        |  "name": "mcp-tools",
+        |  "version": "1.0.0",
+        |  "dependencies": {
+        |    "@modelcontextprotocol/sdk": "^1.0.0",
+        |    "typescript": "^5.0.0"
+        |  }
+        |}
+        |EOF
+        |npm install 2>&1 | tail -3 || true
+        |echo "[mcp] tsc=${'$'}(tsc --version 2>&1) tools-ready=${'$'}(test -d /root/mcp-tools/node_modules && echo 'yes' || echo 'no')
+        """.trimMargin(),
+    ),
+    MCP_DEPLOY(
+        "MCP 部署环境 (完整 MCP 服务器 + 客户端 + 工具)",
+        "command -v node >/dev/null 2>&1 && command -v python >/dev/null 2>&1 && test -d /root/mcp-server",
+        """
+        |echo "[mcp] 开始部署完整 MCP 环境..."
+        |apk add --no-cache nodejs npm python3 py3-pip 2>&1 | tail -3 || true
+        |npm install -g @modelcontextprotocol/sdk typescript 2>&1 | tail -3 || true
+        |pip install mcp 2>&1 | tail -3 || true
+        |mkdir -p /root/mcp-server /root/mcp-tools
+        |cd /root/mcp-server
+        |cat > server.ts << 'EOF'
+        |import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+        |import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+        |
+        |const server = new Server(
+        |  { name: 'quro-mcp-server', version: '1.0.0' },
+        |  { capabilities: { tools: {} } }
+        |);
+        |
+        |server.setRequestHandler('tools/list', async () => ({
+        |  tools: [
+        |    {
+        |      name: 'hello',
+        |      description: 'A simple hello tool',
+        |      inputSchema: { type: 'object', properties: {} }
+        |    }
+        |  ]
+        |}));
+        |
+        |server.setRequestHandler('tools/call', async (request) => {
+        |  const { name } = request.params;
+        |  if (name === 'hello') {
+        |    return { content: [{ type: 'text', text: 'Hello from Quro MCP Server!' }] };
+        |  }
+        |  throw new Error(`Unknown tool: ${'$'}{name}`);
+        |});
+        |
+        |async function main() {
+        |  const transport = new StdioServerTransport();
+        |  await server.connect(transport);
+        |  console.error('Quro MCP Server running on stdio');
+        |}
+        |
+        |main().catch(console.error);
+        |EOF
+        |cat > start.sh << 'EOF'
+        |#!/bin/sh
+        |cd /root/mcp-server
+        |npx tsx server.ts
+        |EOF
+        |chmod +x start.sh
+        |echo "[mcp] server=${'$'}(test -f /root/mcp-server/server.ts && echo 'ready' || echo 'not ready')"
+        |echo "[mcp] tools=${'$'}(test -d /root/mcp-tools && echo 'ready' || echo 'not ready')"
+        |echo "[mcp] 完整 MCP 环境已部署"
+        """.trimMargin(),
     );
 
     companion object {

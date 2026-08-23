@@ -88,6 +88,14 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
                         "语音风格推导(UI_CONTROL)。指定独立模型后，对应调用即改用该模型。",
                 tone = Accent,
             )
+            InfoBox(
+                text = "视觉模型配置：图像识别和视频识别需要支持视觉能力的模型（如GPT-4 Vision）。" +
+                        "请在「设置 → 模型配置」中配置视觉模型的API密钥和基础URL，" +
+                        "然后在下方为图像识别和视频识别选择对应的模型。\n\n" +
+                        "路径配置说明：所有功能共享主模型配置的基础URL和API密钥。" +
+                        "如需为视觉模型使用不同的端点，请在「设置 → 模型配置」中配置对应的端点地址。",
+                tone = Color(0xFF10B981),
+            )
             Spacer(Modifier.height(10.dp))
             SetGroup {
                 QuroFunctionType.values().forEachIndexed { idx, type ->
@@ -121,6 +129,8 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
         val scope = rememberCoroutineScope()
         val gModel = QuroModelConfigRepository(ctx).load().model
         var manual by remember { mutableStateOf((cfg[type]?.model?.takeIf { it.isNotBlank() } ?: gModel)) }
+        var customBaseUrl by remember { mutableStateOf(cfg[type]?.baseUrl ?: "") }
+        var customApiKey by remember { mutableStateOf(cfg[type]?.apiKey ?: "") }
 
         // 仅以「全局已配置的模型」作为兜底项展示；不再自动联网拉取（改为手动）。
         LaunchedEffect(type) {
@@ -148,7 +158,12 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
             onDismissRequest = { pickerType = null },
             confirmButton = {
                 TextButton(onClick = {
-                    repo.setBinding(type, QuroFunctionModelBinding(useGlobal = false, model = manual.trim()))
+                    repo.setBinding(type, QuroFunctionModelBinding(
+                        useGlobal = false,
+                        model = manual.trim(),
+                        baseUrl = customBaseUrl.trim(),
+                        apiKey = customApiKey.trim(),
+                    ))
                     cfg = repo.load()
                     pickerType = null
                 }) { Text("确定") }
@@ -156,7 +171,7 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
             dismissButton = { TextButton(onClick = { pickerType = null }) { Text("取消") } },
             title = { Text("选择 ${type.label} 模型") },
             text = {
-                Column(Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
+                Column(Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
                     Row(
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -195,6 +210,28 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
                         value = manual,
                         onValueChange = { manual = it },
                         label = { Text("模型名（可手动输入）") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    
+                    // 高级配置：基础URL和API密钥
+                    Spacer(Modifier.height(12.dp))
+                    Text("高级配置（可选）", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Muted)
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = customBaseUrl,
+                        onValueChange = { customBaseUrl = it },
+                        label = { Text("自定义基础URL（可选）") },
+                        placeholder = { Text("留空则使用主模型配置的URL") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = customApiKey,
+                        onValueChange = { customApiKey = it },
+                        label = { Text("自定义API密钥（可选）") },
+                        placeholder = { Text("留空则使用主模型配置的密钥") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -262,6 +299,17 @@ private fun FeatureModelRow(
                     modifier = Modifier.weight(1f),
                 )
                 Icon(Icons.Filled.ChevronRight, null, Modifier.size(16.dp), tint = Muted)
+            }
+            
+            // 高级配置：基础URL和API密钥
+            if (b.baseUrl.isNotBlank() || b.apiKey.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "高级配置：${if (b.baseUrl.isNotBlank()) "自定义端点" else ""}${if (b.baseUrl.isNotBlank() && b.apiKey.isNotBlank()) " + " else ""}${if (b.apiKey.isNotBlank()) "自定义密钥" else ""}",
+                    fontSize = 10.sp,
+                    color = Muted,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
             }
         }
     }

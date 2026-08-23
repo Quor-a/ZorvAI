@@ -233,6 +233,12 @@ dependencies {
     // 与 Manifest 的 <meta-data android:name="health_permissions"> + res/values/health_permissions.xml 对应。
     implementation("androidx.health.connect:connect-client:1.1.0-alpha06")
 
+    // Apache POI for Android：本地Office文档编辑SDK（Word/Excel/PPT）
+    // 开源免费，无需服务器，支持离线编辑
+    implementation("org.apache.poi:poi:5.2.5")
+    implementation("org.apache.poi:poi-ooxml:5.2.5")
+    implementation("stax:stax-api:1.0.1")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation(libs.org.json)
 }

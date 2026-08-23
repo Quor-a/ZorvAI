@@ -6,6 +6,8 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebSettings
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.widget.Toast
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -16,6 +18,7 @@ import android.os.Build
 import android.os.Environment
 import java.io.IOException
 import org.json.JSONObject
+import com.ai.assistance.quro.core.tools.AssetLibResolver
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -1743,6 +1746,7 @@ private fun HtmlPreviewCardView(card: QuroChatCard.HtmlPreviewCard) {
 /**
  * 可复用的网页预览 WebView：loadDataWithBaseURL 加载 AI 下发的 HTML，
  * JS 开启以支持图表/3D 脚本；onPageFinished 读真实内容高度回调（上限 720dp）。
+ * 增加CDN错误恢复：通过AssetLibResolver拦截CDN请求，加载本地库资源
  */
 @Composable
 private fun HtmlPreviewWebView(
@@ -1750,6 +1754,9 @@ private fun HtmlPreviewWebView(
     modifier: Modifier = Modifier,
     onHeight: (Int) -> Unit = {},
 ) {
+    val context = LocalContext.current
+    val assetLibResolver = remember { AssetLibResolver(context) }
+    
     AndroidView(
         modifier = modifier,
         factory = { context ->
@@ -1760,6 +1767,9 @@ private fun HtmlPreviewWebView(
                 settings.useWideViewPort = true
                 settings.loadWithOverviewMode = true
                 settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                settings.allowFileAccess = true
+                settings.allowContentAccess = true
+                
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
@@ -1768,16 +1778,31 @@ private fun HtmlPreviewWebView(
                             onHeight(px.coerceIn(160, 1440))
                         }
                     }
+                    
+                    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                        request?.let {
+                            val response = assetLibResolver.interceptRequest(it)
+                            if (response != null) {
+                                return response
+                            }
+                        }
+                        return super.shouldInterceptRequest(view, request)
+                    }
                 }
+                
+                // 注入CDN错误恢复脚本
+                val htmlWithFallback = assetLibResolver.injectFallbackScript(html)
+                
                 tag = html
-                loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+                loadDataWithBaseURL("file:///android_asset/", htmlWithFallback, "text/html", "UTF-8", null)
             }
         },
         update = { wv ->
             // 仅当 HTML 内容变化时才重载，避免每次 recomposition 重复加载造成闪烁
             if (wv.tag != html) {
                 wv.tag = html
-                wv.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+                val htmlWithFallback = assetLibResolver.injectFallbackScript(html)
+                wv.loadDataWithBaseURL("file:///android_asset/", htmlWithFallback, "text/html", "UTF-8", null)
             }
         },
     )
@@ -1977,6 +2002,7 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
 /**
  * 可复用的小程序 WebView：加载 AI 生成的 HTML，注入小程序运行时（Page/Component 生命周期、JSBridge），
  * 支持 JS 调用原生能力。渲染完成后按 `document.documentElement.scrollHeight` 自适应高度（上限 720dp）。
+ * 增加CDN错误恢复：通过AssetLibResolver拦截CDN请求，加载本地库资源
  */
 @Composable
 private fun MiniAppWebView(
@@ -1984,6 +2010,9 @@ private fun MiniAppWebView(
     modifier: Modifier = Modifier,
     onHeight: (Int) -> Unit = {},
 ) {
+    val context = LocalContext.current
+    val assetLibResolver = remember { AssetLibResolver(context) }
+    
     // 小程序运行时脚本（简化版，支持 Page/Component 生命周期和数据绑定）
     val miniAppRuntime = """
         (function(global) {
@@ -2071,6 +2100,9 @@ private fun MiniAppWebView(
                 settings.useWideViewPort = true
                 settings.loadWithOverviewMode = true
                 settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                settings.allowFileAccess = true
+                settings.allowContentAccess = true
+                
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
@@ -2079,14 +2111,26 @@ private fun MiniAppWebView(
                             onHeight(px.coerceIn(160, 1440))
                         }
                     }
+                    
+                    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                        request?.let {
+                            val response = assetLibResolver.interceptRequest(it)
+                            if (response != null) {
+                                return response
+                            }
+                        }
+                        return super.shouldInterceptRequest(view, request)
+                    }
                 }
-                tag = html
-                // 注入小程序运行时后再加载 HTML
+                
+                // 注入CDN错误恢复脚本和小程序运行时
+                val fallbackScript = assetLibResolver.generateFallbackScript()
                 val wrappedHtml = """
                     <!DOCTYPE html>
                     <html>
                     <head>
                         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                        $fallbackScript
                         <script>$miniAppRuntime</script>
                     </head>
                     <body style="margin: 0; padding: 0;">
@@ -2094,18 +2138,22 @@ private fun MiniAppWebView(
                     </body>
                     </html>
                 """.trimIndent()
-                loadDataWithBaseURL(null, wrappedHtml, "text/html", "UTF-8", null)
+                
+                tag = html
+                loadDataWithBaseURL("file:///android_asset/", wrappedHtml, "text/html", "UTF-8", null)
             }
         },
         update = { wv ->
             // 仅当 HTML 内容变化时才重载，避免每次 recomposition 重复加载造成闪烁
             if (wv.tag != html) {
                 wv.tag = html
+                val fallbackScript = assetLibResolver.generateFallbackScript()
                 val wrappedHtml = """
                     <!DOCTYPE html>
                     <html>
                     <head>
                         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                        $fallbackScript
                         <script>$miniAppRuntime</script>
                     </head>
                     <body style="margin: 0; padding: 0;">
@@ -2113,7 +2161,7 @@ private fun MiniAppWebView(
                     </body>
                     </html>
                 """.trimIndent()
-                wv.loadDataWithBaseURL(null, wrappedHtml, "text/html", "UTF-8", null)
+                wv.loadDataWithBaseURL("file:///android_asset/", wrappedHtml, "text/html", "UTF-8", null)
             }
         },
     )

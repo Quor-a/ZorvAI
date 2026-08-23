@@ -2,6 +2,7 @@ package com.ai.assistance.quro.ui
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import com.ai.assistance.quro.core.model.ApiProviderConfigs
 import com.ai.assistance.quro.core.model.QuroModelConfig
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
 import com.ai.assistance.quro.core.QuroCrashReporter
@@ -36,7 +37,21 @@ class QuroModelConfigViewModel(context: Context) : ViewModel() {
     val isFetchingModels: StateFlow<Boolean> = _isFetchingModels.asStateFlow()
 
     fun update(block: QuroModelConfig.() -> QuroModelConfig) {
-        _cfg.value = _cfg.value.block()
+        val oldConfig = _cfg.value
+        val newConfig = _cfg.value.block()
+        
+        // 自动识别云服务提供商：当基础URL变化时
+        if (oldConfig.baseUrl != newConfig.baseUrl && newConfig.baseUrl.isNotBlank()) {
+            val detectedProvider = ApiProviderConfigs.detectProviderFromUrl(newConfig.baseUrl)
+            if (detectedProvider.name != newConfig.provider) {
+                _cfg.value = newConfig.copy(provider = detectedProvider.name)
+            } else {
+                _cfg.value = newConfig
+            }
+        } else {
+            _cfg.value = newConfig
+        }
+        
         // 每次编辑即落盘：避免用户填了 Key 却没点「保存配置」导致对话读取不到（曾经造成「无法对话」）。
         repo.save(_cfg.value)
     }

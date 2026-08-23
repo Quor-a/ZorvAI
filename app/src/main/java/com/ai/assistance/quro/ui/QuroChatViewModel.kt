@@ -46,6 +46,7 @@ import com.ai.assistance.quro.core.model.QuroModelConfig
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
 import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
 import com.ai.assistance.quro.core.model.QuroFunctionType
+import com.ai.assistance.quro.core.attachment.AttachmentManager
 import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
 import com.ai.assistance.quro.core.tools.buildQuroRegistry
@@ -97,6 +98,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     private val store = QuroConversationStore()
     // 共享工具注册表：assistant 下发 tools 字段 与 系统提示词菜单 都从这里取，保证二者严格一致。
     private val registry = buildQuroRegistry(appContext).also { QuroToolRegistry.active = it }
+    // 统一附件管理器：管理所有上下文附件（工作区/ACI/技能/屏幕/通知/位置等）
+    private val attachmentManager = AttachmentManager(appContext)
 
     /** 当前全部已注册工具（含导入工具），供「+」面板的「已有工具列表」展示。 */
     fun allTools(): List<QuroTool> = registry.all()
@@ -106,6 +109,52 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         QuroImportedToolRegistry.add(appContext, def)
         registry.mergeImported(appContext)
     }
+
+    // ========== 统一附件管理器方法 ==========
+
+    /** 添加工作区上下文附件 */
+    fun addWorkspaceContext(workspacePath: String, workspaceName: String) {
+        attachmentManager.addWorkspaceContext(workspacePath, workspaceName)
+    }
+
+    /** 添加 ACI 上下文附件 */
+    fun addAciContext(aciName: String, packageName: String) {
+        attachmentManager.addAciContext(aciName, packageName)
+    }
+
+    /** 添加技能上下文附件 */
+    fun addSkillsContext(skillNames: List<String>, skillCount: Int) {
+        attachmentManager.addSkillsContext(skillNames, skillCount)
+    }
+
+    /** 捕获屏幕内容 */
+    fun captureScreenContent() {
+        viewModelScope.launch {
+            attachmentManager.captureScreenContent()
+        }
+    }
+
+    /** 捕获通知 */
+    fun captureNotifications() {
+        viewModelScope.launch {
+            attachmentManager.captureNotifications()
+        }
+    }
+
+    /** 捕获位置 */
+    fun captureLocation() {
+        viewModelScope.launch {
+            attachmentManager.captureLocation()
+        }
+    }
+
+    /** 清空所有附件 */
+    fun clearAttachments() {
+        attachmentManager.clearAttachments()
+    }
+
+    /** 获取附件管理器（供 UI 观察附件状态） */
+    fun getAttachmentManager(): AttachmentManager = attachmentManager
     private var assistant = QuroAssistant(QuroLlmClient(), registry, store)
 
     // 全部会话（含消息），落盘的唯一真相源
@@ -553,6 +602,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // 用户消息必须先于 launch add 到共享 store 并 commitCurrent，
         // 这样界面立刻反映出"已发送"状态，无需等 AI 响应。
         // 用户消息先构造成引用，便于既加入共享 store（即时显示）又追加进种子（生成副本）。
+        // 构建用户消息（只包含用户输入的纯文本，不包含上下文）
         val userMsg = QuroMessage(
             role = "user",
             content = t,
@@ -618,8 +668,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 if (!contextMessage.isNullOrBlank()) {
                     store.add(
                         QuroMessage(
-                            role = "system",
-                            content = "[上下文信息 - 用户当前选择的工作区/ACI/技能，供你本轮使用]\n$contextMessage",
+                            role = "user",
+                            content = "[上下文信息 - 用户当前选择的工作区/ACI/技能]\n$contextMessage",
                             hidden = true,
                         ),
                     )
@@ -1067,6 +1117,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 - **权限通道**：priv_status（查看 CMS 权限模式与已授权项）
 - **CMS v2 模块**：cms_list（查看能力模块）、cms_call（调用能力）
 - **记忆库**：memory_save/list/search/delete（自动沉淀长期记忆）
+- **工作区工具**：workspace_write（写文件）、workspace_read（读文件）、workspace_list（列目录）、workspace_render（渲染预览）、workspace_doc（创建文档）、workspace_media（播放媒体）、workspace_doc_view（打开文档）
+- **文档工具**：enhanced_doc_create（增强版文档创建，支持20+格式）、aiwps_create（基础文档创建）、aiwps_read（读取文档）、aiwps_edit（编辑文档）
 
 ## 工具调用规则
 - 用户想「打开/启动 XX 应用」时，优先用 search_and_launch_app（一步完成），不要先 list_installed_apps 再 launch_app
@@ -1074,7 +1126,160 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 - 调用 cms_call 执行应用内能力（所有能力均在应用沙箱内运行，不借助 Root/Shizuku/无障碍）
 - 工具执行结果不需要原样复述给用户，而是基于结果给出自然、有用的答复
 - 如果工具返回错误或找不到，直接告诉用户原因并建议替代方案
-- 用户提到创作需求（图形/视频/音频/3D/游戏/低代码等）时，使用 creative_studio 工具获取推荐和调用能力""".trimIndent()
+- 用户提到创作需求（图形/视频/音频/3D/游戏/低代码等）时，使用 creative_studio 工具获取推荐和调用能力
+
+## AI 多媒体生成/识别（直接调用，结果返回对话框）
+你拥有以下 AI 能力，可以直接调用，结果会自动返回到对话框：
+
+### 图片生成 (image_gen)
+- 用户说"画一张..."、"生成图片"、"帮我做张海报"时调用
+- 参数：{"prompt":"图片描述","width":1024,"height":1024}
+- 生成的图片会自动显示在对话中
+
+### 视频生成 (video_gen)
+- 用户说"做个视频"、"生成视频"、"帮我剪个视频"时调用
+- 参数：{"prompt":"视频描述","duration":5}
+- 生成的视频会自动显示在对话中
+
+### 图像识别 (image_recognition)
+- 用户发送图片后，你想分析图片内容时调用
+- 参数：{"image_path":"图片路径","question":"可选问题"}
+- 返回图片的详细描述和分析
+
+### 音频识别 (audio_recognition)
+- 用户发送音频后，你想转录音频内容时调用
+- 参数：{"audio_path":"音频路径","language":"可选语言"}
+- 返回音频的文字转录
+
+### 视频理解 (video_understanding)
+- 用户发送视频后，你想分析视频内容时调用
+- 参数：{"video_path":"视频路径","question":"可选问题","max_frames":3}
+- 返回视频的详细描述和分析，支持理解场景、动作、文字等
+
+**重要：当用户发送附件时，主动使用对应工具处理！**
+
+## 工作区文件渲染与文档创建
+
+### 工作区渲染 (workspace_render)
+- 用户说"预览这个文件"、"渲染一下"、"看看这个"时调用
+- 参数：{"path":"文件路径","title":"可选标题"}
+- 支持渲染：HTML、Markdown、代码、图片等
+- 渲染结果以卡片形式显示在对话框
+
+### 工作区文档创建 (workspace_doc)
+- 用户说"创建文档"、"新建文件"、"写个HTML"时调用
+- 参数：{"path":"文件路径","content":"内容","type":"html|md|txt|json|js|py|java|kt|css"}
+- 创建的文档自动保存到工作区，并渲染预览
+
+### 工作区媒体播放 (workspace_media)
+- 用户说"播放工作区里的音乐"、"播放视频"时调用
+- 参数：{"path":"文件路径","action":"play_music|play_video|pause|stop"}
+- 支持格式：mp3, wav, m4a, mp4, avi, mkv 等
+- 播放结果会在对话框中显示播放卡片
+
+### 工作区文档查看 (workspace_doc_view)
+- 用户说"打开这个文档"、"查看PDF"时调用
+- 参数：{"path":"文件路径"}
+- 支持格式：PDF、DOCX、XLSX、PPTX、TXT、MD 等
+- 调用系统默认应用打开（如 WPS、Office）
+
+### 增强版文档创建 (enhanced_doc_create)
+- 用户说"创建文档"、"新建文件"、"写个XX"时调用
+- 支持20+格式：docx, xlsx, pptx, pdf, md, txt, csv, html, rtf, odt, epub, json, xml, yaml, css, js, svg
+- 参数：{"type":"格式","title":"标题","content":"内容"}
+- 创建后自动渲染预览
+
+### 工作流示例
+1. 用户说"帮我写个网页" → AI 调用 enhanced_doc_create 创建 HTML → 自动渲染预览
+2. 用户说"看看 index.html" → AI 调用 workspace_render → 显示渲染结果
+3. 用户说"修改这个文件" → AI 先 workspace_read 读取 → 修改后 workspace_write 写回 → workspace_render 预览
+4. 用户说"播放工作区里的音乐" → AI 调用 workspace_media 播放 → 显示播放卡片
+5. 用户说"打开这个PDF" → AI 调用 workspace_doc_view → 系统应用打开
+6. 用户说"创建一个Word文档" → AI 调用 enhanced_doc_create → 显示渲染预览
+7. 用户说"写个JSON配置" → AI 调用 enhanced_doc_create → 显示代码高亮
+
+## 可视化交互（问答与操作弹窗）
+
+### 可视化问答弹窗 (visual_question)
+- 当你需要向用户提问、确认信息或让用户做出选择时调用
+- 参数：{"question":"问题内容","options":["选项1","选项2","选项3"],"allow_custom":true,"title":"标题","timeout":30}
+- 返回：用户选择的答案或自定义输入的内容
+- 使用场景：
+  * AI执行任务时需要用户确认："我将删除文件，确认吗？"
+  * AI需要用户提供额外信息："请告诉我你的邮箱地址"
+  * AI需要用户做出选择："请选择要使用的字体：A/B/C"
+- 示例：
+  * 用户说"帮我写篇文章" → AI 调用 visual_question 询问"你希望文章是正式风格还是轻松风格？" → 用户选择 → AI 继续执行
+  * 用户说"删除这个文件" → AI 调用 visual_question 确认"确定要删除文件吗？" → 用户确认 → AI 执行删除
+
+### 可视化操作弹窗 (visual_action)
+- 当你需要让用户从多个操作中选择一个时调用
+- 参数：{"title":"标题","message":"说明文字","buttons":[{"text":"按钮文本","value":"返回值","style":"primary"}],"timeout":30}
+- style可选: primary(主要操作), secondary(次要操作), danger(危险操作)
+- 返回：用户点击的按钮的value值
+- 使用场景：
+  * AI提供多个操作选项："请选择操作：查看详情/编辑/删除"
+  * AI需要用户选择执行方式："用什么方式打开？浏览器/文件管理器"
+  * AI提供确认/取消选项："确认执行？"
+- 示例：
+  * 用户说"处理这个文件" → AI 调用 visual_action 显示"选择操作"弹窗，包含"查看内容"/"编辑"/"删除"按钮 → 用户点击 → AI执行对应操作
+  * 用户说"安装应用" → AI 调用 visual_action 显示"确认安装？"弹窗，包含"安装"/"取消"按钮 → 用户点击 → AI执行
+
+### 自由可视化弹窗 (visual_popup)
+- 创建任意内容的弹窗，没有格式限制
+- 支持文本、按钮、输入框、图片等任意元素组合
+- 参数：
+```json
+{
+  "title": "标题",
+  "content": "内容(Markdown/HTML/纯文本)",
+  "buttons": [{"text":"按钮文本","value":"返回值","style":"primary"}],
+  "inputs": [{"id":"input1","label":"标签","placeholder":"提示","type":"text"}],
+  "image_url": "图片URL(可选)",
+  "width": 400,
+  "height": 300,
+  "cancelable": true,
+  "timeout": 60
+}
+```
+- 按钮样式：primary(主要)、secondary(次要)、danger(危险)、success(成功)
+- 输入类型：text、number、password、email
+- 返回：`{"button":"点击的按钮值","inputs":{"input1":"输入的值"},"cancelled":false}`
+- 使用场景：
+  * AI需要展示复杂信息并让用户操作
+  * AI需要用户输入多个字段（如表单）
+  * AI需要展示图片并让用户确认
+  * AI需要创建自定义界面
+
+**重要：这三个工具让AI能够与用户进行实时交互！**
+- visual_question：问答弹窗，用户选择答案
+- visual_action：操作弹窗，用户点击按钮
+- visual_popup：自由弹窗，AI可以创建任意内容的界面
+- 弹窗会显示在屏幕上，用户操作后，AI会收到结果并继续执行
+- 这比纯文字对话更高效、更直观
+
+## 附件系统（XML 标签）
+用户消息中可能包含 `<attachment>` XML 标签，这些是上下文附件，你必须读取并使用：
+
+### 附件格式
+```xml
+<attachment id="..." filename="..." type="..." size="...">content</attachment>
+```
+
+### 附件类型
+- **工作区附件**（type="text/plain", filename="workspace.txt"）：包含工作区路径和名称，你可以使用 workspace_write、workspace_read、workspace_list 工具操作该工作区
+- **ACI 附件**（type="text/plain", filename="aci.txt"）：包含 ACI 应用名称和包名，你可以使用 aci_list、aci_call 工具与该应用交互
+- **技能附件**（type="text/plain", filename="skills.txt"）：包含用户已启用的技能列表，你应根据技能能力处理用户消息
+- **屏幕内容附件**（type="text/plain", filename="screen_content.txt"）：屏幕 OCR 识别的文字内容
+- **通知附件**（type="application/json", filename="notifications.json"）：设备当前通知数据
+- **位置附件**（type="application/json", filename="location.json"）：设备当前位置数据
+- **时间附件**（type="text/plain", filename="time.txt"）：当前时间
+- **视频附件**（type="video/*", filename="*.mp4"等）：用户发送的视频文件，你可以使用 video_understanding 工具分析视频内容
+
+### 使用规则
+1. **必须读取**：收到附件时，必须读取其 content 内容并据此作答
+2. **主动使用**：根据附件提供的上下文，主动使用相关工具（如工作区附件 → 使用 workspace_* 工具）
+3. **不要忽略**：附件是用户精心选择的上下文，忽略附件会降低回答质量""".trimIndent()
 
     /** 当前激活的人格卡（无则返回 null）。 */
     private fun activePersona(): QuroPersona? {

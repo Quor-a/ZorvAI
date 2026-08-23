@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
+import android.provider.OpenableColumns
 import java.io.File
 import java.util.UUID
 
@@ -39,11 +40,34 @@ object QuroAttachmentKit {
             val mime = mimeHint.takeIf { it.isNotBlank() }
                 ?: (cr.getType(uri) ?: "application/octet-stream")
             val type = typeOf(mime)
-            val ext = when (type) {
-                "image" -> "jpg"
-                "video" -> "mp4"
-                else -> "bin"
+            
+            // 尝试获取原始文件名和扩展名
+            var originalName = ""
+            var originalExt = ""
+            
+            // 查询原始文件名
+            cr.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    originalName = cursor.getString(0) ?: ""
+                }
             }
+            
+            // 从原始文件名提取扩展名
+            if (originalName.isNotEmpty()) {
+                val lastDot = originalName.lastIndexOf('.')
+                if (lastDot >= 0) {
+                    originalExt = originalName.substring(lastDot + 1).lowercase()
+                }
+            }
+            
+            // 确定最终扩展名：优先使用原始扩展名，其次根据类型推断
+            val ext = when {
+                originalExt.isNotEmpty() -> originalExt
+                type == "image" -> "jpg"
+                type == "video" -> "mp4"
+                else -> getExtensionFromMime(mime)
+            }
+            
             val name = "att_${System.nanoTime()}_${UUID.randomUUID().toString().take(8)}.$ext"
             val out = File(uploadsDir(context), name)
             cr.openInputStream(uri)?.use { input ->
@@ -57,6 +81,30 @@ object QuroAttachmentKit {
                 size = out.length(),
             )
         }.getOrNull()
+    }
+
+    /** 根据MIME类型获取文件扩展名 */
+    private fun getExtensionFromMime(mime: String): String {
+        return when {
+            mime.contains("pdf") -> "pdf"
+            mime.contains("word") || mime.contains("document") -> "docx"
+            mime.contains("excel") || mime.contains("spreadsheet") -> "xlsx"
+            mime.contains("powerpoint") || mime.contains("presentation") -> "pptx"
+            mime.contains("text/plain") -> "txt"
+            mime.contains("text/html") -> "html"
+            mime.contains("text/css") -> "css"
+            mime.contains("text/javascript") || mime.contains("application/javascript") -> "js"
+            mime.contains("application/json") -> "json"
+            mime.contains("application/xml") || mime.contains("text/xml") -> "xml"
+            mime.contains("audio") -> "mp3"
+            mime.contains("zip") -> "zip"
+            mime.contains("rar") -> "rar"
+            mime.contains("7z") -> "7z"
+            mime.contains("csv") -> "csv"
+            mime.contains("svg") -> "svg"
+            mime.contains("markdown") -> "md"
+            else -> "bin"
+        }
     }
 
     /** 由已位于 uploads 目录的临时文件（如系统相机输出）直接构造附件。 */

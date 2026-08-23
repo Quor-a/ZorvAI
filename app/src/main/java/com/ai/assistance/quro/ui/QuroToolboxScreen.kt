@@ -4,6 +4,7 @@ package com.ai.assistance.quro.ui
 
 import android.content.Context
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -72,6 +73,8 @@ fun QuroToolboxScreen(
     var showDocGen by remember { mutableStateOf(false) }
     var showToolsList by remember { mutableStateOf(false) }
     var showImport by remember { mutableStateOf(false) }
+    var editorFile by remember { mutableStateOf<File?>(null) }
+    var showEditor by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().background(cs.background)) {
         TopAppBar(
@@ -135,20 +138,38 @@ fun QuroToolboxScreen(
             onDismissRequest = { showDocGen = false },
             confirmButton = {
                 TextButton(onClick = {
+                    // 创建空白文档并打开编辑器
                     val json = JSONObject().apply {
                         put("type", docType)
-                        put("title", docTitle)
-                        put("content", docContent)
+                        put("title", docTitle.ifBlank { "${docType}_${System.currentTimeMillis()}" })
+                        put("content", docContent.ifBlank { " " }) // 空白内容
                     }.toString()
                     scope.launch(Dispatchers.IO) {
                         val r = runCatching { AiwpsCreateTool().run(ctx, json) }
                             .getOrElse { "生成失败：$it" }
-                        withContext(Dispatchers.Main) { docResult = r }
+                        withContext(Dispatchers.Main) {
+                            docResult = r
+                            // 从结果中提取文件路径并打开编辑器（兼容多种格式）
+                            val path = when {
+                                r.contains("已生成") -> {
+                                    Regex("""已生成\s+\w+\s+文档：(.+?)（""").find(r)?.groupValues?.getOrNull(1)
+                                }
+                                r.contains("文档：") -> {
+                                    Regex("""文档：(.+?)（""").find(r)?.groupValues?.getOrNull(1)
+                                }
+                                else -> null
+                            }
+                            path?.let {
+                                showDocGen = false
+                                editorFile = File(it.trim())
+                                showEditor = true
+                            }
+                        }
                     }
-                }) { Text("生成") }
+                }) { Text("创建") }
             },
             dismissButton = { TextButton(onClick = { showDocGen = false }) { Text("关闭") } },
-            title = { Text("文档生成（aiWPS）") },
+            title = { Text("新建文档") },
             text = {
                 Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                     Text("格式", fontSize = scaled(12), color = Muted)
@@ -333,7 +354,16 @@ fun QuroToolboxScreen(
                         val ok = (docResult ?: "").startsWith("已生成")
                         Text(docResult ?: "", fontSize = scaled(12), color = if (ok) cs.primary else cs.error)
                         if (ok) {
-                            val path = Regex("""文档：(.+?)（""").find(docResult ?: "")?.groupValues?.getOrNull(1)
+                            // 兼容多种返回格式
+                            val path = when {
+                                (docResult ?: "").contains("已生成") -> {
+                                    Regex("""已生成\s+\w+\s+文档：(.+?)（""").find(docResult ?: "")?.groupValues?.getOrNull(1)
+                                }
+                                (docResult ?: "").contains("文档：") -> {
+                                    Regex("""文档：(.+?)（""").find(docResult ?: "")?.groupValues?.getOrNull(1)
+                                }
+                                else -> null
+                            }
                             val genFile = path?.let { File(it.trim()) }
                             if (genFile != null) {
                                 Spacer(Modifier.height(6.dp))
@@ -443,6 +473,18 @@ fun QuroToolboxScreen(
                 }
             }
         )
+    }
+    
+    if (showEditor) {
+        Box(Modifier.fillMaxSize().background(cs.background)) {
+            QuroDocEditorScreen(
+                file = editorFile,
+                onClose = {
+                    showEditor = false
+                    editorFile = null
+                }
+            )
+        }
     }
 }
 

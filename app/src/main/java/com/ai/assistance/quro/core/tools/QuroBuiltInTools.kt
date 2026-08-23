@@ -256,6 +256,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(WorkspaceWriteTool())
     r.register(WorkspaceReadTool())
     r.register(WorkspaceListTool())
+    r.register(WorkspaceRenderTool())   // 工作区文件渲染到对话框
+    r.register(WorkspaceDocTool())      // 工作区文档创建
+    r.register(WorkspaceMediaTool())    // 工作区媒体播放（音乐/视频）
+    r.register(WorkspaceDocViewTool())  // 工作区文档查看（系统应用打开）
     // VNC 桌面环境工具
     r.register(VncTool())
     // 特权通道状态查询：AI 调用高风险能力前自查可用通道、自行选择
@@ -363,6 +367,14 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // aiWPS 文档读取 / 改写：补全「读-写-改」闭环，让 AI 能真正重写已有文档（解决"重写功能几乎没有"）
     r.register(AiwpsReadTool())
     r.register(AiwpsEditTool())
+    // AI 多媒体生成/识别工具：LLM 直接调用，结果返回对话框
+    r.register(ImageGenTool())           // AI 生图
+    r.register(VideoGenTool())           // AI 生视频
+    r.register(ImageRecognitionTool())   // AI 图像识别
+    r.register(AudioRecognitionTool())   // AI 音频识别
+    r.register(VideoUnderstandingTool()) // AI 视频理解
+    // 增强版文档创建工具：支持更多类型和更好渲染
+    r.register(EnhancedDocTool())        // 增强版文档创建
     // UI 动作工具：把对话框界面/弹层/开关注册为 AI 可调用工具（走 QuroUiActionBridge 回调 ChatScreen）
     allUiActionTools.forEach { r.register(it) }
     // 对话框富卡片工具：AI 下发可交互卡片（待办/图表/笔记/动作）
@@ -379,6 +391,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(McpListLocalTool())
     // 广义 IDE 集成工具：图形/视频/音频/3D/游戏/低代码/代码 IDE 的完整知识库和调用能力
     r.register(CreativeStudioTool())
+    // 可视化问答和操作弹窗工具
+    r.register(VisualQuestionTool())   // 可视化问答弹窗
+    r.register(VisualActionTool())     // 可视化操作弹窗
+    r.register(VisualPopupTool())      // 自由可视化弹窗
     // 并入「导入工具」（AI 自写 / 用户粘贴 JSON 导入），使其可被 AI 调用
     context?.let { r.attach(it) }
     // 并入「可调用技能」：把用户技能注册为 AI 工具函数（function calling），与导入工具同理
