@@ -398,6 +398,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(VisualActionTool())     // 可视化操作弹窗
     r.register(VisualPopupTool())      // 自由可视化弹窗（固定UI组件）
     r.register(VisualCustomPopupTool()) // AI自写UI可视化弹窗（完全自定义HTML）
+    // 对话框文档工具：AI在对话框内直接写文档并渲染显示
+    r.register(ChatDocTool())          // 对话框文档（Markdown/HTML/代码/文本）
     // 并入「导入工具」（AI 自写 / 用户粘贴 JSON 导入），使其可被 AI 调用
     context?.let { r.attach(it) }
     // 并入「可调用技能」：把用户技能注册为 AI 工具函数（function calling），与导入工具同理

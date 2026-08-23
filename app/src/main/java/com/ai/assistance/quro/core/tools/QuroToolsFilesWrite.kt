@@ -20,7 +20,10 @@ private fun resolveAppFile(context: Context, rel: String): File? {
 
 class WriteFileTool : QuroTool {
     override val name = "write_file"
-    override val description = "写入文本到应用专属目录文件，参数 {\"path\":\"sub/a.txt\",\"content\":\"文本\",\"append\":false}。"
+    override val description = "📝 设备文件写入：写入文本到设备存储（应用专属目录）。" +
+        "与 workspace_write 的区别：write_file 用相对路径（相对于应用外部存储），写入设备通用位置；" +
+        "workspace_write 写入工作区（用户在工具箱-工作区可见）。" +
+        "参数：{\"path\":\"sub/a.txt\",\"content\":\"文本\",\"append\":false}。"
     override val parametersJson = """{"type":"object","properties":{"path":{"type":"string","description":"相对 getExternalFilesDir 的路径"},"content":{"type":"string","description":"要写入的内容"},"append":{"type":"boolean","description":"是否追加，默认 false"}},"required":["path","content"]}"""
     override fun run(context: Context, arguments: String): String {
         val jo = JSONObject(arguments)

@@ -73,13 +73,10 @@ class AiwpsCreateTool : QuroTool {
     }
 
     override val name = "aiwps_create"
-    override val description = "生成文档（.docx/.xlsx/.pptx/.pdf/.md/.txt/.csv/.html），自研构造、无需外部依赖，后台生成真实可打开的文件。" +
-        "参数 {\"type\":\"docx|xlsx|pptx|pdf|md|txt|csv|html\",\"title\":\"标题(可选)\",\"content\":\"正文\"," +
-        "\"filename\":\"可选文件名(不含扩展名)\"}。" +
-        "docx：按换行分段；`**加粗**` 渲染为粗体；连续 `| a | b |` 行渲染为表格。" +
-        "xlsx：按换行分行、制表/逗号分列；`### 表名` 起新工作表。" +
-        "pptx：每页首行作标题、其余作要点；`---` 分页生成多页。" +
-        "pdf：自研最小文本 PDF（逐行排版，零依赖）；md/txt/csv：纯文本直写；html：包最简 HTML 文档。"
+    override val description = "📄 生成真实Office文件（docx/xlsx/pptx/pdf），自研构造零依赖，后台生成可下载/分享的文件。" +
+        "与 enhanced_doc_create 的区别：aiwps_create 生成真正的 .docx/.xlsx/.pptx 二进制文件（可用 WPS/Office 打开），" +
+        "enhanced_doc_create 生成的是简化格式（如 HTML 包装的 docx）。需要生成可分享的正式文档时优先用此工具。" +
+        "参数 {\"type\":\"docx|xlsx|pptx|pdf\",\"title\":\"标题\",\"content\":\"正文\",\"filename\":\"文件名\"}。"
     override val parametersJson = """{
         "type":"object",
         "properties":{

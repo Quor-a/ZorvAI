@@ -41,13 +41,11 @@ private fun resolveInWorkspace(root: File, relative: String): File? {
 class WorkspaceWriteTool : QuroTool {
     override val name = "workspace_write"
     override val description =
-        "把一段文本（通常是 Java 源码）写入 ZorvAI 工作区（QuroWorkspace）里指定相对路径的文件。" +
-            "工作区就是「工具箱-工作区」展示的目录；写完后用户在 UI 里能看到、也能手动改。" +
-            "典型用法：构建台已用 ACI.create_project 在工作区建好工程文件夹（如 MyApp/，内含 src/Main.java），" +
-            "你用本工具把真正的源码写进 MyApp/src/xxx.java（覆盖或新建），写完后调用 ACI.build_apk 让构建台编译打包。" +
-            "参数：{\"path\":\"相对路径，如 MyApp/src/Main.java\",\"content\":\"文件完整内容\",\"append\":false}。" +
-            "path 必须是工作区内的相对路径（不要带盘符/绝对路径，不要 .. 逃逸沙箱）。" +
-            "写文件会自动创建缺失的父目录。"
+        "📁 工作区文件写入：把文本写入工作区（QuroWorkspace）的相对路径文件。" +
+            "与 write_file 的区别：workspace_write 用相对路径（相对于工作区根目录），写入后用户在「工具箱-工作区」可见；" +
+            "write_file 用绝对路径（如 /sdcard/...），写入设备任意位置。" +
+            "与 workspace_doc 的区别：workspace_write 是通用写入；workspace_doc 自动添加扩展名并渲染预览。" +
+            "参数：{\"path\":\"相对路径，如 MyApp/src/Main.java\",\"content\":\"内容\",\"append\":false}。"
     override val parametersJson = """{
         "type":"object",
         "properties":{

@@ -209,7 +209,9 @@ class ScreenshotBase64Tool : QuroTool {
 /** 截图并用视觉模型分析屏幕内容。 */
 class VisualAnalysisTool : QuroTool {
     override val name = "visual_analysis"
-    override val description = "截取屏幕并用视觉模型分析内容。返回屏幕上的文字、按钮、图标等信息。用于节点树无法读取的场景（游戏、WebView、Flutter等）。"
+    override val description = "👁️ 屏幕视觉分析：截取屏幕并用视觉模型分析内容（文字、按钮、图标等）。" +
+        "与 read_screen 的区别：read_screen 读取无障碍节点树（快、结构化），visual_analysis 用视觉模型看截图（慢但全面，适合游戏/WebView/Flutter）。" +
+        "与 image_recognition 的区别：visual_analysis 分析当前屏幕截图，image_recognition 分析用户提供的图片文件。"
     override val parametersJson = """{"type":"object","properties":{"question":{"type":"string","description":"你想了解屏幕上的什么内容"}},"required":[]}}"""
 
     override fun run(context: Context, arguments: String): String {
@@ -659,10 +661,10 @@ class SetTimerTool : QuroTool {
     }
 }
 
-/** 打开应用工具。 */
+/** 打开应用工具（已弃用，请使用 launch_app）。 */
 class OpenAppTool : QuroTool {
     override val name = "open_app"
-    override val description = "打开指定应用。参数: {\"package\":\"com.android.settings\"}"
+    override val description = "⚠️ 已弃用，请改用 launch_app（支持包名和应用名模糊匹配，功能更强）。打开指定应用。参数: {\"package\":\"com.android.settings\"}"
     override val parametersJson = """{"type":"object","properties":{"package":{"type":"string","description":"应用包名"}},"required":["package"]}}"""
 
     override fun run(context: Context, arguments: String): String {

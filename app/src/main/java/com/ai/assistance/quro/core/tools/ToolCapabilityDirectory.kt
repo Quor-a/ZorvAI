@@ -605,12 +605,36 @@ object ToolCapabilityDirectory {
         "aiwps_create" to ToolInfo(
             name = "aiwps_create",
             category = ToolCategory.AI_CAPABILITIES,
-            description = "生成Office文档",
-            useCases = listOf("帮我生成一份Word周报", "做个Excel表格", "出个PPT关于XX"),
-            examples = listOf("aiwps_create(type=\"word\", title=\"周报\", content=\"内容\")"),
-            parameters = mapOf("type" to "word/excel/ppt", "title" to "标题", "content" to "内容"),
-            tips = listOf("支持Word/Excel/PPT", "本地生成", "自动格式化"),
-            relatedTools = listOf("enhanced_doc_create", "workspace_write"),
+            description = "生成真实Office文件（docx/xlsx/pptx/pdf），可下载/分享",
+            useCases = listOf("帮我生成一份Word周报", "做个Excel表格", "出个PPT关于XX", "生成PDF报告"),
+            examples = listOf("aiwps_create(type=\"docx\", title=\"周报\", content=\"内容\")"),
+            parameters = mapOf("type" to "docx/xlsx/pptx/pdf", "title" to "标题", "content" to "内容"),
+            tips = listOf("生成真正的Office二进制文件", "可用WPS/Office打开", "文件保存到Downloads目录"),
+            relatedTools = listOf("enhanced_doc_create", "chat_doc", "workspace_doc"),
+            priority = 5
+        ),
+        
+        "chat_doc" to ToolInfo(
+            name = "chat_doc",
+            category = ToolCategory.AI_CAPABILITIES,
+            description = "对话框内直接写文档并渲染显示（不生成文件）",
+            useCases = listOf("写一篇文章在对话框显示", "生成代码示例", "写报告/方案", "生成表格"),
+            examples = listOf("chat_doc(title=\"方案\", content=\"# 方案\\n...\", format=\"md\")"),
+            parameters = mapOf("title" to "标题", "content" to "内容", "format" to "md/html/code/text"),
+            tips = listOf("不生成文件，内容直接渲染在对话框", "适合快速展示", "支持Markdown/HTML/代码/文本"),
+            relatedTools = listOf("aiwps_create", "enhanced_doc_create", "ui_widget"),
+            priority = 5
+        ),
+        
+        "enhanced_doc_create" to ToolInfo(
+            name = "enhanced_doc_create",
+            category = ToolCategory.AI_CAPABILITIES,
+            description = "多格式文档创建（md/txt/csv/json/html等17种）",
+            useCases = listOf("创建Markdown文件", "生成JSON配置", "写HTML页面", "创建CSV数据"),
+            examples = listOf("enhanced_doc_create(type=\"md\", title=\"笔记\", content=\"内容\")"),
+            parameters = mapOf("type" to "格式", "title" to "标题", "content" to "内容"),
+            tips = listOf("支持17种格式", "文本类文档优先用此工具", "创建后自动渲染预览"),
+            relatedTools = listOf("aiwps_create", "chat_doc", "workspace_doc"),
             priority = 4
         )
     )
@@ -713,7 +737,9 @@ object ToolCapabilityDirectory {
             "发短信" to listOf("send_sms"),
             "读联系人" to listOf("read_contacts"),
             "代码执行" to listOf("run_code", "workbench"),
-            "文档生成" to listOf("aiwps_create", "enhanced_doc_create"),
+            "文档生成（可下载）" to listOf("aiwps_create", "enhanced_doc_create"),
+            "对话框写文档" to listOf("chat_doc"),
+            "对话框显示文档" to listOf("chat_doc"),
             "定时任务" to listOf("schedule_task"),
             "语音朗读" to listOf("speak"),
             "MCP工具" to listOf("mcp_call", "mcp_list_tools"),

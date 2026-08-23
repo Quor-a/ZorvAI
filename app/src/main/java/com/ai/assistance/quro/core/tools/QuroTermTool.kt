@@ -17,10 +17,10 @@ import org.json.JSONObject
 class QuroTermTool : QuroTool {
     override val name = "quroterm_exec"
     override val description =
-        "在 QuroTerm 自研沙盒终端执行一条命令（ls/cd/cat/echo/grep/ps/top/netstat/ping/curl/wget/dns/" +
-            "pkg/run/alias/su/sandbox/encrypt/compress/base64 等），不依赖系统 shell / root / Termux。" +
-            "参数：{\"command\":\"要执行的命令\"}。返回命令输出文本。适合在受控沙盒里跑工具链/脚本，避免触碰真实系统。" +
-            "注意：沙盒为虚拟文件系统，路径以 ~ 为根（/data/local/tmp/quroterm/root）。"
+        "在 QuroTerm 自研沙盒终端执行命令（ls/cd/cat/echo/grep/ps/top/netstat/ping/curl/wget/dns/" +
+            "pkg/run/alias/sandbox/encrypt/compress/base64 等），独立虚拟文件系统，不触碰真实系统。" +
+            "与 terminal_exec 的区别：terminal_exec 走 proot/Linux（有 apt/python3），quroterm_exec 走自研沙盒（更快更轻）。" +
+            "参数：{\"command\":\"要执行的命令\"}。返回命令输出文本。"
     override val parametersJson = """{
         "type":"object",
         "properties":{"command":{"type":"string","description":"要执行的命令，如 \"ls -la\" / \"echo hello\" / \"run python3 -c 'print(1)'\""}},

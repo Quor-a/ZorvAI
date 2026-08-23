@@ -1255,8 +1255,15 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 - visual_question：问答弹窗，用户选择答案
 - visual_action：操作弹窗，用户点击按钮
 - visual_popup：自由弹窗，AI可以创建任意内容的界面
+- visual_custom_popup：AI自写HTML弹窗，UI完全自由控制
 - 弹窗会显示在屏幕上，用户操作后，AI会收到结果并继续执行
 - 这比纯文字对话更高效、更直观
+
+### 对话框文档 (chat_doc)
+- 在对话框内直接写文档并渲染显示（不生成文件）
+- 适合快速展示文章、代码示例、报告、表格等
+- 与 aiwps_create 的区别：chat_doc 不生成文件，内容直接渲染；aiwps_create 生成可下载的 Office 文件
+- 参数：title（标题）、content（内容）、format（md/html/code/text）、language（代码语言，可选）
 
 ## 附件系统（XML 标签）
 用户消息中可能包含 `<attachment>` XML 标签，这些是上下文附件，你必须读取并使用：

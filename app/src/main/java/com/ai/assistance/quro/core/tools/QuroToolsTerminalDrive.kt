@@ -16,9 +16,9 @@ import org.json.JSONObject
 class TerminalDriveTool : QuroTool {
     override val name: String = "terminal_run"
     override val description: String =
-        "Run a shell command inside the in-app terminal (e.g. ls / pwd / cat file / getprop). " +
-            "App-sandbox only, no root. Returns JSON: {exit_code, success, timed_out, output}. " +
-            "**Always check exit_code / success** — do not assume the command succeeded from output alone."
+        "在应用沙盒终端执行 shell 命令（如 ls / pwd / cat file / getprop）。纯沙盒执行，无 proot/Linux。" +
+            "如需 Python/Linux 能力请用 terminal_exec（自动走 proot）。" +
+            "返回 JSON：{exit_code, success, timed_out, output}。**务必检查 exit_code / success**。"
     override val parametersJson: String =
         "{\"type\":\"object\",\"properties\":{\"command\":{\"type\":\"string\",\"description\":\"shell command to run\"}},\"required\":[\"command\"]}"
 

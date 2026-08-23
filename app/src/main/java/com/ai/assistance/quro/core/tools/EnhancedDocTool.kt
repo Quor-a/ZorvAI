@@ -14,14 +14,10 @@ import java.util.zip.ZipOutputStream
  */
 class EnhancedDocTool : QuroTool {
     override val name = "enhanced_doc_create"
-    override val description = """增强版文档创建工具：创建各种类型的文档，支持更好的渲染和排版。
-支持格式：
-- 办公文档：docx, xlsx, pptx, pdf, rtf, odt
-- 文本格式：md, txt, csv, json, xml, yaml
-- 网页格式：html, htm, css, js
-- 其他：epub, svg
-参数：{"type":"格式","title":"标题","content":"内容","filename":"文件名"}
-创建后自动渲染预览。"""
+    override val description = """📝 多格式文档创建：支持 md/txt/csv/json/xml/yaml/html/css/js/svg/epub 等 17 种格式。
+与 aiwps_create 的区别：aiwps_create 生成真正的 Office 二进制文件（docx/xlsx/pptx），适合分享给他人用 WPS/Office 打开。
+enhanced_doc_create 适合创建代码文件、配置文件、Markdown、HTML 等文本类文档，创建后自动在对话框渲染预览。
+参数：{"type":"格式","title":"标题","content":"内容","filename":"文件名"}"""
     override val parametersJson = """{
         "type":"object",
         "properties":{

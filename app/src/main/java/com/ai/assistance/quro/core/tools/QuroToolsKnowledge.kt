@@ -22,9 +22,11 @@ object QuroKnowledgeFiles {
 /** 在知识库里按关键词检索，返回命中片段（文件:行号 + 内容），按命中词数排序。 */
 class KnowledgeSearchTool : QuroTool {
     override val name = "knowledge_search"
-    override val description = "在本地知识库（knowledge_base 目录下的 Markdown/JSON/TXT）里按关键词检索相关内容。" +
-        "当你需要「查项目规范 / 技术文档 / 领域资料 / 之前存过的笔记」时使用。参数 {\"query\":\"要查的关键词\",\"limit\":8}。" +
-        "返回命中的片段（文件:行号 + 内容），按相关度排序；库中无内容时可先用 knowledge_add 添加。"
+    override val description = "🔍 知识库关键词检索：在本地知识库里按关键词精确匹配。" +
+        "与 knowledge_rag_search 的区别：knowledge_search 是简单关键词匹配（快、精确），" +
+        "knowledge_rag_search 是语义/词法混合检索（更智能、支持同义词）。" +
+        "日常检索优先用 knowledge_rag_search，需要精确关键词匹配时用此工具。" +
+        "参数：{\"query\":\"关键词\",\"limit\":8}。"
     override val parametersJson = """{
         "type":"object",
         "properties":{

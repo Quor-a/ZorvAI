@@ -9,10 +9,10 @@ import java.io.File
  */
 class WorkspaceDocTool : QuroTool {
     override val name = "workspace_doc"
-    override val description = """工作区文档创建工具：在工作区中创建各类文档。
-支持格式：HTML、Markdown、TXT、JSON、代码文件等
-参数：{"path":"相对路径","content":"内容","type":"文档类型"}
-创建的文档会自动保存到工作区，并可在对话框中渲染预览。"""
+    override val description = """📁 工作区文档创建：在工作区中创建文件（HTML/MD/TXT/JSON/JS/PY/Java/KT/CSS）。
+与 workspace_write 的区别：workspace_doc 自动根据类型添加扩展名、自动渲染预览卡片；workspace_write 是通用文件写入。
+与 aiwps_create 的区别：workspace_doc 写入工作区（用户可在工具箱-工作区查看），aiwps_create 生成到 Downloads 目录（可分享）。
+参数：{"path":"相对路径","content":"内容","type":"文档类型"}"""
     override val parametersJson = """{
         "type":"object",
         "properties":{

@@ -17,10 +17,10 @@ import java.util.concurrent.TimeUnit
  */
 class ImageRecognitionTool : QuroTool {
     override val name = "image_recognition"
-    override val description = """AI 图像识别工具：分析图片内容，返回详细描述。
-参数：{"image_path":"图片路径","question":"可选问题"}
-支持识别：物体、场景、文字、人脸、图标等
-返回：图片内容的详细描述和分析。"""
+    override val description = "🖼️ 图片内容识别：分析用户提供的图片文件，返回详细描述。" +
+        "与 visual_analysis 的区别：image_recognition 分析用户发送的图片文件，visual_analysis 分析当前屏幕截图。" +
+        "与 screenshot_base64 的区别：screenshot_base64 是截图并返回 Base64，image_recognition 是识别已有图片。" +
+        "参数：{\"image_path\":\"图片路径\",\"question\":\"可选问题\"}。"
     override val parametersJson = """{
         "type":"object",
         "properties":{
