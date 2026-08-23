@@ -689,7 +689,7 @@ private fun WechatBotPlatformCard(
                 when (loginState.value) {
                     QuroWechatIlinkBotAdapter.LoginState.IDLE -> {
                         OutlinedButton(
-                            onClick = { adapter?.startQrLogin() },
+                            onClick = { CoroutineScope(Dispatchers.IO).launch { adapter?.startQrLogin() } },
                             Modifier.fillMaxWidth().height(36.dp),
                         ) {
                             Text("获取微信登录二维码", fontSize = 12.sp)
@@ -740,14 +740,14 @@ private fun WechatBotPlatformCard(
                     QuroWechatIlinkBotAdapter.LoginState.DENIED -> {
                         Text("登录被拒绝或取消", fontSize = 12.sp, color = Color(0xFFE53935))
                         OutlinedButton(
-                            onClick = { adapter?.startQrLogin() },
+                            onClick = { CoroutineScope(Dispatchers.IO).launch { adapter?.startQrLogin() } },
                             Modifier.fillMaxWidth().height(32.dp),
                         ) { Text("重新获取二维码", fontSize = 11.sp) }
                     }
                     QuroWechatIlinkBotAdapter.LoginState.EXPIRED -> {
                         Text("二维码已过期", fontSize = 12.sp, color = Color(0xFFFF9800))
                         OutlinedButton(
-                            onClick = { adapter?.startQrLogin() },
+                            onClick = { CoroutineScope(Dispatchers.IO).launch { adapter?.startQrLogin() } },
                             Modifier.fillMaxWidth().height(32.dp),
                         ) { Text("重新获取二维码", fontSize = 11.sp) }
                     }
