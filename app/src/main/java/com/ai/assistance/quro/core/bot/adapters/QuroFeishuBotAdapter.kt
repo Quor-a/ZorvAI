@@ -154,16 +154,24 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     override suspend fun deliver(reply: QuroOutboundMessage) {
         if (!ensureToken(reply.userId)) return
 
-        // 优先发送图片（飞书支持）；图片成功后再把文字作为附言补发
+        // 优先发送附件（图片/文件）；附件成功后再把文字作为附言补发
         if (reply.imageBytes != null && reply.imageBytes.isNotEmpty()) {
-            val ok = sendImage(reply.userId, reply.imageBytes, reply.imageFileName ?: "quro_image.png", reply.msgId)
+            val fileName = reply.imageFileName ?: "quro_image.png"
+            val isImage = fileName.endsWith(".png", ignoreCase = true) ||
+                fileName.endsWith(".jpg", ignoreCase = true) || fileName.endsWith(".jpeg", ignoreCase = true) ||
+                fileName.endsWith(".gif", ignoreCase = true) || fileName.endsWith(".webp", ignoreCase = true)
+            val ok = if (isImage) {
+                sendImage(reply.userId, reply.imageBytes, fileName, reply.msgId)
+            } else {
+                sendFile(reply.userId, reply.imageBytes, fileName, reply.msgId)
+            }
             if (ok) {
                 if (reply.text.isNotBlank()) sendTextMessage(reply.userId, reply.text, reply.msgId)
                 lastError = null
-                Log_i("deliver 已发往飞书会话 ${reply.userId}（图片）")
+                Log_i("deliver 已发往飞书会话 ${reply.userId}（${if (isImage) "图片" else "文件"}）")
                 return
             }
-            Log_w("图片发送失败，降级为纯文本 chat=${reply.userId}")
+            Log_w("附件发送失败，降级为纯文本 chat=${reply.userId}")
         }
 
         if (reply.text.isNotBlank()) {
@@ -172,7 +180,7 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                 Log_i("deliver 已发往飞书会话 ${reply.userId}")
             }
         } else {
-            Log_w("deliver 内容为空（无文本且无图片），跳过 chat=${reply.userId}")
+            Log_w("deliver 内容为空（无文本且无附件），跳过 chat=${reply.userId}")
         }
     }
 
@@ -534,6 +542,64 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
         writeTag(out, fieldNum, 2)
         writeVarint(out, bytes.size.toLong())
         out.write(bytes)
+    }
+
+    /**
+     * 上传文件到飞书并发送文件消息（APK 实现：FeishuFileCreateData/Response）。
+     * POST https://open.feishu.cn/open-apis/im/v1/files
+     */
+    private fun sendFile(chatId: String, bytes: ByteArray, fileName: String, msgId: String? = null): Boolean {
+        val mediaType = when {
+            fileName.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
+            fileName.endsWith(".doc", ignoreCase = true) || fileName.endsWith(".docx", ignoreCase = true) -> "application/msword"
+            fileName.endsWith(".xls", ignoreCase = true) || fileName.endsWith(".xlsx", ignoreCase = true) -> "application/vnd.ms-excel"
+            fileName.endsWith(".ppt", ignoreCase = true) || fileName.endsWith(".pptx", ignoreCase = true) -> "application/vnd.ms-powerpoint"
+            fileName.endsWith(".zip", ignoreCase = true) -> "application/zip"
+            fileName.endsWith(".txt", ignoreCase = true) -> "text/plain"
+            fileName.endsWith(".json", ignoreCase = true) -> "application/json"
+            fileName.endsWith(".xml", ignoreCase = true) -> "application/xml"
+            fileName.endsWith(".csv", ignoreCase = true) -> "text/csv"
+            else -> "application/octet-stream"
+        }
+        // Step 1: 上传文件拿到 file_key
+        val up = httpUploadMultipart(
+            "https://open.feishu.cn/open-apis/im/v1/files",
+            headers = mapOf("Authorization" to "Bearer $tenantToken"),
+            formFields = mapOf("file_type" to "stream", "file_name" to fileName),
+            fileField = "file",
+            fileName = fileName,
+            bytes = bytes,
+            mediaType = mediaType,
+        )
+        val fileKey = up?.optJSONObject("data")?.optString("file_key").orEmpty()
+        if (fileKey.isBlank()) {
+            lastError = "文件上传失败 chat=$chatId（未返回 file_key）resp=${(up?.toString() ?: "null").take(200)}"
+            Log_e("文件上传失败 chat=$chatId resp=${(up?.toString() ?: "null").take(200)}")
+            return false
+        }
+        // Step 2: 发送文件消息
+        val content = JSONObject().put("file_key", fileKey).toString()
+        val json = if (!msgId.isNullOrBlank()) {
+            httpPostJson(
+                "https://open.feishu.cn/open-apis/im/v1/messages/${msgId}/reply",
+                headers = mapOf("Authorization" to "Bearer $tenantToken"),
+                json = JSONObject().apply { put("msg_type", "file"); put("content", content) }.toString(),
+            )
+        } else {
+            httpPostJson(
+                "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id",
+                headers = mapOf("Authorization" to "Bearer $tenantToken"),
+                json = JSONObject().apply { put("receive_id", chatId); put("msg_type", "file"); put("content", content) }.toString(),
+            )
+        }
+        return if (json == null) {
+            lastError = "文件消息发送失败 chat=$chatId"
+            Log_e("sendFile 消息发送失败 chat=$chatId")
+            false
+        } else {
+            Log_i("sendFile 已发往飞书 chat=$chatId file=$fileName")
+            true
+        }
     }
 
     private fun Log_i(s: String) { android.util.Log.i(TAG, "[Feishu] $s"); QuroDiag.log("Feishu", s) }

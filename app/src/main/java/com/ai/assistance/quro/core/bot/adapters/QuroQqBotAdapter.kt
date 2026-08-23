@@ -10,6 +10,9 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -130,24 +133,59 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     }
 
     override suspend fun deliver(reply: QuroOutboundMessage) {
+        // ---- 先处理图片/文件附件 ----
+        if (reply.imageBytes != null && reply.imageBytes.isNotEmpty()) {
+            if (accessToken.isBlank()) {
+                val tj = httpPostJson(
+                    "https://bots.qq.com/app/getAppAccessToken",
+                    json = JSONObject().apply { put("appId", appId); put("clientSecret", appSecret) }.toString(),
+                )
+                accessToken = tj?.optString("access_token").orEmpty()
+            }
+            val fileName = reply.imageFileName ?: "quro_image.png"
+            val isImage = fileName.endsWith(".png", ignoreCase = true) ||
+                fileName.endsWith(".jpg", ignoreCase = true) || fileName.endsWith(".jpeg", ignoreCase = true) ||
+                fileName.endsWith(".gif", ignoreCase = true) || fileName.endsWith(".webp", ignoreCase = true)
+            val fileType = if (isImage) "1" else "4"  // 1=图片, 4=文件
+            val msgType = if (isImage) 7 else 10       // 7=图片消息, 10=文件消息
+
+            val fileInfo = uploadMedia(reply.userId, reply.imageBytes, fileName, fileType)
+            if (fileInfo != null) {
+                val ok = sendMediaMessage(reply.userId, fileInfo, msgType, reply.msgId, reply.groupId)
+                if (ok) {
+                    Log_i("deliver 附件成功 → QQ ${if (reply.groupId != null) "群" else "用户"} ${reply.userId}")
+                    // 附件发完后如果有文字，继续发文字
+                    if (reply.text.isNotBlank()) {
+                        // fall through to text send below
+                    } else return
+                } else {
+                    Log_w("deliver 附件发送失败，降级为纯文本")
+                }
+            } else {
+                Log_w("deliver 附件上传失败，降级为纯文本")
+            }
+        }
+
+        // ---- 发送文本消息 ----
+        if (reply.text.isBlank()) return
+
         // ---- 构建请求体（对齐 QQ 官方 OpenAPI：content 裸文本、msg_type 数字、msg_seq 必填）----
-        // 参考 QQ 机器人开放平台官方示例 buildSendMessageBody
         val seq = msgSeq.getAndIncrement()
         val endpoint: String
         val body = if (reply.groupId != null) {
             endpoint = "https://api.sgroup.qq.com/v2/groups/${reply.groupId}/messages"
             JSONObject().apply {
-                put("msg_type", 0)            // 0=text（官方默认，最稳）
-                put("content", reply.text)    // 裸文本，不包 JSON
-                put("msg_seq", seq)           // 被动回复去重序号（必填）
+                put("msg_type", 0)
+                put("content", reply.text)
+                put("msg_seq", seq)
                 reply.msgId?.let { put("msg_id", it) }
                 reply.eventId?.let { put("event_id", it) }
             }.toString()
         } else {
             endpoint = "https://api.sgroup.qq.com/v2/users/${reply.userId}/messages"
             JSONObject().apply {
-                put("msg_type", 0)            // 0=text
-                put("content", reply.text)    // 裸文本
+                put("msg_type", 0)
+                put("content", reply.text)
                 put("msg_seq", seq)
                 reply.msgId?.let { put("msg_id", it) }
                 reply.eventId?.let { put("event_id", it) }
@@ -317,6 +355,70 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             wsConnected.set(false)
             connected = false
         }
+    }
+
+    /**
+     * 上传媒体文件到 QQ（APK 实现：QQAttachment）。
+     * POST https://api.sgroup.qq.com/v2/users/{openid}/files
+     * 返回 file_info 用于发送图片/文件消息。
+     */
+    private fun uploadMedia(userId: String, bytes: ByteArray, fileName: String, fileType: String = "2"): String? {
+        val mp = MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("file_type", fileType)  // 1=图片, 2=视频, 3=语音, 4=文件
+            .addFormDataPart("app_id", appId)
+            .addFormDataPart("file_name", fileName)
+            .addFormDataPart("file", fileName, bytes.toRequestBody("application/octet-stream".toMediaType()))
+            .build()
+
+        val req = Request.Builder()
+            .url("https://api.sgroup.qq.com/v2/users/$userId/files")
+            .addHeader("Authorization", "QQBot $accessToken")
+            .addHeader("X-Union-Appid", appId)
+            .post(mp)
+            .build()
+
+        return try {
+            client.newCall(req).execute().use { resp ->
+                val body = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    Log_e("uploadMedia 失败 HTTP ${resp.code}: ${body.take(300)}")
+                    return null
+                }
+                val json = runCatching { JSONObject(body) }.getOrNull()
+                json?.optJSONObject("data")?.optString("file_info")
+            }
+        } catch (e: Exception) {
+            Log_e("uploadMedia 异常: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * 发送图片消息（APK 实现：msg_type=7 + file_info）。
+     */
+    private fun sendMediaMessage(userId: String, fileInfo: String, msgType: Int, msgId: String? = null, groupId: String? = null): Boolean {
+        val seq = msgSeq.getAndIncrement()
+        val endpoint = if (groupId != null) {
+            "https://api.sgroup.qq.com/v2/groups/$groupId/messages"
+        } else {
+            "https://api.sgroup.qq.com/v2/users/$userId/messages"
+        }
+        val body = JSONObject().apply {
+            put("msg_type", msgType)  // 7=图片, 8=视频, 9=语音, 10=文件
+            put("media", JSONObject().apply { put("file_info", fileInfo) })
+            put("msg_seq", seq)
+            msgId?.let { put("msg_id", it) }
+        }.toString()
+
+        val json = httpPostJson(
+            endpoint,
+            headers = mapOf(
+                "Authorization" to "QQBot $accessToken",
+                "X-Union-Appid" to appId,
+            ),
+            json = body,
+        )
+        return json != null
     }
 
     private fun Log_i(s: String) = android.util.Log.i(TAG, "[QQ] $s")
