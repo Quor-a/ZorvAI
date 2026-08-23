@@ -1962,36 +1962,39 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
     }
 
     if (fullscreen) {
-        Dialog(
-            onDismissRequest = { fullscreen = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            Surface(color = cs.surface, modifier = Modifier.fillMaxSize()) {
-                Column(Modifier.fillMaxSize()) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            title,
-                            color = cs.onSurface,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(onClick = { copyText(context, card.html, "已复制小程序源码") }, Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+        // 用 key 强制 Dialog 内容在每次打开时重建
+        key(card.id, fullscreen) {
+            Dialog(
+                onDismissRequest = { fullscreen = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false),
+            ) {
+                Surface(color = cs.surface, modifier = Modifier.fillMaxSize()) {
+                    Column(Modifier.fillMaxSize()) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                title,
+                                color = cs.onSurface,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(onClick = { copyText(context, card.html, "已复制小程序源码") }, Modifier.size(36.dp)) {
+                                Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                            }
+                            IconButton(onClick = { fullscreen = false }, Modifier.size(36.dp)) {
+                                Icon(Icons.Filled.Close, "关闭", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                            }
                         }
-                        IconButton(onClick = { fullscreen = false }, Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.Close, "关闭", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                        HorizontalDivider(color = cs.outlineVariant)
+                        Box(Modifier.fillMaxSize().background(Color.White).padding(8.dp)) {
+                            MiniAppWebView(
+                                html = card.html,
+                                modifier = Modifier.fillMaxSize(),
+                            )
                         }
-                    }
-                    HorizontalDivider(color = cs.outlineVariant)
-                    Box(Modifier.fillMaxSize().background(Color.White).padding(8.dp)) {
-                        MiniAppWebView(
-                            html = card.html,
-                            modifier = Modifier.fillMaxSize(),
-                        )
                     }
                 }
             }
@@ -2102,7 +2105,7 @@ private fun MiniAppWebView(
                 settings.cacheMode = WebSettings.LOAD_NO_CACHE
                 settings.allowFileAccess = true
                 settings.allowContentAccess = true
-                
+
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
@@ -2111,7 +2114,7 @@ private fun MiniAppWebView(
                             onHeight(px.coerceIn(160, 1440))
                         }
                     }
-                    
+
                     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                         request?.let {
                             val response = assetLibResolver.interceptRequest(it)
@@ -2122,7 +2125,7 @@ private fun MiniAppWebView(
                         return super.shouldInterceptRequest(view, request)
                     }
                 }
-                
+
                 // 注入CDN错误恢复脚本和小程序运行时
                 val fallbackScript = assetLibResolver.generateFallbackScript()
                 val wrappedHtml = """
