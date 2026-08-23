@@ -291,12 +291,14 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
      * 响应: { "ret": 0, "msgs": [...], "get_updates_buf": "<新游标>" }
      */
     override suspend fun runConnection() {
+        Log_i("=== runConnection 开始 === botToken=${botToken.take(10)}...")
         // 登录成功后先获取配置
         fetchConfig()
 
         var retries = 0
         while (!stopped.get()) {
             if (botToken.isBlank()) {
+                Log_w("botToken 为空，等待...")
                 delay(2000)
                 continue
             }
@@ -306,11 +308,14 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                     put("base_info", baseInfoJson())
                 }.toString()
 
+                Log_i("getupdates 请求: buf=${getUpdatesBuf.take(20)}...")
                 val root = httpPostJson(
                     "$BASE_URL/ilink/bot/getupdates",
                     headers = authHeaders(botToken),
                     json = body,
-                ) ?: run {
+                )
+                if (root == null) {
+                    Log_e("getupdates 返回 null（HTTP 错误或网络异常）")
                     backoff(retries++)
                     continue
                 }
@@ -318,7 +323,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                 retries = 0
                 val ret = root.optInt("ret", -1)
                 if (ret != 0) {
-                    Log_w("getupdates 返回 ret=$ret，可能 token 过期")
+                    Log_w("getupdates 返回 ret=$ret，响应: ${root.toString().take(300)}")
                     delay(5000)
                     continue
                 }
@@ -326,9 +331,25 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                 val newBuf = root.optString("get_updates_buf")
                 if (newBuf.isNotEmpty()) getUpdatesBuf = newBuf
 
-                val msgs = root.optJSONArray("msgs") ?: continue
+                // 尝试多种可能的消息数组字段名
+                var msgs = root.optJSONArray("msgs")
+                if (msgs == null) msgs = root.optJSONArray("message_list")
+                if (msgs == null) msgs = root.optJSONArray("data")?.let { data ->
+                    if (data is JSONObject) data.optJSONArray("msgs") ?: data.optJSONArray("message_list")
+                    else null
+                }
+
+                if (msgs == null) {
+                    Log_i("getupdates 无消息（msgs=null），响应字段: ${root.keys().asSequence().toList()}")
+                    if (!stopped.get()) delay(1000)
+                    continue
+                }
+
+                Log_i("getupdates 收到 ${msgs.length()} 条消息")
                 for (i in 0 until msgs.length()) {
                     val msg = msgs.optJSONObject(i) ?: continue
+
+                    Log_i("消息[$i] 原始: ${msg.toString().take(500)}")
 
                     val fromUserId = msg.optString("from_user_id", "")
                     val toUserId = msg.optString("to_user_id", "")
@@ -347,23 +368,29 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                         }
                     }
 
+                    Log_i("消息[$i] 解析: from=$fromUserId to=$toUserId text='${text.take(50)}' ctxToken=${ctxToken.take(10)}...")
+
                     if (fromUserId.isNotBlank() && ctxToken.isNotBlank()) {
                         contextTokens[fromUserId] = ctxToken
                     }
 
                     val chatId = fromUserId.ifBlank { toUserId }
                     if (chatId.isNotBlank() && text.isNotBlank()) {
-                        // 发送输入状态
+                        Log_i("消息[$i] → onInbound chatId=$chatId text='${text.take(50)}'")
                         sendTyping(fromUserId)
                         onInbound(chatId, fromUserId.ifBlank { chatId }, text)
+                    } else {
+                        Log_w("消息[$i] 跳过: chatId=$chatId text.isBlank=${text.isBlank()}")
                     }
                 }
             } catch (e: Exception) {
-                Log_e("长轮询异常: ${e.message}")
+                Log_e("长轮询异常: ${e.javaClass.simpleName}: ${e.message}")
+                e.printStackTrace()
                 backoff(retries++)
             }
             if (!stopped.get()) delay(1000)
         }
+        Log_i("=== runConnection 结束 ===")
     }
 
     // ==================== 发消息 ====================
