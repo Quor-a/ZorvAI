@@ -277,6 +277,31 @@ object ToolCapabilityDirectory {
             priority = 3
         ),
         
+        // ═══════════════ 可视化交互（强制使用） ═══════════════
+        "visual_question" to ToolInfo(
+            name = "visual_question",
+            category = ToolCategory.UI_CARDS,
+            description = "⚠️【强制】模糊命令/缺少信息时必须调用此工具询问用户",
+            useCases = listOf("用户指令模糊", "缺少关键信息", "需要确认不可逆操作", "多个选项需要用户选择", "多种理解需要确认"),
+            examples = listOf("visual_question(question=\"你想要什么风格？\", options=[\"正式\",\"轻松\"])"),
+            parameters = mapOf("question" to "问题", "options" to "选项列表", "allow_custom" to "允许自定义输入"),
+            tips = listOf("【强制】遇到任何不确定必须调用", "禁止猜测、禁止假设、禁止跳过", "返回用户选择的答案"),
+            relatedTools = listOf("visual_action", "visual_popup"),
+            priority = 5
+        ),
+        
+        "visual_action" to ToolInfo(
+            name = "visual_action",
+            category = ToolCategory.UI_CARDS,
+            description = "可视化操作弹窗：让用户从多个操作中选择一个",
+            useCases = listOf("选择操作", "确认/取消", "选择打开方式"),
+            examples = listOf("visual_action(title=\"选择操作\", buttons=[{\"text\":\"查看\",\"value\":\"view\"}])"),
+            parameters = mapOf("title" to "标题", "buttons" to "按钮列表"),
+            tips = listOf("适合让用户选择操作", "返回用户点击的按钮值"),
+            relatedTools = listOf("visual_question", "visual_popup"),
+            priority = 4
+        ),
+        
         // ═══════════════ 知识/记忆 ═══════════════
         "memory_save" to ToolInfo(
             name = "memory_save",

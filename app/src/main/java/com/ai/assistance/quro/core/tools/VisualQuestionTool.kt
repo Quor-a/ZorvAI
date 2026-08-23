@@ -87,9 +87,16 @@ object VisualActionQueue {
  */
 class VisualQuestionTool : QuroTool {
     override val name = "visual_question"
-    override val description = """可视化问答弹窗工具：弹出对话框向用户提问，用户可以选择预设选项或输入自定义答案。
+    override val description = """⚠️【强制】可视化问答弹窗：遇到模糊命令/缺少信息/需要确认时，必须立刻调用此工具询问用户！
+禁止猜测、禁止假设、禁止跳过询问直接执行！
 参数：{"question":"问题内容","options":["选项1","选项2"],"allow_custom":true,"title":"标题","timeout":30}
-返回：用户选择的答案。"""
+返回：用户选择的答案。
+使用场景（必须调用）：
+- 用户指令模糊（"帮我处理一下"）→ 问清楚具体要做什么
+- 缺少关键信息（文件路径、收件人等）→ 问用户要
+- 多种理解可能 → 确认是哪种
+- 不可逆操作（删除、发送）→ 先确认
+- 多个选项 → 让用户选"""
     override val parametersJson = """{
         "type":"object",
         "properties":{
