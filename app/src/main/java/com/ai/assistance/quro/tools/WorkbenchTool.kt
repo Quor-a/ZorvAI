@@ -101,24 +101,81 @@ class WorkbenchTool : QuroTool {
         val name = json.optString("name", "").ifBlank {
             return "缺少 name 参数"
         }
-        val files = json.optJSONArray("files") ?: return "缺少 files 参数"
+        val files = json.optJSONArray("files")
 
         val projectDir = getProjectDir(context, name)
         var created = 0
         val errors = mutableListOf<String>()
 
-        for (i in 0 until files.length()) {
-            val fileObj = files.optJSONObject(i) ?: continue
-            val path = fileObj.optString("path", "").ifBlank { continue }
-            val content = fileObj.optString("content", "")
-
+        // 如果没有提供files，创建默认的空白HTML项目
+        if (files == null || files.length() == 0) {
+            val defaultHtml = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>$name</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 { color: #667eea; margin-bottom: 16px; }
+        p { line-height: 1.6; color: #666; }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 16px;
+        }
+        button:hover { background: #5a6fd6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 $name</h1>
+        <p>这是一个空白项目模板。点击下方按钮开始编辑！</p>
+        <button onclick="alert('开始编辑！')">开始编辑</button>
+    </div>
+</body>
+</html>"""
             try {
-                val file = File(projectDir, path)
-                file.parentFile?.mkdirs()
-                file.writeText(content)
+                val file = File(projectDir, "index.html")
+                file.writeText(defaultHtml)
                 created++
             } catch (e: Exception) {
-                errors.add("写入 $path 失败: ${e.message}")
+                errors.add("创建默认文件失败: ${e.message}")
+            }
+        } else {
+            for (i in 0 until files.length()) {
+                val fileObj = files.optJSONObject(i) ?: continue
+                val path = fileObj.optString("path", "").ifBlank { continue }
+                val content = fileObj.optString("content", "")
+
+                try {
+                    val file = File(projectDir, path)
+                    file.parentFile?.mkdirs()
+                    file.writeText(content)
+                    created++
+                } catch (e: Exception) {
+                    errors.add("写入 $path 失败: ${e.message}")
+                }
             }
         }
 

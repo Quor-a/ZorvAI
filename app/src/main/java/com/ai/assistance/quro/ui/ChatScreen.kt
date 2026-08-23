@@ -13,6 +13,7 @@ import com.ai.assistance.quro.core.tools.QuroTool
 import com.ai.assistance.quro.core.tools.ImportedToolDef
 import com.ai.assistance.quro.core.tools.QuroImportedToolRegistry
 import com.ai.assistance.quro.core.tools.QuroUiActionBridge
+import com.ai.assistance.quro.core.tools.VisualCustomPopupQueue
 import com.ai.assistance.quro.BuildConfig
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.terminal.QuroTerminalController
@@ -20,6 +21,7 @@ import com.ai.assistance.quro.ui.QuroChatCardTray
 import com.ai.assistance.quro.ui.QuroChatCardView
 import com.ai.assistance.quro.ui.VisualDialogs
 import com.ai.assistance.quro.ui.VisualPopupDialog
+import com.ai.assistance.quro.ui.VisualCustomPopupDialog
 import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.ai.assistance.quro.core.cards.parseComponentSpec
 import com.ai.assistance.quro.ui.QuroShareBridge
@@ -841,6 +843,8 @@ fun ChatScreen(
             VisualDialogs()
             // 自由可视化弹窗
             VisualPopupDialog()
+            // AI自写UI可视化弹窗
+            VisualCustomPopupDialog()
             Scaffold(
                 containerColor = cs.background,
                 topBar = {
@@ -2933,7 +2937,77 @@ private fun SingleToolCard(t: ToolCallUi, scaled: (Int) -> androidx.compose.ui.u
                     FormattedResultContent(t.result!!, scaled)
                 }
 
-                if (t.name.startsWith("ui_")) {
+                if (t.name == "visual_custom_popup") {
+                    Spacer(Modifier.height(8.dp))
+                    // 从参数中解析弹窗信息
+                    val popupInfo = remember(t.args) {
+                        runCatching {
+                            val json = org.json.JSONObject(t.args)
+                            val title = json.optString("title", "自定义弹窗")
+                            val cardTitle = json.optString("card_title", title)
+                            val cardDescription = json.optString("card_description", "点击查看详情")
+                            Triple(title, cardTitle, cardDescription)
+                        }.getOrDefault(Triple("自定义弹窗", "自定义弹窗", "点击查看详情"))
+                    }
+                    val (title, cardTitle, cardDescription) = popupInfo
+                    // 小卡片：点击打开弹窗
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                // 重新打开弹窗（如果还在队列中）
+                                // 注意：弹窗可能已经被处理，这里只是尝试重新显示
+                                // 实际实现可能需要更复杂的逻辑
+                                VisualCustomPopupQueue.getCurrentPopup()?.let { (id, popup) ->
+                                    // 弹窗已经显示，无需再次打开
+                                    // 这里可以添加提示或忽略
+                                }
+                            },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(containerColor = cs.primaryContainer),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Filled.Language,
+                                contentDescription = null,
+                                tint = cs.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = cardTitle,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = cs.onPrimaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (cardDescription.isNotBlank()) {
+                                    Text(
+                                        text = cardDescription,
+                                        fontSize = 10.sp,
+                                        color = cs.onPrimaryContainer.copy(alpha = 0.7f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            Icon(
+                                Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = "打开弹窗",
+                                tint = cs.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                } else if (t.name.startsWith("ui_")) {
                     Spacer(Modifier.height(8.dp))
                     val actLabel = if (t.name.startsWith("ui_open_")) "重新打开" else "再次执行"
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
