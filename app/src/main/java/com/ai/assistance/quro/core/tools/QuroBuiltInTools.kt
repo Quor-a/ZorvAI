@@ -385,6 +385,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(McpServersTool())
     r.register(McpListToolsTool())
     r.register(McpCallTool())
+    // 工具发现工具：让 AI 主动查询工具能力目录，解决不会主动使用工具的问题
+    r.register(ToolDiscoveryTool())
     // 本地 MCP 部署工具：AI 创作并部署 MCP 服务器到本应用内（#Task8）
     r.register(McpDeployTool())
     r.register(McpUndeployTool())

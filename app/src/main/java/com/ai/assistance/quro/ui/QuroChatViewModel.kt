@@ -1940,6 +1940,23 @@ $recent
                 sb.append("    · 常见说法/多用途：$hint\n")
             }
         }
+        // ═══ 工具发现工具专项指引（v437 新增）：让 AI 主动查询工具能力目录 ═══
+        sb.append("\n### 🔍 工具发现工具（tool_discovery）——主动查询可用工具\n")
+        sb.append(
+            "当你不确定该用哪个工具时，使用 `tool_discovery` 工具查询：\n" +
+            "1. **查询所有分类**：tool_discovery(action=\"list_categories\") → 列出14个工具分类\n" +
+            "2. **按分类查工具**：tool_discovery(action=\"list_tools\", category=\"NETWORK_WEB\") → 查看网络/Web类所有工具\n" +
+            "3. **根据意图匹配**：tool_discovery(action=\"match_intent\", intent=\"我想打开网页\") → 推荐匹配的工具\n" +
+            "4. **查看工具详情**：tool_discovery(action=\"get_tool_info\", tool_name=\"ai_browser\") → 获取工具使用指南\n" +
+            "5. **获取最佳实践**：tool_discovery(action=\"get_best_practices\") → 工具使用原则和技巧\n" +
+            "6. **获取目录摘要**：tool_discovery(action=\"get_directory_summary\") → 所有工具的快速参考\n\n" +
+            "**使用场景**：\n" +
+            "- 用户需求不明确，需要找到合适的工具 → 用 `match_intent`\n" +
+            "- 想了解所有可用工具 → 用 `list_categories` 和 `list_tools`\n" +
+            "- 想知道某个工具怎么用 → 用 `get_tool_info`\n" +
+            "- 工具调用失败，想换其他工具 → 用 `match_intent` 找替代方案\n\n" +
+            "**重要**：这个工具是你主动发现工具的入口，遇到不确定的工具选择时优先使用它，而不是瞎猜或不用工具。\n"
+        )
         // ═══ AI 键盘通道专项指引（v436 新增）：让 LLM 知道何时走 IME 键盘通道而非无障碍 input_text ═══
         sb.append("\n### AI 键盘通道（ai_type_text / ai_press_enter / ai_press_send）\n")
         sb.append(
