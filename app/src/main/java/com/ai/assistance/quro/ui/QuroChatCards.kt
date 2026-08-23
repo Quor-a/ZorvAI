@@ -1756,7 +1756,6 @@ private fun HtmlPreviewWebView(
 ) {
     val context = LocalContext.current
     val assetLibResolver = remember { AssetLibResolver(context) }
-    var loadCount by remember { mutableIntStateOf(0) }
     
     AndroidView(
         modifier = modifier,
@@ -1802,11 +1801,6 @@ private fun HtmlPreviewWebView(
             // 仅当 HTML 内容变化时才重载，避免每次 recomposition 重复加载造成闪烁
             if (wv.tag != html) {
                 wv.tag = html
-                val htmlWithFallback = assetLibResolver.injectFallbackScript(html)
-                wv.loadDataWithBaseURL("file:///android_asset/", htmlWithFallback, "text/html", "UTF-8", null)
-            } else if (loadCount == 0) {
-                // 首次加载时强制重新加载，确保退出后能正确渲染
-                loadCount++
                 val htmlWithFallback = assetLibResolver.injectFallbackScript(html)
                 wv.loadDataWithBaseURL("file:///android_asset/", htmlWithFallback, "text/html", "UTF-8", null)
             }
@@ -2018,8 +2012,7 @@ private fun MiniAppWebView(
 ) {
     val context = LocalContext.current
     val assetLibResolver = remember { AssetLibResolver(context) }
-    var loadCount by remember { mutableIntStateOf(0) }
-    
+
     // 小程序运行时脚本（简化版，支持 Page/Component 生命周期和数据绑定）
     val miniAppRuntime = """
         (function(global) {
@@ -2154,24 +2147,6 @@ private fun MiniAppWebView(
             // 仅当 HTML 内容变化时才重载，避免每次 recomposition 重复加载造成闪烁
             if (wv.tag != html) {
                 wv.tag = html
-                val fallbackScript = assetLibResolver.generateFallbackScript()
-                val wrappedHtml = """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                        $fallbackScript
-                        <script>$miniAppRuntime</script>
-                    </head>
-                    <body style="margin: 0; padding: 0;">
-                        $html
-                    </body>
-                    </html>
-                """.trimIndent()
-                wv.loadDataWithBaseURL("file:///android_asset/", wrappedHtml, "text/html", "UTF-8", null)
-            } else if (loadCount == 0) {
-                // 首次加载时强制重新加载，确保退出后能正确渲染
-                loadCount++
                 val fallbackScript = assetLibResolver.generateFallbackScript()
                 val wrappedHtml = """
                     <!DOCTYPE html>
