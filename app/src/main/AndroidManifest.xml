@@ -287,6 +287,12 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- 可视化弹窗悬浮窗服务 -->
+        <service
+            android:name=".service.VisualPopupOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <!-- 粘贴键盘：悬浮窗（TYPE_APPLICATION_OVERLAY）+ 无障碍粘贴，非前台服务 -->
         <service
             android:name=".service.QuroPasteKeyboardService"
@@ -364,6 +370,15 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/quro_accessibility_service" />
         </service>
+
+        <!-- 开机广播接收器：检查无障碍服务状态 -->
+        <receiver
+            android:name=".service.QuroBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <!-- 自动填充服务（对应 PERMISSIONS.md #4）：用户在系统「自动填充服务」中选中 Zorv AI 后启用，
              可在其它 App 输入框提供 AI 生成的填充建议。
