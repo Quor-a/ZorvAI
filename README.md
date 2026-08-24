@@ -33,6 +33,11 @@
 - [功能全览 · Feature Map](#功能全览-feature-map)
 - [界面导航 · Screens](#界面导航-screens)
 - [对话框与消息能力 · Chat & Messages](#对话框与消息能力-chat--messages)
+- [可视化弹窗 & 询问](#可视化弹窗--询问)
+- [多语言运行器](#多语言运行器)
+- [自研多语言小程序（MiniApp）](#自研多语言小程序miniapp)
+- [可视化组件](#可视化组件)
+- [可视化编程（Mermaid 图表）](#可视化编程mermaid-图表)
 - [内置技能 · Skills（63 个）](#内置技能-skills63-个)
 - [截图预览 · Screenshots](#截图预览-screenshots)
 - [功能构架 · Architecture](#功能构架-architecture)
@@ -102,6 +107,11 @@
 | **语音** | 多供应商 TTS（EDGE_TTS / OPENAI_COMPAT / MINIMAX / SILICONFLOW / 阿里云 等）、端侧 Whisper STT、语音悬浮球 |
 | **知识 / 记忆 / 人格 / Bot** | 向量语义 RAG 知识库、记忆库、人格/灵魂配置、多通道机器人（QQ/飞书/微信/本地） |
 | **ACI 控制台 UI（LAN 控制台）** | 控制端 `QuroAidlAciCenterScreen` 按 `console_ui` 能力拉取 SDUI 快照、复用本地 `AciConsoleScreen` 渲染器（`core/aci` 包，纯本地零网络） |
+| **可视化弹窗 & 询问** | **可视化弹窗**（`visual_popup` / `visual_custom_popup`）：AI 创建结构化弹窗或自写 HTML 弹窗，对话框内小卡片展示历史；**可视化询问**（`visual_question` / `visual_action`）：AI 遇到模糊命令/缺少信息时强制弹出选择题/输入框，禁止猜测 |
+| **多语言运行器** | `QuroLanguageRunner`：对话框内支持 **7 种编程语言**（JavaScript、Python、HTML、JSON、CSS、XML、C/C++/Java）的检测、运行和渲染，手机端轻量 IDE |
+| **自研多语言小程序（MiniApp）** | AI 生成完整小程序代码（HTML + JS + CSS），对话框内实时渲染为可交互小程序页面；支持 Page/Component 生命周期、data-bind 数据绑定、data-action 事件绑定；通过 JSBridge 调用原生能力（存储、网络、设备信息、UI、路由） |
+| **可视化组件** | `ui_widget` 工具：**60+ 种可交互组件**（按钮、表单、图表、进度、评分、轮播、时间线等），直接融进聊天气泡；支持 `command` 语法触发动作（打开页面、执行命令、调用 AI 等） |
+| **可视化编程** | **Mermaid 图表离线渲染**：AI 或用户写 ` ```mermaid ` 围栏代码块，离线渲染成流程图/时序图/状态机/类图/思维导图等；支持全屏预览、SVG 导出、五种主题 |
 
 ---
 
@@ -142,6 +152,92 @@
   - `java`/`c`/`c++`：撰写与算法逻辑；端侧沙箱不能直接编译，需借助 `workspace_write` + ACI 构建台（云端编译）。
   - **组合拳**：例如「抓数据(python) → 算指标(python) → 画看板(html 工件)」整条链路 AI 一人完成，全部在对话框呈现。工作流口诀：**算/抓/分析 → `run_code(python)`；画网页/图表/三维 → 返回 `html` 工件（或 ```html 围栏，二者等效）；画流程/架构图 → mermaid**。
 - 系统提示词（[`QuroPlatformManifest`](app/src/main/java/com/ai/assistance/quro/core/QuroPlatformManifest.kt) 「能力环境」段与 [`QuroChatViewModel`](app/src/main/java/com/ai/assistance/quro/ui/QuroChatViewModel.kt) 的「手机 AI IDE 能力地图」指引）已同步：引导 AI 主动用 `run_code` 跑代码、用 html 工件/```html 围栏渲染可视化、用 mermaid 画图，把「说」和「做 / 画 / 跑」自由组合。
+
+### 1.6 可视化弹窗 & 询问（v1.0.62 新增）
+AI 在执行任务时可以通过可视化方式与用户交互，**强制规则**：遇到模糊命令/缺少信息/需要确认时，必须立刻调用可视化工具询问用户，禁止猜测、禁止假设、禁止跳过。
+
+- **可视化弹窗（`visual_popup`）**：AI 创建结构化弹窗，支持 Markdown/HTML/纯文本内容、多按钮（不同样式）、输入框（文本/数字/密码/邮箱）、图片显示、自定义宽高、超时控制。弹窗在对话框中显示为可点击的小卡片，用户操作后结果返回给 AI。
+  - **AI自写UI弹窗（`visual_custom_popup`）**：AI 完全自写 HTML/CSS/JS 代码，UI 完全自由控制（表单、图表、游戏、任何交互式 UI）。支持 `overlay=true` 模式：通过 `VisualPopupOverlayService` 在 App 外以系统级悬浮窗显示。
+- **可视化询问（`visual_question` / `visual_action`）**：AI 遇到模糊命令/缺少信息/需要确认时，弹出选择题/输入框让用户回答。问答弹窗不允许关闭（`dismissOnBackPress=false, dismissOnClickOutside=false`），必须回答。
+  - 询问方式选择器提供 5 种类型：选择题、输入框、评分、开关、自由HTML
+  - 评分和开关类型会转为 `visual_custom_popup` 调用
+
+### 1.7 多语言运行器（`QuroLanguageRunner`）
+对话框内支持 **7 种编程语言**的检测、运行和渲染，手机端轻量 IDE：
+
+| 语言 | 运行方式 | 说明 |
+|------|----------|------|
+| **JavaScript** | QuickJS 原生沙箱 | App 内置 QuickJS 原生沙箱离线执行，带内存上限 16MB + 超时中断 2s |
+| **Python** | Brython 引擎 | 内置 Brython 引擎，无需 Termux 即可在对话框运行 |
+| **HTML** | WebView 渲染 | 完整 HTML 源码渲染为可交互网页（支持内联样式/脚本、SVG、Three.js 三维） |
+| **JSON** | 数据可视化 | 数据/配置可视化 |
+| **CSS** | 样式支持 | 样式代码支持 |
+| **XML** | 数据/配置 | 数据/配置文件支持 |
+| **C/C++/Java** | 语法高亮 | 语法高亮和算法逻辑撰写（端侧沙箱不能直接编译，需借助工作区或 ACI 构建台） |
+
+### 1.8 自研多语言小程序（MiniApp）
+AI 可以生成完整小程序代码（HTML + JS + CSS），在对话框中实时渲染为可交互的小程序页面。
+
+- **小程序框架**：支持完整的 Page/Component 生命周期、data-bind 数据绑定、data-action 事件绑定
+- **JSBridge 架构**：`MiniAppBridgeInterface` 通过 `@JavascriptInterface` 注解暴露原生能力给 JS
+- **模块化设计**：Storage（存储）、Device（设备信息）、Ui（Toast、导航栏）、Network（HTTP 请求）、Router（页面导航）五个内置模块
+- **双后端运行时**：逻辑层可选 QuickJS（Native 线程，带内存上限 + 超时中断 + 关闭 eval）或 WebView（零 NDK 依赖）
+- **完全离线**：所有运行时代码内联打包进 APK
+
+**使用方式**：AI 通过 `ui_widget` 工具下发 `type: "miniapp"` 组件：
+```json
+{
+  "type": "miniapp",
+  "title": "计算器",
+  "html": "<div data-bind='count'>0</div><button data-action='increment'>+1</button><script>Page({data:{count:0},increment(){this.setData({count:this.data.count+1})}})</script>"
+}
+```
+
+### 1.9 可视化组件（`ui_widget`）
+`ui_widget` 工具支持 **60+ 种可交互组件**，直接融进聊天气泡（而非浮层）。
+
+**支持的组件类型（7 大归类）：**
+
+| 归类 | 组件 |
+|------|------|
+| **Input 类** | button、toggle、slider、form、chips、quickreply、quickaction |
+| **Data 类** | stat、progress、gauge、counter、rating、pie、chart、heatmap、radar、compare |
+| **Media 类** | media、mediaplay、image、video |
+| **Layout 类** | tabs、expandable、carousel、kanban、steps、timeline |
+| **Action 类** | actions、toolcall、timer |
+| **Navigation 类** | breadcrumb、segmented、list |
+| **Decoration 类** | alert、badge、avatargroup、tagcloud、color、note、info |
+
+**技术特点：**
+- 组件通过 `QuroUiActionBridge.onCard` 桥接函数直接挂进聊天气泡
+- 所有组件都是真正可交互的 Compose 控件，支持实时状态联动
+- `command` 语法支持丰富动作：`ui_open_*`、`ui_toggle_*`、`linux:install`、`run:<命令>`、`open:<url>`、`copy:<文本>`、`ai:<提示词>`、`screen:<名称>`
+- 组件画廊入口：对话框 → 设置底部弹层 → 「可视化组件画廊」
+
+### 1.10 可视化编程（Mermaid 图表）
+AI 可以通过 Mermaid 语法创建流程图、架构图、时序图、状态机、类图、思维导图等可视化图表。
+
+**两种触发方式：**
+1. AI 调用 `ui_widget` 工具，`type: "mermaid"`
+2. AI 或用户直接在消息中写 ` ```mermaid ` 围栏代码块，对话框自动渲染
+
+**支持的图表类型：**
+- `flowchart` - 流程图
+- `sequenceDiagram` - 时序图
+- `stateDiagram-v2` - 状态机
+- `classDiagram` - 类图
+- `mindmap` - 思维导图
+- `gitGraph` - Git 图
+- `pie` - 饼图
+- `timeline` - 时间线
+
+**技术特点：**
+- **完全离线**：Mermaid.js 库内联打包进 APK（`assets/libs/mermaid.min.js`），不依赖 CDN
+- **WebView 渲染**：通过 `mermaid_render.html` 桥接页面加载 Mermaid.js 并将 SVG 注入 WebView
+- **SVG 导出**：渲染完成后可将 SVG 保存到 Downloads 目录
+- **全屏模式**：支持手势缩放、横屏适配
+- **主题自动切换**：支持 default/dark/forest/neutral/base 五种主题，缺省按系统深浅色自动选择
+- **人与 AI 共享**：用户也能发 mermaid 围栏画图，可视化编程对人与 AI 都开放
 
 ### 2. 内置技能 Skills（63 个 · 首次启动自动注入）
 - 轻量技能系统：`QuroSkill` → 注册为 `skill__{name}` 工具，可被 LLM 自动编排
@@ -306,6 +402,134 @@ Zorv AI 的对话框（ChatScreen）是 Agent 与用户交互的主界面，强�
 - **回到底部**：内容超出一屏时右下角浮现回底浮动按钮；列表滚动使用 `lastIndex` 精准定位，避免越界。
 
 > 所有消息持久化于 `QuroConversationStore`，删除/重试等操作实时同步内存 store 与磁盘，重启不丢失。
+
+---
+
+## 可视化弹窗 & 询问
+
+AI 在执行任务时可以通过可视化方式与用户交互，**强制规则**：遇到模糊命令/缺少信息/需要确认时，必须立刻调用可视化工具询问用户，禁止猜测、禁止假设、禁止跳过。
+
+### 可视化弹窗（`visual_popup` / `visual_custom_popup`）
+
+**固定UI组件弹窗（`visual_popup`）**：
+- AI 创建结构化弹窗，支持 Markdown/HTML/纯文本内容
+- 多按钮（不同样式：primary/secondary/danger）
+- 输入框（文本/数字/密码/邮箱）
+- 图片显示、自定义宽高、超时控制
+- 弹窗在对话框中显示为可点击的小卡片，用户操作后结果返回给 AI
+
+**AI自写UI弹窗（`visual_custom_popup`）**：
+- AI 完全自写 HTML/CSS/JS 代码，UI 完全自由控制
+- 支持表单、图表、游戏、任何交互式 UI
+- 支持 `overlay=true` 模式：通过 `VisualPopupOverlayService` 在 App 外以系统级悬浮窗显示
+- 需要 `SYSTEM_ALERT_WINDOW` 权限，无权限时自动请求并回退到普通模式
+
+### 可视化询问（`visual_question` / `visual_action`）
+
+AI 遇到模糊命令/缺少信息/需要确认时，弹出选择题/输入框让用户回答。
+
+**技术特点：**
+- 问答弹窗不允许关闭（`dismissOnBackPress=false, dismissOnClickOutside=false`），必须回答
+- 支持预设选项 + 自定义输入两种模式
+- 询问方式选择器提供 5 种类型：选择题、输入框、评分、开关、自由HTML
+- 评分和开关类型会转为 `visual_custom_popup` 调用
+
+---
+
+## 多语言运行器
+
+`QuroLanguageRunner`：对话框内支持 **7 种编程语言**的检测、运行和渲染，手机端轻量 IDE。
+
+| 语言 | 运行方式 | 说明 |
+|------|----------|------|
+| **JavaScript** | QuickJS 原生沙箱 | App 内置 QuickJS 原生沙箱离线执行，带内存上限 16MB + 超时中断 2s |
+| **Python** | Brython 引擎 | 内置 Brython 引擎，无需 Termux 即可在对话框运行 |
+| **HTML** | WebView 渲染 | 完整 HTML 源码渲染为可交互网页（支持内联样式/脚本、SVG、Three.js 三维） |
+| **JSON** | 数据可视化 | 数据/配置可视化 |
+| **CSS** | 样式支持 | 样式代码支持 |
+| **XML** | 数据/配置 | 数据/配置文件支持 |
+| **C/C++/Java** | 语法高亮 | 语法高亮和算法逻辑撰写（端侧沙箱不能直接编译，需借助工作区或 ACI 构建台） |
+
+---
+
+## 自研多语言小程序（MiniApp）
+
+AI 可以生成完整小程序代码（HTML + JS + CSS），在对话框中实时渲染为可交互的小程序页面。
+
+### 核心特性
+
+- **小程序框架**：支持完整的 Page/Component 生命周期、data-bind 数据绑定、data-action 事件绑定
+- **JSBridge 架构**：`MiniAppBridgeInterface` 通过 `@JavascriptInterface` 注解暴露原生能力给 JS
+- **模块化设计**：Storage（存储）、Device（设备信息）、Ui（Toast、导航栏）、Network（HTTP 请求）、Router（页面导航）五个内置模块
+- **双后端运行时**：逻辑层可选 QuickJS（Native 线程，带内存上限 + 超时中断 + 关闭 eval）或 WebView（零 NDK 依赖）
+- **完全离线**：所有运行时代码内联打包进 APK
+
+### 使用方式
+
+AI 通过 `ui_widget` 工具下发 `type: "miniapp"` 组件：
+```json
+{
+  "type": "miniapp",
+  "title": "计算器",
+  "html": "<div data-bind='count'>0</div><button data-action='increment'>+1</button><script>Page({data:{count:0},increment(){this.setData({count:this.data.count+1})}})</script>"
+}
+```
+
+---
+
+## 可视化组件
+
+`ui_widget` 工具支持 **60+ 种可交互组件**，直接融进聊天气泡（而非浮层）。
+
+### 支持的组件类型（7 大归类）
+
+| 归类 | 组件 |
+|------|------|
+| **Input 类** | button、toggle、slider、form、chips、quickreply、quickaction |
+| **Data 类** | stat、progress、gauge、counter、rating、pie、chart、heatmap、radar、compare |
+| **Media 类** | media、mediaplay、image、video |
+| **Layout 类** | tabs、expandable、carousel、kanban、steps、timeline |
+| **Action 类** | actions、toolcall、timer |
+| **Navigation 类** | breadcrumb、segmented、list |
+| **Decoration 类** | alert、badge、avatargroup、tagcloud、color、note、info |
+
+### 技术特点
+
+- 组件通过 `QuroUiActionBridge.onCard` 桥接函数直接挂进聊天气泡
+- 所有组件都是真正可交互的 Compose 控件，支持实时状态联动
+- `command` 语法支持丰富动作：`ui_open_*`、`ui_toggle_*`、`linux:install`、`run:<命令>`、`open:<url>`、`copy:<文本>`、`ai:<提示词>`、`screen:<名称>`
+- 组件画廊入口：对话框 → 设置底部弹层 → 「可视化组件画廊」
+
+---
+
+## 可视化编程（Mermaid 图表）
+
+AI 可以通过 Mermaid 语法创建流程图、架构图、时序图、状态机、类图、思维导图等可视化图表。
+
+### 两种触发方式
+
+1. AI 调用 `ui_widget` 工具，`type: "mermaid"`
+2. AI 或用户直接在消息中写 ` ```mermaid ` 围栏代码块，对话框自动渲染
+
+### 支持的图表类型
+
+- `flowchart` - 流程图
+- `sequenceDiagram` - 时序图
+- `stateDiagram-v2` - 状态机
+- `classDiagram` - 类图
+- `mindmap` - 思维导图
+- `gitGraph` - Git 图
+- `pie` - 饼图
+- `timeline` - 时间线
+
+### 技术特点
+
+- **完全离线**：Mermaid.js 库内联打包进 APK（`assets/libs/mermaid.min.js`），不依赖 CDN
+- **WebView 渲染**：通过 `mermaid_render.html` 桥接页面加载 Mermaid.js 并将 SVG 注入 WebView
+- **SVG 导出**：渲染完成后可将 SVG 保存到 Downloads 目录
+- **全屏模式**：支持手势缩放、横屏适配
+- **主题自动切换**：支持 default/dark/forest/neutral/base 五种主题，缺省按系统深浅色自动选择
+- **人与 AI 共享**：用户也能发 mermaid 围栏画图，可视化编程对人与 AI 都开放
 
 ---
 
