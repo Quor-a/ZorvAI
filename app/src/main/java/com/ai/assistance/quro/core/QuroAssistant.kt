@@ -20,6 +20,8 @@ import com.ai.assistance.quro.core.QuroToolSpec
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.util.QuroStageHints
+import com.ai.assistance.quro.core.fluidcloud.FluidCloudBridge
+import com.ai.assistance.quro.core.fluidcloud.FluidCloudLiveUpdate
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -101,6 +103,43 @@ class QuroAssistant(
     }
 
     /**
+     * 流体云通知辅助：双模式（ContentProvider + LiveUpdates），统一错误处理。
+     * 自动触发时使用，不干扰主流程。
+     */
+    private fun showFluidCloudSafe(context: Context, title: String, step: String, progress: Int) {
+        try {
+            val providerOk = FluidCloudBridge.create(context, title, step, progress)
+            if (!providerOk) {
+                FluidCloudLiveUpdate.show(context, title, step, progress)
+            }
+        } catch (e: Exception) {
+            Log.w("QuroAssistant", "FluidCloud create 失败: ${e.message}")
+        }
+    }
+
+    private fun updateFluidCloudSafe(context: Context, title: String, step: String, progress: Int) {
+        try {
+            val providerOk = FluidCloudBridge.update(context, title, step, progress)
+            if (!providerOk) {
+                FluidCloudLiveUpdate.show(context, title, step, progress)
+            }
+        } catch (e: Exception) {
+            Log.w("QuroAssistant", "FluidCloud update 失败: ${e.message}")
+        }
+    }
+
+    private fun finishFluidCloudSafe(context: Context) {
+        try {
+            val providerOk = FluidCloudBridge.finish(context)
+            if (!providerOk) {
+                FluidCloudLiveUpdate.finish(context)
+            }
+        } catch (e: Exception) {
+            Log.w("QuroAssistant", "FluidCloud finish 失败: ${e.message}")
+        }
+    }
+
+    /**
      * 深度思考指令：仅当用户显式开启「深度思考」时注入，要求模型在回答前充分推理；
      * 关闭时注入轻量指令，避免无谓的长篇推理。弥补此前「深度思考」开关只控制 UI 显隐、
      * 从不真正影响模型行为的缺陷（对所有模型通用：非推理模型被引导多想，推理模型本就在想）。
@@ -135,6 +174,8 @@ class QuroAssistant(
             var streamedContent: String = ""
             val emit = { onUpdate?.invoke() }
             QuroAgentTrace.status("assistant", "AI 开始响应")
+            // 自动触发流体云通知：AI 开始处理时创建胶囊
+            showFluidCloudSafe(context, "ZorvAI", "处理中...", 0)
             // 本地离线模型使用独立的设置（localTemperature / localMaxTokens / localEnableTools），
             // 与云端模型完全隔离——用户改离线设置不影响云端，反之亦然。
         val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
@@ -327,6 +368,8 @@ class QuroAssistant(
                         streamPlaceholderId?.let { sid ->
                             runCatching { store.update(sid) { it.copy(content = "", reasoning = null) } }
                         }
+                        // 自动结束流体云通知
+                        finishFluidCloudSafe(context)
                         throw e
                     }
                     // 🔧 #1113-3：错误必须自报家门。此前文案只有「请求失败：xxx」，
@@ -383,6 +426,8 @@ class QuroAssistant(
                             // 不再重复落库，避免「双气泡」。
                             store.update(streamPlaceholderId!!) { it.copy(content = lastText, reasoning = safeReasoning) }
                             emit()
+                            // 自动结束流体云通知
+                            finishFluidCloudSafe(context)
                             return@withContext lastText
                         }
                         // 非流式（或流式未触发任何 content token，如纯 reasoning 的 MiMo reason 模式）：
@@ -395,6 +440,8 @@ class QuroAssistant(
                             )
                         )
                         emit()
+                        // 自动结束流体云通知
+                        finishFluidCloudSafe(context)
                         return@withContext lastText
                     }
                     is QuroLlmResult.ToolCalls -> {
@@ -454,6 +501,10 @@ class QuroAssistant(
                         val results = runCatching { engine.execute(context, callsWithId) }
                             .getOrElse { e -> callsWithId.map { QuroToolResult(it.name, "工具执行异常：${e.message}") } }
                         val dur = System.currentTimeMillis() - t0
+                        // 自动更新流体云进度：基于轮次计算进度（每轮+10%，上限90%）
+                        val fluidProgress = minOf(round * 10, 90)
+                        val toolNames = callsWithId.joinToString(",") { it.name }
+                        updateFluidCloudSafe(context, "ZorvAI", "执行工具: $toolNames", fluidProgress)
                         // 🔑 关键：把执行结果**回填进 assistant 消息的 toolCalls**（自包含）。
                         // UI 之后直接从这一条 assistant 消息读出「工具名 + 参数 + 结果」三件套，
                         // 彻底不再依赖「跨消息 resultMap 按 toolCallId 匹配 role=tool 结果」这种脆弱写法——
@@ -530,6 +581,8 @@ class QuroAssistant(
                         lastText = "⚠️ 检测到工具调用长时间陷入重复失败（未自行纠正），已停止以避免卡死。可调整指令或检查工具后重试。"
                         store.add(QuroMessage(role = "assistant", content = lastText))
                         emit()
+                        // 自动结束流体云通知
+                        finishFluidCloudSafe(context)
                         return@withContext lastText
                     }
                 } else {
@@ -556,6 +609,8 @@ class QuroAssistant(
                             store.add(QuroMessage(role = "assistant", content = lastText))
                         }
                         emit()
+                        // 自动结束流体云通知
+                        finishFluidCloudSafe(context)
                         return@withContext lastText
                     }
                 }
@@ -566,6 +621,8 @@ class QuroAssistant(
                 else
                     "（已达到最大工具轮次 ${cfg.maxToolRounds}，未能生成最终答复）"
             }
+            // 自动结束流体云通知
+            finishFluidCloudSafe(context)
             lastText
         }
 
