@@ -185,6 +185,11 @@
             android:name="health_permissions"
             android:resource="@array/health_permissions" />
 
+        <!-- OPPO 流体云 oml 模板声明（打包进APK即本地生效，不上架） -->
+        <meta-data
+            android:name="fluid_cloud_template"
+            android:value="fluid_cloud_template.oml" />
+
         <!-- 精确闹钟/健康提醒触发接收器：闹钟到点后弹出通知（内部，不导出） -->
         <receiver
             android:name=".permissions.WorkoutAlarmReceiver"
