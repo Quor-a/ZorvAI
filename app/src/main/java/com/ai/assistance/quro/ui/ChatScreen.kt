@@ -869,6 +869,119 @@ fun ChatScreen(
                     is UiNavigationEvent.PermissionControl -> {
                         // TODO: 实现权限控制逻辑
                     }
+
+                    // ─── 手势操作（点击/长按/双击/滑动/缩放/旋转）───
+                    is UiNavigationEvent.ClickElement,
+                    is UiNavigationEvent.LongPress,
+                    is UiNavigationEvent.DoubleTap,
+                    is UiNavigationEvent.Swipe,
+                    is UiNavigationEvent.Pinch,
+                    is UiNavigationEvent.Rotate -> {
+                        // TODO: 实现手势操作逻辑
+                    }
+
+                    // ─── 文本操作（输入/复制/粘贴/剪切/全选/撤销/重做）───
+                    is UiNavigationEvent.InputText,
+                    is UiNavigationEvent.Copy,
+                    is UiNavigationEvent.Paste,
+                    is UiNavigationEvent.Cut,
+                    is UiNavigationEvent.SelectAll,
+                    is UiNavigationEvent.Undo,
+                    is UiNavigationEvent.Redo -> {
+                        // TODO: 实现文本操作逻辑
+                    }
+
+                    // ─── 系统操作（返回/首页/最近任务/分屏/截屏等）───
+                    is UiNavigationEvent.Back,
+                    is UiNavigationEvent.Home,
+                    is UiNavigationEvent.Recent,
+                    is UiNavigationEvent.SplitScreen,
+                    is UiNavigationEvent.Screenshot,
+                    is UiNavigationEvent.Share,
+                    is UiNavigationEvent.Search,
+                    is UiNavigationEvent.Refresh,
+                    is UiNavigationEvent.StopLoading,
+                    is UiNavigationEvent.Bookmark,
+                    is UiNavigationEvent.Fullscreen,
+                    is UiNavigationEvent.Minimize,
+                    is UiNavigationEvent.Maximize,
+                    is UiNavigationEvent.Close,
+                    is UiNavigationEvent.MinimizeApp,
+                    is UiNavigationEvent.LockScreen,
+                    is UiNavigationEvent.WakeScreen,
+                    is UiNavigationEvent.OpenNotification,
+                    is UiNavigationEvent.OpenQuickSettings -> {
+                        // TODO: 实现系统操作逻辑
+                    }
+
+                    // ─── 媒体控制 ───
+                    is UiNavigationEvent.TakePhoto,
+                    is UiNavigationEvent.StartRecording,
+                    is UiNavigationEvent.StopRecording,
+                    is UiNavigationEvent.PlayMedia,
+                    is UiNavigationEvent.PauseMedia,
+                    is UiNavigationEvent.StopMedia,
+                    is UiNavigationEvent.NextTrack,
+                    is UiNavigationEvent.PrevTrack -> {
+                        // TODO: 实现媒体控制逻辑
+                    }
+
+                    // ─── 设备控制 ───
+                    is UiNavigationEvent.VolumeUp,
+                    is UiNavigationEvent.VolumeDown,
+                    is UiNavigationEvent.Mute,
+                    is UiNavigationEvent.Unmute,
+                    is UiNavigationEvent.BrightnessUp,
+                    is UiNavigationEvent.BrightnessDown,
+                    is UiNavigationEvent.AutoBrightness,
+                    is UiNavigationEvent.WifiOn,
+                    is UiNavigationEvent.WifiOff,
+                    is UiNavigationEvent.BluetoothOn,
+                    is UiNavigationEvent.BluetoothOff,
+                    is UiNavigationEvent.AirplaneModeOn,
+                    is UiNavigationEvent.AirplaneModeOff,
+                    is UiNavigationEvent.DoNotDisturbOn,
+                    is UiNavigationEvent.DoNotDisturbOff,
+                    is UiNavigationEvent.FlashlightOn,
+                    is UiNavigationEvent.FlashlightOff,
+                    is UiNavigationEvent.LocationOn,
+                    is UiNavigationEvent.LocationOff,
+                    is UiNavigationEvent.NfcOn,
+                    is UiNavigationEvent.NfcOff,
+                    is UiNavigationEvent.AutoRotateOn,
+                    is UiNavigationEvent.AutoRotateOff,
+                    is UiNavigationEvent.Portrait,
+                    is UiNavigationEvent.Landscape -> {
+                        // TODO: 实现设备控制逻辑
+                    }
+
+                    // ─── 应用管理 ───
+                    is UiNavigationEvent.OpenApp,
+                    is UiNavigationEvent.CloseApp,
+                    is UiNavigationEvent.InstallApp,
+                    is UiNavigationEvent.UninstallApp,
+                    is UiNavigationEvent.FreezeApp,
+                    is UiNavigationEvent.UnfreezeApp -> {
+                        // TODO: 实现应用管理逻辑
+                    }
+
+                    // ─── 设置管理 ───
+                    is UiNavigationEvent.OpenSettings,
+                    is UiNavigationEvent.OpenAccessibilitySettings,
+                    is UiNavigationEvent.OpenDeveloperOptionsSettings,
+                    is UiNavigationEvent.OpenAboutPhoneSettings,
+                    is UiNavigationEvent.OpenBatterySettings,
+                    is UiNavigationEvent.OpenStorageSettings,
+                    is UiNavigationEvent.OpenNetworkSettings,
+                    is UiNavigationEvent.OpenDisplaySettings,
+                    is UiNavigationEvent.OpenSoundSettings,
+                    is UiNavigationEvent.OpenSecuritySettings,
+                    is UiNavigationEvent.OpenPrivacySettings,
+                    is UiNavigationEvent.OpenAccountsSettings,
+                    is UiNavigationEvent.OpenDateTimeSettings,
+                    is UiNavigationEvent.OpenLanguageSettings -> {
+                        // TODO: 实现设置管理逻辑
+                    }
                 }
             }
             kotlinx.coroutines.delay(100) // 每100ms检查一次
