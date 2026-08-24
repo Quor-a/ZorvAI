@@ -12,15 +12,15 @@ import com.ai.assistance.quro.R
 import com.ai.assistance.quro.activity.QuroMainActivity
 
 /**
- * AI 回复通知（仿微信消息）—— 系统通知。
+ * AI 回复通知（仿微信消息）—— 系统通知 + Bubble 气泡。
  *
  * 设计原则（与「常住」功能彻底解耦）：
- * - 本类只负责「离开软件时」的**系统通知**（heads-up 弹窗 + 通知栏条目）。
+ * - 本类只负责「离开软件时」的**系统通知**（heads-up 弹窗 + 通知栏条目 + Bubble 气泡）。
  * - **仅在 app 不在前台时弹出**：[notifyReply] 开头若 [isAppForeground] 为真直接 return，
  *   用户在对话框里/软件内能直接看到回复，不重复弹系统通知。
  * - 应用退到后台、被关掉、来电/锁屏等「离开软件」场景：走 HIGH 渠道 → 锁屏/通知栏以
- *   「弹窗(heads-up)」形式出现，离开软件也能收到。
- * - 点击通知把应用带到前台（QuroMainActivity 为 singleTask，自然回到对话）。
+ *   「弹窗(heads-up)」形式出现 + Bubble 气泡浮动在屏幕上，离开软件也能收到。
+ * - 点击通知/Bubble 把应用带到前台（QuroMainActivity 为 singleTask，自然回到对话）。
  *
  * 与「常住」是两套独立体系：常驻通知栏由 [com.ai.assistance.quro.service.QuroVoiceBallService]
  * （前台服务常驻条目）负责，本类不管常驻，只管「离开软件时的消息系统通知」。
@@ -60,8 +60,35 @@ object QuroReplyNotifier {
     }
 
     /**
+     * 创建 Bubble 气泡元数据（Android 10+）。
+     * 气泡点击后打开 QuroMainActivity，直接进入对话界面。
+     */
+    private fun createBubbleMetadata(ctx: Context, id: Int): NotificationCompat.BubbleMetadata? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        return try {
+            val bubbleIntent = Intent(ctx, QuroMainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("open_chat", true)
+            }
+            val pi = PendingIntent.getActivity(
+                ctx, id + 10000, bubbleIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+            )
+            val icon = androidx.core.graphics.drawable.IconCompat.createWithResource(ctx, R.mipmap.ic_launcher)
+            NotificationCompat.BubbleMetadata.Builder(pi, icon)
+                .setDesiredHeight(600)
+                .build()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
      * 收到 AI 回复时调用。**仅当 app 不在前台时**才弹出系统通知（离开软件才能收到）；
      * app 在前台（用户在对话框/软件内）直接 return，不重复打扰。
+     *
+     * Android 10+ 自动附加 Bubble 气泡，用户可点击气泡直接进入对话。
+     *
      * @param ctx   上下文（通常用 ApplicationContext）
      * @param sender 发送者显示名（人格名或 "Zorv AI"）
      * @param text  回复正文（自动取首非空行并截断）
@@ -85,8 +112,8 @@ object QuroReplyNotifier {
             val ai = Person.Builder().setName(sender).build()
             val style = NotificationCompat.MessagingStyle(me)
                 .addMessage(snippet, System.currentTimeMillis(), ai)
-            // 离开软件 → HIGH 渠道 + HIGH 优先级 → heads-up 弹窗
-            val notif = NotificationCompat.Builder(ctx, CHANNEL_ID)
+            // 离开软件 → HIGH 渠道 + HIGH 优先级 → heads-up 弹窗 + Bubble 气泡
+            val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(sender)
                 .setContentText(snippet)
@@ -96,7 +123,14 @@ object QuroReplyNotifier {
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setAutoCancel(true)
                 .setContentIntent(pi)
-                .build()
+            // Android 10+ 添加 Bubble 气泡（类似流体云胶囊）
+            val bubbleMetadata = createBubbleMetadata(ctx, NOTIF_ID)
+            if (bubbleMetadata != null) {
+                builder.setBubbleMetadata(bubbleMetadata)
+                builder.setShortcutId("quro_chat")
+                builder.addPerson(ai)
+            }
+            val notif = builder.build()
             val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.notify(NOTIF_ID, notif)
         }
@@ -120,7 +154,7 @@ object QuroReplyNotifier {
     }
 
     /**
-     * IM（机器人）消息系统弹窗：离开软件时弹 heads-up，前台时不弹（用户能在绑定对话里看到）。
+     * IM（机器人）消息系统弹窗：离开软件时弹 heads-up + Bubble 气泡，前台时不弹（用户能在绑定对话里看到）。
      * 用于「飞书 / QQ / 微信 收到消息 → 系统级弹窗提醒」与「机器人回复 → 系统级弹窗提醒」两个场景。
      * @param id 通知 id：入站用 [NOTIF_IM_INBOUND]、回复用 [NOTIF_IM_REPLY]，避免两类通知互相覆盖。
      */
@@ -136,7 +170,7 @@ object QuroReplyNotifier {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
             val snippet = text.lineSequence().firstOrNull { it.isNotBlank() }?.take(200) ?: "（空消息）"
-            val notif = NotificationCompat.Builder(ctx, CHANNEL_IM_ID)
+            val builder = NotificationCompat.Builder(ctx, CHANNEL_IM_ID)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(sender)
                 .setContentText(snippet)
@@ -145,7 +179,15 @@ object QuroReplyNotifier {
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setAutoCancel(true)
                 .setContentIntent(pi)
-                .build()
+            // Android 10+ 添加 Bubble 气泡
+            val bubbleMetadata = createBubbleMetadata(ctx, id)
+            if (bubbleMetadata != null) {
+                builder.setBubbleMetadata(bubbleMetadata)
+                builder.setShortcutId("quro_chat")
+                val person = Person.Builder().setName(sender).build()
+                builder.addPerson(person)
+            }
+            val notif = builder.build()
             val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.notify(id, notif)
         }

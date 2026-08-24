@@ -286,6 +286,27 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
                 )
             } catch (_: Throwable) { /* 个别 ROM 无此入口，忽略 */ }
         }
+        // 精确闹钟（Android 12+）：引导用户到「闹钟和提醒」设置页开启
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val am = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            if (!am.canScheduleExactAlarms()) {
+                try {
+                    startActivity(
+                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                            .setData(Uri.parse("package:$packageName"))
+                    )
+                } catch (_: Throwable) { /* 个别 ROM 无此入口，忽略 */ }
+            }
+        }
+        // 悬浮窗权限：可视化弹窗默认需要，启动时引导开启
+        if (!Settings.canDrawOverlays(this)) {
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName"))
+                )
+            } catch (_: Throwable) { /* 个别 ROM 无此入口，忽略 */ }
+        }
     }
 
     private fun toggleVoiceBall(enabled: Boolean) {

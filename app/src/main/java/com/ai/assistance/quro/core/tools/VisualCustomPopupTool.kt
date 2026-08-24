@@ -152,7 +152,7 @@ visual_custom_popup({
             "height":{"type":"integer","description":"弹窗高度（可选，默认自适应）"},
             "cancelable":{"type":"boolean","description":"是否允许取消（默认true）"},
             "timeout":{"type":"integer","description":"超时时间（秒），默认120秒"},
-            "overlay":{"type":"boolean","description":"是否以系统级悬浮窗显示（默认false，需要悬浮窗权限）"}
+            "overlay":{"type":"boolean","description":"是否以系统级悬浮窗显示（默认true，自动申请权限）"}
         },
         "required":["title","html","card_title"]
     }"""
@@ -171,7 +171,7 @@ visual_custom_popup({
         val height = if (args.has("height")) args.optInt("height") else null
         val cancelable = args.optBoolean("cancelable", true)
         val timeout = args.optInt("timeout", 120)
-        val overlay = args.optBoolean("overlay", false)
+        val overlay = args.optBoolean("overlay", true)
 
         // 生成唯一ID
         val popupId = "popup_${System.currentTimeMillis()}_${(Math.random() * 1000).toInt()}"
@@ -225,9 +225,10 @@ visual_custom_popup({
             if (com.ai.assistance.quro.service.VisualPopupOverlayService.hasOverlayPermission(context)) {
                 com.ai.assistance.quro.service.VisualPopupOverlayService.showPopup(context, id)
             } else {
-                // 没有悬浮窗权限，请求权限并回退到普通模式
+                // 没有悬浮窗权限，自动跳转设置页请求权限
                 com.ai.assistance.quro.service.VisualPopupOverlayService.requestOverlayPermission(context)
-                Log.w(TAG, "没有悬浮窗权限，回退到普通模式")
+                Log.w(TAG, "没有悬浮窗权限，已跳转设置页请求")
+                // 回退到普通模式显示
             }
         }
 

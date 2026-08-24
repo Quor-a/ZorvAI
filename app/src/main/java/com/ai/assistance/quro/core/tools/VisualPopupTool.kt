@@ -101,12 +101,9 @@ object VisualPopupQueue {
 
     fun getCurrentPopup(): Pair<String, VisualPopupData>? {
         return synchronized(pendingPopups) {
-            if (pendingPopups.isNotEmpty()) {
-                val popup = pendingPopups[0]
-                popup.id to popup
-            } else {
-                null
-            }
+            // 只返回未完成/未取消的弹窗，避免已关闭的弹窗挡住新弹窗
+            val popup = pendingPopups.firstOrNull { it.status == PopupStatus.PENDING || it.status == PopupStatus.ACTIVE }
+            if (popup != null) popup.id to popup else null
         }
     }
 
