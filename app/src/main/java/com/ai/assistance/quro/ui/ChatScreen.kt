@@ -13,6 +13,8 @@ import com.ai.assistance.quro.core.tools.QuroTool
 import com.ai.assistance.quro.core.tools.ImportedToolDef
 import com.ai.assistance.quro.core.tools.QuroImportedToolRegistry
 import com.ai.assistance.quro.core.tools.QuroUiActionBridge
+import com.ai.assistance.quro.core.tools.UiNavigationBus
+import com.ai.assistance.quro.core.tools.ui.UiNavigationEvent
 import com.ai.assistance.quro.core.tools.VisualCustomPopupQueue
 import com.ai.assistance.quro.core.tools.VisualPopupQueue
 import com.ai.assistance.quro.core.tools.PopupButton
@@ -727,6 +729,135 @@ fun ChatScreen(
                     QuroMusicLauncher.consume()
                 }
             }
+        }
+    }
+
+    // ═══ UI 控制事件桥：AI 调用 ui_control 工具时，通过 UiNavigationBus 通知 ChatScreen 执行界面操作 ═══
+    LaunchedEffect(Unit) {
+        // 轮询 UiNavigationBus.navEvent（因为不是 Flow，需要定期检查）
+        while (true) {
+            val event = UiNavigationBus.navEvent
+            if (event != null) {
+                UiNavigationBus.navEvent = null // 清除事件，避免重复处理
+                when (event) {
+                    // ─── 打开界面 ───
+                    is UiNavigationEvent.OpenScreen -> {
+                        when (event.target) {
+                            "editor" -> showEditor = true
+                            "terminal" -> showTerminal = true
+                            "toolbox" -> showToolbox = true
+                            "knowledge" -> showKnowledge = true
+                            "cms" -> showCms = true
+                            "aci" -> showAci = true
+                            "about" -> showAbout = true
+                            "appearance" -> showAppearance = true
+                            "soul" -> showSoulSheet = true
+                            "memory" -> showMemoryDialog = true
+                            "permission" -> showPermission = true
+                            "model_config" -> showModelConfig = true
+                            "voice" -> showVoice = true
+                            "settings" -> sheet = SheetType.Settings
+                            else -> { /* 忽略未知界面 */ }
+                        }
+                    }
+
+                    // ─── 切换开关 ───
+                    is UiNavigationEvent.ToggleSwitch -> {
+                        when (event.target) {
+                            "deepthink" -> vm.setThinking(!vm.thinking.value)
+                            "memory" -> vm.setAutoSaveMemory(!vm.autoSaveMemory.value)
+                            else -> { /* 忽略未知开关 */ }
+                        }
+                    }
+
+                    // ─── 打开弹层 ───
+                    is UiNavigationEvent.OpenSheet -> {
+                        when (event.target) {
+                            "model" -> sheet = SheetType.Model
+                            "persona" -> sheet = SheetType.Persona
+                            "settings" -> sheet = SheetType.Settings
+                            "upload" -> sheet = SheetType.Upload
+                            "voice" -> sheet = SheetType.Voice
+                            else -> { /* 忽略未知弹层 */ }
+                        }
+                    }
+
+                    // ─── 对话管理 ───
+                    is UiNavigationEvent.ChatAction -> {
+                        when (event.action) {
+                            "new" -> vm.newConversation()
+                            "clear" -> vm.clear()
+                            else -> { /* 忽略未知对话操作 */ }
+                        }
+                    }
+
+                    // ─── 渲染卡片 ───
+                    is UiNavigationEvent.RenderCard -> {
+                        val card = com.ai.assistance.quro.core.cards.QuroChatCard(
+                            type = "html",
+                            title = event.title,
+                            content = event.content,
+                            config = mapOf("style" to event.style)
+                        )
+                        vm.attachCardToLastAssistant(card)
+                    }
+
+                    // ─── 渲染组件 ───
+                    is UiNavigationEvent.RenderWidget -> {
+                        val card = com.ai.assistance.quro.core.cards.QuroChatCard(
+                            type = "widget",
+                            title = event.label,
+                            content = event.value,
+                            config = mapOf(
+                                "widget_type" to event.type,
+                                "widget_id" to event.id
+                            )
+                        )
+                        vm.attachCardToLastAssistant(card)
+                    }
+
+                    // ─── 查询状态 ───
+                    is UiNavigationEvent.QueryStatus -> {
+                        // TODO: 实现状态查询逻辑
+                    }
+
+                    // ─── 更新组件属性 ───
+                    is UiNavigationEvent.UpdateComponent -> {
+                        // TODO: 实现组件属性更新逻辑
+                    }
+
+                    // ─── 滚动 ───
+                    is UiNavigationEvent.ScrollTo -> {
+                        // TODO: 实现滚动逻辑
+                    }
+
+                    // ─── 聚焦 ───
+                    is UiNavigationEvent.FocusComponent -> {
+                        // TODO: 实现聚焦逻辑
+                    }
+
+                    // ─── 隐藏 ───
+                    is UiNavigationEvent.HideComponent -> {
+                        // TODO: 实现隐藏逻辑
+                    }
+
+                    // ─── 显示 ───
+                    is UiNavigationEvent.ShowComponent -> {
+                        // TODO: 实现显示逻辑
+                    }
+
+                    // ─── 页面内导航 ───
+                    is UiNavigationEvent.NavigateTo -> {
+                        // TODO: 实现页面内导航逻辑
+                    }
+
+                    // ─── 权限控制 ───
+                    is UiNavigationEvent.PermissionControl -> {
+                        // TODO: 实现权限控制逻辑
+                    }
+                }
+            }
+            kotlinx.coroutines.delay(100) // 每100ms检查一次
         }
     }
 
