@@ -291,11 +291,25 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
             val am = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
             if (!am.canScheduleExactAlarms()) {
                 try {
-                    startActivity(
-                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                            .setData(Uri.parse("package:$packageName"))
-                    )
-                } catch (_: Throwable) { /* 个别 ROM 无此入口，忽略 */ }
+                    // 尝试打开闹钟和提醒设置页面
+                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                    // 给用户一个提示
+                    android.widget.Toast.makeText(
+                        this,
+                        "请在「闹钟和提醒」设置中开启「允许设置精确闹钟」权限",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                } catch (_: Throwable) {
+                    // 如果无法打开设置页面，给用户一个手动操作的提示
+                    android.widget.Toast.makeText(
+                        this,
+                        "请手动前往「设置 → 应用 → Zorv AI → 权限 → 闹钟和提醒」开启权限",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
         // 悬浮窗权限：可视化弹窗默认需要，启动时引导开启
