@@ -614,11 +614,17 @@ private fun notifyTaskCompletion(context: Context, task: QuroScheduledTask, targ
 /** 开机后重新排程所有定时任务 */
 class QuroScheduleBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED ||
-            intent.action == "android.intent.action.MY_PACKAGE_REPLACED" ||
-            intent.action == "android.intent.action.QUICKBOOT_POWERON"
-        ) {
-            QuroScheduledTaskScheduler.scheduleAll(context)
+        when (intent.action) {
+            Intent.ACTION_BOOT_COMPLETED,
+            "android.intent.action.MY_PACKAGE_REPLACED",
+            "android.intent.action.QUICKBOOT_POWERON" -> {
+                QuroScheduledTaskScheduler.scheduleAll(context)
+            }
+            "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" -> {
+                // 闹钟权限状态变更：可能需要重新检查闹钟权限状态
+                // 这里可以添加日志或通知用户权限状态变更
+                android.util.Log.d("QuroScheduleBootReceiver", "闹钟权限状态已变更")
+            }
         }
     }
 }
