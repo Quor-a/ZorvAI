@@ -47,7 +47,6 @@
 - [ACI 控制台 UI（LAN 控制台）](#aci-控制台-ui)
 - [ACI HTTP 传输（局域网/本地组网）](#aci-http-传输)
 - [MCP-ACI 桥接](#mcp-aci-桥接)
-- [ZorvBrowser-ACI 桥接](#zorvbrowser-aci-桥接)
 - [特权 / 权限层 · L1–L5](#特权-权限层-l1l5)
 - [工具箱 · Toolbox](#工具箱-toolbox)
 - [开发工具与导入教程](#开发工具与导入教程)
@@ -878,53 +877,6 @@ MCP 工具名称自动转换为 ACI 能力 ID：
     "serverAlias": "weather",
     "toolName": "get_current_weather",
     "arguments": {"city": "北京"}
-  }
-}
-```
-
----
-
-## ZorvBrowser-ACI 桥接
-
-Zorv AI 内置 **ZorvBrowser-ACI 桥接**功能，支持 30 个浏览器工具的 ACI 调用。
-
-### 浏览器工具分类
-
-| 类别 | 工具 |
-|------|------|
-| **基础导航** | `browser_open`, `browser_back`, `browser_forward`, `browser_reload`, `browser_close`, `browser_screenshot` |
-| **标签页管理** | `browser_tabs_list`, `browser_tabs_switch`, `browser_tabs_new`, `browser_tabs_close` |
-| **DOM 操作** | `browser_dom_query`, `browser_dom_text`, `browser_dom_attr`, `browser_dom_click`, `browser_dom_type` |
-| **内容提取** | `browser_crawl`, `browser_html`, `browser_text`, `browser_links` |
-| **JavaScript 执行** | `browser_script` |
-| **输入模拟** | `browser_input_click`, `browser_input_type`, `browser_input_scroll` |
-| **HTTP 请求** | `browser_http_request`（支持 LAN 明文） |
-| **高级功能** | `browser_find_text`, `browser_pdf`, `browser_print` |
-| **书签和历史** | `browser_bookmarks_list`, `browser_bookmarks_add`, `browser_history_list` |
-
-### ACI Token 认证
-
-ZorvBrowser 通过 ACI Token 认证确保安全性：
-- **Token 格式**：`aci_token_{packageName}_{timestamp}_{random}`
-- **加密存储**：AndroidKeyStore，AES/GCM/NoPadding
-- **自动添加**：`QuroAidlAciManager` 在每次 ACI 调用时自动添加 Token
-
-### 桥接工具
-
-| 工具 | 参数 | 说明 |
-|------|------|------|
-| `browser_aci_list` | — | 列出所有可通过 ACI 调用的浏览器工具 |
-| `browser_aci_call` | `toolName`(必填) / `arguments`(可选) | 通过 ACI 调用浏览器工具 |
-| `browser_aci_bridge` | `action`(必填: refresh/list) | 管理 ZorvBrowser-ACI 桥接器 |
-
-### 使用示例
-
-```json
-{
-  "name": "browser_aci_call",
-  "arguments": {
-    "toolName": "browser_open",
-    "arguments": {"url": "https://example.com"}
   }
 }
 ```

@@ -395,10 +395,6 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(McpAciListTool())
     r.register(McpAciCallTool())
     r.register(McpAciBridgeTool())
-    // ZorvBrowser-ACI 桥接工具：让 AI 通过 ACI 调用 ZorvBrowser 浏览器的工具
-    r.register(BrowserAciListTool())
-    r.register(BrowserAciCallTool())
-    r.register(BrowserAciBridgeTool())
     // 工具发现工具：让 AI 主动查询工具能力目录，解决不会主动使用工具的问题
     r.register(ToolDiscoveryTool())
     // 本地 MCP 部署工具：AI 创作并部署 MCP 服务器到本应用内（#Task8）
