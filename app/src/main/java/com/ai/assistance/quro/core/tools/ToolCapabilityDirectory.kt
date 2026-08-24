@@ -253,31 +253,64 @@ object ToolCapabilityDirectory {
         ),
         
         // ═══════════════ UI/卡片 ═══════════════
-        "ui_widget" to ToolInfo(
-            name = "ui_widget",
+        "ui_control" to ToolInfo(
+            name = "ui_control",
             category = ToolCategory.UI_CARDS,
-            description = "在对话框展示可交互UI组件（含小程序）",
-            useCases = listOf("展示一个图表", "做个进度条", "画个流程图", "做个表单", "展示待办清单", "渲染AI小程序"),
-            examples = listOf(
-                "ui_widget(spec={type:\"progress\", value:75, title:\"完成度\"})",
-                "ui_widget(spec={type:\"miniapp\", title:\"计算器\", html:\"<div>...</div>\"})"
+            description = "统一UI控制工具：操控界面每个角落（打开界面/切换开关/打开弹层/对话管理/渲染卡片/组件/查询状态/更新属性/滚动/聚焦/隐藏/显示/导航/权限控制）",
+            useCases = listOf(
+                "打开编辑器/终端/工具箱/知识库",
+                "切换深度思考/自动记忆开关",
+                "打开模型/人格/设置弹层",
+                "新建/清空对话",
+                "渲染卡片/组件到对话框",
+                "查询组件状态",
+                "更新组件属性",
+                "滚动到指定位置",
+                "聚焦到组件",
+                "隐藏/显示组件",
+                "页面内导航",
+                "权限控制"
             ),
-            parameters = mapOf("spec" to "组件配置JSON（含miniapp类型）"),
-            tips = listOf("支持几十种组件类型", "组件可交互", "实时渲染在对话框", "miniapp支持HTML+JS+CSS小程序"),
-            relatedTools = listOf("ui_card", "mermaid", "visual_custom_popup"),
+            examples = listOf(
+                "ui_control(action=\"open\", target=\"editor\")",
+                "ui_control(action=\"toggle\", target=\"deepthink\")",
+                "ui_control(action=\"sheet\", target=\"model\")",
+                "ui_control(action=\"chat\", action_type=\"new\")",
+                "ui_control(action=\"card\", title=\"天气\", content=\"# 今天天气\", style=\"info\")",
+                "ui_control(action=\"widget\", type=\"button\", id=\"btn1\", label=\"点击\")",
+                "ui_control(action=\"status\", component=\"header\")",
+                "ui_control(action=\"update\", component=\"header\", props={\"title\":\"新标题\"})",
+                "ui_control(action=\"scroll\", target=\"bottom\")",
+                "ui_control(action=\"focus\", target=\"input\")",
+                "ui_control(action=\"hide\", target=\"sidebar\")",
+                "ui_control(action=\"show\", target=\"toolbox\")",
+                "ui_control(action=\"navigate\", target=\"section_id\")",
+                "ui_control(action=\"permission\", permission=\"camera\", enabled=true)"
+            ),
+            parameters = mapOf(
+                "action" to "操作类型：open|toggle|sheet|chat|card|widget|status|update|scroll|focus|hide|show|navigate|permission",
+                "target" to "操作目标",
+                "action_type" to "chat操作子类型：new|clear",
+                "title" to "卡片标题",
+                "content" to "卡片内容（Markdown）",
+                "style" to "卡片样式：info|success|warning|error",
+                "type" to "组件类型：button|toggle|slider|input|select",
+                "id" to "组件唯一ID",
+                "label" to "组件标签",
+                "value" to "组件值",
+                "component" to "组件标识",
+                "props" to "要更新的属性键值对",
+                "permission" to "权限类型",
+                "enabled" to "权限启用状态"
+            ),
+            tips = listOf(
+                "统一入口，替代旧的ui_open_*/ui_toggle_*/ui_card/ui_widget",
+                "支持15种操作类型",
+                "通过action参数区分操作类型",
+                "事件驱动架构，通过UiNavigationBus通知ChatScreen"
+            ),
+            relatedTools = listOf("tool_discovery", "visual_custom_popup", "visual_popup"),
             priority = 5
-        ),
-        
-        "ui_card" to ToolInfo(
-            name = "ui_card",
-            category = ToolCategory.UI_CARDS,
-            description = "在对话框展示静态卡片",
-            useCases = listOf("展示一张卡片", "做个信息卡", "展示结果"),
-            examples = listOf("ui_card(type=\"note\", title=\"笔记\", content=\"内容\")"),
-            parameters = mapOf("type" to "卡片类型", "title" to "标题", "content" to "内容"),
-            tips = listOf("适合展示静态信息", "比ui_widget简单"),
-            relatedTools = listOf("ui_widget"),
-            priority = 3
         ),
         
         // ═══════════════ 可视化交互（强制使用） ═══════════════
@@ -755,8 +788,8 @@ object ToolCapabilityDirectory {
             "打开网页" to listOf("aci_call(browser_open)", "ai_browser", "open_web"),
             "图片生成" to listOf("image_gen"),
             "图片识别" to listOf("image_recognition", "visual_analysis"),
-            "UI展示" to listOf("ui_widget", "ui_card"),
-            "流程图/架构图" to listOf("ui_widget(mermaid)"),
+            "UI展示" to listOf("ui_control"),
+            "流程图/架构图" to listOf("ui_control(action=\"widget\", type=\"mermaid\")"),
             "记忆保存" to listOf("memory_save"),
             "知识搜索" to listOf("knowledge_search", "knowledge_rag_search"),
             "工作区文件" to listOf("workspace_write", "workspace_read", "workspace_list"),
@@ -792,7 +825,7 @@ object ToolCapabilityDirectory {
 ## 1. 主动使用工具
 - 用户需要真实数据（天气/时间/设备状态）→ 调用工具获取，不要瞎猜
 - 用户需要真实动作（打开应用/读写文件/控制设备）→ 调用工具执行
-- 用户需要可视化结果（图表/流程图/UI）→ 调用ui_widget展示
+- 用户需要可视化结果（图表/流程图/UI）→ 调用ui_control(action="widget")展示
 
 ## 2. 工具组合使用
 - 复杂任务拆成多步：思考 → 调用 → 看结果 → 再思考 → 再调用

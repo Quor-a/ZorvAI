@@ -2025,7 +2025,7 @@ $recent
             "若 isInputActive() 为 false（无聚焦输入框），工具会返回明确引导而非静默失败。" +
             "它与无障碍 input_text 是「两条独立通道」：需要「模拟真人逐字输入、触发 IME 的发送/回车动作」时走键盘通道；需要「直接覆盖或设置控件文本、不依赖输入法」时走无障碍通道。\n"
         )
-        sb.append("\n（其中 `ui_open_*` / `ui_toggle_*` / `ui_clear_*` / `ui_new_*` 为**界面控制工具**：调用后会在当前对话框直接打开对应界面/弹层/开关，例如 ui_open_onlyoffice 打开文档查看器、ui_toggle_deepthink 切换深度思考、ui_clear_chat 清空对话。它们同样可由你并行发起，让用户无需手动点击即可导航应用。）\n")
+        sb.append("\n（其中 `ui_control` 为**统一界面控制工具**：调用后会在当前对话框直接打开对应界面/弹层/开关，例如 ui_control(action=\"open\", target=\"editor\") 打开编辑器、ui_control(action=\"toggle\", target=\"deepthink\") 切换深度思考、ui_control(action=\"chat\", action_type=\"clear\") 清空对话。它们同样可由你并行发起，让用户无需手动点击即可导航应用。）\n")
         sb.append("\n（CMS 模块与大部分能力在应用沙箱内执行（intent/js/api）；另有系统级通道 L1 无障碍控屏 / L2 Shizuku / L3 设备管理员 / L4 ROOT / L5 Linux，对应工具已包含在上方清单中，运行时由系统授权与资产可用性把关，未授权时工具会返回明确引导，无需你做通道自查。）\n")
 
         // ═══ WorkbenchTool 专项指引（让 AI 知道如何使用工作区工具） ═══
@@ -2041,21 +2041,21 @@ $recent
         )
         sb.append("\n### 在对话框里「展示」UI（重要）\n")
         sb.append(
-            "- `ui_widget`：当你想给用户**可视化、可交互**的结果时，调用它在对话框内直接渲染组件，而不是只发纯文本。" +
+            "- `ui_control(action=\"widget\")`：当你想给用户**可视化、可交互**的结果时，调用它在对话框内直接渲染组件，而不是只发纯文本。" +
             "支持几十种类型：button（按钮触发动作）/ toggle（开关）/ slider（滑块）/ progress（进度条）/ stat（统计数字）/ alert（提醒条）/" +
             "table（表格）/ list（可选项列表）/ segmented（分段选择）/ pie（饼图）/ rating（星级评分）/ countdown（倒计时）/" +
             "tabs（标签页）/ expandable（折叠块）/ form（表单）/ chips（标签组，单选或多选）/ steps（步骤条）/ gauge（仪表盘）/ media（图片/音频/视频链接）/ info（信息块）/" +
             "以及 legacy 的 todo / chart / note / actions。" +
             "每个组件带丰富属性，组合即可产出「几百款」不同的 UI 输出。" +
             "组件会在对话框底部卡片栏即时渲染、随用户操作（勾选/拖动/切换）实时变化。示例：发一张待办清单、一个带图表的统计卡、一组可点选的标签、一个提交表单。" +
-            "需要用户在对话框里看到可点的东西时，优先用 ui_widget，而不是只写文字。\n"
+            "需要用户在对话框里看到可点的东西时，优先用 ui_control(action=\"widget\")，而不是只写文字。\n"
         )
         sb.append(
-            "- **可视化编程 / AI 自写图表（mermaid，重要）**：当用户要你「画流程图 / 架构图 / 时序图 / 状态机 / 类图 / 思维导图 / git 图 / 饼图 / 时间线 / 甘特图 / 关系图」等任何可视化图形，或说「可视化」「画个图」「用图展示」「做个架构图 / 流程图 / 脑图」时，**必须用 `ui_widget` 下发一个 `type:\"mermaid\"` 的组件**，把图用 Mermaid 语法写在 `source` 字段（多行字符串，换行用 \n），客户端会用离线 Mermaid.js 在对话框里直接渲染出可缩放的真图——这是真正的「可视化编程」能力：你要画的图自己用 Mermaid 写出来，客户端只负责渲染，不内置任何固定图。" +
-            "示例：用户说「画个登录流程」→ 调用 ui_widget({ \"spec\": { \"type\":\"mermaid\", \"title\":\"登录流程\", \"source\":\"flowchart TD\nA[开始] --> B{已登录?}\nB -- 否 --> C[跳登录页]\nB -- 是 --> D[进首页]\" } })。" +
+            "- **可视化编程 / AI 自写图表（mermaid，重要）**：当用户要你「画流程图 / 架构图 / 时序图 / 状态机 / 类图 / 思维导图 / git 图 / 饼图 / 时间线 / 甘特图 / 关系图」等任何可视化图形，或说「可视化」「画个图」「用图展示」「做个架构图 / 流程图 / 脑图」时，**必须用 `ui_control(action=\"widget\", type=\"mermaid\")` 下发一个 mermaid 组件**，把图用 Mermaid 语法写在 `source` 字段（多行字符串，换行用 \n），客户端会用离线 Mermaid.js 在对话框里直接渲染出可缩放的真图——这是真正的「可视化编程」能力：你要画的图自己用 Mermaid 写出来，客户端只负责渲染，不内置任何固定图。" +
+            "示例：用户说「画个登录流程」→ 调用 ui_control({ \"action\": \"widget\", \"type\": \"mermaid\", \"id\": \"login-flow\", \"label\": \"登录流程\", \"value\": \"flowchart TD\nA[开始] --> B{已登录?}\nB -- 否 --> C[跳登录页]\nB -- 是 --> D[进首页]\" })。" +
             "支持的图类型：flowchart / sequenceDiagram / stateDiagram-v2 / classDiagram / mindmap / gitGraph / pie / timeline 等（Mermaid 全量语法）。可选 `theme`：default/dark/forest/neutral/base，缺省按系统深浅色自动选。" +
             "注意：不要只写纯文本或 Markdown 伪图——要图就发 mermaid 组件，用户才能在对话框里看到真渲染的图。\n" +
-            "补充：除了 `ui_widget` 的 mermaid 组件，**直接写 ` ```mermaid ` 围栏代码块也会被对话框渲染成图**，两种方式等效；而且用户自己也能发 mermaid 围栏画图，对话框同样会渲染——可视化编程对人与 AI 都开放。\n"
+            "补充：除了 `ui_control` 的 mermaid 组件，**直接写 ` ```mermaid ` 围栏代码块也会被对话框渲染成图**，两种方式等效；而且用户自己也能发 mermaid 围栏画图，对话框同样会渲染——可视化编程对人与 AI 都开放。\n"
         )
         sb.append(
             "- **代码块与 HTML 可视化渲染（重要）**：对话框内置代码块渲染能力，你**应当主动使用围栏格式输出代码**，让结果以精美卡片呈现，而不是甩一大坨纯文本。" +
@@ -2078,7 +2078,7 @@ $recent
             "  · **组合拳（全栈）**：例如「抓数据(python) → 算指标(python) → 画看板(html 工件)」整条链路你一个人完成，全部在对话框里呈现；或「写 Three.js 三维场景(html) → 对话框里实时旋转预览」。\n" +
             "  **工作流口诀**：要「算 / 抓 / 分析」→ `run_code(python)`；要「画网页 / 图表 / 游戏 / 三维」→ 返回 `html` 工件（或 ```html 围栏，二者等效）；要「画流程图 / 架构图」→ mermaid。可视化产出全部融入对话框内容区。\n" +
             "  注意：你跑出来的网页/图表是**给你向用户展示的成果**，优先用 html 工件或 ```html 围栏让它真正渲染出来，而不是只回一段源码文字。\n" +
-            "  · **小程序开发（MiniApp，重要）**：你（AI）可以生成**小程序代码**并在对话框中实时渲染。小程序支持完整的 Page/Component 生命周期、数据绑定（data-bind）、事件绑定（data-action）。使用 `ui_widget` 下发 `type:\"miniapp\"` 组件，把小程序代码写在 `html` 字段。示例：\n" +
+            "  · **小程序开发（MiniApp，重要）**：你（AI）可以生成**小程序代码**并在对话框中实时渲染。小程序支持完整的 Page/Component 生命周期、数据绑定（data-bind）、事件绑定（data-action）。使用 `ui_control(action=\"widget\", type=\"miniapp\")` 下发 miniapp 组件，把小程序代码写在 `html` 字段。示例：\n" +
             "    ```json\n" +
             "    {\"type\": \"miniapp\", \"title\": \"计数器\", \"html\": \"<div data-bind='count'>0</div><button data-action='increment'>+1</button><script>Page({data:{count:0},increment(){this.setData({count:this.data.count+1})}})</script>\"}\n" +
             "    ```\n" +

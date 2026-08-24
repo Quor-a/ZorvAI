@@ -378,12 +378,12 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(VideoUnderstandingTool()) // AI 视频理解
     // 增强版文档创建工具：支持更多类型和更好渲染
     r.register(EnhancedDocTool())        // 增强版文档创建
-    // UI 动作工具：把对话框界面/弹层/开关注册为 AI 可调用工具（走 QuroUiActionBridge 回调 ChatScreen）
-    allUiActionTools.forEach { r.register(it) }
-    // 对话框富卡片工具：AI 下发可交互卡片（待办/图表/笔记/动作）
-    r.register(UiCardTool())
-    // 对话框内联 UI 组件工具（v134）：AI 在对话框里直接展示可交互 UI（按钮/开关/滑块/进度/统计/提醒/表格/列表/分段/饼图/评分/倒计时/标签页/折叠/表单/标签/步骤/仪表/媒体/信息）
-    r.register(UiWidgetTool())
+    // UI 动作工具：已废弃，统一由 ui_control 工具替代
+    // allUiActionTools.forEach { r.register(it) }
+    // 对话框富卡片工具：已废弃，统一由 ui_control 工具替代
+    // r.register(UiCardTool())
+    // 对话框内联 UI 组件工具：已废弃，统一由 ui_control 工具替代
+    // r.register(UiWidgetTool())
     // MCP 客户端工具：让 AI 调用外部 MCP 服务器暴露的工具（#402）
     r.register(McpServersTool())
     r.register(McpListToolsTool())

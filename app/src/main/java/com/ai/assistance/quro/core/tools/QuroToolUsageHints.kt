@@ -126,9 +126,8 @@ object QuroToolUsageHints {
         // ── 文档生成 ──
         "aiwps_create" to "「帮我生成一份 Word 周报」「做个 Excel 表格」「出个 PPT 关于 XX」都调用（本地生成 Office 兼容文件）",
 
-        // ── 对话框富卡片 / 内联组件 ──
-        "ui_card" to "「在对话框里给我一张待办卡/图表卡/笔记卡」「下发展示卡片」都调用",
-        "ui_widget" to "多用途：既能「展示一个开关让用户点」也能「画一张图表/进度条/表格/评分」也能「放个倒计时或表单」也能「用 Mermaid 画流程图/架构图/时序图/状态机/思维导图（可视化编程）」——用户要对话框里出现可交互 UI、或要你画任意类型的图/结构图/关系图（流程图/架构图/思维导图等）时调用",
+        // ── 统一UI控制工具 ──
+        "ui_control" to "统一UI控制工具：操控界面每个角落。常见用法：「打开编辑器/终端/工具箱」→ ui_control(action=\"open\", target=\"editor\")；「切换深度思考」→ ui_control(action=\"toggle\", target=\"deepthink\")；「打开模型选择」→ ui_control(action=\"sheet\", target=\"model\")；「新建对话」→ ui_control(action=\"chat\", action_type=\"new\")；「渲染卡片/组件」→ ui_control(action=\"card\"/\"widget\")；「查询状态/更新属性/滚动/聚焦/隐藏/显示/导航/权限控制」→ ui_control(action=\"status\"/\"update\"/\"scroll\"/\"focus\"/\"hide\"/\"show\"/\"navigate\"/\"permission\")",
 
         // ── MCP 客户端 ──
         "mcp_servers" to "「看看连了哪些 MCP 服务器」「MCP 服务列表」都调用",
