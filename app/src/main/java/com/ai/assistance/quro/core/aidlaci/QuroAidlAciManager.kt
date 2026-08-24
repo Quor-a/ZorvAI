@@ -146,6 +146,9 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         // 初始化 MCP 桥接器
         McpAciBridge.init(appContext)
         
+        // 初始化 ZorvBrowser-ACI 桥接器
+        com.ai.assistance.quro.core.browser.ZorvBrowserAciBridge.init(appContext)
+        
         return result
     }
 
@@ -756,6 +759,12 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         val mcpPrompt = McpAciBridge.getMcpCapabilityPrompt()
         if (mcpPrompt.isNotEmpty()) {
             sb.append("\n").append(mcpPrompt)
+        }
+        
+        // 添加 ZorvBrowser 浏览器能力
+        val browserPrompt = com.ai.assistance.quro.core.browser.ZorvBrowserAciBridge.getBrowserCapabilityPrompt()
+        if (browserPrompt.isNotEmpty()) {
+            sb.append("\n").append(browserPrompt)
         }
         
         return sb.toString()
