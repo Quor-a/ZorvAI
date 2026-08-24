@@ -793,26 +793,40 @@ fun ChatScreen(
 
                     // ─── 渲染卡片 ───
                     is UiNavigationEvent.RenderCard -> {
-                        val card = com.ai.assistance.quro.core.cards.QuroChatCard(
-                            type = "html",
+                        val card = com.ai.assistance.quro.core.cards.QuroChatCard.InfoCard(
+                            id = "ui_card_${System.currentTimeMillis()}",
                             title = event.title,
-                            content = event.content,
-                            config = mapOf("style" to event.style)
+                            body = event.content,
+                            align = "start"
                         )
                         vm.attachCardToLastAssistant(card)
                     }
 
                     // ─── 渲染组件 ───
                     is UiNavigationEvent.RenderWidget -> {
-                        val card = com.ai.assistance.quro.core.cards.QuroChatCard(
-                            type = "widget",
-                            title = event.label,
-                            content = event.value,
-                            config = mapOf(
-                                "widget_type" to event.type,
-                                "widget_id" to event.id
+                        // 根据widget类型创建对应的卡片
+                        val card = when (event.type) {
+                            "button" -> com.ai.assistance.quro.core.cards.QuroChatCard.ButtonCard(
+                                id = event.id,
+                                title = event.label,
+                                label = event.label,
+                                command = event.value,
+                                variant = "filled"
                             )
-                        )
+                            "toggle" -> com.ai.assistance.quro.core.cards.QuroChatCard.ToggleCard(
+                                id = event.id,
+                                title = event.label,
+                                label = event.label,
+                                checked = event.value.toBooleanStrictOrNull() ?: false,
+                                command = ""
+                            )
+                            else -> com.ai.assistance.quro.core.cards.QuroChatCard.InfoCard(
+                                id = event.id,
+                                title = event.label,
+                                body = event.value,
+                                align = "start"
+                            )
+                        }
                         vm.attachCardToLastAssistant(card)
                     }
 
