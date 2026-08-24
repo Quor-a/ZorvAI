@@ -13,7 +13,7 @@ import java.net.SocketTimeoutException
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.security.SecureRandom
-import java.util.Base64
+import android.util.Base64
 import java.util.concurrent.TimeUnit
 
 /**
@@ -247,5 +247,5 @@ private fun randomWechatUin(): String {
         ((buf[2].toInt() and 0xff) shl 8) or
         (buf[3].toInt() and 0xff)
     val uLong = u.toLong() and 0xffffffffL
-    return Base64.getEncoder().encodeToString(uLong.toString().toByteArray(StandardCharsets.UTF_8))
+    return Base64.encodeToString(uLong.toString().toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
 }
