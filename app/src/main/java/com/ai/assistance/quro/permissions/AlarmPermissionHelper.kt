@@ -34,8 +34,15 @@ class AlarmPermissionHelper(private val context: Context) {
     /** 精确闹钟授权状态（Android 12+）。 */
     fun alarmState(): PermState {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (alarmManager.canScheduleExactAlarms()) PermState.Granted else PermState.NeedSettings
+            // 检查是否已授权精确闹钟权限（SCHEDULE_EXACT_ALARM 或 USE_EXACT_ALARM）
+            if (alarmManager.canScheduleExactAlarms()) {
+                PermState.Granted
+            } else {
+                // 尝试打开设置页面引导用户授权
+                PermState.NeedSettings
+            }
         } else {
+            // Android 12 以下不需要特殊权限
             PermState.Granted
         }
     }
