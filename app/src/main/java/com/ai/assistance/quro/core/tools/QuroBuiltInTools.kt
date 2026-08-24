@@ -17,6 +17,9 @@ import com.ai.assistance.quro.core.cms.QuroPrivStatusTool
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciCallTool
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciListTool
 import com.ai.assistance.quro.core.aidlaci.QuroAciHttpServerTool
+import com.ai.assistance.quro.core.mcp.McpAciListTool
+import com.ai.assistance.quro.core.mcp.McpAciCallTool
+import com.ai.assistance.quro.core.mcp.McpAciBridgeTool
 import com.ai.assistance.quro.core.tools.TerminalDriveTool
 import com.ai.assistance.quro.core.tools.ReadScreenTool
 import com.ai.assistance.quro.core.tools.GetForegroundAppTool
@@ -385,6 +388,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(McpServersTool())
     r.register(McpListToolsTool())
     r.register(McpCallTool())
+    // MCP-ACI 桥接工具：让 AI 通过 ACI 调用外部 MCP 服务器的工具
+    r.register(McpAciListTool())
+    r.register(McpAciCallTool())
+    r.register(McpAciBridgeTool())
     // 工具发现工具：让 AI 主动查询工具能力目录，解决不会主动使用工具的问题
     r.register(ToolDiscoveryTool())
     // 本地 MCP 部署工具：AI 创作并部署 MCP 服务器到本应用内（#Task8）

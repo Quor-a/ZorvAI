@@ -2,6 +2,7 @@ package com.ai.assistance.quro.ui
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -60,6 +61,7 @@ import com.ai.assistance.quro.core.bot.QuroBotPlatform
 import com.ai.assistance.quro.core.bot.adapters.QuroFeishuBotAdapter
 import com.ai.assistance.quro.core.bot.adapters.QuroQqBotAdapter
 import com.ai.assistance.quro.core.bot.adapters.QuroWechatIlinkBotAdapter
+import com.ai.assistance.quro.core.bot.adapters.QrLoginStatus
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
@@ -566,7 +568,8 @@ private fun WechatBotPlatformCard(
     var showManualInput by remember { mutableStateOf(false) }
 
     val adapter = remember { manager.getAdapter(QuroBotPlatform.WECHAT) as? QuroWechatIlinkBotAdapter }
-    val loginState = remember { mutableStateOf(adapter?.loginState ?: QuroWechatIlinkBotAdapter.LoginState.IDLE) }
+    Log.d("WechatBot", "adapter initialized: $adapter, platform=${QuroBotPlatform.WECHAT}")
+    val loginState = remember { mutableStateOf(adapter?.loginState ?: QrLoginStatus.WAIT) }
     val qrCodeData = remember { mutableStateOf(adapter?.qrCodeData) }
     val qrError = remember { mutableStateOf(adapter?.qrError) }
 
@@ -690,15 +693,25 @@ private fun WechatBotPlatformCard(
                 // ===== 扫码登录区域 =====
                 GroupCaption("扫码登录")
                 when (loginState.value) {
-                    QuroWechatIlinkBotAdapter.LoginState.IDLE -> {
+                    QrLoginStatus.WAIT -> {
                         OutlinedButton(
-                            onClick = { CoroutineScope(Dispatchers.IO).launch { adapter?.startQrLogin() } },
+                            onClick = {
+                                if (adapter == null) {
+                                    qrError.value = "适配器未初始化，请重启 App"
+                                    return@OutlinedButton
+                                }
+                                try {
+                                    adapter!!.startQrLogin()
+                                } catch (e: Exception) {
+                                    qrError.value = "启动登录失败: ${e.message}"
+                                }
+                            },
                             Modifier.fillMaxWidth().height(36.dp),
                         ) {
                             Text("获取微信登录二维码", fontSize = 12.sp)
                         }
                     }
-                    QuroWechatIlinkBotAdapter.LoginState.WAITING_SCAN -> {
+                    QrLoginStatus.SCANNED -> {
                         // 显示二维码
                         val qrData = qrCodeData.value
                         if (qrData != null) {
@@ -759,20 +772,20 @@ private fun WechatBotPlatformCard(
                             Text("取消", fontSize = 11.sp)
                         }
                     }
-                    QuroWechatIlinkBotAdapter.LoginState.CONFIRMED -> {
+                    QrLoginStatus.CONFIRMED -> {
                         Text("✓ 登录成功！", fontSize = 13.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.SemiBold)
                     }
-                    QuroWechatIlinkBotAdapter.LoginState.DENIED -> {
+                    QrLoginStatus.UNKNOWN -> {
                         Text("登录被拒绝或取消", fontSize = 12.sp, color = Color(0xFFE53935))
                         OutlinedButton(
-                            onClick = { CoroutineScope(Dispatchers.IO).launch { adapter?.startQrLogin() } },
+                            onClick = { adapter?.startQrLogin() },
                             Modifier.fillMaxWidth().height(32.dp),
                         ) { Text("重新获取二维码", fontSize = 11.sp) }
                     }
-                    QuroWechatIlinkBotAdapter.LoginState.EXPIRED -> {
+                    QrLoginStatus.EXPIRED -> {
                         Text("二维码已过期", fontSize = 12.sp, color = Color(0xFFFF9800))
                         OutlinedButton(
-                            onClick = { CoroutineScope(Dispatchers.IO).launch { adapter?.startQrLogin() } },
+                            onClick = { adapter?.startQrLogin() },
                             Modifier.fillMaxWidth().height(32.dp),
                         ) { Text("重新获取二维码", fontSize = 11.sp) }
                     }

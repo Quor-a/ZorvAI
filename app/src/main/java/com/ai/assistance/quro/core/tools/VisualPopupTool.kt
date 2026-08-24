@@ -2,6 +2,8 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -25,18 +27,30 @@ data class PopupInput(
 
 /** 待处理的自由弹窗 */
 data class VisualPopupData(
+    val id: String,                    // 唯一ID
     val title: String,
-    val content: String,          // 支持 Markdown/HTML/纯文本
+    val content: String,               // 支持 Markdown/HTML/纯文本
     val buttons: List<PopupButton>,
-    val inputs: List<PopupInput>, // 可选的输入框
-    val imageUrl: String?,        // 可选的图片
-    val width: Int?,              // 可选的宽度
-    val height: Int?,             // 可选的高度
+    val inputs: List<PopupInput>,      // 可选的输入框
+    val imageUrl: String?,             // 可选的图片
+    val width: Int?,                   // 可选的宽度
+    val height: Int?,                  // 可选的高度
+    val cardTitle: String,             // 对话框小卡片标题
+    val cardDescription: String,       // 对话框小卡片描述
     val cancelable: Boolean = true,
     val timeout: Int = 60,
     val latch: CountDownLatch,
-    val result: AtomicReference<PopupResult?>
+    val result: AtomicReference<PopupResult?>,
+    var status: PopupStatus = PopupStatus.PENDING  // 弹窗状态
 )
+
+/** 弹窗状态 */
+enum class PopupStatus {
+    PENDING,    // 等待用户操作
+    ACTIVE,     // 弹窗已显示
+    COMPLETED,  // 已完成
+    CANCELLED   // 已取消
+}
 
 /** 弹窗结果 */
 data class PopupResult(
@@ -50,21 +64,83 @@ object VisualPopupQueue {
     private const val TAG = "VisualPopupQueue"
     val pendingPopups = mutableListOf<VisualPopupData>()
 
-    fun submitResult(index: Int, result: PopupResult) {
-        if (index in pendingPopups.indices) {
-            val pending = pendingPopups[index]
-            pending.result.set(result)
-            pending.latch.countDown()
-            pendingPopups.removeAt(index)
-            Log.d(TAG, "用户提交弹窗结果: $result")
+    // 事件通道：当有新弹窗加入或弹窗状态变化时发出信号
+    private val _eventChannel = Channel<PopupEvent>(Channel.BUFFERED)
+    val eventFlow = _eventChannel.receiveAsFlow()
+
+    sealed class PopupEvent {
+        data class PopupAdded(val id: String) : PopupEvent()
+        data class PopupUpdated(val id: String) : PopupEvent()
+        data class PopupRemoved(val id: String) : PopupEvent()
+    }
+
+    fun submitResult(id: String, result: PopupResult) {
+        synchronized(pendingPopups) {
+            val index = pendingPopups.indexOfFirst { it.id == id }
+            if (index >= 0) {
+                val pending = pendingPopups[index]
+                pending.result.set(result)
+                pending.status = if (result.cancelled) PopupStatus.CANCELLED else PopupStatus.COMPLETED
+                pending.latch.countDown()
+                Log.d(TAG, "用户提交弹窗结果: $result")
+                // 发送弹窗更新事件（状态变化）
+                _eventChannel.trySend(PopupEvent.PopupUpdated(id))
+                // 延迟移除弹窗，让UI有时间更新状态
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    synchronized(pendingPopups) {
+                        val idx = pendingPopups.indexOfFirst { it.id == id }
+                        if (idx >= 0) {
+                            pendingPopups.removeAt(idx)
+                            _eventChannel.trySend(PopupEvent.PopupRemoved(id))
+                        }
+                    }
+                }, 2000) // 2秒后移除
+            }
         }
     }
 
-    fun getCurrentPopup(): Pair<Int, VisualPopupData>? {
-        return if (pendingPopups.isNotEmpty()) {
-            0 to pendingPopups[0]
-        } else {
-            null
+    fun getCurrentPopup(): Pair<String, VisualPopupData>? {
+        return synchronized(pendingPopups) {
+            if (pendingPopups.isNotEmpty()) {
+                val popup = pendingPopups[0]
+                popup.id to popup
+            } else {
+                null
+            }
+        }
+    }
+
+    fun getPopupById(id: String): VisualPopupData? {
+        return synchronized(pendingPopups) {
+            pendingPopups.find { it.id == id }
+        }
+    }
+
+    fun addPopup(popup: VisualPopupData) {
+        synchronized(pendingPopups) {
+            pendingPopups.add(popup)
+            // 发送弹窗添加事件
+            _eventChannel.trySend(PopupEvent.PopupAdded(popup.id))
+        }
+    }
+
+    fun removePopup(id: String) {
+        synchronized(pendingPopups) {
+            val index = pendingPopups.indexOfFirst { it.id == id }
+            if (index >= 0) {
+                pendingPopups.removeAt(index)
+                _eventChannel.trySend(PopupEvent.PopupRemoved(id))
+            }
+        }
+    }
+
+    fun updatePopupStatus(id: String, status: PopupStatus) {
+        synchronized(pendingPopups) {
+            val index = pendingPopups.indexOfFirst { it.id == id }
+            if (index >= 0) {
+                pendingPopups[index].status = status
+                _eventChannel.trySend(PopupEvent.PopupUpdated(id))
+            }
         }
     }
 }
@@ -79,6 +155,7 @@ object VisualPopupQueue {
  * - 图片显示
  * - 自定义宽高
  * - 可选是否允许取消
+ * - 对话框显示小卡片，点击可重新打开弹窗
  *
  * 使用场景：
  * - AI需要展示复杂信息并让用户操作
@@ -97,6 +174,8 @@ class VisualPopupTool : QuroTool {
   "image_url":"图片URL(可选)",
   "width":400,
   "height":300,
+  "card_title":"小卡片标题(可选，默认使用title)",
+  "card_description":"小卡片描述(可选，默认'点击查看详情')",
   "cancelable":true,
   "timeout":60
 }
@@ -139,6 +218,8 @@ class VisualPopupTool : QuroTool {
             "image_url":{"type":"string","description":"图片URL（可选）"},
             "width":{"type":"integer","description":"弹窗宽度（可选，默认自适应）"},
             "height":{"type":"integer","description":"弹窗高度（可选，默认自适应）"},
+            "card_title":{"type":"string","description":"对话框小卡片标题（可选，默认使用title）"},
+            "card_description":{"type":"string","description":"小卡片描述（可选，默认'点击查看详情'）"},
             "cancelable":{"type":"boolean","description":"是否允许取消（默认true）"},
             "timeout":{"type":"integer","description":"超时时间（秒），默认60秒"}
         },
@@ -186,11 +267,16 @@ class VisualPopupTool : QuroTool {
         val imageUrl = args.optString("image_url", "").trim().ifBlank { null }
         val width = if (args.has("width")) args.optInt("width") else null
         val height = if (args.has("height")) args.optInt("height") else null
+        val cardTitle = args.optString("card_title", "").trim().ifBlank { title }
+        val cardDescription = args.optString("card_description", "").trim().ifBlank { "点击查看详情" }
         val cancelable = args.optBoolean("cancelable", true)
         val timeout = args.optInt("timeout", 60)
 
+        // 生成唯一ID
+        val popupId = "popup_${System.currentTimeMillis()}_${(Math.random() * 1000).toInt()}"
+
         return try {
-            val result = showPopup(title, content, buttons, inputs, imageUrl, width, height, cancelable, timeout)
+            val result = showPopup(popupId, title, content, buttons, inputs, imageUrl, width, height, cardTitle, cardDescription, cancelable, timeout)
             result?.let {
                 val resultMap = mutableMapOf<String, Any?>()
                 resultMap["button"] = it.buttonValue
@@ -205,6 +291,7 @@ class VisualPopupTool : QuroTool {
     }
 
     private fun showPopup(
+        id: String,
         title: String,
         content: String,
         buttons: List<PopupButton>,
@@ -212,6 +299,8 @@ class VisualPopupTool : QuroTool {
         imageUrl: String?,
         width: Int?,
         height: Int?,
+        cardTitle: String,
+        cardDescription: String,
         cancelable: Boolean,
         timeout: Int
     ): PopupResult? {
@@ -219,6 +308,7 @@ class VisualPopupTool : QuroTool {
         val result = AtomicReference<PopupResult?>(null)
 
         val popup = VisualPopupData(
+            id = id,
             title = title,
             content = content,
             buttons = buttons,
@@ -226,26 +316,26 @@ class VisualPopupTool : QuroTool {
             imageUrl = imageUrl,
             width = width,
             height = height,
+            cardTitle = cardTitle,
+            cardDescription = cardDescription,
             cancelable = cancelable,
             timeout = timeout,
             latch = latch,
             result = result
         )
 
-        synchronized(VisualPopupQueue.pendingPopups) {
-            VisualPopupQueue.pendingPopups.add(popup)
-        }
+        // 使用新的 addPopup 方法（会发送事件通知 UI）
+        VisualPopupQueue.addPopup(popup)
 
-        Log.d(TAG, "显示弹窗: $title (超时: ${timeout}s)")
+        Log.d(TAG, "显示弹窗: $title (ID: $id, 超时: ${timeout}s)")
 
         val answered = latch.await(timeout.toLong(), TimeUnit.SECONDS)
 
         return if (answered) {
             result.get()
         } else {
-            synchronized(VisualPopupQueue.pendingPopups) {
-                VisualPopupQueue.pendingPopups.remove(popup)
-            }
+            // 超时：从队列中移除
+            VisualPopupQueue.removePopup(id)
             null
         }
     }

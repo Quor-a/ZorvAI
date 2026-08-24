@@ -152,6 +152,8 @@ class QuroToolRegistry {
             "ui_widget",
             // MCP 客户端：AI 调用外部 MCP 服务器工具（#402）
             "mcp_servers", "mcp_list_tools", "mcp_call", "mcp_deploy", "mcp_undeploy", "mcp_list_local",
+            // MCP-ACI 桥接：通过 ACI 调用外部 MCP 服务器工具
+            "mcp_aci_list", "mcp_aci_call", "mcp_aci_bridge",
             // 第三方服务授权保险库
             "auth_service_add", "auth_service_list", "auth_service_remove",
             // CMS v2 能力模块 + 特权通道自查

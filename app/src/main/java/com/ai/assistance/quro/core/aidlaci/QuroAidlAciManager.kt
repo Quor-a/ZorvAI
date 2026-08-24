@@ -7,6 +7,7 @@ import ai.aidl.aci.core.AciTokenManager
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciErrors
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciEvents
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciProtocol
+import com.ai.assistance.quro.core.mcp.McpAciBridge
 import ai.aidl.aci.core.IAidlAciCallback
 import ai.aidl.aci.core.IAidlAciService
 import ai.aci.core.IACIService as LegacyIACIService
@@ -20,6 +21,7 @@ import android.os.IBinder
 import android.os.RemoteException
 import android.util.Log
 import org.json.JSONArray
+import org.json.JSONObject
 import java.util.UUID
 import java.util.Date
 import java.util.Locale
@@ -140,6 +142,10 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         } else {
             AciDiag.log(TAG, "discover: 自身受控端已被 queryIntentServices 返回，无需兜底（$selfPkg）")
         }
+        
+        // 初始化 MCP 桥接器
+        McpAciBridge.init(appContext)
+        
         return result
     }
 
@@ -461,6 +467,12 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
     fun call(targetPackage: String, capability: String, params: android.os.Bundle): AidlAciResponse {
         val t0 = System.currentTimeMillis()
         val callId = UUID.randomUUID().toString()
+        
+        // MCP 桥接能力检查：如果能力 ID 以 "mcp_" 开头，则路由到 MCP 桥接器
+        if (McpAciBridge.isMcpAciCapability(capability)) {
+            return handleMcpAciCall(targetPackage, capability, params, t0, callId)
+        }
+        
         // 未安装引导：明确告诉 LLM/用户先安装目标 App，避免「服务未绑定」的迷之错误
         if (!isInstalled(targetPackage)) {
             val resp = AidlAciResponse.error(
@@ -558,6 +570,62 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
             QuroAidlAciEvents.emit(QuroAidlAciEvents.EVT_CALL_FAILED, targetPackage, "$capability:${resp.getErrorCode()}")
         }
         pushTrace(callId, targetPackage, capability, "aidl", resp, t0)
+        return resp
+    }
+
+    /**
+     * 处理 MCP 桥接能力调用
+     */
+    private fun handleMcpAciCall(
+        targetPackage: String,
+        capability: String,
+        params: android.os.Bundle,
+        t0: Long,
+        callId: String
+    ): AidlAciResponse {
+        Log.i(TAG, "🔗 MCP 桥接调用: $targetPackage/$capability")
+        
+        // 从能力 ID 提取 MCP 工具信息
+        val mcpToolInfo = McpAciBridge.extractMcpToolFromCapability(capability)
+        if (mcpToolInfo == null) {
+            val resp = AidlAciResponse.error(404, "MCP 工具信息未找到: $capability")
+            QuroAidlAciCallAudit.log(appContext, targetPackage, capability, resp.getErrorCode(), false, System.currentTimeMillis() - t0)
+            pushTrace(callId, targetPackage, capability, "mcp_bridge", resp, t0)
+            return resp
+        }
+        
+        val (serverAlias, toolName) = mcpToolInfo
+        
+        // 将 Bundle 参数转换为 JSONObject
+        val arguments = JSONObject()
+        for (key in params.keySet()) {
+            if (key.startsWith("_")) continue // 跳过内部参数
+            val value = params.get(key)
+            when (value) {
+                is String -> arguments.put(key, value)
+                is Int -> arguments.put(key, value)
+                is Long -> arguments.put(key, value)
+                is Double -> arguments.put(key, value)
+                is Boolean -> arguments.put(key, value)
+                else -> arguments.put(key, value?.toString() ?: "")
+            }
+        }
+        
+        // 调用 MCP 工具
+        val resp = McpAciBridge.callMcpTool(serverAlias, toolName, arguments)
+        
+        // 记录审计日志
+        QuroAidlAciCallAudit.log(appContext, targetPackage, capability, resp.getErrorCode(), resp.isSuccess(), System.currentTimeMillis() - t0)
+        
+        // 记录追踪
+        if (resp.isSuccess()) {
+            Log.i(TAG, "✅ MCP 桥接调用成功: $targetPackage/$capability (${System.currentTimeMillis() - t0}ms)")
+        } else {
+            Log.w(TAG, "❌ MCP 桥接调用失败: $targetPackage/$capability → ${resp.getErrorMessage()}")
+            QuroAidlAciEvents.emit(QuroAidlAciEvents.EVT_CALL_FAILED, targetPackage, "$capability:${resp.getErrorCode()}")
+        }
+        
+        pushTrace(callId, targetPackage, capability, "mcp_bridge", resp, t0)
         return resp
     }
 
@@ -668,21 +736,28 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         sb.append("你当前可以通过 ACI 控制第三方 App 的能力如下（用 aci_call 调用）。ACI 是本地无 Root 的 App 间 AIDL 框架，不依赖 Shizuku/dumpsys/ROOT 等任何系统提权：\n\n")
         if (capMap.isEmpty()) {
             sb.append("（尚未发现任何 ACI 能力。应用启动时会自动 discover；若已装第三方 ACI App 仍未出现，可重试或确认其已安装。）\n")
-            return sb.toString()
-        }
-        for ((pkg, caps) in capMap) {
-            val appName = nameMap[pkg] ?: pkg
-            sb.append("【").append(appName).append("】(").append(pkg).append(")\n")
-            for (c in caps) {
-                sb.append("  - ").append(c.id).append(": ").append(c.description).append("\n")
-                for (p in c.params) {
-                    sb.append("      · ").append(p.name).append(" (").append(p.type).append(")")
-                        .append(if (p.required) " [必填]" else "").append(" - ").append(p.description).append("\n")
+        } else {
+            for ((pkg, caps) in capMap) {
+                val appName = nameMap[pkg] ?: pkg
+                sb.append("【").append(appName).append("】(").append(pkg).append(")\n")
+                for (c in caps) {
+                    sb.append("  - ").append(c.id).append(": ").append(c.description).append("\n")
+                    for (p in c.params) {
+                        sb.append("      · ").append(p.name).append(" (").append(p.type).append(")")
+                            .append(if (p.required) " [必填]" else "").append(" - ").append(p.description).append("\n")
+                    }
+                    if (c.isRequireUserConfirm) sb.append("      ⚠️ 需要用户确认\n")
                 }
-                if (c.isRequireUserConfirm) sb.append("      ⚠️ 需要用户确认\n")
+                sb.append("\n")
             }
-            sb.append("\n")
         }
+        
+        // 添加 MCP 桥接能力
+        val mcpPrompt = McpAciBridge.getMcpCapabilityPrompt()
+        if (mcpPrompt.isNotEmpty()) {
+            sb.append("\n").append(mcpPrompt)
+        }
+        
         return sb.toString()
     }
 
