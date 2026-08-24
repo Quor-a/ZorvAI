@@ -29,4 +29,18 @@
             android:targetClass="com.ai.assistance.quro.activity.QuroMainActivity" />
     </shortcut>
 
+    <!-- ③ Bubble 气泡对话：通知气泡点击 → 直接进入对话 -->
+    <shortcut
+        android:shortcutId="quro_chat"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_chat"
+        android:shortcutShortLabel="@string/sc_chat_short"
+        android:shortcutLongLabel="@string/sc_chat_long"
+        android:shortcutDisabledMessage="@string/sc_chat_disabled">
+        <intent
+            android:action="com.ai.assistance.quro.action.SHORTCUT_CHAT"
+            android:targetPackage="com.ai.assistance.quro"
+            android:targetClass="com.ai.assistance.quro.activity.QuroMainActivity" />
+    </shortcut>
+
 </shortcuts>

@@ -1570,7 +1570,9 @@ private fun MermaidWebView(
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.allowFileAccess = true
+                settings.allowUniversalAccessFromFileURLs = true
                 settings.loadsImagesAutomatically = true
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 settings.setSupportZoom(zoomable)
                 settings.builtInZoomControls = zoomable
                 settings.displayZoomControls = false
@@ -1769,6 +1771,8 @@ private fun HtmlPreviewWebView(
                 settings.cacheMode = WebSettings.LOAD_NO_CACHE
                 settings.allowFileAccess = true
                 settings.allowContentAccess = true
+                settings.allowUniversalAccessFromFileURLs = true
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -2015,7 +2019,6 @@ private fun MiniAppWebView(
 ) {
     val context = LocalContext.current
     val assetLibResolver = remember { AssetLibResolver(context) }
-    val bridgeInterface = remember { com.ai.assistance.quro.core.miniapp.MiniAppBridgeInterface(context, null!!) }
 
     AndroidView(
         modifier = modifier,
@@ -2029,8 +2032,13 @@ private fun MiniAppWebView(
                 settings.cacheMode = WebSettings.LOAD_NO_CACHE
                 settings.allowFileAccess = true
                 settings.allowContentAccess = true
+                settings.allowUniversalAccessFromFileURLs = true
                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 settings.javaScriptCanOpenWindowsAutomatically = true
+                // 网络访问
+                settings.setSupportZoom(false)
+                settings.builtInZoomControls = false
+                settings.displayZoomControls = false
 
                 // 设置硬件加速
                 setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
