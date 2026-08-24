@@ -96,7 +96,7 @@
 | **离线 LLM 引擎** | 应用内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 剥离、本地工具调用、会话复用；离线也能对话 |
 | **特权层 L1–L5** | 无障碍 → Shizuku(uid 0/2000) → 设备管理员 → ROOT(su) → 应用内 Linux(proot + Alpine) |
 | **终端 / Linux 沙箱** | NovaTerm 自研沙盒 + proot/Alpine 应用内 Linux 环境，终端 UI 直接操作 |
-| **MCP（Model Context Protocol）** | MCP 客户端（WebSocket / HTTP 传输）、应用内本地 MCP 服务，可由 AI 部署/调用 |
+| **MCP（Model Context Protocol）** | MCP 客户端（WebSocket / HTTP 传输）、应用内本地 MCP 服务，可由 AI 部署/调用、**MCP-ACI 桥接**（让 ACI 控制方调用外部 MCP 服务器工具） |
 | **引擎 / 运行时** | CMS 引擎共享运行时（NODE / PYTHON / SSH / JAVA / RUST / GO）、CMS v2 模块、GeckoView 浏览器（MPL-2.0）、本地语音 STT / TTS |
 | **IM 通道** | 飞书（WebSocket）/ QQBot（官方 WS）/ 微信 iLink（HTTP 长轮询 35s）；三家手机端均无公网端点 |
 | **语音** | 多供应商 TTS（EDGE_TTS / OPENAI_COMPAT / MINIMAX / SILICONFLOW / 阿里云 等）、端侧 Whisper STT、语音悬浮球 |
@@ -163,6 +163,7 @@
 - `core/mcp/QuroMcpClient`：外部 MCP 服务器客户端，`initialize` 握手（2025-03-26 协议）、`listTools` / `callTool`
 - 传输层：WebSocket（`QuroMcpWsClient`）、本地 HTTP（`QuroMcpHttpServer`）
 - 应用内本地 MCP 服务：`QuroLocalMcpManager` / `QuroLocalMcpServer` / `QuroLocalMcpDispatcher`（`McpDeployTool` / `McpUndeployTool` 可让 AI 把 MCP 服务部署到应用内）
+- **MCP-ACI 桥接**：`core/mcp/McpAciBridge` 将外部 MCP 服务器工具转换为 ACI 能力，让 ACI 控制方也能调用 MCP 工具
 - 设置 UI：`QuroMcpSettingsScreen`
 
 #### 5.1 接入一个外部 MCP 服务器（实操）
@@ -211,7 +212,7 @@
 | 知识库 | KnowledgeSearch/Add、KnowledgeManage、QuroRagKnowledge（向量语义 RAG，无 Key 降级词法检索） |
 | 文档 | AiwpsCreate/Read/Edit（docx/xlsx/pptx/pdf…） |
 | UI 动作/卡片/组件 | UiAction 系列、UiCard、UiWidget（可交互内联 UI） |
-| MCP | McpServers/ListTools/Call、McpDeploy/Undeploy/ListLocal |
+| MCP | McpServers/ListTools/Call、McpDeploy/Undeploy/ListLocal、**McpAciBridge/List/Call**（MCP-ACI 桥接） |
 
 ### 7. 语音 / TTS / STT
 - **TTS 合成（多供应商）**：`QuroTtsProvider` 支持 EDGE_TTS、OPENAI_COMPAT、MINIMAX、SILICONFLOW、TTS302、COZECN、GIZWITS、ACGN、ALIYUN 等；情绪标签跟随文本
