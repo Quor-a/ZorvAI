@@ -1,6 +1,6 @@
 # Zorv AI · ACI 开发者手册（Agent Capability Interface）
 
-> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.28** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-08-21（v1.0.28 新增 §21 ACI Token 认证机制；全面更新开源协议声明、权限声明、用户使用协议；修复检测更新功能为直接下载）
+> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.62** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-08-24（v1.0.62 新增 §23 MCP-ACI 桥接功能；让 ACI 控制方能够调用外部 MCP 服务器工具）
 >
 > 本文档面向**希望让自己的 Android App 被 Zorv AI（或其他 ACI 控制端）调用**的第三方开发者，也适用于**想基于 `aci-core` 自建控制端**的开发者。
 
@@ -1037,6 +1037,116 @@ override fun onCheckPermission(request: AidlAciRequest, callerPkg: String): Bool
 3. **03 开发者文档**：内嵌 `ACI_DEV_DOC` 长文（可折叠）+ 一键「保存依赖模板 / 下载开发者文档」。
 
 控制台弹层：点「打开控制台」经 Binder 拉 `console_ui` 快照 → `AciConsoleModel.parse` → `AciConsoleScreen`（纯 Compose）渲染。该界面标题显示为「ACT 关联启动」，底层即 ACI。
+
+---
+
+## 23. MCP-ACI 桥接（让 ACI 控制方调用外部 MCP 服务器工具）
+
+> 版本：v1.0.62 新增 | 适用 SDK：`aidl-aci-core` + Zorv AI 主程序 | 最后更新：2026-08-24
+
+### 23.1 什么是 MCP-ACI 桥接
+
+**MCP-ACI 桥接** 是 Zorv AI v1.0.62 新增的功能，它将外部 MCP（Model Context Protocol）服务器的工具转换为 ACI（Agent Capability Interface）能力，让 ACI 控制方能够调用 MCP 工具。
+
+**核心价值**：
+- 统一工具调用入口：AI 可以通过 `aci_call` 同时调用 ACI 原生能力和 MCP 工具
+- 扩展 ACI 能力范围：MCP 生态的工具自动成为 ACI 能力
+- 无缝集成：无需修改现有 ACI 代码，MCP 工具自动映射为 ACI 能力
+
+### 23.2 架构设计
+
+```
+┌──────────────────────────┐         ACI Binder          ┌──────────────────────────┐
+│   ACI 控制端（Zorv AI）    │  ─── aci_call ────────▶    │   McpAciBridge 桥接器     │
+│  QuroAidlAciManager           │  ◀── ACIResponse ───────     │  - 能力映射             │
+│  - aci_call(capability)   │                              │  - 工具调用路由          │
+│  - aci_list              │                              │  - MCP 客户端集成        │
+└──────────────────────────┘                              └───────────┬──────────────┘
+                                                                     │
+                                                                     ▼
+                                                          ┌──────────────────────────┐
+                                                          │   外部 MCP 服务器        │
+                                                          │  - tools/list           │
+                                                          │  - tools/call           │
+                                                          └──────────────────────────┘
+```
+
+### 23.3 能力映射规则
+
+MCP 工具自动映射为 ACI 能力，映射规则如下：
+
+| MCP 工具 | ACI 能力 ID | 说明 |
+|----------|-------------|------|
+| `{toolName}` | `mcp_{toolName}` | 所有 MCP 工具都以 `mcp_` 前缀映射 |
+
+**示例**：
+- MCP 工具 `web_search` → ACI 能力 `mcp_web_search`
+- MCP 工具 `weather_get` → ACI 能力 `mcp_weather_get`
+
+### 23.4 控制端实现（已内置）
+
+Zorv AI 主程序已内置 MCP-ACI 桥接功能，无需额外配置。
+
+**核心组件**：
+- `McpAciBridge`：桥接器核心，负责 MCP 工具到 ACI 能力的映射和调用
+- `QuroAidlAciManager`：ACI 管理器，集成 MCP 桥接功能
+- `QuroMcpAciTools`：MCP-ACI 桥接工具集
+
+**使用方式**：
+
+1. **配置 MCP 服务器**：在「设置 → MCP 服务」中添加外部 MCP 服务器
+2. **查看可用工具**：AI 调用 `mcp_aci_list()` 查看所有可通过 ACI 调用的 MCP 工具
+3. **调用 MCP 工具**：AI 调用 `mcp_aci_call(capability="mcp_{工具名}", args={参数})` 调用 MCP 工具
+4. **管理桥接器**：AI 调用 `mcp_aci_bridge(action="refresh|status")` 管理桥接器
+
+### 23.5 LLM 工具：`mcp_aci_list`、`mcp_aci_call`、`mcp_aci_bridge`
+
+| 工具名 | 参数 | 说明 |
+|--------|------|------|
+| `mcp_aci_list` | `{}` | 列出所有可通过 ACI 调用的 MCP 工具 |
+| `mcp_aci_call` | `{"capability":"mcp_{工具名}","args":{...}}` | 通过 ACI 调用 MCP 工具 |
+| `mcp_aci_bridge` | `{"action":"refresh\|status"}` | 管理 MCP-ACI 桥接器 |
+
+**调用示例**：
+
+```kotlin
+// 1. 查看可用 MCP 工具
+val tools = mcpAciBridge.getMcpCapabilities()
+
+// 2. 调用 MCP 工具
+val response = QuroAidlAciManager.getInstance().call(
+    "mcp_bridge",  // 虚拟包名
+    "mcp_web_search",  // MCP 工能的 ACI 能力 ID
+    Bundle().apply {
+        putString("query", "AI 新闻")
+    }
+)
+```
+
+### 23.6 数据流
+
+```
+AI → mcp_aci_call(capability="mcp_{tool}", args={...})
+    → QuroAidlAciManager.call()
+    → handleMcpAciCall()
+    → McpAciBridge.callMcpTool()
+    → QuroMcpClient.callTool()
+    → 外部 MCP 服务器
+```
+
+### 23.7 错误处理
+
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| 404 | MCP 工具未找到 | 检查 MCP 服务器配置，确保工具存在 |
+| 404 | MCP 服务器未找到 | 检查 MCP 服务器配置，确保服务器已添加 |
+| 500 | MCP 工具调用失败 | 检查 MCP 服务器状态，查看详细错误信息 |
+
+### 23.8 兼容性说明
+
+- **向后兼容**：MCP-ACI 桥接功能是新增功能，不影响现有 ACI 功能
+- **MCP 服务器要求**：外部 MCP 服务器需要支持标准 MCP 协议（tools/list、tools/call）
+- **性能考虑**：MCP 工具调用会增加网络延迟，建议在本地 MCP 服务器上使用
 
 ---
 
