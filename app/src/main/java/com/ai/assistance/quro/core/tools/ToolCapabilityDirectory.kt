@@ -339,8 +339,8 @@ object ToolCapabilityDirectory {
         ),
 
         // ═══════════════ 流体云 ═══════════════
-        "fluid_cloud" to ToolInfo(
-            name = "fluid_cloud",
+        "fluid_cloud_notify" to ToolInfo(
+            name = "fluid_cloud_notify",
             category = ToolCategory.SYSTEM_CONTROL,
             description = "控制OPPO流体云，显示状态栏胶囊和卡片",
             useCases = listOf("AI思考中显示状态", "任务进度显示", "工具执行状态", "创建流体云", "更新进度", "结束流体云"),
@@ -834,7 +834,7 @@ object ToolCapabilityDirectory {
             "MCP工具" to listOf("mcp_call", "mcp_list_tools"),
             "CMS模块" to listOf("cms_call", "cms_list"),
             "第三方App" to listOf("aci_call", "aci_list"),
-            "流体云/状态栏" to listOf("fluid_cloud"),
+            "流体云/状态栏" to listOf("fluid_cloud_notify"),
             "AI思考中/任务进度" to listOf("fluid_cloud(action=create)", "fluid_cloud(action=update)")
         )
         

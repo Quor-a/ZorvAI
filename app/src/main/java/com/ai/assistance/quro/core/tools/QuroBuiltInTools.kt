@@ -72,7 +72,7 @@ import com.ai.assistance.quro.core.tools.QuroExperienceLogTool
 import com.ai.assistance.quro.core.tools.QuroExperienceQueryTool
 import com.ai.assistance.quro.core.tools.QuroExperienceCorrectTool
 import com.ai.assistance.quro.core.tools.QuroExperienceVersionCheckTool
-import com.ai.assistance.quro.core.tools.QuroFluidCloudTool
+import com.ai.assistance.quro.core.tools.FluidCloudTool
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -409,7 +409,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // UI 导航工具集：让 AI 能操控自己的界面（ui_* 命名规范）
     registerUiTools(r)
     // 流体云工具：控制OPPO流体云，显示状态栏胶囊和卡片
-    r.register(QuroFluidCloudTool())
+    r.register(FluidCloudTool(context!!))
     // 对话框文档工具：AI在对话框内直接写文档并渲染显示
     r.register(ChatDocTool())          // 对话框文档（Markdown/HTML/代码/文本）
     // 并入「导入工具」（AI 自写 / 用户粘贴 JSON 导入），使其可被 AI 调用

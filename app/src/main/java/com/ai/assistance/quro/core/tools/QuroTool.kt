@@ -182,7 +182,7 @@ class QuroToolRegistry {
             "linux_run", "linux_install", "linux_start", "linux_stop", "linux_status",
             // terminal_run/terminal_exec 为应用沙盒内免权限 shell（Runtime.exec /system/bin/sh）
             // 流体云（OPPO Fluid Cloud）：状态栏胶囊和卡片显示
-            "fluid_cloud",
+            "fluid_cloud_notify",
         ) + uiActionToolNames() // 并入「UI 动作工具」：对话框界面/弹层/开关 → AI 可调用（见 QuroToolsUiActions）
         val base = map.values.filter { it.name in coreNames }.map {
             QuroToolSpec(it.name, it.description, it.parametersJson)
