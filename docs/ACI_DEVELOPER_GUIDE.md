@@ -1,6 +1,6 @@
 # Zorv AI · ACI 开发者手册（Agent Capability Interface）
 
-> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.62** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-08-24（v1.0.62 新增 §23 MCP-ACI 桥接功能；让 ACI 控制方能够调用外部 MCP 服务器工具）
+> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.63** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-08-24（v1.0.63 新增 §24 ZorvBrowser-ACI 桥接功能；让 ACI 控制方能够调用 ZorvBrowser 浏览器的 30 个工具）
 >
 > 本文档面向**希望让自己的 Android App 被 Zorv AI（或其他 ACI 控制端）调用**的第三方开发者，也适用于**想基于 `aci-core` 自建控制端**的开发者。
 
@@ -1147,6 +1147,251 @@ AI → mcp_aci_call(capability="mcp_{tool}", args={...})
 - **向后兼容**：MCP-ACI 桥接功能是新增功能，不影响现有 ACI 功能
 - **MCP 服务器要求**：外部 MCP 服务器需要支持标准 MCP 协议（tools/list、tools/call）
 - **性能考虑**：MCP 工具调用会增加网络延迟，建议在本地 MCP 服务器上使用
+
+---
+
+## 24. ZorvBrowser-ACI 桥接（让 ACI 控制方调用 ZorvBrowser 浏览器工具）
+
+> 版本：v1.0.63 新增 | 适用 SDK：`aidl-aci-core` + Zorv AI 主程序 + ZorvBrowser | 最后更新：2026-08-24
+
+### 24.1 什么是 ZorvBrowser-ACI 桥接
+
+**ZorvBrowser-ACI 桥接** 是 Zorv AI v1.0.63 新增的功能，它将 ZorvBrowser 浏览器的 30 个 ACI 工具暴露给 ACI 控制方，让 AI 能够通过 ACI 直接操控 ZorvBrowser 浏览器。
+
+**核心价值**：
+- **完整浏览器控制**：30 个工具覆盖导航、DOM 操作、内容提取、JavaScript 执行、输入模拟、HTTP 请求等
+- **系统级输入模拟**：通过 `/dev/uinput` 注入真实触摸事件，绕过反爬检测
+- **LAN 明文支持**：`http_request` 工具支持局域网明文 HTTP，访问路由器/NAS/智能家居
+- **MCP 集成**：支持通过 MCP 协议调用 ZorvBrowser 工具
+- **ACI Token 认证**：支持 ACI Token 认证机制，增强安全性
+
+### 24.2 架构设计
+
+```
+┌──────────────────────────┐         ACI Binder          ┌──────────────────────────┐
+│   ACI 控制端（Zorv AI）    │  ─── aci_call ────────▶    │  ZorvBrowser 浏览器      │
+│  QuroAidlAciManager           │  ◀── ACIResponse ───────     │  - 30 个 ACI 工具       │
+│  - aci_call(capability)   │                              │  - GeckoView 渲染       │
+│  - aci_list              │                              │  - uinput 触摸注入      │
+│  - browser_aci_*         │                              │  - HTTP LAN 明文        │
+└──────────────────────────┘                              └──────────────────────────┘
+         │
+         │  内部调用
+         ▼
+┌──────────────────────────┐
+│  ZorvBrowserAciBridge    │
+│  - 能力映射              │
+│  - 工具调用路由          │
+│  - ACI Token 生成        │
+└──────────────────────────┘
+```
+
+### 24.3 工具清单（30 个）
+
+**基础导航（6 个）**
+
+| 工具名 | 参数 | 说明 |
+|--------|------|------|
+| `browser_open` | `url`(string, 必填) | 打开网页 |
+| `browser_back` | `{}` | 返回上一页 |
+| `browser_forward` | `{}` | 前进下一页 |
+| `browser_reload` | `{}` | 刷新当前页面 |
+| `browser_close` | `{}` | 关闭当前标签页 |
+| `browser_screenshot` | `fullPage`(boolean, 可选) | 截取当前页面截图 |
+
+**标签页管理（4 个）**
+
+| 工具名 | 参数 | 说明 |
+|--------|------|------|
+| `browser_tabs_list` | `{}` | 列出所有标签页 |
+| `browser_tabs_switch` | `tabId`(string, 必填) | 切换到指定标签页 |
+| `browser_tabs_new` | `url`(string, 可选) | 新建标签页 |
+| `browser_tabs_close` | `tabId`(string, 必填) | 关闭指定标签页 |
+
+**DOM 操作（5 个）**
+
+| 工具名 | 参数 | 说明 |
+|--------|------|------|
+| `browser_dom_query` | `selector`(string, 必填) | 查询页面元素 |
+| `browser_dom_text` | `selector`(string, 必填) | 获取元素文本 |
+| `browser_dom_attr` | `selector`(string, 必填), `attribute`(string, 必填) | 获取元素属性 |
+| `browser_dom_click` | `selector`(string, 必填) | 点击元素 |
+| `browser_dom_type` | `selector`(string, 必填), `text`(string, 必填) | 在元素中输入文本 |
+
+**内容提取（4 个）**
+
+| 工具名 | 参数 | 说明 |
+|--------|------|------|
+| `browser_crawl` | `{}` | 提取页面结构化正文和出站链接 |
+| `browser_html` | `{}` | 获取页面完整 HTML |
+| `browser_text` | `{}` | 获取页面纯文本 |
+| `browser_links` | `{}` | 获取页面所有链接 |
+
+**JavaScript 执行（1 个）**
+
+| 工具名 | 参数 | 说明 |
+|--------|------|------|
+| `browser_script` | `script`(string, 必填) | 在页面上下文执行 JavaScript |
+
+**输入模拟（3 个）**
+
+| 工具名 | 参数 | 说明 |
+|--------|------|------|
+| `browser_input_click` | `x`(int, 必填), `y`(int, 必填) | 模拟点击（系统级 uinput） |
+| `browser_input_type` | `text`(string, 必填) | 模拟键盘输入（系统级） |
+| `browser_input_scroll` | `deltaX`(int, 可选), `deltaY`(int, 可选) | 模拟滚动（系统级） |
+
+**HTTP 请求（1 个）**
+
+| 工具名 | 参数 | 说明 |
+|--------|------|------|
+| `browser_http_request` | `url`(string, 必填), `method`(string, 可选), `headers`(object, 可选), `body`(string, 可选) | 发送 HTTP 请求（支持 LAN 明文） |
+
+**高级功能（3 个）**
+
+| 工具名 | 参数 | 说明 |
+|--------|------|------|
+| `browser_find_text` | `text`(string, 必填) | 在页面中查找文本 |
+| `browser_pdf` | `filename`(string, 可选) | 将当前页面导出为 PDF |
+| `browser_print` | `{}` | 打印当前页面 |
+
+**书签和历史（3 个）**
+
+| 工具名 | 参数 | 说明 |
+|--------|------|------|
+| `browser_bookmarks_list` | `{}` | 列出所有书签 |
+| `browser_bookmarks_add` | `url`(string, 必填), `title`(string, 必填) | 添加书签 |
+| `browser_history_list` | `limit`(int, 可选) | 列出浏览历史 |
+
+### 24.4 控制端实现（已内置）
+
+Zorv AI 主程序已内置 ZorvBrowser-ACI 桥接功能，无需额外配置。
+
+**核心组件**：
+- `ZorvBrowserAciBridge`：桥接器核心，负责浏览器工具到 ACI 能力的映射和调用
+- `QuroAidlAciManager`：ACI 管理器，集成 ZorvBrowser 桥接功能
+- `ZorvBrowserAciTools`：ZorvBrowser-ACI 桥接工具集
+
+**使用方式**：
+
+1. **安装 ZorvBrowser**：从 GitHub 仓库 `Quor-a/ZorvBrowser` 下载并安装
+2. **查看可用工具**：AI 调用 `browser_aci_list()` 查看所有可通过 ACI 调用的浏览器工具
+3. **调用浏览器工具**：AI 调用 `browser_aci_call(tool="browser_open", args={"url":"https://example.com"})` 调用浏览器工具
+4. **管理桥接器**：AI 调用 `browser_aci_bridge(action="refresh|status")` 管理桥接器
+
+### 24.5 LLM 工具：`browser_aci_list`、`browser_aci_call`、`browser_aci_bridge`
+
+| 工具名 | 参数 | 说明 |
+|--------|------|------|
+| `browser_aci_list` | `{}` | 列出所有可通过 ACI 调用的 ZorvBrowser 工具 |
+| `browser_aci_call` | `{"tool":"browser_*","args":{...}}` | 通过 ACI 调用 ZorvBrowser 工具 |
+| `browser_aci_bridge` | `{"action":"refresh\|status"}` | 管理 ZorvBrowser-ACI 桥接器 |
+
+**调用示例**：
+
+```kotlin
+// 1. 查看可用浏览器工具
+val tools = ZorvBrowserAciBridge.getAllBrowserToolMappings()
+
+// 2. 调用浏览器工具：打开网页
+val response = QuroAidlAciManager.getInstance().call(
+    "com.ai.assistance.quro.browser",  // ZorvBrowser 包名
+    "browser_open",  // 浏览器工具名
+    Bundle().apply {
+        putString("url", "https://example.com")
+    }
+)
+
+// 3. 调用浏览器工具：执行 JavaScript
+val jsResponse = QuroAidlAciManager.getInstance().call(
+    "com.ai.assistance.quro.browser",
+    "browser_script",
+    Bundle().apply {
+        putString("script", "document.title")
+    }
+)
+```
+
+### 24.6 数据流
+
+```
+AI → browser_aci_call(tool="browser_*", args={...})
+    → ZorvBrowserAciBridge.callBrowserTool()
+    → QuroAidlAciManager.call()
+    → ZorvBrowser ACI Service
+    → 浏览器操作
+    → AidlAciResponse
+```
+
+### 24.7 ACI Token 认证
+
+ZorvBrowser-ACI 桥接支持 ACI Token 认证机制：
+
+**Token 格式**：
+```
+aci_token_{packageName}_{timestamp}_{random}
+```
+
+**示例**：
+```
+aci_token_com.ai.assistance.quro.browser_1787583870335_iNk69+bPempKATGxWMUnQ7ptxZOYgu1kkMHA5OZ0AKU=
+```
+
+**认证流程**：
+1. 控制端（ZorvAI）在调用前自动生成 ACI Token
+2. Token 通过 `_aci_token` 参数传递给受控端（ZorvBrowser）
+3. 受控端可选择验证 Token 以增强安全性
+4. Token 使用 AndroidKeyStore 加密存储，每个目标应用独立 Token
+
+**安全特性**：
+- **加密存储**：Token 使用 AES/GCM/NoPadding 加密，存储在 AndroidKeyStore
+- **独立 Token**：每个目标应用生成独立的 Token，互不影响
+- **向后兼容**：旧版受控端不验证 Token 也能正常工作
+- **可选实现**：Token 验证是可选的，受控端可以选择是否启用
+
+### 24.8 错误处理
+
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| 404 | 浏览器工具未找到 | 检查工具名称是否正确，确保以 `browser_` 开头 |
+| 500 | 浏览器服务未绑定 | 确保 ZorvBrowser 已安装且正在运行 |
+| 500 | 浏览器工具调用失败 | 检查 ZorvBrowser 版本，查看详细错误信息 |
+
+### 24.9 兼容性说明
+
+- **向后兼容**：ZorvBrowser-ACI 桥接功能是新增功能，不影响现有 ACI 功能
+- **ZorvBrowser 要求**：需要安装 ZorvBrowser 应用（GitHub: `Quor-a/ZorvBrowser`）
+- **协议版本**：支持新旧两种 AIDL 契约（`ai.aidl.aci.core` 和 `ai.aci.core`）
+- **性能考虑**：浏览器操作会增加延迟，建议在需要时调用
+
+### 24.10 典型使用场景
+
+**场景 1：网页数据抓取**
+```
+AI → browser_aci_call(tool="browser_open", args={"url":"https://example.com"})
+AI → browser_aci_call(tool="browser_crawl")
+AI → 分析抓取的数据
+```
+
+**场景 2：自动化表单填写**
+```
+AI → browser_aci_call(tool="browser_open", args={"url":"https://form.example.com"})
+AI → browser_aci_call(tool="browser_dom_type", args={"selector":"#email", "text":"user@example.com"})
+AI → browser_aci_call(tool="browser_dom_click", args={"selector":"#submit"})
+```
+
+**场景 3：局域网设备访问**
+```
+AI → browser_aci_call(tool="browser_http_request", args={"url":"http://192.168.1.1/api/status"})
+AI → 分析设备状态
+```
+
+**场景 4：JavaScript 注入执行**
+```
+AI → browser_aci_call(tool="browser_open", args={"url":"https://example.com"})
+AI → browser_aci_call(tool="browser_script", args={"script":"document.querySelectorAll('a').length"})
+AI → 获取页面链接数量
+```
 
 ---
 
