@@ -23,9 +23,18 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Android 14+ 特殊用途前台服务（BotHub 也有此权限，覆盖桌面宠物/悬浮窗等场景） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- 屏幕录制（MediaProjection）前台服务类型（Android 14+ 必须为录屏前台服务显式声明，否则 startForeground 抛异常）。 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- Health Connect 前台服务类型 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <!-- 定位前台服务类型 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 16+ Live Updates（实时更新）：将通知提升为状态栏/锁屏醒目展示，自动映射为 OPPO 流体云胶囊。
+         需此权限才能调用 setRequestPromotedOngoing(true)。 -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <!-- 发送全屏通知（对应 PERMISSIONS.md #2）：FLAG_FULL_SCREEN_INTENT 随通知弹出覆盖式界面。 -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -39,6 +48,8 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -63,6 +74,8 @@
     <!-- 包可见性：Android 11+ 默认隐藏其他 app；TTS 引擎是跨 app 的 TTS_SERVICE 远端服务，
          必须拥有足够包可见性才能绑定，确保 TextToSpeech 能发现并连接引擎。 -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+    <!-- Google Play Install Referrer API：用于归因分析，追踪应用安装来源 -->
+    <uses-permission android:name="com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE" />
 
     <!-- ACI（Agent Capability Interface）：Zorv AI 作为控制方需持有基础调用/发现权限，
          才能绑定并调用第三方 App 暴露的 ACI Service。该权限由 aci-core 库 Manifest 定义
@@ -89,10 +102,14 @@
     <!-- 音频媒体文件（Android 13+ 分离的媒体权限）：配合 READ_MEDIA_IMAGES / _VIDEO 完整覆盖三种媒体类型。
          缺少它时无法通过 MediaStore 读取音频库（如录音文件、音乐文件）。 -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- 媒体位置信息：Android 10+ 读取图片/视频中的位置信息（EXIF GPS） -->
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
 
     <!-- 健身与运动（ACTIVITY_RECOGNITION，Android 10+ 运行时危险权限）：读取步数/活动识别，
          用于「健身与运动」能力（如自动识别步行/跑步）。API29+ 需运行时弹窗授予。 -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- 身体传感器：访问心率等身体传感器数据（Android 9+ 运行时危险权限） -->
+    <uses-permission android:name="android.permission.BODY_SENSORS" />
 
     <!-- 文件写入权限（Android 9 及以下）：Android 10+ 由 Scoped Storage 接管，
          但对低版本设备（minSdk=26）仍需声明才能往外部存储写文件/文档。 -->
@@ -141,6 +158,8 @@
     <uses-permission android:name="android.permission.NFC" />
     <!-- 特殊应用权限：勿扰/通知策略访问（对应「设备和应用通知」项，允许读取/设置 DND 状态） -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <!-- OPPO 流体云/幻想窗特殊权限 -->
+    <uses-permission android:name="com.oplus.permission.safe.FANTASYWINDOW" />
 
     <!-- 包可见性：Android 11+ 默认隐藏大部分已装应用，必须显式声明才能查询/反查包名、启动应用。
          否则 getInstalledApplications / getPackageInfo 只能看到自身，导致「查看软件包名」「启动应用」失效。 -->
@@ -482,7 +501,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- 定时任务开机重排程接收器 -->
+        <!-- 定时任务开机重排程接收器 + 闹钟权限状态变更监听 -->
         <receiver
             android:name=".core.tools.QuroScheduleBootReceiver"
             android:enabled="true"
@@ -491,6 +510,8 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <!-- 关键：监听精确闹钟权限状态变更，使应用出现在「闹钟和提醒」设置列表 -->
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
 
