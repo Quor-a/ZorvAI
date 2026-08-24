@@ -13,6 +13,7 @@ import org.json.JSONObject
  * - end: 结束流体云（移除胶囊）
  *
  * 使用通用entityName（TASK/NAVIGATION）避免受限履约场景
+ * release 包与 debug 包行为一致
  */
 class QuroFluidCloudTool : QuroTool {
     override val name = "fluid_cloud"
@@ -33,10 +34,6 @@ class QuroFluidCloudTool : QuroTool {
                 "type": "string",
                 "description": "内容（创建/更新时使用）"
             },
-            "entityId": {
-                "type": "string",
-                "description": "实体ID（更新/结束时必填，创建时返回）"
-            },
             "progress": {
                 "type": "integer",
                 "description": "进度0-100（更新时使用，显示进度条）"
@@ -45,25 +42,15 @@ class QuroFluidCloudTool : QuroTool {
         "required": ["action"]
     }"""
 
-    private lateinit var fluidCloudManager: FluidCloudManager
-
-    private fun ensureManager(context: Context) {
-        if (!::fluidCloudManager.isInitialized) {
-            fluidCloudManager = FluidCloudManager(context)
-        }
-    }
-
     override fun run(context: Context, arguments: String): String {
-        ensureManager(context)
-
         return try {
             val args = JSONObject(arguments)
             val action = args.optString("action", "")
 
             when (action) {
-                "create" -> createFluidCloud(args)
-                "update" -> updateFluidCloud(args)
-                "end" -> endFluidCloud(args)
+                "create" -> createFluidCloud(context, args)
+                "update" -> updateFluidCloud(context, args)
+                "end" -> endFluidCloud(context)
                 else -> "未知action: $action，可选值：create/update/end"
             }
         } catch (e: Exception) {
@@ -71,62 +58,41 @@ class QuroFluidCloudTool : QuroTool {
         }
     }
 
-    private fun createFluidCloud(args: JSONObject): String {
+    private fun createFluidCloud(context: Context, args: JSONObject): String {
         val title = args.optString("title", "ZorvAI")
         val content = args.optString("content", "处理中")
-        val entityId = "zorvai_${System.currentTimeMillis()}"
+        val progress = args.optInt("progress", 20)
 
-        val result = fluidCloudManager.createFluidCloud(
-            capsuleLeftText = "ZorvAI",
-            capsuleRightText = title,
-            primaryTitle = title,
-            primaryContent = content
-        )
+        val result = FluidCloudManager.create(context, title, content, progress)
 
-        return if (result?.isSuccess == true) {
-            "流体云已创建: $entityId"
+        return if (result.isSuccess) {
+            "流体云已创建"
         } else {
-            "创建失败: ${result?.message}"
+            "创建失败: ${result.message}"
         }
     }
 
-    private fun updateFluidCloud(args: JSONObject): String {
-        val entityId = args.optString("entityId", "")
-        if (entityId.isEmpty()) {
-            return "缺少entityId参数"
-        }
-
-        val progress = if (args.has("progress")) args.optInt("progress") else null
+    private fun updateFluidCloud(context: Context, args: JSONObject): String {
         val title = args.optString("title", "任务更新")
         val content = args.optString("content", "状态已更新")
+        val progress = args.optInt("progress", 50)
 
-        val result = fluidCloudManager.updateFluidCloud(
-            entityId = entityId,
-            capsuleRightText = if (progress != null) "${progress}%" else title,
-            primaryTitle = title,
-            primaryContent = content,
-            progress = progress
-        )
+        val result = FluidCloudManager.update(context, title, content, progress)
 
-        return if (result?.isSuccess == true) {
+        return if (result.isSuccess) {
             "流体云已更新"
         } else {
-            "更新失败: ${result?.message}"
+            "更新失败: ${result.message}"
         }
     }
 
-    private fun endFluidCloud(args: JSONObject): String {
-        val entityId = args.optString("entityId", "")
-        if (entityId.isEmpty()) {
-            return "缺少entityId参数"
-        }
+    private fun endFluidCloud(context: Context): String {
+        val result = FluidCloudManager.finish(context)
 
-        val result = fluidCloudManager.endFluidCloud(entityId = entityId)
-
-        return if (result?.isSuccess == true) {
+        return if (result.isSuccess) {
             "流体云已结束"
         } else {
-            "结束失败: ${result?.message}"
+            "结束失败: ${result.message}"
         }
     }
 }
