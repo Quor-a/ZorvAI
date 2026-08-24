@@ -337,6 +337,34 @@ object ToolCapabilityDirectory {
             relatedTools = listOf("visual_question", "visual_popup"),
             priority = 4
         ),
+
+        // ═══════════════ 流体云 ═══════════════
+        "fluid_cloud" to ToolInfo(
+            name = "fluid_cloud",
+            category = ToolCategory.SYSTEM_CONTROL,
+            description = "控制OPPO流体云，显示状态栏胶囊和卡片",
+            useCases = listOf("AI思考中显示状态", "任务进度显示", "工具执行状态", "创建流体云", "更新进度", "结束流体云"),
+            examples = listOf(
+                "fluid_cloud(action=create, title=AI思考中, content=正在处理请求...)",
+                "fluid_cloud(action=update, entityId=zorvai_xxx, progress=75)",
+                "fluid_cloud(action=end, entityId=zorvai_xxx)"
+            ),
+            parameters = mapOf(
+                "action" to "操作类型：create(创建)/update(更新)/end(结束)",
+                "title" to "标题（创建/更新时使用）",
+                "content" to "内容（创建/更新时使用）",
+                "entityId" to "实体ID（更新/结束时必填）",
+                "progress" to "进度0-100（更新时使用）"
+            ),
+            tips = listOf(
+                "使用通用entityName（TASK/NAVIGATION）避免受限履约场景",
+                "需要ColorOS 14+（推荐16+）",
+                "用户需在设置中开启流体云开关",
+                "创建时返回entityId，更新/结束时需要传入"
+            ),
+            relatedTools = listOf("visual_popup", "ui_control"),
+            priority = 4
+        ),
         
         // ═══════════════ 知识/记忆 ═══════════════
         "memory_save" to ToolInfo(
@@ -805,7 +833,9 @@ object ToolCapabilityDirectory {
             "语音朗读" to listOf("speak"),
             "MCP工具" to listOf("mcp_call", "mcp_list_tools"),
             "CMS模块" to listOf("cms_call", "cms_list"),
-            "第三方App" to listOf("aci_call", "aci_list")
+            "第三方App" to listOf("aci_call", "aci_list"),
+            "流体云/状态栏" to listOf("fluid_cloud"),
+            "AI思考中/任务进度" to listOf("fluid_cloud(action=create)", "fluid_cloud(action=update)")
         )
         
         for ((intent, tools) in intentMappings) {

@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  OPPO 流体云 oml 模板
+  打包进 APK 即可本地生效，不需要上架
+
+  使用说明：
+  1. 将此文件放入 src/main/assets/ 目录
+  2. 在 AndroidManifest.xml 中声明：<meta-data android:name="fluid_cloud_template" android:value="fluid_cloud_template.oml"/>
+  3. 安装到 ColorOS 14+ 设备，开启流体云开关
+-->
+<templates>
+    <!--
+      card-template 声明
+      entry="notification" 表示从通知入口展示
+      category="modular/general/task" 表示通用任务类别（避免受限履约场景）
+    -->
+    <card-template
+        entry="notification"
+        category="modular/general/task"
+        name="ZorvAITask"
+        version="1"
+        description="ZorvAI 通用任务模板">
+
+        <!-- 胶囊样式 -->
+        <capsule>
+            <left-image src="ic_zorvai_logo" />
+            <left-text field="capsuleLeftText" />
+            <right-text field="capsuleRightText" />
+        </capsule>
+
+        <!-- 卡片内容 -->
+        <card>
+            <!-- 主要信息区域 -->
+            <primary>
+                <title field="primaryTitle" />
+                <content field="primaryContent" />
+            </primary>
+
+            <!-- 扩展信息区域（可选） -->
+            <secondary>
+                <progress field="progress" style="inside" />
+            </secondary>
+        </card>
+
+        <!-- 点击动作 -->
+        <click-action>
+            <intent>
+                <action android:name="com.example.fluidcloud.ACTION_TASK_DETAIL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <extra android:name="entityId" android:value="${entityId}" />
+            </intent>
+        </click-action>
+    </card-template>
+
+    <!-- 导航模板 -->
+    <card-template
+        entry="notification"
+        category="modular/general/navigation"
+        name="ZorvAINavigation"
+        version="1"
+        description="ZorvAI 导航模板">
+
+        <capsule>
+            <left-image src="ic_navigation" />
+            <left-text field="capsuleLeftText" />
+            <right-text field="capsuleRightText" />
+        </capsule>
+
+        <card>
+            <primary>
+                <title field="primaryTitle" />
+                <content field="primaryContent" />
+            </primary>
+        </card>
+
+        <click-action>
+            <intent>
+                <action android:name="com.example.fluidcloud.ACTION_NAVIGATION_DETAIL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <extra android:name="entityId" android:value="${entityId}" />
+            </intent>
+        </click-action>
+    </card-template>
+
+    <!-- 计时器模板 -->
+    <card-template
+        entry="notification"
+        category="modular/general/timer"
+        name="ZorvAITimer"
+        version="1"
+        description="ZorvAI 计时器模板">
+
+        <capsule>
+            <left-image src="ic_timer" />
+            <left-text field="capsuleLeftText" />
+            <right-text field="capsuleRightText" />
+        </capsule>
+
+        <card>
+            <primary>
+                <title field="primaryTitle" />
+                <content field="primaryContent" />
+            </primary>
+            <secondary>
+                <timer field="timerValue" format="mm:ss" />
+            </secondary>
+        </card>
+
+        <click-action>
+            <intent>
+                <action android:name="com.example.fluidcloud.ACTION_TIMER_DETAIL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <extra android:name="entityId" android:value="${entityId}" />
+            </intent>
+        </click-action>
+    </card-template>
+</templates>
