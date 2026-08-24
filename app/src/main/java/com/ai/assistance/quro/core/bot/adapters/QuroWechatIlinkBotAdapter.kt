@@ -10,7 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import java.security.SecureRandom
-import java.util.Base64
+import android.util.Base64
 
 /**
  * 微信 iLink 个人号 Bot 适配器（直连官方域名，零公网端点）。
@@ -399,7 +399,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                 ((bytes[1].toInt() and 0xFF) shl 16) or
                 ((bytes[2].toInt() and 0xFF) shl 8) or
                 (bytes[3].toInt() and 0xFF)
-        return Base64.getEncoder().encodeToString(n.toString().toByteArray())
+        return Base64.encodeToString(n.toString().toByteArray(), Base64.NO_WRAP)
     }
 
     /** 生成随机 client_id（用于 sendmessage 的去重）。 */
