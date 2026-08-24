@@ -240,6 +240,8 @@ dependencies {
     implementation("org.apache.poi:poi-ooxml:5.2.5")
     implementation("stax:stax-api:1.0.1")
 
+    // 微信 iLink Bot：纯 OkHttp + org.json 实现（移植自 Andclaw 1.2.0，不依赖 SDK）
+
     testImplementation("junit:junit:4.13.2")
     testImplementation(libs.org.json)
 }

@@ -2015,88 +2015,12 @@ private fun MiniAppWebView(
 ) {
     val context = LocalContext.current
     val assetLibResolver = remember { AssetLibResolver(context) }
-
-    // 小程序运行时脚本（简化版，支持 Page/Component 生命周期和数据绑定）
-    val miniAppRuntime = """
-        (function(global) {
-            'use strict';
-            // 数据绑定渲染
-            function renderKey(instance, key, root) {
-                root = root || document;
-                var nodes = root.querySelectorAll('[data-bind="' + key + '"]');
-                for (var i = 0; i < nodes.length; i++) {
-                    nodes[i].textContent = instance.data[key];
-                }
-            }
-            function render(instance, patch, root) {
-                root = root || document;
-                var keys = patch ? Object.keys(patch) : Object.keys(instance.data);
-                for (var i = 0; i < keys.length; i++) renderKey(instance, keys[i], root);
-            }
-            // 事件绑定
-            function bindEvents(instance, root) {
-                root = root || document;
-                var acts = root.querySelectorAll('[data-action]');
-                for (var i = 0; i < acts.length; i++) {
-                    (function(el) {
-                        var method = el.getAttribute('data-action');
-                        var evt = el.getAttribute('data-event') || 'click';
-                        el.addEventListener(evt, function(e) {
-                            if (typeof instance[method] === 'function') instance[method].call(instance, e);
-                        });
-                    })(acts[i]);
-                }
-            }
-            // Page 生命周期
-            global.Page = function(options) {
-                var page = {
-                    data: JSON.parse(JSON.stringify(options.data || {})),
-                    setData: function(patch) {
-                        Object.assign(this.data, patch);
-                        render(this, patch);
-                    }
-                };
-                Object.keys(options).forEach(function(k) {
-                    if (k === 'data') return;
-                    if (typeof options[k] === 'function') page[k] = options[k];
-                });
-                global.__currentPage = page;
-                if (document.readyState !== 'loading') {
-                    bindEvents(page);
-                    if (typeof options.onLoad === 'function') options.onLoad.call(page, global.__pageQuery || {});
-                } else {
-                    document.addEventListener('DOMContentLoaded', function() {
-                        bindEvents(page);
-                        if (typeof options.onLoad === 'function') options.onLoad.call(page, global.__pageQuery || {});
-                    });
-                }
-            };
-            // Component 生命周期
-            global.Component = function(options) {
-                var comp = {
-                    data: JSON.parse(JSON.stringify(options.data || {})),
-                    props: options.props || {},
-                    setData: function(patch) {
-                        Object.assign(this.data, patch);
-                        render(this, patch);
-                    }
-                };
-                Object.keys(options).forEach(function(k) {
-                    if (k === 'data' || k === 'props') return;
-                    if (typeof options[k] === 'function') comp[k] = options[k];
-                });
-                if (options.lifetimes && typeof options.lifetimes.attached === 'function') {
-                    if (document.readyState !== 'loading') options.lifetimes.attached.call(comp);
-                    else document.addEventListener('DOMContentLoaded', function() { options.lifetimes.attached.call(comp); });
-                }
-            };
-        })(window);
-    """.trimIndent()
+    val bridgeInterface = remember { com.ai.assistance.quro.core.miniapp.MiniAppBridgeInterface(context, null!!) }
 
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            WebView(ctx).apply {
+            val webView = WebView(ctx).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.loadsImagesAutomatically = true
@@ -2105,6 +2029,15 @@ private fun MiniAppWebView(
                 settings.cacheMode = WebSettings.LOAD_NO_CACHE
                 settings.allowFileAccess = true
                 settings.allowContentAccess = true
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                settings.javaScriptCanOpenWindowsAutomatically = true
+
+                // 设置硬件加速
+                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+
+                // 注入JSBridge接口
+                val bridge = com.ai.assistance.quro.core.miniapp.MiniAppBridgeInterface(ctx, this)
+                addJavascriptInterface(bridge, "native")
 
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -2126,6 +2059,13 @@ private fun MiniAppWebView(
                     }
                 }
 
+                // 加载bridge.js
+                val bridgeJs = try {
+                    ctx.assets.open("bridge/bridge.js").bufferedReader().use { it.readText() }
+                } catch (e: Exception) {
+                    ""
+                }
+
                 // 注入CDN错误恢复脚本和小程序运行时
                 val fallbackScript = assetLibResolver.generateFallbackScript()
                 val wrappedHtml = """
@@ -2134,7 +2074,7 @@ private fun MiniAppWebView(
                     <head>
                         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
                         $fallbackScript
-                        <script>$miniAppRuntime</script>
+                        <script>$bridgeJs</script>
                     </head>
                     <body style="margin: 0; padding: 0;">
                         $html
@@ -2145,11 +2085,17 @@ private fun MiniAppWebView(
                 tag = html
                 loadDataWithBaseURL("file:///android_asset/", wrappedHtml, "text/html", "UTF-8", null)
             }
+            webView
         },
         update = { wv ->
             // 仅当 HTML 内容变化时才重载，避免每次 recomposition 重复加载造成闪烁
             if (wv.tag != html) {
                 wv.tag = html
+                val bridgeJs = try {
+                    context.assets.open("bridge/bridge.js").bufferedReader().use { it.readText() }
+                } catch (e: Exception) {
+                    ""
+                }
                 val fallbackScript = assetLibResolver.generateFallbackScript()
                 val wrappedHtml = """
                     <!DOCTYPE html>
@@ -2157,7 +2103,7 @@ private fun MiniAppWebView(
                     <head>
                         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
                         $fallbackScript
-                        <script>$miniAppRuntime</script>
+                        <script>$bridgeJs</script>
                     </head>
                     <body style="margin: 0; padding: 0;">
                         $html

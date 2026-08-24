@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -16,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -28,6 +30,121 @@ import com.ai.assistance.quro.core.tools.PopupInput
 import com.ai.assistance.quro.core.tools.PopupResult
 import com.ai.assistance.quro.core.tools.VisualPopupQueue
 import com.ai.assistance.quro.core.tools.VisualPopupData
+import com.ai.assistance.quro.core.tools.PopupStatus
+
+/**
+ * 可视化弹窗小卡片 - 显示在对话框中，点击可重新打开弹窗
+ */
+@Composable
+fun VisualPopupCard(
+    popupData: VisualPopupData,
+    onClick: () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = when (popupData.status) {
+                PopupStatus.COMPLETED -> cs.secondaryContainer
+                PopupStatus.CANCELLED -> cs.errorContainer
+                else -> cs.primaryContainer
+            }
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 图标
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        when (popupData.status) {
+                            PopupStatus.COMPLETED -> cs.secondary
+                            PopupStatus.CANCELLED -> cs.error
+                            else -> cs.primary
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    when (popupData.status) {
+                        PopupStatus.COMPLETED -> Icons.Filled.Check
+                        PopupStatus.CANCELLED -> Icons.Filled.Close
+                        else -> Icons.Filled.Web
+                    },
+                    contentDescription = null,
+                    tint = cs.onPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // 标题和描述
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = popupData.cardTitle,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = cs.onPrimaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (popupData.cardDescription.isNotBlank()) {
+                    Text(
+                        text = popupData.cardDescription,
+                        fontSize = 12.sp,
+                        color = cs.onPrimaryContainer.copy(alpha = 0.7f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+
+            // 状态指示
+            when (popupData.status) {
+                PopupStatus.COMPLETED -> {
+                    Text(
+                        text = "已完成",
+                        fontSize = 10.sp,
+                        color = cs.secondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                PopupStatus.CANCELLED -> {
+                    Text(
+                        text = "已取消",
+                        fontSize = 10.sp,
+                        color = cs.error,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                else -> {
+                    Icon(
+                        Icons.Filled.ChevronRight,
+                        contentDescription = null,
+                        tint = cs.onPrimaryContainer.copy(alpha = 0.5f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
+}
 
 /**
  * 自由可视化弹窗 - AI可以创建任意内容的弹窗，没有格式限制
@@ -35,28 +152,52 @@ import com.ai.assistance.quro.core.tools.VisualPopupData
 @Composable
 fun VisualPopupDialog() {
     val cs = MaterialTheme.colorScheme
-    var currentPopup by remember { mutableStateOf<Pair<Int, VisualPopupData>?>(null) }
+    var currentPopup by remember { mutableStateOf<Pair<String, VisualPopupData>?>(null) }
     var inputValues by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
-    // 定时检查是否有待处理的弹窗
+    // 事件驱动：监听弹窗队列变化
     LaunchedEffect(Unit) {
-        while (true) {
-            val popup = VisualPopupQueue.getCurrentPopup()
-            if (popup != null && currentPopup == null) {
-                currentPopup = popup
-                // 初始化输入框默认值
-                val defaults = popup.second.inputs.associate { it.id to it.defaultValue }
-                inputValues = defaults
+        VisualPopupQueue.eventFlow.collect { event ->
+            when (event) {
+                is VisualPopupQueue.PopupEvent.PopupAdded -> {
+                    // 有新弹窗加入，如果当前没有显示弹窗则显示
+                    if (currentPopup == null) {
+                        val popup = VisualPopupQueue.getCurrentPopup()
+                        if (popup != null) {
+                            currentPopup = popup
+                            // 初始化输入框默认值
+                            val defaults = popup.second.inputs.associate { it.id to it.defaultValue }
+                            inputValues = defaults
+                            // 更新弹窗状态为ACTIVE
+                            VisualPopupQueue.updatePopupStatus(popup.first, PopupStatus.ACTIVE)
+                        }
+                    }
+                }
+                is VisualPopupQueue.PopupEvent.PopupUpdated -> {
+                    // 弹窗状态更新
+                    if (currentPopup?.first == event.id) {
+                        val popup = VisualPopupQueue.getPopupById(event.id)
+                        if (popup != null) {
+                            currentPopup = event.id to popup
+                        }
+                    }
+                }
+                is VisualPopupQueue.PopupEvent.PopupRemoved -> {
+                    // 弹窗被移除
+                    if (currentPopup?.first == event.id) {
+                        currentPopup = null
+                        inputValues = emptyMap()
+                    }
+                }
             }
-            kotlinx.coroutines.delay(500)
         }
     }
 
-    currentPopup?.let { (index, popup) ->
+    currentPopup?.let { (id, popup) ->
         Dialog(
             onDismissRequest = {
                 if (popup.cancelable) {
-                    VisualPopupQueue.submitResult(index, PopupResult(null, inputValues, cancelled = true))
+                    VisualPopupQueue.submitResult(id, PopupResult(null, inputValues, cancelled = true))
                     currentPopup = null
                 }
             },
@@ -108,12 +249,12 @@ fun VisualPopupDialog() {
                         if (popup.cancelable) {
                             IconButton(
                                 onClick = {
-                                    VisualPopupQueue.submitResult(index, PopupResult(null, inputValues, cancelled = true))
+                                    VisualPopupQueue.submitResult(id, PopupResult(null, inputValues, cancelled = true))
                                     currentPopup = null
                                 },
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(40.dp)
                             ) {
-                                Icon(Icons.Filled.Close, "关闭", modifier = Modifier.size(18.dp))
+                                Icon(Icons.Filled.Close, "关闭", modifier = Modifier.size(20.dp))
                             }
                         }
                     }
@@ -194,7 +335,7 @@ fun VisualPopupDialog() {
                                     Button(
                                         onClick = {
                                             VisualPopupQueue.submitResult(
-                                                index,
+                                                id,
                                                 PopupResult(button.value, inputValues, cancelled = false)
                                             )
                                             currentPopup = null
@@ -230,7 +371,7 @@ fun VisualPopupDialog() {
                                 Button(
                                     onClick = {
                                         VisualPopupQueue.submitResult(
-                                            index,
+                                            id,
                                             PopupResult(button.value, inputValues, cancelled = false)
                                         )
                                         currentPopup = null

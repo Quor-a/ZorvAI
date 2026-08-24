@@ -14,6 +14,10 @@ import com.ai.assistance.quro.core.tools.ImportedToolDef
 import com.ai.assistance.quro.core.tools.QuroImportedToolRegistry
 import com.ai.assistance.quro.core.tools.QuroUiActionBridge
 import com.ai.assistance.quro.core.tools.VisualCustomPopupQueue
+import com.ai.assistance.quro.core.tools.VisualPopupQueue
+import com.ai.assistance.quro.core.tools.PopupButton
+import com.ai.assistance.quro.core.tools.PopupInput
+import com.ai.assistance.quro.core.tools.PopupResult
 import com.ai.assistance.quro.BuildConfig
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.terminal.QuroTerminalController
@@ -298,6 +302,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import com.ai.assistance.quro.ui.VisualPopupConfigDialog
+import com.ai.assistance.quro.ui.VisualQuestionConfigDialog
 
 private enum class SheetType { Model, Persona, Settings, Upload, Voice }
 
@@ -581,6 +587,12 @@ fun ChatScreen(
     var showSkills by remember { mutableStateOf(false) }
     // 技能选择对话框（从输入框工具菜单/上下文标识栏进入）
     var showSkillSelector by remember { mutableStateOf(false) }
+    // 可视化弹窗配置对话框
+    var showVisualPopupConfig by remember { mutableStateOf(false) }
+    val pendingVisualPopup = remember { mutableStateOf(false) }
+    // 可视化询问配置对话框
+    var showVisualQuestionConfig by remember { mutableStateOf(false) }
+    val pendingVisualQuestion = remember { mutableStateOf(false) }
     // 定时任务管理入口
     var showSchedule by remember { mutableStateOf(false) }
     // 知识库管理页（从设置页入口进入：浏览 / 查看 / 新建 / 删除 knowledge_base 文档）
@@ -811,6 +823,14 @@ fun ChatScreen(
                 ctxParts.add("ACI应用: $aciName (包名: $pkg)")
             }
         }
+        if (pendingVisualPopup.value) {
+            ctxParts.add("用户选择了：可视化弹窗，请立即调用visual_popup工具创建一个可视化弹窗")
+            pendingVisualPopup.value = false
+        }
+        if (pendingVisualQuestion.value) {
+            ctxParts.add("用户选择了：可视化询问，请立即调用visual_question工具创建一个可视化询问")
+            pendingVisualQuestion.value = false
+        }
         if (enabledSkillsCount > 0) {
             val enabledSkills = com.ai.assistance.quro.core.skill.QuroSkillStore.load(ctx)
                 .filter { it.enabled }
@@ -1023,6 +1043,24 @@ fun ChatScreen(
                         onOpenSkills = { showSkillSelector = true },
                         onOpenAciSelector = { showAciSelector = true },
                         onOpenEditor = { showEditor = true },
+                        onSelectVisualPopup = {
+                            pendingVisualPopup.value = !pendingVisualPopup.value
+                            if (pendingVisualPopup.value) {
+                                Toast.makeText(ctx, "已选择：可视化弹窗，发送消息时将触发", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(ctx, "已取消：可视化弹窗", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onSelectVisualQuestion = {
+                            pendingVisualQuestion.value = !pendingVisualQuestion.value
+                            if (pendingVisualQuestion.value) {
+                                Toast.makeText(ctx, "已选择：可视化询问，发送消息时将触发", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(ctx, "已取消：可视化询问", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        pendingVisualPopup = pendingVisualPopup.value,
+                        pendingVisualQuestion = pendingVisualQuestion.value,
                         currentWorkspace = currentWorkspace,
                         onOpenWorkspaceSelector = { showWorkspaceSelector = true },
                         currentAciName = currentAciName,
@@ -1460,6 +1498,9 @@ fun ChatScreen(
                 onSkillsChanged = { count -> enabledSkillsCount = count },
             )
         }
+
+        // 可视化弹窗配置对话框
+        // 可视化弹窗配置对话框（已移除，使用状态模式）
 
         // 语音设置页：内嵌对话框底部的紧凑面板（不再是全屏页）
         if (showVoice) {
@@ -2107,6 +2148,111 @@ private fun MessageRow(
             if (showTools && !msg.tools.isNullOrEmpty()) {
                 ToolsInlineContent(msg.tools, scaled, embeddedTrace = embeddedTrace)
                 Spacer(Modifier.height(6.dp))
+            }
+            // ═══ 可视化弹窗/自定义弹窗小卡片：独立于工具区域显示 ═══
+            if (!msg.tools.isNullOrEmpty()) {
+                msg.tools.filter { it.name == "visual_popup" && it.args.isNotBlank() }.forEach { t ->
+                    Spacer(Modifier.height(6.dp))
+                    val popupCardInfo = remember(t.args) {
+                        runCatching {
+                            val json = org.json.JSONObject(t.args)
+                            val title = json.optString("title", "可视化弹窗")
+                            val cardTitle = json.optString("card_title", title)
+                            val cardDescription = json.optString("card_description", "点击查看详情")
+                            Triple(title, cardTitle, cardDescription)
+                        }.getOrDefault(Triple("可视化弹窗", "可视化弹窗", "点击查看详情"))
+                    }
+                    val (_, cardTitle, cardDescription) = popupCardInfo
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                runCatching {
+                                    val json = org.json.JSONObject(t.args)
+                                    val pTitle = json.optString("title", "可视化弹窗")
+                                    val content = json.optString("content", "")
+                                    val btns = mutableListOf<PopupButton>()
+                                    json.optJSONArray("buttons")?.let { arr ->
+                                        for (i in 0 until arr.length()) {
+                                            val b = arr.optJSONObject(i) ?: continue
+                                            val txt = b.optString("text", "")
+                                            val v = b.optString("value", "")
+                                            if (txt.isNotBlank() && v.isNotBlank()) btns.add(PopupButton(txt, v, b.optString("style", "primary")))
+                                        }
+                                    }
+                                    val inps = mutableListOf<PopupInput>()
+                                    json.optJSONArray("inputs")?.let { arr ->
+                                        for (i in 0 until arr.length()) {
+                                            val inp = arr.optJSONObject(i) ?: continue
+                                            val id = inp.optString("id", "")
+                                            val lbl = inp.optString("label", "")
+                                            if (id.isNotBlank() && lbl.isNotBlank()) inps.add(PopupInput(id, lbl, inp.optString("placeholder", ""), inp.optString("default_value", ""), inp.optString("type", "text")))
+                                        }
+                                    }
+                                    val latch = java.util.concurrent.CountDownLatch(1)
+                                    val resultRef = java.util.concurrent.atomic.AtomicReference<PopupResult?>(null)
+                                    VisualPopupQueue.addPopup(com.ai.assistance.quro.core.tools.VisualPopupData(
+                                        id = "popup_${System.currentTimeMillis()}_${(Math.random() * 1000).toInt()}",
+                                        title = pTitle, content = content, buttons = btns, inputs = inps,
+                                        imageUrl = json.optString("image_url", "").ifBlank { null },
+                                        width = if (json.has("width")) json.optInt("width") else null,
+                                        height = if (json.has("height")) json.optInt("height") else null,
+                                        cardTitle = json.optString("card_title", pTitle),
+                                        cardDescription = json.optString("card_description", "点击查看详情"),
+                                        cancelable = json.optBoolean("cancelable", true),
+                                        timeout = json.optInt("timeout", 60),
+                                        latch = latch, result = resultRef
+                                    ))
+                                }
+                            },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = cs.primaryContainer),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Language, null, tint = cs.primary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(cardTitle, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = cs.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (cardDescription.isNotBlank()) Text(cardDescription, fontSize = 10.sp, color = cs.onPrimaryContainer.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, "打开弹窗", tint = cs.primary, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+                msg.tools.filter { it.name == "visual_custom_popup" && it.args.isNotBlank() }.forEach { t ->
+                    Spacer(Modifier.height(6.dp))
+                    val popupCardInfo = remember(t.args) {
+                        runCatching {
+                            val json = org.json.JSONObject(t.args)
+                            val title = json.optString("title", "自定义弹窗")
+                            val cardTitle = json.optString("card_title", title)
+                            val cardDescription = json.optString("card_description", "点击查看详情")
+                            Triple(title, cardTitle, cardDescription)
+                        }.getOrDefault(Triple("自定义弹窗", "自定义弹窗", "点击查看详情"))
+                    }
+                    val (_, cardTitle, cardDescription) = popupCardInfo
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                VisualCustomPopupQueue.getCurrentPopup()?.let { /* 已在队列 */ }
+                            },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = cs.primaryContainer),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Language, null, tint = cs.primary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(cardTitle, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = cs.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (cardDescription.isNotBlank()) Text(cardDescription, fontSize = 10.sp, color = cs.onPrimaryContainer.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, "打开弹窗", tint = cs.primary, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
             }
             // 附件：用户与 AI 消息通用，支持一条消息多个文件，图片/视频/文档发出来可直接预览
             if (msg.attachments.isNotEmpty()) {
@@ -2938,77 +3084,7 @@ private fun SingleToolCard(t: ToolCallUi, scaled: (Int) -> androidx.compose.ui.u
                     FormattedResultContent(t.result!!, scaled)
                 }
 
-                if (t.name == "visual_custom_popup") {
-                    Spacer(Modifier.height(8.dp))
-                    // 从参数中解析弹窗信息
-                    val popupInfo = remember(t.args) {
-                        runCatching {
-                            val json = org.json.JSONObject(t.args)
-                            val title = json.optString("title", "自定义弹窗")
-                            val cardTitle = json.optString("card_title", title)
-                            val cardDescription = json.optString("card_description", "点击查看详情")
-                            Triple(title, cardTitle, cardDescription)
-                        }.getOrDefault(Triple("自定义弹窗", "自定义弹窗", "点击查看详情"))
-                    }
-                    val (title, cardTitle, cardDescription) = popupInfo
-                    // 小卡片：点击打开弹窗
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                // 重新打开弹窗（如果还在队列中）
-                                // 注意：弹窗可能已经被处理，这里只是尝试重新显示
-                                // 实际实现可能需要更复杂的逻辑
-                                VisualCustomPopupQueue.getCurrentPopup()?.let { (id, popup) ->
-                                    // 弹窗已经显示，无需再次打开
-                                    // 这里可以添加提示或忽略
-                                }
-                            },
-                        shape = RoundedCornerShape(8.dp),
-                        colors = CardDefaults.cardColors(containerColor = cs.primaryContainer),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Filled.Language,
-                                contentDescription = null,
-                                tint = cs.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = cardTitle,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = cs.onPrimaryContainer,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                if (cardDescription.isNotBlank()) {
-                                    Text(
-                                        text = cardDescription,
-                                        fontSize = 10.sp,
-                                        color = cs.onPrimaryContainer.copy(alpha = 0.7f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                            Icon(
-                                Icons.AutoMirrored.Filled.OpenInNew,
-                                contentDescription = "打开弹窗",
-                                tint = cs.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                } else if (t.name.startsWith("ui_")) {
+                if (t.name.startsWith("ui_")) {
                     Spacer(Modifier.height(8.dp))
                     val actLabel = if (t.name.startsWith("ui_open_")) "重新打开" else "再次执行"
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -3728,6 +3804,10 @@ private fun Composer(
     onOpenSkills: () -> Unit = {},
     onOpenAciSelector: () -> Unit = {},
     onOpenEditor: () -> Unit = {},
+    onSelectVisualPopup: () -> Unit = {},
+    onSelectVisualQuestion: () -> Unit = {},
+    pendingVisualPopup: Boolean = false,
+    pendingVisualQuestion: Boolean = false,
     currentWorkspace: String? = null,
     onOpenWorkspaceSelector: () -> Unit = {},
     currentAciName: String? = null,
@@ -3831,6 +3911,7 @@ private fun Composer(
                 .padding(6.dp),
             verticalAlignment = Alignment.Bottom
         ) {
+            val ctx = LocalContext.current
             IconButton(onClick = onAttach, Modifier.size(44.dp).padding(2.dp)) {
                 Icon(Icons.Filled.Add, "上传文件", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
             }
@@ -3875,27 +3956,39 @@ private fun Composer(
                         },
                     )
                     HorizontalDivider()
-                    // 可视化交互工具
+                    // 可视化交互工具（支持切换选择/取消选择）
                     DropdownMenuItem(
-                        text = { Text("可视化弹窗") },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.DesktopWindows, null, Modifier.size(18.dp), tint = cs.primary)
+                                Spacer(Modifier.width(8.dp))
+                                Text("可视化弹窗")
+                                if (pendingVisualPopup) {
+                                    Spacer(Modifier.width(8.dp))
+                                    Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
+                                }
+                            }
+                        },
                         onClick = {
                             showToolMenu = false
-                            // 发送预设提示词让AI创建可视化弹窗
-                            onSend("请创建一个可视化弹窗，展示一些有趣的交互内容")
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Filled.DesktopWindows, null, Modifier.size(18.dp), tint = cs.primary)
+                            onSelectVisualPopup()
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("可视化询问") },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.TouchApp, null, Modifier.size(18.dp), tint = cs.primary)
+                                Spacer(Modifier.width(8.dp))
+                                Text("可视化询问")
+                                if (pendingVisualQuestion) {
+                                    Spacer(Modifier.width(8.dp))
+                                    Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
+                                }
+                            }
+                        },
                         onClick = {
                             showToolMenu = false
-                            // 发送预设提示词让AI创建可视化询问
-                            onSend("请用可视化方式问我一个问题，让我选择或输入")
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Filled.TouchApp, null, Modifier.size(18.dp), tint = cs.primary)
+                            onSelectVisualQuestion()
                         },
                     )
                 }

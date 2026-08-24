@@ -130,6 +130,21 @@ class QuroBotManager(
 
     /** 会话绑定器：把机器人对话写入 App 持久化会话。 */
     var conversationBinder: BotConversationBinder? = null
+        set(value) {
+            field = value
+            // ViewModel 注册后，处理之前积压的消息
+            if (value != null) {
+                synchronized(pendingInboundMessages) {
+                    pendingInboundMessages.forEach { msg ->
+                        scope.launch { processInbound(msg) }
+                    }
+                    pendingInboundMessages.clear()
+                }
+            }
+        }
+
+    /** ViewModel 创建前积压的入站消息（conversationBinder 为 null 时暂存）。 */
+    private val pendingInboundMessages = mutableListOf<QuroInboundMessage>()
 
     /** 读取某平台的会话绑定模式：none / auto / fixed。 */
     fun bindMode(platform: QuroBotPlatform): String {
@@ -176,75 +191,96 @@ class QuroBotManager(
      * 内部切到 IO 协程跑回复引擎，拿到文本后调 adapter.deliver 回传平台，并触发 uiMirror。
      */
     fun handleInbound(message: QuroInboundMessage) {
-        scope.launch {
-            try {
-                // 系统级弹窗：IM 入站消息（离开软件时 heads-up）
+        Log.d(TAG, "handleInbound 收到消息: platform=${message.platform} user=${message.userId} text=${message.text.take(50)}...")
+        // 如果 conversationBinder 还没注册（ViewModel 未创建），暂存消息
+        if (conversationBinder == null) {
+            synchronized(pendingInboundMessages) {
+                if (pendingInboundMessages.size < 50) { // 防止无限积压
+                    pendingInboundMessages.add(message)
+                    Log.w(TAG, "conversationBinder 未注册，消息暂存: platform=${message.platform} user=${message.userId}")
+                }
+            }
+            return
+        }
+        Log.d(TAG, "handleInbound conversationBinder 已注册，启动处理")
+        scope.launch { processInbound(message) }
+    }
+
+    private suspend fun processInbound(message: QuroInboundMessage) {
+        try {
+            Log.d(TAG, "processInbound 开始处理: platform=${message.platform} user=${message.userId}")
+            // 系统级弹窗：IM 入站消息（离开软件时 heads-up）
+            QuroReplyNotifier.notifyImMessage(
+                appContext,
+                "${message.platform.label}·${message.userName.ifBlank { message.userId }}",
+                message.text,
+                id = QuroReplyNotifier.NOTIF_IM_INBOUND,
+            )
+
+            // 驱动回复引擎；硬超时 90s 防止 assistant.ask 卡死导致飞书侧「永无回复/无错误」。
+            val reply = try {
+                withTimeout(90_000) {
+                    replyEngine.reply(message.platform, message.userId, message.text)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "replyEngine.reply 超时/失败 platform=${message.platform} user=${message.userId}: ${e.message}")
+                QuroReply("（机器人回复超时或失败：${e.message ?: "未知错误"}）")
+            }
+            Log.d(TAG, "processInbound 回复: ${reply.text.take(100)}...")
+            val out = QuroOutboundMessage(
+                message.platform,
+                message.userId,
+                reply.text,
+                imageBytes = reply.imageBytes,
+                imageFileName = reply.imageFileName,
+                msgId = message.msgId,
+                eventId = message.eventId,
+                groupId = message.groupId,
+            )
+
+            // 按平台配置，把用户消息 + 机器人回复写入 App 持久化会话
+            val mode = bindMode(message.platform)
+            Log.d(TAG, "processInbound 绑定模式: $mode")
+            if (mode != "none") {
+                runCatching {
+                    conversationBinder?.append(
+                        platform = message.platform,
+                        userId = message.userId,
+                        userName = message.userName.ifBlank { message.userId },
+                        userText = message.text,
+                        replyText = reply.text,
+                        mode = mode,
+                        fixedConvId = bindConvId(message.platform),
+                    )
+                    Log.d(TAG, "processInbound 消息已写入会话")
+                }
+            }
+
+            runCatching { 
+                adapters[message.platform]?.deliver(out)
+                Log.d(TAG, "processInbound 回复已发送到平台")
+            }
+            // 系统级弹窗：机器人回复（离开软件时 heads-up；前台时用户在对话里直接看到）
+            runCatching {
                 QuroReplyNotifier.notifyImMessage(
                     appContext,
-                    "${message.platform.label}·${message.userName.ifBlank { message.userId }}",
-                    message.text,
-                    id = QuroReplyNotifier.NOTIF_IM_INBOUND,
-                )
-
-                // 驱动回复引擎；硬超时 90s 防止 assistant.ask 卡死导致飞书侧「永无回复/无错误」。
-                val reply = try {
-                    withTimeout(90_000) {
-                        replyEngine.reply(message.platform, message.userId, message.text)
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "replyEngine.reply 超时/失败 platform=${message.platform} user=${message.userId}: ${e.message}")
-                    QuroReply("（机器人回复超时或失败：${e.message ?: "未知错误"}）")
-                }
-                val out = QuroOutboundMessage(
-                    message.platform,
-                    message.userId,
+                    "Zorv · ${message.platform.label}",
                     reply.text,
-                    imageBytes = reply.imageBytes,
-                    imageFileName = reply.imageFileName,
-                    msgId = message.msgId,
-                    eventId = message.eventId,
-                    groupId = message.groupId,
+                    id = QuroReplyNotifier.NOTIF_IM_REPLY,
                 )
-
-                // 按平台配置，把用户消息 + 机器人回复写入 App 持久化会话
-                val mode = bindMode(message.platform)
-                if (mode != "none") {
-                    runCatching {
-                        conversationBinder?.append(
-                            platform = message.platform,
-                            userId = message.userId,
-                            userName = message.userName.ifBlank { message.userId },
-                            userText = message.text,
-                            replyText = reply.text,
-                            mode = mode,
-                            fixedConvId = bindConvId(message.platform),
-                        )
-                    }
-                }
-
-                runCatching { adapters[message.platform]?.deliver(out) }
-                // 系统级弹窗：机器人回复（离开软件时 heads-up；前台时用户在对话里直接看到）
-                runCatching {
-                    QuroReplyNotifier.notifyImMessage(
-                        appContext,
-                        "Zorv · ${message.platform.label}",
-                        reply.text,
-                        id = QuroReplyNotifier.NOTIF_IM_REPLY,
-                    )
-                }
-                uiMirror?.invoke(out)
-            } catch (e: Exception) {
-                Log.e(TAG, "handleInbound failed platform=${message.platform} user=${message.userId}: ${e.message}")
-                val err = QuroOutboundMessage(
-                    message.platform,
-                    message.userId,
-                    "（机器人暂时无法回复：${e.message}）",
-                    msgId = message.msgId,
-                    eventId = message.eventId,
-                    groupId = message.groupId,
-                )
-                runCatching { adapters[message.platform]?.deliver(err) }
             }
+            uiMirror?.invoke(out)
+        } catch (e: Exception) {
+            Log.e(TAG, "handleInbound failed platform=${message.platform} user=${message.userId}: ${e.message}")
+            val err = QuroOutboundMessage(
+                message.platform,
+                message.userId,
+                "（机器人暂时无法回复：${e.message}）",
+                msgId = message.msgId,
+                eventId = message.eventId,
+                groupId = message.groupId,
+            )
+            runCatching { adapters[message.platform]?.deliver(err) }
         }
     }
 
