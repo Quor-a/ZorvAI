@@ -50,18 +50,12 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.SET_ALARM" />
     <!-- 精确闹钟权限（Android 12+）：
-         1. SCHEDULE_EXACT_ALARM：Android 12-13 自动授予，Android 14+ 默认拒绝，用户可在设置中授权
-         2. USE_EXACT_ALARM：Android 13+ 自动授予，不可撤销，但只适用于闹钟/日历类应用
+         只声明 SCHEDULE_EXACT_ALARM，不要同时声明 USE_EXACT_ALARM。
+         如果同时声明两个权限，应用可能不会出现在闹钟和提醒列表中。
          
-         我们同时声明两个权限：
-         - USE_EXACT_ALARM：确保应用出现在"闹钟和提醒"列表中（Android 13+）
-         - SCHEDULE_EXACT_ALARM：兼容 Android 12 设备
-         
-         如果用户在设置中看不到"闹钟和提醒"权限，可能是因为：
-         1. 应用没有被系统识别为闹钟/日历类应用
-         2. 需要手动打开设置页面引导用户授权 -->
+         SCHEDULE_EXACT_ALARM：Android 12-13 自动授予，Android 14+ 默认拒绝，用户可在设置中授权
+         应用需要出现在"闹钟和提醒"列表中，用户手动授权后才能使用精确闹钟。 -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <!-- 权限管理：电池优化豁免引导 -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
