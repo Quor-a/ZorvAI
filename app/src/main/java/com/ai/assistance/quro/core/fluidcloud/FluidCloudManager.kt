@@ -3,218 +3,125 @@ package com.ai.assistance.quro.core.fluidcloud
 import android.content.ContentProviderClient
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import org.json.JSONObject
-import java.util.UUID
 
 /**
- * OPPO 流体云端侧管理器
+ * OPPO 流体云端侧管理器（官方标准写法）
+ *
  * 不上架最小可行路径：ContentProviderClient + 意图共享
+ * release 包与 debug 包行为一致，只要包名一致、流体云开关开启、场景非敏感履约
  *
  * 使用条件：
  * 1. ColorOS 14+（推荐16+）
  * 2. 设置 → 通知与控制中心 → 流体云 总开关开
- * 3. 自建 Demo App（自己包名，debug 签名）
+ * 3. 包名一致、签名有效
  *
  * 支持的操作：
  * - ActionStatus 0: 创建流体云（胶囊/卡片）
  * - ActionStatus 1: 更新流体云
  * - ActionStatus 2: 结束流体云
  */
-class FluidCloudManager(private val context: Context) {
+object FluidCloudManager {
+    private const val TAG = "FluidCloud"
+    private const val AUTHORITY = "IntelligentIntent"
+    private const val METHOD = "shareIntent"
 
-    companion object {
-        // 流体云 ContentProvider authority
-        private const val AUTHORITY = "IntelligentIntent"
-        private const val METHOD_SHARE_INTENT = "shareIntent"
-
-        // 意图名称模板
-        const val INTENT_NAME_TASK = "ZorvAI.Task"
-        const val INTENT_NAME_NAVIGATION = "ZorvAI.Navigation"
-        const val INTENT_NAME_TIMER = "ZorvAI.Timer"
-        const val INTENT_NAME_PROGRESS = "ZorvAI.Progress"
-
-        // 垂域名称（entityName）- 通用模板避免受限场景
-        const val ENTITY_NAME_TASK = "TASK"
-        const val ENTITY_NAME_NAVIGATION = "NAVIGATION"
-
-        // ActionStatus
-        const val ACTION_CREATE = 0
-        const val ACTION_UPDATE = 1
-        const val ACTION_END = 2
-    }
-
-    /**
-     * 发送意图共享数据到流体云
-     * @param intentData IntentData JSON字符串
-     * @return ShareResult 或 null（失败时）
-     */
-    fun shareIntent(intentData: String): ShareResult? {
-        return try {
-            val client: ContentProviderClient? =
-                context.contentResolver.acquireUnstableContentProviderClient(AUTHORITY)
-
-            if (client == null) {
-                return ShareResult(code = -1, message = "无法获取ContentProviderClient，请检查流体云开关")
-            }
-
-            try {
-                val extras = Bundle().apply {
-                    putString("intentData", intentData)
-                }
-
-                val resultBundle = client.call(METHOD_SHARE_INTENT, null, extras)
-                val resultJson = resultBundle?.getString("result")
-
-                if (resultJson != null) {
-                    parseShareResult(resultJson)
-                } else {
-                    ShareResult(code = -1, message = "返回结果为空")
-                }
-            } finally {
-                client.close()
-            }
-        } catch (e: Exception) {
-            ShareResult(code = -1, message = "调用异常: ${e.message}")
-        }
-    }
+    // 返回码
+    const val CODE_SUCCESS = 0
+    const val CODE_NO_PERMISSION = 10101001
+    const val CODE_PERMISSION_EXPIRED = 10101002
+    const val CODE_PARAM_ERROR = 10102001
+    const val CODE_DATA_TOO_LARGE = 10103001
+    const val CODE_FREQ_LIMIT = 10103002
+    const val CODE_SWITCH_OFF = 10103003
+    const val CODE_ENTITY_LIMIT = 10103004
+    const val CODE_VERSION_NOT_SUPPORT = 10103005
 
     /**
      * 创建流体云（显示胶囊）
-     * @param intentName 意图名称
-     * @param entityName 垂域名称（TASK/NAVIGATION等通用模板）
-     * @param entityId 实体ID（订单号等）
-     * @param capsuleLeftText 胶囊左侧文字
-     * @param capsuleRightText 胶囊右侧文字
-     * @param primaryTitle 卡片主标题
-     * @param primaryContent 卡片主内容
+     * @param context Context
+     * @param title 标题
+     * @param content 内容
+     * @param progress 进度 0-100（可选）
      */
-    fun createFluidCloud(
-        intentName: String = INTENT_NAME_TASK,
-        entityName: String = ENTITY_NAME_TASK,
-        entityId: String = UUID.randomUUID().toString(),
-        capsuleLeftText: String = "ZorvAI",
-        capsuleRightText: String = "进行中",
-        primaryTitle: String = "任务进行中",
-        primaryContent: String = "点击查看详情"
-    ): ShareResult? {
-        val intentData = buildIntentData(
-            actionStatus = ACTION_CREATE,
-            intentName = intentName,
-            entityName = entityName,
-            entityId = entityId,
-            capsuleLeftText = capsuleLeftText,
-            capsuleRightText = capsuleRightText,
-            primaryTitle = primaryTitle,
-            primaryContent = primaryContent
-        )
-        return shareIntent(intentData)
+    fun create(
+        context: Context,
+        title: String = "ZorvAI",
+        content: String = "处理中",
+        progress: Int = 20
+    ): FluidCloudResult {
+        return send(context, build(0, title, content, progress))
     }
 
     /**
      * 更新流体云
+     * @param context Context
+     * @param title 标题
+     * @param content 内容
+     * @param progress 进度 0-100
      */
-    fun updateFluidCloud(
-        intentName: String = INTENT_NAME_TASK,
-        entityName: String = ENTITY_NAME_TASK,
-        entityId: String,
-        capsuleRightText: String = "更新中",
-        primaryTitle: String = "任务更新",
-        primaryContent: String = "状态已更新",
-        progress: Int? = null
-    ): ShareResult? {
-        val intentData = buildIntentData(
-            actionStatus = ACTION_UPDATE,
-            intentName = intentName,
-            entityName = entityName,
-            entityId = entityId,
-            capsuleRightText = capsuleRightText,
-            primaryTitle = primaryTitle,
-            primaryContent = primaryContent,
-            progress = progress
-        )
-        return shareIntent(intentData)
+    fun update(
+        context: Context,
+        title: String = "任务更新",
+        content: String = "状态已更新",
+        progress: Int = 50
+    ): FluidCloudResult {
+        return send(context, build(1, title, content, progress))
     }
 
     /**
      * 结束流体云（移除胶囊）
+     * @param context Context
      */
-    fun endFluidCloud(
-        intentName: String = INTENT_NAME_TASK,
-        entityName: String = ENTITY_NAME_TASK,
-        entityId: String
-    ): ShareResult? {
-        val intentData = buildIntentData(
-            actionStatus = ACTION_END,
-            intentName = intentName,
-            entityName = entityName,
-            entityId = entityId
-        )
-        return shareIntent(intentData)
+    fun finish(context: Context): FluidCloudResult {
+        return send(context, build(2, "", "", 100))
     }
 
     /**
-     * 构建IntentData JSON
+     * 构建 IntentData JSON（官方标准格式）
      */
-    private fun buildIntentData(
+    private fun build(
         actionStatus: Int,
-        intentName: String,
-        entityName: String,
-        entityId: String,
-        capsuleLeftText: String = "",
-        capsuleRightText: String = "",
-        primaryTitle: String = "",
-        primaryContent: String = "",
-        progress: Int? = null
+        title: String,
+        content: String,
+        progress: Int
     ): String {
-        val timestamp = System.currentTimeMillis()
-        val identifier = UUID.randomUUID().toString()
+        val ts = System.currentTimeMillis()
+        val identifier = "zorvai_${ts}_${(Math.random() * 10000).toInt()}"
 
-        val intentData = JSONObject().apply {
-            put("intentName", intentName)
+        return JSONObject().apply {
+            put("intentName", "ZorvAI.Task")
             put("identifier", identifier)
-            put("timestamp", timestamp)
-
-            // serviceId - 卡片ID
+            put("timestamp", ts)
             put("serviceId", JSONObject().apply {
                 put("launcher", "999800001")
                 put("fluidCloud", "999900001")
             })
-
-            // intentAction - 动作
-            put("intentAction", JSONObject().apply {
-                put("actionStatus", actionStatus)
-            })
-
-            // intentEntity - 实体信息
+            put("intentAction", JSONObject().put("actionStatus", actionStatus))
             put("intentEntity", JSONObject().apply {
-                put("entityName", entityName)
-                put("entityId", entityId)
+                put("entityName", "TASK") // 使用通用模板，避免受限履约场景
+                put("entityId", "zorvai_task_$ts")
 
-                // capsule - 胶囊信息
-                if (capsuleLeftText.isNotEmpty() || capsuleRightText.isNotEmpty()) {
+                if (actionStatus != 2) { // 非结束操作
+                    put("milestone", JSONObject().apply {
+                        put("code", 10)
+                        put("text", "running")
+                    })
                     put("capsule", JSONObject().apply {
-                        if (capsuleLeftText.isNotEmpty()) put("leftText", capsuleLeftText)
-                        if (capsuleRightText.isNotEmpty()) put("rightText", capsuleRightText)
+                        put("leftText", "ZorvAI")
+                        put("rightText", if (progress in 0..100) "$progress%" else title)
                     })
-                }
-
-                // primary - 卡片主要信息
-                if (primaryTitle.isNotEmpty() || primaryContent.isNotEmpty()) {
                     put("primary", JSONObject().apply {
-                        if (primaryTitle.isNotEmpty()) {
-                            put("title", org.json.JSONArray().apply {
-                                put(JSONObject().apply {
-                                    put("text", primaryTitle)
-                                    put("color", "#FF6B35")
-                                })
+                        put("title", org.json.JSONArray().apply {
+                            put(JSONObject().apply {
+                                put("text", title.ifEmpty { "ZorvAI" })
+                                put("color", "#FFFFFF")
+                                put("darkColor", "#000000")
                             })
-                        }
-                        if (primaryContent.isNotEmpty()) put("content", primaryContent)
+                        })
+                        put("content", content.ifEmpty { "处理中" })
                     })
-                }
-
-                // secondaryData - 扩展信息（可选，用于进度等）
-                if (progress != null) {
                     put("secondaryData", JSONObject().apply {
                         put("type", "PROGRESS")
                         put("progress", progress)
@@ -222,35 +129,73 @@ class FluidCloudManager(private val context: Context) {
                     })
                 }
             })
-        }
-
-        return intentData.toString()
+        }.toString()
     }
 
     /**
-     * 解析ShareResult
+     * 端侧调用（官方标准写法）
      */
-    private fun parseShareResult(resultJson: String): ShareResult {
+    private fun send(context: Context, intentData: String): FluidCloudResult {
+        var client: ContentProviderClient? = null
         return try {
-            val json = JSONObject(resultJson)
-            ShareResult(
-                code = json.getInt("code"),
-                message = json.getString("message"),
-                data = json.optString("data", null)
-            )
+            client = context.contentResolver.acquireUnstableContentProviderClient(AUTHORITY)
+            if (client == null) {
+                Log.w(TAG, "未获取到 Provider（系统不支持/流体云关闭）")
+                return FluidCloudResult(
+                    code = -1,
+                    message = "未获取到 Provider（系统不支持/流体云关闭）"
+                )
+            }
+
+            val bundle = Bundle().apply {
+                putString("intentData", intentData)
+            }
+            val result = client.call(METHOD, null, bundle)
+            val shareResult = result?.getString("result")
+            Log.d(TAG, "FluidCloud result = $shareResult")
+
+            val code = JSONObject(shareResult ?: "{}").optInt("code", -1)
+            val message = JSONObject(shareResult ?: "{}").optString("message", "")
+
+            if (code == CODE_SUCCESS) {
+                FluidCloudResult(code = code, message = "成功")
+            } else {
+                val errorMsg = getErrorMessage(code)
+                Log.w(TAG, "FluidCloud 调用失败: $errorMsg")
+                FluidCloudResult(code = code, message = errorMsg)
+            }
         } catch (e: Exception) {
-            ShareResult(code = -1, message = "解析结果失败: ${e.message}")
+            Log.e(TAG, "FluidCloud 调用异常", e)
+            FluidCloudResult(code = -1, message = "调用异常: ${e.message}")
+        } finally {
+            client?.close()
         }
     }
 
     /**
-     * ShareResult 数据类
+     * 获取错误信息
      */
-    data class ShareResult(
+    private fun getErrorMessage(code: Int): String {
+        return when (code) {
+            CODE_NO_PERMISSION -> "应用无意图共享权限（检查流体云开关/是否被拦截）"
+            CODE_PERMISSION_EXPIRED -> "意图共享权限已过期"
+            CODE_PARAM_ERROR -> "意图共享参数错误"
+            CODE_DATA_TOO_LARGE -> "意图共享数据大小超过限制"
+            CODE_FREQ_LIMIT -> "意图共享频次超过限制"
+            CODE_SWITCH_OFF -> "流体云总开关已关闭"
+            CODE_ENTITY_LIMIT -> "意图共享实体数量超限"
+            CODE_VERSION_NOT_SUPPORT -> "系统版本不支持（需 ColorOS 14+）"
+            else -> "调用失败 code=$code"
+        }
+    }
+
+    /**
+     * FluidCloudResult 数据类
+     */
+    data class FluidCloudResult(
         val code: Int,
-        val message: String,
-        val data: String? = null
+        val message: String
     ) {
-        val isSuccess: Boolean get() = code == 0
+        val isSuccess: Boolean get() = code == CODE_SUCCESS
     }
 }
