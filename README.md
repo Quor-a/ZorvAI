@@ -38,6 +38,7 @@
 - [自研多语言小程序（MiniApp）](#自研多语言小程序miniapp)
 - [可视化组件](#可视化组件)
 - [可视化编程（Mermaid 图表）](#可视化编程mermaid-图表)
+- [系统返回手势支持](#系统返回手势支持)
 - [内置技能 · Skills（63 个）](#内置技能-skills63-个)
 - [截图预览 · Screenshots](#截图预览-screenshots)
 - [功能构架 · Architecture](#功能构架-architecture)
@@ -45,6 +46,8 @@
 - [ACI · 智能体能力接口](#aci-智能体能力接口)
 - [ACI 控制台 UI（LAN 控制台）](#aci-控制台-ui)
 - [ACI HTTP 传输（局域网/本地组网）](#aci-http-传输)
+- [MCP-ACI 桥接](#mcp-aci-桥接)
+- [ZorvBrowser-ACI 桥接](#zorvbrowser-aci-桥接)
 - [特权 / 权限层 · L1–L5](#特权-权限层-l1l5)
 - [工具箱 · Toolbox](#工具箱-toolbox)
 - [开发工具与导入教程](#开发工具与导入教程)
@@ -112,6 +115,7 @@
 | **自研多语言小程序（MiniApp）** | AI 生成完整小程序代码（HTML + JS + CSS），对话框内实时渲染为可交互小程序页面；支持 Page/Component 生命周期、data-bind 数据绑定、data-action 事件绑定；通过 JSBridge 调用原生能力（存储、网络、设备信息、UI、路由） |
 | **可视化组件** | `ui_widget` 工具：**60+ 种可交互组件**（按钮、表单、图表、进度、评分、轮播、时间线等），直接融进聊天气泡；支持 `command` 语法触发动作（打开页面、执行命令、调用 AI 等） |
 | **可视化编程** | **Mermaid 图表离线渲染**：AI 或用户写 ` ```mermaid ` 围栏代码块，离线渲染成流程图/时序图/状态机/类图/思维导图等；支持全屏预览、SVG 导出、五种主题 |
+| **系统返回手势** | 完整支持 Android 系统返回手势，包括从屏幕边缘滑动返回、分层返回策略、导航栏适配、全屏模式处理；所有弹窗和二级界面均使用 `BackHandler` 处理返回事件 |
 
 ---
 
@@ -238,6 +242,35 @@ AI 可以通过 Mermaid 语法创建流程图、架构图、时序图、状态�
 - **全屏模式**：支持手势缩放、横屏适配
 - **主题自动切换**：支持 default/dark/forest/neutral/base 五种主题，缺省按系统深浅色自动选择
 - **人与 AI 共享**：用户也能发 mermaid 围栏画图，可视化编程对人与 AI 都开放
+
+### 1.11 系统返回手势支持
+Zorv AI 完整支持 Android 系统返回手势，确保用户在任何界面都能通过手势自然导航。
+
+**技术实现：**
+- **Jetpack Compose BackHandler**：所有弹窗、设置页面、二级界面均使用 `BackHandler` 组件处理返回事件
+- **分层返回策略**：复杂界面（如知识库详情→列表→关闭）实现逐层返回，而非直接关闭整个界面
+- **手势导航兼容**：完全兼容 Android 10+ 的手势导航系统，支持从屏幕边缘滑动返回
+- **导航栏适配**：使用 `navigationBarsPadding()` 适配不同设备的导航栏高度，避免内容被遮挡
+- **全屏模式处理**：全屏查看图片、视频、文档时，返回手势优先关闭全屏视图而非退出应用
+
+**支持的手势操作：**
+| 手势 | 操作 | 适用场景 |
+|------|------|----------|
+| **从屏幕左侧边缘向右滑动** | 返回上一级 | 系统级手势，所有界面通用 |
+| **从屏幕右侧边缘向左滑动** | 返回上一级 | 系统级手势（部分设备） |
+| **按返回键/手势返回** | 关闭当前弹窗或返回上一级 | 所有弹窗和二级界面 |
+| **长按返回键** | 多任务/应用切换 | 系统级手势 |
+
+**分层返回示例：**
+```kotlin
+// 知识库详情视图：返回键先回到列表（不选清空 selected）
+BackHandler(enabled = selected != null) {
+    selected = null
+}
+
+// 知识库列表视图：返回键关闭整个知识库屏
+BackHandler { showKnowledge = false }
+```
 
 ### 2. 内置技能 Skills（63 个 · 首次启动自动注入）
 - 轻量技能系统：`QuroSkill` → 注册为 `skill__{name}` 工具，可被 LLM 自动编排
@@ -804,6 +837,97 @@ ZorvAI 浏览器（受控端）新增 `http_request` 能力：AI 可经 ACI 让�
 > ⚠️ 安全权衡：明文放开后公网明文 HTTP 也会一并放行。**仅在可信局域网内**用 `http_request` 访问内网地址，不要经它请求公网明文站点；远程生产通信（HTTPS）不受影响。
 
 开发者接入细节（受控端如何自己加 `http_request`、NSC 配置、gzip 解压）见 [ACI 开发者手册 §15](./docs/ACI_DEVELOPER_GUIDE.md)。
+
+---
+
+## MCP-ACI 桥接
+
+Zorv AI 支持 **MCP-ACI 桥接**功能，让 ACI 控制方能够调用外部 MCP 服务器的工具。
+
+### 桥接原理
+
+```mermaid
+flowchart LR
+    A[AI LLM] --> B[mcp_aci_call]
+    B --> C[QuroAidlAciManager]
+    C --> D[McpAciBridge]
+    D --> E[QuroMcpClient]
+    E --> F[外部 MCP 服务器]
+```
+
+### 能力映射规则
+
+MCP 工具名称自动转换为 ACI 能力 ID：
+- MCP 工具 `weather_query` → ACI 能力 `mcp_weather_query`
+- MCP 工具 `web_search` → ACI 能力 `mcp_web_search`
+
+### 桥接工具
+
+| 工具 | 参数 | 说明 |
+|------|------|------|
+| `mcp_aci_list` | — | 列出所有可通过 ACI 调用的 MCP 工具 |
+| `mcp_aci_call` | `serverAlias`(必填) / `toolName`(必填) / `arguments`(可选) | 通过 ACI 调用 MCP 工具 |
+| `mcp_aci_bridge` | `action`(必填: refresh/list) | 管理 MCP-ACI 桥接器 |
+
+### 使用示例
+
+```json
+{
+  "name": "mcp_aci_call",
+  "arguments": {
+    "serverAlias": "weather",
+    "toolName": "get_current_weather",
+    "arguments": {"city": "北京"}
+  }
+}
+```
+
+---
+
+## ZorvBrowser-ACI 桥接
+
+Zorv AI 内置 **ZorvBrowser-ACI 桥接**功能，支持 30 个浏览器工具的 ACI 调用。
+
+### 浏览器工具分类
+
+| 类别 | 工具 |
+|------|------|
+| **基础导航** | `browser_open`, `browser_back`, `browser_forward`, `browser_reload`, `browser_close`, `browser_screenshot` |
+| **标签页管理** | `browser_tabs_list`, `browser_tabs_switch`, `browser_tabs_new`, `browser_tabs_close` |
+| **DOM 操作** | `browser_dom_query`, `browser_dom_text`, `browser_dom_attr`, `browser_dom_click`, `browser_dom_type` |
+| **内容提取** | `browser_crawl`, `browser_html`, `browser_text`, `browser_links` |
+| **JavaScript 执行** | `browser_script` |
+| **输入模拟** | `browser_input_click`, `browser_input_type`, `browser_input_scroll` |
+| **HTTP 请求** | `browser_http_request`（支持 LAN 明文） |
+| **高级功能** | `browser_find_text`, `browser_pdf`, `browser_print` |
+| **书签和历史** | `browser_bookmarks_list`, `browser_bookmarks_add`, `browser_history_list` |
+
+### ACI Token 认证
+
+ZorvBrowser 通过 ACI Token 认证确保安全性：
+- **Token 格式**：`aci_token_{packageName}_{timestamp}_{random}`
+- **加密存储**：AndroidKeyStore，AES/GCM/NoPadding
+- **自动添加**：`QuroAidlAciManager` 在每次 ACI 调用时自动添加 Token
+
+### 桥接工具
+
+| 工具 | 参数 | 说明 |
+|------|------|------|
+| `browser_aci_list` | — | 列出所有可通过 ACI 调用的浏览器工具 |
+| `browser_aci_call` | `toolName`(必填) / `arguments`(可选) | 通过 ACI 调用浏览器工具 |
+| `browser_aci_bridge` | `action`(必填: refresh/list) | 管理 ZorvBrowser-ACI 桥接器 |
+
+### 使用示例
+
+```json
+{
+  "name": "browser_aci_call",
+  "arguments": {
+    "toolName": "browser_open",
+    "arguments": {"url": "https://example.com"}
+  }
+}
+```
 
 ---
 
