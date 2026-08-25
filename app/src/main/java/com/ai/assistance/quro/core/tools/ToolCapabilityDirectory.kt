@@ -182,7 +182,7 @@ object ToolCapabilityDirectory {
             name = "linux_install",
             category = ToolCategory.TERMINAL_LINUX,
             description = "安装Linux环境",
-            useCases = listOf("装一下Linux环境", "初始化Alpine", "安装proot"),
+            useCases = listOf("装一下Linux环境", "初始化Ubuntu", "安装proot"),
             examples = listOf("linux_install()"),
             parameters = emptyMap(),
             tips = listOf("首次使用需要安装", "安装后可运行Linux命令", "需要网络连接"),

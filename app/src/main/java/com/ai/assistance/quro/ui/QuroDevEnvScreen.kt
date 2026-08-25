@@ -1,10 +1,24 @@
 package com.ai.assistance.quro.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -31,7 +45,7 @@ import kotlinx.coroutines.*
  * 开发环境管理界面 — 独立于 CMS 引擎，每个环境可单独部署。
  *
  * 显示 Java 17、Gradle、Rust/Cargo、Go 等开发环境的部署状态，
- * 点击部署按钮后在 proot/Alpine 终端中执行对应的安装脚本。
+ * 点击部署按钮后在 proot/Ubuntu 终端中执行对应的安装脚本。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -161,7 +175,7 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                         enabled = termReady && !isDeploying,
                         onDeploy = {
                             deploying = profile.name
-                            deployLogs = emptyList()
+                            deployLogs = deployLogs + "\n--- 开始安装 ${profile.name} ---"
                             scope.launch(Dispatchers.IO) {
                                 try {
                                     // 使用实时日志版本
@@ -263,14 +277,32 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
             // 部署日志
             if (deployLogs.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
-                Text("部署日志：", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("部署日志：", style = MaterialTheme.typography.labelLarge)
+                    TextButton(
+                        onClick = {
+                            val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("部署日志", deployLogs.joinToString("\n"))
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(ctx, "日志已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Icon(Icons.Filled.ContentCopy, contentDescription = "复制", modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("复制全部")
+                    }
+                }
                 Column(
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(12.dp)
-                        .heightIn(max = 200.dp)
+                        .heightIn(max = 300.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
                     deployLogs.forEach { line ->
@@ -281,6 +313,7 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                                 line.startsWith("✅") -> Color(0xFF34C759)
                                 line.startsWith("❌") -> MaterialTheme.colorScheme.error
                                 line.startsWith("⚠️") -> Color(0xFFFF9500)
+                                line.startsWith("---") -> MaterialTheme.colorScheme.primary
                                 else -> MaterialTheme.colorScheme.onSurfaceVariant
                             },
                         )

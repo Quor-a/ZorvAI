@@ -10,7 +10,7 @@ import com.ai.assistance.quro.core.linux.QuroLinuxEnv
  * - [DepKind.MODULE]  另一个已注册 CMS 模块 id
  * - [DepKind.MCP]     MCP 别名
  * - [DepKind.SKILL]   SKILL id
- * - [DepKind.LINUX]   Linux 包（apk add / pip install，终端沙箱内）
+ * - [DepKind.LINUX]   Linux 包（apt-get install -y / pip install，终端沙箱内）
  * - [DepKind.CAPABILITY] 本模块声明的能力 id（旧格式兼容）
  *
  * `provisionedLinux`：部署包自身声明将由 deploy 安装的 Linux 包（如 python3），
@@ -64,9 +64,9 @@ object CmsDependencyResolver {
             return if (dep.optional) DepResult(dep, DepResolution.OPTIONAL_MISSING, "Linux 环境未就绪（可选依赖暂不校验）")
             else miss(dep, "依赖 Linux 包 $pkg，但终端环境(proot)未就绪")
         }
-        val (c, _) = QuroLinuxEnv.run(context, "apk info -e $pkg", timeoutMs = 20_000)
+        val (c, _) = QuroLinuxEnv.run(context, "dpkg -s $pkg >/dev/null 2>&1", timeoutMs = 20_000)
         return if (c == 0) ok(dep, "Linux 包 $pkg 已装")
-        else miss(dep, "依赖 Linux 包 $pkg 未安装（需 apk add $pkg）")
+        else miss(dep, "依赖 Linux 包 $pkg 未安装（需 apt-get install $pkg）")
     }
 
     private fun resolveEnv(context: Context, dep: QuroCmsDependency, profile: String, provisioned: Set<String>): DepResult {

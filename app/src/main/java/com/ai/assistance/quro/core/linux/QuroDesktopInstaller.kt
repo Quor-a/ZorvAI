@@ -79,7 +79,7 @@ object QuroDesktopInstaller {
         _state.value = DesktopState.Installing("更新软件包列表…")
         
         // 更新软件包列表
-        val updateResult = QuroLinuxEnv.run(context, "apk update", timeoutMs = 60_000)
+        val updateResult = QuroLinuxEnv.run(context, "apt-get update", timeoutMs = 60_000)
         if (updateResult.first != 0) {
             throw IllegalStateException("更新软件包列表失败：${updateResult.second}")
         }
@@ -89,7 +89,7 @@ object QuroDesktopInstaller {
         // 安装XFCE桌面环境
         val xfceResult = QuroLinuxEnv.run(
             context,
-            "apk add --no-cache xfce4 xfce4-terminal thunar",
+            "apt-get install -y --no-install-recommends xfce4 xfce4-terminal thunar",
             timeoutMs = 300_000
         )
         if (xfceResult.first != 0) {
@@ -101,7 +101,7 @@ object QuroDesktopInstaller {
         // 安装Xvfb虚拟显示和x11vnc服务器
         val vncResult = QuroLinuxEnv.run(
             context,
-            "apk add --no-cache xvfb x11vnc",
+            "apt-get install -y --no-install-recommends xvfb x11vnc",
             timeoutMs = 120_000
         )
         if (vncResult.first != 0) {
@@ -113,7 +113,7 @@ object QuroDesktopInstaller {
         // 安装额外工具
         val toolsResult = QuroLinuxEnv.run(
             context,
-            "apk add --no-cache dbus dbus-x11 xorg-server xorg-applications",
+            "apt-get install -y --no-install-recommends dbus dbus-x11 xorg-server xorg-applications",
             timeoutMs = 120_000)
         if (toolsResult.first != 0) {
             QuroDiag.log(TAG, "⚠ 安装额外工具失败，但不影响基本功能")
@@ -124,7 +124,7 @@ object QuroDesktopInstaller {
         // 安装noVNC和websockify
         val novncResult = QuroLinuxEnv.run(
             context,
-            "apk add --no-cache novnc websockify",
+            "apt-get install -y --no-install-recommends novnc websockify",
             timeoutMs = 120_000
         )
         if (novncResult.first != 0) {

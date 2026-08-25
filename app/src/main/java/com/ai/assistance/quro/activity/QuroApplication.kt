@@ -10,6 +10,11 @@ import com.ai.assistance.quro.core.bot.QuroBotManager
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciManager
 import com.ai.assistance.quro.core.shizuku.QuroShizuku
 import com.ai.assistance.quro.ui.QuroPersonaViewModel
+import com.ai.assistance.quro.workflow.data.WorkflowRepository
+import com.ai.assistance.quro.workflow.data.NotesRepository
+import com.ai.assistance.quro.workflow.data.RunStore
+import com.ai.assistance.quro.workflow.executor.WorkflowEngine
+import com.ai.assistance.quro.workflow.trigger.TriggerEngine
 
 /**
  * 应用入口（原创）。
@@ -72,6 +77,18 @@ class QuroApplication : Application() {
         QuroPersonaViewModel.initHeartbeat(applicationContext)
         if (QuroPersonaViewModel.heartbeatEnabled.value) {
             QuroPersonaViewModel.startHeartbeat()
+        }
+        // 工作流引擎 + 触发器：初始化仓库/引擎，并武装所有「定时(time)」工作流，
+        // 使其随应用启动自动排程（修复定时工作流永不触发）。整体包 try，避免影响主流程。
+        try {
+            WorkflowRepository.init(applicationContext)
+            NotesRepository.init(applicationContext)
+            RunStore.init(applicationContext)
+            WorkflowEngine.init(applicationContext)
+            TriggerEngine.init(applicationContext)
+            TriggerEngine.armAll()
+        } catch (e: Throwable) {
+            android.util.Log.e("QuroApplication", "Workflow 初始化失败（不影响主流程）", e)
         }
     }
 }

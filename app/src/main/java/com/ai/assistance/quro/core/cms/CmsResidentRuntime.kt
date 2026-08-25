@@ -5,7 +5,7 @@ import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
-/** 把 Windows CRLF 统一为 LF，防止写入 proot/Alpine 的脚本被 sh 解析成非法选项。 */
+/** 把 Windows CRLF 统一为 LF，防止写入 proot/Ubuntu 的脚本被 sh 解析成非法选项。 */
 private fun String.normalizeLineEndings(): String = this.replace("\r\n", "\n").replace("\r", "\n")
 
 /**
@@ -66,7 +66,7 @@ object CmsResidentRuntime {
         envSpec: Map<String, String>,
     ): String {
         val st = QuroLinuxEnv.probe(context)
-        if (!st.available) return "⛔ 终端环境(proot/Alpine)未就绪：${st.reason}。请先在终端页安装 Linux 环境。"
+        if (!st.available) return "⛔ 终端环境(proot/Ubuntu)未就绪：${st.reason}。请先在终端页安装 Linux 环境。"
         if (!ensureEntry(context, module)) {
             return "⛔ 模块 ${module.id} 无可部署的终端入口脚本(terminalEntry)，无法常驻启动。"
         }

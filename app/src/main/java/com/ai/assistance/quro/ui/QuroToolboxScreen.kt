@@ -65,6 +65,7 @@ fun QuroToolboxScreen(
     onOpenVideo: (String, String) -> Unit = { _: String, _: String -> },
     allTools: List<QuroTool> = emptyList(),
     onImportTool: (ImportedToolDef) -> Unit = {},
+    onOpenWorkflow: () -> Unit = {},
 ) {
     var screen by remember { mutableStateOf("home") }
     val cs = MaterialTheme.colorScheme
@@ -101,6 +102,7 @@ fun QuroToolboxScreen(
                 onOpenOnlyOffice = onOpenOnlyOffice,
                 onOpenMusic = onOpenMusic,
                 onOpenVideo = onOpenVideo,
+                onOpenWorkflow = onOpenWorkflow,
             )
             "files" -> QuroFileManager(onExitToHome = { screen = "home" })
             "package" -> PackageNameFinder()
@@ -498,6 +500,7 @@ private fun ToolboxHome(
     onOpenOnlyOffice: () -> Unit,
     onOpenMusic: () -> Unit,
     onOpenVideo: (String, String) -> Unit,
+    onOpenWorkflow: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
     val tools = listOf(
@@ -517,6 +520,7 @@ private fun ToolboxHome(
                 ctx.startActivity(android.content.Intent("android.settings.INPUT_METHOD_SUBTYPE_SETTINGS"))
             }
         }),
+        ToolItem(Icons.Filled.AccountTree, "工作流", "创建和管理自动化工作流，支持定时触发、条件分支", onOpenWorkflow),
     )
     // 使用手动 Row+weight 布局替代 LazyVerticalGrid（GridCells.Fixed(2) 在某些容器内退化为单列）
     Column(

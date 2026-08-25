@@ -125,7 +125,7 @@ class QuroShellSession private constructor(
     private val writer = BufferedWriter(OutputStreamWriter(process.outputStream, StandardCharsets.UTF_8))
 
     init {
-        appendLine("— Zorv AI 终端已启动 (${if (mode == ShellMode.LINUX) "proot/Linux · Alpine aarch64" else "设备 · Toybox sh"}) —")
+        appendLine("— Zorv AI 终端已启动 (${if (mode == ShellMode.LINUX) "proot/Linux · Ubuntu 24.04" else "设备 · Toybox sh"}) —")
         appendLine(promptPrefix())
         launch { drain() }
     }
@@ -383,7 +383,7 @@ class QuroShellSession private constructor(
             }
             val dev = createDevice(context)
             if (launch != null) {
-                dev.lines.add("⚠ proot 启动失败，已回退设备 shell（无 python3 / Alpine 能力）")
+                dev.lines.add("⚠ proot 启动失败，已回退设备 shell（无 python3 / Ubuntu 能力）")
             }
             return dev
         }

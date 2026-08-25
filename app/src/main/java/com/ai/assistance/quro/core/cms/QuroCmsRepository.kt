@@ -377,7 +377,7 @@ class QuroCmsRepository(context: Context) {
             id = "quro.term.python",
             name = "终端·Python运行时",
             version = "1.0.0",
-            description = "在 proot/Alpine 终端内运行 Python（bootstrap 已装 python3）。模块自带真实入口脚本：部署后在终端拉起一个本地 HTTP 后端（监听 0.0.0.0 端口），本 App 作为前端通过 cms_call/ACI 调用，实现「终端是后端、本软是前端」的互为主从。",
+            description = "在 proot/Ubuntu 终端内运行 Python（bootstrap 已装 python3）。模块自带真实入口脚本：部署后在终端拉起一个本地 HTTP 后端（监听 0.0.0.0 端口），本 App 作为前端通过 cms_call/ACI 调用，实现「终端是后端、本软是前端」的互为主从。",
             author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
@@ -400,7 +400,7 @@ class QuroCmsRepository(context: Context) {
             ),
             terminalEntry = """
 #!/bin/sh
-# Quro CMS 终端模块：Python 后端运行时（proot/Alpine）
+# Quro CMS 终端模块：Python 后端运行时（proot/Ubuntu）
 PORT="${'$'}QURO_HTTP_PORT:-8765"
 echo "[quro.term.python] 启动 Python 后端，监听 0.0.0.0:${'$'}PORT"
 python3 - "${'$'}PORT" <<'PYEOF'
@@ -429,7 +429,7 @@ PYEOF
             id = "quro.term.node",
             name = "终端·Node运行时",
             version = "1.0.0",
-            description = "在 proot/Alpine 终端内运行 Node.js（bootstrap 已装 nodejs）。自带真实入口脚本：部署后拉起本地 HTTP 后端，作为「终端是后端」的另一实现，与 Python 后端可并存。",
+            description = "在 proot/Ubuntu 终端内运行 Node.js（bootstrap 已装 nodejs）。自带真实入口脚本：部署后拉起本地 HTTP 后端，作为「终端是后端」的另一实现，与 Python 后端可并存。",
             author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
@@ -452,7 +452,7 @@ PYEOF
             ),
             terminalEntry = """
 #!/bin/sh
-# Quro CMS 终端模块：Node 后端运行时（proot/Alpine）
+# Quro CMS 终端模块：Node 后端运行时（proot/Ubuntu）
 PORT="${'$'}QURO_HTTP_PORT:-8766"
 echo "[quro.term.node] 启动 Node 后端，监听 0.0.0.0:${'$'}PORT"
 node - "${'$'}PORT" <<'JSEOF'

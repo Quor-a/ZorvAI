@@ -65,7 +65,7 @@ object QuroTerminalSentinel {
      *
      * 用 POSIX 八进制转义 `\036` 而不是 `\x1e`：
      * `\xHH` 是 bash/GNU 扩展，dash / 部分 BusyBox printf 会原样输出 "x1e"；
-     * 而 `\ddd` 八进制是 POSIX `printf` 明确要求支持的，proot 里的 Alpine ash
+     * 而 `\ddd` 八进制是 POSIX `printf` 明确要求支持的，proot 里的 Ubuntu ash
      * 和设备上的 Toybox 都能正确解释。
      *
      * `"$?"` 必须在**紧接着**上一条命令的下一行求值，否则拿到的是别的命令的退出码。

@@ -38,8 +38,8 @@ android {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 501
-        versionName = "1.0.63"
+        versionCode = 502
+        versionName = "1.0.64"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -149,6 +149,7 @@ kotlin {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.annotation)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(libs.lifecycle.runtime.ktx)

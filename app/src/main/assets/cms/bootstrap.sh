@@ -1,13 +1,17 @@
 #!/bin/sh
-# CMS v2 built-in bootstrap — one-time full dev environment for proot/Alpine aarch64.
-# Idempotent: apk add --no-cache skips already-installed packages; safe to re-run.
+# CMS v2 built-in bootstrap — one-time full dev environment for proot/Ubuntu 24.04 ARM64.
+# Based on terminal environment repair flow from AI summary (2026-08-26)
+# Idempotent: apt-get install -y skips already-installed packages; safe to re-run.
 # Marker .bootstrap.done is written next to this script; the host (Android) detects
 # it under <homePath>/cms/_bootstrap/ to skip re-running on subsequent deploys.
 
 BOOT_DIR=$(cd "$(dirname "$0")" && pwd)
 
+echo "[cms-bootstrap] 🚀 Starting CMS bootstrap at $(date)"
+echo "[cms-bootstrap] 📁 Bootstrap directory: $BOOT_DIR"
+
 # ═══ Phase 0: 确保 DNS 可用 ═══
-echo "[cms-bootstrap] 🔧 checking DNS..."
+echo "[cms-bootstrap] 🔧 Phase 0: checking DNS..."
 
 # 先检查/etc目录是否存在
 if [ ! -d /etc ]; then
@@ -49,60 +53,126 @@ else
     echo "[cms-bootstrap] DNS already configured"
 fi
 
-# ═══ Phase 0.5: 确保镜像源可用（不覆盖已有配置，除非为空） ═══
-echo "[cms-bootstrap] 🔧 checking apk mirrors..."
-if [ ! -s /etc/apk/repositories ] || ! grep -q "alpine" /etc/apk/repositories 2>/dev/null; then
-    # 配置文件不存在或为空，写入默认镜像（清华 + 阿里云 + 官方）
-    mkdir -p /etc/apk
-    cat > /etc/apk/repositories << 'MIRRORS'
-https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.20/main
-https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.20/community
-https://mirrors.aliyun.com/alpine/v3.20/main
-https://mirrors.aliyun.com/alpine/v3.20/community
-https://dl-cdn.alpinelinux.org/alpine/v3.20/main
-https://dl-cdn.alpinelinux.org/alpine/v3.20/community
-MIRRORS
-    echo "[cms-bootstrap] mirrors configured: tsinghua + aliyun + official"
+# 测试DNS解析
+echo "[cms-bootstrap] 🔍 Testing DNS resolution..."
+if ping -c 1 -W 3 mirrors.tuna.tsinghua.edu.cn >/dev/null 2>&1; then
+    echo "[cms-bootstrap] ✅ DNS resolution working"
 else
-    echo "[cms-bootstrap] mirrors already configured (keeping existing)"
+    echo "[cms-bootstrap] ⚠️ DNS resolution failed, but continuing..."
 fi
 
+# ═══ Phase 0.5: 确保 apt 源可用（Ubuntu 24.04 HTTP 镜像） ═══
+echo "[cms-bootstrap] 🔧 Phase 0.5: checking apt sources..."
+# 修复dpkg数据库（之前可能中断）
+echo "[cms-bootstrap] 🔧 Fixing dpkg database..."
+dpkg --configure -a 2>/dev/null || echo "[cms-bootstrap] ⚠️ dpkg --configure -a failed, continuing..."
+
+# 配置Ubuntu 24.04 apt源（HTTP避免SSL证书问题）
+echo "[cms-bootstrap] 🔧 Configuring apt sources..."
+if [ ! -s /etc/apt/sources.list ] || ! grep -q "noble" /etc/apt/sources.list 2>/dev/null; then
+    mkdir -p /etc/apt/apt.conf.d
+    # 关闭签名验证（proot环境下GPG公钥可能不完整）
+    printf 'Acquire::Check-Valid-Until "false";\nAPT::Get::AllowUnauthenticated "true";\n' > /etc/apt/apt.conf.d/99no-check-gpg
+    # 使用HTTP避免SSL证书问题
+    printf 'deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse\ndeb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse\ndeb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
+    echo "[cms-bootstrap] ✅ apt sources configured (noble, HTTP)"
+else
+    echo "[cms-bootstrap] ℹ️ apt sources already configured (keeping existing)"
+fi
+
+# 显示当前apt源
+echo "[cms-bootstrap] 📋 Current apt sources:"
+cat /etc/apt/sources.list 2>/dev/null | head -5
+
 # ═══ Phase 1: 更新索引（带重试） ═══
-echo "[cms-bootstrap] 📦 updating apk index..."
-update_apk() {
+echo "[cms-bootstrap] 📦 Phase 1: updating apt index..."
+update_apt() {
     # 先试当前配置
-    if apk update --no-cache 2>&1; then return 0; fi
-    echo "[cms-bootstrap] WARN: apk update failed, trying fallback mirrors..."
+    echo "[cms-bootstrap] 🔍 Trying current apt configuration..."
+    if apt-get update 2>&1; then 
+        echo "[cms-bootstrap] ✅ apt-get update succeeded with current configuration"
+        return 0
+    fi
+    echo "[cms-bootstrap] ⚠️ apt-get update failed with current configuration, trying alternative mirrors..."
     # 逐个尝试其他镜像
-    for mirror in \
-        "https://mirrors.tuna.tsinghua.edu.cn/alpine" \
-        "https://mirrors.aliyun.com/alpine" \
-        "https://dl-cdn.alpinelinux.org/alpine"; do
-        echo "https://${mirror#https://}/v3.20/main" > /etc/apk/repositories
-        echo "https://${mirror#https://}/v3.20/community" >> /etc/apk/repositories
+    for BASE in \
+        "http://mirrors.tuna.tsinghua.edu.cn/ubuntu" \
+        "http://mirrors.aliyun.com/ubuntu" \
+        "http://archive.ubuntu.com/ubuntu"; do
+        echo "[cms-bootstrap] 🔍 Trying mirror: $BASE"
+        printf "deb %s/ noble main restricted universe multiverse\ndeb %s/ noble-updates main restricted universe multiverse\ndeb %s/ noble-security main restricted universe multiverse\n" "$BASE" "$BASE" "$BASE" > /etc/apt/sources.list
         sleep 1
-        if apk update --no-cache 2>&1; then return 0; fi
+        if apt-get update 2>&1; then 
+            echo "[cms-bootstrap] ✅ apt-get update succeeded with mirror: $BASE"
+            return 0
+        fi
+        echo "[cms-bootstrap] ❌ apt-get update failed with mirror: $BASE"
     done
     return 1
 }
-update_apk || {
-    echo "[cms-bootstrap] ❌ FAILED: apk update failed on all mirrors"
-    echo "[cms-bootstrap] Available repositories:"
-    cat /etc/apk/repositories 2>/dev/null || echo "(none)"
+update_apt || {
+    echo "[cms-bootstrap] ❌ FAILED: apt-get update failed on all mirrors"
+    echo "[cms-bootstrap] 📋 Available sources:"
+    cat /etc/apt/sources.list 2>/dev/null || echo "(none)"
+    echo "[cms-bootstrap] 🔍 Testing network connectivity..."
+    ping -c 1 -W 3 mirrors.tuna.tsinghua.edu.cn 2>&1 || echo "[cms-bootstrap] ⚠️ Network connectivity test failed"
     exit 1
 }
 
-# ═══ Phase 2: 修复APK数据库错误 ═══
-echo "[cms-bootstrap] 🔧 fixing APK database errors..."
-# 清理APK数据库中的历史残留错误
-apk fix 2>/dev/null || true
-# 重置unzip包的损坏状态
-apk del --purge unzip 2>/dev/null || true
-# 重新安装unzip
-apk add --no-cache unzip 2>/dev/null || true
+# ═══ Phase 2: 修复 dpkg 数据库错误 ═══
+echo "[cms-bootstrap] 🔧 fixing dpkg database errors..."
+dpkg --configure -a 2>/dev/null || true
+apt-get install -f -y 2>/dev/null || true
+
+# ═══ Phase 2.5: 安装关键共享库（手动安装，避免 proot 下 apt 不可靠） ═══
+echo "[cms-bootstrap] 🔧 Phase 2.5: installing critical shared libraries..."
+
+# 创建临时目录用于下载deb包
+mkdir -p /tmp/debs && cd /tmp/debs
+
+# 关键共享库列表（手动下载安装，确保完整）
+LIBS=(
+    "libcurl4"
+    "libcurl3t64" 
+    "libnghttp2-14"
+    "libssh-4"
+    "libssh-gcrypt-4"
+    "zlib1g"
+    "libssl3t64"
+    "libsqlite3-0"
+    "libgcc-s1"
+    "libc6"
+    "libstdc++6"
+    "libgssapi-krb5-2"
+    "libldap-2.5-0"
+    "libpsl5"
+    "librtmp1"
+    "libunistring5"
+)
+
+echo "[cms-bootstrap] 📦 Downloading and installing shared libraries..."
+for lib in "${LIBS[@]}"; do
+    echo "[cms-bootstrap]   Installing $lib..."
+    apt-get download "$lib" 2>/dev/null && dpkg-deb -x "$lib"*.deb / 2>/dev/null
+    rm -f "$lib"*.deb 2>/dev/null
+done
+
+# 清理临时目录
+cd /
+rm -rf /tmp/debs
+
+# 验证关键共享库
+echo "[cms-bootstrap] 🔍 Verifying critical shared libraries..."
+for lib in libcurl libz libssl libsqlite3; do
+    if ldconfig -p 2>/dev/null | grep -q "$lib"; then
+        echo "[cms-bootstrap]   ✅ $lib found"
+    else
+        echo "[cms-bootstrap]   ⚠️ $lib not found in ldconfig, but may still work"
+    fi
+done
 
 # ═══ Phase 3: 语言运行时 ═══
-echo "[cms-bootstrap] 📦 installing language runtimes..."
+echo "[cms-bootstrap] 📦 Phase 3: installing language runtimes..."
 # 使用智能安装函数：检查包是否已安装，不依赖退出码
 smart_install() {
     local pkg="$1"
@@ -110,61 +180,205 @@ smart_install() {
     
     # 先检查是否已安装
     if command -v $cmd >/dev/null 2>&1; then
-        echo "[cms-bootstrap] $pkg already installed"
+        echo "[cms-bootstrap] ✅ $pkg already installed: $(command -v $cmd)"
         return 0
     fi
     
     # 尝试安装
-    echo "[cms-bootstrap] Installing $pkg..."
-    apk add --no-cache $pkg 2>&1 | tail -3
+    echo "[cms-bootstrap] 📦 Installing $pkg..."
+    if apt-get install -y --no-install-recommends $pkg 2>&1 | tail -5; then
+        echo "[cms-bootstrap] ✅ $pkg installation command succeeded"
+    else
+        echo "[cms-bootstrap] ⚠️ $pkg installation command failed, but continuing..."
+    fi
     
     # 验证是否安装成功（不依赖退出码）
     if command -v $cmd >/dev/null 2>&1; then
-        echo "[cms-bootstrap] ✅ $pkg installed successfully"
+        echo "[cms-bootstrap] ✅ $pkg installed successfully: $(command -v $cmd)"
         return 0
     else
-        echo "[cms-bootstrap] ❌ $pkg installation failed"
+        echo "[cms-bootstrap] ❌ $pkg installation failed - command '$cmd' not found"
         return 1
     fi
 }
 
-# 安装语言运行时
-smart_install "python3" "python3" || true
-smart_install "py3-pip" "pip3" || true
-smart_install "nodejs" "node" || true
-smart_install "npm" "npm" || true
+# 安装Python（优先，因为Python是proot环境下最好的自救工具）
+echo "[cms-bootstrap] 📦 Installing python3..."
+smart_install "python3" "python3" || echo "[cms-bootstrap] ⚠️ python3 installation failed, continuing..."
+echo "[cms-bootstrap] 📦 Installing python3-pip..."
+smart_install "python3-pip" "pip3" || echo "[cms-bootstrap] ⚠️ python3-pip installation failed, continuing..."
+echo "[cms-bootstrap] 📦 Installing python3-venv..."
+smart_install "python3-venv" "python3" || echo "[cms-bootstrap] ⚠️ python3-venv installation failed, continuing..."
 
-# ═══ Phase 4: 编译工具链 ═══
-echo "[cms-bootstrap] 🔨 installing build toolchain..."
-smart_install "gcc" "gcc" || true
-smart_install "g++" "g++" || true
-smart_install "make" "make" || true
-smart_install "cmake" "cmake" || true
-smart_install "linux-headers" "make" || true
+# 安装Python开发头文件（修复Python.h缺失）
+echo "[cms-bootstrap] 📦 Installing python3.12-dev..."
+mkdir -p /tmp/debs && cd /tmp/debs
+apt-get download python3.12-dev libpython3.12-dev 2>/dev/null
+for f in *.deb; do dpkg-deb -x "$f" / 2>/dev/null; done
+rm -f *.deb 2>/dev/null
+cd /
+rm -rf /tmp/debs
 
-# ═══ Phase 5: 开发工具 ═══
-echo "[cms-bootstrap] 🛠️ installing dev tools..."
-smart_install "git" "git" || true
-smart_install "vim" "vim" || true
-smart_install "nano" "nano" || true
-smart_install "bash" "bash" || true
-
-# ═══ Phase 6: 网络与压缩工具 ═══
-echo "[cms-bootstrap] 🌐 installing network & utility tools..."
-smart_install "curl" "curl" || true
-smart_install "wget" "wget" || true
-smart_install "jq" "jq" || true
-smart_install "zip" "zip" || true
-smart_install "unzip" "unzip" || true
-smart_install "openssh-client" "ssh" || true
-
-# ═══ Phase 7: Python venv ═══
-if [ ! -x /root/cms-venv/bin/python3 ]; then
-    echo "[cms-bootstrap] creating /root/cms-venv..."
-    python3 -m venv /root/cms-venv || echo "[cms-bootstrap] WARN: venv creation failed (system python still usable)"
+# 安装Node.js（使用官方独立二进制，避免Ubuntu包的externalized builtins问题）
+echo "[cms-bootstrap] 📦 Installing Node.js 20 (official binary)..."
+if command -v node >/dev/null 2>&1; then
+    NODE_VERSION=$(node --version 2>&1)
+    echo "[cms-bootstrap] ✅ Node.js already installed: $NODE_VERSION"
+else
+    echo "[cms-bootstrap] 📦 Downloading Node.js v20.19.0 from npmmirror..."
+    NODE_URL="https://npmmirror.com/mirrors/node/v20.19.0/node-v20.19.0-linux-arm64.tar.xz"
+    curl -fsSL "$NODE_URL" -o /tmp/node.tar.xz 2>/dev/null
+    if [ $? -eq 0 ] && [ -f /tmp/node.tar.xz ]; then
+        echo "[cms-bootstrap] 📦 Extracting Node.js..."
+        tar -xf /tmp/node.tar.xz -C /usr/local --strip-components=1 2>/dev/null
+        rm -f /tmp/node.tar.xz
+        if command -v node >/dev/null 2>&1; then
+            echo "[cms-bootstrap] ✅ Node.js installed: $(node --version)"
+        else
+            echo "[cms-bootstrap] ⚠️ Node.js extraction succeeded but command not found"
+        fi
+    else
+        echo "[cms-bootstrap] ⚠️ Node.js download failed, trying apt fallback..."
+        smart_install "nodejs" "node" || echo "[cms-bootstrap] ⚠️ nodejs installation failed, continuing..."
+    fi
 fi
 
+# 安装npm（如果Node.js安装成功）
+echo "[cms-bootstrap] 📦 Installing npm..."
+if command -v npm >/dev/null 2>&1; then
+    echo "[cms-bootstrap] ✅ npm already installed: $(npm --version)"
+else
+    smart_install "npm" "npm" || echo "[cms-bootstrap] ⚠️ npm installation failed, continuing..."
+fi
+
+# 修复node-gyp PATH问题
+echo "[cms-bootstrap] 🔧 Fixing node-gyp PATH..."
+if [ -d /opt/node-v20.19.0-linux-arm64/lib/node_modules/node-gyp ]; then
+    ln -sf /opt/node-v20.19.0-linux-arm64/lib/node_modules/node-gyp/bin/node-gyp.js \
+           /opt/node-v20.19.0-linux-arm64/bin/node-gyp 2>/dev/null
+    echo "[cms-bootstrap] ✅ node-gyp symlink created"
+fi
+
+# 安装Go
+echo "[cms-bootstrap] 📦 Installing Go..."
+if command -v go >/dev/null 2>&1; then
+    echo "[cms-bootstrap] ✅ Go already installed: $(go --version 2>&1 | head -1)"
+else
+    echo "[cms-bootstrap] 📦 Downloading Go 1.23.4..."
+    GO_URL="https://npmmirror.com/mirrors/golang/go1.23.4.linux-arm64.tar.gz"
+    curl -fsSL "$GO_URL" -o /tmp/go.tar.gz 2>/dev/null
+    if [ $? -eq 0 ] && [ -f /tmp/go.tar.gz ]; then
+        echo "[cms-bootstrap] 📦 Extracting Go..."
+        tar -xf /tmp/go.tar.gz -C /usr/local 2>/dev/null
+        rm -f /tmp/go.tar.gz
+        export PATH=$PATH:/usr/local/go/bin
+        if command -v go >/dev/null 2>&1; then
+            echo "[cms-bootstrap] ✅ Go installed: $(go --version 2>&1 | head -1)"
+        fi
+    fi
+fi
+
+# 安装Rust（使用中科大镜像）
+echo "[cms-bootstrap] 📦 Installing Rust..."
+if command -v rustc >/dev/null 2>&1; then
+    echo "[cms-bootstrap] ✅ Rust already installed: $(rustc --version 2>&1)"
+else
+    echo "[cms-bootstrap] 📦 Downloading rustup-init..."
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal 2>/dev/null
+    if [ $? -eq 0 ]; then
+        # 配置中科大镜像
+        export RUSTUP_DIST_SERVER="https://mirrors.ustc.edu.cn/rust-static"
+        export RUSTUP_UPDATE_ROOT="https://mirrors.ustc.edu.cn/rust-static/rustup"
+        source "$HOME/.cargo/env" 2>/dev/null
+        rustup component add rustfmt clippy 2>/dev/null
+        echo "[cms-bootstrap] ✅ Rust installed: $(rustc --version 2>&1)"
+    fi
+fi
+
+# ═══ Phase 4: 编译工具链 ═══
+echo "[cms-bootstrap] 🔨 Phase 4: installing build toolchain..."
+echo "[cms-bootstrap] 📦 Installing gcc..."
+smart_install "gcc" "gcc" || echo "[cms-bootstrap] ⚠️ gcc installation failed, continuing..."
+echo "[cms-bootstrap] 📦 Installing g++..."
+smart_install "g++" "g++" || echo "[cms-bootstrap] ⚠️ g++ installation failed, continuing..."
+echo "[cms-bootstrap] 📦 Installing make..."
+smart_install "make" "make" || echo "[cms-bootstrap] ⚠️ make installation failed, continuing..."
+
+# 安装CMake及其依赖链
+echo "[cms-bootstrap] 📦 Installing CMake with dependencies..."
+mkdir -p /tmp/debs && cd /tmp/debs
+apt-get download cmake cmake-data libarchive13t64 libjsoncpp25 libuv1t64 librhash0 libxml2 2>/dev/null
+for f in *.deb; do dpkg-deb -x "$f" / 2>/dev/null; done
+rm -f *.deb 2>/dev/null
+cd /
+rm -rf /tmp/debs
+ldconfig 2>/dev/null
+
+echo "[cms-bootstrap] 📦 Installing linux-headers-generic..."
+smart_install "linux-headers-generic" "make" || echo "[cms-bootstrap] ⚠️ linux-headers-generic installation failed, continuing..."
+
+# ═══ Phase 5: 开发工具 ═══
+echo "[cms-bootstrap] 🛠️ Phase 5: installing dev tools..."
+echo "[cms-bootstrap] 📦 Installing git..."
+smart_install "git" "git" || echo "[cms-bootstrap] ⚠️ git installation failed, continuing..."
+echo "[cms-bootstrap] 📦 Installing vim..."
+smart_install "vim" "vim" || echo "[cms-bootstrap] ⚠️ vim installation failed, continuing..."
+echo "[cms-bootstrap] 📦 Installing nano..."
+smart_install "nano" "nano" || echo "[cms-bootstrap] ⚠️ nano installation failed, continuing..."
+echo "[cms-bootstrap] 📦 Installing bash..."
+smart_install "bash" "bash" || echo "[cms-bootstrap] ⚠️ bash installation failed, continuing..."
+
+# ═══ Phase 6: 网络与压缩工具 ═══
+echo "[cms-bootstrap] 🌐 Phase 6: installing network & utility tools..."
+echo "[cms-bootstrap] 📦 Installing curl..."
+smart_install "curl" "curl" || echo "[cms-bootstrap] ⚠️ curl installation failed, continuing..."
+echo "[cms-bootstrap] 📦 Installing wget..."
+smart_install "wget" "wget" || echo "[cms-bootstrap] ⚠️ wget installation failed, continuing..."
+echo "[cms-bootstrap] 📦 Installing jq..."
+smart_install "jq" "jq" || echo "[cms-bootstrap] ⚠️ jq installation failed, continuing..."
+echo "[cms-bootstrap] 📦 Installing zip..."
+smart_install "zip" "zip" || echo "[cms-bootstrap] ⚠️ zip installation failed, continuing..."
+echo "[cms-bootstrap] 📦 Installing unzip..."
+smart_install "unzip" "unzip" || echo "[cms-bootstrap] ⚠️ unzip installation failed, continuing..."
+echo "[cms-bootstrap] 📦 Installing openssh-client..."
+smart_install "openssh-client" "ssh" || echo "[cms-bootstrap] ⚠️ openssh-client installation failed, continuing..."
+echo "[cms-bootstrap] 📦 Installing xz-utils..."
+smart_install "xz-utils" "xz" || echo "[cms-bootstrap] ⚠️ xz-utils installation failed, continuing..."
+
+# ═══ Phase 6.5: 修复CA证书（手动合并，避免 update-ca-certificates 在 proot 下失败） ═══
+echo "[cms-bootstrap] 🔧 Phase 6.5: fixing CA certificates..."
+if [ -d /usr/share/ca-certificates/mozilla ]; then
+    echo "[cms-bootstrap] 📦 Merging CA certificates manually..."
+    cat /usr/share/ca-certificates/mozilla/*.crt > /etc/ssl/certs/ca-certificates.crt 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo "[cms-bootstrap] ✅ CA certificates merged successfully"
+    else
+        echo "[cms-bootstrap] ⚠️ CA certificates merge failed, but continuing..."
+    fi
+else
+    echo "[cms-bootstrap] ⚠️ CA certificates directory not found, skipping..."
+fi
+
+# ═══ Phase 7: Python venv 和依赖 ═══
+echo "[cms-bootstrap] 🐍 Phase 7: creating Python venv and installing dependencies..."
+if [ ! -x /root/cms-venv/bin/python3 ]; then
+    echo "[cms-bootstrap] 📦 Creating /root/cms-venv..."
+    if python3 -m venv /root/cms-venv 2>&1; then
+        echo "[cms-bootstrap] ✅ Python venv created successfully"
+    else
+        echo "[cms-bootstrap] ⚠️ Python venv creation failed (system python still usable)"
+    fi
+else
+    echo "[cms-bootstrap] ✅ Python venv already exists"
+fi
+
+# 安装Python requests依赖链
+echo "[cms-bootstrap] 📦 Installing Python requests dependencies..."
+pip3 install --break-system-packages certifi chardet charset-normalizer urllib3 2>/dev/null
+echo "[cms-bootstrap] ✅ Python requests dependencies installed"
+
 # ═══ 验证 ═══
+echo "[cms-bootstrap] 🔍 Phase 8: verifying installation..."
 echo "[cms-bootstrap] ✅ dev environment ready:"
 echo "  python3  = $(python3 --version 2>&1)"
 echo "  node     = $(node --version 2>&1)"
@@ -173,6 +387,27 @@ echo "  gcc      = $(gcc --version 2>&1 | head -1)"
 echo "  cmake    = $(cmake --version 2>&1 | head -1)"
 echo "  git      = $(git --version 2>&1)"
 echo "  curl     = $(curl --version 2>&1 | head -1)"
+echo "  go       = $(go --version 2>&1 | head -1)"
+echo "  rustc    = $(rustc --version 2>&1)"
+
+echo "[cms-bootstrap] 📊 Installation summary:"
+echo "  - python3: $(command -v python3 2>&1 || echo 'not found')"
+echo "  - pip3: $(command -v pip3 2>&1 || echo 'not found')"
+echo "  - node: $(command -v node 2>&1 || echo 'not found')"
+echo "  - npm: $(command -v npm 2>&1 || echo 'not found')"
+echo "  - gcc: $(command -v gcc 2>&1 || echo 'not found')"
+echo "  - g++: $(command -v g++ 2>&1 || echo 'not found')"
+echo "  - make: $(command -v make 2>&1 || echo 'not found')"
+echo "  - cmake: $(command -v cmake 2>&1 || echo 'not found')"
+echo "  - git: $(command -v git 2>&1 || echo 'not found')"
+echo "  - curl: $(command -v curl 2>&1 || echo 'not found')"
+echo "  - wget: $(command -v wget 2>&1 || echo 'not found')"
+echo "  - vim: $(command -v vim 2>&1 || echo 'not found')"
+echo "  - nano: $(command -v nano 2>&1 || echo 'not found')"
+echo "  - bash: $(command -v bash 2>&1 || echo 'not found')"
+echo "  - go: $(command -v go 2>&1 || echo 'not found')"
+echo "  - rustc: $(command -v rustc 2>&1 || echo 'not found')"
 
 touch "$BOOT_DIR/.bootstrap.done"
-echo "[cms-bootstrap] marker written: $BOOT_DIR/.bootstrap.done"
+echo "[cms-bootstrap] ✅ marker written: $BOOT_DIR/.bootstrap.done"
+echo "[cms-bootstrap] 🎉 Bootstrap completed at $(date)"

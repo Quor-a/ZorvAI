@@ -33,4 +33,31 @@ target_compile_options(quroplugin PRIVATE
 find_library(log-lib log)
 target_link_libraries(quroplugin ${log-lib})
 
-# 注：quro_exec / quro_pty 原生执行库已移除——AI 为纯应用内执行体，不再经 shell/Shizuku/root/PTY 控制系统。
+# ═══════════════════════════════════════════════════════════════
+# Termux PTY 终端库（libtermux-terminal.so）
+# 基于 Termux 的 JNI 实现，提供伪终端（PTY）支持
+# ═══════════════════════════════════════════════════════════════
+set(TERMUX_JNI_DIR ${CMAKE_SOURCE_DIR}/../jni/termux)
+
+add_library(termux-terminal SHARED
+    ${TERMUX_JNI_DIR}/termux.c
+)
+
+target_include_directories(termux-terminal PRIVATE
+    ${TERMUX_JNI_DIR}
+)
+
+target_compile_options(termux-terminal PRIVATE
+    -std=c11
+    -Wall
+    -Wextra
+    -Werror
+    -Os
+    -fno-stack-protector
+)
+
+target_link_options(termux-terminal PRIVATE
+    -Wl,--gc-sections
+)
+
+target_link_libraries(termux-terminal ${log-lib})

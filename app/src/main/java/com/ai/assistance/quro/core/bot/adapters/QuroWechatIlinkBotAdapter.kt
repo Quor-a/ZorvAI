@@ -294,10 +294,4 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
     // ==================== 状态查询 ====================
 
     fun isLoggedIn(): Boolean = wechatPrefs.getBoolean(KEY_LOGGED_IN, false)
-
-    // ==================== 枚举 ====================
-
-    enum class QrLoginStatus {
-        WAIT, SCANNED, CONFIRMED, DENIED, EXPIRED, UNKNOWN
-    }
 }

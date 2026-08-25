@@ -7,7 +7,7 @@ import java.security.MessageDigest
  * CMS v2 CMS引擎（一级部署单元，区别于模块 [CmsDeployPackage]）。
  *
  * 「CMS引擎」是 CMS 原创性的核心：它不是某个业务模块，而是把整套终端运行引擎
- * （proot/Alpine 内的基础运行时 + 环境栈 + 共享服务）打包成可一键部署、可导出分享、
+ * （proot/Ubuntu 内的基础运行时 + 环境栈 + 共享服务）打包成可一键部署、可导出分享、
  * 可导入校验的官方署名包。模块依赖它提供的基础环境运行。
  *
  * 部署目标固定为 /root/cms/_engine（与模块 /root/cms/<moduleId> 隔离）。
@@ -185,45 +185,44 @@ else
     echo "[quro-engine] DNS already configured"
 fi
 
-# Phase 0.5: mirrors (skip if already configured by Android side)
-echo "[quro-engine] checking apk mirrors..."
-if [ ! -s /etc/apk/repositories ] || ! grep -q "alpine" /etc/apk/repositories 2>/dev/null; then
-    mkdir -p /etc/apk
-    printf 'https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.20/main\nhttps://mirrors.tuna.tsinghua.edu.cn/alpine/v3.20/community\nhttps://mirrors.aliyun.com/alpine/v3.20/main\nhttps://mirrors.aliyun.com/alpine/v3.20/community\nhttps://dl-cdn.alpinelinux.org/alpine/v3.20/main\nhttps://dl-cdn.alpinelinux.org/alpine/v3.20/community\n' > /etc/apk/repositories
-    echo "[quro-engine] mirrors configured"
+# Phase 0.5: apt sources (skip if already configured by Android side)
+# 关键修复：已切换到 Ubuntu 24.04 (Noble) ARM64 rootfs。
+echo "[quro-engine] checking apt sources..."
+if [ ! -s /etc/apt/sources.list ] || ! grep -q "noble" /etc/apt/sources.list 2>/dev/null; then
+    mkdir -p /etc/apt/apt.conf.d
+    # 关闭签名验证（proot 环境下 GPG 公钥可能不完整）
+    printf 'Acquire::Check-Valid-Until "false";\nAPT::Get::AllowUnauthenticated "true";\n' > /etc/apt/apt.conf.d/99no-check-gpg
+    printf 'deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
+    echo "[quro-engine] apt sources configured (noble)"
 else
-    echo "[quro-engine] mirrors already configured"
+    echo "[quro-engine] apt sources already configured (keeping existing)"
 fi
 
-# Phase 1: apk update with retry
-echo "[quro-engine] updating apk index..."
-if ! apk update --no-cache 2>&1; then
-    echo "[quro-engine] WARN: apk update failed, trying alternative mirrors..."
-    for m in tsinghua aliyun dl-cdn; do
+# Phase 1: apt update with retry
+echo "[quro-engine] updating apt index..."
+if ! apt-get update 2>&1; then
+    echo "[quro-engine] WARN: apt-get update failed, trying alternative mirrors..."
+    for m in tsinghua aliyun archive; do
         case "${'$'}m" in
-            tsinghua) BASE="https://mirrors.tuna.tsinghua.edu.cn/alpine" ;;
-            aliyun)   BASE="https://mirrors.aliyun.com/alpine" ;;
-            dl-cdn)   BASE="https://dl-cdn.alpinelinux.org/alpine" ;;
+            tsinghua) BASE="https://mirrors.tuna.tsinghua.edu.cn/ubuntu" ;;
+            aliyun)   BASE="https://mirrors.aliyun.com/ubuntu" ;;
+            archive)  BASE="https://archive.ubuntu.com/ubuntu" ;;
         esac
-        printf '%s/v3.20/main\n%s/v3.20/community\n' "${'$'}BASE" "${'$'}BASE" > /etc/apk/repositories
+        printf "deb %s/ noble main restricted universe multiverse\ndeb %s/ noble-updates main restricted universe multiverse\ndeb %s/ noble-security main restricted universe multiverse\n" "${'$'}BASE" "${'$'}BASE" "${'$'}BASE" > /etc/apt/sources.list
         sleep 1
-        if apk update --no-cache 2>&1; then break; fi
+        if apt-get update 2>&1; then break; fi
     done
     # final check
-    if ! apk update --no-cache 2>&1; then
-        echo "[quro-engine] FAILED: apk update failed on all mirrors"
+    if ! apt-get update 2>&1; then
+        echo "[quro-engine] FAILED: apt-get update failed on all mirrors"
         exit 1
     fi
 fi
 
-# Phase 2: 修复APK数据库错误
-echo "[quro-engine] fixing APK database errors..."
-# 清理APK数据库中的历史残留错误
-apk fix 2>/dev/null || true
-# 重置unzip包的损坏状态
-apk del --purge unzip 2>/dev/null || true
-# 重新安装unzip
-apk add --no-cache unzip 2>/dev/null || true
+# Phase 2: 修复 dpkg 数据库错误
+echo "[quro-engine] fixing dpkg database errors..."
+dpkg --configure -a 2>/dev/null || true
+apt-get install -f -y 2>/dev/null || true
 
 # Phase 3: language runtimes
 echo "[quro-engine] installing language runtimes..."
@@ -240,7 +239,7 @@ smart_install() {
     
     # 尝试安装
     echo "[quro-engine] Installing ${'$'}pkg..."
-    apk add --no-cache ${'$'}pkg 2>&1 | tail -3
+    apt-get install -y --no-install-recommends ${'$'}pkg 2>&1 | tail -3
     
     # 验证是否安装成功（不依赖退出码）
     if command -v ${'$'}cmd >/dev/null 2>&1; then
@@ -254,7 +253,7 @@ smart_install() {
 
 # 安装语言运行时
 smart_install "python3" "python3" || true
-smart_install "py3-pip" "pip3" || true
+smart_install "python3-pip" "pip3" || true
 smart_install "nodejs" "node" || true
 smart_install "npm" "npm" || true
 
@@ -264,7 +263,7 @@ smart_install "gcc" "gcc" || true
 smart_install "g++" "g++" || true
 smart_install "make" "make" || true
 smart_install "cmake" "cmake" || true
-smart_install "linux-headers" "make" || true
+smart_install "linux-headers-generic" "make" || true
 
 # Phase 5: dev tools
 echo "[quro-engine] installing dev tools..."
@@ -305,6 +304,6 @@ private val BUILTIN_PROVISIONER = """
 # Quro Engine provisioner — engine-level shared environment (best effort).
 set -e
 echo "[quro-engine] provisioning engine-level tools..."
-apk add --no-cache bash coreutils findutils grep sed gawk || true
+apt-get install -y --no-install-recommends bash coreutils findutils grep sed gawk || true
 echo "[quro-engine] engine provisioning done"
 """

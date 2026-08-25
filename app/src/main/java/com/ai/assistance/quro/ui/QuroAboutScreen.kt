@@ -258,7 +258,7 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
             // ── 原生工具库 ──
             Triple("proot", "GPL-2.0+", "PRoot - 无 Root 用户空间 chroot/mount 模拟，预编译 .so。源码见 https://github.com/proot-me/proot"),
             Triple("talloc", "LGPL-3.0+", "Samba 项目 - 层级内存分配库，预编译 .so，动态链接。源码见 https://talloc.samba.org"),
-            Triple("Alpine Linux 环境", "GPL-2.0+ / MIT / BSD", "包含 musl libc (MIT)、BusyBox (GPL-2.0)、apk 包管理器等，用于应用内 Linux 环境"),
+            Triple("Ubuntu 24.04 环境", "GPL-2.0+ / MIT / BSD", "包含 glibc、coreutils、apt 包管理器等，用于应用内 Linux 环境"),
             // ── 前端 JavaScript 库 ──
             Triple("Three.js", "MIT", "Three.js Authors - 3D 渲染引擎，用于 GLB 头像显示"),
             Triple("Draco", "Apache-2.0", "Google - 3D 数据压缩/解压库（draco_decoder.wasm）"),

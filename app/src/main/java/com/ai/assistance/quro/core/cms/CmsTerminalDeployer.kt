@@ -5,14 +5,14 @@ import com.ai.assistance.quro.core.cms.CmsStateStore
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import java.io.File
 
-/** 把 Windows CRLF 统一为 LF，防止写入 proot/Alpine 的 shell 脚本出现「illegal option -」等诡异解析错误。 */
+/** 把 Windows CRLF 统一为 LF，防止写入 proot/Ubuntu 的 shell 脚本出现「illegal option -」等诡异解析错误。 */
 private fun String.normalizeLineEndings(): String = this.replace("\r\n", "\n").replace("\r", "\n")
 
 /**
  * CMS v2 终端部署器（原创运行时 · 部署系统）。
  *
- * 把 [CmsDeployPackage] 推到 proot/Alpine 沙箱的 /root/cms/<moduleId>：
- * ① 校验完整性（sha256，P0）② 写 manifest + 入口脚本 ③ 装依赖(apk/pip) ④ chmod +x。
+ * 把 [CmsDeployPackage] 推到 proot/Ubuntu 沙箱的 /root/cms/<moduleId>：
+ * ① 校验完整性（sha256，P0）② 写 manifest + 入口脚本 ③ 装依赖(apt/pip) ④ chmod +x。
  * 启动/进程管理归 [CmsTerminalRuntime]（v179）。
  *
  * D1 约束：终端执行后端唯一化 = proot；环境未就绪**直接拒绝**，绝不回退 /system/bin/sh 玩具通道。
@@ -34,7 +34,7 @@ object CmsTerminalDeployer {
         File(QuroLinuxEnv.homePath(context), "cms/_bootstrap").also { it.mkdirs() }
 
     /**
-     * 确保 CMS 基础运行环境已就绪（proot/Alpine 内）。
+     * 确保 CMS 基础运行环境已就绪（proot/Ubuntu 内）。
      * - proot 未就绪 → 返回引导文案（不静默失败）。
      * - 已就绪但缺 .bootstrap.done 标记 → 从 assets 拷 bootstrap.sh 进 proot 并执行。
      * - 已标记但关键工具缺失（proot重启后rootfs重置） → 重新执行 bootstrap。
@@ -43,9 +43,15 @@ object CmsTerminalDeployer {
      */
     fun bootstrap(context: Context): String {
         CmsStateStore.init(context)
-        val st = QuroLinuxEnv.probe(context)
+        // 环境未就绪时**自动拉起**终端安装（与 deploy 一致），安装成功即继续 bootstrap。
+        var st = QuroLinuxEnv.probe(context)
         if (!st.available) {
-            return "⛔ 终端环境(proot/Alpine)未就绪：${st.reason}。请先在「终端」页安装 Linux 环境（首次需联网下载约30MB）。"
+            CmsStateStore.appendLog("_bootstrap", "▶ 终端环境未就绪，自动安装 proot/Ubuntu…")
+            st = QuroLinuxEnv.ensureInstalledBlocking(context)
+            if (!st.available) {
+                return "⛔ 终端环境(proot/Ubuntu)自动安装失败：${st.reason}。请先在「终端」页安装 Linux 环境（首次需联网下载约30MB）。"
+            }
+            CmsStateStore.appendLog("_bootstrap", "✅ 终端环境已自动安装就绪")
         }
         val dir = bootstrapDir(context)
         val marker = File(dir, ".bootstrap.done")
@@ -97,12 +103,16 @@ object CmsTerminalDeployer {
     fun deploy(context: Context, pkg: CmsDeployPackage): String {
         CmsStateStore.init(context)
         CmsStateStore.markDeployStart(pkg.moduleId, "准备部署 ${pkg.moduleId}")
-        // D1：终端后端唯一化 = proot；环境未就绪直接拒绝，不回退 device sh。
-        val st = QuroLinuxEnv.probe(context)
+        // D1：终端后端唯一化 = proot；环境未就绪时**自动拉起**终端安装，安装成功即继续部署。
+        var st = QuroLinuxEnv.probe(context)
         if (!st.available) {
-            val msg = "⛔ 终端环境(proot/Alpine)未就绪：${st.reason}。请在终端页点「安装 Linux 环境」后再部署。"
-            CmsStateStore.markDeployEnd(pkg.moduleId, false, msg)
-            return msg
+            CmsStateStore.markDeployStep(pkg.moduleId, "自动安装终端环境(proot/Ubuntu)", 10)
+            st = QuroLinuxEnv.ensureInstalledBlocking(context)
+            if (!st.available) {
+                val msg = "⛔ 终端环境(proot/Ubuntu)自动安装失败：${st.reason}。请在终端页点「安装 Linux 环境」后再部署。"
+                CmsStateStore.markDeployEnd(pkg.moduleId, false, msg)
+                return msg
+            }
         }
         // 确保基础运行环境（python3/nodejs）就绪；幂等（已标记则跳过）。
         CmsStateStore.markDeployStep(pkg.moduleId, "环境就绪，准备 bootstrap")
@@ -134,18 +144,18 @@ object CmsTerminalDeployer {
         CmsStateStore.markDeployStep(pkg.moduleId, "文件已写入 ${guestDir(pkg.moduleId)}", 60)
 
         if (pkg.apkDeps.isNotEmpty()) {
-            CmsStateStore.markDeployStep(pkg.moduleId, "安装 apk 依赖: ${pkg.apkDeps.joinToString(" ")}", 75)
+            CmsStateStore.markDeployStep(pkg.moduleId, "安装 Linux 依赖: ${pkg.apkDeps.joinToString(" ")}", 75)
             val (c, out) = QuroLinuxEnv.run(
                 context,
-                "apk add --no-cache ${pkg.apkDeps.joinToString(" ")}",
+                "apt-get install -y --no-install-recommends ${pkg.apkDeps.joinToString(" ")}",
                 timeoutMs = 180_000,
             )
             if (c != 0) {
-                val msg = sb.appendLine("⛔ apk 依赖安装失败(exit $c): ${out.take(300)}").toString()
-                CmsStateStore.markDeployEnd(pkg.moduleId, false, "apk 依赖安装失败(exit $c): ${out.take(300)}")
+                val msg = sb.appendLine("⛔ Linux 依赖安装失败(exit $c): ${out.take(300)}").toString()
+                CmsStateStore.markDeployEnd(pkg.moduleId, false, "apt 依赖安装失败(exit $c): ${out.take(300)}")
                 return msg
             }
-            sb.appendLine("✅ apk 依赖已装: ${pkg.apkDeps.joinToString(" ")}")
+            sb.appendLine("✅ apt 依赖已装: ${pkg.apkDeps.joinToString(" ")}")
         }
 
         if (pkg.pipDeps.isNotEmpty()) {
