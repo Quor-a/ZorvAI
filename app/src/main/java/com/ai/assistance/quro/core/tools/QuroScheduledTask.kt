@@ -183,7 +183,7 @@ object QuroScheduledTaskStore {
 object QuroScheduledTaskScheduler {
     private const val TAG = "QuroScheduler"
     private const val CHANNEL_ID = "quro_scheduled_task"
-    const val ACTION_TRIGGER = "com.ai.assistance.quro.SCHEDULED_TASK_TRIGGER"
+    const val ACTION_TRIGGER = "com.ai.assistance.quro.SCHEDULED_TASK_EXACT_ALARM"
     const val EXTRA_TASK_ID = "task_id"
 
     /** 排程所有启用的任务 */
