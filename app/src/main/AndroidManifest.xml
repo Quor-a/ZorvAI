@@ -495,11 +495,7 @@
         <receiver
             android:name=".core.tools.QuroScheduleReceiver"
             android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.ai.assistance.quro.SCHEDULED_TASK_EXACT_ALARM" />
-            </intent-filter>
-        </receiver>
+            android:exported="false" />
 
         <!-- 定时任务开机重排程接收器 -->
         <receiver
