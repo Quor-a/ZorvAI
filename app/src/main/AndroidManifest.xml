@@ -501,7 +501,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- 定时任务开机重排程接收器 + 闹钟权限状态变更监听 -->
+        <!-- 定时任务开机重排程接收器 -->
         <receiver
             android:name=".core.tools.QuroScheduleBootReceiver"
             android:enabled="true"
@@ -509,9 +509,6 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <!-- 关键：监听精确闹钟权限状态变更，使应用出现在「闹钟和提醒」设置列表 -->
-                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
 
