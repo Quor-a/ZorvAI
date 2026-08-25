@@ -497,7 +497,7 @@
             android:enabled="true"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.ai.assistance.quro.SCHEDULED_TASK_TRIGGER" />
+                <action android:name="com.ai.assistance.quro.SCHEDULED_TASK_EXACT_ALARM" />
             </intent-filter>
         </receiver>
 
