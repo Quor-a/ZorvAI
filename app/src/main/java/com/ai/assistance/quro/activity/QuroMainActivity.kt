@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.activity
 
 import android.Manifest
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -131,18 +132,26 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
         // 特殊权限引导：MEDIA 管理（MANAGE_EXTERNAL_STORAGE）与精确闹钟（SCHEDULE_EXACT_ALARM）
         // 不走普通 runtime 弹窗，需跳系统设置页授权；此处按需拉起一次，让用户直接开通。
         requestSpecialPermissions()
-        // 精确闹钟权限：主动触发 ACTION_REQUEST 让系统注册本应用到「闹钟和提醒」列表
-        // ColorOS 需要应用至少调用一次此 Intent 才会出现在设置列表中
+        // 精确闹钟权限：强制调用一次 setAlarmClock 让系统注册本应用到「闹钟和提醒」列表
+        // OPPO ColorOS 需要应用实际调用过闹钟 API 才会出现在特殊应用权限列表中
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val am = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
             if (!am.canScheduleExactAlarms()) {
-                try {
-                    startActivity(
-                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                            data = Uri.parse("package:$packageName")
-                        }
+                // 强制触发一次闹钟调用（1分钟后），让系统检测到应用需要精确闹钟权限
+                // 即使权限被拒绝，系统也会因此把应用加入「闹钟和提醒」列表
+                runCatching {
+                    val pi = PendingIntent.getBroadcast(
+                        this, 0x7A1F,
+                        Intent("com.ai.assistance.quro.ALARM_REGISTER_HINT")
+                            .setPackage(packageName),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
-                } catch (_: Throwable) { }
+                    am.setAlarmClock(
+                        android.app.AlarmManager.AlarmClockInfo(
+                            System.currentTimeMillis() + 60_000L, pi
+                        ), pi
+                    )
+                }
             }
         }
         // 初始化语音球开关（持久化），供设置页开关初始态显示
