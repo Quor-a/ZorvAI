@@ -131,6 +131,20 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
         // 特殊权限引导：MEDIA 管理（MANAGE_EXTERNAL_STORAGE）与精确闹钟（SCHEDULE_EXACT_ALARM）
         // 不走普通 runtime 弹窗，需跳系统设置页授权；此处按需拉起一次，让用户直接开通。
         requestSpecialPermissions()
+        // 精确闹钟权限：主动触发 ACTION_REQUEST 让系统注册本应用到「闹钟和提醒」列表
+        // ColorOS 需要应用至少调用一次此 Intent 才会出现在设置列表中
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val am = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            if (!am.canScheduleExactAlarms()) {
+                try {
+                    startActivity(
+                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                    )
+                } catch (_: Throwable) { }
+            }
+        }
         // 初始化语音球开关（持久化），供设置页开关初始态显示
         voiceBallEnabled = QuroVoiceFeaturePrefs.getVoiceBall(this)
         setContent {
