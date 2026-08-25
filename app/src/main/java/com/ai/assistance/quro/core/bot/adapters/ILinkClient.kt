@@ -273,11 +273,16 @@ data class QrCodeResponse(
 
 /**
  * 二维码登录状态枚举（对齐 weixin_clawbot QrLoginStatus）。
+ *
+ * ⚠️ 唯一权威定义：微信 iLink 适配器与设置页 UI 都引用此顶层枚举，
+ * 切勿在 QuroWechatIlinkBotAdapter 内再嵌套同名枚举，否则 UI 的 when 永远
+ * 匹配不到适配器实际状态（类型不一致 → 扫码区整块不渲染）。
  */
 enum class QrLoginStatus {
     WAIT,
     SCANNED,
     CONFIRMED,
+    DENIED,
     EXPIRED,
     UNKNOWN
 }

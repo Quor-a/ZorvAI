@@ -782,6 +782,13 @@ private fun WechatBotPlatformCard(
                             Modifier.fillMaxWidth().height(32.dp),
                         ) { Text("重新获取二维码", fontSize = 11.sp) }
                     }
+                    QrLoginStatus.DENIED -> {
+                        Text("登录被用户拒绝", fontSize = 12.sp, color = Color(0xFFE53935))
+                        OutlinedButton(
+                            onClick = { adapter?.startQrLogin() },
+                            Modifier.fillMaxWidth().height(32.dp),
+                        ) { Text("重新获取二维码", fontSize = 11.sp) }
+                    }
                     QrLoginStatus.EXPIRED -> {
                         Text("二维码已过期", fontSize = 12.sp, color = Color(0xFFFF9800))
                         OutlinedButton(

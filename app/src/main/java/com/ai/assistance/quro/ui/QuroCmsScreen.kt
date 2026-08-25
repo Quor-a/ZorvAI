@@ -42,7 +42,7 @@ import java.util.*
  * 「怎么添加 CMS v2 模块」说明（开发者文档，可一键下载到本地）。
  */
 private val CMS_ADD_MODULE_GUIDE = """
-CMS v2 模块 = 一个能力包（cms.io/v2 规范），可部署到「手机端（应用内执行）」或「终端（proot/Alpine Linux 沙箱内执行）」。
+CMS v2 模块 = 一个能力包（cms.io/v2 规范），可部署到「手机端（应用内执行）」或「终端（proot/Ubuntu Linux 沙箱内执行）」。
 
 一、点「+ 添加模块」填写：
 • 名称 / 简介：一眼看懂用途。
@@ -51,7 +51,7 @@ CMS v2 模块 = 一个能力包（cms.io/v2 规范），可部署到「手机端
 • 依赖（Dependencies）：声明运行所需环境，kind 选 NODE / PYTHON / SSH / JAVA / RUST / GO（由 CmsEnvProvisioner 自动 provision），或 CAPABILITY（依赖另一个模块的能力）。
 
 二、依赖与运行：
-• 终端模块首次部署前，先在「终端」页安装 Linux 环境（约需联网下载 30MB），部署时按需 apk add 基础包。
+• 终端模块首次部署前，先在「终端」页安装 Linux 环境（约需联网下载 30MB），部署时按需 apt-get install 基础包。
 • 阻塞依赖（非 optional 且非 CAPABILITY）未满足时会提示先 provision。
 
 三、导入 / 导出：
@@ -435,7 +435,7 @@ private fun ModulesSection(
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            "💡 CMS 模块部署到应用内 proot/Alpine Linux 沙箱运行。首次请先在「终端」页安装 Linux 环境（约需联网下载 30MB）；部署时按需 apk add 基础包。",
+            "💡 CMS 模块部署到应用内 proot/Ubuntu Linux 沙箱运行。首次请先在「终端」页安装 Linux 环境（约需联网下载 30MB）；部署时按需 apt-get install 基础包。",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -864,7 +864,7 @@ private fun CallDialog(
                 val actionLabel = when (cap.actionType) {
                     "js" -> "JS 脚本（应用内 QuickJS 沙箱）"
                     "api" -> "API 操作"
-                    "terminal" -> "终端命令（应用内 proot/Alpine 沙箱）"
+                    "terminal" -> "终端命令（应用内 proot/Ubuntu 沙箱）"
                     else -> "Intent（应用内派发）"
                 }
                 Text("$actionLabel：${cap.action}", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)

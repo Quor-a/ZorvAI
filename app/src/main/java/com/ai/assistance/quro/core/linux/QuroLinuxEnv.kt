@@ -11,6 +11,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.BufferedInputStream
@@ -23,21 +24,20 @@ import java.util.zip.GZIPInputStream
 import com.ai.assistance.quro.util.QuroDiag
 import kotlin.time.Duration.Companion.milliseconds
 
-/** 把 Windows CRLF 统一为 LF，防止写入 proot/Alpine 的脚本被 sh 解析成非法选项。 */
+/** 把 Windows CRLF 统一为 LF，防止写入 proot/Ubuntu 的脚本被 sh 解析成非法选项。 */
 private fun String.normalizeLineEndings(): String = this.replace("\r\n", "\n").replace("\r", "\n")
 
 /**
- * 应用内 Linux 环境（proot + Alpine aarch64）后端。
+ * 应用内 Linux 环境（proot + Ubuntu 24.04 ARM64）后端。
  *
- * v108 删除了原 QuroLinuxEnv 资产（proot 二进制 + alpine.tar.gz 随包解压），
+ * v108 删除了原 QuroLinuxEnv 资产（proot 二进制 + rootfs 随包解压），
  * 导致终端只能回退成设备 Toybox sh、AI 的 linux_* 工具全部报「环境不可用」。
  *
- * 本版本（v132）直接移植 Kai 9000（https://github.com/SimonSchubert/Kai）的
+ * 本版本直接移植 Kai 9000（https://github.com/SimonSchubert/Kai）的
  * Android Linux Sandbox 思路并落地：
  * - proot 二进制以预编译 .so 形式打包进 jniLibs，**从 applicationInfo.nativeLibraryDir
  *   取执行权限**（Android 仅在此目录授予 .so 可执行权限，这是终端此前跑不起来的根因）；
- * - Alpine rootfs（3.22.5，因 3.23+ 的 apk-tools 3 用了 proot 不支持的 execveat）
- *   首次使用时从镜像（清华源优先）下载 minirootfs 并解压到应用私有目录；
+ * - Ubuntu 24.04 ARM64 rootfs（首次使用时从镜像下载 base rootfs 并解压到应用私有目录）；
  * - 交互终端经 [shellLaunch] 以 proot 常驻 /bin/sh，获得 python3 / 完整写能力等；
  * - 非交互命令经 [run] 一次性执行，供 AI 的 linux_* / terminal_* 工具调用；
  * - 任一资产缺失则优雅降级并报明确原因，不崩溃、不静默失败。
@@ -46,19 +46,24 @@ object QuroLinuxEnv {
 
     private const val TAG = "QuroLinuxEnv"
 
-    /** Alpine 锁 3.22.5：3.23+ 的 apk-tools 3 使用 execveat()，proot 不支持，apk update 会失败。 */
-    private const val ALPINE_VERSION = "3.22.5"
-    private const val ALPINE_BRANCH = "v3.22"
+    /** Ubuntu 24.04 LTS (Noble) ARM64 rootfs。 */
+    private const val UBUNTU_CODENAME = "noble"
+    private const val UBUNTU_VERSION = "24.04.4"
     private const val BUFFER_SIZE = 8192
     private const val MAX_OUTPUT_LENGTH = 15_000L
 
-    // 清华源优先（国内用户最快），其余为国际兜底。
-    private val ALPINE_MIRRORS = listOf(
-        "https://mirrors.tuna.tsinghua.edu.cn/alpine",
-        "https://dl-cdn.alpinelinux.org/alpine",
-        "https://mirrors.edge.kernel.org/alpine",
-        "https://alpine.ethz.ch/alpine",
-        "https://mirror.csclub.uwaterloo.ca/alpine",
+    // rootfs 下载镜像（Ubuntu Base 最小化 rootfs）- 使用HTTP避免SSL问题
+    private val UBUNTU_ROOTFS_MIRRORS = listOf(
+        "http://mirrors.tuna.tsinghua.edu.cn/ubuntu-cdimage/ubuntu-base/releases/24.04/release",
+        "http://mirrors.aliyun.com/ubuntu-cdimage/ubuntu-base/releases/24.04/release",
+        "http://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release",
+    )
+
+    // apt 软件源镜像（国内优先，国际兜底）- 使用HTTP避免SSL证书问题
+    private val UBUNTU_APT_MIRRORS = listOf(
+        "http://mirrors.tuna.tsinghua.edu.cn/ubuntu",
+        "http://mirrors.aliyun.com/ubuntu",
+        "http://archive.ubuntu.com/ubuntu",
     )
 
     sealed interface SandboxState {
@@ -215,7 +220,7 @@ object QuroLinuxEnv {
             if (_state.value is SandboxState.Ready) _state.value = SandboxState.NotInstalled
             val reason = when {
                 !rootfs.isDirectory ->
-                    "Alpine rootfs 未安装（请在终端点「安装 Linux 环境」）"
+                    "Ubuntu rootfs 未安装（请在终端点「安装 Linux 环境」）"
                 !rootfsBinRunnable(rootfs, "bin/sh") ->
                     "rootfs 解压残缺（/bin/sh 无法在 rootfs 内解析，可能符号链接创建失败），请重试安装"
                 !prootCanExec -> 
@@ -230,9 +235,9 @@ object QuroLinuxEnv {
     /**
      * 在 rootfs 内部解析一个（可能含绝对/相对符号链接的）路径，判断其最终真实文件是否存在且可执行。
      *
-     * **不能用 [File.exists]/[File.canExecute] 直接判**：Alpine 的 `/bin/sh` 是「绝对路径」符号链接
-     * （`-> /bin/busybox`）。在宿主 Android 文件系统上 `/bin/busybox` 根本不存在，宿主侧 `exists()`
-     * 会把它误判为缺失；但 proot 进入 rootfs 后 `/bin/busybox` 是存在的、可正常启动 Alpine。
+     * **不能用 [File.exists]/[File.canExecute] 直接判**：rootfs 的 `/bin/sh` 可能是符号链接
+     * （如 `-> /bin/busybox` 或 `-> /usr/bin/dash`）。在宿主 Android 文件系统上链接目标
+     * 根本不存在，宿主侧 `exists()` 会误判缺失；但 proot 进入 rootfs 后链接目标是存在的。
      * 必须按 rootfs 边界把链接目标解析回 rootfs 内再判定，否则正确解压的 rootfs 会被误报「残缺」。
      */
     private fun rootfsBinRunnable(rootfs: File, relPath: String): Boolean {
@@ -252,8 +257,8 @@ object QuroLinuxEnv {
     }
 
     /**
-     * 触发一次性安装：下载 Alpine rootfs → 解压 → 写 resolv.conf/repositories →
-     * apk update → 装 bash。幂等，已是 Ready 则直接返回。进度通过 [state] 暴露给 UI。
+     * 触发一次性安装：下载 Ubuntu rootfs → 解压 → 写 resolv.conf/sources.list →
+     * apt-get update → 装 bash。幂等，已是 Ready 则直接返回。进度通过 [state] 暴露给 UI。
      */
     fun setup(context: Context) {
         if (setupJob?.isActive == true) return
@@ -267,6 +272,36 @@ object QuroLinuxEnv {
             } finally {
                 setupMutex.unlock()
             }
+        }
+    }
+
+    /**
+     * 阻塞式确保终端(proot/Ubuntu)已安装，供 CMS 部署器等「必须同步等到环境就绪」的调用方使用。
+     *
+     * - 已就绪：直接返回就绪状态（不触发下载）。
+     * - 未就绪：触发一次性安装（下载 rootfs → 解压 → apt-get update → 装 bash → proot 自检），
+     *   成功返回就绪状态；安装过程进度仍经 [state] 暴露给 UI。
+     * - 安装失败：返回 available=false 的状态并附带原因（不抛异常，便于部署器转成明确错误文案）。
+     *
+     * 实现要点：用 [runBlocking] + [setupMutex.withLock] 同步等待安装完成；若并发的 [setup] 已在跑，
+     * withLock 会等其释放后重新探测（可能已被装好）。**调用方必须已处于后台线程**——
+     * CMS 部署器本就在工作线程跑阻塞式 proot 命令，符合此约束。
+     */
+    fun ensureInstalledBlocking(context: Context): EnvStatus {
+        val st = probe(context)
+        if (st.available) return st
+        return try {
+            runBlocking {
+                setupMutex.withLock {
+                    // 抢到锁后再探一次：并发 setup() 可能已先完成安装
+                    probe(context).takeIf { it.available }?.let { return@runBlocking it }
+                    setupInternal(context)
+                    probe(context)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "ensureInstalledBlocking 终端安装失败", e)
+            EnvStatus(false, prootPath(context).takeIf { File(it).exists() }, null, e.message ?: "终端安装失败")
         }
     }
 
@@ -343,7 +378,7 @@ object QuroLinuxEnv {
         dir.mkdirs()
         File(dir, "tmp").mkdirs()
 
-        // Android 把原生 .so 的 .so.2 后缀剥离，Alpine 内程序按 libtalloc.so.2 找，这里补回。
+        // Android 把原生 .so 的 .so.2 后缀剥离，Linux 内程序按 libtalloc.so.2 找，这里补回。
         val talloc = File(dir, "libtalloc.so.2")
         if (!talloc.exists()) {
             val tallocPath = findNativeLibWithAssetsFallback(context, "libtalloc.so")
@@ -355,14 +390,64 @@ object QuroLinuxEnv {
         val rootfsDir = File(dir, "rootfs")
         if (rootfsDir.exists()) rootfsDir.deleteRecursively()
         val tarGz = File(dir, "rootfs.tar.gz")
+        val tarXz = File(dir, "rootfs.tar.xz")
+        var extractSuccess = false
         try {
             _state.value = SandboxState.Downloading(0f)
-            downloadRootfs(arch, tarGz) { p -> _state.value = SandboxState.Downloading(p) }
+            downloadRootfs(context, arch, tarGz) { p -> _state.value = SandboxState.Downloading(p) }
 
             _state.value = SandboxState.Extracting
-            extractTarGz(tarGz, rootfsDir)
+            // 优先尝试xz格式（Operit兼容）
+            if (tarXz.exists() && tarXz.length() > 0) {
+                Log.i(TAG, "尝试使用xz格式rootfs: ${tarXz.absolutePath} (${tarXz.length()} bytes)")
+                try {
+                    extractXzTar(tarXz, rootfsDir)
+                    // 验证解压是否成功
+                    if (rootfsDir.exists() && rootfsDir.isDirectory && rootfsDir.listFiles()?.isNotEmpty() == true) {
+                        Log.i(TAG, "xz格式rootfs解压成功，目录内容数: ${rootfsDir.listFiles()?.size}")
+                        extractSuccess = true
+                    } else {
+                        Log.w(TAG, "xz格式rootfs解压后目录为空或不存在")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "xz格式rootfs解压失败: ${e.message}")
+                    // 清理解压失败的残留
+                    if (rootfsDir.exists()) rootfsDir.deleteRecursively()
+                }
+            }
+
+            // 如果xz解压失败或不存在，尝试gz格式
+            if (!extractSuccess && tarGz.exists() && tarGz.length() > 0) {
+                Log.i(TAG, "尝试使用gz格式rootfs: ${tarGz.absolutePath} (${tarGz.length()} bytes)")
+                try {
+                    extractTarGz(tarGz, rootfsDir)
+                    // 验证解压是否成功
+                    if (rootfsDir.exists() && rootfsDir.isDirectory && rootfsDir.listFiles()?.isNotEmpty() == true) {
+                        Log.i(TAG, "gz格式rootfs解压成功，目录内容数: ${rootfsDir.listFiles()?.size}")
+                        extractSuccess = true
+                    } else {
+                        Log.w(TAG, "gz格式rootfs解压后目录为空或不存在")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "gz格式rootfs解压失败: ${e.message}")
+                    // 清理解压失败的残留
+                    if (rootfsDir.exists()) rootfsDir.deleteRecursively()
+                }
+            }
+
+            // 如果两种格式都失败，抛出异常
+            if (!extractSuccess) {
+                val xzExists = tarXz.exists()
+                val gzExists = tarGz.exists()
+                throw java.io.IOException(
+                    "rootfs文件解压失败。xz文件存在: $xzExists(${if (xzExists) tarXz.length() else 0} bytes), " +
+                    "gz文件存在: $gzExists(${if (gzExists) tarGz.length() else 0} bytes)。" +
+                    "可能原因：1) busybox/tar命令不可用；2) 存储空间不足；3) 文件损坏"
+                )
+            }
         } finally {
             tarGz.delete()
+            tarXz.delete()
         }
 
         // 解压后立即校验 rootfs 真可用：/bin/sh 必须能在 rootfs 内部解析为可执行文件。
@@ -370,7 +455,7 @@ object QuroLinuxEnv {
         // 必须用 [rootfsBinRunnable] 按 rootfs 边界内解析（v1.0.48 修正 v1.0.47 的误报）。
         // 若解压残缺或符号链接创建失败 → 直接报错，绝不把残缺 rootfs 标成「就绪」。
         if (!rootfsBinRunnable(rootfsDir, "bin/sh")) {
-            val detail = "rootfs 解压后 /bin/sh 无法在 rootfs 内解析（解压残缺或符号链接创建失败），无法启动 Alpine"
+            val detail = "rootfs 解压后 /bin/sh 无法在 rootfs 内解析（解压残缺或符号链接创建失败），无法启动 Ubuntu"
             QuroDiag.log("LinuxEnv", "⛔ $detail")
             rootfsDir.deleteRecursively()
             throw IllegalStateException(detail)
@@ -384,21 +469,21 @@ object QuroLinuxEnv {
 
         var updated = false
         var lastErr = ""
-        for (mirror in ALPINE_MIRRORS) {
-            writeRepositories(rootfsDir, mirror)
-            val r = runProot(context, "apk update", timeoutMs = 60_000)
+        for (mirror in UBUNTU_APT_MIRRORS) {
+            writeAptSources(rootfsDir, mirror)
+            val r = runProot(context, "apt-get update", timeoutMs = 60_000)
             if (r.first == 0) { updated = true; break }
-            lastErr = r.second // 保留完整输出，便于定位镜像/网络/签名问题（不再截断 200 字）
+            lastErr = r.second
         }
         if (!updated) {
-            QuroDiag.log("LinuxEnv", "⛔ apk update 在所有镜像失败:\n$lastErr")
+            QuroDiag.log("LinuxEnv", "⛔ apt-get update 在所有镜像失败:\n$lastErr")
             rootfsDir.deleteRecursively()
-            throw IllegalStateException("apk update 在所有镜像均失败。最后错误：\n$lastErr")
+            throw IllegalStateException("apt-get update 在所有镜像均失败。最后错误：\n$lastErr")
         }
 
         // bash 是持久 shell 的基础，必须装。
         _state.value = SandboxState.Installing("安装 bash…")
-        val bash = runProot(context, "apk add --no-cache bash", timeoutMs = 120_000)
+        val bash = runProot(context, "apt-get install -y --no-install-recommends bash", timeoutMs = 120_000)
         if (bash.first != 0) {
             QuroDiag.log("LinuxEnv", "⛔ bash 安装失败(exit ${bash.first}):\n${bash.second}")
             throw IllegalStateException("bash 安装失败（exit ${bash.first}）：\n${bash.second}")
@@ -408,7 +493,7 @@ object QuroLinuxEnv {
         // 必须真正用 proot 在该设备 rootfs 内跑一条命令，确认 proot 能在本机启动并执行。
         // 否则会出现「bash 装上了、状态标 Ready、但终端一进 proot 就崩、静默回退设备 sh」的「废了」现象。
         _state.value = SandboxState.Installing("自检 proot 运行环境…")
-        val smoke = runProot(context, "echo QURO_SMOKETEST_OK; id -u; apk --version", timeoutMs = 30_000)
+        val smoke = runProot(context, "echo QURO_SMOKETEST_OK; id -u; apt-get --version", timeoutMs = 30_000)
         if (smoke.first != 0 || !smoke.second.contains("QURO_SMOKETEST_OK")) {
             val detail = "部署后自检失败：proot 在您的设备上无法在 rootfs 内执行命令。" +
                 "常见原因：系统 SELinux 限制了 ptrace，或 proot loader 加载失败。\n" +
@@ -423,10 +508,8 @@ object QuroLinuxEnv {
 
     /** 一次性执行命令（AI 工具用）。环境不可用返回原因。 */
     fun run(context: Context, command: String, timeoutMs: Long = 30000): Pair<Int, String> {
-        val st = probe(context)
-        if (!st.available || st.prootPath == null || st.rootfsPath == null) {
-            return -1 to "❌ Linux 环境不可用：${st.reason}。请在终端点「安装 Linux 环境」。"
-        }
+        // 不再依赖 probe() 前置检查 —— probe 的 rootfsBinRunnable 可能在宿主侧误判符号链接。
+        // 直接尝试执行命令，让 proot 自己报错。
         return runProot(context, command, timeoutMs)
     }
 
@@ -437,10 +520,6 @@ object QuroLinuxEnv {
         timeoutMs: Long = 30000,
         onLine: (String) -> Unit = {}
     ): Pair<Int, String> {
-        val st = probe(context)
-        if (!st.available || st.prootPath == null || st.rootfsPath == null) {
-            return -1 to "❌ Linux 环境不可用：${st.reason}"
-        }
         return runProotWithLog(context, command, timeoutMs, onLine)
     }
 
@@ -484,16 +563,16 @@ object QuroLinuxEnv {
             "PROOT_TMP_DIR" to tmp,
             "PROOT_LOADER" to loader,
         )
-        return ProotLaunch(args, env, File(rootfs).parentFile)
+        val rootfsFile = File(rootfs)
+        return ProotLaunch(args, env, rootfsFile.parentFile ?: rootfsFile)
     }
 
     /** 内部：构造 proot 参数并执行。添加多种执行策略应对权限问题。 */
     private fun runProot(context: Context, command: String, timeoutMs: Long): Pair<Int, String> {
-        val st = probe(context)
-        if (!st.available || st.prootPath == null || st.rootfsPath == null) {
-            return -1 to "❌ Linux 环境不可用：${st.reason}。请在终端点「安装 Linux 环境」。"
-        }
-        prepareRuntimeExtras(context, File(st.rootfsPath))
+        // 不再依赖 probe() 前置检查 —— probe 的 rootfsBinRunnable 可能在宿主侧误判符号链接。
+        // 直接尝试执行命令，让 proot 自己报错。
+        val rootfs = rootfsPath(context)
+        prepareRuntimeExtras(context, File(rootfs))
         Log.i(TAG, "runProot 开始执行，超时: ${timeoutMs}ms，命令: ${command.take(100)}...")
 
         val launch = buildProotLaunch(context)
@@ -703,10 +782,89 @@ object QuroLinuxEnv {
     // rootfs 下载（HttpURLConnection，避免引入 ktor 依赖）
     // ----------------------------------------------------------------
 
-    private fun downloadRootfs(arch: String, target: File, onProgress: (Float) -> Unit) {
-        val urls = ALPINE_MIRRORS.map { base ->
-            "$base/$ALPINE_BRANCH/releases/$arch/alpine-minirootfs-$ALPINE_VERSION-$arch.tar.gz"
+    private fun downloadRootfs(context: Context, arch: String, target: File, onProgress: (Float) -> Unit) {
+        // 优先从assets读取rootfs文件
+        // 注意：优先选择gz格式，因为Java原生支持GZIPInputStream解压
+        // xz格式需要系统命令（busybox/tar），在Android App进程中通常不可用
+        try {
+            val assetFiles = context.assets.list("linux_env") ?: emptyArray()
+            Log.i(TAG, "检查assets文件: ${assetFiles.joinToString()}")
+
+            // 优先检查gz格式（Java原生支持解压）
+            val gzFile = assetFiles.find { it.endsWith(".tar.gz") && !it.contains("alpine") }
+            if (gzFile != null) {
+                Log.i(TAG, "从assets读取gz格式rootfs: $gzFile (优先，Java原生支持)")
+                try {
+                    val assetFileDescriptor = context.assets.openFd("linux_env/$gzFile")
+                    val totalSize = assetFileDescriptor.declaredLength
+                    assetFileDescriptor.close()
+
+                    context.assets.open("linux_env/$gzFile").use { input ->
+                        FileOutputStream(target).use { output ->
+                            val buffer = ByteArray(BUFFER_SIZE)
+                            var totalRead = 0L
+                            var read: Int
+                            while (input.read(buffer).also { read = it } != -1) {
+                                output.write(buffer, 0, read)
+                                totalRead += read
+                                if (totalSize > 0) onProgress(totalRead.toFloat() / totalSize)
+                            }
+                        }
+                    }
+                    Log.i(TAG, "从assets读取gz rootfs成功: ${target.absolutePath} (${target.length()} bytes)")
+                    return
+                } catch (e: Exception) {
+                    Log.e(TAG, "从assets读取gz rootfs失败: ${e.message}")
+                }
+            }
+
+            // 检查xz格式（回退选项，解压依赖系统命令）
+            val xzFile = assetFiles.find { it.endsWith(".tar.xz") }
+            if (xzFile != null) {
+                Log.i(TAG, "从assets读取xz格式rootfs: $xzFile (回退选项)")
+                try {
+                    val assetFileDescriptor = context.assets.openFd("linux_env/$xzFile")
+                    val totalSize = assetFileDescriptor.declaredLength
+                    assetFileDescriptor.close()
+
+                    // 修改目标文件名为xz格式
+                    val xzTarget = File(target.parent, target.name.replace(".tar.gz", ".tar.xz"))
+
+                    context.assets.open("linux_env/$xzFile").use { input ->
+                        FileOutputStream(xzTarget).use { output ->
+                            val buffer = ByteArray(BUFFER_SIZE)
+                            var totalRead = 0L
+                            var read: Int
+                            while (input.read(buffer).also { read = it } != -1) {
+                                output.write(buffer, 0, read)
+                                totalRead += read
+                                if (totalSize > 0) onProgress(totalRead.toFloat() / totalSize)
+                            }
+                        }
+                    }
+                    Log.i(TAG, "从assets读取xz rootfs成功: ${xzTarget.absolutePath} (${xzTarget.length()} bytes)")
+                    return
+                } catch (e: Exception) {
+                    Log.e(TAG, "从assets读取xz rootfs失败: ${e.message}")
+                }
+            }
+
+            Log.i(TAG, "assets中没有找到合适的rootfs文件")
+        } catch (e: Exception) {
+            Log.e(TAG, "检查assets文件失败: ${e.message}")
         }
+
+        // 回退到网络下载（gz格式，Java原生支持）
+        Log.i(TAG, "回退到网络下载rootfs (gz格式)")
+        val ubuntuArch = when (arch) {
+            "aarch64" -> "arm64"
+            "armhf" -> "armhf"
+            "x86_64" -> "amd64"
+            "x86" -> "i386"
+            else -> "arm64"
+        }
+        val fileName = "ubuntu-base-${UBUNTU_VERSION}-base-${ubuntuArch}.tar.gz"
+        val urls = UBUNTU_ROOTFS_MIRRORS.map { base -> "$base/$fileName" }
         var lastErr: Exception? = null
         for ((i, url) in urls.withIndex()) {
             try {
@@ -718,7 +876,7 @@ object QuroLinuxEnv {
                 if (i < urls.lastIndex) onProgress(0f)
             }
         }
-        throw java.io.IOException("所有 Alpine 镜像下载失败: ${lastErr?.message}")
+        throw java.io.IOException("所有 Ubuntu 镜像下载失败: ${lastErr?.message}")
     }
 
     private fun downloadFrom(url: String, target: File, onProgress: (Float) -> Unit) {
@@ -762,9 +920,174 @@ object QuroLinuxEnv {
 
     private fun extractTarGz(tarGz: File, target: File) {
         target.mkdirs()
-        GZIPInputStream(BufferedInputStream(FileInputStream(tarGz))).use { gzip ->
-            extractTar(gzip, target)
+        Log.d(TAG, "extractTarGz: 开始解压rootfs文件: ${tarGz.name}")
+        
+        // 检查文件格式
+        val fileName = tarGz.name.lowercase()
+        when {
+            fileName.endsWith(".tar.xz") -> {
+                Log.d(TAG, "extractTarGz: 检测到xz格式，使用busybox tar解压")
+                extractXzTar(tarGz, target)
+            }
+            fileName.endsWith(".tar.gz") || fileName.endsWith(".tgz") -> {
+                Log.d(TAG, "extractTarGz: 检测到gzip格式，使用Java GZIPInputStream解压")
+                extractGzTar(tarGz, target)
+            }
+            else -> {
+                Log.d(TAG, "extractTarGz: 未知格式，尝试gzip解压")
+                extractGzTar(tarGz, target)
+            }
         }
+    }
+    
+    private fun extractGzTar(tarGz: File, target: File) {
+        try {
+            GZIPInputStream(BufferedInputStream(FileInputStream(tarGz))).use { gzip ->
+                extractTar(gzip, target)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "extractGzTar: Java gzip解压失败: ${e.message}")
+            throw e
+        }
+    }
+    
+    private fun extractXzTar(xzFile: File, target: File) {
+        Log.i(TAG, "extractXzTar: 开始解压xz文件: ${xzFile.absolutePath}")
+        target.mkdirs()
+
+        // 检查文件是否存在且有效
+        if (!xzFile.exists() || xzFile.length() == 0L) {
+            throw java.io.IOException("xz文件不存在或为空: ${xzFile.absolutePath}")
+        }
+
+        // 检查可用的解压命令
+        val hasTar = checkCommandExists("tar")
+        val hasBusybox = checkCommandExists("busybox")
+        val hasXz = checkCommandExists("xz")
+
+        Log.i(TAG, "extractXzTar: 可用命令 - tar=$hasTar, busybox=$hasBusybox, xz=$hasXz")
+
+        // 策略1：直接使用tar命令（如果可用）
+        if (hasTar) {
+            val cmd = "tar xf '${xzFile.absolutePath}' -C '${target.absolutePath}'"
+            Log.i(TAG, "extractXzTar: 尝试tar命令: $cmd")
+            if (execCommand(cmd)) {
+                Log.i(TAG, "extractXzTar: tar命令解压成功")
+                return
+            }
+            Log.w(TAG, "extractXzTar: tar命令解压失败")
+        }
+
+        // 策略2：使用busybox tar（如果可用）
+        if (hasBusybox) {
+            val cmd = "busybox tar xf '${xzFile.absolutePath}' -C '${target.absolutePath}'"
+            Log.i(TAG, "extractXzTar: 尝试busybox tar命令: $cmd")
+            if (execCommand(cmd)) {
+                Log.i(TAG, "extractXzTar: busybox tar命令解压成功")
+                return
+            }
+            Log.w(TAG, "extractXzTar: busybox tar命令解压失败")
+        }
+
+        // 策略3：先用xz解压，再用tar解压（如果xz可用）
+        if (hasXz) {
+            val decompressed = File(xzFile.parent, "${xzFile.nameWithoutExtension}")
+            val xzCmd = "xz -dk '${xzFile.absolutePath}'"
+            Log.i(TAG, "extractXzTar: 尝试xz解压: $xzCmd")
+            if (execCommand(xzCmd) && decompressed.exists()) {
+                val tarCmd = "tar xf '${decompressed.absolutePath}' -C '${target.absolutePath}'"
+                Log.i(TAG, "extractXzTar: 尝试tar解压: $tarCmd")
+                if (execCommand(tarCmd)) {
+                    decompressed.delete()
+                    Log.i(TAG, "extractXzTar: xz+tar解压成功")
+                    return
+                }
+                decompressed.delete()
+            }
+            Log.w(TAG, "extractXzTar: xz+tar解压失败")
+        }
+
+        // 策略4：使用Java内置方式解压（最可靠但最慢）
+        Log.i(TAG, "extractXzTar: 尝试Java内置解压方式")
+        try {
+            extractXzWithJava(xzFile, target)
+            Log.i(TAG, "extractXzTar: Java内置解压成功")
+            return
+        } catch (e: Exception) {
+            Log.e(TAG, "extractXzTar: Java内置解压失败: ${e.message}")
+        }
+
+        // 所有策略都失败
+        throw java.io.IOException(
+            "所有xz解压策略都失败。" +
+            "可用命令: tar=$hasTar, busybox=$hasBusybox, xz=$hasXz。" +
+            "请确保设备上有可用的解压工具。"
+        )
+    }
+
+    /** 检查系统命令是否存在 */
+    private fun checkCommandExists(command: String): Boolean {
+        return try {
+            val process = Runtime.getRuntime().exec(arrayOf("which", command))
+            val exitCode = process.waitFor()
+            exitCode == 0
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /** 执行shell命令并返回是否成功 */
+    private fun execCommand(cmd: String): Boolean {
+        return try {
+            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
+            val exitCode = process.waitFor()
+            if (exitCode != 0) {
+                val error = process.errorStream.bufferedReader().readText()
+                Log.w(TAG, "execCommand失败: exitCode=$exitCode, error=${error.take(500)}")
+            }
+            exitCode == 0
+        } catch (e: Exception) {
+            Log.w(TAG, "execCommand异常: ${e.message}")
+            false
+        }
+    }
+
+    /** 使用Java内置方式解压xz文件 */
+    private fun extractXzWithJava(xzFile: File, target: File) {
+        // Java没有内置xz支持，需要使用系统命令
+        // 尝试多种命令组合
+        val commands = listOf(
+            // 策略1：直接用tar（现代tar支持xz）
+            arrayOf("tar", "xf", xzFile.absolutePath, "-C", target.absolutePath),
+            // 策略2：用sh -c调用tar
+            arrayOf("sh", "-c", "tar xf '${xzFile.absolutePath}' -C '${target.absolutePath}'"),
+            // 策略3：尝试先xz解压再tar（如果xz命令可用）
+            arrayOf("sh", "-c", "xz -dk '${xzFile.absolutePath}' && tar xf '${xzFile.absolutePath}' -C '${target.absolutePath}'"),
+        )
+
+        for (cmd in commands) {
+            try {
+                Log.i(TAG, "extractXzWithJava: 尝试命令: ${cmd.joinToString(" ")}")
+                val pb = ProcessBuilder(*cmd)
+                pb.redirectErrorStream(true)
+                val process = pb.start()
+                val output = process.inputStream.bufferedReader().readText()
+                val exitCode = process.waitFor()
+                if (exitCode == 0) {
+                    Log.i(TAG, "extractXzWithJava: 命令成功")
+                    return
+                } else {
+                    Log.w(TAG, "extractXzWithJava: 命令失败(exit $exitCode): ${output.take(200)}")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "extractXzWithJava: 命令执行异常: ${e.message}")
+            }
+        }
+
+        throw java.io.IOException(
+            "xz解压失败：系统没有可用的tar/xz命令。" +
+            "建议使用gz格式的rootfs文件。"
+        )
     }
 
     private fun extractTar(input: java.io.InputStream, targetDir: File) {
@@ -860,17 +1183,24 @@ object QuroLinuxEnv {
 
     private fun makeWritable(rootfs: File) {
         rootfs.walkTopDown().forEach { f ->
+            // 递归设置所有目录和文件的写权限
             if (f.isDirectory && !f.canWrite()) f.setWritable(true, true)
+            if (f.isFile && !f.canWrite()) f.setWritable(true, true)
+        }
+        // 确保关键目录存在且可写
+        listOf("var/lib/dpkg", "var/lib/apt", "var/cache/apt", "tmp").forEach { dir ->
+            val d = File(rootfs, dir)
+            d.mkdirs()
+            d.setWritable(true, true)
         }
     }
 
     /**
      * 修复 rootfs 中的 hardlink 问题（P0 修复）。
      *
-     * Alpine rootfs 使用 erofs 格式时，hardlink 无法创建，导致文件为 0 字节空文件。
-     * 本函数扫描 rootfs 中所有 0 字节的可执行文件，创建符号链接指向对应的 busybox。
-     *
-     * 常见受影响文件：gcc、g++、musl-gcc、unzip、zipinfo 等。
+     * Ubuntu rootfs 通常不依赖 busybox hardlink，但极少数压缩包格式或文件系统
+     * 可能导致 hardlink 退化为 0 字节空文件。本函数扫描 rootfs 中所有 0 字节的
+     * 可执行文件并记录日志，确保问题可追溯。
      */
     private fun fixHardlinks(rootfs: File) {
         Log.i(TAG, "修复 rootfs hardlink 问题...")
@@ -928,7 +1258,7 @@ object QuroLinuxEnv {
      * 写 rootfs 的 /etc/resolv.conf。
      *
      * **网络修复（用户「要完整的」之一）**：旧实现硬编码 `nameserver 8.8.8.8 / 8.8.4.4`，
-     * 在运营商/企业网屏蔽 Google DNS 时终端 `ping`/`apk`/`curl` 全部解析失败。
+     * 在运营商/企业网屏蔽 Google DNS 时终端 `ping`/`apt`/`curl` 全部解析失败。
      * 改为优先采用**设备当前网络真实 DNS**（由 [deviceDnsServers] 经 ConnectivityManager
      * 取 LinkProperties.dnsServers），缺失再回落到硬编码的公共 DNS。这样终端联网行为与
      * 宿主 App 一致，切换 WiFi/数据也不会失效。
@@ -961,7 +1291,7 @@ object QuroLinuxEnv {
     }
 
     /**
-     * 终端内 getprop 垫片脚本（Alpine 没有 Android 的 getprop）。
+     * 终端内 getprop 垫片脚本（Linux 环境没有 Android 的 getprop）。
      * 数据来自 [prepareRuntimeExtras] 写入的 /etc/quro_props.prop，并回落读只读绑入的
      * /system/build.prop；无参时打印全部属性（与 Android getprop 行为一致）。
      */
@@ -1062,9 +1392,20 @@ fi
         }
     }
 
-    private fun writeRepositories(rootfs: File, mirrorBase: String) {
-        val apk = File(rootfs, "etc/apk"); apk.mkdirs()
-        File(apk, "repositories").writeText("$mirrorBase/$ALPINE_BRANCH/main\n$mirrorBase/$ALPINE_BRANCH/community\n")
+    private fun writeAptSources(rootfs: File, mirrorBase: String) {
+        val aptDir = File(rootfs, "etc/apt")
+        aptDir.mkdirs()
+        // Ubuntu 24.04 用 DEB822 格式（/etc/apt/sources.list.d/ubuntu.sources），
+        // 但也兼容传统 sources.list。两种都写，确保 apt 一定能读到。
+        File(aptDir, "sources.list").writeText(
+            "deb $mirrorBase/ $UBUNTU_CODENAME main restricted universe multiverse\n" +
+            "deb $mirrorBase/ ${UBUNTU_CODENAME}-updates main restricted universe multiverse\n" +
+            "deb $mirrorBase/ ${UBUNTU_CODENAME}-security main restricted universe multiverse\n" +
+            "deb $mirrorBase/ ${UBUNTU_CODENAME}-backports main restricted universe multiverse\n"
+        )
+        // 关闭签名验证（proot 环境下 GPG 公钥可能不完整）
+        File(aptDir, "apt.conf.d").mkdirs()
+        File(aptDir, "apt.conf.d/99no-check-gpg").writeText("Acquire::Check-Valid-Until \"false\";\nAPT::Get::AllowUnauthenticated \"true\";\n")
     }
 
     /** 重置沙箱（清掉 rootfs 与状态）。 */

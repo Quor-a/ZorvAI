@@ -49,7 +49,7 @@ class QuroCmsCallTool : QuroTool {
     override val name = "cms_call"
     override val description =
         "调用一个 CMS v2 能力模块暴露的应用内能力（如 run_node / device_model / open_url / web_search）。" +
-            "参数：{\"capability_id\":\"能力id\",\"args\":{参数名:参数值}}。会经过权限策略门控，通过四类受控通道执行（intent 拉起其他 App / js QuickJS 沙箱 / api 应用内只读 / terminal proot-Alpine 沙箱）。部分能力声明 Elevated(Shizuku 已连) 或 Critical(ROOT 可用) 权限级别，仅在对应系统授权已授予时才放行，否则返回引导提示；不直接执行裸 shell 或无障碍自动化。"
+            "参数：{\"capability_id\":\"能力id\",\"args\":{参数名:参数值}}。会经过权限策略门控，通过四类受控通道执行（intent 拉起其他 App / js QuickJS 沙箱 / api 应用内只读 / terminal proot-Ubuntu 沙箱）。部分能力声明 Elevated(Shizuku 已连) 或 Critical(ROOT 可用) 权限级别，仅在对应系统授权已授予时才放行，否则返回引导提示；不直接执行裸 shell 或无障碍自动化。"
     override val parametersJson = """{
         "type":"object",
         "properties":{
@@ -281,11 +281,11 @@ private fun jsonToStringList(a: JSONArray?): List<String> {
 class QuroPrivStatusTool : QuroTool {
     override val name = "priv_status"
     override val description =
-        "查看 CMS v2 权限模式与已授权项。能力经四类受控通道执行（intent 拉起其他 App / js QuickJS 沙箱 / api 应用内只读 / terminal proot-Alpine 沙箱）；部分能力可声明要求 Shizuku(已连)/ROOT(可用) 授权，由权限中枢按系统授权状态自动闸控放行或拒绝引导，不直接执行裸 shell 或无障碍自动化。参数为空 {}。"
+        "查看 CMS v2 权限模式与已授权项。能力经四类受控通道执行（intent 拉起其他 App / js QuickJS 沙箱 / api 应用内只读 / terminal proot-Ubuntu 沙箱）；部分能力可声明要求 Shizuku(已连)/ROOT(可用) 授权，由权限中枢按系统授权状态自动闸控放行或拒绝引导，不直接执行裸 shell 或无障碍自动化。参数为空 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
 
     override fun run(context: Context, arguments: String): String {
-        val sb = StringBuilder("CMS v2 执行架构：能力经四类受控通道执行（intent 拉起其他 App / js QuickJS 沙箱 / api 应用内只读 / terminal proot-Alpine 沙箱）。部分能力声明 Elevated(Shizuku 已连) 或 Critical(ROOT 可用) 权限级别，须对应系统授权已授予才由权限中枢放行，否则拒绝并给出引导；不直接跑裸 shell 或无障碍自动化控制系统。\n")
+        val sb = StringBuilder("CMS v2 执行架构：能力经四类受控通道执行（intent 拉起其他 App / js QuickJS 沙箱 / api 应用内只读 / terminal proot-Ubuntu 沙箱）。部分能力声明 Elevated(Shizuku 已连) 或 Critical(ROOT 可用) 权限级别，须对应系统授权已授予才由权限中枢放行，否则拒绝并给出引导；不直接跑裸 shell 或无障碍自动化控制系统。\n")
         sb.append("CMS v2 权限模式 = ${QuroPolicyStore.getCms(context).name}\n")
         val auths = QuroCmsBroker(context).listAuths()
             .filter { it.level != AuthorizationLevel.Denied }
@@ -304,8 +304,8 @@ class QuroPrivStatusTool : QuroTool {
 }
 
 /**
- * CMS v2 终端部署工具（原创）：把一个 [CmsDeployPackage] 推到 proot/Alpine 沙箱（/root/cms/<id>），
- * 写文件 + 装依赖(apk/pip) + 准备启动。
+ * CMS v2 终端部署工具（原创）：把一个 [CmsDeployPackage] 推到 proot/Ubuntu 沙箱（/root/cms/<id>），
+ * 写文件 + 装依赖(apt/pip) + 准备启动。
  *
  * 安全闸（P0）：部署是高危动作，**必须显式 confirm=true** 才执行；AI 须在用户确认后传入，
  * 不允许静默 auto-available 执行。未带 confirm 仅返回引导说明。
@@ -313,7 +313,7 @@ class QuroPrivStatusTool : QuroTool {
 class QuroCmsDeployTool : QuroTool {
     override val name = "cms_deploy_terminal"
     override val description =
-        "把一个能力模块部署到 proot/Alpine 终端沙箱（/root/cms/<id>），写文件并安装依赖(apk/pip)，使其可在 Linux 环境运行。" +
+        "把一个能力模块部署到 proot/Ubuntu 终端沙箱（/root/cms/<id>），写文件并安装依赖(apt/pip)，使其可在 Linux 环境运行。" +
             "参数：{\"module_id\":\"模块id（如 demo-py）\" 或 \"package\":\"CmsDeployPackage 的 JSON（须带 sha256 签名）\", \"confirm\":true}。" +
             "⚠️ 部署为高危动作，必须 confirm=true 才执行；首次部署建议用户在 CMS 界面点「部署到终端」按钮确认。"
     override val parametersJson = """{

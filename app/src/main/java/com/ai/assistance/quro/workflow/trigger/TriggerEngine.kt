@@ -42,6 +42,9 @@ object TriggerEngine {
 
     fun init(ctx: Context) {
         appCtx = ctx.applicationContext
+        // 修复：原实现只设 appCtx 不置 initialized=true，导致 armAll() 的
+        // `if (!initialized) return` 永远早退、定时工作流随启动永不武装。
+        initialized = true
     }
 
     /** 接收器可能在 App 未初始化时被系统唤起（如开机），在此补齐初始化。 */

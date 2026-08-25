@@ -11,7 +11,7 @@ import org.json.JSONObject
  * 应用内终端工具集（v108 删除了 QuroToolsTerminal.kt，此文件为 v116 恢复）。
  *
  * 后端复用已有的 [QuroTerminalController]（自包含 [com.ai.assistance.quro.core.terminal.QuroShellSession]，
- * 常驻 shell 进程 + 按行流式读入，无 Termux/PTY 依赖），并在应用内 Linux 环境（proot + Alpine aarch64）
+ * 常驻 shell 进程 + 按行流式读入，无 Termux/PTY 依赖），并在应用内 Linux 环境（proot + Ubuntu 24.04 ARM64）
  * 就绪时优先经 [QuroLinuxEnv] 执行，使 AI 经这些工具驱动的命令也拥有 python3 / nslookup /
  * 任意写等完整 Linux 能力（terminal_exec 与交互式终端界面走同一 proot 路径）。
  * 本文件只补回 v108 被删的交互式终端工具（写输入 / 结束会话 / 查状态 / exec），AI 可经这些工具驱动终端。
@@ -22,7 +22,7 @@ class TerminalExecTool : QuroTool {
     override val name: String = "terminal_exec"
     override val description: String =
         "在应用内终端执行一条 shell 命令（如 ls / pwd / cat file / getprop / ps / python3 / 写文件）。" +
-            "应用内 Linux 环境就绪时经 proot+Alpine 执行（免 root），否则回退设备 Toybox shell。" +
+            "应用内 Linux 环境就绪时经 proot+Ubuntu 执行（免 root），否则回退设备 Toybox shell。" +
             "返回 JSON：{source, exit_code, success, timed_out, output}。" +
             "**务必检查 exit_code / success**，不要只看 output 就断定命令成功。"
     override val parametersJson: String =
@@ -130,7 +130,7 @@ class TerminalStatusTool : QuroTool {
     override fun run(context: Context, arguments: String): String {
         val session = QuroTerminalController.session
         val linux = QuroLinuxEnv.shellLaunch(context) != null
-        val shell = if (linux) "proot/Linux (Alpine aarch64)" else "/system/bin/sh (Toybox)"
+        val shell = if (linux) "proot/Linux (Ubuntu 24.04 ARM64)" else "/system/bin/sh (Toybox)"
         return JSONObject().apply {
             put("active_session", session != null)
             put("mode", when {

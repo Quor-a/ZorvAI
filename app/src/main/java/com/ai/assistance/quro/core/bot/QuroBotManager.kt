@@ -217,9 +217,12 @@ class QuroBotManager(
                 id = QuroReplyNotifier.NOTIF_IM_INBOUND,
             )
 
-            // 驱动回复引擎；硬超时 90s 防止 assistant.ask 卡死导致飞书侧「永无回复/无错误」。
+            // 驱动回复引擎；聚合硬超时 180s。
+            // 注：单次 LLM 调用另有 QuroLlmClient 内 90s 计时器护栏（防单调用假死），
+            // 此处放宽到 180s 是为了容纳 AI 多步工具调用（一轮对话多次 LLM round-trip）
+            // 的真实耗时，避免「执行任务长」被过早掐断。
             val reply = try {
-                withTimeout(90_000) {
+                withTimeout(180_000) {
                     replyEngine.reply(message.platform, message.userId, message.text)
                 }
             } catch (e: Exception) {

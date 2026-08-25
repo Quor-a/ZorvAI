@@ -59,6 +59,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!-- 设置闹钟权限（危险权限，需要运行时请求）：用于实际设置闹钟。
+         Android 12+ 被 SCHEDULE_EXACT_ALARM 取代，但在某些 ROM（如 OPPO ColorOS）上仍需要。 -->
+    <uses-permission android:name="android.permission.SET_ALARM" />
     <!-- 精确闹钟权限（Android 12+）：
          只声明 SCHEDULE_EXACT_ALARM，不要同时声明 USE_EXACT_ALARM。
          如果同时声明两个权限，应用可能不会出现在闹钟和提醒列表中。
@@ -310,6 +313,12 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- 机器人开机保活服务：前台常驻，连接已启用的飞书/QQ/微信机器人 -->
+        <service
+            android:name=".service.QuroBotBootstrapService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <!-- 可视化弹窗悬浮窗服务 -->
         <service
             android:name=".service.VisualPopupOverlayService"
@@ -394,9 +403,19 @@
                 android:resource="@xml/quro_accessibility_service" />
         </service>
 
-        <!-- 开机自启动：监听 BOOT_COMPLETED，按偏好拉起常住语音球服务 -->
+        <!-- 开机自启动：监听 BOOT_COMPLETED，拉起机器人保活 + 按偏好拉起语音球 -->
         <receiver
             android:name=".receiver.QuroBootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 开机无障碍提醒（独立接收器，原 .service.QuroBootReceiver） -->
+        <receiver
+            android:name=".service.QuroBootReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>

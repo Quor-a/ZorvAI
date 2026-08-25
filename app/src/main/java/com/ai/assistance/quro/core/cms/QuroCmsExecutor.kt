@@ -22,7 +22,7 @@ import java.util.Locale
  * - intent：以应用自身身份 startActivity 拉起其他 App / 系统界面（应用内派发，非 shell 命令）。
  * - js：在 App 内置 QuickJS 沙箱内执行 JS（插件运行时复用）。
  * - api：调用应用内 Android API 完成只读/轻量操作（设备信息、已装应用、时间、应用沙箱文件，路径白名单受限）。
- * - terminal：在 proot/Alpine 应用内 Linux 沙箱内执行（即 CMS 所谓"终端"），可跑 python3/node/任意二进制
+ * - terminal：在 proot/Ubuntu 应用内 Linux 沙箱内执行（即 CMS 所谓"终端"），可跑 python3/node/任意二进制
  *   + 真实文件系统写；环境未就绪直接报错（D1 约束：终端后端唯一化 = proot，不回退设备 sh）。
  * 每次执行经 [QuroCmsBroker] 权限仲裁 + 策略关卡，并写审计（[QuroAgentTrace] + [QuroCmsStorage]）。
  */
@@ -241,13 +241,13 @@ class QuroCmsExecutor(context: Context) {
     }.getOrElse { "⛔ API 执行失败：${it.message}" }
 
     /**
-     * 终端通道（CMS v2）：在 proot/Alpine 沙箱内执行命令（即"终端"）。
+     * 终端通道（CMS v2）：在 proot/Ubuntu 沙箱内执行命令（即"终端"）。
      * D1 约束：终端执行后端唯一化 = proot；环境未就绪**直接报错**，绝不回退 /system/bin/sh 玩具通道。
      */
     private fun runTerminal(cmd: String): String {
         val st = QuroLinuxEnv.probe(appContext)
         if (!st.available) {
-            return "⛔ 终端环境(proot/Alpine)未就绪：${st.reason}。请在终端页点「安装 Linux 环境」。"
+            return "⛔ 终端环境(proot/Ubuntu)未就绪：${st.reason}。请在终端页点「安装 Linux 环境」。"
         }
         val (code, out) = QuroLinuxEnv.run(appContext, cmd)
         return if (code == 0) out else "⛔ 终端执行失败(exit $code): ${out.take(300)}"

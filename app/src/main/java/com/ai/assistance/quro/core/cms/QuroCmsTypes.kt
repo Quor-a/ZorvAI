@@ -16,7 +16,7 @@ enum class ModuleState {
 /**
  * 运行时宿主（能力可前后端互换的 Runtime Host）。
  * - APP：前端宿主，指 Android 应用进程内（intent/js/api 通道）。
- * - TERMINAL：后端宿主，指 proot/Alpine 应用内 Linux 沙箱（terminal 通道），可跑 python3/node/任意二进制。
+ * - TERMINAL：后端宿主，指 proot/Ubuntu 应用内 Linux 沙箱（terminal 通道），可跑 python3/node/任意二进制。
  * 一个能力声明 [QuroCmsCapability.runOn] 标明可在哪些宿主运行；调用时经 [CmsHostRouter]
  * 按 target(auto/app/terminal) + 运行时上下文（电量/锁屏/proot 可用性）选宿主，实现「互为主从」。
  */
@@ -145,7 +145,7 @@ enum class DepKind {
     MCP,
     /** SKILL id。 */
     SKILL,
-    /** Linux 包（apk add / pip install，终端沙箱内）。 */
+    /** Linux 包（apt-get install -y / pip install，终端沙箱内）。 */
     LINUX,
     /** 旧格式：本模块内声明的能力 id。 */
     CAPABILITY,

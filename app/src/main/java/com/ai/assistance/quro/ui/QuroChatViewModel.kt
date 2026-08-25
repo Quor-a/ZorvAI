@@ -2112,7 +2112,7 @@ $recent
         sb.append("\n### CMS 引擎（系统资源包 · 一级运行引擎）\n")
         sb.append("- **CMS 引擎**是 CMS 的一级运行引擎（区别于上方「能力模块」）：它不是某个业务模块，而是整套终端运行引擎，提供 NODE / PYTHON / SSH / JAVA / RUST / GO 等**共享运行时**，是依赖这些运行时的能力模块能运行的基础底座。\n")
         sb.append("- 引擎态与模块态相互独立：模块态用 `cms_status` 查，**引擎态用 `cms_engine_status` 查**（不要混用、不要猜）。\n")
-        sb.append("- 用户可在「设置 → CMS v2 模块」页的「🔧 CMS引擎」卡进行：部署官方 CMS 引擎、导入/导出 CMS 引擎包（.cmsengine，可分享/本地留存）。引擎部署依赖终端 Linux 环境（proot/Alpine），未就绪时 cms_engine_status 会给出引导。\n")
+        sb.append("- 用户可在「设置 → CMS v2 模块」页的「🔧 CMS引擎」卡进行：部署官方 CMS 引擎、导入/导出 CMS 引擎包（.cmsengine，可分享/本地留存）。引擎部署依赖终端 Linux 环境（proot/Ubuntu），未就绪时 cms_engine_status 会给出引导。\n")
         sb.append("- 当你要判断「某个需要 Python/Node 的模块能不能跑」「引擎是否就绪」「引擎拉起了哪些共享服务」时，调用 **cms_engine_status** 回查，而不是凭空回答。\n")
 
         // ══════════════ ACI（Agent Capability Interface）：AI 作为控制方调用第三方 App ══════════════

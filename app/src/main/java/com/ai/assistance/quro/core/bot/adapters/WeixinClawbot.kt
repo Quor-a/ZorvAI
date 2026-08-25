@@ -261,6 +261,10 @@ class QrLoginSession(
                             _events.emit(QrLoginEvent.Expired)
                             return@launch
                         }
+                        QrLoginStatus.DENIED -> {
+                            _events.emit(QrLoginEvent.Error("登录被用户拒绝"))
+                            return@launch
+                        }
                         QrLoginStatus.UNKNOWN -> {
                             Log.w(TAG, "未知状态: ${statusResponse.status}")
                         }

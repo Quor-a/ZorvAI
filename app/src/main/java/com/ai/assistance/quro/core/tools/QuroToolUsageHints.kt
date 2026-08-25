@@ -211,7 +211,7 @@ object QuroToolUsageHints {
 
         // ── L5 Linux 环境 ──
         "linux_run" to "「在 Linux 环境跑 XX」「执行个 Linux 命令」都调用（需 proot 资产）",
-        "linux_install" to "「装一下 Linux 环境」「初始化 Alpine」都调用",
+        "linux_install" to "「装一下 Linux 环境」「初始化 Ubuntu」都调用",
         "linux_start" to "「启动 Linux 环境」都调用",
         "linux_stop" to "「关掉 Linux 环境」都调用",
         "linux_status" to "「Linux 环境状态」「装好了没」都调用",

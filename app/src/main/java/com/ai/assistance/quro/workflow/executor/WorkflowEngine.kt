@@ -9,6 +9,12 @@ import com.ai.assistance.quro.workflow.data.model.FlowNode
 import com.ai.assistance.quro.workflow.data.model.NodeType
 import com.ai.assistance.quro.workflow.data.model.Workflow
 import com.ai.assistance.quro.workflow.platform.Device
+import com.ai.assistance.quro.core.model.QuroModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionType
+import com.ai.assistance.quro.core.network.QuroLlmClient
+import com.ai.assistance.quro.core.QuroChatMessage
+import com.ai.assistance.quro.core.QuroLlmResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -115,6 +121,7 @@ object WorkflowEngine {
                 NodeType.SWITCH -> "SWITCH ${node.params["value"] ?: ""}"
                 NodeType.LOOP -> "LOOP[${node.params["mode"] ?: "count"}]"
                 NodeType.PARALLEL -> "PARALLEL ×${node.children.size}"
+                NodeType.AI -> "AI ${(node.params["prompt"] ?: "").take(8)}"
                 else -> node.type.value.uppercase()
             }
             log.appendLine("▶ $label (${node.id})")
@@ -281,10 +288,44 @@ object WorkflowEngine {
                     log.appendLine("  PLAY_MEDIA ${p["target"]} → ${if (ok) "已发起播放" else "失败/文件不存在"}")
                     Outcome(ok)
                 }
-                NodeType.CAPTURE_PHOTO -> {
+                    NodeType.CAPTURE_PHOTO -> {
                     val ok = Device.capturePhoto(appCtx, p["path"])
                     log.appendLine("  CAPTURE_PHOTO → ${if (ok) "已调起相机" else "失败"}")
                     Outcome(ok)
+                }
+                // AI 节点：WorkflowACI 接入 ZorvAI 模型能力（「需要模型才能做到」的核心落点）。
+                // 复用全局模型配置（QuroModelConfigRepository + 功能级覆盖），调用 QuroLlmClient.chat，
+                // 把模型回复写入 out 变量，供后续节点（如 HTTP body）消费。
+                NodeType.AI -> {
+                    val prompt = p["prompt"] ?: throw IllegalArgumentException("AI 节点缺少 prompt")
+                    val system = p["system"]
+                    val base = QuroModelConfigRepository(appCtx).load()
+                    if (base.apiKey.isBlank()) {
+                        throw IllegalStateException("AI 节点需要模型 API Key，请先在「设置」配置模型（baseUrl/apiKey/model）")
+                    }
+                    val cfg = QuroFunctionModelConfigRepository(appCtx).resolveConfig(QuroFunctionType.CHAT, base)
+                    val messages = buildList {
+                        if (!system.isNullOrBlank()) add(QuroChatMessage("system", system))
+                        add(QuroChatMessage("user", prompt))
+                    }
+                    val temp = p["temperature"]?.toFloatOrNull() ?: cfg.temperature
+                    val maxT = p["maxTokens"]?.toIntOrNull() ?: cfg.maxTokens
+                    log.appendLine("  AI 推理 model=${cfg.model} temp=$temp maxTokens=$maxT…")
+                    val res = QuroLlmClient().chat(cfg.baseUrl, cfg.apiKey, cfg.model, messages, temp, maxT)
+                    when (res) {
+                        is QuroLlmResult.Text -> {
+                            val outVar = p["out"]
+                            if (outVar != null) {
+                                vars[outVar] = res.content
+                                log.appendLine("  AI 回复 → 存入 \$$outVar (${res.content.length} 字符)")
+                            } else {
+                                log.appendLine("  AI 回复: ${res.content.take(200)}")
+                            }
+                            Outcome(true)
+                        }
+                        is QuroLlmResult.Error -> Outcome(false, "AI 推理失败：${res.message}")
+                        else -> Outcome(false, "AI 节点返回了不支持的结果类型")
+                    }
                 }
             }
         } catch (e: Exception) {

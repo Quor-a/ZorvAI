@@ -276,6 +276,16 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
      * 不再打扰式自动跳转。未授权时 AlarmPermissionHelper / QuroScheduledTask 会优雅降级。
      */
     private fun requestSpecialPermissions() {
+        // 闹钟权限：SET_ALARM 是危险权限，需要运行时请求
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SET_ALARM)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.SET_ALARM),
+                RECORD_CODE // 复用 RECORD_CODE，不影响现有逻辑
+            )
+        }
         // 媒体/文件管理：Android 11+ 需进入「所有文件访问权限」设置页开通
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
             !Environment.isExternalStorageManager()

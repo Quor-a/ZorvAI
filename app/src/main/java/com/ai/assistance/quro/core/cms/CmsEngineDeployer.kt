@@ -5,13 +5,13 @@ import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.util.QuroDiag
 import java.io.File
 
-/** 把 Windows CRLF 统一为 LF，防止写入 proot/Alpine 的 shell 脚本出现「illegal option -」等诡异解析错误。 */
+/** 把 Windows CRLF 统一为 LF，防止写入 proot/Ubuntu 的 shell 脚本出现「illegal option -」等诡异解析错误。 */
 private fun String.normalizeLineEndings(): String = this.replace("\r\n", "\n").replace("\r", "\n")
 
 /**
  * CMS v2 CMS引擎部署器（一级部署系统）。
  *
- * 把 [CmsEnginePackage] 推到 proot/Alpine 的 /root/cms/_engine（区别于模块 /root/cms/<moduleId>）：
+ * 把 [CmsEnginePackage] 推到 proot/Ubuntu 的 /root/cms/_engine（区别于模块 /root/cms/<moduleId>）：
  * ① 校验完整性(sha256, P0) ② 写 cms-engine.json + bootstrap.sh + provision/ + services/ ③ 跑 bootstrap
  * ④ provisionAll(envProfiles) ⑤ 拉起共享服务 ⑥ 写就绪标记 + [CmsEngineStore]。
  *
@@ -50,12 +50,17 @@ object CmsEngineDeployer {
     }
 
     private fun deployEngineInner(context: Context, pkg: CmsEnginePackage): String {
-        // D1：终端后端唯一化 = proot；环境未就绪直接拒绝，不回退 device sh。
-        val st = QuroLinuxEnv.probe(context)
+        // D1：终端后端唯一化 = proot；环境未就绪时**自动拉起**终端安装（下载 rootfs/解压/apt-get update/装 bash），
+        // 安装成功即继续部署，失败才明确报错。此前此处直接拒绝，导致用户必须先手动去终端页点安装。
+        var st = QuroLinuxEnv.probe(context)
         if (!st.available) {
-            val msg = "⛔ 终端环境(proot/Alpine)未就绪：${st.reason}。请先在「终端」页安装 Linux 环境后再部署CMS引擎。"
-            CmsEngineStore.markFailed(msg)
-            return msg
+            CmsEngineStore.markDeployStep("自动安装终端环境(proot/Ubuntu)", 10)
+            st = QuroLinuxEnv.ensureInstalledBlocking(context)
+            if (!st.available) {
+                val msg = "⛔ 终端环境(proot/Ubuntu)自动安装失败：${st.reason}。请先在「终端」页安装 Linux 环境后再部署CMS引擎。"
+                CmsEngineStore.markFailed(msg)
+                return msg
+            }
         }
         // P0：完整性校验（sha256 缺失/不匹配 → 拒部署）。
         if (!pkg.verifyIntegrity()) {
@@ -69,8 +74,8 @@ object CmsEngineDeployer {
         File(dir, "cms-engine.json").writeText(pkg.toJson())
 
         val boot = File(dir, "bootstrap.sh")
-        // 关键修复：Windows 工作区常见 CRLF，直接写入 Alpine 会让 /bin/sh 把 \r 当参数，
-        // 出现「set: illegal option -」「apk add 包名带 \r」等诡异常；写入前强转 LF。
+        // 关键修复：Windows 工作区常见 CRLF，直接写入 Ubuntu 会让 /bin/sh 把 \r 当参数，
+        // 出现「set: illegal option -」「apt-get install 包名带 \r」等诡异常；写入前强转 LF。
         boot.writeText(pkg.bootstrapContent.normalizeLineEndings())
         boot.setExecutable(true)
 

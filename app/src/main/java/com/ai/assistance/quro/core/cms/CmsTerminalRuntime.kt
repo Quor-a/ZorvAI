@@ -7,7 +7,7 @@ import java.io.File
 /**
  * CMS v2 终端模块运行时（原创运行时 · 进程管理）。
  *
- * 在 proot/Alpine 沙箱里把已部署的 [CmsDeployPackage] 启动为**后台常驻进程**，
+ * 在 proot/Ubuntu 沙箱里把已部署的 [CmsDeployPackage] 启动为**后台常驻进程**，
  * 提供：启动（带 P0 资源约束 ulimit -t/-v）、读取输出（经 run.log）、健康检查、停止。
  *
  * 设计取舍：proot 的一次性 [QuroLinuxEnv.run] 模型不适合长连接流式 IO，

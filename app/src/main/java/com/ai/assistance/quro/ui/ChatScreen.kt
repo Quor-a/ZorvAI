@@ -7,6 +7,7 @@ import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.collectAsState
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import com.ai.assistance.quro.core.tools.QuroTool
@@ -22,7 +23,7 @@ import com.ai.assistance.quro.core.tools.PopupInput
 import com.ai.assistance.quro.core.tools.PopupResult
 import com.ai.assistance.quro.BuildConfig
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
-import com.ai.assistance.quro.core.terminal.QuroTerminalController
+import com.ai.assistance.quro.core.termux.QuroTermuxTerminalController
 import com.ai.assistance.quro.ui.QuroChatCardTray
 import com.ai.assistance.quro.ui.QuroChatCardView
 import com.ai.assistance.quro.ui.VisualDialogs
@@ -35,6 +36,12 @@ import com.ai.assistance.quro.service.QuroMediaService
 import com.ai.assistance.quro.core.tools.QuroMediaController
 import com.ai.assistance.quro.core.QuroBrowserBridge
 import com.ai.assistance.quro.util.QuroDiag
+import com.ai.assistance.quro.workflow.data.WorkflowRepository
+import com.ai.assistance.quro.workflow.data.model.Workflow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import android.app.Activity
 import android.content.ContextWrapper
 import android.graphics.drawable.GradientDrawable
@@ -127,6 +134,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Button
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import android.webkit.WebView
@@ -231,9 +239,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.filterNotNull
 import org.json.JSONObject
 import com.ai.assistance.quro.core.tools.RunCodeTool
@@ -597,6 +602,8 @@ fun ChatScreen(
     val pendingVisualQuestion = remember { mutableStateOf(false) }
     // 定时任务管理入口
     var showSchedule by remember { mutableStateOf(false) }
+    // 工作流管理入口
+    var showWorkflow by remember { mutableStateOf(false) }
     // 知识库管理页（从设置页入口进入：浏览 / 查看 / 新建 / 删除 knowledge_base 文档）
     var showKnowledge by remember { mutableStateOf(false) }
     // 机器人设置页（C2）：从工具箱「机器人」入口进入
@@ -1011,9 +1018,8 @@ fun ChatScreen(
             cmd == "linux:install" -> QuroLinuxEnv.setup(ctx)
             cmd.startsWith("run:") -> {
                 val c = cmd.removePrefix("run:")
-                QuroTerminalController.session ?: QuroTerminalController.createSession(ctx)
-                QuroTerminalController.sendToShell(c)
                 showTerminal = true
+                QuroTermuxTerminalController.initialCommand = c
             }
             // ── v221 富事件命令：open / copy / ai / screen ──
             cmd.startsWith("open:") -> QuroBrowserBridge.open(cmd.removePrefix("open:").trim())
@@ -1624,6 +1630,14 @@ fun ChatScreen(
             }
         }
 
+        // 工作流管理页：全屏覆盖层（从工具箱「工作流」入口进入）
+        if (showWorkflow) {
+            BackHandler { showWorkflow = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(Color(0xFFF2F2F7))) {
+                QuroWorkflowScreen(onClose = { showWorkflow = false })
+            }
+        }
+
         // 全屏文本编辑器：编辑对话框长文本
         if (showEditor) {
             BackHandler { showEditor = false }
@@ -1858,6 +1872,7 @@ fun ChatScreen(
                     },
                     allTools = vm.allTools(),
                     onImportTool = { vm.importTool(it) },
+                    onOpenWorkflow = { showWorkflow = true },
                 )
             }
         }
@@ -1886,11 +1901,11 @@ fun ChatScreen(
             }
         }
 
-        // 可交互终端（v109 恢复，纯应用内免权限）：全屏覆盖层（从工具栏「终端」进入）
+        // 可交互终端（去品牌化 Termux 渲染 + proot/Alpine 后端）：全屏覆盖层（从工具栏「终端」进入）
         if (showTerminal) {
             BackHandler { showTerminal = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
-                QuroTerminalScreen(
+                QuroTermuxTerminalScreen(
                     onClose = { showTerminal = false },
                 )
             }
@@ -6826,3 +6841,255 @@ private fun fallbackCopy(ctx: Context, src: File, name: String) {
 
 // PermissionModeBar / PolicyChipGroup 已抽到 ui/chat/ChatPermissionModeBar.kt（ChatPermissionModeBar），
 // 修复「权限模式全选后收起/返回按钮被测量成 0 宽而消失」的布局塌陷根因。
+
+// 工作流管理界面
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QuroWorkflowScreen(onClose: () -> Unit) {
+    val context = LocalContext.current
+    var workflows by remember { mutableStateOf(listOf<Workflow>()) }
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var editingWorkflow by remember { mutableStateOf<Workflow?>(null) }
+
+    // 初始化 WorkflowRepository
+    LaunchedEffect(Unit) {
+        WorkflowRepository.init(context)
+        workflows = WorkflowRepository.getAll()
+    }
+
+    // 监听工作流变化
+    LaunchedEffect(WorkflowRepository.changeSignal.value) {
+        workflows = WorkflowRepository.getAll()
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("工作流管理", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { editingWorkflow = null; showCreateDialog = true }) {
+                        Icon(Icons.Filled.Add, contentDescription = "新建工作流")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        if (workflows.isEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(Icons.Filled.List, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                Spacer(Modifier.height(16.dp))
+                Text("还没有工作流", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                Spacer(Modifier.height(8.dp))
+                Text("点击右上角 + 新建，或让 AI 帮你创建", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(workflows, key = { it.id }) { workflow ->
+                    WorkflowCard(
+                        workflow = workflow,
+                        onToggle = { enabled ->
+                            val updated = workflow.copy(enabled = enabled)
+                            WorkflowRepository.upsert(updated)
+                        },
+                        onRun = {
+                            // 运行工作流
+                            CoroutineScope(Dispatchers.IO).launch {
+                                try {
+                                    com.ai.assistance.quro.workflow.executor.WorkflowEngine.run(workflow.id)
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(context, "工作流执行完成", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(context, "执行失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        },
+                        onEdit = {
+                            editingWorkflow = workflow
+                            showCreateDialog = true
+                        },
+                        onDelete = {
+                            WorkflowRepository.delete(workflow.id)
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    // 创建/编辑工作流对话框
+    if (showCreateDialog) {
+        WorkflowCreateDialog(
+            workflow = editingWorkflow,
+            onDismiss = { showCreateDialog = false },
+            onSave = { workflow ->
+                WorkflowRepository.upsert(workflow)
+                showCreateDialog = false
+            }
+        )
+    }
+}
+
+// 工作流卡片
+@Composable
+private fun WorkflowCard(
+    workflow: Workflow,
+    onToggle: (Boolean) -> Unit,
+    onRun: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cs.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = workflow.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = cs.onSurface
+                    )
+                    Text(
+                        text = "触发: ${workflow.trigger} | 节点: ${workflow.nodes.size}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant
+                    )
+                    if (workflow.lastStatus != "idle") {
+                        Text(
+                            text = "上次状态: ${workflow.lastStatus}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = when (workflow.lastStatus) {
+                                "success" -> Color(0xFF4CAF50)
+                                "failed" -> Color(0xFFF44336)
+                                else -> cs.onSurfaceVariant
+                            }
+                        )
+                    }
+                }
+                Switch(
+                    checked = workflow.enabled,
+                    onCheckedChange = onToggle
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onRun,
+                    modifier = Modifier.weight(1f),
+                    enabled = workflow.enabled
+                ) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("运行")
+                }
+                OutlinedButton(
+                    onClick = onEdit,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("编辑")
+                }
+                IconButton(
+                    onClick = onDelete,
+                    colors = IconButtonDefaults.iconButtonColors(contentColor = cs.error)
+                ) {
+                    Icon(Icons.Filled.Delete, contentDescription = "删除")
+                }
+            }
+        }
+    }
+}
+
+// 工作流创建/编辑对话框
+@Composable
+private fun WorkflowCreateDialog(
+    workflow: Workflow?,
+    onDismiss: () -> Unit,
+    onSave: (Workflow) -> Unit
+) {
+    var name by remember { mutableStateOf(workflow?.name ?: "") }
+    var trigger by remember { mutableStateOf(workflow?.trigger ?: "manual") }
+    var schedule by remember { mutableStateOf(workflow?.schedule ?: "") }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (workflow != null) "编辑工作流" else "新建工作流") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("工作流名称") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = trigger,
+                    onValueChange = { trigger = it },
+                    label = { Text("触发类型 (manual/time/event)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = schedule,
+                    onValueChange = { schedule = it },
+                    label = { Text("调度规则 (如 daily:09:00)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val newWorkflow = Workflow(
+                        id = workflow?.id ?: java.util.UUID.randomUUID().toString(),
+                        name = name,
+                        trigger = trigger,
+                        schedule = schedule,
+                        enabled = workflow?.enabled ?: true,
+                        nodes = workflow?.nodes ?: emptyList()
+                    )
+                    onSave(newWorkflow)
+                },
+                enabled = name.isNotBlank()
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}

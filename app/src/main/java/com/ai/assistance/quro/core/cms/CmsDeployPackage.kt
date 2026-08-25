@@ -6,9 +6,9 @@ import java.security.MessageDigest
 /**
  * CMS v2 终端部署包 manifest（原创运行时 · 部署器数据单元）。
  *
- * 一个「部署包」描述一个要推到 proot/Alpine 沙箱（即"终端"）运行的模块：
+ * 一个「部署包」描述一个要推到 proot/Ubuntu 沙箱（即"终端"）运行的模块：
  * - 入口脚本 [entryContent]（如 python3 脚本 / shell 脚本）
- * - 依赖：Alpine 包 [apkDeps]（apk add）/ Python 包 [pipDeps]（pip install）
+ * - 依赖：apt 包 [apkDeps]（apt-get install -y）/ Python 包 [pipDeps]（pip install）
  * - 环境变量 [env]、监听端口 [ports]
  * - **完整性**：[sha256] 为 manifest 规范摘要（部署前强制校验，P0）；[signature] 为发布者签名（导入包须带）。
  *
@@ -127,7 +127,7 @@ data class CmsDeployPackage(
          */
         fun fromModule(m: QuroCmsModule): CmsDeployPackage {
             // 若模块自带真实终端入口脚本（terminalEntry），直接作为 entry.sh 部署——
-            // 真正实现「一键部署 CMS v2 系统构架到终端的包」（在 proot/Alpine 内可运行的后端），
+            // 真正实现「一键部署 CMS v2 系统构架到终端的包」（在 proot/Ubuntu 内可运行的后端），
             // 而非仅部署 manifest 的空壳。依赖按 LINUX(pip: 前缀→pip / 其余→apk) 与 ENV 分类装配。
             if (m.terminalEntry.isNotBlank()) {
                 return signed(
