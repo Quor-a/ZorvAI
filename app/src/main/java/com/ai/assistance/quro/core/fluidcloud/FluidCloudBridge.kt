@@ -7,53 +7,78 @@ import org.json.JSONObject
 
 /**
  * ColorOS 流体云端侧接入桥（Intent Sharing，不上架、release 可用）。
- * 协议：authority=IntelligentIntent，actionStatus 0/1/2 = 创建/更新/结束。
+ * 协议：authority=IntelligentIntent，method=shareIntent。
+ *
+ * 关键字段：
+ * - actionStatus: 0=创建, 1=更新, 2=结束
+ * - entityName: TASK（通用任务类别，避免受限履约场景）
+ * - capsule: 胶囊数据（状态栏显示）
+ * - primary: 卡片主要信息
  */
 object FluidCloudBridge {
 
     private const val AUTHORITY = "IntelligentIntent"
     private const val METHOD = "shareIntent"
+    private const val TAG = "FluidCloud"
 
-    // 任务唯一标识，创建/更新/结束必须保持一致
-    private const val ID = "zorv-ai-agent-task"
+    // 任务唯一标识，每次调用重新生成
+    private fun generateId() = "zorv-ai-task-${System.currentTimeMillis()}"
 
-    fun create(context: Context, title: String, step: String, progress: Int) =
-        push(context, build(0, title, step, progress))
-
-    fun update(context: Context, title: String, step: String, progress: Int) =
-        push(context, build(1, title, step, progress))
-
-    fun finish(context: Context) {
-        val json = JSONObject().apply {
-            put("intentName", "ZorvAI.AgentTask")
-            put("identifier", ID)
-            put("timestamp", System.currentTimeMillis())
-            put("serviceId", JSONObject().put("launcher", "999800001").put("fluidCloud", "999900001"))
-            put("intentAction", JSONObject().put("actionStatus", 2))
-            put("intentEntity", JSONObject().put("entityName", "TASK").put("entityId", ID))
-        }.toString()
-        push(context, json)
+    fun create(context: Context, title: String, step: String, progress: Int): Boolean {
+        return push(context, build(0, title, step, progress))
     }
 
-    private fun build(action: Int, title: String, step: String, progress: Int): String =
-        JSONObject().apply {
+    fun update(context: Context, title: String, step: String, progress: Int): Boolean {
+        return push(context, build(1, title, step, progress))
+    }
+
+    fun finish(context: Context): Boolean {
+        val id = generateId()
+        val json = JSONObject().apply {
             put("intentName", "ZorvAI.AgentTask")
-            put("identifier", ID)
+            put("identifier", id)
             put("timestamp", System.currentTimeMillis())
-            put("serviceId", JSONObject().put("launcher", "999800001").put("fluidCloud", "999900001"))
-            put("intentAction", JSONObject().put("actionStatus", action))
+            put("intentAction", JSONObject().apply {
+                put("actionStatus", 2)  // 2 = 结束
+            })
             put("intentEntity", JSONObject().apply {
                 put("entityName", "TASK")
-                put("entityId", ID)
+                put("entityId", id)
+            })
+        }.toString()
+        return push(context, json)
+    }
+
+    private fun build(action: Int, title: String, step: String, progress: Int): String {
+        val id = generateId()
+        return JSONObject().apply {
+            put("intentName", "ZorvAI.AgentTask")
+            put("identifier", id)
+            put("timestamp", System.currentTimeMillis())
+            put("intentAction", JSONObject().apply {
+                put("actionStatus", action)  // 0=创建, 1=更新
+            })
+            put("intentEntity", JSONObject().apply {
+                put("entityName", "TASK")
+                put("entityId", id)
                 if (action != 2) {
-                    put("milestone", JSONObject().put("code", 10).put("text", "running"))
-                    put("capsule", JSONObject().put("rightText", "$step $progress%"))
+                    // 里程碑状态
+                    put("milestone", JSONObject().apply {
+                        put("code", 10)
+                        put("text", "running")
+                    })
+                    // 胶囊数据（状态栏显示）
+                    put("capsule", JSONObject().apply {
+                        put("leftText", title)
+                        put("rightText", "$step $progress%")
+                    })
+                    // 卡片主要信息
                     put("primary", JSONObject().apply {
-                        put("title", arrayOf(JSONObject().put("text", title)
-                            .put("color", "#FFFFFF").put("darkColor", "#000000")))
+                        put("title", title)
                         put("content", "$step · $progress%")
                         put("clickAction", "com.ai.assistance.quro://agent/task")
                     })
+                    // 进度条
                     put("secondaryData", JSONObject().apply {
                         put("type", "PROGRESS")
                         put("progress", progress.coerceIn(0, 100))
@@ -63,21 +88,25 @@ object FluidCloudBridge {
                 }
             })
         }.toString()
+    }
 
-    private fun push(context: Context, intentData: String) {
+    private fun push(context: Context, intentData: String): Boolean {
         var client: ContentProviderClient? = null
         try {
             client = context.contentResolver.acquireUnstableContentProviderClient(AUTHORITY)
             if (client == null) {
-                android.util.Log.w("FluidCloud", "未获取到 Provider（系统不支持/流体云关闭）")
-                return
+                android.util.Log.w(TAG, "Provider 不可用（系统不支持/流体云关闭）")
+                return false
             }
             val bundle = Bundle().apply { putString("intentData", intentData) }
             val result = client.call(METHOD, null, bundle)
-            val code = JSONObject(result?.getString("result") ?: "{}").optInt("code", -1)
-            if (code != 0) android.util.Log.w("FluidCloud", "code=$code")
+            val resultStr = result?.getString("result") ?: "{}"
+            val code = JSONObject(resultStr).optInt("code", -1)
+            android.util.Log.d(TAG, "push result: code=$code, data=${intentData.take(100)}")
+            return code == 0
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.w(TAG, "push 异常: ${e.message}")
+            return false
         } finally {
             client?.close()
         }
