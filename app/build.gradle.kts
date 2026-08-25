@@ -37,7 +37,7 @@ android {
     defaultConfig {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 34
         versionCode = 501
         versionName = "1.0.63"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
