@@ -394,92 +394,6 @@
                 android:resource="@xml/quro_accessibility_service" />
         </service>
 
-        <!-- 开机广播接收器：检查无障碍服务状态 -->
-        <receiver
-            android:name=".service.QuroBootReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
-
-        <!-- 自动填充服务（对应 PERMISSIONS.md #4）：用户在系统「自动填充服务」中选中 Zorv AI 后启用，
-             可在其它 App 输入框提供 AI 生成的填充建议。
-             权限 BIND_AUTOFILL_SERVICE 为系统签名保护级，第三方无法伪造绑定。 -->
-        <service
-            android:name=".service.QuroAutofillService"
-            android:permission="android.permission.BIND_AUTOFILL_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.service.autofill.AutofillService" />
-            </intent-filter>
-        </service>
-
-        <!-- 通知侦听服务（对应 PERMISSIONS.md #8）：用户授权「通知访问」后，
-             可读取/清除通知、触发通知按钮、读取/设置 DND。
-             权限 BIND_NOTIFICATION_LISTENER_SERVICE 为系统保护级。 -->
-        <service
-            android:name=".service.QuroNotificationListenerService"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
-
-        <!--
-          Shizuku UserService（特权执行通道）：运行于 Shizuku 提供的特权进程，承载 AIDL 命令执行。
-          必须在 manifest 声明，否则 Shizuku.bindUserService() 抛 IllegalArgumentException 被 runCatching 吞掉，
-          aidlBound 永 false、AIDL 主路径永远失效，永远退化为脆弱的反射 newProcess 降级路径。
-          权限 moe.shizuku.manager.permission.API_V23 与上方 uses-permission 一致（Shizuku 13.x 要求）。
-        -->
-        <service
-            android:name=".core.shizuku.QuroShellService"
-            android:exported="false"
-            android:permission="moe.shizuku.manager.permission.API_V23" />
-
-        <!--
-          设备管理员（E-12 根因修复）。
-
-          原声明缺少 DEVICE_ADMIN_ENABLED 的 intent-filter 且 exported="false"，
-          导致 DevicePolicyManagerService.findAdmin() 用
-              queryBroadcastReceivers(Intent(ACTION_DEVICE_ADMIN_ENABLED), GET_META_DATA)
-          根本解析不到本组件 —— ACTION_ADD_DEVICE_ADMIN 无法激活，
-          onEnabled / onDisableRequested 也永远不会触发。整个 L3 能力此前是死的。
-
-          exported 必须为 true：接收方是系统进程。安全性由
-          android:permission="android.permission.BIND_DEVICE_ADMIN" 保证——
-          该权限为 signature 级，只有系统持有，第三方应用无法向本组件发广播。
-          这是 AOSP 文档给出的标准声明形式。
-        -->
-        <receiver
-            android:name=".receiver.QuroDeviceAdminReceiver"
-            android:label="@string/quro_device_admin_label"
-            android:description="@string/quro_device_admin_desc"
-            android:exported="true"
-            android:permission="android.permission.BIND_DEVICE_ADMIN">
-            <meta-data
-                android:name="android.app.device_admin"
-                android:resource="@xml/quro_device_admin" />
-            <intent-filter>
-                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
-                <action android:name="android.app.action.DEVICE_ADMIN_DISABLE_REQUESTED" />
-                <action android:name="android.app.action.DEVICE_ADMIN_DISABLED" />
-            </intent-filter>
-        </receiver>
-
-        <!-- 桌面卡片（AppWidget）：展示最近一条 AI 回复摘要，点击进入应用 -->
-        <receiver
-            android:name=".core.QuroReplyWidget"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/quro_reply_widget_info" />
-        </receiver>
-
         <!-- 开机自启动：监听 BOOT_COMPLETED，按偏好拉起常住语音球服务 -->
         <receiver
             android:name=".receiver.QuroBootReceiver"
@@ -503,6 +417,27 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- WorkflowACI 定时触发器：AlarmManager 回调 -->
+        <receiver
+            android:name=".workflow.trigger.WorkflowAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- WorkflowACI 系统事件触发器：开机/亮灭屏/网络变化 -->
+        <receiver
+            android:name=".workflow.trigger.WorkflowTriggerReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.USER_PRESENT" />
+                <action android:name="android.intent.action.SCREEN_ON" />
+                <action android:name="android.intent.action.SCREEN_OFF" />
+                <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
