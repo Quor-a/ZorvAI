@@ -286,60 +286,12 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
                 )
             } catch (_: Throwable) { /* 个别 ROM 无此入口，忽略 */ }
         }
-        // 精确闹钟（Android 12+）：引导用户到「闹钟和提醒」设置页开启
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val am = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
-            if (!am.canScheduleExactAlarms()) {
-                android.util.Log.d("QuroMainActivity", "闹钟权限未授予，尝试打开设置页面")
-                try {
-                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                        data = Uri.parse("package:$packageName")
-                    }
-                    startActivity(intent)
-                    Toast.makeText(
-                        this,
-                        "请在「闹钟和提醒」设置中开启「允许设置精确闹钟」权限",
-                        Toast.LENGTH_LONG
-                    ).show()
-                } catch (e: Throwable) {
-                    android.util.Log.e("QuroMainActivity", "打开闹钟权限设置失败: ${e.message}")
-                    Toast.makeText(
-                        this,
-                        "请手动前往「设置 → 应用 → Zorv AI → 权限 → 闹钟和提醒」开启权限",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            } else {
-                android.util.Log.d("QuroMainActivity", "闹钟权限已授予")
-            }
-        }
-        // 通知权限引导：Android 13+ 通知权限被拒后，引导用户手动开启
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                android.util.Log.d("QuroMainActivity", "通知权限未授予，尝试打开设置页面")
-                try {
-                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                        putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-                    }
-                    startActivity(intent)
-                    Toast.makeText(
-                        this,
-                        "请开启「通知」权限以显示任务状态和提醒",
-                        Toast.LENGTH_LONG
-                    ).show()
-                } catch (_: Throwable) {
-                    Toast.makeText(
-                        this,
-                        "请手动前往「设置 → 应用 → Zorv AI → 通知」开启权限",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            } else {
-                android.util.Log.d("QuroMainActivity", "通知权限已授予")
-            }
-        }
+        // 闹钟和通知权限不在这里自动跳转——
+        // - SCHEDULE_EXACT_ALARM：由 Manifest 声明 + QuroScheduleBootReceiver intent-filter 使应用
+        //   出现在「闹钟和提醒」列表；用户手动授权后 AlarmManager 即可用。
+        //   ⚠️ 覆盖安装不会更新权限列表，必须卸载重装！
+        // - POST_NOTIFICATIONS：在上方 onCreate() 已通过 ActivityCompat.requestPermissions 弹窗请求。
+        //   被拒后由用户在「设置→应用→通知」手动开启，不自动跳转避免死循环。
         // 悬浮窗权限：可视化弹窗默认需要，启动时引导开启
         if (!Settings.canDrawOverlays(this)) {
             try {
