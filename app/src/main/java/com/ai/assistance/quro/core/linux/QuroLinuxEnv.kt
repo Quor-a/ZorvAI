@@ -53,17 +53,19 @@ object QuroLinuxEnv {
     private const val MAX_OUTPUT_LENGTH = 15_000L
 
     // rootfs 下载镜像（Ubuntu Base 最小化 rootfs）- 使用HTTP避免SSL问题
+    // 优先使用阿里云镜像（清华镜像可能被封锁）
     private val UBUNTU_ROOTFS_MIRRORS = listOf(
-        "http://mirrors.tuna.tsinghua.edu.cn/ubuntu-cdimage/ubuntu-base/releases/24.04/release",
         "http://mirrors.aliyun.com/ubuntu-cdimage/ubuntu-base/releases/24.04/release",
+        "http://mirrors.tuna.tsinghua.edu.cn/ubuntu-cdimage/ubuntu-base/releases/24.04/release",
         "http://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release",
     )
 
-    // apt 软件源镜像（国内优先，国际兜底）- 使用HTTP避免SSL证书问题
+    // apt 软件源镜像（阿里云优先，清华其次，国际兜底）
+    // ⚠️ arm64/aarch64 架构必须用 ubuntu-ports，不是 ubuntu！
     private val UBUNTU_APT_MIRRORS = listOf(
-        "http://mirrors.tuna.tsinghua.edu.cn/ubuntu",
-        "http://mirrors.aliyun.com/ubuntu",
-        "http://archive.ubuntu.com/ubuntu",
+        "http://mirrors.aliyun.com/ubuntu-ports",
+        "http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports",
+        "http://ports.ubuntu.com/ubuntu-ports",
     )
 
     sealed interface SandboxState {
@@ -268,7 +270,8 @@ object QuroLinuxEnv {
                 setupInternal(context)
             } catch (e: Exception) {
                 Log.e(TAG, "setup failed", e)
-                _state.value = SandboxState.Error(e.message ?: "安装失败")
+                val logPath = File(sandboxDir(context), "setup-diag.log").absolutePath
+                _state.value = SandboxState.Error("${e.message}\n\n诊断日志: $logPath")
             } finally {
                 setupMutex.unlock()
             }
@@ -310,7 +313,23 @@ object QuroLinuxEnv {
         setupJob = null
     }
 
+    /** 将诊断日志同时写到 app 私有目录下的文件，方便用户取出查看。 */
+    private fun diagLog(context: Context, msg: String) {
+        Log.i(TAG, msg)
+        try {
+            val logDir = File(context.filesDir, "linux-sandbox")
+            logDir.mkdirs()
+            val logFile = File(logDir, "setup-diag.log")
+            logFile.appendText("[${java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())}] $msg\n")
+        } catch (_: Throwable) {}
+    }
+
     private suspend fun setupInternal(context: Context) {
+        // 清理上次诊断日志
+        try { File(sandboxDir(context), "setup-diag.log").delete() } catch (_: Throwable) {}
+        diagLog(context, "=== setupInternal 开始 ===")
+        diagLog(context, "架构: ${getLinuxArch()}, proot: ${prootPath(context)}")
+
         val arch = getLinuxArch()
         val prootPathStr = prootPath(context)
         val proot = File(prootPathStr)
@@ -451,58 +470,101 @@ object QuroLinuxEnv {
         }
 
         // 解压后立即校验 rootfs 真可用：/bin/sh 必须能在 rootfs 内部解析为可执行文件。
-        // 注意 /bin/sh 是「绝对路径」符号链接（-> /bin/busybox），宿主侧 exists() 会误判缺失，
-        // 必须用 [rootfsBinRunnable] 按 rootfs 边界内解析（v1.0.48 修正 v1.0.47 的误报）。
-        // 若解压残缺或符号链接创建失败 → 直接报错，绝不把残缺 rootfs 标成「就绪」。
+        diagLog(context, "解压完成，rootfsDir=${rootfsDir.absolutePath}, 文件数=${rootfsDir.listFiles()?.size ?: 0}")
         if (!rootfsBinRunnable(rootfsDir, "bin/sh")) {
             val detail = "rootfs 解压后 /bin/sh 无法在 rootfs 内解析（解压残缺或符号链接创建失败），无法启动 Ubuntu"
+            diagLog(context, "⛔ $detail")
             QuroDiag.log("LinuxEnv", "⛔ $detail")
             rootfsDir.deleteRecursively()
             throw IllegalStateException(detail)
         }
+        diagLog(context, "✅ /bin/sh 校验通过")
 
         _state.value = SandboxState.Installing("初始化…")
+        diagLog(context, "makeWritable 开始")
         makeWritable(rootfsDir)
-        // P0 修复：修复 erofs rootfs 的 hardlink 问题
+        diagLog(context, "fixHardlinks 开始")
         fixHardlinks(rootfsDir)
+
+        // 创建 usr/bin/ 目录和符号链接（参考 Operit）
+        diagLog(context, "创建 usr/bin/ 符号链接")
+        createUsrBinSymlinks(context, dir)
+
+        diagLog(context, "prepareRuntimeExtras 开始")
         prepareRuntimeExtras(context, rootfsDir)
+
+        // 先做一次 proot 基础能力测试（在 apt-get update 之前）
+        diagLog(context, "proot 基础测试：echo hello")
+        val baseTest = runProot(context, "echo PROOT_BASELINE_OK", timeoutMs = 15_000)
+        diagLog(context, "proot 基础测试结果: exit=${baseTest.first}, output=${baseTest.second.take(200)}")
+        if (baseTest.first != 0 || !baseTest.second.contains("PROOT_BASELINE_OK")) {
+            val detail = "proot 无法在 rootfs 内执行基础命令。\n" +
+                "proot路径: ${prootPath(context)}, exists=${File(prootPath(context)).exists()}\n" +
+                "proot可执行: ${File(prootPath(context)).canExecute()}\n" +
+                "rootfs: ${rootfsDir.absolutePath}, 文件数=${rootfsDir.listFiles()?.size}\n" +
+                "输出(exit ${baseTest.first}):\n${baseTest.second.take(800)}\n" +
+                "常见原因：1) proot loader 缺失或不兼容 2) SELinux 限制 ptrace 3) 设备不支持"
+            diagLog(context, "⛔ $detail")
+            QuroDiag.log("LinuxEnv", "⛔ $detail")
+            rootfsDir.deleteRecursively()
+            throw IllegalStateException(detail)
+        }
+        diagLog(context, "✅ proot 基础测试通过")
+
+        // 写 DNS
+        diagLog(context, "写入 resolv.conf 和 sources.list")
+        val dns = deviceDnsServers(context)
+        diagLog(context, "设备DNS: $dns")
 
         var updated = false
         var lastErr = ""
         for (mirror in UBUNTU_APT_MIRRORS) {
+            diagLog(context, "尝试 apt-get update (镜像: $mirror)")
             writeAptSources(rootfsDir, mirror)
-            val r = runProot(context, "apt-get update", timeoutMs = 60_000)
+            // 使用更多选项确保成功：强制IPv4、禁用缓存、增加超时
+            val r = runProot(context, "apt-get update -o Acquire::http::No-Cache=true -o Acquire::Max-FutureTime=0 -o Acquire::ForceIPv4=true", timeoutMs = 180_000)
+            diagLog(context, "apt-get update 结果: exit=${r.first}, output=${r.second.take(500)}")
             if (r.first == 0) { updated = true; break }
             lastErr = r.second
+            Log.w(TAG, "apt-get update 失败 (镜像: $mirror): ${r.second.take(500)}")
         }
         if (!updated) {
-            QuroDiag.log("LinuxEnv", "⛔ apt-get update 在所有镜像失败:\n$lastErr")
+            val detail = "apt-get update 在所有镜像均失败。\n$lastErr"
+            diagLog(context, "⛔ $detail")
+            QuroDiag.log("LinuxEnv", "⛔ $detail")
             rootfsDir.deleteRecursively()
-            throw IllegalStateException("apt-get update 在所有镜像均失败。最后错误：\n$lastErr")
+            throw IllegalStateException(detail)
         }
+        diagLog(context, "✅ apt-get update 成功")
 
         // bash 是持久 shell 的基础，必须装。
         _state.value = SandboxState.Installing("安装 bash…")
+        diagLog(context, "安装 bash...")
         val bash = runProot(context, "apt-get install -y --no-install-recommends bash", timeoutMs = 120_000)
+        diagLog(context, "bash 安装结果: exit=${bash.first}, output=${bash.second.take(300)}")
         if (bash.first != 0) {
-            QuroDiag.log("LinuxEnv", "⛔ bash 安装失败(exit ${bash.first}):\n${bash.second}")
-            throw IllegalStateException("bash 安装失败（exit ${bash.first}）：\n${bash.second}")
+            val detail = "bash 安装失败（exit ${bash.first}）：\n${bash.second}"
+            diagLog(context, "⛔ $detail")
+            QuroDiag.log("LinuxEnv", "⛔ $detail")
+            throw IllegalStateException(detail)
         }
+        diagLog(context, "✅ bash 安装成功")
 
-        // ★ 部署后自检（v1.0.47 根因修复）：装完 bash ≠ 环境真能用。
-        // 必须真正用 proot 在该设备 rootfs 内跑一条命令，确认 proot 能在本机启动并执行。
-        // 否则会出现「bash 装上了、状态标 Ready、但终端一进 proot 就崩、静默回退设备 sh」的「废了」现象。
+        // ★ 部署后自检
         _state.value = SandboxState.Installing("自检 proot 运行环境…")
+        diagLog(context, "smoke test: echo + id + apt-get --version")
         val smoke = runProot(context, "echo QURO_SMOKETEST_OK; id -u; apt-get --version", timeoutMs = 30_000)
+        diagLog(context, "smoke test 结果: exit=${smoke.first}, output=${smoke.second.take(500)}")
         if (smoke.first != 0 || !smoke.second.contains("QURO_SMOKETEST_OK")) {
-            val detail = "部署后自检失败：proot 在您的设备上无法在 rootfs 内执行命令。" +
-                "常见原因：系统 SELinux 限制了 ptrace，或 proot loader 加载失败。\n" +
+            val detail = "部署后自检失败：proot 在您的设备上无法在 rootfs 内执行命令。\n" +
                 "自检输出（exit ${smoke.first}）：\n${smoke.second.take(800)}"
+            diagLog(context, "⛔ $detail")
             QuroDiag.log("LinuxEnv", "⛔ $detail")
             rootfsDir.deleteRecursively()
             throw IllegalStateException(detail)
         }
 
+        diagLog(context, "=== ✅ 部署成功 ===")
         _state.value = SandboxState.Ready
     }
 
@@ -538,9 +600,11 @@ object QuroLinuxEnv {
         val tmp = tmpPath(context)
         val loader = loaderPath(context)
         val dir = sandboxDir(context)
+        val usrBinDir = File(dir, "usr/bin")
         val args = mutableListOf(
             proot,
             "--rootfs=$rootfs",
+            "--link2symlink",  // 添加 link2symlink 支持（参考 Operit）
             "--bind=/dev",
             "--bind=/proc",
             "--bind=/sys",
@@ -556,10 +620,11 @@ object QuroLinuxEnv {
         args.add("/bin/sh"); args.add("-c")
         val env = mutableMapOf(
             "HOME" to "/root",
-            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            // 更新 PATH 包含 usr/bin/（bash 和 busybox 所在位置）
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${usrBinDir.absolutePath}",
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
-            "LD_LIBRARY_PATH" to dir.absolutePath,
+            "LD_LIBRARY_PATH" to "${dir.absolutePath}:${usrBinDir.absolutePath}",
             "PROOT_TMP_DIR" to tmp,
             "PROOT_LOADER" to loader,
         )
@@ -747,8 +812,11 @@ object QuroLinuxEnv {
         // 运行期资产（resolv.conf 用设备 DNS / getprop 垫片）随网络与设备状态刷新，
         // 避免安装时一次性快照过期（如换了 WiFi、或升级后属性变化）。
         prepareRuntimeExtras(context, rootfs)
+        val dir = sandboxDir(context)
+        val usrBinDir = File(dir, "usr/bin")
         val args = mutableListOf(
             "--rootfs=${st.rootfsPath}",
+            "--link2symlink",  // 添加 link2symlink 支持（参考 Operit）
             "--bind=/dev",
             "--bind=/proc",
             "--bind=/sys",
@@ -767,95 +835,29 @@ object QuroLinuxEnv {
     }
 
     /** 交互 shell 进程应注入的环境变量（PROOT_LOADER / LD_LIBRARY_PATH 等）。 */
-    fun shellEnv(context: Context): Array<String> = arrayOf(
-        "TERM=xterm-256color",
-        "HOME=/root",
-        "TMPDIR=${tmpPath(context)}",
-        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        "LANG=C.UTF-8",
-        "LD_LIBRARY_PATH=${sandboxDir(context).absolutePath}",
-        "PROOT_TMP_DIR=${tmpPath(context)}",
-        "PROOT_LOADER=${loaderPath(context)}",
-    )
+    fun shellEnv(context: Context): Array<String> {
+        val dir = sandboxDir(context)
+        val usrBinDir = File(dir, "usr/bin")
+        return arrayOf(
+            "TERM=xterm-256color",
+            "HOME=/root",
+            "TMPDIR=${tmpPath(context)}",
+            // 更新 PATH 包含 usr/bin/（bash 和 busybox 所在位置）
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${usrBinDir.absolutePath}",
+            "LANG=C.UTF-8",
+            "LD_LIBRARY_PATH=${dir.absolutePath}:${usrBinDir.absolutePath}",
+            "PROOT_TMP_DIR=${tmpPath(context)}",
+            "PROOT_LOADER=${loaderPath(context)}",
+        )
+    }
 
     // ----------------------------------------------------------------
     // rootfs 下载（HttpURLConnection，避免引入 ktor 依赖）
     // ----------------------------------------------------------------
 
     private fun downloadRootfs(context: Context, arch: String, target: File, onProgress: (Float) -> Unit) {
-        // 优先从assets读取rootfs文件
-        // 注意：优先选择gz格式，因为Java原生支持GZIPInputStream解压
-        // xz格式需要系统命令（busybox/tar），在Android App进程中通常不可用
-        try {
-            val assetFiles = context.assets.list("linux_env") ?: emptyArray()
-            Log.i(TAG, "检查assets文件: ${assetFiles.joinToString()}")
-
-            // 优先检查gz格式（Java原生支持解压）
-            val gzFile = assetFiles.find { it.endsWith(".tar.gz") && !it.contains("alpine") }
-            if (gzFile != null) {
-                Log.i(TAG, "从assets读取gz格式rootfs: $gzFile (优先，Java原生支持)")
-                try {
-                    val assetFileDescriptor = context.assets.openFd("linux_env/$gzFile")
-                    val totalSize = assetFileDescriptor.declaredLength
-                    assetFileDescriptor.close()
-
-                    context.assets.open("linux_env/$gzFile").use { input ->
-                        FileOutputStream(target).use { output ->
-                            val buffer = ByteArray(BUFFER_SIZE)
-                            var totalRead = 0L
-                            var read: Int
-                            while (input.read(buffer).also { read = it } != -1) {
-                                output.write(buffer, 0, read)
-                                totalRead += read
-                                if (totalSize > 0) onProgress(totalRead.toFloat() / totalSize)
-                            }
-                        }
-                    }
-                    Log.i(TAG, "从assets读取gz rootfs成功: ${target.absolutePath} (${target.length()} bytes)")
-                    return
-                } catch (e: Exception) {
-                    Log.e(TAG, "从assets读取gz rootfs失败: ${e.message}")
-                }
-            }
-
-            // 检查xz格式（回退选项，解压依赖系统命令）
-            val xzFile = assetFiles.find { it.endsWith(".tar.xz") }
-            if (xzFile != null) {
-                Log.i(TAG, "从assets读取xz格式rootfs: $xzFile (回退选项)")
-                try {
-                    val assetFileDescriptor = context.assets.openFd("linux_env/$xzFile")
-                    val totalSize = assetFileDescriptor.declaredLength
-                    assetFileDescriptor.close()
-
-                    // 修改目标文件名为xz格式
-                    val xzTarget = File(target.parent, target.name.replace(".tar.gz", ".tar.xz"))
-
-                    context.assets.open("linux_env/$xzFile").use { input ->
-                        FileOutputStream(xzTarget).use { output ->
-                            val buffer = ByteArray(BUFFER_SIZE)
-                            var totalRead = 0L
-                            var read: Int
-                            while (input.read(buffer).also { read = it } != -1) {
-                                output.write(buffer, 0, read)
-                                totalRead += read
-                                if (totalSize > 0) onProgress(totalRead.toFloat() / totalSize)
-                            }
-                        }
-                    }
-                    Log.i(TAG, "从assets读取xz rootfs成功: ${xzTarget.absolutePath} (${xzTarget.length()} bytes)")
-                    return
-                } catch (e: Exception) {
-                    Log.e(TAG, "从assets读取xz rootfs失败: ${e.message}")
-                }
-            }
-
-            Log.i(TAG, "assets中没有找到合适的rootfs文件")
-        } catch (e: Exception) {
-            Log.e(TAG, "检查assets文件失败: ${e.message}")
-        }
-
-        // 回退到网络下载（gz格式，Java原生支持）
-        Log.i(TAG, "回退到网络下载rootfs (gz格式)")
+        // 纯网络下载模式 - 不再从assets读取rootfs
+        Log.i(TAG, "开始网络下载rootfs (gz格式)")
         val ubuntuArch = when (arch) {
             "aarch64" -> "arm64"
             "armhf" -> "armhf"
@@ -865,13 +867,36 @@ object QuroLinuxEnv {
         }
         val fileName = "ubuntu-base-${UBUNTU_VERSION}-base-${ubuntuArch}.tar.gz"
         val urls = UBUNTU_ROOTFS_MIRRORS.map { base -> "$base/$fileName" }
+
+        // 检查是否已有有效的下载文件（断点续传支持）
+        if (target.exists() && target.length() > 10 * 1024 * 1024) { // 大于10MB认为有效
+            Log.i(TAG, "发现已存在的下载文件: ${target.absolutePath}, 大小: ${target.length() / 1024}KB, 跳过下载")
+            onProgress(1f)
+            return
+        }
+
+        // 清理不完整的下载
+        if (target.exists()) {
+            Log.i(TAG, "清理不完整的下载文件: ${target.absolutePath}, 大小: ${target.length()}")
+            target.delete()
+        }
+
         var lastErr: Exception? = null
         for ((i, url) in urls.withIndex()) {
             try {
+                Log.i(TAG, "尝试镜像 ${i + 1}/${urls.size}: $url")
                 downloadFrom(url, target, onProgress)
-                return
+                // 验证下载的文件
+                if (target.exists() && target.length() > 10 * 1024 * 1024) {
+                    Log.i(TAG, "✅ rootfs下载成功: ${target.absolutePath}, 大小: ${target.length() / 1024}KB")
+                    return
+                } else {
+                    val size = if (target.exists()) target.length() else 0
+                    throw java.io.IOException("下载的文件太小: ${size}bytes (期望 >10MB)")
+                }
             } catch (e: Exception) {
                 lastErr = e
+                Log.e(TAG, "❌ 镜像下载失败: $url, 错误: ${e.message}")
                 if (target.exists()) target.delete()
                 if (i < urls.lastIndex) onProgress(0f)
             }
@@ -880,15 +905,25 @@ object QuroLinuxEnv {
     }
 
     private fun downloadFrom(url: String, target: File, onProgress: (Float) -> Unit) {
+        Log.i(TAG, "开始下载: $url, 目标文件: ${target.absolutePath}")
         val conn = URL(url).openConnection() as HttpURLConnection
-        conn.connectTimeout = 15_000
-        conn.readTimeout = 60_000
+        conn.connectTimeout = 30_000
+        conn.readTimeout = 120_000
         conn.requestMethod = "GET"
+        conn.setRequestProperty("User-Agent", "QuroLinuxEnv/1.0")
         try {
-            if (conn.responseCode !in 200..299) {
-                throw java.io.IOException("HTTP ${conn.responseCode} from $url")
+            Log.i(TAG, "连接建立中...")
+            val responseCode = conn.responseCode
+            Log.i(TAG, "HTTP响应码: $responseCode")
+            if (responseCode !in 200..299) {
+                val errorBody = try { conn.errorStream?.bufferedReader()?.readText()?.take(500) } catch (_: Throwable) { "" }
+                throw java.io.IOException("HTTP $responseCode from $url\n$errorBody")
             }
             val total = conn.contentLengthLong
+            val contentType = conn.contentType
+            Log.i(TAG, "Content-Length: $total, Content-Type: $contentType")
+            val startTime = System.currentTimeMillis()
+            var lastLogTime = startTime
             conn.inputStream.buffered().use { input ->
                 FileOutputStream(target).use { out ->
                     val buf = ByteArray(BUFFER_SIZE)
@@ -897,10 +932,33 @@ object QuroLinuxEnv {
                     while (input.read(buf).also { read = it } != -1) {
                         out.write(buf, 0, read)
                         downloaded += read
-                        if (total > 0) onProgress(downloaded.toFloat() / total)
+                        val now = System.currentTimeMillis()
+                        // 每2秒或有Content-Length时每5%打一次日志
+                        if (now - lastLogTime > 2000) {
+                            val elapsed = (now - startTime) / 1000.0
+                            val speed = if (elapsed > 0) downloaded / elapsed / 1024 else 0.0
+                            if (total > 0) {
+                                val pct = downloaded * 100f / total
+                                Log.i(TAG, "下载进度: ${downloaded}/${total} (${pct.toInt()}%) 速度: ${"%.1f".format(speed)} KB/s")
+                                onProgress(downloaded.toFloat() / total)
+                            } else {
+                                Log.i(TAG, "已下载: ${downloaded / 1024}KB 速度: ${"%.1f".format(speed)} KB/s")
+                                // 未知大小时模拟进度：基于已下载量估算，100MB为参考
+                                val estimatedProgress = (downloaded.toFloat() / (100 * 1024 * 1024)).coerceAtMost(0.95f)
+                                onProgress(estimatedProgress)
+                            }
+                            lastLogTime = now
+                        }
                     }
+                    // 最终进度
+                    val finalSize = target.length()
+                    Log.i(TAG, "下载完成: 文件大小=${finalSize / 1024}KB, 耗时=${(System.currentTimeMillis() - startTime) / 1000}秒")
+                    onProgress(1f)
                 }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "下载失败: $url, 错误: ${e.message}")
+            throw e
         } finally {
             conn.disconnect()
         }
@@ -1374,6 +1432,74 @@ fi
      *
      * rootfs 在 setup 时已 makeWritable，且均在应用私有目录，写操作安全；任何一步失败都只记日志，不致命。
      */
+    /**
+     * 创建 usr/bin/ 目录和符号链接（参考 Operit 实现）。
+     * 将 nativeLibraryDir 中的二进制链接到 usr/bin/，使 proot 环境内可直接使用。
+     */
+    private fun createUsrBinSymlinks(context: Context, sandboxDir: File) {
+        val usrDir = File(sandboxDir, "usr")
+        val binDir = File(usrDir, "bin")
+        binDir.mkdirs()
+
+        val nativeLibDir = context.applicationInfo.nativeLibraryDir
+
+        // 需要创建符号链接的二进制文件
+        val libraries = mapOf(
+            "libproot.so" to "proot",
+            "libproot-loader.so" to "loader",
+            "libbash.so" to "bash",
+            "libbusybox.so" to "busybox",
+            "libtalloc.so" to "talloc"
+        )
+
+        libraries.forEach { (libName, linkName) ->
+            val libFile = File(nativeLibDir, libName)
+            val linkFile = File(binDir, linkName)
+
+            Log.i(TAG, "检查 $libName: ${libFile.absolutePath}, exists=${libFile.exists()}")
+
+            if (!libFile.exists()) {
+                Log.w(TAG, "⚠ 原生库不存在: $libName")
+                return@forEach
+            }
+
+            try {
+                // 删除已存在的文件或损坏的符号链接
+                if (linkFile.exists() || linkFile.toPath().let { java.nio.file.Files.isSymbolicLink(it) }) {
+                    linkFile.delete()
+                }
+
+                // 设置可执行权限
+                libFile.setExecutable(true, false)
+
+                // 创建符号链接
+                java.nio.file.Files.createSymbolicLink(linkFile.toPath(), libFile.toPath())
+                Log.i(TAG, "✅ 创建符号链接: $linkName -> ${libFile.absolutePath}")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ 创建符号链接失败: $linkName, 错误: ${e.message}")
+            }
+        }
+
+        // 为 busybox 创建常用命令的符号链接
+        val busybox = File(binDir, "busybox")
+        if (busybox.exists()) {
+            val busyboxCommands = listOf(
+                "awk", "ash", "basename", "bzip2", "curl", "cp", "chmod", "cut", "cat", "du", "dd",
+                "find", "grep", "gzip", "hexdump", "head", "id", "lscpu", "mkdir", "realpath", "rm",
+                "sed", "stat", "sh", "tr", "tar", "uname", "xargs", "xz", "xxd", "wget", "vi", "nano"
+            )
+            busyboxCommands.forEach { cmd ->
+                val cmdFile = File(binDir, cmd)
+                if (!cmdFile.exists()) {
+                    try {
+                        java.nio.file.Files.createSymbolicLink(cmdFile.toPath(), busybox.toPath())
+                    } catch (_: Throwable) {}
+                }
+            }
+            Log.i(TAG, "✅ 为 busybox 创建了 ${busyboxCommands.size} 个命令符号链接")
+        }
+    }
+
     private fun prepareRuntimeExtras(context: Context, rootfs: File) {
         try {
             writeResolvConf(rootfs, context)
@@ -1395,17 +1521,55 @@ fi
     private fun writeAptSources(rootfs: File, mirrorBase: String) {
         val aptDir = File(rootfs, "etc/apt")
         aptDir.mkdirs()
+        Log.i(TAG, "writeAptSources: 配置apt源 $mirrorBase")
+        
         // Ubuntu 24.04 用 DEB822 格式（/etc/apt/sources.list.d/ubuntu.sources），
-        // 但也兼容传统 sources.list。两种都写，确保 apt 一定能读到。
-        File(aptDir, "sources.list").writeText(
-            "deb $mirrorBase/ $UBUNTU_CODENAME main restricted universe multiverse\n" +
+        // 但也兼容传统 sources.list。必须删除 DEB822 格式，否则 apt 会优先读取它。
+        val sourcesListD = File(aptDir, "sources.list.d")
+        if (sourcesListD.exists()) {
+            Log.i(TAG, "sources.list.d 目录存在，列出所有文件:")
+            sourcesListD.listFiles()?.forEach { file ->
+                Log.i(TAG, "  文件: ${file.name} (${file.length()} bytes)")
+                if (file.name.endsWith(".sources") || file.name.endsWith(".list")) {
+                    val deleted = file.delete()
+                    Log.i(TAG, "  删除${if (deleted) "成功" else "失败"}: ${file.absolutePath}")
+                }
+            }
+        } else {
+            Log.i(TAG, "sources.list.d 目录不存在")
+        }
+        
+        // 写入传统 sources.list 格式
+        val sourcesContent = "deb $mirrorBase/ $UBUNTU_CODENAME main restricted universe multiverse\n" +
             "deb $mirrorBase/ ${UBUNTU_CODENAME}-updates main restricted universe multiverse\n" +
             "deb $mirrorBase/ ${UBUNTU_CODENAME}-security main restricted universe multiverse\n" +
             "deb $mirrorBase/ ${UBUNTU_CODENAME}-backports main restricted universe multiverse\n"
-        )
+        File(aptDir, "sources.list").writeText(sourcesContent)
+        Log.i(TAG, "写入sources.list: $mirrorBase")
+        
         // 关闭签名验证（proot 环境下 GPG 公钥可能不完整）
+        // 同时配置超时和重试（手机网络不稳定）
         File(aptDir, "apt.conf.d").mkdirs()
-        File(aptDir, "apt.conf.d/99no-check-gpg").writeText("Acquire::Check-Valid-Until \"false\";\nAPT::Get::AllowUnauthenticated \"true\";\n")
+        File(aptDir, "apt.conf.d/99no-check-gpg").writeText(
+            "Acquire::Check-Valid-Until \"false\";\n" +
+            "APT::Get::AllowUnauthenticated \"true\";\n" +
+            "Acquire::http::Timeout \"60\";\n" +
+            "Acquire::https::Timeout \"60\";\n" +
+            "Acquire::ftp::Timeout \"60\";\n" +
+            "Acquire::Retries \"5\";\n" +
+            "Acquire::http::Dl-Limit \"256\";\n" +
+            "Acquire::ForceIPv4 \"true\";\n" +
+            "Acquire::http::Pipeline-Depth \"0\";\n"
+        )
+        Log.i(TAG, "写入99no-check-gpg + 超时重试配置")
+    }
+
+    /** 读取最近一次部署的诊断日志。 */
+    fun getDiagLog(context: Context): String? {
+        return try {
+            val logFile = File(sandboxDir(context), "setup-diag.log")
+            if (logFile.exists()) logFile.readText() else null
+        } catch (_: Throwable) { null }
     }
 
     /** 重置沙箱（清掉 rootfs 与状态）。 */

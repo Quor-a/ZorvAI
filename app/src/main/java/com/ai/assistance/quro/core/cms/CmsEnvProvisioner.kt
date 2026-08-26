@@ -31,13 +31,18 @@ enum class EnvProfile(
         "command -v node >/dev/null 2>&1 && command -v pnpm >/dev/null 2>&1 && command -v tsc >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends nodejs npm 2>&1 | tail -5
-        |npm install -g pnpm typescript 2>&1 | tail -5 || true
-        |echo "[env] node=${'$'}(node --version 2>&1) pnpm=${'$'}(pnpm --version 2>&1) tsc=${'$'}(tsc --version 2>&1)"
+        |echo "[env] node=${'$'}(node --version 2>&1) npm=${'$'}(npm --version 2>&1)"
+        |npm config set prefix /usr/local 2>/dev/null || true
+        |export PATH="/usr/local/bin:${'$'}PATH"
+        |npm install -g pnpm typescript 2>&1 | tail -5 || echo "WARN: npm global install failed"
+        |echo "[env] pnpm=${'$'}(which pnpm 2>/dev/null || echo 'not found') tsc=${'$'}(which tsc 2>/dev/null || echo 'not found')"
+        |echo "[env] npm prefix=${'$'}(npm config get prefix 2>&1)"
+        |echo "[env] PATH=${'$'}PATH"
         """.trimMargin(),
     ),
     PYTHON(
@@ -45,15 +50,15 @@ enum class EnvProfile(
         "command -v python >/dev/null 2>&1 && (command -v pip >/dev/null 2>&1 || command -v pip3 >/dev/null 2>&1) && command -v uv >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends python3 python3-pip python3-venv 2>&1 | tail -5
         |if ! command -v python >/dev/null 2>&1; then ln -sf ${'$'}(command -v python3) /usr/local/bin/python 2>/dev/null || true; fi
         |python3 -m ensurepip --upgrade 2>/dev/null || true
         |python3 -m venv /root/cms-venv 2>/dev/null || true
-        |echo "[env] python=${'$'}(python --version 2>&1)"
+        |echo "[env] python=${'$'}(python --version 2>&1) pip=${'$'}(pip --version 2>&1 || pip3 --version 2>&1)"
         """.trimMargin(),
     ),
     SSH(
@@ -61,9 +66,9 @@ enum class EnvProfile(
         "command -v ssh >/dev/null 2>&1 && command -v sshpass >/dev/null 2>&1 && command -v sshd >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends openssh-client openssh-server sshpass 2>&1 | tail -5
         |if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then ssh-keygen -A 2>/dev/null || true; fi
@@ -75,9 +80,9 @@ enum class EnvProfile(
         "command -v java >/dev/null 2>&1 && command -v gradle >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends openjdk-17-jdk-headless gradle 2>&1 | tail -5
         |echo "[env] java=${'$'}(java -version 2>&1 | head -1)"
@@ -88,9 +93,9 @@ enum class EnvProfile(
         "command -v rustc >/dev/null 2>&1 && command -v cargo >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends rustc cargo 2>&1 | tail -5
         |echo "[env] rustc=${'$'}(rustc --version 2>&1) cargo=${'$'}(cargo --version 2>&1)"
@@ -101,9 +106,9 @@ enum class EnvProfile(
         "command -v go >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends golang-go 2>&1 | tail -5
         |echo "[env] go=${'$'}(go version 2>&1)"
@@ -125,9 +130,9 @@ enum class EnvProfile(
         "command -v pip >/dev/null 2>&1 || command -v pip3 >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends python3-pip python3-venv 2>&1 | tail -5
         |python3 -m ensurepip --upgrade 2>/dev/null || true
@@ -139,9 +144,9 @@ enum class EnvProfile(
         "command -v uv >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends curl 2>&1 | tail -5
         |if ! command -v uv >/dev/null 2>&1; then
@@ -165,9 +170,9 @@ enum class EnvProfile(
         "command -v node >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends nodejs npm 2>&1 | tail -5
         |echo "[env] node=${'$'}(node --version 2>&1)"
@@ -178,13 +183,15 @@ enum class EnvProfile(
         "command -v pnpm >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends nodejs npm 2>&1 | tail -5
-        |npm install -g pnpm typescript 2>&1 | tail -5 || true
-        |echo "[env] pnpm=${'$'}(pnpm --version 2>&1) tsc=${'$'}(tsc --version 2>&1)"
+        |npm config set prefix /usr/local 2>/dev/null || true
+        |export PATH="/usr/local/bin:${'$'}PATH"
+        |npm install -g pnpm typescript 2>&1 | tail -5 || echo "WARN: npm global install failed"
+        |echo "[env] pnpm=${'$'}(which pnpm 2>/dev/null || echo 'not found') tsc=${'$'}(which tsc 2>/dev/null || echo 'not found')"
         """.trimMargin(),
     ),
     // ─── SSH 子环境 ───
@@ -193,9 +200,9 @@ enum class EnvProfile(
         "command -v ssh >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends openssh-client 2>&1 | tail -5
         |echo "[env] ssh=${'$'}(ssh -V 2>&1)"
@@ -206,9 +213,9 @@ enum class EnvProfile(
         "command -v sshpass >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends sshpass 2>&1 | tail -5
         |echo "[env] sshpass=${'$'}(sshpass -V 2>&1 | head -1)"
@@ -219,9 +226,9 @@ enum class EnvProfile(
         "command -v sshd >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends openssh-server 2>&1 | tail -5
         |if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then ssh-keygen -A 2>/dev/null || true; fi
@@ -234,9 +241,9 @@ enum class EnvProfile(
         "command -v java >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends openjdk-17-jdk-headless 2>&1 | tail -5
         |echo "[env] java=${'$'}(java -version 2>&1 | head -1)"
@@ -247,9 +254,9 @@ enum class EnvProfile(
         "command -v gradle >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends gradle 2>&1 | tail -5
         |echo "[env] gradle=${'$'}(gradle --version 2>&1 | head -3)"
@@ -261,9 +268,9 @@ enum class EnvProfile(
         "command -v node >/dev/null 2>&1 && npm list -g @modelcontextprotocol/sdk >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends nodejs npm 2>&1 | tail -5
         |npm install -g @modelcontextprotocol/sdk 2>&1 | tail -5 || true
@@ -275,9 +282,9 @@ enum class EnvProfile(
         "command -v python >/dev/null 2>&1 && python -c 'import mcp' >/dev/null 2>&1",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends python3 python3-pip python3-venv 2>&1 | tail -5
         |pip install mcp 2>&1 | tail -5 || true
@@ -289,9 +296,9 @@ enum class EnvProfile(
         "command -v tsc >/dev/null 2>&1 && test -d /root/mcp-tools",
         """
         |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
+        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
         |apt-get install -y --no-install-recommends nodejs npm 2>&1 | tail -5
         |npm install -g typescript 2>&1 | tail -5 || true
@@ -380,18 +387,31 @@ object CmsEnvProvisioner {
 
     /** 单个档是否已就绪（proot 内：标记文件优先，否则 command -v 探活）。 */
     fun isReady(context: Context, profile: EnvProfile): Boolean {
-        // 不再依赖 probe() 判断 —— probe 的 rootfsBinRunnable 可能在宿主侧误判符号链接。
-        // 直接尝试执行命令，如果 proot 能跑就说明环境可用。
         // 检查标记文件
-        val (mc, _) = QuroLinuxEnv.run(context, "[ -f $MARKER_DIR/${profile.name}.done ]", timeoutMs = 10_000)
-        if (mc == 0) {
+        val (mc, mOut) = QuroLinuxEnv.run(context, "ls $MARKER_DIR/${profile.name}.done 2>/dev/null && echo MARKER_EXISTS || echo MARKER_MISSING", timeoutMs = 10_000)
+        android.util.Log.i("CmsEnvProvisioner", "${profile.name}: marker check=$mc, output=${mOut.take(100)}")
+        if (mc == 0 && mOut.contains("MARKER_EXISTS")) {
             android.util.Log.i("CmsEnvProvisioner", "${profile.name}: 标记文件存在，已就绪")
             return true
         }
-        // 运行检查命令
-        val (c, out) = QuroLinuxEnv.run(context, profile.checkCmd, timeoutMs = 20_000)
-        android.util.Log.i("CmsEnvProvisioner", "${profile.name}: checkCmd exit=$c, output=${out.take(100)}")
-        return c == 0
+        // 运行检查命令 — 先设置 PATH 确保 npm 全局包可被找到
+        // 逐个检查命令并输出诊断信息
+        val diagnosticScript = buildString {
+            append("export PATH=\"/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:${'$'}PATH\"\n")
+            append("echo '--- ${profile.name} 环境检测 ---'\n")
+            append("echo \"PATH=${'$'}PATH\"\n")
+            val cmds = profile.checkCmd.split(" && ").map { it.trim() }
+            for (cmd in cmds) {
+                append("if $cmd; then echo \"✅ PASS: $cmd\"; else echo \"❌ FAIL: $cmd\"; fi\n")
+            }
+            append("echo '--- 检测完成 ---'")
+        }
+        val (c, out) = QuroLinuxEnv.run(context, diagnosticScript, timeoutMs = 20_000)
+        android.util.Log.i("CmsEnvProvisioner", "${profile.name}: checkCmd exit=$c, output=${out.take(500)}")
+        // 如果所有子命令都通过（输出中无 FAIL），则认为就绪
+        val ready = !out.contains("FAIL:")
+        android.util.Log.i("CmsEnvProvisioner", "${profile.name}: ready=$ready")
+        return ready
     }
 
     /** 供给单个档：已就绪/已标记则跳过；否则跑装配脚本（best-effort）。返回人类可读结果。 */
@@ -404,9 +424,12 @@ object CmsEnvProvisioner {
         val duration = System.currentTimeMillis() - startTime
         android.util.Log.i("CmsEnvProvisioner", "${profile.name} 执行完成，耗时: ${duration}ms，退出码: $c")
 
+        // 安装后检查 — 设置 PATH 确保 npm 全局包可被找到
         val ok = c == 0 || isReady(context, profile)
         if (ok) {
+            // 写入 marker 文件
             QuroLinuxEnv.run(context, "mkdir -p $MARKER_DIR && touch $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
+            android.util.Log.i("CmsEnvProvisioner", "${profile.name}: marker 文件已写入 $MARKER_DIR/${profile.name}.done")
             return "✅ ${profile.name} 安装完成（耗时 ${duration/1000}秒）\n${out}"
         }
         return "❌ ${profile.name} 安装失败(exit $c，耗时 ${duration/1000}秒)\n${out}"
@@ -429,9 +452,12 @@ object CmsEnvProvisioner {
         val duration = System.currentTimeMillis() - startTime
         android.util.Log.i("CmsEnvProvisioner", "${profile.name} 执行完成，耗时: ${duration}ms，退出码: $c")
 
+        // 安装后检查 — 设置 PATH 确保 npm 全局包可被找到
         val ok = c == 0 || isReady(context, profile)
         if (ok) {
+            // 写入 marker 文件
             QuroLinuxEnv.run(context, "mkdir -p $MARKER_DIR && touch $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
+            android.util.Log.i("CmsEnvProvisioner", "${profile.name}: marker 文件已写入 $MARKER_DIR/${profile.name}.done")
             return "✅ ${profile.name} 安装完成（耗时 ${duration/1000}秒）"
         }
         return "❌ ${profile.name} 安装失败(exit $c，耗时 ${duration/1000}秒)"
