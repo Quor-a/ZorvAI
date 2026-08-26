@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # CMS v2 built-in bootstrap — one-time full dev environment for proot/Ubuntu 24.04 ARM64.
 # Based on terminal environment repair flow from AI summary (2026-08-26)
 # Idempotent: apt-get install -y skips already-installed packages; safe to re-run.
@@ -53,12 +53,14 @@ else
     echo "[cms-bootstrap] DNS already configured"
 fi
 
-# 测试DNS解析
-echo "[cms-bootstrap] 🔍 Testing DNS resolution..."
-if ping -c 1 -W 3 mirrors.tuna.tsinghua.edu.cn >/dev/null 2>&1; then
-    echo "[cms-bootstrap] ✅ DNS resolution working"
+# 测试网络连通性（用curl替代ping，proot可能没有ping）
+echo "[cms-bootstrap] 🔍 Testing network connectivity..."
+if curl -sS --connect-timeout 5 --max-time 10 http://mirrors.aliyun.com >/dev/null 2>&1; then
+    echo "[cms-bootstrap] ✅ Network connectivity working"
+elif wget -q --spider --timeout=5 http://mirrors.aliyun.com 2>/dev/null; then
+    echo "[cms-bootstrap] ✅ Network connectivity working (wget)"
 else
-    echo "[cms-bootstrap] ⚠️ DNS resolution failed, but continuing..."
+    echo "[cms-bootstrap] ⚠️ Network connectivity test failed, but continuing..."
 fi
 
 # ═══ Phase 0.5: 确保 apt 源可用（Ubuntu 24.04 HTTP 镜像） ═══
@@ -73,9 +75,9 @@ if [ ! -s /etc/apt/sources.list ] || ! grep -q "noble" /etc/apt/sources.list 2>/
     mkdir -p /etc/apt/apt.conf.d
     # 关闭签名验证（proot环境下GPG公钥可能不完整）
     printf 'Acquire::Check-Valid-Until "false";\nAPT::Get::AllowUnauthenticated "true";\n' > /etc/apt/apt.conf.d/99no-check-gpg
-    # 使用HTTP避免SSL证书问题
-    printf 'deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse\ndeb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse\ndeb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
-    echo "[cms-bootstrap] ✅ apt sources configured (noble, HTTP)"
+    # 使用阿里云镜像（arm64必须用ubuntu-ports）
+    printf 'deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse\ndeb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse\ndeb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
+    echo "[cms-bootstrap] ✅ apt sources configured (noble, aliyun ubuntu-ports)"
 else
     echo "[cms-bootstrap] ℹ️ apt sources already configured (keeping existing)"
 fi
@@ -89,20 +91,20 @@ echo "[cms-bootstrap] 📦 Phase 1: updating apt index..."
 update_apt() {
     # 先试当前配置
     echo "[cms-bootstrap] 🔍 Trying current apt configuration..."
-    if apt-get update 2>&1; then 
+    if apt-get update 2>&1; then
         echo "[cms-bootstrap] ✅ apt-get update succeeded with current configuration"
         return 0
     fi
     echo "[cms-bootstrap] ⚠️ apt-get update failed with current configuration, trying alternative mirrors..."
-    # 逐个尝试其他镜像
+    # 逐个尝试其他镜像（arm64必须用ubuntu-ports）
     for BASE in \
-        "http://mirrors.tuna.tsinghua.edu.cn/ubuntu" \
-        "http://mirrors.aliyun.com/ubuntu" \
-        "http://archive.ubuntu.com/ubuntu"; do
+        "http://mirrors.aliyun.com/ubuntu-ports" \
+        "http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports" \
+        "http://ports.ubuntu.com/ubuntu-ports"; do
         echo "[cms-bootstrap] 🔍 Trying mirror: $BASE"
         printf "deb %s/ noble main restricted universe multiverse\ndeb %s/ noble-updates main restricted universe multiverse\ndeb %s/ noble-security main restricted universe multiverse\n" "$BASE" "$BASE" "$BASE" > /etc/apt/sources.list
         sleep 1
-        if apt-get update 2>&1; then 
+        if apt-get update 2>&1; then
             echo "[cms-bootstrap] ✅ apt-get update succeeded with mirror: $BASE"
             return 0
         fi
@@ -115,7 +117,7 @@ update_apt || {
     echo "[cms-bootstrap] 📋 Available sources:"
     cat /etc/apt/sources.list 2>/dev/null || echo "(none)"
     echo "[cms-bootstrap] 🔍 Testing network connectivity..."
-    ping -c 1 -W 3 mirrors.tuna.tsinghua.edu.cn 2>&1 || echo "[cms-bootstrap] ⚠️ Network connectivity test failed"
+    curl -sS --connect-timeout 5 --max-time 10 http://mirrors.aliyun.com >/dev/null 2>&1 || echo "[cms-bootstrap] ⚠️ Network connectivity test failed"
     exit 1
 }
 

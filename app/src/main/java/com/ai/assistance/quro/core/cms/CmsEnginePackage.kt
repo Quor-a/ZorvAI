@@ -192,7 +192,7 @@ if [ ! -s /etc/apt/sources.list ] || ! grep -q "noble" /etc/apt/sources.list 2>/
     mkdir -p /etc/apt/apt.conf.d
     # 关闭签名验证（proot 环境下 GPG 公钥可能不完整）
     printf 'Acquire::Check-Valid-Until "false";\nAPT::Get::AllowUnauthenticated "true";\n' > /etc/apt/apt.conf.d/99no-check-gpg
-    printf 'deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
+    printf 'deb https://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse\ndeb https://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse\ndeb https://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
     echo "[quro-engine] apt sources configured (noble)"
 else
     echo "[quro-engine] apt sources already configured (keeping existing)"
@@ -202,11 +202,11 @@ fi
 echo "[quro-engine] updating apt index..."
 if ! apt-get update 2>&1; then
     echo "[quro-engine] WARN: apt-get update failed, trying alternative mirrors..."
-    for m in tsinghua aliyun archive; do
+    for m in aliyun tsinghua ports; do
         case "${'$'}m" in
-            tsinghua) BASE="https://mirrors.tuna.tsinghua.edu.cn/ubuntu" ;;
-            aliyun)   BASE="https://mirrors.aliyun.com/ubuntu" ;;
-            archive)  BASE="https://archive.ubuntu.com/ubuntu" ;;
+            aliyun)   BASE="https://mirrors.aliyun.com/ubuntu-ports" ;;
+            tsinghua) BASE="https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports" ;;
+            ports)    BASE="http://ports.ubuntu.com/ubuntu-ports" ;;
         esac
         printf "deb %s/ noble main restricted universe multiverse\ndeb %s/ noble-updates main restricted universe multiverse\ndeb %s/ noble-security main restricted universe multiverse\n" "${'$'}BASE" "${'$'}BASE" "${'$'}BASE" > /etc/apt/sources.list
         sleep 1
