@@ -17,7 +17,7 @@ import android.util.Base64
 import java.util.concurrent.TimeUnit
 
 /**
- * iLink HTTP 客户端（移植自 Andclaw ClawBotApiClient）。
+ * iLink HTTP 客户端。
  * 纯 OkHttp + org.json，零外部依赖。
  */
 class ClawBotApiClient(

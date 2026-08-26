@@ -230,14 +230,14 @@ enum class ToolKind(val category: String, val displayName: String, val shortDesc
 
         /**
          * Map an actual tool name emitted by the LLM (e.g. "read_file", "mcp_web_search")
-         * to its [ToolKind]. Strips common prefixes (quro_/calw_/local_/mcp_/server_/builtin_)
+         * to its [ToolKind]. Strips common prefixes (quro_/local_/mcp_/server_/builtin_)
          * and tail path/qualifier segments, then matches case-insensitively.
          * Unknown names fall back to [GENERIC].
          */
         fun fromToolName(raw: String): ToolKind {
             val rawNorm = raw.lowercase().trim()
             val simple = raw.substringAfterLast('.').substringAfterLast('/')
-                .removePrefix("quro_").removePrefix("calw_").removePrefix("local_")
+                .removePrefix("quro_").removePrefix("local_")
                 .removePrefix("mcp_").removePrefix("server_").removePrefix("builtin_")
                 .lowercase().trim()
             return NAME_MAP[simple] ?: NAME_MAP[rawNorm] ?: GENERIC

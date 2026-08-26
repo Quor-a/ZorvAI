@@ -13,7 +13,7 @@ private const val DEFAULT_LONG_POLL_MS = 38_000L
 private const val TAG = "ClawBotPoller"
 
 /**
- * ClawBot getupdates 长轮询循环（移植自 Andclaw）。
+ * iLink getupdates 长轮询循环。
  * 纯 OkHttp + org.json，由 QuroWechatIlinkBotAdapter 在 IO 协程中驱动。
  */
 class ClawBotPoller(

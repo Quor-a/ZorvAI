@@ -13,10 +13,9 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 微信 iLink Bot 适配器（移植自 Andclaw ClawBotApiClient + ClawBotPoller）。
+ * 微信 iLink Bot 适配器。
  *
  * 纯 OkHttp + org.json，零第三方 SDK 依赖。
- * 协议层完全对齐 Andclaw 的 ClawBotApiClient + ClawBotPoller。
  */
 class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     override val platform = QuroBotPlatform.WECHAT
@@ -91,7 +90,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
         }
     }
 
-    // ==================== 扫码登录（Andclaw ClawBotAuthClient 风格） ====================
+    // ==================== 扫码登录 ====================
 
     fun startQrLogin() {
         Log.d(TAG, "startQrLogin 被调用, loginState=$loginState")
@@ -129,7 +128,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                 loginState = QrLoginStatus.SCANNED
                 Log.d(TAG, "二维码已就绪，等待扫码...")
 
-                // 2. 轮询扫码状态（Andclaw 风格：外层循环 + 单次查询）
+                // 2. 轮询扫码状态（外层循环 + 单次查询）
                 var pollCount = 0
                 val maxPolls = 120 // 最多轮询 120 次（约 2 分钟）
                 while (isActive && pollCount < maxPolls) {

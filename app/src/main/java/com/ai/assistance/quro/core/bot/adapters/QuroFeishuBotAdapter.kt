@@ -238,8 +238,8 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     }
 
     /**
-     * 上传图片字节到飞书并发送图片消息（移植自 Andclaw 的 uploadImage + sendImageMessage，
-     * 按飞书官方契约校正：文件 part 名为 image、附加 image_type=message 表单字段）。
+     * 上传图片字节到飞书并发送图片消息。
+     * 按飞书官方契约：文件 part 名为 image、附加 image_type=message 表单字段。
      * 成功返回 true。
      */
     private fun sendImage(chatId: String, bytes: ByteArray, fileName: String, msgId: String? = null): Boolean {

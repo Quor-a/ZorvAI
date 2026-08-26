@@ -22,7 +22,7 @@
 #include <unwind.h>
 #include <dlfcn.h>
 
-#if defined(OPERIT_HAS_LLAMA_CPP) && OPERIT_HAS_LLAMA_CPP
+#if defined(QURO_HAS_LLAMA_CPP) && QURO_HAS_LLAMA_CPP
 #include "chat.h"
 #include "llama.h"
 #include "nlohmann/json.hpp"
@@ -56,7 +56,7 @@ static std::string jstringToString(JNIEnv * env, jstring jstr) {
     return out;
 }
 
-#if defined(OPERIT_HAS_LLAMA_CPP) && OPERIT_HAS_LLAMA_CPP
+#if defined(QURO_HAS_LLAMA_CPP) && QURO_HAS_LLAMA_CPP
 static llama_sampler * createSamplerChain(
         const llama_vocab * vocab,
         float temperature,
@@ -204,7 +204,7 @@ static jstring bytesUtf8ToJstring(JNIEnv * env, const std::string & bytes) {
     return env->NewString(reinterpret_cast<const jchar *>(out.data()), static_cast<jsize>(out.size()));
 }
 
-#if !(defined(OPERIT_HAS_LLAMA_CPP) && OPERIT_HAS_LLAMA_CPP)
+#if !(defined(QURO_HAS_LLAMA_CPP) && QURO_HAS_LLAMA_CPP)
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_ai_assistance_llama_LlamaNative_nativeIsAvailable(JNIEnv * env, jclass clazz) {
@@ -261,7 +261,7 @@ Java_com_ai_assistance_llama_LlamaNative_nativeCancel(JNIEnv * env, jclass clazz
     (void) sessionPtr;
 }
 
-// Plan A: 与真实分支（OPERIT_HAS_LLAMA_CPP）的 nativeResetKv 配对的空实现。
+// Plan A: 与真实分支（QURO_HAS_LLAMA_CPP）的 nativeResetKv 配对的空实现。
 // 必须存在——否则未编入 llama.cpp 时 LlamaSession.resetContext() 会抛 UnsatisfiedLinkError。
 extern "C" JNIEXPORT void JNICALL
 Java_com_ai_assistance_llama_LlamaNative_nativeResetKv(JNIEnv * env, jclass clazz, jlong sessionPtr) {

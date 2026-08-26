@@ -12,7 +12,7 @@ import java.util.Locale
 /**
  * 受控浏览器「控制台」后端业务状态（SDUI 范式）。
  *
- * 这是把主应用 LAN 控制台的「后端驱动 UI」范式移植到受控浏览器（后端）的实现：
+ * 这是把主应用 LAN 控制台的「后端驱动 UI」范式适配到受控浏览器（后端）的实现：
  * - buildUiSnapshot() 生成 UI 描述 JSON（组件化，前端免发版渲染）；
  * - applyAction() 处理前端回传的 action，真正驱动浏览器（不再由 UI 直连 BrowserCore）。
  *

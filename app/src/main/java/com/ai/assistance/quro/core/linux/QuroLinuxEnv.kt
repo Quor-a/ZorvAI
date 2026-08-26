@@ -33,8 +33,7 @@ private fun String.normalizeLineEndings(): String = this.replace("\r\n", "\n").r
  * v108 删除了原 QuroLinuxEnv 资产（proot 二进制 + rootfs 随包解压），
  * 导致终端只能回退成设备 Toybox sh、AI 的 linux_* 工具全部报「环境不可用」。
  *
- * 本版本直接移植 Kai 9000（https://github.com/SimonSchubert/Kai）的
- * Android Linux Sandbox 思路并落地：
+ * 本版本采用 Android Linux Sandbox 思路并落地：
  * - proot 二进制以预编译 .so 形式打包进 jniLibs，**从 applicationInfo.nativeLibraryDir
  *   取执行权限**（Android 仅在此目录授予 .so 可执行权限，这是终端此前跑不起来的根因）；
  * - Ubuntu 24.04 ARM64 rootfs（首次使用时从镜像下载 base rootfs 并解压到应用私有目录）；
@@ -416,7 +415,7 @@ object QuroLinuxEnv {
             downloadRootfs(context, arch, tarGz) { p -> _state.value = SandboxState.Downloading(p) }
 
             _state.value = SandboxState.Extracting
-            // 优先尝试xz格式（Operit兼容）
+            // 优先尝试xz格式（兼容上游 proot rootfs 打包）
             if (tarXz.exists() && tarXz.length() > 0) {
                 Log.i(TAG, "尝试使用xz格式rootfs: ${tarXz.absolutePath} (${tarXz.length()} bytes)")
                 try {
@@ -486,7 +485,7 @@ object QuroLinuxEnv {
         diagLog(context, "fixHardlinks 开始")
         fixHardlinks(rootfsDir)
 
-        // 创建 usr/bin/ 目录和符号链接（参考 Operit）
+        // 创建 usr/bin/ 目录和符号链接（参考上游 proot 实现）
         diagLog(context, "创建 usr/bin/ 符号链接")
         createUsrBinSymlinks(context, dir)
 
@@ -604,7 +603,7 @@ object QuroLinuxEnv {
         val args = mutableListOf(
             proot,
             "--rootfs=$rootfs",
-            "--link2symlink",  // 添加 link2symlink 支持（参考 Operit）
+            "--link2symlink",  // 添加 link2symlink 支持（参考上游 proot 实现）
             "--bind=/dev",
             "--bind=/proc",
             "--bind=/sys",
@@ -816,7 +815,7 @@ object QuroLinuxEnv {
         val usrBinDir = File(dir, "usr/bin")
         val args = mutableListOf(
             "--rootfs=${st.rootfsPath}",
-            "--link2symlink",  // 添加 link2symlink 支持（参考 Operit）
+            "--link2symlink",  // 添加 link2symlink 支持（参考上游 proot 实现）
             "--bind=/dev",
             "--bind=/proc",
             "--bind=/sys",
@@ -1433,7 +1432,7 @@ fi
      * rootfs 在 setup 时已 makeWritable，且均在应用私有目录，写操作安全；任何一步失败都只记日志，不致命。
      */
     /**
-     * 创建 usr/bin/ 目录和符号链接（参考 Operit 实现）。
+     * 创建 usr/bin/ 目录和符号链接（参考上游 proot 实现）。
      * 将 nativeLibraryDir 中的二进制链接到 usr/bin/，使 proot 环境内可直接使用。
      */
     private fun createUsrBinSymlinks(context: Context, sandboxDir: File) {

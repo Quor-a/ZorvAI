@@ -62,7 +62,7 @@ add_library(
     src/main/cpp/llama_jni_stub.cpp
 )
 
-target_compile_definitions(LlamaWrapper PRIVATE OPERIT_HAS_LLAMA_CPP=1)
+target_compile_definitions(LlamaWrapper PRIVATE QURO_HAS_LLAMA_CPP=1)
 target_include_directories(LlamaWrapper PRIVATE "${QURO_LLAMA_CPP_SOURCE_DIR}")
 target_include_directories(LlamaWrapper PRIVATE "${QURO_LLAMA_CPP_SOURCE_DIR}/common")
 target_include_directories(LlamaWrapper PRIVATE "${QURO_LLAMA_CPP_SOURCE_DIR}/include")

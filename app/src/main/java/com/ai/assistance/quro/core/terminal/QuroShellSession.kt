@@ -26,7 +26,7 @@ import java.nio.charset.StandardCharsets
 /**
  * 自包含的交互式 shell 会话（v127 重写，彻底移除 Termux / PTY 依赖）。
  *
- * 设计参考 Kai 9000（https://github.com/SimonSchubert/Kai）的 sandbox 思路：
+ * 设计采用常驻 shell 进程的 sandbox 思路：
  * 不依赖原生 PTY（Termux terminal-emulator 在 Compose 布局期会因 mRenderer.mFontWidth
  * 空指针而崩溃），改为常驻一个 shell 进程、把命令写进其 stdin、并发地把 stdout/stderr
  * 按行读入 Compose 的 SnapshotStateList 滚动缓冲区。
