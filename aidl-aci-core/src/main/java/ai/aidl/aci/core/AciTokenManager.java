@@ -25,7 +25,9 @@ import javax.crypto.spec.GCMParameterSpec;
  * 2. 存储和检索 Token
  * 3. 验证 Token 有效性
  * 
- * Token 格式：aci_token_{packageName}_{timestamp}_{random}
+ * Token 格式：aci_token_{ownerPackage}_{timestamp}_{random}
+ *   - ownerPackage = 本 AciTokenManager 所属 App 自身包名（调用方/caller 身份），用于受控端校验"是谁在调用"
+ *   - 不是传入的 target packageName（被调方）。token 应标识调用方，而不是被调方。
  * 存储方式：AndroidKeyStore 加密 + SharedPreferences 存储
  */
 public class AciTokenManager {
@@ -110,12 +112,18 @@ public class AciTokenManager {
     
     /**
      * 生成 Token
+     *
+     * 注意：token 中嵌入的是【本 AciTokenManager 所属 App 自身】的包名（caller 身份，即控制端），
+     * 用于受控端校验"是谁在调用"，而不是传入的 target packageName（被调方）。
+     * packageName 参数仅作为本地存储 key 使用。
+     * random 用 URL_SAFE + NO_PADDING，去掉结尾 '='，可直接放进 header / URL。
      */
     private String generateToken(String packageName) {
         byte[] random = new byte[32];
         new SecureRandom().nextBytes(random);
-        String randomStr = Base64.encodeToString(random, Base64.NO_WRAP);
-        return KEY_PREFIX + packageName + "_" + System.currentTimeMillis() + "_" + randomStr;
+        String randomStr = Base64.encodeToString(random, Base64.URL_SAFE | Base64.NO_PADDING);
+        String owner = appContext.getPackageName();
+        return KEY_PREFIX + owner + "_" + System.currentTimeMillis() + "_" + randomStr;
     }
     
     /**
