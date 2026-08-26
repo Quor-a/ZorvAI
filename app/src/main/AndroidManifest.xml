@@ -440,13 +440,13 @@
             </intent-filter>
         </receiver>
 
-        <!-- WorkflowACI 定时触发器：AlarmManager 回调 -->
+        <!-- 定时触发器：AlarmManager 回调 -->
         <receiver
             android:name=".workflow.trigger.WorkflowAlarmReceiver"
             android:enabled="true"
             android:exported="false" />
 
-        <!-- WorkflowACI 系统事件触发器：开机/亮灭屏/网络变化 -->
+        <!-- 系统事件触发器：开机/亮灭屏/网络变化 -->
         <receiver
             android:name=".workflow.trigger.WorkflowTriggerReceiver"
             android:enabled="true"

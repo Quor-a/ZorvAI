@@ -31,7 +31,7 @@ import kotlin.math.sqrt
  *  - [QuroSttPrefs.SOURCE_ONDEVICE] → AudioRecord 录音(VAD 静音断句) → [QuroOnDeviceAsr] 离线识别
  *
  * 修复此前「对话框语音按钮」只能走原生识别、无法使用已配置云端 / 端侧 STT 的问题。
- * 录音 + VAD + WAV 逻辑移植自语音球（已验证），独立成件以避免污染调用方。
+ * 录音 + VAD + WAV 逻辑（已验证），独立成件以避免污染调用方。
  */
 object QuroSttRecorder {
     private const val TAG = "QuroSttRecorder"

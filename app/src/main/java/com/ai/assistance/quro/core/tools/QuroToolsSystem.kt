@@ -640,15 +640,18 @@ class RunCodeTool : QuroTool {
         if (body.isBlank()) "(退出码=$code，无输出)" else "退出码=$code\n$body"
     } catch (e: Exception) { "执行失败：${e.message}" }
 
-    /** Python 执行：对话框独立，Termux > 系统 python3（手机大多没有，对话框不依赖终端 proot）。 */
+    /** Python 执行：对话框独立，优先本应用自带 Linux 沙箱 Python > 系统 python3（手机大多没有，对话框不依赖终端 proot）。 */
     private fun runPython(code: String, ctx: Context): String {
-        // 优先尝试 Termux / 系统 Python
-        val termux = listOf(
-            "/data/data/com.termux/files/usr/bin/python",
-            "/data/data/com.termux/files/usr/bin/python3"
+        // 优先尝试本应用自带 Linux 沙箱 Python 与系统 Python（不再依赖第三方 Termux 包路径）
+        val base = ctx.filesDir.absolutePath
+        val candidate = listOf(
+            "$base/linux-sandbox/usr/bin/python3",
+            "$base/linux-sandbox/usr/bin/python",
+            "python3",
+            "python"
         ).firstOrNull { java.io.File(it).exists() }
-        if (termux != null) {
-            val result = execShell(ctx, "$termux -c ${quoteShell(code)}")
+        if (candidate != null) {
+            val result = execShell(ctx, "$candidate -c ${quoteShell(code)}")
             if (result.contains("<html", ignoreCase = true) || result.contains("<!DOCTYPE", ignoreCase = true)) return result
             return result
         }
