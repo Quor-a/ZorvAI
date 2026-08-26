@@ -286,6 +286,7 @@ BackHandler { showKnowledge = false }
 - `core/linux/QuroLinuxEnv`：应用内 Linux 环境后端（proot + **Ubuntu 24.04 ARM64**）；`proot` / `libbash` / `libbusybox` 以 `.so` 形式内置（`nativeLibraryDir` + `assets/linux_env` 兜底），**Ubuntu base rootfs 首次使用自动从 Ubuntu 官方镜像（aliyun / tuna / cdimage）下载并解压到应用私有目录**，不随包内置
 - 关键能力：交互终端常驻 `/bin/sh`、link2symlink 符号链接、apt 源自动切 `ubuntu-ports`（arm64）、bash/busybox 内置命令、CMS 引擎 `bootstrap.sh` 提供 NODE / PYTHON / RUST / GO / JAVA 共享运行时
 - 终端 UI：对话框输入「+」→ 终端，或 AI 调用 `ui_open_terminal`；`QuroTerminalController` 驱动
+- 对外集成能力（已支持）：终端同时作为 ZorvAI 生态的**受控执行端**，向控制端开放 **ACI（AIDL）/ ACIHTTP（本地 HTTP 传输）/ 操控台（Console 后端驱动 UI）/ 本地 API / MCP（MCP Server）** 五类接口；详见 `term-aci` 仓库 README
 
 ### 5. MCP（Model Context Protocol）
 - `core/mcp/QuroMcpClient`：外部 MCP 服务器客户端，`initialize` 握手（2025-03-26 协议）、`listTools` / `callTool`
