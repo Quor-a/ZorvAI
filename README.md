@@ -69,7 +69,7 @@
 从全局看，Zorv AI 解决了三件事：
 
 1. **让 AI 能动手**。它内置 120+ 工具，覆盖读屏/点按、文件、通信、定时、终端、知识库等；更高权限的能力（Shizuku、设备管理员、ROOT、应用内 Linux）按 L1–L5 分级，且**每一级都要你显式授权**，不会偷偷越权。
-2. **让 AI 能离线**。MNN / llama.cpp 两个本地推理引擎编译进 APK，配合本地 STT、本地 TTS、本地 RAG 与应用内 Alpine Linux 沙箱，断网也能完成大部分任务。
+2. **让 AI 能离线**。MNN / llama.cpp 两个本地推理引擎编译进 APK，配合本地 STT、本地 TTS、本地 RAG 与应用内 Ubuntu 24.04 Linux 沙箱（proot），断网也能完成大部分任务。
 3. **让 AI 能跨应用**。通过 ACI（Agent Capability Interface）——一套同设备、基于 AIDL Binder、无 Root 的本地协议——任意 App 都能把自己暴露成「可被 AI 调用的能力」，由 Zorv AI 的 LLM 自动编排。
 
 它的设计主线是 **Tool-first（一切皆工具）**：Agent 拥有的每一项能力都表达为一个 `QuroTool`，扩展系统只需要实现四成员的接口并注册，LLM 会自动发现并用它，无需改任何接线代码。
@@ -101,8 +101,8 @@
 | **Agent 核心** | 多会话隔离（`liveBuffers` 按会话独立）、种子快照（`convBase`）、显示刷新闸门（`canUpdateDisplay`）、多轮 `[第N轮]` hidden 标记防串台、系统提示词构建、工具注册表（`QuroToolRegistry.active`）、技能系统（`QuroSkill` → 注册为 `skill__{name}` 工具） |
 | **工具 / 能力层** | **120+ 内置工具**（`buildQuroRegistry` 注册 123 项 + 导入工具 + 可调用技能）：无障碍 `input_text`/`tap_screen`/`read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text`/`ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
 | **离线 LLM 引擎** | 应用内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 剥离、本地工具调用、会话复用；离线也能对话 |
-| **特权层 L1–L5** | 无障碍 → Shizuku(uid 0/2000) → 设备管理员 → ROOT(su) → 应用内 Linux(proot + Alpine) |
-| **终端 / Linux 沙箱** | NovaTerm 自研沙盒 + proot/Alpine 应用内 Linux 环境，终端 UI 直接操作 |
+| **特权层 L1–L5** | 无障碍 → Shizuku(uid 0/2000) → 设备管理员 → ROOT(su) → 应用内 Linux(proot + Ubuntu 24.04) |
+| **终端 / Linux 沙箱** | 应用内 Linux 终端：proot + Ubuntu 24.04（rootfs 首次使用自动从 Ubuntu 官方镜像下载，`proot`/`libbash`/`libbusybox` 以 `.so` 内置），支持完整 Shell / Python / 编译工具链，终端 UI 直接操作 |
 | **MCP（Model Context Protocol）** | MCP 客户端（WebSocket / HTTP 传输）、应用内本地 MCP 服务，可由 AI 部署/调用、**MCP-ACI 桥接**（让 ACI 控制方调用外部 MCP 服务器工具） |
 | **引擎 / 运行时** | CMS 引擎共享运行时（NODE / PYTHON / SSH / JAVA / RUST / GO）、CMS v2 模块、GeckoView 浏览器（MPL-2.0）、本地语音 STT / TTS |
 | **IM 通道** | 飞书（WebSocket）/ QQBot（官方 WS）/ 微信 iLink（HTTP 长轮询 35s）；三家手机端均无公网端点 |
@@ -142,7 +142,7 @@
   - **CSS**：样式代码支持
   - **XML**：数据/配置文件支持
   - **C/C++/Java**：语法高亮和算法逻辑撰写（端侧沙箱不能直接编译，需借助工作区或 ACI 构建台）
-- **终端**：打开 proot / 本地 Shell，可直接跑命令、查设备环境（入口：输入框「+」→ 终端，或 `ui_open_terminal`）
+- **终端**：打开 proot / 本地 Shell（应用内 Ubuntu 24.04 沙箱），可直接跑命令、查设备环境（入口：输入框「+」→ 终端，或 `ui_open_terminal`）
 - **工具箱**：文件 / 包名 / 浏览器等内置工具集合（入口：输入框「+」→ 工具箱，或 `ui_open_toolbox`）
 - **文件**：直接附件 / 上传到对话框（入口：输入框「+」→ 上传，或 `ui_open_upload`）
 - **mermaid 围栏即画即渲染（v1.0.56 新增的「可视化编程」缺口）**：无论是 AI 还是**用户自己**，只要在对话框里写 ` ```mermaid ` 代码块（流程 / 时序 / 状态机 / 思维导图 / 类图 / git 图 / 饼图等），对话框都会用离线 Mermaid.js 直接渲染成可缩放的真图——支持全屏查看、下载 SVG、复制源码。这补齐了此前「可视化编程只走 `ui_widget` JSON」的局限，让对话框真正成为人人可画的自由画布。
@@ -282,10 +282,10 @@ BackHandler { showKnowledge = false }
 - `core/model/QuroLocalModelRepository.kt` 负责本地模型仓库/加载
 
 ### 4. 应用内终端 & Linux 沙箱
-- `core/terminal/QuroTerminalController`：proot 优先、否则设备 `sh` 的会话控制器
-- `core/linux/QuroLinuxEnv`：从镜像下载 Alpine minirootfs + `libproot.so`，提供应用内 Linux 环境
-- `core/novaterm/`：NovaTerm 自研沙盒（FileSystem / ProcessWatcher / RootExecutor / SandboxExecutor / CommandDispatcher / BuiltinCommand 等）
-- 终端 UI：`QuroTerminalScreen`（集成 NovaTerm）、工具栏入口
+- `core/terminal/QuroTerminalController`：proot 优先、否则设备 `sh` 的会话控制器（`QuroShellSession` 为 PTY Shell 会话载体）
+- `core/linux/QuroLinuxEnv`：应用内 Linux 环境后端（proot + **Ubuntu 24.04 ARM64**）；`proot` / `libbash` / `libbusybox` 以 `.so` 形式内置（`nativeLibraryDir` + `assets/linux_env` 兜底），**Ubuntu base rootfs 首次使用自动从 Ubuntu 官方镜像（aliyun / tuna / cdimage）下载并解压到应用私有目录**，不随包内置
+- 关键能力：交互终端常驻 `/bin/sh`、link2symlink 符号链接、apt 源自动切 `ubuntu-ports`（arm64）、bash/busybox 内置命令、CMS 引擎 `bootstrap.sh` 提供 NODE / PYTHON / RUST / GO / JAVA 共享运行时
+- 终端 UI：对话框输入「+」→ 终端，或 AI 调用 `ui_open_terminal`；`QuroTerminalController` 驱动
 
 ### 5. MCP（Model Context Protocol）
 - `core/mcp/QuroMcpClient`：外部 MCP 服务器客户端，`initialize` 握手（2025-03-26 协议）、`listTools` / `callTool`
@@ -400,7 +400,7 @@ BackHandler { showKnowledge = false }
 | `QuroMainScreen` / `QuroApp` | 主壳：全屏聊天 + 设置覆盖层 + 崩溃自报告 |
 | `ChatScreen` | 聊天主界面、消息流/流式/Markdown/Think/ToolCall、消息操作、所有二级屏入口 |
 | `QuroSkillsScreen` | 内置/自定义技能管理（63 个内置） |
-| `QuroTerminalScreen` | 应用内终端（NovaTerm/Linux 沙箱） |
+| `QuroTerminalController` | 应用内终端控制器（proot / Ubuntu 24.04 Linux 沙箱，PTY `QuroShellSession`） |
 | `QuroBrowserScreen` | 内置 GeckoView 浏览器 |
 | `QuroMediaBrowser` / `QuroMusicPlayerScreen` / `QuroVideoPlayerScreen` | 媒体浏览 / 音乐 / 视频播放 |
 | `QuroDocumentViewer` / `QuroDocOpener` / `QuroOnlyOfficeScreen` | 文档查看 / 分发 / OnlyOffice |
@@ -595,7 +595,7 @@ Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{
   </tr>
   <tr>
     <td align="center"><img src="screenshots/cms-modules.jpg" width="220"/><br><sub>CMSv2 模块 · CMS 引擎</sub></td>
-    <td align="center"><img src="screenshots/terminal-proot.jpg" width="220"/><br><sub>终端 · proot / Alpine Linux 沙箱</sub></td>
+    <td align="center"><img src="screenshots/terminal-proot.jpg" width="220"/><br><sub>终端 · proot / Ubuntu 24.04 Linux 沙箱</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="screenshots/plugins-mcp-aci.jpg" width="220"/><br><sub>插件运行时 / MCP 服务 / ACI 管理中心</sub></td>
@@ -644,7 +644,7 @@ flowchart TB
         D2["L2 Shizuku uid 0/2000"]
         D3["L3 设备管理员 DeviceAdmin"]
         D4["L4 ROOT su"]
-        D5["L5 应用内 Linux proot + Alpine"]
+        D5["L5 应用内 Linux proot + Ubuntu 24.04"]
     end
     subgraph ENGINE["引擎 / 运行时层"]
         E1["CMS 引擎 共享运行时 NODE / PYTHON / SSH / JAVA / RUST / GO"]
@@ -892,7 +892,7 @@ flowchart LR
     L1["L1 无障碍<br/>AccessibilityService"] --> L2["L2 Shizuku<br/>uid 0/2000"]
     L2 --> L3["L3 设备管理员<br/>DeviceAdmin"]
     L3 --> L4["L4 ROOT<br/>su"]
-    L4 --> L5["L5 应用内 Linux<br/>proot + Alpine"]
+    L4 --> L5["L5 应用内 Linux<br/>proot + Ubuntu 24.04"]
 ```
 
 | 层级 | 是什么 | 用途 | 前置条件 |
@@ -901,7 +901,7 @@ flowchart LR
 | **L2** Shizuku | uid 0/2000，AIDL `UserService` 主路径，反射 `newProcess` 备选 | 高权限 shell 命令执行 | 安装并运行 Shizuku App，完成配对授权 |
 | **L3** 设备管理员 | `DeviceAdmin` | 设备策略级能力（锁定 / 擦除等） | 在设置中激活设备管理员 |
 | **L4** ROOT | `su` | 完整 root 权限，命令走 `sh -c` 执行 | 设备已 root |
-| **L5** 应用内 Linux | `proot` + Alpine rootfs | 真 Linux 用户态执行 | 用户自备 `proot` 二进制与 Alpine rootfs |
+| **L5** 应用内 Linux | `proot` + Ubuntu 24.04 rootfs | 真 Linux 用户态执行 | `proot`/`libbash`/`libbusybox` 随包内置；Ubuntu base rootfs 首次使用自动下载 |
 
 > 📋 **完整权限与系统能力申请清单（每项用途 / 授予方式 / 隐私边界）见 [PERMISSIONS.md](./PERMISSIONS.md)。**
 
@@ -1099,7 +1099,7 @@ cd ZorvAI
 | **`./gradlew` 无法启动** | wrapper jar 缺失 `Main-Class` 时需修复；或改用本机已安装的 Gradle 直接构建。 |
 | **Shizuku 相关能力不可用** | 必须**先打开 Shizuku App 并启动其服务 / 完成配对**，再在 Zorv AI 中授权；Shizuku 未运行时 L2 通道不会启用。 |
 | **ROOT 模式命令不执行** | ROOT 模式命令走 `sh -c` 执行，需确认设备已 root 且已授予 su 权限。 |
-| **应用内 Linux（L5）无法运行** | 真执行依赖**用户自备的 `proot` 二进制**与 Alpine rootfs，请先准备好这些外部资源。 |
+| **应用内 Linux（L5）无法运行** | 首次进入终端会提示「安装 Linux 环境」，`proot` 已随包内置，仅 Ubuntu base rootfs 需联网从官方镜像下载（arm64 走 `ubuntu-ports`）；下载失败检查网络/镜像连通性，日志在 `Download/QuroAI_logs/`。 |
 | **离线对话不可用** | 离线 LLM 随发布包内置；若所用构建不含离线引擎原生库则会提示未接入，请使用包含离线引擎的版本。 |
 | **网页 / HTML 预览不显示** | 确认已随包集成 GeckoView（MPL-2.0）运行时。 |
 | **本地语音识别不可用** | 本地 STT 模型为约 85MB 的 onnx 文件，首次使用需下载 / 放置到指定目录。 |
