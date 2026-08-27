@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.ui
 
+import kotlin.math.roundToInt
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient

@@ -187,6 +187,26 @@ class VisualPopupOverlayService : Service(), CoroutineScope by CoroutineScope(Di
         composeLifecycleOwner = lifecycleOwner
         
         val context = androidx.appcompat.view.ContextThemeWrapper(this, getAppThemeRes())
+
+        // 悬浮窗参数（在 composeView 之前声明，供 onDrag 拖拽回调引用）
+        val width = popup.width?.dpToPx() ?: (resources.displayMetrics.widthPixels * 0.9).toInt()
+        val height = popup.height?.dpToPx() ?: (resources.displayMetrics.heightPixels * 0.7).toInt()
+        val params = WindowManager.LayoutParams(
+            width,
+            height,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.CENTER
+            x = 0
+            y = 0
+        }
+
         val composeView = ComposeView(context).apply {
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeViewModelStoreOwner(lifecycleOwner)
@@ -210,7 +230,7 @@ class VisualPopupOverlayService : Service(), CoroutineScope by CoroutineScope(Di
                     onDrag = { dx, dy ->
                         params.x += dx
                         params.y += dy
-                        windowManager.updateViewLayout(composeView, params)
+                        currentPopupView?.let { windowManager.updateViewLayout(it, params) }
                     },
                     onMinimize = {
                         mainHandler.post {
@@ -222,26 +242,6 @@ class VisualPopupOverlayService : Service(), CoroutineScope by CoroutineScope(Di
         }
         
         currentPopupView = composeView
-        
-        // 悬浮窗参数
-        val width = popup.width?.dpToPx() ?: (resources.displayMetrics.widthPixels * 0.9).toInt()
-        val height = popup.height?.dpToPx() ?: (resources.displayMetrics.heightPixels * 0.7).toInt()
-        
-        val params = WindowManager.LayoutParams(
-            width,
-            height,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.CENTER
-            x = 0
-            y = 0
-        }
         
         windowManager.addView(composeView, params)
         isShowing = true
