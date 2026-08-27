@@ -206,6 +206,16 @@ class VisualPopupOverlayService : Service(), CoroutineScope by CoroutineScope(Di
                         mainHandler.post {
                             hideOverlayPopup()
                         }
+                    },
+                    onDrag = { dx, dy ->
+                        params.x += dx
+                        params.y += dy
+                        windowManager.updateViewLayout(composeView, params)
+                    },
+                    onMinimize = {
+                        mainHandler.post {
+                            hideOverlayPopup()
+                        }
                     }
                 )
             }
@@ -236,9 +246,6 @@ class VisualPopupOverlayService : Service(), CoroutineScope by CoroutineScope(Di
         windowManager.addView(composeView, params)
         isShowing = true
         
-        // 添加拖动支持
-        setupDragSupport(composeView, params)
-        
         Log.d(TAG, "显示悬浮窗弹窗: ${popup.title}")
     }
     
@@ -254,51 +261,6 @@ class VisualPopupOverlayService : Service(), CoroutineScope by CoroutineScope(Di
             Log.d(TAG, "隐藏悬浮窗弹窗")
         } catch (e: Exception) {
             Log.e(TAG, "隐藏悬浮窗失败", e)
-        }
-    }
-    
-    private fun setupDragSupport(view: View, params: WindowManager.LayoutParams) {
-        var initialX = 0
-        var initialY = 0
-        var initialTouchX = 0f
-        var initialTouchY = 0f
-        var isDragging = false
-        
-        view.setOnTouchListener { v, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    initialX = params.x
-                    initialY = params.y
-                    initialTouchX = event.rawX
-                    initialTouchY = event.rawY
-                    isDragging = false
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - initialTouchX
-                    val dy = event.rawY - initialTouchY
-                    
-                    // 如果移动距离超过阈值，则认为是拖动
-                    if (Math.abs(dx) > MOVE_THRESHOLD_DP || Math.abs(dy) > MOVE_THRESHOLD_DP) {
-                        isDragging = true
-                    }
-                    
-                    if (isDragging) {
-                        params.x = initialX + dx.toInt()
-                        params.y = initialY + dy.toInt()
-                        windowManager.updateViewLayout(view, params)
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP -> {
-                    if (!isDragging) {
-                        // 点击事件，不处理（由Compose处理）
-                        v.performClick()
-                    }
-                    true
-                }
-                else -> false
-            }
         }
     }
     

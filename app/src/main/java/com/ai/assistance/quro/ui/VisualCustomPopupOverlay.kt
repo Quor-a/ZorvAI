@@ -4,8 +4,10 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -30,7 +32,9 @@ import com.ai.assistance.quro.core.tools.generateCustomPopupHtml
 fun VisualCustomPopupOverlay(
     popupData: VisualCustomPopupData,
     onSubmit: (String) -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onDrag: (Int, Int) -> Unit = { _, _ -> },
+    onMinimize: () -> Unit = {}
 ) {
     val cs = MaterialTheme.colorScheme
     var webView by remember { mutableStateOf<WebView?>(null) }
@@ -51,6 +55,11 @@ fun VisualCustomPopupOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(cs.primaryContainer)
+                    .pointerInput(Unit) {
+                        detectDragGestures { _, dragAmount ->
+                            onDrag(dragAmount.x.roundToInt(), dragAmount.y.roundToInt())
+                        }
+                    }
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -145,7 +154,7 @@ fun VisualCustomPopupOverlay(
                     .weight(1f)
             )
             
-            // 底部操作栏
+            // 底部操作栏：收起 + 确认
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -154,36 +163,19 @@ fun VisualCustomPopupOverlay(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 全屏按钮
-                IconButton(
-                    onClick = {
-                        // TODO: 实现全屏功能
-                    },
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.Fullscreen,
-                        contentDescription = "全屏",
-                        tint = cs.onSurfaceVariant,
-                        modifier = Modifier.size(24.dp)
-                    )
+                TextButton(onClick = onMinimize) {
+                    Icon(Icons.Filled.Minimize, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("收起")
                 }
-                
-                Spacer(modifier = Modifier.width(8.dp))
-                
-                // 最小化按钮
-                IconButton(
-                    onClick = {
-                        // TODO: 实现最小化功能
-                    },
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.Minimize,
-                        contentDescription = "最小化",
-                        tint = cs.onSurfaceVariant,
-                        modifier = Modifier.size(24.dp)
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = {
+                    webView?.evaluateJavascript(
+                        "(function(){ try { if (window.submitResult) { window.submitResult({}); return; } if (window.Android && window.Android.postMessage) { window.Android.postMessage(JSON.stringify({action:'submit', data:{}})); } } catch(e){} })();",
+                        null
                     )
+                }) {
+                    Text("确认")
                 }
             }
         }

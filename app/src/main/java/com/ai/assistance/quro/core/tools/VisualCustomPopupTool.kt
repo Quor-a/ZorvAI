@@ -263,6 +263,9 @@ fun generateCustomPopupHtml(popupData: VisualCustomPopupData): String {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
+            /* 让 WebView 内所有元素（尤其是 AI 自写的小卡片）都能稳定接收点击/轻触 */
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -325,32 +328,43 @@ fun generateCustomPopupHtml(popupData: VisualCustomPopupData): String {
     </div>
     
     <script>
-        // 向父窗口（对话框）发送消息
+        // 结果回传：优先走 Android JS 桥（对话框/悬浮窗注入的 window.Android.postMessage），
+        // 否则退回 window.parent.postMessage（兼容 iframe 场景）。
+        function __quroSend(obj) {
+            var payload = JSON.stringify(obj);
+            if (window.Android && window.Android.postMessage) {
+                window.Android.postMessage(payload);
+            } else {
+                window.parent.postMessage(payload, '*');
+            }
+        }
         function submitResult(data) {
-            window.parent.postMessage(JSON.stringify({
-                action: 'submit',
-                popupId: '${popupData.id}',
-                data: data
-            }), '*');
+            __quroSend({ action: 'submit', popupId: '${popupData.id}', data: data == null ? {} : data });
         }
-        
-        // 关闭弹窗
         function closePopup() {
-            window.parent.postMessage(JSON.stringify({
-                action: 'close',
-                popupId: '${popupData.id}'
-            }), '*');
+            __quroSend({ action: 'close', popupId: '${popupData.id}' });
         }
-        
-        // 监听父窗口消息
+        // 转发 HTML 内部通过 window.parent.postMessage 发出的消息到 Android 桥，
+        // 使 AI 自写的小卡片/按钮（onclick 调 submitResult/closePopup 或 window.parent.postMessage）都能真正回传。
         window.addEventListener('message', function(event) {
             try {
-                const msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-                if (msg.action === 'close') {
-                    closePopup();
+                var msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                if (window.Android && window.Android.postMessage) {
+                    window.Android.postMessage(JSON.stringify(msg));
                 }
             } catch(e) {}
         });
+        // 全局兜底：任何带 data-quro-submit / onclick=submitResult 的元素都可点
+        document.addEventListener('click', function(e) {
+            var el = e.target;
+            while (el && el !== document) {
+                if (el.getAttribute && el.getAttribute('data-quro-submit') != null) {
+                    try { submitResult(el.getAttribute('data-quro-submit') || {}); } catch(_) {}
+                    break;
+                }
+                el = el.parentNode;
+            }
+        }, true);
     </script>
 </body>
 </html>"""

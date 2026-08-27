@@ -269,9 +269,15 @@ fun QuroDocScreen(onClose: () -> Unit) {
 private fun listOfficeFiles(ctx: Context): List<File> {
     val exts = setOf("docx", "xlsx", "pptx", "pdf", "txt", "md", "markdown", "csv", "json", "xml", "log")
     val dirs = buildList {
+        // 应用专属文档目录：aiwps_create / enhanced_doc_create / 文档页「新建」均写到这里
         add(File(ctx.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "QuroDocs"))
+        // 应用专属下载目录（QuroDownloadUtil 写入）
+        ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.let { add(File(it, "Quro")) }
+        // 公共目录（兼容旧版静态 createDocument 写入到 Documents/QuroDocs 的情形）
         runCatching { add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)) }
+        runCatching { add(File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "QuroDocs")) }
         runCatching { add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)) }
+        runCatching { add(File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Quro")) }
     }
     return dirs.flatMap { d ->
         runCatching { d.listFiles()?.toList().orEmpty() }.getOrDefault(emptyList())
