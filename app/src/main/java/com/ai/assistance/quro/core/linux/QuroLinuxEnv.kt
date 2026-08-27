@@ -219,12 +219,19 @@ object QuroLinuxEnv {
         } else {
             // rootfs 缺失/残缺/不可执行：把错误的 Ready 降级回 NotInstalled，恢复安装横幅。
             if (_state.value is SandboxState.Ready) _state.value = SandboxState.NotInstalled
+            // 🔧 「曾安装但现已丢失」：多因系统清理应用数据（应用长时间未用）。写自诊断到 Download，
+            // 并给出一键恢复提示，避免用户面对「莫名其妙没了」无从下手。
+            val wasThere = wasInstalled(context)
+            if (wasThere) writeLostEnvDiagnostic(context)
             val reason = when {
                 !rootfs.isDirectory ->
-                    "Ubuntu rootfs 未安装（请在终端点「安装 Linux 环境」）"
+                    if (wasThere)
+                        "开发环境曾安装但 rootfs 已丢失（最可能是系统清理了应用数据 / 应用长时间未用被速冻）。点「安装 Linux 环境」或发送 linux:install 可一键重新下载恢复。"
+                    else
+                        "Ubuntu rootfs 未安装（请在终端点「安装 Linux 环境」）"
                 !rootfsBinRunnable(rootfs, "bin/sh") ->
                     "rootfs 解压残缺（/bin/sh 无法在 rootfs 内解析，可能符号链接创建失败），请重试安装"
-                !prootCanExec -> 
+                !prootCanExec ->
                     "proot 不可执行（权限问题）。可能原因：SELinux 限制、文件系统挂载选项（noexec）、或应用权限不足。"
                 else -> "proot 不可执行"
             }
@@ -321,6 +328,49 @@ object QuroLinuxEnv {
             val logFile = File(logDir, "setup-diag.log")
             logFile.appendText("[${java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())}] $msg\n")
         } catch (_: Throwable) {}
+    }
+
+    // ═══ 安装态持久化 + 丢失自诊断（应对「长时间未用 → 系统清理应用数据 → 重检显示无环境」）═══
+    private fun wasInstalled(context: Context): Boolean =
+        runCatching { context.getSharedPreferences("quro_linux_env", android.content.Context.MODE_PRIVATE).getBoolean("installed", false) }.getOrDefault(false)
+
+    private fun markInstalled(context: Context) {
+        runCatching { context.getSharedPreferences("quro_linux_env", android.content.Context.MODE_PRIVATE).edit().putBoolean("installed", true).apply() }
+    }
+
+    /**
+     * 开发环境丢失时，把自诊断报告写到手机公共 Download/QuroAI_logs/（用户用文件管理器即可取到，
+     * 无需 adb/logcat）。公共目录写失败则兜底到应用外部存储 QuroAI_logs/。
+     */
+    private fun writeLostEnvDiagnostic(context: Context) {
+        val content = buildString {
+            appendLine("ZorvAI 开发环境（Linux 沙箱）丢失自诊断")
+            appendLine("时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}")
+            appendLine()
+            appendLine("现象：重新检测开发环境，提示「未安装 / 没有开发环境」。")
+            appendLine("根因判断：rootfs（Ubuntu 解压目录 ${rootfsPath(context)}）已不存在。")
+            appendLine("最可能原因：应用长时间未使用，被系统/手机管家清理了应用数据")
+            appendLine("  （如 OPPO/ColorOS 的应用速冻、应用数据清理，或手动「清除数据」），")
+            appendLine("  把 filesDir/linux-sandbox 整目录删除。注意 proot 二进制在 APK 内（nativeLibraryDir），")
+            appendLine("  不会丢；丢的是下载解压的 Ubuntu rootfs。")
+            appendLine()
+            appendLine("恢复方法（任选其一）：")
+            appendLine("  1) 打开「开发环境」页面 → 点「安装 Linux 环境」；")
+            appendLine("  2) 在对话框发送：linux:install ；")
+            appendLine("  3) AI 调用需要 Linux 的工具时，会自动触发重新下载安装。")
+            appendLine("重新安装需联网（从阿里云/清华镜像下载 Ubuntu 24.04 ARM64 rootfs 并解压，约数百 MB）。")
+        }
+        try {
+            val dir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "QuroAI_logs")
+            dir.mkdirs()
+            File(dir, "linux_env_lost.txt").writeText(content)
+        } catch (_: Throwable) {
+            try {
+                val fb = context.getExternalFilesDir("QuroAI_logs")
+                fb?.mkdirs()
+                File(fb, "linux_env_lost.txt").writeText(content)
+            } catch (_: Throwable) {}
+        }
     }
 
     private suspend fun setupInternal(context: Context) {
@@ -565,6 +615,8 @@ object QuroLinuxEnv {
 
         diagLog(context, "=== ✅ 部署成功 ===")
         _state.value = SandboxState.Ready
+        // 持久化「曾安装」标记：即使后续 rootfs 被系统清理，重检时也能识别为「丢失」并提示一键恢复。
+        markInstalled(context)
     }
 
     /** 一次性执行命令（AI 工具用）。环境不可用返回原因。 */

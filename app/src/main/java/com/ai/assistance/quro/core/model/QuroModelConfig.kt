@@ -17,10 +17,11 @@ data class QuroModelConfig(
     val apiKey: String = "",
     val model: String = "gpt-4o-mini",
     val temperature: Float = 0.7f,
-    val maxTokens: Int = 4096,
+    val maxTokens: Int = 65536,            // 输出 token 上限：对齐模型真实上限 65536（原 4096 过小，长工具编排/长文会被腰斩）
     val enableTools: Boolean = true,
     val maxToolRounds: Int = 0,           // 工具调用轮次上限：0=不限制（默认，工具调用不设次数上限，ReAct 循环持续到模型给出最终答复，内置 200 轮安全天花板防失控）；>0 时按该值封顶
-    val contextWindow: Int = 32000,       // 上下文窗口（输入 token 预算）：0=不限制；非 0 时按预算从最旧轮次裁剪历史，始终保留 system（身份/人格/工具指引），避免长对话撑爆窗口被网关静默丢弃前部上下文或 tools 字段。默认调大到 32000：完整 system prompt（含 50 工具菜单+CMS+ACI+记忆+经验）已占 ~11.5k token，16000 时留给历史对话的预算极少，长对话从前部被裁 → 表现为「记不住上下文」。
+    val contextWindow: Int = 262144,      // 上下文窗口（输入 token 预算）：0=不限制（按模型硬输入上限 262144 作为安全顶）；非 0 时按预算从最旧轮次裁剪历史，始终保留 system。默认对齐模型真实输入上限 262144：平时不裁你的长上下文，只在逼近 262144 才裁，避免「全量发送撑爆窗口 → 上游 500 context length exceeded」。
+    val maxInputTokens: Int = 262144,      // 模型硬输入上限（token）：请求总输入（system + 历史）不得超过此值，否则上游直接 500。contextWindow=0 时本值作为安全硬顶生效；contextWindow>0 时取两者较小值。属模型固有能力，不作用户配置项。
     val customProviderName: String = "",   // 自定义厂商展示名（provider=="OTHER" 时有效）
     val localModelPath: String = "",       // 本地离线模型路径（provider 为 MNN/LLAMA_CPP 时有效）
     val useFullTools: Boolean = true,      // 完整工具集开关：默认开启（全面开放，下发 fullSpecs ~50 个）；设置入口已移除，由默认全开保证工具可用

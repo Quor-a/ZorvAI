@@ -7,6 +7,10 @@ import java.util.UUID
 /** 单条工具结果回传给模型时的最大保留字符数，超出部分就地截断（保留头+尾）。 */
 internal const val TOOL_RESULT_CAP = 1600
 
+/** 模型硬输入上限（token）：请求总输入（system + 历史）不得超过此值，否则上游直接 500「context length exceeded」。
+ *  contextWindow=0（用户设「不限制」）时本值作为安全硬顶生效，避免「全量无界发送」撑爆模型上限。 */
+internal const val MODEL_MAX_INPUT_TOKENS = 262144
+
 /**
  * 就地压缩超长工具结果（role=tool 的 content），防止命令类工具（terminal_exec / root_exec 等）
  * 的巨型输出在上下文裁剪时被整条丢弃，进而拆散工具轮、诱发孤儿调用与模型「跑偏 / 乱执行」。
@@ -27,11 +31,30 @@ internal fun compactToolResults(list: List<QuroChatMessage>): List<QuroChatMessa
 internal fun truncateToolResult(text: String): String {
     val head = (TOOL_RESULT_CAP * 4 / 10).coerceAtLeast(200)
     val tail = (TOOL_RESULT_CAP - head).coerceAtLeast(200)
+    // 🔧 按「码点」而非 UTF-16 字符截断：原 take/takeLast 可能把 emoji / 代理对切成孤立代理项
+    // （lone surrogate）→ 该孤立代理项进入请求体后会让严格上游 JSON 解析失败 → 500。
+    val headStr = text.takeCodePoints(head)
+    val tailStr = text.takeLastCodePoints(tail)
     return buildString {
-        append(text.take(head))
+        append(headStr)
         append("\n…\n〔工具输出过长已截断：原文 ${text.length} 字符，仅保留头 $head + 尾 $tail；完整日志见本机文件〕\n…\n")
-        append(text.takeLast(tail))
+        append(tailStr)
     }
+}
+
+/** 取前 n 个 Unicode 码点（避免切裂代理对）。 */
+private fun String.takeCodePoints(n: Int): String {
+    if (n <= 0) return ""
+    val cps = codePoints().limit(n.toLong()).toArray()
+    return if (cps.isEmpty()) "" else String(cps, 0, cps.size)
+}
+
+/** 取后 n 个 Unicode 码点（避免切裂代理对）。 */
+private fun String.takeLastCodePoints(n: Int): String {
+    if (n <= 0) return ""
+    val cps = codePoints().toArray()
+    val start = (cps.size - n).coerceAtLeast(0)
+    return String(cps, start, cps.size - start)
 }
 
 /**
@@ -116,7 +139,7 @@ class QuroConversationStore {
                     m.reasoning!!.replace(Regex("<[^>]*>"), "")
                 else -> m.content
             }
-            built.add(QuroChatMessage(m.role, content, m.toolCalls, m.toolCallId, m.attachments))
+            built.add(QuroChatMessage(m.role, content, m.toolCalls, m.toolCallId, m.attachments, reasoning = m.reasoning))
         }
         // 「保留对话轮数」对话框级覆盖：仅保留最近 N 个 (用户+助手) 轮次，其余丢弃。
         // 仅当 historyRounds > 0 时生效；0/未设置则跳过（与历史行为完全一致）。
@@ -129,10 +152,15 @@ class QuroConversationStore {
         // 这里在裁剪前先把超长工具结果就地截断（保留头 + 尾 + 长度说明），使其始终能留在上下文里，
         // 工具轮 call↔result 始终成对，从根本上消除孤儿、保住模型对工具执行的历史记忆。
         capped = compactToolResults(capped)
-        if (contextWindow <= 0) return pruneOrphanToolMessages(capped)
+        // 🔧 硬输入上限安全网（toolfix7）：用户把 contextWindow 设 0（「不限制」）时，旧逻辑完全不裁剪、
+        // 每轮全量发送历史；长对话 / 多工具轮后总输入超过模型硬上限（如 262144）即被上游 500
+        // 「context length exceeded」。现以模型真实输入上限（262144）作为预算：平时（远小于上限）不裁
+        // 你的长上下文，只在逼近上限才裁最旧轮次——既保住长上下文，又不再因溢出而 500。
+        val ceiling = if (contextWindow > 0) contextWindow.coerceAtMost(MODEL_MAX_INPUT_TOKENS) else MODEL_MAX_INPUT_TOKENS
+        if (ceiling <= 0) return pruneOrphanToolMessages(capped)
 
         val sysTokens = system?.let { estTokens(it.content) } ?: 0
-        var budget = contextWindow - sysTokens
+        var budget = ceiling - sysTokens
         val nonSys = capped.filter { it.role != "system" }
         if (budget <= 0) {
             // 预算连 system 都不够：仅保留 system + 最后一条消息，避免空请求
@@ -144,31 +172,40 @@ class QuroConversationStore {
         // 策略：先填普通消息（高优先级），剩余预算再填巨型消息（低优先级）。
         // 这样预算紧张时巨型旧内容率先被裁剪，大幅降低"继续之前任务"类串台。
         val GIANT_THRESHOLD = 3000
-        val (giantMsgs, normalMsgs) = nonSys.partition { it.content.length > GIANT_THRESHOLD }
+        // 🔧 用原始下标标记每条消息，确保最终严格按时间先后排列。
+        // 旧逻辑把 normal / giant 分两路各自 asReversed 后拼接、再整体 asReversed，
+        // 会把「所有巨型消息」排到「所有普通消息」之前，彻底打乱时序：
+        // 例如 round2 的巨型工具结果会被摆到 round1 的普通消息之前；若它对应的
+        // assistant tool_calls 在更晚轮次，则 role=tool 排在 tool_calls 之前 → 严格上游 400/500。
+        // 现改为：greedy 决策「保/丢」时只收集下标，最后一步按原始下标还原顺序。
+        val indexed = nonSys.mapIndexed { i, m -> i to m }
+        val (giantIdx, normalIdx) = indexed.partition { it.second.content.length > GIANT_THRESHOLD }
 
-        val kept = mutableListOf<QuroChatMessage>()
-        // 第一轮：填充普通消息（从最新往最旧）
-        for (m in normalMsgs.asReversed()) {
+        val keptIdx = mutableListOf<Int>()
+        // 第一轮：填充普通消息（高优先级，从最新往最旧）
+        for ((i, m) in normalIdx.asReversed()) {
             val t = estTokens(m.content) + (m.toolCalls?.sumOf { estTokens(it.arguments) } ?: 0)
-            if (kept.isEmpty() && t > budget) {
-                kept.add(m)
+            if (keptIdx.isEmpty() && t > budget) {
+                keptIdx.add(i) // 最新一条超预算也强制保留，避免空请求
             } else if (t <= budget) {
-                kept.add(m)
+                keptIdx.add(i)
                 budget -= t
             } else {
                 break
             }
         }
-        // 第二轮：用剩余预算填充巨型消息（如果还有空间）
-        for (m in giantMsgs.asReversed()) {
+        // 第二轮：用剩余预算填充巨型消息（低优先级，放不下跳过不 break）
+        for ((i, m) in giantIdx.asReversed()) {
             val t = estTokens(m.content) + (m.toolCalls?.sumOf { estTokens(it.arguments) } ?: 0)
             if (t <= budget) {
-                kept.add(m)
+                keptIdx.add(i)
                 budget -= t
             }
-            // 巨型消息放不下就跳过，不 break（后面可能有小一点的巨型消息能放下）
         }
-        return pruneOrphanToolMessages(capped.filter { it.role == "system" } + kept.asReversed())
+        // 按原始时间顺序还原（keptIdx 仅收集「保/丢」决策，顺序在此一步纠正）
+        keptIdx.sort()
+        val kept = keptIdx.map { nonSys[it] }
+        return pruneOrphanToolMessages(capped.filter { it.role == "system" } + kept)
     }
 
     /**

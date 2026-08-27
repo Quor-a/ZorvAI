@@ -17,6 +17,8 @@ import com.ai.assistance.quro.core.QuroAttachment
 import org.json.JSONObject
 import android.util.Log
 import com.ai.assistance.quro.core.QuroToolSpec
+import com.ai.assistance.quro.core.tools.QuroToolRouter
+import java.util.IdentityHashMap
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.util.QuroStageHints
@@ -40,6 +42,12 @@ class QuroAssistant(
     private val store: QuroConversationStore,
 ) {
     private val engine = QuroToolEngine(registry)
+
+    /**
+     * 渐进式工具披露：每个会话（store）一个 router 实例，跨轮次保留「已加载」工具集。
+     * 新会话用新 store → 自动拿到干净的 router。
+     */
+    private val toolRouters = IdentityHashMap<QuroConversationStore, QuroToolRouter>()
 
     /**
      * 兜底清洗：部分小本地模型会把内部多轮上下文控制指令回显进正文
@@ -196,6 +204,11 @@ class QuroAssistant(
             }
             // 记忆开关关闭时摘除 memory_* 工具，与系统提示词中的记忆段保持一致（都不注入）
             val effectiveSpecs = if (autoSaveMemory) toolSpecs else toolSpecs.filter { !it.name.startsWith("memory_") }
+            // 🔧 渐进式工具披露（toolfix10）：每轮只下发【路由目录 + 常驻核心 + 已加载】，而非全部工具。
+            // router 实例按会话(store)保留，跨轮次累积「已加载」工具，避免每次都扫全量、也不需要每次 discovery。
+            val activeToolRouter = if (QuroToolRouter.PROGRESSIVE && !isLocal) {
+                toolRouters.getOrPut(store) { QuroToolRouter(effectiveSpecs) }.also { it.setSpecs(effectiveSpecs) }
+            } else null
             Log.i("QuroAssistant", "tool mode=${if (!effEnableTools) "off" else if (cfg.useFullTools) "full(${toolSpecs.size})" else "core(${toolSpecs.size})"}")
             // 诊断日志：确认 aci/workspace 工具是否在下发列表中
             val aciWsTools = effectiveSpecs.filter { it.name.startsWith("aci_") || it.name.startsWith("workspace_") }
@@ -349,7 +362,7 @@ class QuroAssistant(
                             messages = llmMessages,
                             temperature = effTemperature,
                             maxTokens = effMaxTokens,
-                            tools = effectiveSpecs,
+                            tools = if (activeToolRouter != null) activeToolRouter.activeSpecs() else effectiveSpecs,
                             stream = streaming,
                             // 注意：v384 已根除重组期重编译正则的 ANR 真凶，此处无需再用 500ms 粗节流保命。
                             onToken = if (streaming) emitStreamToken else null,
@@ -498,8 +511,28 @@ class QuroAssistant(
                         // 工具执行异常不得上抛：降级为每个 call 各一条错误结果，保持 id 配对正确，
                         // 让 LLM 能看到错误并自行兜底答复。
                         val t0 = System.currentTimeMillis()
-                        val results = runCatching { engine.execute(context, callsWithId) }
-                            .getOrElse { e -> callsWithId.map { QuroToolResult(it.name, "工具执行异常：${e.message}") } }
+                        // 🔧 渐进式工具披露：tool_router 调用由 router 处理（返回目录/加载工具），
+                        // 不进 engine.execute（它不是真实可执行工具）。其余正常执行。
+                        val results = if (activeToolRouter != null && callsWithId.any { it.name == "tool_router" }) {
+                            val byId = LinkedHashMap<String, QuroToolResult>()
+                            val normalCalls = ArrayList<QuroToolCall>()
+                            callsWithId.forEach { c ->
+                                if (c.name == "tool_router") {
+                                    byId[c.id] = QuroToolResult(c.name, activeToolRouter.handle(c.name, c.arguments))
+                                } else {
+                                    normalCalls.add(c)
+                                }
+                            }
+                            if (normalCalls.isNotEmpty()) {
+                                runCatching { engine.execute(context, normalCalls) }
+                                    .getOrElse { e -> normalCalls.map { QuroToolResult(it.name, "工具执行异常：${e.message}") } }
+                                    .forEachIndexed { i, r -> byId[normalCalls[i].id] = r }
+                            }
+                            callsWithId.map { byId[it.id] ?: QuroToolResult(it.name, "工具执行异常：无结果") }
+                        } else {
+                            runCatching { engine.execute(context, callsWithId) }
+                                .getOrElse { e -> callsWithId.map { QuroToolResult(it.name, "工具执行异常：${e.message}") } }
+                        }
                         val dur = System.currentTimeMillis() - t0
                         // 自动更新流体云进度：基于轮次计算进度（每轮+10%，上限90%）
                         val fluidProgress = minOf(round * 10, 90)
