@@ -25,6 +25,7 @@ import com.ai.assistance.quro.core.aidlaci.QuroAidlAciManager
 import com.ai.assistance.quro.core.aidlaci.AciConsoleModel
 import com.ai.assistance.quro.core.aidlaci.AciConsoleScreen
 import com.ai.assistance.quro.core.aidlaci.AidlAciScreen
+import com.ai.assistance.quro.core.aidlaci.AciComponent
 import org.json.JSONObject
 import androidx.compose.ui.window.Dialog
 import com.ai.assistance.quro.core.tools.QuroDownloadUtil
@@ -455,9 +456,15 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
             val resp = withContext(Dispatchers.IO) { mgr.call(pkg, "console_ui", android.os.Bundle()) }
             if (resp.isSuccess) {
                 val snap = resp.result?.getString("snapshot") ?: ""
+                // 容错：受控端若返回非 SDUI JSON（如旧版纯文本快照），不整屏报「JSON 解析失败」，
+                // 而是降级为单个文本组件展示原始内容，保证操控台始终可用。
                 consoleScreen = runCatching { AciConsoleModel.parse(JSONObject(snap)) }.getOrElse {
-                    consoleError = "控制台 JSON 解析失败：${it.message}"
-                    null
+                    AidlAciScreen(
+                        title = "控制台",
+                        subtitle = "（原始输出，未识别为 SDUI 快照）",
+                        updatedAt = System.currentTimeMillis(),
+                        components = listOf(AciComponent.Text(snap.ifEmpty { "（空快照）" }))
+                    )
                 }
             } else {
                 consoleError = "打开控制台失败（错误码=${resp.errorCode}）：${resp.errorMessage}"
@@ -477,7 +484,14 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
             val r2 = withContext(Dispatchers.IO) { mgr.call(pkg, "console_ui", android.os.Bundle()) }
             if (r2.isSuccess) {
                 val snap = r2.result?.getString("snapshot") ?: ""
-                consoleScreen = runCatching { AciConsoleModel.parse(JSONObject(snap)) }.getOrNull()
+                consoleScreen = runCatching { AciConsoleModel.parse(JSONObject(snap)) }.getOrElse {
+                    AidlAciScreen(
+                        title = "控制台",
+                        subtitle = "（原始输出，未识别为 SDUI 快照）",
+                        updatedAt = System.currentTimeMillis(),
+                        components = listOf(AciComponent.Text(snap.ifEmpty { "（空快照）" }))
+                    )
+                }
             }
         }
     }

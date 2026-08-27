@@ -2363,12 +2363,11 @@ private fun MessageRow(
         Column(Modifier.widthIn(max = if (narrow) 260.dp else 280.dp)) {
             // ── 名字行 + 思考/工具小按钮 ──────────────────────────────
             // 状态提升到 Column 作用域（展开内容在 Row 外渲染）
-            // 🔧 Bug修复「思考没有修复」：生成中的最后一条消息默认展开思考区，
-            //   流式 reasoning 边产出边上屏；用户仍可手动收起（remember 初始值只在首次组合生效）。
-            var showThink by remember { mutableStateOf(streamingThink) }
-            // 🔧 v453：工具调用默认【折叠】。此前默认 = isLastToolMsg（true），导致每轮工具调用
-            // 自动展开、且流式刷新时 MessageRow 重挂载会把展开态重置回 true（"手动收起又弹开"）。
-            // 改为默认折叠，仅留「· N 工具」胶囊供用户按需点开；重挂载也稳定保持折叠态。
+            // 🔧 用户诉求（toolfix8 修正）：思考过程默认【折叠】，不手动点永远不展开。
+            //   即使生成中最后一条也保持折叠；点击下方「思考过程 · N步」胶囊才展开。
+            var showThink by remember { mutableStateOf(false) }
+            // 🔧 用户诉求（toolfix8 修正）：工具调用默认【折叠】，不手动点永远不展开。
+            //   点击「· N 工具」胶囊才展开；内层每个工具块默认也折叠（见 ToolCallBlock expanded 默认 false）。
             var showTools by remember { mutableStateOf(false) }
             val hasThinkOrTools = !msg.mine && (msg.think != null || !msg.tools.isNullOrEmpty())
 

@@ -1,6 +1,11 @@
 package com.ai.assistance.quro.core.network
 
+import android.content.ContentValues
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
+import com.ai.assistance.quro.activity.QuroApplication
 import com.ai.assistance.quro.core.QuroAttachmentKit
 import com.ai.assistance.quro.core.QuroChatMessage
 import com.ai.assistance.quro.core.QuroLlmResult
@@ -12,6 +17,10 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
@@ -22,6 +31,13 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.coroutineContext
 
 private const val TAG = "QuroLlm"
+
+/**
+ * 单次响应 max_tokens 的硬性上限（token）。取已知最大模型（MiMo-v2.5 输出上限 128K=131072）作为天花板，
+ * 防止配置里误填超大值（如误存的 131000 或更大）被严格网关/上游按「超模型输出上限」直接 500。
+ * 正常配置（≤131072）不受影响；仅当超出时才钳制并打日志提示。
+ */
+private const val MAX_OUTPUT_TOKENS = 131_072
 
 /**
  * 单次 HTTP 调用的硬超时护栏（毫秒）。
@@ -90,17 +106,22 @@ class QuroLlmClient(
         //  （o1 固定为 1，传非 1 也 400），统一省略由服务端取默认。
         //  通过 model 名前缀 o+数字（o1 / o3-mini / o4-mini …）识别；gpt-4o / 4.1 等普通模型不受影响。
         val isReasoningModel = Regex("(?i)^o[0-9]").containsMatchIn(model.trim())
+        // 🔧 toolfix8：max_tokens 硬性上限护栏。避免误配超大值被上游按「超模型输出上限」500。
+        val effectiveMaxTokens = maxTokens.coerceAtMost(MAX_OUTPUT_TOKENS)
+        if (effectiveMaxTokens != maxTokens) {
+            Log.w(TAG, ">>> max_tokens 被钳到 $effectiveMaxTokens（原 $maxTokens 超模型输出上限 $MAX_OUTPUT_TOKENS）")
+        }
         val body = JSONObject().apply {
             put("model", model)
             if (isReasoningModel) {
                 Log.i(TAG, ">>> reasoning model 分支：用 max_completion_tokens，省略 temperature (model=$model)")
-                put("max_completion_tokens", maxTokens)
+                put("max_completion_tokens", effectiveMaxTokens)
             } else {
                 put("temperature", temperature)
-                put("max_tokens", maxTokens)
+                put("max_tokens", effectiveMaxTokens)
             }
             put("messages", JSONArray().also { arr ->
-                messages.forEach { m -> arr.put(messageToJson(m)) }
+                messages.forEach { m -> arr.put(messageToJson(m, emitReasoning = !isReasoningModel)) }
             })
             if (tools.isNotEmpty()) {
                 put("tools", JSONArray().also { arr ->
@@ -122,7 +143,7 @@ class QuroLlmClient(
         }
         val bodyStr = body.toString()
         // ===== 调试日志：请求体概览（Logcat tag=QuroLlm）=====
-        Log.i(TAG, ">>> REQUEST  model=$model url=$url messages=${messages.size} tools=${tools.size} maxTokens=$maxTokens body=${bodyStr.length}ch")
+        Log.i(TAG, ">>> REQUEST  model=$model url=$url messages=${messages.size} tools=${tools.size} maxTokens=$effectiveMaxTokens body=${bodyStr.length}ch")
         if (tools.isNotEmpty()) {
             Log.d(TAG, "    tool_names=[${tools.joinToString(", ") { it.name }}]")
             if (tools.size > 25) Log.w(TAG, "    ⚠️ 工具数量 ${tools.size} 偏多（内置工具+技能）！部分 API 中转可能静默丢弃 tools 字段，导致模型无法调用工具。可考虑关闭部分技能的「常驻系统提示词」或在设置关闭「完整工具集」。")
@@ -134,7 +155,7 @@ class QuroLlmClient(
             .build()
         // 流式路径：逐字回调，不走重试（避免半截 token 后重试造成内容错乱）。
         if (stream && onToken != null) {
-            return streamChat(req, onToken, onThinking)
+            return streamChat(req, bodyStr, onToken, onThinking)
         }
         // 重试策略：网关类临时故障（5xx / 429）与网络异常（超时/连接失败）自动重试，
         // 避免 openresty 等反向代理偶发 502/503 直接把原始错误甩给用户。
@@ -187,6 +208,9 @@ class QuroLlmClient(
                         if (resp.code in retryableCodes && attempt < maxRetries) {
                             return@use null // 临时故障 → 进入下一次重试
                         }
+                        // 🔧 把真实发出的请求体 + 上游响应双写到 Download/QuroAI_logs/，
+                        // 用户用文件管理器即可取到（无需 adb），用于定位到底哪条消息/哪个字段非法。
+                        dumpLlmErrorPayload(resp.code, text, bodyStr, url)
                         return@use QuroLlmResult.Error(friendlyHttpError(resp.code, text))
                     }
                     return@use parse(text)
@@ -207,6 +231,7 @@ class QuroLlmClient(
                         lastErr = e.message
                         Log.e(TAG, "<<< NETWORK ERROR attempt=$attempt: ${e.message}", e)
                         if (attempt < maxRetries) continue // 超时/连接失败等网络异常重试
+                        dumpLlmErrorPayload(-1, "网络/解析异常: ${e.message}", bodyStr, url)
                         return QuroLlmResult.Error(friendlyNetError(e))
                     }
                 }
@@ -232,9 +257,108 @@ class QuroLlmClient(
                 "模型服务响应超时（504），请稍后重试"
             plain.contains("429") || plain.contains("Too Many Requests", ignoreCase = true) ->
                 "请求过于频繁（429），请稍后重试"
-            else -> "请求失败（HTTP $code）：${plain.take(200)}"
+            // 🔧 上游模型服务 500：中转网关（tokenrouter 等）把真实上游模型的 500
+            //   透传为 "Upstream Response Error" / "Internal Server Error"。这是服务端故障，
+            //   不是本应用请求构造问题，给出明确引导而非把原始 JSON 甩给用户。
+            plain.contains("Upstream Response Error", ignoreCase = true) ||
+                plain.contains("Internal Server Error", ignoreCase = true) ->
+                "模型上游服务返回 500（Internal Server Error）。通常是模型服务端临时故障或该模型/中转不可用，" +
+                    "请稍后重试；若持续出现，请到「模型配置」检查模型名与中转地址是否有效（或换一个模型试试）。" +
+                    "（已生成诊断文件 Download/QuroAI_logs/llm_last_error.json，可在手机文件管理器取到后发我，用于精准定位非法字段）"
+            else -> {
+                // 其它未归类错误：尽量抽 {"error":{"message":"..."}} 的 message，避免整段原始 JSON 进气泡。
+                val msg = extractJsonErrorMessage(plain) ?: plain.take(200)
+                "请求失败（HTTP $code）：$msg"
+            }
         }
     }
+
+    /** 从网关错误体里尽量抽出 {"error":{"message":"..."}} 的 message，避免把整段 JSON 甩给用户。 */
+    /**
+     * 🔧 请求失败（尤其是 500）时，把真实发出的请求体 + 上游响应双写到手机
+     * Download/QuroAI_logs/llm_last_error.json，用户用文件管理器即可取到（无需 adb/logcat），
+     * 用于定位到底哪条消息/哪个字段非法导致上游拒收。
+     * - 图片 data URI 等超大字段脱敏，避免文件膨胀、聚焦 JSON 结构。
+     * - 写入走 MediaStore（Android 11+ 文件管理器可见的「下载」目录）；
+     *   旧方案直接用 File 写公共 Download 子目录在作用域存储下会被系统拒绝（静默失败），
+     *   这是上一版「没有诊断文件」的真因，已改为 MediaStore + RELATIVE_PATH=Download/QuroAI_logs。
+     * - 兜底：app 私有外部存储 getExternalFilesDir（adb / Android/data 可取）。
+     */
+    private fun dumpLlmErrorPayload(code: Int, responseText: String, requestBody: String, url: String = "") {
+        val redacted = requestBody
+            .replace(Regex("\"url\"\\s*:\\s*\"data:[^\"]*\""), "\"url\":\"[image base64 omitted]\"")
+            .replace(Regex("\"image_url\"\\s*:\\s*\\{[^}]*\\}"), "\"image_url\":{\"url\":\"[omitted]\"}")
+        // 🔧 toolfix8：诊断写出【完整】请求体（不再截断前 200000 字）。此前截断导致 500 致因的
+        //  最新消息（user / tool 尾部）被切掉、无法定位到底是哪条消息/字段非法。图片 data URI 已脱敏，
+        //  其余（system / 历史 / tools）全量保留，便于精准比对上游拒收点。
+        val reqModel = runCatching { JSONObject(redacted).optString("model", "") }.getOrDefault("")
+        val content = buildString {
+            appendLine("ZorvAI LLM 请求失败自诊断")
+            appendLine("时间: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}")
+            appendLine("HTTP 状态码: $code")
+            appendLine("请求 URL: ${url.ifBlank { "(未知)" }}")
+            appendLine("请求 model: ${reqModel.ifBlank { "(未知)" }}")
+            appendLine("请求体字节数: ${redacted.length}")
+            appendLine()
+            appendLine("=== 上游响应（前 2000 字）===")
+            appendLine(responseText.take(2000))
+            appendLine()
+            appendLine("=== 发出的请求体（图片 data URI 已脱敏，完整未截断）===")
+            appendLine(redacted)
+            appendLine()
+            appendLine("=== 说明 ===")
+            appendLine("若 HTTP=500 且响应含 Upstream Response Error，通常是上游/中转服务端临时故障（5xx/限流），")
+            appendLine("并非本应用请求构造问题——已对「首 token 前」的 5xx/429 自动重试，多数能恢复。")
+            appendLine("若仍持续 500：① 到「模型配置」确认中转地址/模型名有效；② 换一个模型或中转试试；")
+            appendLine("③ 本文件为完整请求体（共 ${redacted.length} 字节），可确认消息结构是否干净。")
+        }
+        val fileName = "llm_last_error.json"
+        val ctx = QuroApplication.appCtx
+        if (ctx == null) {
+            Log.e(TAG, "⚠️ dumpLlmErrorPayload: QuroApplication.appCtx 为空，无法落盘")
+            return
+        }
+        // 1) MediaStore 写公共 Download/QuroAI_logs（Android 11+ 文件管理器可见）
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            runCatching {
+                val resolver = ctx.contentResolver
+                val coll = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                runCatching {
+                    resolver.delete(coll, "${MediaStore.Downloads.DISPLAY_NAME} = ?", arrayOf(fileName))
+                }
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(MediaStore.Downloads.MIME_TYPE, "application/json")
+                    put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/QuroAI_logs")
+                }
+                val uri = resolver.insert(coll, values) ?: return@runCatching
+                resolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) }
+                Log.i(TAG, "✅ LLM 错误诊断已写入 Download/QuroAI_logs/$fileName（MediaStore）")
+            }.onFailure { t ->
+                Log.e(TAG, "⚠️ MediaStore 写 LLM 诊断失败: ${t.message}")
+            }
+        } else {
+            // Android 10-：直接写公共 Download 子目录（无作用域存储限制）
+            runCatching {
+                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "QuroAI_logs")
+                dir.mkdirs()
+                File(dir, fileName).writeText(content)
+            }.onFailure { t ->
+                Log.e(TAG, "⚠️ 旧版直接写 LLM 诊断失败: ${t.message}")
+            }
+        }
+        // 2) 兜底：app 私有外部存储（adb / Android/data/com.ai.assistance.quro/files/QuroAI_logs）
+        runCatching {
+            val fb = ctx.getExternalFilesDir("QuroAI_logs")?.apply { mkdirs() }
+            fb?.let { File(it, fileName).writeText(content) }
+        }.onFailure { t ->
+            Log.e(TAG, "⚠️ 兜底写 LLM 诊断失败: ${t.message}")
+        }
+    }
+
+    private fun extractJsonErrorMessage(plain: String): String? = runCatching {
+        JSONObject(plain).optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() }
+    }.getOrNull()
 
     private fun friendlyNetError(e: Exception): String {
         val raw = e.message ?: "network error"
@@ -298,23 +422,70 @@ class QuroLlmClient(
         }
     }
 
-    private fun messageToJson(m: QuroChatMessage): JSONObject {
+    /**
+     * 清洗发送给模型的文本，剔除会让严格上游 JSON 解析失败（→ 500）的非法字符：
+     *  - 孤立代理项（lone surrogate，UTF-16 截断产生）→ 替换为 U+FFFD；
+     *  - C0 控制字符（除 \n \r \t）与 C1 控制字符（0x7F–0x9F，含 ANSI 转义起始 0x1B）→ 剔除。
+     * 保留正常可见文本、emoji（合法代理对）、换行与缩进。终端/命令工具输出常含此类脏字符，
+     * 原样发出会被严格上游（DeepSeek/中转）解析失败 → 500 "Upstream Response Error"。
+     */
+    private fun sanitizeForLlm(s: String): String {
+        val sb = StringBuilder(s.length)
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            when {
+                c.isHighSurrogate() -> {
+                    if (i + 1 < s.length && s[i + 1].isLowSurrogate()) {
+                        sb.append(c); sb.append(s[i + 1]); i += 2
+                    } else { sb.append('\uFFFD'); i += 1 }
+                }
+                c.isLowSurrogate() -> { sb.append('\uFFFD'); i += 1 }
+                c < '\u0020' -> {
+                    if (c == '\n' || c == '\r' || c == '\t') sb.append(c)
+                    i += 1
+                }
+                c in '\u007F'..'\u009F' -> { i += 1 }
+                else -> { sb.append(c); i += 1 }
+            }
+        }
+        return sb.toString()
+    }
+
+    private fun messageToJson(m: QuroChatMessage, emitReasoning: Boolean = true): JSONObject {
         val o = JSONObject().put("role", m.role)
+        // 🔧 toolfix8：推理模型的思考过程（reasoning_content）随 assistant 消息一并回传。
+        //  mimo-v2.5 等严格上游要求带 tool_calls 的 assistant 历史必须带 reasoning_content，
+        //  缺失会被拒收 → 500。o 系列推理模型（isReasoningModel）服务端不接受输入侧的
+        //  reasoning_content，故对其不发送（避免 400）。其余模型 reasoning 本就为空，不会发送。
+        if (emitReasoning && m.reasoning != null) {
+            o.put("reasoning_content", m.reasoning)
+        }
+        // 🔧 清洗非法字符：发送前统一清洗，保证请求体 JSON 合法且喂给模型的文本干净。
+        val safeContent = sanitizeForLlm(m.content)
         val images = m.attachments?.filter { it.type == "image" } ?: emptyList()
         val videos = m.attachments?.filter { it.type == "video" } ?: emptyList()
         val files = m.attachments?.filter { it.type == "file" } ?: emptyList()
         if (m.toolCallId != null) {
             o.put("tool_call_id", m.toolCallId)
             m.toolName?.let { o.put("name", it) }
-            o.put("content", m.content)
+            // 🔧 toolfix8：严格上游（部分推理模型网关）拒绝空的 tool 消息 content（""）→ 500。
+            //  工具无文本输出时给占位串，避免空 content 触发上游拒收。
+            o.put("content", if (safeContent.isBlank()) "(工具无输出)" else safeContent)
         } else if (m.toolCalls != null) {
-            o.put("content", m.content.ifBlank { " " })
+            // 🔧 修复：assistant 带 tool_calls 但无文本时，content 必须发 JSON null（OpenAI/DeepSeek 规范），
+            //    发 " " 空串会被严格上游判定为非法消息结构 → 500。
+            o.put("content", if (safeContent.isBlank()) JSONObject.NULL else safeContent)
             o.put("tool_calls", JSONArray().also { arr ->
                 m.toolCalls.forEach { tc ->
+                    // 🔧 关键修复：历史回放时 arguments 也必须清洗——旧版本存储的对话里可能残留
+                    //    模型产出的非法 JSON arguments，原样回传会被严格上游解析失败 → 500。
+                    //    先 sanitizeToolArguments 规整 JSON，再 sanitizeForLlm 清掉字符串值内的孤立代理项/控制字符。
                     arr.put(
                         JSONObject().put("id", tc.id).put("type", "function").put(
                             "function",
-                            JSONObject().put("name", tc.name).put("arguments", tc.arguments),
+                            JSONObject().put("name", tc.name)
+                                .put("arguments", sanitizeForLlm(sanitizeToolArguments(tc.arguments))),
                         ),
                     )
                 }
@@ -324,7 +495,7 @@ class QuroLlmClient(
             val arr = JSONArray()
             // 构建增强文本：包含附件描述信息
             val enhancedText = buildString {
-                append(m.content)
+                append(safeContent)
                 if (videos.isNotEmpty()) {
                     append("\n\n[附件信息] 用户发送了以下视频文件：")
                     videos.forEach { att ->
@@ -368,7 +539,7 @@ class QuroLlmClient(
             }
             o.put("content", arr)
         } else {
-            o.put("content", m.content)
+            o.put("content", safeContent)
         }
         return o
     }
@@ -393,7 +564,12 @@ class QuroLlmClient(
                     QuroToolCall(
                         id = tc.optString("id", "call_$i"),
                         name = fn.getString("name"),
-                        arguments = fn.optString("arguments", "{}"),
+                        // 🔧 修复模型快速并发发出多个 tool_call 时 arguments 常为非法 JSON
+                        // （未引号 key / 单引号 / 尾逗号 / 截断）。原样回传会被严格上游
+                        // （DeepSeek/国内厂商）解析失败 → 500 "Upstream Response Error"，
+                        // 并触发 500 重试在 1 秒内连发数次失败请求。落地即修复为合法 JSON，
+                        // 既避免上游 500，也让工具拿到可解析参数。
+                        arguments = sanitizeToolArguments(fn.optString("arguments", "{}")),
                     ),
                 )
             }
@@ -426,6 +602,76 @@ class QuroLlmClient(
     }
 
     /**
+     * 修复模型返回的非法 JSON 工具参数（arguments）。
+     *
+     * 真实 BUG 根因：模型（尤其快速并发发出多个 tool_call 时）常返回不规范的 arguments：
+     *  - 键未加引号（{key: "v"}）
+     *  - 使用单引号（{'key': 'v'}）
+     *  - 尾随逗号（{"a":1,}）
+     *  - 被截断（网络分包 / 生成中断，如 {"a": 12）
+     * 这些字符串在「下一轮请求」被原样回传给严格上游（DeepSeek / 国内厂商）时会被服务端
+     * 严格解析失败 → 返回 500 "Upstream Response Error"，并触发 500 重试在 1 秒内连发数次失败请求
+     * （与用户反馈的「1 秒执行了好几个 / 非法传入」现象完全吻合）。
+     *
+     * 修复策略：先尝试直接解析（合法则规整化返回）；否则做启发式修复（单引号→双引号、
+     * 去尾逗号、补引号键、闭合未结束的括号与字符串）；修复后仍非法则回退 "{}"（空参数），
+     * 绝不把脏数据甩给上游，也绝不因此让整轮对话 500。
+     */
+    private fun sanitizeToolArguments(json: String): String {
+        val trimmed = json.trim()
+        if (trimmed.isEmpty()) return "{}"
+        // 已是合法 JSON 对象 → 规整化（统一 key 引号）后原样返回。
+        runCatching { JSONObject(trimmed) }.onSuccess { return it.toString() }
+        // 已是合法 JSON 数组 / 标量 → 直接返回（参数理论上应是对象，但容错）。
+        runCatching { JSONArray(trimmed) }.onSuccess { return it.toString() }
+        // 否则进入启发式修复；修复后仍非法 → 回退空对象。
+        val repaired = repairToolArguments(trimmed)
+        return if (runCatching { JSONObject(repaired) }.isSuccess) {
+            repaired
+        } else {
+            Log.w(TAG, "⚠️ tool arguments 修复后仍非法，回退空对象。原始=${trimmed.take(200)}")
+            "{}"
+        }
+    }
+
+    /** 启发式修复非法 JSON 对象字符串（单引号 / 尾逗号 / 未引号键 / 截断括号）。 */
+    private fun repairToolArguments(s: String): String {
+        var t = s
+        // 1) 单引号 → 双引号：模型常以单引号作 JSON 定界符（{'k':'v'} → {"k":"v"}）。
+        //    注：这是最佳努力修复，若字符串值内本身含裸单引号（罕见）可能受损；
+        //    此时后续解析会失败并回退 "{}"，不会把脏数据甩给上游。
+        t = t.replace('\'', '"')
+        // 2) 去尾随逗号：{,} / {, ] / ,} 等处的多余逗号。
+        t = t.replace(Regex(""",\s*([\]}])"""), "$1")
+        // 3) 给未加引号的键补双引号：{ key: 或 , key: → 补引号（key 为合法标识符）。
+        //    已正确加引号的键（前导字符是 "）不会命中，故不会重复加引号。
+        t = t.replace(Regex("""([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*(\s*:)"""), "$1\"$2\"$3")
+        // 4) 截断修复：闭合未结束的字符串与未闭合的 {。
+        t = closeBrackets(t)
+        return t
+    }
+
+    /** 闭合未结束的字符串与未闭合的 {（参数通常是纯对象，简化只补 }）。 */
+    private fun closeBrackets(s: String): String {
+        var depth = 0
+        var inStr = false
+        var esc = false
+        for (ch in s) {
+            if (esc) { esc = false; continue }
+            when (ch) {
+                '\\' -> esc = true
+                '"' -> inStr = !inStr
+                '{' -> if (!inStr) depth++
+                '}' -> if (!inStr) depth--
+            }
+        }
+        var r = s
+        if (inStr) r += "\"" // 闭合未结束的字符串
+        if (depth > 0) r += "}".repeat(depth) // 闭合未闭合的对象
+        return r
+    }
+
+    /**
      * 流式对话：解析 OpenAI 兼容的 SSE（server-sent events），逐块回调已累计的文本内容，
      * 让上层 UI 实时刷新 AI 回复气泡（修复「发出消息后很久才看到回复」的体感问题）。
      *
@@ -439,7 +685,7 @@ class QuroLlmClient(
      *    这与非流式 chat() 的重试策略对齐，也对齐「其他客户端连得上」的体感——
      *    单次建连因路由/解析抖动失败不该直接判死，给一次重连机会；已吐出内容则不重试（避免错乱）。
      */
-    private suspend fun streamChat(req: Request, onToken: (String) -> Unit, onThinking: ((String) -> Unit)? = null): QuroLlmResult {
+    private suspend fun streamChat(req: Request, requestBody: String, onToken: (String) -> Unit, onThinking: ((String) -> Unit)? = null): QuroLlmResult {
         val contentAcc = StringBuilder()
         val reasoningAcc = StringBuilder()
         // 🔧 v291 修复：流式响应里模型返回的 tool_calls 也以 delta 形式下发，必须按 index 累计
@@ -451,8 +697,12 @@ class QuroLlmClient(
         }
         // 建连/早期失败重试：对齐非流式路径与主流客户端。仅在尚未吐出任何内容时重连。
         val maxRetries = 2
+        val retryableCodes = setOf(429, 500, 502, 503, 504)
         var lastErr: Exception? = null
         for (attempt in 0..maxRetries) {
+            // 🔧 toolfix9：首 token 前可重试的 HTTP 状态码（5xx/429）命中时置此，循环外进入下一轮重试。
+            //   在循环内声明 → 每轮重置，避免上一轮置位污染本轮成功结果导致误重试。
+            var retryableHttp: Pair<Int, String>? = null
             if (attempt > 0) {
                 // 已吐出内容 → 不再重试，按已有内容兜底（下方统一处理）。
                 if (contentAcc.isNotEmpty() || toolAcc.isNotEmpty()) break
@@ -471,7 +721,19 @@ class QuroLlmClient(
                 val result = try {
                     call.execute().use { resp ->
                     if (!resp.isSuccessful) {
-                        return@use QuroLlmResult.Error(friendlyHttpError(resp.code, resp.body?.string().orEmpty()))
+                        val respText = resp.body?.string().orEmpty()
+                        val code = resp.code
+                        // 🔧 toolfix9：流式首 token 前遇到可重试状态码（5xx/429）→ 重试，
+                        //   对齐非流式 chat() 路径。此前流式 500 直接判死甩给用户，
+                        //   而上游（token-plan 中转）常间歇性 500，重试大多能恢复。
+                        //   仅当「尚未吐出任何内容」时才重试，避免对已生成内容重复计费/错乱。
+                        if (code in retryableCodes && attempt < maxRetries && contentAcc.isEmpty() && toolAcc.isEmpty()) {
+                            retryableHttp = code to respText
+                            return@use null
+                        }
+                        // 🔧 流式路径的 500 也必须落盘诊断（旧版漏了 → 没有文件）
+                        dumpLlmErrorPayload(code, respText, requestBody, req.url.toString())
+                        return@use QuroLlmResult.Error(friendlyHttpError(code, respText))
                     }
                     val source = resp.body?.source()
                         ?: return@use QuroLlmResult.Error("模型返回了空响应体")
@@ -531,9 +793,16 @@ class QuroLlmClient(
                 } finally {
                     cancelHook?.dispose()
                 }
-                // HTTP 非成功（如 502/503）属确定性失败，直接返回不重试（避免重复生成/计费）。
+                // HTTP 4xx（鉴权/参数错）属确定性失败，直接返回不重试（避免重复生成/计费）。
                 if (result is QuroLlmResult.Error) return result
-                return result
+                // 🔧 toolfix9：首 token 前可重试状态码已在上方置 retryableHttp → 进入下一轮重试。
+                if (retryableHttp != null) {
+                    lastErr = Exception("HTTP ${retryableHttp.first}")
+                    Log.w(TAG, "<<< STREAM RETRY (http ${retryableHttp.first}) attempt=$attempt/$maxRetries")
+                    continue
+                }
+                // result 仅在成功路径（Text/ToolCalls）或非流式 Error 时非 null；此处兜底防御。
+                return result ?: QuroLlmResult.Error("流式响应为空（未知原因）")
             } catch (e: Exception) {
                 // 🔧 取消信号必须原样向上抛：否则会被当成"断流截断"兜底成成功文本，
                 // 导致「停止生成/切换会话」不出现"⏹ 已停止生成"提示。
@@ -556,6 +825,7 @@ class QuroLlmClient(
                 // 连接/早期失败且无内容 → 进入下一轮重试（若还有次数）。
             }
         }
+        dumpLlmErrorPayload(-1, "流式连接/解析异常: ${lastErr?.message}", requestBody, req.url.toString())
         return QuroLlmResult.Error(friendlyNetError(lastErr ?: Exception("stream connection failed")))
     }
 
@@ -568,7 +838,8 @@ class QuroLlmClient(
         val reasoning = reasoningAcc.toString().takeIf { it.isNotBlank() }
         return if (toolAcc.isNotEmpty()) {
             val calls = toolAcc.mapIndexed { i, t ->
-                QuroToolCall(id = t.id ?: "call_$i", name = t.name, arguments = t.arguments.ifBlank { "{}" })
+                // 🔧 同样修复流式分片拼接出的非法 JSON arguments（见 sanitizeToolArguments 说明）。
+                QuroToolCall(id = t.id ?: "call_$i", name = t.name, arguments = sanitizeToolArguments(t.arguments.ifBlank { "{}" }))
             }
             Log.i(TAG, "<<< STREAM tool_calls=${calls.size} reasoningBlank=${reasoning.isNullOrBlank()} first=${calls.firstOrNull()?.name}")
             QuroLlmResult.ToolCalls(calls, reasoning, contentAcc.toString().takeIf { it.isNotBlank() })

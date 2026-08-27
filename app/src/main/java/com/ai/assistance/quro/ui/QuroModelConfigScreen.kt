@@ -325,7 +325,7 @@ fun QuroModelConfigForm(
                 QuroField(
                     "最大令牌", cfg.maxTokens.toString(),
                     KeyboardOptions(keyboardType = KeyboardType.Number), Modifier.weight(1f),
-                ) { vm.update { copy(maxTokens = it.toIntOrNull() ?: 4096) } }
+                ) { vm.update { copy(maxTokens = it.toIntOrNull() ?: 65536) } }
                 StepperField(
                     "工具轮次", cfg.maxToolRounds,
                     { vm.update { copy(maxToolRounds = it) } }, Modifier.weight(1f),
@@ -342,7 +342,7 @@ fun QuroModelConfigForm(
             QuroField(
                 "上下文窗口", cfg.contextWindow.toString(),
                 KeyboardOptions(keyboardType = KeyboardType.Number),
-            ) { vm.update { copy(contextWindow = it.toIntOrNull() ?: 16000) } }
+            ) { vm.update { copy(contextWindow = it.toIntOrNull() ?: 262144) } }
             Spacer(Modifier.height(10.dp))
             Text(
                 "输入 token 预算（0=不限制）。长对话自动丢弃最旧轮次、始终保留身份/人格/工具指引，避免窗口撑爆导致丢失上下文或工具调用失效。小米 MiMo 建议 16000–32000。",
