@@ -6872,7 +6872,7 @@ private fun fallbackCopy(ctx: Context, src: File, name: String) {
 // 工作流管理界面
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun QuroWorkflowScreen(onClose: () -> Unit) {
+internal fun QuroWorkflowScreen(onClose: () -> Unit) {
     val context = LocalContext.current
     var workflows by remember { mutableStateOf(listOf<Workflow>()) }
     var showCreateDialog by remember { mutableStateOf(false) }
