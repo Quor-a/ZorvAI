@@ -77,6 +77,12 @@ fun QuroToolboxScreen(
     var editorFile by remember { mutableStateOf<File?>(null) }
     var showEditor by remember { mutableStateOf(false) }
 
+    // 工作流作为工具箱内的一个子页面（自带 TopAppBar），返回直接回到工具箱首页，保证「一层返回」。
+    if (screen == "workflow") {
+        QuroWorkflowScreen(onClose = { screen = "home" })
+        return
+    }
+
     Column(Modifier.fillMaxSize().background(cs.background)) {
         TopAppBar(
             title = { Text(if (screen == "home") "工具箱" else when (screen) {
@@ -102,7 +108,7 @@ fun QuroToolboxScreen(
                 onOpenOnlyOffice = onOpenOnlyOffice,
                 onOpenMusic = onOpenMusic,
                 onOpenVideo = onOpenVideo,
-                onOpenWorkflow = onOpenWorkflow,
+                onOpenWorkflow = { screen = "workflow" },
             )
             "files" -> QuroFileManager(onExitToHome = { screen = "home" })
             "package" -> PackageNameFinder()

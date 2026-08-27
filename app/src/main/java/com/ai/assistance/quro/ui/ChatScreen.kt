@@ -42,6 +42,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import android.app.Activity
 import android.content.ContextWrapper
 import android.graphics.drawable.GradientDrawable
@@ -78,6 +79,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -2090,8 +2092,24 @@ private fun MessageList(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val lastMsg = messages.lastOrNull()
-    // 是否贴底（决定是否自动跟随流式输出）：列表还能继续向下滚 = 不在底部。
+    // 是否贴底（仅用于「回到底部」按钮可见性判定：列表还能继续向下滚 = 不在底部）。
     val isAtBottom by remember { derivedStateOf { !listState.canScrollForward } }
+
+    // 是否自动跟随流式输出：由【用户拖拽手势意图】决定，而非「当前布局是否到底」。
+    // 旧逻辑曾用 !canScrollForward 同时控制跟随，但流式输出使最后一项超出视口后 canScrollForward
+    // 恒为 true，导致内容一超过一屏就停止跟随（#auto-follow 回归：对话框不能跟随 AI 最新输出）。
+    // 新方案：用户开始拖拽即暂停跟随；松手时下方仍有可滚内容=停在中/上方→保持暂停，
+    // 松手已在底部→恢复跟随。程序 scrollToItem 不触发 DragInteraction，二者互不干扰。
+    val shouldFollow = remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect { inter ->
+            when (inter) {
+                is DragInteraction.Start -> shouldFollow.value = false
+                is DragInteraction.Stop -> shouldFollow.value = !listState.canScrollForward
+                is DragInteraction.Cancel -> shouldFollow.value = !listState.canScrollForward
+            }
+        }
+    }
 
     /**
      * 把「最后一条消息的底部」贴住视口底部（而非把消息顶部对齐视口顶部）。
@@ -2107,7 +2125,7 @@ private fun MessageList(
     suspend fun pinToBottom() {
         if (messages.isEmpty()) return
         val lastItemIndex = messages.size
-        // 先把最后一项滚入视口。scrollToItem 在内部滚动块里只触发重排，真实测量高度要等下一帧布局落地。
+        // 先把最后一项滚入视口（顶部对齐），触发布局测量
         listState.scrollToItem(lastItemIndex)
         // 关键修复（#滚动对齐）：等一帧让布局稳定，再读真实 item 高度——否则取到的是滚动前的旧布局，
         // 导致「高于一屏的长消息」底部算不到位、最新 token 被推到视口下方看不见（即内容能到哪里 vs 滚动只到哪里）。
@@ -2115,32 +2133,42 @@ private fun MessageList(
         val layoutInfo = listState.layoutInfo
         val lastInfo = layoutInfo.visibleItemsInfo.lastOrNull { it.index == lastItemIndex } ?: return
         val viewportH = layoutInfo.viewportSize.height
-        // 项比一屏高：用负偏移把「该项底部」对齐视口底部（scrollToItem 钳制到最大滚动），
+        // 项比一屏高：scrollToItem 的 scrollOffset 必须非负，用「项高 − 视口高」(正值) 把该项底部对齐视口底，
         // 保证输入框上方的最新内容始终可见；项比一屏矮时无需额外偏移（同样钳制到底部）。
         if (lastInfo.size > viewportH) {
-            listState.scrollToItem(lastItemIndex, viewportH - lastInfo.size)
+            listState.scrollToItem(lastItemIndex, lastInfo.size - viewportH)
         }
     }
 
-    // 触发①：进入 / 切换会话 → 无条件落到底部看最新一条。
+    // 触发①：进入 / 切换会话 → 无条件落到底部看最新一条，并恢复自动跟随。
     LaunchedEffect(currentId) {
+        shouldFollow.value = true
         pinToBottom()
     }
 
-    // 触发②：用户刚发出新消息（最后一条是用户消息）→ 强制跳到底部，即使此前在中部上滑。
+    // 触发②：用户刚发出新消息（最后一条是用户消息）→ 强制跳到底部，即使此前在中部上滑，并恢复跟随。
     LaunchedEffect(lastMsg?.id) {
         if (lastMsg != null && lastMsg.mine) {
+            shouldFollow.value = true
             pinToBottom()
         }
     }
 
-    // 触发③：流式回复增长（同条消息 content 变）→ 仅当用户「停在底部」时才自动跟随；
-    // 用户若上滑阅读历史，isAtBottom=false，跳过自动滚动，由下方「回到底部」按钮兜底，
+    // 触发③：流式回复增长（同条消息的可见内容变）→ 仅当用户「意图停在底部」(shouldFollow) 时自动跟随；
+    // 用户若上滑阅读历史，shouldFollow=false，跳过自动滚动，由下方「回到底部」按钮兜底，
     // 避免流式 token 持续把视口拽回底部、导致无法阅读上方内容（#auto-follow 回归修复）。
-    val lastContentLen = (lastMsg?.text ?: "").length
-    LaunchedEffect(lastContentLen) {
+    // 综合签名覆盖 text + 工具卡数 + 推理步数 + 卡片数，确保思考/工具/最终文本任何阶段增长都跟随，
+    // 不再只依赖单一 text 字段（文本尚为空、仅思考/工具在推进时也能跟随）。
+    val lastSig = buildString {
+        val lm = messages.lastOrNull()
+        append(lm?.text ?: "")
+        append('#'); append(lm?.tools?.size ?: -1)
+        append('#'); append(lm?.think?.steps?.size ?: -1)
+        append('#'); append(lm?.cards?.size ?: -1)
+    }
+    LaunchedEffect(lastSig) {
         if (messages.isEmpty()) return@LaunchedEffect
-        if (!isAtBottom) return@LaunchedEffect
+        if (!shouldFollow.value) return@LaunchedEffect
         pinToBottom()
     }
     // 注意：执行轨迹事件已统一在 ChatScreen 顶层订阅一次（单一真相源 traceLines），
@@ -2199,7 +2227,7 @@ private fun MessageList(
         exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
     ) {
         Surface(
-            onClick = { scope.launch { pinToBottom() } },
+            onClick = { scope.launch { shouldFollow.value = true; pinToBottom() } },
             shape = CircleShape,
             color = cs.surface.copy(alpha = 0.92f),
             contentColor = cs.onSurface,

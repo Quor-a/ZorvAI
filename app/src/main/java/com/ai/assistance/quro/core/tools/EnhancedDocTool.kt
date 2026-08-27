@@ -54,10 +54,10 @@ enhanced_doc_create 适合创建代码文件、配置文件、Markdown、HTML �
 
         return try {
             when (type) {
-                "docx" -> createDocx(dir, safeName, content, title)
-                "xlsx" -> createXlsx(dir, safeName, content, title)
-                "pptx" -> createPptx(dir, safeName, content, title)
-                "pdf" -> createPdf(dir, safeName, content, title)
+                "docx" -> createDocx(context, safeName, content, title)
+                "xlsx" -> createXlsx(context, safeName, content, title)
+                "pptx" -> createPptx(context, safeName, content, title)
+                "pdf" -> createPdf(context, safeName, content, title)
                 "html", "htm" -> createHtml(dir, safeName, content, title)
                 "md", "markdown" -> createMarkdown(dir, safeName, content, title)
                 "txt" -> createPlainText(dir, safeName, content, title)
@@ -78,28 +78,32 @@ enhanced_doc_create 适合创建代码文件、配置文件、Markdown、HTML �
         }
     }
 
-    private fun createDocx(dir: File, name: String, content: String, title: String): String {
-        val file = File(dir, "$name.docx")
-        // 直接调用 AiwpsCreateTool 的静态方法
-        val result = AiwpsCreateTool.createDocument("docx", content, title, name)
+    private fun createDocx(context: Context, name: String, content: String, title: String): String {
+        // 走实例 run()，写入应用专属 QuroDocs（与查看器扫描目录一致，避免落公共目录导致文档列表不显示）
+        val result = AiwpsCreateTool().run(context, org.json.JSONObject().apply {
+            put("type", "docx"); put("content", content); put("title", title); put("filename", name)
+        }.toString())
         return "✅ $result"
     }
 
-    private fun createXlsx(dir: File, name: String, content: String, title: String): String {
-        val file = File(dir, "$name.xlsx")
-        val result = AiwpsCreateTool.createDocument("xlsx", content, title, name)
+    private fun createXlsx(context: Context, name: String, content: String, title: String): String {
+        val result = AiwpsCreateTool().run(context, org.json.JSONObject().apply {
+            put("type", "xlsx"); put("content", content); put("title", title); put("filename", name)
+        }.toString())
         return "✅ $result"
     }
 
-    private fun createPptx(dir: File, name: String, content: String, title: String): String {
-        val file = File(dir, "$name.pptx")
-        val result = AiwpsCreateTool.createDocument("pptx", content, title, name)
+    private fun createPptx(context: Context, name: String, content: String, title: String): String {
+        val result = AiwpsCreateTool().run(context, org.json.JSONObject().apply {
+            put("type", "pptx"); put("content", content); put("title", title); put("filename", name)
+        }.toString())
         return "✅ $result"
     }
 
-    private fun createPdf(dir: File, name: String, content: String, title: String): String {
-        val file = File(dir, "$name.pdf")
-        val result = AiwpsCreateTool.createDocument("pdf", content, title, name)
+    private fun createPdf(context: Context, name: String, content: String, title: String): String {
+        val result = AiwpsCreateTool().run(context, org.json.JSONObject().apply {
+            put("type", "pdf"); put("content", content); put("title", title); put("filename", name)
+        }.toString())
         return "✅ $result"
     }
 

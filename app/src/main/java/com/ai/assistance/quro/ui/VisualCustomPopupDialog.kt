@@ -258,6 +258,39 @@ fun VisualCustomPopupDialog() {
                             .fillMaxSize()
                             .weight(1f)
                     )
+
+                    // 底部操作栏：收起 + 确认
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(cs.surfaceVariant)
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                // 收起：暂存弹窗（保留在队列，对话内卡片可重新打开），不提交结果
+                                currentPopup = null
+                            }
+                        ) {
+                            Icon(Icons.Filled.Minimize, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("收起")
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                // 确认：触发 HTML 内 submitResult（已桥接 Android），无则回传空结果
+                                webView?.evaluateJavascript(
+                                    "(function(){ try { if (window.submitResult) { window.submitResult({}); return; } if (window.Android && window.Android.postMessage) { window.Android.postMessage(JSON.stringify({action:'submit', data:{}})); } } catch(e){} })();",
+                                    null
+                                )
+                            }
+                        ) {
+                            Text("确认")
+                        }
+                    }
                 }
             }
         }
