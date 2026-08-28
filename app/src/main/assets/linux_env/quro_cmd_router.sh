@@ -21,10 +21,11 @@ set -e
 
 # 命令映射表：原生命令 -> 兼容层命令
 # 格式：原生命令|兼容层命令|转换函数名
+#
+# ⚠ 注意：apt-get|apt|dpkg 不在此列表中！
+# Ubuntu 24.04 rootfs 自带原生 apt/dpkg，不需要转换到 apk。
+# 如果加进来，/usr/local/bin/apt 会遮蔽 /usr/bin/apt，导致原生命令失效。
 CMD_MAP="
-apt-get|apk|_apt_to_apk
-apt|apk|_apt_to_apk
-dpkg|apk|_dpkg_to_apk
 dpkg-deb|tar|_dpkgdeb_to_tar
 pkg|apk|_pkg_to_apk
 yum|apk|_yum_to_apk

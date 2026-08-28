@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.ai.assistance.quro.core.linux.CommandTranslator
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.privilege.QuroShellQuote
 import kotlinx.coroutines.CoroutineScope
@@ -212,10 +213,15 @@ class QuroShellSession private constructor(
             appendLine(promptPrefix())
             return
         }
+        // 命令翻译：非 Ubuntu 命令（pkg/yum/pacman 等）→ Ubuntu 等价命令
+        val translated = CommandTranslator.translate(trimmed)
+        if (translated != trimmed) {
+            appendLine("[router] $trimmed → $translated")
+        }
         appendLine(promptPrefix() + trimmed)
         lastInterrupted = false
         busy = true
-        writeWithSentinel(trimmed)
+        writeWithSentinel(translated)
     }
 
     /**
