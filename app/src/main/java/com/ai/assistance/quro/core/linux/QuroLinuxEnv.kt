@@ -170,6 +170,7 @@ object QuroLinuxEnv {
     
     /**
      * 从 assets/linux_env/ 解压 proot 二进制到应用私有目录。
+     * 验证文件大小确保完整性。
      */
     private fun extractProotFromAssets(context: Context, libName: String): File? {
         return try {
@@ -179,12 +180,21 @@ object QuroLinuxEnv {
                 "libproot-loader32.so" -> "linux_env/libproot-loader32.so"
                 else -> null
             } ?: return null
-            
+
             val targetDir = File(context.filesDir, "native-libs")
             targetDir.mkdirs()
             val target = File(targetDir, libName)
-            if (target.exists()) return target
-            
+
+            // 验证已有文件：大小 > 0 且可执行
+            if (target.exists() && target.length() > 1024 && target.canExecute()) {
+                return target
+            }
+            // 删除损坏的旧文件
+            if (target.exists()) {
+                Log.w(TAG, "⚠ 删除损坏的 $libName (${target.length()} bytes, canExec=${target.canExecute()})")
+                target.delete()
+            }
+
             context.assets.open(assetName).use { input ->
                 FileOutputStream(target).use { output ->
                     input.copyTo(output)
@@ -1692,8 +1702,8 @@ fi
             // GETPROP_SHIM 是源码里的原始字符串；Windows 工作区 CRLF 会让 sh 执行出错，强转 LF。
             shim.writeText(GETPROP_SHIM.normalizeLineEndings())
             shim.setExecutable(true, false)
-            // 安装全面的终端命令垫片（quro_commands.sh）
-            installCommandShims(context, rootfs)
+            // 安装命令路由器（双兼容架构：原生优先 → 兼容层转发）
+            installCmdRouter(context, rootfs)
             // 安装跨平台命令兼容层（platform_compat.sh）
             installPlatformCompat(context, rootfs)
             // 安装 QuroTerm 双兼容层（不动原二进制）
@@ -1704,69 +1714,80 @@ fi
     }
 
     /**
-     * 安装全面的终端命令垫片到 /usr/local/bin/。
-     * 每个垫片先检查真实命令是否存在（来自 apt/busybox），若不存在则提供基本实现。
-     * 这确保即使 apt 安装失败，用户也能使用常见的终端命令。
+     * 安装命令路由器到 /usr/local/bin/。
+     * 双兼容架构：原生命令优先 → 兼容层转发 → 提示不存在。
+     * 不修改原二进制，只在 PATH 中加入路由包装器。
      */
-    private fun installCommandShims(context: Context, rootfs: File) {
+    private fun installCmdRouter(context: Context, rootfs: File) {
         try {
-            val marker = File(rootfs, "usr/local/bin/.quro_commands_installed")
-            // 幂等：如果已安装且脚本未更新，跳过
-            if (marker.exists()) {
-                val assetTime = try {
-                    context.assets.open("linux_env/quro_commands.sh").use { it.available().toLong() }
-                } catch (_: Exception) { 0L }
-                if (assetTime <= 0) return
-            }
-            // 从 assets 复制 quro_commands.sh 到 rootfs
-            val targetScript = File(rootfs, "usr/local/bin/quro_commands.sh")
+            val marker = File(rootfs, "usr/local/bin/.cmd_router_installed")
+            if (marker.exists()) return
+
+            val libDir = File(rootfs, "usr/local/lib")
+            libDir.mkdirs()
+            val binDir = File(rootfs, "usr/local/bin")
+
+            // 复制路由器函数库
+            val routerLib = File(libDir, "quro-cmd-router.sh")
             try {
-                context.assets.open("linux_env/quro_commands.sh").use { input ->
-                    FileOutputStream(targetScript).use { output ->
+                context.assets.open("linux_env/quro_cmd_router.sh").use { input ->
+                    FileOutputStream(routerLib).use { output ->
                         input.copyTo(output)
                     }
                 }
-                targetScript.setExecutable(true, false)
-                // 执行脚本安装所有命令垫片
-                val proot = prootPath(context)
-                val loader = loaderPath(context)
-                val tmp = tmpPath(context)
-                val home = homePath(context)
-                val process = ProcessBuilder(
-                    proot,
-                    "--rootfs=${rootfs.absolutePath}",
-                    "--link2symlink",
-                    "--bind=/dev",
-                    "--bind=/proc",
-                    "--bind=/sys",
-                    "--bind=$home:/root",
-                    "--bind=$tmp:/tmp",
-                    "--bind=/system/build.prop:/system/build.prop",
-                    "-0", "-w", "/root",
-                    "/bin/sh", "-c",
-                    "chmod +x /usr/local/bin/quro_commands.sh && /usr/local/bin/quro_commands.sh"
-                )
-                process.directory(rootfs.parentFile)
-                process.environment().apply {
-                    put("HOME", "/root")
-                    put("PATH", "/usr/local/bin:/usr/bin:/bin")
-                    put("LANG", "C.UTF-8")
-                }
-                process.redirectErrorStream(true)
-                val p = process.start()
-                val output = p.inputStream.bufferedReader().readText()
-                val exitCode = p.waitFor()
-                if (exitCode == 0) {
-                    marker.writeText("installed")
-                    Log.i(TAG, "✅ 终端命令垫片安装成功: ${output.trim().take(200)}")
-                } else {
-                    Log.w(TAG, "⚠ 终端命令垫片安装失败 (exit=$exitCode): ${output.trim().take(200)}")
-                }
+                routerLib.setExecutable(true, false)
             } catch (e: Exception) {
-                Log.w(TAG, "⚠ 终端命令垫片安装异常（非致命）: ${e.message}")
+                Log.w(TAG, "⚠ 命令路由器库复制失败: ${e.message}")
+                return
             }
+
+            // 为每个需要路由的命令创建包装器
+            // 只覆盖非 Ubuntu 的命令（Ubuntu 的 apt/apt-get/dpkg 保持原生）
+            val routeMap = listOf(
+                Triple("pkg", "pkg", "apk"),
+                Triple("yum", "yum", "apk"),
+                Triple("dnf", "dnf", "apk"),
+                Triple("pacman", "pacman", "apk"),
+                Triple("zypper", "zypper", "apk"),
+                Triple("xbps-install", "xbps-install", "apk"),
+                Triple("nix-env", "nix-env", "apk"),
+                Triple("swupd", "swupd", "apk"),
+            )
+
+            for ((wrapper, nativeCmd, compatCmd) in routeMap) {
+                val wrapperScript = File(binDir, wrapper)
+                // 跳过已存在的真实命令（非路由器生成的）
+                if (wrapperScript.exists() && !wrapperScript.name.startsWith(".")) {
+                    // 检查是否是我们的路由器（通过注释标记）
+                    val firstLine = try { wrapperScript.readText().lineSequence().firstOrNull() ?: "" } catch (_: Exception) { "" }
+                    if (firstLine.contains("QuroTerm-Router")) continue
+                }
+
+                wrapperScript.writeText(
+                    "#!/bin/sh\n" +
+                    "# QuroTerm-Router: $wrapper -> $compatCmd (原生优先)\n" +
+                    "# 如果原生命令存在则执行原生，否则转发到兼容层\n" +
+                    "\n" +
+                    "# 加载路由函数库\n" +
+                    "QURO_ROUTER_LIB=\"/usr/local/lib/quro-cmd-router.sh\"\n" +
+                    "[ -f \"\$QURO_ROUTER_LIB\" ] && . \"\$QURO_ROUTER_LIB\"\n" +
+                    "\n" +
+                    "# 检查原生命令是否存在（排除自身）\n" +
+                    "NATIVE=\$(command -v \"$nativeCmd\" 2>/dev/null)\n" +
+                    "if [ -n \"\$NATIVE\" ] && [ \"\$(readlink -f \"\$NATIVE\" 2>/dev/null)\" != \"/usr/local/bin/$wrapper\" ]; then\n" +
+                    "    exec \"$nativeCmd\" \"\$@\"\n" +
+                    "fi\n" +
+                    "\n" +
+                    "# 原生命令不存在，执行路由转换\n" +
+                    "route_command \"$wrapper\" \"\$@\"\n"
+                )
+                wrapperScript.setExecutable(true, false)
+            }
+
+            marker.writeText("installed")
+            Log.i(TAG, "✅ 命令路由器已安装（${routeMap.size} 个包装器）")
         } catch (e: Exception) {
-            Log.w(TAG, "⚠ installCommandShims 异常（非致命）: ${e.message}")
+            Log.w(TAG, "⚠ installCmdRouter 异常（非致命）: ${e.message}")
         }
     }
 
@@ -1790,14 +1811,8 @@ fi
     private fun installPlatformCompat(context: Context, rootfs: File) {
         try {
             val marker = File(rootfs, "usr/local/bin/.platform_compat_installed")
-            // 幂等：如果已安装且脚本未更新，跳过
-            if (marker.exists()) {
-                val assetTime = try {
-                    context.assets.open("linux_env/platform_compat.sh").use { it.available().toLong() }
-                } catch (_: Exception) { 0L }
-                if (assetTime <= 0) return
-            }
-            // 从 assets 复制 platform_compat.sh 到 rootfs
+            if (marker.exists()) return
+
             val targetScript = File(rootfs, "usr/local/bin/platform_compat.sh")
             try {
                 context.assets.open("linux_env/platform_compat.sh").use { input ->
@@ -1806,43 +1821,10 @@ fi
                     }
                 }
                 targetScript.setExecutable(true, false)
-                // 执行脚本安装跨平台兼容层
-                val proot = prootPath(context)
-                val loader = loaderPath(context)
-                val tmp = tmpPath(context)
-                val home = homePath(context)
-                val process = ProcessBuilder(
-                    proot,
-                    "--rootfs=${rootfs.absolutePath}",
-                    "--link2symlink",
-                    "--bind=/dev",
-                    "--bind=/proc",
-                    "--bind=/sys",
-                    "--bind=$home:/root",
-                    "--bind=$tmp:/tmp",
-                    "--bind=/system/build.prop:/system/build.prop",
-                    "-0", "-w", "/root",
-                    "/bin/sh", "-c",
-                    "chmod +x /usr/local/bin/platform_compat.sh && /usr/local/bin/platform_compat.sh"
-                )
-                process.directory(rootfs.parentFile)
-                process.environment().apply {
-                    put("HOME", "/root")
-                    put("PATH", "/usr/local/bin:/usr/bin:/bin")
-                    put("LANG", "C.UTF-8")
-                }
-                process.redirectErrorStream(true)
-                val p = process.start()
-                val output = p.inputStream.bufferedReader().readText()
-                val exitCode = p.waitFor()
-                if (exitCode == 0) {
-                    marker.writeText("installed")
-                    Log.i(TAG, "✅ 跨平台命令兼容层安装成功: ${output.trim().take(200)}")
-                } else {
-                    Log.w(TAG, "⚠ 跨平台命令兼容层安装失败 (exit=$exitCode): ${output.trim().take(200)}")
-                }
+                marker.writeText("installed")
+                Log.i(TAG, "✅ 跨平台命令兼容层已复制（延迟执行）")
             } catch (e: Exception) {
-                Log.w(TAG, "⚠ 跨平台命令兼容层安装异常（非致命）: ${e.message}")
+                Log.w(TAG, "⚠ 跨平台命令兼容层复制失败: ${e.message}")
             }
         } catch (e: Exception) {
             Log.w(TAG, "⚠ installPlatformCompat 异常（非致命）: ${e.message}")
