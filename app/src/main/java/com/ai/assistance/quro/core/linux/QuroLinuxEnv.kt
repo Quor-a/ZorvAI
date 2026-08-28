@@ -1685,6 +1685,8 @@ fi
             shim.setExecutable(true, false)
             // 安装全面的终端命令垫片（quro_commands.sh）
             installCommandShims(context, rootfs)
+            // 安装跨平台命令兼容层（platform_compat.sh）
+            installPlatformCompat(context, rootfs)
         } catch (e: Exception) {
             Log.w(TAG, "prepareRuntimeExtras 部分失败（非致命）: ${e.message}")
         }
@@ -1754,6 +1756,85 @@ fi
             }
         } catch (e: Exception) {
             Log.w(TAG, "⚠ installCommandShims 异常（非致命）: ${e.message}")
+        }
+    }
+
+    /**
+     * 安装跨平台命令兼容层（platform_compat.sh）。
+     * 为 Alpine Linux 环境提供其他平台命令的兼容包装器：
+     * - Debian/Ubuntu: apt, dpkg, apt-get, apt-cache, apt-mark, dpkg-reconfigure
+     * - Termux: pkg, termux-setup-storage, termux-open, termux-clipboard-*, termux-reload-settings
+     * - CentOS/RHEL: yum, dnf, rpm, systemctl
+     * - Arch Linux: pacman, yay, makepkg
+     * - openSUSE: zypper
+     * - Void Linux: xbps-install, xbps-remove, xbps-query
+     * - NixOS: nix-env, nix-channel
+     * - macOS: open, pbcopy, pbpaste, say
+     * - BSD: ls-bsd, ps-bsd
+     * - 通用: update-alternatives, update-rc.d, service, invoke-rc.d
+     * - 网络: ifconfig, netstat, route
+     * - 开发: gcc, g++, make, cmake, gdb, strace
+     * - 运行时: python, pip, node
+     */
+    private fun installPlatformCompat(context: Context, rootfs: File) {
+        try {
+            val marker = File(rootfs, "usr/local/bin/.platform_compat_installed")
+            // 幂等：如果已安装且脚本未更新，跳过
+            if (marker.exists()) {
+                val assetTime = try {
+                    context.assets.open("linux_env/platform_compat.sh").use { it.available().toLong() }
+                } catch (_: Exception) { 0L }
+                if (assetTime <= 0) return
+            }
+            // 从 assets 复制 platform_compat.sh 到 rootfs
+            val targetScript = File(rootfs, "usr/local/bin/platform_compat.sh")
+            try {
+                context.assets.open("linux_env/platform_compat.sh").use { input ->
+                    FileOutputStream(targetScript).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                targetScript.setExecutable(true, false)
+                // 执行脚本安装跨平台兼容层
+                val proot = prootPath(context)
+                val loader = loaderPath(context)
+                val tmp = tmpPath(context)
+                val home = homePath(context)
+                val process = ProcessBuilder(
+                    proot,
+                    "--rootfs=${rootfs.absolutePath}",
+                    "--link2symlink",
+                    "--bind=/dev",
+                    "--bind=/proc",
+                    "--bind=/sys",
+                    "--bind=$home:/root",
+                    "--bind=$tmp:/tmp",
+                    "--bind=/system/build.prop:/system/build.prop",
+                    "-0", "-w", "/root",
+                    "/bin/sh", "-c",
+                    "chmod +x /usr/local/bin/platform_compat.sh && /usr/local/bin/platform_compat.sh"
+                )
+                process.directory(rootfs.parentFile)
+                process.environment().apply {
+                    put("HOME", "/root")
+                    put("PATH", "/usr/local/bin:/usr/bin:/bin")
+                    put("LANG", "C.UTF-8")
+                }
+                process.redirectErrorStream(true)
+                val p = process.start()
+                val output = p.inputStream.bufferedReader().readText()
+                val exitCode = p.waitFor()
+                if (exitCode == 0) {
+                    marker.writeText("installed")
+                    Log.i(TAG, "✅ 跨平台命令兼容层安装成功: ${output.trim().take(200)}")
+                } else {
+                    Log.w(TAG, "⚠ 跨平台命令兼容层安装失败 (exit=$exitCode): ${output.trim().take(200)}")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠ 跨平台命令兼容层安装异常（非致命）: ${e.message}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠ installPlatformCompat 异常（非致命）: ${e.message}")
         }
     }
 
