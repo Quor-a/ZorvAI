@@ -78,12 +78,12 @@ object CmsTerminalDeployer {
         } catch (e: Exception) {
             return "⛔ 内置 bootstrap 脚本读取失败：${e.message}"
         }
-        CmsStateStore.appendLog("_bootstrap", "• 执行 bootstrap（安装 python3/nodejs，约需联网）")
-        var (code, out) = QuroLinuxEnv.run(context, "sh /root/cms/_bootstrap/bootstrap.sh", timeoutMs = 300_000)
+        CmsStateStore.appendLog("_bootstrap", "• 执行 bootstrap（安装 python3/nodejs/终端工具，约需联网）")
+        var (code, out) = QuroLinuxEnv.run(context, "sh /root/cms/_bootstrap/bootstrap.sh", timeoutMs = 600_000)
         if (code != 0) {
             CmsStateStore.appendLog("_bootstrap", "• 首次 bootstrap 失败，等待2秒后重试...")
             Thread.sleep(2000)
-            val retry = QuroLinuxEnv.run(context, "sh /root/cms/_bootstrap/bootstrap.sh", timeoutMs = 300_000)
+            val retry = QuroLinuxEnv.run(context, "sh /root/cms/_bootstrap/bootstrap.sh", timeoutMs = 600_000)
             code = retry.first
             out = retry.second
         }
