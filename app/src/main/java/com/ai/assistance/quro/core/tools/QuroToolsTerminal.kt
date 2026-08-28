@@ -161,7 +161,10 @@ class TerminalStatusTool : QuroTool {
             put("last_interrupted", session?.lastInterrupted ?: false)
             put("shell", shell)
             put("linux_env", linux)
-            put("default_session_id", QuroTerminalSessionManager.defaultSession?.let { "default" } ?: "none")
+            put("default_session_id", QuroTerminalSessionManager.defaultSession?.let { session ->
+                // 返回实际的会话 ID，而不是固定字符串 "default"
+                QuroTerminalSessionManager.listSessions().find { it.isDefault }?.id ?: "default"
+            } ?: "none")
             put("sessions", sessions)
             put("note", if (session != null) "交互式会话可用，可用 terminal_write 输入" else "会话未启动，terminal_exec 仍可独立执行命令")
         }.toString()

@@ -200,13 +200,15 @@ object QuroTerminalSessionManager {
         if (id == "default") return defaultEntry?.alive == true
         val target = extras[id] ?: return false
         return mutex.withLock {
-            val newDefault = Entry("default", DEFAULT_NAME, Kind.DEFAULT, target.backend, target.createdAt, target.shell)
+            // 保留原始会话的 ID，而不是使用固定的 "default"
+            val newDefault = Entry(id, target.name, Kind.DEFAULT, target.backend, target.createdAt, target.shell)
             val old = defaultEntry
             defaultEntry = newDefault
             extras.remove(id)
             // 旧默认（若有进程）降级为额外会话，避免进程丢失
-            if (old?.shell != null && old.id != "default") {
-                val oldId = UUID.randomUUID().toString().take(8)
+            if (old?.shell != null) {
+                // 旧默认会话使用随机生成的 ID，避免与新默认会话冲突
+                val oldId = if (old.id == "default") UUID.randomUUID().toString().take(8) else old.id
                 extras[oldId] = Entry(oldId, old.name, Kind.EXTRA, old.backend, old.createdAt, old.shell)
             }
             persist()
