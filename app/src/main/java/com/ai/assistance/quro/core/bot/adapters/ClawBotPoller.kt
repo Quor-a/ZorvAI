@@ -30,6 +30,7 @@ class ClawBotPoller(
     private val getBaseUrl: () -> String,
     private val loadSyncBuf: () -> String,
     private val saveSyncBuf: (String) -> Unit,
+    private val onTokenExpired: (() -> Unit)? = null, // token过期回调
 ) {
     data class InboundMessage(
         val fromUserId: String,
@@ -73,10 +74,30 @@ class ClawBotPoller(
                     if (sessionExpired) {
                         consecutiveFailures = 0
                         onDisconnected()
-                        clog("W", "会话过期 (errcode=-14)，暂停 ${SESSION_PAUSE_MS / 1000}s")
+                        clog("W", "会话过期 (errcode=-14)，触发自动重新登录")
+                        // 协议规定 errcode=-14 = session 过期，必须重新扫码，仅暂停无意义
+                        onTokenExpired?.invoke()
                         kotlinx.coroutines.delay(SESSION_PAUSE_MS)
                         continue
                     }
+                    
+                    // 检测其他token过期/无效错误码
+                    val isTokenExpired = env.ret in listOf(-1, 400, 401, 403) ||
+                                        env.errCode in listOf(-1, 400, 401, 403)
+                    
+                    if (isTokenExpired) {
+                        consecutiveFailures = 0
+                        onDisconnected()
+                        clog("W", "Token 过期或无效: ret=${env.ret}, errcode=${env.errCode}")
+                        
+                        // 触发token过期回调
+                        onTokenExpired?.invoke()
+                        
+                        // 暂停轮询等待重新登录
+                        kotlinx.coroutines.delay(SESSION_PAUSE_MS)
+                        continue
+                    }
+                    
                     consecutiveFailures++
                     onDisconnected()
                     clog("W", "API 错误: ret=${env.ret}, errcode=${env.errCode}")

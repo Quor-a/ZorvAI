@@ -11,6 +11,7 @@ import com.ai.assistance.quro.core.network.QuroLlmClient
 import com.ai.assistance.quro.core.tools.buildQuroRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.util.Log
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -70,6 +71,7 @@ class QuroBotReplyEngine(private val appContext: Context) {
      */
     suspend fun reply(platform: QuroBotPlatform, userId: String, text: String): QuroReply =
         withContext(Dispatchers.IO) {
+            val t0 = System.currentTimeMillis()
             val baseCfg = QuroModelConfigRepository(appContext).load()
             if (baseCfg.apiKey.isBlank()) {
                 return@withContext QuroReply("（未配置模型 API Key，机器人无法回复；请到「模型设置」填写 baseUrl / apiKey / model。）")
@@ -81,12 +83,15 @@ class QuroBotReplyEngine(private val appContext: Context) {
                 stores["${platform.name}:$userId"] = it
             }
             store.add(QuroMessage(role = "user", content = text))
+            Log.i("BotReply", "开始回复 platform=${platform.name} user=$userId model=${cfg.model} text=${text.take(50)}...")
             val result = assistant.ask(
                 context = appContext,
                 cfg = cfg,
                 systemPrompt = systemPrompt(platform, userId),
                 autoSaveMemory = false,
             )
+            val dur = System.currentTimeMillis() - t0
+            Log.i("BotReply", "回复完成 platform=${platform.name} user=$userId dur=${dur}ms replyLen=${result.length}")
             QuroReply(result)
         }
 
