@@ -61,14 +61,25 @@ object QuroTerminalController {
     val session: QuroShellSession?
         get() = QuroTerminalSessionManager.defaultSession
 
-    /** 确保默认会话存在（跟随创建，缺失后端则安装）。等价于「打开终端」。返回默认会话。 */
+    /**
+     * 确保默认会话存在（跟随创建，缺失后端则安装）。等价于「打开终端」。返回默认会话。
+     *
+     * ⚠ **必须在后台线程调用**！本方法用 runBlocking 阻塞当前线程直到会话就绪，
+     * 而会话创建可能包含 rootfs 安装与 proot 进程启动（秒级～分钟级）。
+     * 在主线程调用会直接 Input dispatching timed out ANR。
+     * UI 侧请改用 [QuroTerminalSessionManager.ensureDefault]（suspend，内部已切 IO 线程）。
+     */
     fun createSession(context: Context): QuroShellSession =
         runBlocking(Dispatchers.IO) {
             QuroTerminalSessionManager.ensureDefault(context, installIfMissing = true)
                 ?: error("无法创建终端会话")
         }
 
-    /** 懒确保：若没有默认会话则创建一个（不触发下载，缺失后端时回退设备 shell）。 */
+    /**
+     * 懒确保：若没有默认会话则创建一个（不触发下载，缺失后端时回退设备 shell）。
+     *
+     * ⚠ 同样**必须在后台线程调用**（runBlocking 会阻塞调用线程），理由同 [createSession]。
+     */
     fun ensureSession(context: Context): QuroShellSession? =
         if (session != null) session else runBlocking(Dispatchers.IO) {
             QuroTerminalSessionManager.ensureDefault(context, installIfMissing = false)
