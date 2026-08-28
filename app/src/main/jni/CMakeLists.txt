@@ -37,7 +37,7 @@ target_link_libraries(quroplugin ${log-lib})
 # Termux PTY 终端库（libtermux-terminal.so）
 # 基于 Termux 的 JNI 实现，提供伪终端（PTY）支持
 # ═══════════════════════════════════════════════════════════════
-set(TERMUX_JNI_DIR ${CMAKE_SOURCE_DIR}/../jni/termux)
+set(TERMUX_JNI_DIR ${CMAKE_SOURCE_DIR}/termux)
 
 add_library(termux-terminal SHARED
     ${TERMUX_JNI_DIR}/termux.c

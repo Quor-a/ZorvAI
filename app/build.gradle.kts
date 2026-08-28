@@ -126,7 +126,7 @@ android {
     // 插件运行时：把 QuickJS 引擎 + JNI 桥编进 app（libquroplugin.so）
     externalNativeBuild {
         cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
+            path = file("src/main/jni/CMakeLists.txt")
             // AGP 自带 CMake；若本地版本异常可显式指定 version = "3.22.1"
         }
     }
