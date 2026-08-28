@@ -651,8 +651,17 @@ main() {
     # 创建兼容目录
     mkdir -p "$COMPAT_DIR" "$BIN_DIR"
     
-    # 设置所有兼容层
-    setup_debian_compat
+    # 设置兼容层 —— 关键隔离逻辑：
+    # 如果底层系统已经是 Debian/Ubuntu（有 apt-get），则跳过 Debian 兼容层，
+    # 避免 /usr/local/bin/apt 等 wrapper 遮蔽 /usr/bin/apt 原生命令。
+    case "$PM" in
+        apt-get|dpkg)
+            echo "[platform-compat] 检测到 Debian/Ubuntu 系统，跳过 Debian 兼容层（保留原生 apt/dpkg）"
+            ;;
+        *)
+            setup_debian_compat
+            ;;
+    esac
     setup_termux_compat
     setup_centos_compat
     setup_arch_compat

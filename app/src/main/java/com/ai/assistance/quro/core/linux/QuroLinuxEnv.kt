@@ -670,7 +670,11 @@ object QuroLinuxEnv {
     fun run(context: Context, command: String, timeoutMs: Long = 30000): Pair<Int, String> {
         // 不再依赖 probe() 前置检查 —— probe 的 rootfsBinRunnable 可能在宿主侧误判符号链接。
         // 直接尝试执行命令，让 proot 自己报错。
-        return runProot(context, command, timeoutMs)
+        val translated = CommandTranslator.translate(command)
+        if (translated != command) {
+            Log.i(TAG, "命令翻译: '$command' → '$translated'")
+        }
+        return runProot(context, translated, timeoutMs)
     }
 
     /** 带实时日志回调的执行命令。每输出一行就回调一次。 */
@@ -1702,12 +1706,12 @@ fi
             // GETPROP_SHIM 是源码里的原始字符串；Windows 工作区 CRLF 会让 sh 执行出错，强转 LF。
             shim.writeText(GETPROP_SHIM.normalizeLineEndings())
             shim.setExecutable(true, false)
-            // 安装命令路由器（双兼容架构：原生优先 → 兼容层转发）
-            installCmdRouter(context, rootfs)
-            // 安装跨平台命令兼容层（platform_compat.sh）
-            installPlatformCompat(context, rootfs)
-            // 安装 QuroTerm 双兼容层（不动原二进制）
-            installQuroTermCompat(context, rootfs)
+            // ⚠ Ubuntu 24.04 rootfs 自带原生 apt/dpkg/apt-get，
+            //   不安装命令路由器和平台兼容层——它们会在 /usr/local/bin 创建
+            //   wrapper 遮蔽 /usr/bin 下的原生命令，导致 apt 等全部失效。
+            //   这些兼容层仅适用于 Alpine rootfs。
+            //   命令翻译由 Kotlin 层 CommandTranslator 在 run/sendCommand 入口处理。
+            cleanupShellWrappers(rootfs)
         } catch (e: Exception) {
             Log.w(TAG, "prepareRuntimeExtras 部分失败（非致命）: ${e.message}")
         }
@@ -1720,7 +1724,7 @@ fi
      */
     private fun installCmdRouter(context: Context, rootfs: File) {
         try {
-            val marker = File(rootfs, "usr/local/bin/.cmd_router_installed")
+            val marker = File(rootfs, "usr/local/bin/.cmd_router_v2")
             if (marker.exists()) return
 
             val libDir = File(rootfs, "usr/local/lib")
@@ -1851,6 +1855,46 @@ fi
             }
         } catch (e: Exception) {
             Log.w(TAG, "⚠ installQuroTermCompat 异常（非致命）: ${e.message}")
+        }
+    }
+
+    /**
+     * 清理旧版 shell wrapper 脚本。
+     * 之前版本会在 /usr/local/bin 创建 apt/apt-get/dpkg 等 wrapper 遮蔽原生命令。
+     * 现在改为 Kotlin 层 CommandTranslator 做命令翻译，不再需要这些 wrapper。
+     */
+    private fun cleanupShellWrappers(rootfs: File) {
+        val binDir = File(rootfs, "usr/local/bin")
+        if (!binDir.exists()) return
+        // 需要清理的 wrapper 文件名（这些会遮蔽 /usr/bin 下的原生命令）
+        val wrappers = listOf(
+            "apt", "apt-get", "apt-cache", "apt-mark", "dpkg", "dpkg-deb", "dpkg-reconfigure",
+            "pkg", "yum", "dnf", "pacman", "zypper", "xbps-install", "xbps-remove", "xbps-query",
+            "nix-env", "nix-channel", "swupd", "rpm", "systemctl",
+            "termux-setup-storage", "termux-open", "termux-clipboard-get", "termux-clipboard-set",
+            "termux-reload-settings", "update-alternatives", "update-rc.d", "service", "invoke-rc.d",
+            "yay", "makepkg", "ifconfig", "netstat", "route", "ls-bsd", "ps-bsd",
+            "open", "pbcopy", "pbpaste", "say",
+        )
+        var cleaned = 0
+        for (name in wrappers) {
+            val f = File(binDir, name)
+            if (f.exists() && !f.isDirectory) {
+                // 只删除由我们生成的 wrapper（非用户手动创建的）
+                val firstLine = try { f.readText().lineSequence().firstOrNull() ?: "" } catch (_: Exception) { "" }
+                if (firstLine.contains("quro-compat") || firstLine.contains("QuroTerm-Router") ||
+                    firstLine.contains("platform-compat") || firstLine.contains("兼容包装器")) {
+                    f.delete()
+                    cleaned++
+                }
+            }
+        }
+        // 清理 marker 文件（允许重新安装干净状态）
+        File(binDir, ".cmd_router_installed").delete()
+        File(binDir, ".cmd_router_v2").let { if (it.exists()) it.delete() }
+        File(binDir, ".platform_compat_installed").delete()
+        if (cleaned > 0) {
+            Log.i(TAG, "✅ 清理旧版 shell wrapper $cleaned 个")
         }
     }
 
