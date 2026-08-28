@@ -10,6 +10,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -121,21 +122,27 @@ object QuroTerminalSessionManager {
         if (defaultEntry?.alive == true) return defaultEntry!!.shell
         return mutex.withLock {
             if (defaultEntry?.alive == true) return@withLock defaultEntry!!.shell
-            if (installIfMissing) {
-                val st = QuroLinuxEnv.probe(context)
-                if (!st.available) {
-                    Log.i(TAG, "ensureDefault: 后端未就绪，跟随安装 Linux 环境…")
-                    QuroLinuxEnv.ensureInstalledBlocking(context)
+            // ⚠ ANR 修复：以下全是重操作（文件 I/O、可能下载并解压 rootfs、启动 proot 进程），
+            // 必须切到 IO 线程。本函数虽是 suspend，但调用方（如 UI 的 rememberCoroutineScope，
+            // 默认 Main 调度器）并不一定会切线程——不在这里 withContext 就会把重活全压到主线程。
+            // 真机实测 ANR：Input dispatching timed out，而应用进程 CPU 仅 3.7%（典型阻塞态）。
+            withContext(Dispatchers.IO) {
+                if (installIfMissing) {
+                    val st = QuroLinuxEnv.probe(context)
+                    if (!st.available) {
+                        Log.i(TAG, "ensureDefault: 后端未就绪，跟随安装 Linux 环境…")
+                        QuroLinuxEnv.ensureInstalledBlocking(context)
+                    }
                 }
+                val shell = QuroShellSession.create(context)
+                val backend = if (shell.mode == ShellMode.LINUX) Backend.LINUX_PROOT else Backend.DEVICE_SH
+                val entry = Entry("default", DEFAULT_NAME, Kind.DEFAULT, backend, System.currentTimeMillis(), shell)
+                shell.onExit = { code -> Log.i(TAG, "默认会话退出(exit=$code)，保活服务将重建") }
+                defaultEntry = entry
+                persist()
+                Log.i(TAG, "✅ 默认共享会话已创建: backend=$backend")
+                shell
             }
-            val shell = QuroShellSession.create(context)
-            val backend = if (shell.mode == ShellMode.LINUX) Backend.LINUX_PROOT else Backend.DEVICE_SH
-            val entry = Entry("default", DEFAULT_NAME, Kind.DEFAULT, backend, System.currentTimeMillis(), shell)
-            shell.onExit = { code -> Log.i(TAG, "默认会话退出(exit=$code)，保活服务将重建") }
-            defaultEntry = entry
-            persist()
-            Log.i(TAG, "✅ 默认共享会话已创建: backend=$backend")
-            shell
         }
     }
 
@@ -162,25 +169,30 @@ object QuroTerminalSessionManager {
      * 新会话不会自动成为默认；如需切换默认请调用 [switchDefault]。
      */
     suspend fun createSession(context: Context, name: String?, installIfMissing: Boolean = true): SessionInfo {
-        if (installIfMissing) {
-            val st = QuroLinuxEnv.probe(context)
-            if (!st.available) QuroLinuxEnv.ensureInstalledBlocking(context)
+        // ⚠ ANR 修复：同上，会话创建含文件 I/O / 可能安装 rootfs / 启动 proot 进程，
+        // 必须切 IO 线程。UI「+ 新会话」按钮用的是 rememberCoroutineScope（Main 调度器），
+        // 不切线程会直接 5 秒 Input dispatching 超时 ANR。
+        return withContext(Dispatchers.IO) {
+            if (installIfMissing) {
+                val st = QuroLinuxEnv.probe(context)
+                if (!st.available) QuroLinuxEnv.ensureInstalledBlocking(context)
+            }
+            val shell = QuroShellSession.create(context)
+            val backend = if (shell.mode == ShellMode.LINUX) Backend.LINUX_PROOT else Backend.DEVICE_SH
+            val id = UUID.randomUUID().toString().take(8)
+            val entry = Entry(
+                id = id,
+                name = name?.takeIf { it.isNotBlank() } ?: "会话 $id",
+                kind = Kind.EXTRA,
+                backend = backend,
+                createdAt = System.currentTimeMillis(),
+                shell = shell,
+            )
+            extras[id] = entry
+            persist()
+            Log.i(TAG, "✅ 新会话已创建: id=$id name=${entry.name} backend=$backend")
+            entry.toInfo()
         }
-        val shell = QuroShellSession.create(context)
-        val backend = if (shell.mode == ShellMode.LINUX) Backend.LINUX_PROOT else Backend.DEVICE_SH
-        val id = UUID.randomUUID().toString().take(8)
-        val entry = Entry(
-            id = id,
-            name = name?.takeIf { it.isNotBlank() } ?: "会话 $id",
-            kind = Kind.EXTRA,
-            backend = backend,
-            createdAt = System.currentTimeMillis(),
-            shell = shell,
-        )
-        extras[id] = entry
-        persist()
-        Log.i(TAG, "✅ 新会话已创建: id=$id name=${entry.name} backend=$backend")
-        return entry.toInfo()
     }
 
     /** 把某个已存在的会话提升为默认（AI/使用者切换默认会话）。原默认降级为额外会话并保留进程。 */
