@@ -699,29 +699,9 @@ object QuroLinuxEnv {
             "--bind=$home:/root",
             "--bind=$tmp:/tmp",
         )
-        // 绑定 usr/bin 目录（包含 bash、busybox 等预编译二进制）
-        if (usrBinDir.exists()) {
-            args.add("--bind=${usrBinDir.absolutePath}:/usr/bin")
-        }
         // getprop 垫片可回落读 /system/build.prop，仅当该文件本就可读时绑定（避免整体启动失败）。
         if (File("/system/build.prop").canRead()) {
             args.add("--bind=/system/build.prop:/system/build.prop")
-        }
-        // 网络支持：绑定 DNS 配置和网络相关文件，使 proot 内的 HTTP 服务能正常工作
-        val rootfsFile = File(rootfs)
-        val etcDir = File(rootfsFile, "etc")
-        if (etcDir.exists()) {
-            // 绑定 DNS 配置（resolv.conf 已由 prepareRuntimeExtras 写入）
-            val resolvConf = File(etcDir, "resolv.conf")
-            if (resolvConf.exists()) {
-                args.add("--bind=${resolvConf.absolutePath}:/etc/resolv.conf")
-            }
-            // 绑定 hosts 文件
-            val hostsFile = File(etcDir, "hosts")
-            if (!hostsFile.exists()) {
-                hostsFile.writeText("127.0.0.1 localhost\n::1 localhost\n")
-            }
-            args.add("--bind=${hostsFile.absolutePath}:/etc/hosts")
         }
         args.add("-0")
         args.add("-w"); args.add("/root")
@@ -736,6 +716,7 @@ object QuroLinuxEnv {
             "PROOT_TMP_DIR" to tmp,
             "PROOT_LOADER" to loader,
         )
+        val rootfsFile = File(rootfs)
         return ProotLaunch(args, env, rootfsFile.parentFile ?: rootfsFile)
     }
 
@@ -838,9 +819,9 @@ object QuroLinuxEnv {
         val tmp = tmpPath(context)
         val loader = loaderPath(context)
         val dir = sandboxDir(context)
-
+        
         Log.i(TAG, "runProotWithLog 开始执行，超时: ${timeoutMs}ms")
-
+        
         prepareRuntimeExtras(context, File(rootfs))
         return try {
             val args = mutableListOf(
@@ -852,27 +833,8 @@ object QuroLinuxEnv {
                 "--bind=$home:/root",
                 "--bind=$tmp:/tmp",
             )
-            // 绑定 usr/bin 目录（包含 bash、busybox 等预编译二进制）
-            val usrBinDir = File(dir, "usr/bin")
-            if (usrBinDir.exists()) {
-                args.add("--bind=${usrBinDir.absolutePath}:/usr/bin")
-            }
             if (File("/system/build.prop").canRead()) {
                 args.add("--bind=/system/build.prop:/system/build.prop")
-            }
-            // 网络支持：绑定 DNS 配置和网络相关文件，使 proot 内的 HTTP 服务能正常工作
-            val rootfsFile = File(rootfs)
-            val etcDir = File(rootfsFile, "etc")
-            if (etcDir.exists()) {
-                val resolvConf = File(etcDir, "resolv.conf")
-                if (resolvConf.exists()) {
-                    args.add("--bind=${resolvConf.absolutePath}:/etc/resolv.conf")
-                }
-                val hostsFile = File(etcDir, "hosts")
-                if (!hostsFile.exists()) {
-                    hostsFile.writeText("127.0.0.1 localhost\n::1 localhost\n")
-                }
-                args.add("--bind=${hostsFile.absolutePath}:/etc/hosts")
             }
             args.add("-0")
             args.add("-w"); args.add("/root")
@@ -948,31 +910,14 @@ object QuroLinuxEnv {
             "--bind=/sys",
             "--bind=${homePath(context)}:/root",
             "--bind=${tmpPath(context)}:/tmp",
+            "-0",
+            "-w", "/root",
+            "/bin/sh",
         )
-        // 绑定 usr/bin 目录（包含 bash、busybox 等预编译二进制）
-        if (usrBinDir.exists()) {
-            args.add("--bind=${usrBinDir.absolutePath}:/usr/bin")
-        }
-        args.add("-0")
-        args.add("-w"); args.add("/root")
-        args.add("/bin/sh")
         // getprop 垫片可回落读 /system/build.prop，故把宿主真机 build.prop 只读绑进沙箱
         // （仅当该文件本就可读，避免 proot 因源不存在而整体启动失败）。
         if (File("/system/build.prop").canRead()) {
             args.add("--bind=/system/build.prop:/system/build.prop")
-        }
-        // 网络支持：绑定 DNS 配置和网络相关文件，使 proot 内的 HTTP 服务能正常工作
-        val etcDir = File(rootfs, "etc")
-        if (etcDir.exists()) {
-            val resolvConf = File(etcDir, "resolv.conf")
-            if (resolvConf.exists()) {
-                args.add("--bind=${resolvConf.absolutePath}:/etc/resolv.conf")
-            }
-            val hostsFile = File(etcDir, "hosts")
-            if (!hostsFile.exists()) {
-                hostsFile.writeText("127.0.0.1 localhost\n::1 localhost\n")
-            }
-            args.add("--bind=${hostsFile.absolutePath}:/etc/hosts")
         }
         return st.prootPath to args
     }
@@ -1623,40 +1568,13 @@ fi
             }
         }
 
-        // 为 busybox 创建常用命令的符号链接（完整覆盖）
+        // 为 busybox 创建常用命令的符号链接
         val busybox = File(binDir, "busybox")
         if (busybox.exists()) {
             val busyboxCommands = listOf(
-                // Shell
-                "sh", "ash", "bash",
-                // 文件操作
-                "cp", "mv", "rm", "mkdir", "rmdir", "touch", "ln", "chmod", "chown", "chgrp",
-                "ls", "cat", "head", "tail", "more", "less", "tac", "rev",
-                "find", "xargs", "basename", "dirname", "realpath", "readlink", "stat", "du", "df",
-                "dd", "cpio", "lsattr", "chattr",
-                // 文本处理
-                "grep", "egrep", "fgrep", "sed", "awk", "sort", "uniq", "wc", "tr", "cut",
-                "diff", "cmp", "tee", "tee", "paste", "column", "fold",
-                // 压缩
-                "tar", "gzip", "gunzip", "zcat", "bzip2", "bunzip2", "bzcat",
-                "xz", "unxz", "xzcat", "zip", "unzip",
-                // 网络
-                "wget", "curl", "ping", "ifconfig", "netstat", "nslookup", "telnet",
-                // 系统信息
-                "uname", "hostname", "id", "whoami", "uptime", "free", "ps", "top", "kill", "killall",
-                "env", "printenv", "set", "export", "alias", "unalias",
-                "date", "cal", "time", "sleep", "usleep",
-                // 十六进制
-                "hexdump", "xxd", "od",
-                // 其他
-                "vi", "nano", "ed", "patch", "strings", "seq", "yes", "expr", "test",
-                "seq", "yes", "true", "false", "sleep", "usleep",
-                "sync", "reboot", "halt", "poweroff", "su", "sudo", "su",
-                "crontab", "at", "tee", "xargs", "nohup",
-                // 进程管理
-                "nice", "renice", "nohup", "timeout",
-                // 设备
-                "mknod", "losetup", "mount", "umount", "fdisk", "mkfs",
+                "awk", "ash", "basename", "bzip2", "curl", "cp", "chmod", "cut", "cat", "du", "dd",
+                "find", "grep", "gzip", "hexdump", "head", "id", "lscpu", "mkdir", "realpath", "rm",
+                "sed", "stat", "sh", "tr", "tar", "uname", "xargs", "xz", "xxd", "wget", "vi", "nano"
             )
             busyboxCommands.forEach { cmd ->
                 val cmdFile = File(binDir, cmd)
@@ -1672,15 +1590,6 @@ fi
 
     private fun prepareRuntimeExtras(context: Context, rootfs: File) {
         try {
-            // 确保 libtalloc.so.2 存在（proot 依赖此库）
-            val dir = sandboxDir(context)
-            val talloc = File(dir, "libtalloc.so.2")
-            if (!talloc.exists()) {
-                val tallocPath = findNativeLibWithAssetsFallback(context, "libtalloc.so")
-                val src = File(tallocPath)
-                if (src.exists()) src.copyTo(talloc, overwrite = true)
-            }
-
             writeResolvConf(rootfs, context)
             val props = buildProps(context)
             File(rootfs, "etc").mkdirs()
@@ -1692,158 +1601,8 @@ fi
             // GETPROP_SHIM 是源码里的原始字符串；Windows 工作区 CRLF 会让 sh 执行出错，强转 LF。
             shim.writeText(GETPROP_SHIM.normalizeLineEndings())
             shim.setExecutable(true, false)
-            // 安装全面的终端命令垫片（quro_commands.sh）
-            installCommandShims(context, rootfs)
-            // 安装跨平台命令兼容层（platform_compat.sh）
-            installPlatformCompat(context, rootfs)
         } catch (e: Exception) {
             Log.w(TAG, "prepareRuntimeExtras 部分失败（非致命）: ${e.message}")
-        }
-    }
-
-    /**
-     * 安装全面的终端命令垫片到 /usr/local/bin/。
-     * 每个垫片先检查真实命令是否存在（来自 apt/busybox），若不存在则提供基本实现。
-     * 这确保即使 apt 安装失败，用户也能使用常见的终端命令。
-     */
-    private fun installCommandShims(context: Context, rootfs: File) {
-        try {
-            val marker = File(rootfs, "usr/local/bin/.quro_commands_installed")
-            // 幂等：如果已安装且脚本未更新，跳过
-            if (marker.exists()) {
-                val assetTime = try {
-                    context.assets.open("linux_env/quro_commands.sh").use { it.available().toLong() }
-                } catch (_: Exception) { 0L }
-                if (assetTime <= 0) return
-            }
-            // 从 assets 复制 quro_commands.sh 到 rootfs
-            val targetScript = File(rootfs, "usr/local/bin/quro_commands.sh")
-            try {
-                context.assets.open("linux_env/quro_commands.sh").use { input ->
-                    FileOutputStream(targetScript).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                targetScript.setExecutable(true, false)
-                // 执行脚本安装所有命令垫片
-                val proot = prootPath(context)
-                val loader = loaderPath(context)
-                val tmp = tmpPath(context)
-                val home = homePath(context)
-                val process = ProcessBuilder(
-                    proot,
-                    "--rootfs=${rootfs.absolutePath}",
-                    "--link2symlink",
-                    "--bind=/dev",
-                    "--bind=/proc",
-                    "--bind=/sys",
-                    "--bind=$home:/root",
-                    "--bind=$tmp:/tmp",
-                    "--bind=/system/build.prop:/system/build.prop",
-                    "-0", "-w", "/root",
-                    "/bin/sh", "-c",
-                    "chmod +x /usr/local/bin/quro_commands.sh && /usr/local/bin/quro_commands.sh"
-                )
-                process.directory(rootfs.parentFile)
-                process.environment().apply {
-                    put("HOME", "/root")
-                    put("PATH", "/usr/local/bin:/usr/bin:/bin")
-                    put("LANG", "C.UTF-8")
-                }
-                process.redirectErrorStream(true)
-                val p = process.start()
-                val output = p.inputStream.bufferedReader().readText()
-                val exitCode = p.waitFor()
-                if (exitCode == 0) {
-                    marker.writeText("installed")
-                    Log.i(TAG, "✅ 终端命令垫片安装成功: ${output.trim().take(200)}")
-                } else {
-                    Log.w(TAG, "⚠ 终端命令垫片安装失败 (exit=$exitCode): ${output.trim().take(200)}")
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "⚠ 终端命令垫片安装异常（非致命）: ${e.message}")
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "⚠ installCommandShims 异常（非致命）: ${e.message}")
-        }
-    }
-
-    /**
-     * 安装跨平台命令兼容层（platform_compat.sh）。
-     * 为 Alpine Linux 环境提供其他平台命令的兼容包装器：
-     * - Debian/Ubuntu: apt, dpkg, apt-get, apt-cache, apt-mark, dpkg-reconfigure
-     * - Termux: pkg, termux-setup-storage, termux-open, termux-clipboard-*, termux-reload-settings
-     * - CentOS/RHEL: yum, dnf, rpm, systemctl
-     * - Arch Linux: pacman, yay, makepkg
-     * - openSUSE: zypper
-     * - Void Linux: xbps-install, xbps-remove, xbps-query
-     * - NixOS: nix-env, nix-channel
-     * - macOS: open, pbcopy, pbpaste, say
-     * - BSD: ls-bsd, ps-bsd
-     * - 通用: update-alternatives, update-rc.d, service, invoke-rc.d
-     * - 网络: ifconfig, netstat, route
-     * - 开发: gcc, g++, make, cmake, gdb, strace
-     * - 运行时: python, pip, node
-     */
-    private fun installPlatformCompat(context: Context, rootfs: File) {
-        try {
-            val marker = File(rootfs, "usr/local/bin/.platform_compat_installed")
-            // 幂等：如果已安装且脚本未更新，跳过
-            if (marker.exists()) {
-                val assetTime = try {
-                    context.assets.open("linux_env/platform_compat.sh").use { it.available().toLong() }
-                } catch (_: Exception) { 0L }
-                if (assetTime <= 0) return
-            }
-            // 从 assets 复制 platform_compat.sh 到 rootfs
-            val targetScript = File(rootfs, "usr/local/bin/platform_compat.sh")
-            try {
-                context.assets.open("linux_env/platform_compat.sh").use { input ->
-                    FileOutputStream(targetScript).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                targetScript.setExecutable(true, false)
-                // 执行脚本安装跨平台兼容层
-                val proot = prootPath(context)
-                val loader = loaderPath(context)
-                val tmp = tmpPath(context)
-                val home = homePath(context)
-                val process = ProcessBuilder(
-                    proot,
-                    "--rootfs=${rootfs.absolutePath}",
-                    "--link2symlink",
-                    "--bind=/dev",
-                    "--bind=/proc",
-                    "--bind=/sys",
-                    "--bind=$home:/root",
-                    "--bind=$tmp:/tmp",
-                    "--bind=/system/build.prop:/system/build.prop",
-                    "-0", "-w", "/root",
-                    "/bin/sh", "-c",
-                    "chmod +x /usr/local/bin/platform_compat.sh && /usr/local/bin/platform_compat.sh"
-                )
-                process.directory(rootfs.parentFile)
-                process.environment().apply {
-                    put("HOME", "/root")
-                    put("PATH", "/usr/local/bin:/usr/bin:/bin")
-                    put("LANG", "C.UTF-8")
-                }
-                process.redirectErrorStream(true)
-                val p = process.start()
-                val output = p.inputStream.bufferedReader().readText()
-                val exitCode = p.waitFor()
-                if (exitCode == 0) {
-                    marker.writeText("installed")
-                    Log.i(TAG, "✅ 跨平台命令兼容层安装成功: ${output.trim().take(200)}")
-                } else {
-                    Log.w(TAG, "⚠ 跨平台命令兼容层安装失败 (exit=$exitCode): ${output.trim().take(200)}")
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "⚠ 跨平台命令兼容层安装异常（非致命）: ${e.message}")
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "⚠ installPlatformCompat 异常（非致命）: ${e.message}")
         }
     }
 
