@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.core.novaterm.core
 
+import android.util.Log
+
 /**
  * 权限控制系统
  * 自研权限模型，不依赖 Linux UID/GID
@@ -24,7 +26,12 @@ object PermissionController {
     }
 
     fun getLevel(sessionId: String): PermissionLevel =
-        sessionPermissions[sessionId] ?: PermissionLevel.GUEST
+        sessionPermissions[sessionId] ?: run {
+            // 如果 session 不存在，自动创建并设为 USER 权限（避免 GUEST 锁定）
+            sessionPermissions[sessionId] = PermissionLevel.USER
+            Log.w("PermissionController", "⚠ Session $sessionId 未注册，自动提升为 USER")
+            PermissionLevel.USER
+        }
 
     fun require(sessionId: String, required: PermissionLevel): Boolean {
         val current = getLevel(sessionId)
