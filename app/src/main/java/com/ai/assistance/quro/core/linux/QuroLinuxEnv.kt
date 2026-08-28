@@ -170,7 +170,6 @@ object QuroLinuxEnv {
     
     /**
      * 从 assets/linux_env/ 解压 proot 二进制到应用私有目录。
-     * 验证文件大小确保完整性。
      */
     private fun extractProotFromAssets(context: Context, libName: String): File? {
         return try {
@@ -180,21 +179,12 @@ object QuroLinuxEnv {
                 "libproot-loader32.so" -> "linux_env/libproot-loader32.so"
                 else -> null
             } ?: return null
-
+            
             val targetDir = File(context.filesDir, "native-libs")
             targetDir.mkdirs()
             val target = File(targetDir, libName)
-
-            // 验证已有文件：大小 > 0 且可执行
-            if (target.exists() && target.length() > 1024 && target.canExecute()) {
-                return target
-            }
-            // 删除损坏的旧文件
-            if (target.exists()) {
-                Log.w(TAG, "⚠ 删除损坏的 $libName (${target.length()} bytes, canExec=${target.canExecute()})")
-                target.delete()
-            }
-
+            if (target.exists()) return target
+            
             context.assets.open(assetName).use { input ->
                 FileOutputStream(target).use { output ->
                     input.copyTo(output)
@@ -233,23 +223,10 @@ object QuroLinuxEnv {
      * 让安装横幅重新出现。下载/安装中间态由 [setup] 自身管理，此处不抢状态。
      */
     fun probe(context: Context): EnvStatus {
-        // 每次探测都重新查找 proot 路径（含 assets fallback），避免 nativeLibraryDir 被清理后缓存失效
-        var prootPathStr = prootPath(context)
-        var proot = File(prootPathStr)
-
-        // 自动恢复：如果 proot 缺失，主动触发 assets 解压重试
-        if (!proot.exists()) {
-            Log.w(TAG, "⚠ proot 不存在于 $prootPathStr，尝试 assets 恢复...")
-            val recovered = extractProotFromAssets(context, "libproot.so")
-            if (recovered != null && recovered.exists()) {
-                prootPathStr = recovered.absolutePath
-                proot = recovered
-                Log.i(TAG, "✅ assets 恢复成功: $prootPathStr")
-            }
-        }
-
+        val prootPathStr = prootPath(context)
+        val proot = File(prootPathStr)
         Log.i(TAG, "🔍 probe 开始: prootPath=$prootPathStr, exists=${proot.exists()}")
-
+        
         if (!proot.exists()) {
             if (_state.value is SandboxState.Ready) _state.value = SandboxState.NotInstalled
             // 诊断：列出 nativeLibraryDir 下的实际文件，帮助定位问题
@@ -257,14 +234,9 @@ object QuroLinuxEnv {
             val nativeFiles = try {
                 File(nativeDir).listFiles()?.map { it.name }?.joinToString(", ") ?: "(目录不可读)"
             } catch (_: Throwable) { "(访问失败)" }
-            val filesDirLibs = File(context.filesDir, "native-libs")
-            val fallbackFiles = try {
-                filesDirLibs.listFiles()?.map { "${it.name}(${it.length()}b)" }?.joinToString(", ") ?: "(空)"
-            } catch (_: Throwable) { "(访问失败)" }
-            Log.e(TAG, "❌ proot 二进制缺失。nativeLibraryDir=$nativeDir，内容=[$nativeFiles]。fallback=$fallbackFiles")
+            Log.e(TAG, "❌ proot 二进制缺失。nativeLibraryDir=$nativeDir，内容=[$nativeFiles]")
             return EnvStatus(false, null, null,
                 "proot 二进制缺失。应用库目录($nativeDir)内容: $nativeFiles。" +
-                "fallback目录: $fallbackFiles。" +
                 "可能原因：1) APK 未正确安装（native library 未解压）；2) 设备架构不匹配（需 arm64-v8a）；" +
                 "3) 系统清理了应用数据。请尝试卸载重装。")
         }
@@ -688,11 +660,7 @@ object QuroLinuxEnv {
     fun run(context: Context, command: String, timeoutMs: Long = 30000): Pair<Int, String> {
         // 不再依赖 probe() 前置检查 —— probe 的 rootfsBinRunnable 可能在宿主侧误判符号链接。
         // 直接尝试执行命令，让 proot 自己报错。
-        val translated = CommandTranslator.translate(command)
-        if (translated != command) {
-            Log.i(TAG, "命令翻译: '$command' → '$translated'")
-        }
-        return runProot(context, translated, timeoutMs)
+        return runProot(context, command, timeoutMs)
     }
 
     /** 带实时日志回调的执行命令。每输出一行就回调一次。 */
@@ -1704,7 +1672,7 @@ fi
 
     private fun prepareRuntimeExtras(context: Context, rootfs: File) {
         try {
-            // 确保 libtalloc.so.2 存在（proot 依赖此库）——只在不存在时拷贝（快速检查）
+            // 确保 libtalloc.so.2 存在（proot 依赖此库）
             val dir = sandboxDir(context)
             val talloc = File(dir, "libtalloc.so.2")
             if (!talloc.exists()) {
@@ -1713,108 +1681,92 @@ fi
                 if (src.exists()) src.copyTo(talloc, overwrite = true)
             }
 
-            // 已初始化的 marker：首次安装时写入，跳过后续重复文件 I/O（防 ANR）
-            val extrasMarker = File(rootfs, "usr/local/bin/.runtime_extras_done")
-            if (!extrasMarker.exists()) {
-                writeResolvConf(rootfs, context)
-                val props = buildProps(context)
-                File(rootfs, "etc").mkdirs()
-                File(rootfs, "etc/quro_props.prop").writeText(
-                    props.entries.joinToString("\n") { "${it.key}=${it.value}" } + "\n"
-                )
-                val bin = File(rootfs, "usr/local/bin"); bin.mkdirs()
-                val shim = File(bin, "getprop")
-                // GETPROP_SHIM 是源码里的原始字符串；Windows 工作区 CRLF 会让 sh 执行出错，强转 LF。
-                shim.writeText(GETPROP_SHIM.normalizeLineEndings())
-                shim.setExecutable(true, false)
-                try { extrasMarker.writeText("done") } catch (_: Throwable) {}
-            }
-            // ⚠ Ubuntu 24.04 rootfs 自带原生 apt/dpkg/apt-get，
-            //   不安装命令路由器和平台兼容层——它们会在 /usr/local/bin 创建
-            //   wrapper 遮蔽 /usr/bin 下的原生命令，导致 apt 等全部失效。
-            //   这些兼容层仅适用于 Alpine rootfs。
-            //   命令翻译由 Kotlin 层 CommandTranslator 在 run/sendCommand 入口处理。
-            cleanupShellWrappers(rootfs)
+            writeResolvConf(rootfs, context)
+            val props = buildProps(context)
+            File(rootfs, "etc").mkdirs()
+            File(rootfs, "etc/quro_props.prop").writeText(
+                props.entries.joinToString("\n") { "${it.key}=${it.value}" } + "\n"
+            )
+            val bin = File(rootfs, "usr/local/bin"); bin.mkdirs()
+            val shim = File(bin, "getprop")
+            // GETPROP_SHIM 是源码里的原始字符串；Windows 工作区 CRLF 会让 sh 执行出错，强转 LF。
+            shim.writeText(GETPROP_SHIM.normalizeLineEndings())
+            shim.setExecutable(true, false)
+            // 安装全面的终端命令垫片（quro_commands.sh）
+            installCommandShims(context, rootfs)
+            // 安装跨平台命令兼容层（platform_compat.sh）
+            installPlatformCompat(context, rootfs)
+            // 安装 QuroTerm 双兼容层（不动原二进制）
+            installQuroTermCompat(context, rootfs)
         } catch (e: Exception) {
             Log.w(TAG, "prepareRuntimeExtras 部分失败（非致命）: ${e.message}")
         }
     }
 
     /**
-     * 安装命令路由器到 /usr/local/bin/。
-     * 双兼容架构：原生命令优先 → 兼容层转发 → 提示不存在。
-     * 不修改原二进制，只在 PATH 中加入路由包装器。
+     * 安装全面的终端命令垫片到 /usr/local/bin/。
+     * 每个垫片先检查真实命令是否存在（来自 apt/busybox），若不存在则提供基本实现。
+     * 这确保即使 apt 安装失败，用户也能使用常见的终端命令。
      */
-    private fun installCmdRouter(context: Context, rootfs: File) {
+    private fun installCommandShims(context: Context, rootfs: File) {
         try {
-            val marker = File(rootfs, "usr/local/bin/.cmd_router_v2")
-            if (marker.exists()) return
-
-            val libDir = File(rootfs, "usr/local/lib")
-            libDir.mkdirs()
-            val binDir = File(rootfs, "usr/local/bin")
-
-            // 复制路由器函数库
-            val routerLib = File(libDir, "quro-cmd-router.sh")
+            val marker = File(rootfs, "usr/local/bin/.quro_commands_installed")
+            // 幂等：如果已安装且脚本未更新，跳过
+            if (marker.exists()) {
+                val assetTime = try {
+                    context.assets.open("linux_env/quro_commands.sh").use { it.available().toLong() }
+                } catch (_: Exception) { 0L }
+                if (assetTime <= 0) return
+            }
+            // 从 assets 复制 quro_commands.sh 到 rootfs
+            val targetScript = File(rootfs, "usr/local/bin/quro_commands.sh")
             try {
-                context.assets.open("linux_env/quro_cmd_router.sh").use { input ->
-                    FileOutputStream(routerLib).use { output ->
+                context.assets.open("linux_env/quro_commands.sh").use { input ->
+                    FileOutputStream(targetScript).use { output ->
                         input.copyTo(output)
                     }
                 }
-                routerLib.setExecutable(true, false)
-            } catch (e: Exception) {
-                Log.w(TAG, "⚠ 命令路由器库复制失败: ${e.message}")
-                return
-            }
-
-            // 为每个需要路由的命令创建包装器
-            // 只覆盖非 Ubuntu 的命令（Ubuntu 的 apt/apt-get/dpkg 保持原生）
-            val routeMap = listOf(
-                Triple("pkg", "pkg", "apk"),
-                Triple("yum", "yum", "apk"),
-                Triple("dnf", "dnf", "apk"),
-                Triple("pacman", "pacman", "apk"),
-                Triple("zypper", "zypper", "apk"),
-                Triple("xbps-install", "xbps-install", "apk"),
-                Triple("nix-env", "nix-env", "apk"),
-                Triple("swupd", "swupd", "apk"),
-            )
-
-            for ((wrapper, nativeCmd, compatCmd) in routeMap) {
-                val wrapperScript = File(binDir, wrapper)
-                // 跳过已存在的真实命令（非路由器生成的）
-                if (wrapperScript.exists() && !wrapperScript.name.startsWith(".")) {
-                    // 检查是否是我们的路由器（通过注释标记）
-                    val firstLine = try { wrapperScript.readText().lineSequence().firstOrNull() ?: "" } catch (_: Exception) { "" }
-                    if (firstLine.contains("QuroTerm-Router")) continue
-                }
-
-                wrapperScript.writeText(
-                    "#!/bin/sh\n" +
-                    "# QuroTerm-Router: $wrapper -> $compatCmd (原生优先)\n" +
-                    "# 如果原生命令存在则执行原生，否则转发到兼容层\n" +
-                    "\n" +
-                    "# 加载路由函数库\n" +
-                    "QURO_ROUTER_LIB=\"/usr/local/lib/quro-cmd-router.sh\"\n" +
-                    "[ -f \"\$QURO_ROUTER_LIB\" ] && . \"\$QURO_ROUTER_LIB\"\n" +
-                    "\n" +
-                    "# 检查原生命令是否存在（排除自身）\n" +
-                    "NATIVE=\$(command -v \"$nativeCmd\" 2>/dev/null)\n" +
-                    "if [ -n \"\$NATIVE\" ] && [ \"\$(readlink -f \"\$NATIVE\" 2>/dev/null)\" != \"/usr/local/bin/$wrapper\" ]; then\n" +
-                    "    exec \"$nativeCmd\" \"\$@\"\n" +
-                    "fi\n" +
-                    "\n" +
-                    "# 原生命令不存在，执行路由转换\n" +
-                    "route_command \"$wrapper\" \"\$@\"\n"
+                targetScript.setExecutable(true, false)
+                // 执行脚本安装所有命令垫片
+                val proot = prootPath(context)
+                val loader = loaderPath(context)
+                val tmp = tmpPath(context)
+                val home = homePath(context)
+                val process = ProcessBuilder(
+                    proot,
+                    "--rootfs=${rootfs.absolutePath}",
+                    "--link2symlink",
+                    "--bind=/dev",
+                    "--bind=/proc",
+                    "--bind=/sys",
+                    "--bind=$home:/root",
+                    "--bind=$tmp:/tmp",
+                    "--bind=/system/build.prop:/system/build.prop",
+                    "-0", "-w", "/root",
+                    "/bin/sh", "-c",
+                    "chmod +x /usr/local/bin/quro_commands.sh && /usr/local/bin/quro_commands.sh"
                 )
-                wrapperScript.setExecutable(true, false)
+                process.directory(rootfs.parentFile)
+                process.environment().apply {
+                    put("HOME", "/root")
+                    put("PATH", "/usr/local/bin:/usr/bin:/bin")
+                    put("LANG", "C.UTF-8")
+                }
+                process.redirectErrorStream(true)
+                val p = process.start()
+                val output = p.inputStream.bufferedReader().readText()
+                val exitCode = p.waitFor()
+                if (exitCode == 0) {
+                    marker.writeText("installed")
+                    Log.i(TAG, "✅ 终端命令垫片安装成功: ${output.trim().take(200)}")
+                } else {
+                    Log.w(TAG, "⚠ 终端命令垫片安装失败 (exit=$exitCode): ${output.trim().take(200)}")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠ 终端命令垫片安装异常（非致命）: ${e.message}")
             }
-
-            marker.writeText("installed")
-            Log.i(TAG, "✅ 命令路由器已安装（${routeMap.size} 个包装器）")
         } catch (e: Exception) {
-            Log.w(TAG, "⚠ installCmdRouter 异常（非致命）: ${e.message}")
+            Log.w(TAG, "⚠ installCommandShims 异常（非致命）: ${e.message}")
         }
     }
 
@@ -1838,8 +1790,14 @@ fi
     private fun installPlatformCompat(context: Context, rootfs: File) {
         try {
             val marker = File(rootfs, "usr/local/bin/.platform_compat_installed")
-            if (marker.exists()) return
-
+            // 幂等：如果已安装且脚本未更新，跳过
+            if (marker.exists()) {
+                val assetTime = try {
+                    context.assets.open("linux_env/platform_compat.sh").use { it.available().toLong() }
+                } catch (_: Exception) { 0L }
+                if (assetTime <= 0) return
+            }
+            // 从 assets 复制 platform_compat.sh 到 rootfs
             val targetScript = File(rootfs, "usr/local/bin/platform_compat.sh")
             try {
                 context.assets.open("linux_env/platform_compat.sh").use { input ->
@@ -1848,10 +1806,43 @@ fi
                     }
                 }
                 targetScript.setExecutable(true, false)
-                marker.writeText("installed")
-                Log.i(TAG, "✅ 跨平台命令兼容层已复制（延迟执行）")
+                // 执行脚本安装跨平台兼容层
+                val proot = prootPath(context)
+                val loader = loaderPath(context)
+                val tmp = tmpPath(context)
+                val home = homePath(context)
+                val process = ProcessBuilder(
+                    proot,
+                    "--rootfs=${rootfs.absolutePath}",
+                    "--link2symlink",
+                    "--bind=/dev",
+                    "--bind=/proc",
+                    "--bind=/sys",
+                    "--bind=$home:/root",
+                    "--bind=$tmp:/tmp",
+                    "--bind=/system/build.prop:/system/build.prop",
+                    "-0", "-w", "/root",
+                    "/bin/sh", "-c",
+                    "chmod +x /usr/local/bin/platform_compat.sh && /usr/local/bin/platform_compat.sh"
+                )
+                process.directory(rootfs.parentFile)
+                process.environment().apply {
+                    put("HOME", "/root")
+                    put("PATH", "/usr/local/bin:/usr/bin:/bin")
+                    put("LANG", "C.UTF-8")
+                }
+                process.redirectErrorStream(true)
+                val p = process.start()
+                val output = p.inputStream.bufferedReader().readText()
+                val exitCode = p.waitFor()
+                if (exitCode == 0) {
+                    marker.writeText("installed")
+                    Log.i(TAG, "✅ 跨平台命令兼容层安装成功: ${output.trim().take(200)}")
+                } else {
+                    Log.w(TAG, "⚠ 跨平台命令兼容层安装失败 (exit=$exitCode): ${output.trim().take(200)}")
+                }
             } catch (e: Exception) {
-                Log.w(TAG, "⚠ 跨平台命令兼容层复制失败: ${e.message}")
+                Log.w(TAG, "⚠ 跨平台命令兼容层安装异常（非致命）: ${e.message}")
             }
         } catch (e: Exception) {
             Log.w(TAG, "⚠ installPlatformCompat 异常（非致命）: ${e.message}")
@@ -1879,51 +1870,6 @@ fi
         } catch (e: Exception) {
             Log.w(TAG, "⚠ installQuroTermCompat 异常（非致命）: ${e.message}")
         }
-    }
-
-    /**
-     * 清理旧版 shell wrapper 脚本。
-     * 之前版本会在 /usr/local/bin 创建 apt/apt-get/dpkg 等 wrapper 遮蔽原生命令。
-     * 现在改为 Kotlin 层 CommandTranslator 做命令翻译，不再需要这些 wrapper。
-     */
-    private fun cleanupShellWrappers(rootfs: File) {
-        // 只执行一次：marker 存在则跳过（避免每次 runProot 都读几十个文件导致 ANR）
-        val marker = File(rootfs, "usr/local/bin/.wrapper_cleanup_done")
-        if (marker.exists()) return
-        val binDir = File(rootfs, "usr/local/bin")
-        if (!binDir.exists()) return
-        // 需要清理的 wrapper 文件名（这些会遮蔽 /usr/bin 下的原生命令）
-        val wrappers = listOf(
-            "apt", "apt-get", "apt-cache", "apt-mark", "dpkg", "dpkg-deb", "dpkg-reconfigure",
-            "pkg", "yum", "dnf", "pacman", "zypper", "xbps-install", "xbps-remove", "xbps-query",
-            "nix-env", "nix-channel", "swupd", "rpm", "systemctl",
-            "termux-setup-storage", "termux-open", "termux-clipboard-get", "termux-clipboard-set",
-            "termux-reload-settings", "update-alternatives", "update-rc.d", "service", "invoke-rc.d",
-            "yay", "makepkg", "ifconfig", "netstat", "route", "ls-bsd", "ps-bsd",
-            "open", "pbcopy", "pbpaste", "say",
-        )
-        var cleaned = 0
-        for (name in wrappers) {
-            val f = File(binDir, name)
-            if (f.exists() && !f.isDirectory) {
-                // 只删除由我们生成的 wrapper（非用户手动创建的）
-                val firstLine = try { f.readText().lineSequence().firstOrNull() ?: "" } catch (_: Exception) { "" }
-                if (firstLine.contains("quro-compat") || firstLine.contains("QuroTerm-Router") ||
-                    firstLine.contains("platform-compat") || firstLine.contains("兼容包装器")) {
-                    f.delete()
-                    cleaned++
-                }
-            }
-        }
-        // 清理 marker 文件（允许重新安装干净状态）
-        File(binDir, ".cmd_router_installed").delete()
-        File(binDir, ".cmd_router_v2").let { if (it.exists()) it.delete() }
-        File(binDir, ".platform_compat_installed").delete()
-        if (cleaned > 0) {
-            Log.i(TAG, "✅ 清理旧版 shell wrapper $cleaned 个")
-        }
-        // 标记已完成，避免每次 runProot 都重复执行文件扫描
-        try { marker.writeText("done") } catch (_: Throwable) {}
     }
 
     private fun writeAptSources(rootfs: File, mirrorBase: String) {
