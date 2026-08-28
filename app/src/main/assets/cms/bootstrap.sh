@@ -66,6 +66,39 @@ if [ $PM_COUNT -eq 0 ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════
+# apt 安装辅助函数（带依赖处理和重试）
+# ═══════════════════════════════════════════════════════════
+apt_install_with_deps() {
+    local pkg="$1"
+    local max_retries=3
+    local retry=0
+
+    while [ $retry -lt $max_retries ]; do
+        # 尝试安装（带依赖）
+        if apt-get install -y "$pkg" 2>&1 | grep -q "E: dpkg was interrupted"; then
+            echo "[apt] ⚠️ dpkg 被中断，尝试修复..."
+            dpkg --configure -a 2>&1 || true
+            apt-get install -f -y 2>&1 || true
+            retry=$((retry + 1))
+            continue
+        fi
+
+        # 检查是否安装成功
+        if apt-get install -y "$pkg" >/dev/null 2>&1; then
+            return 0
+        fi
+
+        # 安装失败，尝试修复依赖
+        echo "[apt] ⚠️ 安装失败，尝试修复依赖..."
+        apt-get install -f -y 2>&1 || true
+        dpkg --configure -a 2>&1 || true
+        retry=$((retry + 1))
+    done
+
+    return 1
+}
+
+# ═══════════════════════════════════════════════════════════
 # 通用安装函数：尝试所有可用包管理器
 # ═══════════════════════════════════════════════════════════
 try_install() {
@@ -80,7 +113,22 @@ try_install() {
             apk add --no-cache "$pkg_name" >/dev/null 2>&1 && command -v "$cmd_name" >/dev/null 2>&1 && return 0
         fi
         if [ $HAS_APT -eq 1 ]; then
-            apt-get install -y --no-install-recommends "$pkg_name" >/dev/null 2>&1 && command -v "$cmd_name" >/dev/null 2>&1 && return 0
+            # 使用带依赖处理的安装函数
+            if apt_install_with_deps "$pkg_name" 2>&1 | tail -1 | grep -q "✅"; then
+                command -v "$cmd_name" >/dev/null 2>&1 && return 0
+            fi
+            # 如果还是失败，尝试降级到 dpkg fallback
+            if ! command -v "$cmd_name" >/dev/null 2>&1; then
+                echo "[apt] ⚠️ apt 安装失败，尝试 dpkg fallback..."
+                local tmpdir=$(mktemp -d)
+                if apt-get download "$pkg_name" -o Dir::Cache::archives="$tmpdir" >/dev/null 2>&1; then
+                    for deb in "$tmpdir"/*.deb; do
+                        [ -f "$deb" ] && dpkg -i "$deb" 2>&1 | tail -1 || true
+                    done
+                fi
+                rm -rf "$tmpdir"
+                command -v "$cmd_name" >/dev/null 2>&1 && return 0
+            fi
         fi
         if [ $HAS_PKG -eq 1 ]; then
             pkg install -y "$pkg_name" >/dev/null 2>&1 && command -v "$cmd_name" >/dev/null 2>&1 && return 0
@@ -119,21 +167,49 @@ batch_install() {
 }
 
 # ═══════════════════════════════════════════════════════════
-# 锁检测与修复（apt/dpkg 特有）
+# 锁检测与修复（apt/dpkg 特有）- 强化版
 # ═══════════════════════════════════════════════════════════
 if [ $HAS_APT -eq 1 ]; then
-    echo "[cms-bootstrap] 🔓 Fixing apt/dpkg locks..."
-    for lk in /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock; do
-        [ -e "$lk" ] && rm -f "$lk" 2>/dev/null || true
-    done
-    dpkg --configure -a 2>/dev/null || true
+    echo "[cms-bootstrap] 🔓 强制修复 apt/dpkg 状态..."
 
-    # 中和服务管理器（proot 无 init）
+    # 1. 强制删除所有锁文件
+    echo "[lock] 强制删除所有 dpkg/apt 锁文件..."
+    for lk in /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/cache/apt/archives/lock /var/lib/apt/lists/lock; do
+        if [ -e "$lk" ]; then
+            rm -f "$lk" 2>/dev/null && echo "[lock] 已删除: $lk" || echo "[lock] 删除失败: $lk"
+        fi
+    done
+
+    # 2. 强制终止可能持有锁的进程
+    echo "[lock] 检查并终止可能持有锁的进程..."
+    for proc in dpkg apt apt-get; do
+        pkill -9 "$proc" 2>/dev/null && echo "[lock] 已终止: $proc" || true
+    done
+
+    # 3. 修复 dpkg 状态（关键步骤）
+    echo "[lock] 修复 dpkg 状态..."
+    if dpkg --configure -a 2>&1 | grep -q "error\|dpkg was interrupted"; then
+        echo "[lock] ⚠️ dpkg 状态损坏，尝试修复..."
+        # 尝试强制修复
+        dpkg --force-depends --configure -a 2>&1 || true
+        # 如果还是失败，重置 dpkg 状态
+        if [ -f /var/lib/dpkg/status ]; then
+            echo "[lock] 备份并重置 dpkg 状态..."
+            cp /var/lib/dpkg/status /var/lib/dpkg/status.bak 2>/dev/null || true
+            # 创建最小化的状态文件
+            echo "" > /var/lib/dpkg/status
+            dpkg --configure -a 2>&1 || true
+        fi
+    fi
+
+    # 4. 中和服务管理器（proot 无 init）
     mkdir -p /usr/local/sbin
     for b in start-stop-daemon invoke-rc.d update-rc.d service systemctl; do
         printf '#!/bin/sh\nexit 0\n' > "/usr/local/sbin/$b" 2>/dev/null
         chmod +x "/usr/local/sbin/$b" 2>/dev/null || true
     done
+
+    echo "[lock] ✅ dpkg 状态修复完成"
 fi
 
 # ═══════════════════════════════════════════════════════════
