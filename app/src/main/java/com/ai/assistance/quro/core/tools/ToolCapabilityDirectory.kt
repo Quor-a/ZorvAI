@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.core.tools
 
+import com.ai.assistance.quro.core.QuroToolSpec
+
 /**
  * 工具能力目录系统
  * 
@@ -51,9 +53,10 @@ object ToolCapabilityDirectory {
     )
     
     /**
-     * 工具能力目录
+     * 工具能力目录（增强元数据层）：手写的高质量条目（useCases/examples/tips/relatedTools）。
+     * 真实注册表里不在本层的工具，会在 [install] 时用 description 兜底合成，分类走命名推断。
      */
-    private val directory = mapOf(
+    private val handbook = mapOf(
         // ═══════════════ 基础工具 ═══════════════
         "get_current_time" to ToolInfo(
             name = "get_current_time",
@@ -728,6 +731,75 @@ object ToolCapabilityDirectory {
         )
     )
     
+    /**
+     * 合成目录：以真实注册表为单一真相源。
+     * - 手写 [handbook] 作为「增强元数据」覆盖（保留高质量 useCases/examples/tips/relatedTools 与手写分类）；
+     * - 真实注册表里 handbook 没有的工具，用 description 兜底生成最小 ToolInfo（分类走命名推断 [inferCategory]）；
+     * - handbook 里「真实不存在」的旧名工具不会进入合成目录，避免误导模型去调不存在的工具。
+     * 由此 [directory] 始终 == 真实可调用工具全集，模型经 tool_discovery / tool_router 查到的目录与
+     * 实际下发的 tools 字段严格一致，从根本上消除「分组目录残缺 → 很多功能得提醒才用」。
+     */
+    private var directory: Map<String, ToolInfo> = handbook
+
+    /** 由真实注册表安装/刷新工具能力目录。应在注册表构建（register + attach + mergeSkills）完成后调用一次。 */
+    fun install(specs: List<QuroToolSpec>) {
+        val merged = LinkedHashMap<String, ToolInfo>()
+        for (s in specs) {
+            merged[s.name] = handbook[s.name] ?: autoInfo(s)
+        }
+        directory = merged
+    }
+
+    private fun autoInfo(spec: QuroToolSpec): ToolInfo = ToolInfo(
+        name = spec.name,
+        category = inferCategory(spec.name),
+        description = spec.description,
+        useCases = listOf(spec.description),
+        examples = emptyList(),
+        parameters = emptyMap(),
+        tips = emptyList(),
+        relatedTools = emptyList(),
+        priority = 3,
+    )
+
+    /** 命名推断分类（兜底；handbook 已含手写分类优先）。与 QuroToolRouter.categorize 同源逻辑。 */
+    private fun inferCategory(name: String): ToolCategory {
+        return when {
+            name.startsWith("workspace_") -> ToolCategory.WORKSPACE
+            name.startsWith("aci_") -> ToolCategory.APP_MANAGEMENT
+            name.startsWith("mcp_") -> ToolCategory.NETWORK_WEB
+            name.startsWith("cms_") -> ToolCategory.AI_CAPABILITIES
+            name.startsWith("memory_") || name.startsWith("experience_") || name.startsWith("knowledge_") ->
+                ToolCategory.KNOWLEDGE_MEMORY
+            name.startsWith("terminal_") || name.startsWith("linux_") || name.startsWith("quroterm_") ->
+                ToolCategory.TERMINAL_LINUX
+            name.startsWith("ui_") -> ToolCategory.UI_CARDS
+            name.startsWith("skill__") -> ToolCategory.AI_CAPABILITIES
+            name in setOf("read_screen", "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen",
+                "input_text", "get_foreground_app", "get_screen_state", "screenshot", "screenshot_base64",
+                "visual_analysis", "visual_question", "visual_action", "visual_popup", "visual_custom_popup") ->
+                ToolCategory.ACCESSIBILITY
+            name.startsWith("send_sms") || name.startsWith("read_contacts") || name.startsWith("read_sms") ||
+                name.contains("calendar") -> ToolCategory.COMMUNICATION
+            name.startsWith("launch_app") || name.startsWith("open_app") || name.startsWith("list_installed") ||
+                name.startsWith("search_and_launch") || name.startsWith("install_app") || name.startsWith("freeze_app") ||
+                name.startsWith("get_package_name") -> ToolCategory.APP_MANAGEMENT
+            name.startsWith("volume") || name.startsWith("brightness") || name.startsWith("wifi") ||
+                name.startsWith("bluetooth") || name.startsWith("notification") || name.startsWith("airplane") ||
+                name.startsWith("screen_rotation") || name.startsWith("set_timer") ->
+                ToolCategory.SYSTEM_CONTROL
+            name.startsWith("image") || name.startsWith("video") || name.startsWith("audio") ||
+                name.startsWith("music") || name.startsWith("local_") || name.startsWith("media") ||
+                name.startsWith("list_media") -> ToolCategory.MEDIA
+            name.startsWith("shizuku") || name.startsWith("root_") || name.startsWith("lock_screen") ||
+                name.startsWith("device_admin") || name.startsWith("set_camera") || name.startsWith("priv_") ->
+                ToolCategory.SECURITY
+            name.startsWith("get_") || name in setOf("calculate", "vibrate", "set_clipboard", "get_clipboard") ->
+                ToolCategory.BASIC
+            else -> ToolCategory.BASIC
+        }
+    }
+
     /**
      * 根据用户意图匹配工具
      */

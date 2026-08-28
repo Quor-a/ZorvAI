@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import com.ai.assistance.quro.core.bot.QuroBotPlatform
 import com.ai.assistance.quro.core.bot.QuroOutboundMessage
+import com.ai.assistance.quro.util.QuroDiag
 import kotlinx.coroutines.*
 import okhttp3.OkHttpClient
 import org.json.JSONObject
@@ -13,9 +14,10 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 微信 iLink Bot 适配器。
+ * 微信 iLink Bot 适配器（移植自 Andclaw ClawBotApiClient + ClawBotPoller）。
  *
  * 纯 OkHttp + org.json，零第三方 SDK 依赖。
+ * 协议层完全对齐 Andclaw 的 ClawBotApiClient + ClawBotPoller。
  */
 class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     override val platform = QuroBotPlatform.WECHAT
@@ -33,6 +35,10 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
         private const val DEFAULT_BASE_URL = "https://ilinkai.weixin.qq.com"
         private const val DEFAULT_BOT_TYPE = "3"
     }
+
+    /** 统一诊断出口：Logcat + 手机公共 Download/QuroAI_logs（用户无需 adb 即可取）。 */
+    private fun d(s: String) { Log.d(TAG, s); QuroDiag.log("Wechat", s) }
+    private fun de(msg: String, t: Throwable? = null) { Log.e(TAG, msg, t); QuroDiag.log("Wechat", "$msg ${t?.message ?: ""}") }
 
     private val wechatPrefs: SharedPreferences =
         appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -58,6 +64,9 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
     // 独立登录 scope
     private var loginJob: Job? = null
     private var pollJob: Job? = null
+
+    /** 真实连接态：仅轮询启动后才算已连接，避免 UI 误显「已连接」。 */
+    override val isConnected: Boolean get() = pollJob?.isActive == true
 
     // 扫码登录状态
     @Volatile var loginState = QrLoginStatus.WAIT
@@ -90,10 +99,10 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
         }
     }
 
-    // ==================== 扫码登录 ====================
+    // ==================== 扫码登录（Andclaw ClawBotAuthClient 风格） ====================
 
     fun startQrLogin() {
-        Log.d(TAG, "startQrLogin 被调用, loginState=$loginState")
+        d("startQrLogin 被调用, loginState=$loginState")
 
         if (loginState == QrLoginStatus.SCANNED || loginState == QrLoginStatus.CONFIRMED) {
             return
@@ -107,7 +116,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
 
         loginJob = CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                Log.d(TAG, ">>> 开始获取二维码...")
+                d(">>> 开始获取二维码...")
                 val baseUrl = wechatPrefs.getString(KEY_BASE_URL, DEFAULT_BASE_URL) ?: DEFAULT_BASE_URL
                 val botType = wechatPrefs.getString(KEY_BOT_TYPE, DEFAULT_BOT_TYPE) ?: DEFAULT_BOT_TYPE
 
@@ -116,7 +125,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                 val qrcode = qrResponse.optString("qrcode", "")
                 val qrcodeImgContent = qrResponse.optString("qrcode_img_content", "")
 
-                Log.d(TAG, ">>> 二维码获取成功: qrcode=${qrcode.take(50)}, imgContent=${qrcodeImgContent.take(50)}")
+                d(">>> 二维码获取成功: qrcode=${qrcode.take(50)}, imgContent=${qrcodeImgContent.take(50)}")
 
                 if (qrcode.isEmpty()) {
                     loginState = QrLoginStatus.UNKNOWN
@@ -126,9 +135,9 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
 
                 qrCodeData = qrcodeImgContent.takeIf { it.isNotEmpty() } ?: qrcode
                 loginState = QrLoginStatus.SCANNED
-                Log.d(TAG, "二维码已就绪，等待扫码...")
+                d("二维码已就绪，等待扫码...")
 
-                // 2. 轮询扫码状态（外层循环 + 单次查询）
+                // 2. 轮询扫码状态（Andclaw 风格：外层循环 + 单次查询）
                 var pollCount = 0
                 val maxPolls = 120 // 最多轮询 120 次（约 2 分钟）
                 while (isActive && pollCount < maxPolls) {
@@ -138,12 +147,12 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                     try {
                         val statusResponse = apiClient.getQrcodeStatus(baseUrl, qrcode)
                         val status = statusResponse.optString("status", "").lowercase()
-                        Log.d(TAG, "扫码状态: $status (第 $pollCount 次)")
+                        d("扫码状态: $status (第 $pollCount 次)")
 
                         when (status) {
                             "scanned" -> {
                                 loginState = QrLoginStatus.SCANNED
-                                Log.d(TAG, "已扫码，等待确认...")
+                                d("已扫码，等待确认...")
                             }
                             "confirmed" -> {
                                 loginState = QrLoginStatus.CONFIRMED
@@ -152,7 +161,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                                 val userId = statusResponse.optString("ilink_user_id", "")
                                 val serverBaseUrl = statusResponse.optString("baseurl", "")
 
-                                Log.d(TAG, ">>> 登录成功! token=${token.take(20)}..., accountId=$accountId")
+                                d(">>> 登录成功! token=${token.take(20)}..., accountId=$accountId")
 
                                 // 保存登录信息
                                 wechatPrefs.edit().apply {
@@ -180,7 +189,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                             }
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "轮询扫码状态失败: ${e.message}")
+                        de("轮询扫码状态失败: ${e.message}")
                     }
                 }
 
@@ -190,7 +199,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                     qrError = "扫码超时"
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "扫码登录失败", e)
+                de("扫码登录失败", e)
                 loginState = QrLoginStatus.UNKNOWN
                 qrError = e.message ?: "未知错误"
             }
@@ -205,7 +214,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
         pollJob = CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             poller.runLoop(
                 onInbound = { msg ->
-                    Log.d(TAG, "收到消息: from=${msg.fromUserId}, text=${msg.text.take(50)}")
+                    d("收到消息: from=${msg.fromUserId}, text=${msg.text.take(50)}")
 
                     // 缓存 context_token
                     contextTokens[msg.fromUserId] = msg.contextToken
@@ -225,10 +234,10 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                     com.ai.assistance.quro.core.bot.QuroBotManager.instance(appContext).handleInbound(inbound)
                 },
                 onConnected = {
-                    Log.d(TAG, "微信 Bot 已连接")
+                    d("微信 Bot 已连接")
                 },
                 onDisconnected = {
-                    Log.d(TAG, "微信 Bot 已断开")
+                    d("微信 Bot 已断开")
                 },
                 shouldStop = { pollJob?.isActive != true }
             )
@@ -246,25 +255,34 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
         val userId = msg.userId
         val token = wechatPrefs.getString(KEY_BOT_TOKEN, null)
         val baseUrl = wechatPrefs.getString(KEY_BASE_URL, DEFAULT_BASE_URL) ?: DEFAULT_BASE_URL
+        // 发送者必须是机器人自己的 ilink_bot_id（登录时存为 KEY_ACCOUNT_ID）；空 sender 会被服务端丢弃
+        val accountId = wechatPrefs.getString(KEY_ACCOUNT_ID, "")
 
         if (token.isNullOrEmpty()) {
-            Log.e(TAG, "发送失败: 未登录")
+            de("发送失败: 未登录")
+            lastError = "微信发送失败：未登录"
             return
         }
 
-        // 获取 context_token
+        // 获取 context_token（按用户缓存，回带才能定位会话）
         val contextToken = contextTokens[userId] ?: lastContextToken
 
         if (contextToken.isEmpty()) {
-            Log.e(TAG, "发送失败: 缺少 context_token")
+            de("发送失败: 缺少 context_token")
+            lastError = "微信发送失败：缺少 context_token（请先收到一条消息）"
             return
         }
 
         try {
-            apiClient.postSendMessage(baseUrl, token, userId, msg.text, contextToken)
-            Log.d(TAG, "消息已发送: to=$userId")
+            apiClient.postSendMessage(
+                baseUrl, token, userId, msg.text, contextToken,
+                fromUserId = accountId ?: "",
+            )
+            d("消息已发送: to=$userId from=$accountId")
+            lastError = null
         } catch (e: Exception) {
-            Log.e(TAG, "发送消息失败", e)
+            de("发送消息失败", e)
+            lastError = "微信发送失败：${e.message ?: "未知错误"}"
         }
     }
 
@@ -293,4 +311,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
     // ==================== 状态查询 ====================
 
     fun isLoggedIn(): Boolean = wechatPrefs.getBoolean(KEY_LOGGED_IN, false)
+
+    // 注意：QrLoginStatus 使用同包顶层定义（ILinkClient.kt），
+    // 切勿在此嵌套同名枚举，否则 UI 的 when 因类型不一致而整块不渲染二维码。
 }

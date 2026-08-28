@@ -49,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.ImageBitmap
+import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.imageResource
@@ -307,6 +308,19 @@ private fun StatusPill(text: String, color: Color) {
 }
 
 /**
+ * 尝试把 base64 图片（含可选 data:image/...;base64, 前缀）解码为 ImageBitmap；
+ * 不是图片（如纯 token/URL）则返回 null，交由 ZXing 生成二维码。
+ */
+private fun decodeQrImage(content: String): ImageBitmap? {
+    return runCatching {
+        val b64 = if (content.contains("base64,")) content.substringAfter("base64,") else content
+        val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+        val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+        bmp.asImageBitmap()
+    }.getOrNull()
+}
+
+/**
  * 平台卡：一体化设计——头部含图标/名称/副标/开关/状态，点击展开配置。
  * 配置区默认折叠，减少初始视觉噪音。
  */
@@ -562,6 +576,7 @@ private fun WechatBotPlatformCard(
     prefs: SharedPreferences,
     manager: QuroBotManager,
 ) {
+    val ctx = LocalContext.current.applicationContext
     var sw by remember { mutableStateOf(prefs.getBoolean("enabled_WECHAT", false)) }
     var expanded by remember { mutableStateOf(false) }
     var manualToken by remember { mutableStateOf(prefs.getString("wechat_token", "") ?: "") }
@@ -661,14 +676,13 @@ private fun WechatBotPlatformCard(
             )
         }
 
-        // ═══ 展开内容 ════
-        if (expanded) {
-            HorizontalDivider(color = Line.copy(alpha = 0.5f))
-
+        // ═══ 扫码登录区（始终可见，无需展开）═══
+        HorizontalDivider(color = Line.copy(alpha = 0.5f))
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             // 操作栏（重连 + 错误提示）
             if (sw) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -689,45 +703,50 @@ private fun WechatBotPlatformCard(
                 }
             }
 
-            Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                // ===== 扫码登录区域 =====
-                GroupCaption("扫码登录")
-                when (loginState.value) {
-                    QrLoginStatus.WAIT -> {
-                        OutlinedButton(
-                            onClick = {
-                                if (adapter == null) {
-                                    qrError.value = "适配器未初始化，请重启 App"
-                                    return@OutlinedButton
-                                }
-                                try {
-                                    adapter!!.startQrLogin()
-                                } catch (e: Exception) {
-                                    qrError.value = "启动登录失败: ${e.message}"
-                                }
-                            },
-                            Modifier.fillMaxWidth().height(36.dp),
-                        ) {
-                            Text("获取微信登录二维码", fontSize = 12.sp)
-                        }
+            GroupCaption("扫码登录")
+            when (loginState.value) {
+                QrLoginStatus.WAIT -> {
+                    OutlinedButton(
+                        onClick = {
+                            if (adapter == null) {
+                                qrError.value = "适配器未初始化，请重启 App"
+                                return@OutlinedButton
+                            }
+                            try {
+                                adapter!!.startQrLogin()
+                            } catch (e: Exception) {
+                                qrError.value = "启动登录失败: ${e.message}"
+                            }
+                        },
+                        Modifier.fillMaxWidth().height(36.dp),
+                    ) {
+                        Text("获取微信登录二维码", fontSize = 12.sp)
                     }
-                    QrLoginStatus.SCANNED -> {
-                        // 显示二维码
-                        val qrData = qrCodeData.value
-                        if (qrData != null) {
-                            // 判断是否为 URL（需要生成 QR 码）
-                            val isUrl = qrData.startsWith("http://") || qrData.startsWith("https://")
-                            val qrContent = if (isUrl) qrData else qrData
-
-                            // 生成 QR 码 Bitmap
-                            val qrBitmap = remember(qrContent) {
+                }
+                QrLoginStatus.SCANNED -> {
+                    val qrData = qrCodeData.value
+                    if (qrData != null) {
+                        val directImg = remember(qrData) { decodeQrImage(qrData) }
+                        if (directImg != null) {
+                            androidx.compose.foundation.Image(
+                                bitmap = directImg,
+                                contentDescription = "微信登录二维码",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.White)
+                                    .padding(8.dp),
+                            )
+                        } else {
+                            val qrBitmap = remember(qrData) {
                                 try {
                                     val hints = hashMapOf<com.google.zxing.EncodeHintType, Any>(
                                         com.google.zxing.EncodeHintType.MARGIN to 1,
                                         com.google.zxing.EncodeHintType.ERROR_CORRECTION to com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.M,
                                     )
                                     val matrix = com.google.zxing.qrcode.QRCodeWriter().encode(
-                                        qrContent,
+                                        qrData,
                                         com.google.zxing.BarcodeFormat.QR_CODE,
                                         400, 400, hints
                                     )
@@ -744,7 +763,6 @@ private fun WechatBotPlatformCard(
                                     null
                                 }
                             }
-
                             if (qrBitmap != null) {
                                 androidx.compose.foundation.Image(
                                     bitmap = qrBitmap.asImageBitmap(),
@@ -759,51 +777,56 @@ private fun WechatBotPlatformCard(
                             } else {
                                 Text("二维码生成失败: $qrData", fontSize = 11.sp, color = Color.Red)
                             }
-                            Spacer(Modifier.height(4.dp))
-                            Text("请用微信扫描二维码完成登录", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
-                            Text("正在获取二维码...", fontSize = 12.sp, color = Muted)
                         }
-                        OutlinedButton(
-                            onClick = { adapter?.cancelQrLogin() },
-                            Modifier.fillMaxWidth().height(32.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFE53935)),
-                        ) {
-                            Text("取消", fontSize = 11.sp)
-                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text("请用微信扫描二维码完成登录", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        Text("正在获取二维码...", fontSize = 12.sp, color = Muted)
                     }
-                    QrLoginStatus.CONFIRMED -> {
-                        Text("✓ 登录成功！", fontSize = 13.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.SemiBold)
-                    }
-                    QrLoginStatus.UNKNOWN -> {
-                        Text("登录被拒绝或取消", fontSize = 12.sp, color = Color(0xFFE53935))
-                        OutlinedButton(
-                            onClick = { adapter?.startQrLogin() },
-                            Modifier.fillMaxWidth().height(32.dp),
-                        ) { Text("重新获取二维码", fontSize = 11.sp) }
-                    }
-                    QrLoginStatus.DENIED -> {
-                        Text("登录被用户拒绝", fontSize = 12.sp, color = Color(0xFFE53935))
-                        OutlinedButton(
-                            onClick = { adapter?.startQrLogin() },
-                            Modifier.fillMaxWidth().height(32.dp),
-                        ) { Text("重新获取二维码", fontSize = 11.sp) }
-                    }
-                    QrLoginStatus.EXPIRED -> {
-                        Text("二维码已过期", fontSize = 12.sp, color = Color(0xFFFF9800))
-                        OutlinedButton(
-                            onClick = { adapter?.startQrLogin() },
-                            Modifier.fillMaxWidth().height(32.dp),
-                        ) { Text("重新获取二维码", fontSize = 11.sp) }
+                    OutlinedButton(
+                        onClick = { adapter?.cancelQrLogin() },
+                        Modifier.fillMaxWidth().height(32.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFE53935)),
+                    ) {
+                        Text("取消", fontSize = 11.sp)
                     }
                 }
-
-                // 错误信息
-                if (qrError.value != null) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(qrError.value!!, fontSize = 10.sp, color = Color(0xFFE53935), lineHeight = 14.sp)
+                QrLoginStatus.CONFIRMED -> {
+                    Text("✓ 登录成功！", fontSize = 13.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.SemiBold)
                 }
+                QrLoginStatus.UNKNOWN -> {
+                    Text("登录被拒绝或取消", fontSize = 12.sp, color = Color(0xFFE53935))
+                    OutlinedButton(
+                        onClick = { adapter?.startQrLogin() },
+                        Modifier.fillMaxWidth().height(32.dp),
+                    ) { Text("重新获取二维码", fontSize = 11.sp) }
+                }
+                QrLoginStatus.DENIED -> {
+                    Text("登录被用户拒绝", fontSize = 12.sp, color = Color(0xFFE53935))
+                    OutlinedButton(
+                        onClick = { adapter?.startQrLogin() },
+                        Modifier.fillMaxWidth().height(32.dp),
+                    ) { Text("重新获取二维码", fontSize = 11.sp) }
+                }
+                QrLoginStatus.EXPIRED -> {
+                    Text("二维码已过期", fontSize = 12.sp, color = Color(0xFFFF9800))
+                    OutlinedButton(
+                        onClick = { adapter?.startQrLogin() },
+                        Modifier.fillMaxWidth().height(32.dp),
+                    ) { Text("重新获取二维码", fontSize = 11.sp) }
+                }
+            }
 
+            // 错误信息
+            if (qrError.value != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(qrError.value!!, fontSize = 10.sp, color = Color(0xFFE53935), lineHeight = 14.sp)
+            }
+        }
+
+        // ═══ 展开内容（高级选项）═══
+        if (expanded) {
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // ===== 手动填 Token =====
                 GroupCaption("手动填 Token（高级）")
                 OutlinedButton(
@@ -820,6 +843,10 @@ private fun WechatBotPlatformCard(
                         onValueChange = { v ->
                             manualToken = v
                             prefs.edit().putString("wechat_token", v).apply()
+                            // 同步写入适配器自己的 SharedPreferences，否则轮询拿不到 token
+                            val wechatPrefs = ctx.getSharedPreferences("quro_wechat_ilink", Context.MODE_PRIVATE)
+                            wechatPrefs.edit().putString("bot_token", v).apply()
+                            wechatPrefs.edit().putBoolean("logged_in", v.isNotBlank()).apply()
                         },
                         placeholder = "粘贴从 ilinkai.weixin.qq.com 获取的 token",
                         isSecret = true,

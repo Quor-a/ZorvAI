@@ -4,7 +4,9 @@ import android.content.Context
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.terminal.QuroTerminalController
+import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager
 import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -101,8 +103,9 @@ class TerminalWriteTool : QuroTool {
     override fun run(context: Context, arguments: String): String {
         val text = JSONObject(arguments).optString("text", "")
         if (text.isBlank()) return "missing text"
-        val session = QuroTerminalController.session
-            ?: return "❌ 当前没有活动终端会话，请先在对话框工具栏打开「终端」界面再写入"
+        // 终端架构统一：优先使用默认共享会话；若无则懒创建一个（不触发下载，缺失后端时回退设备 sh）。
+        val session = QuroTerminalController.ensureSession(context)
+            ?: return "❌ 无法创建终端会话，请先在对话框工具栏打开「终端」界面或安装 Linux 环境"
         session.sendCommand(text)
         return "✅ 已写入终端: $text"
     }
@@ -131,6 +134,18 @@ class TerminalStatusTool : QuroTool {
         val session = QuroTerminalController.session
         val linux = QuroLinuxEnv.shellLaunch(context) != null
         val shell = if (linux) "proot/Linux (Ubuntu 24.04 ARM64)" else "/system/bin/sh (Toybox)"
+        // 终端架构统一：把会话总览一并返回，AI/使用者可据此管理所有会话与后端。
+        val sessions = JSONArray()
+        QuroTerminalSessionManager.listSessions().forEach { s ->
+            sessions.put(JSONObject().apply {
+                put("id", s.id)
+                put("name", s.name)
+                put("kind", s.kind.name)
+                put("backend", s.backend.name)
+                put("is_default", s.isDefault)
+                put("alive", s.alive)
+            })
+        }
         return JSONObject().apply {
             put("active_session", session != null)
             put("mode", when {
@@ -146,6 +161,8 @@ class TerminalStatusTool : QuroTool {
             put("last_interrupted", session?.lastInterrupted ?: false)
             put("shell", shell)
             put("linux_env", linux)
+            put("default_session_id", QuroTerminalSessionManager.defaultSession?.let { "default" } ?: "none")
+            put("sessions", sessions)
             put("note", if (session != null) "交互式会话可用，可用 terminal_write 输入" else "会话未启动，terminal_exec 仍可独立执行命令")
         }.toString()
     }
@@ -177,5 +194,120 @@ class TerminalInterruptTool : QuroTool {
         val msg = runBlocking { QuroTerminalController.interrupt(context) }
         QuroAgentTrace.result("terminal", "中断结果", msg)
         return msg
+    }
+}
+
+/**
+ * 列出所有终端会话（终端架构统一 · 新增）。
+ *
+ * AI 与使用者可据此查看并管理所有会话与后端：默认共享会话（AI/CMS/使用者共用）、
+ * 额外会话、终端界面（Termux PTY）、以及跨重启的历史会话。返回每个会话的
+ * id / 名称 / 后端 / 是否默认 / 是否存活，供 terminal_session_switch / terminal_session_kill 使用。
+ */
+class TerminalSessionsTool : QuroTool {
+    override val name: String = "terminal_sessions"
+    override val description: String =
+        "列出所有终端会话：默认共享会话 / 额外会话 / 终端界面 / 历史，含 id、名称、后端(proot/Linux 或设备 sh)、是否默认、是否存活。" +
+            "AI 和使用者据此管理所有会话与后端。配合 terminal_session_new/switch/kill 使用。"
+    override val parametersJson: String = """{"type":"object","properties":{}}"""
+
+    override fun run(context: Context, arguments: String): String {
+        val arr = JSONArray()
+        QuroTerminalSessionManager.listSessions().forEach { s ->
+            arr.put(JSONObject().apply {
+                put("id", s.id)
+                put("name", s.name)
+                put("kind", s.kind.name)
+                put("backend", s.backend.name)
+                put("is_default", s.isDefault)
+                put("alive", s.alive)
+            })
+        }
+        return JSONObject().put("count", arr.length()).put("sessions", arr).toString()
+    }
+}
+
+/**
+ * 创建新终端会话（终端架构统一 · 新增）。
+ *
+ * 新会话与默认会话共用同一后端（proot/Ubuntu 或设备 sh），但独立运行、不自动成为默认。
+ * 若后端未安装会跟随安装 Linux 环境（与打开终端界面一致）。
+ */
+class TerminalSessionNewTool : QuroTool {
+    override val name: String = "terminal_session_new"
+    override val description: String =
+        "创建一个新的终端会话（后端与默认会话一致：proot/Ubuntu 或设备 sh）。不会自动成为默认；" +
+            "可用 terminal_session_switch 切换默认。若后端未安装会跟随安装 Linux 环境。"
+    override val parametersJson: String =
+        """{"type":"object","properties":{"name":{"type":"string","description":"可选会话名"}},"required":[]}"""
+
+    override fun run(context: Context, arguments: String): String {
+        val name = JSONObject(arguments).optString("name", "")
+        return try {
+            val info = runBlocking {
+                QuroTerminalSessionManager.createSession(context, name.ifBlank { null }, installIfMissing = true)
+            }
+            JSONObject().apply {
+                put("ok", true)
+                put("id", info.id)
+                put("name", info.name)
+                put("backend", info.backend.name)
+                put("is_default", info.isDefault)
+            }.toString()
+        } catch (e: Exception) {
+            JSONObject().put("ok", false).put("error", e.message ?: e.toString()).toString()
+        }
+    }
+}
+
+/**
+ * 切换默认会话（终端架构统一 · 新增）。
+ *
+ * 把指定 id 的会话提升为默认共享会话——此后 AI 工具（terminal_write/interrupt/status）与 CMS
+ * 开发环境都将使用该会话。原默认会话降级为额外会话并保留进程，不会丢失工作。
+ */
+class TerminalSessionSwitchTool : QuroTool {
+    override val name: String = "terminal_session_switch"
+    override val description: String =
+        "把指定 id 的会话切换为默认共享会话（AI 工具 / CMS 此后将使用该会话）。原默认会话降级为额外会话并保留进程。" +
+            "id 来自 terminal_sessions 的返回。"
+    override val parametersJson: String =
+        """{"type":"object","properties":{"id":{"type":"string","description":"目标会话 id（来自 terminal_sessions）"}},"required":["id"]}"""
+
+    override fun run(context: Context, arguments: String): String {
+        val id = JSONObject(arguments).optString("id", "")
+        if (id.isBlank()) return "missing id"
+        return try {
+            val ok = runBlocking { QuroTerminalSessionManager.switchDefault(id) }
+            if (ok) "✅ 已切换默认会话为 $id（可用 terminal_sessions 确认）"
+            else "❌ 找不到会话 $id（可用 terminal_sessions 查询）"
+        } catch (e: Exception) {
+            "❌ 切换失败: ${e.message}"
+        }
+    }
+}
+
+/**
+ * 销毁指定会话（终端架构统一 · 新增）。
+ *
+ * id=default（或省略）则销毁默认共享会话；销毁后下次使用会重新创建。
+ * 满足「使用者可管理（结束）所有会话」的需求。
+ */
+class TerminalSessionKillTool : QuroTool {
+    override val name: String = "terminal_session_kill"
+    override val description: String =
+        "销毁指定 id 的会话；id=default 或省略则销毁默认共享会话。销毁后下次使用会重新创建。" +
+            "用于使用者结束不再需要的会话。"
+    override val parametersJson: String =
+        """{"type":"object","properties":{"id":{"type":"string","description":"会话 id，默认 default"}},"required":[]}"""
+
+    override fun run(context: Context, arguments: String): String {
+        val id = JSONObject(arguments).optString("id", "default").ifBlank { "default" }
+        return try {
+            val ok = runBlocking { QuroTerminalSessionManager.destroySession(id) }
+            if (ok) "✅ 已销毁会话 $id" else "❌ 找不到会话 $id（可用 terminal_sessions 查询）"
+        } catch (e: Exception) {
+            "❌ 销毁失败: ${e.message}"
+        }
     }
 }

@@ -41,6 +41,7 @@ class UiWidgetTool : QuroTool {
 "mermaid{source(多行 Mermaid 文本),theme?(default|dark|forest|neutral|base,缺省按系统深浅色自动选)}：AI 自写的可视化图表（flowchart/时序图/状态机/类图/思维导图/git图…），客户端不内置固定图，只渲染 AI 下发的 Mermaid 源码；" +
 "此外，AI 消息中若含链接（yb.tencent.com / yuanbao.tencent.com），会自动渲染为「链接回答」预览卡，点击在应用内浏览器打开该回答（无需经本工具）。" +
 "miniapp{html,config?}：AI 生成小程序代码（HTML+JS+CSS），在对话框内实时渲染为可交互的小程序页面，支持 Page/Component 生命周期、data-bind 数据绑定、data-action 事件绑定；" +
+"composite{layout(stack|tabs|accordion),children:[<组件spec数组>],description?}：多语言组合卡——把多个子卡聚合成一个整体一起展示，同时支持「只渲染其中一个」；layout=stack 时各子卡顺序堆叠且可点「单独」单独全宽渲染，layout=tabs 时子卡以标签页呈现一次只显示一个，layout=accordion 时各子卡独立折叠；children 内每个元素都是完整的组件 spec（可嵌套 composite），用于「小程序后端+前端组合完成」「可视化弹窗+可视化编程+多语言渲染」等需要组合且互不干扰的产物；" +
 "legacy: todo{items:[{text,done}]}; chart{chart_type,series:[{label,value}]}; note{body,lang?}; actions{actions:[{label,command}]}。" +
         "command 语法：ui_open_* / ui_toggle_* / linux:install / run:<命令> / widget:<任意自定义>，" +
         "以及 v221 新增 open:<url>（内置浏览器打开）/ copy:<文本>（复制剪贴板）/ ai:<提示词>（直接发给 AI）/ screen:<名称>（界面导航）。"
@@ -51,7 +52,7 @@ class UiWidgetTool : QuroTool {
             val jo = JSONObject(arguments)
             val spec = jo.optString("spec", "").ifBlank { arguments }
             val card = parseComponentSpec(spec)
-                ?: return "❌ 未知组件类型或 spec 解析失败（请检查 type 与字段，支持 button/toggle/slider/progress/stat/alert/table/list/segmented/pie/rating/countdown/tabs/expandable/form/chips/steps/gauge/media/info/toolcall/stream/mediaplay/quickreply/quickaction/timeline/heatmap/compare/radar/timer/carousel/kanban 及 v221 新增 color/counter/breadcrumb/tagcloud/badge/avatargroup 与 v300 新增 mermaid（AI 自写 Mermaid 图表）与 v1057 新增 miniapp（AI 小程序），详见 CARD_CATALOG；legacy 仍支持 todo/chart/note/actions；链接 yb.tencent.com 会自动生成预览卡）"
+                ?: return "❌ 未知组件类型或 spec 解析失败（请检查 type 与字段，支持 button/toggle/slider/progress/stat/alert/table/list/segmented/pie/rating/countdown/tabs/expandable/form/chips/steps/gauge/media/info/toolcall/stream/mediaplay/quickreply/quickaction/timeline/heatmap/compare/radar/timer/carousel/kanban 及 v221 新增 color/counter/breadcrumb/tagcloud/badge/avatargroup 与 v300 新增 mermaid（AI 自写 Mermaid 图表）与 v1057 新增 miniapp（AI 小程序）与 v1068 新增 composite（多语言组合卡，可组合可单渲染）详见 CARD_CATALOG；legacy 仍支持 todo/chart/note/actions；链接 yb.tencent.com 会自动生成预览卡）"
             // 优先挂进聊天气泡（onCard 桥 → 当前助手消息）；桥未连接时退回全局卡片栏兜底
             val bridge = QuroUiActionBridge.onCard
             if (bridge != null) {

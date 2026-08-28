@@ -7,6 +7,36 @@
 
 BOOT_DIR=$(cd "$(dirname "$0")" && pwd)
 
+# ── dpkg / apt 锁检测与释放 ──
+# 上一次安装中断/崩溃会残留 /var/lib/dpkg/lock* 与 /var/cache/apt/archives/lock，
+# 导致后续 apt-get 卡死或报 "Could not get lock"。本段检测并释放 stale 锁（被进程占用则跳过）。
+echo "[cms-bootstrap] 🔓 检测并释放残留 dpkg/apt 锁..."
+for lk in /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/cache/apt/archives/lock /var/lib/apt/lists/lock; do
+  if [ -e "$lk" ]; then
+    if command -v fuser >/dev/null 2>&1 && fuser "$lk" >/dev/null 2>&1; then
+      echo "[cms-bootstrap] ⏭️ $lk 被进程占用，跳过释放"
+    else
+      echo "[cms-bootstrap] 🧹 释放 stale 锁: $lk"
+      rm -f "$lk" 2>/dev/null || true
+    fi
+  fi
+done
+dpkg --configure -a 2>/dev/null || true
+
+# ── 中和 dpkg 服务管理器（proot 无 PID1/init，postinst 调用 start-stop-daemon/systemctl 等会挂起）──
+echo "[cms-bootstrap] 🛡️ 中和 dpkg 服务管理器（proot 无 init，避免维护脚本挂起）..."
+neutralize_dpkg_services() {
+    mkdir -p /usr/local/sbin
+    for b in start-stop-daemon invoke-rc.d update-rc.d service systemctl telinit initctl deb-systemd-helper deb-systemd-invoke; do
+        printf '#!/bin/sh\nexit 0\n' > "/usr/local/sbin/$b"
+        chmod +x "/usr/local/sbin/$b" 2>/dev/null || true
+    done
+    printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d 2>/dev/null || true
+    chmod +x /usr/sbin/policy-rc.d 2>/dev/null || true
+    echo "[cms-bootstrap] ✅ 服务管理器已中和（no-op 置于 /usr/local/sbin，PATH 优先级高于系统二进制）"
+}
+neutralize_dpkg_services
+
 echo "[cms-bootstrap] 🚀 Starting CMS bootstrap at $(date)"
 echo "[cms-bootstrap] 📁 Bootstrap directory: $BOOT_DIR"
 
@@ -175,42 +205,40 @@ done
 
 # ═══ Phase 3: 语言运行时 ═══
 echo "[cms-bootstrap] 📦 Phase 3: installing language runtimes..."
-# 使用智能安装函数：检查包是否已安装，不依赖退出码
-smart_install() {
+# 使用稳健安装函数：先 apt-get install；proot 下事务常半装失败，则回退 apt-get download + dpkg-deb -x。
+robust_install() {
     local pkg="$1"
     local cmd="$2"
-    
-    # 先检查是否已安装
     if command -v $cmd >/dev/null 2>&1; then
         echo "[cms-bootstrap] ✅ $pkg already installed: $(command -v $cmd)"
         return 0
     fi
-    
-    # 尝试安装
     echo "[cms-bootstrap] 📦 Installing $pkg..."
-    if apt-get install -y --no-install-recommends $pkg 2>&1 | tail -5; then
-        echo "[cms-bootstrap] ✅ $pkg installation command succeeded"
-    else
-        echo "[cms-bootstrap] ⚠️ $pkg installation command failed, but continuing..."
-    fi
-    
-    # 验证是否安装成功（不依赖退出码）
+    apt-get install -y --no-install-recommends $pkg 2>&1 | tail -5
     if command -v $cmd >/dev/null 2>&1; then
-        echo "[cms-bootstrap] ✅ $pkg installed successfully: $(command -v $cmd)"
+        echo "[cms-bootstrap] ✅ $pkg installed via apt"
+        return 0
+    fi
+    echo "[cms-bootstrap] ⚠️ apt 未生效，$pkg 改用 download+dpkg-deb 回退..."
+    local tmp=/tmp/quro_deb; mkdir -p "$tmp"
+    ( cd "$tmp" && apt-get download $pkg 2>/dev/null && for f in *.deb; do dpkg-deb -x "$f" / 2>/dev/null; done; rm -f *.deb )
+    apt-get install -f -y 2>/dev/null || true
+    if command -v $cmd >/dev/null 2>&1; then
+        echo "[cms-bootstrap] ✅ $pkg installed via dpkg fallback"
         return 0
     else
-        echo "[cms-bootstrap] ❌ $pkg installation failed - command '$cmd' not found"
+        echo "[cms-bootstrap] ❌ $pkg installation failed (apt + dpkg fallback)"
         return 1
     fi
 }
 
 # 安装Python（优先，因为Python是proot环境下最好的自救工具）
 echo "[cms-bootstrap] 📦 Installing python3..."
-smart_install "python3" "python3" || echo "[cms-bootstrap] ⚠️ python3 installation failed, continuing..."
+robust_install "python3" "python3" || echo "[cms-bootstrap] ⚠️ python3 installation failed, continuing..."
 echo "[cms-bootstrap] 📦 Installing python3-pip..."
-smart_install "python3-pip" "pip3" || echo "[cms-bootstrap] ⚠️ python3-pip installation failed, continuing..."
+robust_install "python3-pip" "pip3" || echo "[cms-bootstrap] ⚠️ python3-pip installation failed, continuing..."
 echo "[cms-bootstrap] 📦 Installing python3-venv..."
-smart_install "python3-venv" "python3" || echo "[cms-bootstrap] ⚠️ python3-venv installation failed, continuing..."
+robust_install "python3-venv" "python3" || echo "[cms-bootstrap] ⚠️ python3-venv installation failed, continuing..."
 
 # 安装Python开发头文件（修复Python.h缺失）
 echo "[cms-bootstrap] 📦 Installing python3.12-dev..."
@@ -241,7 +269,7 @@ else
         fi
     else
         echo "[cms-bootstrap] ⚠️ Node.js download failed, trying apt fallback..."
-        smart_install "nodejs" "node" || echo "[cms-bootstrap] ⚠️ nodejs installation failed, continuing..."
+        robust_install "nodejs" "node" || echo "[cms-bootstrap] ⚠️ nodejs installation failed, continuing..."
     fi
 fi
 
@@ -250,7 +278,7 @@ echo "[cms-bootstrap] 📦 Installing npm..."
 if command -v npm >/dev/null 2>&1; then
     echo "[cms-bootstrap] ✅ npm already installed: $(npm --version)"
 else
-    smart_install "npm" "npm" || echo "[cms-bootstrap] ⚠️ npm installation failed, continuing..."
+    robust_install "npm" "npm" || echo "[cms-bootstrap] ⚠️ npm installation failed, continuing..."
 fi
 
 # 修复node-gyp PATH问题
@@ -300,11 +328,11 @@ fi
 # ═══ Phase 4: 编译工具链 ═══
 echo "[cms-bootstrap] 🔨 Phase 4: installing build toolchain..."
 echo "[cms-bootstrap] 📦 Installing gcc..."
-smart_install "gcc" "gcc" || echo "[cms-bootstrap] ⚠️ gcc installation failed, continuing..."
+robust_install "gcc" "gcc" || echo "[cms-bootstrap] ⚠️ gcc installation failed, continuing..."
 echo "[cms-bootstrap] 📦 Installing g++..."
-smart_install "g++" "g++" || echo "[cms-bootstrap] ⚠️ g++ installation failed, continuing..."
+robust_install "g++" "g++" || echo "[cms-bootstrap] ⚠️ g++ installation failed, continuing..."
 echo "[cms-bootstrap] 📦 Installing make..."
-smart_install "make" "make" || echo "[cms-bootstrap] ⚠️ make installation failed, continuing..."
+robust_install "make" "make" || echo "[cms-bootstrap] ⚠️ make installation failed, continuing..."
 
 # 安装CMake及其依赖链
 echo "[cms-bootstrap] 📦 Installing CMake with dependencies..."
@@ -317,35 +345,35 @@ rm -rf /tmp/debs
 ldconfig 2>/dev/null
 
 echo "[cms-bootstrap] 📦 Installing linux-headers-generic..."
-smart_install "linux-headers-generic" "make" || echo "[cms-bootstrap] ⚠️ linux-headers-generic installation failed, continuing..."
+robust_install "linux-headers-generic" "make" || echo "[cms-bootstrap] ⚠️ linux-headers-generic installation failed, continuing..."
 
 # ═══ Phase 5: 开发工具 ═══
 echo "[cms-bootstrap] 🛠️ Phase 5: installing dev tools..."
 echo "[cms-bootstrap] 📦 Installing git..."
-smart_install "git" "git" || echo "[cms-bootstrap] ⚠️ git installation failed, continuing..."
+robust_install "git" "git" || echo "[cms-bootstrap] ⚠️ git installation failed, continuing..."
 echo "[cms-bootstrap] 📦 Installing vim..."
-smart_install "vim" "vim" || echo "[cms-bootstrap] ⚠️ vim installation failed, continuing..."
+robust_install "vim" "vim" || echo "[cms-bootstrap] ⚠️ vim installation failed, continuing..."
 echo "[cms-bootstrap] 📦 Installing nano..."
-smart_install "nano" "nano" || echo "[cms-bootstrap] ⚠️ nano installation failed, continuing..."
+robust_install "nano" "nano" || echo "[cms-bootstrap] ⚠️ nano installation failed, continuing..."
 echo "[cms-bootstrap] 📦 Installing bash..."
-smart_install "bash" "bash" || echo "[cms-bootstrap] ⚠️ bash installation failed, continuing..."
+robust_install "bash" "bash" || echo "[cms-bootstrap] ⚠️ bash installation failed, continuing..."
 
 # ═══ Phase 6: 网络与压缩工具 ═══
 echo "[cms-bootstrap] 🌐 Phase 6: installing network & utility tools..."
 echo "[cms-bootstrap] 📦 Installing curl..."
-smart_install "curl" "curl" || echo "[cms-bootstrap] ⚠️ curl installation failed, continuing..."
+robust_install "curl" "curl" || echo "[cms-bootstrap] ⚠️ curl installation failed, continuing..."
 echo "[cms-bootstrap] 📦 Installing wget..."
-smart_install "wget" "wget" || echo "[cms-bootstrap] ⚠️ wget installation failed, continuing..."
+robust_install "wget" "wget" || echo "[cms-bootstrap] ⚠️ wget installation failed, continuing..."
 echo "[cms-bootstrap] 📦 Installing jq..."
-smart_install "jq" "jq" || echo "[cms-bootstrap] ⚠️ jq installation failed, continuing..."
+robust_install "jq" "jq" || echo "[cms-bootstrap] ⚠️ jq installation failed, continuing..."
 echo "[cms-bootstrap] 📦 Installing zip..."
-smart_install "zip" "zip" || echo "[cms-bootstrap] ⚠️ zip installation failed, continuing..."
+robust_install "zip" "zip" || echo "[cms-bootstrap] ⚠️ zip installation failed, continuing..."
 echo "[cms-bootstrap] 📦 Installing unzip..."
-smart_install "unzip" "unzip" || echo "[cms-bootstrap] ⚠️ unzip installation failed, continuing..."
+robust_install "unzip" "unzip" || echo "[cms-bootstrap] ⚠️ unzip installation failed, continuing..."
 echo "[cms-bootstrap] 📦 Installing openssh-client..."
-smart_install "openssh-client" "ssh" || echo "[cms-bootstrap] ⚠️ openssh-client installation failed, continuing..."
+robust_install "openssh-client" "ssh" || echo "[cms-bootstrap] ⚠️ openssh-client installation failed, continuing..."
 echo "[cms-bootstrap] 📦 Installing xz-utils..."
-smart_install "xz-utils" "xz" || echo "[cms-bootstrap] ⚠️ xz-utils installation failed, continuing..."
+robust_install "xz-utils" "xz" || echo "[cms-bootstrap] ⚠️ xz-utils installation failed, continuing..."
 
 # ═══ Phase 6.5: 修复CA证书（手动合并，避免 update-ca-certificates 在 proot 下失败） ═══
 echo "[cms-bootstrap] 🔧 Phase 6.5: fixing CA certificates..."
@@ -410,6 +438,20 @@ echo "  - bash: $(command -v bash 2>&1 || echo 'not found')"
 echo "  - go: $(command -v go 2>&1 || echo 'not found')"
 echo "  - rustc: $(command -v rustc 2>&1 || echo 'not found')"
 
-touch "$BOOT_DIR/.bootstrap.done"
-echo "[cms-bootstrap] ✅ marker written: $BOOT_DIR/.bootstrap.done"
+# 仅当核心开发工具齐全才写 .bootstrap.done（避免"标记有了但工具没装"的假成功，这正是终端缺开发工具、模块装不上的根因）
+CORE_OK=1
+for t in python3 node gcc make cmake git curl; do
+    if command -v $t >/dev/null 2>&1; then
+        echo "[cms-bootstrap] ✅ $t present"
+    else
+        echo "[cms-bootstrap] ❌ $t MISSING"
+        CORE_OK=0
+    fi
+done
+if [ "$CORE_OK" = "1" ]; then
+    touch "$BOOT_DIR/.bootstrap.done"
+    echo "[cms-bootstrap] ✅ marker written: $BOOT_DIR/.bootstrap.done"
+else
+    echo "[cms-bootstrap] ❌ core dev tools missing, NOT writing .bootstrap.done（下次部署会重试，可在 CMS 日志看到缺了哪个工具）"
+fi
 echo "[cms-bootstrap] 🎉 Bootstrap completed at $(date)"

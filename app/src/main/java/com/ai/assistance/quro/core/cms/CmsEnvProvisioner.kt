@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.cms
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.util.QuroDiag
 
 /**
  * CMS v2 终端环境供给器（原创运行时 · 开发环境栈补齐）。
@@ -16,6 +17,64 @@ import com.ai.assistance.quro.core.linux.QuroLinuxEnv
  * 注意：installScript 内所有 shell `$` 必须以 `${'$'}` 转义——Kotlin 原始字符串
  * 仍会按模板解析裸 `$`，否则编译报 "Unresolved reference"。
  */
+/**
+ * 开发环境装配共享 prologue：先释放可能残留的 dpkg/apt 锁，再注入与引擎 bootstrap 同源的
+ * [robust_install] 函数（apt 失败回退 apt-get download + dpkg-deb -x）。
+ * 这样各 EnvProfile 脚本里的 `apt-get install` 不再静默吞错，proot 下半装失败的包能被兜底装上。
+ */
+private val ENV_INSTALL_PROLOGUE = QuroLinuxEnv.APT_LOCK_RELEASE_PROLOGUE + """
+    |
+    |# ── 中和 dpkg 服务管理器（proot 无 init/PID1，postinst 调用 start-stop-daemon/systemctl 等会挂起，
+    |#    正是"dpkg问题一直存在、依赖装不上、部署卡死"的根因）──
+    |neutralize_dpkg_services() {
+    |    mkdir -p /usr/local/sbin
+    |    echo "[svc] 中和 proot 下会挂起的服务管理器..."
+    |    for b in start-stop-daemon invoke-rc.d update-rc.d service systemctl telinit initctl deb-systemd-helper deb-systemd-invoke; do
+    |        printf '#!/bin/sh\nexit 0\n' > "/usr/local/sbin/${'$'}b"
+    |        chmod +x "/usr/local/sbin/${'$'}b" 2>/dev/null || true
+    |    done
+    |    printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d 2>/dev/null || true
+    |    chmod +x /usr/sbin/policy-rc.d 2>/dev/null || true
+    |    echo "[svc] 服务管理器已中和（no-op 置于 /usr/local/sbin，PATH 优先级高于系统二进制）"
+    |}
+    |neutralize_dpkg_services
+    |
+    |# 稳健安装函数：先 apt-get install；proot 下事务常半装失败，则回退 apt-get download + dpkg-deb -x。
+    |# 用法: robust_install "<deb 包列表>" "<就绪探测命令>"
+    |#   ${'$'}1 = 待安装 deb 包(空格分隔, 如 "nodejs npm")
+    |#   ${'$'}2 = 就绪探测命令(可选, 通常为包提供的二进制名, 如 node/gradle/ssh)
+    |#        提供且 command -v 命中 -> 视为已装, 跳过 apt(幂等)
+    |#        为空           -> 不跳过, 始终尝试 apt 安装(避免漏装)
+    |robust_install() {
+    |    local pkgs="${'$'}1"
+    |    local probe="${'$'}2"
+    |    if [ -n "${'$'}probe" ] && command -v "${'$'}probe" >/dev/null 2>&1; then
+    |        echo "[env] ${'$'}pkgs already installed (probe=${'$'}probe: $(command -v ${'$'}probe))"
+    |        return 0
+    |    fi
+    |    echo "[env] Installing ${'$'}pkgs..."
+    |    apt-get install -y --no-install-recommends ${'$'}pkgs 2>&1 | tail -5
+    |    if [ -n "${'$'}probe" ] && command -v "${'$'}probe" >/dev/null 2>&1; then
+    |        echo "[env] ✅ ${'$'}pkgs installed via apt (probe=${'$'}probe)"
+    |        return 0
+    |    fi
+    |    echo "[env] ⚠️ apt 未生效，${'$'}pkgs 改用 download+dpkg-deb 回退..."
+    |    local tmp=/tmp/quro_deb; mkdir -p "${'$'}tmp"
+    |    ( cd "${'$'}tmp" && apt-get download ${'$'}pkgs 2>/dev/null; for f in *.deb; do [ -e "${'$'}f" ] && dpkg-deb -x "${'$'}f" / 2>/dev/null; done; rm -f *.deb )
+    |    apt-get install -f -y 2>/dev/null || true
+    |    if [ -n "${'$'}probe" ] && command -v "${'$'}probe" >/dev/null 2>&1; then
+    |        echo "[env] ✅ ${'$'}pkgs installed via dpkg fallback (probe=${'$'}probe)"
+    |        return 0
+    |    elif [ -z "${'$'}probe" ]; then
+    |        echo "[env] ✅ ${'$'}pkgs apt 执行完成(无显式探测)"
+    |        return 0
+    |    else
+    |        echo "[env] ❌ ${'$'}pkgs installation failed (apt + dpkg fallback)"
+    |        return 1
+    |    fi
+    |}
+""".trimMargin()
+
 enum class EnvProfile(
     /** 人类可读档名（UI 展示）。 */
     val profileName: String,
@@ -35,9 +94,11 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends nodejs npm 2>&1 | tail -5
+        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm 安装失败"
         |echo "[env] node=${'$'}(node --version 2>&1) npm=${'$'}(npm --version 2>&1)"
         |npm config set prefix /usr/local 2>/dev/null || true
+        |rm -rf /root/.npm_real /root/.npm 2>/dev/null || true
+        |npm config set cache /tmp/npm-cache 2>/dev/null || true
         |export PATH="/usr/local/bin:${'$'}PATH"
         |npm install -g pnpm typescript 2>&1 | tail -5 || echo "WARN: npm global install failed"
         |echo "[env] pnpm=${'$'}(which pnpm 2>/dev/null || echo 'not found') tsc=${'$'}(which tsc 2>/dev/null || echo 'not found')"
@@ -54,7 +115,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends python3 python3-pip python3-venv 2>&1 | tail -5
+        |robust_install "python3 python3-pip python3-venv" "python3" || echo "[env] WARN: python3/pip/venv 安装失败"
         |if ! command -v python >/dev/null 2>&1; then ln -sf ${'$'}(command -v python3) /usr/local/bin/python 2>/dev/null || true; fi
         |python3 -m ensurepip --upgrade 2>/dev/null || true
         |python3 -m venv /root/cms-venv 2>/dev/null || true
@@ -70,7 +131,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends openssh-client openssh-server sshpass 2>&1 | tail -5
+        |robust_install "openssh-client openssh-server sshpass" "ssh" || echo "[env] WARN: ssh 工具链安装失败"
         |if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then ssh-keygen -A 2>/dev/null || true; fi
         |echo "[env] ssh=${'$'}(ssh -V 2>&1) sshpass=${'$'}(sshpass -V 2>&1 | head -1)"
         """.trimMargin(),
@@ -84,7 +145,8 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends openjdk-17-jdk-headless gradle 2>&1 | tail -5
+        |robust_install "openjdk-17-jdk-headless" "java" || echo "[env] WARN: JDK17 安装失败"
+        |robust_install "gradle" "gradle" || echo "[env] WARN: Gradle 安装失败"
         |echo "[env] java=${'$'}(java -version 2>&1 | head -1)"
         """.trimMargin(),
     ),
@@ -97,7 +159,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends rustc cargo 2>&1 | tail -5
+        |robust_install "rustc cargo" "rustc" || echo "[env] WARN: rust/cargo 安装失败"
         |echo "[env] rustc=${'$'}(rustc --version 2>&1) cargo=${'$'}(cargo --version 2>&1)"
         """.trimMargin(),
     ),
@@ -110,7 +172,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends golang-go 2>&1 | tail -5
+        |robust_install "golang-go" "go" || echo "[env] WARN: golang 安装失败"
         |echo "[env] go=${'$'}(go version 2>&1)"
         """.trimMargin(),
     ),
@@ -134,7 +196,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends python3-pip python3-venv 2>&1 | tail -5
+        |robust_install "python3-pip python3-venv" "pip3" || echo "[env] WARN: pip/venv 安装失败"
         |python3 -m ensurepip --upgrade 2>/dev/null || true
         |echo "[env] pip=${'$'}(pip --version 2>&1 || pip3 --version 2>&1)"
         """.trimMargin(),
@@ -148,9 +210,11 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends curl 2>&1 | tail -5
+        |robust_install "curl" "curl" || echo "[env] WARN: curl 安装失败"
         |if ! command -v uv >/dev/null 2>&1; then
+        |  rm -rf "${'$'}HOME/.local/bin/uv" 2>/dev/null || true
         |  curl -LsSf https://astral.sh/uv/install.sh | sh 2>&1 | tail -3 || true
+        |  chmod +x "${'$'}HOME/.local/bin/uv" 2>/dev/null || true
         |  ln -sf "${'$'}HOME/.local/bin/uv" /usr/local/bin/uv 2>/dev/null || true
         |fi
         |echo "[env] uv=${'$'}(uv --version 2>&1)"
@@ -174,7 +238,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends nodejs npm 2>&1 | tail -5
+        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm 安装失败"
         |echo "[env] node=${'$'}(node --version 2>&1)"
         """.trimMargin(),
     ),
@@ -187,8 +251,10 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends nodejs npm 2>&1 | tail -5
+        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm 安装失败"
         |npm config set prefix /usr/local 2>/dev/null || true
+        |rm -rf /root/.npm_real /root/.npm 2>/dev/null || true
+        |npm config set cache /tmp/npm-cache 2>/dev/null || true
         |export PATH="/usr/local/bin:${'$'}PATH"
         |npm install -g pnpm typescript 2>&1 | tail -5 || echo "WARN: npm global install failed"
         |echo "[env] pnpm=${'$'}(which pnpm 2>/dev/null || echo 'not found') tsc=${'$'}(which tsc 2>/dev/null || echo 'not found')"
@@ -204,7 +270,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends openssh-client 2>&1 | tail -5
+        |robust_install "openssh-client" "ssh" || echo "[env] WARN: openssh-client 安装失败"
         |echo "[env] ssh=${'$'}(ssh -V 2>&1)"
         """.trimMargin(),
     ),
@@ -217,7 +283,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends sshpass 2>&1 | tail -5
+        |robust_install "sshpass" "sshpass" || echo "[env] WARN: sshpass 安装失败"
         |echo "[env] sshpass=${'$'}(sshpass -V 2>&1 | head -1)"
         """.trimMargin(),
     ),
@@ -230,7 +296,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends openssh-server 2>&1 | tail -5
+        |robust_install "openssh-server" "sshd" || echo "[env] WARN: openssh-server 安装失败"
         |if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then ssh-keygen -A 2>/dev/null || true; fi
         |echo "[env] sshd=${'$'}(sshd -V 2>&1 | head -1)"
         """.trimMargin(),
@@ -245,7 +311,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends openjdk-17-jdk-headless 2>&1 | tail -5
+        |robust_install "openjdk-17-jdk-headless" "java" || echo "[env] WARN: OpenJDK17 安装失败"
         |echo "[env] java=${'$'}(java -version 2>&1 | head -1)"
         """.trimMargin(),
     ),
@@ -258,7 +324,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends gradle 2>&1 | tail -5
+        |robust_install "gradle" "gradle" || echo "[env] WARN: Gradle 安装失败"
         |echo "[env] gradle=${'$'}(gradle --version 2>&1 | head -3)"
         """.trimMargin(),
     ),
@@ -272,7 +338,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends nodejs npm 2>&1 | tail -5
+        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm 安装失败"
         |npm install -g @modelcontextprotocol/sdk 2>&1 | tail -5 || true
         |echo "[env] node=${'$'}(node --version 2>&1)"
         """.trimMargin(),
@@ -286,7 +352,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends python3 python3-pip python3-venv 2>&1 | tail -5
+        |robust_install "python3 python3-pip python3-venv" "python3" || echo "[env] WARN: python3/pip/venv 安装失败"
         |pip install mcp 2>&1 | tail -5 || true
         |echo "[env] python=${'$'}(python --version 2>&1)"
         """.trimMargin(),
@@ -300,7 +366,7 @@ enum class EnvProfile(
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
         |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
         |apt-get update 2>&1 | tail -3 || true
-        |apt-get install -y --no-install-recommends nodejs npm 2>&1 | tail -5
+        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm 安装失败"
         |npm install -g typescript 2>&1 | tail -5 || true
         |mkdir -p /root/mcp-tools
         |cd /root/mcp-tools
@@ -323,7 +389,7 @@ enum class EnvProfile(
         "command -v node >/dev/null 2>&1 && command -v python >/dev/null 2>&1 && test -d /root/mcp-server",
         """
         |echo "[mcp] 开始部署完整 MCP 环境..."
-        |apt-get install -y --no-install-recommends nodejs npm python3 python3-pip 2>&1 | tail -3 || true
+        |robust_install "nodejs npm python3 python3-pip" "node" || echo "[env] WARN: MCP 依赖安装失败"
         |npm install -g @modelcontextprotocol/sdk typescript 2>&1 | tail -3 || true
         |pip install mcp 2>&1 | tail -3 || true
         |mkdir -p /root/mcp-server /root/mcp-tools
@@ -385,17 +451,15 @@ object CmsEnvProvisioner {
 
     private const val MARKER_DIR = "/root/.cms-env"
 
-    /** 单个档是否已就绪（proot 内：标记文件优先，否则 command -v 探活）。 */
+    /** 把开发环境装配/检测的原始输出落盘到手机公共 Download/QuroAI_logs，用户无需 adb 即可取。 */
+    private fun persistDiag(profile: EnvProfile, phase: String, out: String) {
+        QuroDiag.log("DevEnv", "[$phase] ${profile.name}: ${out.take(800)}")
+        QuroDiag.writeFile("quro_devenv_${profile.name}.log", "[$phase @ ${System.currentTimeMillis()}]\n$out\n")
+    }
+
+    /** 单个档是否已就绪（proot 内：以实际 command -v 探活为准，不轻信标记文件）。 */
     fun isReady(context: Context, profile: EnvProfile): Boolean {
-        // 检查标记文件
-        val (mc, mOut) = QuroLinuxEnv.run(context, "ls $MARKER_DIR/${profile.name}.done 2>/dev/null && echo MARKER_EXISTS || echo MARKER_MISSING", timeoutMs = 10_000)
-        android.util.Log.i("CmsEnvProvisioner", "${profile.name}: marker check=$mc, output=${mOut.take(100)}")
-        if (mc == 0 && mOut.contains("MARKER_EXISTS")) {
-            android.util.Log.i("CmsEnvProvisioner", "${profile.name}: 标记文件存在，已就绪")
-            return true
-        }
         // 运行检查命令 — 先设置 PATH 确保 npm 全局包可被找到
-        // 逐个检查命令并输出诊断信息
         val diagnosticScript = buildString {
             append("export PATH=\"/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:${'$'}PATH\"\n")
             append("echo '--- ${profile.name} 环境检测 ---'\n")
@@ -408,9 +472,16 @@ object CmsEnvProvisioner {
         }
         val (c, out) = QuroLinuxEnv.run(context, diagnosticScript, timeoutMs = 20_000)
         android.util.Log.i("CmsEnvProvisioner", "${profile.name}: checkCmd exit=$c, output=${out.take(500)}")
+        persistDiag(profile, "detect", out)
         // 如果所有子命令都通过（输出中无 FAIL），则认为就绪
         val ready = !out.contains("FAIL:")
         android.util.Log.i("CmsEnvProvisioner", "${profile.name}: ready=$ready")
+        // 以实际探测为准：就绪则补写标记；未就绪则清理可能的陈旧/假标记，避免误报「已就绪」。
+        if (ready) {
+            QuroLinuxEnv.run(context, "mkdir -p $MARKER_DIR && touch $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
+        } else {
+            QuroLinuxEnv.run(context, "rm -f $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
+        }
         return ready
     }
 
@@ -420,19 +491,21 @@ object CmsEnvProvisioner {
 
         android.util.Log.i("CmsEnvProvisioner", "开始供给 ${profile.name}，脚本长度: ${profile.installScript.length}，超时: ${profile.timeoutMs}ms")
         val startTime = System.currentTimeMillis()
-        val (c, out) = QuroLinuxEnv.run(context, profile.installScript, timeoutMs = profile.timeoutMs)
+        // 安装前先释放残留 dpkg/apt 锁；并注入 robust_install 让 apt 失败可回退。
+        // 注意：installScript 以 echo 结尾，其退出码恒为 0，绝不能用 c==0 判定成功，必须以实际探测为准。
+        val script = ENV_INSTALL_PROLOGUE + "\n" + profile.installScript
+        val (c, out) = QuroLinuxEnv.run(context, script, timeoutMs = profile.timeoutMs)
         val duration = System.currentTimeMillis() - startTime
         android.util.Log.i("CmsEnvProvisioner", "${profile.name} 执行完成，耗时: ${duration}ms，退出码: $c")
+        persistDiag(profile, "provision(exit=$c,${duration}ms)", out)
 
-        // 安装后检查 — 设置 PATH 确保 npm 全局包可被找到
-        val ok = c == 0 || isReady(context, profile)
+        // 以实际探测（command -v）为准，isReady 内部会写/清标记。
+        val ok = isReady(context, profile)
         if (ok) {
-            // 写入 marker 文件
-            QuroLinuxEnv.run(context, "mkdir -p $MARKER_DIR && touch $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
-            android.util.Log.i("CmsEnvProvisioner", "${profile.name}: marker 文件已写入 $MARKER_DIR/${profile.name}.done")
+            android.util.Log.i("CmsEnvProvisioner", "${profile.name}: 探测通过，已就绪")
             return "✅ ${profile.name} 安装完成（耗时 ${duration/1000}秒）\n${out}"
         }
-        return "❌ ${profile.name} 安装失败(exit $c，耗时 ${duration/1000}秒)\n${out}"
+        return "❌ ${profile.name} 安装失败(脚本退出 $c，探测未通过，耗时 ${duration/1000}秒)\n${out}"
     }
 
     /** 带实时日志的供给单个档。返回人类可读结果。 */
@@ -446,21 +519,22 @@ object CmsEnvProvisioner {
         android.util.Log.i("CmsEnvProvisioner", "开始供给 ${profile.name}，超时: ${profile.timeoutMs}ms")
         onLine("[${profile.name}] 开始安装...")
         val startTime = System.currentTimeMillis()
-        val (c, out) = QuroLinuxEnv.runWithLog(context, profile.installScript, timeoutMs = profile.timeoutMs) { line ->
+        // 安装前先释放残留 dpkg/apt 锁；并注入 robust_install 让 apt 失败可回退。
+        val script = ENV_INSTALL_PROLOGUE + "\n" + profile.installScript
+        val (c, out) = QuroLinuxEnv.runWithLog(context, script, timeoutMs = profile.timeoutMs) { line ->
             onLine(line)
         }
+        persistDiag(profile, "provisionWithLog(exit=$c)", out)
         val duration = System.currentTimeMillis() - startTime
         android.util.Log.i("CmsEnvProvisioner", "${profile.name} 执行完成，耗时: ${duration}ms，退出码: $c")
 
-        // 安装后检查 — 设置 PATH 确保 npm 全局包可被找到
-        val ok = c == 0 || isReady(context, profile)
+        // 以实际探测（command -v）为准，isReady 内部会写/清标记。
+        val ok = isReady(context, profile)
         if (ok) {
-            // 写入 marker 文件
-            QuroLinuxEnv.run(context, "mkdir -p $MARKER_DIR && touch $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
-            android.util.Log.i("CmsEnvProvisioner", "${profile.name}: marker 文件已写入 $MARKER_DIR/${profile.name}.done")
+            android.util.Log.i("CmsEnvProvisioner", "${profile.name}: 探测通过，已就绪")
             return "✅ ${profile.name} 安装完成（耗时 ${duration/1000}秒）"
         }
-        return "❌ ${profile.name} 安装失败(exit $c，耗时 ${duration/1000}秒)"
+        return "❌ ${profile.name} 安装失败(脚本退出 $c，探测未通过，耗时 ${duration/1000}秒)"
     }
 
     /** 供给多个档（按档名），逐个执行并汇总（非致命）。返回 (档名, 结果)。 */

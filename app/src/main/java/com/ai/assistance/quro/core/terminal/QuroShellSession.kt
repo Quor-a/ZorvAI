@@ -52,6 +52,7 @@ class QuroShellSession private constructor(
     command: List<String>,
     env: Array<String>,
     cwd: String,
+    externalProcess: Process? = null,
 ) : CoroutineScope {
 
     private val job = SupervisorJob()
@@ -84,6 +85,17 @@ class QuroShellSession private constructor(
     var onExit: ((Int) -> Unit)? = null
 
     /**
+     * host 模式标志：终端由原生 qurohost 后端驱动（[QuroHostBridge] 启动的 libqurohost.so）。
+     * 此模式下 [sendControl] 可下发 CMS / 开发者环境的原生控制命令，[drain] 会识别
+     * qurohost 回传的控制响应并转交 [controlCallback]。否则（旧直连路径）这些能力不可用。
+     */
+    var isHost: Boolean = false
+        internal set
+
+    /** 控制响应回调：qurohost 发回的 US"@qurohost-resp " 行（已剥前缀，为 JSON 文本）。 */
+    var controlCallback: ((String) -> Unit)? = null
+
+    /**
      * 本会话专属的随机哨兵 token（E-8）。
      *
      * 每个会话一个，命令输出撞上的概率可忽略。旧实现全局固定 `QURO_DONE`，
@@ -107,7 +119,7 @@ class QuroShellSession private constructor(
     @Volatile
     private var suppressNextPrompt: Boolean = false
 
-    private val process: Process = try {
+    private val process: Process = externalProcess ?: try {
         val pb = ProcessBuilder(command)
         pb.directory(File(cwd))
         pb.environment().clear()
@@ -136,6 +148,11 @@ class QuroShellSession private constructor(
             var line: String?
             while (reader.readLine().also { line = it } != null) {
                 val raw = line ?: continue
+                // host 模式：识别 qurohost 的控制响应（US"@qurohost-resp " 开头），转交回调，不进终端缓冲区。
+                if (isHost && raw.startsWith(QuroHostBridge.CONTROL_RESP_PREFIX)) {
+                    controlCallback?.invoke(raw.substring(QuroHostBridge.CONTROL_RESP_PREFIX.length))
+                    continue
+                }
                 if (QuroTerminalSentinel.looksLikeSentinel(raw, doneToken)) {
                     val done = QuroTerminalSentinel.parse(raw, doneToken)
                     if (done != null) {
@@ -199,6 +216,19 @@ class QuroShellSession private constructor(
         lastInterrupted = false
         busy = true
         writeWithSentinel(trimmed)
+    }
+
+    /**
+     * 发送 CMS / 开发者环境的原生控制命令（仅 [isHost] 模式有效）。
+     * 控制行以 [QuroHostBridge.CONTROL_PREFIX] 开头，由 qurohost 拦截处理、不进子 shell；
+     * 响应经 [drain] 识别后转交 [controlCallback]。非 host 模式安全忽略。
+     */
+    fun sendControl(cmd: String) {
+        if (!isHost) return
+        runCatching {
+            writer.write(QuroHostBridge.CONTROL_PREFIX + cmd + "\n")
+            writer.flush()
+        }
     }
 
     /**
@@ -364,10 +394,44 @@ class QuroShellSession private constructor(
         private const val INTERRUPT_POLL_MS: Long = 50L
 
         /**
-         * 创建会话：Linux 环境就绪则走 proot，否则（或 proot 启动失败）回退设备 sh。
-         * 关键：Linux(proot) 启动任何异常都被捕获并降级，绝不抛出，避免拖垮 ChatScreen 重组。
+         * 创建会话。
+         *
+         * 优先级：原生 host 后端（[QuroHostBridge] 启动 libqurohost.so，经 proot 进沙箱或设备直跑）
+         * → 失败则回落旧直连路径（[createLegacy]，与 v127 行为一致）。任何异常都被捕获降级，
+         * 绝不抛出，避免拖垮 ChatScreen 重组。旧 Termux 终端 / 旧 Kotlin CMS 部署器路径完整保留。
          */
         fun create(context: Context): QuroShellSession {
+            val launch = QuroHostBridge.buildLaunch(context)
+            if (launch != null) {
+                try {
+                    val pb = ProcessBuilder(launch.args)
+                    pb.directory(launch.workDir)
+                    pb.environment().putAll(launch.env)
+                    pb.redirectErrorStream(true)
+                    val p = pb.start()
+                    val linux = QuroLinuxEnv.shellLaunch(context) != null
+                    val s = QuroShellSession(
+                        context,
+                        if (linux) ShellMode.LINUX else ShellMode.DEVICE,
+                        launch.args,
+                        launch.env.map { "${it.key}=${it.value}" }.toTypedArray(),
+                        context.filesDir.absolutePath,
+                        p,
+                    )
+                    s.isHost = true
+                    return s
+                } catch (e: Exception) {
+                    Log.w(TAG, "host 模式启动失败，回退旧直连路径: ${e.message}")
+                }
+            }
+            return createLegacy(context)
+        }
+
+        /**
+         * 旧直连路径（v127 行为）：Linux 环境就绪则 proot 常驻 sh，否则设备 sh。
+         * 仅在 host 后端不可用或启动失败时调用，作为兜底。
+         */
+        private fun createLegacy(context: Context): QuroShellSession {
             val launch = QuroLinuxEnv.shellLaunch(context)
             if (launch != null) {
                 try {

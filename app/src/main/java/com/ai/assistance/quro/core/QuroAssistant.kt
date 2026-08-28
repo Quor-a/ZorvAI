@@ -217,17 +217,24 @@ class QuroAssistant(
             } else {
                 Log.w("QuroAssistant", "⚠️ NO aci/workspace tools in effectiveSpecs! total=${effectiveSpecs.size} names=${effectiveSpecs.map { it.name }.take(10)}")
             }
-            // 工具调用轮次：0=不限制（默认），ReAct 循环持续到模型返回最终 Text 答复，
-            // **没有步数上限，可一直链式编排直到任务真正完成**。
-            // 仅保留一个极高的安全天花板（默认 2000，真实任务远不会触及）作最后兜底；
-            // 真正防死循环的机制是下方的「重复调用检测」，而非低轮次封顶。
-            // 离线模型（1.2B）工具编排能力弱，一旦进入工具循环极易卡死/乱码；
-            // 单独收紧上限到 12 轮（云端仍是 2000 兜底），保证离线工具任务必定终止、不冻结。
-            val roundLimit = if (isLocal) 12 else if (cfg.maxToolRounds <= 0) 2000 else cfg.maxToolRounds
+            // 工具调用轮次：0=不限制（默认），ReAct 循环持续到模型返回最终 Text 答复。
+            // **不靠「低轮次封顶」防死循环**——那会直接腰斩 AI 修 bug 等合法长任务（连续多轮只发工具调用、
+            // 不出文本是排查过程的常态，并非卡死）。真正的防御是下方的「死循环精确检测」：
+            // 用滑动窗口捕获「签名原地重复（循环）」与「完全相同调用且失败」，仅在模型确属打转时才停，
+            // 合法多步探索（不断发出新调用）不受影响。
+            // 仅保留一个极高的安全天花板作最后兜底（云端 2000 / 离线 12）；真实多步任务远不会触及。
+            val roundLimit = if (isLocal) 12 else if (cfg.maxToolRounds in 1..2000) cfg.maxToolRounds else 2000
             var round = 0
             var prevCallSig: String? = null   // 上一轮工具调用签名，用于死循环检测
             var repeatStreak = 0
             var warnedForSig: String? = null  // 同一失败签名只提示一次，避免每条重复失败都再灌一条 [系统提示]
+            // 死循环精确检测（不误伤合法长任务）：用「滑动窗口内签名重复」区分 真·循环 与 合法多步探索。
+            // 合法修复/排查任务不断发出「新」工具调用（读新文件、新命令），签名不重复 → 计数持续归零 → 不误杀；
+            // 真·死循环反复发起「近期已做过」的调用（签名在窗口内重复出现）→ 计数累积 → 触发停止。
+            val LOOP_WINDOW = 16
+            val recentSigs = mutableListOf<String>()
+            var loopRepeatStreak = 0      // 连续命中窗口内已有签名的轮数（=原地打转）
+            var loopSegmentHadText = true // 当前潜在循环段内是否产出过最终文本
             while (round < roundLimit) {
                 // 协作取消点：用户点击「停止生成」取消父 Job 后，下一轮循环立即抛 CancellationException，
                 // 避免生成协程在「思考中」卡死无法中断（配合下方 client.chat 的取消透传）。
@@ -458,6 +465,8 @@ class QuroAssistant(
                         return@withContext lastText
                     }
                     is QuroLlmResult.ToolCalls -> {
+                        // 死循环检测在下方 sig 计算处与 while 末尾统一处理（按「签名是否原地重复」判定，
+                        // 不按单轮有无文本，避免误杀 AI 修 bug 等合法长任务）。
                         // 同一轮可能返回多个 tool_call（模型批量并发调用）。
                         // ⚠️ 每个 tool_call 必须拥有**唯一** id（OpenAI 协议：assistant 消息里的
                         // tool_calls 各 id 不可重复，tool 结果消息的 tool_call_id 须回指原 call）。
@@ -591,6 +600,17 @@ class QuroAssistant(
                         // 结果正常的重复调用（合法成功场景）完全不干预，连计数都不累积，避免误伤。
                         // 仅保留极高兜底（repeatStreak>=10 且持续失败）：AI 长时间收到提示仍不纠正才强制停止防卡死。
             val sig = result.calls.joinToString("|") { "${it.name}:${it.arguments}" }
+            // 死循环精确检测（不误杀合法长任务）：命中窗口内已有签名=原地打转；新签名=合法探索（归零）。
+            val hitWindow = recentSigs.contains(sig)
+            if (hitWindow) {
+                loopRepeatStreak++
+            } else {
+                loopRepeatStreak = 0
+                loopSegmentHadText = false
+                recentSigs.add(sig)
+                if (recentSigs.size > LOOP_WINDOW) recentSigs.removeAt(0)
+            }
+            if (!result.content.isNullOrBlank()) loopSegmentHadText = true
             if (sig == prevCallSig) {
                 // 仅当本次重复调用的工具结果确为「失败」（高置信判定，避免正文提到失败/错误字样就误判）时，才视为失败重试：
                 val anyFailed = results.any { toolResultLooksFailed(it.result) }
@@ -647,6 +667,17 @@ class QuroAssistant(
                         return@withContext lastText
                     }
                 }
+            }
+            // 🔧 死循环兜底：连续 30 轮工具调用「命中近期窗口（原地打转）」且全程无最终文本 → 确认真·死循环，停止。
+            // 合法长任务（修 bug/多步探索）不断发出新签名调用 → loopRepeatStreak 持续归零 → 不会被误杀。
+            if (loopRepeatStreak >= 30 && !loopSegmentHadText) {
+                lastText = "⚠️ 检测到工具调用陷入循环（反复执行相同操作且无进展），已停止以避免卡死。可调整指令或简化任务后重试。"
+                val ph = streamPlaceholderId
+                if (ph != null) runCatching { store.update(ph) { it.copy(content = lastText) } }
+                else store.add(QuroMessage(role = "assistant", content = lastText))
+                emit()
+                finishFluidCloudSafe(context)
+                return@withContext lastText
             }
             if (lastText.isEmpty()) {
                 lastText = if (cfg.maxToolRounds <= 0)

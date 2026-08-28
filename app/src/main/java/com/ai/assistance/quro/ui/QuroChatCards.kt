@@ -220,6 +220,7 @@ fun QuroChatCardView(card: QuroChatCard, onCommand: (String) -> Unit, modifier: 
             is QuroChatCard.MermaidCard -> MermaidCardView(card)
             is QuroChatCard.HtmlPreviewCard -> HtmlPreviewCardView(card)
             is QuroChatCard.MiniAppCard -> MiniAppCardView(card)
+            is QuroChatCard.CompositeCard -> CompositeCardView(card, onCommand)
         }
     }
 }
@@ -2122,4 +2123,141 @@ private fun MiniAppWebView(
             }
         },
     )
+}
+
+// ───────────── 多语言组合卡（v1068） ─────────────
+/**
+ * 组合卡渲染：把多个子卡聚合为一个整体，支持三种布局，且组合内的子卡各自独立、互不干扰。
+ *
+ * - stack：子卡顺序堆叠，每张右上角带「单独」按钮可把它单独全宽渲染；提供「显示全部」还原组合；
+ *          满足用户「可以组合可以只渲染一个」——默认组合展示，也可一键只看某一块。
+ * - tabs：子卡以标签页呈现，一次只显示一个，互不干扰（类比原 TabsCard，但子卡是完整卡片而非纯文本）。
+ * - accordion：子卡各自独立折叠/展开，任意张可同时展开。
+ *
+ * 每个子卡都通过 [QuroChatCardView] 递归渲染，因此子卡保持自身 id 与状态（如开关/滑块/小程序 WebView），
+ * 即使嵌套 CompositeCard 也能正确组合——实现「互相不影响、可单渲染、可组合」。
+ */
+@Composable
+private fun CompositeCardView(card: QuroChatCard.CompositeCard, onCommand: (String) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val layout = card.layout.ifBlank { "stack" }.lowercase()
+    // 单渲染模式：非 null 表示当前只展示第 i 个子卡
+    var singleIndex by remember(card.id) { mutableStateOf<Int?>(null) }
+    // tabs 当前选中页
+    var tabIndex by remember(card.id) { mutableStateOf(0) }
+    // accordion 展开集合（按子卡 index）
+    val expandedSet = remember(card.id) { mutableStateListOf<Int>() }
+
+    CardShell(
+        title = card.title,
+        headerEnd = {
+            if (singleIndex != null && layout == "stack") {
+                TextButton(onClick = { singleIndex = null }) {
+                    Text("显示全部", color = cs.primary, fontSize = 12.sp)
+                }
+            }
+        },
+    ) {
+        if (card.description?.isNotBlank() == true) {
+            Text(card.description, color = cs.onSurfaceVariant, fontSize = 12.sp)
+            Spacer(Modifier.height(8.dp))
+        }
+        if (card.children.isEmpty()) {
+            Text("（组合为空）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+            return@CardShell
+        }
+
+        when (layout) {
+            "tabs" -> {
+                val idx = tabIndex.coerceIn(0, card.children.lastIndex)
+                ScrollableTabRow(
+                    selectedTabIndex = idx,
+                    edgePadding = 0.dp,
+                    containerColor = cs.surfaceVariant,
+                    contentColor = cs.primary,
+                    divider = {},
+                ) {
+                    card.children.forEachIndexed { i, child ->
+                        Tab(
+                            selected = i == idx,
+                            onClick = { tabIndex = i },
+                            text = {
+                                Text(
+                                    child.title.ifBlank { "组件 ${i + 1}" },
+                                    color = if (i == idx) cs.primary else cs.onSurfaceVariant,
+                                    fontSize = 12.sp,
+                                )
+                            },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                QuroChatCardView(card.children[idx], onCommand)
+            }
+            "accordion" -> {
+                card.children.forEachIndexed { i, child ->
+                    val expanded = expandedSet.contains(i)
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(cs.surfaceVariant.copy(alpha = 0.5f))
+                            .clickable { if (expanded) expandedSet.remove(i) else expandedSet.add(i) }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    ) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                child.title.ifBlank { "组件 ${i + 1}" },
+                                color = cs.onSurface,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Icon(
+                                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                null,
+                                tint = cs.onSurfaceVariant,
+                            )
+                        }
+                        if (expanded) {
+                            Spacer(Modifier.height(8.dp))
+                            // 独立渲染子卡，保持其自身 id/状态
+                            QuroChatCardView(child, onCommand)
+                        }
+                    }
+                }
+            }
+            else -> { // stack（默认）
+                val showIndex = singleIndex
+                if (showIndex != null && showIndex in card.children.indices) {
+                    // 单渲染：只展示该子卡，全宽
+                    QuroChatCardView(card.children[showIndex], onCommand)
+                } else {
+                    card.children.forEachIndexed { i, child ->
+                        // 每张子卡独立包裹，互不干扰
+                        Box(Modifier.fillMaxWidth()) {
+                            QuroChatCardView(child, onCommand)
+                            // 「单独」按钮浮在子卡右上角
+                            Row(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp)) {
+                                Surface(
+                                    color = cs.surfaceVariant.copy(alpha = 0.9f),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.clickable { singleIndex = i },
+                                ) {
+                                    Text(
+                                        "单独",
+                                        color = cs.primary,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    )
+                                }
+                            }
+                        }
+                        if (i != card.children.lastIndex) Spacer(Modifier.height(8.dp))
+                    }
+                }
+            }
+        }
+    }
 }

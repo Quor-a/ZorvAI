@@ -7,6 +7,9 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionType
+import com.ai.assistance.quro.core.model.QuroModelConfigRepository
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -43,7 +46,7 @@ class VideoGenTool : QuroTool {
         val model = args.optString("model", "runway-gen-3").trim()
 
         return try {
-            val videoUrl = generateVideo(prompt, duration, model)
+            val videoUrl = generateVideo(context, prompt, duration, model)
             if (videoUrl != null) {
                 // 下载视频并保存
                 val videoPath = downloadVideo(context, videoUrl)
@@ -61,21 +64,28 @@ class VideoGenTool : QuroTool {
         }
     }
 
-    private fun generateVideo(prompt: String, duration: Int, model: String): String? {
+    private fun generateVideo(context: Context, prompt: String, duration: Int, model: String): String? {
         return try {
-            // 使用 Runway Gen-3 API（示例）
+            val (apiKey, baseUrl) = resolveCreds(context)
+            if (apiKey.isBlank()) {
+                Log.e("VideoGenTool", "未配置 API Key，无法调用生视频接口")
+                return null
+            }
+            val binding = QuroFunctionModelConfigRepository(context).getBinding(QuroFunctionType.VIDEO_GEN)
+            val effectiveModel = binding.model.ifBlank { model }
+            val endpoint = baseUrl.removeSuffix("/") + "/video/generations"
             val jsonBody = JSONObject().apply {
                 put("prompt", prompt)
                 put("duration", duration)
-                put("model", model)
+                put("model", effectiveModel)
             }
 
             val requestBody = jsonBody.toString()
                 .toRequestBody("application/json".toMediaType())
 
             val request = Request.Builder()
-                .url("https://api.runway.com/v1/video/generations")  // 示例URL
-                .addHeader("Authorization", "Bearer ${getApiKey()}")
+                .url(endpoint)
+                .addHeader("Authorization", "Bearer $apiKey")
                 .post(requestBody)
                 .build()
 
@@ -117,8 +127,12 @@ class VideoGenTool : QuroTool {
         }
     }
 
-    private fun getApiKey(): String {
-        // 从配置中获取 API Key
-        return ""
+    /** 解析生视频接口的鉴权与接入点：功能级绑定(apiKey/baseUrl) > 全局模型配置。 */
+    private fun resolveCreds(context: Context): Pair<String, String> {
+        val global = QuroModelConfigRepository(context).load()
+        val binding = QuroFunctionModelConfigRepository(context).getBinding(QuroFunctionType.VIDEO_GEN)
+        val apiKey = binding.apiKey.ifBlank { global.apiKey }
+        val baseUrl = binding.baseUrl.ifBlank { global.baseUrl }
+        return apiKey to baseUrl
     }
 }

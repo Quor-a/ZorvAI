@@ -77,6 +77,12 @@ fun QuroToolboxScreen(
     var editorFile by remember { mutableStateOf<File?>(null) }
     var showEditor by remember { mutableStateOf(false) }
 
+    // 系统返回键逐级回退：内部子页面(包名/工作流/文件/工作区) → 工具箱首页 → 关闭工具箱，
+    // 保证「一层一层返回」。对话框/编辑器打开时让位给它自身关闭逻辑，避免误关整个工具箱。
+    BackHandler(enabled = !showDocGen && !showToolsList && !showImport && !showEditor) {
+        if (screen == "home") onClose() else screen = "home"
+    }
+
     // 工作流作为工具箱内的一个子页面（自带 TopAppBar），返回直接回到工具箱首页，保证「一层返回」。
     if (screen == "workflow") {
         QuroWorkflowScreen(onClose = { screen = "home" })

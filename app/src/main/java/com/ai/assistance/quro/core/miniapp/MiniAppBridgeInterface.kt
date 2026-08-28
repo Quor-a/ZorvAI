@@ -1,8 +1,21 @@
 package com.ai.assistance.quro.core.miniapp
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.speech.tts.TextToSpeech
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import androidx.core.content.pm.PackageInfoCompat
 import org.json.JSONObject
 
 /**
@@ -24,6 +37,8 @@ class MiniAppBridgeInterface(
         registerModule(UiModule(context))
         registerModule(NetworkModule(context))
         registerModule(RouterModule(context, this))
+        // 原生 Kotlin 能力：让 AI 生成的小程序可调用真·Android/Kotlin（剪贴板/分享/打开App/通知/TTS 等）
+        registerModule(KotlinModule(context))
     }
     
     fun registerModule(module: MiniAppBridgeModule) {
@@ -295,5 +310,164 @@ class RouterModule(
                 callback(-1, null, "method not found: $method")
             }
         }
+    }
+}
+
+/**
+ * 原生 Kotlin 桥接模块
+ *
+ * 把 Android/Kotlin 的**真·原生能力**暴露给小程序 JS（融合"原生 Kotlin 语言"到现有 HTML/JS/CSS 小程序），
+ * 让 AI 生成的小程序不再只是 WebView 内网页，而能：
+ *  - 读写系统剪贴板、呼起系统分享、打开任意 URL / 第三方 App（HTML/JS 做不到）；
+ *  - 读取宿主 App 信息、弹出系统通知、调用 TTS 朗读。
+ * 所有调用都落在主线程/系统 Service，边界与权限已做防护。
+ */
+class KotlinModule(private val context: Context) : MiniAppBridgeModule {
+    override val name = "kotlin"
+
+    override fun invoke(method: String, params: JSONObject, callback: (Int, Any?, String?) -> Unit) {
+        when (method) {
+            "getAppInfo" -> {
+                runCatching {
+                    val pkg = context.packageName
+                    val pi = context.packageManager.getPackageInfo(pkg, 0)
+                    val info = JSONObject().apply {
+                        put("packageName", pkg)
+                        put("versionName", pi.versionName ?: "")
+                        put("versionCode", PackageInfoCompat.getLongVersionCode(pi))
+                        put("brand", Build.BRAND)
+                        put("model", Build.MODEL)
+                        put("system", "Android ${Build.VERSION.RELEASE}")
+                        put("sdkVersion", Build.VERSION.SDK_INT)
+                    }
+                    callback(0, info, null)
+                }.onFailure { callback(-1, null, it.message) }
+            }
+            "copyText" -> {
+                val text = params.optString("text", "")
+                runCatching {
+                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("miniapp", text))
+                    callback(0, null, null)
+                }.onFailure { callback(-1, null, it.message) }
+            }
+            "getClipboard" -> {
+                runCatching {
+                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clip = cm.primaryClip
+                    val text = if (clip != null && clip.itemCount > 0) clip.getItemAt(0).text?.toString() else null
+                    callback(0, text ?: "", null)
+                }.onFailure { callback(-1, null, it.message) }
+            }
+            "shareText" -> {
+                val text = params.optString("text", "")
+                val title = params.optString("title", "")
+                runCatching {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, text)
+                        if (title.isNotEmpty()) putExtra(Intent.EXTRA_TITLE, title)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(Intent.createChooser(intent, title.ifEmpty { "分享" }))
+                    callback(0, null, null)
+                }.onFailure { callback(-1, null, it.message) }
+            }
+            "openUrl" -> {
+                val url = params.optString("url", "")
+                if (url.isEmpty()) { callback(-1, null, "url is required"); return }
+                runCatching {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                    callback(0, null, null)
+                }.onFailure { callback(-1, null, it.message) }
+            }
+            "openApp" -> {
+                val pkg = params.optString("packageName", "")
+                if (pkg.isEmpty()) { callback(-1, null, "packageName is required"); return }
+                runCatching {
+                    val intent = context.packageManager.getLaunchIntentForPackage(pkg)
+                    if (intent == null) {
+                        callback(-1, null, "app not installed: $pkg")
+                    } else {
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                        callback(0, null, null)
+                    }
+                }.onFailure { callback(-1, null, it.message) }
+            }
+            "notify" -> {
+                val title = params.optString("title", "小程序通知")
+                val body = params.optString("body", "")
+                // Android 13+ 需要 POST_NOTIFICATIONS 权限
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED
+                ) {
+                    callback(-1, null, "notification permission not granted")
+                    return
+                }
+                runCatching {
+                    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    val channelId = "miniapp"
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val chan = NotificationChannel(
+                            channelId, "小程序通知", NotificationManager.IMPORTANCE_DEFAULT
+                        ).apply { setShowBadge(true) }
+                        nm.createNotificationChannel(chan)
+                    }
+                    val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                    val pi = PendingIntent.getActivity(
+                        context, 0,
+                        launch ?: Intent(),
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                    )
+                    val notif = NotificationCompat.Builder(context, channelId)
+                        .setContentTitle(title)
+                        .setContentText(body)
+                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                        .setContentIntent(pi)
+                        .setAutoCancel(true)
+                        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                        .build()
+                    nm.notify(System.currentTimeMillis().toInt(), notif)
+                    callback(0, null, null)
+                }.onFailure { callback(-1, null, it.message) }
+            }
+            "speak" -> {
+                val text = params.optString("text", "")
+                if (text.isEmpty()) { callback(-1, null, "text is required"); return }
+                runCatching {
+                    val tts = ensureTts() ?: run { callback(-1, null, "tts unavailable"); return }
+                    tts.language = java.util.Locale.getDefault()
+                    val r = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+                    callback(if (r == TextToSpeech.SUCCESS) 0 else -1, null, null)
+                }.onFailure { callback(-1, null, it.message) }
+            }
+            else -> {
+                callback(-1, null, "method not found: $method")
+            }
+        }
+    }
+
+    /** 惰性创建并缓存 TTS 实例（用 applicationContext 避免 Activity 泄漏）。 */
+    private fun ensureTts(): TextToSpeech? {
+        if (ttsRef.get() == null) {
+            synchronized(lock) {
+                if (ttsRef.get() == null) {
+                    ttsRef.set(runCatching {
+                        TextToSpeech(context.applicationContext, null)
+                    }.getOrNull())
+                }
+            }
+        }
+        return ttsRef.get()
+    }
+
+    companion object {
+        private val ttsRef = java.util.concurrent.atomic.AtomicReference<TextToSpeech?>(null)
+        private val lock = Any()
     }
 }

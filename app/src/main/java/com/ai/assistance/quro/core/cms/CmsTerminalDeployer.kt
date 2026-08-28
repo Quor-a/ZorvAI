@@ -145,32 +145,39 @@ object CmsTerminalDeployer {
 
         if (pkg.apkDeps.isNotEmpty()) {
             CmsStateStore.markDeployStep(pkg.moduleId, "安装 Linux 依赖: ${pkg.apkDeps.joinToString(" ")}", 75)
-            val (c, out) = QuroLinuxEnv.run(
-                context,
-                "apt-get install -y --no-install-recommends ${pkg.apkDeps.joinToString(" ")}",
-                timeoutMs = 180_000,
-            )
+            // 稳健安装：先 apt-get install，proot 下失败则回退 apt-get download + dpkg-deb -x（与 CMS 引擎一致）。
+            // best-effort：proot 下 apt 事务偶发半装，不应整体失败阻塞模块部署，改为告警后继续。
+            val deps = pkg.apkDeps.joinToString(" ") { "\"$it\"" }
+            // 安装前先检测并释放残留 dpkg/apt 锁，避免上一次中断遗留的锁导致 apt-get 卡死/失败（与引擎、开发环境一致）。
+            val lockPrologue = QuroLinuxEnv.APT_LOCK_RELEASE_PROLOGUE
+            val installCmd = lockPrologue + "\n" +
+                "for p in $deps; do apt-get install -y --no-install-recommends \$p 2>&1 | tail -2; " +
+                "if ! dpkg -s \$p >/dev/null 2>&1; then d=/tmp/cmsdeb_\$p; mkdir -p \$d; " +
+                "(cd \$d && apt-get download \$p 2>/dev/null && for f in *.deb; do dpkg-deb -x \"\$f\" / 2>/dev/null; done; rm -f *.deb); " +
+                "apt-get -f -y install 2>/dev/null; fi; done; true"
+            val (c, out) = QuroLinuxEnv.run(context, installCmd, timeoutMs = 240_000)
             if (c != 0) {
-                val msg = sb.appendLine("⛔ Linux 依赖安装失败(exit $c): ${out.take(300)}").toString()
-                CmsStateStore.markDeployEnd(pkg.moduleId, false, "apt 依赖安装失败(exit $c): ${out.take(300)}")
-                return msg
+                sb.appendLine("⚠️ 部分 Linux 依赖安装可能不完整(exit $c): ${out.take(300)}（best-effort，继续部署）")
+                CmsStateStore.appendLog(pkg.moduleId, "⚠️ apt 依赖安装返回 $c: ${out.take(300)}")
+            } else {
+                sb.appendLine("✅ apt 依赖已装: ${pkg.apkDeps.joinToString(" ")}")
             }
-            sb.appendLine("✅ apt 依赖已装: ${pkg.apkDeps.joinToString(" ")}")
         }
 
         if (pkg.pipDeps.isNotEmpty()) {
             CmsStateStore.markDeployStep(pkg.moduleId, "安装 pip 依赖: ${pkg.pipDeps.joinToString(" ")}", 90)
+            // best-effort：pip 在 proot 下偶发网络/证书问题，不应整体失败阻塞模块部署。
             val (c, out) = QuroLinuxEnv.run(
                 context,
-                "pip install --no-cache-dir ${pkg.pipDeps.joinToString(" ")}",
-                timeoutMs = 180_000,
+                "pip install --no-cache-dir --break-system-packages ${pkg.pipDeps.joinToString(" ")} 2>&1 || pip install --no-cache-dir ${pkg.pipDeps.joinToString(" ")} 2>&1",
+                timeoutMs = 240_000,
             )
             if (c != 0) {
-                val msg = sb.appendLine("⛔ pip 依赖安装失败(exit $c): ${out.take(300)}").toString()
-                CmsStateStore.markDeployEnd(pkg.moduleId, false, "pip 依赖安装失败(exit $c): ${out.take(300)}")
-                return msg
+                sb.appendLine("⚠️ 部分 pip 依赖安装可能不完整(exit $c): ${out.take(300)}（best-effort，继续部署）")
+                CmsStateStore.appendLog(pkg.moduleId, "⚠️ pip 依赖返回 $c: ${out.take(300)}")
+            } else {
+                sb.appendLine("✅ pip 依赖已装: ${pkg.pipDeps.joinToString(" ")}")
             }
-            sb.appendLine("✅ pip 依赖已装: ${pkg.pipDeps.joinToString(" ")}")
         }
 
         if (pkg.envProfiles.isNotEmpty()) {

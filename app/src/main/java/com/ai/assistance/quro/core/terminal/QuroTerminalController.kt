@@ -2,13 +2,16 @@ package com.ai.assistance.quro.core.terminal
 
 import android.content.Context
 import android.os.Environment
+import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
  * 一次非交互式命令执行的结构化结果（E-8）。
  *
- * 旧的 [QuroTerminalController.runCommand] 只返回一个 `String`，把
+ * 旧的 [runCommand] 只返回一个 `String`，把
  * 「命令失败」「命令超时」「命令成功但没输出」全部糊成人类可读文本，
  * 调用方（AI 工具层）**没有任何办法**判断命令到底成没成功，
  * 只能靠正则去猜 `"⏱ 命令超时"` 这种提示语——极其脆弱。
@@ -39,24 +42,37 @@ data class ShellResult(
 }
 
 /**
- * 终端会话的全局控制器（v127 重写，后端换成自包含 [QuroShellSession]，彻底移除 Termux/PTY）。
+ * 终端会话的全局控制器（v127 重写，后端换成自包含 [QuroShellSession]）。
  *
- * - [createSession]：按需创建（Linux 环境就绪则 proot，否则设备 sh）常驻会话；重复调用会先销毁旧会话。
+ * **终端架构统一（本次重构）**：本控制器不再自行持有会话，而是把
+ * 「默认共享会话」委托给 [QuroTerminalSessionManager] 协调——AI 工具层、终端界面、CMS 开发环境
+ * 现在共用同一个默认 [QuroShellSession]，并由管理器提供 list / create / switch / destroy 等管理能力。
+ *
+ * - [session]：默认共享会话（getter 委托管理器）。
+ * - [createSession]：确保默认会话存在（缺失后端则跟随安装），等价于「打开终端」。
+ * - [ensureSession]：懒确保默认会话（不触发下载，缺失后端时回退设备 sh）。
  * - [sendToShell]：给用户输入框调用，等价于在提示符后敲回车（带回显 + 哨兵完成检测）。
  * - [runCommand]：非交互式一次性执行（AI terminal_exec 设备回退用），与活动会话解耦，不回显。
  * - [interrupt]：中断当前运行中的命令（E-9），软中断失败则重建会话并回到原目录。
  */
 object QuroTerminalController {
 
-    var session: QuroShellSession? = null
-        private set
+    /** 默认共享会话（AI 工具 / CMS / 使用者共用），由 [QuroTerminalSessionManager] 持有。 */
+    val session: QuroShellSession?
+        get() = QuroTerminalSessionManager.defaultSession
 
-    fun createSession(context: Context): QuroShellSession {
-        session?.destroy()
-        val s = QuroShellSession.create(context)
-        session = s
-        return s
-    }
+    /** 确保默认会话存在（跟随创建，缺失后端则安装）。等价于「打开终端」。返回默认会话。 */
+    fun createSession(context: Context): QuroShellSession =
+        runBlocking(Dispatchers.IO) {
+            QuroTerminalSessionManager.ensureDefault(context, installIfMissing = true)
+                ?: error("无法创建终端会话")
+        }
+
+    /** 懒确保：若没有默认会话则创建一个（不触发下载，缺失后端时回退设备 shell）。 */
+    fun ensureSession(context: Context): QuroShellSession? =
+        if (session != null) session else runBlocking(Dispatchers.IO) {
+            QuroTerminalSessionManager.ensureDefault(context, installIfMissing = false)
+        }
 
     /** 用户提交一条命令（带回显 + 完成哨兵）。无活动会话则忽略。 */
     fun sendToShell(command: String) {
@@ -73,16 +89,15 @@ object QuroTerminalController {
         session?.sendKey(seq)
     }
 
-    /** 销毁当前会话（terminal_kill 工具 / 离开界面时用）。 */
+    /** 销毁默认会话（terminal_kill 工具 / 离开界面时用）。 */
     fun destroySession() {
-        session?.destroy()
-        session = null
+        runBlocking(Dispatchers.IO) { QuroTerminalSessionManager.killDefault() }
     }
 
     /**
      * 中断当前运行中的命令（E-9）。
      *
-     * 两阶段：先让会话尝试软中断（写 ETX）；软中断失败则**强杀 shell 进程并重建会话**，
+     * 两阶段：先让会话尝试软中断（写 ETX）；软中断失败则**强杀 shell 进程并重建默认会话**，
      * 并把工作目录恢复到中断前的位置，让用户可以无缝继续操作。
      *
      * 之所以要走到「重建」这一步：本会话的 stdin 是管道不是 PTY，
@@ -98,14 +113,15 @@ object QuroTerminalController {
 
         if (s.interrupt()) return "已中断当前命令"
 
-        // 硬中断：记住 cwd → 杀进程 → 重建 → cd 回去
+        // 硬中断：记住 cwd → 杀进程 → 重建默认会话 → cd 回去
         val cwd = s.cwdState
         val history = s.lines.toList()
         s.forceStop()
         s.destroy()
 
-        val ns = QuroShellSession.create(context)
-        session = ns
+        val ns = runBlocking(Dispatchers.IO) {
+            QuroTerminalSessionManager.ensureDefault(context, installIfMissing = false)
+        } ?: return "命令未响应软中断，且无法重建 shell"
         // 把中断前的滚动内容接回新会话，否则用户屏幕会突然被清空、以为崩了
         ns.prependHistory(history)
         ns.restoreCwd(cwd)

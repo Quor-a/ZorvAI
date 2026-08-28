@@ -23,6 +23,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import com.ai.assistance.quro.util.QuroDiag
 
 /**
  * 直连型平台适配器基类（QQBot V2 / 飞书 / 微信 iLink 共用）。
@@ -84,12 +85,12 @@ abstract class QuroDirectBotAdapter(
         client.newCall(req).execute().use { resp ->
             val b = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
-                Log.w(TAG, "$platform POST $url -> HTTP ${resp.code}: ${b.take(500)}")
+                bd("W", "$platform POST $url -> HTTP ${resp.code}: ${b.take(500)}")
                 null
             } else JSONObject(b)
         }
     } catch (e: Exception) {
-        Log.e(TAG, "$platform POST $url 失败: ${e.message}")
+        bd("E", "$platform POST $url 失败: ${e.message}")
         null
     }
 
@@ -113,7 +114,7 @@ abstract class QuroDirectBotAdapter(
             Triple(resp.code, b, parsed)
         }
     } catch (e: Exception) {
-        Log.e(TAG, "$platform POST $url 异常: ${e.message}")
+        bd("E", "$platform POST $url 异常: ${e.message}")
         Triple(0, e.message ?: "exception", null)
     }
 
@@ -129,7 +130,7 @@ abstract class QuroDirectBotAdapter(
             Triple(resp.code, b, if (resp.isSuccessful) b else null)
         }
     } catch (e: Exception) {
-        Log.e(TAG, "$platform GET $url 异常: ${e.javaClass.simpleName}: ${e.message}")
+        bd("E", "$platform GET $url 异常: ${e.javaClass.simpleName}: ${e.message}")
         Triple(0, e.javaClass.simpleName + ": " + (e.message ?: "exception"), null)
     }
 
@@ -143,12 +144,12 @@ abstract class QuroDirectBotAdapter(
         client.newCall(req).execute().use { resp ->
             val b = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
-                Log.w(TAG, "$platform GET $url -> HTTP ${resp.code}: ${b.take(200)}")
+                bd("W", "$platform GET $url -> HTTP ${resp.code}: ${b.take(200)}")
                 null
             } else b
         }
     } catch (e: Exception) {
-        Log.e(TAG, "$platform GET $url 失败: ${e.message}")
+        bd("E", "$platform GET $url 失败: ${e.message}")
         null
     }
 
@@ -163,13 +164,13 @@ abstract class QuroDirectBotAdapter(
         client.newCall(req).execute().use { resp ->
             val b = resp.body?.string().orEmpty()
             when {
-                !resp.isSuccessful -> { Log.w(TAG, "$platform GET $url -> HTTP ${resp.code}"); null }
+                !resp.isSuccessful -> { bd("W", "$platform GET $url -> HTTP ${resp.code}"); null }
                 b.isBlank() -> null
                 else -> try { JSONObject(b) } catch (_: Exception) { null }
             }
         }
     } catch (e: Exception) {
-        Log.e(TAG, "$platform GET $url 失败: ${e.message}")
+        bd("E", "$platform GET $url 失败: ${e.message}")
         null
     }
 
@@ -196,12 +197,12 @@ abstract class QuroDirectBotAdapter(
         client.newCall(req).execute().use { resp ->
             val b = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
-                Log.w(TAG, "$platform UPLOAD $url -> HTTP ${resp.code}: ${b.take(500)}")
+                bd("W", "$platform UPLOAD $url -> HTTP ${resp.code}: ${b.take(500)}")
                 null
             } else runCatching { JSONObject(b) }.getOrNull()
         }
     } catch (e: Exception) {
-        Log.e(TAG, "$platform UPLOAD $url 失败: ${e.message}")
+        bd("E", "$platform UPLOAD $url 失败: ${e.message}")
         null
     }
 
@@ -209,7 +210,7 @@ abstract class QuroDirectBotAdapter(
 
     override suspend fun start() {
         if (!isConfigured()) {
-            Log.w(TAG, "$platform 未配置，跳过 start")
+            bd("W", "$platform 未配置，跳过 start")
             connected = false
             return
         }
@@ -219,13 +220,13 @@ abstract class QuroDirectBotAdapter(
             try {
                 runConnection()
             } catch (e: Exception) {
-                Log.e(TAG, "$platform 连接循环异常退出: ${e.message}")
+                bd("E", "$platform 连接循环异常退出: ${e.message}")
             } finally {
                 connected = false
             }
         }
         connected = true
-        Log.i(TAG, "$platform 直连适配器已启动")
+        bd("I", "$platform 直连适配器已启动")
     }
 
     override suspend fun stop() {
@@ -234,7 +235,7 @@ abstract class QuroDirectBotAdapter(
         connJob = null
         connected = false
         onDisconnect()
-        Log.i(TAG, "$platform 已停止")
+        bd("I", "$platform 已停止")
     }
 
     /** 连接主循环（WS 长连 / HTTP 长轮询），由子类实现。 */
@@ -262,6 +263,13 @@ abstract class QuroDirectBotAdapter(
 
     companion object {
         protected const val TAG = "QuroDirectBot"
+    }
+
+    /** 统一诊断出口：Logcat + 手机公共 Download/QuroAI_logs（用户无需 adb 即可取）。 */
+    private fun bd(lvl: String, s: String) {
+        val m = "[$lvl][$platform] $s"
+        android.util.Log.i("QuroDirectBot", m)
+        QuroDiag.log("BotNet", m)
     }
 }
 

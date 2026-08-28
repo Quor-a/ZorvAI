@@ -61,3 +61,30 @@ target_link_options(termux-terminal PRIVATE
 )
 
 target_link_libraries(termux-terminal ${log-lib})
+
+# ═══════════════════════════════════════════════════════════════
+# qurohost — 原生终端 / CMS / 开发者环境统一后端（libqurohost.so）
+# 由 Kotlin 侧 QuroHostBridge 经 ProcessBuilder 直接执行（与 libproot.so 同机制）；
+# Linux 模式下经 proot 跑进沙箱，子 shell 为 Ubuntu /bin/sh；设备模式回退 /system/bin/sh。
+# 注意：作为可执行 .so 直接运行，须保留 main() 入口，且为 PIE（Android SHARED 默认 PIE）。
+# ═══════════════════════════════════════════════════════════════
+set(QUROHOST_DIR ${CMAKE_SOURCE_DIR}/qurohost)
+
+add_library(qurohost SHARED
+    ${QUROHOST_DIR}/qurohost.c
+)
+
+target_compile_options(qurohost PRIVATE
+    -std=c11
+    -Wall
+    -Wextra
+    -O2
+    -fPIE
+)
+
+target_link_options(qurohost PRIVATE
+    -pie
+    -Wl,--gc-sections
+)
+
+target_link_libraries(qurohost ${log-lib})

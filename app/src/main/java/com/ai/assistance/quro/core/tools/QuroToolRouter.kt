@@ -20,8 +20,8 @@ import com.ai.assistance.quro.core.QuroToolSpec
 class QuroToolRouter(allSpecs: List<QuroToolSpec>) {
 
     companion object {
-        /** 渐进式披露总开关。false=退回旧行为（全量下发）。默认开启。 */
-        @Volatile var PROGRESSIVE: Boolean = true
+        /** 渐进式披露总开关。false=退回旧行为（全量下发，对齐 v1.0.64 已知良好基线）。 */
+        @Volatile var PROGRESSIVE: Boolean = false
 
         /**
          * 常驻核心集：高频、用户口语最常触发、依赖链最短的工具每轮都直接下发，
@@ -88,12 +88,19 @@ class QuroToolRouter(allSpecs: List<QuroToolSpec>) {
     private var allSpecs: List<QuroToolSpec> = allSpecs
     private var specByName: Map<String, QuroToolSpec> = allSpecs.associateBy { it.name }
 
+    init {
+        // 工具能力目录以本 router 的真实 specs 为单一真相源，确保 match_intent / get_schema 查到的目录
+        // 与模型实际能调的工具集严格一致（修复「目录残缺→很多功能得提醒才用」）。
+        ToolCapabilityDirectory.install(allSpecs)
+    }
+
     /** 对话级已加载工具（跨轮次保留，新会话清空）。 */
     private val loaded = LinkedHashSet<String>()
 
     fun setSpecs(specs: List<QuroToolSpec>) {
         allSpecs = specs
         specByName = specs.associateBy { it.name }
+        ToolCapabilityDirectory.install(specs)
     }
 
     fun reset() = loaded.clear()
