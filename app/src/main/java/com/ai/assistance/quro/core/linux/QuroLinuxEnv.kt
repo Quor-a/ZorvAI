@@ -51,6 +51,10 @@ object QuroLinuxEnv {
     private const val BUFFER_SIZE = 8192
     private const val MAX_OUTPUT_LENGTH = 15_000L
 
+    /** chroot 配置 SharedPreferences 键名。 */
+    private const val PREFS_NAME = "quro_linux_env"
+    private const val KEY_USE_CHROOT = "use_chroot"
+
     /**
      * dpkg/apt 锁检测与释放 prologue —— 所有经 proot 的 apt/dpkg 安装脚本都应先执行。
      *
@@ -375,6 +379,53 @@ object QuroLinuxEnv {
         runCatching { context.getSharedPreferences("quro_linux_env", android.content.Context.MODE_PRIVATE).edit().putBoolean("installed", true).apply() }
     }
 
+    // ═══ chroot 配置管理 ═══
+    /**
+     * 检查是否启用了 chroot 模式（默认 false，即使用 PRoot）。
+     * chroot 需要 root 权限，设备未 root 时此配置无效。
+     */
+    fun isChrootEnabled(context: Context): Boolean {
+        return runCatching {
+            context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+                .getBoolean(KEY_USE_CHROOT, false)
+        }.getOrDefault(false)
+    }
+
+    /**
+     * 设置 chroot 模式开关。
+     * @param enabled true=使用 chroot（需 root），false=使用 PRoot（默认）
+     */
+    fun setChrootEnabled(context: Context, enabled: Boolean) {
+        runCatching {
+            context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_USE_CHROOT, enabled).apply()
+        }
+    }
+
+    /**
+     * 检测当前是否可用 chroot（设备已 root 且用户启用了 chroot 模式）。
+     * 需在 IO 线程调用（会探测 su 可用性）。
+     */
+    fun isChrootAvailable(context: Context): Boolean {
+        if (!isChrootEnabled(context)) return false
+        return try {
+            com.ai.assistance.quro.core.privilege.QuroRootGateway.isRootAvailable()
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /**
+     * 构建 chroot 启动参数与环境（与 [buildProotLaunch] 对应）。
+     * chroot 通过 `su -c chroot <rootfs> /bin/sh -c <command>` 执行，
+     * 需要先挂载 /dev、/proc、/sys 到 rootfs。
+     */
+    private data class ChrootLaunch(
+        val suCommand: String,
+        val env: MutableMap<String, String>,
+        val workDir: File,
+    )
+
     /**
      * 开发环境丢失时，把自诊断报告写到手机公共 Download/QuroAI_logs/（用户用文件管理器即可取到，
      * 无需 adb/logcat）。公共目录写失败则兜底到应用外部存储 QuroAI_logs/。
@@ -663,6 +714,11 @@ object QuroLinuxEnv {
         return runProot(context, command, timeoutMs)
     }
 
+    /** 获取当前执行模式（proot 或 chroot），供 UI 显示。 */
+    fun getExecutionMode(context: Context): String {
+        return if (isChrootAvailable(context)) "chroot" else "proot"
+    }
+
     /** 带实时日志回调的执行命令。每输出一行就回调一次。 */
     fun runWithLog(
         context: Context,
@@ -720,6 +776,89 @@ object QuroLinuxEnv {
         return ProotLaunch(args, env, rootfsFile.parentFile ?: rootfsFile)
     }
 
+    /**
+     * 构建 chroot 启动命令（通过 su 执行）。
+     * chroot 需要先挂载 /dev、/proc、/sys 到 rootfs，然后执行 chroot 命令。
+     *
+     * @return ChrootLaunch 包含完整的 su 命令字符串、环境变量和工作目录
+     */
+    private fun buildChrootLaunch(context: Context): ChrootLaunch {
+        val rootfs = rootfsPath(context)
+        val home = homePath(context)
+        val tmp = tmpPath(context)
+        val dir = sandboxDir(context)
+        val usrBinDir = File(dir, "usr/bin")
+
+        // 构建 chroot 启动脚本
+        // 1. 挂载必要文件系统
+        // 2. 创建临时挂载点（如果需要）
+        // 3. 执行 chroot
+        val mountCommands = buildString {
+            // 挂载 /dev
+            appendLine("mount -o bind /dev $rootfs/dev")
+            // 挂载 /dev/pts（伪终端）
+            appendLine("mkdir -p $rootfs/dev/pts 2>/dev/null || true")
+            appendLine("mount -o bind /dev/pts $rootfs/dev/pts")
+            // 挂载 /proc
+            appendLine("mount -t proc proc $rootfs/proc")
+            // 挂载 /sys
+            appendLine("mount -t sysfs sysfs $rootfs/sys")
+            // 挂载 /tmp（如果不同）
+            if (tmp != "$rootfs/tmp") {
+                appendLine("mkdir -p $rootfs/tmp 2>/dev/null || true")
+                appendLine("mount -o bind $tmp $rootfs/tmp")
+            }
+            // 挂载 home 目录到 /root
+            appendLine("mkdir -p $rootfs/root 2>/dev/null || true")
+            appendLine("mount -o bind $home $rootfs/root")
+            // 挂载 /system/build.prop（如果可读）
+            if (File("/system/build.prop").canRead()) {
+                appendLine("mkdir -p $rootfs/system 2>/dev/null || true")
+                appendLine("mount -o bind /system/build.prop $rootfs/system/build.prop")
+            }
+        }
+
+        // 构建 chroot 命令（进入 rootfs 后执行）
+        val chrootCmd = "chroot $rootfs /bin/sh -c 'cd /root && exec /bin/sh'"
+
+        // 完整的 su 命令：挂载 + chroot
+        val fullScript = buildString {
+            appendLine("#!/system/bin/sh")
+            appendLine("# QuroAI chroot 启动脚本")
+            appendLine(mountCommands)
+            appendLine("# 执行 chroot")
+            appendLine(chrootCmd)
+            // 清理挂载（chroot 退出后）
+            appendLine("# 清理挂载点")
+            appendLine("umount $rootfs/dev/pts 2>/dev/null || true")
+            appendLine("umount $rootfs/dev 2>/dev/null || true")
+            appendLine("umount $rootfs/proc 2>/dev/null || true")
+            appendLine("umount $rootfs/sys 2>/dev/null || true")
+            if (tmp != "$rootfs/tmp") {
+                appendLine("umount $rootfs/tmp 2>/dev/null || true")
+            }
+            appendLine("umount $rootfs/root 2>/dev/null || true")
+            if (File("/system/build.prop").canRead()) {
+                appendLine("umount $rootfs/system/build.prop 2>/dev/null || true")
+            }
+        }
+
+        // 转义脚本中的特殊字符，用于 su -c
+        val escapedScript = fullScript.replace("'", "'\\''")
+        val suCommand = "su -c '$escapedScript'"
+
+        val env = mutableMapOf(
+            "HOME" to "/root",
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${usrBinDir.absolutePath}",
+            "TERM" to "xterm-256color",
+            "LANG" to "C.UTF-8",
+            "LD_LIBRARY_PATH" to "${dir.absolutePath}:${usrBinDir.absolutePath}",
+        )
+
+        val rootfsFile = File(rootfs)
+        return ChrootLaunch(suCommand, env, rootfsFile.parentFile ?: rootfsFile)
+    }
+
     /** 内部：构造 proot 参数并执行。添加多种执行策略应对权限问题。 */
     private fun runProot(context: Context, command: String, timeoutMs: Long): Pair<Int, String> {
         // 不再依赖 probe() 前置检查 —— probe 的 rootfsBinRunnable 可能在宿主侧误判符号链接。
@@ -727,6 +866,12 @@ object QuroLinuxEnv {
         val rootfs = rootfsPath(context)
         prepareRuntimeExtras(context, File(rootfs))
         Log.i(TAG, "runProot 开始执行，超时: ${timeoutMs}ms，命令: ${command.take(100)}...")
+
+        // 根据配置选择 proot 或 chroot
+        if (isChrootAvailable(context)) {
+            Log.i(TAG, "使用 chroot 模式执行命令")
+            return runChroot(context, command, timeoutMs)
+        }
 
         val launch = buildProotLaunch(context)
         launch.args.add(command)
@@ -771,6 +916,60 @@ object QuroLinuxEnv {
     }
 
     /**
+     * 使用 chroot 模式执行命令（通过 su 权限）。
+     * 与 [runProot] 对应，但使用 chroot 而不是 proot。
+     */
+    private fun runChroot(context: Context, command: String, timeoutMs: Long): Pair<Int, String> {
+        Log.i(TAG, "runChroot 开始执行，超时: ${timeoutMs}ms，命令: ${command.take(100)}...")
+
+        val launch = buildChrootLaunch(context)
+        // 将用户命令追加到 chroot 脚本中
+        val escapedCommand = command.replace("'", "'\\''")
+        val rootfsPathStr = rootfsPath(context)
+        val suCommand = launch.suCommand.replace(
+            "chroot $rootfsPathStr /bin/sh -c 'cd /root && exec /bin/sh'",
+            "chroot $rootfsPathStr /bin/sh -c 'cd /root && $escapedCommand'"
+        )
+
+        return try {
+            // 通过 su 执行 chroot 命令
+            val pb = ProcessBuilder("su", "-c", suCommand)
+            pb.directory(launch.workDir)
+            pb.environment().putAll(launch.env)
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            Log.i(TAG, "chroot 进程已启动（通过 su）")
+
+            val outBuilder = StringBuilder()
+            val reader = p.inputStream.bufferedReader()
+            val readThread = Thread {
+                try { reader.use { r -> r.forEachLine { outBuilder.appendLine(it) } } } catch (_: Throwable) {}
+            }
+            readThread.start()
+            val startTime = System.currentTimeMillis()
+            val finished = p.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            val duration = System.currentTimeMillis() - startTime
+            val code = if (finished) {
+                p.exitValue()
+            } else {
+                Log.w(TAG, "chroot 执行超时(${timeoutMs}ms)，强杀进程")
+                try { p.destroyForcibly() } catch (_: Throwable) {}
+                -1
+            }
+            try { readThread.join(2000) } catch (_: Throwable) {}
+            val trimmed = outBuilder.toString().trim()
+            Log.i(TAG, "chroot 执行完成，耗时: ${duration}ms，退出码: $code，输出长度: ${trimmed.length}")
+            if (trimmed.isNotEmpty()) {
+                Log.i(TAG, "chroot 输出前500字符: ${trimmed.take(500)}")
+            }
+            code to (if (trimmed.isBlank()) (if (finished) "(no output, exit $code)" else "⏱ 命令超时(${timeoutMs}ms)") else trimmed)
+        } catch (e: Exception) {
+            Log.e(TAG, "chroot 执行异常: ${e.message}")
+            -1 to "❌ chroot 执行失败: ${e.message}"
+        }
+    }
+
+    /**
      * 启动**常驻** proot 进程（原创运行时 · 修复终端 httpd 被杀）。
      *
      * 与 [runProot] 不同：不 waitFor、不超时强杀，直接返回存活的 [Process] 句柄，
@@ -789,6 +988,13 @@ object QuroLinuxEnv {
             return null
         }
         prepareRuntimeExtras(context, File(st.rootfsPath))
+
+        // 根据配置选择 proot 或 chroot
+        if (isChrootAvailable(context)) {
+            Log.i(TAG, "使用 chroot 模式启动常驻进程")
+            return spawnPersistentChroot(context, command, extraEnv)
+        }
+
         val launch = buildProotLaunch(context)
         launch.args.add(command)
         launch.env.putAll(extraEnv)
@@ -802,6 +1008,35 @@ object QuroLinuxEnv {
             p
         } catch (e: Exception) {
             Log.e(TAG, "spawnPersistent 创建进程失败: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * 使用 chroot 模式启动常驻进程（通过 su 权限）。
+     * 与 [spawnPersistent] 对应，但使用 chroot 而不是 proot。
+     */
+    private fun spawnPersistentChroot(context: Context, command: String, extraEnv: Map<String, String>): Process? {
+        val launch = buildChrootLaunch(context)
+        // 将用户命令追加到 chroot 脚本中
+        val escapedCommand = command.replace("'", "'\\''")
+        val rootfsPathStr = rootfsPath(context)
+        val suCommand = launch.suCommand.replace(
+            "chroot $rootfsPathStr /bin/sh -c 'cd /root && exec /bin/sh'",
+            "chroot $rootfsPathStr /bin/sh -c 'cd /root && $escapedCommand'"
+        )
+
+        launch.env.putAll(extraEnv)
+        return try {
+            val pb = ProcessBuilder("su", "-c", suCommand)
+            pb.directory(launch.workDir)
+            pb.environment().putAll(launch.env)
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            Log.i(TAG, "spawnPersistent 常驻 chroot 已启动（通过 su），命令: ${command.take(100)}")
+            p
+        } catch (e: Exception) {
+            Log.e(TAG, "spawnPersistent chroot 创建进程失败: ${e.message}")
             null
         }
     }
@@ -823,6 +1058,13 @@ object QuroLinuxEnv {
         Log.i(TAG, "runProotWithLog 开始执行，超时: ${timeoutMs}ms")
         
         prepareRuntimeExtras(context, File(rootfs))
+
+        // 根据配置选择 proot 或 chroot
+        if (isChrootAvailable(context)) {
+            Log.i(TAG, "使用 chroot 模式执行命令（带日志回调）")
+            return runChrootWithLog(context, command, timeoutMs, onLine)
+        }
+
         return try {
             val args = mutableListOf(
                 proot,
@@ -887,6 +1129,70 @@ object QuroLinuxEnv {
         }
     }
 
+    /**
+     * 使用 chroot 模式执行命令（带实时日志回调，通过 su 权限）。
+     * 与 [runProotWithLog] 对应，但使用 chroot 而不是 proot。
+     */
+    private fun runChrootWithLog(
+        context: Context,
+        command: String,
+        timeoutMs: Long,
+        onLine: (String) -> Unit
+    ): Pair<Int, String> {
+        Log.i(TAG, "runChrootWithLog 开始执行，超时: ${timeoutMs}ms，命令: ${command.take(100)}...")
+
+        val launch = buildChrootLaunch(context)
+        // 将用户命令追加到 chroot 脚本中
+        val escapedCommand = command.replace("'", "'\\''")
+        val rootfsPathStr = rootfsPath(context)
+        val suCommand = launch.suCommand.replace(
+            "chroot $rootfsPathStr /bin/sh -c 'cd /root && exec /bin/sh'",
+            "chroot $rootfsPathStr /bin/sh -c 'cd /root && $escapedCommand'"
+        )
+
+        return try {
+            // 通过 su 执行 chroot 命令
+            val pb = ProcessBuilder("su", "-c", suCommand)
+            pb.directory(launch.workDir)
+            pb.environment().putAll(launch.env)
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            Log.i(TAG, "chroot 进程已启动（通过 su，带日志回调）")
+
+            val outBuilder = StringBuilder()
+            val reader = p.inputStream.bufferedReader()
+            // 实时读取并回调每一行
+            val readThread = Thread {
+                try {
+                    reader.use { r ->
+                        r.forEachLine { line ->
+                            outBuilder.appendLine(line)
+                            onLine(line)
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+            readThread.start()
+            val startTime = System.currentTimeMillis()
+            val finished = p.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            val duration = System.currentTimeMillis() - startTime
+            val code = if (finished) {
+                p.exitValue()
+            } else {
+                Log.w(TAG, "chroot 执行超时(${timeoutMs}ms)，强杀进程")
+                try { p.destroyForcibly() } catch (_: Throwable) {}
+                -1
+            }
+            try { readThread.join(2000) } catch (_: Throwable) {}
+            val trimmed = outBuilder.toString().trim()
+            Log.i(TAG, "runChrootWithLog 执行完成，耗时: ${duration}ms，退出码: $code")
+            code to (if (trimmed.isBlank()) (if (finished) "(no output)" else "⏱ 超时") else trimmed)
+        } catch (e: Exception) {
+            Log.e(TAG, "chroot 执行异常: ${e.message}")
+            -1 to "❌ chroot 执行失败: ${e.message}"
+        }
+    }
+
     /** 策略1：直接执行 proot */
     /**
      * 交互终端启动参数：(proot 路径, 参数列表)。环境未安装返回 null。
@@ -902,6 +1208,53 @@ object QuroLinuxEnv {
         prepareRuntimeExtras(context, rootfs)
         val dir = sandboxDir(context)
         val usrBinDir = File(dir, "usr/bin")
+
+        // 根据配置选择 proot 或 chroot
+        if (isChrootAvailable(context)) {
+            Log.i(TAG, "使用 chroot 模式启动交互终端")
+            // chroot 模式：通过 su 执行 chroot 命令
+            // 返回 su 和 -c 作为命令，后面追加 chroot 脚本
+            val rootfsPath = st.rootfsPath
+            val home = homePath(context)
+            val tmp = tmpPath(context)
+
+            // 构建 chroot 启动脚本
+            val mountCommands = buildString {
+                appendLine("mount -o bind /dev $rootfsPath/dev")
+                appendLine("mkdir -p $rootfsPath/dev/pts 2>/dev/null || true")
+                appendLine("mount -o bind /dev/pts $rootfsPath/dev/pts")
+                appendLine("mount -t proc proc $rootfsPath/proc")
+                appendLine("mount -t sysfs sysfs $rootfsPath/sys")
+                if (tmp != "$rootfsPath/tmp") {
+                    appendLine("mkdir -p $rootfsPath/tmp 2>/dev/null || true")
+                    appendLine("mount -o bind $tmp $rootfsPath/tmp")
+                }
+                appendLine("mkdir -p $rootfsPath/root 2>/dev/null || true")
+                appendLine("mount -o bind $home $rootfsPath/root")
+                if (File("/system/build.prop").canRead()) {
+                    appendLine("mkdir -p $rootfsPath/system 2>/dev/null || true")
+                    appendLine("mount -o bind /system/build.prop $rootfsPath/system/build.prop")
+                }
+            }
+
+            val chrootCmd = "chroot $rootfsPath /bin/sh -c 'cd /root && exec /bin/sh'"
+
+            val fullScript = buildString {
+                appendLine("#!/system/bin/sh")
+                appendLine("# QuroAI chroot 交互终端启动脚本")
+                appendLine(mountCommands)
+                appendLine("# 执行 chroot")
+                appendLine(chrootCmd)
+                // 注意：交互终端不清理挂载，由用户退出时清理
+            }
+
+            val escapedScript = fullScript.replace("'", "'\\''")
+            val suCommand = "su -c '$escapedScript'"
+
+            // 返回 su 和 -c 以及脚本内容
+            return "su" to listOf("-c", escapedScript)
+        }
+
         val args = mutableListOf(
             "--rootfs=${st.rootfsPath}",
             "--link2symlink",  // 添加 link2symlink 支持（参考上游 proot 实现）
@@ -926,6 +1279,19 @@ object QuroLinuxEnv {
     fun shellEnv(context: Context): Array<String> {
         val dir = sandboxDir(context)
         val usrBinDir = File(dir, "usr/bin")
+
+        // chroot 模式不需要 PROOT 相关变量
+        if (isChrootAvailable(context)) {
+            return arrayOf(
+                "TERM=xterm-256color",
+                "HOME=/root",
+                "TMPDIR=${tmpPath(context)}",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${usrBinDir.absolutePath}",
+                "LANG=C.UTF-8",
+                "LD_LIBRARY_PATH=${dir.absolutePath}:${usrBinDir.absolutePath}",
+            )
+        }
+
         return arrayOf(
             "TERM=xterm-256color",
             "HOME=/root",
