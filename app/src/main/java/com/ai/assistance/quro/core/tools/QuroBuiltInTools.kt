@@ -360,7 +360,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // ═════════════ L4 ROOT（CapOS 最高风险通道，需设备已 Root）══════════════
     r.register(RootExecTool())
     r.register(RootStatusTool())
-    // L5 应用内 Linux 环境（proot + Alpine，可选高级入口，完整工具集解锁）
+    // L5 应用内 Linux 环境（proot + Ubuntu 24.04，可选高级入口，完整工具集解锁）
     r.register(LinuxRunTool())
     r.register(LinuxInstallTool())
     r.register(LinuxStartTool())

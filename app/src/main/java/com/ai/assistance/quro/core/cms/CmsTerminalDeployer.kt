@@ -71,7 +71,7 @@ object CmsTerminalDeployer {
         CmsStateStore.appendLog("_bootstrap", "▶ 写入内置 bootstrap 脚本")
         val script = File(dir, "bootstrap.sh")
         try {
-            // 关键修复：assets 文件在 Windows 工作区可能是 CRLF，直接拷进 Alpine 会让 sh 解析出错。
+            // 关键修复：assets 文件在 Windows 工作区可能是 CRLF，直接拷进 Ubuntu 会让 sh 解析出错。
             val text = context.assets.open(BOOTSTRAP_ASSET).bufferedReader().use { it.readText() }.normalizeLineEndings()
             script.writeText(text)
             script.setExecutable(true)
