@@ -141,7 +141,11 @@ object SuCommand : BuiltinCommand {
             "root" -> PermissionController.PermissionLevel.ROOT
             "dev", "developer" -> PermissionController.PermissionLevel.DEVELOPER
             "user" -> PermissionController.PermissionLevel.USER
-            "guest" -> PermissionController.PermissionLevel.GUEST
+            "guest" -> {
+                // GUEST 已被 PermissionController.getLevel() 强制提升为 USER，
+                // 降级到 GUEST 无意义且会锁死命令，直接拒绝。
+                return CommandResult.err("su: 降级到 GUEST 已被禁止（GUEST 无任何命令权限，会锁死终端）")
+            }
             else -> null
         }
         if (level == null) return CommandResult.err("su: unknown level '$target'")
@@ -154,5 +158,5 @@ object SuCommand : BuiltinCommand {
             CommandResult.err("su: permission denied")
         }
     }
-    override fun help() = "su [root|dev|user|guest]  - 切换权限等级"
+    override fun help() = "su [root|dev|user]  - 切换权限等级（guest 已禁用）"
 }

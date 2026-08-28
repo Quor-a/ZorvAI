@@ -233,10 +233,23 @@ object QuroLinuxEnv {
      * 让安装横幅重新出现。下载/安装中间态由 [setup] 自身管理，此处不抢状态。
      */
     fun probe(context: Context): EnvStatus {
-        val prootPathStr = prootPath(context)
-        val proot = File(prootPathStr)
+        // 每次探测都重新查找 proot 路径（含 assets fallback），避免 nativeLibraryDir 被清理后缓存失效
+        var prootPathStr = prootPath(context)
+        var proot = File(prootPathStr)
+
+        // 自动恢复：如果 proot 缺失，主动触发 assets 解压重试
+        if (!proot.exists()) {
+            Log.w(TAG, "⚠ proot 不存在于 $prootPathStr，尝试 assets 恢复...")
+            val recovered = extractProotFromAssets(context, "libproot.so")
+            if (recovered != null && recovered.exists()) {
+                prootPathStr = recovered.absolutePath
+                proot = recovered
+                Log.i(TAG, "✅ assets 恢复成功: $prootPathStr")
+            }
+        }
+
         Log.i(TAG, "🔍 probe 开始: prootPath=$prootPathStr, exists=${proot.exists()}")
-        
+
         if (!proot.exists()) {
             if (_state.value is SandboxState.Ready) _state.value = SandboxState.NotInstalled
             // 诊断：列出 nativeLibraryDir 下的实际文件，帮助定位问题
@@ -244,9 +257,14 @@ object QuroLinuxEnv {
             val nativeFiles = try {
                 File(nativeDir).listFiles()?.map { it.name }?.joinToString(", ") ?: "(目录不可读)"
             } catch (_: Throwable) { "(访问失败)" }
-            Log.e(TAG, "❌ proot 二进制缺失。nativeLibraryDir=$nativeDir，内容=[$nativeFiles]")
+            val filesDirLibs = File(context.filesDir, "native-libs")
+            val fallbackFiles = try {
+                filesDirLibs.listFiles()?.map { "${it.name}(${it.length()}b)" }?.joinToString(", ") ?: "(空)"
+            } catch (_: Throwable) { "(访问失败)" }
+            Log.e(TAG, "❌ proot 二进制缺失。nativeLibraryDir=$nativeDir，内容=[$nativeFiles]。fallback=$fallbackFiles")
             return EnvStatus(false, null, null,
                 "proot 二进制缺失。应用库目录($nativeDir)内容: $nativeFiles。" +
+                "fallback目录: $fallbackFiles。" +
                 "可能原因：1) APK 未正确安装（native library 未解压）；2) 设备架构不匹配（需 arm64-v8a）；" +
                 "3) 系统清理了应用数据。请尝试卸载重装。")
         }

@@ -26,7 +26,10 @@ object PermissionController {
     }
 
     fun getLevel(sessionId: String): PermissionLevel =
-        sessionPermissions[sessionId] ?: run {
+        sessionPermissions[sessionId]?.let {
+            // 安全下限：GUEST 无任何命令权限，强制提升为 USER（防误操作锁死）
+            if (it == PermissionLevel.GUEST) PermissionLevel.USER else it
+        } ?: run {
             // 如果 session 不存在，自动创建并设为 USER 权限（避免 GUEST 锁定）
             sessionPermissions[sessionId] = PermissionLevel.USER
             Log.w("PermissionController", "⚠ Session $sessionId 未注册，自动提升为 USER")
