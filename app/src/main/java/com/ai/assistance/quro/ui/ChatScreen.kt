@@ -1903,7 +1903,7 @@ fun ChatScreen(
             }
         }
 
-        // 可交互终端（去品牌化 Termux 渲染 + proot/Alpine 后端）：全屏覆盖层（从工具栏「终端」进入）
+        // 可交互终端（去品牌化 Termux 渲染 + proot/Ubuntu 24.04 后端）：全屏覆盖层（从工具栏「终端」进入）
         if (showTerminal) {
             BackHandler { showTerminal = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
