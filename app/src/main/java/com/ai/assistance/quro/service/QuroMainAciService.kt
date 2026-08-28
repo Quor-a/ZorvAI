@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.service
 
+import ai.aidl.aci.core.AciIntentBridge
+import ai.aidl.aci.core.AciProviderBridge
 import ai.aidl.aci.core.AidlAciError
 import ai.aidl.aci.core.AidlAciRequest
 import ai.aidl.aci.core.AidlAciResponse
@@ -107,6 +109,11 @@ class QuroMainAciService : BaseAidlAciService() {
                 .addResult("supported", "string", "本端支持的全部协议版本（逗号分隔）")
                 .addFlag(Capability.FLAG_NO_UI)
         )
+        // Intent 发送代理：受控端在自己进程内代发 Intent（Activity / 广播 / 服务）。
+        // 实现复用 aci-core 的通用桥，任何受控端均可一行接入。
+        caps.add(AciIntentBridge.capability())
+        // ContentProvider 访问代理：受控端代读/代写 content:// URI。
+        caps.add(AciProviderBridge.capability())
     }
 
     override fun onCheckPermission(req: AidlAciRequest?, callerPkg: String?): Boolean {
@@ -121,6 +128,8 @@ class QuroMainAciService : BaseAidlAciService() {
             when (req.capability) {
                 "http_request" -> handleHttpRequest(req.params)
                 "aci_protocol" -> handleProtocol()
+                AciIntentBridge.CAP_ID -> AciIntentBridge.handle(this, req.params)
+                AciProviderBridge.CAP_ID -> AciProviderBridge.handle(this, req.params)
                 else -> AidlAciResponse.error(AidlAciError.CAPABILITY_NOT_FOUND, "unknown: ${req.capability}")
             }
         } catch (e: Throwable) {
