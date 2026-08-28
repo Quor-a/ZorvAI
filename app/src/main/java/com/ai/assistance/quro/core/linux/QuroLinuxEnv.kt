@@ -1317,10 +1317,14 @@ object QuroLinuxEnv {
                     outFile.parentFile?.mkdirs()
                     try {
                         if (outFile.exists()) outFile.delete()
-                        java.nio.file.Files.createSymbolicLink(outFile.toPath(), java.nio.file.Paths.get(linkName))
+                        // 优先用 ln -s（Android 上比 Java Files.createSymbolicLink 更可靠）
+                        val p = Runtime.getRuntime().exec(arrayOf("ln", "-s", linkName, outFile.absolutePath))
+                        p.waitFor()
+                        if (p.exitValue() != 0) {
+                            // ln 失败，fallback 到 Java API
+                            java.nio.file.Files.createSymbolicLink(outFile.toPath(), java.nio.file.Paths.get(linkName))
+                        }
                     } catch (e: Exception) {
-                        // 符号链接创建失败（如 SELinux 限制应用私有目录软链）会导致 /bin/sh 等缺失，
-                        // 必须记下来，否则 rootfs 残缺却被当成「解压成功」。
                         QuroDiag.log("LinuxEnv", "⚠ 符号链接创建失败: $fullName -> $linkName: ${e.message}")
                     }
                 }
@@ -1414,10 +1418,13 @@ object QuroLinuxEnv {
                 if (f.isFile && f.length() == 0L && f.canExecute()) {
                     try {
                         f.delete()
-                        java.nio.file.Files.createSymbolicLink(
-                            f.toPath(),
-                            java.nio.file.Paths.get("/bin/busybox")
-                        )
+                        val p = Runtime.getRuntime().exec(arrayOf("ln", "-s", "/bin/busybox", f.absolutePath))
+                        p.waitFor()
+                        if (p.exitValue() != 0) {
+                            java.nio.file.Files.createSymbolicLink(
+                                f.toPath(), java.nio.file.Paths.get("/bin/busybox")
+                            )
+                        }
                         fixed++
                     } catch (_: Exception) {}
                 }
@@ -1431,10 +1438,13 @@ object QuroLinuxEnv {
                 if (f.isFile && f.length() == 0L) {
                     try {
                         f.delete()
-                        java.nio.file.Files.createSymbolicLink(
-                            f.toPath(),
-                            java.nio.file.Paths.get("/bin/busybox")
-                        )
+                        val p = Runtime.getRuntime().exec(arrayOf("ln", "-s", "/bin/busybox", f.absolutePath))
+                        p.waitFor()
+                        if (p.exitValue() != 0) {
+                            java.nio.file.Files.createSymbolicLink(
+                                f.toPath(), java.nio.file.Paths.get("/bin/busybox")
+                            )
+                        }
                         fixed++
                     } catch (_: Exception) {}
                 }
@@ -1672,6 +1682,15 @@ fi
 
     private fun prepareRuntimeExtras(context: Context, rootfs: File) {
         try {
+            // 确保 libtalloc.so.2 存在（proot 依赖此库，Android 会剥离 .so.2 后缀）
+            val dir = sandboxDir(context)
+            val talloc = File(dir, "libtalloc.so.2")
+            if (!talloc.exists()) {
+                val tallocPath = findNativeLibWithAssetsFallback(context, "libtalloc.so")
+                val src = File(tallocPath)
+                if (src.exists()) src.copyTo(talloc, overwrite = true)
+            }
+
             writeResolvConf(rootfs, context)
             val props = buildProps(context)
             File(rootfs, "etc").mkdirs()
