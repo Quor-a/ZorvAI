@@ -33,8 +33,8 @@ class QuroTermTool : QuroTool {
             .optString("command", "").trim()
         if (cmd.isEmpty()) return "缺少 command 参数。"
 
-        val sid = "tool_${System.nanoTime()}"
-        SessionManager.createSession(sid)
+        // 创建会话并获取正确的 sessionId（不是 name）
+        val sid = SessionManager.createSession("tool_${System.nanoTime()}")
         val exec = SandboxExecutor(sid)
         return try {
             val result = runBlocking { exec.executeBlocking(cmd) }
