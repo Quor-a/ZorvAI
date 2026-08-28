@@ -13,21 +13,24 @@ import okhttp3.WebSocketListener
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import com.ai.assistance.quro.util.QuroDiag
 
 /**
  * QQ 机器人 V2 适配器（直连官方网关，零公网端点）。
  *
  * 接入形态（已核实）：
  *  - 换 token：POST https://bots.qq.com/app/getAppAccessToken（appId + clientSecret）→ access_token
- *  - 拿 WS 网关：GET https://api.sgroup.qq.com/gateway/bot（Authorization: QQBot {token}）→ wss 地址
- *  - 收消息：WebSocket 长连，op=0 DISPATCH 的 C2C_MESSAGE_CREATE 事件
- *  - 回消息：POST https://api.sgroup.qq.com/v2/users/{openid}/messages（被动回复，5 分钟内）
- *  - 心跳：HELLO 给 heartbeat_interval，客户端周期发 op=1 HEARTBEAT
- *  - Intent：1<<25（C2C + 群@，沙箱期仅私聊可用）
+ *  - 拿 WS 网关：GET {baseUrl}/gateway（Authorization: QQBot {token} + X-Union-Appid: {appId}）→ wss 地址
+ *  - 收消息：WebSocket 长连，op=0 DISPATCH 的 C2C_MESSAGE_CREATE / GROUP_AT_MESSAGE_CREATE 事件
+ *  - 回消息：POST {baseUrl}/v2/users/{openid}/messages（被动回复，5 分钟内）
+ *  - 心跳：HELLO 给 heartbeat_interval，客户端周期发 op=1 HEARTBEAT；服务端主动心跳(op=1)立即回包
+ *  - Intent：(1<<30)|(1<<26)|(1<<25)|(1<<12)（群@ / 群消息 / 私聊 / 加机器人），对齐 operit 可跑实现
+ *  - 握手顺序：onOpen 等待 op=10 HELLO → 再发 op=2 IDENTIFY（shard=[0,1]），收到 op=0 READY 才算连上
  *
  * 仅用 OkHttp（含 WebSocket）+ org.json，不引入官方 SDK。
  */
@@ -36,6 +39,7 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
 
     private val appId get() = pref("qq_appid")
     private val appSecret get() = pref("qq_secret")
+    private val useSandbox get() = pref("qq_sandbox").equals("true", ignoreCase = true)
 
     private var accessToken: String = ""
     private var ws: WebSocket? = null
@@ -96,15 +100,22 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                     }
                 }
 
+                val baseUrl = if (useSandbox) "https://sandbox.api.sgroup.qq.com" else "https://api.sgroup.qq.com"
                 val gw = httpGetString(
-                    "https://api.sgroup.qq.com/gateway/bot",
-                    headers = mapOf("Authorization" to "QQBot $accessToken"),
+                    "$baseUrl/gateway",
+                    headers = mapOf(
+                        "Authorization" to "QQBot $accessToken",
+                        "X-Union-Appid" to appId,
+                    ),
                 ) ?: run {
-                    lastError = "获取 QQ WS 网关失败（token 无效或网络不通）"
+                    lastError = "获取 QQ WS 网关失败（token 无效 / 缺少 X-Union-Appid / 网络不通）"
                     alive.set(false); backoff(retries++); continue
                 }
                 val wsUrl = JSONObject(gw).optString("url").also {
-                    if (it.isBlank()) { alive.set(false); backoff(retries++); continue }
+                    if (it.isBlank()) {
+                        lastError = "QQ 网关返回为空: ${gw.take(300)}"
+                        alive.set(false); backoff(retries++); continue
+                    }
                 }
 
                 retries = 0
@@ -286,7 +297,9 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                             put("op", 2)
                             put("d", JSONObject().apply {
                                 put("token", "QQBot $accessToken")
-                                put("intents", (1 shl 30) or (1 shl 25))  // C2C_MESSAGE_CREATE | GROUP_AT_MESSAGE_CREATE
+                                // 对齐 operit 可跑实现：私聊(1<<25) | 群@(1<<30) | 群消息(1<<26) | 加机器人(1<<12)
+                                put("intents", (1 shl 30) or (1 shl 26) or (1 shl 25) or (1 shl 12))
+                                put("shard", JSONArray().put(0).put(1))
                             })
                         }.toString()
                         webSocket.send(identify)
@@ -298,6 +311,13 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                         if (seq > 0) lastSeq.set(seq)
                         val t = msg.optString("t")
                         val d = msg.optJSONObject("d") ?: return@runCatching
+                        if (t == "READY") {
+                            val sess = d.optString("session_id").ifBlank { null }
+                            val botName = d.optJSONObject("user")?.optString("username").orEmpty()
+                            connected = true
+                            Log_i("✅ 握手完成 READY session=${sess?.take(12)}... bot=$botName")
+                            return@runCatching
+                        }
                         if (t == "C2C_MESSAGE_CREATE") {
                             val openid = d.optJSONObject("author")?.optString("user_openid").orEmpty()
                             var content = d.optString("content", "").trim()
@@ -323,6 +343,12 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                             }
                         }
                     }
+                    1 -> { // 服务端主动心跳：立即原样回 HEARTBEAT（op=1, d=seq），对齐 operit
+                        try {
+                            val d = if (lastSeq.get() > 0) lastSeq.get() else JSONObject.NULL
+                            webSocket.send(JSONObject().put("op", 1).put("d", d).toString())
+                        } catch (e: Exception) { Log_e("心跳回包失败: ${e.message}") }
+                    }
                     11 -> { /* HEARTBEAT ACK */ }
                     7, 12 -> { // INVALID SESSION / RECONNECT
                         Log_w("收到重连指令 op=$op，关闭重连")
@@ -336,6 +362,7 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
             Log_w("WS closing $code $reason")
             wsConnected.set(false)
+            alive.set(false)
             webSocket.cancel()
         }
 
@@ -343,6 +370,7 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             Log_w("WS closed $code $reason")
             wsConnected.set(false)
             connected = false
+            alive.set(false)
             if (code != 1000 && code != 1001) {
                 lastError = "WS 已断开（code=$code ${reason.ifBlank { "无原因" }}）"
             }
@@ -354,6 +382,7 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             lastError = "WS 连接失败：${t.message ?: "未知"} $httpInfo"
             wsConnected.set(false)
             connected = false
+            alive.set(false)
         }
     }
 
@@ -504,7 +533,7 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
         return json != null
     }
 
-    private fun Log_i(s: String) = android.util.Log.i(TAG, "[QQ] $s")
-    private fun Log_w(s: String) = android.util.Log.w(TAG, "[QQ] $s")
-    private fun Log_e(s: String) = android.util.Log.e(TAG, "[QQ] $s")
+    private fun Log_i(s: String) { android.util.Log.i(TAG, "[QQ] $s"); QuroDiag.log("QQ", s) }
+    private fun Log_w(s: String) { android.util.Log.w(TAG, "[QQ] $s"); QuroDiag.log("QQ", s) }
+    private fun Log_e(s: String) { android.util.Log.e(TAG, "[QQ] $s"); QuroDiag.log("QQ", s) }
 }

@@ -142,9 +142,20 @@ object CmsEngineDeployer {
             }
         }
 
-        // 健康检查：确认就绪标记
+        // 健康检查：确认就绪标记 + 核心开发工具确实就绪（避免"标记写了但工具没装"的假成功）
         val (hc, _) = QuroLinuxEnv.run(context, "[ -f ${engineGuestDir()}/.engine.ready ]", timeoutMs = 10_000)
-        val health = hc == 0
+        var health = hc == 0
+        if (health) {
+            val (tc, tout) = QuroLinuxEnv.run(
+                context,
+                "miss=; for t in python3 node gcc make cmake git curl; do command -v \$t >/dev/null 2>&1 || miss=\"\$miss \$t\"; done; if [ -n \"\$miss\" ]; then echo \"MISSING:\$miss\"; exit 2; fi; echo OK",
+                timeoutMs = 10_000,
+            )
+            if (tc != 0) {
+                health = false
+                CmsEngineStore.appendLog("⚠️ 引擎就绪标记存在但缺少核心工具(tout=${tout.take(120)})，判定未就绪")
+            }
+        }
 
         CmsEngineStore.markDeployed(pkg.engineVersion, launched, health)
         sb.appendLine("🚀 CMS引擎部署完成（v${pkg.engineVersion}）${if (health) "，健康检查通过" else "，但就绪标记缺失"}。")

@@ -51,6 +51,43 @@ object QuroLinuxEnv {
     private const val BUFFER_SIZE = 8192
     private const val MAX_OUTPUT_LENGTH = 15_000L
 
+    /**
+     * dpkg/apt 锁检测与释放 prologue —— 所有经 proot 的 apt/dpkg 安装脚本都应先执行。
+     *
+     * 上一次安装中断/崩溃会残留 /var/lib/dpkg/lock* 与 /var/cache/apt/archives/lock，
+     * 导致后续 apt-get 卡死或报 "Could not get lock ... - open (11: Resource temporarily unavailable)" / "Unable to acquire the dpkg frontend lock"。
+     * 策略：逐个检查锁文件，若已存在且**无进程占用**（stale，典型为上次中断遗留）则删除；
+     * 若被进程占用则跳过（不误杀运行中的 apt）。最后 dpkg --configure -a 修复半配置状态。
+     */
+    val APT_LOCK_RELEASE_PROLOGUE = """
+        |# ── dpkg / apt 锁检测与释放（仅当锁残留且无进程占用时才释放）──
+        |echo "[lock] 检查 dpkg/apt 残留锁..."
+        |_quro_release_locks() {
+        |  local released=0
+        |  for lk in /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/cache/apt/archives/lock /var/lib/apt/lists/lock; do
+        |    [ -e "${'$'}lk" ] || continue
+        |    local held=0
+        |    if command -v fuser >/dev/null 2>&1; then
+        |      fuser "${'$'}lk" >/dev/null 2>&1 && held=1
+        |    else
+        |      for _p in /proc/[0-9]*/cmdline; do
+        |        if tr '\0' ' ' < "${'$'}_p" 2>/dev/null | grep -qE 'apt|dpkg'; then held=1; break; fi
+        |      done
+        |    fi
+        |    if [ "${'$'}held" -eq 0 ]; then
+        |      rm -f "${'$'}lk" 2>/dev/null || true
+        |      echo "[lock] 释放 stale 锁: ${'$'}lk"
+        |      released=1
+        |    else
+        |      echo "[lock] ${'$'}lk 被进程占用，跳过释放"
+        |    fi
+        |  done
+        |  [ "${'$'}released" -eq 0 ] && echo "[lock] 无残留锁，无需释放"
+        |}
+        |_quro_release_locks
+        |dpkg --configure -a 2>/dev/null || true
+        |""".trimMargin()
+
     // rootfs 下载镜像（Ubuntu Base 最小化 rootfs）- 使用HTTP避免SSL问题
     // 优先使用阿里云镜像（清华镜像可能被封锁）
     private val UBUNTU_ROOTFS_MIRRORS = listOf(

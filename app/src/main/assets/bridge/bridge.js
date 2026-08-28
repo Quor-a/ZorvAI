@@ -2,8 +2,9 @@
  * 桥接运行时脚本（由MiniAppEngine注入到每个页面<head>）。
  * 提供两部分能力：
  *   1) 轻量运行时：Page() / Component() / mountComponent() / 数据绑定 / 事件绑定；
- *   2) JSBridge SDK：封装 native.invoke，暴露 storage / ui / device / network / router 命名空间，
+ *   2) JSBridge SDK：封装 native.invoke，暴露 storage / ui / device / network / router / kotlin 命名空间，
  *      并接管 Native->JS 的 response / event 回调（Promise 化）。
+ *      kotlin 命名空间即"原生 Kotlin 语言"——小程序可调用真·Android/Kotlin 能力（剪贴板/分享/打开App/通知/TTS 等）。
  */
 (function (global) {
   'use strict';
@@ -202,6 +203,17 @@
     router: {
       navigateTo: function (url) { return invoke('router', 'navigateTo', { url: url }); },
       navigateBack: function () { return invoke('router', 'navigateBack', {}); }
+    },
+    // 原生 Kotlin 语言命名空间：融合原生能力到小程序
+    kotlin: {
+      getAppInfo: function () { return invoke('kotlin', 'getAppInfo', {}); },
+      copyText: function (t) { return invoke('kotlin', 'copyText', { text: t }); },
+      getClipboard: function () { return invoke('kotlin', 'getClipboard', {}); },
+      shareText: function (t, title) { return invoke('kotlin', 'shareText', { text: t, title: title || '' }); },
+      openUrl: function (url) { return invoke('kotlin', 'openUrl', { url: url }); },
+      openApp: function (pkg) { return invoke('kotlin', 'openApp', { packageName: pkg }); },
+      notify: function (title, body) { return invoke('kotlin', 'notify', { title: title, body: body }); },
+      speak: function (text) { return invoke('kotlin', 'speak', { text: text }); }
     },
     // 便捷别名
     navigateTo: function (url) { return invoke('router', 'navigateTo', { url: url }); },

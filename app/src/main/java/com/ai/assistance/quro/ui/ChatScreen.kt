@@ -2536,7 +2536,35 @@ private fun MessageRow(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                VisualCustomPopupQueue.getCurrentPopup()?.let { /* 已在队列 */ }
+                                runCatching {
+                                    val json = org.json.JSONObject(t.args)
+                                    val title = json.optString("title", "自定义弹窗")
+                                    val html = json.optString("html", "")
+                                    if (html.isBlank()) return@runCatching
+                                    val cardTitle = json.optString("card_title", title)
+                                    val cardDescription = json.optString("card_description", "点击查看详情")
+                                    val width = if (json.has("width")) json.optInt("width") else null
+                                    val height = if (json.has("height")) json.optInt("height") else null
+                                    val cancelable = json.optBoolean("cancelable", true)
+                                    val timeout = json.optInt("timeout", 120)
+                                    val latch = java.util.concurrent.CountDownLatch(1)
+                                    val resultRef = java.util.concurrent.atomic.AtomicReference<String?>(null)
+                                    VisualCustomPopupQueue.addPopup(
+                                        com.ai.assistance.quro.core.tools.VisualCustomPopupData(
+                                            id = "popup_${System.currentTimeMillis()}_${(Math.random() * 1000).toInt()}",
+                                            title = title,
+                                            htmlContent = html,
+                                            cardTitle = cardTitle,
+                                            cardDescription = cardDescription,
+                                            width = width,
+                                            height = height,
+                                            cancelable = cancelable,
+                                            timeout = timeout,
+                                            latch = latch,
+                                            result = resultRef
+                                        )
+                                    )
+                                }
                             },
                         shape = RoundedCornerShape(10.dp),
                         colors = CardDefaults.cardColors(containerColor = cs.primaryContainer),

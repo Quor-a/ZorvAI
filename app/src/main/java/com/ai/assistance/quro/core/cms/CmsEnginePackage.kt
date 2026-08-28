@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.core.cms
 
+import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import org.json.JSONObject
 import java.security.MessageDigest
 
@@ -136,7 +137,7 @@ data class EngineSvc(
 )
 
 /** 内置引擎引导脚本（幂等，与 assets/cms/bootstrap.sh 同源，便于引擎包独立分发）。 */
-private val BUILTIN_BOOTSTRAP = """
+private val BUILTIN_BOOTSTRAP = QuroLinuxEnv.APT_LOCK_RELEASE_PROLOGUE + """
 #!/bin/sh
 # Quro Engine bootstrap - one-time full dev environment under /root/cms/_engine.
 ENGINE_DIR=/root/cms/_engine
@@ -186,16 +187,22 @@ else
 fi
 
 # Phase 0.5: apt sources (skip if already configured by Android side)
-# 关键修复：已切换到 Ubuntu 24.04 (Noble) ARM64 rootfs。
+# 关键修复：已切换到 Ubuntu 24.04 (Noble) ARM64 rootfs。用 HTTP 镜像，避免 proot 下 CA 证书缺失导致 apt over HTTPS 失败。
 echo "[quro-engine] checking apt sources..."
 if [ ! -s /etc/apt/sources.list ] || ! grep -q "noble" /etc/apt/sources.list 2>/dev/null; then
     mkdir -p /etc/apt/apt.conf.d
     # 关闭签名验证（proot 环境下 GPG 公钥可能不完整）
     printf 'Acquire::Check-Valid-Until "false";\nAPT::Get::AllowUnauthenticated "true";\n' > /etc/apt/apt.conf.d/99no-check-gpg
-    printf 'deb https://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse\ndeb https://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse\ndeb https://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
-    echo "[quro-engine] apt sources configured (noble)"
+    printf 'deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse\ndeb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse\ndeb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
+    echo "[quro-engine] apt sources configured (noble, http)"
 else
     echo "[quro-engine] apt sources already configured (keeping existing)"
+fi
+
+# Phase 0.6: 手动合并 CA 证书（update-ca-certificates 在 proot 下不可靠，避免后续 https 下载证书报错）
+echo "[quro-engine] merging CA certificates..."
+if [ -d /usr/share/ca-certificates/mozilla ]; then
+    cat /usr/share/ca-certificates/mozilla/*.crt > /etc/ssl/certs/ca-certificates.crt 2>/dev/null || true
 fi
 
 # Phase 1: apt update with retry
@@ -226,60 +233,71 @@ apt-get install -f -y 2>/dev/null || true
 
 # Phase 3: language runtimes
 echo "[quro-engine] installing language runtimes..."
-# 使用智能安装函数：检查包是否已安装，不依赖退出码
-smart_install() {
+# 稳健安装函数：先 apt-get install；proot 下事务常半装失败，则回退 apt-get download + dpkg-deb -x。
+robust_install() {
     local pkg="${'$'}1"
     local cmd="${'$'}2"
-    
-    # 先检查是否已安装
     if command -v ${'$'}cmd >/dev/null 2>&1; then
-        echo "[quro-engine] ${'$'}pkg already installed"
+        echo "[quro-engine] ${'$'}pkg already installed: $(command -v ${'$'}cmd)"
         return 0
     fi
-    
-    # 尝试安装
     echo "[quro-engine] Installing ${'$'}pkg..."
     apt-get install -y --no-install-recommends ${'$'}pkg 2>&1 | tail -3
-    
-    # 验证是否安装成功（不依赖退出码）
     if command -v ${'$'}cmd >/dev/null 2>&1; then
-        echo "[quro-engine] ✅ ${'$'}pkg installed successfully"
+        echo "[quro-engine] ✅ ${'$'}pkg installed via apt"
+        return 0
+    fi
+    echo "[quro-engine] ⚠️ apt 未生效，${'$'}pkg 改用 download+dpkg-deb 回退..."
+    local tmp=/tmp/quro_deb; mkdir -p "${'$'}tmp"
+    ( cd "${'$'}tmp" && apt-get download ${'$'}pkg 2>/dev/null && for f in *.deb; do dpkg-deb -x "${'$'}f" / 2>/dev/null; done; rm -f *.deb )
+    apt-get install -f -y 2>/dev/null || true
+    if command -v ${'$'}cmd >/dev/null 2>&1; then
+        echo "[quro-engine] ✅ ${'$'}pkg installed via dpkg fallback"
         return 0
     else
-        echo "[quro-engine] ❌ ${'$'}pkg installation failed"
+        echo "[quro-engine] ❌ ${'$'}pkg installation failed (apt + dpkg fallback)"
         return 1
     fi
 }
 
 # 安装语言运行时
-smart_install "python3" "python3" || true
-smart_install "python3-pip" "pip3" || true
-smart_install "nodejs" "node" || true
-smart_install "npm" "npm" || true
+robust_install "python3" "python3" || true
+robust_install "python3-pip" "pip3" || true
+# Node.js：优先 apt（robust_install 含 dpkg 回退）；若仍无效则用官方独立二进制（proot 下 apt nodejs 的 externalized builtins 易坏，见 CMS 引擎依赖修复报告）
+robust_install "nodejs" "node" || true
+if ! command -v node >/dev/null 2>&1; then
+    echo "[quro-engine] ⚠️ apt nodejs 无效，改用 Node.js 20 官方二进制..."
+    curl -fsSL "https://npmmirror.com/mirrors/node/v20.19.0/node-v20.19.0-linux-arm64.tar.xz" -o /tmp/node.tar.xz 2>/dev/null
+    if [ -f /tmp/node.tar.xz ]; then
+        tar -xf /tmp/node.tar.xz -C /usr/local --strip-components=1 2>/dev/null
+        rm -f /tmp/node.tar.xz
+    fi
+fi
+robust_install "npm" "npm" || true
 
 # Phase 4: build toolchain
 echo "[quro-engine] installing build toolchain..."
-smart_install "gcc" "gcc" || true
-smart_install "g++" "g++" || true
-smart_install "make" "make" || true
-smart_install "cmake" "cmake" || true
-smart_install "linux-headers-generic" "make" || true
+robust_install "gcc" "gcc" || true
+robust_install "g++" "g++" || true
+robust_install "make" "make" || true
+robust_install "cmake" "cmake" || true
+robust_install "linux-headers-generic" "make" || true
 
 # Phase 5: dev tools
 echo "[quro-engine] installing dev tools..."
-smart_install "git" "git" || true
-smart_install "vim" "vim" || true
-smart_install "nano" "nano" || true
-smart_install "bash" "bash" || true
+robust_install "git" "git" || true
+robust_install "vim" "vim" || true
+robust_install "nano" "nano" || true
+robust_install "bash" "bash" || true
 
 # Phase 6: network tools
 echo "[quro-engine] installing network tools..."
-smart_install "curl" "curl" || true
-smart_install "wget" "wget" || true
-smart_install "jq" "jq" || true
-smart_install "zip" "zip" || true
-smart_install "unzip" "unzip" || true
-smart_install "openssh-client" "ssh" || true
+robust_install "curl" "curl" || true
+robust_install "wget" "wget" || true
+robust_install "jq" "jq" || true
+robust_install "zip" "zip" || true
+robust_install "unzip" "unzip" || true
+robust_install "openssh-client" "ssh" || true
 
 # Phase 7: Python venv
 if [ ! -x /root/cms-venv/bin/python3 ]; then
@@ -287,15 +305,23 @@ if [ ! -x /root/cms-venv/bin/python3 ]; then
     python3 -m venv /root/cms-venv 2>&1 || echo "[quro-engine] WARN: venv creation failed"
 fi
 
-# Verify
-echo "[quro-engine] dev environment ready:"
-echo "  python3  = ${'$'}(python3 --version 2>&1)"
-echo "  node     = ${'$'}(node --version 2>&1)"
-echo "  gcc      = ${'$'}(gcc --version 2>&1 | head -1)"
-echo "  git      = ${'$'}(git --version 2>&1)"
-
-touch "${'$'}ENGINE_DIR/.engine.ready"
-echo "[quro-engine] marker written: ${'$'}ENGINE_DIR/.engine.ready"
+# Verify — 仅当核心开发工具全部就绪才写就绪标记（否则引擎会"假成功"：报装好却无工具，正是"引擎装了没用"根因）
+echo "[quro-engine] verifying core dev tools..."
+CORE_OK=1
+for t in python3 node gcc make cmake git curl; do
+    if command -v ${'$'}t >/dev/null 2>&1; then
+        echo "[quro-engine]   ✅ ${'$'}t = $(command -v ${'$'}t)"
+    else
+        echo "[quro-engine]   ❌ ${'$'}t MISSING"
+        CORE_OK=0
+    fi
+done
+if [ "${'$'}CORE_OK" = "1" ]; then
+    touch "${'$'}ENGINE_DIR/.engine.ready"
+    echo "[quro-engine] ✅ all core tools present, marker written: ${'$'}ENGINE_DIR/.engine.ready"
+else
+    echo "[quro-engine] ❌ core dev tools missing, NOT writing .engine.ready（引擎部署将报告未就绪，便于排查）"
+fi
 """
 
 /** 内置引擎级环境供给脚本（best-effort，失败不阻断）。 */

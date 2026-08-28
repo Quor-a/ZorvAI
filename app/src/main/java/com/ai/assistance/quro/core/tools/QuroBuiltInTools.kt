@@ -34,6 +34,7 @@ import com.ai.assistance.quro.core.tools.ScreenshotTool
 import com.ai.assistance.quro.core.tools.ScreenshotBase64Tool
 import com.ai.assistance.quro.core.tools.VisualAnalysisTool
 import com.ai.assistance.quro.core.tools.TakePhotoTool
+import com.ai.assistance.quro.core.tools.TranslateTool
 import com.ai.assistance.quro.core.tools.ScreenRecordTool
 import com.ai.assistance.quro.core.tools.VolumeControlTool
 import com.ai.assistance.quro.core.tools.BrightnessControlTool
@@ -60,6 +61,10 @@ import com.ai.assistance.quro.core.tools.TerminalWriteTool
 import com.ai.assistance.quro.core.tools.TerminalKillTool
 import com.ai.assistance.quro.core.tools.TerminalStatusTool
 import com.ai.assistance.quro.core.tools.TerminalInterruptTool
+import com.ai.assistance.quro.core.tools.TerminalSessionsTool
+import com.ai.assistance.quro.core.tools.TerminalSessionNewTool
+import com.ai.assistance.quro.core.tools.TerminalSessionSwitchTool
+import com.ai.assistance.quro.core.tools.TerminalSessionKillTool
 import com.ai.assistance.quro.core.tools.LinuxRunTool
 import com.ai.assistance.quro.core.tools.LinuxInstallTool
 import com.ai.assistance.quro.core.tools.LinuxStartTool
@@ -334,6 +339,11 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(TerminalStatusTool())
     // E-9：两段式中断（先 ETX，再强杀重建会话）
     r.register(TerminalInterruptTool())
+    // 终端架构统一：会话管理（AI/使用者可查看/创建/切换/销毁所有会话与后端）
+    r.register(TerminalSessionsTool())
+    r.register(TerminalSessionNewTool())
+    r.register(TerminalSessionSwitchTool())
+    r.register(TerminalSessionKillTool())
 
     // ═════════════ L2 Shizuku 执行（CapOS 通道，需 Shizuku 已授权+运行中）══════════════
     r.register(ShizukuExecTool())
@@ -374,6 +384,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // AI 多媒体生成/识别工具：LLM 直接调用，结果返回对话框
     r.register(ImageGenTool())           // AI 生图
     r.register(VideoGenTool())           // AI 生视频
+    r.register(TranslateTool())          // 对话框多语言后端：文本翻译（消费 QuroFeatureModelConfig.TRANSLATION）
     r.register(ImageRecognitionTool())   // AI 图像识别
     r.register(AudioRecognitionTool())   // AI 音频识别
     r.register(VideoUnderstandingTool()) // AI 视频理解
@@ -424,5 +435,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
             r.maxSkillTools = cfg.maxSkillTools
         }
     }
+    // 工具能力目录以真实注册表为单一真相源动态生成（修复「分组目录残缺→AI 查不到/不主动用工具」）
+    // 用 fullSpecs()（内置全部 + 技能工具），与模型实际下发集合严格一致（core/full 模式下目录==可调用全集）
+    ToolCapabilityDirectory.install(r.fullSpecs())
     return r
 }

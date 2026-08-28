@@ -2,7 +2,9 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import android.util.Log
-import com.ai.assistance.quro.core.attachment.AttachmentManager
+import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionType
+import com.ai.assistance.quro.core.model.QuroModelConfigRepository
 import com.ai.assistance.quro.core.network.QuroLlmClient
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
@@ -49,7 +51,7 @@ class ImageGenTool : QuroTool {
         val model = args.optString("model", "dall-e-3").trim()
 
         return try {
-            val imageUrl = generateImage(prompt, width, height, model)
+            val imageUrl = generateImage(context, prompt, width, height, model)
             if (imageUrl != null) {
                 // 下载图片并保存
                 val imagePath = downloadImage(context, imageUrl)
@@ -67,12 +69,20 @@ class ImageGenTool : QuroTool {
         }
     }
 
-    private fun generateImage(prompt: String, width: Int, height: Int, model: String): String? {
+    private fun generateImage(context: Context, prompt: String, width: Int, height: Int, model: String): String? {
         return runBlocking {
             try {
-                // 使用 OpenAI DALL-E 3 API
+                val (apiKey, baseUrl) = resolveCreds(context)
+                if (apiKey.isBlank()) {
+                    Log.e("ImageGenTool", "未配置 API Key，无法调用生图接口")
+                    return@runBlocking null
+                }
+                // 解析最终使用的模型：功能绑定 > 调用参数；绝不回落到聊天模型
+                val binding = QuroFunctionModelConfigRepository(context).getBinding(QuroFunctionType.IMAGE_GEN)
+                val effectiveModel = binding.model.ifBlank { model }
+                val endpoint = baseUrl.removeSuffix("/") + "/images/generations"
                 val jsonBody = JSONObject().apply {
-                    put("model", model)
+                    put("model", effectiveModel)
                     put("prompt", prompt)
                     put("n", 1)
                     put("size", "${width}x${height}")
@@ -83,8 +93,8 @@ class ImageGenTool : QuroTool {
                     .toRequestBody("application/json".toMediaType())
 
                 val request = Request.Builder()
-                    .url("https://api.openai.com/v1/images/generations")
-                    .addHeader("Authorization", "Bearer ${getApiKey()}")
+                    .url(endpoint)
+                    .addHeader("Authorization", "Bearer $apiKey")
                     .post(requestBody)
                     .build()
 
@@ -129,9 +139,12 @@ class ImageGenTool : QuroTool {
         }
     }
 
-    private fun getApiKey(): String {
-        // 从配置中获取 API Key
-        // 这里简化处理，实际应该从 QuroModelConfig 中获取
-        return ""
+    /** 解析生图接口的鉴权与接入点：功能级绑定(apiKey/baseUrl) > 全局模型配置。 */
+    private fun resolveCreds(context: Context): Pair<String, String> {
+        val global = QuroModelConfigRepository(context).load()
+        val binding = QuroFunctionModelConfigRepository(context).getBinding(QuroFunctionType.IMAGE_GEN)
+        val apiKey = binding.apiKey.ifBlank { global.apiKey }
+        val baseUrl = binding.baseUrl.ifBlank { global.baseUrl }
+        return apiKey to baseUrl
     }
 }

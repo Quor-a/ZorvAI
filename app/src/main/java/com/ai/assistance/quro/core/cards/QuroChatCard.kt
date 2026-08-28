@@ -479,7 +479,8 @@ sealed interface QuroChatCard {
 
     /**
      * AI 自写小程序卡片（MiniApp）：AI 生成完整小程序代码（HTML + JS + CSS），
-     * 客户端用 MiniAppEngine 渲染，支持 JSBridge 调用原生能力（存储/网络/UI 等）。
+     * 客户端用 MiniAppEngine 渲染，支持 JSBridge 调用原生能力（存储/网络/UI，以及原生 Kotlin 融合层
+     * `window.native.kotlin.*`：剪贴板/分享/打开App/通知/TTS 等真·Android 能力）。
      *
      * @param html AI 生成的完整 HTML 源码（含内联或外部 JS/CSS）
      * @param config 小程序配置（可选，如 appId、页面路由等）
@@ -489,6 +490,30 @@ sealed interface QuroChatCard {
         override val title: String,
         val html: String,
         val config: Map<String, Any> = emptyMap(),
+    ) : QuroChatCard
+
+    // ───────────── v1068 多语言组合渲染 ─────────────
+    /**
+     * 组合卡：把多个子卡聚合为一个整体一起展示，同时支持「只渲染其中一个」（单渲染）。
+     * 组合内每个子卡仍保持各自独立的 id 与状态，互不影响，且 children 可再嵌套 CompositeCard，实现组合可嵌套。
+     *
+     * layout 决定组合呈现方式：
+     * - "stack"：子卡顺序堆叠，每张带「单独」按钮可单渲染，提供「显示全部」还原组合；
+     * - "tabs"：子卡以标签页呈现，一次只显示一个，互不干扰；
+     * - "accordion"：子卡各自独立折叠展开，任意张可同时展开。
+     *
+     * 该卡用于解决「小程序需要后端+前端组合完成」「可视化弹窗+可视化编程+多语言渲染」等产物被拆散渲染丢失组合关系的问题。
+     *
+     * @param layout      "stack" | "tabs" | "accordion"
+     * @param children    子卡列表，每个子卡独立 id/状态
+     * @param description 可选的组合说明（展示在组合头部）
+     */
+    data class CompositeCard(
+        override val id: String,
+        override val title: String,
+        val layout: String,
+        val children: List<QuroChatCard>,
+        val description: String? = null,
     ) : QuroChatCard
 }
 
@@ -824,6 +849,20 @@ fun parseComponentSpec(spec: String): QuroChatCard? {
                     }
                 } ?: emptyMap(),
             )
+            // ── v1068 多语言组合卡：聚合多个子卡为一个整体，支持单渲染 ──
+            "composite" -> {
+                val layout = s.optString("layout", "stack").ifBlank { "stack" }
+                val children = s.optJSONArray("children")?.let { arr ->
+                    (0 until arr.length()).mapNotNull { i ->
+                        val child = arr.optJSONObject(i) ?: return@mapNotNull null
+                        parseComponentSpec(child.toString())
+                    }
+                } ?: emptyList()
+                QuroChatCard.CompositeCard(
+                    id, title, layout, children,
+                    s.optString("description", "").ifBlank { null },
+                )
+            }
             else -> null
         }
     } catch (e: Exception) {
@@ -893,6 +932,7 @@ fun serializeCard(card: QuroChatCard): JSONObject {
         is QuroChatCard.MermaidCard -> "mermaid"
         is QuroChatCard.HtmlPreviewCard -> "htmlpreview"
         is QuroChatCard.MiniAppCard -> "miniapp"
+        is QuroChatCard.CompositeCard -> "composite"
     })
     o.put("id", card.id)
     o.put("title", card.title)
@@ -1050,6 +1090,13 @@ fun serializeCard(card: QuroChatCard): JSONObject {
                 o.put("config", JSONObject(card.config))
             }
         }
+        is QuroChatCard.CompositeCard -> {
+            o.put("layout", card.layout)
+            o.put("description", card.description ?: JSONObject.NULL)
+            o.put("children", JSONArray().also { a ->
+                card.children.forEach { child -> a.put(serializeCard(child)) }
+            })
+        }
     }
     return o
 }
@@ -1205,6 +1252,14 @@ fun parseCard(o: JSONObject): QuroChatCard? {
                     }
                 } ?: emptyMap(),
             )
+            "composite" -> {
+                val layout = o.optString("layout", "stack").ifBlank { "stack" }
+                val description = if (o.has("description") && !o.isNull("description")) o.optString("description") else null
+                val children = o.optJSONArray("children")?.let { arr ->
+                    (0 until arr.length()).mapNotNull { i -> parseCard(arr.optJSONObject(i)) }
+                } ?: emptyList()
+                QuroChatCard.CompositeCard(id, title, layout, children, description)
+            }
             else -> null
         }
     }.getOrNull()

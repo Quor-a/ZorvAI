@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.bot.adapters
 
 import android.util.Log
+import com.ai.assistance.quro.util.QuroDiag
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -29,6 +30,13 @@ class ClawBotApiClient(
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
     }
 
+    /** 微信 ClawBot 层诊断出口：Logcat + 手机公共 Download/QuroAI_logs（Wechat 标签）。 */
+    private fun clog(lvl: String, s: String) {
+        val m = "[$lvl][ClawBotApiClient] $s"
+        Log.i(TAG, m)
+        QuroDiag.log("Wechat", m)
+    }
+
     fun buildHeaders(botToken: String?): okhttp3.Headers {
         val b = okhttp3.Headers.Builder()
         b.add("Content-Type", "application/json")
@@ -42,6 +50,17 @@ class ClawBotApiClient(
     }
 
     /**
+     * 登录专用头：BotHub 的扫码登录 HTTP 客户端（Luua）额外带
+     * `User-Agent: Bothub-Android/iLink`，其 iLink 业务调用（Liwa）则不带。
+     * 对齐 BotHub 登录链路，仅在 get_bot_qrcode / get_qrcode_status 上使用。
+     */
+    fun loginHeaders(botToken: String?): okhttp3.Headers {
+        return buildHeaders(botToken).newBuilder()
+            .add("User-Agent", "ZorvAI/iLink")
+            .build()
+    }
+
+    /**
      * GET ilink/bot/get_bot_qrcode
      */
     fun getBotQrcode(baseUrl: String, botType: String, botToken: String? = null): JSONObject {
@@ -51,7 +70,7 @@ class ClawBotApiClient(
             .build()
         val req = Request.Builder()
             .url(url)
-            .headers(buildHeaders(botToken))
+            .headers(loginHeaders(botToken))
             .get()
             .build()
         return httpClient.newCall(req).execute().use { resp ->
@@ -59,7 +78,7 @@ class ClawBotApiClient(
             if (!resp.isSuccessful) {
                 throw ClawBotHttpException(resp.code, body)
             }
-            Log.d(TAG, "getBotQrcode 响应: ${body.take(200)}")
+            clog("D", "getBotQrcode 响应: ${body.take(200)}")
             JSONObject(body)
         }
     }
@@ -75,7 +94,7 @@ class ClawBotApiClient(
             .build()
         val req = Request.Builder()
             .url(url)
-            .headers(buildHeaders(botToken))
+            .headers(loginHeaders(botToken))
             .get()
             .build()
         return httpClient.newCall(req).execute().use { resp ->
@@ -83,7 +102,7 @@ class ClawBotApiClient(
             if (!resp.isSuccessful) {
                 throw ClawBotHttpException(resp.code, body)
             }
-            Log.d(TAG, "getQrcodeStatus 响应: ${body.take(200)}")
+            clog("D", "getQrcodeStatus 响应: ${body.take(200)}")
             JSONObject(body)
         }
     }
@@ -138,12 +157,13 @@ class ClawBotApiClient(
         botToken: String?,
         toUserId: String,
         text: String,
-        contextToken: String
+        contextToken: String,
+        fromUserId: String = ""
     ) {
         val clientId = "quro-" + java.util.UUID.randomUUID().toString().replace("-", "")
         val payload = buildString {
             append("""{"msg":{""")
-            append(""""from_user_id":"","to_user_id":${jsonString(toUserId)},""")
+            append(""""from_user_id":${jsonString(fromUserId)},"to_user_id":${jsonString(toUserId)},""")
             append(""""client_id":${jsonString(clientId)},"message_type":2,"message_state":2,""")
             append(""""context_token":${jsonString(contextToken)},""")
             append(""""item_list":[{"type":1,"text_item":{"text":${jsonString(text)}}}]""")

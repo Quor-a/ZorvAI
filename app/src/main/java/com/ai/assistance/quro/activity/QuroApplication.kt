@@ -9,6 +9,8 @@ import com.ai.assistance.quro.core.tools.QuroScheduledTaskScheduler
 import com.ai.assistance.quro.core.bot.QuroBotManager
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciManager
 import com.ai.assistance.quro.core.shizuku.QuroShizuku
+import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager
+import com.ai.assistance.quro.service.QuroTerminalKeepAliveService
 import com.ai.assistance.quro.ui.QuroPersonaViewModel
 import com.ai.assistance.quro.workflow.data.WorkflowRepository
 import com.ai.assistance.quro.workflow.data.NotesRepository
@@ -89,6 +91,15 @@ class QuroApplication : Application() {
             TriggerEngine.armAll()
         } catch (e: Throwable) {
             android.util.Log.e("QuroApplication", "Workflow 初始化失败（不影响主流程）", e)
+        }
+        // 终端架构统一：载入持久化会话元数据；拉起默认共享会话（跟随安装 Linux 环境），
+        // 并启动终端保活服务（满足「终端启动默认打开 zorvAI 终端环境」「zorvAI 自启动存活终端保持跟随存话」）。
+        try {
+            QuroTerminalSessionManager.load(applicationContext)
+            QuroTerminalSessionManager.ensureDefaultAsync(applicationContext, installIfMissing = true)
+            QuroTerminalKeepAliveService.ensureStarted(applicationContext)
+        } catch (e: Throwable) {
+            android.util.Log.e("QuroApplication", "终端统一初始化失败（不影响主流程）", e)
         }
     }
 }

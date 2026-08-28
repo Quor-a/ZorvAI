@@ -319,6 +319,12 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- 终端默认会话保活服务：前台常驻，每 15s 保活默认终端会话（installIfMissing=false） -->
+        <service
+            android:name=".service.QuroTerminalKeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <!-- 可视化弹窗悬浮窗服务 -->
         <service
             android:name=".service.VisualPopupOverlayService"
@@ -457,6 +463,17 @@
                 <action android:name="android.intent.action.SCREEN_ON" />
                 <action android:name="android.intent.action.SCREEN_OFF" />
                 <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 终端保活开机接收器：开机/应用更新后拉起终端保活服务，恢复默认会话存活 -->
+        <receiver
+            android:name=".receiver.QuroTerminalBootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>

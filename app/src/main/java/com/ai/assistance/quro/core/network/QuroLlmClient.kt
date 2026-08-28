@@ -574,7 +574,8 @@ class QuroLlmClient(
                 )
             }
             Log.i(TAG, "<<< PARSE tool_calls=${calls.size} reasoningBlank=${reasoning.isNullOrBlank()} first=${calls.firstOrNull()?.name}")
-            QuroLlmResult.ToolCalls(calls, reasoning, safeString(msg, "content")?.takeIf { it.isNotBlank() })
+            val cm = stripThinkBlocks(safeString(msg, "content").orEmpty(), reasoning)
+            QuroLlmResult.ToolCalls(calls, cm.second, cm.first.takeIf { it.isNotBlank() })
         } else {
             // 小米 MiMo 等推理模型在 reason 模式下 content 可能为空、仅返回 reasoning_content。
             // ⚠️ 不再将 reasoning 兜底到 content！此前 content=reasoning 导致思考文本同时写入
@@ -583,7 +584,8 @@ class QuroLlmClient(
             // 正确做法：content 为空时返回空字符串，由 QuroAssistant 决定是否展示占位符；
             //   reasoning 始终只走 reasoning 字段，仅在用户开启「深度思考」时展示。
             val rawContent = safeString(msg, "content")?.takeIf { it.isNotBlank() } ?: ""
-            QuroLlmResult.Text(rawContent, reasoning)
+            val clean = stripThinkBlocks(rawContent, reasoning)
+            QuroLlmResult.Text(clean.first, clean.second)
         }
     } catch (e: Exception) {
         QuroLlmResult.Error(e.message ?: "parse error")
@@ -688,6 +690,30 @@ class QuroLlmClient(
     private suspend fun streamChat(req: Request, requestBody: String, onToken: (String) -> Unit, onThinking: ((String) -> Unit)? = null): QuroLlmResult {
         val contentAcc = StringBuilder()
         val reasoningAcc = StringBuilder()
+        // 🔧 思考标签剥离：DeepSeek-R1 / Qwen-Think 等推理模型把 <think>…</think> 直接混进 content 流，
+        //   若不剥离会渲染进正文气泡（用户报"AI 思考内容出现在内容区"）。这里用状态机把 think 段路由到
+        //   reasoning（独立 ThinkBubble 渲染），正文只留非 think 文本；跨 delta 分片也能正确处理。
+        var inThink = false
+        var prevContentLen = 0
+        var prevReasonLen = 0
+        val openRe = Regex("(?i)<think(ing)?\\s*>")
+        val closeRe = Regex("(?i)</think(ing)?>")
+        fun routeThinkChunk(raw: String) {
+            var s = raw
+            while (s.isNotEmpty()) {
+                if (!inThink) {
+                    val m = openRe.find(s)
+                    if (m == null) { contentAcc.append(s); s = "" }
+                    else { contentAcc.append(s.substring(0, m.range.first)); inThink = true; s = s.substring(m.range.last + 1) }
+                } else {
+                    val m = closeRe.find(s)
+                    if (m == null) { reasoningAcc.append(s); s = "" }
+                    else { reasoningAcc.append(s.substring(0, m.range.first)); inThink = false; s = s.substring(m.range.last + 1) }
+                }
+            }
+            if (contentAcc.length != prevContentLen) { onToken(contentAcc.toString()); prevContentLen = contentAcc.length }
+            if (reasoningAcc.length != prevReasonLen) { onThinking?.invoke(reasoningAcc.toString()); prevReasonLen = reasoningAcc.length }
+        }
         // 🔧 v291 修复：流式响应里模型返回的 tool_calls 也以 delta 形式下发，必须按 index 累计
         // （function.name / function.arguments 常分片到达）。否则工具调用被当成「空文本」→
         // AI 不执行工具、空回复、工具卡消失（用户报「AI 挂了 / 不执行 / 不回复 / 空回复」的根因）。
@@ -755,8 +781,7 @@ class QuroLlmClient(
                             if (delta != null) {
                                 val c = safeString(delta, "content")
                                 if (!c.isNullOrEmpty()) {
-                                    contentAcc.append(c)
-                                    onToken(contentAcc.toString())
+                                    routeThinkChunk(c)
                                 }
                                 val r = safeString(delta, "reasoning_content")
                                     ?: safeString(delta, "reasoning")
@@ -829,6 +854,36 @@ class QuroLlmClient(
         return QuroLlmResult.Error(friendlyNetError(lastErr ?: Exception("stream connection failed")))
     }
 
+    /** 把 content 里的 <think>…</think> 段剥离到 reasoning（与流式 routeThinkChunk 同语义，用于非流式终态）。 */
+    private fun stripThinkBlocks(content: String, reasoning: String?): Pair<String, String?> {
+        val openRe = Regex("(?i)<think(ing)?\\s*>")
+        val closeRe = Regex("(?i)</think(ing)?>")
+        val out = StringBuilder()
+        val extra = StringBuilder()
+        var cur = content
+        var inThink = false
+        while (cur.isNotEmpty()) {
+            if (!inThink) {
+                val m = openRe.find(cur)
+                if (m == null) { out.append(cur); break }
+                out.append(cur.substring(0, m.range.first))
+                inThink = true
+                cur = cur.substring(m.range.last + 1)
+            } else {
+                val m = closeRe.find(cur)
+                if (m == null) { extra.append(cur); break }
+                extra.append(cur.substring(0, m.range.first))
+                inThink = false
+                cur = cur.substring(m.range.last + 1)
+            }
+        }
+        val merged = if (extra.isEmpty()) reasoning else buildString {
+            if (!reasoning.isNullOrEmpty()) append(reasoning)
+            append(extra)
+        }.takeIf { it.isNotBlank() }
+        return out.toString() to merged
+    }
+
     /** 流式累计结束后，按是否含工具调用产出 ToolCalls 或 Text（与 parse() 同语义）。 */
     private fun buildToolCallsOrText(
         toolAcc: List<StreamToolAcc>,
@@ -836,15 +891,16 @@ class QuroLlmClient(
         reasoningAcc: StringBuilder,
     ): QuroLlmResult {
         val reasoning = reasoningAcc.toString().takeIf { it.isNotBlank() }
+        val clean = stripThinkBlocks(contentAcc.toString(), reasoning)
         return if (toolAcc.isNotEmpty()) {
             val calls = toolAcc.mapIndexed { i, t ->
                 // 🔧 同样修复流式分片拼接出的非法 JSON arguments（见 sanitizeToolArguments 说明）。
                 QuroToolCall(id = t.id ?: "call_$i", name = t.name, arguments = sanitizeToolArguments(t.arguments.ifBlank { "{}" }))
             }
             Log.i(TAG, "<<< STREAM tool_calls=${calls.size} reasoningBlank=${reasoning.isNullOrBlank()} first=${calls.firstOrNull()?.name}")
-            QuroLlmResult.ToolCalls(calls, reasoning, contentAcc.toString().takeIf { it.isNotBlank() })
+            QuroLlmResult.ToolCalls(calls, clean.second, clean.first.takeIf { it.isNotBlank() })
         } else {
-            QuroLlmResult.Text(contentAcc.toString(), reasoning)
+            QuroLlmResult.Text(clean.first, clean.second)
         }
     }
 

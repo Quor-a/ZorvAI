@@ -1,9 +1,17 @@
 package com.ai.assistance.quro.core.bot.adapters
 
 import android.util.Log
+import com.ai.assistance.quro.util.QuroDiag
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
+
+/** 微信 ClawBot 层诊断出口：Logcat + 手机公共 Download/QuroAI_logs（Wechat 标签）。 */
+private fun clog(lvl: String, s: String) {
+    val m = "[$lvl][ClawBotPoller] $s"
+    Log.i("ClawBotPoller", m)
+    QuroDiag.log("Wechat", m)
+}
 
 private const val MAX_CONSECUTIVE_FAILURES = 3
 private const val BACKOFF_DELAY_MS = 30_000L
@@ -13,7 +21,7 @@ private const val DEFAULT_LONG_POLL_MS = 38_000L
 private const val TAG = "ClawBotPoller"
 
 /**
- * iLink getupdates 长轮询循环。
+ * ClawBot getupdates 长轮询循环（移植自 Andclaw）。
  * 纯 OkHttp + org.json，由 QuroWechatIlinkBotAdapter 在 IO 协程中驱动。
  */
 class ClawBotPoller(
@@ -40,7 +48,7 @@ class ClawBotPoller(
         var consecutiveFailures = 0
         var getUpdatesBuf = loadSyncBuf()
 
-        Log.d(TAG, "轮询循环启动")
+        clog("D", "轮询循环启动")
 
         while (!shouldStop()) {
             val token = getAuthToken()
@@ -65,13 +73,13 @@ class ClawBotPoller(
                     if (sessionExpired) {
                         consecutiveFailures = 0
                         onDisconnected()
-                        Log.w(TAG, "会话过期 (errcode=-14)，暂停 ${SESSION_PAUSE_MS / 1000}s")
+                        clog("W", "会话过期 (errcode=-14)，暂停 ${SESSION_PAUSE_MS / 1000}s")
                         kotlinx.coroutines.delay(SESSION_PAUSE_MS)
                         continue
                     }
                     consecutiveFailures++
                     onDisconnected()
-                    Log.w(TAG, "API 错误: ret=${env.ret}, errcode=${env.errCode}")
+                    clog("W", "API 错误: ret=${env.ret}, errcode=${env.errCode}")
                     if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
                         consecutiveFailures = 0
                         kotlinx.coroutines.delay(BACKOFF_DELAY_MS)
@@ -98,7 +106,7 @@ class ClawBotPoller(
             } catch (e: Exception) {
                 consecutiveFailures++
                 onDisconnected()
-                Log.e(TAG, "轮询异常: ${e.message}")
+                clog("E", "轮询异常: ${e.message}")
                 if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
                     consecutiveFailures = 0
                     kotlinx.coroutines.delay(BACKOFF_DELAY_MS)
@@ -107,7 +115,7 @@ class ClawBotPoller(
                 }
             }
         }
-        Log.d(TAG, "轮询循环结束")
+        clog("D", "轮询循环结束")
     }
 
     private fun mapToIncoming(msg: JSONObject): InboundMessage? {
@@ -122,7 +130,7 @@ class ClawBotPoller(
         }
         val ctx = msg.optString("context_token", "").trim()
         if (ctx.isEmpty()) {
-            Log.d(TAG, "丢弃消息: 缺少 context_token (from=$from)")
+            clog("D", "丢弃消息: 缺少 context_token (from=$from)")
             return null
         }
         return InboundMessage(

@@ -3,6 +3,7 @@ package com.ai.assistance.quro.core.bot
 import android.content.Context
 import android.util.Log
 import com.ai.assistance.quro.core.QuroReplyNotifier
+import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.core.bot.adapters.QuroFeishuBotAdapter
 import com.ai.assistance.quro.core.bot.adapters.QuroQqBotAdapter
 import com.ai.assistance.quro.core.bot.adapters.QuroWechatIlinkBotAdapter
@@ -175,13 +176,28 @@ class QuroBotManager(
         }
     }
 
+    /** 统一诊断出口：Logcat + 手机公共 Download/QuroAI_logs（用户无需 adb 即可取）。 */
+    private fun bd(lvl: String, s: String) {
+        val m = "[$lvl][BotNet] $s"
+        Log.i(TAG, m)
+        QuroDiag.log("BotNet", m)
+    }
+
     /** 启动所有「已启用且已配置」的平台。在 Application.onCreate 调用一次。 */
     fun startEnabled(ctx: Context) {
         val prefs = ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         adapters.values.forEach { a ->
             val enabled = prefs.getBoolean("enabled_${a.platform.name}", false)
-            if (enabled && a.isConfigured()) {
-                scope.launch { runCatching { a.start() } }
+            val configured = runCatching { a.isConfigured() }.getOrDefault(false)
+            if (enabled && configured) {
+                bd("I", "启动 ${a.platform}（enabled + configured）")
+                scope.launch {
+                    runCatching { a.start() }.onFailure { e ->
+                        bd("E", "start ${a.platform} 抛出异常: ${e.message}")
+                    }
+                }
+            } else {
+                bd("W", "跳过 ${a.platform}: enabled=$enabled configured=$configured（未启用或未配置/未登录则不会连）")
             }
         }
     }
@@ -191,24 +207,24 @@ class QuroBotManager(
      * 内部切到 IO 协程跑回复引擎，拿到文本后调 adapter.deliver 回传平台，并触发 uiMirror。
      */
     fun handleInbound(message: QuroInboundMessage) {
-        Log.d(TAG, "handleInbound 收到消息: platform=${message.platform} user=${message.userId} text=${message.text.take(50)}...")
+        bd("D", "handleInbound 收到消息: platform=${message.platform} user=${message.userId} text=${message.text.take(50)}...")
         // 如果 conversationBinder 还没注册（ViewModel 未创建），暂存消息
         if (conversationBinder == null) {
             synchronized(pendingInboundMessages) {
                 if (pendingInboundMessages.size < 50) { // 防止无限积压
                     pendingInboundMessages.add(message)
-                    Log.w(TAG, "conversationBinder 未注册，消息暂存: platform=${message.platform} user=${message.userId}")
+                    bd("W", "conversationBinder 未注册，消息暂存: platform=${message.platform} user=${message.userId}")
                 }
             }
             return
         }
-        Log.d(TAG, "handleInbound conversationBinder 已注册，启动处理")
+        bd("D", "handleInbound conversationBinder 已注册，启动处理")
         scope.launch { processInbound(message) }
     }
 
     private suspend fun processInbound(message: QuroInboundMessage) {
         try {
-            Log.d(TAG, "processInbound 开始处理: platform=${message.platform} user=${message.userId}")
+            bd("D", "processInbound 开始处理: platform=${message.platform} user=${message.userId}")
             // 系统级弹窗：IM 入站消息（离开软件时 heads-up）
             QuroReplyNotifier.notifyImMessage(
                 appContext,
@@ -226,10 +242,10 @@ class QuroBotManager(
                     replyEngine.reply(message.platform, message.userId, message.text)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "replyEngine.reply 超时/失败 platform=${message.platform} user=${message.userId}: ${e.message}")
+                bd("E", "replyEngine.reply 超时/失败 platform=${message.platform} user=${message.userId}: ${e.message}")
                 QuroReply("（机器人回复超时或失败：${e.message ?: "未知错误"}）")
             }
-            Log.d(TAG, "processInbound 回复: ${reply.text.take(100)}...")
+            bd("D", "processInbound 回复: ${reply.text.take(100)}...")
             val out = QuroOutboundMessage(
                 message.platform,
                 message.userId,
@@ -243,7 +259,7 @@ class QuroBotManager(
 
             // 按平台配置，把用户消息 + 机器人回复写入 App 持久化会话
             val mode = bindMode(message.platform)
-            Log.d(TAG, "processInbound 绑定模式: $mode")
+            bd("D", "processInbound 绑定模式: $mode")
             if (mode != "none") {
                 runCatching {
                     conversationBinder?.append(
@@ -255,13 +271,26 @@ class QuroBotManager(
                         mode = mode,
                         fixedConvId = bindConvId(message.platform),
                     )
-                    Log.d(TAG, "processInbound 消息已写入会话")
+                    bd("D", "processInbound 消息已写入会话")
                 }
             }
 
-            runCatching { 
-                adapters[message.platform]?.deliver(out)
-                Log.d(TAG, "processInbound 回复已发送到平台")
+            // 投递回平台；失败必须显形（不再被 runCatching 静默吞掉，否则「只回对话框」且无从排查）
+            val deliverAdapter = adapters[message.platform]
+            try {
+                deliverAdapter?.deliver(out)
+                bd("D", "processInbound 回复已发送到平台")
+            } catch (e: Exception) {
+                val reason = deliverAdapter?.lastError ?: e.message ?: "未知错误"
+                bd("E", "processInbound 回复发回${message.platform.label}失败: $reason | exc=${e.message}")
+                // 把失败原因直接回显到对话（无需翻 logcat/adb）：平台投递失败时至少应用内对话框可见，便于定位
+                uiMirror?.invoke(
+                    QuroOutboundMessage(
+                        message.platform, message.userId,
+                        "（⚠️ 回复已生成，但发回${message.platform.label}失败：$reason）",
+                        msgId = message.msgId, eventId = message.eventId, groupId = message.groupId,
+                    )
+                )
             }
             // 系统级弹窗：机器人回复（离开软件时 heads-up；前台时用户在对话里直接看到）
             runCatching {
@@ -274,7 +303,7 @@ class QuroBotManager(
             }
             uiMirror?.invoke(out)
         } catch (e: Exception) {
-            Log.e(TAG, "handleInbound failed platform=${message.platform} user=${message.userId}: ${e.message}")
+            bd("E", "handleInbound failed platform=${message.platform} user=${message.userId}: ${e.message}")
             val err = QuroOutboundMessage(
                 message.platform,
                 message.userId,

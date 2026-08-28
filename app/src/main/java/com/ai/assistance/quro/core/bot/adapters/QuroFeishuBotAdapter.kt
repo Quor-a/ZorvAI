@@ -6,6 +6,8 @@ import com.ai.assistance.quro.core.bot.QuroOutboundMessage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import com.ai.assistance.quro.util.QuroDiag
 import okhttp3.Request
 import okhttp3.Response
@@ -38,6 +40,8 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     private var tenantToken: String = ""
     private var ws: WebSocket? = null
     private val alive = AtomicBoolean(false)
+    /** 单飞锁：防止 start() 被多次并发调用时开多个 WS（日志曾出现 3 个 WS 同时连）。 */
+    private val startLock = Mutex()
     /** WS 真实连接状态（onOpen→true, onClosed/onFailure→false），供 UI 读取。 */
     val wsConnected = AtomicBoolean(false)
 
@@ -54,13 +58,18 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
             return
         }
         if (connJob?.isActive == true) return
-        stopped.set(false)
-        wsConnected.set(false)
-        connJob = scope.launch {
-            try { runConnection() } catch (e: Exception) { Log_e("连接循环异常退出: ${e.message}") }
-            finally { connected = false; wsConnected.set(false) }
+        var didStart = false
+        startLock.withLock {
+            if (connJob?.isActive == true) return@withLock
+            stopped.set(false)
+            wsConnected.set(false)
+            connJob = scope.launch {
+                try { runConnection() } catch (e: Exception) { Log_e("连接循环异常退出: ${e.message}") }
+                finally { connected = false; wsConnected.set(false) }
+            }
+            didStart = true
         }
-        Log_i("飞书 适配器已启动（等待 WS 连接...）")
+        if (didStart) Log_i("飞书 适配器已启动（等待 WS 连接...）")
     }
 
     override suspend fun runConnection() {
@@ -238,8 +247,8 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
     }
 
     /**
-     * 上传图片字节到飞书并发送图片消息。
-     * 按飞书官方契约：文件 part 名为 image、附加 image_type=message 表单字段。
+     * 上传图片字节到飞书并发送图片消息（移植自 Andclaw 的 uploadImage + sendImageMessage，
+     * 按飞书官方契约校正：文件 part 名为 image、附加 image_type=message 表单字段）。
      * 成功返回 true。
      */
     private fun sendImage(chatId: String, bytes: ByteArray, fileName: String, msgId: String? = null): Boolean {
@@ -321,24 +330,27 @@ class QuroFeishuBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
             val buf = bytes.toByteArray()
             val hex = buf.take(160).joinToString("") { "%02x".format(it) }
+            Log_i("WS收到二进制帧 rawLen=${buf.size} first160Hex=${hex}")
             runCatching {
                 val frame = decodeFrame(buf)
-                Log_i("WS二进制帧 method=${frame.method} headers=${frame.headers} payloadLen=${frame.payload.size} rawHex=${hex}")
-                // 不依赖 method 字段分流（proto 字段号可能有出入），统一看 header.type 判断是否为数据帧
+                Log_i("WS二进制帧 method=${frame.method} headers=${frame.headers} payloadLen=${frame.payload.size}")
                 val type = frame.headers.firstOrNull { it.first.equals("type", true) }?.second ?: ""
-                val isData = type.equals("event", true) || type.equals("card", true) || frame.method == 1
-                // 飞书硬性要求：收到帧须 3s 内 ACK（二进制回显帧，原样回带 headers，payload={"code":200}），否则重推
-                val ack = encodeFrame(frame.copy(payload = "{\"code\":200}".toByteArray(Charsets.UTF_8)))
-                runCatching { webSocket.send(ByteString.of(*ack)) }.onFailure { Log_w("ACK帧发送失败: ${it.message}") }
-                if (isData) {
-                    val payloadStr = runCatching { String(frame.payload, Charsets.UTF_8) }.getOrDefault("")
-                    if (payloadStr.isNotBlank()) handleEnvelopeAny(payloadStr, webSocket)
-                    else Log_w("数据帧 payload 为空，无法解析")
-                } else {
-                    Log_i("控制帧 type=$type（已ACK）")
-                    // 兜底：部分版本控制帧也可能携带 JSON payload，尝试解析避免漏消息
-                    val payloadStr = runCatching { String(frame.payload, Charsets.UTF_8) }.getOrDefault("")
-                    if (payloadStr.isNotBlank() && payloadStr.trimStart().startsWith("{")) handleEnvelopeAny(payloadStr, webSocket)
+                // 飞书数据帧 method==2（事件/卡片）；控制帧 method==1（ping/心跳）。之前误把 method==1 当数据帧，导致事件被当控制帧丢弃。
+                val isData = frame.method == 2 || type.equals("event", true) || type.equals("card", true)
+                val isPing = frame.method == 1 || type.equals("ping", true)
+                // ACK：直接原样回显收到的字节（服务端按 seq_id 匹配即可，避免重编码 protobuf 出错导致被服务端忽略/停止推送）
+                runCatching { webSocket.send(bytes) }.onFailure { Log_w("ACK帧发送失败: ${it.message}") }
+                // ping 控制帧需回 pong（缺失会被服务端断开）
+                if (isPing) {
+                    runCatching { webSocket.send(JSONObject().put("type", "pong").put("sn", frame.seqId).toString()) }
+                        .onFailure { Log_w("pong 发送失败: ${it.message}") }
+                        .also { Log_i("已回 pong sn=${frame.seqId}") }
+                }
+                val payloadStr = runCatching { String(frame.payload, Charsets.UTF_8) }.getOrDefault("")
+                if (payloadStr.isNotBlank()) {
+                    handleEnvelopeAny(payloadStr, webSocket)
+                } else if (isData) {
+                    Log_w("数据帧 payload 为空，无法解析")
                 }
             }.onFailure { e ->
                 // decodeFrame 失败 → 兜底：把整帧当 UTF-8 JSON 文本解析（万一飞书实际发文本帧，或 proto 字段号猜错）
