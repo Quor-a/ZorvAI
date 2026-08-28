@@ -1686,7 +1686,7 @@ fi
 
     private fun prepareRuntimeExtras(context: Context, rootfs: File) {
         try {
-            // 确保 libtalloc.so.2 存在（proot 依赖此库）
+            // 确保 libtalloc.so.2 存在（proot 依赖此库）——只在不存在时拷贝（快速检查）
             val dir = sandboxDir(context)
             val talloc = File(dir, "libtalloc.so.2")
             if (!talloc.exists()) {
@@ -1695,17 +1695,22 @@ fi
                 if (src.exists()) src.copyTo(talloc, overwrite = true)
             }
 
-            writeResolvConf(rootfs, context)
-            val props = buildProps(context)
-            File(rootfs, "etc").mkdirs()
-            File(rootfs, "etc/quro_props.prop").writeText(
-                props.entries.joinToString("\n") { "${it.key}=${it.value}" } + "\n"
-            )
-            val bin = File(rootfs, "usr/local/bin"); bin.mkdirs()
-            val shim = File(bin, "getprop")
-            // GETPROP_SHIM 是源码里的原始字符串；Windows 工作区 CRLF 会让 sh 执行出错，强转 LF。
-            shim.writeText(GETPROP_SHIM.normalizeLineEndings())
-            shim.setExecutable(true, false)
+            // 已初始化的 marker：首次安装时写入，跳过后续重复文件 I/O（防 ANR）
+            val extrasMarker = File(rootfs, "usr/local/bin/.runtime_extras_done")
+            if (!extrasMarker.exists()) {
+                writeResolvConf(rootfs, context)
+                val props = buildProps(context)
+                File(rootfs, "etc").mkdirs()
+                File(rootfs, "etc/quro_props.prop").writeText(
+                    props.entries.joinToString("\n") { "${it.key}=${it.value}" } + "\n"
+                )
+                val bin = File(rootfs, "usr/local/bin"); bin.mkdirs()
+                val shim = File(bin, "getprop")
+                // GETPROP_SHIM 是源码里的原始字符串；Windows 工作区 CRLF 会让 sh 执行出错，强转 LF。
+                shim.writeText(GETPROP_SHIM.normalizeLineEndings())
+                shim.setExecutable(true, false)
+                try { extrasMarker.writeText("done") } catch (_: Throwable) {}
+            }
             // ⚠ Ubuntu 24.04 rootfs 自带原生 apt/dpkg/apt-get，
             //   不安装命令路由器和平台兼容层——它们会在 /usr/local/bin 创建
             //   wrapper 遮蔽 /usr/bin 下的原生命令，导致 apt 等全部失效。
@@ -1864,6 +1869,9 @@ fi
      * 现在改为 Kotlin 层 CommandTranslator 做命令翻译，不再需要这些 wrapper。
      */
     private fun cleanupShellWrappers(rootfs: File) {
+        // 只执行一次：marker 存在则跳过（避免每次 runProot 都读几十个文件导致 ANR）
+        val marker = File(rootfs, "usr/local/bin/.wrapper_cleanup_done")
+        if (marker.exists()) return
         val binDir = File(rootfs, "usr/local/bin")
         if (!binDir.exists()) return
         // 需要清理的 wrapper 文件名（这些会遮蔽 /usr/bin 下的原生命令）
@@ -1896,6 +1904,8 @@ fi
         if (cleaned > 0) {
             Log.i(TAG, "✅ 清理旧版 shell wrapper $cleaned 个")
         }
+        // 标记已完成，避免每次 runProot 都重复执行文件扫描
+        try { marker.writeText("done") } catch (_: Throwable) {}
     }
 
     private fun writeAptSources(rootfs: File, mirrorBase: String) {
