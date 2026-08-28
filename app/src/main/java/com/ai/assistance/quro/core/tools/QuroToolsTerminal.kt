@@ -311,31 +311,3 @@ class TerminalSessionKillTool : QuroTool {
         }
     }
 }
-
-/**
- * proot / Linux 环境一键诊断工具。
- *
- * 生成完整报告：设备 Seccomp/SELinux 策略、proot 二进制与 nativeLibraryDir 内容、
- * rootfs 完整性（含 /bin/sh 是否为断链）、usr/bin 符号链接指向，
- * 并**实际**用「默认模式」与「PROOT_NO_SECCOMP=1 纯 ptrace 模式」各跑一次命令对比结果。
- * 报告双写到手机公共 Download/QuroAI_logs/proot_diag.txt——
- * 用户用文件管理器即可取到，全程不需要 adb / logcat / 电脑。
- */
-class LinuxDiagTool : QuroTool {
-    override val name: String = "linux_diag"
-    override val description: String =
-        "诊断应用内 Linux(proot+Ubuntu) 环境。检查设备 Seccomp/SELinux 策略、proot 二进制、" +
-            "rootfs 完整性、usr/bin 符号链接指向，并实际用「默认模式」与「PROOT_NO_SECCOMP=1 纯 ptrace 模式」" +
-            "各执行一次命令对比结果（用于判定设备 seccomp 是否拦截 proot）。" +
-            "报告同步写入手机 Download/QuroAI_logs/proot_diag.txt（文件管理器可取，无需 adb）。"
-    override val parametersJson: String = """{"type":"object","properties":{}}"""
-
-    override fun run(context: Context, arguments: String): String {
-        QuroAgentTrace.action("linux", "运行 proot 环境诊断", "")
-        val report = QuroLinuxEnv.dumpProotDiagnostic(context)
-        QuroAgentTrace.result("linux", "诊断完成", report.take(400))
-        // 完整报告很长，这里回传最关键的第 5 段（双模式实测）供模型直接判定
-        val idx = report.indexOf("--- 5.")
-        return if (idx >= 0) report.substring(idx).take(3000) else report.take(3000)
-    }
-}

@@ -341,13 +341,8 @@ object QuroLinuxEnv {
                 setupInternal(context)
             } catch (e: Exception) {
                 Log.e(TAG, "setup failed", e)
-                // 失败即生成完整诊断报告（设备安全策略 / rootfs / 符号链接 / 双模式执行实测），
-                // 双写到 Download/QuroAI_logs/proot_diag.txt —— 用户用文件管理器即可取，无需 adb。
-                dumpProotDiagnostic(context)
                 val logPath = File(sandboxDir(context), "setup-diag.log").absolutePath
-                _state.value = SandboxState.Error(
-                    "${e.message}\n\n诊断日志: $logPath\n完整报告: Download/QuroAI_logs/proot_diag.txt"
-                )
+                _state.value = SandboxState.Error("${e.message}\n\n诊断日志: $logPath")
             } finally {
                 setupMutex.unlock()
             }
@@ -730,7 +725,7 @@ object QuroLinuxEnv {
     )
 
     /** 构造 proot 启动参数与环境（命令由调用方追加为末参）。 */
-    private fun buildProotLaunch(context: Context, noSeccomp: Boolean = false): ProotLaunch {
+    private fun buildProotLaunch(context: Context): ProotLaunch {
         val proot = prootPath(context)
         val rootfs = rootfsPath(context)
         val home = homePath(context)
@@ -749,17 +744,8 @@ object QuroLinuxEnv {
             "--bind=$tmp:/tmp",
         )
         // 绑定 usr/bin 目录（包含 bash、busybox 等预编译二进制）
-        // ⚠ 绝不能 bind 到 /usr/bin：Ubuntu 24.04 rootfs 自带完整 /usr/bin
-        // （python3 / apt / dpkg / tar…），一旦覆盖，这些原生命令全部消失。
-        // 改为挂到 /opt/quro-bin（PATH 末尾，原生命令优先）。
-        // 同时把 nativeLibraryDir 挂到 /opt/quro-lib，使 usr/bin 内符号链接的目标
-        // 在 guest 内可解析——原先指向 host 的 /data/app/~~xxx~~/ 绝对路径，
-        // guest 内不存在该路径，且 APK 一升级就断链，execve 直接 ENOENT。
-        context.applicationInfo.nativeLibraryDir?.let { nd ->
-            args.add("--bind=$nd:/opt/quro-lib")
-        }
         if (usrBinDir.exists()) {
-            args.add("--bind=${usrBinDir.absolutePath}:/opt/quro-bin")
+            args.add("--bind=${usrBinDir.absolutePath}:/usr/bin")
         }
         // getprop 垫片可回落读 /system/build.prop，仅当该文件本就可读时绑定（避免整体启动失败）。
         if (File("/system/build.prop").canRead()) {
@@ -787,51 +773,26 @@ object QuroLinuxEnv {
         val env = mutableMapOf(
             "HOME" to "/root",
             // 更新 PATH 包含 usr/bin/（bash 和 busybox 所在位置）
-            // /opt/quro-bin 置于 PATH 末尾：Ubuntu 原生命令优先，quro 补充命令兜底
-            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/quro-bin",
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${usrBinDir.absolutePath}",
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
-            "LD_LIBRARY_PATH" to "${dir.absolutePath}:/opt/quro-lib",
+            "LD_LIBRARY_PATH" to "${dir.absolutePath}:${usrBinDir.absolutePath}",
             "PROOT_TMP_DIR" to tmp,
             "PROOT_LOADER" to loader,
         )
-        // 设备 seccomp 过滤器拦截 proot 所需 syscall 时（典型报错：
-        // "Function not implemented" / ENOSYS / "seccomp"），回退到纯 ptrace 模式重试。
-        // proot 的 seccomp 只是可选加速路径，ptrace 才是主路径，禁用后仍可工作。
-        if (noSeccomp || needsNoSeccomp(context)) {
-            env["PROOT_NO_SECCOMP"] = "1"
-            Log.w(TAG, "⚙ 以 PROOT_NO_SECCOMP=1（纯 ptrace 模式）启动")
-        }
         return ProotLaunch(args, env, rootfsFile.parentFile ?: rootfsFile)
     }
 
     /** 内部：构造 proot 参数并执行。添加多种执行策略应对权限问题。 */
-    /** 设备是否需要禁用 proot 的 seccomp 加速（纯 ptrace 模式）。结果持久化，供交互终端复用。 */
-    private fun prefs(context: Context) =
-        context.getSharedPreferences("quro_linux_env", android.content.Context.MODE_PRIVATE)
+    private fun runProot(context: Context, command: String, timeoutMs: Long): Pair<Int, String> {
+        // 不再依赖 probe() 前置检查 —— probe 的 rootfsBinRunnable 可能在宿主侧误判符号链接。
+        // 直接尝试执行命令，让 proot 自己报错。
+        val rootfs = rootfsPath(context)
+        prepareRuntimeExtras(context, File(rootfs))
+        Log.i(TAG, "runProot 开始执行，超时: ${timeoutMs}ms，命令: ${command.take(100)}...")
 
-    private fun needsNoSeccomp(context: Context): Boolean =
-        prefs(context).getBoolean("proot_no_seccomp", false)
-
-    private fun setNeedsNoSeccomp(context: Context, v: Boolean) {
-        try { prefs(context).edit().putBoolean("proot_no_seccomp", v).apply() } catch (_: Throwable) {}
-        Log.i(TAG, "记录 proot_no_seccomp = $v（后续启动沿用）")
-    }
-
-    /** 输出是否疑似被设备 seccomp 过滤器拦截（值得用纯 ptrace 模式重试）。 */
-    private fun looksLikeSeccompBlock(code: Int, out: String): Boolean {
-        if (code == 0) return false
-        val s = out.lowercase()
-        return s.contains("function not implemented") ||
-            s.contains("not implemented") ||
-            s.contains("operation not permitted") ||
-            s.contains("seccomp") ||
-            s.contains("errno 38") ||
-            s.contains("en-osys")
-    }
-
-    /** 真正 spawn 并等待一个 proot 进程，返回 (退出码, 输出)。 */
-    private fun execProotLaunch(launch: ProotLaunch, timeoutMs: Long): Pair<Int, String> {
+        val launch = buildProotLaunch(context)
+        launch.args.add(command)
         return try {
             val pb = ProcessBuilder(launch.args)
             pb.directory(launch.workDir)
@@ -870,163 +831,6 @@ object QuroLinuxEnv {
             Log.e(TAG, "proot 执行异常: ${e.message}")
             -1 to "❌ proot 执行失败: ${e.message}"
         }
-    }
-
-    private fun runProot(context: Context, command: String, timeoutMs: Long): Pair<Int, String> {
-        // 不再依赖 probe() 前置检查 —— probe 的 rootfsBinRunnable 可能在宿主侧误判符号链接。
-        // 直接尝试执行命令，让 proot 自己报错。
-        val rootfs = rootfsPath(context)
-        prepareRuntimeExtras(context, File(rootfs))
-        Log.i(TAG, "runProot 开始执行，超时: ${timeoutMs}ms，命令: ${command.take(100)}...")
-
-        // 若上次探测已知该设备需要纯 ptrace 模式，直接沿用，省掉一次注定失败的尝试。
-        val forceNoSeccomp = needsNoSeccomp(context)
-        val primary = buildProotLaunch(context, noSeccomp = forceNoSeccomp)
-        primary.args.add(command)
-        val result = execProotLaunch(primary, timeoutMs)
-
-        if (forceNoSeccomp || !looksLikeSeccompBlock(result.first, result.second)) return result
-
-        // 疑似被 seccomp 过滤 → 用纯 ptrace 模式重试一次
-        Log.w(TAG, "⚠ 疑似 seccomp 拦截 proot（exit=${result.first}），切换纯 ptrace 模式重试")
-        val fallback = buildProotLaunch(context, noSeccomp = true)
-        fallback.args.add(command)
-        val retried = execProotLaunch(fallback, timeoutMs)
-        if (retried.first == 0 || !looksLikeSeccompBlock(retried.first, retried.second)) {
-            Log.i(TAG, "✅ 纯 ptrace 模式可用，持久化偏好供交互终端复用")
-            setNeedsNoSeccomp(context, true)
-            return retried
-        }
-        Log.w(TAG, "⛔ 两种模式均失败，返回首次结果")
-        return result
-    }
-
-    /** 读 /proc/self/<file> 中指定 key 的值（如 Seccomp / Seccomp_filters / SELinux）。 */
-    private fun readProcField(file: String, key: String): String {
-        return try {
-            java.io.File("/proc/self/$file").readLines()
-                .firstOrNull { it.startsWith("$key:") }
-                ?.substringAfter(":")?.trim() ?: "(无此字段)"
-        } catch (_: Throwable) { "(读取失败)" }
-    }
-
-    /** 在宿主（不经过 proot）执行一条命令。 */
-    private fun runHost(cmd: String): String {
-        return try {
-            val p = Runtime.getRuntime().exec(arrayOf("/system/bin/sh", "-c", cmd))
-            val out = p.inputStream.bufferedReader().readText().trim()
-            p.waitFor()
-            out.ifBlank { "(无输出)" }
-        } catch (e: Throwable) { "(执行失败: ${e.message})" }
-    }
-
-    /**
-     * 生成 proot 环境完整诊断报告，并**双写到手机公共 Download/QuroAI_logs/proot_diag.txt**。
-     *
-     * 设计意图：设备不连工作机、无法 adb 时，用户用手机文件管理器即可取到报告，
-     * 不需要在电脑上跑 logcat。
-     */
-    fun dumpProotDiagnostic(context: Context): String {
-        val sb = StringBuilder()
-        fun w(s: String = "") = sb.appendLine(s)
-        try {
-            w("========== QuroAI proot 诊断报告 ==========")
-            w("时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
-                .format(java.util.Date())}")
-            w()
-
-            w("--- 1. 设备安全策略 ---")
-            w("Seccomp:         ${readProcField("status", "Seccomp")}")
-            w("Seccomp_filters: ${readProcField("status", "Seccomp_filters")}")
-            w("SELinux(proc):   ${readProcField("status", "SELinux")}")
-            w("getenforce:      ${runHost("getenforce")}")
-            w("内核:            ${runHost("uname -a")}")
-            w()
-
-            w("--- 2. proot 二进制 ---")
-            val proot = File(prootPath(context))
-            val nDir = context.applicationInfo.nativeLibraryDir
-            w("proot 路径: ${proot.absolutePath}")
-            w("存在: ${proot.exists()}  大小: ${if (proot.exists()) proot.length() else 0}")
-            w("可执行: canExecute=${proot.canExecute()}")
-            w("nativeLibraryDir: $nDir")
-            w("nativeLib 内容: ${File(nDir).listFiles()?.map { it.name }?.joinToString(", ")}")
-            w("loader: ${loaderPath(context)}")
-            w("talloc: ${File(sandboxDir(context), "libtalloc.so.2").let { "${it.absolutePath} exists=${it.exists()}" }}")
-            w()
-
-            w("--- 3. rootfs ---")
-            val rootfs = File(rootfsPath(context))
-            w("路径: ${rootfs.absolutePath}")
-            w("存在: ${rootfs.exists()}  顶层条目数: ${rootfs.listFiles()?.size ?: 0}")
-            w("顶层内容: ${rootfs.listFiles()?.take(20)?.joinToString(", ") { it.name }}")
-            val sh = File(rootfs, "bin/sh")
-            w("/bin/sh 存在: ${sh.exists()}")
-            if (sh.exists()) {
-                val isLink = try { java.nio.file.Files.isSymbolicLink(sh.toPath()) } catch (_: Throwable) { false }
-                w("/bin/sh 是符号链接: $isLink")
-                if (isLink) {
-                    w("/bin/sh -> ${try { java.nio.file.Files.readSymbolicLink(sh.toPath()) } catch (_: Throwable) { "(读失败)" }}")
-                }
-                w("/bin/sh 可执行: ${sh.canExecute()}")
-            }
-            w("usr/bin 条目数: ${File(rootfs, "usr/bin").listFiles()?.size ?: 0}")
-            w("usr/bin 前10项: ${File(rootfs, "usr/bin").listFiles()?.take(10)?.joinToString(", ") { it.name }}")
-            w()
-
-            w("--- 4. 沙箱 usr/bin 符号链接（应指向 /opt/quro-lib/... 或相对名）---")
-            val usrBin = File(sandboxDir(context), "usr/bin")
-            if (usrBin.exists()) {
-                usrBin.listFiles()?.take(12)?.forEach { f ->
-                    val target = try {
-                        if (java.nio.file.Files.isSymbolicLink(f.toPath()))
-                            java.nio.file.Files.readSymbolicLink(f.toPath()).toString()
-                        else "(普通文件 ${f.length()}B)"
-                    } catch (_: Throwable) { "(读取失败)" }
-                    w("  ${f.name} -> $target")
-                }
-            } else w("  usr/bin 不存在（未创建）")
-            w()
-
-            w("--- 5. proot 实际执行测试（关键）---")
-            for ((label, noSec) in listOf("默认模式" to false, "PROOT_NO_SECCOMP=1" to true)) {
-                val launch = buildProotLaunch(context, noSeccomp = noSec)
-                launch.args.add("echo QURO_DIAG_OK; id -u; pwd; ls /bin/sh")
-                val r = execProotLaunch(launch, 20_000)
-                w("[$label] exit=${r.first}")
-                w("   输出: ${r.second.take(400).replace("\n", " ⏎ ")}")
-            }
-            w()
-
-            w("--- 6. 注入的环境变量 ---")
-            buildProotLaunch(context).env.forEach { (k, v) -> w("  $k=$v") }
-            w()
-            w("--- 7. 偏好 ---")
-            w("  proot_no_seccomp(持久化)=${needsNoSeccomp(context)}")
-            w()
-            w("==========================================")
-        } catch (e: Throwable) {
-            w("!! 诊断过程异常: ${e.message}")
-            w(e.stackTraceToString().take(1500))
-        }
-
-        val text = sb.toString()
-        // 双写：优先公共 Download（用户文件管理器可取），失败回落应用外置目录
-        try {
-            val dir = File(
-                android.os.Environment.getExternalStoragePublicDirectory(
-                    android.os.Environment.DIRECTORY_DOWNLOADS), "QuroAI_logs")
-            dir.mkdirs()
-            File(dir, "proot_diag.txt").writeText(text)
-        } catch (_: Throwable) {
-            try {
-                val fb = context.getExternalFilesDir("QuroAI_logs")
-                fb?.mkdirs()
-                File(fb, "proot_diag.txt").writeText(text)
-            } catch (_: Throwable) {}
-        }
-        Log.i(TAG, "诊断报告已生成:\n$text")
-        return text
     }
 
     /**
@@ -1086,21 +890,16 @@ object QuroLinuxEnv {
             val args = mutableListOf(
                 proot,
                 "--rootfs=$rootfs",
-                // 与 runProot / shellLaunch 两条启动路径保持一致（上游 proot 推荐）
-                "--link2symlink",
                 "--bind=/dev",
                 "--bind=/proc",
                 "--bind=/sys",
                 "--bind=$home:/root",
                 "--bind=$tmp:/tmp",
             )
-            // ⚠ 同上：不覆盖 guest /usr/bin，改挂 /opt/quro-bin + /opt/quro-lib
+            // 绑定 usr/bin 目录（包含 bash、busybox 等预编译二进制）
             val usrBinDir = File(dir, "usr/bin")
-            context.applicationInfo.nativeLibraryDir?.let { nd ->
-                args.add("--bind=$nd:/opt/quro-lib")
-            }
             if (usrBinDir.exists()) {
-                args.add("--bind=${usrBinDir.absolutePath}:/opt/quro-bin")
+                args.add("--bind=${usrBinDir.absolutePath}:/usr/bin")
             }
             if (File("/system/build.prop").canRead()) {
                 args.add("--bind=/system/build.prop:/system/build.prop")
@@ -1126,13 +925,12 @@ object QuroLinuxEnv {
             pb.directory(File(rootfs).parentFile)
             pb.environment().apply {
                 put("HOME", "/root")
-                put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/quro-bin")
+                put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
                 put("TERM", "xterm-256color")
                 put("LANG", "C.UTF-8")
-                put("LD_LIBRARY_PATH", "${dir.absolutePath}:/opt/quro-lib")
+                put("LD_LIBRARY_PATH", dir.absolutePath)
                 put("PROOT_TMP_DIR", tmp)
                 put("PROOT_LOADER", loader)
-                if (needsNoSeccomp(context)) put("PROOT_NO_SECCOMP", "1")
             }
             pb.redirectErrorStream(true)
             val p = pb.start()
@@ -1196,17 +994,8 @@ object QuroLinuxEnv {
             "--bind=${tmpPath(context)}:/tmp",
         )
         // 绑定 usr/bin 目录（包含 bash、busybox 等预编译二进制）
-        // ⚠ 绝不能 bind 到 /usr/bin：Ubuntu 24.04 rootfs 自带完整 /usr/bin
-        // （python3 / apt / dpkg / tar…），一旦覆盖，这些原生命令全部消失。
-        // 改为挂到 /opt/quro-bin（PATH 末尾，原生命令优先）。
-        // 同时把 nativeLibraryDir 挂到 /opt/quro-lib，使 usr/bin 内符号链接的目标
-        // 在 guest 内可解析——原先指向 host 的 /data/app/~~xxx~~/ 绝对路径，
-        // guest 内不存在该路径，且 APK 一升级就断链，execve 直接 ENOENT。
-        context.applicationInfo.nativeLibraryDir?.let { nd ->
-            args.add("--bind=$nd:/opt/quro-lib")
-        }
         if (usrBinDir.exists()) {
-            args.add("--bind=${usrBinDir.absolutePath}:/opt/quro-bin")
+            args.add("--bind=${usrBinDir.absolutePath}:/usr/bin")
         }
         args.add("-0")
         args.add("-w"); args.add("/root")
@@ -1235,20 +1024,18 @@ object QuroLinuxEnv {
     /** 交互 shell 进程应注入的环境变量（PROOT_LOADER / LD_LIBRARY_PATH 等）。 */
     fun shellEnv(context: Context): Array<String> {
         val dir = sandboxDir(context)
-        val env = mutableListOf(
+        val usrBinDir = File(dir, "usr/bin")
+        return arrayOf(
             "TERM=xterm-256color",
             "HOME=/root",
             "TMPDIR=${tmpPath(context)}",
-            // /opt/quro-bin 置于末尾：Ubuntu 原生命令优先，quro 补充命令（busybox/bash）兜底
-            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/quro-bin",
+            // 更新 PATH 包含 usr/bin/（bash 和 busybox 所在位置）
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${usrBinDir.absolutePath}",
             "LANG=C.UTF-8",
-            "LD_LIBRARY_PATH=${dir.absolutePath}:/opt/quro-lib",
+            "LD_LIBRARY_PATH=${dir.absolutePath}:${usrBinDir.absolutePath}",
             "PROOT_TMP_DIR=${tmpPath(context)}",
             "PROOT_LOADER=${loaderPath(context)}",
         )
-        // 与 runProot 共用探测结果：该设备若需纯 ptrace 模式，交互终端同样沿用
-        if (needsNoSeccomp(context)) env.add("PROOT_NO_SECCOMP=1")
-        return env.toTypedArray()
     }
 
     // ----------------------------------------------------------------
@@ -1872,12 +1659,9 @@ fi
                 // 设置可执行权限
                 libFile.setExecutable(true, false)
 
-                // ⚠ 目标必须写成 guest 内路径 /opt/quro-lib/<name>（nativeLibraryDir 被 bind 到此）。
-                // 原先写 host 的 /data/app/~~hash~~/lib/<abi>/…：guest 内根本不存在该路径，
-                // 且 APK 每次升级 ~~hash~~ 都变，链接立刻断 → execve 报 ENOENT。
-                val guestTarget = java.nio.file.Paths.get("/opt/quro-lib", libName)
-                java.nio.file.Files.createSymbolicLink(linkFile.toPath(), guestTarget)
-                Log.i(TAG, "✅ 创建符号链接: $linkName -> $guestTarget (源: ${libFile.absolutePath})")
+                // 创建符号链接
+                java.nio.file.Files.createSymbolicLink(linkFile.toPath(), libFile.toPath())
+                Log.i(TAG, "✅ 创建符号链接: $linkName -> ${libFile.absolutePath}")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ 创建符号链接失败: $linkName, 错误: ${e.message}")
             }
@@ -1922,11 +1706,7 @@ fi
                 val cmdFile = File(binDir, cmd)
                 if (!cmdFile.exists()) {
                     try {
-                        // 相对链接（同目录的 busybox）：无论 usr/bin 被 bind 到 guest 的哪个
-                        // 位置都能解析，不像 host 绝对路径那样受 APK 升级 / 挂载点变化影响。
-                        java.nio.file.Files.createSymbolicLink(
-                            cmdFile.toPath(), java.nio.file.Paths.get("busybox")
-                        )
+                        java.nio.file.Files.createSymbolicLink(cmdFile.toPath(), busybox.toPath())
                     } catch (_: Throwable) {}
                 }
             }

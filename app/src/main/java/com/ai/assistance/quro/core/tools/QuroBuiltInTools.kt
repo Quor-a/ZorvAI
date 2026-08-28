@@ -344,9 +344,6 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(TerminalSessionNewTool())
     r.register(TerminalSessionSwitchTool())
     r.register(TerminalSessionKillTool())
-    // proot 环境一键诊断：默认模式 vs PROOT_NO_SECCOMP=1 双模式实测，
-    // 报告双写到 Download/QuroAI_logs/proot_diag.txt（无需 adb 即可取）
-    r.register(LinuxDiagTool())
 
     // ═════════════ L2 Shizuku 执行（CapOS 通道，需 Shizuku 已授权+运行中）══════════════
     r.register(ShizukuExecTool())
