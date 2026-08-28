@@ -24,52 +24,48 @@ import com.ai.assistance.quro.util.QuroDiag
  */
 private val ENV_INSTALL_PROLOGUE = QuroLinuxEnv.APT_LOCK_RELEASE_PROLOGUE + """
     |
-    |# ── 中和 dpkg 服务管理器（proot 无 init/PID1，postinst 调用 start-stop-daemon/systemctl 等会挂起，
-    |#    正是"dpkg问题一直存在、依赖装不上、部署卡死"的根因）──
+    |# ── 中和 dpkg 服务管理器 ──
     |neutralize_dpkg_services() {
     |    mkdir -p /usr/local/sbin
-    |    echo "[svc] 中和 proot 下会挂起的服务管理器..."
     |    for b in start-stop-daemon invoke-rc.d update-rc.d service systemctl telinit initctl deb-systemd-helper deb-systemd-invoke; do
-    |        printf '#!/bin/sh\nexit 0\n' > "/usr/local/sbin/${'$'}b"
+    |        printf '#!/bin/sh\nexit 0\n' > "/usr/local/sbin/${'$'}b" 2>/dev/null
     |        chmod +x "/usr/local/sbin/${'$'}b" 2>/dev/null || true
     |    done
     |    printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d 2>/dev/null || true
     |    chmod +x /usr/sbin/policy-rc.d 2>/dev/null || true
-    |    echo "[svc] 服务管理器已中和（no-op 置于 /usr/local/sbin，PATH 优先级高于系统二进制）"
     |}
     |neutralize_dpkg_services
     |
-    |# 稳健安装函数：先 apt-get install；proot 下事务常半装失败，则回退 apt-get download + dpkg-deb -x。
-    |# 用法: robust_install "<deb 包列表>" "<就绪探测命令>"
-    |#   ${'$'}1 = 待安装 deb 包(空格分隔, 如 "nodejs npm")
-    |#   ${'$'}2 = 就绪探测命令(可选, 通常为包提供的二进制名, 如 node/gradle/ssh)
-    |#        提供且 command -v 命中 -> 视为已装, 跳过 apt(幂等)
-    |#        为空           -> 不跳过, 始终尝试 apt 安装(避免漏装)
+    |# ── Ubuntu 24.04 Noble apt sources（幂等，已存在且含 noble 则跳过）──
+    |if [ ! -s /etc/apt/sources.list ] || ! grep -q "noble" /etc/apt/sources.list 2>/dev/null; then
+    |    mkdir -p /etc/apt/apt.conf.d
+    |    printf 'Acquire::Check-Valid-Until "false";\nAPT::Get::AllowUnauthenticated "true";\n' > /etc/apt/apt.conf.d/99no-check-gpg
+    |    printf 'deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse\ndeb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse\ndeb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
+    |fi
+    |dpkg --configure -a 2>/dev/null || true
+    |apt-get update 2>&1 | tail -3 || true
+    |
+    |# ── 稳健安装函数：apt 优先，失败回退 dpkg-deb -x ──
     |robust_install() {
     |    local pkgs="${'$'}1"
     |    local probe="${'$'}2"
     |    if [ -n "${'$'}probe" ] && command -v "${'$'}probe" >/dev/null 2>&1; then
-    |        echo "[env] ${'$'}pkgs already installed (probe=${'$'}probe: $(command -v ${'$'}probe))"
     |        return 0
     |    fi
     |    echo "[env] Installing ${'$'}pkgs..."
     |    apt-get install -y --no-install-recommends ${'$'}pkgs 2>&1 | tail -5
     |    if [ -n "${'$'}probe" ] && command -v "${'$'}probe" >/dev/null 2>&1; then
-    |        echo "[env] ✅ ${'$'}pkgs installed via apt (probe=${'$'}probe)"
     |        return 0
     |    fi
-    |    echo "[env] ⚠️ apt 未生效，${'$'}pkgs 改用 download+dpkg-deb 回退..."
+    |    echo "[env] apt failed, trying dpkg fallback..."
     |    local tmp=/tmp/quro_deb; mkdir -p "${'$'}tmp"
     |    ( cd "${'$'}tmp" && apt-get download ${'$'}pkgs 2>/dev/null; for f in *.deb; do [ -e "${'$'}f" ] && dpkg-deb -x "${'$'}f" / 2>/dev/null; done; rm -f *.deb )
     |    apt-get install -f -y 2>/dev/null || true
     |    if [ -n "${'$'}probe" ] && command -v "${'$'}probe" >/dev/null 2>&1; then
-    |        echo "[env] ✅ ${'$'}pkgs installed via dpkg fallback (probe=${'$'}probe)"
     |        return 0
     |    elif [ -z "${'$'}probe" ]; then
-    |        echo "[env] ✅ ${'$'}pkgs apt 执行完成(无显式探测)"
     |        return 0
     |    else
-    |        echo "[env] ❌ ${'$'}pkgs installation failed (apt + dpkg fallback)"
     |        return 1
     |    fi
     |}
@@ -89,33 +85,19 @@ enum class EnvProfile(
         "Node.js 前端栈 (Node + PNPM + TypeScript)",
         "command -v node >/dev/null 2>&1 && command -v pnpm >/dev/null 2>&1 && command -v tsc >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm 安装失败"
-        |echo "[env] node=${'$'}(node --version 2>&1) npm=${'$'}(npm --version 2>&1)"
+        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm install failed"
         |npm config set prefix /usr/local 2>/dev/null || true
-        |rm -rf /root/.npm_real /root/.npm 2>/dev/null || true
         |npm config set cache /tmp/npm-cache 2>/dev/null || true
         |export PATH="/usr/local/bin:${'$'}PATH"
         |npm install -g pnpm typescript 2>&1 | tail -5 || echo "WARN: npm global install failed"
-        |echo "[env] pnpm=${'$'}(which pnpm 2>/dev/null || echo 'not found') tsc=${'$'}(which tsc 2>/dev/null || echo 'not found')"
-        |echo "[env] npm prefix=${'$'}(npm config get prefix 2>&1)"
-        |echo "[env] PATH=${'$'}PATH"
+        |echo "[env] node=${'$'}(node --version 2>&1) pnpm=${'$'}(which pnpm 2>/dev/null || echo 'not found')"
         """.trimMargin(),
     ),
     PYTHON(
-        "Python 栈 (python→python3 链接 / venv / pip / UV)",
-        "command -v python >/dev/null 2>&1 && (command -v pip >/dev/null 2>&1 || command -v pip3 >/dev/null 2>&1) && command -v uv >/dev/null 2>&1",
+        "Python 栈 (python3 / venv / pip / UV)",
+        "command -v python3 >/dev/null 2>&1 && (command -v pip >/dev/null 2>&1 || command -v pip3 >/dev/null 2>&1) && command -v uv >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "python3 python3-pip python3-venv" "python3" || echo "[env] WARN: python3/pip/venv 安装失败"
+        |robust_install "python3 python3-pip python3-venv" "python3" || echo "[env] WARN: python3/pip/venv install failed"
         |if ! command -v python >/dev/null 2>&1; then ln -sf ${'$'}(command -v python3) /usr/local/bin/python 2>/dev/null || true; fi
         |python3 -m ensurepip --upgrade 2>/dev/null || true
         |python3 -m venv /root/cms-venv 2>/dev/null || true
@@ -123,15 +105,10 @@ enum class EnvProfile(
         """.trimMargin(),
     ),
     SSH(
-        "SSH 工具链 (openssh + sshpass + sshd 反向隧道)",
+        "SSH 工具链 (openssh + sshpass + sshd)",
         "command -v ssh >/dev/null 2>&1 && command -v sshpass >/dev/null 2>&1 && command -v sshd >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "openssh-client openssh-server sshpass" "ssh" || echo "[env] WARN: ssh 工具链安装失败"
+        |robust_install "openssh-client openssh-server sshpass" "ssh" || echo "[env] WARN: ssh install failed"
         |if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then ssh-keygen -A 2>/dev/null || true; fi
         |echo "[env] ssh=${'$'}(ssh -V 2>&1) sshpass=${'$'}(sshpass -V 2>&1 | head -1)"
         """.trimMargin(),
@@ -140,13 +117,8 @@ enum class EnvProfile(
         "Java 栈 (OpenJDK 17 + Gradle)",
         "command -v java >/dev/null 2>&1 && command -v gradle >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "openjdk-17-jdk-headless" "java" || echo "[env] WARN: JDK17 安装失败"
-        |robust_install "gradle" "gradle" || echo "[env] WARN: Gradle 安装失败"
+        |robust_install "openjdk-17-jdk-headless" "java" || echo "[env] WARN: JDK17 install failed"
+        |robust_install "gradle" "gradle" || echo "[env] WARN: Gradle install failed"
         |echo "[env] java=${'$'}(java -version 2>&1 | head -1)"
         """.trimMargin(),
     ),
@@ -154,12 +126,7 @@ enum class EnvProfile(
         "Rust / Cargo",
         "command -v rustc >/dev/null 2>&1 && command -v cargo >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "rustc cargo" "rustc" || echo "[env] WARN: rust/cargo 安装失败"
+        |robust_install "rustc cargo" "rustc" || echo "[env] WARN: rust/cargo install failed"
         |echo "[env] rustc=${'$'}(rustc --version 2>&1) cargo=${'$'}(cargo --version 2>&1)"
         """.trimMargin(),
     ),
@@ -167,12 +134,7 @@ enum class EnvProfile(
         "Go 语言栈 (Go)",
         "command -v go >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "golang-go" "go" || echo "[env] WARN: golang 安装失败"
+        |robust_install "golang-go" "go" || echo "[env] WARN: golang install failed"
         |echo "[env] go=${'$'}(go version 2>&1)"
         """.trimMargin(),
     ),
@@ -191,12 +153,7 @@ enum class EnvProfile(
         "Pip (Python 包管理器)",
         "command -v pip >/dev/null 2>&1 || command -v pip3 >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "python3-pip python3-venv" "pip3" || echo "[env] WARN: pip/venv 安装失败"
+        |robust_install "python3-pip python3-venv" "pip3" || echo "[env] WARN: pip/venv install failed"
         |python3 -m ensurepip --upgrade 2>/dev/null || true
         |echo "[env] pip=${'$'}(pip --version 2>&1 || pip3 --version 2>&1)"
         """.trimMargin(),
@@ -205,16 +162,10 @@ enum class EnvProfile(
         "UV (Rust 极速 Python 包安装器)",
         "command -v uv >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "curl" "curl" || echo "[env] WARN: curl 安装失败"
+        |robust_install "curl" "curl" || echo "[env] WARN: curl install failed"
         |if ! command -v uv >/dev/null 2>&1; then
         |  rm -rf "${'$'}HOME/.local/bin/uv" 2>/dev/null || true
         |  curl -LsSf https://astral.sh/uv/install.sh | sh 2>&1 | tail -3 || true
-        |  chmod +x "${'$'}HOME/.local/bin/uv" 2>/dev/null || true
         |  ln -sf "${'$'}HOME/.local/bin/uv" /usr/local/bin/uv 2>/dev/null || true
         |fi
         |echo "[env] uv=${'$'}(uv --version 2>&1)"
@@ -233,12 +184,7 @@ enum class EnvProfile(
         "Node.js (JavaScript 运行时)",
         "command -v node >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm 安装失败"
+        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm install failed"
         |echo "[env] node=${'$'}(node --version 2>&1)"
         """.trimMargin(),
     ),
@@ -246,14 +192,8 @@ enum class EnvProfile(
         "PNPM (快速包管理器 + TypeScript)",
         "command -v pnpm >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm 安装失败"
+        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm install failed"
         |npm config set prefix /usr/local 2>/dev/null || true
-        |rm -rf /root/.npm_real /root/.npm 2>/dev/null || true
         |npm config set cache /tmp/npm-cache 2>/dev/null || true
         |export PATH="/usr/local/bin:${'$'}PATH"
         |npm install -g pnpm typescript 2>&1 | tail -5 || echo "WARN: npm global install failed"
@@ -265,12 +205,7 @@ enum class EnvProfile(
         "SSH 客户端 (openssh)",
         "command -v ssh >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "openssh-client" "ssh" || echo "[env] WARN: openssh-client 安装失败"
+        |robust_install "openssh-client" "ssh" || echo "[env] WARN: openssh-client install failed"
         |echo "[env] ssh=${'$'}(ssh -V 2>&1)"
         """.trimMargin(),
     ),
@@ -278,12 +213,7 @@ enum class EnvProfile(
         "sshpass (密码认证工具)",
         "command -v sshpass >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "sshpass" "sshpass" || echo "[env] WARN: sshpass 安装失败"
+        |robust_install "sshpass" "sshpass" || echo "[env] WARN: sshpass install failed"
         |echo "[env] sshpass=${'$'}(sshpass -V 2>&1 | head -1)"
         """.trimMargin(),
     ),
@@ -291,12 +221,7 @@ enum class EnvProfile(
         "OpenSSH 服务器 (反向隧道)",
         "command -v sshd >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "openssh-server" "sshd" || echo "[env] WARN: openssh-server 安装失败"
+        |robust_install "openssh-server" "sshd" || echo "[env] WARN: openssh-server install failed"
         |if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then ssh-keygen -A 2>/dev/null || true; fi
         |echo "[env] sshd=${'$'}(sshd -V 2>&1 | head -1)"
         """.trimMargin(),
@@ -306,12 +231,7 @@ enum class EnvProfile(
         "OpenJDK 17 (Java 开发环境)",
         "command -v java >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "openjdk-17-jdk-headless" "java" || echo "[env] WARN: OpenJDK17 安装失败"
+        |robust_install "openjdk-17-jdk-headless" "java" || echo "[env] WARN: OpenJDK17 install failed"
         |echo "[env] java=${'$'}(java -version 2>&1 | head -1)"
         """.trimMargin(),
     ),
@@ -319,12 +239,7 @@ enum class EnvProfile(
         "Gradle (构建自动化工具)",
         "command -v gradle >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "gradle" "gradle" || echo "[env] WARN: Gradle 安装失败"
+        |robust_install "gradle" "gradle" || echo "[env] WARN: Gradle install failed"
         |echo "[env] gradle=${'$'}(gradle --version 2>&1 | head -3)"
         """.trimMargin(),
     ),
@@ -333,12 +248,7 @@ enum class EnvProfile(
         "MCP 服务器环境 (Node.js + MCP SDK)",
         "command -v node >/dev/null 2>&1 && npm list -g @modelcontextprotocol/sdk >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm 安装失败"
+        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm install failed"
         |npm install -g @modelcontextprotocol/sdk 2>&1 | tail -5 || true
         |echo "[env] node=${'$'}(node --version 2>&1)"
         """.trimMargin(),
@@ -347,12 +257,7 @@ enum class EnvProfile(
         "MCP 客户端环境 (Python + MCP Python SDK)",
         "command -v python >/dev/null 2>&1 && python -c 'import mcp' >/dev/null 2>&1",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "python3 python3-pip python3-venv" "python3" || echo "[env] WARN: python3/pip/venv 安装失败"
+        |robust_install "python3 python3-pip python3-venv" "python3" || echo "[env] WARN: python3/pip/venv install failed"
         |pip install mcp 2>&1 | tail -5 || true
         |echo "[env] python=${'$'}(python --version 2>&1)"
         """.trimMargin(),
@@ -361,83 +266,39 @@ enum class EnvProfile(
         "MCP 工具开发环境 (TypeScript + MCP 工具模板)",
         "command -v tsc >/dev/null 2>&1 && test -d /root/mcp-tools",
         """
-        |dpkg --configure -a 2>/dev/null || true
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list
-        |echo "deb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list
-        |apt-get update 2>&1 | tail -3 || true
-        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm 安装失败"
+        |robust_install "nodejs npm" "node" || echo "[env] WARN: nodejs/npm install failed"
         |npm install -g typescript 2>&1 | tail -5 || true
-        |mkdir -p /root/mcp-tools
-        |cd /root/mcp-tools
+        |mkdir -p /root/mcp-tools && cd /root/mcp-tools
         |cat > package.json << 'EOF'
-        |{
-        |  "name": "mcp-tools",
-        |  "version": "1.0.0",
-        |  "dependencies": {
-        |    "@modelcontextprotocol/sdk": "^1.0.0",
-        |    "typescript": "^5.0.0"
-        |  }
-        |}
+        |{"name":"mcp-tools","version":"1.0.0","dependencies":{"@modelcontextprotocol/sdk":"^1.0.0","typescript":"^5.0.0"}}
         |EOF
         |npm install 2>&1 | tail -3 || true
-        |echo "[mcp] tsc=${'$'}(tsc --version 2>&1) tools-ready=${'$'}(test -d /root/mcp-tools/node_modules && echo 'yes' || echo 'no')
+        |echo "[mcp] tsc=${'$'}(tsc --version 2>&1) tools-ready=${'$'}(test -d /root/mcp-tools/node_modules && echo yes || echo no)"
         """.trimMargin(),
     ),
     MCP_DEPLOY(
         "MCP 部署环境 (完整 MCP 服务器 + 客户端 + 工具)",
         "command -v node >/dev/null 2>&1 && command -v python >/dev/null 2>&1 && test -d /root/mcp-server",
         """
-        |echo "[mcp] 开始部署完整 MCP 环境..."
-        |robust_install "nodejs npm python3 python3-pip" "node" || echo "[env] WARN: MCP 依赖安装失败"
+        |robust_install "nodejs npm python3 python3-pip" "node" || echo "[env] WARN: MCP deps install failed"
         |npm install -g @modelcontextprotocol/sdk typescript 2>&1 | tail -3 || true
         |pip install mcp 2>&1 | tail -3 || true
-        |mkdir -p /root/mcp-server /root/mcp-tools
-        |cd /root/mcp-server
+        |mkdir -p /root/mcp-server /root/mcp-tools && cd /root/mcp-server
         |cat > server.ts << 'EOF'
         |import { Server } from '@modelcontextprotocol/sdk/server/index.js';
         |import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-        |
-        |const server = new Server(
-        |  { name: 'quro-mcp-server', version: '1.0.0' },
-        |  { capabilities: { tools: {} } }
-        |);
-        |
-        |server.setRequestHandler('tools/list', async () => ({
-        |  tools: [
-        |    {
-        |      name: 'hello',
-        |      description: 'A simple hello tool',
-        |      inputSchema: { type: 'object', properties: {} }
-        |    }
-        |  ]
-        |}));
-        |
-        |server.setRequestHandler('tools/call', async (request) => {
-        |  const { name } = request.params;
-        |  if (name === 'hello') {
-        |    return { content: [{ type: 'text', text: 'Hello from Quro MCP Server!' }] };
-        |  }
-        |  throw new Error(`Unknown tool: ${'$'}{name}`);
-        |});
-        |
-        |async function main() {
-        |  const transport = new StdioServerTransport();
-        |  await server.connect(transport);
-        |  console.error('Quro MCP Server running on stdio');
-        |}
-        |
+        |const server = new Server({ name: 'quro-mcp-server', version: '1.0.0' }, { capabilities: { tools: {} } });
+        |server.setRequestHandler('tools/list', async () => ({ tools: [{ name: 'hello', description: 'Hello tool', inputSchema: { type: 'object', properties: {} } }] }));
+        |server.setRequestHandler('tools/call', async (req) => { if (req.params.name === 'hello') return { content: [{ type: 'text', text: 'Hello from Quro MCP Server!' }] }; throw new Error('Unknown tool'); });
+        |async function main() { const t = new StdioServerTransport(); await server.connect(t); console.error('Quro MCP Server running'); }
         |main().catch(console.error);
         |EOF
         |cat > start.sh << 'EOF'
         |#!/bin/sh
-        |cd /root/mcp-server
-        |npx tsx server.ts
+        |cd /root/mcp-server && npx tsx server.ts
         |EOF
         |chmod +x start.sh
-        |echo "[mcp] server=${'$'}(test -f /root/mcp-server/server.ts && echo 'ready' || echo 'not ready')"
-        |echo "[mcp] tools=${'$'}(test -d /root/mcp-tools && echo 'ready' || echo 'not ready')"
-        |echo "[mcp] 完整 MCP 环境已部署"
+        |echo "[mcp] server ready, tools ready"
         """.trimMargin(),
     );
 
