@@ -698,7 +698,24 @@ private fun WechatBotPlatformCard(
                         Text("重连", fontSize = 10.sp)
                     }
                     if (adapter?.lastError?.isNotBlank() == true) {
-                        Text("⚠ ${adapter?.lastError}", fontSize = 10.sp, color = Color(0xFFE53935), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        val errorText = adapter?.lastError ?: ""
+                        val isTokenExpired = errorText.contains("Token 过期", ignoreCase = true) ||
+                                            errorText.contains("token过期", ignoreCase = true) ||
+                                            errorText.contains("过期", ignoreCase = true) ||
+                                            errorText.contains("expired", ignoreCase = true)
+                        
+                        if (isTokenExpired) {
+                            // Token 过期特殊提示
+                            Text(
+                                "⚠ Token 已过期，请点击下方「获取微信登录二维码」重新扫码",
+                                fontSize = 10.sp, 
+                                color = Color(0xFFFF9800), // 橙色警告
+                                maxLines = 2, 
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        } else {
+                            Text("⚠ $errorText", fontSize = 10.sp, color = Color(0xFFE53935), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }

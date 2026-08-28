@@ -9,10 +9,14 @@ import com.ai.assistance.quro.core.QuroToolSpec
 import com.ai.assistance.quro.core.mcp.DroidMcp
 import com.ai.assistance.quro.core.mcp.McpTool
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 
 /**
  * 工具接口：名称 + 描述 + 参数 JSON-Schema + 执行。
  */
+
+/** 单个工具执行的硬超时（毫秒），防止卡住吃满 180s 总超时。 */
+private const val TOOL_EXEC_TIMEOUT_MS = 60_000L
 interface QuroTool {
     val name: String
     val description: String
@@ -291,16 +295,29 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
                 }
             }
             val argsMap = runCatching { jsonToMap(call.arguments) }.getOrElse { emptyMap() }
-            var res = droidMcp.callTool(call.name, argsMap)
-            if (!res.isSuccess) {
-                // 工具执行失败，等待1秒后重试一次（应对临时故障）
-                delay(1000)
-                res = droidMcp.callTool(call.name, argsMap)
+            // 工具执行带超时保护（60s）：防止单个工具卡住吃满 180s 总超时
+            val execResult = runCatching {
+                withTimeout(TOOL_EXEC_TIMEOUT_MS) {
+                    var res = droidMcp.callTool(call.name, argsMap)
+                    if (!res.isSuccess) {
+                        // 工具执行失败，等待1秒后重试一次（应对临时故障）
+                        delay(1000)
+                        res = droidMcp.callTool(call.name, argsMap)
+                    }
+                    res
+                }
+            }.getOrElse { e ->
+                if (e is kotlinx.coroutines.TimeoutCancellationException) {
+                    android.util.Log.e("QuroToolEngine", "工具「${call.name}」执行超时（${TOOL_EXEC_TIMEOUT_MS}ms）")
+                    return@map QuroToolResult(call.name, "工具执行超时（超过60秒），已自动终止。如需执行长时间任务，请分步操作。")
+                }
+                android.util.Log.e("QuroToolEngine", "工具「${call.name}」执行异常: ${e.message}")
+                return@map QuroToolResult(call.name, "工具执行异常: ${e.message}")
             }
-            val text = if (res.isSuccess) {
-                res.data?.get("result")?.toString() ?: "OK"
+            val text = if (execResult.isSuccess) {
+                execResult.data?.get("result")?.toString() ?: "OK"
             } else {
-                "工具执行失败: ${res.errorMessage}"
+                "工具执行失败: ${execResult.errorMessage}"
             }
             QuroToolResult(call.name, text)
         }

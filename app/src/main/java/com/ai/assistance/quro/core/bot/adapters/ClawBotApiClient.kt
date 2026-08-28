@@ -169,7 +169,38 @@ class ClawBotApiClient(
             append(""""item_list":[{"type":1,"text_item":{"text":${jsonString(text)}}}]""")
             append("""},"base_info":{"channel_version":${jsonString(channelVersion)}}}""")
         }
-        postShort(baseUrl, "ilink/bot/sendmessage", payload, botToken)
+        val body = postShortWithBody(baseUrl, "ilink/bot/sendmessage", payload, botToken)
+        // 校验 API 响应体：HTTP 200 但 body 含错误码时抛异常，否则该错误会被静默忽略
+        try {
+            val respJson = JSONObject(body)
+            val ret = respJson.optInt("ret", 0)
+            val errCode = respJson.optInt("errcode", 0)
+            if (ret != 0 || errCode != 0) {
+                val errMsg = respJson.optString("errmsg", respJson.optString("err_msg", ""))
+                clog("W", "sendmessage API 业务错误: ret=$ret errcode=$errCode errmsg=$errMsg body=${body.take(200)}")
+                
+                // 检测 token 过期/无效错误码
+                val isTokenExpired = ret in listOf(-1, 400, 401, 403) || 
+                                    errCode in listOf(-1, 400, 401, 403) ||
+                                    errMsg.contains("token", ignoreCase = true) ||
+                                    errMsg.contains("expired", ignoreCase = true) ||
+                                    errMsg.contains("invalid", ignoreCase = true)
+                
+                if (isTokenExpired) {
+                    throw TokenExpiredException("Token 过期或无效: ret=$ret errcode=$errCode $errMsg")
+                }
+                
+                throw ClawBotHttpException(200, "API error: ret=$ret errcode=$errCode $errMsg")
+            }
+        } catch (e: org.json.JSONException) {
+            // 响应体不是 JSON（正常情况），忽略
+            clog("D", "sendmessage 响应非JSON（正常）: ${body.take(100)}")
+        } catch (e: ClawBotHttpException) {
+            throw e  // 重新抛出业务错误
+        } catch (e: TokenExpiredException) {
+            throw e  // 重新抛出 token 过期异常
+        }
+        clog("D", "sendmessage 成功: to=$toUserId from=$fromUserId")
     }
 
     /**
@@ -258,6 +289,9 @@ class ClawBotApiClient(
 }
 
 class ClawBotHttpException(val code: Int, val body: String) : RuntimeException("HTTP $code: $body")
+
+/** 专用于 token 过期检测的异常：当 API 返回 token 无效/过期错误码时抛出。 */
+class TokenExpiredException(message: String) : RuntimeException(message)
 
 private fun randomWechatUin(): String {
     val buf = ByteArray(4)

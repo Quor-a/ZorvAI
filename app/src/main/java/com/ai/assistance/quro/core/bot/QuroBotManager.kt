@@ -51,6 +51,8 @@ data class QuroInboundMessage(
     val eventId: String? = null,
     /** QQ 群消息的目标群 ID（GROUP_AT_MESSAGE_CREATE 时非空，回复走 /v2/groups/ 端点）。 */
     val groupId: String? = null,
+    /** 微信 iLink Bot 的上下文令牌（必须回传才能关联到正确会话）。 */
+    val contextToken: String? = null,
 )
 
 /**
@@ -91,6 +93,8 @@ data class QuroOutboundMessage(
     val eventId: String? = null,
     /** QQ 群消息的目标群 ID（透传自入站消息）。 */
     val groupId: String? = null,
+    /** 微信 iLink Bot 的上下文令牌（透传自入站消息，必须回传才能关联到正确会话）。 */
+    val contextToken: String? = null,
 )
 
 /**
@@ -255,6 +259,7 @@ class QuroBotManager(
                 msgId = message.msgId,
                 eventId = message.eventId,
                 groupId = message.groupId,
+                contextToken = message.contextToken,
             )
 
             // 按平台配置，把用户消息 + 机器人回复写入 App 持久化会话
@@ -289,6 +294,7 @@ class QuroBotManager(
                         message.platform, message.userId,
                         "（⚠️ 回复已生成，但发回${message.platform.label}失败：$reason）",
                         msgId = message.msgId, eventId = message.eventId, groupId = message.groupId,
+                        contextToken = message.contextToken,
                     )
                 )
             }
