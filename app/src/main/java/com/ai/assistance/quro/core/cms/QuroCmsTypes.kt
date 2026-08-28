@@ -116,10 +116,16 @@ data class QuroCmsCapability(
     /** 从默认 action 模板解析参数名（${name}）。 */
     fun argNames(): List<String> = argNamesOf(action)
 
-    /** 把参数代入指定模板（${name} → args）。 */
+    /** 把参数代入指定模板（${name} → args）。只替换 args 中明确存在的参数名，避免花括号误识别。 */
     fun resolveTemplate(tpl: String, args: Map<String, String>): String {
         var cmd = tpl
-        argNamesOf(tpl).forEach { name -> cmd = cmd.replace("\${$name}", args[name] ?: "") }
+        // 只替换在 args 中明确存在的参数名，避免 f-string 中的 {...} 被误识别为模板变量
+        argNamesOf(tpl).filter { name -> args.containsKey(name) }.forEach { name ->
+            val value = args[name] ?: ""
+            // 对于 terminal 类型的代码执行（python3 -c / node -e），直接替换参数值，不进行 shell 转义
+            // 因为这些命令需要接收原始代码字符串
+            cmd = cmd.replace("\${$name}", value)
+        }
         return cmd.trim()
     }
 
