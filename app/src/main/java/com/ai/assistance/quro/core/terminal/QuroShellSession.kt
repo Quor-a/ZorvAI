@@ -17,6 +17,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import com.ai.assistance.quro.core.aidlaci.AciNativeBridge
+import com.ai.assistance.quro.core.aidlaci.QuroAidlAciManager
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.File
@@ -213,6 +217,14 @@ class QuroShellSession private constructor(
             appendLine(promptPrefix())
             return
         }
+        // ACI 命令拦截：让终端内直接使用 ACI 的**全部**能力。
+        // 注：qurohost 是经 ProcessBuilder 启动的独立原生进程、不在 JVM 内，
+        // 无法用 JNI 调 ACI；故在本层（Kotlin 侧）拦截并把结果回显到终端。
+        // 进程内原生代码则可直接用 libacihost.so 的 C API（aci_call/aci_list）。
+        if (trimmed == "aci" || trimmed.startsWith("aci ")) {
+            runAciCommand(trimmed)
+            return
+        }
         // 命令翻译：非 Ubuntu 命令（pkg/yum/pacman 等）→ Ubuntu 等价命令
         val translated = CommandTranslator.translate(trimmed)
         if (translated != trimmed) {
@@ -222,6 +234,144 @@ class QuroShellSession private constructor(
         lastInterrupted = false
         busy = true
         writeWithSentinel(translated)
+    }
+
+    // ═══════════════════ 终端内 ACI 命令 ═══════════════════
+
+    /**
+     * 异步执行终端内的 `aci` 命令。
+     *
+     * ⚠ ACI 调用是跨进程同步等待（最长约 15 秒），**绝不能**在调用线程直接跑——
+     * sendCommand 可能来自 UI 主线程，阻塞即 ANR。故在 IO 线程执行，
+     * 回显时切回主线程（lines 是 Compose 的 SnapshotStateList，应在主线程改）。
+     */
+    private fun runAciCommand(trimmed: String) {
+        appendLine(promptPrefix() + trimmed)
+        launch {
+            val out = try {
+                executeAciCommand(trimmed)
+            } catch (t: Throwable) {
+                Log.w(TAG, "aci 命令执行失败", t)
+                "aci: 执行失败: ${t.message}"
+            }
+            withContext(Dispatchers.Main) {
+                out.lineSequence().forEach { appendLine(it) }
+                appendLine(promptPrefix())
+            }
+        }
+    }
+
+    /** 解析并执行 aci 子命令（在 IO 线程）。 */
+    private fun executeAciCommand(trimmed: String): String {
+        val rest = trimmed.removePrefix("aci").trim()
+        return when {
+            rest.isEmpty() || rest == "help" -> aciHelp()
+            rest == "list" -> aciList()
+            rest == "targets" -> aciList()
+            rest.startsWith("call") -> aciCall(rest.removePrefix("call").trim())
+            else -> "未知 aci 子命令：$rest\n${aciHelp()}"
+        }
+    }
+
+    private fun aciHelp(): String = buildString {
+        appendLine("ACI 终端命令（使用 ACI 的全部能力）：")
+        appendLine("  aci list                              列出所有受控端及其能力")
+        appendLine("  aci call <包名> <能力> [参数JSON]      调用指定受控端的能力")
+        appendLine("  aci help                              显示本帮助")
+        appendLine("示例：")
+        appendLine("  aci call com.ai.assistance.quro intent {\"mode\":\"activity\",\"action\":\"android.intent.action.VIEW\"}")
+        appendLine("  aci call com.ai.assistance.quro provider {\"uri\":\"content://sms/inbox\",\"op\":\"query\",\"limit\":\"5\"}")
+        appendLine("说明：参数值为标量（字符串/数字/布尔）；requireUserConfirm 的能力视为已在终端确认。")
+    }.trimEnd()
+
+    /** 列出所有受控端及能力。 */
+    private fun aciList(): String {
+        val idx = QuroAidlAciManager.getInstance().getCapabilityIndex()
+        if (idx.isEmpty()) return "ACI：暂无已连接的受控端（先在 ACI 管理中心绑定）"
+        return buildString {
+            appendLine("ACI 受控端共 ${idx.size} 个：")
+            idx.forEach { (pkg, caps) ->
+                appendLine("● $pkg")
+                if (caps.isEmpty()) {
+                    appendLine("    （无已声明能力）")
+                } else {
+                    caps.forEach { c ->
+                        val flag = if (c.isRequireUserConfirm) " [需确认]" else ""
+                        appendLine("    ${c.id}$flag — ${c.description ?: ""}")
+                    }
+                }
+            }
+        }.trimEnd()
+    }
+
+    /**
+     * 调用能力。格式：`call <包名> <能力> [参数JSON]`
+     * 参数 JSON 可选，从第一个 `{` 起算；没有 JSON 时按空格切出能力名。
+     */
+    private fun aciCall(args: String): String {
+        val sp = args.indexOf(' ')
+        if (sp <= 0) return "用法：aci call <包名> <能力> [参数JSON]"
+        val pkg = args.substring(0, sp).trim()
+        var rest = args.substring(sp + 1).trim()
+
+        val brace = rest.indexOf('{')
+        val capability: String
+        val json: String
+        if (brace >= 0) {
+            capability = rest.substring(0, brace).trim()
+            json = rest.substring(brace).trim()
+        } else {
+            val sp2 = rest.indexOf(' ')
+            if (sp2 > 0) {
+                capability = rest.substring(0, sp2).trim()
+                json = rest.substring(sp2 + 1).trim()
+            } else {
+                capability = rest
+                json = ""
+            }
+        }
+        if (pkg.isEmpty() || capability.isEmpty()) {
+            return "用法：aci call <包名> <能力> [参数JSON]"
+        }
+        if (!json.isEmpty() && !json.startsWith("{")) {
+            return "参数必须是 JSON 对象，实际：$json"
+        }
+
+        // 终端里用户主动敲命令即视为已确认（requireUserConfirm 的能力同样放行）
+        val raw = AciNativeBridge.callJson(pkg, capability, json, confirmed = true)
+        return formatAciResult(pkg, capability, raw)
+    }
+
+    /** 把 ACI 原生桥接返回的 JSON 渲染成终端可读文本。 */
+    private fun formatAciResult(pkg: String, capability: String, raw: String): String {
+        return try {
+            val o = JSONObject(raw)
+            if (!o.optBoolean("ok", false)) {
+                val code = o.optInt("code", -1)
+                val err = o.optString("error", "unknown")
+                "⛔ ACI 调用失败（$pkg / $capability，code=$code）：$err"
+            } else {
+                val data = o.optJSONObject("data")
+                if (data == null || data.length() == 0) {
+                    "✅ $pkg / $capability 调用成功（无返回数据）"
+                } else {
+                    buildString {
+                        appendLine("✅ $pkg / $capability")
+                        val keys = data.keys()
+                        while (keys.hasNext()) {
+                            val k = keys.next()
+                            val v = data.opt(k)
+                            val s = v?.toString() ?: "null"
+                            // 超长值截断，避免刷屏（完整内容仍可从 ACI 工具侧拿）
+                            appendLine("  $k = ${if (s.length > 2000) s.take(2000) + "…(截断)" else s}")
+                        }
+                    }.trimEnd()
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "ACI 结果解析失败，原样输出", t)
+            raw
+        }
     }
 
     /**

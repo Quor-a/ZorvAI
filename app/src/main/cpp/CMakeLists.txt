@@ -88,3 +88,33 @@ target_link_options(qurohost PRIVATE
 )
 
 target_link_libraries(qurohost ${log-lib})
+
+# ═══════════════════════════════════════════════════════════════
+# acihost — ACI 原生能力层（libacihost.so）
+# 进程内 JNI 库：把 ACI 的「列能力 / 调任意能力」两个入口暴露成 C API，
+# 让原生代码无需回到 Kotlin 层即可使用 ACI 的**全部**能力
+# （ACI 本身是通用 call(capability, params)，这两个入口即覆盖全部）。
+# 经 JNI 回调 com.ai.assistance.quro.core.aidlaci.AciNativeBridge。
+#
+# ⚠ 与 qurohost 的区别：qurohost 是经 ProcessBuilder 启动的独立原生进程、
+#   不在 JVM 内，无法用本库；它改走既有的 @qurohost-ctl 控制通道，
+#   由 Kotlin 侧（QuroHostBridge）桥接 ACI。
+# ═══════════════════════════════════════════════════════════════
+set(ACI_DIR ${CMAKE_SOURCE_DIR}/aci)
+
+add_library(acihost SHARED
+    ${ACI_DIR}/aci_native.c
+)
+
+target_include_directories(acihost PRIVATE ${ACI_DIR})
+
+target_compile_options(acihost PRIVATE
+    -std=c11
+    -Wall
+    -Wextra
+    -Wno-unused-parameter
+    -O2
+    -fPIC
+)
+
+target_link_libraries(acihost ${log-lib})

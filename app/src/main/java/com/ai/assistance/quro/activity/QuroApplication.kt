@@ -101,5 +101,12 @@ class QuroApplication : Application() {
         } catch (e: Throwable) {
             android.util.Log.e("QuroApplication", "终端统一初始化失败（不影响主流程）", e)
         }
+        // ACI 原生层：加载 libacihost.so，使 C/C++ 代码可直接调用 ACI 的全部能力
+        // （列能力 + 调任意能力两个入口即覆盖全部）。失败不影响 Kotlin/Java 调用路径。
+        try {
+            com.ai.assistance.quro.core.aidlaci.AciNativeBridge.ensureLoaded()
+        } catch (e: Throwable) {
+            android.util.Log.e("QuroApplication", "ACI 原生层加载失败（不影响主流程）", e)
+        }
     }
 }
