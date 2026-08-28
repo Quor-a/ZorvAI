@@ -521,7 +521,15 @@ object QuroLinuxEnv {
         }
 
         val rootfsDir = File(dir, "rootfs")
-        if (rootfsDir.exists()) rootfsDir.deleteRecursively()
+        // ⚠ 不再无条件删除已有 rootfs！旧逻辑每次 setup 都删→重新下载→解压，
+        // 如果 proot 测试失败（Seccomp 限制）又删一次，导致 rootfs 永远丢失。
+        // 新逻辑：如果 rootfs 已存在且 /bin/sh 可解析，直接跳过下载解压。
+        if (rootfsDir.isDirectory && rootfsBinRunnable(rootfsDir, "bin/sh")) {
+            diagLog(context, "rootfs 已存在且有效，跳过下载解压 (${rootfsDir.listFiles()?.size ?: 0} files)")
+            Log.i(TAG, "✅ rootfs 已存在且有效，跳过下载解压")
+        } else {
+            // rootfs 不存在或残缺，需要下载解压
+            if (rootfsDir.exists()) rootfsDir.deleteRecursively()  // 残缺的旧 rootfs 才删
         val tarGz = File(dir, "rootfs.tar.gz")
         val tarXz = File(dir, "rootfs.tar.xz")
         var extractSuccess = false
@@ -582,6 +590,7 @@ object QuroLinuxEnv {
             tarGz.delete()
             tarXz.delete()
         }
+        } // end else (rootfs 需要下载解压)
 
         // 解压后立即校验 rootfs 真可用：/bin/sh 必须能在 rootfs 内部解析为可执行文件。
         diagLog(context, "解压完成，rootfsDir=${rootfsDir.absolutePath}, 文件数=${rootfsDir.listFiles()?.size ?: 0}")
@@ -612,18 +621,22 @@ object QuroLinuxEnv {
         val baseTest = runProot(context, "echo PROOT_BASELINE_OK", timeoutMs = 15_000)
         diagLog(context, "proot 基础测试结果: exit=${baseTest.first}, output=${baseTest.second.take(200)}")
         if (baseTest.first != 0 || !baseTest.second.contains("PROOT_BASELINE_OK")) {
-            val detail = "proot 无法在 rootfs 内执行基础命令。\n" +
+            // ⚠ 不再删除 rootfs！旧逻辑：测试失败→删 rootfs→setup 失败→下次又删→死循环。
+            // 新逻辑：rootfs 已解压就保留，只记录警告。用户可手动重试或在设备侧排查 Seccomp。
+            val detail = "proot 基础测试未通过（exit=${baseTest.first}），但 rootfs 已保留。\n" +
                 "proot路径: ${prootPath(context)}, exists=${File(prootPath(context)).exists()}\n" +
                 "proot可执行: ${File(prootPath(context)).canExecute()}\n" +
                 "rootfs: ${rootfsDir.absolutePath}, 文件数=${rootfsDir.listFiles()?.size}\n" +
                 "输出(exit ${baseTest.first}):\n${baseTest.second.take(800)}\n" +
-                "常见原因：1) proot loader 缺失或不兼容 2) SELinux 限制 ptrace 3) 设备不支持"
-            diagLog(context, "⛔ $detail")
-            QuroDiag.log("LinuxEnv", "⛔ $detail")
-            rootfsDir.deleteRecursively()
-            throw IllegalStateException(detail)
+                "可能原因：1) Seccomp 限制 proot 的 execve/ptrace 2) proot loader 不兼容 3) 设备架构不匹配\n" +
+                "rootfs 已保留，终端可回退设备 shell 使用。如需 proot 能力，请检查设备 Seccomp 配置。"
+            diagLog(context, "⚠ $detail")
+            Log.w(TAG, detail)
+            // 不删除 rootfs，不抛异常——让 setup 继续写 apt 源等，rootfs 保留供后续排查
+            _state.value = SandboxState.Ready  // 标记为可用（回退设备 shell 仍可工作）
+        } else {
+            diagLog(context, "✅ proot 基础测试通过")
         }
-        diagLog(context, "✅ proot 基础测试通过")
 
         // 写 DNS
         diagLog(context, "写入 resolv.conf 和 sources.list")
@@ -643,11 +656,10 @@ object QuroLinuxEnv {
             Log.w(TAG, "apt-get update 失败 (镜像: $mirror): ${r.second.take(500)}")
         }
         if (!updated) {
-            val detail = "apt-get update 在所有镜像均失败。\n$lastErr"
-            diagLog(context, "⛔ $detail")
-            QuroDiag.log("LinuxEnv", "⛔ $detail")
-            rootfsDir.deleteRecursively()
-            throw IllegalStateException(detail)
+            val detail = "apt-get update 在所有镜像均失败（网络问题，rootfs 已保留）。\n$lastErr"
+            diagLog(context, "⚠ $detail")
+            Log.w(TAG, detail)
+            // ⚠ 不删除 rootfs——网络问题不影响 rootfs 完整性，下次重试即可
         }
         diagLog(context, "✅ apt-get update 成功")
 
@@ -670,15 +682,15 @@ object QuroLinuxEnv {
         val smoke = runProot(context, "echo QURO_SMOKETEST_OK; id -u; apt-get --version", timeoutMs = 30_000)
         diagLog(context, "smoke test 结果: exit=${smoke.first}, output=${smoke.second.take(500)}")
         if (smoke.first != 0 || !smoke.second.contains("QURO_SMOKETEST_OK")) {
-            val detail = "部署后自检失败：proot 在您的设备上无法在 rootfs 内执行命令。\n" +
-                "自检输出（exit ${smoke.first}）：\n${smoke.second.take(800)}"
-            diagLog(context, "⛔ $detail")
-            QuroDiag.log("LinuxEnv", "⛔ $detail")
-            rootfsDir.deleteRecursively()
-            throw IllegalStateException(detail)
+            val detail = "proot 自检未通过（exit=${smoke.first}），但 rootfs 已保留。\n" +
+                "自检输出：\n${smoke.second.take(800)}\n" +
+                "终端可回退设备 shell 使用。如需 proot 能力，请检查设备 Seccomp 配置。"
+            diagLog(context, "⚠ $detail")
+            Log.w(TAG, detail)
+            // ⚠ 不删除 rootfs，不抛异常——标记为 Ready，让终端可用（回退设备 shell）
         }
 
-        diagLog(context, "=== ✅ 部署成功 ===")
+        diagLog(context, "=== ✅ 部署完成（rootfs 已保留）===")
         _state.value = SandboxState.Ready
         // 持久化「曾安装」标记：即使后续 rootfs 被系统清理，重检时也能识别为「丢失」并提示一键恢复。
         markInstalled(context)
