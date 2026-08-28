@@ -703,6 +703,22 @@ object QuroLinuxEnv {
         if (File("/system/build.prop").canRead()) {
             args.add("--bind=/system/build.prop:/system/build.prop")
         }
+        // 网络支持：绑定 DNS 配置和网络相关文件，使 proot 内的 HTTP 服务能正常工作
+        val rootfsFile = File(rootfs)
+        val etcDir = File(rootfsFile, "etc")
+        if (etcDir.exists()) {
+            // 绑定 DNS 配置（resolv.conf 已由 prepareRuntimeExtras 写入）
+            val resolvConf = File(etcDir, "resolv.conf")
+            if (resolvConf.exists()) {
+                args.add("--bind=${resolvConf.absolutePath}:/etc/resolv.conf")
+            }
+            // 绑定 hosts 文件
+            val hostsFile = File(etcDir, "hosts")
+            if (!hostsFile.exists()) {
+                hostsFile.writeText("127.0.0.1 localhost\n::1 localhost\n")
+            }
+            args.add("--bind=${hostsFile.absolutePath}:/etc/hosts")
+        }
         args.add("-0")
         args.add("-w"); args.add("/root")
         args.add("/bin/sh"); args.add("-c")
@@ -716,7 +732,6 @@ object QuroLinuxEnv {
             "PROOT_TMP_DIR" to tmp,
             "PROOT_LOADER" to loader,
         )
-        val rootfsFile = File(rootfs)
         return ProotLaunch(args, env, rootfsFile.parentFile ?: rootfsFile)
     }
 
@@ -836,6 +851,20 @@ object QuroLinuxEnv {
             if (File("/system/build.prop").canRead()) {
                 args.add("--bind=/system/build.prop:/system/build.prop")
             }
+            // 网络支持：绑定 DNS 配置和网络相关文件，使 proot 内的 HTTP 服务能正常工作
+            val rootfsFile = File(rootfs)
+            val etcDir = File(rootfsFile, "etc")
+            if (etcDir.exists()) {
+                val resolvConf = File(etcDir, "resolv.conf")
+                if (resolvConf.exists()) {
+                    args.add("--bind=${resolvConf.absolutePath}:/etc/resolv.conf")
+                }
+                val hostsFile = File(etcDir, "hosts")
+                if (!hostsFile.exists()) {
+                    hostsFile.writeText("127.0.0.1 localhost\n::1 localhost\n")
+                }
+                args.add("--bind=${hostsFile.absolutePath}:/etc/hosts")
+            }
             args.add("-0")
             args.add("-w"); args.add("/root")
             args.add("/bin/sh"); args.add("-c"); args.add(command)
@@ -918,6 +947,19 @@ object QuroLinuxEnv {
         // （仅当该文件本就可读，避免 proot 因源不存在而整体启动失败）。
         if (File("/system/build.prop").canRead()) {
             args.add("--bind=/system/build.prop:/system/build.prop")
+        }
+        // 网络支持：绑定 DNS 配置和网络相关文件，使 proot 内的 HTTP 服务能正常工作
+        val etcDir = File(rootfs, "etc")
+        if (etcDir.exists()) {
+            val resolvConf = File(etcDir, "resolv.conf")
+            if (resolvConf.exists()) {
+                args.add("--bind=${resolvConf.absolutePath}:/etc/resolv.conf")
+            }
+            val hostsFile = File(etcDir, "hosts")
+            if (!hostsFile.exists()) {
+                hostsFile.writeText("127.0.0.1 localhost\n::1 localhost\n")
+            }
+            args.add("--bind=${hostsFile.absolutePath}:/etc/hosts")
         }
         return st.prootPath to args
     }
