@@ -400,15 +400,13 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
                     val installed = CmsEnvProvisioner.isReady(context, profile)
                     appendLine("    \"${profile.name.lowercase()}\": {")
                     appendLine("      \"name\": \"${profile.profileName}\",")
-                    appendLine("      \"installed\": $installed,")
-                    appendLine("      \"description\": \"${profile.description}\"")
+                    appendLine("      \"installed\": $installed")
                     if (index < profiles.lastIndex) appendLine("    },") else appendLine("    }")
                 }
                 appendLine("  },")
                 appendLine("  \"terminal\": {")
                 val terminalStatus = QuroLinuxEnv.probe(context)
-                appendLine("    \"available\": ${terminalStatus.available},")
-                appendLine("    \"proot_available\": ${terminalStatus.prootAvailable}")
+                appendLine("    \"available\": ${terminalStatus.available}")
                 appendLine("  }")
                 appendLine("}")
             }
