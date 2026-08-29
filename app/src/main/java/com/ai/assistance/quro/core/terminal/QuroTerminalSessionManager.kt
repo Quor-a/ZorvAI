@@ -165,6 +165,59 @@ object QuroTerminalSessionManager {
     }
 
     /**
+     * 根据 ID 获取会话信息。
+     * @param sessionId 会话 ID
+     * @return 会话信息，如果不存在返回 null
+     */
+    fun getSession(sessionId: String): SessionInfo? {
+        // 检查默认会话
+        defaultEntry?.let { entry ->
+            if (entry.id == sessionId) return entry.toInfo()
+        }
+        
+        // 检查额外会话
+        extras[sessionId]?.let { entry ->
+            return entry.toInfo()
+        }
+        
+        // 检查 UI 会话
+        uiEntry?.let { entry ->
+            if (entry.id == sessionId) return entry.toInfo()
+        }
+        
+        // 检查历史会话
+        history[sessionId]?.let { h ->
+            return h.copy(alive = false)
+        }
+        
+        return null
+    }
+
+    /**
+     * 根据 ID 获取实际的 Qu roShellSession 对象。
+     * @param sessionId 会话 ID
+     * @return Qu roShellSession 对象，如果不存在或已退出返回 null
+     */
+    fun getShellSession(sessionId: String): QuroShellSession? {
+        // 检查默认会话
+        defaultEntry?.let { entry ->
+            if (entry.id == sessionId) return entry.shell
+        }
+        
+        // 检查额外会话
+        extras[sessionId]?.let { entry ->
+            return entry.shell
+        }
+        
+        // 检查 UI 会话
+        uiEntry?.let { entry ->
+            if (entry.id == sessionId) return entry.shell
+        }
+        
+        return null
+    }
+
+    /**
      * 创建一个新的额外 shell 会话（满足「创建新会话」需求）。
      * 新会话不会自动成为默认；如需切换默认请调用 [switchDefault]。
      */

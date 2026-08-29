@@ -216,6 +216,18 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
                 // 应用快捷方式「小窗对话」：已是主界面（对话即主 UI），仅回到前台。
                 // 后续如需真正的悬浮迷你对话窗，可在此拉起 overlay 窗口。
             }
+            // Deep Link: quro://terminal/...
+            "android.intent.action.VIEW" -> {
+                val uri = intent.data
+                if (uri?.scheme == "quro" && uri.host == "terminal") {
+                    // 终端 Deep Link
+                    val handler = com.ai.assistance.quro.core.terminal.TerminalDeepLinkHandler(this)
+                    val result = handler.handleIntent(intent)
+                    // 可以通过 Toast 或其他方式显示结果
+                    android.widget.Toast.makeText(this, result, android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+
             // 桌面组件 / 通知 / 外部入口：携带 ui_action（如 ui_open_schedule）打开对应界面。
             // 走 QuroUiActionBridge.request：UI 桥就绪立即分发，否则暂存待 ChatScreen 组合后补派。
             else -> {

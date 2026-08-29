@@ -11,6 +11,7 @@ import com.ai.assistance.quro.core.aidlaci.QuroAidlAciManager
 import com.ai.assistance.quro.core.shizuku.QuroShizuku
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager
 import com.ai.assistance.quro.service.QuroTerminalKeepAliveService
+import com.ai.assistance.quro.service.QuroTerminalAciService
 import com.ai.assistance.quro.ui.QuroPersonaViewModel
 import com.ai.assistance.quro.workflow.data.WorkflowRepository
 import com.ai.assistance.quro.workflow.data.NotesRepository
@@ -98,6 +99,8 @@ class QuroApplication : Application() {
             QuroTerminalSessionManager.load(applicationContext)
             QuroTerminalSessionManager.ensureDefaultAsync(applicationContext, installIfMissing = true)
             QuroTerminalKeepAliveService.ensureStarted(applicationContext)
+            // 同时启动终端 ACI 服务，确保跨进程能力可用
+            QuroTerminalAciService.ensureStarted(applicationContext, installIfMissing = true)
         } catch (e: Throwable) {
             android.util.Log.e("QuroApplication", "终端统一初始化失败（不影响主流程）", e)
         }

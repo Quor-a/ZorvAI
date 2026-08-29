@@ -286,7 +286,24 @@ BackHandler { showKnowledge = false }
 - `core/linux/QuroLinuxEnv`：应用内 Linux 环境后端（proot + **Ubuntu 24.04 ARM64**）；`proot` / `libbash` / `libbusybox` 以 `.so` 形式内置（`nativeLibraryDir` + `assets/linux_env` 兜底），**Ubuntu base rootfs 首次使用自动从 Ubuntu 官方镜像（aliyun / tuna / cdimage）下载并解压到应用私有目录**，不随包内置
 - 关键能力：交互终端常驻 `/bin/sh`、link2symlink 符号链接、apt 源自动切 `ubuntu-ports`（arm64）、bash/busybox 内置命令、CMS 引擎 `bootstrap.sh` 提供 NODE / PYTHON / RUST / GO / JAVA 共享运行时
 - 终端 UI：对话框输入「+」→ 终端，或 AI 调用 `ui_open_terminal`；`QuroTerminalController` 驱动
-- 对外集成能力（已支持）：终端同时作为 ZorvAI 生态的**受控执行端**，向控制端开放 **ACI（AIDL）/ ACIHTTP（本地 HTTP 传输）/ 操控台（Console 后端驱动 UI）/ 本地 API / MCP（MCP Server）** 五类接口；详见 `term-aci` 仓库 README
+
+#### 4.1 前台服务保活（息屏 / 切 App 不被杀）
+- `QuroTerminalKeepAliveService`：**specialUse 前台服务**，进程内 fork 的 shell 子进程归属于服务进程 → 服务存活 = 终端存活
+- 每 15 秒巡检：会话死亡则自动重建；ACI 服务未启动则拉起
+- 通知栏常驻「Zorv AI 终端运行中」，点击跳转主界面
+- 开机自启动：`QuroTerminalBootReceiver` 监听 `BOOT_COMPLETED`，设备重启后自动恢复终端保活
+- **Android 14+ 兼容**：manifest 声明 `<property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"/>` + `FOREGROUND_SERVICE_SPECIAL_USE` 权限
+
+#### 4.2 ACI 跨进程接口（12 个能力）
+- `QuroTerminalAciService`：继承 `BaseAidlAciService`，以前台服务身份运行，暴露终端全部能力给外部应用调用
+- 12 个 ACI 能力：`exec` / `create_session` / `destroy_session` / `send_input` / `get_session_status` / `list_sessions` / `set_session_env` / `get_session_env` / `list_capabilities` / `get_service_status` / `get_audit_log` / `help`
+- 调用方式：ACI AIDL 绑定 / ACI HTTP（本地 HTTP 传输）/ MCP 桥接
+
+#### 4.3 Intent / Provider / BroadcastReceiver / Deep Link
+- `TerminalProvider`：`content://com.ai.assistance.quro.terminal/...`，暴露会话数据、输出历史、环境变量
+- `TerminalDeepLinkHandler`：`quro://terminal/exec?cmd=...`、`quro://terminal/sessions` 等
+- `TerminalIntentHandler`：支持 `ACTION_SEND`、`TERMINAL_EXEC`、`TERMINAL_STATUS` 等 Intent Action
+- `TerminalBroadcastReceiver`：6 个广播 Action，结果通过 `TERMINAL_RESULT` 返回
 
 ### 5. MCP（Model Context Protocol）
 - `core/mcp/QuroMcpClient`：外部 MCP 服务器客户端，`initialize` 握手（2025-03-26 协议）、`listTools` / `callTool`
