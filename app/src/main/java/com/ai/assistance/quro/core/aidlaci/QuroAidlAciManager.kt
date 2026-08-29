@@ -322,35 +322,50 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         Thread {
             // 对于终端服务（前台服务），必须先 startForegroundService 再 bind
             // 直接 bind 而不先 start → Android 12+ 抛 ForegroundServiceStartNotAllowedException
-            // 关键修复：使用显式 Intent（QuroTerminalAciService.ensureStarted）而非隐式 Intent（ACI_ACTION）
-            // 隐式 Intent 在部分 Android 版本 / ROM 上可能被系统拦截或解析失败
             if (mapKey.contains(":terminal")) {
-                Log.i(TAG, "🚀 终端服务：使用显式 Intent 启动 QuroTerminalAciService 再 bind")
-                // 步骤1：用显式 Intent 启动前台服务（比 startControlledService 的隐式 Intent 更可靠）
-                try {
+                Log.i(TAG, "🚀 终端服务：启动 + 绑定流程（mapKey=$mapKey）")
+                // 步骤1：用显式 Intent 启动前台服务
+                val started = try {
                     com.ai.assistance.quro.service.QuroTerminalAciService.ensureStarted(appContext, false)
-                    Log.i(TAG, "🚀 QuroTerminalAciService.ensureStarted 调用成功")
                 } catch (e: Exception) {
-                    Log.w(TAG, "⚠️ ensureStarted 失败，回退隐式启动：${e.message}")
+                    Log.w(TAG, "⚠️ ensureStarted 异常: ${e.message}")
+                    false
+                }
+                if (!started) {
+                    // 显式启动失败，回退到 startControlledService（隐式 Intent）
+                    Log.w(TAG, "⚠️ ensureStarted 返回 false，回退 startControlledService")
                     startControlledService(packageName, className)
                 }
-                // 等待服务 onCreate + startForeground 完成（前台服务启动需 1-3s）
+                // 等待前台服务 onCreate + startForeground 完成
                 try { Thread.sleep(3000) } catch (ignored: InterruptedException) {}
-                // 步骤2：绑定服务
+
+                // 步骤2：第一次绑定尝试
                 doBind(packageName, className, null, mapKey)
                 try { Thread.sleep(2000) } catch (ignored: InterruptedException) {}
                 if (serviceMap[mapKey] != null) {
-                    Log.i(TAG, "✅ 终端服务绑定成功（mapKey=$mapKey, caps=${capMap[mapKey]?.size ?: 0}）")
+                    Log.i(TAG, "✅ 终端服务绑定成功（第1次, mapKey=$mapKey, caps=${capMap[mapKey]?.size ?: 0}）")
                     return@Thread
                 }
-                // 步骤3：重试绑定
-                Log.i(TAG, "🔄 终端服务首次绑定未成，重试 doBind（mapKey=$mapKey）")
+
+                // 步骤3：重试绑定（可能服务还在初始化）
+                Log.i(TAG, "🔄 终端服务第1次绑定未成，等待3s后重试")
+                try { Thread.sleep(3000) } catch (ignored: InterruptedException) {}
+                doBind(packageName, className, null, mapKey)
+                try { Thread.sleep(2000) } catch (ignored: InterruptedException) {}
+                if (serviceMap[mapKey] != null) {
+                    Log.i(TAG, "✅ 终端服务绑定成功（第2次, mapKey=$mapKey, caps=${capMap[mapKey]?.size ?: 0}）")
+                    return@Thread
+                }
+
+                // 步骤4：最终重试（可能需要更长时间）
+                Log.i(TAG, "🔄 终端服务第2次绑定未成，最终重试")
+                try { Thread.sleep(3000) } catch (ignored: InterruptedException) {}
                 doBind(packageName, className, null, mapKey)
                 try { Thread.sleep(3000) } catch (ignored: InterruptedException) {}
                 if (serviceMap[mapKey] != null) {
-                    Log.i(TAG, "✅ 终端服务绑定成功（重试 mapKey=$mapKey, caps=${capMap[mapKey]?.size ?: 0}）")
+                    Log.i(TAG, "✅ 终端服务绑定成功（第3次, mapKey=$mapKey, caps=${capMap[mapKey]?.size ?: 0}）")
                 } else {
-                    Log.e(TAG, "❌ 终端服务绑定失败（mapKey=$mapKey），可能需要手动启动终端")
+                    Log.e(TAG, "❌ 终端服务3次绑定均失败（mapKey=$mapKey），请检查终端ACI服务是否正常运行")
                 }
                 return@Thread
             }
@@ -406,16 +421,23 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         // 关键修复：使用显式 Intent（ensureStarted）替代隐式 Intent（startControlledService）
         if (pkg.contains(":terminal")) {
             Log.i(TAG, "🚀 终端服务 ensureBound：显式 Intent 启动 + 绑定")
-            try {
+            val started = try {
                 com.ai.assistance.quro.service.QuroTerminalAciService.ensureStarted(appContext, false)
             } catch (e: Exception) {
-                Log.w(TAG, "⚠️ ensureStarted 失败：${e.message}")
+                Log.w(TAG, "⚠️ ensureStarted 异常: ${e.message}")
+                false
+            }
+            if (!started) {
                 val cls = classMap[pkg]
                 if (cls != null) startControlledService(actualPkg, cls)
             }
             try { Thread.sleep(3000) } catch (ignored: InterruptedException) {}
             if (tryBindWithLatch(pkg)) return serviceMap[pkg]
-            // 重试绑定
+            // 重试绑定（等待更长时间）
+            try { Thread.sleep(3000) } catch (ignored: InterruptedException) {}
+            if (tryBindWithLatch(pkg)) return serviceMap[pkg]
+            // 最终重试
+            try { Thread.sleep(2000) } catch (ignored: InterruptedException) {}
             if (tryBindWithLatch(pkg)) return serviceMap[pkg]
         } else {
             wakeCallee(actualPkg)
