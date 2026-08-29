@@ -305,6 +305,11 @@ enum class EnvProfile(
     companion object {
         /** 按档名（不区分大小写）解析；无法识别返回 null。 */
         fun parse(name: String): EnvProfile? = entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
+
+        /** 获取环境的安装脚本（包含 prologue）。 */
+        fun getInstallScript(profile: EnvProfile): String {
+            return ENV_INSTALL_PROLOGUE + "\n" + profile.installScript
+        }
     }
 }
 
