@@ -1610,6 +1610,185 @@ AI → aci_call(capability="get_session_status", args={"session_id":"abc123"})
 4. **会话持久化**：默认会话在应用重启后自动恢复（元数据持久化到 JSON 文件）
 5. **大输出截断**：命令输出超过一定长度会被截断，避免 `TransactionTooLargeException`
 
+### 25.10 Intent / ContentProvider / BroadcastReceiver 升级说明（v1.0.67）
+
+> 本节说明 Android 标准组件的完整实现，符合 Android 官方最佳实践。
+
+#### 25.10.1 Intent 升级
+
+**显式 Intent（推荐）**：
+```kotlin
+// 启动终端执行命令
+val intent = Intent(context, TerminalIntentHandler::class.java)
+intent.action = TerminalIntentHandler.ACTION_EXEC
+intent.putExtra("command", "python3 -c 'print(1+2)'")
+intent.putExtra("timeout", 14L)
+startActivityForResult(intent, 0)
+```
+
+**隐式 Intent**：
+```kotlin
+// 声明 action，由系统匹配 Intent Filter
+val intent = Intent(TerminalIntentHandler.ACTION_EXEC)
+intent.putExtra("command", "uname -a")
+startActivity(intent)
+```
+
+**有序广播**：
+```kotlin
+// 按优先级依次传递，接收器可修改结果、中止传播
+val intent = Intent(TerminalBroadcastReceiver.ACTION_EXEC)
+intent.putExtra("command", "ls -la")
+sendOrderedBroadcast(intent, "ai.aci.permission.CALL")
+```
+
+**ACTION_PICK 模式（Intent + ContentProvider 协作）**：
+```kotlin
+// 1. 发送 ACTION_PICK Intent
+val intent = Intent(TerminalIntentHandler.ACTION_PICK_SESSION)
+intent.type = TerminalIntentHandler.MIME_SESSION_LIST
+startActivityForResult(intent, REQUEST_PICK_SESSION)
+
+// 2. 在 onActivityResult 中：
+val sessionUri = data.data  // content://com.ai.assistance.quro.terminal/sessions/{id}
+val cursor = contentResolver.query(sessionUri, null, null, null, null)
+```
+
+#### 25.10.2 ContentProvider 升级
+
+**完整 CRUD 接口**：
+```kotlin
+// 查询所有会话
+val cursor = contentResolver.query(
+    Uri.parse("content://com.ai.assistance.quro.terminal/sessions"),
+    null, null, null, null
+)
+
+// 查询指定会话
+val cursor = contentResolver.query(
+    Uri.parse("content://com.ai.assistance.quro.terminal/sessions/abc123"),
+    null, null, null, null
+)
+
+// 查询会话输出历史
+val cursor = contentResolver.query(
+    Uri.parse("content://com.ai.assistance.quro.terminal/sessions/abc123/output?limit=50"),
+    null, null, null, null
+)
+
+// 执行命令（通过 insert）
+val values = ContentValues().apply {
+    put("command", "uname -a")
+    put("timeout", 14L)
+}
+val resultUri = contentResolver.insert(
+    Uri.parse("content://com.ai.assistance.quro.terminal/exec"),
+    values
+)
+
+// 创建新会话
+val values = ContentValues().apply {
+    put("session_name", "my-session")
+}
+val sessionUri = contentResolver.insert(
+    Uri.parse("content://com.ai.assistance.quro.terminal/sessions"),
+    values
+)
+
+// 销毁会话
+contentResolver.delete(
+    Uri.parse("content://com.ai.assistance.quro.terminal/sessions/abc123"),
+    null, null
+)
+
+// 获取服务状态
+val cursor = contentResolver.query(
+    Uri.parse("content://com.ai.assistance.quro.terminal/status"),
+    null, null, null, null
+)
+
+// 获取能力列表
+val cursor = contentResolver.query(
+    Uri.parse("content://com.ai.assistance.quro.terminal/capabilities"),
+    null, null, null, null
+)
+```
+
+**细粒度权限控制**：
+```xml
+<!-- AndroidManifest.xml -->
+<provider
+    android:name=".core.terminal.TerminalProvider"
+    android:authorities="com.ai.assistance.quro.terminal"
+    android:exported="true"
+    android:readPermission="ai.aci.permission.READ_TERMINAL"
+    android:writePermission="ai.aci.permission.WRITE_TERMINAL"
+    android:grantUriPermissions="true" />
+```
+
+**URI 临时权限授予**：
+```kotlin
+// 通过 Intent 授予临时读权限
+val intent = Intent(Intent.ACTION_VIEW, sessionUri)
+intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+startActivity(intent)
+```
+
+#### 25.10.3 BroadcastReceiver 升级
+
+**普通广播（异步，所有接收器同时收到）**：
+```kotlin
+val intent = Intent(TerminalBroadcastReceiver.ACTION_EXEC)
+intent.putExtra("command", "ls -la")
+sendBroadcast(intent)
+```
+
+**有序广播（按优先级依次传递）**：
+```kotlin
+val intent = Intent(TerminalBroadcastReceiver.ACTION_EXEC)
+intent.putExtra("command", "uname -a")
+sendOrderedBroadcast(intent, "ai.aci.permission.CALL")
+```
+
+**带权限的广播**：
+```kotlin
+// 仅拥有此权限的接收器能收到
+val intent = Intent(TerminalBroadcastReceiver.ACTION_EXEC)
+intent.putExtra("command", "whoami")
+sendBroadcast(intent, "ai.aci.permission.CALL")
+```
+
+**结果回调**：
+```kotlin
+// 注册结果接收器
+val receiver = TerminalBroadcastReceiver.ResultReceiver()
+registerReceiver(receiver, IntentFilter(TerminalBroadcastReceiver.ACTION_RESULT))
+
+// 发送有序广播并获取结果
+val intent = Intent(TerminalBroadcastReceiver.ACTION_EXEC)
+intent.putExtra("command", "ls -la")
+sendOrderedBroadcast(intent, null, receiver, null, 0, null, null)
+
+// 在 ResultReceiver.onReceive() 中获取结果
+override fun onReceive(context: Context, intent: Intent) {
+    val output = intent.getStringExtra("result_output")
+    val exitCode = intent.getIntExtra("exit_code", -1)
+    val timedOut = intent.getBooleanExtra("timed_out", false)
+}
+```
+
+**支持的广播 Action**：
+| Action | 说明 | 权限 |
+|--------|------|------|
+| `TERMINAL_EXEC` | 执行命令 | `ai.aci.permission.SEND_TERMINAL_BROADCAST` |
+| `TERMINAL_STATUS` | 获取状态 | 无 |
+| `TERMINAL_SESSIONS` | 列出会话 | 无 |
+| `TERMINAL_CREATE_SESSION` | 创建会话 | `ai.aci.permission.SEND_TERMINAL_BROADCAST` |
+| `TERMINAL_DESTROY_SESSION` | 销毁会话 | `ai.aci.permission.SEND_TERMINAL_BROADCAST` |
+| `TERMINAL_SEND_INPUT` | 发送输入 | `ai.aci.permission.SEND_TERMINAL_BROADCAST` |
+| `TERMINAL_GET_OUTPUT` | 获取输出 | 无 |
+| `TERMINAL_RESULT` | 结果回调 | `ai.aci.permission.RECEIVE_TERMINAL_BROADCAST` |
+
 ---
 
 > 本手册由软件工坊基于 `aidl-aci-core` 源码与 Zorv AI 真实接入经验整理。协议细节以 [ACI_PROTOCOL.md](https://github.com/Quor-a/ZorvAI)（开源分支）为准。
