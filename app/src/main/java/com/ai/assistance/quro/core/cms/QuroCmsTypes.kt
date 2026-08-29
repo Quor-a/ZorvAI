@@ -122,9 +122,15 @@ data class QuroCmsCapability(
         // 只替换在 args 中明确存在的参数名，避免 f-string 中的 {...} 被误识别为模板变量
         argNamesOf(tpl).filter { name -> args.containsKey(name) }.forEach { name ->
             val value = args[name] ?: ""
-            // 对于 terminal 类型的代码执行（python3 -c / node -e），直接替换参数值，不进行 shell 转义
-            // 因为这些命令需要接收原始代码字符串
-            cmd = cmd.replace("\${$name}", value)
+            // Shell 转义：把值中的 " $ ` \ ! 等 shell 特殊字符转义，
+            // 防止 python3 -c "${code}" / node -e "${code}" 中的括号等被 sh 解析。
+            val escaped = value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\\$", "\\\$")
+                .replace("`", "\\`")
+                .replace("!", "\\!")
+            cmd = cmd.replace("\${$name}", escaped)
         }
         return cmd.trim()
     }
