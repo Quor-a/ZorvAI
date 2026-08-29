@@ -290,6 +290,16 @@
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>
 
+            <!-- 终端 Deep Link: quro://terminal/... -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="quro"
+                    android:host="terminal" />
+            </intent-filter>
+
             <!-- 数字助理角色（ROLE_ASSISTANT）入口：声明 ACTION_ASSIST 使本应用可被系统识别为
                  数字助理候选，用户在「默认数字助理」设置里选择 Zorv AI 后即承担助理职责
                  （接管长按 Home / 侧键唤醒的助手手势、提供语音/文本助理能力）。
@@ -319,11 +329,54 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <!-- 终端默认会话保活服务：前台常驻，每 15s 保活默认终端会话（installIfMissing=false） -->
+        <!-- 终端默认会话保活服务：前台常驻，每 15s 保活默认终端会话（installIfMissing=false）。
+             进程内 fork 的 shell 子进程属于本服务进程，前台服务存活 → 子进程存活 → 息屏/切 App 不被杀。 -->
         <service
             android:name=".service.QuroTerminalKeepAliveService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="终端会话保活：在服务进程内 fork shell 子进程并持续巡检存活，脱离 UI 生命周期" />
+        </service>
+
+        <!-- 终端 ACI 受控端服务：前台常驻，暴露终端执行能力，让终端会话脱离 UI 生命周期。
+             进程内 fork 的 shell 子进程属于本服务进程，前台服务存活 → 子进程存活。 -->
+        <service
+            android:name=".service.QuroTerminalAciService"
+            android:exported="true"
+            android:permission="ai.aci.permission.CALL"
+            android:foregroundServiceType="specialUse">
+            <intent-filter>
+                <action android:name="ai.aci.core.ACTION_BIND" />
+            </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="终端会话持久化：fork shell 进程在服务进程内运行，脱离 UI 生命周期" />
+        </service>
+
+        <!-- 终端 ContentProvider：暴露终端会话数据、输出历史、环境变量等，其他应用可通过 content:// URI 访问 -->
+        <provider
+            android:name=".core.terminal.TerminalProvider"
+            android:authorities="com.ai.assistance.quro.terminal"
+            android:exported="true"
+            android:permission="ai.aci.permission.CALL"
+            android:grantUriPermissions="true" />
+
+        <!-- 终端广播接收器：接收广播执行终端命令、获取终端状态等 -->
+        <receiver
+            android:name=".core.terminal.TerminalBroadcastReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_EXEC" />
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_STATUS" />
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_CREATE_SESSION" />
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_DESTROY_SESSION" />
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_SEND_INPUT" />
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_GET_OUTPUT" />
+            </intent-filter>
+        </receiver>
 
         <!-- 可视化弹窗悬浮窗服务 -->
         <service

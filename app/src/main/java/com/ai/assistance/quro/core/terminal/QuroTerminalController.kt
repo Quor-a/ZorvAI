@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.terminal
 
 import android.content.Context
 import android.os.Environment
+import com.ai.assistance.quro.activity.QuroApplication
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -144,10 +145,97 @@ object QuroTerminalController {
      * 与活动会话完全解耦：它自己起一个短命 sh 进程，不回显、不碰滚动缓冲区。
      *
      * **阻塞**最长 timeoutMs，必须在 IO 线程调用。
+     *
+     * **Linux 环境支持**：如果 Linux 环境（proot/Ubuntu）已安装，则使用 proot 启动命令，
+     * 获得完整的 Ubuntu 用户空间能力（python3、apt 等）。否则回退到设备 shell。
+     *
+     * @param context 上下文，用于访问 Linux 环境。如果为 null，则使用默认上下文。
      */
-    fun runCommand(command: String, timeoutMs: Long = 30_000L): ShellResult {
+    fun runCommand(command: String, timeoutMs: Long = 30_000L, context: Context? = null): ShellResult {
         if (command.isBlank()) return ShellResult("", -1, error = "命令为空")
 
+        // 使用提供的上下文，或者尝试获取应用上下文
+        val ctx = context ?: QuroApplication.appCtx
+        
+        // 如果没有上下文，回退到设备 shell
+        if (ctx == null) {
+            return runCommandInDevice(command, timeoutMs)
+        }
+
+        // 尝试使用 Linux 环境（proot/Ubuntu）
+        val linuxLaunch = QuroLinuxEnv.shellLaunch(ctx)
+        if (linuxLaunch != null) {
+            return runCommandInLinux(command, timeoutMs, linuxLaunch, ctx)
+        }
+
+        // 回退到设备 shell
+        return runCommandInDevice(command, timeoutMs)
+    }
+
+    /**
+     * 在 Linux 环境中执行命令（使用 proot）。
+     */
+    private fun runCommandInLinux(command: String, timeoutMs: Long, linuxLaunch: Pair<String, List<String>>, context: Context): ShellResult {
+        var proc: Process? = null
+        return try {
+            val (prootPath, prootArgs) = linuxLaunch
+            val env = QuroLinuxEnv.shellEnv(context)
+            
+            // prootArgs 已包含完整参数：--rootfs=... -0 -w /root /bin/sh -c
+            // 只需追加实际要执行的命令
+            val fullCommand = listOf(prootPath) + prootArgs + listOf(command)
+            
+            val pb = ProcessBuilder(fullCommand)
+            pb.directory(File(context.filesDir.absolutePath))
+            pb.environment().clear()
+            for (e in env) {
+                val idx = e.indexOf('=')
+                if (idx > 0) pb.environment()[e.substring(0, idx)] = e.substring(idx + 1)
+            }
+            pb.redirectErrorStream(true)
+            
+            val p = pb.start()
+            proc = p
+            
+            // 读取输出
+            val outB = StringBuilder()
+            val errB = StringBuilder()
+            val tOut = Thread {
+                runCatching { p.inputStream.bufferedReader().use { outB.append(it.readText()) } }
+            }.apply { isDaemon = true; start() }
+            val tErr = Thread {
+                runCatching { p.errorStream.bufferedReader().use { errB.append(it.readText()) } }
+            }.apply { isDaemon = true; start() }
+
+            val finished = p.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
+            if (!finished) {
+                p.destroyForcibly()
+                tOut.join(500)
+                tErr.join(500)
+                ShellResult(
+                    output = (outB.toString() + errB.toString()).trim(),
+                    exitCode = -1,
+                    timedOut = true,
+                )
+            } else {
+                tOut.join(1000)
+                tErr.join(1000)
+                ShellResult(
+                    output = (outB.toString() + errB.toString()).trim(),
+                    exitCode = p.exitValue(),
+                )
+            }
+        } catch (e: Exception) {
+            ShellResult("", -1, error = e.message ?: e.toString())
+        } finally {
+            runCatching { proc?.destroy() }
+        }
+    }
+
+    /**
+     * 在设备 shell 中执行命令（回退路径）。
+     */
+    private fun runCommandInDevice(command: String, timeoutMs: Long): ShellResult {
         var proc: Process? = null
         return try {
             val p = Runtime.getRuntime().exec(
