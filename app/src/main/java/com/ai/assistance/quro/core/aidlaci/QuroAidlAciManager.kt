@@ -313,6 +313,9 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
      * 新逻辑：先尝试直绑（进程已运行 / 非停止态秒连）；失败则发 ACTION_WAKE
      * （FLAG_INCLUDE_STOPPED_PACKAGES）把进程拉起，稍候重试绑定。
      * 全程后台线程，不阻塞调用方（discover/rebind 多由 UI 触发）。
+     *
+     * 特殊处理：对于终端服务（mapKey包含":terminal"），直接启动终端ACI服务，
+     * 因为唤醒广播只启动主ACI服务，不启动终端服务。
      */
     private fun bindWithWake(packageName: String, className: String, mapKey: String = packageName) {
         Thread {
@@ -323,6 +326,16 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
 
             // 2) 停止态：唤醒广播拉起进程后再绑
             Log.i(TAG, "📡 $packageName 初次绑定未成，发唤醒广播后重试")
+            
+            // 对于终端服务，直接启动终端ACI服务（因为唤醒广播只启动主ACI服务）
+            if (mapKey.contains(":terminal")) {
+                Log.i(TAG, "🚀 终端服务特殊处理：直接启动 QuroTerminalAciService")
+                startControlledService(packageName, className)
+                try { Thread.sleep(1000) } catch (ignored: InterruptedException) {}
+                if (serviceMap[mapKey] == null) doBind(packageName, className, null, mapKey)
+                return@Thread
+            }
+            
             wakeCallee(packageName)
             try { Thread.sleep(900) } catch (ignored: InterruptedException) {}
             if (serviceMap[mapKey] == null) doBind(packageName, className, null, mapKey)
@@ -361,9 +374,21 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         Log.i(TAG, "📡 $pkg 首次绑定未成功，发送唤醒广播拉起进程后重试")
         // 对于终端服务，使用实际的包名而不是键
         val actualPkg = if (pkg.contains(":terminal")) pkg.split(":")[0] else pkg
-        wakeCallee(actualPkg)
-        try { Thread.sleep(600) } catch (ignored: InterruptedException) {}
-        if (tryBindWithLatch(pkg)) return serviceMap[pkg]
+        
+        // 对于终端服务，直接启动终端ACI服务（因为唤醒广播只启动主ACI服务）
+        if (pkg.contains(":terminal")) {
+            Log.i(TAG, "🚀 终端服务特殊处理：直接启动 QuroTerminalAciService")
+            val cls = classMap[pkg]
+            if (cls != null) {
+                startControlledService(actualPkg, cls)
+                try { Thread.sleep(1000) } catch (ignored: InterruptedException) {}
+                if (tryBindWithLatch(pkg)) return serviceMap[pkg]
+            }
+        } else {
+            wakeCallee(actualPkg)
+            try { Thread.sleep(600) } catch (ignored: InterruptedException) {}
+            if (tryBindWithLatch(pkg)) return serviceMap[pkg]
+        }
 
         // 广播拉起仍失败：直接 startService 把受控 ACI Service 拉起（比广播更直接，
         // 对「无界面壳 App」同样有效），再尝试绑定。无需任何 UI 介入。

@@ -1,0 +1,12 @@
+{
+  "moduleId": "quro.term.node",
+  "name": "终端·Node运行时",
+  "version": "1.0.1",
+  "entry": "entry.sh",
+  "entryContent": "#!/bin/sh\nPORT=\"${QURO_NODE_PORT:-${1:-8766}}\"\necho \"[quro.term.node] listening 0.0.0.0:$PORT\"\nexec node /root/cms/quro.term.node/backend.js \"$PORT\"",
+  "apkDeps": "",
+  "pipDeps": "",
+  "envProfiles": "",
+  "env": {},
+  "ports": ""
+}

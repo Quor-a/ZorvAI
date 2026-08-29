@@ -104,7 +104,9 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             "get_status" -> handleGetStatus(context)
             "run_script" -> handleRunScript(context, obj)
             "fix_deploy" -> handleFixDeploy(context)
-            else -> "不支持的 action: $action\n\n可用 action: list_modules, call_module, deploy_engine, status_engine, deploy_devenv, status_devenv, repair_deployment, copy_config, get_logs, get_status, run_script, fix_deploy"
+            "get_install_scripts" -> handleGetInstallScripts(context, obj)
+            "fix_modules" -> handleFixModules(context, obj)
+            else -> "不支持的 action: $action\n\n可用 action: list_modules, call_module, deploy_engine, status_engine, deploy_devenv, status_devenv, repair_deployment, copy_config, get_logs, get_status, run_script, fix_deploy, get_install_scripts, fix_modules"
         }
     }
 
@@ -290,16 +292,10 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
     private fun repairEngine(context: Context): String {
         return try {
             // 1. 执行CMS引擎部署修复脚本（修复apt锁、dpkg异常等）
-            val fixScript = """
-#!/bin/bash
+            val fixScript = """#!/bin/bash
 # CMS v2 引擎部署修复脚本
-# 修复 apt 锁残留、dpkg 包异常、ca-certificates 缓存目录缺失
-
 echo "🔧 Step 1: 清除 apt 残留锁..."
-rm -f /var/lib/dpkg/lock
-rm -f /var/lib/dpkg/lock-frontend
-rm -f /var/cache/apt/archives/lock
-rm -f /var/lib/apt/lists/lock
+rm -f /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/cache/apt/archives/lock /var/lib/apt/lists/lock
 echo "✅ 锁文件已清除"
 
 echo "🔧 Step 2: 创建缺失的缓存目录..."
@@ -315,37 +311,21 @@ echo "🔧 Step 4: 手动修复 ca-certificates..."
 update-ca-certificates 2>&1 || true
 echo "✅ CA 证书已更新"
 
-echo "🔧 Step 5: 逐个修复异常包..."
-for pkg in ca-certificates ca-certificates-java openssh-server \
-           openjdk-17-jre-headless openjdk-17-jdk-headless \
-           python3-pip npm; do
-    dpkg --configure "$pkg" 2>&1 && echo "  ✅ $pkg" || echo "  ⚠️ $pkg (跳过)"
-done
-
-echo "🔧 Step 6: 验证修复结果..."
-BROKEN=$(dpkg -l | grep -E "^(iF|iU)" | wc -l)
-echo "  异常包数量: $BROKEN"
-if [ "$BROKEN" -eq 0 ]; then
-    echo "✅ 全部包状态正常"
-else
-    echo "⚠️ 仍有 $BROKEN 个异常包"
-    dpkg -l | grep -E "^(iF|iU)" | awk '{print "  -", $2}'
-fi
+echo "🔧 Step 5: 验证修复结果..."
+dpkg -l | grep -E "^(iF|iU)" | wc -l
 
 echo ""
-echo "🔧 Step 7: 验证运行时..."
-echo "  Python: $(python3 --version 2>&1 || echo '❌ 未安装')"
-echo "  Node:   $(node --version 2>&1 || echo '❌ 未安装')"
-echo "  Java:   $(java -version 2>&1 | head -1 || echo '❌ 未安装')"
-echo "  SSH:    $(which ssh 2>&1 && echo '✅' || echo '❌ 未安装')"
+echo "🔧 Step 6: 验证运行时..."
+echo "  Python: $(python3 --version 2>&1 || echo '未安装')"
+echo "  Node:   $(node --version 2>&1 || echo '未安装')"
+echo "  Java:   $(java -version 2>&1 | head -1 || echo '未安装')"
+echo ""
+echo "🎉 修复完成！"
 """.trimIndent()
 
             // 通过终端执行修复脚本
-            val controller = com.ai.assistance.quro.core.terminal.QuroTerminalController.getInstance(context)
-            val fixResult = runBlocking(Dispatchers.IO) {
-                controller.runCommandInLinux(fixScript)
-            }
-            android.util.Log.i("CmsToolbox", "修复脚本执行结果:\n$fixResult")
+            val fixResult = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(fixScript, 60_000L, context)
+            android.util.Log.i("CmsToolbox", "修复脚本执行结果:\n${fixResult.output}")
 
             // 2. 清理可能损坏的引擎目录
             val engineDir = CmsEngineDeployer.engineHostDir(context)
@@ -356,7 +336,7 @@ echo "  SSH:    $(which ssh 2>&1 && echo '✅' || echo '❌ 未安装')"
             // 3. 重新部署引擎
             val enginePackage = CmsEnginePackage.builtin()
             val result = CmsEngineDeployer.deployEngine(context, enginePackage)
-            "✅ CMS 引擎修复成功\n\n=== 修复脚本执行结果 ===\n$fixResult\n\n=== 引擎部署结果 ===\n引擎 ID: ${enginePackage.engineId}\n部署结果: $result"
+            "✅ CMS 引擎修复成功\n\n=== 修复脚本执行结果 ===\n${fixResult.output}\n\n=== 引擎部署结果 ===\n引擎 ID: ${enginePackage.engineId}\n部署结果: $result"
         } catch (e: Exception) {
             "❌ CMS 引擎修复失败: ${e.message}\n\n可尝试手动执行修复脚本:\nscripts/cms-fix-deploy.sh"
         }
@@ -406,13 +386,10 @@ echo "  SSH:    $(which ssh 2>&1 && echo '✅' || echo '❌ 未安装')"
         }
 
         return try {
-            val controller = com.ai.assistance.quro.core.terminal.QuroTerminalController.getInstance(context)
-
             val scriptToRun = when {
                 scriptName == "cms-fix-deploy" -> {
                     // 内置的CMS修复脚本
-                    """
-#!/bin/bash
+                    """#!/bin/bash
 # CMS v2 引擎部署修复脚本
 echo "🔧 Step 1: 清除 apt 残留锁..."
 rm -f /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/cache/apt/archives/lock /var/lib/apt/lists/lock
@@ -432,15 +409,13 @@ update-ca-certificates 2>&1 || true
 echo "✅ CA 证书已更新"
 
 echo "🔧 Step 5: 验证修复结果..."
-BROKEN=$(dpkg -l | grep -E "^(iF|iU)" | wc -l)
-echo "  异常包数量: $BROKEN"
-if [ "$BROKEN" -eq 0 ]; then echo "✅ 全部包状态正常"; else echo "⚠️ 仍有 $BROKEN 个异常包"; fi
+dpkg -l | grep -E "^(iF|iU)" | wc -l
 
 echo ""
 echo "🔧 Step 6: 验证运行时..."
-echo "  Python: $(python3 --version 2>&1 || echo '❌ 未安装')"
-echo "  Node:   $(node --version 2>&1 || echo '❌ 未安装')"
-echo "  Java:   $(java -version 2>&1 | head -1 || echo '❌ 未安装')"
+echo "  Python: $(python3 --version 2>&1 || echo '未安装')"
+echo "  Node:   $(node --version 2>&1 || echo '未安装')"
+echo "  Java:   $(java -version 2>&1 | head -1 || echo '未安装')"
 echo ""
 echo "🎉 修复完成！"
 """.trimIndent()
@@ -449,10 +424,8 @@ echo "🎉 修复完成！"
                 else -> return "未找到脚本: $scriptName"
             }
 
-            val result = runBlocking(Dispatchers.IO) {
-                controller.runCommandInLinux(scriptToRun)
-            }
-            "✅ 脚本执行完成\n\n=== 执行结果 ===\n$result"
+            val result = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(scriptToRun, 60_000L, context)
+            "✅ 脚本执行完成\n\n=== 执行结果 ===\n${result.output}"
         } catch (e: Exception) {
             "❌ 脚本执行失败: ${e.message}"
         }
@@ -460,12 +433,8 @@ echo "🎉 修复完成！"
 
     private fun handleFixDeploy(context: Context): String {
         return try {
-            // 执行完整的CMS引擎部署修复流程
-            val controller = com.ai.assistance.quro.core.terminal.QuroTerminalController.getInstance(context)
-
             // 1. 执行修复脚本
-            val fixScript = """
-#!/bin/bash
+            val fixScript = """#!/bin/bash
 echo "🔧 开始CMS引擎部署修复..."
 echo ""
 
@@ -487,23 +456,19 @@ update-ca-certificates 2>&1 || true
 echo "✅ CA 证书已更新"
 
 echo "🔧 Step 5: 验证修复结果..."
-BROKEN=$(dpkg -l | grep -E "^(iF|iU)" | wc -l)
-echo "  异常包数量: $BROKEN"
-if [ "$BROKEN" -eq 0 ]; then echo "✅ 全部包状态正常"; else echo "⚠️ 仍有 $BROKEN 个异常包"; fi
+dpkg -l | grep -E "^(iF|iU)" | wc -l
 
 echo ""
 echo "🔧 Step 6: 验证运行时..."
-echo "  Python: $(python3 --version 2>&1 || echo '❌ 未安装')"
-echo "  Node:   $(node --version 2>&1 || echo '❌ 未安装')"
-echo "  Java:   $(java -version 2>&1 | head -1 || echo '❌ 未安装')"
+echo "  Python: $(python3 --version 2>&1 || echo '未安装')"
+echo "  Node:   $(node --version 2>&1 || echo '未安装')"
+echo "  Java:   $(java -version 2>&1 | head -1 || echo '未安装')"
 echo ""
 echo "🎉 修复完成！"
 """.trimIndent()
 
-            val fixResult = runBlocking(Dispatchers.IO) {
-                controller.runCommandInLinux(fixScript)
-            }
-            android.util.Log.i("CmsToolbox", "修复脚本执行结果:\n$fixResult")
+            val fixResult = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(fixScript, 60_000L, context)
+            android.util.Log.i("CmsToolbox", "修复脚本执行结果:\n${fixResult.output}")
 
             // 2. 清理可能损坏的引擎目录
             val engineDir = CmsEngineDeployer.engineHostDir(context)
@@ -515,7 +480,7 @@ echo "🎉 修复完成！"
             val enginePackage = CmsEnginePackage.builtin()
             val deployResult = CmsEngineDeployer.deployEngine(context, enginePackage)
 
-            "✅ CMS引擎部署修复完成\n\n=== 修复脚本执行结果 ===\n$fixResult\n\n=== 引擎部署结果 ===\n引擎 ID: ${enginePackage.engineId}\n部署结果: $deployResult"
+            "✅ CMS引擎部署修复完成\n\n=== 修复脚本执行结果 ===\n${fixResult.output}\n\n=== 引擎部署结果 ===\n引擎 ID: ${enginePackage.engineId}\n部署结果: $deployResult"
         } catch (e: Exception) {
             "❌ CMS引擎部署修复失败: ${e.message}\n\n可尝试手动执行:\ncms_toolbox(action=\"run_script\", script_name=\"cms-fix-deploy\")"
         }
@@ -565,9 +530,9 @@ echo "🎉 修复完成！"
             )
             
             if (result.startsWith("OK:")) {
-                "✅ CMS 引擎配置已保存到 Download/Quro/$fileName\n\n配置内容:\n$json"
+                "✅ CMS 引擎配置已保存到 Download/Quro/$fileName\n\n配置内容:\n```json\n$json\n```"
             } else {
-                "⚠️ 配置保存失败，但配置内容如下:\n$json"
+                "⚠️ 配置保存失败，但配置内容如下:\n```json\n$json\n```"
             }
         } catch (e: Exception) {
             "❌ 获取引擎配置失败: ${e.message}"
@@ -601,9 +566,9 @@ echo "🎉 修复完成！"
             )
             
             if (result.startsWith("OK:")) {
-                "✅ 开发环境配置已保存到 Download/Quro/$fileName\n\n配置内容:\n$config"
+                "✅ 开发环境配置已保存到 Download/Quro/$fileName\n\n配置内容:\n```json\n$config\n```"
             } else {
-                "⚠️ 配置保存失败，但配置内容如下:\n$config"
+                "⚠️ 配置保存失败，但配置内容如下:\n```json\n$config\n```"
             }
         } catch (e: Exception) {
             "❌ 获取开发环境配置失败: ${e.message}"
@@ -639,9 +604,9 @@ echo "🎉 修复完成！"
             )
             
             if (result.startsWith("OK:")) {
-                "✅ 模块配置已保存到 Download/Quro/$fileName\n\n配置内容:\n$config"
+                "✅ 模块配置已保存到 Download/Quro/$fileName\n\n配置内容:\n```json\n$config\n```"
             } else {
-                "⚠️ 配置保存失败，但配置内容如下:\n$config"
+                "⚠️ 配置保存失败，但配置内容如下:\n```json\n$config\n```"
             }
         } catch (e: Exception) {
             "❌ 获取模块配置失败: ${e.message}"
@@ -721,5 +686,106 @@ echo "🎉 修复完成！"
         } catch (e: Exception) {
             "❌ 获取状态失败: ${e.message}"
         }
+    }
+
+    private fun handleGetInstallScripts(context: Context, obj: JSONObject): String {
+        val profiles = mutableListOf<String>()
+        val profilesArray = obj.optJSONArray("profiles")
+        if (profilesArray != null) {
+            for (i in 0 until profilesArray.length()) {
+                profiles.add(profilesArray.optString(i))
+            }
+        }
+        
+        if (profiles.isEmpty()) {
+            // 默认返回所有开发环境的安装脚本
+            profiles.addAll(listOf("node", "python", "java", "rust", "go"))
+        }
+        
+        val sb = StringBuilder("开发环境安装脚本（可复制）：\n\n")
+        
+        profiles.forEach { profileName ->
+            val profile = EnvProfile.parse(profileName)
+            if (profile != null) {
+                sb.appendLine("## ${profile.profileName}")
+                sb.appendLine("```bash")
+                sb.appendLine(profile.installScript.trimIndent())
+                sb.appendLine("```\n")
+            } else {
+                sb.appendLine("## $profileName")
+                sb.appendLine("❌ 未知环境配置\n")
+            }
+        }
+        
+        sb.appendLine("提示：以上脚本在 proot Ubuntu 环境中执行，用于安装对应的开发环境。")
+        sb.appendLine("使用方式：在终端中粘贴执行，或通过 cms_toolbox(action=\"run_script\", script=\"...\") 执行。")
+
+        return sb.toString().trim()
+    }
+
+    /**
+     * 返回 CMS 模块修复脚本（DNS修复、httpd修复、node修复）。
+     * 用户可以复制这些脚本到终端执行，或者通过 run_script action 执行。
+     */
+    private fun handleFixModules(context: Context, obj: JSONObject): String {
+        val moduleType = obj.optString("module_type", "all").trim()
+
+        val sb = StringBuilder("CMS 模块修复脚本（可复制到终端执行）：\n\n")
+
+        // 1. bootstrap.sh DNS修复说明
+        if (moduleType == "all" || moduleType == "dns") {
+            sb.appendLine("## 1. bootstrap.sh DNS 部分修复")
+            sb.appendLine("修复 bootstrap.sh 中有问题的 DNS heredoc 块（`|| {` 语法错误）：")
+            sb.appendLine("")
+            sb.appendLine("**修复方法**：删除 `|| {` 块，改为简单的 `<< 'DNS'` heredoc，只保留 5 个 nameserver。")
+            sb.appendLine("")
+            sb.appendLine("**修复后**：")
+            sb.appendLine("```bash")
+            sb.appendLine("cat > /etc/resolv.conf 2>/dev/null << 'DNS'")
+            sb.appendLine("nameserver 8.8.8.8")
+            sb.appendLine("nameserver 8.8.4.4")
+            sb.appendLine("nameserver 223.5.5.5")
+            sb.appendLine("nameserver 1.1.1.1")
+            sb.appendLine("nameserver 9.9.9.9")
+            sb.appendLine("DNS")
+            sb.appendLine("```\n")
+        }
+
+        // 2-4: 从 assets 读取脚本文件
+        val assetFiles = mapOf(
+            "httpd" to Triple("2. httpd entry.sh", "cms/modules/quro.term.httpd/entry.sh", "bash"),
+            "node_backend" to Triple("3. node backend.js", "cms/modules/quro.term.node/backend.js", "javascript"),
+            "node_entry" to Triple("4. node entry.sh", "cms/modules/quro.term.node/entry.sh", "bash"),
+            "fix_script" to Triple("5. 一键修复脚本", "cms/modules/cms-fix-modules.sh", "bash"),
+        )
+
+        val showHttpd = moduleType == "all" || moduleType == "httpd"
+        val showNode = moduleType == "all" || moduleType == "node"
+        val showFix = moduleType == "all" || moduleType == "fix"
+
+        val toShow = mutableListOf<String>()
+        if (showHttpd) toShow.addAll(listOf("httpd"))
+        if (showNode) toShow.addAll(listOf("node_backend", "node_entry"))
+        if (showFix) toShow.add("fix_script")
+
+        toShow.forEach { key ->
+            val (title, assetPath, lang) = assetFiles[key] ?: return@forEach
+            sb.appendLine("## $title")
+            sb.appendLine("```$lang")
+            try {
+                val content = context.assets.open(assetPath).bufferedReader().use { it.readText() }
+                sb.appendLine(content.trimIndent())
+            } catch (e: Exception) {
+                sb.appendLine("(脚本文件缺失: $assetPath)")
+            }
+            sb.appendLine("```\n")
+        }
+
+        sb.appendLine("提示：")
+        sb.appendLine("1. 以上脚本在 proot Ubuntu 环境中执行")
+        sb.appendLine("2. 使用方式：在终端中粘贴执行，或通过 cms_toolbox(action=\"run_script\", script=\"...\") 执行")
+        sb.appendLine("3. 一键修复脚本会自动修复 DNS、httpd 和 node 模块")
+
+        return sb.toString().trim()
     }
 }
