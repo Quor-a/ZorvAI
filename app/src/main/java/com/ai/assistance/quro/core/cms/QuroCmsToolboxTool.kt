@@ -592,7 +592,7 @@ echo "🎉 修复完成！"
                 }
                 appendLine("  },")
                 appendLine("  \"terminal\": {")
-                val terminalStatus = QuroLinuxEnv.probe(context)
+                val terminalStatus = QuroLinuxEnv.probeLenient(context)
                 appendLine("    \"available\": ${terminalStatus.available}")
                 appendLine("  }")
                 appendLine("}")
@@ -717,7 +717,7 @@ echo "🎉 修复完成！"
             status.add("权限模式: ${policy.name}")
             
             // 终端状态
-            val terminalStatus = QuroLinuxEnv.probe(context)
+            val terminalStatus = QuroLinuxEnv.probeLenient(context)
             status.add("终端环境: ${if (terminalStatus.available) "✅ 就绪" else "❌ 未就绪"}")
             
             status.joinToString("\n")

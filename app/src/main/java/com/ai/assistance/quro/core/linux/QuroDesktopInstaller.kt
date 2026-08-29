@@ -70,8 +70,8 @@ object QuroDesktopInstaller {
     }
     
     private suspend fun installInternal(context: Context) {
-        // 检查Linux环境是否就绪
-        val envStatus = QuroLinuxEnv.probe(context)
+        // 检查Linux环境是否就绪（使用宽松探测，避免误判）
+        val envStatus = QuroLinuxEnv.probeLenient(context)
         if (!envStatus.available) {
             throw IllegalStateException("Linux环境未就绪，请先安装Linux环境")
         }

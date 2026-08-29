@@ -39,7 +39,7 @@ object CmsHostRouter {
             return HostResolution(candidates.first(), null)
         }
         // 双宿主：按运行时上下文选（互为主从策略）；context 为空（JVM 单测）时按保守策略：不就绪/未锁/中性电量
-        val terminalReady = if (context == null) false else runCatching { QuroLinuxEnv.probe(context).available }.getOrDefault(false)
+        val terminalReady = if (context == null) false else runCatching { QuroLinuxEnv.probeLenient(context).available }.getOrDefault(false)
         val locked = context != null && isDeviceLocked(context)
         val (level, charging) = if (context == null) (50 to false) else batteryInfo(context)
         val preferTerminal = terminalReady && !locked && (charging || level >= 20)

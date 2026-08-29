@@ -59,7 +59,7 @@ object CmsDependencyResolver {
     private fun resolveLinux(context: Context, dep: QuroCmsDependency, pkg: String, provisioned: Set<String>): DepResult {
         // 部署包声明会安装 → 视为供给，不报缺失。
         if (provisioned.contains(pkg)) return ok(dep, "Linux 包 $pkg（部署时安装）")
-        val st = QuroLinuxEnv.probe(context)
+        val st = QuroLinuxEnv.probeLenient(context)
         if (!st.available) {
             return if (dep.optional) DepResult(dep, DepResolution.OPTIONAL_MISSING, "Linux 环境未就绪（可选依赖暂不校验）")
             else miss(dep, "依赖 Linux 包 $pkg，但终端环境(proot)未就绪")
@@ -74,7 +74,7 @@ object CmsDependencyResolver {
         val p = EnvProfile.parse(profile)
         if (p == null) return miss(dep, "依赖未知环境档 $profile（可选值：NODE/PYTHON/SSH/JAVA/RUST/GO）")
         if (CmsEnvProvisioner.isReady(context, p)) return ok(dep, "终端环境 $profile 已就绪")
-        val st = QuroLinuxEnv.probe(context)
+        val st = QuroLinuxEnv.probeLenient(context)
         if (!st.available) {
             return if (dep.optional) DepResult(dep, DepResolution.OPTIONAL_MISSING, "终端环境未就绪（可选环境暂不校验）")
             else miss(dep, "依赖终端环境 $profile，但终端(proot)未就绪")

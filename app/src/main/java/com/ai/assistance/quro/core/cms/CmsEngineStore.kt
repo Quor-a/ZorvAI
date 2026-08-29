@@ -138,7 +138,7 @@ object CmsEngineStore {
     /** 主动探测引擎是否在线（供 UI 进入时刷新健康态）。 */
     fun probeHealth(context: Context) {
         init(context)
-        val st = QuroLinuxEnv.probe(context)
+        val st = QuroLinuxEnv.probeLenient(context)
         if (!st.available) { markHealth(false); return }
         val (c, _) = QuroLinuxEnv.run(context, "[ -f ${CmsEngineDeployer.engineGuestDir()}/.engine.ready ]", timeoutMs = 10_000)
         markHealth(c == 0)

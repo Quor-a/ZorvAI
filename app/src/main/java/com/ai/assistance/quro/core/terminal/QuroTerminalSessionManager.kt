@@ -128,7 +128,7 @@ object QuroTerminalSessionManager {
             // 真机实测 ANR：Input dispatching timed out，而应用进程 CPU 仅 3.7%（典型阻塞态）。
             withContext(Dispatchers.IO) {
                 if (installIfMissing) {
-                    val st = QuroLinuxEnv.probe(context)
+                    val st = QuroLinuxEnv.probeLenient(context)
                     if (!st.available) {
                         Log.i(TAG, "ensureDefault: 后端未就绪，跟随安装 Linux 环境…")
                         QuroLinuxEnv.ensureInstalledBlocking(context)
@@ -227,7 +227,7 @@ object QuroTerminalSessionManager {
         // 不切线程会直接 5 秒 Input dispatching 超时 ANR。
         return withContext(Dispatchers.IO) {
             if (installIfMissing) {
-                val st = QuroLinuxEnv.probe(context)
+                val st = QuroLinuxEnv.probeLenient(context)
                 if (!st.available) QuroLinuxEnv.ensureInstalledBlocking(context)
             }
             val shell = QuroShellSession.create(context)

@@ -298,6 +298,49 @@ object QuroLinuxEnv {
     }
 
     /**
+     * **宽松探测**：只校验「文件/目录是否真实存在」，不校验可执行位与符号链接可解析性。
+     *
+     * 供**交互终端启动路径**（[shellLaunch] / [QuroHostBridge.buildLaunch]）专用，
+     * 与一次性执行命令的 [run] 保持同一策略：直接构造 proot 参数，让 proot 自己报错，
+     * 而不是在 Kotlin 侧预先判定「不可用」。
+     *
+     * ## 为什么必须宽松（真机根因，2026-08-29）
+     * 严格版 [probe] 用 `proot.canExecute()` + [rootfsBinRunnable] 两项判定，在部分 ROM /
+     * SELinux 策略 / 挂载选项（noexec）下会**误判为不可用**：
+     *  - `canExecute()` 对 nativeLibraryDir 下的 .so 可能返回 false（SELinux 限制），
+     *    但 proot 经 ProcessBuilder 实际能执行；
+     *  - rootfs 的 `/bin/sh` 是**指向 rootfs 内部的符号链接**（如 `-> dash` / `-> busybox`），
+     *    在宿主文件系统上解析必然失败，误报「解压残缺」。
+     *
+     * 结果是：AI 的 `terminal_exec`（走 [run]，绕过 probe）一切正常，
+     * 而终端 UI（走 [shellLaunch] → [probe]）被误判后**静默回退** `/system/bin/sh`，
+     * 表现为 `/bin/sh: dpkg: inaccessible or not found`（Android toybox 的特有措辞）。
+     *
+     * 宽松后：proot 真的跑不起来时，进程启动会抛异常，由 [QuroShellSession.create] 的
+     * try-catch 捕获并降级设备 sh，行为可预期且日志可查，不会再「静默」退化。
+     */
+    fun probeLenient(context: Context): EnvStatus {
+        val prootPathStr = prootPath(context)
+        val proot = File(prootPathStr)
+        val rootfs = File(rootfsPath(context))
+
+        if (!proot.exists()) {
+            return EnvStatus(false, prootPathStr, null, "proot 二进制缺失（$prootPathStr）")
+        }
+        if (!rootfs.isDirectory || (rootfs.listFiles()?.isEmpty() != false)) {
+            return EnvStatus(false, prootPathStr, null, "rootfs 目录缺失或为空（${rootfs.absolutePath}）")
+        }
+        // 存在即认为可用；可执行位/符号链接问题交给 proot 自己暴露。
+        val strict = probe(context)
+        if (!strict.available) {
+            // 严格探测与宽松探测结论不一致 = 严格探测在误判，记日志便于真机取证。
+            Log.w(TAG, "⚠ 宽松探测可用但严格探测判为不可用，按宽松结论启动 proot。" +
+                "严格原因: ${strict.reason}")
+        }
+        return EnvStatus(true, proot.absolutePath, rootfs.absolutePath, "环境就绪（宽松探测）")
+    }
+
+    /**
      * 在 rootfs 内部解析一个（可能含绝对/相对符号链接的）路径，判断其最终真实文件是否存在且可执行。
      *
      * **不能用 [File.exists]/[File.canExecute] 直接判**：rootfs 的 `/bin/sh` 可能是符号链接
@@ -354,15 +397,19 @@ object QuroLinuxEnv {
      * CMS 部署器本就在工作线程跑阻塞式 proot 命令，符合此约束。
      */
     fun ensureInstalledBlocking(context: Context): EnvStatus {
-        val st = probe(context)
+        // 用**宽松探测**：严格 probe 会误判（见 [probeLenient]），
+        // 一旦误判成「不可用」就会触发 setupInternal —— 重新下载并解压约 200MB rootfs。
+        // 真机上表现为「每次打开终端都要重装环境、等好几分钟」。
+        // 宽松探测保证「已装好」时直接复用，只在 proot/rootfs 真正缺失时才重装。
+        val st = probeLenient(context)
         if (st.available) return st
         return try {
             runBlocking {
                 setupMutex.withLock {
                     // 抢到锁后再探一次：并发 setup() 可能已先完成安装
-                    probe(context).takeIf { it.available }?.let { return@runBlocking it }
+                    probeLenient(context).takeIf { it.available }?.let { return@runBlocking it }
                     setupInternal(context)
-                    probe(context)
+                    probeLenient(context)
                 }
             }
         } catch (e: Exception) {
@@ -1238,8 +1285,15 @@ object QuroLinuxEnv {
      * 调用方（QuroShellSession）须将其并入 shell 进程环境。
      */
     fun shellLaunch(context: Context): Pair<String, List<String>>? {
-        val st = probe(context)
-        if (!st.available || st.prootPath == null || st.rootfsPath == null) return null
+        // 交互终端改用**宽松探测**，与一次性执行的 [run] 同策略。
+        // 旧实现的严格 [probe] 会因 canExecute()/符号链接解析误判，把本可正常启动的 proot
+        // 静默降级成 /system/bin/sh —— 即「terminal_exec 正常、终端 UI 却是 /bin/sh」的真机根因。
+        // 详见 [probeLenient] 注释。
+        val st = probeLenient(context)
+        if (!st.available || st.prootPath == null || st.rootfsPath == null) {
+            Log.w(TAG, "shellLaunch: 宽松探测仍判为不可用，返回 null（调用方将回退设备 sh）。原因: ${st.reason}")
+            return null
+        }
         val rootfs = File(st.rootfsPath)
         // 运行期资产（resolv.conf 用设备 DNS / getprop 垫片）随网络与设备状态刷新，
         // 避免安装时一次性快照过期（如换了 WiFi、或升级后属性变化）。
