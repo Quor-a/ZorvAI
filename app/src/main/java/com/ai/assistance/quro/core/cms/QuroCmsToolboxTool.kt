@@ -102,7 +102,9 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             "copy_config" -> handleCopyConfig(context, obj)
             "get_logs" -> handleGetLogs(context, obj)
             "get_status" -> handleGetStatus(context)
-            else -> "不支持的 action: $action\n\n可用 action: list_modules, call_module, deploy_engine, status_engine, deploy_devenv, status_devenv, repair_deployment, copy_config, get_logs, get_status"
+            "run_script" -> handleRunScript(context, obj)
+            "fix_deploy" -> handleFixDeploy(context)
+            else -> "不支持的 action: $action\n\n可用 action: list_modules, call_module, deploy_engine, status_engine, deploy_devenv, status_devenv, repair_deployment, copy_config, get_logs, get_status, run_script, fix_deploy"
         }
     }
 
@@ -287,18 +289,76 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
 
     private fun repairEngine(context: Context): String {
         return try {
-            // 1. 清理可能损坏的引擎目录
+            // 1. 执行CMS引擎部署修复脚本（修复apt锁、dpkg异常等）
+            val fixScript = """
+#!/bin/bash
+# CMS v2 引擎部署修复脚本
+# 修复 apt 锁残留、dpkg 包异常、ca-certificates 缓存目录缺失
+
+echo "🔧 Step 1: 清除 apt 残留锁..."
+rm -f /var/lib/dpkg/lock
+rm -f /var/lib/dpkg/lock-frontend
+rm -f /var/cache/apt/archives/lock
+rm -f /var/lib/apt/lists/lock
+echo "✅ 锁文件已清除"
+
+echo "🔧 Step 2: 创建缺失的缓存目录..."
+mkdir -p /data/user/0/com.ai.assistance.quro/cache
+echo "✅ 缓存目录已创建"
+
+echo "🔧 Step 3: 修复 dpkg 半安装状态..."
+export DEBIAN_FRONTEND=noninteractive
+dpkg --configure -a 2>&1 || true
+echo "✅ dpkg 状态已修复"
+
+echo "🔧 Step 4: 手动修复 ca-certificates..."
+update-ca-certificates 2>&1 || true
+echo "✅ CA 证书已更新"
+
+echo "🔧 Step 5: 逐个修复异常包..."
+for pkg in ca-certificates ca-certificates-java openssh-server \
+           openjdk-17-jre-headless openjdk-17-jdk-headless \
+           python3-pip npm; do
+    dpkg --configure "$pkg" 2>&1 && echo "  ✅ $pkg" || echo "  ⚠️ $pkg (跳过)"
+done
+
+echo "🔧 Step 6: 验证修复结果..."
+BROKEN=$(dpkg -l | grep -E "^(iF|iU)" | wc -l)
+echo "  异常包数量: $BROKEN"
+if [ "$BROKEN" -eq 0 ]; then
+    echo "✅ 全部包状态正常"
+else
+    echo "⚠️ 仍有 $BROKEN 个异常包"
+    dpkg -l | grep -E "^(iF|iU)" | awk '{print "  -", $2}'
+fi
+
+echo ""
+echo "🔧 Step 7: 验证运行时..."
+echo "  Python: $(python3 --version 2>&1 || echo '❌ 未安装')"
+echo "  Node:   $(node --version 2>&1 || echo '❌ 未安装')"
+echo "  Java:   $(java -version 2>&1 | head -1 || echo '❌ 未安装')"
+echo "  SSH:    $(which ssh 2>&1 && echo '✅' || echo '❌ 未安装')"
+""".trimIndent()
+
+            // 通过终端执行修复脚本
+            val controller = com.ai.assistance.quro.core.terminal.QuroTerminalController.getInstance(context)
+            val fixResult = runBlocking(Dispatchers.IO) {
+                controller.runCommandInLinux(fixScript)
+            }
+            android.util.Log.i("CmsToolbox", "修复脚本执行结果:\n$fixResult")
+
+            // 2. 清理可能损坏的引擎目录
             val engineDir = CmsEngineDeployer.engineHostDir(context)
             if (engineDir.exists()) {
                 engineDir.deleteRecursively()
             }
-            
-            // 2. 重新部署引擎
+
+            // 3. 重新部署引擎
             val enginePackage = CmsEnginePackage.builtin()
             val result = CmsEngineDeployer.deployEngine(context, enginePackage)
-            "✅ CMS 引擎修复成功\n引擎 ID: ${enginePackage.engineId}\n修复结果: $result"
+            "✅ CMS 引擎修复成功\n\n=== 修复脚本执行结果 ===\n$fixResult\n\n=== 引擎部署结果 ===\n引擎 ID: ${enginePackage.engineId}\n部署结果: $result"
         } catch (e: Exception) {
-            "❌ CMS 引擎修复失败: ${e.message}\n\n可能需要手动检查 proot 环境或重装应用"
+            "❌ CMS 引擎修复失败: ${e.message}\n\n可尝试手动执行修复脚本:\nscripts/cms-fix-deploy.sh"
         }
     }
 
@@ -325,7 +385,7 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
         return try {
             // 1. 卸载可能损坏的模块
             CmsTerminalDeployer.undeploy(context, moduleId)
-            
+
             // 2. 重新部署模块
             val repo = QuroCmsRepository(context)
             val module = repo.get(moduleId) ?: return "未找到模块: $moduleId"
@@ -334,6 +394,130 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             "✅ CMS 模块修复成功\n模块 ID: $moduleId\n修复结果: $result"
         } catch (e: Exception) {
             "❌ CMS 模块修复失败: ${e.message}\n\n可使用 cms_toolbox(action=\"list_modules\") 查看可用模块"
+        }
+    }
+
+    private fun handleRunScript(context: Context, obj: JSONObject): String {
+        val script = obj.optString("script", "").trim()
+        val scriptName = obj.optString("script_name", "").trim()
+
+        if (script.isEmpty() && scriptName.isEmpty()) {
+            return "缺少 script 或 script_name 参数。\n\n可用脚本:\n- cms-fix-deploy: CMS引擎部署修复脚本\n- custom: 自定义脚本（需提供script参数）"
+        }
+
+        return try {
+            val controller = com.ai.assistance.quro.core.terminal.QuroTerminalController.getInstance(context)
+
+            val scriptToRun = when {
+                scriptName == "cms-fix-deploy" -> {
+                    // 内置的CMS修复脚本
+                    """
+#!/bin/bash
+# CMS v2 引擎部署修复脚本
+echo "🔧 Step 1: 清除 apt 残留锁..."
+rm -f /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/cache/apt/archives/lock /var/lib/apt/lists/lock
+echo "✅ 锁文件已清除"
+
+echo "🔧 Step 2: 创建缺失的缓存目录..."
+mkdir -p /data/user/0/com.ai.assistance.quro/cache
+echo "✅ 缓存目录已创建"
+
+echo "🔧 Step 3: 修复 dpkg 半安装状态..."
+export DEBIAN_FRONTEND=noninteractive
+dpkg --configure -a 2>&1 || true
+echo "✅ dpkg 状态已修复"
+
+echo "🔧 Step 4: 手动修复 ca-certificates..."
+update-ca-certificates 2>&1 || true
+echo "✅ CA 证书已更新"
+
+echo "🔧 Step 5: 验证修复结果..."
+BROKEN=$(dpkg -l | grep -E "^(iF|iU)" | wc -l)
+echo "  异常包数量: $BROKEN"
+if [ "$BROKEN" -eq 0 ]; then echo "✅ 全部包状态正常"; else echo "⚠️ 仍有 $BROKEN 个异常包"; fi
+
+echo ""
+echo "🔧 Step 6: 验证运行时..."
+echo "  Python: $(python3 --version 2>&1 || echo '❌ 未安装')"
+echo "  Node:   $(node --version 2>&1 || echo '❌ 未安装')"
+echo "  Java:   $(java -version 2>&1 | head -1 || echo '❌ 未安装')"
+echo ""
+echo "🎉 修复完成！"
+""".trimIndent()
+                }
+                script.isNotEmpty() -> script
+                else -> return "未找到脚本: $scriptName"
+            }
+
+            val result = runBlocking(Dispatchers.IO) {
+                controller.runCommandInLinux(scriptToRun)
+            }
+            "✅ 脚本执行完成\n\n=== 执行结果 ===\n$result"
+        } catch (e: Exception) {
+            "❌ 脚本执行失败: ${e.message}"
+        }
+    }
+
+    private fun handleFixDeploy(context: Context): String {
+        return try {
+            // 执行完整的CMS引擎部署修复流程
+            val controller = com.ai.assistance.quro.core.terminal.QuroTerminalController.getInstance(context)
+
+            // 1. 执行修复脚本
+            val fixScript = """
+#!/bin/bash
+echo "🔧 开始CMS引擎部署修复..."
+echo ""
+
+echo "🔧 Step 1: 清除 apt 残留锁..."
+rm -f /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/cache/apt/archives/lock /var/lib/apt/lists/lock
+echo "✅ 锁文件已清除"
+
+echo "🔧 Step 2: 创建缺失的缓存目录..."
+mkdir -p /data/user/0/com.ai.assistance.quro/cache
+echo "✅ 缓存目录已创建"
+
+echo "🔧 Step 3: 修复 dpkg 半安装状态..."
+export DEBIAN_FRONTEND=noninteractive
+dpkg --configure -a 2>&1 || true
+echo "✅ dpkg 状态已修复"
+
+echo "🔧 Step 4: 手动修复 ca-certificates..."
+update-ca-certificates 2>&1 || true
+echo "✅ CA 证书已更新"
+
+echo "🔧 Step 5: 验证修复结果..."
+BROKEN=$(dpkg -l | grep -E "^(iF|iU)" | wc -l)
+echo "  异常包数量: $BROKEN"
+if [ "$BROKEN" -eq 0 ]; then echo "✅ 全部包状态正常"; else echo "⚠️ 仍有 $BROKEN 个异常包"; fi
+
+echo ""
+echo "🔧 Step 6: 验证运行时..."
+echo "  Python: $(python3 --version 2>&1 || echo '❌ 未安装')"
+echo "  Node:   $(node --version 2>&1 || echo '❌ 未安装')"
+echo "  Java:   $(java -version 2>&1 | head -1 || echo '❌ 未安装')"
+echo ""
+echo "🎉 修复完成！"
+""".trimIndent()
+
+            val fixResult = runBlocking(Dispatchers.IO) {
+                controller.runCommandInLinux(fixScript)
+            }
+            android.util.Log.i("CmsToolbox", "修复脚本执行结果:\n$fixResult")
+
+            // 2. 清理可能损坏的引擎目录
+            val engineDir = CmsEngineDeployer.engineHostDir(context)
+            if (engineDir.exists()) {
+                engineDir.deleteRecursively()
+            }
+
+            // 3. 重新部署引擎
+            val enginePackage = CmsEnginePackage.builtin()
+            val deployResult = CmsEngineDeployer.deployEngine(context, enginePackage)
+
+            "✅ CMS引擎部署修复完成\n\n=== 修复脚本执行结果 ===\n$fixResult\n\n=== 引擎部署结果 ===\n引擎 ID: ${enginePackage.engineId}\n部署结果: $deployResult"
+        } catch (e: Exception) {
+            "❌ CMS引擎部署修复失败: ${e.message}\n\n可尝试手动执行:\ncms_toolbox(action=\"run_script\", script_name=\"cms-fix-deploy\")"
         }
     }
 
