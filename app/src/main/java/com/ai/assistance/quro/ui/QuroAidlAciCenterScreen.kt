@@ -504,11 +504,17 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
         // 第 1 秒后刷新一次（快速绑定的场景）
         delay(1000)
         reload()
-        // 第 3 秒后再次刷新（广播唤醒 + 重绑的场景）
+        // 第 2 秒后再次刷新（广播唤醒 + 重绑的场景）
+        delay(1000)
+        reload()
+        // 第 4 秒后刷新（等待 fetchCapabilities 完成）
         delay(2000)
         reload()
-        // 第 6 秒后最后一次自动刷新
+        // 第 7 秒后最后一次自动刷新（确保所有异步操作完成）
         delay(3000)
+        reload()
+        // 第 12 秒后最终刷新（兜底）
+        delay(5000)
         reload()
     }
 

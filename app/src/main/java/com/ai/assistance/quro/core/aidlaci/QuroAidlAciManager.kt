@@ -152,6 +152,12 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
             nameMap[terminalKey] = "${runCatching { appContext.applicationInfo.loadLabel(pm).toString() }.getOrDefault("ZorvAI")} - 终端"
             classMap[terminalKey] = terminalCls
             bindWithWake(selfPkg, terminalCls, terminalKey)
+        } else {
+            // 如果已存在但未绑定，尝试重新绑定
+            if (serviceMap[terminalKey] == null) {
+                AciDiag.log(TAG, "discover: 终端受控端已存在但未绑定，尝试重新绑定 $selfPkg/$terminalCls")
+                bindWithWake(selfPkg, terminalCls, terminalKey)
+            }
         }
         
         // 初始化 MCP 桥接器
