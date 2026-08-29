@@ -4,6 +4,7 @@ import android.content.Context
 import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
 import com.ai.assistance.quro.core.tools.QuroTool
+import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -323,14 +324,13 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
     private fun repairModule(context: Context, moduleId: String): String {
         return try {
             // 1. 卸载可能损坏的模块
-            val deployer = CmsTerminalDeployer(context)
-            deployer.undeploy(context, moduleId)
+            CmsTerminalDeployer.undeploy(context, moduleId)
             
             // 2. 重新部署模块
             val repo = QuroCmsRepository(context)
             val module = repo.get(moduleId) ?: return "未找到模块: $moduleId"
             val deployPackage = CmsDeployPackage.fromModule(module)
-            val result = deployer.deploy(context, deployPackage)
+            val result = CmsTerminalDeployer.deploy(context, deployPackage)
             "✅ CMS 模块修复成功\n模块 ID: $moduleId\n修复结果: $result"
         } catch (e: Exception) {
             "❌ CMS 模块修复失败: ${e.message}\n\n可使用 cms_toolbox(action=\"list_modules\") 查看可用模块"
@@ -352,7 +352,7 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
                 val config = buildString {
                     appendLine("开发环境配置：")
                     profiles.forEach { profile ->
-                        appendLine("- ${profile.name}: ${profile.description}")
+                        appendLine("- ${profile.name}: ${profile.profileName}")
                     }
                     appendLine("\n可用环境: ${profiles.joinToString(", ") { it.name.lowercase() }}")
                 }
@@ -365,7 +365,7 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
                 val devenvConfig = buildString {
                     appendLine("开发环境配置：")
                     profiles.forEach { profile ->
-                        appendLine("- ${profile.name}: ${profile.description}")
+                        appendLine("- ${profile.name}: ${profile.profileName}")
                     }
                 }
                 "✅ 所有配置已复制\n\n=== CMS 引擎配置 ===\n$engineJson\n\n=== 开发环境配置 ===\n$devenvConfig"
