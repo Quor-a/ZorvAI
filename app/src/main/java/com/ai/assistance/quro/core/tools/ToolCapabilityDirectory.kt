@@ -593,28 +593,63 @@ object ToolCapabilityDirectory {
         ),
         
         // ═══════════════ CMS ═══════════════
+        "cms_toolbox" to ToolInfo(
+            name = "cms_toolbox",
+            category = ToolCategory.AI_CAPABILITIES,
+            description = "CMS v2 统一工具箱：整合模块管理、引擎管理、开发环境管理、部署修复于一体",
+            useCases = listOf(
+                "管理CMS模块、引擎、开发环境",
+                "修复CMS部署失败",
+                "查看CMS状态和日志",
+                "复制CMS配置"
+            ),
+            examples = listOf(
+                "cms_toolbox(action=\"list_modules\")",
+                "cms_toolbox(action=\"call_module\", capability_id=\"echo_text\", args={\"text\":\"hello\"})",
+                "cms_toolbox(action=\"deploy_engine\")",
+                "cms_toolbox(action=\"repair_deployment\", component=\"engine\")"
+            ),
+            parameters = mapOf(
+                "action" to "动作类型",
+                "capability_id" to "能力ID（call_module时需要）",
+                "args" to "参数对象（call_module时可选）",
+                "engine_id" to "引擎ID（deploy_engine时可选）",
+                "profiles" to "环境配置列表（deploy_devenv时需要）",
+                "component" to "组件名称（repair_deployment时需要）",
+                "module_id" to "模块ID（repair_deployment component=module时需要）"
+            ),
+            tips = listOf(
+                "单一入口管理所有CMS功能",
+                "部署失败时可用repair_deployment修复",
+                "支持复制正确的配置",
+                "可获取状态和日志"
+            ),
+            relatedTools = listOf("cms_call", "cms_list", "cms_status"),
+            priority = 5
+        ),
+        
         "cms_call" to ToolInfo(
             name = "cms_call",
             category = ToolCategory.AI_CAPABILITIES,
-            description = "调用CMS能力模块",
+            description = "调用CMS能力模块（旧接口，建议使用cms_toolbox）",
             useCases = listOf("调用XX能力模块做YY", "让模块执行", "用CMS功能"),
             examples = listOf("cms_call(capability_id=\"echo_text\", args={text:\"hello\"})"),
             parameters = mapOf("capability_id" to "能力ID", "args" to "参数"),
-            tips = listOf("先用cms_list查看可用能力", "支持同步/异步", "可传参数"),
-            relatedTools = listOf("cms_list", "cms_status"),
-            priority = 4
+            tips = listOf("先用cms_list查看可用能力", "支持同步/异步", "可传参数", "建议使用cms_toolbox替代"),
+            relatedTools = listOf("cms_list", "cms_status", "cms_toolbox"),
+            priority = 3
         ),
         
         "cms_list" to ToolInfo(
             name = "cms_list",
             category = ToolCategory.AI_CAPABILITIES,
-            description = "列出CMS能力模块",
+            description = "列出CMS能力模块（旧接口，建议使用cms_toolbox）",
             useCases = listOf("我装了哪些能力模块", "CMS模块列表", "有什么能力"),
             examples = listOf("cms_list()"),
             parameters = emptyMap(),
-            tips = listOf("列出所有已安装模块", "显示能力ID和说明", "显示风险级别"),
-            relatedTools = listOf("cms_call", "cms_status"),
-            priority = 3
+            tips = listOf("列出所有已安装模块", "显示能力ID和说明", "显示风险级别", "建议使用cms_toolbox替代"),
+            relatedTools = listOf("cms_call", "cms_status", "cms_toolbox"),
+            priority = 2
         ),
         
         // ═══════════════ ACI ═══════════════
