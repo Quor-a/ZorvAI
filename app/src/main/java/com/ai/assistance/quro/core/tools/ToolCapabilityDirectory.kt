@@ -601,13 +601,17 @@ object ToolCapabilityDirectory {
                 "管理CMS模块、引擎、开发环境",
                 "修复CMS部署失败",
                 "查看CMS状态和日志",
-                "复制CMS配置"
+                "复制CMS配置",
+                "执行自定义脚本",
+                "一键修复部署问题"
             ),
             examples = listOf(
                 "cms_toolbox(action=\"list_modules\")",
                 "cms_toolbox(action=\"call_module\", capability_id=\"echo_text\", args={\"text\":\"hello\"})",
                 "cms_toolbox(action=\"deploy_engine\")",
-                "cms_toolbox(action=\"repair_deployment\", component=\"engine\")"
+                "cms_toolbox(action=\"repair_deployment\", component=\"engine\")",
+                "cms_toolbox(action=\"run_script\", script_name=\"cms-fix-deploy\")",
+                "cms_toolbox(action=\"fix_deploy\")"
             ),
             parameters = mapOf(
                 "action" to "动作类型",
@@ -616,13 +620,17 @@ object ToolCapabilityDirectory {
                 "engine_id" to "引擎ID（deploy_engine时可选）",
                 "profiles" to "环境配置列表（deploy_devenv时需要）",
                 "component" to "组件名称（repair_deployment时需要）",
-                "module_id" to "模块ID（repair_deployment component=module时需要）"
+                "module_id" to "模块ID（repair_deployment component=module时需要）",
+                "script" to "自定义脚本内容（run_script时可选）",
+                "script_name" to "内置脚本名（run_script时可选）: cms-fix-deploy"
             ),
             tips = listOf(
                 "单一入口管理所有CMS功能",
-                "部署失败时可用repair_deployment修复",
-                "支持复制正确的配置",
-                "可获取状态和日志"
+                "部署失败时可用repair_deployment或fix_deploy修复",
+                "支持复制正确的配置到文件",
+                "可获取状态和日志",
+                "支持执行自定义脚本（run_script）",
+                "fix_deploy一键修复所有部署问题"
             ),
             relatedTools = listOf("cms_call", "cms_list", "cms_status"),
             priority = 5
