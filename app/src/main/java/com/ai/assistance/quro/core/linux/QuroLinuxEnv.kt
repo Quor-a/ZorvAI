@@ -664,6 +664,14 @@ object QuroLinuxEnv {
         }
         diagLog(context, "✅ proot 基础测试通过")
 
+        // 设置伪造系统数据（Android 限制了部分 /proc，Linux 程序需要）
+        diagLog(context, "设置伪造系统数据 (setup_fake_sysdata)")
+        setupFakeSysdata(context, rootfsDir)
+
+        // 修复 Android 权限兼容性（添加 Android 组 ID 到 /etc/group）
+        diagLog(context, "修复 Android 权限 (fix_permissions)")
+        fixPermissions(context, rootfsDir)
+
         // 写 DNS
         diagLog(context, "写入 resolv.conf 和 sources.list")
         val dns = deviceDnsServers(context)
@@ -1928,12 +1936,12 @@ fi
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
 
         // 需要创建符号链接的二进制文件
+        // 注意：只链接实际存在的库，不存在的跳过（ZorvAI 只有 proot 和 loader）
         val libraries = mapOf(
             "libproot.so" to "proot",
-            "libproot-loader.so" to "loader",
-            "libbash.so" to "bash",
-            "libbusybox.so" to "busybox",
-            "libtalloc.so" to "talloc"
+            "libproot-loader.so" to "loader"
+            // ZorvAI 不包含 libbash.so、libbusybox.so、libtalloc.so
+            // bash 通过 apt-get install 安装，busybox/talloc 不需要
         )
 
         libraries.forEach { (libName, linkName) ->
@@ -1963,25 +1971,6 @@ fi
                 Log.e(TAG, "❌ 创建符号链接失败: $linkName, 错误: ${e.message}")
             }
         }
-
-        // 为 busybox 创建常用命令的符号链接
-        val busybox = File(binDir, "busybox")
-        if (busybox.exists()) {
-            val busyboxCommands = listOf(
-                "awk", "ash", "basename", "bzip2", "curl", "cp", "chmod", "cut", "cat", "du", "dd",
-                "find", "grep", "gzip", "hexdump", "head", "id", "lscpu", "mkdir", "realpath", "rm",
-                "sed", "stat", "sh", "tr", "tar", "uname", "xargs", "xz", "xxd", "wget", "vi", "nano"
-            )
-            busyboxCommands.forEach { cmd ->
-                val cmdFile = File(binDir, cmd)
-                if (!cmdFile.exists()) {
-                    try {
-                        java.nio.file.Files.createSymbolicLink(cmdFile.toPath(), busybox.toPath())
-                    } catch (_: Throwable) {}
-                }
-            }
-            Log.i(TAG, "✅ 为 busybox 创建了 ${busyboxCommands.size} 个命令符号链接")
-        }
     }
 
     private fun prepareRuntimeExtras(context: Context, rootfs: File) {
@@ -1999,6 +1988,142 @@ fi
             shim.setExecutable(true, false)
         } catch (e: Exception) {
             Log.w(TAG, "prepareRuntimeExtras 部分失败（非致命）: ${e.message}")
+        }
+    }
+
+    /**
+     * 设置伪造系统数据（参考 Operit 的 setup_fake_sysdata.sh）。
+     * Android 限制了部分 /proc 入口，Linux 程序（如 apt、dpkg）需要这些数据才能正常运行。
+     */
+    private fun setupFakeSysdata(context: Context, rootfs: File) {
+        try {
+            // 从 assets 复制 setup_fake_sysdata.sh 到 rootfs
+            val scriptTarget = File(rootfs, "tmp/setup_fake_sysdata.sh")
+            scriptTarget.parentFile?.mkdirs()
+
+            try {
+                context.assets.open("linux_env/setup_fake_sysdata.sh").use { input ->
+                    FileOutputStream(scriptTarget).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                scriptTarget.setExecutable(true, false)
+                Log.i(TAG, "✅ setup_fake_sysdata.sh 已复制到 rootfs")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠ 从 assets 复制 setup_fake_sysdata.sh 失败: ${e.message}")
+                // 回退：直接在 rootfs 中创建基本的伪造数据
+                createFakeSysdataInline(rootfs)
+                return
+            }
+
+            // 通过 proot 执行 setup_fake_sysdata.sh
+            val result = runProot(context,
+                "INSTALLED_ROOTFS_DIR=/ distro_name=root " +
+                "DEFAULT_FAKE_KERNEL_RELEASE=6.2.1-qrot " +
+                "DEFAULT_FAKE_KERNEL_VERSION='#1 SMP PREEMPT_DYNAMIC' " +
+                "bash /tmp/setup_fake_sysdata.sh",
+                timeoutMs = 15_000
+            )
+            if (result.first == 0) {
+                Log.i(TAG, "✅ setup_fake_sysdata 执行成功")
+            } else {
+                Log.w(TAG, "⚠ setup_fake_sysdata 执行失败，使用内联回退: ${result.second.take(200)}")
+                createFakeSysdataInline(rootfs)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠ setupFakeSysdata 失败（非致命）: ${e.message}")
+            createFakeSysdataInline(rootfs)
+        }
+    }
+
+    /**
+     * 内联创建基本的伪造系统数据（当 setup_fake_sysdata.sh 不可用时的回退方案）。
+     */
+    private fun createFakeSysdataInline(rootfs: File) {
+        try {
+            val procDir = File(rootfs, "proc")
+            procDir.mkdirs()
+
+            // /proc/loadavg
+            File(procDir, ".loadavg").writeText("0.12 0.07 0.02 2/165 765\n")
+
+            // /proc/stat - 最小化版本
+            File(procDir, ".stat").writeText(buildString {
+                appendLine("cpu  1957 0 2877 93280 262 342 254 87 0 0")
+                appendLine("cpu0 31 0 226 12027 82 10 4 9 0 0")
+                appendLine("ctxt 140223")
+                appendLine("btime 1680020856")
+                appendLine("processes 772")
+                appendLine("procs_running 2")
+                appendLine("procs_blocked 0")
+            })
+
+            // /proc/uptime
+            File(procDir, ".uptime").writeText("124.08 932.80\n")
+
+            // /proc/version
+            File(procDir, ".version").writeText(
+                "Linux version 6.2.1-qrot (proot@quro) (gcc (GCC) 13.3.0, GNU ld (GNU Binutils) 2.42) #1 SMP PREEMPT_DYNAMIC\n"
+            )
+
+            // /proc/sys/kernel/cap_last_cap
+            val sysDir = File(rootfs, "proc/sys/kernel")
+            sysDir.mkdirs()
+            File(sysDir, "cap_last_cap").writeText("40\n")
+
+            Log.i(TAG, "✅ 内联伪造系统数据创建完成")
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠ 内联伪造系统数据创建失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 修复 Android 权限兼容性（参考 Operit 的 fix_permissions）。
+     * Android 的组 ID 在 Ubuntu 中可能不存在，导致 "cannot find name for group ID" 警告。
+     */
+    private fun fixPermissions(context: Context, rootfs: File) {
+        try {
+            // 获取当前进程的组 ID
+            val groups = try {
+                val process = Runtime.getRuntime().exec(arrayOf("id", "-G"))
+                val output = process.inputStream.bufferedReader().readText().trim()
+                process.waitFor()
+                output.split(" ").filter { it.isNotEmpty() }
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠ 获取组 ID 失败: ${e.message}")
+                emptyList()
+            }
+
+            if (groups.isEmpty()) {
+                Log.w(TAG, "⚠ 未获取到组 ID，跳过权限修复")
+                return
+            }
+
+            // 读取当前 /etc/group
+            val groupFile = File(rootfs, "etc/group")
+            if (!groupFile.exists()) {
+                Log.w(TAG, "⚠ /etc/group 不存在，跳过权限修复")
+                return
+            }
+
+            val existingGroups = groupFile.readText()
+            var modified = false
+
+            // 为每个 Android 组 ID 添加条目（如果不存在）
+            for (gid in groups) {
+                if (!existingGroups.contains(":$gid:")) {
+                    groupFile.appendText("android_group_$gid:x:$gid:\n")
+                    modified = true
+                }
+            }
+
+            if (modified) {
+                Log.i(TAG, "✅ Android 权限修复完成，添加了 ${groups.size} 个组 ID")
+            } else {
+                Log.i(TAG, "✅ 权限已正确，无需修复")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠ fixPermissions 失败（非致命）: ${e.message}")
         }
     }
 
