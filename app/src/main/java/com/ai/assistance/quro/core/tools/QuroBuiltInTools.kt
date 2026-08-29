@@ -15,6 +15,7 @@ import com.ai.assistance.quro.core.cms.QuroCmsEngineStatusTool
 import com.ai.assistance.quro.core.cms.QuroCmsUndeployTool
 import com.ai.assistance.quro.core.cms.QuroCmsToolboxTool
 import com.ai.assistance.quro.core.cms.QuroPrivStatusTool
+import com.ai.assistance.quro.core.tools.QuroDevEnvTool
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciCallTool
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciListTool
 import com.ai.assistance.quro.core.aidlaci.QuroAciHttpServerTool
@@ -259,6 +260,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(QuroCmsUndeployTool())
     // CMS v2 统一工具箱：整合模块管理、引擎管理、开发环境管理、部署修复于一体
     r.register(QuroCmsToolboxTool())
+    // 开发环境管理工具：独立管理终端开发环境的安装/卸载/检查
+    r.register(QuroDevEnvTool())
     // ACI（Agent Capability Interface）：让 AI 作为控制方发现并调用第三方 App 暴露的能力
     r.register(QuroAidlAciListTool())
     r.register(QuroAidlAciCallTool())

@@ -193,7 +193,32 @@ object ToolCapabilityDirectory {
             relatedTools = listOf("linux_run", "linux_status"),
             priority = 3
         ),
-        
+
+        "dev_env" to ToolInfo(
+            name = "dev_env",
+            category = ToolCategory.TERMINAL_LINUX,
+            description = "开发环境管理：安装/卸载/检查终端开发环境（Node.js、Python、Java、Rust、Go、Git）",
+            useCases = listOf("安装Node.js环境", "装Python", "检查Java环境", "卸载Rust", "看看有哪些开发环境"),
+            examples = listOf(
+                "dev_env(action=\"install\", env=\"node\")",
+                "dev_env(action=\"uninstall\", env=\"python\")",
+                "dev_env(action=\"check\")",
+                "dev_env(action=\"list\")"
+            ),
+            parameters = mapOf(
+                "action" to "动作: install/uninstall/check/list",
+                "env" to "环境名: node/python/java/rust/go/git/all"
+            ),
+            tips = listOf(
+                "命令通过终端会话执行，输出在终端界面可见",
+                "install返回安装命令，需要在终端执行",
+                "check返回检查命令，可查看环境是否已安装",
+                "list列出所有支持的环境"
+            ),
+            relatedTools = listOf("linux_run", "terminal_run"),
+            priority = 4
+        ),
+
         // ═══════════════ 网络/Web ═══════════════
         "http_request" to ToolInfo(
             name = "http_request",
@@ -980,12 +1005,13 @@ object ToolCapabilityDirectory {
             "语音朗读" to listOf("speak"),
             "MCP工具" to listOf("mcp_call", "mcp_list_tools"),
             "CMS模块" to listOf("cms_toolbox", "cms_call", "cms_list"),
+            "开发环境" to listOf("dev_env", "linux_install", "linux_run"),
             "第三方App" to listOf("aci_call", "aci_list"),
             "流体云/状态栏" to listOf("fluid_cloud_notify"),
             "AI思考中/任务进度" to listOf("fluid_cloud(action=create)", "fluid_cloud(action=update)"),
             "CMS模块管理" to listOf("cms_toolbox(action=list_modules)", "cms_toolbox(action=call_module)"),
             "CMS引擎部署" to listOf("cms_toolbox(action=deploy_engine)", "cms_toolbox(action=status_engine)"),
-            "开发环境管理" to listOf("cms_toolbox(action=deploy_devenv)", "cms_toolbox(action=status_devenv)"),
+            "开发环境管理" to listOf("dev_env(action=install)", "dev_env(action=check)"),
             "CMS部署修复" to listOf("cms_toolbox(action=repair_deployment)", "cms_toolbox(action=fix_deploy)"),
             "AI自写CMS模块" to listOf("cms_toolbox(action=create_module)", "cms_toolbox(action=deploy_custom)"),
             "AI自写引擎脚本" to listOf("cms_toolbox(action=create_engine_script)"),
