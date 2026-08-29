@@ -1,0 +1,12 @@
+{
+  "moduleId": "quro.term.httpd",
+  "name": "终端·静态HTTP服务",
+  "version": "1.0.1",
+  "entry": "entry.sh",
+  "entryContent": "#!/bin/sh\nPORT=\"${QURO_HTTP_PORT:-${1:-8080}}\"\nDIR=\"${QURO_SERVE_DIR:-${2:-/root/cms/quro.term.httpd/www}}\"\nmkdir -p \"$DIR\"\nif [ ! -f \"$DIR/index.html\" ]; then\n  echo \"<h1>Quro Terminal HTTPD</h1><p>ready</p>\" > \"$DIR/index.html\"\nfi\necho \"[quro.term.httpd] dir=$DIR port=$PORT\"\ncd \"$DIR\"\nexec python3 -m http.server \"$PORT\" --bind 0.0.0.0",
+  "apkDeps": "",
+  "pipDeps": "",
+  "envProfiles": "",
+  "env": {},
+  "ports": ""
+}

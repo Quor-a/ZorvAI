@@ -73,7 +73,13 @@ object CmsResidentRuntime {
 
         val gdir = CmsTerminalDeployer.guestDir(module.id)
         // exec 让 server 直接顶替 sh，成为 proot 的直接子进程；proot 常驻，server 即常驻。
-        val command = "cd $gdir && exec sh ./entry.sh"
+        // 构建要传递给 entry.sh 的参数（按 envSpec 中定义的 argName 顺序）
+        val argsList = mutableListOf<String>()
+        envSpec.forEach { (argName, _) ->
+            args[argName]?.takeIf { it.isNotBlank() }?.let { argsList.add(it) }
+        }
+        val argsStr = if (argsList.isNotEmpty()) " " + argsList.joinToString(" ") { "\"$it\"" } else ""
+        val command = "cd $gdir && exec sh ./entry.sh$argsStr"
 
         val extraEnv = mutableMapOf<String, String>()
         envSpec.forEach { (argName, envName) ->
