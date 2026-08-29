@@ -140,7 +140,6 @@ fun QuroCmsScreen(onClose: () -> Unit) {
     var pendingExport by remember { mutableStateOf<List<QuroCmsModule>>(emptyList()) }
     var pendingPerm by remember { mutableStateOf<QuroCmsPermission?>(null) }
     var permDeferred = remember { mutableStateOf<CompletableDeferred<AuthorizationLevel?>?>(null) }
-    var showDevEnvPage by remember { mutableStateOf(false) }
 
     fun refresh() {
         modules = repo.load()
@@ -234,7 +233,6 @@ fun QuroCmsScreen(onClose: () -> Unit) {
                     onDeployed = { modules = repo.load() },
                     onExport = { showExportPicker = true },
                     onImport = { importModulesLauncher.launch(arrayOf("application/json")) },
-                    onOpenDevEnv = { showDevEnvPage = true },
                 )
                 "auth" -> AuthSection(
                     auths = auths,
@@ -247,15 +245,6 @@ fun QuroCmsScreen(onClose: () -> Unit) {
                     onCall = { callPair = it },
                 )
             }
-        }
-    }
-
-    // 开发环境管理页（全屏覆盖层）
-    if (showDevEnvPage) {
-        // 拦截系统返回键：先关闭开发环境页，再关闭整个CMS
-        BackHandler { showDevEnvPage = false }
-        Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
-            QuroDevEnvScreen(onBack = { showDevEnvPage = false })
         }
     }
 
@@ -360,7 +349,6 @@ private fun ModulesSection(
     onDeployed: () -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
-    onOpenDevEnv: () -> Unit,
 ) {
     val ctx = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
@@ -570,13 +558,6 @@ private fun ModulesSection(
                 modifier = Modifier.weight(1f),
                 enabled = !busyOneClick,
             ) { Text(if (busyOneClick) "部署中…" else "一键部署到终端") }
-        }
-        // 开发环境入口
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = { onOpenDevEnv() },
-                modifier = Modifier.weight(1f),
-            ) { Text("☕ 开发环境 (Java/Rust/Go)") }
         }
         // 模块导入 / 导出（SAF）
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
