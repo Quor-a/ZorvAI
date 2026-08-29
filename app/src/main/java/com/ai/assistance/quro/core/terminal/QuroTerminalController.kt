@@ -181,9 +181,10 @@ object QuroTerminalController {
             val (prootPath, prootArgs) = linuxLaunch
             val env = QuroLinuxEnv.shellEnv(context)
             
-            // prootArgs 已包含完整参数：--rootfs=... -0 -w /root /bin/sh -c
-            // 只需追加实际要执行的命令
-            val fullCommand = listOf(prootPath) + prootArgs + listOf(command)
+            // prootArgs 已包含完整参数：--rootfs=... -0 -w /root /bin/sh
+            // shellLaunch 返回的 prootArgs 末尾是 /bin/sh（无 -c），需手动补上 -c 才能让 sh 把 command 当命令字符串执行
+            // 否则 sh 会把 command 当文件名 → "cannot open <command>: No such file"
+            val fullCommand = listOf(prootPath) + prootArgs + listOf("-c", command)
             
             val pb = ProcessBuilder(fullCommand)
             pb.directory(File(context.filesDir.absolutePath))
