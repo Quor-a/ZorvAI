@@ -259,9 +259,9 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         }
         return try {
             val ok = appContext.bindService(intent, conn, Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT)
-            if (ok) connMap[packageName] = conn
-            else Log.e(TAG, "❌ 绑定失败：$packageName")
-            AciDiag.log(TAG, "doBind $packageName -> bindService=${ok}")
+            if (ok) connMap[mapKey] = conn
+            else Log.e(TAG, "❌ 绑定失败：$packageName (mapKey=$mapKey)")
+            AciDiag.log(TAG, "doBind $packageName (mapKey=$mapKey) -> bindService=${ok}")
             ok
         } catch (e: SecurityException) {
             Log.e(TAG, "❌ 绑定 SecurityException：${e.message}")
@@ -285,11 +285,13 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         // millis < 0: -1717986918400）。这里把指数与结果都夹紧，杜绝溢出。
         val exp = (attempt - 1).coerceAtMost(4)
         val delay = (800L * (1 shl exp)).coerceIn(0L, 8000L)
+        // 对于终端服务，使用实际的包名而不是键
+        val actualPkg = if (pkg.contains(":terminal")) pkg.split(":")[0] else pkg
         Thread {
             try { Thread.sleep(delay) } catch (ignored: InterruptedException) {}
             if (serviceMap[pkg] == null) {
                 Log.i(TAG, "🔄 重绑：$pkg（第 $attempt 次，延迟 ${delay}ms）")
-                doBind(pkg, cls)
+                doBind(actualPkg, cls, null, pkg)
             }
         }.start()
     }
@@ -908,40 +910,36 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
     /** 当前所有已发现 App 的状态快照（含绑定态 + 能力清单），供 UI 直接展示。 */
     fun getAppStatuses(): List<AciAppStatus> {
         val result = mutableListOf<AciAppStatus>()
-        val processedPkgs = mutableSetOf<String>()
+        val processedKeys = mutableSetOf<String>()
 
-        // 首先处理所有已发现的包
-        for ((pkg, className) in classMap) {
-            if (processedPkgs.contains(pkg)) continue
-            processedPkgs.add(pkg)
+        // 遍历所有已发现的服务（键可能是 "com.ai.assistance.quro" 或 "com.ai.assistance.quro:terminal"）
+        for ((key, serviceCls) in classMap) {
+            if (processedKeys.contains(key)) continue
+            processedKeys.add(key)
 
-            // 查找该包下的所有服务类
-            val servicesForPkg = classMap.filter { it.key == pkg }
-            for ((_, serviceCls) in servicesForPkg) {
-                val key = if (serviceCls.contains("Terminal")) "$pkg:terminal" else pkg
-                result.add(AciAppStatus(
-                    packageName = pkg,
-                    appName = nameMap[pkg] ?: pkg,
-                    serviceClass = serviceCls,
-                    bound = serviceMap[key] != null,
-                    capabilities = capMap[key] ?: emptyList(),
-                    lastSeen = lastSeenMap[key] ?: 0L
-                ))
+            // 从键中提取实际包名（处理 "pkg:terminal" 格式）
+            val actualPkg = if (key.contains(":")) key.split(":")[0] else key
+            val isTerminal = key.contains(":terminal") || serviceCls.contains("Terminal")
+            
+            // 使用正确的键查找绑定状态、能力、最后见到时间
+            val bound = serviceMap[key] != null
+            val capabilities = capMap[key] ?: emptyList()
+            val lastSeen = lastSeenMap[key] ?: 0L
+            
+            // 获取应用名称
+            val appName = if (isTerminal) {
+                "${nameMap[actualPkg] ?: actualPkg} - 终端"
+            } else {
+                nameMap[key] ?: nameMap[actualPkg] ?: actualPkg
             }
-        }
 
-        // 确保终端服务被纳入（如果还没有）
-        val selfPkg = appContext.packageName
-        val terminalCls = ".service.QuroTerminalAciService"
-        if (!result.any { it.serviceClass == terminalCls }) {
-            val terminalKey = "$selfPkg:terminal"
             result.add(AciAppStatus(
-                packageName = selfPkg,
-                appName = "${nameMap[selfPkg] ?: selfPkg} - 终端",
-                serviceClass = terminalCls,
-                bound = serviceMap[terminalKey] != null,
-                capabilities = capMap[terminalKey] ?: emptyList(),
-                lastSeen = lastSeenMap[terminalKey] ?: 0L
+                packageName = actualPkg,
+                appName = appName,
+                serviceClass = serviceCls,
+                bound = bound,
+                capabilities = capabilities,
+                lastSeen = lastSeen
             ))
         }
 

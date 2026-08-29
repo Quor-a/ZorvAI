@@ -498,7 +498,19 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
 
     fun reload() { statuses = mgr.getAppStatuses() }
 
-    LaunchedEffect(Unit) { reload() }
+    // 首次加载后自动刷新多次，等待异步绑定完成（bindWithWake 是线程池异步绑定，需要时间）
+    LaunchedEffect(Unit) {
+        reload()
+        // 第 1 秒后刷新一次（快速绑定的场景）
+        delay(1000)
+        reload()
+        // 第 3 秒后再次刷新（广播唤醒 + 重绑的场景）
+        delay(2000)
+        reload()
+        // 第 6 秒后最后一次自动刷新
+        delay(3000)
+        reload()
+    }
 
     Scaffold(
         topBar = {
