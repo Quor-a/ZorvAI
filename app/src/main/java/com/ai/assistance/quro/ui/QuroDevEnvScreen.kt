@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.ai.assistance.quro.core.cms.CmsEnvProvisioner
 import com.ai.assistance.quro.core.cms.EnvProfile
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.terminal.QuroTerminalController
 import com.ai.assistance.quro.ui.theme.Line
 import kotlinx.coroutines.*
 
@@ -170,41 +171,61 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
 
                     DevEnvCard(
                         info = info,
+                        installScript = EnvProfile.getInstallScript(profile),
                         isReady = isReady,
                         isDeploying = isDeploying,
                         enabled = termReady && !isDeploying,
                         onDeploy = {
-                            deploying = profile.name
-                            deployLogs = deployLogs + "\n--- 开始安装 ${profile.name} ---"
+                            // 发送安装命令给终端会话
+                            val script = EnvProfile.getInstallScript(profile)
                             scope.launch(Dispatchers.IO) {
                                 try {
-                                    // 使用实时日志版本
-                                    val result = CmsEnvProvisioner.provisionWithLog(ctx, profile) { line ->
-                                        // 实时回调，更新UI
-                                        kotlinx.coroutines.runBlocking {
-                                            withContext(Dispatchers.Main) {
-                                                deployLogs = deployLogs + line
-                                            }
-                                        }
-                                    }
-                                    
+                                    // 确保终端会话存在
+                                    val session = QuroTerminalController.createSession(ctx)
                                     withContext(Dispatchers.Main) {
-                                        deployProgress = ""
-                                        Toast.makeText(ctx, result.lines().firstOrNull() ?: result, Toast.LENGTH_LONG).show()
+                                        Toast.makeText(ctx, "发送安装命令到终端", Toast.LENGTH_SHORT).show()
                                     }
-                                    val ready = CmsEnvProvisioner.isReady(ctx, profile)
+                                    // 发送安装命令给终端
+                                    QuroTerminalController.sendToShell(script)
                                     withContext(Dispatchers.Main) {
-                                        envStates = envStates + (profile.name to ready)
+                                        deployLogs = deployLogs + "✅ 已发送安装命令到终端: ${profile.name}"
                                     }
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
-                                        deployLogs = deployLogs + "❌ 操作异常: ${e.message}"
-                                        deployProgress = ""
+                                        deployLogs = deployLogs + "❌ 发送命令失败: ${e.message}"
                                     }
-                                } finally {
+                                }
+                            }
+                        },
+                        onDelete = {
+                            // 删除已安装环境
+                            scope.launch(Dispatchers.IO) {
+                                try {
+                                    val deleteScript = when (profile) {
+                                        EnvProfile.PYTHON, EnvProfile.PYTHON_LINK, EnvProfile.PIP, EnvProfile.UV, EnvProfile.VENV ->
+                                            "apt-get remove -y python3 python3-pip python3-venv 2>/dev/null; rm -rf /root/cms-venv /usr/local/bin/python"
+                                        EnvProfile.NODEJS, EnvProfile.PNPM ->
+                                            "apt-get remove -y nodejs npm 2>/dev/null; npm uninstall -g pnpm typescript 2>/dev/null; rm -rf /usr/local/lib/node_modules /usr/local/bin/pnpm /usr/local/bin/tsc"
+                                        EnvProfile.SSH, EnvProfile.SSH_CLIENT, EnvProfile.SSHPASS, EnvProfile.SSH_SERVER ->
+                                            "apt-get remove -y openssh-client openssh-server sshpass 2>/dev/null; rm -f /etc/ssh/ssh_host_*_key"
+                                        EnvProfile.JAVA, EnvProfile.OPENJDK17, EnvProfile.GRADLE ->
+                                            "apt-get remove -y openjdk-17-jdk-headless gradle 2>/dev/null"
+                                        EnvProfile.RUST ->
+                                            "apt-get remove -y rustc cargo 2>/dev/null; rm -rf /root/.cargo /root/.rustup"
+                                        EnvProfile.GO ->
+                                            "apt-get remove -y golang-go 2>/dev/null; rm -rf /usr/local/go"
+                                        else -> "echo 'No delete script for ${profile.name}'"
+                                    }
                                     withContext(Dispatchers.Main) {
-                                        deploying = null
-                                        deployProgress = ""
+                                        Toast.makeText(ctx, "发送删除命令到终端", Toast.LENGTH_SHORT).show()
+                                    }
+                                    QuroTerminalController.sendToShell(deleteScript)
+                                    withContext(Dispatchers.Main) {
+                                        deployLogs = deployLogs + "✅ 已发送删除命令: ${profile.name}"
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        deployLogs = deployLogs + "❌ 删除命令发送失败: ${e.message}"
                                     }
                                 }
                             }
@@ -226,22 +247,30 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                         busyAll = true
                         scope.launch(Dispatchers.IO) {
                             try {
+                                // 确保终端会话存在
+                                val session = QuroTerminalController.createSession(ctx)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(ctx, "发送全部安装命令到终端", Toast.LENGTH_SHORT).show()
+                                }
+                                
+                                // 发送所有安装命令给终端
                                 envSections.forEach { section ->
                                     section.items.forEach { (profile, _) ->
-                                        deploying = profile.name
+                                        val script = EnvProfile.getInstallScript(profile)
+                                        QuroTerminalController.sendToShell(script)
                                         withContext(Dispatchers.Main) {
-                                            deployProgress = "正在部署 ${profile.name}..."
-                                        }
-                                        CmsEnvProvisioner.provision(ctx, profile)
-                                        val ready = CmsEnvProvisioner.isReady(ctx, profile)
-                                        withContext(Dispatchers.Main) {
-                                            envStates = envStates + (profile.name to ready)
+                                            deployLogs = deployLogs + "✅ 已发送安装命令: ${profile.name}"
                                         }
                                     }
                                 }
+                                
                                 withContext(Dispatchers.Main) {
-                                    Toast.makeText(ctx, "全部环境部署完成", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(ctx, "全部安装命令已发送到终端", Toast.LENGTH_LONG).show()
                                     deployProgress = ""
+                                }
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    deployLogs = deployLogs + "❌ 发送命令失败: ${e.message}"
                                 }
                             } finally {
                                 withContext(Dispatchers.Main) {
@@ -255,7 +284,7 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !busyAll && deploying == null,
                 ) {
-                    Text(if (busyAll) "部署中…" else "一键部署全部环境")
+                    Text(if (busyAll) "发送中…" else "一键发送全部安装命令")
                 }
             }
 
@@ -336,12 +365,19 @@ data class DevEnvInfo(
 @Composable
 private fun DevEnvCard(
     info: DevEnvInfo,
+    installScript: String,
     isReady: Boolean,
     isDeploying: Boolean,
     enabled: Boolean,
     onDeploy: () -> Unit,
+    onDelete: () -> Unit,
     deployProgress: String = "",
 ) {
+    val ctx = LocalContext.current
+    var showCommandBox by remember { mutableStateOf(false) }
+    var editingCommand by remember { mutableStateOf("") }
+    var isEditing by remember { mutableStateOf(false) }
+
     Column(
         Modifier
             .fillMaxWidth()
@@ -377,27 +413,127 @@ private fun DevEnvCard(
                 }
             }
         }
+
+        // 操作按钮行
         Row(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // 发送/安装按钮
             Button(
                 onClick = onDeploy,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
                 enabled = enabled,
                 colors = if (isReady) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer) else ButtonDefaults.buttonColors(),
             ) {
                 Text(
                     when {
-                        isDeploying -> "部署中…"
-                        isReady -> "检查更新"
-                        else -> "安装"
+                        isDeploying -> "发送中…"
+                        isReady -> "重新安装"
+                        else -> "发送到终端"
                     },
                     color = if (isReady) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
+
+            // 删除按钮
+            if (isReady) {
+                Button(
+                    onClick = onDelete,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.onErrorContainer)
+                }
+            }
+
+            // 查看命令按钮
+            IconButton(onClick = { showCommandBox = !showCommandBox }) {
+                Icon(
+                    if (showCommandBox) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = "查看命令",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
         }
+
+        // 命令框
+        if (showCommandBox) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "安装命令",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row {
+                        // 复制按钮
+                        IconButton(
+                            onClick = {
+                                val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("安装命令", installScript)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(ctx, "命令已复制", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(Icons.Filled.ContentCopy, "复制", modifier = Modifier.size(16.dp))
+                        }
+                        // 编辑按钮
+                        IconButton(
+                            onClick = {
+                                isEditing = !isEditing
+                                editingCommand = installScript
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                if (isEditing) Icons.Filled.Save else Icons.Filled.Edit,
+                                if (isEditing) "保存" else "编辑",
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (isEditing) {
+                    // 编辑模式 - 文本框
+                    OutlinedTextField(
+                        value = editingCommand,
+                        onValueChange = { editingCommand = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 100.dp, max = 200.dp),
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    )
+                } else {
+                    // 只读模式
+                    Text(
+                        installScript,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 150.dp)
+                            .verticalScroll(rememberScrollState())
+                    )
+                }
+            }
+        }
+
         Spacer(Modifier.height(4.dp))
     }
 }

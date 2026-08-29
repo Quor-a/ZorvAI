@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -373,6 +375,13 @@ private fun ModulesSection(
             es.lastError.isNotBlank() -> "⛔ 部署失败" to MaterialTheme.colorScheme.error
             else -> "○ 未部署引擎" to MaterialTheme.colorScheme.onSurfaceVariant
         }
+        var showEngineScripts by remember { mutableStateOf(false) }
+        var editingBootstrap by remember { mutableStateOf("") }
+        var editingProvisioner by remember { mutableStateOf("") }
+        var isEditingBootstrap by remember { mutableStateOf(false) }
+        var isEditingProvisioner by remember { mutableStateOf(false) }
+        val enginePackage = remember { CmsEnginePackage.builtin() }
+
         Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).border(1.dp, Line, RoundedCornerShape(12.dp))) {
             Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -393,6 +402,147 @@ private fun ModulesSection(
             if (es.services.isNotEmpty()) {
                 Text("共享服务：${es.services.joinToString(", ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp))
             }
+
+            // 查看/编辑脚本按钮
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                OutlinedButton(
+                    onClick = { showEngineScripts = !showEngineScripts },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        if (showEngineScripts) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (showEngineScripts) "收起脚本" else "查看/编辑引擎脚本")
+                }
+            }
+
+            // 脚本编辑区
+            if (showEngineScripts) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(8.dp)
+                ) {
+                    // Bootstrap 脚本
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Bootstrap 引导脚本", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row {
+                            IconButton(
+                                onClick = {
+                                    val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText("Bootstrap脚本", enginePackage.bootstrapContent)
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(ctx, "脚本已复制", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(Icons.Filled.ContentCopy, "复制", modifier = Modifier.size(16.dp))
+                            }
+                            IconButton(
+                                onClick = {
+                                    isEditingBootstrap = !isEditingBootstrap
+                                    editingBootstrap = enginePackage.bootstrapContent
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    if (isEditingBootstrap) Icons.Filled.Save else Icons.Filled.Edit,
+                                    if (isEditingBootstrap) "保存" else "编辑",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                    if (isEditingBootstrap) {
+                        OutlinedTextField(
+                            value = editingBootstrap,
+                            onValueChange = { editingBootstrap = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 150.dp, max = 300.dp),
+                            textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        )
+                    } else {
+                        Text(
+                            enginePackage.bootstrapContent,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 200.dp)
+                                .verticalScroll(rememberScrollState())
+                        )
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Provisioner 脚本
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Provisioner 环境脚本", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row {
+                            IconButton(
+                                onClick = {
+                                    val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText("Provisioner脚本", enginePackage.provisionerContent)
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(ctx, "脚本已复制", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(Icons.Filled.ContentCopy, "复制", modifier = Modifier.size(16.dp))
+                            }
+                            IconButton(
+                                onClick = {
+                                    isEditingProvisioner = !isEditingProvisioner
+                                    editingProvisioner = enginePackage.provisionerContent
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    if (isEditingProvisioner) Icons.Filled.Save else Icons.Filled.Edit,
+                                    if (isEditingProvisioner) "保存" else "编辑",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                    if (isEditingProvisioner) {
+                        OutlinedTextField(
+                            value = editingProvisioner,
+                            onValueChange = { editingProvisioner = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 100.dp, max = 200.dp),
+                            textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        )
+                    } else {
+                        Text(
+                            enginePackage.provisionerContent,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 150.dp)
+                                .verticalScroll(rememberScrollState())
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(4.dp))
         }
         Spacer(Modifier.height(8.dp))
@@ -557,6 +707,97 @@ private fun ModulesSection(
                         enabled = !busy && deployStatus != "deploying",
                     ) {
                         Text(if (busy) "部署中…" else "部署到终端")
+                    }
+                }
+
+                // 终端模块脚本查看/编辑区
+                if (m.terminalEntry.isNotBlank()) {
+                    var showModuleScript by remember { mutableStateOf(false) }
+                    var editingModuleEntry by remember { mutableStateOf("") }
+                    var isEditingModuleEntry by remember { mutableStateOf(false) }
+
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showModuleScript = !showModuleScript },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                if (showModuleScript) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (showModuleScript) "收起 entry.sh" else "查看/编辑 entry.sh")
+                        }
+                    }
+
+                    if (showModuleScript) {
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("entry.sh 脚本", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row {
+                                    IconButton(
+                                        onClick = {
+                                            val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            val clip = ClipData.newPlainText("entry.sh", m.terminalEntry)
+                                            clipboard.setPrimaryClip(clip)
+                                            Toast.makeText(ctx, "脚本已复制", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(Icons.Filled.ContentCopy, "复制", modifier = Modifier.size(16.dp))
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            isEditingModuleEntry = !isEditingModuleEntry
+                                            editingModuleEntry = m.terminalEntry
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            if (isEditingModuleEntry) Icons.Filled.Save else Icons.Filled.Edit,
+                                            if (isEditingModuleEntry) "保存" else "编辑",
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            if (isEditingModuleEntry) {
+                                OutlinedTextField(
+                                    value = editingModuleEntry,
+                                    onValueChange = { editingModuleEntry = it },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 100.dp, max = 250.dp),
+                                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                )
+                            } else {
+                                Text(
+                                    m.terminalEntry,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 200.dp)
+                                        .verticalScroll(rememberScrollState())
+                                )
+                            }
+                        }
                     }
                 }
             }

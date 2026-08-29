@@ -7,6 +7,7 @@ import com.ai.assistance.quro.core.tools.QuroTool
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 
@@ -61,11 +62,31 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
    - lines: 行数（可选，默认 50）
 10. get_status: 获取 CMS 总体状态（无参数）
 
+--- AI 自写脚本部署 ---
+11. create_module: 创建自定义 CMS 模块
+   - module_id: 模块 ID（如 "my.httpd"）
+   - entry_script: entry.sh 脚本内容
+   - cms_package: cms-package.json 内容（可选，自动生成）
+   - backend_script: 后端脚本内容（可选，如 backend.js）
+12. create_engine_script: 创建自定义引擎脚本
+   - script_type: 脚本类型（"bootstrap" 或 "provisioner"）
+   - script_content: 脚本内容
+13. create_devenv_script: 创建自定义开发环境脚本
+   - env_name: 环境名称（如 "myenv"）
+   - install_script: 安装脚本内容
+14. deploy_custom: 部署自定义脚本
+   - type: 部署类型（"module", "engine", "devenv"）
+   - id: 模块ID/环境名称
+   - script_content: 脚本内容（create后部署时可省略）
+15. list_scripts: 列出自定义脚本（无参数）
+
 示例：
 - cms_toolbox(action="list_modules")
 - cms_toolbox(action="call_module", capability_id="echo_text", args={"text":"hello"})
 - cms_toolbox(action="deploy_engine")
 - cms_toolbox(action="repair_deployment", component="engine")
+- cms_toolbox(action="create_module", module_id="my.httpd", entry_script="#!/bin/sh\\npython3 -m http.server 8080")
+- cms_toolbox(action="deploy_custom", type="module", id="my.httpd")
 """.trimIndent()
 
     override val parametersJson = """{
@@ -79,7 +100,16 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             "profiles":{"type":"array","items":{"type":"string"},"description":"环境配置列表（deploy_devenv 时需要）"},
             "component":{"type":"string","description":"组件名称（repair_deployment 时需要）"},
             "module_id":{"type":"string","description":"模块 ID（repair_deployment component=module 时需要）"},
-            "lines":{"type":"integer","description":"日志行数（get_logs 时可选，默认 50）"}
+            "lines":{"type":"integer","description":"日志行数（get_logs 时可选，默认 50）"},
+            "entry_script":{"type":"string","description":"entry.sh 脚本内容（create_module 时需要）"},
+            "cms_package":{"type":"string","description":"cms-package.json 内容（create_module 时可选）"},
+            "backend_script":{"type":"string","description":"后端脚本内容（create_module 时可选）"},
+            "script_type":{"type":"string","description":"脚本类型（create_engine_script 时需要）"},
+            "script_content":{"type":"string","description":"脚本内容（create_engine_script/create_devenv_script 时需要）"},
+            "env_name":{"type":"string","description":"环境名称（create_devenv_script 时需要）"},
+            "install_script":{"type":"string","description":"安装脚本内容（create_devenv_script 时需要）"},
+            "type":{"type":"string","description":"部署类型（deploy_custom 时需要）"},
+            "id":{"type":"string","description":"模块ID/环境名称（deploy_custom 时需要）"}
         },
         "required":["action"]
     }"""
@@ -108,7 +138,13 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             "fix_modules" -> handleFixModules(context, obj)
             "save_fix_scripts" -> handleSaveFixScripts(context, obj)
             "save_install_scripts" -> handleSaveInstallScripts(context, obj)
-            else -> "不支持的 action: $action\n\n可用 action:\n- 模块管理: list_modules, call_module\n- 引擎管理: deploy_engine, status_engine\n- 开发环境: deploy_devenv, status_devenv\n- 修复部署: repair_deployment, fix_deploy\n- 配置管理: copy_config\n- 脚本操作: run_script, get_install_scripts, fix_modules\n- 保存到文件: save_fix_scripts, save_install_scripts\n- 日志状态: get_logs, get_status"
+            // AI 自写脚本部署
+            "create_module" -> handleCreateModule(context, obj)
+            "create_engine_script" -> handleCreateEngineScript(context, obj)
+            "create_devenv_script" -> handleCreateDevenvScript(context, obj)
+            "deploy_custom" -> handleDeployCustom(context, obj)
+            "list_scripts" -> handleListScripts(context)
+            else -> "不支持的 action: $action\n\n可用 action:\n- 模块管理: list_modules, call_module\n- 引擎管理: deploy_engine, status_engine\n- 开发环境: deploy_devenv, status_devenv\n- 修复部署: repair_deployment, fix_deploy\n- 配置管理: copy_config\n- 脚本操作: run_script, get_install_scripts, fix_modules\n- 保存到文件: save_fix_scripts, save_install_scripts\n- AI自写部署: create_module, create_engine_script, create_devenv_script, deploy_custom, list_scripts\n- 日志状态: get_logs, get_status"
         }
     }
 
@@ -914,6 +950,309 @@ echo "🎉 修复完成！"
         savedFiles.forEach { sb.appendLine("  - $it") }
         sb.appendLine("")
         sb.appendLine("使用方式：在终端中 sh /sdcard/Download/Quro/install_scripts/install_xxx.sh")
+
+        return sb.toString().trim()
+    }
+
+    // ═══════════════ AI 自写脚本部署 ═══════════════
+
+    /**
+     * 创建自定义 CMS 模块
+     */
+    private fun handleCreateModule(context: Context, obj: JSONObject): String {
+        val moduleId = obj.optString("module_id", "").trim()
+        if (moduleId.isEmpty()) return "缺少 module_id 参数。"
+
+        val entryScript = obj.optString("entry_script", "").trim()
+        if (entryScript.isEmpty()) return "缺少 entry_script 参数。"
+
+        val cmsPackageJson = obj.optString("cms_package", "").trim()
+        val backendScript = obj.optString("backend_script", "").trim()
+
+        return try {
+            // 1. 创建模块目录
+            val moduleDir = File(context.filesDir, "cms_modules/$moduleId")
+            moduleDir.mkdirs()
+
+            // 2. 写入 entry.sh
+            val entryFile = File(moduleDir, "entry.sh")
+            entryFile.writeText(entryScript)
+
+            // 3. 生成或使用提供的 cms-package.json
+            val cmsPackage = if (cmsPackageJson.isNotEmpty()) {
+                cmsPackageJson
+            } else {
+                // 自动生成
+                JSONObject().apply {
+                    put("moduleId", moduleId)
+                    put("name", moduleId)
+                    put("version", "1.0.0")
+                    put("entry", "entry.sh")
+                    put("entryContent", entryScript)
+                    put("apkDeps", "")
+                    put("pipDeps", "")
+                    put("envProfiles", "")
+                    put("env", JSONObject())
+                    put("ports", "")
+                }.toString(2)
+            }
+            val cmsPackageFile = File(moduleDir, "cms-package.json")
+            cmsPackageFile.writeText(cmsPackage)
+
+            // 4. 如果提供了后端脚本，写入
+            if (backendScript.isNotEmpty()) {
+                val backendFile = File(moduleDir, "backend.js")
+                backendFile.writeText(backendScript)
+            }
+
+            // 5. 注册到 CMS 仓库
+            val repo = QuroCmsRepository(context)
+            val module = QuroCmsModule(
+                id = moduleId,
+                name = moduleId,
+                version = "1.0.0",
+                description = "自定义模块: $moduleId",
+                terminalEntry = entryScript,
+                capabilities = listOf(
+                    QuroCmsCapability(
+                        id = "${moduleId}_run",
+                        summary = "运行 $moduleId",
+                        schema = "{}",
+                        requiresPermissions = emptyList(),
+                        constraints = PermissionConstraints(),
+                        actionType = "terminal",
+                        action = "sh ${moduleDir.absolutePath}/entry.sh"
+                    )
+                )
+            )
+            repo.upsert(module)
+
+            "✅ 自定义 CMS 模块创建成功\n" +
+                "模块 ID: $moduleId\n" +
+                "目录: ${moduleDir.absolutePath}\n" +
+                "文件: entry.sh, cms-package.json${if (backendScript.isNotEmpty()) ", backend.js" else ""}\n\n" +
+                "使用方式:\n" +
+                "1. 部署: cms_toolbox(action=\"deploy_custom\", type=\"module\", id=\"$moduleId\")\n" +
+                "2. 调用: cms_toolbox(action=\"call_module\", capability_id=\"${moduleId}_run\")"
+        } catch (e: Exception) {
+            "❌ 创建模块失败: ${e.message}"
+        }
+    }
+
+    /**
+     * 创建自定义引擎脚本
+     */
+    private fun handleCreateEngineScript(context: Context, obj: JSONObject): String {
+        val scriptType = obj.optString("script_type", "").trim()
+        if (scriptType.isEmpty() || scriptType !in listOf("bootstrap", "provisioner")) {
+            return "缺少或无效的 script_type 参数。可用值: bootstrap, provisioner"
+        }
+
+        val scriptContent = obj.optString("script_content", "").trim()
+        if (scriptContent.isEmpty()) return "缺少 script_content 参数。"
+
+        return try {
+            val scriptsDir = File(context.filesDir, "cms_scripts")
+            scriptsDir.mkdirs()
+
+            val scriptFile = File(scriptsDir, "engine_${scriptType}.sh")
+            scriptFile.writeText(scriptContent)
+
+            "✅ 自定义引擎脚本创建成功\n" +
+                "类型: $scriptType\n" +
+                "文件: ${scriptFile.absolutePath}\n\n" +
+                "使用方式:\n" +
+                "1. 部署: cms_toolbox(action=\"deploy_custom\", type=\"engine\", id=\"$scriptType\")\n" +
+                "2. 执行: cms_toolbox(action=\"run_script\", script=\"${scriptContent.take(50)}...\")"
+        } catch (e: Exception) {
+            "❌ 创建引擎脚本失败: ${e.message}"
+        }
+    }
+
+    /**
+     * 创建自定义开发环境脚本
+     */
+    private fun handleCreateDevenvScript(context: Context, obj: JSONObject): String {
+        val envName = obj.optString("env_name", "").trim()
+        if (envName.isEmpty()) return "缺少 env_name 参数。"
+
+        val installScript = obj.optString("install_script", "").trim()
+        if (installScript.isEmpty()) return "缺少 install_script 参数。"
+
+        return try {
+            val scriptsDir = File(context.filesDir, "cms_scripts/devenv")
+            scriptsDir.mkdirs()
+
+            val scriptFile = File(scriptsDir, "install_${envName}.sh")
+            scriptFile.writeText(installScript)
+
+            "✅ 自定义开发环境脚本创建成功\n" +
+                "环境名称: $envName\n" +
+                "文件: ${scriptFile.absolutePath}\n\n" +
+                "使用方式:\n" +
+                "1. 部署: cms_toolbox(action=\"deploy_custom\", type=\"devenv\", id=\"$envName\")\n" +
+                "2. 执行: cms_toolbox(action=\"run_script\", script=\"${installScript.take(50)}...\")"
+        } catch (e: Exception) {
+            "❌ 创建开发环境脚本失败: ${e.message}"
+        }
+    }
+
+    /**
+     * 部署自定义脚本
+     */
+    private fun handleDeployCustom(context: Context, obj: JSONObject): String {
+        val type = obj.optString("type", "").trim()
+        if (type.isEmpty() || type !in listOf("module", "engine", "devenv")) {
+            return "缺少或无效的 type 参数。可用值: module, engine, devenv"
+        }
+
+        val id = obj.optString("id", "").trim()
+        if (id.isEmpty()) return "缺少 id 参数。"
+
+        val scriptContent = obj.optString("script_content", "").trim()
+
+        return try {
+            when (type) {
+                "module" -> deployCustomModule(context, id, scriptContent)
+                "engine" -> deployCustomEngine(context, id, scriptContent)
+                "devenv" -> deployCustomDevenv(context, id, scriptContent)
+                else -> "不支持的部署类型: $type"
+            }
+        } catch (e: Exception) {
+            "❌ 部署失败: ${e.message}"
+        }
+    }
+
+    private fun deployCustomModule(context: Context, moduleId: String, scriptContent: String): String {
+        val moduleDir = File(context.filesDir, "cms_modules/$moduleId")
+        if (!moduleDir.exists()) {
+            return "模块目录不存在: $moduleId\n请先使用 create_module 创建模块"
+        }
+
+        // 如果提供了新的脚本内容，更新
+        if (scriptContent.isNotEmpty()) {
+            val entryFile = File(moduleDir, "entry.sh")
+            entryFile.writeText(scriptContent)
+        }
+
+        // 部署到终端
+        val repo = QuroCmsRepository(context)
+        val module = repo.get(moduleId) ?: return "未找到模块: $moduleId"
+        val deployPackage = CmsDeployPackage.fromModule(module)
+        val result = CmsTerminalDeployer.deploy(context, deployPackage)
+
+        return "✅ 自定义模块部署成功\n" +
+            "模块 ID: $moduleId\n" +
+            "部署结果: $result"
+    }
+
+    private fun deployCustomEngine(context: Context, engineType: String, scriptContent: String): String {
+        val scriptsDir = File(context.filesDir, "cms_scripts")
+        val scriptFile = File(scriptsDir, "engine_${engineType}.sh")
+
+        if (!scriptFile.exists() && scriptContent.isEmpty()) {
+            return "引擎脚本不存在: $engineType\n请先使用 create_engine_script 创建脚本"
+        }
+
+        // 如果提供了新的脚本内容，更新
+        if (scriptContent.isNotEmpty()) {
+            scriptFile.parentFile?.mkdirs()
+            scriptFile.writeText(scriptContent)
+        }
+
+        // 执行脚本
+        val scriptToRun = scriptFile.readText()
+        val result = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(
+            scriptToRun, 60_000L, context
+        )
+
+        return "✅ 自定义引擎脚本部署成功\n" +
+            "类型: $engineType\n" +
+            "执行结果: ${result.output}"
+    }
+
+    private fun deployCustomDevenv(context: Context, envName: String, scriptContent: String): String {
+        val scriptsDir = File(context.filesDir, "cms_scripts/devenv")
+        val scriptFile = File(scriptsDir, "install_${envName}.sh")
+
+        if (!scriptFile.exists() && scriptContent.isEmpty()) {
+            return "开发环境脚本不存在: $envName\n请先使用 create_devenv_script 创建脚本"
+        }
+
+        // 如果提供了新的脚本内容，更新
+        if (scriptContent.isNotEmpty()) {
+            scriptFile.parentFile?.mkdirs()
+            scriptFile.writeText(scriptContent)
+        }
+
+        // 执行脚本
+        val scriptToRun = scriptFile.readText()
+        val result = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(
+            scriptToRun, 120_000L, context
+        )
+
+        return "✅ 自定义开发环境部署成功\n" +
+            "环境名称: $envName\n" +
+            "执行结果: ${result.output}"
+    }
+
+    /**
+     * 列出自定义脚本
+     */
+    private fun handleListScripts(context: Context): String {
+        val sb = StringBuilder("自定义脚本列表：\n\n")
+
+        // 检查自定义模块
+        val modulesDir = File(context.filesDir, "cms_modules")
+        if (modulesDir.exists()) {
+            val customModules = modulesDir.listFiles()?.filter { it.isDirectory } ?: emptyList()
+            if (customModules.isNotEmpty()) {
+                sb.appendLine("📁 自定义 CMS 模块:")
+                customModules.forEach { dir ->
+                    val moduleId = dir.name
+                    val entryFile = File(dir, "entry.sh")
+                    val hasEntry = entryFile.exists()
+                    sb.appendLine("  - $moduleId ${if (hasEntry) "✅" else "❌"}")
+                }
+                sb.appendLine()
+            }
+        }
+
+        // 检查自定义引擎脚本
+        val scriptsDir = File(context.filesDir, "cms_scripts")
+        if (scriptsDir.exists()) {
+            val engineScripts = scriptsDir.listFiles { file -> file.name.startsWith("engine_") } ?: emptyArray()
+            if (engineScripts.isNotEmpty()) {
+                sb.appendLine("🔧 自定义引擎脚本:")
+                engineScripts.forEach { file ->
+                    val type = file.name.removePrefix("engine_").removeSuffix(".sh")
+                    sb.appendLine("  - $type (${file.length()} bytes)")
+                }
+                sb.appendLine()
+            }
+
+            // 检查自定义开发环境脚本
+            val devenvDir = File(scriptsDir, "devenv")
+            if (devenvDir.exists()) {
+                val devenvScripts = devenvDir.listFiles() ?: emptyArray()
+                if (devenvScripts.isNotEmpty()) {
+                    sb.appendLine("💻 自定义开发环境脚本:")
+                    devenvScripts.forEach { file ->
+                        val envName = file.name.removePrefix("install_").removeSuffix(".sh")
+                        sb.appendLine("  - $envName (${file.length()} bytes)")
+                    }
+                    sb.appendLine()
+                }
+            }
+        }
+
+        if (sb.toString() == "自定义脚本列表：\n\n") {
+            sb.appendLine("暂无自定义脚本。")
+            sb.appendLine("\n使用以下命令创建：")
+            sb.appendLine("- cms_toolbox(action=\"create_module\", module_id=\"my.httpd\", entry_script=\"...\")")
+            sb.appendLine("- cms_toolbox(action=\"create_engine_script\", script_type=\"bootstrap\", script_content=\"...\")")
+            sb.appendLine("- cms_toolbox(action=\"create_devenv_script\", env_name=\"myenv\", install_script=\"...\")")
+        }
 
         return sb.toString().trim()
     }
