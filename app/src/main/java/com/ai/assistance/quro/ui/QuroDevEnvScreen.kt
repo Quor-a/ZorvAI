@@ -10,7 +10,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,7 +24,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,8 +33,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.ai.assistance.quro.core.cms.CmsEnvProvisioner
-import com.ai.assistance.quro.core.cms.EnvProfile
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.terminal.QuroTerminalController
 import com.ai.assistance.quro.ui.theme.Line
@@ -54,37 +50,29 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
 
-    // 环境分类
-    data class EnvSection(val title: String, val items: List<Pair<EnvProfile, DevEnvInfo>>)
+    // 环境分类 - 简化版本，直接使用命令
+    data class EnvSection(val title: String, val items: List<Pair<String, DevEnvInfo>>)
 
     val envSections = listOf(
         EnvSection("Python 环境", listOf(
-            EnvProfile.PYTHON to DevEnvInfo(Icons.Filled.Code, "Python 开发环境", "Python 3 + pip + venv + uv 全套", Color(0xFF3776AB)),
-            EnvProfile.PYTHON_LINK to DevEnvInfo(Icons.Filled.Link, "Python 链接", "将 python 命令链接到 python3", Color(0xFF3776AB)),
-            EnvProfile.PIP to DevEnvInfo(Icons.Filled.Inventory2, "Pip", "Python 包管理器", Color(0xFF3776AB)),
-            EnvProfile.UV to DevEnvInfo(Icons.Filled.FlashOn, "UV", "用 Rust 编写的极速 Python 包安装器", Color(0xFFE65100)),
-            EnvProfile.VENV to DevEnvInfo(Icons.Filled.FolderOpen, "虚拟环境", "Python 虚拟环境支持", Color(0xFF3776AB)),
+            "python" to DevEnvInfo(Icons.Filled.Code, "Python3", "Python 3 + pip + venv", Color(0xFF3776AB)),
         )),
         EnvSection("Node.js 环境", listOf(
-            EnvProfile.NODEJS to DevEnvInfo(Icons.Filled.Javascript, "Node.js", "JavaScript 运行时", Color(0xFF339933)),
-            EnvProfile.PNPM to DevEnvInfo(Icons.Filled.Apps, "PNPM + TypeScript", "快速的包管理器和 TypeScript", Color(0xFF339933)),
+            "node" to DevEnvInfo(Icons.Filled.Javascript, "Node.js", "JavaScript 运行时 + npm", Color(0xFF339933)),
+            "pnpm" to DevEnvInfo(Icons.Filled.Apps, "PNPM + TypeScript", "快速的包管理器和 TypeScript", Color(0xFF339933)),
         )),
         EnvSection("SSH 工具", listOf(
-            EnvProfile.SSH to DevEnvInfo(Icons.Filled.VpnKey, "SSH 完整工具链", "SSH 客户端 + sshpass + sshd 反向隧道", Color(0xFF0055A5)),
-            EnvProfile.SSH_CLIENT to DevEnvInfo(Icons.Filled.Terminal, "SSH 客户端", "SSH 连接客户端", Color(0xFF0055A5)),
-            EnvProfile.SSHPASS to DevEnvInfo(Icons.Filled.Password, "sshpass", "SSH 密码认证工具", Color(0xFF0055A5)),
-            EnvProfile.SSH_SERVER to DevEnvInfo(Icons.Filled.Dns, "OpenSSH 服务器", "用于反向隧道挂载本地文件系统", Color(0xFF0055A5)),
+            "ssh" to DevEnvInfo(Icons.Filled.VpnKey, "SSH 完整工具链", "SSH 客户端 + sshpass + sshd", Color(0xFF0055A5)),
         )),
         EnvSection("Java 环境", listOf(
-            EnvProfile.JAVA to DevEnvInfo(Icons.Filled.Coffee, "Java 完整环境", "OpenJDK 17 + Gradle 构建工具", Color(0xFFE6794A)),
-            EnvProfile.OPENJDK17 to DevEnvInfo(Icons.Filled.Coffee, "OpenJDK 17", "Java 17 开发环境", Color(0xFFE6794A)),
-            EnvProfile.GRADLE to DevEnvInfo(Icons.Filled.Build, "Gradle", "现代化的构建自动化工具", Color(0xFFE6794A)),
+            "java" to DevEnvInfo(Icons.Filled.Coffee, "Java", "OpenJDK 17", Color(0xFFE6794A)),
+            "gradle" to DevEnvInfo(Icons.Filled.Build, "Gradle", "构建自动化工具", Color(0xFFE6794A)),
         )),
         EnvSection("Rust 环境", listOf(
-            EnvProfile.RUST to DevEnvInfo(Icons.Filled.Memory, "Rust / Cargo", "通过 rustup 安装 Rust 工具链和 Cargo 包管理器", Color(0xFFE65100)),
+            "rust" to DevEnvInfo(Icons.Filled.Memory, "Rust / Cargo", "Rust 工具链和 Cargo 包管理器", Color(0xFFE65100)),
         )),
         EnvSection("Go 环境", listOf(
-            EnvProfile.GO to DevEnvInfo(Icons.Filled.SmartToy, "Go", "Go 编程语言开发环境", Color(0xFF00ADD8)),
+            "go" to DevEnvInfo(Icons.Filled.SmartToy, "Go", "Go 编程语言开发环境", Color(0xFF00ADD8)),
         )),
     )
 
@@ -99,26 +87,56 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
     // 部署进度
     var deployProgress by remember { mutableStateOf("") }
 
-    // 进入时检查终端和环境状态（不重置正在部署的状态）
+    // 进入时检查终端状态
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             val st = QuroLinuxEnv.probe(ctx)
             termReady = st.available
-            if (termReady) {
-                val states = mutableMapOf<String, Boolean>()
-                envSections.forEach { section ->
-                    section.items.forEach { (profile, _) ->
-                        // 只检测不在部署中的环境
-                        if (deploying != profile.name) {
-                            states[profile.name] = CmsEnvProvisioner.isReady(ctx, profile)
-                        } else {
-                            // 部署中的环境保持当前状态
-                            states[profile.name] = envStates[profile.name] ?: false
-                        }
-                    }
-                }
-                envStates = states
-            }
+        }
+    }
+
+    // 简化的环境检查命令
+    fun getCheckCommand(envName: String): String {
+        return when (envName) {
+            "python" -> "python3 --version && pip --version || echo '未安装'"
+            "node" -> "node -v && npm -v || echo '未安装'"
+            "pnpm" -> "pnpm -v && tsc -v || echo '未安装'"
+            "ssh" -> "ssh -V && sshpass -V || echo '未安装'"
+            "java" -> "java -version 2>&1 | head -1 || echo '未安装'"
+            "gradle" -> "gradle --version | head -3 || echo '未安装'"
+            "rust" -> "rustc --version && cargo --version || echo '未安装'"
+            "go" -> "go version || echo '未安装'"
+            else -> "echo '未知环境'"
+        }
+    }
+
+    // 简化的安装命令
+    fun getInstallCommand(envName: String): String {
+        return when (envName) {
+            "python" -> "apt-get update && apt-get install -y python3 python3-pip python3-venv && python3 -m ensurepip --upgrade 2>&1 | tail -20"
+            "node" -> "apt-get update && apt-get install -y nodejs npm 2>&1 | tail -20"
+            "pnpm" -> "npm install -g pnpm typescript 2>&1 | tail -20"
+            "ssh" -> "apt-get update && apt-get install -y openssh-client openssh-server sshpass 2>&1 | tail -20"
+            "java" -> "apt-get update && apt-get install -y openjdk-17-jdk-headless 2>&1 | tail -20"
+            "gradle" -> "apt-get update && apt-get install -y gradle 2>&1 | tail -20"
+            "rust" -> "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y 2>&1 | tail -20"
+            "go" -> "apt-get update && apt-get install -y golang 2>&1 | tail -20"
+            else -> "echo '未知环境'"
+        }
+    }
+
+    // 简化的卸载命令
+    fun getUninstallCommand(envName: String): String {
+        return when (envName) {
+            "python" -> "apt-get remove -y python3 python3-pip python3-venv && rm -rf /root/cms-venv 2>&1 | tail -20"
+            "node" -> "apt-get remove -y nodejs npm && npm uninstall -g pnpm typescript 2>&1 | tail -20"
+            "pnpm" -> "npm uninstall -g pnpm typescript 2>&1 | tail -20"
+            "ssh" -> "apt-get remove -y openssh-client openssh-server sshpass 2>&1 | tail -20"
+            "java" -> "apt-get remove -y openjdk-17-jdk-headless 2>&1 | tail -20"
+            "gradle" -> "apt-get remove -y gradle 2>&1 | tail -20"
+            "rust" -> "apt-get remove -y rustc cargo && rm -rf /root/.cargo /root/.rustup 2>&1 | tail -20"
+            "go" -> "apt-get remove -y golang && rm -rf /usr/local/go 2>&1 | tail -20"
+            else -> "echo '未知环境'"
         }
     }
 
@@ -165,19 +183,20 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                 )
                 
                 // 该分组下的环境卡片
-                section.items.forEach { (profile, info) ->
-                    val isReady = envStates[profile.name] ?: false
-                    val isDeploying = deploying == profile.name
+                section.items.forEach { (envName, info) ->
+                    val isReady = envStates[envName] ?: false
+                    val isDeploying = deploying == envName
 
                     DevEnvCard(
                         info = info,
-                        installScript = EnvProfile.getInstallScript(profile),
+                        installCommand = getInstallCommand(envName),
+                        checkCommand = getCheckCommand(envName),
                         isReady = isReady,
                         isDeploying = isDeploying,
                         enabled = termReady && !isDeploying,
                         onDeploy = {
                             // 发送安装命令给终端会话
-                            val script = EnvProfile.getInstallScript(profile)
+                            val command = getInstallCommand(envName)
                             scope.launch(Dispatchers.IO) {
                                 try {
                                     // 确保终端会话存在
@@ -186,9 +205,9 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                                         Toast.makeText(ctx, "发送安装命令到终端", Toast.LENGTH_SHORT).show()
                                     }
                                     // 发送安装命令给终端
-                                    QuroTerminalController.sendToShell(script)
+                                    QuroTerminalController.sendToShell(command)
                                     withContext(Dispatchers.Main) {
-                                        deployLogs = deployLogs + "✅ 已发送安装命令到终端: ${profile.name}"
+                                        deployLogs = deployLogs + "✅ 已发送安装命令到终端: ${envName}"
                                     }
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
@@ -201,27 +220,13 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                             // 删除已安装环境
                             scope.launch(Dispatchers.IO) {
                                 try {
-                                    val deleteScript = when (profile) {
-                                        EnvProfile.PYTHON, EnvProfile.PYTHON_LINK, EnvProfile.PIP, EnvProfile.UV, EnvProfile.VENV ->
-                                            "apt-get remove -y python3 python3-pip python3-venv 2>/dev/null; rm -rf /root/cms-venv /usr/local/bin/python"
-                                        EnvProfile.NODEJS, EnvProfile.PNPM ->
-                                            "apt-get remove -y nodejs npm 2>/dev/null; npm uninstall -g pnpm typescript 2>/dev/null; rm -rf /usr/local/lib/node_modules /usr/local/bin/pnpm /usr/local/bin/tsc"
-                                        EnvProfile.SSH, EnvProfile.SSH_CLIENT, EnvProfile.SSHPASS, EnvProfile.SSH_SERVER ->
-                                            "apt-get remove -y openssh-client openssh-server sshpass 2>/dev/null; rm -f /etc/ssh/ssh_host_*_key"
-                                        EnvProfile.JAVA, EnvProfile.OPENJDK17, EnvProfile.GRADLE ->
-                                            "apt-get remove -y openjdk-17-jdk-headless gradle 2>/dev/null"
-                                        EnvProfile.RUST ->
-                                            "apt-get remove -y rustc cargo 2>/dev/null; rm -rf /root/.cargo /root/.rustup"
-                                        EnvProfile.GO ->
-                                            "apt-get remove -y golang-go 2>/dev/null; rm -rf /usr/local/go"
-                                        else -> "echo 'No delete script for ${profile.name}'"
-                                    }
+                                    val deleteCommand = getUninstallCommand(envName)
                                     withContext(Dispatchers.Main) {
                                         Toast.makeText(ctx, "发送删除命令到终端", Toast.LENGTH_SHORT).show()
                                     }
-                                    QuroTerminalController.sendToShell(deleteScript)
+                                    QuroTerminalController.sendToShell(deleteCommand)
                                     withContext(Dispatchers.Main) {
-                                        deployLogs = deployLogs + "✅ 已发送删除命令: ${profile.name}"
+                                        deployLogs = deployLogs + "✅ 已发送删除命令: ${envName}"
                                     }
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
@@ -255,11 +260,11 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                                 
                                 // 发送所有安装命令给终端
                                 envSections.forEach { section ->
-                                    section.items.forEach { (profile, _) ->
-                                        val script = EnvProfile.getInstallScript(profile)
-                                        QuroTerminalController.sendToShell(script)
+                                    section.items.forEach { (envName, _) ->
+                                        val command = getInstallCommand(envName)
+                                        QuroTerminalController.sendToShell(command)
                                         withContext(Dispatchers.Main) {
-                                            deployLogs = deployLogs + "✅ 已发送安装命令: ${profile.name}"
+                                            deployLogs = deployLogs + "✅ 已发送安装命令: ${envName}"
                                         }
                                     }
                                 }
@@ -365,7 +370,8 @@ data class DevEnvInfo(
 @Composable
 private fun DevEnvCard(
     info: DevEnvInfo,
-    installScript: String,
+    installCommand: String,
+    checkCommand: String,
     isReady: Boolean,
     isDeploying: Boolean,
     enabled: Boolean,
@@ -375,8 +381,6 @@ private fun DevEnvCard(
 ) {
     val ctx = LocalContext.current
     var showCommandBox by remember { mutableStateOf(false) }
-    var editingCommand by remember { mutableStateOf("") }
-    var isEditing by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -469,68 +473,35 @@ private fun DevEnvCard(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(8.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "安装命令",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row {
-                        // 复制按钮
-                        IconButton(
-                            onClick = {
-                                val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("安装命令", installScript)
-                                clipboard.setPrimaryClip(clip)
-                                Toast.makeText(ctx, "命令已复制", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(Icons.Filled.ContentCopy, "复制", modifier = Modifier.size(16.dp))
-                        }
-                        // 编辑按钮
-                        IconButton(
-                            onClick = {
-                                isEditing = !isEditing
-                                editingCommand = installScript
-                            },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                if (isEditing) Icons.Filled.Save else Icons.Filled.Edit,
-                                if (isEditing) "保存" else "编辑",
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-
-                if (isEditing) {
-                    // 编辑模式 - 文本框
-                    OutlinedTextField(
-                        value = editingCommand,
-                        onValueChange = { editingCommand = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 100.dp, max = 200.dp),
-                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    )
-                } else {
-                    // 只读模式
-                    Text(
-                        installScript,
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 150.dp)
-                            .verticalScroll(rememberScrollState())
-                    )
-                }
+                Text(
+                    "安装命令",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    installCommand,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "检查命令",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    checkCommand,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                )
             }
         }
 

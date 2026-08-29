@@ -59,6 +59,8 @@ import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager.Kind
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager.SessionInfo
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 去品牌化 Termux 终端界面（Zorv AI 版）。
@@ -84,6 +86,7 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
     val sandboxState by QuroLinuxEnv.state.collectAsState()
     var showReplaceDialog by remember { mutableStateOf(false) }
     var showDevEnvMenu by remember { mutableStateOf(false) }
+    var devEnvStatus by remember { mutableStateOf("") }
 
     // 统一会话管理状态
     val scope = rememberCoroutineScope()
@@ -139,45 +142,81 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                     }
                     DropdownMenu(expanded = showDevEnvMenu, onDismissRequest = { showDevEnvMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text("📦 安装 Node.js 环境") },
+                            text = { Text("📦 安装 Node.js") },
                             onClick = {
                                 showDevEnvMenu = false
-                                sessionState.value?.write("sh -c 'curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs' 2>&1 | tail -20\n")
+                                devEnvStatus = "正在发送 Node.js 安装命令..."
+                                scope.launch(Dispatchers.IO) {
+                                    sessionState.value?.write("apt-get update && apt-get install -y nodejs npm && npm install -g pnpm typescript 2>&1 | tail -20\n")
+                                    withContext(Dispatchers.Main) {
+                                        devEnvStatus = "Node.js 安装命令已发送，请查看终端输出"
+                                    }
+                                }
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("🐍 安装 Python3 环境") },
+                            text = { Text("🐍 安装 Python3") },
                             onClick = {
                                 showDevEnvMenu = false
-                                sessionState.value?.write("apt-get install -y python3 python3-pip 2>&1 | tail -20\n")
+                                devEnvStatus = "正在发送 Python3 安装命令..."
+                                scope.launch(Dispatchers.IO) {
+                                    sessionState.value?.write("apt-get update && apt-get install -y python3 python3-pip python3-venv && python3 -m ensurepip --upgrade 2>&1 | tail -20\n")
+                                    withContext(Dispatchers.Main) {
+                                        devEnvStatus = "Python3 安装命令已发送，请查看终端输出"
+                                    }
+                                }
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("☕ 安装 Java 环境") },
+                            text = { Text("☕ 安装 Java") },
                             onClick = {
                                 showDevEnvMenu = false
-                                sessionState.value?.write("apt-get install -y default-jdk 2>&1 | tail -20\n")
+                                devEnvStatus = "正在发送 Java 安装命令..."
+                                scope.launch(Dispatchers.IO) {
+                                    sessionState.value?.write("apt-get update && apt-get install -y default-jdk 2>&1 | tail -20\n")
+                                    withContext(Dispatchers.Main) {
+                                        devEnvStatus = "Java 安装命令已发送，请查看终端输出"
+                                    }
+                                }
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("🦀 安装 Rust 环境") },
+                            text = { Text("🦀 安装 Rust") },
                             onClick = {
                                 showDevEnvMenu = false
-                                sessionState.value?.write("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y 2>&1 | tail -20\n")
+                                devEnvStatus = "正在发送 Rust 安装命令..."
+                                scope.launch(Dispatchers.IO) {
+                                    sessionState.value?.write("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y 2>&1 | tail -20\n")
+                                    withContext(Dispatchers.Main) {
+                                        devEnvStatus = "Rust 安装命令已发送，请查看终端输出"
+                                    }
+                                }
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("🔧 安装 Go 环境") },
+                            text = { Text("🔧 安装 Go") },
                             onClick = {
                                 showDevEnvMenu = false
-                                sessionState.value?.write("apt-get install -y golang 2>&1 | tail -20\n")
+                                devEnvStatus = "正在发送 Go 安装命令..."
+                                scope.launch(Dispatchers.IO) {
+                                    sessionState.value?.write("apt-get update && apt-get install -y golang 2>&1 | tail -20\n")
+                                    withContext(Dispatchers.Main) {
+                                        devEnvStatus = "Go 安装命令已发送，请查看终端输出"
+                                    }
+                                }
                             }
                         )
                         DropdownMenuItem(
                             text = { Text("🌐 安装 Git + Curl + Wget") },
                             onClick = {
                                 showDevEnvMenu = false
-                                sessionState.value?.write("apt-get install -y git curl wget 2>&1 | tail -20\n")
+                                devEnvStatus = "正在发送 Git 安装命令..."
+                                scope.launch(Dispatchers.IO) {
+                                    sessionState.value?.write("apt-get update && apt-get install -y git curl wget 2>&1 | tail -20\n")
+                                    withContext(Dispatchers.Main) {
+                                        devEnvStatus = "Git 安装命令已发送，请查看终端输出"
+                                    }
+                                }
                             }
                         )
                         Divider()
@@ -185,7 +224,79 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                             text = { Text("🔍 检查已安装环境") },
                             onClick = {
                                 showDevEnvMenu = false
-                                sessionState.value?.write("echo '=== 环境检查 ===' && echo -n 'Node: ' && node -v 2>/dev/null || echo '未安装' && echo -n 'Python: ' && python3 --version 2>/dev/null || echo '未安装' && echo -n 'Java: ' && java -version 2>&1 | head -1 || echo '未安装' && echo -n 'Rust: ' && rustc --version 2>/dev/null || echo '未安装' && echo -n 'Go: ' && go version 2>/dev/null || echo '未安装' && echo -n 'Git: ' && git --version 2>/dev/null || echo '未安装'\n")
+                                devEnvStatus = "正在检查环境状态..."
+                                scope.launch(Dispatchers.IO) {
+                                    sessionState.value?.write("echo '=== 环境检查 ===' && echo -n 'Node: ' && node -v 2>/dev/null || echo '未安装' && echo -n 'Python: ' && python3 --version 2>/dev/null || echo '未安装' && echo -n 'Java: ' && java -version 2>&1 | head -1 || echo '未安装' && echo -n 'Rust: ' && rustc --version 2>/dev/null || echo '未安装' && echo -n 'Go: ' && go version 2>/dev/null || echo '未安装' && echo -n 'Git: ' && git --version 2>/dev/null || echo '未安装'\n")
+                                    withContext(Dispatchers.Main) {
+                                        devEnvStatus = "环境检查命令已发送，请查看终端输出"
+                                    }
+                                }
+                            }
+                        )
+                        Divider()
+                        DropdownMenuItem(
+                            text = { Text("🗑️ 卸载 Node.js") },
+                            onClick = {
+                                showDevEnvMenu = false
+                                devEnvStatus = "正在发送 Node.js 卸载命令..."
+                                scope.launch(Dispatchers.IO) {
+                                    sessionState.value?.write("apt-get remove -y nodejs npm && npm uninstall -g pnpm typescript 2>&1 | tail -20\n")
+                                    withContext(Dispatchers.Main) {
+                                        devEnvStatus = "Node.js 卸载命令已发送，请查看终端输出"
+                                    }
+                                }
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🗑️ 卸载 Python3") },
+                            onClick = {
+                                showDevEnvMenu = false
+                                devEnvStatus = "正在发送 Python3 卸载命令..."
+                                scope.launch(Dispatchers.IO) {
+                                    sessionState.value?.write("apt-get remove -y python3 python3-pip python3-venv && rm -rf /root/cms-venv 2>&1 | tail -20\n")
+                                    withContext(Dispatchers.Main) {
+                                        devEnvStatus = "Python3 卸载命令已发送，请查看终端输出"
+                                    }
+                                }
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🗑️ 卸载 Java") },
+                            onClick = {
+                                showDevEnvMenu = false
+                                devEnvStatus = "正在发送 Java 卸载命令..."
+                                scope.launch(Dispatchers.IO) {
+                                    sessionState.value?.write("apt-get remove -y default-jdk 2>&1 | tail -20\n")
+                                    withContext(Dispatchers.Main) {
+                                        devEnvStatus = "Java 卸载命令已发送，请查看终端输出"
+                                    }
+                                }
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🗑️ 卸载 Rust") },
+                            onClick = {
+                                showDevEnvMenu = false
+                                devEnvStatus = "正在发送 Rust 卸载命令..."
+                                scope.launch(Dispatchers.IO) {
+                                    sessionState.value?.write("apt-get remove -y rustc cargo && rm -rf /root/.cargo /root/.rustup 2>&1 | tail -20\n")
+                                    withContext(Dispatchers.Main) {
+                                        devEnvStatus = "Rust 卸载命令已发送，请查看终端输出"
+                                    }
+                                }
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🗑️ 卸载 Go") },
+                            onClick = {
+                                showDevEnvMenu = false
+                                devEnvStatus = "正在发送 Go 卸载命令..."
+                                scope.launch(Dispatchers.IO) {
+                                    sessionState.value?.write("apt-get remove -y golang && rm -rf /usr/local/go 2>&1 | tail -20\n")
+                                    withContext(Dispatchers.Main) {
+                                        devEnvStatus = "Go 卸载命令已发送，请查看终端输出"
+                                    }
+                                }
                             }
                         )
                     }
@@ -201,6 +312,35 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                 // 清屏
                 IconButton(onClick = { sessionState.value?.write("clear\n") }) {
                     Icon(Icons.Filled.ClearAll, "清屏", tint = Color.White)
+                }
+            }
+
+            // ═══════════ 开发环境状态显示 ═══════════
+            if (devEnvStatus.isNotBlank()) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF1A2E1A))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            devEnvStatus,
+                            color = Color(0xFF7BE0A0),
+                            fontSize = 11.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(
+                            onClick = { devEnvStatus = "" },
+                            modifier = Modifier.padding(start = 8.dp)
+                        ) {
+                            Text("关闭", fontSize = 10.sp, color = Color(0xFF999999))
+                        }
+                    }
                 }
             }
 
