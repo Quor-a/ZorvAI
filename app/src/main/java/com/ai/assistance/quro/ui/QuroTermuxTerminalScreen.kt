@@ -19,9 +19,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -79,6 +83,7 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
     val cwd by QuroTermuxTerminalController.cwd.collectAsState()
     val sandboxState by QuroLinuxEnv.state.collectAsState()
     var showReplaceDialog by remember { mutableStateOf(false) }
+    var showDevEnvMenu by remember { mutableStateOf(false) }
 
     // 统一会话管理状态
     val scope = rememberCoroutineScope()
@@ -126,6 +131,64 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                         color = Color(0xFF9CC7FF),
                         fontSize = 12.sp,
                     )
+                }
+                // 开发环境管理下拉菜单
+                Box {
+                    IconButton(onClick = { showDevEnvMenu = true }) {
+                        Icon(Icons.Filled.Build, "开发环境", tint = Color(0xFFFFD700))
+                    }
+                    DropdownMenu(expanded = showDevEnvMenu, onDismissRequest = { showDevEnvMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("📦 安装 Node.js 环境") },
+                            onClick = {
+                                showDevEnvMenu = false
+                                sessionState.value?.write("sh -c 'curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs' 2>&1 | tail -20\n")
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🐍 安装 Python3 环境") },
+                            onClick = {
+                                showDevEnvMenu = false
+                                sessionState.value?.write("apt-get install -y python3 python3-pip 2>&1 | tail -20\n")
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("☕ 安装 Java 环境") },
+                            onClick = {
+                                showDevEnvMenu = false
+                                sessionState.value?.write("apt-get install -y default-jdk 2>&1 | tail -20\n")
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🦀 安装 Rust 环境") },
+                            onClick = {
+                                showDevEnvMenu = false
+                                sessionState.value?.write("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y 2>&1 | tail -20\n")
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🔧 安装 Go 环境") },
+                            onClick = {
+                                showDevEnvMenu = false
+                                sessionState.value?.write("apt-get install -y golang 2>&1 | tail -20\n")
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🌐 安装 Git + Curl + Wget") },
+                            onClick = {
+                                showDevEnvMenu = false
+                                sessionState.value?.write("apt-get install -y git curl wget 2>&1 | tail -20\n")
+                            }
+                        )
+                        Divider()
+                        DropdownMenuItem(
+                            text = { Text("🔍 检查已安装环境") },
+                            onClick = {
+                                showDevEnvMenu = false
+                                sessionState.value?.write("echo '=== 环境检查 ===' && echo -n 'Node: ' && node -v 2>/dev/null || echo '未安装' && echo -n 'Python: ' && python3 --version 2>/dev/null || echo '未安装' && echo -n 'Java: ' && java -version 2>&1 | head -1 || echo '未安装' && echo -n 'Rust: ' && rustc --version 2>/dev/null || echo '未安装' && echo -n 'Go: ' && go version 2>/dev/null || echo '未安装' && echo -n 'Git: ' && git --version 2>/dev/null || echo '未安装'\n")
+                            }
+                        )
+                    }
                 }
                 // 始终显示检查更新按钮
                 IconButton(onClick = { showReplaceDialog = true }) {

@@ -434,7 +434,10 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val mgr = remember { QuroAidlAciManager.getInstance() }
     val scope = rememberCoroutineScope()
-    var statuses by remember { mutableStateOf(mgr.getAppStatuses()) }
+    // 过滤掉本机包名，只显示第三方 ACI App
+    val selfPkg = ctx.packageName
+    var allStatuses by remember { mutableStateOf(mgr.getAppStatuses()) }
+    val statuses by remember(allStatuses) { mutableStateOf(allStatuses.filter { it.packageName != selfPkg }) }
     var pkgInput by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var searched by remember { mutableStateOf(false) }
@@ -496,7 +499,7 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
         }
     }
 
-    fun reload() { statuses = mgr.getAppStatuses() }
+    fun reload() { allStatuses = mgr.getAppStatuses() }
 
     // 首次加载后自动刷新多次，等待异步绑定完成（bindWithWake 是线程池异步绑定，需要时间）
     LaunchedEffect(Unit) {
