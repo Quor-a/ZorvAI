@@ -47,6 +47,7 @@
 - [ACI 控制台 UI（LAN 控制台）](#aci-控制台-ui)
 - [ACI HTTP 传输（局域网/本地组网）](#aci-http-传输)
 - [MCP-ACI 桥接](#mcp-aci-桥接)
+- [终端 & Linux 沙箱（完整技术架构）](#4-应用内终端-linux-沙箱完整技术架构)
 - [特权 / 权限层 · L1–L5](#特权-权限层-l1l5)
 - [工具箱 · Toolbox](#工具箱-toolbox)
 - [开发工具与导入教程](#开发工具与导入教程)
@@ -102,7 +103,7 @@
 | **工具 / 能力层** | **120+ 内置工具**（`buildQuroRegistry` 注册 123 项 + 导入工具 + 可调用技能）：无障碍 `input_text`/`tap_screen`/`read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text`/`ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
 | **离线 LLM 引擎** | 应用内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 剥离、本地工具调用、会话复用；离线也能对话 |
 | **特权层 L1–L5** | 无障碍 → Shizuku(uid 0/2000) → 设备管理员 → ROOT(su) → 应用内 Linux(proot + Ubuntu 24.04) |
-| **终端 / Linux 沙箱** | 应用内 Linux 终端：proot + Ubuntu 24.04（rootfs 首次使用自动从 Ubuntu 官方镜像下载，`proot`/`libbash`/`libbusybox` 以 `.so` 内置），支持完整 Shell / Python / 编译工具链，终端 UI 直接操作 |
+| **终端 / Linux 沙箱** | 完整终端模拟器：proot + Ubuntu 24.04 ARM64 真实用户空间（rootfs 首次使用自动下载）；PTY 伪终端（`/dev/ptmx` + `fork/exec`）；前台服务保活（specialUse，息屏/切 App 不被杀）；ACI 跨进程 12 个能力（exec/session/env/status）；4 种 IPC 接入（ContentProvider / Deep Link / Intent / BroadcastReceiver）；多会话管理；开机自启动；Android 14+ 兼容 |
 | **MCP（Model Context Protocol）** | MCP 客户端（WebSocket / HTTP 传输）、应用内本地 MCP 服务，可由 AI 部署/调用、**MCP-ACI 桥接**（让 ACI 控制方调用外部 MCP 服务器工具） |
 | **引擎 / 运行时** | CMS 引擎共享运行时（NODE / PYTHON / SSH / JAVA / RUST / GO）、CMS v2 模块、GeckoView 浏览器（MPL-2.0）、本地语音 STT / TTS |
 | **IM 通道** | 飞书（WebSocket）/ QQBot（官方 WS）/ 微信 iLink（HTTP 长轮询 35s）；三家手机端均无公网端点 |
@@ -281,30 +282,275 @@ BackHandler { showKnowledge = false }
 - 应用**内置**本地推理运行时（`QuroLocalEngineNative`），驱动 `MNNLlmSession` / `LlamaSession`，支持流式、`<think>` 剥离、本地工具调用解析、会话常驻与门禁；离线（无网络、无 API Key）也能对话
 - `core/model/QuroLocalModelRepository.kt` 负责本地模型仓库/加载
 
-### 4. 应用内终端 & Linux 沙箱
-- `core/terminal/QuroTerminalController`：proot 优先、否则设备 `sh` 的会话控制器（`QuroShellSession` 为 PTY Shell 会话载体）
-- `core/linux/QuroLinuxEnv`：应用内 Linux 环境后端（proot + **Ubuntu 24.04 ARM64**）；`proot` / `libbash` / `libbusybox` 以 `.so` 形式内置（`nativeLibraryDir` + `assets/linux_env` 兜底），**Ubuntu base rootfs 首次使用自动从 Ubuntu 官方镜像（aliyun / tuna / cdimage）下载并解压到应用私有目录**，不随包内置
-- 关键能力：交互终端常驻 `/bin/sh`、link2symlink 符号链接、apt 源自动切 `ubuntu-ports`（arm64）、bash/busybox 内置命令、CMS 引擎 `bootstrap.sh` 提供 NODE / PYTHON / RUST / GO / JAVA 共享运行时
-- 终端 UI：对话框输入「+」→ 终端，或 AI 调用 `ui_open_terminal`；`QuroTerminalController` 驱动
+### 4. 应用内终端 & Linux 沙箱（完整技术架构）
 
-#### 4.1 前台服务保活（息屏 / 切 App 不被杀）
-- `QuroTerminalKeepAliveService`：**specialUse 前台服务**，进程内 fork 的 shell 子进程归属于服务进程 → 服务存活 = 终端存活
-- 每 15 秒巡检：会话死亡则自动重建；ACI 服务未启动则拉起
-- 通知栏常驻「Zorv AI 终端运行中」，点击跳转主界面
-- 开机自启动：`QuroTerminalBootReceiver` 监听 `BOOT_COMPLETED`，设备重启后自动恢复终端保活
-- **Android 14+ 兼容**：manifest 声明 `<property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"/>` + `FOREGROUND_SERVICE_SPECIAL_USE` 权限
+Zorv AI 终端是一个**完整的 Android 终端模拟器**，集成了 Linux 沙箱、前台服务保活、ACI 跨进程调用、多种 IPC 接入方式，支持真实的 Ubuntu 24.04 ARM64 用户空间。
 
-#### 4.2 ACI 跨进程接口（12 个能力）
-- `QuroTerminalAciService`：继承 `BaseAidlAciService`，以前台服务身份运行，暴露终端全部能力给外部应用调用
-- 12 个 ACI 能力：`exec` / `create_session` / `destroy_session` / `send_input` / `get_session_status` / `list_sessions` / `set_session_env` / `get_session_env` / `list_capabilities` / `get_service_status` / `get_audit_log` / `help`
-- 调用方式：ACI AIDL 绑定 / ACI HTTP（本地 HTTP 传输）/ MCP 桥接
+#### 4.1 架构概览
 
-#### 4.3 Intent / Provider / BroadcastReceiver / Deep Link
-- **TerminalProvider**：`content://com.ai.assistance.quro.terminal/sessions`（会话列表）、`/exec?cmd=...`（执行命令）、`/status`（服务状态），其他应用可通过 `content://` URI 直接读取终端数据
-- **Deep Link**：`quro://terminal/exec?cmd=ls -la`（执行命令）、`quro://terminal/sessions`（会话列表）、`quro://terminal/create?name=my-session`（创建会话）、`quro://terminal/status`（服务状态）
-- **Intent Handler**：支持 `com.ai.assistance.quro.action.TERMINAL_EXEC`（附带 `command` extra）、`TERMINAL_STATUS`、`TERMINAL_SESSIONS`、`TERMINAL_CREATE_SESSION` 等 Action
-- **BroadcastReceiver**：6 个广播 Action（`TERMINAL_EXEC` / `TERMINAL_STATUS` / `TERMINAL_SESSIONS` / `TERMINAL_CREATE_SESSION` / `TERMINAL_DESTROY_SESSION` / `TERMINAL_SEND_INPUT`），结果通过 `TERMINAL_RESULT` extras 返回（含 `exit_code` / `output` / `error`）
-- 所有组件均通过 `AndroidManifest.xml` 注册，无需运行时动态注册
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        终端 UI 层                                │
+│  ChatScreen 输入框「+」→ 终端  /  AI 调用 ui_open_terminal        │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────────┐
+│                    QuroTerminalController                        │
+│  会话管理 · 命令路由 · proot/设备shell 自动选择                    │
+└──┬──────────────────────┬──────────────────────┬────────────────┘
+   │                      │                      │
+┌──▼──────────┐  ┌────────▼────────┐  ┌─────────▼────────────────┐
+│QuroShellSession│ │QuroLinuxEnv     │  │QuroTerminalSessionManager│
+│PTY会话载体   │  │proot+Ubuntu24.04│  │多会话管理·跨进程访问      │
+│fork/exec    │  │rootfs下载/解压   │  │默认/额外/UI/历史会话      │
+└──┬──────────┘  └────────┬────────┘  └─────────┬────────────────┘
+   │                      │                      │
+┌──▼──────────────────────▼──────────────────────▼────────────────┐
+│                    前台服务层（保活）                              │
+│  Qu roTerminalKeepAliveService · Qu roTerminalAciService         │
+│  specialUse 前台服务 · shell子进程归属服务进程 · 15秒巡检          │
+└──┬──────────────────────┬──────────────────────┬────────────────┘
+   │                      │                      │
+┌──▼──────────┐  ┌────────▼────────┐  ┌─────────▼────────────────┐
+│ACI 跨进程    │  │Intent/Provider  │  │BroadcastReceiver/DeepLink│
+│12个能力      │  │ContentProvider  │  │6个广播Action              │
+│AIDL绑定     │  │content://URI    │  │quro://terminal/...       │
+└─────────────┘  └─────────────────┘  └──────────────────────────┘
+```
+
+#### 4.2 核心组件
+
+| 组件 | 文件位置 | 职责 |
+|------|----------|------|
+| **QuroTerminalController** | `core/terminal/QuroTerminalController.kt` | 终端控制器：proot 优先、否则设备 `sh`；命令路由、超时控制、Linux 环境自动检测 |
+| **QuroShellSession** | `core/terminal/QuroShellSession.kt` | PTY Shell 会话载体：`/dev/ptmx` 伪终端、`fork/exec` 进程控制、`TIOCSWINSZ` 窗口大小、输出流读取 |
+| **QuroLinuxEnv** | `core/linux/QuroLinuxEnv.kt` | Linux 环境后端：proot + **Ubuntu 24.04 ARM64**；`proot`/`libbash`/`libbusybox` 以 `.so` 内置，rootfs 首次使用自动从 Ubuntu 官方镜像下载 |
+| **QuroTerminalSessionManager** | `core/terminal/QuroTerminalSessionManager.kt` | 多会话管理：默认会话 / 额外会话 / UI 会话 / 历史会话；跨进程会话访问 |
+| **QuroTerminalKeepAliveService** | `service/QuroTerminalKeepAliveService.kt` | 前台保活服务：shell 子进程归属服务进程，15 秒巡检，息屏/切 App 不被杀 |
+| **QuroTerminalAciService** | `service/QuroTerminalAciService.kt` | ACI 受控端服务：暴露 12 个能力给外部应用调用 |
+| **TerminalProvider** | `core/terminal/TerminalProvider.kt` | ContentProvider：`content://com.ai.assistance.quro.terminal/...` |
+| **TerminalDeepLinkHandler** | `core/terminal/TerminalDeepLinkHandler.kt` | Deep Link 处理：`quro://terminal/...` |
+| **TerminalIntentHandler** | `core/terminal/TerminalIntentHandler.kt` | Intent 处理：`TERMINAL_EXEC` / `TERMINAL_STATUS` 等 |
+| **TerminalBroadcastReceiver** | `core/terminal/TerminalBroadcastReceiver.kt` | 广播接收：6 个 Action，结果通过 `TERMINAL_RESULT` 返回 |
+
+#### 4.3 Linux 沙箱（proot + Ubuntu 24.04 ARM64）
+
+- **架构**：proot 用户空间模拟（无需 ROOT），`--bind` 挂载系统目录
+- **rootfs 来源**：`assets/linux_env/ubuntu-noble-aarch64-pd-v4.18.0.tar.xz`（Ubuntu 24.04 Noble ARM64，xz 格式）
+- **内置工具**：`proot`/`libbash`/`libbusybox` 以 `.so` 形式内置（`nativeLibraryDir` + `assets/linux_env` 兜底）
+- **路径全动态**：`rootfsPath=File(context.filesDir,"linux-sandbox")`、`prootPath=applicationInfo.nativeLibraryDir`、`homePath=context.getExternalFilesDir(...)`
+- **关键能力**：
+  - 交互终端常驻 `/bin/sh`
+  - link2symlink 符号链接（Android 限制兼容）
+  - apt 源自动切 `ubuntu-ports`（arm64）
+  - bash/busybox 内置命令
+  - CMS 引擎 `bootstrap.sh` 提供 NODE / PYTHON / RUST / GO / JAVA 共享运行时
+
+#### 4.4 前台服务保活（息屏 / 切 App 不被杀）
+
+**核心原理**：前台服务调 `startForeground()` → 系统不杀这个进程 → 进程内 fork 的 shell 子进程也不会被杀 → 息屏/切 App 不死。
+
+```kotlin
+// Qu roTerminalKeepAliveService.kt 核心逻辑
+class Qu roTerminalKeepAliveService : Service() {
+    private var heldSession: QuroShellSession? = null  // 服务直接持有终端会话
+
+    override fun onCreate() {
+        startForeground(NOTIF_ID, buildNotification("终端运行中…"),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        startLoop()  // 每 15 秒巡检
+    }
+
+    private fun ensureSessionSafe() {
+        // 在服务进程内创建 shell 子进程
+        heldSession = QuroShellSession.create(context, env, "keepalive") { /* onOutput */ }
+        // shell 子进程是服务进程的 fork → 服务存活 = shell 子进程存活
+    }
+}
+```
+
+**关键特性**：
+| 特性 | 实现 |
+|------|------|
+| **前台服务类型** | `specialUse`（Android 14+ 兼容，需 `<property>` 标签） |
+| **巡检间隔** | 每 15 秒检查会话状态，死亡自动重建 |
+| **通知栏** | 常驻「Zorv AI 终端运行中」，点击跳转主界面 |
+| **开机自启动** | `QuroTerminalBootReceiver` 监听 `BOOT_COMPLETED` |
+| **Android 14+ 兼容** | `<property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"/>` + `FOREGROUND_SERVICE_SPECIAL_USE` 权限 |
+
+**Manifest 配置**：
+```xml
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+<service
+    android:name=".service.QuroTerminalKeepAliveService"
+    android:exported="false"
+    android:foregroundServiceType="specialUse">
+    <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="终端会话保活：保持终端会话在息屏/切换应用时不被杀死" />
+</service>
+```
+
+#### 4.5 ACI 跨进程接口（12 个能力）
+
+`QuroTerminalAciService` 继承 `BaseAidlAciService`，以前台服务身份运行，暴露终端全部能力给外部应用调用。
+
+| 能力 | 入参 | 返回 | 说明 |
+|------|------|------|------|
+| `exec` | `command`(必填) / `timeout`(可选) / `session_id`(可选) | `output` / `exit_code` / `error` | 在终端中执行命令并返回结果 |
+| `create_session` | `name`(可选) | `session_id` / `name` | 创建新的终端会话 |
+| `destroy_session` | `session_id`(必填) | `destroyed` | 销毁指定会话 |
+| `send_input` | `session_id`(必填) / `input`(必填) | `sent` | 向指定会话发送输入 |
+| `get_session_status` | `session_id`(必填) | `session_id` / `is_alive` / `pid` / `uptime` | 获取会话状态 |
+| `list_sessions` | — | `sessions` (array) | 列出所有终端会话状态 |
+| `set_session_env` | `session_id`(必填) / `key`(必填) / `value`(必填) | `set` | 设置会话环境变量 |
+| `get_session_env` | `session_id`(必填) / `key`(必填) | `value` | 获取会话环境变量 |
+| `list_capabilities` | — | `capabilities` (array) | 列出所有可用能力 |
+| `get_service_status` | — | `running` / `session_count` / `uptime` | 获取服务状态 |
+| `get_audit_log` | `limit`(可选) | `logs` (array) | 获取审计日志 |
+| `help` | — | `help_text` | 显示帮助信息 |
+
+**调用方式**：
+1. **ACI AIDL 绑定**：其他应用通过 `bindService()` 绑定 `QuroTerminalAciService`
+2. **ACI HTTP（本地 HTTP 传输）**：通过本地 HTTP 服务器调用
+3. **MCP 桥接**：通过 `McpAciBridge` 将终端能力转换为 MCP 工具
+
+#### 4.6 Intent / Provider / BroadcastReceiver / Deep Link
+
+终端支持 4 种标准 Android IPC 接入方式，其他应用可通过任意一种方式调用终端能力：
+
+**4.6.1 ContentProvider（TerminalProvider）**
+
+```kotlin
+// URI 格式
+content://com.ai.assistance.quro.terminal/sessions     // 会话列表
+content://com.ai.assistance.quro.terminal/exec?cmd=ls  // 执行命令
+content://com.ai.assistance.quro.terminal/status        // 服务状态
+
+// 使用示例
+val cursor = contentResolver.query(
+    Uri.parse("content://com.ai.assistance.quro.terminal/sessions"),
+    null, null, null, null
+)
+```
+
+**4.6.2 Deep Link（TerminalDeepLinkHandler）**
+
+```kotlin
+// URI 格式
+quro://terminal/exec?cmd=ls -la           // 执行命令
+quro://terminal/sessions                   // 会话列表
+quro://terminal/create?name=my-session     // 创建会话
+quro://terminal/status                     // 服务状态
+
+// 使用示例
+val intent = Intent(Intent.ACTION_VIEW, Uri.parse("quro://terminal/exec?cmd=uname -a"))
+startActivity(intent)
+```
+
+**4.6.3 Intent Handler（TerminalIntentHandler）**
+
+```kotlin
+// 支持的 Action
+com.ai.assistance.quro.action.TERMINAL_EXEC        // 执行命令（extra: command）
+com.ai.assistance.quro.action.TERMINAL_STATUS       // 获取状态
+com.ai.assistance.quro.action.TERMINAL_SESSIONS     // 列出会话
+com.ai.assistance.quro.action.TERMINAL_CREATE_SESSION // 创建会话
+
+// 使用示例
+val intent = Intent("com.ai.assistance.quro.action.TERMINAL_EXEC")
+intent.putExtra("command", "python3 --version")
+sendBroadcast(intent)
+```
+
+**4.6.4 BroadcastReceiver（TerminalBroadcastReceiver）**
+
+```kotlin
+// 支持的 Action（6 个）
+com.ai.assistance.quro.action.TERMINAL_EXEC
+com.ai.assistance.quro.action.TERMINAL_STATUS
+com.ai.assistance.quro.action.TERMINAL_SESSIONS
+com.ai.assistance.quro.action.TERMINAL_CREATE_SESSION
+com.ai.assistance.quro.action.TERMINAL_DESTROY_SESSION
+com.ai.assistance.quro.action.TERMINAL_SEND_INPUT
+
+// 结果通过 extras 返回
+intent.getStringExtra("output")      // 命令输出
+intent.getIntExtra("exit_code", -1)  // 退出码
+intent.getStringExtra("error")       // 错误信息
+```
+
+#### 4.7 技术实现细节
+
+**PTY 会话创建（QuroShellSession）**：
+```kotlin
+// 核心流程
+val masterFd = Os.open("/dev/ptmx", O_RDWR or O_NOCTTY)  // 打开伪终端主设备
+val slaveName = Os.slavename(masterFd)                     // 获取从设备名
+Os.grantpt(masterFd)                                       // 授权从设备
+Os.unlockpt(masterFd)                                      // 解锁从设备
+val slaveFd = Os.open(slaveName, O_RDWR or O_NOCTTY)      // 打开从设备
+Os.setsid()                                                // 创建新会话
+Os.ioctl(masterFd, TIOCSWINSZ, winsize)                   // 设置窗口大小
+
+// fork 子进程
+val pid = fork()
+if (pid == 0) {
+    // 子进程：重定向标准输入/输出/错误到从设备
+    Os.dup2(slaveFd, 0)
+    Os.dup2(slaveFd, 1)
+    Os.dup2(slaveFd, 2)
+    Os.execve("/bin/sh", arrayOf("/bin/sh"), envp)  // 启动 shell
+}
+```
+
+**命令执行路由（QuroTerminalController）**：
+```kotlin
+// 自动选择执行环境
+fun runCommand(command: String, timeout: Long = 14000): String {
+    val env = QuroLinuxEnv.getInstance(context)
+    return if (env.isReady()) {
+        // Linux 环境可用 → 使用 proot
+        runCommandInLinux(command, timeout)
+    } else {
+        // 回退到设备 shell
+        runCommandInDeviceShell(command, timeout)
+    }
+}
+
+private fun runCommandInLinux(command: String, timeout: Long): String {
+    val prootPath = applicationInfo.nativeLibraryDir + "/libproot.so"
+    val prootArgs = listOf("-0", "root", "--link2symlink",
+        "-w", "/root", "--bind=/proc", "--bind=/sys", "--bind=/dev",
+        "--bind=/sdcard:/mnt/sdcard")
+    val fullCommand = listOf(prootPath) + prootArgs + listOf("/bin/sh", "-c", command)
+    return ProcessBuilder(fullCommand).start().inputStream.bufferedReader().readText()
+}
+```
+
+#### 4.8 终端 UI 入口
+
+- **对话框输入框「+」→ 终端**：点击输入框左侧「+」按钮，选择「终端」
+- **AI 调用 `ui_open_terminal`**：AI 在对话中主动打开终端界面
+- **Deep Link 直接启动**：`quro://terminal/exec?cmd=...`
+- **ACI 跨进程调用**：其他应用通过 ACI 协议调用终端能力
+
+#### 4.9 关键特性总结
+
+| 特性 | 状态 | 说明 |
+|------|------|------|
+| **真实用户空间** | ✅ | Ubuntu 24.04 ARM64，完整的 Linux 工具链 |
+| **前台服务保活** | ✅ | specialUse 类型，息屏/切 App 不被杀 |
+| **ACI 跨进程** | ✅ | 12 个能力，AIDL/HTTP/MCP 三种调用方式 |
+| **Intent/Provider** | ✅ | ContentProvider + Deep Link + Intent + BroadcastReceiver |
+| **多会话支持** | ✅ | 默认/额外/UI/历史会话，会话隔离 |
+| **开机自启动** | ✅ | BOOT_COMPLETED 广播接收器 |
+| **Android 14+ 兼容** | ✅ | specialUse + property 标签 |
+| **PTY 伪终端** | ✅ | /dev/ptmx，fork/exec，TIOCSWINSZ |
+| **proot 沙箱** | ✅ | 无需 ROOT，link2symlink 符号链接 |
+| **CMS 运行时** | ✅ | NODE/PYTHON/RUST/GO/JAVA 共享环境 |
 
 ### 5. MCP（Model Context Protocol）
 - `core/mcp/QuroMcpClient`：外部 MCP 服务器客户端，`initialize` 握手（2025-03-26 协议）、`listTools` / `callTool`
@@ -665,6 +911,15 @@ flowchart TB
         D4["L4 ROOT su"]
         D5["L5 应用内 Linux proot + Ubuntu 24.04"]
     end
+    subgraph TERM["终端子系统 · core/terminal"]
+        T1["QuroTerminalController"]
+        T2["QuroShellSession (PTY)"]
+        T3["QuroTerminalSessionManager"]
+        T4["QuroLinuxEnv (proot+Ubuntu)"]
+        T5["前台服务 Qu roTerminalKeepAliveService"]
+        T6["ACI 受控端 Qu roTerminalAciService"]
+        T7["IPC 接口 Provider/DeepLink/Intent/Broadcast"]
+    end
     subgraph ENGINE["引擎 / 运行时层"]
         E1["CMS 引擎 共享运行时 NODE / PYTHON / SSH / JAVA / RUST / GO"]
         E2["CMS v2 模块 QuroCmsRepository"]
@@ -686,8 +941,10 @@ flowchart TB
     UI --> CORE
     CORE --> TOOLS
     TOOLS --> PRIV
+    TOOLS --> TERM
     TOOLS --> ENGINE
-    PRIV --> ENGINE
+    PRIV --> TERM
+    TERM --> ENGINE
     CORE --> IM
     CORE --> DATA
 ```
@@ -1119,6 +1376,11 @@ cd ZorvAI
 | **Shizuku 相关能力不可用** | 必须**先打开 Shizuku App 并启动其服务 / 完成配对**，再在 Zorv AI 中授权；Shizuku 未运行时 L2 通道不会启用。 |
 | **ROOT 模式命令不执行** | ROOT 模式命令走 `sh -c` 执行，需确认设备已 root 且已授予 su 权限。 |
 | **应用内 Linux（L5）无法运行** | 首次进入终端会提示「安装 Linux 环境」，`proot` 已随包内置，仅 Ubuntu base rootfs 需联网从官方镜像下载（arm64 走 `ubuntu-ports`）；下载失败检查网络/镜像连通性，日志在 `Download/QuroAI_logs/`。 |
+| **终端息屏/切 App 后被杀** | 确认前台服务已启动：通知栏应显示「Zorv AI 终端运行中」。若无通知，检查 AndroidManifest 中 `Qu roTerminalKeepAliveService` 的 `foregroundServiceType="specialUse"` 和 `<property>` 标签是否完整。Android 14+ 需要 `FOREGROUND_SERVICE_SPECIAL_USE` 权限。 |
+| **终端 ACI 跨进程调用失败** | 检查 `Qu roTerminalAciService` 是否在 Manifest 中注册，权限 `ai.aci.permission.CALL` 是否声明。调用方需通过 `bindService()` 绑定服务。 |
+| **终端 Intent/Provider 不响应** | 检查 `TerminalProvider`、`TerminalBroadcastReceiver`、`TerminalDeepLinkHandler` 是否在 Manifest 中注册。Deep Link 需在 `QuroMainActivity` 的 `intent-filter` 中配置 `quro://terminal` scheme。 |
+| **终端会话状态不一致** | `QuroTerminalSessionManager` 管理多会话（默认/额外/UI/历史）。调用 `listSessions()` 获取真实状态。若默认会话丢失，前台服务每 15 秒自动重建。 |
+| **终端命令执行报 Illegal option -0** | 这是 proot 参数重复问题。`QuroTerminalController.runCommandInLinux` 中 `prootArgs` 已包含 `-0 root`，不应重复添加。更新到 v1.0.67+ 已修复。 |
 | **离线对话不可用** | 离线 LLM 随发布包内置；若所用构建不含离线引擎原生库则会提示未接入，请使用包含离线引擎的版本。 |
 | **网页 / HTML 预览不显示** | 确认已随包集成 GeckoView（MPL-2.0）运行时。 |
 | **本地语音识别不可用** | 本地 STT 模型为约 85MB 的 onnx 文件，首次使用需下载 / 放置到指定目录。 |
@@ -1131,12 +1393,28 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-**最新版本：`v1.0.61`**（2026-08-20，屏幕视觉双模 + 系统级控制动作 + 消费级闭环）：
+**最新版本：`v1.0.67`**（2026-08-29，终端前台服务保活 + ACI 跨进程 + Intent/Provider）：
 
-- 🟢 **[ZorvAI-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.61/ZorvAI-full-release.apk)**（约 334MB，Release 签名，**最新**）
-- 🟢 **[ZorvAI-full-debug.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.61/ZorvAI-full-debug.apk)**（约 347MB，Debug 版本）
+- 🟢 **[app-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.67/app-full-release-v1.0.67.apk)**（约 233MB，Release 签名，**最新**）
 
-### v1.0.61 新增功能
+### v1.0.67 新增功能
+
+**终端前台服务保活**：
+- 修复 Android 14+ 前台服务被系统静默拒绝（dataSync → specialUse）
+- 息屏/切 App 终端会话不再被杀
+- 通知栏常驻「Zorv AI 终端运行中」
+- 开机自启动保活
+
+**ACI 跨进程接口（12 个能力）**：
+- exec / create_session / destroy_session / send_input
+- get_session_status / list_sessions / set/get_session_env
+- list_capabilities / get_service_status / get_audit_log / help
+
+**Intent / Provider / BroadcastReceiver / Deep Link**：
+- TerminalProvider: `content://com.ai.assistance.quro.terminal/...`
+- Deep Link: `quro://terminal/exec?cmd=...`
+- BroadcastReceiver: 6 个广播 Action
+- IntentHandler: TERMINAL_EXEC / TERMINAL_STATUS 等
 
 **屏幕视觉双模感知**：
 - `screenshot` - 截图保存文件
