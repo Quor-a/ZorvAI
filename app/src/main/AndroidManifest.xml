@@ -16,6 +16,24 @@
         android:label="ACI Discover Permission"
         android:protectionLevel="normal" />
 
+    <!-- 终端 Intent/Provider/Broadcast 权限定义 -->
+    <permission
+        android:name="ai.aci.permission.READ_TERMINAL"
+        android:label="Read Terminal Sessions"
+        android:protectionLevel="normal" />
+    <permission
+        android:name="ai.aci.permission.WRITE_TERMINAL"
+        android:label="Write Terminal / Execute Commands"
+        android:protectionLevel="dangerous" />
+    <permission
+        android:name="ai.aci.permission.SEND_TERMINAL_BROADCAST"
+        android:label="Send Terminal Broadcast"
+        android:protectionLevel="normal" />
+    <permission
+        android:name="ai.aci.permission.RECEIVE_TERMINAL_BROADCAST"
+        android:label="Receive Terminal Broadcast Results"
+        android:protectionLevel="normal" />
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -360,23 +378,80 @@
             android:name=".core.terminal.TerminalProvider"
             android:authorities="com.ai.assistance.quro.terminal"
             android:exported="true"
-            android:permission="ai.aci.permission.CALL"
-            android:grantUriPermissions="true" />
+            android:readPermission="ai.aci.permission.READ_TERMINAL"
+            android:writePermission="ai.aci.permission.WRITE_TERMINAL"
+            android:grantUriPermissions="true">
+            <!-- Intent Filter：支持 ACTION_PICK 模式（Intent + ContentProvider 协作） -->
+            <intent-filter>
+                <action android:name="android.intent.action.PICK" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="vnd.android.cursor.dir/vnd.com.ai.assistance.quro.terminal.sessions" />
+            </intent-filter>
+        </provider>
 
         <!-- 终端广播接收器：接收广播执行终端命令、获取终端状态等 -->
         <receiver
             android:name=".core.terminal.TerminalBroadcastReceiver"
             android:enabled="true"
-            android:exported="true">
+            android:exported="true"
+            android:permission="ai.aci.permission.SEND_TERMINAL_BROADCAST">
             <intent-filter>
                 <action android:name="com.ai.assistance.quro.action.TERMINAL_EXEC" />
                 <action android:name="com.ai.assistance.quro.action.TERMINAL_STATUS" />
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_SESSIONS" />
                 <action android:name="com.ai.assistance.quro.action.TERMINAL_CREATE_SESSION" />
                 <action android:name="com.ai.assistance.quro.action.TERMINAL_DESTROY_SESSION" />
                 <action android:name="com.ai.assistance.quro.action.TERMINAL_SEND_INPUT" />
                 <action android:name="com.ai.assistance.quro.action.TERMINAL_GET_OUTPUT" />
             </intent-filter>
         </receiver>
+
+        <!-- 终端结果广播接收器（接收操作结果，无需权限） -->
+        <receiver
+            android:name=".core.terminal.TerminalBroadcastReceiver$ResultReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_RESULT" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 终端 Intent Activity（透明）：外部应用通过 Intent 调用终端的标准 Android 入口。
+             显式/隐式 Intent、startActivityForResult 结果回传、ACTION_SEND、Deep Link 均通过此 Activity。 -->
+        <activity
+            android:name=".core.terminal.TerminalIntentActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Quro.TerminalIntent"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:permission="ai.aci.permission.CALL">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_EXEC" />
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_STATUS" />
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_SESSIONS" />
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_CREATE_SESSION" />
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_DESTROY_SESSION" />
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_SEND_INPUT" />
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_GET_OUTPUT" />
+                <action android:name="com.ai.assistance.quro.action.TERMINAL_PICK_SESSION" />
+                <action android:name="android.intent.action.PICK" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="vnd.android.cursor.dir/vnd.com.ai.assistance.quro.terminal.sessions" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="quro" android:host="terminal" />
+            </intent-filter>
+        </activity>
 
         <!-- 可视化弹窗悬浮窗服务 -->
         <service
