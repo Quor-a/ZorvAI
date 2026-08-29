@@ -330,8 +330,8 @@ Zorv AI 终端是一个**完整的 Android 终端模拟器**，集成了 Linux �
 | **QuroTerminalAciService** | `service/QuroTerminalAciService.kt` | ACI 受控端服务：暴露 12 个能力给外部应用调用 |
 | **TerminalProvider** | `core/terminal/TerminalProvider.kt` | ContentProvider：`content://com.ai.assistance.quro.terminal/...` |
 | **TerminalDeepLinkHandler** | `core/terminal/TerminalDeepLinkHandler.kt` | Deep Link 处理：`quro://terminal/...` |
-| **TerminalIntentHandler** | `core/terminal/TerminalIntentHandler.kt` | Intent 处理：`TERMINAL_EXEC` / `TERMINAL_STATUS` 等 |
-| **TerminalBroadcastReceiver** | `core/terminal/TerminalBroadcastReceiver.kt` | 广播接收：6 个 Action，结果通过 `TERMINAL_RESULT` 返回 |
+| **TerminalIntentActivity** | `core/terminal/TerminalIntentActivity.kt` | 透明 Activity：外部应用通过 Intent 调用终端的标准入口（显式/隐式 Intent + startActivityForResult + ACTION_SEND + ACTION_PICK + Deep Link） |
+| **TerminalBroadcastReceiver** | `core/terminal/TerminalBroadcastReceiver.kt` | 广播接收：7 个 Action，结果通过 `TERMINAL_RESULT` 返回 |
 
 #### 4.3 Linux 沙箱（proot + Ubuntu 24.04 ARM64）
 
@@ -450,31 +450,52 @@ val intent = Intent(Intent.ACTION_VIEW, Uri.parse("quro://terminal/exec?cmd=unam
 startActivity(intent)
 ```
 
-**4.6.3 Intent Handler（TerminalIntentHandler）**
+**4.6.3 Intent Activity（TerminalIntentActivity）— 标准 Android Activity 入口**
+
+透明 Activity，无可见 UI，仅作为 Intent 处理器。支持 3 种调用模式：
 
 ```kotlin
-// 支持的 Action
-com.ai.assistance.quro.action.TERMINAL_EXEC        // 执行命令（extra: command）
-com.ai.assistance.quro.action.TERMINAL_STATUS       // 获取状态
-com.ai.assistance.quro.action.TERMINAL_SESSIONS     // 列出会话
-com.ai.assistance.quro.action.TERMINAL_CREATE_SESSION // 创建会话
+// 模式 1：显式 Intent（推荐，指定 ComponentName）
+val intent = Intent()
+intent.component = ComponentName("com.ai.assistance.quro",
+    "com.ai.assistance.quro.core.terminal.TerminalIntentActivity")
+intent.action = "com.ai.assistance.quro.action.TERMINAL_EXEC"
+intent.putExtra("command", "ls -la")
+val result = startActivityForResult(intent, 0)  // 结果通过 onActivityResult 回传
 
-// 使用示例
+// 模式 2：隐式 Intent（通过 Intent Filter 匹配）
 val intent = Intent("com.ai.assistance.quro.action.TERMINAL_EXEC")
-intent.putExtra("command", "python3 --version")
-sendBroadcast(intent)
+intent.putExtra("command", "uname -a")
+startActivity(intent)
+
+// 模式 3：Deep Link（quro://terminal/...）
+val intent = Intent(Intent.ACTION_VIEW, Uri.parse("quro://terminal/exec?cmd=ls -la"))
+startActivity(intent)
+
+// 支持的 Action（8 个）
+com.ai.assistance.quro.action.TERMINAL_EXEC          // 执行命令（extras: command, timeout）
+com.ai.assistance.quro.action.TERMINAL_STATUS         // 获取状态
+com.ai.assistance.quro.action.TERMINAL_SESSIONS       // 列出会话
+com.ai.assistance.quro.action.TERMINAL_CREATE_SESSION // 创建会话（extras: session_name）
+com.ai.assistance.quro.action.TERMINAL_DESTROY_SESSION // 销毁会话（extras: session_id）
+com.ai.assistance.quro.action.TERMINAL_SEND_INPUT     // 发送输入（extras: session_id, input）
+com.ai.assistance.quro.action.TERMINAL_GET_OUTPUT     // 获取输出（extras: session_id, output_limit）
+com.ai.assistance.quro.action.TERMINAL_PICK_SESSION   // ACTION_PICK 模式（Intent + Provider 协作）
+android.intent.action.SEND                            // 分享文本到终端（extras: EXTRA_TEXT）
+android.intent.action.VIEW + quro://terminal           // Deep Link
 ```
 
 **4.6.4 BroadcastReceiver（TerminalBroadcastReceiver）**
 
 ```kotlin
-// 支持的 Action（6 个）
+// 支持的 Action（7 个）
 com.ai.assistance.quro.action.TERMINAL_EXEC
 com.ai.assistance.quro.action.TERMINAL_STATUS
 com.ai.assistance.quro.action.TERMINAL_SESSIONS
 com.ai.assistance.quro.action.TERMINAL_CREATE_SESSION
 com.ai.assistance.quro.action.TERMINAL_DESTROY_SESSION
 com.ai.assistance.quro.action.TERMINAL_SEND_INPUT
+com.ai.assistance.quro.action.TERMINAL_GET_OUTPUT
 
 // 结果通过 extras 返回
 intent.getStringExtra("output")      // 命令输出
