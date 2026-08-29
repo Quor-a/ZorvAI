@@ -49,6 +49,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.linux.SourceManager
+import com.ai.assistance.quro.core.linux.PackageManagerType
 import com.ai.assistance.quro.core.termux.QuroTermuxTerminalController
 import com.ai.assistance.quro.core.termux.QuroTermuxViewClient
 import com.ai.assistance.quro.core.termux.terminal.TerminalSession
@@ -87,6 +89,7 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
     var showReplaceDialog by remember { mutableStateOf(false) }
     var showDevEnvMenu by remember { mutableStateOf(false) }
     var devEnvStatus by remember { mutableStateOf("") }
+    val sourceManager = remember { SourceManager(context) }
 
     // 统一会话管理状态
     val scope = rememberCoroutineScope()
@@ -147,9 +150,19 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                                 showDevEnvMenu = false
                                 devEnvStatus = "正在发送 Node.js 安装命令..."
                                 scope.launch(Dispatchers.IO) {
-                                    sessionState.value?.write("apt-get update && apt-get install -y nodejs npm && npm install -g pnpm typescript 2>&1 | tail -20\n")
+                                    // 使用 SourceManager 生成的命令
+                                    val sourceConfig = sourceManager.generateAllSourceConfigCommands()
+                                    val nodeCommand = """
+                                        $sourceConfig
+                                        # 安装 Node.js 24.x（使用 NodeSource）
+                                        curl -fsSL https://deb.nodesource.com/setup_24.x | bash - 
+                                        apt-get install -y nodejs
+                                        echo "Node.js 安装完成"
+                                        node -v && npm -v
+                                    """.trimIndent()
+                                    sessionState.value?.write("$nodeCommand 2>&1 | tail -20\n")
                                     withContext(Dispatchers.Main) {
-                                        devEnvStatus = "Node.js 安装命令已发送，请查看终端输出"
+                                        devEnvStatus = "Node.js 安装命令已发送（已配置镜像源），请查看终端输出"
                                     }
                                 }
                             }
@@ -160,9 +173,19 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                                 showDevEnvMenu = false
                                 devEnvStatus = "正在发送 Python3 安装命令..."
                                 scope.launch(Dispatchers.IO) {
-                                    sessionState.value?.write("apt-get update && apt-get install -y python3 python3-pip python3-venv && python3 -m ensurepip --upgrade 2>&1 | tail -20\n")
+                                    // 使用 SourceManager 生成的命令
+                                    val sourceConfig = sourceManager.generateAllSourceConfigCommands()
+                                    val pythonCommand = """
+                                        $sourceConfig
+                                        # 安装 Python3 + pip
+                                        apt-get update
+                                        apt-get install -y python3 python3-pip
+                                        echo "Python 安装完成"
+                                        python3 --version && pip3 --version
+                                    """.trimIndent()
+                                    sessionState.value?.write("$pythonCommand 2>&1 | tail -20\n")
                                     withContext(Dispatchers.Main) {
-                                        devEnvStatus = "Python3 安装命令已发送，请查看终端输出"
+                                        devEnvStatus = "Python3 安装命令已发送（已配置镜像源），请查看终端输出"
                                     }
                                 }
                             }
@@ -173,9 +196,19 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                                 showDevEnvMenu = false
                                 devEnvStatus = "正在发送 Java 安装命令..."
                                 scope.launch(Dispatchers.IO) {
-                                    sessionState.value?.write("apt-get update && apt-get install -y default-jdk 2>&1 | tail -20\n")
+                                    // 使用 SourceManager 生成的命令
+                                    val sourceConfig = sourceManager.generateAllSourceConfigCommands()
+                                    val javaCommand = """
+                                        $sourceConfig
+                                        # 安装 OpenJDK 17
+                                        apt-get update
+                                        apt-get install -y openjdk-17-jdk-headless
+                                        echo "Java 安装完成"
+                                        java -version
+                                    """.trimIndent()
+                                    sessionState.value?.write("$javaCommand 2>&1 | tail -20\n")
                                     withContext(Dispatchers.Main) {
-                                        devEnvStatus = "Java 安装命令已发送，请查看终端输出"
+                                        devEnvStatus = "Java 安装命令已发送（已配置镜像源），请查看终端输出"
                                     }
                                 }
                             }
@@ -186,9 +219,21 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                                 showDevEnvMenu = false
                                 devEnvStatus = "正在发送 Rust 安装命令..."
                                 scope.launch(Dispatchers.IO) {
-                                    sessionState.value?.write("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y 2>&1 | tail -20\n")
+                                    // 使用 SourceManager 生成的命令
+                                    val sourceConfig = sourceManager.generateAllSourceConfigCommands()
+                                    val rustCommand = """
+                                        $sourceConfig
+                                        # 安装 Rust（使用镜像源）
+                                        export RUSTUP_DIST_SERVER="${sourceManager.getSelectedSource(PackageManagerType.RUST).url}"
+                                        export RUSTUP_UPDATE_ROOT="${sourceManager.getSelectedSource(PackageManagerType.RUST).url}/rustup"
+                                        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+                                        source ~/.cargo/env
+                                        echo "Rust 安装完成"
+                                        rustc --version && cargo --version
+                                    """.trimIndent()
+                                    sessionState.value?.write("$rustCommand 2>&1 | tail -20\n")
                                     withContext(Dispatchers.Main) {
-                                        devEnvStatus = "Rust 安装命令已发送，请查看终端输出"
+                                        devEnvStatus = "Rust 安装命令已发送（已配置镜像源），请查看终端输出"
                                     }
                                 }
                             }
@@ -199,9 +244,19 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                                 showDevEnvMenu = false
                                 devEnvStatus = "正在发送 Go 安装命令..."
                                 scope.launch(Dispatchers.IO) {
-                                    sessionState.value?.write("apt-get update && apt-get install -y golang 2>&1 | tail -20\n")
+                                    // 使用 SourceManager 生成的命令
+                                    val sourceConfig = sourceManager.generateAllSourceConfigCommands()
+                                    val goCommand = """
+                                        $sourceConfig
+                                        # 安装 Go
+                                        apt-get update
+                                        apt-get install -y golang
+                                        echo "Go 安装完成"
+                                        go version
+                                    """.trimIndent()
+                                    sessionState.value?.write("$goCommand 2>&1 | tail -20\n")
                                     withContext(Dispatchers.Main) {
-                                        devEnvStatus = "Go 安装命令已发送，请查看终端输出"
+                                        devEnvStatus = "Go 安装命令已发送（已配置镜像源），请查看终端输出"
                                     }
                                 }
                             }
@@ -212,9 +267,19 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                                 showDevEnvMenu = false
                                 devEnvStatus = "正在发送 Git 安装命令..."
                                 scope.launch(Dispatchers.IO) {
-                                    sessionState.value?.write("apt-get update && apt-get install -y git curl wget 2>&1 | tail -20\n")
+                                    // 使用 SourceManager 生成的命令
+                                    val sourceConfig = sourceManager.generateAllSourceConfigCommands()
+                                    val gitCommand = """
+                                        $sourceConfig
+                                        # 安装 Git + Curl + Wget
+                                        apt-get update
+                                        apt-get install -y git curl wget
+                                        echo "Git/Curl/Wget 安装完成"
+                                        git --version && curl --version | head -1 && wget --version | head -1
+                                    """.trimIndent()
+                                    sessionState.value?.write("$gitCommand 2>&1 | tail -20\n")
                                     withContext(Dispatchers.Main) {
-                                        devEnvStatus = "Git 安装命令已发送，请查看终端输出"
+                                        devEnvStatus = "Git 安装命令已发送（已配置镜像源），请查看终端输出"
                                     }
                                 }
                             }
@@ -226,7 +291,16 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                                 showDevEnvMenu = false
                                 devEnvStatus = "正在检查环境状态..."
                                 scope.launch(Dispatchers.IO) {
-                                    sessionState.value?.write("echo '=== 环境检查 ===' && echo -n 'Node: ' && node -v 2>/dev/null || echo '未安装' && echo -n 'Python: ' && python3 --version 2>/dev/null || echo '未安装' && echo -n 'Java: ' && java -version 2>&1 | head -1 || echo '未安装' && echo -n 'Rust: ' && rustc --version 2>/dev/null || echo '未安装' && echo -n 'Go: ' && go version 2>/dev/null || echo '未安装' && echo -n 'Git: ' && git --version 2>/dev/null || echo '未安装'\n")
+                                    val checkCommand = """
+                                        echo '=== 环境检查 ==='
+                                        echo -n 'Node: ' && node -v 2>/dev/null || echo '未安装'
+                                        echo -n 'Python: ' && python3 --version 2>/dev/null || echo '未安装'
+                                        echo -n 'Java: ' && java -version 2>&1 | head -1 || echo '未安装'
+                                        echo -n 'Rust: ' && rustc --version 2>/dev/null || echo '未安装'
+                                        echo -n 'Go: ' && go version 2>/dev/null || echo '未安装'
+                                        echo -n 'Git: ' && git --version 2>/dev/null || echo '未安装'
+                                    """.trimIndent()
+                                    sessionState.value?.write("$checkCommand\n")
                                     withContext(Dispatchers.Main) {
                                         devEnvStatus = "环境检查命令已发送，请查看终端输出"
                                     }
@@ -240,7 +314,12 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                                 showDevEnvMenu = false
                                 devEnvStatus = "正在发送 Node.js 卸载命令..."
                                 scope.launch(Dispatchers.IO) {
-                                    sessionState.value?.write("apt-get remove -y nodejs npm && npm uninstall -g pnpm typescript 2>&1 | tail -20\n")
+                                    val uninstallCommand = """
+                                        # 卸载 Node.js
+                                        apt-get remove -y nodejs npm
+                                        echo "Node.js 卸载完成"
+                                    """.trimIndent()
+                                    sessionState.value?.write("$uninstallCommand 2>&1 | tail -20\n")
                                     withContext(Dispatchers.Main) {
                                         devEnvStatus = "Node.js 卸载命令已发送，请查看终端输出"
                                     }
@@ -253,7 +332,12 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                                 showDevEnvMenu = false
                                 devEnvStatus = "正在发送 Python3 卸载命令..."
                                 scope.launch(Dispatchers.IO) {
-                                    sessionState.value?.write("apt-get remove -y python3 python3-pip python3-venv && rm -rf /root/cms-venv 2>&1 | tail -20\n")
+                                    val uninstallCommand = """
+                                        # 卸载 Python3
+                                        apt-get remove -y python3 python3-pip
+                                        echo "Python3 卸载完成"
+                                    """.trimIndent()
+                                    sessionState.value?.write("$uninstallCommand 2>&1 | tail -20\n")
                                     withContext(Dispatchers.Main) {
                                         devEnvStatus = "Python3 卸载命令已发送，请查看终端输出"
                                     }
@@ -266,7 +350,12 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                                 showDevEnvMenu = false
                                 devEnvStatus = "正在发送 Java 卸载命令..."
                                 scope.launch(Dispatchers.IO) {
-                                    sessionState.value?.write("apt-get remove -y default-jdk 2>&1 | tail -20\n")
+                                    val uninstallCommand = """
+                                        # 卸载 Java
+                                        apt-get remove -y openjdk-17-jdk-headless
+                                        echo "Java 卸载完成"
+                                    """.trimIndent()
+                                    sessionState.value?.write("$uninstallCommand 2>&1 | tail -20\n")
                                     withContext(Dispatchers.Main) {
                                         devEnvStatus = "Java 卸载命令已发送，请查看终端输出"
                                     }
@@ -279,7 +368,13 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                                 showDevEnvMenu = false
                                 devEnvStatus = "正在发送 Rust 卸载命令..."
                                 scope.launch(Dispatchers.IO) {
-                                    sessionState.value?.write("apt-get remove -y rustc cargo && rm -rf /root/.cargo /root/.rustup 2>&1 | tail -20\n")
+                                    val uninstallCommand = """
+                                        # 卸载 Rust
+                                        rustup self uninstall -y 2>/dev/null || true
+                                        rm -rf ~/.cargo ~/.rustup
+                                        echo "Rust 卸载完成"
+                                    """.trimIndent()
+                                    sessionState.value?.write("$uninstallCommand 2>&1 | tail -20\n")
                                     withContext(Dispatchers.Main) {
                                         devEnvStatus = "Rust 卸载命令已发送，请查看终端输出"
                                     }
@@ -292,7 +387,13 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                                 showDevEnvMenu = false
                                 devEnvStatus = "正在发送 Go 卸载命令..."
                                 scope.launch(Dispatchers.IO) {
-                                    sessionState.value?.write("apt-get remove -y golang && rm -rf /usr/local/go 2>&1 | tail -20\n")
+                                    val uninstallCommand = """
+                                        # 卸载 Go
+                                        apt-get remove -y golang
+                                        rm -rf /usr/local/go
+                                        echo "Go 卸载完成"
+                                    """.trimIndent()
+                                    sessionState.value?.write("$uninstallCommand 2>&1 | tail -20\n")
                                     withContext(Dispatchers.Main) {
                                         devEnvStatus = "Go 卸载命令已发送，请查看终端输出"
                                     }
