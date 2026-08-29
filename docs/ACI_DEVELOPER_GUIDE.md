@@ -1614,39 +1614,59 @@ AI → aci_call(capability="get_session_status", args={"session_id":"abc123"})
 
 > 本节说明 Android 标准组件的完整实现，符合 Android 官方最佳实践。
 
-#### 25.10.1 Intent 升级
+#### 25.10.1 Intent Activity 升级（TerminalIntentActivity）
 
-**显式 Intent（推荐）**：
+透明 Activity，无可见 UI，仅作为 Intent 处理器，处理完毕后立即 `finish()`。
+外部应用通过 Intent 调用终端的标准 Android 入口。
+
+**显式 Intent（推荐，指定 ComponentName）**：
 ```kotlin
 // 启动终端执行命令
-val intent = Intent(context, TerminalIntentHandler::class.java)
-intent.action = TerminalIntentHandler.ACTION_EXEC
+val intent = Intent()
+intent.component = ComponentName("com.ai.assistance.quro",
+    "com.ai.assistance.quro.core.terminal.TerminalIntentActivity")
+intent.action = TerminalIntentActivity.ACTION_EXEC
 intent.putExtra("command", "python3 -c 'print(1+2)'")
 intent.putExtra("timeout", 14L)
-startActivityForResult(intent, 0)
+startActivityForResult(intent, 0)  // 结果通过 onActivityResult 回传
 ```
 
 **隐式 Intent**：
 ```kotlin
 // 声明 action，由系统匹配 Intent Filter
-val intent = Intent(TerminalIntentHandler.ACTION_EXEC)
+val intent = Intent(TerminalIntentActivity.ACTION_EXEC)
 intent.putExtra("command", "uname -a")
 startActivity(intent)
 ```
 
-**有序广播**：
+**ACTION_SEND（分享文本到终端）**：
+```kotlin
+val intent = Intent(Intent.ACTION_SEND)
+intent.type = "text/plain"
+intent.putExtra(Intent.EXTRA_TEXT, "echo hello world")
+intent.setPackage("com.ai.assistance.quro")
+startActivity(intent)
+```
+
+**Deep Link**：
+```kotlin
+val intent = Intent(Intent.ACTION_VIEW, Uri.parse("quro://terminal/exec?cmd=ls -la"))
+startActivity(intent)
+```
+
+**有序广播（BroadcastReceiver）**：
 ```kotlin
 // 按优先级依次传递，接收器可修改结果、中止传播
 val intent = Intent(TerminalBroadcastReceiver.ACTION_EXEC)
 intent.putExtra("command", "ls -la")
-sendOrderedBroadcast(intent, "ai.aci.permission.CALL")
+sendOrderedBroadcast(intent, "ai.aci.permission.SEND_TERMINAL_BROADCAST")
 ```
 
 **ACTION_PICK 模式（Intent + ContentProvider 协作）**：
 ```kotlin
 // 1. 发送 ACTION_PICK Intent
-val intent = Intent(TerminalIntentHandler.ACTION_PICK_SESSION)
-intent.type = TerminalIntentHandler.MIME_SESSION_LIST
+val intent = Intent(TerminalIntentActivity.ACTION_PICK_SESSION)
+intent.type = "vnd.android.cursor.dir/vnd.com.ai.assistance.quro.terminal.sessions"
 startActivityForResult(intent, REQUEST_PICK_SESSION)
 
 // 2. 在 onActivityResult 中：
@@ -1734,6 +1754,48 @@ intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 startActivity(intent)
 ```
 
+**TerminalIntentActivity Manifest 配置**：
+```xml
+<!-- AndroidManifest.xml — 透明 Activity，外部应用的标准入口 -->
+<activity
+    android:name=".core.terminal.TerminalIntentActivity"
+    android:exported="true"
+    android:theme="@style/Theme.Quro.TerminalIntent"
+    android:excludeFromRecents="true"
+    android:noHistory="true"
+    android:launchMode="singleTop"
+    android:taskAffinity=""
+    android:permission="ai.aci.permission.CALL">
+    <!-- 终端 Action + ACTION_PICK -->
+    <intent-filter>
+        <action android:name="com.ai.assistance.quro.action.TERMINAL_EXEC" />
+        <action android:name="com.ai.assistance.quro.action.TERMINAL_STATUS" />
+        <action android:name="com.ai.assistance.quro.action.TERMINAL_SESSIONS" />
+        <action android:name="com.ai.assistance.quro.action.TERMINAL_CREATE_SESSION" />
+        <action android:name="com.ai.assistance.quro.action.TERMINAL_DESTROY_SESSION" />
+        <action android:name="com.ai.assistance.quro.action.TERMINAL_SEND_INPUT" />
+        <action android:name="com.ai.assistance.quro.action.TERMINAL_GET_OUTPUT" />
+        <action android:name="com.ai.assistance.quro.action.TERMINAL_PICK_SESSION" />
+        <action android:name="android.intent.action.PICK" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="vnd.android.cursor.dir/vnd.com.ai.assistance.quro.terminal.sessions" />
+    </intent-filter>
+    <!-- ACTION_SEND（分享文本到终端） -->
+    <intent-filter>
+        <action android:name="android.intent.action.SEND" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="text/plain" />
+    </intent-filter>
+    <!-- Deep Link（quro://terminal/...） -->
+    <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="quro" android:host="terminal" />
+    </intent-filter>
+</activity>
+```
+
 #### 25.10.3 BroadcastReceiver 升级
 
 **普通广播（异步，所有接收器同时收到）**：
@@ -1747,7 +1809,7 @@ sendBroadcast(intent)
 ```kotlin
 val intent = Intent(TerminalBroadcastReceiver.ACTION_EXEC)
 intent.putExtra("command", "uname -a")
-sendOrderedBroadcast(intent, "ai.aci.permission.CALL")
+sendOrderedBroadcast(intent, "ai.aci.permission.SEND_TERMINAL_BROADCAST")
 ```
 
 **带权限的广播**：
@@ -1755,7 +1817,7 @@ sendOrderedBroadcast(intent, "ai.aci.permission.CALL")
 // 仅拥有此权限的接收器能收到
 val intent = Intent(TerminalBroadcastReceiver.ACTION_EXEC)
 intent.putExtra("command", "whoami")
-sendBroadcast(intent, "ai.aci.permission.CALL")
+sendBroadcast(intent, "ai.aci.permission.SEND_TERMINAL_BROADCAST")
 ```
 
 **结果回调**：
