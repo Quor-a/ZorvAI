@@ -386,7 +386,7 @@ class QuroCmsRepository(context: Context) {
             capabilities = listOf(
                 QuroCmsCapability("term_python_run", "运行 Python 代码", "code:string",
                     listOf("term.python.exec"), PermissionConstraints(maxExecutionTimeSecs = 30),
-                    "terminal", "python3 -c \${code}"),
+                    "terminal", "python3 -c \"\${code}\""),
                 QuroCmsCapability("term_python_version", "查看 Python 版本", "{}",
                     listOf("term.python.exec"), PermissionConstraints(),
                     "terminal", "python3 --version"),
@@ -438,7 +438,7 @@ PYEOF
             capabilities = listOf(
                 QuroCmsCapability("term_node_run", "运行 Node 代码", "code:string",
                     listOf("term.node.exec"), PermissionConstraints(maxExecutionTimeSecs = 30),
-                    "terminal", "node -e \${code}"),
+                    "terminal", "node -e \"\${code}\""),
                 QuroCmsCapability("term_node_version", "查看 Node 版本", "{}",
                     listOf("term.node.exec"), PermissionConstraints(),
                     "terminal", "node --version"),
