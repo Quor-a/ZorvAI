@@ -197,28 +197,41 @@ object ToolCapabilityDirectory {
         "dev_env" to ToolInfo(
             name = "dev_env",
             category = ToolCategory.TERMINAL_LINUX,
-            description = "开发环境管理：安装/卸载/检查终端开发环境（Node.js、Python、Java、Rust、Go、Git）",
-            useCases = listOf("安装Node.js环境", "装Python", "检查Java环境", "卸载Rust", "看看有哪些开发环境"),
+            description = "终端开发环境管理（唯一工具）：安装/卸载/检查开发环境 + 镜像源管理",
+            useCases = listOf(
+                "安装Node.js环境",
+                "装Python",
+                "检查Java环境",
+                "卸载Rust",
+                "看看有哪些开发环境",
+                "配置镜像源",
+                "切换镜像源"
+            ),
             examples = listOf(
                 "dev_env(action=\"install\", env=\"node\")",
                 "dev_env(action=\"install\", env=\"node\", execute=true)",
                 "dev_env(action=\"uninstall\", env=\"python\")",
                 "dev_env(action=\"check\")",
-                "dev_env(action=\"list\")"
+                "dev_env(action=\"list\")",
+                "dev_env(action=\"source_list\")",
+                "dev_env(action=\"source_select\", pm=\"apt\", source=\"tuna_apt\")"
             ),
             parameters = mapOf(
-                "action" to "动作: install/uninstall/check/list",
+                "action" to "动作: install/uninstall/check/list/source_list/source_select/source_config",
                 "env" to "环境名: node/python/java/rust/go/git/all",
-                "execute" to "是否直接执行命令（默认false）"
+                "execute" to "是否直接执行命令（默认false）",
+                "pm" to "包管理器: apt/pip/npm/rust",
+                "source" to "镜像源ID"
             ),
             tips = listOf(
+                "⚠️ 这是终端开发环境管理的唯一工具，CMS相关操作请用 cms_toolbox",
                 "execute=true 时命令直接在终端执行，输出在终端界面可见",
-                "execute=false 时只返回命令文本，需要用户手动复制执行",
-                "install安装指定环境，uninstall卸载指定环境",
-                "check检查环境状态，list列出所有支持的环境"
+                "execute=false 时只返回命令文本",
+                "install 自动配置镜像源后再安装",
+                "source_list/source_select 管理镜像源"
             ),
-            relatedTools = listOf("linux_run", "terminal_run"),
-            priority = 4
+            relatedTools = listOf("linux_run", "terminal_run", "cms_toolbox"),
+            priority = 5
         ),
 
         // ═══════════════ 网络/Web ═══════════════
@@ -624,74 +637,41 @@ object ToolCapabilityDirectory {
         "cms_toolbox" to ToolInfo(
             name = "cms_toolbox",
             category = ToolCategory.CMS_DEVELOPMENT,
-            description = "CMS v2 统一工具箱：整合模块管理、引擎管理、开发环境管理、部署修复于一体，支持AI自写脚本部署",
+            description = "CMS模块与引擎管理：查看/调用CMS模块、部署/检查CMS引擎状态、修复CMS部署、AI自写CMS模块脚本",
             useCases = listOf(
-                "管理CMS模块、引擎、开发环境",
+                "查看CMS模块列表",
+                "调用CMS能力模块",
+                "部署CMS引擎",
+                "检查CMS引擎状态",
                 "修复CMS部署失败",
-                "查看CMS状态和日志",
-                "复制CMS配置",
-                "执行自定义脚本",
-                "一键修复部署问题",
-                "获取CMS模块修复脚本",
-                "AI自写CMS模块并部署",
-                "AI自写引擎脚本并部署",
-                "AI自写开发环境脚本并部署"
+                "AI自写CMS模块并部署"
             ),
             examples = listOf(
                 "cms_toolbox(action=\"list_modules\")",
                 "cms_toolbox(action=\"call_module\", capability_id=\"echo_text\", args={\"text\":\"hello\"})",
                 "cms_toolbox(action=\"deploy_engine\")",
+                "cms_toolbox(action=\"status_engine\")",
                 "cms_toolbox(action=\"repair_deployment\", component=\"engine\")",
-                "cms_toolbox(action=\"run_script\", script_name=\"cms-fix-deploy\")",
-                "cms_toolbox(action=\"fix_deploy\")",
-                "cms_toolbox(action=\"get_install_scripts\", profiles=[\"node\",\"python\",\"java\"])",
-                "cms_toolbox(action=\"fix_modules\", module_type=\"all\")",
-                "cms_toolbox(action=\"save_fix_scripts\")",
-                "cms_toolbox(action=\"save_install_scripts\", profiles=[\"node\",\"python\"])",
-                "cms_toolbox(action=\"create_module\", module_id=\"my.httpd\", entry_script=\"#!/bin/sh\\npython3 -m http.server 8080\")",
-                "cms_toolbox(action=\"deploy_custom\", type=\"module\", id=\"my.httpd\")",
-                "cms_toolbox(action=\"create_engine_script\", script_type=\"bootstrap\", script_content=\"#!/bin/bash\\necho install...\")",
-                "cms_toolbox(action=\"create_devenv_script\", env_name=\"myenv\", install_script=\"#!/bin/sh\\napt install...\")",
-                "cms_toolbox(action=\"list_scripts\")"
+                "cms_toolbox(action=\"create_module\", module_id=\"my.httpd\", entry_script=\"#!/bin/sh\\npython3 -m http.server 8080\")"
             ),
             parameters = mapOf(
                 "action" to "动作类型",
                 "capability_id" to "能力ID（call_module时需要）",
                 "args" to "参数对象（call_module时可选）",
                 "engine_id" to "引擎ID（deploy_engine时可选）",
-                "profiles" to "环境配置列表（deploy_devenv/get_install_scripts/save_install_scripts时需要）",
                 "component" to "组件名称（repair_deployment时需要）",
                 "module_id" to "模块ID（repair_deployment component=module时需要）",
-                "script" to "自定义脚本内容（run_script时可选）",
-                "script_name" to "内置脚本名（run_script时可选）: cms-fix-deploy",
-                "module_type" to "模块类型（fix_modules时可选）: all/dns/httpd/node/fix",
-                "entry_script" to "entry.sh脚本内容（create_module时需要）",
-                "cms_package" to "cms-package.json内容（create_module时可选）",
-                "backend_script" to "后端脚本内容（create_module时可选）",
-                "script_type" to "脚本类型（create_engine_script时需要）: bootstrap/provisioner",
-                "script_content" to "脚本内容（create_engine_script/create_devenv_script时需要）",
-                "env_name" to "环境名称（create_devenv_script时需要）",
-                "install_script" to "安装脚本内容（create_devenv_script时需要）",
-                "type" to "部署类型（deploy_custom时需要）: module/engine/devenv",
-                "id" to "模块ID/环境名称（deploy_custom时需要）"
+                "entry_script" to "entry.sh脚本内容（create_module时需要）"
             ),
             tips = listOf(
-                "单一入口管理所有CMS功能",
-                "部署失败时可用repair_deployment或fix_deploy修复",
-                "支持复制正确的配置到文件（copy_config）",
-                "可获取状态和日志",
-                "支持执行自定义脚本（run_script）",
-                "fix_deploy一键修复所有部署问题",
-                "fix_modules获取CMS模块修复脚本（DNS、httpd、node）",
-                "save_fix_scripts 将修复脚本保存到手机 Download/Quro/cms_fix/",
-                "save_install_scripts 将开发环境安装脚本保存到 Download/Quro/install_scripts/",
-                "create_module 创建自定义CMS模块，AI可编写entry.sh脚本",
-                "create_engine_script 创建自定义引擎脚本（bootstrap/provisioner）",
-                "create_devenv_script 创建自定义开发环境安装脚本",
-                "deploy_custom 部署自定义脚本到终端",
-                "list_scripts 列出所有自定义脚本"
+                "⚠️ 此工具只管理CMS模块和引擎，不管理终端开发环境",
+                "终端开发环境请用 dev_env 工具",
+                "list_modules 查看已安装的CMS模块",
+                "deploy_engine 部署CMS引擎到终端",
+                "status_engine 检查CMS引擎运行状态",
+                "create_module AI自写CMS模块脚本并部署"
             ),
-            relatedTools = listOf("cms_call", "cms_list", "cms_status"),
+            relatedTools = listOf("dev_env", "cms_call", "cms_list"),
             priority = 5
         ),
         
@@ -1007,17 +987,18 @@ object ToolCapabilityDirectory {
             "语音朗读" to listOf("speak"),
             "MCP工具" to listOf("mcp_call", "mcp_list_tools"),
             "CMS模块" to listOf("cms_toolbox", "cms_call", "cms_list"),
-            "开发环境" to listOf("dev_env", "linux_install", "linux_run"),
+            "开发环境安装" to listOf("dev_env(action=install)", "dev_env(action=install, execute=true)"),
+            "开发环境检查" to listOf("dev_env(action=check)"),
+            "开发环境卸载" to listOf("dev_env(action=uninstall)"),
+            "开发环境管理" to listOf("dev_env(action=install)", "dev_env(action=check)", "dev_env(action=list)"),
+            "镜像源管理" to listOf("dev_env(action=source_list)", "dev_env(action=source_select)"),
             "第三方App" to listOf("aci_call", "aci_list"),
             "流体云/状态栏" to listOf("fluid_cloud_notify"),
             "AI思考中/任务进度" to listOf("fluid_cloud(action=create)", "fluid_cloud(action=update)"),
             "CMS模块管理" to listOf("cms_toolbox(action=list_modules)", "cms_toolbox(action=call_module)"),
             "CMS引擎部署" to listOf("cms_toolbox(action=deploy_engine)", "cms_toolbox(action=status_engine)"),
-            "开发环境管理" to listOf("dev_env(action=install)", "dev_env(action=check)", "dev_env(action=install, execute=true)"),
-            "CMS部署修复" to listOf("cms_toolbox(action=repair_deployment)", "cms_toolbox(action=fix_deploy)"),
-            "AI自写CMS模块" to listOf("cms_toolbox(action=create_module)", "cms_toolbox(action=deploy_custom)"),
-            "AI自写引擎脚本" to listOf("cms_toolbox(action=create_engine_script)"),
-            "AI自写开发环境脚本" to listOf("cms_toolbox(action=create_devenv_script)")
+            "CMS部署修复" to listOf("cms_toolbox(action=repair_deployment)"),
+            "AI自写CMS模块" to listOf("cms_toolbox(action=create_module)")
         )
         
         for ((intent, tools) in intentMappings) {
