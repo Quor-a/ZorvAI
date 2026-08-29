@@ -65,6 +65,7 @@ class QuroToolRouter(allSpecs: List<QuroToolSpec>) {
             "lock_screen", "device_admin_status", "set_camera_disabled",
             "root_exec", "root_status",
             "linux_run", "linux_install", "linux_start", "linux_stop", "linux_status",
+            "dev_env",
             "fluid_cloud_notify",
         )
 
