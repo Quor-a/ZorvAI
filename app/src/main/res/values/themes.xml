@@ -24,6 +24,15 @@
         <item name="android:windowNoTitle">true</item>
     </style>
 
+    <!-- 终端 Intent 透明 Activity：无 UI，仅处理 Intent 后立即 finish() -->
+    <style name="Theme.Quro.TerminalIntent" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowIsFloating">true</item>
+    </style>
+
     <!-- 息屏/锁屏提醒全屏浮层（v1.0.58）：锁屏之上展示 + 自动亮屏。
          锁屏显示/自动亮屏由 QuroReminderActivity 在代码里 setShowWhenLocked/setTurnScreenOn（API27+）
          以及 Manifest 的 android:showOnLockScreen / android:turnScreenOn 活动属性共同保证；

@@ -128,11 +128,13 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
             bindWithWake(pkg, cls)   // 改裸 doBind → 带唤醒，修复停止态绑不上
         }
         // 兜底：确保主程序自身作为受控端（QuroMainAciService 暴露 http_request + aci_protocol）
+        // 以及终端 ACI 服务（QuroTerminalAciService 暴露终端执行能力）
         // 始终出现在「已发现能力」中，使清单完整。部分 ROM / 包可见性实现下，
         // queryIntentServices 不会把调用方自身的 Service 返回出来（独立 App 不受影响），
-        // 导致列表只剩第三方 App、缺主程序自身 2 项能力。此处显式纳入并去重（同源包已被
+        // 导致列表只剩第三方 App、缺主程序自身能力。此处显式纳入并去重（同源包已被
         // 返回时不会重复添加）。
         val selfPkg = appContext.packageName
+        // 确保 QuroMainAciService 被纳入
         if (!nameMap.containsKey(selfPkg)) {
             val selfCls = ".service.QuroMainAciService"
             nameMap[selfPkg] = runCatching { appContext.applicationInfo.loadLabel(pm).toString() }.getOrDefault("ZorvAI")
@@ -141,6 +143,15 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
             bindWithWake(selfPkg, selfCls)
         } else {
             AciDiag.log(TAG, "discover: 自身受控端已被 queryIntentServices 返回，无需兜底（$selfPkg）")
+        }
+        // 确保 QuroTerminalAciService 被纳入（终端 ACI 受控端）
+        val terminalCls = ".service.QuroTerminalAciService"
+        val terminalKey = "$selfPkg:terminal"
+        if (!classMap.containsKey(terminalKey)) {
+            AciDiag.log(TAG, "discover: 兜底纳入终端受控端 $selfPkg/$terminalCls")
+            nameMap[terminalKey] = "${runCatching { appContext.applicationInfo.loadLabel(pm).toString() }.getOrDefault("ZorvAI")} - 终端"
+            classMap[terminalKey] = terminalCls
+            bindWithWake(selfPkg, terminalCls, terminalKey)
         }
         
         // 初始化 MCP 桥接器
@@ -162,7 +173,8 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
     private fun doBind(
         packageName: String,
         className: String,
-        latch: java.util.concurrent.CountDownLatch? = null
+        latch: java.util.concurrent.CountDownLatch? = null,
+        mapKey: String = packageName
     ): Boolean {
         val intent = Intent(ACI_ACTION).apply { setClassName(packageName, className) }
         val conn = object : ServiceConnection {
@@ -219,30 +231,30 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
                     latch?.countDown()
                     return
                 }
-                serviceMap[packageName] = proxy
-                rebindAttempts[packageName] = 0   // 成功绑定清零退避计数
-                lastSeenMap[packageName] = System.currentTimeMillis()
-                QuroAidlAciEvents.emit(QuroAidlAciEvents.EVT_SERVICE_BOUND, packageName, "")
+                serviceMap[mapKey] = proxy
+                rebindAttempts[mapKey] = 0   // 成功绑定清零退避计数
+                lastSeenMap[mapKey] = System.currentTimeMillis()
+                QuroAidlAciEvents.emit(QuroAidlAciEvents.EVT_SERVICE_BOUND, mapKey, "")
                 // 注册 Binder 死亡监听：远端进程死亡时立即（比 onServiceDisconnected 更早）触发重绑，
                 // 把断线感知从「800ms 轮询」升级为「事件驱动」。
                 if (binder != null) {
-                    val recipient = createDeathRecipient(packageName)
-                    deathRecipients[packageName] = recipient
+                    val recipient = createDeathRecipient(mapKey)
+                    deathRecipients[mapKey] = recipient
                     try { binder.linkToDeath(recipient, 0) }
-                    catch (e: Exception) { Log.w(TAG, "linkToDeath 失败（$packageName）：${e.message}") }
+                    catch (e: Exception) { Log.w(TAG, "linkToDeath 失败（$mapKey）：${e.message}") }
                 }
-                fetchCapabilities(packageName, proxy)
+                fetchCapabilities(mapKey, proxy)
                 latch?.countDown()
             }
 
             override fun onServiceDisconnected(name: ComponentName?) {
-                serviceMap.remove(packageName)
-                deathRecipients.remove(packageName)   // 断开即弃旧监听，避免悬空引用
-                socketOk.remove(packageName)          // 复位 socket 探测，便于重连后重探
-                Log.w(TAG, "⚠️ 断开：$packageName（已保留能力缓存，待自动重绑）")
-                AciDiag.log(TAG, "onServiceDisconnected $packageName")
-                QuroAidlAciEvents.emit(QuroAidlAciEvents.EVT_SERVICE_UNBOUND, packageName, "")
-                scheduleRebind(packageName)
+                serviceMap.remove(mapKey)
+                deathRecipients.remove(mapKey)   // 断开即弃旧监听，避免悬空引用
+                socketOk.remove(mapKey)          // 复位 socket 探测，便于重连后重探
+                Log.w(TAG, "⚠️ 断开：$mapKey（已保留能力缓存，待自动重绑）")
+                AciDiag.log(TAG, "onServiceDisconnected $mapKey")
+                QuroAidlAciEvents.emit(QuroAidlAciEvents.EVT_SERVICE_UNBOUND, mapKey, "")
+                scheduleRebind(mapKey)
             }
         }
         return try {
@@ -294,18 +306,18 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
      * （FLAG_INCLUDE_STOPPED_PACKAGES）把进程拉起，稍候重试绑定。
      * 全程后台线程，不阻塞调用方（discover/rebind 多由 UI 触发）。
      */
-    private fun bindWithWake(packageName: String, className: String) {
+    private fun bindWithWake(packageName: String, className: String, mapKey: String = packageName) {
         Thread {
             // 1) 直绑（进程已在跑 / 非停止态直接成功）
-            doBind(packageName, className)
+            doBind(packageName, className, null, mapKey)
             try { Thread.sleep(500) } catch (ignored: InterruptedException) {}
-            if (serviceMap[packageName] != null) return@Thread
+            if (serviceMap[mapKey] != null) return@Thread
 
             // 2) 停止态：唤醒广播拉起进程后再绑
             Log.i(TAG, "📡 $packageName 初次绑定未成，发唤醒广播后重试")
             wakeCallee(packageName)
             try { Thread.sleep(900) } catch (ignored: InterruptedException) {}
-            if (serviceMap[packageName] == null) doBind(packageName, className)
+            if (serviceMap[mapKey] == null) doBind(packageName, className, null, mapKey)
         }.start()
     }
 
@@ -339,7 +351,9 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         // 发送 ACI 唤醒广播（带 FLAG_INCLUDE_STOPPED_PACKAGES 穿透停止态）把被控进程拉起，
         // 稍候进程就绪后重试绑定——全程无需用户手动打开被控 App。
         Log.i(TAG, "📡 $pkg 首次绑定未成功，发送唤醒广播拉起进程后重试")
-        wakeCallee(pkg)
+        // 对于终端服务，使用实际的包名而不是键
+        val actualPkg = if (pkg.contains(":terminal")) pkg.split(":")[0] else pkg
+        wakeCallee(actualPkg)
         try { Thread.sleep(600) } catch (ignored: InterruptedException) {}
         if (tryBindWithLatch(pkg)) return serviceMap[pkg]
 
@@ -348,7 +362,7 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         val cls = classMap[pkg]
         if (cls != null) {
             Log.i(TAG, "🚀 $pkg 广播未成，改用 startService 直拉 ACI Service 后重试")
-            startControlledService(pkg, cls)
+            startControlledService(actualPkg, cls)
             try { Thread.sleep(700) } catch (ignored: InterruptedException) {}
             if (tryBindWithLatch(pkg)) return serviceMap[pkg]
         }
@@ -378,7 +392,9 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
     private fun tryBindWithLatch(pkg: String): Boolean {
         val cls = classMap[pkg] ?: return false
         val latch = java.util.concurrent.CountDownLatch(1)
-        doBind(pkg, cls, latch)
+        // 对于终端服务，使用实际的包名而不是键
+        val actualPkg = if (pkg.contains(":terminal")) pkg.split(":")[0] else pkg
+        doBind(actualPkg, cls, latch, pkg)
         try { latch.await(3, java.util.concurrent.TimeUnit.SECONDS) } catch (ignored: InterruptedException) {}
         return serviceMap[pkg] != null
     }
@@ -474,7 +490,8 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
         }
         
         // 未安装引导：明确告诉 LLM/用户先安装目标 App，避免「服务未绑定」的迷之错误
-        if (!isInstalled(targetPackage)) {
+        // 对于终端服务（键包含 ":terminal"），跳过安装检查
+        if (!targetPackage.contains(":terminal") && !isInstalled(targetPackage)) {
             val resp = AidlAciResponse.error(
                 404,
                 "目标 App 未安装：$targetPackage。请先安装该 App（或在 ACI 中心用「搜软件名」找到并启动它），再重试 aci_list 触发重新发现。"
@@ -890,17 +907,45 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
 
     /** 当前所有已发现 App 的状态快照（含绑定态 + 能力清单），供 UI 直接展示。 */
     fun getAppStatuses(): List<AciAppStatus> {
-        val pkgs = (nameMap.keys + serviceMap.keys + capMap.keys).toSet()
-        return pkgs.map { pkg ->
-            AciAppStatus(
-                packageName = pkg,
-                appName = nameMap[pkg] ?: pkg,
-                serviceClass = classMap[pkg] ?: "",
-                bound = serviceMap[pkg] != null,
-                capabilities = capMap[pkg] ?: emptyList(),
-                lastSeen = lastSeenMap[pkg] ?: 0L
-            )
-        }.sortedBy { it.appName }
+        val result = mutableListOf<AciAppStatus>()
+        val processedPkgs = mutableSetOf<String>()
+
+        // 首先处理所有已发现的包
+        for ((pkg, className) in classMap) {
+            if (processedPkgs.contains(pkg)) continue
+            processedPkgs.add(pkg)
+
+            // 查找该包下的所有服务类
+            val servicesForPkg = classMap.filter { it.key == pkg }
+            for ((_, serviceCls) in servicesForPkg) {
+                val key = if (serviceCls.contains("Terminal")) "$pkg:terminal" else pkg
+                result.add(AciAppStatus(
+                    packageName = pkg,
+                    appName = nameMap[pkg] ?: pkg,
+                    serviceClass = serviceCls,
+                    bound = serviceMap[key] != null,
+                    capabilities = capMap[key] ?: emptyList(),
+                    lastSeen = lastSeenMap[key] ?: 0L
+                ))
+            }
+        }
+
+        // 确保终端服务被纳入（如果还没有）
+        val selfPkg = appContext.packageName
+        val terminalCls = ".service.QuroTerminalAciService"
+        if (!result.any { it.serviceClass == terminalCls }) {
+            val terminalKey = "$selfPkg:terminal"
+            result.add(AciAppStatus(
+                packageName = selfPkg,
+                appName = "${nameMap[selfPkg] ?: selfPkg} - 终端",
+                serviceClass = terminalCls,
+                bound = serviceMap[terminalKey] != null,
+                capabilities = capMap[terminalKey] ?: emptyList(),
+                lastSeen = lastSeenMap[terminalKey] ?: 0L
+            ))
+        }
+
+        return result.sortedBy { it.appName }
     }
 
     /** 重新扫描所有已安装 ACI 服务并触发绑定，返回最新状态快照。 */
@@ -938,7 +983,7 @@ class QuroAidlAciManager private constructor(private val appContext: Context) {
     /** 强制对指定包重绑（供 UI「重绑」按钮；类名缓存缺失则返回 false）。 */
     fun rebind(packageName: String): Boolean {
         val cls = classMap[packageName] ?: return false
-        bindWithWake(packageName, cls)   // 改裸 doBind → 带唤醒，重绑按钮也能拉起停止态 App
+        bindWithWake(packageName, cls, packageName)   // 改裸 doBind → 带唤醒，重绑按钮也能拉起停止态 App
         return true
     }
 
