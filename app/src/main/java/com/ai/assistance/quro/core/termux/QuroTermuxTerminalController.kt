@@ -48,6 +48,8 @@ object QuroTermuxTerminalController {
     ): TerminalSession {
         val appCtx = context.applicationContext
 
+        Log.i(TAG, "========== 终端启动 ==========")
+
         // 1. 先探测环境状态（不触发安装）
         val envProbe = try {
             QuroLinuxEnv.probe(appCtx)
@@ -69,12 +71,16 @@ object QuroTermuxTerminalController {
                 null
             }
         }
+        Log.i(TAG, "环境安装结果: available=${envReady?.available}, reason=${envReady?.reason}")
 
         // 3. 获取 proot 启动参数
         val launchSpec = envReady?.let {
             if (it.available) {
                 val spec = QuroLinuxEnv.shellLaunch(appCtx)
-                Log.i(TAG, "shellLaunch 返回: ${spec != null}")
+                Log.i(TAG, "shellLaunch 返回: ${spec != null}, proot=${spec?.first?.takeLast(30)}, args数量=${spec?.second?.size}")
+                if (spec == null) {
+                    Log.e(TAG, "⚠ shellLaunch 返回 null！环境探测说可用但 launch 失败")
+                }
                 spec
             } else {
                 Log.w(TAG, "环境不可用: ${it.reason}")
@@ -94,7 +100,8 @@ object QuroTermuxTerminalController {
             env = QuroLinuxEnv.shellEnv(appCtx)
             _modeLabel.value = "proot/Linux"
             _cwd.value = "/root"
-            Log.i(TAG, "✅ 使用 proot 启动: shellPath=$shellPath, args=${args.joinToString(" ").take(200)}")
+            Log.i(TAG, "✅ 使用 proot 启动: shellPath=$shellPath, args=${args.joinToString(" ").take(300)}")
+            Log.i(TAG, "环境变量: ${env.joinToString(", ") { it.substringBefore("=") }}")
         } else {
             // 回退到设备 sh
             shellPath = "/system/bin/sh"
@@ -107,12 +114,14 @@ object QuroTermuxTerminalController {
             )
             _modeLabel.value = "设备 sh"
             _cwd.value = android.os.Environment.getExternalStorageDirectory().absolutePath
-            Log.i(TAG, "回退到设备 sh")
+            Log.w(TAG, "⚠ 回退到设备 sh（Ubuntu 命令不可用！）")
+            Log.w(TAG, "回退原因: envReady=${envReady?.available}, reason=${envReady?.reason}")
         }
 
         // 4. 创建 Termux 原版 TerminalSession
         //    initializeEmulator() 会在 TerminalView.onMeasure 时被调用，
         //    届时 JNI.createSubprocess() 会创建 PTY 子进程。
+        Log.i(TAG, "创建 TerminalSession: shellPath=$shellPath, cwd=${appCtx.filesDir.absolutePath}")
         val s = TerminalSession(
             shellPath,
             appCtx.filesDir.absolutePath,
@@ -122,6 +131,7 @@ object QuroTermuxTerminalController {
             QuroTermuxSessionClient(appCtx) { view.onScreenUpdated() }
         )
         session = s
+        Log.i(TAG, "TerminalSession 已创建，模式: ${_modeLabel.value}")
 
         return s
     }
