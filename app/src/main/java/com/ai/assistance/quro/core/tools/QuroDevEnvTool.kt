@@ -20,7 +20,9 @@ import org.json.JSONObject
 class QuroDevEnvTool : QuroTool {
     override val name = "dev_env"
     override val description = """
-开发环境管理工具：安装/卸载/检查终端开发环境，管理镜像源。
+终端开发环境管理工具（唯一工具）：安装/卸载/检查开发环境 + 镜像源管理。
+
+⚠️ 注意：此工具只管理终端开发环境（Node.js、Python、Java等），CMS模块/引擎管理请用 cms_toolbox。
 
 参数格式：{"action":"动作", "env":"环境名", "execute":true/false, "source":"源ID", "pm":"包管理器"}
 
@@ -44,8 +46,8 @@ class QuroDevEnvTool : QuroTool {
    - execute: 是否直接在终端执行（默认false）
 
 支持的环境：
-- node: Node.js 20.x + npm
-- python: Python3 + pip + venv
+- node: Node.js 24.x + npm (NodeSource)
+- python: Python3 + pip
 - java: OpenJDK 17
 - rust: Rust + Cargo
 - go: Go 编程语言
@@ -78,17 +80,17 @@ class QuroDevEnvTool : QuroTool {
     /** 环境安装命令 */
     private val installCommands = mapOf(
         "node" to """
-# 安装 Node.js 20.x + npm
-apt-get update
-apt-get install -y nodejs npm
+# 安装 Node.js 24.x (NodeSource)
+curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
+apt-get install -y nodejs
 echo "Node.js 安装完成"
 node -v && npm -v
 """.trimIndent(),
 
         "python" to """
-# 安装 Python3 + pip + venv
+# 安装 Python3 + pip
 apt-get update
-apt-get install -y python3 python3-pip python3-venv
+apt-get install -y python3 python3-pip
 echo "Python 安装完成"
 python3 --version && pip3 --version
 """.trimIndent(),
@@ -104,7 +106,7 @@ java -version
         "rust" to """
 # 安装 Rust + Cargo
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source ~/.cargo/env
+. ~/.cargo/env
 echo "Rust 安装完成"
 rustc --version && cargo --version
 """.trimIndent(),
