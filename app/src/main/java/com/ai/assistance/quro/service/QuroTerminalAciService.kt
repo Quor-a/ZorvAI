@@ -55,10 +55,10 @@ class QuroTerminalAciService : BaseAidlAciService() {
         private const val ZORVAI_PACKAGE = "com.ai.assistance.quro"
 
         /**
-         * 确保终端 ACI 服务已启动。
+         * 确保终端 ACI 服务已启动。返回 true=成功发送启动 Intent，false=失败。
          */
-        fun ensureStarted(context: Context, installIfMissing: Boolean = true) {
-            try {
+        fun ensureStarted(context: Context, installIfMissing: Boolean = true): Boolean {
+            return try {
                 val intent = Intent(context, QuroTerminalAciService::class.java)
                 intent.putExtra("install_if_missing", installIfMissing)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -66,8 +66,11 @@ class QuroTerminalAciService : BaseAidlAciService() {
                 } else {
                     context.startService(intent)
                 }
+                Log.i(TAG, "ensureStarted: startForegroundService 成功")
+                true
             } catch (e: Throwable) {
-                Log.e(TAG, "拉起终端 ACI 服务失败", e)
+                Log.e(TAG, "拉起终端 ACI 服务失败: ${e.javaClass.simpleName}: ${e.message}")
+                false
             }
         }
 
