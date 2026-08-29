@@ -339,38 +339,130 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
 
     private fun handleCopyConfig(context: Context, obj: JSONObject): String {
         val target = obj.optString("target", "all").trim()
+        val component = obj.optString("component", "").trim()
         
+        // 如果指定了 component，复制特定组件的配置文件
+        if (component.isNotEmpty()) {
+            return when (component) {
+                "engine" -> copyEngineConfig(context)
+                "module" -> {
+                    val moduleId = obj.optString("module_id", "").trim()
+                    if (moduleId.isEmpty()) return "复制模块配置需要 module_id 参数"
+                    copyModuleConfig(context, moduleId)
+                }
+                "devenv" -> copyDevenvConfig(context)
+                else -> "不支持的 component: $component\n可用值: engine, module, devenv"
+            }
+        }
+        
+        // 否则按 target 复制
         return when (target) {
-            "engine" -> {
-                val enginePackage = CmsEnginePackage.builtin()
-                val json = CmsEngineDeployer.exportPackage(enginePackage)
-                "✅ CMS 引擎配置已复制\n配置内容:\n$json"
-            }
-            "devenv" -> {
-                // 开发环境配置：列出可用的环境配置
-                val profiles = EnvProfile.entries
-                val config = buildString {
-                    appendLine("开发环境配置：")
-                    profiles.forEach { profile ->
-                        appendLine("- ${profile.name}: ${profile.profileName}")
-                    }
-                    appendLine("\n可用环境: ${profiles.joinToString(", ") { it.name.lowercase() }}")
-                }
-                "✅ 开发环境配置已复制\n配置内容:\n$config"
-            }
+            "engine" -> copyEngineConfig(context)
+            "devenv" -> copyDevenvConfig(context)
             "all" -> {
-                val enginePackage = CmsEnginePackage.builtin()
-                val engineJson = CmsEngineDeployer.exportPackage(enginePackage)
-                val profiles = EnvProfile.entries
-                val devenvConfig = buildString {
-                    appendLine("开发环境配置：")
-                    profiles.forEach { profile ->
-                        appendLine("- ${profile.name}: ${profile.profileName}")
-                    }
-                }
-                "✅ 所有配置已复制\n\n=== CMS 引擎配置 ===\n$engineJson\n\n=== 开发环境配置 ===\n$devenvConfig"
+                val results = mutableListOf<String>()
+                results.add(copyEngineConfig(context))
+                results.add(copyDevenvConfig(context))
+                results.joinToString("\n\n")
             }
             else -> "不支持的 target: $target\n可用值: engine, devenv, all"
+        }
+    }
+    
+    private fun copyEngineConfig(context: Context): String {
+        return try {
+            val enginePackage = CmsEnginePackage.builtin()
+            val json = CmsEngineDeployer.exportPackage(enginePackage)
+            
+            // 保存到 Downloads 目录
+            val fileName = "cms_engine_config.json"
+            val result = com.ai.assistance.quro.core.tools.QuroDownloadUtil.saveTextToDownloads(
+                context, fileName, "application/json", json
+            )
+            
+            if (result.startsWith("OK:")) {
+                "✅ CMS 引擎配置已保存到 Download/Quro/$fileName\n\n配置内容:\n$json"
+            } else {
+                "⚠️ 配置保存失败，但配置内容如下:\n$json"
+            }
+        } catch (e: Exception) {
+            "❌ 获取引擎配置失败: ${e.message}"
+        }
+    }
+    
+    private fun copyDevenvConfig(context: Context): String {
+        return try {
+            val profiles = listOf(EnvProfile.NODE, EnvProfile.PYTHON, EnvProfile.JAVA, EnvProfile.RUST, EnvProfile.GO, EnvProfile.SSH)
+            val config = buildString {
+                appendLine("{")
+                appendLine("  \"profiles\": {")
+                profiles.forEachIndexed { index, profile ->
+                    val installed = CmsEnvProvisioner.isReady(context, profile)
+                    appendLine("    \"${profile.name.lowercase()}\": {")
+                    appendLine("      \"name\": \"${profile.profileName}\",")
+                    appendLine("      \"installed\": $installed,")
+                    appendLine("      \"description\": \"${profile.description}\"")
+                    if (index < profiles.lastIndex) appendLine("    },") else appendLine("    }")
+                }
+                appendLine("  },")
+                appendLine("  \"terminal\": {")
+                val terminalStatus = QuroLinuxEnv.probe(context)
+                appendLine("    \"available\": ${terminalStatus.available},")
+                appendLine("    \"proot_available\": ${terminalStatus.prootAvailable}")
+                appendLine("  }")
+                appendLine("}")
+            }
+            
+            val fileName = "cms_devenv_config.json"
+            val result = com.ai.assistance.quro.core.tools.QuroDownloadUtil.saveTextToDownloads(
+                context, fileName, "application/json", config
+            )
+            
+            if (result.startsWith("OK:")) {
+                "✅ 开发环境配置已保存到 Download/Quro/$fileName\n\n配置内容:\n$config"
+            } else {
+                "⚠️ 配置保存失败，但配置内容如下:\n$config"
+            }
+        } catch (e: Exception) {
+            "❌ 获取开发环境配置失败: ${e.message}"
+        }
+    }
+    
+    private fun copyModuleConfig(context: Context, moduleId: String): String {
+        return try {
+            val repo = QuroCmsRepository(context)
+            val module = repo.get(moduleId) ?: return "未找到模块: $moduleId"
+            
+            val config = buildString {
+                appendLine("{")
+                appendLine("  \"id\": \"${module.id}\",")
+                appendLine("  \"name\": \"${module.name}\",")
+                appendLine("  \"version\": \"${module.version}\",")
+                appendLine("  \"description\": \"${module.description}\",")
+                appendLine("  \"permissions\": [")
+                module.permissions.forEachIndexed { index, perm ->
+                    if (index < module.permissions.lastIndex) {
+                        appendLine("    \"$perm\",")
+                    } else {
+                        appendLine("    \"$perm\"")
+                    }
+                }
+                appendLine("  ]")
+                appendLine("}")
+            }
+            
+            val fileName = "cms_module_${moduleId}_config.json"
+            val result = com.ai.assistance.quro.core.tools.QuroDownloadUtil.saveTextToDownloads(
+                context, fileName, "application/json", config
+            )
+            
+            if (result.startsWith("OK:")) {
+                "✅ 模块配置已保存到 Download/Quro/$fileName\n\n配置内容:\n$config"
+            } else {
+                "⚠️ 配置保存失败，但配置内容如下:\n$config"
+            }
+        } catch (e: Exception) {
+            "❌ 获取模块配置失败: ${e.message}"
         }
     }
 
