@@ -13,6 +13,7 @@ import com.ai.assistance.quro.core.cms.QuroCmsRunDagTool
 import com.ai.assistance.quro.core.cms.QuroCmsStatusTool
 import com.ai.assistance.quro.core.cms.QuroCmsEngineStatusTool
 import com.ai.assistance.quro.core.cms.QuroCmsUndeployTool
+import com.ai.assistance.quro.core.cms.QuroCmsToolboxTool
 import com.ai.assistance.quro.core.cms.QuroPrivStatusTool
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciCallTool
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciListTool
@@ -256,6 +257,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // CMS v2 终端部署/卸载（原创运行时）：把模块推到 proot 终端并运行
     r.register(QuroCmsDeployTool())
     r.register(QuroCmsUndeployTool())
+    // CMS v2 统一工具箱：整合模块管理、引擎管理、开发环境管理、部署修复于一体
+    r.register(QuroCmsToolboxTool())
     // ACI（Agent Capability Interface）：让 AI 作为控制方发现并调用第三方 App 暴露的能力
     r.register(QuroAidlAciListTool())
     r.register(QuroAidlAciCallTool())
