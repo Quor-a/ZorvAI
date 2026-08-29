@@ -1395,4 +1395,221 @@ AI → 获取页面链接数量
 
 ---
 
+## 25. 终端 ACI 受控端完整文档（v1.0.67）
+
+> Zorv AI 内置终端作为 ACI 受控端，暴露 12 个能力 + 前台服务保活 + Intent/Provider/BroadcastReceiver/Deep Link 四种跨进程接入方式。
+
+### 25.1 架构概览
+
+```
+┌─────────────────────────────────────────────────────┐
+│              QuroTerminalAciService                  │
+│              (前台服务, ACI 受控端)                    │
+│              foregroundServiceType=specialUse         │
+├─────────────────────────────────────────────────────┤
+│  12 个 ACI 能力                                      │
+│  ┌──────────────┬──────────────┬──────────────────┐  │
+│  │ exec         │ create_sess  │ destroy_session  │  │
+│  │ send_input   │ get_status   │ list_sessions    │  │
+│  │ set_env      │ get_env      │ list_capabilities│  │
+│  │ get_status   │ get_audit    │ help             │  │
+│  └──────────────┴──────────────┴──────────────────┘  │
+├─────────────────────────────────────────────────────┤
+│  前台服务保活（QuroTerminalKeepAliveService）          │
+│  - specialUse 类型，Android 14+ 兼容                 │
+│  - 每 15s 巡检：会话死亡自动重建                      │
+│  - 开机自启动（BOOT_COMPLETED）                       │
+├─────────────────────────────────────────────────────┤
+│  4 种跨进程接入                                      │
+│  ┌──────────┬──────────┬──────────┬──────────┐      │
+│  │ ACI AIDL │ Provider │ DeepLink │ Broadcast│      │
+│  │ (Binder) │ (content)│ (quro://)│ (6 个)   │      │
+│  └──────────┴──────────┴──────────┴──────────┘      │
+└─────────────────────────────────────────────────────┘
+```
+
+### 25.2 ACI 能力清单
+
+| 能力 ID | 描述 | 入参 | 出参 | 标志 |
+|---------|------|------|------|------|
+| `exec` | 在终端中执行命令并返回结果 | `command`(string,必填), `timeout`(int,默认14), `interactive`(boolean) | `exit_code`(int), `output`(string), `error`(string), `timed_out`(boolean) | FLAG_BACKGROUND |
+| `create_session` | 创建新的终端会话 | `name`(string), `mode`(linux/device) | `session_id`(string), `session_name`(string), `created`(boolean) | FLAG_BACKGROUND |
+| `destroy_session` | 销毁指定终端会话 | `session_id`(string,必填) | `destroyed`(boolean) | FLAG_BACKGROUND |
+| `send_input` | 向指定会话发送输入 | `session_id`(string,必填), `input`(string,必填) | `sent`(boolean) | FLAG_BACKGROUND |
+| `get_session_status` | 获取会话状态 | `session_id`(string,必填) | `session_id`, `name`, `mode`, `alive`(boolean), `busy`(boolean), `cwd`(string), `last_exit`(int) | FLAG_NO_UI |
+| `list_sessions` | 列出所有会话 | 无 | `sessions`(string, JSON数组) | FLAG_NO_UI |
+| `set_session_env` | 设置环境变量 | `session_id`, `key`, `value` | `set`(boolean) | FLAG_BACKGROUND |
+| `get_session_env` | 获取环境变量 | `session_id` | `env`(string, JSON对象) | FLAG_NO_UI |
+| `list_capabilities` | 列出所有能力 | 无 | `capabilities`(string, JSON数组) | FLAG_NO_UI |
+| `get_service_status` | 获取服务状态 | 无 | `running`(boolean), `sessions_count`(int), `uptime`(long), `version`(string) | FLAG_NO_UI |
+| `get_audit_log` | 获取审计日志 | `limit`(int,默认100) | `audit_log`(string, JSON数组) | FLAG_NO_UI |
+| `help` | 显示帮助信息 | 无 | `help`(string) | FLAG_NO_UI |
+
+### 25.3 前台服务保活
+
+**核心机制**：`QuroTerminalKeepAliveService` 以前台服务身份运行，shell 子进程归属于服务进程 → 服务存活 = 终端存活。
+
+**Manifest 声明**（Android 14+ 必需 `<property>` 标签）：
+```xml
+<service
+    android:name=".service.QuroTerminalKeepAliveService"
+    android:exported="false"
+    android:foregroundServiceType="specialUse">
+    <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="终端会话保活：在服务进程内 fork shell 子进程并持续巡检存活，脱离 UI 生命周期" />
+</service>
+```
+
+**必需权限**：
+```xml
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+```
+
+**保活逻辑**：
+1. `Application.onCreate()` → `ensureStarted()` → `startForegroundService()`
+2. `onCreate()` → `startForeground(NOTIF_ID, notification, SPECIAL_USE)`
+3. 每 15 秒巡检：会话死亡则 `QuroShellSession.create()` 重建
+4. 同时确保 `QuroTerminalAciService` 运行
+
+### 25.4 Intent 接入
+
+**Action 列表**：
+
+| Action | 附加参数 | 返回 |
+|--------|---------|------|
+| `com.ai.assistance.quro.action.TERMINAL_EXEC` | `command`(string), `timeout`(long,可选) | `exit_code`(int), `output`(string), `error`(string) |
+| `com.ai.assistance.quro.action.TERMINAL_STATUS` | 无 | `running`(boolean), `sessions_count`(int) |
+| `com.ai.assistance.quro.action.TERMINAL_SESSIONS` | 无 | `sessions`(string, JSON数组) |
+| `com.ai.assistance.quro.action.TERMINAL_CREATE_SESSION` | `name`(string,可选) | `session_id`(string), `created`(boolean) |
+| `com.ai.assistance.quro.action.TERMINAL_DESTROY_SESSION` | `session_id`(string) | `destroyed`(boolean) |
+| `com.ai.assistance.quro.action.TERMINAL_SEND_INPUT` | `session_id`(string), `input`(string) | `sent`(boolean) |
+
+**调用示例**：
+```kotlin
+// 执行命令
+val intent = Intent("com.ai.assistance.quro.action.TERMINAL_EXEC")
+intent.setPackage("com.ai.assistance.quro")
+intent.putExtra("command", "ls -la /tmp")
+intent.putExtra("timeout", 10000L)
+startActivityForResult(intent, REQUEST_CODE)
+
+// 通过 Bundle 获取结果
+override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    val exitCode = data?.getIntExtra("exit_code", -1)
+    val output = data?.getStringExtra("output")
+    val error = data?.getStringExtra("error")
+}
+```
+
+### 25.5 ContentProvider 接入
+
+**Authority**：`com.ai.assistance.quro.terminal`
+
+**URI 路径**：
+
+| URI | 方法 | 返回 |
+|-----|------|------|
+| `content://com.ai.assistance.quro.terminal/sessions` | query | 会话列表 JSON |
+| `content://com.ai.assistance.quro.terminal/exec?cmd=ls -la` | query | 执行结果 JSON |
+| `content://com.ai.assistance.quro.terminal/status` | query | 服务状态 JSON |
+| `content://com.ai.assistance.quro.terminal/env?key=PATH` | query | 环境变量值 |
+
+**调用示例**：
+```kotlin
+// 查询会话列表
+val cursor = contentResolver.query(
+    Uri.parse("content://com.ai.assistance.quro.terminal/sessions"),
+    null, null, null, null
+)
+cursor?..moveToFirst()
+val sessions = cursor?.getString(0) // JSON 字符串
+
+// 执行命令
+val cursor = contentResolver.query(
+    Uri.parse("content://com.ai.assistance.quro.terminal/exec?cmd=python3 --version"),
+    null, null, null, null
+)
+```
+
+### 25.6 Deep Link 接入
+
+**Scheme**：`quro://terminal/...`
+
+**路径**：
+
+| Deep Link | 功能 |
+|-----------|------|
+| `quro://terminal/exec?cmd=ls -la` | 执行命令 |
+| `quro://terminal/sessions` | 查看会话列表 |
+| `quro://terminal/create?name=my-session` | 创建新会话 |
+| `quro://terminal/destroy?id=default` | 销毁会话 |
+| `quro://terminal/status` | 查看服务状态 |
+| `quro://terminal/input?id=default&input=ls` | 向会话发送输入 |
+
+**调用示例**：
+```kotlin
+// 通过浏览器/其他App打开
+val intent = Intent(Intent.ACTION_VIEW, Uri.parse("quro://terminal/exec?cmd=uname -a"))
+startActivity(intent)
+```
+
+### 25.7 BroadcastReceiver 接入
+
+**Action 列表**：
+
+| Action | 附加参数 | 结果 Extras |
+|--------|---------|------------|
+| `com.ai.assistance.quro.action.TERMINAL_EXEC` | `command`(string), `timeout`(long) | `exit_code`(int), `output`(string), `error`(string) |
+| `com.ai.assistance.quro.action.TERMINAL_STATUS` | 无 | `running`(boolean), `sessions_count`(int) |
+| `com.ai.assistance.quro.action.TERMINAL_SESSIONS` | 无 | `sessions`(string, JSON) |
+| `com.ai.assistance.quro.action.TERMINAL_CREATE_SESSION` | `name`(string) | `session_id`(string), `created`(boolean) |
+| `com.ai.assistance.quro.action.TERMINAL_DESTROY_SESSION` | `session_id`(string) | `destroyed`(boolean) |
+| `com.ai.assistance.quro.action.TERMINAL_SEND_INPUT` | `session_id`(string), `input`(string) | `sent`(boolean) |
+
+**调用示例**（带结果回调）：
+```kotlin
+val receiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val exitCode = intent.getIntExtra("exit_code", -1)
+        val output = intent.getStringExtra("output")
+        val error = intent.getStringExtra("error")
+        Log.d("Terminal", "exit=$exitCode output=$output error=$error")
+    }
+}
+
+registerReceiver(receiver, IntentFilter("com.ai.assistance.quro.action.TERMINAL_RESULT"))
+
+val intent = Intent("com.ai.assistance.quro.action.TERMINAL_EXEC")
+intent.setPackage("com.ai.assistance.quro")
+intent.putExtra("command", "echo hello")
+sendBroadcast(intent)
+```
+
+### 25.8 ACI 调用示例（通过 Zorv AI）
+
+**AI 工具调用**：
+```
+AI → aci_call(target="com.ai.assistance.quro", capability="exec", args={"command":"ls -la /tmp"})
+AI → 获取命令执行结果
+```
+
+**创建并管理会话**：
+```
+AI → aci_call(capability="create_session", args={"name":"build-session"})
+AI → aci_call(capability="send_input", args={"session_id":"abc123","input":"cd /project && make"})
+AI → aci_call(capability="get_session_status", args={"session_id":"abc123"})
+```
+
+### 25.9 注意事项
+
+1. **Android 14+**：前台服务必须声明 `<property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"/>`
+2. **权限**：受控端只需 `<uses-permission>` 引用，不要用 `<permission>` 定义 `ai.aci.permission.*`
+3. **超时**：`exec` 默认 14 秒超时，长时间命令需增大 `timeout` 参数
+4. **会话持久化**：默认会话在应用重启后自动恢复（元数据持久化到 JSON 文件）
+5. **大输出截断**：命令输出超过一定长度会被截断，避免 `TransactionTooLargeException`
+
+---
+
 > 本手册由软件工坊基于 `aidl-aci-core` 源码与 Zorv AI 真实接入经验整理。协议细节以 [ACI_PROTOCOL.md](https://github.com/Quor-a/ZorvAI)（开源分支）为准。

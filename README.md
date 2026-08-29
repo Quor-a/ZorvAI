@@ -300,10 +300,11 @@ BackHandler { showKnowledge = false }
 - 调用方式：ACI AIDL 绑定 / ACI HTTP（本地 HTTP 传输）/ MCP 桥接
 
 #### 4.3 Intent / Provider / BroadcastReceiver / Deep Link
-- `TerminalProvider`：`content://com.ai.assistance.quro.terminal/...`，暴露会话数据、输出历史、环境变量
-- `TerminalDeepLinkHandler`：`quro://terminal/exec?cmd=...`、`quro://terminal/sessions` 等
-- `TerminalIntentHandler`：支持 `ACTION_SEND`、`TERMINAL_EXEC`、`TERMINAL_STATUS` 等 Intent Action
-- `TerminalBroadcastReceiver`：6 个广播 Action，结果通过 `TERMINAL_RESULT` 返回
+- **TerminalProvider**：`content://com.ai.assistance.quro.terminal/sessions`（会话列表）、`/exec?cmd=...`（执行命令）、`/status`（服务状态），其他应用可通过 `content://` URI 直接读取终端数据
+- **Deep Link**：`quro://terminal/exec?cmd=ls -la`（执行命令）、`quro://terminal/sessions`（会话列表）、`quro://terminal/create?name=my-session`（创建会话）、`quro://terminal/status`（服务状态）
+- **Intent Handler**：支持 `com.ai.assistance.quro.action.TERMINAL_EXEC`（附带 `command` extra）、`TERMINAL_STATUS`、`TERMINAL_SESSIONS`、`TERMINAL_CREATE_SESSION` 等 Action
+- **BroadcastReceiver**：6 个广播 Action（`TERMINAL_EXEC` / `TERMINAL_STATUS` / `TERMINAL_SESSIONS` / `TERMINAL_CREATE_SESSION` / `TERMINAL_DESTROY_SESSION` / `TERMINAL_SEND_INPUT`），结果通过 `TERMINAL_RESULT` extras 返回（含 `exit_code` / `output` / `error`）
+- 所有组件均通过 `AndroidManifest.xml` 注册，无需运行时动态注册
 
 ### 5. MCP（Model Context Protocol）
 - `core/mcp/QuroMcpClient`：外部 MCP 服务器客户端，`initialize` 握手（2025-03-26 协议）、`listTools` / `callTool`
