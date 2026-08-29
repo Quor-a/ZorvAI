@@ -6,20 +6,8 @@ import com.ai.assistance.quro.core.policy.QuroPolicyStore
 import com.ai.assistance.quro.core.tools.QuroTool
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
-
-// 导入CMS相关类
-import com.ai.assistance.quro.core.cms.CmsStateStore
-import com.ai.assistance.quro.core.cms.CmsEngineStore
-import com.ai.assistance.quro.core.cms.CmsEnvProvisioner
-import com.ai.assistance.quro.core.cms.CmsTerminalDeployer
-import com.ai.assistance.quro.core.cms.CmsEnginePackage
-import com.ai.assistance.quro.core.cms.CmsEngineDeployer
-import com.ai.assistance.quro.core.cms.QuroCmsRepository
-import com.ai.assistance.quro.core.cms.InvocationTarget
-import com.ai.assistance.quro.core.cms.CmsHostRouter
-import com.ai.assistance.quro.core.cms.CmsExecResult
-import com.ai.assistance.quro.core.cms.QuroCmsExecutor
-import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import java.text.SimpleDateFormat
+import java.util.Date
 
 /**
  * CMS v2 统一工具箱（原创）：整合 CMS 模块管理、引擎管理、开发环境管理、部署修复于一体。
@@ -185,10 +173,10 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             }
         }
 
-        return if (result.success) {
-            "✅ CMS 能力执行成功\n能力: $capId\n结果: ${result.output}"
+        return if (result.ok) {
+            "✅ CMS 能力执行成功\n能力: $capId\n结果: ${result.stdout}"
         } else {
-            "❌ CMS 能力执行失败\n能力: $capId\n错误: ${result.output}"
+            "❌ CMS 能力执行失败\n能力: $capId\n错误: ${result.stdout}"
         }
     }
 
@@ -219,7 +207,8 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             if (snapshot.deploying) {
                 appendLine("- 部署步骤: ${snapshot.deployStep}")
             }
-            appendLine("- 最后部署: ${if (snapshot.lastDeployAt > 0) java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(snapshot.lastDeployAt)) else "从未部署"}")
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+            appendLine("- 最后部署: ${if (snapshot.lastDeployAt > 0) dateFormat.format(Date(snapshot.lastDeployAt)) else "从未部署"}")
             if (snapshot.lastError.isNotEmpty()) {
                 appendLine("- 错误: ${snapshot.lastError}")
             }
@@ -241,13 +230,12 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
         }
         
         return try {
-            val provisioner = CmsEnvProvisioner(context)
             val results = mutableListOf<String>()
             
             profiles.forEach { profileName ->
-                val profile = CmsEnvProvisioner.EnvProfile.parse(profileName)
+                val profile = EnvProfile.parse(profileName)
                 if (profile != null) {
-                    val result = provisioner.provisionWithLog(context, profile) { line ->
+                    val result = CmsEnvProvisioner.provisionWithLog(context, profile) { line ->
                         // 日志输出到控制台
                         android.util.Log.i("CmsToolbox", line)
                     }
@@ -265,14 +253,12 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
 
     private fun handleStatusDevenv(context: Context): String {
         return try {
-            val provisioner = CmsEnvProvisioner(context)
-            val profiles = listOf("NODE", "PYTHON", "JAVA", "RUST", "GO", "SSH")
+            val profiles = listOf(EnvProfile.NODE, EnvProfile.PYTHON, EnvProfile.JAVA, EnvProfile.RUST, EnvProfile.GO, EnvProfile.SSH)
             buildString {
                 appendLine("开发环境状态：")
-                profiles.forEach { profileName ->
-                    val profile = CmsEnvProvisioner.EnvProfile.valueOf(profileName)
-                    val installed = provisioner.isReady(context, profile)
-                    appendLine("- $profileName: ${if (installed) "✅ 已安装" else "❌ 未安装"}")
+                profiles.forEach { profile ->
+                    val installed = CmsEnvProvisioner.isReady(context, profile)
+                    appendLine("- ${profile.name}: ${if (installed) "✅ 已安装" else "❌ 未安装"}")
                 }
                 appendLine("\n可使用 cms_toolbox(action=\"deploy_devenv\", profiles=[\"node\",\"python\"]) 安装环境")
             }
@@ -318,16 +304,14 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
     private fun repairDevenv(context: Context): String {
         return try {
             // 重新部署基础环境
-            val provisioner = CmsEnvProvisioner(context)
-            val profiles = listOf("NODE", "PYTHON", "JAVA")
+            val profiles = listOf(EnvProfile.NODE, EnvProfile.PYTHON, EnvProfile.JAVA)
             val results = mutableListOf<String>()
             
-            profiles.forEach { profileName ->
-                val profile = CmsEnvProvisioner.EnvProfile.valueOf(profileName)
-                val result = provisioner.provisionWithLog(context, profile) { line ->
+            profiles.forEach { profile ->
+                val result = CmsEnvProvisioner.provisionWithLog(context, profile) { line ->
                     android.util.Log.i("CmsToolbox", line)
                 }
-                results.add("$profileName: $result")
+                results.add("${profile.name}: $result")
             }
             
             "✅ 开发环境修复成功\n环境: node, python, java\n修复结果:\n${results.joinToString("\n")}"
@@ -364,7 +348,7 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             }
             "devenv" -> {
                 // 开发环境配置：列出可用的环境配置
-                val profiles = CmsEnvProvisioner.EnvProfile.entries
+                val profiles = EnvProfile.entries
                 val config = buildString {
                     appendLine("开发环境配置：")
                     profiles.forEach { profile ->
@@ -377,7 +361,7 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             "all" -> {
                 val enginePackage = CmsEnginePackage.builtin()
                 val engineJson = CmsEngineDeployer.exportPackage(enginePackage)
-                val profiles = CmsEnvProvisioner.EnvProfile.entries
+                val profiles = EnvProfile.entries
                 val devenvConfig = buildString {
                     appendLine("开发环境配置：")
                     profiles.forEach { profile ->
@@ -432,15 +416,19 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             status.add("=== CMS v2 总体状态 ===")
             
             // 引擎状态
-            val engineStore = CmsEngineStore(context)
-            val engineStatus = engineStore.getStatus()
-            status.add("引擎: ${engineStatus.state} (ID: ${engineStatus.engineId ?: "未安装"})")
+            CmsEngineStore.init(context)
+            val engineSnapshot = CmsEngineStore.snapshot.value
+            val engineState = when {
+                engineSnapshot.deploying -> "部署中"
+                engineSnapshot.ready -> "就绪"
+                else -> "未安装"
+            }
+            status.add("引擎: $engineState (版本: ${engineSnapshot.engineVersion.ifEmpty { "未知" }})")
             
             // 开发环境状态
-            val provisioner = CmsEnvProvisioner(context)
-            val devenvStatus = provisioner.getStatus()
-            val installedEnvs = devenvStatus.filter { it.value }.keys.joinToString(", ")
-            status.add("开发环境: ${if (installedEnvs.isEmpty()) "未安装" else "已安装: $installedEnvs"}")
+            val profiles = listOf(EnvProfile.NODE, EnvProfile.PYTHON, EnvProfile.JAVA)
+            val installedEnvs = profiles.filter { CmsEnvProvisioner.isReady(context, it) }.map { it.name }
+            status.add("开发环境: ${if (installedEnvs.isEmpty()) "未安装" else "已安装: ${installedEnvs.joinToString(", ")}"}")
             
             // 模块状态
             val repo = QuroCmsRepository(context)
@@ -452,8 +440,8 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             status.add("权限模式: ${policy.name}")
             
             // 终端状态
-            val terminalReady = QuroLinuxEnv.isProotReady(context)
-            status.add("终端环境: ${if (terminalReady) "✅ 就绪" else "❌ 未就绪"}")
+            val terminalStatus = QuroLinuxEnv.probe(context)
+            status.add("终端环境: ${if (terminalStatus.available) "✅ 就绪" else "❌ 未就绪"}")
             
             status.joinToString("\n")
         } catch (e: Exception) {
