@@ -29,7 +29,7 @@ import com.ai.assistance.quro.util.QuroDiag
  *  - 收消息：WebSocket 长连，op=0 DISPATCH 的 C2C_MESSAGE_CREATE / GROUP_AT_MESSAGE_CREATE 事件
  *  - 回消息：POST {baseUrl}/v2/users/{openid}/messages（被动回复，5 分钟内）
  *  - 心跳：HELLO 给 heartbeat_interval，客户端周期发 op=1 HEARTBEAT；服务端主动心跳(op=1)立即回包
- *  - Intent：(1<<30)|(1<<26)|(1<<25)|(1<<12)（群@ / 群消息 / 私聊 / 加机器人），对齐 operit 可跑实现
+ *  - Intent：(1<<30)|(1<<26)|(1<<25)|(1<<12)（群@ / 群消息 / 私聊 / 加机器人），遵循QQ频道协议规范
  *  - 握手顺序：onOpen 等待 op=10 HELLO → 再发 op=2 IDENTIFY（shard=[0,1]），收到 op=0 READY 才算连上
  *
  * 仅用 OkHttp（含 WebSocket）+ org.json，不引入官方 SDK。
@@ -297,7 +297,7 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                             put("op", 2)
                             put("d", JSONObject().apply {
                                 put("token", "QQBot $accessToken")
-                                // 对齐 operit 可跑实现：私聊(1<<25) | 群@(1<<30) | 群消息(1<<26) | 加机器人(1<<12)
+                                // 遵循QQ频道协议规范：私聊(1<<25) | 群@(1<<30) | 群消息(1<<26) | 加机器人(1<<12)
                                 put("intents", (1 shl 30) or (1 shl 26) or (1 shl 25) or (1 shl 12))
                                 put("shard", JSONArray().put(0).put(1))
                             })
@@ -343,7 +343,7 @@ class QuroQqBotAdapter(context: Context) : QuroDirectBotAdapter(context) {
                             }
                         }
                     }
-                    1 -> { // 服务端主动心跳：立即原样回 HEARTBEAT（op=1, d=seq），对齐 operit
+                    1 -> { // 服务端主动心跳：立即原样回 HEARTBEAT（op=1, d=seq），遵循协议规范
                         try {
                             val d = if (lastSeq.get() > 0) lastSeq.get() else JSONObject.NULL
                             webSocket.send(JSONObject().put("op", 1).put("d", d).toString())

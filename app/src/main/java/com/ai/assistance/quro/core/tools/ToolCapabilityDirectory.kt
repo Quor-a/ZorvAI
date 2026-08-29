@@ -196,7 +196,7 @@ object ToolCapabilityDirectory {
 
         "dev_env" to ToolInfo(
             name = "dev_env",
-            category = ToolCategory.DEVELOPMENT_ENV,
+            category = ToolCategory.TERMINAL_LINUX,
             description = "开发环境管理：安装/卸载/检查终端开发环境（Node.js、Python、Java、Rust、Go、Git）",
             useCases = listOf("安装Node.js环境", "装Python", "检查Java环境", "卸载Rust", "看看有哪些开发环境"),
             examples = listOf(
