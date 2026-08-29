@@ -106,7 +106,9 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             "fix_deploy" -> handleFixDeploy(context)
             "get_install_scripts" -> handleGetInstallScripts(context, obj)
             "fix_modules" -> handleFixModules(context, obj)
-            else -> "不支持的 action: $action\n\n可用 action: list_modules, call_module, deploy_engine, status_engine, deploy_devenv, status_devenv, repair_deployment, copy_config, get_logs, get_status, run_script, fix_deploy, get_install_scripts, fix_modules"
+            "save_fix_scripts" -> handleSaveFixScripts(context, obj)
+            "save_install_scripts" -> handleSaveInstallScripts(context, obj)
+            else -> "不支持的 action: $action\n\n可用 action:\n- 模块管理: list_modules, call_module\n- 引擎管理: deploy_engine, status_engine\n- 开发环境: deploy_devenv, status_devenv\n- 修复部署: repair_deployment, fix_deploy\n- 配置管理: copy_config\n- 脚本操作: run_script, get_install_scripts, fix_modules\n- 保存到文件: save_fix_scripts, save_install_scripts\n- 日志状态: get_logs, get_status"
         }
     }
 
@@ -785,6 +787,133 @@ echo "🎉 修复完成！"
         sb.appendLine("1. 以上脚本在 proot Ubuntu 环境中执行")
         sb.appendLine("2. 使用方式：在终端中粘贴执行，或通过 cms_toolbox(action=\"run_script\", script=\"...\") 执行")
         sb.appendLine("3. 一键修复脚本会自动修复 DNS、httpd 和 node 模块")
+
+        return sb.toString().trim()
+    }
+
+    /**
+     * 将 CMS 模块修复脚本保存到手机 Download/Quro/cms_fix/ 目录。
+     * 用户可通过文件管理器直接访问、复制、执行。
+     */
+    private fun handleSaveFixScripts(context: Context, obj: JSONObject): String {
+        val sb = StringBuilder()
+        val savedFiles = mutableListOf<String>()
+
+        // 保存一键修复脚本
+        try {
+            val fixContent = context.assets.open("cms/modules/cms-fix-modules.sh").bufferedReader().use { it.readText() }
+            val result = com.ai.assistance.quro.core.tools.QuroDownloadUtil.saveTextToDownloads(
+                context, "Quro/cms_fix/cms-fix-modules.sh", "text/x-shellscript", fixContent
+            )
+            if (result.startsWith("OK:")) {
+                savedFiles.add("cms-fix-modules.sh")
+                sb.appendLine("✅ cms-fix-modules.sh 已保存")
+            } else {
+                sb.appendLine("⚠️ cms-fix-modules.sh 保存失败: $result")
+            }
+        } catch (e: Exception) {
+            sb.appendLine("❌ cms-fix-modules.sh: ${e.message}")
+        }
+
+        // 保存 httpd entry.sh
+        try {
+            val httpdContent = context.assets.open("cms/modules/quro.term.httpd/entry.sh").bufferedReader().use { it.readText() }
+            val result = com.ai.assistance.quro.core.tools.QuroDownloadUtil.saveTextToDownloads(
+                context, "Quro/cms_fix/quro.term.httpd_entry.sh", "text/x-shellscript", httpdContent
+            )
+            if (result.startsWith("OK:")) savedFiles.add("quro.term.httpd_entry.sh")
+        } catch (e: Exception) { /* skip */ }
+
+        // 保存 node backend.js
+        try {
+            val nodeJsContent = context.assets.open("cms/modules/quro.term.node/backend.js").bufferedReader().use { it.readText() }
+            val result = com.ai.assistance.quro.core.tools.QuroDownloadUtil.saveTextToDownloads(
+                context, "Quro/cms_fix/quro.term.node_backend.js", "application/javascript", nodeJsContent
+            )
+            if (result.startsWith("OK:")) savedFiles.add("quro.term.node_backend.js")
+        } catch (e: Exception) { /* skip */ }
+
+        // 保存 node entry.sh
+        try {
+            val nodeEntryContent = context.assets.open("cms/modules/quro.term.node/entry.sh").bufferedReader().use { it.readText() }
+            val result = com.ai.assistance.quro.core.tools.QuroDownloadUtil.saveTextToDownloads(
+                context, "Quro/cms_fix/quro.term.node_entry.sh", "text/x-shellscript", nodeEntryContent
+            )
+            if (result.startsWith("OK:")) savedFiles.add("quro.term.node_entry.sh")
+        } catch (e: Exception) { /* skip */ }
+
+        // 保存 httpd cms-package.json
+        try {
+            val httpdPkg = context.assets.open("cms/modules/quro.term.httpd/cms-package.json").bufferedReader().use { it.readText() }
+            val result = com.ai.assistance.quro.core.tools.QuroDownloadUtil.saveTextToDownloads(
+                context, "Quro/cms_fix/quro.term.httpd_cms-package.json", "application/json", httpdPkg
+            )
+            if (result.startsWith("OK:")) savedFiles.add("quro.term.httpd_cms-package.json")
+        } catch (e: Exception) { /* skip */ }
+
+        // 保存 node cms-package.json
+        try {
+            val nodePkg = context.assets.open("cms/modules/quro.term.node/cms-package.json").bufferedReader().use { it.readText() }
+            val result = com.ai.assistance.quro.core.tools.QuroDownloadUtil.saveTextToDownloads(
+                context, "Quro/cms_fix/quro.term.node_cms-package.json", "application/json", nodePkg
+            )
+            if (result.startsWith("OK:")) savedFiles.add("quro.term.node_cms-package.json")
+        } catch (e: Exception) { /* skip */ }
+
+        sb.appendLine("")
+        sb.appendLine("📁 已保存 ${savedFiles.size} 个文件到 Download/Quro/cms_fix/：")
+        savedFiles.forEach { sb.appendLine("  - $it") }
+        sb.appendLine("")
+        sb.appendLine("使用方式：")
+        sb.appendLine("1. 在终端中: sh /sdcard/Download/Quro/cms_fix/cms-fix-modules.sh")
+        sb.appendLine("2. 或在 AI 中: cms_toolbox(action=\"run_script\", script_name=\"cms-fix-modules\")")
+
+        return sb.toString().trim()
+    }
+
+    /**
+     * 将开发环境安装脚本保存到手机 Download/Quro/install_scripts/ 目录。
+     * 用户可通过文件管理器直接访问、复制、执行。
+     */
+    private fun handleSaveInstallScripts(context: Context, obj: JSONObject): String {
+        val profilesArray = obj.optJSONArray("profiles")
+        val profiles = mutableListOf<String>()
+        if (profilesArray != null) {
+            for (i in 0 until profilesArray.length()) {
+                profiles.add(profilesArray.optString(i))
+            }
+        }
+        if (profiles.isEmpty()) {
+            profiles.addAll(listOf("node", "python", "java", "rust", "go"))
+        }
+
+        val sb = StringBuilder()
+        val savedFiles = mutableListOf<String>()
+
+        profiles.forEach { profileName ->
+            val profile = EnvProfile.parse(profileName)
+            if (profile != null) {
+                val fileName = "install_${profile.name.lowercase()}.sh"
+                val content = "#!/bin/sh\n# ${profile.profileName} 安装脚本\n# 在 proot Ubuntu 环境中执行\n\nset -e\n\n${profile.installScript.trimIndent()}\n"
+                val result = com.ai.assistance.quro.core.tools.QuroDownloadUtil.saveTextToDownloads(
+                    context, "Quro/install_scripts/$fileName", "text/x-shellscript", content
+                )
+                if (result.startsWith("OK:")) {
+                    savedFiles.add(fileName)
+                    sb.appendLine("✅ ${profile.profileName} → $fileName")
+                } else {
+                    sb.appendLine("⚠️ ${profile.profileName}: $result")
+                }
+            } else {
+                sb.appendLine("❌ $profileName: 未知环境配置")
+            }
+        }
+
+        sb.appendLine("")
+        sb.appendLine("📁 已保存 ${savedFiles.size} 个安装脚本到 Download/Quro/install_scripts/：")
+        savedFiles.forEach { sb.appendLine("  - $it") }
+        sb.appendLine("")
+        sb.appendLine("使用方式：在终端中 sh /sdcard/Download/Quro/install_scripts/install_xxx.sh")
 
         return sb.toString().trim()
     }
