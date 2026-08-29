@@ -22,6 +22,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.zip.GZIPInputStream
 import com.ai.assistance.quro.util.QuroDiag
+import com.ai.assistance.quro.core.linux.PackageManagerType
+import com.ai.assistance.quro.core.linux.SourceManager
 import kotlin.time.Duration.Companion.milliseconds
 
 /** 把 Windows CRLF 统一为 LF，防止写入 proot/Ubuntu 的脚本被 sh 解析成非法选项。 */
@@ -107,6 +109,20 @@ object QuroLinuxEnv {
         "http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports",
         "http://ports.ubuntu.com/ubuntu-ports",
     )
+
+    /**
+     * 获取用户选择的 APT 镜像源（优先使用 SourceManager）
+     */
+    private fun getSelectedAptMirror(context: Context): String {
+        return try {
+            val sourceManager = SourceManager(context)
+            val selectedSource = sourceManager.getSelectedSource(PackageManagerType.APT)
+            selectedSource.url
+        } catch (e: Exception) {
+            // 如果 SourceManager 不可用，使用默认列表
+            UBUNTU_APT_MIRRORS.first()
+        }
+    }
 
     sealed interface SandboxState {
         data object NotInstalled : SandboxState
@@ -655,15 +671,29 @@ object QuroLinuxEnv {
 
         var updated = false
         var lastErr = ""
-        for (mirror in UBUNTU_APT_MIRRORS) {
-            diagLog(context, "尝试 apt-get update (镜像: $mirror)")
-            writeAptSources(rootfsDir, mirror)
-            // 使用更多选项确保成功：强制IPv4、禁用缓存、增加超时
-            val r = runProot(context, "apt-get update -o Acquire::http::No-Cache=true -o Acquire::Max-FutureTime=0 -o Acquire::ForceIPv4=true", timeoutMs = 180_000)
-            diagLog(context, "apt-get update 结果: exit=${r.first}, output=${r.second.take(500)}")
-            if (r.first == 0) { updated = true; break }
+        
+        // 优先使用用户选择的镜像源
+        val userMirror = getSelectedAptMirror(context)
+        diagLog(context, "使用用户选择的镜像源: $userMirror")
+        writeAptSources(rootfsDir, userMirror)
+        var r = runProot(context, "apt-get update -o Acquire::http::No-Cache=true -o Acquire::Max-FutureTime=0 -o Acquire::ForceIPv4=true", timeoutMs = 180_000)
+        diagLog(context, "apt-get update 结果: exit=${r.first}, output=${r.second.take(500)}")
+        if (r.first == 0) {
+            updated = true
+        } else {
             lastErr = r.second
-            Log.w(TAG, "apt-get update 失败 (镜像: $mirror): ${r.second.take(500)}")
+            Log.w(TAG, "apt-get update 失败 (用户镜像: $userMirror): ${r.second.take(500)}")
+            
+            // 用户镜像失败时，回退到默认列表
+            for (mirror in UBUNTU_APT_MIRRORS) {
+                diagLog(context, "尝试 apt-get update (镜像: $mirror)")
+                writeAptSources(rootfsDir, mirror)
+                r = runProot(context, "apt-get update -o Acquire::http::No-Cache=true -o Acquire::Max-FutureTime=0 -o Acquire::ForceIPv4=true", timeoutMs = 180_000)
+                diagLog(context, "apt-get update 结果: exit=${r.first}, output=${r.second.take(500)}")
+                if (r.first == 0) { updated = true; break }
+                lastErr = r.second
+                Log.w(TAG, "apt-get update 失败 (镜像: $mirror): ${r.second.take(500)}")
+            }
         }
         if (!updated) {
             val detail = "apt-get update 在所有镜像均失败。\n$lastErr"
