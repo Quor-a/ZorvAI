@@ -614,14 +614,16 @@ object ToolCapabilityDirectory {
                 "cms_toolbox(action=\"run_script\", script_name=\"cms-fix-deploy\")",
                 "cms_toolbox(action=\"fix_deploy\")",
                 "cms_toolbox(action=\"get_install_scripts\", profiles=[\"node\",\"python\",\"java\"])",
-                "cms_toolbox(action=\"fix_modules\", module_type=\"all\")"
+                "cms_toolbox(action=\"fix_modules\", module_type=\"all\")",
+                "cms_toolbox(action=\"save_fix_scripts\")",
+                "cms_toolbox(action=\"save_install_scripts\", profiles=[\"node\",\"python\"])"
             ),
             parameters = mapOf(
                 "action" to "动作类型",
                 "capability_id" to "能力ID（call_module时需要）",
                 "args" to "参数对象（call_module时可选）",
                 "engine_id" to "引擎ID（deploy_engine时可选）",
-                "profiles" to "环境配置列表（deploy_devenv/get_install_scripts时需要）",
+                "profiles" to "环境配置列表（deploy_devenv/get_install_scripts/save_install_scripts时需要）",
                 "component" to "组件名称（repair_deployment时需要）",
                 "module_id" to "模块ID（repair_deployment component=module时需要）",
                 "script" to "自定义脚本内容（run_script时可选）",
@@ -631,11 +633,13 @@ object ToolCapabilityDirectory {
             tips = listOf(
                 "单一入口管理所有CMS功能",
                 "部署失败时可用repair_deployment或fix_deploy修复",
-                "支持复制正确的配置到文件",
+                "支持复制正确的配置到文件（copy_config）",
                 "可获取状态和日志",
                 "支持执行自定义脚本（run_script）",
                 "fix_deploy一键修复所有部署问题",
-                "fix_modules获取CMS模块修复脚本（DNS、httpd、node）"
+                "fix_modules获取CMS模块修复脚本（DNS、httpd、node）",
+                "save_fix_scripts 将修复脚本保存到手机 Download/Quro/cms_fix/",
+                "save_install_scripts 将开发环境安装脚本保存到 Download/Quro/install_scripts/"
             ),
             relatedTools = listOf("cms_call", "cms_list", "cms_status"),
             priority = 5
