@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.terminal.QuroTerminalController
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 
@@ -18,15 +19,18 @@ class QuroDevEnvTool : QuroTool {
     override val description = """
 开发环境管理工具：安装/卸载/检查终端开发环境。
 
-参数格式：{"action":"动作", "env":"环境名"}
+参数格式：{"action":"动作", "env":"环境名", "execute":true/false}
 
 支持的 action：
 1. install: 安装指定环境
    - env: 环境名称（node/python/java/rust/go/git/all）
+   - execute: 是否直接在终端执行（默认false）
 2. uninstall: 卸载指定环境
    - env: 环境名称
+   - execute: 是否直接在终端执行（默认false）
 3. check: 检查环境状态
    - env: 环境名称（可选，不填则检查所有）
+   - execute: 是否直接在终端执行（默认false）
 4. list: 列出所有支持的环境
 
 支持的环境：
@@ -39,7 +43,8 @@ class QuroDevEnvTool : QuroTool {
 - all: 全部安装
 
 示例：
-- dev_env(action="install", env="node")
+- dev_env(action="install", env="node")  # 只返回命令文本
+- dev_env(action="install", env="node", execute=true)  # 直接执行命令
 - dev_env(action="uninstall", env="python")
 - dev_env(action="check")
 - dev_env(action="list")
@@ -49,7 +54,8 @@ class QuroDevEnvTool : QuroTool {
         "type":"object",
         "properties":{
             "action":{"type":"string","description":"动作类型: install/uninstall/check/list"},
-            "env":{"type":"string","description":"环境名称: node/python/java/rust/go/git/all"}
+            "env":{"type":"string","description":"环境名称: node/python/java/rust/go/git/all"},
+            "execute":{"type":"boolean","description":"是否直接在终端执行命令（默认false，只返回命令文本）"}
         },
         "required":["action"]
     }"""
@@ -166,20 +172,25 @@ echo -n "Wget: " && wget --version 2>/dev/null | head -1 || echo "未安装\""""
         val obj = JSONObject(arguments)
         val action = obj.optString("action", "list")
         val env = obj.optString("env", "")
+        val execute = obj.optBoolean("execute", false)
 
         return when (action) {
-            "install" -> handleInstall(env)
-            "uninstall" -> handleUninstall(env)
-            "check" -> handleCheck(env)
+            "install" -> handleInstall(env, execute, context)
+            "uninstall" -> handleUninstall(env, execute, context)
+            "check" -> handleCheck(env, execute, context)
             "list" -> handleList()
             else -> "不支持的 action: $action\n\n可用 action: install, uninstall, check, list"
         }
     }
 
-    private fun handleInstall(env: String): String {
+    private fun handleInstall(env: String, execute: Boolean, context: Context): String {
         if (env.isEmpty()) return "请指定要安装的环境: env=node/python/java/rust/go/git/all"
-        
+
         if (env == "all") {
+            val allCommands = installCommands.values.joinToString("\n")
+            if (execute) {
+                return executeCommand(allCommands, "安装所有开发环境", context)
+            }
             return buildString {
                 appendLine("=== 安装所有开发环境 ===")
                 appendLine()
@@ -204,6 +215,10 @@ echo -n "Wget: " && wget --version 2>/dev/null | head -1 || echo "未安装\""""
         val cmd = installCommands[env]
             ?: return "不支持的环境: $env\n\n支持的环境: ${installCommands.keys.joinToString(", ")}"
 
+        if (execute) {
+            return executeCommand(cmd, "安装 $env", context)
+        }
+
         return buildString {
             appendLine("=== 安装 $env ===")
             appendLine()
@@ -215,11 +230,15 @@ echo -n "Wget: " && wget --version 2>/dev/null | head -1 || echo "未安装\""""
         }
     }
 
-    private fun handleUninstall(env: String): String {
+    private fun handleUninstall(env: String, execute: Boolean, context: Context): String {
         if (env.isEmpty()) return "请指定要卸载的环境: env=node/python/java/rust/go/git"
-        
+
         val cmd = uninstallCommands[env]
             ?: return "不支持的环境: $env\n\n支持的环境: ${uninstallCommands.keys.joinToString(", ")}"
+
+        if (execute) {
+            return executeCommand(cmd, "卸载 $env", context)
+        }
 
         return buildString {
             appendLine("=== 卸载 $env ===")
@@ -232,19 +251,25 @@ echo -n "Wget: " && wget --version 2>/dev/null | head -1 || echo "未安装\""""
         }
     }
 
-    private fun handleCheck(env: String): String {
+    private fun handleCheck(env: String, execute: Boolean, context: Context): String {
         if (env.isEmpty()) {
             // 检查所有环境
-            return buildString {
-                appendLine("=== 环境状态检查 ===")
-                appendLine()
-                appendLine("请在终端中执行以下命令：")
-                appendLine()
+            val allCommands = buildString {
                 appendLine("echo '=== 开发环境检查 ==='")
                 checkCommands.forEach { (name, cmd) ->
                     appendLine()
                     appendLine(cmd)
                 }
+            }
+            if (execute) {
+                return executeCommand(allCommands, "检查所有环境", context)
+            }
+            return buildString {
+                appendLine("=== 环境状态检查 ===")
+                appendLine()
+                appendLine("请在终端中执行以下命令：")
+                appendLine()
+                appendLine(allCommands)
                 appendLine()
                 appendLine("命令发送到终端后，输出将显示在终端界面。")
             }
@@ -252,6 +277,10 @@ echo -n "Wget: " && wget --version 2>/dev/null | head -1 || echo "未安装\""""
 
         val cmd = checkCommands[env]
             ?: return "不支持的环境: $env\n\n支持的环境: ${checkCommands.keys.joinToString(", ")}"
+
+        if (execute) {
+            return executeCommand(cmd, "检查 $env 状态", context)
+        }
 
         return buildString {
             appendLine("=== 检查 $env 状态 ===")
@@ -283,6 +312,41 @@ echo -n "Wget: " && wget --version 2>/dev/null | head -1 || echo "未安装\""""
             appendLine("- dev_env(action=\"uninstall\", env=\"python\")")
             appendLine("- dev_env(action=\"check\")")
             appendLine("- dev_env(action=\"list\")")
+            appendLine()
+            appendLine("直接执行命令：")
+            appendLine("- dev_env(action=\"install\", env=\"node\", execute=true)")
+            appendLine("- dev_env(action=\"uninstall\", env=\"python\", execute=true)")
+            appendLine("- dev_env(action=\"check\", env=\"node\", execute=true)")
+        }
+    }
+
+    /**
+     * 执行终端命令
+     * @param command 要执行的命令
+     * @param description 命令描述
+     * @param context Android Context
+     * @return 执行结果
+     */
+    private fun executeCommand(command: String, description: String, context: Context): String {
+        return try {
+            // 确保终端会话存在
+            QuroTerminalController.createSession(context)
+            // 发送命令到终端
+            QuroTerminalController.sendToShell(command)
+            buildString {
+                appendLine("✅ $description 命令已发送到终端")
+                appendLine()
+                appendLine("命令将在终端中执行，输出会显示在终端界面。")
+                appendLine()
+                appendLine("请查看终端界面查看执行结果。")
+            }
+        } catch (e: Exception) {
+            buildString {
+                appendLine("❌ 执行命令失败: ${e.message}")
+                appendLine()
+                appendLine("请确保终端环境已正确初始化。")
+                appendLine("可以尝试先运行: linux_install() 初始化Linux环境")
+            }
         }
     }
 }

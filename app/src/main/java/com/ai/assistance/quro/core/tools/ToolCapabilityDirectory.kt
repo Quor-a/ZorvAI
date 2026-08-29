@@ -196,24 +196,26 @@ object ToolCapabilityDirectory {
 
         "dev_env" to ToolInfo(
             name = "dev_env",
-            category = ToolCategory.TERMINAL_LINUX,
+            category = ToolCategory.DEVELOPMENT_ENV,
             description = "开发环境管理：安装/卸载/检查终端开发环境（Node.js、Python、Java、Rust、Go、Git）",
             useCases = listOf("安装Node.js环境", "装Python", "检查Java环境", "卸载Rust", "看看有哪些开发环境"),
             examples = listOf(
                 "dev_env(action=\"install\", env=\"node\")",
+                "dev_env(action=\"install\", env=\"node\", execute=true)",
                 "dev_env(action=\"uninstall\", env=\"python\")",
                 "dev_env(action=\"check\")",
                 "dev_env(action=\"list\")"
             ),
             parameters = mapOf(
                 "action" to "动作: install/uninstall/check/list",
-                "env" to "环境名: node/python/java/rust/go/git/all"
+                "env" to "环境名: node/python/java/rust/go/git/all",
+                "execute" to "是否直接执行命令（默认false）"
             ),
             tips = listOf(
-                "命令通过终端会话执行，输出在终端界面可见",
-                "install返回安装命令，需要在终端执行",
-                "check返回检查命令，可查看环境是否已安装",
-                "list列出所有支持的环境"
+                "execute=true 时命令直接在终端执行，输出在终端界面可见",
+                "execute=false 时只返回命令文本，需要用户手动复制执行",
+                "install安装指定环境，uninstall卸载指定环境",
+                "check检查环境状态，list列出所有支持的环境"
             ),
             relatedTools = listOf("linux_run", "terminal_run"),
             priority = 4
@@ -1011,7 +1013,7 @@ object ToolCapabilityDirectory {
             "AI思考中/任务进度" to listOf("fluid_cloud(action=create)", "fluid_cloud(action=update)"),
             "CMS模块管理" to listOf("cms_toolbox(action=list_modules)", "cms_toolbox(action=call_module)"),
             "CMS引擎部署" to listOf("cms_toolbox(action=deploy_engine)", "cms_toolbox(action=status_engine)"),
-            "开发环境管理" to listOf("dev_env(action=install)", "dev_env(action=check)"),
+            "开发环境管理" to listOf("dev_env(action=install)", "dev_env(action=check)", "dev_env(action=install, execute=true)"),
             "CMS部署修复" to listOf("cms_toolbox(action=repair_deployment)", "cms_toolbox(action=fix_deploy)"),
             "AI自写CMS模块" to listOf("cms_toolbox(action=create_module)", "cms_toolbox(action=deploy_custom)"),
             "AI自写引擎脚本" to listOf("cms_toolbox(action=create_engine_script)"),
