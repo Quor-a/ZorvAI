@@ -44,7 +44,7 @@ object CmsTerminalDeployer {
     fun bootstrap(context: Context): String {
         CmsStateStore.init(context)
         // 环境未就绪时**自动拉起**终端安装（与 deploy 一致），安装成功即继续 bootstrap。
-        var st = QuroLinuxEnv.probe(context)
+        var st = QuroLinuxEnv.probeLenient(context)
         if (!st.available) {
             CmsStateStore.appendLog("_bootstrap", "▶ 终端环境未就绪，自动安装 proot/Ubuntu…")
             st = QuroLinuxEnv.ensureInstalledBlocking(context)
@@ -104,7 +104,7 @@ object CmsTerminalDeployer {
         CmsStateStore.init(context)
         CmsStateStore.markDeployStart(pkg.moduleId, "准备部署 ${pkg.moduleId}")
         // D1：终端后端唯一化 = proot；环境未就绪时**自动拉起**终端安装，安装成功即继续部署。
-        var st = QuroLinuxEnv.probe(context)
+        var st = QuroLinuxEnv.probeLenient(context)
         if (!st.available) {
             CmsStateStore.markDeployStep(pkg.moduleId, "自动安装终端环境(proot/Ubuntu)", 10)
             st = QuroLinuxEnv.ensureInstalledBlocking(context)

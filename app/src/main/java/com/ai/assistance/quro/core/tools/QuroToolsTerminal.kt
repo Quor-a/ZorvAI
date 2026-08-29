@@ -37,7 +37,8 @@ class TerminalExecTool : QuroTool {
 
         // v122：优先走 proot/Linux 环境（python3 / 任意写可用），不可用时回退设备 Toybox shell。
         // 这样 AI 经 terminal_exec 驱动的命令与交互式终端界面拥有完全一致的能力，不再受 untrusted_app 沙盒限制。
-        val st = QuroLinuxEnv.probe(context)
+        // 使用宽松探测：严格 probe 会因 canExecute()/符号链接解析误判。
+        val st = QuroLinuxEnv.probeLenient(context)
 
         // E-8：退出码必须**结构化**返回给模型。
         // 旧实现把设备回退路径的结果糊成一个字符串（"(no output, exit 1)" / "⏱ 命令超时…"），

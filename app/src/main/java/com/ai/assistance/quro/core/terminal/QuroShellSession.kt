@@ -142,17 +142,35 @@ class QuroShellSession private constructor(
     private val writer = BufferedWriter(OutputStreamWriter(process.outputStream, StandardCharsets.UTF_8))
 
     init {
+        Log.i(TAG, "init: 创建会话, 模式=$mode, 命令=${command.joinToString(" ")}")
         appendLine("— Zorv AI 终端已启动 (${if (mode == ShellMode.LINUX) "proot/Linux · Ubuntu 24.04" else "设备 · Toybox sh"}) —")
+        // ⚠ 设备模式 = proot 未启用，所有 Linux 命令都不可用。
+        // 把**原因直接打进终端缓冲区**：用户在真机上无需 adb/logcat，截图即可取证。
+        if (mode == ShellMode.DEVICE) {
+            appendLine("⚠ 当前是 Android 设备 shell，apt-get / dpkg / python3 / node 等 Linux 命令均不可用。")
+            runCatching {
+                val st = QuroLinuxEnv.probeLenient(context)
+                appendLine("   原因: ${st.reason}")
+                val p = QuroLinuxEnv.prootPath(context)
+                appendLine("   proot : $p (存在=${File(p).exists()})")
+                val rf = File(QuroLinuxEnv.rootfsPath(context))
+                appendLine("   rootfs: ${rf.absolutePath} (是目录=${rf.isDirectory}, 条目数=${rf.listFiles()?.size ?: 0})")
+                appendLine("   修复 : 点顶栏「检查更新/安装 Linux 环境」，或在对话发送 linux:install")
+            }
+        }
         appendLine(promptPrefix())
+        Log.d(TAG, "init: 启动drain协程")
         launch { drain() }
     }
 
     /** 并发读取 stdout（已合并 stderr），按行追加到缓冲区；识别哨兵行。 */
     private fun drain() {
+        Log.d(TAG, "drain: 开始读取stdout/stderr流")
         try {
             var line: String?
             while (reader.readLine().also { line = it } != null) {
                 val raw = line ?: continue
+                Log.d(TAG, "drain: 读取到行: '${raw.take(100)}${if (raw.length > 100) "..." else ""}'")
                 // host 模式：识别 qurohost 的控制响应（US"@qurohost-resp " 开头），转交回调，不进终端缓冲区。
                 if (isHost && raw.startsWith(QuroHostBridge.CONTROL_RESP_PREFIX)) {
                     controlCallback?.invoke(raw.substring(QuroHostBridge.CONTROL_RESP_PREFIX.length))
@@ -174,11 +192,14 @@ class QuroShellSession private constructor(
                 val clean = stripAnsi(raw)
                 if (clean.isNotEmpty()) appendLine(clean)
             }
+            Log.d(TAG, "drain: 读取流结束")
         } catch (e: Exception) {
+            Log.e(TAG, "drain: 读取流异常", e)
             if (!exited) appendLine("⚠ 读取流结束: ${e.message}")
         } finally {
             exited = true
             exitCode = runCatching { process.exitValue() }.getOrDefault(-1)
+            Log.d(TAG, "drain: 进程退出, exitCode=$exitCode")
             // 进程没了，任何等待中的命令都不会再有哨兵回来，必须解除 busy，
             // 否则 UI 永远卡在「运行中…」、中断按钮也失效。
             busy = false
@@ -203,7 +224,10 @@ class QuroShellSession private constructor(
 
     /** 发送一条命令（带回显 + 哨兵），等价于用户在提示符后敲回车。 */
     fun sendCommand(cmd: String) {
-        if (exited) return
+        if (exited) {
+            Log.w(TAG, "sendCommand: 会话已退出，忽略命令: $cmd")
+            return
+        }
         val trimmed = cmd.trim()
         if (trimmed.isEmpty()) {
             // 空回车：仅补一个新提示符
@@ -230,6 +254,7 @@ class QuroShellSession private constructor(
         if (translated != trimmed) {
             appendLine("[router] $trimmed → $translated")
         }
+        Log.d(TAG, "sendCommand: 发送命令 '$translated', 模式=$mode, busy=$busy")
         appendLine(promptPrefix() + trimmed)
         lastInterrupted = false
         busy = true
@@ -396,12 +421,17 @@ class QuroShellSession private constructor(
     private fun writeWithSentinel(cmd: String) {
         launch {
             try {
+                Log.d(TAG, "writeWithSentinel: 写入命令到stdin, cmd='$cmd'")
                 writer.write(cmd)
                 writer.write("\n")
-                writer.write(QuroTerminalSentinel.emitCommand(doneToken))
+                val sentinel = QuroTerminalSentinel.emitCommand(doneToken)
+                Log.d(TAG, "writeWithSentinel: 写入哨兵, sentinel='$sentinel'")
+                writer.write(sentinel)
                 writer.write("\n")
                 writer.flush()
+                Log.d(TAG, "writeWithSentinel: 命令写入完成")
             } catch (e: Exception) {
+                Log.e(TAG, "writeWithSentinel: 写入失败", e)
                 appendLine("⚠ 写入失败: ${e.message}")
                 busy = false
                 suppressNextPrompt = false
@@ -557,29 +587,12 @@ class QuroShellSession private constructor(
          * 绝不抛出，避免拖垮 ChatScreen 重组。旧 Termux 终端 / 旧 Kotlin CMS 部署器路径完整保留。
          */
         fun create(context: Context): QuroShellSession {
-            val launch = QuroHostBridge.buildLaunch(context)
-            if (launch != null) {
-                try {
-                    val pb = ProcessBuilder(launch.args)
-                    pb.directory(launch.workDir)
-                    pb.environment().putAll(launch.env)
-                    pb.redirectErrorStream(true)
-                    val p = pb.start()
-                    val linux = QuroLinuxEnv.shellLaunch(context) != null
-                    val s = QuroShellSession(
-                        context,
-                        if (linux) ShellMode.LINUX else ShellMode.DEVICE,
-                        launch.args,
-                        launch.env.map { "${it.key}=${it.value}" }.toTypedArray(),
-                        context.filesDir.absolutePath,
-                        p,
-                    )
-                    s.isHost = true
-                    return s
-                } catch (e: Exception) {
-                    Log.w(TAG, "host 模式启动失败，回退旧直连路径: ${e.message}")
-                }
-            }
+            // 直连 proot/设备 sh，不走 qurohost 包装层。
+            // qurohost（libqurohost.so）是 Android ELF 二进制，动态链接器为
+            // /system/bin/linker64。proot 将 / 映射到 Ubuntu rootfs，
+            // rootfs 内无 linker64 → qurohost 在 proot 内秒退、终端无任何输出。
+            // terminal_exec 走 QuroLinuxEnv.run() 绕过了 qurohost 所以正常，
+            // 交互终端也应走同一路径（直连 proot）。
             return createLegacy(context)
         }
 

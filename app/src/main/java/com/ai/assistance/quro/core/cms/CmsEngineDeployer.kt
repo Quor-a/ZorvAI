@@ -52,7 +52,7 @@ object CmsEngineDeployer {
     private fun deployEngineInner(context: Context, pkg: CmsEnginePackage): String {
         // D1：终端后端唯一化 = proot；环境未就绪时**自动拉起**终端安装（下载 rootfs/解压/apt-get update/装 bash），
         // 安装成功即继续部署，失败才明确报错。此前此处直接拒绝，导致用户必须先手动去终端页点安装。
-        var st = QuroLinuxEnv.probe(context)
+        var st = QuroLinuxEnv.probeLenient(context)
         if (!st.available) {
             CmsEngineStore.markDeployStep("自动安装终端环境(proot/Ubuntu)", 10)
             st = QuroLinuxEnv.ensureInstalledBlocking(context)

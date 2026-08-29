@@ -25,7 +25,8 @@ class LinuxRunTool : QuroTool {
         val cmd = JSONObject(arguments).optString("command", "")
         if (cmd.isBlank()) return "missing command"
         // 环境未就绪则自动触发后台安装，避免「未知工具/环境不可用」死路。
-        if (!QuroLinuxEnv.probe(context).available) {
+        // 使用宽松探测：严格 probe 会因 canExecute()/符号链接解析误判。
+        if (!QuroLinuxEnv.probeLenient(context).available) {
             QuroLinuxEnv.setup(context)
             return "⏳ Linux 环境未安装，已自动在后台开始安装（下载 Ubuntu rootfs 并初始化），请稍候在终端查看进度后重试。"
         }
@@ -46,7 +47,7 @@ class LinuxInstallTool : QuroTool {
     override fun run(context: Context, arguments: String): String {
         val pkg = JSONObject(arguments).optString("package", "")
         if (pkg.isBlank()) return "missing package"
-        if (!QuroLinuxEnv.probe(context).available) {
+        if (!QuroLinuxEnv.probeLenient(context).available) {
             QuroLinuxEnv.setup(context)
             return "⏳ Linux 环境未安装，已自动在后台开始安装，请稍候重试 $pkg 的安装。"
         }

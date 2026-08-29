@@ -41,7 +41,7 @@ object CmsTerminalRuntime {
         timeoutSecs: Int = 30,
         memMb: Int = 256,
     ): CmsModuleProcess? {
-        val st = QuroLinuxEnv.probe(context)
+        val st = QuroLinuxEnv.probeLenient(context)
         if (!st.available) return null
 
         val gdir = CmsTerminalDeployer.guestDir(pkg.moduleId)

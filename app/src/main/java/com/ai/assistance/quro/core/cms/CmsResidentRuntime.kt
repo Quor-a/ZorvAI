@@ -65,7 +65,7 @@ object CmsResidentRuntime {
         args: Map<String, String>,
         envSpec: Map<String, String>,
     ): String {
-        val st = QuroLinuxEnv.probe(context)
+        val st = QuroLinuxEnv.probeLenient(context)
         if (!st.available) return "⛔ 终端环境(proot/Ubuntu)未就绪：${st.reason}。请先在终端页安装 Linux 环境。"
         if (!ensureEntry(context, module)) {
             return "⛔ 模块 ${module.id} 无可部署的终端入口脚本(terminalEntry)，无法常驻启动。"
