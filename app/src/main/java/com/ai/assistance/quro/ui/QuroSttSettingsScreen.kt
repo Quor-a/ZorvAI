@@ -209,7 +209,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                 val res = QuroModelListFetcher().fetch(cfg.baseUrl, cfg.apiKey)
                 when (res) {
                     is QuroModelListResult.Success -> {
-                        fetchedModels = res.models
+                        fetchedModels = res.models.map { it.id }
                         fetchStatus = "拉取成功 ${res.models.size} 个"
                         addLog("✅ 拉取成功: ${res.models.size} 个模型")
                         fetchMenu = true

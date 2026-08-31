@@ -264,7 +264,11 @@ class QuroAssistant(
                 // 「最近 N 轮」的干净上下文里作答，从源头消除无界历史导致的乱恢复。云端模型上下文窗口大、能力强，
                 // 不受影响。8 轮对 1.2B~3B 模型足够覆盖正常多轮，同时把历史长度压在模型有效注意力范围内。
                 val effHistoryRounds = if (isLocal && historyRounds <= 0) 12 else historyRounds
-                val llmMessages = runCatching { store.toLlmMessages(system, cfg.contextWindow, effHistoryRounds) }.getOrElse { emptyList() }
+                // 单次上下文总开关：modelContextLength 是接口回填的模型真实上下文长度（硬上限来源），
+                // 未知时回落 1048576 安全顶；contextWindow 是用户在总开关上设的预算（≤ 硬上限，0=用硬上限）。
+                val hardMax = if (cfg.modelContextLength > 0) cfg.modelContextLength else MODEL_MAX_INPUT_TOKENS
+                val effContextWindow = if (cfg.contextWindow > 0) cfg.contextWindow.coerceAtMost(hardMax) else hardMax
+                val llmMessages = runCatching { store.toLlmMessages(system, effContextWindow, effHistoryRounds) }.getOrElse { emptyList() }
                 // 流式增量回调（云端 / 本地离线模型**共用**）。参数 acc 为「累计文本」。
                 // ⚠️ #1112 修复：此前本地（MNN / llama.cpp）路径压根不传 onToken，且下方 streaming
                 //   还对本地强制置 false —— 本地推理整条链零流式。手机 CPU 上一次生成动辄数十秒到

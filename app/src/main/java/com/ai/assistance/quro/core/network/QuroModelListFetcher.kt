@@ -17,8 +17,11 @@ import java.util.concurrent.TimeUnit
  * - Ollama 端点（通常为 http://localhost:11434）：自动检测并回退到 `{baseUrl}/api/tags`
  * - 本地回环服务通常免密钥：apiKey 为空时不带鉴权头
  */
+/** 单个模型信息：模型 id + 真实上下文长度（token）。contextLength=0 表示接入点未返回该字段（未知）。 */
+data class QuroModelInfo(val id: String, val contextLength: Int = 0)
+
 sealed interface QuroModelListResult {
-    data class Success(val models: List<String>) : QuroModelListResult
+    data class Success(val models: List<QuroModelInfo>) : QuroModelListResult
     data class Error(val message: String) : QuroModelListResult
 }
 
@@ -88,13 +91,18 @@ class QuroModelListFetcher(
      * 解析 OpenAI 格式模型列表 JSON：
      * `{"object":"list","data":[{"id":"gpt-4o","object":"model"}, ...]}`
      */
-    internal fun parseModels(json: String): List<String> {
+    internal fun parseModels(json: String): List<QuroModelInfo> {
         val root = JSONObject(json)
         val arr = root.getJSONArray("data")
-        val out = mutableListOf<String>()
+        val out = mutableListOf<QuroModelInfo>()
         for (i in 0 until arr.length()) {
-            val id = arr.getJSONObject(i).optString("id", "").trim()
-            if (id.isNotEmpty()) out.add(id)
+            val obj = arr.getJSONObject(i)
+            val id = obj.optString("id", "").trim()
+            if (id.isEmpty()) continue
+            // 优先读 context_length（OpenRouter / Together / vLLM 等常见），次之 context_window
+            val cl = obj.optInt("context_length", 0).takeIf { it > 0 }
+                ?: obj.optInt("context_window", 0).takeIf { it > 0 } ?: 0
+            out.add(QuroModelInfo(id, cl))
         }
         return out
     }
@@ -103,15 +111,15 @@ class QuroModelListFetcher(
      * 解析 Ollama /api/tags 响应格式：
      * `{"models":[{"name":"llama3.2:latest","modified_at":"..."}, ...]}`
      */
-    internal fun parseOllamaTags(json: String): List<String> {
+    internal fun parseOllamaTags(json: String): List<QuroModelInfo> {
         val root = JSONObject(json)
-        // Ollama 可能返回顶层 "models" 数组
+        // Ollama 可能返回顶层 "models" 数组（/api/tags 不提供 context_length，记作 0）
         return try {
             val arr = root.getJSONArray("models")
-            val out = mutableListOf<String>()
+            val out = mutableListOf<QuroModelInfo>()
             for (i in 0 until arr.length()) {
                 val name = arr.getJSONObject(i).optString("name", "").trim()
-                if (name.isNotEmpty()) out.add(name)
+                if (name.isNotEmpty()) out.add(QuroModelInfo(name, 0))
             }
             out
         } catch (_: Exception) {

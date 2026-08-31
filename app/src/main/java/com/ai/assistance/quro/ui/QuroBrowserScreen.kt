@@ -62,9 +62,12 @@ import android.widget.Button
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
-import org.mozilla.geckoview.GeckoView
-import org.mozilla.geckoview.GeckoSession
-import org.mozilla.geckoview.GeckoRuntime
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import com.ai.assistance.quro.core.tools.QuroDownloadUtil
 import java.io.File
 import java.io.FileOutputStream
@@ -95,21 +98,9 @@ private val UA_PRESETS = listOf(
     "兼容模式 (Chrome 88 旧版)" to LEGACY_UA,
 )
 
-// —— GeckoView 运行时单例（全局只能 create 一次）——
-private var geckoRuntime: GeckoRuntime? = null
-private var geckoInitError: String? = null
-private fun getGeckoRuntime(ctx: Context): GeckoRuntime? {
-    if (geckoRuntime != null) return geckoRuntime
-    if (geckoInitError != null) return null
-    return try {
-        geckoRuntime = GeckoRuntime.create(ctx.applicationContext)
-        geckoRuntime
-    } catch (e: Throwable) {
-        geckoInitError = "浏览器内核初始化失败：${e.message ?: e.javaClass.simpleName}"
-        android.util.Log.e("QuroBrowser", "GeckoRuntime.create 失败", e)
-        null
-    }
-}
+// —— 浏览器内核：使用系统 WebView（Android 自带 Chromium/WebKit 引擎），保证「能打开网页」——
+// 参考 Titanium Browser 仓库结论：自行编译的 Chromium 内核无法作为库嵌入应用，故落地为系统 WebView，
+// 由系统提供稳定内核，打开各类网页最可靠。
 
 // —— 网页自动化脚本：数据模型 + 持久化 ——
 private data class BrowserScript(val id: String, val name: String, val code: String)
@@ -135,23 +126,18 @@ private fun saveScripts(ctx: Context, list: List<BrowserScript>) {
         .edit().putString(SCRIPT_KEY, arr.toString()).apply()
 }
 
-// —— 内置 Python 控制台：把 Brython 资源拷到应用私有目录后由 GeckoView 以 file:// 加载 ——
-private fun openPythonConsole(ctx: Context, session: GeckoSession) {
-    val dir = File(ctx.filesDir, "brython_console")
-    dir.mkdirs()
-    val html = File(dir, "python_console.html")
-    val js = File(dir, "brython.min.js")
-    runCatching {
-        ctx.assets.open("www/python_console.html").use { it.copyTo(html.outputStream()) }
-        ctx.assets.open("www/brython.min.js").use { it.copyTo(js.outputStream()) }
-    }.onFailure {
-        session.loadUri("about:blank")
-        return
-    }
-    session.loadUri("file://" + html.absolutePath)
+// —— 内置 Python 控制台：把 Brython 资源读入内存，内联进 HTML 后用 loadDataWithBaseURL 加载（避开 file:// 限制）——
+private fun openPythonConsole(ctx: Context, wv: WebView?) {
+    if (wv == null) return
+    val html = runCatching { ctx.assets.open("www/python_console.html").bufferedReader().readText() }.getOrNull()
+    if (html == null) { wv.loadUrl("about:blank"); return }
+    val js = runCatching { ctx.assets.open("www/brython.min.js").bufferedReader().readText() }.getOrNull()
+    // 把 brython.min.js 内联到 </head> 前，避免 file:// 在 Android 11+ 被 WebView 拦截
+    val inlined = if (js != null) html.replace("</head>", "<script>$js</script></head>") else html
+    wv.loadDataWithBaseURL("https://quro.local/", inlined, "text/html", "utf-8", null)
 }
 
-private val DEFAULT_SCRIPT = """// 原生「眼 + 手」自动化指令（现代 GeckoView 已移除 session.evaluate，网页内 JS 求值需 WebExtension）：
+private val DEFAULT_SCRIPT = """// 原生「眼 + 手」自动化指令（系统 WebView 不开放网页内 JS 求值接口）：
 // eye_capture         —— 眼睛截图：PixelCopy 截取当前界面像素，交给 AI/人眼识别
 // tap_text:下一步      —— 眼睛看到文本含「下一步」的控件 → 手点击它
 // count_buttons       —— 统计当前界面可见可点控件数量
@@ -267,8 +253,8 @@ private fun saveBookmarks(ctx: Context, list: List<Pair<String, String>>) {
 }
 
 /**
- * 应用内置浏览器（GeckoView 开源引擎，替换系统 WebView）：
- * 用 Mozilla GeckoView（Firefox 系开源浏览器 Iceraven/IronFox）作为内置浏览器引擎，
+ * 应用内置浏览器（系统 WebView 引擎）：
+ * 用 Android 系统自带的 WebView（Chromium/WebKit 内核）作为内置浏览器引擎，保证「能打开网页」，
  * 支持前进/后退/刷新/停止、加载进度、桌面版网站、页内查找、收藏夹、分享/复制链接、
  * 正文抓取、网页自动化脚本（注入 JS 执行并回显结果）、代码编辑器入口。
  */
@@ -325,39 +311,15 @@ fun QuroBrowserScreen(
     var running by remember { mutableStateOf(false) }
     var eyeBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    // GeckoView 会话（内置开源浏览器引擎）；内核初始化失败时降级为错误页而非整屏崩溃
-    val runtime = remember { getGeckoRuntime(ctx) }
-    val session = remember(runtime) {
-        runtime?.let {
-            GeckoSession().apply {
-                open(it)
-                loadUri(url)
-            }
-        }
-    }
-    if (session == null) {
-        Box(Modifier.fillMaxSize().background(cs.background), contentAlignment = Alignment.Center) {
-            Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("⚠ 内置浏览器不可用", style = MaterialTheme.typography.titleMedium, color = cs.error)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    geckoInitError ?: "浏览器内核未能初始化",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = cs.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(16.dp))
-                Button(onClick = onClose) { Text("关闭") }
-            }
-        }
-        return
-    }
+    // 系统 WebView：在下方 AndroidView 工厂里创建并配置；系统自带引擎一定可用，无需降级分支。
+    var webView by remember { mutableStateOf<WebView?>(null) }
 
     var loadError by remember { mutableStateOf<String?>(null) }
 
     // 前进/后退状态由 NavigationDelegate.onCanGoBack / onCanGoForward 回调维护
     fun refreshNavState() { }
 
-    // 「眼睛」：PixelCopy 截取当前 Activity 整个窗口（含 GeckoView 渲染的网页像素），保存并预览
+    // 「眼睛」：PixelCopy 截取当前 Activity 整个窗口（含 WebView 渲染的网页像素），保存并预览
     fun captureScreen() {
         val activity = ctx.findActivity()
         if (activity == null) {
@@ -405,7 +367,7 @@ fun QuroBrowserScreen(
             code.trim() == "count_buttons" -> {
                 if (root == null) "⚠ 无法获取界面" else "可见可点控件数：${countClickable(root)}"
             }
-            else -> "⚠ 暂不支持该脚本（现代 GeckoView 已移除 session.evaluate；网页内 JS 求值需 WebExtension，当前自动化走原生「眼+手」）。"
+            else -> "⚠ 暂不支持该脚本（系统 WebView 不开放网页内 JS 求值接口，当前自动化走原生「眼+手」）。"
         }
         scriptLog += "[${nowTs()}] $result\n"
         running = false
@@ -471,94 +433,31 @@ fun QuroBrowserScreen(
     }
 
     fun applyDesktopMode() {
+        val wv = webView ?: return
         val ua = when {
             selectedUa == "自定义" && customUa.isNotBlank() -> customUa
             selectedUa != "自动" -> UA_PRESETS.find { it.first == selectedUa }?.second ?: ""
             desktopMode -> DESKTOP_UA
             else -> ""
         }
-        session.settings.userAgentOverride = ua
-        // 兼容性模式：GeckoView 通过 content blocking / tracking protection 实现
-        // JS 禁用需要通过 session.settings 配置
-        if (!jsEnabled) {
-            // GeckoView 不直接支持禁用 JS，通过 content policy 实现部分效果
-        }
-        // 旧版 UA 启用更宽松的渲染模式
-        if (selectedUa == "兼容模式 (Chrome 88 旧版)") {
-            // GeckoView 兼容模式：通过 UA 和 viewport 设置实现
-        }
-        session.reload()
+        // 系统 WebView：空 UA = 使用系统默认；禁用 JS / 图片即时落到 WebSettings。
+        wv.settings.userAgentString = ua.ifBlank { null }
+        wv.settings.javaScriptEnabled = jsEnabled
+        wv.settings.loadsImagesAutomatically = imagesEnabled
+        wv.reload()
     }
 
-    // —— GeckoView 回调：进度 / 标题 / 导航状态（注：现代 GeckoView 已无 DownloadDelegate，下载走默认处理）——
-    DisposableEffect(session) {
-        session.navigationDelegate = object : GeckoSession.NavigationDelegate {
-            override fun onLocationChange(
-                session: GeckoSession,
-                url: String?,
-                perms: List<GeckoSession.PermissionDelegate.ContentPermission>,
-                hasUserGesture: Boolean,
-            ) {
-                url?.let { address = it }
-            }
-
-            override fun onCanGoBack(session: GeckoSession, canGoBackParam: Boolean) {
-                canGoBack = canGoBackParam
-            }
-
-            override fun onCanGoForward(session: GeckoSession, canGoForwardParam: Boolean) {
-                canGoForward = canGoForwardParam
-            }
-        }
-        session.progressDelegate = object : GeckoSession.ProgressDelegate {
-            override fun onPageStart(session: GeckoSession, url: String) {
-                isLoading = true
-                loadError = null
-                if (url.isNotBlank()) address = url
-            }
-
-            override fun onPageStop(session: GeckoSession, success: Boolean) {
-                isLoading = false
-                refreshNavState()
-                if (!success) loadError = "页面加载失败，请检查网络或网址：$address"
-            }
-
-            override fun onProgressChange(session: GeckoSession, newProgress: Int) {
-                progress = newProgress
-                isLoading = newProgress < 100
-            }
-        }
-        session.contentDelegate = object : GeckoSession.ContentDelegate {
-            override fun onTitleChange(session: GeckoSession, title: String?) {
-                if (!title.isNullOrEmpty()) pageTitle = title
-            }
-
-            override fun onCrash(session: GeckoSession) {
-                // 内核崩溃后尝试重建会话恢复，而非只提示
-                runCatching {
-                    runtime?.let { rt ->
-                        session.close()
-                        session.open(rt)
-                        if (address.isNotBlank()) session.loadUri(address) else session.loadUri(url)
-                    }
-                }.onFailure {
-                    loadError = "浏览器内核崩溃，请返回后重试"
-                }
-            }
-        }
-        // 注：权限（定位/摄像头/麦克风）暂由 GeckoView 默认处理；
-        // 如需强制授予可在后续接入 PermissionDelegate（GeckoView 140 API 与旧版差异较大，单独迭代）。
-        onDispose { }
-    }
+    // —— 系统 WebView 的进度 / 标题 / 导航回调在下方 AndroidView 工厂里通过
+    //    WebViewClient / WebChromeClient 配置，这里不再单独挂委托——
 
     // 返回键优先级：编辑器 → 查找栏 → 书签面板 → 菜单 → 网页后退 → 关闭
     androidx.activity.compose.BackHandler {
         when {
             showEditor -> showEditor = false
-            showFind -> { showFind = false; session.getFinder().clear(); findQuery = "" }
+            showFind -> { showFind = false; webView?.clearMatches(); findQuery = "" }
             showBookmarks -> showBookmarks = false
             showMenu -> showMenu = false
-            canGoBack -> { session.goBack() }
+            canGoBack -> { webView?.goBack() }
             else -> onClose()
         }
     }
@@ -572,7 +471,7 @@ fun QuroBrowserScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(
-                    onClick = { session.goBack() },
+                    onClick = { webView?.goBack() },
                     enabled = canGoBack,
                     modifier = Modifier.size(36.dp),
                 ) {
@@ -583,7 +482,7 @@ fun QuroBrowserScreen(
                     )
                 }
                 IconButton(
-                    onClick = { session.goForward() },
+                    onClick = { webView?.goForward() },
                     enabled = canGoForward,
                     modifier = Modifier.size(36.dp),
                 ) {
@@ -606,7 +505,7 @@ fun QuroBrowserScreen(
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                         keyboardActions = KeyboardActions(onGo = {
                             val u = address.trim()
-                            if (u.isNotEmpty()) session.loadUri(u)
+                            if (u.isNotEmpty()) webView?.loadUrl(u)
                         }),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
                         decorationBox = { inner ->
@@ -618,7 +517,7 @@ fun QuroBrowserScreen(
                     )
                 }
                 IconButton(
-                    onClick = { if (isLoading) session.stop() else session.reload() },
+                    onClick = { webView?.let { if (isLoading) it.stopLoading() else it.reload() } },
                     modifier = Modifier.size(36.dp),
                 ) {
                     Icon(
@@ -646,7 +545,7 @@ fun QuroBrowserScreen(
                         DropdownMenuItem(
                             text = { Text("刷新") },
                             leadingIcon = { Icon(Icons.Filled.Refresh, null) },
-                            onClick = { showMenu = false; session.reload() },
+                            onClick = { showMenu = false; webView?.reload() },
                         )
                         DropdownMenuItem(
                             text = { Text("桌面版网站") },
@@ -728,7 +627,7 @@ fun QuroBrowserScreen(
                             leadingIcon = { Icon(Icons.Filled.Terminal, null) },
                             onClick = {
                                 showMenu = false
-                                openPythonConsole(ctx, session)
+                                openPythonConsole(ctx, webView)
                             },
                         )
                     }
@@ -765,7 +664,7 @@ fun QuroBrowserScreen(
                 ) {
                     BasicTextField(
                         value = findQuery,
-                        onValueChange = { findQuery = it; session.getFinder().find(it, GeckoSession.FINDER_FIND_FORWARD) },
+                        onValueChange = { findQuery = it; webView?.findAllAsync(it) },
                         singleLine = true,
                         textStyle = TextStyle(fontSize = 14.sp, color = cs.onSurface),
                         modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
@@ -774,14 +673,14 @@ fun QuroBrowserScreen(
                             inner()
                         },
                     )
-                    IconButton(onClick = { session.getFinder().find(findQuery, GeckoSession.FINDER_FIND_BACKWARDS) }, Modifier.size(32.dp)) {
+                    IconButton(onClick = { webView?.findNext(false) }, Modifier.size(32.dp)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "上一个", tint = cs.onSurfaceVariant)
                     }
-                    IconButton(onClick = { session.getFinder().find(findQuery, GeckoSession.FINDER_FIND_FORWARD) }, Modifier.size(32.dp)) {
+                    IconButton(onClick = { webView?.findNext(true) }, Modifier.size(32.dp)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, "下一个", tint = cs.onSurfaceVariant)
                     }
                     IconButton(
-                        onClick = { showFind = false; session.getFinder().clear(); findQuery = "" },
+                        onClick = { showFind = false; webView?.clearMatches(); findQuery = "" },
                         Modifier.size(32.dp),
                     ) {
                         Icon(Icons.Filled.Close, "关闭查找", tint = cs.onSurfaceVariant)
@@ -813,7 +712,7 @@ fun QuroBrowserScreen(
                                     Row(
                                         Modifier.fillMaxWidth()
                                             .clickable {
-                                                session.loadUri(u)
+                                                webView?.loadUrl(u)
                                                 address = u
                                                 showBookmarks = false
                                             }
@@ -849,8 +748,50 @@ fun QuroBrowserScreen(
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { c ->
-                        GeckoView(c).apply { setSession(session) }
+                        WebView(c).apply {
+                            webView = this
+                            settings.apply {
+                                javaScriptEnabled = true
+                                domStorageEnabled = true
+                                databaseEnabled = true
+                                loadsImagesAutomatically = true
+                                loadWithOverviewMode = true
+                                useWideViewPort = true
+                                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                allowFileAccess = true
+                                javaScriptCanOpenWindowsAutomatically = true
+                                defaultTextEncodingName = "utf-8"
+                            }
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                                    isLoading = true
+                                    loadError = null
+                                    url?.let { address = it }
+                                }
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    isLoading = false
+                                    canGoBack = view?.canGoBack() ?: false
+                                    canGoForward = view?.canGoForward() ?: false
+                                }
+                                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                                    if (request?.isForMainFrame == true) {
+                                        loadError = "页面加载失败：${error?.description ?: "未知错误"} (code=${error?.errorCode})"
+                                    }
+                                }
+                            }
+                            webChromeClient = object : WebChromeClient() {
+                                override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                    progress = newProgress
+                                    isLoading = newProgress < 100
+                                }
+                                override fun onReceivedTitle(view: WebView?, title: String?) {
+                                    if (!title.isNullOrEmpty()) pageTitle = title
+                                }
+                            }
+                            loadUrl(url)
+                        }
                     },
+                    onRelease = { it.destroy() },
                 )
             }
         }
@@ -1246,7 +1187,7 @@ fun QuroBrowserScreen(
                             )
                             Spacer(Modifier.height(12.dp))
                             Text(
-                                "注意: 代理设置需要 GeckoRuntime 支持。当前代理配置将保存在本地，重启浏览器后生效。",
+                                "注意: 代理设置需要系统 WebView 支持（Android 11+ 经 ProxyController 注入）。当前代理配置将保存在本地。",
                                 fontSize = 11.sp, color = cs.onSurfaceVariant,
                             )
                         }
