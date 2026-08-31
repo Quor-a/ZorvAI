@@ -1,4 +1,4 @@
-# VM 终端资产（Kalidroid 思路：pKVM / AVF / QEMU）
+# VM 终端资产（pKVM / AVF / QEMU）
 
 本目录的 4 个二进制资产**不在发布包内**（数百 MB，且需真机验证），由构建机按下方链接拉取后重新打包激活。
 代码层已就绪：`QuroVmEnv` 三级探测（AVF → QEMU → proot），资产到位即自动启用 VM 真内核，缺失则两窗格都回退 proot，终端始终可用。
