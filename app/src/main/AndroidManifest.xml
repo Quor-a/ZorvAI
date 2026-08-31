@@ -88,6 +88,13 @@
          应用需要出现在"闹钟和提醒"列表中，用户手动授权后才能使用精确闹钟。 -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!-- 虚拟机（AVF/pKVM/QEMU）：终端 VM 后端所需，跑完整 Linux 内核。
+         MANAGE_VIRTUAL_MACHINE：创建/管理虚拟化（Android 15+ 特殊权限，需用户手动在系统设置授予）；
+         USE_CUSTOM_VIRTUAL_MACHINE：使用内置自定义 VM payload（完整 Linux 镜像）。
+         探测阶段不强制授予；实际启动 VM 时若未授予将降级 QEMU/proot。 -->
+    <uses-permission android:name="android.permission.MANAGE_VIRTUAL_MACHINE" />
+    <uses-permission android:name="android.permission.USE_CUSTOM_VIRTUAL_MACHINE" />
+
     <!-- 权限管理：电池优化豁免引导 -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
