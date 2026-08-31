@@ -100,6 +100,7 @@ import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager.Backend
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager.Kind
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager.SessionInfo
 import com.ai.assistance.quro.core.terminal.ShellMode
+import com.ai.assistance.quro.terminal.kai.KaiTerminalPane
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -572,55 +573,16 @@ private fun TerminalPane(
             if (isActive) Text("● 活动", color = Color(0xFF7BE0A0), fontSize = 8.sp)
         }
 
-        // 输出
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 4.dp),
+        // 输出：真·VT 终端（移植自 Kai 的 VT100/xterm 引擎），带 ANSI 颜色 / 光标 / 加粗 / 清屏。
+        // 左窗格 = VM 融合终端，右窗格 = Kai 风格 proot/Linux 终端，均走同一 VT 渲染管线。
+        val outSession = session
+        Box(
+            Modifier.fillMaxWidth().weight(1f),
         ) {
-            if (lines != null) {
-                items(lines.size) { idx ->
-                    val line = lines[idx]
-                    val isCopied = idx == pane.lastCopiedLine.value
-                    val isSearchMatch = searchQuery.isNotBlank() && line.lowercase().contains(searchLower)
-                    Row(
-                        Modifier.fillMaxWidth().let { mod ->
-                            mod.clickable { copySingleLine(idx) }
-                        }.let { mod ->
-                            if (isSearchMatch) mod.background(Color(0xFF3D3500).copy(alpha = 0.4f)) else mod
-                        }.padding(horizontal = 4.dp, vertical = 1.dp),
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        if (showLineNumbers) {
-                            Text(
-                                text = "${idx + 1}".padStart(4),
-                                color = Color(0xFF555555), fontSize = (fontSize - 2).sp,
-                                fontFamily = FontFamily.Monospace, modifier = Modifier.width(32.dp).padding(end = 4.dp),
-                            )
-                        }
-                        val lineColor = when {
-                            line.contains("error", ignoreCase = true) || line.contains("错误", ignoreCase = true) -> Color(0xFFFF6B6B)
-                            line.contains("warning", ignoreCase = true) || line.contains("警告", ignoreCase = true) -> Color(0xFFFFD700)
-                            line.startsWith("quro@") || line.startsWith("$") || line.startsWith("#") -> Color(0xFF7BE0A0)
-                            line.startsWith("—") -> Color(0xFF666666)
-                            line.startsWith("[router]") -> Color(0xFFBB86FC)
-                            line.startsWith("⚠") -> Color(0xFFFF6B6B)
-                            line.startsWith("✓") || line.contains("完成") -> Color(0xFF7BE0A0)
-                            else -> Color(0xFFCCCCCC)
-                        }
-                        Text(
-                            text = line, color = lineColor,
-                            fontSize = fontSize.sp, fontFamily = FontFamily.Monospace,
-                            lineHeight = (fontSize + 4).sp, modifier = Modifier.weight(1f),
-                        )
-                        if (isCopied) {
-                            Icon(Icons.Filled.ContentCopy, "已复制", tint = Color(0xFF7BE0A0), modifier = Modifier.size(12.dp).padding(start = 2.dp))
-                        }
-                    }
-                }
+            if (outSession != null) {
+                KaiTerminalPane(session = outSession, modifier = Modifier.fillMaxSize())
             } else {
-                item {
-                    Text("正在启动终端…", color = Color(0xFF666666), fontSize = fontSize.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(vertical = 8.dp))
-                }
+                Text("正在启动终端…", color = Color(0xFF666666), fontSize = fontSize.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(vertical = 8.dp))
             }
         }
 
