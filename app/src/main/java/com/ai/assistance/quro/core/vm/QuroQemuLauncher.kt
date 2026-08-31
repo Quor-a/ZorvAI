@@ -12,9 +12,11 @@ import java.io.File
  *
  * 资产要求（置于 assets/vm/ 或由打包步骤注入）：
  *  - qemu-system-aarch64（交叉编译的 Android aarch64 二进制，静态链接最佳）
- *  - Image（Linux kernel）
- *  - disk.qcow2（含完整 Linux 根文件系统，如 Alpine/Ubuntu Cloud 镜像）
- * 缺失任一则 [start] 返回 null，由上层回退 proot。
+ *  - Image（Linux kernel，virt 机型；Alpine 用 vmlinuz-virt）
+ *  - initramfs-virt（可选，Alpine netboot initramfs，含 9p 模块；有则 -initrd 注入）
+ *  - rootfs.tar.gz（完整 Linux 根文件系统 tar 包；运行时解压到 files/vm/rootfs，
+ *    经 virtio-9p（mount_tag=rootfs）挂为 guest 根，免去 qcow2 磁盘镜像与镜像工具）
+ * 缺失关键资产则 [start] 返回 null，由上层回退 proot。
  */
 object QuroQemuLauncher {
     private const val TAG = "QuroQemuLauncher"
@@ -31,28 +33,38 @@ object QuroQemuLauncher {
             Log.w(TAG, "kernel 缺失: ${kernel.absolutePath}")
             return null
         }
-        val disk = File(QuroVmEnv.diskPath(context))
-        if (!disk.exists()) {
-            Log.w(TAG, "disk 缺失: ${disk.absolutePath}")
-            return null
-        }
+        // rootfs：优先从 assets/vm/rootfs 展开（可写，9p 需要），否则取已解压目录；都没有则降级。
+        val rootfs = QuroVmEnv.ensureRootfsFromAssets(context)
+            ?: run {
+                val d = QuroVmEnv.rootfsDir(context)
+                if (!d.isDirectory) {
+                    Log.w(TAG, "rootfs 缺失: ${d.absolutePath}")
+                    return null
+                }
+                d
+            }
+        val initramfs = File(QuroVmEnv.initramfsPath(context))
 
         val sockFile = File(context.cacheDir, SOCK_NAME)
         runCatching { sockFile.delete() }
 
-        val cmd = listOf(
+        val cmd = mutableListOf(
             qemu.absolutePath,
             "-M", "virt",
             "-cpu", "max",
             "-m", "1024",
             "-kernel", kernel.absolutePath,
-            "-append", "console=ttyS0 root=/dev/vda rw quiet",
-            "-drive", "file=${disk.absolutePath},format=qcow2,if=virtio",
+            "-append", "console=ttyS0 root=rootfs rootfstype=9p rootflags=trans=virtio,version=9p2000.L rw quiet",
+            "-virtfs", "local,path=${rootfs.absolutePath},mount_tag=rootfs,security_model=passthrough",
             "-nographic",
             "-serial", "unix:${sockFile.absolutePath},server,nowait",
             "-display", "none",
             "-no-reboot",
         )
+        if (initramfs.exists()) {
+            cmd.add("-initrd")
+            cmd.add(initramfs.absolutePath)
+        }
         Log.i(TAG, "启动 QEMU: ${cmd.joinToString(" ")}")
         val qemuProc = try {
             ProcessBuilder(cmd).redirectErrorStream(true).start()
@@ -66,7 +78,7 @@ object QuroQemuLauncher {
         val deadline = System.currentTimeMillis() + 8000
         while (!sockFile.exists() && System.currentTimeMillis() < deadline) {
             if (!qemuProc.isAlive) {
-                Log.e(TAG, "QEMU 进程启动即退出（检查 kernel/disk 是否匹配）")
+                Log.e(TAG, "QEMU 进程启动即退出（检查 kernel/rootfs/initramfs 是否匹配）")
                 diag(context, "QEMU 进程启动即退出")
                 return null
             }
