@@ -288,7 +288,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(QuroCmsResultTool())
     // CMS v2 DAG 编排：按依赖执行一组 terminal 命令
     r.register(QuroCmsRunDagTool())
-    // QuroTerm 自研沙盒终端能力（集成 NovaTerm，去品牌化为 QuroTerm）
+    // QuroTerm 自研沙盒终端能力（集成 NovaTerm为 QuroTerm）
     r.register(QuroTermTool())
     // 记忆库：AI 自动沉淀长期记忆（保存/列出/检索/删除）
     r.register(QuroMemorySaveTool())

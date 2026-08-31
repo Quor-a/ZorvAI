@@ -8,7 +8,7 @@ import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 
 /**
- * QuroTerm 自研沙盒终端能力（集成自 NovaTerm，已去品牌化命名为 QuroTerm）。
+ * QuroTerm 自研沙盒终端能力（集成自 NovaTerm，已命名为 QuroTerm）。
  *
  * 在应用私有沙盒（/data/local/tmp/quroterm/root）内执行命令，
  * 不依赖系统 shell / root / Termux，与既有 proot 终端（QuroTermuxTerminalScreen）形成

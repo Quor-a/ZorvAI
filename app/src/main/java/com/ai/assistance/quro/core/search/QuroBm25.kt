@@ -3,7 +3,7 @@ package com.ai.assistance.quro.core.search
 import kotlin.math.ln
 
 /**
- * BM25 检索引擎（参照 Teleclaw 记忆系统的 BM25 实现，去品牌化重写）。
+ * BM25 检索引擎（参照 Teleclaw 记忆系统的 BM25 实现重写）。
  *
  * 为什么不用「关键词包含匹配」：
  *  - 包含匹配无法排序，长记忆永远排前面（词频高但相关性低）；

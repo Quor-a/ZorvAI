@@ -7,16 +7,16 @@ import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import java.io.File
 
 /**
- * 命名容器（rootfs）生命周期管理 —— 融合自 Cateners/tiny_container（已去品牌化）。
+ * 命名容器（rootfs）生命周期管理。
  *
- * tiny_container 用 proot + rootfs 压缩包在安卓上跑完整 Linux 容器，其 proot 启动范式
+ * 用 proot + rootfs 压缩包在安卓上跑完整 Linux 容器。proot 启动范式
  * （PROOT_LOADER 环境变量 + .so 软链成 proot 二进制 + --link2symlink + boot 脚本 exec
- * + --assured-path lstat 缓存）已被证明在大量消费级机型可用。这里把该范式收编为
+ * + --assured-path lstat 缓存）已在大量消费级机型验证可用。这里把它作为
  * 「我方终端」的 proot 容器后端：当 VM 后端（pKVM / AVF / QEMU，见
  * [com.ai.assistance.quro.core.vm.QuroVmEnv]）不可用时，终端可走这里跑真实 Linux。
  *
  * 与 [QuroLinuxEnv]（单 rootfs 沙箱）的区别：本类支持「多个命名容器」，可导入
- * 任意 rootfs.tar.zst / rootfs.tar.gz，对应 tiny_container 的容器导入与管理能力。
+ * 任意 rootfs.tar.zst / rootfs.tar.gz，对应通用容器导入与管理能力。
  */
 object QuroContainerManager {
 
@@ -33,7 +33,7 @@ object QuroContainerManager {
     fun containerDir(context: Context, name: String): File =
         File(context.filesDir, "linux-containers/$name")
 
-    /** 默认容器名（终端右窗格使用的 Kai 风格 / 当前终端均可指向它）。 */
+    /** 默认容器名（终端会话默认使用的容器，右窗格本地终端也指向它）。 */
     const val DEFAULT_CONTAINER = "quro"
 
     fun isProvisioned(context: Context, name: String = DEFAULT_CONTAINER): Boolean {
@@ -54,7 +54,7 @@ object QuroContainerManager {
     /**
      * 导入容器：把 rootfs 压缩包解压进 [containerDir]。支持 tar.gz / tar.xz / tar.zst。
      *
-     * 解压走 tiny_container 范式：优先用 proot 自带的 tar（libtar.so 软链成 tar 后
+     * 解压走 proot 容器范式：优先用 proot 自带的 tar（libtar.so 软链成 tar 后
      * `proot --link2symlink tar -xf`），其次退回系统 tar；两者皆不可用时返回 false。
      * 解压完成后做 proot-distro 式 uid/gid 修复（去掉 aid_*、补当前用户条目），保证
      * 容器内 passwd/group 与宿主 uid 对齐，避免 proot 内 permission denied。
@@ -71,7 +71,7 @@ object QuroContainerManager {
         dir.mkdirs()
 
         val proot = QuroLinuxEnv.prootPath(context)
-        // 尝试用 proot 自带的 tar（tiny_container 把 tar 也打包成 .so 软链）
+        // 尝试用 proot 自带的 tar（proot 也把 tar 打包成 .so 软链）
         val tarBin = findTarBinary(context)
         if (tarBin != null) {
             runHost("$proot --link2symlink $tarBin -xf ${archive.absolutePath} -C ${dir.absolutePath} --delay-directory-restore --preserve-permissions")
@@ -89,7 +89,7 @@ object QuroContainerManager {
     }
 
     /**
-     * 构造 proot 启动参数 + 环境（tiny_container 范式）。
+     * 构造 proot 启动参数 + 环境（proot 容器范式）。
      * 命令由调用方追加（通常为 /bin/sh）。
      *
      * @return [ProotLaunch]；容器未就绪返回 null。
@@ -120,7 +120,7 @@ object QuroContainerManager {
         QuroLinuxEnv.sharedStorageHostDir(context)?.let { ss ->
             args.add("--bind=${ss.absolutePath}:/sdcard")
         }
-        // tiny_container 的 lstat 缓存优化：把容器目录标为 assured-path，减少 proot 对宿主 fs 的 lstat 探活
+        // lstat 缓存优化：把容器目录标为 assured-path，减少 proot 对宿主 fs 的 lstat 探活
         args.add("--assured-path=${dir.absolutePath}")
         args.add("-0")
         args.add("-w"); args.add("/root")

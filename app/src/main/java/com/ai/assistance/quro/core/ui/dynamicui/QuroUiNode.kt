@@ -1,7 +1,7 @@
 package com.ai.assistance.quro.core.ui.dynamicui
 
 /**
- * ZorvAI 动态 UI 节点模型（参照 Kai `ui/dynamicui` 设计，去品牌化重写）。
+ * ZorvAI 动态 UI 节点模型（参照 Kai `ui/dynamicui` 设计重写）。
  *
  * 与 Kai 一致采用「AI 输出 UI DSL → 解析 → 原生渲染」三段式：
  * AI 在回复里写 ```quro-ui 代码块，解析器转成节点树，Compose 直接渲染成真实原生控件，

@@ -18,7 +18,7 @@ data class TerminalCell(
  * [hyperlinks] are URIs extracted from OSC 8 sequences (xterm hyperlinks). TUIs
  * like Grok put login URLs there while showing only "click here" on the grid.
  *
- * 移植自 Kai，去掉 kotlinx.collections.immutable 依赖（[hyperlinks] 用普通 List）。
+ * 去掉 kotlinx.collections.immutable 依赖（[hyperlinks] 用普通 List）。
  */
 @Immutable
 data class TerminalSnapshot(

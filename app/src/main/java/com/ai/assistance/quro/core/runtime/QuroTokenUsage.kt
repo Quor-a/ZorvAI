@@ -8,7 +8,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Token 用量统计（参照 Eta `AgentTokenUsage`，去品牌化重写）。
+ * Token 用量统计（参照 Eta `AgentTokenUsage`重写）。
  *
  * 为什么需要：模型账单与上下文预算都靠 token 说话，但用户看到的只有「钱变少了」。
  * 有了用量台账，才能回答三个关键问题：

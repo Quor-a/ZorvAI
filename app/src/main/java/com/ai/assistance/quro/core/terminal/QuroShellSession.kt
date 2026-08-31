@@ -74,7 +74,7 @@ class QuroShellSession private constructor(
     val lines = mutableStateListOf<String>()
 
     /**
-     * 可选 VT 渲染引擎（移植自 Kai 的 VT100/xterm 引擎）。
+     * 可选 VT 渲染引擎（VT100/xterm 兼容）。
      * 非 null 时，[drain] 会把**原始（含 ANSI 转义）**字节喂给它，由 Compose 画布渲染
      * 出真·终端（颜色 / 光标 / 加粗 / 清屏）；[lines] 仍同步维护一份纯文本用于导出与兜底。
      * 设为 null（默认）则维持旧管道行为，终端 UI 走 LazyColumn 纯文本。
@@ -218,7 +218,7 @@ class QuroShellSession private constructor(
                 }
                 val clean = stripAnsi(raw)
                 if (clean.isNotEmpty()) appendLine(clean)
-                // VT 模式：把原始（含 ANSI 转义）行喂给 Kai 引擎渲染真·终端
+                // VT 模式：把原始（含 ANSI 转义）行喂给 VT 引擎渲染真·终端
                 if (vt != null) {
                     vt!!.writeText(raw + "\n")
                     publishVt()
@@ -722,7 +722,7 @@ class QuroShellSession private constructor(
          * 仅在 host 后端不可用或启动失败时调用，作为兜底。
          */
         private fun createLegacy(context: Context): QuroShellSession {
-            // 优先用已导入的命名容器（tiny_container 范式，去品牌化）：
+            // 优先用已导入的命名容器（proot 命名容器范式）：
             // 若存在 rootfs 容器，终端直接跑该容器 proot，而非默认单 rootfs 沙箱。
             if (QuroContainerManager.isProvisioned(context)) {
                 runCatching {

@@ -10,7 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 动态 UI 配套工具（参照 Kai 的 `kai-ui` 能力，去品牌化重写）。
+ * 动态 UI 配套工具（参照 Kai 的 `kai-ui` 能力重写）。
  *
  * 为什么需要工具而不只是「让 AI 自己写代码块」：
  *  - [UiDslSpecTool] 让模型**按需**拉取完整 DSL 规范，避免把冗长 schema 常驻系统提示词白白烧 token；

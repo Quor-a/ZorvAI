@@ -15,7 +15,7 @@ import androidx.annotation.Nullable;
 
 import com.ai.assistance.quro.core.termux.terminal.TerminalBuffer;
 import com.ai.assistance.quro.core.termux.terminal.WcWidth;
-// R 资源已在去品牌化时移除，菜单文案直接使用字符串字面量
+// R 资源已移除，菜单文案直接使用字符串字面量
 import com.ai.assistance.quro.core.termux.view.TerminalView;
 
 public class TextSelectionCursorController implements CursorController {

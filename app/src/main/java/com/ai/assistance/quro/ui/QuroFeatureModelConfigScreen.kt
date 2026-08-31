@@ -44,7 +44,7 @@ import kotlinx.coroutines.launch
 
 /**
  * 功能模型配置（设置 → 功能模型配置）：参考 FunctionalConfigScreen 的「功能 → 配置」
- * 设计、去品牌化移植。为 12 类 AI 能力各自绑定模型：默认「跟随主模型」，可切换为独立模型
+ * 设计、移植。为 12 类 AI 能力各自绑定模型：默认「跟随主模型」，可切换为独立模型
  * 并从全局接入点的模型列表中选取。
  *
  * 消费机制：引擎入口 [com.ai.assistance.quro.core.QuroAssistant.ask] 经

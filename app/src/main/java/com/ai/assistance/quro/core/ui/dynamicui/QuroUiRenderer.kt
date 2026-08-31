@@ -78,7 +78,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * ZorvAI 动态 UI 的 Compose 原生渲染器（参照 Kai `KaiUiRenderer` 设计，去品牌化重写）。
+ * ZorvAI 动态 UI 的 Compose 原生渲染器（参照 Kai `KaiUiRenderer` 设计重写）。
  *
  * 之所以坚持原生渲染而非 WebView：
  *  - 控件可直接读写状态，用户交互能原样回传给模型（WebView 需桥接且易丢事件）；

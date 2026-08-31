@@ -4,7 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * ZorvAI 动态 UI DSL 解析器（参照 Kai `KaiUiParser` 的三级流水线，去品牌化重写）。
+ * ZorvAI 动态 UI DSL 解析器（参照 Kai `KaiUiParser` 的三级流水线重写）。
  *
  * 流水线：
  *  1. **代码块提取** —— 从模型回复中定位 ```quro-ui 围栏，取出原始 body；

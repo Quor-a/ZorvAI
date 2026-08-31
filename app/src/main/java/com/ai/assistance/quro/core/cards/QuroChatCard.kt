@@ -1192,7 +1192,7 @@ fun parseCard(o: JSONObject): QuroChatCard? {
                 QuroChatCard.KanbanCard.KanbanColumn(it.optString("name", ""), arrStr(it.optJSONArray("items")))
             })
             "yuanbao", "linkAnswer" -> {
-                // 兼容去品牌化期间发布的 v1.0.26（wire-type 曾为 "linkAnswer"）已保存的卡片
+                // 兼容早期发布的 v1.0.26（wire-type 曾为 "linkAnswer"）已保存的卡片
                 val linksArr = o.optJSONArray("links")
                 val links = if (linksArr != null) {
                     (0 until linksArr.length()).map { i ->

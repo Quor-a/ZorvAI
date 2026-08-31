@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 
 /**
- * 功能级模型绑定配置（原创，参考 FunctionalConfigManager 设计、去品牌化移植）。
+ * 功能级模型绑定配置（原创，参考 FunctionalConfigManager 设计、移植）。
  *
  * 设计要点（与对齐）：
  * - 每个 [QuroFunctionType] 可「跟随主模型」(useGlobal=true) 或指定独立模型 (useGlobal=false, model=具体模型名)。
