@@ -14,6 +14,7 @@ orgjson = "20240303"
 shizuku = "13.1.5"
 shizukuProvider = "13.1.5"
 androidxWebkit = "1.12.1"
+workRuntime = "2.9.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -38,6 +39,10 @@ zxing-core = { group = "com.google.zxing", name = "core", version = "3.5.3" }
 coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 org-json = { group = "org.json", name = "json", version.ref = "orgjson" }
+# WorkManager：后台周期任务（提供商健康检查、自主心跳）用它而非手写 AlarmManager，
+# 因为需要「约束（联网/充电）+ 指数退避重试 + 进程被杀后仍能恢复调度」这三件事，
+# 手写 AlarmManager 都要重复实现一遍且容易漏掉开机恢复。
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntime" }
 
 # Shizuku（L2 通道：ADB 级 IPC / 免 Root 系统执行）
 shizuku-api = { group = "dev.rikka.shizuku", name = "api", version.ref = "shizuku" }

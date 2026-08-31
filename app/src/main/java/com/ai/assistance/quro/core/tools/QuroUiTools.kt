@@ -40,7 +40,7 @@ class QuroUiControlTool : QuroTool {
 }
 
 action 说明:
-- open: 打开界面 (target: editor/terminal/toolbox/knowledge/cms/aci/about/appearance/soul/memory/permission/model_config/voice/settings)
+- open: 打开界面 (target: editor/terminal/toolbox/knowledge/cms/aci/about/appearance/soul/memory/permission/model_config/voice/settings/tool_center)
 - toggle: 切换开关 (target: deepthink/memory/permission_*)
 - sheet: 打开弹层 (target: model/persona/settings)
 - chat: 对话管理 (action_type: new/clear)

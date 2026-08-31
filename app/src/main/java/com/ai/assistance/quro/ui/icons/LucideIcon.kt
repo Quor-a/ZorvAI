@@ -28,6 +28,8 @@ fun LucideIcon(
 
 private fun iconRes(name: String): Int = when (name) {
     "panel_left"       -> R.drawable.ic_panel_left
+    "blocks"           -> R.drawable.ic_blocks
+    "chevron_left"     -> R.drawable.ic_chevron_left
     "chevron_down"     -> R.drawable.ic_chevron_down
     "chevron_up"       -> R.drawable.ic_chevron_up
     "chevron_right"    -> R.drawable.ic_chevron_right

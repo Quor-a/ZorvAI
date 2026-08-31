@@ -194,9 +194,9 @@ object QuroTerminalSessionManager {
     }
 
     /**
-     * 根据 ID 获取实际的 Qu roShellSession 对象。
+     * 根据 ID 获取实际的 QuroShellSession 对象。
      * @param sessionId 会话 ID
-     * @return Qu roShellSession 对象，如果不存在或已退出返回 null
+     * @return QuroShellSession 对象，如果不存在或已退出返回 null
      */
     fun getShellSession(sessionId: String): QuroShellSession? {
         // 检查默认会话

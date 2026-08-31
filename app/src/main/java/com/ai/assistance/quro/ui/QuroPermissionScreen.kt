@@ -145,8 +145,11 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
     }
 
     fun onClickStd(item: QuroPermissionItem) {
-        if (item.id == "storage" || item.id == "location") requestRuntime(item)
-        else item.guideIntent?.let { ctx.startActivity(it) }
+        when (item.id) {
+            "storage", "location" -> requestRuntime(item)
+            "alarm" -> item.guideIntent?.let { ctx.startActivity(it) }
+            else -> item.guideIntent?.let { ctx.startActivity(it) }
+        }
     }
 
     // 触发一次特权提升（四阶段仲裁）
@@ -534,7 +537,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
 }
 
 private fun stdPerms(ctx: android.content.Context): List<QuroPermissionItem> =
-    QuroPermissionHelper.getItems(ctx).filter { it.id in setOf("storage", "location", "overlay", "battery") }
+    QuroPermissionHelper.getItems(ctx).filter { it.id in setOf("storage", "location", "overlay", "battery", "alarm") }
 
 @Composable
 private fun PrivilegeCard(

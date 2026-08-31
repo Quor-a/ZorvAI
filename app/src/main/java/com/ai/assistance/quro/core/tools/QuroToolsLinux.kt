@@ -2,6 +2,8 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
+import com.ai.assistance.quro.core.linux.DETECT_DISTRO_CMD
+import com.ai.assistance.quro.core.linux.PkgAction
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import org.json.JSONObject
 
@@ -40,19 +42,123 @@ class LinuxRunTool : QuroTool {
 class LinuxInstallTool : QuroTool {
     override val name: String = "linux_install"
     override val description: String =
-        "在应用内 Linux 环境用 apt 安装一个 Ubuntu 软件包（如 python3 / nodejs / git）。"
+        "在应用内 Linux 环境安装一个软件包（如 python3 / nodejs / git）。" +
+            "会自动探测发行版并选用对应包管理器（Ubuntu/Debian→apt、Alpine→apk、Fedora→dnf、Arch→pacman），" +
+            "无需你指定用哪个命令。"
     override val parametersJson: String =
-        """{"type":"object","properties":{"package":{"type":"string","description":"要安装的包名"}},"required":["package"]}"""
+        """{"type":"object","properties":{"package":{"type":"string","description":"要安装的包名，可空格分隔多个"}},"required":["package"]}"""
 
     override fun run(context: Context, arguments: String): String {
-        val pkg = JSONObject(arguments).optString("package", "")
-        if (pkg.isBlank()) return "missing package"
+        val pkgLine = JSONObject(arguments).optString("package", "")
+        val pkgs = pkgLine.split(Regex("\\s+")).filter { it.isNotBlank() }
+        if (pkgs.isEmpty()) return "missing package"
         if (!QuroLinuxEnv.probeLenient(context).available) {
             QuroLinuxEnv.setup(context)
-            return "⏳ Linux 环境未安装，已自动在后台开始安装，请稍候重试 $pkg 的安装。"
+            return "⏳ Linux 环境未安装，已自动在后台开始安装，请稍候重试 ${pkgs.joinToString(" ")} 的安装。"
         }
-        val (code, out) = QuroLinuxEnv.run(context, "apt-get install -y --no-install-recommends $pkg")
-        return if (code == 0) "✅ 已安装 $pkg" else "❌ 安装失败(exit=$code): $out"
+        // 不再写死 apt-get：先探测发行版，再交由对应包管理器生成命令。
+        // 否则换到 Alpine/Fedora 环境时「装软件」会直接失效且报错对用户无指导性。
+        val pm = QuroLinuxEnv.detectPackageManager(context)
+        val (code, out) = QuroLinuxEnv.run(
+            context, pm.install(pkgs), timeoutMs = INSTALL_TIMEOUT_MS
+        )
+        val tail = out.takeLast(1500)
+        return if (code == 0) {
+            "✅ 已安装 ${pkgs.joinToString(" ")}（${pm.displayName}）\n$tail"
+        } else {
+            // 命令失败时把所用发行版与命令一并回传，便于排查「包不存在/源不可达/权限不足」
+            "❌ 安装失败(exit=$code, ${pm.displayName})\n命令：${pm.install(pkgs)}\n$tail"
+        }
+    }
+
+    private companion object {
+        /** 装包可能触发下载与解压，默认 30s 远远不够，给到 5 分钟。 */
+        const val INSTALL_TIMEOUT_MS = 300_000L
+    }
+}
+
+/**
+ * 统一的 Linux 包管理工具。
+ *
+ * 相比 [LinuxInstallTool]（只做安装），本工具覆盖完整的包管理生命周期
+ * （安装/卸载/更新源/升级/搜索/列表/详情/清理/探测发行版），
+ * 并同样基于 [QuroLinuxDistroDetector] 自动适配包管理器。
+ */
+class LinuxPackageTool : QuroTool {
+    override val name: String = "linux_pkg"
+    override val description: String =
+        "在应用内 Linux 环境管理软件包：安装/卸载/更新软件源/升级/搜索/列出已装/查看详情/清理缓存/探测发行版。" +
+            "自动识别发行版并选用正确的包管理器（apt / apk / dnf / pacman），你不需要关心底层是哪个包管理器。"
+    override val parametersJson: String = """{
+        "type":"object",
+        "properties":{
+            "action":{"type":"string","description":"操作：install/remove/update/upgrade/search/list/info/clean/detect","enum":["install","remove","update","upgrade","search","list","info","clean","detect"]},
+            "packages":{"type":"string","description":"包名，多个用空格分隔（install/remove/info 需要）"},
+            "query":{"type":"string","description":"搜索关键词或列表过滤词（search/list 需要）"}
+        },
+        "required":["action"]
+    }"""
+
+    override fun run(context: Context, arguments: String): String {
+        val args = runCatching { JSONObject(arguments) }.getOrElse { JSONObject() }
+        val action = PkgAction.from(args.optString("action", ""))
+            ?: return "未知操作：${args.optString("action", "")}。可用：install/remove/update/upgrade/search/list/info/clean/detect"
+
+        if (!QuroLinuxEnv.probeLenient(context).available) {
+            QuroLinuxEnv.setup(context)
+            return "⏳ Linux 环境未安装，已自动在后台开始安装，请稍候重试「${action.summary}」。"
+        }
+
+        val pm = QuroLinuxEnv.detectPackageManager(context)
+        val pkgs = args.optString("packages", "")
+            .split(Regex("[\\s,]+")).filter { it.isNotBlank() }
+        val query = args.optString("query", "").trim()
+
+        // detect 只探测环境，不需要真的动包管理器
+        val command = when (action) {
+            PkgAction.INSTALL -> {
+                if (pkgs.isEmpty()) return "install 需要 packages 参数"
+                pm.install(pkgs)
+            }
+            PkgAction.REMOVE -> {
+                if (pkgs.isEmpty()) return "remove 需要 packages 参数"
+                pm.remove(pkgs)
+            }
+            PkgAction.UPDATE -> pm.update()
+            PkgAction.UPGRADE -> pm.upgrade()
+            PkgAction.SEARCH -> {
+                if (query.isBlank()) return "search 需要 query 参数"
+                pm.search(query)
+            }
+            PkgAction.LIST -> pm.listInstalled(query.ifBlank { null })
+            PkgAction.INFO -> {
+                if (pkgs.isEmpty()) return "info 需要 packages 参数"
+                pm.info(pkgs.first())
+            }
+            PkgAction.CLEAN -> pm.clean()
+            PkgAction.DETECT -> DETECT_DISTRO_CMD
+        }
+
+        val timeout = if (action == PkgAction.INSTALL || action == PkgAction.UPGRADE) {
+            300_000L   // 下载+解压，给足 5 分钟
+        } else {
+            60_000L
+        }
+
+        val (code, out) = QuroLinuxEnv.run(context, command, timeoutMs = timeout)
+        val tail = out.takeLast(2000)
+
+        return buildString {
+            append("${action.summary}｜发行版包管理器：${pm.displayName}")
+            appendLine()
+            append("命令：$command")
+            appendLine()
+            if (code == 0) append("✅ 成功") else append("⚠️ 退出码 $code")
+            if (tail.isNotBlank()) {
+                appendLine()
+                append(tail)
+            }
+        }.trim()
     }
 }
 

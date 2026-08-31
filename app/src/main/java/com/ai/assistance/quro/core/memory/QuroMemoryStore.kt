@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.memory
 
 import android.content.Context
+import com.ai.assistance.quro.core.search.bm25Search
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -77,16 +78,53 @@ class QuroMemoryRepository(context: Context) {
     }
 
     /** 检索：匹配内容 / 标题 / 标签 / 分组（不区分大小写）。空查询返回全部。 */
+    /**
+     * 检索记忆。
+     *
+     * 检索策略（BM25 优先 + 子串包含兜底）：
+     *  1. **BM25 打分排序**——先按相关性降序返回真正「语义相关」的结果。
+     *     相比旧的「子串包含」，BM25 考虑了词频饱和与长度归一化，
+     *     能让「短而切题」的记忆排在「长而泛泛」的记忆之前，
+     *     且支持中英混排与多词查询（无需词典，中文走 bigram）。
+     *     索引文本 = 标题 + 内容 + 标签 + 分组，任一字段命中即得分。
+     *  2. **子串包含兜底**——BM25 依赖分词，对纯符号、单字符、或分词边界特殊
+     *     的查询可能零命中。为不丢失旧行为（如精确搜某个编号/英文片段），
+     *     把「BM25 未命中但子串包含」的记忆追加在后，保证召回只增不减。
+     */
     fun search(query: String): List<QuroMemoryEntry> {
         val q = query.trim().lowercase()
         if (q.isEmpty()) return loadAll()
-        return loadAll().filter { e ->
-            e.content.lowercase().contains(q) ||
-                e.title.lowercase().contains(q) ||
-                e.tags.any { it.lowercase().contains(q) } ||
-                e.group.lowercase().contains(q)
+
+        val all = loadAll()
+        if (all.isEmpty()) return emptyList()
+
+        // 1) BM25 排序
+        val docs = all.map { e -> e.id to indexTextOf(e) }
+        val hits = bm25Search(documents = docs, query = query, topK = all.size)
+        val hitIds = hits.mapTo(HashSet()) { it.id }
+        val byId = all.associateBy { it.id }
+        val ranked = hits.mapNotNull { byId[it.id] }
+
+        // 2) 子串包含兜底（仅在 BM25 零命中该条时补入，避免重复）
+        if (ranked.size == all.size) return ranked
+        val fallback = all.filter { e ->
+            e.id !in hitIds && (
+                e.content.lowercase().contains(q) ||
+                    e.title.lowercase().contains(q) ||
+                    e.tags.any { it.lowercase().contains(q) } ||
+                    e.group.lowercase().contains(q)
+                )
         }
+        return ranked + fallback
     }
+
+    /** 参与检索的合并文本：标题 + 内容 + 标签 + 分组。 */
+    private fun indexTextOf(e: QuroMemoryEntry): String = buildString {
+        if (e.title.isNotBlank()) append(e.title).append(' ')
+        if (e.content.isNotBlank()) append(e.content).append(' ')
+        if (e.tags.isNotEmpty()) append(e.tags.joinToString(" ")).append(' ')
+        if (e.group.isNotBlank()) append(e.group)
+    }.toString()
 
     fun saveAll(list: List<QuroMemoryEntry>) {
         runCatching {

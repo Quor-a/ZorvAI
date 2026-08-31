@@ -67,6 +67,8 @@ class QuroToolRouter(allSpecs: List<QuroToolSpec>) {
             "linux_run", "linux_install", "linux_start", "linux_stop", "linux_status",
             "dev_env",
             "fluid_cloud_notify",
+            // 隔离沙箱 + 私有数据库只读查询（应用内免权限）
+            "sandbox", "private_db",
         )
 
         private val CATALOG_PARAMS_JSON = """{

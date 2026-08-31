@@ -228,6 +228,7 @@ class QuroAssistant(
             var prevCallSig: String? = null   // 上一轮工具调用签名，用于死循环检测
             var repeatStreak = 0
             var warnedForSig: String? = null  // 同一失败签名只提示一次，避免每条重复失败都再灌一条 [系统提示]
+            var concludedNudgeInjected = false // 防重复循环：是否已注入「请基于已有结果收尾」隐藏系统提示
             // 死循环精确检测（不误伤合法长任务）：用「滑动窗口内签名重复」区分 真·循环 与 合法多步探索。
             // 合法修复/排查任务不断发出「新」工具调用（读新文件、新命令），签名不重复 → 计数持续归零 → 不误杀；
             // 真·死循环反复发起「近期已做过」的调用（签名在窗口内重复出现）→ 计数累积 → 触发停止。
@@ -240,6 +241,19 @@ class QuroAssistant(
                 // 避免生成协程在「思考中」卡死无法中断（配合下方 client.chat 的取消透传）。
                 coroutineContext[Job]?.ensureActive()
                 round++
+                // 🔧 #loop-guard：连续多轮纯工具调用保护。终端/排查类任务下，模型易反复发起
+                // 全新探测命令（签名各不相同）而永不归结结论，跑到 roundLimit（云端 2000）仍不停、
+                // 对话框持续重复「测试终端」式文本。round 达阈值后注入一次隐藏系统提示要求收尾；
+                // 仍不止则到硬上限强制退出，避免无限循环刷屏。
+                if (round >= 16 && !concludedNudgeInjected) {
+                    concludedNudgeInjected = true
+                    store.add(QuroMessage(role = "system", content = "[系统提示] 你已连续执行了多步工具调用。请基于目前已有的全部工具结果直接给出最终结论或答复，不要再发起新的工具调用，除非用户明确要求继续。", hidden = true))
+                    emit()
+                }
+                if (round >= 80) {
+                    store.add(QuroMessage(role = "assistant", content = "（已自动停止：连续执行的工具调用过多，如需继续请明确告诉我。）"))
+                    break
+                }
                 // 任何一步抛异常都兜底成错误文本，绝不让协程崩掉导致界面「卡死在思考中」
                 // 🔧 MNN/llama 本地「乱恢复」根治（v1.0.49）：小型本地模型（1.2B~3B）在【无上限的历史】下
                 // 极易把较早轮次的内容当成当前指令「回放 / 续写」——表现为乱回复、继续一个早已完成的任务、

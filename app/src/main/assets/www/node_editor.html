@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>节点编辑器</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --node: #1e2330;
+    --node-border: #2c3346;
+    --accent: #4f8cff;
+    --accent2: #f5a623;
+    --text: #e6e9ef;
+    --muted: #8a93a6;
+    --edge: #5b6478;
+    --danger: #e5484d;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: var(--bg); color: var(--text); overflow: hidden;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    user-select: none; -webkit-user-select: none;
+  }
+  #app { display: flex; flex-direction: column; height: 100%; width: 100%; }
+
+  /* 顶部工具栏 */
+  #toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    padding: 8px 10px; background: var(--panel);
+    border-bottom: 1px solid var(--node-border);
+    flex: 0 0 auto;
+  }
+  #toolbar .group { display: flex; gap: 6px; align-items: center; }
+  #toolbar .sep { width: 1px; height: 22px; background: var(--node-border); margin: 0 4px; }
+  button.tb {
+    background: var(--node); color: var(--text); border: 1px solid var(--node-border);
+    border-radius: 8px; padding: 7px 11px; font-size: 13px; cursor: pointer;
+    line-height: 1; white-space: nowrap;
+  }
+  button.tb:hover { border-color: var(--accent); }
+  button.tb.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.tb.warn { border-color: var(--danger); color: var(--danger); }
+  select.tb {
+    background: var(--node); color: var(--text); border: 1px solid var(--node-border);
+    border-radius: 8px; padding: 7px 8px; font-size: 13px;
+  }
+
+  /* 画布 */
+  #stage {
+    position: relative; flex: 1 1 auto; overflow: auto;
+    background:
+      radial-gradient(circle, #20242f 1px, transparent 1px);
+    background-size: 22px 22px; background-color: var(--bg);
+    touch-action: none;
+  }
+  #canvas { position: relative; min-width: 2000px; min-height: 1400px; }
+  #edges {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 1; overflow: visible;
+  }
+  #edges path { stroke: var(--edge); stroke-width: 2.5; fill: none; }
+  #edges path.sel { stroke: var(--danger); stroke-width: 3; }
+  #edges path.temp { stroke: var(--accent); stroke-dasharray: 5 4; }
+
+  .node {
+    position: absolute; z-index: 2; min-width: 120px; max-width: 220px;
+    background: var(--node); border: 1.5px solid var(--node-border);
+    border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.35);
+    cursor: grab;
+  }
+  .node.sel { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79,140,255,.35), 0 4px 14px rgba(0,0,0,.35); }
+  .node .hd {
+    padding: 7px 10px; font-size: 12px; color: var(--muted);
+    border-bottom: 1px solid var(--node-border); border-radius: 10px 10px 0 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  }
+  .node .hd .tag { font-size: 10px; padding: 1px 6px; border-radius: 6px; background: #2a3142; color: var(--muted); }
+  .node .body {
+    padding: 10px; font-size: 13px; line-height: 1.4; color: var(--text);
+    min-height: 20px; outline: none; word-break: break-word;
+  }
+  .node .body[contenteditable="true"] { background: #11151d; cursor: text; }
+  .node.decision { border-color: var(--accent2); }
+  .node.decision .hd .tag { background: rgba(245,166,35,.18); color: var(--accent2); }
+  .node.start, .node.end { border-color: #43c59e; }
+  .node.start .hd .tag, .node.end .hd .tag { background: rgba(67,197,158,.18); color: #43c59e; }
+
+  .port {
+    position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--bg); border: 2px solid var(--accent); z-index: 3;
+    top: 50%; transform: translateY(-50%);
+  }
+  .port.in { left: -8px; }
+  .port.out { right: -8px; cursor: crosshair; border-color: var(--accent2); }
+  .port.out:hover { background: var(--accent2); }
+
+  /* 底部 Mermaid 面板 */
+  #bottom {
+    flex: 0 0 auto; background: var(--panel); border-top: 1px solid var(--node-border);
+    display: flex; flex-direction: column; max-height: 42%;
+  }
+  #bottom .tabbar { display: flex; gap: 4px; padding: 6px 8px 0; }
+  #bottom .tab {
+    padding: 6px 12px; font-size: 12px; color: var(--muted); cursor: pointer;
+    border: 1px solid transparent; border-bottom: none; border-radius: 8px 8px 0 0;
+  }
+  #bottom .tab.active { color: var(--text); background: var(--bg); border-color: var(--node-border); }
+  #bottom .pane { display: none; padding: 8px; gap: 8px; flex: 1; min-height: 0; }
+  #bottom .pane.active { display: flex; }
+  #mermaidSrc {
+    flex: 1; width: 100%; resize: none; background: #11151d; color: var(--text);
+    border: 1px solid var(--node-border); border-radius: 8px; padding: 8px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px;
+    line-height: 1.5;
+  }
+  #previewWrap { flex: 1; overflow: auto; background: #fff; border-radius: 8px; padding: 8px; }
+  #previewWrap .err { color: #e5484d; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+  #previewWrap svg { max-width: 100%; height: auto; display: block; }
+  .hint { font-size: 11px; color: var(--muted); padding: 2px 4px; }
+
+  /* 浮动提示 */
+  #toast {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+    background: rgba(0,0,0,.82); color: #fff; padding: 8px 14px; border-radius: 10px;
+    font-size: 13px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 99;
+  }
+  #toast.show { opacity: 1; }
+</style>
+<script src="mermaid.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <div class="group">
+      <select id="nodeType" class="tb">
+        <option value="start">开始</option>
+        <option value="process" selected>处理</option>
+        <option value="decision">判断</option>
+        <option value="io">输入/输出</option>
+        <option value="end">结束</option>
+      </select>
+      <button class="tb primary" id="addBtn">+ 添加节点</button>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <button class="tb" id="exportBtn">导出 Mermaid</button>
+      <button class="tb" id="importBtn">从文本导入</button>
+      <button class="tb" id="previewBtn">刷新预览</button>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <button class="tb" id="copyBtn">复制 Mermaid</button>
+      <button class="tb" id="saveBtn">保存到文件</button>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <button class="tb warn" id="delBtn">删除选中</button>
+      <button class="tb warn" id="clearBtn">清空</button>
+    </div>
+  </div>
+
+  <div id="stage">
+    <div id="canvas">
+      <svg id="edges"></svg>
+    </div>
+  </div>
+
+  <div id="bottom">
+    <div class="tabbar">
+      <div class="tab active" data-pane="src">Mermaid 源码</div>
+      <div class="tab" data-pane="prev">预览</div>
+    </div>
+    <div class="pane active" id="pane-src">
+      <textarea id="mermaidSrc" spellcheck="false" placeholder="点击「导出 Mermaid」生成，或在此粘贴 flowchart 语法后「从文本导入」"></textarea>
+    </div>
+    <div class="pane" id="pane-prev">
+      <div id="previewWrap"><div class="hint">点「刷新预览」渲染当前 Mermaid 源码</div></div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var canvas = document.getElementById('canvas');
+  var stage = document.getElementById('stage');
+  var edgesSvg = document.getElementById('edges');
+  var typeSel = document.getElementById('nodeType');
+  var srcArea = document.getElementById('mermaidSrc');
+  var previewWrap = document.getElementById('previewWrap');
+  var toastEl = document.getElementById('toast');
+
+  var nodes = [];   // {id, type, x, y, label}
+  var edges = [];   // {id, from, to}
+  var seq = 1;
+  var selectedNode = null;
+  var selectedEdge = null;
+
+  var TYPE_LABEL = { start: '开始', process: '处理', decision: '判断', io: '输入/输出', end: '结束' };
+
+  function uid(p) { return p + (seq++); }
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { toastEl.classList.remove('show'); }, 1600);
+  }
+
+  // ---------- 节点渲染 ----------
+  function renderNode(n) {
+    var el = document.getElementById(n.id);
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'node ' + n.type;
+      el.id = n.id;
+      el.dataset.id = n.id;
+      el.innerHTML =
+        '<div class="hd"><span class="ttl">' + TYPE_LABEL[n.type] + '</span><span class="tag">' + n.type + '</span></div>' +
+        '<div class="body" contenteditable="false"></div>' +
+        '<div class="port in"></div>' +
+        '<div class="port out"></div>';
+      canvas.appendChild(el);
+
+      el.querySelector('.body').textContent = n.label;
+
+      // 拖拽
+      el.addEventListener('pointerdown', function (e) {
+        if (e.target.classList.contains('port')) return;
+        if (e.target.classList.contains('body') && e.target.getAttribute('contenteditable') === 'true') return;
+        startDrag(e, n);
+      });
+      // 连线起点
+      el.querySelector('.port.out').addEventListener('pointerdown', function (e) {
+        e.stopPropagation(); startConnect(e, n);
+      });
+      // 连线终点（在节点任意位置松开都算接到该节点）
+      el.addEventListener('pointerup', function (e) {
+        if (connecting) finishConnect(n);
+      });
+      // 选中
+      el.addEventListener('pointerdown', function (e) {
+        if (e.target.classList.contains('port')) return;
+        selectNode(n);
+      });
+      // 双击改名
+      el.querySelector('.body').addEventListener('dblclick', function (e) {
+        e.stopPropagation();
+        var b = el.querySelector('.body');
+        b.setAttribute('contenteditable', 'true');
+        b.focus();
+        document.execCommand && document.getSelection && placeCaretEnd(b);
+      });
+      el.querySelector('.body').addEventListener('blur', function () {
+        var b = el.querySelector('.body');
+        b.setAttribute('contenteditable', 'false');
+        n.label = b.textContent.trim() || TYPE_LABEL[n.type];
+        b.textContent = n.label;
+      });
+    }
+    el.style.left = n.x + 'px';
+    el.style.top = n.y + 'px';
+    el.classList.toggle('sel', selectedNode === n.id);
+  }
+
+  function placeCaretEnd(el) {
+    var r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+
+  function renderAll() {
+    nodes.forEach(renderNode);
+    // 移除已删
+    Array.prototype.slice.call(canvas.querySelectorAll('.node')).forEach(function (el) {
+      if (!nodes.some(function (n) { return n.id === el.id; })) el.remove();
+    });
+    renderEdges();
+  }
+
+  function portPoint(n, side) {
+    var el = document.getElementById(n.id);
+    var w = el ? el.offsetWidth : 120;
+    var h = el ? el.offsetHeight : 44;
+    return side === 'in'
+      ? { x: n.x, y: n.y + h / 2 }
+      : { x: n.x + w, y: n.y + h / 2 };
+  }
+
+  function edgePath(a, b) {
+    var dx = Math.max(40, Math.abs(b.x - a.x) * 0.5);
+    return 'M ' + a.x + ' ' + a.y + ' C ' + (a.x + dx) + ' ' + a.y + ', ' + (b.x - dx) + ' ' + b.y + ', ' + b.x + ' ' + b.y;
+  }
+
+  function renderEdges() {
+    var byId = {};
+    nodes.forEach(function (n) { byId[n.id] = n; });
+    var html = '';
+    edges.forEach(function (e) {
+      var from = byId[e.from], to = byId[e.to];
+      if (!from || !to) return;
+      var a = portPoint(from, 'out'), b = portPoint(to, 'in');
+      html += '<path data-id="' + e.id + '" class="' + (selectedEdge === e.id ? 'sel' : '') + '" d="' + edgePath(a, b) + '"></path>';
+    });
+    if (connecting && connectTemp) {
+      html += '<path class="temp" d="' + edgePath(connectTemp.from, connectTemp.to) + '"></path>';
+    }
+    edgesSvg.innerHTML = html;
+    // 边点击选中
+    Array.prototype.slice.call(edgesSvg.querySelectorAll('path')).forEach(function (p) {
+      p.style.pointerEvents = 'stroke';
+      p.addEventListener('pointerdown', function (ev) {
+        ev.stopPropagation();
+        selectedEdge = p.dataset.id; selectedNode = null; renderAll();
+      });
+    });
+  }
+
+  // ---------- 选择 / 删除 ----------
+  function selectNode(n) { selectedNode = n.id; selectedEdge = null; renderAll(); }
+  function clearSelect() { selectedNode = null; selectedEdge = null; renderAll(); }
+
+  // ---------- 拖拽 ----------
+  var drag = null;
+  function startDrag(e, n) {
+    if (e.target.classList.contains('port')) return;
+    var rect = canvas.getBoundingClientRect();
+    drag = { id: n.id, dx: e.clientX - rect.left - n.x, dy: e.clientY - rect.top - n.y, moved: false };
+    try { e.target.setPointerCapture(e.pointerId); } catch (_) {}
+    window.addEventListener('pointermove', onDragMove);
+    window.addEventListener('pointerup', onDragUp);
+  }
+  function onDragMove(e) {
+    if (!drag) return;
+    var rect = canvas.getBoundingClientRect();
+    var n = nodes.find(function (x) { return x.id === drag.id; });
+    if (!n) return;
+    n.x = Math.max(0, e.clientX - rect.left - drag.dx);
+    n.y = Math.max(0, e.clientY - rect.top - drag.dy);
+    drag.moved = true;
+    renderNode(n); renderEdges();
+  }
+  function onDragUp() {
+    drag = null;
+    window.removeEventListener('pointermove', onDragMove);
+    window.removeEventListener('pointerup', onDragUp);
+  }
+
+  // ---------- 连线 ----------
+  var connecting = false, connectFrom = null, connectTemp = null;
+  function startConnect(e, n) {
+    connecting = true; connectFrom = n;
+    connectTemp = { from: portPoint(n, 'out'), to: portPoint(n, 'out') };
+    window.addEventListener('pointermove', onConnMove);
+    window.addEventListener('pointerup', onConnUp);
+  }
+  function onConnMove(e) {
+    if (!connecting) return;
+    var rect = canvas.getBoundingClientRect();
+    connectTemp.to = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    renderEdges();
+  }
+  function onConnUp() {
+    connecting = false; connectTemp = null;
+    window.removeEventListener('pointermove', onConnMove);
+    window.removeEventListener('pointerup', onConnUp);
+    renderEdges();
+  }
+  function finishConnect(target) {
+    if (!connectFrom || connectFrom.id === target.id) return;
+    if (edges.some(function (e) { return e.from === connectFrom.id && e.to === target.id; })) {
+      toast('已存在该连线'); return;
+    }
+    edges.push({ id: uid('e'), from: connectFrom.id, to: target.id });
+    connectFrom = null;
+    renderEdges();
+  }
+
+  // ---------- 增删 ----------
+  function addNode(type) {
+    var cx = stage.scrollLeft + stage.clientWidth / 2 - 70;
+    var cy = stage.scrollTop + stage.clientHeight / 2 - 30;
+    var n = { id: uid('n'), type: type, x: Math.max(0, cx), y: Math.max(0, cy), label: TYPE_LABEL[type] };
+    nodes.push(n); selectNode(n);
+    toast('已添加：' + TYPE_LABEL[type]);
+  }
+  function deleteSelected() {
+    if (selectedNode) {
+      nodes = nodes.filter(function (n) { return n.id !== selectedNode; });
+      edges = edges.filter(function (e) { return e.from !== selectedNode && e.to !== selectedNode; });
+      selectedNode = null; renderAll(); toast('已删除节点');
+    } else if (selectedEdge) {
+      edges = edges.filter(function (e) { return e.id !== selectedEdge; });
+      selectedEdge = null; renderAll(); toast('已删除连线');
+    } else {
+      toast('先选中节点或连线');
+    }
+  }
+  function clearAll() {
+    nodes = []; edges = []; selectedNode = null; selectedEdge = null; renderAll();
+    srcArea.value = ''; toast('已清空');
+  }
+
+  // ---------- Mermaid 导入导出 ----------
+  function sanitizeId(id) {
+    return id.replace(/[^A-Za-z0-9_]/g, '_');
+  }
+  function exportMermaid() {
+    if (!nodes.length) { toast('画布为空'); return ''; }
+    var lines = ['flowchart TD'];
+    var shape = { process: '[]', io: '[]', start: '([])', end: '([])', decision: '{}' };
+    nodes.forEach(function (n) {
+      var id = sanitizeId(n.id);
+      var lbl = (n.label || TYPE_LABEL[n.type]).replace(/"/g, "'");
+      lines.push('  ' + id + shape[n.type] + '["' + lbl + '"]');
+    });
+    edges.forEach(function (e) {
+      lines.push('  ' + sanitizeId(e.from) + ' --> ' + sanitizeId(e.to));
+    });
+    var txt = lines.join('\n');
+    srcArea.value = txt;
+    return txt;
+  }
+  function importMermaid(text) {
+    text = (text || srcArea.value).trim();
+    if (!text) { toast('没有可导入的文本'); return; }
+    var lines = text.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+    if (!lines.length) return;
+    // 去掉首行 graph/flowchart 声明
+    var defs = {}, newEdges = [];
+    var reDef = /^([A-Za-z0-9_]+)\s*(?:\[([^\]]*)\]|\(([^)]*)\)|\{([^}]*)\}|\[\(([^)]*)\)\]|\(\[([^\]]*)\]\))?/;
+    var reEdge = /^([A-Za-z0-9_]+)\s*-+->\s*(?:\|([^|]*)\|\s*)?([A-Za-z0-9_]+)/;
+    var order = [];
+    lines.forEach(function (line) {
+      if (/^(flowchart|graph)\b/i.test(line)) return;
+      var em = line.match(reEdge);
+      if (em) { newEdges.push({ from: em[1], to: em[3] }); return; }
+      var dm = line.match(reDef);
+      if (dm && dm[1]) {
+        var lbl = dm[2] || dm[3] || dm[4] || dm[5] || dm[6] || dm[1];
+        defs[dm[1]] = lbl;
+        order.push(dm[1]);
+      }
+    });
+    if (!order.length) { toast('未解析到节点'); return; }
+    // 重建
+    nodes = []; edges = []; selectedNode = null; selectedEdge = null; seq = 1;
+    var map = {};
+    var cols = Math.ceil(Math.sqrt(order.length));
+    order.forEach(function (oid, i) {
+      var type = /[?？]/.test(defs[oid]) ? 'decision' : 'process';
+      var n = {
+        id: uid('n'),
+        type: type,
+        x: 60 + (i % cols) * 230,
+        y: 60 + Math.floor(i / cols) * 130,
+        label: defs[oid]
+      };
+      map[oid] = n.id;
+      nodes.push(n);
+    });
+    newEdges.forEach(function (e) {
+      if (map[e.from] && map[e.to]) edges.push({ id: uid('e'), from: map[e.from], to: map[e.to] });
+    });
+    renderAll();
+    exportMermaid();
+    toast('已导入 ' + nodes.length + ' 个节点');
+  }
+
+  // ---------- 预览 ----------
+  function renderPreview() {
+    var txt = srcArea.value.trim();
+    if (!txt) { previewWrap.innerHTML = '<div class="hint">暂无源码</div>'; return; }
+    try {
+      if (typeof mermaid === 'undefined') { previewWrap.innerHTML = '<div class="err">mermaid.min.js 未加载</div>'; return; }
+      mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose', flowchart: { useMaxWidth: true } });
+      var id = 'p' + Date.now();
+      mermaid.render(id, txt).then(function (r) {
+        previewWrap.innerHTML = (r && r.svg) ? r.svg : ('' + r);
+      }).catch(function (err) {
+        previewWrap.innerHTML = '<div class="err">预览失败：\n' + (err && err.message ? err.message : err) + '</div>';
+      });
+    } catch (e) {
+      previewWrap.innerHTML = '<div class="err">预览失败：' + (e.message || e) + '</div>';
+    }
+  }
+
+  // ---------- Android 桥 ----------
+  function androidCopy(text) {
+    try { if (window.AndroidBridge && AndroidBridge.copyText) { AndroidBridge.copyText(text); return true; } } catch (_) {}
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text); return true; }
+    } catch (_) {}
+    return false;
+  }
+  function androidSave(filename, content) {
+    try { if (window.AndroidBridge && AndroidBridge.saveFile) { AndroidBridge.saveFile(filename, content); return true; } } catch (_) {}
+    return false;
+  }
+
+  // ---------- 按钮绑定 ----------
+  document.getElementById('addBtn').addEventListener('click', function () { addNode(typeSel.value); });
+  document.getElementById('exportBtn').addEventListener('click', function () { var t = exportMermaid(); toast(t ? '已生成 Mermaid 源码' : '画布为空'); });
+  document.getElementById('importBtn').addEventListener('click', function () { importMermaid(); });
+  document.getElementById('previewBtn').addEventListener('click', renderPreview);
+  document.getElementById('copyBtn').addEventListener('click', function () {
+    var t = srcArea.value || exportMermaid();
+    if (!t) return;
+    if (androidCopy(t)) toast('已复制到剪贴板'); else { srcArea.select(); toast('请手动复制（Ctrl+C）'); }
+  });
+  document.getElementById('saveBtn').addEventListener('click', function () {
+    var t = srcArea.value || exportMermaid();
+    if (!t) return;
+    var name = 'node-flow-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.mmd';
+    if (androidSave(name, t)) toast('已保存：' + name); else toast('当前环境不支持保存文件');
+  });
+  document.getElementById('delBtn').addEventListener('click', deleteSelected);
+  document.getElementById('clearBtn').addEventListener('click', clearAll);
+
+  // 底部 tab 切换
+  Array.prototype.slice.call(document.querySelectorAll('#bottom .tab')).forEach(function (t) {
+    t.addEventListener('click', function () {
+      document.querySelectorAll('#bottom .tab').forEach(function (x) { x.classList.remove('active'); });
+      document.querySelectorAll('#bottom .pane').forEach(function (x) { x.classList.remove('active'); });
+      t.classList.add('active');
+      document.getElementById('pane-' + t.dataset.pane).classList.add('active');
+      if (t.dataset.pane === 'prev') renderPreview();
+    });
+  });
+
+  // 画布空白处点击取消选择
+  stage.addEventListener('pointerdown', function (e) {
+    if (e.target === stage || e.target === canvas || e.target === edgesSvg) clearSelect();
+  });
+  // 键盘删除
+  window.addEventListener('keydown', function (e) {
+    if ((e.key === 'Delete' || e.key === 'Backspace')) {
+      var ae = document.activeElement;
+      if (ae && ae.getAttribute && ae.getAttribute('contenteditable') === 'true') return;
+      if (srcArea === document.activeElement) return;
+      e.preventDefault(); deleteSelected();
+    }
+  });
+
+  // 暴露给 Kotlin 侧调用
+  window.__getMermaid = function () { return exportMermaid(); };
+  window.__setMermaid = function (txt) { srcArea.value = txt || ''; importMermaid(); };
+  window.__addNode = function (type) { addNode(type || 'process'); };
+  window.__clear = function () { clearAll(); };
+
+  // 初始示例
+  (function seed() {
+    var a = { id: uid('n'), type: 'start', x: 80, y: 80, label: '开始' };
+    var b = { id: uid('n'), type: 'process', x: 80, y: 190, label: '处理数据' };
+    var c = { id: uid('n'), type: 'decision', x: 360, y: 190, label: '是否通过?' };
+    var d = { id: uid('n'), type: 'end', x: 640, y: 80, label: '结束' };
+    nodes.push(a, b, c, d);
+    edges.push({ id: uid('e'), from: a.id, to: b.id });
+    edges.push({ id: uid('e'), from: b.id, to: c.id });
+    edges.push({ id: uid('e'), from: c.id, to: d.id });
+    renderAll();
+  })();
+
+  try { if (window.AndroidBridge && AndroidBridge.onReady) AndroidBridge.onReady(); } catch (_) {}
+})();
+</script>
+</body>
+</html>

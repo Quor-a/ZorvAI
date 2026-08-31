@@ -372,6 +372,11 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(LinuxStartTool())
     r.register(LinuxStopTool())
     r.register(LinuxStatusTool())
+    r.register(LinuxPackageTool())   // 统一包管理：自动适配 apt/apk/dnf/pacman
+    // 隔离沙箱（应用私有目录隔离，路径穿越防护）
+    r.register(QuroSandboxTool())
+    // 应用私有数据库只读查询（应用私有目录隔离，只读安全）
+    r.register(QuroPrivateDbTool())
     // 媒体：百分百开源本地音乐 / 视频播放器（基于 Android 框架 MediaPlayer / 系统播放能力）
     r.register(LocalMusicPlayerTool())
     r.register(MusicPlayTool())
@@ -423,6 +428,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(VisualActionTool())     // 可视化操作弹窗
     r.register(VisualPopupTool())      // 自由可视化弹窗（固定UI组件）
     r.register(VisualCustomPopupTool()) // AI自写UI可视化弹窗（完全自定义HTML）
+    // 动态 UI 工具：AI 输出 quro-ui DSL 代码块 → 解析 → Compose 原生渲染（可交互、可回传表单值）
+    r.register(UiDslSpecTool())     // 拉取 DSL 规范，避免长 schema 常驻系统提示词
+    r.register(UiValidateTool())    // 输出前自检，把「渲染失败」变成事前修正
     // UI 导航工具集：让 AI 能操控自己的界面（ui_* 命名规范）
     registerUiTools(r)
     // 流体云工具：控制OPPO流体云，显示状态栏胶囊和卡片
@@ -440,6 +448,17 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
             r.skillToolsEnabled = cfg.skillToolsEnabled
             r.maxSkillTools = cfg.maxSkillTools
         }
+    }
+    // 高级能力工具集。
+    // 这一批此前只是「独立组件」：有完整业务逻辑，但既没实现 QuroTool 契约也没注册，
+    // 因此从未进入过模型的工具集——功能写了等于没写。现已补齐契约并在此注册。
+    context?.let { ctx ->
+        r.register(QuroMultiProviderTool(ctx))   // multi_provider  ：多提供商配置 / 故障转移 / 健康检查
+        r.register(QuroHeartbeatTool(ctx))       // heartbeat       ：自主心跳与系统自检报告
+        r.register(QuroLocalModelTool(ctx))      // local_model     ：本地模型下载 / 加载 / 推理
+        r.register(QuroVirtualDisplayTool(ctx))  // virtual_display ：虚拟显示器与后台自动化
+        r.register(QuroTaskSchedulerTool(ctx))   // task_scheduler  ：定时任务调度（Cron）
+        r.register(QuroDataManagerTool(ctx))     // data_manager    ：数据导出 / 导入 / 加密备份
     }
     // 工具能力目录以真实注册表为单一真相源动态生成（修复「分组目录残缺→AI 查不到/不主动用工具」）
     // 用 fullSpecs()（内置全部 + 技能工具），与模型实际下发集合严格一致（core/full 模式下目录==可调用全集）
