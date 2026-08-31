@@ -1465,8 +1465,8 @@ fun ChatScreen(
         val fetchedGroup: ModelGroup? = when (val ml = modelList) {
             is QuroModelListResult.Success -> ModelGroup(
                 "可用模型 (API)",
-                ml.models.map { id ->
-                    ChatModel(name = id, id = id, desc = "来自 ${cfg.baseUrl}", provider = cfg.provider.ifBlank { "自定义" }, mark = id.firstOrNull()?.uppercase() ?: "M")
+                ml.models.map { info ->
+                    ChatModel(name = info.id, id = info.id, desc = "来自 ${cfg.baseUrl}", provider = cfg.provider.ifBlank { "自定义" }, mark = info.id.firstOrNull()?.uppercase() ?: "M")
                 }
             )
             else -> null

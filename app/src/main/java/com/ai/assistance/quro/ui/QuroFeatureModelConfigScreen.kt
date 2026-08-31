@@ -148,7 +148,7 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
             models = seed
             scope.launch {
                 when (val r = QuroModelListFetcher(connectTimeout = 8, readTimeout = 15).fetch(g.baseUrl, g.apiKey)) {
-                    is QuroModelListResult.Success -> { models = (seed + r.models).distinct(); loading = false }
+                    is QuroModelListResult.Success -> { models = (seed + r.models.map { it.id }).distinct(); loading = false }
                     is QuroModelListResult.Error -> { error = r.message; models = seed; loading = false }
                 }
             }

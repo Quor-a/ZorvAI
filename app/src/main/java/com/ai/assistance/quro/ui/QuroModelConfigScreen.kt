@@ -528,10 +528,25 @@ fun QuroModelConfigForm(
                     text = {
                         if (ml.models.isEmpty()) Text("未获取到模型，请检查地址 / 密钥。")
                         else LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                            items(ml.models) { id ->
-                                TextButton(onClick = { vm.update { copy(model = id) }; vm.clearModelList() },
+                            items(ml.models) { info ->
+                                TextButton(onClick = {
+                                    vm.update {
+                                        // 总开关：把从 /models 接口取到的真实上下文长度写回 contextWindow，
+                                        // 不再硬编码 1048576；并记入 modelContextLength 作为单次输入硬上限来源。
+                                        copy(
+                                            model = info.id,
+                                            modelContextLength = info.contextLength,
+                                            contextWindow = if (info.contextLength > 0) info.contextLength else this.contextWindow,
+                                        )
+                                    }
+                                    vm.clearModelList()
+                                },
                                     modifier = Modifier.fillMaxWidth()) {
-                                    Text(text = id, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                                    Text(
+                                        text = if (info.contextLength > 0) "${info.id}  (ctx ${info.contextLength})" else info.id,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Start
+                                    )
                                 }
                             }
                         }

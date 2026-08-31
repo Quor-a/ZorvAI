@@ -1,6 +1,8 @@
 package com.ai.assistance.quro.core.linux
 
 import android.content.Context
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.os.Build
 import android.util.Log
@@ -163,8 +165,22 @@ object QuroLinuxEnv {
     fun tmpPath(context: Context): String =
         File(sandboxDir(context), "tmp").absolutePath
 
-    /** 设备共享存储（/sdcard，即 /storage/emulated/0）宿主路径，绑进 proot 后沙箱内可见为 /sdcard。 */
+    /**
+     * 设备共享存储（/sdcard，即 /storage/emulated/0）宿主路径，绑进 proot 后沙箱内可见为 /sdcard。
+     * 参考 Agora：仅在已获「所有文件访问」权限时才返回路径并真正 bind；否则返回 null 跳过挂载。
+     * 没有该权限时即便 proot bind 成功，沙箱内访问 DCIM/Download/Pictures 等子目录仍会 EACCES
+     * （Android 11+ scoped storage），等于「共享存储没挂上」。用权限闸门保证「挂载即真实可用」。
+     */
     fun sharedStorageHostDir(context: Context): File? {
+        val accessible = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+：全文件系统 appop 特殊权限 MANAGE_EXTERNAL_STORAGE
+            android.os.Environment.isExternalStorageManager()
+        } else {
+            // Android 10-：分区存储下需 READ/WRITE_EXTERNAL_STORAGE
+            context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED ||
+            context.checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
+        if (!accessible) return null
         val f = android.os.Environment.getExternalStorageDirectory()
         return if (f != null && f.canRead()) f else null
     }
@@ -870,6 +886,7 @@ object QuroLinuxEnv {
             "--rootfs=$rootfs",
             "--link2symlink",  // 添加 link2symlink 支持（参考上游 proot 实现）
             "--bind=/dev",
+            "--bind=/dev/urandom:/dev/random",  // 参考 Agora：将 /dev/random 映射到 urandom，避免应用读 /dev/random 阻塞
             "--bind=/proc",
             "--bind=/sys",
             "--bind=$home:/root",
@@ -1198,6 +1215,7 @@ object QuroLinuxEnv {
                 proot,
                 "--rootfs=$rootfs",
                 "--bind=/dev",
+                "--bind=/dev/urandom:/dev/random",  // 参考 Agora：/dev/random → urandom
                 "--bind=/proc",
                 "--bind=/sys",
                 "--bind=$home:/root",
@@ -1401,6 +1419,8 @@ object QuroLinuxEnv {
             "--rootfs=${st.rootfsPath}",
             "--link2symlink",  // 添加 link2symlink 支持（参考上游 proot 实现）
             "--bind=/dev",
+            "--bind=/dev/urandom:/dev/random",  // 参考 Agora：/dev/random → urandom
+
             "--bind=/proc",
             "--bind=/sys",
             "--bind=${homePath(context)}:/root",
