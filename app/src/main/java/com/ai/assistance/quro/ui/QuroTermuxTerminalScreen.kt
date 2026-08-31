@@ -73,6 +73,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,6 +82,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.SoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -103,19 +106,52 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // ═══════════════════════════════════════════════════════════════
-// 终端界面 v3 —— 全功能版
+// 终端界面 v4 —— 双终端版（融合 VM + Kai 本地）
 //
-// 新增功能：
-//  - 命令历史（上下键 / 按钮导航）
-//  - 快捷命令面板（系统/包管理/开发/网络/文件分类）
-//  - 更多特殊按键（方向键、Ctrl组合、括号引号）
-//  - 输出搜索（实时高亮匹配行）
-//  - 一键复制输出 / 粘贴到输入
-//  - 字体大小可调
-//  - 日志导出
-//  - 会话管理增强（重命名、PID显示）
-//  - 设置面板
+// 设计：
+//  - 双窗格终端：左窗格「VM/Linux 融合」(VM/pKVM/AVF/QEMU 优先，失败回退 proot)，
+//    右窗格「Kai 终端」(com.inspiredandroid.kai 风格，强制 proot 本地)。
+//  - 顶栏「⇆ 单/双」切换单窗格 / 双窗格；点任一窗格徽章将其设为活动窗格。
+//  - 两窗格完全独立：各自输出、输入、命令历史、特殊键、复制。
+//  - 顶栏操作按钮（环境/快捷/搜索/中断/清屏）作用于「活动窗格」。
+//  - VM 资产（qemu/kernel/rootfs/initramfs）到位即左窗格自动跑真内核；
+//    缺失则左窗格也回退 proot，终端始终可用。
 // ═══════════════════════════════════════════════════════════════
+
+/** 单个窗格的可变状态集合（与 Compose 重组解耦，便于双窗格复用）。 */
+private class PaneState(
+    val session: MutableState<QuroShellSession?>,
+    val input: MutableState<TextFieldValue>,
+    val listState: androidx.compose.foundation.lazy.LazyListState,
+    val history: SnapshotStateList<String>,
+    val histIdx: MutableState<Int>,
+    val lastCopiedLine: MutableState<Int>,
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun rememberPaneState(
+    context: android.content.Context,
+    scope: kotlinx.coroutines.CoroutineScope,
+    vmFirst: Boolean,
+): PaneState {
+    val session = remember { mutableStateOf<QuroShellSession?>(null) }
+    val input = remember { mutableStateOf(TextFieldValue("")) }
+    val listState = rememberLazyListState()
+    val history = remember { mutableStateListOf<String>() }
+    val histIdx = remember { mutableStateOf(-1) }
+    val lastCopiedLine = remember { mutableStateOf(-1) }
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            if (!QuroLinuxEnv.probeLenient(context).available) {
+                QuroLinuxEnv.ensureInstalledBlocking(context)
+            }
+            session.value = if (vmFirst) QuroShellSession.create(context) else QuroShellSession.createLocal(context)
+        }
+    }
+    DisposableEffect(Unit) { onDispose { session.value?.destroy() } }
+    return PaneState(session, input, listState, history, histIdx, lastCopiedLine)
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -124,10 +160,12 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
 
-    // ═══════════ 核心状态 ═══════════
-    var shellSession by remember { mutableStateOf<QuroShellSession?>(null) }
-    var inputText by remember { mutableStateOf(TextFieldValue("")) }
-    val listState = rememberLazyListState()
+    // ═══════════ 双窗格状态 ═══════════
+    val paneA = rememberPaneState(context, scope, vmFirst = true)   // 左：VM/Linux 融合
+    val paneB = rememberPaneState(context, scope, vmFirst = false)  // 右：Kai 本地
+    var isDual by remember { mutableStateOf(true) }
+    var activePane by remember { mutableStateOf(0) }
+    fun active(): PaneState = if (activePane == 0) paneA else paneB
 
     // ═══════════ 面板开关 ═══════════
     var showDevEnvMenu by remember { mutableStateOf(false) }
@@ -143,38 +181,12 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
     val sandboxState by QuroLinuxEnv.state.collectAsState()
     val sourceManager = remember { SourceManager(context) }
 
-    // ═══════════ 命令历史 ═══════════
-    val commandHistory = remember { mutableStateListOf<String>() }
-    var historyIndex by remember { mutableIntStateOf(-1) }
-
     // ═══════════ 设置 ═══════════
     var fontSize by remember { mutableFloatStateOf(12f) }
     var showLineNumbers by remember { mutableStateOf(false) }
 
     // ═══════════ 搜索 ═══════════
     var searchQuery by remember { mutableStateOf("") }
-    var searchMatchCount by remember { mutableIntStateOf(0) }
-
-    // ═══════════ 剪贴板 ═══════════
-    var lastCopiedLine by remember { mutableIntStateOf(-1) }
-
-    // ═══════════ 创建初始会话 ═══════════
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            if (!QuroLinuxEnv.probeLenient(context).available) {
-                QuroLinuxEnv.ensureInstalledBlocking(context)
-            }
-            shellSession = QuroShellSession.create(context)
-        }
-    }
-
-    // ═══════════ 自动滚动到底部 ═══════════
-    val lines = shellSession?.lines
-    LaunchedEffect(lines?.size) {
-        if (lines != null && lines.isNotEmpty() && searchQuery.isBlank()) {
-            listState.animateScrollToItem(lines.size - 1)
-        }
-    }
 
     // ═══════════ 定时刷新会话列表 ═══════════
     LaunchedEffect(Unit) {
@@ -184,110 +196,20 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
         }
     }
 
-    // ═══════════ 搜索匹配计数 ═══════════
-    LaunchedEffect(searchQuery, lines?.size) {
-        if (searchQuery.isNotBlank() && lines != null) {
-            searchMatchCount = lines.count { it.contains(searchQuery, ignoreCase = true) }
-        } else {
-            searchMatchCount = 0
-        }
-    }
-
-    // ═══════════ 退出清理 ═══════════
-    DisposableEffect(Unit) {
-        onDispose { shellSession?.destroy() }
-    }
-
-    // ═══════════ 会话切换 ═══════════
-    fun switchSession(newSession: QuroShellSession?) {
-        shellSession?.destroy()
-        shellSession = newSession
-    }
-
-    fun createNewSession() {
+    // ═══════════ 重建活动窗格会话（顶栏「新会话」） ═══════════
+    fun recreateActivePane() {
         scope.launch {
             withContext(Dispatchers.IO) {
-                val old = shellSession
-                val newSession = QuroShellSession.create(context)
-                switchSession(newSession)
+                val p = if (activePane == 0) paneA else paneB
+                val old = p.session.value
+                val newS = if (activePane == 0) QuroShellSession.create(context) else QuroShellSession.createLocal(context)
+                p.session.value = newS
+                p.history.clear()
+                p.histIdx.value = -1
+                p.input.value = TextFieldValue("")
                 old?.destroy()
                 sessionList = QuroTerminalSessionManager.listSessions()
             }
-        }
-    }
-
-    // ═══════════ 发送命令 ═══════════
-    fun sendCommand() {
-        val session = shellSession ?: return
-        val cmd = inputText.text.trim()
-        if (cmd.isEmpty()) return
-        if (session.busy) {
-            // busy = 命令在跑（等用户输入），走 sendKey 直接喂字符，不加哨兵
-            session.sendRaw(cmd)
-        } else {
-            // 空闲 = 等新命令，走 sendCommand 加哨兵
-            if (commandHistory.isEmpty() || commandHistory.last() != cmd) {
-                commandHistory.add(cmd)
-            }
-            historyIndex = -1
-            session.sendCommand(cmd)
-        }
-        inputText = TextFieldValue("")
-        keyboardController?.hide()
-    }
-
-    // ═══════════ 历史导航 ═══════════
-    fun navigateHistoryUp() {
-        if (commandHistory.isEmpty()) return
-        val newIndex = if (historyIndex < 0) commandHistory.size - 1 else maxOf(0, historyIndex - 1)
-        historyIndex = newIndex
-        inputText = TextFieldValue(commandHistory[newIndex])
-    }
-
-    fun navigateHistoryDown() {
-        if (historyIndex < 0) return
-        val newIndex = historyIndex + 1
-        if (newIndex >= commandHistory.size) {
-            historyIndex = -1
-            inputText = TextFieldValue("")
-        } else {
-            historyIndex = newIndex
-            inputText = TextFieldValue(commandHistory[newIndex])
-        }
-    }
-
-    // ═══════════ 复制输出 ═══════════
-    fun copyAllOutput() {
-        val allText = lines?.joinToString("\n") ?: return
-        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("terminal output", allText))
-        Toast.makeText(context, "已复制全部输出", Toast.LENGTH_SHORT).show()
-    }
-
-    fun copySingleLine(index: Int) {
-        if (lines == null || index >= lines.size) return
-        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("line", lines[index]))
-        lastCopiedLine = index
-        Toast.makeText(context, "已复制第 ${index + 1} 行", Toast.LENGTH_SHORT).show()
-    }
-
-    fun pasteFromClipboard() {
-        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        val clip = clipboard.primaryClip
-        if (clip != null && clip.itemCount > 0) {
-            val text = clip.getItemAt(0).text?.toString() ?: return
-            inputText = TextFieldValue(inputText.text + text)
-        }
-    }
-
-    // ═══════════ 导出日志 ═══════════
-    fun exportLog() {
-        val path = shellSession?.exportLog()
-        if (path != null) {
-            Toast.makeText(context, "日志已保存: $path", Toast.LENGTH_LONG).show()
-        } else {
-            Toast.makeText(context, "导出失败", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -295,7 +217,7 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Color(0xFF0C0C0C))) {
         Column(Modifier.fillMaxSize()) {
 
-            // ═══════════ 顶栏第一行：返回 + 模式 + cwd + 设置 ═══════════
+            // ═══════════ 顶栏第一行：返回 + 双窗格徽章 + 单/双 + 设置 ═══════════
             Row(
                 Modifier.fillMaxWidth().height(36.dp).background(Color(0xFF1B1B1B)).padding(horizontal = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -303,39 +225,36 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                 IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Filled.ArrowBack, "返回", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
-                // 模式徽章
-                val (modeText, modeColor) = when (shellSession?.mode) {
-                    ShellMode.VM -> "VM/Linux" to Color(0xFF8AB4F8)
-                    ShellMode.LINUX -> "proot/Linux" to Color(0xFF7BE0A0)
-                    ShellMode.DEVICE -> "设备 sh" to Color(0xFFFFD700)
-                    null -> "初始化…" to Color(0xFF666666)
-                }
-                Box(
-                    Modifier.clip(RoundedCornerShape(4.dp)).background(modeColor.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(modeText, color = modeColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                // 窗格 A 徽章
+                PaneBadge(paneA, "VM/Linux 融合", activePane == 0) { activePane = 0 }
+                if (isDual) {
+                    Spacer(Modifier.width(4.dp))
+                    // 窗格 B 徽章
+                    PaneBadge(paneB, "Kai 终端", activePane == 1) { activePane = 1 }
                 }
                 Spacer(Modifier.width(4.dp))
-                // cwd（截断）
-                val cwd = shellSession?.cwdState
+                // 活动窗格 cwd（截断）
+                val cwd = active().session.value?.cwdState
                 if (!cwd.isNullOrBlank()) {
                     val shortCwd = cwd.substringAfterLast("/files", cwd).let { if (it.length > 30) "…" + it.takeLast(29) else it }
                     Text(
                         shortCwd, color = Color(0xFF9CC7FF), fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                     )
                 } else {
                     Spacer(Modifier.weight(1f))
                 }
-                // 右侧小按钮
+                // 单/双切换
+                IconButton(onClick = { isDual = !isDual }, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Filled.Build, if (isDual) "切单窗格" else "切双窗格", tint = Color(0xFF9CC7FF), modifier = Modifier.size(16.dp))
+                }
                 IconButton(onClick = { showSettings = !showSettings }, modifier = Modifier.size(28.dp)) {
                     Icon(Icons.Filled.Settings, "设置", tint = Color(0xFF999999), modifier = Modifier.size(16.dp))
                 }
             }
 
-            // ═══════════ 顶栏第二行：操作按钮 ═══════════
+            // ═══════════ 顶栏第二行：操作按钮（作用于活动窗格） ═══════════
             Row(
                 Modifier.fillMaxWidth().height(32.dp).background(Color(0xFF151515)).padding(horizontal = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -346,8 +265,9 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                 SmallButton("📦 快捷") { showQuickCmds = !showQuickCmds }
                 SmallButton("🔍 搜索") { showSearchBar = !showSearchBar }
                 SmallButton("⬆ 下载") { showReplaceDialog = true }
-                SmallButton("⏹ 中断") { scope.launch { shellSession?.interrupt() } }
-                SmallButton("🗑 清屏") { shellSession?.clear() }
+                SmallButton("⏹ 中断") { scope.launch { active().session.value?.interrupt() } }
+                SmallButton("🗑 清屏") { active().session.value?.clear() }
+                SmallButton("➕ 新") { recreateActivePane() }
             }
 
             // ═══════════ 开发环境菜单 ═══════════
@@ -357,7 +277,7 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                     onDismiss = { showDevEnvMenu = false },
                     onStatus = { devEnvStatus = it },
                     sourceManager = sourceManager,
-                    session = shellSession,
+                    session = active().session.value,
                 )
             }
 
@@ -388,10 +308,17 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                         Spacer(Modifier.width(4.dp))
                         Text("显示行号", color = Color(0xFFCCCCCC), fontSize = 11.sp)
                         Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { exportLog() }) {
+                        TextButton(onClick = { active().session.value?.exportLog()?.let { p ->
+                            Toast.makeText(context, "日志已保存: $p", Toast.LENGTH_LONG).show()
+                        } ?: Toast.makeText(context, "导出失败", Toast.LENGTH_SHORT).show() }) {
                             Text("📄 导出日志", fontSize = 11.sp, color = Color(0xFF7BE0A0))
                         }
-                        TextButton(onClick = { copyAllOutput() }) {
+                        TextButton(onClick = {
+                            val all = active().session.value?.lines?.joinToString("\n") ?: return@TextButton
+                            val cb = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            cb.setPrimaryClip(android.content.ClipData.newPlainText("terminal output", all))
+                            Toast.makeText(context, "已复制全部输出", Toast.LENGTH_SHORT).show()
+                        }) {
                             Text("📋 复制全部", fontSize = 11.sp, color = Color(0xFF9CC7FF))
                         }
                     }
@@ -414,15 +341,11 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                         singleLine = true,
                         decorationBox = { inner ->
                             Box {
-                                if (searchQuery.isEmpty()) Text("搜索输出…", color = Color(0xFF555555), fontSize = 12.sp)
+                                if (searchQuery.isEmpty()) Text("搜索活动窗格输出…", color = Color(0xFF555555), fontSize = 12.sp)
                                 inner()
                             }
                         },
                     )
-                    Spacer(Modifier.width(6.dp))
-                    if (searchQuery.isNotBlank()) {
-                        Text("$searchMatchCount 匹配", color = Color(0xFFFFD700), fontSize = 10.sp)
-                    }
                     IconButton(onClick = { searchQuery = ""; showSearchBar = false }, modifier = Modifier.size(24.dp)) {
                         Icon(Icons.Filled.Close, "关闭搜索", tint = Color(0xFF666666), modifier = Modifier.size(14.dp))
                     }
@@ -478,111 +401,39 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
             // ═══════════ 快捷命令面板 ═══════════
             AnimatedVisibility(visible = showQuickCmds, enter = expandVertically(), exit = shrinkVertically()) {
                 QuickCommandsPanel(
-                    session = shellSession,
+                    session = active().session.value,
                     sourceManager = sourceManager,
                     onStatus = { devEnvStatus = it },
                     onDismiss = { showQuickCmds = false },
                 )
             }
 
-            // ═══════════ 终端输出 ═══════════
-            val currentLines = shellSession?.lines
-            val searchLower = searchQuery.lowercase()
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 4.dp),
-            ) {
-                if (currentLines != null) {
-                    items(currentLines.size) { idx ->
-                        val line = currentLines[idx]
-                        val isCopied = idx == lastCopiedLine
-                        val isSearchMatch = searchQuery.isNotBlank() && line.lowercase().contains(searchLower)
-
-                        // 输出行：点击复制
-                        Row(
-                            Modifier.fillMaxWidth().let { mod ->
-                                mod.clickable { copySingleLine(idx) }
-                            }.let { mod ->
-                                if (isSearchMatch) mod.background(Color(0xFF3D3500).copy(alpha = 0.4f))
-                                else mod
-                            }.padding(horizontal = 4.dp, vertical = 1.dp),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            // 行号
-                            if (showLineNumbers) {
-                                Text(
-                                    text = "${idx + 1}".padStart(4),
-                                    color = Color(0xFF555555), fontSize = (fontSize - 2).sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    modifier = Modifier.width(32.dp).padding(end = 4.dp),
-                                )
-                            }
-                            // 行内容（颜色编码）
-                            val lineColor = when {
-                                line.contains("error", ignoreCase = true) || line.contains("错误", ignoreCase = true) -> Color(0xFFFF6B6B)
-                                line.contains("warning", ignoreCase = true) || line.contains("警告", ignoreCase = true) -> Color(0xFFFFD700)
-                                line.startsWith("quro@") || line.startsWith("$") || line.startsWith("#") -> Color(0xFF7BE0A0)
-                                line.startsWith("—") -> Color(0xFF666666)
-                                line.startsWith("[router]") -> Color(0xFFBB86FC)
-                                line.startsWith("⚠") -> Color(0xFFFF6B6B)
-                                line.startsWith("✓") || line.contains("完成") -> Color(0xFF7BE0A0)
-                                else -> Color(0xFFCCCCCC)
-                            }
-                            Text(
-                                text = line, color = lineColor,
-                                fontSize = fontSize.sp, fontFamily = FontFamily.Monospace,
-                                lineHeight = (fontSize + 4).sp,
-                                modifier = Modifier.weight(1f),
-                            )
-                            // 复制指示
-                            if (isCopied) {
-                                Icon(Icons.Filled.ContentCopy, "已复制", tint = Color(0xFF7BE0A0), modifier = Modifier.size(12.dp).padding(start = 2.dp))
-                            }
-                        }
-                    }
-                } else {
-                    item {
-                        Text("正在启动终端…", color = Color(0xFF666666), fontSize = fontSize.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(vertical = 8.dp))
-                    }
+            // ═══════════ 双 / 单窗格终端区 ═══════════
+            if (isDual) {
+                Row(Modifier.fillMaxWidth().weight(1f)) {
+                    TerminalPane(
+                        pane = paneA, role = "VM/Linux 融合", isActive = activePane == 0, onFocus = { activePane = 0 },
+                        fontSize = fontSize, showLineNumbers = showLineNumbers, searchQuery = searchQuery,
+                        keyboardController = keyboardController, scope = scope, context = context, sourceManager = sourceManager,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Divider(color = Color(0xFF000000), thickness = 1.dp)
+                    TerminalPane(
+                        pane = paneB, role = "Kai 终端", isActive = activePane == 1, onFocus = { activePane = 1 },
+                        fontSize = fontSize, showLineNumbers = showLineNumbers, searchQuery = searchQuery,
+                        keyboardController = keyboardController, scope = scope, context = context, sourceManager = sourceManager,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
+            } else {
+                TerminalPane(
+                    pane = active(), role = if (activePane == 0) "VM/Linux 融合" else "Kai 终端",
+                    isActive = true, onFocus = { },
+                    fontSize = fontSize, showLineNumbers = showLineNumbers, searchQuery = searchQuery,
+                    keyboardController = keyboardController, scope = scope, context = context, sourceManager = sourceManager,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
             }
-
-            // ═══════════ 特殊按键栏 ═══════════
-            SpecialKeysBar(
-                onKey = { seq -> shellSession?.sendKey(seq) },
-                fontSize = fontSize,
-            )
-
-            // ═══════════ 操作确认栏（busy 时显示 Y/N/Enter/Tab，走 sendKey 绕过 busy 锁） ═══════════
-            val isBusy = shellSession?.busy == true
-            AnimatedVisibility(visible = isBusy, enter = expandVertically(), exit = shrinkVertically()) {
-                Row(
-                    Modifier.fillMaxWidth().background(Color(0xFF1A0A0A)).padding(horizontal = 6.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text("⏳ 等待输入:", color = Color(0xFFFFD700), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    ConfirmButton("Y 确认") { shellSession?.sendKey("y\n") }
-                    ConfirmButton("N 取消") { shellSession?.sendKey("n\n") }
-                    ConfirmButton("Enter ↵") { shellSession?.sendKey("\n") }
-                    ConfirmButton("Tab ⇥") { shellSession?.sendKey("\t") }
-                    ConfirmButton("Ctrl+C") { shellSession?.sendKey("\u0003") }
-                }
-            }
-
-            // ═══════════ 输入栏 ═══════════
-            InputBar(
-                inputText = inputText,
-                onInputChange = { inputText = it },
-                isBusy = shellSession?.busy == true,
-                isEnabled = shellSession != null,
-                onSend = { sendCommand() },
-                onHistoryUp = { navigateHistoryUp() },
-                onHistoryDown = { navigateHistoryDown() },
-                onPaste = { pasteFromClipboard() },
-                historySize = commandHistory.size,
-                historyIndex = historyIndex,
-            )
         }
 
         // ═══════════ 会话管理面板 ═══════════
@@ -590,7 +441,7 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
             SessionPanel(
                 sessions = sessionList,
                 onDismiss = { showSessionPanel = false },
-                onCreateNew = { createNewSession() },
+                onCreateNew = { recreateActivePane() },
                 onDestroy = { id ->
                     scope.launch {
                         QuroTerminalSessionManager.destroySession(id)
@@ -605,6 +456,207 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                 },
             )
         }
+    }
+}
+
+// ═══════════ 窗格徽章（可点击设为活动） ═══════════
+@Composable
+private fun PaneBadge(pane: PaneState, role: String, isActive: Boolean, onFocus: () -> Unit) {
+    val (modeText, modeColor) = when (pane.session.value?.mode) {
+        ShellMode.VM -> "VM/Linux" to Color(0xFF8AB4F8)
+        ShellMode.LINUX -> "proot/Linux" to Color(0xFF7BE0A0)
+        ShellMode.DEVICE -> "设备 sh" to Color(0xFFFFD700)
+        null -> "初始化…" to Color(0xFF666666)
+    }
+    Box(
+        Modifier.clip(RoundedCornerShape(4.dp))
+            .background(modeColor.copy(alpha = if (isActive) 0.22f else 0.10f))
+            .clickable { onFocus() }
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Text(modeText, color = modeColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+// ═══════════ 单窗格终端（输出 + 特殊键 + 输入，全部自包含） ═══════════
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TerminalPane(
+    pane: PaneState,
+    role: String,
+    isActive: Boolean,
+    onFocus: () -> Unit,
+    fontSize: Float,
+    showLineNumbers: Boolean,
+    searchQuery: String,
+    keyboardController: SoftwareKeyboardController?,
+    scope: kotlinx.coroutines.CoroutineScope,
+    context: android.content.Context,
+    sourceManager: SourceManager,
+    modifier: Modifier = Modifier,
+) {
+    val session = pane.session.value
+    val lines = session?.lines
+    val listState = pane.listState
+    val searchLower = searchQuery.lowercase()
+
+    // 自动滚动到底部
+    LaunchedEffect(lines?.size) {
+        if (lines != null && lines.isNotEmpty() && searchQuery.isBlank()) {
+            listState.animateScrollToItem(lines.size - 1)
+        }
+    }
+
+    fun sendCommand() {
+        val s = pane.session.value ?: return
+        val cmd = pane.input.value.text.trim()
+        if (cmd.isEmpty()) return
+        if (s.busy) {
+            s.sendRaw(cmd)
+        } else {
+            if (pane.history.isEmpty() || pane.history.last() != cmd) pane.history.add(cmd)
+            pane.histIdx.value = -1
+            s.sendCommand(cmd)
+        }
+        pane.input.value = TextFieldValue("")
+        keyboardController?.hide()
+    }
+    fun navigateHistoryUp() {
+        if (pane.history.isEmpty()) return
+        val ni = if (pane.histIdx.value < 0) pane.history.size - 1 else maxOf(0, pane.histIdx.value - 1)
+        pane.histIdx.value = ni
+        pane.input.value = TextFieldValue(pane.history[ni])
+    }
+    fun navigateHistoryDown() {
+        if (pane.histIdx.value < 0) return
+        val ni = pane.histIdx.value + 1
+        if (ni >= pane.history.size) {
+            pane.histIdx.value = -1
+            pane.input.value = TextFieldValue("")
+        } else {
+            pane.histIdx.value = ni
+            pane.input.value = TextFieldValue(pane.history[ni])
+        }
+    }
+    fun copySingleLine(idx: Int) {
+        if (lines == null || idx >= lines.size) return
+        val cb = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cb.setPrimaryClip(android.content.ClipData.newPlainText("line", lines[idx]))
+        pane.lastCopiedLine.value = idx
+        Toast.makeText(context, "已复制第 ${idx + 1} 行", Toast.LENGTH_SHORT).show()
+    }
+    fun pasteFromClipboard() {
+        val cb = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clip = cb.primaryClip
+        if (clip != null && clip.itemCount > 0) {
+            val t = clip.getItemAt(0).text?.toString() ?: return
+            pane.input.value = TextFieldValue(pane.input.value.text + t)
+        }
+    }
+
+    Column(
+        modifier
+            .fillMaxSize()
+            .background(if (isActive) Color(0xFF0C0C0C) else Color(0xFF080808))
+            .clickable { onFocus() }
+    ) {
+        // 窗格角色条
+        Row(
+            Modifier.fillMaxWidth().height(22.dp)
+                .background(if (isActive) Color(0xFF1B2B1B) else Color(0xFF141414))
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(role, color = if (isActive) Color(0xFFBFE9C8) else Color(0xFF777777), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            if (isActive) Text("● 活动", color = Color(0xFF7BE0A0), fontSize = 8.sp)
+        }
+
+        // 输出
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 4.dp),
+        ) {
+            if (lines != null) {
+                items(lines.size) { idx ->
+                    val line = lines[idx]
+                    val isCopied = idx == pane.lastCopiedLine.value
+                    val isSearchMatch = searchQuery.isNotBlank() && line.lowercase().contains(searchLower)
+                    Row(
+                        Modifier.fillMaxWidth().let { mod ->
+                            mod.clickable { copySingleLine(idx) }
+                        }.let { mod ->
+                            if (isSearchMatch) mod.background(Color(0xFF3D3500).copy(alpha = 0.4f)) else mod
+                        }.padding(horizontal = 4.dp, vertical = 1.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        if (showLineNumbers) {
+                            Text(
+                                text = "${idx + 1}".padStart(4),
+                                color = Color(0xFF555555), fontSize = (fontSize - 2).sp,
+                                fontFamily = FontFamily.Monospace, modifier = Modifier.width(32.dp).padding(end = 4.dp),
+                            )
+                        }
+                        val lineColor = when {
+                            line.contains("error", ignoreCase = true) || line.contains("错误", ignoreCase = true) -> Color(0xFFFF6B6B)
+                            line.contains("warning", ignoreCase = true) || line.contains("警告", ignoreCase = true) -> Color(0xFFFFD700)
+                            line.startsWith("quro@") || line.startsWith("$") || line.startsWith("#") -> Color(0xFF7BE0A0)
+                            line.startsWith("—") -> Color(0xFF666666)
+                            line.startsWith("[router]") -> Color(0xFFBB86FC)
+                            line.startsWith("⚠") -> Color(0xFFFF6B6B)
+                            line.startsWith("✓") || line.contains("完成") -> Color(0xFF7BE0A0)
+                            else -> Color(0xFFCCCCCC)
+                        }
+                        Text(
+                            text = line, color = lineColor,
+                            fontSize = fontSize.sp, fontFamily = FontFamily.Monospace,
+                            lineHeight = (fontSize + 4).sp, modifier = Modifier.weight(1f),
+                        )
+                        if (isCopied) {
+                            Icon(Icons.Filled.ContentCopy, "已复制", tint = Color(0xFF7BE0A0), modifier = Modifier.size(12.dp).padding(start = 2.dp))
+                        }
+                    }
+                }
+            } else {
+                item {
+                    Text("正在启动终端…", color = Color(0xFF666666), fontSize = fontSize.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(vertical = 8.dp))
+                }
+            }
+        }
+
+        // busy 确认栏
+        val isBusy = session?.busy == true
+        AnimatedVisibility(visible = isBusy, enter = expandVertically(), exit = shrinkVertically()) {
+            Row(
+                Modifier.fillMaxWidth().background(Color(0xFF1A0A0A)).padding(horizontal = 6.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text("⏳ 等待输入:", color = Color(0xFFFFD700), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                ConfirmButton("Y 确认") { session?.sendKey("y\n") }
+                ConfirmButton("N 取消") { session?.sendKey("n\n") }
+                ConfirmButton("Enter ↵") { session?.sendKey("\n") }
+                ConfirmButton("Tab ⇥") { session?.sendKey("\t") }
+                ConfirmButton("Ctrl+C") { session?.sendKey("\u0003") }
+            }
+        }
+
+        // 特殊键栏
+        SpecialKeysBar(onKey = { seq -> session?.sendKey(seq) }, fontSize = fontSize)
+
+        // 输入栏
+        InputBar(
+            inputText = pane.input.value,
+            onInputChange = { pane.input.value = it },
+            isBusy = isBusy,
+            isEnabled = session != null,
+            onSend = { sendCommand() },
+            onHistoryUp = { navigateHistoryUp() },
+            onHistoryDown = { navigateHistoryDown() },
+            onPaste = { pasteFromClipboard() },
+            historySize = pane.history.size,
+            historyIndex = pane.histIdx.value,
+        )
     }
 }
 
@@ -737,11 +789,10 @@ private fun QuickCommandsPanel(
 // ═══════════ 特殊按键栏 ═══════════
 @Composable
 private fun SpecialKeysBar(onKey: (String) -> Unit, fontSize: Float) {
-    data class KeyDef(val label: String, val seq: String, val wide: Boolean = false)
+    data class KeyDef(val label: String, val seq: String)
     val keys = listOf(
         KeyDef("ESC", "\u001b"),
         KeyDef("TAB", "\t"),
-        KeyDef("CTRL", "", wide = true), // placeholder for sub-row
         KeyDef("↑", "\u001b[A"),
         KeyDef("↓", "\u001b[B"),
         KeyDef("→", "\u001b[C"),
@@ -776,7 +827,7 @@ private fun SpecialKeysBar(onKey: (String) -> Unit, fontSize: Float) {
         Modifier.fillMaxWidth().background(Color(0xFF0E0E0E)).horizontalScroll(scrollState).padding(horizontal = 4.dp, vertical = 3.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        keys.filter { it.label != "CTRL" }.forEach { key ->
+        keys.forEach { key ->
             Box(
                 Modifier.clip(RoundedCornerShape(4.dp))
                     .background(if (key.label in listOf("ESC", "TAB", "C", "D")) Color(0xFF2A1F12) else Color(0xFF1A1A1A))
@@ -808,7 +859,6 @@ private fun InputBar(
         Modifier.fillMaxWidth().background(Color(0xFF1B1B1B)).padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 历史导航按钮
         IconButton(onClick = onHistoryUp, enabled = historySize > 0 && !isBusy, modifier = Modifier.size(28.dp)) {
             Icon(Icons.Filled.KeyboardArrowUp, "上一条", tint = if (historySize > 0) Color(0xFF7BE0A0) else Color(0xFF333333), modifier = Modifier.size(16.dp))
         }
@@ -816,7 +866,6 @@ private fun InputBar(
             Icon(Icons.Filled.KeyboardArrowDown, "下一条", tint = if (historyIndex >= 0) Color(0xFF7BE0A0) else Color(0xFF333333), modifier = Modifier.size(16.dp))
         }
 
-        // 输入框（busy 时也能打字，发送走 sendRaw）
         BasicTextField(
             value = inputText,
             onValueChange = onInputChange,
@@ -849,12 +898,10 @@ private fun InputBar(
             keyboardActions = KeyboardActions(onSend = { onSend() }),
         )
 
-        // 粘贴按钮
         IconButton(onClick = onPaste, modifier = Modifier.size(28.dp)) {
             Icon(Icons.Filled.ContentPaste, "粘贴", tint = Color(0xFF999999), modifier = Modifier.size(16.dp))
         }
 
-        // 发送按钮（busy 时也能发，走 sendRaw）
         IconButton(
             onClick = onSend,
             enabled = inputText.text.isNotBlank() && isEnabled,

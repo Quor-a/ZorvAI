@@ -663,6 +663,13 @@ class QuroShellSession private constructor(
     }
 
         /**
+         * 强制本地 proot/设备终端（不尝试 VM 后端）。
+         * 用于双终端场景的「本地窗格」：即使本机有 VM 能力，也显式走 proot，
+         * 与 [create] 的 VM 优先窗格形成对照，保证两窗格后端不同、互不争抢 VM 资源。
+         */
+        fun createLocal(context: Context): QuroShellSession = createLegacy(context)
+
+        /**
          * 旧直连路径（v127 行为）：Linux 环境就绪则 proot 常驻 sh，否则设备 sh。
          * 仅在 host 后端不可用或启动失败时调用，作为兜底。
          */

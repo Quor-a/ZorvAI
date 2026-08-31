@@ -12,7 +12,8 @@ import java.io.File
  *     探测用系统特性 "android.software.virtualization_framework"（Android 14+），并用反射兜底探测
  *     android.system.virtualmachine.VirtualizationManager；实测设备若未开启 pKVM（多数消费级手机），
  *     框架特性仍在但 start() 会失败 —— 此时由 [QuroAvfLauncher.start] 捕获异常并降级 QEMU/proot。
- *  2. QEMU：软件虚拟化（TCG），无需 KVM/pKVM，几乎全机型可用；需预置 qemu-system-aarch64 + kernel + disk。
+ *  2. QEMU：软件虚拟化（TCG），无需 KVM/pKVM，几乎全机型可用；需预置 qemu-system-aarch64 + kernel + rootfs.tar.gz
+ *     （rootfs 经 virtio-9p 挂为 guest 根，免去 qcow2 磁盘镜像与镜像工具）。
  *  3. proot：用户态模拟，由 [com.ai.assistance.quro.core.linux.QuroLinuxEnv] 兜底，无 VM 资产时终端依旧可用。
  *
  * 本类**只探测与解析路径，不下载/不安装**。QEMU 二进制、AVF VM payload、kernel、disk 等重资产
@@ -86,11 +87,14 @@ object QuroVmEnv {
         }
     }
 
-    /** 探测 QEMU：assets/vm 下 qemu-system-aarch64 二进制存在且可执行。 */
+    /** 探测 QEMU：qemu-system-aarch64 二进制可执行 + kernel 存在 + rootfs（tar 或已解压目录）存在。 */
     private fun probeQemu(context: Context): Boolean {
-        val f = File(qemuPath(context))
-        val ok = f.exists() && f.canExecute()
-        Log.d(TAG, "QEMU: ${f.absolutePath} exists=${f.exists()} exec=${f.canExecute()}")
+        val q = File(qemuPath(context))
+        val k = File(kernelPath(context))
+        val r = File(rootfsTarPath(context))
+        val rd = rootfsDir(context)
+        val ok = q.exists() && q.canExecute() && k.exists() && (r.exists() || rd.exists())
+        Log.d(TAG, "QEMU: qemu=${q.exists()}/${q.canExecute()} kernel=${k.exists()} rootfsTar=${r.exists()} rootfsDir=${rd.exists()}")
         return ok
     }
 
@@ -106,9 +110,61 @@ object QuroVmEnv {
     fun kernelPath(context: Context): String =
         findVmBinary(context, "libvm_kernel.so", "vm/Image")
 
-    /** 磁盘镜像（供 QEMU，qcow2/raw）路径。 */
-    fun diskPath(context: Context): String =
-        findVmBinary(context, "libvm_disk.so", "vm/disk.qcow2")
+    /** rootfs 压缩包（供 QEMU，经 9p 挂载；构建脚本产出，assets/vm/rootfs.tar.gz）。 */
+    fun rootfsTarPath(context: Context): String =
+        findVmBinary(context, "libvm_rootfs.so", "vm/rootfs.tar.gz")
+
+    /** initramfs（供 QEMU，Alpine netboot initramfs-virt，含 9p 模块；可选）。 */
+    fun initramfsPath(context: Context): String =
+        findVmBinary(context, "libvm_initramfs.so", "vm/initramfs-virt")
+
+    /** rootfs 解压目录（运行时首次从 assets/vm/rootfs 展开到这里）。 */
+    fun rootfsDir(context: Context): File = File(vmDir(context), "rootfs")
+
+    /**
+     * 把 assets/vm/rootfs 一次性展开到可写目录 files/vm/rootfs（virtio-9p 需要可写源，
+     * 而 APK 内 assets 只读）。已展开（存在 .quro_rootfs_ok 标记）则直接返回。
+     * 返回可写 rootfs 目录；assets 未打包或为空返回 null。
+     */
+    fun ensureRootfsFromAssets(context: Context): File? {
+        val dst = rootfsDir(context)
+        if (File(dst, ".quro_rootfs_ok").exists() && dst.isDirectory) return dst
+        return try {
+            val top = context.assets.list("vm/rootfs") ?: return null
+            if (top.isEmpty()) return null
+            dst.mkdirs()
+            copyAssetDir(context, "vm/rootfs", dst)
+            File(dst, ".quro_rootfs_ok").createNewFile()
+            Log.i(TAG, "✅ rootfs 已从 assets 展开到 ${dst.absolutePath}")
+            dst
+        } catch (e: Exception) {
+            Log.w(TAG, "rootfs 展开失败: ${e.message}")
+            null
+        }
+    }
+
+    private fun copyAssetDir(context: Context, assetRel: String, dst: File) {
+        val entries = context.assets.list(assetRel) ?: return
+        if (entries.isEmpty()) {
+            // 叶子：文件
+            context.assets.open(assetRel).use { input ->
+                java.io.FileOutputStream(File(dst, assetRel.substringAfterLast('/'))).use { out -> input.copyTo(out) }
+            }
+            return
+        }
+        for (name in entries) {
+            val childDst = File(dst, name)
+            val childAsset = "$assetRel/$name"
+            if (context.assets.list(childAsset)?.isNotEmpty() == true) {
+                childDst.mkdirs()
+                copyAssetDir(context, childAsset, childDst)
+            } else {
+                context.assets.open(childAsset).use { input ->
+                    java.io.FileOutputStream(childDst).use { out -> input.copyTo(out) }
+                }
+            }
+        }
+    }
 
     /** VM guest shell 环境（占位；externalProcess 模式下 ProcessBuilder 不消费，保留语义完整）。 */
     fun vmShellEnv(context: Context): Array<String> = arrayOf(
