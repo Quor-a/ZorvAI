@@ -388,7 +388,7 @@ class QuroDataManager(private val context: Context) {
             "version": "1.0",
             "exportedAt": $timestamp,
             "appName": "ZorvAI",
-            "appVersion": "1.0.70",
+            "appVersion": "1.0.71",
             "description": "ZorvAI data export"
         }
         """.trimIndent()
