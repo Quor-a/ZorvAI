@@ -126,7 +126,7 @@ object QuroPermissionHelper {
             } else {
                 null
             },
-            note = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) "Android 12 以下不需要特殊权限" else "",
+            note = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) "Android 12 以下不需要特殊权限" else "Android 12+ 需在系统设置手动开启「精确闹钟」，点「开启」跳转，授权后可用「测试」按钮验证",
         )
     }
 

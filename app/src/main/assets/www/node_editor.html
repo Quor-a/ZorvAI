@@ -157,6 +157,7 @@
     </div>
     <div class="sep"></div>
     <div class="group">
+      <button class="tb" id="sampleBtn">加载示例</button>
       <button class="tb warn" id="delBtn">删除选中</button>
       <button class="tb warn" id="clearBtn">清空</button>
     </div>
@@ -520,6 +521,7 @@
   });
   document.getElementById('delBtn').addEventListener('click', deleteSelected);
   document.getElementById('clearBtn').addEventListener('click', clearAll);
+  document.getElementById('sampleBtn').addEventListener('click', function () { seedExample(); toast('已加载内置示例'); });
 
   // 底部 tab 切换
   Array.prototype.slice.call(document.querySelectorAll('#bottom .tab')).forEach(function (t) {
@@ -552,8 +554,9 @@
   window.__addNode = function (type) { addNode(type || 'process'); };
   window.__clear = function () { clearAll(); };
 
-  // 初始示例
-  (function seed() {
+  // 初始示例：打开即内置一张流程图，并自动在底部预览其 Mermaid 源码，让用户一眼看到「内置好的」
+  function seedExample() {
+    nodes = []; edges = []; selectedNode = null; selectedEdge = null; seq = 1;
     var a = { id: uid('n'), type: 'start', x: 80, y: 80, label: '开始' };
     var b = { id: uid('n'), type: 'process', x: 80, y: 190, label: '处理数据' };
     var c = { id: uid('n'), type: 'decision', x: 360, y: 190, label: '是否通过?' };
@@ -563,7 +566,10 @@
     edges.push({ id: uid('e'), from: b.id, to: c.id });
     edges.push({ id: uid('e'), from: c.id, to: d.id });
     renderAll();
-  })();
+    exportMermaid();
+    renderPreview();
+  }
+  seedExample();
 
   try { if (window.AndroidBridge && AndroidBridge.onReady) AndroidBridge.onReady(); } catch (_) {}
 })();
