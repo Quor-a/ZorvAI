@@ -152,7 +152,23 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
     fun onClickStd(item: QuroPermissionItem) {
         when (item.id) {
             "storage", "location" -> requestRuntime(item)
-            "alarm" -> item.guideIntent?.let { ctx.startActivity(it) }
+            "set_alarm" -> {
+                // 设置闹钟走系统时钟 App：点击行触发跳转；"AlarmClock.ACTION_SET_ALARM" 让用户在系统时钟里设闹钟
+                runCatching {
+                    val intent = Intent(android.provider.AlarmClock.ACTION_SET_ALARM).apply {
+                        putExtra(android.provider.AlarmClock.EXTRA_HOUR, java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY))
+                        putExtra(android.provider.AlarmClock.EXTRA_MINUTES, (java.util.Calendar.getInstance().get(java.util.Calendar.MINUTE) + 1) % 60)
+                        putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "Zorv AI 闹钟测试")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    ctx.startActivity(intent)
+                }.onFailure {
+                    // 无系统时钟 App 时落到应用详情页
+                    item.guideIntent?.let { ctx.startActivity(it) }
+                    android.widget.Toast.makeText(ctx, "未找到系统时钟应用，请到 设置→应用→Zorv AI→所有权限 中查看「设置闹钟」", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+            "exact_alarm" -> item.guideIntent?.let { ctx.startActivity(it) }
             else -> item.guideIntent?.let { ctx.startActivity(it) }
         }
     }
@@ -447,7 +463,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                     StdPermRow(
                         item = item,
                         onClick = { onClickStd(item) },
-                        trailing = if (item.id == "alarm") {
+                        trailing = if (item.id == "exact_alarm") {
                             {
                                 val helper = remember { AlarmPermissionHelper(ctx) }
                                 TextButton(
@@ -587,7 +603,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
 }
 
 private fun stdPerms(ctx: android.content.Context): List<QuroPermissionItem> =
-    QuroPermissionHelper.getItems(ctx).filter { it.id in setOf("storage", "location", "overlay", "battery", "alarm") }
+    QuroPermissionHelper.getItems(ctx).filter { it.id in setOf("storage", "location", "overlay", "battery", "set_alarm", "exact_alarm") }
 
 @Composable
 private fun PrivilegeCard(

@@ -260,6 +260,9 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Add
@@ -590,6 +593,7 @@ fun ChatScreen(
     val modelConfigRepo = QuroModelConfigRepository(LocalContext.current)
     var showAbout by remember { mutableStateOf(false) }
     var showCleanup by remember { mutableStateOf(false) }
+    var showFileManager by remember { mutableStateOf(false) }
     // ACI 管理中心屏：从设置「功能 → ACI 管理中心」进入（此前仅有 AI 工具 ui_open_aci 可打开，无手动按钮）
     var showAci by remember { mutableStateOf(false) }
     // ACI 应用选择器对话框
@@ -1604,6 +1608,7 @@ fun ChatScreen(
             onSettingsToggleAiReplyNotify = { vm.setAiReplyNotify(!aiReplyNotify) },
             onOpenAbout = { showAbout = true },
             onOpenCleanup = { showCleanup = true },
+            onOpenFileManager = { showFileManager = true },
             onOpenAci = { showAci = true },
             onOpenMcp = { showMcp = true },
             onOpenSystemStatus = { showSystemStatus = true },
@@ -1747,6 +1752,14 @@ fun ChatScreen(
             BackHandler { showCleanup = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
                 CleanupScreen(onClose = { showCleanup = false }, scaled = { scaled(it) })
+            }
+        }
+
+        // 文件管理页：全屏覆盖层（从设置「文件管理」进入）
+        if (showFileManager) {
+            BackHandler { showFileManager = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+                FileManagerDialog(onClose = { showFileManager = false }, scaled = { scaled(it) })
             }
         }
 
@@ -4687,6 +4700,7 @@ private fun SheetOverlay(
     onSettingsToggleAiReplyNotify: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenCleanup: () -> Unit,
+    onOpenFileManager: () -> Unit,
     onOpenAci: () -> Unit,
     onOpenMcp: () -> Unit,
     onOpenSystemStatus: () -> Unit,
@@ -4760,7 +4774,7 @@ private fun SheetOverlay(
                         onManagePersona, onOpenVoiceService,
                         onClearChat, settingsVoiceBallEnabled, onSettingsToggleVoiceBall,
                     settingsAiReplyNotify, onSettingsToggleAiReplyNotify,
-                        onOpenAbout, onOpenAci, onOpenMcp, onOpenSystemStatus, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, scaled
+                        onOpenAbout, onOpenAci, onOpenMcp, onOpenSystemStatus, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenFileManager, scaled
                     )
                     else -> {}
                 }
@@ -4812,6 +4826,7 @@ private fun SettingsSheetContent(
     onOpenAppearance: () -> Unit,
     onExport: () -> Unit, onClear: () -> Unit,
     onOpenCleanup: () -> Unit,
+    onOpenFileManager: () -> Unit,
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -4857,6 +4872,7 @@ private fun SettingsSheetContent(
             SetRowClickable(Icons.Filled.Download, "导出对话", "", "导出为文本", onExport, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.DeleteSweep, "清理存储", "分类清理日志、缓存、AI产物等", "", onOpenCleanup, scaled)
+            SetRowClickable(Icons.Filled.FolderOpen, "文件管理", "浏览沙箱目录 · 在系统文件管理器中打开", "", onOpenFileManager, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.DeleteSweep, "清除全部对话", "", "", onClear, scaled, danger = true)
         }
@@ -7393,6 +7409,130 @@ private fun WorkflowCreateDialog(
             }
         }
     )
+}
+
+/**
+ * 文件管理页面（从设置「文件管理」进入）。
+ * 浏览沙箱目录，并支持「在系统文件管理器中打开」与「复制路径」；
+ * 顶部展示共享存储挂载状态（Android 11+ 应用私有目录在系统文件管理器可见）。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FileManagerDialog(
+    onClose: () -> Unit,
+    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
+) {
+    val ctx = LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    val externalFiles = ctx.getExternalFilesDir(null)
+    val dirs = listOfNotNull(
+        "应用私有文件" to ctx.filesDir,
+        "应用数据(quro_data)" to File(ctx.filesDir, "quro_data"),
+        "导出(quro_exports)" to File(externalFiles, "quro_exports"),
+        "备份(quro_backups)" to File(externalFiles, "quro_backups"),
+        "公共下载/QuroAI_logs" to File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            "QuroAI_logs",
+        ),
+    )
+    val sharedMounted = Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED
+
+    fun openInSystemFileManager(dir: File) {
+        if (!dir.exists()) {
+            Toast.makeText(ctx, "目录不存在：${dir.absolutePath}", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // 路径 1：用 FileProvider 暴露 content:// URI，再 ACTION_OPEN_DOCUMENT_TREE 落到 SAF。
+        // ACTION_VIEW + file:// 在 Android 7+ StrictMode 直接崩、11+ 无文件管理器响应，
+        // 所以这里尽量走 SAF / 复制路径兜底，避免误以为功能不工作。
+        try {
+            val treeIntent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            ctx.startActivity(treeIntent)
+            Toast.makeText(ctx, "请在系统文件管理器中导航到：${dir.absolutePath}", Toast.LENGTH_LONG).show()
+        } catch (_: Exception) {
+            try {
+                val authority = "${ctx.packageName}.fileprovider"
+                val uri = androidx.core.content.FileProvider.getUriForFile(ctx, authority, dir)
+                val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "resource/folder")
+                    addCategory(Intent.CATEGORY_DEFAULT)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                ctx.startActivity(viewIntent)
+            } catch (_: Exception) {
+                val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("path", dir.absolutePath))
+                Toast.makeText(ctx, "已复制路径，请在文件管理器粘贴：${dir.absolutePath}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().background(cs.background)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") }
+            Spacer(Modifier.width(8.dp))
+            Text("文件管理", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+        }
+        // 共享存储状态
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                .clip(RoundedCornerShape(10.dp)).background(cs.surfaceVariant.copy(alpha = 0.4f))
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                if (sharedMounted) Icons.Filled.CheckCircle else Icons.Filled.Warning,
+                null,
+                tint = if (sharedMounted) cs.primary else cs.error,
+            )
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text("共享存储", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+                Text(
+                    if (sharedMounted) "已挂载（Android 11+ 应用私有目录在系统文件管理器可见）" else "未挂载或不可用",
+                    fontSize = 12.sp, color = cs.onSurfaceVariant,
+                )
+            }
+        }
+        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+            items(dirs) { (label, dir) ->
+                val exists = dir.exists()
+                Column(
+                    Modifier.fillMaxWidth().clickable { openInSystemFileManager(dir) }
+                        .padding(vertical = 12.dp),
+                ) {
+                    Text(label, fontSize = 15.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "${if (exists) "存在" else "不存在"} · ${dir.absolutePath}",
+                        fontSize = 12.sp, color = cs.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AssistChip(
+                            onClick = { openInSystemFileManager(dir) },
+                            label = { Text("在系统文件管理器中打开") },
+                            leadingIcon = { Icon(Icons.Filled.FolderOpen, null, Modifier.size(16.dp)) },
+                        )
+                        AssistChip(
+                            onClick = {
+                                val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                cm.setPrimaryClip(android.content.ClipData.newPlainText("path", dir.absolutePath))
+                                Toast.makeText(ctx, "已复制路径", Toast.LENGTH_SHORT).show()
+                            },
+                            label = { Text("复制路径") },
+                            leadingIcon = { Icon(Icons.Filled.ContentCopy, null, Modifier.size(16.dp)) },
+                        )
+                    }
+                    HorizontalDivider(Modifier.padding(top = 10.dp), color = cs.outlineVariant)
+                }
+            }
+        }
+    }
 }
 
 /**

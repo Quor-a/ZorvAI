@@ -18,4 +18,14 @@
     <external-path
         name="quro_download"
         path="Download" />
+    <!-- 文件管理：沙箱目录（filesDir + externalFilesDir），用来在系统文件管理器打开应用沙箱 -->
+    <files-path
+        name="quro_sandbox_files"
+        path="." />
+    <external-files-path
+        name="quro_sandbox_ext"
+        path="." />
+    <cache-path
+        name="quro_sandbox_cache"
+        path="." />
 </paths>
