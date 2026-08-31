@@ -288,7 +288,7 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
      * 不再打扰式自动跳转。未授权时 AlarmPermissionHelper / QuroScheduledTask 会优雅降级。
      */
     private fun requestSpecialPermissions() {
-        // 闹钟权限：SET_ALARM 是危险权限，需要运行时请求
+        // 闹钟权限：SET_ALARM 是 normal 权限，安装即授予，无需运行时请求；此处仅为防御性检查。
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.SET_ALARM)
             != PackageManager.PERMISSION_GRANTED
         ) {
