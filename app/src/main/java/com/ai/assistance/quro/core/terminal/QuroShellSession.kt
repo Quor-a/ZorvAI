@@ -80,9 +80,21 @@ class QuroShellSession private constructor(
      * 设为 null（默认）则维持旧管道行为，终端 UI 走 LazyColumn 纯文本。
      */
     var vt: TerminalScreen? = null
+        set(value) {
+            field = value
+            // 解决“终端一片黑”：Compose 渲染层懒初始化 VT 时，回放 init 期间写入的欢迎语 / 提示符。
+            if (value != null && pendingReplay.isNotEmpty()) {
+                pendingReplay.forEach { value.writeText(it + "\n") }
+                pendingReplay.clear()
+                publishVt()
+            }
+        }
 
     /** VT 屏幕的不可变快照状态，Compose 渲染层收集它即可随终端输出重组。 */
     val vtSnapshot = mutableStateOf<TerminalSnapshot?>(null)
+
+    /** init 期间在 VT 尚未挂载时所写的欢迎语 / 提示符，等 VT 被设置时一次性回放。 */
+    private val pendingReplay = mutableListOf<String>()
 
     /** 进程是否已退出。 */
     var exited by mutableStateOf(false)
@@ -161,27 +173,32 @@ class QuroShellSession private constructor(
 
     init {
         Log.i(TAG, "init: 创建会话, 模式=$mode, 命令=${command.joinToString(" ")}")
+        // 解决 “终端一片黑”：把欢迎语 / 提示符既写进 lines（纯文本兜底）也写进 pendingReplay
+        // 由 vt 属性 setter 在 VT 被挂载时统一回放，保证 Compose 进入终端页第一帧就有内容。
+        fun emit(s: String) {
+            appendLine(s)
+            pendingReplay += s
+        }
         when (mode) {
-            ShellMode.VM -> appendLine("— Zorv AI 终端（VM · 完整 Linux 内核）已启动 —")
-            ShellMode.LINUX -> appendLine("— Zorv AI 终端已启动 (proot/Linux · Ubuntu 24.04) —")
+            ShellMode.VM -> emit("— Zorv AI 终端（VM · 完整 Linux 内核）已启动 —")
+            ShellMode.LINUX -> emit("— Zorv AI 终端已启动 (proot/Linux · Ubuntu 24.04) —")
             ShellMode.DEVICE -> {
-                appendLine("— Zorv AI 终端已启动 (设备 · Toybox sh) —")
-                // ⚠ 设备模式 = proot 未启用，所有 Linux 命令都不可用。
-                // 把**原因直接打进终端缓冲区**：用户在真机上无需 adb/logcat，截图即可取证。
-                appendLine("⚠ 当前是 Android 设备 shell，apt-get / dpkg / python3 / node 等 Linux 命令均不可用。")
+                emit("— Zorv AI 终端已启动 (设备 · Toybox sh) —")
+                // 设备模式 = proot 未启用，所有 Linux 命令都不可用——原因直接打进终端缓冲区。
+                emit("⚠ 当前是 Android 设备 shell，apt-get / dpkg / python3 / node 等 Linux 命令均不可用。")
                 runCatching {
                     val st = QuroLinuxEnv.probeLenient(context)
-                    appendLine("   原因: ${st.reason}")
+                    emit("   原因: ${st.reason}")
                     val p = QuroLinuxEnv.prootPath(context)
-                    appendLine("   proot : $p (存在=${File(p).exists()})")
+                    emit("   proot : $p (存在=${File(p).exists()})")
                     val rf = File(QuroLinuxEnv.rootfsPath(context))
-                    appendLine("   rootfs: ${rf.absolutePath} (是目录=${rf.isDirectory}, 条目数=${rf.listFiles()?.size ?: 0})")
-                    appendLine("   修复 : 点顶栏「检查更新/安装 Linux 环境」，或在对话发送 linux:install")
+                    emit("   rootfs: ${rf.absolutePath} (是目录=${rf.isDirectory}, 条目数=${rf.listFiles()?.size ?: 0})")
+                    emit("   修复 : 点顶栏「检查更新/安装 Linux 环境」，或在对话发送 linux:install")
                 }
             }
         }
         // VM 模式：guest shell 自行回显与提示符，本层不补 promptPrefix。
-        if (mode != ShellMode.VM) appendLine(promptPrefix())
+        if (mode != ShellMode.VM) emit(promptPrefix())
         Log.d(TAG, "init: 启动drain协程")
         launch { drain() }
     }
