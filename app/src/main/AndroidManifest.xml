@@ -77,9 +77,10 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <!-- 设置闹钟权限（危险权限，需要运行时请求）：用于实际设置闹钟。
-         Android 12+ 被 SCHEDULE_EXACT_ALARM 取代，但在某些 ROM（如 OPPO ColorOS）上仍需要。 -->
-    <uses-permission android:name="android.permission.SET_ALARM" />
+    <!-- 设置闹钟权限（normal 权限，安装即授予，无需运行时请求）：用于实际设置闹钟。
+         必须是 com.android.alarm.permission.SET_ALARM（与框架 Manifest.permission.SET_ALARM 常量一致）；
+         写 android.permission.SET_ALARM 是无效字符串，系统时钟 App 会拒绝 ACTION_SET_ALARM（Permission Denial）。 -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- 精确闹钟权限（Android 12+）：
          只声明 SCHEDULE_EXACT_ALARM，不要同时声明 USE_EXACT_ALARM。
          如果同时声明两个权限，应用可能不会出现在闹钟和提醒列表中。
