@@ -212,6 +212,39 @@ object QuroBrowserController {
         return eval(js)
     }
 
+    /** 收集当前页所有外链（绝对化后的 href 列表），过滤 js:/#/mailto:/tel: 等无意义锚点。供爬虫使用。 */
+    suspend fun collectLinks(): List<String>? {
+        val js = """(function(){
+          try {
+            var out = [];
+            var seen = {};
+            document.querySelectorAll('a[href]').forEach(function(a){
+              var h = a.href;
+              if (!h) return;
+              if (h.indexOf('javascript:')===0 || h.indexOf('#')===0 ||
+                  h.indexOf('mailto:')===0 || h.indexOf('tel:')===0) return;
+              if (seen[h]) return;
+              seen[h] = 1;
+              out.push(h);
+            });
+            return JSON.stringify(out);
+          } catch(e){ return '__ERR__:'+e; }
+        })()"""
+        val raw = eval(js, 8000) ?: return null
+        if (raw.startsWith("__ERR__:")) return null
+        val arr = runCatching { JSONObject(raw); JSONArray(raw) }.getOrNull() ?: return null
+        val list = mutableListOf<String>()
+        for (i in 0 until arr.length()) list.add(arr.optString(i))
+        return list
+    }
+
+    /** 取当前页正文（body.innerText），截断到 maxChars，供爬虫做正文抽取。 */
+    suspend fun collectText(maxChars: Int = 4000): String? {
+        val js = "document.body ? document.body.innerText : ''"
+        val r = eval(js, 8000) ?: return null
+        return r.take(maxChars).trim()
+    }
+
     private fun runOnMain(block: () -> Unit) {
         if (Looper.myLooper() === Looper.getMainLooper()) block() else main.post(block)
     }

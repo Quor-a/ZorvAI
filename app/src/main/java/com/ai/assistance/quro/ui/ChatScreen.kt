@@ -1994,6 +1994,11 @@ fun ChatScreen(
                                 showToolCenter = false
                                 android.widget.Toast.makeText(appCtx, "AI 可用 browser_act 操控此浏览器", android.widget.Toast.LENGTH_SHORT).show()
                             }
+                            "crawler" -> {
+                                com.ai.assistance.quro.core.QuroBrowserBridge.open("https://www.baidu.com")
+                                showToolCenter = false
+                                android.widget.Toast.makeText(appCtx, "AI 可用 web_crawler 批量抓取（网页爬虫）：告诉它起始 URL 即可", android.widget.Toast.LENGTH_LONG).show()
+                            }
                             "python_ai" -> {
                                 showTerminal = true
                                 showToolCenter = false
