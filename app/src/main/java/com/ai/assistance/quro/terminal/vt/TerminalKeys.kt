@@ -1,4 +1,4 @@
-package com.ai.assistance.quro.terminal.kai
+package com.ai.assistance.quro.terminal.vt
 
 import androidx.compose.runtime.Immutable
 

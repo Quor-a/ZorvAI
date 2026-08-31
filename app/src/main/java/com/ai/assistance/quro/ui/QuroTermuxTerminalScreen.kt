@@ -100,7 +100,7 @@ import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager.Backend
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager.Kind
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager.SessionInfo
 import com.ai.assistance.quro.core.terminal.ShellMode
-import com.ai.assistance.quro.terminal.kai.KaiTerminalPane
+import com.ai.assistance.quro.terminal.vt.QuroTerminalPane
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -231,7 +231,7 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                 if (isDual) {
                     Spacer(Modifier.width(4.dp))
                     // 窗格 B 徽章
-                    PaneBadge(paneB, "Kai 终端", activePane == 1) { activePane = 1 }
+                    PaneBadge(paneB, "Quro 终端", activePane == 1) { activePane = 1 }
                 }
                 Spacer(Modifier.width(4.dp))
                 // 活动窗格 cwd（截断）
@@ -420,7 +420,7 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                     )
                     Divider(color = Color(0xFF000000), thickness = 1.dp)
                     TerminalPane(
-                        pane = paneB, role = "Kai 终端", isActive = activePane == 1, onFocus = { activePane = 1 },
+                        pane = paneB, role = "Quro 终端", isActive = activePane == 1, onFocus = { activePane = 1 },
                         fontSize = fontSize, showLineNumbers = showLineNumbers, searchQuery = searchQuery,
                         keyboardController = keyboardController, scope = scope, context = context, sourceManager = sourceManager,
                         modifier = Modifier.weight(1f),
@@ -428,7 +428,7 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                 }
             } else {
                 TerminalPane(
-                    pane = active(), role = if (activePane == 0) "VM/Linux 融合" else "Kai 终端",
+                    pane = active(), role = if (activePane == 0) "VM/Linux 融合" else "Quro 终端",
                     isActive = true, onFocus = { },
                     fontSize = fontSize, showLineNumbers = showLineNumbers, searchQuery = searchQuery,
                     keyboardController = keyboardController, scope = scope, context = context, sourceManager = sourceManager,
@@ -583,7 +583,7 @@ private fun TerminalPane(
                 // 只要会话已建立就挂载真·VT 面板；VT 引擎由面板在首次布局(onSizeChanged)时创建并赋给 session.vt。
                 // 注意：不能再以 outSession.vt != null 作为挂载条件，否则面板永不挂载、vt 永不创建，
                 // 终端会永久卡在"正在启动终端…"（鸡生蛋死锁）。
-                KaiTerminalPane(session = outSession, modifier = Modifier.fillMaxSize())
+                QuroTerminalPane(session = outSession, modifier = Modifier.fillMaxSize())
             } else {
                 Column(Modifier.fillMaxSize().padding(16.dp)) {
                     Text("正在启动终端…", color = Color(0xFF7BE0A0), fontSize = 14.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)

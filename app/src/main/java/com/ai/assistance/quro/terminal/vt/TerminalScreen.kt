@@ -1,10 +1,10 @@
-package com.ai.assistance.quro.terminal.kai
+package com.ai.assistance.quro.terminal.vt
 
 /**
  * Mutable character-cell screen buffer + cursor. Fed by [VtParser]; snapshotted
  * for Compose.
  *
- * 移植自 Kai 的自研 VT100/xterm 引擎，去
+ * 自研 VT100/xterm 引擎的字符单元屏幕缓冲 + 光标，去除
  * kotlinx.collections.immutable 依赖。Call [resize] when the host viewport
  * changes; TUI apps react via SIGWINCH after the PTY winsize is updated separately.
  */

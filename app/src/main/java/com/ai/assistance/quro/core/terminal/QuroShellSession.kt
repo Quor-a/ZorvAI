@@ -13,8 +13,8 @@ import com.ai.assistance.quro.core.guest.QuroContainerManager
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.vm.QuroVmEnv
 import com.ai.assistance.quro.core.privilege.QuroShellQuote
-import com.ai.assistance.quro.terminal.kai.TerminalScreen
-import com.ai.assistance.quro.terminal.kai.TerminalSnapshot
+import com.ai.assistance.quro.terminal.vt.TerminalScreen
+import com.ai.assistance.quro.terminal.vt.TerminalSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
