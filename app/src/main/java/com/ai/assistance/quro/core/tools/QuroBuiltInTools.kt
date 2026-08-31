@@ -391,6 +391,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(PythonRunTool())
     // AI 抓包：在 proot 容器内启动 mitmdump，flow 写到 /mnt/quro/mitm/
     r.register(PacketCaptureTool())
+    // AI 驱动网页爬虫：用内置浏览器 WebView 批量渲染抓取（支持 JS 动态页、同域限流、去重、导出 Markdown）
+    r.register(WebCrawlerTool())
+    // 终端监控：proot 内读 /proc 暴露负载/内存/进程（无 root 的 Android 应用也可观测，无需 cgroups）
+    r.register(TermMonitorTool())
     // 升级版知识库（add / search / list，后台可用）
     r.register(KnowledgeManageTool())
     // 知识库 C3 重做：本地自包含向量语义检索（RAG），零重依赖，离线可用（无 API Key 时降级本地词法检索）

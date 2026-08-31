@@ -579,7 +579,10 @@ private fun TerminalPane(
         Box(
             Modifier.fillMaxWidth().weight(1f),
         ) {
-            if (outSession != null && outSession.vt != null) {
+            if (outSession != null) {
+                // 只要会话已建立就挂载真·VT 面板；VT 引擎由面板在首次布局(onSizeChanged)时创建并赋给 session.vt。
+                // 注意：不能再以 outSession.vt != null 作为挂载条件，否则面板永不挂载、vt 永不创建，
+                // 终端会永久卡在"正在启动终端…"（鸡生蛋死锁）。
                 KaiTerminalPane(session = outSession, modifier = Modifier.fillMaxSize())
             } else {
                 Column(Modifier.fillMaxSize().padding(16.dp)) {

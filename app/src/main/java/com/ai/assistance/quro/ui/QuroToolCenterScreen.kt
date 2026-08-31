@@ -120,6 +120,7 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         Triple("vispro", "可视化编程", "Mermaid 源码编辑器 + 实时渲染 / 导出 SVG"),
         Triple("flow", "节点编辑器", "拖拽式节点流编程，导出 Mermaid"),
         Triple("browser_ai", "浏览器 AI 操控", "AI 用 browser_act 接管当前浏览器：snapshot/click/fill/eval（先 action=open）"),
+        Triple("crawler", "网页爬虫", "AI 用 web_crawler 批量抓取整站：支持 JS 动态页、同域限流、去重、导出 Markdown（自动打开浏览器并提示 AI）"),
         Triple("python_ai", "Python", "AI 用 python_run 在 proot 内跑 Python（首次会自动 apt-get install -y python3）"),
         Triple("mitm", "抓包", "容器内 mitmdump 监听 0.0.0.0:8080；flow 写到 /mnt/quro/mitm/，需配合系统代理/adb reverse/VPN"),
     )
@@ -128,7 +129,7 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(cards) { (key, title, desc) ->
-            val launch = key in setOf("terminal", "cms", "toolbox", "browser_ai", "python_ai", "mitm")
+            val launch = key in setOf("terminal", "cms", "toolbox", "browser_ai", "crawler", "python_ai", "mitm")
             Card(
                 Modifier.fillMaxWidth().clickable { if (launch) onLaunch(key) else onSelect(key) },
                 shape = RoundedCornerShape(14.dp),
