@@ -305,6 +305,7 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                 }
                 // 模式徽章
                 val (modeText, modeColor) = when (shellSession?.mode) {
+                    ShellMode.VM -> "VM/Linux" to Color(0xFF8AB4F8)
                     ShellMode.LINUX -> "proot/Linux" to Color(0xFF7BE0A0)
                     ShellMode.DEVICE -> "设备 sh" to Color(0xFFFFD700)
                     null -> "初始化…" to Color(0xFF666666)

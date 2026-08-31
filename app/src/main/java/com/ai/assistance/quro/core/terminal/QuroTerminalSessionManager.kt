@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.ai.assistance.quro.activity.QuroApplication
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.vm.QuroVmEnv
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,7 +41,7 @@ object QuroTerminalSessionManager {
     private const val DEFAULT_NAME = "默认会话"
     private const val UI_ID = "__ui_termux__"
 
-    enum class Backend { LINUX_PROOT, DEVICE_SH }
+    enum class Backend { LINUX_PROOT, DEVICE_SH, VM_LINUX }
     enum class Kind { DEFAULT, EXTRA, UI_TERMUX }
 
     /** 对外的会话摘要（不含进程句柄，可安全序列化 / 跨层传递）。 */
@@ -135,7 +136,11 @@ object QuroTerminalSessionManager {
                     }
                 }
                 val shell = QuroShellSession.create(context)
-                val backend = if (shell.mode == ShellMode.LINUX) Backend.LINUX_PROOT else Backend.DEVICE_SH
+                val backend = when (shell.mode) {
+                    ShellMode.VM -> Backend.VM_LINUX
+                    ShellMode.LINUX -> Backend.LINUX_PROOT
+                    ShellMode.DEVICE -> Backend.DEVICE_SH
+                }
                 val entry = Entry("default", DEFAULT_NAME, Kind.DEFAULT, backend, System.currentTimeMillis(), shell)
                 shell.onExit = { code -> Log.i(TAG, "默认会话退出(exit=$code)，保活服务将重建") }
                 defaultEntry = entry
@@ -231,7 +236,11 @@ object QuroTerminalSessionManager {
                 if (!st.available) QuroLinuxEnv.ensureInstalledBlocking(context)
             }
             val shell = QuroShellSession.create(context)
-            val backend = if (shell.mode == ShellMode.LINUX) Backend.LINUX_PROOT else Backend.DEVICE_SH
+            val backend = when (shell.mode) {
+                ShellMode.VM -> Backend.VM_LINUX
+                ShellMode.LINUX -> Backend.LINUX_PROOT
+                ShellMode.DEVICE -> Backend.DEVICE_SH
+            }
             val id = UUID.randomUUID().toString().take(8)
             val entry = Entry(
                 id = id,

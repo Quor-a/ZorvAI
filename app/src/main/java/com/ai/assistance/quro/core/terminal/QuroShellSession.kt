@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ai.assistance.quro.core.linux.CommandTranslator
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.vm.QuroVmEnv
 import com.ai.assistance.quro.core.privilege.QuroShellQuote
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,6 +63,9 @@ class QuroShellSession private constructor(
 
     private val job = SupervisorJob()
     override val coroutineContext = Dispatchers.IO + job
+
+    /** VM 真 TTY 模式下，回显/提示符/信号全部由 guest 完成，本层只透传输入、不注入哨兵。 */
+    private val passthroughEcho = mode == ShellMode.VM
 
     /** 滚动缓冲区（每行一条），由 Compose LazyColumn 渲染。 */
     val lines = mutableStateListOf<String>()
@@ -143,22 +147,27 @@ class QuroShellSession private constructor(
 
     init {
         Log.i(TAG, "init: 创建会话, 模式=$mode, 命令=${command.joinToString(" ")}")
-        appendLine("— Zorv AI 终端已启动 (${if (mode == ShellMode.LINUX) "proot/Linux · Ubuntu 24.04" else "设备 · Toybox sh"}) —")
-        // ⚠ 设备模式 = proot 未启用，所有 Linux 命令都不可用。
-        // 把**原因直接打进终端缓冲区**：用户在真机上无需 adb/logcat，截图即可取证。
-        if (mode == ShellMode.DEVICE) {
-            appendLine("⚠ 当前是 Android 设备 shell，apt-get / dpkg / python3 / node 等 Linux 命令均不可用。")
-            runCatching {
-                val st = QuroLinuxEnv.probeLenient(context)
-                appendLine("   原因: ${st.reason}")
-                val p = QuroLinuxEnv.prootPath(context)
-                appendLine("   proot : $p (存在=${File(p).exists()})")
-                val rf = File(QuroLinuxEnv.rootfsPath(context))
-                appendLine("   rootfs: ${rf.absolutePath} (是目录=${rf.isDirectory}, 条目数=${rf.listFiles()?.size ?: 0})")
-                appendLine("   修复 : 点顶栏「检查更新/安装 Linux 环境」，或在对话发送 linux:install")
+        when (mode) {
+            ShellMode.VM -> appendLine("— Zorv AI 终端（VM · 完整 Linux 内核）已启动 —")
+            ShellMode.LINUX -> appendLine("— Zorv AI 终端已启动 (proot/Linux · Ubuntu 24.04) —")
+            ShellMode.DEVICE -> {
+                appendLine("— Zorv AI 终端已启动 (设备 · Toybox sh) —")
+                // ⚠ 设备模式 = proot 未启用，所有 Linux 命令都不可用。
+                // 把**原因直接打进终端缓冲区**：用户在真机上无需 adb/logcat，截图即可取证。
+                appendLine("⚠ 当前是 Android 设备 shell，apt-get / dpkg / python3 / node 等 Linux 命令均不可用。")
+                runCatching {
+                    val st = QuroLinuxEnv.probeLenient(context)
+                    appendLine("   原因: ${st.reason}")
+                    val p = QuroLinuxEnv.prootPath(context)
+                    appendLine("   proot : $p (存在=${File(p).exists()})")
+                    val rf = File(QuroLinuxEnv.rootfsPath(context))
+                    appendLine("   rootfs: ${rf.absolutePath} (是目录=${rf.isDirectory}, 条目数=${rf.listFiles()?.size ?: 0})")
+                    appendLine("   修复 : 点顶栏「检查更新/安装 Linux 环境」，或在对话发送 linux:install")
+                }
             }
         }
-        appendLine(promptPrefix())
+        // VM 模式：guest shell 自行回显与提示符，本层不补 promptPrefix。
+        if (mode != ShellMode.VM) appendLine(promptPrefix())
         Log.d(TAG, "init: 启动drain协程")
         launch { drain() }
     }
@@ -229,6 +238,16 @@ class QuroShellSession private constructor(
             return
         }
         val trimmed = cmd.trim()
+        // VM 真 TTY：回显/提示符/信号由 guest 完成，本层只透传输入、不注入哨兵。
+        if (passthroughEcho) {
+            if (trimmed.isEmpty()) return
+            if (trimmed == "clear" || trimmed == "cls") { clear(); return }
+            // ACI 命令仍在本层拦截（qurohost 不在 VM 内）
+            if (trimmed == "aci" || trimmed.startsWith("aci ")) { runAciCommand(trimmed); return }
+            lastInterrupted = false
+            writeRawDirect(CommandTranslator.translate(trimmed) + "\n")
+            return
+        }
         if (trimmed.isEmpty()) {
             // 空回车：仅补一个新提示符
             appendLine(promptPrefix())
@@ -418,7 +437,27 @@ class QuroShellSession private constructor(
      * 哨兵写到 stderr（C 库对 stderr 不做缓冲），再经 `redirectErrorStream(true)`
      * 合并进我们读取的同一流，确保完成信号立即到达、不被 stdout 的块缓冲卡住。
      */
+    /**
+     * 仅把文本原样写进底层进程 stdin（不补换行、不回显、不加哨兵），
+     * 用于 VM 真 TTY 透传模式与内部 cd 命令。
+     */
+    private fun writeRawDirect(text: String) {
+        launch {
+            try {
+                writer.write(text)
+                writer.flush()
+            } catch (e: Exception) {
+                appendLine("⚠ 写入失败: ${e.message}")
+            }
+        }
+    }
+
     private fun writeWithSentinel(cmd: String) {
+        if (passthroughEcho) {
+            // 真 TTY：仅透传命令，回显与提示符由 guest shell 完成
+            launch { writeRawDirect(cmd + "\n") }
+            return
+        }
         launch {
             try {
                 Log.d(TAG, "writeWithSentinel: 写入命令到stdin, cmd='$cmd'")
@@ -447,6 +486,11 @@ class QuroShellSession private constructor(
      */
     fun restoreCwd(path: String) {
         if (exited || path.isBlank() || path == cwdState) return
+        if (passthroughEcho) {
+            // VM 真 TTY：直接透传 cd，guest shell 自行处理
+            writeRawDirect("cd " + QuroShellQuote.quote(path) + "\n")
+            return
+        }
         busy = true
         suppressNextPrompt = true
         writeWithSentinel("cd " + QuroShellQuote.quote(path))
@@ -472,6 +516,13 @@ class QuroShellSession private constructor(
      */
     suspend fun interrupt(): Boolean {
         if (exited) return true
+        if (passthroughEcho) {
+            // 真 TTY：ETX 会被内核翻译成 SIGINT 投递给 guest 前台进程组
+            lastInterrupted = true
+            appendLine("^C")
+            runCatching { writer.write("\u0003"); writer.flush() }
+            return true
+        }
         if (!busy) return true
 
         lastInterrupted = true
@@ -567,7 +618,11 @@ class QuroShellSession private constructor(
     }
 
     private fun promptPrefix(): String =
-        if (mode == ShellMode.LINUX) "quro@linux:$cwdState\$ " else "$cwdState\$ "
+        when (mode) {
+            ShellMode.LINUX -> "quro@linux:$cwdState\$ "
+            ShellMode.VM -> "" // guest shell 自行回显提示符
+            ShellMode.DEVICE -> "$cwdState\$ "
+        }
 
     companion object {
         private const val MAX_LINES = 4000
@@ -586,15 +641,26 @@ class QuroShellSession private constructor(
          * → 失败则回落旧直连路径（[createLegacy]，与 v127 行为一致）。任何异常都被捕获降级，
          * 绝不抛出，避免拖垮 ChatScreen 重组。旧 Termux 终端 / 旧 Kotlin CMS 部署器路径完整保留。
          */
-        fun create(context: Context): QuroShellSession {
-            // 直连 proot/设备 sh，不走 qurohost 包装层。
-            // qurohost（libqurohost.so）是 Android ELF 二进制，动态链接器为
-            // /system/bin/linker64。proot 将 / 映射到 Ubuntu rootfs，
-            // rootfs 内无 linker64 → qurohost 在 proot 内秒退、终端无任何输出。
-            // terminal_exec 走 QuroLinuxEnv.run() 绕过了 qurohost 所以正常，
-            // 交互终端也应走同一路径（直连 proot）。
-            return createLegacy(context)
+    fun create(context: Context): QuroShellSession {
+        // VM-first：AVF/pKVM 或 QEMU 真内核 Linux 优先；任一失败回退 proot 用户态 Linux。
+        runCatching {
+            val console = QuroVmEnv.startConsole(context)
+            if (console != null) {
+                val env = QuroVmEnv.vmShellEnv(context)
+                Log.i(TAG, "✅ VM 后端已启动，创建 VM 模式会话")
+                return QuroShellSession(context, ShellMode.VM, emptyList(), env, "/root", console)
+            }
+        }.onFailure { e ->
+            Log.w(TAG, "VM 后端启动失败，回退 proot: ${e.message}")
         }
+        // 直连 proot/设备 sh，不走 qurohost 包装层。
+        // qurohost（libqurohost.so）是 Android ELF 二进制，动态链接器为
+        // /system/bin/linker64。proot 将 / 映射到 Ubuntu rootfs，
+        // rootfs 内无 linker64 → qurohost 在 proot 内秒退、终端无任何输出。
+        // terminal_exec 走 QuroLinuxEnv.run() 绕过了 qurohost 所以正常，
+        // 交互终端也应走同一路径（直连 proot）。
+        return createLegacy(context)
+    }
 
         /**
          * 旧直连路径（v127 行为）：Linux 环境就绪则 proot 常驻 sh，否则设备 sh。
@@ -635,7 +701,7 @@ class QuroShellSession private constructor(
     }
 }
 
-enum class ShellMode { DEVICE, LINUX }
+enum class ShellMode { DEVICE, LINUX, VM }
 
 /** 去掉 ANSI 转义序列（\x1b[...m 等），让管道模式下的输出干净可读。 */
 private fun stripAnsi(s: String): String {
