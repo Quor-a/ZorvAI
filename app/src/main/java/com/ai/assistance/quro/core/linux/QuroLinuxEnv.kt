@@ -163,6 +163,15 @@ object QuroLinuxEnv {
     fun tmpPath(context: Context): String =
         File(sandboxDir(context), "tmp").absolutePath
 
+    /** 设备共享存储（/sdcard，即 /storage/emulated/0）宿主路径，绑进 proot 后沙箱内可见为 /sdcard。 */
+    fun sharedStorageHostDir(context: Context): File? {
+        val f = android.os.Environment.getExternalStorageDirectory()
+        return if (f != null && f.canRead()) f else null
+    }
+
+    /** 共享存储在 proot 内的挂载点（Agora 同为 /sdcard）。 */
+    const val SHARED_STORAGE_MOUNT = "/sdcard"
+
     /** proot 二进制：nativeLibraryDir 内，Android 在此授予 .so 可执行权限。 */
     fun prootPath(context: Context): String = findNativeLibWithAssetsFallback(context, "libproot.so")
 
@@ -866,6 +875,8 @@ object QuroLinuxEnv {
             "--bind=$home:/root",
             "--bind=$tmp:/tmp",
         )
+        // 设备共享存储（/sdcard）绑进沙箱，让 Linux 终端能访问 Downloads/DCIM/Documents 等（参考 Agora SharedFolderMounts）。
+        sharedStorageHostDir(context)?.let { args.add("--bind=${it.absolutePath}:$SHARED_STORAGE_MOUNT") }
         // getprop 垫片可回落读 /system/build.prop，仅当该文件本就可读时绑定（避免整体启动失败）。
         if (File("/system/build.prop").canRead()) {
             args.add("--bind=/system/build.prop:/system/build.prop")
@@ -922,6 +933,11 @@ object QuroLinuxEnv {
             // 挂载 home 目录到 /root
             appendLine("mkdir -p $rootfs/root 2>/dev/null || true")
             appendLine("mount -o bind $home $rootfs/root")
+            // 挂载设备共享存储（/sdcard）进沙箱，终端可访问 Downloads/DCIM/Documents（参考 Agora SharedFolderMounts）
+            sharedStorageHostDir(context)?.let { ss ->
+                appendLine("mkdir -p $rootfs/sdcard 2>/dev/null || true")
+                appendLine("mount -o bind ${ss.absolutePath} $rootfs/sdcard")
+            }
             // 挂载 /system/build.prop（如果可读）
             if (File("/system/build.prop").canRead()) {
                 appendLine("mkdir -p $rootfs/system 2>/dev/null || true")
@@ -949,6 +965,7 @@ object QuroLinuxEnv {
                 appendLine("umount $rootfs/tmp 2>/dev/null || true")
             }
             appendLine("umount $rootfs/root 2>/dev/null || true")
+            sharedStorageHostDir(context)?.let { appendLine("umount $rootfs/sdcard 2>/dev/null || true") }
             if (File("/system/build.prop").canRead()) {
                 appendLine("umount $rootfs/system/build.prop 2>/dev/null || true")
             }
@@ -1186,6 +1203,7 @@ object QuroLinuxEnv {
                 "--bind=$home:/root",
                 "--bind=$tmp:/tmp",
             )
+            sharedStorageHostDir(context)?.let { args.add("--bind=${it.absolutePath}:$SHARED_STORAGE_MOUNT") }
             if (File("/system/build.prop").canRead()) {
                 args.add("--bind=/system/build.prop:/system/build.prop")
             }
@@ -1353,6 +1371,12 @@ object QuroLinuxEnv {
                     appendLine("mkdir -p $rootfsPath/system 2>/dev/null || true")
                     appendLine("mount -o bind /system/build.prop $rootfsPath/system/build.prop")
                 }
+                // 设备共享存储（/sdcard）绑进沙箱，终端可访问 Downloads/DCIM/Documents（参考 Agora）。
+                val ss = android.os.Environment.getExternalStorageDirectory()
+                if (ss != null && ss.canRead()) {
+                    appendLine("mkdir -p $rootfsPath/sdcard 2>/dev/null || true")
+                    appendLine("mount -o bind ${ss.absolutePath} $rootfsPath/sdcard")
+                }
             }
 
             val chrootCmd = "chroot $rootfsPath /bin/sh -c 'cd /root && exec /bin/sh'"
@@ -1381,10 +1405,12 @@ object QuroLinuxEnv {
             "--bind=/sys",
             "--bind=${homePath(context)}:/root",
             "--bind=${tmpPath(context)}:/tmp",
-            "-0",
-            "-w", "/root",
-            "/bin/sh",
         )
+        // 设备共享存储（/sdcard）绑进沙箱，让终端能访问 Downloads/DCIM/Documents 等（参考 Agora SharedFolderMounts）。
+        sharedStorageHostDir(context)?.let { args.add("--bind=${it.absolutePath}:$SHARED_STORAGE_MOUNT") }
+        args.add("-0")
+        args.add("-w"); args.add("/root")
+        args.add("/bin/sh")
         // getprop 垫片可回落读 /system/build.prop，故把宿主真机 build.prop 只读绑进沙箱
         // （仅当该文件本就可读，避免 proot 因源不存在而整体启动失败）。
         if (File("/system/build.prop").canRead()) {
@@ -2056,6 +2082,8 @@ fi
     private fun prepareRuntimeExtras(context: Context, rootfs: File) {
         try {
             writeResolvConf(rootfs, context)
+            // 创建共享存储挂载点（/sdcard），否则 proot --bind 因目标不存在而整体启动失败。
+            File(rootfs, SHARED_STORAGE_MOUNT.trimStart('/')).mkdirs()
             val props = buildProps(context)
             File(rootfs, "etc").mkdirs()
             File(rootfs, "etc/quro_props.prop").writeText(

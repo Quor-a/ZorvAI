@@ -214,6 +214,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:hardwareAccelerated="true"
         android:theme="@style/Theme.Quro"
         android:resizeableActivity="true"
         android:networkSecurityConfig="@xml/network_security_config">
@@ -544,6 +545,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 
@@ -562,6 +564,43 @@
             android:name=".core.tools.QuroScheduleReceiver"
             android:enabled="true"
             android:exported="false" />
+
+        <!-- 桌面小卡片（AppWidget）：必须在此注册，否则系统无法添加/更新该组件（此前缺失导致卡片异常） -->
+        <receiver
+            android:name=".core.QuroReplyWidget"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quro_reply_widget_info" />
+        </receiver>
+
+        <!-- 状态栏快捷开关：进入对话（非通知栏，Quick Settings Tile） -->
+        <service
+            android:name=".service.QuroChatTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Zorv 对话"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- 状态栏快捷开关：语音球（点击切换悬浮语音球） -->
+        <service
+            android:name=".service.QuroVoiceTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Zorv 语音球"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!-- 定时任务开机重排程接收器 -->
         <receiver

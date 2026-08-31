@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Python 控制台 (Brython)</title>
+<script src="brython.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: #0d1117; color: #c9d1d9;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    display: flex; flex-direction: column; padding: 12px; gap: 10px;
+  }
+  .bar { display: flex; align-items: center; gap: 8px; }
+  .bar h1 { font-size: 15px; margin: 0; color: #58a6ff; flex: 1; }
+  button {
+    background: #238636; color: #fff; border: 0; border-radius: 6px;
+    padding: 8px 14px; font-size: 14px; cursor: pointer;
+  }
+  button.ghost { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+  textarea {
+    flex: 1; min-height: 160px; width: 100%; resize: vertical;
+    background: #010409; color: #c9d1d9; border: 1px solid #30363d;
+    border-radius: 6px; padding: 10px; font: 14px/1.5 ui-monospace, monospace;
+  }
+  pre {
+    background: #010409; border: 1px solid #30363d; border-radius: 6px;
+    padding: 10px; margin: 0; min-height: 80px; max-height: 38vh; overflow: auto;
+    white-space: pre-wrap; word-break: break-word; font-size: 13px;
+  }
+  .hint { font-size: 12px; color: #8b949e; }
+</style>
+</head>
+<body onload="brython()">
+  <div class="bar">
+    <h1>Python 控制台</h1>
+    <button class="ghost" onclick="clearOut()">清空</button>
+    <button onclick="run()">运行 ▶</button>
+  </div>
+  <div class="hint">完整 Python（Brython 离线内核）。支持 print / 函数 / 类 / 标准库（math、json、re、random 等）。</div>
+  <textarea id="code">import math
+
+def fib(n):
+    a, b = 0, 1
+    for _ in range(n):
+        a, b = b, a + b
+    return a
+
+print("sqrt(2) =", round(math.sqrt(2), 4))
+print("fib(10) =", fib(10))
+print("hello from python")
+</textarea>
+  <pre id="out"></pre>
+
+<script type="text/python">
+from browser import document
+import sys, traceback
+from io import StringIO
+
+def run():
+    code = document["code"].value
+    buf = StringIO()
+    old_out = sys.stdout
+    sys.stdout = buf
+    try:
+        exec(code)
+    except Exception as e:
+        print("Traceback:")
+        traceback.print_exc()
+    finally:
+        sys.stdout = old_out
+    document["out"].textContent = buf.getvalue() or "(无输出)"
+
+def clearOut():
+    document["out"].textContent = ""
+</script>
+</body>
+</html>

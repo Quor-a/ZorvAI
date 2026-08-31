@@ -9,6 +9,7 @@ import android.content.Intent
 import android.widget.RemoteViews
 import com.ai.assistance.quro.R
 import com.ai.assistance.quro.activity.QuroMainActivity
+import com.ai.assistance.quro.service.QuroVoiceBallService
 
 /**
  * 桌面卡片（AppWidget）：展示最近一条 AI 回复摘要，点击进入应用。
@@ -87,9 +88,12 @@ class QuroReplyWidget : AppWidgetProvider() {
                         action = Intent.ACTION_MAIN
                         flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
                     }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
-            // 🎤 语音：切换语音球（广播通知 Service）
+            // 🎤 语音：切换悬浮语音球（复用语音球服务的 ACTION_VOICE_TALK）
+            val voiceIntent = Intent(ctx, QuroVoiceBallService::class.java).apply {
+                action = QuroVoiceBallService.ACTION_VOICE_TALK
+            }
             rv.setOnClickPendingIntent(R.id.widget_card_voice,
-                PendingIntent.getBroadcast(ctx, 11, Intent("com.ai.assistance.quro.TOGGLE_VOICE_BALL"),
+                PendingIntent.getService(ctx, 11, voiceIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             // ⏰ 提醒 → 定时任务
             rv.setOnClickPendingIntent(R.id.widget_card_schedule, featureIntent(12, "ui_open_schedule"))

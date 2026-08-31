@@ -812,26 +812,66 @@ private fun InfoCardView(card: QuroChatCard.InfoCard) {
 }
 
 // ───────────── v135 工具调用 / 流式 / 媒体播放 ─────────────
+/** 按工具名映射专属资源图标（解决「工具调用图标简漏 / 不够用」）。 */
+private fun toolIcon(name: String): ImageVector = when (name.lowercase()) {
+    "browser", "web", "fetch", "http", "ai_browser", "open_url" -> Icons.Filled.Public
+    "image", "image_gen", "draw", "paint" -> Icons.Filled.Image
+    "video", "video_gen" -> Icons.Filled.Videocam
+    "audio", "tts", "music", "play" -> Icons.Filled.Audiotrack
+    "stt", "asr", "transcribe", "voice" -> Icons.Filled.Mic
+    "alarm", "set_alarm", "cancel_alarm", "list_alarms", "remind" -> Icons.Filled.Alarm
+    "calendar", "schedule", "event" -> Icons.Filled.CalendarToday
+    "terminal", "shell", "cmd", "exec", "bash", "sh" -> Icons.Filled.Terminal
+    "code", "run_code", "script", "python" -> Icons.Filled.Code
+    "file", "read_file", "write_file", "cat", "edit" -> Icons.Filled.InsertDriveFile
+    "search", "web_search", "google" -> Icons.Filled.Search
+    "translate" -> Icons.Filled.Translate
+    "package", "pkg", "install", "uninstall", "apt", "dpkg" -> Icons.Filled.Inventory2
+    "download", "download_file" -> Icons.Filled.Download
+    "cleanup", "clean", "clear_cache" -> Icons.Filled.CleaningServices
+    "sms", "message", "send_sms" -> Icons.Filled.Sms
+    "email", "mail" -> Icons.Filled.Email
+    "location", "map", "geo" -> Icons.Filled.LocationOn
+    "battery", "ps", "top", "mem", "cpuinfo", "netstat" -> Icons.Filled.Memory
+    "wifi", "network", "ping", "curl" -> Icons.Filled.Wifi
+    "clipboard", "copy" -> Icons.Filled.ContentCopy
+    else -> Icons.Filled.Build
+}
+
 @Composable
 private fun ToolCallCardView(card: QuroChatCard.ToolCallCard) {
     val cs = MaterialTheme.colorScheme
-    val (icon, color, label) = when (card.status.lowercase()) {
-        "running" -> Triple(Icons.Filled.Autorenew, cs.primary, "运行中")
+    val (statusIcon, color, label) = when (card.status.lowercase()) {
+        "running" -> Triple(Icons.Filled.Autorenew, cs.primary, "执行中")
         "done" -> Triple(Icons.Filled.CheckCircle, SUCCESS, "完成")
         "error" -> Triple(Icons.Filled.Error, ERROR, "失败")
         else -> Triple(Icons.Filled.Schedule, WARNING, "等待中")
     }
     CardShell(card.title) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // 工具专属资源图标
+            Icon(toolIcon(card.tool), null, tint = cs.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            // 状态指示（执行中旋转 / 完成 / 失败）
             if (card.status == "running") {
                 CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp), color = color)
             } else {
-                Icon(icon, null, tint = color, modifier = Modifier.size(18.dp))
+                Icon(statusIcon, null, tint = color, modifier = Modifier.size(18.dp))
             }
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(card.tool.ifBlank { "工具调用" }, color = cs.onSurface, fontSize = 13.sp)
-                if (card.message.isNotBlank()) Text(card.message, color = cs.onSurfaceVariant, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (card.message.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        card.message,
+                        color = cs.onSurfaceVariant,
+                        fontSize = 11.sp,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
             }
             Text(label, color = color, fontSize = 11.sp)
         }

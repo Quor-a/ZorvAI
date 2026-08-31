@@ -97,9 +97,18 @@ private val UA_PRESETS = listOf(
 
 // —— GeckoView 运行时单例（全局只能 create 一次）——
 private var geckoRuntime: GeckoRuntime? = null
-private fun getGeckoRuntime(ctx: Context): GeckoRuntime {
-    if (geckoRuntime == null) geckoRuntime = GeckoRuntime.create(ctx.applicationContext)
-    return geckoRuntime!!
+private var geckoInitError: String? = null
+private fun getGeckoRuntime(ctx: Context): GeckoRuntime? {
+    if (geckoRuntime != null) return geckoRuntime
+    if (geckoInitError != null) return null
+    return try {
+        geckoRuntime = GeckoRuntime.create(ctx.applicationContext)
+        geckoRuntime
+    } catch (e: Throwable) {
+        geckoInitError = "浏览器内核初始化失败：${e.message ?: e.javaClass.simpleName}"
+        android.util.Log.e("QuroBrowser", "GeckoRuntime.create 失败", e)
+        null
+    }
 }
 
 // —— 网页自动化脚本：数据模型 + 持久化 ——
@@ -316,12 +325,31 @@ fun QuroBrowserScreen(
     var running by remember { mutableStateOf(false) }
     var eyeBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    // GeckoView 会话（内置开源浏览器引擎）
-    val session = remember {
-        GeckoSession().apply {
-            open(getGeckoRuntime(ctx))
-            loadUri(url)
+    // GeckoView 会话（内置开源浏览器引擎）；内核初始化失败时降级为错误页而非整屏崩溃
+    val runtime = remember { getGeckoRuntime(ctx) }
+    val session = remember(runtime) {
+        runtime?.let {
+            GeckoSession().apply {
+                open(it)
+                loadUri(url)
+            }
         }
+    }
+    if (session == null) {
+        Box(Modifier.fillMaxSize().background(cs.background), contentAlignment = Alignment.Center) {
+            Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("⚠ 内置浏览器不可用", style = MaterialTheme.typography.titleMedium, color = cs.error)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    geckoInitError ?: "浏览器内核未能初始化",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = cs.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = onClose) { Text("关闭") }
+            }
+        }
+        return
     }
 
     var loadError by remember { mutableStateOf<String?>(null) }
@@ -506,9 +534,20 @@ fun QuroBrowserScreen(
             }
 
             override fun onCrash(session: GeckoSession) {
-                loadError = "浏览器内核崩溃，请返回后重试"
+                // 内核崩溃后尝试重建会话恢复，而非只提示
+                runCatching {
+                    runtime?.let { rt ->
+                        session.close()
+                        session.open(rt)
+                        if (address.isNotBlank()) session.loadUri(address) else session.loadUri(url)
+                    }
+                }.onFailure {
+                    loadError = "浏览器内核崩溃，请返回后重试"
+                }
             }
         }
+        // 注：权限（定位/摄像头/麦克风）暂由 GeckoView 默认处理；
+        // 如需强制授予可在后续接入 PermissionDelegate（GeckoView 140 API 与旧版差异较大，单独迭代）。
         onDispose { }
     }
 

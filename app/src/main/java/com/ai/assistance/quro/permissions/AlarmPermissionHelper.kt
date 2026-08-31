@@ -67,13 +67,13 @@ class AlarmPermissionHelper(private val context: Context) {
             openExactAlarmSettings()
             return
         }
-        val pi = WorkoutAlarmReceiver.buildIntent(context, title, content)
+        val pi = WorkoutAlarmReceiver.buildIntent(context, "", title, content)
         alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi)
     }
 
     /** 普通提醒用非精确闹钟（窗口对齐，不需特殊权限）。 */
     fun scheduleReminder(triggerAtMillis: Long, title: String, content: String) {
-        val pi = WorkoutAlarmReceiver.buildIntent(context, title, content)
+        val pi = WorkoutAlarmReceiver.buildIntent(context, "", title, content)
         alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi)
     }
 
