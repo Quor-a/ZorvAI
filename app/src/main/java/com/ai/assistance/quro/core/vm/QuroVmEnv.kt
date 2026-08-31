@@ -5,7 +5,7 @@ import android.util.Log
 import java.io.File
 
 /**
- * VM 终端后端能力探测 + 资产路径解析（Kalidroid 思路：AVF/pKVM 真内核 → QEMU 软虚拟化 → proot 兜底）。
+ * VM 终端后端能力探测 + 资产路径解析，三级降级：AVF/pKVM 真内核 → QEMU 软虚拟化 → proot 兜底。
  *
  * 三级能力（优先级从高到低）：
  *  1. AVF / pKVM：Android Virtualization Framework，跑**完整 Linux 内核**（最优，接近原生性能）。
