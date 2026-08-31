@@ -352,6 +352,19 @@ cp -f "$BUILT" "$OUT_DIR/libproot.so.unstripped"
 chmod +x "$OUT_DIR/libproot.so"
 echo "✅ libproot.so 构建完成（CMake 驱动）"
 
+# 外部 loader（PROOT_LOADER 指向；proot 运行时 execve 的就是它，必须与新 proot 同源重建）
+# loader.elf 由 CMake 的 build_loader() 生成（与内嵌 loader 同源、同 NDK、同 proot commit 编译），
+# 类型为 ET_EXEC 固定地址（与既有 libproot-loader.so 一致），可直接作外部 loader 使用。
+# 漏装它会导致 PROOT_LOADER 仍指向旧 loader，与新 proot 版本漂移 → guest execve 报 Bad address。
+LOADER_ELF="$CMAKE_BUILD/obj/loader.elf"
+if [[ -f "$LOADER_ELF" ]]; then
+  cp -f "$LOADER_ELF" "$OUT_DIR/libproot-loader.so"
+  chmod +x "$OUT_DIR/libproot-loader.so"
+  echo "✅ libproot-loader.so 提取完成（外部 loader，与 proot 同源）"
+else
+  echo "❌ 未找到 $LOADER_ELF（loader 构建步骤未产出）"; exit 1
+fi
+
 # ── 8. 校验（不靠肉眼，靠 ELF 头）─────────────────────────────────────────
 echo ""
 echo "=== 产物校验 ==="
@@ -405,9 +418,21 @@ if [[ "$DO_INSTALL" == "1" ]]; then
   mkdir -p "$ROOT/app/src/full/jniLibs/$ABI"
   cp -f "$BIN_FILE" "$ROOT/app/src/full/jniLibs/$ABI/libproot.so"
   echo "  → app/src/full/jniLibs/$ABI/libproot.so"
+  # 外部 loader 同步安装（与 proot 同源重建，PROOT_LOADER 指向它）
+  LOADER_BIN="$OUT_DIR/libproot-loader.so"
+  if [[ -f "$LOADER_BIN" ]]; then
+    cp -f "$LOADER_BIN" "$ROOT/app/src/full/jniLibs/$ABI/libproot-loader.so"
+    echo "  → app/src/full/jniLibs/$ABI/libproot-loader.so"
+  else
+    echo "❌ 缺少 $LOADER_BIN，loader 未生成"; exit 1
+  fi
   if [[ "$ABI" == "arm64-v8a" ]]; then
     cp -f "$BIN_FILE" "$ROOT/app/src/main/assets/linux_env/proot"
     echo "  → app/src/main/assets/linux_env/proot"
+    if [[ -f "$LOADER_BIN" ]]; then
+      cp -f "$LOADER_BIN" "$ROOT/app/src/main/assets/linux_env/libproot-loader.so"
+      echo "  → app/src/main/assets/linux_env/libproot-loader.so"
+    fi
   fi
   echo "⚠ 已覆盖运行时二进制，务必真机验证终端；回退：git checkout -- app/src/full/jniLibs app/src/main/assets/linux_env"
 else
