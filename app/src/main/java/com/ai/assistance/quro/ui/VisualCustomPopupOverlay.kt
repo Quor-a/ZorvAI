@@ -116,6 +116,15 @@ fun VisualCustomPopupOverlay(
                         settings.allowContentAccess = true
                         settings.loadWithOverviewMode = true
                         settings.useWideViewPort = true
+                        settings.setSupportZoom(false)
+                        settings.builtInZoomControls = false
+                        settings.displayZoomControls = false
+                        settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        settings.mediaPlaybackRequiresUserGesture = false
+                        settings.defaultTextEncodingName = "UTF-8"
+                        settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                        settings.allowUniversalAccessFromFileURLs = true
+                        settings.allowFileAccessFromFileURLs = true
                         
                         // 添加JavaScript接口，让HTML可以调用
                         addJavascriptInterface(object {

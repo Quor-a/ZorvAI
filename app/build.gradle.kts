@@ -38,8 +38,8 @@ android {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1069
-        versionName = "1.0.69"
+        versionCode = 1070
+        versionName = "1.0.70"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -168,6 +168,9 @@ dependencies {
     implementation(libs.zxing.core)
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
+    // 后台周期任务：提供商健康检查、自主心跳（选 WorkManager 而非手写 AlarmManager，
+    // 因其自带约束、指数退避重试与进程被杀后的调度恢复）
+    implementation(libs.androidx.work.runtime.ktx)
 
     // 插件运行时：PluginRuntime.kt（manifest 解析 / 权限网关）依赖 org.json
     implementation(libs.org.json)

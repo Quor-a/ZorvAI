@@ -50,6 +50,7 @@ object QuroPermissionHelper {
             battery(context, pkg),
             location(context),
             accessibility(context, pkg),
+            alarm(context, pkg),
             shizuku(context),
             admin(context),
             root(context),
@@ -102,6 +103,30 @@ object QuroPermissionHelper {
             guideIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                 data = Uri.parse("package:$pkg")
             },
+        )
+    }
+
+    // 4) 闹钟权限
+    private fun alarm(ctx: Context, pkg: String): QuroPermissionItem {
+        val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = ctx.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            alarmManager.canScheduleExactAlarms()
+        } else {
+            true // Android 12 以下不需要特殊权限
+        }
+        return QuroPermissionItem(
+            id = "alarm",
+            title = "闹钟权限",
+            desc = "设置精确闹钟和提醒",
+            granted = granted,
+            guideIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                    data = Uri.parse("package:$pkg")
+                }
+            } else {
+                null
+            },
+            note = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) "Android 12 以下不需要特殊权限" else "",
         )
     }
 

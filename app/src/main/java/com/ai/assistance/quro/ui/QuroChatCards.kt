@@ -1564,6 +1564,9 @@ private fun MermaidWebView(
         val t = card.theme.trim().lowercase()
         if (t in setOf("default", "dark", "forest", "neutral", "base")) t else if (dark) "dark" else "default"
     }
+    val webViewRef = remember { mutableStateOf<WebView?>(null) }
+    var renderError by remember(card.id) { mutableStateOf<String?>(null) }
+
     AndroidView(
         modifier = modifier,
         factory = { context ->
@@ -1577,6 +1580,8 @@ private fun MermaidWebView(
                 settings.setSupportZoom(zoomable)
                 settings.builtInZoomControls = zoomable
                 settings.displayZoomControls = false
+                settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                settings.defaultTextEncodingName = "UTF-8"
                 setBackgroundColor(0x00000000)
                 addJavascriptInterface(object {
                     @JavascriptInterface
@@ -1590,23 +1595,73 @@ private fun MermaidWebView(
                     }
 
                     @JavascriptInterface
+                    fun onError(msg: String) {
+                        renderError = msg
+                    }
+
+                    @JavascriptInterface
                     fun onReady() {}
                 }, "AndroidBridge")
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
+                        renderError = null
                         val src = JSONObject.quote(card.source)
                         view?.evaluateJavascript("window.__render($src, '$theme')", null)
                     }
+
+                    override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                        super.onReceivedError(view, errorCode, description, failingUrl)
+                        renderError = "WebView 错误: $description (code=$errorCode)"
+                    }
                 }
+                webViewRef.value = this
                 loadUrl("file:///android_asset/www/mermaid_render.html")
             }
         },
         update = { wv ->
+            renderError = null
             val src = JSONObject.quote(card.source)
             wv.evaluateJavascript("window.__render($src, '$theme')", null)
         }
     )
+
+    // 渲染失败时显示重试按钮
+    renderError?.let { err ->
+        Box(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "渲染失败: ${err.take(100)}",
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 11.sp,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(4.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.clickable {
+                        webViewRef.value?.let { wv ->
+                            renderError = null
+                            val src = JSONObject.quote(card.source)
+                            wv.evaluateJavascript("window.__retry($src, '$theme')", null)
+                        }
+                    }
+                ) {
+                    Text(
+                        "重试",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**

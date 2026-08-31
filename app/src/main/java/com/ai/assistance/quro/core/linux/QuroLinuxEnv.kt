@@ -804,6 +804,32 @@ object QuroLinuxEnv {
         return if (isChrootAvailable(context)) "chroot" else "proot"
     }
 
+    /**
+     * 探测环境内的 Linux 发行版，并返回对应的包管理器。
+     *
+     * 读取 /etc/os-release（Alpine 是 apk、Ubuntu/Debian 是 apt、Fedora 是 dnf、Arch 是 pacman），
+     * 让上层的「装软件」不必把某个包管理器写死。
+     *
+     * 探测失败时（环境未就绪或 cat 失败）回落 apt —— 它是当前内置 rootfs 的默认值，
+     * 至少不会让调用方拿到 null 而无从下手。
+     */
+    fun detectPackageManager(context: Context): PackageManagerSpec {
+        return runCatching {
+            val (code, out) = run(context, DETECT_DISTRO_CMD, timeoutMs = 10_000L)
+            QuroLinuxDistroDetector.packageManagerFor(if (code == 0) out else null)
+        }.getOrDefault(AptPackageManager)
+    }
+
+    /**
+     * 探测到的发行版（供 UI / 工具展示「当前环境是什么系统」）。
+     */
+    fun detectDistro(context: Context): LinuxDistro {
+        return runCatching {
+            val (code, out) = run(context, DETECT_DISTRO_CMD, timeoutMs = 10_000L)
+            QuroLinuxDistroDetector.detect(if (code == 0) out else null)
+        }.getOrDefault(LinuxDistro.UNKNOWN)
+    }
+
     /** 带实时日志回调的执行命令。每输出一行就回调一次。 */
     fun runWithLog(
         context: Context,

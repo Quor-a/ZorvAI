@@ -54,6 +54,7 @@ internal fun ChatTopBar(
     onMenu: () -> Unit,
     onModel: () -> Unit,
     onSettings: () -> Unit,
+    onToolCenter: () -> Unit = {},
     persona: Persona? = null,
     onPick: () -> Unit = {},
     scaled: (Int) -> TextUnit,
@@ -96,6 +97,9 @@ internal fun ChatTopBar(
         }
         // ③ 右侧固定：终端 + 设置。无 weight → 与 ① 同批被测量，长模型名/长人格名都挤不掉它
         Spacer(Modifier.width(4.dp))
+        IconButton(onClick = onToolCenter, modifier = Modifier.size(TOP_BAR_TOUCH)) {
+            LucideIcon("blocks", "工具中心", Modifier.size(21.dp), tint = cs.onBackground)
+        }
         IconButton(onClick = onSettings, modifier = Modifier.size(TOP_BAR_TOUCH)) {
             LucideIcon("settings", "设置", Modifier.size(21.dp), tint = cs.onBackground)
         }

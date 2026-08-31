@@ -10,7 +10,7 @@
     background: transparent;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
   }
-  #diagram { width: 100%; }
+  #diagram { width: 100%; padding: 4px; box-sizing: border-box; }
   #diagram svg { width: 100%; height: auto; max-width: 100%; display: block; }
   .err {
     color: #e5484d;
@@ -20,61 +20,168 @@
     font-family: monospace;
     line-height: 1.4;
   }
+  .debug-info {
+    color: #888;
+    font-size: 11px;
+    white-space: pre-wrap;
+    padding: 4px;
+    font-family: monospace;
+  }
 </style>
 <script src="mermaid.min.js"></script>
 </head>
 <body>
 <div id="diagram" class="mermaid"></div>
 <script>
+  var _renderAttempts = 0;
+  var _lastSvg = '';
+
   function report() {
     var el = document.getElementById('diagram');
-    var h = el ? (el.scrollHeight || el.offsetHeight) : 0;
+    var h = el ? (el.scrollHeight || el.offsetHeight || 0) : 0;
     if (!h || h < 40) h = document.body.scrollHeight || 120;
-    if (window.AndroidBridge) { AndroidBridge.onHeight(Math.ceil(h)); }
+    try {
+      if (window.AndroidBridge && AndroidBridge.onHeight) {
+        AndroidBridge.onHeight(Math.ceil(h));
+      }
+    } catch(e) {}
   }
 
-  // AI 在对话框里「自己写出来」的图表：客户端不内置任何固定流程图，
-  // 只负责把 AI 下发的 Mermaid 文本渲染成矢量图。
-  window.__render = function (src, theme) {
+  function showError(msg) {
+    var el = document.getElementById('diagram');
+    el.innerHTML = '<div class="err">流程图渲染失败：\n' + msg + '</div>';
+    report();
     try {
-      mermaid.initialize({
+      if (window.AndroidBridge && AndroidBridge.onError) {
+        AndroidBridge.onError(msg);
+      }
+    } catch(e) {}
+  }
+
+  // mermaid v10+ 异步 API：mermaid.render(id, definition) 返回 Promise<{svg}>
+  // mermaid v9 同步 API：mermaid.mermaidAPI.render(id, definition, cb)
+  function detectMermaidVersion() {
+    if (typeof mermaid === 'undefined') return 'none';
+    if (mermaid.render && typeof mermaid.render === 'function') return 'v10';
+    if (mermaid.mermaidAPI && mermaid.mermaidAPI.render) return 'v9';
+    return 'unknown';
+  }
+
+  function doRender(src, theme) {
+    _renderAttempts++;
+    var el = document.getElementById('diagram');
+
+    if (!src || !src.trim()) {
+      el.innerHTML = '<div class="debug-info">（空图表）</div>';
+      report();
+      return;
+    }
+
+    var ver = detectMermaidVersion();
+    if (ver === 'none') {
+      showError('mermaid.min.js 加载失败');
+      return;
+    }
+
+    try {
+      var cfg = {
         startOnLoad: false,
         theme: (theme || 'default'),
         securityLevel: 'loose',
-        flowchart: { htmlLabels: true, curve: 'basis' },
-        sequence: { useMaxWidth: true },
-        mindmap: { useMaxWidth: true }
-      });
-      var el = document.getElementById('diagram');
-      el.removeAttribute('data-processed');
-      el.innerHTML = '';
-      var id = 'm' + Date.now() + Math.floor(Math.random() * 1000);
-      mermaid.render(id, src).then(function (res) {
-        el.innerHTML = (res && res.svg) ? res.svg : '';
-        if (res && res.svg && window.AndroidBridge) { AndroidBridge.onSvg(res.svg); }
-        report();
-        // 兜底：部分机型首次测量偏小时，延迟再测一次，确保高度准确、不被裁切
-        setTimeout(report, 250);
-        setTimeout(report, 600);
-      }).catch(function (e) {
-        var msg = (e && e.message) ? e.message : ('' + e);
-        el.innerHTML = '<div class="err">流程图渲染失败：\n' + msg + '</div>';
-        report();
-      });
-    } catch (e) {
-      var msg = (e && e.message) ? e.message : ('' + e);
-      document.getElementById('diagram').innerHTML = '<div class="err">流程图解析失败：\n' + msg + '</div>';
-      report();
-    }
-  };
+        logLevel: 'error',
+        flowchart: { htmlLabels: true, curve: 'basis', useMaxWidth: true },
+        sequence: { useMaxWidth: true, diagramMarginX: 8, diagramMarginY: 8 },
+        mindmap: { useMaxWidth: true },
+        gantt: { useMaxWidth: true },
+        class: { useMaxWidth: true },
+        state: { useMaxWidth: true },
+        pie: { useMaxWidth: true }
+      };
 
-  // 尺寸变化（如 WebView 高度回填导致重排）时再测一次，保证自适应高度始终正确
-  if (window.ResizeObserver) {
-    var ro = new ResizeObserver(function () { report(); });
-    ro.observe(document.getElementById('diagram'));
+      if (ver === 'v10') {
+        // mermaid v10+ API
+        mermaid.initialize(cfg);
+        var id = 'm' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+
+        mermaid.render(id, src).then(function(res) {
+          var svg = (res && res.svg) ? res.svg : ('' + res);
+          if (svg && svg.indexOf('<svg') >= 0) {
+            el.innerHTML = '';
+            el.innerHTML = svg;
+            _lastSvg = svg;
+            try {
+              if (window.AndroidBridge && AndroidBridge.onSvg) {
+                AndroidBridge.onSvg(svg);
+              }
+            } catch(e) {}
+            report();
+            setTimeout(report, 200);
+            setTimeout(report, 500);
+          } else {
+            showError('渲染结果为空（SVG 未生成）');
+          }
+        }).catch(function(e) {
+          var msg = (e && e.message) ? e.message : ('' + e);
+          // 有些 mermaid 版本在 renderer 前加了前缀，去掉
+          msg = msg.replace(/Syntax error in text[\s\S]*?near '/, '语法错误 near \'');
+          showError(msg);
+        });
+      } else {
+        // mermaid v9 legacy API
+        mermaid.mermaidAPI.initialize(cfg);
+        var id = 'm' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+        mermaid.mermaidAPI.render(id, src, function(svgCode) {
+          if (svgCode && svgCode.indexOf('<svg') >= 0) {
+            el.innerHTML = '';
+            el.innerHTML = svgCode;
+            _lastSvg = svgCode;
+            try {
+              if (window.AndroidBridge && AndroidBridge.onSvg) {
+                AndroidBridge.onSvg(svgCode);
+              }
+            } catch(e) {}
+            report();
+            setTimeout(report, 200);
+            setTimeout(report, 500);
+          } else {
+            showError('渲染结果为空');
+          }
+        });
+      }
+    } catch(e) {
+      showError((e && e.message) ? e.message : ('' + e));
+    }
   }
 
-  if (window.AndroidBridge) { AndroidBridge.onReady(); }
+  // 全局渲染入口
+  window.__render = function(src, theme) {
+    doRender(src, theme);
+  };
+
+  // 重试入口
+  window.__retry = function(src, theme) {
+    doRender(src, theme);
+  };
+
+  // 获取上次渲染的 SVG
+  window.__getSvg = function() {
+    return _lastSvg;
+  };
+
+  // 尺寸变化时重新测量
+  if (window.ResizeObserver) {
+    try {
+      var ro = new ResizeObserver(function() { report(); });
+      ro.observe(document.getElementById('diagram'));
+    } catch(e) {}
+  }
+
+  // 通知 Kotlin 侧已就绪
+  try {
+    if (window.AndroidBridge && AndroidBridge.onReady) {
+      AndroidBridge.onReady();
+    }
+  } catch(e) {}
 </script>
 </body>
 </html>

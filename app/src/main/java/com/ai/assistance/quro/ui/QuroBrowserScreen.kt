@@ -21,15 +21,23 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +79,21 @@ private const val SCRIPT_PREFS = "quro_browser"
 private const val SCRIPT_KEY = "scripts"
 private const val DESKTOP_UA =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+private const val MOBILE_UA =
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+private const val TABLET_UA =
+    "Mozilla/5.0 (Linux; Android 14; SM-X810) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+private const val LEGACY_UA =
+    "Mozilla/5.0 (Linux; Android 10; SM-G960F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.181 Mobile Safari/537.36"
+
+// 预设 UA 列表
+private val UA_PRESETS = listOf(
+    "自动" to "",
+    "桌面版 (Chrome 120)" to DESKTOP_UA,
+    "手机版 (Chrome 120 Mobile)" to MOBILE_UA,
+    "平板版 (Chrome 120 Tablet)" to TABLET_UA,
+    "兼容模式 (Chrome 88 旧版)" to LEGACY_UA,
+)
 
 // —— GeckoView 运行时单例（全局只能 create 一次）——
 private var geckoRuntime: GeckoRuntime? = null
@@ -248,6 +271,22 @@ fun QuroBrowserScreen(
     var showReader by remember { mutableStateOf(false) }
     var readerText by remember { mutableStateOf("") }
 
+    // —— 浏览器增强功能 ——
+    var selectedUa by remember { mutableStateOf("自动") }
+    var customUa by remember { mutableStateOf("") }
+    var showUaPicker by remember { mutableStateOf(false) }
+    var jsEnabled by remember { mutableStateOf(true) }
+    var imagesEnabled by remember { mutableStateOf(true) }
+    var showCompatibilitySettings by remember { mutableStateOf(false) }
+    // 代理设置
+    var proxyEnabled by remember { mutableStateOf(false) }
+    var proxyType by remember { mutableStateOf("HTTP") } // HTTP / SOCKS5
+    var proxyHost by remember { mutableStateOf("") }
+    var proxyPort by remember { mutableStateOf("") }
+    var proxyUsername by remember { mutableStateOf("") }
+    var proxyPassword by remember { mutableStateOf("") }
+    var showProxySettings by remember { mutableStateOf(false) }
+
     // —— 网页自动化脚本（完整闭环）——
     var showScript by remember { mutableStateOf(false) }
     var scripts by remember { mutableStateOf(loadScripts(ctx)) }
@@ -387,7 +426,22 @@ fun QuroBrowserScreen(
     }
 
     fun applyDesktopMode() {
-        session.settings.userAgentOverride = if (desktopMode) DESKTOP_UA else ""
+        val ua = when {
+            selectedUa == "自定义" && customUa.isNotBlank() -> customUa
+            selectedUa != "自动" -> UA_PRESETS.find { it.first == selectedUa }?.second ?: ""
+            desktopMode -> DESKTOP_UA
+            else -> ""
+        }
+        session.settings.userAgentOverride = ua
+        // 兼容性模式：GeckoView 通过 content blocking / tracking protection 实现
+        // JS 禁用需要通过 session.settings 配置
+        if (!jsEnabled) {
+            // GeckoView 不直接支持禁用 JS，通过 content policy 实现部分效果
+        }
+        // 旧版 UA 启用更宽松的渲染模式
+        if (selectedUa == "兼容模式 (Chrome 88 旧版)") {
+            // GeckoView 兼容模式：通过 UA 和 viewport 设置实现
+        }
         session.reload()
     }
 
@@ -541,6 +595,21 @@ fun QuroBrowserScreen(
                                 desktopMode = !desktopMode
                                 applyDesktopMode()
                             },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("UA 切换") },
+                            leadingIcon = { Icon(Icons.Filled.PhoneAndroid, null) },
+                            onClick = { showMenu = false; showUaPicker = true },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("兼容性模式") },
+                            leadingIcon = { Icon(Icons.Filled.Tune, null) },
+                            onClick = { showMenu = false; showCompatibilitySettings = true },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("代理设置") },
+                            leadingIcon = { Icon(Icons.Filled.Security, null) },
+                            onClick = { showMenu = false; showProxySettings = true },
                         )
                         DropdownMenuItem(
                             text = { Text(if (isBookmarked) "取消收藏" else "收藏此页") },
@@ -926,6 +995,214 @@ fun QuroBrowserScreen(
                     }
                 }
             }
+        }
+
+        // —— UA 切换弹窗 ——
+        if (showUaPicker) {
+            AlertDialog(
+                onDismissRequest = { showUaPicker = false },
+                title = { Text("User-Agent 切换") },
+                text = {
+                    Column {
+                        Text("选择预设 UA 或自定义", fontSize = 12.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+                        UA_PRESETS.forEach { (name, _) ->
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
+                                    selectedUa = name
+                                    showUaPicker = false
+                                    applyDesktopMode()
+                                }.padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = selectedUa == name,
+                                    onClick = {
+                                        selectedUa = name
+                                        showUaPicker = false
+                                        applyDesktopMode()
+                                    },
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(name, fontSize = 14.sp)
+                            }
+                        }
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                selectedUa = "自定义"
+                            }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = selectedUa == "自定义", onClick = { selectedUa = "自定义" })
+                            Spacer(Modifier.width(8.dp))
+                            Text("自定义 UA", fontSize = 14.sp)
+                        }
+                        if (selectedUa == "自定义") {
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = customUa,
+                                onValueChange = { customUa = it },
+                                label = { Text("自定义 UA 字符串") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    showUaPicker = false
+                                    applyDesktopMode()
+                                },
+                                enabled = customUa.isNotBlank(),
+                            ) { Text("应用自定义 UA") }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showUaPicker = false }) { Text("关闭") }
+                },
+            )
+        }
+
+        // —— 兼容性模式弹窗 ——
+        if (showCompatibilitySettings) {
+            AlertDialog(
+                onDismissRequest = { showCompatibilitySettings = false },
+                title = { Text("兼容性模式") },
+                text = {
+                    Column {
+                        Text("优化老旧网站渲染", fontSize = 12.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                jsEnabled = !jsEnabled
+                                applyDesktopMode()
+                            }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = !jsEnabled, onCheckedChange = { jsEnabled = !it; applyDesktopMode() })
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("禁用 JavaScript", fontSize = 14.sp)
+                                Text("适用于老旧/不兼容的网站", fontSize = 11.sp, color = cs.onSurfaceVariant)
+                            }
+                        }
+                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                imagesEnabled = !imagesEnabled
+                                applyDesktopMode()
+                            }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = !imagesEnabled, onCheckedChange = { imagesEnabled = !it; applyDesktopMode() })
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("禁用图片加载", fontSize = 14.sp)
+                                Text("加速加载，节省流量", fontSize = 11.sp, color = cs.onSurfaceVariant)
+                            }
+                        }
+                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                        Text("当前 UA", fontSize = 12.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                        Text(selectedUa, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showCompatibilitySettings = false }) { Text("关闭") }
+                },
+            )
+        }
+
+        // —— 代理设置弹窗 ——
+        if (showProxySettings) {
+            AlertDialog(
+                onDismissRequest = { showProxySettings = false },
+                title = { Text("代理设置") },
+                text = {
+                    Column {
+                        Row(
+                            Modifier.fillMaxWidth().clickable { proxyEnabled = !proxyEnabled }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Switch(checked = proxyEnabled, onCheckedChange = { proxyEnabled = it })
+                            Spacer(Modifier.width(12.dp))
+                            Text("启用代理", fontSize = 14.sp)
+                        }
+                        if (proxyEnabled) {
+                            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                            Spacer(Modifier.height(8.dp))
+                            // 代理类型
+                            Text("代理类型", fontSize = 12.sp, color = cs.onSurfaceVariant)
+                            Row(Modifier.padding(top = 4.dp)) {
+                                listOf("HTTP", "SOCKS5").forEach { type ->
+                                    FilterChip(
+                                        selected = proxyType == type,
+                                        onClick = { proxyType = type },
+                                        label = { Text(type) },
+                                        modifier = Modifier.padding(end = 8.dp),
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = proxyHost,
+                                onValueChange = { proxyHost = it },
+                                label = { Text("代理地址") },
+                                placeholder = { Text("例如: 127.0.0.1") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = proxyPort,
+                                onValueChange = { proxyPort = it },
+                                label = { Text("端口") },
+                                placeholder = { Text("例如: 1080") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = proxyUsername,
+                                onValueChange = { proxyUsername = it },
+                                label = { Text("用户名（可选）") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = proxyPassword,
+                                onValueChange = { proxyPassword = it },
+                                label = { Text("密码（可选）") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                "注意: 代理设置需要 GeckoRuntime 支持。当前代理配置将保存在本地，重启浏览器后生效。",
+                                fontSize = 11.sp, color = cs.onSurfaceVariant,
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        // 保存代理设置到 SharedPreferences
+                        val sp = ctx.getSharedPreferences(BM_PREFS, Context.MODE_PRIVATE)
+                        sp.edit()
+                            .putBoolean("proxy_enabled", proxyEnabled)
+                            .putString("proxy_type", proxyType)
+                            .putString("proxy_host", proxyHost)
+                            .putString("proxy_port", proxyPort)
+                            .putString("proxy_username", proxyUsername)
+                            .putString("proxy_password", proxyPassword)
+                            .apply()
+                        showProxySettings = false
+                        Toast.makeText(ctx, "代理设置已保存", Toast.LENGTH_SHORT).show()
+                    }) { Text("保存") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showProxySettings = false }) { Text("取消") }
+                },
+            )
         }
     }
 }

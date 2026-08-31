@@ -313,6 +313,18 @@ import java.util.Date
 import java.util.Locale
 import com.ai.assistance.quro.ui.VisualPopupConfigDialog
 import com.ai.assistance.quro.ui.VisualQuestionConfigDialog
+// 动态 UI：AI 输出的 quro-ui DSL 直接渲染为原生可交互控件
+import com.ai.assistance.quro.core.ui.dynamicui.QuroUiDslParser
+import com.ai.assistance.quro.core.ui.dynamicui.QuroUiParseResult
+import com.ai.assistance.quro.core.ui.dynamicui.QuroUiRenderer
+import com.ai.assistance.quro.core.ui.dynamicui.QuroUiAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroCallbackAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroToolCallAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroSkillAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroOpenUrlAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroCopyAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroOpenAppAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroToggleAction
 
 private enum class SheetType { Model, Persona, Settings, Upload, Voice }
 
@@ -531,14 +543,27 @@ fun ChatScreen(
             //   正确语义：仅统计【最后一条用户消息之后】是否已有助手回复（含流式占位）。
             //   用户刚发出消息、AI 还没产出任何内容时，等待气泡才出现；首个 token/思考到达后消失。
             val lastUserIdx = out.indexOfLast { it.mine }
-            val hasAssistantMsg = out.drop(if (lastUserIdx >= 0) lastUserIdx + 1 else 0)
-                .any { !it.mine && it.id != -1 }
+            val afterUser = out.drop(if (lastUserIdx >= 0) lastUserIdx + 1 else 0)
+            val hasAssistantMsg = afterUser.any { !it.mine && it.id != -1 }
+            // 🔧 执行态展示：存在「结果尚未回填」的工具调用（正卡在 engine.execute 慢任务上）时，
+            // 追加一条「AI 正在执行工具…」工作指示气泡。多轮工具循环里第一轮之后必有助手消息，
+            // 原「等等」组件因 hasAssistantMsg=true 永不出现 → 循环期间对话框无任何「工作中」反馈，
+            // 看起来像死循环重复文本。此分支专门补上执行中展示。
+            val hasPendingTool = afterUser.any { !it.mine && !it.tools.isNullOrEmpty() && it.tools.any { t -> t.result.isNullOrBlank() } }
             if (!hasAssistantMsg) {
                 out.add(
                     Message(
                         id = -1, mine = false, author = selectedPersona.name,
                         avatar = selectedPersona.ava, avatarUri = selectedPersona.avatarUri,
                         time = "", text = null, isWaiting = true,
+                    )
+                )
+            } else if (hasPendingTool) {
+                out.add(
+                    Message(
+                        id = -2, mine = false, author = selectedPersona.name,
+                        avatar = selectedPersona.ava, avatarUri = selectedPersona.avatarUri,
+                        time = "", text = null, isWorking = true,
                     )
                 )
             }
@@ -564,6 +589,7 @@ fun ChatScreen(
     // 模型配置仓库：在可组合作用域直接创建（LocalContext.current 不能放进 remember/普通 lambda）
     val modelConfigRepo = QuroModelConfigRepository(LocalContext.current)
     var showAbout by remember { mutableStateOf(false) }
+    var showCleanup by remember { mutableStateOf(false) }
     // ACI 管理中心屏：从设置「功能 → ACI 管理中心」进入（此前仅有 AI 工具 ui_open_aci 可打开，无手动按钮）
     var showAci by remember { mutableStateOf(false) }
     // ACI 应用选择器对话框
@@ -657,6 +683,8 @@ fun ChatScreen(
     var docViewerName by remember { mutableStateOf("") }
     // 应用内全屏音乐播放器
     var showMusicPlayer by remember { mutableStateOf(false) }
+    // 工具中心（能力聚合入口：终端/小程序/CMS/工具箱/沙箱/私有库）
+    var showToolCenter by remember { mutableStateOf(false) }
 
     // ═══ UI 动作桥：把 AI 调用的 ui_* 工具回调到本组合作用域，打开对应界面/弹层/开关 ═══
     fun handleUiAction(action: String) {
@@ -694,6 +722,7 @@ fun ChatScreen(
             "ui_toggle_memory" -> vm.setAutoSaveMemory(!vm.autoSaveMemory.value)
             "ui_clear_chat" -> vm.clear()
             "ui_new_chat" -> vm.newConversation()
+            "ui_open_tool_center" -> showToolCenter = true
         }
     }
     val appCtx = LocalContext.current
@@ -766,6 +795,7 @@ fun ChatScreen(
                             "model_config" -> showModelConfig = true
                             "voice" -> showVoice = true
                             "settings" -> sheet = SheetType.Settings
+                            "tool_center" -> showToolCenter = true
                             else -> { /* 忽略未知界面 */ }
                         }
                     }
@@ -1140,6 +1170,7 @@ fun ChatScreen(
                         onMenu = openDrawer,
                         onModel = { sheet = SheetType.Model },
                         onSettings = { sheet = SheetType.Settings },
+                        onToolCenter = { showToolCenter = true },
                         persona = selectedPersona,
                         onPick = { sheet = SheetType.Persona },
                         scaled = { scaled(it) }
@@ -1441,7 +1472,8 @@ fun ChatScreen(
         // 任意「设置子页」浮层是否开着：用于禁用设置 sheet 的返回回调，保证逐级返回
         val settingsChildOpen = showModelConfig || showToolbox || showVoice || showAbout || showAppearance ||
             showPermission || showCms || showPlugins || showKnowledge || showTerminal || showSchedule || showBots ||
-            showTts || showStt || showVoiceService || showSystemStatus || showFeatureModelConfig || showAci
+            showTts || showStt || showVoiceService || showSystemStatus || showFeatureModelConfig || showAci ||
+            showToolCenter
         // 底部弹层（自定义，统一遮罩 + 上滑）
         SheetOverlay(
             sheet = sheet, lastSheet = lastSheet,
@@ -1562,6 +1594,7 @@ fun ChatScreen(
             settingsAiReplyNotify = aiReplyNotify,
             onSettingsToggleAiReplyNotify = { vm.setAiReplyNotify(!aiReplyNotify) },
             onOpenAbout = { showAbout = true },
+            onOpenCleanup = { showCleanup = true },
             onOpenAci = { showAci = true },
             onOpenMcp = { showMcp = true },
             onOpenSystemStatus = { showSystemStatus = true },
@@ -1697,6 +1730,14 @@ fun ChatScreen(
             BackHandler { showAbout = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
                 QuroAboutScreen(onBack = { showAbout = false })
+            }
+        }
+
+        // 清理存储页：全屏覆盖层（从设置「数据 → 清理存储」进入）
+        if (showCleanup) {
+            BackHandler { showCleanup = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+                CleanupScreen(onClose = { showCleanup = false }, scaled = { scaled(it) })
             }
         }
 
@@ -1909,6 +1950,26 @@ fun ChatScreen(
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
                 QuroTermuxTerminalScreen(
                     onClose = { showTerminal = false },
+                )
+            }
+        }
+
+        // 工具中心（能力聚合入口：终端/小程序/CMS/工具箱/沙箱/私有库）
+        if (showToolCenter) {
+            BackHandler { showToolCenter = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+                QuroToolCenterScreen(
+                    context = appCtx,
+                    onLaunch = { target ->
+                        when (target) {
+                            "terminal" -> showTerminal = true
+                            "cms" -> showCms = true
+                            "toolbox" -> showToolbox = true
+                            "editor" -> showEditor = true
+                        }
+                        showToolCenter = false
+                    },
+                    onClose = { showToolCenter = false },
                 )
             }
         }
@@ -2439,6 +2500,11 @@ private fun MessageRow(
                 WaitingDots()
                 Spacer(Modifier.height(4.dp))
             }
+            // 执行中指示：AI 正在执行工具（结果尚未回填）→ 显示「AI 正在执行工具…」工作小组件。
+            if (msg.isWorking) {
+                WorkingIndicator()
+                Spacer(Modifier.height(4.dp))
+            }
             // 展开的思考内容（在名字行下方，正文上方）
             if (showThink && msg.think != null) {
                 ThinkInlineContent(msg.think, scaled)
@@ -2675,6 +2741,11 @@ private fun MessageRow(
                                         theme = "",
                                     ),
                                     onCommand = onCommand
+                                )
+                                is MsgBlock.DynamicUi -> DynamicUiBlock(
+                                    source = blk.source,
+                                    onCommand = onCommand,
+                                    onOpenLink = onOpenLink,
                                 )
                             }
                         }
@@ -3148,6 +3219,13 @@ private fun ToolCallBlock(
                 Box(Modifier.size(8.dp).clip(CircleShape).background(dotColor))
                 Spacer(Modifier.width(8.dp))
             }
+            // 🔧 执行中：存在尚未回填结果的工具调用 → 标题栏显示脉冲点 + 执行中（多轮循环期间持续可见）。
+            if (tools.any { it.result.isNullOrBlank() }) {
+                val pulse by rememberInfiniteTransition().animateFloat(0.35f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse))
+                Box(Modifier.size(8.dp).clip(CircleShape).background(cs.primary.copy(alpha = pulse)))
+                Spacer(Modifier.width(6.dp))
+                Text("执行中…", fontSize = 10.sp, color = cs.primary, fontWeight = FontWeight.Medium)
+            }
             Spacer(Modifier.weight(1f))
             LucideIcon(if (expanded) "chevron_up" else "chevron_down", null, Modifier.size(14.dp), tint = Muted)
         }
@@ -3308,14 +3386,16 @@ private fun SingleToolCard(t: ToolCallUi, scaled: (Int) -> androidx.compose.ui.u
     val cs = MaterialTheme.colorScheme
     val cat = toolCategory(t.name)
     val status = t.result?.let { detectResultStatus(it) } ?: ResultStatus.INFO
+    // 执行中标记：工具结果尚未回填（正卡在 engine.execute 慢任务）→ 头部与边框显示「进行中」强调态。
+    val pending = t.result.isNullOrBlank()
     var cardExpanded by remember { mutableStateOf(false) }
 
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(cs.surface.copy(alpha = 0.5f))
-            .border(0.5.dp, cs.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+            .background(if (pending) cs.primary.copy(alpha = 0.06f) else cs.surface.copy(alpha = 0.5f))
+            .border(0.5.dp, if (pending) cs.primary.copy(alpha = 0.5f) else cs.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
             .then(if (cardExpanded) Modifier.padding(12.dp) else Modifier.padding(horizontal = 10.dp, vertical = 8.dp))
     ) {
         // ── 卡片头部 ──
@@ -3356,6 +3436,12 @@ private fun SingleToolCard(t: ToolCallUi, scaled: (Int) -> androidx.compose.ui.u
                     ResultStatus.INFO -> "info"
                 }
                 LucideIcon(statusIcon, "状态", Modifier.size(13.dp), tint = statusColor)
+            } else {
+                // 🔧 执行中指示：结果尚未回填 → 脉冲点 + 「执行中…」，让慢任务在对话框里有明确「进行中」展示。
+                val pulse by rememberInfiniteTransition().animateFloat(0.35f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse))
+                Box(Modifier.size(9.dp).clip(CircleShape).background(cs.primary.copy(alpha = pulse)))
+                Spacer(Modifier.width(4.dp))
+                Text("执行中…", fontSize = 9.sp, color = cs.primary, fontWeight = FontWeight.Medium)
             }
             Spacer(Modifier.width(4.dp))
             LucideIcon(if (cardExpanded) "chevron_down" else "chevron_right", null,
@@ -3945,6 +4031,27 @@ private fun WaitingDots() {
             )
             if (i < 2) Spacer(Modifier.width(5.dp))
         }
+    }
+}
+
+/**
+ * 「AI 正在执行工具…」工作指示：复用 [WaitingDots] 的跳动圆点动画 + 文案，
+ * 让多轮工具循环期间对话框明确显示「进行中」，而非静止空白或重复文本。
+ */
+@Composable
+private fun WorkingIndicator() {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 4.dp),
+    ) {
+        Spacer(Modifier.width(8.dp))
+        WaitingDots()
+        Spacer(Modifier.width(6.dp))
+        Text(
+            "AI 正在执行工具…",
+            fontSize = 12.sp, color = cs.primary, fontWeight = FontWeight.Medium,
+        )
     }
 }
 
@@ -4570,6 +4677,7 @@ private fun SheetOverlay(
     settingsAiReplyNotify: Boolean,
     onSettingsToggleAiReplyNotify: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenCleanup: () -> Unit,
     onOpenAci: () -> Unit,
     onOpenMcp: () -> Unit,
     onOpenSystemStatus: () -> Unit,
@@ -4643,7 +4751,7 @@ private fun SheetOverlay(
                         onManagePersona, onOpenVoiceService,
                         onClearChat, settingsVoiceBallEnabled, onSettingsToggleVoiceBall,
                     settingsAiReplyNotify, onSettingsToggleAiReplyNotify,
-                        onOpenAbout, onOpenAci, onOpenMcp, onOpenSystemStatus, onOpenComponentGallery, onOpenAppearance, onExport, onClear, scaled
+                        onOpenAbout, onOpenAci, onOpenMcp, onOpenSystemStatus, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, scaled
                     )
                     else -> {}
                 }
@@ -4694,6 +4802,7 @@ private fun SettingsSheetContent(
     onOpenComponentGallery: () -> Unit,
     onOpenAppearance: () -> Unit,
     onExport: () -> Unit, onClear: () -> Unit,
+    onOpenCleanup: () -> Unit,
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -4737,6 +4846,8 @@ private fun SettingsSheetContent(
         GroupCaption("数据")
         SetGroup {
             SetRowClickable(Icons.Filled.Download, "导出对话", "", "导出为文本", onExport, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(Icons.Filled.DeleteSweep, "清理存储", "分类清理日志、缓存、AI产物等", "", onOpenCleanup, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.DeleteSweep, "清除全部对话", "", "", onClear, scaled, danger = true)
         }
@@ -5434,6 +5545,8 @@ private sealed class MsgBlock {
     data class Text(val text: String) : MsgBlock()
     data class Code(val lang: String, val code: String) : MsgBlock()
     data class Mermaid(val source: String) : MsgBlock()
+    /** 动态 UI：```quro-ui 围栏，渲染为原生可交互控件（非 WebView）。 */
+    data class DynamicUi(val source: String) : MsgBlock()
     data class Heading(val level: Int, val text: String) : MsgBlock()
     data class Quote(val text: String) : MsgBlock()
     data class Rule(val text: String = "") : MsgBlock()
@@ -5630,6 +5743,9 @@ private fun parseBlocks(text: String): List<MsgBlock> {
             if (lang.equals("mermaid", true) || lang.equals("mmd", true)) {
                 // 可视化编程：原始 mermaid / mmd 围栏直接渲染成离线矢量图（AI 或用户均可作者）
                 MsgBlock.Mermaid(m.groupValues[2].removeSuffix("\n"))
+            } else if (isDynamicUiLang(lang)) {
+                // 动态 UI：AI 写的 UI DSL 渲染为原生可交互控件（可回传表单值给模型）
+                MsgBlock.DynamicUi(m.groupValues[2].removeSuffix("\n"))
             } else {
                 MsgBlock.Code(lang, m.groupValues[2].removeSuffix("\n"))
             }
@@ -5638,6 +5754,18 @@ private fun parseBlocks(text: String): List<MsgBlock> {
     }
     if (last < text.length) blocks.addAll(parseTail(text.substring(last)))
     return if (blocks.isEmpty()) listOf(MsgBlock.Text(text)) else blocks
+}
+
+/**
+ * 判断是否动态 UI 围栏语言。
+ *
+ * 兼容三种写法：`quro-ui`（现行）、`quro_ui`（部分模型会把连字符写成下划线）、
+ * `zorv-ui`（历史前缀）。与 [com.ai.assistance.quro.core.ui.dynamicui.QuroUiDslParser]
+ * 的围栏识别保持一致，否则解析器认得、渲染层却不认，会出现「明明写了却当普通代码块显示」。
+ */
+private fun isDynamicUiLang(lang: String): Boolean {
+    val l = lang.trim().lowercase()
+    return l == "quro-ui" || l == "quro_ui" || l == "zorv-ui"
 }
 
 /**
@@ -5657,6 +5785,9 @@ private fun parseTail(seg: String): List<MsgBlock> {
             if (before.isNotBlank()) out.addAll(parseSegments(before))
             if (lang.equals("mermaid", true) || lang.equals("mmd", true)) {
                 out.add(MsgBlock.Mermaid(after))
+            } else if (isDynamicUiLang(lang)) {
+                // 流式输出中 quro-ui 围栏还没闭合时，也实时渲染（边写边出界面）
+                out.add(MsgBlock.DynamicUi(after))
             } else {
                 out.add(MsgBlock.Code(lang.ifBlank { "text" }, after))
             }
@@ -5827,6 +5958,112 @@ private fun escapeHtml(text: String): String {
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
         .replace("'", "&#39;")
+}
+
+/**
+ * 动态 UI 块：把 AI 输出的 ```quro-ui DSL 渲染成**原生**可交互控件。
+ *
+ * 之所以用原生渲染而非内嵌 HTML/WebView：
+ *  - 控件状态由 Compose 托管，用户填写的表单值能原样回传给模型继续处理；
+ *  - 自动继承应用主题（深浅色 / 字体缩放），AI 无需关心配色；
+ *  - 没有 JS 执行面，安全边界更清晰。
+ *
+ * 解析失败时**不留空白**：回退展示失败原因与原始内容，
+ * 这样用户看得到东西、模型下一轮也能据此修正 DSL。
+ */
+@Composable
+private fun DynamicUiBlock(
+    source: String,
+    onCommand: (String) -> Unit,
+    onOpenLink: (String) -> Unit,
+) {
+    // 只在 source 变化时重新解析：流式输出期间每来一个字都会重组，
+    // 若把解析写在重组体内会导致每帧重解析一次（白白烧 CPU）。
+    val parsed = remember(source) { QuroUiDslParser.parseBlock(source) }
+
+    when (parsed) {
+        is QuroUiParseResult.Success -> Surface(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                QuroUiRenderer(
+                    root = parsed.root,
+                    onAction = { action, values ->
+                        handleDynamicUiAction(action, values, onCommand, onOpenLink)
+                    },
+                )
+            }
+        }
+
+        is QuroUiParseResult.Failure -> Surface(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Text(
+                    text = "⚠️ 动态 UI 解析失败：${parsed.reason}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = parsed.rawJson.take(600),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 把动态 UI 的交互动作翻译成对话侧的行为。
+ *
+ * 绝大多数动作统一走 [onCommand]（即作为一条用户消息发回给模型），
+ * 因为「接下来该做什么」的判断权在模型手里，客户端只负责把用户填了什么如实送达。
+ */
+private fun handleDynamicUiAction(
+    action: QuroUiAction,
+    values: Map<String, String>,
+    onCommand: (String) -> Unit,
+    onOpenLink: (String) -> Unit,
+) {
+    when (action) {
+        is QuroCallbackAction -> {
+            val merged = LinkedHashMap<String, String>(values).apply { putAll(action.data) }
+            val body = if (merged.isNotEmpty()) {
+                merged.entries.joinToString("\n") { "${it.key}: ${it.value}" }
+            } else {
+                action.event
+            }
+            onCommand(if (action.event.isNotBlank()) "【${action.event}】\n$body" else body)
+        }
+
+        is QuroToolCallAction -> {
+            val args = LinkedHashMap(action.arguments).apply { putAll(values) }
+            val argText = if (args.isEmpty()) "" else "，参数：" +
+                args.entries.joinToString("，") { "${it.key}=${it.value}" }
+            onCommand("请调用工具 ${action.tool}$argText")
+        }
+
+        is QuroSkillAction -> {
+            val input = action.input?.takeIf { it.isNotBlank() }
+                ?: values.values.joinToString("，")
+            onCommand("请执行技能 ${action.skill}：$input")
+        }
+
+        is QuroOpenUrlAction -> if (action.url.isNotBlank()) onOpenLink(action.url)
+
+        is QuroCopyAction -> onCommand("请把以下内容复制到剪贴板：${action.text}")
+
+        is QuroOpenAppAction -> onCommand("请打开应用 ${action.packageName}")
+
+        // 纯本地行为（显示/隐藏节点），渲染器内部已切换可见性，无需惊动模型
+        is QuroToggleAction -> Unit
+    }
 }
 
 /** 对话内代码块：可复制、可直接运行（IDE 能力）；HTML 代码块额外支持「代码 / 预览」双 Tab 渲染。 */
@@ -7147,4 +7384,230 @@ private fun WorkflowCreateDialog(
             }
         }
     )
+}
+
+/**
+ * 清理存储页面（从设置「数据 → 清理存储」进入）。
+ * 分类清理：日志、离线模型缓存、AI产物、临时文件等。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CleanupScreen(
+    onClose: () -> Unit,
+    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    var logsSize by remember { mutableStateOf(0L) }
+    var modelCacheSize by remember { mutableStateOf(0L) }
+    var aiProductsSize by remember { mutableStateOf(0L) }
+    var tempFilesSize by remember { mutableStateOf(0L) }
+    var selectedItems by remember { mutableStateOf(setOf<String>()) }
+    var showCleanupDialog by remember { mutableStateOf(false) }
+    var cleanupType by remember { mutableStateOf("") }
+
+    // 计算各类缓存大小
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            logsSize = calculateDirSize(File(context.filesDir, "logs"))
+            modelCacheSize = calculateDirSize(File(context.filesDir, "model_cache"))
+            aiProductsSize = calculateDirSize(File(context.filesDir, "ai_products"))
+            tempFilesSize = calculateDirSize(File(context.cacheDir, "temp"))
+        }
+    }
+
+    Column(Modifier.fillMaxSize().background(cs.background)) {
+        TopAppBar(
+            title = { Text("清理存储") },
+            navigationIcon = {
+                IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+        )
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
+        ) {
+            GroupCaption("存储概览")
+            SetGroup {
+                SetRowClickable(
+                    Icons.Filled.Info,
+                    "总缓存大小",
+                    formatFileSize(logsSize + modelCacheSize + aiProductsSize + tempFilesSize),
+                    "",
+                    { },
+                    scaled
+                )
+            }
+
+            GroupCaption("分类清理")
+            SetGroup {
+                SetRowClickable(
+                    Icons.Filled.List,
+                    "应用日志",
+                    formatFileSize(logsSize),
+                    "",
+                    {
+                        cleanupType = "logs"
+                        showCleanupDialog = true
+                    },
+                    scaled
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                SetRowClickable(
+                    Icons.Filled.Terminal,
+                    "离线模型缓存",
+                    formatFileSize(modelCacheSize),
+                    "",
+                    {
+                        cleanupType = "model_cache"
+                        showCleanupDialog = true
+                    },
+                    scaled
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                SetRowClickable(
+                    Icons.Filled.Build,
+                    "AI 产物",
+                    formatFileSize(aiProductsSize),
+                    "",
+                    {
+                        cleanupType = "ai_products"
+                        showCleanupDialog = true
+                    },
+                    scaled
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                SetRowClickable(
+                    Icons.Filled.Delete,
+                    "临时文件",
+                    formatFileSize(tempFilesSize),
+                    "",
+                    {
+                        cleanupType = "temp"
+                        showCleanupDialog = true
+                    },
+                    scaled
+                )
+            }
+
+            GroupCaption("全部清理")
+            SetGroup {
+                SetRowClickable(
+                    Icons.Filled.DeleteSweep,
+                    "清理所有缓存",
+                    "删除以上所有缓存文件",
+                    "",
+                    {
+                        cleanupType = "all"
+                        showCleanupDialog = true
+                    },
+                    scaled,
+                    danger = true
+                )
+            }
+        }
+    }
+
+    // 清理确认对话框
+    if (showCleanupDialog) {
+        val title = when (cleanupType) {
+            "logs" -> "清理应用日志"
+            "model_cache" -> "清理离线模型缓存"
+            "ai_products" -> "清理 AI 产物"
+            "temp" -> "清理临时文件"
+            "all" -> "清理所有缓存"
+            else -> "清理"
+        }
+        val message = when (cleanupType) {
+            "logs" -> "确定要清理所有应用日志吗？"
+            "model_cache" -> "确定要清理离线模型缓存吗？这可能需要重新下载模型。"
+            "ai_products" -> "确定要清理 AI 产物吗？"
+            "temp" -> "确定要清理临时文件吗？"
+            "all" -> "确定要清理所有缓存吗？这将删除日志、模型缓存、AI产物和临时文件。"
+            else -> "确定要清理吗？"
+        }
+
+        AlertDialog(
+            onDismissRequest = { showCleanupDialog = false },
+            title = { Text(title) },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCleanupDialog = false
+                        // 执行清理操作
+                        CoroutineScope(Dispatchers.IO).launch {
+                            when (cleanupType) {
+                                "logs" -> deleteDir(File(context.filesDir, "logs"))
+                                "model_cache" -> deleteDir(File(context.filesDir, "model_cache"))
+                                "ai_products" -> deleteDir(File(context.filesDir, "ai_products"))
+                                "temp" -> deleteDir(File(context.cacheDir, "temp"))
+                                "all" -> {
+                                    deleteDir(File(context.filesDir, "logs"))
+                                    deleteDir(File(context.filesDir, "model_cache"))
+                                    deleteDir(File(context.filesDir, "ai_products"))
+                                    deleteDir(File(context.cacheDir, "temp"))
+                                }
+                            }
+                            // 更新大小
+                            logsSize = calculateDirSize(File(context.filesDir, "logs"))
+                            modelCacheSize = calculateDirSize(File(context.filesDir, "model_cache"))
+                            aiProductsSize = calculateDirSize(File(context.filesDir, "ai_products"))
+                            tempFilesSize = calculateDirSize(File(context.cacheDir, "temp"))
+                        }
+                    }
+                ) {
+                    Text("确定清理")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCleanupDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+}
+
+/**
+ * 计算目录大小
+ */
+private fun calculateDirSize(dir: File): Long {
+    if (!dir.exists()) return 0
+    var size = 0L
+    dir.listFiles()?.forEach { file ->
+        size += if (file.isDirectory) {
+            calculateDirSize(file)
+        } else {
+            file.length()
+        }
+    }
+    return size
+}
+
+/**
+ * 删除目录
+ */
+private fun deleteDir(dir: File) {
+    if (!dir.exists()) return
+    dir.listFiles()?.forEach { file ->
+        if (file.isDirectory) {
+            deleteDir(file)
+        } else {
+            file.delete()
+        }
+    }
+    dir.delete()
+}
+
+/**
+ * 格式化文件大小
+ */
+private fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
+        else -> "${bytes / (1024 * 1024 * 1024)} GB"
+    }
 }

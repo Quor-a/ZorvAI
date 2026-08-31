@@ -61,4 +61,20 @@ sealed interface QuroLlmResult {
 data class QuroToolResult(
     val name: String,
     val result: String,
-)
+) {
+    companion object {
+        /**
+         * 成功结果。`name` 填 "success"，便于调用方按 name 判定成败而不必解析 result 文案。
+         *
+         * 说明：这里用大写开头的工厂函数（而非 Kotlin 惯例的小写），
+         * 是为了让调用处写成语义清晰的 `QuroToolResult.Success("...") / .Error("...")`，
+         * 与 sealed 结果类型的写法保持一致，后续若改为 sealed 类也无需改动调用点。
+         */
+        @Suppress("FunctionName")
+        fun Success(result: String): QuroToolResult = QuroToolResult("success", result)
+
+        /** 失败结果。`name` 填 "error"。 */
+        @Suppress("FunctionName")
+        fun Error(result: String): QuroToolResult = QuroToolResult("error", result)
+    }
+}

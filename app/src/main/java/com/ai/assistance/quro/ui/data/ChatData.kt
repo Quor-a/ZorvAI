@@ -74,6 +74,9 @@ data class Message(
     val cards: List<QuroChatCard> = emptyList(), // 气泡内富组件（一等公民，合体进聊天气泡）
     /** 等待指示：AI 尚未产出首条内容时的「等等」动态小组件标记（独立于头像/名字，仅内容区 loading）。 */
     val isWaiting: Boolean = false,
+    /** 执行指示：AI 正在执行工具（存在结果尚未回填的工具调用）时的「工作中」标记，
+     *  对话框据此显示「AI 正在执行工具…」，避免多轮工具循环期间无任何「进行中」反馈。 */
+    val isWorking: Boolean = false,
     /** 用户消息的上下文标识（工作区/ACI/技能），从 [上下文|...] 注入标记中提取，用于气泡内可见化展示。 */
     val context: String? = null,
 )
