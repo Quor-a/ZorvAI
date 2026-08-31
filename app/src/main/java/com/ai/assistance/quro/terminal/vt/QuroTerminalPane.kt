@@ -1,4 +1,4 @@
-package com.ai.assistance.quro.terminal.kai
+package com.ai.assistance.quro.terminal.vt
 
 import android.graphics.Paint
 import android.graphics.Typeface
@@ -46,7 +46,7 @@ import com.ai.assistance.quro.core.terminal.QuroShellSession
  * 若 [QuroShellSession.vt] 为 null（未启用 VT），本面板不会用于该窗格，旧 UI 继续走纯文本。
  */
 @Composable
-fun KaiTerminalPane(
+fun QuroTerminalPane(
     session: QuroShellSession,
     modifier: Modifier = Modifier,
 ) {
@@ -102,7 +102,7 @@ fun KaiTerminalPane(
                 drawGrid(this, s, cellW, cellH, baseline, fontSizePx)
             }
             // 透明输入层：捕获软/硬键盘，点击即弹出键盘
-            KaiTerminalInputLayer(
+            QuroTerminalInputLayer(
                 showKeyboardRequest = kbReq,
                 onKey = onKey,
                 onText = onText,

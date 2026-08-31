@@ -1,4 +1,4 @@
-package com.ai.assistance.quro.terminal.kai
+package com.ai.assistance.quro.terminal.vt
 
 /**
  * Minimal VT100 / xterm CSI parser. Enough for shells, apt, and agent TUIs to

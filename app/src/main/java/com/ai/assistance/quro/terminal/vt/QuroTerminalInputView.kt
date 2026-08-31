@@ -1,4 +1,4 @@
-package com.ai.assistance.quro.terminal.kai
+package com.ai.assistance.quro.terminal.vt
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -24,7 +24,7 @@ import androidx.compose.ui.viewinterop.AndroidView
  * Invisible, focusable view over the terminal grid whose only job is IME
  * plumbing — it draws nothing, since the grid underneath is Compose.
  *
- * 移植自 Kai 的 TerminalInputView（包名 com.ai.assistance.quro.terminal.kai）。
+ * 终端网格上的不可见、可聚焦视图，仅负责 IME 输入管线（网格由 Compose 绘制，本视图不绘制任何内容）。
  *
  * It asks the keyboard for a null input type, which is what makes a keyboard
  * stop composing text and deliver raw key events instead. That is the only way
@@ -33,7 +33,7 @@ import androidx.compose.ui.viewinterop.AndroidView
  * well; between the two paths every keyboard lands somewhere sensible.
  */
 @SuppressLint("ViewConstructor")
-internal class KaiTerminalInputView(context: Context) : View(context) {
+internal class QuroTerminalInputView(context: Context) : View(context) {
 
     var onKey: (TerminalKey, TerminalModifiers) -> Unit = { _, _ -> }
     var onText: (String, TerminalModifiers) -> Unit = { _, _ -> }
@@ -79,7 +79,7 @@ internal class KaiTerminalInputView(context: Context) : View(context) {
         outAttrs.imeOptions = EditorInfo.IME_ACTION_DONE or
             EditorInfo.IME_FLAG_NO_EXTRACT_UI or
             EditorInfo.IME_FLAG_NO_FULLSCREEN
-        return KaiTerminalInputConnection()
+        return QuroTerminalInputConnection()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
@@ -113,8 +113,8 @@ internal class KaiTerminalInputView(context: Context) : View(context) {
         return true
     }
 
-    private inner class KaiTerminalInputConnection :
-        BaseInputConnection(this@KaiTerminalInputView, true) {
+    private inner class QuroTerminalInputConnection :
+        BaseInputConnection(this@QuroTerminalInputView, true) {
 
         override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
             if (!text.isNullOrEmpty()) onText(text.toString(), TerminalModifiers.None)
@@ -176,13 +176,13 @@ internal class KaiTerminalInputView(context: Context) : View(context) {
 }
 
 @Composable
-fun KaiTerminalInputLayer(
+fun QuroTerminalInputLayer(
     showKeyboardRequest: Int,
     onKey: (TerminalKey, TerminalModifiers) -> Unit,
     onText: (String, TerminalModifiers) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var view by remember { mutableStateOf<KaiTerminalInputView?>(null) }
+    var view by remember { mutableStateOf<QuroTerminalInputView?>(null) }
 
     LaunchedEffect(showKeyboardRequest, view) {
         if (showKeyboardRequest > 0) view?.showKeyboard()
@@ -190,7 +190,7 @@ fun KaiTerminalInputLayer(
 
     AndroidView(
         modifier = modifier,
-        factory = { context -> KaiTerminalInputView(context).also { view = it } },
+        factory = { context -> QuroTerminalInputView(context).also { view = it } },
         update = { input ->
             input.onKey = onKey
             input.onText = onText
