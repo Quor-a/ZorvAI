@@ -718,6 +718,10 @@ object QuroLinuxEnv {
         diagLog(context, "prepareRuntimeExtras 开始")
         prepareRuntimeExtras(context, rootfsDir)
 
+        // 把 proot 打进 rootfs：容器内自持容器运行时（ULFA 零外部依赖）
+        diagLog(context, "installProotIntoRootfs 开始")
+        installProotIntoRootfs(context, rootfsDir)
+
         // 先做一次 proot 基础能力测试（在 apt-get update 之前）
         diagLog(context, "proot 基础测试：echo hello")
         val baseTest = runProot(context, "echo PROOT_BASELINE_OK", timeoutMs = 15_000)
@@ -876,6 +880,9 @@ object QuroLinuxEnv {
     private fun buildProotLaunch(context: Context): ProotLaunch {
         val proot = prootPath(context)
         val rootfs = rootfsPath(context)
+        // 存量环境（rootfs 已装好、不会重跑 install）也要补上内置 proot；
+        // 目标已存在且大小一致时会直接返回，开销仅两次 stat。
+        runCatching { installProotIntoRootfs(context, File(rootfs)) }
         val home = homePath(context)
         val tmp = tmpPath(context)
         val loader = loaderPath(context)
@@ -2116,6 +2123,54 @@ fi
             shim.setExecutable(true, false)
         } catch (e: Exception) {
             Log.w(TAG, "prepareRuntimeExtras 部分失败（非致命）: ${e.message}")
+        }
+    }
+
+    /**
+     * 把 proot 二进制本身打进 rootfs（/usr/local/bin/proot，并链到 /usr/bin/proot），
+     * 使 Linux 环境内部可直接调用 proot —— 容器运行时自持，不再依赖外部 PATH 上的 proot。
+     *
+     * 这是 ULFA「零外部依赖」要求的落地：以前 fusion/脚本层要 execlp("proot")，
+     * 一旦 PATH 没继承到子进程就 exit 127；现在 rootfs 内自带，绝对路径可调。
+     *
+     * 纯新增动作，任何失败都只打日志，不影响既有终端启动链路。
+     */
+    fun installProotIntoRootfs(context: Context, rootfs: File) {
+        try {
+            if (!rootfs.isDirectory) return
+            val src = File(prootPath(context))
+            if (!src.exists() || src.length() < 100_000L) {
+                Log.w(TAG, "installProotIntoRootfs 跳过：proot 源不可用 ${src.absolutePath}")
+                return
+            }
+            val target = File(rootfs, "usr/local/bin/proot").apply { parentFile?.mkdirs() }
+            if (!target.exists() || target.length() != src.length()) {
+                src.inputStream().use { input ->
+                    FileOutputStream(target).use { output -> input.copyTo(output) }
+                }
+                // ownerOnly=false → 0755，容器内非 root 用户也要能执行
+                target.setExecutable(true, false)
+                target.setReadable(true, false)
+            }
+            val usrBin = File(rootfs, "usr/bin")
+            if (usrBin.isDirectory) {
+                val alias = File(usrBin, "proot")
+                if (!alias.exists()) {
+                    try {
+                        java.nio.file.Files.createSymbolicLink(
+                            alias.toPath(),
+                            java.nio.file.Paths.get("/usr/local/bin/proot")
+                        )
+                    } catch (_: Exception) {
+                        // rootfs 所在分区可能不支持符号链接（sdcard/FAT），退化成硬拷贝
+                        target.copyTo(alias, overwrite = true)
+                        alias.setExecutable(true, false)
+                    }
+                }
+            }
+            Log.i(TAG, "✅ proot 已内置到 rootfs: /usr/local/bin/proot (${target.length()} bytes)")
+        } catch (e: Exception) {
+            Log.w(TAG, "installProotIntoRootfs 失败（非致命）: ${e.message}")
         }
     }
 
