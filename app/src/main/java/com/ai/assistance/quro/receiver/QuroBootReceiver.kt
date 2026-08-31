@@ -17,7 +17,10 @@ import com.ai.assistance.quro.service.QuroVoiceBallService
  */
 class QuroBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
+        val action = intent?.action
+        if (action != Intent.ACTION_BOOT_COMPLETED &&
+            action != Intent.ACTION_MY_PACKAGE_REPLACED
+        ) return
 
         // 1) 机器人保活：开机即连接已启用的机器人平台
         QuroBotBootstrapService.ensureStarted(context)
@@ -33,5 +36,8 @@ class QuroBootReceiver : BroadcastReceiver() {
                 context.startService(i)
             }
         }
+
+        // 3) 应用内闹钟重建排程（开机后 AlarmManager 已清空，需按持久化数据重排）
+        com.ai.assistance.quro.permissions.QuroAlarmScheduler(context).scheduleAll()
     }
 }

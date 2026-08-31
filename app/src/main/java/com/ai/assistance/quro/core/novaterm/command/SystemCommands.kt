@@ -7,20 +7,26 @@ import com.ai.assistance.quro.core.novaterm.core.SessionManager
 
 /**
  * 系统信息命令集
+ *
+ * 终端呈现的是 Linux/proot 环境，其 /proc 由 proot 绑定宿主 /proc，
+ * 故直接解析 /proc 才能得到「环境内」真实、准确的进程/内存/CPU 数据，
+ * 而非用 Runtime.exec 调宿主 toybox ps/top（输出格式与语义都不对）。
  */
 object PsCommand : BuiltinCommand {
     override val name = "ps"
     override fun execute(sessionId: String, cmd: Command): CommandResult {
         return try {
-            val process = Runtime.getRuntime().exec("ps")
-            val output = process.inputStream.bufferedReader().readText()
-            process.waitFor()
-            CommandResult.ok(output.trim())
+            val procs = listProcesses()
+            val header = String.format("%-6s %-6s %-5s %s", "PID", "PPID", "STAT", "COMMAND")
+            val body = procs.map { (pid, ppid, stat, cmdline) ->
+                String.format("%-6s %-6s %-5s %s", pid, ppid, stat, cmdline)
+            }
+            CommandResult.ok((listOf(header) + body).joinToString("\n"))
         } catch (e: Exception) {
             CommandResult.err("ps: ${e.message}")
         }
     }
-    override fun help() = "ps  - 显示运行中的进程"
+    override fun help() = "ps  - 显示运行中的进程（读取 /proc）"
 }
 
 object TopCommand : BuiltinCommand {
@@ -28,60 +34,60 @@ object TopCommand : BuiltinCommand {
     override fun execute(sessionId: String, cmd: Command): CommandResult {
         return try {
             val count = cmd.getOption("-n", "10").toIntOrNull() ?: 10
-            val process = Runtime.getRuntime().exec("top -n $count")
-            val output = process.inputStream.bufferedReader().readText()
-            process.waitFor()
-            CommandResult.ok(output.trim())
-        } catch (e: Exception) {
-            // 解析 /proc 作为备选方案
-            val lines = parseProcForTop()
+            val mem = readMemInfo()
+            val procs = listProcesses().take(count)
+            val lines = mutableListOf<String>()
+            lines.add("Mem: total=${formatKb(mem.total)} available=${formatKb(mem.available)} free=${formatKb(mem.free)}")
+            lines.add(String.format("%-6s %-6s %-5s %s", "PID", "PPID", "STAT", "COMMAND"))
+            procs.forEach { (pid, ppid, stat, cmdline) ->
+                lines.add(String.format("%-6s %-6s %-5s %s", pid, ppid, stat, cmdline))
+            }
             CommandResult.ok(lines.joinToString("\n"))
+        } catch (e: Exception) {
+            CommandResult.err("top: ${e.message}")
         }
     }
-    override fun help() = "top [-n <count>]  - 显示系统资源使用"
+    override fun help() = "top [-n <count>]  - 显示系统资源使用（读取 /proc）"
 }
 
 object MemCommand : BuiltinCommand {
     override val name = "mem"
     override fun execute(sessionId: String, cmd: Command): CommandResult {
-        val rt = Runtime.getRuntime()
-        val maxMem = rt.maxMemory()
-        val totalMem = rt.totalMemory()
-        val freeMem = rt.freeMemory()
-        val usedMem = totalMem - freeMem
-
-        val lines = listOf(
-            "┌────────────┬────────────┬────────────┬────────────┐",
-            "│  Max Mem   │ Total Mem  │ Used Mem   │ Free Mem   │",
-            "├────────────┼────────────┼────────────┼────────────┤",
-            "│ ${formatKb(maxMem)}  │ ${formatKb(totalMem)}  │ ${formatKb(usedMem)}  │ ${formatKb(freeMem)}  │",
-            "└────────────┴────────────┴────────────┴────────────┘",
-            "",
-            "Usage: ${String.format("%.1f", usedMem * 100.0 / totalMem)}%"
-        )
-        return CommandResult.ok(lines.joinToString("\n"))
+        return try {
+            val m = readMemInfo()
+            val used = (m.total - m.available).coerceAtLeast(0)
+            val lines = listOf(
+                "┌────────────┬────────────┬────────────┬────────────┐",
+                "│  Total    │ Available │ Used      │ Free      │",
+                "├────────────┼────────────┼────────────┼────────────┤",
+                "│ ${formatKb(m.total)}  │ ${formatKb(m.available)}  │ ${formatKb(used)}  │ ${formatKb(m.free)}  │",
+                "└────────────┴────────────┴────────────┴────────────┘",
+                "",
+                "Usage: ${String.format("%.1f", if (m.total > 0) used * 100.0 / m.total else 0.0)}%"
+            )
+            CommandResult.ok(lines.joinToString("\n"))
+        } catch (e: Exception) {
+            CommandResult.err("mem: ${e.message}")
+        }
     }
-    override fun help() = "mem  - 显示内存信息"
+    override fun help() = "mem  - 显示内存信息（读取 /proc/meminfo）"
 }
 
 object CpuInfoCommand : BuiltinCommand {
     override val name = "cpuinfo"
     override fun execute(sessionId: String, cmd: Command): CommandResult {
         return try {
-            val process = Runtime.getRuntime().exec("cat /proc/cpuinfo")
-            val output = process.inputStream.bufferedReader().readText()
-            process.waitFor()
-
-            // 精简输出
-            val lines = output.lines()
-                .filter { it.contains("Processor") || it.contains("model name") || it.contains("MHz") || it.contains("cores") }
-                .take(20)
+            val f = java.io.File("/proc/cpuinfo")
+            if (!f.exists()) return CommandResult.err("cpuinfo: /proc/cpuinfo not found")
+            val lines = f.readLines()
+                .filter { it.contains("Processor") || it.contains("model name") || it.contains("Hardware") || it.contains("BogoMIPS") || it.contains("processor") }
+                .take(24)
             CommandResult.ok(lines.joinToString("\n"))
         } catch (e: Exception) {
             CommandResult.err("cpuinfo: ${e.message}")
         }
     }
-    override fun help() = "cpuinfo  - 显示 CPU 信息"
+    override fun help() = "cpuinfo  - 显示 CPU 信息（读取 /proc/cpuinfo）"
 }
 
 object BatteryCommand : BuiltinCommand {
@@ -142,21 +148,53 @@ private fun formatKb(bytes: Long): String {
     }
 }
 
-private fun parseProcForTop(): List<String> {
-    val procDir = java.io.File("/proc")
-    if (!procDir.exists()) return listOf("top: /proc not accessible")
-    val processes = procDir.listFiles { f -> f.isDirectory && f.name.all { it.isDigit() } }
-        ?.take(15) ?: return emptyList()
+private data class ProcInfo(
+    val pid: String,
+    val ppid: String,
+    val stat: String,
+    val cmdline: String,
+)
 
-    return processes.mapNotNull { dir ->
-        val cmdline = java.io.File(dir, "cmdline").readText().replace('\u0000', ' ').trim()
-        if (cmdline.isNotEmpty()) {
-            val stat = java.io.File(dir, "stat").readText().split(" ")
-            val name = stat.getOrElse(1) { "?" }
+/** 读取 /proc 下所有数字目录，解析 stat/cmdline 得到进程列表（环境真实数据）。 */
+private fun listProcesses(): List<ProcInfo> {
+    val procDir = java.io.File("/proc")
+    val dirs = procDir.listFiles { f -> f.isDirectory && f.name.all { it.isDigit() } } ?: return emptyList()
+    return dirs.mapNotNull { dir ->
+        runCatching {
             val pid = dir.name
-            "$pid  $name  $cmdline"
-        } else null
+            val stat = java.io.File(dir, "stat").readText()
+            val open = stat.indexOf('(')
+            val close = stat.indexOf(')')
+            val comm = if (open >= 0 && close > open) stat.substring(open + 1, close) else pid
+            val after = if (close > 0) stat.substring(close + 1).trim().split("\\s+".toRegex()) else emptyList()
+            val state = after.getOrNull(0) ?: "?"
+            val ppid = after.getOrNull(1) ?: "?"
+            val cmdlineRaw = runCatching { java.io.File(dir, "cmdline").readText() }.getOrDefault("")
+                .replace('\u0000', ' ').trim()
+            val cmdline = cmdlineRaw.ifEmpty { comm }
+            ProcInfo(pid, ppid, state, cmdline.ifEmpty { comm })
+        }.getOrNull()
     }
+}
+
+private data class MemInfo(val total: Long, val free: Long, val available: Long)
+
+/** 解析 /proc/meminfo（单位 kB → 字节），Linux 环境真实内存。 */
+private fun readMemInfo(): MemInfo {
+    val f = java.io.File("/proc/meminfo")
+    var total = 0L; var free = 0L; var available = 0L
+    if (f.exists()) {
+        f.readLines().forEach { line ->
+            val v = line.split("\\s+".toRegex()).getOrNull(1)?.toLongOrNull() ?: 0L
+            when {
+                line.startsWith("MemTotal:") -> total = v * 1024
+                line.startsWith("MemFree:") -> free = v * 1024
+                line.startsWith("MemAvailable:") -> available = v * 1024
+            }
+        }
+    }
+    if (available == 0L) available = free
+    return MemInfo(total, free, available)
 }
 
 /**

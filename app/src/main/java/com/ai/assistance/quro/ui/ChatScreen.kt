@@ -2708,11 +2708,11 @@ private fun MessageRow(
                 Box(
                     bubbleModifier
                         .combinedClickable(
-                            onClick = { copyPlain(ctx, displayText) },
-                            onLongClick = { if (!msg.text.isNullOrBlank()) copyToClipboard(msg.text) }
+                            onClick = { copyPlain(ctx, displayText) }
                         )
                 ) {
                     val blocks = remember(cleanText) { parseBlocks(cleanText) }
+                    SelectionContainer {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         blocks.forEach { blk ->
                             when (blk) {
@@ -2792,6 +2792,7 @@ private fun MessageRow(
                                 }
                             }
                         }
+                    }
                     }
                     // 复制成功提示（浮在气泡内右下角）
                     if (showCopyMenu && copiedText.isNotBlank()) {
@@ -7547,25 +7548,31 @@ private fun CleanupScreen(
 ) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
-    var logsSize by remember { mutableStateOf(0L) }
-    var modelCacheSize by remember { mutableStateOf(0L) }
-    var aiProductsSize by remember { mutableStateOf(0L) }
-    var tempFilesSize by remember { mutableStateOf(0L) }
-    var selectedItems by remember { mutableStateOf(setOf<String>()) }
+    // 各类真实写盘路径（与运行时一致，不再写死不存在的目录）
+    val ext = context.getExternalFilesDir(null)
+    val paths = remember {
+        mapOf(
+            "appdata" to File(context.filesDir, "quro_data"),
+            "sandbox" to File(context.filesDir, "linux-sandbox"), // Ubuntu rootfs + tmp，体积最大
+            "logs" to File(
+                android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOWNLOADS
+                ), "QuroAI_logs"
+            ), // 诊断日志（公共 Download，需 MANAGE_EXTERNAL_STORAGE 才能删）
+            "exports" to (ext?.let { File(it, "quro_exports") } ?: File(context.filesDir, "quro_exports")),
+            "backups" to (ext?.let { File(it, "quro_backups") } ?: File(context.filesDir, "quro_backups")),
+            "cache" to context.cacheDir,
+        )
+    }
+    var sizes by remember { mutableStateOf(mapOf<String, Long>()) }
     var showCleanupDialog by remember { mutableStateOf(false) }
     var cleanupType by remember { mutableStateOf("") }
 
-    // 计算各类缓存大小（对齐 QuroDataManager 真实写盘路径，旧写死 logs/model_cache/ai_products 均不存在，导致恒为 0）
+    fun total() = sizes.values.sum()
+
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            logsSize = calculateDirSize(File(context.filesDir, "quro_data"))
-            modelCacheSize = calculateDirSize(
-                context.getExternalFilesDir(null)?.let { File(it, "quro_exports") } ?: File(context.filesDir, "quro_exports")
-            )
-            aiProductsSize = calculateDirSize(
-                context.getExternalFilesDir(null)?.let { File(it, "quro_backups") } ?: File(context.filesDir, "quro_backups")
-            )
-            tempFilesSize = calculateDirSize(context.cacheDir)
+            sizes = paths.mapValues { (_, f) -> calculateDirSize(f) }
         }
     }
 
@@ -7584,71 +7591,41 @@ private fun CleanupScreen(
             SetGroup {
                 SetRowClickable(
                     Icons.Filled.Info,
-                    "总缓存大小",
-                    formatFileSize(logsSize + modelCacheSize + aiProductsSize + tempFilesSize),
-                    "",
+                    "可清理总大小",
+                    formatFileSize(total()),
+                    "以下分类之和（不含离线模型等用户外部文件）",
                     { },
                     scaled
                 )
             }
 
-            GroupCaption("分类清理")
+            GroupCaption("分类清理（谨慎选择，重要数据会丢失）")
             SetGroup {
-                SetRowClickable(
-                    Icons.Filled.List,
-                    "应用数据",
-                    formatFileSize(logsSize),
-                    "对话 / 设置 / 模型配置",
-                    {
-                        cleanupType = "logs"
-                        showCleanupDialog = true
-                    },
-                    scaled
-                )
+                CleanupRow(Icons.Filled.List, "应用数据", formatFileSize(sizes["appdata"] ?: 0),
+                    "对话 / 设置 / 模型配置", scaled) { cleanupType = "appdata"; showCleanupDialog = true }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                SetRowClickable(
-                    Icons.Filled.Folder,
-                    "导出文件",
-                    formatFileSize(modelCacheSize),
-                    "导出的 ZIP 数据包",
-                    {
-                        cleanupType = "model_cache"
-                        showCleanupDialog = true
-                    },
-                    scaled
-                )
+                CleanupRow(Icons.Filled.Folder, "Linux 沙箱 (rootfs)", formatFileSize(sizes["sandbox"] ?: 0),
+                    "Ubuntu rootfs / 缓存，清理后需重新下载", scaled) { cleanupType = "sandbox"; showCleanupDialog = true }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                SetRowClickable(
-                    Icons.Filled.Build,
-                    "备份文件",
-                    formatFileSize(aiProductsSize),
-                    "数据备份归档",
-                    {
-                        cleanupType = "ai_products"
-                        showCleanupDialog = true
-                    },
-                    scaled
-                )
+                CleanupRow(Icons.Filled.Description, "诊断日志", formatFileSize(sizes["logs"] ?: 0),
+                    "手机 Download/QuroAI_logs", scaled) { cleanupType = "logs"; showCleanupDialog = true }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                SetRowClickable(
-                    Icons.Filled.Delete,
-                    "缓存目录",
-                    formatFileSize(tempFilesSize),
-                    "图片 / WebView / 临时缓存",
-                    {
-                        cleanupType = "temp"
-                        showCleanupDialog = true
-                    },
-                    scaled
-                )
+                CleanupRow(Icons.Filled.Folder, "导出文件", formatFileSize(sizes["exports"] ?: 0),
+                    "导出的 ZIP 数据包", scaled) { cleanupType = "exports"; showCleanupDialog = true }
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                CleanupRow(Icons.Filled.Build, "备份文件", formatFileSize(sizes["backups"] ?: 0),
+                    "数据备份归档", scaled) { cleanupType = "backups"; showCleanupDialog = true }
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                CleanupRow(Icons.Filled.Delete, "缓存目录", formatFileSize(sizes["cache"] ?: 0),
+                    "图片 / WebView / 临时缓存", scaled) { cleanupType = "cache"; showCleanupDialog = true }
             }
 
             GroupCaption("全部清理")
             SetGroup {
                 SetRowClickable(
                     Icons.Filled.DeleteSweep,
-                    "清理所有缓存",
-                    "删除以上所有缓存文件",
+                    "清理所有以上项",
+                    "删除应用数据 / 沙箱 / 日志 / 导出 / 备份 / 缓存",
                     "",
                     {
                         cleanupType = "all"
@@ -7661,22 +7638,25 @@ private fun CleanupScreen(
         }
     }
 
-    // 清理确认对话框
     if (showCleanupDialog) {
         val title = when (cleanupType) {
-            "logs" -> "清理应用数据"
-            "model_cache" -> "清理导出文件"
-            "ai_products" -> "清理备份文件"
-            "temp" -> "清理缓存目录"
-            "all" -> "清理所有缓存"
+            "appdata" -> "清理应用数据"
+            "sandbox" -> "清理 Linux 沙箱"
+            "logs" -> "清理诊断日志"
+            "exports" -> "清理导出文件"
+            "backups" -> "清理备份文件"
+            "cache" -> "清理缓存目录"
+            "all" -> "清理所有以上项"
             else -> "清理"
         }
         val message = when (cleanupType) {
-            "logs" -> "确定要清理应用数据（对话/设置/模型配置）吗？"
-            "model_cache" -> "确定要清理导出的 ZIP 数据包吗？"
-            "ai_products" -> "确定要清理数据备份归档吗？"
-            "temp" -> "确定要清理缓存目录吗？"
-            "all" -> "确定要清理所有缓存吗？这将删除应用数据、导出文件、备份文件与临时缓存。"
+            "appdata" -> "将删除所有对话 / 设置 / 模型配置（不可恢复），确定吗？"
+            "sandbox" -> "将删除 Ubuntu rootfs 与沙箱缓存，下次使用 CMS/终端需重新下载，确定吗？"
+            "logs" -> "将删除手机 Download/QuroAI_logs 诊断日志，确定吗？"
+            "exports" -> "将删除所有导出的 ZIP 数据包，确定吗？"
+            "backups" -> "将删除所有数据备份归档，确定吗？"
+            "cache" -> "将删除应用缓存目录，确定吗？"
+            "all" -> "将删除以上全部项（不含离线模型等用户外部文件），确定吗？"
             else -> "确定要清理吗？"
         }
 
@@ -7688,44 +7668,38 @@ private fun CleanupScreen(
                 TextButton(
                     onClick = {
                         showCleanupDialog = false
-                        // 执行清理操作
                         CoroutineScope(Dispatchers.IO).launch {
-                            val ext = context.getExternalFilesDir(null)
-                            val dirs = mapOf(
-                                "logs" to File(context.filesDir, "quro_data"),
-                                "model_cache" to (ext?.let { File(it, "quro_exports") } ?: File(context.filesDir, "quro_exports")),
-                                "ai_products" to (ext?.let { File(it, "quro_backups") } ?: File(context.filesDir, "quro_backups")),
-                                "temp" to context.cacheDir,
-                            )
-                            when (cleanupType) {
-                                "logs" -> deleteDir(dirs["logs"]!!)
-                                "model_cache" -> deleteDir(dirs["model_cache"]!!)
-                                "ai_products" -> deleteDir(dirs["ai_products"]!!)
-                                "temp" -> deleteDir(dirs["temp"]!!)
-                                "all" -> dirs.values.forEach { deleteDir(it) }
-                            }
-                            // 更新大小
-                            logsSize = calculateDirSize(dirs["logs"]!!)
-                            modelCacheSize = calculateDirSize(dirs["model_cache"]!!)
-                            aiProductsSize = calculateDirSize(dirs["ai_products"]!!)
-                            tempFilesSize = calculateDirSize(dirs["temp"]!!)
+                            val targets = if (cleanupType == "all") paths else mapOf(cleanupType to (paths[cleanupType] ?: File("/dev/null")))
+                            targets.forEach { (_, f) -> deleteDir(f) }
+                            sizes = paths.mapValues { (_, f) -> calculateDirSize(f) }
                         }
                     }
-                ) {
-                    Text("确定清理")
-                }
+                ) { Text("确定清理") }
             },
             dismissButton = {
-                TextButton(onClick = { showCleanupDialog = false }) {
-                    Text("取消")
-                }
+                TextButton(onClick = { showCleanupDialog = false }) { Text("取消") }
             }
         )
     }
 }
 
 /**
- * 计算目录大小
+ * 清理存储分类行（点击触发确认）。
+ */
+@Composable
+private fun CleanupRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    size: String,
+    sub: String,
+    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
+    onClick: () -> Unit,
+) {
+    SetRowClickable(icon, title, size, sub, onClick, scaled)
+}
+
+/**
+ * 计算目录大小（递归）。
  */
 private fun calculateDirSize(dir: File): Long {
     if (!dir.exists()) return 0
@@ -7741,18 +7715,18 @@ private fun calculateDirSize(dir: File): Long {
 }
 
 /**
- * 删除目录
+ * 删除目录（保留顶层目录本身，仅清空内容，避免后续写入因目录缺失而报错）。
  */
 private fun deleteDir(dir: File) {
     if (!dir.exists()) return
     dir.listFiles()?.forEach { file ->
         if (file.isDirectory) {
             deleteDir(file)
+            file.delete()
         } else {
             file.delete()
         }
     }
-    dir.delete()
 }
 
 /**

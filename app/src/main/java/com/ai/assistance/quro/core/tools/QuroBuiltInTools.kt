@@ -223,8 +223,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(ListMediaTool())
     // AI 发文件：把设备文件作为对话框附件（图片/视频/文档直接预览）
     r.register(AttachFileTool())
-    // 闹钟
+    // 闹钟（应用内真正会响的提醒）
     r.register(SetAlarmTool())
+    r.register(CancelAlarmTool())
+    r.register(ListAlarmsTool())
     // 定时任务/自动化提醒
     r.register(ScheduleTaskTool())
     r.register(ListScheduledTasksTool())

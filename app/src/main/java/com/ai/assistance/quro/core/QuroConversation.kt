@@ -9,7 +9,7 @@ internal const val TOOL_RESULT_CAP = 1600
 
 /** 模型硬输入上限（token）：请求总输入（system + 历史）不得超过此值，否则上游直接 500「context length exceeded」。
  *  contextWindow=0（用户设「不限制」）时本值作为安全硬顶生效，避免「全量无界发送」撑爆模型上限。 */
-internal const val MODEL_MAX_INPUT_TOKENS = 262144
+internal const val MODEL_MAX_INPUT_TOKENS = 1048576
 
 /**
  * 就地压缩超长工具结果（role=tool 的 content），防止命令类工具（terminal_exec / root_exec 等）

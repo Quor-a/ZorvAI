@@ -161,6 +161,14 @@
       <button class="tb warn" id="delBtn">删除选中</button>
       <button class="tb warn" id="clearBtn">清空</button>
     </div>
+    <div class="sep"></div>
+    <div class="group">
+      <button class="tb" id="undoBtn">↶ 撤销</button>
+      <button class="tb" id="redoBtn">↷ 重做</button>
+      <button class="tb" id="saveProjBtn">保存工程</button>
+      <button class="tb" id="loadProjBtn">打开工程</button>
+      <button class="tb" id="pngBtn">导出 PNG</button>
+    </div>
   </div>
 
   <div id="stage">
@@ -183,6 +191,7 @@
   </div>
 </div>
 <div id="toast"></div>
+<input type="file" id="projFile" accept=".qne,application/json,.json" style="display:none">
 
 <script>
 (function () {
@@ -211,6 +220,66 @@
     toastEl.classList.add('show');
     clearTimeout(toast._t);
     toast._t = setTimeout(function () { toastEl.classList.remove('show'); }, 1600);
+  }
+
+  // ---------- 历史 / 持久化 / 导出 ----------
+  var history = [];
+  var hidx = -1;
+  function snapshot() { return JSON.stringify({ nodes: nodes, edges: edges, seq: seq }); }
+  function pushHistory() {
+    history = history.slice(0, hidx + 1);
+    history.push(snapshot());
+    hidx = history.length - 1;
+    if (history.length > 120) { history.shift(); hidx--; }
+  }
+  function restore(s) {
+    try {
+      var o = JSON.parse(s);
+      nodes = o.nodes || []; edges = o.edges || []; seq = o.seq || 1;
+      selectedNode = null; selectedEdge = null; renderAll();
+    } catch (_) {}
+  }
+  function commit() { pushHistory(); autosave(); }
+  function undo() { if (hidx > 0) { hidx--; restore(history[hidx]); autosave(); toast('已撤销'); } }
+  function redo() { if (hidx < history.length - 1) { hidx++; restore(history[hidx]); autosave(); toast('已重做'); } }
+
+  var LS_KEY = 'quro_node_editor_v1';
+  function autosave() { try { localStorage.setItem(LS_KEY, snapshot()); } catch (_) {} }
+  function loadLocal() {
+    try {
+      var s = localStorage.getItem(LS_KEY);
+      if (s) { restore(s); pushHistory(); return true; }
+    } catch (_) {}
+    return false;
+  }
+  function exportPNG() {
+    renderPreview();
+    setTimeout(function () {
+      var svg = previewWrap.querySelector('svg');
+      if (!svg) { toast('请先点「刷新预览」'); return; }
+      try {
+        var xml = new XMLSerializer().serializeToString(svg);
+        var img = new Image();
+        img.onload = function () {
+          var c = document.createElement('canvas');
+          var w = (svg.width && svg.width.baseVal) ? svg.width.baseVal.value : img.width;
+          var h = (svg.height && svg.height.baseVal) ? svg.height.baseVal.value : img.height;
+          c.width = w || 800; c.height = h || 600;
+          var cx = c.getContext('2d');
+          cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, c.width, c.height);
+          cx.drawImage(img, 0, 0);
+          c.toBlob(function (b) {
+            if (!b) { toast('PNG 导出失败'); return; }
+            var a = document.createElement('a');
+            a.download = 'node-flow-' + Date.now() + '.png';
+            a.href = URL.createObjectURL(b); a.click();
+            toast('已导出 PNG');
+          });
+        };
+        img.onerror = function () { toast('PNG 导出失败'); };
+        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)));
+      } catch (e) { toast('PNG 导出失败：' + (e.message || e)); }
+    }, 350);
   }
 
   // ---------- 节点渲染 ----------
@@ -262,6 +331,7 @@
         b.setAttribute('contenteditable', 'false');
         n.label = b.textContent.trim() || TYPE_LABEL[n.type];
         b.textContent = n.label;
+        commit();
       });
     }
     el.style.left = n.x + 'px';
@@ -346,9 +416,11 @@
     renderNode(n); renderEdges();
   }
   function onDragUp() {
+    var moved = drag && drag.moved;
     drag = null;
     window.removeEventListener('pointermove', onDragMove);
     window.removeEventListener('pointerup', onDragUp);
+    if (moved) commit();
   }
 
   // ---------- 连线 ----------
@@ -379,6 +451,7 @@
     edges.push({ id: uid('e'), from: connectFrom.id, to: target.id });
     connectFrom = null;
     renderEdges();
+    commit();
   }
 
   // ---------- 增删 ----------
@@ -387,16 +460,17 @@
     var cy = stage.scrollTop + stage.clientHeight / 2 - 30;
     var n = { id: uid('n'), type: type, x: Math.max(0, cx), y: Math.max(0, cy), label: TYPE_LABEL[type] };
     nodes.push(n); selectNode(n);
+    commit();
     toast('已添加：' + TYPE_LABEL[type]);
   }
   function deleteSelected() {
     if (selectedNode) {
       nodes = nodes.filter(function (n) { return n.id !== selectedNode; });
       edges = edges.filter(function (e) { return e.from !== selectedNode && e.to !== selectedNode; });
-      selectedNode = null; renderAll(); toast('已删除节点');
+      selectedNode = null; renderAll(); toast('已删除节点'); commit();
     } else if (selectedEdge) {
       edges = edges.filter(function (e) { return e.id !== selectedEdge; });
-      selectedEdge = null; renderAll(); toast('已删除连线');
+      selectedEdge = null; renderAll(); toast('已删除连线'); commit();
     } else {
       toast('先选中节点或连线');
     }
@@ -404,6 +478,7 @@
   function clearAll() {
     nodes = []; edges = []; selectedNode = null; selectedEdge = null; renderAll();
     srcArea.value = ''; toast('已清空');
+    commit();
   }
 
   // ---------- Mermaid 导入导出 ----------
@@ -470,6 +545,7 @@
     renderAll();
     exportMermaid();
     toast('已导入 ' + nodes.length + ' 个节点');
+    commit();
   }
 
   // ---------- 预览 ----------
@@ -521,7 +597,35 @@
   });
   document.getElementById('delBtn').addEventListener('click', deleteSelected);
   document.getElementById('clearBtn').addEventListener('click', clearAll);
-  document.getElementById('sampleBtn').addEventListener('click', function () { seedExample(); toast('已加载内置示例'); });
+  document.getElementById('sampleBtn').addEventListener('click', function () { seedExample(); pushHistory(); autosave(); toast('已加载内置示例'); });
+
+  // 历史 / 持久化 / 导出
+  document.getElementById('undoBtn').addEventListener('click', undo);
+  document.getElementById('redoBtn').addEventListener('click', redo);
+  document.getElementById('saveProjBtn').addEventListener('click', function () {
+    var ok = androidSave('project.qne', snapshot());
+    autosave();
+    toast(ok ? '已保存工程文件' : '已存到本地缓存');
+  });
+  document.getElementById('loadProjBtn').addEventListener('click', function () {
+    var inp = document.getElementById('projFile');
+    if (inp) inp.click(); else toast('当前环境不支持打开文件');
+  });
+  document.getElementById('pngBtn').addEventListener('click', exportPNG);
+  document.getElementById('projFile').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        restore('' + reader.result); pushHistory(); autosave();
+        exportMermaid(); renderPreview();
+        toast('已打开工程：' + f.name);
+      } catch (_) { toast('工程文件解析失败'); }
+    };
+    reader.readAsText(f);
+    e.target.value = '';
+  });
 
   // 底部 tab 切换
   Array.prototype.slice.call(document.querySelectorAll('#bottom .tab')).forEach(function (t) {
@@ -569,7 +673,17 @@
     exportMermaid();
     renderPreview();
   }
-  seedExample();
+  // 初始化：优先恢复本地持久化的工程，否则加载内置示例
+  var restored = false;
+  try { restored = loadLocal(); } catch (_) {}
+  if (restored) {
+    exportMermaid();
+    renderPreview();
+  } else {
+    seedExample();
+    pushHistory();
+    autosave();
+  }
 
   try { if (window.AndroidBridge && AndroidBridge.onReady) AndroidBridge.onReady(); } catch (_) {}
 })();

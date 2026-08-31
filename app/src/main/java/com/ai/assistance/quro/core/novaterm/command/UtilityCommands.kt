@@ -1,5 +1,9 @@
 package com.ai.assistance.quro.core.novaterm.command
 
+import com.ai.assistance.quro.activity.QuroApplication
+import com.ai.assistance.quro.core.linux.DETECT_DISTRO_CMD
+import com.ai.assistance.quro.core.linux.QuroLinuxDistroDetector
+import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.novaterm.core.*
 import com.ai.assistance.quro.core.novaterm.core.FileSystem
 import com.ai.assistance.quro.core.novaterm.core.SessionManager
@@ -129,24 +133,67 @@ object SandboxCommand : BuiltinCommand {
 object PkgCommand : BuiltinCommand {
     override val name = "pkg"
     override fun execute(sessionId: String, cmd: Command): CommandResult {
-        val subCmd = cmd.getArg(0)
+        val sub = cmd.getArg(0)
+        val ctx = QuroApplication.appCtx
 
-        return when (subCmd) {
-            "list" -> {
-                // 列出已安装的 App（需要相应权限）
-                try {
-                    val pm = android.content.Context::class.java
-                    CommandResult.ok("Package manager not available in standalone mode")
-                } catch (e: Exception) {
-                    CommandResult.ok("(simulated) com.ai.assistance.quro.core.novaterm\n(simulated) com.example.app")
-                }
+        // 探测 Linux 环境发行版 → 选对应包管理器（apk/apt/dnf/pacman）
+        val spec = runCatching {
+            val osRelease = ctx?.let { c -> QuroLinuxEnv.run(c, DETECT_DISTRO_CMD, 15000).second } ?: ""
+            QuroLinuxDistroDetector.packageManagerFor(osRelease)
+        }.getOrElse { QuroLinuxDistroDetector.packageManagerFor("") }
+
+        // 在 Linux 环境内执行生成的命令；无环境/执行失败时回退为「返回命令串」供手动跑。
+        val run: (String) -> CommandResult = { command ->
+            if (ctx == null) {
+                CommandResult.ok("(在 Linux 终端执行) $command")
+            } else {
+                runCatching {
+                    val (code, out) = QuroLinuxEnv.run(ctx, command, 180000)
+                    if (code == 0) CommandResult.ok(out.ifBlank { "✓ 执行成功：$command" })
+                    else CommandResult.ok("exit=$code\n$out")
+                }.getOrElse { CommandResult.ok("(命令已生成，请在 Linux 环境执行) $command") }
             }
+        }
+
+        return when (sub) {
+            "install" -> {
+                val pkgs = cmd.args.drop(1)
+                if (pkgs.isEmpty()) return CommandResult.err("用法: pkg install <包名...>")
+                run(spec.install(pkgs))
+            }
+            "remove", "uninstall" -> {
+                val pkgs = cmd.args.drop(1)
+                if (pkgs.isEmpty()) return CommandResult.err("用法: pkg remove <包名...>")
+                run(spec.remove(pkgs))
+            }
+            "update" -> run(spec.update())
+            "upgrade" -> run(spec.upgrade())
+            "search" -> {
+                val q = cmd.getArg(1)
+                if (q.isBlank()) return CommandResult.err("用法: pkg search <关键词>")
+                run(spec.search(q))
+            }
+            "list" -> run(spec.listInstalled(cmd.getArg(1).ifBlank { null }))
             "info" -> {
-                val pkg = cmd.getArg(1)
-                CommandResult.ok("Package: $pkg\nVersion: (simulated)\nPermissions: (simulated)")
+                val p = cmd.getArg(1)
+                if (p.isBlank()) return CommandResult.err("用法: pkg info <包名>")
+                run(spec.info(p))
             }
-            else -> CommandResult.ok("pkg [list|info <name>]")
+            "clean" -> run(spec.clean())
+            "detect" -> CommandResult.ok("当前包管理器：${spec.displayName}（${spec.binary}）")
+            else -> CommandResult.ok(
+                "pkg <子命令> [参数]  —— 基于 Linux 环境 /etc/os-release 自动选择包管理器\n" +
+                "  install <包...>   安装软件包\n" +
+                "  remove  <包...>   卸载软件包\n" +
+                "  update            更新软件源索引\n" +
+                "  upgrade           升级全部已装软件\n" +
+                "  search <关键词>   搜索可用包\n" +
+                "  list [过滤]       列出已安装包\n" +
+                "  info <包名>       查看包详情\n" +
+                "  clean             清理包缓存\n" +
+                "  detect            探测当前发行版与包管理器"
+            )
         }
     }
-    override fun help() = "pkg [list|info <name>]  - 包管理"
+    override fun help() = "pkg <install|remove|update|upgrade|search|list|info|clean|detect>  - Linux 包管理"
 }
