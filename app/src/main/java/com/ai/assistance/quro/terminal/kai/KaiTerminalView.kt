@@ -39,10 +39,10 @@ import androidx.compose.ui.unit.sp
 import com.ai.assistance.quro.core.terminal.QuroShellSession
 
 /**
- * 真·终端渲染面板：把 [QuroShellSession.vt]（Kai 移植的 VT100/xterm 引擎）画到画布上，
+ * 真·终端渲染面板：把 [QuroShellSession.vt]（VT100/xterm 引擎）画到画布上，
  * 叠加透明 IME 输入层（捕获键盘），底部一排特殊功能键（Ctrl/Alt/方向等）。
  *
- * 这是「kai9000 那种终端」——带 ANSI 颜色 / 光标 / 加粗的真终端，而非旧版 LazyColumn 纯文本。
+ * 这是带 ANSI 颜色 / 光标 / 加粗的真终端，而非旧版 LazyColumn 纯文本。
  * 若 [QuroShellSession.vt] 为 null（未启用 VT），本面板不会用于该窗格，旧 UI 继续走纯文本。
  */
 @Composable

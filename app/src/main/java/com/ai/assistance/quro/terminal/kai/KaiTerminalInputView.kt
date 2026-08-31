@@ -24,7 +24,7 @@ import androidx.compose.ui.viewinterop.AndroidView
  * Invisible, focusable view over the terminal grid whose only job is IME
  * plumbing — it draws nothing, since the grid underneath is Compose.
  *
- * 移植自 Kai 的 TerminalInputView，去品牌化（包名 com.ai.assistance.quro.terminal.kai）。
+ * 移植自 Kai 的 TerminalInputView（包名 com.ai.assistance.quro.terminal.kai）。
  *
  * It asks the keyboard for a null input type, which is what makes a keyboard
  * stop composing text and deliver raw key events instead. That is the only way

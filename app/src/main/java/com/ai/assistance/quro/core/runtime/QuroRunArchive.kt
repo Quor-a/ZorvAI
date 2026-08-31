@@ -6,7 +6,7 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * Agent 运行归档（参照 Eta `AgentRunArchiveStore`，去品牌化重写）。
+ * Agent 运行归档（参照 Eta `AgentRunArchiveStore`重写）。
  *
  * 把一次完整运行的**事件流**以 JSONL（每行一个 JSON 事件）追加落盘。
  * 用途：

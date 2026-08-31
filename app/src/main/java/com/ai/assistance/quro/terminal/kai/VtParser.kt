@@ -4,7 +4,7 @@ package com.ai.assistance.quro.terminal.kai
  * Minimal VT100 / xterm CSI parser. Enough for shells, apt, and agent TUIs to
  * paint a usable screen.
  *
- * 移植自 Kai (com.inspiredandroid.kai)。使用稳定的 kotlin.io.encoding.Base64
+ * 使用稳定的 kotlin.io.encoding.Base64
  * （Kotlin 2.3.10 无需 @OptIn(ExperimentalEncodingApi)）。
  *
  * Login URLs often arrive as:

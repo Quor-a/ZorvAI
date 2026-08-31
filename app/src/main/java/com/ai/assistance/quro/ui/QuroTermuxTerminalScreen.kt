@@ -107,11 +107,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // ═══════════════════════════════════════════════════════════════
-// 终端界面 v4 —— 双终端版（融合 VM + Kai 本地）
+// 终端界面 v4 —— 双终端版（融合 VM + 本地终端）
 //
 // 设计：
 //  - 双窗格终端：左窗格「VM/Linux 融合」(VM/pKVM/AVF/QEMU 优先，失败回退 proot)，
-//    右窗格「Kai 终端」(com.inspiredandroid.kai 风格，强制 proot 本地)。
+//    右窗格「本地终端」（强制 proot 本地）。
 //  - 顶栏「⇆ 单/双」切换单窗格 / 双窗格；点任一窗格徽章将其设为活动窗格。
 //  - 两窗格完全独立：各自输出、输入、命令历史、特殊键、复制。
 //  - 顶栏操作按钮（环境/快捷/搜索/中断/清屏）作用于「活动窗格」。
@@ -163,7 +163,7 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
 
     // ═══════════ 双窗格状态 ═══════════
     val paneA = rememberPaneState(context, scope, vmFirst = true)   // 左：VM/Linux 融合
-    val paneB = rememberPaneState(context, scope, vmFirst = false)  // 右：Kai 本地
+    val paneB = rememberPaneState(context, scope, vmFirst = false)  // 右：本地
     var isDual by remember { mutableStateOf(true) }
     var activePane by remember { mutableStateOf(0) }
     fun active(): PaneState = if (activePane == 0) paneA else paneB
@@ -573,8 +573,8 @@ private fun TerminalPane(
             if (isActive) Text("● 活动", color = Color(0xFF7BE0A0), fontSize = 8.sp)
         }
 
-        // 输出：真·VT 终端（移植自 Kai 的 VT100/xterm 引擎），带 ANSI 颜色 / 光标 / 加粗 / 清屏。
-        // 左窗格 = VM 融合终端，右窗格 = Kai 风格 proot/Linux 终端，均走同一 VT 渲染管线。
+        // 输出：真·VT 终端，带 ANSI 颜色 / 光标 / 加粗 / 清屏。
+        // 左窗格 = VM 融合终端，右窗格 = 本地 proot/Linux 终端，均走同一 VT 渲染管线。
         val outSession = session
         Box(
             Modifier.fillMaxWidth().weight(1f),

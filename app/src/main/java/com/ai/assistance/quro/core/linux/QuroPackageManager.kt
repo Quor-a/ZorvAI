@@ -1,7 +1,7 @@
 package com.ai.assistance.quro.core.linux
 
 /**
- * Linux 包管理器统一抽象（参照 Kai `linux/` 的 PackageManagerSpec 设计，去品牌化重写）。
+ * Linux 包管理器统一抽象（参照 Kai `linux/` 的 PackageManagerSpec 设计重写）。
  *
  * 为什么需要抽象层：应用内的 Linux 环境可能是 Alpine（apk），也可能是 Ubuntu/Debian（apt），
  * 甚至用户自己换成了 Fedora/Arch。若把 `apt-get install` 写死在工具里，

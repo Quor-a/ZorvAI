@@ -6,7 +6,7 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * Agent 运行检查点（参照 Eta `agent/runtime` 的 checkpoint 机制，去品牌化重写）。
+ * Agent 运行检查点（参照 Eta `agent/runtime` 的 checkpoint 机制重写）。
  *
  * 解决的问题：一次多轮 Agent 运行（用户提问 → 模型思考 → 连调 5 个工具 → 生成最终回答）
  * 动辄几十秒。中途进程被杀、切后台被回收、或某次工具调用抛异常，
