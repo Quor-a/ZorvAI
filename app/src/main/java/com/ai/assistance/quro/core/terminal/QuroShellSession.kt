@@ -9,9 +9,12 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ai.assistance.quro.core.linux.CommandTranslator
+import com.ai.assistance.quro.core.guest.QuroContainerManager
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.vm.QuroVmEnv
 import com.ai.assistance.quro.core.privilege.QuroShellQuote
+import com.ai.assistance.quro.terminal.kai.TerminalScreen
+import com.ai.assistance.quro.terminal.kai.TerminalSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -67,8 +70,19 @@ class QuroShellSession private constructor(
     /** VM 真 TTY 模式下，回显/提示符/信号全部由 guest 完成，本层只透传输入、不注入哨兵。 */
     private val passthroughEcho = mode == ShellMode.VM
 
-    /** 滚动缓冲区（每行一条），由 Compose LazyColumn 渲染。 */
+    /** 滚动缓冲区（每行一条），由 Compose LazyColumn 渲染（VT 未启用时的兜底）。 */
     val lines = mutableStateListOf<String>()
+
+    /**
+     * 可选 VT 渲染引擎（移植自 Kai 的 VT100/xterm 引擎）。
+     * 非 null 时，[drain] 会把**原始（含 ANSI 转义）**字节喂给它，由 Compose 画布渲染
+     * 出真·终端（颜色 / 光标 / 加粗 / 清屏）；[lines] 仍同步维护一份纯文本用于导出与兜底。
+     * 设为 null（默认）则维持旧管道行为，终端 UI 走 LazyColumn 纯文本。
+     */
+    var vt: TerminalScreen? = null
+
+    /** VT 屏幕的不可变快照状态，Compose 渲染层收集它即可随终端输出重组。 */
+    val vtSnapshot = mutableStateOf<TerminalSnapshot?>(null)
 
     /** 进程是否已退出。 */
     var exited by mutableStateOf(false)
@@ -191,7 +205,11 @@ class QuroShellSession private constructor(
                         // 哨兵可能与命令输出粘在同一行（命令没有以换行结尾时），
                         // 先把前半段真实输出打出来，再复位状态。
                         val head = stripAnsi(QuroTerminalSentinel.stripSentinel(raw, doneToken))
-                        if (head.isNotEmpty()) appendLine(head)
+                        if (head.isNotEmpty()) {
+                            appendLine(head)
+                            vt?.writeText(head + "\n")
+                            publishVt()
+                        }
                         onCommandDone(done)
                         continue
                     }
@@ -200,6 +218,11 @@ class QuroShellSession private constructor(
                 }
                 val clean = stripAnsi(raw)
                 if (clean.isNotEmpty()) appendLine(clean)
+                // VT 模式：把原始（含 ANSI 转义）行喂给 Kai 引擎渲染真·终端
+                if (vt != null) {
+                    vt!!.writeText(raw + "\n")
+                    publishVt()
+                }
             }
             Log.d(TAG, "drain: 读取流结束")
         } catch (e: Exception) {
@@ -228,7 +251,10 @@ class QuroShellSession private constructor(
             suppressNextPrompt = false
             return
         }
-        appendLine(promptPrefix())
+        val pr = promptPrefix()
+        appendLine(pr)
+        vt?.writeText(pr)
+        publishVt()
     }
 
     /** 发送一条命令（带回显 + 哨兵），等价于用户在提示符后敲回车。 */
@@ -274,7 +300,10 @@ class QuroShellSession private constructor(
             appendLine("[router] $trimmed → $translated")
         }
         Log.d(TAG, "sendCommand: 发送命令 '$translated', 模式=$mode, busy=$busy")
-        appendLine(promptPrefix() + trimmed)
+        val echo = promptPrefix() + trimmed
+        appendLine(echo)
+        vt?.writeText(echo)
+        if (vt != null) publishVt()
         lastInterrupted = false
         busy = true
         writeWithSentinel(translated)
@@ -290,7 +319,10 @@ class QuroShellSession private constructor(
      * 回显时切回主线程（lines 是 Compose 的 SnapshotStateList，应在主线程改）。
      */
     private fun runAciCommand(trimmed: String) {
-        appendLine(promptPrefix() + trimmed)
+        val echo = promptPrefix() + trimmed
+        appendLine(echo)
+        vt?.writeText(echo)
+        if (vt != null) publishVt()
         launch {
             val out = try {
                 executeAciCommand(trimmed)
@@ -299,8 +331,14 @@ class QuroShellSession private constructor(
                 "aci: 执行失败: ${t.message}"
             }
             withContext(Dispatchers.Main) {
-                out.lineSequence().forEach { appendLine(it) }
-                appendLine(promptPrefix())
+                out.lineSequence().forEach {
+                    appendLine(it)
+                    vt?.writeText(it + "\n")
+                }
+                val pr = promptPrefix()
+                appendLine(pr)
+                vt?.writeText(pr)
+                if (vt != null) publishVt()
             }
         }
     }
@@ -589,6 +627,16 @@ class QuroShellSession private constructor(
     /** 清屏（仅清空滚动缓冲区，不影响底层进程）。 */
     fun clear() {
         lines.clear()
+        vt?.clear()
+        if (vt != null) publishVt()
+    }
+
+    /**
+     * 把当前 VT 屏幕状态推送给 Compose 渲染层（drain 在 IO 线程调用；
+     * [vtSnapshot] 是 Compose MutableState，跨线程写入由快照系统保证安全）。
+     */
+    private fun publishVt() {
+        vt?.let { vtSnapshot.value = it.snapshot() }
     }
 
     /**
@@ -674,6 +722,20 @@ class QuroShellSession private constructor(
          * 仅在 host 后端不可用或启动失败时调用，作为兜底。
          */
         private fun createLegacy(context: Context): QuroShellSession {
+            // 优先用已导入的命名容器（tiny_container 范式，去品牌化）：
+            // 若存在 rootfs 容器，终端直接跑该容器 proot，而非默认单 rootfs 沙箱。
+            if (QuroContainerManager.isProvisioned(context)) {
+                runCatching {
+                    val proc = QuroContainerManager.launchSession(context)
+                    if (proc != null) {
+                        Log.i(TAG, "✅ 命名容器已启动，创建 LINUX 模式会话")
+                        return QuroShellSession(
+                            context, ShellMode.LINUX, emptyList(), emptyArray(),
+                            context.filesDir.absolutePath, proc,
+                        )
+                    }
+                }.onFailure { e -> Log.w(TAG, "命名容器启动失败，回退默认 proot: ${e.message}") }
+            }
             val launch = QuroLinuxEnv.shellLaunch(context)
             if (launch != null) {
                 try {
