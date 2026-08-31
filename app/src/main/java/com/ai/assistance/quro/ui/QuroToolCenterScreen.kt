@@ -29,15 +29,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.ai.assistance.quro.core.linux.LinuxDistro
+import com.ai.assistance.quro.core.linux.PackageManagerSpec
+import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.tools.QuroPrivateDbTool
 import com.ai.assistance.quro.core.tools.QuroSandboxTool
 import com.ai.assistance.quro.ui.icons.LucideIcon
 import com.ai.assistance.quro.ui.theme.Muted
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -96,6 +101,7 @@ fun QuroToolCenterScreen(
             "workbench" -> WorkbenchPanel(context)
             "vispro" -> VisProPanel(context)
             "flow" -> NodeEditorPanel(context)
+            "pkgmgr" -> PackageManagerPanel(context)
         }
     }
 }
@@ -108,6 +114,7 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         Triple("workbench", "小程序", "AI 生成并在对话框渲染的 HTML/JS 小程序"),
         Triple("cms", "能力模块", "CMS 引擎与开发环境部署"),
         Triple("toolbox", "工具箱", "文件管理 / 浏览器 / IDE"),
+        Triple("pkgmgr", "包管理", "apt/apk/dnf/pacman 安装/查询软件"),
         Triple("sandbox", "隔离沙箱", "免权限文件沙箱与 shell"),
         Triple("db", "私有数据库", "只读查询应用自有 SQLite"),
         Triple("vispro", "可视化编程", "Mermaid 源码编辑器 + 实时渲染 / 导出 SVG"),
@@ -511,6 +518,130 @@ private fun NodeEditorPanel(context: Context) {
                 }.also { wvRef.value = it }
             },
         )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 包管理：apt/apk/dnf/pacman 安装 / 查询 / 列表（Linux 沙箱内执行）
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun PackageManagerPanel(context: Context) {
+    val cs = MaterialTheme.colorScheme
+    val scope = rememberCoroutineScope()
+    var distro by remember { mutableStateOf<LinuxDistro?>(null) }
+    var pm by remember { mutableStateOf<PackageManagerSpec?>(null) }
+    var installed by remember { mutableStateOf<String?>(null) }
+    var running by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var envReady by remember { mutableStateOf(false) }
+
+    fun runCmd(cmd: String) {
+        if (running) return
+        running = true
+        installed = "执行：$cmd"
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { QuroLinuxEnv.run(context, cmd, timeoutMs = 60_000L) }
+            }.getOrElse { -1 to "执行失败：${it.message}" }
+            running = false
+            installed = buildString {
+                appendLine("[exit=${result.first}] $cmd")
+                appendLine(result.second.take(4000))
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val status = runCatching { QuroLinuxEnv.probeLenient(context) }.getOrNull()
+            envReady = status?.available == true
+            distro = runCatching { QuroLinuxEnv.detectDistro(context) }.getOrNull()
+            pm = runCatching { QuroLinuxEnv.detectPackageManager(context) }.getOrNull()
+        }
+    }
+
+    Column(
+        Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("包管理（Linux 沙箱）", style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
+        Surface(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(cs.surfaceVariant),
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("环境状态", fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        if (envReady) "就绪" else "未就绪（请先在终端页安装 rootfs）",
+                        color = if (envReady) cs.primary else cs.error,
+                        fontSize = 13.sp,
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "发行版：${distro?.displayName ?: "未检测"}",
+                    fontSize = 13.sp, color = cs.onSurfaceVariant,
+                )
+                Text(
+                    "包管理器：${pm?.let { "${it.displayName} (${it.binary})" } ?: "未检测"}",
+                    fontSize = 13.sp, color = cs.onSurfaceVariant,
+                )
+            }
+        }
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text("搜索 / 安装软件名") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            enabled = pm != null && envReady,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(
+                enabled = pm != null && envReady && !running && query.isNotBlank(),
+                onClick = {
+                    val manager = pm ?: return@Button
+                    runCmd(manager.install(listOf(query.trim())))
+                },
+            ) { Text(if (running) "执行中…" else "安装") }
+            OutlinedButton(
+                enabled = pm != null && envReady && !running && query.isNotBlank(),
+                onClick = {
+                    val manager = pm ?: return@OutlinedButton
+                    runCmd(manager.search(query.trim()))
+                },
+            ) { Text("搜索") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                enabled = pm != null && envReady && !running,
+                onClick = { runCmd(pm!!.listInstalled()) },
+            ) { Text("列表已装") }
+            OutlinedButton(
+                enabled = pm != null && envReady && !running,
+                onClick = { runCmd(pm!!.info(query.trim())) },
+            ) { Text("查看信息") }
+            OutlinedButton(
+                enabled = pm != null && envReady && !running,
+                onClick = { runCmd(pm!!.update()) },
+            ) { Text("更新源") }
+        }
+        Surface(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(cs.surface),
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Text("输出", fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    installed ?: "尚无输出。安装/搜索/列表 命令执行后会在此显示（截取 4000 字）。",
+                    fontSize = 12.sp,
+                    color = cs.onSurfaceVariant,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+        }
     }
 }
 

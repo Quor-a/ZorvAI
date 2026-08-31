@@ -126,6 +126,22 @@ private fun saveScripts(ctx: Context, list: List<BrowserScript>) {
         .edit().putString(SCRIPT_KEY, arr.toString()).apply()
 }
 
+// —— 内置 Python 控制台：把 Brython 资源拷到应用私有目录后由 GeckoView 以 file:// 加载 ——
+private fun openPythonConsole(ctx: Context, session: GeckoSession) {
+    val dir = File(ctx.filesDir, "brython_console")
+    dir.mkdirs()
+    val html = File(dir, "python_console.html")
+    val js = File(dir, "brython.min.js")
+    runCatching {
+        ctx.assets.open("www/python_console.html").use { it.copyTo(html.outputStream()) }
+        ctx.assets.open("www/brython.min.js").use { it.copyTo(js.outputStream()) }
+    }.onFailure {
+        session.loadUri("about:blank")
+        return
+    }
+    session.loadUri("file://" + html.absolutePath)
+}
+
 private val DEFAULT_SCRIPT = """// 原生「眼 + 手」自动化指令（现代 GeckoView 已移除 session.evaluate，网页内 JS 求值需 WebExtension）：
 // eye_capture         —— 眼睛截图：PixelCopy 截取当前界面像素，交给 AI/人眼识别
 // tap_text:下一步      —— 眼睛看到文本含「下一步」的控件 → 手点击它
@@ -147,12 +163,13 @@ private fun formatEvalResult(raw: String?): String {
     return try {
         val o = JSONObject(r)
         if (o.optBoolean("ok", true)) {
-        val v = o.opt("value")
-        when (v) {
-            is JSONObject -> v.toString(2)
-            is JSONArray -> v.toString(2)
-            else -> v.toString()
-        }
+            val v = o.opt("value")
+            when (v) {
+                null, JSONObject.NULL -> "(null)"
+                is JSONObject -> v.toString(2)
+                is JSONArray -> v.toString(2)
+                else -> v?.toString() ?: "(无返回值)"
+            }
         } else {
             "⚠ 脚本错误: ${o.optString("error")}"
         }
@@ -475,6 +492,7 @@ fun QuroBrowserScreen(
             override fun onPageStop(session: GeckoSession, success: Boolean) {
                 isLoading = false
                 refreshNavState()
+                if (!success) loadError = "页面加载失败，请检查网络或网址：$address"
             }
 
             override fun onProgressChange(session: GeckoSession, newProgress: Int) {
@@ -485,6 +503,10 @@ fun QuroBrowserScreen(
         session.contentDelegate = object : GeckoSession.ContentDelegate {
             override fun onTitleChange(session: GeckoSession, title: String?) {
                 if (!title.isNullOrEmpty()) pageTitle = title
+            }
+
+            override fun onCrash(session: GeckoSession) {
+                loadError = "浏览器内核崩溃，请返回后重试"
             }
         }
         onDispose { }
@@ -660,6 +682,14 @@ fun QuroBrowserScreen(
                             onClick = {
                                 showMenu = false
                                 showScript = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Python 控制台") },
+                            leadingIcon = { Icon(Icons.Filled.Terminal, null) },
+                            onClick = {
+                                showMenu = false
+                                openPythonConsole(ctx, session)
                             },
                         )
                     }

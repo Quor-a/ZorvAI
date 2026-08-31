@@ -50,7 +50,8 @@ object QuroPermissionHelper {
             battery(context, pkg),
             location(context),
             accessibility(context, pkg),
-            alarm(context, pkg),
+            setAlarm(context, pkg),
+            exactAlarm(context, pkg),
             shizuku(context),
             admin(context),
             root(context),
@@ -106,8 +107,31 @@ object QuroPermissionHelper {
         )
     }
 
-    // 4) 闹钟权限
-    private fun alarm(ctx: Context, pkg: String): QuroPermissionItem {
+    // 4-1) 「设置闹钟」（系统 SET_ALARM 普通权限 + AlarmClock.ACTION_SET_ALARM 跳转）
+    /**
+     * 对应系统「应用信息 → 所有权限」里的「设置闹钟」项。
+     * SET_ALARM 是 normal permission，无需运行时申请；用户能在系统所有权限列表中看到。
+     * 真正使用：通过 `AlarmClock.ACTION_SET_ALARM` Intent 跳转系统时钟 App 设闹钟。
+     * 同时 Android 14+ 在精确闹钟被拒后，仍可用此入口降级（依赖系统时钟 App 的兜底）。
+     */
+    private fun setAlarm(ctx: Context, pkg: String): QuroPermissionItem {
+        // SET_ALARM 是 normal permission，安装即默认授权
+        val granted = ctx.hasPermission(android.Manifest.permission.SET_ALARM)
+        return QuroPermissionItem(
+            id = "set_alarm",
+            title = "设置闹钟",
+            desc = "跳转到系统时钟 App 设置闹钟/提醒（普通权限，安装即授）",
+            granted = granted,
+            // 点击直接跳到本应用的「应用信息」页，用户可在此处直观看到「设置闹钟」项
+            guideIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", pkg, null)
+            },
+            note = if (!granted) "未授权，请在应用详情中确认未被禁用" else "可点击下方「测试闹钟」直接跳到系统时钟设置",
+        )
+    }
+
+    // 4-2) 「精确闹钟」（SCHEDULE_EXACT_ALARM，Android 12+ 需用户在系统设置授权）
+    private fun exactAlarm(ctx: Context, pkg: String): QuroPermissionItem {
         val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = ctx.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
             alarmManager.canScheduleExactAlarms()
@@ -115,9 +139,9 @@ object QuroPermissionHelper {
             true // Android 12 以下不需要特殊权限
         }
         return QuroPermissionItem(
-            id = "alarm",
-            title = "闹钟权限",
-            desc = "设置精确闹钟和提醒",
+            id = "exact_alarm",
+            title = "精确闹钟",
+            desc = "应用自管闹钟/提醒（无需跳转系统时钟，Android 12+ 需用户授权）",
             granted = granted,
             guideIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
