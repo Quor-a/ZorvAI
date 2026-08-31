@@ -263,7 +263,7 @@ class QuroAssistant(
                 // 这里对本地路径强制一个合理轮数上限（用户未显式设置 historyRounds 时生效），让模型始终只在
                 // 「最近 N 轮」的干净上下文里作答，从源头消除无界历史导致的乱恢复。云端模型上下文窗口大、能力强，
                 // 不受影响。8 轮对 1.2B~3B 模型足够覆盖正常多轮，同时把历史长度压在模型有效注意力范围内。
-                val effHistoryRounds = if (isLocal && historyRounds <= 0) 8 else historyRounds
+                val effHistoryRounds = if (isLocal && historyRounds <= 0) 12 else historyRounds
                 val llmMessages = runCatching { store.toLlmMessages(system, cfg.contextWindow, effHistoryRounds) }.getOrElse { emptyList() }
                 // 流式增量回调（云端 / 本地离线模型**共用**）。参数 acc 为「累计文本」。
                 // ⚠️ #1112 修复：此前本地（MNN / llama.cpp）路径压根不传 onToken，且下方 streaming
@@ -517,6 +517,20 @@ class QuroAssistant(
                         }
                         store.add(assistantMsg)
                         emit()
+                        // 🔧 回复-边执行：工具调用轮若模型没给「前缀回复」（如"好的，我来查一下…"），
+                        // 这里补一条可见的「正在执行」气泡，让用户看到 AI 正在干活、而不是只干等圆点；
+                        // 复用 streamPlaceholderId —— 下一轮正文到达时 emitStreamToken 会原地覆盖成最终回复，
+                        // 反复工具轮也会在 514 处被清掉重建，绝不残留重复气泡（防循环刷屏）。
+                        // 模型已给前缀正文时不补（聚合层已把 assistantMsg.content 渲染进气泡，避免重复）。
+                        if (streamPlaceholderId == null && result.content.isNullOrBlank()) {
+                            val p = QuroMessage(
+                                role = "assistant",
+                                content = "⏳ 正在执行：${callsWithId.joinToString("、") { it.name }}…",
+                            )
+                            store.add(p)
+                            streamPlaceholderId = p.id
+                            emit()
+                        }
                         Log.i("QuroAssistant", "TOOLCALL round=$round storedCalls=${callsWithId.size} reasoningBlank=${roundReasoning.isNullOrBlank()} ids=${callsWithId.joinToString(","){it.id}}")
                         // 轨迹：把工具调用作为「行动」写入 AI 执行轨迹总线（终端改造后的可视化数据源）
                         callsWithId.forEach { c ->
@@ -731,6 +745,16 @@ class QuroAssistant(
             return QuroLlmResult.Error(
                 "未找到已登记的本地模型（${cfg.provider}）。请到「模型配置 → 本地离线模型」添加并选择。"
             )
+        }
+        // 🔧 修复「加载过的没常驻、进程重启后每次都要手动重新加载」：
+        // 若常驻会话里没有这个模型，先自动 load（仅首次等数十秒，之后常驻复用，不再每条消息重加载）。
+        // 这样用户无需每次手动点「加载」，且同一进程内后续消息直接复用常驻会话，省掉最贵的模型加载步骤。
+        if (!loader.isLoaded(local)) {
+            Log.i("QuroAssistant", "routeLocal 自动加载本地模型 | id=${local.id} | name=${local.name} | type=${local.type}")
+            val lr = loader.load(local)
+            if (lr is LocalModelLoader.LoadResult.Failure) {
+                return QuroLlmResult.Error("本地模型自动加载失败：${lr.message}\n请到「设置 → 模型配置 → 本地离线模型」重新加载。")
+            }
         }
         return resolveLocalEngine().run(
             local,
