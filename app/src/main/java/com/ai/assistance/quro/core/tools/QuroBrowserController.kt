@@ -8,6 +8,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
@@ -232,7 +233,7 @@ object QuroBrowserController {
         })()"""
         val raw = eval(js, 8000) ?: return null
         if (raw.startsWith("__ERR__:")) return null
-        val arr = runCatching { JSONObject(raw); JSONArray(raw) }.getOrNull() ?: return null
+        val arr = runCatching { JSONArray(raw) }.getOrNull() ?: return null
         val list = mutableListOf<String>()
         for (i in 0 until arr.length()) list.add(arr.optString(i))
         return list
