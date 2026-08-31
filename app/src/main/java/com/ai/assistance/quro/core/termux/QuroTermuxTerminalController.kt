@@ -3,6 +3,7 @@ package com.ai.assistance.quro.core.termux
 import android.content.Context
 import android.util.Log
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import java.io.File
 import com.ai.assistance.quro.core.termux.terminal.TerminalSession
 import com.ai.assistance.quro.core.termux.view.TerminalView
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +19,14 @@ import kotlinx.coroutines.flow.asStateFlow
 object QuroTermuxTerminalController {
 
     private const val TAG = "QuroTerminalCtrl"
+
+    /**
+     * ULFA 可选终端后端开关。默认 false（生产终端仍是 termux PTY + proot 直启）。
+     * 置 true 时，Linux 终端改为经 libfusiond.so 拉起（fusiond 内部 openpty + execv proot），
+     * 复用 Termux 同一套 PTY 机制，仅替换被拉起的二进制与环境。
+     * 仅在真机验证过 fusiond 路径后再开启，未验证前保持 false。
+     */
+    private const val ULFA_FUSIOND_TERMINAL = true
 
     var session: TerminalSession? = null
         private set
@@ -93,7 +102,36 @@ object QuroTermuxTerminalController {
         val args: Array<String>
         val env: Array<String>
 
-        if (launchSpec != null) {
+        val useFusiond = ULFA_FUSIOND_TERMINAL && launchSpec != null
+        if (useFusiond) {
+            // ULFA 可选后端: 经 fusiond 拉起（内部 openpty + execv proot），复用 Termux PTY 机制
+            val fusiondBin = File(appCtx.applicationInfo.nativeLibraryDir, "libfusiond.so").absolutePath
+            val ulfaHome = File(QuroLinuxEnv.rootfsPath(appCtx)).parent ?: appCtx.filesDir.absolutePath
+            shellPath = fusiondBin
+            args = emptyArray()   // fusiond 默认跑 /bin/bash；要指定 shell 可传 argv[1]
+            val ulfaEnv = mutableListOf<String>().apply {
+                add("ULFA_HOME=$ulfaHome")
+                add("ULFA_PROOT=${QuroLinuxEnv.prootPath(appCtx)}")
+                // ★ 真机必挂根因修复：PROOT_LOADER 必须注入，proot 靠它定位 ptrace 翻译层
+                //   loader。漏掉则 guest 内 execve("/usr/bin/sh") 直接 EFAULT → "Bad address"。
+                //   生产 proot 分支走 QuroLinuxEnv.shellEnv() 已含此变量，fusiond 分支手动构造
+                //   env 时原先漏了，这里补齐，必须与 shellEnv() 保持一致。
+                add("PROOT_LOADER=${QuroLinuxEnv.loaderPath(appCtx)}")
+                add("ULFA_BACKEND=proot")
+                add("ULFA_ROOT_BIND=${QuroLinuxEnv.homePath(appCtx)}")
+                add("ULFA_TMP_BIND=${QuroLinuxEnv.tmpPath(appCtx)}")
+                val ws = QuroLinuxEnv.sharedStorageHostDir(appCtx)
+                if (ws != null) add("ULFA_WORKSPACE_HOST=${ws.absolutePath}")
+                add("TERM=xterm-256color")
+                add("HOME=/root")
+                add("PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin")
+                add("LANG=C.UTF-8")
+            }
+            env = ulfaEnv.toTypedArray()
+            _modeLabel.value = "fusiond/Linux"
+            _cwd.value = "/root"
+            Log.i(TAG, "✅ 使用 fusiond 启动(ULFA 可选后端): shellPath=$fusiondBin, ULFA_HOME=$ulfaHome")
+        } else if (launchSpec != null) {
             val (proot, prootArgs) = launchSpec
             shellPath = proot
             args = prootArgs.toTypedArray()

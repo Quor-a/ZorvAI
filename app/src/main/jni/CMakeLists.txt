@@ -118,3 +118,36 @@ target_compile_options(acihost PRIVATE
 )
 
 target_link_libraries(acihost ${log-lib})
+
+# ═══════════════════════════════════════════════════════════════
+# fusiond — ULFA 融合层守护进程（libfusiond.so）
+# 与 qurohost 同机制：SHARED 库但保留 main() 入口、PIE，经 ProcessBuilder
+# 由 Kotlin 侧（FusionTerminal / QuroLinuxEnv）直接执行；
+# 内部用 openpty 建真 PTY，再以绝对路径 execv proot 进入 Ubuntu rootfs。
+# proot 后端解析优先级见 fusion_layer.c 的 resolve_proot()：
+#   $ULFA_PROOT → $ULFA_HOME/rootfs/usr/local/bin/proot →
+#   $ULFA_HOME/rootfs/usr/bin/proot → $ULFA_HOME/bin/proot → PATH
+# 注：bionic 的 openpty 在 libc 内（见 fusion_layer.c 头部注释），不链 -lutil。
+# ═══════════════════════════════════════════════════════════════
+set(ULFA_DIR ${CMAKE_SOURCE_DIR}/ulfa)
+
+add_library(fusiond SHARED
+    ${ULFA_DIR}/fusion_layer.c
+)
+
+target_compile_options(fusiond PRIVATE
+    -std=c11
+    -Wall
+    -Wextra
+    -Wno-unused-parameter
+    -O2
+    -fPIE
+    -D_GNU_SOURCE
+)
+
+target_link_options(fusiond PRIVATE
+    -pie
+    -Wl,--gc-sections
+)
+
+target_link_libraries(fusiond ${log-lib})
