@@ -859,6 +859,15 @@ fun ChatScreen(
                                 checked = event.value.toBooleanStrictOrNull() ?: false,
                                 command = ""
                             )
+                            // v1070 修复：AI 经 ui_control(action:"widget", type:"mermaid") 渲染可视化编程，
+                            // 之前走 else→InfoCard 被当纯文本，图出不来。这里直接构造 MermaidCard，
+                            // 复用与 ui_widget 完全一致的 onCard→气泡→MermaidCardView 离线渲染通路。
+                            "mermaid" -> com.ai.assistance.quro.core.cards.QuroChatCard.MermaidCard(
+                                id = event.id.ifBlank { "mermaid_${System.currentTimeMillis()}" },
+                                title = event.label.ifBlank { "可视化编程" },
+                                source = event.value,
+                                theme = ""
+                            )
                             else -> com.ai.assistance.quro.core.cards.QuroChatCard.InfoCard(
                                 id = event.id,
                                 title = event.label,
