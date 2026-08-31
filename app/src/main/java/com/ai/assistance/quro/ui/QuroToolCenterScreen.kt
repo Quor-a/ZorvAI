@@ -110,7 +110,7 @@ fun QuroToolCenterScreen(
 private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val cards = listOf(
-        Triple("terminal", "终端", "应用内 shell / proot Ubuntu 24.04 环境"),
+        Triple("terminal", "双窗格终端", "左窗格 VM/Linux 融合 (AVF/pKVM/QEMU 优先，失败回退 proot) + 右窗格 本地 proot/Linux，单/双可切换"),
         Triple("workbench", "小程序", "AI 生成并在对话框渲染的 HTML/JS 小程序"),
         Triple("cms", "能力模块", "CMS 引擎与开发环境部署"),
         Triple("toolbox", "工具箱", "文件管理 / 浏览器 / IDE"),
@@ -119,13 +119,16 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         Triple("db", "私有数据库", "只读查询应用自有 SQLite"),
         Triple("vispro", "可视化编程", "Mermaid 源码编辑器 + 实时渲染 / 导出 SVG"),
         Triple("flow", "节点编辑器", "拖拽式节点流编程，导出 Mermaid"),
+        Triple("browser_ai", "浏览器 AI 操控", "AI 用 browser_act 接管当前浏览器：snapshot/click/fill/eval（先 action=open）"),
+        Triple("python_ai", "Python", "AI 用 python_run 在 proot 内跑 Python（首次会自动 apt-get install -y python3）"),
+        Triple("mitm", "抓包", "容器内 mitmdump 监听 0.0.0.0:8080；flow 写到 /mnt/quro/mitm/，需配合系统代理/adb reverse/VPN"),
     )
     LazyColumn(
         Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(cards) { (key, title, desc) ->
-            val launch = key in setOf("terminal", "cms", "toolbox")
+            val launch = key in setOf("terminal", "cms", "toolbox", "browser_ai", "python_ai", "mitm")
             Card(
                 Modifier.fillMaxWidth().clickable { if (launch) onLaunch(key) else onSelect(key) },
                 shape = RoundedCornerShape(14.dp),

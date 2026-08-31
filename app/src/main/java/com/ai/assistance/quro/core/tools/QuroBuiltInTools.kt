@@ -385,6 +385,12 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(LocalVideoPlayerTool())
     // AI 自动化浏览器 + 联网搜索（后台可用）
     r.register(AiBrowserTool())
+    // AI 操控内置浏览器（接管前台 WebView）：snapshot/click/fill/eval/wait/read
+    r.register(BrowserActTool())
+    // AI 在 proot 容器内执行 Python 代码
+    r.register(PythonRunTool())
+    // AI 抓包：在 proot 容器内启动 mitmdump，flow 写到 /mnt/quro/mitm/
+    r.register(PacketCaptureTool())
     // 升级版知识库（add / search / list，后台可用）
     r.register(KnowledgeManageTool())
     // 知识库 C3 重做：本地自包含向量语义检索（RAG），零重依赖，离线可用（无 API Key 时降级本地词法检索）

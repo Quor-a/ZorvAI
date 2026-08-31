@@ -78,6 +78,35 @@ import kotlin.concurrent.thread
 
 private const val BM_PREFS = "quro_browser"
 private const val BM_KEY = "bookmarks"
+
+// WebView 自己能处理的 scheme：交给 WebView 加载；其它自定义 scheme 调系统 Intent 跳对应 APP。
+private val WEB_SCHEMES = setOf("http", "https", "file", "about", "data", "javascript", "blob", "content")
+
+private fun launchExternalScheme(context: android.content.Context, u: android.net.Uri): Boolean {
+    return try {
+        // intent:// 协议拆包：Android 要求用 Intent.parseUri 拿到真实 intent
+        val intent: android.content.Intent? = if (u.scheme?.lowercase() == "intent") {
+            runCatching { android.content.Intent.parseUri(u.toString(), android.content.Intent.URI_INTENT_SCHEME) }.getOrNull()
+        } else {
+            android.content.Intent(android.content.Intent.ACTION_VIEW, u)
+        }
+        if (intent == null) {
+            Toast.makeText(context, "无法解析链接：${u}", Toast.LENGTH_SHORT).show()
+            return true
+        }
+        intent.flags = intent.flags or android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+        // 允许跨包跳转
+        intent.addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+        context.startActivity(intent)
+        true
+    } catch (e: android.content.ActivityNotFoundException) {
+        Toast.makeText(context, "未安装可处理 ${u.scheme}:// 的应用", Toast.LENGTH_SHORT).show()
+        true
+    } catch (e: Exception) {
+        Toast.makeText(context, "跳转失败：${e.message}", Toast.LENGTH_SHORT).show()
+        true
+    }
+}
 private const val SCRIPT_PREFS = "quro_browser"
 private const val SCRIPT_KEY = "scripts"
 private const val DESKTOP_UA =
@@ -762,6 +791,8 @@ fun QuroBrowserScreen(
                                 javaScriptCanOpenWindowsAutomatically = true
                                 defaultTextEncodingName = "utf-8"
                             }
+                            // 注册 AI 操控桥：AI 工具可通过 browser_act 接管当前 WebView。
+                            com.ai.assistance.quro.core.tools.QuroBrowserController.attach(this)
                             webViewClient = object : WebViewClient() {
                                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                                     isLoading = true
@@ -778,6 +809,24 @@ fun QuroBrowserScreen(
                                         loadError = "页面加载失败：${error?.description ?: "未知错误"} (code=${error?.errorCode})"
                                     }
                                 }
+                                // 自定义 scheme（baiduboxapp://、intent://、alipays://、taobao:// 等）
+                                // 不交给 WebView 处理，转系统 Intent 跳对应 APP；intent:// 解析为
+                                // 其内层真实 scheme 后再 ACTION_VIEW。
+                                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                    val u = request?.url ?: return false
+                                    val scheme = u.scheme?.lowercase() ?: return false
+                                    if (scheme in WEB_SCHEMES) return false  // http/https/file/about/data/javascript 走 WebView
+                                    return launchExternalScheme(context, u)
+                                }
+                                // 旧版 WebView 同步兼容（shouldOverrideUrlLoading 也有不带 ResourceRequest 的形态）
+                                @Suppress("DEPRECATION")
+                                override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                                    if (url.isNullOrEmpty()) return false
+                                    val parsed = runCatching { android.net.Uri.parse(url) }.getOrNull() ?: return false
+                                    val scheme = parsed.scheme?.lowercase() ?: return false
+                                    if (scheme in WEB_SCHEMES) return false
+                                    return launchExternalScheme(context, parsed)
+                                }
                             }
                             webChromeClient = object : WebChromeClient() {
                                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
@@ -791,7 +840,10 @@ fun QuroBrowserScreen(
                             loadUrl(url)
                         }
                     },
-                    onRelease = { it.destroy() },
+                    onRelease = {
+                        com.ai.assistance.quro.core.tools.QuroBrowserController.detach(it)
+                        it.destroy()
+                    },
                 )
             }
         }

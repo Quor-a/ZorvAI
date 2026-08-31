@@ -643,6 +643,7 @@ fun ChatScreen(
     // 应用内文档查看器（本地渲染引擎，替代原 Collabora/外跳 ONLYOFFICE；已整合原「文档中心」）
     var showOnlyOffice by remember { mutableStateOf(false) }
     var showTerminal by remember { mutableStateOf(false) }
+    var showBrowser by remember { mutableStateOf(false) }
     var showMcp by remember { mutableStateOf(false) }
     // 聚合式「系统状态」浏览界面（设备 / 权限 / 模块运行态 / 人格心跳）
     var showSystemStatus by remember { mutableStateOf(false) }
@@ -1988,8 +1989,28 @@ fun ChatScreen(
                             "cms" -> showCms = true
                             "toolbox" -> showToolbox = true
                             "editor" -> showEditor = true
+                            "browser_ai" -> {
+                                com.ai.assistance.quro.core.QuroBrowserBridge.open("https://www.baidu.com")
+                                showToolCenter = false
+                                android.widget.Toast.makeText(appCtx, "AI 可用 browser_act 操控此浏览器", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                            "python_ai" -> {
+                                showTerminal = true
+                                showToolCenter = false
+                                android.widget.Toast.makeText(appCtx, "AI 可用 python_run 跑 Python", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                            "mitm" -> {
+                                showToolCenter = false
+                                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    val tool = com.ai.assistance.quro.core.tools.PacketCaptureTool()
+                                    val out = tool.run(appCtx, "{\"action\":\"start\",\"port\":8080}")
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                        android.widget.Toast.makeText(appCtx, out.take(200), android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                            else -> showToolCenter = false
                         }
-                        showToolCenter = false
                     },
                     onClose = { showToolCenter = false },
                 )

@@ -579,10 +579,22 @@ private fun TerminalPane(
         Box(
             Modifier.fillMaxWidth().weight(1f),
         ) {
-            if (outSession != null) {
+            if (outSession != null && outSession.vt != null) {
                 KaiTerminalPane(session = outSession, modifier = Modifier.fillMaxSize())
             } else {
-                Text("正在启动终端…", color = Color(0xFF666666), fontSize = fontSize.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(vertical = 8.dp))
+                Column(Modifier.fillMaxSize().padding(16.dp)) {
+                    Text("正在启动终端…", color = Color(0xFF7BE0A0), fontSize = 14.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Text("首次进入会下载 / 解压 rootfs + 启动 proot，安静等待几秒到一两分钟。", color = Color(0xFF9CC7FF), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                    val recent = outSession?.lines.orEmpty()
+                    if (recent.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text("最近输出（${outSession?.mode ?: "—"}）：", color = Color(0xFFBFE9C8), fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                        recent.takeLast(8).forEach { l ->
+                            Text(l, color = Color(0xFFCCCCCC), fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                        }
+                    }
+                }
             }
         }
 
