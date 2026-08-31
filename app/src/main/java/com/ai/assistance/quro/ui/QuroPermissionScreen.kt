@@ -2,10 +2,15 @@ package com.ai.assistance.quro.ui
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlarmManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import rikka.shizuku.Shizuku
+import com.ai.assistance.quro.permissions.AlarmPermissionHelper
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityManager
 import android.widget.Toast
@@ -439,7 +444,52 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
             GroupCaption("标准运行时权限")
             SetGroup {
                 stdItems.forEachIndexed { idx, item ->
-                    StdPermRow(item = item, onClick = { onClickStd(item) })
+                    StdPermRow(
+                        item = item,
+                        onClick = { onClickStd(item) },
+                        trailing = if (item.id == "alarm") {
+                            {
+                                val helper = remember { AlarmPermissionHelper(ctx) }
+                                TextButton(
+                                    onClick = alarmTest@{
+                                        // 真正用上精确闹钟权限：已授权则设一条 10 秒后的测试闹钟（由 WorkoutAlarmReceiver 弹通知），
+                                        // 未授权则引导去系统设置开启。让「闹钟权限」不再是只有开关的死入口。
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                            val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                                            if (!am.canScheduleExactAlarms()) {
+                                                try {
+                                                    ctx.startActivity(
+                                                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                                            data = Uri.parse("package:${ctx.packageName}")
+                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                        }
+                                                    )
+                                                    Toast.makeText(ctx, "请在系统设置开启「精确闹钟」，返回后再次点击测试", Toast.LENGTH_LONG).show()
+                                                } catch (e: Exception) {
+                                                    // Android 14+ 部分 ROM 跳不到精确闹钟页，落到应用信息页；退回应用详情页并提示手动路径
+                                                    ctx.startActivity(
+                                                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                            data = Uri.fromParts("package", ctx.packageName, null)
+                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                        }
+                                                    )
+                                                    Toast.makeText(ctx, "请到 设置→应用→Zorv AI→通知/权限 中开启「精确闹钟」", Toast.LENGTH_LONG).show()
+                                                }
+                                                return@alarmTest
+                                            }
+                                        }
+                                        helper.ensureReminderChannel()
+                                        helper.setExactAlarm(
+                                            System.currentTimeMillis() + 10_000,
+                                            "Zorv AI 测试闹钟",
+                                            "测试提醒：精确闹钟权限已生效"
+                                        )
+                                        Toast.makeText(ctx, "已设置，约 10 秒后弹出提醒通知", Toast.LENGTH_SHORT).show()
+                                    }
+                                ) { Text("测试", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold) }
+                            }
+                        } else null,
+                    )
                     if (idx < stdItems.lastIndex) {
                         HorizontalDivider(color = Line)
                     }
@@ -609,7 +659,11 @@ private fun PrivilegeTestSlot(testLabel: String?, onTest: (() -> String)?) {
 }
 
 @Composable
-private fun StdPermRow(item: QuroPermissionItem, onClick: () -> Unit) {
+private fun StdPermRow(
+    item: QuroPermissionItem,
+    onClick: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
+) {
     val cs = MaterialTheme.colorScheme
     Row(
         Modifier
@@ -629,6 +683,10 @@ private fun StdPermRow(item: QuroPermissionItem, onClick: () -> Unit) {
                 Spacer(Modifier.height(2.dp))
                 Text(item.note, fontSize = 12.sp, color = Muted)
             }
+        }
+        if (trailing != null) {
+            Spacer(Modifier.width(8.dp))
+            trailing()
         }
         if (item.granted) {
             Text("已开启", color = Sage, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)

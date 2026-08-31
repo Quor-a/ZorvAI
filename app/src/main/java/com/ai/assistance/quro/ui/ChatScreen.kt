@@ -7415,13 +7415,17 @@ private fun CleanupScreen(
     var showCleanupDialog by remember { mutableStateOf(false) }
     var cleanupType by remember { mutableStateOf("") }
 
-    // 计算各类缓存大小
+    // 计算各类缓存大小（对齐 QuroDataManager 真实写盘路径，旧写死 logs/model_cache/ai_products 均不存在，导致恒为 0）
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            logsSize = calculateDirSize(File(context.filesDir, "logs"))
-            modelCacheSize = calculateDirSize(File(context.filesDir, "model_cache"))
-            aiProductsSize = calculateDirSize(File(context.filesDir, "ai_products"))
-            tempFilesSize = calculateDirSize(File(context.cacheDir, "temp"))
+            logsSize = calculateDirSize(File(context.filesDir, "quro_data"))
+            modelCacheSize = calculateDirSize(
+                context.getExternalFilesDir(null)?.let { File(it, "quro_exports") } ?: File(context.filesDir, "quro_exports")
+            )
+            aiProductsSize = calculateDirSize(
+                context.getExternalFilesDir(null)?.let { File(it, "quro_backups") } ?: File(context.filesDir, "quro_backups")
+            )
+            tempFilesSize = calculateDirSize(context.cacheDir)
         }
     }
 
@@ -7452,9 +7456,9 @@ private fun CleanupScreen(
             SetGroup {
                 SetRowClickable(
                     Icons.Filled.List,
-                    "应用日志",
+                    "应用数据",
                     formatFileSize(logsSize),
-                    "",
+                    "对话 / 设置 / 模型配置",
                     {
                         cleanupType = "logs"
                         showCleanupDialog = true
@@ -7463,10 +7467,10 @@ private fun CleanupScreen(
                 )
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 SetRowClickable(
-                    Icons.Filled.Terminal,
-                    "离线模型缓存",
+                    Icons.Filled.Folder,
+                    "导出文件",
                     formatFileSize(modelCacheSize),
-                    "",
+                    "导出的 ZIP 数据包",
                     {
                         cleanupType = "model_cache"
                         showCleanupDialog = true
@@ -7476,9 +7480,9 @@ private fun CleanupScreen(
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 SetRowClickable(
                     Icons.Filled.Build,
-                    "AI 产物",
+                    "备份文件",
                     formatFileSize(aiProductsSize),
-                    "",
+                    "数据备份归档",
                     {
                         cleanupType = "ai_products"
                         showCleanupDialog = true
@@ -7488,9 +7492,9 @@ private fun CleanupScreen(
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 SetRowClickable(
                     Icons.Filled.Delete,
-                    "临时文件",
+                    "缓存目录",
                     formatFileSize(tempFilesSize),
-                    "",
+                    "图片 / WebView / 临时缓存",
                     {
                         cleanupType = "temp"
                         showCleanupDialog = true
@@ -7520,19 +7524,19 @@ private fun CleanupScreen(
     // 清理确认对话框
     if (showCleanupDialog) {
         val title = when (cleanupType) {
-            "logs" -> "清理应用日志"
-            "model_cache" -> "清理离线模型缓存"
-            "ai_products" -> "清理 AI 产物"
-            "temp" -> "清理临时文件"
+            "logs" -> "清理应用数据"
+            "model_cache" -> "清理导出文件"
+            "ai_products" -> "清理备份文件"
+            "temp" -> "清理缓存目录"
             "all" -> "清理所有缓存"
             else -> "清理"
         }
         val message = when (cleanupType) {
-            "logs" -> "确定要清理所有应用日志吗？"
-            "model_cache" -> "确定要清理离线模型缓存吗？这可能需要重新下载模型。"
-            "ai_products" -> "确定要清理 AI 产物吗？"
-            "temp" -> "确定要清理临时文件吗？"
-            "all" -> "确定要清理所有缓存吗？这将删除日志、模型缓存、AI产物和临时文件。"
+            "logs" -> "确定要清理应用数据（对话/设置/模型配置）吗？"
+            "model_cache" -> "确定要清理导出的 ZIP 数据包吗？"
+            "ai_products" -> "确定要清理数据备份归档吗？"
+            "temp" -> "确定要清理缓存目录吗？"
+            "all" -> "确定要清理所有缓存吗？这将删除应用数据、导出文件、备份文件与临时缓存。"
             else -> "确定要清理吗？"
         }
 
@@ -7546,23 +7550,25 @@ private fun CleanupScreen(
                         showCleanupDialog = false
                         // 执行清理操作
                         CoroutineScope(Dispatchers.IO).launch {
+                            val ext = context.getExternalFilesDir(null)
+                            val dirs = mapOf(
+                                "logs" to File(context.filesDir, "quro_data"),
+                                "model_cache" to (ext?.let { File(it, "quro_exports") } ?: File(context.filesDir, "quro_exports")),
+                                "ai_products" to (ext?.let { File(it, "quro_backups") } ?: File(context.filesDir, "quro_backups")),
+                                "temp" to context.cacheDir,
+                            )
                             when (cleanupType) {
-                                "logs" -> deleteDir(File(context.filesDir, "logs"))
-                                "model_cache" -> deleteDir(File(context.filesDir, "model_cache"))
-                                "ai_products" -> deleteDir(File(context.filesDir, "ai_products"))
-                                "temp" -> deleteDir(File(context.cacheDir, "temp"))
-                                "all" -> {
-                                    deleteDir(File(context.filesDir, "logs"))
-                                    deleteDir(File(context.filesDir, "model_cache"))
-                                    deleteDir(File(context.filesDir, "ai_products"))
-                                    deleteDir(File(context.cacheDir, "temp"))
-                                }
+                                "logs" -> deleteDir(dirs["logs"]!!)
+                                "model_cache" -> deleteDir(dirs["model_cache"]!!)
+                                "ai_products" -> deleteDir(dirs["ai_products"]!!)
+                                "temp" -> deleteDir(dirs["temp"]!!)
+                                "all" -> dirs.values.forEach { deleteDir(it) }
                             }
                             // 更新大小
-                            logsSize = calculateDirSize(File(context.filesDir, "logs"))
-                            modelCacheSize = calculateDirSize(File(context.filesDir, "model_cache"))
-                            aiProductsSize = calculateDirSize(File(context.filesDir, "ai_products"))
-                            tempFilesSize = calculateDirSize(File(context.cacheDir, "temp"))
+                            logsSize = calculateDirSize(dirs["logs"]!!)
+                            modelCacheSize = calculateDirSize(dirs["model_cache"]!!)
+                            aiProductsSize = calculateDirSize(dirs["ai_products"]!!)
+                            tempFilesSize = calculateDirSize(dirs["temp"]!!)
                         }
                     }
                 ) {
