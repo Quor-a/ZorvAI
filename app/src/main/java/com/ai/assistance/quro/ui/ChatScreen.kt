@@ -23,6 +23,7 @@ import com.ai.assistance.quro.core.tools.PopupInput
 import com.ai.assistance.quro.core.tools.PopupResult
 import com.ai.assistance.quro.BuildConfig
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.terminal.QuroTerminalPrefs
 import com.ai.assistance.quro.core.termux.QuroTermuxTerminalController
 import com.ai.assistance.quro.ui.QuroChatCardTray
 import com.ai.assistance.quro.ui.QuroChatCardView
@@ -615,6 +616,7 @@ fun ChatScreen(
     var modelConfigFromSettings by remember { mutableStateOf(false) }
     // 权限管理页（从设置页入口进入）
     var showPermission by remember { mutableStateOf(false) }
+    var showLspose by remember { mutableStateOf(false) }
     // 包管理页（插件 / 工具包 / 技能 / MCP，从设置页入口进入）
     var showCms by remember { mutableStateOf(false) }
     // 工具箱（设置页入口：文件管理 / 包名查询 / 代码运行 / 内置浏览器）
@@ -1587,6 +1589,7 @@ fun ChatScreen(
             onOpenModelConfig = { showModelConfig = true; modelConfigFromSettings = true },
             onOpenFeatureModelConfig = { showFeatureModelConfig = true },
             onOpenPermission = { showPermission = true },
+            onOpenLspose = { showLspose = true },
             onOpenCms = { showCms = true },
             onOpenToolbox = { showToolbox = true },
             onOpenKnowledge = { showKnowledge = true },
@@ -1624,6 +1627,14 @@ fun ChatScreen(
             BackHandler { showPermission = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(Color(0xFFF2F2F7))) {
                 QuroPermissionScreen(onClose = { showPermission = false })
+            }
+        }
+
+        // LSPosed 模块页：全屏覆盖层（从设置底部弹层入口进入，返回关页回设置）
+        if (showLspose) {
+            BackHandler { showLspose = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
+                QuroLsposeScreen(onClose = { showLspose = false })
             }
         }
 
@@ -4705,6 +4716,7 @@ private fun SheetOverlay(
     onOpenModelConfig: () -> Unit,
     onOpenFeatureModelConfig: () -> Unit,
     onOpenPermission: () -> Unit,
+    onOpenLspose: () -> Unit,
     onOpenCms: () -> Unit,
     onOpenToolbox: () -> Unit,
     onOpenKnowledge: () -> Unit,
@@ -4795,7 +4807,7 @@ private fun SheetOverlay(
                         settingsSoundOn, onSettingsToggleSound,
                         settingsEnterSend, onSettingsToggleEnter,
                         settingsFontName, onSettingsCycleFont,
-                        onOpenModelConfig, onOpenFeatureModelConfig, onOpenPermission, onOpenCms, onOpenToolbox, onOpenKnowledge, onOpenTerminal, onOpenPlugins, onOpenSkills,
+                        onOpenModelConfig, onOpenFeatureModelConfig, onOpenPermission, onOpenLspose, onOpenCms, onOpenToolbox, onOpenKnowledge, onOpenTerminal, onOpenPlugins, onOpenSkills,
                         onManagePersona, onOpenVoiceService,
                         onClearChat, settingsVoiceBallEnabled, onSettingsToggleVoiceBall,
                     settingsAiReplyNotify, onSettingsToggleAiReplyNotify,
@@ -4832,6 +4844,7 @@ private fun SettingsSheetContent(
     onOpenModelConfig: () -> Unit,
     onOpenFeatureModelConfig: () -> Unit,
     onOpenPermission: () -> Unit,
+    onOpenLspose: () -> Unit,
     onOpenCms: () -> Unit,
     onOpenToolbox: () -> Unit,
     onOpenKnowledge: () -> Unit,
@@ -4855,6 +4868,7 @@ private fun SettingsSheetContent(
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
+    var usePty by remember { mutableStateOf(QuroTerminalPrefs.usePty) }
     Column(
         Modifier.fillMaxWidth().heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
@@ -4876,6 +4890,8 @@ private fun SettingsSheetContent(
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Security, "权限", "L1 无障碍 / L2 Shizuku / L3 设备管理员 / L4 ROOT", "", onOpenPermission, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(Icons.Filled.Extension, "LSPosed 模块", "钩子注入 / 作用域管理", "", onOpenLspose, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Info, "系统状态", "设备 / 权限能力 / 模块运行态 / 人格心跳", "", onOpenSystemStatus, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Info, "组件画廊", "可视化组件库：卡片 / 按钮 / 输入 / 交互 / 覆盖层", "", onOpenComponentGallery, scaled)
@@ -4887,6 +4903,12 @@ private fun SettingsSheetContent(
             SetRowClickable(Icons.Filled.Hub, "MCP 服务", "把内置工具以 MCP 协议暴露给本机客户端", "", onOpenMcp, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Public, "ACI 管理中心", "已发现第三方 App / 绑定状态 / 能力清单 / 手动注册刷新重绑", "", onOpenAci, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRow(
+                Icons.Filled.Code, "真实 PTY 终端（实验）",
+                "伪终端：vim/top/REPL 可交互、SIGINT 正常；出问题请关闭回退管道", usePty,
+                onToggle = { usePty = !usePty; QuroTerminalPrefs.usePty = usePty },
+            )
         }
         GroupCaption("通知")
         SetGroup {

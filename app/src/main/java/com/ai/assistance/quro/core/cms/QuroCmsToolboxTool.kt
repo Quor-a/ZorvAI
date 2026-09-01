@@ -362,7 +362,7 @@ echo "🎉 修复完成！"
 """.trimIndent()
 
             // 通过终端执行修复脚本
-            val fixResult = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(fixScript, 60_000L, context)
+            val fixResult = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(fixScript, 60_000L, context, confirmed = true)
             android.util.Log.i("CmsToolbox", "修复脚本执行结果:\n${fixResult.output}")
 
             // 2. 清理可能损坏的引擎目录
@@ -462,7 +462,7 @@ echo "🎉 修复完成！"
                 else -> return "未找到脚本: $scriptName"
             }
 
-            val result = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(scriptToRun, 60_000L, context)
+            val result = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(scriptToRun, 60_000L, context, confirmed = true)
             "✅ 脚本执行完成\n\n=== 执行结果 ===\n${result.output}"
         } catch (e: Exception) {
             "❌ 脚本执行失败: ${e.message}"
@@ -505,7 +505,7 @@ echo ""
 echo "🎉 修复完成！"
 """.trimIndent()
 
-            val fixResult = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(fixScript, 60_000L, context)
+            val fixResult = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(fixScript, 60_000L, context, confirmed = true)
             android.util.Log.i("CmsToolbox", "修复脚本执行结果:\n${fixResult.output}")
 
             // 2. 清理可能损坏的引擎目录
@@ -1163,7 +1163,7 @@ echo "🎉 修复完成！"
         // 执行脚本
         val scriptToRun = scriptFile.readText()
         val result = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(
-            scriptToRun, 60_000L, context
+            scriptToRun, 60_000L, context, confirmed = true
         )
 
         return "✅ 自定义引擎脚本部署成功\n" +
@@ -1188,7 +1188,7 @@ echo "🎉 修复完成！"
         // 执行脚本
         val scriptToRun = scriptFile.readText()
         val result = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(
-            scriptToRun, 120_000L, context
+            scriptToRun, 120_000L, context, confirmed = true
         )
 
         return "✅ 自定义开发环境部署成功\n" +

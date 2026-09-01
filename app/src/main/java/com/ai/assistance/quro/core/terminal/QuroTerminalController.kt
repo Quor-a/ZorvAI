@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.terminal
 
 import android.content.Context
 import android.os.Environment
+import android.util.Log
 import com.ai.assistance.quro.activity.QuroApplication
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import kotlinx.coroutines.Dispatchers
@@ -151,8 +152,16 @@ object QuroTerminalController {
      *
      * @param context 上下文，用于访问 Linux 环境。如果为 null，则使用默认上下文。
      */
-    fun runCommand(command: String, timeoutMs: Long = 30_000L, context: Context? = null): ShellResult {
+    fun runCommand(command: String, timeoutMs: Long = 30_000L, context: Context? = null, confirmed: Boolean = false): ShellResult {
         if (command.isBlank()) return ShellResult("", -1, error = "命令为空")
+
+        // 命令副作用分级（路线图标 P3）：破坏性命令默认拦截，保护 AI / 自动化路径不被静默执行
+        // 不可逆操作（rm -rf / dd / mkfs / curl|sh / shutdown …）。显式 confirmed=true 才放行
+        // （如 CMS 工具箱执行用户主动要求的清理 / 安装脚本）。交互终端里用户亲手敲的命令走 sendCommand，不在此拦截。
+        if (QuroShellCommandGuard.shouldBlock(command, confirmed)) {
+            Log.w("QuroTermController", "runCommand: 拦截破坏性命令: $command")
+            return ShellResult("", -1, error = QuroShellCommandGuard.blockReason(command))
+        }
 
         // 使用提供的上下文，或者尝试获取应用上下文
         val ctx = context ?: QuroApplication.appCtx

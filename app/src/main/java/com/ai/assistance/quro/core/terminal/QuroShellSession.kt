@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.terminal
 
 import android.content.Context
 import android.os.Environment
+import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -26,6 +27,8 @@ import com.ai.assistance.quro.core.aidlaci.QuroAidlAciManager
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.nio.charset.StandardCharsets
@@ -60,13 +63,15 @@ class QuroShellSession private constructor(
     env: Array<String>,
     cwd: String,
     externalProcess: Process? = null,
+    /** 真实 PTY 模式：经 libtermux-terminal 的 createSubprocess 把 shell 挂到伪终端（默认关，设置可开）。 */
+    usePty: Boolean = false,
 ) : CoroutineScope {
 
     private val job = SupervisorJob()
     override val coroutineContext = Dispatchers.IO + job
 
-    /** VM 真 TTY 模式下，回显/提示符/信号全部由 guest 完成，本层只透传输入、不注入哨兵。 */
-    private val passthroughEcho = mode == ShellMode.VM
+    /** VM 真 TTY 或真实 PTY 模式下，回显/提示符/信号全部由 guest shell 完成，本层只透传输入、不注入哨兵。 */
+    private val passthroughEcho = mode == ShellMode.VM || usePty
 
     /** 滚动缓冲区（每行一条），由 Compose LazyColumn 渲染（VT 未启用时的兜底）。 */
     val lines = mutableStateListOf<String>()
@@ -152,7 +157,10 @@ class QuroShellSession private constructor(
     @Volatile
     private var suppressNextPrompt: Boolean = false
 
-    private val process: Process = externalProcess ?: try {
+    /** 真实 PTY 模式（经 libtermux-terminal 的 createSubprocess 把 shell 挂到伪终端）。 */
+    private val isPty: Boolean = usePty && externalProcess == null
+
+    private val process: Process? = if (isPty) null else externalProcess ?: try {
         val pb = ProcessBuilder(command)
         pb.directory(File(cwd))
         pb.environment().clear()
@@ -166,8 +174,35 @@ class QuroShellSession private constructor(
         throw IllegalStateException("启动 shell 失败: ${e.message}", e)
     }
 
-    private val reader = BufferedReader(InputStreamReader(process.inputStream, StandardCharsets.UTF_8))
-    private val writer = BufferedWriter(OutputStreamWriter(process.outputStream, StandardCharsets.UTF_8))
+    /** PTY master 文件描述符与子进程 pid（仅 isPty 时有效）。 */
+    private var ptyMasterFd: Int = -1
+    private var ptyPid: Int = -1
+    private var ptyPfd: ParcelFileDescriptor? = null
+
+    private val reader: BufferedReader
+    private val writer: BufferedWriter
+    init {
+        if (isPty) {
+            // 真实 PTY：用 createSubprocess 把 shell 挂到伪终端，经 master fd 收发。
+            // 注意：此处仅用原生 createSubprocess 拿 fd（Termux 原生能力，安全），
+            // 渲染仍走本类的 drain / VT 引擎，不复用 Termux TerminalEmulator（其在 Compose 布局期有 mRenderer 空指针问题）。
+            val pid = intArrayOf(0)
+            val fd = QuroTerminalJNI.createSubprocess(
+                command.first(), cwd, command.drop(1).toTypedArray(), env, pid,
+                24, 80, 0, 0,
+            )
+            if (fd < 0) throw IllegalStateException("createSubprocess 返回无效 fd: $fd")
+            ptyMasterFd = fd
+            ptyPid = pid[0]
+            ptyPfd = ParcelFileDescriptor.fromFd(fd)
+            reader = BufferedReader(InputStreamReader(FileInputStream(ptyPfd!!.fileDescriptor), StandardCharsets.UTF_8))
+            writer = BufferedWriter(OutputStreamWriter(FileOutputStream(ptyPfd!!.fileDescriptor), StandardCharsets.UTF_8))
+            Log.i(TAG, "init: PTY 会话已创建, fd=$fd, pid=$ptyPid, 命令=${command.joinToString(" ")}")
+        } else {
+            reader = BufferedReader(InputStreamReader(process!!.inputStream, StandardCharsets.UTF_8))
+            writer = BufferedWriter(OutputStreamWriter(process!!.outputStream, StandardCharsets.UTF_8))
+        }
+    }
 
     init {
         Log.i(TAG, "init: 创建会话, 模式=$mode, 命令=${command.joinToString(" ")}")
@@ -195,8 +230,8 @@ class QuroShellSession private constructor(
                 }
             }
         }
-        // VM 模式：guest shell 自行回显与提示符，本层不补 promptPrefix。
-        if (mode != ShellMode.VM) emit(promptPrefix())
+        // VM / 真实 PTY 模式：guest shell 自行回显与提示符，本层不补 promptPrefix（避免多出一个假提示符）。
+        if (!passthroughEcho) emit(promptPrefix())
         Log.d(TAG, "init: 启动drain协程")
         launch { drain() }
     }
@@ -246,7 +281,8 @@ class QuroShellSession private constructor(
             diag(context, "drain 异常: ${e.message}")
         } finally {
             exited = true
-            exitCode = runCatching { process.exitValue() }.getOrDefault(-1)
+            exitCode = if (isPty) runCatching { QuroTerminalJNI.waitFor(ptyPid) }.getOrDefault(-1)
+                       else runCatching { process?.exitValue() ?: -1 }.getOrDefault(-1)
             Log.d(TAG, "drain: 进程退出, exitCode=$exitCode")
             // 进程没了，任何等待中的命令都不会再有哨兵回来，必须解除 busy，
             // 否则 UI 永远卡在「运行中…」、中断按钮也失效。
@@ -280,7 +316,17 @@ class QuroShellSession private constructor(
             return
         }
         val trimmed = cmd.trim()
-        // VM 真 TTY：回显/提示符/信号由 guest 完成，本层只透传输入、不注入哨兵。
+        // 命令副作用分级（P3）：破坏性命令在交互终端里用户主动敲 = 已授权，放行但先打印醒目警告，
+        // 让执行不可逆操作前用户看得见自己要干什么。
+        if (QuroTerminalPrefs.warnDestructive && trimmed.isNotEmpty()
+            && !trimmed.startsWith("aci") && !trimmed.startsWith("clear") && !trimmed.startsWith("cls")
+            && QuroShellCommandGuard.classify(trimmed) == QuroShellCommandGuard.Risk.DESTRUCTIVE) {
+            val warn = "⚠ 破坏性命令（命令副作用分级）：『$trimmed』可能不可逆（删除/覆写/格式化/远程代码执行等），即将执行。"
+            appendLine(warn)
+            vt?.writeText(warn + "\n")
+            if (vt != null) publishVt()
+        }
+        // VM 真 TTY / 真实 PTY：回显/提示符/信号由 guest 完成，本层只透传输入、不注入哨兵。
         if (passthroughEcho) {
             if (trimmed.isEmpty()) return
             if (trimmed == "clear" || trimmed == "cls") { clear(); return }
@@ -596,8 +642,15 @@ class QuroShellSession private constructor(
 
     /** 强制终止 shell 进程（硬中断第二阶段，由 controller 调用）。 */
     fun forceStop() {
-        appendLine("⚠ 前台命令未响应软中断（管道 stdin 无法投递 SIGINT），已强制终止 shell")
-        runCatching { process.destroyForcibly() }
+        if (isPty) {
+            // PTY 下 ETX 即 SIGINT；强制模式直接关 master fd（shell 收 SIGHUP 退出），再补一刀 ETX。
+            appendLine("⚠ 前台命令未响应软中断，已强制关闭 PTY 终端")
+            runCatching { writer.write("\u0003"); writer.flush() }
+            runCatching { QuroTerminalJNI.close(ptyMasterFd) }
+        } else {
+            appendLine("⚠ 前台命令未响应软中断（管道 stdin 无法投递 SIGINT），已强制终止 shell")
+            runCatching { process?.destroyForcibly() }
+        }
     }
 
     /**
@@ -671,7 +724,12 @@ class QuroShellSession private constructor(
     /** 销毁会话：关闭流、结束进程、取消协程。 */
     fun destroy() {
         runCatching { writer.close() }
-        runCatching { process.destroy() }
+        if (isPty) {
+            runCatching { QuroTerminalJNI.close(ptyMasterFd) }
+            runCatching { ptyPfd?.close() }
+        } else {
+            runCatching { process?.destroy() }
+        }
         job.cancel()
     }
 
@@ -711,9 +769,16 @@ class QuroShellSession private constructor(
         }
 
         fun create(context: Context): QuroShellSession {
+        // 真实 PTY 模式（设置「功能 → 真实 PTY 终端」可开，默认关）：
+        // 经 libtermux-terminal 把 shell 挂到伪终端，vim/top/python REPL 等可真正交互、SIGINT 正常投递。
+        // 任何异常都回退管道会话（绝不抛、永不为 null），保证终端永不开不了。
+        if (QuroTerminalPrefs.usePty) {
+            return runCatching { createPty(context) }.getOrElse { t ->
+                Log.w(TAG, "create: PTY 会话失败，回退管道", t)
+                createLegacy(context)
+            }
+        }
         // v1.0.70 行为：直连 proot/设备 sh，不尝试 VM 优先 / 命名容器优先。
-        // VM(QuroVmEnv)/容器(QuroContainerManager) 在部分真机会卡住或空转导致终端黑屏，
-        // 故回退到已知可用的直连 proot 路径。
         diag(context, "create: 直连 proot（v1.0.70 行为）")
         // 关键修复：create 必须「永不抛、永不为 null」，否则调用方（终端 UI 的 LaunchedEffect）
         // 一旦拿到异常就会崩溃、session.value 永远赋不上 → 终端永久停在「正在启动终端…」。
@@ -729,6 +794,33 @@ class QuroShellSession private constructor(
          * 与 [create] 的 VM 优先窗格形成对照，保证两窗格后端不同、互不争抢 VM 资源。
          */
         fun createLocal(context: Context): QuroShellSession = createLegacy(context)
+
+        /**
+         * 真实 PTY 会话：Linux 环境就绪则 proot 常驻 sh 挂 PTY，否则设备 sh 挂 PTY。
+         * createSubprocess 失败时向上抛，由 [create] 的 getOrElse 回退管道会话。
+         */
+        private fun createPty(context: Context): QuroShellSession {
+            diag(context, "createPty: 进入真实 PTY 路径")
+            val launch = runCatching { QuroLinuxEnv.shellLaunch(context) }.getOrNull()
+            if (launch != null) {
+                val (proot, args) = launch
+                val env = QuroLinuxEnv.shellEnv(context)
+                return QuroShellSession(context, ShellMode.LINUX, listOf(proot) + args, env, context.filesDir.absolutePath, usePty = true)
+            }
+            return createDevicePty(context)
+        }
+
+        /** 设备模式 PTY 会话：常驻 /system/bin/sh 挂 PTY。 */
+        private fun createDevicePty(context: Context): QuroShellSession {
+            val home = Environment.getExternalStorageDirectory().absolutePath
+            val env = arrayOf(
+                "TERM=xterm-256color",
+                "HOME=$home",
+                "PATH=/system/bin:/system/xbin:/sbin",
+                "LANG=en_US.UTF-8",
+            )
+            return QuroShellSession(context, ShellMode.DEVICE, listOf("/system/bin/sh"), env, home, usePty = true)
+        }
 
         /**
          * 旧直连路径（v127 行为）：Linux 环境就绪则 proot 常驻 sh，否则设备 sh。
