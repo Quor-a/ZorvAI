@@ -808,12 +808,12 @@ fun QuroBrowserScreen(
                                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                                     isLoading = true
                                     loadError = null
-                                    com.ai.assistance.quro.core.tools.QuroBrowserController.markPageStarted()
+                                    com.ai.assistance.quro.core.tools.QuroBrowserController.markPageStarted(url)
                                     url?.let { address = it }
                                 }
                                 override fun onPageFinished(view: WebView?, url: String?) {
                                     isLoading = false
-                                    com.ai.assistance.quro.core.tools.QuroBrowserController.markPageFinished()
+                                    com.ai.assistance.quro.core.tools.QuroBrowserController.markPageFinished(url)
                                     canGoBack = view?.canGoBack() ?: false
                                     canGoForward = view?.canGoForward() ?: false
                                 }
@@ -847,7 +847,10 @@ fun QuroBrowserScreen(
                                     isLoading = newProgress < 100
                                 }
                                 override fun onReceivedTitle(view: WebView?, title: String?) {
-                                    if (!title.isNullOrEmpty()) pageTitle = title
+                                    if (!title.isNullOrEmpty()) {
+                                        pageTitle = title
+                                        com.ai.assistance.quro.core.tools.QuroBrowserController.markTitle(title)
+                                    }
                                 }
                             }
                             loadUrl(url)
