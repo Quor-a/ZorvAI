@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AciApp" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">#FF101418</item>
+        <item name="android:colorForeground">#FFECEFF1</item>
+    </style>
+</resources>
