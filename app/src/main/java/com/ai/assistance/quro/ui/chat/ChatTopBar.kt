@@ -55,6 +55,7 @@ internal fun ChatTopBar(
     onModel: () -> Unit,
     onSettings: () -> Unit,
     onToolCenter: () -> Unit = {},
+    onMinimize: () -> Unit = {},
     persona: Persona? = null,
     onPick: () -> Unit = {},
     scaled: (Int) -> TextUnit,
@@ -102,6 +103,9 @@ internal fun ChatTopBar(
         }
         IconButton(onClick = onSettings, modifier = Modifier.size(TOP_BAR_TOUCH)) {
             LucideIcon("settings", "设置", Modifier.size(21.dp), tint = cs.onBackground)
+        }
+        IconButton(onClick = onMinimize, modifier = Modifier.size(TOP_BAR_TOUCH)) {
+            LucideIcon("maximize", "化小窗", Modifier.size(21.dp), tint = cs.onBackground)
         }
     }
 }

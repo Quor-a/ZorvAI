@@ -187,6 +187,26 @@ object QuroMath {
 /** 注册全部原创工具（最大集，100% 自研，引擎来自 vendored droid-mcp Apache-2.0）。 */
 fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     val r = QuroToolRegistry()
+    // ══════════════ 工具分类架构（能力域 → 代表工具）══════════════
+    //  · 基础/系统/设备   : clock, device_info, battery, wifi, sensors, clipboard, apps, notifications, bluetooth, flashlight
+    //  · 通信/日历        : sms, contacts, calendar
+    //  · 文件/工作区      : list/read/write/delete files, workbench, workspace_*, knowledge_*
+    //  · 网络/Web         : http_request, open_web, ai_browser, web_crawler
+    //  · 终端/沙箱/Linux  : quro_term, terminal_*, sandbox, linux_*, python_run
+    //  · 特权/ADB/LSPosed : priv_exec, priv_status, adb_term, lsposed（高风险，自动降级通道）
+    //  · 抓包             : packet_capture（proot 内 mitmdump，flow 写 /mnt/quro/mitm/）
+    //  · 内置浏览器 AI 操控: browser_act（snapshot/click/fill/eval/wait/read，接管对话框内置 WebView）
+    //  · 对话框文档/排版   : chat_doc（对话框内渲染 Markdown/HTML/代码）；文档附件支持对话框内联排版预览（mammoth/SheetJS/pdf.js）
+    //  · ACI/跨应用       : aidl_aci_*, aci_http_server, mcp_aci_*, list/invoke_app_function
+    //  · 无障碍控屏/L1     : read_screen, tap/longpress/swipe, ai_keyboard_*, screenshot*, visual_*
+    //  · 系统控制/L2-L5    : shizuku_*, root_*, device_admin_*, 媒体/拍摄/录屏/音量/亮度…
+    //  · 多媒/生成         : image_gen, video_gen, translate, image/audio/video_recognition
+    //  · 文档生成          : aiwps_create/read/edit, enhanced_doc
+    //  · 记忆/经验/技能    : memory_*, experience_*, skills, tool_discovery
+    //  · UI/可视化         : ui_control(ui_*), visual_*, dynamic_ui, creative_studio, fluid_cloud
+    //  · 化小窗(纯 UI)     : 对话框顶栏 + 浏览器工具栏「化小窗」按钮（可拖拽悬浮小窗，非工具）
+    // ══════════════════════════════════════════════════════════════
+
     // 基础演示工具
     r.register(QuroClockTool())
     r.register(QuroDeviceInfoTool())
