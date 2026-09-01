@@ -4869,6 +4869,7 @@ private fun SettingsSheetContent(
 ) {
     val cs = MaterialTheme.colorScheme
     var usePty by remember { mutableStateOf(QuroTerminalPrefs.usePty) }
+    var requireDestructiveConfirm by remember { mutableStateOf(QuroTerminalPrefs.requireDestructiveConfirm) }
     Column(
         Modifier.fillMaxWidth().heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
@@ -4908,6 +4909,15 @@ private fun SettingsSheetContent(
                 Icons.Filled.Code, "真实 PTY 终端（实验）",
                 "伪终端：vim/top/REPL 可交互、SIGINT 正常；出问题请关闭回退管道", usePty,
                 onToggle = { usePty = !usePty; QuroTerminalPrefs.usePty = usePty },
+            )
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRow(
+                Icons.Filled.Warning, "破坏性命令二次确认（授权）",
+                "开启后 rm -rf / dd / mkfs 等危险命令需再次发送或 confirm 才执行", requireDestructiveConfirm,
+                onToggle = {
+                    requireDestructiveConfirm = !requireDestructiveConfirm
+                    QuroTerminalPrefs.requireDestructiveConfirm = requireDestructiveConfirm
+                },
             )
         }
         GroupCaption("通知")
