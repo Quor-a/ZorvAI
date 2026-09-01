@@ -783,6 +783,19 @@ object QuroLinuxEnv {
         }
         diagLog(context, "✅ 基础包安装成功")
 
+        // 通用 DNS（绕开被阻断的 53 端口）：装 dnscrypt-proxy（向上走 DoH/DNSCrypt 443 解析任意域名）。
+        // 非致命——装不上则退化到 /etc/hosts 预列主机，不影响既有流程。
+        _state.value = SandboxState.Installing("安装 dnscrypt-proxy（通用 DNS）…")
+        diagLog(context, "安装 dnscrypt-proxy...")
+        val dnsp = runProot(context, "apt-get install -y --no-install-recommends dnscrypt-proxy", timeoutMs = 180_000)
+        diagLog(context, "dnscrypt-proxy 安装结果: exit=${dnsp.first}, output=${dnsp.second.take(200)}")
+        if (dnsp.first == 0) {
+            diagLog(context, "启动 DoH 代理（通用 DNS）...")
+            ensureDnsProxy(context, rootfsDir)
+        } else {
+            diagLog(context, "dnscrypt-proxy 安装失败，通用 DNS 跳过（/etc/hosts 兜底）")
+        }
+
         // ★ 部署后自检
         _state.value = SandboxState.Installing("自检 proot 运行环境…")
         diagLog(context, "smoke test: echo + id + apt-get --version")
@@ -2159,6 +2172,65 @@ object QuroLinuxEnv {
         return url.substringAfter("://").substringBefore("/").substringBefore(":").trim()
     }
 
+    /**
+     * dnscrypt-proxy 最小配置：监听 127.0.0.1:53，向上走 DoH/DNSCrypt（443）解析**任意**域名，
+     * 彻底绕开被阻断的 53 端口。用静态 stamp（内嵌上游 IP，无需先解析），`ignore_system_dns=true`
+     * 避免它再去查被阻断的系统 DNS 做引导。Cloudflare / Google 双上游互备。
+     */
+    private const val DNSCRYPT_CONF = """listen_addresses = ['127.0.0.1:53']
+ipv4_servers = true
+ipv6_servers = false
+dnscrypt_servers = true
+doh_servers = true
+ignore_system_dns = true
+server_names = ['cloudflare', 'google']
+[static.'cloudflare']
+stamp = 'sdns://AgIAAAAAAAAAAAAABGo0OC5kbnMuY2xvdWRmbGFyZS5jb20AAAAAAAAWOS5kbnMuY2xvdWRmbGFyZS5jb20'
+[static.'google']
+stamp = 'sdns://AgUAAAAAAAAAAAAAB2Rucy5nb29nbGUuY29tCi9leHBlcmltZW50YWw'
+"""
+
+    /**
+     * 通用 DNS（彻底绕开被阻断的 53 端口）：在容器内拉起 dnscrypt-proxy，向上走 DoH/DNSCrypt(443) 解析 ANY 域名，
+     * 监听 127.0.0.1:53；随后把 resolv.conf 指向 127.0.0.1，使 apt/pip/npm 对任意域名都可联网
+     * （不再依赖 /etc/hosts 预列清单）。依赖 setup 阶段 apt 安装 dnscrypt-proxy（/etc/hosts 已使 apt 可用）。
+     *
+     * 全链路非致命 + 可自愈：代理不可用/探测失败则回退 resolv.conf（/etc/hosts 预列主机仍经 files 优先解析，不回归）；
+     * 每次命令前 prepareRuntimeExtras 都会重跑，代理若被回收会在下条命令前自动重启。
+     */
+    private fun ensureDnsProxy(context: Context, rootfs: File) {
+        try {
+            val bin = listOf("usr/sbin/dnscrypt-proxy", "usr/bin/dnscrypt-proxy")
+                .map { File(rootfs, it) }.firstOrNull { it.canExecute() }
+            if (bin == null) {
+                Log.i(TAG, "ensureDnsProxy：dnscrypt-proxy 未安装，跳过（/etc/hosts 兜底）")
+                return
+            }
+            val cfg = File(rootfs, "etc/dnscrypt-proxy.toml")
+            if (!cfg.exists()) cfg.writeText(DNSCRYPT_CONF)
+            // 后台拉起（setsid 脱离 proot 进程组，避免命令结束后被一起杀；失败则静默退出，旧实例保留）
+            val launch = "if command -v setsid >/dev/null 2>&1; then setsid nohup ${bin.absolutePath} -config ${cfg.absolutePath} >/dev/null 2>&1 & else nohup ${bin.absolutePath} -config ${cfg.absolutePath} >/dev/null 2>&1 & fi"
+            runProot(context, launch, timeoutMs = 10_000)
+            // 探测：把 resolv.conf 临时指向 127.0.0.1，查一个 /etc/hosts 没有的域名
+            File(rootfs, "etc/resolv.conf").writeText("nameserver 127.0.0.1\noptions timeout:2 attempts:2\n")
+            var ok = false
+            for (i in 1..6) {
+                Thread.sleep(800)
+                val r = runProot(context, "getent hosts cloudflare.com", timeoutMs = 8_000)
+                if (r.second.contains(Regex("""\d+\.\d+\.\d+\.\d+"""))) { ok = true; break }
+            }
+            if (ok) {
+                Log.i(TAG, "✅ ensureDnsProxy：DoH 代理已起，resolv.conf → 127.0.0.1（通用 DNS 生效）")
+            } else {
+                Log.w(TAG, "ensureDnsProxy：代理探测失败，回退 resolv.conf（/etc/hosts 兜底）")
+                writeResolvConf(rootfs, context)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "ensureDnsProxy 失败（非致命）: ${e.message}")
+            runCatching { writeResolvConf(rootfs, context) }
+        }
+    }
+
     /** 确保 /etc/nsswitch.conf 含 hosts: files dns，否则 getaddrinfo 可能不查 DNS（网络修复之一）。 */
     private fun ensureNsswitch(rootfs: File) {
         try {
@@ -2333,6 +2405,9 @@ fi
             // 该解析是阻塞网络调用，放进 IO scope 异步执行，避免在主线程调用 prepareRuntimeExtras 时 ANR；
             // setup 路径（setupInternal）则是同步调用，保证 apt-get update 前 hosts 已就绪。
             scope.launch(Dispatchers.IO) { bootstrapHosts(context, rootfs) }
+            // 通用 DNS：若已装 dnscrypt-proxy，确保 DoH 代理在跑并接管 resolv.conf（覆盖任意域名）。
+            // 含阻塞网络探测，放进 IO scope 异步执行避免主线程 ANR；setup 路径为同步（保证部署即生效）。
+            scope.launch(Dispatchers.IO) { ensureDnsProxy(context, rootfs) }
             // 创建共享存储挂载点（/sdcard），否则 proot --bind 因目标不存在而整体启动失败。
             File(rootfs, SHARED_STORAGE_MOUNT.trimStart('/')).mkdirs()
             val props = buildProps(context)
