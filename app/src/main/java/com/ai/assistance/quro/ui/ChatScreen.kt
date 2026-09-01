@@ -257,6 +257,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.core.content.FileProvider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Usb
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ContentCopy
@@ -617,6 +619,10 @@ fun ChatScreen(
     // 权限管理页（从设置页入口进入）
     var showPermission by remember { mutableStateOf(false) }
     var showLspose by remember { mutableStateOf(false) }
+    // USB / 无线调试 (ADB) 页（从设置页入口进入）
+    var showUsbDebug by remember { mutableStateOf(false) }
+    // 默认应用角色管理页（从设置页入口进入）
+    var showDefaultApp by remember { mutableStateOf(false) }
     // 包管理页（插件 / 工具包 / 技能 / MCP，从设置页入口进入）
     var showCms by remember { mutableStateOf(false) }
     // 工具箱（设置页入口：文件管理 / 包名查询 / 代码运行 / 内置浏览器）
@@ -1488,7 +1494,7 @@ fun ChatScreen(
         val settingsChildOpen = showModelConfig || showToolbox || showVoice || showAbout || showAppearance ||
             showPermission || showCms || showPlugins || showKnowledge || showTerminal || showSchedule || showBots ||
             showTts || showStt || showVoiceService || showSystemStatus || showFeatureModelConfig || showAci ||
-            showToolCenter
+            showToolCenter || showUsbDebug || showDefaultApp
         // 底部弹层（自定义，统一遮罩 + 上滑）
         SheetOverlay(
             sheet = sheet, lastSheet = lastSheet,
@@ -1590,6 +1596,8 @@ fun ChatScreen(
             onOpenFeatureModelConfig = { showFeatureModelConfig = true },
             onOpenPermission = { showPermission = true },
             onOpenLspose = { showLspose = true },
+            onOpenUsbDebug = { showUsbDebug = true },
+            onOpenDefaultApp = { showDefaultApp = true },
             onOpenCms = { showCms = true },
             onOpenToolbox = { showToolbox = true },
             onOpenKnowledge = { showKnowledge = true },
@@ -1635,6 +1643,22 @@ fun ChatScreen(
             BackHandler { showLspose = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
                 QuroLsposeScreen(onClose = { showLspose = false })
+            }
+        }
+
+        // USB / 无线调试 (ADB) 页：全屏覆盖层（从设置页入口进入，返回关页回设置）
+        if (showUsbDebug) {
+            BackHandler { showUsbDebug = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
+                QuroUsbDebugScreen(onClose = { showUsbDebug = false })
+            }
+        }
+
+        // 默认应用角色管理页：全屏覆盖层（从设置页入口进入，返回关页回设置）
+        if (showDefaultApp) {
+            BackHandler { showDefaultApp = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
+                QuroDefaultAppScreen(onClose = { showDefaultApp = false })
             }
         }
 
@@ -4717,6 +4741,8 @@ private fun SheetOverlay(
     onOpenFeatureModelConfig: () -> Unit,
     onOpenPermission: () -> Unit,
     onOpenLspose: () -> Unit,
+    onOpenUsbDebug: () -> Unit,
+    onOpenDefaultApp: () -> Unit,
     onOpenCms: () -> Unit,
     onOpenToolbox: () -> Unit,
     onOpenKnowledge: () -> Unit,
@@ -4807,7 +4833,7 @@ private fun SheetOverlay(
                         settingsSoundOn, onSettingsToggleSound,
                         settingsEnterSend, onSettingsToggleEnter,
                         settingsFontName, onSettingsCycleFont,
-                        onOpenModelConfig, onOpenFeatureModelConfig, onOpenPermission, onOpenLspose, onOpenCms, onOpenToolbox, onOpenKnowledge, onOpenTerminal, onOpenPlugins, onOpenSkills,
+                        onOpenModelConfig, onOpenFeatureModelConfig, onOpenPermission, onOpenLspose, onOpenUsbDebug, onOpenDefaultApp, onOpenCms, onOpenToolbox, onOpenKnowledge, onOpenTerminal, onOpenPlugins, onOpenSkills,
                         onManagePersona, onOpenVoiceService,
                         onClearChat, settingsVoiceBallEnabled, onSettingsToggleVoiceBall,
                     settingsAiReplyNotify, onSettingsToggleAiReplyNotify,
@@ -4845,6 +4871,8 @@ private fun SettingsSheetContent(
     onOpenFeatureModelConfig: () -> Unit,
     onOpenPermission: () -> Unit,
     onOpenLspose: () -> Unit,
+    onOpenUsbDebug: () -> Unit,
+    onOpenDefaultApp: () -> Unit,
     onOpenCms: () -> Unit,
     onOpenToolbox: () -> Unit,
     onOpenKnowledge: () -> Unit,
@@ -4892,6 +4920,10 @@ private fun SettingsSheetContent(
             SetRowClickable(Icons.Filled.Security, "权限", "L1 无障碍 / L2 Shizuku / L3 设备管理员 / L4 ROOT", "", onOpenPermission, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Extension, "LSPosed 模块", "钩子注入 / 作用域管理", "", onOpenLspose, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(Icons.Filled.Usb, "USB / 无线调试", "ADB：被电脑控制 · 本机客户端 · TCP 监听", "", onOpenUsbDebug, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(Icons.Filled.Apps, "默认应用", "桌面启动器 / 浏览器 / 相册 / 视频 / 邮箱 / 文档 / 短信 / 拨号", "", onOpenDefaultApp, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Info, "系统状态", "设备 / 权限能力 / 模块运行态 / 人格心跳", "", onOpenSystemStatus, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
