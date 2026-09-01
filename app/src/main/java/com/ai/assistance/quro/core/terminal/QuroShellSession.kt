@@ -705,13 +705,10 @@ class QuroShellSession private constructor(
          * → 失败则回落旧直连路径（[createLegacy]，与 v127 行为一致）。任何异常都被捕获降级，
          * 绝不抛出，避免拖垮 ChatScreen 重组。旧 Termux 终端 / 旧 Kotlin CMS 部署器路径完整保留。
          */
-    private fun diag(context: Context, msg: String) {
-        runCatching {
-            val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "QuroAI_logs")
-            dir.mkdirs()
-            File(dir, "terminal_diag.txt").appendText("[${System.currentTimeMillis()}] $msg\n")
+        private fun diag(context: Context, msg: String) {
+            // 仅走 Logcat，不再往手机公共 Download 写诊断文件（避免污染 QuroAI_logs 目录）。
+            Log.d(TAG, msg)
         }
-    }
 
     fun create(context: Context): QuroShellSession {
         // v1.0.70 行为：直连 proot/设备 sh，不尝试 VM 优先 / 命名容器优先。
