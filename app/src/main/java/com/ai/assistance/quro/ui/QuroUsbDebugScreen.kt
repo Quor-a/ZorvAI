@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -69,6 +71,18 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
     var shellCmd by remember { mutableStateOf("") }
     var shellOut by remember { mutableStateOf("") }
     var shellBusy by remember { mutableStateOf(false) }
+
+    // 常用设备控制命令（点按即填入输入框，避免手敲）
+    val quickCmds = listOf(
+        "getprop ro.build.version.release",
+        "ip addr",
+        "wm size",
+        "settings list system",
+        "pm list packages",
+        "getenforce",
+        "dumpsys battery",
+        "svc wifi enable",
+    )
 
     fun runShell() {
         val c = shellCmd.trim()
@@ -271,6 +285,19 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
             // 本机 ADB Shell：经特权通道以 root 执行命令（控制代码 / 控制手机）
             GroupCaption("ADB Shell（控制代码 / 控制手机）")
             SetGroup {
+                // 常用命令快捷芯片：点按即填入输入框
+                LazyRow(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(quickCmds) { cmd ->
+                        AssistChip(
+                            onClick = { shellCmd = cmd },
+                            label = { Text(cmd, fontSize = 11.sp) },
+                        )
+                    }
+                }
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -302,6 +329,7 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("输出", fontSize = 12.sp, color = Muted, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { copy(shellOut) }) { Text("复制", fontSize = 12.sp, color = Accent) }
                         TextButton(onClick = { shellOut = "" }) { Text("清空", fontSize = 12.sp, color = Accent) }
                     }
                     Box(
