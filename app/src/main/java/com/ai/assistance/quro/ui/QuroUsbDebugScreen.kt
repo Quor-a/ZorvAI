@@ -3,6 +3,7 @@ package com.ai.assistance.quro.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -20,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -72,6 +74,9 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
     var shellOut by remember { mutableStateOf("") }
     var shellBusy by remember { mutableStateOf(false) }
 
+    // 本机作为 ADB 客户端：反向连接对方 ip:port（被手机控制 / 本机作为客户端）
+    var clientTarget by remember { mutableStateOf("") }
+
     // 常用设备控制命令（点按即填入输入框，避免手敲）
     val quickCmds = listOf(
         "getprop ro.build.version.release",
@@ -120,6 +125,28 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
         }
     }
 
+    fun connectRemote() {
+        val t = clientTarget.trim()
+        if (t.isBlank()) return
+        if (!QuroAdbDebug.hasPrivilegedChannel()) {
+            Toast.makeText(ctx, "需要 root / Shizuku 才能执行 adb connect", Toast.LENGTH_LONG).show()
+            return
+        }
+        scope.launch {
+            shellBusy = true
+            val r = withContext(Dispatchers.IO) { QuroAdbDebug.shell(ctx, "adb connect $t") }
+            shellBusy = false
+            shellOut = buildString {
+                append(shellOut)
+                append("$ adb connect ")
+                append(t)
+                append("\n")
+                append(r.render())
+                append("\n")
+            }.takeLast(8000)
+        }
+    }
+
     val tcpEnabled = tcpPort > 0
 
     fun refresh() {
@@ -149,6 +176,17 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
             val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("adb", text))
             Toast.makeText(ctx, "已复制：$text", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun share(text: String) {
+        runCatching {
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            ctx.startActivity(Intent.createChooser(intent, "分享连接命令"))
         }
     }
 
@@ -257,12 +295,48 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
                 }
             }
 
-            // 连接信息：被电脑控制
+            // 连接信息：被电脑控制 / 被手机控制（同一 TCP adbd，控制端可是电脑也可是另一台手机）
             if (tcpEnabled && ip != null) {
-                GroupCaption("电脑连接本机")
+                GroupCaption("电脑/手机连接本机（被控制）")
                 SetGroup {
                     val cmd = "adb connect $ip:$tcpPort"
-                    ConnectInfoRow(cmd, "在电脑终端执行，连接本机；连接后电脑即可控制本机（安装/卸载/截屏/文件/Shell）", onCopy = { copy(cmd) })
+                    ConnectInfoRow(
+                        cmd,
+                        "在电脑或另一台手机的终端执行该命令即可连接本机；连接后对方即可控制本机（安装/卸载/截屏/文件/Shell）",
+                        onCopy = { copy(cmd) },
+                        onShare = { share(cmd) },
+                    )
+                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                    val qrBitmap = remember(ip, tcpPort) {
+                        try {
+                            val hints = hashMapOf<com.google.zxing.EncodeHintType, Any>(
+                                com.google.zxing.EncodeHintType.MARGIN to 1,
+                                com.google.zxing.EncodeHintType.ERROR_CORRECTION to com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.M,
+                            )
+                            val matrix = com.google.zxing.qrcode.QRCodeWriter().encode(cmd, com.google.zxing.BarcodeFormat.QR_CODE, 400, 400, hints)
+                            val w = matrix.width
+                            val h = matrix.height
+                            val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+                            for (x in 0 until w) {
+                                for (y in 0 until h) {
+                                    bmp.setPixel(x, y, if (matrix.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+                                }
+                            }
+                            bmp
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                    if (qrBitmap != null) {
+                        Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
+                            androidx.compose.foundation.Image(
+                                bitmap = qrBitmap.asImageBitmap(),
+                                contentDescription = "adb connect 二维码",
+                                modifier = Modifier.size(180.dp).clip(RoundedCornerShape(8.dp)).background(Color.White).padding(12.dp),
+                            )
+                        }
+                        Text("扫码即得连接命令（另一台手机/电脑相机扫码后可复制），实现被手机/电脑控制", fontSize = 11.sp, color = Muted, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
+                    }
                 }
             } else if (tcpEnabled && ip == null) {
                 GroupCaption("电脑连接本机")
@@ -271,10 +345,35 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
                 }
             }
 
-            // 被手机控制：本机作为 ADB 客户端
-            GroupCaption("被手机控制 / 本机作为客户端")
+            // 本机作为 ADB 客户端：反向连接对方（被手机控制 / 本机作为客户端）
+            GroupCaption("本机作为客户端（控制对方）")
             SetGroup {
-                InfoLine("本机也可作为 ADB 客户端去连其它设备、或连自身（adb connect 127.0.0.1:$tcpPort）。在终端输入 adb 命令即可控制。")
+                InfoLine("本机也可作为 ADB 客户端去连其它设备、或连自身（adb connect 127.0.0.1:$tcpPort）。输入对方 ip:port 即可反向连接并控制对方。")
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = clientTarget,
+                        onValueChange = { clientTarget = it.filter { c -> c.isDigit() || c == '.' || c == ':' } },
+                        label = { Text("对方 ip:port", fontSize = 12.sp) },
+                        placeholder = { Text("如 192.168.1.10:5555", fontSize = 12.sp, color = Muted) },
+                        singleLine = true,
+                        enabled = !shellBusy,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { connectRemote() }),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = { connectRemote() },
+                        enabled = !shellBusy && clientTarget.isNotBlank(),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                    ) {
+                        if (shellBusy) Text("连接中…", fontSize = 13.sp) else Text("连接", fontSize = 13.sp)
+                    }
+                }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 SetRowClickable(
                     Icons.Filled.Terminal, "打开终端", "执行 adb / shell 命令控制本机或远端", "",
@@ -442,13 +541,16 @@ private fun StatusRow(icon: androidx.compose.ui.graphics.vector.ImageVector, nam
     }
 }
 
-/** 连接信息行：可复制的命令 + 说明。 */
+/** 连接信息行：可复制 / 可分享的命令 + 说明。 */
 @Composable
-private fun ConnectInfoRow(cmd: String, desc: String, onCopy: () -> Unit) {
+private fun ConnectInfoRow(cmd: String, desc: String, onCopy: () -> Unit, onShare: (() -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("连接命令", fontSize = 13.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            if (onShare != null) {
+                TextButton(onClick = onShare) { Text("分享", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold) }
+            }
             TextButton(onClick = onCopy) { Text("复制", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold) }
         }
         Spacer(Modifier.height(6.dp))
