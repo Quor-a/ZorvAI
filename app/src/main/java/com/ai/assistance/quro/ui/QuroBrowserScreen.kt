@@ -534,7 +534,11 @@ fun QuroBrowserScreen(
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                         keyboardActions = KeyboardActions(onGo = {
                             val u = address.trim()
-                            if (u.isNotEmpty()) webView?.loadUrl(u)
+                            if (u.isNotEmpty()) {
+                                val target = com.ai.assistance.quro.core.tools.QuroBrowserController.resolveBrowserInput(u)
+                                webView?.loadUrl(target)
+                                address = target
+                            }
                         }),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
                         decorationBox = { inner ->
@@ -797,10 +801,12 @@ fun QuroBrowserScreen(
                                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                                     isLoading = true
                                     loadError = null
+                                    com.ai.assistance.quro.core.tools.QuroBrowserController.markPageStarted()
                                     url?.let { address = it }
                                 }
                                 override fun onPageFinished(view: WebView?, url: String?) {
                                     isLoading = false
+                                    com.ai.assistance.quro.core.tools.QuroBrowserController.markPageFinished()
                                     canGoBack = view?.canGoBack() ?: false
                                     canGoForward = view?.canGoForward() ?: false
                                 }
