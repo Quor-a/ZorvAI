@@ -2116,32 +2116,44 @@ object QuroLinuxEnv {
      * 每次启动刷新（prepareRuntimeExtras）；用标记行 `# quro-dns-bootstrap` 隔离自写条目，不破坏用户/系统其它 hosts。
      * 宿主侧当前离线导致全部解析失败时不动文件（保留上一次有效结果），非致命。
      */
+    /** 需要静态写进 /etc/hosts 的开发主机清单（绕开被阻断的 53 端口）。覆盖 apt 源 + 语言包/CDN/工具链。 */
+    private fun curatedDevHosts(context: Context): List<String> = buildList {
+        addAll(listOf(
+            // apt 源（arm64 用 ports.ubuntu.com）
+            "mirrors.aliyun.com", "mirrors.tuna.tsinghua.edu.cn",
+            "archive.ubuntu.com", "security.ubuntu.com", "ports.ubuntu.com", "extras.ubuntu.com",
+            "azure.archive.ubuntu.com", "deb.debian.org", "security.debian.org",
+            "launchpad.net", "ppa.launchpadcontent.net",
+            // pip
+            "pypi.org", "files.pythonhosted.org", "pypi.python.org",
+            // npm / yarn / pnpm
+            "registry.npmjs.org", "registry.npmjs.com", "registry.yarnpkg.com",
+            "registry.npmmirror.com", "cdn.jsdelivr.net",
+            // git
+            "github.com", "objects.githubusercontent.com", "codeload.github.com", "raw.githubusercontent.com",
+            "gist.githubusercontent.com",
+            // go
+            "proxy.golang.org", "sum.golang.org", "goproxy.cn", "goproxy.io",
+            // rust / cargo
+            "static.crates.io", "crates.io", "static.rust-lang.org", "sh.rustup.rs",
+            // maven / gradle / android
+            "repo1.maven.org", "maven.aliyun.com", "maven.google.com",
+            "services.gradle.org", "dl.google.com",
+            // node / deno
+            "nodejs.org", "deno.land",
+            // conda / docker
+            "repo.anaconda.com", "download.docker.com",
+            // 通用
+            "google.com",
+        ))
+        // 动态纳入「用户所选 apt 镜像」与默认镜像候选，确保无论选哪个源都被预解析（绕 53 端口）
+        runCatching { add(hostOf(getSelectedAptMirror(context))) }
+        UBUNTU_APT_MIRRORS.forEach { runCatching { add(hostOf(it)) } }
+    }.distinct()
+
     private fun bootstrapHosts(context: Context, rootfs: File) {
         try {
-            val resolved = resolveHostIps(
-                buildList {
-                    // apt 源候选（arm64 用 ports.ubuntu.com）
-                    addAll(listOf(
-                        "mirrors.aliyun.com", "mirrors.tuna.tsinghua.edu.cn",
-                        "archive.ubuntu.com", "security.ubuntu.com", "ports.ubuntu.com", "extras.ubuntu.com",
-                        "azure.archive.ubuntu.com", "deb.debian.org", "security.debian.org",
-                        "launchpad.net", "ppa.launchpadcontent.net",
-                        // pip
-                        "pypi.org", "files.pythonhosted.org", "pypi.python.org",
-                        // npm / yarn
-                        "registry.npmjs.org", "registry.npmjs.com", "registry.yarnpkg.com",
-                        // git
-                        "github.com", "objects.githubusercontent.com", "codeload.github.com", "raw.githubusercontent.com",
-                        // go
-                        "proxy.golang.org", "sum.golang.org",
-                        // 通用
-                        "google.com",
-                    ))
-                    // 动态纳入「用户所选 apt 镜像」与默认镜像候选的主机名，确保无论选哪个源都被预解析（绕 53 端口）
-                    runCatching { add(hostOf(getSelectedAptMirror(context))) }
-                    UBUNTU_APT_MIRRORS.forEach { runCatching { add(hostOf(it)) } }
-                }.distinct()
-            )
+            val resolved = resolveHostIps(curatedDevHosts(context))
             if (resolved.isEmpty()) {
                 Log.w(TAG, "bootstrapHosts：宿主侧全部解析失败（可能离线），保留现有 /etc/hosts")
                 return
@@ -2180,37 +2192,14 @@ object QuroLinuxEnv {
      * 应用层 DNS API（DNS-over-HTTPS HTTP 接口，走 443）解析开发镜像/CDN 主机名 → 写 /etc/hosts 静态映射。
      *
      * 这是比 [bootstrapHosts]（宿主 InetAddress 系统解析器）更彻底的 53 端口绕行路径：
-     * 直接以 HTTPS 请求公共 DoH 解析器（Google `dns.google` / Cloudflare `cloudflare-dns.com`）拿到 A 记录 IP，
+     * 直接以 HTTPS 请求国内可达的公共 DoH 解析器（如阿里 `dns.alidns.com`）拿到 A 记录 IP，
      * 完全不经过 Android 系统 DNS stub 与容器内 53 端口——即便宿主 Private DNS 异常或系统解析器不可用，
      * 也能靠 DoH 拿到镜像 IP 并静态写进 /etc/hosts，使 apt-get update / pip / npm 按 IP 直连。
      * 与 bootstrapHosts 共用 `# quro-dns-bootstrap` 标记写入，结果合并进同一份 hosts（互不冲突）。
      */
     private fun bootstrapHostsByDoH(context: Context, rootfs: File) {
         try {
-            val resolved = resolveHostIpsByDoH(
-                buildList {
-                    // apt 源候选（arm64 用 ports.ubuntu.com）
-                    addAll(listOf(
-                        "mirrors.aliyun.com", "mirrors.tuna.tsinghua.edu.cn",
-                        "archive.ubuntu.com", "security.ubuntu.com", "ports.ubuntu.com", "extras.ubuntu.com",
-                        "azure.archive.ubuntu.com", "deb.debian.org", "security.debian.org",
-                        "launchpad.net", "ppa.launchpadcontent.net",
-                        // pip
-                        "pypi.org", "files.pythonhosted.org", "pypi.python.org",
-                        // npm / yarn
-                        "registry.npmjs.org", "registry.npmjs.com", "registry.yarnpkg.com",
-                        // git
-                        "github.com", "objects.githubusercontent.com", "codeload.github.com", "raw.githubusercontent.com",
-                        // go
-                        "proxy.golang.org", "sum.golang.org",
-                        // 通用
-                        "google.com",
-                    ))
-                    // 动态纳入「用户所选 apt 镜像」与默认镜像候选，确保无论选哪个源都被预解析（绕 53 端口）
-                    runCatching { add(hostOf(getSelectedAptMirror(context))) }
-                    UBUNTU_APT_MIRRORS.forEach { runCatching { add(hostOf(it)) } }
-                }.distinct()
-            )
+            val resolved = resolveHostIpsByDoH(curatedDevHosts(context))
             if (resolved.isEmpty()) {
                 Log.w(TAG, "bootstrapHostsByDoH：DoH 全部解析失败（可能离线/DoH 不可达），保留现有 /etc/hosts")
                 return
@@ -2224,8 +2213,9 @@ object QuroLinuxEnv {
 
     /**
      * 通过应用层 DNS-over-HTTPS API 解析主机名 → A 记录 IPv4 映射。
-     * 依次尝试多个 DoH 端点（Google / Cloudflare），单个端点/主机失败则跳到下一个，整体非致命。
-     * 走 443 HTTPS，与 Android 系统 DNS stub 及容器内 53 端口无关，是彻底的 53 绕行路径。
+     * 依次尝试多个 DoH 端点（国内可达解析器优先：阿里/360/腾讯，Google/Cloudflare 仅兜底），
+     * 单个端点/主机失败则跳到下一个，整体非致命。走 443 HTTPS，与 Android 系统 DNS stub
+     * 及容器内 53 端口无关，是彻底的 53 绕行路径。端点已按国内可达性排序，自动选最优可用者。
      */
     private fun resolveHostIpsByDoH(hosts: List<String>): Map<String, String> {
         val out = linkedMapOf<String, String>()
@@ -2236,32 +2226,44 @@ object QuroLinuxEnv {
         return out
     }
 
-    /** 对单个主机名走 DoH 解析，返回首个合法 IPv4；全部端点失败返回 null。 */
+    /**
+     * 应用层 DoH 端点（均走 443 HTTPS），返回 Google 风格 application/dns-json 响应。
+     * 按国内可达性排序：阿里/360/腾讯 优先，Google/Cloudflare 仅作最后兜底（国内多被墙）。
+     * 不支持 JSON 的端点（如腾讯/360 若只支持 RFC8484）会解析失败并自动跳到下一个，无副作用。
+     */
+    private val DOH_JSON_ENDPOINTS = listOf(
+        "https://dns.alidns.com/resolve?name=%s&type=A",      // 阿里公共 DNS，国内首选，支持 JSON API
+        "https://doh.360.cn/resolve?name=%s&type=A",          // 360 公共 DNS
+        "https://119.29.29.29/resolve?name=%s&type=A",        // 腾讯公共 DNS（IP 直连）
+        "https://dns.google/resolve?name=%s&type=A",          // Google（兜底）
+        "https://cloudflare-dns.com/dns-query?name=%s&type=A",// Cloudflare（兜底）
+    )
+
+    /** 对单个主机名走 DoH 解析，返回首个成功解析的合法 IPv4；全部端点失败返回 null。 */
     private fun dohResolveOne(host: String): String? {
-        // DoH 端点（均走 443）：Google dns.google / Cloudflare cloudflare-dns.com，返回 JSON Answer[].data = IPv4
-        val endpoints = listOf(
-            "https://dns.google/resolve?name=%s&type=A",
-            "https://cloudflare-dns.com/dns-query?name=%s&type=A",
-        )
-        for (tmpl in endpoints) {
-            try {
-                val url = java.net.URL(tmpl.format(host))
-                val conn = (url.openConnection() as? java.net.HttpURLConnection) ?: continue
-                conn.requestMethod = "GET"
-                conn.connectTimeout = 5_000
-                conn.readTimeout = 5_000
-                conn.instanceFollowRedirects = true
-                conn.setRequestProperty("Accept", "application/dns-json")
-                val code = runCatching { conn.responseCode }.getOrElse { -1 }
-                if (code != 200) { runCatching { conn.disconnect() }; continue }
-                val txt = runCatching { conn.inputStream.bufferedReader().use { it.readText() } }.getOrNull()
-                runCatching { conn.disconnect() }
-                if (txt.isNullOrBlank()) continue
-                val ip = parseDohAnswer(txt)
-                if (!ip.isNullOrBlank()) return ip
-            } catch (_: Throwable) { }
+        for (tmpl in DOH_JSON_ENDPOINTS) {
+            // 端点已按国内可达性排序，第一个成功者即「最优可用」，直接返回避免不必要等待。
+            val ip = runCatching { dohQuery(tmpl, host) }.getOrNull() ?: continue
+            if (ip.isNotBlank()) return ip
         }
         return null
+    }
+
+    /** 单次 DoH JSON 查询；返回首个合法 IPv4，异常/非 200/无答案返回 null。 */
+    private fun dohQuery(tmpl: String, host: String): String? {
+        val url = java.net.URL(tmpl.format(host))
+        val conn = (url.openConnection() as? java.net.HttpURLConnection) ?: return null
+        conn.requestMethod = "GET"
+        conn.connectTimeout = 5_000
+        conn.readTimeout = 5_000
+        conn.instanceFollowRedirects = true
+        conn.setRequestProperty("Accept", "application/dns-json")
+        val code = runCatching { conn.responseCode }.getOrElse { -1 }
+        if (code != 200) { runCatching { conn.disconnect() }; return null }
+        val txt = runCatching { conn.inputStream.bufferedReader().use { it.readText() } }.getOrNull()
+        runCatching { conn.disconnect() }
+        if (txt.isNullOrBlank()) return null
+        return parseDohAnswer(txt)
     }
 
     /** 解析 DoH JSON 响应，提取首个 A 记录（type=1）合法 IPv4；Status!=0（解析失败）返回 null。 */
@@ -2301,29 +2303,110 @@ object QuroLinuxEnv {
     }
 
     /**
-     * dnscrypt-proxy 最小配置：监听 127.0.0.1:53，向上走 DoH/DNSCrypt（443）解析**任意**域名，
-     * 彻底绕开被阻断的 53 端口。用静态 stamp（内嵌上游 IP，无需先解析），`ignore_system_dns=true`
-     * 避免它再去查被阻断的系统 DNS 做引导。Cloudflare / Google 双上游互备。
+     * dnscrypt-proxy 上游候选：国内可达优先，Google/Cloudflare 仅兜底（国内多被墙）。
+     * - providerName：DoH 服务器的 TLS SNI / 主机名；
+     * - path：DoH 路径（RFC8484，dnscrypt-proxy 原生支持）；
+     * - bootstrapIp：解析器 IP，写入 stamp 的 BootstrapIP 字段，dnscrypt-proxy 直接连此 IP 并以
+     *   providerName 作 SNI 完成 TLS，从而**完全不依赖被阻断的系统 DNS 做引导**；为空则在宿主侧
+     *   实时解析 providerName 并内嵌（见 [resolveBootstrapIp]）。
      */
-    private const val DNSCRYPT_CONF = """listen_addresses = ['127.0.0.1:53']
+    private data class DohUpstream(
+        val name: String,
+        val providerName: String,
+        val path: String,
+        val bootstrapIp: String?,
+    )
+
+    private val DOH_UPSTREAMS = listOf(
+        DohUpstream("alidns", "dns.alidns.com", "/dns-query", null),
+        DohUpstream("dot360", "doh.360.cn", "/dns-query", null),
+        DohUpstream("baidu", "doh.baidu.com", "/dns-query", null),
+        DohUpstream("tencent", "119.29.29.29", "/dns-query", "119.29.29.29"),
+        DohUpstream("google", "dns.google", "/dns-query", "8.8.8.8"),
+        DohUpstream("cloudflare", "cloudflare-dns.com", "/dns-query", "1.1.1.1"),
+    )
+
+    /**
+     * 宿主侧解析 DoH 提供方主机名 → IPv4，作为 stamp 的 BootstrapIP（内嵌后 dnscrypt-proxy 直连，
+     * 不再依赖被阻断的系统 DNS）。解析失败返回 null（stamp 退化为仅用 providerName，由 proxy 自行引导）。
+     */
+    private fun resolveBootstrapIp(providerName: String): String? = runCatching {
+        java.net.InetAddress.getAllByName(providerName)
+            .firstOrNull { it is java.net.Inet4Address }?.hostAddress
+    }.getOrNull()
+
+    /** 构造 dnscrypt-proxy 的 DoH stamp（sdns://，proto=0x02）。Addr 留空，BootstrapIP=解析器 IP。 */
+    private fun buildDohStamp(providerName: String, path: String, bootstrapIp: String?): String {
+        val out = java.io.ByteArrayOutputStream()
+        out.write(0x02) // proto = DoH
+        out.write(0); out.write(0) // props (uint16 LE) = 0（无特殊属性声明）
+        val pn = providerName.toByteArray(Charsets.UTF_8)
+        out.write(pn.size); out.write(pn) // providerName
+        appendStampIp(out, null) // Addr 留空（由 BootstrapIP 引导）
+        val p = path.toByteArray(Charsets.UTF_8)
+        out.write(p.size); out.write(p) // path
+        appendStampIp(out, bootstrapIp) // BootstrapIP（内嵌解析器 IP，避免系统 DNS）
+        val raw = out.toByteArray()
+        return "sdns://" + android.util.Base64.encodeToString(
+            raw, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
+        )
+    }
+
+    /** 按 [android.util.Base64] stamp 格式写入长度+地址（4=IPv4，16=IPv6，0=空）。 */
+    private fun appendStampIp(out: java.io.ByteArrayOutputStream, ip: String?) {
+        if (ip.isNullOrBlank()) { out.write(0); return }
+        val bytes = runCatching { java.net.InetAddress.getByName(ip).address }.getOrNull()
+        if (bytes == null) { out.write(0); return }
+        out.write(bytes.size); out.write(bytes)
+    }
+
+    /**
+     * 测量到上游 :443 的 TCP 建连延迟（ms）；不可达返回 Long.MAX_VALUE。
+     * 用于把 dnscrypt-proxy 的 server_names 按「实际可达性 + 延迟」排序，自动选最优上游。
+     */
+    private fun measureDohLatency(bootstrapIp: String): Long {
+        if (bootstrapIp.isBlank()) return Long.MAX_VALUE
+        return runCatching {
+            val t0 = System.nanoTime()
+            java.net.Socket().use { it.connect(java.net.InetSocketAddress(bootstrapIp, 443), 1_500) }
+            (System.nanoTime() - t0) / 1_000_000
+        }.getOrDefault(Long.MAX_VALUE)
+    }
+
+    /**
+     * 生成 dnscrypt-proxy 配置：监听 127.0.0.1:53，向上走 DoH(443) 解析**任意**域名，彻底绕开被阻断的 53 端口。
+     * stamp 内嵌 BootstrapIP（`ignore_system_dns=true` 不依赖系统 DNS 引导）；server_names 按宿主侧实测
+     * 延迟排序（国内可达解析器优先），实现「自动选最优」；全部不可达时退化为默认顺序（仍会尝试）。
+     */
+    private fun buildDnscryptConf(context: Context): String {
+        val ranked = DOH_UPSTREAMS.map { up ->
+            val ip = up.bootstrapIp ?: resolveBootstrapIp(up.providerName)
+            val cost = if (ip != null) measureDohLatency(ip) else Long.MAX_VALUE
+            up to (ip to cost)
+        }.sortedBy { it.second.second }
+        val names = ranked.joinToString(", ") { "'${it.first.name}'" }
+        val blocks = ranked.joinToString("\n") { (up, ipCost) ->
+            val stamp = buildDohStamp(up.providerName, up.path, ipCost.first)
+            "[static.'${up.name}']\nstamp = '$stamp'"
+        }
+        return """listen_addresses = ['127.0.0.1:53']
 ipv4_servers = true
 ipv6_servers = false
 dnscrypt_servers = true
 doh_servers = true
 ignore_system_dns = true
-server_names = ['cloudflare', 'google']
-[static.'cloudflare']
-stamp = 'sdns://AgIAAAAAAAAAAAAABGo0OC5kbnMuY2xvdWRmbGFyZS5jb20AAAAAAAAWOS5kbnMuY2xvdWRmbGFyZS5jb20'
-[static.'google']
-stamp = 'sdns://AgUAAAAAAAAAAAAAB2Rucy5nb29nbGUuY29tCi9leHBlcmltZW50YWw'
+server_names = [$names]
+$blocks
 """
+    }
 
     /**
-     * 通用 DNS（彻底绕开被阻断的 53 端口）：在容器内拉起 dnscrypt-proxy，向上走 DoH/DNSCrypt(443) 解析 ANY 域名，
-     * 监听 127.0.0.1:53；随后把 resolv.conf 指向 127.0.0.1，使 apt/pip/npm 对任意域名都可联网
+     * 通用 DNS（彻底绕开被阻断的 53 端口）：在容器内拉起 dnscrypt-proxy，向上走 DoH(443) 解析 ANY 域名，
+     * 监听 127.0.0.1:53；随后把 resolv.conf 指向 127.0.0.1（设备真实 DNS 作兜底），使 apt/pip/npm 对任意域名都可联网
      * （不再依赖 /etc/hosts 预列清单）。依赖 setup 阶段 apt 安装 dnscrypt-proxy（/etc/hosts 已使 apt 可用）。
+     * DoH 上游为国内可达解析器（阿里/360/百度/腾讯，Google/Cloudflare 兜底），按宿主实测延迟自动选最优。
      *
-     * 全链路非致命 + 可自愈：代理不可用/探测失败则回退 resolv.conf（/etc/hosts 预列主机仍经 files 优先解析，不回归）；
+     * 全链路非致命 + 可自愈：代理不可用/探测失败时仍保留 127.0.0.1 首选项（/etc/hosts 预列主机经 files 优先解析兜底）；
      * 每次命令前 prepareRuntimeExtras 都会重跑，代理若被回收会在下条命令前自动重启。
      */
     private fun ensureDnsProxy(context: Context, rootfs: File) {
@@ -2334,34 +2417,42 @@ stamp = 'sdns://AgUAAAAAAAAAAAAAB2Rucy5nb29nbGUuY29tCi9leHBlcmltZW50YWw'
                 Log.i(TAG, "ensureDnsProxy：dnscrypt-proxy 未安装，跳过（/etc/hosts 兜底）")
                 return
             }
+            // 按宿主侧实测延迟生成配置（国内可达解析器优先，自动选最优上游），每次都重写以保证顺序最新。
             val cfg = File(rootfs, "etc/dnscrypt-proxy.toml")
-            if (!cfg.exists()) cfg.writeText(DNSCRYPT_CONF)
+            cfg.writeText(buildDnscryptConf(context))
             // 后台拉起（setsid 脱离 proot 进程组，避免命令结束后被一起杀；失败则静默退出，旧实例保留）
             val launch = "if command -v setsid >/dev/null 2>&1; then setsid nohup ${bin.absolutePath} -config ${cfg.absolutePath} >/dev/null 2>&1 & else nohup ${bin.absolutePath} -config ${cfg.absolutePath} >/dev/null 2>&1 & fi"
             runProot(context, launch, timeoutMs = 10_000)
-            // 探测：把 resolv.conf 临时指向 127.0.0.1，用 curl 查一个 /etc/hosts 没有的域名（端到端验证代理）。
+            // resolv.conf 优先走本地 DoH 代理（127.0.0.1:53）；代理不可用时退回到设备真实 DNS（部分网络 53 仍可达）。
+            // 始终保留 127.0.0.1 在前，确保代理一旦拉起即接管通用 DNS（任意域名不再依赖 /etc/hosts 预列）。
+            File(rootfs, "etc/resolv.conf").writeText(buildResolvConf(context))
+            // 探测：用 curl 经代理解析并连接一个 /etc/hosts 没有、且国内可达的域名（端到端验证代理）。
             // 注：不用 getent —— 它在 libc-bin 里，最小 rootfs 可能没装；curl 是 setup 必装，且能真正走代理解析。
-            File(rootfs, "etc/resolv.conf").writeText("nameserver 127.0.0.1\noptions timeout:2 attempts:2\n")
             var ok = false
             for (i in 1..8) {
                 Thread.sleep(700)
                 val r = runProot(
                     context,
-                    "curl -sI --max-time 5 https://cloudflare.com >/dev/null 2>&1; printf 'PROXY_OK=%s\\n' $?",
+                    "curl -sI --max-time 5 https://dns.alidns.com >/dev/null 2>&1; printf 'PROXY_OK=%s\\n' $?",
                     timeoutMs = 9_000,
                 )
                 if (r.second.contains("PROXY_OK=0")) { ok = true; break }
             }
             if (ok) {
-                Log.i(TAG, "✅ ensureDnsProxy：DoH 代理已起，resolv.conf → 127.0.0.1（通用 DNS 生效）")
+                Log.i(TAG, "✅ ensureDnsProxy：DoH 代理已起，resolv.conf → 127.0.0.1（国内可达上游，通用 DNS 生效）")
             } else {
-                Log.w(TAG, "ensureDnsProxy：代理探测失败，回退 resolv.conf（/etc/hosts 兜底）")
-                writeResolvConf(rootfs, context)
+                Log.w(TAG, "ensureDnsProxy：代理探测失败（/etc/hosts 静态映射仍兜底，通用域名解析受限）")
             }
         } catch (e: Exception) {
             Log.w(TAG, "ensureDnsProxy 失败（非致命）: ${e.message}")
-            runCatching { writeResolvConf(rootfs, context) }
         }
+    }
+
+    /** 生成容器 resolv.conf：本地 DoH 代理优先，设备真实 DNS 兜底（仅当代理异常且 53 部分可达时生效）。 */
+    private fun buildResolvConf(context: Context): String = buildString {
+        appendLine("nameserver 127.0.0.1")
+        deviceDnsServers(context).take(2).forEach { appendLine("nameserver $it") }
+        appendLine("options timeout:1 attempts:2")
     }
 
     /** 确保 /etc/nsswitch.conf 含 hosts: files dns，否则 getaddrinfo 可能不查 DNS（网络修复之一）。 */
@@ -2609,7 +2700,7 @@ fi
     }
 
     /**
-     * 设置伪造系统数据（参考 Operit 的 setup_fake_sysdata.sh）。
+     * 设置伪造系统数据（fake sysdata）。
      * Android 限制了部分 /proc 入口，Linux 程序（如 apt、dpkg）需要这些数据才能正常运行。
      */
     private fun setupFakeSysdata(context: Context, rootfs: File) {
@@ -2695,7 +2786,7 @@ fi
     }
 
     /**
-     * 修复 Android 权限兼容性（参考 Operit 的 fix_permissions）。
+     * 修复 Android 权限兼容性（fix permissions）。
      * Android 的组 ID 在 Ubuntu 中可能不存在，导致 "cannot find name for group ID" 警告。
      */
     private fun fixPermissions(context: Context, rootfs: File) {
