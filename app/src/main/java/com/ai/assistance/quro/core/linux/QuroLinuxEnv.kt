@@ -22,7 +22,10 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
+import java.util.Locale
 import java.util.zip.GZIPInputStream
 import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.core.linux.PackageManagerType
@@ -472,6 +475,140 @@ object QuroLinuxEnv {
         val tar = File(sandboxDir(context), "rootfs.tar.gz")
         return verifyDownloadedRootfs(context, tar)
     }
+
+    // ═══ 沙箱快照 / 回滚（P2 快照 · 支撑 P3 回滚）═══
+    // 快照对象 = 宿主侧 sandbox-home（proot 内即 /root 的可写层）：用户 venv / CMS 引擎 / 配置 / 项目文件。
+    // 不快照 base rootfs（Ubuntu 本体，只读大体积）；apt 装进 base 的二进制不在快照范围，属已知边界。
+
+    /** 快照根目录：sandboxDir/snapshots/<name>。 */
+    fun snapshotsDir(context: Context): File = File(sandboxDir(context), "snapshots")
+
+    /** 单条快照的元信息（供列表展示）。 */
+    data class SnapshotInfo(val name: String, val sizeBytes: Long, val mtime: Long)
+
+    /** 列出全部快照（按修改时间倒序）。 */
+    fun listSnapshots(context: Context): List<SnapshotInfo> {
+        val dir = snapshotsDir(context)
+        dir.mkdirs()
+        return (dir.listFiles()?.filter { it.isDirectory } ?: emptyList())
+            .map { SnapshotInfo(it.name, dirSize(it), it.lastModified()) }
+            .sortedByDescending { it.mtime }
+    }
+
+    /**
+     * 创建沙箱快照。
+     * @param name 快照名（仅允许 [A-Za-z0-9._-]，超长截断，非法字符替换为 _）
+     * @return 人类可读的结果文案
+     */
+    fun snapshotSandbox(context: Context, name: String): String {
+        val safe = sanitizeSnapshotName(name)
+        if (safe.isEmpty()) return "快照名非法（仅允许字母/数字/._-）"
+        val home = File(homePath(context))
+        if (!home.exists()) return "无沙箱数据（/root 尚不存在），无需快照。"
+        val snap = File(snapshotsDir(context), safe)
+        runCatching { snap.deleteRecursively() }
+        return try {
+            copyTreePreservingSymlinks(home, snap)
+            "✅ 已创建快照「$safe」（大小 ${humanSize(dirSize(snap))}）。回滚：linux:rollback $safe"
+        } catch (t: Throwable) {
+            Log.w(TAG, "创建快照失败: $safe", t)
+            "❌ 创建快照「$safe」失败：${t.message}"
+        }
+    }
+
+    /**
+     * 回滚到指定快照：复制快照到临时区 → 原子替换当前 sandbox-home。
+     * 失败时当前 sandbox-home 保持不变（临时区为独立副本，替换前不删除原数据）。
+     * @return 人类可读的结果文案
+     */
+    fun rollbackSandbox(context: Context, name: String): String {
+        val safe = sanitizeSnapshotName(name)
+        if (safe.isEmpty()) return "快照名非法（仅允许字母/数字/._-）"
+        val snap = File(snapshotsDir(context), safe)
+        if (!snap.isDirectory) return "❌ 快照不存在：「$safe」（linux:snapshots 查看列表）"
+        val base = sandboxDir(context)
+        val home = File(homePath(context))
+        val tmp = File(base, "sandbox-home.rollback.tmp")
+        runCatching { tmp.deleteRecursively() }
+        return try {
+            copyTreePreservingSymlinks(snap, tmp)
+            // 原子替换：原 home 先改名备份，tmp 改名顶上；任一失败则回退到拷贝兜底。
+            val bak = File(base, "sandbox-home.rollback.bak")
+            runCatching { bak.deleteRecursively() }
+            val renamed = home.renameTo(bak)
+            val swapped = if (renamed) tmp.renameTo(home) else false
+            if (!swapped) {
+                // tmp 未顶上（rename 失败，多半跨存储）：直接拷贝 tmp → home
+                if (home.exists()) home.deleteRecursively()
+                copyTreePreservingSymlinks(tmp, home)
+                runCatching { tmp.deleteRecursively() }
+            }
+            runCatching { bak.deleteRecursively() }
+            "✅ 已回滚到快照「$safe」（大小 ${humanSize(dirSize(snap))}）。若当前会话已打开，重启终端生效。"
+        } catch (t: Throwable) {
+            Log.w(TAG, "回滚失败: $safe", t)
+            "❌ 回滚到「$safe」失败：${t.message}（当前数据未改动）"
+        }
+    }
+
+    /** 删除指定快照（回收空间）。 */
+    fun deleteSnapshot(context: Context, name: String): String {
+        val safe = sanitizeSnapshotName(name)
+        if (safe.isEmpty()) return "快照名非法"
+        val snap = File(snapshotsDir(context), safe)
+        if (!snap.isDirectory) return "❌ 快照不存在：「$safe」"
+        return try {
+            snap.deleteRecursively()
+            "✅ 已删除快照「$safe」"
+        } catch (t: Throwable) {
+            "❌ 删除快照「$safe」失败：${t.message}"
+        }
+    }
+
+    private fun sanitizeSnapshotName(name: String): String {
+        val s = name.trim().replace(Regex("[^A-Za-z0-9._-]"), "_").take(64)
+        return if (s == ".." || s == ".") "" else s
+    }
+
+    /** 递归拷贝目录，保留符号链接（symlink 原样重建，避免 venv 软链被展开成实体文件导致体积膨胀）。 */
+    private fun copyTreePreservingSymlinks(src: File, dst: File) {
+        if (Files.isSymbolicLink(src.toPath())) {
+            dst.parentFile?.mkdirs()
+            runCatching { Files.deleteIfExists(dst.toPath()) }
+            Files.createSymbolicLink(dst.toPath(), Files.readSymbolicLink(src.toPath()))
+            return
+        }
+        if (src.isDirectory) {
+            dst.mkdirs()
+            src.listFiles()?.forEach { child ->
+                copyTreePreservingSymlinks(child, File(dst, child.name))
+            }
+            return
+        }
+        dst.parentFile?.mkdirs()
+        Files.copy(src.toPath(), dst.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
+    }
+
+    /** 递归计算目录字节数。 */
+    private fun dirSize(dir: File): Long {
+        if (Files.isSymbolicLink(dir.toPath())) return 0
+        if (dir.isFile) return dir.length()
+        var total = 0L
+        dir.listFiles()?.forEach { total += dirSize(it) }
+        return total
+    }
+
+    private fun humanSize(bytes: Long): String {
+        if (bytes < 1024) return "${bytes}B"
+        val units = arrayOf("B", "KB", "MB", "GB", "TB")
+        var v = bytes.toDouble()
+        var i = 0
+        while (v >= 1024 && i < units.lastIndex) { v /= 1024; i++ }
+        return String.format(Locale.US, "%.1f%s", v, units[i])
+    }
+
+    /** 对外暴露的人类可读体积（供终端 linux: 命令展示）。 */
+    fun humanSizePublic(bytes: Long): String = humanSize(bytes)
 
     /** 将诊断日志同时写到 app 私有目录下的文件，方便用户取出查看。 */
     private fun diagLog(context: Context, msg: String) {

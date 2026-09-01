@@ -395,6 +395,8 @@ class QuroShellSession private constructor(
             if (trimmed == "clear" || trimmed == "cls") { clear(); return }
             // ACI 命令仍在本层拦截（qurohost 不在 VM 内）
             if (trimmed == "aci" || trimmed.startsWith("aci ")) { runAciCommand(trimmed); return }
+            // 沙箱快照/回滚命令（linux:snapshot/rollback/snapshots/delete/help）本层拦截
+            if (trimmed.startsWith("linux:")) { runLinuxCommand(trimmed); return }
             lastInterrupted = false
             writeRawDirect(CommandTranslator.translate(trimmed) + "\n")
             return
@@ -417,6 +419,11 @@ class QuroShellSession private constructor(
         // 进程内原生代码则可直接用 libacihost.so 的 C API（aci_call/aci_list）。
         if (trimmed == "aci" || trimmed.startsWith("aci ")) {
             runAciCommand(trimmed)
+            return
+        }
+        // 沙箱快照/回滚命令（linux:snapshot/rollback/snapshots/delete/help）本层拦截
+        if (trimmed.startsWith("linux:")) {
+            runLinuxCommand(trimmed)
             return
         }
         // 命令翻译：非 Ubuntu 命令（pkg/yum/pacman 等）→ Ubuntu 等价命令
@@ -490,6 +497,86 @@ class QuroShellSession private constructor(
         appendLine("  aci call com.ai.assistance.quro provider {\"uri\":\"content://sms/inbox\",\"op\":\"query\",\"limit\":\"5\"}")
         appendLine("说明：参数值为标量（字符串/数字/布尔）；requireUserConfirm 的能力视为已在终端确认。")
     }.trimEnd()
+
+    // ═══════════════ 终端内沙箱快照/回滚命令（linux:）═══════════════
+
+    /**
+     * 异步执行终端内的 `linux:` 命令（文件拷贝可能较慢，放 IO 线程避免 ANR，与 [runAciCommand] 同模式）。
+     */
+    private fun runLinuxCommand(trimmed: String) {
+        val echo = promptPrefix() + trimmed
+        appendLine(echo)
+        vt?.writeText(echo)
+        if (vt != null) publishVt()
+        launch {
+            val out = try {
+                executeLinuxCommand(trimmed)
+            } catch (t: Throwable) {
+                Log.w(TAG, "linux: 命令执行失败", t)
+                "linux: 执行失败: ${t.message}"
+            }
+            withContext(Dispatchers.Main) {
+                out.lineSequence().forEach {
+                    appendLine(it)
+                    vt?.writeText(it + "\n")
+                }
+                val pr = promptPrefix()
+                appendLine(pr)
+                vt?.writeText(pr)
+                if (vt != null) publishVt()
+            }
+        }
+    }
+
+    /** 解析并执行 linux: 子命令（在 IO 线程）。 */
+    private fun executeLinuxCommand(trimmed: String): String {
+        val rest = trimmed.removePrefix("linux:").trim()
+        return when {
+            rest.isEmpty() || rest == "help" -> linuxHelp()
+            rest == "snapshots" || rest == "list" -> linuxList()
+            rest.startsWith("snapshot") -> {
+                val name = rest.removePrefix("snapshot").trim()
+                if (name.isEmpty()) "用法：linux:snapshot <名称>  （例如 linux:snapshot before-pip-install）"
+                else QuroLinuxEnv.snapshotSandbox(context, name)
+            }
+            rest.startsWith("rollback") -> {
+                val name = rest.removePrefix("rollback").trim()
+                if (name.isEmpty()) "用法：linux:rollback <名称>  （linux:snapshots 查看列表）"
+                else QuroLinuxEnv.rollbackSandbox(context, name)
+            }
+            rest.startsWith("delete") -> {
+                val name = rest.removePrefix("delete").trim()
+                if (name.isEmpty()) "用法：linux:delete <名称>"
+                else QuroLinuxEnv.deleteSnapshot(context, name)
+            }
+            else -> "未知 linux: 子命令：$rest\n${linuxHelp()}"
+        }
+    }
+
+    private fun linuxHelp(): String = buildString {
+        appendLine("沙箱快照 / 回滚（linux: 命令）：")
+        appendLine("  linux:snapshots                  列出全部快照（名称 / 大小 / 时间）")
+        appendLine("  linux:snapshot <名称>            快照当前 /root 可写层（venv/引擎/配置/项目）")
+        appendLine("  linux:rollback <名称>            回滚 /root 到指定快照（当前数据先备份再替换）")
+        appendLine("  linux:delete  <名称>            删除指定快照（回收空间）")
+        appendLine("  linux:help                      显示本帮助")
+        appendLine("说明：")
+        appendLine("  · 快照对象 = 宿主侧 sandbox-home（proot 内即 /root 可写层），不含 Ubuntu 本体。")
+        appendLine("  · apt 装进 base rootfs 的二进制不在快照范围内（已知边界）。")
+        appendLine("  · 回滚后若终端已打开，重启终端生效。")
+    }.trimEnd()
+
+    private fun linuxList(): String {
+        val list = QuroLinuxEnv.listSnapshots(context)
+        if (list.isEmpty()) return "暂无快照。创建：linux:snapshot <名称>"
+        return buildString {
+            appendLine("沙箱快照共 ${list.size} 个：")
+            list.forEach {
+                val ts = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(it.mtime))
+                appendLine("  ● ${it.name}    ${QuroLinuxEnv.humanSizePublic(it.sizeBytes)}    $ts")
+            }
+        }.trimEnd()
+    }
 
     /** 列出所有受控端及能力。 */
     private fun aciList(): String {
