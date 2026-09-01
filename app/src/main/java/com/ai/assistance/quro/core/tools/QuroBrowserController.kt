@@ -1,7 +1,13 @@
 package com.ai.assistance.quro.core.tools
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.graphics.Bitmap
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.view.PixelCopy
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import kotlinx.coroutines.CompletableDeferred
@@ -10,17 +16,22 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
+import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 
 /**
- * 应用内置 WebView 控制器：让 AI 工具能直接操控当前显示的网页（点击、填表、取 DOM、导航）。
+ * 应用内置 WebView 控制器：让 AI 工具能直接操控当前显示的网页（点击、填表、取 DOM、导航、截图）。
  *
  * 设计：
  * - 当前活跃的 QuroBrowserScreen WebView 在 onAttached 时把自己挂进来，onDestroy 时摘掉。
  * - 所有操控走 [eval]，内部用 evaluateJavascript 异步回主线程，结果通过 token 回调拿到。
- * - AI 工具可调 snapshot() 拿带稳定 ID 的 DOM（DOM 中每个可点击/可输入元素被自动注入 data-quro-id），
- *   再用 clickById / fillById / eval 直接操作元素。
+ * - 关键修复：eval 不再用 eval(字符串) 方式执行（严格 CSP 页面会禁 unsafe-eval 导致脚本永远返回 null、
+ *   被 AI 误判为「没有活跃浏览器/页面未加载」），而是把表达式直接包进 IIFE 调桥，兼容 CSP。
+ * - [markPageStarted]/[markPageFinished] 由 WebViewClient 回调驱动，给 AI 一个基于 onPageFinished 的
+ *   可靠 loaded 状态（与 readyState 无关），彻底解决「网页明明加载了 AI 却说没加载」。
  */
 object QuroBrowserController {
     data class PageSnapshot(
@@ -32,6 +43,7 @@ object QuroBrowserController {
     )
 
     @Volatile private var active: WebView? = null
+    @Volatile private var pageLoaded = false
     private val main = Handler(Looper.getMainLooper())
     private val pending = ConcurrentHashMap<Long, CompletableDeferred<String>>()
     @Volatile private var nextToken = 0L
@@ -50,11 +62,27 @@ object QuroBrowserController {
     }
 
     fun detach(wv: WebView) {
-        if (active === wv) active = null
+        if (active === wv) {
+            active = null
+            pageLoaded = false
+        }
         runOnMain {
             runCatching { wv.removeJavascriptInterface("QuroBridge") }
         }
     }
+
+    /** 页面开始加载（WebViewClient.onPageStarted 调用）。 */
+    fun markPageStarted() {
+        pageLoaded = false
+    }
+
+    /** 页面加载完成（WebViewClient.onPageFinished 调用）。 */
+    fun markPageFinished() {
+        pageLoaded = true
+    }
+
+    /** 当前页面是否已加载完成（基于 onPageFinished，最可靠的判据）。 */
+    fun isPageLoaded(): Boolean = pageLoaded
 
     fun isAttached(): Boolean = active != null
 
@@ -70,7 +98,7 @@ object QuroBrowserController {
         return runOnMainSync { wv.title }
     }
 
-    /** 通用：切到主线程同步执行并取结果；非主线程时阻塞当前线程直到主线程跑完（仅供 QuroBrowserController 内部使用，调用方应在协程内）。 */
+    /** 通用：切到主线程同步执行并取结果；非主线程时阻塞当前线程直到主线程跑完（仅供内部使用，调用方应在协程内）。 */
     private inline fun <T> runOnMainSync(crossinline block: () -> T): T {
         return if (Looper.myLooper() === Looper.getMainLooper()) block() else {
             kotlinx.coroutines.runBlocking {
@@ -79,7 +107,11 @@ object QuroBrowserController {
         }
     }
 
-    /** 异步执行 JS；返回 JS 表达式的字符串结果（null = 没有活跃 WebView）。 */
+    /**
+     * 异步执行 JS 表达式并把字符串化结果回传（null = 没有活跃 WebView 或超时）。
+     * 修复点：直接把表达式包进 IIFE 调 QuroBridge.onEvalResult，**不使用 eval()**，从而兼容
+     * Content-Security-Policy 禁止 unsafe-eval 的页面（否则这些页面上脚本永远执行失败、被 AI 误判未加载）。
+     */
     suspend fun eval(js: String, timeoutMs: Long = 8000): String? {
         val wv = active ?: return null
         return withTimeoutOrNull(timeoutMs) {
@@ -89,23 +121,20 @@ object QuroBrowserController {
                     val cd = CompletableDeferred<String>()
                     pending[token] = cd
                     cont.invokeOnCancellation { pending.remove(token); cd.cancel() }
-                    val safe = "(()=>{try{var __r=eval(${JSONObject.quote(js)});return __r===undefined?'undefined':(__r&&__r.toString?__r.toString():String(__r));}catch(e){return '__ERR__:'+e;}})()"
-                    wv.evaluateJavascript(safe) { v ->
-                        // evaluateJavascript 本身也会异步回调一次；JS 桥走另一通道。
-                        // 这里不直接 complete，把控制权交给 JS 桥。
-                    }
-                    // 真正结果通过 JS 桥回传（兼容 evaluateJavascript 不给值的页面 CSP 场景）
-                    val bridgeJs = "QuroBridge.onEvalResult($token, $safe);"
-                    wv.evaluateJavascript(bridgeJs, null)
+                    val wrapped = "QuroBridge.onEvalResult($token,(function(){try{var __r=($js);" +
+                        "return __r===undefined?'undefined':(__r&&__r.toString?__r.toString():String(__r));" +
+                        "}catch(e){return '__ERR__:'+(e&&e.message?e.message:e);}})());"
+                    wv.evaluateJavascript(wrapped, null)
                 }
             }
         }
     }
 
-    /** 导航到 URL；返回是否成功。 */
+    /** 导航到 URL；返回是否成功。关键词会被 [resolveBrowserInput] 转成搜索链接。 */
     suspend fun navigate(url: String): Boolean {
         val wv = active ?: return false
-        runOnMain { wv.loadUrl(url) }
+        val target = resolveBrowserInput(url)
+        runOnMain { wv.loadUrl(target) }
         return true
     }
 
@@ -117,7 +146,7 @@ object QuroBrowserController {
         val wv = active ?: return null
         val url = currentUrl() ?: ""
         val title = currentTitle() ?: ""
-        // 等待 readyState === 'complete'
+        // 等待 readyState === 'complete' 或 'interactive'（DOM 可用即视为就绪，避免 SPA/懒加载页永远卡在等待）
         val ready = waitReady(8000)
         val js = """
             (function(){
@@ -162,16 +191,56 @@ object QuroBrowserController {
         return PageSnapshot(url = url, title = title, ready = ready, dom = dom, elements = list)
     }
 
-    /** 等待页面 readyState === 'complete'。 */
+    /** 等待页面 readyState === 'complete' 或 'interactive'（DOM 可用）。 */
     suspend fun waitReady(timeoutMs: Long): Boolean {
-        val js = "document.readyState"
+        val js = "(document.readyState==='complete'||document.readyState==='interactive')"
         repeat((timeoutMs / 200).toInt().coerceAtLeast(1)) {
-            val r = eval(js, 500)
-            if (r == "complete") return true
+            if (eval(js, 500) == "true") return true
             kotlinx.coroutines.delay(200)
         }
         return false
     }
+
+    /** 当前浏览器状态摘要（attached/loaded/url/title），供 AI 可靠判断页面是否就绪。 */
+    fun status(): String {
+        val wv = active
+        return buildString {
+            append("attached=").append(wv != null).append('\n')
+            append("loaded=").append(pageLoaded).append('\n')
+            append("url=").append(wv?.url ?: "").append('\n')
+            append("title=").append(wv?.title ?: "").append('\n')
+        }
+    }
+
+    // —— 导航 ——
+    fun goBack(): Boolean {
+        val wv = active ?: return false
+        runOnMain { if (wv.canGoBack()) wv.goBack() }
+        return true
+    }
+
+    fun goForward(): Boolean {
+        val wv = active ?: return false
+        runOnMain { if (wv.canGoForward()) wv.goForward() }
+        return true
+    }
+
+    fun reload(): Boolean {
+        val wv = active ?: return false
+        runOnMain { wv.reload() }
+        return true
+    }
+
+    fun stopLoading(): Boolean {
+        val wv = active ?: return false
+        runOnMain { wv.stopLoading() }
+        return true
+    }
+
+    // —— 滚动 ——
+    suspend fun scrollBy(dy: Int): Boolean = eval("window.scrollBy(0, $dy)") != null
+    suspend fun scrollToTop(): Boolean = eval("window.scrollTo(0, 0)") != null
+    suspend fun scrollToBottom(): Boolean = eval("window.scrollTo(0, document.body ? document.body.scrollHeight : 0)") != null
 
     /** 按 quro-id 派发 click 事件。 */
     suspend fun clickById(quroId: String): Boolean {
@@ -206,6 +275,26 @@ object QuroBrowserController {
         return eval(js) == "ok"
     }
 
+    /** 按 CSS 选择器写入文本（input/textarea）。 */
+    suspend fun fillBySelector(sel: String, value: String): Boolean {
+        val s = JSONObject.quote(sel)
+        val v = JSONObject.quote(value)
+        val js = """
+            (function(){
+              var el=document.querySelector($s);
+              if(!el) return 'no';
+              el.focus();
+              var proto = el.tagName==='INPUT' ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+              var setter = Object.getOwnPropertyDescriptor(proto,'value').set;
+              setter.call(el, $v);
+              el.dispatchEvent(new Event('input',{bubbles:true}));
+              el.dispatchEvent(new Event('change',{bubbles:true}));
+              return 'ok';
+            })()
+        """.trimIndent()
+        return eval(js) == "ok"
+    }
+
     /** 按 CSS 选择器读 outerHTML。 */
     suspend fun readBySelector(sel: String): String? {
         val s = JSONObject.quote(sel)
@@ -213,7 +302,24 @@ object QuroBrowserController {
         return eval(js)
     }
 
-    /** 收集当前页所有外链（绝对化后的 href 列表），过滤 js:/#/mailto:/tel: 等无意义锚点。供爬虫使用。 */
+    /** 整页 HTML（document.documentElement.outerHTML）。 */
+    suspend fun pageHtml(): String? = eval("document.documentElement ? document.documentElement.outerHTML : ''", 8000)
+
+    /** 页面可见正文（document.body.innerText）。 */
+    suspend fun pageText(): String? = eval("document.body ? document.body.innerText : ''", 8000)
+
+    /** 页面内查找文本并高亮，返回是否命中（true/false；null=执行失败）。 */
+    suspend fun find(text: String): Boolean? {
+        val t = JSONObject.quote(text)
+        val r = eval("(function(){try{return window.find($t, false, false, true, false) ? 'true' : 'false';}catch(e){return '__ERR__:'+e;}})()", 3000)
+        return when (r) {
+            "true" -> true
+            "false" -> false
+            else -> null
+        }
+    }
+
+    /** 收集当前页所有外链（绝对化后的 href 列表），过滤 js:/#/mailto:/tel: 等无意义锚点。供爬虫/AI 使用。 */
     suspend fun collectLinks(): List<String>? {
         val js = """(function(){
           try {
@@ -239,14 +345,59 @@ object QuroBrowserController {
         return list
     }
 
-    /** 取当前页正文（body.innerText），截断到 maxChars，供爬虫做正文抽取。 */
+    /** 取当前页正文（body.innerText），截断到 maxChars。 */
     suspend fun collectText(maxChars: Int = 4000): String? {
-        val js = "document.body ? document.body.innerText : ''"
-        val r = eval(js, 8000) ?: return null
+        val r = eval("document.body ? document.body.innerText : ''", 8000) ?: return null
         return r.take(maxChars).trim()
+    }
+
+    /** 截取当前窗口（含网页渲染像素）存 PNG，返回文件路径；失败返回 null。 */
+    suspend fun screenshot(context: Context): String? {
+        val wv = active ?: return null
+        val activity = (context.findActivity() ?: wv.context.findActivity()) ?: return null
+        val win = activity.window
+        val decor = win.decorView
+        if (decor.width <= 0 || decor.height <= 0) return null
+        return suspendCancellableCoroutine { cont ->
+            val bmp = Bitmap.createBitmap(decor.width, decor.height, Bitmap.Config.ARGB_8888)
+            PixelCopy.request(win, bmp, { res ->
+                if (res == PixelCopy.SUCCESS) {
+                    val dir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: context.filesDir
+                    val file = File(dir, "quro_browser_${System.currentTimeMillis()}.png")
+                    runCatching {
+                        FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    }.onSuccess { cont.resume(file.absolutePath) }
+                        .onFailure { cont.resume(null) }
+                } else cont.resume(null)
+            }, Handler(Looper.getMainLooper()))
+        }
+    }
+
+    private fun Context.findActivity(): Activity? {
+        var c: Context? = this
+        while (c != null) {
+            if (c is Activity) return c
+            c = if (c is ContextWrapper) c.baseContext else null
+        }
+        return null
     }
 
     private fun runOnMain(block: () -> Unit) {
         if (Looper.myLooper() === Looper.getMainLooper()) block() else main.post(block)
+    }
+
+    /**
+     * 地址栏输入归一化：把用户输入解析成可加载的 URL。
+     * - 带 scheme（http://、file://…）→ 原样；
+     * - 无空格且含 '.'（如 example.com / 192.168.1.1 / localhost:8080）→ 补 https://；
+     * - 含空格或纯词（如「kotlin 教程」）→ 当作搜索关键词，走百度检索。
+     */
+    fun resolveBrowserInput(raw: String): String {
+        val s = raw.trim()
+        if (s.isEmpty()) return s
+        if (Regex("""^[a-zA-Z][a-zA-Z0-9+.\-]*://""").containsMatchIn(s)) return s
+        if (!s.contains(' ') && s.contains('.')) return "https://$s"
+        val enc = URLEncoder.encode(s, "UTF-8")
+        return "https://www.baidu.com/s?wd=$enc"
     }
 }
