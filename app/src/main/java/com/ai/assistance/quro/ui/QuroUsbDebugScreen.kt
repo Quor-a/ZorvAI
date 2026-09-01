@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -18,7 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -61,6 +64,33 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
     var portText by remember { mutableStateOf(QuroAdbDebug.DEFAULT_PORT.toString()) }
     var busy by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf("") }
+
+    // 本机 ADB Shell（控制代码 / 控制手机）：经特权通道以 root 执行命令
+    var shellCmd by remember { mutableStateOf("") }
+    var shellOut by remember { mutableStateOf("") }
+    var shellBusy by remember { mutableStateOf(false) }
+
+    fun runShell() {
+        val c = shellCmd.trim()
+        if (c.isBlank()) return
+        if (!QuroAdbDebug.hasPrivilegedChannel()) {
+            Toast.makeText(ctx, "需要 root / Shizuku 才能执行本机 ADB shell", Toast.LENGTH_LONG).show()
+            return
+        }
+        scope.launch {
+            shellBusy = true
+            val r = withContext(Dispatchers.IO) { QuroAdbDebug.shell(ctx, c) }
+            shellBusy = false
+            shellOut = buildString {
+                append(shellOut)
+                append("$ ")
+                append(c)
+                append("\n")
+                append(r.render())
+                append("\n")
+            }.takeLast(8000)
+        }
+    }
 
     val tcpEnabled = tcpPort > 0
 
@@ -236,6 +266,56 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
                     Icons.Filled.Wifi, "无线调试", "Android 11+ 无线调试配对（配对码 + 端口）", "",
                     onClick = { QuroAdbDebug.openWirelessDebugging(ctx) }, scaled = { it.sp },
                 )
+            }
+
+            // 本机 ADB Shell：经特权通道以 root 执行命令（控制代码 / 控制手机）
+            GroupCaption("ADB Shell（控制代码 / 控制手机）")
+            SetGroup {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = shellCmd,
+                        onValueChange = { shellCmd = it },
+                        label = { Text("命令", fontSize = 12.sp) },
+                        placeholder = { Text("如 getprop ro.build.version.release", fontSize = 12.sp, color = Muted) },
+                        singleLine = true,
+                        enabled = !shellBusy,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { runShell() }),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = { runShell() },
+                        enabled = !shellBusy && shellCmd.isNotBlank(),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                    ) {
+                        if (shellBusy) Text("执行中…", fontSize = 13.sp) else Text("执行", fontSize = 13.sp)
+                    }
+                }
+                if (shellOut.isNotBlank()) {
+                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("输出", fontSize = 12.sp, color = Muted, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { shellOut = "" }) { Text("清空", fontSize = 12.sp, color = Accent) }
+                    }
+                    Box(
+                        Modifier.fillMaxWidth().heightIn(max = 200.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    ) {
+                        Text(shellOut, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontFamily = FontFamily.Monospace)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
             }
 
             if (log.isNotBlank()) {
