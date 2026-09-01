@@ -110,6 +110,11 @@ object QuroTerminalSessionManager {
         } catch (e: Exception) {
             Log.w(TAG, "载入会话元数据失败（忽略）: ${e.message}")
         }
+        // phantom killer：启动期回收上一轮残留的 proot 孤儿进程（App 崩溃/被系统杀后，
+        // 上一轮 proot 被 reparent 到 init 仍占资源，且可能锁住 rootfs 的 dpkg 锁/端口）。
+        // 只杀 cmdline 同时含我们 proot 二进制 + 我们 rootfs、且父进程已死的进程，绝不误伤其它。
+        runCatching { QuroTerminalReaper.reapOrphans(context) }
+            .onFailure { Log.w(TAG, "启动期回收孤儿进程失败（忽略）: ${it.message}") }
     }
 
     /**
