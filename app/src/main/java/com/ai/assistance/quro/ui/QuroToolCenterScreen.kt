@@ -110,11 +110,9 @@ fun QuroToolCenterScreen(
 private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val cards = listOf(
-        Triple("terminal", "Linux 终端", "proot/Linux 终端（Ubuntu 24.04），打开即自动安装并进入完整 Linux 环境"),
         Triple("workbench", "小程序", "AI 生成并在对话框渲染的 HTML/JS 小程序"),
-        Triple("cms", "能力模块", "CMS 引擎与开发环境部署"),
         Triple("toolbox", "工具箱", "文件管理 / 浏览器 / IDE"),
-        Triple("pkgmgr", "包管理", "apt/apk/dnf/pacman 安装/查询软件"),
+        Triple("pkgmgr", "包管理", "apt/apk/dnf/pacman 安装/卸载/升级/查询软件"),
         Triple("sandbox", "隔离沙箱", "免权限文件沙箱与 shell"),
         Triple("db", "私有数据库", "只读查询应用自有 SQLite"),
         Triple("vispro", "可视化编程", "Mermaid 源码编辑器 + 实时渲染 / 导出 SVG"),
@@ -129,7 +127,7 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(cards) { (key, title, desc) ->
-            val launch = key in setOf("terminal", "cms", "toolbox", "browser_ai", "crawler", "python_ai", "mitm")
+            val launch = key in setOf("toolbox", "browser_ai", "crawler", "python_ai", "mitm")
             Card(
                 Modifier.fillMaxWidth().clickable { if (launch) onLaunch(key) else onSelect(key) },
                 shape = RoundedCornerShape(14.dp),
@@ -631,6 +629,20 @@ private fun PackageManagerPanel(context: Context) {
                 enabled = pm != null && envReady && !running,
                 onClick = { runCmd(pm!!.update()) },
             ) { Text("更新源") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                enabled = pm != null && envReady && !running && query.isNotBlank(),
+                onClick = { runCmd(pm!!.remove(listOf(query.trim()))) },
+            ) { Text("卸载") }
+            OutlinedButton(
+                enabled = pm != null && envReady && !running,
+                onClick = { runCmd(pm!!.upgrade()) },
+            ) { Text("升级") }
+            OutlinedButton(
+                enabled = pm != null && envReady && !running,
+                onClick = { runCmd(pm!!.clean()) },
+            ) { Text("清理") }
         }
         Surface(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(cs.surface),
