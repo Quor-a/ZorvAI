@@ -1041,6 +1041,7 @@ Zorv AI 内置 **ACI（Agent Capability Interface）** —— 一套同设备、
 - 📖 **开发者手册**：[docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md) —— 受控端 5 步接入、能力定义、权限模型、真实踩坑。
 - 📦 **`aci-core` AAR**：随 Release 提供 `aci-core-release.aar`；开源独立分支 `aci-core` 提供完整可构建源码。
 - 🌿 **开源分支**：`git checkout aci-core` 即可拿到一个可独立 `./gradlew assembleRelease` 的 Android 库工程。
+- 📱 **Application Module（应用模块）**：本仓库内置规范参考实现 `aci-app/`（`com.android.application`，依赖 `:aidl-aci-core`），经 `BaseAidlAciService` 暴露 `echo` / `device_info` / `health` 三个示例能力，含 `tools:node="remove"` 权限剥离、`queries` 包可见性、`ACTION_WAKE` 唤醒 Receiver，可直接安装即被 Zorv AI 主程序经 ACI 自动发现调用。
 
 **受控端最小接入（Kotlin）：**
 
