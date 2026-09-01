@@ -2103,22 +2103,28 @@ object QuroLinuxEnv {
                 mutableListOf("127.0.0.1 localhost", "::1 localhost ip6-localhost ip6-loopback")
             }
             val resolved = resolveHostIps(
-                listOf(
+                buildList {
                     // apt 源候选（arm64 用 ports.ubuntu.com）
-                    "mirrors.aliyun.com", "mirrors.tuna.tsinghua.edu.cn",
-                    "archive.ubuntu.com", "security.ubuntu.com", "ports.ubuntu.com", "extras.ubuntu.com",
-                    "deb.debian.org", "security.debian.org",
-                    // pip
-                    "pypi.org", "files.pythonhosted.org", "pypi.python.org",
-                    // npm / yarn
-                    "registry.npmjs.org", "registry.npmjs.com", "registry.yarnpkg.com",
-                    // git
-                    "github.com", "objects.githubusercontent.com", "codeload.github.com", "raw.githubusercontent.com",
-                    // go
-                    "proxy.golang.org", "sum.golang.org",
-                    // 通用
-                    "google.com",
-                )
+                    addAll(listOf(
+                        "mirrors.aliyun.com", "mirrors.tuna.tsinghua.edu.cn",
+                        "archive.ubuntu.com", "security.ubuntu.com", "ports.ubuntu.com", "extras.ubuntu.com",
+                        "azure.archive.ubuntu.com", "deb.debian.org", "security.debian.org",
+                        "launchpad.net", "ppa.launchpadcontent.net",
+                        // pip
+                        "pypi.org", "files.pythonhosted.org", "pypi.python.org",
+                        // npm / yarn
+                        "registry.npmjs.org", "registry.npmjs.com", "registry.yarnpkg.com",
+                        // git
+                        "github.com", "objects.githubusercontent.com", "codeload.github.com", "raw.githubusercontent.com",
+                        // go
+                        "proxy.golang.org", "sum.golang.org",
+                        // 通用
+                        "google.com",
+                    ))
+                    // 动态纳入「用户所选 apt 镜像」与默认镜像候选的主机名，确保无论选哪个源都被预解析（绕 53 端口）
+                    runCatching { add(hostOf(getSelectedAptMirror(context))) }
+                    UBUNTU_APT_MIRRORS.forEach { runCatching { add(hostOf(it)) } }
+                }.distinct()
             )
             if (resolved.isEmpty()) {
                 Log.w(TAG, "bootstrapHosts：宿主侧全部解析失败（可能离线），保留现有 /etc/hosts")
@@ -2146,6 +2152,11 @@ object QuroLinuxEnv {
             } catch (_: Throwable) { }
         }
         return out
+    }
+
+    /** 从 apt 源 URL（如 http://mirrors.aliyun.com/ubuntu-ports）提取主机名。 */
+    private fun hostOf(url: String): String {
+        return url.substringAfter("://").substringBefore("/").substringBefore(":").trim()
     }
 
     /** 确保 /etc/nsswitch.conf 含 hosts: files dns，否则 getaddrinfo 可能不查 DNS（网络修复之一）。 */
