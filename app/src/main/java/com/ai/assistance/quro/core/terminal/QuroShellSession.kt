@@ -149,6 +149,12 @@ class QuroShellSession private constructor(
         private set
 
     /**
+     * 授权门（P3）挂起的待确认破坏性命令。
+     * 非空表示上一条破坏性命令被拦截、等待用户二次确认；发送 `confirm` 或再次发送相同命令即授权执行。
+     */
+    private var pendingConfirm: String? = null
+
+    /**
      * 下一次哨兵回来时不打印提示符。
      *
      * 用于 [restoreCwd] 这类**内部**命令：它们不该在滚动区里留下痕迹，
@@ -326,13 +332,53 @@ class QuroShellSession private constructor(
         publishVt()
     }
 
-    /** 发送一条命令（带回显 + 哨兵），等价于用户在提示符后敲回车。 */
+    /** 发送一条命令（P3 授权门 + 实际派发），等价于用户在提示符后敲回车。 */
     fun sendCommand(cmd: String) {
         if (exited) {
             Log.w(TAG, "sendCommand: 会话已退出，忽略命令: $cmd")
             return
         }
         val trimmed = cmd.trim()
+        // 授权门（P3）：破坏性命令需二次确认时，拦截并挂起待确认，不直接执行。
+        if (maybeRequireConfirm(trimmed)) return
+        dispatchCommand(trimmed)
+    }
+
+    /**
+     * 破坏性命令二次确认门（P3 授权）。
+     * @return true 表示已拦截（命令不执行），调用方应直接 return
+     */
+    private fun maybeRequireConfirm(trimmed: String): Boolean {
+        if (!QuroTerminalPrefs.requireDestructiveConfirm) return false
+        // confirm / yes：执行挂起的待确认命令
+        if ((trimmed == "confirm" || trimmed == "yes") && pendingConfirm != null) {
+            val pending = pendingConfirm!!
+            pendingConfirm = null
+            dispatchCommand(pending)
+            return true
+        }
+        val destructive = QuroShellCommandGuard.classify(trimmed) == QuroShellCommandGuard.Risk.DESTRUCTIVE
+            && !trimmed.startsWith("aci") && !trimmed.startsWith("clear") && !trimmed.startsWith("cls")
+        if (!destructive) {
+            pendingConfirm = null // 非破坏性命令取消之前挂起的项
+            return false
+        }
+        if (pendingConfirm == trimmed) {
+            // 用户再次发送相同破坏性命令 → 授权执行
+            pendingConfirm = null
+            dispatchCommand(trimmed)
+            return true
+        }
+        pendingConfirm = trimmed
+        val msg = "⚠ 破坏性命令需二次确认（授权）：再次发送相同命令，或发送 confirm，以授权执行『$trimmed』"
+        appendLine(msg)
+        vt?.writeText(msg + "\n")
+        if (vt != null) publishVt()
+        return true
+    }
+
+    /** 实际派发命令（警告 + 透传/哨兵）。[sendCommand] 经授权门后调用。 */
+    private fun dispatchCommand(trimmed: String) {
         // 命令副作用分级（P3）：破坏性命令在交互终端里用户主动敲 = 已授权，放行但先打印醒目警告，
         // 让执行不可逆操作前用户看得见自己要干什么。
         if (QuroTerminalPrefs.warnDestructive && trimmed.isNotEmpty()

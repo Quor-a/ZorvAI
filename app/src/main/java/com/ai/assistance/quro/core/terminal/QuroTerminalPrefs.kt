@@ -13,6 +13,7 @@ object QuroTerminalPrefs {
     private const val NAME = "quro_terminal_prefs"
     private const val KEY_USE_PTY = "use_pty"
     private const val KEY_WARN_DESTRUCTIVE = "warn_destructive"
+    private const val KEY_REQUIRE_DESTRUCTIVE_CONFIRM = "require_destructive_confirm"
 
     private val sp: SharedPreferences?
         get() = runCatching { QuroApplication.appCtx?.getSharedPreferences(NAME, Context.MODE_PRIVATE) }.getOrNull()
@@ -32,4 +33,16 @@ object QuroTerminalPrefs {
     var warnDestructive: Boolean
         get() = sp?.getBoolean(KEY_WARN_DESTRUCTIVE, true) ?: true
         set(v) { sp?.edit()?.putBoolean(KEY_WARN_DESTRUCTIVE, v)?.apply() }
+
+    /**
+     * 破坏性命令需二次确认（授权门，默认关）。
+     *
+     * 开启后：交互终端里敲下破坏性命令（rm -rf / dd / mkfs / shutdown 等）不会立即执行，
+     * 而是挂起待确认——再次发送相同命令，或发送 `confirm`，才真正授权执行。
+     * 默认关闭以保持既有「警告后直接执行」行为不变；这是 P3 授权在交互路径上的落地，
+     * 与程序化路径（AI/CMS 经 runCommand 的 confirmed 闸门）保持一致。
+     */
+    var requireDestructiveConfirm: Boolean
+        get() = sp?.getBoolean(KEY_REQUIRE_DESTRUCTIVE_CONFIRM, false) ?: false
+        set(v) { sp?.edit()?.putBoolean(KEY_REQUIRE_DESTRUCTIVE_CONFIRM, v)?.apply() }
 }
