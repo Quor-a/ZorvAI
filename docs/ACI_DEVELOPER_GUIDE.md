@@ -1,6 +1,6 @@
 # Zorv AI · ACI 开发者手册（Agent Capability Interface）
 
-> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.63** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-09-02（v1.0.75 新增 §25 主程序 LLM 工具：Python↔浏览器会话桥 / 抓包记全 / 特权终端 `priv_exec` / ADB 终端 `adb_term`）
+> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.63** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-09-02（v1.0.75 `browser_capture` 抓包记全：请求体 + 响应头 / 状态码 / 响应体）
 >
 > 本文档面向**希望让自己的 Android App 被 Zorv AI（或其他 ACI 控制端）调用**的第三方开发者，也适用于**想基于 `aci-core` 自建控制端**的开发者。
 
@@ -1855,46 +1855,3 @@ override fun onReceive(context: Context, intent: Intent) {
 
 > 本手册由软件工坊基于 `aidl-aci-core` 源码与 Zorv AI 真实接入经验整理。协议细节以 [ACI_PROTOCOL.md](https://github.com/Quor-a/ZorvAI)（开源分支）为准。
 
----
-
-## 25. 主程序 LLM 工具：Python↔浏览器会话桥 与 终端特权/ADB 工具（v1.0.75）
-
-> 版本：v1.0.75 新增 | 适用：Zorv AI 主程序（`com.ai.assistance.quro`）| 最后更新：2026-09-02
-
-本节补充主程序自身在 v1.0.75 新增 / 增强、与 ACI 浏览器链路直接相关的 LLM 工具。它们**不是**对外暴露的 ACI 能力（不进入 `Capability` 清单），而是主程序注册给 LLM 的内置工具（`QuroBuiltInTools`），但都与受控浏览器 / 终端子系统深度联动，故在此统一说明。
-
-### 25.1 Python ↔ 浏览器会话桥（`QuroSessionBridge`）
-
-对话框内的 Brython(Python) 运行环境与内置浏览器共享**同一会话上下文**，解决「在 Python 里算完数据，还得手动把 Cookie/登录态喂给浏览器」的割裂：
-
-- **Cookie 双向同步**：经全局 `android.webkit.CookieManager` 共享，Python 侧发起的 HTTP 与浏览器访问同一站点时携带相同 Cookie（含 `HttpOnly` / 跨域）。
-- **Storage 镜像**：`localStorage` / `sessionStorage` 经 `SharedPreferences` 镜像，浏览器与 Python 侧可读写同一份键值。
-- **Python 驱动浏览器**：Python 侧经注入对象 `window.QuroSession.browserAct(action, params)` 直接调用 `QuroBrowserController` 的 `open / read / crawl / script / act`，无需把页面 HTML 复制回 Python 再贴回。
-
-```python
-# 对话框内 Brython 示例：用浏览器已登录态抓取并解析页面
-from browser import window
-result = window.QuroSession.browserAct("crawl", {"url": "https://example.com/dashboard"})
-print(result["text"])
-```
-
-> 注意：此「Python」指对话框内联的 **Brython（WebView 内 JS 桥）**，与在 proot Ubuntu 容器内跑的 `python3`（`PythonRunTool` 数据处理路径）是两条独立链路，勿混淆。
-
-### 25.2 终端特权执行工具 `priv_exec`
-
-- `run`：以 **ZorvAI 授权 / Shizuku / ROOT（`QuroRootGateway` 自动降级）** 执行命令，阻塞调用须在 IO 线程；返回经 `RootResult.render()` 的文本。
-- `status`：汇总查询特权通道可用状态——Root（`cachedRootAvailable`）、Shizuku（`QuroShizuku.isReady`）、LSPosed（`QuroLSPosed.statusText`）、ZorvAI。
-- LSPosed 仅做**管理器探测**（清单 `KNOWN_MANAGERS`），不注入任何钩子，符合「受控端不得定义 `ai.aci.permission.*`」铁律。
-
-### 25.3 ADB 终端工具 `adb_term`
-
-把 ADB 当终端用（无线调试中枢，复用 `QuroAdbDebug`）：
-
-| 动作 | 说明 |
-|------|------|
-| `shell` | 本机 ADB shell（等同在电脑上 `adb shell`） |
-| `tcp_status` | 查询 TCP/IP 无线调试状态：是否有特权通道、`adbd` 是否在监听、WiFi IP、当前端口、USB 调试是否开启 |
-| `tcp_enable` | 开启 TCP/IP 无线调试（指定端口，默认 5555） |
-| `tcp_disable` | 关闭 TCP/IP 无线调试 |
-
-> 这三个工具（§25.1–25.3）均与既有 pipe/shell 会话链路隔离、不破坏已工作的终端 ACI 12 能力。
