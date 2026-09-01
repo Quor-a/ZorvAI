@@ -13,7 +13,6 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -115,19 +114,16 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         Triple("pkgmgr", "包管理", "apt/apk/dnf/pacman 安装/卸载/升级/查询软件"),
         Triple("sandbox", "隔离沙箱", "免权限文件沙箱与 shell"),
         Triple("db", "私有数据库", "只读查询应用自有 SQLite"),
-        Triple("vispro", "可视化编程", "Mermaid 源码编辑器 + 实时渲染 / 导出 SVG"),
+        Triple("vispro", "可视化编程", "查看 / 编辑 Mermaid 源码，实时渲染并导出 SVG"),
         Triple("flow", "节点编辑器", "拖拽式节点流编程，导出 Mermaid"),
         Triple("browser_ai", "浏览器 AI 操控", "AI 用 browser_act 接管当前浏览器：snapshot/click/fill/eval（先 action=open）"),
-        Triple("crawler", "网页爬虫", "AI 用 web_crawler 批量抓取整站：支持 JS 动态页、同域限流、去重、导出 Markdown（自动打开浏览器并提示 AI）"),
-        Triple("python_ai", "Python", "AI 用 python_run 在 proot 内跑 Python（首次会自动 apt-get install -y python3）"),
-        Triple("mitm", "抓包", "容器内 mitmdump 监听 0.0.0.0:8080；flow 写到 /mnt/quro/mitm/，需配合系统代理/adb reverse/VPN"),
     )
     LazyColumn(
         Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(cards) { (key, title, desc) ->
-            val launch = key in setOf("toolbox", "browser_ai", "crawler", "python_ai", "mitm")
+            val launch = key in setOf("toolbox", "browser_ai")
             Card(
                 Modifier.fillMaxWidth().clickable { if (launch) onLaunch(key) else onSelect(key) },
                 shape = RoundedCornerShape(14.dp),
@@ -341,19 +337,11 @@ private fun WorkbenchPanel(context: Context) {
 // 可视化编程：Mermaid 源码编辑器 + 离线实时渲染
 // ---------------------------------------------------------------------------
 
-private const val MERMAID_SAMPLE = """flowchart TD
-    A[开始] --> B[读取输入]
-    B --> C{条件满足?}
-    C -->|是| D[执行处理]
-    C -->|否| E[返回错误]
-    D --> F[输出结果]
-    E --> F"""
-
 @Composable
 private fun VisProPanel(context: Context) {
     val cs = MaterialTheme.colorScheme
     val isDark = isSystemInDarkTheme()
-    var src by remember { mutableStateOf(MERMAID_SAMPLE) }
+    var src by remember { mutableStateOf("") }
     var pageReady by remember { mutableStateOf(false) }
     var lastSvg by remember { mutableStateOf("") }
     var errMsg by remember { mutableStateOf("") }
@@ -381,14 +369,6 @@ private fun VisProPanel(context: Context) {
         wv.evaluateJavascript("window.__render(${JSONObject.quote(src)}, ${JSONObject.quote(theme)})", null)
     }
 
-    val templates = listOf(
-        "流程图" to "flowchart TD\n    A[开始] --> B(处理) --> C{判断?}\n    C -->|是| D[完成]\n    C -->|否| B",
-        "时序图" to "sequenceDiagram\n    用户->>应用: 发起请求\n    应用-->>用户: 返回结果",
-        "状态图" to "stateDiagram-v2\n    [*] --> 空闲\n    空闲 --> 运行: 启动\n    运行 --> 空闲: 停止",
-        "思维导图" to "mindmap\n    root((主题))\n        分支A\n        分支B",
-        "饼图" to "pie title 占比\n    \"A\" : 40\n    \"B\" : 60",
-    )
-
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Row(
             Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -413,24 +393,12 @@ private fun VisProPanel(context: Context) {
         TextField(
             value = src,
             onValueChange = { src = it; doRender(wvRef.value) },
-            placeholder = { Text("输入 Mermaid 语法", color = Muted) },
+            placeholder = { Text("粘贴 Mermaid 源码查看 / 编辑（AI 生成的可从对话框复制）", color = Muted) },
             modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 200.dp),
             colors = TextFieldDefaults.colors(),
             singleLine = false,
             textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
         )
-
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            templates.forEach { (label, code) ->
-                AssistChip(
-                    onClick = { src = code; doRender(wvRef.value) },
-                    label = { Text(label, fontSize = 12.sp) },
-                )
-            }
-        }
 
         Box(
             Modifier.fillMaxSize().weight(1f).clip(RoundedCornerShape(10.dp))
