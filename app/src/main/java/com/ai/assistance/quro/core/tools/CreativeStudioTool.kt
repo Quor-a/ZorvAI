@@ -560,7 +560,7 @@ AI 网页生成：
 
 **安卓手机终端工具**：
 - Termux：完整 Linux 终端环境
-- QuroTerm：应用内自研终端
+- ZorvAI 沙盒终端：应用内自研终端
 - AIDE Terminal：安卓开发终端
 
 **推荐组合**：

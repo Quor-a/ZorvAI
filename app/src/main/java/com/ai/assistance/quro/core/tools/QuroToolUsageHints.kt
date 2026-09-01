@@ -91,7 +91,7 @@ object QuroToolUsageHints {
         "terminal_write" to "向已开的终端会话写入输入（如半交互命令的后续参数）",
         "terminal_kill" to "「关掉终端」「杀掉那个 shell 进程」",
         "terminal_status" to "「终端还活着吗」「当前会话状态」",
-        "quroterm_exec" to "走 QuroTerm 自研沙盒执行命令（与 terminal_run 同类，按当前通道选用）",
+        "quroterm_exec" to "走 ZorvAI 自研沙盒终端执行命令（与 terminal_run 同类，按当前通道选用）",
 
         // ── TTS ──
         "speak" to "「读给我听」「念一下这段」「大声朗读」「用语音播报」都调用；也可用于把 AI 回复转语音",

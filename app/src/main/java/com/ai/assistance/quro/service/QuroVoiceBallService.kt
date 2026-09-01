@@ -171,7 +171,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
     private fun buildNotification(): Notification {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val chan = NotificationChannel(
-            CHANNEL_ID, "Quro 语音球", NotificationManager.IMPORTANCE_LOW,
+            CHANNEL_ID, "ZorvAI 语音球", NotificationManager.IMPORTANCE_LOW,
         )
         nm.createNotificationChannel(chan)
         val intent = Intent(this, javaClass)

@@ -29,7 +29,7 @@ class QuroTermuxSessionClient(
 
     override fun onCopyTextToClipboard(session: TerminalSession, text: String) {
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
-        cm.setPrimaryClip(ClipData.newPlainText("QuroTerm", text))
+        cm.setPrimaryClip(ClipData.newPlainText("ZorvAI 沙盒终端", text))
     }
 
     override fun onPasteTextFromClipboard(session: TerminalSession?) {

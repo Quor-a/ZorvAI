@@ -101,7 +101,7 @@ class TerminalViewModel(app: Application) : AndroidViewModel(app) {
             "   ╚═╝  ╚═══╝ ╚═════╝   ╚═══╝  ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝",
             "",
             "   ┌──────────────────────────────────────────────────────────────┐",
-            "   │  QuroTerm v1.0  │  Self-Contained Terminal System          │",
+            "   │  ZorvAI 沙盒终端 v1.0  │  Self-Contained Terminal System     │",
             "   │  Type 'help' for commands  │  Type 'theme' for themes      │",
             "   └──────────────────────────────────────────────────────────────┘",
             ""

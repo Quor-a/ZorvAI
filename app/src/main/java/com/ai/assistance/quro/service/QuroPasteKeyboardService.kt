@@ -154,7 +154,7 @@ class QuroPasteKeyboardService : Service(), CoroutineScope by CoroutineScope(Dis
     private fun pasteResult() {
         if (result.isBlank()) return
         val svc = QuroAccessibilityService.instance
-        if (svc == null) { showToast("请先在系统设置开启 Quro 无障碍服务"); return }
+        if (svc == null) { showToast("请先在系统设置开启 ZorvAI 无障碍服务"); return }
         showToast(svc.performPaste(result))
     }
 
@@ -219,7 +219,7 @@ class QuroPasteKeyboardService : Service(), CoroutineScope by CoroutineScope(Dis
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "粘贴：先在目标 App 点一下输入框，再点「粘贴」（走无障碍 SET_TEXT / PASTE）。需开启 Quro 无障碍服务。",
+                        "粘贴：先在目标 App 点一下输入框，再点「粘贴」（走无障碍 SET_TEXT / PASTE）。需开启 ZorvAI 无障碍服务。",
                         fontSize = 11.sp, color = cs.onSurfaceVariant,
                     )
                 }

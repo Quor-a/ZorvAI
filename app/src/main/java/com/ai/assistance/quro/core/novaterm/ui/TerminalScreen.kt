@@ -131,7 +131,7 @@ private fun TerminalToolbar(
                 Spacer(Modifier.width(8.dp))
 
                 Text(
-                    "QuroTerm",
+                    "ZorvAI 沙盒终端",
                     color = theme.toolbarFg,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
