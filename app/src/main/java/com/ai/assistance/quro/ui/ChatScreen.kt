@@ -142,6 +142,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.view.ViewGroup
 import androidx.compose.ui.viewinterop.AndroidView
@@ -2168,6 +2169,15 @@ fun ChatScreen(
                                             c.startActivity(intent)
                                         }
                                         return true
+                                    }
+                                }
+                                // 化小窗同样需要 WebChromeClient：补齐 onReceivedTitle → markTitle，
+                                // 否则化小窗后 status()/snapshot() 的 title 永远为空，AI 看不到页面标题（首个被忽略的真实缺陷）。
+                                webChromeClient = object : WebChromeClient() {
+                                    override fun onReceivedTitle(view: WebView?, title: String?) {
+                                        if (!title.isNullOrEmpty()) {
+                                            com.ai.assistance.quro.core.tools.QuroBrowserController.markTitle(title)
+                                        }
                                     }
                                 }
                                 loadUrl(furl)

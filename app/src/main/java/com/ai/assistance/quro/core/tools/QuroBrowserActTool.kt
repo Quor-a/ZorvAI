@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import com.ai.assistance.quro.core.QuroBrowserBridge
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 
@@ -57,7 +58,19 @@ class BrowserActTool : QuroTool {
                     "已在当前浏览器打开：${QuroBrowserController.resolveBrowserInput(url)}（关键词已转搜索）；操作前请先 status 确认 loaded，或 snapshot 拿元素。"
                 } else {
                     QuroBrowserBridge.open(url)
-                    "已打开应用内置浏览器（前台）：$url；操作前请先 status 确认 loaded，或 snapshot 拿元素。"
+                    // 桥接为异步：LaunchedEffect 下一帧才挂载 WebView 并 attach。
+                    // 轮询等待真正 attach（最多 ~4s），确保后续 status/snapshot 拿到真实 WebView，
+                    // 避免「刚 open 就 status 误报无活跃浏览器」的竞态（这是此前 AI 用不上的直接表现）。
+                    var attached = false
+                    repeat(27) {
+                        if (QuroBrowserController.isAttached()) { attached = true; return@repeat }
+                        delay(150)
+                    }
+                    "已打开应用内置浏览器（前台）：$url" + if (attached) {
+                        "；操作前请先 status 确认 loaded=true，或 snapshot 拿元素 quro-id。"
+                    } else {
+                        "（浏览器仍在挂载中，若 status 仍报无活跃浏览器，请稍候 1 秒再试一次 status）"
+                    }
                 }
             }
             "status" -> QuroBrowserController.status()
