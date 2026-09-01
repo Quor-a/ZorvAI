@@ -121,7 +121,13 @@ class QuroLlmClient(
                 put("max_tokens", effectiveMaxTokens)
             }
             put("messages", JSONArray().also { arr ->
-                messages.forEach { m -> arr.put(messageToJson(m, emitReasoning = !isReasoningModel)) }
+                // 🔧 toolfix-deepseek：发送前强制 OpenAI 工具调用顺序不变式。
+                // 工具调用轮里插入的可见「⏳ 正在执行」进度占位气泡（role=assistant、无 toolCalls）
+                // 随 toLlmMessages 进入 LLM 上下文，落在 assistant[tool_calls] 与 tool 结果之间，
+                // 触发 DeepSeek 严格校验 400：
+                //  "An assistant message with 'tool_calls' must be followed by tool messages ..."。
+                // 该占位只是 UI 提示，序列化为请求前剔除即可让 tool 结果正确贴回 assistant 之后。
+                normalizeToolCallMessages(messages).forEach { m -> arr.put(messageToJson(m, emitReasoning = !isReasoningModel)) }
             })
             if (tools.isNotEmpty()) {
                 put("tools", JSONArray().also { arr ->
@@ -542,6 +548,71 @@ class QuroLlmClient(
             o.put("content", safeContent)
         }
         return o
+    }
+
+    /**
+     * 强制 OpenAI/DeepSeek 工具调用顺序不变式，作为网络边界的终极护栏（对所有 OpenAI 兼容端点生效）。
+     *
+     * 不变式：任何带 tool_calls 的 assistant 消息，其后必须**紧跟**覆盖每个 tool_call_id 的
+     * role=tool 消息，中间不得插入其它角色消息。
+     *
+     * 真实 BUG 根因：工具执行循环里会往会话插入一条可见的「⏳ 正在执行」进度占位气泡
+     * （role=assistant、无 toolCalls）。toLlmMessages 刻意把全部消息（含可见气泡）送进 LLM 上下文，
+     * 于是下一轮请求的序列化序列变成：assistant[tool_calls] → assistant(⏳ 正在执行) → tool[]。
+     * assistant[tool_calls] 与 tool 结果之间被一条非 tool 消息隔开，DeepSeek 严格校验直接 400：
+     *   "An assistant message with 'tool_calls' must be followed by tool messages responding to each 'tool_call_id'."
+     * 该占位只是 UI 提示、不含任何需喂给模型的信息，剔除后 tool 结果即可正确贴回 assistant 之后，序列合法。
+     *
+     * 处理规则（单次顺序扫描）：
+     *  - 遇 assistant[tool_calls]：接管「待回填 tool_call id 集合」（open）。
+     *  - 遇 role=tool：仅当回指当前 open 中的某个 id 才保留，否则视为孤儿结果丢弃（避免未知 tool_call_id）。
+     *  - 遇 user/assistant 文本：若仍有未闭合的工具调用（open 非空），说明中间插了非 tool 消息（典型即
+     *    「⏳ 正在执行」占位）→ 剔除该插队消息，让后续 tool 结果能正确贴上；open 不在此重置（结果可能在插队之后）。
+     *  - 扫描结束若 open 仍非空（极端、pruneOrphanToolMessages 未覆盖时）：从原 assistant 剥离这些
+     *    dangling tool_calls，杜绝「声明调用却无结果」导致的 400。
+     */
+    private fun normalizeToolCallMessages(input: List<QuroChatMessage>): List<QuroChatMessage> {
+        val out = ArrayList<QuroChatMessage>(input.size)
+        // 当前「等待 tool 结果回填」的 tool_call id 集合（LinkedHashSet 保顺序）。
+        var open = linkedSetOf<String>()
+        for (m in input) {
+            when {
+                m.toolCalls != null && m.toolCalls.isNotEmpty() -> {
+                    // 新的 assistant 工具调用组。接管 open 集合（上一组在 toLlmMessages 的
+                    // pruneOrphanToolMessages 保证下应已闭合，这里直接覆盖即可）。
+                    open = m.toolCalls.map { it.id }.toCollection(linkedSetOf())
+                    out.add(m)
+                }
+                m.role == "tool" -> {
+                    // tool 结果：仅当回指当前开放调用才保留；否则孤儿结果丢弃。
+                    if (m.toolCallId != null && m.toolCallId in open) {
+                        out.add(m)
+                        open.remove(m.toolCallId)
+                    } else {
+                        Log.d(TAG, "🔧 丢弃孤儿 tool 结果（tool_call_id=${m.toolCallId ?: "null"} 无对应开放调用）")
+                    }
+                }
+                else -> {
+                    // user / assistant 文本：open 非空说明有未闭合工具调用、中间插了非 tool 消息 → 剔除插队消息。
+                    if (open.isNotEmpty()) {
+                        Log.d(TAG, "🔧 剔除工具调用组之间的插队消息（role=${m.role}），修复 DeepSeek 工具调用顺序 400")
+                    } else {
+                        out.add(m)
+                    }
+                }
+            }
+        }
+        // 终态兜底：仍有未闭合调用 → 从原 assistant 剥离 dangling tool_calls。
+        if (open.isNotEmpty()) {
+            val idx = out.indexOfLast { it.toolCalls != null && it.toolCalls!!.any { c -> c.id in open } }
+            if (idx >= 0) {
+                val a = out[idx]
+                val kept = a.toolCalls!!.filter { it.id !in open }
+                out[idx] = if (kept.isEmpty()) a.copy(toolCalls = null) else a.copy(toolCalls = kept)
+                Log.d(TAG, "🔧 剥离 ${open.size} 个无结果 tool_call，避免 assistant 声明调用却无 tool 结果")
+            }
+        }
+        return out
     }
 
     private fun parse(json: String): QuroLlmResult = try {
