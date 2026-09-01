@@ -56,9 +56,159 @@ object QuroBrowserController {
         }
     }
 
+    // ── 抓包（request body + 响应头/状态码/响应体，经 JS 钩子 fetch/xhr）──
+    data class CapturedApi(
+        val source: String,
+        val url: String,
+        val method: String,
+        val reqHeaders: Map<String, String>,
+        val reqBody: String,
+        val respStatus: Int?,
+        val respHeaders: Map<String, String>,
+        val respBody: String,
+        val error: String?,
+        val time: Long
+    )
+
+    private object CaptureBuffer {
+        private val list = mutableListOf<CapturedApi>()
+        private val lock = Any()
+        const val MAX = 500
+        @Volatile var enabled = true
+        fun add(r: CapturedApi) {
+            if (!enabled) return
+            synchronized(lock) {
+                list.add(r)
+                if (list.size > MAX) list.removeAt(0)
+            }
+        }
+        fun snapshot(limit: Int = 200, filter: String = ""): List<CapturedApi> = synchronized(lock) {
+            val src = if (filter.isEmpty()) list else list.filter {
+                it.url.contains(filter, true) || it.method.contains(filter, true) ||
+                it.reqBody.contains(filter, true) || it.respBody.contains(filter, true)
+            }
+            src.takeLast(limit)
+        }
+        fun clear() = synchronized(lock) { list.clear() }
+        fun size(): Int = synchronized(lock) { list.size }
+        fun setOn(on: Boolean) { enabled = on; if (!on) clear() }
+    }
+
+    private val captureBridge = object {
+        @JavascriptInterface
+        fun onCaptured(json: String?) {
+            if (json.isNullOrEmpty()) return
+            runCatching {
+                val o = JSONObject(json)
+                val reqH = mutableMapOf<String, String>()
+                o.optJSONObject("reqHeaders")?.let { h -> h.keys().forEach { k -> reqH[k] = h.optString(k) } }
+                val respH = mutableMapOf<String, String>()
+                o.optJSONObject("respHeaders")?.let { h -> h.keys().forEach { k -> respH[k] = h.optString(k) } }
+                val rawStatus = o.opt("respStatus")
+                val status: Int? = if (rawStatus is Int && rawStatus >= 0) rawStatus else null
+                val err = if (o.has("error") && !o.isNull("error")) o.optString("error") else null
+                CaptureBuffer.add(
+                    CapturedApi(
+                        source = o.optString("source", "unknown"),
+                        url = o.optString("url", ""),
+                        method = o.optString("method", "GET"),
+                        reqHeaders = reqH,
+                        reqBody = o.optString("reqBody", ""),
+                        respStatus = status,
+                        respHeaders = respH,
+                        respBody = o.optString("respBody", ""),
+                        error = err,
+                        time = if (o.has("time")) o.optLong("time") else System.currentTimeMillis()
+                    )
+                )
+            }
+        }
+    }
+
+    private val CAPTURE_HOOK_JS = """(function(){
+  if (window.__quroCapInstalled) return;
+  window.__quroCapInstalled = true;
+  function clamp(s, n){ if(!s) return ''; s=String(s); return s.length>n? s.slice(0,n)+'\n…[truncated '+(s.length-n)+' chars]':s; }
+  function post(o){ try{ QuroCapture.onCaptured(JSON.stringify(o)); }catch(e){} }
+  function hdrObj(h){ var o={}; try{ if(h&&h.forEach){h.forEach(function(v,k){o[k]=v;});} else if(h){ for(var k in h){ if(h.hasOwnProperty(k)) o[k]=h[k]; } } }catch(e){} return o; }
+  try{
+    var _fetch = window.fetch ? window.fetch.bind(window) : null;
+    if(_fetch){ window.fetch = function(input, init){
+      var url = (typeof input==='string')? input : (input&&input.url? input.url : '');
+      var method = (init&&init.method)? String(init.method).toUpperCase() : 'GET';
+      var reqHeaders = hdrObj(init? init.headers : null);
+      var rb = init? init.body : undefined;
+      var reqBody=''; try{ if(typeof rb==='string') reqBody=rb; else if(rb&&rb.toString){var s=rb.toString(); if(s&&s.indexOf('[object')!==0) reqBody=s;} }catch(e){}
+      var t0 = Date.now();
+      return _fetch(input, init).then(function(resp){
+        var respHeaders={}; try{ resp.headers.forEach(function(v,k){respHeaders[k]=v;}); }catch(e){}
+        var status=resp.status;
+        var bodyPromise; try{ bodyPromise = resp.clone().text(); }catch(e){ bodyPromise=Promise.resolve(''); }
+        return bodyPromise.then(function(bt){
+          post({source:'fetch',url:url,method:method,reqHeaders:reqHeaders,reqBody:clamp(reqBody,65536),respStatus:status,respHeaders:respHeaders,respBody:clamp(bt||'',262144),time:t0});
+          return resp;
+        }).catch(function(){ post({source:'fetch',url:url,method:method,reqHeaders:reqHeaders,reqBody:clamp(reqBody,65536),respStatus:status,time:t0}); return resp; });
+      }).catch(function(err){ post({source:'fetch',url:url,method:method,reqHeaders:reqHeaders,reqBody:clamp(reqBody,65536),error:String(err&&err.message?err.message:err),time:t0}); throw err; });
+    };}
+  }catch(e){}
+  try{
+    var _xhrOpen = XMLHttpRequest.prototype.open;
+    var _xhrSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(m,u){ this.__qm=m; this.__qu=u; this.__qh={}; this.__qb=''; return _xhrOpen.apply(this, arguments); };
+    var _xhrSet = XMLHttpRequest.prototype.setRequestHeader;
+    XMLHttpRequest.prototype.setRequestHeader = function(k,v){ try{ this.__qh[k]=v; }catch(e){} return _xhrSet.apply(this, arguments); };
+    XMLHttpRequest.prototype.send = function(body){
+      try{ if(typeof body==='string') this.__qb=body; else if(body&&body.toString){var s=body.toString(); if(s&&s.indexOf('[object')!==0) this.__qb=s;} }catch(e){}
+      var self=this; var t0=Date.now();
+      this.addEventListener('readystatechange', function(){
+        if(self.readyState===4){
+          var rh={}; try{ var th=self.getAllResponseHeaders(); if(th){ th.split(/\r?\n/).forEach(function(l){ var i=l.indexOf(':'); if(i>0){ var k=l.slice(0,i).trim(); var v=l.slice(i+1).trim(); if(k) rh[k]=v; } }); } }catch(e){}
+          var rb=''; try{ rb=self.responseText||''; }catch(e){}
+          post({source:'xhr',url:self.__qu,method:self.__qm,reqHeaders:self.__qh,reqBody:clamp(self.__qb,65536),respStatus:self.status,respHeaders:rh,respBody:clamp(rb,262144),time:t0});
+        }
+      });
+      return _xhrSend.apply(this, arguments);
+    };
+  }catch(e){}
+})();"""
+
+    /** 注入 fetch/xhr 抓包钩子（幂等，window.__quroCapInstalled 防护）。 */
+    fun injectCaptureHook(wv: WebView) {
+        try { wv.evaluateJavascript(CAPTURE_HOOK_JS, null) } catch (_: Throwable) {}
+    }
+
+    /** 导出抓包快照为 JSON（含请求体 / 响应头 / 状态码 / 响应体）。供 browser_act capture / web_crawler include_captures 使用。 */
+    fun getCaptureSnapshotJson(limit: Int = 200, filter: String = ""): String {
+        val list = CaptureBuffer.snapshot(limit, filter)
+        val arr = JSONArray()
+        list.forEach { r ->
+            arr.put(JSONObject().apply {
+                put("source", r.source)
+                put("url", r.url)
+                put("method", r.method)
+                put("req_headers", JSONObject(r.reqHeaders))
+                put("req_body", r.reqBody)
+                put("resp_status", r.respStatus ?: JSONObject.NULL)
+                put("resp_headers", JSONObject(r.respHeaders))
+                put("resp_body", r.respBody)
+                if (r.error != null) put("error", r.error)
+                put("time", r.time)
+            })
+        }
+        return JSONObject().put("count", list.size).put("requests", arr).toString()
+    }
+
+    fun clearCapture() = CaptureBuffer.clear()
+    fun isCaptureEnabled(): Boolean = CaptureBuffer.enabled
+    fun setCaptureEnabled(on: Boolean) = CaptureBuffer.setOn(on)
+
     fun attach(wv: WebView) {
         active = wv
-        runOnMain { wv.addJavascriptInterface(bridge, "QuroBridge") }
+        runOnMain {
+            wv.addJavascriptInterface(bridge, "QuroBridge")
+            wv.addJavascriptInterface(captureBridge, "QuroCapture")
+            QuroSessionBridge.register(wv)
+        }
     }
 
     fun detach(wv: WebView) {
@@ -74,6 +224,7 @@ object QuroBrowserController {
     /** 页面开始加载（WebViewClient.onPageStarted 调用）。 */
     fun markPageStarted() {
         pageLoaded = false
+        active?.let { injectCaptureHook(it) }
     }
 
     /** 页面加载完成（WebViewClient.onPageFinished 调用）。 */

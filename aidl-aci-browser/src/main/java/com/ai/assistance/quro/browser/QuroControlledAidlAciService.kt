@@ -189,7 +189,7 @@ class QuroControlledAidlAciService : BaseAidlAciService() {
         // browser_capture（v1.0.12-capture 新增：抓包 / 流量拦截）
         try {
             caps.add(
-                Capability.create("browser_capture", "抓包：拦截并列出当前页发出的网络请求（URL/方法/请求头/是否主框架），用于流量分析")
+                Capability.create("browser_capture", "抓包：拦截并列出当前页发出的网络请求。shouldInterceptRequest 记请求元数据(URL/方法/请求头/是否主框架)；fetch/xhr 钩子额外补全 请求体 + 响应状态码/响应头/响应体，可直接用于 API 数据分析、请求重放与爬虫取真实接口数据")
                     .addParam("action", "string", false, "操作：list(默认)/clear/enable/disable")
                     .addParam("limit", "string", false, "返回条数上限，默认200")
                     .addParam("filter", "string", false, "按 url/方法/请求头 关键字过滤")
@@ -1470,6 +1470,12 @@ class QuroControlledAidlAciService : BaseAidlAciService() {
             o.put("method", it.method)
             o.put("headers", it.headers)
             o.put("is_main_frame", it.isMainFrame)
+            o.put("source", it.source)
+            if (it.requestBody != null) o.put("request_body", it.requestBody)
+            if (it.responseStatus != null) o.put("response_status", it.responseStatus)
+            if (it.responseHeaders != null) o.put("response_headers", it.responseHeaders)
+            if (it.responseBody != null) o.put("response_body", it.responseBody)
+            if (it.error != null) o.put("error", it.error)
             o.put("time", it.time)
             arr.put(o)
         }
@@ -1478,7 +1484,7 @@ class QuroControlledAidlAciService : BaseAidlAciService() {
             .putResult("requests", arr.toString())
             .putResult("count", "${items.size}")
             .putResult("enabled", BrowserCore.isCaptureEnabled())
-            .putResult("note", "v1 抓包=请求侧拦截(WebView shouldInterceptRequest)，可看 URL/方法/请求头；响应状态码与响应体需 Chrome DevTools 协议，后续支持")
+            .putResult("note", "v2 抓包：shouldInterceptRequest 记请求元数据(net)，fetch/xhr 钩子额外记 请求体 + 响应状态码/响应头/响应体(js)。可直接用于 API 数据分析、请求重放与爬虫取真实接口数据")
     }
 
     /** 页面内查找（find / next / prev / clear）。 */

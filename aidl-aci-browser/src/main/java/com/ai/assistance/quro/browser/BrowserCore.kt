@@ -1,18 +1,23 @@
 package com.ai.assistance.quro.browser
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
+import android.webkit.ConsoleMessage
 import android.webkit.GeolocationPermissions
 import android.webkit.PermissionRequest
-import android.webkit.ConsoleMessage
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import java.util.Random
@@ -64,7 +69,146 @@ object BrowserCore {
 
     @Synchronized
     fun init(context: Context) {
-        if (appContext == null) appContext = context.applicationContext
+        if (appContext == null) {
+            appContext = context.applicationContext
+            registerProxyReceiver(appContext!!)
+            applyProxyFromPrefs(appContext!!)
+        }
+    }
+
+    // ── 代理真正注入 WebView（v8 · 修复「空壳」：之前弹窗只写 SharedPreferences，代码从不消费）──
+    // 代理配置与 app 模块 QuroBrowserScreen 共用同一份 SharedPreferences("quro_browser")。
+    // ProxyController(API30+) / WebView.setHttpProxy(API29) 是进程级全局设置，对进程内所有 WebView
+    // （含 BrowserCore 常驻实例、BrowserActivity 的显示实例）生效。设置变更经本地广播即时重应用。
+    const val ACTION_PROXY_CHANGED = "com.ai.assistance.quro.browser.ACTION_PROXY_CHANGED"
+    private const val BM_PREFS = "quro_browser"
+
+    @Volatile private var proxyReceiver: BroadcastReceiver? = null
+    @Volatile private var proxyReceiverRegistered = false
+    @Volatile private var lastProxyKey: String? = null
+
+    private fun proxyKey(enabled: Boolean, type: String, host: String, port: String): String =
+        "$enabled|$type|$host|$port"
+
+    /** 读取 quro_browser 代理配置并真正注入 WebView 网络栈；enabled=false 则清除注入。 */
+    @Synchronized
+    fun applyProxyFromPrefs(context: Context) {
+        try {
+            val sp = context.getSharedPreferences(BM_PREFS, Context.MODE_PRIVATE)
+            val enabled = sp.getBoolean("proxy_enabled", false)
+            val type = sp.getString("proxy_type", "HTTP") ?: "HTTP"
+            val host = sp.getString("proxy_host", "") ?: ""
+            val port = sp.getString("proxy_port", "") ?: ""
+            val key = proxyKey(enabled, type, host, port)
+            if (key == lastProxyKey) return   // 与上次一致，跳过重复注入（避免重复写日志/重设）
+            lastProxyKey = key
+            if (!enabled) {
+                clearProxy(context)
+                DiagBuffer.append("Proxy", "ℹ️ 代理已关闭，已清除注入")
+                return
+            }
+            if (host.isBlank() || port.isBlank()) {
+                DiagBuffer.append("Proxy", "⚠️ 代理主机/端口为空，跳过注入")
+                return
+            }
+            val portNum = port.toIntOrNull()
+            if (portNum == null || portNum <= 0 || portNum > 65535) {
+                DiagBuffer.append("Proxy", "⚠️ 代理端口非法: $port")
+                return
+            }
+            val rule = if (type.equals("SOCKS5", true)) "socks://$host:$portNum"
+                       else "$host:$portNum"
+            setProxyOverride(context, rule, type)
+        } catch (e: Throwable) {
+            DiagBuffer.append("Proxy", "⚠️ 代理注入异常: ${e.message}")
+        }
+    }
+
+    private fun setProxyOverride(context: Context, rule: String, type: String) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // 注意：本机 compileSdk 桩里缺失 android.webkit.ProxyController / ProxyConfig 符号，
+                // 但运行时 API30+ 设备均存在，故经反射调用（仅消费，不依赖编译期符号）。
+                val controllerCls = Class.forName("android.webkit.ProxyController")
+                val controller = controllerCls.getMethod("getInstance").invoke(null)
+                val builderCls = Class.forName("android.webkit.ProxyConfig\$Builder")
+                val builder = builderCls.getDeclaredConstructor().newInstance()
+                // 严格走代理：不 addDirect()，确保流量确实经过代理（非静默回落直连）
+                builderCls.getMethod("addProxyRule", String::class.java).invoke(builder, rule)
+                val config = builderCls.getMethod("build").invoke(builder)
+                val executor = Executor { it.run() }
+                val listener = Runnable { DiagBuffer.append("Proxy", "✅ 代理已注入(ProxyController): $rule") }
+                controllerCls.getMethod(
+                    "setProxyOverride",
+                    Class.forName("android.webkit.ProxyConfig"),
+                    Executor::class.java,
+                    Runnable::class.java
+                ).invoke(controller, config, executor, listener)
+            } else if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
+                if (type.equals("SOCKS5", true)) {
+                    DiagBuffer.append("Proxy", "⚠️ SOCKS5 需 Android 11+；当前按 HTTP 注入 $rule")
+                }
+                val hostOnly = rule.substringBefore(":")
+                val portNum = rule.substringAfter(":").toIntOrNull() ?: 0
+                WebView::class.java
+                    .getMethod("setHttpProxy", String::class.java, Int::class.javaPrimitiveType, String::class.java)
+                    .invoke(null, hostOnly, portNum, "")
+                DiagBuffer.append("Proxy", "✅ 代理已注入(setHttpProxy): $rule")
+            } else {
+                DiagBuffer.append("Proxy", "⚠️ 当前系统版本不支持 WebView 代理注入(API<29)")
+            }
+        } catch (e: Throwable) {
+            DiagBuffer.append("Proxy", "⚠️ 代理注入失败: ${e.message}")
+        }
+    }
+
+    private fun clearProxy(context: Context) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val controllerCls = Class.forName("android.webkit.ProxyController")
+                val controller = controllerCls.getMethod("getInstance").invoke(null)
+                val executor = Executor { it.run() }
+                val listener = Runnable { DiagBuffer.append("Proxy", "ℹ️ 已清除代理(ProxyController)") }
+                controllerCls.getMethod(
+                    "clearProxyOverride",
+                    Executor::class.java,
+                    Runnable::class.java
+                ).invoke(controller, executor, listener)
+            } else if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
+                WebView::class.java
+                    .getMethod("setHttpProxy", String::class.java, Int::class.javaPrimitiveType, String::class.java)
+                    .invoke(null, "", 0, "")
+                DiagBuffer.append("Proxy", "ℹ️ 已清除代理(setHttpProxy)")
+            }
+        } catch (e: Throwable) {
+            DiagBuffer.append("Proxy", "⚠️ 清除代理失败: ${e.message}")
+        }
+    }
+
+    private fun registerProxyReceiver(ctx: Context) {
+        if (proxyReceiverRegistered) return
+        try {
+            val r = object : BroadcastReceiver() {
+                override fun onReceive(c: Context?, intent: Intent?) {
+                    if (intent?.action == ACTION_PROXY_CHANGED) {
+                        val appCtx = appContext ?: c ?: return@onReceive
+                        applyProxyFromPrefs(appCtx)
+                    }
+                }
+            }
+            val filter = IntentFilter(ACTION_PROXY_CHANGED)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ctx.registerReceiver(r, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                ctx.registerReceiver(r, filter)
+            }
+            proxyReceiver = r
+            proxyReceiverRegistered = true
+            DiagBuffer.append("Proxy", "✅ 代理变更广播接收器已注册")
+        } catch (e: Throwable) {
+            DiagBuffer.append("Proxy", "⚠️ 注册代理广播失败: ${e.message}")
+        }
     }
 
     /** BrowserActivity 把 XML 里的 WebView 注册过来，并挂上权限自动授权的 WebChromeClient。 */
@@ -129,6 +273,11 @@ object BrowserCore {
                     return true
                 }
             }
+            // 【v8】注册时把代理配置真正注入该 WebView 网络栈（ProxyController 进程级生效）
+            applyProxyFromPrefs(wv.context)
+            // 【v2 抓包】注册 fetch/xhr 钩子桥 + 注入钩子（幂等）
+            registerCaptureBridge(wv)
+            injectCaptureHook(wv)
         } catch (e: Throwable) {
             DiagBuffer.append("Core", "⚠️ 挂 WebChromeClient 失败: ${e.message}")
         }
@@ -159,8 +308,11 @@ object BrowserCore {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
             }
+            registerCaptureBridge(heldWv)
         }
         displayWv = heldWv
+        applyProxyFromPrefs(context)
+        injectCaptureHook(heldWv)
         return heldWv!!
     }
 
@@ -1045,7 +1197,11 @@ if (!window.__aciNetInstalled) {
         fun clear() = synchronized(lock) { list.clear() }
     }
 
-    fun reportPageEvent(type: String, url: String) = EventBuffer.add(type, url)
+    fun reportPageEvent(type: String, url: String) {
+        EventBuffer.add(type, url)
+        // 每次主文档开始加载都重新注入 fetch/xhr 钩子（页面刷新/跳转后 window 状态重置）
+        if (type == "page_started") injectCaptureHook(displayWv)
+    }
     fun getPageEvents(limit: Int = 100): List<PageEvent> = EventBuffer.snapshot(limit)
     fun clearPageEvents() = EventBuffer.clear()
 
@@ -1076,13 +1232,19 @@ if (!window.__aciNetInstalled) {
 
     // ── 抓包（packet capture）：请求侧拦截缓冲 ──
 
-    /** 单条被拦截的请求记录。 */
+    /** 单条被拦截的请求记录。v2 起扩展：JS 钩子(fetch/xhr)会补全 请求体 + 响应状态码/响应头/响应体。 */
     data class CapturedRequest(
         val url: String,
         val method: String,
         val headers: String,
         val isMainFrame: Boolean,
-        val time: Long
+        val time: Long,
+        val source: String = "net",              // "net"=shouldInterceptRequest 元数据，"js"=fetch/xhr 钩子
+        val requestBody: String? = null,
+        val responseStatus: Int? = null,
+        val responseHeaders: String? = null,
+        val responseBody: String? = null,
+        val error: String? = null
     )
 
     /** 请求抓包环形缓冲（线程安全；shouldInterceptRequest 在后台线程调用，故全程 synchronized）。 */
@@ -1112,7 +1274,101 @@ if (!window.__aciNetInstalled) {
 
     /** WebViewClient.shouldInterceptRequest 回调时调用，记录请求元数据（不修改响应）。 */
     fun captureRequest(url: String, method: String, headers: String, isMainFrame: Boolean) {
-        CaptureBuffer.add(CapturedRequest(url, method, headers, isMainFrame, System.currentTimeMillis()))
+        CaptureBuffer.add(CapturedRequest(url, method, headers, isMainFrame, System.currentTimeMillis(), source = "net"))
+    }
+
+    /** JS 抓包钩子：包装 window.fetch / XMLHttpRequest，捕获 请求体 + 响应头/状态码/响应体，经 QuroCapture 桥回传。 */
+    private val CAPTURE_HOOK_JS = """(function(){
+  if (window.__quroCapInstalled) return;
+  window.__quroCapInstalled = true;
+  function clamp(s, n){ if(!s) return ''; s=String(s); return s.length>n? s.slice(0,n)+'\n…[truncated '+(s.length-n)+' chars]':s; }
+  function post(o){ try{ QuroCapture.onCaptured(JSON.stringify(o)); }catch(e){} }
+  function hdrObj(h){ var o={}; try{ if(h&&h.forEach){h.forEach(function(v,k){o[k]=v;});} else if(h){ for(var k in h){ if(h.hasOwnProperty(k)) o[k]=h[k]; } } }catch(e){} return o; }
+  try{
+    var _fetch = window.fetch ? window.fetch.bind(window) : null;
+    if(_fetch){ window.fetch = function(input, init){
+      var url = (typeof input==='string')? input : (input&&input.url? input.url : '');
+      var method = (init&&init.method)? String(init.method).toUpperCase() : 'GET';
+      var reqHeaders = hdrObj(init? init.headers : null);
+      var rb = init? init.body : undefined;
+      var reqBody=''; try{ if(typeof rb==='string') reqBody=rb; else if(rb&&rb.toString){var s=rb.toString(); if(s&&s.indexOf('[object')!==0) reqBody=s;} }catch(e){}
+      var t0 = Date.now();
+      return _fetch(input, init).then(function(resp){
+        var respHeaders={}; try{ resp.headers.forEach(function(v,k){respHeaders[k]=v;}); }catch(e){}
+        var status=resp.status;
+        var bodyPromise; try{ bodyPromise = resp.clone().text(); }catch(e){ bodyPromise=Promise.resolve(''); }
+        return bodyPromise.then(function(bt){
+          post({source:'fetch',url:url,method:method,reqHeaders:reqHeaders,reqBody:clamp(reqBody,65536),respStatus:status,respHeaders:respHeaders,respBody:clamp(bt||'',262144),time:t0});
+          return resp;
+        }).catch(function(){ post({source:'fetch',url:url,method:method,reqHeaders:reqHeaders,reqBody:clamp(reqBody,65536),respStatus:status,time:t0}); return resp; });
+      }).catch(function(err){ post({source:'fetch',url:url,method:method,reqHeaders:reqHeaders,reqBody:clamp(reqBody,65536),error:String(err&&err.message?err.message:err),time:t0}); throw err; });
+    };}
+  }catch(e){}
+  try{
+    var _xhrOpen = XMLHttpRequest.prototype.open;
+    var _xhrSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(m,u){ this.__qm=m; this.__qu=u; this.__qh={}; this.__qb=''; return _xhrOpen.apply(this, arguments); };
+    var _xhrSet = XMLHttpRequest.prototype.setRequestHeader;
+    XMLHttpRequest.prototype.setRequestHeader = function(k,v){ try{ this.__qh[k]=v; }catch(e){} return _xhrSet.apply(this, arguments); };
+    XMLHttpRequest.prototype.send = function(body){
+      try{ if(typeof body==='string') this.__qb=body; else if(body&&body.toString){var s=body.toString(); if(s&&s.indexOf('[object')!==0) this.__qb=s;} }catch(e){}
+      var self=this; var t0=Date.now();
+      this.addEventListener('readystatechange', function(){
+        if(self.readyState===4){
+          var rh={}; try{ var th=self.getAllResponseHeaders(); if(th){ th.split(/\r?\n/).forEach(function(l){ var i=l.indexOf(':'); if(i>0){ var k=l.slice(0,i).trim(); var v=l.slice(i+1).trim(); if(k) rh[k]=v; } }); } }catch(e){}
+          var rb=''; try{ rb=self.responseText||''; }catch(e){}
+          post({source:'xhr',url:self.__qu,method:self.__qm,reqHeaders:self.__qh,reqBody:clamp(self.__qb,65536),respStatus:self.status,respHeaders:rh,respBody:clamp(rb,262144),time:t0});
+        }
+      });
+      return _xhrSend.apply(this, arguments);
+    };
+  }catch(e){}
+})();"""
+
+    /** JS 抓包桥：页面经 QuroCapture.onCaptured(json) 回传 fetch/xhr 记录（@JavascriptInterface 在独立线程回调，CaptureBuffer 已同步）。 */
+    private val captureBridge = object {
+        @JavascriptInterface
+        fun onCaptured(json: String?) {
+            if (json.isNullOrEmpty()) return
+            runCatching {
+                val o = JSONObject(json)
+                val reqH = mutableMapOf<String, String>()
+                o.optJSONObject("reqHeaders")?.let { h -> h.keys().forEach { k -> reqH[k] = h.optString(k) } }
+                val respH = mutableMapOf<String, String>()
+                o.optJSONObject("respHeaders")?.let { h -> h.keys().forEach { k -> respH[k] = h.optString(k) } }
+                val rawStatus = o.opt("respStatus")
+                val status: Int? = if (rawStatus is Int && rawStatus >= 0) rawStatus else null
+                val err = if (o.has("error") && !o.isNull("error")) o.optString("error") else null
+                CaptureBuffer.add(
+                    CapturedRequest(
+                        url = o.optString("url", ""),
+                        method = o.optString("method", "GET"),
+                        headers = reqH.entries.joinToString("\n") { (k, v) -> "$k: $v" },
+                        isMainFrame = false,
+                        time = if (o.has("time")) o.optLong("time") else System.currentTimeMillis(),
+                        source = o.optString("source", "js"),
+                        requestBody = o.optString("reqBody", ""),
+                        responseStatus = status,
+                        responseHeaders = respH.entries.joinToString("\n") { (k, v) -> "$k: $v" },
+                        responseBody = o.optString("respBody", ""),
+                        error = err
+                    )
+                )
+            }.onFailure { DiagBuffer.append("Capture", "⚠️ 解析抓包 JSON 失败: ${it.message}") }
+        }
+    }
+
+    /** 在 WebView 上注册抓包 JS 桥（幂等，重复注册同名接口会覆盖）。 */
+    @Synchronized
+    private fun registerCaptureBridge(wv: WebView?) {
+        if (wv == null) return
+        try { wv.addJavascriptInterface(captureBridge, "QuroCapture") } catch (_: Throwable) {}
+    }
+
+    /** 注入 fetch/xhr 抓包钩子（幂等，window.__quroCapInstalled 防护）。 */
+    fun injectCaptureHook(wv: WebView?) {
+        if (wv == null) return
+        try { wv.evaluateJavascript(CAPTURE_HOOK_JS, null) } catch (_: Throwable) {}
     }
 
     fun setCaptureEnabled(on: Boolean) = CaptureBuffer.setOn(on)
