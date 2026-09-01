@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.terminal.QuroTerminalController
 import com.ai.assistance.quro.ui.theme.Line
@@ -93,6 +94,38 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
             val st = QuroLinuxEnv.probe(ctx)
             termReady = st.available
         }
+    }
+
+    // 探测各环境真实安装状态：用 command -v 逐个检查二进制是否在 proot 内可达。
+    // 修复：envStates 此前初始化为空且从未被赋值，导致 Python/SSH/Node 等所有环境
+    // 永久显示「未安装」/「未注册」，即便实际已可用（用户看到「未注册（功能正常）」的根因）。
+    suspend fun reprobeEnvStates() {
+        if (!QuroLinuxEnv.probeLenient(ctx).available) return
+        runCatching {
+            val probeCmd = "for b in python3 node pnpm ssh java gradle rustc go; do command -v \$b >/dev/null 2>&1 && echo \"\$b:1\" || echo \"\$b:0\"; done"
+            val (code, out) = QuroLinuxEnv.run(ctx, probeCmd, timeoutMs = 15000)
+            if (code == 0) {
+                val m = out.lines().mapNotNull { l ->
+                    val p = l.indexOf(':')
+                    if (p > 0) l.substring(0, p) to (l.substring(p + 1).trim() == "1") else null
+                }.toMap()
+                envStates = mapOf(
+                    "python" to (m["python3"] == true),
+                    "node" to (m["node"] == true),
+                    "pnpm" to (m["pnpm"] == true),
+                    "ssh" to (m["ssh"] == true),
+                    "java" to (m["java"] == true),
+                    "gradle" to (m["gradle"] == true),
+                    "rust" to (m["rustc"] == true),
+                    "go" to (m["go"] == true),
+                )
+            }
+        }
+    }
+
+    // 进入即探测真实环境状态
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { reprobeEnvStates() }
     }
 
     // 简化的环境检查命令
@@ -170,7 +203,13 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                     Text("请先在「终端」页面安装 Linux 环境，再部署开发环境。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
                 }
             } else {
-                Text("终端环境已就绪 ✓", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 8.dp))
+                Row(Modifier.padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("终端环境已就绪 ✓", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = { scope.launch(Dispatchers.IO) { reprobeEnvStates() } }) {
+                        Text("刷新状态", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
             }
 
             // 各开发环境分组

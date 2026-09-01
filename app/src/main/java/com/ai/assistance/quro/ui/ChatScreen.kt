@@ -248,7 +248,6 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.ui.geometry.Offset
@@ -2731,12 +2730,11 @@ private fun MessageRow(
                 } else {
                     Modifier.padding(if (narrow) 10.dp else 12.dp, if (narrow) 8.dp else 10.dp)
                 }
-                Box(
-                    bubbleModifier
-                        .combinedClickable(
-                            onClick = { copyPlain(ctx, displayText) }
-                        )
-                ) {
+                // 自由复制修复：此前父 Box 挂了 combinedClickable(onClick=copyPlain)，
+                // 其长按手势会吞掉 SelectionContainer 的文本选区手势，且单击即整段复制，
+                // 导致「长按自由选词复制」失效。移除此点击处理，让 SelectionContainer 接管选区；
+                // 整段复制仍由下方「复制」操作按钮提供。
+                Box(bubbleModifier) {
                     val blocks = remember(cleanText) { parseBlocks(cleanText) }
                     SelectionContainer {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {

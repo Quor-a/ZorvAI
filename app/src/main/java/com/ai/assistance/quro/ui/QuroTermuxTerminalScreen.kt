@@ -143,9 +143,11 @@ private fun rememberPaneState(
     val lastCopiedLine = remember { mutableStateOf(-1) }
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            if (!QuroLinuxEnv.probeLenient(context).available) {
-                QuroLinuxEnv.ensureInstalledBlocking(context)
-            }
+            // 立即建立会话：env 已就绪走 proot/Linux，否则设备 sh 兜底（create 已保证永不抛、永不为 null）。
+            // 关键修复：移除 UI 启动路径里的阻塞式 ensureInstalledBlocking——
+            // 它在 env 未就绪时会触发 rootfs 下载（无超时、无网络/被墙时永久卡死），
+            // 导致 session.value 永远赋不上 → 终端永久停在「正在启动终端…」。
+            // env 未就绪改由下方 DEVICE 分支触发非阻塞 setup，安装完成由 sandboxState LaunchedEffect 自动重建为 proot。
             session.value = if (vmFirst) QuroShellSession.create(context) else QuroShellSession.createLocal(context)
             // 自动修复：若回退到设备 shell（proot 启动失败 / 环境损坏 / rootfs 缺失），
             // 后台重装 Linux 环境，待 Ready 后由屏幕级 LaunchedEffect 自动重建为 proot/Linux 会话，

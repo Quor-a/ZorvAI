@@ -710,12 +710,17 @@ class QuroShellSession private constructor(
             Log.d(TAG, msg)
         }
 
-    fun create(context: Context): QuroShellSession {
+        fun create(context: Context): QuroShellSession {
         // v1.0.70 行为：直连 proot/设备 sh，不尝试 VM 优先 / 命名容器优先。
         // VM(QuroVmEnv)/容器(QuroContainerManager) 在部分真机会卡住或空转导致终端黑屏，
         // 故回退到已知可用的直连 proot 路径。
         diag(context, "create: 直连 proot（v1.0.70 行为）")
-        return createLegacy(context)
+        // 关键修复：create 必须「永不抛、永不为 null」，否则调用方（终端 UI 的 LaunchedEffect）
+        // 一旦拿到异常就会崩溃、session.value 永远赋不上 → 终端永久停在「正在启动终端…」。
+        return runCatching { createLegacy(context) }.getOrElse { t ->
+            Log.e(TAG, "create 失败，兜底设备 shell", t)
+            createDevice(context)
+        }
     }
 
         /**
@@ -731,7 +736,8 @@ class QuroShellSession private constructor(
          */
         private fun createLegacy(context: Context): QuroShellSession {
             diag(context, "createLegacy: 进入直连 proot 路径")
-            val launch = QuroLinuxEnv.shellLaunch(context)
+            // shellLaunch 也可能抛（prepareRuntimeExtras / 文件操作），包一层避免 create 抛异常。
+            val launch = runCatching { QuroLinuxEnv.shellLaunch(context) }.getOrNull()
             if (launch != null) {
                 try {
                     val (proot, args) = launch
