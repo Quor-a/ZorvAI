@@ -87,7 +87,7 @@ fun QuroComponentGalleryScreen(
                         }
                         Column {
                             Text("人物卡", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            Text("Quro 助手 · 在线", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            Text("ZorvAI 助手 · 在线", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         Spacer(Modifier.weight(1f))
                         Button(onClick = { onComponentSelected?.invoke("操作卡") }) { Text("操作") }

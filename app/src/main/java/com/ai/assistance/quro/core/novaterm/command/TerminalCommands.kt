@@ -30,7 +30,7 @@ object HelpCommand : BuiltinCommand {
     override fun execute(sessionId: String, cmd: Command): CommandResult {
         val lines = listOf(
             "╔══════════════════════════════════════════════╗",
-            "║        QuroTerm v1.0 — Command List         ║",
+            "║      ZorvAI 沙盒终端 — Command List        ║",
             "╠══════════════════════════════════════════════╣",
             "║  📁 File System                             ║",
             "║    ls cd pwd cat mkdir rm cp mv touch       ║",

@@ -229,7 +229,7 @@ class QuroMediaService : android.app.Service() {
         if (Build.VERSION.SDK_INT >= 26) {
             val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (mgr.getNotificationChannel(CHANNEL_ID) == null) {
-                val ch = NotificationChannel(CHANNEL_ID, "Quro 音乐播放", NotificationManager.IMPORTANCE_LOW)
+                val ch = NotificationChannel(CHANNEL_ID, "ZorvAI 音乐播放", NotificationManager.IMPORTANCE_LOW)
                 ch.setShowBadge(false)
                 mgr.createNotificationChannel(ch)
             }

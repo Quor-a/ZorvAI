@@ -183,7 +183,7 @@ object QuroPermissionHelper {
                 putExtra(":settings:fragment_args_key", cn.flattenToString())
                 putExtra("EXTRA_FRAGMENT_ARG_KEY", cn.flattenToString())
             },
-            note = if (enabled) "" else "在系统「无障碍」列表中找到「Quro 无障碍」并开启",
+            note = if (enabled) "" else "在系统「无障碍」列表中找到「ZorvAI 无障碍」并开启",
         )
     }
 

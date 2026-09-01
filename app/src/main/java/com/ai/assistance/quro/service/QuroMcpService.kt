@@ -69,7 +69,7 @@ class QuroMcpService : Service() {
 
     private fun buildNotification(): Notification {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val chan = NotificationChannel(CHANNEL_ID, "Quro MCP 服务", NotificationManager.IMPORTANCE_LOW)
+        val chan = NotificationChannel(CHANNEL_ID, "ZorvAI MCP 服务", NotificationManager.IMPORTANCE_LOW)
         nm.createNotificationChannel(chan)
         val port = prefs(this).getInt(KEY_PORT, 0)
         return NotificationCompat.Builder(this, CHANNEL_ID)

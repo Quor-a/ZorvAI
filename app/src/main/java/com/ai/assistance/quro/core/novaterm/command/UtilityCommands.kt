@@ -39,7 +39,7 @@ object ScriptCommands : BuiltinCommand {
         return CommandResult.ok(outputs.joinToString("\n"))
     }
 
-    override fun help() = "run <script.nv>  - 执行 QuroTerm 脚本"
+    override fun help() = "run <script.nv>  - 执行 ZorvAI 沙盒终端脚本"
 }
 
 object EncryptCommand : BuiltinCommand {

@@ -28,7 +28,7 @@ fun QuroNovaTermScreen(onClose: () -> Unit) {
             onClick = onClose,
             modifier = Modifier.align(Alignment.TopEnd).zIndex(50f)
         ) {
-            Icon(Icons.Filled.Close, contentDescription = "关闭 QuroTerm", tint = Color.White)
+            Icon(Icons.Filled.Close, contentDescription = "关闭沙盒终端", tint = Color.White)
         }
     }
 }
