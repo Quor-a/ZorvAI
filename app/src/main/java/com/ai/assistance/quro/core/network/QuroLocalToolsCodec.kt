@@ -144,8 +144,12 @@ object QuroLocalToolsCodec {
      * 只有既无 content 又无 tool_calls 的消息才会被丢弃。
      */
     fun encodeMessages(messages: List<QuroChatMessage>): String {
+        // 🔧 toolfix-deepseek（本地对齐）：剔除工具调用组之间插队的「⏳ 正在执行」等占位气泡，
+        // 这些可见气泡随 toLlmMessages 进入上下文，落在 assistant[tool_calls] 与 tool 结果之间，
+        // 同样违反本地模板的工具调用顺序约束。剔除后 tool 结果贴回 assistant 之后、序列合法。
+        val ordered = filterToolCallOrdering(messages)
         val arr = JSONArray()
-        for (m in messages) {
+        for (m in ordered) {
             val role = when (m.role.lowercase()) {
                 "system" -> "system"
                 "assistant" -> "assistant"
@@ -216,6 +220,36 @@ object QuroLocalToolsCodec {
      * @return 解析出的工具调用列表；空列表表示无工具调用（调用方应走 Text 兜底）。
      */
     fun parseToolCalls(rawOrJson: String): List<QuroToolCall> = parseDetailed(rawOrJson).calls
+
+    /**
+     * 与 [QuroLlmClient.normalizeToolCallMessages] 同语义、供本地模板用的工具调用顺序过滤。
+     *
+     * 任何带 tool_calls 的 assistant 消息之后必须紧跟覆盖每个 tool_call_id 的 role=tool 消息；
+     * 若中间插入了非 tool 消息（典型即「⏳ 正在执行」UI 占位气泡），剔除该插队消息，
+     * 让 tool 结果能正确贴回 assistant 之后。孤儿 tool 结果（tool_call_id 无对应开放调用）一并丢弃。
+     */
+    private fun filterToolCallOrdering(input: List<QuroChatMessage>): List<QuroChatMessage> {
+        val out = ArrayList<QuroChatMessage>(input.size)
+        var open = linkedSetOf<String>()
+        for (m in input) {
+            when {
+                m.toolCalls != null && m.toolCalls.isNotEmpty() -> {
+                    open = m.toolCalls.map { it.id }.toCollection(linkedSetOf())
+                    out.add(m)
+                }
+                m.role == "tool" -> {
+                    if (m.toolCallId != null && m.toolCallId in open) {
+                        out.add(m)
+                        open.remove(m.toolCallId)
+                    }
+                }
+                else -> {
+                    if (open.isEmpty()) out.add(m)
+                }
+            }
+        }
+        return out
+    }
 
     /**
      * 工具调用解析结果（含诊断信息）。

@@ -12,32 +12,26 @@ import org.json.JSONObject
 class VncTool : QuroTool {
     override val name: String = "vnc"
     override val description: String = "控制VNC虚拟桌面环境：安装、启动、停止、状态查询"
-    override val parametersJson: String = getDescription().toString()
-    
-    /**
-     * 工具描述 - 提供给AI的工具定义
-     */
-    fun getDescription(): JSONObject {
-        return JSONObject().apply {
-            put("name", "vnc")
-            put("description", "控制VNC虚拟桌面环境：安装、启动、停止、状态查询")
-            put("parameters", JSONObject().apply {
-                put("action", JSONObject().apply {
-                    put("type", "string")
-                    put("description", "操作类型：install（安装）、start（启动）、stop（停止）、status（状态）")
-                    put("enum", org.json.JSONArray().apply {
-                        put("install")
-                        put("start")
-                        put("stop")
-                        put("status")
-                    })
+    // 🔧 toolfix-vnc：必须为合法 JSON Schema（type:"object"），否则 DeepSeek 报
+    // "schema must be a JSON Schema of 'type: \"object\"', got 'type: null'" (HTTP 400)。
+    override val parametersJson: String = JSONObject().apply {
+        put("type", "object")
+        put("properties", JSONObject().apply {
+            put("action", JSONObject().apply {
+                put("type", "string")
+                put("description", "操作类型：install（安装）、start（启动）、stop（停止）、status（状态）")
+                put("enum", org.json.JSONArray().apply {
+                    put("install")
+                    put("start")
+                    put("stop")
+                    put("status")
                 })
             })
-            put("required", org.json.JSONArray().apply {
-                put("action")
-            })
-        }
-    }
+        })
+        put("required", org.json.JSONArray().apply {
+            put("action")
+        })
+    }.toString()
     
     /**
      * 执行工具
