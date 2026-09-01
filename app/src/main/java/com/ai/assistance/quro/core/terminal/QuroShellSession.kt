@@ -179,6 +179,23 @@ class QuroShellSession private constructor(
     private var ptyPid: Int = -1
     private var ptyPfd: ParcelFileDescriptor? = null
 
+    /**
+     * 会话根进程 PID（proot / PTY 子进程），供 phantom killer 回收整棵进程树。
+     * PTY 模式取 createSubprocess 返回的 pid；管道模式反射取 [java.lang.Process] 的 pid()
+     * （部分编译 stub 不暴露 pid() 成员，故用反射，运行时 API 26+ 必然存在）。
+     * 进程已退出或无 PID 时返回 -1。
+     */
+    val rootPid: Int
+        get() = if (isPty) ptyPid else processPid
+
+    /** 反射读取 java.lang.Process.pid()（API 26+ 才有，编译 stub 可能不含，故反射兜底）。 */
+    private val processPid: Int
+        get() = runCatching {
+            val p = process ?: return@runCatching -1
+            val m = p.javaClass.getMethod("pid")
+            (m.invoke(p) as? Number)?.toInt() ?: -1
+        }.getOrDefault(-1)
+
     private val reader: BufferedReader
     private val writer: BufferedWriter
     init {
@@ -651,6 +668,9 @@ class QuroShellSession private constructor(
             appendLine("⚠ 前台命令未响应软中断（管道 stdin 无法投递 SIGINT），已强制终止 shell")
             runCatching { process?.destroyForcibly() }
         }
+        // phantom killer：关掉直接进程后，整棵进程树（proot + shell + 后代）一并回收，避免孤儿残留
+        val pid = rootPid
+        if (pid > 1) QuroTerminalReaper.killTree(pid)
     }
 
     /**
@@ -721,7 +741,7 @@ class QuroShellSession private constructor(
         while (lines.size > MAX_LINES) lines.removeAt(0)
     }
 
-    /** 销毁会话：关闭流、结束进程、取消协程。 */
+    /** 销毁会话：关闭流、结束进程、取消协程，并回收整棵进程树（phantom killer）。 */
     fun destroy() {
         runCatching { writer.close() }
         if (isPty) {
@@ -730,6 +750,9 @@ class QuroShellSession private constructor(
         } else {
             runCatching { process?.destroy() }
         }
+        // phantom killer：直接进程关掉后，proot/shell 拉起的后代（后台作业/嵌套 shell/REPL）一并 SIGKILL
+        val pid = rootPid
+        if (pid > 1) QuroTerminalReaper.killTree(pid)
         job.cancel()
     }
 
