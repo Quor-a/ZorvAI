@@ -680,6 +680,10 @@ fun ChatScreen(
     }
     // 内置浏览器 URL（open_web 工具或工具箱触发）
     var browserUrl by remember { mutableStateOf<String?>(null) }
+    // 浏览器「化小窗」：非空时全屏浏览器收起、改由可拖拽悬浮小窗承载同一网址
+    var browserFloatUrl by remember { mutableStateOf<String?>(null) }
+    // 对话框「化小窗」：true 时主对话收起、改由可拖拽悬浮小窗承载
+    var chatMinimized by remember { mutableStateOf(false) }
 
     // 应用内视频播放器（VideoView 渲染屏）
     var showVideoPlayer by remember { mutableStateOf(false) }
@@ -1160,7 +1164,10 @@ fun ChatScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
-        ModalNavigationDrawer(
+        // 对话框「化小窗」：chatMinimized 时主对话收起为悬浮小窗，根布局仅留背景占位。
+        if (chatMinimized) {
+            Box(Modifier.fillMaxSize().background(cs.background))
+        } else ModalNavigationDrawer(
             drawerState = drawerState,
             gesturesEnabled = true,
             drawerContent = {
@@ -1192,6 +1199,7 @@ fun ChatScreen(
                         onModel = { sheet = SheetType.Model },
                         onSettings = { sheet = SheetType.Settings },
                         onToolCenter = { showToolCenter = true },
+                        onMinimize = { chatMinimized = true },
                         persona = selectedPersona,
                         onPick = { sheet = SheetType.Persona },
                         scaled = { scaled(it) }
@@ -2084,6 +2092,11 @@ fun ChatScreen(
                 QuroBrowserScreen(
                     url = url,
                     onClose = { browserUrl = null },
+                    onMinimize = {
+                        val u = browserUrl
+                        browserFloatUrl = u
+                        browserUrl = null
+                    },
                     onOpenInSystem = { sysUrl ->
                         runCatching {
                             val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(sysUrl))
@@ -2092,6 +2105,125 @@ fun ChatScreen(
                         }
                     },
                 )
+            }
+        }
+
+        // 内置浏览器「化小窗」：全屏浏览器收起后，改由可拖拽悬浮小窗承载同一网址。
+        // 小窗内是独立 WebView（复用 QuroBrowserController.attach，AI 的 browser_act 仍可用），
+        // 拖到任意位置即可边浏览边用对话；点还原回到全屏，点关闭退出小窗。
+        browserFloatUrl?.let { furl ->
+            Box(Modifier.fillMaxSize().zIndex(300f)) {
+                FloatingMiniWindow(
+                    title = "浏览器小窗",
+                    initialX = 40.dp, initialY = 150.dp,
+                    initialWidth = 320.dp, initialHeight = 400.dp,
+                    onRestore = { browserUrl = furl; browserFloatUrl = null },
+                    onClose = { browserFloatUrl = null },
+                ) {
+                    val webSchemes = setOf("http", "https", "file", "about", "data", "javascript")
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { c ->
+                            WebView(c).apply {
+                                settings.apply {
+                                    javaScriptEnabled = true
+                                    domStorageEnabled = true
+                                    databaseEnabled = true
+                                    loadsImagesAutomatically = true
+                                    loadWithOverviewMode = true
+                                    useWideViewPort = true
+                                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                    allowFileAccess = true
+                                    javaScriptCanOpenWindowsAutomatically = true
+                                    defaultTextEncodingName = "utf-8"
+                                }
+                                com.ai.assistance.quro.core.tools.QuroBrowserController.attach(this)
+                                webViewClient = object : WebViewClient() {
+                                    override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                                        com.ai.assistance.quro.core.tools.QuroBrowserController.markPageStarted(url)
+                                    }
+                                    override fun onPageFinished(view: WebView?, url: String?) {
+                                        com.ai.assistance.quro.core.tools.QuroBrowserController.markPageFinished(url)
+                                    }
+                                    override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
+                                        val u = request?.url ?: return false
+                                        val scheme = u.scheme?.lowercase() ?: return false
+                                        if (scheme in webSchemes) return false
+                                        runCatching {
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, u)
+                                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            c.startActivity(intent)
+                                        }
+                                        return true
+                                    }
+                                    @Suppress("DEPRECATION")
+                                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                                        if (url.isNullOrEmpty()) return false
+                                        val parsed = runCatching { android.net.Uri.parse(url) }.getOrNull() ?: return false
+                                        val scheme = parsed.scheme?.lowercase() ?: return false
+                                        if (scheme in webSchemes) return false
+                                        runCatching {
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, parsed)
+                                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            c.startActivity(intent)
+                                        }
+                                        return true
+                                    }
+                                }
+                                loadUrl(furl)
+                            }
+                        },
+                        onRelease = {
+                            com.ai.assistance.quro.core.tools.QuroBrowserController.detach(it)
+                            it.destroy()
+                        },
+                    )
+                }
+            }
+        }
+
+        // 对话框「化小窗」：主对话收起后，改由可拖拽悬浮小窗承载最近对话，可边看边用其它功能。
+        if (chatMinimized) {
+            Box(Modifier.fillMaxSize().zIndex(300f)) {
+                FloatingMiniWindow(
+                    title = "对话小窗",
+                    initialX = 24.dp, initialY = 120.dp,
+                    initialWidth = 300.dp, initialHeight = 420.dp,
+                    onRestore = { chatMinimized = false },
+                    onClose = { chatMinimized = false },
+                ) {
+                    Column(Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            Modifier.fillMaxWidth().weight(1f).padding(8.dp),
+                            reverseLayout = true,
+                        ) {
+                            val recent = uiMessages.takeLast(15)
+                            items(recent.size) { idx ->
+                                val m = recent[idx]
+                                val label = if (m.mine) "我" else "AI"
+                                Text(
+                                    "$label：${(m.text ?: "").take(200)}",
+                                    fontSize = 12.sp,
+                                    color = cs.onSurface,
+                                    maxLines = 4,
+                                    modifier = Modifier.padding(vertical = 3.dp),
+                                )
+                            }
+                        }
+                        Row(
+                            Modifier.fillMaxWidth().background(cs.surfaceVariant).padding(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TextButton(onClick = { vm.newConversation(); chatMinimized = false }) {
+                                Text("新建对话")
+                            }
+                            Spacer(Modifier.weight(1f))
+                            TextButton(onClick = { chatMinimized = false }) {
+                                Text("展开对话")
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -3063,6 +3195,7 @@ private fun AttachmentVideoPreview(att: Attachment, onActivate: () -> Unit) {
 @Composable
 private fun AttachmentFilePreview(att: Attachment, onActivate: () -> Unit) {
     val cs = MaterialTheme.colorScheme
+    val ctx = LocalContext.current
     val ext = att.name.substringAfterLast('.', "").lowercase()
     val isPreviewable = ext in setOf(
         "docx", "xlsx", "pptx", "pdf",
@@ -3155,6 +3288,56 @@ private fun AttachmentFilePreview(att: Attachment, onActivate: () -> Unit) {
                     color = cs.onSurface.copy(alpha = 0.8f),
                     lineHeight = 15.sp,
                     maxLines = 4,
+                )
+            }
+        }
+        // 对话框内直接渲染文档排版：可展开内联预览（复用 QuroDocumentViewer 进程内渲染引擎，
+        // docx/xlsx/pptx/pdf 走 mammoth/SheetJS/pdf.js，真正实现「对话框直接渲染文档排版」）。
+        if (isOfficeDoc && att.path != null) {
+            val docFile = remember(att.path) { File(att.path!!) }
+            var inlineExpanded by remember(att.path) { mutableStateOf(false) }
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { inlineExpanded = !inlineExpanded }) {
+                    Text(
+                        if (inlineExpanded) "收起排版预览" else "对话框内预览排版",
+                        color = cs.primary,
+                        fontSize = 12.sp,
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onActivate) {
+                    Text("全屏预览", color = cs.primary.copy(alpha = 0.8f), fontSize = 12.sp)
+                }
+            }
+            if (inlineExpanded && docFile.exists()) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 260.dp, max = 420.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(cs.surface)
+                        .border(1.dp, Line, RoundedCornerShape(8.dp))
+                ) {
+                    QuroDocumentViewer(
+                        file = docFile,
+                        onClose = { inlineExpanded = false },
+                        onExternal = {
+                            openFileWithSystemViewer(ctx, att)
+                            inlineExpanded = false
+                        },
+                        readOnly = true,
+                    )
+                }
+            } else if (inlineExpanded) {
+                Text(
+                    "文件不存在：${att.path}",
+                    color = cs.error,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(8.dp),
                 )
             }
         }

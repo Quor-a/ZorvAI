@@ -299,6 +299,7 @@ fun QuroBrowserScreen(
     url: String,
     onClose: () -> Unit,
     onOpenInSystem: (String) -> Unit = {},
+    onMinimize: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
@@ -571,6 +572,9 @@ fun QuroBrowserScreen(
                 }
                 IconButton(onClick = { captureScreen() }, Modifier.size(36.dp)) {
                     Icon(Icons.Filled.Visibility, "眼睛截图", tint = cs.onSurfaceVariant)
+                }
+                IconButton(onClick = onMinimize, Modifier.size(36.dp)) {
+                    Icon(Icons.Filled.CloseFullscreen, "化小窗", tint = cs.onSurfaceVariant)
                 }
                 Box {
                     IconButton(onClick = { showMenu = true }, Modifier.size(36.dp)) {

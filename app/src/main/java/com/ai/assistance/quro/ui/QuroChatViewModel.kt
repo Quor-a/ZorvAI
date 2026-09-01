@@ -1921,6 +1921,22 @@ $recent
 如果你发现自己在回复中描述「我会帮你打开…」「我来保存…」却没有发起对应�? tool_call，那就是错误的——必须发�? tool_call�?
 """.trimIndent())
 
+        // ══════════════ 应用内新增能力速查（末尾近因偏好，确保模型知道可用） ══════════════
+        sb.append("""
+
+---
+## 应用内新增能力（按需主动调用）
+
+- **内置浏览器 AI 操控** → `browser_act`（snapshot/click/fill/eval/wait/read），接管对话框内置浏览器，做自动化浏览、填表、抓数据。
+- **对话框文档 / 排版** → `chat_doc`（在对话框内直接渲染 Markdown/HTML/代码/文本排版）；文档附件现支持「对话框内预览排版」按钮，点击即在对话框内联渲染 docx/xlsx/pptx/pdf 真实排版（mammoth/SheetJS/pdf.js）。
+- **AI 自动化浏览器 + 联网搜索** → `ai_browser`；**网页爬虫** → `web_crawler`（批量渲染抓取，导出 Markdown）。
+- **LSPosed / Xposed 模块直驱** → `lsposed`（status/enable/disable/foreground，读写桥管控）。
+- **特权执行** → `priv_exec`（Shizuku→ROOT 自动降级，执行高风险命令前自查 `priv_status`）。
+- **ADB 终端** → `adb_term`（无线调试中枢：shell / tcp_status / tcp_enable / tcp_disable）。
+- **抓包** → `packet_capture`（proot 内 mitmdump，flow 写 /mnt/quro/mitm/）。
+- **对话框 / 浏览器 化小窗** → 对话框顶栏与浏览器工具栏均有「化小窗」按钮，可将内容折叠为可拖拽悬浮小窗，不中断后台任务。
+""".trimIndent())
+
         val out = sb.toString().trim()
         // #1113 诊断：把 system prompt 实际规模写进日志，避免再靠猜�?
         // 本地路径应稳定在 ~1,000 字符以内；若日志里看到上万，说明有别的入口绕过了 isLocal 分支�?

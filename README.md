@@ -41,6 +41,7 @@
 - [系统返回手势支持](#系统返回手势支持)
 - [内置技能 · Skills（63 个）](#内置技能-skills63-个)
 - [截图预览 · Screenshots](#截图预览-screenshots)
+- [近期新增功能（v1.0.75）](#近期新增功能v1075)
 - [功能构架 · Architecture](#功能构架-architecture)
 - [引擎详解 · Engine](#引擎详解-engine)
 - [ACI · 智能体能力接口](#aci-智能体能力接口)
@@ -909,6 +910,18 @@ Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{
 </table>
 
 ---
+
+## 近期新增功能（v1.0.75）
+
+- **对话框 / 浏览器「化小窗」**：对话框顶栏与内置浏览器工具栏均新增「化小窗」按钮，可把对话或浏览器折叠为可拖拽、可缩放的悬浮小窗，不中断后台任务，随时还原 / 关闭。
+- **对话框文档排版内联预览**：docx / xlsx / pptx / pdf 等文档附件，在气泡内新增「对话框内预览排版」按钮，点击即在对话框内联渲染真实排版（docx→mammoth.js、xlsx→SheetJS、pdf→pdf.js），无需跳出全屏查看器即可看到版面。
+- **内置浏览器 AI 操控（`browser_act`）**：AI 可直接接管对话框内置浏览器，执行 snapshot / click / fill / eval / wait / read，实现自动化浏览、表单填写与数据抓取。
+- **LSPosed / Xposed 模块 AI 直驱（`lsposed`）**：完整对接，AI 可读写桥管控 Xposed 模块启停与前台状态。
+- **特权执行（`priv_exec`）与 ADB 终端（`adb_term`）**：`priv_exec` 走 Shizuku→ROOT 自动降级通道执行高风险命令；`adb_term` 提供无线调试中枢（shell / tcp 启用停用与管理）。
+- **AI 抓包（`packet_capture`）**：在应用内 Linux 沙箱中启动 mitmdump，流量落盘到 `/mnt/quro/mitm/`，供 AI 分析。
+- **对话框文档（`chat_doc`）**：AI 可在对话框内直接写并渲染 Markdown / HTML / 代码 / 文本，排版即时可见。
+
+> 工具现已按能力域分类注册（系统/设备、通信/日历、文件/工作区、网络/Web、终端/Linux、特权/ADB/LSPosed、抓包、内置浏览器操控、对话框文档、ACI/跨应用、无障碍控屏、系统控制、多媒体生成、文档生成、记忆/经验/技能、UI/可视化），详见 `core/tools/QuroBuiltInTools.kt` 的分类总览注释。
 
 ## 功能构架 · Architecture
 
