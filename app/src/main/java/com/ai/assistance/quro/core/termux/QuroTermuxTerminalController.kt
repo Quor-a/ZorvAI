@@ -22,11 +22,14 @@ object QuroTermuxTerminalController {
 
     /**
      * ULFA 可选终端后端开关。默认 false（生产终端仍是 termux PTY + proot 直启）。
-     * 置 true 时，Linux 终端改为经 libfusiond.so 拉起（fusiond 内部 openpty + execv proot），
-     * 复用 Termux 同一套 PTY 机制，仅替换被拉起的二进制与环境。
-     * 仅在真机验证过 fusiond 路径后再开启，未验证前保持 false。
+     * 置 true 时，Linux 终端改为经 libfusiond.so 拉起（fusiond 内部 openpty + execv proot）。
+     *
+     * ⚠️ 注意：fusiond 路径在真机实测为「终端会话一片黑」（进程拉起但无输出，非崩溃），
+     * 而 v1.0.70 的直启 proot 方式（launchSpec != null 分支）是真机可用基线。
+     * 该开关恢复为 false，回退到 v1.0.70 直启 proot 行为，直到 fusiond 在真机验证通过再开。
+     * 直启 proot 路径同样经 QuroLinuxEnv.shellEnv() 注入 PROOT_LOADER（含 loader 修复）。
      */
-    private const val ULFA_FUSIOND_TERMINAL = true
+    private const val ULFA_FUSIOND_TERMINAL = false
 
     var session: TerminalSession? = null
         private set
