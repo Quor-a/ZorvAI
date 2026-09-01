@@ -100,7 +100,6 @@ import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager.Backend
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager.Kind
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager.SessionInfo
 import com.ai.assistance.quro.core.terminal.ShellMode
-import com.ai.assistance.quro.terminal.vt.QuroTerminalPane
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -583,7 +582,26 @@ private fun TerminalPane(
                 // 只要会话已建立就挂载真·VT 面板；VT 引擎由面板在首次布局(onSizeChanged)时创建并赋给 session.vt。
                 // 注意：不能再以 outSession.vt != null 作为挂载条件，否则面板永不挂载、vt 永不创建，
                 // 终端会永久卡在"正在启动终端…"（鸡生蛋死锁）。
-                QuroTerminalPane(session = outSession, modifier = Modifier.fillMaxSize())
+                val termListState = rememberLazyListState()
+                LaunchedEffect(outSession.lines.size) {
+                    if (outSession.lines.isNotEmpty()) {
+                        termListState.animateScrollToItem(outSession.lines.size - 1)
+                    }
+                }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                    state = termListState,
+                ) {
+                    items(outSession.lines.size) { i ->
+                        Text(
+                            outSession.lines[i],
+                            color = Color(0xFFCCCCCC),
+                            fontSize = fontSize.sp,
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = (fontSize * 1.25f).sp,
+                        )
+                    }
+                }
             } else {
                 Column(Modifier.fillMaxSize().padding(16.dp)) {
                     Text("正在启动终端…", color = Color(0xFF7BE0A0), fontSize = 14.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)

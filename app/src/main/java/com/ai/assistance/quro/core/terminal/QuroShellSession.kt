@@ -9,9 +9,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ai.assistance.quro.core.linux.CommandTranslator
-import com.ai.assistance.quro.core.guest.QuroContainerManager
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
-import com.ai.assistance.quro.core.vm.QuroVmEnv
 import com.ai.assistance.quro.core.privilege.QuroShellQuote
 import com.ai.assistance.quro.terminal.vt.TerminalScreen
 import com.ai.assistance.quro.terminal.vt.TerminalSnapshot
@@ -245,6 +243,7 @@ class QuroShellSession private constructor(
         } catch (e: Exception) {
             Log.e(TAG, "drain: 读取流异常", e)
             if (!exited) appendLine("⚠ 读取流结束: ${e.message}")
+            diag(context, "drain 异常: ${e.message}")
         } finally {
             exited = true
             exitCode = runCatching { process.exitValue() }.getOrDefault(-1)
@@ -706,24 +705,19 @@ class QuroShellSession private constructor(
          * → 失败则回落旧直连路径（[createLegacy]，与 v127 行为一致）。任何异常都被捕获降级，
          * 绝不抛出，避免拖垮 ChatScreen 重组。旧 Termux 终端 / 旧 Kotlin CMS 部署器路径完整保留。
          */
-    fun create(context: Context): QuroShellSession {
-        // VM-first：AVF/pKVM 或 QEMU 真内核 Linux 优先；任一失败回退 proot 用户态 Linux。
+    private fun diag(context: Context, msg: String) {
         runCatching {
-            val console = QuroVmEnv.startConsole(context)
-            if (console != null) {
-                val env = QuroVmEnv.vmShellEnv(context)
-                Log.i(TAG, "✅ VM 后端已启动，创建 VM 模式会话")
-                return QuroShellSession(context, ShellMode.VM, emptyList(), env, "/root", console)
-            }
-        }.onFailure { e ->
-            Log.w(TAG, "VM 后端启动失败，回退 proot: ${e.message}")
+            val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "QuroAI_logs")
+            dir.mkdirs()
+            File(dir, "terminal_diag.txt").appendText("[${System.currentTimeMillis()}] $msg\n")
         }
-        // 直连 proot/设备 sh，不走 qurohost 包装层。
-        // qurohost（libqurohost.so）是 Android ELF 二进制，动态链接器为
-        // /system/bin/linker64。proot 将 / 映射到 Ubuntu rootfs，
-        // rootfs 内无 linker64 → qurohost 在 proot 内秒退、终端无任何输出。
-        // terminal_exec 走 QuroLinuxEnv.run() 绕过了 qurohost 所以正常，
-        // 交互终端也应走同一路径（直连 proot）。
+    }
+
+    fun create(context: Context): QuroShellSession {
+        // v1.0.70 行为：直连 proot/设备 sh，不尝试 VM 优先 / 命名容器优先。
+        // VM(QuroVmEnv)/容器(QuroContainerManager) 在部分真机会卡住或空转导致终端黑屏，
+        // 故回退到已知可用的直连 proot 路径。
+        diag(context, "create: 直连 proot（v1.0.70 行为）")
         return createLegacy(context)
     }
 
@@ -739,20 +733,7 @@ class QuroShellSession private constructor(
          * 仅在 host 后端不可用或启动失败时调用，作为兜底。
          */
         private fun createLegacy(context: Context): QuroShellSession {
-            // 优先用已导入的命名容器（proot 命名容器范式）：
-            // 若存在 rootfs 容器，终端直接跑该容器 proot，而非默认单 rootfs 沙箱。
-            if (QuroContainerManager.isProvisioned(context)) {
-                runCatching {
-                    val proc = QuroContainerManager.launchSession(context)
-                    if (proc != null) {
-                        Log.i(TAG, "✅ 命名容器已启动，创建 LINUX 模式会话")
-                        return QuroShellSession(
-                            context, ShellMode.LINUX, emptyList(), emptyArray(),
-                            context.filesDir.absolutePath, proc,
-                        )
-                    }
-                }.onFailure { e -> Log.w(TAG, "命名容器启动失败，回退默认 proot: ${e.message}") }
-            }
+            diag(context, "createLegacy: 进入直连 proot 路径")
             val launch = QuroLinuxEnv.shellLaunch(context)
             if (launch != null) {
                 try {
@@ -764,6 +745,7 @@ class QuroShellSession private constructor(
                 } catch (e: Exception) {
                     // proot 启动失败（不可执行 / 架构不符 / 权限受限等）：降级设备 sh，终端依旧可用。
                     Log.w(TAG, "Linux(proot) shell 启动失败，回退设备 sh: ${e.message}")
+                    diag(context, "createLegacy: proot 启动异常: ${e.message}")
                 }
             }
             val dev = createDevice(context)
