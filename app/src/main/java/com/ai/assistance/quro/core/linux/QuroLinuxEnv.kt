@@ -723,10 +723,12 @@ object QuroLinuxEnv {
         diagLog(context, "修复 Android 权限 (fix_permissions)")
         fixPermissions(context, rootfsDir)
 
-        // 写 DNS
-        diagLog(context, "写入 resolv.conf 和 sources.list")
-        val dns = deviceDnsServers(context)
-        diagLog(context, "设备DNS: $dns")
+        // 写 DNS / CA 证书 / nsswitch（联网修复：resolv.conf 用设备真实 DNS + 公共兜底；
+        // 最小 rootfs 无 ca-certificates，SSL 证书来自 Android 系统 CA 库；nsswitch 保证 getaddrinfo 查 DNS）
+        diagLog(context, "写入 resolv.conf / CA 证书 / nsswitch")
+        writeResolvConf(rootfsDir, context)
+        syncCaCerts(context, rootfsDir)
+        ensureNsswitch(rootfsDir)
 
         var updated = false
         var lastErr = ""
@@ -1966,13 +1968,77 @@ object QuroLinuxEnv {
      */
     private fun writeResolvConf(rootfs: File, context: Context) {
         val etc = File(rootfs, "etc"); etc.mkdirs()
-        val servers = deviceDnsServers(context)
-        val body = if (servers.isNotEmpty()) {
-            servers.joinToString("\n") { "nameserver $it" }
-        } else {
-            "nameserver 8.8.8.8\nnameserver 8.8.4.4"
-        }
+        val device = deviceDnsServers(context)
+        // 设备真实 DNS 优先（匹配宿主网络 / 企业内网解析），再追加多个公共 DNS 兜底，
+        // 避免单一 Google DNS 被运营商 / 企业网屏蔽时整网解析失败（用户「apt 完全无法联网」根因之一）。
+        val fallbacks = listOf("223.5.5.5", "119.29.11.29", "1.1.1.1", "8.8.8.8", "8.8.4.4")
+        val all = (device.distinct() + fallbacks).distinct().take(6)
+        val body = if (all.isNotEmpty()) all.joinToString("\n") { "nameserver $it" }
+        else "nameserver 223.5.5.5\nnameserver 1.1.1.1"
         File(etc, "resolv.conf").writeText(body + "\n")
+    }
+
+    /**
+     * 把 Android 系统 CA 证书同步进 rootfs 的 /etc/ssl/certs，使容器内 apt/curl/wget/openssl/requests
+     * 能校验 HTTPS（用户「proot 容器内缺少 SSL 证书，apt/pip/npm 全超时」的根因之一）。
+     *
+     * 最小 ubuntu-base rootfs 不自带 ca-certificates，/etc/ssl/certs 为空；而 Android 在
+     * /system/etc/security/cacerts（或 /apex/com.android.conscrypt/cacerts）存了完整系统 CA
+     * （每个证书一个哈希命名的 .0 PEM）。把这些文件复制进 rootfs/etc/ssl/certs，OpenSSL/gnutls 即可识别；
+     * 再拼接成 ca-certificates.crt 单文件 bundle，供 apt / python-requests / pip 等使用。
+     *
+     * 幂等：ca-certificates.crt 已存在（说明后续 apt 已装好 ca-certificates）则跳过，避免覆盖。
+     * 任何失败都只记日志，不致命——HTTP 镜像仍可走 DNS 联网。
+     */
+    private fun syncCaCerts(context: Context, rootfs: File) {
+        try {
+            val certsDir = File(rootfs, "etc/ssl/certs").apply { mkdirs() }
+            val bundle = File(certsDir, "ca-certificates.crt")
+            if (bundle.exists() && bundle.length() > 1024) {
+                Log.i(TAG, "syncCaCerts 跳过：已存在 ca-certificates.crt")
+                return
+            }
+            // 候选 Android CA 目录（不同 Android 版本路径不同）
+            val src = listOf(
+                "/system/etc/security/cacerts",
+                "/apex/com.android.conscrypt/cacerts",
+            ).firstOrNull { File(it).isDirectory }
+            if (src == null) {
+                Log.w(TAG, "syncCaCerts：未找到 Android CA 目录（证书校验需联网 HTTPS 时可能失败）")
+                return
+            }
+            val files = File(src).listFiles { f -> f.isFile && (f.extension == "0" || f.name.endsWith(".pem")) }
+            if (files.isNullOrEmpty()) {
+                Log.w(TAG, "syncCaCerts：CA 目录为空 $src")
+                return
+            }
+            val sb = StringBuilder()
+            files.forEach { f ->
+                try {
+                    val text = f.readText()
+                    // 复制原始证书文件（保持哈希命名 .0，OpenSSL 直接识别）
+                    File(certsDir, f.name).writeText(text)
+                    // 拼接到单文件 bundle
+                    sb.append(text)
+                    if (!text.endsWith("\n")) sb.append("\n")
+                } catch (_: Throwable) { }
+            }
+            bundle.writeText(sb.toString())
+            Log.i(TAG, "✅ syncCaCerts：复制 ${files.size} 个 CA 证书 → ${certsDir.absolutePath}")
+        } catch (e: Exception) {
+            Log.w(TAG, "syncCaCerts 失败（非致命）: ${e.message}")
+        }
+    }
+
+    /** 确保 /etc/nsswitch.conf 含 hosts: files dns，否则 getaddrinfo 可能不查 DNS（网络修复之一）。 */
+    private fun ensureNsswitch(rootfs: File) {
+        try {
+            val etc = File(rootfs, "etc"); etc.mkdirs()
+            val f = File(etc, "nsswitch.conf")
+            if (!f.exists()) {
+                f.writeText("passwd: files\ngroup: files\nhosts: files dns\nnetworks: files dns\n")
+            }
+        } catch (_: Throwable) { }
     }
 
     /**
@@ -2069,9 +2135,11 @@ fi
 
     /**
      * 每次启动终端/执行命令前，把运行期需要的「额外资产」刷进 rootfs：
-     * 1. resolv.conf —— 用设备真实 DNS（网络修复，见 [writeResolvConf]）；
-     * 2. /etc/quro_props.prop —— ro.* 属性快照（getprop 垫片数据源）；
-     * 3. /usr/local/bin/getprop —— 垫片脚本，使 `getprop ro.build.version.sdk` 等可用（[GETPROP_SHIM]）。
+     * 1. resolv.conf —— 用设备真实 DNS + 公共兜底（网络修复，见 [writeResolvConf]）；
+     * 2. /etc/ssl/certs + ca-certificates.crt —— 复制 Android 系统 CA 库，使 HTTPS 校验通过（见 [syncCaCerts]）；
+     * 3. /etc/nsswitch.conf —— hosts: files dns，保证 getaddrinfo 查 DNS（见 [ensureNsswitch]）；
+     * 4. /etc/quro_props.prop —— ro.* 属性快照（getprop 垫片数据源）；
+     * 5. /usr/local/bin/getprop —— 垫片脚本，使 `getprop ro.build.version.sdk` 等可用（[GETPROP_SHIM]）。
      *
      * rootfs 在 setup 时已 makeWritable，且均在应用私有目录，写操作安全；任何一步失败都只记日志，不致命。
      */
@@ -2126,7 +2194,11 @@ fi
 
     private fun prepareRuntimeExtras(context: Context, rootfs: File) {
         try {
+            // 每次启动都刷新 DNS / CA 证书 / nsswitch（与 setup 同级），
+            // 避免一次快照过期导致 apt/pip/npm 再次超时（用户「容器内缺 SSL 证书 → 联网超时」根因）。
             writeResolvConf(rootfs, context)
+            syncCaCerts(context, rootfs)
+            ensureNsswitch(rootfs)
             // 创建共享存储挂载点（/sdcard），否则 proot --bind 因目标不存在而整体启动失败。
             File(rootfs, SHARED_STORAGE_MOUNT.trimStart('/')).mkdirs()
             val props = buildProps(context)
