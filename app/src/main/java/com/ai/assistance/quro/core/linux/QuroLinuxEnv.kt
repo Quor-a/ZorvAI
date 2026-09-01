@@ -154,10 +154,20 @@ object QuroLinuxEnv {
     fun rootfsPath(context: Context): String =
         File(sandboxDir(context), "rootfs").absolutePath
 
-    /** /root 绑定到外部可见目录，使沙箱内产物可被 FileProvider 打开。 */
+    /**
+     * /root 绑定目录（宿主侧路径；proot 内即 /root，二者必须始终同一目录，否则 CMS 模块/venv/引擎
+     * 在宿主与容器间读写错位）。
+     *
+     * 早期实现绑外部存储 `getExternalFilesDir(null)/sandbox-home`，但外部 FUSE/sdcardfs 对 proot 子进程
+     * 有写入与符号链接限制（SELinux 域 + FUSE 不支持 symlink）：容器内 /root 实际不可写，导致
+     * `python3 -m venv /root/cms-venv` 静默失败、CMS 引擎目录(/root/cms/_engine)建不了，表现就是
+     * 「Python 未注册 / PYTHON·NODE 共享引擎未拉起」（用户诊断出的 /root ACL/权限限制根因）。
+     * 改为绑 **app 内部存储**（sandboxDir/sandbox-home，真实 ext4/f2fs，支持符号链接与完整 Unix 权限，
+     * 与 proot 进程同 UID 同 SELinux 域，可自由读写），思路同 Termux 的 $PREFIX。宿主 homePath 与容器
+     * /root 仍同一目录，CMS 模块/venv/引擎读写一致。
+     */
     fun homePath(context: Context): String {
-        val external = context.getExternalFilesDir(null)
-        val target = if (external != null) File(external, "sandbox-home") else File(sandboxDir(context), "home")
+        val target = File(sandboxDir(context), "sandbox-home")
         target.mkdirs()
         return target.absolutePath
     }
