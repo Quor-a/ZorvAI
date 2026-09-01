@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lib_aci 是纯框架库，不自带 Service（受控端 Service 由 :cap_main 声明）。
+     仅声明对 ACI CALL 权限的使用，真正的权限定义由主应用 :app 的 manifest 提供。 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="ai.aci.permission.CALL" />
+</manifest>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- :cap_main 自身声明受控端 Service（MainAciService）。
+     经 manifest merger 合并进主应用 :app，等价于在 app manifest 中注册。
+     权限 ai.aci.permission.CALL 由 :app 定义（protectionLevel=normal）。 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="ai.aci.permission.CALL" />
+
+    <application>
+        <!-- 主应用业务能力受控端：暴露 main.* 系列能力（订单 / 笔记等）。
+             控制方（含本应用 AI 经 aci_call）可经 ACI 调用本 Service。 -->
+        <service
+            android:name=".MainAciService"
+            android:exported="true"
+            android:permission="ai.aci.permission.CALL">
+            <intent-filter>
+                <action android:name="ai.aci.core.ACTION_BIND" />
+            </intent-filter>
+        </service>
+    </application>
+
+</manifest>

@@ -38,8 +38,8 @@ android {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1073
-        versionName = "1.0.73"
+        versionCode = 1074
+        versionName = "1.0.74"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -183,6 +183,13 @@ dependencies {
     // （ai.aci.core.*：IAidlAciService / IAidlAciCallback AIDL、AidlAciRequest / AidlAciResponse / Capability），
     // 不再依赖任何跨仓预编译 AAR。受控端 aci-browser 同样依赖 :aci-core，保证协议一致。
     implementation(project(":aidl-aci-core"))
+
+    // ACI 业务能力子模块（新增，非重构）：
+    // :lib_aci = 框架层（CapabilitySpec / AciHandler / AciRouter / PermissionGuard / CapabilityRegistry）
+    // :cap_main = 主应用业务 Handler（main.* 订单 / 笔记等）+ 受控端 Service MainAciService
+    // 二者共存于既有 QuroMainAciService，构成"控制方 + 多受控端"的 ACI 能力矩阵。
+    implementation(project(":lib_aci"))
+    implementation(project(":cap_main"))
 
     // 旧契约兼容 AAR（ai.aci.core.*）：浏览器等第三方旧受控端在「ACI→AIDL ACI 重命名」重构前
     // 基于该契约构建，其 Service 描述符为 ai.aci.core.IACIService。控制端必须持有字节一致的旧类，

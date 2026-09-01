@@ -31,6 +31,8 @@ target_compile_options(quroplugin PRIVATE
 )
 
 find_library(log-lib log)
+# 16KB 页大小合规（Android 15+ / 16KB 设备必需，否则 dlopen failed / SIGSEGV）
+target_link_options(quroplugin PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_libraries(quroplugin ${log-lib})
 
 # ═══════════════════════════════════════════════════════════════
@@ -58,6 +60,7 @@ target_compile_options(termux-terminal PRIVATE
 
 target_link_options(termux-terminal PRIVATE
     -Wl,--gc-sections
+    "-Wl,-z,max-page-size=16384"
 )
 
 target_link_libraries(termux-terminal ${log-lib})
@@ -85,6 +88,7 @@ target_compile_options(qurohost PRIVATE
 target_link_options(qurohost PRIVATE
     -pie
     -Wl,--gc-sections
+    "-Wl,-z,max-page-size=16384"
 )
 
 target_link_libraries(qurohost ${log-lib})
@@ -117,6 +121,8 @@ target_compile_options(acihost PRIVATE
     -fPIC
 )
 
+# 16KB 页大小合规
+target_link_options(acihost PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_libraries(acihost ${log-lib})
 
 # ═══════════════════════════════════════════════════════════════
@@ -148,6 +154,7 @@ target_compile_options(fusiond PRIVATE
 target_link_options(fusiond PRIVATE
     -pie
     -Wl,--gc-sections
+    "-Wl,-z,max-page-size=16384"
 )
 
 target_link_libraries(fusiond ${log-lib})
