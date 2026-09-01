@@ -2211,13 +2211,18 @@ stamp = 'sdns://AgUAAAAAAAAAAAAAB2Rucy5nb29nbGUuY29tCi9leHBlcmltZW50YWw'
             // 后台拉起（setsid 脱离 proot 进程组，避免命令结束后被一起杀；失败则静默退出，旧实例保留）
             val launch = "if command -v setsid >/dev/null 2>&1; then setsid nohup ${bin.absolutePath} -config ${cfg.absolutePath} >/dev/null 2>&1 & else nohup ${bin.absolutePath} -config ${cfg.absolutePath} >/dev/null 2>&1 & fi"
             runProot(context, launch, timeoutMs = 10_000)
-            // 探测：把 resolv.conf 临时指向 127.0.0.1，查一个 /etc/hosts 没有的域名
+            // 探测：把 resolv.conf 临时指向 127.0.0.1，用 curl 查一个 /etc/hosts 没有的域名（端到端验证代理）。
+            // 注：不用 getent —— 它在 libc-bin 里，最小 rootfs 可能没装；curl 是 setup 必装，且能真正走代理解析。
             File(rootfs, "etc/resolv.conf").writeText("nameserver 127.0.0.1\noptions timeout:2 attempts:2\n")
             var ok = false
-            for (i in 1..6) {
-                Thread.sleep(800)
-                val r = runProot(context, "getent hosts cloudflare.com", timeoutMs = 8_000)
-                if (r.second.contains(Regex("""\d+\.\d+\.\d+\.\d+"""))) { ok = true; break }
+            for (i in 1..8) {
+                Thread.sleep(700)
+                val r = runProot(
+                    context,
+                    "curl -sI --max-time 5 https://cloudflare.com >/dev/null 2>&1; printf 'PROXY_OK=%s\\n' $?",
+                    timeoutMs = 9_000,
+                )
+                if (r.second.contains("PROXY_OK=0")) { ok = true; break }
             }
             if (ok) {
                 Log.i(TAG, "✅ ensureDnsProxy：DoH 代理已起，resolv.conf → 127.0.0.1（通用 DNS 生效）")
