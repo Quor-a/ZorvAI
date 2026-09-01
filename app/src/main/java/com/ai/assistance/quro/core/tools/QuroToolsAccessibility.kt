@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
+import com.ai.assistance.quro.core.privilege.QuroLsposeBridgeReceiver
 import com.ai.assistance.quro.service.QuroAccessibilityService
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
@@ -108,18 +109,33 @@ class GetForegroundAppTool : QuroTool {
     override val description = "获取当前前台应用包名与 Activity 名称，无需参数 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String {
-        val svc = QuroAccessibilityService.instance ?: return "❌ 无障碍服务未连接"
-        return try {
-            val root = svc.rootInActiveWindow ?: return "⚠️ 无法获取窗口信息"
-            // 从根节点的 packageName 和 Activity 的 viewId 推断
-            val pkg = root.packageName?.toString() ?: "未知"
-            // Android 5+ 可通过 WindowManager 或 UsageStats 辅助确认
-            val info = context.packageManager.getPackageInfo(pkg, 0)
-            val label = info.applicationInfo?.loadLabel(context.packageManager)?.toString() ?: pkg
-            """{"package":"$pkg","label":"$label"}"""
-        } catch (e: Exception) {
-            "❌ 获取前台应用失败: ${e.message}"
+        // 1) 无障碍节点树（最可靠路径）
+        val svc = QuroAccessibilityService.instance
+        if (svc != null) {
+            runCatching {
+                val root = svc.rootInActiveWindow
+                val pkg = root?.packageName?.toString()
+                if (!pkg.isNullOrEmpty() && pkg != "未知") {
+                    val label = context.packageManager.getPackageInfo(pkg, 0)
+                        .applicationInfo?.loadLabel(context.packageManager)?.toString() ?: pkg
+                    return """{"package":"$pkg","label":"$label","source":"accessibility"}"""
+                }
+            }
         }
+        // 2) LSPosed 跨应用注入桥回退（补无障碍 / usage-stats 盲区）：模块钩中目标 App Activity.onCreate
+        //    后广播，QuroLsposeBridgeReceiver 记录到 SharedPreferences，这里读取。
+        val lsp = QuroLsposeBridgeReceiver.lastForegroundApp(context)
+        if (lsp != null) {
+            val (pkg, activity, ts) = lsp
+            if (!pkg.isNullOrEmpty()) {
+                val label = runCatching {
+                    context.packageManager.getPackageInfo(pkg, 0)
+                        .applicationInfo?.loadLabel(context.packageManager)?.toString()
+                }.getOrNull() ?: pkg
+                return """{"package":"$pkg","label":"$label","activity":"$activity","ts":$ts,"source":"lsposed_bridge"}"""
+            }
+        }
+        return "❌ 无法获取前台应用：无障碍服务未连接，且 LSPosed 桥未上报（若已装 LSPosed，请在本应用纳入作用域并 enable 跨应用注入桥）"
     }
 }
 

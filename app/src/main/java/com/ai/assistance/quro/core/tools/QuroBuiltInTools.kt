@@ -294,6 +294,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(QuroPrivExecTool())
     // #565 ADB 可当 ADB 终端（无线调试中枢）：shell=本机 ADB shell / tcp_status|tcp_enable|tcp_disable=管理 TCP adbd
     r.register(QuroAdbTermTool())
+    // LSPosed/Xposed 模块 AI 直驱（完整对接）：status/foreground 读桥数据、enable/disable 写 lsposed_bridge.json 管控桥开关
+    r.register(QuroLsposeTool())
     // 记忆库：AI 自动沉淀长期记忆（保存/列出/检索/删除）
     r.register(QuroMemorySaveTool())
     r.register(QuroMemoryListTool())
