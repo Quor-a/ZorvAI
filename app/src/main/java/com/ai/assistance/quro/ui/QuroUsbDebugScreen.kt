@@ -84,8 +84,22 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
         "svc wifi enable",
     )
 
-    fun runShell() {
-        val c = shellCmd.trim()
+    // 设备控制快捷动作（直接执行，服务"控制手机"）：label → 命令（__REBOOT__ 走二次确认）
+    val extDir = ctx.getExternalFilesDir(null)?.absolutePath ?: ctx.filesDir.absolutePath
+    val deviceActions = listOf(
+        "截图" to "screencap -p $extDir/quro_screencap.png",
+        "锁屏" to "input keyevent 26",
+        "回桌面" to "input keyevent 3",
+        "多任务" to "input keyevent 187",
+        "音量+" to "input keyevent 24",
+        "音量-" to "input keyevent 25",
+        "重启" to "__REBOOT__",
+    )
+
+    var showRebootConfirm by remember { mutableStateOf(false) }
+
+    fun runShell(cmd: String = shellCmd) {
+        val c = cmd.trim()
         if (c.isBlank()) return
         if (!QuroAdbDebug.hasPrivilegedChannel()) {
             Toast.makeText(ctx, "需要 root / Shizuku 才能执行本机 ADB shell", Toast.LENGTH_LONG).show()
@@ -346,6 +360,27 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
                 }
             }
 
+            // 设备控制快捷动作：直接执行高频"控制手机"指令
+            GroupCaption("设备控制（快捷动作 / 控制手机）")
+            SetGroup {
+                LazyRow(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(deviceActions) { (label, cmd) ->
+                        AssistChip(
+                            onClick = {
+                                if (cmd == "__REBOOT__") showRebootConfirm = true
+                                else runShell(cmd)
+                            },
+                            label = { Text(label, fontSize = 11.sp) },
+                        )
+                    }
+                }
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                InfoLine("截图存到 App 私有存储（$extDir/quro_screencap.png）；锁屏/回桌面/多任务/音量经 input keyevent 注入；重启需二次确认。")
+            }
+
             if (log.isNotBlank()) {
                 GroupCaption("最近执行结果")
                 SetGroup {
@@ -363,6 +398,22 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
                 InfoLine("无 root / Shizuku 时无法静默启停 adbd，请使用系统「无线调试」配对（Android 11+ 支持配对码）。")
             }
         }
+    }
+
+    if (showRebootConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRebootConfirm = false },
+            title = { Text("确认重启？") },
+            text = { Text("重启会立即关闭设备，未保存的数据可能丢失。") },
+            confirmButton = {
+                TextButton(onClick = { showRebootConfirm = false; runShell("reboot") }) {
+                    Text("重启", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRebootConfirm = false }) { Text("取消") }
+            },
+        )
     }
 }
 
