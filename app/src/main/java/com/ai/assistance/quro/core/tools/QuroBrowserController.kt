@@ -44,6 +44,9 @@ object QuroBrowserController {
 
     @Volatile private var active: WebView? = null
     @Volatile private var pageLoaded = false
+    // URL/title 缓存：由 WebViewClient 回调在主线程写入，工具层只读缓存，彻底避免在工作线程触碰 WebView 属性。
+    @Volatile private var lastUrl: String? = null
+    @Volatile private var lastTitle: String? = null
     private val main = Handler(Looper.getMainLooper())
     private val pending = ConcurrentHashMap<Long, CompletableDeferred<String>>()
     @Volatile private var nextToken = 0L
@@ -208,6 +211,8 @@ object QuroBrowserController {
             wv.addJavascriptInterface(bridge, "QuroBridge")
             wv.addJavascriptInterface(captureBridge, "QuroCapture")
             QuroSessionBridge.register(wv)
+            lastUrl = wv.url
+            lastTitle = wv.title
         }
     }
 
@@ -222,14 +227,21 @@ object QuroBrowserController {
     }
 
     /** 页面开始加载（WebViewClient.onPageStarted 调用）。 */
-    fun markPageStarted() {
+    fun markPageStarted(url: String? = null) {
         pageLoaded = false
+        if (!url.isNullOrEmpty()) lastUrl = url
         active?.let { injectCaptureHook(it) }
     }
 
     /** 页面加载完成（WebViewClient.onPageFinished 调用）。 */
-    fun markPageFinished() {
+    fun markPageFinished(url: String? = null) {
         pageLoaded = true
+        if (!url.isNullOrEmpty()) lastUrl = url
+    }
+
+    /** 页面标题更新（WebViewClient.onReceivedTitle 调用）。 */
+    fun markTitle(title: String?) {
+        if (!title.isNullOrEmpty()) lastTitle = title
     }
 
     /** 当前页面是否已加载完成（基于 onPageFinished，最可靠的判据）。 */
@@ -237,26 +249,11 @@ object QuroBrowserController {
 
     fun isAttached(): Boolean = active != null
 
-    /** 当前 URL（null = 没有挂载中的浏览器）。 */
-    fun currentUrl(): String? {
-        val wv = active ?: return null
-        return runOnMainSync { wv.url }
-    }
+    /** 当前 URL（来自主线程缓存；null = 没有挂载中的浏览器）。 */
+    fun currentUrl(): String? = lastUrl
 
-    /** 当前 title。 */
-    fun currentTitle(): String? {
-        val wv = active ?: return null
-        return runOnMainSync { wv.title }
-    }
-
-    /** 通用：切到主线程同步执行并取结果；非主线程时阻塞当前线程直到主线程跑完（仅供内部使用，调用方应在协程内）。 */
-    private inline fun <T> runOnMainSync(crossinline block: () -> T): T {
-        return if (Looper.myLooper() === Looper.getMainLooper()) block() else {
-            kotlinx.coroutines.runBlocking {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { block() }
-            }
-        }
-    }
+    /** 当前 title（来自主线程缓存）。 */
+    fun currentTitle(): String? = lastTitle
 
     /**
      * 异步执行 JS 表达式并把字符串化结果回传（null = 没有活跃 WebView 或超时）。
@@ -266,17 +263,20 @@ object QuroBrowserController {
     suspend fun eval(js: String, timeoutMs: Long = 8000): String? {
         val wv = active ?: return null
         return withTimeoutOrNull(timeoutMs) {
-            suspendCancellableCoroutine<String> { cont ->
+            val token = nextToken++
+            val cd = CompletableDeferred<String>()
+            pending[token] = cd
+            try {
                 runOnMain {
-                    val token = nextToken++
-                    val cd = CompletableDeferred<String>()
-                    pending[token] = cd
-                    cont.invokeOnCancellation { pending.remove(token); cd.cancel() }
                     val wrapped = "QuroBridge.onEvalResult($token,(function(){try{var __r=($js);" +
                         "return __r===undefined?'undefined':(__r&&__r.toString?__r.toString():String(__r));" +
                         "}catch(e){return '__ERR__:'+(e&&e.message?e.message:e);}})());"
                     wv.evaluateJavascript(wrapped, null)
                 }
+                // 等待 JS 桥（onEvalResult）在主线程回调 complete；超时被 withTimeoutOrNull 取消。
+                cd.await()
+            } finally {
+                pending.remove(token)
             }
         }
     }
@@ -354,14 +354,12 @@ object QuroBrowserController {
 
     /** 当前浏览器状态摘要（attached/loaded/url/title），供 AI 可靠判断页面是否就绪。 */
     fun status(): String {
-        // 必须在主线程读 WebView 属性（wv.url / wv.title），否则在 Dispatchers.Default /
-        // QuroSessionBridge 单线程 Executor 上调用时会抛
-        // "A WebView method was called on thread 'DefaultDispatcher-worker-2'"。
-        // 复用 currentUrl()/currentTitle()（内部已走 runOnMainSync → 主线程）。
+        // url/title 只读主线程缓存（lastUrl/lastTitle），不在工作线程触碰 WebView 属性，
+        // 彻底规避 "A WebView method was called on thread 'DefaultDispatcher-worker-N'" 崩溃。
         val attached = isAttached()
         val loaded = pageLoaded
-        val url = currentUrl() ?: ""
-        val title = currentTitle() ?: ""
+        val url = lastUrl ?: ""
+        val title = lastTitle ?: ""
         return buildString {
             append("attached=").append(attached).append('\n')
             append("loaded=").append(loaded).append('\n')
