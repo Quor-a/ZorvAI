@@ -147,6 +147,12 @@ private fun rememberPaneState(
                 QuroLinuxEnv.ensureInstalledBlocking(context)
             }
             session.value = if (vmFirst) QuroShellSession.create(context) else QuroShellSession.createLocal(context)
+            // 自动修复：若回退到设备 shell（proot 启动失败 / 环境损坏 / rootfs 缺失），
+            // 后台重装 Linux 环境，待 Ready 后由屏幕级 LaunchedEffect 自动重建为 proot/Linux 会话，
+            // 用户无需手动点「安装」按钮。
+            if (session.value?.mode == ShellMode.DEVICE) {
+                QuroLinuxEnv.setup(context)
+            }
         }
     }
     DisposableEffect(Unit) { onDispose { session.value?.destroy() } }
@@ -160,12 +166,9 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
 
-    // ═══════════ 双窗格状态 ═══════════
-    val paneA = rememberPaneState(context, scope, vmFirst = true)   // 左：VM/Linux 融合
-    val paneB = rememberPaneState(context, scope, vmFirst = false)  // 右：本地
-    var isDual by remember { mutableStateOf(true) }
-    var activePane by remember { mutableStateOf(0) }
-    fun active(): PaneState = if (activePane == 0) paneA else paneB
+    // ═══════════ 单窗格状态（移除双终端，默认单终端） ═══════════
+    val pane = rememberPaneState(context, scope, vmFirst = true)    // proot/Linux 终端
+    fun active(): PaneState = pane
 
     // ═══════════ 面板开关 ═══════════
     var showDevEnvMenu by remember { mutableStateOf(false) }
@@ -196,13 +199,27 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
         }
     }
 
+    // 自动修复：Linux 环境安装/重装就绪后，若当前会话仍是设备 sh（proot 启动失败/环境损坏），
+    // 自动重建为 proot/Linux 会话，无需用户手动点「安装」按钮。
+    LaunchedEffect(sandboxState) {
+        if (sandboxState is QuroLinuxEnv.SandboxState.Ready && pane.session.value?.mode == ShellMode.DEVICE) {
+            scope.launch {
+                withContext(Dispatchers.IO) {
+                    val old = pane.session.value
+                    pane.session.value = QuroShellSession.create(context)
+                    old?.destroy()
+                }
+            }
+        }
+    }
+
     // ═══════════ 重建活动窗格会话（顶栏「新会话」） ═══════════
     fun recreateActivePane() {
         scope.launch {
             withContext(Dispatchers.IO) {
-                val p = if (activePane == 0) paneA else paneB
+                val p = pane
                 val old = p.session.value
-                val newS = if (activePane == 0) QuroShellSession.create(context) else QuroShellSession.createLocal(context)
+                val newS = QuroShellSession.create(context)
                 p.session.value = newS
                 p.history.clear()
                 p.histIdx.value = -1
@@ -217,7 +234,7 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Color(0xFF0C0C0C))) {
         Column(Modifier.fillMaxSize()) {
 
-            // ═══════════ 顶栏第一行：返回 + 双窗格徽章 + 单/双 + 设置 ═══════════
+            // ═══════════ 顶栏第一行：返回 + 终端标签 + 设置 ═══════════
             Row(
                 Modifier.fillMaxWidth().height(36.dp).background(Color(0xFF1B1B1B)).padding(horizontal = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -225,13 +242,10 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                 IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Filled.ArrowBack, "返回", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
-                // 窗格 A 徽章
-                PaneBadge(paneA, "VM/Linux 融合", activePane == 0) { activePane = 0 }
-                if (isDual) {
-                    Spacer(Modifier.width(4.dp))
-                    // 窗格 B 徽章
-                    PaneBadge(paneB, "Quro 终端", activePane == 1) { activePane = 1 }
-                }
+                Text(
+                    "Linux 终端", color = Color(0xFF7BE0A0), fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp),
+                )
                 Spacer(Modifier.width(4.dp))
                 // 活动窗格 cwd（截断）
                 val cwd = active().session.value?.cwdState
@@ -244,10 +258,6 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                     )
                 } else {
                     Spacer(Modifier.weight(1f))
-                }
-                // 单/双切换
-                IconButton(onClick = { isDual = !isDual }, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Filled.Build, if (isDual) "切单窗格" else "切双窗格", tint = Color(0xFF9CC7FF), modifier = Modifier.size(16.dp))
                 }
                 IconButton(onClick = { showSettings = !showSettings }, modifier = Modifier.size(28.dp)) {
                     Icon(Icons.Filled.Settings, "设置", tint = Color(0xFF999999), modifier = Modifier.size(16.dp))
@@ -408,32 +418,14 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
                 )
             }
 
-            // ═══════════ 双 / 单窗格终端区 ═══════════
-            if (isDual) {
-                Row(Modifier.fillMaxWidth().weight(1f)) {
-                    TerminalPane(
-                        pane = paneA, role = "VM/Linux 融合", isActive = activePane == 0, onFocus = { activePane = 0 },
-                        fontSize = fontSize, showLineNumbers = showLineNumbers, searchQuery = searchQuery,
-                        keyboardController = keyboardController, scope = scope, context = context, sourceManager = sourceManager,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Divider(color = Color(0xFF000000), thickness = 1.dp)
-                    TerminalPane(
-                        pane = paneB, role = "Quro 终端", isActive = activePane == 1, onFocus = { activePane = 1 },
-                        fontSize = fontSize, showLineNumbers = showLineNumbers, searchQuery = searchQuery,
-                        keyboardController = keyboardController, scope = scope, context = context, sourceManager = sourceManager,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            } else {
-                TerminalPane(
-                    pane = active(), role = if (activePane == 0) "VM/Linux 融合" else "Quro 终端",
-                    isActive = true, onFocus = { },
-                    fontSize = fontSize, showLineNumbers = showLineNumbers, searchQuery = searchQuery,
-                    keyboardController = keyboardController, scope = scope, context = context, sourceManager = sourceManager,
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                )
-            }
+            // ═══════════ 单窗格终端区 ═══════════
+            TerminalPane(
+                pane = pane, role = "Linux 终端",
+                isActive = true, onFocus = { },
+                fontSize = fontSize, showLineNumbers = showLineNumbers, searchQuery = searchQuery,
+                keyboardController = keyboardController, scope = scope, context = context, sourceManager = sourceManager,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
         }
 
         // ═══════════ 会话管理面板 ═══════════
@@ -459,24 +451,8 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
     }
 }
 
-// ═══════════ 窗格徽章（可点击设为活动） ═══════════
-@Composable
-private fun PaneBadge(pane: PaneState, role: String, isActive: Boolean, onFocus: () -> Unit) {
-    val (modeText, modeColor) = when (pane.session.value?.mode) {
-        ShellMode.VM -> "VM/Linux" to Color(0xFF8AB4F8)
-        ShellMode.LINUX -> "proot/Linux" to Color(0xFF7BE0A0)
-        ShellMode.DEVICE -> "设备 sh" to Color(0xFFFFD700)
-        null -> "初始化…" to Color(0xFF666666)
-    }
-    Box(
-        Modifier.clip(RoundedCornerShape(4.dp))
-            .background(modeColor.copy(alpha = if (isActive) 0.22f else 0.10f))
-            .clickable { onFocus() }
-            .padding(horizontal = 6.dp, vertical = 2.dp)
-    ) {
-        Text(modeText, color = modeColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-    }
-}
+// ═══════════ 窗格徽章（单终端后已移除） ═══════════
+
 
 // ═══════════ 单窗格终端（输出 + 特殊键 + 输入，全部自包含） ═══════════
 @OptIn(ExperimentalLayoutApi::class)

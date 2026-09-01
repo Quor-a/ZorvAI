@@ -110,7 +110,7 @@ fun QuroToolCenterScreen(
 private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val cards = listOf(
-        Triple("terminal", "双窗格终端", "左窗格 VM/Linux 融合 (AVF/pKVM/QEMU 优先，失败回退 proot) + 右窗格 本地 proot/Linux，单/双可切换"),
+        Triple("terminal", "Linux 终端", "proot/Linux 终端（Ubuntu 24.04），打开即自动安装并进入完整 Linux 环境"),
         Triple("workbench", "小程序", "AI 生成并在对话框渲染的 HTML/JS 小程序"),
         Triple("cms", "能力模块", "CMS 引擎与开发环境部署"),
         Triple("toolbox", "工具箱", "文件管理 / 浏览器 / IDE"),
