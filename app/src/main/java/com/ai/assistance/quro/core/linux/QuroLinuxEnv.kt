@@ -723,12 +723,14 @@ object QuroLinuxEnv {
         diagLog(context, "修复 Android 权限 (fix_permissions)")
         fixPermissions(context, rootfsDir)
 
-        // 写 DNS / CA 证书 / nsswitch（联网修复：resolv.conf 用设备真实 DNS + 公共兜底；
-        // 最小 rootfs 无 ca-certificates，SSL 证书来自 Android 系统 CA 库；nsswitch 保证 getaddrinfo 查 DNS）
-        diagLog(context, "写入 resolv.conf / CA 证书 / nsswitch")
+        // 写 DNS / CA 证书 / nsswitch / 基础文件（联网修复：resolv.conf 用设备真实 DNS + 公共兜底；
+        // 最小 rootfs 无 ca-certificates，SSL 证书来自 Android 系统 CA 库；nsswitch 保证 getaddrinfo 查 DNS；
+        // hosts/timezone/apt keyrings 补齐基础环境）
+        diagLog(context, "写入 resolv.conf / CA 证书 / nsswitch / 基础文件")
         writeResolvConf(rootfsDir, context)
         syncCaCerts(context, rootfsDir)
         ensureNsswitch(rootfsDir)
+        setupMiscFiles(context, rootfsDir)
 
         var updated = false
         var lastErr = ""
@@ -765,18 +767,19 @@ object QuroLinuxEnv {
         }
         diagLog(context, "✅ apt-get update 成功")
 
-        // bash 是持久 shell 的基础，必须装。
-        _state.value = SandboxState.Installing("安装 bash…")
-        diagLog(context, "安装 bash...")
-        val bash = runProot(context, "apt-get install -y --no-install-recommends bash", timeoutMs = 120_000)
-        diagLog(context, "bash 安装结果: exit=${bash.first}, output=${bash.second.take(300)}")
+        // bash 是持久 shell 的基础，必须装。同时补齐联网/开发必需的底层库（ca-certificates 让 HTTPS 源与
+        // pip/npm 信任链可用；libcurl4 是多数编译/开发工具依赖；curl/wget 便于下载验证）。
+        _state.value = SandboxState.Installing("安装 bash / ca-certificates / libcurl4…")
+        diagLog(context, "安装基础包 bash ca-certificates libcurl4 curl wget...")
+        val bash = runProot(context, "apt-get install -y --no-install-recommends bash ca-certificates libcurl4 curl wget", timeoutMs = 180_000)
+        diagLog(context, "基础包安装结果: exit=${bash.first}, output=${bash.second.take(300)}")
         if (bash.first != 0) {
-            val detail = "bash 安装失败（exit ${bash.first}）：\n${bash.second}"
+            val detail = "基础包安装失败（exit ${bash.first}）：\n${bash.second}"
             diagLog(context, "⛔ $detail")
             QuroDiag.log("LinuxEnv", "⛔ $detail")
             throw IllegalStateException(detail)
         }
-        diagLog(context, "✅ bash 安装成功")
+        diagLog(context, "✅ 基础包安装成功")
 
         // ★ 部署后自检
         _state.value = SandboxState.Installing("自检 proot 运行环境…")
@@ -872,6 +875,9 @@ object QuroLinuxEnv {
             "--bind=/dev",
             "--bind=/dev/urandom:/dev/random",  // 参考 Agora：将 /dev/random 映射到 urandom，避免应用读 /dev/random 阻塞
             "--bind=/proc",
+            // 显式绑入宿主 /proc/net，修复部分 Android 上 proot 内 /proc/net/dev 为空导致
+            // glibc getifaddrs 读不到网卡 → 默认路由解析失败、connect 报 Network unreachable（用户列的首个缺失项）。
+            "--bind=/proc/net:/proc/net",
             "--bind=/sys",
             "--bind=$home:/root",
             "--bind=$tmp:/tmp",
@@ -2012,12 +2018,18 @@ object QuroLinuxEnv {
                 Log.w(TAG, "syncCaCerts：CA 目录为空 $src")
                 return
             }
+            // CA 证书库存放目录（update-ca-certificates 的源目录；用户「CA 证书库缺失」项）
+            val shareDir = File(rootfs, "usr/share/ca-certificates").apply { mkdirs() }
+            val localShareDir = File(rootfs, "usr/local/share/ca-certificates").apply { mkdirs() }
             val sb = StringBuilder()
             files.forEach { f ->
                 try {
                     val text = f.readText()
                     // 复制原始证书文件（保持哈希命名 .0，OpenSSL 直接识别）
                     File(certsDir, f.name).writeText(text)
+                    // CA 证书库源目录也放一份（供后续 update-ca-certificates 使用）
+                    File(shareDir, f.name).writeText(text)
+                    File(localShareDir, f.name).writeText(text)
                     // 拼接到单文件 bundle
                     sb.append(text)
                     if (!text.endsWith("\n")) sb.append("\n")
@@ -2027,6 +2039,41 @@ object QuroLinuxEnv {
             Log.i(TAG, "✅ syncCaCerts：复制 ${files.size} 个 CA 证书 → ${certsDir.absolutePath}")
         } catch (e: Exception) {
             Log.w(TAG, "syncCaCerts 失败（非致命）: ${e.message}")
+        }
+    }
+
+    /**
+     * 补齐最小 rootfs 缺的基础文件（用户列出的「缺失项」）：
+     * 1. /etc/hosts —— 127.0.0.1/::1 解析 localhost，否则本地域名解析不可用；
+     * 2. /etc/timezone —— 取设备当前时区（java.util.TimeZone），否则时间相关命令/日志错乱；
+     * 3. /etc/apt/keyrings/ —— 创建并尽量从 rootfs 自带 ubuntu-archive-keyring 复制，供 signed-by 源验证包签名。
+     * 均幂等、失败非致命。
+     */
+    private fun setupMiscFiles(context: Context, rootfs: File) {
+        try {
+            val etc = File(rootfs, "etc").apply { mkdirs() }
+            // /etc/hosts
+            val hosts = File(etc, "hosts")
+            if (!hosts.exists()) {
+                hosts.writeText(
+                    "127.0.0.1 localhost\n" +
+                    "::1 localhost ip6-localhost ip6-loopback\n" +
+                    "ff02::1 ip6-allnodes\n" +
+                    "ff02::2 ip6-allrouters\n"
+                )
+            }
+            // /etc/timezone（设备当前时区）
+            val tz = java.util.TimeZone.getDefault().id ?: "UTC"
+            File(etc, "timezone").writeText("$tz\n")
+            // /etc/apt/keyrings
+            val keyrings = File(etc, "apt/keyrings").apply { mkdirs() }
+            val ubuntuKey = File(rootfs, "usr/share/keyrings/ubuntu-archive-keyring.gpg")
+            if (ubuntuKey.isFile && !File(keyrings, ubuntuKey.name).exists()) {
+                ubuntuKey.copyTo(File(keyrings, ubuntuKey.name), overwrite = false)
+            }
+            Log.i(TAG, "✅ setupMiscFiles：hosts/timezone($tz)/apt keyrings 已补齐")
+        } catch (e: Exception) {
+            Log.w(TAG, "setupMiscFiles 失败（非致命）: ${e.message}")
         }
     }
 
@@ -2194,11 +2241,12 @@ fi
 
     private fun prepareRuntimeExtras(context: Context, rootfs: File) {
         try {
-            // 每次启动都刷新 DNS / CA 证书 / nsswitch（与 setup 同级），
+            // 每次启动都刷新 DNS / CA 证书 / nsswitch / 基础文件（与 setup 同级），
             // 避免一次快照过期导致 apt/pip/npm 再次超时（用户「容器内缺 SSL 证书 → 联网超时」根因）。
             writeResolvConf(rootfs, context)
             syncCaCerts(context, rootfs)
             ensureNsswitch(rootfs)
+            setupMiscFiles(context, rootfs)
             // 创建共享存储挂载点（/sdcard），否则 proot --bind 因目标不存在而整体启动失败。
             File(rootfs, SHARED_STORAGE_MOUNT.trimStart('/')).mkdirs()
             val props = buildProps(context)
