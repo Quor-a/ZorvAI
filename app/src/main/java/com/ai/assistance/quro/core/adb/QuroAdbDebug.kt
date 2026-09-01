@@ -116,4 +116,18 @@ object QuroAdbDebug {
             openDeveloperOptions(ctx)
         }
     }
+
+    /**
+     * 经特权通道（Shizuku/ROOT）以 root 执行一条命令，等价于「本机 ADB shell」——即用户诉求里的
+     * "控制代码 / 控制手机"：本应用自身作为 ADB 客户端对系统发指令（重启服务、改设置、读写系统分区等）。
+     *
+     * 走 [QuroRootGateway] 统一降级链（Shizuku-root → su），**阻塞**调用，必须在 IO 线程调用。
+     *
+     * @return [QuroRootGateway.RootResult]，含 exitCode / 合并后的 stdout+stderr / 实际通道
+     */
+    fun shell(
+        ctx: Context,
+        command: String,
+        timeoutMs: Long = QuroRootGateway.DEFAULT_TIMEOUT_MS,
+    ): QuroRootGateway.RootResult = QuroRootGateway.exec(ctx, command, timeoutMs, "capos.adb.shell")
 }
