@@ -145,10 +145,10 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
                                 apkUrl = gh.getOrNull()!!.third
                             } else {
                                 // 2) GitHub 不可达 → 回退 Gitee 镜像
-                                val ge = runCatching { fetchLatestRelease("https://gitee.com/api/v5/repos/ZorvAI/ZorvAI/releases/latest") }
+                                val ge = runCatching { fetchLatestRelease("https://gitee.com/api/v5/repos/Quor-a/ZorvAI/releases/latest") }
                                 if (ge.isSuccess && ge.getOrNull()?.first?.isNotBlank() == true) {
                                     latest = ge.getOrNull()!!.first
-                                    htmlUrl = ge.getOrNull()!!.second.ifBlank { "https://gitee.com/ZorvAI/ZorvAI/releases" }
+                                    htmlUrl = ge.getOrNull()!!.second.ifBlank { "https://gitee.com/Quor-a/ZorvAI/releases" }
                                     apkUrl = ge.getOrNull()!!.third
                                 } else {
                                     errMsg = gh.exceptionOrNull()?.message ?: ge.exceptionOrNull()?.message ?: "未知错误"
@@ -167,7 +167,7 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
                                             // 如果没有 APK 下载链接，显示对话框让用户选择
                                             updateDialog = Triple(
                                                 htmlUrl ?: "$repoUrl/releases/latest",
-                                                "https://gitee.com/ZorvAI/ZorvAI/releases",
+                                                "https://gitee.com/Quor-a/ZorvAI/releases",
                                                 apkUrl ?: ""
                                             )
                                         }
