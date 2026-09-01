@@ -354,12 +354,19 @@ object QuroBrowserController {
 
     /** 当前浏览器状态摘要（attached/loaded/url/title），供 AI 可靠判断页面是否就绪。 */
     fun status(): String {
-        val wv = active
+        // 必须在主线程读 WebView 属性（wv.url / wv.title），否则在 Dispatchers.Default /
+        // QuroSessionBridge 单线程 Executor 上调用时会抛
+        // "A WebView method was called on thread 'DefaultDispatcher-worker-2'"。
+        // 复用 currentUrl()/currentTitle()（内部已走 runOnMainSync → 主线程）。
+        val attached = isAttached()
+        val loaded = pageLoaded
+        val url = currentUrl() ?: ""
+        val title = currentTitle() ?: ""
         return buildString {
-            append("attached=").append(wv != null).append('\n')
-            append("loaded=").append(pageLoaded).append('\n')
-            append("url=").append(wv?.url ?: "").append('\n')
-            append("title=").append(wv?.title ?: "").append('\n')
+            append("attached=").append(attached).append('\n')
+            append("loaded=").append(loaded).append('\n')
+            append("url=").append(url).append('\n')
+            append("title=").append(title).append('\n')
         }
     }
 
