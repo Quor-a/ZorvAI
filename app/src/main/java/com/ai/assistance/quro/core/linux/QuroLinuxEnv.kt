@@ -22,6 +22,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import java.util.zip.GZIPInputStream
 import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.core.linux.PackageManagerType
@@ -456,6 +457,20 @@ object QuroLinuxEnv {
     fun cancelSetup() {
         setupJob?.cancel()
         setupJob = null
+    }
+
+    /**
+     * 校验已下载 rootfs tarball 的完整性（P2 校验 · 对外可观测入口）。
+     *
+     * 供「linux:verify」等调试命令或设置页调用，让用户主动确认本地 rootfs 未被损坏。
+     * 内部复用 [verifyDownloadedRootfs]：gzip 魔数 + SHA-256 sidecar 匹配；
+     * 无 sidecar 的首次运行会顺手写入（信任当前文件）。
+     *
+     * @return tarball 存在且完整返回 true，否则 false
+     */
+    fun verifyRootfsIntegrity(context: Context): Boolean {
+        val tar = File(sandboxDir(context), "rootfs.tar.gz")
+        return verifyDownloadedRootfs(context, tar)
     }
 
     /** 将诊断日志同时写到 app 私有目录下的文件，方便用户取出查看。 */
@@ -1513,16 +1528,17 @@ object QuroLinuxEnv {
         val urls = UBUNTU_ROOTFS_MIRRORS.flatMap { base -> candidateFileNames.map { "$base/$it" } }
         Log.i(TAG, "rootfs 候选 URL(${urls.size}): ${urls.joinToString(" | ")}")
 
-        // 检查是否已有有效的下载文件（断点续传支持）
-        if (target.exists() && target.length() > 10 * 1024 * 1024) { // 大于10MB认为有效
-            Log.i(TAG, "发现已存在的下载文件: ${target.absolutePath}, 大小: ${target.length() / 1024}KB, 跳过下载")
+        // 校验（P2 校验）：已存在且完整性通过（gzip 魔数 + SHA-256 sidecar 匹配）→ 跳过下载复用；
+        // 损坏（被代理/错误页替换、或磁盘写入残缺）→ 清理后重下，避免静默产出破 rootfs（「命令不可达 Ubuntu」）。
+        if (verifyDownloadedRootfs(context, target)) {
+            Log.i(TAG, "发现已存在且校验通过的 rootfs: ${target.absolutePath}, 大小: ${target.length() / 1024}KB, 跳过下载")
             onProgress(1f)
             return
         }
 
-        // 清理不完整的下载
+        // 清理不完整/损坏的下载
         if (target.exists()) {
-            Log.i(TAG, "清理不完整的下载文件: ${target.absolutePath}, 大小: ${target.length()}")
+            Log.i(TAG, "清理不完整/损坏的下载文件: ${target.absolutePath}, 大小: ${target.length()}")
             target.delete()
         }
 
@@ -1531,9 +1547,15 @@ object QuroLinuxEnv {
             try {
                 Log.i(TAG, "尝试镜像 ${i + 1}/${urls.size}: $url")
                 downloadFrom(url, target, onProgress)
-                // 验证下载的文件
+                // 验证刚下载的文件：gzip 魔数 + 写入 SHA-256 sidecar
                 if (target.exists() && target.length() > 10 * 1024 * 1024) {
-                    Log.i(TAG, "✅ rootfs下载成功: ${target.absolutePath}, 大小: ${target.length() / 1024}KB")
+                    if (!isGzipFile(target)) {
+                        throw java.io.IOException("下载内容非 gzip（疑似被代理/错误页替换），拒绝使用")
+                    }
+                    val sha = sha256Hex(target)
+                        ?: throw java.io.IOException("rootfs 校验和计算失败")
+                    rootfsShaFile(context).writeText(sha)
+                    Log.i(TAG, "✅ rootfs下载+校验成功: ${target.absolutePath}, 大小: ${target.length() / 1024}KB, sha256=$sha")
                     return
                 } else {
                     val size = if (target.exists()) target.length() else 0
@@ -1547,6 +1569,62 @@ object QuroLinuxEnv {
             }
         }
         throw java.io.IOException("所有 Ubuntu 镜像下载失败: ${lastErr?.message}")
+    }
+
+    /**
+     * 计算文件 SHA-256（十六进制小写）；失败返回 null。
+     * 分块流式读取，避免 ~30MB tarball 一次性读入内存。
+     */
+    private fun sha256Hex(file: File): String? = runCatching {
+        val md = MessageDigest.getInstance("SHA-256")
+        FileInputStream(file).buffered(64 * 1024).use { `in` ->
+            val buf = ByteArray(64 * 1024)
+            var n: Int
+            while (`in`.read(buf).also { n = it } != -1) md.update(buf, 0, n)
+        }
+        md.digest().joinToString("") { "%02x".format(it) }
+    }.getOrNull()
+
+    /** 文件是否以 gzip 魔数 (0x1f 0x8b) 开头（用于识别「下载内容被代理/错误页替换」）。 */
+    private fun isGzipFile(file: File): Boolean = runCatching {
+        FileInputStream(file).buffered().use { it.read() == 0x1f && it.read() == 0x8b }
+    }.getOrDefault(false)
+
+    /** rootfs tarball 的 SHA-256 校验和 sidecar 路径。 */
+    private fun rootfsShaFile(context: Context) = File(sandboxDir(context), "rootfs.tar.gz.sha256")
+
+    /**
+     * 校验已下载 rootfs tarball 完整性（P2 校验）。
+     *
+     * 判定：
+     *  - 文件不存在 / 小于 10MB → false（需下载）；
+     *  - gzip 魔数缺失 → 内容疑似被代理/错误页替换 → false（需重下）；
+     *  - 有 sidecar 且 SHA-256 不匹配 → 损坏（磁盘写入残缺/被篡改）→ false（需重下）；
+     *  - 无 sidecar（旧安装/首次）→ 计算并写入（信任当前文件，向后兼容），返回 true；
+     *  - 有 sidecar 且匹配 → true。
+     *
+     * 关键：只有「检测到损坏」才触发重下，绝不强迫重下一个本来完好的安装。
+     */
+    private fun verifyDownloadedRootfs(context: Context, file: File): Boolean {
+        if (!file.exists() || file.length() < 10 * 1024 * 1024) return false
+        if (!isGzipFile(file)) {
+            Log.w(TAG, "rootfs 非 gzip（疑似损坏/被代理替换），需重下")
+            return false
+        }
+        val shaFile = rootfsShaFile(context)
+        val actual = sha256Hex(file) ?: return false
+        if (!shaFile.exists()) {
+            shaFile.writeText(actual)
+            Log.i(TAG, "rootfs 校验和 sidecar 已写入（向后兼容旧安装）: $actual")
+            return true
+        }
+        val expected = shaFile.readText().trim()
+        if (expected.equals(actual, ignoreCase = true)) {
+            Log.i(TAG, "rootfs 完整性校验通过")
+            return true
+        }
+        Log.w(TAG, "rootfs 校验和不匹配（损坏），需重下: expected=$expected actual=$actual")
+        return false
     }
 
     /**
