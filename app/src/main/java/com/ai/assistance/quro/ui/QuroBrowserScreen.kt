@@ -69,6 +69,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.ai.assistance.quro.core.tools.QuroDownloadUtil
+import com.ai.assistance.quro.core.tools.QuroSessionBridge
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -163,7 +164,13 @@ private fun openPythonConsole(ctx: Context, wv: WebView?) {
     val js = runCatching { ctx.assets.open("www/brython.min.js").bufferedReader().readText() }.getOrNull()
     // 把 brython.min.js 内联到 </head> 前，避免 file:// 在 Android 11+ 被 WebView 拦截
     val inlined = if (js != null) html.replace("</head>", "<script>$js</script></head>") else html
-    wv.loadDataWithBaseURL("https://quro.local/", inlined, "text/html", "utf-8", null)
+    // 注入 Quro 会话桥（window.QuroSession）+ Python 侧 quro_session 包装，
+    // 使 Python 可驱动 browser_act、读写 Cookie/Storage（Python↔浏览器会话桥）。
+    val qsPy = QuroSessionBridge.QURO_SESSION_PY
+    val withQs = inlined.replace("</body>", "<script type=\"text/python\">\n$qsPy\n</script>\n</body>")
+    // 先挂载桥（addJavascriptInterface 须在页面加载前），再加载页面
+    QuroSessionBridge.register(wv)
+    wv.loadDataWithBaseURL("https://quro.local/", withQs, "text/html", "utf-8", null)
 }
 
 private val DEFAULT_SCRIPT = """// 原生「眼 + 手」自动化指令（系统 WebView 不开放网页内 JS 求值接口）：
@@ -1245,7 +1252,7 @@ fun QuroBrowserScreen(
                             )
                             Spacer(Modifier.height(12.dp))
                             Text(
-                                "注意: 代理设置需要系统 WebView 支持（Android 11+ 经 ProxyController 注入）。当前代理配置将保存在本地。",
+                                "代理将实时注入浏览器 WebView 网络栈（Android 11+ 经 ProxyController，Android 10 经 setHttpProxy）。HTTP/SOCKS5 均支持；代理认证（用户名/密码）在 ProxyController 下可能不被底层 WebView 支持。",
                                 fontSize = 11.sp, color = cs.onSurfaceVariant,
                             )
                         }
@@ -1253,7 +1260,7 @@ fun QuroBrowserScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = {
-                        // 保存代理设置到 SharedPreferences
+                        // 保存代理设置到 SharedPreferences（commit 确保写入完成后再广播，避免读到的仍是旧值）
                         val sp = ctx.getSharedPreferences(BM_PREFS, Context.MODE_PRIVATE)
                         sp.edit()
                             .putBoolean("proxy_enabled", proxyEnabled)
@@ -1262,9 +1269,13 @@ fun QuroBrowserScreen(
                             .putString("proxy_port", proxyPort)
                             .putString("proxy_username", proxyUsername)
                             .putString("proxy_password", proxyPassword)
-                            .apply()
+                            .commit()
+                        // 通知 BrowserCore 立即把代理真正注入 WebView 网络栈（Android 11+ 经 ProxyController）
+                        ctx.sendBroadcast(Intent("com.ai.assistance.quro.browser.ACTION_PROXY_CHANGED"))
                         showProxySettings = false
-                        Toast.makeText(ctx, "代理设置已保存", Toast.LENGTH_SHORT).show()
+                        val tip = if (proxyEnabled) "代理已保存并注入：${proxyType} $proxyHost:$proxyPort"
+                                  else "代理已关闭"
+                        Toast.makeText(ctx, tip, Toast.LENGTH_SHORT).show()
                     }) { Text("保存") }
                 },
                 dismissButton = {

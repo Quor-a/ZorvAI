@@ -20,13 +20,15 @@ class BrowserActTool : QuroTool {
         "read(按 CSS 选择器取 outerHTML) / html(整页 HTML) / text(页面正文) / links(所有外链) / " +
         "eval(执行任意 JS 表达式) / wait(等页面就绪, ms) / scroll(dy 像素,to=top|bottom 滚到顶/底) / " +
         "find(页面内查找文本,返回是否命中) / back(后退) / forward(前进) / reload(刷新) / stop(停止加载) / " +
-        "screenshot(截当前窗口存 PNG,返回路径)。" +
+        "screenshot(截当前窗口存 PNG,返回路径) / " +
+        "capture(抓包：列出当前页 fetch/xhr 请求，含 请求体 + 响应头/状态码/响应体，可用于 API 数据分析与重放) / " +
+        "capture_clear(清空抓包缓冲)。" +
         "必须先用 snapshot 拿可交互元素的 quro-id 列表，再按 id 操作；不要靠 CSS 选择器（页面结构易变）。" +
         "若浏览器未在前台，先 action=open 打开（支持直接搜关键词）；本工具不打开新窗口，仅操控当前活跃的 WebView。"
     override val parametersJson = """{
         "type":"object",
         "properties":{
-            "action":{"type":"string","description":"open/status/snapshot/click/fill/click_selector/fill_selector/read/html/text/links/eval/wait/scroll/find/back/forward/reload/stop/screenshot"},
+            "action":{"type":"string","description":"open/status/snapshot/click/fill/click_selector/fill_selector/read/html/text/links/eval/wait/scroll/find/back/forward/reload/stop/screenshot/capture/capture_clear"},
             "url":{"type":"string","description":"open 时的网址或关键词（关键词自动搜索）"},
             "id":{"type":"string","description":"click/fill 时的稳定 quro-id（snapshot 返回）"},
             "value":{"type":"string","description":"fill 时写入的文本"},
@@ -35,7 +37,9 @@ class BrowserActTool : QuroTool {
             "dy":{"type":"integer","description":"scroll 时向下滚动的像素，默认 300；为负向上"},
             "to":{"type":"string","description":"scroll 时滚到 top(顶) 或 bottom(底)"},
             "text":{"type":"string","description":"find 时查找的文本"},
-            "ms":{"type":"integer","description":"wait 时等待毫秒，默认 1500，最大 15000"}
+            "ms":{"type":"integer","description":"wait 时等待毫秒，默认 1500，最大 15000"},
+            "limit":{"type":"integer","description":"capture 返回条数上限，默认 200"},
+            "filter":{"type":"string","description":"capture 按 url/方法/请求体/响应体 关键字过滤"}
         },
         "required":["action"]
     }"""
@@ -165,7 +169,18 @@ class BrowserActTool : QuroTool {
                     ?: return@runBlocking "截图失败（没有活跃浏览器或界面未布局完成）"
                 "screenshot=$path"
             }
-            else -> "未知 action: $action（支持 open/status/snapshot/click/fill/click_selector/fill_selector/read/html/text/links/eval/wait/scroll/find/back/forward/reload/stop/screenshot）"
+            "capture" -> {
+                if (!QuroBrowserController.isAttached()) return@runBlocking "当前没有活跃的内置浏览器（请先 action=open）"
+                val limit = jo.optInt("limit", 200).coerceIn(1, 1000)
+                val filter = jo.optString("filter", "")
+                val json = QuroBrowserController.getCaptureSnapshotJson(limit, filter)
+                "📡 抓包记录（含 请求体 / 响应头 / 状态码 / 响应体）：\n$json"
+            }
+            "capture_clear" -> {
+                QuroBrowserController.clearCapture()
+                "已清空抓包缓冲"
+            }
+            else -> "未知 action: $action（支持 open/status/snapshot/click/fill/click_selector/fill_selector/read/html/text/links/eval/wait/scroll/find/back/forward/reload/stop/screenshot/capture/capture_clear）"
         }
     }
 }

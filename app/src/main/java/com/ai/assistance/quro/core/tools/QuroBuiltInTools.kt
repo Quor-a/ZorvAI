@@ -290,6 +290,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(QuroCmsRunDagTool())
     // QuroTerm 自研沙盒终端能力（集成 NovaTerm为 QuroTerm）
     r.register(QuroTermTool())
+    // #564 终端直用特权通道执行（Shizuku→ROOT 自动降级）：run=以 root 执行命令 / status=查特权通道
+    r.register(QuroPrivExecTool())
+    // #565 ADB 可当 ADB 终端（无线调试中枢）：shell=本机 ADB shell / tcp_status|tcp_enable|tcp_disable=管理 TCP adbd
+    r.register(QuroAdbTermTool())
     // 记忆库：AI 自动沉淀长期记忆（保存/列出/检索/删除）
     r.register(QuroMemorySaveTool())
     r.register(QuroMemoryListTool())

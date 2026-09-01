@@ -43,9 +43,10 @@ class WebCrawlerTool : QuroTool {
             "max_pages":{"type":"integer","description":"最大抓取页数，默认 15，最大 60"},
             "same_host_only":{"type":"boolean","description":"只抓同 host 的链接（默认 true，避免爬出本站）"},
             "extract":{"type":"string","description":"both(链接+正文)/links(仅链接)/text(仅正文)，默认 both"},
-            "render_wait_ms":{"type":"integer","description":"每页渲染等待毫秒，默认 2500，最大 12000"},
-            "save_markdown":{"type":"boolean","description":"是否把整站正文导出 Markdown 到下载目录，默认 false"}
-        },
+        "render_wait_ms":{"type":"integer","description":"每页渲染等待毫秒，默认 2500，最大 12000"},
+        "save_markdown":{"type":"boolean","description":"是否把整站正文导出 Markdown 到下载目录，默认 false"},
+        "include_captures":{"type":"boolean","description":"是否把抓取过程中页面发出的 fetch/xhr 请求（含 请求体/响应状态码/响应头/响应体）一并返回，用于拿真实接口数据，默认 false"}
+    },
         "required":["start_url"]
     }"""
 
@@ -62,6 +63,7 @@ class WebCrawlerTool : QuroTool {
         val extract = jo.optString("extract", "both").takeIf { it in setOf("both", "links", "text") } ?: "both"
         val renderWaitMs = jo.optInt("render_wait_ms", 2500).coerceIn(300, 12000)
         val saveMarkdown = jo.optBoolean("save_markdown", false)
+        val includeCaptures = jo.optBoolean("include_captures", false)
 
         // 确保有活跃浏览器
         if (!QuroBrowserController.isAttached()) {
@@ -161,6 +163,12 @@ class WebCrawlerTool : QuroTool {
             saveNote = "\n\n📄 Markdown 报告已保存：${saveMarkdownFile(context, name, md.toString())}"
         }
 
+        var captureNote = ""
+        if (includeCaptures) {
+            val capJson = QuroBrowserController.getCaptureSnapshotJson(300, "")
+            captureNote = "\n\n📡 抓取过程抓包（fetch/xhr，含 请求体/响应状态码/响应头/响应体）：\n$capJson"
+        }
+
         // 截断输出，避免撑爆上下文：只回前若干页摘要 + 统计
         val brief = JSONObject().apply {
             put("stats", result.getJSONObject("stats"))
@@ -176,7 +184,7 @@ class WebCrawlerTool : QuroTool {
             })
             if (pages.size > 12) put("note", "仅显示前 12 页摘要，完整 ${pages.size} 页见 web_crawler 返回的 pages 字段（或直接 save_markdown=true 导出）")
         }
-        "✅ 爬取完成（${done} 页）。\n${brief.toString(2)}$saveNote"
+        "✅ 爬取完成（${done} 页）。\n${brief.toString(2)}$saveNote$captureNote"
     }
 
     private data class CrawlItem(val url: String, val depth: Int)
