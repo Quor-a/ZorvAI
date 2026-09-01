@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
 import com.ai.assistance.quro.core.adb.QuroAdbDebug
+import com.ai.assistance.quro.core.approle.DefaultAppRole
+import com.ai.assistance.quro.core.approle.QuroDefaultAppManager
 import com.ai.assistance.quro.ui.theme.Accent
 import com.ai.assistance.quro.ui.theme.Card
 import com.ai.assistance.quro.ui.theme.Line
@@ -76,6 +78,9 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
 
     // 本机作为 ADB 客户端：反向连接对方 ip:port（被手机控制 / 本机作为客户端）
     var clientTarget by remember { mutableStateOf("") }
+
+    // 8 项默认应用角色持有状态（诊断用，随 refresh 刷新）
+    var roleHeld by remember { mutableStateOf(mapOf<DefaultAppRole, Boolean>()) }
 
     // 常用设备控制命令（点按即填入输入框，避免手敲）
     val quickCmds = listOf(
@@ -160,11 +165,15 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
                 val l = if (pt > 0) runCatching { QuroAdbDebug.isAdbdListening(ctx, pt) }.getOrDefault(false) else false
                 Quin(p, u, pt, a, l)
             }
+            val roles = withContext(Dispatchers.IO) {
+                enumValues<DefaultAppRole>().map { it to QuroDefaultAppManager.isHeld(ctx, it) }.toMap()
+            }
             hasPriv = priv
             usbOn = usb
             tcpPort = port
             ip = addr
             listening = live
+            roleHeld = roles
             probing = false
         }
     }
@@ -188,6 +197,19 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
             }
             ctx.startActivity(Intent.createChooser(intent, "分享连接命令"))
         }
+    }
+
+    fun shareDiagnostic() {
+        val sb = StringBuilder()
+        sb.appendLine("QuroAI ADB / 默认应用诊断")
+        sb.appendLine("提权通道: ${if (hasPriv) "可用(root/Shizuku)" else "无"}")
+        sb.appendLine("USB 调试: ${when (usbOn) { null -> "未知"; true -> "开"; false -> "关" }}")
+        sb.appendLine("TCP ADB: ${if (tcpPort > 0) "监听 $tcpPort${if (listening) " (已监听)" else ""}" else "未启用"}")
+        sb.appendLine("WiFi IP: ${ip ?: "无"}")
+        sb.appendLine("连接命令: ${if (tcpPort > 0 && ip != null) "adb connect $ip:$tcpPort" else "—"}")
+        sb.appendLine("默认应用角色:")
+        for ((r, h) in roleHeld) sb.appendLine("  ${r.label}: ${if (h) "已设为默认" else "未设"}")
+        share(sb.toString())
     }
 
     fun onToggle(newVal: Boolean) {
@@ -487,6 +509,26 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
                         log, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     )
+                }
+            }
+
+            // 诊断：无需 adb，在手机上即可确认 ADB 与默认应用状态
+            GroupCaption("诊断（无需 adb，手机上自证状态）")
+            SetGroup {
+                InfoLine("一键汇总当前 ADB 通道、TCP 监听、连接命令与 8 项默认应用角色状态，可分享给开发者定位；不写任何外部日志。")
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Button(
+                        onClick = { shareDiagnostic() },
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                    ) {
+                        Text("分享诊断信息", fontSize = 13.sp)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = { refresh() }) { Text("刷新", fontSize = 13.sp, color = Accent) }
                 }
             }
 
