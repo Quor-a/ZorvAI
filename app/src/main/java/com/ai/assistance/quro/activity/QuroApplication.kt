@@ -50,6 +50,15 @@ class QuroApplication : Application() {
         super.attachBaseContext(base)
         appCtx = base.applicationContext ?: base
         QuroCrashLogger.install(this)
+        // LSPosed 作用域标记自愈：每次启动先清除旧标记；若本应用被 LSPosed 纳入作用域，
+        // QuroXposedModule 会在 attachBaseContext 的 Xposed 钩子（afterHookedMethod）重新写入，
+        // 使 QuroLSPosed.isAppInScope() 真实反映「当前是否处于作用域」，取消作用域后随下次启动自愈。
+        // 文件名 ".lsposed_scope" 必须与 QuroXposedModule.SCOPE_MARKER 保持一致；此处不得引用该类，
+        // 否则会把 xposed 桩类拉进常规运行路径触发 NoClassDefFoundError。
+        try {
+            java.io.File(filesDir, ".lsposed_scope").delete()
+        } catch (_: Throwable) {
+        }
     }
 
     override fun onCreate() {

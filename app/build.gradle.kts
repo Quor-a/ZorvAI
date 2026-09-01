@@ -221,6 +221,10 @@ dependencies {
     // 显式保活 concurrent-futures，确保 androidx.concurrent.futures.AbstractResolvableFuture 必然进 dex。
     implementation("androidx.concurrent:concurrent-futures:1.2.0")
 
+    // LSPosed / Xposed 模块 API 桩：compileOnly 引用，绝不进 APK。
+    // 运行时由 LSPosed 把真实 de.robv.android.xposed.* 类注入进程；app 仅借此编译 QuroXposedModule。
+    compileOnly(project(":xposed-stub"))
+
     // 自包含终端（v127 起）：交互式 shell 用 QuroShellSession（常驻进程 + 流式读入，无 Termux/PTY 依赖），
     // 应用内 Linux 环境走 QuroLinuxEnv（proot + Alpine aarch64）。不再依赖 Termux terminal-view。
 

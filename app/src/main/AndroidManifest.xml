@@ -227,6 +227,19 @@
         android:resizeableActivity="true"
         android:networkSecurityConfig="@xml/network_security_config">
 
+        <!-- LSPosed / Xposed 模块声明：本应用同时作为可选模块。LSPosed 据此识别并在「模块」列表呈现，
+             经 assets/xposed_init 加载 QuroXposedModule 入口。xposedminversion=82 对应 LSPosed（API 82+）。
+             不定义任何 ai.aci.permission.*（定义权属控制端）。 -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="82" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="Zorv AI 可选 LSPosed 模块：作用域标记 + 可选跨应用注入/系统重定向桥（opt-in，配置驱动）" />
+
         <!-- Health Connect：声明本应用支持读写的数据类型（Android 14+ 系统内置；旧版需集成 health-connect-client 库）。
              与 res/values/health_permissions.xml 对应，系统据此在授权页展示可授权项。 -->
         <meta-data
@@ -750,6 +763,17 @@
                 <data android:mimeType="application/vnd.openxmlformats-officedocument.presentationml.presentation" />
             </intent-filter>
         </activity>
+
+        <!-- LSPosed 跨应用注入桥接收器：接收 QuroXposedModule 在被钩中目标包 Activity.onCreate 时
+             发出的前台 App 通知广播（导出以便跨 UID 接收；仅处理固定 action，不定义任何 ai.aci.permission.*）。 -->
+        <receiver
+            android:name=".core.privilege.QuroLsposeBridgeReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.LSPOSED_APP_OPENED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 
