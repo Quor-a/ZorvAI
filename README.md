@@ -116,7 +116,7 @@
 | **可视化组件** | `ui_widget` 工具：**60+ 种可交互组件**（按钮、表单、图表、进度、评分、轮播、时间线等），直接融进聊天气泡；支持 `command` 语法触发动作（打开页面、执行命令、调用 AI 等） |
 | **可视化编程** | **Mermaid 图表离线渲染**：AI 或用户写 ` ```mermaid ` 围栏代码块，离线渲染成流程图/时序图/状态机/类图/思维导图等；支持全屏预览、SVG 导出、五种主题 |
 | **系统返回手势** | 完整支持 Android 系统返回手势，包括从屏幕边缘滑动返回、分层返回策略、导航栏适配、全屏模式处理；所有弹窗和二级界面均使用 `BackHandler` 处理返回事件 |
-| **特权终端工具 `priv_exec`** | AI 在对话中直接以 **ZorvAI 授权 / Shizuku / ROOT（自动降级）** 执行命令：`run`=以 root 执行；`status`=查询特权通道（Root / Shizuku / LSPosed / ZorvAI）可用状态。LSPosed 仅做管理器探测（不注入钩子） |
+| **特权终端工具 `priv_exec`** | AI 在对话中直接以 **ZorvAI 授权 / Shizuku / ROOT（自动降级）** 执行命令：`run`=以 root 执行；`status`=查询特权通道（Root / Shizuku / LSPosed / ZorvAI）可用状态。LSPosed 提供 opt-in 模块（作用域标记 + 可选跨应用注入/系统重定向桥，配置驱动） |
 | **ADB 终端工具 `adb_term`** | 把 ADB 当终端用：`shell`=本机 ADB shell；`tcp_status` / `tcp_enable` / `tcp_disable`=管理 TCP/IP 无线调试（开启/关闭 `adbd`、查 WiFi IP、当前端口、USB 调试状态、是否有特权通道） |
 | **Python ↔ 浏览器会话桥** | `QuroSessionBridge`：对话框内 Brython(Python) 与内置浏览器**共享 Cookie（全局 `CookieManager` 双向）+ Storage（`SharedPreferences` 镜像）**；Python 侧经 `window.QuroSession.browserAct()` 直接驱动 `QuroBrowserController`（open / read / crawl / script / act），无需手动复制页面上下文 |
 
@@ -582,7 +582,7 @@ private fun runCommandInLinux(command: String, timeout: Long): String {
 
 | 工具 | 动作 | 说明 |
 |------|------|------|
-| `priv_exec` | `run` / `status` | `run`=以 **ZorvAI 授权 / Shizuku / ROOT（自动降级）** 执行命令；`status`=查询特权通道（Root / Shizuku / LSPosed / ZorvAI）可用状态。LSPosed 仅做管理器探测（不注入钩子） |
+| `priv_exec` | `run` / `status` | `run`=以 **ZorvAI 授权 / Shizuku / ROOT（自动降级）** 执行命令；`status`=查询特权通道（Root / Shizuku / LSPosed / ZorvAI）可用状态。LSPosed 提供 opt-in 模块（作用域标记 + 可选跨应用注入/系统重定向桥，配置驱动） |
 | `adb_term` | `shell` / `tcp_status` / `tcp_enable` / `tcp_disable` | `shell`=本机 ADB shell；其余管理 TCP/IP 无线调试（开启/关闭 `adbd`、查 WiFi IP、当前端口、USB 调试状态、是否有特权通道） |
 
 > 这两个工具复用既有特权栈 `QuroRootGateway`（`Shizuku→su` 自动降级）与 `QuroAdbDebug`（ADB-over-TCP 中枢），是终端能力的「AI 直驱」薄封装，不新增权限、不破坏已有 pipe/shell 会话链路。
@@ -1437,7 +1437,7 @@ cd ZorvAI
 ### v1.0.75 新增功能
 
 **终端类 LLM 工具（AI 直驱）**：
-- `priv_exec`：以 ZorvAI 授权 / Shizuku / ROOT（自动降级）执行命令；查询特权通道（Root / Shizuku / LSPosed / ZorvAI）状态
+- `priv_exec`：以 ZorvAI 授权 / Shizuku / ROOT（自动降级）执行命令；查询特权通道（Root / Shizuku / LSPosed / ZorvAI）状态（LSPosed 现为可选模块，纳入作用域后由 QuroXposedModule 写入真实作用域标记）
 - `adb_term`：本机 ADB shell；TCP/IP 无线调试中枢（开启/关闭 adbd、查 WiFi IP、端口、USB 调试状态）
 
 **Python ↔ 浏览器会话桥**：

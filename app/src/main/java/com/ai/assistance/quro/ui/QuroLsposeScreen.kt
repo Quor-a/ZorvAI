@@ -38,7 +38,9 @@ import kotlinx.coroutines.withContext
  *  - 展示 Zorv AI 是否已被纳入框架作用域（引导用户在管理器里勾选）；
  *  - 一键跳转对应管理器（若已安装）做作用域 / 模块管理。
  *
- * 仅做探测与引导，不注入任何钩子、不请求任何敏感权限。
+ * 仅做探测与引导；不请求任何敏感权限、不定义任何 ai.aci.permission.*（定义权属控制端）。
+ * 现已提供 opt-in LSPosed 模块（QuroXposedModule）：被纳入作用域即写入作用域标记，
+ * 可选开启跨应用注入 / 系统重定向桥（由外部 lsposed_bridge.json 配置驱动，默认关闭）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -111,7 +113,7 @@ fun QuroLsposeScreen(onClose: () -> Unit) {
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 SetRowClickable(
                     Icons.Filled.Tune, "激活 Zorv AI 模块",
-                    "若提供了专属模块，在「模块」列表启用并重启作用域应用", "",
+                    "在 LSPosed「模块」列表启用 Zorv AI，并在「应用」勾选本应用以纳入作用域", "",
                     onClick = {
                         if (managers.isNotEmpty()) openManager(ctx, managers.first().first)
                         else Toast.makeText(ctx, "请先安装 LSPosed 管理器", Toast.LENGTH_SHORT).show()
@@ -122,7 +124,7 @@ fun QuroLsposeScreen(onClose: () -> Unit) {
             GroupCaption("说明")
             SetGroup {
                 InfoLine("Zorv AI 的终端 / ACI / 自动化能力走自有管线（无障碍 · Shizuku · 设备管理员 · ROOT），不依赖 Xposed 也能运行。")
-                InfoLine("LSPosed 仅用于需要更深系统钩子的场景（如跨应用界面注入、系统级重定向）。本页不注入任何钩子、不申请任何敏感权限。")
+                InfoLine("Zorv AI 现已提供 opt-in LSPosed 模块：被纳入作用域即写入作用域标记；可选开启跨应用注入 / 系统重定向桥（需外部 lsposed_bridge.json 配置，默认关闭）。本页不定义任何 ai.aci.permission.*。")
                 InfoLine("权限定义（ai.aci.permission.* 等）由控制端工程维护，本应用只声明与使用，不重复定义。")
             }
         }
