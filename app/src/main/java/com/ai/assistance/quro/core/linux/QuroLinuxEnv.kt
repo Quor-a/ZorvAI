@@ -731,6 +731,8 @@ object QuroLinuxEnv {
         syncCaCerts(context, rootfsDir)
         ensureNsswitch(rootfsDir)
         setupMiscFiles(context, rootfsDir)
+        // 绕过被阻断的 53 端口 DNS：宿主侧解析关键主机名写进 /etc/hosts，使 apt-get update 按 IP 直连
+        bootstrapHosts(context, rootfsDir)
 
         var updated = false
         var lastErr = ""
@@ -2077,6 +2079,75 @@ object QuroLinuxEnv {
         }
     }
 
+    /**
+     * 绕过被阻断的 DNS 53 端口：在**宿主进程内**用 Android 自身可用的 DNS（Private DNS/DoT 或运营商 DNS）
+     * 解析一组开发必需的主机名，把 `IP 主机名` 直接写进 rootfs 的 `/etc/hosts`。
+     *
+     * 用户根因链：「DNS 53 端口被阻断 → apt 无法解析域名(mirrors.aliyun.com) → apt-get update 超时 →
+     * 所有包安装失败」。容器内 glibc 按 nsswitch `hosts: files dns` 先查 /etc/hosts，命中即直连 IP，
+     * 不再发任何 53 查询，从而彻底绕开端口阻断。覆盖 apt 源 + 常见 pip/npm/git/go 主机，
+     * 使 apt-get update / pip install / npm i 等核心流程可用。
+     *
+     * 每次启动刷新（prepareRuntimeExtras）；用标记行 `# quro-dns-bootstrap` 隔离自写条目，不破坏用户/系统其它 hosts。
+     * 宿主侧当前离线导致全部解析失败时不动文件（保留上一次有效结果），非致命。
+     */
+    private fun bootstrapHosts(context: Context, rootfs: File) {
+        try {
+            val etc = File(rootfs, "etc").apply { mkdirs() }
+            val hosts = File(etc, "hosts")
+            val marker = "# quro-dns-bootstrap"
+            // 保留 localhost 等基础行 + 历史非 bootstrap 行
+            val kept = if (hosts.exists()) {
+                hosts.readLines().filter { it.isNotBlank() && !it.contains(marker) }
+            } else {
+                mutableListOf("127.0.0.1 localhost", "::1 localhost ip6-localhost ip6-loopback")
+            }
+            val resolved = resolveHostIps(
+                listOf(
+                    // apt 源候选（arm64 用 ports.ubuntu.com）
+                    "mirrors.aliyun.com", "mirrors.tuna.tsinghua.edu.cn",
+                    "archive.ubuntu.com", "security.ubuntu.com", "ports.ubuntu.com", "extras.ubuntu.com",
+                    "deb.debian.org", "security.debian.org",
+                    // pip
+                    "pypi.org", "files.pythonhosted.org", "pypi.python.org",
+                    // npm / yarn
+                    "registry.npmjs.org", "registry.npmjs.com", "registry.yarnpkg.com",
+                    // git
+                    "github.com", "objects.githubusercontent.com", "codeload.github.com", "raw.githubusercontent.com",
+                    // go
+                    "proxy.golang.org", "sum.golang.org",
+                    // 通用
+                    "google.com",
+                )
+            )
+            if (resolved.isEmpty()) {
+                Log.w(TAG, "bootstrapHosts：宿主侧全部解析失败（可能离线），保留现有 /etc/hosts")
+                return
+            }
+            val sb = StringBuilder()
+            kept.forEach { sb.append(it).append("\n") }
+            resolved.forEach { (h, ip) -> sb.append("$ip $h $marker\n") }
+            hosts.writeText(sb.toString())
+            Log.i(TAG, "✅ bootstrapHosts：注入 ${resolved.size} 条主机解析（绕过 53 端口）")
+        } catch (e: Exception) {
+            Log.w(TAG, "bootstrapHosts 失败（非致命）: ${e.message}")
+        }
+    }
+
+    /** 宿主侧解析主机名 → 优先 IPv4（apt 用 ForceIPv4）。失败的主机跳过。 */
+    private fun resolveHostIps(hosts: List<String>): Map<String, String> {
+        val out = linkedMapOf<String, String>()
+        for (h in hosts) {
+            try {
+                val addrs = java.net.InetAddress.getAllByName(h)
+                val ip = addrs.firstOrNull { it is java.net.Inet4Address }?.hostAddress
+                    ?: addrs.firstOrNull()?.hostAddress
+                if (!ip.isNullOrBlank()) out[h] = ip
+            } catch (_: Throwable) { }
+        }
+        return out
+    }
+
     /** 确保 /etc/nsswitch.conf 含 hosts: files dns，否则 getaddrinfo 可能不查 DNS（网络修复之一）。 */
     private fun ensureNsswitch(rootfs: File) {
         try {
@@ -2247,6 +2318,10 @@ fi
             syncCaCerts(context, rootfs)
             ensureNsswitch(rootfs)
             setupMiscFiles(context, rootfs)
+            // 每次启动刷新 /etc/hosts（宿主侧解析，绕过被阻断的 53 端口 DNS）。
+            // 该解析是阻塞网络调用，放进 IO scope 异步执行，避免在主线程调用 prepareRuntimeExtras 时 ANR；
+            // setup 路径（setupInternal）则是同步调用，保证 apt-get update 前 hosts 已就绪。
+            scope.launch(Dispatchers.IO) { bootstrapHosts(context, rootfs) }
             // 创建共享存储挂载点（/sdcard），否则 proot --bind 因目标不存在而整体启动失败。
             File(rootfs, SHARED_STORAGE_MOUNT.trimStart('/')).mkdirs()
             val props = buildProps(context)
