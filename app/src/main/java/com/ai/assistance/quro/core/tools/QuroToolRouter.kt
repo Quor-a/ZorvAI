@@ -39,7 +39,7 @@ class QuroToolRouter(allSpecs: List<QuroToolSpec>) {
             "read_calendar", "write_calendar", "get_location", "geocode",
             "list_files", "read_text_file", "browse_files", "file_read",
             "write_file", "delete_file", "make_directory", "move_file", "copy_file", "find_files", "file_info",
-            "http_request", "open_web", "ai_browser",
+            "http_request", "open_web", "ai_browser", "browser_act",
             "run_code", "creative_studio",
             "terminal_run", "terminal_exec", "terminal_write", "terminal_kill", "terminal_status", "quroterm_exec",
             "speak", "stop_speak",
