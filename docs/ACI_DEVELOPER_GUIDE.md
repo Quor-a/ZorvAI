@@ -1,8 +1,8 @@
 # Zorv AI · ACI 开发者手册（Agent Capability Interface）
 
-> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.63** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-09-02（v1.0.75 `browser_capture` 抓包记全：请求体 + 响应头 / 状态码 / 响应体）
+> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.63** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-09-02（v1.0.75 `browser_capture` 抓包记全 + §3/§4.1 子模块 `aci-core`→`aidl-aci-core` 重命名同步：AAR 改名 `aidl-aci-core-release.aar`、开源分支改名 `aidl-aci-core`）
 >
-> 本文档面向**希望让自己的 Android App 被 Zorv AI（或其他 ACI 控制端）调用**的第三方开发者，也适用于**想基于 `aci-core` 自建控制端**的开发者。
+> 本文档面向**希望让自己的 Android App 被 Zorv AI（或其他 ACI 控制端）调用**的第三方开发者，也适用于**想基于 `aidl-aci-core` 自建控制端**的开发者。
 
 ---
 
@@ -33,33 +33,33 @@ ACI 的设计目标是让「手机上的任意 App 能力」成为 AI Agent 可�
 
 | 角色 | 职责 | 关键类 |
 |------|------|--------|
-| **控制端** | 扫描、绑定、取能力清单、发起调用、把结果喂给 LLM | `QuroAidlAciManager` + `aci-core` 的 `IACIService` 桩 |
+| **控制端** | 扫描、绑定、取能力清单、发起调用、把结果喂给 LLM | `QuroAidlAciManager` + `aidl-aci-core` 的 `IACIService` 桩 |
 | **受控端** | 继承 `BaseACIService`，声明能力，实现处理逻辑 | `BaseACIService` / `Capability` / `ACIRequest` / `ACIResponse` |
 | **Binder 契约** | 定义跨进程方法 | `IACIService.aidl` / `IACICallback.aidl` |
 | **权限** | 5 层鉴权 | `aci_permissions.xml` + `onCheckPermission` |
 
 ---
 
-## 3. 接入准备：获取 `aci-core`
+## 3. 接入准备：获取 `aidl-aci-core`
 
-`aci-core` 是纯本地库（仅依赖 `androidx.annotation:annotation:1.7.1`），以 **AAR** 形式分发。
+`aidl-aci-core` 是纯本地库（仅依赖 `androidx.annotation:annotation:1.7.1`），以 **AAR** 形式分发。（v1.0.26 起由 `aci-core` 重命名为 `aidl-aci-core`，见 §17.6；Manifest 动作名 `ai.aci.core.*` 与权限 `ai.aci.permission.*` 保持不变。）
 
 ### 方式 A：从本仓库 Release 直接下载
 
-在 [ZorvAI Releases](https://github.com/Quor-a/ZorvAI/releases) 的 **v1.0.6（含 AAR）** 中下载 `aci-core-release.aar`，放入你模块的 `libs/` 目录。
+在 [ZorvAI Releases](https://github.com/Quor-a/ZorvAI/releases) 的 **最新 Release（含 AAR）** 中下载 `aidl-aci-core-release.aar`，放入你模块的 `libs/` 目录。
 
-> 开源独立分支：`aci-core` 分支（仓库根即一个可独立 `./gradlew assembleRelease` 的 Android 库工程），你可 `git checkout aci-core` 后自行构建或改源码。
+> 开源独立分支：`aidl-aci-core` 分支（仓库根即一个可独立 `./gradlew assembleRelease` 的 Android 库工程），你可 `git checkout aidl-aci-core` 后自行构建或改源码。
 
 ### 方式 B：Gradle 依赖（私有/本地仓库）
 
 ```kotlin
 // app/build.gradle.kts（或你的库模块）
 dependencies {
-    implementation(files("libs/aci-core-release.aar"))
+    implementation(files("libs/aidl-aci-core-release.aar"))
 }
 ```
 
-> ⚠️ `aci-core` 当前以 AAR 二进制分发（非 Maven Central 坐标）。开源分支提供完整源码，可接入你自己的 Maven 仓库后改用坐标依赖。
+> ⚠️ `aidl-aci-core` 当前以 AAR 二进制分发（非 Maven Central 坐标）。开源分支（`aidl-aci-core`）提供完整源码，可接入你自己的 Maven 仓库后改用坐标依赖。
 
 ---
 
@@ -67,11 +67,11 @@ dependencies {
 
 ### 4.1 添加依赖
 
-把 `aci-core-release.aar` 放到受控端模块的 `libs/`，并在该模块 `build.gradle.kts` 加：
+把 `aidl-aci-core-release.aar` 放到受控端模块的 `libs/`，并在该模块 `build.gradle.kts` 加：
 
 ```kotlin
 dependencies {
-    implementation(files("libs/aci-core-release.aar"))
+    implementation(files("libs/aidl-aci-core-release.aar"))
 }
 ```
 
@@ -82,7 +82,7 @@ dependencies {
 **权限架构说明：**
 - **主应用（控制方）**：声明 `<permission>` 定义权限（使用自定义证书签名）
 - **第三方受控端**：只使用 `<uses-permission>` 引用权限（使用 debug 证书签名）
-- **ACI核心库 (`aci-core`)**：不包含任何权限声明，只提供 AIDL 接口和基础类
+- **ACI核心库 (`aidl-aci-core`)**：不包含任何权限声明，只提供 AIDL 接口和基础类
 
 ```xml
 <manifest ...
