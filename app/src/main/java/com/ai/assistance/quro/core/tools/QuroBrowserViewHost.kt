@@ -27,10 +27,10 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * 职责：
  * - 持有唯一的浏览器 WebView（懒创建、统一配置、注册 AI 操控桥 QuroBrowserController.attach）。
- * - 全屏容器（QuroBrowserScreen 的 FrameLayout）与浮窗容器（QuroMiniWindowManager 的 FrameLayout）
- *   通过 bindMain/bindFloat 登记；reattach 把 WebView 移到当前目标容器（不重建、不重载）。
- * - 最小化（化小窗）→ bindFloat → WebView 移入浮窗；还原 → unbindFloat → 移回全屏容器（browserUrl 仍保留，容器在）。
- * - 仅当主容器与浮窗容器都不在（真正关闭浏览器）时才 destroy，避免最小化/还原过程中的误销毁。
+ * - 全屏容器（QuroBrowserScreen 的 FrameLayout）通过 bindMain 登记；WebView 在容器间移动时不重建、不重载。
+ * - 化小窗（最小化）≠ 跨窗口搬 WebView：直接把 WebView 从窗口摘下、保留在内存并返回对话界面
+ *   （零重载、零卡顿，彻底消除「化小窗卡顿」）。重开全屏时 bindMain 把它重新挂入原 Activity 容器即可。
+ * - 仅当真正关闭浏览器（QuroBrowserScreen 的退出/返回）时才由调用方显式 destroy()，绝不因最小化/离场误销毁。
  * - 单一通用 WebViewClient/WebChromeClient：全屏与浮窗的 UI 都从 [uiState] 读同一份状态，
  *   不再各自持有 client（避免重挂后 client 被覆盖导致某端 UI 不刷新）。
  */
@@ -74,15 +74,36 @@ object QuroBrowserViewHost {
     }
 
     /**
-     * 仅在 WebView 尚未加载任何页面时加载 [url]（避免重挂/还原时整页重载导致卡顿）。
-     * 化小窗、AI 开浏览器、主浏览器重开都走它：已加载过则零重载。
+     * 打开/重开浏览器时确保地址正确：
+     * - 尚未加载（cur 空）→ 直接加载 [url]；
+     * - 已加载且与 [url] 同一页（归一化比较，忽略尾斜杠/www/协议/fragment）→ 零重载、零卡顿，
+     *   化小窗后重开同一地址即保留浏览位置；
+     * - 已加载但地址不同（打开新链接/AI 新地址）→ 正常导航加载。
+     * 这样既消除「化小窗卡顿」（不跨窗口搬 WebView），又修正此前「仅空才加载」导致新地址不刷新的回归。
      */
     fun loadIfNeeded(url: String) {
         val wv = webView ?: return
         val cur = wv.url
         if (cur.isNullOrEmpty() || cur == "about:blank") {
             wv.loadUrl(url)
+            return
         }
+        if (normalizeUrl(cur) != normalizeUrl(url)) {
+            wv.loadUrl(url)
+        }
+    }
+
+    /** 归一化 URL 用于「是否同一页」判断：小写协议/主机、去 www.、去尾斜杠、忽略 fragment。 */
+    private fun normalizeUrl(u: String?): String {
+        if (u.isNullOrEmpty()) return ""
+        return runCatching {
+            val uri = android.net.Uri.parse(u)
+            val scheme = (uri.scheme ?: "https").lowercase()
+            val host = (uri.host ?: "").lowercase().removePrefix("www.")
+            val path = (uri.path ?: "").trimEnd('/')
+            val query = uri.query ?: ""
+            "$scheme://$host$path${if (query.isNotEmpty()) "?$query" else ""}"
+        }.getOrDefault(u)
     }
 
     /** 登记全屏容器（QuroBrowserScreen）。若当前没有浮窗占用，则把 WebView 挂回全屏。 */
@@ -103,25 +124,31 @@ object QuroBrowserViewHost {
         if (webView != null) reattach()
     }
 
-    /** 全屏容器移除（QuroBrowserScreen 离场）：解绑主容器；若浮窗也未激活则销毁 WebView。 */
+    /** 全屏容器移除（QuroBrowserScreen 离场）：解绑主容器，但【不销毁】WebView。
+     *  化小窗/返回对话界面只是把 WebView 从窗口摘下保留在内存（已加载页面与导航栈仍在），
+     *  重开全屏时重新挂入容器即可零重载、零卡顿。真正关闭浏览器由 destroy() 显式调用。 */
     fun unbindMain(container: ViewGroup) {
         if (mainContainer === container) mainContainer = null
-        if (webView != null && floatContainer == null && mainContainer == null) {
-            destroy()
-        }
+        if (webView != null) reattach()
     }
 
-    /** 在目标容器间移动 WebView（不重建、不重载）。对标 operit WebSessionWebViewHost.reattach。 */
+    /** 在目标容器间移动 WebView（不重建、不重载）。对标 operit WebSessionWebViewHost.reattach。
+     *  若没有任何容器（化小窗返回对话界面），仅从当前父移除、WebView 保留在内存，
+     *  重开全屏时再挂入——全程不跨 WindowManager 窗口搬动，故零卡顿。 */
     private fun reattach() {
         val wv = webView ?: return
-        val target = floatContainer ?: mainContainer ?: return
+        val target = floatContainer ?: mainContainer
         val parent = wv.parent
+        if (target == null) {
+            // 无容器：从原父摘下，WebView 留在内存（不销毁），等重开再挂入。
+            if (parent is ViewGroup) parent.removeView(wv)
+            return
+        }
         if (parent is ViewGroup && parent !== target) {
             parent.removeView(wv)
         }
-        if (target.childCount == 1 && target.getChildAt(0) === wv) return
-        target.removeAllViews()
         if (wv.parent == null) {
+            target.removeAllViews()
             target.addView(
                 wv,
                 ViewGroup.LayoutParams(

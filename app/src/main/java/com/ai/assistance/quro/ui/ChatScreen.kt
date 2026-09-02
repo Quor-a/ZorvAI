@@ -2099,13 +2099,19 @@ fun ChatScreen(
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
                 QuroBrowserScreen(
                     url = url,
-                    onClose = { browserUrl = null },
+                    onClose = {
+                        // 显式退出/返回浏览器：真正销毁共享 WebView（释放资源）。
+                        browserUrl = null
+                        QuroMiniWindowManager.hideBrowser()
+                        com.ai.assistance.quro.core.tools.QuroBrowserViewHost.destroy()
+                    },
                     onMinimize = {
-                        val u = browserUrl
-                        browserFloatUrl = u
-                        // 系统级浮窗与应用内降级浮层都复用同一共享 WebView（QuroBrowserViewHost）：
-                        // 化小窗只是把该 WebView 从全屏容器重挂到浮层容器，不重建/不重载，彻底消除卡顿。
-                        // 因此主浏览器始终保留（不销毁 WebView），返回全屏仅移除浮层即可。
+                        // 化小窗 = 直接返回对话界面，不再把 WebView 跨 WindowManager 窗口重挂到浮层
+                        // （这是「化小窗卡顿」的根因）。WebView 保留在宿主内存，重开全屏零重载、零卡顿；
+                        // 若浮窗已存在则一并关闭。
+                        browserUrl = null
+                        browserFloatUrl = null
+                        QuroMiniWindowManager.hideBrowser()
                     },
                     onOpenInSystem = { sysUrl ->
                         runCatching {
