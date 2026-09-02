@@ -887,6 +887,15 @@ fun ChatScreen(
                                 source = event.value,
                                 theme = ""
                             )
+                            // v1057 修复：AI 经 ui_control(action:"widget", type:"miniapp", value:"<html>")
+                            // 渲染小程序，之前走 else→InfoCard 被当纯文本（HTML 整段显示）。这里直接构造
+                            // MiniAppCard，复用与 ui_widget 完全一致的 onCard→气泡→MiniAppCardView 运行时通路。
+                            "miniapp" -> com.ai.assistance.quro.core.cards.QuroChatCard.MiniAppCard(
+                                id = event.id.ifBlank { "mini_${System.currentTimeMillis()}" },
+                                title = event.label.ifBlank { "小程序（AI 生成）" },
+                                html = event.value,
+                                config = emptyMap(),
+                            )
                             else -> com.ai.assistance.quro.core.cards.QuroChatCard.InfoCard(
                                 id = event.id,
                                 title = event.label,

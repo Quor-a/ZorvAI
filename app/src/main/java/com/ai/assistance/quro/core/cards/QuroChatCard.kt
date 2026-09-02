@@ -838,9 +838,11 @@ fun parseComponentSpec(spec: String): QuroChatCard? {
                 s.optString("theme", "").ifBlank { "" },
             )
             // ── v1057 小程序（MiniApp）──
+            // 兼容两种字段名：ui_widget 的 spec JSON 用 `html`，ui_control(action:"widget",type:"miniapp")
+            // 把内容放在 `value`（与 mermaid 一致）。两者都接受，避免 AI 用 value 传 HTML 时渲染为空。
             "miniapp" -> QuroChatCard.MiniAppCard(
                 id, title,
-                s.optString("html", ""),
+                s.optString("html", "").ifBlank { s.optString("value", "") },
                 s.optJSONObject("config")?.let { config ->
                     mutableMapOf<String, Any>().apply {
                         config.keys().forEach { key ->
