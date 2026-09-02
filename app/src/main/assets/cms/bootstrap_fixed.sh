@@ -25,9 +25,11 @@ fi
 # ═══════════════════════════════════════════════════════════
 if [ ! -s /etc/apt/sources.list ] || ! grep -q "noble" /etc/apt/sources.list 2>/dev/null; then
     mkdir -p /etc/apt/apt.conf.d
-    printf 'Acquire::Check-Valid-Until "false";\nAPT::Get::AllowUnauthenticated "true";\n' > /etc/apt/apt.conf.d/99no-check-gpg
-    printf 'deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse\ndeb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse\ndeb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
-    echo "[cms-bootstrap] apt sources configured (noble, http)"
+    # 轮次F：放开未签名仓库（proot 下手动 curl 拉索引，无 Release 签名）→ apt 才肯用这批索引
+    printf 'Acquire::Check-Valid-Until "false";\nAPT::Get::AllowUnauthenticated "true";\nAcquire::AllowInsecureRepositories "true";\n' > /etc/apt/apt.conf.d/99no-check-gpg
+    # 轮次F：切清华 TUNA（HTTP，避免 proot 下 HTTPS 卡死）；ports.ubuntu.com pool 整体 404 已弃用
+    printf 'deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ noble main restricted universe multiverse\ndeb http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ noble-updates main restricted universe multiverse\ndeb http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
+    echo "[cms-bootstrap] apt sources configured (noble, tuna http)"
 fi
 
 # ═══════════════════════════════════════════════════════════
@@ -38,12 +40,26 @@ if [ -d /usr/share/ca-certificates/mozilla ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════
+# 轮次F：/etc/hosts 静态映射（proot 下 DNS 53 端口常不可达，先写死镜像域名 IP）
+# TUNA（清华）+ aliyun（阿里云）anycast IP；幂等：先删自身标记行再追加，绝不覆盖其它条目。
+# 另补 127.0.0.1 localhost —— proot 默认无 localhost 映射 → `ssh localhost` 报 Could not resolve hostname。
+# ═══════════════════════════════════════════════════════════
+sed -i '/# quro-bootstrap-dns$/d' /etc/hosts 2>/dev/null || true
+cat >> /etc/hosts << 'HOSTS'
+101.6.15.130 mirrors.tuna.tsinghua.edu.cn # quro-bootstrap-dns
+163.181.201.182 mirrors.aliyun.com # quro-bootstrap-dns
+HOSTS
+grep -q '^127.0.0.1[[:space:]].*localhost' /etc/hosts 2>/dev/null || echo "127.0.0.1 localhost" >> /etc/hosts
+
+# ═══════════════════════════════════════════════════════════
 # 强制修复 dpkg 状态 + 中和服务管理器
 # ═══════════════════════════════════════════════════════════
 echo "[cms-bootstrap] fixing dpkg..."
 for lk in /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/cache/apt/archives/lock /var/lib/apt/lists/lock; do
     rm -f "$lk" 2>/dev/null
 done
+# 轮次F：清掉残留的 partial 下载碎片（apt-get update 超时强杀常留半截）
+rm -rf /var/lib/apt/lists/partial/* 2>/dev/null || true
 for proc in dpkg apt apt-get; do pkill -9 "$proc" 2>/dev/null || true; done
 dpkg --configure -a 2>/dev/null || true
 apt-get install -f -y 2>/dev/null || true
@@ -58,21 +74,50 @@ printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d 2>/dev/null || true
 chmod +x /usr/sbin/policy-rc.d 2>/dev/null || true
 
 # ═══════════════════════════════════════════════════════════
-# apt update（带镜像回退）
+# 轮次F · apt 索引（绕过 apt-get update 超时）
+# proot 下 apt-get update 拉清华 universe 6万+ 包超 30s 终端超时，且 ports.ubuntu.com pool 整体 404。
+# 改用 curl 手动拉清华 TUNA(HTTP) 12 组件索引直写 /var/lib/apt/lists/，文件名须严格合规，apt 才能识别。
+# 仅当 TUNA 拉齐后才清旧源（ports.ubuntu.com 已 404 必删；aliyun 仅在 TUNA 成功时替换），
+# 避免误删基线已装好的 aliyun 索引导致无索引可用。curl 缺失或 TUNA 全失败时回退 apt-get update（硬 25s 超时）。
 # ═══════════════════════════════════════════════════════════
-echo "[cms-bootstrap] apt update..."
-if ! apt-get update 2>&1; then
-    for m in aliyun tsinghua ports; do
-        case "$m" in
-            aliyun)   BASE="http://mirrors.aliyun.com/ubuntu-ports" ;;
-            tsinghua) BASE="https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports" ;;
-            ports)    BASE="http://ports.ubuntu.com/ubuntu-ports" ;;
-        esac
-        printf "deb %s/ noble main restricted universe multiverse\ndeb %s/ noble-updates main restricted universe multiverse\ndeb %s/ noble-security main restricted universe multiverse\n" "$BASE" "$BASE" "$BASE" > /etc/apt/sources.list
-        sleep 1
-        if apt-get update 2>&1; then break; fi
-    done
-fi
+echo "[cms-bootstrap] apt index (manual curl, bypass apt-get update timeout)..."
+quro_manual_apt_index() {
+    local BASE="http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/dists"
+    local APTL="/var/lib/apt/lists"
+    mkdir -p "$APTL" "$APTL/partial"
+    rm -f "$APTL"/partial/* 2>/dev/null || true
+    local ok=0 total=0
+    if command -v curl >/dev/null 2>&1; then
+        for dist in noble noble-updates noble-security; do
+            for comp in main universe multiverse restricted; do
+                total=$((total+1))
+                local f="mirrors.tuna.tsinghua.edu.cn_ubuntu-ports_dists_${dist}_${comp}_binary-arm64_Packages"
+                if curl -s --max-time 40 -o "$APTL/$f.gz" "$BASE/$dist/$comp/binary-arm64/Packages.gz" \
+                   && gzip -dc "$APTL/$f.gz" > "$APTL/$f" 2>/dev/null && [ -s "$APTL/$f" ]; then
+                    rm -f "$APTL/$f.gz"; ok=$((ok+1)); echo "[apt] index ok: $f"
+                else
+                    echo "[apt] WARN: failed fetch $dist/$comp"; rm -f "$APTL/$f.gz" "$APTL/$f" 2>/dev/null || true
+                fi
+            done
+        done
+        echo "[apt] manual index: $ok/$total fetched"
+        if [ "$ok" -ge 1 ]; then
+            rm -f "$APTL"/ports.ubuntu.com_* 2>/dev/null || true
+            rm -f "$APTL"/mirrors.aliyun.com_* 2>/dev/null || true
+        fi
+    else
+        echo "[apt] curl not available, will rely on apt-get update"
+    fi
+    if [ "$ok" -lt 1 ]; then
+        echo "[apt] manual index insufficient, trying apt-get update (hard 25s timeout)..."
+        if command -v timeout >/dev/null 2>&1; then
+            timeout 25 apt-get update 2>&1 | tail -5 || true
+        else
+            apt-get update 2>&1 | tail -5 || true
+        fi
+    fi
+}
+quro_manual_apt_index
 
 # ═══════════════════════════════════════════════════════════
 # 稳健安装函数：apt 优先，失败回退 apt-get download + dpkg-deb -x
