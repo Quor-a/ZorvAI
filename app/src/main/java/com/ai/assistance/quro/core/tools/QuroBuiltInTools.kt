@@ -258,6 +258,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(RunCodeTool())
     // 后端工作区：多文件多语言项目
     r.register(WorkbenchTool())
+    r.register(MiniAppStudioTool())    // 小程序工作台：AI 直接 CRUD/运行小程序工程（完整移植 MiniAppFramework）
     // TTS 朗读
     r.register(SpeakTool())
     r.register(StopSpeakTool())
@@ -445,6 +446,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(VisualActionTool())     // 可视化操作弹窗
     r.register(VisualPopupTool())      // 自由可视化弹窗（固定UI组件）
     r.register(VisualCustomPopupTool()) // AI自写UI可视化弹窗（完全自定义HTML）
+    r.register(NodeEditorTool())       // 节点编辑器：AI 直接读写节点流工程（无需打开界面）
+    r.register(VisualStudioTool())     // 可视化编程：命名工程多项目保存（产物+可视化）
     // 动态 UI 工具：AI 输出 quro-ui DSL 代码块 → 解析 → Compose 原生渲染（可交互、可回传表单值）
     r.register(UiDslSpecTool())     // 拉取 DSL 规范，避免长 schema 常驻系统提示词
     r.register(UiValidateTool())    // 输出前自检，把「渲染失败」变成事前修正

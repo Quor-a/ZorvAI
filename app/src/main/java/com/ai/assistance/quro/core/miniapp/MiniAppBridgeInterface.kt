@@ -39,6 +39,11 @@ class MiniAppBridgeInterface(
         registerModule(RouterModule(context, this))
         // 原生 Kotlin 能力：让 AI 生成的小程序可调用真·Android/Kotlin（剪贴板/分享/打开App/通知/TTS 等）
         registerModule(KotlinModule(context))
+        // 移植自 MiniAppFramework 的富能力模块（去品牌化，协议兼容 MiniAppBridgeModule）
+        registerModule(AciModule(context))      // 关联启动第三方 App / 组件
+        registerModule(CryptoModule(context))   // md5/sha1/sha256/hmac
+        registerModule(SqlStorageModule(context)) // 结构化 SQLite 存储
+        registerModule(LocationModule(context)) // 获取位置
     }
     
     fun registerModule(module: MiniAppBridgeModule) {
