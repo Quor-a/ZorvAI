@@ -53,7 +53,10 @@ class NodeEditorTool : QuroTool {
             if (!dir.exists()) dir.mkdirs()
             return dir
         }
-        fun fileFor(context: Context, name: String): File = File(getRoot(context), "$name.qne")
+        fun fileFor(context: Context, name: String): File {
+            val safe = name.replace(Regex("[^A-Za-z0-9_.\\-]"), "_").replace("..", "_")
+            return File(getRoot(context), "$safe.qne")
+        }
     }
 
     override fun run(context: Context, arguments: String): String {
