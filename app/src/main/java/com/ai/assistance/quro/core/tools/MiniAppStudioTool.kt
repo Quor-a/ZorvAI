@@ -72,7 +72,10 @@ class MiniAppStudioTool : QuroTool {
             return dir
         }
 
-        fun getProjectDir(context: Context, name: String): File = File(getRoot(context), name)
+        fun getProjectDir(context: Context, name: String): File {
+            val safe = name.replace(Regex("[^A-Za-z0-9_.\\-]"), "_").replace("..", "_")
+            return File(getRoot(context), safe)
+        }
     }
 
     override fun run(context: Context, arguments: String): String {
@@ -144,9 +147,11 @@ class MiniAppStudioTool : QuroTool {
         val content = json.optString("content", null) ?: return "缺少 content 参数"
         val projectDir = getProjectDir(context, name)
         if (!projectDir.exists()) projectDir.mkdirs()
+        // 清理相对路径里的 .. / 绝对段，确保只写在工程目录内，避免越界写入
+        val safePath = path.split('/').filter { it.isNotBlank() && it != "." && it != ".." }.joinToString("/")
         return runCatching {
-            val f = File(projectDir, path); f.parentFile?.mkdirs(); f.writeText(content, StandardCharsets.UTF_8)
-            "✅ 已写入 $path (${content.length} 字符) 到工程「$name」"
+            val f = File(projectDir, safePath); f.parentFile?.mkdirs(); f.writeText(content, StandardCharsets.UTF_8)
+            "✅ 已写入 $safePath (${content.length} 字符) 到工程「$name」"
         }.getOrElse { "❌ 写入失败：${it.message}" }
     }
 

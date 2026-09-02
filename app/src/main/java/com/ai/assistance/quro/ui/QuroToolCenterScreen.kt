@@ -623,7 +623,8 @@ private fun NodeEditorPanel(
 
     fun writeFlow(name: String, content: String): String {
         flowDir.mkdirs()
-        val base = name.substringBeforeLast(".", name).ifBlank { name }.ifBlank { "default" }
+        val raw = name.substringBeforeLast(".", name).ifBlank { name }.ifBlank { "default" }
+        val base = raw.replace(Regex("[^A-Za-z0-9_.\\-]"), "_").replace("..", "_")
         val f = File(flowDir, "$base.qne")
         return runCatching { f.writeText(content, Charsets.UTF_8); "已保存到工程「$base」" }.getOrElse { "保存失败：${it.message}" }
     }

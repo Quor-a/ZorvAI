@@ -56,7 +56,10 @@ class VisualStudioTool : QuroTool {
             if (!dir.exists()) dir.mkdirs()
             return dir
         }
-        fun fileFor(context: Context, name: String): File = File(getRoot(context), "$name.mmd")
+        fun fileFor(context: Context, name: String): File {
+            val safe = name.replace(Regex("[^A-Za-z0-9_.\\-]"), "_").replace("..", "_")
+            return File(getRoot(context), "$safe.mmd")
+        }
     }
 
     override fun run(context: Context, arguments: String): String {
