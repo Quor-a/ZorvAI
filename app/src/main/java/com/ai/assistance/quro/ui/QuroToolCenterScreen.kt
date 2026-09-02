@@ -749,10 +749,16 @@ private fun NodeEditorPanel(
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
-                            // 打开即恢复默认工程（AI 写入的节点流在此可见，无需手动打开）
-                            val f = File(flowDir, "default.qne")
-                            if (f.exists()) {
-                                evaluateJavascript("window.__restore(${JSONObject.quote(f.readText(Charsets.UTF_8))})") {}
+                            // 打开即恢复「最近写入」的工程（AI 用 node_editor 工具写入任意命名工程后，
+                            // 面板打开即可见，无需手动点开）——取修改时间最新的 .qne 并同步工程名
+                            val latest = flowDir.listFiles()
+                                ?.filter { it.extension == "qne" }
+                                ?.maxByOrNull { it.lastModified() }
+                            if (latest != null) {
+                                view?.post {
+                                    flowName = latest.nameWithoutExtension
+                                    evaluateJavascript("window.__restore(${JSONObject.quote(latest.readText(Charsets.UTF_8))})") {}
+                                }
                             }
                         }
                     }
