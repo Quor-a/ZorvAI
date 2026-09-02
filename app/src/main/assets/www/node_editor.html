@@ -235,7 +235,15 @@
   function restore(s) {
     try {
       var o = JSON.parse(s);
-      nodes = o.nodes || []; edges = o.edges || []; seq = o.seq || 1;
+      nodes = o.nodes || []; edges = o.edges || [];
+      // 让 seq 超过现有最大编号：AI 写入的工程可能不含 seq（文档约定只含 nodes/edges），
+      // 若直接按 o.seq||1 重置，新增节点会拿到已存在的 id（如 n1）造成画布重复/错乱。
+      var maxSeq = 0;
+      nodes.forEach(function (n) {
+        var m = /(\d+)$/.exec(n.id || '');
+        if (m) { var v = parseInt(m[1], 10); if (v > maxSeq) maxSeq = v; }
+      });
+      seq = (typeof o.seq === 'number' && o.seq > maxSeq) ? o.seq : (maxSeq + 1);
       selectedNode = null; selectedEdge = null; renderAll();
     } catch (_) {}
   }
