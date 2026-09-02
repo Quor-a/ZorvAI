@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import com.ai.assistance.quro.core.linux.LinuxDistro
 import com.ai.assistance.quro.core.linux.PackageManagerSpec
@@ -793,6 +794,12 @@ private fun MiniAppStudioPanel(
     val wvRef = remember { mutableStateOf<WebView?>(null) }
     val engineRef = remember { mutableStateOf<MiniAppEngine?>(null) }
     val scope = rememberCoroutineScope()
+
+    // 系统返回键：小程序内部有多页历史时先在小程序内返回（engine.handleBack），否则退回工程列表
+    BackHandler(enabled = current != null) {
+        val handled = engineRef.value?.handleBack() ?: false
+        if (!handled) { current = null; engineRef.value = null }
+    }
 
     Column(Modifier.fillMaxSize()) {
         if (current == null) {
