@@ -128,7 +128,7 @@ object QuroToolUsageHints {
         "aiwps_create" to "「帮我生成一份 Word 周报」「做个 Excel 表格」「出个 PPT 关于 XX」都调用（本地生成 Office 兼容文件）",
 
         // ── 统一UI控制工具 ──
-        "ui_control" to "统一UI控制工具：操控界面每个角落。常见用法：「打开编辑器/终端/工具箱」→ ui_control(action=\"open\", target=\"editor\")；「切换深度思考」→ ui_control(action=\"toggle\", target=\"deepthink\")；「打开模型选择」→ ui_control(action=\"sheet\", target=\"model\")；「新建对话」→ ui_control(action=\"chat\", action_type=\"new\")；「渲染卡片/组件」→ ui_control(action=\"card\"/\"widget\")；「查询状态/更新属性/滚动/聚焦/隐藏/显示/导航/权限控制」→ ui_control(action=\"status\"/\"update\"/\"scroll\"/\"focus\"/\"hide\"/\"show\"/\"navigate\"/\"permission\")",
+        "ui_control" to "统一UI控制工具：操控界面每个角落。常见用法：「打开编辑器/终端/工具箱」→ ui_control(action=\"open\", target=\"editor\")；「切换深度思考」→ ui_control(action=\"toggle\", target=\"deepthink\")；「打开模型选择」→ ui_control(action=\"sheet\", target=\"model\")；「新建对话」→ ui_control(action=\"chat\", action_type=\"new\")；「渲染卡片/组件」→ ui_control(action=\"card\"/\"widget\")；「查询状态/更新属性/滚动/聚焦/隐藏/显示/导航/权限控制」→ ui_control(action=\"status\"/\"update\"/\"scroll\"/\"focus\"/\"hide\"/\"show\"/\"navigate\"/\"permission\")。可用 target（action=open 直达界面/能力）：editor/terminal/toolbox/knowledge/cms/aci/about/appearance/soul/memory/permission/model_config/voice/settings/tool_center（工具中心总览）/vispro（可视化编程：Mermaid 源码编辑+实时渲染+导出 SVG）/node_editor（节点编辑器：拖拽节点流，导出 Mermaid）/miniapp（小程序工作台：渲染 AI 生成的 HTML/JS 小程序）；小程序也可直接在对话框渲染——优先用 ```miniapp 围栏或 ui_control(action=\"widget\", type=\"miniapp\", value=\"<html>\")",
 
         // ── MCP 客户端 ──
         "mcp_servers" to "「看看连了哪些 MCP 服务器」「MCP 服务列表」都调用",

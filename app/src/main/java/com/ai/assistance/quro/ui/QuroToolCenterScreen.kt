@@ -62,9 +62,10 @@ fun QuroToolCenterScreen(
     context: Context,
     onLaunch: (target: String) -> Unit,
     onClose: () -> Unit,
+    initialSelected: String? = null,
 ) {
     val cs = MaterialTheme.colorScheme
-    var selected by remember { mutableStateOf<String?>(null) }
+    var selected by remember { mutableStateOf<String?>(initialSelected) }
 
     Column(Modifier.fillMaxSize().background(cs.background)) {
         Row(

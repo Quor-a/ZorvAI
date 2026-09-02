@@ -704,6 +704,8 @@ fun ChatScreen(
     var showMusicPlayer by remember { mutableStateOf(false) }
     // 工具中心（能力聚合入口：终端/小程序/CMS/工具箱/沙箱/私有库）
     var showToolCenter by remember { mutableStateOf(false) }
+    // 工具中心初始进入的子面板（供 AI 经 ui_control(open,target=vispro|node_editor|miniapp 等) 直达）
+    var toolCenterInitial by remember { mutableStateOf<String?>(null) }
 
     // ═══ UI 动作桥：把 AI 调用的 ui_* 工具回调到本组合作用域，打开对应界面/弹层/开关 ═══
     fun handleUiAction(action: String) {
@@ -815,6 +817,11 @@ fun ChatScreen(
                             "voice" -> showVoice = true
                             "settings" -> sheet = SheetType.Settings
                             "tool_center" -> showToolCenter = true
+                            // v1057 暴露给 AI：工具中心的子能力可直接打开，无需先手动进工具中心
+                            "vispro" -> { toolCenterInitial = "vispro"; showToolCenter = true }
+                            "node_editor" -> { toolCenterInitial = "flow"; showToolCenter = true }
+                            "miniapp" -> { toolCenterInitial = "workbench"; showToolCenter = true }
+                            "workbench" -> { toolCenterInitial = "workbench"; showToolCenter = true }
                             else -> { /* 忽略未知界面 */ }
                         }
                     }
@@ -2042,6 +2049,7 @@ fun ChatScreen(
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
                 QuroToolCenterScreen(
                     context = appCtx,
+                    initialSelected = toolCenterInitial,
                     onLaunch = { target ->
                         when (target) {
                             "terminal" -> showTerminal = true
