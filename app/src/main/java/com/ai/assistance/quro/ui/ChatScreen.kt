@@ -1058,6 +1058,9 @@ fun ChatScreen(
     // 应用上下文：提前声明，供 handleUiAction / handleCardCommand 等局部函数捕获
     val ctx = LocalContext.current
     quroDiagCtx = ctx
+    // 系统级悬浮窗（TYPE_APPLICATION_OVERLAY）权限：已授权时化小窗走 QuroMiniWindowManager，
+    // 即使 App 退后台也浮于其他 App 之上；未授权降级为应用内 Compose 浮层。提前声明供下方条件判断使用。
+    val useSystemOverlay = remember { QuroMiniWindowManager.hasOverlayPermission(ctx) }
     // 当前选择的工作区路径（从持久化存储初始化）
     var currentWorkspace by remember { mutableStateOf(com.ai.assistance.quro.core.tools.WorkspacePreferences.getCurrentWorkspace(ctx)) }
     // 当前选择的 ACI 应用名称（从持久化存储初始化，用于上下文标识栏）
@@ -1168,7 +1171,9 @@ fun ChatScreen(
 
     Box(Modifier.fillMaxSize()) {
         // 对话框「化小窗」：chatMinimized 时主对话收起为悬浮小窗，根布局仅留背景占位。
-        if (chatMinimized) {
+        // 系统级浮窗（useSystemOverlay）下不拆除主屏内容：主屏在浮层之下保持已组合状态，
+        // 返回全屏时仅移除浮层即可，避免整屏重建导致的卡顿；占位仅在应用内降级浮层时生效。
+        if (chatMinimized && !useSystemOverlay) {
             Box(Modifier.fillMaxSize().background(cs.background))
         } else ModalNavigationDrawer(
             drawerState = drawerState,
@@ -1202,7 +1207,11 @@ fun ChatScreen(
                         onModel = { sheet = SheetType.Model },
                         onSettings = { sheet = SheetType.Settings },
                         onToolCenter = { showToolCenter = true },
-                        onMinimize = { chatMinimized = true },
+                        onMinimize = {
+                            chatMinimized = true
+                            // 系统级浮窗：把 App 切到后台，让对话小窗浮于桌面/其他 App 之上
+                            if (useSystemOverlay) (ctx as? android.app.Activity)?.moveTaskToBack(true)
+                        },
                         persona = selectedPersona,
                         onPick = { sheet = SheetType.Persona },
                         scaled = { scaled(it) }
@@ -2098,7 +2107,11 @@ fun ChatScreen(
                     onMinimize = {
                         val u = browserUrl
                         browserFloatUrl = u
-                        browserUrl = null
+                        // 系统级浮窗下保留主浏览器（不销毁 WebView）：返回全屏仅移除浮层，
+                        // 主浏览器已加载无需整页重载，避免卡顿；仅应用内降级浮层才销毁主浏览器。
+                        if (!useSystemOverlay) browserUrl = null
+                        // 系统级浮窗：把 App 切到后台，让小窗真正浮于桌面/其他 App 之上
+                        if (useSystemOverlay) (ctx as? android.app.Activity)?.moveTaskToBack(true)
                     },
                     onOpenInSystem = { sysUrl ->
                         runCatching {
@@ -2114,15 +2127,15 @@ fun ChatScreen(
         // ═══ 系统级化小窗（TYPE_APPLICATION_OVERLAY，浮于桌面/其他 App 之上）═══
         // 已授予 SYSTEM_ALERT_WINDOW 时，把小窗渲染为真正的系统悬浮窗（QuroMiniWindowManager），
         // 即使 App 退后台/切到其他软件也持续可见；未授权则下方继续走应用内 Compose 浮层（降级）。
-        val useSystemOverlay = remember { QuroMiniWindowManager.hasOverlayPermission(ctx) }
         var askedOverlayPerm by remember { mutableStateOf(false) }
         DisposableEffect(Unit) {
-            QuroMiniWindowManager.onExpandChat = { chatMinimized = false }
-            QuroMiniWindowManager.onCloseChat = { chatMinimized = false }
-            QuroMiniWindowManager.onNewConversation = { vm.newConversation(); chatMinimized = false }
-            QuroMiniWindowManager.onRestoreBrowser = { url -> browserUrl = url; browserFloatUrl = null }
-            QuroMiniWindowManager.onCloseBrowser = { browserFloatUrl = null }
+            QuroMiniWindowManager.onExpandChat = { chatMinimized = false; if (useSystemOverlay) QuroMiniWindowManager.bringAppToForeground() }
+            QuroMiniWindowManager.onCloseChat = { chatMinimized = false; if (useSystemOverlay) QuroMiniWindowManager.bringAppToForeground() }
+            QuroMiniWindowManager.onNewConversation = { vm.newConversation(); chatMinimized = false; if (useSystemOverlay) QuroMiniWindowManager.bringAppToForeground() }
+            QuroMiniWindowManager.onRestoreBrowser = { url -> browserUrl = url; browserFloatUrl = null; if (useSystemOverlay) QuroMiniWindowManager.bringAppToForeground() }
+            QuroMiniWindowManager.onCloseBrowser = { browserFloatUrl = null; if (useSystemOverlay) QuroMiniWindowManager.bringAppToForeground() }
             QuroMiniWindowManager.onSendMessage = { send(it) }
+            QuroMiniWindowManager.setMessageSource(vm.messages)
             onDispose {
                 QuroMiniWindowManager.onExpandChat = null
                 QuroMiniWindowManager.onCloseChat = null
@@ -2133,13 +2146,6 @@ fun ChatScreen(
                 // 离开对话界面时收起系统悬浮窗，避免残留浮在其它界面
                 QuroMiniWindowManager.hideChat()
                 QuroMiniWindowManager.hideBrowser()
-            }
-        }
-        LaunchedEffect(uiMessages) {
-            if (useSystemOverlay) {
-                QuroMiniWindowManager.setChatLines(
-                    uiMessages.takeLast(15).map { MiniChatLine(if (it.mine) "我" else "AI", it.text ?: "") },
-                )
             }
         }
         LaunchedEffect(chatMinimized) {
