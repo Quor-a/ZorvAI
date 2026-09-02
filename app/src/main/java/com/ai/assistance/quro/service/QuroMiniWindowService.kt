@@ -152,7 +152,8 @@ object QuroMiniWindowManager {
         setColorScheme(scheme)
         if (!hasOverlayPermission(ctx)) return
         ensureService(ctx)
-        if (chatView != null) return
+        // 幂等：若已有对话浮窗（如再次化小窗），先彻底移除旧视图再重建，避免 early-return 导致"只能化小窗一次"。
+        if (chatView != null) hideChat()
         val wm = windowManager ?: return
 
         val lifecycle = QuroServiceLifecycleOwner().apply { create(); resume() }
