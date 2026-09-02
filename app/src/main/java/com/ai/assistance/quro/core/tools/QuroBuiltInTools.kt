@@ -22,7 +22,6 @@ import com.ai.assistance.quro.core.aidlaci.QuroAciHttpServerTool
 import com.ai.assistance.quro.core.mcp.McpAciListTool
 import com.ai.assistance.quro.core.mcp.McpAciCallTool
 import com.ai.assistance.quro.core.mcp.McpAciBridgeTool
-import com.ai.assistance.quro.core.tools.TerminalDriveTool
 import com.ai.assistance.quro.core.tools.ReadScreenTool
 import com.ai.assistance.quro.core.tools.GetForegroundAppTool
 import com.ai.assistance.quro.core.tools.GetScreenStateTool
@@ -56,17 +55,8 @@ import com.ai.assistance.quro.core.tools.DeviceAdminStatusTool
 import com.ai.assistance.quro.core.tools.SetCameraDisabledTool
 import com.ai.assistance.quro.core.tools.RootExecTool
 import com.ai.assistance.quro.core.tools.RootStatusTool
-import com.ai.assistance.quro.core.tools.TerminalExecTool
 import com.ai.assistance.quro.tools.VncTool
 import com.ai.assistance.quro.tools.WorkbenchTool
-import com.ai.assistance.quro.core.tools.TerminalWriteTool
-import com.ai.assistance.quro.core.tools.TerminalKillTool
-import com.ai.assistance.quro.core.tools.TerminalStatusTool
-import com.ai.assistance.quro.core.tools.TerminalInterruptTool
-import com.ai.assistance.quro.core.tools.TerminalSessionsTool
-import com.ai.assistance.quro.core.tools.TerminalSessionNewTool
-import com.ai.assistance.quro.core.tools.TerminalSessionSwitchTool
-import com.ai.assistance.quro.core.tools.TerminalSessionKillTool
 import com.ai.assistance.quro.core.tools.LinuxRunTool
 import com.ai.assistance.quro.core.tools.LinuxInstallTool
 import com.ai.assistance.quro.core.tools.LinuxStartTool
@@ -365,19 +355,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(AuthServiceAddTool())
     r.register(AuthServiceListTool())
     r.register(AuthServiceRemoveTool())
-    // 终端驱动工具（应用沙盒内免权限 shell，Runtime.exec /system/bin/sh）：
-    r.register(TerminalDriveTool())
-    r.register(TerminalExecTool())
-    r.register(TerminalWriteTool())
-    r.register(TerminalKillTool())
-    r.register(TerminalStatusTool())
-    // E-9：两段式中断（先 ETX，再强杀重建会话）
-    r.register(TerminalInterruptTool())
-    // 终端架构统一：会话管理（AI/使用者可查看/创建/切换/销毁所有会话与后端）
-    r.register(TerminalSessionsTool())
-    r.register(TerminalSessionNewTool())
-    r.register(TerminalSessionSwitchTool())
-    r.register(TerminalSessionKillTool())
+    // 终端驱动工具（统一为单一 terminal 工具，action 分发；内部复用原 10 个终端子工具实例）
+    r.register(QuroTerminalTool())
 
     // ═════════════ L2 Shizuku 执行（CapOS 通道，需 Shizuku 已授权+运行中）══════════════
     r.register(ShizukuExecTool())
