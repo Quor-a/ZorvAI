@@ -2122,12 +2122,14 @@ fun ChatScreen(
             QuroMiniWindowManager.onNewConversation = { vm.newConversation(); chatMinimized = false }
             QuroMiniWindowManager.onRestoreBrowser = { url -> browserUrl = url; browserFloatUrl = null }
             QuroMiniWindowManager.onCloseBrowser = { browserFloatUrl = null }
+            QuroMiniWindowManager.onSendMessage = { send(it) }
             onDispose {
                 QuroMiniWindowManager.onExpandChat = null
                 QuroMiniWindowManager.onCloseChat = null
                 QuroMiniWindowManager.onNewConversation = null
                 QuroMiniWindowManager.onRestoreBrowser = null
                 QuroMiniWindowManager.onCloseBrowser = null
+                QuroMiniWindowManager.onSendMessage = null
                 // 离开对话界面时收起系统悬浮窗，避免残留浮在其它界面
                 QuroMiniWindowManager.hideChat()
                 QuroMiniWindowManager.hideBrowser()
