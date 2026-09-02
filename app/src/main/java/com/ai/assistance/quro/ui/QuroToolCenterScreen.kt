@@ -32,6 +32,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.ai.assistance.quro.core.linux.LinuxDistro
 import com.ai.assistance.quro.core.linux.PackageManagerSpec
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
@@ -63,6 +65,8 @@ fun QuroToolCenterScreen(
     onLaunch: (target: String) -> Unit,
     onClose: () -> Unit,
     initialSelected: String? = null,
+    onRenderInChat: (type: String, value: String, label: String) -> Unit = { _, _, _ -> },
+    onAskAi: (prompt: String) -> Unit = { _ -> },
 ) {
     val cs = MaterialTheme.colorScheme
     var selected by remember { mutableStateOf<String?>(initialSelected) }
@@ -98,9 +102,9 @@ fun QuroToolCenterScreen(
             null -> ToolGrid(onLaunch = onLaunch, onSelect = { selected = it })
             "sandbox" -> SandboxPanel(context)
             "db" -> DbPanel(context)
-            "workbench" -> WorkbenchPanel(context)
-            "vispro" -> VisProPanel(context)
-            "flow" -> NodeEditorPanel(context)
+            "workbench" -> WorkbenchPanel(context, onRenderInChat, onAskAi)
+            "vispro" -> VisProPanel(context, onRenderInChat)
+            "flow" -> NodeEditorPanel(context, onRenderInChat)
             "pkgmgr" -> PackageManagerPanel(context)
         }
     }
@@ -271,17 +275,58 @@ private fun DbPanel(context: Context) {
 }
 
 @Composable
-private fun WorkbenchPanel(context: Context) {
+private fun WorkbenchPanel(
+    context: Context,
+    onRenderInChat: (type: String, value: String, label: String) -> Unit,
+    onAskAi: (prompt: String) -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     val root = remember { File(context.filesDir, "workbench") }
-    val projects = remember { (root.listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()) }
+    var refreshKey by remember { mutableStateOf(0) }
+    val projects = remember(refreshKey) {
+        root.listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
+    }
     var html by remember { mutableStateOf<String?>(null) }
     var current by remember { mutableStateOf<String?>(null) }
 
+    // 导入本地 HTML 文件为小程序项目（项目名取文件名）
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val name = runCatching {
+            context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (c.moveToFirst() && i >= 0) c.getString(i) else null
+            }
+        }.getOrNull() ?: "imported_${System.currentTimeMillis()}"
+        val base = name.substringBeforeLast(".", name).ifBlank { "imported_${System.currentTimeMillis()}" }
+        val content = runCatching {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull()
+        if (content.isNullOrBlank()) {
+            Toast.makeText(context, "导入失败：无法读取文件", Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+        val dir = File(root, base)
+        if (dir.exists()) {
+            Toast.makeText(context, "已存在同名项目：$base", Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+        dir.mkdirs()
+        File(dir, "index.html").writeText(content, Charsets.UTF_8)
+        refreshKey++
+        Toast.makeText(context, "已导入项目：$base", Toast.LENGTH_SHORT).show()
+    }
+
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         if (html == null) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("小程序工作台", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
+                TextButton(onClick = { onAskAi("请使用 workbench 工具为我创建一个实用的 HTML/JS 小程序（例如：待办清单、计算器、记账本或单位换算器），并保存到小程序工作台（workbench）。生成后我会在工具中心-小程序工作台里打开并渲染到对话框。") }) { Text("AI 生成小程序") }
+                TextButton(onClick = { importLauncher.launch("text/html") }) { Text("导入") }
+            }
+            Spacer(Modifier.height(8.dp))
             if (projects.isEmpty()) {
-                Text("小程序工作台为空（filesDir/workbench 下还没有项目）。用 workbench 工具让 AI 创建小程序。", color = Muted)
+                Text("小程序工作台为空（filesDir/workbench 下还没有项目）。点「AI 生成小程序」让 AI 用 workbench 工具创建，或点「导入」载入本地 HTML。", color = Muted)
             } else {
                 LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(projects) { name ->
@@ -303,6 +348,22 @@ private fun WorkbenchPanel(context: Context) {
             Row(Modifier.fillMaxWidth()) {
                 TextButton(onClick = { html = null; current = null }) { Text("← 返回列表") }
                 Text(current ?: "", Modifier.weight(1f).padding(12.dp), color = Muted)
+                TextButton(
+                    onClick = {
+                        onRenderInChat("miniapp", html ?: "", current ?: "小程序")
+                        Toast.makeText(context, "已发送到对话框渲染", Toast.LENGTH_SHORT).show()
+                    },
+                ) { Text("渲染到对话框") }
+                TextButton(
+                    onClick = {
+                        if (current != null && File(root, current!!).deleteRecursively()) {
+                            Toast.makeText(context, "已删除项目：$current", Toast.LENGTH_SHORT).show()
+                            html = null; current = null; refreshKey++
+                        } else {
+                            Toast.makeText(context, "删除失败", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                ) { Text("删除") }
             }
             AndroidView(
                 modifier = Modifier.fillMaxSize().weight(1f).clip(RoundedCornerShape(10.dp)),
@@ -339,7 +400,10 @@ private fun WorkbenchPanel(context: Context) {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun VisProPanel(context: Context) {
+private fun VisProPanel(
+    context: Context,
+    onRenderInChat: (type: String, value: String, label: String) -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     val isDark = isSystemInDarkTheme()
     var src by remember { mutableStateOf("") }
@@ -347,6 +411,32 @@ private fun VisProPanel(context: Context) {
     var lastSvg by remember { mutableStateOf("") }
     var errMsg by remember { mutableStateOf("") }
     val wvRef = remember { mutableStateOf<WebView?>(null) }
+
+    fun doRender(wv: WebView?) {
+        if (wv == null || !pageReady) return
+        val theme = if (isDark) "dark" else "default"
+        wv.evaluateJavascript("window.__render(${JSONObject.quote(src)}, ${JSONObject.quote(theme)})", null)
+    }
+
+    val visproDir = remember { File(context.filesDir, "vispro") }
+    var refreshKey by remember { mutableStateOf(0) }
+    val savedFiles = remember(refreshKey) {
+        visproDir.listFiles()?.filter { it.isFile }?.map { it.name }?.sorted() ?: emptyList()
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val txt = runCatching {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull()
+        if (txt.isNullOrBlank()) {
+            Toast.makeText(context, "导入失败：无法读取文件", Toast.LENGTH_SHORT).show()
+        } else {
+            src = txt
+            doRender(wvRef.value)
+            Toast.makeText(context, "已导入 Mermaid 源码", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val bridge = remember {
         object {
@@ -364,18 +454,35 @@ private fun VisProPanel(context: Context) {
         }
     }
 
-    fun doRender(wv: WebView?) {
-        if (wv == null || !pageReady) return
-        val theme = if (isDark) "dark" else "default"
-        wv.evaluateJavascript("window.__render(${JSONObject.quote(src)}, ${JSONObject.quote(theme)})", null)
-    }
-
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Row(
             Modifier.fillMaxWidth().padding(bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Mermaid 源码", style = MaterialTheme.typography.labelMedium, color = Muted, modifier = Modifier.weight(1f))
+            TextButton(
+                onClick = {
+                    if (src.isBlank()) {
+                        Toast.makeText(context, "源码为空", Toast.LENGTH_SHORT).show()
+                    } else {
+                        onRenderInChat("mermaid", src, "可视化编程")
+                        Toast.makeText(context, "已发送到对话框渲染", Toast.LENGTH_SHORT).show()
+                    }
+                },
+            ) { Text("渲染到对话框") }
+            TextButton(
+                onClick = {
+                    if (src.isBlank()) {
+                        Toast.makeText(context, "源码为空，无法保存", Toast.LENGTH_SHORT).show()
+                    } else {
+                        visproDir.mkdirs()
+                        val name = "mermaid_${System.currentTimeMillis()}.mmd"
+                        Toast.makeText(context, saveTextFile(context, name, src), Toast.LENGTH_SHORT).show()
+                        refreshKey++
+                    }
+                },
+            ) { Text("保存") }
+            TextButton(onClick = { importLauncher.launch("text/plain,application/json") }) { Text("导入") }
             TextButton(
                 onClick = {
                     if (lastSvg.isBlank()) {
@@ -400,6 +507,34 @@ private fun VisProPanel(context: Context) {
             singleLine = false,
             textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
         )
+
+        // 已保存的 Mermaid 文件列表（打开 / 删除）
+        if (savedFiles.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("已保存（${savedFiles.size}）", style = MaterialTheme.typography.labelSmall, color = Muted)
+            LazyColumn(
+                Modifier.fillMaxWidth().heightIn(max = 140.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(savedFiles) { name ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                            .background(cs.surfaceVariant).padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
+                        TextButton(onClick = {
+                            val f = File(visproDir, name)
+                            if (f.exists()) { src = f.readText(); doRender(wvRef.value) }
+                        }) { Text("打开") }
+                        TextButton(onClick = {
+                            if (File(visproDir, name).delete()) { refreshKey++ }
+                        }) { Text("删除") }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
 
         Box(
             Modifier.fillMaxSize().weight(1f).clip(RoundedCornerShape(10.dp))
@@ -437,7 +572,10 @@ private fun VisProPanel(context: Context) {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun NodeEditorPanel(context: Context) {
+private fun NodeEditorPanel(
+    context: Context,
+    onRenderInChat: (type: String, value: String, label: String) -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     val wvRef = remember { mutableStateOf<WebView?>(null) }
 
@@ -459,21 +597,66 @@ private fun NodeEditorPanel(context: Context) {
         }
     }
 
+    // 导入工程文件（.qne / .json），读到文本后还原到画布
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull()?.takeIf { it.isNotBlank() }?.let { txt ->
+            wvRef.value?.evaluateJavascript("window.__restore(${JSONObject.quote(txt)})") {
+                Toast.makeText(context, "已导入工程到画布", Toast.LENGTH_SHORT).show()
+            }
+        } ?: Toast.makeText(context, "导入失败：无法读取文件", Toast.LENGTH_SHORT).show()
+    }
+
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("拖拽节点 / 端口连线 / 双击改名；底部可导出与预览 Mermaid", style = MaterialTheme.typography.labelSmall, color = Muted, modifier = Modifier.weight(1f))
+            Text(
+                "拖拽节点 / 端口连线 / 双击改名；底部可导出与预览 Mermaid",
+                style = MaterialTheme.typography.labelSmall, color = Muted, modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { importLauncher.launch("application/json,text/plain") }) { Text("导入工程") }
             TextButton(
                 onClick = {
-                    wvRef.value?.evaluateJavascript("window.__getMermaid()") { r ->
-                        val txt = runCatching { JSONObject(r).optString("") }.getOrDefault(r ?: "")
-                        copyText(context, txt)
-                        Toast.makeText(context, "已复制 Mermaid 源码", Toast.LENGTH_SHORT).show()
+                    wvRef.value?.evaluateJavascript("JSON.stringify([window.__snapshot()])") { r ->
+                        val snap = decodeJsString(r)
+                        if (snap.isBlank()) {
+                            Toast.makeText(context, "画布为空，无可保存内容", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, saveTextFile(context, "node_project_${System.currentTimeMillis()}.qne", snap), Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+            ) { Text("保存工程") }
+            TextButton(
+                onClick = {
+                    wvRef.value?.evaluateJavascript("JSON.stringify([window.__getMermaid()])") { r ->
+                        val txt = decodeJsString(r)
+                        if (txt.isBlank()) {
+                            Toast.makeText(context, "画布为空，暂无可复制的 Mermaid", Toast.LENGTH_SHORT).show()
+                        } else {
+                            copyText(context, txt)
+                            Toast.makeText(context, "已复制 Mermaid 源码", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 },
             ) { Text("复制 Mermaid") }
+            TextButton(
+                onClick = {
+                    wvRef.value?.evaluateJavascript("JSON.stringify([window.__getMermaid()])") { r ->
+                        val txt = decodeJsString(r)
+                        if (txt.isBlank()) {
+                            Toast.makeText(context, "画布为空，暂无可渲染内容", Toast.LENGTH_SHORT).show()
+                        } else {
+                            onRenderInChat("mermaid", txt, "节点编辑器")
+                            Toast.makeText(context, "已发送到对话框渲染", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+            ) { Text("渲染到对话框") }
         }
         AndroidView(
             modifier = Modifier.fillMaxSize().weight(1f),
@@ -677,4 +860,15 @@ private fun fallbackSaveToDir(dir: java.io.File?, name: String, content: String)
     } catch (e: Exception) {
         "保存失败：${e.message}"
     }
+}
+
+/**
+ * 把 WebView.evaluateJavascript 回调收到的 JSON 字面量还原成普通 Kotlin 字符串。
+ * evaluateJavascript 返回的是「被 JSON 编码过的字符串」（带外层引号、内部转义），
+ * 直接当普通文本用会带上转义引号 / 换行符。约定调用方用 JSON.stringify([expr]) 包裹，
+ * 这里用 JSONArray 取第 0 项即可无失真还原。解析失败则原样返回。
+ */
+private fun decodeJsString(raw: String?): String {
+    if (raw == null) return ""
+    return runCatching { JSONArray(raw).optString(0) }.getOrDefault(raw)
 }

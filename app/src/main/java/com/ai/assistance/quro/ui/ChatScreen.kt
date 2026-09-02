@@ -2085,6 +2085,21 @@ fun ChatScreen(
                         }
                     },
                     onClose = { showToolCenter = false },
+                    // 工具中心面板「发到对话框渲染」：直接走与 AI 相同的 RenderWidget 总线
+                    onRenderInChat = { type, value, label ->
+                        UiNavigationBus.navEvent = UiNavigationEvent.RenderWidget(
+                            type = type,
+                            id = "",
+                            label = label,
+                            value = value,
+                        )
+                        showToolCenter = false
+                    },
+                    // 工具中心「AI 生成小程序」：把诉求作为用户消息发给 AI（AI 会用 workbench 工具落地）
+                    onAskAi = { prompt ->
+                        send(prompt)
+                        showToolCenter = false
+                    },
                 )
             }
         }
