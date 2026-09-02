@@ -1,0 +1,492 @@
+package com.ai.assistance.quro.service
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.graphics.PixelFormat
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.view.Gravity
+import android.view.WindowManager
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.appcompat.view.ContextThemeWrapper
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.app.NotificationCompat
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import com.ai.assistance.quro.activity.QuroMainActivity
+import com.ai.assistance.quro.core.tools.QuroBrowserController
+import com.ai.assistance.quro.core.util.QuroServiceLifecycleOwner
+import com.ai.assistance.quro.ui.FloatingMiniWindow
+
+/**
+ * 对话 / 浏览器「系统级化小窗」管理器（进程级单例）。
+ *
+ * 与旧版「应用内 Compose 浮层」(FloatingMiniWindow 直接嵌在 ChatScreen 的 Compose 树里，
+ * App 退后台即消失) 不同，这里把小窗渲染为真正的系统悬浮窗：
+ *   - 通过 WindowManager.addView + LayoutParams(type = TYPE_APPLICATION_OVERLAY) 挂载；
+ *   - 挂在应用进程（由 QuroMiniWindowService 前台保活）之上，可浮在桌面 / 其他 App 之上；
+ *   - 复用现有 FloatingMiniWindow 容器（拖拽 / 缩放 / 还原 / 关闭）与 ChatScreen 的浏览器 WebView 配置。
+ *
+ * 权限：依赖 AndroidManifest 已声明的 SYSTEM_ALERT_WINDOW；未授权时上层(ChatScreen)自动降级为应用内浮层。
+ */
+object QuroMiniWindowManager {
+
+    /** 由 Activity 推送的对话小窗快照（避免跨 Activity 持有 ViewModel）。 */
+    data class MiniChatLine(val label: String, val text: String)
+
+    private var appCtx: Context? = null
+    private var windowManager: WindowManager? = null
+
+    private var chatLifecycle: QuroServiceLifecycleOwner? = null
+    private var browserLifecycle: QuroServiceLifecycleOwner? = null
+    private var chatView: ComposeView? = null
+    private var browserView: ComposeView? = null
+
+    private val chatLinesState = mutableStateOf<List<MiniChatLine>>(emptyList())
+    private val browserUrlState = mutableStateOf<String?>(null)
+
+    /** 当前主题色板（由 Activity 同步，保证悬浮窗与主界面视觉一致）。 */
+    private var colorScheme = androidx.compose.material3.darkColorScheme()
+
+    /** Activity 回填回调：悬浮窗内按钮 → 回到主界面状态。 */
+    var onExpandChat: (() -> Unit)? = null
+    var onCloseChat: (() -> Unit)? = null
+    var onNewConversation: (() -> Unit)? = null
+    var onRestoreBrowser: ((String) -> Unit)? = null
+    var onCloseBrowser: (() -> Unit)? = null
+
+    // ───────────────────────── 权限 ─────────────────────────
+
+    fun hasOverlayPermission(ctx: Context): Boolean = Settings.canDrawOverlays(ctx)
+
+    fun requestOverlayPermission(ctx: Context) {
+        if (!hasOverlayPermission(ctx)) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:${ctx.packageName}"),
+            ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+            ctx.startActivity(intent)
+        }
+    }
+
+    fun setColorScheme(scheme: androidx.compose.material3.ColorScheme) {
+        colorScheme = scheme
+    }
+
+    fun setChatLines(lines: List<MiniChatLine>) {
+        chatLinesState.value = lines
+    }
+
+    fun isChatShown(): Boolean = chatView != null
+    fun isBrowserShown(): Boolean = browserView != null
+
+    // ───────────────────────── 对话小窗 ─────────────────────────
+
+    fun showChat(ctx: Context, scheme: androidx.compose.material3.ColorScheme) {
+        ensureCtx(ctx)
+        setColorScheme(scheme)
+        if (!hasOverlayPermission(ctx)) return
+        ensureService(ctx)
+        if (chatView != null) return
+        val wm = windowManager ?: return
+
+        val lifecycle = QuroServiceLifecycleOwner().apply { create(); resume() }
+        chatLifecycle = lifecycle
+        val composeCtx = ContextThemeWrapper(appCtx, getThemeRes())
+        val view = ComposeView(composeCtx).apply {
+            setViewTreeLifecycleOwner(lifecycle)
+            setViewTreeViewModelStoreOwner(lifecycle)
+            setViewTreeSavedStateRegistryOwner(lifecycle)
+            setContent {
+                MaterialTheme(colorScheme = colorScheme) {
+                    Box(Modifier.fillMaxSize()) {
+                        FloatingMiniWindow(
+                            title = "对话小窗",
+                            initialX = 24.dp, initialY = 120.dp,
+                            initialWidth = 300.dp, initialHeight = 420.dp,
+                            onRestore = { onExpandChat?.invoke() },
+                            onClose = { onCloseChat?.invoke() },
+                        ) {
+                            ChatMiniContent()
+                        }
+                    }
+                }
+            }
+        }
+        chatView = view
+        wm.addView(view, fullScreenParams())
+    }
+
+    fun hideChat() {
+        try {
+            chatView?.let { windowManager?.removeView(it) }
+        } catch (_: Exception) {
+        }
+        chatView = null
+        chatLifecycle?.destroy()
+        chatLifecycle = null
+        maybeStopService()
+    }
+
+    // ───────────────────────── 浏览器小窗 ─────────────────────────
+
+    fun showBrowser(ctx: Context, url: String, scheme: androidx.compose.material3.ColorScheme) {
+        ensureCtx(ctx)
+        setColorScheme(scheme)
+        if (!hasOverlayPermission(ctx)) return
+        ensureService(ctx)
+        // 已显示则先移除再重建（保证最新 url 生效）
+        if (browserView != null) hideBrowser()
+        val wm = windowManager ?: return
+
+        val lifecycle = QuroServiceLifecycleOwner().apply { create(); resume() }
+        browserLifecycle = lifecycle
+        val composeCtx = ContextThemeWrapper(appCtx, getThemeRes())
+        val view = ComposeView(composeCtx).apply {
+            setViewTreeLifecycleOwner(lifecycle)
+            setViewTreeViewModelStoreOwner(lifecycle)
+            setViewTreeSavedStateRegistryOwner(lifecycle)
+            setContent {
+                MaterialTheme(colorScheme = colorScheme) {
+                    Box(Modifier.fillMaxSize()) {
+                        FloatingMiniWindow(
+                            title = "浏览器小窗",
+                            initialX = 40.dp, initialY = 150.dp,
+                            initialWidth = 320.dp, initialHeight = 400.dp,
+                            onRestore = {
+                                val u = browserUrlState.value
+                                if (u != null) onRestoreBrowser?.invoke(u)
+                            },
+                            onClose = { onCloseBrowser?.invoke() },
+                        ) {
+                            BrowserMiniContent(url)
+                        }
+                    }
+                }
+            }
+        }
+        browserView = view
+        browserUrlState.value = url
+        wm.addView(view, fullScreenParams())
+    }
+
+    fun hideBrowser() {
+        try {
+            browserView?.let {
+                windowManager?.removeView(it)
+            }
+        } catch (_: Exception) {
+        }
+        browserView = null
+        browserLifecycle?.destroy()
+        browserLifecycle = null
+        maybeStopService()
+    }
+
+    /** 服务进程销毁（进程将死）：兜底移除所有悬浮窗视图。 */
+    fun onServiceDestroyed() {
+        try {
+            chatView?.let { windowManager?.removeView(it) }
+            browserView?.let { windowManager?.removeView(it) }
+        } catch (_: Exception) {
+        }
+        chatView = null
+        browserView = null
+        chatLifecycle?.destroy()
+        browserLifecycle?.destroy()
+        chatLifecycle = null
+        browserLifecycle = null
+    }
+
+    // ───────────────────────── 内部 Composable 内容 ─────────────────────────
+
+    @Composable
+    private fun ChatMiniContent() {
+        val lines by chatLinesState
+        Column(Modifier.fillMaxSize()) {
+            LazyColumn(
+                Modifier.fillMaxWidth().weight(1f).padding(8.dp),
+                reverseLayout = true,
+            ) {
+                items(lines.size) { idx ->
+                    val m = lines[idx]
+                    Text(
+                        "${m.label}：${m.text.take(200)}",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 4,
+                        modifier = Modifier.padding(vertical = 3.dp),
+                    )
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { onNewConversation?.invoke() }) {
+                    Text("新建对话")
+                }
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = { onExpandChat?.invoke() }) {
+                    Text("展开对话")
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun BrowserMiniContent(url: String) {
+        val webSchemes = setOf("http", "https", "file", "about", "data", "javascript")
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { c ->
+                WebView(c).apply {
+                    settings.apply {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        databaseEnabled = true
+                        loadsImagesAutomatically = true
+                        loadWithOverviewMode = true
+                        useWideViewPort = true
+                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        allowFileAccess = true
+                        javaScriptCanOpenWindowsAutomatically = true
+                        defaultTextEncodingName = "utf-8"
+                    }
+                    QuroBrowserController.attach(this)
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageStarted(view: WebView?, u: String?, favicon: android.graphics.Bitmap?) {
+                            QuroBrowserController.markPageStarted(u)
+                        }
+
+                        override fun onPageFinished(view: WebView?, u: String?) {
+                            QuroBrowserController.markPageFinished(u)
+                        }
+
+                        override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
+                            val reqUri = request?.url ?: return false
+                            val scheme = reqUri.scheme?.lowercase() ?: return false
+                            if (scheme in webSchemes) return false
+                            runCatching {
+                                val intent = Intent(Intent.ACTION_VIEW, reqUri)
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                c.startActivity(intent)
+                            }
+                            return true
+                        }
+
+                        @Suppress("DEPRECATION")
+                        override fun shouldOverrideUrlLoading(view: WebView?, u: String?): Boolean {
+                            if (u.isNullOrEmpty()) return false
+                            val parsed = runCatching { Uri.parse(u) }.getOrNull() ?: return false
+                            val scheme = parsed.scheme?.lowercase() ?: return false
+                            if (scheme in webSchemes) return false
+                            runCatching {
+                                val intent = Intent(Intent.ACTION_VIEW, parsed)
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                c.startActivity(intent)
+                            }
+                            return true
+                        }
+                    }
+                    // 化小窗同样需要 WebChromeClient：补齐 onReceivedTitle → markTitle，
+                    // 否则化小窗后 status()/snapshot() 的 title 永远为空（同 ChatScreen 修复点）。
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onReceivedTitle(view: WebView?, title: String?) {
+                            if (!title.isNullOrEmpty()) QuroBrowserController.markTitle(title)
+                        }
+                    }
+                    loadUrl(url)
+                }
+            },
+            onRelease = {
+                QuroBrowserController.detach(it)
+                it.destroy()
+            },
+        )
+    }
+
+    // ───────────────────────── 内部工具 ─────────────────────────
+
+    private fun ensureCtx(ctx: Context) {
+        if (appCtx == null) {
+            appCtx = ctx.applicationContext
+            windowManager = appCtx?.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+        }
+    }
+
+    private fun ensureService(ctx: Context) {
+        QuroMiniWindowService.start(ctx.applicationContext)
+    }
+
+    private fun maybeStopService() {
+        if (chatView == null && browserView == null) {
+            appCtx?.let { QuroMiniWindowService.stop(it) }
+        }
+    }
+
+    private fun fullScreenParams(): WindowManager.LayoutParams {
+        val dm = appCtx?.resources?.displayMetrics
+        val w = dm?.widthPixels ?: 1080
+        val h = dm?.heightPixels ?: 1920
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+        return WindowManager.LayoutParams(
+            w,
+            h,
+            type,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 0
+        }
+    }
+
+    private fun getThemeRes(): Int {
+        val ctx = appCtx ?: return android.R.style.Theme_Material_Light
+        return ctx.resources.getIdentifier("Theme.Quro", "style", ctx.packageName).let {
+            if (it != 0) it else android.R.style.Theme_Material_Light
+        }
+    }
+}
+
+/**
+ * 对话 / 浏览器系统级悬浮窗保活服务。
+ *
+ * 仅用于「前台保活」：让进程在 App 退到后台 / 切到其他软件时仍存活，
+ * 从而 WindowManager 上挂载的 TYPE_APPLICATION_OVERLAY 小窗能持续浮在桌面与其他 App 之上。
+ * 悬浮窗视图本身由 QuroMiniWindowManager（进程级单例）持有与增删，本服务不触碰视图。
+ *
+ * 采用 specialUse 前台服务类型（与终端保活服务一致），并在 Manifest 中声明对应 subtype。
+ */
+class QuroMiniWindowService : Service() {
+
+    override fun onBind(intent: Intent?): android.os.IBinder? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        startForegroundSafely()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            QuroMiniWindowManager.hideChat()
+            QuroMiniWindowManager.hideBrowser()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        // 保活：进程存活期间小窗持续显示
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        QuroMiniWindowManager.onServiceDestroyed()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        super.onDestroy()
+    }
+
+    private fun startForegroundSafely() {
+        val notif = buildNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIF_ID,
+                notif,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } else {
+            startForeground(NOTIF_ID, notif)
+        }
+    }
+
+    private fun buildNotification(): Notification {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val chan = NotificationChannel(
+            CHANNEL_ID,
+            "对话/浏览器悬浮小窗",
+            NotificationManager.IMPORTANCE_LOW,
+        )
+        nm.createNotificationChannel(chan)
+
+        val contentIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, QuroMainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
+        val stopIntent = Intent(this, QuroMiniWindowService::class.java).apply { action = ACTION_STOP }
+        val stopPi = PendingIntent.getService(
+            this,
+            1,
+            stopIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("对话/浏览器悬浮小窗")
+            .setContentText("Zorv AI 系统级悬浮窗运行中")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentIntent(contentIntent)
+            .addAction(android.R.drawable.ic_menu_delete, "关闭全部悬浮窗", stopPi)
+            .build()
+    }
+
+    companion object {
+        private const val NOTIF_ID = 8812
+        private const val CHANNEL_ID = "quro_mini_window"
+        const val ACTION_STOP = "com.ai.assistance.quro.action.MINI_WINDOW_STOP"
+
+        fun start(context: Context) {
+            val intent = Intent(context, QuroMiniWindowService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+
+        fun stop(context: Context) {
+            val intent = Intent(context, QuroMiniWindowService::class.java).apply { action = ACTION_STOP }
+            context.startService(intent)
+        }
+    }
+}
