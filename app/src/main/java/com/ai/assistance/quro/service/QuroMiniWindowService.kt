@@ -531,9 +531,11 @@ object QuroMiniWindowManager {
 
     /**
      * 浮窗窗口参数（对话/浏览器共用）：窗口仅包围小窗面板本身（WRAP_CONTENT，按面板尺寸自动测量），
-     * 而非满屏。配合 NOT_FOCUSABLE + NOT_TOUCH_MODAL，行为与「语音球」一致——浮于其它 App 之上却不拦截：
+     * 而非满屏。配合 NOT_FOCUSABLE + NOT_TOUCH_MODAL + ALT_FOCUSABLE_IM，既「不挡其它 App」又能「唤起键盘」：
      * - NOT_FOCUSABLE：浮窗不抢下层 App（抖音/快手）焦点，其输入框/键盘照常工作；
      * - NOT_TOUCH_MODAL：面板「边界之外」的整片区域点击穿透到下层 App，可边看浮窗边操作其它应用；
+     * - ALT_FOCUSABLE_IM：与 NOT_FOCUSABLE 配合 → 窗口本身不抢焦点，但面板内 EditText 仍可作为 IME 目标，
+     *   点输入框即弹出软键盘（聊天头部浮窗的标准做法），且不抢占下层 App 的输入焦点；
      * - 面板内的按钮/滚动/拖拽/缩放仍正常响应（拖拽由 moveMiniWindow 移动整窗，缩放由 updateMiniLayout 重测）。
      * 初始屏幕坐标由 x/y 决定；拖拽时 moveMiniWindow 更新 x/y 并 updateViewLayout。
      */
@@ -549,6 +551,7 @@ object QuroMiniWindowManager {
             WindowManager.LayoutParams.WRAP_CONTENT,
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
