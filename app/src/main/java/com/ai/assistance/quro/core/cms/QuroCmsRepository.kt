@@ -9,8 +9,9 @@ import java.io.File
  * CMS v2 模块仓库：模块清单以 [org.json] 持久化到 filesDir/cms_modules.json，
  * 协议头 apiVersion 固定为 `cms.io/v2`。
  *
- * v3 重构：所有种子能力均为纯应用内执行（intent / js / api），
- * 不再包含任何 shell / root / Shizuku / 无障碍真实执行能力。
+ * v4 精简：仅保留终端（proot/Ubuntu）模块，所有「应用内执行」手机模块已移除。
+ * 终端模块自带 [QuroCmsModule.terminalEntry] 真实入口脚本，在 proot 沙箱内作为后端运行；
+ * 本 App 作为前端通过 cms_call/ACI 调用，落实「互为主从」。
  */
 class QuroCmsRepository(context: Context) {
 
@@ -93,286 +94,35 @@ class QuroCmsRepository(context: Context) {
     // ---------- 种子模块（首次运行注入内置能力目录） ----------
 
     /**
-     * 强制覆盖写入内置种子模块（确保升级后的纯应用内能力始终生效），并清理历史遗留的
-     * 「真实执行」模块（如无障碍模拟点击/滑动的 quro.automation）。
+     * 强制覆盖写入内置种子模块（确保升级后的终端模块始终生效），并清理历史遗留的
+     * 手机模块（应用内执行）与「真实执行」模块（如无障碍模拟点击/滑动的 quro.automation）。
      */
     fun ensureSeed() {
         builtInModules().forEach { upsert(it) }
         purgeLegacy()
     }
 
-    /** 清理历史版本遗留的「真实执行」模块（已在新架构下失效）。 */
+    /** 清理历史版本遗留的「真实执行」模块与已移除的手机（应用内执行）模块（已在新架构下失效）。 */
     private fun purgeLegacy() {
-        val legacy = setOf("quro.automation")
+        val legacy = setOf(
+            "quro.automation",   // 历史「真实执行」模块
+            // 已移除的手机（应用内执行）模块
+            "quro.web", "quro.system", "quro.file", "quro.code", "quro.time",
+            "quro.draw", "quro.github", "quro.daily", "quro.workflow", "quro.memory",
+            "quro.12306", "quro.terminal", "quro.launcher",
+        )
         val keep = load().filter { it.id !in legacy }
         if (keep.size != load().size) save(keep)
     }
 
     /**
      * 内置种子模块（Context-free，可在 JVM 单测中直接调用）。
-     * 所有种子能力均为纯应用内执行（intent / js / api），不调用 shell / root / Shizuku / 无障碍真实执行。
-     * v311：重写 10 个内置插件为真实原生实现，并把自动化浏览器接入为 quro.web 的真实能力。
+     * v4 精简：仅保留终端（proot/Ubuntu）模块，所有「应用内执行」手机模块已移除。
+     * 终端模块均带 [QuroCmsModule.terminalEntry] 真实入口脚本，在 proot 沙箱内作为后端运行。
      */
     companion object {
         fun builtInModules(): List<QuroCmsModule> = listOf(
-        // 1. Web 搜索与浏览（应用内嵌 WebView 浏览器，v177 重写）
-        QuroCmsModule(
-            id = "quro.web",
-            name = "Web 搜索与浏览",
-            version = "1.0.0",
-            description = "网络搜索、打开任意网址（应用内嵌 WebView 浏览器，不跳转外部浏览器）；并内置 AI 自动化浏览器：后台自动研究（搜索→抓取→合并简报）与单页正文抓取。",
-            author = "Zorv AI", license = "Apache-2.0",
-            state = ModuleState.Ready,
-            permissions = listOf(
-                QuroCmsPermission("net.access", PermissionLevel.Normal, "访问网络（搜索/打开网页）", "*", AuthorizationLevel.Session),
-            ),
-            capabilities = listOf(
-                QuroCmsCapability("web_search", "网络搜索", "query:string",
-                    listOf("net.access"), PermissionConstraints(allowedDomains = listOf("google.com", "bing.com", "baidu.com")),
-                    "intent", """{"action":"android.intent.action.VIEW","data":"https://www.google.com/search?q=${'$'}{query}"}"""),
-                QuroCmsCapability("open_url", "打开网址", "url:string",
-                    listOf("net.access"), PermissionConstraints(),
-                    "intent", """{"action":"android.intent.action.VIEW","data":"${'$'}{url}"}"""),
-                // 自动化浏览器（★ 真实能力）：AI 后台自动研究（搜索→抓取前 N 页正文→合并简报）
-                QuroCmsCapability("automate_browser", "自动化研究(浏览器)", "query:string,depth:int",
-                    listOf("net.access"), PermissionConstraints(maxExecutionTimeSecs = 30),
-                    "api", "ai.browser.automate"),
-                // 抓取单页正文（真实能力，接 AiBrowserTool 引擎）
-                QuroCmsCapability("extract_article", "抓取网页正文", "url:string",
-                    listOf("net.access"), PermissionConstraints(maxExecutionTimeSecs = 20),
-                    "api", "ai.browser.read"),
-            ),
-        ),
-        // 2. 系统信息（只读 API，不控制系统）
-        QuroCmsModule(
-            id = "quro.system",
-            name = "系统信息",
-            version = "1.0.0",
-            description = "只读设备信息、列出已安装应用（均通过应用内 Android API，不执行 shell / 不控制系统）。",
-            author = "Zorv AI", license = "Apache-2.0",
-            state = ModuleState.Ready,
-            permissions = listOf(
-                QuroCmsPermission("sys.info", PermissionLevel.Normal, "读取设备属性", "*", AuthorizationLevel.Session),
-            ),
-            capabilities = listOf(
-                QuroCmsCapability("device_model", "读取设备型号", "{}",
-                    listOf("sys.info"), PermissionConstraints(),
-                    "api", "device.info"),
-                QuroCmsCapability("list_packages", "列出已安装应用", "{}",
-                    listOf("sys.info"), PermissionConstraints(),
-                    "api", "packages.list"),
-                // 电量信息（真实能力，应用内 BatteryManager 只读）
-                QuroCmsCapability("battery_info", "读取电量信息", "{}",
-                    listOf("sys.info"), PermissionConstraints(),
-                    "api", "battery.info"),
-            ),
-        ),
-        // 3. 文件工具（仅应用沙箱内只读，不触达系统文件 / 不执行 shell）
-        QuroCmsModule(
-            id = "quro.file",
-            name = "文件工具",
-            version = "1.0.0",
-            description = "在应用自身沙箱内列目录、读文件、写文件（不读取系统文件，不执行 shell）。",
-            author = "Zorv AI", license = "Apache-2.0",
-            state = ModuleState.Ready,
-            permissions = listOf(
-                QuroCmsPermission("fs.read", PermissionLevel.Normal, "读取应用沙箱文件", "*", AuthorizationLevel.Session),
-                QuroCmsPermission("fs.write", PermissionLevel.Normal, "写入应用沙箱文件", "*", AuthorizationLevel.Session),
-            ),
-            capabilities = listOf(
-                QuroCmsCapability("list_dir", "列应用目录", "path:string",
-                    listOf("fs.read"), PermissionConstraints(),
-                    "api", "file.list"),
-                QuroCmsCapability("read_file", "读应用文件", "path:string",
-                    listOf("fs.read"), PermissionConstraints(),
-                    "api", "file.read"),
-                QuroCmsCapability("write_file", "写应用文件", "path:string,content:string",
-                    listOf("fs.write"), PermissionConstraints(),
-                    "api", "file.write"),
-            ),
-        ),
-        // 4. 代码运行（应用内 QuickJS 沙箱执行 JS，不调用系统 node/python）
-        QuroCmsModule(
-            id = "quro.code",
-            name = "代码运行",
-            version = "1.0.0",
-            description = "在应用进程内置 QuickJS 沙箱内执行 JS 脚本（应用内逻辑执行，不触达系统）。",
-            author = "Zorv AI", license = "Apache-2.0",
-            state = ModuleState.Ready,
-            permissions = listOf(
-                QuroCmsPermission("code.run", PermissionLevel.Normal, "在应用内执行脚本", "*", AuthorizationLevel.Session),
-            ),
-            capabilities = listOf(
-                QuroCmsCapability("run_node", "运行 JS", "script:string",
-                    listOf("code.run"), PermissionConstraints(maxExecutionTimeSecs = 10),
-                    "js", "\${script}"),
-                QuroCmsCapability(
-                    id = "run_code_dual",
-                    summary = "运行 JS/Node（可前端 QuickJS 或后端 proot node，互为主从）",
-                    schema = "script:string",
-                    requiresPermissions = listOf("code.run"),
-                    constraints = PermissionConstraints(maxExecutionTimeSecs = 10),
-                    actionType = "js",
-                    action = "\${script}",
-                    runOn = setOf(RuntimeHost.APP, RuntimeHost.TERMINAL),
-                    terminalAction = "node -e \${script}",
-                ),
-            ),
-        ),
-        // 5. 时间（只读 API）
-        QuroCmsModule(
-            id = "quro.time",
-            name = "时间",
-            version = "1.0.0",
-            description = "读取当前系统时间（应用内 API）。",
-            author = "Zorv AI", license = "Apache-2.0",
-            state = ModuleState.Ready,
-            permissions = listOf(
-                QuroCmsPermission("time.read", PermissionLevel.Normal, "读取系统时间", "*", AuthorizationLevel.Session),
-            ),
-            capabilities = listOf(
-                QuroCmsCapability("now", "当前时间", "{}",
-                    listOf("time.read"), PermissionConstraints(),
-                    "api", "time.now"),
-                // 按指定格式输出时间（真实能力，应用内 SimpleDateFormat）
-                QuroCmsCapability("format_time", "格式化时间", "format:string,epoch:string",
-                    listOf("time.read"), PermissionConstraints(),
-                    "api", "time.format"),
-            ),
-        ),
-        // 6. AI 绘图（intent 打开各厂商平台）
-        QuroCmsModule(
-            id = "quro.draw",
-            name = "AI 绘图",
-            version = "1.0.0",
-            description = "打开各厂商文生图平台（实际生成由对话框内 AI 经 API 完成，此处仅登记能力并打开对应平台）。",
-            author = "Zorv AI", license = "Apache-2.0",
-            state = ModuleState.Ready,
-            permissions = listOf(
-                QuroCmsPermission("net.api", PermissionLevel.Normal, "调用绘图平台（需联网）", "*", AuthorizationLevel.Session),
-            ),
-            capabilities = listOf(
-                QuroCmsCapability("draw_openai", "OpenAI 绘图", "prompt:string",
-                    listOf("net.api"), PermissionConstraints(),
-                    "intent", """{"action":"android.intent.action.VIEW","data":"https://openai.com/dall-e"}"""),
-                QuroCmsCapability("draw_zhipu", "智谱绘图", "prompt:string",
-                    listOf("net.api"), PermissionConstraints(),
-                    "intent", """{"action":"android.intent.action.VIEW","data":"https://open.bigmodel.cn"}"""),
-                QuroCmsCapability("draw_qwen", "通义千问绘图", "prompt:string",
-                    listOf("net.api"), PermissionConstraints(),
-                    "intent", """{"action":"android.intent.action.VIEW","data":"https://tongyi.aliyun.com"}"""),
-            ),
-        ),
-        // 7. 开发协作（intent 打开仓库）
-        QuroCmsModule(
-            id = "quro.github",
-            name = "GitHub",
-            version = "1.0.0",
-            description = "打开仓库、查看项目主页（intent）。",
-            author = "Zorv AI", license = "Apache-2.0",
-            state = ModuleState.Ready,
-            permissions = listOf(
-                QuroCmsPermission("net.access", PermissionLevel.Normal, "访问网络", "*", AuthorizationLevel.Session),
-            ),
-            capabilities = listOf(
-                QuroCmsCapability("open_repo", "打开仓库", "url:string",
-                    listOf("net.access"), PermissionConstraints(),
-                    "intent", """{"action":"android.intent.action.VIEW","data":"${'$'}{url}"}"""),
-            ),
-        ),
-        // 8. 日常助手（intent 拉起系统日历/闹钟）
-        QuroCmsModule(
-            id = "quro.daily",
-            name = "日常助手",
-            version = "1.0.0",
-            description = "日历、闹钟等日常操作（应用内派发 Intent 拉起系统界面）。",
-            author = "Zorv AI", license = "Apache-2.0",
-            state = ModuleState.Ready,
-            permissions = listOf(
-                QuroCmsPermission("daily.intent", PermissionLevel.Normal, "启动系统日历/闹钟", "*", AuthorizationLevel.Session),
-            ),
-            capabilities = listOf(
-                QuroCmsCapability("open_calendar", "打开日历", "{}",
-                    listOf("daily.intent"), PermissionConstraints(),
-                    "intent", """{"action":"android.intent.action.VIEW","data":"content://com.android.calendar/time"}"""),
-                QuroCmsCapability("set_alarm", "设置闹钟", "hour:int,minute:int",
-                    listOf("daily.intent"), PermissionConstraints(),
-                    "intent", """{"action":"android.intent.action.SET_ALARM","extra":{"android.intent.extra.alarm.HOUR":{"t":"i","v":"${'$'}{hour}"},"android.intent.extra.alarm.MINUTES":{"t":"i","v":"${'$'}{minute}"}}}"""),
-            ),
-        ),
-        // 9. 工作流（应用内 echo 演示）
-        QuroCmsModule(
-            id = "quro.workflow",
-            name = "工作流",
-            version = "1.0.0",
-            description = "组合多步能力编排简单工作流（应用内真实执行：echo 单步 + 多步序列编排内置能力）。",
-            author = "Zorv AI", license = "Apache-2.0",
-            state = ModuleState.Ready,
-            permissions = listOf(
-                QuroCmsPermission("wf.run", PermissionLevel.Normal, "运行本地工作流", "*", AuthorizationLevel.Session),
-            ),
-            capabilities = listOf(
-                QuroCmsCapability("echo_step", "回显步骤", "text:string",
-                    listOf("wf.run"), PermissionConstraints(),
-                    "api", "echo"),
-                // 多步编排（真实能力，递归分发其它内置 api 能力，本地执行）
-                QuroCmsCapability("run_sequence", "运行多步工作流", "steps:string",
-                    listOf("wf.run"), PermissionConstraints(maxExecutionTimeSecs = 30),
-                    "api", "workflow.sequence"),
-            ),
-        ),
-        // 10. 记忆库（intent 打开记忆页）
-        QuroCmsModule(
-            id = "quro.memory",
-            name = "记忆库",
-            version = "1.0.0",
-            description = "长期记忆的登记与权限通道（实际读写由 memory_* 工具完成）。",
-            author = "Zorv AI", license = "Apache-2.0",
-            state = ModuleState.Ready,
-            permissions = listOf(
-                QuroCmsPermission("mem.access", PermissionLevel.Normal, "读写本地记忆库", "*", AuthorizationLevel.Session),
-            ),
-            capabilities = listOf(
-                QuroCmsCapability("open_memory", "打开记忆库", "{}",
-                    listOf("mem.access"), PermissionConstraints(),
-                    "intent", """{"action":"android.intent.action.VIEW","data":"quro://memory"}"""),
-            ),
-        ),
-        // 11. 12306 出行（intent）
-        QuroCmsModule(
-            id = "quro.12306",
-            name = "12306 出行",
-            version = "1.0.0",
-            description = "打开铁路 12306 官网（intent）。",
-            author = "Zorv AI", license = "Apache-2.0",
-            state = ModuleState.Ready,
-            permissions = listOf(
-                QuroCmsPermission("net.access", PermissionLevel.Normal, "访问网络", "*", AuthorizationLevel.Session),
-            ),
-            capabilities = listOf(
-                QuroCmsCapability("open_12306", "打开 12306", "{}",
-                    listOf("net.access"), PermissionConstraints(),
-                    "intent", """{"action":"android.intent.action.VIEW","data":"https://www.12306.cn"}"""),
-            ),
-        ),
-        // 12. 终端（应用内 PTY，纯用户空间；执行经 QuroAgentTrace 实时可视化）
-        QuroCmsModule(
-            id = "quro.terminal",
-            name = "终端",
-            version = "1.0.0",
-            description = "在应用内 PTY（/system/bin/sh）执行 shell 命令（纯用户空间，无 root/Shizuku）。执行过程经 QuroAgentTrace 实时可视化。",
-            author = "Zorv AI", license = "Apache-2.0",
-            state = ModuleState.Ready,
-            permissions = listOf(
-                QuroCmsPermission("term.run", PermissionLevel.Normal, "在应用内执行 shell 命令", "*", AuthorizationLevel.Session),
-            ),
-            capabilities = listOf(
-                QuroCmsCapability("run_shell", "执行命令", "command:string",
-                    listOf("term.run"), PermissionConstraints(maxExecutionTimeSecs = 15),
-                    "terminal", "\${command}"),
-            ),
-        ),
-        // 14. 终端·Python 运行时（proot 内真实 Python 后端；终端是后端，本软是前端）
+        // 1. 终端·Python 运行时（proot 内真实 Python 后端；终端是后端，本软是前端）
         QuroCmsModule(
             id = "quro.term.python",
             name = "终端·Python运行时",
@@ -424,7 +174,7 @@ HTTPServer(('0.0.0.0', port), H).serve_forever()
 PYEOF
 """.trimIndent(),
         ),
-        // 15. 终端·Node 运行时（proot 内真实 Node 后端）
+        // 2. 终端·Node 运行时（proot 内真实 Node 后端）
         QuroCmsModule(
             id = "quro.term.node",
             name = "终端·Node运行时",
@@ -470,7 +220,7 @@ server.listen(port, '0.0.0.0', () => console.log('node backend on ' + port));
 JSEOF
 """.trimIndent(),
         ),
-        // 16. 终端·静态 HTTP 服务（终端作为后端，对外提供文件服务）
+        // 3. 终端·静态 HTTP 服务（终端作为后端，对外提供文件服务）
         QuroCmsModule(
             id = "quro.term.httpd",
             name = "终端·静态HTTP服务",
@@ -506,26 +256,6 @@ echo "[quro.term.httpd] 启动静态 HTTP 服务，目录 ${'$'}DIR，端口 ${'
 cd "${'$'}DIR"
 exec python3 -m http.server "${'$'}PORT" --bind 0.0.0.0
 """.trimIndent(),
-        ),
-        // 13. 启动器（应用级操作：打开应用 / 回到桌面，均以应用自身身份 startActivity）
-        QuroCmsModule(
-            id = "quro.launcher",
-            name = "启动器",
-            version = "1.0.0",
-            description = "打开指定应用、回到桌面等应用级操作（应用内派发 Intent，不控制系统）。",
-            author = "Zorv AI", license = "Apache-2.0",
-            state = ModuleState.Ready,
-            permissions = listOf(
-                QuroCmsPermission("launch.app", PermissionLevel.Normal, "启动其他应用", "*", AuthorizationLevel.Session),
-            ),
-            capabilities = listOf(
-                QuroCmsCapability("open_app", "打开应用", "package:string",
-                    listOf("launch.app"), PermissionConstraints(),
-                    "intent", """{"action":"android.intent.action.MAIN","package":"${'$'}{package}","category":["android.intent.category.LAUNCHER"]}"""),
-                QuroCmsCapability("home", "回到桌面", "{}",
-                    listOf("launch.app"), PermissionConstraints(),
-                    "intent", """{"action":"android.intent.action.MAIN","category":["android.intent.category.HOME"]}"""),
-            ),
         )
         )
     }

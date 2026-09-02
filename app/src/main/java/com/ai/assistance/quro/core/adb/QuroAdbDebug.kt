@@ -76,16 +76,17 @@ object QuroAdbDebug {
         return QuroRootGateway.exec(ctx, cmd)
     }
 
-    /** adbd 是否真的在监听该端口（ss -ltn / netstat -ltn 命中）。需 IO 线程。 */
+    /** adbd 是否真的在监听该端口（解析 /proc/net/tcp 的 LISTEN 状态）。需 IO 线程。 */
     fun isAdbdListening(ctx: Context, port: Int): Boolean {
-        val cmd = "ss -ltn 2>/dev/null; netstat -ltn 2>/dev/null"
+        // Bug7 修复：原实现依赖 `ss -ltn` / `netstat -ltn`，但 Android 宿主 root shell 可能无 netstat/ss
+        // （toybox/busybox 差异），且 proot 容器内 /proc/net/tcp 受 hidepid=invisible 限制不可读。
+        // 改为直接解析 /proc/net/tcp：local_address 为 `IP:PORT`（hex），st 字段 0A=LISTEN。
+        // 127.0.0.1 的 hex = 0100007F；宿主侧 /proc/net/tcp 可读，最可靠且不依赖 netstat/ss。
+        val portHex = String.format("%04X", port)
+        val cmd = "grep -qiE \"[ :]0100007F:${portHex}[ ]+.*[ ]+0A[ ]\" /proc/net/tcp /proc/net/tcp6 2>/dev/null && echo LISTENING || echo CLOSED"
         val r = runCatching { QuroRootGateway.exec(ctx, cmd, QuroRootGateway.PROBE_TIMEOUT_MS) }.getOrNull()
         val out = r?.output ?: return false
-        // 命中形如 0.0.0.0:5555 / [::]:5555 / 127.0.0.1:5555 的监听项
-        return out.lineSequence().any { line ->
-            val idx = line.indexOf(":$port")
-            idx >= 0 && (idx + (":$port").length >= line.length || line[idx + (":$port").length] == ' ')
-        }
+        return out.contains("LISTENING")
     }
 
     /** USB 调试是否已开启（Settings.Global ADB_ENABLED）。部分 ROM 受限返回 null。 */

@@ -130,15 +130,38 @@ object CmsEngineDeployer {
             else sb.appendLine("✅ 引擎环境栈已装配：${pkg.envProfiles.joinToString(" ")}")
         }
 
-        // 拉起共享服务（每个服务脚本自行后台化）
+        // 拉起共享服务（Bug1 修复：彻底脱离 + 端口就绪探测）
+        // 旧逻辑用 QuroLinuxEnv.run 直接 exec 服务脚本并信任其退出码；proot 下常驻进程持有 stdout pipe
+        // 导致 run() 20s 超时 → destroyForcibly() 返回 -1 → 不加入 launched → services=[]（功能正常但状态误判“未登记”）。
+        // 现改为：① setsid 包裹彻底脱离 stdout/stderr/stdin，run() 立即返回（不再触发超时）；
+        // ② 轮询 127.0.0.1:port，可连接即登记成功，最多 ~8s 判失败，不再依赖退出码。
         val launched = mutableListOf<String>()
         pkg.sharedServices.filter { it.enabled && it.command.isNotBlank() }.forEach { svc ->
-            val (sc, sout) = QuroLinuxEnv.run(context, "sh ${engineGuestDir()}/services/${svc.id}.sh", timeoutMs = 20_000)
-            if (sc == 0) {
+            // 1) 彻底脱离启动：setsid 使服务成为新会话首领，三重重定向到 /dev/null 后后台化，
+            //    run() 的 /bin/sh -c 立即 fork 返回，proot stdout pipe 被释放，run() 不再超时误杀服务。
+            val launchCmd = buildString {
+                append("if command -v setsid >/dev/null 2>&1; then setsid sh ${engineGuestDir()}/services/${svc.id}.sh >/dev/null 2>&1 </dev/null & ")
+                append("else nohup sh ${engineGuestDir()}/services/${svc.id}.sh >/dev/null 2>&1 </dev/null & fi")
+            }
+            QuroLinuxEnv.run(context, launchCmd, timeoutMs = 10_000)
+            // 2) 端口就绪探测：单次 proot 调用内用 python 轮询（40 次×0.3s），可连接即成功，避免反复拉起 proot。
+            val probe = """
+                python3 -c "import socket,time,sys
+                port=${svc.port}
+                ok=False
+                for _ in range(40):
+                    s=socket.socket(); s.settimeout(0.3)
+                    if s.connect_ex(('127.0.0.1',port))==0:
+                        ok=True; break
+                    s.close(); time.sleep(0.2)
+                sys.exit(0 if ok else 1)"
+            """.trimIndent()
+            val (pc, _) = QuroLinuxEnv.run(context, probe, timeoutMs = 15_000)
+            if (pc == 0) {
                 launched.add(svc.id)
                 CmsEngineStore.appendLog("引擎服务 ${svc.name} 已拉起（端口 ${svc.port}）")
             } else {
-                CmsEngineStore.appendLog("引擎服务 ${svc.name} 启动返回 $sc：${sout.take(120)}")
+                CmsEngineStore.appendLog("引擎服务 ${svc.name} 端口 ${svc.port} 探测超时，可能未就绪")
             }
         }
 

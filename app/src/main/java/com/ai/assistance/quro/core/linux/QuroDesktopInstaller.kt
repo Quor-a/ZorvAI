@@ -209,7 +209,13 @@ object QuroDesktopInstaller {
      * 获取VNC连接信息
      */
     fun getVncInfo(context: Context): String {
-        val result = QuroLinuxEnv.run(context, "ps aux | grep -E '(Xvfb|x11vnc)' | grep -v grep")
+        // Bug6 修复：proot 下 `ps aux` 因 Android hidepid=invisible 只读表头（Unable to get system boot time），
+        // grep 不到进程 → 误判"未运行"。改用 pgrep -af（直接读 /proc/*/cmdline，不受 hidepid 影响，用户已确认可用），
+        // 回退 ps -e（同样不受 btime 缺失影响）。
+        val result = QuroLinuxEnv.run(
+            context,
+            "pgrep -af 'Xvfb|x11vnc' 2>/dev/null || ps -e -o pid,comm,args 2>/dev/null | grep -E 'Xvfb|x11vnc' | grep -v grep",
+        )
         return if (result.first == 0 && result.second.isNotEmpty()) {
             "VNC服务器状态：运行中\n${result.second}"
         } else {

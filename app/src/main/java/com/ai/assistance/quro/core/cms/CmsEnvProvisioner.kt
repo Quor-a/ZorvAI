@@ -94,13 +94,16 @@ enum class EnvProfile(
         """.trimMargin(),
     ),
     PYTHON(
-        "Python 栈 (python3 / venv / pip / UV)",
-        "command -v python3 >/dev/null 2>&1 && (command -v pip >/dev/null 2>&1 || command -v pip3 >/dev/null 2>&1) && command -v uv >/dev/null 2>&1",
+        "Python 栈 (python3 / venv / pip)",
+        // Bug2 修复：去掉强制要求 uv（Rust 安装器，proot 下常下载失败 → 误判“PYTHON 未注册”）。
+        // 只要 python3 + pip/pip3 可用即视为就绪；uv 作为独立 UV 档按需装配。
+        "command -v python3 >/dev/null 2>&1 && (command -v pip >/dev/null 2>&1 || command -v pip3 >/dev/null 2>&1)",
         """
         |robust_install "python3 python3-pip python3-venv" "python3" || echo "[env] WARN: python3/pip/venv install failed"
         |if ! command -v python >/dev/null 2>&1; then ln -sf ${'$'}(command -v python3) /usr/local/bin/python 2>/dev/null || true; fi
         |python3 -m ensurepip --upgrade 2>/dev/null || true
-        |python3 -m venv /root/cms-venv 2>/dev/null || true
+        |# Bug2 修复：venv 目录优先建在 /opt（避开 proot /root ACL 限制），失败再退回 ${'$'}HOME。
+        |python3 -m venv /opt/cms-venv 2>/dev/null || python3 -m venv "${'$'}HOME/cms-venv" 2>/dev/null || true
         |echo "[env] python=${'$'}(python --version 2>&1) pip=${'$'}(pip --version 2>&1 || pip3 --version 2>&1)"
         """.trimMargin(),
     ),
@@ -173,10 +176,15 @@ enum class EnvProfile(
     ),
     VENV(
         "Python 虚拟环境 (venv)",
-        "test -x /root/cms-venv/bin/python3",
+        // Bug2 修复：proot /root 受 ACL 限制时 /root/cms-venv 创建/探测失败 → VENV 档误判未就绪。
+        // 允许 /opt/cms-venv 或 ${'$'}HOME/cms-venv（与 PYTHON 档优先写入路径一致）。
+        "test -x /opt/cms-venv/bin/python3 || test -x \"\${'$'}HOME/cms-venv/bin/python3\" || test -x /root/cms-venv/bin/python3",
         """
-        |python3 -m venv /root/cms-venv 2>/dev/null || true
-        |echo "[env] venv=${'$'}(/root/cms-venv/bin/python3 --version 2>&1)"
+        |VENV_ROOT=/opt/cms-venv
+        |if [ ! -x "\${'$'}VENV_ROOT/bin/python3" ]; then
+        |  python3 -m venv "\${'$'}VENV_ROOT" 2>/dev/null || python3 -m venv "\${'$'}HOME/cms-venv" 2>/dev/null || true
+        |fi
+        |echo "[env] venv=${'$'}(ls -d /opt/cms-venv "\${'$'}HOME/cms-venv" /root/cms-venv 2>/dev/null | head -1)/bin/python3"
         """.trimMargin(),
     ),
     // ─── Node.js 子环境 ───

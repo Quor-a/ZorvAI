@@ -9,9 +9,10 @@ BOOT_DIR=$(cd "$(dirname "$0")" && pwd)
 # ═══════════════════════════════════════════════════════════
 if [ ! -f /etc/resolv.conf ] || ! grep -q nameserver /etc/resolv.conf 2>/dev/null; then
     mkdir -p /etc
-    cat > /etc/resolv.conf 2>/dev/null << 'DNS'
+    cat > /etc/resolv.conf 2>/dev/null << 'DNS' || printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\nnameserver 223.5.5.5\n' > /etc/resolv.conf
 nameserver 8.8.8.8
 nameserver 8.8.4.4
+nameserver 114.114.114.114
 nameserver 223.5.5.5
 nameserver 1.1.1.1
 nameserver 9.9.9.9
@@ -138,6 +139,14 @@ robust_install "openssh-client" "ssh" || true
 robust_install "tree file" "tree" || true
 robust_install "less" "less" || true
 robust_install "bc" "bc" || true
+
+# Phase 3.5 (Bug3 修复)：网络诊断命令（ping/nslookup/dig/host/netstat/ifconfig/ip/ss）。
+# proot 默认不含，按用户清单补齐，best-effort 非致命。
+# 包映射：iputils-ping→ping, dnsutils→nslookup/dig/host, net-tools→netstat/ifconfig, iproute2→ip/ss
+robust_install "iputils-ping" "ping" || true
+robust_install "dnsutils" "nslookup" || true
+robust_install "net-tools" "netstat" || true
+robust_install "iproute2" "ip" || true
 
 # ═══════════════════════════════════════════════════════════
 # Phase 4: Python venv
