@@ -820,7 +820,7 @@ fun ChatScreen(
                             // v1057 暴露给 AI：工具中心的子能力可直接打开，无需先手动进工具中心
                             "vispro" -> { toolCenterInitial = "vispro"; showToolCenter = true }
                             "node_editor" -> { toolCenterInitial = "flow"; showToolCenter = true }
-                            "miniapp" -> { toolCenterInitial = "workbench"; showToolCenter = true }
+                            "miniapp" -> { toolCenterInitial = "miniapp"; showToolCenter = true }
                             "workbench" -> { toolCenterInitial = "workbench"; showToolCenter = true }
                             else -> { /* 忽略未知界面 */ }
                         }
