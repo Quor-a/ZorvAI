@@ -177,15 +177,17 @@ class SourceManager(context: Context) {
     
     // 生成更改APT源的Shell命令
     fun getAptSourceChangeCommand(source: MirrorSource): String {
-        val sourceUrl = source.url
+        // 轮次G：APT 源强制 HTTP，与 bootstrap.sh / BUILTIN_BOOTSTRAP 保持一致。
+        // proot 内 HTTPS 曾因 CA 证书问题导致 apt-get install 拉 .deb 失败，HTTP TUNA 已验证可用。
+        val sourceUrl = source.url.replace("https://", "http://")
         return """
         change_ubuntu_source(){
           cat <<'EOF' > ${'$'}UBUNTU_PATH/etc/apt/sources.list
-        # From ZorvAI Settings - ${source.name}
-        deb ${sourceUrl} noble main restricted universe multiverse
-        deb ${sourceUrl} noble-updates main restricted universe multiverse
-        deb ${sourceUrl} noble-backports main restricted universe multiverse
-        EOF
+# From ZorvAI Settings - ${source.name}
+deb ${sourceUrl} noble main restricted universe multiverse
+deb ${sourceUrl} noble-updates main restricted universe multiverse
+deb ${sourceUrl} noble-backports main restricted universe multiverse
+EOF
           echo "APT source changed to: ${source.name}"
         }
         change_ubuntu_source
@@ -250,3 +252,54 @@ class SourceManager(context: Context) {
         """.trimIndent()
     }
 }
+
+/**
+ * 轮次G：proot 内刷新 APT 索引的稳健命令。
+ *
+ * 与 bootstrap.sh / bootstrap_fixed.sh / BUILTIN_BOOTSTRAP 中的 quro_manual_apt_index 同源，
+ * 但此函数体**独立内联**到交互式终端会话（下拉菜单 / dev_env 工具）命令里，因为 bootstrap
+ * 定义的函数不会保留到后续新开的 shell 会话。
+ *
+ * 设计要点：
+ * 1. 若 bootstrap 已建好索引（noble/main Packages 存在且非空），直接跳过，避免每次安装都重拉 12 个组件。
+ * 2. 否则用 curl 手动拉清华 TUNA(HTTP) 12 组件 Packages 直写 /var/lib/apt/lists/，
+ *    名称规范与 apt 期望一致：<host>_ubuntu-ports_dists_<dist>_<comp>_binary-arm64_Packages。
+ * 3. 手动索引无 Release 签名，需配合 bootstrap 注入的 Acquire::AllowInsecureRepositories "true"。
+ * 4. 拉取不足 1 个时回退 timeout 25 apt-get update（硬超时，避免占锁/卡死）。
+ *
+ * 注意：Kotlin 原始字符串里 $ 必须转义为 ${'$'}。
+ */
+fun quroAptRefreshCommand(): String = """
+quro_apt_refresh() {
+  local APTL="/var/lib/apt/lists"
+  local IDX="${'$'}APTL/mirrors.tuna.tsinghua.edu.cn_ubuntu-ports_dists_noble_main_binary-arm64_Packages"
+  if [ -s "${'$'}IDX" ]; then
+    echo "[apt] index present, skip refresh"
+    return 0
+  fi
+  local BASE="http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/dists"
+  mkdir -p "${'$'}APTL" "${'$'}APTL/partial"
+  local ok=0 total=0
+  for dist in noble noble-updates noble-security; do
+    for comp in main universe multiverse restricted; do
+      total=$((total+1))
+      local f="mirrors.tuna.tsinghua.edu.cn_ubuntu-ports_dists_${'$'}{dist}_${'$'}{comp}_binary-arm64_Packages"
+      if curl -s --max-time 40 -o "${'$'}APTL/${'$'}f.gz" "${'$'}BASE/${'$'}{dist}/${'$'}{comp}/binary-arm64/Packages.gz" \
+         && gzip -dc "${'$'}APTL/${'$'}f.gz" > "${'$'}APTL/${'$'}f" 2>/dev/null && [ -s "${'$'}APTL/${'$'}f" ]; then
+        rm -f "${'$'}APTL/${'$'}f.gz"; ok=$((ok+1))
+      else
+        rm -f "${'$'}APTL/${'$'}f.gz" "${'$'}APTL/${'$'}f" 2>/dev/null || true
+      fi
+    done
+  done
+  echo "[apt] manual index: ${'$'}ok/${'$'}total fetched"
+  if [ "${'$'}ok" -lt 1 ]; then
+    if command -v timeout >/dev/null 2>&1; then
+      timeout 25 apt-get update 2>&1 | tail -5 || true
+    else
+      apt-get update 2>&1 | tail -5 || true
+    fi
+  fi
+}
+quro_apt_refresh
+""".trimIndent()
