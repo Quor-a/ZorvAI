@@ -679,7 +679,7 @@ private fun QuickCommandsPanel(
             "free -h" to "free -h",
             "top" to "top -bn1 | head -20",
             "cat /etc/os-release" to "cat /etc/os-release",
-            "ps aux" to "ps aux | head -20",
+            "ps" to "ps -e | head -20",
             "env" to "env",
         )),
         CmdCategory("包管理", Color(0xFFFFD700), listOf(
@@ -705,7 +705,7 @@ private fun QuickCommandsPanel(
             "公网IP" to "curl -s ifconfig.me 2>/dev/null || echo '无法获取'",
             "ping" to "ping -c 3 8.8.8.8",
             "DNS" to "cat /etc/resolv.conf",
-            "端口" to "ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null | head -20",
+            "端口" to "for p in 22 80 443 3000 5000 8000 8080 9000; do python3 -c \"import socket; s=socket.socket(); print('port', \$p, 'OPEN' if s.connect_ex(('127.0.0.1', \$p))==0 else 'closed')\" 2>/dev/null; done",
         )),
         CmdCategory("文件", Color(0xFFBB86FC), listOf(
             "cd ~" to "cd ~ && pwd",

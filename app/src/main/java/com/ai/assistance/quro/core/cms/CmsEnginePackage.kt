@@ -186,6 +186,20 @@ else
     echo "[quro-engine] DNS already configured"
 fi
 
+# Phase 0.2 (Bug4 加固)：绕过被阻断的 DNS 53 端口 —— 静态映射 apt 镜像域名到近期 anycast IP。
+# proot 下 glibc 按 nsswitch `hosts: files dns` 先查 /etc/hosts，命中即直连 IP，不再发 53 查询。
+# 与终端侧 bootstrapHosts 注入的 `# quro-dns-bootstrap` 条目共存、互为兜底（glibc 返回全部命中 IP 并依次尝试）。
+# 全程 guarded：先删自己上一次写的标记行（幂等刷新），再追加；绝不覆盖用户/系统其它 hosts 条目。
+# 即使所列 IP 偶发失效，setup 阶段注入的动态 IP 仍会被尝试，故仅为二次兜底，非致命。
+sed -i '/# quro-engine-dns$/d' /etc/hosts 2>/dev/null || true
+cat >> /etc/hosts << 'HOSTS'
+163.181.201.182 mirrors.aliyun.com # quro-engine-dns
+163.181.92.243 mirrors.aliyun.com # quro-engine-dns
+101.6.15.130 mirrors.tuna.tsinghua.edu.cn # quro-engine-dns
+91.189.91.39 ports.ubuntu.com # quro-engine-dns
+HOSTS
+echo "[quro-engine] DNS: appended static mirror mappings to /etc/hosts (bypass port 53)"
+
 # Phase 0.5: apt sources (skip if already configured by Android side)
 # 关键修复：已切换到 Ubuntu 24.04 (Noble) ARM64 rootfs。用 HTTP 镜像，避免 proot 下 CA 证书缺失导致 apt over HTTPS 失败。
 echo "[quro-engine] checking apt sources..."
@@ -298,6 +312,18 @@ robust_install "jq" "jq" || true
 robust_install "zip" "zip" || true
 robust_install "unzip" "unzip" || true
 robust_install "openssh-client" "ssh" || true
+
+# Phase 6.2 (Bug3 修复)：网络诊断命令（ping/nslookup/dig/host/netstat/ifconfig/ip/ss）。
+# proot 默认不含，按用户清单补齐；best-effort 非致命（|| true 兜底，绝不阻断整包部署）。
+# 包映射：iputils-ping→ping, dnsutils→nslookup/dig/host, net-tools→netstat/ifconfig, iproute2→ip/ss
+robust_install "iputils-ping" "ping" || true
+robust_install "dnsutils" "nslookup" || true
+robust_install "net-tools" "netstat" || true
+robust_install "iproute2" "ip" || true
+
+# Phase 6.5 (Bug3 修复)：bc 计算器（部分模块/诊断脚本依赖）。proot 下默认不包含，需显式安装。
+# best-effort，失败非致命（用 || true 兜底，绝不阻断整包部署）。
+robust_install "bc" "bc" || true
 
 # Phase 7: Python venv
 if [ ! -x /root/cms-venv/bin/python3 ]; then
