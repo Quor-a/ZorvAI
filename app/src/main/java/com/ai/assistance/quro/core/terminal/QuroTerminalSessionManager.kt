@@ -124,22 +124,65 @@ object QuroTerminalSessionManager {
      *         - 打开终端界面 / 用户主动操作：true（跟随启动 zorvAI 终端环境）。
      *         - 应用自启动 / 开机保活：false（避免无网络时误下载、或开机即消耗流量）。
      */
+    /**
+     * 确保默认共享会话存在（若不存在则跟随创建）。
+     *
+     * ⚠ **终端架构统一修复（关键）**：若已存在的默认会话是设备 shell（[ShellMode.DEVICE]）但 proot/Linux 后端现已可用，
+     * 透明地把它**升级**为 proot/Linux 会话。否则会出现「AI 的 terminal_exec 走独立 proot 进程（永远能用 Linux 命令），
+     * 而可见终端界面 / terminal_write 共用的默认会话却停在基础 Android shell」的不一致——用户直观感受就是
+     * 「AI 用的终端正常，但界面里的终端只能用基础命令」。
+     *
+     * 旧逻辑：快速路径 `if (defaultEntry?.alive == true) return` 一旦默认会话被锁成 DEVICE 模式（开机保活服务在
+     * proot 装好前用 installIfMissing=false 抢先创建），之后每次调用都直接返回这个 DEVICE 会话、永不升级 →
+     * 终端界面永久停在基础命令。升级在 [mutex] 内完成，避免并发重复创建。
+     *
+     * @param installIfMissing 后端未就绪时是否触发安装/下载。
+     *         - 打开终端界面 / 用户主动操作：true（跟随启动 zorvAI 终端环境）。
+     *         - 应用自启动 / 开机保活：false（避免无网络时误下载、或开机即消耗流量）。
+     */
     suspend fun ensureDefault(context: Context, installIfMissing: Boolean = true): QuroShellSession? {
-        if (defaultEntry?.alive == true) return defaultEntry!!.shell
         return mutex.withLock {
-            if (defaultEntry?.alive == true) return@withLock defaultEntry!!.shell
-            // ⚠ ANR 修复：以下全是重操作（文件 I/O、可能下载并解压 rootfs、启动 proot 进程），
-            // 必须切到 IO 线程。本函数虽是 suspend，但调用方（如 UI 的 rememberCoroutineScope，
-            // 默认 Main 调度器）并不一定会切线程——不在这里 withContext 就会把重活全压到主线程。
-            // 真机实测 ANR：Input dispatching timed out，而应用进程 CPU 仅 3.7%（典型阻塞态）。
-            withContext(Dispatchers.IO) {
-                if (installIfMissing) {
-                    val st = QuroLinuxEnv.probeLenient(context)
-                    if (!st.available) {
-                        Log.i(TAG, "ensureDefault: 后端未就绪，跟随安装 Linux 环境…")
-                        QuroLinuxEnv.ensureInstalledBlocking(context)
+            // ── 快速路径：已是 proot/VM 的默认会话，直接复用（不做任何重操作） ──
+            val cur = defaultEntry?.takeIf { it.alive }
+            if (cur != null && cur.shell?.mode != ShellMode.DEVICE) {
+                return@withLock cur.shell
+            }
+
+            // 走到这里：没有存活会话，或存活但为 DEVICE（需升级/重建）。
+            var needRecreate = cur == null
+            if (cur != null && cur.shell?.mode == ShellMode.DEVICE) {
+                // 设备 shell 能否升级为 proot？
+                val linuxAvailable = runCatching { QuroLinuxEnv.shellLaunch(context) != null }.getOrDefault(false)
+                when {
+                    linuxAvailable -> {
+                        Log.i(TAG, "ensureDefault: 默认会话是设备 shell 但 proot 已可用 → 升级为 proot/Linux 默认会话")
+                        runCatching { cur.shell?.destroy() }
+                        defaultEntry = null
+                        needRecreate = true
+                    }
+                    installIfMissing -> {
+                        val st = QuroLinuxEnv.probeLenient(context)
+                        if (!st.available) {
+                            Log.i(TAG, "ensureDefault: 后端未就绪，跟随安装 Linux 环境…")
+                            runCatching { QuroLinuxEnv.ensureInstalledBlocking(context) }
+                        }
+                        runCatching { cur.shell?.destroy() }
+                        defaultEntry = null
+                        needRecreate = true
+                    }
+                    else -> {
+                        // proot 不可用且不允许安装：保留设备 shell 作为兜底（终端仍可用，只是无 Linux 能力）
+                        return@withLock cur.shell
                     }
                 }
+            }
+
+            if (!needRecreate) return@withLock cur?.shell
+
+            // ⚠ ANR 修复：以下全是重操作（文件 I/O、可能下载并解压 rootfs、启动 proot 进程），必须切到 IO 线程。
+            // 本函数虽是 suspend，但调用方（如 UI 的 rememberCoroutineScope，默认 Main 调度器）并不一定会切线程——
+            // 不在这里 withContext 就会把重活全压到主线程 → Input dispatching timed out ANR。
+            withContext(Dispatchers.IO) {
                 val shell = QuroShellSession.create(context)
                 val backend = when (shell.mode) {
                     ShellMode.VM -> Backend.VM_LINUX
