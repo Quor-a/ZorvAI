@@ -41,7 +41,7 @@
 - [系统返回手势支持](#系统返回手势支持)
 - [内置技能 · Skills（63 个）](#内置技能-skills63-个)
 - [截图预览 · Screenshots](#截图预览-screenshots)
-- [近期新增功能（v1.0.75）](#近期新增功能v1075)
+- [近期新增功能（v1.0.77）](#近期新增功能v1077)
 - [功能构架 · Architecture](#功能构架-architecture)
 - [引擎详解 · Engine](#引擎详解-engine)
 - [ACI · 智能体能力接口](#aci-智能体能力接口)
@@ -911,17 +911,61 @@ Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{
 
 ---
 
-## 近期新增功能（v1.0.75）
+## 近期新增功能（v1.0.77）
 
+### v1.0.77（本次）
+- **工具中心三面板对接对话框渲染**：小程序工作台 / 可视化编程 / 节点编辑器均支持「保存 / 删除 / 导入」，并一键把产物（小程序 / Mermaid 图）渲染到对话框内；节点编辑器修复「复制 Mermaid」乱码（详见「LSPosed / Xposed 模块」「对话框『化小窗』」「浏览器『化小窗』」章节与工具中心部分）。
+
+### 历史近期（v1.0.75）
 - **对话框 / 浏览器「化小窗」**：对话框顶栏与内置浏览器工具栏均新增「化小窗」按钮，可把对话或浏览器折叠为可拖拽、可缩放的悬浮小窗，不中断后台任务，随时还原 / 关闭。
 - **对话框文档排版内联预览**：docx / xlsx / pptx / pdf 等文档附件，在气泡内新增「对话框内预览排版」按钮，点击即在对话框内联渲染真实排版（docx→mammoth.js、xlsx→SheetJS、pdf→pdf.js），无需跳出全屏查看器即可看到版面。
 - **内置浏览器 AI 操控（`browser_act`）**：AI 可直接接管对话框内置浏览器，执行 snapshot / click / fill / eval / wait / read，实现自动化浏览、表单填写与数据抓取。
-- **LSPosed / Xposed 模块 AI 直驱（`lsposed`）**：完整对接，AI 可读写桥管控 Xposed 模块启停与前台状态。
+- **LSPosed / Xposed 模块 AI 直驱（`lsposed`）**：opt-in 模块，AI 经 `lsposed` 工具读取作用域状态、驱动跨应用注入桥配置（写 `lsposed_bridge.json`）并感知桥上报的前台 App；模块的启用/停用/作用域勾选仍在 LSPosed Manager 内完成（详见下方「LSPosed / Xposed 模块」章节）。
 - **特权执行（`priv_exec`）与 ADB 终端（`adb_term`）**：`priv_exec` 走 Shizuku→ROOT 自动降级通道执行高风险命令；`adb_term` 提供无线调试中枢（shell / tcp 启用停用与管理）。
 - **AI 抓包（`packet_capture`）**：在应用内 Linux 沙箱中启动 mitmdump，流量落盘到 `/mnt/quro/mitm/`，供 AI 分析。
 - **对话框文档（`chat_doc`）**：AI 可在对话框内直接写并渲染 Markdown / HTML / 代码 / 文本，排版即时可见。
 
 > 工具现已按能力域分类注册（系统/设备、通信/日历、文件/工作区、网络/Web、终端/Linux、特权/ADB/LSPosed、抓包、内置浏览器操控、对话框文档、ACI/跨应用、无障碍控屏、系统控制、多媒体生成、文档生成、记忆/经验/技能、UI/可视化），详见 `core/tools/QuroBuiltInTools.kt` 的分类总览注释。
+
+## LSPosed / Xposed 模块（AI 直驱）
+
+Zorv AI 提供一个 **opt-in LSPosed / Xposed 模块**（`QuroXposedModule`），并配套 AI 直驱工具 `lsposed`（核心类 `core/tools/QuroLsposeTool.kt`）。
+
+### 真实集成现状
+- **不依赖 Xposed 也能用**：终端 / ACI / 自动化 / 无障碍控屏等核心能力走 Zorv AI 自有管线（无障碍 · Shizuku · 设备管理员 · ROOT），LSPosed 仅用于「需要更深系统钩子」的可选场景。
+- **作用域判定真实化**：`QuroLSPosed.isAppInScope()` 依据模块写入的标记文件 `.lsposed_scope` 真实判定——框架已安装且本应用确实被钩中才返回 true（不再用「框架已安装即永真」的假判定）；取消作用域后随下次启动自愈。
+- **AI 直驱 = 桥配置 + 前台感知**（非直接开关模块）：
+  - `lsposed status`：报告 LSPosed 安装状态、本应用是否纳入作用域、跨应用注入桥最近上报的前台 App、当前桥配置；
+  - `lsposed foreground`：读取 LSPosed 跨应用注入桥经 `ACTION_APP_OPENED` 广播上报的前台 App（包名 / Activity / 时间戳），补充 `get_foreground_app` 在无 `PACKAGE_USAGE_STATS` 权限时的盲区；
+  - `lsposed enable`：写外部存储根 `lsposed_bridge.json`（跨应用注入桥 `cross_app_injection` + 可选 `system_redirect` 系统重定向桥），模块钩中目标包时即加载该配置开始产出数据；Android 11+ 无外部存储根写权限时自动回退 `root cp`；
+  - `lsposed disable`：关闭桥（`enabled=false`）。
+- **模块的启用 / 停用 / 作用域勾选仍在 LSPosed Manager 内完成**（AI 不替你在框架里开关模块）；AI 只负责在「已纳入作用域」的前提下驱动桥配置与读取桥上报数据。
+- **权限铁律**：模块与桥接代码均**不定义任何 `ai.aci.permission.*`**；Zorv AI 只 `uses-permission` 引用控制端统一声明的 ACI 权限。
+
+### 接入（开发者）
+1. 在 LSPosed Manager 的「模块」中启用 Zorv AI，并在作用域勾选 Zorv AI 自身（如需跨应用注入，勾选目标包）；
+2. 通过对话让 AI 执行 `lsposed enable`（带 `target_packages`）开启跨应用注入桥，之后打开目标 App 即可用 `lsposed foreground` 感知前台 App；
+3. `status` 随时查看桥状态与配置。
+
+## 对话框「化小窗」
+
+对话可折叠为 **系统级悬浮小窗**，浮在桌面 / 其他 App 之上，不中断后台任务。
+
+- **入口**：对话框顶栏「化小窗」按钮（`ui/chat/ChatTopBar.kt`）。
+- **实现**：`QuroMiniWindowManager`（进程级单例）+ `QuroMiniWindowService`（前台保活，`specialUse` 类型）。小窗经 `WindowManager.addView` 挂载 `TYPE_APPLICATION_OVERLAY`，视图常驻（`show`/`hide` 只 `addView`/`removeView`，不重建、不重启服务），彻底消除「化小窗卡顿」。
+- **窗口参数**：`WRAP_CONTENT`（仅包围面板、非满屏）+ `FLAG_NOT_TOUCH_MODAL` + `FLAG_LAYOUT_IN_SCREEN`；面板外区域点击穿透到下层 App（可边看浮窗边操作抖音/快手等），面板内输入框可正常唤起软键盘、按钮/滚动/拖拽/缩放照常响应。
+- **能力**：小窗内可直接输入并发送消息（完整对话框缩小版）、新建对话、展开/还原回全屏；App 退后台时浮窗仍实时刷新最近 15 条对话（独立协程收集消息流）。
+- **权限**：依赖 `SYSTEM_ALERT_WINDOW`；未授权时自动降级为应用内 Compose 浮层（App 退后台即消失）。
+
+## 浏览器「化小窗」
+
+内置 GeckoView 浏览器可同样折叠为系统级悬浮小窗。
+
+- **入口**：内置浏览器工具栏「化小窗」按钮；也可由 AI 经 `browser_act` 的 `open` 默认化小窗（`browserUrl=null` 时走 `browserFloatUrl`）。
+- **实现**：复用 `QuroBrowserViewHost` 的**全局唯一 WebView**——化小窗只把它从全屏容器「重挂」到浮窗容器，不新建、不整页重载；地址栏/导航/前进后退均与原浏览器共享同一 WebView，化小窗↔还原零重建、零卡顿。
+- **窗口参数**：与对话小窗一致（`TYPE_APPLICATION_OVERLAY` + `NOT_TOUCH_MODAL` + `LAYOUT_IN_SCREEN`），面板外点击穿透到下层 App。
+- **能力**：小窗内带地址栏（直接输入网址 / 关键词走搜索引擎）、加载错误可点击重试；AI 再次打开不同链接时共享 WebView 原地导航，不重建视图、不整页重载，避免「全屏+小窗并存」。
+- **权限**：同对话框小窗，依赖 `SYSTEM_ALERT_WINDOW`。
 
 ## 功能构架 · Architecture
 
@@ -1444,9 +1488,17 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-**最新版本：`v1.0.75`**（2026-09-02，特权终端工具 + ADB 终端工具 + Python↔浏览器会话桥 + 抓包记全）：
+**最新版本：`v1.0.77`**（2026-09-02，工具中心三面板对接对话框渲染 + 保存/删除/导入 + 节点编辑器修复）：
 
-- 🟢 **[app-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.75/app-full-release.apk)**（约 233MB，Release 签名，**最新**）
+- 🟢 **[app-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.77/app-full-release.apk)**（约 244MB，Release 签名，**最新**）
+
+### v1.0.77 新增功能
+
+**工具中心三面板对接对话框渲染（诉求⑦闭环）**：
+- **小程序工作台**：AI 在对话框内直接写小程序；工程可保存 / 删除 / 导入（`.html` 导入建项目），并一键「渲染到对话框」
+- **可视化编程**：Mermaid 工程保存（`.mmd`）/ 打开 / 删除 / 导入；「渲染到对话框」把图表直接长在对话里
+- **节点编辑器**：修复「复制 Mermaid」JSON 解析乱码（`JSON.stringify([expr])` + Kotlin 侧 `JSONArray` 还原）；支持「渲染到对话框」/ 保存工程（`.qne`）/ 导入工程
+- 三面板共用 `UiNavigationBus.RenderWidget` 渲染总线：对话框 `LaunchedEffect` 消费，按 type 构造 `MermaidCard` / `MiniAppCard` 挂到最近消息
 
 ### v1.0.75 新增功能
 

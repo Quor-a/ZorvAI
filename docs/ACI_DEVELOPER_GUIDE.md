@@ -1,6 +1,6 @@
 # Zorv AI · ACI 开发者手册（Agent Capability Interface）
 
-> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.63** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-09-02（v1.0.75 `browser_capture` 抓包记全 + §3/§4.1 子模块 `aci-core`→`aidl-aci-core` 重命名同步：AAR 改名 `aidl-aci-core-release.aar`、开源分支改名 `aidl-aci-core`）
+> 版本：v1.0.14（能力清单同步 ZorvAI 浏览器 v1.0.14；新增 §15 HTTP 传输 / http_request · 局域网明文）→ **文档已同步至 v1.0.63** ｜ 适用 SDK：`aidl-aci-core`（原 `aci-core`，v1.0.26 重命名落地）｜ 最后更新：2026-09-02（v1.0.75 `browser_capture` 抓包记全 + §3/§4.1 子模块 `aci-core`→`aidl-aci-core` 重命名同步：AAR 改名 `aidl-aci-core-release.aar`、开源分支改名 `aidl-aci-core`；v1.0.77 新增 §26 ACI Application Module（aci-app 参考实现）+ §27 lib_aci 框架库）
 >
 > 本文档面向**希望让自己的 Android App 被 Zorv AI（或其他 ACI 控制端）调用**的第三方开发者，也适用于**想基于 `aidl-aci-core` 自建控制端**的开发者。
 
@@ -1846,6 +1846,91 @@ override fun onReceive(context: Context, intent: Intent) {
 | `TERMINAL_STATUS` | 获取状态 | 无 |
 | `TERMINAL_SESSIONS` | 列出会话 | 无 |
 | `TERMINAL_CREATE_SESSION` | 创建会话 | `ai.aci.permission.SEND_TERMINAL_BROADCAST` |
+
+---
+
+## 26. ACI Application Module（aci-app 参考实现）
+
+`aci-app` 是 ACI 架构中「Application Module（应用模块）」层的**规范参考实现**：一个独立的 `com.android.application` 模块，消费 `:aidl-aci-core` SDK 把自己暴露成可被 ZorvAI 主程序（控制端）自动发现并调用的受控端 App。它也是第三方「如何把我的 App 变成 ACI 受控端」的最小可运行范本。
+
+### 26.1 模块定位与结构
+- **模块类型**：`com.android.application`（可独立安装、独立 Release）。
+- **namespace / applicationId**：`com.ai.assistance.quro.aciapp`（与控制端主程序 `com.ai.assistance.quro` 区分，避免权限/组件冲突）。
+- **核心文件**：
+  - `AciAppService.kt` —— 继承 `BaseAidlAciService`，声明能力 + 鉴权 + 派发；
+  - `AciAppWakeReceiver.kt` —— 唤醒 Receiver，收到 `ai.aci.core.ACTION_WAKE` 广播拉起主 Activity，使受控进程脱离停止态；
+  - `MainActivity.kt` —— Launcher，仅作存在性展示与 ACI Service 保活（前台期间 `bindService`）；
+  - `build.gradle.kts` —— `implementation(project(":aidl-aci-core"))`，release 用系统 debug 签名（第三方开发者无需主程序私钥）。
+- **Manifest 铁律**（`aci-app/src/main/AndroidManifest.xml`）：
+  - 用 `tools:node="remove"` **剥除库（`aidl-aci-core`）可能带入的 `<permission>` 定义**（`ai.aci.permission.CALL` / `CALL_DANGEROUS` / `DISCOVER`）；权限定义权属控制端，受控端只 `uses-permission` 引用；
+  - ACI Service `exported=true` 且 `android:permission="ai.aci.permission.CALL"`，仅放行持有该权限的调用方；
+  - `<queries>` 声明 `ACTION_BIND` / `ACTION_WAKE` 与 `com.ai.assistance.quro`，保证 Android 11+ 包可见性下能被控制端发现与绑定。
+
+### 26.2 Service 实现要点
+```kotlin
+class AciAppService : BaseAidlAciService() {
+    override fun onCreateCapabilities(caps: MutableList<Capability>) {
+        caps.add(Capability.create("echo", "回显传入文本，用于 ACI 连通性自测")
+            .addParam("text", "string", true, "待回显文本")
+            .addResult("text", "string", "回显结果")
+            .addFlag(Capability.FLAG_NO_UI))
+        caps.add(Capability.create("device_info", "返回本机设备信息")/* … */)
+        caps.add(Capability.create("health", "返回受控端健康状态")/* … */)
+    }
+    override fun onCheckPermission(req: AidlAciRequest, callerPkg: String): Boolean =
+        callerPkg == "com.ai.assistance.quro" || callerPkg == packageName
+    override fun onCall(req: AidlAciRequest): AidlAciResponse = when (req.capability) {
+        "echo" -> handleEcho(req)
+        "device_info" -> handleDeviceInfo(req)
+        "health" -> handleHealth(req)
+        else -> AidlAciResponse.error(AidlAciError.CAPABILITY_NOT_FOUND, "unknown: ${req.capability}")
+    }
+}
+```
+- `onCreateCapabilities`：声明暴露给 LLM 的能力（id + 描述 + 参数/结果 schema）；
+- `onCheckPermission`：调用方白名单裁决（仅放行 ZorvAI 主程序与自身）；
+- `onCall`：按 `capability` 派发到具体 handler，返回 `AidlAciResponse.success/error`。
+
+### 26.3 唤醒 Receiver
+受控端若处于**停止态**（被系统冻干），控制端 `bindService` 会失败。控制端在绑定前先发 `ai.aci.core.ACTION_WAKE` 广播，`AciAppWakeReceiver` 收到后 `startActivity` 拉起主 Activity，进程变为活跃态后即可成功绑定（详见 §4.6 stopped-state 唤醒）。
+
+### 26.4 打包与发布
+- 受控端 App 用**系统 debug 签名**即可（无需主程序 Release 私钥），降低第三方分发门槛；
+- 构建：`./gradlew :aci-app:assembleRelease`；安装后主程序在「ACI 管理中心 / LAN 控制台」自动发现并调用。
+
+## 27. lib_aci 框架库（受控端高层封装）
+
+`lib_aci` 是架在 `:aidl-aci-core` 之上的**受控端高层框架库**（`com.android.library`，namespace `com.ai.assistance.quro.libaci`），把「能力注册 → 路由 → 鉴权」从样板代码里抽出来，让业务模块只写「一个能力一个 Handler」。
+
+### 27.1 模块结构
+- `AciHandler.kt` —— 能力 Handler 接口：`val spec: CapabilitySpec` + `fun handle(params: Bundle): Bundle`；业务只认 `Bundle`，不碰 ACI 协议对象（`AidlAciRequest`/`AidlAciResponse`）。
+- `CapabilitySpec.kt` —— 能力声明数据类（`id` / `desc` / `dangerous`）；`toCapability()` 转成 `aci-core` 的 `Capability`。约定：**主应用能力统一 `main.` 前缀**，与副应用 `sub.` 区分，防 LLM 调错；`desc` 写给模型看（何时用 + 参数是否必填 + 返回什么 + 有无副作用）；`dangerous` 触发 `PermissionGuard` 二次确认。
+- `CapabilityRegistry.kt` —— 能力注册中心（单例 `LinkedHashMap`）。`register` / `get` / `all` / `ids`；注册幂等（同 id 覆盖，便于热更新/测试）。`AciRouter` 与 `MainAciService` 只认此表，不反向依赖业务模块，避免循环依赖。
+- `AciRouter.kt` —— 能力路由器（`object`）：AIDL 请求 → 业务 Handler 的唯一派发入口。解析 `req.capability` → 查 `CapabilityRegistry` → 调 `handler.handle(params)` → 包成 `AidlAciResponse.success`；统一错误码：`capability` 缺失 → `CAPABILITY_NOT_FOUND`，业务异常 → `INTERNAL_ERROR`（绝不抛给 Binder 线程）。鉴权由 `BaseAidlAciService.dispatch` 在 `onCall` 前完成，这里只做能力存在性 + 异常兜底。
+- `PermissionGuard.kt` —— 调用方鉴权守卫：`CONTROLLER_PKGS`（本应用 `com.ai.assistance.quro` 与浏览器子模块 `com.ai.assistance.quro.browser`）白名单；能力 `dangerous=true` 时额外要求调用方持有 `ai.aci.permission.CALL_DANGEROUS`（manifest `protectionLevel=dangerous`，系统级二次确认闸门）。
+
+### 27.2 Manifest 约定
+`lib_aci` 是纯框架库、**不自带 Service**（受控端 Service 由 `:cap_main` 声明）；仅 `uses-permission ai.aci.permission.CALL`，真正的权限定义由主应用 `:app` 的 manifest 提供（见 §16 签名冲突案例）。
+
+### 27.3 写一个能力的标准姿势
+```kotlin
+// 1) 定义 spec + handler
+class EchoHandler : AciHandler {
+    override val spec = CapabilitySpec("main.echo", "回显文本，用于自测", dangerous = false)
+    override fun handle(params: Bundle): Bundle {
+        val b = Bundle()
+        b.putString("text", params.getString("text", ""))
+        return b
+    }
+}
+// 2) 注册（运行时，:cap_main 或 Application.onCreate）
+CapabilityRegistry.register(EchoHandler())
+// 3) 路由（由 BaseAidlAciService.onCall 调 AciRouter.dispatch）
+val resp = AciRouter.dispatch(req)
+```
+
+### 27.4 与 aci-app 的关系
+`aci-app`（§26）是「应用模块」层的最小可运行示例；`lib_aci` 是它内部可复用的框架层。第三方若要把自己的 App 变成受控端，推荐直接依赖 `:aidl-aci-core` + `:lib_aci`：用 `CapabilityRegistry` 注册能力、`AciRouter` 派发、`PermissionGuard` 兜底鉴权，再把 Service Manifest 按 §26.1 铁律配置即可。
 | `TERMINAL_DESTROY_SESSION` | 销毁会话 | `ai.aci.permission.SEND_TERMINAL_BROADCAST` |
 | `TERMINAL_SEND_INPUT` | 发送输入 | `ai.aci.permission.SEND_TERMINAL_BROADCAST` |
 | `TERMINAL_GET_OUTPUT` | 获取输出 | 无 |
