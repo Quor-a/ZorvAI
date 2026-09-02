@@ -89,6 +89,9 @@ object QuroMiniWindowManager {
     private var browserLifecycle: QuroServiceLifecycleOwner? = null
     private var chatView: ComposeView? = null
     private var browserView: ComposeView? = null
+    // 视图是否已挂载到 WindowManager：show/hide 只 add/remove，避免每次重建与重复 addView 异常。
+    private var chatAdded = false
+    private var browserAdded = false
 
     private val chatLinesState = mutableStateOf<List<MiniChatLine>>(emptyList())
 
@@ -155,56 +158,61 @@ object QuroMiniWindowManager {
         setColorScheme(scheme)
         if (!hasOverlayPermission(ctx)) return
         ensureService(ctx)
-        // 幂等：若已有对话浮窗（如再次化小窗），先彻底移除旧视图再重建，避免 early-return 导致"只能化小窗一次"。
-        if (chatView != null) hideChat()
         val wm = windowManager ?: return
-
-        val lifecycle = QuroServiceLifecycleOwner().apply { create(); resume() }
-        chatLifecycle = lifecycle
-        val composeCtx = ContextThemeWrapper(appCtx, getThemeRes())
-        val view = ComposeView(composeCtx).apply {
-            setViewTreeLifecycleOwner(lifecycle)
-            setViewTreeViewModelStoreOwner(lifecycle)
-            setViewTreeSavedStateRegistryOwner(lifecycle)
-            setContent {
-                MaterialTheme(colorScheme = colorScheme) {
-                    Box(Modifier.fillMaxSize()) {
-                        FloatingMiniWindow(
-                            title = "对话小窗",
-                            initialX = 24.dp, initialY = 120.dp,
-                            initialWidth = 300.dp, initialHeight = 420.dp,
-                            onRestore = { onExpandChat?.invoke() },
-                            onClose = { onCloseChat?.invoke() },
-                        ) {
-                            ChatMiniContent()
+        // 复用持久 ComposeView（不每次重建）：仅首次构建，之后 show/hide 只 add/remove 视图，
+        // 彻底消除「化小窗卡顿」——对标可视化弹窗：浮窗视图常驻、最小化只是移除视图，不重建不重排、不重启服务。
+        if (chatView == null) {
+            val lifecycle = QuroServiceLifecycleOwner().apply { create(); resume() }
+            chatLifecycle = lifecycle
+            val composeCtx = ContextThemeWrapper(appCtx, getThemeRes())
+            val view = ComposeView(composeCtx).apply {
+                setViewTreeLifecycleOwner(lifecycle)
+                setViewTreeViewModelStoreOwner(lifecycle)
+                setViewTreeSavedStateRegistryOwner(lifecycle)
+                setContent {
+                    MaterialTheme(colorScheme = colorScheme) {
+                        Box(Modifier.fillMaxSize()) {
+                            FloatingMiniWindow(
+                                title = "对话小窗",
+                                initialX = 24.dp, initialY = 120.dp,
+                                initialWidth = 300.dp, initialHeight = 420.dp,
+                                onRestore = { onExpandChat?.invoke() },
+                                onClose = { onCloseChat?.invoke() },
+                            ) {
+                                ChatMiniContent()
+                            }
                         }
                     }
                 }
             }
-        }
-        chatView = view
-        wm.addView(view, fullScreenParams())
-        // 独立协程作用域收集消息流：App 退后台时 ChatScreen 的 LaunchedEffect 会暂停，
-        // 这里用托管作用域保证化小窗列表持续刷新（系统级浮窗应浮于其他 App 之上仍可用）。
-        chatScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-        messageFlow?.let { f ->
-            chatScope?.launch {
-                f.collect { msgs -> setChatLines(mapLines(msgs)) }
+            chatView = view
+            chatAdded = false
+            // 独立协程作用域收集消息流：App 退后台时 ChatScreen 的 LaunchedEffect 会暂停，
+            // 这里用托管作用域保证化小窗列表持续刷新（系统级浮窗应浮于其他 App 之上仍可用）。
+            // 视图常驻期间协程持续运行（最小化↔还原不取消），浮窗列表始终实时。
+            chatScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+            messageFlow?.let { f ->
+                chatScope?.launch {
+                    f.collect { msgs -> setChatLines(mapLines(msgs)) }
+                }
             }
+        }
+        // 已挂载则跳过（避免重复 addView 抛异常）；首次或已移除则重新挂回 WindowManager。
+        if (!chatAdded) {
+            wm.addView(chatView, fullScreenParams())
+            chatAdded = true
         }
     }
 
     fun hideChat() {
-        try {
-            chatView?.let { windowManager?.removeView(it) }
-        } catch (_: Exception) {
+        // 仅移除浮窗视图（保留 ComposeView/生命周期/协程），最小化↔还原瞬时切换不重建、不重启服务。
+        if (chatAdded) {
+            try {
+                chatView?.let { windowManager?.removeView(it) }
+            } catch (_: Exception) {
+            }
+            chatAdded = false
         }
-        chatView = null
-        chatLifecycle?.destroy()
-        chatLifecycle = null
-        chatScope?.cancel()
-        chatScope = null
-        maybeStopService()
     }
 
     // ───────────────────────── 浏览器小窗 ─────────────────────────
@@ -214,51 +222,55 @@ object QuroMiniWindowManager {
         setColorScheme(scheme)
         if (!hasOverlayPermission(ctx)) return
         ensureService(ctx)
-        // 已显示则先移除再重建（保证最新 url 生效）
-        if (browserView != null) hideBrowser()
         val wm = windowManager ?: return
-
-        val lifecycle = QuroServiceLifecycleOwner().apply { create(); resume() }
-        browserLifecycle = lifecycle
-        val composeCtx = ContextThemeWrapper(appCtx, getThemeRes())
-        val view = ComposeView(composeCtx).apply {
-            setViewTreeLifecycleOwner(lifecycle)
-            setViewTreeViewModelStoreOwner(lifecycle)
-            setViewTreeSavedStateRegistryOwner(lifecycle)
-            setContent {
-                MaterialTheme(colorScheme = colorScheme) {
-                    Box(Modifier.fillMaxSize()) {
-                        FloatingMiniWindow(
-                            title = "浏览器小窗",
-                            initialX = 40.dp, initialY = 150.dp,
-                            initialWidth = 320.dp, initialHeight = 400.dp,
-                            onRestore = {
-                                val u = QuroBrowserViewHost.uiState.value.url
-                                if (u.isNotEmpty()) onRestoreBrowser?.invoke(u)
-                            },
-                            onClose = { onCloseBrowser?.invoke() },
-                        ) {
-                            BrowserMiniContent(url)
+        // 复用持久 ComposeView（不每次重建）：仅首次构建，之后 show/hide 只 add/remove 视图。
+        // WebView 由 QuroBrowserViewHost 共享单例承载，化小窗只把它从全屏容器重挂到浮窗容器
+        // （不新建、不整页重载），浮窗视图常驻使还原↔化小窗零重建、零卡顿（对标可视化弹窗）。
+        if (browserView == null) {
+            val lifecycle = QuroServiceLifecycleOwner().apply { create(); resume() }
+            browserLifecycle = lifecycle
+            val composeCtx = ContextThemeWrapper(appCtx, getThemeRes())
+            val view = ComposeView(composeCtx).apply {
+                setViewTreeLifecycleOwner(lifecycle)
+                setViewTreeViewModelStoreOwner(lifecycle)
+                setViewTreeSavedStateRegistryOwner(lifecycle)
+                setContent {
+                    MaterialTheme(colorScheme = colorScheme) {
+                        Box(Modifier.fillMaxSize()) {
+                            FloatingMiniWindow(
+                                title = "浏览器小窗",
+                                initialX = 40.dp, initialY = 150.dp,
+                                initialWidth = 320.dp, initialHeight = 400.dp,
+                                onRestore = {
+                                    val u = QuroBrowserViewHost.uiState.value.url
+                                    if (u.isNotEmpty()) onRestoreBrowser?.invoke(u)
+                                },
+                                onClose = { onCloseBrowser?.invoke() },
+                            ) {
+                                BrowserMiniContent(url)
+                            }
                         }
                     }
                 }
             }
+            browserView = view
+            browserAdded = false
         }
-        browserView = view
-        wm.addView(view, fullScreenParams())
+        if (!browserAdded) {
+            wm.addView(browserView, fullScreenParams())
+            browserAdded = true
+        }
     }
 
     fun hideBrowser() {
-        try {
-            browserView?.let {
-                windowManager?.removeView(it)
+        // 仅移除浮窗视图（保留 ComposeView/生命周期），最小化↔还原瞬时切换不重建、不重启服务。
+        if (browserAdded) {
+            try {
+                browserView?.let { windowManager?.removeView(it) }
+            } catch (_: Exception) {
             }
-        } catch (_: Exception) {
+            browserAdded = false
         }
-        browserView = null
-        browserLifecycle?.destroy()
-        browserLifecycle = null
-        maybeStopService()
     }
 
     /** 服务进程销毁（进程将死）：兜底移除所有悬浮窗视图。 */
@@ -270,12 +282,31 @@ object QuroMiniWindowManager {
         }
         chatView = null
         browserView = null
+        chatAdded = false
+        browserAdded = false
         chatLifecycle?.destroy()
         browserLifecycle?.destroy()
         chatLifecycle = null
         browserLifecycle = null
         chatScope?.cancel()
         chatScope = null
+    }
+
+    /** 彻底释放：移除浮窗视图、销毁 ComposeView 与生命周期、停止保活服务。
+     *  仅在对话界面销毁（App 退出/进程将死）时由 ChatScreen 调用，避免离开界面后残留前台通知。
+     *  日常「化小窗↔还原」走 show/hide（视图常驻、服务保活），不会触发本方法。 */
+    fun release() {
+        hideChat()
+        hideBrowser()
+        chatView = null
+        browserView = null
+        chatLifecycle?.destroy()
+        browserLifecycle?.destroy()
+        chatLifecycle = null
+        browserLifecycle = null
+        chatScope?.cancel()
+        chatScope = null
+        appCtx?.let { QuroMiniWindowService.stop(it) }
     }
 
     // ───────────────────────── 内部 Composable 内容 ─────────────────────────
@@ -407,12 +438,6 @@ object QuroMiniWindowManager {
 
     private fun ensureService(ctx: Context) {
         QuroMiniWindowService.start(ctx.applicationContext)
-    }
-
-    private fun maybeStopService() {
-        if (chatView == null && browserView == null) {
-            appCtx?.let { QuroMiniWindowService.stop(it) }
-        }
     }
 
     /** 系统级浮窗还原/关闭时把 App 带回前台（moveTaskToFront），使「返回全屏」平滑、浮层即时移除。

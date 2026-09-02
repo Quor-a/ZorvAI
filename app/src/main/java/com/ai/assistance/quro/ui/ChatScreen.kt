@@ -2106,12 +2106,12 @@ fun ChatScreen(
                         com.ai.assistance.quro.core.tools.QuroBrowserViewHost.destroy()
                     },
                     onMinimize = {
-                        // 化小窗 = 直接返回对话界面，不再把 WebView 跨 WindowManager 窗口重挂到浮层
-                        // （这是「化小窗卡顿」的根因）。WebView 保留在宿主内存，重开全屏零重载、零卡顿；
-                        // 若浮窗已存在则一并关闭。
-                        browserUrl = null
-                        browserFloatUrl = null
-                        QuroMiniWindowManager.hideBrowser()
+                        // 化小窗 = 真正浮出浏览器小窗（对标可视化弹窗：浮窗内直接承载 WebView，
+                        // 化小窗即浮出小窗，而非返回对话）。复用同一共享 WebView，从全屏容器重挂到浮窗容器
+                        // （不新建 WebView、不整页重载）；WebView 仅跨一次容器，页面与导航栈保留、零刷新。
+                        val cur = browserFloatUrl ?: url
+                        browserUrl = null        // 移除全屏浏览器（Activity 容器），WebView 由浮窗接管
+                        browserFloatUrl = cur    // 触发系统级浮窗 showBrowser，浮出可拖拽小窗
                     },
                     onOpenInSystem = { sysUrl ->
                         runCatching {
@@ -2143,9 +2143,8 @@ fun ChatScreen(
                 QuroMiniWindowManager.onRestoreBrowser = null
                 QuroMiniWindowManager.onCloseBrowser = null
                 QuroMiniWindowManager.onSendMessage = null
-                // 离开对话界面时收起系统悬浮窗，避免残留浮在其它界面
-                QuroMiniWindowManager.hideChat()
-                QuroMiniWindowManager.hideBrowser()
+                // 离开对话界面时彻底释放系统级浮窗（移除视图 + 停止保活服务），避免残留前台通知/浮窗。
+                QuroMiniWindowManager.release()
             }
         }
         LaunchedEffect(chatMinimized) {
