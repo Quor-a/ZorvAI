@@ -61,7 +61,16 @@ class SqlStorageModule(private val context: Context) : MiniAppBridgeModule {
         executor.execute {
             runCatching {
                 val cv = ContentValues()
-                values.keys().forEach { k -> cv.put(k, values.optString(k, null)) }
+                val now = System.currentTimeMillis()
+                // app_data 表的 created_at/updated_at 为 NOT NULL：调用方未传时自动补当前时间，避免 insert 因缺列报错
+                if (table == "app_data") {
+                    cv.put("created_at", values.optLong("created_at", now))
+                    cv.put("updated_at", values.optLong("updated_at", now))
+                }
+                values.keys().forEach { k ->
+                    if (table == "app_data" && (k == "created_at" || k == "updated_at")) return@forEach
+                    cv.put(k, values.optString(k, null))
+                }
                 val id = dbHelper.writableDatabase.insert(table, null, cv)
                 callback(0, JSONObject().put("insertId", id), null)
             }.onFailure { callback(-1, null, it.message) }
@@ -75,7 +84,12 @@ class SqlStorageModule(private val context: Context) : MiniAppBridgeModule {
         executor.execute {
             runCatching {
                 val cv = ContentValues()
-                values.keys().forEach { k -> cv.put(k, values.optString(k, null)) }
+                val now = System.currentTimeMillis()
+                if (table == "app_data") cv.put("updated_at", values.optLong("updated_at", now))
+                values.keys().forEach { k ->
+                    if (table == "app_data" && k == "updated_at") return@forEach
+                    cv.put(k, values.optString(k, null))
+                }
                 val count = if (where.isBlank()) dbHelper.writableDatabase.update(table, cv, null, null)
                 else dbHelper.writableDatabase.update(table, cv, where, null)
                 callback(0, JSONObject().put("changes", count), null)
