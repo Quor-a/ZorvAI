@@ -657,6 +657,11 @@
   window.__setMermaid = function (txt) { srcArea.value = txt || ''; importMermaid(); };
   window.__addNode = function (type) { addNode(type || 'process'); };
   window.__clear = function () { clearAll(); };
+  // 供工具中心「保存工程 / 导入工程」直接程序化调用
+  window.__snapshot = function () { return snapshot(); };
+  window.__restore = function (txt) {
+    try { restore(txt); pushHistory(); autosave(); renderPreview(); return true; } catch (_) { return false; }
+  };
 
   // 初始示例：打开即内置一张流程图，并自动在底部预览其 Mermaid 源码，让用户一眼看到「内置好的」
   function seedExample() {
