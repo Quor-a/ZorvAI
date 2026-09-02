@@ -80,34 +80,7 @@ import kotlin.concurrent.thread
 private const val BM_PREFS = "quro_browser"
 private const val BM_KEY = "bookmarks"
 
-// WebView 自己能处理的 scheme：交给 WebView 加载；其它自定义 scheme 调系统 Intent 跳对应 APP。
-private val WEB_SCHEMES = setOf("http", "https", "file", "about", "data", "javascript", "blob", "content")
-
-private fun launchExternalScheme(context: android.content.Context, u: android.net.Uri): Boolean {
-    return try {
-        // intent:// 协议拆包：Android 要求用 Intent.parseUri 拿到真实 intent
-        val intent: android.content.Intent? = if (u.scheme?.lowercase() == "intent") {
-            runCatching { android.content.Intent.parseUri(u.toString(), android.content.Intent.URI_INTENT_SCHEME) }.getOrNull()
-        } else {
-            android.content.Intent(android.content.Intent.ACTION_VIEW, u)
-        }
-        if (intent == null) {
-            Toast.makeText(context, "无法解析链接：${u}", Toast.LENGTH_SHORT).show()
-            return true
-        }
-        intent.flags = intent.flags or android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-        // 允许跨包跳转
-        intent.addCategory(android.content.Intent.CATEGORY_BROWSABLE)
-        context.startActivity(intent)
-        true
-    } catch (e: android.content.ActivityNotFoundException) {
-        Toast.makeText(context, "未安装可处理 ${u.scheme}:// 的应用", Toast.LENGTH_SHORT).show()
-        true
-    } catch (e: Exception) {
-        Toast.makeText(context, "跳转失败：${e.message}", Toast.LENGTH_SHORT).show()
-        true
-    }
-}
+// 注：WebView 的 scheme 过滤与外部跳转逻辑已迁至 QuroBrowserViewHost（共享单例的单一通用 client）。
 private const val SCRIPT_PREFS = "quro_browser"
 private const val SCRIPT_KEY = "scripts"
 private const val DESKTOP_UA =
@@ -304,12 +277,21 @@ fun QuroBrowserScreen(
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
 
+    // 共享浏览器状态：全屏/化小窗共用同一 WebView，状态由 QuroBrowserViewHost 统一维护
+    // （单一通用 client），避免「重挂后某一端 client 被覆盖、UI 不再刷新」。
+    val bs = com.ai.assistance.quro.core.tools.QuroBrowserViewHost.collectUiState().value
     var address by remember { mutableStateOf(url) }
-    var pageTitle by remember { mutableStateOf("") }
-    var progress by remember { mutableStateOf(0) }
-    var isLoading by remember { mutableStateOf(true) }
-    var canGoBack by remember { mutableStateOf(false) }
-    var canGoForward by remember { mutableStateOf(false) }
+    // 地址栏编辑缓冲：导航导致 uiState.url 变化时同步回地址栏（打字时 uiState.url 不变，不会覆盖输入）
+    LaunchedEffect(bs.url) {
+        if (bs.url.isNotEmpty()) address = bs.url
+    }
+    // 以下镜像共享状态：collectUiState 在 uiState 变更时触发本组合重算，故普通 val 即可随状态刷新
+    val pageTitle = bs.title
+    val progress = bs.progress
+    val isLoading = bs.isLoading
+    val canGoBack = bs.canGoBack
+    val canGoForward = bs.canGoForward
+    val loadError = bs.loadError
     var desktopMode by remember { mutableStateOf(false) }
     var showEditor by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
@@ -348,10 +330,9 @@ fun QuroBrowserScreen(
     var running by remember { mutableStateOf(false) }
     var eyeBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    // 系统 WebView：在下方 AndroidView 工厂里创建并配置；系统自带引擎一定可用，无需降级分支。
+    // 系统 WebView：共享单例（QuroBrowserViewHost），全屏与化小窗重挂不重建；系统自带引擎一定可用。
+    // 由下方 AndroidView 工厂在创建/获取共享 WebView 后写入（remember 保持，跨重组成立）。
     var webView by remember { mutableStateOf<WebView?>(null) }
-
-    var loadError by remember { mutableStateOf<String?>(null) }
 
     // 前进/后退状态由 NavigationDelegate.onCanGoBack / onCanGoForward 回调维护
     fun refreshNavState() { }
@@ -792,77 +773,21 @@ fun QuroBrowserScreen(
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { c ->
-                        WebView(c).apply {
-                            webView = this
-                            settings.apply {
-                                javaScriptEnabled = true
-                                domStorageEnabled = true
-                                databaseEnabled = true
-                                loadsImagesAutomatically = true
-                                loadWithOverviewMode = true
-                                useWideViewPort = true
-                                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                allowFileAccess = true
-                                javaScriptCanOpenWindowsAutomatically = true
-                                defaultTextEncodingName = "utf-8"
-                            }
-                            // 注册 AI 操控桥：AI 工具可通过 browser_act 接管当前 WebView。
-                            com.ai.assistance.quro.core.tools.QuroBrowserController.attach(this)
-                            webViewClient = object : WebViewClient() {
-                                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                                    isLoading = true
-                                    loadError = null
-                                    com.ai.assistance.quro.core.tools.QuroBrowserController.markPageStarted(url)
-                                    url?.let { address = it }
-                                }
-                                override fun onPageFinished(view: WebView?, url: String?) {
-                                    isLoading = false
-                                    com.ai.assistance.quro.core.tools.QuroBrowserController.markPageFinished(url)
-                                    canGoBack = view?.canGoBack() ?: false
-                                    canGoForward = view?.canGoForward() ?: false
-                                }
-                                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                                    if (request?.isForMainFrame == true) {
-                                        loadError = "页面加载失败：${error?.description ?: "未知错误"} (code=${error?.errorCode})"
-                                    }
-                                }
-                                // 自定义 scheme（baiduboxapp://、intent://、alipays://、taobao:// 等）
-                                // 不交给 WebView 处理，转系统 Intent 跳对应 APP；intent:// 解析为
-                                // 其内层真实 scheme 后再 ACTION_VIEW。
-                                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                    val u = request?.url ?: return false
-                                    val scheme = u.scheme?.lowercase() ?: return false
-                                    if (scheme in WEB_SCHEMES) return false  // http/https/file/about/data/javascript 走 WebView
-                                    return launchExternalScheme(context, u)
-                                }
-                                // 旧版 WebView 同步兼容（shouldOverrideUrlLoading 也有不带 ResourceRequest 的形态）
-                                @Suppress("DEPRECATION")
-                                override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                                    if (url.isNullOrEmpty()) return false
-                                    val parsed = runCatching { android.net.Uri.parse(url) }.getOrNull() ?: return false
-                                    val scheme = parsed.scheme?.lowercase() ?: return false
-                                    if (scheme in WEB_SCHEMES) return false
-                                    return launchExternalScheme(context, parsed)
-                                }
-                            }
-                            webChromeClient = object : WebChromeClient() {
-                                override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                                    progress = newProgress
-                                    isLoading = newProgress < 100
-                                }
-                                override fun onReceivedTitle(view: WebView?, title: String?) {
-                                    if (!title.isNullOrEmpty()) {
-                                        pageTitle = title
-                                        com.ai.assistance.quro.core.tools.QuroBrowserController.markTitle(title)
-                                    }
-                                }
-                            }
-                            loadUrl(url)
-                        }
+                        // 复用全局唯一浏览器 WebView（QuroBrowserViewHost）：全屏与化小窗之间只是重挂，
+                        // 不重建、不重载 —— 这是消除「化小窗卡顿」的关键（对标 operit WebSessionWebViewHost）。
+                        val container = android.widget.FrameLayout(c)
+                        val wv = com.ai.assistance.quro.core.tools.QuroBrowserViewHost.getOrCreate(c)
+                        // 写入外层 webView 状态，供地址栏/导航按钮/后退-前进等复用同一实例
+                        webView = wv
+                        // 首次打开才加载初始 url；重挂/还原时 WebView 已加载，loadIfNeeded 零重载。
+                        com.ai.assistance.quro.core.tools.QuroBrowserViewHost.loadIfNeeded(url)
+                        // 把共享 WebView 挂入本全屏容器（若当前未化小窗）。
+                        com.ai.assistance.quro.core.tools.QuroBrowserViewHost.bindMain(container)
+                        container
                     },
                     onRelease = {
-                        com.ai.assistance.quro.core.tools.QuroBrowserController.detach(it)
-                        it.destroy()
+                        // 离场仅解绑主容器；若仍化小窗则不销毁（WebView 在浮窗复用），真正关闭才 destroy。
+                        com.ai.assistance.quro.core.tools.QuroBrowserViewHost.unbindMain(it as ViewGroup)
                     },
                 )
             }

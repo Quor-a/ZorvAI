@@ -2103,9 +2103,9 @@ fun ChatScreen(
                     onMinimize = {
                         val u = browserUrl
                         browserFloatUrl = u
-                        // 系统级浮窗下保留主浏览器（不销毁 WebView）：返回全屏仅移除浮层，
-                        // 主浏览器已加载无需整页重载，避免卡顿；仅应用内降级浮层才销毁主浏览器。
-                        if (!useSystemOverlay) browserUrl = null
+                        // 系统级浮窗与应用内降级浮层都复用同一共享 WebView（QuroBrowserViewHost）：
+                        // 化小窗只是把该 WebView 从全屏容器重挂到浮层容器，不重建/不重载，彻底消除卡顿。
+                        // 因此主浏览器始终保留（不销毁 WebView），返回全屏仅移除浮层即可。
                     },
                     onOpenInSystem = { sysUrl ->
                         runCatching {
@@ -2174,71 +2174,20 @@ fun ChatScreen(
                     onRestore = { browserUrl = furl; browserFloatUrl = null },
                     onClose = { browserFloatUrl = null },
                 ) {
-                    val webSchemes = setOf("http", "https", "file", "about", "data", "javascript")
+                    // 应用内降级浮层同样复用全局唯一浏览器 WebView：化小窗只是把它重挂到浮层容器，
+                    // 不重建/不重载（与主浏览器/系统浮窗共用同一 WebView，状态统一由 QuroBrowserViewHost 维护）。
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = { c ->
-                            WebView(c).apply {
-                                settings.apply {
-                                    javaScriptEnabled = true
-                                    domStorageEnabled = true
-                                    databaseEnabled = true
-                                    loadsImagesAutomatically = true
-                                    loadWithOverviewMode = true
-                                    useWideViewPort = true
-                                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                    allowFileAccess = true
-                                    javaScriptCanOpenWindowsAutomatically = true
-                                    defaultTextEncodingName = "utf-8"
-                                }
-                                com.ai.assistance.quro.core.tools.QuroBrowserController.attach(this)
-                                webViewClient = object : WebViewClient() {
-                                    override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                                        com.ai.assistance.quro.core.tools.QuroBrowserController.markPageStarted(url)
-                                    }
-                                    override fun onPageFinished(view: WebView?, url: String?) {
-                                        com.ai.assistance.quro.core.tools.QuroBrowserController.markPageFinished(url)
-                                    }
-                                    override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
-                                        val u = request?.url ?: return false
-                                        val scheme = u.scheme?.lowercase() ?: return false
-                                        if (scheme in webSchemes) return false
-                                        runCatching {
-                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, u)
-                                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            c.startActivity(intent)
-                                        }
-                                        return true
-                                    }
-                                    @Suppress("DEPRECATION")
-                                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                                        if (url.isNullOrEmpty()) return false
-                                        val parsed = runCatching { android.net.Uri.parse(url) }.getOrNull() ?: return false
-                                        val scheme = parsed.scheme?.lowercase() ?: return false
-                                        if (scheme in webSchemes) return false
-                                        runCatching {
-                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, parsed)
-                                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            c.startActivity(intent)
-                                        }
-                                        return true
-                                    }
-                                }
-                                // 化小窗同样需要 WebChromeClient：补齐 onReceivedTitle → markTitle，
-                                // 否则化小窗后 status()/snapshot() 的 title 永远为空，AI 看不到页面标题（首个被忽略的真实缺陷）。
-                                webChromeClient = object : WebChromeClient() {
-                                    override fun onReceivedTitle(view: WebView?, title: String?) {
-                                        if (!title.isNullOrEmpty()) {
-                                            com.ai.assistance.quro.core.tools.QuroBrowserController.markTitle(title)
-                                        }
-                                    }
-                                }
-                                loadUrl(furl)
-                            }
+                            val container = android.widget.FrameLayout(c)
+                            com.ai.assistance.quro.core.tools.QuroBrowserViewHost.getOrCreate(c)
+                            // 首次打开才加载；从全屏重挂则零重载。
+                            com.ai.assistance.quro.core.tools.QuroBrowserViewHost.loadIfNeeded(furl)
+                            com.ai.assistance.quro.core.tools.QuroBrowserViewHost.bindFloat(container)
+                            container
                         },
                         onRelease = {
-                            com.ai.assistance.quro.core.tools.QuroBrowserController.detach(it)
-                            it.destroy()
+                            com.ai.assistance.quro.core.tools.QuroBrowserViewHost.unbindFloat(it as android.view.ViewGroup)
                         },
                     )
                 }
