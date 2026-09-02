@@ -481,6 +481,18 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- 对话/浏览器系统级悬浮窗保活服务：前台常驻，让 WindowManager 上挂载的
+             TYPE_APPLICATION_OVERLAY 小窗在 App 退后台/切其它软件时仍浮于桌面与其他应用之上。
+             悬浮窗视图由 QuroMiniWindowManager（进程级单例）持有与增删，本服务仅保活进程。 -->
+        <service
+            android:name=".service.QuroMiniWindowService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="对话/浏览器系统级悬浮小窗：在 WindowManager 中以 TYPE_APPLICATION_OVERLAY 渲染，脱离 Activity 生命周期，浮于桌面与其他应用之上" />
+        </service>
+
         <!-- 粘贴键盘：悬浮窗（TYPE_APPLICATION_OVERLAY）+ 无障碍粘贴，非前台服务 -->
         <service
             android:name=".service.QuroPasteKeyboardService"
