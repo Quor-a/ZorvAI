@@ -130,6 +130,33 @@ enum class EnvProfile(
         "command -v rustc >/dev/null 2>&1 && command -v cargo >/dev/null 2>&1",
         """
         |robust_install "rustc cargo" "rustc" || echo "[env] WARN: rust/cargo install failed"
+        |# ── 轮次E Rust 修复：rustup 工具链软链 + 环境变量持久化（幂等兜底）──
+        |# 兼容两种布局：/var/rustup+/var/cargo（方案标准）与默认 /root/.rustup+/root/.cargo（dev-env/终端 UI 安装）。
+        |# 仅当 rustup 工具链真实存在时清理 /usr/bin 孤儿二进制并软链；否则保留 apt 装的 rustc/cargo，绝不破坏可用链路。
+        |RUST_HOME=""
+        |CARGO_HOME_DIR=""
+        |if [ -d /var/rustup/toolchains ]; then RUST_HOME=/var/rustup; CARGO_HOME_DIR=/var/cargo; fi
+        |if [ -d /root/.rustup/toolchains ]; then RUST_HOME=/root/.rustup; CARGO_HOME_DIR=/root/.cargo; fi
+        |RUST_TC_DIR=""
+        |if [ -n "${'$'}RUST_HOME" ]; then
+        |    for d in "${'$'}RUST_HOME"/toolchains/*-unknown-linux-gnu "${'$'}RUST_HOME"/toolchains/stable-*; do
+        |        if [ -d "${'$'}d/bin" ] && [ -x "${'$'}d/bin/rustc" ]; then RUST_TC_DIR="${'$'}d/bin"; break; fi
+        |    done
+        |fi
+        |if [ -n "${'$'}RUST_TC_DIR" ]; then
+        |    rm -f /usr/bin/rustc /usr/bin/cargo /usr/bin/rustfmt /usr/bin/clippy-driver /usr/bin/cargo-clippy 2>/dev/null || true
+        |    for b in rustc cargo rustfmt clippy-driver cargo-clippy rustdoc; do
+        |        ln -sf "${'$'}RUST_TC_DIR/${'$'}b" /usr/bin/${'$'}b 2>/dev/null || true
+        |    done
+        |    echo "[env] Rust: linked toolchain from ${'$'}RUST_TC_DIR"
+        |fi
+        |if [ -n "${'$'}RUST_HOME" ]; then
+        |    grep -q 'RUSTUP_HOME' /root/.bashrc 2>/dev/null || cat >> /root/.bashrc << RB
+        |export RUSTUP_HOME=${'$'}RUST_HOME
+        |export CARGO_HOME=${'$'}CARGO_HOME_DIR
+        |export PATH="${'$'}CARGO_HOME_DIR/bin:/usr/local/go/bin:${'$'}PATH"
+        |RB
+        |fi
         |echo "[env] rustc=${'$'}(rustc --version 2>&1) cargo=${'$'}(cargo --version 2>&1)"
         """.trimMargin(),
     ),
