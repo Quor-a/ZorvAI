@@ -5,6 +5,7 @@ import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.linux.SourceManager
 import com.ai.assistance.quro.core.linux.PackageManagerType
 import com.ai.assistance.quro.core.linux.MirrorSource
+import com.ai.assistance.quro.core.linux.quroAptRefreshCommand
 import com.ai.assistance.quro.core.terminal.QuroTerminalController
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -81,6 +82,7 @@ class QuroDevEnvTool : QuroTool {
     private val installCommands = mapOf(
         "node" to """
 # 安装 Node.js 24.x (NodeSource)
+${quroAptRefreshCommand()}
 curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 apt-get install -y nodejs
 echo "Node.js 安装完成"
@@ -89,7 +91,7 @@ node -v && npm -v
 
         "python" to """
 # 安装 Python3 + pip
-apt-get update
+${quroAptRefreshCommand()}
 apt-get install -y python3 python3-pip
 echo "Python 安装完成"
 python3 --version && pip3 --version
@@ -97,7 +99,7 @@ python3 --version && pip3 --version
 
         "java" to """
 # 安装 OpenJDK 17
-apt-get update
+${quroAptRefreshCommand()}
 apt-get install -y openjdk-17-jdk-headless
 echo "Java 安装完成"
 java -version
@@ -139,7 +141,7 @@ rustc --version && cargo --version
 
         "go" to """
 # 安装 Go
-apt-get update
+${quroAptRefreshCommand()}
 apt-get install -y golang
 echo "Go 安装完成"
 go version
@@ -147,7 +149,7 @@ go version
 
         "git" to """
 # 安装 Git + Curl + Wget
-apt-get update
+${quroAptRefreshCommand()}
 apt-get install -y git curl wget
 echo "Git/Curl/Wget 安装完成"
 git --version && curl --version | head -1 && wget --version | head -1
