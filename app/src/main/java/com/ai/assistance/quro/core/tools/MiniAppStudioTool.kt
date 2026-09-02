@@ -263,12 +263,20 @@ button{margin-top:16px;background:#fff;color:#5a6fd6;border:none;padding:12px 20
 <h1 data-bind="title">Hello MiniApp</h1>
 <p data-bind="tip">这是用 MiniAppFramework 运行时渲染的小程序。</p>
 <button data-action="onTap">点我调用原生</button>
+<button data-action="onHash">算 SHA256（native.crypto）</button>
 <script>
 Page({
   data: { title: "Hello MiniApp", tip: "这是用 MiniAppFramework 运行时渲染的小程序。" },
   onTap: function () {
     this.setData({ title: "你点了一下！" });
     native.kotlin.toast({ text: "来自小程序的问候" });
+  },
+  onHash: function () {
+    native.crypto.sha256("Hello MiniApp").then(function (h) {
+      native.kotlin.toast({ text: "sha256: " + h.slice(0, 16) + "…" });
+    }).catch(function (e) {
+      native.kotlin.toast({ text: "crypto 失败: " + (e && e.message ? e.message : e) });
+    });
   }
 });
 </script>

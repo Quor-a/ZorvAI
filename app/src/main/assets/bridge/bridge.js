@@ -222,6 +222,35 @@
       notify: function (title, body) { return invoke('kotlin', 'notify', { title: title, body: body }); },
       speak: function (text) { return invoke('kotlin', 'speak', { text: text }); }
     },
+    // 加解密（移植自 MiniAppFramework，纯 Kotlin 实现，无需权限）
+    crypto: {
+      md5: function (d) { return invoke('crypto', 'md5', { data: d }); },
+      sha1: function (d) { return invoke('crypto', 'sha1', { data: d }); },
+      sha256: function (d) { return invoke('crypto', 'sha256', { data: d }); },
+      hmacSha256: function (d, k) { return invoke('crypto', 'hmacSha256', { data: d, key: k }); }
+    },
+    // 结构化存储（SQLite）：移植自 MiniAppFramework 的 SqlStorage 模块
+    db: {
+      execSql: function (sql) { return invoke('db', 'execSql', { sql: sql }); },
+      query: function (sql) { return invoke('db', 'query', { sql: sql }); },
+      insert: function (table, values) { return invoke('db', 'insert', { table: table, values: values }); },
+      update: function (table, values, where) { return invoke('db', 'update', { table: table, values: values, where: where || '' }); },
+      delete: function (table, where) { return invoke('db', 'delete', { table: table, where: where || '' }); }
+    },
+    // 位置（需宿主声明定位权限，未授权返回错误）
+    location: {
+      getLocation: function () { return invoke('location', 'getLocation', {}); }
+    },
+    // ACI：关联启动第三方 App / 组件（移植自 MiniAppFramework）
+    aci: {
+      isEnabled: function () { return invoke('aci', 'isEnabled', {}); },
+      setEnabled: function () { return invoke('aci', 'setEnabled', {}); },
+      launchApp: function (pkg) { return invoke('aci', 'launchApp', { packageName: pkg }); },
+      launchComponent: function (pkg, comp, action, data) {
+        return invoke('aci', 'launchComponent', { packageName: pkg, componentName: comp, action: action || '', data: data || '' });
+      },
+      canLaunch: function (pkg) { return invoke('aci', 'canLaunch', { packageName: pkg }); }
+    },
     // 便捷别名
     navigateTo: function (url) { return invoke('router', 'navigateTo', { url: url }); },
     navigateBack: function () { return invoke('router', 'navigateBack', {}); }
