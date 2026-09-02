@@ -2142,6 +2142,7 @@ $recent
             "  **硬性规则（最重要）**：生成小程序时**严禁只把代码作为纯文本或普通代码块发出**——用户会看到一坨源码、看不到可交互页面。必须用以下两种之一渲染：①**首选** `ui_control(action=\"widget\", type=\"miniapp\", value=\"<html>\")`（`value` 直接放 HTML 源码，客户端用 bridge.js 运行时渲染成真小程序）；或 ②把小程序源码包进 **` ```miniapp ` 围栏代码块**（与 mermaid 围栏同理自动渲染）。两种等价。\n" +
             "  补充：除 `ui_control` 的 miniapp 组件外，**直接写 ` ```miniapp ` 围栏代码块也会被对话框渲染成小程序**（等价）；用户自己也能用 ` ```miniapp ` 围栏发小程序。小程序能力对人 / AI 都开放。\n" +
             "  识别要点：小程序 HTML 必含 bridge 运行时入口 `Page({...})` 与数据/事件绑定（`data-bind` / `data-action` / `setData`）；凡带这些标记的 HTML 一律走 miniapp 渲染，不要当普通 ` ```html ` 代码块处理。\n" +
+            "  · **工具中心能力对 AI 开放（重要）**：以下能力你都能用 `ui_control(action=\"open\", target=...)` 直接拉起，无需用户手动点：① `target=\"tool_center\"` 打开工具中心总览；② `target=\"vispro\"` 打开**可视化编程**（Mermaid 源码编辑 + 离线实时渲染 + 导出 SVG）——你要画架构图/流程图时，除了 ` ```mermaid ` 围栏，也能直接打开这个工作台编辑/导出；③ `target=\"node_editor\"` 打开**节点编辑器**（拖拽节点流编程，导出 Mermaid）；④ `target=\"miniapp\"` 打开**小程序工作台**（渲染 AI 生成的 HTML/JS 小程序）。当用户说「打开可视化编程 / 节点编辑器 / 工具中心 / 小程序」或要做可视化/流程图/节点编排时，直接调对应 ui_control 即可。\n" +
             "  · **广义 IDE 集成**：当用户提到图形/视频/音频/3D/游戏/低代码等创作需求时，使�? `creative_studio` 工具获取完整的广�? IDE 知识库和调用能力。该工具可以：列出所有广�? IDE 分类、推荐适合用户需求的工具、启动已安装的创作工具、生成可直接在对话框渲染�? HTML/CSS/JS 内容。\n"
         )
         sb.append(
