@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.WebChromeClient
@@ -96,6 +97,10 @@ object QuroMiniWindowManager {
     /** 浏览器小窗当前已加载的目标网址：AI 再次打开不同链接时用于判断是否需要原地导航（不重建视图）。 */
     private var browserShownUrl: String? = null
 
+    /** 浮窗窗口的 LayoutParams：拖拽/缩放时更新 x/y 并 updateViewLayout（窗口仅包围面板，非满屏）。 */
+    private var chatParams: WindowManager.LayoutParams? = null
+    private var browserParams: WindowManager.LayoutParams? = null
+
     private val chatLinesState = mutableStateOf<List<MiniChatLine>>(emptyList())
 
     /** 对话消息流（Activity 注入）：小窗在 App 退后台时仍实时刷新列表（系统级浮窗核心诉求）。 */
@@ -174,16 +179,19 @@ object QuroMiniWindowManager {
                 setViewTreeSavedStateRegistryOwner(lifecycle)
                 setContent {
                     MaterialTheme(colorScheme = colorScheme) {
-                        Box(Modifier.fillMaxSize()) {
-                            FloatingMiniWindow(
-                                title = "对话小窗",
-                                initialX = 24.dp, initialY = 120.dp,
-                                initialWidth = 300.dp, initialHeight = 420.dp,
-                                onRestore = { onExpandChat?.invoke() },
-                                onClose = { onCloseChat?.invoke() },
-                            ) {
-                                ChatMiniContent()
-                            }
+                        // 窗口本身已是「仅包围面板」尺寸（WRAP_CONTENT，见 miniWindowParams），
+                        // 面板填满窗口；初始屏幕位置由 chatParams.x/y 决定，拖拽由 onDrag 移动整窗，
+                        // 缩放由 onResize 触发重新测量。改版后浮窗不再满屏拦截，面板外区域点击穿透到下层 App。
+                        FloatingMiniWindow(
+                            title = "对话小窗",
+                            initialX = 0.dp, initialY = 0.dp,
+                            initialWidth = 300.dp, initialHeight = 420.dp,
+                            onRestore = { onExpandChat?.invoke() },
+                            onClose = { onCloseChat?.invoke() },
+                            onDrag = { dx, dy -> moveMiniWindow(chatParams, chatView, dx, dy) },
+                            onResize = { updateMiniLayout(chatParams, chatView) },
+                        ) {
+                            ChatMiniContent()
                         }
                     }
                 }
@@ -202,7 +210,9 @@ object QuroMiniWindowManager {
         }
         // 已挂载则跳过（避免重复 addView 抛异常）；首次或已移除则重新挂回 WindowManager。
         if (!chatAdded) {
-            wm.addView(chatView, fullScreenParams())
+            // 窗口仅包围面板（WRAP_CONTENT，非满屏），面板外点击穿透到下层 App（抖音/快手等照常可操作）。
+            chatParams = miniWindowParams(dpToPx(24f), dpToPx(120f))
+            wm.addView(chatView, chatParams)
             chatAdded = true
         }
     }
@@ -239,19 +249,20 @@ object QuroMiniWindowManager {
                 setViewTreeSavedStateRegistryOwner(lifecycle)
                 setContent {
                     MaterialTheme(colorScheme = colorScheme) {
-                        Box(Modifier.fillMaxSize()) {
-                            FloatingMiniWindow(
-                                title = "浏览器小窗",
-                                initialX = 40.dp, initialY = 150.dp,
-                                initialWidth = 320.dp, initialHeight = 400.dp,
-                                onRestore = {
-                                    val u = QuroBrowserViewHost.uiState.value.url
-                                    if (u.isNotEmpty()) onRestoreBrowser?.invoke(u)
-                                },
-                                onClose = { onCloseBrowser?.invoke() },
-                            ) {
-                                BrowserMiniContent(url)
-                            }
+                        // 窗口仅包围面板（WRAP_CONTENT），面板外点击穿透到下层 App；拖拽移动整窗、缩放重测量。
+                        FloatingMiniWindow(
+                            title = "浏览器小窗",
+                            initialX = 0.dp, initialY = 0.dp,
+                            initialWidth = 320.dp, initialHeight = 400.dp,
+                            onRestore = {
+                                val u = QuroBrowserViewHost.uiState.value.url
+                                if (u.isNotEmpty()) onRestoreBrowser?.invoke(u)
+                            },
+                            onClose = { onCloseBrowser?.invoke() },
+                            onDrag = { dx, dy -> moveMiniWindow(browserParams, browserView, dx, dy) },
+                            onResize = { updateMiniLayout(browserParams, browserView) },
+                        ) {
+                            BrowserMiniContent(url)
                         }
                     }
                 }
@@ -261,9 +272,10 @@ object QuroMiniWindowManager {
             browserShownUrl = url
         }
         if (!browserAdded) {
-            // 浏览器小窗用 browserFloatParams：NOT_FOCUSABLE 不抢宿主 Activity 输入焦点，
-            // 化小窗后对话框仍可正常输入/操作；NOT_TOUCH_MODAL 让小窗未覆盖区域点击穿透到下方。
-            wm.addView(browserView, browserFloatParams())
+            // 窗口仅包围面板（WRAP_CONTENT）：NOT_FOCUSABLE 不抢下层 App 焦点，NOT_TOUCH_MODAL
+            // 让面板外的整片区域点击穿透到抖音/快手等下层 App，可边看浮窗边操作其它应用。
+            browserParams = miniWindowParams(dpToPx(40f), dpToPx(150f))
+            wm.addView(browserView, browserParams)
             browserAdded = true
         } else if (browserShownUrl != url) {
             // 已浮出且换了网址（AI 再次打开其它链接 / 多次打开浏览器）：
@@ -517,42 +529,15 @@ object QuroMiniWindowManager {
         com.ai.assistance.quro.core.QuroBrowserBridge.open(url)
     }
 
-    private fun fullScreenParams(): WindowManager.LayoutParams {
-        val dm = appCtx?.resources?.displayMetrics
-        val w = dm?.widthPixels ?: 1080
-        val h = dm?.heightPixels ?: 1920
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
-        return WindowManager.LayoutParams(
-            w,
-            h,
-            type,
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = 0
-            y = 0
-        }
-    }
-
     /**
-     * 浏览器小窗专用 params（与对话小窗的 fullScreenParams 区分）：
-     * - FLAG_NOT_FOCUSABLE：浮窗不抢宿主 Activity 输入焦点 / IME 焦点，化小窗后对话框仍可正常输入与操作
-     *   （满足「手动化小窗后再在对话框操作」）；WebView 滚动/点击等触控仍正常响应，仅失去浏览器内输入焦点
-     *   （需在浏览器地址栏/表单输入时，点「还原」转全屏即可）。
-     * - FLAG_NOT_TOUCH_MODAL：浮窗小窗 box 之外的透明区域点击穿透到下方 Activity，对话/其它 App 照常可点。
-     * - 保留全屏尺寸：使 NOT_TOUCH_MODAL 的穿透覆盖整屏（小窗 box 之外全部透传给下方）。
+     * 浮窗窗口参数（对话/浏览器共用）：窗口仅包围小窗面板本身（WRAP_CONTENT，按面板尺寸自动测量），
+     * 而非满屏。配合 NOT_FOCUSABLE + NOT_TOUCH_MODAL，行为与「语音球」一致——浮于其它 App 之上却不拦截：
+     * - NOT_FOCUSABLE：浮窗不抢下层 App（抖音/快手）焦点，其输入框/键盘照常工作；
+     * - NOT_TOUCH_MODAL：面板「边界之外」的整片区域点击穿透到下层 App，可边看浮窗边操作其它应用；
+     * - 面板内的按钮/滚动/拖拽/缩放仍正常响应（拖拽由 moveMiniWindow 移动整窗，缩放由 updateMiniLayout 重测）。
+     * 初始屏幕坐标由 x/y 决定；拖拽时 moveMiniWindow 更新 x/y 并 updateViewLayout。
      */
-    private fun browserFloatParams(): WindowManager.LayoutParams {
-        val dm = appCtx?.resources?.displayMetrics
-        val w = dm?.widthPixels ?: 1080
-        val h = dm?.heightPixels ?: 1920
+    private fun miniWindowParams(xPx: Int, yPx: Int): WindowManager.LayoutParams {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         } else {
@@ -560,8 +545,8 @@ object QuroMiniWindowManager {
             WindowManager.LayoutParams.TYPE_PHONE
         }
         return WindowManager.LayoutParams(
-            w,
-            h,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -569,9 +554,43 @@ object QuroMiniWindowManager {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 0
-            y = 0
+            x = xPx
+            y = yPx
         }
+    }
+
+    /** 拖拽时移动整个浮窗窗口（而非面板内部 offset），并夹紧在屏幕内避免丢失。 */
+    private fun moveMiniWindow(
+        params: WindowManager.LayoutParams?,
+        view: View?,
+        dxPx: Float,
+        dyPx: Float,
+    ) {
+        val p = params ?: return
+        val wm = windowManager ?: return
+        val dm = appCtx?.resources?.displayMetrics
+        val screenW = dm?.widthPixels ?: 1080
+        val screenH = dm?.heightPixels ?: 1920
+        p.x = (p.x + dxPx.toInt()).coerceIn(0, (screenW - 40).coerceAtLeast(0))
+        p.y = (p.y + dyPx.toInt()).coerceIn(0, (screenH - 40).coerceAtLeast(0))
+        try {
+            if (view != null) wm.updateViewLayout(view, p)
+        } catch (_: Throwable) {
+        }
+    }
+
+    /** 缩放后重新测量窗口（WRAP_CONTENT 窗口需主动 updateViewLayout 才按新面板尺寸刷新）。 */
+    private fun updateMiniLayout(params: WindowManager.LayoutParams?, view: View?) {
+        val wm = windowManager ?: return
+        try {
+            if (params != null && view != null) wm.updateViewLayout(view, params)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun dpToPx(dp: Float): Int {
+        val density = appCtx?.resources?.displayMetrics?.density ?: 1f
+        return (dp * density).toInt()
     }
 
     private fun getThemeRes(): Int {
