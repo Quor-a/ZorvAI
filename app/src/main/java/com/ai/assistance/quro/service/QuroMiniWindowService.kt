@@ -21,6 +21,7 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -418,15 +419,29 @@ object QuroMiniWindowManager {
                 TextButton(onClick = {
                     val raw = currentUrl.text.trim()
                     if (raw.isNotEmpty()) {
-                        val final = if (!raw.contains("://")) "https://$raw" else raw
+                        // 【修复】关键词/非 URL 文本 → 走搜索引擎（对齐 QuroBrowserScreen 的 resolveBrowserInput），
+                        // 不再被当域名补 https:// 前缀导致 ERR_NAME_NOT_RESOLVED / 被当成网页。
+                        val target = QuroBrowserController.resolveBrowserInput(raw)
                         // 共享 WebView：化小窗始终复用同一个，前往即导航（不重建/不重载）
-                        QuroBrowserViewHost.get()?.loadUrl(final)
+                        QuroBrowserViewHost.get()?.loadUrl(target)
                         // uiState.url 由通用 client 的 onPageStarted 自动更新；currentUrl 仅作即时回显。
-                        currentUrl = TextFieldValue(final)
+                        currentUrl = TextFieldValue(target)
                     }
                 }) {
                     Text("前往")
                 }
+            }
+            // 加载错误提示（点击重试）：让「部分网页打不开」有可见反馈，而非静默失败
+            bs.loadError?.let { err ->
+                Text(
+                    "加载失败：$err（点此重试）",
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 11.sp,
+                    modifier = Modifier.fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.errorContainer)
+                        .clickable { QuroBrowserViewHost.get()?.reload() }
+                        .padding(6.dp),
+                )
             }
             AndroidView(
                 modifier = Modifier.fillMaxWidth().weight(1f),

@@ -668,15 +668,27 @@ fun QuroBrowserScreen(
                 )
             }
 
-            // 加载错误提示
+            // 加载错误提示（点击重试）
             loadError?.let {
-                Surface(color = cs.errorContainer, modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        "加载失败：$it",
-                        color = cs.onErrorContainer,
-                        fontSize = 12.sp,
-                        modifier = Modifier.fillMaxWidth().padding(8.dp),
-                    )
+                Surface(
+                    color = cs.errorContainer,
+                    modifier = Modifier.fillMaxWidth()
+                        .clickable { webView?.reload() },
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "加载失败：$it（点击重试）",
+                            color = cs.onErrorContainer,
+                            fontSize = 12.sp,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = { webView?.reload() }, Modifier.size(28.dp)) {
+                            Icon(Icons.Filled.Refresh, "重试", tint = cs.onErrorContainer)
+                        }
+                    }
                 }
             }
 

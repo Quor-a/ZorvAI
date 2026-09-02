@@ -5,9 +5,12 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.view.ViewGroup
+import android.webkit.GeolocationPermissions
+import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -63,6 +66,23 @@ object QuroBrowserViewHost {
                 allowFileAccess = true
                 javaScriptCanOpenWindowsAutomatically = true
                 defaultTextEncodingName = "utf-8"
+
+                // —— 补齐「成熟浏览器」引擎配置（对齐 ZorvBrowser BrowserCore，解决「部分网页打不开」）——
+                // 定位：地图/本地类站点需要；否则静默失败导致页面不可用。
+                setGeolocationEnabled(true)
+                // 移动端适配：页面缩放消除横向溢出。
+                layoutAlgorithm = WebSettings.LayoutAlgorithm.NARROW_COLUMNS
+                setSupportZoom(true)
+                builtInZoomControls = true
+                displayZoomControls = false
+                // 缓存：默认走 HTTP 缓存，加速二次打开（AppCache 已废弃，不再启用）。
+                cacheMode = WebSettings.LOAD_DEFAULT
+                // 本地资源 / file:// 跨域（部分 SPA、本地工具页需要）。
+                allowContentAccess = true
+                allowFileAccessFromFileURLs = true
+                allowUniversalAccessFromFileURLs = true
+                // 媒体自动播放（视频/语音类站点）。
+                mediaPlaybackRequiresUserGesture = false
             }
             // 注册 AI 操控桥：browser_act 始终操控这一个 WebView（无论在全屏还是浮窗）。
             QuroBrowserController.attach(this)
@@ -206,6 +226,19 @@ object QuroBrowserViewHost {
                 }
             }
 
+            override fun onReceivedHttpError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                errorResponse: WebResourceResponse?,
+            ) {
+                if (request?.isForMainFrame == true) {
+                    val code = errorResponse?.statusCode ?: 0
+                    _uiState.value = _uiState.value.copy(
+                        loadError = "页面加载失败：HTTP $code (${request.url})",
+                    )
+                }
+            }
+
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val u = request?.url ?: return false
                 val scheme = u.scheme?.lowercase() ?: return false
@@ -223,6 +256,24 @@ object QuroBrowserViewHost {
             }
         }
         wv.webChromeClient = object : WebChromeClient() {
+            // 站点请求定位 → 自动授予（地图/本地类站点；对齐 ZorvBrowser，避免静默失败导致页面不可用）。
+            override fun onGeolocationPermissionsShowPrompt(
+                origin: String?,
+                callback: GeolocationPermissions.Callback?,
+            ) {
+                callback?.invoke(origin, true, false)
+            }
+
+            // 站点请求相机/麦克风 → 自动授予（视频通话/录音类站点）。
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                if (request == null) return
+                try {
+                    request.grant(request.resources)
+                } catch (_: Throwable) {
+                    try { request.deny() } catch (_: Throwable) {}
+                }
+            }
+
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 _uiState.value = _uiState.value.copy(
                     progress = newProgress,
