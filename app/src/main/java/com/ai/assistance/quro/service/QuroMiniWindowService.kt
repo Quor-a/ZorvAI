@@ -302,75 +302,110 @@ object QuroMiniWindowManager {
     @Composable
     private fun BrowserMiniContent(url: String) {
         val webSchemes = setOf("http", "https", "file", "about", "data", "javascript")
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { c ->
-                WebView(c).apply {
-                    settings.apply {
-                        javaScriptEnabled = true
-                        domStorageEnabled = true
-                        databaseEnabled = true
-                        loadsImagesAutomatically = true
-                        // 化小窗需随窗口自由缩放：禁用 wide viewport / overview 缩放，
-                        // 让视口宽度 = WebView 实际宽度，页面随窗口尺寸 reflow（而非锁定固定比例）。
-                        loadWithOverviewMode = false
-                        useWideViewPort = false
-                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        allowFileAccess = true
-                        javaScriptCanOpenWindowsAutomatically = true
-                        defaultTextEncodingName = "utf-8"
+        var currentUrl by remember { mutableStateOf(TextFieldValue(url)) }
+        var wvRef by remember { mutableStateOf<WebView?>(null) }
+        Column(Modifier.fillMaxSize()) {
+            // 地址栏：完整浏览器缩小版，可直接输入网址导航
+            Row(
+                Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = currentUrl,
+                    onValueChange = { currentUrl = it },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    placeholder = { Text("输入网址…", fontSize = 11.sp) },
+                    textStyle = TextStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface),
+                )
+                TextButton(onClick = {
+                    val raw = currentUrl.text.trim()
+                    if (raw.isNotEmpty()) {
+                        val final = if (!raw.contains("://")) "https://$raw" else raw
+                        wvRef?.loadUrl(final)
+                        browserUrlState.value = final
+                        currentUrl = TextFieldValue(final)
                     }
-                    QuroBrowserController.attach(this)
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageStarted(view: WebView?, u: String?, favicon: android.graphics.Bitmap?) {
-                            QuroBrowserController.markPageStarted(u)
-                        }
-
-                        override fun onPageFinished(view: WebView?, u: String?) {
-                            QuroBrowserController.markPageFinished(u)
-                        }
-
-                        override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
-                            val reqUri = request?.url ?: return false
-                            val scheme = reqUri.scheme?.lowercase() ?: return false
-                            if (scheme in webSchemes) return false
-                            runCatching {
-                                val intent = Intent(Intent.ACTION_VIEW, reqUri)
-                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                c.startActivity(intent)
-                            }
-                            return true
-                        }
-
-                        @Suppress("DEPRECATION")
-                        override fun shouldOverrideUrlLoading(view: WebView?, u: String?): Boolean {
-                            if (u.isNullOrEmpty()) return false
-                            val parsed = runCatching { Uri.parse(u) }.getOrNull() ?: return false
-                            val scheme = parsed.scheme?.lowercase() ?: return false
-                            if (scheme in webSchemes) return false
-                            runCatching {
-                                val intent = Intent(Intent.ACTION_VIEW, parsed)
-                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                c.startActivity(intent)
-                            }
-                            return true
-                        }
-                    }
-                    // 化小窗同样需要 WebChromeClient：补齐 onReceivedTitle → markTitle，
-                    // 否则化小窗后 status()/snapshot() 的 title 永远为空（同 ChatScreen 修复点）。
-                    webChromeClient = object : WebChromeClient() {
-                        override fun onReceivedTitle(view: WebView?, title: String?) {
-                            if (!title.isNullOrEmpty()) QuroBrowserController.markTitle(title)
-                        }
-                    }
-                    loadUrl(url)
+                }) {
+                    Text("前往")
                 }
-            },
-            onRelease = {
-                QuroBrowserController.detach(it)
-                it.destroy()
-            },
-        )
+            }
+            AndroidView(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                factory = { c ->
+                    WebView(c).apply {
+                        wvRef = this
+                        settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+                            databaseEnabled = true
+                            loadsImagesAutomatically = true
+                            // 化小窗需随窗口自由缩放：禁用 wide viewport / overview 缩放，
+                            // 让视口宽度 = WebView 实际宽度，页面随窗口尺寸 reflow（而非锁定固定比例）。
+                            loadWithOverviewMode = false
+                            useWideViewPort = false
+                            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            allowFileAccess = true
+                            javaScriptCanOpenWindowsAutomatically = true
+                            defaultTextEncodingName = "utf-8"
+                        }
+                        QuroBrowserController.attach(this)
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageStarted(view: WebView?, u: String?, favicon: android.graphics.Bitmap?) {
+                                QuroBrowserController.markPageStarted(u)
+                                if (!u.isNullOrEmpty()) {
+                                    browserUrlState.value = u
+                                    currentUrl = TextFieldValue(u)
+                                }
+                            }
+
+                            override fun onPageFinished(view: WebView?, u: String?) {
+                                QuroBrowserController.markPageFinished(u)
+                            }
+
+                            override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
+                                val reqUri = request?.url ?: return false
+                                val scheme = reqUri.scheme?.lowercase() ?: return false
+                                if (scheme in webSchemes) return false
+                                runCatching {
+                                    val intent = Intent(Intent.ACTION_VIEW, reqUri)
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    c.startActivity(intent)
+                                }
+                                return true
+                            }
+
+                            @Suppress("DEPRECATION")
+                            override fun shouldOverrideUrlLoading(view: WebView?, u: String?): Boolean {
+                                if (u.isNullOrEmpty()) return false
+                                val parsed = runCatching { Uri.parse(u) }.getOrNull() ?: return false
+                                val scheme = parsed.scheme?.lowercase() ?: return false
+                                if (scheme in webSchemes) return false
+                                runCatching {
+                                    val intent = Intent(Intent.ACTION_VIEW, parsed)
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    c.startActivity(intent)
+                                }
+                                return true
+                            }
+                        }
+                        // 化小窗同样需要 WebChromeClient：补齐 onReceivedTitle → markTitle，
+                        // 否则化小窗后 status()/snapshot() 的 title 永远为空（同 ChatScreen 修复点）。
+                        webChromeClient = object : WebChromeClient() {
+                            override fun onReceivedTitle(view: WebView?, title: String?) {
+                                if (!title.isNullOrEmpty()) QuroBrowserController.markTitle(title)
+                            }
+                        }
+                        loadUrl(url)
+                    }
+                },
+                onRelease = {
+                    QuroBrowserController.detach(it)
+                    it.destroy()
+                },
+            )
+        }
     }
 
     // ───────────────────────── 内部工具 ─────────────────────────
