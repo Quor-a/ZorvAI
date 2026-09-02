@@ -12,11 +12,13 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.view.Gravity
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.os.Handler
 import android.os.Looper
 import androidx.appcompat.view.ContextThemeWrapper
@@ -35,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +58,7 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import com.ai.assistance.quro.activity.QuroMainActivity
 import com.ai.assistance.quro.core.QuroMessage
 import com.ai.assistance.quro.core.tools.QuroBrowserController
+import com.ai.assistance.quro.core.tools.QuroBrowserViewHost
 import com.ai.assistance.quro.core.util.QuroServiceLifecycleOwner
 import com.ai.assistance.quro.ui.FloatingMiniWindow
 import kotlinx.coroutines.CoroutineScope
@@ -89,7 +93,6 @@ object QuroMiniWindowManager {
     private var browserView: ComposeView? = null
 
     private val chatLinesState = mutableStateOf<List<MiniChatLine>>(emptyList())
-    private val browserUrlState = mutableStateOf<String?>(null)
 
     /** 对话消息流（Activity 注入）：小窗在 App 退后台时仍实时刷新列表（系统级浮窗核心诉求）。 */
     private var messageFlow: Flow<List<QuroMessage>>? = null
@@ -232,8 +235,8 @@ object QuroMiniWindowManager {
                             initialX = 40.dp, initialY = 150.dp,
                             initialWidth = 320.dp, initialHeight = 400.dp,
                             onRestore = {
-                                val u = browserUrlState.value
-                                if (u != null) onRestoreBrowser?.invoke(u)
+                                val u = QuroBrowserViewHost.uiState.value.url
+                                if (u.isNotEmpty()) onRestoreBrowser?.invoke(u)
                             },
                             onClose = { onCloseBrowser?.invoke() },
                         ) {
@@ -244,7 +247,6 @@ object QuroMiniWindowManager {
             }
         }
         browserView = view
-        browserUrlState.value = url
         wm.addView(view, fullScreenParams())
     }
 
@@ -342,9 +344,12 @@ object QuroMiniWindowManager {
 
     @Composable
     private fun BrowserMiniContent(url: String) {
-        val webSchemes = setOf("http", "https", "file", "about", "data", "javascript")
+        val bs = QuroBrowserViewHost.collectUiState().value
         var currentUrl by remember { mutableStateOf(TextFieldValue(url)) }
-        var wvRef by remember { mutableStateOf<WebView?>(null) }
+        // 地址栏同步共享状态（导航导致 uiState.url 变化时回写；打字时 uiState.url 不变，不覆盖输入）
+        LaunchedEffect(bs.url) {
+            if (bs.url.isNotEmpty()) currentUrl = TextFieldValue(bs.url)
+        }
         Column(Modifier.fillMaxSize()) {
             // 地址栏：完整浏览器缩小版，可直接输入网址导航
             Row(
@@ -364,8 +369,9 @@ object QuroMiniWindowManager {
                     val raw = currentUrl.text.trim()
                     if (raw.isNotEmpty()) {
                         val final = if (!raw.contains("://")) "https://$raw" else raw
-                        wvRef?.loadUrl(final)
-                        browserUrlState.value = final
+                        // 共享 WebView：化小窗始终复用同一个，前往即导航（不重建/不重载）
+                        QuroBrowserViewHost.get()?.loadUrl(final)
+                        // uiState.url 由通用 client 的 onPageStarted 自动更新；currentUrl 仅作即时回显。
                         currentUrl = TextFieldValue(final)
                     }
                 }) {
@@ -375,75 +381,18 @@ object QuroMiniWindowManager {
             AndroidView(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 factory = { c ->
-                    WebView(c).apply {
-                        wvRef = this
-                        settings.apply {
-                            javaScriptEnabled = true
-                            domStorageEnabled = true
-                            databaseEnabled = true
-                            loadsImagesAutomatically = true
-                            // 化小窗需随窗口自由缩放：禁用 wide viewport / overview 缩放，
-                            // 让视口宽度 = WebView 实际宽度，页面随窗口尺寸 reflow（而非锁定固定比例）。
-                            loadWithOverviewMode = false
-                            useWideViewPort = false
-                            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                            allowFileAccess = true
-                            javaScriptCanOpenWindowsAutomatically = true
-                            defaultTextEncodingName = "utf-8"
-                        }
-                        QuroBrowserController.attach(this)
-                        webViewClient = object : WebViewClient() {
-                            override fun onPageStarted(view: WebView?, u: String?, favicon: android.graphics.Bitmap?) {
-                                QuroBrowserController.markPageStarted(u)
-                                if (!u.isNullOrEmpty()) {
-                                    browserUrlState.value = u
-                                    currentUrl = TextFieldValue(u)
-                                }
-                            }
-
-                            override fun onPageFinished(view: WebView?, u: String?) {
-                                QuroBrowserController.markPageFinished(u)
-                            }
-
-                            override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
-                                val reqUri = request?.url ?: return false
-                                val scheme = reqUri.scheme?.lowercase() ?: return false
-                                if (scheme in webSchemes) return false
-                                runCatching {
-                                    val intent = Intent(Intent.ACTION_VIEW, reqUri)
-                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    c.startActivity(intent)
-                                }
-                                return true
-                            }
-
-                            @Suppress("DEPRECATION")
-                            override fun shouldOverrideUrlLoading(view: WebView?, u: String?): Boolean {
-                                if (u.isNullOrEmpty()) return false
-                                val parsed = runCatching { Uri.parse(u) }.getOrNull() ?: return false
-                                val scheme = parsed.scheme?.lowercase() ?: return false
-                                if (scheme in webSchemes) return false
-                                runCatching {
-                                    val intent = Intent(Intent.ACTION_VIEW, parsed)
-                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    c.startActivity(intent)
-                                }
-                                return true
-                            }
-                        }
-                        // 化小窗同样需要 WebChromeClient：补齐 onReceivedTitle → markTitle，
-                        // 否则化小窗后 status()/snapshot() 的 title 永远为空（同 ChatScreen 修复点）。
-                        webChromeClient = object : WebChromeClient() {
-                            override fun onReceivedTitle(view: WebView?, title: String?) {
-                                if (!title.isNullOrEmpty()) QuroBrowserController.markTitle(title)
-                            }
-                        }
-                        loadUrl(url)
-                    }
+                    // 复用全局唯一浏览器 WebView：化小窗只是把它从全屏容器重挂到浮窗容器，
+                    // 不新建 WebView、不整页 loadUrl 重载 —— 彻底消除「化小窗卡顿」（对标 operit）。
+                    val container = FrameLayout(c)
+                    QuroBrowserViewHost.getOrCreate(c)
+                    // 首次打开才加载初始 url；已存在（从全屏重挂）则零重载。
+                    QuroBrowserViewHost.loadIfNeeded(url)
+                    QuroBrowserViewHost.bindFloat(container)
+                    container
                 },
                 onRelease = {
-                    QuroBrowserController.detach(it)
-                    it.destroy()
+                    // 仅解绑浮窗容器；若主浏览器仍在则移回全屏，真正关闭才销毁。
+                    QuroBrowserViewHost.unbindFloat(it as ViewGroup)
                 },
             )
         }
