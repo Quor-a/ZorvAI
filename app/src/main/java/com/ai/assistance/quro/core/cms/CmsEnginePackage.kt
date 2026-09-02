@@ -199,16 +199,19 @@ cat >> /etc/hosts << 'HOSTS'
 91.189.91.39 ports.ubuntu.com # quro-engine-dns
 HOSTS
 echo "[quro-engine] DNS: appended static mirror mappings to /etc/hosts (bypass port 53)"
+# 轮次F：proot 默认无 localhost 映射 → `ssh localhost` 报 Could not resolve hostname；补上（幂等）。
+grep -q '^127.0.0.1[[:space:]].*localhost' /etc/hosts 2>/dev/null || echo "127.0.0.1 localhost" >> /etc/hosts
 
 # Phase 0.5: apt sources (skip if already configured by Android side)
 # 关键修复：已切换到 Ubuntu 24.04 (Noble) ARM64 rootfs。用 HTTP 镜像，避免 proot 下 CA 证书缺失导致 apt over HTTPS 失败。
 echo "[quro-engine] checking apt sources..."
 if [ ! -s /etc/apt/sources.list ] || ! grep -q "noble" /etc/apt/sources.list 2>/dev/null; then
     mkdir -p /etc/apt/apt.conf.d
-    # 关闭签名验证（proot 环境下 GPG 公钥可能不完整）
-    printf 'Acquire::Check-Valid-Until "false";\nAPT::Get::AllowUnauthenticated "true";\n' > /etc/apt/apt.conf.d/99no-check-gpg
-    printf 'deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse\ndeb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse\ndeb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
-    echo "[quro-engine] apt sources configured (noble, http)"
+    # 轮次F：放开未签名仓库（手动 curl 拉索引，无 Release 签名）→ apt 才肯用这批索引
+    printf 'Acquire::Check-Valid-Until "false";\nAPT::Get::AllowUnauthenticated "true";\nAcquire::AllowInsecureRepositories "true";\n' > /etc/apt/apt.conf.d/99no-check-gpg
+    # 轮次F：切清华 TUNA（HTTP）；ports.ubuntu.com pool 整体 404 已弃用
+    printf 'deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ noble main restricted universe multiverse\ndeb http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ noble-updates main restricted universe multiverse\ndeb http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
+    echo "[quro-engine] apt sources configured (noble, tuna http)"
 else
     echo "[quro-engine] apt sources already configured (keeping existing)"
 fi
@@ -219,26 +222,49 @@ if [ -d /usr/share/ca-certificates/mozilla ]; then
     cat /usr/share/ca-certificates/mozilla/*.crt > /etc/ssl/certs/ca-certificates.crt 2>/dev/null || true
 fi
 
-# Phase 1: apt update with retry
-echo "[quro-engine] updating apt index..."
-if ! apt-get update 2>&1; then
-    echo "[quro-engine] WARN: apt-get update failed, trying alternative mirrors..."
-    for m in aliyun tsinghua ports; do
-        case "${'$'}m" in
-            aliyun)   BASE="https://mirrors.aliyun.com/ubuntu-ports" ;;
-            tsinghua) BASE="https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports" ;;
-            ports)    BASE="http://ports.ubuntu.com/ubuntu-ports" ;;
-        esac
-        printf "deb %s/ noble main restricted universe multiverse\ndeb %s/ noble-updates main restricted universe multiverse\ndeb %s/ noble-security main restricted universe multiverse\n" "${'$'}BASE" "${'$'}BASE" "${'$'}BASE" > /etc/apt/sources.list
-        sleep 1
-        if apt-get update 2>&1; then break; fi
-    done
-    # final check
-    if ! apt-get update 2>&1; then
-        echo "[quro-engine] FAILED: apt-get update failed on all mirrors"
-        exit 1
+# 轮次F · apt 索引（绕过 apt-get update 超时）
+# proot 下 apt-get update 拉清华 universe 6万+ 包超 30s 终端超时，且 ports.ubuntu.com pool 整体 404。
+# 改用 curl 手动拉清华 TUNA(HTTP) 12 组件索引直写 /var/lib/apt/lists/，文件名须严格合规，apt 才能识别。
+# 仅当 TUNA 拉齐后才清旧源（ports.ubuntu.com 已 404 必删；aliyun 仅在 TUNA 成功时替换）。
+# curl 缺失或 TUNA 全失败时回退 apt-get update（硬 25s 超时）。
+echo "[quro-engine] apt index (manual curl, bypass apt-get update timeout)..."
+quro_manual_apt_index() {
+    local BASE="http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/dists"
+    local APTL="/var/lib/apt/lists"
+    mkdir -p "${'$'}APTL" "${'$'}APTL/partial"
+    rm -f "${'$'}APTL"/partial/* 2>/dev/null || true
+    local ok=0 total=0
+    if command -v curl >/dev/null 2>&1; then
+        for dist in noble noble-updates noble-security; do
+            for comp in main universe multiverse restricted; do
+                total=$((total+1))
+                local f="mirrors.tuna.tsinghua.edu.cn_ubuntu-ports_dists_${'$'}dist_${'$'}comp_binary-arm64_Packages"
+                if curl -s --max-time 40 -o "${'$'}APTL/${'$'}f.gz" "${'$'}BASE/${'$'}dist/${'$'}comp/binary-arm64/Packages.gz" \
+                   && gzip -dc "${'$'}APTL/${'$'}f.gz" > "${'$'}APTL/${'$'}f" 2>/dev/null && [ -s "${'$'}APTL/${'$'}f" ]; then
+                    rm -f "${'$'}APTL/${'$'}f.gz"; ok=$((ok+1)); echo "[apt] index ok: ${'$'}f"
+                else
+                    echo "[apt] WARN: failed fetch ${'$'}dist/${'$'}comp"; rm -f "${'$'}APTL/${'$'}f.gz" "${'$'}APTL/${'$'}f" 2>/dev/null || true
+                fi
+            done
+        done
+        echo "[apt] manual index: ${'$'}ok/${'$'}total fetched"
+        if [ "${'$'}ok" -ge 1 ]; then
+            rm -f "${'$'}APTL"/ports.ubuntu.com_* 2>/dev/null || true
+            rm -f "${'$'}APTL"/mirrors.aliyun.com_* 2>/dev/null || true
+        fi
+    else
+        echo "[apt] curl not available, will rely on apt-get update"
     fi
-fi
+    if [ "${'$'}ok" -lt 1 ]; then
+        echo "[apt] manual index insufficient, trying apt-get update (hard 25s timeout)..."
+        if command -v timeout >/dev/null 2>&1; then
+            timeout 25 apt-get update 2>&1 | tail -5 || true
+        else
+            apt-get update 2>&1 | tail -5 || true
+        fi
+    fi
+}
+quro_manual_apt_index
 
 # Phase 2: 修复 dpkg 数据库错误
 echo "[quro-engine] fixing dpkg database errors..."

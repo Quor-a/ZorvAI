@@ -39,11 +39,50 @@ private val ENV_INSTALL_PROLOGUE = QuroLinuxEnv.APT_LOCK_RELEASE_PROLOGUE + """
     |# ── Ubuntu 24.04 Noble apt sources（幂等，已存在且含 noble 则跳过）──
     |if [ ! -s /etc/apt/sources.list ] || ! grep -q "noble" /etc/apt/sources.list 2>/dev/null; then
     |    mkdir -p /etc/apt/apt.conf.d
-    |    printf 'Acquire::Check-Valid-Until "false";\nAPT::Get::AllowUnauthenticated "true";\n' > /etc/apt/apt.conf.d/99no-check-gpg
-    |    printf 'deb http://mirrors.aliyun.com/ubuntu-ports/ noble main restricted universe multiverse\ndeb http://mirrors.aliyun.com/ubuntu-ports/ noble-updates main restricted universe multiverse\ndeb http://mirrors.aliyun.com/ubuntu-ports/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
+    |    # 轮次F：放开未签名仓库（手动 curl 拉索引，无 Release 签名）→ apt 才肯用这批索引
+    |    printf 'Acquire::Check-Valid-Until "false";\nAPT::Get::AllowUnauthenticated "true";\nAcquire::AllowInsecureRepositories "true";\n' > /etc/apt/apt.conf.d/99no-check-gpg
+    |    # 轮次F：切清华 TUNA（HTTP）；ports.ubuntu.com pool 整体 404 已弃用
+    |    printf 'deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ noble main restricted universe multiverse\ndeb http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ noble-updates main restricted universe multiverse\ndeb http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ noble-security main restricted universe multiverse\n' > /etc/apt/sources.list
     |fi
     |dpkg --configure -a 2>/dev/null || true
-    |apt-get update 2>&1 | tail -3 || true
+    |# 轮次F · apt 索引（绕过 apt-get update 超时）：手动 curl 拉清华 TUNA 12 组件索引；失败回退 apt-get update(硬25s)
+    |quro_manual_apt_index() {
+    |    local BASE="http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/dists"
+    |    local APTL="/var/lib/apt/lists"
+    |    mkdir -p "${'$'}APTL" "${'$'}APTL/partial"
+    |    rm -f "${'$'}APTL"/partial/* 2>/dev/null || true
+    |    local ok=0 total=0
+    |    if command -v curl >/dev/null 2>&1; then
+    |        for dist in noble noble-updates noble-security; do
+    |            for comp in main universe multiverse restricted; do
+    |                total=$((total+1))
+    |                local f="mirrors.tuna.tsinghua.edu.cn_ubuntu-ports_dists_${'$'}dist_${'$'}comp_binary-arm64_Packages"
+    |                if curl -s --max-time 40 -o "${'$'}APTL/${'$'}f.gz" "${'$'}BASE/${'$'}dist/${'$'}comp/binary-arm64/Packages.gz" \
+    |                   && gzip -dc "${'$'}APTL/${'$'}f.gz" > "${'$'}APTL/${'$'}f" 2>/dev/null && [ -s "${'$'}APTL/${'$'}f" ]; then
+    |                    rm -f "${'$'}APTL/${'$'}f.gz"; ok=$((ok+1)); echo "[apt] index ok: ${'$'}f"
+    |                else
+    |                    echo "[apt] WARN: failed fetch ${'$'}dist/${'$'}comp"; rm -f "${'$'}APTL/${'$'}f.gz" "${'$'}APTL/${'$'}f" 2>/dev/null || true
+    |                fi
+    |            done
+    |        done
+    |        echo "[apt] manual index: ${'$'}ok/${'$'}total fetched"
+    |        if [ "${'$'}ok" -ge 1 ]; then
+    |            rm -f "${'$'}APTL"/ports.ubuntu.com_* 2>/dev/null || true
+    |            rm -f "${'$'}APTL"/mirrors.aliyun.com_* 2>/dev/null || true
+    |        fi
+    |    else
+    |        echo "[apt] curl not available, will rely on apt-get update"
+    |    fi
+    |    if [ "${'$'}ok" -lt 1 ]; then
+    |        echo "[apt] manual index insufficient, trying apt-get update (hard 25s timeout)..."
+    |        if command -v timeout >/dev/null 2>&1; then
+    |            timeout 25 apt-get update 2>&1 | tail -5 || true
+    |        else
+    |            apt-get update 2>&1 | tail -5 || true
+    |        fi
+    |    fi
+    |}
+    |quro_manual_apt_index
     |
     |# ── 稳健安装函数：apt 优先，失败回退 dpkg-deb -x ──
     |robust_install() {
@@ -109,7 +148,10 @@ enum class EnvProfile(
     ),
     SSH(
         "SSH 工具链 (openssh + sshpass + sshd)",
-        "command -v ssh >/dev/null 2>&1 && command -v sshpass >/dev/null 2>&1 && command -v sshd >/dev/null 2>&1",
+        // 轮次F 修复：原 checkCmd 要求 ssh && sshpass && sshd 三者俱全，但终端侧仅装 openssh-client（ssh 客户端），
+        // 导致 /usr/bin/ssh 已存在时 status_devenv 仍误报“❌ 未安装”（与 Bug8 Python 探测同类：检测逻辑与实际环境不一致）。
+        // 顶层 SSH 档以「ssh 客户端可用」为就绪信号；sshpass/sshd 由 SSHPASS/SSH_SERVER 子档独立探测。
+        "command -v ssh >/dev/null 2>&1",
         """
         |robust_install "openssh-client openssh-server sshpass" "ssh" || echo "[env] WARN: ssh install failed"
         |if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then ssh-keygen -A 2>/dev/null || true; fi
