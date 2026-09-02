@@ -298,6 +298,8 @@ object QuroMiniWindowManager {
     fun release() {
         hideChat()
         hideBrowser()
+        // 先释放重量级对象（ComposeView/生命周期/协程/消息引用），让 GC 在关停服务前有机会回收，
+        // 避免紧随其后的 startService 在进程已濒临堆上限时 OOM 崩进程。
         chatView = null
         browserView = null
         chatLifecycle?.destroy()
@@ -306,7 +308,15 @@ object QuroMiniWindowManager {
         browserLifecycle = null
         chatScope?.cancel()
         chatScope = null
-        appCtx?.let { QuroMiniWindowService.stop(it) }
+        chatLinesState.value = emptyList()
+        messageFlow = null
+        // 关停保活服务：若进程已濒临 OOM，startService 可能抛 OutOfMemoryError；
+        // 服务会随进程被系统回收，吞掉异常避免主线程崩溃。
+        try {
+            appCtx?.let { QuroMiniWindowService.stop(it) }
+        } catch (_: Throwable) {
+            // 忽略：内存耗尽，系统会回收服务与前台通知
+        }
     }
 
     // ───────────────────────── 内部 Composable 内容 ─────────────────────────
@@ -608,8 +618,14 @@ class QuroMiniWindowService : Service() {
         }
 
         fun stop(context: Context) {
-            val intent = Intent(context, QuroMiniWindowService::class.java).apply { action = ACTION_STOP }
-            context.startService(intent)
+            // 进程已濒临 OOM 时 startService 可能抛 OutOfMemoryError；服务会随进程被系统回收，
+            // 吞掉异常避免主线程崩溃（release 路径已先行释放重量级对象以争取回收空间）。
+            try {
+                val intent = Intent(context, QuroMiniWindowService::class.java).apply { action = ACTION_STOP }
+                context.startService(intent)
+            } catch (_: Throwable) {
+                // 忽略：内存耗尽，系统会回收服务与前台通知
+            }
         }
     }
 }
