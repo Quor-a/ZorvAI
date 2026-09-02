@@ -92,6 +92,8 @@ object QuroMiniWindowManager {
     // 视图是否已挂载到 WindowManager：show/hide 只 add/remove，避免每次重建与重复 addView 异常。
     private var chatAdded = false
     private var browserAdded = false
+    /** 浏览器小窗当前已加载的目标网址：AI 再次打开不同链接时用于判断是否需要原地导航（不重建视图）。 */
+    private var browserShownUrl: String? = null
 
     private val chatLinesState = mutableStateOf<List<MiniChatLine>>(emptyList())
 
@@ -255,10 +257,18 @@ object QuroMiniWindowManager {
             }
             browserView = view
             browserAdded = false
+            browserShownUrl = url
         }
         if (!browserAdded) {
-            wm.addView(browserView, fullScreenParams())
+            // 浏览器小窗用 browserFloatParams：NOT_FOCUSABLE 不抢宿主 Activity 输入焦点，
+            // 化小窗后对话框仍可正常输入/操作；NOT_TOUCH_MODAL 让小窗未覆盖区域点击穿透到下方。
+            wm.addView(browserView, browserFloatParams())
             browserAdded = true
+        } else if (browserShownUrl != url) {
+            // 已浮出且换了网址（AI 再次打开其它链接 / 多次打开浏览器）：
+            // 共享 WebView 原地导航，不重建视图、不整页重载，地址栏由 uiState 同步。避免「全屏+小窗并存」。
+            QuroBrowserViewHost.get()?.loadUrl(url)
+            browserShownUrl = url
         }
     }
 
@@ -271,6 +281,7 @@ object QuroMiniWindowManager {
             }
             browserAdded = false
         }
+        browserShownUrl = null
     }
 
     /** 服务进程销毁（进程将死）：兜底移除所有悬浮窗视图。 */
@@ -482,12 +493,12 @@ object QuroMiniWindowManager {
         }.getOrDefault(false)
     }
 
-    /** AI 操控浏览器时把浏览器展示给用户：改为在应用内全屏展示（复用同一共享 WebView，
-     *  browser_act 仍操控它），【不再浮为系统级小窗】——避免 WebView 跨 WindowManager 窗口重挂
-     *  导致化小窗/还原卡顿。无 SYSTEM_ALERT_WINDOW 权限也能正常展示。 */
+    /** AI 操控浏览器时把浏览器展示给用户：默认化小窗（符合移动端——默认小窗、手动全屏）。
+     *  经 QuroBrowserBridge → ChatScreen 设 browserFloatUrl → 系统级浮窗 showBrowser（NOT_FOCUSABLE，
+     *  不抢对话框焦点）。复用同一共享 WebView，绝不跨窗口重建，化小窗/还原均零卡顿。 */
     fun showBrowserFromAi(context: Context, url: String) {
-        // 统一走应用内全屏浏览器（QuroBrowserBridge → ChatScreen 显示 QuroBrowserScreen），
-        // WebView 始终只在 Activity 容器，绝不跨窗口搬，化小窗/还原均零卡顿。
+        // 统一经 QuroBrowserBridge 把网址交给 ChatScreen：ChatScreen 默认设 browserFloatUrl（小窗），
+        // WebView 始终仅一个实例，化小窗/还原/多次打开均复用，零重建零整页重载。
         com.ai.assistance.quro.core.QuroBrowserBridge.open(url)
     }
 
@@ -506,6 +517,39 @@ object QuroMiniWindowManager {
             h,
             type,
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 0
+        }
+    }
+
+    /**
+     * 浏览器小窗专用 params（与对话小窗的 fullScreenParams 区分）：
+     * - FLAG_NOT_FOCUSABLE：浮窗不抢宿主 Activity 输入焦点 / IME 焦点，化小窗后对话框仍可正常输入与操作
+     *   （满足「手动化小窗后再在对话框操作」）；WebView 滚动/点击等触控仍正常响应，仅失去浏览器内输入焦点
+     *   （需在浏览器地址栏/表单输入时，点「还原」转全屏即可）。
+     * - FLAG_NOT_TOUCH_MODAL：浮窗小窗 box 之外的透明区域点击穿透到下方 Activity，对话/其它 App 照常可点。
+     * - 保留全屏尺寸：使 NOT_TOUCH_MODAL 的穿透覆盖整屏（小窗 box 之外全部透传给下方）。
+     */
+    private fun browserFloatParams(): WindowManager.LayoutParams {
+        val dm = appCtx?.resources?.displayMetrics
+        val w = dm?.widthPixels ?: 1080
+        val h = dm?.heightPixels ?: 1920
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+        return WindowManager.LayoutParams(
+            w,
+            h,
+            type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply {
