@@ -29,11 +29,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +43,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -87,6 +91,8 @@ object QuroMiniWindowManager {
     var onNewConversation: (() -> Unit)? = null
     var onRestoreBrowser: ((String) -> Unit)? = null
     var onCloseBrowser: (() -> Unit)? = null
+    /** 对话小窗内输入框发送：Activity 回填为 vm.send（完整对话框缩小版，可直接发消息）。 */
+    var onSendMessage: ((String) -> Unit)? = null
 
     // ───────────────────────── 权限 ─────────────────────────
 
@@ -236,6 +242,7 @@ object QuroMiniWindowManager {
     @Composable
     private fun ChatMiniContent() {
         val lines by chatLinesState
+        var inputText by remember { mutableStateOf(TextFieldValue("")) }
         Column(Modifier.fillMaxSize()) {
             LazyColumn(
                 Modifier.fillMaxWidth().weight(1f).padding(8.dp),
@@ -252,8 +259,33 @@ object QuroMiniWindowManager {
                     )
                 }
             }
+            // 输入框：完整对话框缩小版，可直接在此输入并发送消息
             Row(
-                Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(6.dp),
+                Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    placeholder = { Text("输入消息…", fontSize = 11.sp) },
+                    textStyle = TextStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface),
+                )
+                TextButton(onClick = {
+                    val t = inputText.text.trim()
+                    if (t.isNotEmpty()) {
+                        onSendMessage?.invoke(t)
+                        inputText = TextFieldValue("")
+                    }
+                }) {
+                    Text("发送")
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(onClick = { onNewConversation?.invoke() }) {
@@ -279,8 +311,10 @@ object QuroMiniWindowManager {
                         domStorageEnabled = true
                         databaseEnabled = true
                         loadsImagesAutomatically = true
-                        loadWithOverviewMode = true
-                        useWideViewPort = true
+                        // 化小窗需随窗口自由缩放：禁用 wide viewport / overview 缩放，
+                        // 让视口宽度 = WebView 实际宽度，页面随窗口尺寸 reflow（而非锁定固定比例）。
+                        loadWithOverviewMode = false
+                        useWideViewPort = false
                         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                         allowFileAccess = true
                         javaScriptCanOpenWindowsAutomatically = true
