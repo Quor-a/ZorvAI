@@ -152,6 +152,7 @@ private fun rememberPaneState(
             // 终端架构统一：UI 可见终端直接复用管理器持有的默认共享会话（defaultSession），
             // 与 AI 工具(terminal_write/terminal_exec) / CMS 共用同一会话，AI 的自动化即出现在用户眼前。
             // installIfMissing=false 与原来一致：env 未就绪先回退设备 sh，待 Ready 后由下方升级 effect 重建为 proot。
+            // 不保留旧的独立会话路径：严格走 defaultSession（用户要求）。
             session.value = QuroTerminalSessionManager.ensureDefault(context, installIfMissing = false)
             // 自动修复：若回退到设备 shell（proot 启动失败 / 环境损坏 / rootfs 缺失），
             // 后台重装 Linux 环境，待 Ready 后由屏幕级 LaunchedEffect 自动重建为 proot/Linux 会话，
