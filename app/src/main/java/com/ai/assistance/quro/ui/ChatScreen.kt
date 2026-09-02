@@ -1207,11 +1207,7 @@ fun ChatScreen(
                         onModel = { sheet = SheetType.Model },
                         onSettings = { sheet = SheetType.Settings },
                         onToolCenter = { showToolCenter = true },
-                        onMinimize = {
-                            chatMinimized = true
-                            // 系统级浮窗：把 App 切到后台，让对话小窗浮于桌面/其他 App 之上
-                            if (useSystemOverlay) (ctx as? android.app.Activity)?.moveTaskToBack(true)
-                        },
+                        onMinimize = { chatMinimized = true },
                         persona = selectedPersona,
                         onPick = { sheet = SheetType.Persona },
                         scaled = { scaled(it) }
@@ -2110,8 +2106,6 @@ fun ChatScreen(
                         // 系统级浮窗下保留主浏览器（不销毁 WebView）：返回全屏仅移除浮层，
                         // 主浏览器已加载无需整页重载，避免卡顿；仅应用内降级浮层才销毁主浏览器。
                         if (!useSystemOverlay) browserUrl = null
-                        // 系统级浮窗：把 App 切到后台，让小窗真正浮于桌面/其他 App 之上
-                        if (useSystemOverlay) (ctx as? android.app.Activity)?.moveTaskToBack(true)
                     },
                     onOpenInSystem = { sysUrl ->
                         runCatching {
