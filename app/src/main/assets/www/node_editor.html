@@ -236,6 +236,11 @@
     try {
       var o = JSON.parse(s);
       nodes = o.nodes || []; edges = o.edges || [];
+      // 容错：AI 写入的快照可能缺 x/y，或把数字写成字符串（LLM JSON 偶发），统一转数值，避免节点错位/连线坐标 NaN
+      nodes.forEach(function (n) {
+        n.x = (typeof n.x === 'number' && !isNaN(n.x)) ? n.x : (parseFloat(n.x) || 0);
+        n.y = (typeof n.y === 'number' && !isNaN(n.y)) ? n.y : (parseFloat(n.y) || 0);
+      });
       // 让 seq 超过现有最大编号：AI 写入的工程可能不含 seq（文档约定只含 nodes/edges），
       // 若直接按 o.seq||1 重置，新增节点会拿到已存在的 id（如 n1）造成画布重复/错乱。
       var maxSeq = 0;
