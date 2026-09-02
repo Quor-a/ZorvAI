@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.tools
 
 import android.content.Context
+import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -229,6 +230,20 @@ class MiniAppStudioTool : QuroTool {
         result = jsRegex.replace(result) { m ->
             val f = File(dir, m.groupValues[1])
             if (f.exists()) "<script>\n${f.readText(StandardCharsets.UTF_8)}\n</script>" else m.value
+        }
+        // 内联同目录图片为 data URI：对话框预览（无 app:// 拦截）才能和面板内渲染一致
+        val imgRegex = Regex("""<img\s+[^>]*src=["']([^"']+\.(?:png|jpe?g|webp|gif|svg))["']""", RegexOption.IGNORE_CASE)
+        result = imgRegex.replace(result) { m ->
+            val f = File(dir, m.groupValues[1])
+            if (f.exists()) {
+                val mime = when (f.extension.lowercase()) {
+                    "png" -> "image/png"; "jpg", "jpeg" -> "image/jpeg"
+                    "webp" -> "image/webp"; "gif" -> "image/gif"; "svg" -> "image/svg+xml"
+                    else -> "application/octet-stream"
+                }
+                val b64 = Base64.encodeToString(f.readBytes(), Base64.NO_WRAP)
+                m.value.replace(m.groupValues[1], "data:$mime;base64,$b64")
+            } else m.value
         }
         return result
     }
