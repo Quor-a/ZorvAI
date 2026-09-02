@@ -17,7 +17,14 @@
     root = root || document;
     var nodes = root.querySelectorAll('[data-bind="' + key + '"]');
     for (var i = 0; i < nodes.length; i++) {
-      nodes[i].textContent = instance.data[key];
+      var val = instance.data[key];
+      // 值含 HTML 标签时用 innerHTML 渲染（富文本 / 标签页切换内容），否则用 textContent（纯文本，安全）。
+      // 这样 data-bind 既能绑普通文本，也能绑带样式的 HTML 片段（小程序常见用法）。
+      if (typeof val === 'string' && /<[a-z!]/i.test(val)) {
+        nodes[i].innerHTML = val;
+      } else {
+        nodes[i].textContent = (val == null ? '' : val);
+      }
     }
   }
 

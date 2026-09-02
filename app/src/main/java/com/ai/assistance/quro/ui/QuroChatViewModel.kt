@@ -2135,13 +2135,13 @@ $recent
             "  · **组合拳（全栈�?**：例如「抓数据(python) �? 算指�?(python) �? 画看�?(html 工件)」整条链路你一个人完成，全部在对话框里呈现；或「写 Three.js 三维场景(html) �? 对话框里实时旋转预览」。\n" +
             "  **工作流口诀**：要「算 / �? / 分析」→ `run_code(python)`；要「画网页 / 图表 / 游戏 / 三维」→ 返回 `html` 工件（或 ```html 围栏，二者等效）；要「画流程�? / 架构图」→ mermaid。可视化产出全部融入对话框内容区。\n" +
             "  注意：你跑出来的网页/图表�?**给你向用户展示的成果**，优先用 html 工件�? ```html 围栏让它真正渲染出来，而不是只回一段源码文字。\n" +
-            "  · **小程序开发（MiniApp，重要）**：你（AI）可以生�?**小程序代�?**并在对话框中实时渲染。小程序支持完整�? Page/Component 生命周期、数据绑定（data-bind）、事件绑定（data-action）。使�? `ui_control(action=\"widget\", type=\"miniapp\")` 下发 miniapp 组件，把小程序代码写�? `html` 字段。示例：\n" +
+            "  · **小程序开发（MiniApp，重要）**：你（AI）可以生成**小程序代码**并在对话框中实时渲染成可交互页面。小程序支持完整 Page/Component 生命周期、数据绑定（data-bind）、事件绑定（data-action）。**正确下发方法（必须是这个）**：调用 `ui_control(action=\"widget\", type=\"miniapp\", value=\"<完整 HTML 源码>\")`，把小程序 HTML 代码**直接放进 `value` 字段**（不要包 JSON、不要当普通文本、不要写进 `html` 子字段）。示例：\n" +
             "    ```json\n" +
-            "    {\"type\": \"miniapp\", \"title\": \"计数器\", \"html\": \"<div data-bind='count'>0</div><button data-action='increment'>+1</button><script>Page({data:{count:0},increment(){this.setData({count:this.data.count+1})}})</script>\"}\n" +
+            "    ui_control({ \"action\": \"widget\", \"type\": \"miniapp\", \"title\": \"Zorv AI 个人主页\", \"value\": \"<div data-bind='count'>0</div><button data-action='increment'>+1</button><script>Page({data:{count:0},increment(){this.setData({count:this.data.count+1})}})</script>\" })\n" +
             "    ```\n" +
-            "  **硬性规则（最重要）**：生成小程序时**严禁只把代码作为纯文本或普通代码块发出**——用户会看到一坨源码、看不到可交互页面。必须二选一渲染：①调用 `ui_control(action=\"widget\", type=\"miniapp\")` 下发组件；或 ②把小程序源码包进 **` ```miniapp ` 围栏代码块**（与 mermaid 围栏同理，对话框会自动用 bridge.js 运行时渲染成真小程序）。两种等价。\n" +
-            "  补充：除 `ui_control` 的 miniapp 组件外，**直接写 ` ```miniapp ` 围栏代码块也会被对话框渲染成小程序**（等价）；而且用户自己也能用 ` ```miniapp ` 围栏发小程序，对话框同样会渲染——小程序能力对人 / AI 都开放。\n" +
-            "  识别要点：小程序源码必含 bridge 运行时入口 `Page({...})` 与数据/事件绑定（`data-bind` / `data-action` / `setData`）；凡是带这些标记的小程序 HTML，一律走 miniapp 渲染，不要当普通 ` ```html ` 代码块处理。\n" +
+            "  **硬性规则（最重要）**：生成小程序时**严禁只把代码作为纯文本或普通代码块发出**——用户会看到一坨源码、看不到可交互页面。必须用以下两种之一渲染：①**首选** `ui_control(action=\"widget\", type=\"miniapp\", value=\"<html>\")`（`value` 直接放 HTML 源码，客户端用 bridge.js 运行时渲染成真小程序）；或 ②把小程序源码包进 **` ```miniapp ` 围栏代码块**（与 mermaid 围栏同理自动渲染）。两种等价。\n" +
+            "  补充：除 `ui_control` 的 miniapp 组件外，**直接写 ` ```miniapp ` 围栏代码块也会被对话框渲染成小程序**（等价）；用户自己也能用 ` ```miniapp ` 围栏发小程序。小程序能力对人 / AI 都开放。\n" +
+            "  识别要点：小程序 HTML 必含 bridge 运行时入口 `Page({...})` 与数据/事件绑定（`data-bind` / `data-action` / `setData`）；凡带这些标记的 HTML 一律走 miniapp 渲染，不要当普通 ` ```html ` 代码块处理。\n" +
             "  · **广义 IDE 集成**：当用户提到图形/视频/音频/3D/游戏/低代码等创作需求时，使�? `creative_studio` 工具获取完整的广�? IDE 知识库和调用能力。该工具可以：列出所有广�? IDE 分类、推荐适合用户需求的工具、启动已安装的创作工具、生成可直接在对话框渲染�? HTML/CSS/JS 内容。\n"
         )
         sb.append(
