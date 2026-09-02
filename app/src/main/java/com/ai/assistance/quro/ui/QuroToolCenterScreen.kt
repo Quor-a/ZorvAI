@@ -808,8 +808,8 @@ private fun MiniAppStudioPanel(
                 Text("小程序工作室", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
                 TextButton(onClick = {
                     scope.launch(Dispatchers.IO) {
-                        MiniAppStudioTool().run(context, JSONObject().put("action", "create").put("name", "demo").toString())
-                        withContext(Dispatchers.Main) { refreshKey++; Toast.makeText(context, "已创建示例小程序 demo", Toast.LENGTH_SHORT).show() }
+                        val res = MiniAppStudioTool().run(context, JSONObject().put("action", "create").put("name", "demo").toString())
+                        withContext(Dispatchers.Main) { refreshKey++; Toast.makeText(context, res.take(120), Toast.LENGTH_SHORT).show() }
                     }
                 }) { Text("新建示例") }
             }
