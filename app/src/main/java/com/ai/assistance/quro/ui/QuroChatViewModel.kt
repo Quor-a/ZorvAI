@@ -2139,6 +2139,9 @@ $recent
             "    ```json\n" +
             "    {\"type\": \"miniapp\", \"title\": \"计数器\", \"html\": \"<div data-bind='count'>0</div><button data-action='increment'>+1</button><script>Page({data:{count:0},increment(){this.setData({count:this.data.count+1})}})</script>\"}\n" +
             "    ```\n" +
+            "  **硬性规则（最重要）**：生成小程序时**严禁只把代码作为纯文本或普通代码块发出**——用户会看到一坨源码、看不到可交互页面。必须二选一渲染：①调用 `ui_control(action=\"widget\", type=\"miniapp\")` 下发组件；或 ②把小程序源码包进 **` ```miniapp ` 围栏代码块**（与 mermaid 围栏同理，对话框会自动用 bridge.js 运行时渲染成真小程序）。两种等价。\n" +
+            "  补充：除 `ui_control` 的 miniapp 组件外，**直接写 ` ```miniapp ` 围栏代码块也会被对话框渲染成小程序**（等价）；而且用户自己也能用 ` ```miniapp ` 围栏发小程序，对话框同样会渲染——小程序能力对人 / AI 都开放。\n" +
+            "  识别要点：小程序源码必含 bridge 运行时入口 `Page({...})` 与数据/事件绑定（`data-bind` / `data-action` / `setData`）；凡是带这些标记的小程序 HTML，一律走 miniapp 渲染，不要当普通 ` ```html ` 代码块处理。\n" +
             "  · **广义 IDE 集成**：当用户提到图形/视频/音频/3D/游戏/低代码等创作需求时，使�? `creative_studio` 工具获取完整的广�? IDE 知识库和调用能力。该工具可以：列出所有广�? IDE 分类、推荐适合用户需求的工具、启动已安装的创作工具、生成可直接在对话框渲染�? HTML/CSS/JS 内容。\n"
         )
         sb.append(

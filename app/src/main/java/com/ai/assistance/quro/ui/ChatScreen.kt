@@ -2967,6 +2967,15 @@ private fun MessageRow(
                                 is MsgBlock.Rule -> HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 4.dp))
                                 is MsgBlock.Table -> RenderTable(blk.header, blk.rows, scaled, textColor, onOpenLink)
                                 is MsgBlock.Code -> CodeBlock(lang = blk.lang, code = blk.code, scaled = scaled, onSend = onSend)
+                                is MsgBlock.MiniApp -> QuroChatCardView(
+                                    QuroChatCard.MiniAppCard(
+                                        id = "mini_" + blk.html.hashCode().toString(36).replace("-", "m"),
+                                        title = "小程序（AI 生成）",
+                                        html = blk.html,
+                                        config = emptyMap(),
+                                    ),
+                                    onCommand = onCommand
+                                )
                                 is MsgBlock.Mermaid -> QuroChatCardView(
                                     QuroChatCard.MermaidCard(
                                         id = "mmd_" + blk.source.hashCode().toString(36).replace("-", "m"),
@@ -5863,6 +5872,8 @@ private sealed class MsgBlock {
     data class Text(val text: String) : MsgBlock()
     data class Code(val lang: String, val code: String) : MsgBlock()
     data class Mermaid(val source: String) : MsgBlock()
+    /** 小程序（MiniApp）：```miniapp 围栏或含 bridge 运行时的 HTML，渲染为可交互小程序页面（WebView 运行时）。 */
+    data class MiniApp(val html: String) : MsgBlock()
     /** 动态 UI：```quro-ui 围栏，渲染为原生可交互控件（非 WebView）。 */
     data class DynamicUi(val source: String) : MsgBlock()
     data class Heading(val level: Int, val text: String) : MsgBlock()
@@ -6061,11 +6072,21 @@ private fun parseBlocks(text: String): List<MsgBlock> {
             if (lang.equals("mermaid", true) || lang.equals("mmd", true)) {
                 // 可视化编程：原始 mermaid / mmd 围栏直接渲染成离线矢量图（AI 或用户均可作者）
                 MsgBlock.Mermaid(m.groupValues[2].removeSuffix("\n"))
+            } else if (lang.equals("miniapp", true) || lang.equals("mini", true)) {
+                // 小程序：```miniapp 围栏直接渲染为可交互小程序页面（bridge.js 运行时）
+                MsgBlock.MiniApp(m.groupValues[2].removeSuffix("\n"))
             } else if (isDynamicUiLang(lang)) {
                 // 动态 UI：AI 写的 UI DSL 渲染为原生可交互控件（可回传表单值给模型）
                 MsgBlock.DynamicUi(m.groupValues[2].removeSuffix("\n"))
             } else {
-                MsgBlock.Code(lang, m.groupValues[2].removeSuffix("\n"))
+                val code = m.groupValues[2].removeSuffix("\n")
+                if (isMiniAppHtml(lang, code)) {
+                    // 兜底：AI 把小程序 HTML 写成 ```html 围栏却带了 bridge 运行时标记，
+                    // 也按小程序渲染，避免用户只看到源码、看不到可交互页面（诉求⑤）
+                    MsgBlock.MiniApp(code)
+                } else {
+                    MsgBlock.Code(lang, code)
+                }
             }
         )
         last = m.range.last + 1
@@ -6087,6 +6108,22 @@ private fun isDynamicUiLang(lang: String): Boolean {
 }
 
 /**
+ * 判断一段「HTML 围栏代码」是否为小程序（MiniApp）源码、应走小程序渲染而非纯代码块。
+ * 触发条件（同时满足，避免误伤普通网页）：
+ *  - 语言是 html/htm/markup（或为空，即 ``` 裸围栏里是 HTML）；
+ *  - 内容含 bridge 运行时入口 `Page(` 且至少带一个 MiniApp 绑定标记（data-bind / data-action / setData）。
+ * `data-bind` / `data-action` / `setData` 是 assets/bridge/bridge.js 小程序运行时专属语法，普通网页几乎不会同时出现。
+ */
+private fun isMiniAppHtml(lang: String, code: String): Boolean {
+    val l = lang.trim().lowercase()
+    val htmlish = l == "html" || l == "htm" || l == "markup" || l.isBlank()
+    if (!htmlish) return false
+    val hasRuntime = code.contains("Page(")
+    val hasBinding = code.contains("data-bind") || code.contains("data-action") || code.contains("setData")
+    return hasRuntime && hasBinding
+}
+
+/**
  * 处理围栏之间的尾段：若含「未闭合的开围栏」（流式生成中常见），
  * 把开围栏之后的内容直接当代码块渲染（带边框），实现「边写边出框」；
  * 否则走原 HTML 片段嗅探 / Markdown 解析。
@@ -6103,6 +6140,9 @@ private fun parseTail(seg: String): List<MsgBlock> {
             if (before.isNotBlank()) out.addAll(parseSegments(before))
             if (lang.equals("mermaid", true) || lang.equals("mmd", true)) {
                 out.add(MsgBlock.Mermaid(after))
+            } else if (lang.equals("miniapp", true) || lang.equals("mini", true)) {
+                // 流式输出中 miniapp 围栏还没闭合时，也实时渲染（边写边出小程序）
+                out.add(MsgBlock.MiniApp(after))
             } else if (isDynamicUiLang(lang)) {
                 // 流式输出中 quro-ui 围栏还没闭合时，也实时渲染（边写边出界面）
                 out.add(MsgBlock.DynamicUi(after))
