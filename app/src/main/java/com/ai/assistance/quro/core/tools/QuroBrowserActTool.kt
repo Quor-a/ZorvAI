@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import com.ai.assistance.quro.core.QuroBrowserBridge
+import com.ai.assistance.quro.service.QuroMiniWindowManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -53,11 +54,14 @@ class BrowserActTool : QuroTool {
             "open" -> {
                 val url = jo.optString("url", "").trim()
                 if (url.isEmpty()) return@runBlocking "open 缺少 url"
+                val resolved = QuroBrowserController.resolveBrowserInput(url)
                 if (QuroBrowserController.isAttached()) {
                     QuroBrowserController.navigate(url)
-                    "已在当前浏览器打开：${QuroBrowserController.resolveBrowserInput(url)}（关键词已转搜索）；操作前请先 status 确认 loaded，或 snapshot 拿元素。"
+                    QuroMiniWindowManager.showBrowserFromAi(context, resolved)
+                    "已在当前浏览器打开：$resolved（关键词已转搜索）；操作前请先 status 确认 loaded，或 snapshot 拿元素。"
                 } else {
                     QuroBrowserBridge.open(url)
+                    QuroMiniWindowManager.showBrowserFromAi(context, resolved)
                     // 桥接为异步：LaunchedEffect 下一帧才挂载 WebView 并 attach。
                     // 轮询等待真正 attach（最多 ~4s），确保后续 status/snapshot 拿到真实 WebView，
                     // 避免「刚 open 就 status 误报无活跃浏览器」的竞态（这是此前 AI 用不上的直接表现）。

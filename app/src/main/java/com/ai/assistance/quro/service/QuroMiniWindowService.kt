@@ -17,6 +17,8 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.os.Handler
+import android.os.Looper
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -466,14 +468,49 @@ object QuroMiniWindowManager {
         }
     }
 
-    /** 系统级浮窗还原/关闭时把 App 带回前台（moveTaskToFront），使「返回全屏」平滑、浮层即时移除。 */
+    /** 系统级浮窗还原/关闭时把 App 带回前台（moveTaskToFront），使「返回全屏」平滑、浮层即时移除。
+     *  仅当 App 确实不在前台时才 startActivity：系统级浮窗本就浮在宿主 Activity 之上、App 一直前台，
+     *  此时强制 startActivity 会触发 Activity 重排/重启，导致「返回全屏」卡顿，故直接跳过。 */
     fun bringAppToForeground() {
         val c = appCtx ?: return
+        if (isAppForeground()) return
         kotlin.runCatching {
             val intent = Intent(c, QuroMainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             c.startActivity(intent)
+        }
+    }
+
+    /** App 是否处于前台（进程 importance = FOREGROUND）。系统级浮窗显示时宿主 Activity 仍前台，故视为前台。 */
+    private fun isAppForeground(): Boolean {
+        val c = appCtx ?: return false
+        return kotlin.runCatching {
+            @Suppress("DEPRECATION")
+            val am = c.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val pkg = c.packageName
+            for (proc in am.runningAppProcesses ?: emptyList()) {
+                if (proc.processName == pkg &&
+                    proc.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+                ) {
+                    return@runCatching true
+                }
+            }
+            false
+        }.getOrDefault(false)
+    }
+
+    /** AI 操控浏览器时主动把浏览器浮为系统级小窗：让用户在任意界面都能看到浏览器被 AI 驱动。
+     *  无 SYSTEM_ALERT_WINDOW 权限时静默跳过（降级为原全屏浏览器）。WindowManager.addView 必须在主线程执行。 */
+    fun showBrowserFromAi(context: Context, url: String) {
+        val ctx = context.applicationContext
+        ensureCtx(ctx)
+        if (!hasOverlayPermission(ctx)) return
+        ensureService(ctx)
+        val scheme = colorScheme
+        val u = url
+        Handler(Looper.getMainLooper()).post {
+            kotlin.runCatching { showBrowser(appCtx ?: ctx, u, scheme) }
         }
     }
 
