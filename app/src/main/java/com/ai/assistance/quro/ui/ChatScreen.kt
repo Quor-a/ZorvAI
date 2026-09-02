@@ -2304,10 +2304,13 @@ fun ChatScreen(
         }
     }
 
-    // 监听来自 open_web 工具的内置浏览器打开请求
+    // 监听来自 open_web 工具/链接的内置浏览器打开请求：
+    // 默认化小窗（符合移动端——默认小窗、手动全屏）。与全屏形态互斥——开小窗即清全屏，
+    // 杜绝「全屏 + 小窗共同出现」；AI 多次打开浏览器也只更新同一小窗（见 QuroMiniWindowManager.showBrowser）。
     LaunchedEffect(Unit) {
         for (u in QuroBrowserBridge.requests) {
-            browserUrl = u
+            browserUrl = null
+            browserFloatUrl = u
         }
     }
 }
