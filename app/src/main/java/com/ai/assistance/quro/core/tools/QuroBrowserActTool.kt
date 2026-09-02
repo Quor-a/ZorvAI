@@ -3,6 +3,7 @@ package com.ai.assistance.quro.core.tools
 import android.content.Context
 import com.ai.assistance.quro.core.QuroBrowserBridge
 import com.ai.assistance.quro.service.QuroMiniWindowManager
+import com.ai.assistance.quro.util.QuroDiag
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -30,7 +31,7 @@ class BrowserActTool : QuroTool {
     override val parametersJson = """{
         "type":"object",
         "properties":{
-            "action":{"type":"string","description":"open/status/snapshot/click/fill/click_selector/fill_selector/read/html/text/links/eval/wait/scroll/find/back/forward/reload/stop/screenshot/capture/capture_clear"},
+            "action":{"type":"string","description":"open/status/snapshot/click/fill/click_selector/fill_selector/read/html/text/links/eval/wait/scroll/find/back/forward/reload/stop/screenshot/capture/capture_clear/diag"},
             "url":{"type":"string","description":"open 时的网址或关键词（关键词自动搜索）"},
             "id":{"type":"string","description":"click/fill 时的稳定 quro-id（snapshot 返回）"},
             "value":{"type":"string","description":"fill 时写入的文本"},
@@ -49,6 +50,14 @@ class BrowserActTool : QuroTool {
     override fun run(context: Context, arguments: String): String = runBlocking {
         val jo = JSONObject(arguments)
         val action = jo.optString("action", "").trim().lowercase()
+        // 诊断：每次 AI 调用都落盘到 Download/QuroAI_logs/quro_diag_<date>.log（用户无需 adb 即可取）。
+        // 记录线程名可直观验证「是否在工作线程调用」——历史痛点就是工作线程碰 WebView 崩溃。
+        QuroDiag.log(
+            "BrowserAct",
+            "run action=$action thread=${Thread.currentThread().name} " +
+                "attached=${QuroBrowserController.isAttached()} loaded=${QuroBrowserController.isPageLoaded()} " +
+                "url=${(QuroBrowserController.currentUrl() ?: "").take(120)}"
+        )
         if (action.isEmpty()) return@runBlocking "缺少 action"
         when (action) {
             "open" -> {
@@ -70,6 +79,7 @@ class BrowserActTool : QuroTool {
                         if (QuroBrowserController.isAttached()) { attached = true; return@repeat }
                         delay(150)
                     }
+                    QuroDiag.log("BrowserAct", "open: $url -> attachedAfterOpen=$attached resolved=$resolved")
                     "已打开应用内置浏览器（前台）：$url" + if (attached) {
                         "；操作前请先 status 确认 loaded=true，或 snapshot 拿元素 quro-id。"
                     } else {
@@ -197,7 +207,12 @@ class BrowserActTool : QuroTool {
                 QuroBrowserController.clearCapture()
                 "已清空抓包缓冲"
             }
-            else -> "未知 action: $action（支持 open/status/snapshot/click/fill/click_selector/fill_selector/read/html/text/links/eval/wait/scroll/find/back/forward/reload/stop/screenshot/capture/capture_clear）"
+            "diag" -> {
+                val st = QuroBrowserController.status()
+                QuroDiag.log("BrowserAct", "diag 当前状态:\n$st")
+                "browser_act 诊断：每次调用都写入「Download/QuroAI_logs/quro_diag_<今天日期>.log」（手机文件管理器直接打开，无需 adb）。\n当前状态：\n$st"
+            }
+            else -> "未知 action: $action（支持 open/status/snapshot/click/fill/click_selector/fill_selector/read/html/text/links/eval/wait/scroll/find/back/forward/reload/stop/screenshot/capture/capture_clear/diag）"
         }
     }
 }

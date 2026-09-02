@@ -10,6 +10,7 @@ import android.os.Looper
 import android.view.PixelCopy
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import com.ai.assistance.quro.util.QuroDiag
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -261,9 +262,17 @@ object QuroBrowserController {
      * Content-Security-Policy 禁止 unsafe-eval 的页面（否则这些页面上脚本永远执行失败、被 AI 误判未加载）。
      */
     suspend fun eval(js: String, timeoutMs: Long = 8000): String? {
-        val wv = active ?: return null
-        return withTimeoutOrNull(timeoutMs) {
-            val token = nextToken++
+        val wv = active ?: run {
+            // 历史痛点：active==null 时所有 snapshot/click/fill/eval 都返回「无活跃浏览器」，
+            // AI 据此误判页面没加载。落盘诊断便于真机定位是「真的没 open」还是「挂载竞态」。
+            QuroDiag.log(
+                "BrowserAct",
+                "eval: active==null（无活跃 WebView），调用方将得到「无活跃浏览器」。js=${js.take(90)}"
+            )
+            return null
+        }
+        val token = nextToken++
+        val res = withTimeoutOrNull(timeoutMs) {
             val cd = CompletableDeferred<String>()
             pending[token] = cd
             try {
@@ -279,6 +288,14 @@ object QuroBrowserController {
                 pending.remove(token)
             }
         }
+        if (res == null) {
+            // 超时：桥未在限时内回调（多为页面卡死或 JS 阻塞）。真机诊断关键信号。
+            QuroDiag.log(
+                "BrowserAct",
+                "eval: TIMEOUT ${timeoutMs}ms token=$token（JS 桥未在限时内回调 onEvalResult；页面可能卡死/JS 阻塞）。js=${js.take(90)}"
+            )
+        }
+        return res
     }
 
     /** 导航到 URL；返回是否成功。关键词会被 [resolveBrowserInput] 转成搜索链接。 */
