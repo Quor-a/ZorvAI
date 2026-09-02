@@ -57,6 +57,10 @@ fun FloatingMiniWindow(
     titleBarColor: Color? = null,
     onRestore: () -> Unit,
     onClose: () -> Unit,
+    /** 系统级浮窗拖拽：宿主接管移动整个窗口（传入后不再用内部 offset）。 */
+    onDrag: ((dxPx: Float, dyPx: Float) -> Unit)? = null,
+    /** 系统级浮窗缩放：面板尺寸变化后通知宿主重新测量窗口。 */
+    onResize: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val density = LocalDensity.current
@@ -89,10 +93,16 @@ fun FloatingMiniWindow(
                     .pointerInput(Unit) {
                         detectDragGestures { change, dragAmount ->
                             change.consume()
-                            val dx = with(density) { dragAmount.x.toDp() }
-                            val dy = with(density) { dragAmount.y.toDp() }
-                            offsetX = (offsetX + dx).coerceAtLeast(0.dp)
-                            offsetY = (offsetY + dy).coerceAtLeast(0.dp)
+                            if (onDrag != null) {
+                                // 系统级浮窗：拖拽移动整个窗口（由宿主 updateViewLayout）。
+                                onDrag(dragAmount.x, dragAmount.y)
+                            } else {
+                                // 应用内浮层：面板内部偏移（父容器即满屏 Box）。
+                                val dx = with(density) { dragAmount.x.toDp() }
+                                val dy = with(density) { dragAmount.y.toDp() }
+                                offsetX = (offsetX + dx).coerceAtLeast(0.dp)
+                                offsetY = (offsetY + dy).coerceAtLeast(0.dp)
+                            }
                         }
                     },
                 verticalAlignment = Alignment.CenterVertically,
@@ -141,6 +151,7 @@ fun FloatingMiniWindow(
                         val dy = with(density) { dragAmount.y.toDp() }
                         width = (width + dx).coerceAtLeast(minWidth)
                         height = (height + dy).coerceAtLeast(minHeight)
+                        onResize?.invoke()
                     }
                 },
         )
