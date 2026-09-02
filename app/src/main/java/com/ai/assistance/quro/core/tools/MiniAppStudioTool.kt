@@ -264,6 +264,8 @@ button{margin-top:16px;background:#fff;color:#5a6fd6;border:none;padding:12px 20
 <p data-bind="tip">这是用 MiniAppFramework 运行时渲染的小程序。</p>
 <button data-action="onTap">点我调用原生</button>
 <button data-action="onHash">算 SHA256（native.crypto）</button>
+<button data-action="onDbWrite">写DB（native.db）</button>
+<button data-action="onDbRead">读DB（native.db）</button>
 <script>
 Page({
   data: { title: "Hello MiniApp", tip: "这是用 MiniAppFramework 运行时渲染的小程序。" },
@@ -276,6 +278,20 @@ Page({
       native.kotlin.toast({ text: "sha256: " + h.slice(0, 16) + "…" });
     }).catch(function (e) {
       native.kotlin.toast({ text: "crypto 失败: " + (e && e.message ? e.message : e) });
+    });
+  },
+  onDbWrite: function () {
+    native.db.insert('app_data', { key: 'demo_' + Date.now(), value: 'hello' }).then(function (r) {
+      native.kotlin.toast({ text: "db.insertId=" + (r && r.insertId) });
+    }).catch(function (e) {
+      native.kotlin.toast({ text: "db 写失败: " + (e && e.message ? e.message : e) });
+    });
+  },
+  onDbRead: function () {
+    native.db.query("SELECT * FROM app_data ORDER BY id DESC LIMIT 5").then(function (rows) {
+      native.kotlin.toast({ text: "db 最新 " + (rows ? rows.length : 0) + " 条" });
+    }).catch(function (e) {
+      native.kotlin.toast({ text: "db 读失败: " + (e && e.message ? e.message : e) });
     });
   }
 });
