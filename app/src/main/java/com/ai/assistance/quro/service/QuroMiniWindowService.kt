@@ -19,8 +19,6 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
-import android.os.Handler
-import android.os.Looper
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -449,18 +447,13 @@ object QuroMiniWindowManager {
         }.getOrDefault(false)
     }
 
-    /** AI 操控浏览器时主动把浏览器浮为系统级小窗：让用户在任意界面都能看到浏览器被 AI 驱动。
-     *  无 SYSTEM_ALERT_WINDOW 权限时静默跳过（降级为原全屏浏览器）。WindowManager.addView 必须在主线程执行。 */
+    /** AI 操控浏览器时把浏览器展示给用户：改为在应用内全屏展示（复用同一共享 WebView，
+     *  browser_act 仍操控它），【不再浮为系统级小窗】——避免 WebView 跨 WindowManager 窗口重挂
+     *  导致化小窗/还原卡顿。无 SYSTEM_ALERT_WINDOW 权限也能正常展示。 */
     fun showBrowserFromAi(context: Context, url: String) {
-        val ctx = context.applicationContext
-        ensureCtx(ctx)
-        if (!hasOverlayPermission(ctx)) return
-        ensureService(ctx)
-        val scheme = colorScheme
-        val u = url
-        Handler(Looper.getMainLooper()).post {
-            kotlin.runCatching { showBrowser(appCtx ?: ctx, u, scheme) }
-        }
+        // 统一走应用内全屏浏览器（QuroBrowserBridge → ChatScreen 显示 QuroBrowserScreen），
+        // WebView 始终只在 Activity 容器，绝不跨窗口搬，化小窗/还原均零卡顿。
+        com.ai.assistance.quro.core.QuroBrowserBridge.open(url)
     }
 
     private fun fullScreenParams(): WindowManager.LayoutParams {
