@@ -41,6 +41,9 @@ import com.ai.assistance.quro.core.tools.QuroPrivateDbTool
 import com.ai.assistance.quro.core.tools.QuroSandboxTool
 import com.ai.assistance.quro.ui.icons.LucideIcon
 import com.ai.assistance.quro.ui.theme.Muted
+import com.ai.assistance.quro.core.miniapp.MiniAppEngine
+import com.ai.assistance.quro.core.miniapp.MiniAppBridgeInterface
+import com.ai.assistance.quro.core.tools.MiniAppStudioTool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -82,12 +85,13 @@ fun QuroToolCenterScreen(
                 }
             }
             Text(
-                text = if (selected == null) "工具中心" else when (selected) {
+                text = if (selected == null) "工具中心" else                 when (selected) {
                     "sandbox" -> "隔离沙箱"
                     "db" -> "私有数据库"
                     "workbench" -> "小程序工作台"
                     "vispro" -> "可视化编程"
                     "flow" -> "节点编辑器"
+                    "miniapp" -> "小程序工作室"
                     else -> "工具中心"
                 },
                 style = MaterialTheme.typography.titleLarge,
@@ -105,6 +109,7 @@ fun QuroToolCenterScreen(
             "workbench" -> WorkbenchPanel(context, onRenderInChat, onAskAi)
             "vispro" -> VisProPanel(context, onRenderInChat)
             "flow" -> NodeEditorPanel(context, onRenderInChat)
+            "miniapp" -> MiniAppStudioPanel(context, onRenderInChat)
             "pkgmgr" -> PackageManagerPanel(context)
         }
     }
@@ -115,6 +120,7 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
     val cs = MaterialTheme.colorScheme
     val cards = listOf(
         Triple("workbench", "小程序", "AI 生成并在对话框渲染的 HTML/JS 小程序"),
+        Triple("miniapp", "小程序工作室", "完整移植 MiniAppFramework：AI 写 app.json+页面，原生桥调用真·Android 能力"),
         Triple("toolbox", "工具箱", "文件管理 / 浏览器 / IDE"),
         Triple("pkgmgr", "包管理", "apt/apk/dnf/pacman 安装/卸载/升级/查询软件"),
         Triple("sandbox", "隔离沙箱", "免权限文件沙箱与 shell"),
@@ -407,6 +413,7 @@ private fun VisProPanel(
     val cs = MaterialTheme.colorScheme
     val isDark = isSystemInDarkTheme()
     var src by remember { mutableStateOf("") }
+    var projName by remember { mutableStateOf("") }
     var pageReady by remember { mutableStateOf(false) }
     var lastSvg by remember { mutableStateOf("") }
     var errMsg by remember { mutableStateOf("") }
@@ -418,10 +425,12 @@ private fun VisProPanel(
         wv.evaluateJavascript("window.__render(${JSONObject.quote(src)}, ${JSONObject.quote(theme)})", null)
     }
 
-    val visproDir = remember { File(context.filesDir, "vispro") }
+    // 「产物 + 可视化」模型：每个工程 = 一份 Mermaid 源码，存于 filesDir/studio/vispro/<name>.mmd
+    // 多工程并存、写入单一干净（AI 用 visual 工具写入的也在列表里）
+    val visproDir = remember { File(context.filesDir, "studio/vispro") }
     var refreshKey by remember { mutableStateOf(0) }
     val savedFiles = remember(refreshKey) {
-        visproDir.listFiles()?.filter { it.isFile }?.map { it.name }?.sorted() ?: emptyList()
+        visproDir.listFiles()?.filter { it.extension == "mmd" }?.map { it.nameWithoutExtension }?.sorted() ?: emptyList()
     }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -474,11 +483,13 @@ private fun VisProPanel(
                 onClick = {
                     if (src.isBlank()) {
                         Toast.makeText(context, "源码为空，无法保存", Toast.LENGTH_SHORT).show()
+                    } else if (projName.isBlank()) {
+                        Toast.makeText(context, "请先填写工程名", Toast.LENGTH_SHORT).show()
                     } else {
                         visproDir.mkdirs()
-                        val name = "mermaid_${System.currentTimeMillis()}.mmd"
-                        Toast.makeText(context, saveTextFile(context, name, src), Toast.LENGTH_SHORT).show()
+                        File(visproDir, "$projName.mmd").writeText(src, Charsets.UTF_8)
                         refreshKey++
+                        Toast.makeText(context, "已保存到工程「$projName」", Toast.LENGTH_SHORT).show()
                     }
                 },
             ) { Text("保存") }
@@ -498,20 +509,44 @@ private fun VisProPanel(
             ) { Text("复制源码") }
         }
 
+        // 工程名 + 载入（与 AI 的 visual 工具共享同一份命名工程）
+        Row(
+            Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = projName,
+                onValueChange = { projName = it },
+                label = { Text("工程名") },
+                singleLine = true,
+                modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                colors = TextFieldDefaults.colors(),
+            )
+            TextButton(onClick = {
+                val name = projName.ifBlank { "" }
+                if (name.isBlank()) { Toast.makeText(context, "请先填写工程名", Toast.LENGTH_SHORT).show(); return@TextButton }
+                val f = File(visproDir, "$name.mmd")
+                if (f.exists()) {
+                    src = f.readText(); doRender(wvRef.value)
+                    Toast.makeText(context, "已载入工程「$name」", Toast.LENGTH_SHORT).show()
+                } else Toast.makeText(context, "工程不存在：$name", Toast.LENGTH_SHORT).show()
+            }) { Text("载入") }
+        }
+
         TextField(
             value = src,
             onValueChange = { src = it; doRender(wvRef.value) },
-            placeholder = { Text("粘贴 Mermaid 源码查看 / 编辑（AI 生成的可从对话框复制）", color = Muted) },
+            placeholder = { Text("粘贴 Mermaid 源码查看 / 编辑（AI 可用 visual 工具直接写入命名工程）", color = Muted) },
             modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 200.dp),
             colors = TextFieldDefaults.colors(),
             singleLine = false,
             textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
         )
 
-        // 已保存的 Mermaid 文件列表（打开 / 删除）
+        // 已保存的命名工程列表（打开 / 删除）
         if (savedFiles.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Text("已保存（${savedFiles.size}）", style = MaterialTheme.typography.labelSmall, color = Muted)
+            Text("已保存工程（${savedFiles.size}）", style = MaterialTheme.typography.labelSmall, color = Muted)
             LazyColumn(
                 Modifier.fillMaxWidth().heightIn(max = 140.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -524,11 +559,11 @@ private fun VisProPanel(
                     ) {
                         Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
                         TextButton(onClick = {
-                            val f = File(visproDir, name)
-                            if (f.exists()) { src = f.readText(); doRender(wvRef.value) }
+                            val f = File(visproDir, "$name.mmd")
+                            if (f.exists()) { src = f.readText(); projName = name; doRender(wvRef.value) }
                         }) { Text("打开") }
                         TextButton(onClick = {
-                            if (File(visproDir, name).delete()) { refreshKey++ }
+                            if (File(visproDir, "$name.mmd").delete()) { refreshKey++ }
                         }) { Text("删除") }
                     }
                 }
@@ -578,6 +613,19 @@ private fun NodeEditorPanel(
 ) {
     val cs = MaterialTheme.colorScheme
     val wvRef = remember { mutableStateOf<WebView?>(null) }
+    val flowDir = remember { File(context.filesDir, "studio/flow") }
+    var flowName by remember { mutableStateOf("default") }
+    var flowRefresh by remember { mutableStateOf(0) }
+    val flowProjects = remember(flowRefresh) {
+        flowDir.listFiles()?.filter { it.extension == "qne" }?.map { it.nameWithoutExtension }?.sorted() ?: emptyList()
+    }
+
+    fun writeFlow(name: String, content: String): String {
+        flowDir.mkdirs()
+        val base = name.substringBeforeLast(".", name).ifBlank { name }.ifBlank { "default" }
+        val f = File(flowDir, "$base.qne")
+        return runCatching { f.writeText(content, Charsets.UTF_8); "已保存到工程「$base」" }.getOrElse { "保存失败：${it.message}" }
+    }
 
     val bridge = remember {
         object {
@@ -589,7 +637,10 @@ private fun NodeEditorPanel(
 
             @JavascriptInterface
             fun saveFile(name: String, content: String) {
-                Toast.makeText(context, saveTextFile(context, name, content), Toast.LENGTH_SHORT).show()
+                // 画布内「保存工程」也写入共享工作区，与 AI 的 node_editor 工具同一份文件
+                val msg = writeFlow(name, content)
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                flowRefresh++
             }
 
             @JavascriptInterface
@@ -615,7 +666,7 @@ private fun NodeEditorPanel(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "拖拽节点 / 端口连线 / 双击改名；底部可导出与预览 Mermaid",
+                "拖拽节点 / 端口连线 / 双击改名；AI 可直接用 node_editor 工具读写本工程",
                 style = MaterialTheme.typography.labelSmall, color = Muted, modifier = Modifier.weight(1f),
             )
             TextButton(onClick = { importLauncher.launch("application/json,text/plain") }) { Text("导入工程") }
@@ -623,11 +674,8 @@ private fun NodeEditorPanel(
                 onClick = {
                     wvRef.value?.evaluateJavascript("JSON.stringify([window.__snapshot()])") { r ->
                         val snap = decodeJsString(r)
-                        if (snap.isBlank()) {
-                            Toast.makeText(context, "画布为空，无可保存内容", Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(context, saveTextFile(context, "node_project_${System.currentTimeMillis()}.qne", snap), Toast.LENGTH_SHORT).show()
-                        }
+                        if (snap.isBlank()) Toast.makeText(context, "画布为空，无可保存内容", Toast.LENGTH_SHORT).show()
+                        else { val msg = writeFlow(flowName, snap); flowRefresh++; Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }
                     }
                 },
             ) { Text("保存工程") }
@@ -635,12 +683,8 @@ private fun NodeEditorPanel(
                 onClick = {
                     wvRef.value?.evaluateJavascript("JSON.stringify([window.__getMermaid()])") { r ->
                         val txt = decodeJsString(r)
-                        if (txt.isBlank()) {
-                            Toast.makeText(context, "画布为空，暂无可复制的 Mermaid", Toast.LENGTH_SHORT).show()
-                        } else {
-                            copyText(context, txt)
-                            Toast.makeText(context, "已复制 Mermaid 源码", Toast.LENGTH_SHORT).show()
-                        }
+                        if (txt.isBlank()) Toast.makeText(context, "画布为空，暂无可复制的 Mermaid", Toast.LENGTH_SHORT).show()
+                        else { copyText(context, txt); Toast.makeText(context, "已复制 Mermaid 源码", Toast.LENGTH_SHORT).show() }
                     }
                 },
             ) { Text("复制 Mermaid") }
@@ -648,21 +692,70 @@ private fun NodeEditorPanel(
                 onClick = {
                     wvRef.value?.evaluateJavascript("JSON.stringify([window.__getMermaid()])") { r ->
                         val txt = decodeJsString(r)
-                        if (txt.isBlank()) {
-                            Toast.makeText(context, "画布为空，暂无可渲染内容", Toast.LENGTH_SHORT).show()
-                        } else {
-                            onRenderInChat("mermaid", txt, "节点编辑器")
-                            Toast.makeText(context, "已发送到对话框渲染", Toast.LENGTH_SHORT).show()
-                        }
+                        if (txt.isBlank()) Toast.makeText(context, "画布为空，暂无可渲染内容", Toast.LENGTH_SHORT).show()
+                        else { onRenderInChat("mermaid", txt, "节点编辑器"); Toast.makeText(context, "已发送到对话框渲染", Toast.LENGTH_SHORT).show() }
                     }
                 },
             ) { Text("渲染到对话框") }
+        }
+        // 工程名 + 项目列表（多工程并存，AI 写入的也在列表里）
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = flowName,
+                onValueChange = { flowName = it },
+                label = { Text("工程名") },
+                singleLine = true,
+                modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                colors = TextFieldDefaults.colors(),
+            )
+            TextButton(onClick = {
+                val f = File(flowDir, "${flowName.ifBlank { "default" }}.qne")
+                if (f.exists()) {
+                    wvRef.value?.evaluateJavascript("window.__restore(${JSONObject.quote(f.readText(Charsets.UTF_8))})") {}
+                    Toast.makeText(context, "已载入工程「${flowName}」", Toast.LENGTH_SHORT).show()
+                } else Toast.makeText(context, "工程不存在：$flowName", Toast.LENGTH_SHORT).show()
+            }) { Text("载入") }
+        }
+        if (flowProjects.isNotEmpty()) {
+            LazyColumn(
+                Modifier.fillMaxWidth().heightIn(max = 96.dp).padding(horizontal = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                items(flowProjects) { name ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(cs.surfaceVariant).padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
+                        TextButton(onClick = {
+                            val f = File(flowDir, "$name.qne")
+                            wvRef.value?.evaluateJavascript("window.__restore(${JSONObject.quote(f.readText(Charsets.UTF_8))})") {}
+                            flowName = name
+                        }) { Text("打开") }
+                        TextButton(onClick = {
+                            if (File(flowDir, "$name.qne").delete()) { flowRefresh++; Toast.makeText(context, "已删除：$name", Toast.LENGTH_SHORT).show() }
+                        }) { Text("删除") }
+                    }
+                }
+            }
         }
         AndroidView(
             modifier = Modifier.fillMaxSize().weight(1f),
             factory = { ctx ->
                 WebView(ctx).apply {
-                    webViewClient = WebViewClient()
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
+                            // 打开即恢复默认工程（AI 写入的节点流在此可见，无需手动打开）
+                            val f = File(flowDir, "default.qne")
+                            if (f.exists()) {
+                                evaluateJavascript("window.__restore(${JSONObject.quote(f.readText(Charsets.UTF_8))})") {}
+                            }
+                        }
+                    }
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.loadWithOverviewMode = true
@@ -672,6 +765,95 @@ private fun NodeEditorPanel(
                 }.also { wvRef.value = it }
             },
         )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 小程序工作室：完整移植 MiniAppFramework，AI 用 miniapp 工具写入的工程在此渲染
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun MiniAppStudioPanel(
+    context: Context,
+    onRenderInChat: (type: String, value: String, label: String) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val root = remember { File(context.filesDir, "studio/miniapp") }
+    var refreshKey by remember { mutableStateOf(0) }
+    val projects = remember(refreshKey) {
+        root.listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
+    }
+    var current by remember { mutableStateOf<String?>(null) }
+    val wvRef = remember { mutableStateOf<WebView?>(null) }
+    val engineRef = remember { mutableStateOf<MiniAppEngine?>(null) }
+    val scope = rememberCoroutineScope()
+
+    Column(Modifier.fillMaxSize()) {
+        if (current == null) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("小程序工作室", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
+                TextButton(onClick = {
+                    scope.launch(Dispatchers.IO) {
+                        MiniAppStudioTool().run(context, JSONObject().put("action", "create").put("name", "demo").toString())
+                        withContext(Dispatchers.Main) { refreshKey++; Toast.makeText(context, "已创建示例小程序 demo", Toast.LENGTH_SHORT).show() }
+                    }
+                }) { Text("新建示例") }
+            }
+            Spacer(Modifier.height(8.dp))
+            if (projects.isEmpty()) {
+                Text("小程序工作台为空（filesDir/studio/miniapp 下还没有工程）。点「新建示例」，或让 AI 用 miniapp 工具创建并写入。", color = Muted, modifier = Modifier.padding(16.dp))
+            } else {
+                LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(projects) { name ->
+                        Card(
+                            Modifier.fillMaxWidth().clickable { current = name },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant),
+                        ) {
+                            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
+                                TextButton(onClick = { current = name }) { Text("打开") }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { current = null; engineRef.value = null }) { Text("← 返回列表") }
+                Text(current ?: "", Modifier.weight(1f).padding(12.dp), color = Muted)
+                TextButton(onClick = {
+                    scope.launch(Dispatchers.IO) {
+                        val html = MiniAppStudioTool().run(context, JSONObject().put("action", "run").put("name", current).toString())
+                        withContext(Dispatchers.Main) {
+                            if (html.startsWith("❌")) Toast.makeText(context, html, Toast.LENGTH_SHORT).show()
+                            else { onRenderInChat("miniapp", html, current ?: "小程序"); Toast.makeText(context, "已发送到对话框预览", Toast.LENGTH_SHORT).show() }
+                        }
+                    }
+                }) { Text("对话框预览") }
+                TextButton(onClick = {
+                    if (current != null && File(root, current!!).deleteRecursively()) { refreshKey++; current = null; Toast.makeText(context, "已删除工程", Toast.LENGTH_SHORT).show() }
+                }) { Text("删除") }
+            }
+            AndroidView(
+                modifier = Modifier.fillMaxSize().weight(1f),
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.allowFileAccess = true
+                        settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                        val bridge = MiniAppBridgeInterface(ctx, this)
+                        val engine = MiniAppEngine(this, bridge)
+                        engine.configure()
+                        engine.start(File(root, current ?: "demo"))
+                        engineRef.value = engine
+                        wvRef.value = this
+                    }
+                },
+            )
+        }
     }
 }
 
