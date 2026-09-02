@@ -149,7 +149,10 @@ private fun rememberPaneState(
             // 它在 env 未就绪时会触发 rootfs 下载（无超时、无网络/被墙时永久卡死），
             // 导致 session.value 永远赋不上 → 终端永久停在「正在启动终端…」。
             // env 未就绪改由下方 DEVICE 分支触发非阻塞 setup，安装完成由 sandboxState LaunchedEffect 自动重建为 proot。
-            session.value = if (vmFirst) QuroShellSession.create(context) else QuroShellSession.createLocal(context)
+            // 终端架构统一：UI 可见终端直接复用管理器持有的默认共享会话（defaultSession），
+            // 与 AI 工具(terminal_write/terminal_exec) / CMS 共用同一会话，AI 的自动化即出现在用户眼前。
+            // installIfMissing=false 与原来一致：env 未就绪先回退设备 sh，待 Ready 后由下方升级 effect 重建为 proot。
+            session.value = QuroTerminalSessionManager.ensureDefault(context, installIfMissing = false)
             // 自动修复：若回退到设备 shell（proot 启动失败 / 环境损坏 / rootfs 缺失），
             // 后台重装 Linux 环境，待 Ready 后由屏幕级 LaunchedEffect 自动重建为 proot/Linux 会话，
             // 用户无需手动点「安装」按钮。
@@ -158,7 +161,13 @@ private fun rememberPaneState(
             }
         }
     }
-    DisposableEffect(Unit) { onDispose { session.value?.destroy() } }
+    // 默认会话是 AI/CMS/UI 共享的常驻会话，UI 关闭只解绑、绝不销毁（否则会切断 AI/CMS 的会话）。
+    DisposableEffect(Unit) {
+        onDispose {
+            if (session.value != QuroTerminalSessionManager.defaultSession) session.value?.destroy()
+            session.value = null
+        }
+    }
     return PaneState(session, input, listState, history, histIdx, lastCopiedLine)
 }
 
@@ -208,9 +217,9 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
         if (sandboxState is QuroLinuxEnv.SandboxState.Ready && pane.session.value?.mode == ShellMode.DEVICE) {
             scope.launch {
                 withContext(Dispatchers.IO) {
-                    val old = pane.session.value
-                    pane.session.value = QuroShellSession.create(context)
-                    old?.destroy()
+                    // 升级默认共享会话：销毁设备 sh 默认，重建为 proot/Linux 默认（UI 与 AI 共用）。
+                    QuroTerminalSessionManager.destroySession("default")
+                    pane.session.value = QuroTerminalSessionManager.ensureDefault(context, installIfMissing = false)
                 }
             }
         }
@@ -221,13 +230,14 @@ fun QuroTermuxTerminalScreen(onClose: () -> Unit) {
         scope.launch {
             withContext(Dispatchers.IO) {
                 val p = pane
-                val old = p.session.value
-                val newS = QuroShellSession.create(context)
+                // 「新会话」：重建默认共享会话（销毁旧默认、建一个新 proot/Linux 默认），
+                // 保证重建后 UI 与 AI 仍指向同一个会话。
+                QuroTerminalSessionManager.destroySession("default")
+                val newS = QuroTerminalSessionManager.ensureDefault(context, installIfMissing = false)
                 p.session.value = newS
                 p.history.clear()
                 p.histIdx.value = -1
                 p.input.value = TextFieldValue("")
-                old?.destroy()
                 sessionList = QuroTerminalSessionManager.listSessions()
             }
         }
