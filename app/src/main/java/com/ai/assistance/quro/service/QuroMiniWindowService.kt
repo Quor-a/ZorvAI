@@ -51,9 +51,16 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import com.ai.assistance.quro.activity.QuroMainActivity
+import com.ai.assistance.quro.core.QuroMessage
 import com.ai.assistance.quro.core.tools.QuroBrowserController
 import com.ai.assistance.quro.core.util.QuroServiceLifecycleOwner
 import com.ai.assistance.quro.ui.FloatingMiniWindow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 
 /**
  * 对话 / 浏览器「系统级化小窗」管理器（进程级单例）。
@@ -81,6 +88,10 @@ object QuroMiniWindowManager {
 
     private val chatLinesState = mutableStateOf<List<MiniChatLine>>(emptyList())
     private val browserUrlState = mutableStateOf<String?>(null)
+
+    /** 对话消息流（Activity 注入）：小窗在 App 退后台时仍实时刷新列表（系统级浮窗核心诉求）。 */
+    private var messageFlow: Flow<List<QuroMessage>>? = null
+    private var chatScope: CoroutineScope? = null
 
     /** 当前主题色板（由 Activity 同步，保证悬浮窗与主界面视觉一致）。 */
     private var colorScheme = androidx.compose.material3.darkColorScheme()
@@ -114,6 +125,21 @@ object QuroMiniWindowManager {
 
     fun setChatLines(lines: List<MiniChatLine>) {
         chatLinesState.value = lines
+    }
+
+    /** Activity 注入当前会话消息流（StateFlow），供独立协程作用域在 App 退后台时持续刷新小窗。 */
+    fun setMessageSource(flow: Flow<List<QuroMessage>>) {
+        messageFlow = flow
+    }
+
+    /** 把 QuroMessage 列表映射为小窗快照：跳过隐藏/工具消息，取最近 15 条。 */
+    private fun mapLines(msgs: List<QuroMessage>): List<MiniChatLine> {
+        return msgs.filter { !it.hidden && it.role != "tool" }
+            .takeLast(15)
+            .map { m ->
+                val label = if (m.role == "user") (m.senderName ?: "我") else "AI"
+                MiniChatLine(label, m.content.ifBlank { m.reasoning ?: "" })
+            }
     }
 
     fun isChatShown(): Boolean = chatView != null
@@ -154,6 +180,14 @@ object QuroMiniWindowManager {
         }
         chatView = view
         wm.addView(view, fullScreenParams())
+        // 独立协程作用域收集消息流：App 退后台时 ChatScreen 的 LaunchedEffect 会暂停，
+        // 这里用托管作用域保证化小窗列表持续刷新（系统级浮窗应浮于其他 App 之上仍可用）。
+        chatScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        messageFlow?.let { f ->
+            chatScope?.launch {
+                f.collect { msgs -> setChatLines(mapLines(msgs)) }
+            }
+        }
     }
 
     fun hideChat() {
@@ -164,6 +198,8 @@ object QuroMiniWindowManager {
         chatView = null
         chatLifecycle?.destroy()
         chatLifecycle = null
+        chatScope?.cancel()
+        chatScope = null
         maybeStopService()
     }
 
@@ -235,6 +271,8 @@ object QuroMiniWindowManager {
         browserLifecycle?.destroy()
         chatLifecycle = null
         browserLifecycle = null
+        chatScope?.cancel()
+        chatScope = null
     }
 
     // ───────────────────────── 内部 Composable 内容 ─────────────────────────
@@ -424,6 +462,17 @@ object QuroMiniWindowManager {
     private fun maybeStopService() {
         if (chatView == null && browserView == null) {
             appCtx?.let { QuroMiniWindowService.stop(it) }
+        }
+    }
+
+    /** 系统级浮窗还原/关闭时把 App 带回前台（moveTaskToFront），使「返回全屏」平滑、浮层即时移除。 */
+    fun bringAppToForeground() {
+        val c = appCtx ?: return
+        kotlin.runCatching {
+            val intent = Intent(c, QuroMainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            c.startActivity(intent)
         }
     }
 
