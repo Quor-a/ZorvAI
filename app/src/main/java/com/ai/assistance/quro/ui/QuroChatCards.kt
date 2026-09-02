@@ -2172,7 +2172,20 @@ private fun MiniAppWebView(
 
                 // 注入CDN错误恢复脚本和小程序运行时
                 val fallbackScript = assetLibResolver.generateFallbackScript()
-                val wrappedHtml = """
+                // 若 AI 下发的是完整 HTML 文档（如小程序 create 示例页），把桥运行时注入其 <head>，
+                // 而非再套一层 <html> —— 否则完整文档被嵌进 <body> 变成嵌套文档，DOM 解析错乱。
+                val isFullDoc = html.trimStart().startsWith("<!doctype", ignoreCase = true) || html.contains("<html", ignoreCase = true)
+                val wrappedHtml = if (isFullDoc) {
+                    val injected = "$fallbackScript\n<script>$bridgeJs</script>"
+                    val hi = html.indexOf("</head>", ignoreCase = true)
+                    if (hi >= 0) html.substring(0, hi) + injected + html.substring(hi)
+                    else {
+                        val si = html.indexOf("<html", ignoreCase = true)
+                        if (si >= 0) { val e = html.indexOf(">", si); html.substring(0, e + 1) + injected + html.substring(e + 1) }
+                        else injected + html
+                    }
+                } else {
+                    """
                     <!DOCTYPE html>
                     <html>
                     <head>
@@ -2184,7 +2197,8 @@ private fun MiniAppWebView(
                         $html
                     </body>
                     </html>
-                """.trimIndent()
+                    """.trimIndent()
+                }
                 
                 tag = html
                 loadDataWithBaseURL("file:///android_asset/", wrappedHtml, "text/html", "UTF-8", null)
@@ -2201,7 +2215,20 @@ private fun MiniAppWebView(
                     ""
                 }
                 val fallbackScript = assetLibResolver.generateFallbackScript()
-                val wrappedHtml = """
+                // 若 AI 下发的是完整 HTML 文档（如小程序 create 示例页），把桥运行时注入其 <head>，
+                // 而非再套一层 <html> —— 否则完整文档被嵌进 <body> 变成嵌套文档，DOM 解析错乱。
+                val isFullDoc = html.trimStart().startsWith("<!doctype", ignoreCase = true) || html.contains("<html", ignoreCase = true)
+                val wrappedHtml = if (isFullDoc) {
+                    val injected = "$fallbackScript\n<script>$bridgeJs</script>"
+                    val hi = html.indexOf("</head>", ignoreCase = true)
+                    if (hi >= 0) html.substring(0, hi) + injected + html.substring(hi)
+                    else {
+                        val si = html.indexOf("<html", ignoreCase = true)
+                        if (si >= 0) { val e = html.indexOf(">", si); html.substring(0, e + 1) + injected + html.substring(e + 1) }
+                        else injected + html
+                    }
+                } else {
+                    """
                     <!DOCTYPE html>
                     <html>
                     <head>
@@ -2213,7 +2240,8 @@ private fun MiniAppWebView(
                         $html
                     </body>
                     </html>
-                """.trimIndent()
+                    """.trimIndent()
+                }
                 wv.loadDataWithBaseURL("file:///android_asset/", wrappedHtml, "text/html", "UTF-8", null)
             }
         },
