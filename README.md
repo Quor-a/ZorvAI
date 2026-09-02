@@ -41,7 +41,7 @@
 - [系统返回手势支持](#系统返回手势支持)
 - [内置技能 · Skills（63 个）](#内置技能-skills63-个)
 - [截图预览 · Screenshots](#截图预览-screenshots)
-- [近期新增功能（v1.0.77）](#近期新增功能v1077)
+- [近期新增功能（v1.0.78）](#近期新增功能v1078)
 - [功能构架 · Architecture](#功能构架-architecture)
 - [引擎详解 · Engine](#引擎详解-engine)
 - [ACI · 智能体能力接口](#aci-智能体能力接口)
@@ -911,7 +911,7 @@ Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{
 
 ---
 
-## 近期新增功能（v1.0.77）
+## 近期新增功能（v1.0.78）
 
 ### v1.0.77（本次）
 - **工具中心三面板对接对话框渲染**：小程序工作台 / 可视化编程 / 节点编辑器均支持「保存 / 删除 / 导入」，并一键把产物（小程序 / Mermaid 图）渲染到对话框内；节点编辑器修复「复制 Mermaid」乱码（详见「LSPosed / Xposed 模块」「对话框『化小窗』」「浏览器『化小窗』」章节与工具中心部分）。
@@ -1488,9 +1488,22 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-**最新版本：`v1.0.77`**（2026-09-02，工具中心三面板对接对话框渲染 + 保存/删除/导入 + 节点编辑器修复）：
+**最新版本：`v1.0.78`**（2026-09-02，修复 CMS 与终端 9 项 Bug：共享服务状态登记 / PYTHON 注册 / bc / 诊断命令 / ps aux·netstat 替代）：
 
-- 🟢 **[app-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.77/app-full-release.apk)**（约 244MB，Release 签名，**最新**）
+- 🟢 **[app-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.78/app-full-release.apk)**（约 244MB，Release 签名，**最新**）
+
+### v1.0.78 新增功能
+
+**CMS 与终端 9 项 Bug 修复（清单 2026-09-02）**：
+- 共享服务状态未登记 → `setsid` 彻底脱离 + python 端口探测登记 `services`
+- 开发环境 PYTHON 未注册 → 去强制 uv，允许 `/opt`/`$HOME`/`/root` 的 cms-venv
+- bootstrap 安装 bc 失败 → `robust_install` 带 apt+dpkg 回退
+- 网络诊断命令缺失 → 补装 iputils-ping / dnsutils / net-tools / iproute2（ping/nslookup/dig/host/netstat/ifconfig/ip/ss）
+- apt 锁卡死 → 资产脚本 rm 锁 + pkill；BUILTIN 以 APT_LOCK_RELEASE_PROLOGUE 开头
+- ps aux / uptime 失效（hidepid）→ `getVncInfo` 改 `pgrep -af`，UI 快捷命令 `ps aux`→`ps -e`
+- netstat / ss 无法显示连接 → `isAdbdListening` 改解析 `/proc/net/tcp` LISTEN；UI「端口」改 python `connect_ex` 探测
+- bootstrap DNS heredoc 语法 → 确认资产/BUILTIN 均为干净 `if ! cat<<'DNS'` 形式
+- hosts 静态映射冗余 → 保留 `quro-engine-dns` 镜像加速（guarded 幂等，无害）
 
 ### v1.0.77 新增功能
 
