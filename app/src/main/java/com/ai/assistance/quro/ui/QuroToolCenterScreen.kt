@@ -657,13 +657,25 @@ private fun NodeEditorPanel(
     // 导入工程文件（.qne / .json），读到文本后还原到画布
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        runCatching {
+        val txt = runCatching {
             context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-        }.getOrNull()?.takeIf { it.isNotBlank() }?.let { txt ->
-            wvRef.value?.evaluateJavascript("window.__restore(${JSONObject.quote(txt)})") {
-                Toast.makeText(context, "已导入工程到画布", Toast.LENGTH_SHORT).show()
-            }
-        } ?: Toast.makeText(context, "导入失败：无法读取文件", Toast.LENGTH_SHORT).show()
+        }.getOrNull()
+        if (txt.isNullOrBlank()) {
+            Toast.makeText(context, "导入失败：无法读取文件", Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+        // __restore 返回 true/false：成功才提示「已导入」，失败提示「文件格式错误」
+        // （此前忽略返回值，坏 JSON 也误报成功，且画布保持原样造成状态不同步）
+        wvRef.value?.evaluateJavascript(
+            "JSON.stringify([window.__restore(${JSONObject.quote(txt)})])"
+        ) { r ->
+            val ok = r?.let { it.trim().trim('"') == "true" || it.contains("true") } ?: false
+            Toast.makeText(
+                context,
+                if (ok) "已导入工程到画布" else "导入失败：文件不是有效的工程格式",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
