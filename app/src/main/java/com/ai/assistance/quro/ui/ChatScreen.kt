@@ -610,6 +610,8 @@ fun ChatScreen(
     var showAciSelector by remember { mutableStateOf(false) }
     // 工作区选择器对话框
     var showWorkspaceSelector by remember { mutableStateOf(false) }
+    // 工作区代码编辑器（写代码 / 浏览代码）全屏页
+    var showCodeWorkspace by remember { mutableStateOf(false) }
     // 功能模型配置屏（从设置「功能模型配置」进入）：为 5 类 AI 子能力各自绑定模型
     var showFeatureModelConfig by remember { mutableStateOf(false) }
     var showAppearance by remember { mutableStateOf(false) }
@@ -1417,6 +1419,7 @@ fun ChatScreen(
                         pendingVisualQuestion = pendingVisualQuestion.value,
                         currentWorkspace = currentWorkspace,
                         onOpenWorkspaceSelector = { showWorkspaceSelector = true },
+                        onOpenCodeBrowser = { showCodeWorkspace = true },
                         currentAciName = currentAciName,
                         enabledSkillsCount = enabledSkillsCount,
                         scaled = { scaled(it) }
@@ -1901,6 +1904,19 @@ fun ChatScreen(
                 },
                 initialSelectedPath = currentWorkspace,
             )
+        }
+
+        // 工作区代码编辑器（写代码 / 浏览代码）：当前工作区未选时落到默认工作区
+        if (showCodeWorkspace) {
+            BackHandler { showCodeWorkspace = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
+                val codeRoot = currentWorkspace
+                    ?: java.io.File(ctx.getExternalFilesDir(null), "QuroWorkspace").apply { mkdirs() }.absolutePath
+                WorkspaceCodeScreen(
+                    rootPath = codeRoot,
+                    onClose = { showCodeWorkspace = false },
+                )
+            }
         }
 
         // 技能选择对话框（从输入框工具菜单 / 上下文标识栏进入）
@@ -4580,6 +4596,7 @@ private fun Composer(
     pendingVisualQuestion: Boolean = false,
     currentWorkspace: String? = null,
     onOpenWorkspaceSelector: () -> Unit = {},
+    onOpenCodeBrowser: () -> Unit = {},
     currentAciName: String? = null,
     enabledSkillsCount: Int = 0,
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
@@ -4824,6 +4841,7 @@ private fun Composer(
             onToggleVision = onToggleVision,
             currentWorkspace = currentWorkspace,
             onOpenWorkspaceSelector = onOpenWorkspaceSelector,
+            onOpenCodeBrowser = onOpenCodeBrowser,
         )
     }
 }

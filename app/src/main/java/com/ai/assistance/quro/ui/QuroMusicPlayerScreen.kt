@@ -1,8 +1,13 @@
 package com.ai.assistance.quro.ui
 
 import android.content.Intent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +34,7 @@ import androidx.compose.material.icons.filled.SkipPrevious
 /**
  * 应用内全屏音乐播放器（百分百开源，基于 QuroMediaService + 框架 MediaPlayer）。
  * 订阅 [QuroMediaController] 全局状态，并通过 Intent 向 [QuroMediaService] 下发控制命令。
+ * 选曲时把整张媒体库作为播放列表(queue)下发，支持连播；播放列表界面可点击切歌、清空。
  * 空状态时提供「选择音乐」入口（QuroMediaBrowser），选曲即后台播放。
  */
 @Composable
@@ -37,6 +43,7 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val media by QuroMediaController.state.collectAsState()
     var showPicker by remember { mutableStateOf(media.uri.isEmpty()) }
+    var showQueue by remember { mutableStateOf(false) }
 
     fun sendControl(action: String, fill: (Intent) -> Unit = {}) {
         val intent = Intent(ctx, QuroMediaService::class.java).setAction(action)
@@ -44,8 +51,12 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
         runCatching { ctx.startService(intent) }
     }
 
-    fun pickAndPlay(uri: String, title: String) {
+    // 选曲：整库入队（当前曲目在队列中的位置从 0 起），上一首/下一首即可整库连播
+    fun pickAndPlay(uri: String, title: String, queueUris: List<String>, queueTitles: List<String>, index: Int) {
         val intent = Intent(ctx, QuroMediaService::class.java)
+            .putStringArrayListExtra(QuroMediaService.EXTRA_QUEUE_URIS, ArrayList(queueUris))
+            .putStringArrayListExtra(QuroMediaService.EXTRA_QUEUE_TITLES, ArrayList(queueTitles))
+            .putExtra(QuroMediaService.EXTRA_INDEX, index)
             .putExtra(QuroMediaService.EXTRA_URI, uri)
             .putExtra(QuroMediaService.EXTRA_TITLE, title)
         runCatching { ctx.startForegroundService(intent) }
@@ -54,8 +65,14 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
     if (showPicker) {
         QuroMediaBrowser(
             kind = "music",
-            onPick = { uri, name ->
-                pickAndPlay(uri.toString(), name)
+            onPick = { pickedUri, pickedName ->
+                // 整库作为播放队列：重新扫描，找到所点曲目的索引，其余顺序保留
+                val all = com.ai.assistance.quro.core.tools.QuroMediaLibLoader.load(ctx, "music")
+                val idx = all.indexOfFirst { it.first == pickedUri.toString() }.coerceAtLeast(0)
+                pickAndPlay(
+                    pickedUri.toString(), pickedName,
+                    all.map { it.first }, all.map { it.second }, idx,
+                )
                 showPicker = false
             },
             onClose = { if (media.uri.isEmpty()) onClose() else showPicker = false },
@@ -220,15 +237,82 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
 
             Spacer(Modifier.height(16.dp))
 
-            Button(
-                onClick = { showPicker = true },
-                modifier = Modifier.align(Alignment.CenterHorizontally),
+            // 播放列表 / 选择音乐
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Filled.MusicNote, null)
-                Spacer(Modifier.width(8.dp))
-                Text("选择音乐")
+                OutlinedButton(onClick = { showQueue = true }) {
+                    Icon(Icons.Filled.QueueMusic, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("播放列表 (${media.queue.size})")
+                }
+                Spacer(Modifier.width(12.dp))
+                Button(onClick = { showPicker = true }) {
+                    Icon(Icons.Filled.MusicNote, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("选择音乐")
+                }
             }
         }
+    }
+
+    // 播放列表弹窗：显示当前队列，点击切歌、长按单曲删除、清空
+    if (showQueue) {
+        AlertDialog(
+            onDismissRequest = { showQueue = false },
+            title = { Text("播放列表 (${media.queue.size})") },
+            text = {
+                if (media.queue.isEmpty()) {
+                    Text("队列为空，先去「选择音乐」添加吧。", color = cs.onSurfaceVariant)
+                } else {
+                    LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                        itemsIndexed(media.queue) { i, track ->
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clickable {
+                                        sendControl(QuroMediaService.ACTION_PLAY_INDEX) {
+                                            it.putExtra(QuroMediaService.EXTRA_INDEX, i)
+                                        }
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Filled.MusicNote,
+                                    null,
+                                    tint = if (i == media.index) cs.primary else cs.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    track.title.ifBlank { "曲目 ${i + 1}" },
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = if (i == media.index) cs.primary else cs.onSurface,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                IconButton(onClick = { showQueue = false }, Modifier.size(28.dp)) {
+                                    Icon(Icons.Filled.Close, "关闭", tint = cs.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (media.queue.isNotEmpty()) {
+                    TextButton(onClick = {
+                        sendControl(QuroMediaService.ACTION_STOP)
+                        showQueue = false
+                    }) { Text("停止", color = cs.error) }
+                }
+            },
+            dismissButton = { TextButton(onClick = { showQueue = false }) { Text("关闭") } },
+        )
     }
 }
 

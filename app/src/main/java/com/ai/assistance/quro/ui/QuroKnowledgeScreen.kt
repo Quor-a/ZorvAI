@@ -129,6 +129,9 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
     // 富预览：用应用内 QuroDocumentViewer 渲染（docx/xlsx/pptx 走 WebView 富文本，txt/md 可编辑），
     // 解决"知识库不支持多种文档预览"——此前详情仅展示纯文本提取，Office 文档看不出结构。
     var viewFile by remember { mutableStateOf<File?>(null) }
+    // 富编辑器：md/txt/json/csv 用全屏 QuroDocEditorScreen（格式工具栏 + 完整 md 预览 + 字数统计），
+    // 新建文档也走这里——替代此前"路径 + 200dp 文本框"的简陋创建对话框。
+    var editorFile by remember { mutableStateOf<File?>(null) }
 
     val filtered = remember(files, query) {
         if (query.isBlank()) files
@@ -182,8 +185,7 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
         selectedText = ""
     }
 
-    // 富预览优先：点击「打开预览」后用应用内渲染器展示（docx/xlsx/pptx 富文本、txt/md 可编辑）。
-    // 允许在预览器内编辑文本内容和 Office 文档（readOnly 已移除，用户可直接编辑）。
+    // 富预览优先：Office 文档用应用内渲染器展示（docx/xlsx/pptx 富文本、可编辑）。
     if (viewFile != null) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             QuroDocumentViewer(
@@ -195,6 +197,26 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                     } else viewFile = null
                 },
                 readOnly = false,
+            )
+        }
+        return
+    }
+
+    // 富编辑器（md/txt/json/csv + 新建文档）：全屏编辑，保存后自动重建 RAG 索引并刷新列表。
+    if (editorFile != null) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            QuroDocEditorScreen(
+                file = editorFile!!,
+                onSave = {
+                    files = listKnowledgeFiles(dir)
+                    scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
+                },
+                onClose = {
+                    editorFile = null
+                    files = listKnowledgeFiles(dir)
+                    // 若正停留在该文件详情页，同步刷新内容
+                    selected?.let { sel -> if (sel.exists()) loadFile(sel) }
+                },
             )
         }
         return
@@ -224,11 +246,15 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                         }
                         IconButton(onClick = { showAdd = true }) { Icon(Icons.Filled.Add, "添加文档") }
                     } else {
-                        IconButton(onClick = { selected?.let { viewFile = it } }) {
+                        // 文本类（md/txt/json/csv）走富编辑器（自带完整 md 预览）；Office 走 viewer
+                        val openDoc: (File) -> Unit = { f ->
+                            if (f.extension.lowercase() in KB_TEXT_EXTS) editorFile = f else viewFile = f
+                        }
+                        IconButton(onClick = { selected?.let { openDoc(it) } }) {
                             Icon(Icons.Filled.OpenInNew, "打开预览（富文本/可编辑）")
                         }
-                        // 所有支持的文档类型都可编辑（文本类用内置编辑器，Office 文档用 viewer 编辑）
-                        IconButton(onClick = { selected?.let { viewFile = it } }) {
+                        // 所有支持的文档类型都可编辑（文本类用内置富编辑器，Office 文档用 viewer 编辑）
+                        IconButton(onClick = { selected?.let { openDoc(it) } }) {
                             Icon(Icons.Filled.EditNote, "编辑内容")
                         }
                         IconButton(onClick = { selected?.let { renameTarget = it; showRename = true } }) {
@@ -317,13 +343,20 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                     modifier = Modifier.padding(top = 2.dp),
                 )
                 Spacer(Modifier.height(10.dp))
-                Text(
-                    selectedText,
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    lineHeight = 19.sp,
-                )
+                if (selected!!.extension.lowercase() == "md") {
+                    // Markdown 完整排版渲染（标题/表格/代码块/图片/删除线/任务列表/引用/链接）
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                        MarkdownPreview(selectedText)
+                    }
+                } else {
+                    Text(
+                        selectedText,
+                        Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        lineHeight = 19.sp,
+                    )
+                }
                 if (selected!!.extension.lowercase() in KB_OFFICE_EXTS) {
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -339,16 +372,21 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
     if (showAdd) {
         AddDocDialog(
             onDismiss = { showAdd = false },
-            onConfirm = { path, content, append ->
+            onConfirm = { path ->
                 runCatching {
                     dir.mkdirs()
-                    val f = File(dir, path.trimStart('/'))
+                    var name = path.trim().trimStart('/').replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                    // 无扩展名默认按 Markdown 文档创建（保证出现在知识库列表里）
+                    if (!name.contains('.')) name = "$name.md"
+                    val f = File(dir, name)
                     f.parentFile?.mkdirs()
-                    if (append) f.appendText(content) else f.writeText(content)
+                    if (!f.exists()) f.writeText("")
+                    showAdd = false
+                    // 直接进入富编辑器撰写（格式工具栏 + 完整 md 预览），保存即入库并重建索引
+                    editorFile = f
+                }.onFailure {
+                    Toast.makeText(ctx, "创建失败：${it.message}", Toast.LENGTH_LONG).show()
                 }
-                files = listKnowledgeFiles(dir)
-                showAdd = false
-                scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
             }
         )
     }
@@ -398,44 +436,33 @@ private fun listKnowledgeFiles(dir: File): List<File> {
 @Composable
 private fun AddDocDialog(
     onDismiss: () -> Unit,
-    onConfirm: (path: String, content: String, append: Boolean) -> Unit,
+    onConfirm: (path: String) -> Unit,
 ) {
     var path by remember { mutableStateOf("") }
-    var content by remember { mutableStateOf("") }
-    var append by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
         dismissButton = {},
-        title = { Text("添加知识文档") },
+        title = { Text("新建知识文档") },
         text = {
-            Column(
-                Modifier.fillMaxWidth().heightIn(max = 460.dp).verticalScroll(rememberScrollState())
-            ) {
-                UnderlineField(
-                    label = "路径",
-                    value = path,
-                    onValueChange = { path = it },
-                    placeholder = "如 规范/编码风格.md",
+            Column(Modifier.fillMaxWidth()) {
+                Text(
+                    "输入文档名后直接进入富编辑器撰写（支持 Markdown 格式工具栏与实时预览）。",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = content,
-                    onValueChange = { content = it },
-                    label = { Text("文档内容") },
-                    modifier = Modifier.fillMaxWidth().height(200.dp),
-                    maxLines = 12,
+                UnderlineField(
+                    label = "文档名",
+                    value = path,
+                    onValueChange = { path = it },
+                    placeholder = "如 编码规范（默认 .md）",
                 )
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = append, onCheckedChange = { append = it })
-                    Text("追加模式（不勾 = 覆盖原文件）", fontSize = 13.sp)
-                }
                 Spacer(Modifier.height(12.dp))
                 DialogActions(
                     onCancel = onDismiss,
-                    onConfirm = { if (path.isNotBlank()) onConfirm(path, content, append) },
+                    onConfirm = { if (path.isNotBlank()) onConfirm(path) },
                 )
             }
         },

@@ -98,15 +98,35 @@ class QuroSandboxTool : QuroTool {
         pb.directory(home)
         pb.redirectErrorStream(false)
         val p = pb.start()
-        val out = p.inputStream.bufferedReader().use { it.readText() }
-        val errOut = p.errorStream.bufferedReader().use { it.readText() }
+        // stdout/stderr 各起独立线程读取：
+        // 1) 若先同步读满 stdout 再读 stderr，进程 stderr 管道缓冲写满后会阻塞 → 死锁；
+        // 2) 若主线程先读流再 waitFor，永不退出的命令（sleep/top 等）会阻塞在 readText，
+        //    30 秒超时永远到不了 → 永久挂起。现在主线程只负责 waitFor 计时强制终止。
+        val outBuf = StringBuilder()
+        val errBuf = StringBuilder()
+        fun readerThread(stream: java.io.InputStream, buf: StringBuilder) = Thread {
+            runCatching {
+                stream.bufferedReader().forEachLine { line ->
+                    synchronized(buf) { if (buf.length < 200_000) buf.appendLine(line) }
+                }
+            }
+        }.apply { isDaemon = true }
+        val tOut = readerThread(p.inputStream, outBuf)
+        val tErr = readerThread(p.errorStream, errBuf)
+        tOut.start(); tErr.start()
         val ok = runCatching { p.waitFor(30, TimeUnit.SECONDS) }.getOrDefault(false)
-        val code = if (ok) p.exitValue() else { p.destroy(); -1 }
+        if (!ok) runCatching { p.destroy() }
+        runCatching { tOut.join(1500) }
+        runCatching { tErr.join(1500) }
+        val out: String; val errOut: String
+        synchronized(outBuf) { out = outBuf.toString() }
+        synchronized(errBuf) { errOut = errBuf.toString() }
+        val code = if (ok) runCatching { p.exitValue() }.getOrDefault(-1) else -1
         return JSONObject().apply {
             put("ok", true)
             put("exit_code", code)
-            put("stdout", out)
-            put("stderr", errOut)
+            put("stdout", out.take(64_000))
+            put("stderr", errOut.take(64_000))
             if (!ok) put("note", "执行超过30秒被强制终止")
         }.toString()
     }

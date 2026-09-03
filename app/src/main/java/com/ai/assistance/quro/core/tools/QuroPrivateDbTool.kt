@@ -75,7 +75,13 @@ class QuroPrivateDbTool : QuroTool {
     private fun doList(dbDir: File): String {
         val arr = JSONArray()
         dbDir.listFiles()
-            ?.filter { it.extension == "db" || it.extension == "sqlite" }
+            ?.filter { f ->
+                val n = f.name.lowercase()
+                // 排除 wal/shm/journal 伴生文件；主库按扩展名或「存在 -wal 伴生文件」识别
+                !(n.endsWith("-wal") || n.endsWith("-shm") || n.endsWith("-journal")) &&
+                    (n.endsWith(".db") || n.endsWith(".sqlite") || n.endsWith(".sqlite3") ||
+                        File(f.parentFile, f.name + "-wal").isFile)
+            }
             ?.sortedBy { it.name }
             ?.forEach { f ->
                 arr.put(JSONObject().apply {
@@ -167,12 +173,15 @@ class QuroPrivateDbTool : QuroTool {
         val okPrefix = upper.startsWith("SELECT") || upper.startsWith("PRAGMA") ||
                 upper.startsWith("WITH") || upper.startsWith("EXPLAIN")
         if (!okPrefix) return err("仅允许 SELECT/PRAGMA/WITH/EXPLAIN 只读语句")
-        // 禁止任何写关键字（PRAGMA 自身允许，从禁用词中剔除）
+        // 禁止任何写关键字（PRAGMA 自身允许，从禁用词中剔除）。
+        // 先剥掉单引号字符串字面量再匹配：否则查询文本列里出现 'DELETE'/'CREATE' 等词
+        // 的合法 SELECT 会被误杀（例如查聊天记录/日志表内容）。
         val writeWords = listOf(
             "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "ATTACH",
             "REPLACE", "BEGIN", "COMMIT", "ROLLBACK", "VACUUM", "GRANT", "REVOKE"
         )
-        val hit = writeWords.firstOrNull { Regex("""\b$it\b""").containsMatchIn(upper) }
+        val scrubbed = upper.replace(Regex("'(?:[^']|'')*'"), "''")
+        val hit = writeWords.firstOrNull { Regex("""\b$it\b""").containsMatchIn(scrubbed) }
         if (hit != null) return err("检测到写操作关键字被拒绝: $hit")
         return withSnapshot(context, dbDir, db) { snap ->
             SQLiteDatabase.openDatabase(

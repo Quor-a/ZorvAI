@@ -87,6 +87,24 @@ object QuroBrowserViewHost {
             // 注册 AI 操控桥：browser_act 始终操控这一个 WebView（无论在全屏还是浮窗）。
             QuroBrowserController.attach(this)
             attachUniversalClient(this)
+            // 下载监听：此前全工程未挂 DownloadListener，点下载链接完全无反应。
+            // 统一走 QuroDownloadUtil（MediaStore 写公共 Download/Quro 目录，失败回退应用私有目录）。
+            setDownloadListener { dlUrl, userAgent, contentDisposition, mimeType, _ ->
+                val appCtx = context.applicationContext
+                val name = QuroDownloadUtil.deriveFileName(dlUrl, contentDisposition) ?: dlUrl
+                Toast.makeText(appCtx, "开始下载：$name", Toast.LENGTH_SHORT).show()
+                Thread {
+                    val result = QuroDownloadUtil.download(appCtx, dlUrl, userAgent, contentDisposition, mimeType)
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        val msg = when {
+                            result.startsWith("OK:") -> "✅ 下载完成：${result.removePrefix("OK:")}\n已保存到 Download/Quro"
+                            result.startsWith("FALLBACK:") -> "已保存到应用目录：${result.removePrefix("FALLBACK:")}"
+                            else -> "⚠ $result"
+                        }
+                        Toast.makeText(appCtx, msg, Toast.LENGTH_LONG).show()
+                    }
+                }.start()
+            }
         }
         webView = wv
         reattach()
@@ -216,6 +234,8 @@ object QuroBrowserViewHost {
                     canGoBack = view?.canGoBack() ?: false,
                     canGoForward = view?.canGoForward() ?: false,
                 )
+                // 历史记录：页面加载完成写入（全屏/浮窗共用此 client，都会记录）
+                if (view != null && !u.isNullOrEmpty()) recordHistory(view.context, u, view.title)
             }
 
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -293,6 +313,62 @@ object QuroBrowserViewHost {
     /** Compose 便捷：收集共享浏览器状态。 */
     @Composable
     fun collectUiState(): State<BrowserUiState> = uiState.collectAsState()
+
+    // ───────────────────────── 历史记录（持久化） ─────────────────────────
+
+    /** 历史记录条目（title + url + 时间戳）。 */
+    data class HistoryEntry(val title: String, val url: String, val ts: Long)
+
+    /** 读取浏览历史（最新在前）。 */
+    fun loadHistory(context: Context): List<HistoryEntry> {
+        val sp = context.getSharedPreferences(HISTORY_PREFS, Context.MODE_PRIVATE)
+        val raw = sp.getString(HISTORY_KEY, null) ?: return emptyList()
+        return runCatching {
+            val arr = org.json.JSONArray(raw)
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                HistoryEntry(o.optString("title"), o.getString("url"), o.optLong("ts"))
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    /** 清空浏览历史。 */
+    fun clearHistory(context: Context) {
+        context.getSharedPreferences(HISTORY_PREFS, Context.MODE_PRIVATE)
+            .edit().remove(HISTORY_KEY).apply()
+    }
+
+    /** 写入一条历史：同 URL 去重并提到最前，最多保留 [HISTORY_MAX] 条。只记 http/https 页面。 */
+    private fun recordHistory(context: Context, url: String, title: String?) {
+        if (!url.startsWith("http")) return
+        try {
+            val sp = context.getSharedPreferences(HISTORY_PREFS, Context.MODE_PRIVATE)
+            val raw = sp.getString(HISTORY_KEY, null)
+            val arr = if (raw != null) org.json.JSONArray(raw) else org.json.JSONArray()
+            val list = mutableListOf<org.json.JSONObject>()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                if (o.optString("url") != url) list.add(o)
+            }
+            list.add(
+                0,
+                org.json.JSONObject().apply {
+                    put("title", title?.takeIf { it.isNotBlank() } ?: url)
+                    put("url", url)
+                    put("ts", System.currentTimeMillis())
+                },
+            )
+            if (list.size > HISTORY_MAX) list.subList(HISTORY_MAX, list.size).clear()
+            val out = org.json.JSONArray()
+            list.forEach { out.put(it) }
+            sp.edit().putString(HISTORY_KEY, out.toString()).apply()
+        } catch (_: Exception) {
+        }
+    }
+
+    private const val HISTORY_PREFS = "quro_browser"
+    private const val HISTORY_KEY = "history"
+    private const val HISTORY_MAX = 500
 
     /** 共享浏览器 UI 状态快照（全屏/浮窗共用同一 WebView，状态统一）。 */
     data class BrowserUiState(

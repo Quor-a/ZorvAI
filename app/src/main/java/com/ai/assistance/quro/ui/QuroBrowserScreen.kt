@@ -299,6 +299,8 @@ fun QuroBrowserScreen(
     var findQuery by remember { mutableStateOf("") }
     var showBookmarks by remember { mutableStateOf(false) }
     var bookmarks by remember { mutableStateOf(loadBookmarks(ctx)) }
+    var showHistory by remember { mutableStateOf(false) }
+    var history by remember { mutableStateOf(emptyList<com.ai.assistance.quro.core.tools.QuroBrowserViewHost.HistoryEntry>()) }
     var showReader by remember { mutableStateOf(false) }
     var readerText by remember { mutableStateOf("") }
 
@@ -474,6 +476,7 @@ fun QuroBrowserScreen(
             showEditor -> showEditor = false
             showFind -> { showFind = false; webView?.clearMatches(); findQuery = "" }
             showBookmarks -> showBookmarks = false
+            showHistory -> showHistory = false
             showMenu -> showMenu = false
             canGoBack -> { webView?.goBack() }
             else -> onClose()
@@ -610,6 +613,15 @@ fun QuroBrowserScreen(
                             text = { Text("书签") },
                             leadingIcon = { Icon(Icons.Filled.Bookmarks, null) },
                             onClick = { showMenu = false; showBookmarks = true },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("历史记录") },
+                            leadingIcon = { Icon(Icons.Filled.History, null) },
+                            onClick = {
+                                showMenu = false
+                                history = com.ai.assistance.quro.core.tools.QuroBrowserViewHost.loadHistory(ctx)
+                                showHistory = true
+                            },
                         )
                         DropdownMenuItem(
                             text = { Text("查找") },
@@ -764,6 +776,79 @@ fun QuroBrowserScreen(
                                             onClick = {
                                                 bookmarks = bookmarks.filter { it.second != u }
                                                 saveBookmarks(ctx, bookmarks)
+                                            },
+                                            Modifier.size(32.dp),
+                                        ) {
+                                            Icon(Icons.Filled.Delete, "删除", tint = cs.onSurfaceVariant)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 历史记录面板
+            if (showHistory) {
+                Surface(
+                    color = cs.surface,
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
+                ) {
+                    Column {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("历史记录", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                            if (history.isNotEmpty()) {
+                                TextButton(onClick = {
+                                    com.ai.assistance.quro.core.tools.QuroBrowserViewHost.clearHistory(ctx)
+                                    history = emptyList()
+                                }) { Text("清空", color = cs.error, fontSize = 13.sp) }
+                            }
+                            IconButton(onClick = { showHistory = false }, Modifier.size(32.dp)) {
+                                Icon(Icons.Filled.Close, "关闭", tint = cs.onSurfaceVariant)
+                            }
+                        }
+                        if (history.isEmpty()) {
+                            Text("暂无浏览记录。", color = cs.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+                        } else {
+                            LazyColumn {
+                                items(history) { h ->
+                                    Row(
+                                        Modifier.fillMaxWidth()
+                                            .clickable {
+                                                webView?.loadUrl(h.url)
+                                                address = h.url
+                                                showHistory = false
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(h.title.ifBlank { h.url }, color = cs.onSurface, fontSize = 14.sp, maxLines = 1)
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(h.ts)),
+                                                    color = cs.onSurfaceVariant,
+                                                    fontSize = 11.sp,
+                                                )
+                                                Text("  ·  ", color = cs.onSurfaceVariant, fontSize = 11.sp)
+                                                Text(h.url, color = cs.onSurfaceVariant, fontSize = 11.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                                            }
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                // 单条删除：重写剩余历史
+                                                val remain = history.filter { it != h }
+                                                history = remain
+                                                val sp = ctx.getSharedPreferences("quro_browser", Context.MODE_PRIVATE)
+                                                val arr = JSONArray()
+                                                remain.forEach { e ->
+                                                    arr.put(JSONObject().apply { put("title", e.title); put("url", e.url); put("ts", e.ts) })
+                                                }
+                                                sp.edit().putString("history", arr.toString()).apply()
                                             },
                                             Modifier.size(32.dp),
                                         ) {

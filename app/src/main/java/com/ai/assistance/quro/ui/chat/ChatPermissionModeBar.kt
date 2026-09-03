@@ -95,6 +95,7 @@ internal fun ChatPermissionModeBar(
     onToggleVision: () -> Unit = {},
     currentWorkspace: String? = null,
     onOpenWorkspaceSelector: () -> Unit = {},
+    onOpenCodeBrowser: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
     // 惰性初始化只做一次：原实现直接在 composition body 调用（等于每次重组都跑一次 SharedPreferences 访问）
@@ -235,6 +236,14 @@ internal fun ChatPermissionModeBar(
                         title = "工作区",
                         desc = if (currentWorkspace != null) " — ${currentWorkspace.substringAfterLast('/')}" else " — 选择工作目录",
                         onClick = onOpenWorkspaceSelector,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    // 工作区代码编辑器：写代码 / 浏览代码
+                    ModeToggleRow(
+                        active = false,
+                        title = "代码编辑",
+                        desc = " — 写代码 / 浏览工作区文件",
+                        onClick = onOpenCodeBrowser,
                     )
                 }
             }
