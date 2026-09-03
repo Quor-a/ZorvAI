@@ -51,6 +51,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +65,7 @@ import com.ai.assistance.quro.terminal.data.TerminalSessionData
 import com.ai.assistance.quro.terminal.utils.CommandSanitizer
 import com.ai.assistance.quro.terminal.view.canvas.CanvasTerminalOutput
 import com.ai.assistance.quro.terminal.view.canvas.CanvasTerminalScreen
+import com.ai.assistance.quro.terminal.view.canvas.RenderConfig
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -72,6 +75,17 @@ fun TerminalHome(
 ) {
     val fontSize = 14.sp
     val padding = 8.dp
+
+    // 终端画布配置：字号按 sp→px 换算（Canvas 物理像素布局，不同密度手机排版一致）
+    val density = LocalDensity.current
+    val terminalConfig = remember {
+        RenderConfig(
+            fontSize = with(density) { 14.sp.toPx() },
+            backgroundColor = TerminalTheme.terminalBackground.toArgb(),
+            foregroundColor = TerminalTheme.onSurfaceColor.toArgb(),
+            cursorColor = TerminalTheme.accentColor.toArgb()
+        )
+    }
 
     // 删除确认弹窗状态
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
@@ -118,6 +132,7 @@ fun TerminalHome(
                 CanvasTerminalScreen(
                     emulator = env.terminalEmulator,
                     modifier = Modifier.weight(1f),
+                    config = terminalConfig,
                     pty = currentPty,
                     onInput = { env.onSendInput(it, false) }
                 )
@@ -139,6 +154,7 @@ fun TerminalHome(
                 CanvasTerminalOutput(
                     emulator = env.terminalEmulator,
                     modifier = Modifier.weight(1f),
+                    config = terminalConfig,
                     pty = currentPty
                 )
 

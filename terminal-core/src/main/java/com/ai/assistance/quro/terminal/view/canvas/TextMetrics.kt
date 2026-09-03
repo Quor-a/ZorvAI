@@ -29,7 +29,7 @@ class TextMetrics(private val paint: Paint) {
     /**
      * 更新字体大小并重新计算指标
      */
-    fun updateFontSize(fontSize: Float) {
+    fun updateFontSize(fontSize: Float, lineSpacingRatio: Float = 0.1f) {
         paint.textSize = fontSize
         paint.typeface = Typeface.MONOSPACE
         
@@ -37,7 +37,8 @@ class TextMetrics(private val paint: Paint) {
         charWidth = paint.measureText("M")
         
         val fontMetrics = paint.fontMetrics
-        charHeight = fontMetrics.descent - fontMetrics.ascent
+        // 行高 = 字符高度 × (1 + 行距比例)，避免行与行紧贴导致「不整齐」的观感
+        charHeight = (fontMetrics.descent - fontMetrics.ascent) * (1f + lineSpacingRatio)
         charBaseline = -fontMetrics.ascent
         
         // 清除缓存
