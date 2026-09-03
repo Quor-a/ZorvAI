@@ -652,7 +652,7 @@ object ToolCapabilityDirectory {
                 "cms_toolbox(action=\"deploy_engine\")",
                 "cms_toolbox(action=\"status_engine\")",
                 "cms_toolbox(action=\"repair_deployment\", component=\"engine\")",
-                "cms_toolbox(action=\"create_module\", module_id=\"my.httpd\", entry_script=\"#!/bin/sh\\npython3 -m http.server 8080\")"
+                "cms_toolbox(action=\"create_module\", module_id=\"my.httpd\", entry_script=\"#!/bin/sh\\npython3 -m http.server 8123\")"
             ),
             parameters = mapOf(
                 "action" to "动作类型",

@@ -81,7 +81,7 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、部署修复�
 - cms_toolbox(action="call_module", capability_id="echo_text", args={"text":"hello"})
 - cms_toolbox(action="deploy_engine")
 - cms_toolbox(action="repair_deployment", component="engine")
-- cms_toolbox(action="create_module", module_id="my.httpd", entry_script="#!/bin/sh\\npython3 -m http.server 8080")
+- cms_toolbox(action="create_module", module_id="my.httpd", entry_script="#!/bin/sh\\npython3 -m http.server 8123")
 - cms_toolbox(action="deploy_custom", type="module", id="my.httpd")
 """.trimIndent()
 
