@@ -3,6 +3,9 @@ package com.ai.assistance.quro.terminal.view.canvas
 import android.view.MotionEvent
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.ai.assistance.quro.terminal.domain.ansi.AnsiTerminalEmulator
 
@@ -21,7 +24,7 @@ fun CanvasTerminalScreen(
 ) {
     AndroidView(
         factory = { context ->
-            CanvasTerminalView(context).apply {
+            CanvasTerminalView(context, config = config).apply {
                 setEmulator(emulator)
                 setPty(pty)
                 setInputCallback(onInput)
@@ -66,9 +69,12 @@ fun ConfigurableCanvasTerminal(
     cursorColor: Int = 0xFF2DD4BF.toInt(),
     onInput: (String) -> Unit = {}
 ) {
-    val config = remember(fontSize, backgroundColor, foregroundColor, cursorColor) {
+    val density = LocalDensity.current
+    // sp → px：终端画布按物理像素布局，必须换算（否则不同密度手机字号/排版不一致）
+    val fontSizePx = with(density) { fontSize.sp.toPx() }
+    val config = remember(fontSizePx, backgroundColor, foregroundColor, cursorColor) {
         RenderConfig(
-            fontSize = fontSize,
+            fontSize = fontSizePx,
             backgroundColor = backgroundColor,
             foregroundColor = foregroundColor,
             cursorColor = cursorColor
@@ -99,7 +105,7 @@ fun PerformanceMonitoredTerminal(
 ) {
     AndroidView(
         factory = { context ->
-            CanvasTerminalView(context).apply {
+            CanvasTerminalView(context, config = config).apply {
                 setEmulator(emulator)
                 setInputCallback(onInput)
                 setPerformanceCallback { fps: Float, frameTime: Long ->
@@ -138,7 +144,7 @@ fun CanvasTerminalOutput(
 ) {
     AndroidView(
         factory = { context ->
-            CanvasTerminalView(context).apply {
+            CanvasTerminalView(context, config = config).apply {
                 setEmulator(emulator)
                 setPty(pty)
                 setFullscreenMode(false) // 关键：设置为非全屏模式
