@@ -5,6 +5,7 @@ import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
 import com.ai.assistance.quro.util.QuroDiag
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /** 把 Windows CRLF 统一为 LF，防止写入 proot/Ubuntu 的 shell 脚本出现「illegal option -」等诡异解析错误。 */
 private fun String.normalizeLineEndings(): String = this.replace("\r\n", "\n").replace("\r", "\n")
@@ -30,11 +31,61 @@ object CmsEngineDeployer {
     /** proot 内（guest）引擎路径（无 context，供状态系统探活复用）。 */
     fun engineGuestDir(): String = "/root/cms/_engine"
 
-    /** 导出CMS引擎为 JSON 文本（用于「导出CMS引擎」分享/本地留存）。 */
+    /** 导出CMS引擎为 JSON（用于「导出CMS引擎」/ 工具箱 export 动作）。 */
     fun exportPackage(pkg: CmsEnginePackage): String = pkg.toJson()
 
     /** 解析导入的CMS引擎 JSON（用于「导入CMS引擎」）。异常由调用方捕获。 */
     fun importPackage(json: String): CmsEnginePackage = CmsEnginePackage.fromJson(json)
+
+    // ---------- 共享服务常驻运行时 ----------
+
+    /** 已拉起的引擎共享服务进程句柄（svcId → 常驻 proot 进程）。 */
+    private val engineServices = ConcurrentHashMap<String, Process>()
+
+    /**
+     * 以常驻模型拉起一个引擎共享服务（与 [CmsResidentRuntime] 同一机制）。
+     *
+     * 旧实现用 `setsid sh ... &` 在一次性 proot 调用里后台启动：proot 进程退出后，
+     * 作为其子进程的服务失去 syscall 翻译层随之被回收 —— 部署时端口探测通过、
+     * 部署完成后服务立刻死掉（表现即「引擎装好了但 8080 打不开」）。
+     * 现改为 proot 本身常驻（不 waitFor），服务以 `exec` 顶替 sh 成为 proot 的直接子进程。
+     */
+    private fun startEngineService(context: Context, svc: EngineSvc): Boolean {
+        val st = QuroLinuxEnv.probeLenient(context)
+        if (!st.available) return false
+        // exec 让服务直接顶替 sh，成为 proot 的直接子进程；proot 常驻，服务即常驻。
+        val command = "cd ${engineGuestDir()} && exec ${svc.command}"
+        val proc = QuroLinuxEnv.spawnPersistent(context, command, emptyMap()) ?: return false
+
+        // 排空 stdout/stderr，避免管道缓冲写满后阻塞服务进程
+        val log = File(engineHostDir(context), "services/${svc.id}.log")
+        log.parentFile?.mkdirs()
+        val reader = proc.inputStream.bufferedReader()
+        val drain = Thread {
+            try { reader.use { r -> r.forEachLine { line -> runCatching { log.appendText(line + "\n") } } } } catch (_: Throwable) {}
+        }
+        drain.isDaemon = true
+        drain.start()
+
+        engineServices[svc.id] = proc
+        return runCatching { Thread.sleep(300); proc.isAlive }.getOrDefault(true)
+    }
+
+    /** 停止并注销一个引擎共享服务（先 TERM 后 KILL）。 */
+    fun stopEngineService(svcId: String): Boolean {
+        val p = engineServices.remove(svcId) ?: return false
+        runCatching { p.destroyForcibly() }
+        return true
+    }
+
+    /** 引擎共享服务的常驻进程是否仍存活。 */
+    fun isEngineServiceAlive(svcId: String): Boolean = engineServices[svcId]?.isAlive ?: false
+
+    /** App 退出时清理所有引擎共享服务进程。 */
+    fun stopAllEngineServices() {
+        engineServices.values.forEach { runCatching { it.destroyForcibly() } }
+        engineServices.clear()
+    }
 
     /**
      * 一键部署CMS引擎：bootstrap 基础运行时 + 引擎级环境栈 + 拉起共享服务。
@@ -125,21 +176,19 @@ object CmsEngineDeployer {
         if (pc != 0) sb.appendLine("⚠️ 引擎 provisioner 异常(exit $pc): ${pout.take(200)}（非致命，继续）")
         else sb.appendLine("✅ 引擎 provisioner 完成")
 
-        // 拉起共享服务（Bug1 修复：彻底脱离 + 端口就绪探测）
-        // 旧逻辑用 QuroLinuxEnv.run 直接 exec 服务脚本并信任其退出码；proot 下常驻进程持有 stdout pipe
-        // 导致 run() 20s 超时 → destroyForcibly() 返回 -1 → 不加入 launched → services=[]（功能正常但状态误判“未登记”）。
-        // 现改为：① setsid 包裹彻底脱离 stdout/stderr/stdin，run() 立即返回（不再触发超时）；
-        // ② 轮询 127.0.0.1:port，可连接即登记成功，最多 ~8s 判失败，不再依赖退出码。
+        // 拉起共享服务（常驻模型 + 端口就绪探测）
+        // 旧逻辑把服务放进一次性 proot 调用里后台化（setsid ... &）：proot 调用结束即退出，
+        // 作为 proot 子进程的服务失去 syscall 翻译层被回收 —— 部署时端口探测刚过、部署完服务就死，
+        // 于是引擎快照长期显示 services=[cms-static] 而 8080 实际打不开。
+        // 现改为 proot 常驻（不 waitFor），服务以 exec 顶替 sh 成为 proot 直接子进程，proot 活着服务就活着。
         val launched = mutableListOf<String>()
         pkg.sharedServices.filter { it.enabled && it.command.isNotBlank() }.forEach { svc ->
-            // 1) 彻底脱离启动：setsid 使服务成为新会话首领，三重重定向到 /dev/null 后后台化，
-            //    run() 的 /bin/sh -c 立即 fork 返回，proot stdout pipe 被释放，run() 不再超时误杀服务。
-            val launchCmd = buildString {
-                append("if command -v setsid >/dev/null 2>&1; then setsid sh ${engineGuestDir()}/services/${svc.id}.sh >/dev/null 2>&1 </dev/null & ")
-                append("else nohup sh ${engineGuestDir()}/services/${svc.id}.sh >/dev/null 2>&1 </dev/null & fi")
+            val started = startEngineService(context, svc)
+            if (!started) {
+                CmsEngineStore.appendLog("引擎服务 ${svc.name} 常驻启动失败（proot 未就绪或进程创建失败）")
+                return@forEach
             }
-            QuroTerminalBridge.run(context, launchCmd, timeoutMs = 10_000)
-            // 2) 端口就绪探测：单次 proot 调用内用 python 轮询（40 次×0.3s），可连接即成功，避免反复拉起 proot。
+            // 端口就绪探测：单次 proot 调用内用 python 轮询（40 次×0.2s），可连接即成功，不再依赖退出码。
             val probe = """
                 python3 -c "import socket,time,sys
                 port=${svc.port}
@@ -154,11 +203,13 @@ object CmsEngineDeployer {
             val (pc, _) = QuroTerminalBridge.run(context, probe, timeoutMs = 15_000)
             if (pc == 0) {
                 launched.add(svc.id)
-                CmsEngineStore.appendLog("引擎服务 ${svc.name} 已拉起（端口 ${svc.port}）")
+                CmsEngineStore.appendLog("引擎服务 ${svc.name} 已拉起（常驻 proot 存活，端口 ${svc.port}）")
             } else {
                 CmsEngineStore.appendLog("引擎服务 ${svc.name} 端口 ${svc.port} 探测超时，可能未就绪")
             }
         }
+        // 登记服务端口表，供 CmsEngineStore.probeHealth 在运行时按端口刷新服务状态
+        CmsEngineStore.registerEngineServices(pkg.sharedServices)
 
         // 健康检查：确认就绪标记 + 核心开发工具确实就绪（避免"标记写了但工具没装"的假成功）
         val (hc, _) = QuroTerminalBridge.run(context, "[ -f ${engineGuestDir()}/.engine.ready ]", timeoutMs = 10_000)

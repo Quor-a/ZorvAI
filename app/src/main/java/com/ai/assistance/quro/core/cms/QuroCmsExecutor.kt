@@ -50,9 +50,11 @@ class QuroCmsExecutor(context: Context) {
         }
         val maxLevel = if (perms.isEmpty()) PermissionLevel.Normal else perms.maxOf { it.level.ordinal }.let { PermissionLevel.values()[it] }
 
-        // 2) 解析动作（按选定宿主取模板，统一做 ${...} 代入）
+        // 2) 解析动作（按选定宿主取模板，统一做 ${...} 代入）；先并入能力声明的参数默认值，
+        //    避免调用未传参数时模板里 ${arg} 被替换成空串（如 term_httpd_list 的 dir）。
+        val effectiveArgs = cap.defaultArgs + args
         val (tpl, type) = cap.effectiveFor(host)
-        val resolved = cap.resolveTemplate(tpl, args)
+        val resolved = cap.resolveTemplate(tpl, effectiveArgs)
 
         // 3) trace：记录 AI 内部 action
         QuroAgentTrace.action("cms", "调用能力 ${cap.id}", "host=${host.label} module=${module.id} args=${args.keys.joinToString()}")

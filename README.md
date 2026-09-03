@@ -41,7 +41,7 @@
 - [系统返回手势支持](#系统返回手势支持)
 - [内置技能 · Skills（63 个）](#内置技能-skills63-个)
 - [截图预览 · Screenshots](#截图预览-screenshots)
-- [近期新增功能（v1.0.79）](#近期新增功能v1079)
+- [近期新增功能（v1.0.80）](#近期新增功能v1080)
 - [功能构架 · Architecture](#功能构架-architecture)
 - [引擎详解 · Engine](#引擎详解-engine)
 - [ACI · 智能体能力接口](#aci-智能体能力接口)
@@ -911,9 +911,15 @@ Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{
 
 ---
 
-## 近期新增功能（v1.0.79）
+## 近期新增功能（v1.0.80）
 
-### v1.0.79（本次）
+### v1.0.80（本次）
+- **CMS 框架修复**：内置终端模块的 `entry.sh` 补齐环境变量花括号（`${VAR:-default}`），端口注入不再被展开成字面量；内置模块改为**版本化幂等播种**，`entry.sh` 内容一致则跳过重写——你在终端里的手动修复不再被 App 覆盖。
+- **引擎共享服务常驻化**：静态资源服务（8080）改为「前台命令 + 常驻 proot 子进程」模型，proot 存活即服务存活，彻底修掉「部署时端口通、部署完就打不开」；引擎健康态改为**按端口实测**刷新服务列表，状态与实际一致。
+- **CMS 能力参数默认值**：能力可声明 `defaultArgs`，调用未传时自动补齐（如 `term_httpd_list` 的 `dir`），不再出现 `ls -la ""`。
+- **USB / 无线调试功能补全**：修复无线 ADB「实际可连却显示未监听」的误判（原只匹配回环地址，实际监听 `0.0.0.0`）；新增 USB 数据线实际连接状态、「正在控制本机的客户端」列表（谁在操控这台设备）、`adb devices -l` 输出；「打开终端」改为真实跳转。
+
+### v1.0.79
 - **终端特权 / 远程接入**：终端顶栏新增「权限」「远程」两个入口；一键查看并申请 ROOT / LSPosed / ADB / Shizuku 权限，授权后打开终端直接可用；共享存储挂载改为自有路径（不再写死第三方路径）；离线模型（MNN / llama.cpp）无需再填 API 地址即可运行；终端支持 SSH / VNC 远程连接。
 
 ### v1.0.77
@@ -1491,9 +1497,19 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-**最新版本：`v1.0.79`**（2026-09-03，终端特权 / 远程接入：ROOT · LSPosed · ADB · Shizuku 对接、权限面板、共享存储自有路径、离线模型免 API 地址、SSH / VNC 远程连接）：
+**最新版本：`v1.0.80`**（2026-09-03，CMS 框架修复 + USB / 无线调试补全：entry.sh 不再被覆盖、引擎服务常驻化、能力参数默认值、ADB 监听状态与连接可见性）：
 
-- 🟢 **[app-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.79/app-full-release.apk)**（约 296MB，Release 签名，**最新**）
+- 🟢 **[app-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.80/app-full-release.apk)**（约 296MB，Release 签名，**最新**）
+
+### v1.0.80 新增功能
+
+**CMS 框架修复 + USB / 无线调试补全（2026-09-03）**：
+- `entry.sh` 环境变量花括号修复，端口注入生效
+- 内置模块版本化幂等播种，手动修复不再被覆盖
+- 引擎共享服务常驻化（proot 子进程），健康态按端口实测
+- CMS 能力参数 `defaultArgs` 默认值机制
+- 无线 ADB 监听状态误判修复（兼容 `0.0.0.0` 监听）
+- 新增 USB 数据线状态、正在控制本机的客户端列表、`adb devices`
 
 ### v1.0.79 新增功能
 

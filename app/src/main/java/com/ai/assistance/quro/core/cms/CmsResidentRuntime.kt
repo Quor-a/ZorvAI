@@ -48,8 +48,14 @@ object CmsResidentRuntime {
         val dir = CmsTerminalDeployer.hostDir(context, module.id)
         dir.mkdirs()
         val f = File(dir, "entry.sh")
+        val normalized = entry.normalizeLineEndings()
+        // 内容相同则跳过重写，避免每次启动常驻服务都覆盖用户在终端里对 entry.sh 的手动修复
+        if (f.exists() && f.readText() == normalized) {
+            if (!f.canExecute()) runCatching { f.setExecutable(true) }
+            return true
+        }
         return runCatching {
-            f.writeText(entry.normalizeLineEndings())
+            f.writeText(normalized)
             f.setExecutable(true)
         }.isSuccess
     }

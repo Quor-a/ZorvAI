@@ -112,6 +112,8 @@ data class QuroCmsCapability(
     val residentEnv: Map<String, String> = emptyMap(),
     /** 常驻停止标记：true 时该 terminal 能力转去 [CmsResidentRuntime.stop] 停止对应模块常驻服务。 */
     val residentStop: Boolean = false,
+    /** 参数默认值：调用未传某参数时补齐，避免模板里 `${arg}` 被替换成空串（如 term_httpd_list 的 dir）。 */
+    val defaultArgs: Map<String, String> = emptyMap(),
 ) {
     /** 从默认 action 模板解析参数名（${name}）。 */
     fun argNames(): List<String> = argNamesOf(action)

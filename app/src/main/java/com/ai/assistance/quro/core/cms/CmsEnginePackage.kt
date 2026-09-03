@@ -110,7 +110,7 @@ data class CmsEnginePackage(
                     EngineSvc(
                         id = "cms-static",
                         name = "CMS 静态资源服务",
-                        command = "cd /root/cms && nohup python3 -m http.server 8080 >/root/cms/_engine/services/cms-static.log 2>&1 &",
+                        command = "python3 -m http.server 8080 --bind 0.0.0.0",
                         port = 8080,
                         enabled = true,
                     ),
@@ -120,11 +120,11 @@ data class CmsEnginePackage(
     }
 }
 
-/** 引擎提供的共享后台服务描述（写入 /root/cms/_engine/services/<id>.sh 并后台拉起）。 */
+/** 引擎提供的共享后台服务描述（写入 /root/cms/_engine/services/<id>.sh）。 */
 data class EngineSvc(
     val id: String,
     val name: String,
-    /** 启动命令模板（sh，应自行后台化：nohup ... &）。 */
+    /** 前台启动命令（sh，不应自行后台化）：由 [CmsEngineDeployer] 以常驻 proot `exec` 启动，proot 常驻则服务常驻。 */
     val command: String,
     val port: Int = 0,
     val enabled: Boolean = true,

@@ -1686,7 +1686,11 @@ fun ChatScreen(
         if (showUsbDebug) {
             BackHandler { showUsbDebug = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
-                QuroUsbDebugScreen(onClose = { showUsbDebug = false })
+                QuroUsbDebugScreen(
+                    onClose = { showUsbDebug = false },
+                    // 「打开终端」真实跳转到终端页（此前是弹 Toast 的占位）
+                    onOpenTerminal = { showUsbDebug = false; showTerminal = true },
+                )
             }
         }
 

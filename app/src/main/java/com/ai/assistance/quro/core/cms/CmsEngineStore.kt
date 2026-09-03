@@ -37,6 +37,20 @@ object CmsEngineStore {
     private lateinit var appCtx: Context
     private val logBuf = mutableListOf<String>()
 
+    /**
+     * 引擎共享服务端口表（svcId → port），持久化到 engine-state.json。
+     * 供 [probeHealth] 在运行时按端口探测，把 services 刷新为「真实仍在监听」的服务，
+     * 避免部署快照里登记了 cms-static、而 8080 早已随 proot 退出死掉的状态失真。
+     */
+    private val enginePorts = mutableMapOf<String, Int>()
+
+    /** 登记引擎共享服务端口（部署时调用），并即时持久化。 */
+    fun registerEngineServices(svcs: List<EngineSvc>) {
+        enginePorts.clear()
+        svcs.filter { it.enabled && it.port > 0 }.forEach { enginePorts[it.id] = it.port }
+        persist()
+    }
+
     fun init(context: Context) {
         if (initialized) return
         initialized = true
@@ -46,6 +60,14 @@ object CmsEngineStore {
             runCatching {
                 val o = JSONObject(f.readText())
                 val svcs = o.optString("services", "").split(",").map { it.trim() }.filter { it.isNotBlank() }
+                // 服务端口表（跨重启恢复，供运行时端口探测刷新 services 状态）
+                val portsObj = o.optJSONObject("servicePorts")
+                if (portsObj != null) {
+                    portsObj.keys().forEach { k ->
+                        val p = portsObj.optInt(k, 0)
+                        if (p > 0) enginePorts[k] = p
+                    }
+                }
                 _snapshot.value = EngineSnapshot(
                     engineVersion = o.optString("engineVersion", ""),
                     ready = o.optBoolean("ready", false),
@@ -129,6 +151,7 @@ object CmsEngineStore {
                 put("ready", s.ready)
                 put("health", s.health)
                 put("services", s.services.joinToString(","))
+                put("servicePorts", JSONObject().apply { enginePorts.forEach { (k, v) -> put(k, v) } })
                 put("lastDeployAt", s.lastDeployAt)
                 put("lastError", s.lastError)
             }
@@ -136,12 +159,34 @@ object CmsEngineStore {
         }
     }
 
-    /** 主动探测引擎是否在线（供 UI 进入时刷新健康态）。 */
+    /**
+     * 主动探测引擎是否在线（供 UI 进入时刷新健康态 + 服务列表）。
+     * 除检查 .engine.ready 标记外，还按 [enginePorts] 做运行时端口探测，
+     * 把 services 刷新为真实仍在监听的服务 id 列表（服务可能随 proot 退出/重启而挂）。
+     */
     fun probeHealth(context: Context) {
         init(context)
         val st = QuroLinuxEnv.probeLenient(context)
         if (!st.available) { markHealth(false); return }
         val (c, _) = QuroTerminalBridge.run(context, "[ -f ${CmsEngineDeployer.engineGuestDir()}/.engine.ready ]", timeoutMs = 10_000)
-        markHealth(c == 0)
+        val healthy = c == 0
+        val alive = probePorts(context)
+        _snapshot.value = _snapshot.value.copy(health = healthy, services = alive)
+        persist()
+    }
+
+    /**
+     * 运行时端口探测：轮询已在 [enginePorts] 登记的服务端口，返回仍在监听的 id 列表。
+     * 未登记端口（如从未部署过引擎）时原样返回当前快照，避免误清空。
+     */
+    private fun probePorts(context: Context): List<String> {
+        if (enginePorts.isEmpty()) return _snapshot.value.services
+        val alive = mutableListOf<String>()
+        enginePorts.forEach { (id, port) ->
+            val probe = "python3 -c \"import socket,sys; s=socket.socket(); s.settimeout(0.5); sys.exit(0 if s.connect_ex(('127.0.0.1',$port))==0 else 1)\""
+            val (pc, _) = QuroTerminalBridge.run(context, probe, timeoutMs = 8_000)
+            if (pc == 0) alive.add(id)
+        }
+        return alive
     }
 }
