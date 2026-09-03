@@ -89,6 +89,80 @@ class TerminalManager private constructor(
         }
 
         private const val TAG = "TerminalManager"
+
+        /**
+         * 计算字节数组尾部「不完整 UTF-8 序列」的长度（0..3）。
+         * 多字节 UTF-8 的前导字节声明了序列总长（110→2 / 1110→3 / 11110→4），
+         * 若尾部剩余字节不足该长度，则这部分需要留给下一个 read 块拼接。
+         */
+        /**
+         * 检测字符串末尾是否存在被 read 边界截断的不完整 ANSI 转义序列。
+         * 返回应留给下一块的字符长度；0 表示末尾是完整序列或普通文本。
+         */
+        private fun incompleteAnsiTailLength(text: String): Int {
+            val esc = text.lastIndexOf('\u001B')
+            if (esc < 0) return 0
+            if (esc == text.length - 1) return 1 // ESC 单独在末尾
+            val after = text[esc + 1]
+            if (after == '[') {
+                // CSI：完整需要命令字符 0x40-0x7E；参数/中间字符在 0x30-0x3F 与 0x20-0x2F
+                for (i in esc + 2 until text.length) {
+                    val c = text[i].code
+                    if (c in 0x40..0x7E) return 0 // 完整
+                    if (c in 0x30..0x3F || c in 0x20..0x2F) continue
+                    // 遇到非法字符：当成已结束（让 scanner 去处理错误）
+                    return 0
+                }
+                return text.length - esc
+            }
+            if (after == ']') {
+                // OSC：以 BEL 或 ESC \ 结束
+                for (i in esc + 2 until text.length) {
+                    if (text[i] == '\u0007') return 0
+                    if (text[i] == '\u001B' && i + 1 < text.length && text[i + 1] == '\\') return 0
+                }
+                return text.length - esc
+            }
+            if (after == 'P') {
+                // DCS：以 ESC \ 结束
+                for (i in esc + 2 until text.length) {
+                    if (text[i] == '\u001B' && i + 1 < text.length && text[i + 1] == '\\') return 0
+                }
+                return text.length - esc
+            }
+            // ESC 7/8/c/D/E/H/M/Z 等单字符序列已完整；其余不处理
+            return 0
+        }
+
+        private fun incompleteUtf8TailLength(bytes: ByteArray): Int {
+            val n = bytes.size
+            // 最多回看 4 字节（UTF-8 序列最长 4 字节）
+            for (lookBack in 1..minOf(4, n)) {
+                val idx = n - lookBack
+                val b = bytes[idx].toInt() and 0xFF
+                when {
+                    // 前导字节：序列总长
+                    (b and 0xF8) == 0xF0 -> {
+                        val have = n - idx
+                        return if (have < 4) lookBack else 0
+                    }
+                    (b and 0xF0) == 0xE0 -> {
+                        val have = n - idx
+                        return if (have < 3) lookBack else 0
+                    }
+                    (b and 0xE0) == 0xC0 -> {
+                        val have = n - idx
+                        return if (have < 2) lookBack else 0
+                    }
+                    // 续字节（10xxxxxx）：继续回看找前导
+                    (b and 0xC0) == 0x80 -> { /* 继续往前找 */ }
+                    // ASCII：尾部无残缺
+                    else -> return 0
+                }
+            }
+            // 回看 4 字节全是续字节（异常流），不保留，按替换字符解码
+            return 0
+        }
     }
 
     init {
@@ -189,10 +263,50 @@ class TerminalManager private constructor(
                         terminalSession.stdout.use { inputStream ->
                             val buffer = ByteArray(4096)
                             var bytesRead: Int
+                            // UTF-8 安全分块：多字节序列跨 read 边界时先留尾部不完整字节，
+                            // 与下一块拼接后再解码，避免中文/emoji 在 4096 字节边界被截成 U+FFFD 乱码。
+                            var pending: ByteArray = ByteArray(0)
+                            // ANSI 转义序列跨 read 边界时同样留尾（如 ESC[32 与下一块的 m 分属两次 read）
+                            var pendingAnsi: String = ""
                             while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                                val chunk = String(buffer, 0, bytesRead)
-                                Log.d(TAG, "Read chunk: '$chunk'")
-                                outputProcessor.processOutput(sessionId, chunk, sessionManager)
+                                val all = if (pending.isEmpty()) buffer.copyOf(bytesRead)
+                                else pending + buffer.copyOf(bytesRead)
+                                val keep = incompleteUtf8TailLength(all)
+                                val decodeLen = all.size - keep
+                                if (decodeLen > 0) {
+                                    var chunk = String(all, 0, decodeLen, Charsets.UTF_8)
+                                    // 拼接上一块遗留的 ANSI 尾部
+                                    if (pendingAnsi.isNotEmpty()) {
+                                        chunk = pendingAnsi + chunk
+                                        pendingAnsi = ""
+                                    }
+                                    // 当前块末尾若存在不完整的 ANSI 序列，把尾部留到下一次
+                                    val ansiKeep = incompleteAnsiTailLength(chunk)
+                                    if (ansiKeep > 0) {
+                                        if (ansiKeep < chunk.length) {
+                                            pendingAnsi = chunk.substring(chunk.length - ansiKeep)
+                                            chunk = chunk.substring(0, chunk.length - ansiKeep)
+                                        } else {
+                                            pendingAnsi = chunk
+                                            chunk = ""
+                                        }
+                                    }
+                                    if (chunk.isNotEmpty()) {
+                                        Log.d(TAG, "Read chunk: '$chunk'")
+                                        outputProcessor.processOutput(sessionId, chunk, sessionManager)
+                                    }
+                                }
+                                pending = if (keep > 0) all.copyOfRange(decodeLen, all.size) else ByteArray(0)
+                            }
+                            // 流结束时仍残留的不完整字节按替换字符解码，并把遗留的 ANSI 尾部一并喂出去
+                            if (pending.isNotEmpty() || pendingAnsi.isNotEmpty()) {
+                                var chunk = String(pending, Charsets.UTF_8)
+                                if (pendingAnsi.isNotEmpty()) {
+                                    chunk = pendingAnsi + chunk
+                                }
+                                if (chunk.isNotEmpty()) {
+                                    outputProcessor.processOutput(sessionId, chunk, sessionManager)
+                                }
                             }
                         }
                     } catch (e: java.io.InterruptedIOException) {

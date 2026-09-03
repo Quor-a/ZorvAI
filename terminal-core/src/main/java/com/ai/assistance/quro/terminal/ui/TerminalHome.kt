@@ -130,7 +130,11 @@ fun TerminalHome(
                 )
             }
         } else {
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .imePadding()
+            ) {
                 // 终端输出区域
                 CanvasTerminalOutput(
                     emulator = env.terminalEmulator,
@@ -146,6 +150,13 @@ fun TerminalHome(
                     onInterrupt = env::onInterrupt,
                     fontSize = fontSize,
                     padding = padding
+                )
+
+                // 虚拟快捷键键盘（非全屏模式同样可用：ESC/TAB/方向键/Ctrl 组合键）
+                VirtualKeyboard(
+                    onKeyPress = { key -> env.onSendInput(key, false) },
+                    fontSize = fontSize * 0.7f,
+                    padding = padding * 0.5f
                 )
             }
         }
@@ -624,6 +635,19 @@ private fun VirtualKeyboard(
                         )
                     }
                 }
+            }
+
+            // 第四行：readline 常用快捷键（挂起/行首/行尾/删词/删到行尾/搜历史）
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(padding * 0.5f)
+            ) {
+                KeyButton("^Z", "\u001a", fontSize, padding, onKeyPress, modifier = Modifier.weight(1f))
+                KeyButton("^A", "\u0001", fontSize, padding, onKeyPress, modifier = Modifier.weight(1f))
+                KeyButton("^E", "\u0005", fontSize, padding, onKeyPress, modifier = Modifier.weight(1f))
+                KeyButton("^W", "\u0017", fontSize, padding, onKeyPress, modifier = Modifier.weight(1f))
+                KeyButton("^K", "\u000b", fontSize, padding, onKeyPress, modifier = Modifier.weight(1f))
+                KeyButton("^R", "\u0012", fontSize, padding, onKeyPress, modifier = Modifier.weight(1f))
             }
         }
     }
