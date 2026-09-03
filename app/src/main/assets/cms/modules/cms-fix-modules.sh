@@ -27,7 +27,20 @@ sh -n "$BOOT" && echo "  ✅ bootstrap.sh 语法OK" || echo "  ⚠️ 需手动�
 echo "🔧 修复 httpd entry.sh..."
 cat > /root/cms/quro.term.httpd/entry.sh << 'HTTPD'
 #!/bin/sh
-PORT="${QURO_HTTP_PORT:-${1:-8080}}"
+# Quro CMS 终端模块：静态文件 HTTP 服务（终端作为后端）
+# 默认端口 8123（避开引擎 cms-static 的 8080 与 quro.term.python 的 8765 / node 的 8766）
+if [ -n "${QURO_HTTP_PORT:-}" ]; then
+  PORT="$QURO_HTTP_PORT"
+elif [ -n "${1:-}" ]; then
+  PORT="$1"
+else
+  PORT=8123
+  for cand in 8123 8124 8125 8126 8127; do
+    if ! (exec 3<>/dev/tcp/127.0.0.1/$cand) 2>/dev/null; then
+      PORT=$cand; break
+    fi
+  done
+fi
 DIR="${QURO_SERVE_DIR:-${2:-/root/cms/quro.term.httpd/www}}"
 mkdir -p "$DIR"
 if [ ! -f "$DIR/index.html" ]; then
@@ -38,7 +51,7 @@ cd "$DIR"
 exec python3 -m http.server "$PORT" --bind 0.0.0.0
 HTTPD
 chmod +x /root/cms/quro.term.httpd/entry.sh
-echo "  ✅ httpd entry.sh 修好"
+echo "  ✅ httpd entry.sh 修好（默认端口 8123，自动探测空闲端口）"
 
 echo "🔧 修复 node backend.js + entry.sh..."
 cat > /root/cms/quro.term.node/backend.js << 'NODEJS'
