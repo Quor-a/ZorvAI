@@ -426,7 +426,9 @@ class CanvasTerminalView @JvmOverloads constructor(
         var bgStartX = x
 
         // 批量绘制字符：把连续且样式相同的字符合并为一次 drawText，
-        // 避免逐字符 applyStyle（重建 Typeface）+ drawText 的开销
+        // 避免逐字符 applyStyle（重建 Typeface）+ drawText 的开销。
+        // 宽字符（CJK/emoji，占 2 格）必须断开 run 单独绘制：
+        // run 批量绘制按「字符数 × charWidth」定位，若混入宽字符会整体错位。
         var runStart = 0
         val runText = StringBuilder()
 
@@ -454,21 +456,45 @@ class CanvasTerminalView @JvmOverloads constructor(
                 bgStartX = x + charWidth
             }
 
-            // 样式变化时 flush 上一个 run
-            if (col > runStart && !sameCharStyle(line[runStart], termChar)) {
-                drawTextRun(canvas, line, runStart, col, startX, y, baseline, charWidth, charHeight, runText)
-                runStart = col
-                runText.setLength(0)
-            }
+            when {
+                // 宽字符的第二格占位：无文本（首格已按 2 格宽绘制），背景照常
+                termChar.isContinuation -> {
+                    if (col > runStart && runText.isNotEmpty()) {
+                        drawTextRun(canvas, line, runStart, col, startX, y, baseline, charWidth, charHeight, runText)
+                    }
+                    runText.setLength(0)
+                    runStart = col + 1
+                }
+                // 宽字符首格：断 run 单独绘制（等宽字体中 CJK/emoji 自然占 2 格宽）
+                AnsiTerminalEmulator.displayWidth(termChar.char) == 2 -> {
+                    if (col > runStart && runText.isNotEmpty()) {
+                        drawTextRun(canvas, line, runStart, col, startX, y, baseline, charWidth, charHeight, runText)
+                    }
+                    runText.setLength(0)
+                    applyCharStyle(termChar)
+                    canvas.drawText(termChar.char.toString(), x, y + baseline, textPaint)
+                    runStart = col + 1
+                }
+                else -> {
+                    // 样式变化时 flush 上一个 run
+                    if (col > runStart && !sameCharStyle(line[runStart], termChar)) {
+                        drawTextRun(canvas, line, runStart, col, startX, y, baseline, charWidth, charHeight, runText)
+                        runStart = col
+                        runText.setLength(0)
+                    }
 
-            val ch = if (termChar.char != ' ' && !termChar.isHidden) termChar.char else ' '
-            runText.append(ch)
+                    val ch = if (termChar.char != ' ' && !termChar.isHidden) termChar.char else ' '
+                    runText.append(ch)
+                }
+            }
 
             x += charWidth
         }
 
         // flush 最后一个 run
-        drawTextRun(canvas, line, runStart, line.size, startX, y, baseline, charWidth, charHeight, runText)
+        if (runStart < line.size && runText.isNotEmpty()) {
+            drawTextRun(canvas, line, runStart, line.size, startX, y, baseline, charWidth, charHeight, runText)
+        }
 
         // 绘制行尾的背景
         currentBgColor?.let {
@@ -546,12 +572,13 @@ class CanvasTerminalView @JvmOverloads constructor(
     }
     
     private fun drawCursor(canvas: Canvas, charWidth: Float, charHeight: Float) {
-        val cursorX = emulator?.getCursorX() ?: 0
-        val cursorY = emulator?.getCursorY() ?: 0
-        
+        // deferred wrap 时光标列可能等于 screenWidth（越界一格），绘制时收敛到最后一列
+        val cursorX = (emulator?.getCursorX() ?: 0).coerceAtMost(cachedCols - 1)
+        val cursorY = (emulator?.getCursorY() ?: 0).coerceAtMost(cachedRows - 1)
+
         val x = cursorX * charWidth
         val y = cursorY * charHeight - scrollOffsetY
-        
+
         // 绘制光标方块
         canvas.drawRect(x, y, x + charWidth, y + charHeight, cursorPaint)
     }

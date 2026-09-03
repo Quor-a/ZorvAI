@@ -33,6 +33,9 @@ class TerminalEnvironment(context: Context) {
     private val usrDir: File = File(filesDir, "usr")
     private val binDir: File = File(usrDir, "bin")
     private val nativeLibDir: String = context.applicationInfo.nativeLibraryDir
+    // 应用自有外部目录，作为「终端公用挂载主目录」始终可挂（不依赖 MANAGE_EXTERNAL_STORAGE 权限）
+    private val sharedHostDir: String = context.getExternalFilesDir(null)?.absolutePath
+        ?: File(filesDir, "shared").apply { mkdirs() }.absolutePath
 
     private val sourceManager = SourceManager(context)
 
@@ -306,6 +309,9 @@ class TerminalEnvironment(context: Context) {
         val loginUbuntu = """
         login_ubuntu(){
           mkdir -p "${'$'}UBUNTU_PATH/storage/emulated" 2>/dev/null
+          # 终端「公用挂载主目录」：应用自有外部目录，不依赖存储权限，始终可用
+          mkdir -p "${'$'}UBUNTU_PATH/mnt/shared" 2>/dev/null
+          mkdir -p "${'$'}UBUNTU_PATH/root/shared" 2>/dev/null
           exec ${'$'}BIN/proot \
             -0 \
             -r "${'$'}UBUNTU_PATH" \
@@ -319,6 +325,8 @@ class TerminalEnvironment(context: Context) {
             -b /proc/self/fd/0:/dev/stdin \
             -b /proc/self/fd/1:/dev/stdout \
             -b /proc/self/fd/2:/dev/stderr \
+            -b "$sharedHostDir":/mnt/shared \
+            -b "$sharedHostDir":/root/shared \
             @SB@
             -w /root \
             /usr/bin/env -i \

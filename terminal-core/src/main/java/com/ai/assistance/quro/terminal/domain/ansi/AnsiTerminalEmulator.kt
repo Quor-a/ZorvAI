@@ -8,7 +8,9 @@ import android.util.Log
  */
 data class TerminalChar(
     val char: Char = ' ',
-    val attributes: TextAttributes = TextAttributes()
+    val attributes: TextAttributes = TextAttributes(),
+    /** 宽字符（CJK/emoji）占用的第二格占位标记：渲染时跳过文本绘制（首格已按 2 格宽绘制）。 */
+    val isContinuation: Boolean = false
 ) {
     constructor(
         char: Char,
@@ -54,6 +56,53 @@ class AnsiTerminalEmulator(
     companion object {
         private const val TAG = "AnsiTerminalEmulator"
         private const val TAB_SIZE = 8
+
+        // East Asian Wide / Fullwidth 的常见 UnicodeBlock 集合（用于 wcwidth 判定）
+        private val wideBlocks: Set<Character.UnicodeBlock> = setOf(
+            Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS,
+            Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A,
+            Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_B,
+            Character.UnicodeBlock.CJK_COMPATIBILITY_IDEOGRAPHS,
+            Character.UnicodeBlock.CJK_RADICALS_SUPPLEMENT,
+            Character.UnicodeBlock.CJK_SYMBOLS_AND_PUNCTUATION,
+            Character.UnicodeBlock.HIRAGANA,
+            Character.UnicodeBlock.KATAKANA,
+            Character.UnicodeBlock.HANGUL_SYLLABLES,
+            Character.UnicodeBlock.HANGUL_JAMO,
+            Character.UnicodeBlock.HANGUL_COMPATIBILITY_JAMO,
+            Character.UnicodeBlock.HALFWIDTH_AND_FULLWIDTH_FORMS,
+        )
+
+        /**
+         * 终端字符显示宽度（wcwidth 简化版）：
+         * - 控制字符 0（本方法只处理可打印字符，控制字符不会走到这里）
+         * - CJK / 全角 / 韩文 / 常见 emoji 为 2（占两个终端格）
+         * - 其余为 1
+         * 注意：UTF-16 代理对按「高代理 2 / 低代理 0」处理，使 emoji 总占 2 格
+         * 且低代理作为 continuation 占位。
+         */
+        fun displayWidth(c: Char): Int = when {
+            // UTF-16 代理对：高代理算 2 格，低代理为 0（由 handleText 作 continuation 处理）
+            Character.isHighSurrogate(c) -> 2
+            Character.isLowSurrogate(c) -> 0
+            c in '\u1100'..'\u115F' -> 2   // Hangul Jamo
+            c in '\u2E80'..'\u303E' -> 2   // CJK 部首补充 / 康熙部首 / CJK 符号
+            c in '\u3041'..'\u33FF' -> 2   // 假名 / 注音 / CJK 兼容
+            c in '\u3400'..'\u4DBF' -> 2   // CJK 扩展 A
+            c in '\u4E00'..'\u9FFF' -> 2   // CJK 统一表意文字
+            c in '\uA000'..'\uA4CF' -> 2   // 彝文
+            c in '\uAC00'..'\uD7A3' -> 2   // 韩文音节
+            c in '\uF900'..'\uFAFF' -> 2   // CJK 兼容表意
+            c in '\uFE30'..'\uFE4F' -> 2   // CJK 兼容形式
+            c in '\uFF00'..'\uFF60' -> 2   // 全角形式
+            c in '\uFFE0'..'\uFFE6' -> 2   // 全角符号
+            c.code in 0x1F300..0x1FAFF -> 2 // Emoji（多数字体渲染为 2 格宽）
+            else -> {
+                // 兜底：按 UnicodeBlock 判定（覆盖上面区间遗漏的块）
+                val block = Character.UnicodeBlock.of(c)
+                if (block != null && block in wideBlocks) 2 else 1
+            }
+        }
     }
     
     // 屏幕缓冲区
@@ -115,9 +164,13 @@ class AnsiTerminalEmulator(
     }
     
     /**
-     * 处理普通文本字符
+     * 处理普通文本字符（含宽字符双格占位）
      */
     private fun handleText(char: Char) {
+        val w = displayWidth(char)
+        // UTF-16 低代理：不单独占格（其高代理已按 2 格处理），直接丢弃避免覆盖 continuation 格
+        if (w == 0) return
+
         // 检查是否需要自动换行
         if (cursorX >= screenWidth) {
             if (autoWrapMode) {
@@ -131,11 +184,36 @@ class AnsiTerminalEmulator(
                 cursorX = screenWidth - 1
             }
         }
-        
+
+        // 宽字符只剩行尾 1 格且开自动换行：填空格顶位，换行后写到下一行行首
+        if (w == 2 && cursorX == screenWidth - 1 && autoWrapMode &&
+            cursorY < screenHeight
+        ) {
+            screenBuffer[cursorY][cursorX] = TerminalChar(' ', currentAttributes)
+            cursorX = 0
+            cursorY++
+            if (cursorY > scrollBottom) {
+                cursorY = scrollBottom
+                scrollUp(1)
+            }
+        }
+
         // 写入字符
         if (cursorY < screenHeight && cursorX < screenWidth) {
             screenBuffer[cursorY][cursorX] = TerminalChar(char, currentAttributes)
-            cursorX++
+            if (w == 2) {
+                // 宽字符占两格：第二格写 continuation 占位（渲染层跳过其文本绘制）
+                val nx = cursorX + 1
+                if (nx < screenWidth) {
+                    screenBuffer[cursorY][nx] = TerminalChar(' ', currentAttributes, isContinuation = true)
+                }
+                cursorX += 2
+            } else {
+                cursorX++
+            }
+        } else if (w == 2) {
+            // 边界保护：光标越界时宽字符按 2 格推进，交由下个字符触发换行
+            cursorX += 2
         }
     }
     
@@ -475,20 +553,8 @@ class AnsiTerminalEmulator(
             for (y in scrollTop until scrollBottom) {
                 screenBuffer[y] = screenBuffer[y + 1]
             }
-            screenBuffer[scrollBottom] = Array(screenWidth) { 
-                TerminalChar(attributes = currentAttributes.copy(
-                    fgColor = Color.WHITE,
-                    bgColor = 0xFF0B0E14.toInt(),
-                    isBold = false,
-                    isDim = false,
-                    isItalic = false,
-                    isUnderline = false,
-                    isBlinking = false,
-                    isInverse = false,
-                    isHidden = false,
-                    isStrikethrough = false
-                ))
-            }
+            // BCE：滚动产生的空行继承当前背景色（TUI 应用依赖此行为绘制连续色块）
+            screenBuffer[scrollBottom] = Array(screenWidth) { TerminalChar(' ', currentAttributes) }
         }
     }
     
@@ -517,46 +583,46 @@ class AnsiTerminalEmulator(
     }
     
     private fun eraseFromCursorToEnd() {
-        // 清除当前行从光标到行尾
+        // BCE：擦除保留当前背景色（xterm EL/ED 的标准行为），TUI 色块不残缺
         for (x in cursorX until screenWidth) {
-            screenBuffer[cursorY][x] = TerminalChar()
+            screenBuffer[cursorY][x] = TerminalChar(' ', currentAttributes)
         }
         // 清除下面所有行
         for (y in cursorY + 1 until screenHeight) {
             for (x in 0 until screenWidth) {
-                screenBuffer[y][x] = TerminalChar()
+                screenBuffer[y][x] = TerminalChar(' ', currentAttributes)
             }
         }
     }
-    
+
     private fun eraseFromStartToCursor() {
         // 清除上面所有行
         for (y in 0 until cursorY) {
             for (x in 0 until screenWidth) {
-                screenBuffer[y][x] = TerminalChar()
+                screenBuffer[y][x] = TerminalChar(' ', currentAttributes)
             }
         }
         // 清除当前行从行首到光标
         for (x in 0..cursorX) {
-            screenBuffer[cursorY][x] = TerminalChar()
+            screenBuffer[cursorY][x] = TerminalChar(' ', currentAttributes)
         }
     }
-    
+
     private fun eraseLineFromCursor() {
         for (x in cursorX until screenWidth) {
-            screenBuffer[cursorY][x] = TerminalChar()
+            screenBuffer[cursorY][x] = TerminalChar(' ', currentAttributes)
         }
     }
-    
+
     private fun eraseLineToCursor() {
         for (x in 0..cursorX) {
-            screenBuffer[cursorY][x] = TerminalChar()
+            screenBuffer[cursorY][x] = TerminalChar(' ', currentAttributes)
         }
     }
-    
+
     private fun eraseLine() {
         for (x in 0 until screenWidth) {
-            screenBuffer[cursorY][x] = TerminalChar()
+            screenBuffer[cursorY][x] = TerminalChar(' ', currentAttributes)
         }
     }
     
