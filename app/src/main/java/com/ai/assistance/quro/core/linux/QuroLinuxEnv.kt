@@ -152,6 +152,28 @@ object QuroLinuxEnv {
 
     private val setupMutex = Mutex()
     private var setupJob: Job? = null
+    /**
+     * 安装失败冷却：失败后 60 秒内拒绝再次 setup，避免 UI 的 auto-fix effect / 用户多次点重试
+     * 把设备打成"死循环安装环境"（apt-get install exit 100 后 setupJob 完成 → state 变 Error →
+     * UI 横幅"重试"回调 setup → 又一次失败）。冷却期内直接返回最近一次错误。
+     */
+    @Volatile private var lastSetupFailAt: Long = 0L
+    private val setupCooldownMs: Long = 60_000L
+    /** 失败时给用户的详细诊断（含 apt-get 完整输出前 60 行），写到公共 Download 目录供手机直接读取。 */
+    private fun writeLastErrorToDownloads(context: Context, detail: String) {
+        runCatching {
+            val downloads = android.os.Environment.getExternalStoragePublicDirectory(
+                android.os.Environment.DIRECTORY_DOWNLOADS
+            )
+            if (downloads == null) return@runCatching
+            downloads.mkdirs()
+            val out = File(downloads, "QuroAI_last_setup_error.txt")
+            val header = "QuroAI setup failed at ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}\n" +
+                "请把本文件发给开发者，或自行查下面的网址/DNS/HTTP 错误。\n" +
+                "（" + out.absolutePath + "）\n\n"
+            out.writeText(header + detail)
+        }
+    }
 
     private fun sandboxDir(context: Context) = File(context.filesDir, "linux-sandbox")
 
@@ -409,6 +431,16 @@ object QuroLinuxEnv {
      */
     fun setup(context: Context) {
         if (setupJob?.isActive == true) return
+        // 冷却期检查：失败后 60 秒内拒绝再跑，避免"死循环安装环境"。
+        val now = System.currentTimeMillis()
+        val sinceLastFail = now - lastSetupFailAt
+        if (lastSetupFailAt != 0L && sinceLastFail < setupCooldownMs) {
+            val remain = (setupCooldownMs - sinceLastFail) / 1000
+            val prev = (state.value as? SandboxState.Error)?.message ?: "最近一次安装失败"
+            Log.w(TAG, "setup: 处于安装失败冷却期（剩余 ${remain}s），忽略本次重试请求")
+            _state.value = SandboxState.Error("$prev\n\n冷却期剩余 ${remain}s，请稍候再试。完整错误请查看手机 Download/QuroAI_last_setup_error.txt")
+            return
+        }
         setupJob = scope.launch {
             if (!setupMutex.tryLock()) return@launch
             try {
@@ -416,7 +448,12 @@ object QuroLinuxEnv {
             } catch (e: Exception) {
                 Log.e(TAG, "setup failed", e)
                 val logPath = File(sandboxDir(context), "setup-diag.log").absolutePath
-                _state.value = SandboxState.Error("${e.message}\n\n诊断日志: $logPath")
+                // 把完整诊断（含 apt-get 真实输出 60+ 行）写到公共 Download 目录，
+                // 用户用手机文件管理器能直接读出"哪个域名拉不到 / 哪个包 404"等根因。
+                val fullDetail = (e.message ?: "未知错误") + "\n\n沙箱内诊断日志: " + logPath
+                writeLastErrorToDownloads(context, fullDetail)
+                _state.value = SandboxState.Error("${e.message}\n\n诊断日志: $logPath\n详细错误已写入 Download/QuroAI_last_setup_error.txt")
+                lastSetupFailAt = System.currentTimeMillis()
             } finally {
                 setupMutex.unlock()
             }
@@ -441,7 +478,14 @@ object QuroLinuxEnv {
         // 真机上表现为「每次打开终端都要重装环境、等好几分钟」。
         // 宽松探测保证「已装好」时直接复用，只在 proot/rootfs 真正缺失时才重装。
         val st = probeLenient(context)
-        if (st.available) return st
+        if (st.available) {
+            // 存量环境（rootfs 已装好）：补齐开发工具链（python3/ffmpeg/node/git 等），幂等，仅装一次。
+            // 这样已装环境的用户在更新 APK 后打开终端即自动获得完整 Linux 命令，无需重新下载 rootfs。
+            // installDevToolchain 是 suspend 函数，而本方法为阻塞式（调用方已处于后台线程），
+            // 用 runBlocking 同步等待工具链补齐完成（与下方 runBlocking 一致）。
+            runCatching { runBlocking { installDevToolchain(context) } }
+            return st
+        }
         return try {
             runBlocking {
                 setupMutex.withLock {
@@ -460,6 +504,117 @@ object QuroLinuxEnv {
     fun cancelSetup() {
         setupJob?.cancel()
         setupJob = null
+    }
+
+    /**
+     * 开发工具链（对齐完整 Ubuntu 体验）：ubuntu-base 极简 rootfs 不含这些包，
+     * 终端内 `python3` / `ffmpeg` / `node` / `npm` / `git` 等均 "command not found"，
+     * 表现为「AI 终端正常、UI 终端只能基础命令」。需在 apt-get update 之后显式安装。
+     */
+    private const val DEVTOOLS_MARKER = ".quro_devtools_v1"
+    /** 核心包：缺任何一个都显著影响终端可用性，必须装成功。 */
+    private const val DEVTOOLS_CORE =
+        "python3 python3-pip python3-venv ffmpeg nodejs npm git build-essential pkg-config"
+    /** 可选包：源未开（如 universe）时单独装、失败忽略，不影响核心包。 */
+    private const val DEVTOOLS_OPTIONAL = "neofetch"
+
+    /**
+     * 补齐开发工具链（python3 / ffmpeg / node / npm / git 等），使 QuroAI 终端开箱即有
+     * 与完整 Ubuntu 一致的 Linux 命令。
+     *
+     * - ubuntu-base 极简 rootfs 不含这些包，必须在 apt-get 之后显式安装；
+     * - 幂等：用 rootfs 内 marker 文件（[DEVTOOLS_MARKER]）防止重复安装；
+     * - 核心包整组安装，失败（apt list 过期）自动 `apt-get update` 后重试；
+     * - 可选包（neofetch 等，可能依赖 universe 源）单独安装、失败忽略，绝不连累核心包；
+     * - 供 [setupInternal]（全新安装）与 [ensureInstalledBlocking]（存量环境自动补全）共用，
+     *   也供 UI 终端打开时后台触发——已装环境无需重新下载 rootfs 即可补齐工具。
+     *
+     * @return 核心工具链安装成功（或已装过）返回 true，否则 false。
+     */
+    suspend fun installDevToolchain(context: Context): Boolean {
+        val rootfs = File(rootfsPath(context))
+        if (!rootfs.isDirectory) {
+            Log.w(TAG, "installDevToolchain: rootfs 不存在，跳过")
+            return false
+        }
+        val marker = File(rootfs, DEVTOOLS_MARKER)
+        if (marker.exists()) {
+            Log.i(TAG, "installDevToolchain: 已装过，跳过")
+            return true
+        }
+        Log.i(TAG, "installDevToolchain: 开始安装核心工具链 $DEVTOOLS_CORE")
+        var r = runProotInstall(context, DEVTOOLS_CORE)
+        if (r.first != 0) {
+            Log.w(TAG, "installDevToolchain: 核心包首次安装失败，apt-get update 后重试: ${r.second.take(300)}")
+            runProot(context, "apt-get update -o Acquire::http::No-Cache=true -o Acquire::ForceIPv4=true", timeoutMs = 180_000)
+            r = runProotInstall(context, DEVTOOLS_CORE)
+        }
+        val coreOk = r.first == 0
+        if (!coreOk) {
+            Log.e(TAG, "❌ installDevToolchain: 核心工具链安装失败(exit ${r.first}): ${r.second.take(400)}")
+            return false
+        }
+        Log.i(TAG, "✅ installDevToolchain: 核心工具链安装成功")
+        // 可选包：单独装、失败忽略
+        if (DEVTOOLS_OPTIONAL.isNotBlank()) {
+            val o = runProotInstall(context, DEVTOOLS_OPTIONAL)
+            if (o.first != 0) Log.w(TAG, "installDevToolchain: 可选包安装失败（忽略）: ${o.second.take(200)}")
+        }
+        runCatching { marker.createNewFile() }
+        return true
+    }
+
+    /**
+     * apt-get install 并强制 IPv4 + 多镜像回退（供 setupInternal 基础包安装调用）。
+     * 真机 5G/移动网络下 IPv6 常半通：apt-get update 带 ForceIPv4 成功，但 install 不带会走 IPv6 拉 .deb 包，
+     * 触发 connection-reset → exit 100（截图实证「update 成功、install 失败」）。故 install 也必须 ForceIPv4。
+     * 单镜像失败依次切换 UBUNTU_APT_MIRRORS 重试（先 rewrite sources + apt-get update 再装）。
+     */
+    private suspend fun aptInstallWithMirrorRetry(
+        context: Context,
+        rootfsDir: File,
+        pkgs: String,
+        userMirror: String,
+        timeoutMs: Long,
+    ): Pair<Int, String> {
+        val mirrors = listOf(userMirror) + UBUNTU_APT_MIRRORS.filter { it != userMirror }
+        var last = Pair(-1, "")
+        for (m in mirrors) {
+            diagLog(context, "apt install 尝试镜像: $m (ForceIPv4)")
+            writeAptSources(rootfsDir, m)
+            runProot(context, "apt-get update -o Acquire::http::No-Cache=true -o Acquire::Max-FutureTime=0 -o Acquire::ForceIPv4=true", timeoutMs = 180_000)
+            last = runProot(
+                context,
+                "apt-get install -y --fix-missing --no-install-recommends -o Acquire::ForceIPv4=true $pkgs",
+                timeoutMs = timeoutMs,
+            )
+            if (last.first == 0) return last
+            Log.w(TAG, "apt install 失败(镜像 $m): ${last.second.take(300)}")
+            diagLog(context, "apt install 失败(镜像 $m): ${last.second.take(400)}")
+        }
+        return last
+    }
+
+    /**
+     * 执行一组 apt-get install（带 --no-install-recommends + --fix-missing + ForceIPv4，缩短体积、扛单包下载失败/网络抖动）。
+     * 失败时按指数退避重试（2s/4s/8s，最多 3 次），对真机移动网络下瞬时拉不到包友好。
+     */
+    private suspend fun runProotInstall(context: Context, pkgs: String): Pair<Int, String> {
+        var attempt = 0
+        var r: Pair<Int, String>
+        while (true) {
+            attempt++
+            r = runProot(
+                context,
+                "apt-get install -y --fix-missing --no-install-recommends -o Acquire::ForceIPv4=true $pkgs",
+                timeoutMs = 420_000
+            )
+            if (r.first == 0) return r
+            if (attempt >= 3) return r
+            val backoff = attempt * 2000L
+            Log.w(TAG, "runProotInstall($pkgs) 第 $attempt 次失败，${backoff}ms 后重试: ${r.second.take(200)}")
+            kotlinx.coroutines.delay(backoff)
+        }
     }
 
     /**
@@ -935,10 +1090,13 @@ object QuroLinuxEnv {
 
         // bash 是持久 shell 的基础，必须装。同时补齐联网/开发必需的底层库（ca-certificates 让 HTTPS 源与
         // pip/npm 信任链可用；libcurl4 是多数编译/开发工具依赖；curl/wget 便于下载验证）。
+        // ★ 真因修复：apt-get update 带了 ForceIPv4 成功，但 install 不带会走 IPv6 拉 .deb 包，
+        // 真机 5G 下 connection-reset → exit 100（截图实证「update 成功、install 失败」）。
+        // 故 install 强制 ForceIPv4，并按镜像回退重试（先 rewrite sources + update 再装），--fix-missing 容单包 404。
         _state.value = SandboxState.Installing("安装 bash / ca-certificates / libcurl4…")
-        diagLog(context, "安装基础包 bash ca-certificates libcurl4 curl wget...")
-        val bash = runProot(context, "apt-get install -y --no-install-recommends bash ca-certificates libcurl4 curl wget", timeoutMs = 180_000)
-        diagLog(context, "基础包安装结果: exit=${bash.first}, output=${bash.second.take(300)}")
+        diagLog(context, "安装基础包 (ForceIPv4 + 镜像回退)...")
+        val bash = aptInstallWithMirrorRetry(context, rootfsDir, "bash ca-certificates libcurl4 curl wget", userMirror, 240_000)
+        diagLog(context, "基础包安装结果: exit=${bash.first}, output前 60 行=\n${bash.second.take(60 * 120)}")
         if (bash.first != 0) {
             val detail = "基础包安装失败（exit ${bash.first}）：\n${bash.second}"
             diagLog(context, "⛔ $detail")
@@ -946,6 +1104,13 @@ object QuroLinuxEnv {
             throw IllegalStateException(detail)
         }
         diagLog(context, "✅ 基础包安装成功")
+
+        // ★ 补齐开发工具链（python3 / ffmpeg / node / npm / git 等）：ubuntu-base 极简 rootfs 不含这些包，
+        // 而完整 Ubuntu 发行版自带这些包。此处显式安装，使 QuroAI 终端开箱即有完整 Linux 命令，
+        // 对齐「终端所有命令都能用」的体验。已装过（marker 存在）会自动跳过。
+        _state.value = SandboxState.Installing("安装开发工具链 (python3/ffmpeg/node/git)…")
+        diagLog(context, "安装开发工具链: $DEVTOOLS_CORE (+可选 $DEVTOOLS_OPTIONAL)")
+        installDevToolchain(context)
 
         // 通用 DNS（绕开被阻断的 53 端口）：装 dnscrypt-proxy（向上走 DoH/DNSCrypt 443 解析任意域名）。
         // 非致命——装不上则退化到 /etc/hosts 预列主机，不影响既有流程。
@@ -1072,10 +1237,13 @@ object QuroLinuxEnv {
         args.add("/bin/sh"); args.add("-c")
         val env = mutableMapOf(
             "HOME" to "/root",
-            // 更新 PATH 包含 usr/bin/（bash 和 busybox 所在位置）
-            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${usrBinDir.absolutePath}",
+            // 更新 PATH 包含 usr/bin/（bash 和 busybox 所在位置），并补齐
+            // cargo（/var/cargo/bin）与 go（/usr/local/go/bin），否则工具中心-包管理里
+            // go/cargo 相关命令会 Command not found。
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:${usrBinDir.absolutePath}",
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
+            "DEBIAN_FRONTEND" to "noninteractive",
             "LD_LIBRARY_PATH" to "${dir.absolutePath}:${usrBinDir.absolutePath}",
             "PROOT_TMP_DIR" to tmp,
             "PROOT_LOADER" to loader,
@@ -1163,9 +1331,10 @@ object QuroLinuxEnv {
 
         val env = mutableMapOf(
             "HOME" to "/root",
-            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${usrBinDir.absolutePath}",
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:${usrBinDir.absolutePath}",
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
+            "DEBIAN_FRONTEND" to "noninteractive",
             "LD_LIBRARY_PATH" to "${dir.absolutePath}:${usrBinDir.absolutePath}",
         )
 
@@ -1516,16 +1685,23 @@ object QuroLinuxEnv {
      * 调用方（QuroShellSession）须将其并入 shell 进程环境。
      */
     fun shellLaunch(context: Context): Pair<String, List<String>>? {
-        // 交互终端改用**宽松探测**，与一次性执行的 [run] 同策略。
-        // 旧实现的严格 [probe] 会因 canExecute()/符号链接解析误判，把本可正常启动的 proot
-        // 静默降级成 /system/bin/sh —— 即「terminal_exec 正常、终端 UI 却是 /bin/sh」的真机根因。
-        // 详见 [probeLenient] 注释。
-        val st = probeLenient(context)
-        if (!st.available || st.prootPath == null || st.rootfsPath == null) {
-            Log.w(TAG, "shellLaunch: 宽松探测仍判为不可用，返回 null（调用方将回退设备 sh）。原因: ${st.reason}")
+        // ★ 与一次性执行 [run] 完全一致的策略：直接构造 proot 参数，不预先用 probe 判定「不可用」。
+        // [run] 从不调用 probe、直接 launch proot 并让 proot 自身报错；本函数此前用 [probeLenient] 预判，
+        // 在 rootfs 安装中（目录瞬时为空）/ 部分 ROM 的 SELinux 限制下会误判为不可用并返回 null，
+        // 导致 UI 终端静默回退 /system/bin/sh（Toybox 基础命令），而 AI 的 run() 因绕过 probe 正常启动 proot ——
+        // 这正是「AI 终端正常、UI 终端只能基础命令」的真机根因。去掉预判后，UI 与 AI 的启动行为完全一致。
+        val prootPathStr = prootPath(context)
+        val proot = File(prootPathStr)
+        if (!proot.exists()) {
+            Log.w(TAG, "shellLaunch: proot 二进制缺失，返回 null（调用方回退设备 sh）")
             return null
         }
-        val rootfs = File(st.rootfsPath)
+        val rootfs = File(rootfsPath(context))
+        if (!rootfs.isDirectory) {
+            Log.w(TAG, "shellLaunch: rootfs 目录缺失，返回 null（调用方回退设备 sh）")
+            return null
+        }
+        val st = EnvStatus(true, proot.absolutePath, rootfs.absolutePath, "环境就绪")
         // 运行期资产（resolv.conf 用设备 DNS / getprop 垫片）随网络与设备状态刷新，
         // 避免安装时一次性快照过期（如换了 WiFi、或升级后属性变化）。
         prepareRuntimeExtras(context, rootfs)
@@ -1591,6 +1767,9 @@ object QuroLinuxEnv {
             "--bind=/dev/urandom:/dev/random",  // 参考 Agora：/dev/random → urandom
 
             "--bind=/proc",
+            // 显式绑入宿主 /proc/net，修复交互式终端内 /proc/net/dev 为空导致 glibc 默认路由解析失败、
+            // apt-get / pip / npm 联网报 Network unreachable（与 AI 一次性执行路径 buildProotLaunch 对齐）。
+            "--bind=/proc/net:/proc/net",
             "--bind=/sys",
             "--bind=${homePath(context)}:/root",
             "--bind=${tmpPath(context)}:/tmp",
@@ -1605,7 +1784,7 @@ object QuroLinuxEnv {
         if (File("/system/build.prop").canRead()) {
             args.add("--bind=/system/build.prop:/system/build.prop")
         }
-        return st.prootPath to args
+        return prootPathStr to args
     }
 
     /** 交互 shell 进程应注入的环境变量（PROOT_LOADER / LD_LIBRARY_PATH 等）。 */
@@ -1619,8 +1798,9 @@ object QuroLinuxEnv {
                 "TERM=xterm-256color",
                 "HOME=/root",
                 "TMPDIR=${tmpPath(context)}",
-                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${usrBinDir.absolutePath}",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:${usrBinDir.absolutePath}",
                 "LANG=C.UTF-8",
+                "DEBIAN_FRONTEND=noninteractive",
                 "LD_LIBRARY_PATH=${dir.absolutePath}:${usrBinDir.absolutePath}",
             )
         }
@@ -1629,9 +1809,10 @@ object QuroLinuxEnv {
             "TERM=xterm-256color",
             "HOME=/root",
             "TMPDIR=${tmpPath(context)}",
-            // 更新 PATH 包含 usr/bin/（bash 和 busybox 所在位置）
-            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${usrBinDir.absolutePath}",
+            // 更新 PATH 包含 usr/bin/（bash 和 busybox 所在位置），并补齐 cargo/go 工具链
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:${usrBinDir.absolutePath}",
             "LANG=C.UTF-8",
+            "DEBIAN_FRONTEND=noninteractive",
             "LD_LIBRARY_PATH=${dir.absolutePath}:${usrBinDir.absolutePath}",
             "PROOT_TMP_DIR=${tmpPath(context)}",
             "PROOT_LOADER=${loaderPath(context)}",

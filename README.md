@@ -41,7 +41,7 @@
 - [系统返回手势支持](#系统返回手势支持)
 - [内置技能 · Skills（63 个）](#内置技能-skills63-个)
 - [截图预览 · Screenshots](#截图预览-screenshots)
-- [近期新增功能（v1.0.78）](#近期新增功能v1078)
+- [近期新增功能（v1.0.79）](#近期新增功能v1079)
 - [功能构架 · Architecture](#功能构架-architecture)
 - [引擎详解 · Engine](#引擎详解-engine)
 - [ACI · 智能体能力接口](#aci-智能体能力接口)
@@ -911,9 +911,12 @@ Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{
 
 ---
 
-## 近期新增功能（v1.0.78）
+## 近期新增功能（v1.0.79）
 
-### v1.0.77（本次）
+### v1.0.79（本次）
+- **终端特权 / 远程接入**：终端顶栏新增「权限」「远程」两个入口；一键查看并申请 ROOT / LSPosed / ADB / Shizuku 权限，授权后打开终端直接可用；共享存储挂载改为自有路径（不再写死第三方路径）；离线模型（MNN / llama.cpp）无需再填 API 地址即可运行；终端支持 SSH / VNC 远程连接。
+
+### v1.0.77
 - **工具中心三面板对接对话框渲染**：小程序工作台 / 可视化编程 / 节点编辑器均支持「保存 / 删除 / 导入」，并一键把产物（小程序 / Mermaid 图）渲染到对话框内；节点编辑器修复「复制 Mermaid」乱码（详见「LSPosed / Xposed 模块」「对话框『化小窗』」「浏览器『化小窗』」章节与工具中心部分）。
 
 ### 历史近期（v1.0.75）
@@ -1488,9 +1491,18 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-**最新版本：`v1.0.78`**（2026-09-02，修复 CMS 与终端 9 项 Bug：共享服务状态登记 / PYTHON 注册 / bc / 诊断命令 / ps aux·netstat 替代）：
+**最新版本：`v1.0.79`**（2026-09-03，终端特权 / 远程接入：ROOT · LSPosed · ADB · Shizuku 对接、权限面板、共享存储自有路径、离线模型免 API 地址、SSH / VNC 远程连接）：
 
-- 🟢 **[app-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.78/app-full-release.apk)**（约 244MB，Release 签名，**最新**）
+- 🟢 **[app-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.79/app-full-release.apk)**（约 296MB，Release 签名，**最新**）
+
+### v1.0.79 新增功能
+
+**终端特权 / 远程接入（2026-09-03）**：
+- 终端顶栏新增「权限」「远程」入口，一键查看并申请授权
+- 特权后端收敛：ROOT / LSPosed / ADB / Shizuku 统一对接，授权后打开终端直接可用
+- 共享存储挂载改用自有路径，不再写死第三方路径
+- 离线模型（MNN / llama.cpp）无需再填 API 地址即可运行
+- 终端支持 SSH（端口 2222）/ VNC（5901）远程连接
 
 ### v1.0.78 新增功能
 

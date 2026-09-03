@@ -161,14 +161,12 @@ enum class DepKind {
     LINUX,
     /** 旧格式：本模块内声明的能力 id。 */
     CAPABILITY,
-    /** 终端开发环境栈（Node/Python/SSH/Java/Rust/Go，部署时由 CmsEnvProvisioner 装配）。 */
-    ENV,
 }
 
 /** 能力模块依赖声明（CMS v2：支持 module/mcp/skill/linuxPkg 四类）。 */
 data class QuroCmsDependency(
     val kind: DepKind = DepKind.CAPABILITY,
-    /** 目标：MODULE=模块id / MCP=别名 / SKILL=id / LINUX=包名 / CAPABILITY=能力id / ENV=环境档名(NODE/PYTHON/SSH/JAVA/RUST/GO)。 */
+    /** 目标：MODULE=模块id / MCP=别名 / SKILL=id / LINUX=包名 / CAPABILITY=能力id。 */
     val spec: String = "",
     /** 旧格式兼容：能力 id（kind==CAPABILITY 且 spec 为空时回退用）。 */
     val capability: String = "",

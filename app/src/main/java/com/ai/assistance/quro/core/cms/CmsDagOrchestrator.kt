@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.cms
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -79,7 +80,7 @@ object CmsDagOrchestrator {
             val jobs = level.map { node ->
                 async(Dispatchers.IO) {
                     val cmd = buildCommand(node, outputs)
-                    val (code, out) = QuroLinuxEnv.run(context, cmd, node.timeoutSecs * 1000L)
+                    val (code, out) = QuroTerminalBridge.run(context, cmd, node.timeoutSecs * 1000L)
                     CmsNodeOutcome(node.id, code, out)
                 }
             }

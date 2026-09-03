@@ -37,7 +37,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import com.ai.assistance.quro.core.linux.LinuxDistro
 import com.ai.assistance.quro.core.linux.PackageManagerSpec
-import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
+import com.ai.assistance.quro.terminal.TerminalManager
+import com.ai.assistance.quro.terminal.data.MirrorSource
+import com.ai.assistance.quro.terminal.data.PackageManagerType
+import com.ai.assistance.quro.terminal.utils.SourceManager
 import com.ai.assistance.quro.core.tools.QuroPrivateDbTool
 import com.ai.assistance.quro.core.tools.QuroSandboxTool
 import com.ai.assistance.quro.ui.icons.LucideIcon
@@ -47,7 +51,6 @@ import com.ai.assistance.quro.core.miniapp.MiniAppBridgeInterface
 import com.ai.assistance.quro.core.tools.MiniAppStudioTool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -886,13 +889,19 @@ private fun PackageManagerPanel(context: Context) {
     var query by remember { mutableStateOf("") }
     var envReady by remember { mutableStateOf(false) }
 
+    // 软件源管理（镜像源选择，复用终端侧 SourceManager，与 rootfs 源配置同一套偏好）
+    val sourceManager = remember { SourceManager(context) }
+    val sourcePms = remember { listOf(PackageManagerType.APT, PackageManagerType.PIP, PackageManagerType.NPM, PackageManagerType.RUST) }
+    var sourceRefresh by remember { mutableStateOf(0) }
+    var sourceDialogPm by remember { mutableStateOf<PackageManagerType?>(null) }
+
     fun runCmd(cmd: String) {
         if (running) return
         running = true
         installed = "执行：$cmd"
         scope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { QuroLinuxEnv.run(context, cmd, timeoutMs = 60_000L) }
+                runCatching { QuroTerminalBridge.run(context, cmd, timeoutMs = 300_000L) }
             }.getOrElse { -1 to "执行失败：${it.message}" }
             running = false
             installed = buildString {
@@ -904,10 +913,9 @@ private fun PackageManagerPanel(context: Context) {
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            val status = runCatching { QuroLinuxEnv.probeLenient(context) }.getOrNull()
-            envReady = status?.available == true
-            distro = runCatching { QuroLinuxEnv.detectDistro(context) }.getOrNull()
-            pm = runCatching { QuroLinuxEnv.detectPackageManager(context) }.getOrNull()
+            envReady = runCatching { QuroTerminalBridge.envReady(context) }.getOrDefault(false)
+            distro = runCatching { QuroTerminalBridge.distro(context) }.getOrNull()
+            pm = runCatching { QuroTerminalBridge.packageManager(context) }.getOrNull()
         }
     }
 
@@ -1006,7 +1014,157 @@ private fun PackageManagerPanel(context: Context) {
                 )
             }
         }
+
+        // —— 软件源管理（镜像源选择，与终端 rootfs 源配置同一套偏好）——
+        Surface(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(cs.surfaceVariant),
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Text("软件源管理", fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+                Spacer(Modifier.height(6.dp))
+                sourcePms.forEach { pmType ->
+                    val selected = remember(sourceRefresh, pmType) { sourceManager.getSelectedSource(pmType) }
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                            .clickable { sourceDialogPm = pmType }
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(pmType.displayName, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
+                            Spacer(Modifier.height(2.dp))
+                            Text("当前源：${selected.name}", fontSize = 12.sp, color = cs.onSurfaceVariant)
+                        }
+                        LucideIcon("chevron_right", null, Modifier.size(18.dp), tint = Muted)
+                    }
+                    if (pmType != sourcePms.last()) {
+                        HorizontalDivider(color = cs.outlineVariant)
+                    }
+                }
+            }
+        }
     }
+
+    // 源选择对话框
+    sourceDialogPm?.let { pmType ->
+        val sources = remember(pmType, sourceRefresh) {
+            when (pmType) {
+                PackageManagerType.APT -> sourceManager.aptSources
+                PackageManagerType.PIP -> sourceManager.pipSources
+                PackageManagerType.NPM -> sourceManager.npmSources
+                PackageManagerType.RUST -> sourceManager.rustSources
+            }
+        }
+        var selectedId by remember(pmType) { mutableStateOf(sourceManager.getSelectedSourceId(pmType)) }
+        var showAddCustom by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { sourceDialogPm = null },
+            title = {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("选择 ${pmType.displayName} 源", Modifier.weight(1f))
+                    TextButton(onClick = { showAddCustom = true }) { Text("+ 自定义") }
+                }
+            },
+            text = {
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    sources.forEach { source ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { selectedId = source.id }.padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = selectedId == source.id, onClick = { selectedId = source.id })
+                            Spacer(Modifier.width(6.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(source.name, color = cs.onSurface)
+                                Text(source.url, fontSize = 11.sp, color = cs.onSurfaceVariant, maxLines = 1)
+                            }
+                            if (source.id.startsWith("custom_")) {
+                                TextButton(onClick = {
+                                    sourceManager.deleteCustomSource(pmType, source.id)
+                                    sourceRefresh++
+                                }) { Text("删除", color = cs.error) }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    sourceManager.setSelectedSourceId(pmType, selectedId)
+                    val chosen = sources.find { it.id == selectedId }
+                    if (chosen != null) {
+                        val cmd = when (pmType) {
+                            PackageManagerType.APT -> sourceManager.getAptSourceChangeCommand(chosen)
+                            PackageManagerType.PIP -> sourceManager.getPipSourceChangeCommand(chosen)
+                            PackageManagerType.NPM -> sourceManager.getNpmSourceChangeCommand(chosen)
+                            PackageManagerType.RUST -> "echo 'Rust 镜像源已更新为: ${chosen.name}（下次安装 Rust 时生效）'"
+                        }
+                        scope.launch {
+                            runCatching { TerminalManager.getInstance(context).sendCommandToSession("default", cmd) }
+                        }
+                    }
+                    sourceRefresh++
+                    sourceDialogPm = null
+                }) { Text("确认") }
+            },
+            dismissButton = { TextButton(onClick = { sourceDialogPm = null }) { Text("取消") } },
+        )
+
+        if (showAddCustom) {
+            AddCustomSourceDialog(
+                pmType = pmType,
+                sourceManager = sourceManager,
+                onDismiss = { showAddCustom = false },
+                onAdded = { sourceRefresh++; showAddCustom = false },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddCustomSourceDialog(
+    pmType: PackageManagerType,
+    sourceManager: SourceManager,
+    onDismiss: () -> Unit,
+    onAdded: () -> Unit,
+) {
+    var customName by remember { mutableStateOf("") }
+    var customUrl by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("添加自定义 ${pmType.displayName} 源") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = customName,
+                    onValueChange = { customName = it },
+                    label = { Text("源名称") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = customUrl,
+                    onValueChange = { customUrl = it },
+                    label = { Text("源地址") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = customName.isNotBlank() && customUrl.isNotBlank(),
+                onClick = {
+                    val id = "custom_${pmType.name.lowercase()}_${System.currentTimeMillis()}"
+                    sourceManager.saveCustomSource(pmType, MirrorSource(id, customName, customUrl, true))
+                    onAdded()
+                },
+            ) { Text("添加") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
 
 // ---------------------------------------------------------------------------

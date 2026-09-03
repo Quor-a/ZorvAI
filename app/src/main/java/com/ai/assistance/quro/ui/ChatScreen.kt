@@ -24,7 +24,12 @@ import com.ai.assistance.quro.core.tools.PopupResult
 import com.ai.assistance.quro.BuildConfig
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.terminal.QuroTerminalPrefs
-import com.ai.assistance.quro.core.termux.QuroTermuxTerminalController
+import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
+import com.ai.assistance.quro.terminal.TerminalManager
+import com.ai.assistance.quro.terminal.rememberTerminalEnv
+import com.ai.assistance.quro.terminal.utils.CacheManager
+import com.ai.assistance.quro.terminal.utils.FtpServerManager
+import com.ai.assistance.quro.terminal.view.TerminalScreen
 import com.ai.assistance.quro.ui.QuroChatCardTray
 import com.ai.assistance.quro.ui.QuroChatCardView
 import com.ai.assistance.quro.ui.VisualDialogs
@@ -1096,9 +1101,8 @@ fun ChatScreen(
             cmd.startsWith("ui_") -> QuroUiActionBridge.dispatch?.invoke(cmd)
             cmd == "linux:install" -> QuroLinuxEnv.setup(ctx)
             cmd.startsWith("run:") -> {
-                val c = cmd.removePrefix("run:")
+                // 打开移植后的重终端；命令由用户在终端内输入，不再预填。
                 showTerminal = true
-                QuroTermuxTerminalController.initialCommand = c
             }
             // ── v221 富事件命令：open / copy / ai / screen ──
             cmd.startsWith("open:") -> QuroBrowserBridge.open(cmd.removePrefix("open:").trim())
@@ -2033,13 +2037,13 @@ fun ChatScreen(
             }
         }
 
-        // 可交互终端（终端渲染 + proot/Ubuntu 24.04 后端）：全屏覆盖层（从工具栏「终端」进入）
+        // 可交互重终端（proot + Ubuntu 24.04 + ANSI 模拟 + canvas 渲染）：全屏覆盖层（从工具栏「终端」进入）
         if (showTerminal) {
             BackHandler { showTerminal = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
-                QuroTermuxTerminalScreen(
-                    onClose = { showTerminal = false },
-                )
+                val terminalManager = remember { TerminalManager.getInstance(ctx) }
+                val terminalEnv = rememberTerminalEnv(terminalManager)
+                TerminalScreen(env = terminalEnv)
             }
         }
 
@@ -7865,6 +7869,9 @@ private fun FileManagerDialog(
             }
         }
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+            item { StorageManagementSection() }
+            item { FtpServerSection() }
+            item { TerminalRootfsSection() }
             items(dirs) { (label, dir) ->
                 val exists = dir.exists()
                 Column(
@@ -7896,6 +7903,227 @@ private fun FileManagerDialog(
                     HorizontalDivider(Modifier.padding(top = 10.dp), color = cs.outlineVariant)
                 }
             }
+        }
+    }
+}
+
+/**
+ * 存储管理（原终端-设置「存储管理」迁入）：展示 Linux rootfs 缓存占用，一键清除。
+ */
+@Composable
+private fun StorageManagementSection() {
+    val ctx = LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    val scope = rememberCoroutineScope()
+    val cacheManager = remember { CacheManager(ctx) }
+    var cacheSizeText by remember { mutableStateOf("计算中…") }
+    var clearing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val size = cacheManager.getCacheSize { }
+        cacheSizeText = cacheManager.formatSize(size)
+    }
+
+    Surface(
+        color = cs.surfaceVariant.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.FormatSize, null, tint = cs.primary, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("存储管理", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.weight(1f))
+                Text(cacheSizeText, fontSize = 13.sp, color = cs.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Linux rootfs 缓存（usr/tmp）占用，清除后需重新初始化终端环境。",
+                fontSize = 12.sp, color = cs.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        if (clearing) return@Button
+                        clearing = true
+                        scope.launch {
+                            cacheManager.clearCache(TerminalManager.getInstance(ctx))
+                            withContext(Dispatchers.Main) {
+                                cacheSizeText = "0 B"
+                                clearing = false
+                                Toast.makeText(ctx, "缓存已清除", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    enabled = !clearing,
+                ) { Text(if (clearing) "清除中…" else "清除缓存") }
+            }
+        }
+    }
+}
+
+/**
+ * FTP 文件服务器（原终端-设置「FTP文件服务器」迁入）：启动/停止 Apache FtpServer，
+ * 暴露 Ubuntu rootfs 供局域网 FTP 客户端访问。
+ */
+@Composable
+private fun FtpServerSection() {
+    val ctx = LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    val scope = rememberCoroutineScope()
+    val ftp = remember { FtpServerManager.getInstance(ctx) }
+    var running by remember { mutableStateOf(ftp.isFtpServerRunning()) }
+    var info by remember { mutableStateOf(ftp.getFtpServerInfo()) }
+    var busy by remember { mutableStateOf(false) }
+
+    Surface(
+        color = cs.surfaceVariant.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Usb, null, tint = if (running) cs.primary else cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("FTP 文件服务器", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.weight(1f))
+                Text(if (running) "运行中" else "已停止", fontSize = 13.sp, color = if (running) cs.primary else cs.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(info, fontSize = 12.sp, color = cs.onSurfaceVariant, fontFamily = FontFamily.Monospace)
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = {
+                    if (busy) return@Button
+                    busy = true
+                    scope.launch {
+                        val ok = if (running) ftp.stopFtpServer() else ftp.startFtpServer()
+                        withContext(Dispatchers.Main) {
+                            running = ftp.isFtpServerRunning()
+                            info = ftp.getFtpServerInfo()
+                            busy = false
+                            Toast.makeText(
+                                ctx,
+                                if (ok) (if (running) "FTP 服务器已启动" else "FTP 服务器已停止") else "FTP 服务器操作失败",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                },
+                enabled = !busy,
+            ) { Text(if (busy) "处理中…" else if (running) "停止服务器" else "启动服务器") }
+        }
+    }
+}
+
+/**
+ * 终端 rootfs 文件（设置-文件管理对接终端）：经统一门面浏览/读写/删除 Ubuntu rootfs 内文件，
+ * 与可见终端共用同一文件系统（/root、/etc、/sdcard…）。
+ */
+@Composable
+private fun TerminalRootfsSection() {
+    val ctx = LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    val scope = rememberCoroutineScope()
+    var path by remember { mutableStateOf("/root") }
+    var result by remember { mutableStateOf<String?>(null) }
+    var content by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var envReady by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { envReady = QuroTerminalBridge.envReady(ctx) }
+    }
+
+    Surface(
+        color = cs.surfaceVariant.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Folder, null, tint = cs.primary, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("终端 rootfs 文件", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.weight(1f))
+                Text(if (envReady) "就绪" else "环境未就绪", fontSize = 13.sp, color = if (envReady) cs.primary else cs.error)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text("浏览/读写 Ubuntu rootfs 内文件（/root、/etc、/sdcard…），与终端共用同一文件系统。", fontSize = 12.sp, color = cs.onSurfaceVariant)
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = path,
+                onValueChange = { path = it },
+                label = { Text("rootfs 路径") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !busy,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(enabled = !busy && path.isNotBlank(), onClick = {
+                    busy = true
+                    scope.launch {
+                        val r = withContext(Dispatchers.IO) { QuroTerminalBridge.listDir(ctx, path.trim()) }
+                        withContext(Dispatchers.Main) {
+                            busy = false
+                            result = if (r.success) r.output.ifBlank { "(空目录)" } else "错误：${r.error}"
+                        }
+                    }
+                }) { Text(if (busy) "…" else "列出") }
+                OutlinedButton(enabled = !busy && path.isNotBlank(), onClick = {
+                    busy = true
+                    scope.launch {
+                        val r = withContext(Dispatchers.IO) { QuroTerminalBridge.readFile(ctx, path.trim()) }
+                        withContext(Dispatchers.Main) {
+                            busy = false
+                            if (r.success) {
+                                content = r.output
+                                result = "已读取 ${r.output.length} 字符（可编辑后「写入」回同一路径）"
+                            } else {
+                                result = "错误：${r.error}"
+                            }
+                        }
+                    }
+                }) { Text("读取") }
+                OutlinedButton(enabled = !busy && path.isNotBlank(), onClick = {
+                    busy = true
+                    scope.launch {
+                        val r = withContext(Dispatchers.IO) { QuroTerminalBridge.writeFile(ctx, path.trim(), content) }
+                        withContext(Dispatchers.Main) {
+                            busy = false
+                            result = if (r.success) "已写入 ${path.trim()}" else "错误：${r.error}"
+                        }
+                    }
+                }) { Text("写入") }
+                OutlinedButton(enabled = !busy && path.isNotBlank(), onClick = {
+                    busy = true
+                    scope.launch {
+                        val r = withContext(Dispatchers.IO) { QuroTerminalBridge.deleteFile(ctx, path.trim()) }
+                        withContext(Dispatchers.Main) {
+                            busy = false
+                            result = if (r.success) "已删除 ${path.trim()}" else "错误：${r.error}"
+                        }
+                    }
+                }) { Text("删除", color = cs.error) }
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = content,
+                onValueChange = { content = it },
+                label = { Text("文件内容（读取后显示，可编辑后「写入」）") },
+                minLines = 3,
+                maxLines = 8,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !busy,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                result ?: "提示：输入路径后点「列出」看目录，或直接「读取 / 写入 / 删除」文件。",
+                fontSize = 12.sp,
+                color = cs.onSurfaceVariant,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 20,
+            )
         }
     }
 }

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SetupScreen -->
+    <string name="setup_title">Environment Setup</string>
+    <string name="setup_subtitle">Select development environments and tools to install (parallel installation supported)</string>
+    <string name="skip">Skip</string>
+    <string name="start_setup">Start Setup</string>
+    <string name="select_all">Select All</string>
+    <string name="expand">Expand</string>
+    <string name="collapse">Collapse</string>
+    <string name="installed">Installed</string>
+    <string name="zorvai_required">ZorvAI Required</string>
+    
+    <!-- Dialog -->
+    <string name="setup_dialog_title">Notice</string>
+    <string name="setup_dialog_message">The environment setup is about to begin, which may take some time. Please try to keep the app in foreground or floating window mode to ensure smooth configuration.\n\nIf the configuration is interrupted unexpectedly, don\'t worry. The next time you return to this page to start configuration, it will automatically continue from the previous progress.</string>
+    <string name="dialog_confirm">I Understand</string>
+    <string name="dialog_cancel">Cancel</string>
+    
+    <!-- Package Categories -->
+    <string name="category_nodejs_name">Node.js Environment</string>
+    <string name="category_nodejs_desc">Node.js and frontend development environment</string>
+    <string name="category_python_name">Python Environment</string>
+    <string name="category_python_desc">Python development environment</string>
+    <string name="category_java_name">Java Environment</string>
+    <string name="category_java_desc">Java development environment</string>
+    <string name="category_rust_name">Rust (Cargo) Environment</string>
+    <string name="category_rust_desc">Rust development environment and package manager</string>
+    <string name="category_go_name">Go Environment</string>
+    <string name="category_go_desc">Go programming language environment</string>
+    
+    <!-- Package Items -->
+    <string name="package_nodejs_name">Node.js</string>
+    <string name="package_nodejs_desc">JavaScript runtime</string>
+    <string name="package_pnpm_name">PNPM</string>
+    <string name="package_pnpm_desc">Fast package manager and TypeScript</string>
+    <string name="package_python_link_name">Python Link</string>
+    <string name="package_python_link_desc">Link python command to python3</string>
+    <string name="package_python_venv_name">Virtual Environment</string>
+    <string name="package_python_venv_desc">Python virtual environment support</string>
+    <string name="package_python_pip_name">Pip</string>
+    <string name="package_python_pip_desc">Python package manager</string>
+    <string name="package_uv_name">uv</string>
+    <string name="package_uv_desc">An extremely fast Python package installer written in Rust</string>
+    <string name="package_openjdk_name">OpenJDK 17</string>
+    <string name="package_openjdk_desc">Java 17 development environment</string>
+    <string name="package_rust_name">Rust &amp; Cargo</string>
+    <string name="package_rust_desc">Install Rust toolchain via rustup</string>
+    <string name="package_go_name">Go</string>
+    <string name="package_go_desc">Go programming language</string>
+    
+    <!-- SettingsScreen -->
+    <string name="settings_title">Settings</string>
+    <string name="back">Back</string>
+    
+    <!-- FTP Server Section -->
+    <string name="ftp_server_title">FTP File Server</string>
+    <string name="ftp_server_stopping">Stopping…</string>
+    <string name="ftp_server_stop">Stop</string>
+    <string name="ftp_server_start">Start</string>
+    <string name="ftp_server_tip">💡 Tip: Use an FTP client to connect to the above address to access the Ubuntu file system</string>
+    <string name="ftp_server_suggestion">📱 Suggestion: Enable floating window mode to keep the app running and ensure FTP service availability</string>
+    
+    <!-- Storage Management Section -->
+    <string name="storage_management_title">Storage Management</string>
+    <string name="ubuntu_environment_size">Ubuntu Environment Size: %s</string>
+    <string name="refresh_size_calculating">Calculating…</string>
+    <string name="refresh_size">Refresh</string>
+    <string name="reset_environment">Reset</string>
+    
+    <!-- Project Section -->
+    <string name="project_address_title">Project Repository</string>
+    <string name="project_name">ZorvAI</string>
+    <string name="visit_project">Visit</string>
+    <string name="check_updates">Check</string>
+    <string name="update_now">Update</string>
+    
+    <!-- Reset Environment Dialog -->
+    <string name="reset_dialog_title">⚠️ Dangerous Operation</string>
+    <string name="reset_dialog_description">This operation will completely delete the Ubuntu virtual environment, including:</string>
+    <string name="reset_dialog_item1">• All installed software packages</string>
+    <string name="reset_dialog_item2">• User data and configuration files</string>
+    <string name="reset_dialog_item3">• System files and environment settings</string>
+    <string name="reset_dialog_warning">After the operation, the Ubuntu environment will need to be reinitialized, which may take several minutes.</string>
+    <string name="reset_dialog_ftp_warning">The FTP server will also be stopped. Are you sure you want to continue?</string>
+    <string name="reset_confirm">Confirm Reset</string>
+    
+    <!-- SettingsViewModel -->
+    <string name="cache_size_default">Click to refresh</string>
+    <string name="update_status_default">Click to check updates</string>
+    <string name="ftp_server_not_running">FTP server not running</string>
+    <string name="cache_calculating">Calculating…</string>
+    <string name="cache_calculation_cancelled">Calculation cancelled</string>
+    <string name="cache_calculation_failed">Calculation failed</string>
+    <string name="environment_resetting">Resetting environment…</string>
+    <string name="environment_reset_complete">Environment reset (restart required)</string>
+    <string name="environment_reset_failed">Reset failed: %s</string>
+    <string name="checking_updates">Checking for updates…</string>
+    <string name="update_available">Update available: %1$s (current: %2$s)</string>
+    <string name="up_to_date">Up to date (%s)</string>
+    <string name="update_check_failed">Check failed: %s</string>
+    <string name="ftp_server_starting">Starting FTP server…</string>
+    <string name="ftp_server_start_failed_env">Start failed (ensure Ubuntu environment is initialized)</string>
+    <string name="ftp_server_start_failed">Start failed: %s</string>
+    <string name="ftp_server_stopping_progress">Stopping FTP server…</string>
+    <string name="ftp_server_stopped">FTP server stopped</string>
+    <string name="ftp_server_stop_failed">Stop failed</string>
+    <string name="ftp_server_stop_failed_with_error">Stop failed: %s</string>
+    
+    <!-- TerminalHome -->
+    <string name="confirm_delete_session">Confirm Delete Session</string>
+    <string name="delete_session_message">Are you sure you want to delete session \"%s\"?\n\nThis action cannot be undone and all data in the session will be permanently lost.</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+    <string name="new_session">New Session</string>
+    <string name="close_session">Close Session</string>
+    <string name="executing">Executing…</string>
+    <string name="interrupt_key">Ctrl+C</string>
+    <string name="interrupt">Interrupt</string>
+    <string name="environment_setup">Environment Setup</string>
+    <string name="settings">Settings</string>
+    <string name="terminal_permission">Permission</string>
+    <string name="terminal_permission_title">Terminal Permissions</string>
+    <string name="terminal_permission_hint">Integrate ROOT / Shizuku / ADB / LSPosed / shared storage. Once granted, the terminal can use privileged capabilities directly.</string>
+    <string name="permission_request">Request</string>
+    <string name="permission_available">Available</string>
+    <string name="permission_unavailable">Not granted</string>
+    <string name="permission_no_bridge">Privilege backend not connected (restart the app and retry)</string>
+    <string name="permission_probing">Probing…</string>
+    <string name="terminal_remote">Remote</string>
+    <string name="terminal_remote_title">Remote Access</string>
+    <string name="terminal_remote_hint">Access the Ubuntu environment from a PC via SSH / VNC (requires an initialized environment).</string>
+    <string name="remote_local_ip">Local IP</string>
+    <string name="remote_ssh">SSH</string>
+    <string name="remote_vnc">VNC</string>
+    <string name="remote_install_start">Install &amp; start</string>
+    <string name="remote_not_installed">Not installed</string>
+    
+    <!-- Additional new strings -->
+    <string name="initializing">Initializing...</string>
+    <string name="new_version_found">New version found: %1$s</string>
+    <string name="update_check_failed_short">Update check failed</string>
+    <string name="cannot_open_browser">Cannot open browser</string>
+    <string name="ftp_server_running_info">FTP Server Running\nAddress: %1$s:%2$s\nUsername: %3$s\nPassword: %4$s\nRoot Directory: Ubuntu File System</string>
+    <string name="unknown_session">Unknown Session</string>
+</resources> 

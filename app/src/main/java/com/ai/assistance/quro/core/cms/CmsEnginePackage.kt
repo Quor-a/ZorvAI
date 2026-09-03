@@ -30,8 +30,6 @@ data class CmsEnginePackage(
     val provisionerContent: String = "",
     /** 引擎提供的共享后台服务（如静态文件服务器 / 内部 API 网关）。 */
     val sharedServices: List<EngineSvc> = emptyList(),
-    /** 引擎级环境档（NODE/PYTHON/SSH/JAVA/RUST/GO），部署时由 [CmsEnvProvisioner] 装配。 */
-    val envProfiles: List<String> = emptyList(),
     val signature: String = "",
     val sha256: String = "",
 ) {
@@ -40,7 +38,6 @@ data class CmsEnginePackage(
         append(engineId); append("|"); append(name); append("|"); append(engineVersion); append("|")
         append(bootstrapContent); append("|"); append(provisionerContent); append("|")
         append(sharedServices.joinToString(";") { "${it.id}:${it.name}:${it.command}:${it.port}:${it.enabled}" }); append("|")
-        append(envProfiles.joinToString(","))
     }
 
     /** 计算规范摘要（忽略 sha256 字段本身）。 */
@@ -59,7 +56,6 @@ data class CmsEnginePackage(
         put("bootstrapContent", bootstrapContent)
         put("provisionerContent", provisionerContent)
         put("sharedServices", sharedServices.joinToString(";") { "${it.id}|${it.name}|${it.command}|${it.port}|${it.enabled}" })
-        put("envProfiles", envProfiles.joinToString(","))
         put("signature", signature)
         put("sha256", sha256)
     }.toString()
@@ -85,7 +81,6 @@ data class CmsEnginePackage(
                 bootstrapContent = o.optString("bootstrapContent", ""),
                 provisionerContent = o.optString("provisionerContent", ""),
                 sharedServices = svcs,
-                envProfiles = o.optString("envProfiles", "").split(",").map { it.trim() }.filter { it.isNotBlank() },
                 signature = o.optString("signature", ""),
                 sha256 = o.optString("sha256", ""),
             )
@@ -120,7 +115,6 @@ data class CmsEnginePackage(
                         enabled = true,
                     ),
                 ),
-                envProfiles = listOf("PYTHON", "NODE"),
             )
         )
     }

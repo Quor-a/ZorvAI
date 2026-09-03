@@ -5,6 +5,7 @@ import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
 import com.ai.assistance.quro.core.tools.QuroTool
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import java.io.File
@@ -12,21 +13,21 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 /**
- * CMS v2 统一工具箱（原创）：整合 CMS 模块管理、引擎管理、开发环境管理、部署修复于一体。
+ * CMS v2 统一工具箱（原创）：整合 CMS 模块管理、引擎管理、部署修复于一体。
  * 
  * 设计目标：
  * 1. 单一入口：AI 通过 cms_toolbox(action, ...) 调用所有 CMS 功能
  * 2. 部署失败时 AI 可接手修复：自动诊断并尝试修复
- * 3. 支持复制正确的引擎/模块/开发环境配置
+ * 3. 支持复制正确的引擎/模块配置
  * 4. 统一状态查询和日志查看
+ * 
+ * 注：开发环境（node/python/java/rust/go）已由终端「环境配置」页统一负责，工具箱不再重复提供。
  * 
  * 支持的 action：
  * - list_modules: 列出已安装的 CMS 模块
  * - call_module: 调用 CMS 模块能力
  * - deploy_engine: 部署 CMS 引擎
  * - status_engine: 查看 CMS 引擎状态
- * - deploy_devenv: 部署开发环境
- * - status_devenv: 查看开发环境状态
  * - repair_deployment: 修复部署失败
  * - copy_config: 复制正确的配置
  * - get_logs: 获取 CMS 日志
@@ -35,8 +36,9 @@ import java.util.Date
 class QuroCmsToolboxTool : QuroTool {
     override val name = "cms_toolbox"
     override val description = """
-CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境管理、部署修复于一体。
-当用户需要管理 CMS 模块、引擎、开发环境或修复部署问题时使用此工具。
+CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、部署修复于一体。
+当用户需要管理 CMS 模块、引擎或修复部署问题时使用此工具。
+（开发环境安装已由终端「环境配置」页统一负责，此处不再提供。）
 
 参数格式：{"action":"动作", "参数名":"参数值"}
 
@@ -49,36 +51,30 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
 3. deploy_engine: 部署 CMS 引擎
    - engine_id: 引擎 ID（可选，默认使用内置引擎）
 4. status_engine: 查看 CMS 引擎状态（无参数）
-5. deploy_devenv: 部署开发环境
-   - profiles: 环境配置列表（如 ["node", "python", "java"]）
-6. status_devenv: 查看开发环境状态（无参数）
-7. repair_deployment: 修复部署失败
-   - component: 要修复的组件（"engine", "devenv", "module"）
+5. repair_deployment: 修复部署失败
+   - component: 要修复的组件（"engine", "module"）
    - module_id: 模块 ID（当 component="module" 时需要）
-8. copy_config: 复制正确的配置
-   - target: 复制目标（"engine", "devenv", "all"）
-9. get_logs: 获取 CMS 日志
+6. copy_config: 复制正确的配置
+   - target: 复制目标（"engine", "all"）
+7. get_logs: 获取 CMS 日志
    - component: 组件名称（可选，不填则获取所有）
    - lines: 行数（可选，默认 50）
-10. get_status: 获取 CMS 总体状态（无参数）
+8. get_status: 获取 CMS 总体状态（无参数）
 
 --- AI 自写脚本部署 ---
-11. create_module: 创建自定义 CMS 模块
+9. create_module: 创建自定义 CMS 模块
    - module_id: 模块 ID（如 "my.httpd"）
    - entry_script: entry.sh 脚本内容
    - cms_package: cms-package.json 内容（可选，自动生成）
    - backend_script: 后端脚本内容（可选，如 backend.js）
-12. create_engine_script: 创建自定义引擎脚本
+10. create_engine_script: 创建自定义引擎脚本
    - script_type: 脚本类型（"bootstrap" 或 "provisioner"）
    - script_content: 脚本内容
-13. create_devenv_script: 创建自定义开发环境脚本
-   - env_name: 环境名称（如 "myenv"）
-   - install_script: 安装脚本内容
-14. deploy_custom: 部署自定义脚本
-   - type: 部署类型（"module", "engine", "devenv"）
-   - id: 模块ID/环境名称
+11. deploy_custom: 部署自定义脚本
+   - type: 部署类型（"module", "engine"）
+   - id: 模块ID
    - script_content: 脚本内容（create后部署时可省略）
-15. list_scripts: 列出自定义脚本（无参数）
+12. list_scripts: 列出自定义脚本（无参数）
 
 示例：
 - cms_toolbox(action="list_modules")
@@ -97,7 +93,6 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             "args":{"type":"object","description":"参数对象（call_module 时可选）"},
             "target":{"type":"string","description":"运行宿主（call_module 时可选，默认 auto）"},
             "engine_id":{"type":"string","description":"引擎 ID（deploy_engine 时可选）"},
-            "profiles":{"type":"array","items":{"type":"string"},"description":"环境配置列表（deploy_devenv 时需要）"},
             "component":{"type":"string","description":"组件名称（repair_deployment 时需要）"},
             "module_id":{"type":"string","description":"模块 ID（repair_deployment component=module 时需要）"},
             "lines":{"type":"integer","description":"日志行数（get_logs 时可选，默认 50）"},
@@ -105,11 +100,9 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             "cms_package":{"type":"string","description":"cms-package.json 内容（create_module 时可选）"},
             "backend_script":{"type":"string","description":"后端脚本内容（create_module 时可选）"},
             "script_type":{"type":"string","description":"脚本类型（create_engine_script 时需要）"},
-            "script_content":{"type":"string","description":"脚本内容（create_engine_script/create_devenv_script 时需要）"},
-            "env_name":{"type":"string","description":"环境名称（create_devenv_script 时需要）"},
-            "install_script":{"type":"string","description":"安装脚本内容（create_devenv_script 时需要）"},
+            "script_content":{"type":"string","description":"脚本内容（create_engine_script 时需要）"},
             "type":{"type":"string","description":"部署类型（deploy_custom 时需要）"},
-            "id":{"type":"string","description":"模块ID/环境名称（deploy_custom 时需要）"}
+            "id":{"type":"string","description":"模块ID（deploy_custom 时需要）"}
         },
         "required":["action"]
     }"""
@@ -126,25 +119,20 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
             "call_module" -> handleCallModule(context, obj)
             "deploy_engine" -> handleDeployEngine(context, obj)
             "status_engine" -> handleStatusEngine(context)
-            "deploy_devenv" -> handleDeployDevenv(context, obj)
-            "status_devenv" -> handleStatusDevenv(context)
             "repair_deployment" -> handleRepairDeployment(context, obj)
             "copy_config" -> handleCopyConfig(context, obj)
             "get_logs" -> handleGetLogs(context, obj)
             "get_status" -> handleGetStatus(context)
             "run_script" -> handleRunScript(context, obj)
             "fix_deploy" -> handleFixDeploy(context)
-            "get_install_scripts" -> handleGetInstallScripts(context, obj)
             "fix_modules" -> handleFixModules(context, obj)
             "save_fix_scripts" -> handleSaveFixScripts(context, obj)
-            "save_install_scripts" -> handleSaveInstallScripts(context, obj)
             // AI 自写脚本部署
             "create_module" -> handleCreateModule(context, obj)
             "create_engine_script" -> handleCreateEngineScript(context, obj)
-            "create_devenv_script" -> handleCreateDevenvScript(context, obj)
             "deploy_custom" -> handleDeployCustom(context, obj)
             "list_scripts" -> handleListScripts(context)
-            else -> "不支持的 action: $action\n\n可用 action:\n- 模块管理: list_modules, call_module\n- 引擎管理: deploy_engine, status_engine\n- 开发环境: deploy_devenv, status_devenv\n- 修复部署: repair_deployment, fix_deploy\n- 配置管理: copy_config\n- 脚本操作: run_script, get_install_scripts, fix_modules\n- 保存到文件: save_fix_scripts, save_install_scripts\n- AI自写部署: create_module, create_engine_script, create_devenv_script, deploy_custom, list_scripts\n- 日志状态: get_logs, get_status"
+            else -> "不支持的 action: $action\n\n可用 action:\n- 模块管理: list_modules, call_module\n- 引擎管理: deploy_engine, status_engine\n- 修复部署: repair_deployment, fix_deploy\n- 配置管理: copy_config\n- 脚本操作: run_script, fix_modules\n- 保存到文件: save_fix_scripts\n- AI自写部署: create_module, create_engine_script, deploy_custom, list_scripts\n- 日志状态: get_logs, get_status"
         }
     }
 
@@ -259,71 +247,19 @@ CMS v2 统一工具箱：整合 CMS 模块管理、引擎管理、开发环境�
         }
     }
 
-    private fun handleDeployDevenv(context: Context, obj: JSONObject): String {
-        val profiles = mutableListOf<String>()
-        val profilesArray = obj.optJSONArray("profiles")
-        if (profilesArray != null) {
-            for (i in 0 until profilesArray.length()) {
-                profiles.add(profilesArray.optString(i))
-            }
-        }
-        
-        if (profiles.isEmpty()) {
-            return "缺少 profiles 参数。可用环境: node, python, java, rust, go, ssh"
-        }
-        
-        return try {
-            val results = mutableListOf<String>()
-            
-            profiles.forEach { profileName ->
-                val profile = EnvProfile.parse(profileName)
-                if (profile != null) {
-                    val result = CmsEnvProvisioner.provisionWithLog(context, profile) { line ->
-                        // 日志输出到控制台
-                        android.util.Log.i("CmsToolbox", line)
-                    }
-                    results.add("$profileName: $result")
-                } else {
-                    results.add("$profileName: ❌ 未知环境配置")
-                }
-            }
-            
-            "✅ 开发环境部署完成\n环境: ${profiles.joinToString(", ")}\n结果:\n${results.joinToString("\n")}"
-        } catch (e: Exception) {
-            "❌ 开发环境部署失败: ${e.message}\n\n可使用 cms_toolbox(action=\"repair_deployment\", component=\"devenv\") 尝试修复"
-        }
-    }
-
-    private fun handleStatusDevenv(context: Context): String {
-        return try {
-            val profiles = listOf(EnvProfile.NODE, EnvProfile.PYTHON, EnvProfile.JAVA, EnvProfile.RUST, EnvProfile.GO, EnvProfile.SSH)
-            buildString {
-                appendLine("开发环境状态：")
-                profiles.forEach { profile ->
-                    val installed = CmsEnvProvisioner.isReady(context, profile)
-                    appendLine("- ${profile.name}: ${if (installed) "✅ 已安装" else "❌ 未安装"}")
-                }
-                appendLine("\n可使用 cms_toolbox(action=\"deploy_devenv\", profiles=[\"node\",\"python\"]) 安装环境")
-            }
-        } catch (e: Exception) {
-            "❌ 获取开发环境状态失败: ${e.message}"
-        }
-    }
-
     private fun handleRepairDeployment(context: Context, obj: JSONObject): String {
         val component = obj.optString("component", "").trim()
-        if (component.isEmpty()) return "缺少 component 参数。可用值: engine, devenv, module"
+        if (component.isEmpty()) return "缺少 component 参数。可用值: engine, module"
         
         val moduleId = obj.optString("module_id", "").trim()
         
         return when (component) {
             "engine" -> repairEngine(context)
-            "devenv" -> repairDevenv(context)
             "module" -> {
                 if (moduleId.isEmpty()) return "repair_deployment component=module 时需要 module_id 参数"
                 repairModule(context, moduleId)
             }
-            else -> "不支持的 component: $component\n可用值: engine, devenv, module"
+            else -> "不支持的 component: $component\n可用值: engine, module"
         }
     }
 
@@ -362,7 +298,7 @@ echo "🎉 修复完成！"
 """.trimIndent()
 
             // 通过终端执行修复脚本
-            val fixResult = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(fixScript, 60_000L, context, confirmed = true)
+            val fixResult = QuroTerminalBridge.exec(fixScript, 60_000L, context, confirmed = true)
             android.util.Log.i("CmsToolbox", "修复脚本执行结果:\n${fixResult.output}")
 
             // 2. 清理可能损坏的引擎目录
@@ -377,25 +313,6 @@ echo "🎉 修复完成！"
             "✅ CMS 引擎修复成功\n\n=== 修复脚本执行结果 ===\n${fixResult.output}\n\n=== 引擎部署结果 ===\n引擎 ID: ${enginePackage.engineId}\n部署结果: $result"
         } catch (e: Exception) {
             "❌ CMS 引擎修复失败: ${e.message}\n\n可尝试手动执行修复脚本:\nscripts/cms-fix-deploy.sh"
-        }
-    }
-
-    private fun repairDevenv(context: Context): String {
-        return try {
-            // 重新部署基础环境
-            val profiles = listOf(EnvProfile.NODE, EnvProfile.PYTHON, EnvProfile.JAVA)
-            val results = mutableListOf<String>()
-            
-            profiles.forEach { profile ->
-                val result = CmsEnvProvisioner.provisionWithLog(context, profile) { line ->
-                    android.util.Log.i("CmsToolbox", line)
-                }
-                results.add("${profile.name}: $result")
-            }
-            
-            "✅ 开发环境修复成功\n环境: node, python, java\n修复结果:\n${results.joinToString("\n")}"
-        } catch (e: Exception) {
-            "❌ 开发环境修复失败: ${e.message}\n\n可能需要手动检查 proot 环境或重装应用"
         }
     }
 
@@ -462,7 +379,7 @@ echo "🎉 修复完成！"
                 else -> return "未找到脚本: $scriptName"
             }
 
-            val result = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(scriptToRun, 60_000L, context, confirmed = true)
+            val result = QuroTerminalBridge.exec(scriptToRun, 60_000L, context, confirmed = true)
             "✅ 脚本执行完成\n\n=== 执行结果 ===\n${result.output}"
         } catch (e: Exception) {
             "❌ 脚本执行失败: ${e.message}"
@@ -505,7 +422,7 @@ echo ""
 echo "🎉 修复完成！"
 """.trimIndent()
 
-            val fixResult = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(fixScript, 60_000L, context, confirmed = true)
+            val fixResult = QuroTerminalBridge.exec(fixScript, 60_000L, context, confirmed = true)
             android.util.Log.i("CmsToolbox", "修复脚本执行结果:\n${fixResult.output}")
 
             // 2. 清理可能损坏的引擎目录
@@ -537,22 +454,14 @@ echo "🎉 修复完成！"
                     if (moduleId.isEmpty()) return "复制模块配置需要 module_id 参数"
                     copyModuleConfig(context, moduleId)
                 }
-                "devenv" -> copyDevenvConfig(context)
-                else -> "不支持的 component: $component\n可用值: engine, module, devenv"
+                else -> "不支持的 component: $component\n可用值: engine, module"
             }
         }
         
         // 否则按 target 复制
         return when (target) {
-            "engine" -> copyEngineConfig(context)
-            "devenv" -> copyDevenvConfig(context)
-            "all" -> {
-                val results = mutableListOf<String>()
-                results.add(copyEngineConfig(context))
-                results.add(copyDevenvConfig(context))
-                results.joinToString("\n\n")
-            }
-            else -> "不支持的 target: $target\n可用值: engine, devenv, all"
+            "engine", "all" -> copyEngineConfig(context)
+            else -> "不支持的 target: $target\n可用值: engine, all"
         }
     }
     
@@ -574,42 +483,6 @@ echo "🎉 修复完成！"
             }
         } catch (e: Exception) {
             "❌ 获取引擎配置失败: ${e.message}"
-        }
-    }
-    
-    private fun copyDevenvConfig(context: Context): String {
-        return try {
-            val profiles = listOf(EnvProfile.NODE, EnvProfile.PYTHON, EnvProfile.JAVA, EnvProfile.RUST, EnvProfile.GO, EnvProfile.SSH)
-            val config = buildString {
-                appendLine("{")
-                appendLine("  \"profiles\": {")
-                profiles.forEachIndexed { index, profile ->
-                    val installed = CmsEnvProvisioner.isReady(context, profile)
-                    appendLine("    \"${profile.name.lowercase()}\": {")
-                    appendLine("      \"name\": \"${profile.profileName}\",")
-                    appendLine("      \"installed\": $installed")
-                    if (index < profiles.lastIndex) appendLine("    },") else appendLine("    }")
-                }
-                appendLine("  },")
-                appendLine("  \"terminal\": {")
-                val terminalStatus = QuroLinuxEnv.probeLenient(context)
-                appendLine("    \"available\": ${terminalStatus.available}")
-                appendLine("  }")
-                appendLine("}")
-            }
-            
-            val fileName = "cms_devenv_config.json"
-            val result = com.ai.assistance.quro.core.tools.QuroDownloadUtil.saveTextToDownloads(
-                context, fileName, "application/json", config
-            )
-            
-            if (result.startsWith("OK:")) {
-                "✅ 开发环境配置已保存到 Download/Quro/$fileName\n\n配置内容:\n```json\n$config\n```"
-            } else {
-                "⚠️ 配置保存失败，但配置内容如下:\n```json\n$config\n```"
-            }
-        } catch (e: Exception) {
-            "❌ 获取开发环境配置失败: ${e.message}"
         }
     }
     
@@ -702,11 +575,6 @@ echo "🎉 修复完成！"
             }
             status.add("引擎: $engineState (版本: ${engineSnapshot.engineVersion.ifEmpty { "未知" }})")
             
-            // 开发环境状态
-            val profiles = listOf(EnvProfile.NODE, EnvProfile.PYTHON, EnvProfile.JAVA)
-            val installedEnvs = profiles.filter { CmsEnvProvisioner.isReady(context, it) }.map { it.name }
-            status.add("开发环境: ${if (installedEnvs.isEmpty()) "未安装" else "已安装: ${installedEnvs.joinToString(", ")}"}")
-            
             // 模块状态
             val repo = QuroCmsRepository(context)
             val caps = repo.loadCapabilities()
@@ -724,41 +592,6 @@ echo "🎉 修复完成！"
         } catch (e: Exception) {
             "❌ 获取状态失败: ${e.message}"
         }
-    }
-
-    private fun handleGetInstallScripts(context: Context, obj: JSONObject): String {
-        val profiles = mutableListOf<String>()
-        val profilesArray = obj.optJSONArray("profiles")
-        if (profilesArray != null) {
-            for (i in 0 until profilesArray.length()) {
-                profiles.add(profilesArray.optString(i))
-            }
-        }
-        
-        if (profiles.isEmpty()) {
-            // 默认返回所有开发环境的安装脚本
-            profiles.addAll(listOf("node", "python", "java", "rust", "go"))
-        }
-        
-        val sb = StringBuilder("开发环境安装脚本（可复制）：\n\n")
-        
-        profiles.forEach { profileName ->
-            val profile = EnvProfile.parse(profileName)
-            if (profile != null) {
-                sb.appendLine("## ${profile.profileName}")
-                sb.appendLine("```bash")
-                sb.appendLine(profile.installScript.trimIndent())
-                sb.appendLine("```\n")
-            } else {
-                sb.appendLine("## $profileName")
-                sb.appendLine("❌ 未知环境配置\n")
-            }
-        }
-        
-        sb.appendLine("提示：以上脚本在 proot Ubuntu 环境中执行，用于安装对应的开发环境。")
-        sb.appendLine("使用方式：在终端中粘贴执行，或通过 cms_toolbox(action=\"run_script\", script=\"...\") 执行。")
-
-        return sb.toString().trim()
     }
 
     /**
@@ -907,53 +740,6 @@ echo "🎉 修复完成！"
         return sb.toString().trim()
     }
 
-    /**
-     * 将开发环境安装脚本保存到手机 Download/Quro/install_scripts/ 目录。
-     * 用户可通过文件管理器直接访问、复制、执行。
-     */
-    private fun handleSaveInstallScripts(context: Context, obj: JSONObject): String {
-        val profilesArray = obj.optJSONArray("profiles")
-        val profiles = mutableListOf<String>()
-        if (profilesArray != null) {
-            for (i in 0 until profilesArray.length()) {
-                profiles.add(profilesArray.optString(i))
-            }
-        }
-        if (profiles.isEmpty()) {
-            profiles.addAll(listOf("node", "python", "java", "rust", "go"))
-        }
-
-        val sb = StringBuilder()
-        val savedFiles = mutableListOf<String>()
-
-        profiles.forEach { profileName ->
-            val profile = EnvProfile.parse(profileName)
-            if (profile != null) {
-                val fileName = "install_${profile.name.lowercase()}.sh"
-                val content = "#!/bin/sh\n# ${profile.profileName} 安装脚本\n# 在 proot Ubuntu 环境中执行\n\nset -e\n\n${profile.installScript.trimIndent()}\n"
-                val result = com.ai.assistance.quro.core.tools.QuroDownloadUtil.saveTextToDownloads(
-                    context, "Quro/install_scripts/$fileName", "text/x-shellscript", content
-                )
-                if (result.startsWith("OK:")) {
-                    savedFiles.add(fileName)
-                    sb.appendLine("✅ ${profile.profileName} → $fileName")
-                } else {
-                    sb.appendLine("⚠️ ${profile.profileName}: $result")
-                }
-            } else {
-                sb.appendLine("❌ $profileName: 未知环境配置")
-            }
-        }
-
-        sb.appendLine("")
-        sb.appendLine("📁 已保存 ${savedFiles.size} 个安装脚本到 Download/Quro/install_scripts/：")
-        savedFiles.forEach { sb.appendLine("  - $it") }
-        sb.appendLine("")
-        sb.appendLine("使用方式：在终端中 sh /sdcard/Download/Quro/install_scripts/install_xxx.sh")
-
-        return sb.toString().trim()
-    }
-
     // ═══════════════ AI 自写脚本部署 ═══════════════
 
     /**
@@ -1070,40 +856,12 @@ echo "🎉 修复完成！"
     }
 
     /**
-     * 创建自定义开发环境脚本
-     */
-    private fun handleCreateDevenvScript(context: Context, obj: JSONObject): String {
-        val envName = obj.optString("env_name", "").trim()
-        if (envName.isEmpty()) return "缺少 env_name 参数。"
-
-        val installScript = obj.optString("install_script", "").trim()
-        if (installScript.isEmpty()) return "缺少 install_script 参数。"
-
-        return try {
-            val scriptsDir = File(context.filesDir, "cms_scripts/devenv")
-            scriptsDir.mkdirs()
-
-            val scriptFile = File(scriptsDir, "install_${envName}.sh")
-            scriptFile.writeText(installScript)
-
-            "✅ 自定义开发环境脚本创建成功\n" +
-                "环境名称: $envName\n" +
-                "文件: ${scriptFile.absolutePath}\n\n" +
-                "使用方式:\n" +
-                "1. 部署: cms_toolbox(action=\"deploy_custom\", type=\"devenv\", id=\"$envName\")\n" +
-                "2. 执行: cms_toolbox(action=\"run_script\", script=\"${installScript.take(50)}...\")"
-        } catch (e: Exception) {
-            "❌ 创建开发环境脚本失败: ${e.message}"
-        }
-    }
-
-    /**
      * 部署自定义脚本
      */
     private fun handleDeployCustom(context: Context, obj: JSONObject): String {
         val type = obj.optString("type", "").trim()
-        if (type.isEmpty() || type !in listOf("module", "engine", "devenv")) {
-            return "缺少或无效的 type 参数。可用值: module, engine, devenv"
+        if (type.isEmpty() || type !in listOf("module", "engine")) {
+            return "缺少或无效的 type 参数。可用值: module, engine"
         }
 
         val id = obj.optString("id", "").trim()
@@ -1115,7 +873,6 @@ echo "🎉 修复完成！"
             when (type) {
                 "module" -> deployCustomModule(context, id, scriptContent)
                 "engine" -> deployCustomEngine(context, id, scriptContent)
-                "devenv" -> deployCustomDevenv(context, id, scriptContent)
                 else -> "不支持的部署类型: $type"
             }
         } catch (e: Exception) {
@@ -1162,37 +919,12 @@ echo "🎉 修复完成！"
 
         // 执行脚本
         val scriptToRun = scriptFile.readText()
-        val result = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(
+        val result = QuroTerminalBridge.exec(
             scriptToRun, 60_000L, context, confirmed = true
         )
 
         return "✅ 自定义引擎脚本部署成功\n" +
             "类型: $engineType\n" +
-            "执行结果: ${result.output}"
-    }
-
-    private fun deployCustomDevenv(context: Context, envName: String, scriptContent: String): String {
-        val scriptsDir = File(context.filesDir, "cms_scripts/devenv")
-        val scriptFile = File(scriptsDir, "install_${envName}.sh")
-
-        if (!scriptFile.exists() && scriptContent.isEmpty()) {
-            return "开发环境脚本不存在: $envName\n请先使用 create_devenv_script 创建脚本"
-        }
-
-        // 如果提供了新的脚本内容，更新
-        if (scriptContent.isNotEmpty()) {
-            scriptFile.parentFile?.mkdirs()
-            scriptFile.writeText(scriptContent)
-        }
-
-        // 执行脚本
-        val scriptToRun = scriptFile.readText()
-        val result = com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(
-            scriptToRun, 120_000L, context, confirmed = true
-        )
-
-        return "✅ 自定义开发环境部署成功\n" +
-            "环境名称: $envName\n" +
             "执行结果: ${result.output}"
     }
 
@@ -1230,20 +962,6 @@ echo "🎉 修复完成！"
                 }
                 sb.appendLine()
             }
-
-            // 检查自定义开发环境脚本
-            val devenvDir = File(scriptsDir, "devenv")
-            if (devenvDir.exists()) {
-                val devenvScripts = devenvDir.listFiles() ?: emptyArray()
-                if (devenvScripts.isNotEmpty()) {
-                    sb.appendLine("💻 自定义开发环境脚本:")
-                    devenvScripts.forEach { file ->
-                        val envName = file.name.removePrefix("install_").removeSuffix(".sh")
-                        sb.appendLine("  - $envName (${file.length()} bytes)")
-                    }
-                    sb.appendLine()
-                }
-            }
         }
 
         if (sb.toString() == "自定义脚本列表：\n\n") {
@@ -1251,7 +969,6 @@ echo "🎉 修复完成！"
             sb.appendLine("\n使用以下命令创建：")
             sb.appendLine("- cms_toolbox(action=\"create_module\", module_id=\"my.httpd\", entry_script=\"...\")")
             sb.appendLine("- cms_toolbox(action=\"create_engine_script\", script_type=\"bootstrap\", script_content=\"...\")")
-            sb.appendLine("- cms_toolbox(action=\"create_devenv_script\", env_name=\"myenv\", install_script=\"...\")")
         }
 
         return sb.toString().trim()

@@ -3,6 +3,7 @@ package com.ai.assistance.quro.core.cms
 import android.content.Context
 import com.ai.assistance.quro.core.cms.CmsStateStore
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
 import java.io.File
 
 /** 把 Windows CRLF 统一为 LF，防止写入 proot/Ubuntu 的 shell 脚本出现「illegal option -」等诡异解析错误。 */
@@ -57,7 +58,7 @@ object CmsTerminalDeployer {
         val marker = File(dir, ".bootstrap.done")
         
         // 检查关键工具是否存在（proot重启后可能丢失）
-        val checkTools = QuroLinuxEnv.run(context, "command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1 && command -v gcc >/dev/null 2>&1", timeoutMs = 10_000)
+        val checkTools = QuroTerminalBridge.run(context, "command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1 && command -v gcc >/dev/null 2>&1", timeoutMs = 10_000)
         val toolsMissing = checkTools.first != 0
         
         if (marker.exists() && !toolsMissing) {
@@ -79,11 +80,11 @@ object CmsTerminalDeployer {
             return "⛔ 内置 bootstrap 脚本读取失败：${e.message}"
         }
         CmsStateStore.appendLog("_bootstrap", "• 执行 bootstrap（安装 python3/nodejs/终端工具，约需联网）")
-        var (code, out) = QuroLinuxEnv.run(context, "sh /root/cms/_bootstrap/bootstrap.sh", timeoutMs = 600_000)
+        var (code, out) = QuroTerminalBridge.run(context, "sh /root/cms/_bootstrap/bootstrap.sh", timeoutMs = 600_000)
         if (code != 0) {
             CmsStateStore.appendLog("_bootstrap", "• 首次 bootstrap 失败，等待2秒后重试...")
             Thread.sleep(2000)
-            val retry = QuroLinuxEnv.run(context, "sh /root/cms/_bootstrap/bootstrap.sh", timeoutMs = 600_000)
+            val retry = QuroTerminalBridge.run(context, "sh /root/cms/_bootstrap/bootstrap.sh", timeoutMs = 600_000)
             code = retry.first
             out = retry.second
         }
@@ -155,7 +156,7 @@ object CmsTerminalDeployer {
                 "if ! dpkg -s \$p >/dev/null 2>&1; then d=/tmp/cmsdeb_\$p; mkdir -p \$d; " +
                 "(cd \$d && apt-get download \$p 2>/dev/null && for f in *.deb; do dpkg-deb -x \"\$f\" / 2>/dev/null; done; rm -f *.deb); " +
                 "apt-get -f -y install 2>/dev/null; fi; done; true"
-            val (c, out) = QuroLinuxEnv.run(context, installCmd, timeoutMs = 240_000)
+            val (c, out) = QuroTerminalBridge.run(context, installCmd, timeoutMs = 240_000)
             if (c != 0) {
                 sb.appendLine("⚠️ 部分 Linux 依赖安装可能不完整(exit $c): ${out.take(300)}（best-effort，继续部署）")
                 CmsStateStore.appendLog(pkg.moduleId, "⚠️ apt 依赖安装返回 $c: ${out.take(300)}")
@@ -167,7 +168,7 @@ object CmsTerminalDeployer {
         if (pkg.pipDeps.isNotEmpty()) {
             CmsStateStore.markDeployStep(pkg.moduleId, "安装 pip 依赖: ${pkg.pipDeps.joinToString(" ")}", 90)
             // best-effort：pip 在 proot 下偶发网络/证书问题，不应整体失败阻塞模块部署。
-            val (c, out) = QuroLinuxEnv.run(
+            val (c, out) = QuroTerminalBridge.run(
                 context,
                 "pip install --no-cache-dir --break-system-packages ${pkg.pipDeps.joinToString(" ")} 2>&1 || pip install --no-cache-dir ${pkg.pipDeps.joinToString(" ")} 2>&1",
                 timeoutMs = 240_000,
@@ -177,18 +178,6 @@ object CmsTerminalDeployer {
                 CmsStateStore.appendLog(pkg.moduleId, "⚠️ pip 依赖返回 $c: ${out.take(300)}")
             } else {
                 sb.appendLine("✅ pip 依赖已装: ${pkg.pipDeps.joinToString(" ")}")
-            }
-        }
-
-        if (pkg.envProfiles.isNotEmpty()) {
-            CmsStateStore.markDeployStep(pkg.moduleId, "装配终端环境栈: ${pkg.envProfiles.joinToString(" ")}", 95)
-            val results = CmsEnvProvisioner.provisionAll(context, pkg.envProfiles)
-            results.forEach { (p, r) -> CmsStateStore.appendLog(pkg.moduleId, "[env:$p] $r") }
-            val hardFail = results.filter { it.second.startsWith("⛔") }
-            if (hardFail.isNotEmpty()) {
-                sb.appendLine("⚠️ 部分终端环境装配失败（非致命，部署继续）：${hardFail.joinToString { it.second }}")
-            } else {
-                sb.appendLine("✅ 终端环境栈已装配： ${pkg.envProfiles.joinToString(" ")}")
             }
         }
 

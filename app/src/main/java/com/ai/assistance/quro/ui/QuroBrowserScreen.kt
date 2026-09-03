@@ -786,7 +786,7 @@ fun QuroBrowserScreen(
                     modifier = Modifier.fillMaxSize(),
                     factory = { c ->
                         // 复用全局唯一浏览器 WebView（QuroBrowserViewHost）：全屏与化小窗之间只是重挂，
-                        // 不重建、不重载 —— 这是消除「化小窗卡顿」的关键（对标 operit WebSessionWebViewHost）。
+                        // 不重建、不重载 —— 这是消除「化小窗卡顿」的关键。
                         val container = android.widget.FrameLayout(c)
                         val wv = com.ai.assistance.quro.core.tools.QuroBrowserViewHost.getOrCreate(c)
                         // 写入外层 webView 状态，供地址栏/导航按钮/后退-前进等复用同一实例

@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.cms
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
 import com.ai.assistance.quro.util.QuroDiag
 
 /**
@@ -413,7 +414,7 @@ object CmsEnvProvisioner {
             }
             append("echo '--- 检测完成 ---'")
         }
-        val (c, out) = QuroLinuxEnv.run(context, diagnosticScript, timeoutMs = 20_000)
+        val (c, out) = QuroTerminalBridge.run(context, diagnosticScript, timeoutMs = 20_000)
         android.util.Log.i("CmsEnvProvisioner", "${profile.name}: checkCmd exit=$c, output=${out.take(500)}")
         persistDiag(profile, "detect", out)
         // 如果所有子命令都通过（输出中无 FAIL），则认为就绪
@@ -421,9 +422,9 @@ object CmsEnvProvisioner {
         android.util.Log.i("CmsEnvProvisioner", "${profile.name}: ready=$ready")
         // 以实际探测为准：就绪则补写标记；未就绪则清理可能的陈旧/假标记，避免误报「已就绪」。
         if (ready) {
-            QuroLinuxEnv.run(context, "mkdir -p $MARKER_DIR && touch $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
+            QuroTerminalBridge.run(context, "mkdir -p $MARKER_DIR && touch $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
         } else {
-            QuroLinuxEnv.run(context, "rm -f $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
+            QuroTerminalBridge.run(context, "rm -f $MARKER_DIR/${profile.name}.done", timeoutMs = 10_000)
         }
         return ready
     }
@@ -437,7 +438,7 @@ object CmsEnvProvisioner {
         // 安装前先释放残留 dpkg/apt 锁；并注入 robust_install 让 apt 失败可回退。
         // 注意：installScript 以 echo 结尾，其退出码恒为 0，绝不能用 c==0 判定成功，必须以实际探测为准。
         val script = ENV_INSTALL_PROLOGUE + "\n" + profile.installScript
-        val (c, out) = QuroLinuxEnv.run(context, script, timeoutMs = profile.timeoutMs)
+        val (c, out) = QuroTerminalBridge.run(context, script, timeoutMs = profile.timeoutMs)
         val duration = System.currentTimeMillis() - startTime
         android.util.Log.i("CmsEnvProvisioner", "${profile.name} 执行完成，耗时: ${duration}ms，退出码: $c")
         persistDiag(profile, "provision(exit=$c,${duration}ms)", out)
@@ -464,7 +465,7 @@ object CmsEnvProvisioner {
         val startTime = System.currentTimeMillis()
         // 安装前先释放残留 dpkg/apt 锁；并注入 robust_install 让 apt 失败可回退。
         val script = ENV_INSTALL_PROLOGUE + "\n" + profile.installScript
-        val (c, out) = QuroLinuxEnv.runWithLog(context, script, timeoutMs = profile.timeoutMs) { line ->
+        val (c, out) = QuroTerminalBridge.runWithLog(context, script, timeoutMs = profile.timeoutMs) { line ->
             onLine(line)
         }
         persistDiag(profile, "provisionWithLog(exit=$c)", out)

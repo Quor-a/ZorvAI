@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.cms
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
 import com.ai.assistance.quro.util.QuroDiag
 import java.io.File
 
@@ -13,7 +14,10 @@ private fun String.normalizeLineEndings(): String = this.replace("\r\n", "\n").r
  *
  * 把 [CmsEnginePackage] 推到 proot/Ubuntu 的 /root/cms/_engine（区别于模块 /root/cms/<moduleId>）：
  * ① 校验完整性(sha256, P0) ② 写 cms-engine.json + bootstrap.sh + provision/ + services/ ③ 跑 bootstrap
- * ④ provisionAll(envProfiles) ⑤ 拉起共享服务 ⑥ 写就绪标记 + [CmsEngineStore]。
+ * ④ 跑 provisioner ⑤ 拉起共享服务 ⑥ 写就绪标记 + [CmsEngineStore]。
+ *
+ * 注：引擎不再装配开发环境栈（NODE/PYTHON/JAVA/RUST/GO）——开发环境部署由终端侧「环境配置」
+ * 统一负责，避免两套重复装配。
  *
  * D1 约束：终端后端唯一化 = proot；环境未就绪**直接拒绝**，绝不回退 /system/bin/sh 玩具通道。
  */
@@ -104,7 +108,7 @@ object CmsEngineDeployer {
 
         // 跑 bootstrap（安装 python3/nodejs 基础运行时）
         CmsEngineStore.markDeployStep("执行引擎 bootstrap（安装基础运行时）", 40)
-        val (bc, bout) = QuroLinuxEnv.run(context, "sh ${engineGuestDir()}/bootstrap.sh", timeoutMs = 300_000)
+        val (bc, bout) = QuroTerminalBridge.run(context, "sh ${engineGuestDir()}/bootstrap.sh", timeoutMs = 300_000)
         if (bc != 0) {
             // 🔎 诊断闭环：把 bootstrap 完整输出落 QuroDiag，设备侧无需 adb 即可取到
             // 真实失败原因（如 CRLF 导致的「set: illegal option -」、apk 源 404 等）。
@@ -117,18 +121,9 @@ object CmsEngineDeployer {
 
         // provisioner（非致命）
         CmsEngineStore.markDeployStep("装配引擎级环境", 70)
-        val (pc, pout) = QuroLinuxEnv.run(context, "sh ${engineGuestDir()}/provision/provision.sh", timeoutMs = 300_000)
+        val (pc, pout) = QuroTerminalBridge.run(context, "sh ${engineGuestDir()}/provision/provision.sh", timeoutMs = 300_000)
         if (pc != 0) sb.appendLine("⚠️ 引擎 provisioner 异常(exit $pc): ${pout.take(200)}（非致命，继续）")
         else sb.appendLine("✅ 引擎 provisioner 完成")
-
-        // 引擎级环境栈（非致命）
-        if (pkg.envProfiles.isNotEmpty()) {
-            CmsEngineStore.markDeployStep("装配引擎环境栈: ${pkg.envProfiles.joinToString(" ")}", 85)
-            val results = CmsEnvProvisioner.provisionAll(context, pkg.envProfiles)
-            val hard = results.filter { it.second.startsWith("⛔") }
-            if (hard.isNotEmpty()) sb.appendLine("⚠️ 部分引擎环境装配失败（非致命）：${hard.joinToString { it.second }}")
-            else sb.appendLine("✅ 引擎环境栈已装配：${pkg.envProfiles.joinToString(" ")}")
-        }
 
         // 拉起共享服务（Bug1 修复：彻底脱离 + 端口就绪探测）
         // 旧逻辑用 QuroLinuxEnv.run 直接 exec 服务脚本并信任其退出码；proot 下常驻进程持有 stdout pipe
@@ -143,7 +138,7 @@ object CmsEngineDeployer {
                 append("if command -v setsid >/dev/null 2>&1; then setsid sh ${engineGuestDir()}/services/${svc.id}.sh >/dev/null 2>&1 </dev/null & ")
                 append("else nohup sh ${engineGuestDir()}/services/${svc.id}.sh >/dev/null 2>&1 </dev/null & fi")
             }
-            QuroLinuxEnv.run(context, launchCmd, timeoutMs = 10_000)
+            QuroTerminalBridge.run(context, launchCmd, timeoutMs = 10_000)
             // 2) 端口就绪探测：单次 proot 调用内用 python 轮询（40 次×0.3s），可连接即成功，避免反复拉起 proot。
             val probe = """
                 python3 -c "import socket,time,sys
@@ -156,7 +151,7 @@ object CmsEngineDeployer {
                     s.close(); time.sleep(0.2)
                 sys.exit(0 if ok else 1)"
             """.trimIndent()
-            val (pc, _) = QuroLinuxEnv.run(context, probe, timeoutMs = 15_000)
+            val (pc, _) = QuroTerminalBridge.run(context, probe, timeoutMs = 15_000)
             if (pc == 0) {
                 launched.add(svc.id)
                 CmsEngineStore.appendLog("引擎服务 ${svc.name} 已拉起（端口 ${svc.port}）")
@@ -166,10 +161,10 @@ object CmsEngineDeployer {
         }
 
         // 健康检查：确认就绪标记 + 核心开发工具确实就绪（避免"标记写了但工具没装"的假成功）
-        val (hc, _) = QuroLinuxEnv.run(context, "[ -f ${engineGuestDir()}/.engine.ready ]", timeoutMs = 10_000)
+        val (hc, _) = QuroTerminalBridge.run(context, "[ -f ${engineGuestDir()}/.engine.ready ]", timeoutMs = 10_000)
         var health = hc == 0
         if (health) {
-            val (tc, tout) = QuroLinuxEnv.run(
+            val (tc, tout) = QuroTerminalBridge.run(
                 context,
                 "miss=; for t in python3 node gcc make cmake git curl; do command -v \$t >/dev/null 2>&1 || miss=\"\$miss \$t\"; done; if [ -n \"\$miss\" ]; then echo \"MISSING:\$miss\"; exit 2; fi; echo OK",
                 timeoutMs = 10_000,
