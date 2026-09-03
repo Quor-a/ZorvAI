@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.ui
 
 import android.content.Context
+import android.content.Intent
 import android.os.Environment
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -121,12 +122,13 @@ fun QuroDocEditorScreen(
                         fileStatus = "就绪"
                     }
                 } else {
-                    // 新建文件，保存到下载目录
+                    // 新建文件：保存到应用私有 Documents 目录（Android 10+ 分区存储无法直写公共 Download）
                     val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
                     val fileName = "文档_$timestamp.md"
-                    val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                    if (!downloadsDir.exists()) downloadsDir.mkdirs()
-                    val newFile = File(downloadsDir, fileName)
+                    val docsDir = ctx.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
+                        ?: File(ctx.filesDir, "documents")
+                    if (!docsDir.exists()) docsDir.mkdirs()
+                    val newFile = File(docsDir, fileName)
                     
                     withContext(Dispatchers.Main) {
                         fileStatus = "正在创建: ${newFile.absolutePath}"
@@ -295,9 +297,33 @@ fun QuroDocEditorScreen(
                         )
                     }
                     
-                    // 更多选项
-                    IconButton(onClick = { /* 显示更多选项 */ }) {
-                        Icon(Icons.Filled.MoreVert, "更多")
+                    // 更多选项：真实分享/导出（通过 FileProvider 授权给系统分享面板）
+                    IconButton(onClick = {
+                        val target = file ?: run {
+                            Toast.makeText(ctx, "请先保存文档，再分享给其他应用", Toast.LENGTH_SHORT).show()
+                            return@IconButton
+                        }
+                        if (!target.exists()) {
+                            Toast.makeText(ctx, "文件不存在，请先保存", Toast.LENGTH_SHORT).show()
+                            return@IconButton
+                        }
+                        val uri = QuroDocOpener.safeUri(ctx, target)
+                        if (uri == null) {
+                            Toast.makeText(ctx, "无法分享该文件（路径未被允许）", Toast.LENGTH_SHORT).show()
+                            return@IconButton
+                        }
+                        val share = Intent(Intent.ACTION_SEND).apply {
+                            type = QuroDocOpener.guessMime(target.name)
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        runCatching {
+                            ctx.startActivity(Intent.createChooser(share, "分享 ${target.name}"))
+                        }.onFailure {
+                            Toast.makeText(ctx, "没有可分享的应用", Toast.LENGTH_SHORT).show()
+                        }
+                    }) {
+                        Icon(Icons.Filled.Share, "分享")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -373,7 +399,10 @@ fun QuroDocEditorScreen(
         ) {
             // 格式化工具栏
             // 根据文件类型选择编辑器
-            val isMarkdown = file?.name?.endsWith(".md") == true || file?.name?.endsWith(".markdown") == true
+            // 新建文档（file == null）默认按 Markdown 编辑；已存在文件按扩展名判定
+            val isMarkdown = file?.name?.endsWith(".md") == true ||
+                    file?.name?.endsWith(".markdown") == true ||
+                    (file == null)
             
             if (isMarkdown) {
                 // Markdown文件使用专业的Markdown编辑器
