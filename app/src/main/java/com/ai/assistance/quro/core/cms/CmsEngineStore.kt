@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.cms
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
 import com.ai.assistance.quro.util.QuroDiag
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -140,7 +141,7 @@ object CmsEngineStore {
         init(context)
         val st = QuroLinuxEnv.probeLenient(context)
         if (!st.available) { markHealth(false); return }
-        val (c, _) = QuroLinuxEnv.run(context, "[ -f ${CmsEngineDeployer.engineGuestDir()}/.engine.ready ]", timeoutMs = 10_000)
+        val (c, _) = QuroTerminalBridge.run(context, "[ -f ${CmsEngineDeployer.engineGuestDir()}/.engine.ready ]", timeoutMs = 10_000)
         markHealth(c == 0)
     }
 }

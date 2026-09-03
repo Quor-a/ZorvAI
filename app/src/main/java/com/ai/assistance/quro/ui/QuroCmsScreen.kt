@@ -50,7 +50,7 @@ CMS v2 模块 = 一个能力包（cms.io/v2 规范），可部署到「手机端
 • 名称 / 简介：一眼看懂用途。
 • 宿主分类：app=手机端执行；terminal=终端 Linux 内执行；dual=双端皆可。
 • 能力（Capabilities）：模块对外暴露的能力点，每个含 id / 描述 / 是否需用户确认。
-• 依赖（Dependencies）：声明运行所需环境，kind 选 NODE / PYTHON / SSH / JAVA / RUST / GO（由 CmsEnvProvisioner 自动 provision），或 CAPABILITY（依赖另一个模块的能力）。
+• 依赖（Dependencies）：声明运行所需依赖，kind 选 MODULE（依赖另一个 CMS 模块）/ MCP（别名）/ SKILL（id）/ LINUX（apt 或 pip 包）/ CAPABILITY（依赖另一个模块的能力）。
 
 二、依赖与运行：
 • 终端模块首次部署前，先在「终端」页安装 Linux 环境（约需联网下载 30MB），部署时按需 apt-get install 基础包。
@@ -852,7 +852,7 @@ private fun ModuleInfoDialog(module: QuroCmsModule, onDismiss: () -> Unit) {
                     Spacer(Modifier.height(8.dp))
                     Text("依赖 (${module.dependencies.size})：", style = MaterialTheme.typography.labelMedium)
                     module.dependencies.forEach { d ->
-                        val tgt = if (d.kind == DepKind.ENV) d.spec else (d.spec.ifBlank { d.capability })
+                        val tgt = d.spec.ifBlank { d.capability }
                         Text("• [${d.kind.name}] $tgt @${d.version}${if (d.optional) "（可选）" else ""}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -878,7 +878,6 @@ private fun AddModuleDialog(onDismiss: () -> Unit, onConfirm: (QuroCmsModule) ->
     var perms by remember { mutableStateOf(mutableListOf<QuroCmsPermission>()) }
     var caps by remember { mutableStateOf(mutableListOf<QuroCmsCapability>()) }
     var deps by remember { mutableStateOf(mutableListOf<QuroCmsDependency>()) }
-    var envProfiles by remember { mutableStateOf(mutableSetOf<String>()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -890,7 +889,7 @@ private fun AddModuleDialog(onDismiss: () -> Unit, onConfirm: (QuroCmsModule) ->
                             id = id.trim(), name = name.ifBlank { id.trim() }, version = version.ifBlank { "1.0.0" },
                             description = description, author = author, license = license,
                             state = ModuleState.Ready, permissions = perms, capabilities = caps,
-                            dependencies = deps + envProfiles.map { QuroCmsDependency(kind = DepKind.ENV, spec = it, optional = false) },
+                            dependencies = deps,
                         )
                     )
                 },
@@ -963,24 +962,6 @@ private fun AddModuleDialog(onDismiss: () -> Unit, onConfirm: (QuroCmsModule) ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = d.optional, onCheckedChange = { deps[i] = d.copy(optional = it) })
                         Text("可选依赖", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-                Text("终端环境栈（部署到终端时自动装配，勾选所需档）", style = MaterialTheme.typography.labelMedium)
-                EnvProfile.entries.forEach { ep ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = envProfiles.contains(ep.name),
-                            onCheckedChange = { checked ->
-                                envProfiles = if (checked) (envProfiles + ep.name).toMutableSet()
-                                else (envProfiles - ep.name).toMutableSet()
-                            },
-                        )
-                        Column(Modifier.weight(1f)) {
-                            Text(ep.name, style = MaterialTheme.typography.bodyMedium)
-                            Text(ep.profileName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                     }
                 }
             }

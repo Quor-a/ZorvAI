@@ -38,8 +38,8 @@ android {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1078
-        versionName = "1.0.78"
+        versionCode = 1079
+        versionName = "1.0.79"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -102,6 +102,13 @@ android {
             excludes += "kotlin-tooling-metadata.json"
             // 排除 AGP 8.13 自动生成的 .version 文件（部分厂商安装器可能不识别）
             excludes += "META-INF/*.version"
+            // 排除 Apache 系 jar（terminal-core 的 FTP 服务器：ftpserver/ftplet/mina/log4j）自带的重复元数据，
+            // 否则 mergeFullReleaseJavaResource 因多个 jar 同路径 META-INF/DEPENDENCIES 冲突而失败。
+            excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/LICENSE"
+            excludes += "META-INF/NOTICE"
+            excludes += "META-INF/LICENSE.txt"
+            excludes += "META-INF/NOTICE.txt"
         }
         jniLibs {
             useLegacyPackaging = true
@@ -190,6 +197,11 @@ dependencies {
     // 二者共存于既有 QuroMainAciService，构成"控制方 + 多受控端"的 ACI 能力矩阵。
     implementation(project(":lib_aci"))
     implementation(project(":cap_main"))
+
+    // 可见重终端：独立终端核心库
+    // （proot + Ubuntu 24.04 rootfs + ANSI 终端模拟 + canvas 渲染 + 多会话 + FTP 服务器），
+    // 替换旧 Termux 可见终端。原 AI 工具链（QuroShellSession / QuroLinuxEnv）不动。
+    implementation(project(":terminal-core"))
 
     // 旧契约兼容 AAR（ai.aci.core.*）：浏览器等第三方旧受控端在「ACI→AIDL ACI 重命名」重构前
     // 基于该契约构建，其 Service 描述符为 ai.aci.core.IACIService。控制端必须持有字节一致的旧类，

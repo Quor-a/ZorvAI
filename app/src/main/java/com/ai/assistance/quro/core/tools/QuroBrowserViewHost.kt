@@ -22,10 +22,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * 浏览器 WebView 共享宿主（对标 operit 的 WebSessionWebViewHost）。
+ * 浏览器 WebView 共享宿主（跨全屏/浮窗复用单个 WebView）。
  *
  * 问题背景：此前「系统级化小窗」的浏览器浮窗会 new 一个 WebView 并 loadUrl 重载，
- * 导致「化小窗」瞬间卡顿（新建 WebView + 整页重载）。operit 的做法是**整个 App 只有这一个
+ * 导致「化小窗」瞬间卡顿（新建 WebView + 整页重载）。正确的做法是**整个 App 只有这一个
  * 浏览器 WebView**，全屏与浮窗之间只是把它在不同容器间「重挂」（reattach），不重建、不重载。
  *
  * 职责：
@@ -59,7 +59,7 @@ object QuroBrowserViewHost {
                 domStorageEnabled = true
                 databaseEnabled = true
                 loadsImagesAutomatically = true
-                // 对标 operit：标准 overview 模式（缩放显示整页）。化小窗时页面随窗口缩放而非整页重载。
+                // 标准 overview 模式（缩放显示整页）。化小窗时页面随窗口缩放而非整页重载。
                 loadWithOverviewMode = true
                 useWideViewPort = true
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
@@ -152,7 +152,7 @@ object QuroBrowserViewHost {
         if (webView != null) reattach()
     }
 
-    /** 在目标容器间移动 WebView（不重建、不重载）。对标 operit WebSessionWebViewHost.reattach。
+    /** 在目标容器间移动 WebView（不重建、不重载），即 WebView 重挂（reattach）模式。
      *  若没有任何容器（化小窗返回对话界面），仅从当前父移除、WebView 保留在内存，
      *  重开全屏时再挂入——全程不跨 WindowManager 窗口搬动，故零卡顿。 */
     private fun reattach() {

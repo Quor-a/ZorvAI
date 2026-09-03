@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.cms
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
 import java.io.File
 
 /**
@@ -54,7 +55,7 @@ object CmsTerminalRuntime {
             append("echo \$! > run.pid\n")
             append("cat run.pid\n")
         }
-        val (c, out) = QuroLinuxEnv.run(context, launch, timeoutMs = 30_000)
+        val (c, out) = QuroTerminalBridge.run(context, launch, timeoutMs = 30_000)
         if (c != 0) return null
         val pid = out.trim().toIntOrNull() ?: return null
         return CmsModuleProcess(
@@ -74,13 +75,13 @@ object CmsTerminalRuntime {
 
     /** 健康检查：进程是否存活。 */
     fun isAlive(context: Context, pid: Int): Boolean {
-        val (c, _) = QuroLinuxEnv.run(context, "kill -0 $pid", timeoutMs = 10_000)
+        val (c, _) = QuroTerminalBridge.run(context, "kill -0 $pid", timeoutMs = 10_000)
         return c == 0
     }
 
     /** 停止进程：先 TERM 后 KILL。 */
     fun stop(context: Context, pid: Int): Boolean {
-        val (c, _) = QuroLinuxEnv.run(
+        val (c, _) = QuroTerminalBridge.run(
             context,
             "kill -TERM $pid 2>/dev/null; sleep 1; kill -KILL $pid 2>/dev/null; echo done",
             timeoutMs = 15_000,

@@ -10,7 +10,9 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager
+import com.ai.assistance.quro.core.terminal.ShellResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,9 +31,12 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * 严格遵循 ACI 开发者手册 §25：
  * - 继承 BaseAidlAciService，实现 onCreateCapabilities / onCall
- * - 12 个 ACI 能力：exec / create_session / destroy_session / send_input /
- *   get_session_status / list_sessions / set_session_env / get_session_env /
- *   list_capabilities / get_service_status / get_audit_log / help
+ * - 14 个 ACI 能力：exec / create_session / destroy_session / send_input /
+ *   switch_session / send_interrupt / get_session_status / list_sessions /
+ *   set_session_env / get_session_env / list_capabilities / get_service_status /
+ *   get_audit_log / help
+ *   （switch_session / send_interrupt 补齐会话切换与命令中断能力，
+ *   实现「接口对接口」用自己 ACI 架构覆盖全部终端操控能力）
  * - 前台服务保活（specialUse）
  * - 权限检查：允许自身 + ZorvAI 控制端
  * - Token 验证：应用层认证
@@ -251,7 +256,25 @@ class QuroTerminalAciService : BaseAidlAciService() {
                 .addFlag(Capability.FLAG_BACKGROUND)
         )
 
-        // 5. get_session_status — 获取会话状态
+        // 5. switch_session — 切换默认会话
+        caps.add(
+            Capability.create("switch_session", "切换默认终端会话，后续 AI/界面操作默认作用于该会话。")
+                .addParam("session_id", "string", true, "要切换为默认的会话 ID")
+                .addResult("switched", "boolean", "是否切换成功")
+                .addResult("default_session", "string", "切换后的默认会话 ID")
+                .addFlag(Capability.FLAG_BACKGROUND)
+        )
+
+        // 6. send_interrupt — 中断运行中的命令
+        caps.add(
+            Capability.create("send_interrupt", "向指定会话发送中断信号（^C），终止正在运行的命令。")
+                .addParam("session_id", "string", true, "目标会话 ID")
+                .addResult("interrupted", "boolean", "是否已发送中断")
+                .addResult("message", "string", "中断结果说明")
+                .addFlag(Capability.FLAG_BACKGROUND)
+        )
+
+        // 7. get_session_status — 获取会话状态
         caps.add(
             Capability.create("get_session_status", "获取指定终端会话的实时状态。")
                 .addParam("session_id", "string", true, "目标会话 ID")
@@ -265,7 +288,7 @@ class QuroTerminalAciService : BaseAidlAciService() {
                 .addFlag(Capability.FLAG_NO_UI)
         )
 
-        // 6. list_sessions — 列出所有会话
+        // 8. list_sessions — 列出所有会话
         caps.add(
             Capability.create("list_sessions", "列出所有终端会话，包括默认会话和额外会话。")
                 .addResult("sessions", "string", "会话列表 JSON 数组")
@@ -273,7 +296,7 @@ class QuroTerminalAciService : BaseAidlAciService() {
                 .addFlag(Capability.FLAG_NO_UI)
         )
 
-        // 7. set_session_env — 设置环境变量（当前受限）
+        // 9. set_session_env — 设置环境变量（当前受限）
         caps.add(
             Capability.create("set_session_env",
                 "设置终端会话的环境变量。注意：当前仅支持在会话创建时设置，运行时修改需新建会话。")
@@ -285,7 +308,7 @@ class QuroTerminalAciService : BaseAidlAciService() {
                 .addFlag(Capability.FLAG_BACKGROUND)
         )
 
-        // 8. get_session_env — 获取环境变量
+        // 10. get_session_env — 获取环境变量
         caps.add(
             Capability.create("get_session_env", "获取终端会话的环境变量信息。")
                 .addParam("session_id", "string", true, "目标会话 ID")
@@ -294,7 +317,7 @@ class QuroTerminalAciService : BaseAidlAciService() {
                 .addFlag(Capability.FLAG_NO_UI)
         )
 
-        // 9. list_capabilities — 列出所有能力
+        // 11. list_capabilities — 列出所有能力
         caps.add(
             Capability.create("list_capabilities", "列出本服务支持的所有 ACI 能力。")
                 .addResult("capabilities", "string", "能力列表 JSON 数组")
@@ -302,7 +325,7 @@ class QuroTerminalAciService : BaseAidlAciService() {
                 .addFlag(Capability.FLAG_NO_UI)
         )
 
-        // 10. get_service_status — 获取服务状态
+        // 12. get_service_status — 获取服务状态
         caps.add(
             Capability.create("get_service_status", "获取终端 ACI 服务运行状态。")
                 .addResult("running", "boolean", "服务是否运行")
@@ -314,7 +337,7 @@ class QuroTerminalAciService : BaseAidlAciService() {
                 .addFlag(Capability.FLAG_NO_UI)
         )
 
-        // 11. get_audit_log — 获取审计日志
+        // 13. get_audit_log — 获取审计日志
         caps.add(
             Capability.create("get_audit_log", "获取终端 ACI 服务的调用审计日志。")
                 .addParam("limit", "int", false, "返回条数，默认 50")
@@ -323,12 +346,142 @@ class QuroTerminalAciService : BaseAidlAciService() {
                 .addFlag(Capability.FLAG_NO_UI)
         )
 
-        // 12. help — 帮助信息
+        // 14. help — 帮助信息
         caps.add(
             Capability.create("help", "显示终端 ACI 服务的完整帮助信息和使用示例。")
                 .addResult("help", "string", "帮助文本")
                 .addResult("version", "string", "服务版本")
                 .addFlag(Capability.FLAG_NO_UI)
+        )
+
+        // ── 15-18. rootfs 文件能力（终端对接 ACI：文件管理经统一门面读写 rootfs）──
+
+        // 15. file_read — 读取 rootfs 文件
+        caps.add(
+            Capability.create("file_read", "读取 rootfs 内文本文件内容（guest 路径，如 /root/foo.txt）。")
+                .addParam("path", "string", true, "rootfs 内路径（/root、/etc、/sdcard 等）")
+                .addParam("max_bytes", "int", false, "读取上限（字节），默认 262144")
+                .addResult("output", "string", "文件内容")
+                .addResult("exit_code", "int", "0=成功")
+                .addResult("error", "string", "失败原因")
+                .addFlag(Capability.FLAG_NO_UI)
+        )
+
+        // 16. file_write — 写入 rootfs 文件
+        caps.add(
+            Capability.create("file_write", "写入 rootfs 内文本文件（父目录不存在则自动创建）。")
+                .addParam("path", "string", true, "rootfs 内路径")
+                .addParam("content", "string", true, "要写入的文本内容")
+                .addResult("exit_code", "int", "0=成功")
+                .addResult("error", "string", "失败原因")
+                .addFlag(Capability.FLAG_BACKGROUND)
+        )
+
+        // 17. file_delete — 删除 rootfs 文件/目录
+        caps.add(
+            Capability.create("file_delete", "删除 rootfs 内文件或目录（递归）。")
+                .addParam("path", "string", true, "rootfs 内路径")
+                .addResult("exit_code", "int", "0=成功")
+                .addResult("error", "string", "失败原因")
+                .addFlag(Capability.FLAG_BACKGROUND)
+        )
+
+        // 18. file_list — 列出 rootfs 目录
+        caps.add(
+            Capability.create("file_list", "列出 rootfs 内目录内容（目录名带 / 后缀）。")
+                .addParam("path", "string", true, "rootfs 内路径")
+                .addResult("output", "string", "文件名列表（换行分隔）")
+                .addResult("exit_code", "int", "0=成功")
+                .addResult("error", "string", "失败原因")
+                .addFlag(Capability.FLAG_NO_UI)
+        )
+
+        // ── 19-26. 包管理能力（终端对接 ACI：包管理经统一门面 + 发行版探测）──
+
+        // 19. pkg_install — 安装软件包
+        caps.add(
+            Capability.create("pkg_install", "在 Linux 环境安装软件包（自动探测发行版包管理器）。")
+                .addParam("packages", "string", true, "软件包名（空格分隔多个）")
+                .addParam("timeout", "int", false, "超时（秒），默认 300")
+                .addResult("exit_code", "int", "退出码（0=成功）")
+                .addResult("output", "string", "安装输出")
+                .addResult("error", "string", "失败原因")
+                .addResult("timed_out", "boolean", "是否超时")
+                .addFlag(Capability.FLAG_BACKGROUND)
+        )
+
+        // 20. pkg_remove — 卸载软件包
+        caps.add(
+            Capability.create("pkg_remove", "卸载 Linux 环境中的软件包。")
+                .addParam("packages", "string", true, "软件包名（空格分隔多个）")
+                .addParam("timeout", "int", false, "超时（秒），默认 300")
+                .addResult("exit_code", "int", "退出码（0=成功）")
+                .addResult("output", "string", "卸载输出")
+                .addResult("error", "string", "失败原因")
+                .addFlag(Capability.FLAG_BACKGROUND)
+        )
+
+        // 21. pkg_update — 更新软件源索引
+        caps.add(
+            Capability.create("pkg_update", "更新 Linux 环境软件源索引（apt update / apk update 等）。")
+                .addParam("timeout", "int", false, "超时（秒），默认 300")
+                .addResult("exit_code", "int", "退出码（0=成功）")
+                .addResult("output", "string", "更新输出")
+                .addResult("error", "string", "失败原因")
+                .addFlag(Capability.FLAG_BACKGROUND)
+        )
+
+        // 22. pkg_upgrade — 升级全部已装软件
+        caps.add(
+            Capability.create("pkg_upgrade", "升级 Linux 环境全部已装软件。")
+                .addParam("timeout", "int", false, "超时（秒），默认 600")
+                .addResult("exit_code", "int", "退出码（0=成功）")
+                .addResult("output", "string", "升级输出")
+                .addResult("error", "string", "失败原因")
+                .addFlag(Capability.FLAG_BACKGROUND)
+        )
+
+        // 23. pkg_search — 搜索软件包
+        caps.add(
+            Capability.create("pkg_search", "搜索 Linux 环境可用软件包。")
+                .addParam("query", "string", true, "搜索关键词")
+                .addParam("timeout", "int", false, "超时（秒），默认 60")
+                .addResult("exit_code", "int", "退出码（0=成功）")
+                .addResult("output", "string", "搜索结果")
+                .addResult("error", "string", "失败原因")
+                .addFlag(Capability.FLAG_NO_UI)
+        )
+
+        // 24. pkg_list — 列出已装软件包
+        caps.add(
+            Capability.create("pkg_list", "列出 Linux 环境已安装的软件包。")
+                .addParam("filter", "string", false, "过滤关键词（可选）")
+                .addParam("timeout", "int", false, "超时（秒），默认 60")
+                .addResult("exit_code", "int", "退出码（0=成功）")
+                .addResult("output", "string", "已装软件包列表")
+                .addResult("error", "string", "失败原因")
+                .addFlag(Capability.FLAG_NO_UI)
+        )
+
+        // 25. pkg_info — 查看软件包详情
+        caps.add(
+            Capability.create("pkg_info", "查看 Linux 环境软件包详情。")
+                .addParam("package", "string", true, "软件包名")
+                .addParam("timeout", "int", false, "超时（秒），默认 60")
+                .addResult("exit_code", "int", "退出码（0=成功）")
+                .addResult("output", "string", "软件包详情")
+                .addResult("error", "string", "失败原因")
+                .addFlag(Capability.FLAG_NO_UI)
+        )
+
+        // 26. pkg_clean — 清理包缓存
+        caps.add(
+            Capability.create("pkg_clean", "清理 Linux 环境包缓存（释放空间）。")
+                .addParam("timeout", "int", false, "超时（秒），默认 120")
+                .addResult("exit_code", "int", "退出码（0=成功）")
+                .addResult("output", "string", "清理输出")
+                .addResult("error", "string", "失败原因")
+                .addFlag(Capability.FLAG_BACKGROUND)
         )
 
         Log.i(TAG, "注册 ${caps.size} 个 ACI 能力")
@@ -378,6 +531,8 @@ class QuroTerminalAciService : BaseAidlAciService() {
                 "create_session" -> handleCreateSession(req.params)
                 "destroy_session" -> handleDestroySession(req.params)
                 "send_input" -> handleSendInput(req.params)
+                "switch_session" -> handleSwitchSession(req.params)
+                "send_interrupt" -> handleSendInterrupt(req.params)
                 "get_session_status" -> handleGetSessionStatus(req.params)
                 "list_sessions" -> handleListSessions()
                 "set_session_env" -> handleSetSessionEnv(req.params)
@@ -386,6 +541,18 @@ class QuroTerminalAciService : BaseAidlAciService() {
                 "get_service_status" -> handleGetServiceStatus()
                 "get_audit_log" -> handleGetAuditLog(req.params)
                 "help" -> handleHelp()
+                "file_read" -> handleFileRead(req.params)
+                "file_write" -> handleFileWrite(req.params)
+                "file_delete" -> handleFileDelete(req.params)
+                "file_list" -> handleFileList(req.params)
+                "pkg_install" -> handlePkgInstall(req.params)
+                "pkg_remove" -> handlePkgRemove(req.params)
+                "pkg_update" -> handlePkgUpdate(req.params)
+                "pkg_upgrade" -> handlePkgUpgrade(req.params)
+                "pkg_search" -> handlePkgSearch(req.params)
+                "pkg_list" -> handlePkgList(req.params)
+                "pkg_info" -> handlePkgInfo(req.params)
+                "pkg_clean" -> handlePkgClean(req.params)
                 else -> AidlAciResponse.error(AidlAciError.CAPABILITY_NOT_FOUND,
                     "unknown capability: $capName")
             }
@@ -414,9 +581,7 @@ class QuroTerminalAciService : BaseAidlAciService() {
 
         return try {
             val result = runBlocking(Dispatchers.IO) {
-                com.ai.assistance.quro.core.terminal.QuroTerminalController.runCommand(
-                    command, timeout * 1000, this@QuroTerminalAciService
-                )
+                QuroTerminalBridge.exec(command, timeout * 1000, this@QuroTerminalAciService)
             }
             AidlAciResponse.success(Bundle().apply {
                 putInt("exit_code", result.exitCode)
@@ -475,6 +640,58 @@ class QuroTerminalAciService : BaseAidlAciService() {
             AidlAciResponse.success(Bundle().apply { putBoolean("sent", true) })
         } catch (e: Throwable) {
             AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "发送输入失败: ${e.message}")
+        }
+    }
+
+    private fun handleSwitchSession(params: Bundle?): AidlAciResponse {
+        val sessionId = params?.getString("session_id") ?: ""
+        if (sessionId.isBlank()) return AidlAciResponse.error(AidlAciError.BAD_REQUEST, "缺少 session_id")
+        return try {
+            val switched = runBlocking(Dispatchers.IO) {
+                QuroTerminalSessionManager.switchDefault(sessionId)
+            }
+            val newDefault = QuroTerminalSessionManager.listSessions().find { it.isDefault }
+            AidlAciResponse.success(Bundle().apply {
+                putBoolean("switched", switched)
+                putString("default_session", newDefault?.id ?: "")
+            })
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "切换会话失败: ${e.message}")
+        }
+    }
+
+    private fun handleSendInterrupt(params: Bundle?): AidlAciResponse {
+        val sessionId = params?.getString("session_id") ?: ""
+        if (sessionId.isBlank()) return AidlAciResponse.error(AidlAciError.BAD_REQUEST, "缺少 session_id")
+        val shell = QuroTerminalSessionManager.getShellSession(sessionId)
+            ?: return AidlAciResponse.error(AidlAciError.CAPABILITY_NOT_FOUND, "会话不存在: $sessionId")
+        return try {
+            val message = runBlocking(Dispatchers.IO) {
+                when {
+                    shell.exited -> "shell 已退出，无需中断"
+                    !shell.busy -> "当前没有运行中的命令"
+                    else -> {
+                        val soft = shell.interrupt()
+                        if (soft) {
+                            "已中断当前命令"
+                        } else {
+                            val isDefault = QuroTerminalSessionManager.listSessions().any { it.isDefault && it.id == sessionId }
+                            if (isDefault) {
+                                com.ai.assistance.quro.core.terminal.QuroTerminalController.interrupt(this@QuroTerminalAciService)
+                            } else {
+                                shell.forceStop()
+                                "命令未响应软中断，已强制终止"
+                            }
+                        }
+                    }
+                }
+            }
+            AidlAciResponse.success(Bundle().apply {
+                putBoolean("interrupted", true)
+                putString("message", message)
+            })
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "发送中断失败: ${e.message}")
         }
     }
 
@@ -624,11 +841,13 @@ class QuroTerminalAciService : BaseAidlAciService() {
         val help = """
 Zorv AI 终端 ACI 服务 v$serviceVersion
 
-支持的能力（12 个）：
+支持的能力（26 个）：
   exec               — 执行命令
   create_session     — 创建会话
   destroy_session    — 销毁会话
   send_input         — 发送输入（交互式）
+  switch_session     — 切换默认会话
+  send_interrupt     — 发送中断信号（^C）
   get_session_status — 获取会话状态
   list_sessions      — 列出所有会话
   set_session_env    — 设置环境变量
@@ -637,6 +856,20 @@ Zorv AI 终端 ACI 服务 v$serviceVersion
   get_service_status — 获取服务状态
   get_audit_log      — 获取审计日志
   help               — 本帮助
+  ── 文件能力 ──
+  file_read          — 读取 rootfs 文件
+  file_write         — 写入 rootfs 文件
+  file_delete        — 删除 rootfs 文件/目录
+  file_list          — 列出 rootfs 目录
+  ── 包管理能力 ──
+  pkg_install        — 安装软件包
+  pkg_remove         — 卸载软件包
+  pkg_update         — 更新软件源索引
+  pkg_upgrade        — 升级全部软件
+  pkg_search         — 搜索软件包
+  pkg_list           — 列出已装软件包
+  pkg_info           — 查看软件包详情
+  pkg_clean          — 清理包缓存
 
 接入方式：
   AIDL Binder    — bindService + ACTION_BIND
@@ -649,12 +882,185 @@ Zorv AI 终端 ACI 服务 v$serviceVersion
   aci call com.ai.assistance.quro exec '{"command":"ls -la"}'
   aci call com.ai.assistance.quro list_sessions
   aci call com.ai.assistance.quro get_service_status
+  aci call com.ai.assistance.quro file_read '{"path":"/root/foo.txt"}'
+  aci call com.ai.assistance.quro pkg_install '{"packages":"htop vim"}'
 """.trimIndent()
 
         return AidlAciResponse.success(Bundle().apply {
             putString("help", help)
             putString("version", serviceVersion)
         })
+    }
+
+    // ========== 文件 / 包管理能力实现（终端对接 ACI · 统一门面） ==========
+
+    /** 把 [ShellResult] 转成 ACI 结果 Bundle，避免各 handler 重复拼装。 */
+    private fun shellBundle(r: ShellResult): Bundle = Bundle().apply {
+        putInt("exit_code", r.exitCode)
+        putString("output", r.output)
+        putString("error", r.error)
+        putBoolean("timed_out", r.timedOut)
+    }
+
+    private fun handleFileRead(params: Bundle?): AidlAciResponse {
+        val path = params?.getString("path") ?: ""
+        if (path.isBlank()) return AidlAciResponse.error(AidlAciError.BAD_REQUEST, "缺少 path 参数")
+        val maxBytes = (params?.getInt("max_bytes", 262144) ?: 262144).coerceIn(1, 8 * 1024 * 1024)
+        return try {
+            val r = runBlocking(Dispatchers.IO) {
+                QuroTerminalBridge.readFile(this@QuroTerminalAciService, path, maxBytes)
+            }
+            AidlAciResponse.success(shellBundle(r))
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "file_read 失败: ${e.message}")
+        }
+    }
+
+    private fun handleFileWrite(params: Bundle?): AidlAciResponse {
+        val path = params?.getString("path") ?: ""
+        val content = params?.getString("content") ?: ""
+        if (path.isBlank()) return AidlAciResponse.error(AidlAciError.BAD_REQUEST, "缺少 path 参数")
+        return try {
+            val r = runBlocking(Dispatchers.IO) {
+                QuroTerminalBridge.writeFile(this@QuroTerminalAciService, path, content)
+            }
+            AidlAciResponse.success(shellBundle(r))
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "file_write 失败: ${e.message}")
+        }
+    }
+
+    private fun handleFileDelete(params: Bundle?): AidlAciResponse {
+        val path = params?.getString("path") ?: ""
+        if (path.isBlank()) return AidlAciResponse.error(AidlAciError.BAD_REQUEST, "缺少 path 参数")
+        return try {
+            val r = runBlocking(Dispatchers.IO) {
+                QuroTerminalBridge.deleteFile(this@QuroTerminalAciService, path)
+            }
+            AidlAciResponse.success(shellBundle(r))
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "file_delete 失败: ${e.message}")
+        }
+    }
+
+    private fun handleFileList(params: Bundle?): AidlAciResponse {
+        val path = params?.getString("path") ?: ""
+        if (path.isBlank()) return AidlAciResponse.error(AidlAciError.BAD_REQUEST, "缺少 path 参数")
+        return try {
+            val r = runBlocking(Dispatchers.IO) {
+                QuroTerminalBridge.listDir(this@QuroTerminalAciService, path)
+            }
+            AidlAciResponse.success(shellBundle(r))
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "file_list 失败: ${e.message}")
+        }
+    }
+
+    private fun handlePkgInstall(params: Bundle?): AidlAciResponse {
+        val packages = params?.getString("packages") ?: ""
+        if (packages.isBlank()) return AidlAciResponse.error(AidlAciError.BAD_REQUEST, "缺少 packages 参数")
+        val timeout = (params?.getLong("timeout", 300L) ?: 300L).coerceIn(1, 1800)
+        val pkgs = packages.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        return try {
+            val r = runBlocking(Dispatchers.IO) {
+                QuroTerminalBridge.pkgInstall(this@QuroTerminalAciService, pkgs, timeout * 1000)
+            }
+            AidlAciResponse.success(shellBundle(r))
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "pkg_install 失败: ${e.message}")
+        }
+    }
+
+    private fun handlePkgRemove(params: Bundle?): AidlAciResponse {
+        val packages = params?.getString("packages") ?: ""
+        if (packages.isBlank()) return AidlAciResponse.error(AidlAciError.BAD_REQUEST, "缺少 packages 参数")
+        val timeout = (params?.getLong("timeout", 300L) ?: 300L).coerceIn(1, 1800)
+        val pkgs = packages.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        return try {
+            val r = runBlocking(Dispatchers.IO) {
+                QuroTerminalBridge.pkgRemove(this@QuroTerminalAciService, pkgs, timeout * 1000)
+            }
+            AidlAciResponse.success(shellBundle(r))
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "pkg_remove 失败: ${e.message}")
+        }
+    }
+
+    private fun handlePkgUpdate(params: Bundle?): AidlAciResponse {
+        val timeout = (params?.getLong("timeout", 300L) ?: 300L).coerceIn(1, 1800)
+        return try {
+            val r = runBlocking(Dispatchers.IO) {
+                QuroTerminalBridge.pkgUpdate(this@QuroTerminalAciService, timeout * 1000)
+            }
+            AidlAciResponse.success(shellBundle(r))
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "pkg_update 失败: ${e.message}")
+        }
+    }
+
+    private fun handlePkgUpgrade(params: Bundle?): AidlAciResponse {
+        val timeout = (params?.getLong("timeout", 600L) ?: 600L).coerceIn(1, 3600)
+        return try {
+            val r = runBlocking(Dispatchers.IO) {
+                QuroTerminalBridge.pkgUpgrade(this@QuroTerminalAciService, timeout * 1000)
+            }
+            AidlAciResponse.success(shellBundle(r))
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "pkg_upgrade 失败: ${e.message}")
+        }
+    }
+
+    private fun handlePkgSearch(params: Bundle?): AidlAciResponse {
+        val query = params?.getString("query") ?: ""
+        if (query.isBlank()) return AidlAciResponse.error(AidlAciError.BAD_REQUEST, "缺少 query 参数")
+        val timeout = (params?.getLong("timeout", 60L) ?: 60L).coerceIn(1, 600)
+        return try {
+            val r = runBlocking(Dispatchers.IO) {
+                QuroTerminalBridge.pkgSearch(this@QuroTerminalAciService, query.trim(), timeout * 1000)
+            }
+            AidlAciResponse.success(shellBundle(r))
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "pkg_search 失败: ${e.message}")
+        }
+    }
+
+    private fun handlePkgList(params: Bundle?): AidlAciResponse {
+        val filter = params?.getString("filter")?.takeIf { it.isNotBlank() }
+        val timeout = (params?.getLong("timeout", 60L) ?: 60L).coerceIn(1, 600)
+        return try {
+            val r = runBlocking(Dispatchers.IO) {
+                QuroTerminalBridge.pkgList(this@QuroTerminalAciService, filter, timeout * 1000)
+            }
+            AidlAciResponse.success(shellBundle(r))
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "pkg_list 失败: ${e.message}")
+        }
+    }
+
+    private fun handlePkgInfo(params: Bundle?): AidlAciResponse {
+        val pkg = params?.getString("package") ?: ""
+        if (pkg.isBlank()) return AidlAciResponse.error(AidlAciError.BAD_REQUEST, "缺少 package 参数")
+        val timeout = (params?.getLong("timeout", 60L) ?: 60L).coerceIn(1, 600)
+        return try {
+            val r = runBlocking(Dispatchers.IO) {
+                QuroTerminalBridge.pkgInfo(this@QuroTerminalAciService, pkg.trim(), timeout * 1000)
+            }
+            AidlAciResponse.success(shellBundle(r))
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "pkg_info 失败: ${e.message}")
+        }
+    }
+
+    private fun handlePkgClean(params: Bundle?): AidlAciResponse {
+        val timeout = (params?.getLong("timeout", 120L) ?: 120L).coerceIn(1, 1800)
+        return try {
+            val r = runBlocking(Dispatchers.IO) {
+                QuroTerminalBridge.pkgClean(this@QuroTerminalAciService, timeout * 1000)
+            }
+            AidlAciResponse.success(shellBundle(r))
+        } catch (e: Throwable) {
+            AidlAciResponse.error(AidlAciError.INTERNAL_ERROR, "pkg_clean 失败: ${e.message}")
+        }
     }
 
     // ========== 审计日志 ==========

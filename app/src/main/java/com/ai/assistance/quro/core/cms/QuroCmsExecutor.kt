@@ -8,6 +8,7 @@ import android.os.Build
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.core.QuroBrowserBridge
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
 import com.ai.assistance.quro.core.tools.AiBrowserTool
 import com.ai.assistance.quro.core.tools.QuroJsExecutor
 import org.json.JSONArray
@@ -249,7 +250,7 @@ class QuroCmsExecutor(context: Context) {
         if (!st.available) {
             return "⛔ 终端环境(proot/Ubuntu)未就绪：${st.reason}。请在终端页点「安装 Linux 环境」。"
         }
-        val (code, out) = QuroLinuxEnv.run(appContext, cmd)
+        val (code, out) = QuroTerminalBridge.run(appContext, cmd)
         return if (code == 0) out else "⛔ 终端执行失败(exit $code): ${out.take(300)}"
     }
 

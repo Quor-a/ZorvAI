@@ -681,7 +681,11 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 //   不再每轮注入 [第N轮] 隐藏 user 消息（旧方案会被小本地模型回�?/改写�?
                 //   表现为「（多轮对话上下文理解：…[第N轮] 你好）」泄漏、乱回复、不回复）�?
                 //   系统提示词已含等价多轮纪律，移除冗余注入即可根治该泄漏�?
-                if (cfg.apiKey.isBlank()) {
+                // 本地离线模型（MNN / llama.cpp）走本地推理，不发起 HTTP，无需 apiKey。
+                // 旧逻辑一刀切拦「apiKey 为空」，导致选本地模型也会被"尚未配置 API Key"挡住，
+                // 本地模型因此永远用不了。这里先放行本地 provider，仅云端模型才校验 apiKey。
+                val isLocalModel = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
+                if (!isLocalModel && cfg.apiKey.isBlank()) {
                     store.add(
                         QuroMessage(
                             role = "assistant",
@@ -879,7 +883,9 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 
     /** 用同一套助手与系统提示词问询（store 须已含用户消息）。onTick 用于生成中持久化�? */
     private suspend fun runVoiceAsk(cfg: QuroModelConfig, onTick: () -> Unit): String {
-        return if (cfg.apiKey.isBlank()) {
+        // 本地离线模型（MNN / llama.cpp）走本地推理，不发起 HTTP，无需 apiKey。
+        val isLocalModel = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
+        return if (!isLocalModel && cfg.apiKey.isBlank()) {
             "⚠️ 尚未配置模型 API Key，请点右上角模型芯片 →「在模型设置中管理」填�? baseUrl / apiKey / model�?"
         } else {
             runCatching {

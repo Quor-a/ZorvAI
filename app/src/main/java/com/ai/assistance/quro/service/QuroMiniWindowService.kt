@@ -459,7 +459,7 @@ object QuroMiniWindowManager {
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 factory = { c ->
                     // 复用全局唯一浏览器 WebView：化小窗只是把它从全屏容器重挂到浮窗容器，
-                    // 不新建 WebView、不整页 loadUrl 重载 —— 彻底消除「化小窗卡顿」（对标 operit）。
+                    // 不新建 WebView、不整页 loadUrl 重载 —— 彻底消除「化小窗卡顿」。
                     val container = FrameLayout(c)
                     QuroBrowserViewHost.getOrCreate(c)
                     // 首次打开才加载初始 url；已存在（从全屏重挂）则零重载。

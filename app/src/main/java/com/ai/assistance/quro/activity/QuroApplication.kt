@@ -9,6 +9,8 @@ import com.ai.assistance.quro.core.tools.QuroScheduledTaskScheduler
 import com.ai.assistance.quro.core.bot.QuroBotManager
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciManager
 import com.ai.assistance.quro.core.shizuku.QuroShizuku
+import com.ai.assistance.quro.core.privilege.QuroTerminalPrivilegeBridge
+import com.ai.assistance.quro.terminal.privilege.TerminalPrivilegeBridgeHolder
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager
 import com.ai.assistance.quro.service.QuroTerminalKeepAliveService
 import com.ai.assistance.quro.service.QuroTerminalAciService
@@ -67,6 +69,11 @@ class QuroApplication : Application() {
         // 确保 Shizuku 在应用存活期间任意时刻连接/授权都能被即时探知，
         // 修复「Shizuku 已装/已授权但权限页一直检测为未连接」的时序盲区（#915）。
         try { QuroShizuku.ensureInit() } catch (_: Throwable) {}
+        // 终端「权限」面板 → app 侧特权后端（ROOT/Shizuku/ADB/LSPosed/共享存储）注入。
+        // terminal-core 是独立 library 不能反向依赖 app，故在此通过 holder 注入实现。
+        try {
+            TerminalPrivilegeBridgeHolder.set(QuroTerminalPrivilegeBridge(applicationContext))
+        } catch (_: Throwable) {}
         // 载入持久化的「导入工具」（AI 自写 / 用户粘贴 JSON 导入），使其在所有会话默认可用
         QuroImportedToolRegistry.load(applicationContext)
         // 自动拉起 AI 部署的本地 MCP 服务器，使其随应用启动即恢复可用（界面自动拉取注册）

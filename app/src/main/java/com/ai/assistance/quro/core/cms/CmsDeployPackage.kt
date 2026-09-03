@@ -25,7 +25,6 @@ data class CmsDeployPackage(
     val entryContent: String,
     val apkDeps: List<String> = emptyList(),
     val pipDeps: List<String> = emptyList(),
-    val envProfiles: List<String> = emptyList(),
     val env: Map<String, String> = emptyMap(),
     val ports: List<Int> = emptyList(),
     /** 发布者签名（导入包必须非空；内置包可空，由内置签名通道保证）。 */
@@ -38,7 +37,6 @@ data class CmsDeployPackage(
         append(moduleId); append("|"); append(name); append("|"); append(version); append("|")
         append(entry); append("|"); append(entryContent); append("|")
         append(apkDeps.joinToString(",")); append("|"); append(pipDeps.joinToString(",")); append("|")
-        append(envProfiles.joinToString(",")); append("|")
         append(env.entries.sortedBy { it.key }.joinToString(",") { "${it.key}=${it.value}" }); append("|")
         append(ports.joinToString(","))
     }
@@ -60,7 +58,6 @@ data class CmsDeployPackage(
         put("entryContent", entryContent)
         put("apkDeps", apkDeps.joinToString(","))
         put("pipDeps", pipDeps.joinToString(","))
-        put("envProfiles", envProfiles.joinToString(","))
         put("env", JSONObject(env))
         put("ports", ports.joinToString(","))
         put("signature", signature)
@@ -82,7 +79,6 @@ data class CmsDeployPackage(
                 entryContent = o.optString("entryContent", ""),
                 apkDeps = o.optString("apkDeps", "").split(",").map { it.trim() }.filter { it.isNotBlank() },
                 pipDeps = o.optString("pipDeps", "").split(",").map { it.trim() }.filter { it.isNotBlank() },
-                envProfiles = o.optString("envProfiles", "").split(",").map { it.trim() }.filter { it.isNotBlank() },
                 env = env,
                 ports = o.optString("ports", "").split(",").map { it.trim() }.filter { it.isNotBlank() }
                     .mapNotNull { it.toIntOrNull() },
@@ -139,7 +135,6 @@ data class CmsDeployPackage(
                         entryContent = m.terminalEntry,
                         apkDeps = m.dependencies.filter { it.kind == DepKind.LINUX && !it.target().startsWith("pip") }.map { it.target() },
                         pipDeps = m.dependencies.filter { it.kind == DepKind.LINUX && it.target().startsWith("pip") }.map { it.target().removePrefix("pip:") },
-                        envProfiles = m.dependencies.filter { it.kind == DepKind.ENV }.map { it.target() },
                     )
                 )
             }
@@ -167,7 +162,6 @@ data class CmsDeployPackage(
                     entryContent = sb.toString(),
                     apkDeps = emptyList(),
                     pipDeps = emptyList(),
-                    envProfiles = m.dependencies.filter { it.kind == DepKind.ENV }.map { it.target() },
                 )
             )
         }

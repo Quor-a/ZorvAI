@@ -17,7 +17,7 @@ import com.ai.assistance.quro.core.novaterm.ui.TerminalViewModel
 /**
  * QuroTerm 自研沙盒终端界面（集成自 NovaTerm，已命名为 QuroTerm）。
  * 复用 NovaTerm 的 TerminalScreen + TerminalViewModel（AndroidViewModel），
- * 与 proot 终端（QuroTermuxTerminalScreen）形成「轻量自研 + 重终端」互补。
+ * 与 proot 重终端（terminal-core）形成「轻量自研 + 重终端」互补。
  */
 @Composable
 fun QuroNovaTermScreen(onClose: () -> Unit) {
