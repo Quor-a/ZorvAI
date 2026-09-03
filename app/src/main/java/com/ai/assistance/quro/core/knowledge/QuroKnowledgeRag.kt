@@ -232,6 +232,17 @@ class QuroSqliteVectorStore(context: Context, dbName: String) :
         writableDatabase.execSQL("DELETE FROM rag_manifest")
     }
 
+    /** 在单个事务内执行批量写入（MB 级文档数千 chunk 一次提交，避免逐条提交的 I/O 开销）。 */
+    fun withTransaction(block: () -> Unit) {
+        writableDatabase.beginTransaction()
+        try {
+            block()
+            writableDatabase.setTransactionSuccessful()
+        } finally {
+            writableDatabase.endTransaction()
+        }
+    }
+
     fun loadManifest(): Map<String, String> {
         val cur = readableDatabase.rawQuery("SELECT path,sig FROM rag_manifest", null)
         val out = LinkedHashMap<String, String>()
@@ -341,13 +352,35 @@ class QuroRagPipeline(
         val chunks = chunkText(text)
         if (chunks.isEmpty()) return
         // 尝试语义嵌入，失败时降级为词法（零向量）
+        // 大批量分批提交：MB 级文档 → 数千 chunk，一次 HTTP 全发易被网关限流/超时，分批降低失败率
+        val EMBED_BATCH = 64
         val embs = try {
-            embedder.embed(chunks)
+            val all = ArrayList<FloatArray>(chunks.size)
+            for (i in chunks.indices step EMBED_BATCH) {
+                val batch = chunks.subList(i, minOf(i + EMBED_BATCH, chunks.size))
+                all.addAll(embedder.embed(batch))
+            }
+            all
         } catch (e: Exception) {
             // Embedding API 失败，使用词法降级（零向量）
             chunks.map { FloatArray(1) }
         }
-        chunks.zip(embs).forEachIndexed { i, (c, e) ->
+        // 单文件多 chunk 批量写入：一次事务提交，避免 MB 级文档数千条逐条插入
+        (store as? QuroSqliteVectorStore)?.let { s ->
+            s.withTransaction {
+                chunks.zip(embs).forEachIndexed { i, (c, e) ->
+                    store.upsert(
+                        QuroChunk(
+                            id = "$docId#$i",
+                            docId = docId,
+                            text = c,
+                            embedding = e,
+                            meta = mapOf("name" to file.name),
+                        ),
+                    )
+                }
+            }
+        } ?: chunks.zip(embs).forEachIndexed { i, (c, e) ->
             store.upsert(
                 QuroChunk(
                     id = "$docId#$i",
