@@ -107,6 +107,10 @@ class NodeEditorTool : QuroTool {
     private fun deleteProject(context: Context, json: JSONObject): String {
         val name = json.optString("name", "").ifBlank { return "缺少 name 参数" }
         val f = fileFor(context, name)
-        return if (f.exists() && f.delete()) "✅ 已删除节点流工程「$name」" else "❌ 工程不存在：$name"
+        return when {
+            !f.exists() -> "❌ 工程不存在：$name"
+            f.delete() -> "✅ 已删除节点流工程「$name」"
+            else -> "❌ 删除失败（文件可能被占用或只读）：$name"
+        }
     }
 }

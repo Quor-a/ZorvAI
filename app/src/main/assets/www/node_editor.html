@@ -536,8 +536,11 @@
       }
     });
     if (!order.length) { toast('未解析到节点'); return; }
-    // 重建
-    nodes = []; edges = []; selectedNode = null; selectedEdge = null; seq = 1;
+    // 重建前先记录现有节点最大编号：历史里可能存有旧快照（undo 用），
+    // seq 从 max+1 继续，保证新生成的 id 与历史快照不重复，避免 renderNode 用 getElementById 复用旧 DOM
+    var maxSeq = 0;
+    nodes.forEach(function (n) { var mm = /(\d+)$/.exec(n.id || ''); if (mm) { var v = parseInt(mm[1], 10); if (v > maxSeq) maxSeq = v; } });
+    nodes = []; edges = []; selectedNode = null; selectedEdge = null; seq = maxSeq + 1;
     var map = {};
     var cols = Math.ceil(Math.sqrt(order.length));
     order.forEach(function (oid, i) {
