@@ -604,83 +604,345 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val internalRoot = ctx.filesDir.absolutePath
     val externalRoot = ctx.getExternalFilesDir(null)?.absolutePath ?: internalRoot
-    var currentPath by remember { mutableStateOf<String?>(null) }
-    var content by remember { mutableStateOf<String?>(null) }
+    val publicRoot = "/storage/emulated/0"
+    // 有所有文件访问权限时公共存储可读，才显示入口（与终端 /sdcard 挂载同条件）
+    val publicReadable = remember { runCatching { File(publicRoot).canRead() }.getOrDefault(false) }
 
-    // 系统返回键逐级回退：先关预览 → 回上层目录 → 回工具箱首页；已在首页则交还外层关闭
+    var currentPath by remember { mutableStateOf<String?>(null) }
+    var refresh by remember { mutableStateOf(0) }
+    var query by remember { mutableStateOf("") }
+    // 查看/编辑的文件：走 QuroDocumentViewer（docx/xlsx/pptx/pdf/图片/文本/md 离线渲染，文本可编辑写回）
+    var viewFile by remember { mutableStateOf<File?>(null) }
+    // 文件操作状态
+    var menuTarget by remember { mutableStateOf<File?>(null) }
+    var renameTarget by remember { mutableStateOf<File?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<File?>(null) }
+    var opMode by remember { mutableStateOf("") } // "copy" | "move"
+    var opTarget by remember { mutableStateOf<File?>(null) }
+    var destPath by remember { mutableStateOf("") }
+    var infoTarget by remember { mutableStateOf<File?>(null) }
+    var showNew by remember { mutableStateOf(false) }
+    var newIsFolder by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
+
+    // 各存储根集合（用于「上一级」判断何时回到位置列表）
+    val roots = remember { listOf(internalRoot, externalRoot, publicRoot) }
+
+    fun parentOf(p: String): String? {
+        roots.forEach { r ->
+            if (p == r) return null
+            if (p.startsWith("$r/")) return p.substringBeforeLast('/')
+        }
+        return null
+    }
+
+    fun sizeText(f: File): String {
+        if (f.isDirectory) {
+            val n = f.listFiles()?.size ?: 0
+            return "$n 项"
+        }
+        val b = f.length()
+        return when {
+            b >= 1024 * 1024 -> "%.1f MB".format(b / 1024f / 1024f)
+            b >= 1024 -> "%.1f KB".format(b / 1024f)
+            else -> "$b B"
+        }
+    }
+
+    fun openFile(f: File) {
+        val ext = f.extension.lowercase()
+        val viewerExts = setOf(
+            "md", "txt", "json", "csv", "log", "xml", "html", "htm", "css", "js", "ts", "kt", "java",
+            "py", "c", "cpp", "h", "hpp", "sh", "yml", "yaml", "ini", "conf", "properties", "sql",
+            "docx", "xlsx", "pptx", "pdf", "jpg", "jpeg", "png", "gif", "webp", "bmp",
+        )
+        if (ext in viewerExts || ext.isBlank()) {
+            viewFile = f
+        } else if (!QuroDocOpener.open(ctx, f)) {
+            Toast.makeText(ctx, "未找到可打开 ${f.name} 的应用", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // 系统返回键逐级回退：关查看器 → 回上层目录 → 回位置列表 → 交还外层关闭
     BackHandler {
         when {
-            content != null -> content = null
-            currentPath != null -> currentPath = null
+            viewFile != null -> viewFile = null
+            currentPath != null -> currentPath = parentOf(currentPath!!)
             else -> onExitToHome()
         }
     }
 
-    val entries = remember(currentPath) {
-        if (currentPath == null) {
-            listOf(
-                FileEntry("📂 内部存储 (应用私有)", internalRoot, true),
-                FileEntry("📂 外部存储 (应用私有)", externalRoot, true),
+    // 富文档查看/编辑优先（全屏）
+    if (viewFile != null) {
+        Box(Modifier.fillMaxSize().background(cs.background)) {
+            QuroDocumentViewer(
+                file = viewFile!!,
+                onClose = { viewFile = null; refresh++ },
+                onExternal = {
+                    if (!QuroDocOpener.open(ctx, viewFile!!)) {
+                        Toast.makeText(ctx, "未找到可打开该文件的应用", Toast.LENGTH_LONG).show()
+                    } else viewFile = null
+                },
+                readOnly = false,
             )
-        } else {
-            val dir = File(currentPath)
-            val list = dir.listFiles()?.sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() }) ?: emptyList()
-            list.map { FileEntry(it.name + if (it.isDirectory) "/" else "", it.absolutePath, it.isDirectory) }
         }
+        return
     }
 
-    Column(Modifier.fillMaxSize()) {
-        // 路径面包屑
-        Surface(color = cs.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                currentPath ?: "根目录（应用可访问范围）",
-                style = MaterialTheme.typography.bodySmall,
-                color = cs.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-            )
-        }
-        if (content != null) {
-            // 文件内容预览
-            Column(Modifier.fillMaxSize()) {
-                Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { content = null }) { Text("← 返回列表") }
-                    Spacer(Modifier.weight(1f))
-                }
-                SelectionContainer(Modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState())) {
-                    Text(content ?: "", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = cs.onSurface)
-                }
+    val entries = remember(currentPath, refresh) {
+        if (currentPath == null) {
+            buildList {
+                add(FileEntry("内部存储（应用私有）", internalRoot, true))
+                add(FileEntry("外部存储（应用私有）", externalRoot, true))
+                if (publicReadable) add(FileEntry("公共存储（内部 SD 卡）", publicRoot, true))
             }
         } else {
-            LazyColumn(
-                Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                items(entries) { e ->
-                    Row(
-                        Modifier.fillMaxWidth()
-                            .clickable {
-                                if (e.isDir) currentPath = e.path
-                                else {
-                                    val f = File(e.path)
-                                    content = if (f.length() > 512 * 1024) "文件过大（${(f.length() / 1024)}KB），建议用其他方式查看"
-                                    else runCatching { f.readText(Charsets.UTF_8) }.getOrNull() ?: "（无法读取，可能不是文本文件）"
-                                }
-                            }
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            if (e.isDir) Icons.Filled.Folder else Icons.Filled.Description,
-                            null, tint = if (e.isDir) cs.primary else cs.onSurfaceVariant, modifier = Modifier.size(20.dp),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(e.name, fontSize = 14.sp, color = cs.onSurface, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            val dir = File(currentPath!!)
+            val list = dir.listFiles()?.sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() }) ?: emptyList()
+            list.map { FileEntry(it.name, it.absolutePath, it.isDirectory) }
+        }
+    }
+    val filtered = if (query.isBlank()) entries else entries.filter { it.name.contains(query, true) }
+
+    Column(Modifier.fillMaxSize()) {
+        // 路径面包屑 + 上一级 + 新建
+        Surface(color = cs.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (currentPath != null) {
+                    IconButton(onClick = { currentPath = parentOf(currentPath!!) }, Modifier.size(32.dp)) {
+                        Icon(Icons.Filled.ArrowUpward, "上一级", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                    }
+                }
+                Text(
+                    currentPath ?: "选择存储位置",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+                if (currentPath != null) {
+                    IconButton(onClick = { newName = ""; newIsFolder = false; showNew = true }, Modifier.size(32.dp)) {
+                        Icon(Icons.Filled.NoteAdd, "新建文件", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                    }
+                    IconButton(onClick = { newName = ""; newIsFolder = true; showNew = true }, Modifier.size(32.dp)) {
+                        Icon(Icons.Filled.CreateNewFolder, "新建文件夹", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     }
                 }
             }
         }
+        // 当前目录内搜索
+        if (currentPath != null) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = { Text("搜索当前目录…", fontSize = 13.sp) },
+                leadingIcon = { Icon(Icons.Filled.Search, null, modifier = Modifier.size(18.dp)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+        }
+        LazyColumn(
+            Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            items(filtered) { e ->
+                val f = File(e.path)
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clickable { if (e.isDir) { currentPath = e.path; query = "" } else openFile(f) }
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        if (e.isDir) Icons.Filled.Folder else Icons.Filled.Description,
+                        null, tint = if (e.isDir) cs.primary else cs.onSurfaceVariant, modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(e.name, fontSize = 14.sp, color = cs.onSurface, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(
+                            "${sizeText(f)} · " + java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(f.lastModified())),
+                            fontSize = 11.sp, color = cs.onSurfaceVariant,
+                        )
+                    }
+                    if (currentPath != null) {
+                        Box {
+                            var showItemMenu by remember { mutableStateOf(false) }
+                            IconButton(onClick = { showItemMenu = true }, Modifier.size(32.dp)) {
+                                Icon(Icons.Filled.MoreVert, "操作", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                            }
+                            DropdownMenu(expanded = showItemMenu, onDismissRequest = { showItemMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("打开方式（外部）") },
+                                    leadingIcon = { Icon(Icons.Filled.OpenInNew, null, modifier = Modifier.size(16.dp)) },
+                                    onClick = { showItemMenu = false; if (!QuroDocOpener.open(ctx, f)) Toast.makeText(ctx, "未找到可打开该文件的应用", Toast.LENGTH_SHORT).show() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("重命名") },
+                                    leadingIcon = { Icon(Icons.Filled.Edit, null, modifier = Modifier.size(16.dp)) },
+                                    onClick = { showItemMenu = false; renameTarget = f; renameText = f.name },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("复制到…") },
+                                    leadingIcon = { Icon(Icons.Filled.ContentCopy, null, modifier = Modifier.size(16.dp)) },
+                                    onClick = { showItemMenu = false; opMode = "copy"; opTarget = f; destPath = f.parent ?: "" },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("移动到…") },
+                                    leadingIcon = { Icon(Icons.Filled.ArrowForward, null, modifier = Modifier.size(16.dp)) },
+                                    onClick = { showItemMenu = false; opMode = "move"; opTarget = f; destPath = f.parent ?: "" },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("属性") },
+                                    leadingIcon = { Icon(Icons.Filled.Info, null, modifier = Modifier.size(16.dp)) },
+                                    onClick = { showItemMenu = false; infoTarget = f },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("删除", color = cs.error) },
+                                    leadingIcon = { Icon(Icons.Filled.Delete, null, Modifier.size(16.dp), tint = cs.error) },
+                                    onClick = { showItemMenu = false; deleteTarget = f },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // —— 重命名 ——
+    if (renameTarget != null) {
+        AlertDialog(
+            onDismissRequest = { renameTarget = null },
+            title = { Text("重命名") },
+            text = {
+                OutlinedTextField(renameText, { renameText = it }, label = { Text("新名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val t = renameTarget!!
+                    val raw = renameText.trim()
+                    if (raw.isNotBlank() && raw != t.name) {
+                        val target = File(t.parentFile, raw.replace(Regex("[\\\\/:*?\"<>|]"), "_"))
+                        if (target.exists()) Toast.makeText(ctx, "已存在同名文件", Toast.LENGTH_SHORT).show()
+                        else if (t.renameTo(target)) { Toast.makeText(ctx, "已重命名", Toast.LENGTH_SHORT).show(); refresh++ }
+                        else Toast.makeText(ctx, "重命名失败", Toast.LENGTH_SHORT).show()
+                    }
+                    renameTarget = null
+                }) { Text("确定") }
+            },
+            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text("取消") } },
+        )
+    }
+
+    // —— 删除确认 ——
+    if (deleteTarget != null) {
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("删除") },
+            text = { Text("确定删除「${deleteTarget!!.name}」${if (deleteTarget!!.isDirectory) "及其全部内容" else ""}？此操作不可恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val t = deleteTarget!!
+                    val ok = runCatching { if (t.isDirectory) t.deleteRecursively() else t.delete() }.getOrDefault(false)
+                    Toast.makeText(ctx, if (ok) "已删除" else "删除失败", Toast.LENGTH_SHORT).show()
+                    deleteTarget = null
+                    refresh++
+                }) { Text("删除", color = cs.error) }
+            },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("取消") } },
+        )
+    }
+
+    // —— 复制 / 移动 ——
+    if (opTarget != null && opMode.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { opTarget = null; opMode = "" },
+            title = { Text(if (opMode == "copy") "复制到目录" else "移动到目录") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("目标目录的完整路径（须已存在）：", fontSize = 13.sp, color = cs.onSurfaceVariant)
+                    OutlinedTextField(destPath, { destPath = it }, label = { Text("目标目录路径") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val src = opTarget!!
+                    val dir = File(destPath.trim())
+                    val ok = if (!dir.isDirectory) {
+                        Toast.makeText(ctx, "目标目录不存在", Toast.LENGTH_SHORT).show(); false
+                    } else {
+                        val target = File(dir, src.name)
+                        runCatching {
+                            if (target.exists()) { Toast.makeText(ctx, "目标已存在同名文件", Toast.LENGTH_SHORT).show(); false }
+                                else if (opMode == "copy") {
+                                    if (src.isDirectory) src.copyRecursively(target)
+                                    else { src.copyTo(target); true }
+                                } else {
+                                    val moved = src.renameTo(target)
+                                    when {
+                                        moved -> true
+                                        src.isDirectory -> src.copyRecursively(target) && src.deleteRecursively()
+                                        else -> runCatching { src.copyTo(target) }.isSuccess && src.delete()
+                                    }
+                                }
+                        }.getOrDefault(false)
+                    }
+                    if (ok) Toast.makeText(ctx, if (opMode == "copy") "已复制" else "已移动", Toast.LENGTH_SHORT).show()
+                    opTarget = null; opMode = ""
+                    refresh++
+                }) { Text("确定") }
+            },
+            dismissButton = { TextButton(onClick = { opTarget = null; opMode = "" }) { Text("取消") } },
+        )
+    }
+
+    // —— 属性 ——
+    if (infoTarget != null) {
+        val f = infoTarget!!
+        AlertDialog(
+            onDismissRequest = { infoTarget = null },
+            title = { Text("属性") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("名称：${f.name}", fontSize = 14.sp)
+                    Text("类型：${if (f.isDirectory) "文件夹" else f.extension.ifBlank { "未知" }.uppercase()}", fontSize = 14.sp)
+                    Text("大小：${sizeText(f)}", fontSize = 14.sp)
+                    Text("路径：${f.absolutePath}", fontSize = 13.sp)
+                    Text("修改时间：${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(f.lastModified()))}", fontSize = 13.sp)
+                    Text("可读：${f.canRead()}  可写：${f.canWrite()}", fontSize = 13.sp)
+                }
+            },
+            confirmButton = { TextButton(onClick = { infoTarget = null }) { Text("关闭") } },
+        )
+    }
+
+    // —— 新建文件 / 文件夹 ——
+    if (showNew) {
+        AlertDialog(
+            onDismissRequest = { showNew = false },
+            title = { Text(if (newIsFolder) "新建文件夹" else "新建文件") },
+            text = {
+                OutlinedTextField(newName, { newName = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val raw = newName.trim()
+                    if (raw.isNotBlank() && currentPath != null) {
+                        val target = File(currentPath!!, raw.replace(Regex("[\\\\/:*?\"<>|]"), "_"))
+                        val ok = runCatching {
+                            if (newIsFolder) target.mkdirs() else target.createNewFile()
+                        }.getOrDefault(false)
+                        Toast.makeText(ctx, if (ok) "已创建" else "创建失败（或已存在）", Toast.LENGTH_SHORT).show()
+                        refresh++
+                    }
+                    showNew = false
+                }) { Text("创建") }
+            },
+            dismissButton = { TextButton(onClick = { showNew = false }) { Text("取消") } },
+        )
     }
 }
 

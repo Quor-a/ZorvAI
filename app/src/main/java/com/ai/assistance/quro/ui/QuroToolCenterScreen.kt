@@ -38,7 +38,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import com.ai.assistance.quro.core.linux.LinuxDistro
 import com.ai.assistance.quro.core.linux.PackageManagerSpec
 import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
-import com.ai.assistance.quro.terminal.TerminalManager
 import com.ai.assistance.quro.terminal.data.MirrorSource
 import com.ai.assistance.quro.terminal.data.PackageManagerType
 import com.ai.assistance.quro.terminal.utils.SourceManager
@@ -167,10 +166,12 @@ private fun SandboxPanel(context: Context) {
     var busy by remember { mutableStateOf(false) }
 
     fun runAction(action: String, extra: JSONObject.() -> Unit = {}) {
+        if (busy) return
+        busy = true
         scope.launch(Dispatchers.IO) {
             val arg = JSONObject().put("action", action).apply(extra).toString()
-            val res = tool.run(context, arg)
-            withContext(Dispatchers.Main) { out = res }
+            val res = runCatching { tool.run(context, arg) }.getOrElse { "执行失败：${it.message}" }
+            withContext(Dispatchers.Main) { out = res; busy = false }
         }
     }
 
@@ -186,15 +187,15 @@ private fun SandboxPanel(context: Context) {
             )
             Spacer(Modifier.width(8.dp))
             Button(
-                onClick = { busy = true; runAction("exec") { put("command", cmd) }.also { busy = false } },
+                onClick = { runAction("exec") { put("command", cmd) } },
                 enabled = cmd.isNotBlank() && !busy,
             ) { Text(if (busy) "执行中…" else "执行") }
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth()) {
-            TextButton(onClick = { runAction("status") }) { Text("状态") }
-            TextButton(onClick = { runAction("list") }) { Text("列目录") }
-            TextButton(onClick = { runAction("reset") }) { Text("清空沙箱") }
+            TextButton(onClick = { runAction("status") }, enabled = !busy) { Text("状态") }
+            TextButton(onClick = { runAction("list") }, enabled = !busy) { Text("列目录") }
+            TextButton(onClick = { runAction("reset") }, enabled = !busy) { Text("清空沙箱") }
         }
         Spacer(Modifier.height(8.dp))
         Text("结果", style = MaterialTheme.typography.labelMedium, color = Muted)
@@ -895,6 +896,19 @@ private fun PackageManagerPanel(context: Context) {
     var sourceRefresh by remember { mutableStateOf(0) }
     var sourceDialogPm by remember { mutableStateOf<PackageManagerType?>(null) }
 
+    // 环境守卫：未就绪时 Toast 引导，而不是把按钮灰掉让人摸不着头脑
+    fun requireEnv(): Boolean {
+        if (envReady && pm != null) return true
+        Toast.makeText(context, "环境未就绪：请先在终端页安装 rootfs", Toast.LENGTH_SHORT).show()
+        return false
+    }
+
+    fun requireQuery(): Boolean {
+        if (query.isNotBlank()) return true
+        Toast.makeText(context, "请先输入软件名", Toast.LENGTH_SHORT).show()
+        return false
+    }
+
     fun runCmd(cmd: String) {
         if (running) return
         running = true
@@ -954,50 +968,71 @@ private fun PackageManagerPanel(context: Context) {
             label = { Text("搜索 / 安装软件名") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            enabled = pm != null && envReady,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             Button(
-                enabled = pm != null && envReady && !running && query.isNotBlank(),
+                enabled = !running,
                 onClick = {
-                    val manager = pm ?: return@Button
-                    runCmd(manager.install(listOf(query.trim())))
+                    if (!requireEnv()) return@Button
+                    if (!requireQuery()) return@Button
+                    runCmd(pm!!.install(listOf(query.trim())))
                 },
             ) { Text(if (running) "执行中…" else "安装") }
             OutlinedButton(
-                enabled = pm != null && envReady && !running && query.isNotBlank(),
+                enabled = !running,
                 onClick = {
-                    val manager = pm ?: return@OutlinedButton
-                    runCmd(manager.search(query.trim()))
+                    if (!requireEnv()) return@OutlinedButton
+                    if (!requireQuery()) return@OutlinedButton
+                    runCmd(pm!!.search(query.trim()))
                 },
             ) { Text("搜索") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(
-                enabled = pm != null && envReady && !running,
-                onClick = { runCmd(pm!!.listInstalled()) },
+                enabled = !running,
+                onClick = {
+                    if (!requireEnv()) return@OutlinedButton
+                    runCmd(pm!!.listInstalled())
+                },
             ) { Text("列表已装") }
             OutlinedButton(
-                enabled = pm != null && envReady && !running,
-                onClick = { runCmd(pm!!.info(query.trim())) },
+                enabled = !running,
+                onClick = {
+                    if (!requireEnv()) return@OutlinedButton
+                    if (!requireQuery()) return@OutlinedButton
+                    runCmd(pm!!.info(query.trim()))
+                },
             ) { Text("查看信息") }
             OutlinedButton(
-                enabled = pm != null && envReady && !running,
-                onClick = { runCmd(pm!!.update()) },
+                enabled = !running,
+                onClick = {
+                    if (!requireEnv()) return@OutlinedButton
+                    runCmd(pm!!.update())
+                },
             ) { Text("更新源") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(
-                enabled = pm != null && envReady && !running && query.isNotBlank(),
-                onClick = { runCmd(pm!!.remove(listOf(query.trim()))) },
+                enabled = !running,
+                onClick = {
+                    if (!requireEnv()) return@OutlinedButton
+                    if (!requireQuery()) return@OutlinedButton
+                    runCmd(pm!!.remove(listOf(query.trim())))
+                },
             ) { Text("卸载") }
             OutlinedButton(
-                enabled = pm != null && envReady && !running,
-                onClick = { runCmd(pm!!.upgrade()) },
+                enabled = !running,
+                onClick = {
+                    if (!requireEnv()) return@OutlinedButton
+                    runCmd(pm!!.upgrade())
+                },
             ) { Text("升级") }
             OutlinedButton(
-                enabled = pm != null && envReady && !running,
-                onClick = { runCmd(pm!!.clean()) },
+                enabled = !running,
+                onClick = {
+                    if (!requireEnv()) return@OutlinedButton
+                    runCmd(pm!!.clean())
+                },
             ) { Text("清理") }
         }
         Surface(
@@ -1093,16 +1128,27 @@ private fun PackageManagerPanel(context: Context) {
                 TextButton(onClick = {
                     sourceManager.setSelectedSourceId(pmType, selectedId)
                     val chosen = sources.find { it.id == selectedId }
-                    if (chosen != null) {
+                    if (chosen != null && pmType != PackageManagerType.RUST) {
                         val cmd = when (pmType) {
                             PackageManagerType.APT -> sourceManager.getAptSourceChangeCommand(chosen)
                             PackageManagerType.PIP -> sourceManager.getPipSourceChangeCommand(chosen)
-                            PackageManagerType.NPM -> sourceManager.getNpmSourceChangeCommand(chosen)
-                            PackageManagerType.RUST -> "echo 'Rust 镜像源已更新为: ${chosen.name}（下次安装 Rust 时生效）'"
+                            else -> sourceManager.getNpmSourceChangeCommand(chosen)
                         }
+                        // 不再依赖可见终端会话（原来 sendCommandToSession 在终端没打开时静默丢失，
+                        // 选了源实际不生效）——改为后台经终端桥真实执行并提示结果
                         scope.launch {
-                            runCatching { TerminalManager.getInstance(context).sendCommandToSession("default", cmd) }
+                            val res = withContext(Dispatchers.IO) {
+                                runCatching { QuroTerminalBridge.run(context, cmd, timeoutMs = 60_000L) }
+                                    .getOrElse { -1 to "执行失败：${it.message}" }
+                            }
+                            val msg = if (res.first == 0) "已切换 ${pmType.displayName} 源：${chosen.name}"
+                            else "源命令执行失败（exit=${res.first}）：${res.second.take(200)}"
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            }
                         }
+                    } else if (chosen != null) {
+                        Toast.makeText(context, "Rust 镜像源已更新为: ${chosen.name}（下次安装 Rust 时生效）", Toast.LENGTH_SHORT).show()
                     }
                     sourceRefresh++
                     sourceDialogPm = null

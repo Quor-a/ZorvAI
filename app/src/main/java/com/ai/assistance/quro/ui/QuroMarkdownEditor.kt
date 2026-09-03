@@ -201,7 +201,7 @@ private fun MarkdownFormatToolbar(
  * 使用WebView渲染Markdown
  */
 @Composable
-private fun MarkdownPreview(content: String) {
+fun MarkdownPreview(content: String) {
     val cs = MaterialTheme.colorScheme
     
     // 将Markdown转换为HTML

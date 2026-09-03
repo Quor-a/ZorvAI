@@ -73,6 +73,15 @@ class QuroMediaService : android.app.Service() {
                 runCatching { player?.playbackParams = player!!.playbackParams.setSpeed(speed) }
                 pushState(); showNotification()
             }
+            // 播放队列中指定索引（播放器队列界面点击切歌）
+            ACTION_PLAY_INDEX -> {
+                val idx = intent.getIntExtra(EXTRA_INDEX, -1)
+                val p = order.indexOf(idx)
+                if (queue.isNotEmpty() && p >= 0) {
+                    orderPos = p
+                    playCurrent()
+                }
+            }
             else -> {
                 // 新播放请求：queue 优先，否则单个 uri
                 val qUris = intent?.getStringArrayListExtra(EXTRA_QUEUE_URIS)
@@ -293,6 +302,7 @@ class QuroMediaService : android.app.Service() {
         const val ACTION_SET_LOOP = "quro.media.SET_LOOP"
         const val ACTION_SET_SHUFFLE = "quro.media.SET_SHUFFLE"
         const val ACTION_SET_SPEED = "quro.media.SET_SPEED"
+        const val ACTION_PLAY_INDEX = "quro.media.PLAY_INDEX"
         const val EXTRA_URI = "uri"
         const val EXTRA_TITLE = "title"
         const val EXTRA_QUEUE_URIS = "queue_uris"
