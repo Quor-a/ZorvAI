@@ -33,7 +33,11 @@ class QuroCmsRepository(context: Context) {
     fun save(list: List<QuroCmsModule>) {
         val arr = JSONArray()
         list.forEach { arr.put(serializeModule(it)) }
-        file.writeText(JSONObject().put("apiVersion", "cms.io/v2").put("modules", arr).toString(2))
+        file.writeText(JSONObject()
+            .put("apiVersion", "cms.io/v2")
+            .put("seedVersion", SEED_VERSION)
+            .put("modules", arr)
+            .toString(2))
     }
 
     fun get(id: String): QuroCmsModule? = load().firstOrNull { it.id == id }
@@ -94,13 +98,24 @@ class QuroCmsRepository(context: Context) {
     // ---------- 种子模块（首次运行注入内置能力目录） ----------
 
     /**
-     * 强制覆盖写入内置种子模块（确保升级后的终端模块始终生效），并清理历史遗留的
-     * 手机模块（应用内执行）与「真实执行」模块（如无障碍模拟点击/滑动的 quro.automation）。
+     * 幂等播种：仅在种子版本变化（首次运行 / 内置模块目录升级）时重写内置种子模块，
+     * 并清理历史遗留的手机模块与「真实执行」模块（如无障碍模拟点击/滑动的 quro.automation）。
+     *
+     * 此前每次进 CMS 页都无条件 upsert(builtInModules())，会覆盖用户在终端/导入侧对模块
+     * 的手动修复；现改为按 [SEED_VERSION] 只播种一次，后续进入不再重写。
      */
     fun ensureSeed() {
-        builtInModules().forEach { upsert(it) }
+        if (storedSeedVersion() != SEED_VERSION) {
+            builtInModules().forEach { upsert(it) }
+        }
         purgeLegacy()
     }
+
+    /** 读取已持久化的种子版本（无文件返回空串，触发首次播种）。 */
+    private fun storedSeedVersion(): String =
+        if (!file.exists()) "" else runCatching {
+            JSONObject(file.readText()).optString("seedVersion", "")
+        }.getOrDefault("")
 
     /** 清理历史版本遗留的「真实执行」模块与已移除的手机（应用内执行）模块（已在新架构下失效）。 */
     private fun purgeLegacy() {
@@ -121,6 +136,12 @@ class QuroCmsRepository(context: Context) {
      * 终端模块均带 [QuroCmsModule.terminalEntry] 真实入口脚本，在 proot 沙箱内作为后端运行。
      */
     companion object {
+        /**
+         * 种子版本：内置模块目录（能力/入口脚本）发生结构性变更时 +1，
+         * 触发 [ensureSeed] 重新播种一次；否则 [ensureSeed] 跳过，避免覆盖用户手动修复。
+         */
+        private const val SEED_VERSION = "1"
+
         fun builtInModules(): List<QuroCmsModule> = listOf(
         // 1. 终端·Python 运行时（proot 内真实 Python 后端；终端是后端，本软是前端）
         QuroCmsModule(
@@ -151,7 +172,7 @@ class QuroCmsRepository(context: Context) {
             terminalEntry = """
 #!/bin/sh
 # Quro CMS 终端模块：Python 后端运行时（proot/Ubuntu）
-PORT="${'$'}QURO_HTTP_PORT:-8765"
+PORT="${'$'}{QURO_HTTP_PORT:-8765}"
 echo "[quro.term.python] 启动 Python 后端，监听 0.0.0.0:${'$'}PORT"
 python3 - "${'$'}PORT" <<'PYEOF'
 import sys, json
@@ -203,7 +224,7 @@ PYEOF
             terminalEntry = """
 #!/bin/sh
 # Quro CMS 终端模块：Node 后端运行时（proot/Ubuntu）
-PORT="${'$'}QURO_HTTP_PORT:-8766"
+PORT="${'$'}{QURO_HTTP_PORT:-8766}"
 echo "[quro.term.node] 启动 Node 后端，监听 0.0.0.0:${'$'}PORT"
 node - "${'$'}PORT" <<'JSEOF'
 const port = parseInt(process.argv[2], 10);
@@ -238,7 +259,8 @@ JSEOF
                     resident = true, residentEnv = mapOf("port" to "QURO_HTTP_PORT", "dir" to "QURO_SERVE_DIR")),
                 QuroCmsCapability("term_httpd_list", "列出服务目录", "dir:string",
                     listOf("term.httpd.exec"), PermissionConstraints(),
-                    "terminal", "ls -la \"\${dir}\""),
+                    "terminal", "ls -la \"\${dir}\"",
+                    defaultArgs = mapOf("dir" to "/root/cms/quro.term.httpd/www")),
                 QuroCmsCapability("term_httpd_stop", "停止静态 HTTP 服务", "{}",
                     listOf("term.httpd.exec"), PermissionConstraints(),
                     "terminal", "true", residentStop = true),
@@ -246,8 +268,8 @@ JSEOF
             terminalEntry = """
 #!/bin/sh
 # Quro CMS 终端模块：静态文件 HTTP 服务（终端作为后端）
-PORT="${'$'}QURO_HTTP_PORT:-8080"
-DIR="${'$'}QURO_SERVE_DIR:-/root/cms/quro.term.httpd/www}"
+PORT="${'$'}{QURO_HTTP_PORT:-8080}"
+DIR="${'$'}{QURO_SERVE_DIR:-/root/cms/quro.term.httpd/www}"
 mkdir -p "${'$'}DIR"
 if [ ! -f "${'$'}DIR/index.html" ]; then
   echo "<h1>Quro Terminal HTTPD</h1><p>终端静态文件服务已就绪。</p>" > "${'$'}DIR/index.html"
@@ -304,6 +326,10 @@ exec python3 -m http.server "${'$'}PORT" --bind 0.0.0.0
             action = o.optString("action", ""),
             runOn = effectiveRunOn,
             terminalAction = o.optString("terminal_action", "").takeIf { it.isNotBlank() },
+            resident = o.optBoolean("resident", false),
+            residentEnv = jsonObjToMap(o.optJSONObject("resident_env")),
+            residentStop = o.optBoolean("resident_stop", false),
+            defaultArgs = jsonObjToMap(o.optJSONObject("default_args")),
         )
     }
 
@@ -360,6 +386,10 @@ exec python3 -m http.server "${'$'}PORT" --bind 0.0.0.0
                 put("actionType", c.actionType); put("action", c.action)
                 put("run_on", JSONArray(c.runOn.map { it.name }))
                 put("terminal_action", c.terminalAction ?: "")
+                put("resident", c.resident)
+                put("resident_env", JSONObject(c.residentEnv))
+                put("resident_stop", c.residentStop)
+                put("default_args", JSONObject(c.defaultArgs))
             }
         }))
         put("dependencies", JSONArray(m.dependencies.map { d ->
@@ -375,6 +405,13 @@ exec python3 -m http.server "${'$'}PORT" --bind 0.0.0.0
     private fun <T> jsonList(arr: JSONArray?, block: (JSONObject) -> T): List<T> {
         if (arr == null) return emptyList()
         return (0 until arr.length()).mapNotNull { i -> runCatching { block(arr.getJSONObject(i)) }.getOrNull() }
+    }
+
+    private fun jsonObjToMap(o: JSONObject?): Map<String, String> {
+        if (o == null) return emptyMap()
+        val m = mutableMapOf<String, String>()
+        o.keys().forEach { k -> m[k] = o.optString(k, "") }
+        return m
     }
 
     private fun JSONArray?.toStringList(): List<String> {

@@ -57,16 +57,20 @@ import kotlinx.coroutines.withContext
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun QuroUsbDebugScreen(onClose: () -> Unit) {
+fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var probing by remember { mutableStateOf(true) }
     var hasPriv by remember { mutableStateOf(false) }
     var usbOn by remember { mutableStateOf<Boolean?>(null) }
+    var usbCable by remember { mutableStateOf<String?>(null) }
     var tcpPort by remember { mutableStateOf(0) }
     var ip by remember { mutableStateOf<String?>(null) }
     var listening by remember { mutableStateOf(false) }
+    // 正在控制本机的客户端（解析 /proc/net/tcp 的 ESTABLISHED 连接）与 adb devices 输出
+    var clients by remember { mutableStateOf<List<String>>(emptyList()) }
+    var adbOut by remember { mutableStateOf<String?>(null) }
     var portText by remember { mutableStateOf(QuroAdbDebug.DEFAULT_PORT.toString()) }
     var busy by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf("") }
@@ -130,6 +134,40 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
         }
     }
 
+    val tcpEnabled = tcpPort > 0
+
+    fun refresh() {
+        scope.launch {
+            probing = true
+            val (priv, usb, port, addr, live, cable, cl, adb) = withContext(Dispatchers.IO) {
+                val p = QuroAdbDebug.hasPrivilegedChannel()
+                val u = runCatching { QuroAdbDebug.usbDebugEnabled(ctx) }.getOrNull()
+                val pt = runCatching { QuroAdbDebug.currentTcpPort(ctx) }.getOrDefault(0)
+                val a = runCatching { QuroAdbDebug.wifiIp(ctx) }.getOrNull()
+                val l = if (pt > 0) runCatching { QuroAdbDebug.isAdbdListening(ctx, pt) }.getOrDefault(false) else false
+                // USB 线实际连接状态（区别于「USB 调试开关」）；谁正连着本机 ADB 端口；adb devices
+                val cb = runCatching { QuroAdbDebug.usbCableState(ctx) }.getOrNull()
+                val cs = if (pt > 0) runCatching { QuroAdbDebug.connectedClients(ctx, pt) }.getOrDefault(emptyList()) else emptyList()
+                val dv = runCatching { QuroAdbDebug.adbDevices(ctx) }.getOrNull()
+                Quin(p, u, pt, a, l, cb, cs, dv)
+            }
+            val roles = withContext(Dispatchers.IO) {
+                enumValues<DefaultAppRole>().map { it to QuroDefaultAppManager.isHeld(ctx, it) }.toMap()
+            }
+            hasPriv = priv
+            usbOn = usb
+            tcpPort = port
+            ip = addr
+            listening = live
+            usbCable = cable
+            clients = cl
+            adbOut = adb
+            roleHeld = roles
+            probing = false
+        }
+    }
+
+    // 本机作为 ADB 客户端：反向连接对方 ip:port。定义在 refresh() 之后 —— Kotlin 局部函数需先声明后使用。
     fun connectRemote() {
         val t = clientTarget.trim()
         if (t.isBlank()) return
@@ -149,32 +187,8 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
                 append(r.render())
                 append("\n")
             }.takeLast(8000)
-        }
-    }
-
-    val tcpEnabled = tcpPort > 0
-
-    fun refresh() {
-        scope.launch {
-            probing = true
-            val (priv, usb, port, addr, live) = withContext(Dispatchers.IO) {
-                val p = QuroAdbDebug.hasPrivilegedChannel()
-                val u = runCatching { QuroAdbDebug.usbDebugEnabled(ctx) }.getOrNull()
-                val pt = runCatching { QuroAdbDebug.currentTcpPort(ctx) }.getOrDefault(0)
-                val a = runCatching { QuroAdbDebug.wifiIp(ctx) }.getOrNull()
-                val l = if (pt > 0) runCatching { QuroAdbDebug.isAdbdListening(ctx, pt) }.getOrDefault(false) else false
-                Quin(p, u, pt, a, l)
-            }
-            val roles = withContext(Dispatchers.IO) {
-                enumValues<DefaultAppRole>().map { it to QuroDefaultAppManager.isHeld(ctx, it) }.toMap()
-            }
-            hasPriv = priv
-            usbOn = usb
-            tcpPort = port
-            ip = addr
-            listening = live
-            roleHeld = roles
-            probing = false
+            // 连接结果会改变 adb devices / 连接列表，执行后回查一次
+            refresh()
         }
     }
 
@@ -204,9 +218,12 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
         sb.appendLine("QuroAI ADB / 默认应用诊断")
         sb.appendLine("提权通道: ${if (hasPriv) "可用(root/Shizuku)" else "无"}")
         sb.appendLine("USB 调试: ${when (usbOn) { null -> "未知"; true -> "开"; false -> "关" }}")
-        sb.appendLine("TCP ADB: ${if (tcpPort > 0) "监听 $tcpPort${if (listening) " (已监听)" else ""}" else "未启用"}")
+        sb.appendLine("USB 数据线: ${usbCable ?: "未知"}")
+        sb.appendLine("TCP ADB: ${if (tcpPort > 0) "监听 $tcpPort${if (listening) " (已监听)" else " (未监听)"}" else "未启用"}")
         sb.appendLine("WiFi IP: ${ip ?: "无"}")
         sb.appendLine("连接命令: ${if (tcpPort > 0 && ip != null) "adb connect $ip:$tcpPort" else "—"}")
+        sb.appendLine("已连接客户端: ${clients.joinToString(", ").ifEmpty { "无" }}")
+        sb.appendLine("adb devices: ${adbOut?.replace('\n', ';') ?: "宿主无 adb 客户端二进制"}")
         sb.appendLine("默认应用角色:")
         for ((r, h) in roleHeld) sb.appendLine("  ${r.label}: ${if (h) "已设为默认" else "未设"}")
         share(sb.toString())
@@ -271,6 +288,12 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
                     "系统开发者选项里的 USB 调试开关",
                     usbOn ?: false,
                     unknown = usbOn == null,
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                TextStateRow(
+                    Icons.Filled.Cable, "USB 数据线",
+                    "线缆实际连接状态（区别于 USB 调试开关）",
+                    usbCable,
                 )
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 StatusRow(
@@ -367,6 +390,30 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
                 }
             }
 
+            // 谁正在控制本机：解析 /proc/net/tcp 中与 ADB 端口 ESTABLISHED 的连接（补齐「被控制」闭环）
+            if (tcpEnabled) {
+                GroupCaption("正在控制本机的客户端")
+                SetGroup {
+                    if (clients.isEmpty()) {
+                        InfoLine("暂无客户端连接（本机仅在监听）。对方执行 adb connect $ip:$tcpPort 后会出现在这里。")
+                    } else {
+                        clients.forEach { c -> InfoLine("● $c") }
+                        HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                        InfoLine("以上为已与本机 ADB 端口 $tcpPort 建立 TCP 连接的控制端。要断开：关闭上方「启用无线 ADB」开关，或让对方 adb disconnect。")
+                    }
+                    if (!probing) {
+                        HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("连接列表不会自动刷新", fontSize = 12.sp, color = Muted, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { refresh() }) { Text("刷新", fontSize = 13.sp, color = Accent) }
+                        }
+                    }
+                }
+            }
+
             // 本机作为 ADB 客户端：反向连接对方（被手机控制 / 本机作为客户端）
             GroupCaption("本机作为客户端（控制对方）")
             SetGroup {
@@ -397,11 +444,19 @@ fun QuroUsbDebugScreen(onClose: () -> Unit) {
                     }
                 }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 此前是弹 Toast 的占位行，改为真正跳到终端页
                 SetRowClickable(
-                    Icons.Filled.Terminal, "打开终端", "执行 adb / shell 命令控制本机或远端", "",
-                    onClick = { Toast.makeText(ctx, "请在设置-终端打开终端，输入 adb 命令", Toast.LENGTH_SHORT).show() },
+                    Icons.Filled.Terminal, "打开终端", "到终端里执行 adb / shell 命令控制本机或远端", "",
+                    onClick = { onOpenTerminal() },
                     scaled = { it.sp },
                 )
+                if (adbOut != null) {
+                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                    InfoLine("adb devices -l：\n$adbOut")
+                } else {
+                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                    InfoLine("宿主无 adb 客户端二进制，无法在此列出 adb devices；上面的「连接」会返回 not found。请在上方「打开终端」里用终端自带的 adb，或用系统「无线调试」配对。")
+                }
             }
 
             GroupCaption("系统入口（无提权时手动配对）")
@@ -583,6 +638,28 @@ private fun StatusRow(icon: androidx.compose.ui.graphics.vector.ImageVector, nam
     }
 }
 
+/** 状态行：图标 + 名称/副标题 + 自定义值徽标（用于 USB 线连接等非「开/关」语义的状态）。 */
+@Composable
+private fun TextStateRow(icon: androidx.compose.ui.graphics.vector.ImageVector, name: String, sub: String, value: String?) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, Modifier.size(20.dp), tint = cs.onSurfaceVariant)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(name, fontSize = 14.sp, color = cs.onSurface)
+            Text(sub, fontSize = 11.sp, color = Muted, modifier = Modifier.padding(top = 2.dp))
+        }
+        val connected = value?.startsWith("已连接") == true
+        val col = if (connected) Sage else Muted
+        Box(Modifier.clip(RoundedCornerShape(20.dp)).background(col.copy(alpha = 0.15f)).padding(horizontal = 10.dp, vertical = 4.dp)) {
+            Text(value ?: "未知", color = col, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
 /** 连接信息行：可复制 / 可分享的命令 + 说明。 */
 @Composable
 private fun ConnectInfoRow(cmd: String, desc: String, onCopy: () -> Unit, onShare: (() -> Unit)? = null) {
@@ -624,4 +701,7 @@ private data class Quin(
     val port: Int,
     val ip: String?,
     val listening: Boolean,
+    val cable: String?,
+    val clients: List<String>,
+    val adb: String?,
 )
