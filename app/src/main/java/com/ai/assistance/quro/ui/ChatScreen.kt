@@ -2617,8 +2617,7 @@ private fun MessageList(
     Box(modifier) {
     LazyColumn(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = if (narrow) 8.dp else 16.dp),
+            .fillMaxSize(),
         state = listState,
         contentPadding = PaddingValues(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -2813,6 +2812,9 @@ private fun MessageRow(
             parseBlocks(clean).filterIsInstance<MsgBlock.DynamicUi>()
         }
     }
+    // 「动态对话框UI」判定：AI 消息且含 quro-ui 围栏 → 动态 UI 本身就是消息内容（对话框本身），
+    // 撑满屏幕宽度、贴边、零内边距、无卡片背景；普通消息仍保留左右留白。
+    val isDynamicUiMessage = !msg.mine && dynamicUiBlocks.isNotEmpty()
     // 正文文本与「内联组件 JSON」抽离结果：供气泡正文与气泡外全宽卡片共用同一份，避免重复解析。
     // 卡片从气泡里拎出来，在下方「全宽内联」区块渲染，不再被 280dp 气泡压窄、移动端看不全。
     val displayText = QuroVoiceStyle.strip(msg.text ?: "")
@@ -2828,13 +2830,15 @@ private fun MessageRow(
         showCopyMenu = true
     }
 
-    // 外层改为 Column：气泡（头像+内容）保持原布局，动态 UI 组件作为「全宽内联区块」渲染在气泡下方，
-    // 撑满对话框内容区、自适应屏幕、完整可见、不弹窗、不点卡片。
-    Column(Modifier.fillMaxWidth()) {
-        // 「动态对话框UI」：AI消息含动态UI时，动态UI本身就是消息内容（对话框本身），
-        // 不是「对话框里再套一层小卡片」。跳过气泡、跳过 280dp 限制、不加卡片背景，
-        // 撑满对话框宽度直接渲染。
-        val isDynamicUiMessage = !msg.mine && dynamicUiBlocks.isNotEmpty()
+    // 外层 Column：动态对话框UI 贴边屏幕边缘（撑满全宽、零水平内边距），
+    // 普通消息保留 8/16dp 水平留白，与气泡视觉一致。
+    Column(
+        Modifier.fillMaxWidth().then(
+            if (isDynamicUiMessage) Modifier
+            else Modifier.padding(horizontal = if (narrow) 8.dp else 16.dp)
+        )
+    ) {
+        // 「动态对话框UI」分支：AI消息含动态UI时直接作为消息体渲染，跳过气泡、跳过280dp限制、无卡片背景、撑满宽度。
         if (isDynamicUiMessage) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                 // AI 头像可点击 → 编辑灵魂卡
@@ -6655,9 +6659,10 @@ private fun DynamicUiBlock(
 
     // 直接在对话框原生层内联渲染：不包 Surface、不另起一层卡片。AI 用 quro-ui DSL 自写 UI，
     // 原生 Compose 直接渲染进对话框；clipToBounds 硬锁屏幕宽度，移动端任何内容都不超出屏幕。
+    // 不再加 horizontal padding：动态 UI 就是对话框本身，要撑满消息列宽（避免之前 12dp×2 把内容挤窄）。
     when (parsed) {
         is QuroUiParseResult.Success -> Column(
-            Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 12.dp).clipToBounds(),
+            Modifier.fillMaxWidth().padding(vertical = 4.dp).clipToBounds(),
         ) {
             QuroUiRenderer(
                 root = parsed.root,
@@ -6669,7 +6674,7 @@ private fun DynamicUiBlock(
         }
 
         is QuroUiParseResult.Failure -> Column(
-            Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 12.dp).clipToBounds(),
+            Modifier.fillMaxWidth().padding(vertical = 4.dp).clipToBounds(),
         ) {
             Text(
                 text = "⚠️ 动态 UI 解析失败：${parsed.reason}",
