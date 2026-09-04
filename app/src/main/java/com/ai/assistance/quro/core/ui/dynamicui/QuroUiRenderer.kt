@@ -126,7 +126,6 @@ fun QuroUiRenderer(
         hidden = hidden,
         onAction = onAction,
         modifier = modifier,
-        isRoot = true,
     )
 }
 
@@ -141,7 +140,6 @@ private fun RenderNode(
     hidden: MutableMap<String, Boolean>,
     onAction: (QuroUiAction, Map<String, String>) -> Unit,
     modifier: Modifier = Modifier,
-    isRoot: Boolean = false,
 ) {
     // toggle 隐藏：节点有 id 且被标记为隐藏则整体不渲染
     val nodeId = node.id
@@ -151,7 +149,7 @@ private fun RenderNode(
         is QuroColumnNode -> RenderColumn(node, state, hidden, onAction, modifier)
         is QuroRowNode -> RenderRow(node, state, hidden, onAction, modifier)
         is QuroBoxNode -> RenderBox(node, state, hidden, onAction, modifier)
-        is QuroCardNode -> RenderCard(node, state, hidden, onAction, modifier, isRoot)
+        is QuroCardNode -> RenderCard(node, state, hidden, onAction, modifier)
         is QuroTextNode -> RenderText(node, modifier)
         is QuroImageNode -> RenderImage(node, modifier)
         is QuroMarkdownNode -> RenderMarkdown(node, onAction, modifier)
@@ -275,37 +273,16 @@ private fun RenderCard(
     hidden: MutableMap<String, Boolean>,
     onAction: (QuroUiAction, Map<String, String>) -> Unit,
     modifier: Modifier,
-    isRoot: Boolean = false,
 ) {
     val pad = (node.padding ?: 12).dp
-    val radius = (node.cornerRadius ?: 12).dp
-    val shape = RoundedCornerShape(radius)
     val action = node.onClick
+    val m = modifier.fillMaxWidth()
 
-    // 根节点若是 card（动态对话框 UI 本体），不渲染卡片外壳（无背景/圆角/点击边框），
-    // 让动态 UI 直接成为对话框消息体，而不是在对话框里再套一层小卡片背景。
-    if (isRoot) {
-        Column(
-            modifier = modifier.fillMaxWidth().padding(pad),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (!node.title.isNullOrBlank()) {
-                Text(
-                    text = node.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            node.children.forEach { child ->
-                RenderNode(child, state, hidden, onAction)
-            }
-        }
-        return
-    }
-
-    // M3 的 Card content 带 ColumnScope receiver，必须声明为 ColumnScope 扩展，
-    // 否则类型不匹配（ComposableFunction0 vs ComposableFunction1<ColumnScope, Unit>）。
-    val content: @Composable ColumnScope.() -> Unit = {
+    // 「动态对话框UI」= 对话框本身：所有 card 节点都不渲染卡片外壳（无 surface 背景/边框/圆角），
+    // 只作为带内边距的逻辑分组容器（保留 padding、title、onClick 交互）。
+    // 这样无论 AI 把 card 放在根节点还是任意嵌套位置，整张动态 UI 都不会出现带背景的「小卡片」，
+    // 彻底成为对话框内容本身，撑满消息列宽。
+    val inner: @Composable () -> Unit = {
         Column(
             modifier = Modifier.padding(pad),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -323,22 +300,14 @@ private fun RenderCard(
         }
     }
 
-    val m = modifier.fillMaxWidth()
-
     if (action != null) {
-        OutlinedCard(
-            modifier = m,
-            shape = shape,
-            onClick = { dispatch(action, state, hidden, onAction) },
-            content = content,
-        )
+        Column(modifier = m.clickable { dispatch(action, state, hidden, onAction) }) {
+            inner()
+        }
     } else {
-        Card(
-            modifier = m,
-            shape = shape,
-            colors = CardDefaults.cardColors(),
-            content = content,
-        )
+        Column(modifier = m) {
+            inner()
+        }
     }
 }
 
