@@ -129,10 +129,10 @@ private fun parseBlocks(src: String): List<MdBlock> {
                 i++
                 out.add(MdBlock("code", code.toString().trimEnd(), lang))
             }
-            line.startsWith("# ") -> out.add(MdBlock("h1", line.substring(2)))
-            line.startsWith("## ") -> out.add(MdBlock("h2", line.substring(3)))
-            line.startsWith("### ") -> out.add(MdBlock("h3", line.substring(4)))
-            line.startsWith(">") -> out.add(MdBlock("quote", line.removePrefix(">").trim()))
+            line.startsWith("# ") -> { out.add(MdBlock("h1", line.substring(2))); i++ }
+            line.startsWith("## ") -> { out.add(MdBlock("h2", line.substring(3))); i++ }
+            line.startsWith("### ") -> { out.add(MdBlock("h3", line.substring(4))); i++ }
+            line.startsWith(">") -> { out.add(MdBlock("quote", line.removePrefix(">").trim())); i++ }
             line.matches(Regex("""^[-*]\s+.+""")) -> {
                 val items = mutableListOf<String>()
                 while (i < lines.size && lines[i].matches(Regex("""^[-*]\s+.+"""))) {
@@ -143,12 +143,14 @@ private fun parseBlocks(src: String): List<MdBlock> {
             line.isBlank() -> { out.add(MdBlock("blank", "")); i++ }
             else -> {
                 val para = StringBuilder()
+                val startI = i
                 while (i < lines.size && lines[i].isNotBlank()
                     && !lines[i].startsWith("```") && !lines[i].startsWith("#")
                     && !lines[i].startsWith(">") && !lines[i].matches(Regex("""^[-*]\s+.+"""))
                 ) {
                     para.appendLine(lines[i]); i++
                 }
+                if (i == startI) i++ // 首行不匹配任何块类型时兜底推进，避免死循环
                 out.add(MdBlock("p", para.toString().trimEnd()))
             }
         }
