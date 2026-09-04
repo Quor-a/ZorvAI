@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -53,6 +54,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -73,6 +75,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.media.MediaPlayer
@@ -1081,5 +1085,45 @@ private fun substituteInAction(
         is QuroCopyAction -> action.copy(text = action.text.sub())
         is QuroOpenUrlAction -> action.copy(url = action.url.sub())
         else -> action
+    }
+}
+
+// =============================================================================================
+// 自适应密度：把 AI 固定设计稿宽度等比映射到任意容器宽度（根因级「不溢出」方案）
+// =============================================================================================
+
+/**
+ * 局部覆盖 [LocalDensity]，让「设计稿宽度 designWidthDp」恰好等于子树可用宽度。
+ *
+ * 原理：Compose 的 dp→px 走 [Density] 接口，而它是 CompositionLocal —— 因此只需对某一棵子树覆写密度，
+ * 不碰全局（区别于今日头条改 DisplayMetrics.density 的全局方案，后者会带歪三方库/Dialog/WebView）。
+ *
+ * 效果：AI 按 360dp 设计稿写绝对尺寸（如 180.dp 占一半、360.dp 撑满），客户端把它等比映射到
+ * 容器真实宽度 —— 手机/平板/折叠屏/分屏/横竖屏全自动，数学上不可能横向溢出。
+ *
+ * 用法：挂在每个动态 UI「surface」根部（即 [QuroUiRenderer] 外层），不要挂在整条聊天列表外。
+ * 列表外层保留系统 density（滚动条/分隔线不能跟着缩放），只有 AI 生成的卡片内部才等比。
+ *
+ * 注意：
+ *  - [designWidthDp] 填 dp，不要填 px（标了 1080px 宽要先 ÷density 换算成 dp 再填）。
+ *  - 文字 fontScale 保留用户系统字号偏好；sp 仍会随 density 等比放大（平板字会偏大）。
+ *    若要文字保持物理大小、仅放大容器，可在此内部用 [CompositionLocalProvider]
+ *    (LocalDensity provides base) 单独包一层文字子树。
+ */
+@Composable
+fun ProvideAutoDensity(
+    designWidthDp: Float = 360f,
+    content: @Composable () -> Unit,
+) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val base = LocalDensity.current
+        val scaled = Density(
+            // 让 designWidthDp 恰好等于当前可用宽度（maxWidth 为当前 density 下的 dp 值）
+            density = (maxWidth.value * base.density) / designWidthDp,
+            fontScale = base.fontScale,
+        )
+        CompositionLocalProvider(LocalDensity provides scaled) {
+            content()
+        }
     }
 }

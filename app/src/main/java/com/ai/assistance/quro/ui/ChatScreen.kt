@@ -339,6 +339,7 @@ import com.ai.assistance.quro.core.ui.dynamicui.QuroUiDslParser
 import com.ai.assistance.quro.core.ui.dynamicui.A2uiInterpreter
 import com.ai.assistance.quro.core.ui.dynamicui.QuroUiParseResult
 import com.ai.assistance.quro.core.ui.dynamicui.QuroUiRenderer
+import com.ai.assistance.quro.core.ui.dynamicui.ProvideAutoDensity
 import com.ai.assistance.quro.core.ui.dynamicui.QuroUiAction
 import com.ai.assistance.quro.core.ui.dynamicui.QuroCallbackAction
 import com.ai.assistance.quro.core.ui.dynamicui.QuroToolCallAction
@@ -6664,13 +6665,17 @@ private fun DynamicUiBlock(
         is QuroUiParseResult.Success -> Column(
             Modifier.fillMaxWidth().padding(vertical = 4.dp).clipToBounds(),
         ) {
-            QuroUiRenderer(
-                root = parsed.root,
-                modifier = Modifier.fillMaxWidth(),
-                onAction = { action, values ->
-                    handleDynamicUiAction(action, values, ctx, scope, onCommand, onOpenLink)
-                },
-            )
+            // 自适应密度：把 AI 按 360dp 设计稿写的绝对尺寸等比映射到本消息列宽，
+            // 手机/平板/折叠/分屏/横竖屏全自适应，数学上不可能横向溢出（根因级方案，替代此前的换行/滚动/限高兜底）。
+            ProvideAutoDensity(designWidthDp = 360f) {
+                QuroUiRenderer(
+                    root = parsed.root,
+                    modifier = Modifier.fillMaxWidth(),
+                    onAction = { action, values ->
+                        handleDynamicUiAction(action, values, ctx, scope, onCommand, onOpenLink)
+                    },
+                )
+            }
         }
 
         is QuroUiParseResult.Failure -> Column(
