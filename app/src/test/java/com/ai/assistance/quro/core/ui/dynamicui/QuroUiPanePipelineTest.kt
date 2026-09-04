@@ -112,6 +112,30 @@ class QuroUiPanePipelineTest {
         assertFalse("旧值 OLD 不应残留", findTextValue(root, "OLD"))
     }
 
+    // 5) 带权重的子区块：pane 子 column 的 weight 被解析并保留（支撑「侧栏 1 : 主区 2」非等比双栏）。
+    @Test
+    fun weightedChild_preservedThroughParseAndValidate() {
+        val json = """
+            {"type":"card","children":[
+              {"type":"pane","direction":"row","children":[
+                {"type":"column","weight":1,"children":[{"type":"text","value":"侧栏"}]},
+                {"type":"column","weight":2,"children":[{"type":"text","value":"主区"}]}
+              ]}
+            ]}
+        """.trimIndent()
+
+        val root = (QuroUiDslParser.parseBlock(json) as QuroUiParseResult.Success).root
+        val validated = QuroUiCatalog.validate(root)
+        assertFalse(validated.degraded)
+
+        val pane = (validated.root as QuroCardNode).children.filterIsInstance<QuroPaneNode>().first()
+        assertEquals(2, pane.children.size)
+        val col1 = pane.children[0] as QuroColumnNode
+        val col2 = pane.children[1] as QuroColumnNode
+        assertEquals(1f, col1.weight ?: 0f, 0.0001f)
+        assertEquals(2f, col2.weight ?: 0f, 0.0001f)
+    }
+
     // 递归查找某文本值是否出现在子树任意 text 节点上。
     private fun findTextValue(node: QuroUiNode?, target: String): Boolean {
         if (node == null) return false
