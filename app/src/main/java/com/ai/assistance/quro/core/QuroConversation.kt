@@ -78,6 +78,8 @@ data class QuroMessage(
     val attachments: List<QuroAttachment>? = null,
     /** 气泡内富组件（AI 经 ui_widget / ui_card 下发，合体进聊天气泡，而非底部独立卡片栏）。 */
     val cards: List<QuroChatCard> = emptyList(),
+    /** 生成式 UI 卡片：本消息关联的 :genui artifact id 列表（AI 自写 JSX/HTML 渲染进对话框）。 */
+    val genUiCardIds: List<String> = emptyList(),
     /** 发送者昵称（用户消息气泡显示用；为空则回退到当前用户资料昵称「我」）。默认 null 以保证旧消息反序列化向后兼容。 */
     val senderName: String? = null,
     /** 发送者头像 URL/Uri（用户消息气泡头像用；为空则回退到当前用户资料头像）。默认 null 以保证向后兼容。 */

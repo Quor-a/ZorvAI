@@ -38,6 +38,9 @@ import com.ai.assistance.quro.ui.VisualCustomPopupDialog
 import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.ai.assistance.quro.core.cards.parseComponentSpec
 import com.ai.assistance.quro.ui.QuroShareBridge
+// ZorvAI 生成式 UI（:genui 模块）：AI 自写 JSX/HTML → 对话框内 WebView 渲染
+import com.zorv.genui.controller.GenUiController
+import com.zorv.genui.ui.GenUiCard
 import com.ai.assistance.quro.service.QuroMediaService
 import com.ai.assistance.quro.service.QuroMiniWindowManager
 import com.ai.assistance.quro.service.QuroMiniWindowManager.MiniChatLine
@@ -1266,6 +1269,7 @@ fun ChatScreen(
                         currentId = currentId,
                         busy = busy,
                         traceLines = traceLines,
+                        genUiController = vm.genUiControllerFor(currentId),
                         onOpenLink = { browserUrl = it },
                         onCommand = { handleCardCommand(it) },
                         onSend = { send(it) },
@@ -2437,6 +2441,8 @@ private fun MessageList(
     onSend: (String) -> Unit = {},
     currentId: String,
     busy: Boolean = false,
+    /** 生成式 UI 控制器（:genui）：按会话隔离，供消息内 WebView 卡片挂载 */
+    genUiController: GenUiController,
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
@@ -2567,6 +2573,7 @@ private fun MessageList(
                         // 让流式 reasoning 实时可见（此前思考只藏在 9sp 收起胶囊后，等于看不见）。
                         streamingThink = busy && index == messages.lastIndex,
                         onSend = onSend,
+                        genUiController = genUiController,
                     )
             }
         }
@@ -2709,6 +2716,8 @@ private fun MessageRow(
     streamingThink: Boolean = false,
     /** 代码块自动修复：发送错误信息给 AI 分析修复 */
     onSend: (String) -> Unit = {},
+    /** 生成式 UI 控制器（:genui）：渲染本消息关联的 WebView 卡片 */
+    genUiController: GenUiController,
 ) {
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
@@ -3118,6 +3127,23 @@ private fun MessageRow(
                         ) { bubbleActions() }
                     }
                 }
+            }
+            // ── 生成式 UI 卡片（ZorvAI 自写 JSX/HTML，WebView 内渲染进对话框）──
+            // 与正文气泡并列，置于其后；卡片 id 由 ViewModel 在流结束时按围栏 id= 精确关联到本消息。
+            if (!msg.mine && msg.genUiCardIds.isNotEmpty()) {
+                Column(
+                    Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    msg.genUiCardIds.forEach { cardId ->
+                        GenUiCard(
+                            artifactId = cardId,
+                            controller = genUiController,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
             }
             // 🔧 Bug修复「简短回复（快捷回复卡片）不显示」：此前卡片只在「有正文气泡」分支内
             //   渲染（见上方 bubbleCards）。AI 只下发卡片、没有正文时（如 quickreply 快捷回复建议、
@@ -7424,11 +7450,23 @@ private fun QuroMessage.toMessage(
         avatar = if (mine) (senderName ?: userName).ifBlank { "我" } else assistantAvatar,
         avatarUri = if (mine) (avatarUrl ?: userAvatarUri) else assistantAvatarUri,
         time = formatChatTime(createdAt),
-        text = content.ifBlank { null },
+        text = stripGenUiFences(content).ifBlank { null },
         attachments = attachmentList,
         think = think,
         cards = cards,
+        genUiCardIds = genUiCardIds,
     )
+}
+
+/**
+ * 去掉 AI 回复里的 ```zorv/ui ... ``` 围栏块。
+ * 这些围栏由生成式 UI 解析器（:genui）消费并渲染为对话框内 WebView 卡片，
+ * 不应作为原始代码文本显示给用户。
+ */
+private fun stripGenUiFences(src: String): String {
+    if (!src.contains("```zorv/ui")) return src
+    val re = Regex("(?s)```zorv/ui[^\\n]*\\n.*?```\\s*")
+    return src.replace(re, "").trimEnd()
 }
 
 /** QuroPersona → MoWen Persona（含 id 以便回写激活状态）。 */
