@@ -1115,6 +1115,7 @@ private fun substitutePlaceholders(
             title = node.title?.sub(),
             children = node.children.map { substitutePlaceholders(it, item, index) },
         )
+        is QuroPaneNode -> node.copy(children = node.children.map { substitutePlaceholders(it, item, index) })
         else -> node
     }
 }
