@@ -15,7 +15,7 @@ object QuroUiCatalog {
 
     /** 允许出现的组件类型（白名单词汇表）。 */
     val COMPONENTS: Set<String> = setOf(
-        "column", "row", "box", "card", "text", "image", "icon", "badge", "progress",
+        "column", "row", "box", "card", "pane", "text", "image", "icon", "badge", "progress",
         "divider", "spacer", "markdown", "video", "audio", "browser", "code",
         "button", "text_input", "checkbox", "switch", "select", "slider", "list", "tabs"
     )
@@ -55,6 +55,7 @@ object QuroUiCatalog {
             is QuroColumnNode -> node.copy(children = node.children.map { validateNode(it, "$path/column", v) })
             is QuroRowNode -> node.copy(children = node.children.map { validateNode(it, "$path/row", v) })
             is QuroBoxNode -> node.copy(children = node.children.map { validateNode(it, "$path/box", v) })
+            is QuroPaneNode -> node.copy(children = node.children.map { validateNode(it, "$path/pane", v) })
             is QuroCardNode -> node.copy(
                 children = node.children.map { validateNode(it, "$path/card", v) },
                 onClick = validateAction(node.onClick, "$path.card.onClick", v),
@@ -89,6 +90,7 @@ object QuroUiCatalog {
         is QuroColumnNode -> "column"
         is QuroRowNode -> "row"
         is QuroBoxNode -> "box"
+        is QuroPaneNode -> "pane"
         is QuroCardNode -> "card"
         is QuroTextNode -> "text"
         is QuroImageNode -> "image"

@@ -153,6 +153,7 @@ private fun RenderNode(
         is QuroColumnNode -> RenderColumn(node, state, hidden, onAction, modifier)
         is QuroRowNode -> RenderRow(node, state, hidden, onAction, modifier)
         is QuroBoxNode -> RenderBox(node, state, hidden, onAction, modifier)
+        is QuroPaneNode -> RenderPane(node, state, hidden, onAction, modifier)
         is QuroCardNode -> RenderCard(node, state, hidden, onAction, modifier)
         is QuroTextNode -> RenderText(node, modifier)
         is QuroImageNode -> RenderImage(node, modifier)
@@ -311,6 +312,59 @@ private fun RenderCard(
     } else {
         Column(modifier = m) {
             inner()
+        }
+    }
+}
+
+/**
+ * 多 pane 布局：根据方向（auto/row/column）与 surface 尺寸档位，把子区块并排或竖排。
+ *
+ * - direction=auto：Expanded（宽屏/平板/分屏）并排，否则竖排 —— 即「WindowSizeClass 多 pane 切换」。
+ * - 每个子区块各自包一层 [SurfaceHost](designWidthDp=360)：把 AI 的 360dp 设计稿等比映射到自己所占那一格的宽度，
+ *   并排时每格更窄但内容照样不溢出，竖排时每格满宽。这是与「不溢出」保证一致的局部等比，而非全局缩放。
+ */
+@Composable
+private fun RenderPane(
+    node: QuroPaneNode,
+    state: MutableMap<String, Any>,
+    hidden: MutableMap<String, Boolean>,
+    onAction: (QuroUiAction, Map<String, String>) -> Unit,
+    modifier: Modifier,
+) {
+    val pad = (node.padding ?: 0).dp
+    val spacing = (node.spacing ?: 12).dp
+    val dir = node.direction?.lowercase()
+    val horizontal = when (dir) {
+        "row", "horizontal" -> true
+        "column", "vertical" -> false
+        else -> LocalSurfaceSizeClass.current == SurfaceSizeClass.Expanded
+    }
+    val m = modifier.then(if (pad > 0.dp) Modifier.padding(pad) else Modifier)
+
+    // 每个子区块包一层 SurfaceHost，使其内部 360dp 设计稿独立等比映射到自身宽度（并排/竖排都不溢出）。
+    val cell: @Composable (QuroUiNode) -> Unit = { child ->
+        SurfaceHost(designWidthDp = 360f) {
+            RenderNode(child, state, hidden, onAction, Modifier.fillMaxWidth())
+        }
+    }
+
+    if (horizontal) {
+        Row(
+            modifier = m.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            verticalAlignment = Alignment.Top,
+        ) {
+            node.children.forEach { child ->
+                // weight(1f) 让并排格子均分宽度；BoxWithConstraints(fillMaxWidth) 在格内测得真实宽度供 SurfaceHost 映射。
+                Box(Modifier.weight(1f).fillMaxWidth()) { cell(child) }
+            }
+        }
+    } else {
+        Column(
+            modifier = m.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(spacing),
+        ) {
+            node.children.forEach { child -> cell(child) }
         }
     }
 }

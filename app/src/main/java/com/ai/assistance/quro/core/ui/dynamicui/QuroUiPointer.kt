@@ -67,6 +67,7 @@ object QuroUiPointer {
         is QuroColumnNode -> node.copy(children = node.children.map { bindNode(it, model) })
         is QuroRowNode -> node.copy(children = node.children.map { bindNode(it, model) })
         is QuroBoxNode -> node.copy(children = node.children.map { bindNode(it, model) })
+        is QuroPaneNode -> node.copy(children = node.children.map { bindNode(it, model) })
         is QuroCardNode -> node.copy(
             title = rt(node.title, model) ?: node.title,
             children = node.children.map { bindNode(it, model) },

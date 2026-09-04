@@ -68,6 +68,10 @@ class UiDslSpecTool : QuroTool {
 - row：横向排列。children[], spacing, padding, align(top|center|bottom), scrollable
 - box：层叠。children[], padding
 - card：卡片容器。children[], title, padding, corner_radius, on_click(动作)
+- pane：多 pane 布局容器（宽屏并排 / 窄屏竖排，WindowSizeClass 风格）。children[], direction(auto|row|column，默认 auto 跟随容器宽度),
+  spacing, padding。direction=auto 时容器宽度≥840dp 的格并排、否则竖排；row 强制横排、column 强制竖排。
+  每个子区块内部按 360dp 设计稿独立等比缩放并贴满所占那一格，并排时每格更窄但内容不会溢出。
+  用于「主从双栏」「表单+预览」这类需要随宽度自适应并排/竖排的场景。
 
 ■ 内容
 - text：文本。value, style(title|headline|body|caption|label), bold, italic, color, size, align, max_lines
