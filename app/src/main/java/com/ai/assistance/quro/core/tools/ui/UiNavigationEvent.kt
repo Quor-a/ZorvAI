@@ -15,6 +15,12 @@ sealed class UiNavigationEvent {
     data class RenderCard(val title: String, val content: String, val style: String) : UiNavigationEvent()
     data class RenderWidget(val type: String, val id: String, val label: String, val value: String) : UiNavigationEvent()
 
+    // ─── 可视化交互（动态 UI 深链）───
+    /** 可视化弹窗：标题 + 内容，纯展示。 */
+    data class VisualPopup(val title: String, val content: String) : UiNavigationEvent()
+    /** 可视化询问：prompt + 选项，选中项回发对话。 */
+    data class VisualAsk(val prompt: String, val options: List<String>) : UiNavigationEvent()
+
     // ─── 组件操作 ───
     data class QueryStatus(val component: String) : UiNavigationEvent()
     data class UpdateComponent(val component: String, val props: Map<String, String>) : UiNavigationEvent()

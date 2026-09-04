@@ -183,6 +183,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -344,6 +345,11 @@ import com.ai.assistance.quro.core.ui.dynamicui.QuroOpenUrlAction
 import com.ai.assistance.quro.core.ui.dynamicui.QuroCopyAction
 import com.ai.assistance.quro.core.ui.dynamicui.QuroOpenAppAction
 import com.ai.assistance.quro.core.ui.dynamicui.QuroToggleAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroOpenScreenAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroRenderHtmlAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroRenderVisproAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroVisualPopupAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroVisualAskAction
 
 private enum class SheetType { Model, Persona, Settings, Upload, Voice }
 
@@ -720,6 +726,14 @@ fun ChatScreen(
     // 工具中心初始进入的子面板（供 AI 经 ui_control(open,target=vispro|node_editor|miniapp 等) 直达）
     var toolCenterInitial by remember { mutableStateOf<String?>(null) }
 
+    // 可视化弹窗 / 询问（动态 UI 深链交互）：经 UiNavigationBus.VisualPopup / VisualAsk 触发
+    var showVisualPopup by remember { mutableStateOf(false) }
+    var visualPopupTitle by remember { mutableStateOf("") }
+    var visualPopupContent by remember { mutableStateOf("") }
+    var showVisualAsk by remember { mutableStateOf(false) }
+    var visualAskPrompt by remember { mutableStateOf("") }
+    var visualAskOptions by remember { mutableStateOf<List<String>>(emptyList()) }
+
     // ═══ UI 动作桥：把 AI 调用的 ui_* 工具回调到本组合作用域，打开对应界面/弹层/开关 ═══
     fun handleUiAction(action: String) {
         when (action) {
@@ -924,6 +938,18 @@ fun ChatScreen(
                             )
                         }
                         vm.attachCardToLastAssistant(card)
+                    }
+
+                    // ─── 可视化交互（动态 UI 深链）───
+                    is UiNavigationEvent.VisualPopup -> {
+                        visualPopupTitle = event.title
+                        visualPopupContent = event.content
+                        showVisualPopup = true
+                    }
+                    is UiNavigationEvent.VisualAsk -> {
+                        visualAskPrompt = event.prompt
+                        visualAskOptions = event.options
+                        showVisualAsk = true
                     }
 
                     // ─── 查询状态 ───
@@ -2018,6 +2044,56 @@ fun ChatScreen(
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
                 QuroModelConfigScreen(modelVm, onBack = { showModelConfig = false })
             }
+        }
+
+        // 动态 UI 可视化弹窗（VisualPopup）：纯展示，不回发模型
+        if (showVisualPopup) {
+            AlertDialog(
+                onDismissRequest = { showVisualPopup = false },
+                title = if (visualPopupTitle.isNotBlank()) {
+                    { Text(visualPopupTitle) }
+                } else null,
+                text = {
+                    Text(
+                        visualPopupContent.ifBlank { "（无内容）" },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { showVisualPopup = false }) { Text("知道了") }
+                },
+            )
+        }
+
+        // 动态 UI 可视化询问（VisualAsk）：选项点击后作为用户消息回发模型继续对话
+        if (showVisualAsk) {
+            AlertDialog(
+                onDismissRequest = { showVisualAsk = false },
+                title = if (visualAskPrompt.isNotBlank()) {
+                    { Text(visualAskPrompt) }
+                } else null,
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        if (visualAskOptions.isEmpty()) {
+                            Text("（无选项）", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                        }
+                        visualAskOptions.forEach { opt ->
+                            TextButton(
+                                onClick = {
+                                    showVisualAsk = false
+                                    vm.send(opt, emptyList(), cfg)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(opt, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showVisualAsk = false }) { Text("取消") }
+                },
+            )
         }
 
         // 工具箱（从输入框「+」工具进入：文件管理 / 包名查询 / 工作区）
@@ -6533,6 +6609,63 @@ private fun handleDynamicUiAction(
 
         // 打开网页：已是真打开（应用内浏览器）。
         is QuroOpenUrlAction -> if (action.url.isNotBlank()) onOpenLink(action.url)
+
+        // ─── 多层渲染 / 深链导航（v1.0.82 新增）───
+
+        // 打开 ZorvAI 内置界面（终端/模型配置/可视化编程/小程序/工具中心等）：经 UI 控制总线打开。
+        is QuroOpenScreenAction -> {
+            val target = action.target.ifBlank { values["target"] ?: "" }
+            if (target.isBlank()) {
+                Toast.makeText(ctx, "未指定要打开的界面", Toast.LENGTH_SHORT).show()
+                return
+            }
+            UiNavigationBus.navEvent = UiNavigationEvent.OpenScreen(target)
+        }
+
+        // 直接渲染 HTML 到对话气泡（第一层渲染，复用 MiniAppCard 运行时）。
+        is QuroRenderHtmlAction -> {
+            val html = action.html.ifBlank { values.values.firstOrNull() ?: "" }
+            if (html.isBlank()) {
+                Toast.makeText(ctx, "没有可渲染的 HTML 内容", Toast.LENGTH_SHORT).show()
+                return
+            }
+            UiNavigationBus.navEvent = UiNavigationEvent.RenderWidget(
+                type = "miniapp",
+                id = "dyn_html_${System.currentTimeMillis()}",
+                label = "HTML 预览",
+                value = html,
+            )
+        }
+
+        // 直接渲染可视化编程（mermaid）到对话气泡（第一层渲染，复用 MermaidCard 运行时）。
+        is QuroRenderVisproAction -> {
+            val source = action.source.ifBlank { values.values.firstOrNull() ?: "" }
+            if (source.isBlank()) {
+                Toast.makeText(ctx, "没有可渲染的可视化内容", Toast.LENGTH_SHORT).show()
+                return
+            }
+            UiNavigationBus.navEvent = UiNavigationEvent.RenderWidget(
+                type = "mermaid",
+                id = "dyn_mermaid_${System.currentTimeMillis()}",
+                label = "可视化编程",
+                value = source,
+            )
+        }
+
+        // 可视化弹窗：经 UI 控制总线上报，ChatScreen 用 AlertDialog 弹出（纯展示）。
+        is QuroVisualPopupAction -> UiNavigationBus.navEvent = UiNavigationEvent.VisualPopup(
+            title = action.title,
+            content = action.content,
+        )
+
+        // 可视化询问：经 UI 控制总线上报，ChatScreen 用 AlertDialog 让用户选择，选中项回发模型。
+        is QuroVisualAskAction -> {
+            val options = action.options.ifEmpty { values.values.toList() }
+            UiNavigationBus.navEvent = UiNavigationEvent.VisualAsk(
+                prompt = action.prompt,
+                options = options,
+            )
+        }
 
         // 调用内置工具：真执行 ZorvAI 工具（对接全部内部功能），结果回传模型继续对话。
         is QuroToolCallAction -> {

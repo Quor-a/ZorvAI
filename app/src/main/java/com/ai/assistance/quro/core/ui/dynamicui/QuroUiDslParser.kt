@@ -506,6 +506,41 @@ object QuroUiDslParser {
                         ?: json.optStringOrNull("package")
                         ?: json.optStringOrNull("app") ?: "",
                 )
+                // ─── 多层渲染 / 深链导航（v1.0.82 新增）───
+                // 打开 ZorvAI 内置界面（终端/模型配置/可视化编程/小程序/工具中心等）
+                "open_screen", "open_screen_target", "screen", "openscreen" -> QuroOpenScreenAction(
+                    target = json.optStringOrNull("target")
+                        ?: json.optStringOrNull("screen")
+                        ?: json.optStringOrNull("name") ?: "",
+                )
+                // 直接渲染 HTML / 小程序到对话气泡（第一层渲染）
+                "render_html", "open_html", "html", "miniapp", "render_miniapp" -> QuroRenderHtmlAction(
+                    html = json.optStringOrNull("html")
+                        ?: json.optStringOrNull("content")
+                        ?: json.optStringOrNull("source") ?: "",
+                )
+                // 直接渲染可视化编程（mermaid）到对话气泡（第一层渲染）
+                "render_vispro", "render_mermaid", "vispro", "mermaid" -> QuroRenderVisproAction(
+                    source = json.optStringOrNull("source")
+                        ?: json.optStringOrNull("mermaid")
+                        ?: json.optStringOrNull("content")
+                        ?: json.optStringOrNull("html") ?: "",
+                )
+                // 可视化弹窗（标题 + 内容）
+                "visual_popup", "popup", "dialog", "alert" -> QuroVisualPopupAction(
+                    title = json.optStringOrNull("title") ?: "",
+                    content = json.optStringOrNull("content")
+                        ?: json.optStringOrNull("body")
+                        ?: json.optStringOrNull("text") ?: "",
+                )
+                // 可视化询问（prompt + 选项，选中项回发对话）
+                "visual_ask", "ask", "choose", "select_option" -> QuroVisualAskAction(
+                    prompt = json.optStringOrNull("prompt")
+                        ?: json.optStringOrNull("title")
+                        ?: json.optStringOrNull("question") ?: "",
+                    options = json.optStringList("options")
+                        .ifEmpty { buildStringList(json) },
+                )
                 else -> null
             }
         } catch (e: Exception) {
