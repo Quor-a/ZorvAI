@@ -355,8 +355,10 @@ private fun RenderPane(
             verticalAlignment = Alignment.Top,
         ) {
             node.children.forEach { child ->
-                // weight(1f) 让并排格子均分宽度；BoxWithConstraints(fillMaxWidth) 在格内测得真实宽度供 SurfaceHost 映射。
-                Box(Modifier.weight(1f).fillMaxWidth()) { cell(child) }
+                // 子区块若自身带 weight（column/row/box/card 支持）则按权重分配并排宽度（如侧栏 1 : 主区 2）；
+                // 否则默认均分（1f）。BoxWithConstraints(fillMaxWidth) 在格内测得真实宽度供 SurfaceHost 等比映射。
+                val w = weightOf(child) ?: 1f
+                Box(Modifier.weight(w).fillMaxWidth()) { cell(child) }
             }
         }
     } else {
