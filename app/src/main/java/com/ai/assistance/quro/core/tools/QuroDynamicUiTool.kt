@@ -202,6 +202,27 @@ red green blue yellow orange purple pink teal indigo gray primary secondary erro
 ]}
 ```
 
+【多 pane 布局 示例】一个「编辑 + 预览」双栏（宽屏并排 / 窄屏竖排，自动切换）：
+
+```quro-ui
+{"type":"card","title":"个人资料","children":[
+  {"type":"pane","direction":"auto","spacing":12,"children":[
+    {"type":"column","children":[
+      {"type":"text","value":"左侧：编辑区","style":"label","color":"muted"},
+      {"type":"text_input","id":"name","label":"昵称","placeholder":"输入昵称"},
+      {"type":"switch","id":"public","label":"公开资料","checked":true}
+    ]},
+    {"type":"column","children":[
+      {"type":"text","value":"右侧：预览区","style":"label","color":"muted"},
+      {"type":"badge","text":"预览","background":"primary"},
+      {"type":"markdown","value":"昵称会实时显示在这里。"}
+    ]}
+  ]}
+]}
+```
+说明：pane 的 direction=auto 时容器宽 ≥840dp 自动并排、否则竖排；每个子区块内部都按 360dp 设计稿等比缩放，并排时每格更窄但内容不溢出。
+也可写 direction:"row" 强制横排、direction:"column" 强制竖排。嵌套结构（如 list 的 itemTemplate 为 pane、pane 内再套 pane）也都支持，动态更新同样下钻生效。
+
 【语言支持】code / run_code 支持 python, node/javascript, shell/bash, html, json, css, xml,
 svg, c, cpp, java, kotlin, dart, go, rust, php, ruby, swift 等 ZorvAI 已接入的全部语言；
 选择在 code 节点的 lang 字段标注即可。
