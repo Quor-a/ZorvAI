@@ -99,14 +99,17 @@ red green blue yellow orange purple pink teal indigo gray primary secondary erro
 - {"type":"callback","event":"事件名","collect_from":["控件id"],"data":{"键":"值"}}
   → 把收集到的表单值作为用户消息回发给你（AI），你据此继续处理。最常用。
 - {"type":"tool_call","tool":"工具名","arguments":{"键":"值"},"collect_from":["控件id"]}
-  → 直接调用一个内置工具，参数可用 collect_from 收集的表单值。
+  → 客户端直连 ZorvAI 真实执行该内置工具（如 get_battery / run_code / http_request / launch_app /
+    set_clipboard 等全部内部功能），不是只回发文本。工具返回的结果会回传给你继续组织回复。
 - {"type":"skill","skill":"技能名","input":"输入","collect_from":["控件id"]}
-  → 调用已安装技能。
-- {"type":"open_url","url":"https://..."} → 打开网页。
-- {"type":"copy","text":"要复制的文本","label":"提示"} → 复制到剪贴板。
-- {"type":"open_app","package_name":"com.example"} → 打开应用。
+  → 客户端直连激活已安装技能（技能指令回灌给你），不是只回发文本。
+- {"type":"open_url","url":"https://..."} → 客户端真实在应用内浏览器打开网页。
+- {"type":"copy","text":"要复制的文本","label":"提示"} → 客户端真实写入系统剪贴板（即时可粘贴）。
+- {"type":"open_app","package_name":"com.example"} → 客户端真实启动应用（支持精确包名或应用名模糊匹配）。
 - {"type":"toggle","target_id":"节点id"} → 切换目标节点的显示/隐藏（纯本地，不打扰你）。
 
+【重要】以上动作在客户端即「真调用」，无需你再二次解析文本去执行——点一下按钮就落地（复制/打开应用/
+打开网页/跑工具/激活技能）。tool_call 与 skill 的执行结果会回传给你，便于你接着对话。
 【收集表单值】collect_from 填交互控件的 id 数组；留空则收集整个表单的全部值。
 用户点击后，值会以「键=值」的形式回发，你就能拿到用户输入继续干活。
 """.trimIndent()

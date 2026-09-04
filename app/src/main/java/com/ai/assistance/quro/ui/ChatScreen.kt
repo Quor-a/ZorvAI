@@ -21,6 +21,9 @@ import com.ai.assistance.quro.core.tools.VisualPopupQueue
 import com.ai.assistance.quro.core.tools.PopupButton
 import com.ai.assistance.quro.core.tools.PopupInput
 import com.ai.assistance.quro.core.tools.PopupResult
+import com.ai.assistance.quro.core.tools.QuroToolRegistry
+import com.ai.assistance.quro.core.tools.LaunchAppTool
+import com.ai.assistance.quro.core.tools.QuroSkillTool
 import com.ai.assistance.quro.BuildConfig
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.terminal.QuroTerminalPrefs
@@ -6419,6 +6422,10 @@ private fun DynamicUiBlock(
     onCommand: (String) -> Unit,
     onOpenLink: (String) -> Unit,
 ) {
+    // 动态 UI 交互要真调用 ZorvAI 内部功能（复制/打开应用/调用工具/执行技能），
+    // 需要应用 Context 与协程作用域，从可组合作用域直接取。
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     // 只在 source 变化时重新解析：流式输出期间每来一个字都会重组，
     // 若把解析写在重组体内会导致每帧重解析一次（白白烧 CPU）。
     val parsed = remember(source) { QuroUiDslParser.parseBlock(source) }
@@ -6436,7 +6443,7 @@ private fun DynamicUiBlock(
                     root = parsed.root,
                     modifier = Modifier.fillMaxWidth(),
                     onAction = { action, values ->
-                        handleDynamicUiAction(action, values, onCommand, onOpenLink)
+                        handleDynamicUiAction(action, values, ctx, scope, onCommand, onOpenLink)
                     },
                 )
             }
@@ -6465,18 +6472,28 @@ private fun DynamicUiBlock(
 }
 
 /**
- * 把动态 UI 的交互动作翻译成对话侧的行为。
+ * 把动态 UI 的交互动作翻译成「ZorvAI 内部功能」的真实调用。
  *
- * 绝大多数动作统一走 [onCommand]（即作为一条用户消息发回给模型），
- * 因为「接下来该做什么」的判断权在模型手里，客户端只负责把用户填了什么如实送达。
+ * 此前这里是「假动作」——所有动作都只是把一句提示文本发回模型、让模型二次解析再 tool_call，
+ * 既多一轮往返又依赖模型正确解读指令。现在改为客户端直连 ZorvAI 能力：
+ *  - copy        → 真写系统剪贴板（[copyPlain]）
+ *  - open_app    → 真启动应用（[LaunchAppTool]，支持包名精确 / 应用名模糊）
+ *  - open_url    → 已是真打开（应用内浏览器）
+ *  - tool_call   → 真执行 ZorvAI 工具（[QuroToolRegistry]，对接全部内置功能），结果回传模型继续对话
+ *  - skill       → 真激活技能（技能本质是「指令回灌」，把技能提示词发回模型）
+ *  - callback    → 回传用户填写的值给模型（设计如此，让模型继续对话）
+ *  - toggle      → 纯本地展开/收起，渲染器内部已处理
  */
 private fun handleDynamicUiAction(
     action: QuroUiAction,
     values: Map<String, String>,
+    ctx: Context,
+    scope: CoroutineScope,
     onCommand: (String) -> Unit,
     onOpenLink: (String) -> Unit,
 ) {
     when (action) {
+        // 回传事件给模型：把用户填的值 + data 作为一条用户消息发回，让模型继续对话。
         is QuroCallbackAction -> {
             val merged = LinkedHashMap<String, String>(values).apply { putAll(action.data) }
             val body = if (merged.isNotEmpty()) {
@@ -6487,26 +6504,90 @@ private fun handleDynamicUiAction(
             onCommand(if (action.event.isNotBlank()) "【${action.event}】\n$body" else body)
         }
 
-        is QuroToolCallAction -> {
-            val args = LinkedHashMap(action.arguments).apply { putAll(values) }
-            val argText = if (args.isEmpty()) "" else "，参数：" +
-                args.entries.joinToString("，") { "${it.key}=${it.value}" }
-            onCommand("请调用工具 ${action.tool}$argText")
+        // 复制文本：真写系统剪贴板（ZorvAI 自带能力）。
+        is QuroCopyAction -> {
+            val text = action.text.ifBlank { values.values.firstOrNull() ?: "" }
+            if (text.isNotBlank()) {
+                copyPlain(ctx, text)
+            } else {
+                Toast.makeText(ctx, "没有可复制的内容", Toast.LENGTH_SHORT).show()
+            }
         }
 
-        is QuroSkillAction -> {
-            val input = action.input?.takeIf { it.isNotBlank() }
-                ?: values.values.joinToString("，")
-            onCommand("请执行技能 ${action.skill}：$input")
+        // 打开应用：真启动（支持包名精确启动，或应用名模糊匹配）。
+        is QuroOpenAppAction -> {
+            val target = action.packageName.ifBlank { values.values.firstOrNull() ?: "" }
+            if (target.isBlank()) {
+                Toast.makeText(ctx, "未指定要打开的应用", Toast.LENGTH_SHORT).show()
+                return
+            }
+            scope.launch(Dispatchers.Main) {
+                val result = runCatching {
+                    LaunchAppTool().run(ctx, JSONObject().apply {
+                        if (target.contains(".")) put("package", target) else put("name", target)
+                    }.toString())
+                }.getOrDefault("启动失败")
+                Toast.makeText(ctx, result.take(120), Toast.LENGTH_SHORT).show()
+            }
         }
 
+        // 打开网页：已是真打开（应用内浏览器）。
         is QuroOpenUrlAction -> if (action.url.isNotBlank()) onOpenLink(action.url)
 
-        is QuroCopyAction -> onCommand("请把以下内容复制到剪贴板：${action.text}")
+        // 调用内置工具：真执行 ZorvAI 工具（对接全部内部功能），结果回传模型继续对话。
+        is QuroToolCallAction -> {
+            val args = LinkedHashMap(action.arguments).apply { putAll(values) }
+            val toolName = action.tool.ifBlank { values["tool"] ?: "" }
+            if (toolName.isBlank()) {
+                Toast.makeText(ctx, "未指定要调用的工具", Toast.LENGTH_SHORT).show()
+                return
+            }
+            scope.launch(Dispatchers.IO) {
+                val tool = QuroToolRegistry.active?.get(toolName)
+                if (tool == null) {
+                    // 兜底：走模型二次解析
+                    withContext(Dispatchers.Main) { onCommand("请调用工具 $toolName") }
+                    return@launch
+                }
+                // 需要危险权限的工具（如手电筒/蓝牙）从 UI 点击直接执行无法弹授权框，
+                // 回退到「模型二次解析」路径（引擎会在 Activity 上下文里申请权限）。
+                if (tool.requiredPermissions.isNotEmpty()) {
+                    val argText = if (args.isEmpty()) "" else "，参数：" +
+                        args.entries.joinToString("，") { "${it.key}=${it.value}" }
+                    withContext(Dispatchers.Main) { onCommand("请调用工具 $toolName$argText") }
+                    return@launch
+                }
+                val argsJson = JSONObject().apply { args.forEach { (k, v) -> put(k, v) } }.toString()
+                val result = runCatching { tool.run(ctx, argsJson) }.getOrDefault("工具执行异常")
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(ctx, "已执行 $toolName", Toast.LENGTH_SHORT).show()
+                    // 工具返回的文本（如 get_battery / run_code / http_request 的结果）回传模型，
+                    // 让 AI 把结果组织成自然语言回复给用户。超长结果截断，避免刷屏。
+                    val feedback = if (result.length > 2000) result.take(2000) + "\n…(结果已截断)" else result
+                    onCommand("【工具 $toolName 执行结果】\n$feedback")
+                }
+            }
+        }
 
-        is QuroOpenAppAction -> onCommand("请打开应用 ${action.packageName}")
+        // 执行技能：技能本质是「指令回灌」，把技能提示词作为用户消息发回模型激活。
+        is QuroSkillAction -> {
+            val skillName = action.skill.ifBlank { values["skill"] ?: "" }
+            if (skillName.isBlank()) {
+                Toast.makeText(ctx, "未指定要执行的技能", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val input = action.input?.takeIf { it.isNotBlank() }
+                ?: values.values.joinToString("，")
+            scope.launch(Dispatchers.IO) {
+                val directive = runCatching {
+                    (QuroToolRegistry.active?.get("skill__$skillName") ?: QuroSkillTool(skillName, ctx))
+                        .run(ctx, JSONObject().apply { put("input", input) }.toString())
+                }.getOrDefault("技能「$skillName」未启用或不存在")
+                withContext(Dispatchers.Main) { onCommand(directive) }
+            }
+        }
 
-        // 纯本地行为（显示/隐藏节点），渲染器内部已切换可见性，无需惊动模型
+        // 纯本地行为（展开/收起节点），渲染器内部已切换可见性，无需惊动模型
         is QuroToggleAction -> Unit
     }
 }
