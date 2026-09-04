@@ -319,6 +319,36 @@ object QuroUiDslParser {
                     tint = json.optColorOrNull(),
                     description = json.optStringOrNull("description"),
                 )
+                "markdown", "md", "richtext", "doc" -> QuroMarkdownNode(
+                    id = json.optStringOrNull("id"),
+                    value = json.optStringOrNull("value")
+                        ?: json.optStringOrNull("content")
+                        ?: json.optStringOrNull("text") ?: "",
+                )
+                "video", "videoplayer" -> QuroVideoNode(
+                    id = json.optStringOrNull("id"),
+                    url = json.optStringOrNull("url") ?: json.optStringOrNull("src") ?: "",
+                    title = json.optStringOrNull("title"),
+                )
+                "audio", "music", "audioplayer" -> QuroAudioNode(
+                    id = json.optStringOrNull("id"),
+                    url = json.optStringOrNull("url") ?: json.optStringOrNull("src") ?: "",
+                    title = json.optStringOrNull("title"),
+                )
+                "browser", "webview", "web" -> QuroBrowserNode(
+                    id = json.optStringOrNull("id"),
+                    url = json.optStringOrNull("url") ?: "",
+                    height = json.optIntOrNull("height"),
+                )
+                "code", "codeblock", "source" -> QuroCodeNode(
+                    id = json.optStringOrNull("id"),
+                    code = json.optStringOrNull("code")
+                        ?: json.optStringOrNull("content")
+                        ?: json.optStringOrNull("value") ?: "",
+                    lang = json.optStringOrNull("lang") ?: json.optStringOrNull("language"),
+                    title = json.optStringOrNull("title"),
+                    runnable = json.optBoolean("runnable", false) || json.optBoolean("run", false),
+                )
                 "badge", "chip", "tag" -> QuroBadgeNode(
                     id = json.optStringOrNull("id"),
                     text = json.optStringOrNull("text") ?: json.optStringOrNull("value") ?: "",

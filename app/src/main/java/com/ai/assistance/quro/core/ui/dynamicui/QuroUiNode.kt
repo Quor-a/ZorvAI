@@ -129,6 +129,49 @@ data class QuroSpacerNode(
 ) : QuroUiNode
 
 // =============================================================================================
+// 富媒体 / 文档节点（v1.0.82 新增：原生文本排版 + 媒体播放 + 完整浏览器 + 代码）
+// =============================================================================================
+
+/** 原生 Markdown 富文本排版（非 HTML）：支持 #/##/### 标题、列表、引用、加粗斜体、行内代码、
+ *  链接，以及围栏代码块（可展示所有语言的代码）。用于把「文档级排版内容」直接渲染成原生控件。 */
+data class QuroMarkdownNode(
+    override val id: String? = null,
+    val value: String = "",
+) : QuroUiNode
+
+/** 视频播放（内嵌播放器）：url 支持 http(s) / 本地文件路径 / content:// uri。 */
+data class QuroVideoNode(
+    override val id: String? = null,
+    val url: String = "",
+    val title: String? = null,
+) : QuroUiNode
+
+/** 音频 / 音乐播放（内嵌播放器）：url 支持 http(s) / 本地文件路径 / content:// uri。 */
+data class QuroAudioNode(
+    override val id: String? = null,
+    val url: String = "",
+    val title: String? = null,
+) : QuroUiNode
+
+/** 内嵌完整功能浏览器（WebView）：支持 JavaScript、缩放、页内前进/后退导航。
+ *  height 为可选像素高度（默认 320）。 */
+data class QuroBrowserNode(
+    override val id: String? = null,
+    val url: String = "",
+    val height: Int? = null,
+) : QuroUiNode
+
+/** 代码块（展示 ZorvAI 支持的所有语言）：code 为源码，lang 为语言名（python/node/shell/html/
+ *  json/xml/svg/c/cpp/java 等）。runnable=true 时显示「运行」按钮，点击经 run_code 真执行。 */
+data class QuroCodeNode(
+    override val id: String? = null,
+    val code: String = "",
+    val lang: String? = null,
+    val title: String? = null,
+    val runnable: Boolean = false,
+) : QuroUiNode
+
+// =============================================================================================
 // 交互节点
 // =============================================================================================
 

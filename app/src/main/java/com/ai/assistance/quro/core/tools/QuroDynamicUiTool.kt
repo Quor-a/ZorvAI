@@ -88,6 +88,23 @@ class UiDslSpecTool : QuroTool {
 - list：列表。items[], item(模板节点，可用 {{item}} 与 {{index}} 占位), max_height
 - tabs：标签页。tabs[{title, node}]
 
+■ 富媒体 / 文档（v1.0.81 新增，原生渲染，非 HTML/WebView）
+- markdown：原生 Markdown 富文本排版（不是 HTML）。value（也接受 value/content/text）；
+  支持 #/##/### 标题、有序/无序列表、引用、加粗/斜体、行内代码、链接（点击在应用内打开）、围栏代码块。
+  适合「文档排版」「说明文字」「条款/协议」这类纯文本格式化场景。
+- video：内嵌视频播放（原生播放器）。url(支持 http(s)/本地路径/content://)，title
+- audio：内嵌音频/音乐播放（原生播放器，带播放/暂停与进度条）。url, title
+- image：图片（见上「内容」段，已原生支持）。url, alt, height, corner_radius
+- browser：内嵌完整功能浏览器（WebView，支持 JS / DOM 存储 / 缩放 / 前进后退）。
+  url, height(可选像素高度，默认 320)。底部自带「在浏览器打开」「刷新」按钮。
+- code：代码块（展示 ZorvAI 支持的所有语言，语法高亮）。code(也接受 code/content/value), lang,
+  title, runnable(为 true 时显示「运行」按钮，将经 run_code 真正执行并把结果回传给你)。
+
+■ 第三方跳转
+- 任意 button 的 action 用 {"type":"open_app","package_name":"com.example"} 或
+  {"type":"open_app","app_name":"微信"} 即可把用户带去第三方 App（精确包名或应用名模糊匹配）。
+  想让用户在一个动态 UI 里「先选功能 → 点按钮跳去别的软件」直接这么写即可。
+
 【颜色】支持 #RGB / #RRGGBB / #AARRGGBB，或语义名：
 red green blue yellow orange purple pink teal indigo gray primary secondary error warning success info muted
 越界或非法颜色会被忽略，回落到主题默认色，不会导致渲染失败。
@@ -101,14 +118,18 @@ red green blue yellow orange purple pink teal indigo gray primary secondary erro
 - {"type":"tool_call","tool":"工具名","arguments":{"键":"值"},"collect_from":["控件id"]}
   → 客户端直连 ZorvAI 真实执行该内置工具（如 get_battery / run_code / http_request / launch_app /
     set_clipboard 等全部内部功能），不是只回发文本。工具返回的结果会回传给你继续组织回复。
+  · run_code 支持 ZorvAI 所有已接入语言：python, node/javascript, shell/bash, html, json, css,
+    xml, svg, c, cpp, java, kotlin, dart, go, rust, php, ruby, swift 等。配合 code 节点的
+    runnable 按钮可直接把代码交给 run_code 真正跑起来。
 - {"type":"skill","skill":"技能名","input":"输入","collect_from":["控件id"]}
   → 客户端直连激活已安装技能（技能指令回灌给你），不是只回发文本。
 - {"type":"open_url","url":"https://..."} → 客户端真实在应用内浏览器打开网页。
 - {"type":"copy","text":"要复制的文本","label":"提示"} → 客户端真实写入系统剪贴板（即时可粘贴）。
 - {"type":"open_app","package_name":"com.example"} → 客户端真实启动应用（支持精确包名或应用名模糊匹配）。
+  也支持 {"type":"open_app","app_name":"微信"} 用应用名模糊匹配；这是「动态 UI 弹转第三方软件」的标准做法。
 - {"type":"toggle","target_id":"节点id"} → 切换目标节点的显示/隐藏（纯本地，不打扰你）。
 
-■ 多层渲染 / 深链导航（v1.0.82 新增，让按钮直接打开 ZorvAI 内部界面或渲染内容到气泡）
+■ 多层渲染 / 深链导航（v1.0.81 新增，让按钮直接打开 ZorvAI 内部界面或渲染内容到气泡）
 - {"type":"open_screen","target":"terminal"} → 客户端直接打开内置界面（深链）。target 取值：
   editor(代码编辑器) / terminal(终端) / toolbox(工具箱) / knowledge(知识库) / cms(内容管理) /
   aci(受控端) / about(关于) / appearance(外观) / soul(人格) / memory(记忆) / permission(权限) /
@@ -159,6 +180,27 @@ red green blue yellow orange purple pink teal indigo gray primary secondary erro
 2. 内容只放 JSON，不要写注释、不要加解释文字；
 3. 每个交互控件都要有唯一 id，否则无法收集用户输入；
 4. 不确定语法是否正确时，可先用 ui_validate 工具自检。
+
+【富媒体 / 文档 示例】一个「产品介绍」动态 UI：
+
+```quro-ui
+{"type":"card","title":"ZorvAI 介绍","children":[
+  {"type":"markdown","value":"# ZorvAI\\n这是一款**原生 AI 助手**应用。\\n- 支持文档排版\\n- 支持音视频播放"},
+  {"type":"image","url":"https://example.com/cover.png","height":160,"corner_radius":12},
+  {"type":"video","url":"https://example.com/demo.mp4","title":"功能演示"},
+  {"type":"audio","url":"https://example.com/speech.mp3","title":"语音解说"},
+  {"type":"code","lang":"python","runnable":true,"code":"print('hello ZorvAI')"},
+  {"type":"browser","url":"https://zorvai.example.com","height":360},
+  {"type":"button","label":"打开第三方 App","variant":"filled",
+   "action":{"type":"open_app","app_name":"微信"}},
+  {"type":"button","label":"在应用内打开官网","variant":"outlined",
+   "action":{"type":"open_url","url":"https://zorvai.example.com"}}
+]}
+```
+
+【语言支持】code / run_code 支持 python, node/javascript, shell/bash, html, json, css, xml,
+svg, c, cpp, java, kotlin, dart, go, rust, php, ruby, swift 等 ZorvAI 已接入的全部语言；
+选择在 code 节点的 lang 字段标注即可。
 """.trimIndent()
     }
 }
