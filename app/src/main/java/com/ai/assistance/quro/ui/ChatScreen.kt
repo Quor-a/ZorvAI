@@ -6051,7 +6051,7 @@ private fun findBalancedBrace(text: String, start: Int): Int {
 // ── ANR 修复（v384）：以下正则全部预编译为文件级常量，只编译一次。
 //    原实现在各解析函数内 `Regex(...)` / `.toRegex()`，每次 Compose 重组都重新编译，
 //    走 ICU native PatternNative.compileImpl；几百消息 × 多正则 × 每帧重组 → 主线程卡死（见 ANR 报告）。
-private val RE_FENCE = Regex("```(\\w*)\\n?([\\s\\S]*?)```")
+private val RE_FENCE = Regex("```([\\w+#-]*)\\n?([\\s\\S]*?)```")
 private val RE_BLOCK = Regex("(?is)<h([1-6])>(.*?)</h\\1>|<blockquote>(.*?)</blockquote>|<hr\\s*/?>|<table>(.*?)</table>|<(ul|ol)>(.*?)</\\6>")
 private val RE_HR = Regex("(?i)<hr")
 private val RE_LI = Regex("(?is)<li>(.*?)</li>")
@@ -6096,7 +6096,7 @@ private fun isFullHtmlDocument(text: String): Boolean {
 }
 
 /** 仅匹配「开围栏」（` ```lang ` 行首），用于流式生成中围栏尚未闭合的情况。 */
-private val RE_FENCE_OPEN = Regex("""(?m)^```([a-zA-Z0-9+#-]*)[ \t]*\n""")
+private val RE_FENCE_OPEN = Regex("""(?m)^```([a-zA-Z0-9_+#-]*)[ \t]*\n""")
 
 /** 解析 ```lang ... ``` 围栏代码块；其余文本走 HTML/Markdown 块级解析。 */
 private fun parseBlocks(text: String): List<MsgBlock> {
