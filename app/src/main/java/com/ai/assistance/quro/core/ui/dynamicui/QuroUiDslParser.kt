@@ -163,13 +163,55 @@ object QuroUiDslParser {
         return out.toString()
     }
 
-    /** 组合修复：补冒号 → 去尾逗号 → 括号栈平衡。 */
+    /**
+     * 组合修复：截前后垃圾 → 去 BOM → 单引号归一 → 补冒号 → 去尾逗号 → 括号栈平衡。
+     *
+     * 目标：让 LLM 常见的「不标准 JSON」也能被 [org.json] 读入。模型偶尔会：
+     *  - 在 JSON 前后夹说明文字（「这是卡片：{...}」）；
+     *  - 用单引号代替双引号（{'a':'b'}）；
+     *  - 残留 UTF-8 BOM。
+     * 这些都让严格 JSON 解析器直接抛异常，必须先在修复阶段兜底。
+     */
     fun repair(raw: String): String {
         var s = raw.trim()
+        // 去掉 UTF-8 BOM（部分模型输出会带上）
+        s = s.removePrefix("\uFEFF")
+        // 截掉首个 { / [ 之前的非 JSON 前缀（如「这是卡片：」）
+        val first = s.indexOfFirst { it == '{' || it == '[' }
+        if (first > 0) s = s.substring(first)
+        // 截掉末个 } / ] 之后的尾部垃圾（如残留的 ``` 或说明文字）
+        val last = s.indexOfLast { it == '}' || it == ']' }
+        if (last in 0 until s.length - 1) s = s.substring(0, last + 1)
+        // 单引号归一为双引号（仅在成对作为字符串定界符、且不在双引号串内时）
+        s = normalizeQuotes(s)
+        // "key"=[ / "key"={ 漏冒号
         s = brokenKeySyntax.replace(s) { "\"${it.groupValues[1]}\":${it.groupValues[2]}" }
+        // 去尾逗号
         s = trailingComma.replace(s) { it.groupValues[1] }
+        // 括号栈平衡
         s = sanitizeJson(s)
         return s
+    }
+
+    /**
+     * 把成对单引号当作字符串定界符归一为双引号（JSON 只允许双引号）。
+     * 仅转换「不在双引号字符串内」的单引号，避免误伤双引号串里的撇号。
+     * best-effort：覆盖 `{'a':'b'}` 这类最常见的 LLM 写法。
+     */
+    private fun normalizeQuotes(s: String): String {
+        val out = StringBuilder(s.length)
+        var inDbl = false
+        for (c in s) {
+            if (c == '"') {
+                inDbl = !inDbl
+                out.append(c)
+            } else if (!inDbl && c == '\'') {
+                out.append('"')
+            } else {
+                out.append(c)
+            }
+        }
+        return out.toString()
     }
 
     // =========================================================================================
@@ -210,7 +252,9 @@ object QuroUiDslParser {
                 }
                 '{' -> {
                     val node = buildNode(JSONObject(repaired))
-                    if (node == null) QuroUiParseResult.Failure(repaired, "未识别的节点类型")
+                    // 正常流程里 buildNode 已对未知类型降级为提示文本节点、不会返回 null；
+                    // 此处 node==null 仅当 buildNode 抛异常（极个别结构崩溃），按失败处理。
+                    if (node == null) QuroUiParseResult.Failure(repaired, "节点构建异常")
                     else QuroUiParseResult.Success(node, repaired)
                 }
                 else -> QuroUiParseResult.Failure(repaired, "内容不是 JSON 对象或数组")
@@ -344,7 +388,14 @@ object QuroUiDslParser {
                     id = json.optStringOrNull("id"),
                     tabs = buildTabs(json),
                 )
-                else -> null
+                // 容错：未知节点类型不再返回 null 导致整张卡片判失败，
+                // 而是降级为一行提示文本（与文件头「单个节点坏掉不影响整棵树」承诺一致）。
+                else -> QuroTextNode(
+                    id = null,
+                    value = "⚠️ 未识别的节点类型：$type",
+                    style = "caption",
+                    color = "warning",
+                )
             }
         } catch (e: Exception) {
             null
