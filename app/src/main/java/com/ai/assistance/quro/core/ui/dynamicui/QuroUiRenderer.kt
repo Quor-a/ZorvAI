@@ -236,23 +236,44 @@ private fun RenderRow(
     modifier: Modifier,
 ) {
     val pad = (node.padding ?: 0).dp
+    val sizeClass = LocalSurfaceSizeClass.current
+    // 响应式布局：在窄屏（Compact）下，若 Row 有多个子且没有 weight（典型的「两等列」「标签+控件并排」）
+    // 自动改为竖排，避免两列在窄屏被 surface 边缘裁掉。与 pane direction=auto 行为对齐。
+    // 有 weight 的 Row 不受影响（weight 已保证比例分摊，不会溢出）。
+    val stackVertically = sizeClass == SurfaceSizeClass.Compact
+        && node.children.size > 1
+        && node.children.none { weightOf(it) != null }
+
     val m = modifier
         .then(if (pad > 0.dp) Modifier.padding(pad) else Modifier)
-        .then(if (node.scrollable) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
+        .then(if (node.scrollable && !stackVertically) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
 
-    Row(
-        modifier = m,
-        horizontalArrangement = Arrangement.spacedBy((node.spacing ?: 8).dp),
-        verticalAlignment = when (node.verticalAlign?.lowercase()) {
-            "top" -> Alignment.Top
-            "bottom" -> Alignment.Bottom
-            else -> Alignment.CenterVertically
-        },
-    ) {
-        node.children.forEach { child ->
-            // weight 是 RowScope 的扩展，必须在本作用域内应用
-            val childMod = weightOf(child)?.let { Modifier.weight(it) } ?: Modifier
-            RenderNode(child, state, hidden, onAction, childMod)
+    if (stackVertically) {
+        Column(
+            modifier = m,
+            verticalArrangement = Arrangement.spacedBy((node.spacing ?: 8).dp),
+            horizontalAlignment = Alignment.Start,
+        ) {
+            node.children.forEach { child ->
+                // 竖排时每行 fillMaxWidth，避免子节点因内在宽度小于父宽度而左对齐留白。
+                RenderNode(child, state, hidden, onAction, Modifier.fillMaxWidth())
+            }
+        }
+    } else {
+        Row(
+            modifier = m,
+            horizontalArrangement = Arrangement.spacedBy((node.spacing ?: 8).dp),
+            verticalAlignment = when (node.verticalAlign?.lowercase()) {
+                "top" -> Alignment.Top
+                "bottom" -> Alignment.Bottom
+                else -> Alignment.CenterVertically
+            },
+        ) {
+            node.children.forEach { child ->
+                // weight 是 RowScope 的扩展，必须在本作用域内应用
+                val childMod = weightOf(child)?.let { Modifier.weight(it) } ?: Modifier
+                RenderNode(child, state, hidden, onAction, childMod)
+            }
         }
     }
 }
