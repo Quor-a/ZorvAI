@@ -139,6 +139,7 @@ class A2uiSession {
                 it.copy(node = it.node?.let { n -> replaceNodeById(n, id, replacement) })
             })
             is QuroListNode -> root.copy(itemTemplate = root.itemTemplate?.let { replaceNodeById(it, id, replacement) })
+            is QuroPaneNode -> root.copy(children = root.children.map { replaceNodeById(it, id, replacement) })
             else -> root
         }
     }
