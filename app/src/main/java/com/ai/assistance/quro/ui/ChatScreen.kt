@@ -317,7 +317,6 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.History
@@ -418,11 +417,6 @@ fun ChatScreen(
         prevBusy = busy
     }
     val attachments = remember { mutableStateListOf<QuroAttachment>() }
-
-    // ── 动态 UI 自适应对话框（v1.0.81）：AI 输出 ```quro-ui 围栏时不再渲染为聊天气泡，
-    //    改为自动弹出原生 Dialog。Dialog 用 usePlatformDefaultWidth=false + 自适应 maxHeight，
-    //    保证在大屏/小屏、横竖屏下都「完整可见、可滚动、不被输入条遮挡」。
-    var dynamicUiDialog by remember { mutableStateOf<DynamicUiDialogState?>(null) }
 
     // 选中模型：直接用 cfg.model 合成（真实配置的模型，不再反查示例假数据）
     val selectedModel: ChatModel = remember(cfg.model) {
@@ -1307,7 +1301,6 @@ fun ChatScreen(
                         genUiController = vm.genUiControllerFor(currentId),
                         onOpenLink = { browserUrl = it },
                         onCommand = { handleCardCommand(it) },
-                        onShowDynamicUi = { src -> dynamicUiDialog = DynamicUiDialogState(src) },
                         onSend = { send(it) },
                         onAskFollowup = { txt ->
                             inputText = TextFieldValue(
@@ -2459,16 +2452,6 @@ fun ChatScreen(
             browserFloatUrl = u
         }
     }
-
-    // ── 动态 UI 自适应对话框（v1.0.81）：渲染在 ChatScreen 最顶层，自动覆盖整个内容区 ──
-    dynamicUiDialog?.let { st ->
-        DynamicUiDialog(
-            state = st,
-            onDismiss = { dynamicUiDialog = null },
-            onCommand = { handleCardCommand(it) },
-            onOpenLink = { browserUrl = it },
-        )
-    }
 }
 
 // ---------------- 顶栏 ----------------
@@ -2535,8 +2518,6 @@ private fun MessageList(
     onAttachmentActivate: (Attachment) -> Unit = {},
     onAttachmentDownload: (Attachment) -> Unit = {},
     onSend: (String) -> Unit = {},
-    /** 动态 UI：把 ```quro-ui 围栏内容弹到原生 Dialog（v1.0.81：替代聊天气泡渲染）。 */
-    onShowDynamicUi: (String) -> Unit = {},
     currentId: String,
     busy: Boolean = false,
     /** 生成式 UI 控制器（:genui）：按会话隔离，供消息内 WebView 卡片挂载 */
@@ -2660,7 +2641,6 @@ private fun MessageList(
                     msg, scaled, onOpenLink,
                     embeddedTrace = if (!msg.tools.isNullOrEmpty()) visibleTraces else emptyList(),
                     onCommand = { onCommand(it) },
-                    onShowDynamicUi = onShowDynamicUi,
                         onAskFollowup = onAskFollowup,
                         onShare = onShare,
                         onRegenerate = onRegenerate,
@@ -2815,14 +2795,22 @@ private fun MessageRow(
     streamingThink: Boolean = false,
     /** 代码块自动修复：发送错误信息给 AI 分析修复 */
     onSend: (String) -> Unit = {},
-    /** 动态 UI：把 ```quro-ui 围栏内容弹到原生 Dialog（v1.0.81：替代聊天气泡渲染）。 */
-    onShowDynamicUi: (String) -> Unit = {},
     /** 生成式 UI 控制器（:genui）：渲染本消息关联的 WebView 卡片 */
     genUiController: GenUiController,
 ) {
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     val avatarSize = if (narrow) 28 else 34
+    // 动态 UI 区块：从消息文本解析出所有 ```quro-ui 围栏，单独拎出来在气泡下方「全宽内联」渲染。
+    // 与气泡内普通文本/卡片互不干扰，避免被 280dp 气泡压窄、被输入条遮挡、需点开才能看。
+    val dynamicUiBlocks = remember(msg.text) {
+        val t = msg.text
+        if (t.isNullOrBlank()) emptyList<MsgBlock.DynamicUi>()
+        else {
+            val clean = extractInlineComponents(QuroVoiceStyle.strip(t)).first
+            parseBlocks(clean).filterIsInstance<MsgBlock.DynamicUi>()
+        }
+    }
     var showCopyMenu by remember { mutableStateOf(false) }
     var copiedText by remember { mutableStateOf("") }
 
@@ -2834,7 +2822,10 @@ private fun MessageRow(
         showCopyMenu = true
     }
 
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (msg.mine) Arrangement.End else Arrangement.Start) {
+    // 外层改为 Column：气泡（头像+内容）保持原布局，动态 UI 组件作为「全宽内联区块」渲染在气泡下方，
+    // 撑满对话框内容区、自适应屏幕、完整可见、不弹窗、不点卡片。
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = if (msg.mine) Arrangement.End else Arrangement.Start) {
         if (!msg.mine) {
             // AI 头像可点击 → 编辑灵魂卡
             var showAvatarMenu by remember { mutableStateOf(false) }
@@ -3092,7 +3083,8 @@ private fun MessageRow(
                     val blocks = remember(cleanText) { parseBlocks(cleanText) }
                     SelectionContainer {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        blocks.forEach { blk ->
+                        // 动态 UI 区块不在气泡内渲染（会被 280dp 压窄 / 输入条遮挡），改在消息底部全宽内联渲染。
+                        blocks.filter { it !is MsgBlock.DynamicUi }.forEach { blk ->
                             when (blk) {
                                 is MsgBlock.Text -> {
                                     // [D1] 接入项目统一富文本渲染器 RichText（ui/dialog/RichText.kt）：
@@ -3151,10 +3143,8 @@ private fun MessageRow(
                                     ),
                                     onCommand = onCommand
                                 )
-                                is MsgBlock.DynamicUi -> DynamicUiBubbleHint(
-                                    source = blk.source,
-                                    onShow = { onShowDynamicUi(blk.source) },
-                                )
+                                // 动态 UI 区块已在消息底部全宽内联渲染，气泡内不再重复渲染。
+                                is MsgBlock.DynamicUi -> {}
                             }
                         }
                         // 消息自带富组件（一等公民）+ AI 文本内联下发的组件 JSON，合体进气泡。
@@ -3275,7 +3265,16 @@ private fun MessageRow(
             Spacer(Modifier.width(10.dp))
             AvatarContent(msg.avatarUri, msg.avatar, avatarSize)
         }
-    }
+        }   // 闭合内层 Row（头像 + 气泡）
+        // ── 动态 UI：全宽内联渲染进对话框（原生、自适应屏幕、完整可见、不弹窗、不点卡片）──
+        if (dynamicUiBlocks.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            dynamicUiBlocks.forEach { blk ->
+                Spacer(Modifier.height(6.dp))
+                DynamicUiBlock(source = blk.source, onCommand = onCommand, onOpenLink = onOpenLink)
+            }
+        }
+    }   // 闭合外层 Column
 }
 
 @Composable
@@ -6503,10 +6502,64 @@ private fun escapeHtml(text: String): String {
 }
 
 /**
- * （v1.0.81 起弃用）旧版 DynamicUiBlock：把动态 UI 渲染进聊天气泡，会被输入条遮挡。
- * 现已替换为 ChatScreen 根部的 [DynamicUiDialog]（自适应原生对话框）+ 气泡内的
- * [DynamicUiBubbleHint]（极简入口/重开按钮）。保留此处的注释作为历史参考。
+ * 动态 UI 内联渲染块（v1.0.81 当前方案）：直接在对话框消息流里、气泡下方以「全宽原生区块」呈现，
+ * 撑满对话框内容区、自适应屏幕宽度、随对话框一起滚动、完整可见——不弹窗、不点卡片、不压窄。
+ * 交互动作经 [handleDynamicUiAction] 直连 ZorvAI 内部能力（复制/打开应用/打开链接/调工具/激活技能…）。
  */
+@Composable
+private fun DynamicUiBlock(
+    source: String,
+    onCommand: (String) -> Unit,
+    onOpenLink: (String) -> Unit,
+) {
+    // 动态 UI 交互要真调用 ZorvAI 内部功能（复制/打开应用/调用工具/执行技能），
+    // 需要应用 Context 与协程作用域，从可组合作用域直接取。
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // 只在 source 变化时重新解析：流式输出期间每来一个字都会重组，
+    // 若把解析写在重组体内会导致每帧重解析一次（白白烧 CPU）。
+    val parsed = remember(source) { QuroUiDslParser.parseBlock(source) }
+
+    when (parsed) {
+        is QuroUiParseResult.Success -> Surface(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        ) {
+            // 内层 Column 必须 fillMaxWidth：根 RenderColumn 若 wrap，会被图标 Row 等子节点压窄，
+            // 整张卡片就 "不满对话框"。强制 fillMaxWidth 让卡片撑满消息气泡宽度。
+            Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                QuroUiRenderer(
+                    root = parsed.root,
+                    modifier = Modifier.fillMaxWidth(),
+                    onAction = { action, values ->
+                        handleDynamicUiAction(action, values, ctx, scope, onCommand, onOpenLink)
+                    },
+                )
+            }
+        }
+
+        is QuroUiParseResult.Failure -> Surface(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                Text(
+                    text = "⚠️ 动态 UI 解析失败：${parsed.reason}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = parsed.rawJson.take(600),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
 
 /**
  * 把动态 UI 的交互动作翻译成「ZorvAI 内部功能」的真实调用。
@@ -8571,176 +8624,3 @@ private fun formatFileSize(bytes: Long): String {
     }
 }
 
-// =====================================================================================
-// v1.0.81：动态 UI 自适应对话框
-// -------------------------------------------------------------------------------------
-// 为什么从「聊天气泡」改成「原生 Dialog」：
-//  - 动态 UI（```quro-ui 围栏）经常是高瘦的表单/看板/记账页，
-//    强行塞进聊天气泡会被输入条遮挡、对不齐、用户看不见完整组件。
-//  - 改成 Compose Dialog（usePlatformDefaultWidth=false + 自适应 maxHeight/maxWidth），
-//    对话框自身先吃掉屏幕自适应，再让 QuroUiRenderer 在对话框内滚动布局。
-//  - 气泡里只保留一个极小的「动态 UI 已弹出 · 打开」提示作为入口/重开按钮，
-//    真正的可交互界面完全在 Dialog 里，与对话框骨架原生兼容。
-// =====================================================================================
-
-/** 动态 UI 对话框的最小状态：仅持有原始 DSL 源码，便于流式期间持续刷新。 */
-private data class DynamicUiDialogState(val source: String)
-
-/**
- * 气泡内的极简入口：检测到 ```quro-ui 围栏时自动弹窗（LaunchedEffect），
- * 气泡里只渲染一个紧凑提示 + 「打开/重新打开」按钮。
- */
-@Composable
-private fun DynamicUiBubbleHint(
-    source: String,
-    onShow: (String) -> Unit,
-) {
-    // 围栏每次出现 / 流式期间 source 变化都触发一次弹窗；
-    // 用户手动关闭后，source 不再变化就不会再弹，避免反复打扰。
-    LaunchedEffect(source) { onShow(source) }
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.30f),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = "动态 UI · 自适应对话框",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    text = "已弹窗展示 · 点下方按钮重新打开",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            TextButton(onClick = { onShow(source) }) {
-                Text("打开")
-            }
-        }
-    }
-}
-
-/**
- * 动态 UI 的自适应原生 Dialog：
- *  - usePlatformDefaultWidth=false → 不走平台默认窄宽度；
- *  - widthIn/heightIn(max=screen-边距) → 大屏铺满、小屏贴边、永不超出屏幕；
- *  - 内部 verticalScroll → 内容超出对话框高度时可滚动；
- *  - 顶栏「标题 + 自适应标签 + 关闭按钮」让用户随时关闭。
- */
-@Composable
-private fun DynamicUiDialog(
-    state: DynamicUiDialogState,
-    onDismiss: () -> Unit,
-    onCommand: (String) -> Unit,
-    onOpenLink: (String) -> Unit,
-) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val configuration = LocalConfiguration.current
-    val maxW = (configuration.screenWidthDp - 16).dp.coerceAtLeast(240.dp)
-    val maxH = (configuration.screenHeightDp - 48).dp.coerceAtLeast(240.dp)
-    // 流式期间 source 会持续变化，每次变化重新解析（QuroUiDslParser 内部有自动修复）。
-    val parsed = remember(state.source) { QuroUiDslParser.parseBlock(state.source) }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = false, // 内容较多，点空白误关体验差；要求用户主动按 X / 返回
-        ),
-    ) {
-        Surface(
-            modifier = Modifier
-                .widthIn(max = maxW)
-                .heightIn(max = maxH)
-                .padding(8.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp,
-            shadowElevation = 8.dp,
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                // 顶栏：标题 + 自适应标签 + 关闭
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = "动态 UI",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = "自适应屏幕 · 内置滚动",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = "关闭",
-                        )
-                    }
-                }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                // 滚动内容区：动态 UI 过大时可滚动，永不被输入条遮挡
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    when (parsed) {
-                        is QuroUiParseResult.Success -> Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .verticalScroll(rememberScrollState()),
-                        ) {
-                            QuroUiRenderer(
-                                root = parsed.root,
-                                modifier = Modifier.fillMaxWidth(),
-                                onAction = { action, values ->
-                                    handleDynamicUiAction(action, values, ctx, scope, onCommand, onOpenLink)
-                                },
-                            )
-                            Spacer(Modifier.height(8.dp))
-                        }
-                        is QuroUiParseResult.Failure -> Column(
-                            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                        ) {
-                            Text(
-                                text = "⚠️ 动态 UI 解析失败：${parsed.reason}",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                text = parsed.rawJson.take(800),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
