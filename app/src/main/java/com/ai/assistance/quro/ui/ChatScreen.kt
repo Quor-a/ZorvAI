@@ -6429,9 +6429,12 @@ private fun DynamicUiBlock(
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
         ) {
-            Column(Modifier.padding(12.dp)) {
+            // 内层 Column 必须 fillMaxWidth：根 RenderColumn 若 wrap，会被图标 Row 等子节点压窄，
+            // 整张卡片就 "不满对话框"。强制 fillMaxWidth 让卡片撑满消息气泡宽度。
+            Column(Modifier.fillMaxWidth().padding(12.dp)) {
                 QuroUiRenderer(
                     root = parsed.root,
+                    modifier = Modifier.fillMaxWidth(),
                     onAction = { action, values ->
                         handleDynamicUiAction(action, values, onCommand, onOpenLink)
                     },
@@ -6444,7 +6447,7 @@ private fun DynamicUiBlock(
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
         ) {
-            Column(Modifier.padding(12.dp)) {
+            Column(Modifier.fillMaxWidth().padding(12.dp)) {
                 Text(
                     text = "⚠️ 动态 UI 解析失败：${parsed.reason}",
                     style = MaterialTheme.typography.bodySmall,
