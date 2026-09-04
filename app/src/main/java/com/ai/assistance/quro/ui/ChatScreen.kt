@@ -94,6 +94,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -335,6 +336,7 @@ import com.ai.assistance.quro.ui.VisualPopupConfigDialog
 import com.ai.assistance.quro.ui.VisualQuestionConfigDialog
 // 动态 UI：AI 输出的 quro-ui DSL 直接渲染为原生可交互控件
 import com.ai.assistance.quro.core.ui.dynamicui.QuroUiDslParser
+import com.ai.assistance.quro.core.ui.dynamicui.A2uiInterpreter
 import com.ai.assistance.quro.core.ui.dynamicui.QuroUiParseResult
 import com.ai.assistance.quro.core.ui.dynamicui.QuroUiRenderer
 import com.ai.assistance.quro.core.ui.dynamicui.QuroUiAction
@@ -2811,6 +2813,10 @@ private fun MessageRow(
             parseBlocks(clean).filterIsInstance<MsgBlock.DynamicUi>()
         }
     }
+    // 正文文本与「内联组件 JSON」抽离结果：供气泡正文与气泡外全宽卡片共用同一份，避免重复解析。
+    // 卡片从气泡里拎出来，在下方「全宽内联」区块渲染，不再被 280dp 气泡压窄、移动端看不全。
+    val displayText = QuroVoiceStyle.strip(msg.text ?: "")
+    val (cleanText, inlineCards) = remember(displayText) { extractInlineComponents(displayText) }
     var showCopyMenu by remember { mutableStateOf(false) }
     var copiedText by remember { mutableStateOf("") }
 
@@ -2825,6 +2831,61 @@ private fun MessageRow(
     // 外层改为 Column：气泡（头像+内容）保持原布局，动态 UI 组件作为「全宽内联区块」渲染在气泡下方，
     // 撑满对话框内容区、自适应屏幕、完整可见、不弹窗、不点卡片。
     Column(Modifier.fillMaxWidth()) {
+        // 「动态对话框UI」：AI消息含动态UI时，动态UI本身就是消息内容（对话框本身），
+        // 不是「对话框里再套一层小卡片」。跳过气泡、跳过 280dp 限制、不加卡片背景，
+        // 撑满对话框宽度直接渲染。
+        val isDynamicUiMessage = !msg.mine && dynamicUiBlocks.isNotEmpty()
+        if (isDynamicUiMessage) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                // AI 头像可点击 → 编辑灵魂卡
+                var showAvatarMenu by remember { mutableStateOf(false) }
+                Box(Modifier.clickable { showAvatarMenu = true }) {
+                    AvatarContent(msg.avatarUri, msg.avatar, avatarSize)
+                    DropdownMenu(expanded = showAvatarMenu, onDismissRequest = { showAvatarMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("编辑灵魂卡", fontSize = 14.sp) },
+                            onClick = { showAvatarMenu = false; onCommand("__edit_soul_card__") },
+                            leadingIcon = { Icon(Icons.Filled.Edit, null, Modifier.size(18.dp)) }
+                        )
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.fillMaxWidth()) {
+                    // 名字+时间（紧凑小字）
+                    Text(
+                        "${msg.author} · ${msg.time}",
+                        fontSize = scaled(11), color = Muted,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    )
+                    // 动态UI直接渲染：全宽、无气泡、无卡片背景，UI本身就是对话框
+                    dynamicUiBlocks.forEach { blk ->
+                        DynamicUiBlock(source = blk.source, onCommand = onCommand, onOpenLink = onOpenLink)
+                    }
+                    // 操作按钮（复制/追问/分享/删除/重试）—— 与气泡消息一致的动作栏
+                    Spacer(Modifier.height(6.dp))
+                    val bubbleActions: @Composable () -> Unit = {
+                        BubbleActionButton("复制", Muted) { copyToClipboard(displayText) }
+                        BubbleActionButton("追问", cs.primary) { onAskFollowup(msg.text ?: "") }
+                        BubbleActionButton("分享", Muted) { onShare(msg.text ?: "") }
+                        BubbleActionButton("删除", Muted) { onDelete(msg.uids) }
+                        BubbleActionButton("重试", Muted) { onRegenerate() }
+                    }
+                    if (narrow) {
+                        FlowRow(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) { bubbleActions() }
+                    } else {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) { bubbleActions() }
+                    }
+                }
+            }
+        } else {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = if (msg.mine) Arrangement.End else Arrangement.Start) {
         if (!msg.mine) {
             // AI 头像可点击 → 编辑灵魂卡
@@ -3057,9 +3118,6 @@ private fun MessageRow(
             // ── 正文气泡（思考/工具已移至名字行小按钮）────────────
             if (!msg.text.isNullOrBlank()) {
                 // 去掉 LLM 回复里的语音风格标记 (风格)，仅用于显示与复制，不影响朗读
-                val displayText = QuroVoiceStyle.strip(msg.text ?: "")
-                // 从文本中抽离 AI 内联下发的组件 JSON（如 {"type":"info",...}），剥离泄露的原文并就地渲染为富卡片
-                val (cleanText, inlineCards) = remember(displayText) { extractInlineComponents(displayText) }
                 val isMine = msg.mine
                 val bubbleShape = RoundedCornerShape(16.dp, if (isMine) 4.dp else 16.dp, 16.dp, 16.dp)
                 val bubbleColor = if (isMine) AccentSoft else cs.surface
@@ -3147,28 +3205,7 @@ private fun MessageRow(
                                 is MsgBlock.DynamicUi -> {}
                             }
                         }
-                        // 消息自带富组件（一等公民）+ AI 文本内联下发的组件 JSON，合体进气泡。
-                        // 自由排版：富卡片用 FlowRow 流式排布——紧凑型卡片（按钮/开关/标签等）并排成行、自动换行；
-                        // 宽型卡片（图表/表格/流程图等）独占一整行，避免被挤窄。
-                        val bubbleCards = remember(msg.cards, inlineCards) { msg.cards + inlineCards }
-                        if (bubbleCards.isNotEmpty()) {
-                            Spacer(Modifier.height(8.dp))
-                            FlowRow(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                maxItemsInEachRow = Int.MAX_VALUE,
-                            ) {
-                                bubbleCards.forEach { card ->
-                                    QuroChatCardView(
-                                        card,
-                                        onCommand,
-                                        modifier = if (isCompactQuroCard(card)) Modifier.wrapContentWidth() else Modifier.fillMaxWidth(),
-                                    )
-                                }
-                            }
                         }
-                    }
                     }
                     // 复制成功提示（浮在气泡内右下角）
                     if (showCopyMenu && copiedText.isNotBlank()) {
@@ -3220,17 +3257,21 @@ private fun MessageRow(
             }
             // ── 生成式 UI 卡片（ZorvAI 自写 JSX/HTML，WebView 内渲染进对话框）──
             // 与正文气泡并列，置于其后；卡片 id 由 ViewModel 在流结束时按围栏 id= 精确关联到本消息。
+            // 外层 Box + clipToBounds：硬锁屏幕宽度，WebView 内任何比屏幕宽的 AI 自写内容一律裁在屏内，
+            // 移动端绝不横向溢出。
             if (!msg.mine && msg.genUiCardIds.isNotEmpty()) {
-                Column(
-                    Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    msg.genUiCardIds.forEach { cardId ->
-                        GenUiCard(
-                            artifactId = cardId,
-                            controller = genUiController,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                Box(Modifier.fillMaxWidth().clipToBounds()) {
+                    Column(
+                        Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        msg.genUiCardIds.forEach { cardId ->
+                            GenUiCard(
+                                artifactId = cardId,
+                                controller = genUiController,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(6.dp))
@@ -3266,7 +3307,34 @@ private fun MessageRow(
             AvatarContent(msg.avatarUri, msg.avatar, avatarSize)
         }
         }   // 闭合内层 Row（头像 + 气泡）
+        // ── 消息富组件（ui_widget/ui_card 下发的卡片、AI 文本内联组件 JSON）：全宽内联在气泡下方渲染，
+        //    不再塞进 280dp 气泡被压窄、移动端看不全。与动态 UI 区块一致：撑满对话框、随对话滚动、无 X 关闭。
+        if (!msg.text.isNullOrBlank()) {
+            val bubbleCards = remember(msg.cards, inlineCards) { msg.cards + inlineCards }
+            if (bubbleCards.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                // 渲染区硬锁到屏幕宽度：任何比屏幕宽的子内容（宽表格/一排多元素/超宽组件）一律裁在屏内，
+                // 绝不溢出导致整屏横向滚动。移动端自适应屏幕、不超出。
+                Box(Modifier.fillMaxWidth().clipToBounds()) {
+                    FlowRow(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        maxItemsInEachRow = Int.MAX_VALUE,
+                    ) {
+                        bubbleCards.forEach { card ->
+                            QuroChatCardView(
+                                card,
+                                onCommand,
+                                modifier = if (isCompactQuroCard(card)) Modifier.wrapContentWidth() else Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+            }
+        }
         // ── 动态 UI：全宽内联渲染进对话框（原生、自适应屏幕、完整可见、不弹窗、不点卡片）──
+        // 仅在「非纯动态UI消息」时渲染（纯动态UI消息已在上面的 if 分支内作为对话框本身直接渲染）。
         if (dynamicUiBlocks.isNotEmpty()) {
             Spacer(Modifier.height(6.dp))
             dynamicUiBlocks.forEach { blk ->
@@ -3274,6 +3342,7 @@ private fun MessageRow(
                 DynamicUiBlock(source = blk.source, onCommand = onCommand, onOpenLink = onOpenLink)
             }
         }
+        }   // 闭合 else（非纯动态UI消息，走原有气泡渲染）
     }   // 闭合外层 Column
 }
 
@@ -6083,6 +6152,14 @@ private fun extractInlineComponents(text: String): Pair<String, List<QuroChatCar
         val end = findBalancedBrace(text, brace)
         if (end < 0) { sb.append(text.substring(brace)); break }
         val candidate = text.substring(brace, end + 1)
+        // v1.0.81 修复：动态 UI 的 JSON 节点树绝不能被当成「内联组件」抽走。
+        // 否则根节点类型与内联卡片类型同名（button/form/list/tabs/slider/progress/badge…）时，
+        // 动态 UI 会被劫持成内联卡片、原围栏被拆烂，表现为「围栏残留气泡里 / 动态 UI 不渲染」。
+        if (isQuroUiNodeJson(candidate)) {
+            sb.append(candidate)
+            i = end + 1
+            continue
+        }
         val card = runCatching { parseComponentSpec(candidate) }.getOrNull()
         if (card != null) {
             cards.add(card)
@@ -6251,27 +6328,30 @@ private fun parseBlocks(text: String): List<MsgBlock> {
     for (m in fences) {
         if (m.range.first > last) blocks.addAll(parseTail(text.substring(last, m.range.first)))
         val lang = m.groupValues[1].trim()
-        blocks.add(
-            if (lang.equals("mermaid", true) || lang.equals("mmd", true)) {
-                // 可视化编程：原始 mermaid / mmd 围栏直接渲染成离线矢量图（AI 或用户均可作者）
-                MsgBlock.Mermaid(m.groupValues[2].removeSuffix("\n"))
-            } else if (lang.equals("miniapp", true) || lang.equals("mini", true)) {
-                // 小程序：```miniapp 围栏直接渲染为可交互小程序页面（bridge.js 运行时）
-                MsgBlock.MiniApp(m.groupValues[2].removeSuffix("\n"))
-            } else if (isDynamicUiLang(lang)) {
-                // 动态 UI：AI 写的 UI DSL 渲染为原生可交互控件（可回传表单值给模型）
-                MsgBlock.DynamicUi(m.groupValues[2].removeSuffix("\n"))
-            } else {
-                val code = m.groupValues[2].removeSuffix("\n")
-                if (isMiniAppHtml(lang, code)) {
-                    // 兜底：AI 把小程序 HTML 写成 ```html 围栏却带了 bridge 运行时标记，
-                    // 也按小程序渲染，避免用户只看到源码、看不到可交互页面（诉求⑤）
-                    MsgBlock.MiniApp(code)
-                } else {
-                    MsgBlock.Code(lang, code)
-                }
-            }
-        )
+        val code = m.groupValues[2].removeSuffix("\n")
+        when {
+            // 生成式 UI（AI 自写 JSX/HTML）：由 :genui WebView 管线渲染，此处不生成任何块，
+            // 避免被内置渲染器或裸代码块二次渲染。内容已在流式阶段 ingest 进 GenUiController。
+            isGenUiLang(lang) -> { /* skip — 已废弃的 GenUI WebView 路径（见 QuroChatViewModel.GENUI_WEBVIEW_ENABLED） */ }
+            // 可视化编程：原始 mermaid / mmd 围栏直接渲染成离线矢量图（AI 或用户均可作者）
+            lang.equals("mermaid", true) || lang.equals("mmd", true) ->
+                blocks.add(MsgBlock.Mermaid(code))
+            // A2UI JSONL 信封（application/a2ui+json）：流式声明式数据，由原生 A2UI 解释器增量渲染
+            lang.equals("a2ui", true) || lang.equals("a2ui+json", true) ->
+                blocks.add(MsgBlock.DynamicUi(code))
+            // 小程序：```miniapp 围栏直接渲染为可交互小程序页面（bridge.js 运行时）
+            lang.equals("miniapp", true) || lang.equals("mini", true) ->
+                blocks.add(MsgBlock.MiniApp(code))
+            // 动态 UI（quro-ui 固定 DSL）：AI 写的 UI DSL 渲染为原生可交互控件（可回传表单值给模型）
+            // 内容兜底：语言标签写错/没写时，只要内容是合法动态 UI 节点树也照样渲染。
+            isDynamicUiLang(lang) || looksLikeQuroUiDsl(code) ->
+                blocks.add(MsgBlock.DynamicUi(code))
+            // 兜底：AI 把小程序 HTML 写成 ```html 围栏却带了 bridge 运行时标记，也按小程序渲染
+            isMiniAppHtml(lang, code) ->
+                blocks.add(MsgBlock.MiniApp(code))
+            else ->
+                blocks.add(MsgBlock.Code(lang, code))
+        }
         last = m.range.last + 1
     }
     if (last < text.length) blocks.addAll(parseTail(text.substring(last)))
@@ -6285,9 +6365,54 @@ private fun parseBlocks(text: String): List<MsgBlock> {
  * `zorv-ui`（历史前缀）。与 [com.ai.assistance.quro.core.ui.dynamicui.QuroUiDslParser]
  * 的围栏识别保持一致，否则解析器认得、渲染层却不认，会出现「明明写了却当普通代码块显示」。
  */
+/**
+ * 判定是否为「生成式 UI 围栏」（已废弃的 :genui WebView 代码执行路径）。
+ *
+ * 按 A2UI 铁律「模型输出永远是数据不是代码，绝不在端上执行 AI 生成的代码」，
+ * 该 WebView 路径已关闭（见 [com.ai.assistance.quro.ui.QuroChatViewModel.GENUI_WEBVIEW_ENABLED]）。
+ * 此处恒返回 false，使任何 zorv* / quro* 围栏都不再被截留给 WebView，
+ * 而是统一走原生 A2UI 解释器（QuroUiDslParser + A2uiInterpreter → QuroUiRenderer）。
+ */
+private fun isGenUiLang(lang: String): Boolean = false
+
+/**
+ * 判定是否为「原生动态 UI 围栏」：quro-ui / zorv/ui 组合式 JSON DSL，由 QuroUiRenderer 原生渲染。
+ * 覆盖 quro-ui（现行）、quro_ui、zorv/ui、zorv-ui、zorv_ui 及含 quro/zorv 的标签——
+ * 即两种历史前缀都并入同一套 A2UI 原生解释器（组合实现，AI 任意嵌套基础节点成树）。
+ */
 private fun isDynamicUiLang(lang: String): Boolean {
     val l = lang.trim().lowercase()
-    return l == "quro-ui" || l == "quro_ui" || l == "zorv-ui"
+    return l == "quro-ui" || l == "quro_ui" || l == "zorv/ui" || l == "zorv-ui" || l == "zorv_ui" ||
+            l.contains("quro") || l.contains("zorv")
+}
+
+/**
+ * 动态 UI 节点类型集合（与 [QuroUiDslParser] 一致）。
+ * 用于 [extractInlineComponents] 识别「动态 UI 的 JSON 节点树」，避免被当成内联卡片劫持。
+ */
+private val QURO_UI_NODE_TYPES = setOf(
+    "column", "row", "box", "card", "text", "image", "icon", "badge", "progress",
+    "divider", "spacer", "button", "text_input", "checkbox", "switch", "select",
+    "slider", "list", "tabs", "markdown", "video", "audio", "browser", "code"
+)
+
+/** 判断一段 JSON 是否为动态 UI 节点（根节点 type 在 [QURO_UI_NODE_TYPES] 内）。 */
+private fun isQuroUiNodeJson(json: String): Boolean {
+    return runCatching {
+        val t = JSONObject(json).optString("type", "").trim().lowercase()
+        t in QURO_UI_NODE_TYPES
+    }.getOrDefault(false)
+}
+
+/**
+ * 判断一段代码块内容是否为「合法动态 UI DSL」。用于 [parseBlocks]/[parseTail] 的内容兜底：
+ * 即使 AI 写错/没写语言标签，只要内容是合法动态 UI 节点树，就渲染为原生动态 UI（内联、不弹窗），
+ * 而不是退化成裸代码块显示在气泡里。
+ */
+private fun looksLikeQuroUiDsl(code: String): Boolean {
+    val t = code.trim()
+    if (!t.startsWith("{") || !t.contains("\"type\"")) return false
+    return QuroUiDslParser.parseBlock(t) is QuroUiParseResult.Success
 }
 
 /**
@@ -6321,16 +6446,23 @@ private fun parseTail(seg: String): List<MsgBlock> {
         if (lang.isNotBlank() || after.trim().isNotEmpty()) {
             val out = mutableListOf<MsgBlock>()
             if (before.isNotBlank()) out.addAll(parseSegments(before))
-            if (lang.equals("mermaid", true) || lang.equals("mmd", true)) {
-                out.add(MsgBlock.Mermaid(after))
-            } else if (lang.equals("miniapp", true) || lang.equals("mini", true)) {
+            when {
+                // 生成式 UI 流式未闭合围栏：已废弃的 GenUI WebView 路径，跳过
+                isGenUiLang(lang) -> { /* skip — 已废弃的 GenUI WebView 路径 */ }
+                // 流式输出中 mermaid 围栏还没闭合时，也实时渲染（边写边出图）
+                lang.equals("mermaid", true) || lang.equals("mmd", true) ->
+                    out.add(MsgBlock.Mermaid(after))
+                // 流式输出中 a2ui 信封围栏还没闭合时，也实时渲染（边写边出界面）
+                lang.equals("a2ui", true) || lang.equals("a2ui+json", true) ->
+                    out.add(MsgBlock.DynamicUi(after))
                 // 流式输出中 miniapp 围栏还没闭合时，也实时渲染（边写边出小程序）
-                out.add(MsgBlock.MiniApp(after))
-            } else if (isDynamicUiLang(lang)) {
+                lang.equals("miniapp", true) || lang.equals("mini", true) ->
+                    out.add(MsgBlock.MiniApp(after))
                 // 流式输出中 quro-ui 围栏还没闭合时，也实时渲染（边写边出界面）
-                out.add(MsgBlock.DynamicUi(after))
-            } else {
-                out.add(MsgBlock.Code(lang.ifBlank { "text" }, after))
+                isDynamicUiLang(lang) || looksLikeQuroUiDsl(after) ->
+                    out.add(MsgBlock.DynamicUi(after))
+                else ->
+                    out.add(MsgBlock.Code(lang.ifBlank { "text" }, after))
             }
             return out
         }
@@ -6518,45 +6650,38 @@ private fun DynamicUiBlock(
     val scope = rememberCoroutineScope()
     // 只在 source 变化时重新解析：流式输出期间每来一个字都会重组，
     // 若把解析写在重组体内会导致每帧重解析一次（白白烧 CPU）。
-    val parsed = remember(source) { QuroUiDslParser.parseBlock(source) }
+    // 统一走 A2UI 多语言解释器：quro-ui DSL → Catalog 校验 →（可选 JSONL 信封）；zorv/ui 同路原生渲染。
+    val parsed = remember(source) { A2uiInterpreter.interpret(source) }
 
+    // 直接在对话框原生层内联渲染：不包 Surface、不另起一层卡片。AI 用 quro-ui DSL 自写 UI，
+    // 原生 Compose 直接渲染进对话框；clipToBounds 硬锁屏幕宽度，移动端任何内容都不超出屏幕。
     when (parsed) {
-        is QuroUiParseResult.Success -> Surface(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        is QuroUiParseResult.Success -> Column(
+            Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 12.dp).clipToBounds(),
         ) {
-            // 内层 Column 必须 fillMaxWidth：根 RenderColumn 若 wrap，会被图标 Row 等子节点压窄，
-            // 整张卡片就 "不满对话框"。强制 fillMaxWidth 让卡片撑满消息气泡宽度。
-            Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                QuroUiRenderer(
-                    root = parsed.root,
-                    modifier = Modifier.fillMaxWidth(),
-                    onAction = { action, values ->
-                        handleDynamicUiAction(action, values, ctx, scope, onCommand, onOpenLink)
-                    },
-                )
-            }
+            QuroUiRenderer(
+                root = parsed.root,
+                modifier = Modifier.fillMaxWidth(),
+                onAction = { action, values ->
+                    handleDynamicUiAction(action, values, ctx, scope, onCommand, onOpenLink)
+                },
+            )
         }
 
-        is QuroUiParseResult.Failure -> Surface(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
+        is QuroUiParseResult.Failure -> Column(
+            Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 12.dp).clipToBounds(),
         ) {
-            Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                Text(
-                    text = "⚠️ 动态 UI 解析失败：${parsed.reason}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = parsed.rawJson.take(600),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = "⚠️ 动态 UI 解析失败：${parsed.reason}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = parsed.rawJson.take(600),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -7690,15 +7815,14 @@ private fun QuroMessage.toMessage(
 }
 
 /**
- * 去掉 AI 回复里的 ```zorv/ui ... ``` 围栏块。
- * 这些围栏由生成式 UI 解析器（:genui）消费并渲染为对话框内 WebView 卡片，
- * 不应作为原始代码文本显示给用户。
+ * 处理 AI 回复里的动态 UI 围栏。
+ *
+ * 原先这里会剥除 ```zorv/ui ... ``` 围栏，因为那时它由 :genui WebView 管线消费。
+ * 现在 WebView 红线已废弃，zorv/ui / quro-ui 围栏统一由原生 A2UI 解释器（QuroUiDslParser +
+ * A2uiInterpreter → QuroUiRenderer）渲染，必须保留在原文本里交给 [parseBlocks] 路由。
+ * 故此处直接原样返回，不再剥除。
  */
-private fun stripGenUiFences(src: String): String {
-    if (!src.contains("```zorv/ui")) return src
-    val re = Regex("(?s)```zorv/ui[^\\n]*\\n.*?```\\s*")
-    return src.replace(re, "").trimEnd()
-}
+private fun stripGenUiFences(src: String): String = src
 
 /** QuroPersona → MoWen Persona（含 id 以便回写激活状态）。 */
 private fun QuroPersona.toPersona(): Persona {

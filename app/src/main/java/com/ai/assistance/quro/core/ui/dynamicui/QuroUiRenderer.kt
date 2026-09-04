@@ -126,6 +126,7 @@ fun QuroUiRenderer(
         hidden = hidden,
         onAction = onAction,
         modifier = modifier,
+        isRoot = true,
     )
 }
 
@@ -140,6 +141,7 @@ private fun RenderNode(
     hidden: MutableMap<String, Boolean>,
     onAction: (QuroUiAction, Map<String, String>) -> Unit,
     modifier: Modifier = Modifier,
+    isRoot: Boolean = false,
 ) {
     // toggle 隐藏：节点有 id 且被标记为隐藏则整体不渲染
     val nodeId = node.id
@@ -149,7 +151,7 @@ private fun RenderNode(
         is QuroColumnNode -> RenderColumn(node, state, hidden, onAction, modifier)
         is QuroRowNode -> RenderRow(node, state, hidden, onAction, modifier)
         is QuroBoxNode -> RenderBox(node, state, hidden, onAction, modifier)
-        is QuroCardNode -> RenderCard(node, state, hidden, onAction, modifier)
+        is QuroCardNode -> RenderCard(node, state, hidden, onAction, modifier, isRoot)
         is QuroTextNode -> RenderText(node, modifier)
         is QuroImageNode -> RenderImage(node, modifier)
         is QuroMarkdownNode -> RenderMarkdown(node, onAction, modifier)
@@ -273,11 +275,33 @@ private fun RenderCard(
     hidden: MutableMap<String, Boolean>,
     onAction: (QuroUiAction, Map<String, String>) -> Unit,
     modifier: Modifier,
+    isRoot: Boolean = false,
 ) {
     val pad = (node.padding ?: 12).dp
     val radius = (node.cornerRadius ?: 12).dp
     val shape = RoundedCornerShape(radius)
     val action = node.onClick
+
+    // 根节点若是 card（动态对话框 UI 本体），不渲染卡片外壳（无背景/圆角/点击边框），
+    // 让动态 UI 直接成为对话框消息体，而不是在对话框里再套一层小卡片背景。
+    if (isRoot) {
+        Column(
+            modifier = modifier.fillMaxWidth().padding(pad),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (!node.title.isNullOrBlank()) {
+                Text(
+                    text = node.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            node.children.forEach { child ->
+                RenderNode(child, state, hidden, onAction)
+            }
+        }
+        return
+    }
 
     // M3 的 Card content 带 ColumnScope receiver，必须声明为 ColumnScope 扩展，
     // 否则类型不匹配（ComposableFunction0 vs ComposableFunction1<ColumnScope, Unit>）。

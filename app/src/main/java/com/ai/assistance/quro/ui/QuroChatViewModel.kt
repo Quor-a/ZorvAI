@@ -213,6 +213,14 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     /** 每会话独立追踪「已喂给控制器的助理正文长度」，按消息 id 记录，避免工具调用轮次串文本 */
     private val genUiIngestLen = mutableMapOf<String, Int>()
 
+    /**
+     * 生成式 UI 的「WebView 执行 AI 代码」路径开关。
+     * 按 A2UI 铁律（模型输出永远是数据不是代码，绝不在端上执行 AI 生成的 JSX/HTML，Play / App Store
+     * 2.5.2 红线）此路径已废弃，默认关闭。动态 UI 一律走原生 A2UI 解释器（quro-ui DSL + Catalog 校验
+     * + JSONL 信封 + 指针绑定 → QuroUiRenderer）。保留开关仅作调试沙箱用途。
+     */
+    private val GENUI_WEBVIEW_ENABLED = false
+
     fun genUiControllerFor(convId: String): GenUiController {
         synchronized(genUiControllers) {
             val prev = genUiActiveConv
@@ -255,6 +263,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 
     /** 把流式累积的助理正文增量喂给生成式 UI 解析器（delta 跟踪，因 onToken 返回的是累计全文） */
     private fun ingestGenUiFromBuffer(convId: String, buf: QuroConversationStore) {
+        if (!GENUI_WEBVIEW_ENABLED) return // A2UI 铁律：WebView 执行 AI 代码路径已废弃，统一走原生解释器
         val m = buf.all().lastOrNull { it.role == "assistant" && !it.hidden } ?: return
         val prev = genUiIngestLen[m.id] ?: 0
         if (m.content.length <= prev) return
@@ -265,6 +274,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 
     /** 流结束后收尾：处理未闭合围栏，并把本轮产出的卡片 id 关联到对应助理消息（按围栏 id= 精确匹配） */
     private fun finishAndAttachGenUi(convId: String, buf: QuroConversationStore) {
+        if (!GENUI_WEBVIEW_ENABLED) return // A2UI 铁律：WebView 执行 AI 代码路径已废弃，统一走原生解释器
         val ctrl = genUiControllers[convId] ?: return
         ctrl.finish()
         val refs = ctrl.cards.value
@@ -412,7 +422,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         instance = this
         // 生成式 UI 冷启动预热：当前会话确定后主线程预热该会话 WebView 池，消首张卡片 200-500ms 冷启动。
         // warmUp 幂等：池满后再次调用为 no-op；后续每次切会话都会为活跃会话预热，无副作用。
-        viewModelScope.launch {
+        // 注：WebView 执行 AI 代码路径已按 A2UI 铁律废弃（GENUI_WEBVIEW_ENABLED=false），此处一并停用预热。
+        if (GENUI_WEBVIEW_ENABLED) viewModelScope.launch {
             currentId.collect { id ->
                 if (id.isBlank()) return@collect
                 Handler(Looper.getMainLooper()).post {
