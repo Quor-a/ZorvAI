@@ -63,6 +63,24 @@ data class QuroCardNode(
     val weight: Float? = null,
 ) : QuroUiNode
 
+/**
+ * 多 pane 布局容器：把多个子区块排成「并排」或「竖排」。
+ *
+ * - direction=auto（默认）：跟随 surface 尺寸档位 —— Expanded（宽屏/平板/分屏）并排，否则竖排。
+ *   这正是「WindowSizeClass 多 pane 切换」的落地：AI 只声明一个 pane 容器，客户端按屏幕自动决定横竖。
+ * - direction=row / column：强制横排 / 竖排，不受档位影响。
+ *
+ * 每个子区块在渲染时各自包一层 SurfaceHost(designWidthDp=360)，把 AI 的 360dp 设计稿等比映射到
+ * 自己所占的那一格宽度 —— 并排时每格更窄但内容照样不溢出，竖排时每格满宽。
+ */
+data class QuroPaneNode(
+    override val id: String? = null,
+    val children: List<QuroUiNode> = emptyList(),
+    val direction: String? = null, // auto | row | column
+    val spacing: Int? = null,
+    val padding: Int? = null,
+) : QuroUiNode
+
 // =============================================================================================
 // 内容节点
 // =============================================================================================

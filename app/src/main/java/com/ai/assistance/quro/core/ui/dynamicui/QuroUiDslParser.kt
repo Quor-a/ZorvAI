@@ -292,6 +292,15 @@ object QuroUiDslParser {
                     padding = json.optIntOrNull("padding"),
                     weight = json.optDoubleOrNull("weight")?.toFloat(),
                 )
+                "pane", "panes", "multi_pane", "multipane" -> QuroPaneNode(
+                    id = json.optStringOrNull("id"),
+                    children = buildChildren(json),
+                    direction = json.optStringOrNull("direction")
+                        ?: json.optStringOrNull("orient")
+                        ?: json.optStringOrNull("layout"),
+                    spacing = json.optIntOrNull("spacing"),
+                    padding = json.optIntOrNull("padding"),
+                )
                 "card" -> QuroCardNode(
                     id = json.optStringOrNull("id"),
                     children = buildChildren(json),
