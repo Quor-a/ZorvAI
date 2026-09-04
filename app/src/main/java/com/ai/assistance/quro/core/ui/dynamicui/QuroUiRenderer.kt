@@ -38,6 +38,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -52,6 +53,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -70,10 +72,26 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.media.MediaPlayer
+import android.net.Uri
+import android.view.View
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.MediaController
+import android.widget.VideoView
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.viewinterop.AndroidView
+import com.ai.assistance.quro.ui.CodeBlock
+import com.ai.assistance.quro.ui.MarkdownText
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -134,6 +152,11 @@ private fun RenderNode(
         is QuroCardNode -> RenderCard(node, state, hidden, onAction, modifier)
         is QuroTextNode -> RenderText(node, modifier)
         is QuroImageNode -> RenderImage(node, modifier)
+        is QuroMarkdownNode -> RenderMarkdown(node, onAction, modifier)
+        is QuroVideoNode -> RenderVideo(node, modifier)
+        is QuroAudioNode -> RenderAudio(node, onAction, modifier)
+        is QuroBrowserNode -> RenderBrowser(node, onAction, modifier)
+        is QuroCodeNode -> RenderCode(node, onAction, modifier)
         is QuroIconNode -> RenderIcon(node, modifier)
         is QuroBadgeNode -> RenderBadge(node, modifier)
         is QuroProgressNode -> RenderProgress(node, modifier)
@@ -395,6 +418,238 @@ private fun RenderImage(node: QuroImageNode, modifier: Modifier) {
             )
         }
     }
+}
+
+/** 把本地路径 / http / content 资源统一解析成 MediaPlayer/VideoView 可用的 Uri。 */
+private fun resolveMediaUri(url: String): Uri = when {
+    url.startsWith("http", ignoreCase = true) ||
+        url.startsWith("content:", ignoreCase = true) ||
+        url.startsWith("file://", ignoreCase = true) -> Uri.parse(url)
+    else -> Uri.fromFile(File(url))
+}
+
+/** 原生 Markdown 富文本排版（非 HTML）：标题/列表/引用/加粗斜体/链接/代码块。链接点击在应用内浏览器打开。 */
+@Composable
+private fun RenderMarkdown(
+    node: QuroMarkdownNode,
+    onAction: (QuroUiAction, Map<String, String>) -> Unit,
+    modifier: Modifier,
+) {
+    if (node.value.isBlank()) return
+    MarkdownText(
+        text = node.value,
+        onLinkClick = { link -> onAction(QuroOpenUrlAction(link), emptyMap()) },
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+}
+
+/** 视频播放（内嵌 VideoView + 媒体控制器）。 */
+@Composable
+private fun RenderVideo(node: QuroVideoNode, modifier: Modifier) {
+    val url = node.url
+    if (url.isBlank()) return
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (!node.title.isNullOrBlank()) {
+            Text(
+                text = node.title,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
+        AndroidView(
+            factory = { context ->
+                VideoView(context).apply {
+                    setVideoURI(resolveMediaUri(url))
+                    val mc = MediaController(context)
+                    mc.setAnchorView(this)
+                    setMediaController(mc)
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 300.dp),
+        )
+    }
+}
+
+/** 音频 / 音乐播放（内嵌 MediaPlayer + 播放/暂停 + 进度条）。 */
+@Composable
+private fun RenderAudio(
+    node: QuroAudioNode,
+    onAction: (QuroUiAction, Map<String, String>) -> Unit,
+    modifier: Modifier,
+) {
+    val ctx = LocalContext.current
+    val url = node.url
+    if (url.isBlank()) return
+
+    var prepared by remember(url) { mutableStateOf(false) }
+    var isPlaying by remember(url) { mutableStateOf(false) }
+    var position by remember(url) { mutableStateOf(0f) }
+    var duration by remember(url) { mutableStateOf(0f) }
+    val player = remember(url) { MediaPlayer() }
+
+    DisposableEffect(url) {
+        runCatching {
+            player.setDataSource(ctx, resolveMediaUri(url))
+            player.setOnPreparedListener { duration = it.duration.toFloat().coerceAtLeast(1f); prepared = true }
+            player.setOnCompletionListener { isPlaying = false; position = 0f }
+            player.prepareAsync()
+        }
+        onDispose { runCatching { player.release() } }
+    }
+
+    // 播放中轮询进度，驱动进度条
+    LaunchedEffect(isPlaying) {
+        while (isPlaying) {
+            runCatching { position = player.currentPosition.toFloat() }
+            delay(250)
+        }
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (!node.title.isNullOrBlank()) {
+            Text(
+                text = node.title,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            IconButton(
+                onClick = {
+                    runCatching {
+                        if (isPlaying) {
+                            player.pause(); isPlaying = false
+                        } else {
+                            player.start(); isPlaying = true
+                        }
+                    }
+                },
+                enabled = prepared,
+                modifier = Modifier.size(36.dp),
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (isPlaying) "暂停" else "播放",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Text(
+                text = formatMs(position.toLong()) + " / " + formatMs(duration.toLong()),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Slider(
+                value = position,
+                onValueChange = {
+                    position = it
+                    runCatching { player.seekTo(it.toInt()) }
+                },
+                valueRange = 0f..(duration.coerceAtLeast(1f)),
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+/** 内嵌完整功能浏览器（WebView，支持 JS / 缩放 / 页内导航）；附「在浏览器打开 / 刷新」按钮。 */
+@Composable
+private fun RenderBrowser(
+    node: QuroBrowserNode,
+    onAction: (QuroUiAction, Map<String, String>) -> Unit,
+    modifier: Modifier,
+) {
+    val url = node.url
+    if (url.isBlank()) return
+    val webView = remember(url) { mutableStateOf<WebView?>(null) }
+    val height = (node.height ?: 320).dp
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            TextButton(onClick = { onAction(QuroOpenUrlAction(url), emptyMap()) }) {
+                Text("在浏览器打开")
+            }
+            TextButton(onClick = { webView.value?.reload() }) {
+                Icon(Icons.Filled.Refresh, contentDescription = "刷新", modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("刷新")
+            }
+        }
+        AndroidView(
+            factory = { context ->
+                WebView(context).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.loadWithOverviewMode = true
+                    settings.useWideViewPort = true
+                    settings.builtInZoomControls = true
+                    settings.displayZoomControls = false
+                    webViewClient = WebViewClient()
+                    loadUrl(url)
+                    webView.value = this
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(height),
+        )
+    }
+}
+
+/** 代码块（展示 ZorvAI 支持的所有语言）；runnable 时附「运行」按钮，经 run_code 真执行。 */
+@Composable
+private fun RenderCode(
+    node: QuroCodeNode,
+    onAction: (QuroUiAction, Map<String, String>) -> Unit,
+    modifier: Modifier,
+) {
+    val code = node.code
+    if (code.isBlank()) return
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (!node.title.isNullOrBlank()) {
+            Text(
+                text = node.title,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
+        CodeBlock(code, node.lang ?: "")
+        if (node.runnable) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Button(onClick = {
+                    onAction(
+                        QuroToolCallAction(
+                            tool = "run_code",
+                            arguments = mapOf("code" to code, "lang" to (node.lang ?: "python")),
+                        ),
+                        emptyMap(),
+                    )
+                }) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("运行")
+                }
+            }
+        }
+    }
+}
+
+/** 毫秒转 mm:ss。 */
+private fun formatMs(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(0)
+    return "%02d:%02d".format(s / 60, s % 60)
 }
 
 /** 图标：内置常用图标名映射，未命中回落 Info，绝不因未知图标名崩溃。 */
