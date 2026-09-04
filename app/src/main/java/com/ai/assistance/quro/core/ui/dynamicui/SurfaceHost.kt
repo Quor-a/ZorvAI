@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 
@@ -54,7 +55,7 @@ fun SurfaceHost(
     designWidthDp: Float = 360f,
     content: @Composable () -> Unit,
 ) {
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    BoxWithConstraints(Modifier.fillMaxWidth().clipToBounds()) {
         val base = LocalDensity.current
         val scaled = Density(
             // 让 designWidthDp 恰好等于当前可用宽度（maxWidth 为当前 density 下的 dp 值）

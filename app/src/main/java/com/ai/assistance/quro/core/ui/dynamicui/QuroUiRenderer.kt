@@ -193,7 +193,12 @@ private fun RenderColumn(
     val pad = (node.padding ?: 0).dp
     val m = modifier
         .then(if (pad > 0.dp) Modifier.padding(pad) else Modifier)
-        .then(if (node.scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
+        .then(
+            // verticalScroll 需要有限高度，否则在 LazyColumn 之类父容器下会因「infinity max height」直接抛 IllegalStateException。
+            // 默认以 heightIn(max = 480.dp) 显式限定 scroll 区域，既不破坏 scrollable=true 的设计意图，也保证任何父容器下都可安全使用。
+            if (node.scrollable) Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())
+            else Modifier
+        )
 
     Column(
         modifier = m,
@@ -1008,7 +1013,9 @@ private fun RenderList(
 ) {
     val m = modifier
         .fillMaxWidth()
-        .then(if (node.maxHeight != null) Modifier.heightIn(max = node.maxHeight.dp) else Modifier)
+        // 列表总是可滚动：verticalScroll 必须配有限高度。maxHeight 缺失时给 480.dp 默认上限，
+        // 既保留 scrollable 行为，又避免在 LazyColumn 父容器下因「infinity max height」直接抛 IllegalStateException。
+        .heightIn(max = (node.maxHeight ?: 480).dp)
         .verticalScroll(rememberScrollState())
 
     Column(modifier = m, verticalArrangement = Arrangement.spacedBy(6.dp)) {
