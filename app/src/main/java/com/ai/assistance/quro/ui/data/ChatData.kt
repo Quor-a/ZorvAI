@@ -72,6 +72,7 @@ data class Message(
     val think: ThinkBlock? = null,
     val tools: List<ToolCallUi>? = null,  // 本消息关联的工具调用（可见化，而非隐藏管道）
     val cards: List<QuroChatCard> = emptyList(), // 气泡内富组件（一等公民，合体进聊天气泡）
+    val genUiCardIds: List<String> = emptyList(), // 生成式 UI 卡片（:genui artifact id，WebView 内渲染进气泡）
     /** 等待指示：AI 尚未产出首条内容时的「等等」动态小组件标记（独立于头像/名字，仅内容区 loading）。 */
     val isWaiting: Boolean = false,
     /** 执行指示：AI 正在执行工具（存在结果尚未回填的工具调用）时的「工作中」标记，

@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<!--
+  CSP 由宿主通过 WebViewAssetLoader 的响应头注入更可靠；
+  此处仅作 fallback（WebView 会忽略 meta CSP 的部分指令，以响应头为准）。
+  connect-src 'none' 是核心：即使模型绕过静态扫描写出 fetch，也发不出去。
+-->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none';
+               script-src 'self' blob:;
+               style-src 'self' 'unsafe-inline';
+               img-src 'self' data: blob:;
+               font-src 'self';
+               connect-src 'none';
+               form-action 'none';
+               base-uri 'none'">
+<title>zorv genui shell</title>
+
+<style>
+  /* ---------- 宿主注入的设计系统变量（深色模式由宿主切 class） ---------- */
+  :root {
+    --zv-bg: #ffffff;
+    --zv-fg: #1a1a1a;
+    --zv-muted: #6b7280;
+    --zv-primary: #2563eb;
+    --zv-primary-fg: #ffffff;
+    --zv-border: #e5e7eb;
+    --zv-surface: #f8fafc;
+    --zv-danger: #dc2626;
+    --zv-radius: 12px;
+    --zv-space: 12px;
+    --zv-font: -apple-system, "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  }
+  html.dark {
+    --zv-bg: #111214;
+    --zv-fg: #e8eaed;
+    --zv-muted: #9aa0a6;
+    --zv-primary: #6ea8fe;
+    --zv-primary-fg: #0b0c0e;
+    --zv-border: #2a2d31;
+    --zv-surface: #191b1e;
+    --zv-danger: #f87171;
+  }
+
+  * { box-sizing: border-box; }
+
+  /* ---------- reset：杜绝生成物破坏宿主布局 ---------- */
+  html, body {
+    margin: 0; padding: 0;
+    background: transparent;
+    color: var(--zv-fg);
+    font-family: var(--zv-font);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    width: 100%;
+  }
+  /* 生成物常见破坏项，强制兜底 */
+  body * { position: static !important; }
+  body [data-zv-allow-fixed] { position: relative !important; }
+
+  #root { padding: var(--zv-space); min-height: 44px; }
+
+  /* ---------- 预置组件：让生成物看起来像原生 ---------- */
+  .zv-card {
+    background: var(--zv-bg);
+    border: 1px solid var(--zv-border);
+    border-radius: var(--zv-radius);
+    padding: var(--zv-space);
+  }
+  .zv-btn {
+    min-height: 44px; min-width: 44px;
+    padding: 0 16px;
+    border: 1px solid var(--zv-border);
+    border-radius: 10px;
+    background: var(--zv-surface);
+    color: var(--zv-fg);
+    font-size: 15px; font-family: inherit;
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 6px;
+  }
+  .zv-btn:active { opacity: .7; }
+  .zv-btn.primary {
+    background: var(--zv-primary);
+    color: var(--zv-primary-fg);
+    border-color: transparent;
+  }
+  .zv-muted { color: var(--zv-muted); }
+  .zv-title { font-size: 16px; font-weight: 600; margin: 0 0 8px; }
+
+  /* ---------- 骨架屏：流式期间显示 ---------- */
+  #skeleton { padding: var(--zv-space); display: none; }
+  #skeleton.on { display: block; }
+  .sk {
+    height: 14px; border-radius: 6px; margin-bottom: 10px;
+    background: linear-gradient(90deg, var(--zv-surface) 25%, var(--zv-border) 37%, var(--zv-surface) 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.2s ease-in-out infinite;
+  }
+  @keyframes shimmer { 0%{background-position:100% 50%} 100%{background-position:0 50%} }
+
+  /* ---------- 错误条：不弹窗，底部一行小字 ---------- */
+  #errbar {
+    display: none;
+    padding: 8px var(--zv-space);
+    font-size: 12px;
+    color: var(--zv-muted);
+    border-top: 1px solid var(--zv-border);
+    align-items: center; gap: 6px;
+  }
+  #errbar.on { display: flex; }
+  #errbar.fatal { color: var(--zv-danger); }
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "react": "/genui/lib/react.js",
+    "react/jsx-runtime": "/genui/lib/react-jsx-runtime.js",
+    "react-dom": "/genui/lib/react-dom.js",
+    "react-dom/client": "/genui/lib/react-dom-client.js",
+    "recharts": "/genui/lib/recharts.js",
+    "lucide-react": "/genui/lib/lucide.js",
+    "zorv-ui": "/genui/lib/zorv-ui.js"
+  }
+}
+</script>
+</head>
+
+<body>
+<div id="skeleton">
+  <div class="sk" style="width:40%"></div>
+  <div class="sk" style="width:100%"></div>
+  <div class="sk" style="width:85%"></div>
+  <div class="sk" style="width:60%"></div>
+</div>
+
+<div id="root"></div>
+<div id="errbar"><span id="errmsg"></span></div>
+
+<!-- Sucrase：~275KB，零初始化开销。绝不用 @babel/standalone 或 esbuild-wasm。 -->
+<script src="/genui/lib/sucrase.js"></script>
+<script src="/genui/lib/react.js" type="module"></script>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ===================== 状态 ===================== */
+  var HOST_ORIGIN = "https://zorv.local";
+  var artifactId = null;
+  var rev = 0;
+  var granted = [];
+  var mounted = false;
+  var lastGoodCode = null;
+  var pendingState = null;
+  var renderRoot = null;
+  var ReactCtor = null;             // 供 ErrorBoundary 使用
+
+  var $root = document.getElementById("root");
+  var $sk = document.getElementById("skeleton");
+  var $err = document.getElementById("errbar");
+  var $errmsg = document.getElementById("errmsg");
+
+  /* ===================== 与宿主通信 ===================== */
+  function post(msg) {
+    msg.artifactId = artifactId;
+    msg.rev = rev;
+    if (window.WebViewMessageBridge) {
+      window.WebViewMessageBridge.postMessage(JSON.stringify(msg));
+    } else if (window.parent && window.parent !== window) {
+      window.parent.postMessage(msg, HOST_ORIGIN);
+    }
+  }
+
+  function setErr(text, fatal) {
+    if (!text) { $err.classList.remove("on", "fatal"); return; }
+    $errmsg.textContent = text;
+    $err.classList.add("on");
+    $err.classList.toggle("fatal", !!fatal);
+  }
+
+  /* ===================== 错误上报（三层捕获） ===================== */
+  var errorCount = 0;
+  function report(err, phase) {
+    var e = err instanceof Error ? err : new Error(String(err));
+    errorCount++;
+    var stack = (e.stack || "").split("\n").slice(0, 5).join("\n");
+    post({
+      type: "error",
+      phase: phase || "runtime",
+      message: e.message,
+      stack: stack,
+      attempt: errorCount
+    });
+    setErr(errorCount <= 3 ? "正在修复…" : "生成失败，已转为代码", errorCount > 3);
+  }
+
+  window.addEventListener("error", function (e) {
+    if (e.error) report(e.error, "runtime");
+    else report(new Error(e.message), "runtime");
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    report(e.reason, "async");
+  });
+
+  var nativeConsoleError = console.error;
+  console.error = function () {
+    var text = Array.prototype.map.call(arguments, String).join(" ");
+    post({ type: "console-error", message: text.slice(0, 300) });
+    nativeConsoleError.apply(console, arguments);
+  };
+
+  /* ===================== React ErrorBoundary（#633 加固） =====================
+     渲染期错误若无 Boundary，整棵树白屏。组件抛错时捕获并上报自愈，
+     同时清空 #root 避免半渲染残留。 */
+  function makeBoundary(React) {
+    function Boundary(props) {
+      ReactCtor.Component.call(this, props);
+      this.state = { hasError: false };
+    }
+    Boundary.prototype = Object.create(ReactCtor.Component.prototype);
+    Boundary.prototype.constructor = Boundary;
+    Boundary.getDerivedStateFromError = function () { return { hasError: true }; };
+    Boundary.prototype.componentDidCatch = function (e) {
+      report(e, "render");
+      $root.innerHTML = "";
+    };
+    Boundary.prototype.render = function () {
+      return this.state.hasError ? null : this.props.children;
+    };
+    return Boundary;
+  }
+
+  /* ===================== 转译 ===================== */
+  function transpile(src, lang) {
+    if (lang === "html") return { code: src, isModule: false };
+    var out = window.sucrase.transform(src, {
+      transforms: ["jsx"],
+      jsxRuntime: "automatic",
+      production: true
+    });
+    return { code: out.code, isModule: true };
+  }
+
+  /* ===================== 执行 ===================== */
+  var currentScript = null;
+
+  function execute(code, isModule) {
+    clearRuntime();
+    if (!isModule) {
+      $root.innerHTML = code;
+      afterMount();
+      return;
+    }
+    var url = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
+    var s = document.createElement("script");
+    s.type = "module";
+    s.src = url;
+    s.onerror = function () { report(new Error("模块加载失败（依赖越界？）"), "module-load"); };
+    document.body.appendChild(s);
+    currentScript = s;
+    URL.revokeObjectURL(url);
+  }
+
+  function clearRuntime() {
+    if (renderRoot && window.ReactDOMClient) {
+      try { renderRoot.unmount(); } catch (_) {}
+    }
+    renderRoot = null;
+    $root.innerHTML = "";
+    if (currentScript && currentScript.parentNode) {
+      currentScript.parentNode.removeChild(currentScript);
+    }
+    currentScript = null;
+  }
+
+  function afterMount() {
+    mounted = true;
+    $sk.classList.remove("on");
+    setErr(null);
+    reportHeight();
+    post({ type: "ready" });
+  }
+
+  /* ===================== 高度自适应 ===================== */
+  var heightTimer = null;
+  function reportHeight() {
+    if (heightTimer) return;
+    heightTimer = setTimeout(function () {
+      heightTimer = null;
+      var h = Math.ceil(document.documentElement.scrollHeight);
+      post({ type: "resize", height: h });
+    }, 100);
+  }
+  if (window.ResizeObserver) {
+    new ResizeObserver(reportHeight).observe(document.body);
+  }
+  window.addEventListener("resize", reportHeight);
+
+  /* ===================== 暴露给生成组件的 API ===================== */
+  var stateStore = {};
+  window.zorv = {
+    emit: function (event, payload) {
+      if (event === "state") {
+        try { payload = JSON.parse(JSON.stringify(payload)); } catch (_) {}
+      }
+      post({ type: "emit", event: event, payload: payload });
+    },
+    storage: {
+      get: function (key) { return stateStore[key]; },
+      set: function (key, value) {
+        stateStore[key] = value;
+        post({ type: "storage", key: key, value: value });
+      }
+    },
+    theme: function () {
+      return document.documentElement.classList.contains("dark") ? "dark" : "light";
+    },
+    /* 供生成组件挂载 React root（module 内调用）。
+       支持传入组件函数（默认导出）或已构建的元素。 */
+    mount: function (node) {
+      var React = window.__zvReact;
+      var RDC = window.__zvReactDOMClient;
+      if (!React || !RDC) { report(new Error("React runtime 未就绪"), "render"); return null; }
+      var el = (typeof node === "function") ? React.createElement(node) : node;
+      clearRuntime();
+      var Boundary = makeBoundary(React);
+      renderRoot = RDC.createRoot($root);
+      renderRoot.render(React.createElement(Boundary, null, React.createElement(React.StrictMode, null, el)));
+      afterMount();
+      return renderRoot;
+    }
+  };
+
+  /* ===================== 接收宿主指令 ===================== */
+  function onHostMessage(e) {
+    if (e.origin && e.origin !== HOST_ORIGIN && e.origin !== "null") return;
+    var msg = e.data;
+    if (typeof msg === "string") { try { msg = JSON.parse(msg); } catch (_) { return; } }
+    if (!msg || !msg.type) return;
+
+    switch (msg.type) {
+      case "render":
+        render(msg);
+        break;
+      case "theme":
+        document.documentElement.classList.toggle("dark", msg.value === "dark");
+        reportHeight();
+        break;
+      case "hydrate":
+        stateStore = msg.state || {};
+        break;
+      case "destroy":
+        clearRuntime();
+        break;
+    }
+  }
+  window.addEventListener("message", onHostMessage);
+  if (window.WebViewMessageListener) {
+    window.WebViewMessageListener.onMessage = onHostMessage;
+  }
+
+  /* ===================== 渲染主流程 ===================== */
+  function render(msg) {
+    artifactId = msg.artifactId;
+    rev = msg.rev;
+    granted = msg.caps || [];
+    errorCount = 0;
+    mounted = false;
+    $sk.classList.add("on");
+    setErr(null);
+
+    var code;
+    try {
+      var out = transpile(msg.code, msg.lang || "jsx");
+      code = out.code;
+      lastGoodCode = code;
+    } catch (e) {
+      report(e, "transpile");
+      $sk.classList.remove("on");
+      return;
+    }
+
+    if (msg.lang === "html") {
+      execute(code, false);
+    } else {
+      ensureReactRuntime().then(function () {
+        execute(code, true);
+        setTimeout(function () {
+          if (!mounted) report(new Error("组件未挂载（缺少 export default 或 window.zorv.mount 调用？）"), "render");
+        }, 3000);
+      }).catch(function (e) {
+        report(e, "module-load");
+      });
+    }
+  }
+
+  var reactReady = null;
+  function ensureReactRuntime() {
+    if (reactReady) return reactReady;
+    reactReady = Promise.all([
+      import("react"),
+      import("react-dom/client")
+    ]).then(function (mods) {
+      window.__zvReact = mods[0];
+      window.__zvReactDOMClient = mods[1];
+      ReactCtor = mods[0];
+    });
+    return reactReady;
+  }
+
+  /* ===================== 启动 ===================== */
+  post({ type: "shell-ready" });
+})();
+</script>
+</body>
+</html>

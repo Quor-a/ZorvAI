@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 生成式 UI 运行时完全本地（WebView 加载 assets 内 shell），无需任何网络/存储权限 -->
+
+    <application />
+</manifest>

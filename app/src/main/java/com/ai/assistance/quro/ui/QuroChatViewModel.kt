@@ -1,6 +1,8 @@
 package com.ai.assistance.quro.ui
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -63,6 +65,14 @@ import com.ai.assistance.quro.core.tools.QuroTtsProviders
 import com.ai.assistance.quro.core.tools.QuroTtsProviderKind
 import com.ai.assistance.quro.core.tools.QuroVoiceFeaturePrefs
 import com.ai.assistance.quro.core.tools.QuroToolRouter
+// ZorvAI 生成式 UI（AI 自写 JSX/HTML → WebView 内渲染）：把 :genui 模块接入主对话运行时
+import com.zorv.genui.controller.GenUiController
+import com.zorv.genui.host.GenUiHost
+import com.zorv.genui.host.SnapshotPersister
+import com.zorv.genui.store.GenUiStore
+import com.zorv.genui.store.RoomBackedStore
+import com.zorv.genui.heal.GenUiSelfHeal
+import com.zorv.genui.prompt.GenUiPrompt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -195,6 +205,87 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         private set
     private val uiPrefs = appContext.getSharedPreferences("quro_ui", Context.MODE_PRIVATE)
 
+    // ══════════════ ZorvAI 生成式 UI（:genui 模块）═════════════
+    // 每会话一个独立控制器（含独立 Room 库 + WebView 池），天然隔离跨会话卡片 id 与快照。
+    // 切换会话时释放上一会话的 WebView，避免无限增长；卡片数据仍在各自 Room 库，切回可重建。
+    private val genUiControllers = mutableMapOf<String, GenUiController>()
+    private var genUiActiveConv: String? = null
+    /** 每会话独立追踪「已喂给控制器的助理正文长度」，按消息 id 记录，避免工具调用轮次串文本 */
+    private val genUiIngestLen = mutableMapOf<String, Int>()
+
+    fun genUiControllerFor(convId: String): GenUiController {
+        synchronized(genUiControllers) {
+            val prev = genUiActiveConv
+            if (prev != null && prev != convId) {
+                // 释放上一会话的 WebView 池（内存生死线），数据仍在 Room，切回可重建。
+                // WebView.destroy 必须主线程，故投递到主线程执行（本方法可能在 IO 流线程被调用）。
+                genUiControllers[prev]?.let { ctrl ->
+                    Handler(Looper.getMainLooper()).post { runCatching { ctrl.releaseAll() } }
+                }
+            }
+            genUiActiveConv = convId
+            return genUiControllers.getOrPut(convId) {
+                val store: GenUiStore = RoomBackedStore(appContext, name = "zorv_genui_${convId.take(64)}")
+                val selfHeal = GenUiSelfHeal(maxAttempts = 3)
+                // 宿主要的是 SnapshotPersister（非 suspend 的 fire-and-forget 单方法接口），
+                // 而 RoomBackedStore.saveState 是 suspend；用 SAM 适配器在 IO 线程桥接。
+                val host = GenUiHost(
+                    appContext,
+                    snapshotPersister = SnapshotPersister { id, rev, state ->
+                        viewModelScope.launch(Dispatchers.IO) { store.saveState(id, rev, state) }
+                    }
+                )
+                GenUiController(host, store, selfHeal).also { ctrl ->
+                    // 自愈：模型写错 → 收到 <runtime-error> → 隐藏用户消息注入反馈 → 触发重写（rev+1）
+                    ctrl.onRepairRequest = { feedback -> repairGenUi(convId, feedback) }
+                    // 组件主动接话：AI 自写卡片里的按钮 emit('intent') → 作为一条用户消息让 AI 接手回应
+                    ctrl.onIntent = { _, type, payload ->
+                        val summary = buildString {
+                            append("【对话卡片交互】用户通过我生成的界面触发了 \"$type\"")
+                            payload?.let { p ->
+                                p.keys().forEach { k -> append("\n- $k: ${p.opt(k)}") }
+                            }
+                        }
+                        viewModelScope.launch { send(text = summary, repairConvId = convId) }
+                    }
+                }
+            }
+        }
+    }
+
+    /** 把流式累积的助理正文增量喂给生成式 UI 解析器（delta 跟踪，因 onToken 返回的是累计全文） */
+    private fun ingestGenUiFromBuffer(convId: String, buf: QuroConversationStore) {
+        val m = buf.all().lastOrNull { it.role == "assistant" && !it.hidden } ?: return
+        val prev = genUiIngestLen[m.id] ?: 0
+        if (m.content.length <= prev) return
+        val delta = m.content.substring(prev)
+        genUiIngestLen[m.id] = m.content.length
+        if (delta.isNotEmpty()) genUiControllerFor(convId).ingest(delta)
+    }
+
+    /** 流结束后收尾：处理未闭合围栏，并把本轮产出的卡片 id 关联到对应助理消息（按围栏 id= 精确匹配） */
+    private fun finishAndAttachGenUi(convId: String, buf: QuroConversationStore) {
+        val ctrl = genUiControllers[convId] ?: return
+        ctrl.finish()
+        val refs = ctrl.cards.value
+        if (refs.isEmpty()) return
+        buf.all().forEach { m ->
+            if (m.role != "assistant" || m.hidden) return@forEach
+            val ids = refs.filter { r ->
+                Regex("""zorv/ui[^\n]*\bid=${r.id}\b""").containsMatchIn(m.content)
+            }.map { it.id }
+            if (ids.isNotEmpty()) {
+                buf.update(m.id) { it.copy(genUiCardIds = (it.genUiCardIds + ids).distinct()) }
+            }
+        }
+        genUiIngestLen.clear()
+    }
+
+    /** 生成式 UI 自愈：把运行时错误反馈作为隐藏用户消息注入，触发模型完整重写该卡片 */
+    private fun repairGenUi(convId: String, feedback: String) {
+        viewModelScope.launch { send(text = "", repairFeedback = feedback, repairConvId = convId) }
+    }
+
     companion object {
         /** 当前活跃�? ViewModel 实例，供语音球等外部组件委托对话写入「选中的对话框」�? */
         lateinit var instance: QuroChatViewModel
@@ -319,6 +410,16 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         //   + saveAll() 写盘均为�? IO，对话量大时在主线程同步执行会直�? ANR（启�?/进聊天即卡死）�?
         //   这里只同步设置引用与空初始态，�? IO 全部挪到 IO 线程异步完成�?
         instance = this
+        // 生成式 UI 冷启动预热：当前会话确定后主线程预热该会话 WebView 池，消首张卡片 200-500ms 冷启动。
+        // warmUp 幂等：池满后再次调用为 no-op；后续每次切会话都会为活跃会话预热，无副作用。
+        viewModelScope.launch {
+            currentId.collect { id ->
+                if (id.isBlank()) return@collect
+                Handler(Looper.getMainLooper()).post {
+                    runCatching { genUiControllerFor(id).warmUp() }
+                }
+            }
+        }
         _convs.value = emptyList()
         _messages.value = emptyList()
         viewModelScope.launch(AppExecutors.io) {
@@ -565,12 +666,17 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         skill: QuroSkill? = null,
         /** 上下文信息字符串（工作区路径/ACI应用/技能数量），作为隐藏消息注入，�? AI 本轮可用�? */
         contextMessage: String? = null,
+        /** 生成式 UI 自愈：非空时把反馈作为【隐藏】用户消息注入，触发模型重写卡片（rev+1） */
+        repairFeedback: String? = null,
+        /** 生成式 UI 自愈/交互：强制把本轮归属到指定会话（否则取当前可见会话） */
+        repairConvId: String? = null,
     ) {
-        val t = text.trim()
+        val t = (repairFeedback ?: text).trim()
         if (t.isEmpty() && attachments.isEmpty()) return
         // 多会话切换修复：锁定本轮归属会话 convId，整个协程以内一律以 convId 记账�?
         // 不再读实�? _currentId，避免切换会话后轮次/忙�?/落盘串台�?
-        val convId = _currentId.value
+        // 生成式 UI 自愈轮：repairConvId 强制归属到出错的会话
+        val convId = repairConvId ?: _currentId.value
         activeConversationId = convId
         // 新一轮生成开始：复位「AI �? speak 工具播报」标记，避免上一轮残留导致自动朗读误让位
         QuroTtsHolder.speakToolFiredThisTurn = false
@@ -604,12 +710,14 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // 这样界面立刻反映�?"已发�?"状态，无需�? AI 响应�?
         // 用户消息先构造成引用，便于既加入共享 store（即时显示）又追加进种子（生成副本）�?
         // 构建用户消息（只包含用户输入的纯文本，不包含上下文）
+        // 生成式 UI 自愈轮：repairFeedback 作为隐藏消息注入（不展示给用户），让模型据此重写卡片
         val userMsg = QuroMessage(
             role = "user",
             content = t,
             attachments = if (attachments.isNotEmpty()) attachments else null,
             senderName = userProfile.value.name.takeIf { it.isNotBlank() },
             avatarUrl = userProfile.value.avatarUri.takeIf { it.isNotBlank() },
+            hidden = repairFeedback != null,
         )
         // �? 存话根因修复：种子快照必须取自【本会话权威态】，绝不用可能被切会话交换的共享单例 store�?
         //   优先本会话在线缓冲（最新、可能尚未落盘）�? 否则持久�? _convs[convId].messages（落盘权威态）�? 兜底空�?
@@ -712,6 +820,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         // 退出也能保留中间过程；commitCurrent 内部已对落盘�? �?1s 节流�?
                             if (firstTokenTs == 0L) { firstTokenTs = System.currentTimeMillis(); QuroDiag.log("GEN_FIRSTTOKEN", "convId=$convId ttfb=${firstTokenTs - askStart}ms") }
                             commitCurrent(convId, buf)
+                            // 生成式 UI：把本轮累积正文增量喂给 :genui 解析器（AI 自写 JSX/HTML → 对话框内渲染）
+                            ingestGenUiFromBuffer(convId, buf)
                         }
                         QuroDiag.log("GEN_ASK_MS", "convId=$convId total=${System.currentTimeMillis() - askStart}ms")
                     }.onFailure { e ->
@@ -720,6 +830,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                             QuroDiag.log("SEND_CANCEL", "convId=$convId (job cancelled �? 已停止生�?)")
                             store.add(QuroMessage(role = "assistant", content = "�? 已停止生成�?"))
                             commitCurrent(convId, buf)
+                            // 生成式 UI：被中断也可能已产出完整卡片，仍尝试收尾挂载
+                            finishAndAttachGenUi(convId, buf)
                             return@onFailure
                         }
                         store.add(
@@ -730,6 +842,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         )
                     }
                 }
+                // 生成式 UI：流结束收尾——处理未闭合围栏，并把本轮产出的卡片 id 关联到对应助理消息
+                finishAndAttachGenUi(convId, buf)
                 commitCurrent(convId, buf, forceSave = true)
                 // 对话一轮完�? �? 触发人格自动孵化（按轮次累计，静默、不阻塞主对话）
                 maybeAutoIncubate()
@@ -1942,6 +2056,11 @@ $recent
 - **抓包** → `packet_capture`（proot 内 mitmdump，flow 写 /mnt/quro/mitm/）。
 - **对话框 / 浏览器 化小窗** → 对话框顶栏与浏览器工具栏均有「化小窗」按钮，可将内容折叠为可拖拽悬浮小窗，不中断后台任务。
 """.trimIndent())
+
+        // ══════════════ 生成式 UI（ZorvAI 自写 JSX/HTML → 对话框内 WebView 渲染）═════════════
+        // 让模型在需要可视化/交互时直接产出可运行界面，是「对话框动态 UI 组件」的本质能力。
+        // 仅注入云端路径（本地小模型上下文过紧，已在上方 early-return 跳过）。
+        sb.append("\n\n").append(GenUiPrompt.SYSTEM_PROMPT.trimIndent())
 
         val out = sb.toString().trim()
         // #1113 诊断：把 system prompt 实际规模写进日志，避免再靠猜�?
