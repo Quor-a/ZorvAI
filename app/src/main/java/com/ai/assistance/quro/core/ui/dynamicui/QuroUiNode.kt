@@ -259,6 +259,44 @@ data class QuroOpenAppAction(
     val packageName: String = "",
 ) : QuroUiAction
 
+/**
+ * 打开 ZorvAI 内置界面（深链导航）：让动态 UI 按钮直接跳进终端 / 模型配置 / 可视化编程 /
+ * 小程序 / 工具中心等原生界面，而不只是回发文本。
+ *
+ * target 与 [com.ai.assistance.quro.core.tools.ui.UiNavigationEvent.OpenScreen] 完全对齐：
+ * editor / terminal / toolbox / knowledge / cms / aci / about / appearance / soul / memory /
+ * permission / model_config / voice / settings / tool_center，以及工具中心子能力
+ * vispro(可视化编程) / node_editor(flow) / miniapp(小程序) / workbench。
+ */
+data class QuroOpenScreenAction(
+    val target: String = "",
+) : QuroUiAction
+
+/** 直接渲染 HTML 到对话气泡（第一层渲染，复用 MiniAppCard 运行时）。 */
+data class QuroRenderHtmlAction(
+    val html: String = "",
+) : QuroUiAction
+
+/** 直接渲染可视化编程（mermaid 源码）到对话气泡（第一层渲染，复用 MermaidCard 运行时）。 */
+data class QuroRenderVisproAction(
+    val source: String = "",
+) : QuroUiAction
+
+/** 可视化弹窗：在对话上方弹出信息框（标题 + 内容），纯本地展示、不惊动模型。 */
+data class QuroVisualPopupAction(
+    val title: String = "",
+    val content: String = "",
+) : QuroUiAction
+
+/**
+ * 可视化询问：弹出选项列表让用户点选，选中项作为一条用户消息回发模型继续对话。
+ * 用于「二选一 / 多选一 / 确认」式交互，比 callback 表单更轻量。
+ */
+data class QuroVisualAskAction(
+    val prompt: String = "",
+    val options: List<String> = emptyList(),
+) : QuroUiAction
+
 // =============================================================================================
 // 解析结果
 // =============================================================================================
