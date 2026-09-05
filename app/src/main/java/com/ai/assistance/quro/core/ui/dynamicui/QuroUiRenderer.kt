@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Star
@@ -294,12 +295,35 @@ private fun RenderBox(
     modifier: Modifier,
 ) {
     val pad = (node.padding ?: 0).dp
-    Box(
-        modifier = modifier
-            .then(if (pad > 0.dp) Modifier.padding(pad) else Modifier),
-    ) {
-        node.children.forEach { child ->
-            RenderNode(child, state, hidden, onAction)
+    val radius = (node.borderRadius ?: 0).dp
+    val bgColor = node.backgroundColor?.let { QuroUiColor.parse(it) }
+    val shape = RoundedCornerShape(radius)
+    val baseModifier = modifier
+        .then(if (pad > 0.dp) Modifier.padding(pad) else Modifier)
+        .let { m ->
+            when {
+                bgColor != null && radius > 0.dp -> m.background(bgColor, shape)
+                bgColor != null -> m.background(bgColor)
+                radius > 0.dp -> m.clip(shape)
+                else -> m
+            }
+        }
+    // 带样式（背景/圆角）的 box 视为「带容器的列布局」：子节点纵向排开（AI 高频把 box 当 cell/section 用）。
+    // 无样式的 box 保持原本的「层叠」语义（多子重叠），不破坏既有用法。
+    if (bgColor != null || radius > 0.dp) {
+        Column(
+            modifier = baseModifier,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            node.children.forEach { child ->
+                RenderNode(child, state, hidden, onAction)
+            }
+        }
+    } else {
+        Box(modifier = baseModifier) {
+            node.children.forEach { child ->
+                RenderNode(child, state, hidden, onAction)
+            }
         }
     }
 }

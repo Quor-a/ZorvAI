@@ -44,12 +44,14 @@ data class QuroRowNode(
     val weight: Float? = null,
 ) : QuroUiNode
 
-/** 堆叠布局（层叠）。 */
+/** 堆叠布局（层叠）；若带 backgroundColor/borderRadius，则视为「带样式的列容器」，子节点纵向排开。 */
 data class QuroBoxNode(
     override val id: String? = null,
     val children: List<QuroUiNode> = emptyList(),
     val padding: Int? = null,
     val weight: Float? = null,
+    val backgroundColor: String? = null,
+    val borderRadius: Int? = null,
 ) : QuroUiNode
 
 /** 卡片容器（带圆角与阴影）。 */
