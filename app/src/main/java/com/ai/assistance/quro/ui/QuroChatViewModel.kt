@@ -2304,6 +2304,7 @@ $recent
         sb.append(
             "- ** whenever you need to show a structured result as a small card / rich card / todo / chart / table / list / stat / progress / pie / rating / alert / tag / badge / gauge / timeline / kanban / etc., you MUST call the `ui_widget` or `ui_card` tool. NEVER paste the raw JSON or data as plain text or a code block in your reply — the user will only see unreadable source code, which is a critical failure.**\n" +
             "- 这是与「动态 UI 组件(quro-ui)」「ui_control」「可视化弹窗(visual_popup)」「可视化询问(visual_question)」「终端」「语音服务」**完全独立、互不相关**的功能：小卡片 ≠ 动态 UI，小卡片 ≠ ui_control(action=\"card\") 纯文本卡片，小卡片 ≠ visual_popup。\n" +
+            "- ⚠️ **小卡片 ≠ `ui_control(action=\"widget\")` 的「小组件」**：`ui_control(action=\"widget\")` 的 7 类（button/toggle/slider/input/select/mermaid/miniapp）是**可交互控件/小组件**，用途是「让用户点按钮、拖滑块、选选项、跑小程序」，**绝不**用来展示数据卡片。凡是「展示一张小卡片/富卡片/数据/图表/列表/进度/统计/评分/标签」的需求，一律用 `ui_widget`/`ui_card`，**永远不要**调 `ui_control(action=\"widget\")`。两者名字都带「widget/卡片」但完全是两回事：ui_widget=展示型小卡片，ui_control widget=交互型小组件。\n" +
             "- **正确示例**（出现同类需求时原样照搬参数结构，只换内容）：\n" +
             "  · 待办清单 → `ui_widget` spec=`{\"type\":\"list\",\"title\":\"今日待办\",\"items\":[{\"text\":\"完成项目报告\",\"done\":true},{\"text\":\"回复客户邮件\",\"done\":false}]} `\n" +
             "  · 数据指标 → `ui_widget` spec=`{\"type\":\"stat\",\"title\":\"今日访问量\",\"value\":\"12847\",\"unit\":\"次\",\"delta\":\"+12.3%\"} `\n" +
