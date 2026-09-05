@@ -2300,11 +2300,23 @@ $recent
             "  - **`speak` 是与「自动朗读」开关完全独立的语音通道**：无论用户是否开启自动朗读，当你需要主动「出声」（如唱歌、讲故事、朗诵、分角色演绎、或任何希望用声音而非仅文字表达的场景）时，都应主动调�? `speak`；语音播报的文本允许与你回复的文字内容不同（文字回复是一份，语音可以是另一份）。\n")
         sb.append("- **多语�? / 分角�? / 讲故事朗读的编排**：当用户要求「用多语�? / 分角�? / 讲故事」等方式朗读时，你应�?**主动编排**而非只产出一段会被统一念出的纯文本——在回复里用 `(语色:任意名称)` 为不同段�? / 角色分配音色，让 TTS 自动切换声音�?**语色标记的名称由你按内容自由�?**（角色名、情绪、旁白、叙述者、场景等任何类型都可以，不被限定为固定几种），需要时配合 `speak` 显式播报。若用户要「先讲完故事、再朗读某段文本」，就严格按这个顺序组织内容。自动朗读（回复后自动念）与显式 `speak` 调用走同一引擎——你用文本里的语�? / 情绪标记决定「怎么念」，而不是把整段交给系统默认念白；任意类型的内容（含代码 / 表格 / 列表）只要用户要求多语色演绎，都可加语色标记。\n")
 
+        sb.append("\n### 可视化小卡片（ui_widget / ui_card）——独立功能，必须走工具渲染\n")
+        sb.append(
+            "- ** whenever you need to show a structured result as a small card / rich card / todo / chart / table / list / stat / progress / pie / rating / alert / tag / badge / gauge / timeline / kanban / etc., you MUST call the `ui_widget` or `ui_card` tool. NEVER paste the raw JSON or data as plain text or a code block in your reply — the user will only see unreadable source code, which is a critical failure.**\n" +
+            "- 这是与「动态 UI 组件(quro-ui)」「ui_control」「可视化弹窗(visual_popup)」「可视化询问(visual_question)」「终端」「语音服务」**完全独立、互不相关**的功能：小卡片 ≠ 动态 UI，小卡片 ≠ ui_control(action=\"card\") 纯文本卡片，小卡片 ≠ visual_popup。\n" +
+            "- **正确示例**（出现同类需求时原样照搬参数结构，只换内容）：\n" +
+            "  · 待办清单 → `ui_widget` spec=`{\"type\":\"list\",\"title\":\"今日待办\",\"items\":[{\"text\":\"完成项目报告\",\"done\":true},{\"text\":\"回复客户邮件\",\"done\":false}]} `\n" +
+            "  · 数据指标 → `ui_widget` spec=`{\"type\":\"stat\",\"title\":\"今日访问量\",\"value\":\"12847\",\"unit\":\"次\",\"delta\":\"+12.3%\"} `\n" +
+            "  · 项目进度 → `ui_widget` spec=`{\"type\":\"progress\",\"title\":\"项目进度\",\"value\":68,\"suffix\":\"%\",\"label\":\"开发阶段\"} `\n" +
+            "  · 饼图占比 → `ui_widget` spec=`{\"type\":\"pie\",\"title\":\"时间分配\",\"segments\":[{\"name\":\"工作\",\"value\":8,\"color\":\"#FF6384\"},{\"name\":\"睡眠\",\"value\":7,\"color\":\"#36A2EB\"}]} `\n" +
+            "  · 快捷动作组 → `ui_card` spec=`{\"kind\":\"actions\",\"title\":\"可用操作\",\"actions\":[{\"label\":\"打开终端\",\"command\":\"ui_open_terminal\"}]} `\n" +
+            "- **禁令**：如果用户请求的是「小卡片」「富卡片」「数据卡片」「图表卡片」，你却把 JSON 写成普通文字发出去，等于没做可视化，必须改调 `ui_widget`/`ui_card`。\n"
+        )
         sb.append("\n### 动态 UI（quro-ui 原生组件 · 必备输出）\n")
         sb.append(
             "- 这是一套**原生渲染**的可交互界面能力（不是 HTML、不用 WebView）：你在回复里写一段 ```quro-ui 代码块（内容是 JSON 节点树），客户端会自动把它渲染成真实原生控件（按钮/表单/卡片/列表/音视频/浏览器等），用户直接在对话框里看到并操作。\n" +
             "- **必备输出（无需用户要求，主动默认使用）**：当你要给用户一个**带布局、能交互、能跳转、能播放、能展示代码、能呈现富媒体**的**完整原生交互界面**（多区域组合、表单/富媒体/可交互控件成体系）时，就**必须主动、默认**用 ```quro-ui 输出，不要等用户说\"用动态UI\"\"做个界面\"。\n" +
-            "  · **边界（小卡片=独立的「可视化富卡片」能力，与动态 UI 组件无关）**：要展示一张「小卡片」（待办/图表/笔记/动作/表格/饼图/评分/标签/列表/统计/进度/告警…），请用独立的 **`ui_widget` / `ui_card`** 工具——它是与「动态 UI 组件(quro-ui)」「可视化弹窗(visual_popup)」「可视化询问(visual_question)」「终端」「语音服务」互不相关的独立功能，不要把小卡片塞进动态 UI 组件，也不要用 `ui_control(action=\"card\")` 纯文本卡片。\n" +
+            "  · **边界（小卡片=独立的「可视化富卡片」能力，与动态 UI 组件无关）**：要展示一张「小卡片」（待办/图表/笔记/动作/表格/饼图/评分/标签/列表/统计/进度/告警…），请用独立的 **`ui_widget` / `ui_card`** 工具（见上方独立章节），**不要**把小卡片塞进动态 UI 组件，也不要用 `ui_control(action=\"card\")` 纯文本卡片。\n" +
             "- **节点类型（节选，完整见 ui_dsl_spec 工具）**：\n" +
             "  · 布局：column / row / box / card\n" +
             "  · 内容：text / image / icon / badge / progress / divider / spacer\n" +

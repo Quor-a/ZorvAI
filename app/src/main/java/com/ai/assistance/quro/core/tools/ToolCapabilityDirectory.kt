@@ -999,8 +999,9 @@ object ToolCapabilityDirectory {
             "图片识别" to listOf("image_recognition", "visual_analysis"),
             "UI展示" to listOf("ui_control"),
             "原生交互界面/动态UI" to listOf("ui_dsl_spec", "ui_validate"),
-            "可视化小卡片/富卡片" to listOf("ui_widget", "ui_card"),
-            "列表/表单/图表卡片" to listOf("ui_widget(type=\"list\")", "ui_widget(type=\"table\")", "ui_widget(type=\"pie\")"),
+            "可视化小卡片/富卡片（禁止裸 JSON）" to listOf("ui_widget", "ui_card"),
+            "待办/进度/统计/评分/告警卡片" to listOf("ui_widget(type=\"list\")", "ui_widget(type=\"progress\")", "ui_widget(type=\"stat\")", "ui_widget(type=\"rating\")", "ui_widget(type=\"alert\")"),
+            "列表/表格/饼图卡片" to listOf("ui_widget(type=\"list\")", "ui_widget(type=\"table\")", "ui_widget(type=\"pie\")"),
             "播放器/浏览器完整界面" to listOf("ui_dsl_spec"),
             "流程图/架构图" to listOf("ui_control(action=\"widget\", type=\"mermaid\")"),
             "记忆保存" to listOf("memory_save"),
@@ -1049,7 +1050,10 @@ object ToolCapabilityDirectory {
 ## 1. 主动使用工具
 - 用户需要真实数据（天气/时间/设备状态）→ 调用工具获取，不要瞎猜
 - 用户需要真实动作（打开应用/读写文件/控制设备）→ 调用工具执行
-            - 用户需要可视化结果：图表/富卡片→调用 **ui_widget**；流程图→mermaid（ui_widget(type="mermaid") 或 ui_control(action="widget", type="mermaid")）；完整原生UI→quro-ui。各能力互不相关，勿混用。
+- 用户需要**小卡片/富卡片/图表/列表/进度/统计/评分/告警**等可视化结果 → **必须调用 `ui_widget` 或 `ui_card` 工具**，严禁把 JSON/数据当作普通文本或代码块发出（用户只会看到不可读的源码）。
+- 用户需要流程图 → mermaid（`ui_widget(type="mermaid")` 或 `ui_control(action="widget", type="mermaid")`）。
+- 用户需要完整原生交互界面 → `quro-ui` DSL。
+- **ui_widget/ui_card、ui_control、quro-ui、visual_popup、visual_question 是相互独立的功能，严禁混用。**
 
 ## 2. 工具组合使用
 - 复杂任务拆成多步：思考 → 调用 → 看结果 → 再思考 → 再调用
