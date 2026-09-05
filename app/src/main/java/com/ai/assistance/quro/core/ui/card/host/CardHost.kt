@@ -1,14 +1,23 @@
 package com.ai.assistance.quro.core.ui.card.host
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import com.ai.assistance.quro.core.ui.card.registry.CardRegistry
 import com.ai.assistance.quro.core.ui.card.registry.CardRenderer
 import com.ai.assistance.quro.core.ui.card.registry.CardState
 import com.ai.assistance.quro.core.ui.card.render.BackendKind
+import com.ai.assistance.quro.core.ui.card.render.CanvasBackend
 import com.ai.assistance.quro.core.ui.card.spec.Action
 import com.ai.assistance.quro.core.ui.card.spec.CardSpec
 import com.ai.assistance.quro.core.ui.card.spec.ColorToken
@@ -85,18 +94,49 @@ fun CardSurface(
     // 受控强转：state 由同一 renderer.createInitialState() 产生，类型一致，安全。
     @Suppress("UNCHECKED_CAST")
     val r = renderer as CardRenderer<CardState>
-    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
-    val resolver: (com.ai.assistance.quro.core.ui.card.spec.ColorToken) -> Color = { StyleTokenResolver.resolve(it) }
+    val measurer = rememberTextMeasurer()
     val state = remember(spec.id) { r.createInitialState() }
 
-    androidx.compose.foundation.Canvas(modifier) {
-        val sizePx = size
-        val measured = r.measure(spec, state, sizePx.width)
+    // 主题令牌：把语义色映射到当前 Material 主题（暗色 / 字体缩放自动生效）。
+    // 端上自写绘制，不依赖任何内置/三方成品卡片控件。
+    val cs = MaterialTheme.colorScheme
+    StyleTokenResolver.resolveToken = { token ->
+        when (token) {
+            ColorToken.Primary -> cs.primary
+            ColorToken.OnPrimary -> cs.onPrimary
+            ColorToken.Secondary -> cs.secondary
+            ColorToken.OnSecondary -> cs.onSecondary
+            ColorToken.Surface -> cs.surface
+            ColorToken.OnSurface -> cs.onSurface
+            ColorToken.SurfaceVariant -> cs.surfaceVariant
+            ColorToken.OnSurfaceVariant -> cs.onSurfaceVariant
+            ColorToken.Background -> cs.background
+            ColorToken.OnBackground -> cs.onBackground
+            ColorToken.Outline -> cs.outline
+            ColorToken.Success -> Color(0xFF4CAF50)
+            ColorToken.Warning -> Color(0xFFFF9800)
+            ColorToken.Danger -> Color(0xFFF44336)
+            ColorToken.Info -> cs.primary
+        }
+    }
+
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        // 预测量：用可用宽度算出卡片高度，否则 Canvas 默认 0 高不显示。
+        // 注意本环境 BOM 2026.01.01 的 Dp↔px 扩展（roundToPx/toDp）在此作用域不可见，
+        // 直接手算：px = dpValue × density（density 是 Float 密度因子）。
+        val densityFactor = LocalDensity.current.density
+        val maxWidthPx = (maxWidth.value * densityFactor).coerceAtLeast(1f)
+        val measured = r.measure(spec, state, maxWidthPx)
         val layout = r.layout(spec, state, measured)
-        val backend = com.ai.assistance.quro.core.ui.card.render.CanvasBackend(
-            scope = this, tokenResolver = resolver, textMeasurer = measurer,
-        )
-        r.render(backend, spec, layout, state)
+        val heightDp = Dp(measured.height / densityFactor)
+        Canvas(Modifier.fillMaxWidth().height(heightDp)) {
+            val backend = CanvasBackend(
+                scope = this,
+                tokenResolver = { StyleTokenResolver.resolve(it) },
+                textMeasurer = measurer,
+            )
+            r.render(backend, spec, layout, state)
+        }
     }
 }
 

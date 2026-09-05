@@ -41,6 +41,11 @@ import com.ai.assistance.quro.ui.VisualCustomPopupDialog
 import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.ai.assistance.quro.core.cards.parseComponentSpec
 import com.ai.assistance.quro.ui.QuroShareBridge
+// 自研卡片渲染（feat_self_card）：独立功能，与动态 UI 的 quro-ui 完全不合并。
+import com.ai.assistance.quro.core.ui.card.CardModule
+import com.ai.assistance.quro.core.ui.card.host.CardSurface
+import com.ai.assistance.quro.core.ui.card.spec.CardSpec
+import com.ai.assistance.quro.core.ui.card.spec.parseCardSpec
 // ZorvAI 生成式 UI（:genui 模块）：AI 自写 JSX/HTML → 对话框内 WebView 渲染
 import com.zorv.genui.controller.GenUiController
 import com.zorv.genui.ui.GenUiCard
@@ -2817,6 +2822,18 @@ private fun MessageRow(
             }
         }
     }
+    // 自研卡片渲染（feat_self_card）：独立开关，与动态 UI 完全无关、不合并。
+    // 从消息文本解析所有 ```quro-card 围栏 → 完整 CardSpec（含 data），在气泡下方全宽内联渲染。
+    // 开关关闭（默认）时不解析、不渲染，围栏降级为普通文本/代码块。
+    val selfCardOn = PersonaFeatureToggles.isSelfCardEnabled(ctx)
+    val selfCardBlocks = remember(msg.text, selfCardOn) {
+        if (!selfCardOn) {
+            emptyList<CardSpec>()
+        } else {
+            val t = msg.text
+            if (t.isNullOrBlank()) emptyList() else extractSelfCardSpecs(QuroVoiceStyle.strip(t))
+        }
+    }
     // 正文文本与「内联组件 JSON」抽离结果：供气泡正文与气泡外全宽卡片共用同一份，避免重复解析。
     // 卡片从气泡里拎出来，在下方「全宽内联」区块渲染，不再被 280dp 气泡压窄、移动端看不全。
     val displayText = QuroVoiceStyle.strip(msg.text ?: "")
@@ -2873,6 +2890,13 @@ private fun MessageRow(
                     // 动态UI直接渲染：全宽、无气泡、无卡片背景，UI本身就是对话框
                     dynamicUiBlocks.forEach { blk ->
                         DynamicUiBlock(source = blk.source, onCommand = onCommand, onOpenLink = onOpenLink)
+                    }
+                    // 自研卡片：全宽内联渲染（独立功能，不合并）
+                    if (selfCardBlocks.isNotEmpty()) {
+                        selfCardBlocks.forEach { spec ->
+                            Spacer(Modifier.height(6.dp))
+                            CardSurface(spec = spec, modifier = Modifier.fillMaxWidth())
+                        }
                     }
                     // 操作按钮（复制/追问/分享/删除/重试）—— 与气泡消息一致的动作栏
                     Spacer(Modifier.height(6.dp))
@@ -3155,7 +3179,7 @@ private fun MessageRow(
                     SelectionContainer {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         // 动态 UI 区块不在气泡内渲染（会被 280dp 压窄 / 输入条遮挡），改在消息底部全宽内联渲染。
-                        blocks.filter { it !is MsgBlock.DynamicUi }.forEach { blk ->
+                        blocks.filter { it !is MsgBlock.DynamicUi && it !is MsgBlock.SelfCard }.forEach { blk ->
                             when (blk) {
                                 is MsgBlock.Text -> {
                                     // [D1] 接入项目统一富文本渲染器 RichText（ui/dialog/RichText.kt）：
@@ -3216,6 +3240,8 @@ private fun MessageRow(
                                 )
                                 // 动态 UI 区块已在消息底部全宽内联渲染，气泡内不再重复渲染。
                                 is MsgBlock.DynamicUi -> {}
+                                // 自研卡片围栏已在消息底部全宽内联渲染，气泡内不再重复渲染（与动态 UI 同源机制）。
+                                is MsgBlock.SelfCard -> {}
                             }
                         }
                         }
@@ -3353,6 +3379,14 @@ private fun MessageRow(
             dynamicUiBlocks.forEach { blk ->
                 Spacer(Modifier.height(6.dp))
                 DynamicUiBlock(source = blk.source, onCommand = onCommand, onOpenLink = onOpenLink)
+            }
+        }
+        // ── 自研卡片渲染（feat_self_card）：全宽内联渲染进对话框，独立功能，与动态 UI 不合并 ──
+        if (selfCardBlocks.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            selfCardBlocks.forEach { spec ->
+                Spacer(Modifier.height(6.dp))
+                CardSurface(spec = spec, modifier = Modifier.fillMaxWidth())
             }
         }
         }   // 闭合 else（非纯动态UI消息，走原有气泡渲染）
@@ -6198,6 +6232,9 @@ private sealed class MsgBlock {
     data class MiniApp(val html: String) : MsgBlock()
     /** 动态 UI：```quro-ui 围栏，渲染为原生可交互控件（非 WebView）。 */
     data class DynamicUi(val source: String) : MsgBlock()
+    // 自研卡片渲染（feat_self_card）围栏：与 DynamicUi 完全独立的另一种 block，不合并。
+    // 同样从气泡剔除、改在消息底部全宽内联渲染 CardSurface。
+    data class SelfCard(val source: String) : MsgBlock()
     data class Heading(val level: Int, val text: String) : MsgBlock()
     data class Quote(val text: String) : MsgBlock()
     data class Rule(val text: String = "") : MsgBlock()
@@ -6226,6 +6263,13 @@ private fun extractInlineComponents(text: String): Pair<String, List<QuroChatCar
         // 否则根节点类型与内联卡片类型同名（button/form/list/tabs/slider/progress/badge…）时，
         // 动态 UI 会被劫持成内联卡片、原围栏被拆烂，表现为「围栏残留气泡里 / 动态 UI 不渲染」。
         if (isQuroUiNodeJson(candidate)) {
+            sb.append(candidate)
+            i = end + 1
+            continue
+        }
+        // 与动态 UI 同款防护：自研卡片的 JSON（data.kind 结构）绝不能被当成「内联组件」抽走，
+        // 否则围栏被拆烂、自研卡片不渲染。仅认 ```quro-card 围栏路径，这里兜底拦截内联 JSON。
+        if (isSelfCardNodeJson(candidate)) {
             sb.append(candidate)
             i = end + 1
             continue
@@ -6400,6 +6444,9 @@ private fun parseBlocks(text: String): List<MsgBlock> {
         val lang = m.groupValues[1].trim()
         val code = m.groupValues[2].removeSuffix("\n")
         when {
+            // 自研卡片渲染（feat_self_card）：独立围栏 ```quro-card，先于动态 UI 判定，避免被劫持。
+            // 内容转成 MsgBlock.SelfCard 从气泡剔除，交给消息底部 CardSurface 全宽内联渲染。
+            isSelfCardLang(lang) -> blocks.add(MsgBlock.SelfCard(code))
             // 生成式 UI（AI 自写 JSX/HTML）：由 :genui WebView 管线渲染，此处不生成任何块，
             // 避免被内置渲染器或裸代码块二次渲染。内容已在流式阶段 ingest 进 GenUiController。
             isGenUiLang(lang) -> { /* skip — 已废弃的 GenUI WebView 路径（见 QuroChatViewModel.GENUI_WEBVIEW_ENABLED） */ }
@@ -6454,6 +6501,50 @@ private fun isDynamicUiLang(lang: String): Boolean {
     val l = lang.trim().lowercase()
     return l == "quro-ui" || l == "quro_ui" || l == "zorv/ui" || l == "zorv-ui" || l == "zorv_ui" ||
             l.contains("quro") || l.contains("zorv")
+}
+
+/**
+ * 判定是否为「自研卡片渲染」围栏（feat_self_card）：quro-card / quro_card / zorv-card / zorv_card。
+ * 必须**先于** [isDynamicUiLang] 判定——后者对含 "quro"/"zorv" 的任意 lang 都返回 true，
+ * 若不先行拦截，```quro-card 会被动态 UI 路径劫持成 quro-ui 节点树，导致自研卡片不渲染、围栏残留。
+ * 与动态 UI 严格两条独立路径，不合并。
+ */
+private fun isSelfCardLang(lang: String): Boolean {
+    val l = lang.trim().lowercase()
+    return l == "quro-card" || l == "quro_card" || l == "zorv-card" || l == "zorv_card"
+}
+
+/** 判断一段 JSON 是否为自研卡片节点（含 data.kind 结构，与内联组件 JSON 区分）。 */
+private fun isSelfCardNodeJson(json: String): Boolean {
+    return runCatching {
+        val o = JSONObject(json)
+        o.has("data") && o.optJSONObject("data")?.has("kind") == true
+    }.getOrDefault(false)
+}
+
+/**
+ * 从 AI 文本里抽离所有 ```quro-card 围栏并解析为完整 [CardSpec]（含 data）。
+ * 与动态 UI 的 quro-ui 解析完全独立、不合并：只认 ```quro-card 围栏，其余不动。
+ *
+ * - 开关关闭（调用方不调用本函数）时不进入此路径；
+ * - 围栏内 JSON 非法 / 缺 type / 不在白名单 → 解析失败跳过该围栏（降级为普通代码块，绝不崩）；
+ * - 渲染器注册由 [CardModule.init] 幂等保证（即便开关已持久化为开、启动时未走切换逻辑也能渲染）。
+ */
+private fun extractSelfCardSpecs(text: String): List<CardSpec> {
+    if (text.isBlank()) return emptyList()
+    // 幂等初始化：确保 CardRegistry 已注册自研渲染器（metric/line_chart/button_group/skeleton…）。
+    CardModule.init()
+    val out = mutableListOf<CardSpec>()
+    val seen = mutableSetOf<String>()
+    for (m in RE_FENCE.findAll(text)) {
+        val lang = m.groupValues[1].trim().lowercase()
+        if (!isSelfCardLang(lang)) continue
+        val code = m.groupValues[2].removeSuffix("\n")
+        val spec = parseCardSpec(code) ?: continue
+        if (!seen.add(spec.id)) continue
+        out.add(spec)
+    }
+    return out
 }
 
 /**
@@ -6517,6 +6608,8 @@ private fun parseTail(seg: String): List<MsgBlock> {
             val out = mutableListOf<MsgBlock>()
             if (before.isNotBlank()) out.addAll(parseSegments(before))
             when {
+                // 自研卡片渲染（feat_self_card）流式未闭合围栏：同样转 SelfCard 块（边写边出卡片）
+                isSelfCardLang(lang) -> out.add(MsgBlock.SelfCard(after))
                 // 生成式 UI 流式未闭合围栏：已废弃的 GenUI WebView 路径，跳过
                 isGenUiLang(lang) -> { /* skip — 已废弃的 GenUI WebView 路径 */ }
                 // 流式输出中 mermaid 围栏还没闭合时，也实时渲染（边写边出图）
