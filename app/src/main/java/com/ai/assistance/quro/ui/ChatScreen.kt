@@ -265,9 +265,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
 import kotlinx.coroutines.flow.filterNotNull
-import org.json.JSONArray
 import org.json.JSONObject
-import kotlin.math.roundToInt
 import com.ai.assistance.quro.core.tools.RunCodeTool
 import android.content.Context
 import android.graphics.BitmapFactory
@@ -941,19 +939,6 @@ fun ChatScreen(
                                 html = event.value,
                                 config = emptyMap(),
                             )
-                            // v1082 修复：AI 经 ui_control(action:"widget", type:"table/pie/rating/tag/...")
-                            // 下发的结构化数据被当纯文本显示，导致截图里销售数据、流量来源等直接暴露 JSON。
-                            // 这里解析 value 并构造对应 QuroChatCard，复用对话内既有渲染器。
-                            "table" -> parseWidgetTableCard(safeId, event.label, event.value)
-                            "pie" -> parseWidgetPieCard(safeId, event.label, event.value)
-                            "rating" -> parseWidgetRatingCard(safeId, event.label, event.value)
-                            "tag", "tags", "chips" -> parseWidgetChipsCard(safeId, event.label, event.value)
-                            "list" -> parseWidgetListCard(safeId, event.label, event.value)
-                            "stat" -> parseWidgetStatCard(safeId, event.label, event.value)
-                            "progress" -> parseWidgetProgressCard(safeId, event.label, event.value)
-                            "alert" -> parseWidgetAlertCard(safeId, event.label, event.value)
-                            "slider" -> parseWidgetSliderCard(safeId, event.label, event.value)
-                            "segmented", "select" -> parseWidgetSegmentedCard(safeId, event.label, event.value)
                             else -> com.ai.assistance.quro.core.cards.QuroChatCard.InfoCard(
                                 id = safeId,
                                 title = event.label,
@@ -8940,145 +8925,5 @@ private fun formatFileSize(bytes: Long): String {
         bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
         else -> "${bytes / (1024 * 1024 * 1024)} GB"
     }
-}
-
-// ═══ ui_control(action="widget") 结构化数据解析辅助函数 ═══
-// 把 AI 下发的 JSON/纯文本 value 转成对应 QuroChatCard，避免在对话里直接显示原始 JSON。
-
-private fun parseWidgetTableCard(id: String, title: String, value: String): com.ai.assistance.quro.core.cards.QuroChatCard.TableCard {
-    return try {
-        val obj = JSONObject(value)
-        val headers = obj.optJSONArray("headers")?.let { arr ->
-            List(arr.length()) { arr.optString(it, "") }
-        } ?: emptyList()
-        val rows = obj.optJSONArray("rows")?.let { arr ->
-            List(arr.length()) { ri ->
-                arr.optJSONArray(ri)?.let { rowArr ->
-                    List(rowArr.length()) { rowArr.optString(it, "") }
-                } ?: listOf(arr.optString(ri, ""))
-            }
-        } ?: emptyList()
-        com.ai.assistance.quro.core.cards.QuroChatCard.TableCard(id, title, headers, rows)
-    } catch (_: Exception) {
-        com.ai.assistance.quro.core.cards.QuroChatCard.TableCard(id, title, emptyList(), listOf(listOf(value)))
-    }
-}
-
-private fun parseWidgetPieCard(id: String, title: String, value: String): com.ai.assistance.quro.core.cards.QuroChatCard.PieCard {
-    return try {
-        val arr = JSONArray(value)
-        val segments = List(arr.length()) { i ->
-            val obj = arr.optJSONObject(i) ?: JSONObject()
-            com.ai.assistance.quro.core.cards.QuroChatCard.PieCard.PieSeg(
-                name = obj.optString("label", obj.optString("name", "项${i + 1}")),
-                value = obj.optDouble("value", 0.0).toFloat(),
-                color = obj.optString("color", "")
-            )
-        }
-        com.ai.assistance.quro.core.cards.QuroChatCard.PieCard(id, title, segments)
-    } catch (_: Exception) {
-        com.ai.assistance.quro.core.cards.QuroChatCard.PieCard(id, title, emptyList())
-    }
-}
-
-private fun parseWidgetRatingCard(id: String, title: String, value: String): com.ai.assistance.quro.core.cards.QuroChatCard.RatingCard {
-    val floatValue = value.toFloatOrNull() ?: 0f
-    val max = 5
-    val intValue = floatValue.roundToInt().coerceIn(0, max)
-    return com.ai.assistance.quro.core.cards.QuroChatCard.RatingCard(id, title, label = "", max = max, value = intValue)
-}
-
-private fun parseWidgetChipsCard(id: String, title: String, value: String): com.ai.assistance.quro.core.cards.QuroChatCard.ChipsCard {
-    val chips = try {
-        val arr = JSONArray(value)
-        List(arr.length()) { arr.optString(it, "") }.filter { it.isNotBlank() }
-    } catch (_: Exception) {
-        value.split(",", "，").map { it.trim() }.filter { it.isNotBlank() }
-    }
-    return com.ai.assistance.quro.core.cards.QuroChatCard.ChipsCard(id, title, label = "", chips = chips, selected = emptyList(), multi = false)
-}
-
-private fun parseWidgetListCard(id: String, title: String, value: String): com.ai.assistance.quro.core.cards.QuroChatCard.ListCard {
-    val items = try {
-        val arr = JSONArray(value)
-        List(arr.length()) { i ->
-            val obj = arr.optJSONObject(i)
-            if (obj != null) {
-                com.ai.assistance.quro.core.cards.QuroChatCard.ListCard.ListItem(
-                    text = obj.optString("text", obj.optString("label", "")),
-                    sub = obj.optString("sub", obj.optString("description", "")),
-                    selected = obj.optBoolean("selected", false)
-                )
-            } else {
-                com.ai.assistance.quro.core.cards.QuroChatCard.ListCard.ListItem(text = arr.optString(i, ""))
-            }
-        }
-    } catch (_: Exception) {
-        value.split("\n").map { com.ai.assistance.quro.core.cards.QuroChatCard.ListCard.ListItem(text = it.trim()) }
-    }
-    return com.ai.assistance.quro.core.cards.QuroChatCard.ListCard(id, title, items, selectable = false, command = "")
-}
-
-private fun parseWidgetStatCard(id: String, title: String, value: String): com.ai.assistance.quro.core.cards.QuroChatCard.StatCard {
-    return try {
-        val obj = JSONObject(value)
-        com.ai.assistance.quro.core.cards.QuroChatCard.StatCard(
-            id = id,
-            title = title,
-            label = obj.optString("label", ""),
-            value = obj.optString("value", value),
-            unit = obj.optString("unit", ""),
-            delta = obj.optString("delta", ""),
-            trend = obj.optString("trend", "flat")
-        )
-    } catch (_: Exception) {
-        com.ai.assistance.quro.core.cards.QuroChatCard.StatCard(id, title, label = "", value = value, unit = "", delta = "", trend = "flat")
-    }
-}
-
-private fun parseWidgetProgressCard(id: String, title: String, value: String): com.ai.assistance.quro.core.cards.QuroChatCard.ProgressCard {
-    val obj = try { JSONObject(value) } catch (_: Exception) { null }
-    val raw = obj?.optDouble("value", 0.0)?.toFloat() ?: value.toFloatOrNull() ?: 0f
-    val max = obj?.optDouble("max", 100.0)?.toFloat() ?: 100f
-    val suffix = obj?.optString("suffix", "%") ?: "%"
-    return com.ai.assistance.quro.core.cards.QuroChatCard.ProgressCard(id, title, label = "", value = raw.coerceIn(0f, max), max = max, suffix = suffix)
-}
-
-private fun parseWidgetAlertCard(id: String, title: String, value: String): com.ai.assistance.quro.core.cards.QuroChatCard.AlertCard {
-    return try {
-        val obj = JSONObject(value)
-        com.ai.assistance.quro.core.cards.QuroChatCard.AlertCard(
-            id = id,
-            title = title,
-            severity = obj.optString("severity", "info"),
-            text = obj.optString("text", value)
-        )
-    } catch (_: Exception) {
-        com.ai.assistance.quro.core.cards.QuroChatCard.AlertCard(id, title, severity = "info", text = value)
-    }
-}
-
-private fun parseWidgetSliderCard(id: String, title: String, value: String): com.ai.assistance.quro.core.cards.QuroChatCard.SliderCard {
-    return try {
-        val obj = JSONObject(value)
-        val valueFloat = obj.optDouble("value", 0.0).toFloat()
-        val min = obj.optDouble("min", 0.0).toFloat()
-        val max = obj.optDouble("max", 100.0).toFloat()
-        val step = obj.optDouble("step", 1.0).toFloat()
-        com.ai.assistance.quro.core.cards.QuroChatCard.SliderCard(id, title, label = "", value = valueFloat, min = min, max = max, step = step)
-    } catch (_: Exception) {
-        val raw = value.toFloatOrNull() ?: 0f
-        com.ai.assistance.quro.core.cards.QuroChatCard.SliderCard(id, title, label = "", value = raw, min = 0f, max = 100f, step = 1f)
-    }
-}
-
-private fun parseWidgetSegmentedCard(id: String, title: String, value: String): com.ai.assistance.quro.core.cards.QuroChatCard.SegmentedCard {
-    val options = try {
-        val arr = JSONArray(value)
-        List(arr.length()) { arr.optString(it, "") }.filter { it.isNotBlank() }
-    } catch (_: Exception) {
-        value.split(",", "，").map { it.trim() }.filter { it.isNotBlank() }
-    }
-    return com.ai.assistance.quro.core.cards.QuroChatCard.SegmentedCard(id, title, label = "", options = options, selectedIndex = 0)
 }
 
