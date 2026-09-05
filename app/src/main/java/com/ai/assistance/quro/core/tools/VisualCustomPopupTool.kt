@@ -49,9 +49,10 @@ object VisualCustomPopupQueue {
                 val pending = pendingPopups[index]
                 pending.result.set(result)
                 pending.latch.countDown()
-                pendingPopups.removeAt(index)
                 Log.d(TAG, "用户提交自定义弹窗结果: $result")
-                // 发送弹窗关闭事件
+                // 修复：与 VisualPopupTool.submitResult 对齐，立即移除并发事件，
+                // 避免旧弹窗卡住 currentPopup 导致新弹窗进不来。
+                pendingPopups.removeAt(index)
                 _eventChannel.trySend(PopupEvent.PopupRemoved(id))
             }
         }

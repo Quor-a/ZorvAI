@@ -2,6 +2,8 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
@@ -39,21 +41,44 @@ object VisualQuestionQueue {
     private const val TAG = "VisualQuestionQueue"
     val pendingQuestions = mutableListOf<VisualPendingQuestion>()
 
+    // 修复：原 UI 用 while(true)+delay(500) 轮询，浪费 CPU 且与事件驱动模式不一致。
+    // 这里加上 eventFlow，UI 改为 collect 触发。
+    private val _eventChannel = Channel<QuestionEvent>(Channel.BUFFERED)
+    val eventFlow = _eventChannel.receiveAsFlow()
+
+    sealed class QuestionEvent {
+        data class QuestionAdded(val index: Int) : QuestionEvent()
+        data class QuestionRemoved(val index: Int) : QuestionEvent()
+    }
+
     fun submitAnswer(index: Int, answer: String) {
-        if (index in pendingQuestions.indices) {
-            val pending = pendingQuestions[index]
-            pending.result.set(answer)
-            pending.latch.countDown()
-            pendingQuestions.removeAt(index)
-            Log.d(TAG, "用户提交答案: $answer")
+        synchronized(pendingQuestions) {
+            if (index in pendingQuestions.indices) {
+                val pending = pendingQuestions[index]
+                pending.result.set(answer)
+                pending.latch.countDown()
+                pendingQuestions.removeAt(index)
+                Log.d(TAG, "用户提交答案: $answer")
+                _eventChannel.trySend(QuestionEvent.QuestionRemoved(index))
+            }
         }
     }
 
     fun getCurrentQuestion(): Pair<Int, VisualPendingQuestion>? {
-        return if (pendingQuestions.isNotEmpty()) {
-            0 to pendingQuestions[0]
-        } else {
-            null
+        return synchronized(pendingQuestions) {
+            if (pendingQuestions.isNotEmpty()) {
+                0 to pendingQuestions[0]
+            } else {
+                null
+            }
+        }
+    }
+
+    fun signalAdded() {
+        synchronized(pendingQuestions) {
+            if (pendingQuestions.isNotEmpty()) {
+                _eventChannel.trySend(QuestionEvent.QuestionAdded(0))
+            }
         }
     }
 }
@@ -63,21 +88,42 @@ object VisualActionQueue {
     private const val TAG = "VisualActionQueue"
     val pendingActions = mutableListOf<VisualPendingAction>()
 
+    private val _eventChannel = Channel<ActionEvent>(Channel.BUFFERED)
+    val eventFlow = _eventChannel.receiveAsFlow()
+
+    sealed class ActionEvent {
+        data class ActionAdded(val index: Int) : ActionEvent()
+        data class ActionRemoved(val index: Int) : ActionEvent()
+    }
+
     fun submitAction(index: Int, value: String) {
-        if (index in pendingActions.indices) {
-            val pending = pendingActions[index]
-            pending.result.set(value)
-            pending.latch.countDown()
-            pendingActions.removeAt(index)
-            Log.d(TAG, "用户选择操作: $value")
+        synchronized(pendingActions) {
+            if (index in pendingActions.indices) {
+                val pending = pendingActions[index]
+                pending.result.set(value)
+                pending.latch.countDown()
+                pendingActions.removeAt(index)
+                Log.d(TAG, "用户选择操作: $value")
+                _eventChannel.trySend(ActionEvent.ActionRemoved(index))
+            }
         }
     }
 
     fun getCurrentAction(): Pair<Int, VisualPendingAction>? {
-        return if (pendingActions.isNotEmpty()) {
-            0 to pendingActions[0]
-        } else {
-            null
+        return synchronized(pendingActions) {
+            if (pendingActions.isNotEmpty()) {
+                0 to pendingActions[0]
+            } else {
+                null
+            }
+        }
+    }
+
+    fun signalAdded() {
+        synchronized(pendingActions) {
+            if (pendingActions.isNotEmpty()) {
+                _eventChannel.trySend(ActionEvent.ActionAdded(0))
+            }
         }
     }
 }
@@ -157,6 +203,8 @@ class VisualQuestionTool : QuroTool {
         synchronized(VisualQuestionQueue.pendingQuestions) {
             VisualQuestionQueue.pendingQuestions.add(pending)
         }
+        // 修复：通知 UI 有新问题加入，让 UI 用 eventFlow 立即拉取
+        VisualQuestionQueue.signalAdded()
 
         Log.d(TAG, "等待用户回答: $question (超时: ${timeout}s)")
 

@@ -37,7 +37,10 @@ object QuroUiPointer {
     /** 把文本中的 `@/path` 替换为数据模型里对应值；找不到保留原样（不丢信息）。 */
     fun resolveText(text: String, model: Map<String, Any?>): String {
         if (!text.contains("@/")) return text
-        return Regex("""@(/[^\s@]+)""").replace(text) { m ->
+        // 修复：@(/[^\s@]+) 把尾随中文标点（，。！？；：）吃进去导致解析失败，
+        // 如 "你好@/user/name，再见" 路径被解析成 "/user/name，"。
+        // 路径只保留 ASCII 字母数字、下划线、连字符、斜杠、点。
+        return Regex("""@(/[\w\-./]+)""").replace(text) { m ->
             resolve(model, m.groupValues[1])?.toString() ?: m.value
         }
     }
@@ -83,7 +86,7 @@ object QuroUiPointer {
         is QuroTextNode -> node.copy(
             value = rt(node.value, model) ?: node.value,
             color = rt(node.color, model) ?: node.color,
-            style = rt(node.style, model) ?: node.style,
+            typography = rt(node.typography, model) ?: node.typography,
             align = rt(node.align, model) ?: node.align,
         )
         is QuroImageNode -> node.copy(url = rt(node.url, model) ?: node.url, alt = rt(node.alt, model) ?: node.alt)
@@ -101,6 +104,7 @@ object QuroUiPointer {
         is QuroVideoNode -> node.copy(url = rt(node.url, model) ?: node.url, title = rt(node.title, model) ?: node.title)
         is QuroAudioNode -> node.copy(url = rt(node.url, model) ?: node.url, title = rt(node.title, model) ?: node.title)
         is QuroBrowserNode -> node.copy(url = rt(node.url, model) ?: node.url)
+        is QuroHtmlNode -> node.copy(html = rt(node.html, model) ?: node.html)
         is QuroCodeNode -> node.copy(
             code = rt(node.code, model) ?: node.code,
             lang = rt(node.lang, model) ?: node.lang,

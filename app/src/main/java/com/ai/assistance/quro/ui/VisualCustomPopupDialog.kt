@@ -135,6 +135,8 @@ fun VisualCustomPopupDialog() {
     currentPopup?.let { (id, popup) ->
         Dialog(
             onDismissRequest = {
+                // 修复：原逻辑只在 cancelable=true 时关闭，否则用户无任何退出路径。
+                // 这里保持 cancelable 控制 onDismiss，但 close 按钮改成无条件显示。
                 if (popup.cancelable) {
                     VisualCustomPopupQueue.submitResult(id, """{"cancelled":true}""")
                     currentPopup = null
@@ -184,29 +186,38 @@ fun VisualCustomPopupDialog() {
                             color = cs.onPrimaryContainer,
                             modifier = Modifier.weight(1f)
                         )
-                        if (popup.cancelable) {
-                            IconButton(
-                                onClick = {
-                                    VisualCustomPopupQueue.submitResult(id, """{"cancelled":true}""")
-                                    currentPopup = null
-                                },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    Icons.Filled.Close,
-                                    contentDescription = "关闭",
-                                    tint = cs.onPrimaryContainer,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                        // 修复：close 按钮无条件显示，让 cancelable=false 弹窗也有退出路径。
+                        IconButton(
+                            onClick = {
+                                VisualCustomPopupQueue.submitResult(id, """{"cancelled":true}""")
+                                currentPopup = null
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "关闭",
+                                tint = cs.onPrimaryContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
-                    
+
                     // WebView内容
                     AndroidView(
                         factory = { context ->
                             WebView(context).apply {
-                                webViewClient = WebViewClient()
+                                // 修复：默认 WebViewClient 不拦截 shouldOverrideUrlLoading，
+                                // AI 自写 HTML 内任何 <a target=_blank> / window.open() 都会跳出 App。
+                                webViewClient = object : WebViewClient() {
+                                    override fun shouldOverrideUrlLoading(
+                                        view: WebView?,
+                                        request: android.webkit.WebResourceRequest?
+                                    ): Boolean {
+                                        request?.url?.let { view?.loadUrl(it.toString()) }
+                                        return true
+                                    }
+                                }
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
                                 settings.allowFileAccess = true
@@ -223,7 +234,7 @@ fun VisualCustomPopupDialog() {
                                 // 允许跨域请求（AI自写HTML可能引用外部CDN资源）
                                 settings.allowUniversalAccessFromFileURLs = true
                                 settings.allowFileAccessFromFileURLs = true
-                                
+
                                 // 添加JavaScript接口，让HTML可以调用
                                 addJavascriptInterface(object {
                                     @JavascriptInterface
@@ -239,16 +250,11 @@ fun VisualCustomPopupDialog() {
                                                         put("data", data ?: org.json.JSONObject())
                                                     }.toString()
                                                     VisualCustomPopupQueue.submitResult(id, result)
-                                                    // 在主线程关闭弹窗
-                                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                                        currentPopup = null
-                                                    }
+                                                    // 修复：submitResult 已发 PopupRemoved，
+                                                    // 不再需要此处手动 currentPopup = null（避免双重关闭路径）。
                                                 }
                                                 "close" -> {
                                                     VisualCustomPopupQueue.submitResult(id, """{"cancelled":true}""")
-                                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                                        currentPopup = null
-                                                    }
                                                 }
                                             }
                                         } catch (e: Exception) {
@@ -256,13 +262,22 @@ fun VisualCustomPopupDialog() {
                                         }
                                     }
                                 }, "Android")
-                                
+
                                 // 加载AI自写的HTML
                                 val html = generateCustomPopupHtml(popup)
                                 loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
-                                
+
                                 webView = this
                             }
+                        },
+                        // 修复：原代码无 onRelease，每次弹窗关闭 WebView 都未 destroy，
+                        // 多次弹窗后 WebView 内部线程与 Context 泄漏导致 OOM。
+                        update = { /* no-op */ },
+                        onRelease = { wv ->
+                            wv.stopLoading()
+                            wv.loadUrl("about:blank")
+                            wv.destroy()
+                            webView = null
                         },
                         modifier = Modifier
                             .fillMaxSize()

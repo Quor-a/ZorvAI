@@ -38,8 +38,8 @@ android {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1081
-        versionName = "1.0.81"
+        versionCode = 1082
+        versionName = "1.0.82"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true

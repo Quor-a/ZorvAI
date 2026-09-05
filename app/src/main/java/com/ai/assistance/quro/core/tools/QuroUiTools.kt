@@ -2,17 +2,35 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import com.ai.assistance.quro.core.tools.ui.UiNavigationEvent
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import org.json.JSONObject
 
 /**
  * UI 控制事件总线：AI 调用 ui_control 工具时，通过此通道通知 ChatScreen 执行界面操作。
  * ChatScreen 在 LaunchedEffect 中 collect [navEvent] 并执行对应的 UI 操作。
+ *
+ * 修复：原 navEvent 是单槽 @Volatile var，AI 一次回包连发两个事件
+ * （如 RenderCard + RenderWidget）或用户 100ms 内连点两个 render_html 按钮时，
+ * 后者覆盖前者 → 事件丢失、渲染缺一。改为 Channel(BUFFERED) 队列，
+ * 事件按序消费不丢失；赋值 API 保持不变（写入方不用动）。
  */
 object UiNavigationBus {
-    @Volatile var navEvent: UiNavigationEvent? = null
+    private val _eventChannel = Channel<UiNavigationEvent>(Channel.BUFFERED)
+    val eventFlow = _eventChannel.receiveAsFlow()
+
+    var navEvent: UiNavigationEvent?
+        @Deprecated("用 eventFlow 消费", ReplaceWith("eventFlow"))
+        get() = _eventChannel.tryReceive().getOrNull()
         set(value) {
-            field = value
+            if (value != null) _eventChannel.trySend(value)
+            // value=null 时是"清除事件"语义，Channel 模式下无需处理（已消费即清除）
         }
+
+    /** 便捷发送（等价于 navEvent = event）。 */
+    fun send(event: UiNavigationEvent) {
+        _eventChannel.trySend(event)
+    }
 }
 
 /**
@@ -45,7 +63,7 @@ action 说明:
 - sheet: 打开弹层 (target: model/persona/settings)
 - chat: 对话管理 (action_type: new/clear)
 - card: 渲染卡片 (title, content, style: info/success/warning/error)
-- widget: 渲染组件 (type: button/toggle/slider/input/select/mermaid, id, label, value；mermaid 时 value 填 Mermaid 源码，对话框渲染成图)
+- widget: 渲染组件 (type: button/toggle/slider/input/select/mermaid/miniapp, id, label, value；mermaid 时 value 填 Mermaid 源码，对话框渲染成图；miniapp 时 value 填完整 HTML，对话框内联渲染小程序)
 - status: 查询组件状态 (component: header/sidebar/input/toolbox)
 - update: 更新组件属性 (component, props: {key:value})
 - scroll: 滚动到指定位置 (target: top/bottom/id)
@@ -156,8 +174,8 @@ action 说明:
     },
     "type": {
       "type": "string",
-      "enum": ["button", "toggle", "slider", "input", "select", "mermaid"],
-      "description": "组件类型（mermaid 用于渲染可视化编程图表，source/value 填 Mermaid 源码）"
+      "enum": ["button", "toggle", "slider", "input", "select", "mermaid", "miniapp"],
+      "description": "组件类型（mermaid 用于渲染可视化编程图表，source/value 填 Mermaid 源码；miniapp 用于渲染 HTML 小程序，value 填完整 HTML）"
     },
     "id": {
       "type": "string",

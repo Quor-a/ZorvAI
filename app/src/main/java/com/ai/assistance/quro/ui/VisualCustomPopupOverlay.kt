@@ -109,7 +109,17 @@ fun VisualCustomPopupOverlay(
             AndroidView(
                 factory = { context ->
                     WebView(context).apply {
-                        webViewClient = WebViewClient()
+                        // 修复：默认 WebViewClient 不拦截 shouldOverrideUrlLoading，
+                        // AI 自写 HTML 内的链接会跳出悬浮窗/跳走。
+                        webViewClient = object : WebViewClient() {
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView?,
+                                request: android.webkit.WebResourceRequest?
+                            ): Boolean {
+                                request?.url?.let { view?.loadUrl(it.toString()) }
+                                return true
+                            }
+                        }
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.allowFileAccess = true
@@ -125,7 +135,7 @@ fun VisualCustomPopupOverlay(
                         settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
                         settings.allowUniversalAccessFromFileURLs = true
                         settings.allowFileAccessFromFileURLs = true
-                        
+
                         // 添加JavaScript接口，让HTML可以调用
                         addJavascriptInterface(object {
                             @JavascriptInterface
@@ -151,13 +161,21 @@ fun VisualCustomPopupOverlay(
                                 }
                             }
                         }, "Android")
-                        
+
                         // 加载AI自写的HTML
                         val html = generateCustomPopupHtml(popupData)
                         loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
-                        
+
                         webView = this
                     }
+                },
+                // 修复：原代码无 onRelease，悬浮窗关闭后 WebView 未 destroy 造成泄漏。
+                update = { /* no-op */ },
+                onRelease = { wv ->
+                    wv.stopLoading()
+                    wv.loadUrl("about:blank")
+                    wv.destroy()
+                    webView = null
                 },
                 modifier = Modifier
                     .fillMaxSize()

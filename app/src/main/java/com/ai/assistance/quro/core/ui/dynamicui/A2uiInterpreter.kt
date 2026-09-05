@@ -21,8 +21,12 @@ object A2uiInterpreter {
     fun looksLikeEnvelope(text: String): Boolean = text.lines().any { l ->
         val t = l.trim()
         t.startsWith("{") && t.contains("\"type\"") && run {
-            t.contains("createSurface") || t.contains("updateComponents") ||
-                    t.contains("updateDataModel") || t.contains("deleteSurface")
+            // 修复：原只查 createSurface 精确驼峰，但 A2uiEnvelope 的 parse 对 type
+            // 做 lowercase()，AI 写 "createsurface" 也合法。这里同步 lowercase 再 contains，
+            // 避免合法信封被路由到 DSL 解析路径报失败。
+            val lower = t.lowercase()
+            lower.contains("createsurface") || lower.contains("updatecomponents") ||
+                    lower.contains("updatedatamodel") || lower.contains("deletesurface")
         }
     }
 

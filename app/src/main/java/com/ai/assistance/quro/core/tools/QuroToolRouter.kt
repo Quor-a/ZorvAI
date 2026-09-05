@@ -249,6 +249,7 @@ class QuroToolRouter(allSpecs: List<QuroToolSpec>) {
     private fun categorize(name: String): ToolCapabilityDirectory.ToolCategory? {
         ToolCapabilityDirectory.getToolInfo(name)?.category?.let { return it }
         return when {
+            name in setOf("ui_dsl_spec", "ui_validate") -> ToolCapabilityDirectory.ToolCategory.DYNAMIC_UI
             name.startsWith("workspace_") -> ToolCapabilityDirectory.ToolCategory.WORKSPACE
             name.startsWith("aci_") -> ToolCapabilityDirectory.ToolCategory.APP_MANAGEMENT
             name.startsWith("mcp_") -> ToolCapabilityDirectory.ToolCategory.NETWORK_WEB

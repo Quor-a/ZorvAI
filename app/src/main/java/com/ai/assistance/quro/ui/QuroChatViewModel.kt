@@ -1133,7 +1133,10 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // - 后台生成会话：改该会话自己的 liveBuffer，绝不碰共享 store / _messages�?
         //   否则卡片会漏进当前可见会话（切会话串台的次要来源）�?
         // 归属会话 = activeConversationId（send 协程启动时已锁定为本�? convId）�?
-        val ownerId = activeConversationId
+        // 修复：工具中心「发到对话框渲染」（非生成中，无 active send）触发 RenderWidget 时，
+        // activeConversationId 为空字符串 → live==null && !visible → 卡片被静默丢弃。
+        // 回落到 _currentId.value（当前可见会话），保证手动渲染的卡片能挂到当前对话。
+        val ownerId = activeConversationId.ifBlank { _currentId.value }
         val visible = (_currentId.value == ownerId)
         // �? 修复（v416）：可见会话在【生成中】时，实时内容在 liveBuffer（buf）里，共�? store 是过时的
         //   （仅含上轮终�? + 本轮用户消息，不含正在流的助手回�?/工具块）。若此处�? store 改卡�?
@@ -2297,10 +2300,10 @@ $recent
             "  - **`speak` 是与「自动朗读」开关完全独立的语音通道**：无论用户是否开启自动朗读，当你需要主动「出声」（如唱歌、讲故事、朗诵、分角色演绎、或任何希望用声音而非仅文字表达的场景）时，都应主动调�? `speak`；语音播报的文本允许与你回复的文字内容不同（文字回复是一份，语音可以是另一份）。\n")
         sb.append("- **多语�? / 分角�? / 讲故事朗读的编排**：当用户要求「用多语�? / 分角�? / 讲故事」等方式朗读时，你应�?**主动编排**而非只产出一段会被统一念出的纯文本——在回复里用 `(语色:任意名称)` 为不同段�? / 角色分配音色，让 TTS 自动切换声音�?**语色标记的名称由你按内容自由�?**（角色名、情绪、旁白、叙述者、场景等任何类型都可以，不被限定为固定几种），需要时配合 `speak` 显式播报。若用户要「先讲完故事、再朗读某段文本」，就严格按这个顺序组织内容。自动朗读（回复后自动念）与显式 `speak` 调用走同一引擎——你用文本里的语�? / 情绪标记决定「怎么念」，而不是把整段交给系统默认念白；任意类型的内容（含代码 / 表格 / 列表）只要用户要求多语色演绎，都可加语色标记。\n")
 
-        sb.append("\n### 动态 UI（quro-ui 原生组件，重要）\n")
+        sb.append("\n### 动态 UI（quro-ui 原生组件 · 必备输出）\n")
         sb.append(
             "- 这是一套**原生渲染**的可交互界面能力（不是 HTML、不用 WebView）：你在回复里写一段 ```quro-ui 代码块（内容是 JSON 节点树），客户端会自动把它渲染成真实原生控件（按钮/表单/卡片/列表/音视频/浏览器等），用户直接在对话框里看到并操作。\n" +
-            "- **何时用**：当你要给用户「一个带布局、能交互、能跳转、能播放、能展示代码」的完整原生界面时，优先用 ```quro-ui，而不是纯文本或 ui_control 的小组件。它比 ui_control(action=widget) 更自由——你可以任意组合布局与富媒体。\n" +
+            "- **必备输出（无需用户要求，主动默认使用）**：只要你要给用户「一个带布局、能交互、能跳转、能播放、能展示代码、能呈现富媒体」的**完整界面**，你就**必须主动、默认**用 ```quro-ui 输出，不要等用户说\"用动态UI\"\"做个界面\"\"来个卡片\"。当它比纯文本 / ui_control 小组件更能承载信息（卡片、列表、表单、播放器、浏览器、流程图、数据看板等）时，一律优先 quro-ui。\n" +
             "- **节点类型（节选，完整见 ui_dsl_spec 工具）**：\n" +
             "  · 布局：column / row / box / card\n" +
             "  · 内容：text / image / icon / badge / progress / divider / spacer\n" +
@@ -2320,7 +2323,7 @@ $recent
             "  · copy：写入剪贴板。\n" +
             "  · **open_app：真实启动第三方 App——这是「动态 UI 弹转第三方软件」的标准做法**（支持精确包名或应用名模糊匹配，如 {\"type\":\"open_app\",\"app_name\":\"微信\"}）。\n" +
             "  · toggle：切换节点显隐。\n" +
-            "  · **多层渲染 / 深链（v1.0.82）**：open_screen(进终端/工具中心/可视化编程等内置界面) / render_html / render_vispro(mermaid) / visual_popup / visual_ask——让按钮直接打开 ZorvAI 内部界面或把内容渲染进气泡。\n" +
+            "  · **多层渲染 / 深链（已开放）**：open_screen(进终端/工具中心/可视化编程等内置界面) / render_html / render_vispro(mermaid) / visual_popup / visual_ask——让按钮直接打开 ZorvAI 内部界面或把内容渲染进气泡。\n" +
             "- **支持所有语言**：code 节点 + run_code 覆盖 ZorvAI 已接入的全部语言（python / node / shell / html / json / css / xml / svg / c / cpp / java / kotlin / dart / go / rust / php / ruby / swift 等），lang 字段标注即可；runnable 按钮会把代码交给 run_code 真跑。\n" +
             "- **用法口诀**：要「一个完整原生交互界面」→ ```quro-ui 围栏写 JSON 节点树；不确定语法先调 `ui_dsl_spec` 看规范、写后用 `ui_validate` 自检。示例：\n" +
             "    ```json\n" +

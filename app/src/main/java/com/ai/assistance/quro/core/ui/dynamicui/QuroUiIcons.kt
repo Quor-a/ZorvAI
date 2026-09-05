@@ -111,7 +111,11 @@ object QuroUiIcons {
      */
     fun resolve(name: String?): ImageVector {
         if (name.isNullOrBlank()) return Icons.Filled.Info
-        val key = name.trim().lowercase()
+        // 修复：注释宣称支持驼峰，但 lowercase 直接转 "arrowback"，MAP 里只有 "arrow_back"
+        // → 静默回落 Info。先把驼峰转 snake_case 再 lowercase。
+        val key = name.trim()
+            .replace(Regex("([a-z0-9])([A-Z])"), "$1_$2") // 驼峰 → snake
+            .lowercase()
             .replace("-", "_")
             .replace(" ", "_")
 

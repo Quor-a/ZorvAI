@@ -28,6 +28,7 @@ object ToolCapabilityDirectory {
         NETWORK_WEB("网络/Web", "HTTP请求、浏览器、MCP服务"),
         MEDIA("媒体", "音乐、视频、图片、音频处理"),
         UI_CARDS("UI/卡片", "对话框UI组件、可视化图表"),
+        DYNAMIC_UI("动态UI", "quro-ui 原生组件：可交互原生界面、富媒体、可视化渲染"),
         KNOWLEDGE_MEMORY("知识/记忆", "记忆库、知识库、经验库"),
         WORKSPACE("工作区", "工作区文件管理"),
         ACCESSIBILITY("无障碍", "屏幕读取、点击、滑动等"),
@@ -356,7 +357,32 @@ object ToolCapabilityDirectory {
             relatedTools = listOf("tool_discovery", "visual_custom_popup", "visual_popup"),
             priority = 5
         ),
-        
+
+        // ═══════════════ 动态 UI（必备输出）══════════════
+        "ui_dsl_spec" to ToolInfo(
+            name = "ui_dsl_spec",
+            category = ToolCategory.DYNAMIC_UI,
+            description = "拉取 quro-ui DSL 完整规范（节点/属性/动作），避免长 schema 常驻系统提示词",
+            useCases = listOf("要写 quro-ui 界面但不确定节点名/属性", "写动态UI前查规范", "确认某个节点的可配字段"),
+            examples = listOf("ui_dsl_spec()"),
+            parameters = emptyMap(),
+            tips = listOf("写 ```quro-ui 前先调一次，按规范产出", "与 ui_validate 配合：写完自检再发", "这是主动输出动态UI的规范来源"),
+            relatedTools = listOf("ui_validate", "chat_doc"),
+            priority = 5
+        ),
+
+        "ui_validate" to ToolInfo(
+            name = "ui_validate",
+            category = ToolCategory.DYNAMIC_UI,
+            description = "输出 quro-ui 前自检：把「渲染失败」变成事前修正",
+            useCases = listOf("写完 quro-ui JSON 想先验证", "界面渲染报错要定位", "确认节点树是否合法"),
+            examples = listOf("ui_validate(code=\"\"\"{...quro-ui json...}\"\"\")"),
+            parameters = mapOf("code" to "quro-ui JSON 节点树字符串"),
+            tips = listOf("写完动态UI后用它自检，再回给用户", "返回错误会指出具体节点/字段", "与 ui_dsl_spec 配合效果最佳"),
+            relatedTools = listOf("ui_dsl_spec"),
+            priority = 5
+        ),
+
         // ═══════════════ 可视化交互（强制使用） ═══════════════
         "visual_question" to ToolInfo(
             name = "visual_question",
@@ -847,6 +873,7 @@ object ToolCapabilityDirectory {
     /** 命名推断分类（兜底；handbook 已含手写分类优先）。与 QuroToolRouter.categorize 同源逻辑。 */
     private fun inferCategory(name: String): ToolCategory {
         return when {
+            name in setOf("ui_dsl_spec", "ui_validate") -> ToolCategory.DYNAMIC_UI
             name.startsWith("workspace_") -> ToolCategory.WORKSPACE
             name.startsWith("aci_") -> ToolCategory.APP_MANAGEMENT
             name.startsWith("mcp_") -> ToolCategory.NETWORK_WEB
@@ -971,6 +998,8 @@ object ToolCapabilityDirectory {
             "图片生成" to listOf("image_gen"),
             "图片识别" to listOf("image_recognition", "visual_analysis"),
             "UI展示" to listOf("ui_control"),
+            "原生交互界面/动态UI" to listOf("ui_dsl_spec", "ui_validate"),
+            "卡片/列表/表单/播放器/浏览器界面" to listOf("ui_dsl_spec"),
             "流程图/架构图" to listOf("ui_control(action=\"widget\", type=\"mermaid\")"),
             "记忆保存" to listOf("memory_save"),
             "知识搜索" to listOf("knowledge_search", "knowledge_rag_search"),

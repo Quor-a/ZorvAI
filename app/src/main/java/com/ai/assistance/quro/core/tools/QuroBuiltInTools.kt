@@ -193,7 +193,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     //  · 多媒/生成         : image_gen, video_gen, translate, image/audio/video_recognition
     //  · 文档生成          : aiwps_create/read/edit, enhanced_doc
     //  · 记忆/经验/技能    : memory_*, experience_*, skills, tool_discovery
-    //  · UI/可视化         : ui_control(ui_*), visual_*, dynamic_ui, creative_studio, fluid_cloud
+    //  · 动态 UI(必备)      : quro-ui 原生组件 = ui_dsl_spec / ui_validate / 消息内 ```quro-ui 围栏（AI 主动默认输出）
+    //  · UI/可视化         : ui_control(ui_*), visual_*, creative_studio, fluid_cloud
     //  · 化小窗(纯 UI)     : 对话框顶栏 + 浏览器工具栏「化小窗」按钮（可拖拽悬浮小窗，非工具）
     // ══════════════════════════════════════════════════════════════
 
@@ -448,7 +449,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(VisualCustomPopupTool()) // AI自写UI可视化弹窗（完全自定义HTML）
     r.register(NodeEditorTool())       // 节点编辑器：AI 直接读写节点流工程（无需打开界面）
     r.register(VisualStudioTool())     // 可视化编程：命名工程多项目保存（产物+可视化）
-    // 动态 UI 工具：AI 输出 quro-ui DSL 代码块 → 解析 → Compose 原生渲染（可交互、可回传表单值）
+    // 动态 UI（必备输出）工具：AI 默认主动输出 quro-ui DSL 代码块 → 解析 → Compose 原生渲染（可交互、可回传表单值）
     r.register(UiDslSpecTool())     // 拉取 DSL 规范，避免长 schema 常驻系统提示词
     r.register(UiValidateTool())    // 输出前自检，把「渲染失败」变成事前修正
     // UI 导航工具集：让 AI 能操控自己的界面（ui_* 命名规范）

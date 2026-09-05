@@ -14,7 +14,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,11 +25,10 @@ import androidx.compose.ui.window.DialogProperties
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.ai.assistance.quro.core.tools.PopupButton
-import com.ai.assistance.quro.core.tools.PopupInput
-import com.ai.assistance.quro.core.tools.PopupResult
 import com.ai.assistance.quro.core.tools.VisualPopupQueue
 import com.ai.assistance.quro.core.tools.VisualPopupData
 import com.ai.assistance.quro.core.tools.PopupStatus
+import com.ai.assistance.quro.core.tools.PopupResult
 
 /**
  * 可视化弹窗小卡片 - 显示在对话框中，点击可重新打开弹窗
@@ -246,30 +244,54 @@ fun VisualPopupDialog() {
                             color = cs.onSurface,
                             modifier = Modifier.weight(1f)
                         )
-                        if (popup.cancelable) {
-                            IconButton(
-                                onClick = {
-                                    VisualPopupQueue.submitResult(id, PopupResult(null, inputValues, cancelled = true))
-                                    currentPopup = null
-                                },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(Icons.Filled.Close, "关闭", modifier = Modifier.size(20.dp))
-                            }
+                        // 修复：close 按钮无条件显示。原逻辑只在 cancelable=true 时显示，
+                        // 但 onDismissRequest / dismissOnBackPress 也受 cancelable 控制，
+                        // 导致 cancelable=false 时用户完全无法退出。
+                        IconButton(
+                            onClick = {
+                                VisualPopupQueue.submitResult(id, PopupResult(null, inputValues, cancelled = true))
+                                currentPopup = null
+                            },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(Icons.Filled.Close, "关闭", modifier = Modifier.size(20.dp))
                         }
                     }
 
                     // 图片（如果有）
                     popup.imageUrl?.let { url ->
+                        val safeUrl = remember(url) { url }
+                        var imageWebView by remember { mutableStateOf<WebView?>(null) }
                         AndroidView(
                             factory = { context ->
                                 WebView(context).apply {
-                                    settings.javaScriptEnabled = true
+                                    // 修复：默认 WebViewClient 不拦截 shouldOverrideUrlLoading，
+                                    // 用户点图片内的链接会跳出 App。改为永远在 WebView 内加载。
+                                    webViewClient = object : WebViewClient() {
+                                        override fun shouldOverrideUrlLoading(
+                                            view: WebView?,
+                                            request: android.webkit.WebResourceRequest?
+                                        ): Boolean {
+                                            // 拦截所有外链跳转，强制在当前 WebView 内加载
+                                            request?.url?.let { view?.loadUrl(it.toString()) }
+                                            return true
+                                        }
+                                    }
+                                    settings.javaScriptEnabled = false
                                     settings.loadWithOverviewMode = true
                                     settings.useWideViewPort = true
-                                    webViewClient = WebViewClient()
-                                    loadUrl(url)
+                                    loadUrl(safeUrl)
+                                    imageWebView = this
                                 }
+                            },
+                            // 修复：原代码无 DisposableEffect，WebView 仅 detach 不 destroy，
+                            // 多次弹图后会泄漏 WebView 内部线程与 Context 引用，最终 OOM。
+                            update = { /* no-op */ },
+                            onRelease = { wv ->
+                                wv.stopLoading()
+                                wv.loadUrl("about:blank")
+                                wv.destroy()
+                                imageWebView = null
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
