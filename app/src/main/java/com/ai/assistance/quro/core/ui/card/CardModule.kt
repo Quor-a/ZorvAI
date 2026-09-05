@@ -10,6 +10,10 @@ import com.ai.assistance.quro.core.ui.card.widgets.MetricCardRenderer
 import com.ai.assistance.quro.core.ui.card.widgets.MetricCardState
 import com.ai.assistance.quro.core.ui.card.widgets.SkeletonRenderer
 import com.ai.assistance.quro.core.ui.card.widgets.SkeletonState
+import com.ai.assistance.quro.core.ui.card.widgets.StatusRenderer
+import com.ai.assistance.quro.core.ui.card.widgets.StatusState
+import com.ai.assistance.quro.core.ui.card.widgets.TableRenderer
+import com.ai.assistance.quro.core.ui.card.widgets.TableState
 
 /**
  * 新功能「自研卡片渲染」的装配入口（与 dynamic UI 完全独立，不合并）。
@@ -26,7 +30,8 @@ object CardModule {
         CardRegistry.register("line_chart", LineChartRenderer() as CardRenderer<LineChartState>)
         CardRegistry.register("button_group", ButtonGroupRenderer() as CardRenderer<ButtonGroupState>)
         CardRegistry.register("skeleton", SkeletonRenderer() as CardRenderer<SkeletonState>)
-        // 媒体/表单/状态其他子类按需追加……
+        CardRegistry.register("table", TableRenderer() as CardRenderer<TableState>)
+        CardRegistry.register("status", StatusRenderer() as CardRenderer<StatusState>)
         initialized = true
     }
 
