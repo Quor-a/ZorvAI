@@ -2801,14 +2801,20 @@ private fun MessageRow(
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     val avatarSize = if (narrow) 28 else 34
+    // 人格卡「动态 UI 组件」总开关：关掉时 quro-ui 区块不解析、不渲染，降级为普通文本。
+    val dynamicUiOn = PersonaFeatureToggles.isDynamicUiEnabled(ctx)
     // 动态 UI 区块：从消息文本解析出所有 ```quro-ui 围栏，单独拎出来在气泡下方「全宽内联」渲染。
     // 与气泡内普通文本/卡片互不干扰，避免被 280dp 气泡压窄、被输入条遮挡、需点开才能看。
-    val dynamicUiBlocks = remember(msg.text) {
-        val t = msg.text
-        if (t.isNullOrBlank()) emptyList<MsgBlock.DynamicUi>()
-        else {
-            val clean = extractInlineComponents(QuroVoiceStyle.strip(t)).first
-            parseBlocks(clean).filterIsInstance<MsgBlock.DynamicUi>()
+    val dynamicUiBlocks = remember(msg.text, dynamicUiOn) {
+        if (!dynamicUiOn) {
+            emptyList<MsgBlock.DynamicUi>()
+        } else {
+            val t = msg.text
+            if (t.isNullOrBlank()) emptyList<MsgBlock.DynamicUi>()
+            else {
+                val clean = extractInlineComponents(QuroVoiceStyle.strip(t)).first
+                parseBlocks(clean).filterIsInstance<MsgBlock.DynamicUi>()
+            }
         }
     }
     // 正文文本与「内联组件 JSON」抽离结果：供气泡正文与气泡外全宽卡片共用同一份，避免重复解析。
@@ -5757,6 +5763,34 @@ private fun ModelSheetContent(
     }
 }
 
+/**
+ * 人格卡里的单个功能开关行（与现有 Switch 用法一致，独立一行）。
+ * 两个功能各调一次，互不合并。
+ */
+@Composable
+private fun PersonaFeatureToggleRow(
+    title: String,
+    desc: String,
+    checked: Boolean,
+    onChanged: (Boolean) -> Unit,
+    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
+) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(cs.surfaceVariant.copy(alpha = 0.5f))
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = scaled(14), color = cs.onSurface, fontWeight = FontWeight.SemiBold)
+            Text(desc, fontSize = scaled(11), color = Muted, modifier = Modifier.padding(top = 3.dp))
+        }
+        Switch(checked = checked, onCheckedChange = onChanged)
+    }
+}
+
 @Composable
 private fun PersonaSheetContent(
     list: List<Persona>,
@@ -5766,11 +5800,40 @@ private fun PersonaSheetContent(
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
+    val ctx = LocalContext.current
+    var dynamicUiOn by remember { mutableStateOf(PersonaFeatureToggles.isDynamicUiEnabled(ctx)) }
+    var selfCardOn by remember { mutableStateOf(PersonaFeatureToggles.isSelfCardEnabled(ctx)) }
 
     Column(
         Modifier.fillMaxWidth().heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
     ) {
+        // ── 人格卡里的两个独立功能开关（互不合并）──
+        // 1) 动态 UI 组件：已有功能（quro-ui DSL 原生渲染）的总开关
+        // 2) 自研卡片渲染：尚未实现的新功能（7 层自研架构，与动态 UI 无关）的总开关
+        SheetHeader("功能开关", "两项独立控制，互不影响。", scaled)
+        PersonaFeatureToggleRow(
+            title = "动态 UI 组件",
+            desc = "AI 回复里的原生交互界面（卡片/列表/表单/播放器/浏览器）。",
+            checked = dynamicUiOn,
+            onChanged = {
+                dynamicUiOn = it
+                PersonaFeatureToggles.setDynamicUiEnabled(ctx, it)
+            },
+            scaled = scaled,
+        )
+        PersonaFeatureToggleRow(
+            title = "自研卡片渲染",
+            desc = "全新自研渲染层（不依赖内置/三方卡片控件，三档底座）。当前为预览。",
+            checked = selfCardOn,
+            onChanged = {
+                selfCardOn = it
+                PersonaFeatureToggles.setSelfCardEnabled(ctx, it)
+                if (it) com.ai.assistance.quro.core.ui.card.CardModule.init()
+            },
+            scaled = scaled,
+        )
+
         SheetHeader("选择灵魂", "每个灵魂是不同语气与专长的「对话伙伴」，切换即换一种相处方式。", scaled)
         list.forEach { p ->
             val sel = p.name == selected.name
