@@ -286,12 +286,26 @@ object QuroUiDslParser {
             when (type) {
                 "column", "vbox", "vertical" -> buildColumn(json)
                 "row", "hbox", "horizontal" -> buildRow(json)
-                "box", "stack" -> QuroBoxNode(
-                    id = json.optStringOrNull("id"),
-                    children = buildChildren(json),
-                    padding = json.optIntOrNull("padding"),
-                    weight = json.optDoubleOrNull("weight")?.toFloat(),
-                )
+                "box", "stack" -> {
+                    // 兼容 AI 把背景/圆角/内边距塞进 `style` 对象的写法（如 `style:{backgroundColor,padding,borderRadius}`）。
+                    val styleObj = json.optJSONObject("style")
+                    QuroBoxNode(
+                        id = json.optStringOrNull("id"),
+                        children = buildChildren(json),
+                        padding = styleObj?.optIntOrNull("padding") ?: json.optIntOrNull("padding"),
+                        weight = json.optDoubleOrNull("weight")?.toFloat(),
+                        backgroundColor = styleObj?.optStringOrNull("backgroundColor")
+                            ?: styleObj?.optStringOrNull("background_color")
+                            ?: styleObj?.optStringOrNull("background")
+                            ?: json.optStringOrNull("backgroundColor")
+                            ?: json.optStringOrNull("background"),
+                        borderRadius = styleObj?.optIntOrNull("borderRadius")
+                            ?: styleObj?.optIntOrNull("border_radius")
+                            ?: json.optIntOrNull("borderRadius")
+                            ?: json.optIntOrNull("corner_radius")
+                            ?: json.optIntOrNull("cornerRadius"),
+                    )
+                }
                 "pane", "panes", "multi_pane", "multipane" -> QuroPaneNode(
                     id = json.optStringOrNull("id"),
                     children = buildChildren(json),
@@ -468,11 +482,30 @@ object QuroUiDslParser {
             ?: json.optStringOrNull("text")
             ?: json.optStringOrNull("content")
             ?: "",
-        style = json.optStringOrNull("style"),
-        bold = json.optBoolean("bold", false),
+        // style 字段：若为字符串（如 "title"/"body"）当作 typography style；若是对象
+        // （AI 高频写法 `style:{fontSize,fontWeight,color,...}`）则各子字段独立提取到 size/bold/color。
+        style = if (json.has("style") && json.opt("style") is String) json.optString("style") else null,
+        bold = run {
+            val s = json.optJSONObject("style")
+            s?.optStringOrNull("fontWeight") == "bold"
+                || s?.optStringOrNull("font_weight") == "bold"
+                || json.optBoolean("bold", false)
+        },
         italic = json.optBoolean("italic", false),
-        color = json.optColorOrNull(),
-        size = json.optIntOrNull("size"),
+        color = run {
+            val s = json.optJSONObject("style")
+            s?.optStringOrNull("color")
+                ?: s?.optStringOrNull("text_color")
+                ?: json.optColorOrNull()
+        },
+        size = run {
+            val s = json.optJSONObject("style")
+            s?.optIntOrNull("fontSize")
+                ?: s?.optIntOrNull("font_size")
+                ?: json.optIntOrNull("fontSize")
+                ?: json.optIntOrNull("font_size")
+                ?: json.optIntOrNull("size")
+        },
         maxLines = json.optIntOrNull("max_lines") ?: json.optIntOrNull("maxLines"),
         align = json.optStringOrNull("align"),
     )
