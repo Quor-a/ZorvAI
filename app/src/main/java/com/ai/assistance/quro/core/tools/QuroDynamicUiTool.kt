@@ -61,7 +61,9 @@ class UiDslSpecTool : QuroTool {
 
     private companion object {
         val NODE_SPEC = """
-【节点类型】每个节点必须有 "type" 字段。所有节点都可带 "id"（交互节点必填，用于收集用户输入）。
+【节点类型】每个节点必须有 "type" 字段。所有节点都可带 "id"（交互节点必填，用于收集用户输入），
+且**任何节点都能挂一个通用 "style" 对象**描述视觉样式（背景/边框/圆角/阴影/边距/尺寸/对齐/显隐），
+让你像写 Compose 一样自由描述任意元素的样子——见文末【通用样式 style（v1.0.83）】。
 
 ■ 布局
 - column：纵向排列。children[], spacing, padding, align(start|center|end), scrollable
@@ -90,7 +92,7 @@ class UiDslSpecTool : QuroTool {
 - switch：开关。label, checked
 - select：下拉选择。label, options[], selected
 - slider：滑块。label, value, min, max, step
-- list：列表。items[], item(模板节点，可用 {{item}} 与 {{index}} 占位), max_height
+- list：列表。items[]（每项可为普通字符串或 JSON 对象字符串）, item(模板节点，可用 {{item}}、{{item.field}}、{{index}} 占位), max_height
 - tabs：标签页。tabs[{title, node}]
 
 ■ 富媒体 / 文档（v1.0.81 新增，原生渲染，非 HTML/WebView）
@@ -101,7 +103,11 @@ class UiDslSpecTool : QuroTool {
 - audio：内嵌音频/音乐播放（原生播放器，带播放/暂停与进度条）。url, title
 - image：图片（见上「内容」段，已原生支持）。url, alt, height, corner_radius
 - browser：内嵌完整功能浏览器（WebView，支持 JS / DOM 存储 / 缩放 / 前进后退）。
-  url, height(可选像素高度，默认 320)。底部自带「在浏览器打开」「刷新」按钮。
+  url, height(可选 dp 高度，默认 320)。底部自带「在浏览器打开」「刷新」按钮。
+- html：自写 HTML（v1.0.84 新增）。AI 完全自写 HTML/CSS/JS，直接内联渲染到对话气泡。
+  html(完整 HTML 源码，也接受 content/value), height(可选 dp，默认 400，上限 600)。
+  这是「自写 UI」核心节点——当 DSL 白名单节点不够用时（复杂表单、图表、动画、小工具），
+  直接写一个 html 节点放任意 HTML 即可，无需 WebView 跳转。长度上限 100KB。
 - code：代码块（展示 ZorvAI 支持的所有语言，语法高亮）。code(也接受 code/content/value), lang,
   title, runnable(为 true 时显示「运行」按钮，将经 run_code 真正执行并把结果回传给你)。
 
@@ -113,6 +119,29 @@ class UiDslSpecTool : QuroTool {
 【颜色】支持 #RGB / #RRGGBB / #AARRGGBB，或语义名：
 red green blue yellow orange purple pink teal indigo gray primary secondary error warning success info muted
 越界或非法颜色会被忽略，回落到主题默认色，不会导致渲染失败。
+
+【通用样式 style（v1.0.83）】任意节点都能挂一个 "style" 对象，让 AI 自由写任意样式。
+两种等价写法（解析器都会收进同一个通用样式对象）：
+  ① 嵌套对象：{"type":"box","style":{"backgroundColor":"#fff","borderRadius":12,"padding":8},"children":[...]}
+  ② 顶层平铺（style 的字段直接放节点上）：{"type":"box","backgroundColor":"#fff","borderRadius":12,"padding":8,"children":[...]}
+字段一览（全部可选，非法值回落默认）：
+  - backgroundColor / background：背景色（"#fff"），或 {"color":"#fff"}。也支持 gradient：
+      {"gradient":{"colors":["#ff9a9e","#fad0c4"],"direction":"vertical"}}  // direction: vertical|horizontal|radial|diagonal
+  - borderColor / borderWidth：边框颜色与宽度(dp)
+  - borderRadius：圆角(dp)
+  - shadowElevation / shadowColor：阴影高度(dp)与颜色
+  - padding / margin：内/外边距。数字=四边同值；对象可单边 {top,bottom,start,end,horizontal,vertical,all}
+  - width / height：尺寸。"fill"=撑满父容器；"auto"=自适应内容；数字或 {"fixed":N}=固定 N dp；{"weight":N}=按比例分配
+  - maxWidth / maxHeight：最大宽高(dp)
+  - opacity：透明度 0~1（也接受 0~100，会自动 ÷100）
+  - align：父容器内对齐。column 里用 start|center|end（控水平）；row 里用 top|center|bottom（控垂直）
+  - visible：false 则该节点整体不渲染（数据驱动显隐，不惊动模型）
+注意：模型输出永远是「数据」不是「代码」——再自由的样式也只是声明，端上忠实渲染成原生控件，
+且任意字段非法都会回落默认值，绝不会导致渲染失败。
+
+【未知节点类型】若写了白名单之外的 type（如拼写错或自定义组件），系统不会崩溃，
+而是把该节点降级为一个「带通用样式的竖向容器」（保留你给的 style 与 children，并在顶部追加一行降级提示），
+保证「单个节点坏掉不影响整棵树」。请优先从上面白名单里挑 type。
 """.trimIndent()
 
         val ACTION_SPEC = """

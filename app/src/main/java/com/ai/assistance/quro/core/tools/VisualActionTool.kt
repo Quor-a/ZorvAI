@@ -100,6 +100,8 @@ style可选: primary(主要), secondary(次要), danger(危险)
         synchronized(VisualActionQueue.pendingActions) {
             VisualActionQueue.pendingActions.add(pending)
         }
+        // 修复：通知 UI 有新操作加入
+        VisualActionQueue.signalAdded()
 
         Log.d(TAG, "等待用户操作: $title (按钮数: ${buttons.size}, 超时: ${timeout}s)")
 

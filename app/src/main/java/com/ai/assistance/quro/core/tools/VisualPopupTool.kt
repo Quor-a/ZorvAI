@@ -83,18 +83,12 @@ object VisualPopupQueue {
                 pending.status = if (result.cancelled) PopupStatus.CANCELLED else PopupStatus.COMPLETED
                 pending.latch.countDown()
                 Log.d(TAG, "用户提交弹窗结果: $result")
-                // 发送弹窗更新事件（状态变化）
+                // 修复：原逻辑 postDelayed 2s 才 removeAt，期间 getCurrentPopup 已过滤掉 COMPLETED
+                // 弹窗能继续显示，但 currentPopup?.first 还指向旧 id，导致新弹窗进不来。
+                // 改为：先发 PopupUpdated 让小卡片切换"已完成/已取消"状态，再立即 removeAt + 发 PopupRemoved。
                 _eventChannel.trySend(PopupEvent.PopupUpdated(id))
-                // 延迟移除弹窗，让UI有时间更新状态
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    synchronized(pendingPopups) {
-                        val idx = pendingPopups.indexOfFirst { it.id == id }
-                        if (idx >= 0) {
-                            pendingPopups.removeAt(idx)
-                            _eventChannel.trySend(PopupEvent.PopupRemoved(id))
-                        }
-                    }
-                }, 2000) // 2秒后移除
+                pendingPopups.removeAt(index)
+                _eventChannel.trySend(PopupEvent.PopupRemoved(id))
             }
         }
     }

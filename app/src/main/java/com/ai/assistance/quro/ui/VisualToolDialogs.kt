@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * 可视化弹窗选择器：选择弹窗类型并配置参数
@@ -356,40 +358,162 @@ fun VisualQuestionSelectorDialog(
 
 /**
  * 构建可视化弹窗的结构化提示词
+ *
+ * 修复：原代码用字符串插值 "title=\"$title\"" 拼接，用户输入含双引号/反斜杠/换行
+ * 会破坏 JSON 结构（注入风险）。改为 JSONObject/JSONArray 序列化自动转义。
  */
 private fun buildVisualPopupPrompt(type: String, title: String, content: String, options: String): String {
     return when (type) {
-        "info" -> "调用 visual_popup 工具，参数：title=\"$title\"，content=\"$content\"，buttons=[{\"text\":\"确认\",\"value\":\"ok\",\"style\":\"primary\"}]"
+        "info" -> {
+            val args = JSONObject().apply {
+                put("title", title)
+                put("content", content)
+                put("buttons", JSONObject().apply {
+                    put("text", "确认")
+                    put("value", "ok")
+                    put("style", "primary")
+                })
+            }
+            "调用 visual_popup 工具，参数：$args"
+        }
         "buttons" -> {
             val btnList = options.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-            val btns = btnList.joinToString(",") { "{\"text\":\"$it\",\"value\":\"$it\",\"style\":\"primary\"}" }
-            "调用 visual_popup 工具，参数：title=\"$title\"，content=\"$content\"，buttons=[$btns]"
+            val btns = JSONArray()
+            btnList.forEach {
+                btns.put(JSONObject().apply {
+                    put("text", it)
+                    put("value", it)
+                    put("style", "primary")
+                })
+            }
+            val args = JSONObject().apply {
+                put("title", title)
+                put("content", content)
+                put("buttons", btns)
+            }
+            "调用 visual_popup 工具，参数：$args"
         }
         "form" -> {
             val fields = options.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-            val inputs = fields.joinToString(",") { "{\"id\":\"${it}\",\"label\":\"$it\",\"type\":\"text\"}" }
-            "调用 visual_popup 工具，参数：title=\"$title\"，content=\"$content\"，inputs=[$inputs]，buttons=[{\"text\":\"提交\",\"value\":\"submit\",\"style\":\"primary\"},{\"text\":\"取消\",\"value\":\"cancel\",\"style\":\"secondary\"}]"
+            val inputs = JSONArray()
+            fields.forEach {
+                inputs.put(JSONObject().apply {
+                    put("id", it)
+                    put("label", it)
+                    put("type", "text")
+                })
+            }
+            val buttons = JSONArray()
+            buttons.put(JSONObject().apply { put("text", "提交"); put("value", "submit"); put("style", "primary") })
+            buttons.put(JSONObject().apply { put("text", "取消"); put("value", "cancel"); put("style", "secondary") })
+            val args = JSONObject().apply {
+                put("title", title)
+                put("content", content)
+                put("inputs", inputs)
+                put("buttons", buttons)
+            }
+            "调用 visual_popup 工具，参数：$args"
         }
-        "confirm" -> "调用 visual_popup 工具，参数：title=\"$title\"，content=\"$content\"，buttons=[{\"text\":\"确定\",\"value\":\"confirm\",\"style\":\"primary\"},{\"text\":\"取消\",\"value\":\"cancel\",\"style\":\"secondary\"}]"
-        "custom" -> "调用 visual_custom_popup 工具，参数：title=\"$title\"，html=\"（请根据以下描述生成HTML内容：$content）\"，card_title=\"$title\""
-        else -> "调用 visual_popup 工具，参数：title=\"$title\"，content=\"$content\""
+        "confirm" -> {
+            val buttons = JSONArray()
+            buttons.put(JSONObject().apply { put("text", "确定"); put("value", "confirm"); put("style", "primary") })
+            buttons.put(JSONObject().apply { put("text", "取消"); put("value", "cancel"); put("style", "secondary") })
+            val args = JSONObject().apply {
+                put("title", title)
+                put("content", content)
+                put("buttons", buttons)
+            }
+            "调用 visual_popup 工具，参数：$args"
+        }
+        "custom" -> {
+            val args = JSONObject().apply {
+                put("title", title)
+                put("html", "（请根据以下描述生成HTML内容：$content）")
+                put("card_title", title)
+            }
+            "调用 visual_custom_popup 工具，参数：$args"
+        }
+        else -> {
+            val args = JSONObject().apply {
+                put("title", title)
+                put("content", content)
+            }
+            "调用 visual_popup 工具，参数：$args"
+        }
     }
 }
 
 /**
  * 构建可视化询问的结构化提示词
+ *
+ * 修复：同上，改用 JSON 序列化避免注入
  */
 private fun buildVisualQuestionPrompt(type: String, question: String, options: String): String {
     return when (type) {
         "choice" -> {
             val opts = options.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-            val btns = opts.joinToString(",") { "{\"text\":\"$it\",\"value\":\"$it\",\"style\":\"primary\"}" }
-            "调用 visual_popup 工具，参数：title=\"请选择\"，content=\"$question\"，buttons=[$btns]"
+            val btns = JSONArray()
+            opts.forEach {
+                btns.put(JSONObject().apply {
+                    put("text", it)
+                    put("value", it)
+                    put("style", "primary")
+                })
+            }
+            val args = JSONObject().apply {
+                put("title", "请选择")
+                put("content", question)
+                put("buttons", btns)
+            }
+            "调用 visual_popup 工具，参数：$args"
         }
-        "input" -> "调用 visual_popup 工具，参数：title=\"请输入\"，content=\"$question\"，inputs=[{\"id\":\"answer\",\"label\":\"$options\",\"type\":\"text\"}]，buttons=[{\"text\":\"提交\",\"value\":\"submit\",\"style\":\"primary\"}]"
-        "rating" -> "调用 visual_custom_popup 工具，参数：title=\"评分\"，html=\"（请生成一个评分界面：$question）\"，card_title=\"评分\""
-        "toggle" -> "调用 visual_custom_popup 工具，参数：title=\"开关\"，html=\"（请生成一个开关界面：$options）\"，card_title=\"$options\""
-        "custom" -> "调用 visual_custom_popup 工具，参数：title=\"询问\"，html=\"（请根据以下描述生成HTML：$question）\"，card_title=\"询问\""
-        else -> "调用 visual_popup 工具，参数：title=\"询问\"，content=\"$question\""
+        "input" -> {
+            val inputs = JSONArray()
+            inputs.put(JSONObject().apply {
+                put("id", "answer")
+                put("label", options)
+                put("type", "text")
+            })
+            val buttons = JSONArray()
+            buttons.put(JSONObject().apply { put("text", "提交"); put("value", "submit"); put("style", "primary") })
+            val args = JSONObject().apply {
+                put("title", "请输入")
+                put("content", question)
+                put("inputs", inputs)
+                put("buttons", buttons)
+            }
+            "调用 visual_popup 工具，参数：$args"
+        }
+        "rating" -> {
+            val args = JSONObject().apply {
+                put("title", "评分")
+                put("html", "（请生成一个评分界面：$question）")
+                put("card_title", "评分")
+            }
+            "调用 visual_custom_popup 工具，参数：$args"
+        }
+        "toggle" -> {
+            val args = JSONObject().apply {
+                put("title", "开关")
+                put("html", "（请生成一个开关界面：$options）")
+                put("card_title", options)
+            }
+            "调用 visual_custom_popup 工具，参数：$args"
+        }
+        "custom" -> {
+            val args = JSONObject().apply {
+                put("title", "询问")
+                put("html", "（请根据以下描述生成HTML：$question）")
+                put("card_title", "询问")
+            }
+            "调用 visual_custom_popup 工具，参数：$args"
+        }
+        else -> {
+            val args = JSONObject().apply {
+                put("title", "询问")
+                put("content", question)
+            }
+            "调用 visual_popup 工具，参数：$args"
+        }
     }
 }

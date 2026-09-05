@@ -89,7 +89,9 @@ class A2uiSession {
             is A2uiMessage.CreateSurface -> {
                 lastSurface = msg.surface
                 val node = runCatching { QuroUiDslParser.buildNode(JSONObject(msg.rootJson)) }.getOrNull()
-                surfaces.getOrPut(msg.surface) { A2uiSurface() }.root = node
+                // 修复：原代码解析失败时 root=null 覆盖旧树，整个 surface 白屏。
+                // 只在解析成功时覆盖，失败保留旧 root，避免坏 createSurface 把好树冲掉。
+                node?.let { surfaces.getOrPut(msg.surface) { A2uiSurface() }.root = it }
             }
             is A2uiMessage.UpdateComponents -> {
                 lastSurface = msg.surface
@@ -105,8 +107,14 @@ class A2uiSession {
             is A2uiMessage.UpdateDataModel -> {
                 lastSurface = msg.surface
                 val surface = surfaces.getOrPut(msg.surface) { A2uiSurface() }
-                val model = runCatching { QuroUiPointer.toModel(JSONObject(msg.dataJson)) }.getOrNull() ?: return
-                surface.dataModel.putAll(model)
+                // 修复：putAll 浅合并，嵌套对象整体覆盖而非合并（与"合并数据模型"语义不符）；
+                // 且 dataJson 解析失败静默 return，AI 无任何反馈。改深合并 + Log 记录失败。
+                val model = runCatching { QuroUiPointer.toModel(JSONObject(msg.dataJson)) }.getOrNull()
+                if (model == null) {
+                    android.util.Log.w("A2uiSession", "updateDataModel dataJson 解析失败，已忽略（surface=${msg.surface}）")
+                    return
+                }
+                deepMerge(surface.dataModel, model)
             }
             is A2uiMessage.DeleteSurface -> surfaces.remove(msg.surface)
         }
@@ -141,6 +149,19 @@ class A2uiSession {
             is QuroListNode -> root.copy(itemTemplate = root.itemTemplate?.let { replaceNodeById(it, id, replacement) })
             is QuroPaneNode -> root.copy(children = root.children.map { replaceNodeById(it, id, replacement) })
             else -> root
+        }
+    }
+
+    /** 深合并：嵌套 Map 递归合并，其余类型后者覆盖前者。 */
+    @Suppress("UNCHECKED_CAST")
+    private fun deepMerge(target: MutableMap<String, Any?>, patch: Map<String, Any?>) {
+        patch.forEach { (k, v) ->
+            val old = target[k]
+            target[k] = if (old is Map<*, *> && v is Map<*, *>) {
+                val merged = (old as Map<String, Any?>).toMutableMap()
+                deepMerge(merged, v as Map<String, Any?>)
+                merged
+            } else v
         }
     }
 }

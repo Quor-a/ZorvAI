@@ -823,12 +823,10 @@ fun ChatScreen(
 
     // ═══ UI 控制事件桥：AI 调用 ui_control 工具时，通过 UiNavigationBus 通知 ChatScreen 执行界面操作 ═══
     LaunchedEffect(Unit) {
-        // 轮询 UiNavigationBus.navEvent（因为不是 Flow，需要定期检查）
-        while (true) {
-            val event = UiNavigationBus.navEvent
-            if (event != null) {
-                UiNavigationBus.navEvent = null // 清除事件，避免重复处理
-                when (event) {
+        // 修复：原 navEvent 是单槽 @Volatile var，连发两个事件时后者覆盖前者 → 事件丢失。
+        // 现在 UiNavigationBus 底层是 Channel(BUFFERED)，直接 collect eventFlow 按序消费，不丢事件。
+        UiNavigationBus.eventFlow.collect { event ->
+            when (event) {
                     // ─── 打开界面 ───
                     is UiNavigationEvent.OpenScreen -> {
                         when (event.target) {
@@ -899,17 +897,19 @@ fun ChatScreen(
 
                     // ─── 渲染组件 ───
                     is UiNavigationEvent.RenderWidget -> {
-                        // 根据widget类型创建对应的卡片
+                        // 修复：button/toggle/else→InfoCard 直接用 event.id（工具中心传 id=""）→ 空 id 卡片，
+                        // 卡片列表按 id 去重/做 key 时会冲突。统一 ifBlank 兜底（与 mermaid/miniapp 对齐）。
+                        val safeId = event.id.ifBlank { "${event.type}_${System.nanoTime()}" }
                         val card = when (event.type) {
                             "button" -> com.ai.assistance.quro.core.cards.QuroChatCard.ButtonCard(
-                                id = event.id,
+                                id = safeId,
                                 title = event.label,
                                 label = event.label,
                                 command = event.value,
                                 variant = "filled"
                             )
                             "toggle" -> com.ai.assistance.quro.core.cards.QuroChatCard.ToggleCard(
-                                id = event.id,
+                                id = safeId,
                                 title = event.label,
                                 label = event.label,
                                 checked = event.value.toBooleanStrictOrNull() ?: false,
@@ -934,7 +934,7 @@ fun ChatScreen(
                                 config = emptyMap(),
                             )
                             else -> com.ai.assistance.quro.core.cards.QuroChatCard.InfoCard(
-                                id = event.id,
+                                id = safeId,
                                 title = event.label,
                                 body = event.value,
                                 align = "start"
@@ -1109,8 +1109,6 @@ fun ChatScreen(
                     }
                 }
             }
-            kotlinx.coroutines.delay(100) // 每100ms检查一次
-        }
     }
 
     // 应用上下文：提前声明，供 handleUiAction / handleCardCommand 等局部函数捕获
@@ -2813,13 +2811,17 @@ private fun MessageRow(
             parseBlocks(clean).filterIsInstance<MsgBlock.DynamicUi>()
         }
     }
-    // 「动态对话框UI」判定：AI 消息且含 quro-ui 围栏 → 动态 UI 本身就是消息内容（对话框本身），
-    // 撑满屏幕宽度、贴边、零内边距、无卡片背景；普通消息仍保留左右留白。
-    val isDynamicUiMessage = !msg.mine && dynamicUiBlocks.isNotEmpty()
     // 正文文本与「内联组件 JSON」抽离结果：供气泡正文与气泡外全宽卡片共用同一份，避免重复解析。
     // 卡片从气泡里拎出来，在下方「全宽内联」区块渲染，不再被 280dp 气泡压窄、移动端看不全。
     val displayText = QuroVoiceStyle.strip(msg.text ?: "")
     val (cleanText, inlineCards) = remember(displayText) { extractInlineComponents(displayText) }
+    // 「动态对话框UI」判定：AI 消息且【几乎整条都是】quro-ui 围栏（剥离围栏后无其余正文）→
+    // 动态 UI 本身就是消息内容（对话框本身），撑满屏幕宽度、贴边、零内边距、无卡片背景；
+    // 普通消息（含正文/思考/工具、仅夹带动态 UI 区块）仍走正常气泡布局，保留左右留白与「思考/工具」胶囊。
+    // 修复：原判定只要含任一围栏就整条走「纯动态UI」布局，导致夹带正文/思考/工具的动态 UI 消息
+    // 丢失气泡正文与「思考/工具」胶囊 —— 表现为「工具调用消失」「部分文本不显示」。
+    // 现改为仅当剥离围栏后无其余正文时才走纯动态UI布局。
+    val isDynamicUiMessage = !msg.mine && dynamicUiBlocks.isNotEmpty() && cleanText.isBlank()
     var showCopyMenu by remember { mutableStateOf(false) }
     var copiedText by remember { mutableStateOf("") }
 
@@ -6781,7 +6783,8 @@ private fun handleDynamicUiAction(
             }
             UiNavigationBus.navEvent = UiNavigationEvent.RenderWidget(
                 type = "miniapp",
-                id = "dyn_html_${System.currentTimeMillis()}",
+                // 修复：System.currentTimeMillis() 连点两次同毫秒 → 卡片 id 重复。改用 nanoTime。
+                id = "dyn_html_${System.nanoTime()}",
                 label = "HTML 预览",
                 value = html,
             )
@@ -6796,7 +6799,8 @@ private fun handleDynamicUiAction(
             }
             UiNavigationBus.navEvent = UiNavigationEvent.RenderWidget(
                 type = "mermaid",
-                id = "dyn_mermaid_${System.currentTimeMillis()}",
+                // 修复：同上，防同毫秒 id 重复
+                id = "dyn_mermaid_${System.nanoTime()}",
                 label = "可视化编程",
                 value = source,
             )
@@ -6835,9 +6839,12 @@ private fun handleDynamicUiAction(
                 // 需要危险权限的工具（如手电筒/蓝牙）从 UI 点击直接执行无法弹授权框，
                 // 回退到「模型二次解析」路径（引擎会在 Activity 上下文里申请权限）。
                 if (tool.requiredPermissions.isNotEmpty()) {
-                    val argText = if (args.isEmpty()) "" else "，参数：" +
-                        args.entries.joinToString("，") { "${it.key}=${it.value}" }
-                    withContext(Dispatchers.Main) { onCommand("请调用工具 $toolName$argText") }
+                    // 修复：原拼「请调用工具 X，参数：k=v」普通文本直接出现在用户气泡里（用户困惑），
+                    // 参数经字符串拼接含引号/换行即失真。改为结构化 JSON 前缀，模型可正确解析参数。
+                    val argsJson = JSONObject().apply { args.forEach { (k, v) -> put(k, v) } }.toString()
+                    withContext(Dispatchers.Main) {
+                        onCommand("[ui_tool_request] {\"tool\":\"$toolName\",\"args\":$argsJson}")
+                    }
                     return@launch
                 }
                 val argsJson = JSONObject().apply { args.forEach { (k, v) -> put(k, v) } }.toString()
@@ -6854,7 +6861,9 @@ private fun handleDynamicUiAction(
 
         // 执行技能：技能本质是「指令回灌」，把技能提示词作为用户消息发回模型激活。
         is QuroSkillAction -> {
-            val skillName = action.skill.ifBlank { values["skill"] ?: "" }
+            // 修复：模型从工具列表复制全名 "skill__xxx" 作为 skill 名传入时，
+            // 拼成 "skill__skill__xxx" 查不到 → 误报「技能未启用」。先去掉重复前缀。
+            val skillName = (action.skill.ifBlank { values["skill"] ?: "" }).removePrefix("skill__")
             if (skillName.isBlank()) {
                 Toast.makeText(ctx, "未指定要执行的技能", Toast.LENGTH_SHORT).show()
                 return

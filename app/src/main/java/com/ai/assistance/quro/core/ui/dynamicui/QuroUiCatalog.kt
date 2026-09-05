@@ -16,7 +16,7 @@ object QuroUiCatalog {
     /** 允许出现的组件类型（白名单词汇表）。 */
     val COMPONENTS: Set<String> = setOf(
         "column", "row", "box", "card", "pane", "text", "image", "icon", "badge", "progress",
-        "divider", "spacer", "markdown", "video", "audio", "browser", "code",
+        "divider", "spacer", "markdown", "video", "audio", "browser", "code", "html",
         "button", "text_input", "checkbox", "switch", "select", "slider", "list", "tabs"
     )
 
@@ -49,7 +49,7 @@ object QuroUiCatalog {
         val type = nodeType(node)
         if (type !in COMPONENTS) {
             v.add(Violation(path, "未知组件类型：$type（已降级为静态文本）", Severity.DEGRADE))
-            return QuroTextNode(value = "⚠️ 未识别的组件：$type", style = "caption")
+            return QuroTextNode(value = "⚠️ 未识别的组件：$type", typography = "caption")
         }
         return when (node) {
             is QuroColumnNode -> node.copy(children = node.children.map { validateNode(it, "$path/column", v) })
@@ -72,6 +72,8 @@ object QuroUiCatalog {
             is QuroBrowserNode -> if (isSafeUrl(node.url)) node else degradeText("$path.browser.url", "非法浏览器地址：${node.url}", v)
             is QuroVideoNode -> if (isSafeUrl(node.url)) node else degradeText("$path.video.url", "非法视频地址：${node.url}", v)
             is QuroAudioNode -> if (isSafeUrl(node.url)) node else degradeText("$path.audio.url", "非法音频地址：${node.url}", v)
+            // html 节点：AI 自写 HTML，长度上限 100KB 防 OOM，超长降级为文本提示
+            is QuroHtmlNode -> if (node.html.length > 100 * 1024) degradeText("$path.html", "HTML 内容超长（${node.html.length} 字符，上限 100KB）", v) else node
             // 其余叶子节点：无额外约束，原样放行（未知字段由渲染器忽略）
             is QuroIconNode -> node
             is QuroBadgeNode -> node
@@ -103,6 +105,7 @@ object QuroUiCatalog {
         is QuroVideoNode -> "video"
         is QuroAudioNode -> "audio"
         is QuroBrowserNode -> "browser"
+        is QuroHtmlNode -> "html"
         is QuroCodeNode -> "code"
         is QuroButtonNode -> "button"
         is QuroTextInputNode -> "text_input"
@@ -142,14 +145,18 @@ object QuroUiCatalog {
     // ─── 参数约束 ───
 
     private fun validateText(node: QuroTextNode, path: String, v: MutableList<Violation>): QuroUiNode {
-        val styleOk = node.style == null || node.style in setOf("title", "headline", "body", "caption", "label")
-        if (!styleOk) v.add(Violation("$path.text.style", "非法 style：${node.style}（已忽略，回退默认）", Severity.WARN))
+        val styleOk = node.typography == null || node.typography in setOf("title", "headline", "body", "caption", "label")
+        if (!styleOk) v.add(Violation("$path.text.style", "非法 style：${node.typography}（已忽略，回退默认）", Severity.WARN))
         val alignOk = node.align == null || node.align in setOf("start", "center", "end")
         if (!alignOk) v.add(Violation("$path.text.align", "非法 align：${node.align}（已忽略，回退默认）", Severity.WARN))
-        val colorOk = node.color == null || COLOR_RE.matches(node.color)
+        // 修复：原 COLOR_RE 只认 #RRGGBB/#AARRGGBB，但 QuroUiColor.parse 与 prompt
+        // （EXAMPLE 里就写 "color":"muted"）都支持命名色 red/muted/primary/#RGB，
+        // 这里把所有命名字体颜色误判为非法并置 null，与工具定义冲突。
+        // 改用 QuroUiColor.parse 作为合法判据，三方对齐。
+        val colorOk = node.color == null || QuroUiColor.parse(node.color) != null
         if (!colorOk) v.add(Violation("$path.text.color", "非法颜色：${node.color}（已忽略）", Severity.WARN))
         return node.copy(
-            style = if (styleOk) node.style else null,
+            typography = if (styleOk) node.typography else null,
             align = if (alignOk) node.align else null,
             color = if (colorOk) node.color else null,
         )
@@ -177,7 +184,7 @@ object QuroUiCatalog {
 
     private fun degradeText(path: String, msg: String, v: MutableList<Violation>): QuroTextNode {
         v.add(Violation(path, "$msg（已降级为静态文本）", Severity.DEGRADE))
-        return QuroTextNode(value = "⚠️ $msg", style = "caption")
+        return QuroTextNode(value = "⚠️ $msg", typography = "caption")
     }
 
     private fun isSafeUrl(url: String): Boolean {

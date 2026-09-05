@@ -57,12 +57,22 @@ fun SurfaceHost(
 ) {
     BoxWithConstraints(Modifier.fillMaxWidth().clipToBounds()) {
         val base = LocalDensity.current
-        val scaled = Density(
-            // 让 designWidthDp 恰好等于当前可用宽度（maxWidth 为当前 density 下的 dp 值）
-            density = (maxWidth.value * base.density) / designWidthDp,
-            fontScale = base.fontScale,
-        )
-        val sizeClass = surfaceSizeClassFromWidth(maxWidth.value)
+        // 修复：原 maxWidth 在水平无界父容器里是 Infinity，
+        // (Infinity * base.density) / 360 = Infinity → dp 换算崩溃。
+        // 这里对 Infinity / 非正数做 fallback 到 base density。
+        val scaled = if (maxWidth.value.isFinite() && maxWidth.value > 0f) {
+            Density(
+                density = (maxWidth.value * base.density) / designWidthDp,
+                fontScale = base.fontScale,
+            )
+        } else {
+            base
+        }
+        val sizeClass = if (maxWidth.value.isFinite() && maxWidth.value > 0f) {
+            surfaceSizeClassFromWidth(maxWidth.value)
+        } else {
+            SurfaceSizeClass.Compact
+        }
         CompositionLocalProvider(
             LocalDensity provides scaled,
             LocalSurfaceSizeClass provides sizeClass,

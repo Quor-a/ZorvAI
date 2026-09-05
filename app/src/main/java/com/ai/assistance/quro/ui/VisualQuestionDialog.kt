@@ -4,7 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -34,16 +34,24 @@ fun VisualQuestionDialog() {
     var customAnswer by remember { mutableStateOf("") }
     var showCustomInput by remember { mutableStateOf(false) }
 
-    // 定时检查是否有待处理的问题
+    // 修复：原 while(true) delay(500) 浪费 CPU，与 VisualPopupQueue 事件驱动模式不一致。
+    // 改为 eventFlow 触发：QuestionAdded 时拉取新问题，QuestionRemoved 时关闭弹窗。
     LaunchedEffect(Unit) {
-        while (true) {
-            val question = VisualQuestionQueue.getCurrentQuestion()
-            if (question != null && currentQuestion == null) {
-                currentQuestion = question
-                showCustomInput = false
-                customAnswer = ""
+        VisualQuestionQueue.eventFlow.collect { event ->
+            when (event) {
+                is VisualQuestionQueue.QuestionEvent.QuestionAdded -> {
+                    if (currentQuestion == null) {
+                        currentQuestion = VisualQuestionQueue.getCurrentQuestion()
+                        showCustomInput = false
+                        customAnswer = ""
+                    }
+                }
+                is VisualQuestionQueue.QuestionEvent.QuestionRemoved -> {
+                    if (currentQuestion != null) {
+                        currentQuestion = null
+                    }
+                }
             }
-            kotlinx.coroutines.delay(500) // 每500ms检查一次
         }
     }
 
@@ -105,7 +113,9 @@ fun VisualQuestionDialog() {
                                 .fillMaxWidth()
                                 .heightIn(max = 300.dp)
                         ) {
-                            itemsIndexed(pending.options) { _, option ->
+                            // 修复：原代码 itemsIndexed 用 position 作 key，options 提交后
+                            // 索引变化会导致不必要的重组。改用 option 自身作 key（更稳定）。
+                            items(pending.options, key = { it }) { option ->
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -197,14 +207,21 @@ fun VisualActionDialog() {
     val cs = MaterialTheme.colorScheme
     var currentAction by remember { mutableStateOf<Pair<Int, VisualPendingAction>?>(null) }
 
-    // 定时检查是否有待处理的操作
+    // 修复：与 VisualQuestionDialog 对齐，改为 eventFlow 驱动
     LaunchedEffect(Unit) {
-        while (true) {
-            val action = VisualActionQueue.getCurrentAction()
-            if (action != null && currentAction == null) {
-                currentAction = action
+        VisualActionQueue.eventFlow.collect { event ->
+            when (event) {
+                is VisualActionQueue.ActionEvent.ActionAdded -> {
+                    if (currentAction == null) {
+                        currentAction = VisualActionQueue.getCurrentAction()
+                    }
+                }
+                is VisualActionQueue.ActionEvent.ActionRemoved -> {
+                    if (currentAction != null) {
+                        currentAction = null
+                    }
+                }
             }
-            kotlinx.coroutines.delay(500) // 每500ms检查一次
         }
     }
 

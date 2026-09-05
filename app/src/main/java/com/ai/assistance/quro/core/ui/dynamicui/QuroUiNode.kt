@@ -11,11 +11,17 @@ package com.ai.assistance.quro.core.ui.dynamicui
  *  - 每个字段都允许缺失，解析时回落默认值，单个节点坏掉不影响整棵树；
  *  - id 用于状态绑定与 collectFrom 取值，交互节点必须有 id；
  *  - 颜色统一 #RRGGBB / #AARRGGBB 字符串，由 [QuroUiColor.parse] 兜底解析。
+ *
+ * v1.0.83 新增通用样式系统（[QuroUiStyle]）：任意节点都能挂任意视觉样式，让 AI
+ * 像写 Compose 一样自由描述界面。模型输出始终是「数据」不是「代码」（红线：
+ * 端上绝不执行 AI 代码），因此再自由的样式也只是声明、会被忠实渲染成原生控件。
  */
 
 /** 所有 UI 节点的基类型。 */
 sealed interface QuroUiNode {
     val id: String?
+    /** 通用视觉样式（可选）。[QuroUiStyle] 见文件末。 */
+    val style: QuroUiStyle? get() = null
 }
 
 // =============================================================================================
@@ -25,6 +31,7 @@ sealed interface QuroUiNode {
 /** 纵向布局。 */
 data class QuroColumnNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val children: List<QuroUiNode> = emptyList(),
     val spacing: Int? = null,
     val padding: Int? = null,
@@ -36,6 +43,7 @@ data class QuroColumnNode(
 /** 横向布局。 */
 data class QuroRowNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val children: List<QuroUiNode> = emptyList(),
     val spacing: Int? = null,
     val padding: Int? = null,
@@ -44,19 +52,19 @@ data class QuroRowNode(
     val weight: Float? = null,
 ) : QuroUiNode
 
-/** 堆叠布局（层叠）；若带 backgroundColor/borderRadius，则视为「带样式的列容器」，子节点纵向排开。 */
+/** 堆叠布局（层叠）。当携带视觉样式（背景/圆角/边框）时渲染器会当作竖向列容器处理；
+ * 否则保持原本「子节点层叠重叠」语义（AI 用 box 做浮层/叠放时）。 */
 data class QuroBoxNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val children: List<QuroUiNode> = emptyList(),
-    val padding: Int? = null,
     val weight: Float? = null,
-    val backgroundColor: String? = null,
-    val borderRadius: Int? = null,
 ) : QuroUiNode
 
 /** 卡片容器（带圆角与阴影）。 */
 data class QuroCardNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val children: List<QuroUiNode> = emptyList(),
     val title: String? = null,
     val padding: Int? = null,
@@ -77,6 +85,7 @@ data class QuroCardNode(
  */
 data class QuroPaneNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val children: List<QuroUiNode> = emptyList(),
     val direction: String? = null, // auto | row | column
     val spacing: Int? = null,
@@ -87,11 +96,12 @@ data class QuroPaneNode(
 // 内容节点
 // =============================================================================================
 
-/** 文本。style: title | headline | body | caption | label */
+/** 文本。typography: title | headline | body | caption | label（沿用旧 style 字符串语义）。 */
 data class QuroTextNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val value: String = "",
-    val style: String? = null,
+    val typography: String? = null, // 旧字段名 style，表示排版级别（title/headline/body/caption/label）
     val bold: Boolean = false,
     val italic: Boolean = false,
     val color: String? = null,
@@ -103,6 +113,7 @@ data class QuroTextNode(
 /** 图片（网络 URL 或 data: base64）。 */
 data class QuroImageNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val url: String = "",
     val alt: String? = null,
     val height: Int? = null,
@@ -113,6 +124,7 @@ data class QuroImageNode(
 /** 图标（Material 图标名，如 "star" / "settings"）。 */
 data class QuroIconNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val name: String = "info",
     val size: Int? = null,
     val tint: String? = null,
@@ -122,6 +134,7 @@ data class QuroIconNode(
 /** 徽标/胶囊标签。 */
 data class QuroBadgeNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val text: String = "",
     val color: String? = null,
     val background: String? = null,
@@ -130,6 +143,7 @@ data class QuroBadgeNode(
 /** 进度条。progress 取值 0.0–1.0；progress 为 null 时显示不确定动画。 */
 data class QuroProgressNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val progress: Float? = null,
     val label: String? = null,
 ) : QuroUiNode
@@ -137,6 +151,7 @@ data class QuroProgressNode(
 /** 分隔线。 */
 data class QuroDividerNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val thickness: Int? = null,
     val padding: Int? = null,
 ) : QuroUiNode
@@ -144,6 +159,7 @@ data class QuroDividerNode(
 /** 占位空白。 */
 data class QuroSpacerNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val height: Int? = null,
     val width: Int? = null,
 ) : QuroUiNode
@@ -156,12 +172,14 @@ data class QuroSpacerNode(
  *  链接，以及围栏代码块（可展示所有语言的代码）。用于把「文档级排版内容」直接渲染成原生控件。 */
 data class QuroMarkdownNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val value: String = "",
 ) : QuroUiNode
 
 /** 视频播放（内嵌播放器）：url 支持 http(s) / 本地文件路径 / content:// uri。 */
 data class QuroVideoNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val url: String = "",
     val title: String? = null,
 ) : QuroUiNode
@@ -169,6 +187,7 @@ data class QuroVideoNode(
 /** 音频 / 音乐播放（内嵌播放器）：url 支持 http(s) / 本地文件路径 / content:// uri。 */
 data class QuroAudioNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val url: String = "",
     val title: String? = null,
 ) : QuroUiNode
@@ -177,7 +196,20 @@ data class QuroAudioNode(
  *  height 为可选像素高度（默认 320）。 */
 data class QuroBrowserNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val url: String = "",
+    val height: Int? = null,
+) : QuroUiNode
+
+/** 自写 HTML（v1.0.84 新增）：AI 完全自写 HTML/CSS/JS，经 WebView loadDataWithBaseURL
+ *  内联渲染到对话气泡。这是「自写 UI」的核心节点——AI 不再受 DSL 白名单限制，
+ *  可以直接写任意 HTML 内容（表单、图表、动画、小工具等）。
+ *  html 为完整 HTML 源码；height 为可选高度 dp（默认自适应，上限 600）。
+ *  注意：与 browser 的区别——browser 加载 url，html 渲染内联源码。 */
+data class QuroHtmlNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val html: String = "",
     val height: Int? = null,
 ) : QuroUiNode
 
@@ -185,6 +217,7 @@ data class QuroBrowserNode(
  *  json/xml/svg/c/cpp/java 等）。runnable=true 时显示「运行」按钮，点击经 run_code 真执行。 */
 data class QuroCodeNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val code: String = "",
     val lang: String? = null,
     val title: String? = null,
@@ -198,6 +231,7 @@ data class QuroCodeNode(
 /** 按钮。variant: filled | outlined | text */
 data class QuroButtonNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val label: String = "",
     val action: QuroUiAction? = null,
     val variant: String? = null,
@@ -208,6 +242,7 @@ data class QuroButtonNode(
 /** 文本输入框。 */
 data class QuroTextInputNode(
     override val id: String = "",
+    override val style: QuroUiStyle? = null,
     val label: String? = null,
     val placeholder: String? = null,
     val value: String? = null,
@@ -219,6 +254,7 @@ data class QuroTextInputNode(
 /** 复选框。 */
 data class QuroCheckboxNode(
     override val id: String = "",
+    override val style: QuroUiStyle? = null,
     val label: String = "",
     val checked: Boolean = false,
 ) : QuroUiNode
@@ -226,6 +262,7 @@ data class QuroCheckboxNode(
 /** 开关。 */
 data class QuroSwitchNode(
     override val id: String = "",
+    override val style: QuroUiStyle? = null,
     val label: String? = null,
     val checked: Boolean = false,
 ) : QuroUiNode
@@ -233,6 +270,7 @@ data class QuroSwitchNode(
 /** 单选下拉。 */
 data class QuroSelectNode(
     override val id: String = "",
+    override val style: QuroUiStyle? = null,
     val label: String? = null,
     val options: List<String> = emptyList(),
     val selected: String? = null,
@@ -241,6 +279,7 @@ data class QuroSelectNode(
 /** 滑块。取值 min..max，步长 step。 */
 data class QuroSliderNode(
     override val id: String = "",
+    override val style: QuroUiStyle? = null,
     val label: String? = null,
     val value: Float = 0f,
     val min: Float = 0f,
@@ -250,10 +289,13 @@ data class QuroSliderNode(
 
 /**
  * 列表。items 为静态数据；每项用 [itemTemplate] 渲染，
- * 模板内可用 {{item}} / {{index}} 占位符引用当前项。
+ * 模板内可用 {{item}} / {{item.field}} / {{index}} 占位符引用当前项。
+ * 当 item 是 JSON 对象字符串时，{{item.emoji}} / {{item.title}} 等按字段解析；
+ * 当 item 是普通字符串时，{{item}} 直接替换为整个字符串。
  */
 data class QuroListNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val items: List<String> = emptyList(),
     val itemTemplate: QuroUiNode? = null,
     val maxHeight: Int? = null,
@@ -262,6 +304,7 @@ data class QuroListNode(
 /** 标签页。tabs: [{title, node}] */
 data class QuroTabsNode(
     override val id: String? = null,
+    override val style: QuroUiStyle? = null,
     val tabs: List<QuroTabItem> = emptyList(),
 ) : QuroUiNode
 
@@ -359,6 +402,66 @@ data class QuroVisualAskAction(
     val prompt: String = "",
     val options: List<String> = emptyList(),
 ) : QuroUiAction
+
+// =============================================================================================
+// 通用样式系统（v1.0.83）
+// =============================================================================================
+
+/**
+ * 通用样式对象：可挂在**任意**节点上，让 AI 像写 Compose 一样自由描述任意元素的视觉样式。
+ *
+ * 模型输出始终是「数据」不是「代码」—— 再自由的样式也只是声明，端上忠实渲染成原生控件，
+ * 且解析时任意字段非法都会回落默认值，绝不会导致渲染失败。
+ *
+ * AI 两种写法等价（解析器都会收进同一个 [QuroUiStyle]）：
+ *  - 嵌套对象：`"style":{"backgroundColor":"#fff","borderRadius":12,"padding":8}`
+ *  - 顶层平铺：`{"type":"box","backgroundColor":"#fff","borderRadius":12,"padding":8}`
+ */
+data class QuroUiStyle(
+    val background: QuroUiBackground? = null, // 背景：纯色或渐变
+    val borderColor: String? = null,         // 边框颜色（#RRGGBB / 语义名）
+    val borderWidth: Int? = null,            // 边框宽度（dp）
+    val borderRadius: Int? = null,           // 圆角（dp）
+    val shadowElevation: Int? = null,        // 阴影高度（dp）
+    val shadowColor: String? = null,         // 阴影颜色
+    val padding: QuroUiEdges? = null,        // 内边距
+    val margin: QuroUiEdges? = null,         // 外边距
+    val width: QuroUiSize? = null,           // 宽度：固定 dp / 撑满 / 自适应
+    val height: QuroUiSize? = null,          // 高度
+    val maxWidth: Int? = null,               // 最大宽度（dp）
+    val maxHeight: Int? = null,              // 最大高度（dp）
+    val opacity: Float? = null,              // 透明度 0..1
+    val align: String? = null,               // 父容器内对齐：start | center | end（column 控水平、row 控垂直；top|bottom 也接受）
+    val visible: Boolean? = null,            // false 则不渲染该节点
+)
+
+/** 背景：纯色或渐变二选一。 */
+sealed interface QuroUiBackground {
+    data class Solid(val color: String) : QuroUiBackground
+    data class Gradient(
+        val colors: List<String>,
+        val direction: String? = null, // vertical | horizontal | diagonal | radial
+        val angle: Int? = null,        // diagonal 时的角度（度，保留位）
+    ) : QuroUiBackground
+}
+
+/** 四边/单边边距（纯数据，不引入 Compose 依赖，由渲染器转成 PaddingValues）。 */
+data class QuroUiEdges(
+    val all: Int? = null,
+    val horizontal: Int? = null,
+    val vertical: Int? = null,
+    val top: Int? = null,
+    val bottom: Int? = null,
+    val start: Int? = null,
+    val end: Int? = null,
+)
+
+/** 尺寸：固定 dp / 撑满父容器（row/column 内可带权重）/ 自适应内容。 */
+sealed interface QuroUiSize {
+    data class Fixed(val dp: Int) : QuroUiSize
+    data class Fill(val weight: Float? = null) : QuroUiSize
+    object Wrap : QuroUiSize
+}
 
 // =============================================================================================
 // 解析结果
