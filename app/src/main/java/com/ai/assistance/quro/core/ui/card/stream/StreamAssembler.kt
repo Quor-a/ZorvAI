@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.ui.card.stream
 
 import com.ai.assistance.quro.core.ui.card.spec.CardData
 import com.ai.assistance.quro.core.ui.card.spec.CardSpec
+import com.ai.assistance.quro.core.ui.card.spec.parseCardSpec
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -79,23 +80,13 @@ class StreamAssembler(
     private fun buildStreamingPreview(snap: String): CardSpec =
         CardSpec(id = streamId, type = "skeleton", data = CardData.Status(statusType = "skeleton", text = snap.take(64)))
 
-    /** 尝试把整段解析为 CardSpec；失败返回 null（说明 JSON 没收全或非法）。 */
-    private fun tryParse(s: String): CardSpec? = runCatching {
-        val obj = JSONObject(s)
-        val type = obj.optString("type").ifBlank { return null }
-        val id = obj.optString("id").ifBlank { streamId }
-        val version = obj.optInt("version", 1)
-        CardSpec(id = id, type = type, version = version)
-    }.getOrNull()
+    /** 尝试把整段解析为完整 [CardSpec]（含 data）；失败返回 null（说明 JSON 没收全或非法）。 */
+    private fun tryParse(s: String): CardSpec? = parseCardSpec(s)
 
-    /** 流式期：截掉最后一个未闭合的键/值后尝试解析，用于增量 patch 预览。 */
+    /** 流式期：截掉最后一个未闭合的键/值后尝试解析，用于增量 patch 预览（同样产出完整含 data 的 spec）。 */
     private fun tryParsePartial(s: String): CardSpec? {
-        // 简化策略：若末尾明显未闭合（引号/大括号不配对），先截断到上一个完整对象边界再试
+        // 若末尾明显未闭合（引号/大括号不配对），先截断到上一个完整对象边界再试
         val trimmed = s.substringBeforeLast("\"}").trimEnd(',') + "}}"
-        return runCatching {
-            val obj = JSONObject(trimmed)
-            val type = obj.optString("type").ifBlank { return null }
-            CardSpec(id = obj.optString("id").ifBlank { streamId }, type = type, version = obj.optInt("version", 1))
-        }.getOrNull().also { /* ignore */ }
+        return parseCardSpec(trimmed)
     }
 }
