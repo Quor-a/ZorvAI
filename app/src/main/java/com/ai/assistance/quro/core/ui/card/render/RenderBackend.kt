@@ -31,6 +31,18 @@ interface RenderBackend {
     fun restore()
     fun clip(left: Float, top: Float, right: Float, bottom: Float)
     fun resolve(token: ColorToken): Color
+
+    /** 渐变圆角矩形（AI 自写卡片 custom 的渐变背景）。默认 noop（VIEW/GL 底座未实现时不崩）。 */
+    fun drawGradientRect(
+        left: Float, top: Float, right: Float, bottom: Float,
+        colors: List<Color>, angleDeg: Float, radiusDp: Float,
+    ) {}
+
+    /** 圆弧（环形进度等）。默认 noop。 */
+    fun drawArc(
+        left: Float, top: Float, right: Float, bottom: Float,
+        startAngle: Float, sweepAngle: Float, color: Color, widthDp: Float,
+    ) {}
 }
 
 /** 三档底座枚举。 */
@@ -99,6 +111,48 @@ class CanvasBackend(
     }
 
     override fun resolve(token: ColorToken): Color = tokenResolver(token)
+
+    override fun drawGradientRect(
+        left: Float, top: Float, right: Float, bottom: Float,
+        colors: List<Color>, angleDeg: Float, radiusDp: Float,
+    ) {
+        // 少于 2 色退化为纯色
+        if (colors.isEmpty()) return
+        if (colors.size == 1) { drawRect(left, top, right, bottom, colors.first(), radiusDp); return }
+        val rad = Math.toRadians(angleDeg.toDouble())
+        val dx = kotlin.math.cos(rad).toFloat()
+        val dy = kotlin.math.sin(rad).toFloat()
+        val cx = (left + right) / 2f
+        val cy = (top + bottom) / 2f
+        val half = kotlin.math.hypot(right - left, bottom - top) / 2f
+        val brush = androidx.compose.ui.graphics.Brush.linearGradient(
+            colors,
+            start = Offset(cx - dx * half, cy - dy * half),
+            end = Offset(cx + dx * half, cy + dy * half),
+        )
+        val r = radiusPx(radiusDp)
+        scope.drawRoundRect(
+            brush = brush,
+            topLeft = Offset(left, top),
+            size = Size(right - left, bottom - top),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(r, r),
+        )
+    }
+
+    override fun drawArc(
+        left: Float, top: Float, right: Float, bottom: Float,
+        startAngle: Float, sweepAngle: Float, color: Color, widthDp: Float,
+    ) {
+        scope.drawArc(
+            color = color,
+            startAngle = startAngle,
+            sweepAngle = sweepAngle,
+            useCenter = false,
+            topLeft = Offset(left, top),
+            size = Size(right - left, bottom - top),
+            style = Stroke(width = dp(widthDp), cap = androidx.compose.ui.graphics.StrokeCap.Round),
+        )
+    }
 }
 
 /**

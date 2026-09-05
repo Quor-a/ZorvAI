@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.ui
 
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
@@ -14,11 +16,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ai.assistance.quro.core.tools.QuroTool
+import com.ai.assistance.quro.core.tools.UiCardTool
+import com.ai.assistance.quro.core.tools.UiWidgetTool
 
 /**
- * Quro 可视化组件画廊（v244 真组件版，所有 Demo 均可交互）
+ * Quro 可视化组件库（v-rewrite 重构版）
+ *
+ * 旧版的「内置组件」Demo（卡片/按钮/输入框/展示/交互/覆盖层 6 类写死的预览）已移除。
+ * 现统一融合真实能力：
+ *  - 富组件（ui_widget）：stat/progress/list/pie/rating/table/alert/tabs/steps/timeline …
+ *  - 富卡片（ui_card）：todo/note/actions …
+ *  - AI 自写（mermaid / miniapp）：AI 下发的流程图与小程序
+ * 点击任意样例，即通过真实工具把组件发送到对话卡片栏（回归全局卡片栏兜底），所见即所得。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,22 +40,32 @@ fun QuroComponentGalleryScreen(
     onComponentSelected: ((String) -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
-    var switchOn by remember { mutableStateOf(true) }
-    var checkboxOn by remember { mutableStateOf(false) }
-    var radioSelected by remember { mutableStateOf(0) }
-    var sliderVal by remember { mutableStateOf(0.4f) }
-    var textValue by remember { mutableStateOf("") }
-    var showDialog by remember { mutableStateOf(false) }
-    var showSnackbar by remember { mutableStateOf(false) }
-    var showSheet by remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
-    LaunchedEffect(showSnackbar) {
-        if (showSnackbar) {
-            snackbarHostState.showSnackbar("这是一条 Snackbar 提示")
-            showSnackbar = false
-        }
-    }
+    // 富组件（ui_widget）样例：标签 -> spec
+    val widgetSamples = listOf(
+        "统计卡" to """{"type":"stat","title":"今日访问","value":"12847","unit":"次","delta":"+12.3%"}""",
+        "进度卡" to """{"type":"progress","title":"项目进度","value":68,"suffix":"%","label":"开发阶段"}""",
+        "列表卡" to """{"type":"list","title":"今日待办","items":[{"text":"完成报告","selected":true},{"text":"回复邮件"}]}""",
+        "饼图" to """{"type":"pie","title":"时间分配","segments":[{"name":"工作","value":8,"color":"#FF6384"},{"name":"睡眠","value":7,"color":"#36A2EB"}]}""",
+        "评分" to """{"type":"rating","label":"满意度","max":5,"value":4}""",
+        "表格" to """{"type":"table","headers":["名称","数量"],"rows":[["苹果","3"],["香蕉","5"]]}""",
+        "提醒" to """{"type":"alert","severity":"warning","text":"磁盘空间不足"}""",
+        "标签页" to """{"type":"tabs","tabs":[{"title":"概览","body":"内容A"},{"title":"详情","body":"内容B"}]}""",
+        "步骤" to """{"type":"steps","steps":[{"title":"下单","status":"done"},{"title":"发货","status":"active"},{"title":"签收"}],"current":1}""",
+        "时间线" to """{"type":"timeline","events":[{"time":"09:00","title":"晨会"},{"time":"14:00","title":"评审"}]}""",
+    )
+    // 富卡片（ui_card）样例：标签 -> spec
+    val cardSamples = listOf(
+        "待办卡" to """{"kind":"todo","title":"任务","items":[{"text":"写文档","done":true},{"text":"发邮件"}]}""",
+        "笔记卡" to """{"kind":"note","title":"读书笔记","body":"这是一段 Markdown 笔记内容。"}""",
+        "动作卡" to """{"kind":"actions","title":"可用操作","actions":[{"label":"打开终端","command":"ui_open_terminal"}]}""",
+    )
+    // AI 自写（mermaid / miniapp）样例：标签 -> spec
+    val aiSamples = listOf(
+        "Mermaid 流程图" to """{"type":"mermaid","title":"登录流程","source":"flowchart TD\nA[开始] --> B{已登录?}\nB -- 否 --> C[跳登录页]\nB -- 是 --> D[进首页]"}""",
+        "小程序 MiniApp" to """{"type":"miniapp","title":"示例卡片","html":"<div style='padding:16px'><h3>AI 自写小程序</h3><p>这段 HTML/CSS/JS 由 AI 生成并在对话框内实时渲染。</p></div>"}""",
+    )
 
     Scaffold(
         topBar = {
@@ -51,205 +74,96 @@ fun QuroComponentGalleryScreen(
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } },
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // 卡片组件
-            item { SectionTitle("卡片组件", cs) }
+            item { SectionTitle("富组件（ui_widget）", cs) }
             item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    GalleryCard(cs, modifier = Modifier.weight(1f)) {
-                        Column {
-                            Text("状态卡", style = MaterialTheme.typography.labelMedium, color = cs.primary)
-                            Spacer(Modifier.height(4.dp))
-                            Text("运行正常", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("CPU 23%", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                        }
-                    }
-                    GalleryCard(cs, modifier = Modifier.weight(1f)) {
-                        Column {
-                            Text("指标卡", style = MaterialTheme.typography.labelMedium, color = cs.tertiary)
-                            Spacer(Modifier.height(4.dp))
-                            Text("1,284", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("今日调用", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                        }
-                    }
-                }
-            }
-            item {
-                GalleryCard(cs) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Surface(Modifier.size(48.dp).clip(CircleShape), color = cs.primaryContainer) {
-                            Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Person, null, tint = cs.onPrimaryContainer) }
-                        }
-                        Column {
-                            Text("人物卡", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            Text("ZorvAI 助手 · 在线", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                        }
-                        Spacer(Modifier.weight(1f))
-                        Button(onClick = { onComponentSelected?.invoke("操作卡") }) { Text("操作") }
+                FlowRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    widgetSamples.forEach { (label, spec) ->
+                        FilterChip(
+                            selected = false,
+                            onClick = { launchSpec(context, UiWidgetTool(), spec, label) },
+                            label = { Text(label) },
+                        )
                     }
                 }
             }
 
-            // 按钮组件
-            item { SectionTitle("按钮组件", cs) }
+            item { SectionTitle("富卡片（ui_card）", cs) }
             item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Button(onClick = {}) { Text("主按钮") }
-                    OutlinedButton(onClick = {}) { Text("描边") }
-                    TextButton(onClick = {}) { Text("文字") }
-                    FilledTonalButton(onClick = {}) { Text("色调") }
-                    IconButton(onClick = {}) { Icon(Icons.Filled.Favorite, null, tint = cs.primary) }
-                }
-            }
-            item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    FilterChip(selected = true, onClick = {}, label = { Text("已选 Chip") })
-                    FilterChip(selected = false, onClick = {}, label = { Text("未选 Chip") })
-                    AssistChip(onClick = {}, label = { Text("辅助 Chip") }, leadingIcon = { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)) })
-                    SmallFloatingActionButton(onClick = {}) { Icon(Icons.Filled.Add, null) }
-                }
-            }
-
-            // 输入框组件
-            item { SectionTitle("输入框组件", cs) }
-            item {
-                OutlinedTextField(
-                    value = textValue,
-                    onValueChange = { textValue = it },
-                    label = { Text("文本框") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-            }
-            item {
-                OutlinedTextField(
-                    value = "",
-                    onValueChange = {},
-                    label = { Text("搜索栏") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Filled.Search, null) },
-                )
-            }
-
-            // 展示组件
-            item { SectionTitle("展示组件", cs) }
-            item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Badge { Text("9") }
-                    Surface(Modifier.size(40.dp).clip(CircleShape), color = cs.secondaryContainer) {
-                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.AccountCircle, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(28.dp)) }
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Text("线性进度", style = MaterialTheme.typography.labelSmall)
-                        LinearProgressIndicator({ 0.6f }, modifier = Modifier.fillMaxWidth())
-                    }
-                }
-            }
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CircularProgressIndicator()
-                    CircularProgressIndicator({ 0.3f })
-                    Column {
-                        Text("空状态", style = MaterialTheme.typography.labelMedium)
-                        Text("暂无数据", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                FlowRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    cardSamples.forEach { (label, spec) ->
+                        FilterChip(
+                            selected = false,
+                            onClick = { launchSpec(context, UiCardTool(), spec, label) },
+                            label = { Text(label) },
+                        )
                     }
                 }
             }
 
-            // 交互组件
-            item { SectionTitle("交互组件", cs) }
+            item { SectionTitle("AI 自写（mermaid / miniapp）", cs) }
             item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(checked = switchOn, onCheckedChange = { switchOn = it })
-                        Spacer(Modifier.width(6.dp)); Text(if (switchOn) "开" else "关")
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = checkboxOn, onCheckedChange = { checkboxOn = it })
-                        Spacer(Modifier.width(6.dp)); Text(if (checkboxOn) "已勾" else "未勾")
-                    }
-                }
-            }
-            item {
-                Column {
-                    Text("滑块: ${(sliderVal * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
-                    Slider(value = sliderVal, onValueChange = { sliderVal = it })
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = radioSelected == 0, onClick = { radioSelected = 0 })
-                        Text("选项 A"); Spacer(Modifier.width(12.dp))
-                        RadioButton(selected = radioSelected == 1, onClick = { radioSelected = 1 })
-                        Text("选项 B")
+                FlowRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    aiSamples.forEach { (label, spec) ->
+                        FilterChip(
+                            selected = false,
+                            onClick = { launchSpec(context, UiWidgetTool(), spec, label) },
+                            label = { Text(label) },
+                        )
                     }
                 }
             }
 
-            // 覆盖层组件
-            item { SectionTitle("覆盖层组件", cs) }
             item {
                 Surface(
                     Modifier.fillMaxWidth(),
                     color = cs.primaryContainer,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(10.dp),
                 ) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         Icon(Icons.Filled.Info, null, tint = cs.onPrimaryContainer)
-                        Text("提示条：这是一条信息提示", color = cs.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "点击任意组件，真实样例会发送到对话卡片栏。ui_widget / ui_card / mermaid / miniapp 均为真实渲染能力，已并入本组件库；旧版写死的「内置组件」Demo 已移除。",
+                            color = cs.onPrimaryContainer,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
-                }
-            }
-            item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { showDialog = true }) { Text("打开对话框") }
-                    Button(onClick = { showSnackbar = true }) { Text("触发 Snackbar") }
-                    Button(onClick = { showSheet = true }) { Text("底部弹层") }
                 }
             }
 
             item { Spacer(Modifier.height(32.dp)) }
         }
     }
+}
 
-    if (showDialog) {
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            confirmButton = { TextButton(onClick = { showDialog = false }) { Text("确定") } },
-            dismissButton = { TextButton(onClick = { showDialog = false }) { Text("取消") } },
-            title = { Text("对话框") },
-            text = { Text("这是一个真实可交互的 Material3 对话框。") },
-        )
-    }
-
-    if (showSheet) {
-        ModalBottomSheet(onDismissRequest = { showSheet = false }) {
-            Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("底部弹层", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("可在此放置操作列表、表单等内容。", style = MaterialTheme.typography.bodyMedium)
-                Button(onClick = { showSheet = false }, modifier = Modifier.fillMaxWidth()) { Text("关闭") }
-                Spacer(Modifier.height(16.dp))
-            }
-        }
-    }
+/** 用真实工具把组件 spec 发送到对话卡片栏（桥未连接时回落全局卡片栏） */
+private fun launchSpec(context: Context, tool: QuroTool, spec: String, label: String) {
+    val result = runCatching { tool.run(context, spec) }.getOrElse { """{"error":"$it"}""" }
+    val ok = result.contains("\"ok\":true") || !result.contains("\"error\"")
+    Toast.makeText(context, if (ok) "已发送：$label" else "发送失败：$label", Toast.LENGTH_SHORT).show()
 }
 
 @Composable
 private fun SectionTitle(text: String, cs: ColorScheme) {
     Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = cs.onSurface)
-}
-
-@Composable
-private fun GalleryCard(cs: ColorScheme, modifier: Modifier = Modifier.fillMaxWidth(), content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = cs.surfaceContainerLow,
-        border = BorderStroke(1.dp, cs.outlineVariant),
-        modifier = modifier,
-    ) {
-        Column(Modifier.padding(16.dp), content = content)
-    }
 }

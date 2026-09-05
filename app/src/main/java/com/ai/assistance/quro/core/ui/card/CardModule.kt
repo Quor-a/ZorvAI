@@ -4,6 +4,8 @@ import com.ai.assistance.quro.core.ui.card.registry.CardRegistry
 import com.ai.assistance.quro.core.ui.card.registry.CardRenderer
 import com.ai.assistance.quro.core.ui.card.widgets.ButtonGroupRenderer
 import com.ai.assistance.quro.core.ui.card.widgets.ButtonGroupState
+import com.ai.assistance.quro.core.ui.card.widgets.CustomCardRenderer
+import com.ai.assistance.quro.core.ui.card.widgets.CustomCardState
 import com.ai.assistance.quro.core.ui.card.widgets.LineChartRenderer
 import com.ai.assistance.quro.core.ui.card.widgets.LineChartState
 import com.ai.assistance.quro.core.ui.card.widgets.MetricCardRenderer
@@ -32,6 +34,8 @@ object CardModule {
         CardRegistry.register("skeleton", SkeletonRenderer() as CardRenderer<SkeletonState>)
         CardRegistry.register("table", TableRenderer() as CardRenderer<TableState>)
         CardRegistry.register("status", StatusRenderer() as CardRenderer<StatusState>)
+        // custom：AI 自写布局卡（layout 树自由设计，无内置模板）
+        CardRegistry.register("custom", CustomCardRenderer() as CardRenderer<CustomCardState>)
         initialized = true
     }
 

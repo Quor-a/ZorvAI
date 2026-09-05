@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -100,6 +102,21 @@ fun CardSurface(
     val measurer = rememberTextMeasurer()
     val state = remember(spec.id) { r.createInitialState() }
 
+    // 入场动画驱动：state 实现 AnimateAware（如 custom 自定义卡）时逐帧推进 0→1，
+    // 渲染器按相位画数字滚动/进度生长；progress 是 mutableStateOf，draw 读取后自动逐帧重绘。
+    val anim = state as? com.ai.assistance.quro.core.ui.card.registry.AnimateAware
+    if (anim != null) {
+        LaunchedEffect(spec.id) {
+            val t0 = withFrameNanos { it }
+            while (true) {
+                val now = withFrameNanos { it }
+                val p = ((now - t0) / 1_400_000_000f).coerceIn(0f, 1f)
+                anim.onFrame(p)
+                if (p >= 1f) break
+            }
+        }
+    }
+
     // 主题令牌：把语义色映射到当前 Material 主题（暗色 / 字体缩放自动生效）。
     // 端上自写绘制，不依赖任何内置/三方成品卡片控件。
     val cs = MaterialTheme.colorScheme
@@ -129,8 +146,8 @@ fun CardSurface(
         // 直接手算：px = dpValue × density（density 是 Float 密度因子）。
         val densityFactor = LocalDensity.current.density
         val maxWidthPx = (maxWidth.value * densityFactor).coerceAtLeast(1f)
-        val measured = r.measure(spec, state, maxWidthPx)
-        val layout = r.layout(spec, state, measured)
+        val measured = r.measure(spec, state, maxWidthPx, densityFactor)
+        val layout = r.layout(spec, state, measured, densityFactor)
         val heightDp = Dp(measured.height / densityFactor)
         Canvas(
             Modifier

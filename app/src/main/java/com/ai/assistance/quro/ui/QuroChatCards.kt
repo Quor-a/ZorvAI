@@ -2361,19 +2361,22 @@ private fun CompositeCardView(card: QuroChatCard.CompositeCard, onCommand: (Stri
                         // 每张子卡独立包裹，互不干扰
                         Box(Modifier.fillMaxWidth()) {
                             QuroChatCardView(child, onCommand)
-                            // 「单独」按钮浮在子卡右上角
-                            Row(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp)) {
-                                Surface(
-                                    color = cs.surfaceVariant.copy(alpha = 0.9f),
-                                    shape = RoundedCornerShape(6.dp),
-                                    modifier = Modifier.clickable { singleIndex = i },
-                                ) {
-                                    Text(
-                                        "单独",
-                                        color = cs.primary,
-                                        fontSize = 11.sp,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                    )
+                            // 「单独」按钮浮在子卡右上角；仅多子卡时才有「单渲染」意义
+                            // （单子卡 composite 不渲染，防 AI 把独立小卡片包进 composite 造成按钮泛滥）
+                            if (card.children.size > 1) {
+                                Row(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp)) {
+                                    Surface(
+                                        color = cs.surfaceVariant.copy(alpha = 0.9f),
+                                        shape = RoundedCornerShape(6.dp),
+                                        modifier = Modifier.clickable { singleIndex = i },
+                                    ) {
+                                        Text(
+                                            "单独",
+                                            color = cs.primary,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        )
+                                    }
                                 }
                             }
                         }

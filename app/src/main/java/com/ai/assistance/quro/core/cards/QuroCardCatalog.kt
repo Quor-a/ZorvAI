@@ -50,6 +50,8 @@ val CARD_CATALOG: List<CardTemplate> = listOf(
     CardTemplate("compare", "data", "左右对比", """{"type":"compare","left_title":"方案A","left_points":["便宜","简单"],"left_positive":true,"right_title":"方案B","right_points":["强大"],"right_positive":false}"""),
     CardTemplate("countdown", "data", "倒计时（目标时间）", """{"type":"countdown","label":"距活动","target":"2026-12-31 23:59:59"}"""),
     CardTemplate("timer", "data", "计时器，到点回传 command", """{"type":"timer","seconds":30,"command":"ui_timer_done"}"""),
+    CardTemplate("alert", "data", "告警横幅（info/warning/error/success）", """{"type":"alert","severity":"warning","text":"磁盘空间不足 10%"}"""),
+    CardTemplate("htmlpreview", "data", "HTML 预览卡（在气泡内渲染自写 HTML）", """{"type":"htmlpreview","title":"预览","html":"<h3>你好</h3><p>这是 HTML 卡</p>"}"""),
     // ── 媒体 ──
     CardTemplate("media", "media", "图片/视频媒体", """{"type":"media","mediaUrl":"https://example.com/a.png","mediaType":"image"}"""),
     CardTemplate("mediaplay", "media", "音频/视频播放器", """{"type":"mediaplay","mediaType":"audio","uri":"https://example.com/a.mp3","label":"播放"}"""),
@@ -76,6 +78,10 @@ val CARD_CATALOG: List<CardTemplate> = listOf(
     CardTemplate("tagcloud", "decoration", "标签云，按权重缩放字号，点击触发 command（v221）", """{"type":"tagcloud","title":"热门标签","tags":[{"label":"AI","weight":5,"command":"ai:讲讲AI"},{"label":"编程","weight":3,"command":"ai:编程技巧"}]}"""),
     CardTemplate("badge", "decoration", "彩色徽章组，点击触发各自 command（v221）", """{"type":"badge","title":"成就","badges":[{"label":"新人","color":"#4CAF50","command":"open:https://example.com/badge"},{"label":"活跃","color":"#FF9800","command":""}]}"""),
     CardTemplate("avatargroup", "decoration", "重叠头像组，点击触发 command（v221）", """{"type":"avatargroup","title":"在线成员","avatars":[{"name":"小明","url":"","command":"screen:profile"},{"name":"小红","url":"","command":"screen:profile"}]}"""),
+    // ── AI 自写 / 组合 ──
+    CardTemplate("mermaid", "aiwrite", "AI 自写 Mermaid 可视化图表（流程/时序/状态机/类图/思维导图/git 图等）", """{"type":"mermaid","title":"流程图","source":"graph TD; A-->B; B-->C;"}"""),
+    CardTemplate("miniapp", "aiwrite", "AI 生成小程序（HTML+JS+CSS）实时渲染为可交互页面", """{"type":"miniapp","title":"计算器","html":"<button data-action='tap' data-bind='n'>点我</button>"}"""),
+    CardTemplate("composite", "aiwrite", "组合卡：多子卡聚合成整体（stack 堆叠可单渲染 / tabs 标签页 / accordion 折叠）", """{"type":"composite","layout":"stack","children":[{"type":"stat","label":"内存","value":"6G"},{"type":"progress","label":"下载","value":60}],"description":"系统概览"}"""),
 )
 
 /** 把目录序列化为紧凑 JSON，便于注入 AI 系统提示词/工具说明。 */

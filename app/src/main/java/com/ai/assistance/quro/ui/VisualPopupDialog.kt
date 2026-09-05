@@ -2,6 +2,7 @@ package com.ai.assistance.quro.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -33,6 +35,11 @@ import com.ai.assistance.quro.core.tools.PopupResult
 /**
  * 可视化弹窗小卡片 - 显示在对话框中，点击可重新打开弹窗
  */
+/**
+ * 可视化弹窗小卡片 - 显示在对话框中，点击可重新打开弹窗。
+ * 重写版（更丰富、独立功能）：图标盒(48dp，按 iconName 解析，缺省按状态) + 标题 + 副标题 +
+ * 描述 + 标签 chips(最多3) + 可选进度条 + 状态徽标，整卡可点重开弹窗。
+ */
 @Composable
 fun VisualPopupCard(
     popupData: VisualPopupData,
@@ -40,98 +47,74 @@ fun VisualPopupCard(
 ) {
     val cs = MaterialTheme.colorScheme
 
+    val containerColor = when (popupData.status) {
+        PopupStatus.COMPLETED -> cs.secondaryContainer
+        PopupStatus.CANCELLED -> cs.errorContainer
+        else -> cs.primaryContainer
+    }
+    val accentColor = when (popupData.status) {
+        PopupStatus.COMPLETED -> cs.secondary
+        PopupStatus.CANCELLED -> cs.error
+        else -> cs.primary
+    }
+    val pending = popupData.status == PopupStatus.PENDING || popupData.status == PopupStatus.ACTIVE
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = when (popupData.status) {
-                PopupStatus.COMPLETED -> cs.secondaryContainer
-                PopupStatus.CANCELLED -> cs.errorContainer
-                else -> cs.primaryContainer
-            }
-        ),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 图标
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        when (popupData.status) {
-                            PopupStatus.COMPLETED -> cs.secondary
-                            PopupStatus.CANCELLED -> cs.error
-                            else -> cs.primary
-                        }
-                    ),
-                contentAlignment = Alignment.Center
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    when (popupData.status) {
-                        PopupStatus.COMPLETED -> Icons.Filled.Check
-                        PopupStatus.CANCELLED -> Icons.Filled.Close
-                        else -> Icons.Filled.Web
-                    },
-                    contentDescription = null,
-                    tint = cs.onPrimary,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+                // 图标盒：按 iconName 解析，缺省按状态取
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(accentColor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        resolvePopupIcon(popupData.iconName, popupData.status),
+                        contentDescription = null,
+                        tint = cs.onPrimary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
 
-            Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-            // 标题和描述
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = popupData.cardTitle,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = cs.onPrimaryContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (popupData.cardDescription.isNotBlank()) {
+                // 标题 + 状态徽标
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = popupData.cardDescription,
-                        fontSize = 12.sp,
-                        color = cs.onPrimaryContainer.copy(alpha = 0.7f),
-                        maxLines = 2,
+                        text = popupData.cardTitle,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = cs.onPrimaryContainer,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 4.dp)
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    when (popupData.status) {
+                        PopupStatus.COMPLETED -> StatusPill("已完成", accentColor, cs.onSecondary)
+                        PopupStatus.CANCELLED -> StatusPill("已取消", accentColor, cs.onError)
+                        else -> { /* 待处理不显示徽标 */ }
+                    }
                 }
-            }
 
-            // 状态指示
-            when (popupData.status) {
-                PopupStatus.COMPLETED -> {
-                    Text(
-                        text = "已完成",
-                        fontSize = 10.sp,
-                        color = cs.secondary,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                PopupStatus.CANCELLED -> {
-                    Text(
-                        text = "已取消",
-                        fontSize = 10.sp,
-                        color = cs.error,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                else -> {
+                // 待处理给箭头提示可点开
+                if (pending) {
                     Icon(
                         Icons.Filled.ChevronRight,
                         contentDescription = null,
@@ -140,7 +123,139 @@ fun VisualPopupCard(
                     )
                 }
             }
+
+            // 副标题
+            if (popupData.subtitle.isNotBlank()) {
+                Text(
+                    text = popupData.subtitle,
+                    fontSize = 13.sp,
+                    color = cs.onPrimaryContainer.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+
+            // 描述
+            if (popupData.cardDescription.isNotBlank()) {
+                Text(
+                    text = popupData.cardDescription,
+                    fontSize = 12.sp,
+                    color = cs.onPrimaryContainer.copy(alpha = 0.7f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = if (popupData.subtitle.isNotBlank()) 2.dp else 8.dp)
+                )
+            }
+
+            // 标签 chips（最多3个）
+            if (popupData.tags.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    popupData.tags.take(3).forEach { tag ->
+                        Surface(
+                            color = accentColor.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = tag,
+                                fontSize = 11.sp,
+                                color = accentColor,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 进度条
+            popupData.progress?.let { p ->
+                LinearProgressIndicator(
+                    progress = { p.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    color = accentColor,
+                    trackColor = accentColor.copy(alpha = 0.2f)
+                )
+            }
         }
+    }
+}
+
+/** 小卡片状态/标签徽标 */
+@Composable
+private fun StatusPill(text: String, bg: Color, fg: Color) {
+    Surface(color = bg, shape = RoundedCornerShape(6.dp)) {
+        Text(
+            text = text,
+            fontSize = 10.sp,
+            color = fg,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+        )
+    }
+}
+
+/**
+ * 小卡片图标解析：按 iconName 取 Material 图标；为空时按状态取（Web/Check/Close）。
+ */
+private fun resolvePopupIcon(name: String, status: PopupStatus): ImageVector {
+    val n = name.lowercase()
+    if (n.isBlank()) return when (status) {
+        PopupStatus.COMPLETED -> Icons.Filled.Check
+        PopupStatus.CANCELLED -> Icons.Filled.Close
+        else -> Icons.Filled.Web
+    }
+    return when (n) {
+        "check","done","complete","ok" -> Icons.Filled.Check
+        "close","cancel","error","x" -> Icons.Filled.Close
+        "info","information" -> Icons.Filled.Info
+        "warning","warn","alert" -> Icons.Filled.Warning
+        "star" -> Icons.Filled.Star
+        "person","user","account" -> Icons.Filled.Person
+        "settings","gear","cog" -> Icons.Filled.Settings
+        "favorite","like","heart" -> Icons.Filled.Favorite
+        "shopping","cart" -> Icons.Filled.ShoppingCart
+        "location","place","map","pin" -> Icons.Filled.LocationOn
+        "calendar","date","event" -> Icons.Filled.CalendarToday
+        "bolt","flash","speed","fast" -> Icons.Filled.Bolt
+        "build","tools","wrench","tool" -> Icons.Filled.Build
+        "code","dev","terminal" -> Icons.Filled.Code
+        "email","mail" -> Icons.Filled.Email
+        "phone","call" -> Icons.Filled.Phone
+        "search","find" -> Icons.Filled.Search
+        "add","plus","new" -> Icons.Filled.Add
+        "rocket","launch" -> Icons.Filled.RocketLaunch
+        "lightbulb","idea","tip" -> Icons.Filled.Lightbulb
+        "link","url" -> Icons.Filled.Link
+        "image","photo","picture" -> Icons.Filled.Image
+        "music","audio","sound" -> Icons.Filled.MusicNote
+        "video","movie" -> Icons.Filled.VideoLibrary
+        "file","doc","document" -> Icons.Filled.Description
+        "cloud" -> Icons.Filled.Cloud
+        "bell","notification","notify" -> Icons.Filled.Notifications
+        "lock","secure","security" -> Icons.Filled.Lock
+        "download" -> Icons.Filled.Download
+        "upload" -> Icons.Filled.Upload
+        "share" -> Icons.Filled.Share
+        "edit","pencil","write" -> Icons.Filled.Edit
+        "delete","trash","remove" -> Icons.Filled.Delete
+        "refresh","sync","reload" -> Icons.Filled.Refresh
+        "play" -> Icons.Filled.PlayArrow
+        "pause" -> Icons.Filled.Pause
+        "home" -> Icons.Filled.Home
+        "chat","message","comment" -> Icons.Filled.Chat
+        "list","tasks" -> Icons.Filled.List
+        "grid","apps" -> Icons.Filled.GridView
+        "folder" -> Icons.Filled.Folder
+        "tag","label" -> Icons.Filled.Label
+        "clock","time" -> Icons.Filled.AccessTime
+        "money","currency","coin" -> Icons.Filled.AttachMoney
+        "trending","chart","analytics" -> Icons.Filled.TrendingUp
+        "wifi" -> Icons.Filled.Wifi
+        "battery" -> Icons.Filled.BatteryFull
+        else -> Icons.Filled.Web
     }
 }
 
