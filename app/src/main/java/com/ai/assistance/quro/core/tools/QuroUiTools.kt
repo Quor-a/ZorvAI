@@ -63,7 +63,7 @@ action 说明:
 - sheet: 打开弹层 (target: model/persona/settings)
 - chat: 对话管理 (action_type: new/clear)
 - card: 渲染卡片 (title, content, style: info/success/warning/error)
-- widget: 渲染组件 (type: button/toggle/slider/input/select/mermaid/miniapp/table/pie/rating/tag/chips/list/stat/progress/alert/segmented, id, label, value；mermaid 时 value 填 Mermaid 源码，对话框渲染成图；miniapp 时 value 填完整 HTML，对话框内联渲染小程序；table 时 value 填 {"headers":[],"rows":[[],...]}；pie 时 value 填 [{"label":"...","value":45,"color":"#RRGGBB"},...]；rating 时 value 填 0-5 数字；tag/chips 时 value 填 ["标签1",...] 或逗号分隔；list 时 value 填 [{"text":"..."},...]；stat/progress/alert 时 value 填对应 JSON 对象或纯文本；segmented/select 时 value 填选项列表)
+- widget: 渲染组件 (type: button/toggle/slider/input/select/mermaid/miniapp, id, label, value；mermaid 时 value 填 Mermaid 源码，对话框渲染成图；miniapp 时 value 填完整 HTML，对话框内联渲染小程序)
 - status: 查询组件状态 (component: header/sidebar/input/toolbox)
 - update: 更新组件属性 (component, props: {key:value})
 - scroll: 滚动到指定位置 (target: top/bottom/id)
@@ -174,7 +174,7 @@ action 说明:
     },
     "type": {
       "type": "string",
-      "enum": ["button", "toggle", "slider", "input", "select", "mermaid", "miniapp", "table", "pie", "rating", "tag", "chips", "list", "stat", "progress", "alert", "segmented"],
+      "enum": ["button", "toggle", "slider", "input", "select", "mermaid", "miniapp"],
       "description": "组件类型（mermaid 用于渲染可视化编程图表，source/value 填 Mermaid 源码；miniapp 用于渲染 HTML 小程序，value 填完整 HTML）"
     },
     "id": {
