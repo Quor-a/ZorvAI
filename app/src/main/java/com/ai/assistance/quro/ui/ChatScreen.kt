@@ -2620,7 +2620,7 @@ private fun MessageList(
         modifier = Modifier
             .fillMaxSize(),
         state = listState,
-        contentPadding = PaddingValues(vertical = 8.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
