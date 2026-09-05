@@ -74,6 +74,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -130,6 +131,7 @@ fun QuroUiRenderer(
         hidden = hidden,
         onAction = onAction,
         modifier = modifier,
+        isRoot = true,
     )
 }
 
@@ -144,13 +146,14 @@ private fun RenderNode(
     hidden: MutableMap<String, Boolean>,
     onAction: (QuroUiAction, Map<String, String>) -> Unit,
     modifier: Modifier = Modifier,
+    isRoot: Boolean = false,
 ) {
     // toggle 隐藏：节点有 id 且被标记为隐藏则整体不渲染
     val nodeId = node.id
     if (nodeId != null && hidden[nodeId] == true) return
 
     when (node) {
-        is QuroColumnNode -> RenderColumn(node, state, hidden, onAction, modifier)
+        is QuroColumnNode -> RenderColumn(node, state, hidden, onAction, modifier, isRoot)
         is QuroRowNode -> RenderRow(node, state, hidden, onAction, modifier)
         is QuroBoxNode -> RenderBox(node, state, hidden, onAction, modifier)
         is QuroPaneNode -> RenderPane(node, state, hidden, onAction, modifier)
@@ -189,15 +192,19 @@ private fun RenderColumn(
     hidden: MutableMap<String, Boolean>,
     onAction: (QuroUiAction, Map<String, String>) -> Unit,
     modifier: Modifier,
+    isRoot: Boolean = false,
 ) {
     val pad = (node.padding ?: 0).dp
     val m = modifier
         .then(if (pad > 0.dp) Modifier.padding(pad) else Modifier)
         .then(
             // verticalScroll 需要有限高度，否则在 LazyColumn 之类父容器下会因「infinity max height」直接抛 IllegalStateException。
-            // 默认以 heightIn(max = 480.dp) 显式限定 scroll 区域，既不破坏 scrollable=true 的设计意图，也保证任何父容器下都可安全使用。
-            if (node.scrollable) Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())
-            else Modifier
+            // 根列：cap = screenHeightDp（屏幕高度），长卡片（如工具中心）底部不再被裁，能整张滚上看；
+            // 非根列：cap = 480.dp（嵌入区域上限），防单卡内部过高影响外层滚动节奏。
+            if (node.scrollable) {
+                val maxHeight = if (isRoot) LocalConfiguration.current.screenHeightDp.dp else 480.dp
+                Modifier.heightIn(max = maxHeight).verticalScroll(rememberScrollState())
+            } else Modifier
         )
 
     Column(
