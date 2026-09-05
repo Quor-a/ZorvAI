@@ -11,6 +11,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import com.ai.assistance.quro.core.ui.card.registry.CardRegistry
@@ -19,6 +21,7 @@ import com.ai.assistance.quro.core.ui.card.registry.CardState
 import com.ai.assistance.quro.core.ui.card.render.BackendKind
 import com.ai.assistance.quro.core.ui.card.render.CanvasBackend
 import com.ai.assistance.quro.core.ui.card.spec.Action
+import com.ai.assistance.quro.core.ui.card.spec.CardData
 import com.ai.assistance.quro.core.ui.card.spec.CardSpec
 import com.ai.assistance.quro.core.ui.card.spec.ColorToken
 
@@ -129,7 +132,22 @@ fun CardSurface(
         val measured = r.measure(spec, state, maxWidthPx)
         val layout = r.layout(spec, state, measured)
         val heightDp = Dp(measured.height / densityFactor)
-        Canvas(Modifier.fillMaxWidth().height(heightDp)) {
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(heightDp)
+                .pointerInput(Unit) {
+                    // 点击命中：交给渲染器做 hitTest，命中则回传对应 Action（按钮组经 onAction→ActionBus→消息流）。
+                    detectTapGestures { offset ->
+                        val hit = r.hitTest(offset, layout, state)
+                        if (hit != null) {
+                            val action = (spec.data as? CardData.Form)?.buttons?.getOrNull(hit.actionIndex)?.action
+                                ?: spec.actions.getOrNull(hit.actionIndex)
+                            if (action != null) onAction(action, spec)
+                        }
+                    }
+                }
+        ) {
             val backend = CanvasBackend(
                 scope = this,
                 tokenResolver = { StyleTokenResolver.resolve(it) },

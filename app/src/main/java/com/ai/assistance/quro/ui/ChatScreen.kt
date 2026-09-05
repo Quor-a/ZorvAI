@@ -43,6 +43,7 @@ import com.ai.assistance.quro.core.cards.parseComponentSpec
 import com.ai.assistance.quro.ui.QuroShareBridge
 // 自研卡片渲染（feat_self_card）：独立功能，与动态 UI 的 quro-ui 完全不合并。
 import com.ai.assistance.quro.core.ui.card.CardModule
+import com.ai.assistance.quro.core.ui.card.host.ActionBus
 import com.ai.assistance.quro.core.ui.card.host.CardSurface
 import com.ai.assistance.quro.core.ui.card.spec.CardSpec
 import com.ai.assistance.quro.core.ui.card.spec.parseCardSpec
@@ -2834,6 +2835,8 @@ private fun MessageRow(
             if (t.isNullOrBlank()) emptyList() else extractSelfCardSpecs(QuroVoiceStyle.strip(t))
         }
     }
+    // 自研卡片点击 → ActionBus → onCommand（命令式卡片动作回传消息流；无匹配命令时静默 no-op）。
+    ActionBus.handler = { action, _ -> action.name?.let { onCommand(it); true } ?: false }
     // 正文文本与「内联组件 JSON」抽离结果：供气泡正文与气泡外全宽卡片共用同一份，避免重复解析。
     // 卡片从气泡里拎出来，在下方「全宽内联」区块渲染，不再被 280dp 气泡压窄、移动端看不全。
     val displayText = QuroVoiceStyle.strip(msg.text ?: "")
