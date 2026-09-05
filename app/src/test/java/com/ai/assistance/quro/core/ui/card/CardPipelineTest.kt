@@ -15,6 +15,8 @@ import com.ai.assistance.quro.core.ui.card.spec.parseCardSpec
 import com.ai.assistance.quro.core.ui.card.widgets.ButtonGroupRenderer
 import com.ai.assistance.quro.core.ui.card.widgets.LineChartRenderer
 import com.ai.assistance.quro.core.ui.card.widgets.SkeletonRenderer
+import com.ai.assistance.quro.core.ui.card.widgets.StatusRenderer
+import com.ai.assistance.quro.core.ui.card.widgets.TableRenderer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -114,6 +116,55 @@ class CardPipelineTest {
         val hit = r.hitTest(Offset((box.left + box.right) / 2f, (box.top + box.bottom) / 2f), layout, state)
         assertNotNull(hit)
         assertEquals(0, hit!!.actionIndex)
+    }
+
+    @Test
+    fun table_render_drawsCellsAndGridLines() {
+        val r = TableRenderer()
+        val json = """{"type":"table","data":{"kind":"media","mediaType":"table","headers":["列1","列2"],"rows":[["a","b"],["c","d"]]}}"""
+        val spec = parseCardSpec(json)!!
+        assertTrue("表格卡应解析为 CardData.Media", spec.data is CardData.Media)
+        val media = spec.data as CardData.Media
+        assertEquals(2, media.headers.size)
+        assertEquals(2, media.rows.size)
+        val state = r.createInitialState()
+        val size = r.measure(spec, state, 360f)
+        assertTrue("表格卡 measure 应给出非零高度(含表头+2行)", size.height > 0f)
+        val layout = r.layout(spec, state, size)
+        val b = RecordingBackend()
+        r.render(b, spec, layout, state)
+        // 表头 1 行 + 2 数据行 = 3 行底色矩形；单元格文字 2 列 *(1 表头+2 行)=6；横线 3 条 + 竖线 1 条
+        assertTrue("表格卡应绘制行底色矩形(>=3)", b.rects >= 3)
+        assertTrue("表格卡应绘制单元格文字(>=6)", b.texts >= 6)
+        assertTrue("表格卡应绘制网格线(line >=4)", b.lines >= 4)
+    }
+
+    @Test
+    fun status_render_progressAndError_drawsExpected() {
+        // progress 形态
+        val rp = StatusRenderer()
+        val specP = parseCardSpec("""{"type":"status","data":{"kind":"status","statusType":"progress","text":"处理中","progress":0.5}}""")!!
+        assertTrue(specP.data is CardData.Status)
+        val stP = specP.data as CardData.Status
+        assertEquals("progress", stP.statusType)
+        assertEquals(0.5f, stP.progress)
+        val stateP = rp.createInitialState()
+        val sizeP = rp.measure(specP, stateP, 360f)
+        assertTrue("progress 卡高度应>0", sizeP.height > 0f)
+        val bP = RecordingBackend()
+        rp.render(bP, specP, rp.layout(specP, stateP, sizeP), stateP)
+        assertTrue("progress 卡应绘制标题文字", bP.texts >= 1)
+        assertTrue("progress 卡应绘制底槽+填充矩形(>=2)", bP.rects >= 2)
+
+        // error 形态（可重试）
+        val specE = parseCardSpec("""{"type":"status","data":{"kind":"status","statusType":"error","text":"失败","reason":"网络错误","retryable":true}}""")!!
+        val stateE = rp.createInitialState()
+        val sizeE = rp.measure(specE, stateE, 360f)
+        assertTrue("error 卡高度应>0", sizeE.height > 0f)
+        val bE = RecordingBackend()
+        rp.render(bE, specE, rp.layout(specE, stateE, sizeE), stateE)
+        // "错误" + 原因 + "点击重试" >=3 段文字
+        assertTrue("error 卡应绘制错误标题/原因/重试提示(>=3)", bE.texts >= 3)
     }
 
     @Test
