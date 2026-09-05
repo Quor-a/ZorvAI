@@ -865,6 +865,19 @@ fun parseComponentSpec(spec: String): QuroChatCard? {
                     s.optString("description", "").ifBlank { null },
                 )
             }
+            // ── 链接回答卡：目录早已声明 yuanbao，此前仅支持落盘还原与链接自动识别，现补齐工具下发 ──
+            "yuanbao" -> QuroChatCard.YuanbaoCard(
+                id, title, s.optString("url", ""),
+                s.optJSONArray("links")?.let { arr ->
+                    (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map {
+                        QuroChatCard.YuanbaoLink(it.optString("title", ""), it.optString("url", ""))
+                    }
+                } ?: emptyList(),
+            )
+            // ── HTML 预览卡：与落盘还原（parseCard "htmlpreview"）对齐，工具下发同样可渲染 ──
+            "htmlpreview" -> QuroChatCard.HtmlPreviewCard(
+                id, title, s.optString("html", ""),
+            )
             else -> null
         }
     } catch (e: Exception) {

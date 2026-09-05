@@ -1360,6 +1360,9 @@ fun ChatScreen(
                         onAttachmentDownload = { downloadAttachment(ctx, it) },
                         modifier = Modifier.weight(1f)
                     )
+                    // 交互组件卡片栏（可视化小卡片兜底）：UI 桥未就绪时 AI 下发的 ui_widget/ui_card
+                    // 富卡片回落 QuroChatCardStore，在此渲染——此前只有 import 没有调用，兜底链路断的。
+                    QuroChatCardTray(onCommand = { handleCardCommand(it) })
                     // 语音：对话框语音输入按钮（受「语音设置 · 对话框按钮」开关控制）
                     val voiceInputEnabled = remember { QuroVoiceFeaturePrefs.getDialogVoiceButton(ctx) }
                     fun startDialogStt() {
@@ -3178,7 +3181,7 @@ private fun MessageRow(
                 // 导致「长按自由选词复制」失效。移除此点击处理，让 SelectionContainer 接管选区；
                 // 整段复制仍由下方「复制」操作按钮提供。
                 Box(bubbleModifier) {
-                    val blocks = remember(cleanText) { parseBlocks(cleanText) }
+                    val blocks = remember(cleanText, selfCardOn) { parseBlocks(cleanText, selfCardOn) }
                     SelectionContainer {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         // 动态 UI 区块不在气泡内渲染（会被 280dp 压窄 / 输入条遮挡），改在消息底部全宽内联渲染。
@@ -5847,7 +5850,7 @@ private fun PersonaSheetContent(
     ) {
         // ── 人格卡里的两个独立功能开关（互不合并）──
         // 1) 动态 UI 组件：已有功能（quro-ui DSL 原生渲染）的总开关
-        // 2) 自研卡片渲染：尚未实现的新功能（7 层自研架构，与动态 UI 无关）的总开关
+        // 2) 可视化小卡片（自研卡片渲染）：7 层自研架构（core.ui.card），AI 用 ```quro-card 围栏下发
         SheetHeader("功能开关", "两项独立控制，互不影响。", scaled)
         PersonaFeatureToggleRow(
             title = "动态 UI 组件",
@@ -5860,8 +5863,8 @@ private fun PersonaSheetContent(
             scaled = scaled,
         )
         PersonaFeatureToggleRow(
-            title = "自研卡片渲染",
-            desc = "全新自研渲染层（不依赖内置/三方卡片控件，三档底座）。当前为预览。",
+            title = "可视化小卡片（自研渲染）",
+            desc = "AI 用 ```quro-card 围栏输出的自研小卡片：指标 / 折线图 / 表格 / 按钮组 / 状态卡。",
             checked = selfCardOn,
             onChanged = {
                 selfCardOn = it
@@ -6392,7 +6395,7 @@ private fun isFullHtmlDocument(text: String): Boolean {
 private val RE_FENCE_OPEN = Regex("""(?m)^```([a-zA-Z0-9_+#-]*)[ \t]*\n""")
 
 /** 解析 ```lang ... ``` 围栏代码块；其余文本走 HTML/Markdown 块级解析。 */
-private fun parseBlocks(text: String): List<MsgBlock> {
+private fun parseBlocks(text: String, selfCard: Boolean = true): List<MsgBlock> {
     // v404 诊断：记录 AI 回复是否含 HTML 及其判定结果（排查「HTML 裸文本」问题）
     val trimmed = text.trim()
     if (quroDiagCtx != null && (trimmed.startsWith("<") || trimmed.contains("```html") || isFullHtmlDocument(text) || looksLikeHtmlStrict(trimmed))) {
@@ -6449,7 +6452,9 @@ private fun parseBlocks(text: String): List<MsgBlock> {
         when {
             // 自研卡片渲染（feat_self_card）：独立围栏 ```quro-card，先于动态 UI 判定，避免被劫持。
             // 内容转成 MsgBlock.SelfCard 从气泡剔除，交给消息底部 CardSurface 全宽内联渲染。
-            isSelfCardLang(lang) -> blocks.add(MsgBlock.SelfCard(code))
+            // 开关关闭（selfCard=false）时降级为普通代码块，内容不丢。
+            isSelfCardLang(lang) ->
+                if (selfCard) blocks.add(MsgBlock.SelfCard(code)) else blocks.add(MsgBlock.Code(lang, code))
             // 生成式 UI（AI 自写 JSX/HTML）：由 :genui WebView 管线渲染，此处不生成任何块，
             // 避免被内置渲染器或裸代码块二次渲染。内容已在流式阶段 ingest 进 GenUiController。
             isGenUiLang(lang) -> { /* skip — 已废弃的 GenUI WebView 路径（见 QuroChatViewModel.GENUI_WEBVIEW_ENABLED） */ }

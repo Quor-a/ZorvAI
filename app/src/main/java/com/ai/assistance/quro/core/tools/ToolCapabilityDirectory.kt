@@ -999,7 +999,9 @@ object ToolCapabilityDirectory {
             "图片识别" to listOf("image_recognition", "visual_analysis"),
             "UI展示" to listOf("ui_control"),
             "原生交互界面/动态UI" to listOf("ui_dsl_spec", "ui_validate"),
-            "可视化小卡片/富卡片（禁止裸 JSON）" to listOf("ui_widget", "ui_card"),
+            "富组件/数据卡片（ui_widget / ui_card，禁止裸 JSON）" to listOf("ui_widget", "ui_card"),
+            "可视化小卡片（```quro-card 围栏自研渲染，非工具调用；下列工具仅为该功能关闭时的兜底）" to listOf("ui_widget", "ui_card"),
+            "可视化弹窗（visual_popup，独立功能，≠小卡片）" to listOf("visual_popup"),
             "待办/进度/统计/评分/告警卡片" to listOf("ui_widget(type=\"list\")", "ui_widget(type=\"progress\")", "ui_widget(type=\"stat\")", "ui_widget(type=\"rating\")", "ui_widget(type=\"alert\")"),
             "列表/表格/饼图卡片" to listOf("ui_widget(type=\"list\")", "ui_widget(type=\"table\")", "ui_widget(type=\"pie\")"),
             "播放器/浏览器完整界面" to listOf("ui_dsl_spec"),
@@ -1050,7 +1052,7 @@ object ToolCapabilityDirectory {
 ## 1. 主动使用工具
 - 用户需要真实数据（天气/时间/设备状态）→ 调用工具获取，不要瞎猜
 - 用户需要真实动作（打开应用/读写文件/控制设备）→ 调用工具执行
-- 用户需要**小卡片/富卡片/图表/列表/进度/统计/评分/告警**等可视化结果 → **必须调用 `ui_widget` 或 `ui_card` 工具**，严禁把 JSON/数据当作普通文本或代码块发出（用户只会看到不可读的源码）。
+- 用户需要**富卡片/图表/列表/进度/统计/评分/告警**等结构化可视化结果 → **必须调用 `ui_widget` 或 `ui_card` 工具**；用户提到**「小卡片 / 可视化小卡片」** → 在回复正文写 **```quro-card 围栏**（AI 自写小卡片，首选 `custom` 自由设计卡——layout 布局树自由组合渐变/大数字/环形进度/进度条；metric 指标 / line_chart 折线 / table 表格 / button_group 按钮组 / status 状态为便捷预设，schema 见系统提示词）。**可视化弹窗 `visual_popup` 与可视化询问 `visual_question` 是独立功能，不是小卡片**。所有卡片 JSON 都严禁当作普通文本或代码块发出（用户只会看到不可读的源码）。
 - 用户需要流程图 → mermaid（`ui_widget(type="mermaid")` 或 `ui_control(action="widget", type="mermaid")`）。
 - 用户需要完整原生交互界面 → `quro-ui` DSL。
 - **ui_widget/ui_card、ui_control、quro-ui、visual_popup、visual_question 是相互独立的功能，严禁混用。**

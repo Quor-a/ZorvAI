@@ -52,7 +52,7 @@ class UiWidgetTool : QuroTool {
             val jo = JSONObject(arguments)
             val spec = jo.optString("spec", "").ifBlank { arguments }
             val card = parseComponentSpec(spec)
-                ?: return "❌ 未知组件类型或 spec 解析失败（请检查 type 与字段，支持 button/toggle/slider/progress/stat/alert/table/list/segmented/pie/rating/countdown/tabs/expandable/form/chips/steps/gauge/media/info/toolcall/stream/mediaplay/quickreply/quickaction/timeline/heatmap/compare/radar/timer/carousel/kanban 及 v221 新增 color/counter/breadcrumb/tagcloud/badge/avatargroup 与 v300 新增 mermaid（AI 自写 Mermaid 图表）与 v1057 新增 miniapp（AI 小程序）与 v1068 新增 composite（多语言组合卡，可组合可单渲染）详见 CARD_CATALOG；legacy 仍支持 todo/chart/note/actions；链接 yb.tencent.com 会自动生成预览卡）"
+                ?: return "❌ 未知组件类型或 spec 解析失败（请检查 type 与字段，支持 button/toggle/slider/progress/stat/alert/table/list/segmented/pie/rating/countdown/tabs/expandable/form/chips/steps/gauge/media/info/toolcall/stream/mediaplay/quickreply/quickaction/timeline/heatmap/compare/radar/timer/carousel/kanban 及 v221 新增 color/counter/breadcrumb/tagcloud/badge/avatargroup 与 v300 新增 mermaid（AI 自写 Mermaid 图表）与 v1057 新增 miniapp（AI 小程序）与 v1068 新增 composite（多语言组合卡，可组合可单渲染）与 yuanbao（链接回答卡）/ htmlpreview（HTML 预览卡）详见 CARD_CATALOG；legacy 仍支持 todo/chart/note/actions；链接 yb.tencent.com 会自动生成预览卡）"
             // 优先挂进聊天气泡（onCard 桥 → 当前助手消息）；桥未连接时退回全局卡片栏兜底
             val bridge = QuroUiActionBridge.onCard
             if (bridge != null) {

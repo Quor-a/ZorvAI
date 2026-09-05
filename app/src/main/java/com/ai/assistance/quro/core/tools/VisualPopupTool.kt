@@ -37,6 +37,10 @@ data class VisualPopupData(
     val height: Int?,                  // 可选的高度
     val cardTitle: String,             // 对话框小卡片标题
     val cardDescription: String,       // 对话框小卡片描述
+    val iconName: String = "",         // 小卡片图标名（check/info/star/bolt/person…），缺省按 status 取
+    val subtitle: String = "",         // 小卡片副标题（可选）
+    val tags: List<String> = emptyList(), // 小卡片标签（可选，最多 3 个）
+    val progress: Float? = null,       // 小卡片进度 0..1（可选）
     val cancelable: Boolean = true,
     val timeout: Int = 60,
     val latch: CountDownLatch,
@@ -146,7 +150,8 @@ object VisualPopupQueue {
  * - 图片显示
  * - 自定义宽高
  * - 可选是否允许取消
- * - 对话框显示小卡片，点击可重新打开弹窗
+ *
+ * 注意：本工具是「可视化弹窗」（独立功能）。用户说的「可视化小卡片」指 ui_widget/ui_card 富卡片，不是本工具。
  *
  * 使用场景：
  * - AI需要展示复杂信息并让用户操作
@@ -211,6 +216,10 @@ class VisualPopupTool : QuroTool {
             "height":{"type":"integer","description":"弹窗高度（可选，默认自适应）"},
             "card_title":{"type":"string","description":"对话框小卡片标题（可选，默认使用title）"},
             "card_description":{"type":"string","description":"小卡片描述（可选，默认'点击查看详情'）"},
+            "icon":{"type":"string","description":"小卡片图标名（可选）：check/info/warning/star/person/settings/favorite/shopping/location/calendar/bolt/build/code/email/phone/search/add/rocket/lightbulb/link/image/music/video/file/cloud/bell/lock/download/share/edit/refresh/play/home/chat/list/folder/tag/clock/money/trending 等，缺省按状态取图标"},
+            "subtitle":{"type":"string","description":"小卡片副标题（可选，显示在标题下方）"},
+            "tags":{"type":"array","items":{"type":"string"},"description":"小卡片标签列表（可选，最多展示3个）"},
+            "progress":{"type":"number","description":"小卡片进度 0~1（可选，渲染进度条）"},
             "cancelable":{"type":"boolean","description":"是否允许取消（默认true）"},
             "timeout":{"type":"integer","description":"超时时间（秒），默认60秒"}
         },
@@ -260,6 +269,14 @@ class VisualPopupTool : QuroTool {
         val height = if (args.has("height")) args.optInt("height") else null
         val cardTitle = args.optString("card_title", "").trim().ifBlank { title }
         val cardDescription = args.optString("card_description", "").trim().ifBlank { "点击查看详情" }
+        val iconName = args.optString("icon", "").trim()
+        val subtitle = args.optString("subtitle", "").trim()
+        val tags = mutableListOf<String>()
+        args.optJSONArray("tags")?.let { arr -> for (i in 0 until arr.length()) tags.add(arr.optString(i).trim()) }
+        val progress = if (args.has("progress")) {
+            val p = args.optDouble("progress", -1.0)
+            if (p in 0.0..1.0) p.toFloat() else null
+        } else null
         val cancelable = args.optBoolean("cancelable", true)
         val timeout = args.optInt("timeout", 60)
 
@@ -267,7 +284,7 @@ class VisualPopupTool : QuroTool {
         val popupId = "popup_${System.currentTimeMillis()}_${(Math.random() * 1000).toInt()}"
 
         return try {
-            val result = showPopup(popupId, title, content, buttons, inputs, imageUrl, width, height, cardTitle, cardDescription, cancelable, timeout)
+            val result = showPopup(popupId, title, content, buttons, inputs, imageUrl, width, height, cardTitle, cardDescription, iconName, subtitle, tags, progress, cancelable, timeout)
             result?.let {
                 val resultMap = mutableMapOf<String, Any?>()
                 resultMap["button"] = it.buttonValue
@@ -292,6 +309,10 @@ class VisualPopupTool : QuroTool {
         height: Int?,
         cardTitle: String,
         cardDescription: String,
+        iconName: String,
+        subtitle: String,
+        tags: List<String>,
+        progress: Float?,
         cancelable: Boolean,
         timeout: Int
     ): PopupResult? {
@@ -309,6 +330,10 @@ class VisualPopupTool : QuroTool {
             height = height,
             cardTitle = cardTitle,
             cardDescription = cardDescription,
+            iconName = iconName,
+            subtitle = subtitle,
+            tags = tags,
+            progress = progress,
             cancelable = cancelable,
             timeout = timeout,
             latch = latch,

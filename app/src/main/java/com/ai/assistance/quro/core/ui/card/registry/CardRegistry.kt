@@ -16,11 +16,12 @@ interface CardRenderer<S : CardState> {
     /** 创建该渲染器的初始状态（供宿主持有）。 */
     fun createInitialState(): S
 
-    /** 自写测量：给定约束返回期望尺寸（px）。 */
-    fun measure(spec: CardSpec, state: S, maxWidthPx: Float): Size
+    /** 自写测量：给定约束返回期望尺寸（px）。`density` 是 sp→px 比率（约 2.75），
+     *  measure 必须用它把 sp 字号换算成真实占的 px 行高，否则会被 Canvas 裁切（v1.0.82 cardfix6）。 */
+    fun measure(spec: CardSpec, state: S, maxWidthPx: Float, density: Float): Size
 
-    /** 自写排版：把子节点摆到坐标。 */
-    fun layout(spec: CardSpec, state: S, size: Size): LayoutResult
+    /** 自写排版：把子节点摆到坐标（px）。`density` 用于按钮/控件类按字号算 box 高度。 */
+    fun layout(spec: CardSpec, state: S, size: Size, density: Float): LayoutResult
 
     /** 自写绘制：用 RenderBackend 自己下绘制指令。 */
     fun render(backend: RenderBackend, spec: CardSpec, result: LayoutResult, state: S)
@@ -33,6 +34,15 @@ interface CardRenderer<S : CardState> {
 interface CardState {
     /** 同一 id 的多次 patch 是否可增量合并。 */
     fun canMerge(other: CardState): Boolean = false
+}
+
+/**
+ * 入场动画感知：实现此接口的渲染器状态由 [com.ai.assistance.quro.core.ui.card.host.CardSurface]
+ * 逐帧驱动 0→1（约 1.4s），渲染器按相位画数字滚动/进度生长等入场动效。
+ * progress 必须用 mutableStateOf 存储，Canvas 绘制读取后自动逐帧重绘。
+ */
+interface AnimateAware {
+    fun onFrame(progress: Float)
 }
 
 /** 排版结果：记录每个可交互/可绘制元素的最终坐标框。 */

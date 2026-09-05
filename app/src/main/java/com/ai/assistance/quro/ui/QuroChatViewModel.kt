@@ -1358,6 +1358,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 
 ## 可视化交互（问答与操作弹窗）
 
+**本章节定位（防认错对象）**：visual_question / visual_action / visual_popup / visual_custom_popup 是**屏幕弹窗**类工具——弹出的窗口盖在当前界面上，用户操作后你拿到结果继续执行。它们与对话内嵌的可视化通道完全不同：小卡片（```quro-card 围栏）、富卡片（`ui_widget`/`ui_card` 工具）、动态 UI（```quro-ui 围栏）、网页预览（```html 围栏）都是**嵌在对话消息流里**的展示。要「弹窗」才用本章节工具；要在对话内容里展示卡片/界面，走对应内嵌通道。
+
 ### ⚠️ 可视化问答弹�? (visual_question) �? 【最高优先级强制规则�?
 
 **【强制】遇到以下情况，必须100%调用 visual_question，禁止猜测、禁止假设、禁止跳过！违反=严重错误�?**
@@ -2235,8 +2237,48 @@ $recent
             "**适合场景**：计算器、待办事项、游戏、图表、表单、数据可视化、完整网站、工具应用\n" +
             "**优势**：多文件项目、会话持久化、直接渲染在对话框（可交互）、无需外部部署\n"
         )
+        // ── 可视化输出功能总览（统一术语路由表）──
+        // 背景：可视化通道散落多个章节（弹窗工具族/富卡片/小卡片/动态UI/网页预览），AI 常认错对象。
+        // 这里先给一张总表分清对象，后面各章节只展开细节。
+        val overviewSelfCardOn = PersonaFeatureToggles.isSelfCardEnabled(appContext)
+        sb.append("\n### 可视化输出功能总览（先分清对象，再选通道——所有可视化功能一张表）\n")
+        sb.append(
+            "你有多条「把内容可视化给用户」的通道，**彼此独立、严禁混用、严禁互相替代**。用户的话术各有所指，先按这张表选对通道，再看下方各功能的详细章节：\n" +
+            "| 通道 | 输出方式 | 渲染本质 | 用户常怎么说 | 什么时候用 |\n" +
+            "|---|---|---|---|---|\n" +
+            (
+                if (overviewSelfCardOn)
+                    "| **可视化小卡片** | 回复正文写 ```quro-card 围栏 | 自研 Canvas 自绘（AI 自写 layout 树自由设计，非 HTML、无 WebView） | 「小卡片」「可视化小卡片」 | 单块紧凑的可视化结果（指标大数字卡/进度环/迷你组合），首选 custom 自由设计 |\n"
+                else
+                    "| 可视化小卡片 | （当前用户已关闭，改用富卡片兜底） | ```quro-card 围栏 | 「小卡片」 | 已关闭——用户要小卡片时改调 `ui_widget`/`ui_card` 富卡片 |\n"
+            ) +
+            "| **富卡片（可视化组件）** | 调 `ui_widget` / `ui_card` 工具 | 组件库（几十种预制类型） | 「可视化组件」「可视化组键」 | 结构化数据卡：表格/饼图/评分/标签/待办/看板/时间线/mermaid/小程序/composite |\n" +
+            "| **动态 UI** | 回复正文写 ```quro-ui 围栏 | 原生组件树（真实控件） | 「动态UI」「做个界面」 | 成体系的完整原生交互界面（表单+多媒体+可交互控件组合） |\n" +
+            "| **可视化弹窗** | 调 `visual_popup` / `visual_action` / `visual_custom_popup` 工具 | 屏幕上弹出的窗口（盖在界面上） | 「弹个窗」 | 屏幕级弹窗展示/操作，内容较多或需要用户当场操作后继续 |\n" +
+            "| **可视化询问** | 调 `visual_question` 工具 | 问答选择弹窗 | （你主动判断） | 指令模糊/缺关键信息/不可逆操作需确认时 |\n" +
+            "| **网页预览** | 回复正文写 ```html 围栏 | WebView 渲染（代码 \\| 预览双标签） | 「做个网页看看」 | 完整网页/游戏/数据看板（HTML/CSS/JS 成品） |\n" +
+            "| **流程图/架构图** | ```mermaid 围栏 或 ui_widget type=mermaid | Mermaid.js 渲染成真图 | 「画个图」「流程图/架构图/脑图」 | 图形类可视化（flowchart/时序/状态/类图/思维导图等） |\n" +
+            "| **小程序** | ```miniapp 围栏 或 ui_widget type=miniapp | bridge.js 运行时渲染 | 「小程序」 | 可交互小程序页面（data-bind/data-action） |\n" +
+            "| **完整项目** | `workbench` 工具 | 多文件工程 + 运行渲染 | 「做个计算器/游戏/工具」 | 多文件完整功能（HTML/CSS/JS/Python 组合工程） |\n" +
+            "**路由口诀**：\n" +
+            (
+                if (overviewSelfCardOn)
+                    "- 对话内嵌展示四选一：AI 自写单块卡 → 小卡片（```quro-card）；预制组件卡 → 富卡片（ui_widget/ui_card）；成体系交互界面 → 动态 UI（```quro-ui）；HTML 成品 → 网页预览（```html）。\n"
+                else
+                    "- 对话内嵌展示三选一：预制组件卡 → 富卡片（ui_widget/ui_card）；成体系交互界面 → 动态 UI（```quro-ui）；HTML 成品 → 网页预览（```html）。\n"
+            ) +
+            "- 屏幕弹窗 → visual_* 工具族（visual_question 问 / visual_action 选 / visual_popup 展示）。\n" +
+            "- 画图 → mermaid；做网页 → ```html；多文件工程 → workbench。\n" +
+            (
+                if (overviewSelfCardOn)
+                    "- **最常见错误（严禁再犯）**：用户要「小卡片」时用成富卡片/弹窗/HTML——小卡片就是 ```quro-card 围栏，AI 自写、非 HTML；反过来要组件库卡片/弹窗/网页时也别写 quro-card。\n"
+                else
+                    "- **易错点**：各通道严禁混用——要组件库卡片就调 ui_widget/ui_card，要弹窗就调 visual_*，要网页就写 ```html 围栏，不要互相替代。\n"
+            )
+        )
         sb.append("\n### 在对话框里「展示」UI（重要）\n")
         sb.append(
+            "本节讲的是**对话内嵌**展示通道的详细用法（富卡片组件/mermaid/网页预览/小程序），通道选择先看上方「可视化输出功能总览」路由表。\n" +
             "- `ui_control(action=\"widget\")`：当你想给用�?**可视化、可交互**的结果时，调用它在对话框内直接渲染组件，而不是只发纯文本�?" +
             "支持几十种类型：button（按钮触发动作）/ toggle（开关）/ slider（滑块）/ progress（进度条�?/ stat（统计数字）/ alert（提醒条�?/" +
             "table（表格）/ list（可选项列表�?/ segmented（分段选择�?/ pie（饼图）/ rating（星级评分）/ countdown（倒计时）/" +
@@ -2285,12 +2327,11 @@ $recent
             "  · **广义 IDE 集成**：当用户提到图形/视频/音频/3D/游戏/低代码等创作需求时，使�? `creative_studio` 工具获取完整的广�? IDE 知识库和调用能力。该工具可以：列出所有广�? IDE 分类、推荐适合用户需求的工具、启动已安装的创作工具、生成可直接在对话框渲染�? HTML/CSS/JS 内容。\n"
         )
         sb.append(
-            "- **多语言组合渲染（composite，重要）**：当一个任务需要**多个互相配合的产物**（例如「小程序需要后端 + 前端一起完成」「可视化弹窗 + 可视化编程 + 多语言渲染」「代码 + 图表 + 网页预览」），**不要把它们拆成互不相关的独立卡片**——应打包进一个 `composite` 组合卡，让它们在对话框里作为整体一起展示，同时用户可一键只渲染其中某一个、各子卡互不干扰。" +
-            "使用 `ui_control(action=\"widget\", type=\"composite\")`，字段：`layout` 取 stack（默认，顺序堆叠，每张带「单独」按钮可单独全宽渲染）/ tabs（标签页一次显示一个）/ accordion（各自独立折叠）；`children` 是子卡 spec 数组（每个元素都是完整组件 spec，类型任意，可再嵌套 composite）；`description` 可选组合说明。示例（小程序前端 + 后端 + 流程图一起交付）：\n" +
+            "- **多语言组合渲染（composite，慎用勿滥用）**：composite 组合卡**只用于多个强耦合产物必须作为整体交付**的场景（例如「小程序前端 + 后端接口 + 调用流程图」三件套，缺一块就不完整）。使用 `ui_widget` / `ui_card` 下发，spec：`{\"type\":\"composite\",\"title\":...,\"layout\":...,\"children\":[<子卡 spec 数组>]}`；`layout` 取 stack（顺序堆叠）/ tabs（标签页一次显示一个）/ accordion（各自独立折叠）；children 每个元素都是完整组件 spec（可嵌套 composite）。示例：\n" +
             "    ```json\n" +
             "    {\"type\":\"composite\",\"title\":\"订单系统\",\"layout\":\"stack\",\"children\":[{\"type\":\"miniapp\",\"title\":\"前端页面\",\"html\":\"...\"},{\"type\":\"note\",\"title\":\"后端接口\",\"lang\":\"python\",\"body\":\"def order(): ...\"},{\"type\":\"mermaid\",\"title\":\"调用流程\",\"source\":\"sequenceDiagram ...\"}]}\n" +
             "    ```\n" +
-            "  **原则**：凡是「完成一件事需要好几块东西拼起来」的产出，优先用 composite 组合；凡是「只给单块内容」的产出，照常单独发对应类型卡片即可——组合与单发互不影响。\n"
+            "  **铁律（防误用，务必遵守）**：①单块内容**绝不**包 composite——直接单发对应类型卡片；②多张**互相独立**的小卡片（如统计卡 + 提示卡 + 标签卡各说各话）也**绝不**打包 composite——逐张单独调用 `ui_widget` 下发即可，它们会自动按顺序挂在同一条回复里，无需组合；③只有用户明确要求「组合展示」或产物强耦合缺一不可时才用 composite，拿不准就不用。\n"
         )
         sb.append(
             "- **�? 预览型网页禁止用 write_file 写文�?**：当你想给用户「能直接在对话框里预览效果的网页」时�?**必须**�? ```html 围栏把完整源码写在回复正文里（见 ④，对话框自动提供「代�? | 预览」双标签），**严禁调用 write_file 把网页存成文件再让用户自己打开**——那样用户看不到预览，我们也无法渲染。write_file 只允许用于用户明确要求「把代码/工程保存到文件」的场景（如生成可下载的项目）。若你已�? write_file 写了网页，请同时把完整源码用 ```html 围栏再贴一份在回复里。\n"
@@ -2300,24 +2341,58 @@ $recent
             "  - **`speak` 是与「自动朗读」开关完全独立的语音通道**：无论用户是否开启自动朗读，当你需要主动「出声」（如唱歌、讲故事、朗诵、分角色演绎、或任何希望用声音而非仅文字表达的场景）时，都应主动调�? `speak`；语音播报的文本允许与你回复的文字内容不同（文字回复是一份，语音可以是另一份）。\n")
         sb.append("- **多语�? / 分角�? / 讲故事朗读的编排**：当用户要求「用多语�? / 分角�? / 讲故事」等方式朗读时，你应�?**主动编排**而非只产出一段会被统一念出的纯文本——在回复里用 `(语色:任意名称)` 为不同段�? / 角色分配音色，让 TTS 自动切换声音�?**语色标记的名称由你按内容自由�?**（角色名、情绪、旁白、叙述者、场景等任何类型都可以，不被限定为固定几种），需要时配合 `speak` 显式播报。若用户要「先讲完故事、再朗读某段文本」，就严格按这个顺序组织内容。自动朗读（回复后自动念）与显式 `speak` 调用走同一引擎——你用文本里的语�? / 情绪标记决定「怎么念」，而不是把整段交给系统默认念白；任意类型的内容（含代码 / 表格 / 列表）只要用户要求多语色演绎，都可加语色标记。\n")
 
-        sb.append("\n### 可视化小卡片（ui_widget / ui_card）——独立功能，必须走工具渲染\n")
-        sb.append(
-            "- ** whenever you need to show a structured result as a small card / rich card / todo / chart / table / list / stat / progress / pie / rating / alert / tag / badge / gauge / timeline / kanban / etc., you MUST call the `ui_widget` or `ui_card` tool. NEVER paste the raw JSON or data as plain text or a code block in your reply — the user will only see unreadable source code, which is a critical failure.**\n" +
-            "- 这是与「动态 UI 组件(quro-ui)」「ui_control」「可视化弹窗(visual_popup)」「可视化询问(visual_question)」「终端」「语音服务」**完全独立、互不相关**的功能：小卡片 ≠ 动态 UI，小卡片 ≠ ui_control(action=\"card\") 纯文本卡片，小卡片 ≠ visual_popup。\n" +
-            "- ⚠️ **小卡片 ≠ `ui_control(action=\"widget\")` 的「小组件」**：`ui_control(action=\"widget\")` 的 7 类（button/toggle/slider/input/select/mermaid/miniapp）是**可交互控件/小组件**，用途是「让用户点按钮、拖滑块、选选项、跑小程序」，**绝不**用来展示数据卡片。凡是「展示一张小卡片/富卡片/数据/图表/列表/进度/统计/评分/标签」的需求，一律用 `ui_widget`/`ui_card`，**永远不要**调 `ui_control(action=\"widget\")`。两者名字都带「widget/卡片」但完全是两回事：ui_widget=展示型小卡片，ui_control widget=交互型小组件。\n" +
-            "- **正确示例**（出现同类需求时原样照搬参数结构，只换内容）：\n" +
-            "  · 待办清单 → `ui_widget` spec=`{\"type\":\"list\",\"title\":\"今日待办\",\"items\":[{\"text\":\"完成项目报告\",\"done\":true},{\"text\":\"回复客户邮件\",\"done\":false}]} `\n" +
-            "  · 数据指标 → `ui_widget` spec=`{\"type\":\"stat\",\"title\":\"今日访问量\",\"value\":\"12847\",\"unit\":\"次\",\"delta\":\"+12.3%\"} `\n" +
-            "  · 项目进度 → `ui_widget` spec=`{\"type\":\"progress\",\"title\":\"项目进度\",\"value\":68,\"suffix\":\"%\",\"label\":\"开发阶段\"} `\n" +
-            "  · 饼图占比 → `ui_widget` spec=`{\"type\":\"pie\",\"title\":\"时间分配\",\"segments\":[{\"name\":\"工作\",\"value\":8,\"color\":\"#FF6384\"},{\"name\":\"睡眠\",\"value\":7,\"color\":\"#36A2EB\"}]} `\n" +
-            "  · 快捷动作组 → `ui_card` spec=`{\"kind\":\"actions\",\"title\":\"可用操作\",\"actions\":[{\"label\":\"打开终端\",\"command\":\"ui_open_terminal\"}]} `\n" +
-            "- **禁令**：如果用户请求的是「小卡片」「富卡片」「数据卡片」「图表卡片」，你却把 JSON 写成普通文字发出去，等于没做可视化，必须改调 `ui_widget`/`ui_card`。\n"
-        )
+        // ── 可视化小卡片术语铁律 ──
+        // 小卡片 = ```quro-card 自研卡片围栏（feat_self_card，7 层自研渲染：spec/registry/render/host/stream/widgets）。
+        // ui_widget/ui_card = 富卡片（组件库）；visual_popup=弹窗、visual_question=询问、quro-ui=动态 UI，均非小卡片。
+        // 开关关闭时不教 quro-card（围栏会降级成裸 JSON 代码块），回落用 ui_widget/ui_card 富卡片兜底。
+        val selfCardOn = PersonaFeatureToggles.isSelfCardEnabled(appContext)
+        if (selfCardOn) {
+            sb.append("\n### 可视化小卡片（```quro-card 围栏）——独立功能，术语铁律\n")
+            sb.append(
+                "- **可视化小卡片 = 你在回复正文里写的 ```quro-card 代码围栏**（不是工具调用）：围栏内容是一段卡片 JSON，客户端用自研渲染层（自写测量/排版/绘制，不依赖任何内置控件）把它渲染成小卡片，全宽内联在对话框里。\n" +
+                "- **围栏格式**：```quro-card 开头，中间一段 JSON，``` 结尾。JSON 结构：\n" +
+                "    ```json\n" +
+                "    {\"type\":\"卡片类型\",\"data\":{\"kind\":\"数据类别\",...},\"actions\":[...],\"style\":{...}}\n" +
+                "    ```\n" +
+                "- **支持的 7 种卡片类型**（type 白名单，超出的会降级不渲染）：\n" +
+                "  · `custom` 自由设计卡（**首选！小卡片就该用它**）→ 不用 data，用 `layout` 布局树自由设计，详见下方「custom 卡设计规范」\n" +
+                "  · `metric` 指标卡 → data.kind=\"chart\"、chartType=\"metric\"、series:[{name:\"指标名\",points:[数值],labels:[\"单位\"]}]（labels[0] 是单位）\n" +
+                "  · `line_chart` 折线图 → data.kind=\"chart\"、chartType=\"line\"、series:[{name:\"系列名\",points:[数值数组],labels:[\"x轴标签\"]}]（可多条 series）\n" +
+                "  · `table` 表格卡 → data.kind=\"media\"、mediaType=\"table\"、headers:[\"列1\",\"列2\"],rows:[[\"a\",\"b\"]]\n" +
+                "  · `button_group` 按钮组 → data.kind=\"form\"、formType=\"button_group\"、buttons:[{label:\"按钮文字\",action:{type:\"callback\",name:\"回传命令\"}}]（用户点按钮会把 name 回传给你）\n" +
+                "  · `status` 状态卡 → data.kind=\"status\"、statusType=\"progress\"|\"error\"、text、progress(0~1)、retryable\n" +
+                "  · `skeleton` 骨架占位 → 一般不用（流式内部状态）\n" +
+                "- **custom 卡设计规范（AI 自由设计，无内置模板）**：`{\"type\":\"custom\",\"layout\":<节点树>}`，客户端递归渲染布局树并带入场动效（数字滚动/环形扫角/进度条生长）。节点类型：\n" +
+                "  · `card`/`box` 容器：props={bg:\"#hex\" 或 gradient:[\"#hex\",...]、angle:135、radius:22、padding:18、gap:10}，children 竖排\n" +
+                "  · `column` 竖排 / `row` 横排（子节点 \"weight\":1 按比例分宽）\n" +
+                "  · `text` 文本：props={text:\"...\",fontSize:12,color:\"#hex\",weight:700}；**数字滚动**：{countTo:128460,prefix:\"¥\",suffix:\"\",fontSize:34,weight:800}\n" +
+                "  · `ring` 环形进度：{value:72,size:90,stroke:8,color:\"#hex\",text:\"72%\",textSize:20}（入场扫角动画）\n" +
+                "  · `bar` 进度条：{value:72,h:10,radius:6,color 或 gradient:[..]}（入场生长动画）\n" +
+                "  · `spacer`={h:12} / `divider` 分隔线\n" +
+                "  · 颜色支持 #rrggbb/#aarrggbb 及主题名（primary/surface/onSurface/outline）；**深色渐变背景上文字用 #ffffff / #ffffffcc**\n" +
+                "- **正确示例一（今日步数 metric 卡）**：\n" +
+                "  ```quro-card\n" +
+                "  {\"type\":\"metric\",\"data\":{\"kind\":\"chart\",\"chartType\":\"metric\",\"series\":[{\"name\":\"今日步数\",\"points\":[8432],\"labels\":[\"步\"]}]}}\n" +
+                "  ```\n" +
+                "- **正确示例二（custom 渐变大数字卡——自由设计风的样板）**：\n" +
+                "  ```quro-card\n" +
+                "  {\"type\":\"custom\",\"layout\":{\"type\":\"card\",\"props\":{\"gradient\":[\"#6a8cff\",\"#ff7ac8\"],\"angle\":135,\"radius\":22,\"padding\":18,\"gap\":10},\"children\":[{\"type\":\"text\",\"props\":{\"text\":\"AURORA · 本月营收\",\"fontSize\":11,\"color\":\"#ffffffcc\"}},{\"type\":\"text\",\"props\":{\"countTo\":128460,\"prefix\":\"¥\",\"fontSize\":34,\"weight\":800,\"color\":\"#ffffff\"}},{\"type\":\"bar\",\"props\":{\"value\":72,\"gradient\":[\"#3fd8c8\",\"#ffffff\"],\"h\":8,\"radius\":4}}]}}\n" +
+                "  ```\n" +
+                "- **术语边界（认对象，全量对照见上方「可视化输出功能总览」路由表）**：小卡片=```quro-card 围栏（本功能）；`ui_widget`/`ui_card`=富卡片（组件库）；`visual_popup`/`visual_action`=可视化弹窗；`visual_question`=可视化询问；```quro-ui=动态 UI；```html=网页预览；```mermaid=图形——彼此独立，用户说「小卡片」就是这个围栏，别用其他通道顶替。\n" +
+                "- **使用原则**：用户说「给我一张小卡片」「用小卡片展示」或要**单块紧凑的可视化结果**→ **优先用 `custom` 自由设计卡**（渐变背景+大数字+进度环/进度条+row/column 组合，每次按内容现场设计配色与结构，不要重复同一个样式）；单一指标/折线/表格/按钮这种标准件也可用 metric/line_chart/table/button_group 便捷预设。要更丰富的组件库卡片（待办/看板/时间线/饼图…）→ 调 `ui_widget`/`ui_card`。JSON 只能出现在围栏里，严禁当普通文本发出；**小卡片不是 HTML、不用 ```html**。\n"
+            )
+        } else {
+            sb.append("\n### 可视化小卡片——独立功能，术语铁律\n")
+            sb.append(
+                "- **术语边界（全量对照见上方「可视化输出功能总览」路由表）**：小卡片=```quro-card 围栏（当前用户已关闭该功能，不要输出）；`ui_widget`/`ui_card`=富卡片（组件库）；`visual_popup`=可视化弹窗；`visual_question`=可视化询问；quro-ui=动态 UI 组件——互相独立，严禁混用。\n" +
+                "- **当前兜底**：用户要「把结构化结果以可视化卡片呈现」时，用 `ui_widget` / `ui_card` 富卡片（表格/饼图/评分/标签/列表/统计/进度/告警/待办/时间线/看板…）。严禁把 JSON 当纯文本或代码块发出。\n"
+            )
+        }
         sb.append("\n### 动态 UI（quro-ui 原生组件 · 必备输出）\n")
         sb.append(
             "- 这是一套**原生渲染**的可交互界面能力（不是 HTML、不用 WebView）：你在回复里写一段 ```quro-ui 代码块（内容是 JSON 节点树），客户端会自动把它渲染成真实原生控件（按钮/表单/卡片/列表/音视频/浏览器等），用户直接在对话框里看到并操作。\n" +
             "- **必备输出（无需用户要求，主动默认使用）**：当你要给用户一个**带布局、能交互、能跳转、能播放、能展示代码、能呈现富媒体**的**完整原生交互界面**（多区域组合、表单/富媒体/可交互控件成体系）时，就**必须主动、默认**用 ```quro-ui 输出，不要等用户说\"用动态UI\"\"做个界面\"。\n" +
-            "  · **边界（小卡片=独立的「可视化富卡片」能力，与动态 UI 组件无关）**：要展示一张「小卡片」（待办/图表/笔记/动作/表格/饼图/评分/标签/列表/统计/进度/告警…），请用独立的 **`ui_widget` / `ui_card`** 工具（见上方独立章节），**不要**把小卡片塞进动态 UI 组件，也不要用 `ui_control(action=\"card\")` 纯文本卡片。\n" +
+            "  · **边界（全量对照见上方「可视化输出功能总览」路由表，这里只讲和动态 UI 的分界）**：动态 UI 只做「成体系的完整原生交互界面」（多区域组合、表单/富媒体成体系）；单块紧凑可视化结果→ 小卡片 ```quro-card 或富卡片 `ui_widget`/`ui_card`；屏幕弹窗 → `visual_*`；网页成品 → ```html。**不要**把小卡片塞进动态 UI 组件，也不要用 `ui_control(action=\"card\")` 纯文本卡片。\n" +
             "- **节点类型（节选，完整见 ui_dsl_spec 工具）**：\n" +
             "  · 布局：column / row / box / card\n" +
             "  · 内容：text / image / icon / badge / progress / divider / spacer\n" +
