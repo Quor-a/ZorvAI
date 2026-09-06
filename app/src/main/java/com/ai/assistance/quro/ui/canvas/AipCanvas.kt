@@ -303,14 +303,14 @@ private fun AipFullscreenSheet(
                 "deck" -> {
                     val slides = env.blocks.filterIsInstance<Aip.Block.Slide>()
                     if (slides.isNotEmpty()) {
-                        // [自适应屏幕] 整篇 PPT 满屏等比缩放：360dp 设计稿映射为全屏宽度，逐页 16:9 满宽、可滚动
-                        SurfaceHost(360f) {
-                            Column(
-                                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                slides.forEach { SlideCard(it) }
-                            }
+                        // 整篇 PPT：幻灯片竖向铺排、逐页满宽、可滚动（16:9 不溢出、不重叠）。
+                        // 注意：不在此处再套 SurfaceHost(360f)——Dialog 满屏容器本身就是约束好的，
+                        // 再叠等比缩放会压窄内部 Column，导致文字 / 图表 / 代码块相互覆盖。
+                        Column(
+                            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            slides.forEach { SlideCard(it) }
                         }
                     } else {
                         AipEnvelopeScroll(env, kind, onLinkClick)
@@ -339,12 +339,12 @@ private fun AipEnvelopeScroll(env: Aip.Envelope, kind: String, onLinkClick: (Str
         Spacer(Modifier.height(10.dp))
         HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.4f))
         Spacer(Modifier.height(10.dp))
-        // [自适应屏幕] 满屏内容等比缩放：360dp 设计稿映射为全屏宽度
-        SurfaceHost(360f) {
-            when (kind) {
-                "mindmap" -> env.blocks.filterIsInstance<Aip.Block.Mindmap>().forEach { MindmapView(it) }
-                else -> env.blocks.forEach { AipCanvasBlock(it, onLinkClick) }
-            }
+        // 注意：满屏容器已经是 Dialog 全屏，块直接走原生密度 + fillMaxWidth()，不要再套 SurfaceHost——
+        // 否则缩放后的 BoxWithConstraints 会把 MarkdownText / ListBlock 的 Box(weight(1f)) 压成 ~10dp 宽，
+        // 每个字一行（一覆盖一个）。
+        when (kind) {
+            "mindmap" -> env.blocks.filterIsInstance<Aip.Block.Mindmap>().forEach { MindmapView(it) }
+            else -> env.blocks.forEach { AipCanvasBlock(it, onLinkClick) }
         }
     }
 }
