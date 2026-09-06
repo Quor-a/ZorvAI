@@ -1194,6 +1194,30 @@ fun ChatScreen(
         }
     }
 
+    // 屏幕捕获（MediaProjection 媒体投影 / 录屏投屏）系统授权 launcher：
+    // 长按「看懂屏幕」开关 → 弹系统授权 dialog → 用户允许 → 授权结果交给 QuroMediaProjectionService
+    // （Android 14+ 红线：getMediaProjection() 必须在 mediaProjection 前台服务运行期调用，否则抛
+    // SecurityException；故不在 Activity 直接调，转交前台服务内部合规调用）。
+    // 之后 captureOnce 优先走像素帧抓取，AI 真正"看到"屏幕画面（视频/游戏/WebView/复杂 UI）。
+    val mpLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK && result.data != null) {
+            // 授权成功：把 resultCode + data 交给 mediaProjection 前台服务，由服务内部调 getMediaProjection 并注入。
+            val svcIntent = Intent(ctx, com.ai.assistance.quro.service.QuroMediaProjectionService::class.java).apply {
+                putExtra(com.ai.assistance.quro.service.QuroMediaProjectionService.EXTRA_RESULT_CODE, result.resultCode)
+                putExtra(com.ai.assistance.quro.service.QuroMediaProjectionService.EXTRA_DATA, result.data)
+            }
+            ctx.startForegroundService(svcIntent)
+        } else {
+            Toast.makeText(ctx, "屏幕捕获授权被取消，已 fallback 到无障碍节点树", Toast.LENGTH_SHORT).show()
+        }
+    }
+    fun requestMediaProjection() {
+        val intent = com.ai.assistance.quro.core.vision.ScreenCaptureController.createConsentIntent(ctx)
+        mpLauncher.launch(intent)
+    }
+
     fun send(text: String) {
         val t = text.trim()
         if (t.isEmpty() && attachments.isEmpty()) return
@@ -1437,6 +1461,7 @@ fun ChatScreen(
                         onToggleAutoRead = { toggleAutoRead() },
                         visionEnabled = visionOn,
                         onToggleVision = { vm.setVisionEnabled(!vm.visionEnabled.value) },
+                        onRequestMediaProjection = { requestMediaProjection() },
                         voiceInputEnabled = voiceInputEnabled,
                         onVoiceInput = { startDialogStt() },
                         onOpenSkills = { showSkillSelector = true },
@@ -2810,33 +2835,23 @@ private fun MessageRow(
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     val avatarSize = if (narrow) 28 else 34
-    // 人格卡「动态 UI 组件」总开关：关掉时 quro-ui 区块不解析、不渲染，降级为普通文本。
-    val dynamicUiOn = PersonaFeatureToggles.isDynamicUiEnabled(ctx)
+    // 「动态 UI 组件」开关是提示词级（灵魂注入编辑里控制 AI 主动/被动），渲染管线常开：
+    // 关 = AI 不主动输出，但用户提醒后 AI 写出的 ```quro-ui 围栏仍要能正常渲染。
     // 动态 UI 区块：从消息文本解析出所有 ```quro-ui 围栏，单独拎出来在气泡下方「全宽内联」渲染。
     // 与气泡内普通文本/卡片互不干扰，避免被 280dp 气泡压窄、被输入条遮挡、需点开才能看。
-    val dynamicUiBlocks = remember(msg.text, dynamicUiOn) {
-        if (!dynamicUiOn) {
-            emptyList<MsgBlock.DynamicUi>()
-        } else {
-            val t = msg.text
-            if (t.isNullOrBlank()) emptyList<MsgBlock.DynamicUi>()
-            else {
-                val clean = extractInlineComponents(QuroVoiceStyle.strip(t)).first
-                parseBlocks(clean).filterIsInstance<MsgBlock.DynamicUi>()
-            }
+    val dynamicUiBlocks = remember(msg.text) {
+        val t = msg.text
+        if (t.isNullOrBlank()) emptyList<MsgBlock.DynamicUi>()
+        else {
+            val clean = extractInlineComponents(QuroVoiceStyle.strip(t)).first
+            parseBlocks(clean).filterIsInstance<MsgBlock.DynamicUi>()
         }
     }
-    // 自研卡片渲染（feat_self_card）：独立开关，与动态 UI 完全无关、不合并。
+    // 自研卡片渲染（feat_self_card）：开关同为提示词级（主动/被动），渲染管线常开——
     // 从消息文本解析所有 ```quro-card 围栏 → 完整 CardSpec（含 data），在气泡下方全宽内联渲染。
-    // 开关关闭（默认）时不解析、不渲染，围栏降级为普通文本/代码块。
-    val selfCardOn = PersonaFeatureToggles.isSelfCardEnabled(ctx)
-    val selfCardBlocks = remember(msg.text, selfCardOn) {
-        if (!selfCardOn) {
-            emptyList<CardSpec>()
-        } else {
-            val t = msg.text
-            if (t.isNullOrBlank()) emptyList() else extractSelfCardSpecs(QuroVoiceStyle.strip(t))
-        }
+    val selfCardBlocks = remember(msg.text) {
+        val t = msg.text
+        if (t.isNullOrBlank()) emptyList() else extractSelfCardSpecs(QuroVoiceStyle.strip(t))
     }
     // 自研卡片点击 → ActionBus → onCommand（命令式卡片动作回传消息流；无匹配命令时静默 no-op）。
     ActionBus.handler = { action, _ -> action.name?.let { onCommand(it); true } ?: false }
@@ -3181,7 +3196,8 @@ private fun MessageRow(
                 // 导致「长按自由选词复制」失效。移除此点击处理，让 SelectionContainer 接管选区；
                 // 整段复制仍由下方「复制」操作按钮提供。
                 Box(bubbleModifier) {
-                    val blocks = remember(cleanText, selfCardOn) { parseBlocks(cleanText, selfCardOn) }
+                    // 开关为提示词级（主动/被动），渲染管线常开——用户提醒后 AI 输出的围栏仍渲染为卡片。
+                    val blocks = remember(cleanText) { parseBlocks(cleanText, selfCard = true) }
                     SelectionContainer {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         // 动态 UI 区块不在气泡内渲染（会被 280dp 压窄 / 输入条遮挡），改在消息底部全宽内联渲染。
@@ -3246,6 +3262,11 @@ private fun MessageRow(
                                 )
                                 // 动态 UI 区块已在消息底部全宽内联渲染，气泡内不再重复渲染。
                                 is MsgBlock.DynamicUi -> {}
+                                // AIP 排版引擎（Canvas，B 通道）：原生富排版，含四级降级兜底
+                                is MsgBlock.Aip -> com.ai.assistance.quro.ui.canvas.AipCanvas(
+                                    source = blk.source,
+                                    onLinkClick = onOpenLink,
+                                )
                                 // 自研卡片围栏已在消息底部全宽内联渲染，气泡内不再重复渲染（与动态 UI 同源机制）。
                                 is MsgBlock.SelfCard -> {}
                             }
@@ -4832,6 +4853,8 @@ private fun Composer(
     onToggleAutoRead: () -> Unit = {},
     visionEnabled: Boolean = false,
     onToggleVision: () -> Unit = {},
+    /** 长按「看懂屏幕」开关时调用：发起 MediaProjection（媒体投影 / 屏幕捕获）系统授权。 */
+    onRequestMediaProjection: () -> Unit = {},
     voiceInputEnabled: Boolean = false,
     onVoiceInput: () -> Unit = {},
     onOpenSkills: () -> Unit = {},
@@ -5086,6 +5109,7 @@ private fun Composer(
             onToggleAutoRead = onToggleAutoRead,
             visionEnabled = visionEnabled,
             onToggleVision = onToggleVision,
+            onRequestMediaProjection = onRequestMediaProjection,
             currentWorkspace = currentWorkspace,
             onOpenWorkspaceSelector = onOpenWorkspaceSelector,
             onOpenCodeBrowser = onOpenCodeBrowser,
@@ -5803,33 +5827,8 @@ private fun ModelSheetContent(
     }
 }
 
-/**
- * 人格卡里的单个功能开关行（与现有 Switch 用法一致，独立一行）。
- * 两个功能各调一次，互不合并。
- */
-@Composable
-private fun PersonaFeatureToggleRow(
-    title: String,
-    desc: String,
-    checked: Boolean,
-    onChanged: (Boolean) -> Unit,
-    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
-) {
-    val cs = MaterialTheme.colorScheme
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(cs.surfaceVariant.copy(alpha = 0.5f))
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, fontSize = scaled(14), color = cs.onSurface, fontWeight = FontWeight.SemiBold)
-            Text(desc, fontSize = scaled(11), color = Muted, modifier = Modifier.padding(top = 3.dp))
-        }
-        Switch(checked = checked, onCheckedChange = onChanged)
-    }
-}
+// 注：原「功能开关」两行（动态 UI 组件 / 可视化小卡片）已迁至 QuroSoulUi.PersonaEditDialog
+// （灵魂注入 · 灵魂编辑对话框），语义改为提示词级：开=百分百主动使用，关=用户提醒才使用。
 
 @Composable
 private fun PersonaSheetContent(
@@ -5841,38 +5840,13 @@ private fun PersonaSheetContent(
 ) {
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
-    var dynamicUiOn by remember { mutableStateOf(PersonaFeatureToggles.isDynamicUiEnabled(ctx)) }
-    var selfCardOn by remember { mutableStateOf(PersonaFeatureToggles.isSelfCardEnabled(ctx)) }
 
     Column(
         Modifier.fillMaxWidth().heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
     ) {
-        // ── 人格卡里的两个独立功能开关（互不合并）──
-        // 1) 动态 UI 组件：已有功能（quro-ui DSL 原生渲染）的总开关
-        // 2) 可视化小卡片（自研卡片渲染）：7 层自研架构（core.ui.card），AI 用 ```quro-card 围栏下发
-        SheetHeader("功能开关", "两项独立控制，互不影响。", scaled)
-        PersonaFeatureToggleRow(
-            title = "动态 UI 组件",
-            desc = "AI 回复里的原生交互界面（卡片/列表/表单/播放器/浏览器）。",
-            checked = dynamicUiOn,
-            onChanged = {
-                dynamicUiOn = it
-                PersonaFeatureToggles.setDynamicUiEnabled(ctx, it)
-            },
-            scaled = scaled,
-        )
-        PersonaFeatureToggleRow(
-            title = "可视化小卡片（自研渲染）",
-            desc = "AI 用 ```quro-card 围栏输出的自研小卡片：指标 / 折线图 / 表格 / 按钮组 / 状态卡。",
-            checked = selfCardOn,
-            onChanged = {
-                selfCardOn = it
-                PersonaFeatureToggles.setSelfCardEnabled(ctx, it)
-                if (it) com.ai.assistance.quro.core.ui.card.CardModule.init()
-            },
-            scaled = scaled,
-        )
+        // ── 两个独立功能开关已迁至「灵魂注入 · 灵魂编辑」对话框（QuroSoulUi.PersonaEditDialog）──
+        // 语义：开 = 提示词带完整功能章节（AI 百分百主动使用）；关 = 仅用户提醒才使用（渲染管线常开）。
 
         SheetHeader("选择灵魂", "每个灵魂是不同语气与专长的「对话伙伴」，切换即换一种相处方式。", scaled)
         list.forEach { p ->
@@ -6241,6 +6215,8 @@ private sealed class MsgBlock {
     // 自研卡片渲染（feat_self_card）围栏：与 DynamicUi 完全独立的另一种 block，不合并。
     // 同样从气泡剔除、改在消息底部全宽内联渲染 CardSurface。
     data class SelfCard(val source: String) : MsgBlock()
+    /** AIP 排版引擎（Canvas，B 通道）：```aip 围栏或裸信封 JSON → 原生富排版（长文档/导图/PPT）。 */
+    data class Aip(val source: String) : MsgBlock()
     data class Heading(val level: Int, val text: String) : MsgBlock()
     data class Quote(val text: String) : MsgBlock()
     data class Rule(val text: String = "") : MsgBlock()
@@ -6412,6 +6388,10 @@ private fun parseBlocks(text: String, selfCard: Boolean = true): List<MsgBlock> 
     // 整段完整 HTML 文档（AI 未加围栏直接贴源码）也路由到预览代码块，避免裸 HTML 当纯文本
     if (isFullHtmlDocument(text)) return listOf(MsgBlock.Code("html", text))
 
+    // AIP 排版引擎（Canvas）：裸信封 JSON（{"v":1,"kind":...,"blocks":[...]}）不经围栏直接输出时，
+    // 整段走 B 通道。流式期间截断的残缺信封也放行——AipCanvas 内部做截断修复 + 分块渲染 + 四级降级。
+    if (com.ai.assistance.quro.core.canvas.Aip.looksLikeAip(text)) return listOf(MsgBlock.Aip(text))
+
     // Agent 模式：检测 <!-- FILE: filename --> 标记，提取多文件
     val fileMarkerRegex = Regex("<!--\\s*FILE:\\s*(\\S+)\\s*-->")
     if (fileMarkerRegex.containsMatchIn(text)) {
@@ -6461,6 +6441,9 @@ private fun parseBlocks(text: String, selfCard: Boolean = true): List<MsgBlock> 
             // 可视化编程：原始 mermaid / mmd 围栏直接渲染成离线矢量图（AI 或用户均可作者）
             lang.equals("mermaid", true) || lang.equals("mmd", true) ->
                 blocks.add(MsgBlock.Mermaid(code))
+            // AIP 排版引擎（Canvas / B 通道）：结构化信封 → 原生富排版（长文档 / 导图 / PPT）
+            lang.equals("aip", true) || lang.equals("aip+json", true) || lang.equals("canvas", true) ->
+                blocks.add(MsgBlock.Aip(code))
             // A2UI JSONL 信封（application/a2ui+json）：流式声明式数据，由原生 A2UI 解释器增量渲染
             lang.equals("a2ui", true) || lang.equals("a2ui+json", true) ->
                 blocks.add(MsgBlock.DynamicUi(code))
