@@ -2944,6 +2944,9 @@ private fun MessageRow(
                 }
             }
         } else {
+        // AIP 排版引擎（B 通道）解析前置：统一解析一次，供气泡过滤与【全宽内联】AIP 块共用。
+        // 声明上提到 280dp 内容列之外（消息 else 块作用域），使 AIP 全宽内联块能复用，避免重复解析。
+        val blocks = remember(cleanText) { parseBlocks(cleanText, selfCard = true) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = if (msg.mine) Arrangement.End else Arrangement.Start) {
         if (!msg.mine) {
             // AI 头像可点击 → 编辑灵魂卡
@@ -3175,8 +3178,7 @@ private fun MessageRow(
             }
             // AIP 排版引擎（B 通道）解析前置：气泡内不再渲染 AIP，改在消息底部全宽内联
             // （与动态 UI / 生成式 UI 同源机制，避免 280dp 气泡压窄、文字重叠一个盖一个），
-            // 故在此统一解析一次，供气泡过滤与内联渲染共用。
-            val blocks = remember(cleanText) { parseBlocks(cleanText, selfCard = true) }
+            // 故在此统一解析一次，供气泡过滤与内联渲染共用（blocks 声明已上提到消息 else 块作用域，见上方）。
             // ── 正文气泡（思考/工具已移至名字行小按钮）────────────
             if (!msg.text.isNullOrBlank()) {
                 // 去掉 LLM 回复里的语音风格标记 (风格)，仅用于显示与复制，不影响朗读
@@ -3324,24 +3326,7 @@ private fun MessageRow(
                     }
                 }
             }
-            // ── AIP 排版引擎（B 通道）全宽内联：与动态 UI / 生成式 UI 同源机制，
-            //    撑满对话框宽度、随对话滚动、避免 280dp 气泡压窄与"文字被覆盖一个盖一个"。
-            if (!msg.mine && blocks.any { it is MsgBlock.Aip }) {
-                Box(Modifier.fillMaxWidth().clipToBounds()) {
-                    Column(
-                        Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        blocks.filterIsInstance<MsgBlock.Aip>().forEach { blk ->
-                            com.ai.assistance.quro.ui.canvas.AipCanvas(
-                                source = blk.source,
-                                onLinkClick = onOpenLink,
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(6.dp))
-            }
+            // （AIP 全宽内联块已移出 280dp 内容列，在消息 else 块末尾按全宽渲染，见本函数下方）
             // ── 生成式 UI 卡片（ZorvAI 自写 JSX/HTML，WebView 内渲染进对话框）──
             // 与正文气泡并列，置于其后；卡片 id 由 ViewModel 在流结束时按围栏 id= 精确关联到本消息。
             // 外层 Box + clipToBounds：硬锁屏幕宽度，WebView 内任何比屏幕宽的 AI 自写内容一律裁在屏内，
@@ -3394,6 +3379,24 @@ private fun MessageRow(
             AvatarContent(msg.avatarUri, msg.avatar, avatarSize)
         }
         }   // 闭合内层 Row（头像 + 气泡）
+        // ── AIP 排版引擎（B 通道）全宽内联：已移出 280dp 内容列，撑满对话框宽度渲染，
+        //    与动态 UI / 生成式 UI / 富组件同源机制，避免 280dp 气泡压窄与"文字被覆盖一个盖一个"。
+        if (!msg.mine && blocks.any { it is MsgBlock.Aip }) {
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.fillMaxWidth().clipToBounds()) {
+                Column(
+                    Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    blocks.filterIsInstance<MsgBlock.Aip>().forEach { blk ->
+                        com.ai.assistance.quro.ui.canvas.AipCanvas(
+                            source = blk.source,
+                            onLinkClick = onOpenLink,
+                        )
+                    }
+                }
+            }
+        }
         // ── 消息富组件（ui_widget/ui_card 下发的卡片、AI 文本内联组件 JSON）：全宽内联在气泡下方渲染，
         //    不再塞进 280dp 气泡被压窄、移动端看不全。与动态 UI 区块一致：撑满对话框、随对话滚动、无 X 关闭。
         if (!msg.text.isNullOrBlank()) {
