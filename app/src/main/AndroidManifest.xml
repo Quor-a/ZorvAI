@@ -363,6 +363,14 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- 屏幕捕获（MediaProjection）前台服务：Android 14+ 要求调用 getMediaProjection() 之前
+             必须有一个 mediaProjection 类型前台服务在运行，否则抛 SecurityException（红线）。
+             由 ChatScreen 在用户授权后 startForegroundService 拉起，服务内部调 getMediaProjection 并注入投影。 -->
+        <service
+            android:name=".service.QuroMediaProjectionService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
         <!-- 机器人开机保活服务：前台常驻，连接已启用的飞书/QQ/微信机器人 -->
         <service
             android:name=".service.QuroBotBootstrapService"
