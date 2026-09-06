@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.ui.canvas
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.animateContentSize
@@ -30,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Slideshow
 import androidx.compose.material3.DropdownMenu
@@ -67,6 +70,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.ai.assistance.quro.core.canvas.Aip
 import com.ai.assistance.quro.core.canvas.AipConvert
 import com.ai.assistance.quro.core.canvas.CanvasRouter
+import com.ai.assistance.quro.core.ui.dynamicui.SurfaceHost
 import com.ai.assistance.quro.core.tools.AiwpsCreateTool
 import com.ai.assistance.quro.ui.MarkdownText
 import kotlinx.coroutines.CoroutineScope
@@ -151,6 +155,10 @@ fun AipCanvas(
                             modifier = Modifier.height(28.dp),
                         )
                         Spacer(Modifier.width(4.dp))
+                        IconButton(onClick = { copyAip(ctx, scope, env) }, modifier = Modifier.size(30.dp)) {
+                            androidx.compose.material3.Icon(Icons.Filled.ContentCopy, "复制", Modifier.size(18.dp), tint = cs.onSurfaceVariant)
+                        }
+                        Spacer(Modifier.width(4.dp))
                         Box {
                             IconButton(onClick = { exportMenu = true }, modifier = Modifier.size(30.dp)) {
                                 androidx.compose.material3.Icon(Icons.Filled.FileDownload, "导出", Modifier.size(18.dp), tint = cs.onSurfaceVariant)
@@ -165,16 +173,20 @@ fun AipCanvas(
 
                     if (env.title.isNotBlank()) HorizontalDivider(Modifier.padding(vertical = 8.dp), color = cs.outlineVariant.copy(alpha = 0.4f))
 
-                    when (kind) {
-                        "deck" -> {
-                            DeckPager(env)
-                            if (presenting) {
-                                val slides = env.blocks.filterIsInstance<Aip.Block.Slide>()
-                                if (slides.isNotEmpty()) DeckPresentOverlay(slides, onDismiss = { presenting = false })
+                    // [自适应屏幕] 把排版内容区用 SurfaceHost(360f) 等比缩放包裹：
+                    // 360dp 设计稿恰好等于容器可用宽度，手机/平板/分屏/横竖屏全自动铺满，数学上不可能横向溢出。
+                    SurfaceHost(360f) {
+                        when (kind) {
+                            "deck" -> {
+                                DeckPager(env)
+                                if (presenting) {
+                                    val slides = env.blocks.filterIsInstance<Aip.Block.Slide>()
+                                    if (slides.isNotEmpty()) DeckPresentOverlay(slides, onDismiss = { presenting = false })
+                                }
                             }
+                            "mindmap" -> env.blocks.filterIsInstance<Aip.Block.Mindmap>().forEach { MindmapView(it) }
+                            else -> env.blocks.forEach { AipCanvasBlock(it, onLinkClick) }
                         }
-                        "mindmap" -> env.blocks.filterIsInstance<Aip.Block.Mindmap>().forEach { MindmapView(it) }
-                        else -> env.blocks.forEach { AipCanvasBlock(it, onLinkClick) }
                     }
                 }
                 // 整页/全屏查看：长文档/PPT/报告整篇排版脱离对话框层，满屏阅读（"不满屏"修复）
@@ -205,8 +217,7 @@ fun AipCanvas(
 }
 
 /** 导出：AIP 信封 → AiwpsCreateTool（docx 走 Markdown 内容 / pptx 走 `---` 分页内容）。 */
-private fun exportAip(ctx: Context, scope: CoroutineScope, env: Aip.Envelope, type: String) {
-    scope.launch(Dispatchers.IO) {
+private fun exportAip(ctx: Context, scope: CoroutineScope, env: Aip.Envelope, type: String) {    scope.launch(Dispatchers.IO) {
         val content = if (type == "pptx") AipConvert.toPptxText(env) else AipConvert.toMarkdown(env)
         val r = runCatching {
             AiwpsCreateTool().run(ctx, JSONObject().apply {
@@ -217,6 +228,18 @@ private fun exportAip(ctx: Context, scope: CoroutineScope, env: Aip.Envelope, ty
             }.toString())
         }.getOrElse { "导出失败：${it.message}" }
         withContext(Dispatchers.Main) { Toast.makeText(ctx, r, Toast.LENGTH_LONG).show() }
+    }
+}
+
+/** 复制：将 AIP 排版内容转为 Markdown 写入系统剪贴板（"缺少复制"修复）。 */
+private fun copyAip(ctx: Context, scope: CoroutineScope, env: Aip.Envelope) {
+    scope.launch(Dispatchers.IO) {
+        val md = AipConvert.toMarkdown(env)
+        withContext(Dispatchers.Main) {
+            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText(env.title.ifBlank { "AIP 排版内容" }, md))
+            Toast.makeText(ctx, "已复制排版内容", Toast.LENGTH_SHORT).show()
+        }
     }
 }
 
@@ -280,12 +303,14 @@ private fun AipFullscreenSheet(
                 "deck" -> {
                     val slides = env.blocks.filterIsInstance<Aip.Block.Slide>()
                     if (slides.isNotEmpty()) {
-                        // 整篇 PPT：幻灯片竖向铺排、逐页满宽、可滚动（16:9 不溢出、不重叠）
-                        Column(
-                            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            slides.forEach { SlideCard(it) }
+                        // [自适应屏幕] 整篇 PPT 满屏等比缩放：360dp 设计稿映射为全屏宽度，逐页 16:9 满宽、可滚动
+                        SurfaceHost(360f) {
+                            Column(
+                                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                slides.forEach { SlideCard(it) }
+                            }
                         }
                     } else {
                         AipEnvelopeScroll(env, kind, onLinkClick)
@@ -314,9 +339,12 @@ private fun AipEnvelopeScroll(env: Aip.Envelope, kind: String, onLinkClick: (Str
         Spacer(Modifier.height(10.dp))
         HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.4f))
         Spacer(Modifier.height(10.dp))
-        when (kind) {
-            "mindmap" -> env.blocks.filterIsInstance<Aip.Block.Mindmap>().forEach { MindmapView(it) }
-            else -> env.blocks.forEach { AipCanvasBlock(it, onLinkClick) }
+        // [自适应屏幕] 满屏内容等比缩放：360dp 设计稿映射为全屏宽度
+        SurfaceHost(360f) {
+            when (kind) {
+                "mindmap" -> env.blocks.filterIsInstance<Aip.Block.Mindmap>().forEach { MindmapView(it) }
+                else -> env.blocks.forEach { AipCanvasBlock(it, onLinkClick) }
+            }
         }
     }
 }
