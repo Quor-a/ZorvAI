@@ -70,7 +70,6 @@ import androidx.compose.ui.window.DialogProperties
 import com.ai.assistance.quro.core.canvas.Aip
 import com.ai.assistance.quro.core.canvas.AipConvert
 import com.ai.assistance.quro.core.canvas.CanvasRouter
-import com.ai.assistance.quro.core.ui.dynamicui.SurfaceHost
 import com.ai.assistance.quro.core.tools.AiwpsCreateTool
 import com.ai.assistance.quro.ui.MarkdownText
 import kotlinx.coroutines.CoroutineScope
@@ -173,20 +172,20 @@ fun AipCanvas(
 
                     if (env.title.isNotBlank()) HorizontalDivider(Modifier.padding(vertical = 8.dp), color = cs.outlineVariant.copy(alpha = 0.4f))
 
-                    // [自适应屏幕] 把排版内容区用 SurfaceHost(360f) 等比缩放包裹：
-                    // 360dp 设计稿恰好等于容器可用宽度，手机/平板/分屏/横竖屏全自动铺满，数学上不可能横向溢出。
-                    SurfaceHost(360f) {
-                        when (kind) {
-                            "deck" -> {
-                                DeckPager(env)
-                                if (presenting) {
-                                    val slides = env.blocks.filterIsInstance<Aip.Block.Slide>()
-                                    if (slides.isNotEmpty()) DeckPresentOverlay(slides, onDismiss = { presenting = false })
-                                }
+                    // 注意：内联路径不再套 SurfaceHost(360f)——对话框宽度本就 ~340-380dp，
+                    // 等比缩放会把 BoxWithConstraints 内的子 Column 压窄，ListBlock / MarkdownText
+                    // 的 Box(weight(1f)) 被压成 ~10dp 宽，导致「运动 30min」被拆成逐字竖排（一覆盖一个）。
+                    // 自适应屏幕由各 Block 自身 fillMaxWidth() + Material typography 自然承担。
+                    when (kind) {
+                        "deck" -> {
+                            DeckPager(env)
+                            if (presenting) {
+                                val slides = env.blocks.filterIsInstance<Aip.Block.Slide>()
+                                if (slides.isNotEmpty()) DeckPresentOverlay(slides, onDismiss = { presenting = false })
                             }
-                            "mindmap" -> env.blocks.filterIsInstance<Aip.Block.Mindmap>().forEach { MindmapView(it) }
-                            else -> env.blocks.forEach { AipCanvasBlock(it, onLinkClick) }
                         }
+                        "mindmap" -> env.blocks.filterIsInstance<Aip.Block.Mindmap>().forEach { MindmapView(it) }
+                        else -> env.blocks.forEach { AipCanvasBlock(it, onLinkClick) }
                     }
                 }
                 // 整页/全屏查看：长文档/PPT/报告整篇排版脱离对话框层，满屏阅读（"不满屏"修复）
