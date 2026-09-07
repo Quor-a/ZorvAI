@@ -132,6 +132,8 @@ class QuroToolRegistry {
             "http_request", "open_web", "ai_browser",
             // 代码执行
             "run_code",
+            // SandboxPackage 完整脚本运行时（JS/TS + Tools.* 宿主 API）+ ToolPkg 脚本包 + 项目模板
+            "code_runner", "toolpkg_list", "toolpkg_call", "project_create",
             // 广义 IDE 集成（图形/视频/音频/3D/游戏/低代码/代码 IDE）
             "creative_studio",
             // 终端（应用沙盒内 PTY / shell，免权限，无 root/Shizuku）
@@ -150,6 +152,10 @@ class QuroToolRegistry {
             "knowledge_search", "knowledge_add", "knowledge_manage", "knowledge_rag_search",
             // 文档生成（aiWPS：本地生成 WPS / Office 兼容 .docx/.xlsx/.pptx，零外部依赖）
             "aiwps_create",
+            // 增强文档创建（md/html/json/xml/yaml/css/js/svg/odt/epub/rtf 等 17 种，含 AIP 文档导出）
+            "enhanced_doc_create",
+            // 后台 AIP 排版合成（整篇长文档/PPT/报告以工具调用形式产出，对话框渲染 B 通道 Canvas 引擎）
+            "aip_compose",
             // 对话框富卡片（AI 下发可交互卡片：待办/图表/笔记/动作）
             "ui_card",
             // 对话框内联 UI 组件（v134：按钮/开关/滑块/进度/统计/提醒/表格/列表/分段/饼图/评分/倒计时/标签页/折叠/表单/标签/步骤/仪表/媒体/信息）

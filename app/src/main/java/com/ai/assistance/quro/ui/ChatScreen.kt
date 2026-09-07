@@ -22,6 +22,7 @@ import com.ai.assistance.quro.core.tools.PopupButton
 import com.ai.assistance.quro.core.tools.PopupInput
 import com.ai.assistance.quro.core.tools.PopupResult
 import com.ai.assistance.quro.core.tools.QuroToolRegistry
+import com.ai.assistance.quro.ui.canvas.AipCanvas
 import com.ai.assistance.quro.core.tools.LaunchAppTool
 import com.ai.assistance.quro.core.tools.QuroSkillTool
 import com.ai.assistance.quro.BuildConfig
@@ -3945,6 +3946,9 @@ private fun ToolCallBlock(
 data class ToolCategory(val icon: String, val color: Color, val label: String)
 
 private fun toolCategory(name: String): ToolCategory = when {
+    name == "aip_compose" || name == "aiwps_create" || name == "enhanced_doc_create" || name.contains("doc") ->
+        ToolCategory("file_text", Color(0xFF0EA5E9), "文档排版")
+
     name.startsWith("read_screen") || name.startsWith("tap") || name.startsWith("swipe") ||
     name.startsWith("input_text") || name.startsWith("scroll") || name.startsWith("global_action") ||
     name.startsWith("get_foreground") || name.startsWith("get_screen_state") ->
@@ -4138,7 +4142,22 @@ private fun SingleToolCard(t: ToolCallUi, scaled: (Int) -> androidx.compose.ui.u
                         }
                     }
                     Spacer(Modifier.height(4.dp))
-                    FormattedResultContent(t.result!!, scaled)
+                    // 后台 AIP 排版：工具调用形式产出的 AIP 信封，在对话框内用 Canvas 引擎渲染（"工具调用形式，最后渲染在对话框"）
+                    if (t.name == "aip_compose") {
+                        val aipJson = t.result!!.substringBefore("\n\n[导出]")
+                        if (com.ai.assistance.quro.core.canvas.Aip.looksLikeAip(aipJson)) {
+                            AipCanvas(source = aipJson)
+                        } else {
+                            FormattedResultContent(t.result!!, scaled)
+                        }
+                        val exportNote = t.result!!.substringAfter("\n\n[导出]", "")
+                        if (exportNote.isNotBlank()) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(exportNote, fontSize = scaled(11), color = Muted)
+                        }
+                    } else {
+                        FormattedResultContent(t.result!!, scaled)
+                    }
                 }
 
                 if (t.name.startsWith("ui_")) {

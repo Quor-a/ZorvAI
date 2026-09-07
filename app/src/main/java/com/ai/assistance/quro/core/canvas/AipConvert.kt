@@ -79,6 +79,7 @@ object AipConvert {
                 is Block.Mindmap -> { newSlide("titleBody", "导图"); (cur!!.bullets as ArrayList<String>).add(flattenMindmap(b.root, 2)) }
                 is Block.Divider -> flush()
                 is Block.Slide -> {} // doc 里不应出现；防御性忽略（toDeck 入口已排除 deck）
+                is Block.Html -> { flush(); slides.add(Block.Slide(nid(), "titleBody", "网页", "", emptyList(), emptyList(), emptyList(), null, null, "", "", "", b.html)) }
                 is Block.Fallback -> { if (cur == null) newSlide("titleBody", env.title.ifBlank { "内容" }); (cur!!.bullets as ArrayList<String>).add(b.text.take(200)) }
             }
         }
@@ -167,6 +168,7 @@ object AipConvert {
                         is Block.Chart -> addLeaf("图表：${b.title.ifBlank { b.chartType }}")
                         is Block.Table -> addLeaf("表格 ${b.headers.size} 列 × ${b.rows.size} 行")
                         is Block.Mindmap -> roots.add(b.root)
+                        is Block.Html -> addLeaf("网页/HTML 内容")
                         else -> {}
                     }
                 }
@@ -231,6 +233,7 @@ object AipConvert {
             b.table?.let { append(blockToMarkdown(it)) }
         }
         is Block.Fallback -> "${b.text}\n"
+        is Block.Html -> b.html + "\n"
     }
 
     /** pptx 导出：`---` 分页，每页首行标题、其余要点（非 deck 先转 deck）。 */
@@ -258,6 +261,7 @@ object AipConvert {
         is Block.Callout -> listOf(b.title, b.text).filter { it.isNotBlank() }.joinToString("：")
         is Block.Heading -> b.text
         is Block.ListBlock -> b.items.joinToString("；")
+        is Block.Html -> "网页内容"
         else -> ""
     }
 

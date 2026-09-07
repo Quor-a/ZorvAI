@@ -257,6 +257,11 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(FileReadTool())
     r.register(OpenWebTool())
     r.register(RunCodeTool())
+    // SandboxPackage 完整脚本运行时：code_runner（JS/TS + Tools.* 宿主 API + CommonJS）+ ToolPkg 脚本包 + 项目模板
+    r.register(CodeRunnerTool())
+    r.register(ToolPkgListTool())
+    r.register(ToolPkgCallTool())
+    r.register(ProjectCreateTool())
     // 后端工作区：多文件多语言项目
     r.register(WorkbenchTool())
     r.register(MiniAppStudioTool())    // 小程序工作台：AI 直接 CRUD/运行小程序工程（完整移植 MiniAppFramework）
@@ -420,6 +425,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(VideoUnderstandingTool()) // AI 视频理解
     // 增强版文档创建工具：支持更多类型和更好渲染
     r.register(EnhancedDocTool())        // 增强版文档创建
+    // 后台 AIP 排版合成工具：整篇长文档/PPT/报告以「工具调用形式」产出，对话框据此渲染（B 通道 Canvas 引擎）
+    r.register(AipComposeTool())         // 后台 AIP 排版合成（doc/deck/mindmap）
     // UI 动作工具：打开界面 / 弹层 / 开关（ui_open_* / ui_toggle_* / ui_clear_chat 等）
     // allUiActionTools.forEach { r.register(it) }
     // 对话框富卡片工具（ui_card）：可视化组件库（独立功能；小卡片=```quro-card 围栏，与此互不相关）

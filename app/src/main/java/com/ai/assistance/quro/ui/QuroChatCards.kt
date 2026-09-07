@@ -1847,7 +1847,7 @@ private fun HtmlPreviewCardView(card: QuroChatCard.HtmlPreviewCard) {
  * 增加CDN错误恢复：通过AssetLibResolver拦截CDN请求，加载本地库资源
  */
 @Composable
-private fun HtmlPreviewWebView(
+internal fun HtmlPreviewWebView(
     html: String,
     modifier: Modifier = Modifier,
     onHeight: (Int) -> Unit = {},

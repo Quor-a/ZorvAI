@@ -4,7 +4,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -60,6 +59,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +71,7 @@ import com.ai.assistance.quro.core.canvas.Aip
 import com.ai.assistance.quro.core.canvas.AipConvert
 import com.ai.assistance.quro.core.canvas.CanvasRouter
 import com.ai.assistance.quro.core.tools.AiwpsCreateTool
+import com.ai.assistance.quro.ui.HtmlPreviewWebView
 import com.ai.assistance.quro.ui.MarkdownText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -110,7 +111,7 @@ fun AipCanvas(
             // [排版引擎修复] 移除外层 Surface 边框/底色（"有框限制"）：改为无框纯容器，
             // 由内部各 Block 自行控制样式，撑满父容器（全宽内联时即满对话框宽）。
             Column(
-                Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 14.dp).animateContentSize(),
+                Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                     // 文档头部区（标题 / 副标题 / 元信息）
@@ -382,16 +383,24 @@ fun AipCanvasBlock(b: Aip.Block, onLinkClick: (String) -> Unit = {}) {
             }
         }
         is Aip.Block.Table -> AipTable(b)
-        is Aip.Block.Code -> Column(
-            Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF1E1E1E))
-                .padding(10.dp)
-        ) {
-            if (b.lang.isNotBlank()) {
-                Text(b.lang, fontSize = 10.sp, color = Color(0xFF9CDCFE), modifier = Modifier.padding(bottom = 4.dp))
+        is Aip.Block.Code -> {
+            // HTML 代码块：复用对话框既有 WebView 渲染（与 ```html 预览同源），不显示裸源码。
+            val isHtml = b.lang.equals("html", true) || b.lang.equals("htm", true) || b.lang.equals("markup", true)
+            if (isHtml) {
+                AipHtml(b.code)
+            } else {
+                Column(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF1E1E1E))
+                        .padding(10.dp)
+                ) {
+                    if (b.lang.isNotBlank()) {
+                        Text(b.lang, fontSize = 10.sp, color = Color(0xFF9CDCFE), modifier = Modifier.padding(bottom = 4.dp))
+                    }
+                    Text(b.code, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = Color(0xFFD4D4D4))
+                }
             }
-            Text(b.code, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = Color(0xFFD4D4D4))
         }
         is Aip.Block.Quote -> Column(
             Modifier.padding(vertical = 4.dp).fillMaxWidth()
@@ -419,6 +428,8 @@ fun AipCanvasBlock(b: Aip.Block, onLinkClick: (String) -> Unit = {}) {
         is Aip.Block.Timeline -> AipTimeline(b)
         is Aip.Block.Mindmap -> MindmapView(b)
         is Aip.Block.Slide -> SlideCard(b)
+        // HTML 块：复用对话框既有 WebView 渲染器（C 通道同源），高度按真实内容自适应（160~1440dp）。
+        is Aip.Block.Html -> AipHtml(b.html)
         // L2 兜底：未知/损坏块 → 富文本渲染原始内容，不丢弃
         is Aip.Block.Fallback -> Surface(
             shape = RoundedCornerShape(8.dp),
@@ -427,6 +438,32 @@ fun AipCanvasBlock(b: Aip.Block, onLinkClick: (String) -> Unit = {}) {
         ) {
             Text(b.text, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(8.dp))
         }
+    }
+}
+
+/**
+ * HTML 块渲染：复用对话框已有的 [HtmlPreviewWebView]（与 ```html 预览、小程序同源的 WebView 管线，
+ * 含离线 CDN 兜底），在 AIP 文档内嵌区域渲染完整/片段 HTML。
+ * 高度按页面真实内容自适应（onPageFinished 回传 scrollHeight → 160~1440dp），避免空白或裁切。
+ */
+@Composable
+private fun AipHtml(html: String) {
+    val cs = MaterialTheme.colorScheme
+    val density = LocalDensity.current.density
+    var h by remember(html) { mutableStateOf(360.dp) }
+    Box(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .background(cs.surfaceVariant.copy(alpha = 0.25f))
+            .padding(6.dp),
+    ) {
+        HtmlPreviewWebView(
+            html = html,
+            modifier = Modifier.fillMaxWidth().height(h),
+            onHeight = { px ->
+                // onHeight 是普通 lambda（非 @Composable），density 在可组合体内捕获后传入。
+                h = (px / density).dp.coerceIn(160.dp, 1440.dp)
+            },
+        )
     }
 }
 
@@ -761,16 +798,20 @@ fun SlideCard(b: Aip.Block.Slide) {
     // [排版引擎修复] 固定 16:9 + Arrangement.Center 在内容超长时会溢出框外、与相邻页/指示器重叠
     // （"文字被覆盖一个盖一个"）。改为：卡片保持 16:9 固定高度，内部内容可纵向滚动 + 顶部对齐，
     // 超长幻灯片滚动查看而非溢出重叠。
-    Column(
+    // [排版引擎修复] 固定 16:9 画框作为稳定外层高度，内部内容单独可纵向滚动。
+    // 注意：aspectRatio 与 verticalScroll 不能叠在同一节点——滚动器会把测量高度撑成内容真实高度，
+    // 超出 16:9 画框，导致下一页/相邻块与溢出内容「一层覆盖一层」。改为 外层 Box 定高 + 内层 Column 滚动。
+    Box(
         Modifier.fillMaxWidth().aspectRatio(16f / 9f)
             .clip(RoundedCornerShape(14.dp))
             .background(
                 Brush.verticalGradient(listOf(cs.surfaceVariant.copy(alpha = 0.25f), cs.surfaceVariant.copy(alpha = 0.6f))),
-            )
-            .verticalScroll(rememberScrollState())
-            .padding(18.dp),
-        verticalArrangement = Arrangement.Top,
+            ),
     ) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
+            verticalArrangement = Arrangement.Top,
+        ) {
         when (b.layout) {
             "cover" -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.Center) {
                 Text(b.title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -846,5 +887,6 @@ fun SlideCard(b: Aip.Block.Slide) {
                 }
             }
         }
+    }
     }
 }
