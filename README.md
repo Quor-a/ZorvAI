@@ -12,10 +12,19 @@
 [![Platform](https://img.shields.io/badge/platform-Android-3DDC84.svg)](https://www.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF.svg)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-1.7-4285F4.svg)](https://developer.android.com/compose)
+[![Python](https://img.shields.io/badge/Python-3.14-3776AB.svg)](https://www.python.org)
+[![MNN](https://img.shields.io/badge/MNN-离线推理-blue.svg)](https://github.com/alibaba/MNN)
+[![llama.cpp](https://img.shields.io/badge/llama.cpp-离线推理-yellow.svg)](https://github.com/ggerganov/llama.cpp)
+[![AIP 排版引擎](https://img.shields.io/badge/AIP%20排版-自研引擎-2E6BE6.svg)](./README.md#aip-对话框文档排版ai-presentation-protocol)
+[![Scripting 沙箱](https://img.shields.io/badge/Scripting-沙箱运行时-2E6BE6.svg)](./README.md#scripting-脚本沙箱端侧-python--ts)
 [![GeckoView](https://img.shields.io/badge/GeckoView-MPL--2.0-success.svg)](https://mozilla.github.io/geckoview/)
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI?label=release)](https://github.com/Quor-a/ZorvAI/releases)
 [![minSdk](https://img.shields.io/badge/minSdk-26-API.svg)](https://developer.android.com/about/versions/oreo)
 [![compileSdk](https://img.shields.io/badge/compileSdk-36-API.svg)](https://developer.android.com)
+[![AGP](https://img.shields.io/badge/AGP-8.13-3DDC84.svg)](https://developer.android.com/build)
+[![QuickJS](https://img.shields.io/badge/QuickJS-沙箱-FFC300.svg)](https://github.com/sebastienwae/quickjs-android)
+[![CPython](https://img.shields.io/badge/CPython-3.14-3776AB.svg)](https://www.python.org)
+[![WebView](https://img.shields.io/badge/WebView-离线渲染-4285F4.svg)](https://developer.android.com/reference/android/webkit/WebView)
 
 </div>
 
