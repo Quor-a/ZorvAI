@@ -487,22 +487,28 @@ private fun CalloutCard(b: Aip.Block.Callout) {
 @Composable
 private fun AipTable(b: Aip.Block.Table) {
     val cs = MaterialTheme.colorScheme
+    val colCount = b.headers.size.coerceAtLeast(1)
+    // 移动端自适应表格修复（"一层覆盖一层"）：
+    // 旧实现 horizontalScroll 会给子级无限水平宽约束，此时 Row 里的 Text(weight(1f)) 权重失效，
+    // 各列按内容各自测宽 → 表头/内容行列宽不一致、列错位，窄屏下列被压成逐字竖排互相覆盖。
+    // 改为：去掉横向滚动，列宽均分（weight 在有限宽约束下正常工作）+ 文本软换行，
+    // 内容过长自动换行撑高本行，绝不溢出屏幕、绝不互相覆盖。列数超出屏幕宽度时自动均分变窄。
     Column(
         Modifier.fillMaxWidth().padding(vertical = 4.dp)
-            .horizontalScroll(rememberScrollState())
             .clip(RoundedCornerShape(8.dp))
             .border(1.dp, cs.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
     ) {
         Row(Modifier.fillMaxWidth().background(cs.surfaceVariant.copy(alpha = 0.5f))) {
             b.headers.forEach {
-                Text(it, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(8.dp), maxLines = 3)
+                Text(it, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(8.dp))
             }
         }
         b.rows.forEachIndexed { ri, row ->
-            if (ri % 2 == 1) Row(Modifier.fillMaxWidth().background(cs.surfaceVariant.copy(alpha = 0.2f))) {
-                row.forEach { Text(it, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(8.dp)) }
-            } else Row(Modifier.fillMaxWidth()) {
-                row.forEach { Text(it, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(8.dp)) }
+            // 补齐/截断到与表头一致的列数，保证每行列数相同、均分不漂移
+            val cells = (row + List(colCount) { "" }).take(colCount)
+            val bg = if (ri % 2 == 1) Modifier.background(cs.surfaceVariant.copy(alpha = 0.2f)) else Modifier
+            Row(Modifier.fillMaxWidth().then(bg)) {
+                cells.forEach { Text(it, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(8.dp)) }
             }
         }
     }
