@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ai.assistance.quro.core.canvas.Aip
 import com.ai.assistance.quro.ui.canvas.AipCanvasBlock
 
@@ -150,9 +151,11 @@ private fun ContainerBlock(b: MdBlock, onLinkClick: (String) -> Unit, color: Col
 @Composable
 private fun InlineText(text: String, onLinkClick: (String) -> Unit, color: Color) {
     val annotated = remember(text) { inlineAnnotated(text, color) }
+    // 加 fillMaxWidth + 明确最小行高，避免 ClickableText 在个别版本测量异常导致多行文字逐行叠压（"一层覆盖一层"）。
     ClickableText(
         text = annotated,
-        style = MaterialTheme.typography.bodyMedium.copy(color = color),
+        style = MaterialTheme.typography.bodyMedium.copy(color = color, lineHeight = 20.sp),
+        modifier = Modifier.fillMaxWidth(),
         onClick = { offset ->
             annotated.getStringAnnotations("url", offset, offset).firstOrNull()?.let { onLinkClick(it.item) }
         },
