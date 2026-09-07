@@ -1,0 +1,6 @@
+{
+  "name": "my-ts-project",
+  "version": "1.0.0",
+  "description": "ZorvAI 模板创建的 TypeScript 项目",
+  "main": "src/index.ts"
+}

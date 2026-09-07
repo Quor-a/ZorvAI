@@ -1,0 +1,7 @@
+{
+  "name": "my-node-project",
+  "version": "1.0.0",
+  "description": "ZorvAI 模板创建的 Node.js 项目",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" }
+}
