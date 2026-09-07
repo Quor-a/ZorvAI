@@ -3,13 +3,16 @@
  *
  * 设计要点（对应评审报告"沙箱硬化"与"my.* 权限网关"）：
  *  - 每个插件一个 JSRuntime（隔离边界），JS_SetMemoryLimit 限制堆，JS_SetInterruptHandler 做超时中断（防死循环 DoS）。
- *  - 删除全局 eval / Function，关闭动态代码执行（沙箱最小面）。
+ *  - 插件模式（allowEval=0）：删除全局 eval / Function，关闭动态代码执行（沙箱最小面）。
+ *  - 脚本包模式（allowEval=1，SandboxPackage / code_runner / ToolPkg）：保留 eval / Function——
+ *    CommonJS require() 需要 new Function(moduleCode) 包装模块体；安全靠内存上限 + 超时中断 +
+ *    Kotlin 侧 hostCallApi 权限网关（fs/net/system 只暴露白名单操作 + 工作区根目录沙箱）。
  *  - 插件通过两个全局函数与宿主通信：
  *      hostSetData(path:string, value:any)  -> 把 setData 的 path-diff 回传 Kotlin（再推给渲染层 WebView）。
- *      hostCallApi(api:string, paramsJson:string) -> 调宿主能力（my.*），同步返回结果 JSON。
+ *      hostCallApi(api:string, paramsJson:string) -> 调宿主能力（my.* / Tools.*），同步返回结果 JSON。
  *  - 事件入口：渲染层 WebView 把 tap/input 经 JSBridge 交给 Kotlin，Kotlin 调 nativeInvokeMethod 执行页面方法。
  *
- * 注意：本文件只负责"引擎 + 桥"，不实现具体 my.* 能力（那是 Kotlin 侧按 manifest 权限网关决定）。
+ * 注意：本文件只负责"引擎 + 桥"，不实现具体 my.* / Tools.* 能力（那是 Kotlin 侧按 manifest 权限网关决定）。
  */
 
 #include <jni.h>
@@ -124,7 +127,7 @@ static int js_interrupt(JSRuntime *rt, void *opaque) {
 
 JNIEXPORT jlong JNICALL
 Java_com_ai_assistance_quro_plugin_QuickJsEngine_nativeCreateRuntime(
-        JNIEnv *env, jobject thiz, jint memLimitBytes, jint timeoutMs) {
+        JNIEnv *env, jobject thiz, jint memLimitBytes, jint timeoutMs, jint allowEval) {
     QuroEngine *e = (QuroEngine *)calloc(1, sizeof(QuroEngine));
     if (!e) return 0;
 
@@ -139,14 +142,16 @@ Java_com_ai_assistance_quro_plugin_QuickJsEngine_nativeCreateRuntime(
 
     (*env)->GetJavaVM(env, &e->vm);
 
-    /* 沙箱硬化：删除全局 eval / Function，关掉动态代码执行入口 */
-    JSValue global = JS_GetGlobalObject(e->ctx);
-    JS_DeleteProperty(e->ctx, global, JS_NewAtom(e->ctx, "eval"), 0);
-    JS_DeleteProperty(e->ctx, global, JS_NewAtom(e->ctx, "Function"), 0);
-    JS_FreeValue(e->ctx, global);
+    /* 沙箱硬化：插件模式删 eval/Function；脚本包模式保留（CommonJS require 需要） */
+    if (!allowEval) {
+        JSValue global = JS_GetGlobalObject(e->ctx);
+        JS_DeleteProperty(e->ctx, global, JS_NewAtom(e->ctx, "eval"), 0);
+        JS_DeleteProperty(e->ctx, global, JS_NewAtom(e->ctx, "Function"), 0);
+        JS_FreeValue(e->ctx, global);
+    }
 
     /* 注册宿主通信函数 */
-    global = JS_GetGlobalObject(e->ctx);
+    JSValue global = JS_GetGlobalObject(e->ctx);
     JS_SetPropertyStr(e->ctx, global,
                       "hostSetData", JS_NewCFunction(e->ctx, js_host_setdata, "hostSetData", 2));
     JS_SetPropertyStr(e->ctx, global,

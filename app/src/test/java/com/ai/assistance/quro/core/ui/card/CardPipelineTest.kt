@@ -82,7 +82,7 @@ class CardPipelineTest {
         CardModule.init()
         val spec = parseCardSpec("""{"type":"line_chart","data":{"kind":"chart","series":[{"name":"x","points":[0.2,0.4,0.6,0.8]}]}}""")!!
         val r = CardRegistry.resolveOrNull("line_chart") as CardRenderer<CardState>
-        val size = r.measure(spec, r.createInitialState(), 360f)
+        val size = r.measure(spec, r.createInitialState(), 360f, 2.75f)
         assertTrue("measure 应给出非零高度", size.height > 0f)
         assertEquals(360f, size.width)
     }
@@ -92,8 +92,8 @@ class CardPipelineTest {
         val r = LineChartRenderer()
         val spec = parseCardSpec("""{"type":"line_chart","data":{"kind":"chart","series":[{"name":"x","color":"primary","points":[0.2,0.5,0.8]}]}}""")!!
         val state = r.createInitialState()
-        val size = r.measure(spec, state, 360f)
-        val layout = r.layout(spec, state, size)
+        val size = r.measure(spec, state, 360f, 2.75f)
+        val layout = r.layout(spec, state, size, 2.75f)
         val b = RecordingBackend()
         r.render(b, spec, layout, state)
         assertTrue("折线图应绘制折线(polyline path)", b.paths >= 1)
@@ -105,8 +105,8 @@ class CardPipelineTest {
         val r = ButtonGroupRenderer()
         val spec = parseCardSpec("""{"type":"button_group","data":{"kind":"form","buttons":[{"label":"确定","action":{"type":"callback","name":"ok"}},{"label":"取消","action":{"type":"callback","name":"cancel"}}]}}""")!!
         val state = r.createInitialState()
-        val size = r.measure(spec, state, 360f)
-        val layout = r.layout(spec, state, size)
+        val size = r.measure(spec, state, 360f, 2.75f)
+        val layout = r.layout(spec, state, size, 2.75f)
         val b = RecordingBackend()
         r.render(b, spec, layout, state)
         assertTrue("按钮组应绘制按钮矩形(>=2)", b.rects >= 2)
@@ -128,9 +128,9 @@ class CardPipelineTest {
         assertEquals(2, media.headers.size)
         assertEquals(2, media.rows.size)
         val state = r.createInitialState()
-        val size = r.measure(spec, state, 360f)
+        val size = r.measure(spec, state, 360f, 2.75f)
         assertTrue("表格卡 measure 应给出非零高度(含表头+2行)", size.height > 0f)
-        val layout = r.layout(spec, state, size)
+        val layout = r.layout(spec, state, size, 2.75f)
         val b = RecordingBackend()
         r.render(b, spec, layout, state)
         // 表头 1 行 + 2 数据行 = 3 行底色矩形；单元格文字 2 列 *(1 表头+2 行)=6；横线 3 条 + 竖线 1 条
@@ -149,20 +149,20 @@ class CardPipelineTest {
         assertEquals("progress", stP.statusType)
         assertEquals(0.5f, stP.progress)
         val stateP = rp.createInitialState()
-        val sizeP = rp.measure(specP, stateP, 360f)
+        val sizeP = rp.measure(specP, stateP, 360f, 2.75f)
         assertTrue("progress 卡高度应>0", sizeP.height > 0f)
         val bP = RecordingBackend()
-        rp.render(bP, specP, rp.layout(specP, stateP, sizeP), stateP)
+        rp.render(bP, specP, rp.layout(specP, stateP, sizeP, 2.75f), stateP)
         assertTrue("progress 卡应绘制标题文字", bP.texts >= 1)
         assertTrue("progress 卡应绘制底槽+填充矩形(>=2)", bP.rects >= 2)
 
         // error 形态（可重试）
         val specE = parseCardSpec("""{"type":"status","data":{"kind":"status","statusType":"error","text":"失败","reason":"网络错误","retryable":true}}""")!!
         val stateE = rp.createInitialState()
-        val sizeE = rp.measure(specE, stateE, 360f)
+        val sizeE = rp.measure(specE, stateE, 360f, 2.75f)
         assertTrue("error 卡高度应>0", sizeE.height > 0f)
         val bE = RecordingBackend()
-        rp.render(bE, specE, rp.layout(specE, stateE, sizeE), stateE)
+        rp.render(bE, specE, rp.layout(specE, stateE, sizeE, 2.75f), stateE)
         // "错误" + 原因 + "点击重试" >=3 段文字
         assertTrue("error 卡应绘制错误标题/原因/重试提示(>=3)", bE.texts >= 3)
     }
@@ -172,8 +172,8 @@ class CardPipelineTest {
         val r = SkeletonRenderer()
         val spec = parseCardSpec("""{"type":"skeleton","data":{"kind":"status","statusType":"skeleton"}}""")!!
         val state = r.createInitialState()
-        val size = r.measure(spec, state, 360f)
-        val layout = r.layout(spec, state, size)
+        val size = r.measure(spec, state, 360f, 2.75f)
+        val layout = r.layout(spec, state, size, 2.75f)
         val b = RecordingBackend()
         r.render(b, spec, layout, state)
         assertTrue("骨架卡应绘制占位条(>=3)", b.rects >= 3)

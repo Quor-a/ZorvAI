@@ -23,8 +23,10 @@ import org.json.JSONObject
 /**
  * 内置 CodeMirror 代码编辑器（WebView 承载，离线资源在 assets/www/）。
  *
- * - 语法高亮：JavaScript / Python / HTML / JSON / CSS / XML / C·C++·Java
- * - 「运行」直接调 RunCodeTool：JS 走 App 内置 QuickJS 原生沙箱离线执行，Python 走 Termux/系统 python3
+ * - 语法高亮：JavaScript / TypeScript / Python / HTML / JSON / CSS / XML / C·C++·Java
+ * - 「运行」直接调 RunCodeTool：JS 走 App 内置 QuickJS 原生沙箱（TS 自动转译），Python 走原生 CPython 3.14
+ * - 「预览」HTML 语言时可用：srcdoc 浮层实时渲染当前内容
+ * - 「? API」宿主 API 速查（Tools.Files/Net/System/calc/Media/Git）
  * - 「完成」把编辑器内容回传 ChatScreen 输入框，供用户审阅后发送
  */
 @Composable
@@ -54,6 +56,7 @@ fun EditorScreen(
             fun onSaveCode(content: String, lang: String) {
                 val extension = when (lang.lowercase()) {
                     "javascript", "js" -> ".js"
+                    "typescript", "ts" -> ".ts"
                     "python", "py" -> ".py"
                     "html", "htm" -> ".html"
                     "json" -> ".json"

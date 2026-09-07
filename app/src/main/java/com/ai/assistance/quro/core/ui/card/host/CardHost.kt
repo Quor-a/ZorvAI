@@ -11,6 +11,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -153,6 +154,10 @@ fun CardSurface(
             Modifier
                 .fillMaxWidth()
                 .height(heightDp)
+                // 防御性裁剪：AI 给的 layout 树若有节点超 allocW（如 ring size 过大），
+                // drawRect/drawArc 不受 Compose 默认 clip 影响，会画到 CardSurface 之外；
+                // 显式 clipToBounds 强制所有绘制指令不出 CardSurface 边界，杜绝溢出屏幕。
+                .clipToBounds()
                 .pointerInput(Unit) {
                     // 点击命中：交给渲染器做 hitTest，命中则回传对应 Action（按钮组经 onAction→ActionBus→消息流）。
                     detectTapGestures { offset ->

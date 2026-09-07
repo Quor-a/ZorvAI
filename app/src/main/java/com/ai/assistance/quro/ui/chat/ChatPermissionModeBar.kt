@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -93,6 +94,8 @@ internal fun ChatPermissionModeBar(
     onToggleAutoRead: () -> Unit = {},
     visionEnabled: Boolean = false,
     onToggleVision: () -> Unit = {},
+    /** 长按「看懂屏幕」开关触发：发起 MediaProjection（媒体投影/屏幕捕获）系统授权。 */
+    onRequestMediaProjection: () -> Unit = {},
     currentWorkspace: String? = null,
     onOpenWorkspaceSelector: () -> Unit = {},
     onOpenCodeBrowser: () -> Unit = {},
@@ -213,8 +216,9 @@ internal fun ChatPermissionModeBar(
                     ModeToggleRow(
                         active = visionEnabled,
                         title = "看懂屏幕",
-                        desc = " — AI 实时理解当前屏幕",
+                        desc = " — AI 实时理解当前屏幕（长按申请屏幕捕获）",
                         onClick = onToggleVision,
+                        onLongClick = onRequestMediaProjection,
                     )
                     Spacer(Modifier.height(6.dp))
 
@@ -289,16 +293,29 @@ private fun ModeToggleRow(
     title: String,
     desc: String,
     onClick: () -> Unit,
+    /** 长按回调：用于「看懂屏幕」升级到 MediaProjection 屏幕捕获等二段操作。null 时退化普通 clickable。 */
+    onLongClick: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
+    val modifier = Modifier
+        .heightIn(min = 36.dp)
+        .clip(RoundedCornerShape(999.dp))
+        .border(1.dp, if (active) ChipActiveBorder else Line, RoundedCornerShape(999.dp))
+        .background(if (active) AccentSoft else cs.surface)
+        .then(
+            if (onLongClick != null) Modifier.combinedClickable(
+                onClickLabel = if (active) "关闭$title" else "开启$title",
+                onLongClickLabel = "长按：${title}（高级）",
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ) else Modifier.clickable(
+                onClickLabel = if (active) "关闭$title" else "开启$title",
+                onClick = onClick,
+            )
+        )
+        .padding(horizontal = 12.dp, vertical = 6.dp)
     Row(
-        Modifier
-            .heightIn(min = 36.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .border(1.dp, if (active) ChipActiveBorder else Line, RoundedCornerShape(999.dp))
-            .background(if (active) AccentSoft else cs.surface)
-            .clickable(onClickLabel = if (active) "关闭$title" else "开启$title", onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(7.dp).clip(CircleShape).background(if (active) Accent else Muted))

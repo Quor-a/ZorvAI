@@ -55,7 +55,7 @@ class QuickJsEngine {
             .isSuccess && nativeLibLoaded()
 
         @JvmStatic
-        external fun nativeCreateRuntime(memLimitBytes: Int, timeoutMs: Int): Long
+        external fun nativeCreateRuntime(memLimitBytes: Int, timeoutMs: Int, allowEval: Int): Long
         @JvmStatic
         external fun nativeEvalPlugin(ptr: Long, jsCode: String, callback: PluginSetDataCallback, timeoutMs: Int): String?
         @JvmStatic
@@ -72,8 +72,17 @@ class QuickJsEngine {
 
     private var ptr: Long = 0
 
-    fun create(memLimitBytes: Int = 16 * 1024 * 1024, timeoutMs: Int = 2000): Boolean {
-        ptr = nativeCreateRuntime(memLimitBytes, timeoutMs)
+    /** 插件模式（默认）：删除 eval/Function，沙箱最小面。 */
+    fun create(memLimitBytes: Int = 16 * 1024 * 1024, timeoutMs: Int = 2000): Boolean =
+        createInternal(memLimitBytes, timeoutMs, allowEval = false)
+
+    /** 脚本包模式（SandboxPackage / code_runner / ToolPkg）：保留 eval/Function（CommonJS require 需要 new Function 包装模块体）。
+     *  安全边界换到：内存上限 + 超时中断 + hostCallApi 权限网关（Kotlin 侧只暴露白名单 fs/net/system 操作）。 */
+    fun createScriptRuntime(memLimitBytes: Int = 64 * 1024 * 1024, timeoutMs: Int = 15000): Boolean =
+        createInternal(memLimitBytes, timeoutMs, allowEval = true)
+
+    private fun createInternal(memLimitBytes: Int, timeoutMs: Int, allowEval: Boolean): Boolean {
+        ptr = nativeCreateRuntime(memLimitBytes, timeoutMs, if (allowEval) 1 else 0)
         return ptr != 0L
     }
 
