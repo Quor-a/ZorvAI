@@ -10,25 +10,52 @@
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android-3DDC84.svg)](https://www.android.com)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF.svg)](https://kotlinlang.org)
-[![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-1.7-4285F4.svg)](https://developer.android.com/compose)
-[![Python](https://img.shields.io/badge/Python-3.14-3776AB.svg)](https://www.python.org)
-[![MNN](https://img.shields.io/badge/MNN-离线推理-blue.svg)](https://github.com/alibaba/MNN)
-[![llama.cpp](https://img.shields.io/badge/llama.cpp-离线推理-yellow.svg)](https://github.com/ggerganov/llama.cpp)
-[![AIP 排版引擎](https://img.shields.io/badge/AIP%20排版-自研引擎-2E6BE6.svg)](./README.md#aip-对话框文档排版ai-presentation-protocol)
-[![Scripting 沙箱](https://img.shields.io/badge/Scripting-沙箱运行时-2E6BE6.svg)](./README.md#scripting-脚本沙箱端侧-python--ts)
-[![GeckoView](https://img.shields.io/badge/GeckoView-MPL--2.0-success.svg)](https://mozilla.github.io/geckoview/)
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI?label=release)](https://github.com/Quor-a/ZorvAI/releases)
 [![minSdk](https://img.shields.io/badge/minSdk-26-API.svg)](https://developer.android.com/about/versions/oreo)
 [![compileSdk](https://img.shields.io/badge/compileSdk-36-API.svg)](https://developer.android.com)
 [![AGP](https://img.shields.io/badge/AGP-8.13-3DDC84.svg)](https://developer.android.com/build)
-[![QuickJS](https://img.shields.io/badge/QuickJS-沙箱-FFC300.svg)](https://github.com/sebastienwae/quickjs-android)
+
+**核心语言 / UI**
+
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF.svg)](https://kotlinlang.org)
+[![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-1.10.2-4285F4.svg)](https://developer.android.com/compose)
+[![Material3](https://img.shields.io/badge/Material3-1.4-4285F4.svg)](https://developer.android.com/jetpack/androidx/releases/compose-material3)
+[![GeckoView](https://img.shields.io/badge/GeckoView-MPL--2.0-success.svg)](https://mozilla.github.io/geckoview/)
+
+**端侧运行时 / 脚本引擎**
+
 [![CPython](https://img.shields.io/badge/CPython-3.14-3776AB.svg)](https://www.python.org)
+[![QuickJS](https://img.shields.io/badge/QuickJS-沙箱-FFC300.svg)](https://github.com/sebastienwae/quickjs-android)
+[![React](https://img.shields.io/badge/React-生成式%20UI-61DAFB.svg)](https://react.dev)
 [![WebView](https://img.shields.io/badge/WebView-离线渲染-4285F4.svg)](https://developer.android.com/reference/android/webkit/WebView)
+
+**离线 AI / 推理引擎**
+
+[![MNN](https://img.shields.io/badge/MNN-离线推理-blue.svg)](https://github.com/alibaba/MNN)
+[![llama.cpp](https://img.shields.io/badge/llama.cpp-离线推理-yellow.svg)](https://github.com/ggml-org/llama.cpp)
+[![Sherpa-NCNN](https://img.shields.io/badge/Sherpa--NCNN-离线%20ASR-4FC08D.svg)](https://github.com/k2-fsa/sherpa-ncnn)
+
+**可视化 / 数据**
+
+[![ECharts](https://img.shields.io/badge/ECharts-图表-FF6B6B.svg)](https://github.com/apache/echarts)
+[![Chart.js](https://img.shields.io/badge/Chart.js-图表-FF6384.svg)](https://github.com/chartjs/Chart.js)
+[![D3.js](https://img.shields.io/badge/D3.js-可视化-F9A03C.svg)](https://github.com/d3/d3)
+[![Mermaid](https://img.shields.io/badge/Mermaid-图表-FF3670.svg)](https://github.com/mermaid-js/mermaid)
+[![KaTeX](https://img.shields.io/badge/KaTeX-数学-008080.svg)](https://github.com/KaTeX/KaTeX)
+
+**系统能力 / 平台通道**
+
+[![Shizuku](https://img.shields.io/badge/Shizuku-免%20Root-8A2BE2.svg)](https://github.com/RikkaApps/Shizuku)
+[![proot](https://img.shields.io/badge/proot-Linux%20沙箱-2F81F7.svg)](https://github.com/proot-me/proot)
+[![Room](https://img.shields.io/badge/Room-持久化-4285F4.svg)](https://developer.android.com/jetpack/androidx/releases/room)
+[![WorkManager](https://img.shields.io/badge/WorkManager-后台任务-4285F4.svg)](https://developer.android.com/topic/libraries/architecture/workmanager)
+[![JGit](https://img.shields.io/badge/JGit-Git%20操作-6B6B6B.svg)](https://www.eclipse.org/jgit/)
+[![AIP 排版引擎](https://img.shields.io/badge/AIP%20排版-自研引擎-2E6BE6.svg)](./README.md#aip-对话框文档排版ai-presentation-protocol)
+[![Scripting 沙箱](https://img.shields.io/badge/Scripting-沙箱运行时-2E6BE6.svg)](./README.md#scripting-脚本沙箱端侧-python--ts)
 
 </div>
 
-> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose ｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34**
+> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34**
 >
 > Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **120+ 内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
 
@@ -1798,15 +1825,11 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 
 - **主许可**：Apache-2.0（应用全部源码）。
 - **GeckoView（Mozilla）**：以 **MPL-2.0** 分发（file-level copyleft）。其对应源代码随构建提供，符合该许可证义务。
-- **Live2D 伙伴（工具箱 Live2D 桌宠）**：相关组件各自保留其许可证，详细说明见 [NOTICE](./NOTICE) 的「Live2D 栈」一节：
-  - 渲染引擎 **PixiJS**（MIT，PixiJS 团队）与 **pixi-live2d-display**（MIT）。
-  - **Live2D Cubism Core SDK**（`live2dcubismcore`）：**Live2D Open Software License**（Live2D Inc.）。
-  - **Live2D Cubism 2 SDK Runtime**（`live2d.min.js`）：**Live2D Open Software License**（Live2D Inc.）；pixi-live2d-display 加载时要求其提供 `window.Live2D`/`Live2DMotion` 全局（即便仅用 Cubism 4 模型亦需先行加载）。
-  - 默认搭载模型 **Hiyori**：**Live2D Open Software License**（Live2D Inc.），取自 Live2D 官方 CubismWebSamples。
-  - 情绪 / 说话逻辑移植自开源项目 **DesktopFriends**（Tosuke-sama，**MIT**），已做完全去品牌化处理，仅保留 MIT 必需的版权与许可声明。
-- **其余第三方依赖**（AndroidX / Jetpack Compose、Kotlin、OkHttp、Shizuku、QuickJS、Sherpa-NCNN 等）各自保留其原有许可证，完整清单见 [NOTICE](./NOTICE)。
+- **端侧 CPython 3.14（PyEngine / Scripting 沙箱）**：Python 解释器本体以 **PSF-2.0** 分发；随包链接的 OpenSSL（Apache-2.0）、SQLite（Public Domain）见 [NOTICE](./NOTICE)。
+- **其余第三方依赖**（AndroidX / Jetpack Compose、Kotlin、OkHttp、Shizuku、QuickJS、Sherpa-NCNN、Chart.js / D3 / ECharts / Plotly / KaTeX / marked / highlight.js、React / Recharts / Lucide / Sucrase 等）各自保留其原有许可证，完整清单见 [NOTICE](./NOTICE)。
 
 > 本仓库仅就**实际随包分发**的组件声明其许可证义务；未随包分发的组件不产生额外的 Copyleft 义务。
+> 仓库根目录下的 `DesktopFriends/` 为参考研究目录（Live2D 桌宠示例），**不参与 APK 构建、不随包分发**，故其许可证不构成本应用的发布义务。
 
 ---
 

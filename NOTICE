@@ -5,8 +5,8 @@ This product includes software developed by third parties. The full
 source code of Quro AI is provided under the Apache License, Version 2.0
 (see LICENSE). Bundled third-party components retain their own licenses,
 summarized below. Where a component is distributed under a copyleft license
-(GPL / LGPL / MPL), the corresponding source is made available alongside
-this repository in accordance with that license's obligations.
+(GPL / LGPL / MPL / EPL), the corresponding source is made available
+alongside this repository in accordance with that license's obligations.
 
 ----------------------------------------------------------------------
 THIRD-PARTY COMPONENTS AND LICENSES
@@ -40,6 +40,17 @@ Apache Commons Compress
   License: Apache-2.0
   Copyright: The Apache Software Foundation
 
+Apache POI (poi / poi-ooxml)
+  License: Apache-2.0
+  Copyright: The Apache Software Foundation
+  Note:    Spreadsheet/Word document reading for document processing
+           (docx/xlsx parsing).
+
+stax-api
+  License: Apache-2.0
+  Copyright: The Apache Software Foundation
+  Note:    Streaming API for XML (StAX) used by Apache POI.
+
 QuickJS
   License: MIT
   Copyright: Fabrice Bellard
@@ -63,6 +74,18 @@ JUnit
   License: EPL-2.0 (Eclipse Public License 2.0)
   Copyright: JUnit team
   Note:    Unit testing framework (testImplementation only).
+
+ZXing (com.google.zxing:core)
+  License: Apache-2.0
+  Copyright: ZXing authors
+  Note:    QR/barcode scanning (core only).
+
+Eclipse JGit (org.eclipse.jgit)
+  License: EPL-2.0 (Eclipse Public License 2.0)
+  Copyright: Eclipse Foundation
+  Note:    Pure-Java Git implementation used by the Scripting GitHostApi
+           (init/status/add/commit/log/branch/checkout). Runtime dependency
+           of the on-device scripting sandbox.
 
 ----------------------------------------------------------------------
 OFFLINE AI MODEL ENGINES (source-compiled, full flavor only)
@@ -109,6 +132,73 @@ Mermaid
   License: MIT
   Source:  https://github.com/mermaid-js/mermaid
   Note:    Diagram/chart rendering library (mermaid.min.js).
+
+Chart.js
+  License: MIT
+  Source:  https://github.com/chartjs/Chart.js
+  Note:    Charting library (assets/libs/chart.min.js).
+
+D3.js
+  License: ISC
+  Copyright: Mike Bostock
+  Source:  https://github.com/d3/d3
+  Note:    Data-driven document manipulation (assets/libs/d3.min.js).
+
+ECharts (Apache)
+  License: Apache-2.0
+  Copyright: Apache Software Foundation / Baidu
+  Source:  https://github.com/apache/echarts
+  Note:    Charting library (assets/libs/echarts.min.js).
+
+Plotly.js
+  License: MIT
+  Source:  https://github.com/plotly/plotly.js
+  Note:    Scientific charting library (assets/libs/plotly.min.js).
+
+KaTeX
+  License: MIT
+  Copyright: Khan Academy
+  Source:  https://github.com/KaTeX/KaTeX
+  Note:    Math typesetting (assets/libs/katex.min.js / katex.min.css).
+
+marked.js
+  License: MIT
+  Copyright: Christopher Jeffrey
+  Source:  https://github.com/markedjs/marked
+  Note:    Markdown parser/renderer (assets/libs/marked.min.js).
+
+highlight.js
+  License: BSD-3-Clause
+  Copyright: Ivan Sagalaev
+  Source:  https://github.com/highlightjs/highlight.js
+  Note:    Syntax highlighting (assets/libs/highlight.min.js).
+
+----------------------------------------------------------------------
+GENERATIVE UI RUNTIME (bundled in genui/src/main/assets/genui/lib/)
+----------------------------------------------------------------------
+
+React / ReactDOM
+  License: MIT
+  Copyright: Meta Platforms, Inc.
+  Source:  https://github.com/facebook/react
+  Note:    UI runtime for AI-generated components (zorv/ui code blocks).
+           Bundled version 18.3.1.
+
+Recharts
+  License: MIT
+  Source:  https://github.com/recharts/recharts
+  Note:    Charting components inside the generative UI runtime.
+
+Lucide (icons)
+  License: ISC
+  Source:  https://github.com/lucide-icons/lucide
+  Note:    Icon set used by the generative UI runtime.
+
+Sucrase
+  License: MIT
+  Copyright: Alan Pierce
+  Source:  https://github.com/alangpierce/sucrase
+  Note:    JSX/TS transpiler used to run AI-generated code on-device.
 
 ----------------------------------------------------------------------
 DOCUMENT PROCESSING LIBRARIES (bundled in assets/docs/)
@@ -175,6 +265,40 @@ Alpine Linux Environment (bundled in assets/linux_env/alpine.tar.gz)
   Note:    Contains musl libc (MIT), BusyBox (GPL-2.0), apk package
            manager, and other system utilities for the in-app Linux
            environment (proot + Alpine aarch64).
+
+----------------------------------------------------------------------
+ON-DEVICE PYTHON 3.14 RUNTIME (bundled in app/src/full/, full flavor)
+----------------------------------------------------------------------
+
+CPython 3.14 (libpython3.14.so + stdlib assets)
+  License: PSF-2.0 (Python Software Foundation License 2.0)
+  Copyright: 2001-2026 Python Software Foundation
+  Source:  https://www.python.org
+  Note:    On-device Python interpreter powering the dialog Python
+           runner (PyEngine) and the Scripting sandbox. Standard library
+           modules (lib-dynload/*.so) distributed under the same license.
+
+OpenSSL (libssl_python.so / libcrypto_python.so)
+  License: Apache-2.0 (OpenSSL 3.x)
+  Copyright: The OpenSSL Project Authors
+  Source:  https://github.com/openssl/openssl
+  Note:    TLS/crypto backend linked into the Python build.
+
+SQLite (libsqlite3_python.so)
+  License: Public Domain
+  Copyright: SQLite Consortium
+  Source:  https://www.sqlite.org
+  Note:    Embedded SQL database linked into the Python build.
+
+libbash.so
+  License: MIT (bash, distributed with GNU GPL-3.0-or-later core)
+  Note:    Shell binary used by the in-app terminal / scripting sandbox.
+
+busybox (libbusybox.so)
+  License: GPL-2.0-or-later
+  Copyright: Erik Andersen / BusyBox authors
+  Note:    Multi-call binary providing core Unix utilities in the
+           on-device Linux environment.
 
 org.json — org.json:json:20240303
   License: Public Domain
