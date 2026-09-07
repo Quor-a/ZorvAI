@@ -36,7 +36,8 @@ object ToolCapabilityDirectory {
         COMMUNICATION("通信", "短信、联系人、日历等"),
         AI_CAPABILITIES("AI能力", "图像生成、视频生成、文档处理"),
         SECURITY("安全/权限", "Shizuku、ROOT、设备管理员"),
-        CMS_DEVELOPMENT("CMS开发", "CMS模块、引擎、开发环境管理与部署")
+        CMS_DEVELOPMENT("CMS开发", "CMS模块、引擎、开发环境管理与部署"),
+        AIP_DOC("文档排版", "长文档/PPT/报告/思维导图的 AIP 结构化排版与文档生成")
     }
     
     /**
@@ -828,7 +829,7 @@ object ToolCapabilityDirectory {
         
         "enhanced_doc_create" to ToolInfo(
             name = "enhanced_doc_create",
-            category = ToolCategory.AI_CAPABILITIES,
+            category = ToolCategory.AIP_DOC,
             description = "多格式文档创建（md/txt/csv/json/html等17种）",
             useCases = listOf("创建Markdown文件", "生成JSON配置", "写HTML页面", "创建CSV数据"),
             examples = listOf("enhanced_doc_create(type=\"md\", title=\"笔记\", content=\"内容\")"),
@@ -1015,8 +1016,8 @@ object ToolCapabilityDirectory {
             "读联系人" to listOf("read_contacts"),
             "代码执行" to listOf("run_code", "workbench"),
             "文档生成（可下载）" to listOf("aiwps_create", "enhanced_doc_create"),
-            "对话框写文档" to listOf("chat_doc"),
-            "对话框显示文档" to listOf("chat_doc"),
+            "对话框写文档" to listOf("aip_compose", "chat_doc"),
+            "对话框显示文档" to listOf("aip_compose", "chat_doc"),
             "定时任务" to listOf("schedule_task"),
             "语音朗读" to listOf("speak"),
             "MCP工具" to listOf("mcp_call", "mcp_list_tools"),

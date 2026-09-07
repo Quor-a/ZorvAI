@@ -10,6 +10,7 @@ import com.ai.assistance.quro.core.AppExecutors
 import com.ai.assistance.quro.core.QuroAssistant
 import com.ai.assistance.quro.core.QuroPlatformManifest
 import com.ai.assistance.quro.core.QuroAttachment
+import com.ai.assistance.quro.core.QuroAttachmentKit
 import com.ai.assistance.quro.core.turn.QuroTurnController
 import com.ai.assistance.quro.core.vision.QuroVisionLoop
 import com.ai.assistance.quro.core.cards.QuroChatCard
@@ -196,6 +197,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     val visionEnabled: StateFlow<Boolean> = visionLoop.enabled
     val visionStatus: StateFlow<QuroVisionLoop.Status> = visionLoop.status
     fun setVisionEnabled(on: Boolean) { visionLoop.setEnabled(on) }
+    fun attachMediaProjection(mp: android.media.projection.MediaProjection) { visionLoop.attachMediaProjection(mp) }
 
     // 对话轮次状态机（原创）：管理每轮生成的 activate / complete / interrupt
     private val turn = QuroTurnController()
@@ -712,9 +714,14 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             QuroDiag.log("BARGE", "convId=$convId oldBufSynced=${oldBuf != null}")
         }
         val myGen = turn.activate(convId)
-        // 屏幕理解（看懂屏幕）：开启时把当前屏幕的无障碍节点树快照注入系统提示�?
-        // �? AI 每轮都能"�?"到当前屏幕在做什么（无需像素截图权限）�?
-        val screenCtx = if (visionEnabled.value) visionLoop.consumeLatestSnapshot()?.let { "\n\n[当前屏幕 UI 结构]\n$it" } else null
+        // 屏幕理解（看懂屏幕）：开启时注入当前屏幕上下文——
+        //  1. MediaProjection 模式：把当前屏幕像素帧（JPEG 临时文件）作为多模态附件，
+        //     构造一个 hidden user message 注入 buf，AI 能"看到"屏幕画面（视频/游戏/WebView/复杂 UI）。
+        //  2. 无障碍节点树 fallback：把 UI 结构文本拼到 system prompt 末尾（保留原行为）。
+        val screenFramePath = if (visionEnabled.value) visionLoop.consumeLatestFramePath() else null
+        val screenCtx = if (visionEnabled.value && screenFramePath == null) {
+            visionLoop.consumeLatestSnapshot()?.let { "\n\n[当前屏幕 UI 结构]\n$it" }
+        } else null
 
         // ── 立即显示用户消息（不等待协程调度）──
         // 用户消息必须先于 launch add 到共�? store �? commitCurrent�?
@@ -760,6 +767,24 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             liveBuffers[convId] = buf
             val genAssistant = QuroAssistant(QuroLlmClient(), registry, buf)
             try {
+                // 屏幕理解（MediaProjection 模式）：hidden user message 携带截屏附件注入 buf。
+                // 不展示给用户，只在 LLM 上下文中；多模态模型从 image_url 字段读图。
+                if (screenFramePath != null) {
+                    val frameFile = java.io.File(screenFramePath)
+                    if (frameFile.exists() && frameFile.length() > 0) {
+                        val att = QuroAttachmentKit.fromFile(appContext, frameFile, "image/jpeg")
+                        if (att != null) {
+                            store.add(
+                                QuroMessage(
+                                    role = "user",
+                                    content = "[屏幕理解：以下为当前屏幕实时截屏（MediaProjection 媒体投影 / 屏幕捕获）]",
+                                    attachments = listOf(att),
+                                    hidden = true,
+                                ),
+                            )
+                        }
+                    }
+                }
                 // 注意：用户消息已�? launch 外添加到共享 store �? commitCurrent（立即显示）�?
                 // buf 快照已包含该消息，此处无需重复添加�?
                 // 触发词自动激活：匹配到的非常驻（alwaysOn=false）技能按隐藏消息预注入，�? AI 本轮作答
@@ -2241,6 +2266,7 @@ $recent
         // 背景：可视化通道散落多个章节（弹窗工具族/富卡片/小卡片/动态UI/网页预览），AI 常认错对象。
         // 这里先给一张总表分清对象，后面各章节只展开细节。
         val overviewSelfCardOn = PersonaFeatureToggles.isSelfCardEnabled(appContext)
+        val overviewDynamicUiOn = PersonaFeatureToggles.isDynamicUiEnabled(appContext)
         sb.append("\n### 可视化输出功能总览（先分清对象，再选通道——所有可视化功能一张表）\n")
         sb.append(
             "你有多条「把内容可视化给用户」的通道，**彼此独立、严禁混用、严禁互相替代**。用户的话术各有所指，先按这张表选对通道，再看下方各功能的详细章节：\n" +
@@ -2250,13 +2276,19 @@ $recent
                 if (overviewSelfCardOn)
                     "| **可视化小卡片** | 回复正文写 ```quro-card 围栏 | 自研 Canvas 自绘（AI 自写 layout 树自由设计，非 HTML、无 WebView） | 「小卡片」「可视化小卡片」 | 单块紧凑的可视化结果（指标大数字卡/进度环/迷你组合），首选 custom 自由设计 |\n"
                 else
-                    "| 可视化小卡片 | （当前用户已关闭，改用富卡片兜底） | ```quro-card 围栏 | 「小卡片」 | 已关闭——用户要小卡片时改调 `ui_widget`/`ui_card` 富卡片 |\n"
+                    "| 可视化小卡片 | 被动模式：仅用户明确要求时才写 ```quro-card 围栏 | 自研 Canvas 自绘 | 「小卡片」 | 用户未提及时不要主动用，正常文字/富卡片回答 |\n"
             ) +
             "| **富卡片（可视化组件）** | 调 `ui_widget` / `ui_card` 工具 | 组件库（几十种预制类型） | 「可视化组件」「可视化组键」 | 结构化数据卡：表格/饼图/评分/标签/待办/看板/时间线/mermaid/小程序/composite |\n" +
-            "| **动态 UI** | 回复正文写 ```quro-ui 围栏 | 原生组件树（真实控件） | 「动态UI」「做个界面」 | 成体系的完整原生交互界面（表单+多媒体+可交互控件组合） |\n" +
+            (
+                if (overviewDynamicUiOn)
+                    "| **动态 UI** | 回复正文写 ```quro-ui 围栏 | 原生组件树（真实控件） | 「动态UI」「做个界面」 | 成体系的完整原生交互界面（表单+多媒体+可交互控件组合） |\n"
+                else
+                    "| 动态 UI | 被动模式：仅用户明确要求时才写 ```quro-ui 围栏 | 原生组件树（真实控件） | 「动态UI」「做个界面」 | 用户未提及时不要主动用 |\n"
+            ) +
             "| **可视化弹窗** | 调 `visual_popup` / `visual_action` / `visual_custom_popup` 工具 | 屏幕上弹出的窗口（盖在界面上） | 「弹个窗」 | 屏幕级弹窗展示/操作，内容较多或需要用户当场操作后继续 |\n" +
             "| **可视化询问** | 调 `visual_question` 工具 | 问答选择弹窗 | （你主动判断） | 指令模糊/缺关键信息/不可逆操作需确认时 |\n" +
             "| **网页预览** | 回复正文写 ```html 围栏 | WebView 渲染（代码 \\| 预览双标签） | 「做个网页看看」 | 完整网页/游戏/数据看板（HTML/CSS/JS 成品） |\n" +
+            "| **排版引擎（AIP）** | 回复正文写 ```aip 围栏（或裸 AIP JSON 信封） | 原生排版引擎（16 种块型：文档流/横滑PPT/导图/图表） | 「排版一下」「做成PPT」「做份报告/长文档」 | 长文档、演示文稿、结构化报告的整篇排版 |\n" +
             "| **流程图/架构图** | ```mermaid 围栏 或 ui_widget type=mermaid | Mermaid.js 渲染成真图 | 「画个图」「流程图/架构图/脑图」 | 图形类可视化（flowchart/时序/状态/类图/思维导图等） |\n" +
             "| **小程序** | ```miniapp 围栏 或 ui_widget type=miniapp | bridge.js 运行时渲染 | 「小程序」 | 可交互小程序页面（data-bind/data-action） |\n" +
             "| **完整项目** | `workbench` 工具 | 多文件工程 + 运行渲染 | 「做个计算器/游戏/工具」 | 多文件完整功能（HTML/CSS/JS/Python 组合工程） |\n" +
@@ -2268,7 +2300,7 @@ $recent
                     "- 对话内嵌展示三选一：预制组件卡 → 富卡片（ui_widget/ui_card）；成体系交互界面 → 动态 UI（```quro-ui）；HTML 成品 → 网页预览（```html）。\n"
             ) +
             "- 屏幕弹窗 → visual_* 工具族（visual_question 问 / visual_action 选 / visual_popup 展示）。\n" +
-            "- 画图 → mermaid；做网页 → ```html；多文件工程 → workbench。\n" +
+            "- 画图 → mermaid；做网页 → ```html；多文件工程 → workbench；整篇排版长文档/PPT/报告 → ```aip 围栏（AIP 信封）。\n" +
             (
                 if (overviewSelfCardOn)
                     "- **最常见错误（严禁再犯）**：用户要「小卡片」时用成富卡片/弹窗/HTML——小卡片就是 ```quro-card 围栏，AI 自写、非 HTML；反过来要组件库卡片/弹窗/网页时也别写 quro-card。\n"
@@ -2307,7 +2339,7 @@ $recent
         )
         sb.append(
             "- **手机 AI IDE（带可视化）能力地图（重要）**：你（AI）自带一个端侧「手�? AI IDE」，可以真正写代码并运行，产出物直接渲染在对话框里—�?**这是给你（AI）用的能力，不是给用户手动敲代码�?**。核心工具是 `run_code`{code, lang}，各语言能做什么：\n" +
-            "  · `python`（默认）�?**内置 Brython 引擎，无需 Termux 即可在对话框运行**——数据处�?/清洗、算法计算、print 输出、字符串/列表/字典操作、函�?/类定义、循�?/条件逻辑�? Python 3 核心语法全部支持。输出直接渲染在对话框里。需要网络爬�?/AI API 调用时，爬到的数据、算出的结果可以再用 ```html 做成图表/看板给用户看。\n" +
+            "  · `python`（默认）�?**内置原生 CPython 3.14 引擎（含完整标准库，无需 Termux 即可在对话框运行**；个别环境自动降级 Brython）——数据处�?/清洗、算法计算、print 输出、字符串/列表/字典操作、函�?/类定义、循�?/条件逻辑、json/re/math 等标准�? **全部支持**。输出直接渲染在对话框里。需要网络爬�?/AI API 调用时，爬到的数据、算出的结果可以再用 ```html 做成图表/看板给用户看。\n" +
             "  · `node` / `javascript` / `js`：App 内置 **QuickJS 原生沙箱离线执行**（无需 Termux），适合逻辑计算、JSON/字符串处理、DOM 无关脚本。\n" +
             "  · `shell` / `sh` / `bash`：应用沙盒内 sh 执行命令（查环境、跑小工具）。\n" +
             "  · `html` / `htm` / `markup`：把**完整 HTML 源码**作为「网页工件」返回，对话框会�? WebView **实时渲染成可交互网页**（支持内�? `<style>`/`<script>`、SVG、离�? **Three.js** 三维；在线时可用 **Chart.js / ECharts** �? CDN 画图）——你生成的网页直接长在对话框里，无需用户复制出去打开。\n" +
@@ -2340,6 +2372,50 @@ $recent
         sb.append("- 语音能力：你可通过 `speak` / `stop_speak` 工具进行 **TTS 语音合成输出**（音�?/语速等配置见「设�? �? 语音」）�?**STT 语音识别是用户的输入通道**——用户说的话会被转写成文字作为消息发给你，你无需、也不能去「调�? STT 工具」，直接基于收到的文字消息作答即可。\n" +
             "  - **`speak` 是与「自动朗读」开关完全独立的语音通道**：无论用户是否开启自动朗读，当你需要主动「出声」（如唱歌、讲故事、朗诵、分角色演绎、或任何希望用声音而非仅文字表达的场景）时，都应主动调�? `speak`；语音播报的文本允许与你回复的文字内容不同（文字回复是一份，语音可以是另一份）。\n")
         sb.append("- **多语�? / 分角�? / 讲故事朗读的编排**：当用户要求「用多语�? / 分角�? / 讲故事」等方式朗读时，你应�?**主动编排**而非只产出一段会被统一念出的纯文本——在回复里用 `(语色:任意名称)` 为不同段�? / 角色分配音色，让 TTS 自动切换声音�?**语色标记的名称由你按内容自由�?**（角色名、情绪、旁白、叙述者、场景等任何类型都可以，不被限定为固定几种），需要时配合 `speak` 显式播报。若用户要「先讲完故事、再朗读某段文本」，就严格按这个顺序组织内容。自动朗读（回复后自动念）与显式 `speak` 调用走同一引擎——你用文本里的语�? / 情绪标记决定「怎么念」，而不是把整段交给系统默认念白；任意类型的内容（含代码 / 表格 / 列表）只要用户要求多语色演绎，都可加语色标记。\n")
+
+        // ── 排版引擎（AIP 信封）——Canvas 三档通道中的 B 通道 ──
+        // core/canvas/Aip.kt 解析 + ui/canvas/AipCanvas.kt 渲染；流式截断容错 + 四级降级。
+        // 通道边界：AIP 管整篇长文档/PPT/报告排版；单张图（流程图/架构图）仍归 mermaid；网页成品归 ```html。
+        sb.append("\n### 排版引擎（AIP 信封）——长文档 / PPT / 报告的整篇排版输出\n")
+        sb.append(
+            "当用户要「排版」「做一份文档/报告/PPT/演示文稿」「生成结构化长回答」时，用 **AIP 信封**输出：客户端排版引擎会把它渲染成精美的原生排版（doc=文档流带目录分节、deck=16:9 横滑幻灯片、mindmap=导图），支持表格/图表(bar/line/pie/radar)/多栏/步骤条/时间线/统计卡。\n" +
+            "- **优先工具调用形式（推荐）**：直接调用 `aip_compose` 工具，参数传 {\"kind\":\"doc|deck|mindmap\",\"title\":\"...\",\"blocks\":[...]}，工具做字段修复与规范化后，对话框用 Canvas 引擎把返回的信封渲染成排版卡片（即「工具调用形式，最后渲染在对话框」）；要落地成可分享文件时再带 `export:\"docx|pptx|md|pdf\"`。\n" +
+            "- **围栏兜底形式**：也可在回复正文写 ```aip 围栏代码块（裸 JSON 信封也能识别）。两种方式渲染同一引擎，优先工具调用、围栏兜底。信封结构：\n" +
+            "  ```json\n" +
+            "  {\"v\":1,\"kind\":\"doc\",\"meta\":{\"title\":\"标题\",\"subtitle\":\"副标题\",\"author\":\"作者\"},\"theme\":{\"name\":\"aurora\",\"accent\":\"#2E6BE6\"},\"blocks\":[...],\"assets\":{}}\n" +
+            "  ```\n" +
+            "- **kind 选择**：整篇文档/报告/方案 → `doc`；演示文稿/PPT → `deck`（每个 slide 一个块）；思维导图 → `mindmap`（root 树）。\n" +
+            "- **16 种块类型**（每个块 `{\"id\":\"b1\",\"type\":\"...\",\"data\":{...}}`，id 必须唯一）：" +
+            "`heading{level,text}` `paragraph{text}` `list{ordered,items[]}` `table{headers[],rows[][]}` `code{lang,code}` `quote{text,cite}` `callout{tone:info|warn|error|success,title,text}` `divider` `image{ref,caption}` `chart{type:bar|line|pie|radar,title,labels[],series:[{name,data:[数值]}]}` `columns{ratio:[1,1],children:[块]}` `steps{items[]}` `timeline{items:[{time,title,text}]}` `mindmap{layout,root:{id,text,children:[]}}` `slide{layout,title,subtitle,bullets[],stats:[{value,label}],columns,chart,table,quote,notes}` `section{level,title}`。\n" +
+            "- **deck 常用 slide 版式**：cover（封面）/ section（章节页）/ stats（大数字统计）/ quote（金句）/ twoCol（双栏对比）/ chart（图表页）/ table（表格页）/ summary（总结页）。\n" +
+            "- **流式规则**：信封头（v/kind/meta/theme）必须最先输出完整；blocks 按顺序一块一块长出来（渲染端支持任意截断的部分解析，写一半也不会白屏）；不要在信封外加多余文字解释。\n" +
+            "- **使用原则**：普通短问答继续用 Markdown，**严禁滥用 AIP**；只有长文档/PPT/报告/整篇排版才走这条路。单张流程图/架构图仍然用 ```mermaid，网页成品仍然用 ```html。\n" +
+            "- **轻量容器语法（普通 Markdown 回复里也能用）**：不需要整个 AIP 信封时，在正文里直接写容器——\n" +
+            "  · `:::card 卡片标题` + 内容 + `:::` → 浮起卡片（重点内容/总结/要点组）；\n" +
+            "  · `:::columns` + 栏内容 + 独立一行 `---` 分栏 + `:::` → 双栏/多栏对比；\n" +
+            "  · `:::chart bar 季度营收`（type 可 bar/line/pie/radar）+ 每行「标签: 数值」+ `:::` → 原生图表；\n" +
+            "  · `:::steps` + 每行一步 + `:::` → 步骤条。\n" +
+            "  内容不复杂时优先用容器语法，超过 5 个块/要 PPT 翻页时才上完整 AIP 信封。\n"
+        )
+
+        // ── 文档创作规范：内容归属（进文档 vs 进对话框）──
+        sb.append("\n### 文档创作规范——内容归属与写法\n")
+        sb.append(
+            "一句话总纲：**文档内容进文档，对话框渲染的内容进对话框渲染**。\n" +
+            "- **进文档（用 AIP 信封 / `aip_compose`，可 export 成 docx/pptx/md/pdf）**：整篇长文档、报告、方案、PPT、思维导图、表格/图表类结构化内容。AIP 的 `html` 块可把网页/图表/Three.js 等内嵌进文档一起渲染（复用对话框 WebView 管线），这是「文档里的 HTML」，与对话框里的 ```html 网页成品是两回事。\n" +
+            "- **只在对话框渲染、不进文档**：单张流程图/架构图用 ```mermaid；网页成品用 ```html；可交互小程序用 ```miniapp；动态 UI 用 ```zorv/ui（quro-ui）。这些是「对话框内的代码渲染」，不是文档，不要写进 AIP 文档或导出文件。\n" +
+            "- **怎么写一份好文档（AIP 块写法要点）**：\n" +
+            "  1. 先定 `kind` 与 `title`/`subtitle`，再按内容层级铺 `blocks`，id 从 b1 顺序编号且全局唯一。\n" +
+            "  2. 标题用 `heading{level:1~6,text}` 或 `section{level,title}` 拉层级；正文用 `paragraph`；并列要点用 `list`；不要什么都堆进一个 paragraph。\n" +
+            "  3. 表格用 `table{headers,rows}`，行列数据用字符串数组；数据对比优先上 `table` 而非截图。\n" +
+            "  4. 图表用 `chart{type:bar|line|pie|radar,labels,series}`，series 是 `[{name,data:[数值]}]`，数值用数字不是字符串。\n" +
+            "  5. 重点提示用 `callout{tone,title,text}`（tone: info/warn/error/success）；引用用 `quote{text,cite}`；分栏用 `columns{ratio,children}`。\n" +
+            "  6. PPT 用 `deck` + 多个 `slide` 块，每页一个 slide，版式选 cover/section/stats/twoCol/chart/table/summary；每页要点 ≤ 6 条、文字精炼。\n" +
+            "  7. 导图用 `mindmap{layout,root:{id,text,children}}`，root 下挂分支节点，叶子节点文字 ≤ 12 字。\n" +
+            "  8. 需要嵌网页/交互组件时，用 `html{html}` 块放完整或片段 HTML（含 `<script>` 也可，渲染端有离线 CDN 兜底）。\n" +
+            "  9. 不确定字段写法时，先调 `aip_compose` 让工具做字段修复；解析失败的块会自动降级成富文本，不会白屏或泄漏源码。\n" +
+            "- **文档工具选择**：要生成真实可分享的 .docx/.xlsx/.pptx → `aiwps_create`（自研 OOXML，零依赖）；要生成 md/html/json/xml/yaml/css/js/svg/odt/epub/rtf 等文本/标记类文档 → `enhanced_doc_create`；整篇排版长文档/PPT/报告 → `aip_compose`（可带 export）。三者都本地生成、不上传服务器。\n"
+        )
 
         // ── 可视化小卡片术语铁律 ──
         // 小卡片 = ```quro-card 自研卡片围栏（feat_self_card，7 层自研渲染：spec/registry/render/host/stream/widgets）。
@@ -2382,16 +2458,25 @@ $recent
                 "- **使用原则**：用户说「给我一张小卡片」「用小卡片展示」或要**单块紧凑的可视化结果**→ **优先用 `custom` 自由设计卡**（渐变背景+大数字+进度环/进度条+row/column 组合，每次按内容现场设计配色与结构，不要重复同一个样式）；单一指标/折线/表格/按钮这种标准件也可用 metric/line_chart/table/button_group 便捷预设。要更丰富的组件库卡片（待办/看板/时间线/饼图…）→ 调 `ui_widget`/`ui_card`。JSON 只能出现在围栏里，严禁当普通文本发出；**小卡片不是 HTML、不用 ```html**。\n"
             )
         } else {
-            sb.append("\n### 可视化小卡片——独立功能，术语铁律\n")
+            sb.append("\n### 可视化小卡片——独立功能（当前为被动模式）\n")
             sb.append(
-                "- **术语边界（全量对照见上方「可视化输出功能总览」路由表）**：小卡片=```quro-card 围栏（当前用户已关闭该功能，不要输出）；`ui_widget`/`ui_card`=富卡片（组件库）；`visual_popup`=可视化弹窗；`visual_question`=可视化询问；quro-ui=动态 UI 组件——互相独立，严禁混用。\n" +
-                "- **当前兜底**：用户要「把结构化结果以可视化卡片呈现」时，用 `ui_widget` / `ui_card` 富卡片（表格/饼图/评分/标签/列表/统计/进度/告警/待办/时间线/看板…）。严禁把 JSON 当纯文本或代码块发出。\n"
+                "- **术语边界（全量对照见上方「可视化输出功能总览」路由表）**：小卡片=```quro-card 围栏（本功能）；`ui_widget`/`ui_card`=富卡片（组件库）；`visual_popup`=可视化弹窗；`visual_question`=可视化询问；quro-ui=动态 UI 组件——互相独立，严禁混用。\n" +
+                "- **被动模式（当前生效）**：用户未提及时**不要主动**输出 ```quro-card 围栏，正常用文字/富卡片回答；**仅当用户明确要求**（说「小卡片」「可视化小卡片」「用 quro-card」等）时才输出该围栏。\n" +
+                "- **用户要求时的围栏格式**：```quro-card 开头，中间一段卡片 JSON，``` 结尾。便捷预设：{\"type\":\"metric\"|\"line_chart\"|\"table\"|\"button_group\"|\"status\",\"data\":{...}}；或自由设计卡 {\"type\":\"custom\",\"layout\":<card/row/column/text/ring/bar 节点树>}。JSON 只能出现在围栏里，严禁当普通文本发出。\n"
             )
         }
-        sb.append("\n### 动态 UI（quro-ui 原生组件 · 必备输出）\n")
+        // 动态 UI 开关（提示词级）：开 = 百分百主动使用；关 = 仅用户明确要求时才输出（渲染管线常开）。
+        val dynamicUiOn = PersonaFeatureToggles.isDynamicUiEnabled(appContext)
+        sb.append(if (dynamicUiOn) "\n### 动态 UI（quro-ui 原生组件 · 必备输出）\n" else "\n### 动态 UI（quro-ui 原生组件 · 被动模式）\n")
         sb.append(
             "- 这是一套**原生渲染**的可交互界面能力（不是 HTML、不用 WebView）：你在回复里写一段 ```quro-ui 代码块（内容是 JSON 节点树），客户端会自动把它渲染成真实原生控件（按钮/表单/卡片/列表/音视频/浏览器等），用户直接在对话框里看到并操作。\n" +
-            "- **必备输出（无需用户要求，主动默认使用）**：当你要给用户一个**带布局、能交互、能跳转、能播放、能展示代码、能呈现富媒体**的**完整原生交互界面**（多区域组合、表单/富媒体/可交互控件成体系）时，就**必须主动、默认**用 ```quro-ui 输出，不要等用户说\"用动态UI\"\"做个界面\"。\n" +
+            (
+                if (dynamicUiOn)
+                    "- **必备输出（无需用户要求，主动默认使用）**：只要你想给用户一个「成体系的、带交互/布局/富媒体」的界面，就**必须主动、默认**用 ```quro-ui 输出，不要等用户说\"用动态UI\"\"做个界面\"。**触发信号（满足任意一条就上 quro-ui）**：①要展示表单/设置面板/操作面板（带按钮、输入、开关、选择）；②要内嵌视频/音频/浏览器/代码运行器；③要做信息仪表盘/工具导航/功能入口面板；④要做一个可交互的完整页面（多区域组合）；⑤用户需求本质是一个\"界面\"而非一句纯文本答案。除纯文本问答外，**默认优先 quro-ui**。\n" +
+                    "- **示例**：用户说\"帮我做个能记待办的面板\" → 输出 ```quro-ui 卡（list + text_input + button，callback 回传）；用户说\"放个能播音乐的播放器\" → ```quro-ui 卡（audio 节点）；用户说\"给个打开微信的按钮\" → ```quro-ui 卡（button.action=open_app）。不输出 quro-ui 反而只回纯文本，是错误的——能做成界面的需求就该用动态 UI。\n"
+                else
+                    "- **被动模式（当前生效）**：用户未提及时**不要主动**输出 ```quro-ui 围栏，正常用文字/富卡片回答；**仅当用户明确要求**（说「动态UI」「做个界面」「用 quro-ui」等）时才输出该围栏。\n"
+            ) +
             "  · **边界（全量对照见上方「可视化输出功能总览」路由表，这里只讲和动态 UI 的分界）**：动态 UI 只做「成体系的完整原生交互界面」（多区域组合、表单/富媒体成体系）；单块紧凑可视化结果→ 小卡片 ```quro-card 或富卡片 `ui_widget`/`ui_card`；屏幕弹窗 → `visual_*`；网页成品 → ```html。**不要**把小卡片塞进动态 UI 组件，也不要用 `ui_control(action=\"card\")` 纯文本卡片。\n" +
             "- **节点类型（节选，完整见 ui_dsl_spec 工具）**：\n" +
             "  · 布局：column / row / box / card\n" +

@@ -122,6 +122,15 @@ object Aip {
             override val type = "section"
         }
 
+        /**
+         * HTML 块：AI 在排版文档内嵌完整/片段 HTML（网页、图表、Three.js 三维、交互组件等）。
+         * 渲染层复用对话框已有的 WebView 渲染器（[com.ai.assistance.quro.ui.HtmlPreviewWebView]），
+         * 不再泄漏源码、不再走 Fallback 裸文本。字段兼容 data.html 与块级 html 两种写法。
+         */
+        data class Html(override val id: String, val html: String) : Block {
+            override val type = "html"
+        }
+
         /** L2 块级降级 / 未知类型兜底：原始 JSON 文本按富文本段落渲染，不丢弃。 */
         data class Fallback(override val id: String, override val type: String, val text: String) : Block
     }
@@ -339,6 +348,11 @@ object Aip {
             }
             "slide" -> parseSlide(id, d)
             "section" -> Block.Section(id, d.optInt("level", 1).coerceIn(1, 4), d.optString("title"))
+            // HTML 块：复用对话框既有 WebView 渲染。AI 可能把 HTML 放在 data.html 或块级 html 字段。
+            "html" -> {
+                val html = d.optString("html", "").ifBlank { bo.optString("html", "") }
+                Block.Html(id, html)
+            }
             else -> Block.Fallback(id, type, bo.toString())   // 未知类型：兜底富文本，不丢弃
         }
     }
