@@ -111,178 +111,81 @@ enhanced_doc_create 适合创建代码文件、配置文件、Markdown、HTML �
         val file = File(dir, "$name.html")
         val htmlContent = buildHtmlDocument(content, title)
         file.writeText(htmlContent, Charsets.UTF_8)
-        return """
-✅ HTML 文档已创建
-文件：${file.absolutePath}
-大小：${formatFileSize(file.length())}
-
-[渲染卡片]
-类型：HTML
-标题：$title
-内容：
-$htmlContent
-[/渲染卡片]
-        """.trimIndent()
+        val note = "✅ HTML 文档已创建\n文件：${file.absolutePath}\n大小：${formatFileSize(file.length())}"
+        return com.ai.assistance.quro.core.canvas.Aip.docEnvelope(title, htmlContent, "html", note = note)
     }
 
     private fun createMarkdown(dir: File, name: String, content: String, title: String): String {
         val file = File(dir, "$name.md")
         val mdContent = "# $title\n\n$content"
         file.writeText(mdContent, Charsets.UTF_8)
-        return """
-✅ Markdown 文档已创建
-文件：${file.absolutePath}
-大小：${formatFileSize(file.length())}
-
-[渲染卡片]
-类型：Markdown
-标题：$title
-内容：
-$mdContent
-[/渲染卡片]
-        """.trimIndent()
+        val note = "✅ Markdown 文档已创建\n文件：${file.absolutePath}\n大小：${formatFileSize(file.length())}"
+        return com.ai.assistance.quro.core.canvas.Aip.docEnvelope(title, mdContent, "md", note = note)
     }
 
     private fun createPlainText(dir: File, name: String, content: String, title: String): String {
         val file = File(dir, "$name.txt")
         val txtContent = "$title\n${"=".repeat(50)}\n\n$content"
         file.writeText(txtContent, Charsets.UTF_8)
-        return """
-✅ 文本文档已创建
-文件：${file.absolutePath}
-大小：${formatFileSize(file.length())}
-
-[渲染卡片]
-类型：文本
-标题：$title
-内容：
-$txtContent
-[/渲染卡片]
-        """.trimIndent()
+        val note = "✅ 文本文档已创建\n文件：${file.absolutePath}\n大小：${formatFileSize(file.length())}"
+        return com.ai.assistance.quro.core.canvas.Aip.docEnvelope(title, txtContent, "text", note = note)
     }
 
     private fun createCsv(dir: File, name: String, content: String, title: String): String {
         val file = File(dir, "$name.csv")
         file.writeText(content, Charsets.UTF_8)
-        return "✅ CSV 文件已创建：${file.absolutePath}"
+        val note = "✅ CSV 文件已创建：${file.absolutePath}"
+        return com.ai.assistance.quro.core.canvas.Aip.docEnvelope(title, content, "csv", note = note)
     }
 
     private fun createJson(dir: File, name: String, content: String, title: String): String {
         val file = File(dir, "$name.json")
         file.writeText(content, Charsets.UTF_8)
-        return """
-✅ JSON 文件已创建
-文件：${file.absolutePath}
-
-[渲染卡片]
-类型：代码
-标题：$title
-语言：JSON
-内容：
-```json
-$content
-```
-[/渲染卡片]
-        """.trimIndent()
+        val note = "✅ JSON 文件已创建\n文件：${file.absolutePath}"
+        return com.ai.assistance.quro.core.canvas.Aip.docEnvelope(title, content, "json", note = note)
     }
 
     private fun createXml(dir: File, name: String, content: String, title: String): String {
         val file = File(dir, "$name.xml")
         file.writeText(content, Charsets.UTF_8)
-        return """
-✅ XML 文件已创建
-文件：${file.absolutePath}
-
-[渲染卡片]
-类型：代码
-标题：$title
-语言：XML
-内容：
-```xml
-$content
-```
-[/渲染卡片]
-        """.trimIndent()
+        val note = "✅ XML 文件已创建\n文件：${file.absolutePath}"
+        return com.ai.assistance.quro.core.canvas.Aip.docEnvelope(title, content, "xml", note = note)
     }
 
     private fun createYaml(dir: File, name: String, content: String, title: String): String {
         val file = File(dir, "$name.yaml")
         file.writeText(content, Charsets.UTF_8)
-        return """
-✅ YAML 文件已创建
-文件：${file.absolutePath}
-
-[渲染卡片]
-类型：代码
-标题：$title
-语言：YAML
-内容：
-```yaml
-$content
-```
-[/渲染卡片]
-        """.trimIndent()
+        val note = "✅ YAML 文件已创建\n文件：${file.absolutePath}"
+        return com.ai.assistance.quro.core.canvas.Aip.docEnvelope(title, content, "yaml", note = note)
     }
 
     private fun createCss(dir: File, name: String, content: String, title: String): String {
         val file = File(dir, "$name.css")
         file.writeText(content, Charsets.UTF_8)
-        return """
-✅ CSS 文件已创建
-文件：${file.absolutePath}
-
-[渲染卡片]
-类型：代码
-标题：$title
-语言：CSS
-内容：
-```css
-$content
-```
-[/渲染卡片]
-        """.trimIndent()
+        val note = "✅ CSS 文件已创建\n文件：${file.absolutePath}"
+        return com.ai.assistance.quro.core.canvas.Aip.docEnvelope(title, content, "css", note = note)
     }
 
     private fun createJs(dir: File, name: String, content: String, title: String): String {
         val file = File(dir, "$name.js")
         file.writeText(content, Charsets.UTF_8)
-        return """
-✅ JavaScript 文件已创建
-文件：${file.absolutePath}
-
-[渲染卡片]
-类型：代码
-标题：$title
-语言：JavaScript
-内容：
-```javascript
-$content
-```
-[/渲染卡片]
-        """.trimIndent()
+        val note = "✅ JavaScript 文件已创建\n文件：${file.absolutePath}"
+        return com.ai.assistance.quro.core.canvas.Aip.docEnvelope(title, content, "js", note = note)
     }
 
     private fun createSvg(dir: File, name: String, content: String, title: String): String {
         val file = File(dir, "$name.svg")
         file.writeText(content, Charsets.UTF_8)
-        return """
-✅ SVG 文件已创建
-文件：${file.absolutePath}
-
-[渲染卡片]
-类型：SVG
-标题：$title
-内容：
-$content
-[/渲染卡片]
-        """.trimIndent()
+        val note = "✅ SVG 文件已创建\n文件：${file.absolutePath}"
+        return com.ai.assistance.quro.core.canvas.Aip.docEnvelope(title, content, "svg", note = note)
     }
 
     private fun createRtf(dir: File, name: String, content: String, title: String): String {
         val file = File(dir, "$name.rtf")
         val rtfContent = buildRtfDocument(content, title)
         file.writeText(rtfContent, Charsets.UTF_8)
-        return "✅ RTF 文档已创建：${file.absolutePath}"
+        val note = "✅ RTF 文档已创建：${file.absolutePath}"
+        return com.ai.assistance.quro.core.canvas.Aip.docEnvelope(title, content, "rtf", note = note)
     }
 
     private fun createOdt(dir: File, name: String, content: String, title: String): String {
@@ -290,7 +193,8 @@ $content
         // ODT 是 ZIP 格式，简化处理
         val odtContent = buildOdtDocument(content, title)
         writeZipFile(file, odtContent)
-        return "✅ ODT 文档已创建：${file.absolutePath}"
+        val note = "✅ ODT 文档已创建：${file.absolutePath}"
+        return com.ai.assistance.quro.core.canvas.Aip.docEnvelope(title, content, "odt", note = note)
     }
 
     private fun createEpub(dir: File, name: String, content: String, title: String): String {
@@ -298,7 +202,8 @@ $content
         // EPUB 是 ZIP 格式，简化处理
         val epubContent = buildEpubDocument(content, title)
         writeZipFile(file, epubContent)
-        return "✅ EPUB 电子书已创建：${file.absolutePath}"
+        val note = "✅ EPUB 电子书已创建：${file.absolutePath}"
+        return com.ai.assistance.quro.core.canvas.Aip.docEnvelope(title, "", "text", note = note)
     }
 
     private fun buildHtmlDocument(content: String, title: String): String {

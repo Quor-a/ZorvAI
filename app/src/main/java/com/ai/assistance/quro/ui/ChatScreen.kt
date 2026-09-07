@@ -4142,14 +4142,12 @@ private fun SingleToolCard(t: ToolCallUi, scaled: (Int) -> androidx.compose.ui.u
                         }
                     }
                     Spacer(Modifier.height(4.dp))
-                    // 后台 AIP 排版：工具调用形式产出的 AIP 信封，在对话框内用 Canvas 引擎渲染（"工具调用形式，最后渲染在对话框"）
-                    if (t.name == "aip_compose") {
-                        val aipJson = t.result!!.substringBefore("\n\n[导出]")
-                        if (com.ai.assistance.quro.core.canvas.Aip.looksLikeAip(aipJson)) {
-                            AipCanvas(source = aipJson)
-                        } else {
-                            FormattedResultContent(t.result!!, scaled)
-                        }
+                    // 后台 AIP 排版：任何发出 AIP 信封的工具结果（aip_compose 或工具箱-文档类工具
+                    // chat_doc / workspace_doc / enhanced_doc_create 发出的 kind=doc 信封）都在对话框内
+                    // 用 Canvas 引擎渲染成完整 AIP 文档（"工具调用形式，最后渲染在对话框"）。
+                    val aipJson = t.result!!.substringBefore("\n\n[导出]")
+                    if (com.ai.assistance.quro.core.canvas.Aip.looksLikeAip(aipJson)) {
+                        AipCanvas(source = aipJson)
                         val exportNote = t.result!!.substringAfter("\n\n[导出]", "")
                         if (exportNote.isNotBlank()) {
                             Spacer(Modifier.height(6.dp))
@@ -6267,6 +6265,19 @@ private sealed class MsgBlock {
 }
 
 /**
+ * 数据型卡片（表格/饼图/图表/热力图/雷达）数据为空时返回 true。
+ * 用于流式防护：避免未写完/空模板的组件 JSON 在气泡里闪「（无数据）」。
+ */
+private fun cardHasNoData(card: QuroChatCard): Boolean = when (card) {
+    is QuroChatCard.TableCard -> card.headers.isEmpty() && card.rows.isEmpty()
+    is QuroChatCard.PieCard -> card.segments.isEmpty()
+    is QuroChatCard.ChartCard -> card.series.isEmpty()
+    is QuroChatCard.HeatmapCard -> card.values.isEmpty()
+    is QuroChatCard.RadarCard -> card.axes.isEmpty()
+    else -> false
+}
+
+/**
  * 从 AI 文本消息里抽离「内联组件 JSON」：形如 {"type":"info","body":"..."} 的结构化组件。
  * 返回「去掉组件 JSON 后的干净文本」与「解析成功的组件列表」。
  * - 只有 type 属于已知组件类型才会被抽离并渲染，其它 JSON（如代码块里的 schema）原样保留；
@@ -6301,6 +6312,15 @@ private fun extractInlineComponents(text: String): Pair<String, List<QuroChatCar
         }
         val card = runCatching { parseComponentSpec(candidate) }.getOrNull()
         if (card != null) {
+            // ★ 流式防护：流式生成每帧重解析增长文本，数据型卡片（表格/饼图/图表/热力图/雷达）
+            // 常因 JSON 未写完或 AI 先发空模板再调 ui_widget 下发真数据，而被解析成空数据卡 →
+            // 气泡闪「（无数据）」。此处丢弃空数据型卡，数据到齐后下一帧重解析自然产出有数据的卡；
+            // 若 AI 仅用内联 JSON 且确为空，丢弃也不损失信息。
+            if (cardHasNoData(card)) {
+                i = end + 1
+                while (i < text.length && text[i].isWhitespace()) i++
+                continue
+            }
             cards.add(card)
             i = end + 1
             // 跳过紧随其后的空白与换行，避免残留空行

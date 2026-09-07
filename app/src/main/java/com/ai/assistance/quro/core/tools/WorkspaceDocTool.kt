@@ -72,27 +72,33 @@ class WorkspaceDocTool : QuroTool {
             actualFile.parentFile?.mkdirs()
             actualFile.writeText(content, Charsets.UTF_8)
 
-            // 返回成功信息和渲染指令
+            // 返回成功信息 + AIP 信封（kind=doc），对话框用 Canvas 引擎渲染成完整 AIP 文档，
+            // 不再走 [渲染卡片] 极简卡（那张卡不是 AIP 文档）。
             val renderType = when (fileType) {
                 "html" -> "HTML"
                 "md" -> "Markdown"
                 "json", "js", "py", "java", "kotlin", "css" -> "代码"
                 else -> "文本"
             }
-
-            """
-✅ 文档已创建：$actualPath
-大小：${actualFile.length()} 字节
-类型：$renderType
-
-[渲染卡片]
-类型：$renderType
-标题：${actualPath.substringAfterLast("/")}
-路径：${actualFile.absolutePath}
-内容：
-$content
-[/渲染卡片]
-            """.trimIndent()
+            val (aipFormat, aipLang) = when (fileType) {
+                "html" -> "html" to ""
+                "md" -> "md" to ""
+                "json" -> "json" to "json"
+                "js" -> "js" to "javascript"
+                "py" -> "py" to "python"
+                "java" -> "java" to "java"
+                "kotlin" -> "kotlin" to "kotlin"
+                "css" -> "css" to "css"
+                else -> "text" to ""
+            }
+            val note = "✅ 文档已创建：$actualPath\n大小：${actualFile.length()} 字节\n类型：$renderType"
+            com.ai.assistance.quro.core.canvas.Aip.docEnvelope(
+                title = actualPath.substringAfterLast("/"),
+                content = content,
+                format = aipFormat,
+                language = aipLang,
+                note = note,
+            )
         } catch (e: Exception) {
             "⚠️ 创建失败：${e.message}"
         }
