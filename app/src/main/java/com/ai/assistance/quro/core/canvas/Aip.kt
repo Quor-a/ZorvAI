@@ -167,26 +167,112 @@ object Aip {
     /**
      * 解析 AIP 输出（容错）。流程：
      *  1. 完整 JSON → 直接解析（最常见：生成已结束）；
+     *  1.5 宽松修复：AI 直接在正文写 AIP 信封时，字符串字面量内常带裸换行/制表符/控制字符
+     *      （尤其 code 块内容、多行 paragraph 文本），org.json 的 JSONTokener 会抛
+     *      "Unterminated string" 导致整体解析失败 → L3 通道降级（显示降级横幅 + JSON 原文）。
+     *      先 [sanitizeJson] 把字符串内部的裸控制字符转义后再解析；
      *  2. 截断修复：状态机扫描找出 blocks 数组内最后一个完整元素的边界，
      *     截掉尾部残块后补 `]}` 再解析（流式中途调用，任意位置截断均可部分解析）；
-     *  3. 都失败 → TextDown（L4，调用方按纯文本/增强 Markdown 渲染，不白屏）。
+     *  3. 都失败 → ChannelDown（L3，调用方回退增强 Markdown / 纯文本渲染，不白屏）。
      */
     fun parse(source: String): ParseResult {
-        val text = source.trim()
+        // BOM（\uFEFF）不是空白，trim() 不去除，先手动剥掉避免 JSONTokener 首个字符报错
+        val text = source.trim().trimStart('\uFEFF', '\u00A0')
         if (text.isEmpty()) return ParseResult(null, Degradation.TextDown, source)
 
         // 1. 完整解析
         parseEnvelope(text)?.let { return ParseResult(it, Degradation.Ok, source) }
 
+        // 1.5 宽松修复（L1 字段修复级别）：转义字符串内的裸控制字符后重试
+        val sanitized = sanitizeJson(text)
+        if (sanitized != text) {
+            parseEnvelope(sanitized)?.let { return ParseResult(it, Degradation.FieldRepair, source) }
+        }
+
+        // 1.6 提取信封：AI 在 ```aip 围栏里先写「以下是 XX」等说明文字再贴 JSON 时，
+        //     从文本中定位第一个完整 {…} 平衡段（外层信封）再解析；说明文字不进信封、不影响渲染。
+        extractEnvelopeJson(sanitized)?.let { envJson ->
+            if (envJson != sanitized) {
+                parseEnvelope(envJson)?.let { return ParseResult(it, Degradation.FieldRepair, source) }
+            }
+        }
+
         // 2. 截断修复：找最后一个安全截断点（完整块边界），补上闭合后缀重解析
-        lastSafeCut(text)?.let { cut ->
-            parseEnvelope(text.substring(0, cut.pos) + cut.suffix)?.let {
+        lastSafeCut(sanitized)?.let { cut ->
+            parseEnvelope(sanitized.substring(0, cut.pos) + cut.suffix)?.let {
                 return ParseResult(it, Degradation.FieldRepair, source)
             }
         }
 
         // 3. 通道降级（L3/L4 由调用方处理渲染形态）
         return ParseResult(null, Degradation.ChannelDown, source)
+    }
+
+    /**
+     * 宽松 JSON 修复：逐字符状态机扫描，**仅**把「字符串字面量内部」的裸控制字符转义为
+     * `\n`/`\r`/`\t`/`\uXXXX`，不动 JSON 结构、不动已有转义序列、不改字符串外任何字符。
+     *
+     * 背景：AI 直接写 ```aip 围栏时，code 块内容 / 多行 paragraph 文本里的换行经常不转义，
+     * org.json 的 JSONTokener 遇到字符串内的裸换行直接抛 "Unterminated string"，
+     * 导致整个信封解析失败 → L3 通道降级（"排版引擎已降级为 Markdown 显示" + JSON 原文）。
+     * 此函数把这类错误修掉，让信封能正常进入 L1 解析（其余字段仍走 safe 取值兜底）。
+     */
+    internal fun sanitizeJson(json: String): String {
+        val sb = StringBuilder(json.length + 32)
+        var inStr = false
+        var esc = false
+        var i = 0
+        while (i < json.length) {
+            val c = json[i]
+            if (inStr) {
+                if (esc) {
+                    sb.append(c); esc = false
+                } else when (c) {
+                    '\\' -> { sb.append(c); esc = true }   // 进入转义，下一字符原样保留
+                    '"'  -> { sb.append(c); inStr = false }
+                    '\n' -> sb.append("\\n")
+                    '\r' -> sb.append("\\r")
+                    '\t' -> sb.append("\\t")
+                    else -> if (c.code < 0x20) sb.append("\\u%04x".format(c.code)) else sb.append(c)
+                }
+            } else {
+                if (c == '"') { sb.append(c); inStr = true } else sb.append(c)
+            }
+            i++
+        }
+        return sb.toString()
+    }
+
+    /**
+     * 从任意文本里提取「第一个完整 {…} 平衡 JSON 段」。AI 在 ```aip 围栏里常先写
+     * 「以下是 XX 文档：」再贴信封 JSON；或把多个 JSON 塞在一起。此函数定位首个 `{` 起、
+     * 括号深度归零（字符串字面量内的括号不计数）的完整段，返回该子串。
+     * 找不到完整段返回 null。
+     */
+    internal fun extractEnvelopeJson(text: String): String? {
+        val start = text.indexOf('{')
+        if (start < 0) return null
+        var depth = 0
+        var inStr = false
+        var esc = false
+        for (j in start until text.length) {
+            val c = text[j]
+            if (inStr) {
+                if (esc) esc = false
+                else if (c == '\\') esc = true
+                else if (c == '"') inStr = false
+                continue
+            }
+            when (c) {
+                '"' -> inStr = true
+                '{', '[' -> depth++
+                '}', ']' -> {
+                    depth--
+                    if (depth == 0) return text.substring(start, j + 1)
+                }
+            }
+        }
+        return null
     }
 
     /* ===================== 截断边界扫描 ===================== */

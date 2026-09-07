@@ -133,4 +133,65 @@ class AipParserTest {
         assertEquals(CanvasRouter.Channel.B, CanvasRouter.route("写点东西", h2Count = 4).channel)
         assertEquals(CanvasRouter.Channel.B, CanvasRouter.route("写点东西", hasTableOrChart = true).channel)
     }
+
+    @Test
+    fun `raw newlines inside string literals are sanitized and envelope parses`() {
+        // AI 直接在 ```aip 围栏里写信封，code 块 / 多行 paragraph 文本常带裸换行（未转义），
+        // org.json 遇字符串内裸换行抛 Unterminated string → 旧实现整体 L3 降级。
+        val src = """
+        {"v":1,"kind":"doc","meta":{"title":"多行报告"},"blocks":[
+          {"id":"b1","type":"paragraph","data":{"text":"第一行
+第二行
+第三行"}},
+          {"id":"b2","type":"code","data":{"lang":"python","code":"def f():
+    return 1"}}
+        ]}
+        """.trimIndent()
+        val r = Aip.parse(src)
+        assertNotNull("字符串内裸换行必须被 sanitize 修复并解析成功，degradation=${r.degradation}", r.envelope)
+        val env = r.envelope!!
+        assertEquals("doc", env.kind)
+        assertEquals("多行报告", env.title)
+        val p = env.blocks[0] as Aip.Block.Paragraph
+        assertTrue("段落文本必须保留换行语义", p.text.contains("第二行"))
+        val c = env.blocks[1] as Aip.Block.Code
+        assertTrue("代码块内容必须保留换行语义，实际=[${c.code.replace("\n", "\\n")}]", c.code.contains("def f():\n"))
+    }
+
+    @Test
+    fun `tab and other control chars inside strings are sanitized`() {
+        val src = "{\"v\":1,\"kind\":\"doc\",\"blocks\":[" +
+            "{\"id\":\"b1\",\"type\":\"paragraph\",\"data\":{\"text\":\"带\t制表符\"}}]}"
+        val r = Aip.parse(src)
+        assertNotNull(r.envelope)
+        val p = r.envelope!!.blocks[0] as Aip.Block.Paragraph
+        assertTrue(p.text.contains("制表符"))
+    }
+
+    @Test
+    fun `sanitize only touches control chars inside string literals`() {
+        val src = """{"a":"x\ny","b":12,"c":[1,{"d":"ok"}],"e":"已转义\\n原样"}"""
+        val out = Aip.sanitizeJson(src)
+        // 已转义的 \n 保持原样（两个字符 \ + n），不重复转义
+        assertTrue(out, out.contains("\"e\":\"已转义\\\\n原样\""))
+        // 结构字符原样
+        assertTrue(out.contains("\"b\":12"))
+    }
+
+    @Test
+    fun `leading prose before envelope is stripped and envelope parses`() {
+        // AI 在 ```aip 围栏里先写说明文字再贴信封 JSON：必须仍能解析出信封（不进说明文字）。
+        val src = "以下是智慧园区建设方案文档：\n" + full
+        val r = Aip.parse(src)
+        assertNotNull("说明文字 + 信封必须能解析，degradation=${r.degradation}", r.envelope)
+        assertEquals("智慧园区建设方案", r.envelope!!.title)
+    }
+
+    @Test
+    fun `extractEnvelopeJson finds balanced outer brace segment`() {
+        val src = "开头文字 {\"a\":{\"b\":[1,2,{\"c\":\"}\"}]},\"d\":3} 结尾文字"
+        val out = Aip.extractEnvelopeJson(src)
+        assertEquals("{\"a\":{\"b\":[1,2,{\"c\":\"}\"}]},\"d\":3}", out)
+        assertEquals(null, Aip.extractEnvelopeJson("no braces here"))
+    }
 }
