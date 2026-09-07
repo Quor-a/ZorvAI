@@ -268,17 +268,82 @@ object Aip {
         val blocksArr = obj.optJSONArray("blocks") ?: JSONArray()
         val meta = obj.optJSONObject("meta")
         val theme = obj.optJSONObject("theme")
+        // 兼容扁平结构（AI 按 aip_compose 工具参数 / 系统提示写的 {kind,title,subtitle,author,accent,blocks}）
+        // 与嵌套 meta/theme 两种写法——任一存在即采用，避免「标题/参数缺失、AIP 不渲染」。
+        val topTitle = obj.optString("title", "").trim()
+        val topSub = obj.optString("subtitle", "").trim()
+        val topAuthor = obj.optString("author", "").trim()
+        val topAccent = obj.optString("accent", "").trim()
+        val metaTitle = meta?.optString("title")?.trim().orEmpty()
+        val metaSub = meta?.optString("subtitle")?.trim().orEmpty()
+        val metaAuthor = meta?.optString("author")?.trim().orEmpty()
+        val themeAccent = theme?.optString("accent")?.trim().orEmpty()
+        val themeName = (theme?.optString("name")?.trim().orEmpty()).ifBlank { obj.optString("theme", "").trim() }
         return Envelope(
             v = obj.optInt("v", PROTOCOL_VERSION),
-            kind = obj.optString("kind", "doc").ifBlank { "doc" },
-            title = meta?.optString("title")?.trim().orEmpty(),
-            subtitle = meta?.optString("subtitle")?.trim().orEmpty(),
-            author = meta?.optString("author")?.trim().orEmpty(),
-            accent = theme?.optString("accent")?.trim().orEmpty(),
-            themeName = theme?.optString("name", "aurora").orEmpty(),
+            kind = (obj.optString("kind", "").ifBlank { meta?.optString("kind", "").orEmpty() }).ifBlank { "doc" }.lowercase(),
+            title = metaTitle.ifBlank { topTitle },
+            subtitle = metaSub.ifBlank { topSub },
+            author = metaAuthor.ifBlank { topAuthor },
+            accent = themeAccent.ifBlank { topAccent },
+            themeName = themeName.ifBlank { "aurora" },
             blocks = parseBlocks(blocksArr),
             assets = obj.optJSONObject("assets"),
         )
+    }
+
+    /**
+     * 由文档工具内容（title/content/format）构造 AIP 信封（kind=doc），
+     * 使工具箱-文档类工具（chat_doc / workspace_doc / enhanced_doc_create）输出与 AIP Canvas 引擎
+     * （B 通道）兼容的「完整结构化文档」，替代旧的 [渲染卡片] 极简卡（那张卡不是 AIP 文档）。
+     *
+     * - 标题由 AipCanvas 头部统一渲染（env.title），故不再额外塞 heading 块，避免重复。
+     * - note 可选：生成信息（如文件路径/大小/类型），以 info 卡片显示在文档顶部。
+     * - format 映射：html → html 块（WebView 渲染）；代码类 → code 块；其余 → paragraph（MarkdownText 富文本）。
+     */
+    fun docEnvelope(title: String, content: String, format: String, language: String = "", note: String = ""): String {
+        val blocks = JSONArray()
+        if (note.isNotBlank()) {
+            blocks.put(JSONObject().apply {
+                put("id", "note")
+                put("type", "callout")
+                put("data", JSONObject().apply {
+                    put("tone", "info")
+                    put("title", "生成信息")
+                    put("text", note)
+                })
+            })
+        }
+        val fmt = format.lowercase()
+        when {
+            fmt == "html" || fmt == "htm" ->
+                blocks.put(JSONObject().apply {
+                    put("id", "b1"); put("type", "html")
+                    put("data", JSONObject().apply { put("html", content) })
+                })
+            fmt in setOf("code", "json", "xml", "yaml", "yml", "css", "js", "javascript",
+                "java", "kt", "kotlin", "py", "python", "c", "cpp", "go", "rust", "swift",
+                "ts", "typescript", "bash", "sh", "sql", "csv", "svg") ->
+                blocks.put(JSONObject().apply {
+                    put("id", "b1"); put("type", "code")
+                    put("data", JSONObject().apply {
+                        put("lang", language.ifBlank { fmt })
+                        put("code", content)
+                    })
+                })
+            else ->
+                blocks.put(JSONObject().apply {
+                    put("id", "b1"); put("type", "paragraph")
+                    put("data", JSONObject().apply { put("text", content) })
+                })
+        }
+        return JSONObject().apply {
+            put("v", PROTOCOL_VERSION)
+            put("kind", "doc")
+            put("meta", JSONObject().apply { put("title", title.ifBlank { "文档" }) })
+            put("theme", JSONObject().apply { put("name", "aurora"); put("accent", "#2E6BE6") })
+            put("blocks", blocks)
+        }.toString()
     }
 
     /** blocks 数组 → 类型化 Block 列表；单块失败 → Fallback（L2，原始文本渲染）。 */
