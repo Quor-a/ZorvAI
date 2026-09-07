@@ -118,6 +118,10 @@ android {
         androidResources {
             // 端侧 ASR 模型在运行期下载到应用私有目录（不再内置 assets）。此处 noCompress 以备 ncnn 文件误入 assets
             noCompress += listOf("onnx", "txt", "ncnn", "param", "bin", "gz", "crt", "so")
+            // 覆盖默认 assets 忽略规则（默认会丢 `_` 开头的文件/目录，如 Python 标准库的
+            // __phello__ / _aix_support.py——CPython 官方 testbed 同款做法）。
+            // 设一个匹配不到任何文件的模式 = 不忽略任何 assets。
+            ignoreAssetsPattern = "quro-nothing-to-ignore"
             // 注：早期 Sherpa-ONNX AAR 会自带约百 MB 示例模型，曾用 ignoreAssetsPattern = "sherpa*" 剔除；
             // 现引擎改为源码打入 + jniLibs 预编译 .so，不再有 AAR 内置模型，故移除该忽略规则。
         }
@@ -181,6 +185,9 @@ dependencies {
 
     // 插件运行时：PluginRuntime.kt（manifest 解析 / 权限网关）依赖 org.json
     implementation(libs.org.json)
+
+    // Tools.Git 宿主 API：JS 沙盒里的本地 Git 仓库操作（init/status/add/commit/log/branch/checkout，JGit 纯 Java 实现）
+    implementation(libs.eclipse.jgit)
 
     // 应用内文档预览：WebViewAssetLoader（RC-A 内存炸弹 + RC-B pdf.js Worker 同源修复）
     implementation(libs.androidx.webkit)

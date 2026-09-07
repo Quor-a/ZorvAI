@@ -470,7 +470,15 @@ object QuroUiDslParser {
                 "badge", "chip", "tag" -> QuroBadgeNode(
                     id = json.optStringOrNull("id"),
                     style = buildStyle(json),
-                    text = json.optStringOrNull("text") ?: json.optStringOrNull("value") ?: "",
+                    // 修复：parser 只读 text/value，但 prompt 与真实 AI 产物大量写 `label`
+                    // （badge/chip/tag 语义上就是"标签"，label 最自然）。原写法 14 个新闻
+                    // 标签全部被丢弃、badge 显示成空色块，用户感知为「quro-ui 没渲染」。
+                    // 补上 label 兜底，并允许 style.label 嵌套写法。
+                    text = json.optStringOrNull("text")
+                        ?: json.optStringOrNull("value")
+                        ?: json.optStringOrNull("label")
+                        ?: json.optJSONObject("style")?.optStringOrNull("label")
+                        ?: "",
                     color = json.optStringOrNull("color"),
                     background = json.optStringOrNull("background"),
                 )
@@ -604,8 +612,14 @@ object QuroUiDslParser {
         typography = if (json.has("style") && json.opt("style") is String) json.optString("style") else null,
         bold = run {
             val s = json.optJSONObject("style")
+            // 修复：原判定只覆盖 style.fontWeight=="bold" 字符串与顶层 bold 布尔。
+            // 但 CSS 习惯与多数 AI 产物写法是 `weight: 700`（数字权重）——
+            // 700 在 CSS 里就是 Bold，600 是 SemiBold。此处统一数值语义：
+            // weight ≥ 600 → bold；否则按原 string/bool 判定。
             s?.optStringOrNull("fontWeight") == "bold"
                 || s?.optStringOrNull("font_weight") == "bold"
+                || (s?.optIntOrNull("fontWeight") ?: s?.optIntOrNull("font_weight") ?: 0) >= 600
+                || (json.optIntOrNull("weight") ?: json.optIntOrNull("font_weight") ?: 0) >= 600
                 || json.optBoolean("bold", false)
         },
         italic = json.optBoolean("italic", false),
@@ -624,7 +638,15 @@ object QuroUiDslParser {
                 ?: json.optIntOrNull("size")
         },
         maxLines = json.optIntOrNull("max_lines") ?: json.optIntOrNull("maxLines"),
-        align = json.optStringOrNull("align"),
+        // align 兼容对象式 style（style.align / style.text_align）与顶层写法（CSS 习惯同 color/fontSize）
+        align = run {
+            val s = json.optJSONObject("style")
+            s?.optStringOrNull("align")
+                ?: s?.optStringOrNull("text_align")
+                ?: s?.optStringOrNull("textAlign")
+                ?: json.optStringOrNull("align")
+                ?: json.optStringOrNull("text_align")
+        },
     )
 
     private fun buildButton(json: JSONObject): QuroButtonNode {

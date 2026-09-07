@@ -36,6 +36,29 @@ target_link_options(quroplugin PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_libraries(quroplugin ${log-lib})
 
 # ═══════════════════════════════════════════════════════════════
+# pybridge — CPython 3.14 嵌入桥（libquropybridge.so）
+# 运行时 dlopen libpython3.14.so（full 风味 jniLibs；fdroid 无 → 降级 Brython），
+# 链接期不依赖 Python，任何风味都能编译本目标。
+# ═══════════════════════════════════════════════════════════════
+add_library(quropybridge SHARED
+    pybridge.c
+)
+
+target_compile_options(quropybridge PRIVATE
+    -std=c11
+    -O2
+    -Wall
+    -Wextra
+)
+
+target_link_options(quropybridge PRIVATE
+    "-Wl,-z,max-page-size=16384"
+)
+
+target_link_libraries(quropybridge ${log-lib} dl)
+
+
+# ═══════════════════════════════════════════════════════════════
 # Termux PTY 终端库（libtermux-terminal.so）
 # 基于 Termux 的 JNI 实现，提供伪终端（PTY）支持
 # ═══════════════════════════════════════════════════════════════

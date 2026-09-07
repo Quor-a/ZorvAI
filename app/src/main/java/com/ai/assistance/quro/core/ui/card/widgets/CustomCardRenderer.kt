@@ -149,10 +149,52 @@ private fun measureNode(node: LayoutNode, availW: Float, d: Float): Size {
         "spacer" -> Size(num(node.props, "w", 0f) * d, num(node.props, "h", 8f) * d)
         "divider" -> Size(availW, 1f)
         "ring" -> {
-            val s = num(node.props, "size", 90f) * d
+            // 强制 clamp：AI 给的 size 过大时（如 size=300dp 在 inner=200dp 的列里），
+            // 直接返回 availW 大小的方框，避免后续 childAllocs/drawChildren 拿未裁剪的内容宽
+            // 推算 cy/cx 时把 sibling 推到屏幕外。同时 clamp 高度，避免拉爆 CardSurface 总高度。
+            val s = (num(node.props, "size", 90f) * d).coerceAtMost(availW).coerceAtLeast(0f)
             Size(s, s)
         }
         "bar" -> Size(availW, num(node.props, "h", 10f) * d)
+        else -> Size(0f, 0f)
+    }
+}
+
+/**
+ * 测量节点「内容宽」——row 里非 weight 子节点用它分配真实宽度。
+ *
+ * 与 [measureNode] 的区别：measureNode 对容器节点一律返回 availW（撑满父宽），
+ * 用于顶层卡片撑满屏幕；但在 row 里横向连排时若每个子都吃满父宽，
+ * 第 2 个子会被画到 x+inner+gap，直接溢出屏幕（只露半截）。
+ * 内容宽 = 子节点实际需要的宽度（取最大/累加），并 clamp 在 availW 内。
+ */
+private fun measureContent(node: LayoutNode, availW: Float, d: Float): Size {
+    val pad = num(node.props, "padding", node.style.paddingDp) * d
+    val gap = num(node.props, "gap", 8f) * d
+    val inner = (availW - pad * 2).coerceAtLeast(0f)
+    return when (node.type) {
+        // 叶子节点：measureNode 本身就是内容宽
+        "text", "ring", "spacer", "divider" -> measureNode(node, availW, d)
+        // 撑满型叶子：与 measureNode 同口径（占 availW），超出部分由 childAllocs/drawChildren 统一 clamp
+        "bar" -> measureNode(node, availW, d)
+        "card", "box", "column" -> {
+            if (node.children.isEmpty()) measureNode(node, availW, d)
+            else {
+                val sizes = node.children.map { measureContent(it, inner, d) }
+                val w = sizes.fold(0f) { acc, s -> kotlin.math.max(acc, s.width) }
+                val h = sizes.fold(0f) { acc, s -> acc + s.height } + gap * (sizes.size - 1).coerceAtLeast(0)
+                Size((w + pad * 2).coerceAtMost(availW), h + pad * 2)
+            }
+        }
+        "row" -> {
+            if (node.children.isEmpty()) measureNode(node, availW, d)
+            else {
+                val sizes = node.children.map { measureContent(it, inner, d) }
+                val w = sizes.fold(0f) { acc, s -> acc + s.width } + gap * (sizes.size - 1).coerceAtLeast(0)
+                val h = sizes.fold(0f) { acc, s -> kotlin.math.max(acc, s.height) }
+                Size((w + pad * 2).coerceAtMost(availW), h + pad * 2)
+            }
+        }
         else -> Size(0f, 0f)
     }
 }
@@ -161,16 +203,28 @@ private fun measureNode(node: LayoutNode, availW: Float, d: Float): Size {
 private fun childAllocs(node: LayoutNode, inner: Float, d: Float): List<Pair<Float, Size>> {
     val gap = num(node.props, "gap", 8f) * d
     if (node.type == "row") {
-        val fixed = node.children.filter { it.weight <= 0f }.map { measureNode(it, inner, d) }
-        val fixedW = fixed.fold(0f) { acc, s -> acc + s.width }
-        val wSum = node.children.filter { it.weight > 0f }.fold(0f) { acc, n -> acc + n.weight }.coerceAtLeast(0.001f)
-        val free = (inner - fixedW - gap * (node.children.size - 1)).coerceAtLeast(0f)
-        return node.children.map {
-            if (it.weight > 0f) {
-                val w = free * (it.weight / wSum)
-                w to measureNode(it, w, d)
-            } else inner to measureNode(it, inner, d)
+        val n = node.children.size
+        val gapTotal = gap * (n - 1).coerceAtLeast(0)
+        // 非 weight 子节点按「内容宽」测量：绝不能每个都吃满 inner，否则横向连排必然溢出屏幕。
+        val contentSizes = node.children.map { if (it.weight <= 0f) measureContent(it, inner, d) else null }
+        val fixedW = contentSizes.filterNotNull().fold(0f) { acc, s -> acc + s.width }
+        val wSum = node.children.filter { it.weight > 0f }.fold(0f) { acc, x -> acc + x.weight }.coerceAtLeast(0.001f)
+        val free = (inner - fixedW - gapTotal).coerceAtLeast(0f)
+        val out = ArrayList<Pair<Float, Size>>(n)
+        // 内容宽总和超 inner 时整体等比压缩，保证横向绝不溢出
+        val over = (fixedW + gapTotal) - inner
+        val shrink = if (over > 0f && fixedW > 0f) (inner - gapTotal).coerceAtLeast(0f) / fixedW else 1f
+        node.children.forEachIndexed { i, c ->
+            if (c.weight > 0f) {
+                val w = free * (c.weight / wSum)
+                out.add(w to measureNode(c, w, d))
+            } else {
+                val s = contentSizes[i]!!
+                val w = (s.width * shrink).coerceAtMost(inner)
+                out.add(w to s)
+            }
         }
+        return out
     }
     return node.children.map { inner to measureNode(it, inner, d) }
 }
@@ -181,16 +235,20 @@ private fun drawNode(backend: RenderBackend, node: LayoutNode, x: Float, y: Floa
     val gap = num(node.props, "gap", 8f) * d
     when (node.type) {
         "card", "box" -> {
+            // 防御性二次 clamp：measureNode 对 card/box/column 默认 width=availW 已撑满父，
+            // 但若被夹在 row 中（allocW 可能小于 parent 内原始 availW）或其他递归层漏算，
+            // 仍把 width 钳到 allocW，避免 drawRect/drawGradientRect 画到 CardSurface 右边界外。
             val size = measureNode(node, allocW, d)
+            val clampedW = size.width.coerceAtMost(allocW).coerceAtLeast(0f)
             val radius = num(node.props, "radius", node.style.cornerDp)
             val grad = (node.props["gradient"] as? List<*>)?.mapNotNull { parseColor(it, backend) }
             if (grad != null && grad.size >= 2) {
-                backend.drawGradientRect(x, y, x + size.width, y + size.height, grad, num(node.props, "angle", 135f), radius)
+                backend.drawGradientRect(x, y, x + clampedW, y + size.height, grad, num(node.props, "angle", 135f), radius)
             } else {
                 val bg = parseColor(node.props["bg"], backend)
                     ?: parseColor(node.style.bg.name.lowercase(), backend)
                     ?: backend.resolve(ColorToken.SurfaceVariant)
-                backend.drawRect(x, y, x + size.width, y + size.height, bg, radius)
+                backend.drawRect(x, y, x + clampedW, y + size.height, bg, radius)
             }
             drawChildren(backend, node, x + pad, y + pad, (allocW - pad * 2).coerceAtLeast(0f), state, d)
         }
@@ -207,8 +265,8 @@ private fun drawNode(backend: RenderBackend, node: LayoutNode, x: Float, y: Floa
         "spacer" -> { /* 纯占位 */ }
         "divider" -> backend.drawLine(x, y, x + allocW, y, backend.resolve(ColorToken.Outline), 1f)
         "ring" -> {
-            val s = measureNode(node, allocW, d)
-            val side = s.width
+            // 空间不足时缩小圆环（而非按自身 size 硬画导致溢出屏幕）
+            val side = (num(node.props, "size", 90f) * d).coerceAtMost(allocW).coerceAtLeast(0f)
             val stroke = num(node.props, "stroke", 8f)
             val v = num(node.props, "value", 0f)
             val col = parseColor(node.props["color"], backend) ?: backend.resolve(ColorToken.Primary)
@@ -255,9 +313,17 @@ private fun drawChildren(
     val allocs = childAllocs(node, inner, d)
     var cx = x
     var cy = y
+    // 横向硬边界：row 连排时任何估算误差都不允许画到父容器右边界之外（防溢出屏幕）
+    val rightLimit = x + inner
     node.children.forEachIndexed { i, child ->
         val (w, s) = allocs[i]
-        drawNode(backend, child, cx, cy, w, state)
-        if (node.type == "row") cx += s.width + gap else cy += s.height + gap
+        if (node.type == "row") {
+            if (cx >= rightLimit - 0.5f) return   // 已无剩余空间，停止绘制后续子节点
+            drawNode(backend, child, cx, cy, w.coerceAtMost(rightLimit - cx), state)
+            cx += w + gap
+        } else {
+            drawNode(backend, child, cx, cy, w, state)
+            cy += s.height + gap
+        }
     }
 }

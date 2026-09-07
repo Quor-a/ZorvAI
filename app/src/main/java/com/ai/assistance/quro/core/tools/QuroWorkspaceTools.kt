@@ -15,7 +15,7 @@ import java.io.File
  * 路径以用户选择的工作区为根做相对解析；未选择时使用默认 QuroWorkspace。
  * 用户可在对话框权限模式栏选择工作区（已创建的/创建新的/自定义文件夹）。
  */
-private fun workspaceRoot(context: Context): File {
+internal fun workspaceRoot(context: Context): File {
     // 优先使用用户选择的工作区
     val customPath = WorkspacePreferences.getCurrentWorkspace(context)
     if (customPath != null) {

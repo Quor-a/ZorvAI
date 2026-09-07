@@ -482,6 +482,36 @@ fun PersonaEditDialog(
                         Text("还没有标签，点「管理标签」新建并选择。",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
+                    // ── 功能开关（两项独立控制，互不影响；提示词级开关，渲染管线常开）──
+                    // 开 = 提示词带完整功能章节，AI 百分百主动使用；
+                    // 关 = AI 不主动用，仅当用户明确提醒/要求时才使用（用户要求后输出仍能正常渲染）。
+                    var featDynamicUi by remember { mutableStateOf(PersonaFeatureToggles.isDynamicUiEnabled(ctx)) }
+                    var featSelfCard by remember { mutableStateOf(PersonaFeatureToggles.isSelfCardEnabled(ctx)) }
+                    Text("功能开关", style = MaterialTheme.typography.labelMedium)
+                    Text("两项独立控制，互不影响。开 = 百分百主动使用；关 = 用户提醒才使用。",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    SoulFeatureToggleRow(
+                        title = "动态 UI 组件",
+                        desc = "开：AI 主动用 ```quro-ui 输出原生交互界面；关：仅用户要求时输出。",
+                        checked = featDynamicUi,
+                        onChanged = {
+                            featDynamicUi = it
+                            PersonaFeatureToggles.setDynamicUiEnabled(ctx, it)
+                        },
+                    )
+                    SoulFeatureToggleRow(
+                        title = "可视化小卡片",
+                        desc = "开：AI 主动用 ```quro-card 输出自研小卡片；关：仅用户要求时输出。",
+                        checked = featSelfCard,
+                        onChanged = {
+                            featSelfCard = it
+                            PersonaFeatureToggles.setSelfCardEnabled(ctx, it)
+                            if (it) com.ai.assistance.quro.core.ui.card.CardModule.init()
+                        },
+                    )
                 }
 
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -839,3 +869,24 @@ private fun MemoryEditDialog(
     )
 }
 
+
+/** 灵魂注入编辑内的功能开关行：标题 + 说明 + Switch（与 PersonaFeatureToggles 联动）。 */
+@Composable
+private fun SoulFeatureToggleRow(
+    title: String,
+    desc: String,
+    checked: Boolean,
+    onChanged: (Boolean) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+            Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(checked = checked, onCheckedChange = onChanged)
+    }
+}

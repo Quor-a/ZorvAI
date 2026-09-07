@@ -112,4 +112,43 @@ class QuroUiInterpreterTest {
             else -> false
         }
     }
+
+    // 6) badge `label` 字段兼容：AI 高频写法 `"label":"知乎 7121万🔥"`，原 parser 只读
+    //    text/value，14 个新闻标签全被丢弃、badge 显示成空色块 → 用户感知「quro-ui 没渲染」。
+    @Test
+    fun interpret_badgeAcceptsLabelField() {
+        val dsl = """{"type":"column","children":[
+            {"type":"row","children":[
+                {"type":"badge","label":"知乎 7121万🔥","color":"#FF4444"},
+                {"type":"badge","label":"社会","color":"#FF9800"}
+            ]}
+        ]}"""
+        val result = A2uiInterpreter.interpret(dsl)
+        assertTrue(result is QuroUiParseResult.Success)
+        val col = (result as QuroUiParseResult.Success).root as QuroColumnNode
+        val row = col.children[0] as QuroRowNode
+        val badges = row.children.filterIsInstance<QuroBadgeNode>()
+        assertEquals(2, badges.size)
+        assertEquals("知乎 7121万🔥", badges[0].text)
+        assertEquals("社会", badges[1].text)
+    }
+
+    // 7) text `weight: 700`（CSS 数值权重）→ 自动视为 bold。AI 习惯写数字权重（400/600/700）
+    //    而非字符串 "bold"，原 parser 只认布尔与字符串 → 标题全部非粗体、看不出层级。
+    @Test
+    fun interpret_textWeight700IsBold() {
+        val dsl = """{"type":"column","children":[
+            {"type":"text","value":"标题","weight":700,"fontSize":16},
+            {"type":"text","value":"副标题","weight":600,"fontSize":14},
+            {"type":"text","value":"正文","weight":400,"fontSize":13}
+        ]}"""
+        val result = A2uiInterpreter.interpret(dsl)
+        assertTrue(result is QuroUiParseResult.Success)
+        val col = (result as QuroUiParseResult.Success).root as QuroColumnNode
+        val texts = col.children.filterIsInstance<QuroTextNode>()
+        assertEquals(3, texts.size)
+        assertTrue("weight=700 应视为 bold", texts[0].bold)
+        assertTrue("weight=600 应视为 bold", texts[1].bold)
+        assertFalse("weight=400 不应 bold", texts[2].bold)
+    }
 }

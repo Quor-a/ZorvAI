@@ -24,6 +24,8 @@ import androidx.core.content.ContextCompat
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import android.os.Build
+import com.ai.assistance.quro.core.scripting.SandboxRuntime
+import com.ai.assistance.quro.core.python.PyEngine
 import org.json.JSONObject
 
 /** 电量与充电状态（无权限）。 */
@@ -400,8 +402,10 @@ class OpenWebTool : QuroTool {
 class RunCodeTool : QuroTool {
     override val name = "run_code"
     override val description = "在手机端执行一段代码并返回结果，是 AI 自带的「手机 AI IDE（带可视化）」核心工具——你（AI）可以直接写代码并运行，产出物会渲染在对话框里，无需用户手动编辑文件。参数 {\"code\":\"代码内容\",\"lang\":\"语言\"}。各语言用途：\n" +
-        "· python（默认）：内置 Brython 引擎，**无需 Termux 即可在对话框运行**——数据处理/清洗、算法计算、print 输出、字符串/列表/字典操作、函数/类定义、循环/条件逻辑等 Python 3 核心语法全部支持。输出直接渲染在对话框里，用于推理与总结。\n" +
-        "· node / javascript / js：App 内置 QuickJS 原生沙箱离线执行（无需 Termux），适合逻辑计算、字符串/JSON 处理、DOM 无关脚本。\n" +
+        "· python（默认）：**原生 CPython 3.14 嵌入引擎（full 风味）**，无需 Termux——完整标准库离线运行：数据处理/清洗、算法计算、json/csv/re/itertools/collections、hashlib/sqlite3/ssl 等含 C 扩展的模块全部可用，print 输出与 traceback 直接返回（15s 超时保护）。若无原生引擎则依次降级：应用内 Linux 沙箱 python3 → Brython（纯 JS 子集）。\n" +
+        "· node / javascript / js / ts / typescript：App 内置 QuickJS 完整脚本沙箱（SandboxPackage）离线执行，" +
+            "带 Tools.Files/Net/System/calc 宿主 API、require() CommonJS（工作区模块）、Lodash(_)、dataUtils；" +
+            "ts/typescript 自动转译。多文件工程用 code_runner（支持 path 指工作区脚本文件）。\n" +
         "· shell / sh / bash：应用沙盒内 sh 执行命令。\n" +
         "· html / htm / markup：把完整 HTML 源码作为「网页工件」返回，对话框会用 WebView 实时渲染成可交互网页（支持内联 <style>/<script>、SVG、离线 Three.js；在线时可用 Chart.js / ECharts 等 CDN 画图）——你生成的网页直接长在对话框里。\n" +
         "· json：返回可视化 JSON 树（HTML 渲染），支持语法高亮和格式化显示。\n" +
@@ -425,7 +429,9 @@ class RunCodeTool : QuroTool {
         if (code.isEmpty()) return "缺少 code 参数"
         return when (lang) {
             "html", "htm", "markup" -> code  // 网页工件：返回 HTML 源码，对话框用 WebView 内联实时预览
-            "node", "javascript", "js", "ts", "typescript" -> QuroJsExecutor.eval(code)
+            "node", "javascript", "js", "ts", "typescript" ->
+                // 完整脚本运行时（SandboxPackage）：CommonJS + Tools.* 宿主 API + Lodash/dataUtils（.ts 自动转译）
+                SandboxRuntime(context, workspaceRoot(context)).runCode(code, lang).format()
             "shell", "sh", "bash" -> execShell(context, code)
             "python", "py", "py3" -> runPython(code, context)
             // 数据 / 标记类：增强渲染，返回可视化 HTML
@@ -640,9 +646,22 @@ class RunCodeTool : QuroTool {
         if (body.isBlank()) "(退出码=$code，无输出)" else "退出码=$code\n$body"
     } catch (e: Exception) { "执行失败：${e.message}" }
 
-    /** Python 执行：对话框独立，优先本应用自带 Linux 沙箱 Python > 系统 python3（手机大多没有，对话框不依赖终端 proot）。 */
+    /**
+     * Python 执行：优先级 原生 CPython 3.14（嵌入，full 风味）> 本应用 Linux 沙箱 python3
+     * > 系统 python3 > Brython（WebView 纯 JS 解释器兜底）。
+     */
     private fun runPython(code: String, ctx: Context): String {
-        // 优先尝试本应用自带 Linux 沙箱 Python 与系统 Python（不再依赖第三方 Termux 包路径）
+        // 1. 原生 CPython 3.14（libpython3.14.so 嵌入，标准库完整含 C 扩展，首启解压 assets）
+        if (PyEngine.probeAvailable(ctx)) {
+            val r = PyEngine.run(ctx, code)
+            // 引擎级错误（不可用/初始化失败，stdout/stderr 均空）→ 走降级链；
+            // 用户代码出错（stderr 有 traceback）→ 正常返回结果
+            if (!(r.error != null && r.stderr.isEmpty() && r.stdout.isEmpty())) {
+                return r.format()
+            }
+        }
+
+        // 2. 本应用自带 Linux 沙箱 Python 与系统 Python（不再依赖第三方 Termux 包路径）
         val base = ctx.filesDir.absolutePath
         val candidate = listOf(
             "$base/linux-sandbox/usr/bin/python3",
@@ -652,16 +671,14 @@ class RunCodeTool : QuroTool {
         ).firstOrNull { java.io.File(it).exists() }
         if (candidate != null) {
             val result = execShell(ctx, "$candidate -c ${quoteShell(code)}")
-            if (result.contains("<html", ignoreCase = true) || result.contains("<!DOCTYPE", ignoreCase = true)) return result
             return result
         }
         val sys = execShell(ctx, "python3 -c ${quoteShell(code)}")
         if (!sys.contains("not found") && !sys.startsWith("执行失败")) {
-            if (sys.contains("<html", ignoreCase = true) || sys.contains("<!DOCTYPE", ignoreCase = true)) return sys
             return sys
         }
 
-        // 无 Termux/Python3 → 使用 Brython（纯 JS Python 解释器）在 WebView 中运行
+        // 3. 无原生/沙箱/系统 Python → Brython 兜底
         return runPythonBrython(code)
     }
 
