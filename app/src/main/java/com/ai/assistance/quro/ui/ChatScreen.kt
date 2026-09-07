@@ -6386,7 +6386,11 @@ private fun findBalancedBrace(text: String, start: Int): Int {
 // ── ANR 修复（v384）：以下正则全部预编译为文件级常量，只编译一次。
 //    原实现在各解析函数内 `Regex(...)` / `.toRegex()`，每次 Compose 重组都重新编译，
 //    走 ICU native PatternNative.compileImpl；几百消息 × 多正则 × 每帧重组 → 主线程卡死（见 ANR 报告）。
-private val RE_FENCE = Regex("```([\\w+#-]*)\\n?([\\s\\S]*?)```")
+// 代码围栏：仅认「行首」的 ``` 作开围栏（(?m)+^ 行首锚定）。
+// 修复：AI 在正文里用反引号内联代码引用围栏语法（如「我用 ` ```aip ` 围栏」）时，
+// 若无行首锚定，RE_FENCE 会从内联代码的 ``` 开始匹配、非贪婪吞到真正围栏起始的 ``` 即停，
+// 导致真正的 AIP/quro-ui/mermaid 信封围栏被吞掉、code 变成说明文字 → 该渲染的块全部降级为纯文本。
+private val RE_FENCE = Regex("(?m)^```([\\w+#-]*)\\n?([\\s\\S]*?)```")
 private val RE_BLOCK = Regex("(?is)<h([1-6])>(.*?)</h\\1>|<blockquote>(.*?)</blockquote>|<hr\\s*/?>|<table>(.*?)</table>|<(ul|ol)>(.*?)</\\6>")
 private val RE_HR = Regex("(?i)<hr")
 private val RE_LI = Regex("(?is)<li>(.*?)</li>")
