@@ -37,7 +37,9 @@
 - [多语言运行器](#多语言运行器)
 - [自研多语言小程序（MiniApp）](#自研多语言小程序miniapp)
 - [可视化组件](#可视化组件)
+- [动态 UI 组件（quro-ui）](#动态-ui-组件quro-ui-围栏)
 - [可视化编程（Mermaid 图表）](#可视化编程mermaid-图表)
+- [AIP 对话框文档排版](#aip-对话框文档排版ai-presentation-protocol)
 - [系统返回手势支持](#系统返回手势支持)
 - [内置技能 · Skills（63 个）](#内置技能-skills63-个)
 - [截图预览 · Screenshots](#截图预览-screenshots)
@@ -112,14 +114,15 @@
 | **知识 / 记忆 / 人格 / Bot** | 向量语义 RAG 知识库、记忆库、人格/灵魂配置、多通道机器人（QQ/飞书/微信/本地） |
 | **ACI 控制台 UI（LAN 控制台）** | 控制端 `QuroAidlAciCenterScreen` 按 `console_ui` 能力拉取 SDUI 快照、复用本地 `AciConsoleScreen` 渲染器（`core/aci` 包，纯本地零网络） |
 | **可视化弹窗 & 询问** | **可视化弹窗**（`visual_popup` / `visual_custom_popup`）：AI 创建结构化弹窗或自写 HTML 弹窗，对话框内小卡片展示历史；**可视化询问**（`visual_question` / `visual_action`）：AI 遇到模糊命令/缺少信息时强制弹出选择题/输入框，禁止猜测 |
-| **多语言运行器** | `QuroLanguageRunner`：对话框内支持 **7 种编程语言**（JavaScript、Python、HTML、JSON、CSS、XML、C/C++/Java）的检测、运行和渲染，手机端轻量 IDE |
+| **多语言运行器** | `QuroLanguageRunner`：对话框内支持 **7 种编程语言**（JavaScript、Python、HTML、JSON、CSS、XML、C/C++/Java）的检测、运行和渲染，手机端轻量 IDE；**Python 3.14 原生引擎（PyEngine）**：端侧 CPython 3.14 + 完整标准库 654 文件，配 Scripting 沙箱（`SandboxRuntime` + `HostApiDispatcher` + `GitHostApi` + `TsTranspiler`），8 语言项目模板一键生成 |
 | **自研多语言小程序（MiniApp）** | AI 生成完整小程序代码（HTML + JS + CSS），对话框内实时渲染为可交互小程序页面；支持 Page/Component 生命周期、data-bind 数据绑定、data-action 事件绑定；通过 JSBridge 调用原生能力（存储、网络、设备信息、UI、路由） |
-| **可视化组件** | `ui_widget` 工具：**60+ 种可交互组件**（按钮、表单、图表、进度、评分、轮播、时间线等），直接融进聊天气泡；支持 `command` 语法触发动作（打开页面、执行命令、调用 AI 等） |
+| **可视化组件** | `ui_widget` 工具：**60+ 种可交互组件**（按钮、表单、图表、进度、评分、轮播、时间线等），直接融进聊天气泡；支持 `command` 语法触发动作（打开页面、执行命令、调用 AI 等）；**动态 UI 组件（```quro-ui 围栏）**：AI 写组合式 JSON DSL（任意嵌套节点成树），原生渲染为成体系的交互界面（表单+按钮+图表+列表联动） |
 | **可视化编程** | **Mermaid 图表离线渲染**：AI 或用户写 ` ```mermaid ` 围栏代码块，离线渲染成流程图/时序图/状态机/类图/思维导图等；支持全屏预览、SVG 导出、五种主题 |
+| **AIP 对话框文档排版** | **AIP 排版引擎**（AI Presentation Protocol）：AI 输出结构化信封（```aip 围栏 / `aip_compose` 工具），对话框原生渲染成**长文档 / PPT 演示 / 思维导图**卡片；支持 doc↔deck↔mindmap 形态互转、导出 docx/pptx/md、全屏预览、演示放映、复制全文、四级容错降级；工具调用入口 `aip_compose` |
 | **系统返回手势** | 完整支持 Android 系统返回手势，包括从屏幕边缘滑动返回、分层返回策略、导航栏适配、全屏模式处理；所有弹窗和二级界面均使用 `BackHandler` 处理返回事件 |
 | **特权终端工具 `priv_exec`** | AI 在对话中直接以 **ZorvAI 授权 / Shizuku / ROOT（自动降级）** 执行命令：`run`=以 root 执行；`status`=查询特权通道（Root / Shizuku / LSPosed / ZorvAI）可用状态。LSPosed 提供 opt-in 模块（作用域标记 + 可选跨应用注入/系统重定向桥，配置驱动） |
 | **ADB 终端工具 `adb_term`** | 把 ADB 当终端用：`shell`=本机 ADB shell；`tcp_status` / `tcp_enable` / `tcp_disable`=管理 TCP/IP 无线调试（开启/关闭 `adbd`、查 WiFi IP、当前端口、USB 调试状态、是否有特权通道） |
-| **Python ↔ 浏览器会话桥** | `QuroSessionBridge`：对话框内 Brython(Python) 与内置浏览器**共享 Cookie（全局 `CookieManager` 双向）+ Storage（`SharedPreferences` 镜像）**；Python 侧经 `window.QuroSession.browserAct()` 直接驱动 `QuroBrowserController`（open / read / crawl / script / act），无需手动复制页面上下文 |
+| **Python ↔ 浏览器会话桥** | `QuroSessionBridge`：对话框内 Python（端侧 PyEngine / Brython）与内置浏览器**共享 Cookie（全局 `CookieManager` 双向）+ Storage（`SharedPreferences` 镜像）**；Python 侧经 `window.QuroSession.browserAct()` 直接驱动 `QuroBrowserController`（open / read / crawl / script / act），无需手动复制页面上下文 |
 
 ---
 
@@ -141,7 +144,7 @@
 对话框本身就是一个可自由使用的轻量 IDE，**不靠额外按钮堆叠**——IDE 级能力直接复用输入框「+」菜单与 AI 侧 `ui_open_*` 工具唤起，避免与已有入口重复：
 - **代码**：内置 CodeMirror 离线代码编辑器，支持以下语言的语法高亮和运行：
   - **JavaScript**：App 内置 QuickJS 原生沙箱离线执行
-  - **Python**：内置 Brython 引擎，无需 Termux 即可在对话框运行
+  - **Python**：**端侧 Python 3.14 引擎（PyEngine）**——真·CPython 原生解释器（libpython3.14.so + 完整标准库 654 文件），无需 Termux / Brython，直接在对话框运行
   - **HTML**：完整 HTML 源码渲染为可交互网页（支持内联样式/脚本、SVG、Three.js 三维）
   - **JSON**：数据/配置可视化
   - **CSS**：样式代码支持
@@ -176,12 +179,14 @@ AI 在执行任务时可以通过可视化方式与用户交互，**强制规则
 | 语言 | 运行方式 | 说明 |
 |------|----------|------|
 | **JavaScript** | QuickJS 原生沙箱 | App 内置 QuickJS 原生沙箱离线执行，带内存上限 16MB + 超时中断 2s |
-| **Python** | Brython 引擎 | 内置 Brython 引擎，无需 Termux 即可在对话框运行 |
+| **Python** | **端侧 Python 3.14 引擎（PyEngine）** | 内置 **Python 3.14 原生解释器**（libpython3.14.so + libssl/libcrypto/libsqlite 完整标准库 654 文件），无需 Termux、无需 Brython，对话框内直接跑真实 Python；配合 **Scripting 沙箱**（`SandboxRuntime`）隔离执行、`HostApiDispatcher` 调用宿主能力（文件/网络/Git）、`TsTranspiler` 转译 TypeScript |
 | **HTML** | WebView 渲染 | 完整 HTML 源码渲染为可交互网页（支持内联样式/脚本、SVG、Three.js 三维） |
 | **JSON** | 数据可视化 | 数据/配置可视化 |
 | **CSS** | 样式支持 | 样式代码支持 |
 | **XML** | 数据/配置 | 数据/配置文件支持 |
 | **C/C++/Java** | 语法高亮 | 语法高亮和算法逻辑撰写（端侧沙箱不能直接编译，需借助工作区或 ACI 构建台） |
+
+> **Python 3.14 引擎**：`core/python/PyEngine.kt` 封装端侧 CPython 3.14（arm64-v8a，`app/src/full/jniLibs` 预编译 `.so` + `app/src/full/assets/python` 完整 stdlib）。与旧版 Brython（浏览器内 Python 翻译）不同，这是**真·CPython 原生解释器**，支持标准库全量导入、网络、加密、sqlite，与 Scripting 沙箱共享运行时。
 
 ### 1.8 自研多语言小程序（MiniApp）
 AI 可以生成完整小程序代码（HTML + JS + CSS），在对话框中实时渲染为可交互的小程序页面。
@@ -201,7 +206,7 @@ AI 可以生成完整小程序代码（HTML + JS + CSS），在对话框中实�
 }
 ```
 
-### 1.9 可视化组件（`ui_widget`）
+### 1.9 可视化组件（`ui_widget` + 动态 UI）
 `ui_widget` 工具支持 **60+ 种可交互组件**，直接融进聊天气泡（而非浮层）。
 
 **支持的组件类型（7 大归类）：**
@@ -215,12 +220,40 @@ AI 可以生成完整小程序代码（HTML + JS + CSS），在对话框中实�
 | **Action 类** | actions、toolcall、timer |
 | **Navigation 类** | breadcrumb、segmented、list |
 | **Decoration 类** | alert、badge、avatargroup、tagcloud、color、note、info |
+| **可视化** | mermaid（AI 自写 Mermaid 离线渲染）、html（网页工件 WebView 内联预览）、miniapp（小程序运行时） |
+| **组合** | composite（stack/tabs/accordion 多子卡聚合，可嵌套） |
 
 **技术特点：**
 - 组件通过 `QuroUiActionBridge.onCard` 桥接函数直接挂进聊天气泡
 - 所有组件都是真正可交互的 Compose 控件，支持实时状态联动
 - `command` 语法支持丰富动作：`ui_open_*`、`ui_toggle_*`、`linux:install`、`run:<命令>`、`open:<url>`、`copy:<文本>`、`ai:<提示词>`、`screen:<名称>`
 - 组件画廊入口：对话框 → 设置底部弹层 → 「可视化组件画廊」
+
+#### 动态 UI 组件（```quro-ui 围栏）
+
+AI 写**组合式 JSON DSL**（基础节点任意嵌套成树），原生解释器（`QuroUiDslParser` + `A2uiInterpreter`）渲染为**成体系的交互界面**——表单 + 按钮 + 图表 + 列表联动，而不是单张卡片。
+
+```json
+// ```quro-ui 围栏内容（示例：嵌套组合节点树）
+{
+  "root": {
+    "type": "column",
+    "children": [
+      { "type": "text", "props": { "text": "任务看板" } },
+      { "type": "row", "children": [
+        { "type": "button", "props": { "label": "新建", "command": "ui_open_todo" } },
+        { "type": "button", "props": { "label": "刷新", "command": "ai:刷新列表" } }
+      ]},
+      { "type": "list", "props": { "items": ["整理架构文档", "发布 v1.0.84"] } }
+    ]
+  }
+}
+```
+
+- **组合式 DSL**：基础节点（text/button/row/column/list/input/chart/switch…）任意嵌套成树，AI 自组织布局
+- **原生渲染**：不套 WebView，纯 Compose 解释执行，深浅色自适应
+- **模型输出即数据**：AI 只写 JSON 数据，端上解释执行，不执行 AI 生成代码（A2UI 铁律）
+- **术语边界**：`quro-ui` = 动态 UI（成体系界面）；`ui_widget`/`ui_card` = 富卡片（单张组件卡）；` ```quro-card ` = 小卡片（AI 自写单块卡）；`visual_popup`/`visual_question` = 弹窗/询问——彼此独立，严禁混用
 
 ### 1.10 可视化编程（Mermaid 图表）
 AI 可以通过 Mermaid 语法创建流程图、架构图、时序图、状态机、类图、思维导图等可视化图表。
@@ -247,7 +280,48 @@ AI 可以通过 Mermaid 语法创建流程图、架构图、时序图、状态�
 - **主题自动切换**：支持 default/dark/forest/neutral/base 五种主题，缺省按系统深浅色自动选择
 - **人与 AI 共享**：用户也能发 mermaid 围栏画图，可视化编程对人与 AI 都开放
 
-### 1.11 系统返回手势支持
+### 1.11 AIP 对话框文档排版（AI Presentation Protocol）
+
+**AIP 排版引擎**让 AI 的长篇输出（文档 / 报告 / 演示 / 导图）在对话框里以**原生富排版卡片**呈现，而非纯文本或代码块。AI 通过 `aip_compose` 工具调用（推荐）或 ` ```aip ` 围栏（兜底）输出**结构化信封**，客户端原生渲染。
+
+**信封结构：**
+```json
+{
+  "v": 1,
+  "kind": "doc | deck | mindmap",
+  "meta": { "title": "...", "subtitle": "...", "author": "..." },
+  "theme": { "name": "aurora", "accent": "#2E6BE6" },
+  "blocks": [
+    { "id": "b1", "type": "heading", "data": { "level": 1, "text": "..." } },
+    { "id": "b2", "type": "table", "data": { "headers": [...], "rows": [...] } },
+    { "id": "b3", "type": "chart", "data": { "type": "bar", "labels": [...], "series": [...] } }
+  ]
+}
+```
+
+**块类型（17 种 + 兜底）：** `heading` `section` `paragraph` `list` `table` `chart` `quote` `callout` `code` `html` `steps` `timeline` `columns` `image` `mindmap` `slide` `divider`；未知类型走 `fallback` 富文本兜底，绝不丢弃。
+
+**核心能力：**
+
+| 能力 | 说明 |
+|------|------|
+| **三种形态** | `doc` 长文档流（标题/段落/列表/表格/引用/代码）、`deck` 16:9 幻灯片（cover/section/stats/quote/twoCol/chart/table/summary 9 种版式）、`mindmap` 思维导图（递归节点树 + 肘形引导线） |
+| **形态互转** | doc ↔ deck ↔ mindmap 一键切换，零内容丢失、幂等转换（`AipConvert`） |
+| **导出真实文件** | 导出 docx（自研 OOXML 引擎，不引第三方）/ pptx（`---` 分页）/ md；复制全文为 Markdown |
+| **全屏预览** | `AipFullscreenSheet` 满屏阅读，脱离对话框层级、可滚动 |
+| **演示放映** | `DeckPresentOverlay` 全屏黑底，右 2/3 点按下一页、左 1/3 上一页 |
+| **流式渲染** | 流式期间残缺信封也可部分渲染（截断修复 `lastSafeCut`） |
+| **四级容错降级** | L1 字段修复（缺块自动合成）/ L2 块级降级（单块→Fallback）/ L3 通道降级（回退 Markdown）/ L4 纯文本兜底（永不空白） |
+| **表格修复** | 列宽均分 + 文本软换行，窄屏不重叠、不溢出（v1.0.84 修复「一层覆盖一层」） |
+| **智能路由** | `CanvasRouter` 三档通道（A 增强 Markdown / B AIP 原生 / C WebView）+ 五级决策（硬指令/信封头/意图/复杂度/兜底）+ 中途软重路由 |
+
+**入口：**
+- **工具调用（推荐）**：AI 调 `aip_compose` 工具（`kind` + `blocks`），工具做 L1 修复后回传规范化信封，对话框自动渲染；blocks 省略时自动从 sections/content/markdown 合成，不白屏
+- **围栏兜底**：AI 在回复中写 ` ```aip ` 围栏直接输出信封，`ChatScreen` 提取为 `MsgBlock.Aip` → `AipCanvas` 渲染
+
+> 技术架构详见 `docs/AIP_对话框排版引擎_技术架构.md`（`core/canvas/Aip.kt` 协议层 / `AipConvert.kt` 转换层 / `CanvasRouter.kt` 路由层 / `AipComposeTool.kt` 工具层 / `ui/canvas/AipCanvas.kt` 渲染层）。
+
+### 1.12 系统返回手势支持
 Zorv AI 完整支持 Android 系统返回手势，确保用户在任何界面都能通过手势自然导航。
 
 **技术实现：**
@@ -778,12 +852,21 @@ AI 遇到模糊命令/缺少信息/需要确认时，弹出选择题/输入框�
 | 语言 | 运行方式 | 说明 |
 |------|----------|------|
 | **JavaScript** | QuickJS 原生沙箱 | App 内置 QuickJS 原生沙箱离线执行，带内存上限 16MB + 超时中断 2s |
-| **Python** | Brython 引擎 | 内置 Brython 引擎，无需 Termux 即可在对话框运行 |
+| **Python** | **端侧 Python 3.14 引擎（PyEngine）** | 内置 **Python 3.14 原生解释器**（libpython3.14.so + libssl/libcrypto/libsqlite + 完整标准库 654 文件），无需 Termux / Brython，对话框内直接跑真实 Python；配 `SandboxRuntime` 沙箱隔离 + `HostApiDispatcher` 宿主能力调用 + `TsTranspiler` TypeScript 转译 |
 | **HTML** | WebView 渲染 | 完整 HTML 源码渲染为可交互网页（支持内联样式/脚本、SVG、Three.js 三维） |
 | **JSON** | 数据可视化 | 数据/配置可视化 |
 | **CSS** | 样式支持 | 样式代码支持 |
 | **XML** | 数据/配置 | 数据/配置文件支持 |
 | **C/C++/Java** | 语法高亮 | 语法高亮和算法逻辑撰写（端侧沙箱不能直接编译，需借助工作区或 ACI 构建台） |
+
+### Scripting 脚本沙箱（端侧 Python / TS）
+
+- **`PyEngine`**（`core/python/PyEngine.kt`）：端侧 CPython 3.14 封装，arm64-v8a 预编译 `libpython3.14.so` / `libssl_python.so` / `libcrypto_python.so` / `libsqlite3_python.so` + `assets/python` 完整标准库（654 文件），**真·原生解释器**，非 Brython 翻译
+- **`SandboxRuntime`**：脚本沙箱运行时，隔离执行 + 宿主 API 分发，脚本可安全调用宿主能力
+- **`HostApiDispatcher` / `GitHostApi`**：脚本内调用宿主能力（含 Git 操作：clone/pull/commit/push）
+- **`TsTranspiler`**：TypeScript → 可执行脚本转译（含单测 `TsTranspilerTest` 340 行）
+- **代码模板集**：`assets/templates/` 内置 8 语言项目脚手架（android / flutter / go / java / node / python / typescript / web），AI 可一键生成可运行项目
+- **编辑器增强**：`editor.html` 代码编辑器支持 TypeScript / Python，HTML 预览浮层，宿主 API 速查
 
 ---
 
@@ -827,6 +910,8 @@ AI 通过 `ui_widget` 工具下发 `type: "miniapp"` 组件：
 | **Action 类** | actions、toolcall、timer |
 | **Navigation 类** | breadcrumb、segmented、list |
 | **Decoration 类** | alert、badge、avatargroup、tagcloud、color、note、info |
+| **可视化** | mermaid（AI 自写 Mermaid 离线渲染）、html（网页工件 WebView 内联预览）、miniapp（小程序运行时） |
+| **组合** | composite（stack/tabs/accordion 多子卡聚合，可嵌套） |
 
 ### 技术特点
 
@@ -834,6 +919,33 @@ AI 通过 `ui_widget` 工具下发 `type: "miniapp"` 组件：
 - 所有组件都是真正可交互的 Compose 控件，支持实时状态联动
 - `command` 语法支持丰富动作：`ui_open_*`、`ui_toggle_*`、`linux:install`、`run:<命令>`、`open:<url>`、`copy:<文本>`、`ai:<提示词>`、`screen:<名称>`
 - 组件画廊入口：对话框 → 设置底部弹层 → 「可视化组件画廊」
+
+### 动态 UI 组件（```quro-ui 围栏）
+
+AI 写**组合式 JSON DSL**（基础节点任意嵌套成树），原生解释器（`QuroUiDslParser` + `A2uiInterpreter` → `QuroUiRenderer`）渲染为**成体系的交互界面**——表单 + 按钮 + 图表 + 列表联动，而非单张卡片。
+
+```json
+// ```quro-ui 围栏内容（组合式节点树）
+{
+  "root": {
+    "type": "column",
+    "children": [
+      { "type": "text", "props": { "text": "任务看板" } },
+      { "type": "row", "children": [
+        { "type": "button", "props": { "label": "新建", "command": "ui_open_todo" } },
+        { "type": "button", "props": { "label": "刷新", "command": "ai:刷新列表" } }
+      ]},
+      { "type": "list", "props": { "items": ["整理架构文档", "发布 v1.0.84"] } }
+    ]
+  }
+}
+```
+
+- **组合式 DSL**：基础节点（text/button/row/column/list/input/chart/switch…）任意嵌套成树，AI 自组织布局
+- **原生渲染**：不套 WebView，纯 Compose 解释执行，深浅色自适应
+- **模型输出即数据**：AI 只写 JSON 数据，端上解释执行，不执行 AI 生成代码（A2UI 铁律）
+- **兼容前缀**：`quro-ui`（现行）、`quro_ui`、`zorv/ui`、`zorv-ui` 历史前缀全部并入同一解释器
+- **术语边界**：`quro-ui` = 动态 UI（成体系界面）；`ui_widget`/`ui_card` = 富卡片（单张组件卡）；` ```quro-card ` = 小卡片（AI 自写单块卡）；`visual_popup`/`visual_question` = 弹窗/询问——彼此独立，严禁混用
 
 ---
 
@@ -865,6 +977,72 @@ AI 可以通过 Mermaid 语法创建流程图、架构图、时序图、状态�
 - **全屏模式**：支持手势缩放、横屏适配
 - **主题自动切换**：支持 default/dark/forest/neutral/base 五种主题，缺省按系统深浅色自动选择
 - **人与 AI 共享**：用户也能发 mermaid 围栏画图，可视化编程对人与 AI 都开放
+
+---
+
+## AIP 对话框文档排版（AI Presentation Protocol）
+
+**AIP 排版引擎**让 AI 的长篇输出（文档 / 报告 / 演示 / 导图）在对话框里以**原生富排版卡片**呈现，而非纯文本或代码块。AI 通过 `aip_compose` 工具调用（推荐）或 ` ```aip ` 围栏（兜底）输出**结构化信封**，客户端原生渲染。
+
+### 信封协议（AIP v1）
+
+```json
+{
+  "v": 1,
+  "kind": "doc | deck | mindmap",
+  "meta": { "title": "...", "subtitle": "...", "author": "..." },
+  "theme": { "name": "aurora", "accent": "#2E6BE6" },
+  "blocks": [
+    { "id": "b1", "type": "heading", "data": { "level": 1, "text": "..." } },
+    { "id": "b2", "type": "table", "data": { "headers": [...], "rows": [...] } },
+    { "id": "b3", "type": "chart", "data": { "type": "bar", "labels": [...], "series": [...] } }
+  ]
+}
+```
+
+### 块类型（17 种 + 兜底）
+
+| 类别 | 块类型 |
+|------|--------|
+| 标题/结构 | `heading` `section` |
+| 正文/列表 | `paragraph` `list` |
+| 数据 | `table` `chart` |
+| 引用/提示 | `quote` `callout` |
+| 步骤/时间 | `steps` `timeline` |
+| 代码/网页 | `code` `html` |
+| 导图/幻灯 | `mindmap` `slide` |
+| 布局/媒体 | `columns` `image` `divider` |
+| 兜底 | `fallback`（未知类型富文本渲染，绝不丢弃） |
+
+### 核心能力
+
+| 能力 | 说明 |
+|------|------|
+| **三种形态** | `doc` 长文档流、`deck` 16:9 幻灯片（9 种版式）、`mindmap` 思维导图 |
+| **形态互转** | doc ↔ deck ↔ mindmap 一键切换，零内容丢失（`AipConvert`） |
+| **导出真实文件** | docx（自研 OOXML 引擎）/ pptx（`---` 分页）/ md；复制全文 |
+| **全屏预览** | `AipFullscreenSheet` 满屏阅读、可滚动 |
+| **演示放映** | `DeckPresentOverlay` 全屏黑底、点按翻页 |
+| **流式渲染** | 残缺信封也可部分渲染（`lastSafeCut` 截断修复） |
+| **四级降级** | L1 字段修复 / L2 块级 / L3 通道（回退 Markdown）/ L4 纯文本 |
+| **智能路由** | `CanvasRouter` 三档通道 + 五级决策 + 中途软重路由 |
+
+### 入口
+
+- **工具调用（推荐）**：AI 调 `aip_compose` 工具（`kind` + `blocks` / `sections` / `content`），工具做 L1 修复后回传规范化信封，对话框自动渲染
+- **围栏兜底**：AI 在回复中写 ` ```aip ` 围栏，`ChatScreen` 提取为 `MsgBlock.Aip` → `AipCanvas` 渲染
+
+### 技术架构
+
+| 模块 | 文件 | 职责 |
+|------|------|------|
+| 协议层 | `core/canvas/Aip.kt` | 信封结构、17 种块类型、容错解析、四级降级 |
+| 转换层 | `core/canvas/AipConvert.kt` | doc↔deck↔mindmap 互转、导出 docx/pptx/md |
+| 路由层 | `core/canvas/CanvasRouter.kt` | 三档通道（A/B/C）+ 五级决策 + 软重路由 |
+| 工具层 | `core/tools/AipComposeTool.kt` | AI 调用入口，L1 修复 + blocks 自动合成 |
+| 渲染层 | `ui/canvas/AipCanvas.kt` | Compose 原生渲染，块级 when 注册表 |
+
+> 完整架构文档见 `docs/AIP_对话框排版引擎_技术架构.md`。
 
 ---
 
@@ -911,9 +1089,16 @@ Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{
 
 ---
 
-## 近期新增功能（v1.0.80）
+## 近期新增功能（v1.0.84）
 
-### v1.0.80（本次）
+### v1.0.84（本次）
+- **端侧 Python 3.14 引擎（PyEngine）**：内置真·CPython 3.14 原生解释器（`libpython3.14.so` + libssl/libcrypto/libsqlite + 完整标准库 654 文件），对话框内直接跑真实 Python，替代旧版 Brython 翻译；配 Scripting 沙箱（`SandboxRuntime` 隔离执行 + `HostApiDispatcher`/`GitHostApi` 宿主能力调用 + `TsTranspiler` TypeScript 转译）+ 8 语言项目模板（android/flutter/go/java/node/python/typescript/web）+ 编辑器 TS/Python 支持与 HTML 预览。
+- **AIP 排版引擎（AI Presentation Protocol）**：AI 输出结构化信封（```aip 围栏 / `aip_compose` 工具），对话框原生渲染**长文档 / PPT 演示 / 思维导图**卡片；17 种块类型 + 四级容错降级、三向形态互转、导出 docx/pptx/md、全屏预览、演示放映、复制全文、智能路由（`CanvasRouter`）。
+- **AIP 围栏行首锚定修复**：`RE_FENCE` 正则加 `(?m)^` 行首锚定，修复 AI 正文里用反引号引用 `` ```aip `` 时真正信封围栏被吞、AIP 降级为 Markdown 的问题。
+- **AIP 表格 / 富文本重叠修复**：`AipTable` 去掉 `horizontalScroll`（无限宽约束下 weight 失效导致列错位、窄屏逐字竖排互相覆盖），改列宽均分 + 软换行；`InlineText` 补行高 + fillMaxWidth，修复「一层覆盖一层」。
+- **aip_compose blocks 自动合成**：blocks 缺失/为空时自动从 sections/content/markdown/text 构造块，不报「缺少 blocks 数组」、不白屏。
+
+### v1.0.80
 - **CMS 框架修复**：内置终端模块的 `entry.sh` 补齐环境变量花括号（`${VAR:-default}`），端口注入不再被展开成字面量；内置模块改为**版本化幂等播种**，`entry.sh` 内容一致则跳过重写——你在终端里的手动修复不再被 App 覆盖。
 - **引擎共享服务常驻化**：静态资源服务（8080）改为「前台命令 + 常驻 proot 子进程」模型，proot 存活即服务存活，彻底修掉「部署时端口通、部署完就打不开」；引擎健康态改为**按端口实测**刷新服务列表，状态与实际一致。
 - **CMS 能力参数默认值**：能力可声明 `defaultArgs`，调用未传时自动补齐（如 `term_httpd_list` 的 `dir`），不再出现 `ls -la ""`。
