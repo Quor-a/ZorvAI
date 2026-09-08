@@ -172,6 +172,8 @@ class QuroToolRegistry {
             "aci_list", "aci_call",
             // 工作区 AI 工具：AI 直接读写 ZorvAI 自己的 QuroWorkspace（与构建台 ACI 协作写码→编译）
             "workspace_write", "workspace_read", "workspace_list",
+            // 构建台：端侧 APK 构建（Java → DEX → APK，AI 可真正触发编译打包，与 ui_open_build 互补）
+            "build_apk",
             // L1 无障碍控屏（CapOS 通道）
             "read_screen", "get_foreground_app", "get_screen_state",
             "tap_screen", "swipe_screen", "input_text", "scroll_screen", "global_action",

@@ -54,6 +54,7 @@ private val UI_ACTIONS = listOf(
     UiActionSpec("ui_open_terminal", "终端", "打开应用内终端 shell"),
     UiActionSpec("ui_open_editor", "代码编辑器", "打开内置代码编辑器"),
     UiActionSpec("ui_open_toolbox", "工具箱", "打开工具箱（文件管理/浏览器/IDE）"),
+    UiActionSpec("ui_open_build", "构建台", "打开 Zorv 构建台（端侧 APK 构建器：Java 工程 → DEX → APK，自带 ecj/d8/apksig 工具链，免 aapt2，可离线编译打包安卓安装包）"),
     UiActionSpec("ui_open_plugins", "插件", "打开插件管理"),
     UiActionSpec("ui_open_skills", "技能", "打开技能 SKILL 管理（查看/新增/编辑/启用用户自定义技能）"),
     UiActionSpec("ui_open_cms", "能力模块(CMS)", "打开 CMS 能力模块"),

@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -106,10 +107,7 @@ fun BuildApp(vm: ProjectViewModel = viewModel(), onClose: (() -> Unit)? = null) 
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Column {
-                        Text("Zorv 构建台", fontSize = 18.sp)
-                        Text("Java 工程 → DEX → APK", fontSize = 12.sp, lineHeight = 14.sp)
-                    } },
+                    title = { Text("Zorv 构建台", fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
                         Row {
                             if (onClose != null) {
@@ -124,18 +122,6 @@ fun BuildApp(vm: ProjectViewModel = viewModel(), onClose: (() -> Unit)? = null) 
                     },
                     actions = {
                         IconButton(
-                            onClick = { showSettings = true },
-                            enabled = !vm.isBuilding
-                        ) {
-                            Icon(Icons.Default.Settings, contentDescription = "工程设置")
-                        }
-                        IconButton(
-                            onClick = { showTools = true },
-                            enabled = !vm.isBuilding
-                        ) {
-                            Icon(Icons.Default.Build, contentDescription = "工具链")
-                        }
-                        IconButton(
                             onClick = { vm.buildProject() },
                             enabled = !vm.isBuilding
                         ) {
@@ -147,14 +133,30 @@ fun BuildApp(vm: ProjectViewModel = viewModel(), onClose: (() -> Unit)? = null) 
                         ) {
                             Icon(Icons.Default.Android, contentDescription = "构建 APK")
                         }
-                        IconButton(
-                            onClick = {
-                                if (vm.apkPath != null) exportApkLauncher.launch("app-release.apk")
-                                else if (vm.dexPath != null) exportLauncher.launch("classes.dex")
-                            },
-                            enabled = vm.dexPath != null
-                        ) {
-                            Icon(Icons.Default.Share, contentDescription = "导出产物")
+                        var menuOpen by remember { mutableStateOf(false) }
+                        IconButton(onClick = { menuOpen = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                        }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            DropdownMenuItem(
+                                text = { Text("工程设置") },
+                                enabled = !vm.isBuilding,
+                                onClick = { menuOpen = false; showSettings = true }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("工具链") },
+                                enabled = !vm.isBuilding,
+                                onClick = { menuOpen = false; showTools = true }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("导出产物") },
+                                enabled = vm.dexPath != null,
+                                onClick = {
+                                    menuOpen = false
+                                    if (vm.apkPath != null) exportApkLauncher.launch("app-release.apk")
+                                    else if (vm.dexPath != null) exportLauncher.launch("classes.dex")
+                                }
+                            )
                         }
                     }
                 )
@@ -176,6 +178,13 @@ fun BuildApp(vm: ProjectViewModel = viewModel(), onClose: (() -> Unit)? = null) 
                     .padding(padding)
                     .padding(horizontal = 12.dp)
             ) {
+                // 副标题（从 TopAppBar 移出，避免标题被挤竖排）
+                Text(
+                    "Java 工程 → DEX → APK",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)
+                )
                 // 编辑器
                 val fileName = vm.selected?.name ?: "未选择文件"
                 Text(

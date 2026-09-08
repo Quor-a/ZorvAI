@@ -504,7 +504,7 @@ object BuildEngine {
         // 这三个 dexed 工具 jar 会被重新生成/修正（例如本次修复 ecj dex），必须每次覆盖解包，
         // 否则覆盖安装时 filesDir 里的旧文件不会被替换，设备会一直用旧（坏的）dex。
         // base.apk 也在列：替换成带图标的模板后必须强制重解包，否则设备会继续用旧的空壳 base.apk。
-        val alwaysExtract = setOf("ecj_dex.jar", "d8_dex.jar", "apksigner_dex.jar", "base.apk")
+        val alwaysExtract = setOf("ecj_dex.jar", "d8_dex.jar", "apksigner_dex.jar", "base.apk", "debug.keystore")
         val names = listOf(
             "ecj.jar", "d8.jar", "apksigner.jar", "android.jar", "debug.keystore", "base.apk",
             // 已 dex 化的工具 jar：进程内加载，避免 Android 14+ 禁止独立 dalvikvm 且绕开 Android 16 Writable dex 限制。
@@ -702,7 +702,26 @@ object BuildEngine {
         val libs = ensureAssets(ctx)
         val baseApk = File(libs, "base.apk")
         // 自定义 keystore 优先；否则回退内置 debug.keystore（android/android/androiddebugkey）。
-        val keystore = config.keystore ?: File(libs, "debug.keystore")
+        // 若内置 keystore 缺失（如 *.keystore 被 .gitignore 排除未打包），优先从 APK assets 重新解包
+        // （不依赖设备是否带 BouncyCastle；实测部分设备运行时无 org.bouncycastle 类），BC 仅作兜底。
+        val keystore = config.keystore ?: run {
+            val builtin = File(libs, "debug.keystore")
+            if (!builtin.exists()) {
+                try {
+                    ctx.assets.open("libs/common/debug.keystore").use { ins ->
+                        builtin.parentFile?.mkdirs()
+                        FileOutputStream(builtin).use { os -> ins.copyTo(os) }
+                    }
+                } catch (e: Throwable) {
+                    try {
+                        generateKeystore(builtin, "androiddebugkey", "android", "android")
+                    } catch (e2: Throwable) {
+                        return BuildResult(false, "内置 debug.keystore 缺失且自动生成失败（${e2.message}），无法构建 APK。", dexPath, null)
+                    }
+                }
+            }
+            builtin
+        }
         if (!baseApk.exists() || !keystore.exists()) {
             return BuildResult(false, "工具链不完整（base.apk / keystore 缺失），无法构建 APK。", dexPath, null)
         }
@@ -741,7 +760,36 @@ object BuildEngine {
         try {
             toolchain.signApk(unsigned, outApk, keystore, config.storePassword, config.keyPassword, config.keyAlias)
         } catch (e: Throwable) {
-            return BuildResult(false, log.append("签名失败（含完整堆栈）：\n").append(throwableDetail(e)).append("\n[APK 签名失败]").toString(), dexPath, null)
+            // 内置 keystore 若因格式/版本问题（如 "Wrong version of key store"）加载失败，
+            // 现场用 BouncyCastle 重新生成一份同设备可读的 PKCS12 再重试一次，避免直接终止构建。
+            val recoverable = !customSign && (e.message?.contains("无法加载密钥库") == true
+                || e.message?.contains("Wrong version", ignoreCase = true) == true
+                || e.message?.contains("key store", ignoreCase = true) == true)
+            if (recoverable) {
+                // 优先：从 APK assets 重新解包内置 keystore（覆盖设备上可能陈旧的 JKS / 损坏文件），
+                // 不依赖设备运行时是否带 BouncyCastle（实测部分设备无 org.bouncycastle 类）。
+                try {
+                    val rebound = File(libs, "debug.keystore")
+                    rebound.delete()
+                    ctx.assets.open("libs/common/debug.keystore").use { ins ->
+                        FileOutputStream(rebound).use { os -> ins.copyTo(os) }
+                    }
+                    toolchain.signApk(unsigned, outApk, rebound, config.storePassword, config.keyPassword, config.keyAlias)
+                } catch (e2: Throwable) {
+                    // 兜底：现场用 BouncyCastle 重新生成（部分设备运行时无 BC，会失败，属预期）。
+                    try {
+                        val fresh = File(libs, "debug.keystore")
+                        fresh.delete()
+                        generateKeystore(fresh, "androiddebugkey", "android", "android")
+                        toolchain.signApk(unsigned, outApk, fresh, config.storePassword, config.keyPassword, config.keyAlias)
+                    } catch (e3: Throwable) {
+                        return BuildResult(false, log.append("签名失败（含完整堆栈）：\n").append(throwableDetail(e))
+                            .append("\n[内置 keystore 加载失败，自愈重试也失败]：\n").append(throwableDetail(e3)).append("\n[APK 签名失败]").toString(), dexPath, null)
+                    }
+                }
+            } else {
+                return BuildResult(false, log.append("签名失败（含完整堆栈）：\n").append(throwableDetail(e)).append("\n[APK 签名失败]").toString(), dexPath, null)
+            }
         }
         if (!outApk.exists()) {
             return BuildResult(false, log.toString() + "\n[APK 签名失败]", dexPath, null)
