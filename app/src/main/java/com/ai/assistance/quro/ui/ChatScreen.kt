@@ -756,6 +756,7 @@ fun ChatScreen(
             "ui_open_terminal" -> showTerminal = true
             "ui_open_editor" -> showEditor = true
             "ui_open_toolbox" -> showToolbox = true
+            "ui_open_build" -> showBuild = true
             "ui_open_plugins" -> showPlugins = true
             "ui_open_skills" -> showSkills = true
             "ui_open_schedule" -> showSchedule = true

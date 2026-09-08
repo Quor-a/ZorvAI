@@ -195,6 +195,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     //  · 记忆/经验/技能    : memory_*, experience_*, skills, tool_discovery
     //  · 动态 UI(必备)      : quro-ui 原生组件 = ui_dsl_spec / ui_validate / 消息内 ```quro-ui 围栏（AI 主动默认输出）
     //  · UI/可视化         : ui_control(ui_*), visual_*, creative_studio, fluid_cloud
+    //  · 构建台/APK 构建    : ui_open_build（打开构建台）, build_apk（端侧 Java→DEX→APK 离线打包）
     //  · 化小窗(纯 UI)     : 对话框顶栏 + 浏览器工具栏「化小窗」按钮（可拖拽悬浮小窗，非工具）
     // ══════════════════════════════════════════════════════════════
 
@@ -262,6 +263,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(ToolPkgListTool())
     r.register(ToolPkgCallTool())
     r.register(ProjectCreateTool())
+    // ═══ 构建台：端侧 APK 构建（Java → DEX → APK，AI 可真正触发编译打包）═══
+    r.register(BuildApkTool())
     // 后端工作区：多文件多语言项目
     r.register(WorkbenchTool())
     r.register(MiniAppStudioTool())    // 小程序工作台：AI 直接 CRUD/运行小程序工程（完整移植 MiniAppFramework）
@@ -428,7 +431,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // 后台 AIP 排版合成工具：整篇长文档/PPT/报告以「工具调用形式」产出，对话框据此渲染（B 通道 Canvas 引擎）
     r.register(AipComposeTool())         // 后台 AIP 排版合成（doc/deck/mindmap）
     // UI 动作工具：打开界面 / 弹层 / 开关（ui_open_* / ui_toggle_* / ui_clear_chat 等）
-    // allUiActionTools.forEach { r.register(it) }
+    // ⚠️ 此前此行被误注释，导致 ui_open_* 既没进可执行 map、又因 coreSpecs 从 map 过滤而未下发 → 整个 UI 动作体系对 AI 失效。
+    // 恢复注册后，ui_open_build 等全部 ui_open_*/ui_toggle_* 既下发给 LLM、又能被 engine 真正执行。
+    allUiActionTools.forEach { r.register(it) }
     // 对话框富卡片工具（ui_card）：可视化组件库（独立功能；小卡片=```quro-card 围栏，与此互不相关）
     r.register(UiCardTool())
     // 对话框富卡片工具（ui_widget）：可视化组件库（与 ui_control / quro-ui / visual_popup / 小卡片围栏互不相关）
