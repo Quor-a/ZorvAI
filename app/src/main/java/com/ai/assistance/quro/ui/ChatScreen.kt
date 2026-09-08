@@ -58,6 +58,8 @@ import com.ai.assistance.quro.core.tools.QuroMediaController
 import com.ai.assistance.quro.core.QuroBrowserBridge
 import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.workflow.data.WorkflowRepository
+// Zorv 构建台（端侧 APK 构建器，已从 build-aci 集成，剥离 ACI 受控端）
+import com.ai.assistance.quro.build.BuildScreen
 import com.ai.assistance.quro.workflow.data.model.Workflow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -735,6 +737,8 @@ fun ChatScreen(
     var showToolCenter by remember { mutableStateOf(false) }
     // 工具中心初始进入的子面板（供 AI 经 ui_control(open,target=vispro|node_editor|miniapp 等) 直达）
     var toolCenterInitial by remember { mutableStateOf<String?>(null) }
+    // Zorv 构建台（端侧 APK 构建器：Java → DEX → APK，已从 build-aci 集成，剥离 ACI 受控端）
+    var showBuild by remember { mutableStateOf(false) }
 
     // 可视化弹窗 / 询问（动态 UI 深链交互）：经 UiNavigationBus.VisualPopup / VisualAsk 触发
     var showVisualPopup by remember { mutableStateOf(false) }
@@ -2224,6 +2228,10 @@ fun ChatScreen(
                                     }
                                 }
                             }
+                            "build" -> {
+                                showBuild = true
+                                showToolCenter = false
+                            }
                             else -> showToolCenter = false
                         }
                     },
@@ -2246,7 +2254,14 @@ fun ChatScreen(
                 )
             }
         }
-        
+
+        // Zorv 构建台（端侧 APK 构建器：从工具中心「构建台」卡片进入，全屏覆盖层）
+        if (showBuild) {
+            BackHandler { showBuild = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+                BuildScreen(onClose = { showBuild = false })
+            }
+        }
 
         // 外观与对话设置页：全屏覆盖层（从设置「外观与对话」进入，返回关页回设置）
         val liveProfile by vm.userProfile.collectAsState()

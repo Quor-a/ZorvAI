@@ -1,5 +1,7 @@
 # Built application files
 *.apk
+# NOTE: 保留端侧 APK 构建器的模板 APK（位于 assets 内，是构建引擎注入 DEX 的底座，非构建产物）
+!app/src/main/assets/libs/common/base.apk
 *.aar
 *.ap_
 *.aab
@@ -15,6 +17,9 @@ bin/
 gen/
 out/
 build/
+# NOTE: 保留端侧 APK 构建器源码包（包名 com.ai.assistance.quro.build，目录名恰为 build，
+# 与 Gradle 构建输出 build/ 同名，必须显式解除忽略，否则源码不会被提交）
+!app/src/main/java/com/ai/assistance/quro/build/
 release/
 
 # Gradle files

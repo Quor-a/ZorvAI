@@ -131,13 +131,14 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         Triple("vispro", "可视化编程", "查看 / 编辑 Mermaid 源码，实时渲染并导出 SVG"),
         Triple("flow", "节点编辑器", "拖拽式节点流编程，导出 Mermaid"),
         Triple("browser_ai", "浏览器 AI 操控", "AI 用 browser_act 接管当前浏览器：snapshot/click/fill/eval（先 action=open）"),
+        Triple("build", "构建台", "端侧 APK 构建器：Java → DEX → APK，内置工具链（ecj/d8/apksig），免 aapt2，生成可独立安装的应用"),
     )
     LazyColumn(
         Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(cards) { (key, title, desc) ->
-            val launch = key in setOf("toolbox", "browser_ai")
+            val launch = key in setOf("toolbox", "browser_ai", "build")
             Card(
                 Modifier.fillMaxWidth().clickable { if (launch) onLaunch(key) else onSelect(key) },
                 shape = RoundedCornerShape(14.dp),

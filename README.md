@@ -185,7 +185,7 @@
   - **JSON**：数据/配置可视化
   - **CSS**：样式代码支持
   - **XML**：数据/配置文件支持
-  - **C/C++/Java**：语法高亮和算法逻辑撰写（端侧沙箱不能直接编译，需借助工作区或 ACI 构建台）
+  - **C/C++/Java**：语法高亮和算法逻辑撰写（端侧沙箱不能直接编译，需借助工作区或 Zorv 构建台（端侧 APK 构建器）
 - **终端**：打开 proot / 本地 Shell（应用内 Ubuntu 24.04 沙箱），可直接跑命令、查设备环境（入口：输入框「+」→ 终端，或 `ui_open_terminal`）
 - **工具箱**：文件 / 包名 / 浏览器等内置工具集合（入口：输入框「+」→ 工具箱，或 `ui_open_toolbox`）
 - **文件**：直接附件 / 上传到对话框（入口：输入框「+」→ 上传，或 `ui_open_upload`）
@@ -220,7 +220,7 @@ AI 在执行任务时可以通过可视化方式与用户交互，**强制规则
 | **JSON** | 数据可视化 | 数据/配置可视化 |
 | **CSS** | 样式支持 | 样式代码支持 |
 | **XML** | 数据/配置 | 数据/配置文件支持 |
-| **C/C++/Java** | 语法高亮 | 语法高亮和算法逻辑撰写（端侧沙箱不能直接编译，需借助工作区或 ACI 构建台） |
+| **C/C++/Java** | 语法高亮 | 语法高亮和算法逻辑撰写（端侧沙箱不能直接编译，需借助工作区或 Zorv 构建台（端侧 APK 构建器） |
 
 > **Python 3.14 引擎**：`core/python/PyEngine.kt` 封装端侧 CPython 3.14（arm64-v8a，`app/src/full/jniLibs` 预编译 `.so` + `app/src/full/assets/python` 完整 stdlib）。与旧版 Brython（浏览器内 Python 翻译）不同，这是**真·CPython 原生解释器**，支持标准库全量导入、网络、加密、sqlite，与 Scripting 沙箱共享运行时。
 
@@ -385,6 +385,18 @@ BackHandler(enabled = selected != null) {
 // 知识库列表视图：返回键关闭整个知识库屏
 BackHandler { showKnowledge = false }
 ```
+
+### 1.13 Zorv 构建台（端侧 APK 构建器）
+
+从 `build-aci`（Zorv 构建台）**直接集成进主程序**，并**剥离其 ACI 受控端能力**（已移除 `BuildAciService` / `BuildAciWakeReceiver` / ACI 权限与 Manifest 段 / `aidl-aci-core` 受控依赖 / 8 项 `build_*` ACI 能力与 console 双通道）。保留并内置的是**端侧 APK 构建引擎**本身：
+
+- **编译管线（进程内，无子进程、无 aapt2）**：`ecj`（Java → `.class`）→ `d8`（`.class` → `classes.dex`）→ `apksig` 进程内签名；`base.apk` 模板（含 `AndroidManifest.xml` + `resources.arsc` + 宿主 `MainActivity`）注入用户 `classes2.dex` 后签名，产出可独立安装运行的 APK。
+- **工具链资产随包分发**：`app/src/main/assets/libs/common/` 内置 `ecj.jar` / `ecj_dex.jar` / `d8.jar` / `d8_dex.jar` / `apksigner.jar` / `apksigner_dex.jar` / `android.jar` / `debug.keystore` / `base.apk`（约 50MB），首次运行解包到 `filesDir/buildproject/libs`；三个 dexed 工具 jar 为 STORED+4 字节对齐，ART 直接 mmap，Android 14/16 亦可靠。
+- **入口**：工具中心「构建台」卡片（或 `ui_open` 直达），全屏覆盖层 `BuildScreen`（`com.ai.assistance.quro.build.BuildScreen`，由 `ChatScreen` 经 `showBuild` 拉起）。
+- **功能**：文件树（新建/重命名/删除文件与目录）、Java 编辑器、实时编译日志、工具链自检（`ToolStatusDialog`）、工程设置（包名 / 应用名 / 图标 / 自定义签名 keystore），支持导出 DEX/APK 到系统分享。
+- **默认工程**：`com/example/hello/Main.java`（`Main.run()`），打开即编、构建即用；用户可在工程设置里改包名避免安装冲突。
+
+> 说明：集成后「端侧 APK 构建」是 Zorv AI 内置能力，不再依赖外部 ACI 受控端 App。原 README 中「需借助 ACI 构建台（云端编译）」之处，现统一指向本端侧构建台。
 
 ### 2. 内置技能 Skills（63 个 · 首次启动自动注入）
 - 轻量技能系统：`QuroSkill` → 注册为 `skill__{name}` 工具，可被 LLM 自动编排
@@ -893,7 +905,7 @@ AI 遇到模糊命令/缺少信息/需要确认时，弹出选择题/输入框�
 | **JSON** | 数据可视化 | 数据/配置可视化 |
 | **CSS** | 样式支持 | 样式代码支持 |
 | **XML** | 数据/配置 | 数据/配置文件支持 |
-| **C/C++/Java** | 语法高亮 | 语法高亮和算法逻辑撰写（端侧沙箱不能直接编译，需借助工作区或 ACI 构建台） |
+| **C/C++/Java** | 语法高亮 | 语法高亮和算法逻辑撰写（端侧沙箱不能直接编译，需借助工作区或 Zorv 构建台（端侧 APK 构建器） |
 
 ### Scripting 脚本沙箱（端侧 Python / TS）
 
