@@ -129,6 +129,15 @@ object QuroUiPointer {
         )
         is QuroSliderNode -> node.copy(label = rt(node.label, model) ?: node.label)
         is QuroProgressNode -> node.copy(label = rt(node.label, model) ?: node.label)
+        is QuroChipsNode -> node.copy(
+            items = node.items.mapNotNull { rt(it, model) },
+            selected = rt(node.selected, model) ?: node.selected,
+            onSelect = bindAction(node.onSelect, model),
+        )
+        is QuroMermaidNode -> node.copy(
+            source = rt(node.source, model) ?: node.source,
+            theme = rt(node.theme, model) ?: node.theme,
+        )
         is QuroDividerNode -> node
         is QuroSpacerNode -> node
     }

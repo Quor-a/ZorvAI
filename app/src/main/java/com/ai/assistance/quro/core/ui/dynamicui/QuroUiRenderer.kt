@@ -66,6 +66,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -82,6 +83,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
+import com.ai.assistance.quro.core.cards.QuroChatCard
+import com.ai.assistance.quro.ui.MermaidWebView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -202,7 +205,66 @@ private fun RenderNode(
         is QuroSliderNode -> RenderSlider(node, state, styled)
         is QuroListNode -> RenderList(node, state, hidden, onAction, styled)
         is QuroTabsNode -> RenderTabs(node, state, hidden, onAction, styled)
+        is QuroChipsNode -> RenderChips(node, state, hidden, onAction, styled)
+        is QuroMermaidNode -> RenderMermaid(node, styled)
     }
+}
+
+// =============================================================================================
+// chips / mermaid 专用渲染
+// =============================================================================================
+
+/** 选择标签组：横向滚动的一排可选标签，点击触发 onSelect 动作（单选）。 */
+@Composable
+private fun RenderChips(
+    node: QuroChipsNode,
+    state: MutableMap<String, Any>,
+    hidden: MutableMap<String, Boolean>,
+    onAction: (QuroUiAction, Map<String, String>) -> Unit,
+    modifier: Modifier,
+) {
+    if (node.items.isEmpty()) return
+    var selected by remember(node.id) { mutableStateOf(node.selected) }
+    Row(
+        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        node.items.forEach { label ->
+            val isSel = label == selected
+            FilterChip(
+                selected = isSel,
+                onClick = {
+                    selected = label
+                    state[node.id ?: "chips"] = label
+                    node.onSelect?.let { dispatch(it, state, hidden, onAction) }
+                },
+                label = { Text(label) },
+            )
+        }
+    }
+}
+
+/** 可视化编排图（mermaid）：内联离线城市渲染（复用 MermaidCard 运行时）。 */
+@Composable
+private fun RenderMermaid(node: QuroMermaidNode, modifier: Modifier) {
+    if (node.source.isBlank()) {
+        Text(
+            text = "⚠️ mermaid 节点缺少 source（图表源码）",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        return
+    }
+    val card = QuroChatCard.MermaidCard(
+        id = node.id ?: "mermaid_${node.source.hashCode()}",
+        title = "",
+        source = node.source,
+        theme = node.theme ?: "",
+    )
+    MermaidWebView(
+        card = card,
+        modifier = modifier.fillMaxWidth().heightIn(min = 80.dp, max = 600.dp),
+    )
 }
 
 // =============================================================================================
@@ -1097,14 +1159,16 @@ private fun RenderButton(
         val action = node.action
         if (action != null) dispatch(action, state, hidden, onAction)
     }
-    // 无动作时按钮退化为展示型胶囊，避免「点了没反应」的困惑
+    // 无动作时仍保持可点击：点击把按钮文案作为回调事件回发模型，
+    // 避免「点了完全没反应」的困惑（AI 漏写 action 也能有反馈，而不是死按钮）。
     if (node.action == null) {
-        AssistChip(
-            onClick = {},
-            enabled = false,
-            label = { Text(node.label) },
-            modifier = modifier,
-        )
+        val fallback = QuroCallbackAction(event = node.label.ifBlank { "click" })
+        val onClick = { dispatch(fallback, state, hidden, onAction) }
+        when (node.variant?.lowercase()) {
+            "outlined" -> OutlinedButton(onClick = onClick, modifier = modifier) { ButtonLabel(node) }
+            "text" -> TextButton(onClick = onClick, modifier = modifier) { ButtonLabel(node) }
+            else -> Button(onClick = onClick, modifier = modifier) { ButtonLabel(node) }
+        }
         return
     }
 

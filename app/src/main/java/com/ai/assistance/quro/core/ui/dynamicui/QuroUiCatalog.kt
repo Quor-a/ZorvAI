@@ -17,7 +17,8 @@ object QuroUiCatalog {
     val COMPONENTS: Set<String> = setOf(
         "column", "row", "box", "card", "pane", "text", "image", "icon", "badge", "progress",
         "divider", "spacer", "markdown", "video", "audio", "browser", "code", "html",
-        "button", "text_input", "checkbox", "switch", "select", "slider", "list", "tabs"
+        "button", "text_input", "checkbox", "switch", "select", "slider", "list", "tabs",
+        "chips", "mermaid"
     )
 
     /** 允许出现的动作类型（A2UI 第②小语种：动作语言）。 */
@@ -63,6 +64,14 @@ object QuroUiCatalog {
             is QuroTabsNode -> node.copy(tabs = node.tabs.map {
                 it.copy(node = it.node?.let { n -> validateNode(n, "$path/tabs", v) })
             })
+            is QuroChipsNode -> node.copy(
+                onSelect = validateAction(node.onSelect, "$path/chips.onSelect", v),
+            )
+            is QuroMermaidNode -> if (node.source.isBlank()) {
+                degradeText("$path.mermaid.source", "mermaid 节点缺少 source（图表源码）", v)
+            } else {
+                node
+            }
             is QuroListNode -> node.copy(itemTemplate = node.itemTemplate?.let { validateNode(it, "$path/list", v) })
             is QuroButtonNode -> node.copy(action = validateAction(node.action, "$path.button.action", v))
             is QuroTextNode -> validateText(node, path, v)
@@ -115,6 +124,8 @@ object QuroUiCatalog {
         is QuroSliderNode -> "slider"
         is QuroListNode -> "list"
         is QuroTabsNode -> "tabs"
+        is QuroChipsNode -> "chips"
+        is QuroMermaidNode -> "mermaid"
     }
 
     private fun validateAction(action: QuroUiAction?, path: String, v: MutableList<Violation>): QuroUiAction? {

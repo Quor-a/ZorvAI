@@ -32,7 +32,6 @@
     --zv-danger: #dc2626;
     --zv-radius: 12px;
     --zv-space: 12px;
-    --zv-font: -apple-system, "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
   }
   html.dark {
     --zv-bg: #111214;
@@ -52,7 +51,8 @@
     margin: 0; padding: 0;
     background: transparent;
     color: var(--zv-fg);
-    font-family: var(--zv-font);
+    /* 不单独指定字体：继承 WebView 默认系统字体，与宿主应用字体保持一致，
+       避免动态 UI 组件出现与应用其余界面不一致的「单独字体」。 */
     font-size: 15px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;

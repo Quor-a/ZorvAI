@@ -313,6 +313,23 @@ data class QuroTabItem(
     val node: QuroUiNode? = null,
 )
 
+/** 选择标签组（chips）：可横向滚动的一排可选标签，点击触发 [onSelect] 动作（单选）。 */
+data class QuroChipsNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val items: List<String> = emptyList(),
+    val selected: String? = null,
+    val onSelect: QuroUiAction? = null,
+) : QuroUiNode
+
+/** 可视化编排图（mermaid 源码）：内联离线城市渲染（复用 MermaidCard 运行时）。 */
+data class QuroMermaidNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val source: String = "",
+    val theme: String? = null,
+) : QuroUiNode
+
 // =============================================================================================
 // 动作模型
 // =============================================================================================
