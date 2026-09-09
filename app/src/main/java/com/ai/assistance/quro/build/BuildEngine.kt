@@ -684,6 +684,42 @@ object BuildEngine {
             return BuildResult(false, f, null)
         }
 
+        // 验证入口类：构建台运行时要求 com.example.hello.Main 固定存在
+        // （宿主 base.apk 的 MainActivity.runUserCode 里硬编码 Class.forName("com.example.hello.Main")）。
+        // 此前若用户写的代码包名/类名不是这个，编译会"成功"出 APK，装上后运行时直接 ClassNotFoundException 崩溃。
+        // 这里在产物出包前就拦住，给出可操作的错误信息（实际编出了什么 + 正确写法示例）。
+        val expectedEntry = File(outDir, "com/example/hello/Main.class")
+        if (!expectedEntry.exists()) {
+            val compiled = outDir.walkTopDown()
+                .filter { it.isFile && it.name.endsWith(".class", ignoreCase = true) }
+                .map { it.relativeTo(outDir).path.replace('\\', '/') }
+                .toList()
+            val msg = buildString {
+                appendLine("❌ 编译产物的入口类不符合要求：")
+                appendLine("构建台运行时要求入口类固定为 `com.example.hello.Main`（宿主 MainActivity 硬编码 Class.forName 这个名字）。")
+                appendLine("但本次编译未发现该类。")
+                appendLine()
+                appendLine("【实际编出的类】")
+                if (compiled.isEmpty()) {
+                    appendLine("（无）— ecj 似乎没产出任何 .class，请先看上面 ecj 日志排查语法/路径问题。")
+                } else {
+                    compiled.forEach { appendLine("  · $it") }
+                }
+                appendLine()
+                appendLine("【正确写法示例】")
+                appendLine("  package com.example.hello;")
+                appendLine("  public class Main {")
+                appendLine("      public static void main(String[] args) {")
+                appendLine("          // 你的代码")
+                appendLine("      }")
+                appendLine("  }")
+                appendLine("  // 文件建议放在：MyApp/src/com/example/hello/Main.java")
+                appendLine()
+                appendLine("（构建台后续会支持任意包名/类名；当前版本入口必须是上面这套。）")
+            }
+            return BuildResult(false, log.append("\n").append(msg).toString(), null)
+        }
+
         // 2) d8：class → dex
         // 关键修复（PC 干跑发现）：本版 R8 的 parse 不支持「目录」作为 program 输入、
         // 也不支持「文件」作为 --output（必须是目录或 jar/zip）。因此先把 ecj 产物打成 jar，
@@ -1046,6 +1082,42 @@ object BuildEngine {
             val f = log.toString()
             saveBuildLog(ctx, f)
             return BuildResult(false, f, null)
+        }
+
+        // 验证入口类：构建台运行时要求 com.example.hello.Main 固定存在
+        // （宿主 base.apk 的 MainActivity.runUserCode 里硬编码 Class.forName("com.example.hello.Main")）。
+        // 此前若用户写的代码包名/类名不是这个，编译会"成功"出 APK，装上后运行时直接 ClassNotFoundException 崩溃。
+        // 这里在产物出包前就拦住，给出可操作的错误信息（实际编出了什么 + 正确写法示例）。
+        val expectedEntry = File(outDir, "com/example/hello/Main.class")
+        if (!expectedEntry.exists()) {
+            val compiled = outDir.walkTopDown()
+                .filter { it.isFile && it.name.endsWith(".class", ignoreCase = true) }
+                .map { it.relativeTo(outDir).path.replace('\\', '/') }
+                .toList()
+            val msg = buildString {
+                appendLine("❌ 编译产物的入口类不符合要求：")
+                appendLine("构建台运行时要求入口类固定为 `com.example.hello.Main`（宿主 MainActivity 硬编码 Class.forName 这个名字）。")
+                appendLine("但本次编译未发现该类。")
+                appendLine()
+                appendLine("【实际编出的类】")
+                if (compiled.isEmpty()) {
+                    appendLine("（无）— ecj 似乎没产出任何 .class，请先看上面 ecj 日志排查语法/路径问题。")
+                } else {
+                    compiled.forEach { appendLine("  · $it") }
+                }
+                appendLine()
+                appendLine("【正确写法示例】")
+                appendLine("  package com.example.hello;")
+                appendLine("  public class Main {")
+                appendLine("      public static void main(String[] args) {")
+                appendLine("          // 你的代码")
+                appendLine("      }")
+                appendLine("  }")
+                appendLine("  // 文件建议放在：MyApp/src/com/example/hello/Main.java")
+                appendLine()
+                appendLine("（构建台后续会支持任意包名/类名；当前版本入口必须是上面这套。）")
+            }
+            return BuildResult(false, log.append("\n").append(msg).toString(), null)
         }
 
         // 2) d8：class → dex
