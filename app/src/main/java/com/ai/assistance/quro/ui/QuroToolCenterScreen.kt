@@ -815,7 +815,12 @@ private fun NodeEditorPanel(
                         ) {
                             super.onReceivedError(view, errorCode, description, failingUrl)
                             android.util.Log.e("NodeEditor", "WebView error code=$errorCode desc=$description url=$failingUrl")
-                            Toast.makeText(context, "节点编辑器加载失败: $description (code=$errorCode)", Toast.LENGTH_LONG).show()
+                            // 仅主框架（node_editor.html 本身）加载失败才算致命；mermaid.min.js 等子资源
+                            // 偶尔被 ROM 拦截时不应弹「加载失败」吓用户（编辑器本体已渲染，预览降级即可）。
+                            val isMain = failingUrl == null || failingUrl.endsWith("node_editor.html")
+                            if (isMain) {
+                                Toast.makeText(context, "节点编辑器加载失败: $description (code=$errorCode)", Toast.LENGTH_LONG).show()
+                            }
                         }
                     }
                     settings.javaScriptEnabled = true
@@ -831,6 +836,7 @@ private fun NodeEditorPanel(
                     // 这两项会让部分 WebView 内核算出 0 高可见视口 → 整页白屏。
                     // 对齐能正常渲染的 mermaid 面板（它不设这两项）。
                     settings.allowFileAccess = true
+                    settings.allowFileAccessFromFileURLs = true
                     settings.allowContentAccess = true
                     settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
