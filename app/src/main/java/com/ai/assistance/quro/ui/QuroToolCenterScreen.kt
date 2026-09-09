@@ -656,23 +656,21 @@ private fun NodeEditorPanel(
         }
     }
 
-    // ══ #667：AI 写入节点流工程后，画布实时跟随刷新（无需用户手动重开面板）══
-    // 轮询 studio/flow 下最新 .qne 的修改时间，变化时自动 __restore 到当前画布。
+    // ══ #667 修复：AI 写入节点流工程后，画布实时跟随刷新（无需用户手动重开面板）══
+    // 关键修正：只自动刷新「当前正在查看的工程」自身文件（按 flowName 定位），
+    // 不再用全局 maxByOrNull 取最新 .qne —— 否则 AI 往别的工程写文件会强行切走你的画布视图与工程名。
     // 用户在画布上未保存的编辑不会改变文件 mtime，因此不会被轮询覆盖；只有 AI 调
-    // node_editor 写入新文件（或用户点「保存工程」）才会触发刷新。
+    // node_editor 写入「当前工程」文件（或你点「保存工程」）才会触发刷新。
     val scope = rememberCoroutineScope()
     var lastLoadedMtime by remember { mutableStateOf(0L) }
     LaunchedEffect(Unit) {
         while (true) {
             delay(2000)
             val wv = wvRef.value ?: continue
-            val latest = flowDir.listFiles()
-                ?.filter { it.extension == "qne" }
-                ?.maxByOrNull { it.lastModified() }
-            if (latest != null && latest.lastModified() != lastLoadedMtime) {
-                lastLoadedMtime = latest.lastModified()
-                flowName = latest.nameWithoutExtension
-                wv.evaluateJavascript("window.__restore(${JSONObject.quote(latest.readText(Charsets.UTF_8))})") {}
+            val cur = File(flowDir, "$flowName.qne")
+            if (cur.exists() && cur.lastModified() != lastLoadedMtime) {
+                lastLoadedMtime = cur.lastModified()
+                wv.evaluateJavascript("window.__restore(${JSONObject.quote(cur.readText(Charsets.UTF_8))})") {}
             }
         }
     }
@@ -716,7 +714,12 @@ private fun NodeEditorPanel(
                     wvRef.value?.evaluateJavascript("JSON.stringify([window.__snapshot()])") { r ->
                         val snap = decodeJsString(r)
                         if (snap.isBlank()) Toast.makeText(context, "画布为空，无可保存内容", Toast.LENGTH_SHORT).show()
-                        else { val msg = writeFlow(flowName, snap); flowRefresh++; Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }
+                        else {
+                            val msg = writeFlow(flowName, snap)
+                            flowRefresh++
+                            lastLoadedMtime = File(flowDir, "${flowName.ifBlank { "default" }}.qne").lastModified()
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        }
                     }
                 },
             ) { Text("保存工程") }
@@ -756,6 +759,7 @@ private fun NodeEditorPanel(
                 val f = File(flowDir, "${flowName.ifBlank { "default" }}.qne")
                 if (f.exists()) {
                     wvRef.value?.evaluateJavascript("window.__restore(${JSONObject.quote(f.readText(Charsets.UTF_8))})") {}
+                    lastLoadedMtime = f.lastModified()
                     Toast.makeText(context, "已载入工程「${flowName}」", Toast.LENGTH_SHORT).show()
                 } else Toast.makeText(context, "工程不存在：$flowName", Toast.LENGTH_SHORT).show()
             }) { Text("载入") }
@@ -775,6 +779,7 @@ private fun NodeEditorPanel(
                             val f = File(flowDir, "$name.qne")
                             wvRef.value?.evaluateJavascript("window.__restore(${JSONObject.quote(f.readText(Charsets.UTF_8))})") {}
                             flowName = name
+                            lastLoadedMtime = f.lastModified()
                         }) { Text("打开") }
                         TextButton(onClick = {
                             if (File(flowDir, "$name.qne").delete()) { flowRefresh++; Toast.makeText(context, "已删除：$name", Toast.LENGTH_SHORT).show() }
@@ -784,28 +789,43 @@ private fun NodeEditorPanel(
             }
         }
         AndroidView(
-            modifier = Modifier.fillMaxSize().weight(1f),
+            modifier = Modifier.fillMaxWidth().weight(1f),
             factory = { ctx ->
                 WebView(ctx).apply {
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
-                            // 打开即恢复「最近写入」的工程（AI 用 node_editor 工具写入任意命名工程后，
-                            // 面板打开即可见，无需手动点开）——取修改时间最新的 .qne 并同步工程名
-                            val latest = flowDir.listFiles()
-                                ?.filter { it.extension == "qne" }
-                                ?.maxByOrNull { it.lastModified() }
-                            if (latest != null) {
-                                lastLoadedMtime = latest.lastModified()
+                            // 只恢复「当前正在查看的工程」自身文件，绝不取全局最新 .qne 劫持画布/改工程名
+                            // （#667 真实要修的 bug 就在这里：原先用 maxByOrNull 全局取最新 .qne，
+                            //  AI 往别的工程写文件，面板一打开就被强行切走视图并改名）。
+                            val cur = File(flowDir, "${flowName.ifBlank { "default" }}.qne")
+                            if (cur.exists()) {
+                                lastLoadedMtime = cur.lastModified()
                                 view?.post {
-                                    flowName = latest.nameWithoutExtension
-                                    evaluateJavascript("window.__restore(${JSONObject.quote(latest.readText(Charsets.UTF_8))})") {}
+                                    evaluateJavascript("window.__restore(${JSONObject.quote(cur.readText(Charsets.UTF_8))})") {}
                                 }
                             }
+                        }
+
+                        override fun onReceivedError(
+                            view: WebView?,
+                            errorCode: Int,
+                            description: String?,
+                            failingUrl: String?,
+                        ) {
+                            super.onReceivedError(view, errorCode, description, failingUrl)
+                            android.util.Log.e("NodeEditor", "WebView error code=$errorCode desc=$description url=$failingUrl")
+                            Toast.makeText(context, "节点编辑器加载失败: $description (code=$errorCode)", Toast.LENGTH_LONG).show()
                         }
                     }
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
+                    // 与能正常渲染的 MermaidWebView 完全对齐：放开同目录 file:// 资源访问、强制 UTF-8、
+                    // 透明底色，避免部分 ROM/WebView 内核下 mermaid.min.js 被拦截或整页白屏。
+                    settings.allowUniversalAccessFromFileURLs = true
+                    settings.loadsImagesAutomatically = true
+                    settings.defaultTextEncodingName = "UTF-8"
+                    setBackgroundColor(0xFF0F1115.toInt()) // 实色底色，杜绝整页透出背后白/黑 surface（节点编辑器白/黑屏根因）
                     // ══ 白屏修复：不要 loadWithOverviewMode / useWideViewPort。
                     // node_editor.html 用 html,body{height:100%;overflow:hidden} + meta viewport，
                     // 这两项会让部分 WebView 内核算出 0 高可见视口 → 整页白屏。

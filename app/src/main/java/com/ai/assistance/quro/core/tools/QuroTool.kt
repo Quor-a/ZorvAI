@@ -132,6 +132,8 @@ class QuroToolRegistry {
             "http_request", "open_web", "ai_browser",
             // 自研端侧联网检索（多引擎并发 + 查询改写 + 正文密度抽取 + 五信号重排 + 上下文打包）
             "web_search", "read_url",
+            // 对话框内 GitHub 搜索引擎（仓库/代码/Issue/用户）
+            "github_search",
             // 屏幕捕获授权（AI 主动发起 MediaProjection 系统授权，无需手动长按开关）
             "enable_screen_capture",
             // 代码执行
