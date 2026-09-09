@@ -8,9 +8,8 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
 
-// GitHub OAuth（授权码流程，与 operit 一致）：优先取 gradle.properties，运行时也可在登录屏覆盖
+// GitHub OAuth（应用内 WebView 授权码流程 + PKCE，无需 client_secret）：client_id 由开发者在 gradle.properties 烤进 BuildConfig
 val githubClientId = (project.findProperty("GITHUB_CLIENT_ID") as String?) ?: ""
-val githubClientSecret = (project.findProperty("GITHUB_CLIENT_SECRET") as String?) ?: ""
 
 plugins {
     alias(libs.plugins.android.application)
@@ -48,9 +47,8 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-        // GitHub 登录配置（Token / OAuth 设备流，无需硬编码凭据）
+        // GitHub 登录配置（WebView OAuth 授权码 + PKCE，client_id 烤进 BuildConfig；无需 client_secret）
         buildConfigField("String", "GITHUB_CLIENT_ID", "\"$githubClientId\"")
-        buildConfigField("String", "GITHUB_CLIENT_SECRET", "\"$githubClientSecret\"")
         buildConfigField("String", "GITHUB_OAUTH_REDIRECT", "\"zorv://github-oauth-callback\"")
         // 插件逻辑层引擎（QuickJS）只编 arm64-v8a（首页插件 Demo 足够，缩小包体）
         ndk {
