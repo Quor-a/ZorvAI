@@ -3,11 +3,6 @@ package com.ai.assistance.quro.ui
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.webkit.WebResourceRequest
-import androidx.compose.ui.viewinterop.AndroidView
-import com.ai.assistance.quro.BuildConfig
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -59,7 +55,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.quro.core.github.QuroGitHubClient
-import com.ai.assistance.quro.core.github.QuroGitHubOAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -126,136 +121,125 @@ fun QuroGitHubScreen(onClose: () -> Unit, initialQuery: String = "") {
 }
 
 /**
- * GitHub 登录屏：应用内 WebView 走官方 OAuth 授权码流程（PKCE，无需 client_secret）。
- * 流程：点「用 GitHub 登录」→ WebView 打开 GitHub 授权页 → 用户用 GitHub 账号授权 →
- * GitHub 重定向到 zorv://github-oauth-callback?code=... → WebView 拦截取码 → 换 access_token → 登录。
- * client_id 由开发者在 gradle.properties 烤进 BuildConfig（普通用户看不到、也不会被要求填任何东西）。
+ * GitHub 登录屏：两种「登录官方 GitHub」的方式，任选其一，都是真实登录（取回账户/仓库/Issue/通知）。
+ *  - PAT：在 github.com/settings/tokens 生成 Personal Access Token 粘贴即可，零注册、立即可用。
+ *  - 设备流：官方 OAuth 设备授权（与 gh CLI 同源），仅需填一次 OAuth App 的 Client ID，
+ *    在浏览器输入验证码即完成授权，无需注册回调地址（这正是 WebView 授权码流程在客户端卡死的原因）。
  */
 @Composable
 private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val clientId = BuildConfig.GITHUB_CLIENT_ID
-    var phase by remember { mutableStateOf(if (clientId.isBlank()) "unconfigured" else "entry") }
+    var mode by remember { mutableStateOf("menu") }        // menu | pat | device
     var busy by remember { mutableStateOf(false) }
-    var authUrl by remember { mutableStateOf("") }
-    var codeVerifier by remember { mutableStateOf("") }
-    var state by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
 
-    when (phase) {
-        "entry" -> Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text("登录 GitHub", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "点击下方按钮，在弹出页面用你的 GitHub 账号授权即可完成登录。无需填写任何 Token 或密钥。",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Spacer(Modifier.height(20.dp))
-            Button(
-                onClick = {
-                    state = QuroGitHubOAuth.randomState()
-                    codeVerifier = QuroGitHubOAuth.randomCodeVerifier()
-                    authUrl = QuroGitHubOAuth.buildAuthUrl(clientId, state, QuroGitHubOAuth.codeChallengeS256(codeVerifier))
-                    phase = "webview"
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("用 GitHub 登录") }
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("返回") }
-        }
-        "webview" -> GitHubLoginWebView(
-            authUrl = authUrl,
-            busy = busy,
-            expectedState = state,
-            onCode = { code ->
-                busy = true
-                scope.launch {
-                    val token = QuroGitHubOAuth.exchangeCodeForToken(clientId, code, codeVerifier)
-                    busy = false
-                    if (token == null) { phase = "entry"; return@launch }
-                    if (QuroGitHubOAuth.applyLogin(ctx, token)) onLoggedIn()
-                    else phase = "entry"
-                }
-            },
-            onError = { phase = "entry" },
-            onCancel = { phase = "entry" },
+    var pat by remember { mutableStateOf("") }             // PAT 输入
+    var clientId by remember { mutableStateOf(QuroGitHubClient.getClientId(ctx)) }
+    var dev by remember { mutableStateOf<QuroGitHubClient.DeviceCode?>(null) }
+    var cancelled by remember { mutableStateOf(false) }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("登录 GitHub", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(
+            "用你的 GitHub 账号授权本应用。两种方式都会真实登录官方 GitHub。",
+            style = MaterialTheme.typography.bodySmall,
         )
-        else -> Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text("GitHub 登录未配置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "开发者：在 gradle.properties 填入 GITHUB_CLIENT_ID 后重新构建，即可启用一键 OAuth 登录。",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("返回") }
-        }
-    }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun GitHubLoginWebView(
-    authUrl: String,
-    busy: Boolean,
-    expectedState: String,
-    onCode: (String) -> Unit,
-    onError: (String) -> Unit,
-    onCancel: () -> Unit,
-) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("GitHub 授权中…") },
-                navigationIcon = { IconButton(onClick = onCancel) { Icon(Icons.Filled.ArrowBack, "取消") } },
-            )
-        },
-    ) { pad ->
-        Box(Modifier.fillMaxSize().padding(pad)) {
-            AndroidView(
-                factory = { c ->
-                    WebView(c).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.userAgentString = "ZorvAI"
-                        webViewClient = object : WebViewClient() {
-                            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                val url = request?.url?.toString() ?: return false
-                                return intercept(url, expectedState, onCode, onError)
-                            }
-
-                            @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
-                            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                                if (url == null) return false
-                                return intercept(url, expectedState, onCode, onError)
-                            }
+        when (mode) {
+            "menu" -> {
+                Button(onClick = { mode = "pat" }, modifier = Modifier.fillMaxWidth()) { Text("用 Personal Access Token 登录") }
+                Button(onClick = { mode = "device" }, modifier = Modifier.fillMaxWidth()) { Text("用 OAuth 设备流登录") }
+            }
+            "pat" -> {
+                OutlinedTextField(
+                    value = pat, onValueChange = { pat = it },
+                    label = { Text("Personal Access Token") },
+                    placeholder = { Text("ghp_xxx / github_pat_xxx") },
+                    singleLine = false, modifier = Modifier.fillMaxWidth(),
+                )
+                Button(
+                    onClick = {
+                        if (pat.isBlank()) { errorMsg = "请先粘贴 Token"; return@Button }
+                        errorMsg = null; busy = true
+                        scope.launch {
+                            val acc = withContext(Dispatchers.IO) { QuroGitHubClient.loginWithToken(ctx, pat) }
+                            busy = false
+                            if (acc != null) onLoggedIn() else errorMsg = "令牌无效或网络异常，请检查后重试"
                         }
-                        loadUrl(authUrl)
+                    },
+                    modifier = Modifier.fillMaxWidth(), enabled = !busy,
+                ) { Text(if (busy) "登录中…" else "登录") }
+                Button(onClick = { mode = "menu"; pat = "" }, modifier = Modifier.fillMaxWidth()) { Text("返回") }
+            }
+            "device" -> {
+                if (dev == null) {
+                    OutlinedTextField(
+                        value = clientId, onValueChange = { clientId = it },
+                        label = { Text("OAuth App Client ID") },
+                        placeholder = { Text("github.com/settings/developers 注册的 Client ID") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    )
+                    Button(
+                        onClick = {
+                            val cid = clientId.trim()
+                            if (cid.isBlank()) { errorMsg = "请填写 Client ID"; return@Button }
+                            errorMsg = null; busy = true
+                            scope.launch {
+                                val d = withContext(Dispatchers.IO) {
+                                    QuroGitHubClient.setClientId(ctx, cid)
+                                    QuroGitHubClient.startDeviceFlow(cid)
+                                }
+                                busy = false
+                                if (d == null) errorMsg = "发起设备流失败（Client ID 无效或未联网）" else dev = d
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(), enabled = !busy,
+                    ) { Text(if (busy) "发起中…" else "发起授权") }
+                    Text(
+                        "没有 Client ID？在 github.com/settings/developers → New OAuth App 创建一个（无需填回调地址），把 Client ID 粘上来即可。",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Button(onClick = { mode = "menu" }, modifier = Modifier.fillMaxWidth()) { Text("返回") }
+                } else {
+                    val d = dev!!
+                    Text("请在浏览器打开以下地址并输入验证码：", style = MaterialTheme.typography.bodyMedium)
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                            Text(d.verificationUriComplete.ifBlank { d.verificationUri }, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.height(8.dp))
+                            Text("你的验证码：${d.userCode}", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                        }
                     }
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
-            if (busy) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                    LaunchedEffect(d) {
+                        cancelled = false
+                        val res = withContext(Dispatchers.IO) {
+                            QuroGitHubClient.pollForToken(clientId, d.deviceCode, d.interval) { cancelled }
+                        }
+                        when (res) {
+                            is QuroGitHubClient.DeviceLoginResult.Token -> {
+                                if (QuroGitHubClient.login(ctx, res.value)) onLoggedIn()
+                                else errorMsg = "登录失败：令牌保存异常"
+                            }
+                            is QuroGitHubClient.DeviceLoginResult.Error -> errorMsg = res.message
+                            QuroGitHubClient.DeviceLoginResult.Cancelled -> {}
+                        }
+                    }
+                    errorMsg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                    Button(onClick = { cancelled = true; dev = null; errorMsg = null }, modifier = Modifier.fillMaxWidth()) { Text("取消") }
                 }
             }
         }
-    }
-}
 
-/** 拦截 OAuth 回调重定向：zorv://github-oauth-callback?code=...&state=... → 取出 code。返回 true 表示已消费该导航。 */
-private fun intercept(url: String, expectedState: String, onCode: (String) -> Unit, onError: (String) -> Unit): Boolean {
-    if (!QuroGitHubOAuth.isOAuthRedirect(url)) return false
-    val code = QuroGitHubOAuth.parseCode(url, expectedState)
-    if (code != null) onCode(code) else onError("GitHub 回调缺少授权码")
-    return true
+        errorMsg?.let { if (mode != "device" || dev == null) Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        if (mode != "device" || dev == null) {
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("关闭") }
+        }
+    }
 }
 
 @Composable
