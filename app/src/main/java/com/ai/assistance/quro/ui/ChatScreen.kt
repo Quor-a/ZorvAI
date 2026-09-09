@@ -179,6 +179,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -3296,7 +3297,12 @@ private fun MessageRow(
                     SelectionContainer {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         // 动态 UI 区块不在气泡内渲染（会被 280dp 压窄 / 输入条遮挡），改在消息底部全宽内联渲染。
-                        blocks.filter { it !is MsgBlock.DynamicUi && it !is MsgBlock.SelfCard }.forEach { blk ->
+                        val bubbleRenderBlocks = blocks.filter { it !is MsgBlock.DynamicUi && it !is MsgBlock.SelfCard }
+                        // v1089：每条块用稳定 key 渲染，避免流式/recomposition 时 Compose 按槽位复用
+                        // AndroidView/WebView，导致两条 html 预览被合并成一个框（两个渲染框融合成一）。
+                        for (bIdx in bubbleRenderBlocks.indices) {
+                            val blk = bubbleRenderBlocks[bIdx]
+                            key(bIdx, blk::class.simpleName ?: "blk") {
                             when (blk) {
                                 is MsgBlock.Text -> {
                                     // [D1] 接入项目统一富文本渲染器 RichText（ui/dialog/RichText.kt）：
@@ -3363,6 +3369,7 @@ private fun MessageRow(
                                 // 自研卡片围栏已在消息底部全宽内联渲染，气泡内不再重复渲染（与动态 UI 同源机制）。
                                 is MsgBlock.SelfCard -> {}
                             }
+                            }
                         }
                         }
                     }
@@ -3426,11 +3433,13 @@ private fun MessageRow(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         msg.genUiCardIds.forEach { cardId ->
-                            GenUiCard(
-                                artifactId = cardId,
-                                controller = genUiController,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
+                            key(cardId) {
+                                GenUiCard(
+                                    artifactId = cardId,
+                                    controller = genUiController,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
                     }
                 }
@@ -3449,11 +3458,13 @@ private fun MessageRow(
                     maxItemsInEachRow = Int.MAX_VALUE,
                 ) {
                     msg.cards.forEach { card ->
-                        QuroChatCardView(
-                            card,
-                            onCommand,
-                            modifier = if (isCompactQuroCard(card)) Modifier.wrapContentWidth() else Modifier.fillMaxWidth(),
-                        )
+                        key(card.id) {
+                            QuroChatCardView(
+                                card,
+                                onCommand,
+                                modifier = if (isCompactQuroCard(card)) Modifier.wrapContentWidth() else Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -3500,12 +3511,16 @@ private fun MessageRow(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         maxItemsInEachRow = Int.MAX_VALUE,
                     ) {
-                        bubbleCards.forEach { card ->
-                            QuroChatCardView(
-                                card,
-                                onCommand,
-                                modifier = if (isCompactQuroCard(card)) Modifier.wrapContentWidth() else Modifier.fillMaxWidth(),
-                            )
+                        // v1089：每张卡片用稳定 key（card.id）渲染，避免 WebView 列表按槽位复用
+                        // 导致两张 HtmlPreviewCard 融合成一个框。
+                        for (c in bubbleCards) {
+                            key(c.id) {
+                                QuroChatCardView(
+                                    c,
+                                    onCommand,
+                                    modifier = if (isCompactQuroCard(c)) Modifier.wrapContentWidth() else Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
                     }
                 }
@@ -3515,17 +3530,21 @@ private fun MessageRow(
         // 仅在「非纯动态UI消息」时渲染（纯动态UI消息已在上面的 if 分支内作为对话框本身直接渲染）。
         if (dynamicUiBlocks.isNotEmpty()) {
             Spacer(Modifier.height(6.dp))
-            dynamicUiBlocks.forEach { blk ->
-                Spacer(Modifier.height(6.dp))
-                DynamicUiBlock(source = blk.source, onCommand = onCommand, onOpenLink = onOpenLink)
+            for (d in dynamicUiBlocks) {
+                key(d.source.hashCode()) {
+                    Spacer(Modifier.height(6.dp))
+                    DynamicUiBlock(source = d.source, onCommand = onCommand, onOpenLink = onOpenLink)
+                }
             }
         }
         // ── 自研卡片渲染（feat_self_card）：全宽内联渲染进对话框，独立功能，与动态 UI 不合并 ──
         if (selfCardBlocks.isNotEmpty()) {
             Spacer(Modifier.height(6.dp))
-            selfCardBlocks.forEach { spec ->
-                Spacer(Modifier.height(6.dp))
-                CardSurface(spec = spec, modifier = Modifier.fillMaxWidth())
+            for (s in selfCardBlocks) {
+                key(s.hashCode()) {
+                    Spacer(Modifier.height(6.dp))
+                    CardSurface(spec = s, modifier = Modifier.fillMaxWidth())
+                }
             }
         }
         }   // 闭合 else（非纯动态UI消息，走原有气泡渲染）
