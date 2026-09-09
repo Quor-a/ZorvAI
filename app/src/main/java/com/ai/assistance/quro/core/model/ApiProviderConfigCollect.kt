@@ -299,6 +299,18 @@ object ApiProviderConfigs {
             )
         ),
         ProviderApiConfig(
+            providerType = ApiProviderType.OPENCODE_GO,
+            defaultModelName = "deepseek-v4-flash",
+            defaultApiEndpoint = "https://opencode.ai/zen/go/v1",
+            requiresApiKey = true,
+            endpointOptions = listOf(
+                ProviderEndpointOption(
+                    endpoint = "https://opencode.ai/zen/go/v1",
+                    label = "OpenAI 兼容 (/v1)"
+                )
+            )
+        ),
+        ProviderApiConfig(
             providerType = ApiProviderType.OTHER,
             defaultModelName = "",
             defaultApiEndpoint = ""

@@ -39,6 +39,7 @@ enum class ApiProviderType {
     LLAMA_CPP, // llama.cpp 本地推理引擎
     PPINFRA, // 派欧云
     NOVITA, // Novita AI
+    OPENCODE_GO, // OpenCode Go（opencode.ai/zen/go，OpenAI 兼容）
     OTHER; // 其他提供商（自定义端点）
 
     companion object {

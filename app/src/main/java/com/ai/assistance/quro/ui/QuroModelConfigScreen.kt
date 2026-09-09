@@ -1237,6 +1237,7 @@ private fun getProviderDisplayName(provider: ApiProviderType): String =
         ApiProviderType.LLAMA_CPP -> "llama.cpp (本地)"
         ApiProviderType.PPINFRA -> "派欧云"
         ApiProviderType.NOVITA -> "Novita AI"
+        ApiProviderType.OPENCODE_GO -> "OpenCode Go"
         ApiProviderType.OTHER -> "其他 / 自定义"
     }
 
@@ -1276,6 +1277,7 @@ private fun getProviderColor(provider: ApiProviderType): Color =
         ApiProviderType.LLAMA_CPP -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.9f)
         ApiProviderType.PPINFRA -> MaterialTheme.colorScheme.primaryContainer
         ApiProviderType.NOVITA -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.75f)
+        ApiProviderType.OPENCODE_GO -> MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
         ApiProviderType.OTHER -> MaterialTheme.colorScheme.surfaceVariant
     }
 
