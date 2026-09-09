@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.quro.core.skill.QuroSkill
 import com.ai.assistance.quro.core.skill.QuroSkillStore
+import com.ai.assistance.quro.core.skill.QuroSkillSuites
 import com.ai.assistance.quro.core.skill.DEFAULT_SKILL_PARAMS
 import com.ai.assistance.quro.core.tools.QuroToolRegistry
 import com.ai.assistance.quro.core.tools.QuroDownloadUtil
@@ -159,6 +161,18 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
                     IconButton(onClick = { showAuthorGuide = true }) {
                         Icon(Icons.Filled.Help, contentDescription = "如何添加技能（说明）", tint = MaterialTheme.colorScheme.primary)
                     }
+                    IconButton(onClick = {
+                        val r = QuroSkillStore.verifyBuiltinSignatures(ctx)
+                        val msg = buildString {
+                            append("内置签名排查：")
+                            append("校验通过 ${r.verified} / ${r.total}")
+                            if (r.failed > 0) append("，⚠️ 失败(疑似篡改) ${r.failed}：${r.failedNames.joinToString("、")}")
+                            if (r.unsigned > 0) append("，未签名 ${r.unsigned}")
+                        }
+                        Toast.makeText(ctx, msg, if (r.failed > 0) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(Icons.Filled.Verified, contentDescription = "验证内置技能签名（签名排查）", tint = MaterialTheme.colorScheme.primary)
+                    }
                     Text(
                         "${skills.count { it.enabled }} 启用 / ${skills.size} 共",
                         style = MaterialTheme.typography.labelSmall,
@@ -177,25 +191,31 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
                     )
                 }
             } else {
+                val grouped = remember(skills) { QuroSkillSuites.group(skills) }
                 LazyColumn(
                     Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
-                    items(skills, key = { it.id }) { s ->
-                        SkillRow(
-                            skill = s,
-                            onToggle = { enabled ->
-                                QuroSkillStore.addOrUpdate(ctx, s.copy(enabled = enabled, updatedAt = System.currentTimeMillis()))
-                                refresh()
-                            },
-                            onEdit = { editing = s; showEditor = true },
-                            onExport = { pendingSkill = s; exportMdLauncher.launch("${s.name}.skill.md") },
-                            onDelete = {
-                                QuroSkillStore.remove(ctx, s.id)
-                                QuroToolRegistry.active?.remove("skill__${s.name}")
-                                refresh()
-                            },
-                        )
-                        HorizontalDivider()
+                    grouped.forEach { (suiteId, groupSkills) ->
+                        item(key = "suite_header_$suiteId") {
+                            SuiteHeader(suiteId = suiteId, count = groupSkills.size)
+                        }
+                        items(groupSkills, key = { it.id }) { s ->
+                            SkillRow(
+                                skill = s,
+                                onToggle = { enabled ->
+                                    QuroSkillStore.addOrUpdate(ctx, s.copy(enabled = enabled, updatedAt = System.currentTimeMillis()))
+                                    refresh()
+                                },
+                                onEdit = { editing = s; showEditor = true },
+                                onExport = { pendingSkill = s; exportMdLauncher.launch("${s.name}.skill.md") },
+                                onDelete = {
+                                    QuroSkillStore.remove(ctx, s.id)
+                                    QuroToolRegistry.active?.remove("skill__${s.name}")
+                                    refresh()
+                                },
+                            )
+                            HorizontalDivider()
+                        }
                     }
                 }
             }
@@ -319,11 +339,50 @@ private fun SkillRow(
                 style = MaterialTheme.typography.labelSmall,
                 color = if (skill.prompt.isBlank()) cs.error else cs.onSurfaceVariant,
             )
+            if (skill.id.startsWith("zorv_") && skill.signState != "unknown") {
+                val (label, color) = when (skill.signState) {
+                    "verified" -> "签名已校验" to cs.primary
+                    "failed" -> "签名失败·疑似篡改" to cs.error
+                    "unsigned" -> "未签名" to cs.outline
+                    else -> "" to cs.onSurfaceVariant
+                }
+                if (label.isNotEmpty()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(label, style = MaterialTheme.typography.labelSmall, color = color)
+                }
+            }
         }
         IconButton(onClick = onExport) { Icon(Icons.Filled.FileDownload, contentDescription = "导出 SKILL.md", tint = cs.primary) }
         IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = cs.primary) }
         IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "删除", tint = cs.error) }
         Switch(checked = skill.enabled, onCheckedChange = onToggle)
+    }
+}
+
+@Composable
+private fun SuiteHeader(suiteId: String, count: Int) {
+    val cs = MaterialTheme.colorScheme
+    Surface(
+        color = cs.surfaceVariant.copy(alpha = 0.5f),
+        tonalElevation = 1.dp,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                QuroSkillSuites.label(suiteId),
+                style = MaterialTheme.typography.titleSmall,
+                color = cs.primary,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "$count 个",
+                style = MaterialTheme.typography.labelSmall,
+                color = cs.onSurfaceVariant,
+            )
+        }
     }
 }
 

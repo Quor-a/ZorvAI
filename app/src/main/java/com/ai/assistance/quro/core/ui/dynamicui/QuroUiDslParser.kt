@@ -555,6 +555,25 @@ object QuroUiDslParser {
                     style = buildStyle(json),
                     tabs = buildTabs(json),
                 )
+                // 选择标签组：横向滚动的一排可选标签，点击触发 on_select 动作。
+                "chips" -> QuroChipsNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    items = buildStringList(json),
+                    selected = json.optStringOrNull("selected") ?: json.optStringOrNull("value"),
+                    onSelect = json.optJSONObject("on_select")?.let { buildAction(it) }
+                        ?: json.optJSONObject("onSelect")?.let { buildAction(it) },
+                )
+                // 可视化编排图：内联渲染 mermaid 源码（复用 MermaidCard 运行时）。
+                "mermaid" -> QuroMermaidNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    source = json.optStringOrNull("source")
+                        ?: json.optStringOrNull("value")
+                        ?: json.optStringOrNull("code")
+                        ?: json.optStringOrNull("definition") ?: "",
+                    theme = json.optStringOrNull("theme"),
+                )
                 // 容错：未知节点类型不再返回 null 导致整张卡片判失败，
                 // 而是降级为一个竖向「带样式容器」（保留 AI 给的通用 style 与子节点），
                 // 并在顶部追加一行降级提示。与「单个节点坏掉不影响整棵树」的承诺一致。
