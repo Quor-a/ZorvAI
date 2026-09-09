@@ -331,6 +331,228 @@ data class QuroMermaidNode(
 ) : QuroUiNode
 
 // =============================================================================================
+// v1.0.88 新增「数据可视化 / 业务卡」节点族（让 quro-ui 能撑住所有 ChatCard 形态）
+// 设计原则：复杂结构字段（segments / events / axes / cells / columns / slides / items …）
+//   一律用 `List<String>` 承载——元素是 JSON 字符串，渲染器按需 org.json 解析；
+//   这样保持 data class 是纯数据载体、不依赖业务模型，避免新节点反向引入 ChatCard 依赖。
+// =============================================================================================
+
+/** 统计数字 + 同比/环比 delta。trend: up | down | flat。 */
+data class QuroStatNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val label: String = "",
+    val value: String = "",
+    val unit: String = "",
+    val delta: String = "",
+    val trend: String = "flat",
+) : QuroUiNode
+
+/** 表格。headers: List<String>；rows: List<List<String>>（每行是字符串数组）。 */
+data class QuroTableNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val headers: List<String> = emptyList(),
+    val rows: List<List<String>> = emptyList(),
+    val caption: String? = null,
+) : QuroUiNode
+
+/** 提醒条。severity: info | success | warning | error。 */
+data class QuroAlertNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val severity: String = "info",
+    val title: String? = null,
+    val text: String = "",
+) : QuroUiNode
+
+/** 评分。value: Float（可半星），max: 默认 5。 */
+data class QuroRatingNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val label: String? = null,
+    val value: Float = 0f,
+    val max: Int = 5,
+) : QuroUiNode
+
+/** 仪表盘/进度盘。progress: 0f..1f。 */
+data class QuroGaugeNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val label: String? = null,
+    val progress: Float = 0f,
+    val color: String? = null,
+) : QuroUiNode
+
+/** 倒计时：距目标 epochMs 剩余时间（自动每秒更新）。 */
+data class QuroCountdownNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val label: String = "",
+    val targetEpochMs: Long = 0L,
+) : QuroUiNode
+
+/** 步骤进度。steps: List<String>（每步一条说明）；current: 当前在第几步（0-based）。 */
+data class QuroStepsNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val steps: List<String> = emptyList(),
+    val current: Int = 0,
+) : QuroUiNode
+
+/** 时间线。events: List<String>，每个元素是 JSON：`{"time":"...","title":"...","body":"..."}`。 */
+data class QuroTimelineNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val events: List<String> = emptyList(),
+) : QuroUiNode
+
+/** 待办列表。items: List<String>，每个元素是 JSON：`{"text":"...","done":false}`。 */
+data class QuroTodoNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val items: List<String> = emptyList(),
+) : QuroUiNode
+
+/** 折叠面板：标题 + 内容；expanded 默认展开状态。 */
+data class QuroExpandableNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val title: String = "",
+    val body: String = "",
+    val expanded: Boolean = false,
+) : QuroUiNode
+
+/** 饼图。segments: List<String>，每项 JSON：`{"name":"...","value":N,"color":"#hex"}`。 */
+data class QuroPieNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val segments: List<String> = emptyList(),
+    val title: String? = null,
+) : QuroUiNode
+
+/** 对比视图。items: List<String>，每项 JSON：`{"name":"...","value":"...","highlight":true|false}`。 */
+data class QuroCompareNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val items: List<String> = emptyList(),
+) : QuroUiNode
+
+/** 雷达图。axes: List<String>，每项 JSON：`{"name":"...","value":0..100,"max":100}`。 */
+data class QuroRadarNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val axes: List<String> = emptyList(),
+) : QuroUiNode
+
+/** 热力图。cells: List<String>，每项 JSON：`{"label":"...","intensity":0..1}`。
+ *  渲染器按行列自动布局（每行 8 列，可由 columns 控制）。 */
+data class QuroHeatmapNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val cells: List<String> = emptyList(),
+    val columns: Int = 8,
+) : QuroUiNode
+
+/** 看板。columns: List<String>，每项 JSON：`{"name":"...","items":[{"text":"..."},...]}`。 */
+data class QuroKanbanNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val columns: List<String> = emptyList(),
+) : QuroUiNode
+
+/** 轮播。slides: List<String>，每项 JSON：`{"title":"...","body":"..."}`。
+ *  极简版（无第三方库）：横向 ScrollableRow，每张占满可见宽度。 */
+data class QuroCarouselNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val slides: List<String> = emptyList(),
+) : QuroUiNode
+
+/** 秒表 / 倒计时器（不带动画，纯展示）。seconds: 时长（秒）；label 可选。 */
+data class QuroTimerNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val label: String? = null,
+    val seconds: Int = 0,
+) : QuroUiNode
+
+/** 标签云。tags: List<String>，可附权重大小（JSON：`{"text":"...","weight":1..5}`）。 */
+data class QuroTagCloudNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val tags: List<String> = emptyList(),
+) : QuroUiNode
+
+/** 头像组。avatars: List<String>，每项 JSON：`{"name":"...","initial":"X","color":"#hex"}`。 */
+data class QuroAvatarGroupNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val avatars: List<String> = emptyList(),
+) : QuroUiNode
+
+/** 数字计数（带简单「滚到目标值」动画）。 */
+data class QuroCounterNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val label: String = "",
+    val value: Float = 0f,
+    val target: Float? = null,
+    val unit: String = "",
+) : QuroUiNode
+
+/** 面包屑导航。crumbs: List<String>。 */
+data class QuroBreadcrumbNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val crumbs: List<String> = emptyList(),
+) : QuroUiNode
+
+/** 颜色卡：单色块 + 名称 + HEX。color 也接受纯字符串或 JSON `{"color":"#hex","name":"X"}`。 */
+data class QuroColorNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val color: String = "",
+    val name: String = "",
+) : QuroUiNode
+
+/** 媒体卡（图片/视频/音频通用）：url + media_type（image/video/audio）+ title。 */
+data class QuroMediaNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val url: String = "",
+    val mediaType: String = "image", // image | video | audio
+    val title: String? = null,
+    val height: Int? = null,
+) : QuroUiNode
+
+/** 表单汇总卡（schema 驱动的字段清单）：fields: List<String>，
+ *  每项 JSON：`{"id":"...","label":"...","type":"text|number|switch|select|...","options":[...],"value":"..."}`。 */
+data class QuroFormNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val fields: List<String> = emptyList(),
+    val title: String? = null,
+) : QuroUiNode
+
+/**
+ * 捕获型兜底节点：任何未在上面显式建模的 `type` 都会被解析器收进它，
+ * 原始属性原样存入 [fields]，子节点递归解析进 [children]。
+ *
+ * 它彻底消除「未识别的节点类型 → 降级为普通容器 / 未识别的组件」这一类问题——
+ * AI 可以自由书写任意新节点类型（如 gantt / calendar / orgchart / metric_grid …），
+ * 解析器不丢字段、Catalog 不拒绝、渲染器用「多个融合解释器」把它画成结构化富卡。
+ * 这是 quro-ui 走向「AI 自由书写、不被白名单限制」的关键一环。
+ */
+data class QuroUnknownNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val type: String = "unknown",
+    val fields: Map<String, Any?> = emptyMap(),
+    val children: List<QuroUiNode> = emptyList(),
+) : QuroUiNode
+
+// =============================================================================================
 // 动作模型
 // =============================================================================================
 

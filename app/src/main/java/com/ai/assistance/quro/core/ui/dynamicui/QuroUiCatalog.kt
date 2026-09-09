@@ -18,7 +18,11 @@ object QuroUiCatalog {
         "column", "row", "box", "card", "pane", "text", "image", "icon", "badge", "progress",
         "divider", "spacer", "markdown", "video", "audio", "browser", "code", "html",
         "button", "text_input", "checkbox", "switch", "select", "slider", "list", "tabs",
-        "chips", "mermaid"
+        "chips", "mermaid",
+        // v1.0.88 数据可视化 / 业务卡节点族
+        "stat", "table", "alert", "rating", "gauge", "countdown", "steps", "timeline",
+        "todo", "expandable", "pie", "compare", "radar", "heatmap", "kanban", "carousel",
+        "timer", "tagcloud", "avatargroup", "counter", "breadcrumb", "color", "media", "form"
     )
 
     /** 允许出现的动作类型（A2UI 第②小语种：动作语言）。 */
@@ -47,6 +51,9 @@ object QuroUiCatalog {
     }
 
     private fun validateNode(node: QuroUiNode, path: String, v: MutableList<Violation>): QuroUiNode {
+        // 捕获型兜底节点：解析器已把它作为合法未知节点收下，原样放行，
+        // 由渲染层的「融合解释器」负责画出结构化富卡，不再二次降级。
+        if (node is QuroUnknownNode) return node
         val type = nodeType(node)
         if (type !in COMPONENTS) {
             v.add(Violation(path, "未知组件类型：$type（已降级为静态文本）", Severity.DEGRADE))
@@ -94,6 +101,34 @@ object QuroUiCatalog {
             is QuroSelectNode -> node
             is QuroDividerNode -> node
             is QuroSpacerNode -> node
+            // ── v1.0.88 数据可视化 / 业务卡：多为叶子节点（内部结构走 JSON 字符串），原样放行 ──
+            is QuroStatNode -> node
+            is QuroTableNode -> node
+            is QuroAlertNode -> node
+            is QuroRatingNode -> node
+            is QuroGaugeNode -> node
+            is QuroCountdownNode -> node
+            is QuroStepsNode -> node
+            is QuroTimelineNode -> node
+            is QuroTodoNode -> node
+            is QuroExpandableNode -> node
+            is QuroPieNode -> node
+            is QuroCompareNode -> node
+            is QuroRadarNode -> node
+            is QuroHeatmapNode -> node
+            is QuroKanbanNode -> node
+            is QuroCarouselNode -> node
+            is QuroTimerNode -> node
+            is QuroTagCloudNode -> node
+            is QuroAvatarGroupNode -> node
+            is QuroCounterNode -> node
+            is QuroBreadcrumbNode -> node
+            is QuroColorNode -> node
+            is QuroMediaNode -> if (isSafeUrl(node.url)) node
+                else degradeText("$path.media.url", "非法媒体地址：${node.url}", v)
+            is QuroFormNode -> node
+            // 捕获型兜底节点：原样放行（渲染层融合解释器处理）
+            is QuroUnknownNode -> node
         }
     }
 
@@ -126,6 +161,32 @@ object QuroUiCatalog {
         is QuroTabsNode -> "tabs"
         is QuroChipsNode -> "chips"
         is QuroMermaidNode -> "mermaid"
+        // ── v1.0.88 数据可视化 / 业务卡 ──
+        is QuroStatNode -> "stat"
+        is QuroTableNode -> "table"
+        is QuroAlertNode -> "alert"
+        is QuroRatingNode -> "rating"
+        is QuroGaugeNode -> "gauge"
+        is QuroCountdownNode -> "countdown"
+        is QuroStepsNode -> "steps"
+        is QuroTimelineNode -> "timeline"
+        is QuroTodoNode -> "todo"
+        is QuroExpandableNode -> "expandable"
+        is QuroPieNode -> "pie"
+        is QuroCompareNode -> "compare"
+        is QuroRadarNode -> "radar"
+        is QuroHeatmapNode -> "heatmap"
+        is QuroKanbanNode -> "kanban"
+        is QuroCarouselNode -> "carousel"
+        is QuroTimerNode -> "timer"
+        is QuroTagCloudNode -> "tagcloud"
+        is QuroAvatarGroupNode -> "avatargroup"
+        is QuroCounterNode -> "counter"
+        is QuroBreadcrumbNode -> "breadcrumb"
+        is QuroColorNode -> "color"
+        is QuroMediaNode -> "media"
+        is QuroFormNode -> "form"
+        is QuroUnknownNode -> node.type
     }
 
     private fun validateAction(action: QuroUiAction?, path: String, v: MutableList<Violation>): QuroUiAction? {

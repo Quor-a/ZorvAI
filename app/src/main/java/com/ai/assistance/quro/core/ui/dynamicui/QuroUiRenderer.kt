@@ -33,7 +33,27 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.min
+import kotlin.math.roundToInt
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import android.graphics.Paint
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Star
@@ -100,6 +120,7 @@ import androidx.compose.ui.unit.sp
 import android.media.MediaPlayer
 import android.net.Uri
 import android.view.View
+import org.json.JSONObject
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.MediaController
@@ -207,6 +228,33 @@ private fun RenderNode(
         is QuroTabsNode -> RenderTabs(node, state, hidden, onAction, styled)
         is QuroChipsNode -> RenderChips(node, state, hidden, onAction, styled)
         is QuroMermaidNode -> RenderMermaid(node, styled)
+        // ───────── v1.0.88 数据可视化 / 业务卡 渲染分支（让 quro-ui 撑住所有 ChatCard 形态）─────────
+        is QuroStatNode -> RenderStat(node, styled)
+        is QuroTableNode -> RenderTable(node, styled)
+        is QuroAlertNode -> RenderAlert(node, styled)
+        is QuroRatingNode -> RenderRating(node, styled)
+        is QuroGaugeNode -> RenderGauge(node, styled)
+        is QuroCountdownNode -> RenderCountdown(node, styled)
+        is QuroStepsNode -> RenderSteps(node, styled)
+        is QuroTimelineNode -> RenderTimeline(node, styled)
+        is QuroTodoNode -> RenderTodo(node, styled)
+        is QuroExpandableNode -> RenderExpandable(node, styled)
+        is QuroPieNode -> RenderPie(node, styled)
+        is QuroCompareNode -> RenderCompare(node, styled)
+        is QuroRadarNode -> RenderRadar(node, styled)
+        is QuroHeatmapNode -> RenderHeatmap(node, styled)
+        is QuroKanbanNode -> RenderKanban(node, styled)
+        is QuroCarouselNode -> RenderCarousel(node, styled)
+        is QuroTimerNode -> RenderTimer(node, styled)
+        is QuroTagCloudNode -> RenderTagCloud(node, styled)
+        is QuroAvatarGroupNode -> RenderAvatarGroup(node, styled)
+        is QuroCounterNode -> RenderCounter(node, styled)
+        is QuroBreadcrumbNode -> RenderBreadcrumb(node, styled)
+        is QuroColorNode -> RenderColor(node, styled)
+        is QuroMediaNode -> RenderMedia(node, onAction, styled)
+        is QuroFormNode -> RenderForm(node, state, hidden, onAction, styled)
+        // 捕获型兜底节点：用「多个融合解释器」渲染成结构化富卡，绝不降级为普通容器。
+        is QuroUnknownNode -> RenderUnknown(node, state, hidden, onAction, styled)
     }
 }
 
@@ -265,6 +313,818 @@ private fun RenderMermaid(node: QuroMermaidNode, modifier: Modifier) {
         card = card,
         modifier = modifier.fillMaxWidth().heightIn(min = 80.dp, max = 600.dp),
     )
+}
+
+// =============================================================================================
+// v1.0.88 数据可视化 / 业务卡 渲染（让 quro-ui 撑住所有 ChatCard 形态，不再降级为普通容器）
+// =============================================================================================
+
+/** 解析 "{}" 形式的列表元素为 JSONObject（容错：不是 JSON 则返回 null）。 */
+private fun jsonObjOrNull(s: String): JSONObject? = runCatching { JSONObject(s) }.getOrNull()
+
+/** 颜色解析：支持 #hex 与语义名（primary/error/warning/success/info 等），失败回退 fallback。 */
+private fun colorOr(s: String?, fallback: Color): Color = s?.let { QuroUiColor.parse(it) } ?: fallback
+
+/** 毫秒数 → 人类可读时长（dd HH:MM:SS / HH:MM:SS）。 */
+private fun formatDuration(ms: Long): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0L)
+    val d = totalSec / 86400
+    val h = (totalSec % 86400) / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (d > 0) "%dd %02d:%02d:%02d".format(d, h, m, s)
+    else "%02d:%02d:%02d".format(h, m, s)
+}
+
+/** 统计数字 + 同比/环比 delta。 */
+@Composable
+private fun RenderStat(node: QuroStatNode, modifier: Modifier) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            if (node.label.isNotBlank())
+                Text(text = node.label, style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(text = node.value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                if (node.unit.isNotBlank()) {
+                    Spacer(Modifier.width(4.dp))
+                    Text(text = node.unit, style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        if (node.delta.isNotBlank()) {
+            val trend = node.trend.lowercase()
+            val c = when (trend) {
+                "up" -> Color(0xFF4CAF50)
+                "down" -> Color(0xFFB3261E)
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            val arrow = when (trend) { "up" -> "▲"; "down" -> "▼"; else -> "" }
+            Surface(color = c.copy(alpha = 0.12f), shape = RoundedCornerShape(8.dp)) {
+                Text(text = "$arrow${node.delta}", color = c, style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+            }
+        }
+    }
+}
+
+/** 表格：表头加粗 + 斑马纹，过宽横向滚动。 */
+@Composable
+private fun RenderTable(node: QuroTableNode, modifier: Modifier) {
+    if (node.headers.isEmpty() && node.rows.isEmpty()) return
+    if (!node.caption.isNullOrBlank()) {
+        Text(text = node.caption!!, style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
+    }
+    val colCount = maxOf(node.headers.size, node.rows.maxOfOrNull { it.size } ?: 0)
+    Column(modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+        Row(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {
+            for (i in 0 until colCount)
+                Text(text = node.headers.getOrNull(i) ?: "", style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.widthIn(min = 80.dp, max = 240.dp).padding(8.dp))
+        }
+        HorizontalDivider()
+        node.rows.forEachIndexed { ri, row ->
+            Row(modifier = Modifier.background(
+                if (ri % 2 == 0) MaterialTheme.colorScheme.surface
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))) {
+                for (i in 0 until colCount)
+                    Text(text = row.getOrNull(i) ?: "", style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.widthIn(min = 80.dp, max = 240.dp).padding(8.dp))
+            }
+            if (ri < node.rows.size - 1) HorizontalDivider()
+        }
+    }
+}
+
+/** 提醒条。 */
+@Composable
+private fun RenderAlert(node: QuroAlertNode, modifier: Modifier) {
+    val (bg, fg, icon) = when (node.severity.lowercase()) {
+        "success" -> Triple(Color(0xFF4CAF50), Color.White, "✓")
+        "warning" -> Triple(Color(0xFFFF9800), Color.Black, "⚠")
+        "error" -> Triple(Color(0xFFB3261E), Color.White, "✕")
+        else -> Triple(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary, "ℹ")
+    }
+    Surface(modifier = modifier.fillMaxWidth(), color = bg, shape = RoundedCornerShape(10.dp)) {
+        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(text = icon, style = MaterialTheme.typography.titleMedium, color = fg)
+            Spacer(Modifier.width(8.dp))
+            Column {
+                if (!node.title.isNullOrBlank())
+                    Text(text = node.title!!, style = MaterialTheme.typography.labelLarge,
+                        color = fg, fontWeight = FontWeight.Bold)
+                if (node.text.isNotBlank())
+                    Text(text = node.text, style = MaterialTheme.typography.bodySmall, color = fg)
+            }
+        }
+    }
+}
+
+/** 评分（星级）。 */
+@Composable
+private fun RenderRating(node: QuroRatingNode, modifier: Modifier) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (!node.label.isNullOrBlank()) {
+            Text(text = node.label!!, style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(end = 8.dp))
+        }
+        val rounded = node.value.roundToInt()
+        for (i in 1..node.max)
+            Text(text = if (i <= rounded) "★" else "☆", color = Color(0xFFFFC107),
+                style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.width(6.dp))
+        Text(text = "%.1f".format(node.value), style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** 仪表盘（环形进度 + 中心百分比）。 */
+@Composable
+private fun RenderGauge(node: QuroGaugeNode, modifier: Modifier) {
+    val p = node.progress.coerceIn(0f, 1f)
+    Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(120.dp)) {
+            CircularProgressIndicator(progress = { p }, modifier = Modifier.fillMaxSize(),
+                color = colorOr(node.color, MaterialTheme.colorScheme.primary), strokeWidth = 10.dp)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(text = "${(p * 100).roundToInt()}%", style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold)
+                if (!node.label.isNullOrBlank())
+                    Text(text = node.label!!, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+/** 倒计时：每秒自动刷新剩余时间。 */
+@Composable
+private fun RenderCountdown(node: QuroCountdownNode, modifier: Modifier) {
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(node.targetEpochMs) {
+        while (node.targetEpochMs > now) { delay(1000); now = System.currentTimeMillis() }
+    }
+    val remainMs = (node.targetEpochMs - now).coerceAtLeast(0L)
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (node.label.isNotBlank()) {
+            Text(text = node.label, style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(end = 8.dp))
+        }
+        Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
+            Text(text = formatDuration(remainMs), style = MaterialTheme.typography.titleMedium,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+        }
+    }
+}
+
+/** 步骤进度。 */
+@Composable
+private fun RenderSteps(node: QuroStepsNode, modifier: Modifier) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        node.steps.forEachIndexed { idx, step ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    val done = idx <= node.current
+                    Surface(shape = RoundedCornerShape(50),
+                        color = if (done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant) {
+                        Text(text = (idx + 1).toString(),
+                            color = if (done) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(8.dp))
+                    }
+                    if (idx < node.steps.size - 1)
+                        Box(modifier = Modifier.width(2.dp).height(20.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant))
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(text = step, style = MaterialTheme.typography.bodyMedium,
+                    color = if (idx == node.current) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(vertical = 4.dp))
+            }
+        }
+    }
+}
+
+/** 时间线。 */
+@Composable
+private fun RenderTimeline(node: QuroTimelineNode, modifier: Modifier) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        node.events.forEachIndexed { idx, ev ->
+            val o = jsonObjOrNull(ev)
+            val time = o?.optString("time") ?: ""
+            val title = o?.optString("title") ?: ""
+            val body = o?.optString("body") ?: ev
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primary) {
+                        Box(modifier = Modifier.size(10.dp).padding(4.dp))
+                    }
+                    if (idx < node.events.size - 1)
+                        Box(modifier = Modifier.width(2.dp).height(24.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant))
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                    if (time.isNotBlank())
+                        Text(text = time, style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (title.isNotBlank())
+                        Text(text = title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    if (body.isNotBlank())
+                        Text(text = body, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+/** 待办列表（只读展示，完成项划线）。 */
+@Composable
+private fun RenderTodo(node: QuroTodoNode, modifier: Modifier) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        node.items.forEach { it ->
+            val o = jsonObjOrNull(it)
+            val text = o?.optString("text") ?: o?.optString("title") ?: it
+            val done = o?.optBoolean("done") ?: false
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                Text(text = if (done) "✓" else "○",
+                    color = if (done) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(8.dp))
+                Text(text = text, style = MaterialTheme.typography.bodyMedium,
+                    textDecoration = if (done) TextDecoration.LineThrough else null,
+                    color = if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+}
+
+/** 折叠面板。 */
+@Composable
+private fun RenderExpandable(node: QuroExpandableNode, modifier: Modifier) {
+    var expanded by remember(node.id) { mutableStateOf(node.expanded) }
+    Column(modifier = modifier.fillMaxWidth()) {
+        Surface(modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+            color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(10.dp)) {
+            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(text = node.title.ifBlank { "详情" }, style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(text = if (expanded) "▲" else "▼", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        if (expanded && node.body.isNotBlank()) {
+            Text(text = node.body, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(12.dp))
+        }
+    }
+}
+
+/** 饼图（环形 + 图例）。 */
+@Composable
+private fun RenderPie(node: QuroPieNode, modifier: Modifier) {
+    if (node.segments.isEmpty()) return
+    val segs = node.segments.mapNotNull { s ->
+        val o = jsonObjOrNull(s) ?: return@mapNotNull null
+        val name = o.optString("name")
+        val value = o.optDouble("value", 0.0).toFloat()
+        val color = colorOr(o.optString("color"), MaterialTheme.colorScheme.primary)
+        Triple(name, value, color)
+    }.filter { it.second > 0f }
+    if (segs.isEmpty()) return
+    val total = segs.sumOf { it.second.toDouble() }.toFloat().coerceAtLeast(0.0001f)
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(120.dp), contentAlignment = Alignment.Center) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                var start = -90f
+                segs.forEach { (_, v, c) ->
+                    val sweep = (v / total) * 360f
+                    drawArc(color = c, startAngle = start, sweepAngle = sweep, useCenter = true,
+                        topLeft = center - Offset(size.minDimension / 2, size.minDimension / 2),
+                        size = Size(size.minDimension, size.minDimension))
+                    start += sweep
+                }
+            }
+            Text(text = "100%", style = MaterialTheme.typography.labelMedium)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column {
+            segs.forEach { (name, v, c) ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                    Surface(color = c, shape = RoundedCornerShape(4.dp)) {
+                        Box(modifier = Modifier.size(12.dp).padding(2.dp))
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(text = "$name ${(v / total * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+/** 对比视图。 */
+@Composable
+private fun RenderCompare(node: QuroCompareNode, modifier: Modifier) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        node.items.forEach { s ->
+            val o = jsonObjOrNull(s)
+            val name = o?.optString("name") ?: s
+            val value = o?.optString("value") ?: ""
+            val highlight = o?.optBoolean("highlight") ?: false
+            Surface(modifier = Modifier.fillMaxWidth(),
+                color = if (highlight) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(10.dp)) {
+                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f))
+                    Text(text = value, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
+}
+
+/** 雷达图（Canvas 多边形 + 轴标签）。 */
+@Composable
+private fun RenderRadar(node: QuroRadarNode, modifier: Modifier) {
+    val axes = node.axes.mapNotNull { s ->
+        val o = jsonObjOrNull(s) ?: return@mapNotNull null
+        val name = o.optString("name")
+        val max = o.optDouble("max", 100.0).toFloat().coerceAtLeast(1f)
+        val value = o.optDouble("value", 0.0).toFloat().coerceIn(0f, max)
+        Pair(name, value / max)
+    }
+    if (axes.isEmpty()) return
+    val n = axes.size
+    // 颜色需在 Composable 作用域取（MaterialTheme.colorScheme 是 Composable，不能放进 Canvas 的 DrawScope lambda）
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val fillColor = MaterialTheme.colorScheme.primary
+    Canvas(modifier = modifier.fillMaxWidth().height(220.dp)) {
+        val cx = size.width / 2
+        val cy = size.height / 2
+        val r = min(size.width, size.height) / 2 * 0.8f
+        for (ring in 1..3) {
+            val rr = r * ring / 3
+            val path = Path()
+            for (i in 0..n) {
+                val a = -Math.PI / 2 + 2 * Math.PI * i / n
+                val x = cx + rr * cos(a).toFloat()
+                val y = cy + rr * sin(a).toFloat()
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(path = path, color = gridColor, style = Stroke(width = 1.dp.toPx()))
+        }
+        val dp = Path()
+        axes.forEachIndexed { i, (_, norm) ->
+            val a = -Math.PI / 2 + 2 * Math.PI * i / n
+            val x = cx + r * norm * cos(a).toFloat()
+            val y = cy + r * norm * sin(a).toFloat()
+            if (i == 0) dp.moveTo(x, y) else dp.lineTo(x, y)
+        }
+        dp.close()
+        drawPath(path = dp, color = fillColor.copy(alpha = 0.4f))
+        drawPath(path = dp, color = fillColor, style = Stroke(width = 2.dp.toPx()))
+        val textPaint = Paint().apply { color = android.graphics.Color.GRAY; textSize = 24f }
+        axes.forEachIndexed { i, (name, _) ->
+            val a = -Math.PI / 2 + 2 * Math.PI * i / n
+            val x = cx + (r + 16) * cos(a).toFloat()
+            val y = cy + (r + 16) * sin(a).toFloat()
+            drawContext.canvas.nativeCanvas.drawText(name, x, y, textPaint)
+        }
+    }
+}
+
+/** 热力图（网格色块）。 */
+@Composable
+private fun RenderHeatmap(node: QuroHeatmapNode, modifier: Modifier) {
+    val cells = node.cells.mapNotNull { s ->
+        val o = jsonObjOrNull(s) ?: return@mapNotNull null
+        val label = o.optString("label")
+        val intensity = o.optDouble("intensity", 0.0).toFloat().coerceIn(0f, 1f)
+        Pair(label, intensity)
+    }
+    if (cells.isEmpty()) return
+    val base = MaterialTheme.colorScheme.primary
+    Column(modifier = modifier.fillMaxWidth()) {
+        cells.chunked(node.columns).forEach { rowCells ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                rowCells.forEach { (label, intensity) ->
+                    val c = base.copy(alpha = (0.15f + intensity * 0.85f).coerceIn(0f, 1f))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f).padding(2.dp)) {
+                        Box(modifier = Modifier.fillMaxWidth().height(40.dp)
+                            .background(c, RoundedCornerShape(4.dp)))
+                        if (label.isNotBlank())
+                            Text(text = label, style = MaterialTheme.typography.labelSmall, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 看板。 */
+@Composable
+private fun RenderKanban(node: QuroKanbanNode, modifier: Modifier) {
+    val cols = node.columns.mapNotNull { s ->
+        val o = jsonObjOrNull(s) ?: return@mapNotNull null
+        val name = o.optString("name")
+        val arr = o.optJSONArray("items")
+        val items = (0 until (arr?.length() ?: 0)).mapNotNull { i ->
+            val it = arr?.optJSONObject(i)
+            it?.optString("text") ?: it?.optString("title") ?: it?.optString("label")
+        }
+        Pair(name, items)
+    }
+    if (cols.isEmpty()) return
+    Row(modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        cols.forEach { (name, items) ->
+            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.width(180.dp)) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Text(text = name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 4.dp))
+                    items.forEach { it ->
+                        Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                            Text(text = it, style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(8.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 轮播（简化：左右切换 + 圆点指示）。 */
+@Composable
+private fun RenderCarousel(node: QuroCarouselNode, modifier: Modifier) {
+    val slides = node.slides.mapNotNull { s ->
+        val o = jsonObjOrNull(s) ?: return@mapNotNull null
+        Pair(o.optString("title"), o.optString("body"))
+    }
+    if (slides.isEmpty()) return
+    var idx by remember(node.id) { mutableStateOf(0) }
+    Column(modifier = modifier.fillMaxWidth()) {
+        Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(12.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                val (t, b) = slides[idx]
+                if (t.isNotBlank()) Text(text = t, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                if (b.isNotBlank())
+                    Text(text = b, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { idx = (idx - 1 + slides.size) % slides.size })
+            { Text("‹", style = MaterialTheme.typography.titleLarge) }
+            slides.indices.forEach { i ->
+                Box(modifier = Modifier.size(if (i == idx) 8.dp else 6.dp)
+                    .background(if (i == idx) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50)))
+                Spacer(Modifier.width(4.dp))
+            }
+            IconButton(onClick = { idx = (idx + 1) % slides.size })
+            { Text("›", style = MaterialTheme.typography.titleLarge) }
+        }
+    }
+}
+
+/** 秒表 / 计时器（纯展示）。 */
+@Composable
+private fun RenderTimer(node: QuroTimerNode, modifier: Modifier) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (!node.label.isNullOrBlank())
+            Text(text = node.label!!, style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(end = 8.dp))
+        Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
+            Text(text = formatDuration((node.seconds * 1000L)), style = MaterialTheme.typography.titleMedium,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+        }
+    }
+}
+
+/** 标签云。 */
+@Composable
+private fun RenderTagCloud(node: QuroTagCloudNode, modifier: Modifier) {
+    if (node.tags.isEmpty()) return
+    val tags = node.tags.map { s ->
+        val o = jsonObjOrNull(s)
+        val text = o?.optString("text") ?: o?.optString("name") ?: s
+        val weight = (o?.optInt("weight") ?: 3).coerceIn(1, 5)
+        Pair(text, weight)
+    }
+    FlowRow(modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        tags.forEach { (text, w) ->
+            val size = (12 + w * 2).sp
+            Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(50.dp)) {
+                Text(text = text, color = MaterialTheme.colorScheme.onSecondaryContainer, fontSize = size,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+            }
+        }
+    }
+}
+
+/** 头像组（重叠圆形）。 */
+@Composable
+private fun RenderAvatarGroup(node: QuroAvatarGroupNode, modifier: Modifier) {
+    val avs = node.avatars.mapNotNull { s ->
+        val o = jsonObjOrNull(s) ?: return@mapNotNull null
+        val name = o.optString("name")
+        val initial = (o.optString("initial").ifBlank { name.take(1) }).uppercase()
+        val color = colorOr(o.optString("color"), MaterialTheme.colorScheme.primary)
+        Triple(name, initial, color)
+    }
+    if (avs.isEmpty()) return
+    Row(modifier = modifier) {
+        avs.forEachIndexed { i, (_, initial, color) ->
+            Surface(modifier = Modifier.size(36.dp).then(
+                if (i > 0) Modifier.offset { IntOffset(-6 * i, 0) } else Modifier),
+                shape = RoundedCornerShape(50), color = color,
+                border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(text = initial, color = Color.White, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+    }
+}
+
+/** 数字计数（带缓动动画）。 */
+@Composable
+private fun RenderCounter(node: QuroCounterNode, modifier: Modifier) {
+    val target = node.target ?: node.value
+    val animated by animateFloatAsState(target, animationSpec = tween(800))
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (node.label.isNotBlank())
+            Text(text = node.label, style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(end = 8.dp))
+        Text(text = "%.${if (target % 1 == 0f) 0 else 1}f".format(animated) + node.unit,
+            style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+    }
+}
+
+/** 面包屑。 */
+@Composable
+private fun RenderBreadcrumb(node: QuroBreadcrumbNode, modifier: Modifier) {
+    if (node.crumbs.isEmpty()) return
+    Row(modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically) {
+        node.crumbs.forEachIndexed { i, c ->
+            if (i > 0)
+                Text(text = " / ", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val last = i == node.crumbs.size - 1
+            Text(text = c,
+                style = if (last) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodySmall,
+                color = if (last) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = if (last) FontWeight.Bold else FontWeight.Normal)
+        }
+    }
+}
+
+/** 颜色卡。 */
+@Composable
+private fun RenderColor(node: QuroColorNode, modifier: Modifier) {
+    val c = colorOr(node.color.ifBlank { null }, MaterialTheme.colorScheme.primary)
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Surface(color = c, shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.size(40.dp)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))) {}
+        Spacer(Modifier.width(10.dp))
+        Column {
+            if (node.name.isNotBlank())
+                Text(text = node.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text(text = node.color, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** 媒体卡：按类型复用已有渲染器。 */
+@Composable
+private fun RenderMedia(
+    node: QuroMediaNode,
+    onAction: (QuroUiAction, Map<String, String>) -> Unit,
+    modifier: Modifier,
+) {
+    when (node.mediaType.lowercase()) {
+        "video" -> RenderVideo(QuroVideoNode(url = node.url, title = node.title), modifier)
+        "audio" -> RenderAudio(QuroAudioNode(url = node.url, title = node.title), onAction, modifier)
+        else -> RenderImage(QuroImageNode(url = node.url, height = node.height, cornerRadius = 12), modifier)
+    }
+}
+
+/** 表单（schema 驱动：text/number/switch/select）。 */
+@Composable
+private fun RenderForm(
+    node: QuroFormNode,
+    state: MutableMap<String, Any>,
+    hidden: MutableMap<String, Boolean>,
+    onAction: (QuroUiAction, Map<String, String>) -> Unit,
+    modifier: Modifier,
+) {
+    if (node.fields.isEmpty()) return
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!node.title.isNullOrBlank())
+            Text(text = node.title!!, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        node.fields.forEach { s ->
+            val o = jsonObjOrNull(s) ?: return@forEach
+            val id = o.optString("id").ifBlank { o.optString("name") }
+            val label = o.optString("label")
+            val type = o.optString("type", "text").lowercase()
+            val value = o.optString("value")
+            val arr = o.optJSONArray("options")
+            val options = (0 until (arr?.length() ?: 0)).mapNotNull { i -> arr?.opt(i)?.toString() }
+            when (type) {
+                "switch" -> {
+                    var checked by remember(id) {
+                        mutableStateOf(value == "true" || value == "1" || o.optBoolean("checked"))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        if (label.isNotBlank()) Text(text = label, modifier = Modifier.weight(1f))
+                        Switch(checked = checked, onCheckedChange = { checked = it; if (id.isNotBlank()) state[id] = it })
+                    }
+                }
+                "select", "dropdown" -> {
+                    RenderSelect(QuroSelectNode(id = id, label = label, options = options, selected = value), state, modifier)
+                }
+                else -> {
+                    var text by remember(id) { mutableStateOf(value) }
+                    if (label.isNotBlank())
+                        Text(text = label, style = MaterialTheme.typography.labelMedium)
+                    OutlinedTextField(value = text,
+                        onValueChange = { text = it; if (id.isNotBlank()) state[id] = it },
+                        modifier = Modifier.fillMaxWidth())
+                }
+            }
+        }
+    }
+}
+
+// =============================================================================================
+// 捕获型兜底渲染：融合解释器（让 AI 自由书写任意节点类型，永不「未识别」）
+// =============================================================================================
+
+/**
+ * 融合解释器：把任意未知节点（QuroUnknownNode）渲染成结构化富卡。
+ * 通过「内容特征」路由到多个解释器：
+ *  - source/code → 代码解释器；html → HTML 解释器；markdown/md → Markdown 解释器；
+ *  - items/rows/segments/events/tags/... → 列表/表格解释器；
+ *  - 其余标量字段 → 键值行；children → 递归渲染。
+ * 这样 AI 写出的任何新节点类型（gantt / calendar / orgchart / metric_grid …）都不会再被降级，
+ * 而是被合理呈现——这就是 quro-ui「AI 自由书写、不被白名单限制」的落地。
+ */
+@Composable
+private fun RenderUnknown(
+    node: QuroUnknownNode,
+    state: MutableMap<String, Any>,
+    hidden: MutableMap<String, Boolean>,
+    onAction: (QuroUiAction, Map<String, String>) -> Unit,
+    modifier: Modifier,
+) {
+    val type = node.type
+    val f = node.fields
+    val primary = f["value"] ?: f["text"] ?: f["content"] ?: f["title"] ?: f["label"] ?: f["name"]
+    val desc = f["description"] ?: f["body"] ?: f["detail"] ?: f["subtitle"]
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(10.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), shape = RoundedCornerShape(6.dp)) {
+                    Text(text = "⟨$type⟩", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                }
+                primary?.let {
+                    Text(text = it.toString(), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                }
+            }
+            desc?.let {
+                Text(text = it.toString(), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            // 融合解释器：富文本字段优先交给对应解释器
+            f["source"]?.toString()?.takeIf { it.isNotBlank() }?.let {
+                RenderCode(QuroCodeNode(code = it, lang = f["lang"]?.toString()), onAction, Modifier.fillMaxWidth())
+            }
+            f["code"]?.toString()?.takeIf { it.isNotBlank() }?.let {
+                RenderCode(QuroCodeNode(code = it, lang = f["lang"]?.toString() ?: f["language"]?.toString()),
+                    onAction, Modifier.fillMaxWidth())
+            }
+            f["html"]?.toString()?.takeIf { it.isNotBlank() }?.let {
+                RenderHtml(QuroHtmlNode(html = it), Modifier.fillMaxWidth())
+            }
+            f["markdown"]?.toString()?.takeIf { it.isNotBlank() }?.let {
+                RenderMarkdown(QuroMarkdownNode(value = it), onAction, Modifier.fillMaxWidth())
+            }
+            f["md"]?.toString()?.takeIf { it.isNotBlank() }?.let {
+                RenderMarkdown(QuroMarkdownNode(value = it), onAction, Modifier.fillMaxWidth())
+            }
+            // 列表型字段 → 列表 / 表格解释器
+            listField(f, "items")?.let { RenderStringList(it, "items") }
+            matrixField(f, "rows")?.let { RenderStringMatrix(it) }
+            listField(f, "segments")?.let { RenderStringList(it, "segments") }
+            listField(f, "events")?.let { RenderStringList(it, "events") }
+            listField(f, "tags")?.let { RenderStringList(it, "tags") }
+            listField(f, "crumbs")?.let { RenderStringList(it, "crumbs") }
+            listField(f, "axes")?.let { RenderStringList(it, "axes") }
+            listField(f, "columns")?.let { RenderStringList(it, "columns") }
+            listField(f, "avatars")?.let { RenderStringList(it, "avatars") }
+            listField(f, "slides")?.let { RenderStringList(it, "slides") }
+            listField(f, "fields")?.let { RenderStringList(it, "fields") }
+            listField(f, "steps")?.let { RenderStringList(it, "steps") }
+            // 其余标量字段（已上屏的除外）
+            val shown = setOf("value", "text", "content", "title", "label", "name", "description", "body", "detail",
+                "subtitle", "source", "code", "html", "markdown", "md", "lang", "language", "items", "rows",
+                "segments", "events", "tags", "crumbs", "axes", "columns", "avatars", "slides", "fields", "steps")
+            f.filterKeys { it !in shown }.forEach { (k, v) ->
+                if (v != null) Text(text = "$k: ${v}", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            // 递归子节点
+            if (node.children.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                node.children.forEach { child ->
+                    RenderNode(child, state, hidden, onAction, Modifier.fillMaxWidth(), isRoot = false)
+                }
+            }
+        }
+    }
+}
+
+private fun listField(f: Map<String, Any?>, key: String): List<String>? {
+    val v = f[key] ?: return null
+    return when (v) {
+        is List<*> -> v.filterNotNull().map { it.toString() }
+        is String -> listOf(v)
+        else -> listOf(v.toString())
+    }
+}
+
+private fun matrixField(f: Map<String, Any?>, key: String): List<List<String>>? {
+    val v = f[key] ?: return null
+    if (v !is List<*>) return null
+    return v.mapNotNull { row ->
+        when (row) {
+            is List<*> -> row.filterNotNull().map { it.toString() }
+            is String -> listOf(row)
+            null -> null
+            else -> listOf(row.toString())
+        }
+    }
+}
+
+@Composable
+private fun RenderStringList(items: List<String>, label: String, modifier: Modifier = Modifier) {
+    if (items.isEmpty()) return
+    Column(modifier = modifier.fillMaxWidth()) {
+        items.forEach { s ->
+            val o = jsonObjOrNull(s)
+            val text = o?.optString("text") ?: o?.optString("title") ?: o?.optString("name")
+                ?: o?.optString("label") ?: s
+            val sub = o?.optString("value") ?: o?.optString("body") ?: o?.optString("description")
+            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("•", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text, style = MaterialTheme.typography.bodyMedium)
+                    if (!sub.isNullOrBlank()) Text(sub, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RenderStringMatrix(rows: List<List<String>>, modifier: Modifier = Modifier) {
+    if (rows.isEmpty()) return
+    Column(modifier = modifier.fillMaxWidth()
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))) {
+        rows.forEachIndexed { ri, row ->
+            Row(modifier = Modifier.fillMaxWidth()
+                .background(if (ri % 2 == 0) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 8.dp, vertical = 4.dp)) {
+                row.forEach { cell ->
+                    Text(cell, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f).padding(end = 6.dp))
+                }
+            }
+        }
+    }
 }
 
 // =============================================================================================

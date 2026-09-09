@@ -140,6 +140,9 @@ object QuroUiPointer {
         )
         is QuroDividerNode -> node
         is QuroSpacerNode -> node
+        // v1.0.88 新增的数据可视化/业务卡节点均为叶子（无 children，数据以 String/List<String> 承载），
+        // 无 @/指针 可递归绑定，原样返回即可满足密封 when 穷尽性。
+        else -> node
     }
 
     private fun bindAction(action: QuroUiAction?, model: Map<String, Any?>): QuroUiAction? = when (action) {

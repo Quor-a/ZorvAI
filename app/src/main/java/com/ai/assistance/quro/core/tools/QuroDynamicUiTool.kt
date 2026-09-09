@@ -111,6 +111,35 @@ class UiDslSpecTool : QuroTool {
 - code：代码块（展示 ZorvAI 支持的所有语言，语法高亮）。code(也接受 code/content/value), lang,
   title, runnable(为 true 时显示「运行」按钮，将经 run_code 真正执行并把结果回传给你)。
 
+■ 数据可视化 / 业务卡（v1.0.88，原生渲染，可呈现依赖/框架/引擎/语言/代码库/外部依赖等各类技术信息）
+这些节点都「原生可渲染」——只要写了对应 type 就不会再降级为普通容器；内部结构（列表/事件/轴/单元格…）
+一律用 JSON 字符串数组承载，例如 {"name":"Kai","value":12}。技术类内容（依赖清单、版本对比、架构图、
+指标看板）优先用下面这些节点，比纯文字或 markdown 更易读。
+- stat：统计数字。label, value, unit(单位), delta(同比/环比文字), trend(up|down|flat 决定涨跌色)
+- table：表格。headers[]（表头）, rows[][]（每行是字符串数组）, caption(可选标题)
+- alert：提醒条。severity(info|success|warning|error 决定配色), title, text
+- rating：评分。value(0~max 可半星), max(默认5), label
+- gauge：仪表盘。progress(0~1), label, color
+- countdown：倒计时。label, target_epoch_ms(目标时间，自动每秒刷新剩余)
+- steps：步骤进度。steps[](每步说明), current(当前步，0 起)
+- timeline：时间线。events[]，每项 JSON {"time":"...","title":"...","body":"..."}
+- todo：待办。items[]，每项 JSON {"text":"...","done":false}
+- expandable：折叠面板。title, body, expanded(默认是否展开)
+- pie：饼图。segments[]，每项 JSON {"name":"...","value":N,"color":"#hex"}；自动画环形图+图例
+- compare：对比。items[]，每项 JSON {"name":"...","value":"...","highlight":true|false}
+- radar：雷达图。axes[]，每项 JSON {"name":"...","value":0~100,"max":100}
+- heatmap：热力图。cells[]，每项 JSON {"label":"...","intensity":0~1}；columns 控制每行列数(默认8)
+- kanban：看板。columns[]，每项 JSON {"name":"...","items":[{"text":"..."}]}
+- carousel：轮播。slides[]，每项 JSON {"title":"...","body":"..."}；左右切换+圆点
+- timer：计时器/秒表(纯展示)。label, seconds
+- tagcloud：标签云。tags[]，每项可为字符串或 JSON {"text":"...","weight":1~5}
+- avatargroup：头像组。avatars[]，每项 JSON {"name":"...","initial":"X","color":"#hex"}
+- counter：数字计数(带滚动动画)。label, value, target(目标值，可选), unit
+- breadcrumb：面包屑。crumbs[]
+- color：颜色卡。color(HEX 或 JSON {"color":"#hex","name":"X"}), name
+- media：媒体卡。url, media_type(image|video|audio), title, height
+- form：表单(schema 驱动)。title, fields[]，每项 JSON {"id":"...","label":"...","type":"text|number|switch|select","options":[...],"value":"..."}
+
 ■ 第三方跳转
 - 任意 button 的 action 用 {"type":"open_app","package_name":"com.example"} 或
   {"type":"open_app","app_name":"微信"} 即可把用户带去第三方 App（精确包名或应用名模糊匹配）。
@@ -139,9 +168,16 @@ red green blue yellow orange purple pink teal indigo gray primary secondary erro
 注意：模型输出永远是「数据」不是「代码」——再自由的样式也只是声明，端上忠实渲染成原生控件，
 且任意字段非法都会回落默认值，绝不会导致渲染失败。
 
-【未知节点类型】若写了白名单之外的 type（如拼写错或自定义组件），系统不会崩溃，
-而是把该节点降级为一个「带通用样式的竖向容器」（保留你给的 style 与 children，并在顶部追加一行降级提示），
-保证「单个节点坏掉不影响整棵树」。请优先从上面白名单里挑 type。
+【节点类型自由书写】你可以写任意 type，不限于上面清单——这是「AI 自由书写、不被白名单限制」的设计。
+- 写了上面清单里的 type → 走对应原生渲染器（stat/table/pie/... 都已原生渲染，不再降级为普通容器）。
+- 写了清单之外的新 type（如 gantt / calendar / orgchart / metric_grid / 你自定义的组件名）→
+  系统用「捕获型兜底节点」原样收下你给的全部字段与子节点，**绝不丢字段、绝不报「未识别」**，
+  再由「多个融合解释器」把它画成结构化富卡：
+    · 若字段里有 source/code → 当代码块渲染；html → 当 HTML 渲染；markdown/md → 当 Markdown 渲染；
+    · 若字段里有 items/rows/segments/events/tags/crumbs/axes/columns/avatars/slides/fields/steps → 当列表/表格渲染；
+    · 其余字段按「键: 值」逐行展示；children 递归渲染。
+  所以你不必担心「写了没见过的节点就坏掉」，任何结构都会被合理呈现。
+- 若某个 type 你希望以后变成「专属原生渲染」（更精致），告诉我，我再加一个渲染器即可；在此之前它已能正常显示。
 """.trimIndent()
 
         val ACTION_SPEC = """
