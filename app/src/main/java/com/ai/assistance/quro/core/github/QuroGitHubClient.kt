@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.github
 
 import android.content.Context
+import com.ai.assistance.quro.BuildConfig
 import com.ai.assistance.quro.core.tools.AuthService
 import com.ai.assistance.quro.core.tools.QuroAuthStore
 import kotlinx.coroutines.Dispatchers
@@ -33,9 +34,12 @@ object QuroGitHubClient {
     // 设备流默认申请范围：仓库读写 / 用户资料 / 邮箱 / 通知 / 组织 / Gist
     private const val DEFAULT_SCOPE = "repo read:user user:email notifications read:org gist"
 
-    // ───────── OAuth 设备流：Client ID 持久化（用户在登录屏填入，仅需注册一次 OAuth App）─────────
-    fun getClientId(ctx: Context): String =
-        ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString("client_id", "") ?: ""
+    // ───────── OAuth 设备流：Client ID 持久化（用户在登录屏填入，或构建时烤进 BuildConfig）─────────
+    fun getClientId(ctx: Context): String {
+        val saved = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString("client_id", "") ?: ""
+        if (saved.isNotBlank()) return saved
+        return BuildConfig.GITHUB_CLIENT_ID
+    }
 
     fun setClientId(ctx: Context, id: String) =
         ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString("client_id", id.trim()).apply()
