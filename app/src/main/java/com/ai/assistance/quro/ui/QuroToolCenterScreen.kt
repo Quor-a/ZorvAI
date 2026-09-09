@@ -808,11 +808,12 @@ private fun NodeEditorPanel(
                     settings.domStorageEnabled = true
                     settings.loadWithOverviewMode = true
                     settings.useWideViewPort = true
-                    // ══ #667 修复：与 MiniApp WebView 对齐，消除 node_editor 白屏 ══
-                    // 缺这三项时，部分 ROM/WebView 内核会拒绝 file:// 资源加载或渲染失败 → 白屏。
                     settings.allowFileAccess = true
+                    settings.allowContentAccess = true
                     settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                    setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                    settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                    // 注意：不要 setLayerType(HARDWARE)。部分 ROM / WebView 内核下强制硬件合成层
+                    // 会让 file:// WebView 渲染成空白（白屏），#667 加这行反而没修好。交给 WebView 自行决定合成层。
                     addJavascriptInterface(bridge, "AndroidBridge")
                     loadUrl("file:///android_asset/www/node_editor.html")
                 }.also { wvRef.value = it }

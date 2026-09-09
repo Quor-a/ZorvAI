@@ -218,11 +218,14 @@ class WebSearchOrchestrator(
         coroutineScope {
             val jobs = queries.mapIndexed { i, q ->
                 // 首个查询（通常最贴近原问句）权重更高
-                async { q to (cache.getHits(q) ?: EngineRouter.search(
-                    engines, q, config.perQueryLimit, config.searchTimeoutMs
-                ).also { if (it.isNotEmpty()) cache.putHits(q, it) }) to if (i == 0) 1.0 else 0.7 }
+                async {
+                    val hits = cache.getHits(q) ?: EngineRouter.search(
+                        engines, q, config.perQueryLimit, config.searchTimeoutMs
+                    ).also { if (it.isNotEmpty()) cache.putHits(q, it) }
+                    hits to if (i == 0) 1.0 else 0.7
+                }
             }
-            for (j in jobs) perQuery.add(j.await().second)
+            for (j in jobs) perQuery.add(j.await())
         }
         timings["retrieve"] = System.currentTimeMillis() - t2
 
