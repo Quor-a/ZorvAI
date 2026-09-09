@@ -1153,6 +1153,11 @@ Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{
 - **节点编辑器白屏修复**：移除 `setLayerType(LAYER_TYPE_HARDWARE)`（部分 ROM/WebView 内核下强制硬件合成层会把 file:// WebView 渲染成空白，#667 加这行反而没修好）；并令 2.5MB `mermaid.min.js` 以 `defer` 非阻塞加载，静态编辑器 UI 立即绘制；补充 `allowContentAccess`。
 - **强化人格卡硬强制（绝对命令 + 显式状态）**：提示词先**显式声明当前开关真实状态**（开/关，禁止模型猜测），再下绝对命令——开关=开时「整条纯文字回复一律禁止、没有任何『普通回复』豁免」，关时明确进入被动模式。彻底消除「AI 把普通回复当成纯文字需求、跳过围栏输出」的问题。
 
+### v1.0.87 二次热修（同版本覆盖发布）
+- **web_search 中文人名分词缺陷**：用户测到「郑钦文」被拆成单字「郑」、返回字典释义。根因在 `QueryRewriter`——改写器把中文人名在字间插入空格（"郑 钦文"）或拆成单字，检索后端按单字分词命中字典义。已修：① 改写系统提示加规则「中文人名/地名必须保持连续完整，禁止插空格或拆单字」；② `parse()` 内对所有查询词做 `collapseHanGaps`，用正则 `(?<=\p{IsHan})\s+(?=\p{IsHan})` 把汉字间的空格合并掉（"郑 钦文"→"郑钦文"），且单字查询会被长度过滤兜底到 `ruleClean` 保留整句中文。
+- **节点编辑器白屏（真因修复）**：上一轮按「硬件合成层」成因移除 `setLayerType(HARDWARE)` 仍未解决——但「小程序工作室」面板带 HARDWARE 反而正常，说明不是它。真因是 `NodeEditorPanel` 比能正常渲染的 mermaid 面板**多设了 `loadWithOverviewMode=true` + `useWideViewPort=true`**，配合 `node_editor.html` 的 `html,body{height:100%;overflow:hidden}` + `meta viewport`，会让部分 WebView 内核算出 **0 高可见视口 → 整页纯白**。已移除这两项，完全对齐能正常渲染的 mermaid 面板配置。
+- **人格卡开关仍非绝对（根因修复）**：上一轮只在云分支中段加了强制段，但①**本地 MNN/LLAMA 极简分支根本不含任何开关内容**（只注入名字+人设+回复纪律），开关对本地模型完全不可见 → 表现成「开关没用 / 识别不出开还是关」；② 云分支段埋在千行提示词中段，小模型易忽略。已把开关强制段抽成 `buildVisualSwitchEnforcement()`，**本地分支末尾 + 云端分支最末尾（最高近因偏好）各注入一份**，且都先显式声明当前开关真实状态再下绝对命令（开关=开 → 整条纯文字回复一律禁止，无普通回复豁免）。
+
 ### v1.0.86
 - **工具分类构架重构**：`ToolCapabilityDirectory` 工具能力目录补全 5 类新工具的显式分类元数据（端侧联网检索 `web_search`/`read_url` → 网络/Web；屏幕捕获授权 `enable_screen_capture` → 无障碍；节点编辑器 `node_editor` → UI/卡片；端侧 APK 构建 `build_apk`/`export_apk` → CMS 开发），分类枚举扩展至 17 类；`buildQuroRegistry` 顶部「工具分类架构」注释同步更新。
 - **端侧联网检索（AI 行动链）**：新增 `web_search`（多引擎并发 + 查询改写 + 正文密度抽取 + 五信号重排 + 上下文打包，返回带 [n] 编号可溯源引用）与 `read_url`（精读单页正文）两个工具，接入 AI 工具集，AI 自主决定联网、搜→挑→读→答，非浏览器套壳。
