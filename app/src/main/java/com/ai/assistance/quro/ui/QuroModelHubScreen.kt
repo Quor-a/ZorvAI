@@ -122,7 +122,7 @@ private suspend fun downloadAndLoadMnn(
 ): String = withContext(Dispatchers.IO) {
     val id = hfId(entry.repoId, entry.fileName, "MNN")
     val dir = modelDir(id, ctx); dir.mkdirs()
-    val r = QuroHuggingFace.downloadMnnModel(entry.repoId, entry.fileName, dir, onProgress)
+    val r = QuroHuggingFace.downloadMnnModel(entry.repoId, dir, onProgress)
     if (!r.startsWith("OK")) return@withContext "下载失败：$r"
     val model = QuroLocalModel(
         id = id,
@@ -208,7 +208,11 @@ private fun ResultRow(ctx: Context, scope: kotlinx.coroutines.CoroutineScope, en
     ) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Text(entry.repoId, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-            Text(entry.fileName, style = MaterialTheme.typography.bodySmall)
+            Text(
+                if (entry.type == "MNN" && entry.fileName.isBlank()) "(完整模型包：配置 + 全部权重文件)"
+                else entry.fileName,
+                style = MaterialTheme.typography.bodySmall,
+            )
             Text("大小约 ${entry.sizeMB} MB", style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
             if (downloading) {
