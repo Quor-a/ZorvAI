@@ -63,7 +63,13 @@ object MiniHtml {
         val cleaned = DOCTYPE_RE.replace(body, "")
 
         for (m in TAG_RE.findAll(cleaned)) {
-            val chunk = cleaned.substring(pos, m.range.first)
+            // 关键修复：skipToClose 会把 pos 跳到 </script> 之后，而 findAll 仍按文档顺序产出
+            // 落在 pos 之前的匹配（被丢弃子树内部的标签）。此时 m.range.first < pos，若直接
+            // substring(pos, m.range.first) 会抛 "begin X, end Y, length Z"（begin>end）。
+            // 这些匹配本身位于已丢弃的子树内，直接跳过即可，不影响解析结果。
+            if (m.range.first < pos) continue
+            val end = m.range.first.coerceAtMost(cleaned.length)
+            val chunk = cleaned.substring(pos, end)
             if (chunk.isNotBlank()) cur.text += unescape(chunk)
             pos = m.range.last + 1
 

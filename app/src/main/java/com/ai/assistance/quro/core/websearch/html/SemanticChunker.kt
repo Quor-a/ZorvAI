@@ -178,7 +178,7 @@ object SemanticChunker {
                 out.add(full)
                 // 重叠：保留上一段尾部，但要对齐到句子边界，
                 // 否则新块会以半截句子开头（实测中出现的"论证文本，说明条件…"就是这么来的）
-                cur = StringBuilder(sentenceAlignedTail(full, overlapChars))
+                cur = StringBuilder(sentenceAlignedTail(full, overlap))
                 if (cur.isNotEmpty()) cur.append('\n')
             }
             if (cur.isNotEmpty()) cur.append('\n')

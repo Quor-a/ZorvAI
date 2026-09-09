@@ -1147,6 +1147,12 @@ Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{
 - **端侧联网检索 `web_search` 修复（v4 引擎升级）**：旧版 `MiniHtml` 的 void 元素集合误含 `link`，导致 RSS `<link>url</link>` 被当成空元素、URL 取不到、所有结果被丢弃 → 联网返回空。v4 修复并升级：① `MiniHtml` 新增 `xmlMode`（RSS 解析强制开启）；② Bing 主力引擎改为 **RSS 优先 / HTML 兜底双通道**（`BingEngine`），单押 RSS 被拦时自动降级到普通搜索页；③ 新增 `EngineHealth` 熔断（不可达源连续失败 3 次进 10 分钟冷却，不再拖慢整体）；④ 新增 `AntiBot` 反爬页识别（验证码页 HTTP 200 但无结果时给出准确诊断）；⑤ `HttpStack` 返回状态码与错误原因，区分「网络不通 / 403 / 解析 0 条」；⑥ 中文 RSS 日期解析（如「周一, 07 9月 2026」）；⑦ 阅读改为超额抓取 + 成功优先。新增 L2 链路（意图路由 / RRF 融合 / 语义切块 / 片段级证据排序 / 引用校验），并附 `SearchDiagnostics` 自检工具。
 - **人格卡开关硬强制（真修）**：之前开关已开但 AI 仍回纯文字——根因是系统提示词里**动态UI组件开关根本没有「必须主动用」的硬规则**，且强制指令埋在千行提示词末尾被小模型忽略。v1.0.87 在工具清单**之前**新增显式「可视化输出硬强制」段（按开关状态生成）：动态UI组件开关=开 → 凡能做成界面/可交互控件必须写 ```quro-ui；可视化小卡片开关=开 → 凡能做成单块卡片必须写 ```quro-card；纯文字回复视为严重错误。同时在「可视化输出功能总览」路由表里给动态UI 补上「必须主动」规则。
 
+### v1.0.87 热修（同版本覆盖发布）
+- **补交漏提交的两个作者编译 bug（已在 APK 生效但未入 git，本轮一并提交）**：① `WebSearchOrchestrator` 的 `perQuery` 因 `to` 右结合写成 `((q,hits),weight)` 导致类型错；② `SemanticChunker` 误用未定义参数 `overlapChars`（应为 `overlap`）。
+- **修 `MiniHtml.parse` 的 `begin>end` 崩溃**：`skipToClose` 跳 `pos` 后，下一个 `findAll` 匹配可能落在 `pos` 之前，原 `cleaned.substring(pos, m.range.first)` 抛 `begin X, end Y, length Z` 异常（表现为 web_search 偶发「后端解析异常：begin 1989, end 1981」）。已加 `if (m.range.first < pos) continue` 守卫。
+- **节点编辑器白屏修复**：移除 `setLayerType(LAYER_TYPE_HARDWARE)`（部分 ROM/WebView 内核下强制硬件合成层会把 file:// WebView 渲染成空白，#667 加这行反而没修好）；并令 2.5MB `mermaid.min.js` 以 `defer` 非阻塞加载，静态编辑器 UI 立即绘制；补充 `allowContentAccess`。
+- **强化人格卡硬强制（绝对命令 + 显式状态）**：提示词先**显式声明当前开关真实状态**（开/关，禁止模型猜测），再下绝对命令——开关=开时「整条纯文字回复一律禁止、没有任何『普通回复』豁免」，关时明确进入被动模式。彻底消除「AI 把普通回复当成纯文字需求、跳过围栏输出」的问题。
+
 ### v1.0.86
 - **工具分类构架重构**：`ToolCapabilityDirectory` 工具能力目录补全 5 类新工具的显式分类元数据（端侧联网检索 `web_search`/`read_url` → 网络/Web；屏幕捕获授权 `enable_screen_capture` → 无障碍；节点编辑器 `node_editor` → UI/卡片；端侧 APK 构建 `build_apk`/`export_apk` → CMS 开发），分类枚举扩展至 17 类；`buildQuroRegistry` 顶部「工具分类架构」注释同步更新。
 - **端侧联网检索（AI 行动链）**：新增 `web_search`（多引擎并发 + 查询改写 + 正文密度抽取 + 五信号重排 + 上下文打包，返回带 [n] 编号可溯源引用）与 `read_url`（精读单页正文）两个工具，接入 AI 工具集，AI 自主决定联网、搜→挑→读→答，非浏览器套壳。
