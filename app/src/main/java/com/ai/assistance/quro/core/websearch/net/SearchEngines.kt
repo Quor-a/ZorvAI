@@ -119,9 +119,14 @@ class SearXngEngine(
 
 // ---------------------------------------------------------------- 解析工具
 
-/** RSS/XML 解析：复用 MiniHtml（标签语言通用），抽取 item 三元组 */
+/**
+ * RSS/XML 解析：复用 MiniHtml（标签语言通用），抽取 item 三元组。
+ *
+ * 注意必须传 xmlMode = true —— RSS 的 <link> 是成对标签，
+ * 沿用 HTML 空元素规则会导致 URL 取不到，全部条目被判为无效。
+ */
 internal fun parseRss(xml: String, engine: String, limit: Int): List<SearchHit> {
-    val root = MiniHtml.parse(xml)
+    val root = MiniHtml.parse(xml, xmlMode = true)
     val out = ArrayList<SearchHit>()
     var pos = 0
     MiniHtml.walk(root) { n ->
@@ -176,17 +181,33 @@ private val MONTHS = mapOf(
     "jul" to 6, "aug" to 7, "sep" to 8, "oct" to 9, "nov" to 10, "dec" to 11
 )
 
-/** 极简 RFC822 时间解析，够用即可，失败返回 -1 不影响主流程 */
+/**
+ * 日期解析，够用即可，失败返回 -1 不影响主流程。
+ *
+ * 需同时兼容两种格式：
+ * - 英文：Mon, 07 Sep 2026 02:31:00 GMT
+ * - 中文（Bing 中文 RSS 实际返回）：周一, 07 9月 2026 02:31:00 GMT
+ * 中文场景若按英文月份表匹配会全部失败，导致新鲜度信号失效。
+ */
+private val DATE_RE = Regex("""(\d{1,2})\s+([A-Za-z]{3,9}|\d{1,2})\s*月?\s+(\d{4})""")
+private val TIME_RE = Regex("""(\d{1,2}):(\d{2})(?::(\d{2}))?""")
+
 internal fun parseRfc822(s: String): Long {
     return runCatching {
-        val p = s.trim().split(Regex("""\s+"""))
-        if (p.size < 4) return -1L
-        val day = p[0].filter { it.isDigit() }.toInt()
-        val mon = MONTHS[p[1].lowercase().take(3)] ?: return -1L
-        val year = p[2].filter { it.isDigit() }.toInt()
-        val hm = p[3].split(":")
+        val d = DATE_RE.find(s) ?: return -1L
+        val day = d.groupValues[1].toInt()
+        val monRaw = d.groupValues[2]
+        val mon = if (monRaw.all { it.isDigit() }) {
+            monRaw.toInt() - 1
+        } else {
+            MONTHS[monRaw.lowercase().take(3)] ?: return -1L
+        }
+        val year = d.groupValues[3].toInt()
+        val t = TIME_RE.find(s)
+        val hour = t?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        val min = t?.groupValues?.get(2)?.toIntOrNull() ?: 0
         val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("GMT"))
-        cal.set(year, mon, day, hm.getOrNull(0)?.toIntOrNull() ?: 0, hm.getOrNull(1)?.toIntOrNull() ?: 0, 0)
+        cal.set(year, mon, day, hour, min, 0)
         cal.timeInMillis
     }.getOrDefault(-1L)
 }
@@ -199,19 +220,36 @@ internal fun parseRfc822(s: String): Long {
  */
 object EngineRouter {
 
+    /**
+     * 并发检索并合并。
+     *
+     * @param useHealth 是否启用熔断。默认开启：不可达源会在连续失败后被跳过，
+     *                  避免每次请求都被它们的超时拖慢（这在受限网络下是主要延迟来源）。
+     *                  自检时请传 false，以便拿到所有引擎的真实状态。
+     */
     suspend fun search(
         engines: List<SearchEngine>,
         query: String,
         limit: Int = 8,
-        timeoutMs: Long = 9_000
+        timeoutMs: Long = 9_000,
+        useHealth: Boolean = true
     ): List<SearchHit> = coroutineScope {
-        val jobs = engines.filter { it.enabled }.map { e ->
+        val active = engines.filter { e ->
+            e.enabled && !(useHealth && EngineHealth.shouldSkip(e.id))
+        }
+
+        val jobs = active.map { e ->
             async {
-                withTimeoutOrNull(timeoutMs) {
+                val tmo = if (useHealth) EngineHealth.timeoutFor(e.id) else timeoutMs
+                val res = withTimeoutOrNull(tmo) {
                     runCatching { e.search(query, limit) }.getOrDefault(emptyList())
-                } ?: emptyList()
+                }
+                if (res.isNullOrEmpty()) EngineHealth.recordFailure(e.id)
+                else EngineHealth.recordSuccess(e.id)
+                res ?: emptyList()
             }
         }
+
         val merged = LinkedHashMap<String, SearchHit>()
         for (j in jobs) {
             for (hit in j.await()) {

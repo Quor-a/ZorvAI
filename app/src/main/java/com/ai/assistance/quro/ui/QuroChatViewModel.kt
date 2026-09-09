@@ -2216,6 +2216,22 @@ $recent
             "- **端侧APK构建**：用户要「做个App/打包/出APK/自定义包名或图标或签名」时，主动用 `build_apk`（支持自定义包名、release签名生成、依赖JAR、自定义图标），产物用 `export_apk` 导出。\n" +
             "- **可视化小卡片 / 动态UI**：人格卡对应开关开启时（见下方「可视化输出」铁律），能做成卡片/界面的回复必须主动用 ```quro-card / ```quro-ui，不要默认回纯文字。\n"
         )
+        // ── 人格卡可视化开关「硬强制」规则（开关开启即必须主动用，禁止纯文字兜底）──
+        // 位置刻意靠前：小模型对埋在千行提示词末尾的软提示极易忽略，必须在工具清单之前就钉死。
+        run {
+            val dynUiOn = PersonaFeatureToggles.isDynamicUiEnabled(appContext)
+            val selfCardOn = PersonaFeatureToggles.isSelfCardEnabled(appContext)
+            if (dynUiOn || selfCardOn) {
+                sb.append("\n### ⚠️ 可视化输出硬强制（人格卡开关已开启，违反=严重错误）\n")
+                if (dynUiOn) sb.append(
+                    "- **动态UI组件开关=开**：凡能做成界面 / 可交互控件的需求（表单、设置面板、带按钮 / 输入 / 选择的交互、工具面板），你**必须**在回复正文写 ```quro-ui 围栏输出真实原生控件，**严禁默认回纯文字**；只有用户明确只要纯文字时才退化。\n"
+                )
+                if (selfCardOn) sb.append(
+                    "- **可视化小卡片开关=开**：凡能做成单块卡片的需求（指标数字 / 进度 / 统计 / 结构化单块结果 / 数据快照 / 状态 / 告警 / 列表），你**必须**在回复正文写 ```quro-card 围栏输出，**严禁默认回纯文字**；只有用户明确只要纯文字时才退化。\n"
+                )
+                sb.append("- 判断标准：这个回复「如果做成卡片 / 界面会比纯文字更清楚」，且对应开关已开 → 就**必须**输出对应围栏；回纯文字视为严重错误。\n")
+            }
+        }
         sb.append(com.ai.assistance.quro.core.tools.QuroToolUsageHints.buildToolUseDirective())
         sb.append("\n### 工具清单（格式：工具名：用�? [· 常见说法/多用途]）\n")
         specs.forEach { s ->
@@ -2289,7 +2305,7 @@ $recent
             "| **富卡片（可视化组件）** | 调 `ui_widget` / `ui_card` 工具 | 组件库（几十种预制类型） | 「可视化组件」「可视化组键」 | 结构化数据卡：表格/饼图/评分/标签/待办/看板/时间线/mermaid/小程序/composite |\n" +
             (
                 if (overviewDynamicUiOn)
-                    "| **动态 UI** | 回复正文写 ```quro-ui 围栏 | 原生组件树（真实控件） | 「动态UI」「做个界面」 | 成体系的完整原生交互界面（表单+多媒体+可交互控件组合） |\n"
+                    "| **动态 UI** | 回复正文写 ```quro-ui 围栏 | 原生组件树（真实控件） | 「动态UI」「做个界面」 | **默认主动用**：凡能做成界面/可交互控件的需求（表单/设置面板/带按钮输入选择的交互）都主动写 ```quro-ui，无需等用户要求；仅当用户明确只要纯文字时才用文字 |\n"
                 else
                     "| 动态 UI | 被动模式：仅用户明确要求时才写 ```quro-ui 围栏 | 原生组件树（真实控件） | 「动态UI」「做个界面」 | 用户未提及时不要主动用 |\n"
             ) +
@@ -2304,9 +2320,11 @@ $recent
             (
                 if (overviewSelfCardOn)
                     "- 对话内嵌展示四选一：AI 自写单块卡 → 小卡片（```quro-card）；预制组件卡 → 富卡片（ui_widget/ui_card）；成体系交互界面 → 动态 UI（```quro-ui）；HTML 成品 → 网页预览（```html）。\n" +
-                    "- **开关已开启 → 主动默认用**：「可视化小卡片」开关开启时，凡能做成单块卡片的回复你都**必须主动**用 ```quro-card 输出，不要默认回纯文字；只有用户明确要求纯文字时才退化为文字。\n"
+                    "- **可视化小卡片开关=开 → 主动默认用**：凡能做成单块卡片的回复你都**必须主动**用 ```quro-card 输出，不要默认回纯文字；只有用户明确要求纯文字时才退化为文字。\n"
                 else
                     "- 对话内嵌展示三选一：预制组件卡 → 富卡片（ui_widget/ui_card）；成体系交互界面 → 动态 UI（```quro-ui）；HTML 成品 → 网页预览（```html）。\n"
+                +
+                (if (overviewDynamicUiOn) "- **动态UI组件开关=开 → 主动默认用**：凡能做成界面/可交互控件的需求（表单/设置面板/带按钮输入选择的交互）你都**必须主动**用 ```quro-ui 输出，不要默认回纯文字；只有用户明确要求纯文字时才退化。\n" else "")
             ) +
             "- 屏幕弹窗 → visual_* 工具族（visual_question 问 / visual_action 选 / visual_popup 展示）。\n" +
             "- 画图 → mermaid；做网页 → ```html；多文件工程 → workbench；整篇排版长文档/PPT/报告 → ```aip 围栏（AIP 信封）。\n" +

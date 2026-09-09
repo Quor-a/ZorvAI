@@ -5,6 +5,7 @@ import com.ai.assistance.quro.core.websearch.model.Article
 import com.ai.assistance.quro.core.websearch.model.Citation
 import com.ai.assistance.quro.core.websearch.model.SearchBundle
 import com.ai.assistance.quro.core.websearch.model.SearchHit
+import com.ai.assistance.quro.core.websearch.rank.EvidenceReranker
 
 /**
  * ContextPacker —— 把多篇正文压缩进有限 token 预算，并生成可引用编号。
@@ -109,6 +110,84 @@ object ContextPacker {
             dropped = dropped,
             timings = timings
         )
+    }
+
+    /**
+     * L2 打包：直接消费片段级证据，而不是整篇文档。
+     *
+     * 与 pack() 的区别：pack() 以"文档"为单位、每篇截断到固定长度；
+     * 这里以"证据块"为单位，按相关性取 Top-K，因此关键结论不会因为排在文末而被截掉。
+     * 同一篇文档的多个块会合并到同一个引用编号下，避免编号膨胀。
+     */
+    fun packEvidence(
+        evidence: List<EvidenceReranker.Evidence>,
+        queries: List<String>,
+        tokenBudget: Int = 5000,
+        perDocCap: Int = 1500,
+        timings: Map<String, Long> = emptyMap()
+    ): SearchBundle {
+        val citations = ArrayList<Citation>()
+        val sb = StringBuilder()
+        var used = 0
+        val perDocUsed = HashMap<String, Int>()
+
+        for (e in evidence) {
+            if (used >= tokenBudget) break
+            val docKey = e.hit.url
+            val docUsed = perDocUsed[docKey] ?: 0
+            if (docUsed >= perDocCap) continue
+
+            val room = minOf(perDocCap - docUsed, tokenBudget - used)
+            if (room < 80) continue
+
+            val (excerpt, truncated) = Markdownizer.truncate(e.chunk.text, charBudget(room))
+            val domain = domainOf(e.hit.url)
+
+            // 同一文档的多个块复用同一编号
+            val existing = citations.firstOrNull { it.url == e.hit.url }
+            val idx: Int
+            if (existing != null) {
+                idx = existing.index
+                citations[citations.indexOf(existing)] = existing.copy(
+                    excerpt = existing.excerpt + "\n" + excerpt,
+                    truncated = existing.truncated || truncated
+                )
+            } else {
+                idx = citations.size + 1
+                citations.add(
+                    Citation(
+                        index = idx,
+                        title = e.hit.title,
+                        url = e.hit.url,
+                        domain = domain,
+                        publishedAt = e.hit.publishedAt,
+                        excerpt = excerpt,
+                        truncated = truncated
+                    )
+                )
+            }
+
+            // 带上标题路径，让模型知道这段出自文档的什么位置
+            val path = e.chunk.headingPath
+            sb.append("[$idx] ").append(e.hit.title.trim())
+            if (path.isNotEmpty()) sb.append(" › ").append(path.joinToString(" › "))
+            sb.append('\n')
+            sb.append(excerpt).append("\n\n")
+
+            val cost = estimateTokens(excerpt) + 20
+            used += cost
+            perDocUsed[docKey] = docUsed + cost
+        }
+
+        if (citations.isEmpty()) {
+            return SearchBundle("", emptyList(), queries, emptyList(), timings)
+        }
+
+        val header = buildString {
+            append("以下是联网检索到的实时资料，请基于这些资料回答；")
+            append("引用处标注对应编号如 [1][2]。若资料不足以回答，请明确说明。\n\n")
+        }
+        return SearchBundle(header + sb.toString().trim(), citations, queries, emptyList(), timings)
     }
 
     /** token 预算换算为字符预算（按中英混合的经验系数） */
