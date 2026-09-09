@@ -375,6 +375,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(AuthServiceAddTool())
     r.register(AuthServiceListTool())
     r.register(AuthServiceRemoveTool())
+    r.register(QuroGitHubSearchTool())   // github_search：对话框内把 GitHub 当作搜索引擎使用
     // 终端驱动工具（统一为单一 terminal 工具，action 分发；内部复用原 10 个终端子工具实例）
     r.register(QuroTerminalTool())
 

@@ -133,4 +133,55 @@ object QuroDownloadUtil {
     } catch (e: Exception) {
         "保存失败：${e.message}"
     }
+
+    /**
+     * 流式下载到指定本地文件（用于大型 GGUF 模型权重，避免整块读入内存）。
+     * 先落 *.tmp，完成后 rename 成目标文件（原子替换，避免半截文件被当作可用模型）。
+     * onProgress(downloaded, total)：total 为 -1 表示服务器未返回 Content-Length。
+     * 返回 "OK:<字节数>" 表示成功，其余为错误信息。
+     */
+    fun downloadToFile(
+        dlUrl: String,
+        target: File,
+        userAgent: String? = null,
+        onProgress: ((downloaded: Long, total: Long) -> Unit)? = null,
+    ): String {
+        return try {
+            val conn = (URL(dlUrl).openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = "GET"
+                userAgent?.let { setRequestProperty("User-Agent", it) }
+                connectTimeout = 20000
+                readTimeout = 60000
+                instanceFollowRedirects = true
+            }
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                conn.disconnect()
+                return "下载失败：HTTP $code"
+            }
+            val total = runCatching { conn.contentLengthLong }.getOrElse { -1L }
+            val tmp = File(target.parent ?: ".", "${target.name}.tmp")
+            tmp.parentFile?.mkdirs()
+            var downloaded = 0L
+            conn.inputStream.use { input ->
+                tmp.outputStream().use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    var read: Int
+                    while (input.read(buf).also { read = it } != -1) {
+                        out.write(buf, 0, read)
+                        downloaded += read
+                        onProgress?.invoke(downloaded, total)
+                    }
+                }
+            }
+            conn.disconnect()
+            if (!tmp.renameTo(target)) {
+                tmp.copyTo(target, overwrite = true)
+                tmp.delete()
+            }
+            "OK:${target.length()}"
+        } catch (e: Exception) {
+            "下载失败：${e.message}"
+        }
+    }
 }

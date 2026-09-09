@@ -673,6 +673,10 @@ fun ChatScreen(
     // 可视化询问配置对话框
     var showVisualQuestionConfig by remember { mutableStateOf(false) }
     val pendingVisualQuestion = remember { mutableStateOf(false) }
+    // 输入框功能选择器（一次性强制）：选中后下一条消息强制 AI 用对应可视化能力（参考可视化弹窗机制）
+    val pendingSelfCard = remember { mutableStateOf(false) }
+    val pendingDynamicUi = remember { mutableStateOf(false) }
+    val pendingAipDoc = remember { mutableStateOf(false) }
     // 定时任务管理入口
     var showSchedule by remember { mutableStateOf(false) }
     // 工作流管理入口
@@ -740,6 +744,13 @@ fun ChatScreen(
     // Zorv 构建台（端侧 APK 构建器：Java → DEX → APK，已从 build-aci 集成，剥离 ACI 受控端）
     var showBuild by remember { mutableStateOf(false) }
 
+    // GitHub 管理屏（登录 + 仓库/Issue/Star/搜索）：从设置「GitHub」/ ui_open_github 进入
+    var showGitHub by remember { mutableStateOf(false) }
+    // /gh 命令预填到 GitHub 搜索的关键词
+    var githubPrefill by remember { mutableStateOf("") }
+    // 离线模型下载中心：从设置「离线模型下载」/ ui_open_model_hub 进入
+    var showModelHub by remember { mutableStateOf(false) }
+
     // 可视化弹窗 / 询问（动态 UI 深链交互）：经 UiNavigationBus.VisualPopup / VisualAsk 触发
     var showVisualPopup by remember { mutableStateOf(false) }
     var visualPopupTitle by remember { mutableStateOf("") }
@@ -786,6 +797,8 @@ fun ChatScreen(
             "ui_clear_chat" -> vm.clear()
             "ui_new_chat" -> vm.newConversation()
             "ui_open_tool_center" -> showToolCenter = true
+            "ui_open_github" -> showGitHub = true
+            "ui_open_model_hub" -> showModelHub = true
         }
     }
     val appCtx = LocalContext.current
@@ -1229,6 +1242,12 @@ fun ChatScreen(
     fun send(text: String) {
         val t = text.trim()
         if (t.isEmpty() && attachments.isEmpty()) return
+        // 对话框做 GitHub 搜索引擎：/gh <关键词> 直接在 GitHub 屏搜索（不发给 AI）
+        if (t.startsWith("/gh", ignoreCase = true)) {
+            githubPrefill = t.removePrefix("/gh").trim()
+            showGitHub = true
+            return
+        }
         // 构建上下文信息（作为隐藏消息注入，用户不可见）
         val ctxParts = mutableListOf<String>()
         val wsPath = currentWorkspace
@@ -1251,6 +1270,18 @@ fun ChatScreen(
             ctxParts.add("用户选择了：可视化询问，请立即调用visual_question工具创建一个可视化询问")
             pendingVisualQuestion.value = false
         }
+        if (pendingSelfCard.value) {
+            ctxParts.add("用户选择了：可视化小卡片，请立即在回复中用 ```quro-card 围栏输出一张自研可视化小卡片（指标/进度/结构化单块结果），纯文字回复禁止")
+            pendingSelfCard.value = false
+        }
+        if (pendingDynamicUi.value) {
+            ctxParts.add("用户选择了：动态UI组件，请立即在回复中用 ```quro-ui 围栏输出原生可交互界面（表单/面板/工具入口等），纯文字回复禁止")
+            pendingDynamicUi.value = false
+        }
+        if (pendingAipDoc.value) {
+            ctxParts.add("用户选择了：AIP文档排版，请用 ```aip 围栏（或 aip_compose 工具）输出整篇排版的文档/PPT/报告（doc/deck/mindmap），不要只回纯文本")
+            pendingAipDoc.value = false
+        }
         if (enabledSkillsCount > 0) {
             val enabledSkills = com.ai.assistance.quro.core.skill.QuroSkillStore.load(ctx)
                 .filter { it.enabled }
@@ -1262,250 +1293,8 @@ fun ChatScreen(
         attachments.clear()
     }
 
-    Box(Modifier.fillMaxSize()) {
-        // 对话框「化小窗」：chatMinimized 时主对话收起为悬浮小窗，根布局仅留背景占位。
-        // 系统级浮窗（useSystemOverlay）下不拆除主屏内容：主屏在浮层之下保持已组合状态，
-        // 返回全屏时仅移除浮层即可，避免整屏重建导致的卡顿；占位仅在应用内降级浮层时生效。
-        if (chatMinimized && !useSystemOverlay) {
-            Box(Modifier.fillMaxSize().background(cs.background))
-        } else ModalNavigationDrawer(
-            drawerState = drawerState,
-            gesturesEnabled = true,
-            drawerContent = {
-                HistoryDrawer(
-                    history = history,
-                    onClose = { scope.launch { drawerState.close() } },
-                    onNew = { vm.newConversation(); scope.launch { drawerState.close() } },
-                    onPick = { id -> vm.selectConversation(id); scope.launch { drawerState.close() } },
-                    onCopyAll = { copyConversation(ctx, uiMessages) },
-                    onDelete = { vm.deleteConversation(it) },
-                    onDeleteAll = { vm.deleteAllConversations() },
-                    scaled = { scaled(it) },
-                    generatingIds = generatingIds,
-                )
-            }
-        ) {
-            // 可视化问答和操作弹窗
-            VisualDialogs()
-            // 自由可视化弹窗
-            VisualPopupDialog()
-            // AI自写UI可视化弹窗
-            VisualCustomPopupDialog()
-            Scaffold(
-                containerColor = cs.background,
-                topBar = {
-                    ChatTopBar(
-                        modelName = modelLabel,
-                        onMenu = openDrawer,
-                        onModel = { sheet = SheetType.Model },
-                        onSettings = { sheet = SheetType.Settings },
-                        onToolCenter = { showToolCenter = true },
-                        onMinimize = { chatMinimized = true },
-                        persona = selectedPersona,
-                        onPick = { sheet = SheetType.Persona },
-                        scaled = { scaled(it) }
-                    )
-                }
-            ) { pad ->
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(pad)
-                ) {
-                    // [D5] 错误横幅：ViewModel 捕获的异常经 error StateFlow 暴露，这里以顶部横幅呈现并在数秒后自动消失。
-                    errorState?.let { err ->
-                        LaunchedEffect(err) {
-                            kotlinx.coroutines.delay(4000L)
-                            vm.clearError()
-                        }
-                        Surface(
-                            color = cs.errorContainer,
-                            modifier = Modifier.fillMaxWidth().padding(8.dp),
-                        ) {
-                            Row(
-                                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text("⚠️ $err", color = cs.onErrorContainer, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                                TextButton(onClick = { vm.clearError() }) { Text("关闭", color = cs.onErrorContainer) }
-                            }
-                        }
-                    }
-                    MessageList(
-                        messages = uiMessages,
-                        scaled = { scaled(it) },
-                        currentId = currentId,
-                        busy = busy,
-                        traceLines = traceLines,
-                        genUiController = vm.genUiControllerFor(currentId),
-                        onOpenLink = { browserUrl = it },
-                        onCommand = { handleCardCommand(it) },
-                        onSend = { send(it) },
-                        onAskFollowup = { txt ->
-                            inputText = TextFieldValue(
-                                "针对上面的回答，我想追问：\n> " + txt.take(200).replace("\n", "\n> ") + "\n\n"
-                            )
-                        },
-                        onShare = { txt -> shareText(ctx, txt) },
-                        onRegenerate = {
-                            val lastUser = uiMessages.lastOrNull { it.mine }?.text
-                            if (!lastUser.isNullOrBlank()) send(lastUser)
-                        },
-                        onDelete = { vm.deleteMessage(it) },
-                        onAttachmentActivate = { att ->
-                            when (att.type) {
-                                "image" -> {
-                                    imageViewerPath = att.path ?: ""
-                                    imageViewerName = att.name
-                                    showImageViewer = true
-                                }
-                                "video" -> {
-                                    videoPlayerUri = "file://" + (att.path ?: "")
-                                    videoPlayerTitle = att.name
-                                    showVideoPlayer = true
-                                }
-                                else -> {
-                                    // 文档/文件：使用应用内 QuoroDocumentViewer 预览，
-                                    // 支持 docx/xlsx/pptx/pdf 等格式的富文本渲染
-                                    val f = att.path?.let { File(it) }
-                                    if (f != null && f.exists()) {
-                                        val ext = f.extension.lowercase()
-                                        val previewableExts = setOf(
-                                            "docx", "xlsx", "pptx", "pdf",
-                                            "txt", "md", "markdown", "json", "csv", "xml",
-                                            "html", "htm", "log", "kt", "kts", "py", "js", "ts", "css", "java",
-                                            "png", "jpg", "jpeg", "gif", "webp", "bmp",
-                                        )
-                                        if (ext in previewableExts) {
-                                            docViewerPath = att.path ?: ""
-                                            docViewerName = att.name
-                                            showDocViewer = true
-                                        } else {
-                                            openFileWithSystemViewer(ctx, att)
-                                        }
-                                    } else {
-                                        openFileWithSystemViewer(ctx, att)
-                                    }
-                                }
-                            }
-                        },
-                        onAttachmentDownload = { downloadAttachment(ctx, it) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    // 交互组件卡片栏（可视化小卡片兜底）：UI 桥未就绪时 AI 下发的 ui_widget/ui_card
-                    // 富卡片回落 QuroChatCardStore，在此渲染——此前只有 import 没有调用，兜底链路断的。
-                    QuroChatCardTray(onCommand = { handleCardCommand(it) })
-                    // 语音：对话框语音输入按钮（受「语音设置 · 对话框按钮」开关控制）
-                    val voiceInputEnabled = remember { QuroVoiceFeaturePrefs.getDialogVoiceButton(ctx) }
-                    fun startDialogStt() {
-                        if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
-                            Toast.makeText(ctx, "设备不支持语音识别", Toast.LENGTH_SHORT).show()
-                            return
-                        }
-                        QuroSttHolder.startListening(
-                            context = ctx,
-                            language = QuroSttPrefs.getLanguage(ctx),
-                            partialResults = QuroSttPrefs.getPartial(ctx),
-                            onPartial = { },
-                            onFinal = { txt ->
-                                if (txt.isNotBlank()) {
-                                    val cur = inputText.text
-                                    inputText = inputText.copy(text = if (cur.isBlank()) txt else "$cur $txt")
-                                }
-                            },
-                            onError = { _, msg -> Toast.makeText(ctx, "语音识别出错：$msg", Toast.LENGTH_SHORT).show() }
-                        )
-                    }
-                    // 自动朗读：AI 回复完成后 TTS 朗读（受「语音设置 · 自动朗读」开关控制）
-                    var autoRead by remember { mutableStateOf(QuroVoiceFeaturePrefs.getAutoRead(ctx)) }
-                    fun toggleAutoRead() { autoRead = !autoRead; QuroVoiceFeaturePrefs.setAutoRead(ctx, autoRead) }
-                    // #411 TTS 去重提升到 ViewModel：remember 是纯内存态，退出对话框 Compose 树销毁即重置为 "" →
-                    // 重进入时 last.id != "" 永远成立 → 重复播放已播过的消息。改用 ViewModel 的 StateFlow，
-                    // 生命周期跟随 ViewModel（Activity 重建也不丢）。
-                    val lastSpokenId by vm.lastSpokenMsgId.collectAsState()
-                    var wasBusy by remember { mutableStateOf(false) }
-                    var busyConvId by remember { mutableStateOf<String?>(null) }
-                    val ttsScope = rememberCoroutineScope()
-                    LaunchedEffect(busy, currentId) {
-                        // 记录「正在生成的是哪个会话」，切走其它会话时不该误触发朗读
-                        if (busy) busyConvId = currentId
-                        if (wasBusy && !busy && busyConvId == currentId) {
-                            val msgs = vm.messages.value
-                            val last = msgs.lastOrNull()
-                            if (autoRead && last != null && last.role == "assistant" && last.id != lastSpokenId) {
-                                vm.markSpoken(last.id)
-                                // ★ 朗读协调：若本回合 AI 已用 speak 工具主动播报（用户要求"让 AI 控制朗读顺序"），
-                                //   自动朗读让位，不再重复朗读同一回复；AI 的多次 speak 调用由串行队列按调用顺序播放。
-                                if (QuroTtsHolder.consumeSpeakToolFired()) {
-                                    Log.d("TTS", "自动朗读让位：本回合 AI 已用 speak 工具控制播报顺序")
-                                } else {
-                                    // v414 修复：ensureReady/speak 是挂起调用，改由稳定 scope 承接，UI 状态变化不再杀掉朗读。
-                                    ttsScope.launch {
-                                        QuroTtsHolder.ensureReady(ctx)
-                                        QuroTtsHolder.speak(last.content)
-                                    }
-                                }
-                            }
-                        }
-                        wasBusy = busy
-                    }
-
-                    val visionOn by vm.visionEnabled.collectAsState()
-                    Composer(
-                        deepThink = thinking,
-                        onToggleThink = { vm.setThinking(!thinking) },
-                        attachments = attachments,
-                        onRemoveAttach = { attachments.remove(it) },
-                        onAttach = { sheet = SheetType.Upload },
-                        autoSaveMemory = autoSaveMemory, onToggleAutoSave = { vm.setAutoSaveMemory(!autoSaveMemory) },
-                        onSend = { send(it) },
-                        text = inputText,
-                        onTextChange = { inputText = it },
-                        enterSend = enterSend,
-                        busy = busy,
-                        onStop = { vm.stop() },
-                        onOpenMusicPlayer = { showMusicPlayer = true },
-                        autoRead = autoRead,
-                        onToggleAutoRead = { toggleAutoRead() },
-                        visionEnabled = visionOn,
-                        onToggleVision = { vm.setVisionEnabled(!vm.visionEnabled.value) },
-                        onRequestMediaProjection = { requestMediaProjection() },
-                        voiceInputEnabled = voiceInputEnabled,
-                        onVoiceInput = { startDialogStt() },
-                        onOpenSkills = { showSkillSelector = true },
-                        onOpenAciSelector = { showAciSelector = true },
-                        onOpenEditor = { showEditor = true },
-                        onSelectVisualPopup = {
-                            pendingVisualPopup.value = !pendingVisualPopup.value
-                            if (pendingVisualPopup.value) {
-                                Toast.makeText(ctx, "已选择：可视化弹窗，发送消息时将触发", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(ctx, "已取消：可视化弹窗", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        onSelectVisualQuestion = {
-                            pendingVisualQuestion.value = !pendingVisualQuestion.value
-                            if (pendingVisualQuestion.value) {
-                                Toast.makeText(ctx, "已选择：可视化询问，发送消息时将触发", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(ctx, "已取消：可视化询问", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        pendingVisualPopup = pendingVisualPopup.value,
-                        pendingVisualQuestion = pendingVisualQuestion.value,
-                        currentWorkspace = currentWorkspace,
-                        onOpenWorkspaceSelector = { showWorkspaceSelector = true },
-                        onOpenCodeBrowser = { showCodeWorkspace = true },
-                        currentAciName = currentAciName,
-                        enabledSkillsCount = enabledSkillsCount,
-                        scaled = { scaled(it) }
-                    )
-                }
-            }
-        }
-
-        // （系统通知改为「离开软件时」由 QuroReplyNotifier 弹 heads-up，不在软件内不弹，故此处无应用内浮层）
-
+    @Composable
+    fun ChatOverlays() {
         // 模型选择 = 当前配置 + 已保存预设 + 从 API 拉取到的真实可用模型（彻底摒弃硬编码假示例）
         val modelList by modelVm.modelList.collectAsState()
         val isFetchingModels by modelVm.isFetchingModels.collectAsState()
@@ -1610,7 +1399,6 @@ fun ChatScreen(
             showPermission || showCms || showPlugins || showKnowledge || showTerminal || showSchedule || showBots ||
             showTts || showStt || showVoiceService || showSystemStatus || showFeatureModelConfig || showAci ||
             showToolCenter || showUsbDebug || showDefaultApp
-        // 底部弹层（自定义，统一遮罩 + 上滑）
         SheetOverlay(
             sheet = sheet, lastSheet = lastSheet,
             onDismiss = { sheet = null },
@@ -1742,6 +1530,8 @@ fun ChatScreen(
             onOpenAppearance = { showAppearance = true },
             vm = vm,
             onSendText = { send(it) },
+            onOpenGitHub = { showGitHub = true },
+            onOpenModelHub = { showModelHub = true },
         )
 
         // 权限管理页：全屏覆盖层（从设置底部弹层入口进入，返回关页回对话）
@@ -2266,6 +2056,22 @@ fun ChatScreen(
             }
         }
 
+        // GitHub 管理屏：全屏覆盖层（从设置「GitHub」/ ui_open_github 进入）
+        if (showGitHub) {
+            BackHandler { showGitHub = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
+                QuroGitHubScreen(onClose = { showGitHub = false }, initialQuery = githubPrefill)
+            }
+        }
+
+        // 离线模型下载中心：全屏覆盖层（从设置「离线模型下载」/ ui_open_model_hub 进入）
+        if (showModelHub) {
+            BackHandler { showModelHub = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
+                QuroModelHubScreen(onClose = { showModelHub = false })
+            }
+        }
+
         // 外观与对话设置页：全屏覆盖层（从设置「外观与对话」进入，返回关页回设置）
         val liveProfile by vm.userProfile.collectAsState()
         if (showAppearance) {
@@ -2495,6 +2301,269 @@ fun ChatScreen(
                 QuroMusicPlayerScreen(onClose = { showMusicPlayer = false })
             }
         }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        // 对话框「化小窗」：chatMinimized 时主对话收起为悬浮小窗，根布局仅留背景占位。
+        // 系统级浮窗（useSystemOverlay）下不拆除主屏内容：主屏在浮层之下保持已组合状态，
+        // 返回全屏时仅移除浮层即可，避免整屏重建导致的卡顿；占位仅在应用内降级浮层时生效。
+        if (chatMinimized && !useSystemOverlay) {
+            Box(Modifier.fillMaxSize().background(cs.background))
+        } else ModalNavigationDrawer(
+            drawerState = drawerState,
+            gesturesEnabled = true,
+            drawerContent = {
+                HistoryDrawer(
+                    history = history,
+                    onClose = { scope.launch { drawerState.close() } },
+                    onNew = { vm.newConversation(); scope.launch { drawerState.close() } },
+                    onPick = { id -> vm.selectConversation(id); scope.launch { drawerState.close() } },
+                    onCopyAll = { copyConversation(ctx, uiMessages) },
+                    onDelete = { vm.deleteConversation(it) },
+                    onDeleteAll = { vm.deleteAllConversations() },
+                    scaled = { scaled(it) },
+                    generatingIds = generatingIds,
+                )
+            }
+        ) {
+            // 可视化问答和操作弹窗
+            VisualDialogs()
+            // 自由可视化弹窗
+            VisualPopupDialog()
+            // AI自写UI可视化弹窗
+            VisualCustomPopupDialog()
+            Scaffold(
+                containerColor = cs.background,
+                topBar = {
+                    ChatTopBar(
+                        modelName = modelLabel,
+                        onMenu = openDrawer,
+                        onModel = { sheet = SheetType.Model },
+                        onSettings = { sheet = SheetType.Settings },
+                        onToolCenter = { showToolCenter = true },
+                        onMinimize = { chatMinimized = true },
+                        persona = selectedPersona,
+                        onPick = { sheet = SheetType.Persona },
+                        scaled = { scaled(it) }
+                    )
+                }
+            ) { pad ->
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(pad)
+                ) {
+                    // [D5] 错误横幅：ViewModel 捕获的异常经 error StateFlow 暴露，这里以顶部横幅呈现并在数秒后自动消失。
+                    errorState?.let { err ->
+                        LaunchedEffect(err) {
+                            kotlinx.coroutines.delay(4000L)
+                            vm.clearError()
+                        }
+                        Surface(
+                            color = cs.errorContainer,
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("⚠️ $err", color = cs.onErrorContainer, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                                TextButton(onClick = { vm.clearError() }) { Text("关闭", color = cs.onErrorContainer) }
+                            }
+                        }
+                    }
+                    MessageList(
+                        messages = uiMessages,
+                        scaled = { scaled(it) },
+                        currentId = currentId,
+                        busy = busy,
+                        traceLines = traceLines,
+                        genUiController = vm.genUiControllerFor(currentId),
+                        onOpenLink = { browserUrl = it },
+                        onCommand = { handleCardCommand(it) },
+                        onSend = { send(it) },
+                        onAskFollowup = { txt ->
+                            inputText = TextFieldValue(
+                                "针对上面的回答，我想追问：\n> " + txt.take(200).replace("\n", "\n> ") + "\n\n"
+                            )
+                        },
+                        onShare = { txt -> shareText(ctx, txt) },
+                        onRegenerate = {
+                            val lastUser = uiMessages.lastOrNull { it.mine }?.text
+                            if (!lastUser.isNullOrBlank()) send(lastUser)
+                        },
+                        onDelete = { vm.deleteMessage(it) },
+                        onAttachmentActivate = { att ->
+                            when (att.type) {
+                                "image" -> {
+                                    imageViewerPath = att.path ?: ""
+                                    imageViewerName = att.name
+                                    showImageViewer = true
+                                }
+                                "video" -> {
+                                    videoPlayerUri = "file://" + (att.path ?: "")
+                                    videoPlayerTitle = att.name
+                                    showVideoPlayer = true
+                                }
+                                else -> {
+                                    // 文档/文件：使用应用内 QuoroDocumentViewer 预览，
+                                    // 支持 docx/xlsx/pptx/pdf 等格式的富文本渲染
+                                    val f = att.path?.let { File(it) }
+                                    if (f != null && f.exists()) {
+                                        val ext = f.extension.lowercase()
+                                        val previewableExts = setOf(
+                                            "docx", "xlsx", "pptx", "pdf",
+                                            "txt", "md", "markdown", "json", "csv", "xml",
+                                            "html", "htm", "log", "kt", "kts", "py", "js", "ts", "css", "java",
+                                            "png", "jpg", "jpeg", "gif", "webp", "bmp",
+                                        )
+                                        if (ext in previewableExts) {
+                                            docViewerPath = att.path ?: ""
+                                            docViewerName = att.name
+                                            showDocViewer = true
+                                        } else {
+                                            openFileWithSystemViewer(ctx, att)
+                                        }
+                                    } else {
+                                        openFileWithSystemViewer(ctx, att)
+                                    }
+                                }
+                            }
+                        },
+                        onAttachmentDownload = { downloadAttachment(ctx, it) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    // 交互组件卡片栏（可视化小卡片兜底）：UI 桥未就绪时 AI 下发的 ui_widget/ui_card
+                    // 富卡片回落 QuroChatCardStore，在此渲染——此前只有 import 没有调用，兜底链路断的。
+                    QuroChatCardTray(onCommand = { handleCardCommand(it) })
+                    // 语音：对话框语音输入按钮（受「语音设置 · 对话框按钮」开关控制）
+                    val voiceInputEnabled = remember { QuroVoiceFeaturePrefs.getDialogVoiceButton(ctx) }
+                    fun startDialogStt() {
+                        if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
+                            Toast.makeText(ctx, "设备不支持语音识别", Toast.LENGTH_SHORT).show()
+                            return
+                        }
+                        QuroSttHolder.startListening(
+                            context = ctx,
+                            language = QuroSttPrefs.getLanguage(ctx),
+                            partialResults = QuroSttPrefs.getPartial(ctx),
+                            onPartial = { },
+                            onFinal = { txt ->
+                                if (txt.isNotBlank()) {
+                                    val cur = inputText.text
+                                    inputText = inputText.copy(text = if (cur.isBlank()) txt else "$cur $txt")
+                                }
+                            },
+                            onError = { _, msg -> Toast.makeText(ctx, "语音识别出错：$msg", Toast.LENGTH_SHORT).show() }
+                        )
+                    }
+                    // 自动朗读：AI 回复完成后 TTS 朗读（受「语音设置 · 自动朗读」开关控制）
+                    var autoRead by remember { mutableStateOf(QuroVoiceFeaturePrefs.getAutoRead(ctx)) }
+                    fun toggleAutoRead() { autoRead = !autoRead; QuroVoiceFeaturePrefs.setAutoRead(ctx, autoRead) }
+                    // #411 TTS 去重提升到 ViewModel：remember 是纯内存态，退出对话框 Compose 树销毁即重置为 "" →
+                    // 重进入时 last.id != "" 永远成立 → 重复播放已播过的消息。改用 ViewModel 的 StateFlow，
+                    // 生命周期跟随 ViewModel（Activity 重建也不丢）。
+                    val lastSpokenId by vm.lastSpokenMsgId.collectAsState()
+                    var wasBusy by remember { mutableStateOf(false) }
+                    var busyConvId by remember { mutableStateOf<String?>(null) }
+                    val ttsScope = rememberCoroutineScope()
+                    LaunchedEffect(busy, currentId) {
+                        // 记录「正在生成的是哪个会话」，切走其它会话时不该误触发朗读
+                        if (busy) busyConvId = currentId
+                        if (wasBusy && !busy && busyConvId == currentId) {
+                            val msgs = vm.messages.value
+                            val last = msgs.lastOrNull()
+                            if (autoRead && last != null && last.role == "assistant" && last.id != lastSpokenId) {
+                                vm.markSpoken(last.id)
+                                // ★ 朗读协调：若本回合 AI 已用 speak 工具主动播报（用户要求"让 AI 控制朗读顺序"），
+                                //   自动朗读让位，不再重复朗读同一回复；AI 的多次 speak 调用由串行队列按调用顺序播放。
+                                if (QuroTtsHolder.consumeSpeakToolFired()) {
+                                    Log.d("TTS", "自动朗读让位：本回合 AI 已用 speak 工具控制播报顺序")
+                                } else {
+                                    // v414 修复：ensureReady/speak 是挂起调用，改由稳定 scope 承接，UI 状态变化不再杀掉朗读。
+                                    ttsScope.launch {
+                                        QuroTtsHolder.ensureReady(ctx)
+                                        QuroTtsHolder.speak(last.content)
+                                    }
+                                }
+                            }
+                        }
+                        wasBusy = busy
+                    }
+
+                    val visionOn by vm.visionEnabled.collectAsState()
+                    Composer(
+                        deepThink = thinking,
+                        onToggleThink = { vm.setThinking(!thinking) },
+                        attachments = attachments,
+                        onRemoveAttach = { attachments.remove(it) },
+                        onAttach = { sheet = SheetType.Upload },
+                        autoSaveMemory = autoSaveMemory, onToggleAutoSave = { vm.setAutoSaveMemory(!autoSaveMemory) },
+                        onSend = { send(it) },
+                        text = inputText,
+                        onTextChange = { inputText = it },
+                        enterSend = enterSend,
+                        busy = busy,
+                        onStop = { vm.stop() },
+                        onOpenMusicPlayer = { showMusicPlayer = true },
+                        autoRead = autoRead,
+                        onToggleAutoRead = { toggleAutoRead() },
+                        visionEnabled = visionOn,
+                        onToggleVision = { vm.setVisionEnabled(!vm.visionEnabled.value) },
+                        onRequestMediaProjection = { requestMediaProjection() },
+                        voiceInputEnabled = voiceInputEnabled,
+                        onVoiceInput = { startDialogStt() },
+                        onOpenSkills = { showSkillSelector = true },
+                        onOpenAciSelector = { showAciSelector = true },
+                        onOpenEditor = { showEditor = true },
+                        onSelectVisualPopup = {
+                            pendingVisualPopup.value = !pendingVisualPopup.value
+                            if (pendingVisualPopup.value) {
+                                Toast.makeText(ctx, "已选择：可视化弹窗，发送消息时将触发", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(ctx, "已取消：可视化弹窗", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onSelectVisualQuestion = {
+                            pendingVisualQuestion.value = !pendingVisualQuestion.value
+                            if (pendingVisualQuestion.value) {
+                                Toast.makeText(ctx, "已选择：可视化询问，发送消息时将触发", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(ctx, "已取消：可视化询问", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        pendingVisualPopup = pendingVisualPopup.value,
+                        pendingVisualQuestion = pendingVisualQuestion.value,
+                        onSelectSelfCard = {
+                            pendingSelfCard.value = !pendingSelfCard.value
+                            Toast.makeText(ctx, if (pendingSelfCard.value) "已选择：可视化小卡片，发送消息时将触发" else "已取消：可视化小卡片", Toast.LENGTH_SHORT).show()
+                        },
+                        onSelectDynamicUi = {
+                            pendingDynamicUi.value = !pendingDynamicUi.value
+                            Toast.makeText(ctx, if (pendingDynamicUi.value) "已选择：动态UI组件，发送消息时将触发" else "已取消：动态UI组件", Toast.LENGTH_SHORT).show()
+                        },
+                        onSelectAipDoc = {
+                            pendingAipDoc.value = !pendingAipDoc.value
+                            Toast.makeText(ctx, if (pendingAipDoc.value) "已选择：AIP文档排版，发送消息时将触发" else "已取消：AIP文档排版", Toast.LENGTH_SHORT).show()
+                        },
+                        pendingSelfCard = pendingSelfCard.value,
+                        pendingDynamicUi = pendingDynamicUi.value,
+                        pendingAipDoc = pendingAipDoc.value,
+                        currentWorkspace = currentWorkspace,
+                        onOpenWorkspaceSelector = { showWorkspaceSelector = true },
+                        onOpenCodeBrowser = { showCodeWorkspace = true },
+                        currentAciName = currentAciName,
+                        enabledSkillsCount = enabledSkillsCount,
+                        scaled = { scaled(it) }
+                    )
+                }
+            }
+        }
+
+        // （系统通知改为「离开软件时」由 QuroReplyNotifier 弹 heads-up，不在软件内不弹，故此处无应用内浮层）
+
+        // 底部弹层（自定义，统一遮罩 + 上滑）
+        ChatOverlays()
     }
 
     // 监听来自 open_web 工具/链接的内置浏览器打开请求：
@@ -4923,6 +4992,12 @@ private fun Composer(
     onSelectVisualQuestion: () -> Unit = {},
     pendingVisualPopup: Boolean = false,
     pendingVisualQuestion: Boolean = false,
+    onSelectSelfCard: () -> Unit = {},
+    onSelectDynamicUi: () -> Unit = {},
+    onSelectAipDoc: () -> Unit = {},
+    pendingSelfCard: Boolean = false,
+    pendingDynamicUi: Boolean = false,
+    pendingAipDoc: Boolean = false,
     currentWorkspace: String? = null,
     onOpenWorkspaceSelector: () -> Unit = {},
     onOpenCodeBrowser: () -> Unit = {},
@@ -5031,84 +5106,23 @@ private fun Composer(
             IconButton(onClick = onAttach, Modifier.size(44.dp).padding(2.dp)) {
                 Icon(Icons.Filled.Add, "上传文件", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
             }
-            // 工具菜单按钮：合并技能选择、ACI 应用选择、编辑器
-            var showToolMenu by remember { mutableStateOf(false) }
-            Box {
-                IconButton(onClick = { showToolMenu = true }, Modifier.size(44.dp).padding(2.dp)) {
-                    Icon(Icons.Filled.Build, "工具", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
-                }
-                DropdownMenu(
-                    expanded = showToolMenu,
-                    onDismissRequest = { showToolMenu = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("选择技能") },
-                        onClick = {
-                            showToolMenu = false
-                            onOpenSkills()
-                        },
-                        leadingIcon = {
-                            LucideIcon("sparkles", null, Modifier.size(18.dp), tint = cs.primary)
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("选择 ACI 应用") },
-                        onClick = {
-                            showToolMenu = false
-                            onOpenAciSelector()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Filled.Public, null, Modifier.size(18.dp), tint = cs.primary)
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("编辑文本") },
-                        onClick = {
-                            showToolMenu = false
-                            onOpenEditor()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Filled.Edit, null, Modifier.size(18.dp), tint = cs.primary)
-                        },
-                    )
-                    HorizontalDivider()
-                    // 可视化交互工具（支持切换选择/取消选择）
-                    DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Filled.DesktopWindows, null, Modifier.size(18.dp), tint = cs.primary)
-                                Spacer(Modifier.width(8.dp))
-                                Text("可视化弹窗")
-                                if (pendingVisualPopup) {
-                                    Spacer(Modifier.width(8.dp))
-                                    Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
-                                }
-                            }
-                        },
-                        onClick = {
-                            showToolMenu = false
-                            onSelectVisualPopup()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Filled.TouchApp, null, Modifier.size(18.dp), tint = cs.primary)
-                                Spacer(Modifier.width(8.dp))
-                                Text("可视化询问")
-                                if (pendingVisualQuestion) {
-                                    Spacer(Modifier.width(8.dp))
-                                    Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
-                                }
-                            }
-                        },
-                        onClick = {
-                            showToolMenu = false
-                            onSelectVisualQuestion()
-                        },
-                    )
-                }
-            }
+            // 工具菜单按钮：合并技能选择、ACI 应用选择、编辑器、可视化交互工具
+            ChatToolMenu(
+                cs = cs,
+                pendingVisualPopup = pendingVisualPopup,
+                pendingVisualQuestion = pendingVisualQuestion,
+                pendingSelfCard = pendingSelfCard,
+                pendingDynamicUi = pendingDynamicUi,
+                pendingAipDoc = pendingAipDoc,
+                onOpenSkills = onOpenSkills,
+                onOpenAciSelector = onOpenAciSelector,
+                onOpenEditor = onOpenEditor,
+                onSelectVisualPopup = onSelectVisualPopup,
+                onSelectVisualQuestion = onSelectVisualQuestion,
+                onSelectSelfCard = onSelectSelfCard,
+                onSelectDynamicUi = onSelectDynamicUi,
+                onSelectAipDoc = onSelectAipDoc,
+            )
             if (voiceInputEnabled) {
                 IconButton(onClick = onVoiceInput, Modifier.size(44.dp).padding(2.dp)) {
                     Icon(Icons.Filled.Mic, "语音输入", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
@@ -5173,6 +5187,158 @@ private fun Composer(
             onOpenWorkspaceSelector = onOpenWorkspaceSelector,
             onOpenCodeBrowser = onOpenCodeBrowser,
         )
+    }
+}
+
+/**
+ * 输入框「工具」下拉菜单（框内 Build 图标）：技能 / ACI 应用 / 编辑器，
+ * 以及可视化交互工具（可视化弹窗 / 询问 / 小卡片 / 动态UI / AIP文档排版）。
+ * 选中可视化项即置一次性强制标志，发送消息时由 ChatScreen 注入强制指令，确保 AI 当轮必用。
+ */
+@Composable
+private fun ChatToolMenu(
+    cs: androidx.compose.material3.ColorScheme,
+    pendingVisualPopup: Boolean,
+    pendingVisualQuestion: Boolean,
+    pendingSelfCard: Boolean,
+    pendingDynamicUi: Boolean,
+    pendingAipDoc: Boolean,
+    onOpenSkills: () -> Unit,
+    onOpenAciSelector: () -> Unit,
+    onOpenEditor: () -> Unit,
+    onSelectVisualPopup: () -> Unit,
+    onSelectVisualQuestion: () -> Unit,
+    onSelectSelfCard: () -> Unit,
+    onSelectDynamicUi: () -> Unit,
+    onSelectAipDoc: () -> Unit,
+) {
+    var showToolMenu by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { showToolMenu = true }, Modifier.size(44.dp).padding(2.dp)) {
+            Icon(Icons.Filled.Build, "工具", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
+        }
+        DropdownMenu(
+            expanded = showToolMenu,
+            onDismissRequest = { showToolMenu = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text("选择技能") },
+                onClick = {
+                    showToolMenu = false
+                    onOpenSkills()
+                },
+                leadingIcon = {
+                    LucideIcon("sparkles", null, Modifier.size(18.dp), tint = cs.primary)
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("选择 ACI 应用") },
+                onClick = {
+                    showToolMenu = false
+                    onOpenAciSelector()
+                },
+                leadingIcon = {
+                    Icon(Icons.Filled.Public, null, Modifier.size(18.dp), tint = cs.primary)
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("编辑文本") },
+                onClick = {
+                    showToolMenu = false
+                    onOpenEditor()
+                },
+                leadingIcon = {
+                    Icon(Icons.Filled.Edit, null, Modifier.size(18.dp), tint = cs.primary)
+                },
+            )
+            HorizontalDivider()
+            // 可视化交互工具（支持切换选择/取消选择）
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.DesktopWindows, null, Modifier.size(18.dp), tint = cs.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("可视化弹窗")
+                        if (pendingVisualPopup) {
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
+                        }
+                    }
+                },
+                onClick = {
+                    showToolMenu = false
+                    onSelectVisualPopup()
+                },
+            )
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.TouchApp, null, Modifier.size(18.dp), tint = cs.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("可视化询问")
+                        if (pendingVisualQuestion) {
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
+                        }
+                    }
+                },
+                onClick = {
+                    showToolMenu = false
+                    onSelectVisualQuestion()
+                },
+            )
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LucideIcon("credit_card", null, Modifier.size(18.dp), tint = cs.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("可视化小卡片")
+                        if (pendingSelfCard) {
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
+                        }
+                    }
+                },
+                onClick = {
+                    showToolMenu = false
+                    onSelectSelfCard()
+                },
+            )
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LucideIcon("layout-dashboard", null, Modifier.size(18.dp), tint = cs.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("动态UI组件")
+                        if (pendingDynamicUi) {
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
+                        }
+                    }
+                },
+                onClick = {
+                    showToolMenu = false
+                    onSelectDynamicUi()
+                },
+            )
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LucideIcon("file-text", null, Modifier.size(18.dp), tint = cs.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("AIP文档排版")
+                        if (pendingAipDoc) {
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
+                        }
+                    }
+                },
+                onClick = {
+                    showToolMenu = false
+                    onSelectAipDoc()
+                },
+            )
+        }
     }
 }
 
@@ -5373,6 +5539,8 @@ private fun SheetOverlay(
     vm: QuroChatViewModel,
     onSendText: (String) -> Unit,
     onOpenSchedule: () -> Unit = {},
+    onOpenGitHub: () -> Unit = {},
+    onOpenModelHub: () -> Unit = {},
 ) {
     val shown = sheet ?: lastSheet
     // 设置底部弹层：系统返回键关闭弹层。关键修复——当任意「设置子页」浮层开着时禁用本回调，
@@ -5438,7 +5606,8 @@ private fun SheetOverlay(
                         onManagePersona, onOpenVoiceService,
                         onClearChat, settingsVoiceBallEnabled, onSettingsToggleVoiceBall,
                     settingsAiReplyNotify, onSettingsToggleAiReplyNotify,
-                        onOpenAbout, onOpenAci, onOpenMcp, onOpenSystemStatus, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenFileManager, scaled
+                        onOpenAbout, onOpenAci, onOpenMcp, onOpenSystemStatus, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenFileManager,
+                        onOpenGitHub = onOpenGitHub, onOpenModelHub = onOpenModelHub, scaled
                     )
                     else -> {}
                 }
@@ -5494,6 +5663,8 @@ private fun SettingsSheetContent(
     onExport: () -> Unit, onClear: () -> Unit,
     onOpenCleanup: () -> Unit,
     onOpenFileManager: () -> Unit,
+    onOpenGitHub: () -> Unit,
+    onOpenModelHub: () -> Unit,
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -5525,6 +5696,10 @@ private fun SettingsSheetContent(
             SetRowClickable(Icons.Filled.Usb, "USB / 无线调试", "ADB：被电脑控制 · 本机客户端 · TCP 监听", "", onOpenUsbDebug, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Apps, "默认应用", "桌面启动器 / 浏览器 / 相册 / 视频 / 邮箱 / 文档 / 短信 / 拨号", "", onOpenDefaultApp, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(Icons.Filled.Public, "GitHub 管理", "登录后管理仓库 / Issue / Star / 通知，对话框内可搜 GitHub", "", onOpenGitHub, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(Icons.Filled.Download, "离线模型下载", "内置多官方镜像直链，一键下载 GGUF 本地推理权重", "", onOpenModelHub, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Info, "系统状态", "设备 / 权限能力 / 模块运行态 / 人格心跳", "", onOpenSystemStatus, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))

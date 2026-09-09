@@ -8,6 +8,10 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
 
+// GitHub OAuth（授权码流程，与 operit 一致）：优先取 gradle.properties，运行时也可在登录屏覆盖
+val githubClientId = (project.findProperty("GITHUB_CLIENT_ID") as String?) ?: ""
+val githubClientSecret = (project.findProperty("GITHUB_CLIENT_SECRET") as String?) ?: ""
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -38,12 +42,16 @@ android {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1087
-        versionName = "1.0.87"
+        versionCode = 1088
+        versionName = "1.0.88"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
+        // GitHub 登录配置（Token / OAuth 设备流，无需硬编码凭据）
+        buildConfigField("String", "GITHUB_CLIENT_ID", "\"$githubClientId\"")
+        buildConfigField("String", "GITHUB_CLIENT_SECRET", "\"$githubClientSecret\"")
+        buildConfigField("String", "GITHUB_OAUTH_REDIRECT", "\"zorv://github-oauth-callback\"")
         // 插件逻辑层引擎（QuickJS）只编 arm64-v8a（首页插件 Demo 足够，缩小包体）
         ndk {
             abiFilters += "arm64-v8a"
