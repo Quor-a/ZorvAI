@@ -36,7 +36,11 @@ class BuildApkTool : QuroTool {
 端侧离线环境**无法**真正把 Go / C / C++ / Python 编译成 APK（需打进整套交叉编译/解释器工具链，体积巨大且不现实）；
 若传 lang="go"/"c"/"c++"/"python"，会如实说明并给出替代方案，不会假装成功。
 参数：{"lang":"语言(java/html/web/go/c/c++/python;不传按目录自动判断:有 index.html 且无 .java → web,否则 java)","src_path":"源码目录(相对工作区或绝对路径;Java 含 .java,HTML 含 index.html)","entry_class":"Java 入口类全限定名(可选,如 com.example.snake.Game;不传自动探测带 main/run 的类)","package_name":"APK 包名(可选)","app_label":"应用显示名(可选)","version_name":"版本名(可选)"}
-当用户要求「构建/打包/编译 APK、生成安卓安装包、把代码打成 apk、端侧打包」时使用。构建成功自动导出到可访问位置并返回安装 URI。"""
+当用户要求「构建/打包/编译 APK、生成安卓安装包、把代码打成 apk、端侧打包」时使用。构建成功自动导出到可访问位置并返回安装 URI。
+【自定义包名 / 应用名 / 版本】用 package_name / app_label / version_name。
+【Release 签名·生成并使用】传 generate_keystore=true 由端侧自动生成自定义 keystore（release 签名），并用 keystore_alias / store_password / key_password 指定别名与密码；也可传 keystore_path 指向已有的 .jks/.p12 由构建台使用。不传则默认用内置 debug.keystore。
+【构建时引用依赖】传 dependencies（JAR 路径数组）：每个元素可以是绝对路径，或相对于「构建台依赖目录 buildproject/deps」/「工作区 deps」的文件名，构建台把它们加入编译 classpath 与 d8 lib，一起编进 APK（适合引入第三方库）。
+【AI 自制图标（头像）】传 icon_path 指向一张 PNG（AI 用 image_gen 生成或 workspace_write 写入的图片文件），构建台把它写入 APK 作为启动图标。"""
     override val parametersJson = """{
         "type":"object",
         "properties":{
@@ -45,7 +49,14 @@ class BuildApkTool : QuroTool {
             "package_name":{"type":"string","description":"APK 包名,如 com.example.myapp(可选,默认 java→com.example.buildapp / web→com.example.webapp)"},
             "app_label":{"type":"string","description":"应用显示名(可选,默认 java→BuildApp / web→WebApp)"},
             "version_name":{"type":"string","description":"版本名(可选,默认 1.0.0)"},
-            "entry_class":{"type":"string","description":"Java 入口类全限定名(可选,如 com.example.snake.Game);不传则由构建台自动探测带 public main/run 入口方法的类(任意包名/类名均可)"}
+            "entry_class":{"type":"string","description":"Java 入口类全限定名(可选,如 com.example.snake.Game);不传则由构建台自动探测带 public main/run 入口方法的类(任意包名/类名均可)"},
+            "generate_keystore":{"type":"boolean","description":"是否端侧自动生成自定义 release 签名 keystore（true=生成并使用，适合发布版 APK）；不传=false，默认用内置 debug.keystore。"},
+            "keystore_alias":{"type":"string","description":"自定义 keystore 别名（generate_keystore=true 或 keystore_path 时生效；不传默认 zorvkey）"},
+            "store_password":{"type":"string","description":"keystore 密码（生成或使用时；不传默认 zorvai）"},
+            "key_password":{"type":"string","description":"密钥密码（生成或使用时；不传默认 zorvai）"},
+            "keystore_path":{"type":"string","description":"（可选）已存在的 keystore 绝对路径(.jks/.p12)，由构建台使用它签名；与 generate_keystore 二选一"},
+            "dependencies":{"type":"array","items":{"type":"string"},"description":"构建时依赖的第三方 JAR 路径数组：绝对路径，或相对「buildproject/deps」/「工作区 deps」的文件名。构建台把它们加入编译 classpath 与 d8 lib。"},
+            "icon_path":{"type":"string","description":"（可选）自定义启动图标 PNG 的绝对路径（AI 用 image_gen 生成或 workspace_write 写入的图片文件），写入 APK 作为应用图标（头像）。"}
         },
         "required":[]
     }"""
@@ -66,10 +77,16 @@ class BuildApkTool : QuroTool {
         if (webDir == null || !webDir.isDirectory) {
             return "网页工程目录不存在或未找到 index.html。请用 workspace_write 把 index.html（及 js/css/资源）写到工作区，例如 workspace_write(path=\"MyWeb/index.html\", content=...)，再调用 build_apk 时传 src_path=\"MyWeb\"；或把 index.html 直接放在工作区根目录（不传 src_path 会自动查找）。"
         }
+        val signing = resolveSigning(context, args)
         val cfg = BuildEngine.BuildConfig(
             packageName = args.optString("package_name", "com.example.webapp").ifBlank { "com.example.webapp" },
             appLabel = args.optString("app_label", "WebApp").ifBlank { "WebApp" },
             versionName = args.optString("version_name", "1.0.0").ifBlank { "1.0.0" },
+            iconBytes = resolveIconBytes(context, args),
+            keystore = signing.keystore,
+            keyAlias = signing.alias,
+            storePassword = signing.storePassword,
+            keyPassword = signing.keyPassword,
         )
         val outApk = File(context.filesDir, "buildproject/web-${System.currentTimeMillis()}.apk")
         val res = BuildEngine.assembleWebApk(context, webDir, outApk, cfg)
@@ -101,16 +118,23 @@ class BuildApkTool : QuroTool {
         }
         // 1) 编译 Java 工程 → classes.dex（自动探测入口类，支持任意包名/类名）
         val explicitEntry = args.optString("entry_class", "").trim().ifBlank { null }
-        val compile = BuildEngine.compileProject(context, srcDir, outDir, explicitEntry)
+        val dependencyJars = resolveDependencyJars(context, args)
+        val compile = BuildEngine.compileProject(context, srcDir, outDir, explicitEntry, dependencyJars)
         if (!compile.ok || compile.dexPath == null) {
             return "❌ 编译失败（ecj/d8 日志如下）：\n${compile.log}"
         }
         // 2) 注入 base.apk 模板并签名打包
+        val signing = resolveSigning(context, args)
         val cfg = BuildEngine.BuildConfig(
             packageName = args.optString("package_name", "com.example.buildapp").ifBlank { "com.example.buildapp" },
             appLabel = args.optString("app_label", "BuildApp").ifBlank { "BuildApp" },
             versionName = args.optString("version_name", "1.0.0").ifBlank { "1.0.0" },
             entryClass = compile.entryClass,
+            iconBytes = resolveIconBytes(context, args),
+            keystore = signing.keystore,
+            keyAlias = signing.alias,
+            storePassword = signing.storePassword,
+            keyPassword = signing.keyPassword,
         )
         val outApk = File(projectRoot, "app-${System.currentTimeMillis()}.apk")
         val res = BuildEngine.assembleApk(context, compile.dexPath, outApk, cfg)
@@ -206,6 +230,69 @@ class BuildApkTool : QuroTool {
         }.getOrDefault(false)
         if (hasJavaAnywhere) return wsRoot
         return File(context.filesDir, "buildproject/src")
+    }
+
+    // ══ #668：release 签名解析（生成自定义 keystore 或使用已有）══
+    private data class ResolvedSigning(
+        val keystore: File?,
+        val alias: String,
+        val storePassword: String,
+        val keyPassword: String,
+    )
+
+    private fun resolveSigning(context: Context, args: JSONObject): ResolvedSigning {
+        val alias = args.optString("keystore_alias", "zorvkey").ifBlank { "zorvkey" }
+        val storePass = args.optString("store_password", "zorvai").ifBlank { "zorvai" }
+        val keyPass = args.optString("key_password", "zorvai").ifBlank { "zorvai" }
+        // 1) 已有 keystore 路径优先
+        val kp = args.optString("keystore_path", "").trim()
+        if (kp.isNotEmpty()) {
+            val f = File(kp)
+            if (f.isFile) return ResolvedSigning(f, alias, storePass, keyPass)
+        }
+        // 2) 端侧自动生成自定义 release keystore
+        val gen = args.optBoolean("generate_keystore", false)
+        if (gen) {
+            val keyDir = File(context.filesDir, "buildproject/keys").apply { mkdirs() }
+            val f = File(keyDir, "$alias.jks")
+            return runCatching {
+                BuildEngine.generateKeystore(f, alias, storePass, keyPass)
+                ResolvedSigning(f, alias, storePass, keyPass)
+            }.getOrElse { ResolvedSigning(null, alias, storePass, keyPass) }
+        }
+        // 3) 未指定：引擎默认用内置 debug.keystore（keystore=null）
+        return ResolvedSigning(null, alias, storePass, keyPass)
+    }
+
+    // ══ #668：AI 自制图标（头像）══
+    private fun resolveIconBytes(context: Context, args: JSONObject): ByteArray? {
+        val p = args.optString("icon_path", "").trim()
+        if (p.isEmpty()) return null
+        val f = File(p)
+        if (!f.isFile) return null
+        return runCatching { f.readBytes() }.getOrNull()
+    }
+
+    // ══ #668：构建时依赖引用（第三方 JAR 路径数组 → File 列表）══
+    private fun resolveDependencyJars(context: Context, args: JSONObject): List<File> {
+        val arr = args.optJSONArray("dependencies") ?: return emptyList()
+        val wsRoot = workspaceRoot(context)
+        val depsDir = File(context.filesDir, "buildproject/deps")
+        val wsDeps = File(wsRoot, "deps")
+        val out = mutableListOf<File>()
+        for (i in 0 until arr.length()) {
+            val raw = arr.optString(i, "").trim()
+            if (raw.isEmpty()) continue
+            val f = File(raw)
+            val cand = listOfNotNull(
+                if (f.isAbsolute && f.isFile) f else null,
+                File(depsDir, raw).takeIf { it.isFile },
+                File(wsDeps, raw).takeIf { it.isFile },
+                File(wsRoot, raw).takeIf { it.isFile },
+            )
+            cand.firstOrNull()?.let { out.add(it) }
+        }
+        return out
     }
 }
 

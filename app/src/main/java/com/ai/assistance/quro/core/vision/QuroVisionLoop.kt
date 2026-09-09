@@ -91,11 +91,23 @@ class QuroVisionLoop(
     private fun start() {
         // 检查 MP 是否就绪：captureController 处于 Running 则 MP 路径可用
         val mpReady = captureController.isRunning
-        if (!mpReady && QuroAccessibilityService.instance == null) {
-            _status.value = Status.Error("请先在「权限模式」中开启 L1 无障碍服务，或授权 MediaProjection 屏幕捕获")
-            _enabled.value = false
+        // ══ #666 修复：需要像素级抓帧但 MP 尚未授权时，自动发起系统授权请求 ══
+        // 用户只需在系统对话框点一次「立即开始」即可启用；无需再手动长按开关。
+        // 由 MediaProjectionRequester 兜底切主线程触发，自动去抖避免反复弹窗。
+        if (!mpReady) requestMediaProjectionPermission()
+        val accessibilityAvailable = QuroAccessibilityService.instance != null
+        if (!mpReady && !accessibilityAvailable) {
+            // 两条抓取路径都还没就绪：保持启用状态持续重试（不关闭开关），
+            // 用户授权 MP 或开启无障碍后会自动切入，无需再次手动操作。
+            _status.value = Status.Error("屏幕理解待授权：请点系统对话框「立即开始」授予屏幕捕获，或在「权限模式」开启 L1 无障碍。授权后自动启用。")
+            startRetryLoop()
             return
         }
+        startCaptureLoop(mpReady)
+    }
+
+    /** 真正开始抓帧循环（MP 优先 / 无障碍兜底）。 */
+    private fun startCaptureLoop(mpReady: Boolean) {
         _status.value = Status.Running
         _useMediaProjection.value = mpReady
         scope.launch { captureOnce() }
@@ -105,6 +117,30 @@ class QuroVisionLoop(
                 delay(INTERVAL_MS)
             }
         }
+    }
+
+    /** 两条抓取路径都未就绪时的轻量重试：每隔一轮重新探测，一旦任一就绪即转入正式抓帧。 */
+    private fun startRetryLoop() {
+        tick = scope.launch {
+            while (isActive && _enabled.value) {
+                val mpReady = captureController.isRunning
+                val acc = QuroAccessibilityService.instance != null
+                if (mpReady || acc) {
+                    startCaptureLoop(mpReady)
+                    return@launch
+                }
+                delay(INTERVAL_MS)
+            }
+        }
+    }
+
+    /** 自动发起 MediaProjection 授权（带去抖：30s 内只弹一次，避免每轮重试反复打断用户）。 */
+    private var lastMpRequestAt = 0L
+    private fun requestMediaProjectionPermission() {
+        val now = System.currentTimeMillis()
+        if (now - lastMpRequestAt < MP_REQUEST_DEBOUNCE_MS) return
+        lastMpRequestAt = now
+        MediaProjectionRequester.request()
     }
 
     private fun stop() {
@@ -237,5 +273,7 @@ class QuroVisionLoop(
         const val MAX_DEPTH = 12
         const val MAX_NODES = 400
         const val MAX_CHARS = 4000
+        /** 自动发起 MP 授权的去抖窗口：30s 内最多弹一次系统授权框。 */
+        const val MP_REQUEST_DEBOUNCE_MS = 30_000L
     }
 }

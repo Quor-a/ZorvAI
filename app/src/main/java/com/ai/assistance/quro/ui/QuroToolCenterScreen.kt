@@ -49,6 +49,7 @@ import com.ai.assistance.quro.core.miniapp.MiniAppEngine
 import com.ai.assistance.quro.core.miniapp.MiniAppBridgeInterface
 import com.ai.assistance.quro.core.tools.MiniAppStudioTool
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -655,6 +656,27 @@ private fun NodeEditorPanel(
         }
     }
 
+    // ══ #667：AI 写入节点流工程后，画布实时跟随刷新（无需用户手动重开面板）══
+    // 轮询 studio/flow 下最新 .qne 的修改时间，变化时自动 __restore 到当前画布。
+    // 用户在画布上未保存的编辑不会改变文件 mtime，因此不会被轮询覆盖；只有 AI 调
+    // node_editor 写入新文件（或用户点「保存工程」）才会触发刷新。
+    val scope = rememberCoroutineScope()
+    var lastLoadedMtime by remember { mutableStateOf(0L) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(2000)
+            val wv = wvRef.value ?: continue
+            val latest = flowDir.listFiles()
+                ?.filter { it.extension == "qne" }
+                ?.maxByOrNull { it.lastModified() }
+            if (latest != null && latest.lastModified() != lastLoadedMtime) {
+                lastLoadedMtime = latest.lastModified()
+                flowName = latest.nameWithoutExtension
+                wv.evaluateJavascript("window.__restore(${JSONObject.quote(latest.readText(Charsets.UTF_8))})") {}
+            }
+        }
+    }
+
     // 导入工程文件（.qne / .json），读到文本后还原到画布
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -774,6 +796,7 @@ private fun NodeEditorPanel(
                                 ?.filter { it.extension == "qne" }
                                 ?.maxByOrNull { it.lastModified() }
                             if (latest != null) {
+                                lastLoadedMtime = latest.lastModified()
                                 view?.post {
                                     flowName = latest.nameWithoutExtension
                                     evaluateJavascript("window.__restore(${JSONObject.quote(latest.readText(Charsets.UTF_8))})") {}
@@ -785,6 +808,11 @@ private fun NodeEditorPanel(
                     settings.domStorageEnabled = true
                     settings.loadWithOverviewMode = true
                     settings.useWideViewPort = true
+                    // ══ #667 修复：与 MiniApp WebView 对齐，消除 node_editor 白屏 ══
+                    // 缺这三项时，部分 ROM/WebView 内核会拒绝 file:// 资源加载或渲染失败 → 白屏。
+                    settings.allowFileAccess = true
+                    settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                     addJavascriptInterface(bridge, "AndroidBridge")
                     loadUrl("file:///android_asset/www/node_editor.html")
                 }.also { wvRef.value = it }

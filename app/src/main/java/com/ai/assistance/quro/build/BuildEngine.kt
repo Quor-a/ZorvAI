@@ -130,7 +130,9 @@ object BuildEngine {
         val assetsDir: File? = null,
         /** 入口类全限定名：组装 APK 时写入 assets/zorv_entry.txt，宿主 MainActivity 运行时读取并反射调用。
          *  null = 不写入（Web 等无入口类的场景）。由 compileProject/compileToDex 的探测结果填充。 */
-        val entryClass: String? = null
+        val entryClass: String? = null,
+        /** 构建时依赖的第三方 JAR（编译 classpath + d8 lib）。AI 可声明依赖，构建台引用它们一起编译/打包。 */
+        val dependencyJars: List<File> = emptyList()
     ) {
         // ByteArray 默认 equals 是引用比较，这里按内容比较，避免混淆。
         override fun equals(other: Any?): Boolean {
@@ -141,6 +143,7 @@ object BuildEngine {
                 storePassword == other.storePassword && keyPassword == other.keyPassword &&
                 keystore == other.keystore && assetsDir == other.assetsDir &&
                 entryClass == other.entryClass &&
+                dependencyJars == other.dependencyJars &&
                 (iconBytes == null && other.iconBytes == null || iconBytes.contentEquals(other.iconBytes))
         }
 
@@ -154,6 +157,7 @@ object BuildEngine {
             h = 31 * h + (keystore?.hashCode() ?: 0)
             h = 31 * h + (assetsDir?.hashCode() ?: 0)
             h = 31 * h + (entryClass?.hashCode() ?: 0)
+            h = 31 * h + dependencyJars.hashCode()
             h = 31 * h + (iconBytes?.contentHashCode() ?: 0)
             return h
         }
@@ -630,7 +634,7 @@ object BuildEngine {
      * 编译整个 src 目录下所有 .java 文件为 classes.dex（真实管线：ecj → class，d8 → dex）。
      * 进程内执行，不需要设备提供独立 JVM 运行时。
      */
-    fun compileProject(ctx: Context, srcDir: File, outDir: File, explicitEntry: String? = null): BuildResult {
+    fun compileProject(ctx: Context, srcDir: File, outDir: File, explicitEntry: String? = null, dependencyJars: List<File> = emptyList()): BuildResult {
         val libs = ensureAssets(ctx)
         srcDir.mkdirs()
         // 递归清空上一轮产物（含 ecj 按包名生成的子目录），避免残留旧 class 干扰本轮
@@ -674,8 +678,18 @@ object BuildEngine {
             // android.jar 必须作 bootclasspath：Android 编译的"引导类"（java.lang.* / android.*）都来自它。
             // 只给 -cp 而不给 -bootclasspath 时，ecj 会去取 JVM 默认的 rt.jar（ART 上不存在）→ 内部抛异常。
             "-bootclasspath", aj.absolutePath,
-            "-source", "8", "-target", "8"
         )
+        // ══ #668：构建时依赖引用（第三方 JAR 加入编译 classpath）══
+        if (dependencyJars.isNotEmpty()) {
+            val valid = dependencyJars.filter { it.exists() && it.extension.equals("jar", ignoreCase = true) }
+            if (valid.isNotEmpty()) {
+                ecjArgs.add("-cp")
+                ecjArgs.add(valid.joinToString(File.pathSeparator) { it.absolutePath })
+                log.append("编译 classpath 依赖（${valid.size} 个 JAR）：\n")
+                valid.forEach { log.append("  · ").append(it.absolutePath).append("\n") }
+            }
+        }
+        ecjArgs.add("-source"); ecjArgs.add("8"); ecjArgs.add("-target"); ecjArgs.add("8")
         ecjArgs.addAll(sources)
         val (ecjOk, ecjOut, ecjEx) = toolchain.compileEcj(ecjArgs.toTypedArray())
         log.append("\n== ecj 编译 Java → class ==\n").append(ecjOut)
@@ -701,13 +715,16 @@ object BuildEngine {
         } catch (e: Throwable) {
             return BuildResult(false, log.append("\n打包 class 为 jar 失败：${e.message}\n").toString(), null)
         }
-        val d8Args = arrayOf(
+        val d8Args = mutableListOf(
             "--output", dexDir.absolutePath,
             "--lib", aj.absolutePath,
-            outJar.absolutePath
         )
+        // ══ #668：依赖 JAR 也要作为 d8 的 lib（解析引用符号），否则 dex 阶段报找不到类 ══
+        dependencyJars.filter { it.exists() && it.extension.equals("jar", ignoreCase = true) }
+            .forEach { d8Args.add("--lib"); d8Args.add(it.absolutePath) }
+        d8Args.add(outJar.absolutePath)
         try {
-            toolchain.runD8(d8Args)
+            toolchain.runD8(d8Args.toTypedArray())
         } catch (e: Throwable) {
             return BuildResult(false, log.append("\n== d8 进程内崩溃（含完整堆栈）==\n").append(throwableDetail(e)).append("\n[DEX 未生成]").toString(), null)
         }
@@ -1103,7 +1120,7 @@ object BuildEngine {
      * 把一段 Java 源码编译为 classes.dex（兼容旧版单文件调用；内部也走 compileProject）。
      * 进程内执行，不需要设备提供独立 JVM 运行时。
      */
-    fun compileToDex(ctx: Context, source: String, className: String, explicitEntry: String? = null): BuildResult {
+    fun compileToDex(ctx: Context, source: String, className: String, explicitEntry: String? = null, dependencyJars: List<File> = emptyList()): BuildResult {
         val libs = ensureAssets(ctx)
         val ecj = File(libs, "ecj.jar")
         val d8 = File(libs, "d8.jar")
@@ -1138,14 +1155,22 @@ object BuildEngine {
         }
 
         // 1) ecj：Java → class（source/target 降到 8，兼容 ART 下的旧版 ecj）
-        val ecjArgs = arrayOf(
+        val ecjArgs = mutableListOf(
             "-proc:none",
             "-d", outDir.absolutePath,
             "-bootclasspath", aj.absolutePath,
-            "-source", "8", "-target", "8",
-            srcFile.absolutePath
         )
-        val (ecjOk, ecjOut, ecjEx) = toolchain.compileEcj(ecjArgs)
+        // ══ #668：依赖 JAR 加入编译 classpath ══
+        if (dependencyJars.isNotEmpty()) {
+            val valid = dependencyJars.filter { it.exists() && it.extension.equals("jar", ignoreCase = true) }
+            if (valid.isNotEmpty()) {
+                ecjArgs.add("-cp")
+                ecjArgs.add(valid.joinToString(File.pathSeparator) { it.absolutePath })
+            }
+        }
+        ecjArgs.add("-source"); ecjArgs.add("8"); ecjArgs.add("-target"); ecjArgs.add("8")
+        ecjArgs.add(srcFile.absolutePath)
+        val (ecjOk, ecjOut, ecjEx) = toolchain.compileEcj(ecjArgs.toTypedArray())
         log.append("== ecj 编译 Java → class ==\n").append(ecjOut)
         if (ecjEx != null) {
             val full = log.append("\n== ecj 进程内崩溃（完整堆栈 + ecj 自身输出）==\n")
@@ -1169,13 +1194,16 @@ object BuildEngine {
         } catch (e: Throwable) {
             return BuildResult(false, log.append("\n打包 class 为 jar 失败：${e.message}\n").toString(), null)
         }
-        val d8Args = arrayOf(
+        val d8Args = mutableListOf(
             "--output", dexDir.absolutePath,
             "--lib", aj.absolutePath,
-            outJar.absolutePath
         )
+        // ══ #668：依赖 JAR 也要作为 d8 的 lib（解析引用符号），否则 dex 阶段报找不到类 ══
+        dependencyJars.filter { it.exists() && it.extension.equals("jar", ignoreCase = true) }
+            .forEach { d8Args.add("--lib"); d8Args.add(it.absolutePath) }
+        d8Args.add(outJar.absolutePath)
         try {
-            toolchain.runD8(d8Args)
+            toolchain.runD8(d8Args.toTypedArray())
         } catch (e: Throwable) {
             return BuildResult(false, log.append("\n== d8 进程内崩溃（含完整堆栈）==\n").append(throwableDetail(e)).append("\n[DEX 未生成]").toString(), null)
         }

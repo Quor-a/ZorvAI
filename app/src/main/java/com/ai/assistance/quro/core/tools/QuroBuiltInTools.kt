@@ -70,6 +70,7 @@ import com.ai.assistance.quro.core.tools.QuroExperienceQueryTool
 import com.ai.assistance.quro.core.tools.QuroExperienceCorrectTool
 import com.ai.assistance.quro.core.tools.QuroExperienceVersionCheckTool
 import com.ai.assistance.quro.core.tools.FluidCloudTool
+import com.ai.assistance.quro.core.websearch.WebSearchTool
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -182,6 +183,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     //  · 通信/日历        : sms, contacts, calendar
     //  · 文件/工作区      : list/read/write/delete files, workbench, workspace_*, knowledge_*
     //  · 网络/Web         : http_request, open_web, ai_browser, web_crawler
+    //  · 联网检索(端侧)    : web_search, read_url（自研多引擎并发+查询改写+正文密度抽取+五信号重排+上下文打包；纯结构化文本，非浏览器套壳）
+    //  · 屏幕捕获授权      : enable_screen_capture（AI 主动发起 MediaProjection 系统授权，无需手动长按开关）
     //  · 终端/沙箱/Linux  : quro_term, terminal_*, sandbox, linux_*, python_run
     //  · 特权/ADB/LSPosed : priv_exec, priv_status, adb_term, lsposed（高风险，自动降级通道）
     //  · 抓包             : packet_capture（proot 内 mitmdump，flow 写 /mnt/quro/mitm/）
@@ -194,7 +197,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     //  · 文档生成          : aiwps_create/read/edit, enhanced_doc
     //  · 记忆/经验/技能    : memory_*, experience_*, skills, tool_discovery
     //  · 动态 UI(必备)      : quro-ui 原生组件 = ui_dsl_spec / ui_validate / 消息内 ```quro-ui 围栏（AI 主动默认输出）
-    //  · UI/可视化         : ui_control(ui_*), visual_*, creative_studio, fluid_cloud
+    //  · UI/可视化         : ui_control(ui_*), visual_*, creative_studio, fluid_cloud, node_editor(节点编辑器/可视化编程), visual_studio(可视化编程工作台)
     //  · 构建台/APK 构建    : ui_open_build（打开构建台）, build_apk（端侧 Java→DEX→APK 离线打包）
     //  · 化小窗(纯 UI)     : 对话框顶栏 + 浏览器工具栏「化小窗」按钮（可拖拽悬浮小窗，非工具）
     // ══════════════════════════════════════════════════════════════
@@ -245,6 +248,12 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(DeleteScheduledTaskTool())
     // 网络 / Web
     r.register(HttpRequestTool())
+    // ═══ 联网检索（自研端侧：多引擎并发 + 查询改写 + 正文密度抽取 + 五信号重排 + 上下文打包）═══
+    // 与"浏览器套壳"无关：全程只有结构化文本流动，不渲染页面。AI 自主决定是否联网、读哪几条。
+    r.register(WebSearchTool("web_search"))
+    r.register(WebSearchTool("read_url"))
+    // ═══ 屏幕捕获授权（AI 主动发起 MediaProjection 系统授权，无需手动长按开关）═══
+    r.register(EnableScreenCaptureTool())
     // 文件写改删
     r.register(WriteFileTool())
     r.register(DeleteFileTool())

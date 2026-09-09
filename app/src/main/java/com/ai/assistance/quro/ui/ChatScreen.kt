@@ -1223,6 +1223,8 @@ fun ChatScreen(
         val intent = com.ai.assistance.quro.core.vision.ScreenCaptureController.createConsentIntent(ctx)
         mpLauncher.launch(intent)
     }
+    // ══ #666：把发起逻辑注册进全局闸门，供 QuroVisionLoop / AI 工具 enable_screen_capture 在任意位置触发 ══
+    com.ai.assistance.quro.core.vision.MediaProjectionRequester.request = { requestMediaProjection() }
 
     fun send(text: String) {
         val t = text.trim()

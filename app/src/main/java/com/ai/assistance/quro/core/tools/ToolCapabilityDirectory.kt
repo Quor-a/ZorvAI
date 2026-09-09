@@ -272,7 +272,31 @@ object ToolCapabilityDirectory {
             relatedTools = listOf("ai_browser", "aci_call"),
             priority = 2
         ),
-        
+
+        "web_search" to ToolInfo(
+            name = "web_search",
+            category = ToolCategory.NETWORK_WEB,
+            description = "端侧联网检索：多引擎并发搜索 + 查询改写 + 正文密度抽取 + 五信号重排 + 上下文打包，返回带编号引用的事实片段",
+            useCases = listOf("搜一下最新消息", "查实时资料", "这个事现在怎么样了", "联网确认一下", "最新XX是什么"),
+            examples = listOf("web_search(query=\"2026年最新安卓发布\")"),
+            parameters = mapOf("query" to "搜索关键词/问题"),
+            tips = listOf("全程结构化文本流动，不渲染页面（非浏览器套壳）", "AI自主决定是否联网、读哪几条", "返回带 [n] 编号可溯源引用，精读用 read_url"),
+            relatedTools = listOf("read_url", "ai_browser", "http_request"),
+            priority = 5
+        ),
+
+        "read_url" to ToolInfo(
+            name = "read_url",
+            category = ToolCategory.NETWORK_WEB,
+            description = "精读单个网页：抓取URL正文并抽取可读文本/要点，供AI引用作答",
+            useCases = listOf("读一下这个链接", "把这个网页内容提炼给我", "打开XX网址看具体内容"),
+            examples = listOf("read_url(url=\"https://example.com/article\")"),
+            parameters = mapOf("url" to "要精读的网页地址"),
+            tips = listOf("配合 web_search 使用：先搜→挑有价值的→read_url精读", "返回正文要点与可溯源片段"),
+            relatedTools = listOf("web_search", "ai_browser"),
+            priority = 4
+        ),
+
         // ═══════════════ 媒体 ═══════════════
         "image_gen" to ToolInfo(
             name = "image_gen",
@@ -406,6 +430,18 @@ object ToolCapabilityDirectory {
             parameters = mapOf("title" to "标题", "buttons" to "按钮列表"),
             tips = listOf("适合让用户选择操作", "返回用户点击的按钮值"),
             relatedTools = listOf("visual_question", "visual_popup"),
+            priority = 4
+        ),
+
+        "node_editor" to ToolInfo(
+            name = "node_editor",
+            category = ToolCategory.UI_CARDS,
+            description = "节点编辑器：AI直接读写节点流工程（.qne），无需打开界面即可编排可视化流程；与工具中心面板共享 studio/flow/*.qne",
+            useCases = listOf("画个流程图/节点流", "做个自动化节点", "把思路连成节点", "生成节点流工程"),
+            examples = listOf("node_editor(action=\"create\", name=\"flow1\", nodes=[])"),
+            parameters = mapOf("action" to "create/read/write/list", "name" to "工程名", "nodes" to "节点列表"),
+            tips = listOf("AI可直接产出/修改节点工程，面板打开自动恢复", "适合可视化编程与流程编排", "导出可转 Mermaid/可视化"),
+            relatedTools = listOf("ui_control", "visual_studio", "ui_widget"),
             priority = 4
         ),
 
@@ -547,7 +583,19 @@ object ToolCapabilityDirectory {
             relatedTools = listOf("scroll_screen", "tap_screen"),
             priority = 4
         ),
-        
+
+        "enable_screen_capture" to ToolInfo(
+            name = "enable_screen_capture",
+            category = ToolCategory.ACCESSIBILITY,
+            description = "主动发起屏幕捕获（MediaProjection）系统授权：让AI能看懂屏幕/截图，无需用户手动长按开关",
+            useCases = listOf("看懂现在屏幕", "截图看下当前界面", "看看屏幕在干嘛", "需要读屏/视觉理解时"),
+            examples = listOf("enable_screen_capture()"),
+            parameters = emptyMap(),
+            tips = listOf("用户要你「看屏幕/截图」或需要像素级屏幕理解时主动调用", "会拉起系统「立即开始」对话框，用户点确认后自动授权", "授权后视觉循环自动启用，无需再手动开"),
+            relatedTools = listOf("read_screen", "screenshot", "visual_analysis"),
+            priority = 5
+        ),
+
         // ═══════════════ 应用管理 ═══════════════
         "launch_app" to ToolInfo(
             name = "launch_app",
@@ -713,7 +761,41 @@ object ToolCapabilityDirectory {
             relatedTools = listOf("cms_list", "cms_status", "cms_toolbox"),
             priority = 3
         ),
-        
+
+        "build_apk" to ToolInfo(
+            name = "build_apk",
+            category = ToolCategory.CMS_DEVELOPMENT,
+            description = "端侧APK构建：Java/Kotlin源码→DEX→APK，AI可真正触发离线编译打包（支持自定义签名/依赖JAR/图标）",
+            useCases = listOf("帮我做个App", "打包这个安卓工程", "生成APK", "编译并签名", "用自定义包名/图标出包"),
+            examples = listOf("build_apk(source=\"...java代码...\", package_name=\"com.example.app\", generate_keystore=true)"),
+            parameters = mapOf(
+                "source" to "源代码（Java/Kotlin）",
+                "package_name" to "自定义包名",
+                "generate_keystore" to "true=自动生成release签名",
+                "keystore_alias" to "签名别名",
+                "store_password" to "keystore密码",
+                "key_password" to "密钥密码",
+                "keystore_path" to "已有keystore路径",
+                "dependencies" to "依赖JAR路径数组",
+                "icon_path" to "自定义图标PNG路径"
+            ),
+            tips = listOf("支持自定义包名、release签名生成与使用、引用依赖JAR、自定义图标", "入口类支持任意包名/类名（动态探测 zorv_entry.txt）", "与 ui_open_build（打开构建台UI）互补"),
+            relatedTools = listOf("export_apk", "ui_control", "workspace_write"),
+            priority = 5
+        ),
+
+        "export_apk" to ToolInfo(
+            name = "export_apk",
+            category = ToolCategory.CMS_DEVELOPMENT,
+            description = "导出构建产物：把构建台生成的APK导出到可访问位置（替代UI文件选择器，AI也能调起）",
+            useCases = listOf("把APK导出来", "保存到下载目录", "导出产物"),
+            examples = listOf("export_apk(path=\"/sdcard/Download/app.apk\")"),
+            parameters = mapOf("path" to "导出目标路径"),
+            tips = listOf("构建台UI的导出是文件选择器、AI用不了，本工具替代它"),
+            relatedTools = listOf("build_apk"),
+            priority = 3
+        ),
+
         "cms_list" to ToolInfo(
             name = "cms_list",
             category = ToolCategory.CMS_DEVELOPMENT,
