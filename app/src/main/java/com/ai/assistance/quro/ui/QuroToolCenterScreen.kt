@@ -806,8 +806,10 @@ private fun NodeEditorPanel(
                     }
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
-                    settings.loadWithOverviewMode = true
-                    settings.useWideViewPort = true
+                    // ══ 白屏修复：不要 loadWithOverviewMode / useWideViewPort。
+                    // node_editor.html 用 html,body{height:100%;overflow:hidden} + meta viewport，
+                    // 这两项会让部分 WebView 内核算出 0 高可见视口 → 整页白屏。
+                    // 对齐能正常渲染的 mermaid 面板（它不设这两项）。
                     settings.allowFileAccess = true
                     settings.allowContentAccess = true
                     settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW

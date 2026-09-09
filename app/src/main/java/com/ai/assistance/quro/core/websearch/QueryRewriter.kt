@@ -34,7 +34,7 @@ object QueryRewriter {
         1. 只输出 JSON，不要任何解释文字，不要 markdown 代码块；
         2. 生成 1-3 个查询词，互相之间角度不同（如：一个查事实、一个查评测、一个查最新动态）；
         3. 查询词要短、关键词化，去掉口语词和礼貌用语；
-        4. 保留专有名词、型号、数字等不可替换的信息；
+        4. 保留专有名词、型号、数字等不可替换的信息；中文人名/地名/专有名词必须保持连续完整，禁止在字间插入空格或拆成单字（如"郑钦文"必须整体输出，不得写成"郑 钦文"或"郑"）；
         5. recency 字段按问题需要填写：day / week / month / any。
         输出格式：{"queries":["查询1","查询2"],"recency":"week"}
     """.trimIndent()
@@ -69,7 +69,10 @@ object QueryRewriter {
             val arr = o.optJSONArray("queries") ?: return null
             val list = ArrayList<String>()
             for (i in 0 until arr.length()) {
-                val q = arr.optString(i).trim()
+                val rawQ = arr.optString(i).trim()
+                if (rawQ.length !in 2..80) continue
+                // 中文连续汉字之间不允许插空格：防止"郑 钦文"被拆成单字去查字典/分词（web_search 中文人名分词缺陷修复）
+                val q = rawQ.replace(Regex("""(?<=\p{IsHan})\s+(?=\p{IsHan})"""), "")
                 if (q.length in 2..80) list.add(q)
             }
             if (list.isEmpty()) return null

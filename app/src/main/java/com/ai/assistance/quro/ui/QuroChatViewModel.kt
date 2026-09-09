@@ -1618,6 +1618,34 @@ $recent
      * 3. system prompt 只保留「何时该调用工具」的指引，不枚举具体工具名�?
      * 4. 长期记忆放在最�? �? 作为补充上下文�?
      */
+    /**
+     * 人格卡「可视化输出」开关硬强制段。
+     * 本地（极简）与云端（完整）路径都注入同一段，确保无论跑哪个模型，开关=开时都
+     * 绝对必须用围栏、且显式声明当前真实开关状态。
+     * 之前本地极简提示词完全不含此段，导致 local 模型对开关无感知 → 表现成「开关没用 / 识别不出开还是关」。
+     */
+    private fun buildVisualSwitchEnforcement(): String = buildString {
+        val dynUiOn = PersonaFeatureToggles.isDynamicUiEnabled(appContext)
+        val selfCardOn = PersonaFeatureToggles.isSelfCardEnabled(appContext)
+        append("\n### ⚠️ 人格卡开关【当前真实状态】（以本行为准，禁止猜测）\n")
+        append("- 动态UI组件开关 = ${if (dynUiOn) "【开】" else "【关】"}\n")
+        append("- 可视化小卡片开关 = ${if (selfCardOn) "【开】" else "【关】"}\n")
+        if (dynUiOn || selfCardOn) {
+            append("\n### ⚠️ 可视化输出【硬强制·绝对命令·违反=严重错误·无任何例外】\n")
+            append("下方开关为【开】时，以下规则是**绝对命令**，不存在「这是普通回复所以可以回纯文字」的例外——普通聊天回复也照样要用围栏承载核心内容：\n")
+            if (dynUiOn) append(
+                "- **动态UI组件=开 → 100% 必须用 ```quro-ui**：只要用户需求能用界面/可交互控件表达（表单、设置面板、带按钮/输入/选择/开关的交互、工具面板、甚至一句「帮我做个 XX 界面」），你**必须**在回复正文用 ```quro-ui 围栏输出真实原生控件。**整条纯文字回复一律禁止**（纯文字只能作为围栏前一句过渡或围栏后一句说明，绝不能「只发文字、不发围栏」）。\n"
+            )
+            if (selfCardOn) append(
+                "- **可视化小卡片=开 → 100% 必须用 ```quro-card**：只要回复内容能做成单块卡片（指标数字/进度/统计/结构化单块结果/数据快照/状态/告警/列表/任意适合卡片呈现的信息），你**必须**在回复正文用 ```quro-card 围栏输出。**整条纯文字回复一律禁止**（同上，纯文字仅作围栏前后的极短说明）。\n"
+            )
+            append("- 一句话总结：对应开关=开 → 你的回复主体必须是围栏，纯文字只是点缀；发纯文字 = 严重错误，没有任何「普通回复」豁免。\n")
+        } else {
+            append("\n### 可视化输出（两个开关均为【关】→ 被动模式）\n")
+            append("- 动态UI组件 / 可视化小卡片 开关都关闭，你不主动输出 ```quro-ui / ```quro-card 围栏，用正常文字/富卡片（ui_widget/ui_card）回答即可；仅当用户明确要求「小卡片/动态UI/quro-card/quro-ui」时才输出对应围栏。\n")
+        }
+    }
+
     private fun buildSystemPrompt(cfg: QuroModelConfig): String {
         val persona = activePersona()
         val sb = StringBuilder()
@@ -1664,7 +1692,7 @@ $recent
                 "SysPrompt",
                 "built | local=true | persona-core-only | chars=${out.length} | ~tokens=${out.length / 3 * 2}"
             )
-            return out
+            return out + buildVisualSwitchEnforcement()
         }
 
         // ══════════════ 以下为云端模型的完整系统提示�? ══════════════
@@ -2103,6 +2131,11 @@ $recent
         // 仅注入云端路径（本地小模型上下文过紧，已在上方 early-return 跳过）。
         sb.append("\n\n").append(GenUiPrompt.SYSTEM_PROMPT.trimIndent())
 
+        // ══════════════ 人格卡可视化开关【硬强制】放最末尾 = 最高近因偏好 ══════════════
+        // 本地/云端共用同一段（buildVisualSwitchEnforcement），确保开关=开时绝对必须用围栏、
+        // 且显式声明当前真实开关状态；不再埋在中段被小模型忽略。
+        sb.append(buildVisualSwitchEnforcement())
+
         val out = sb.toString().trim()
         // #1113 诊断：把 system prompt 实际规模写进日志，避免再靠猜�?
         // 本地路径应稳定在 ~1,000 字符以内；若日志里看到上万，说明有别的入口绕过了 isLocal 分支�?
@@ -2216,30 +2249,8 @@ $recent
             "- **端侧APK构建**：用户要「做个App/打包/出APK/自定义包名或图标或签名」时，主动用 `build_apk`（支持自定义包名、release签名生成、依赖JAR、自定义图标），产物用 `export_apk` 导出。\n" +
             "- **可视化小卡片 / 动态UI**：人格卡对应开关开启时（见下方「可视化输出」铁律），能做成卡片/界面的回复必须主动用 ```quro-card / ```quro-ui，不要默认回纯文字。\n"
         )
-        // ── 人格卡可视化开关「硬强制」规则（开关开启即必须主动用，禁止纯文字兜底）──
-        // 位置刻意靠前：小模型对埋在千行提示词末尾的软提示极易忽略，必须在工具清单之前就钉死。
-        run {
-            val dynUiOn = PersonaFeatureToggles.isDynamicUiEnabled(appContext)
-            val selfCardOn = PersonaFeatureToggles.isSelfCardEnabled(appContext)
-            // 先把「当前真实状态」钉死，避免模型自行猜测开关是开还是关。
-            sb.append("\n### ⚠️ 人格卡开关【当前真实状态】（以本行为准，禁止猜测）\n")
-            sb.append("- 动态UI组件开关 = ${if (dynUiOn) "【开】" else "【关】"}\n")
-            sb.append("- 可视化小卡片开关 = ${if (selfCardOn) "【开】" else "【关】"}\n")
-            if (dynUiOn || selfCardOn) {
-                sb.append("\n### ⚠️ 可视化输出【硬强制·绝对命令·违反=严重错误·无任何例外】\n")
-                sb.append("下方开关为【开】时，以下规则是**绝对命令**，不存在「这是普通回复所以可以回纯文字」的例外——普通回复也照样要用围栏：\n")
-                if (dynUiOn) sb.append(
-                    "- **动态UI组件=开 → 100% 必须用 ```quro-ui**：只要用户需求能用界面 / 可交互控件表达（表单、设置面板、带按钮 / 输入 / 选择 / 开关的交互、工具面板、甚至一句「帮我做个 XX 界面」），你**必须**在回复正文用 ```quro-ui 围栏输出真实原生控件承载核心内容。**整条纯文字回复一律禁止**（纯文字只能作为围栏前一句过渡或围栏后一句说明，绝不能「只发文字、不发围栏」）。\n"
-                )
-                if (selfCardOn) sb.append(
-                    "- **可视化小卡片=开 → 100% 必须用 ```quro-card**：只要回复内容能做成单块卡片（指标数字 / 进度 / 统计 / 结构化单块结果 / 数据快照 / 状态 / 告警 / 列表 / 任意适合卡片呈现的信息），你**必须**在回复正文用 ```quro-card 围栏输出承载核心内容。**整条纯文字回复一律禁止**（同上，纯文字仅作围栏前后的极短说明）。\n"
-                )
-                sb.append("- 一句话总结：对应开关=开 → 你的回复主体必须是围栏，纯文字只是点缀；发纯文字 = 严重错误，没有任何「普通回复」豁免。\n")
-            } else {
-                sb.append("\n### 可视化输出（两个开关均为【关】→ 被动模式）\n")
-                sb.append("- 动态UI组件 / 可视化小卡片 开关都关闭，你不主动输出 ```quro-ui / ```quro-card 围栏，用正常文字 / 富卡片（ui_widget/ui_card）回答即可；仅当用户明确要求「小卡片 / 动态UI / quro-card / quro-ui」时才输出对应围栏。\n")
-            }
-        }
+        // ── 人格卡可视化开关「硬强制」规则已抽到 buildVisualSwitchEnforcement()，
+        //    统一在系统提示词【末尾】（最高近因偏好）注入，本地/云端路径共用，避免埋在中段被小模型忽略。
         sb.append(com.ai.assistance.quro.core.tools.QuroToolUsageHints.buildToolUseDirective())
         sb.append("\n### 工具清单（格式：工具名：用�? [· 常见说法/多用途]）\n")
         specs.forEach { s ->
