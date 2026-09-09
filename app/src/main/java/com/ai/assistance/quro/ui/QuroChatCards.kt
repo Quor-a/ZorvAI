@@ -1592,7 +1592,7 @@ private fun MermaidCardView(card: QuroChatCard.MermaidCard) {
  * [zoomable]=true 时开启双指缩放（用于全屏页），否则按内容高度自适应（用于内联卡片）。
  */
 @Composable
-private fun MermaidWebView(
+internal fun MermaidWebView(
     card: QuroChatCard.MermaidCard,
     modifier: Modifier = Modifier,
     zoomable: Boolean = false,
