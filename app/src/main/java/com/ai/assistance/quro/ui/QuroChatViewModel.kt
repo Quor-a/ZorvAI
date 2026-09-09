@@ -1619,10 +1619,9 @@ $recent
      * 4. 长期记忆放在最�? �? 作为补充上下文�?
      */
     /**
-     * 人格卡「可视化输出」开关硬强制段。
-     * 本地（极简）与云端（完整）路径都注入同一段，确保无论跑哪个模型，开关=开时都
-     * 绝对必须用围栏、且显式声明当前真实开关状态。
-     * 之前本地极简提示词完全不含此段，导致 local 模型对开关无感知 → 表现成「开关没用 / 识别不出开还是关」。
+     * 人格卡「可视化输出」开关硬强制段 —— 仅注入【云端】路径（buildSystemPrompt 末尾）。
+     * 本地离线模型上下文极紧、走独立 early-return 分支，使用专门的 buildLocalSwitchNote()，
+     * 不复用本段（本段是按云端大模型写的完整版，不适合 1.2B 小模型）。
      */
     private fun buildVisualSwitchEnforcement(): String = buildString {
         val dynUiOn = PersonaFeatureToggles.isDynamicUiEnabled(appContext)
@@ -1644,6 +1643,20 @@ $recent
             append("\n### 可视化输出（两个开关均为【关】→ 被动模式）\n")
             append("- 动态UI组件 / 可视化小卡片 开关都关闭，你不主动输出 ```quro-ui / ```quro-card 围栏，用正常文字/富卡片（ui_widget/ui_card）回答即可；仅当用户明确要求「小卡片/动态UI/quro-card/quro-ui」时才输出对应围栏。\n")
         }
+    }
+
+    /**
+     * 本地离线模型（1.2B，上下文极紧）专属的可视化开关提示。
+     * 不复用云端的 buildVisualSwitchEnforcement（那是给大模型的完整段），这里只给
+     * 最简「当前开关状态 + 绝对命令」，让本地模型也知道开关开了必须用围栏。
+     * 两个开关都关时返回空串，不占本地模型宝贵 token。
+     */
+    private fun buildLocalSwitchNote(): String = buildString {
+        val dynOn = PersonaFeatureToggles.isDynamicUiEnabled(appContext)
+        val cardOn = PersonaFeatureToggles.isSelfCardEnabled(appContext)
+        if (!dynOn && !cardOn) return@buildString
+        append("\n[可视化开关] 动态UI=${if (dynOn) "开" else "关"}，小卡片=${if (cardOn) "开" else "关"}。")
+        append("开关开了必须在回复里用 ```quro-ui / ```quro-card 围栏承载内容，禁止只回纯文字。")
     }
 
     private fun buildSystemPrompt(cfg: QuroModelConfig): String {
@@ -1688,11 +1701,15 @@ $recent
                     append("但不要原样重复之前已经给出过的回复或旧轮次的任务结果。\n")
                 }.trimEnd()
             }
+            // 本地离线模型开关提示：两个开关都关时 buildLocalSwitchNote() 返回空串，不占 token；
+            // 任一开关开时注入极简「当前状态 + 绝对命令」，让本地模型也对开关有感知。
+            val localSwitchNote = buildLocalSwitchNote()
+            val finalOut = if (localSwitchNote.isNotEmpty()) (out + "\n" + localSwitchNote).trimEnd() else out
             QuroDiag.log(
                 "SysPrompt",
-                "built | local=true | persona-core-only | chars=${out.length} | ~tokens=${out.length / 3 * 2}"
+                "built | local=true | persona-core-only | switchNote=${if (localSwitchNote.isEmpty()) "off" else "on"} | chars=${finalOut.length} | ~tokens=${finalOut.length / 3 * 2}"
             )
-            return out + buildVisualSwitchEnforcement()
+            return finalOut
         }
 
         // ══════════════ 以下为云端模型的完整系统提示�? ══════════════
@@ -2131,9 +2148,8 @@ $recent
         // 仅注入云端路径（本地小模型上下文过紧，已在上方 early-return 跳过）。
         sb.append("\n\n").append(GenUiPrompt.SYSTEM_PROMPT.trimIndent())
 
-        // ══════════════ 人格卡可视化开关【硬强制】放最末尾 = 最高近因偏好 ══════════════
-        // 本地/云端共用同一段（buildVisualSwitchEnforcement），确保开关=开时绝对必须用围栏、
-        // 且显式声明当前真实开关状态；不再埋在中段被小模型忽略。
+        // ══════════════ 人格卡可视化开关【硬强制】放最末尾 = 最高近因偏好（仅云端路径）═════════════
+        // 本地离线模型不走到这里（已在上面 isLocal 分支 early-return），其开关提示由 buildLocalSwitchNote() 单独注入。
         sb.append(buildVisualSwitchEnforcement())
 
         val out = sb.toString().trim()
