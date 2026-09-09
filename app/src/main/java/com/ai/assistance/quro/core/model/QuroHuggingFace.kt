@@ -128,9 +128,9 @@ object QuroHuggingFace {
         }
     }
 
-    /** 列出仓库 main 分支下的 (路径, 大小) 列表（走 API 镜像）。 */
+    /** 列出仓库 main 分支下的 (路径, 大小) 列表（走 API 镜像，递归以覆盖子目录内的权重/配置/tokenizer）。 */
     private fun listTree(repoId: String): List<Pair<String, Long>> {
-        val (code, body) = httpGet("/api/models/$repoId/tree/main")
+        val (code, body) = httpGet("/api/models/$repoId/tree/main?recursive=true")
         if (code !in 200..299) return emptyList()
         val arr = runCatching { JSONArray(body) }.getOrNull() ?: return emptyList()
         val out = mutableListOf<Pair<String, Long>>()
@@ -218,8 +218,10 @@ object QuroHuggingFace {
     }
 
     /**
-     * 下载完整 MNN 模型包：llm_config.json（必要时用 config.json 改名）+ 仓库内全部 .mnn 权重文件，
-     * 落进 destDir。解决此前「只下一个 .mnn」导致 llm_config.json 引用的权重缺失、加载失败的问题。
+     * 下载完整 MNN 模型目录：MNN 不是单个文件，而是一个目录（含 llm_config.json + 全部
+     * `<模型>.mnn` 权重 + tokenizer 等运行必需文件）。此前只下 config + .mnn，导致 tokenizer
+     * 缺失、加载器报「目录不完整」。这里递归拉取整个仓库目录（跳过 README/LICENSE/文档），
+     * 保留相对路径原样落盘，确保加载器需要的一切都在。
      */
     suspend fun downloadMnnModel(
         repoId: String,
@@ -228,28 +230,46 @@ object QuroHuggingFace {
     ): String = withContext(Dispatchers.IO) {
         destDir.mkdirs()
         val tree = listTree(repoId)
-        val mnns = tree.filter { it.first.endsWith(".mnn", ignoreCase = true) }
+        // 只保留 MNN 运行需要的文件：权重/配置/tokenizer 等；跳过文档与元数据。
+        val keepExt = setOf("mnn", "json", "txt", "tiktoken", "model", "bin")
+        val files = tree.filter { (p, _) ->
+            val name = p.substringAfterLast('/')
+            val ext = name.substringAfterLast('.', "").lowercase()
+            !name.equals(".gitattributes", ignoreCase = true) &&
+                !name.startsWith("README", ignoreCase = true) &&
+                !name.startsWith("LICENSE", ignoreCase = true) &&
+                !name.endsWith(".md", ignoreCase = true) &&
+                ext in keepExt
+        }
+        if (files.isEmpty()) return@withContext "该仓库没有任何可下载的 MNN 文件"
+        val mnns = files.filter { it.first.endsWith(".mnn", ignoreCase = true) }
         if (mnns.isEmpty()) return@withContext "该仓库没有 .mnn 权重文件，无法作为 MNN 模型下载"
 
-        // 配置文件：优先 llm_config.json，否则把 config.json 复制为 llm_config.json 以兼容加载器
-        val cfg = File(destDir, "llm_config.json")
-        var r1 = downloadFile(repoId, "llm_config.json", cfg) {}
-        if (!r1.startsWith("OK")) {
-            val alt = File(destDir, "config.json")
-            r1 = downloadFile(repoId, "config.json", alt) {}
-            if (r1.startsWith("OK") && !cfg.exists()) alt.copyTo(cfg, overwrite = true)
-        }
-        if (!cfg.isFile || cfg.length() <= 0L) return@withContext "下载 llm_config.json 失败：$r1"
-
         var done = 0
-        val total = mnns.size
-        for ((fn) in mnns) {
-            val w = File(destDir, fn)
-            val r = downloadFile(repoId, fn, w) {}
-            if (!r.startsWith("OK")) return@withContext "下载权重失败：$r"
+        val total = files.size
+        for ((rel, _) in files) {
+            val target = File(destDir, rel)
+            target.parentFile?.mkdirs()
+            val r = downloadFile(repoId, rel, target) {}
+            if (!r.startsWith("OK")) return@withContext "下载失败：$rel -> $r"
             done++
             onProgress(done.toFloat() / total)
         }
-        "OK:已下载 MNN 模型包（${total} 个权重文件 + 配置）"
+
+        // 兼容加载器：保证 root 有 llm_config.json（部分仓库放在子目录或命名为 config.json）。
+        val rootCfg = File(destDir, "llm_config.json")
+        if (!rootCfg.isFile) {
+            val found = files.firstOrNull { it.first.endsWith("llm_config.json", ignoreCase = true) }
+                ?: files.firstOrNull { it.first.endsWith("config.json", ignoreCase = true) }
+            if (found != null) {
+                val src = File(destDir, found.first)
+                if (src.isFile) src.copyTo(rootCfg, overwrite = true)
+            }
+        }
+        if (!rootCfg.isFile || rootCfg.length() <= 0L) {
+            val listing = destDir.listFiles()?.joinToString { it.name } ?: "(空)"
+            return@withContext "下载完成但缺少 llm_config.json（需根目录或子目录含该配置）。目录内容：$listing"
+        }
+        "OK:已下载 MNN 模型目录（${total} 个文件：含 ${mnns.size} 个权重 + 配置/tokenizer）"
     }
 }
