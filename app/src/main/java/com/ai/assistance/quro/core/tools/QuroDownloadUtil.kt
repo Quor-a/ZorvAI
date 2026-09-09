@@ -100,6 +100,16 @@ object QuroDownloadUtil {
     }
 
     /**
+     * 把一个本地文件写入公共 Download/Quro 目录（Android Q+ 走 MediaStore，低版本回退公共目录）。
+     * 供端侧构建的 APK 等二进制产物落盘到系统下载目录，用户可在文件管理器/下载中心直接检索安装。
+     * 返回 MediaStore Uri 字符串（成功）或 null（失败）。
+     */
+    fun saveFileToDownloads(ctx: Context, file: File, displayName: String, mime: String): String? {
+        val bytes = runCatching { file.readBytes() }.getOrNull() ?: return null
+        return saveBytes(ctx, bytes, displayName, mime)
+    }
+
+    /**
      * 把一段文本写入公共 Download/Quro 目录（Android Q+ 走 MediaStore，低版本回退公共目录）。
      * 供「开发者文档 / 依赖模板 / 说明」等一键保存到本地复用。
      * 返回 "OK:<name>" 表示成功，其余为错误信息。

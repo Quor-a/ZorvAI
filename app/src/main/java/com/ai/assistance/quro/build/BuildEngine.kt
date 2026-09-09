@@ -152,12 +152,6 @@ object BuildEngine {
         }
     }
 
-    // 模板 base.apk 二进制 AndroidManifest.xml 字符串池固定索引（由 dump_manifest.py 解析确认）。
-    // utf8=False（UTF-16LE），字符串按索引引用，故改名/改图标只需替换这几个字符串、其余保持。
-    private const val IDX_PACKAGE = 22
-    private const val IDX_LABEL = 14
-    private const val IDX_VERSION_NAME = 12
-
     private fun u16(b: ByteArray, o: Int): Int =
         ((b[o].toInt() and 0xFF)) or ((b[o + 1].toInt() and 0xFF) shl 8)
     private fun u32(b: ByteArray, o: Int): Long =
@@ -174,14 +168,13 @@ object BuildEngine {
     }
 
     /**
-     * 改写二进制 AndroidManifest.xml 的包名/应用名/版本名（仅替换字符串池里对应索引的字符串，
-     * XML 树按索引引用，故其它结构原样保留）。启动 Activity 在模板里声明为完整类名
-     * com.example.buildapp.MainActivity，不随 package 变化，宿主 dex 始终能被解析。
-     *
-     * 实现已用 PC 原型（prototype_build.py + aapt2 dump xmltree）验证：改写后包名/应用名生效，
-     * activity 名不变，icon 引用 @0x7f010000 保持。
+     * 通用改写二进制 AndroidManifest.xml 的包名/应用名/版本名：**按值匹配**字符串池里的占位串并替换，
+     * 模板无关（base.apk 与 web_base.apk 都可用）。
+     * - 精确匹配原串（如 "com.example.webapp" 不会误改同池里的 "com.example.webapp.WebActivity"）。
+     * - 重新编码时**保留原编码**（utf8 或 UTF-16），并 4 字节补齐字符串池，保证后续 chunk 对齐，
+     *   否则设备 ResXMLTree 解析会拒装（"安装包异常"）。
      */
-    private fun rewriteManifest(data: ByteArray, newPkg: String, newLabel: String, newVersion: String): ByteArray {
+    private fun patchManifestStrings(data: ByteArray, replacements: Map<String, String>): ByteArray {
         val docHsize = u16(data, 2)
         val spOff = docHsize
         val spType = u16(data, spOff)
@@ -192,51 +185,39 @@ object BuildEngine {
         val flags = u32(data, spOff + 16)
         val stringsStart = u32(data, spOff + 20)
         val stylesStart = u32(data, spOff + 24)
-        val utf8 = (flags and 0x100) != 0L
+        val utf8 = (flags and 0x100L) != 0L
 
         val offsets = IntArray(count) { u32(data, spOff + spHsize + 4 * it).toInt() }
         val base = spOff + stringsStart.toInt()
-        val strings = Array(count) { i ->
+        val decoded = Array(count) { i ->
             val p = base + offsets[i]
-            if (utf8) {
-                val n = u16(data, p); var q = p + 2
-                var l = data[q].toInt() and 0xFF; q++
-                val ln = if ((l and 0x80) != 0) {
-                    val l2 = data[q].toInt() and 0xFF; q++; ((l and 0x7F) shl 8) or l2
-                } else l
-                String(data, q, ln, Charsets.UTF_8)
-            } else {
-                val n = u16(data, p); val q = p + 2
-                String(data, q, n * 2, Charsets.UTF_16LE)
+            if (utf8) decodeUtf8(data, p) else {
+                val n = u16(data, p); String(data, p + 2, n * 2, Charsets.UTF_16LE)
             }
         }
-        strings[IDX_PACKAGE] = newPkg
-        strings[IDX_LABEL] = newLabel
-        strings[IDX_VERSION_NAME] = newVersion
+        val replaced = Array(count) { i -> replacements[decoded[i]] ?: decoded[i] }
 
         val newOffsets = IntArray(count)
         val parts = mutableListOf<ByteArray>()
         var pos = 0
-        for (i in strings.indices) {
-            val enc = strings[i].toByteArray(Charsets.UTF_16LE)
-            val n = enc.size / 2
-            val b = ByteArray(2 + enc.size + 2)
-            w16(b, 0, n)
-            System.arraycopy(enc, 0, b, 2, enc.size)
-            w16(b, 2 + enc.size, 0)
+        for (i in replaced.indices) {
+            val enc = if (utf8) {
+                encodeUtf8(replaced[i])
+            } else {
+                val u = replaced[i].toByteArray(Charsets.UTF_16LE)
+                val b = ByteArray(2 + u.size + 2)
+                w16(b, 0, u.size / 2)
+                System.arraycopy(u, 0, b, 2, u.size)
+                w16(b, 2 + u.size, 0)
+                b
+            }
             newOffsets[i] = pos
-            parts.add(b)
-            pos += b.size
+            parts.add(enc); pos += enc.size
         }
 
         val offsetArraySize = count * 4
         val newStringsStart = spHsize + offsetArraySize
         val newPoolSize = newStringsStart + pos
-        // Android ResChunk size MUST be a multiple of 4; pad the string pool so the
-        // following chunks (resource map / XML tree) stay 4-byte aligned. Without this,
-        // a custom (different-length) package/label misaligns the whole manifest and the
-        // device's ResXMLTree parser rejects it -> "安装包异常". The default package keeps
-        // the original aligned size, which is why only custom packages triggered the failure.
         val pad = (4 - (newPoolSize % 4)) % 4
         val pool = ByteArray(newPoolSize + pad)
         w16(pool, 0, spType); w16(pool, 2, spHsize); w32(pool, 4, pool.size.toLong())
@@ -252,6 +233,45 @@ object BuildEngine {
         w32(out, 4, out.size.toLong())
         return out
     }
+
+    private fun decodeUtf8(b: ByteArray, p: Int): String {
+        val first = b[p].toInt() and 0xFF
+        val len = if ((first and 0x80) != 0) {
+            val second = b[p + 1].toInt() and 0xFF
+            ((first and 0x7F) shl 8) or second
+        } else first
+        val q = p + if ((first and 0x80) != 0) 2 else 1
+        return String(b, q, len, Charsets.UTF_8)
+    }
+
+    private fun encodeUtf8(s: String): ByteArray {
+        val bytes = s.toByteArray(Charsets.UTF_8)
+        val len = bytes.size
+        val head = if (len < 0x80) byteArrayOf(len.toByte())
+        else byteArrayOf(((len shr 8) or 0x80).toByte(), (len and 0xFF).toByte())
+        val tail = byteArrayOf(0, 0) // utf8 字符串以 u16 0 结尾
+        val out = ByteArray(head.size + bytes.size + tail.size)
+        System.arraycopy(head, 0, out, 0, head.size)
+        System.arraycopy(bytes, 0, out, head.size, bytes.size)
+        System.arraycopy(tail, 0, out, head.size + bytes.size, tail.size)
+        return out
+    }
+
+    /** Java 模板（base.apk）清单改写：占位 com.example.buildapp / BuildApp / 1.0.0。 */
+    private fun rewriteManifest(data: ByteArray, newPkg: String, newLabel: String, newVersion: String): ByteArray =
+        patchManifestStrings(data, mapOf(
+            "com.example.buildapp" to newPkg,
+            "BuildApp" to newLabel,
+            "1.0.0" to newVersion
+        ))
+
+    /** WebView 模板（web_base.apk）清单改写：占位 com.example.webapp / WebApp / 1.0.0。 */
+    private fun rewriteWebManifest(data: ByteArray, newPkg: String, newLabel: String, newVersion: String): ByteArray =
+        patchManifestStrings(data, mapOf(
+            "com.example.webapp" to newPkg,
+            "WebApp" to newLabel,
+            "1.0.0" to newVersion
+        ))
 
     /**
      * 端内生成自定义签名 keystore（PKCS12）。自签证书需要 BouncyCastle（Android 运行时自带，
@@ -504,9 +524,9 @@ object BuildEngine {
         // 这三个 dexed 工具 jar 会被重新生成/修正（例如本次修复 ecj dex），必须每次覆盖解包，
         // 否则覆盖安装时 filesDir 里的旧文件不会被替换，设备会一直用旧（坏的）dex。
         // base.apk 也在列：替换成带图标的模板后必须强制重解包，否则设备会继续用旧的空壳 base.apk。
-        val alwaysExtract = setOf("ecj_dex.jar", "d8_dex.jar", "apksigner_dex.jar", "base.apk", "debug.keystore")
+        val alwaysExtract = setOf("ecj_dex.jar", "d8_dex.jar", "apksigner_dex.jar", "base.apk", "web_base.apk", "debug.keystore")
         val names = listOf(
-            "ecj.jar", "d8.jar", "apksigner.jar", "android.jar", "debug.keystore", "base.apk",
+            "ecj.jar", "d8.jar", "apksigner.jar", "android.jar", "debug.keystore", "base.apk", "web_base.apk",
             // 已 dex 化的工具 jar：进程内加载，避免 Android 14+ 禁止独立 dalvikvm 且绕开 Android 16 Writable dex 限制。
             "ecj_dex.jar", "d8_dex.jar", "apksigner_dex.jar"
         )
@@ -701,29 +721,8 @@ object BuildEngine {
     fun assembleApk(ctx: Context, dexPath: String, outApk: File, config: BuildConfig = BuildConfig()): BuildResult {
         val libs = ensureAssets(ctx)
         val baseApk = File(libs, "base.apk")
-        // 自定义 keystore 优先；否则回退内置 debug.keystore（android/android/androiddebugkey）。
-        // 若内置 keystore 缺失（如 *.keystore 被 .gitignore 排除未打包），优先从 APK assets 重新解包
-        // （不依赖设备是否带 BouncyCastle；实测部分设备运行时无 org.bouncycastle 类），BC 仅作兜底。
-        val keystore = config.keystore ?: run {
-            val builtin = File(libs, "debug.keystore")
-            if (!builtin.exists()) {
-                try {
-                    ctx.assets.open("libs/common/debug.keystore").use { ins ->
-                        builtin.parentFile?.mkdirs()
-                        FileOutputStream(builtin).use { os -> ins.copyTo(os) }
-                    }
-                } catch (e: Throwable) {
-                    try {
-                        generateKeystore(builtin, "androiddebugkey", "android", "android")
-                    } catch (e2: Throwable) {
-                        return BuildResult(false, "内置 debug.keystore 缺失且自动生成失败（${e2.message}），无法构建 APK。", dexPath, null)
-                    }
-                }
-            }
-            builtin
-        }
-        if (!baseApk.exists() || !keystore.exists()) {
-            return BuildResult(false, "工具链不完整（base.apk / keystore 缺失），无法构建 APK。", dexPath, null)
+        if (!baseApk.exists()) {
+            return BuildResult(false, "工具链不完整（base.apk 缺失），无法构建 APK。", dexPath, null)
         }
         val dexFile = File(dexPath)
         if (!dexFile.exists()) {
@@ -745,58 +744,131 @@ object BuildEngine {
             unsigned.parentFile?.mkdirs()
             // base.apk 已含宿主 classes.dex（com.example.buildapp.MainActivity）+ AndroidManifest + resources.arsc。
             // repackAligned 保留全部条目（含宿主 classes.dex），按 config 改写清单/图标、追加用户 classes2.dex 与 assets。
-            repackAligned(baseApk, dexFile, unsigned, config)
+            repackAligned(baseApk, dexFile, unsigned, config) { rewriteManifest(it, config.packageName, config.appLabel, config.versionName) }
             log.append("已生成未签名 APK：${unsigned.absolutePath}（${unsigned.length()} 字节，含宿主 classes.dex + 用户 classes2.dex）\n")
         } catch (e: Throwable) {
             return BuildResult(false, log.toString() + "\n注入失败：${e.message}", dexPath, null)
         }
 
         log.append("\n== apksigner 进程内签名 ==\n")
+        val signRes = signApkToFile(ctx, unsigned, outApk, config, log)
+        if (signRes != null) return signRes
+        log.append("\n✔ APK 构建成功：${outApk.absolutePath}（${outApk.length()} 字节）")
+        return BuildResult(true, log.toString(), dexPath, outApk.absolutePath)
+    }
+
+    /**
+     * 把网页工程（index.html + js/css/资源）打包成独立可安装 WebView APK。
+     * 复用 web_base.apk 模板（自带 WebActivity，加载 assets/index.html），无需用户写 Java。
+     * webDir：网页工程根目录（其下应有 index.html）；为 null 时生成空白 WebView 应用。
+     */
+    fun assembleWebApk(ctx: Context, webDir: File?, outApk: File, config: BuildConfig = BuildConfig()): BuildResult {
+        val libs = ensureAssets(ctx)
+        val baseApk = File(libs, "web_base.apk")
+        if (!baseApk.exists()) {
+            return BuildResult(false, "工具链不完整（web_base.apk 缺失），无法构建 WebView APK。请确认 assets/libs/common/web_base.apk 已随包发布。", null, null)
+        }
+        val cfg = if (webDir != null) config.copy(assetsDir = webDir) else config
+        val log = StringBuilder()
+        val customSign = cfg.keystore != null
+        log.append("== 构建 WebView APK（web_base.apk 模板，注入 assets + 改写清单）==\n")
+        log.append("签名：").append(if (customSign) "自定义 keystore（别名 ${cfg.keyAlias}）" else "内置 debug.keystore").append("\n")
+        log.append("清单改写：package=${cfg.packageName}  label=${cfg.appLabel}  versionName=${cfg.versionName}\n")
+        if (webDir?.isDirectory == true) {
+            val files = webDir.walkTopDown().filter { it.isFile }.toList()
+            log.append("网页资源（${files.size} 个文件，注入为 assets/）：\n")
+            files.take(50).forEach { log.append("  · ").append(it.relativeTo(webDir).path.replace('\\', '/')).append("\n") }
+        } else {
+            log.append("（无网页目录：生成空白 WebView 应用）\n")
+        }
+
+        val unsigned = File(outApk.parentFile ?: ctx.filesDir, "web-unsigned.apk")
+        try {
+            unsigned.parentFile?.mkdirs()
+            repackAligned(baseApk, null, unsigned, cfg) { rewriteWebManifest(it, cfg.packageName, cfg.appLabel, cfg.versionName) }
+            log.append("已生成未签名 APK：${unsigned.absolutePath}（${unsigned.length()} 字节）\n")
+        } catch (e: Throwable) {
+            return BuildResult(false, log.toString() + "\n注入/打包失败：${e.message}", null, null)
+        }
+
+        log.append("\n== apksigner 进程内签名 ==\n")
+        val signRes = signApkToFile(ctx, unsigned, outApk, cfg, log)
+        if (signRes != null) return signRes
+        log.append("\n✔ WebView APK 构建成功：${outApk.absolutePath}（${outApk.length()} 字节）")
+        return BuildResult(true, log.toString(), null, outApk.absolutePath)
+    }
+
+    /** 解析签名用的 keystore：自定义优先；否则内置 debug.keystore（缺失则从 assets 重新解包或现场生成）。 */
+    private fun resolveKeystore(ctx: Context, config: BuildConfig): File {
+        config.keystore?.let { return it }
+        val libs = ensureAssets(ctx)
+        val builtin = File(libs, "debug.keystore")
+        if (!builtin.exists()) {
+            try {
+                ctx.assets.open("libs/common/debug.keystore").use { ins ->
+                    builtin.parentFile?.mkdirs()
+                    FileOutputStream(builtin).use { os -> ins.copyTo(os) }
+                }
+            } catch (e: Throwable) {
+                try {
+                    generateKeystore(builtin, "androiddebugkey", "android", "android")
+                } catch (e2: Throwable) {
+                    throw IllegalStateException("内置 debug.keystore 缺失且自动生成失败（${e2.message}），无法构建 APK。")
+                }
+            }
+        }
+        return builtin
+    }
+
+    /**
+     * 进程内对未签名 APK 签名（含 v1/v2/v3）。内置 keystore 偶发加载失败时自动自愈重试一次。
+     * 成功返回 null；失败返回 BuildResult（ok=false），并把失败信息追加进 log。
+     */
+    private fun signApkToFile(ctx: Context, unsigned: File, outApk: File, config: BuildConfig, log: StringBuilder): BuildResult? {
         val toolchain = try {
             getToolchain(ctx)
         } catch (e: Throwable) {
-            return BuildResult(false, log.append("工具链加载失败（含完整堆栈）：\n").append(throwableDetail(e)).append("\n[APK 签名失败]").toString(), dexPath, null)
+            return BuildResult(false, log.append("工具链加载失败（含完整堆栈）：\n").append(throwableDetail(e)).append("\n[APK 签名失败]").toString(), null, null)
+        }
+        val keystore = try {
+            resolveKeystore(ctx, config)
+        } catch (e: Throwable) {
+            return BuildResult(false, log.append(e.message ?: "keystore 解析失败").append("\n[APK 签名失败]").toString(), null, null)
         }
         try {
             toolchain.signApk(unsigned, outApk, keystore, config.storePassword, config.keyPassword, config.keyAlias)
         } catch (e: Throwable) {
-            // 内置 keystore 若因格式/版本问题（如 "Wrong version of key store"）加载失败，
-            // 现场用 BouncyCastle 重新生成一份同设备可读的 PKCS12 再重试一次，避免直接终止构建。
-            val recoverable = !customSign && (e.message?.contains("无法加载密钥库") == true
+            val recoverable = config.keystore == null && (e.message?.contains("无法加载密钥库") == true
                 || e.message?.contains("Wrong version", ignoreCase = true) == true
                 || e.message?.contains("key store", ignoreCase = true) == true)
             if (recoverable) {
-                // 优先：从 APK assets 重新解包内置 keystore（覆盖设备上可能陈旧的 JKS / 损坏文件），
-                // 不依赖设备运行时是否带 BouncyCastle（实测部分设备无 org.bouncycastle 类）。
                 try {
-                    val rebound = File(libs, "debug.keystore")
+                    val rebound = File(ensureAssets(ctx), "debug.keystore")
                     rebound.delete()
                     ctx.assets.open("libs/common/debug.keystore").use { ins ->
                         FileOutputStream(rebound).use { os -> ins.copyTo(os) }
                     }
                     toolchain.signApk(unsigned, outApk, rebound, config.storePassword, config.keyPassword, config.keyAlias)
                 } catch (e2: Throwable) {
-                    // 兜底：现场用 BouncyCastle 重新生成（部分设备运行时无 BC，会失败，属预期）。
                     try {
-                        val fresh = File(libs, "debug.keystore")
+                        val fresh = File(ensureAssets(ctx), "debug.keystore")
                         fresh.delete()
                         generateKeystore(fresh, "androiddebugkey", "android", "android")
                         toolchain.signApk(unsigned, outApk, fresh, config.storePassword, config.keyPassword, config.keyAlias)
                     } catch (e3: Throwable) {
                         return BuildResult(false, log.append("签名失败（含完整堆栈）：\n").append(throwableDetail(e))
-                            .append("\n[内置 keystore 加载失败，自愈重试也失败]：\n").append(throwableDetail(e3)).append("\n[APK 签名失败]").toString(), dexPath, null)
+                            .append("\n[内置 keystore 加载失败，自愈重试也失败]：\n").append(throwableDetail(e3)).append("\n[APK 签名失败]").toString(), null, null)
                     }
                 }
             } else {
-                return BuildResult(false, log.append("签名失败（含完整堆栈）：\n").append(throwableDetail(e)).append("\n[APK 签名失败]").toString(), dexPath, null)
+                return BuildResult(false, log.append("签名失败（含完整堆栈）：\n").append(throwableDetail(e)).append("\n[APK 签名失败]").toString(), null, null)
             }
         }
         if (!outApk.exists()) {
-            return BuildResult(false, log.toString() + "\n[APK 签名失败]", dexPath, null)
+            return BuildResult(false, log.toString() + "\n[APK 签名失败]", null, null)
         }
         unsigned.delete()
-        log.append("\n✔ APK 构建成功：${outApk.absolutePath}（${outApk.length()} 字节）")
-        return BuildResult(true, log.toString(), dexPath, outApk.absolutePath)
+        return null
     }
 
     /**
@@ -818,7 +890,7 @@ object BuildEngine {
         val size: Long
     )
 
-    private fun repackAligned(baseApk: File, userDex: File, outFile: File, config: BuildConfig) {
+    private fun repackAligned(baseApk: File, userDex: File?, outFile: File, config: BuildConfig, rewriter: (ByteArray) -> ByteArray) {
         val crc = CRC32()
         val entries = mutableListOf<ZipEntryMeta>()
         ZipInputStream(BufferedInputStream(FileInputStream(baseApk))).use { zis ->
@@ -828,8 +900,7 @@ object BuildEngine {
                 val raw = zis.readBytes()
                 // 按 config 处理三个定制点：清单改写 / 自定义图标 / 其它保持。
                 val outData = when {
-                    entry.name == "AndroidManifest.xml" ->
-                        rewriteManifest(raw, config.packageName, config.appLabel, config.versionName)
+                    entry.name == "AndroidManifest.xml" -> rewriter(raw)
                     config.iconBytes != null && entry.name.startsWith("res/mipmap-") && entry.name.endsWith("/ic_launcher.png") ->
                         config.iconBytes!!
                     else -> raw
@@ -853,9 +924,11 @@ object BuildEngine {
                 ze = zis.nextEntry
             }
         }
-        val userRaw = userDex.readBytes()
-        crc.reset(); crc.update(userRaw)
-        entries.add(ZipEntryMeta("classes2.dex", ZipEntry.STORED, userRaw, crc.value, userRaw.size.toLong()))
+        if (userDex != null) {
+            val userRaw = userDex.readBytes()
+            crc.reset(); crc.update(userRaw)
+            entries.add(ZipEntryMeta("classes2.dex", ZipEntry.STORED, userRaw, crc.value, userRaw.size.toLong()))
+        }
 
         // 工程 assets/ 下的文件注入 APK（导入的非 .java 资源，用户代码经 AssetManager 读取）。
         config.assetsDir?.takeIf { it.isDirectory }?.walkTopDown()?.filter { it.isFile }?.forEach { f ->

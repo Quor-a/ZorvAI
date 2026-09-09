@@ -265,6 +265,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(ProjectCreateTool())
     // ═══ 构建台：端侧 APK 构建（Java → DEX → APK，AI 可真正触发编译打包）═══
     r.register(BuildApkTool())
+    r.register(ExportApkTool())    // 让 AI 也能「导出产物」（构建台 UI 的导出是文件选择器、AI 调不起）
     // 后端工作区：多文件多语言项目
     r.register(WorkbenchTool())
     r.register(MiniAppStudioTool())    // 小程序工作台：AI 直接 CRUD/运行小程序工程（完整移植 MiniAppFramework）

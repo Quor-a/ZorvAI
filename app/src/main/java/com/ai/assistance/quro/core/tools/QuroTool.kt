@@ -174,6 +174,8 @@ class QuroToolRegistry {
             "workspace_write", "workspace_read", "workspace_list",
             // 构建台：端侧 APK 构建（Java → DEX → APK，AI 可真正触发编译打包，与 ui_open_build 互补）
             "build_apk",
+            // 构建台：导出产物（构建台 UI 的导出是文件选择器、AI 用不了，本工具替代它把 APK 导出到可访问位置）
+            "export_apk",
             // L1 无障碍控屏（CapOS 通道）
             "read_screen", "get_foreground_app", "get_screen_state",
             "tap_screen", "swipe_screen", "input_text", "scroll_screen", "global_action",
