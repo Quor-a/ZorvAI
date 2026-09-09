@@ -130,6 +130,10 @@ class QuroToolRegistry {
             "write_file", "delete_file", "make_directory", "move_file", "copy_file", "find_files", "file_info",
             // 网络 / Web
             "http_request", "open_web", "ai_browser",
+            // 自研端侧联网检索（多引擎并发 + 查询改写 + 正文密度抽取 + 五信号重排 + 上下文打包）
+            "web_search", "read_url",
+            // 屏幕捕获授权（AI 主动发起 MediaProjection 系统授权，无需手动长按开关）
+            "enable_screen_capture",
             // 代码执行
             "run_code",
             // SandboxPackage 完整脚本运行时（JS/TS + Tools.* 宿主 API）+ ToolPkg 脚本包 + 项目模板
@@ -160,6 +164,8 @@ class QuroToolRegistry {
             "ui_card",
             // 对话框内联 UI 组件（v134：按钮/开关/滑块/进度/统计/提醒/表格/列表/分段/饼图/评分/倒计时/标签页/折叠/表单/标签/步骤/仪表/媒体/信息）
             "ui_widget",
+            // 节点编辑器：AI 直接读写节点流工程（与工具中心面板共享 studio/flow/*.qne，面板打开自动恢复）
+            "node_editor",
             // MCP 客户端：AI 调用外部 MCP 服务器工具（#402）
             "mcp_servers", "mcp_list_tools", "mcp_call", "mcp_deploy", "mcp_undeploy", "mcp_list_local",
             // MCP-ACI 桥接：通过 ACI 调用外部 MCP 服务器工具

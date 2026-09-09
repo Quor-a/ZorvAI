@@ -749,6 +749,8 @@ private fun runCommandInLinux(command: String, timeout: Long): String {
 | 媒体 | ListMedia、LocalMusicPlayer、MusicPlay、LocalVideoPlayer |
 | 闹钟/定时 | SetAlarm、ScheduleTask、ListScheduledTasks、DeleteScheduledTask |
 | 网络/Web | HttpRequest、OpenWeb、AiBrowser |
+| 联网检索（端侧） | WebSearch、ReadUrl（自研多引擎并发 + 查询改写 + 正文密度抽取 + 五信号重排 + 上下文打包，纯结构化文本，非浏览器套壳） |
+| 屏幕捕获授权 | EnableScreenCapture（AI 主动发起 MediaProjection 系统授权，无需手动长按开关；授权后视觉循环自动启用） |
 | 语音合成 | Speak、StopSpeak（TTS 工具） |
 | Intent/广播 | ExecuteIntent、SendBroadcast、RunCode |
 | CMS v2 模块 | QuroCmsList/Call/Deploy/Undeploy/Status/EngineStatus/Logs/Result/RunDag |
@@ -763,6 +765,8 @@ private fun runCommandInLinux(command: String, timeout: Long): String {
 | 知识库 | KnowledgeSearch/Add、KnowledgeManage、QuroRagKnowledge（向量语义 RAG，无 Key 降级词法检索） |
 | 文档 | AiwpsCreate/Read/Edit（docx/xlsx/pptx/pdf…） |
 | UI 动作/卡片/组件 | UiAction 系列、UiCard、UiWidget（可交互内联 UI） |
+| 节点编辑器 | NodeEditor（AI 直接读写 .qne 节点流工程，可视化编程 / 流程编排，无需打开界面） |
+| 端侧 APK 构建 | BuildApk（自定义包名 / Release 签名生成 / 依赖 JAR / 图标，离线 Java→DEX→APK）、ExportApk（导出产物） |
 | MCP | McpServers/ListTools/Call、McpDeploy/Undeploy/ListLocal、**McpAciBridge/List/Call**（MCP-ACI 桥接） |
 
 ### 7. 语音 / TTS / STT
@@ -1137,7 +1141,15 @@ Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{
 
 ---
 
-## 近期新增功能（v1.0.84）
+## 近期新增功能（v1.0.86）
+
+### v1.0.86（本次）
+- **工具分类构架重构**：`ToolCapabilityDirectory` 工具能力目录补全 5 类新工具的显式分类元数据（端侧联网检索 `web_search`/`read_url` → 网络/Web；屏幕捕获授权 `enable_screen_capture` → 无障碍；节点编辑器 `node_editor` → UI/卡片；端侧 APK 构建 `build_apk`/`export_apk` → CMS 开发），分类枚举扩展至 17 类；`buildQuroRegistry` 顶部「工具分类架构」注释同步更新。
+- **端侧联网检索（AI 行动链）**：新增 `web_search`（多引擎并发 + 查询改写 + 正文密度抽取 + 五信号重排 + 上下文打包，返回带 [n] 编号可溯源引用）与 `read_url`（精读单页正文）两个工具，接入 AI 工具集，AI 自主决定联网、搜→挑→读→答，非浏览器套壳。
+- **屏幕理解主动授权**：新增 `enable_screen_capture` 工具，AI 可在用户要「看屏幕/截图」或自身需要像素级读屏时主动拉起 MediaProjection 系统授权，授权后视觉循环自动启用，无需手动长按开关；视觉循环内置自动重试与 30s 防抖。
+- **节点编辑器 AI 可驱动**：`node_editor` 工具暴露给 AI，可直接读写 `studio/flow/*.qne` 节点流工程（无需打开界面即可编排可视化流程）；面板 2s 轮询同步 AI 写入、打开自动恢复。
+- **构建台 AI 能力补全**：`build_apk` 扩展自定义包名、Release 签名生成与使用（`generate_keystore`）、依赖 JAR 引用（`-cp`/`--lib`）、自定义图标；入口类支持任意包名/类名（动态探测 `zorv_entry.txt`）；`export_apk` 替代 UI 文件选择器把产物导出到可访问位置。
+- **人格卡开关硬强制 + 系统提示词更新**：人格卡「动态UI组件」「可视化小卡片」开关开启时，对应回复必须主动用 ```quro-ui / ```quro-card，不再默认回纯文字；系统提示词新增「本版重点能力」段，显式告知 AI 五项新能力的主动触发条件。
 
 ### v1.0.84（本次）
 - **端侧 Python 3.14 引擎（PyEngine）**：内置真·CPython 3.14 原生解释器（`libpython3.14.so` + libssl/libcrypto/libsqlite + 完整标准库 654 文件），对话框内直接跑真实 Python，替代旧版 Brython 翻译；配 Scripting 沙箱（`SandboxRuntime` 隔离执行 + `HostApiDispatcher`/`GitHostApi` 宿主能力调用 + `TsTranspiler` TypeScript 转译）+ 8 语言项目模板（android/flutter/go/java/node/python/typescript/web）+ 编辑器 TS/Python 支持与 HTML 预览。

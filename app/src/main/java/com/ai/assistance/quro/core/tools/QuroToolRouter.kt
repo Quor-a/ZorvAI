@@ -40,6 +40,10 @@ class QuroToolRouter(allSpecs: List<QuroToolSpec>) {
             "list_files", "read_text_file", "browse_files", "file_read",
             "write_file", "delete_file", "make_directory", "move_file", "copy_file", "find_files", "file_info",
             "http_request", "open_web", "ai_browser", "browser_act",
+            // 自研端侧联网检索（常驻：涉及实时/事实类问题 AI 应优先主动调用）
+            "web_search", "read_url",
+            // 屏幕捕获授权（AI 主动发起 MediaProjection 系统授权，无需手动长按开关）
+            "enable_screen_capture",
             "run_code", "creative_studio",
             "terminal_run", "terminal_exec", "terminal_write", "terminal_kill", "terminal_status", "quroterm_exec",
             "speak", "stop_speak",
@@ -49,6 +53,8 @@ class QuroToolRouter(allSpecs: List<QuroToolSpec>) {
             "knowledge_search", "knowledge_add", "knowledge_manage", "knowledge_rag_search",
             "aiwps_create", "chat_doc", "enhanced_doc_create",
             "ui_card", "ui_widget", "ui_control",
+            // 节点编辑器：AI 直接读写节点流工程（与工具中心面板共享 studio/flow/*.qne）
+            "node_editor",
             "mcp_servers", "mcp_list_tools", "mcp_call", "mcp_deploy", "mcp_undeploy", "mcp_list_local",
             "mcp_aci_list", "mcp_aci_call", "mcp_aci_bridge",
             "auth_service_add", "auth_service_list", "auth_service_remove",
