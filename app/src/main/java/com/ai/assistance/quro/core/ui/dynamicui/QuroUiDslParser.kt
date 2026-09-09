@@ -574,24 +574,201 @@ object QuroUiDslParser {
                         ?: json.optStringOrNull("definition") ?: "",
                     theme = json.optStringOrNull("theme"),
                 )
-                // 容错：未知节点类型不再返回 null 导致整张卡片判失败，
-                // 而是降级为一个竖向「带样式容器」（保留 AI 给的通用 style 与子节点），
-                // 并在顶部追加一行降级提示。与「单个节点坏掉不影响整棵树」的承诺一致。
-                else -> QuroColumnNode(
+
+                // ──────────────────────────────────────────────────────────────────────────
+                // v1.0.88 数据可视化 / 业务卡节点族（让 quro-ui 撑住所有 ChatCard 形态）
+                // ──────────────────────────────────────────────────────────────────────────
+                "stat" -> QuroStatNode(
                     id = json.optStringOrNull("id"),
                     style = buildStyle(json),
-                    children = listOf(
-                        QuroTextNode(
-                            value = "⚠️ 未识别的节点类型：$type（已降级为普通容器）",
-                            typography = "caption",
-                            color = "warning",
-                        )
-                    ) + buildChildren(json),
+                    label = json.optStringOrNull("label") ?: json.optStringOrNull("name") ?: "",
+                    value = json.optStringOrNull("value") ?: "",
+                    unit = json.optStringOrNull("unit") ?: "",
+                    delta = json.optStringOrNull("delta") ?: "",
+                    trend = json.optStringOrNull("trend") ?: "flat",
                 )
+                "table" -> QuroTableNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    headers = json.optStringList("headers"),
+                    rows = json.optStringMatrix("rows"),
+                    caption = json.optStringOrNull("caption"),
+                )
+                "alert", "notice", "banner" -> QuroAlertNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    severity = json.optStringOrNull("severity") ?: "info",
+                    title = json.optStringOrNull("title"),
+                    text = json.optStringOrNull("text")
+                        ?: json.optStringOrNull("content")
+                        ?: json.optStringOrNull("message") ?: "",
+                )
+                "rating", "stars" -> QuroRatingNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    label = json.optStringOrNull("label"),
+                    value = (json.optDoubleOrNull("value") ?: 0.0).toFloat(),
+                    max = json.optIntOrNull("max") ?: 5,
+                )
+                "gauge", "dial", "meter" -> QuroGaugeNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    label = json.optStringOrNull("label"),
+                    progress = (json.optDoubleOrNull("progress") ?: json.optDoubleOrNull("value") ?: 0.0)
+                        .toFloat().coerceIn(0f, 1f),
+                    color = json.optStringOrNull("color"),
+                )
+                "countdown" -> QuroCountdownNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    label = json.optStringOrNull("label") ?: "",
+                    targetEpochMs = json.optLong("target_epoch_ms", 0L)
+                        .takeIf { it > 0 } ?: json.optLong("targetEpochMs", 0L),
+                )
+                "steps", "stepper" -> QuroStepsNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    steps = json.optStringList("steps"),
+                    current = json.optIntOrNull("current") ?: 0,
+                )
+                "timeline" -> QuroTimelineNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    events = json.optStringList("events"),
+                )
+                "todo" -> QuroTodoNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    items = json.optStringList("items"),
+                )
+                "expandable", "accordion", "collapse" -> QuroExpandableNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    title = json.optStringOrNull("title") ?: "",
+                    body = json.optStringOrNull("body")
+                        ?: json.optStringOrNull("content")
+                        ?: json.optStringOrNull("text") ?: "",
+                    expanded = json.optBoolean("expanded", false),
+                )
+                "pie" -> QuroPieNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    segments = json.optStringList("segments"),
+                    title = json.optStringOrNull("title"),
+                )
+                "compare" -> QuroCompareNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    items = json.optStringList("items"),
+                )
+                "radar" -> QuroRadarNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    axes = json.optStringList("axes"),
+                )
+                "heatmap" -> QuroHeatmapNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    cells = json.optStringList("cells"),
+                    columns = json.optIntOrNull("columns") ?: 8,
+                )
+                "kanban" -> QuroKanbanNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    columns = json.optStringList("columns"),
+                )
+                "carousel", "swiper" -> QuroCarouselNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    slides = json.optStringList("slides"),
+                )
+                "timer" -> QuroTimerNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    label = json.optStringOrNull("label"),
+                    seconds = json.optIntOrNull("seconds") ?: 0,
+                )
+                "tagcloud", "tags" -> QuroTagCloudNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    tags = json.optStringList("tags"),
+                )
+                "avatargroup", "avatars" -> QuroAvatarGroupNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    avatars = json.optStringList("avatars"),
+                )
+                "counter", "animated_number" -> QuroCounterNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    label = json.optStringOrNull("label") ?: "",
+                    value = (json.optDoubleOrNull("value") ?: 0.0).toFloat(),
+                    target = json.optDoubleOrNull("target")?.toFloat(),
+                    unit = json.optStringOrNull("unit") ?: "",
+                )
+                "breadcrumb" -> QuroBreadcrumbNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    crumbs = json.optStringList("crumbs"),
+                )
+                "color", "swatch" -> QuroColorNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    color = json.optStringOrNull("color") ?: "",
+                    name = json.optStringOrNull("name") ?: "",
+                )
+                "media" -> QuroMediaNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    url = json.optStringOrNull("url") ?: json.optStringOrNull("src") ?: "",
+                    mediaType = json.optStringOrNull("media_type")
+                        ?: json.optStringOrNull("mediaType") ?: "image",
+                    title = json.optStringOrNull("title"),
+                    height = json.optIntOrNull("height"),
+                )
+                "form" -> QuroFormNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    fields = json.optStringList("fields"),
+                    title = json.optStringOrNull("title"),
+                )
+                // 捕获型兜底：任何未显式建模的 type 都保留为 QuroUnknownNode，
+                // 原始属性原样存入 fields，子节点递归解析。渲染层用「融合解释器」把它画成结构化富卡，
+                // 不再「降级为普通容器」、不再丢字段、不再出现「未识别的节点类型」提示。
+                // 这是 quro-ui 支持 AI 自由书写任意节点类型的关键。
+                else -> buildUnknown(json, type)
             }
         } catch (e: Exception) {
             null
         }
+    }
+
+    /**
+     * 解析未知节点类型：保留 AI 给出的所有非保留字段（原样存入 [QuroUnknownNode.fields]），
+     * 子节点递归解析。绝不丢弃任何信息——渲染层负责用「融合解释器」把它画成结构化富卡。
+     */
+    private fun buildUnknown(json: JSONObject, type: String): QuroUnknownNode {
+        val reserved = setOf(
+            "type", "kind", "id", "style", "children",
+            "on_click", "onClick", "on_select", "onSelect",
+            "item", "item_template", "itemTemplate"
+        )
+        val fields = LinkedHashMap<String, Any?>()
+        json.keys().forEach { k ->
+            if (k in reserved) return@forEach
+            fields[k] = when (val v = json.opt(k)) {
+                is JSONObject -> v.toString()
+                is JSONArray -> (0 until v.length()).mapNotNull { v.opt(it)?.toString() }
+                else -> v
+            }
+        }
+        return QuroUnknownNode(
+            id = json.optStringOrNull("id"),
+            style = buildStyle(json),
+            type = type,
+            fields = fields,
+            children = buildChildren(json),
+        )
     }
 
     private fun buildColumn(json: JSONObject) = QuroColumnNode(
@@ -1029,6 +1206,17 @@ object QuroUiDslParser {
         // 改用 opt(i)?.toString() 保留原始类型字面量。
         return (0 until arr.length()).mapNotNull { i ->
             arr.opt(i)?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+        }
+    }
+
+    /** 读取二维字符串矩阵（表格 rows）：外层数组套内层字符串数组，兼容 [["a","b"],["c","d"]]。 */
+    private fun JSONObject.optStringMatrix(key: String): List<List<String>> {
+        val arr = optJSONArray(key) ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { r ->
+            val row = arr.optJSONArray(r) ?: return@mapNotNull null
+            (0 until row.length()).mapNotNull { c ->
+                row.opt(c)?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+            }
         }
     }
 }
