@@ -46,8 +46,14 @@ object MiniHtml {
         "times" to "×", "deg" to "°", "euro" to "€", "copy" to "©", "reg" to "®"
     )
 
-    /** 解析入口。抛出异常的可能性极低，任何畸形输入都会尽力产出可用树。 */
-    fun parse(html: String): HNode {
+    /**
+     * 解析入口。抛出异常的可能性极低，任何畸形输入都会尽力产出可用树。
+     *
+     * @param xmlMode 解析 RSS/XML 时必须置 true。
+     *   原因：HTML 中 <link> 是空元素（无闭合标签），而 RSS 中 <link>url</link> 是成对的。
+     *   若在 XML 场景下沿用 void 规则，link 的文本会被挂到父节点上，导致所有条目取不到 URL。
+     */
+    fun parse(html: String, xmlMode: Boolean = false): HNode {
         val src = html
         val root = HNode("#root")
         var cur = root
@@ -66,7 +72,7 @@ object MiniHtml {
             val attrStr = m.groupValues[3]
             val selfClose = m.groupValues[4].isNotEmpty()
 
-            if (tag in DROP) {
+            if (tag in DROP && !xmlMode) {
                 if (!selfClose) skipToClose(cleaned, tag, pos)?.let { pos = it }
                 continue
             }
@@ -80,7 +86,9 @@ object MiniHtml {
                 node.attrs = parseAttrs(attrStr)
                 node.parent = cur
                 cur.children.add(node)
-                if (!selfClose && tag !in VOID) cur = node
+                // xmlMode 下所有标签都视为成对（或自闭合），不适用 HTML 空元素规则
+                val isVoid = !xmlMode && tag in VOID
+                if (!selfClose && !isVoid) cur = node
             }
         }
         val tail = cleaned.substring(pos.coerceIn(0, cleaned.length))
