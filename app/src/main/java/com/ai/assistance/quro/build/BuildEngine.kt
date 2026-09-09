@@ -106,7 +106,9 @@ object BuildEngine {
         val ok: Boolean,
         val log: String,
         val dexPath: String? = null,
-        val apkPath: String? = null
+        val apkPath: String? = null,
+        /** 探测到的入口类全限定名；null = 未找到入口方法。组装 APK 时写入 assets/zorv_entry.txt。 */
+        val entryClass: String? = null
     )
 
     /**
@@ -125,7 +127,10 @@ object BuildEngine {
         val storePassword: String = "android",
         val keyPassword: String = "android",
         /** 工程 assets/ 目录：其中的文件会被注入 APK 的 assets/ 下，供用户代码通过 AssetManager 读取。 */
-        val assetsDir: File? = null
+        val assetsDir: File? = null,
+        /** 入口类全限定名：组装 APK 时写入 assets/zorv_entry.txt，宿主 MainActivity 运行时读取并反射调用。
+         *  null = 不写入（Web 等无入口类的场景）。由 compileProject/compileToDex 的探测结果填充。 */
+        val entryClass: String? = null
     ) {
         // ByteArray 默认 equals 是引用比较，这里按内容比较，避免混淆。
         override fun equals(other: Any?): Boolean {
@@ -135,6 +140,7 @@ object BuildEngine {
                 versionName == other.versionName && keyAlias == other.keyAlias &&
                 storePassword == other.storePassword && keyPassword == other.keyPassword &&
                 keystore == other.keystore && assetsDir == other.assetsDir &&
+                entryClass == other.entryClass &&
                 (iconBytes == null && other.iconBytes == null || iconBytes.contentEquals(other.iconBytes))
         }
 
@@ -147,6 +153,7 @@ object BuildEngine {
             h = 31 * h + keyPassword.hashCode()
             h = 31 * h + (keystore?.hashCode() ?: 0)
             h = 31 * h + (assetsDir?.hashCode() ?: 0)
+            h = 31 * h + (entryClass?.hashCode() ?: 0)
             h = 31 * h + (iconBytes?.contentHashCode() ?: 0)
             return h
         }
@@ -623,7 +630,7 @@ object BuildEngine {
      * 编译整个 src 目录下所有 .java 文件为 classes.dex（真实管线：ecj → class，d8 → dex）。
      * 进程内执行，不需要设备提供独立 JVM 运行时。
      */
-    fun compileProject(ctx: Context, srcDir: File, outDir: File): BuildResult {
+    fun compileProject(ctx: Context, srcDir: File, outDir: File, explicitEntry: String? = null): BuildResult {
         val libs = ensureAssets(ctx)
         srcDir.mkdirs()
         // 递归清空上一轮产物（含 ecj 按包名生成的子目录），避免残留旧 class 干扰本轮
@@ -684,42 +691,6 @@ object BuildEngine {
             return BuildResult(false, f, null)
         }
 
-        // 验证入口类：构建台运行时要求 com.example.hello.Main 固定存在
-        // （宿主 base.apk 的 MainActivity.runUserCode 里硬编码 Class.forName("com.example.hello.Main")）。
-        // 此前若用户写的代码包名/类名不是这个，编译会"成功"出 APK，装上后运行时直接 ClassNotFoundException 崩溃。
-        // 这里在产物出包前就拦住，给出可操作的错误信息（实际编出了什么 + 正确写法示例）。
-        val expectedEntry = File(outDir, "com/example/hello/Main.class")
-        if (!expectedEntry.exists()) {
-            val compiled = outDir.walkTopDown()
-                .filter { it.isFile && it.name.endsWith(".class", ignoreCase = true) }
-                .map { it.relativeTo(outDir).path.replace('\\', '/') }
-                .toList()
-            val msg = buildString {
-                appendLine("❌ 编译产物的入口类不符合要求：")
-                appendLine("构建台运行时要求入口类固定为 `com.example.hello.Main`（宿主 MainActivity 硬编码 Class.forName 这个名字）。")
-                appendLine("但本次编译未发现该类。")
-                appendLine()
-                appendLine("【实际编出的类】")
-                if (compiled.isEmpty()) {
-                    appendLine("（无）— ecj 似乎没产出任何 .class，请先看上面 ecj 日志排查语法/路径问题。")
-                } else {
-                    compiled.forEach { appendLine("  · $it") }
-                }
-                appendLine()
-                appendLine("【正确写法示例】")
-                appendLine("  package com.example.hello;")
-                appendLine("  public class Main {")
-                appendLine("      public static void main(String[] args) {")
-                appendLine("          // 你的代码")
-                appendLine("      }")
-                appendLine("  }")
-                appendLine("  // 文件建议放在：MyApp/src/com/example/hello/Main.java")
-                appendLine()
-                appendLine("（构建台后续会支持任意包名/类名；当前版本入口必须是上面这套。）")
-            }
-            return BuildResult(false, log.append("\n").append(msg).toString(), null)
-        }
-
         // 2) d8：class → dex
         // 关键修复（PC 干跑发现）：本版 R8 的 parse 不支持「目录」作为 program 输入、
         // 也不支持「文件」作为 --output（必须是目录或 jar/zip）。因此先把 ecj 产物打成 jar，
@@ -744,8 +715,43 @@ object BuildEngine {
             return BuildResult(false, log.toString() + "\n[DEX 未生成]", null)
         }
 
-        log.append("\n✔ 编译成功：classes.dex（${dexFile.length()} 字节）位于 ${dexFile.absolutePath}")
-        return BuildResult(true, log.toString(), dexFile.absolutePath, null)
+        // 入口类探测（支持任意包名/类名）：把全限定名写入 APK 的 assets/zorv_entry.txt，
+        // 宿主 MainActivity 运行时读取并反射调用对应入口方法，不再硬编码 com.example.hello.Main。
+        val (entryClass, discoverLog) = discoverEntryClass(ctx, dexFile, outDir, explicitEntry)
+        log.append("\n").append(discoverLog)
+        if (entryClass == null) {
+            val compiled = outDir.walkTopDown()
+                .filter { it.isFile && it.name.endsWith(".class", ignoreCase = true) }
+                .map { it.relativeTo(outDir).path.replace('\\', '/') }
+                .toList()
+            val msg = buildString {
+                appendLine("❌ 未能在编译产物中找到「入口类」：")
+                appendLine("构建台需要源码里至少有一个类带以下 public 方法之一（静态或实例均可）：")
+                appendLine("  · static void main(String[] args)")
+                appendLine("  · static void main(Activity a, String[] args)")
+                appendLine("  · static void run(Activity a)")
+                appendLine("  · static void run()")
+                appendLine()
+                appendLine("【实际编出的类】")
+                if (compiled.isEmpty()) {
+                    appendLine("（无）— ecj 没产出任何 .class，请先看上面 ecj 日志排查语法/路径问题。")
+                } else {
+                    compiled.forEach { appendLine("  · $it") }
+                }
+                appendLine()
+                appendLine("【正确写法示例】")
+                appendLine("  package com.example.hello;")
+                appendLine("  public class Main {")
+                appendLine("      public static void main(String[] args) { /* 你的代码 */ }")
+                appendLine("  }")
+                appendLine("  // 文件可放在任意包名下，例如 MyApp/src/com/example/snake/Game.java")
+            }
+            saveBuildLog(ctx, log.append("\n").append(msg).toString())
+            return BuildResult(false, log.append("\n").append(msg).toString(), null)
+        }
+
+        log.append("\n✔ 编译成功：classes.dex（${dexFile.length()} 字节）位于 ${dexFile.absolutePath}  入口类=$entryClass")
+        return BuildResult(true, log.toString(), dexFile.absolutePath, null, entryClass)
     }
 
     /**
@@ -908,6 +914,65 @@ object BuildEngine {
     }
 
     /**
+     * 在编译产物里自动探测入口类：带 public 入口方法（main/run，静态或实例均可）的类。
+     * 优先级：显式指定 > com.example.hello.Main（旧约定兼容）> 其余按类名排序首个命中。
+     * 返回 Pair(入口类全限定名?, 诊断日志)。
+     * 通过 DexClassLoader 加载用户编译出的 dex，再用反射枚举候选类的入口方法——
+     * 与应用自身 classloader 同为父加载器，android.* 框架类正常可见。
+     */
+    private fun discoverEntryClass(ctx: Context, dexFile: File, outDir: File, explicit: String?): Pair<String?, String> {
+        val sb = StringBuilder()
+        val optDir = File(ctx.filesDir, "buildproject/opt").apply { mkdirs() }
+        val loader = try {
+            DexClassLoader(dexFile.absolutePath, optDir.absolutePath, null, ctx.classLoader)
+        } catch (e: Throwable) {
+            sb.append("⚠️ 入口类探测：DexClassLoader 加载用户 dex 失败（${e.message}），跳过自动探测。\n")
+            null
+        }
+        val candidates = outDir.walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".class", ignoreCase = true) }
+            .map { it.relativeTo(outDir).path.replace('\\', '/').removeSuffix(".class").replace('/', '.') }
+            .toList()
+        sb.append("入口类探测：扫描到 ${candidates.size} 个编译类。\n")
+
+        // 显式指定：确认其确实编出来了（出现在候选类或可被加载）
+        if (!explicit.isNullOrBlank()) {
+            val ok = candidates.contains(explicit) ||
+                (loader != null && runCatching { loader.loadClass(explicit) }.isSuccess)
+            if (ok) {
+                sb.append("✔ 使用显式入口类：$explicit\n")
+                return Pair(explicit, sb.toString())
+            }
+            sb.append("⚠️ 显式入口类 $explicit 未在编译产物中出现，改回自动探测。\n")
+        }
+
+        var found: String? = null
+        if (loader != null) {
+            // 优先 com.example.hello.Main（旧约定），其余按类名排序，首个带入口方法的即命中
+            val ordered = candidates.sortedWith(compareBy({ it != "com.example.hello.Main" }, { it }))
+            for (name in ordered) {
+                try {
+                    val c = loader.loadClass(name)
+                    if (hasEntryMethod(c)) { found = name; break }
+                } catch (_: Throwable) {}
+            }
+        }
+        if (found != null) sb.append("✔ 自动探测到入口类：$found\n")
+        return Pair(found, sb.toString())
+    }
+
+    /** 判断类是否具备可识别的入口方法（public，静态或实例均可）。 */
+    private fun hasEntryMethod(c: Class<*>): Boolean {
+        fun Class<*>.has(name: String, vararg params: Class<*>): Boolean = try {
+            getMethod(name, *params) != null
+        } catch (_: NoSuchMethodException) { false }
+        return c.has("main", Array<String>::class.java)
+            || c.has("main", android.app.Activity::class.java, Array<String>::class.java)
+            || c.has("run", android.app.Activity::class.java)
+            || c.has("run")
+    }
+
+    /**
      * 把 base.apk 的所有条目原样重打到 unsigned APK，并追加用户编译出的 classes2.dex，
      * 同时保证所有 STORED（未压缩）条目按 4 字节对齐——这是 apksigner v2/v3 签名的硬性要求。
      *
@@ -967,11 +1032,21 @@ object BuildEngine {
         }
 
         // 工程 assets/ 下的文件注入 APK（导入的非 .java 资源，用户代码经 AssetManager 读取）。
+        // 跳过用户自带的 zorv_entry.txt，避免与下面构建台写入的入口声明重复。
         config.assetsDir?.takeIf { it.isDirectory }?.walkTopDown()?.filter { it.isFile }?.forEach { f ->
             val rel = f.relativeTo(config.assetsDir!!).path.replace('\\', '/')
+            if (rel == "zorv_entry.txt") return@forEach
             val bytes = f.readBytes()
             crc.reset(); crc.update(bytes)
             entries.add(ZipEntryMeta("assets/$rel", ZipEntry.STORED, bytes, crc.value, bytes.size.toLong()))
+        }
+
+        // 入口类声明：宿主 MainActivity 运行时读取 assets/zorv_entry.txt 动态定位入口类，
+        // 从而支持任意包名/类名（不再硬编码 com.example.hello.Main）。null 时不写（Web 等无入口场景）。
+        if (config.entryClass != null) {
+            val entryBytes = config.entryClass!!.toByteArray(Charsets.UTF_8)
+            crc.reset(); crc.update(entryBytes)
+            entries.add(ZipEntryMeta("assets/zorv_entry.txt", ZipEntry.STORED, entryBytes, crc.value, entryBytes.size.toLong()))
         }
 
         val little = ByteOrder.LITTLE_ENDIAN
@@ -1028,7 +1103,7 @@ object BuildEngine {
      * 把一段 Java 源码编译为 classes.dex（兼容旧版单文件调用；内部也走 compileProject）。
      * 进程内执行，不需要设备提供独立 JVM 运行时。
      */
-    fun compileToDex(ctx: Context, source: String, className: String): BuildResult {
+    fun compileToDex(ctx: Context, source: String, className: String, explicitEntry: String? = null): BuildResult {
         val libs = ensureAssets(ctx)
         val ecj = File(libs, "ecj.jar")
         val d8 = File(libs, "d8.jar")
@@ -1084,42 +1159,6 @@ object BuildEngine {
             return BuildResult(false, f, null)
         }
 
-        // 验证入口类：构建台运行时要求 com.example.hello.Main 固定存在
-        // （宿主 base.apk 的 MainActivity.runUserCode 里硬编码 Class.forName("com.example.hello.Main")）。
-        // 此前若用户写的代码包名/类名不是这个，编译会"成功"出 APK，装上后运行时直接 ClassNotFoundException 崩溃。
-        // 这里在产物出包前就拦住，给出可操作的错误信息（实际编出了什么 + 正确写法示例）。
-        val expectedEntry = File(outDir, "com/example/hello/Main.class")
-        if (!expectedEntry.exists()) {
-            val compiled = outDir.walkTopDown()
-                .filter { it.isFile && it.name.endsWith(".class", ignoreCase = true) }
-                .map { it.relativeTo(outDir).path.replace('\\', '/') }
-                .toList()
-            val msg = buildString {
-                appendLine("❌ 编译产物的入口类不符合要求：")
-                appendLine("构建台运行时要求入口类固定为 `com.example.hello.Main`（宿主 MainActivity 硬编码 Class.forName 这个名字）。")
-                appendLine("但本次编译未发现该类。")
-                appendLine()
-                appendLine("【实际编出的类】")
-                if (compiled.isEmpty()) {
-                    appendLine("（无）— ecj 似乎没产出任何 .class，请先看上面 ecj 日志排查语法/路径问题。")
-                } else {
-                    compiled.forEach { appendLine("  · $it") }
-                }
-                appendLine()
-                appendLine("【正确写法示例】")
-                appendLine("  package com.example.hello;")
-                appendLine("  public class Main {")
-                appendLine("      public static void main(String[] args) {")
-                appendLine("          // 你的代码")
-                appendLine("      }")
-                appendLine("  }")
-                appendLine("  // 文件建议放在：MyApp/src/com/example/hello/Main.java")
-                appendLine()
-                appendLine("（构建台后续会支持任意包名/类名；当前版本入口必须是上面这套。）")
-            }
-            return BuildResult(false, log.append("\n").append(msg).toString(), null)
-        }
-
         // 2) d8：class → dex
         // 关键修复（PC 干跑发现）：本版 R8 的 parse 不支持「目录」作为 program 输入、
         // 也不支持「文件」作为 --output（必须是目录或 jar/zip）。因此先把 ecj 产物打成 jar，
@@ -1144,7 +1183,42 @@ object BuildEngine {
             return BuildResult(false, log.toString() + "\n[DEX 未生成]", null)
         }
 
-        log.append("\n✔ 编译成功：classes.dex（${dexFile.length()} 字节）位于 ${dexFile.absolutePath}")
-        return BuildResult(true, log.toString(), dexFile.absolutePath, null)
+        // 入口类探测（支持任意包名/类名）：把全限定名写入 APK 的 assets/zorv_entry.txt，
+        // 宿主 MainActivity 运行时读取并反射调用对应入口方法，不再硬编码 com.example.hello.Main。
+        val (entryClass, discoverLog) = discoverEntryClass(ctx, dexFile, outDir, explicitEntry)
+        log.append("\n").append(discoverLog)
+        if (entryClass == null) {
+            val compiled = outDir.walkTopDown()
+                .filter { it.isFile && it.name.endsWith(".class", ignoreCase = true) }
+                .map { it.relativeTo(outDir).path.replace('\\', '/') }
+                .toList()
+            val msg = buildString {
+                appendLine("❌ 未能在编译产物中找到「入口类」：")
+                appendLine("构建台需要源码里至少有一个类带以下 public 方法之一（静态或实例均可）：")
+                appendLine("  · static void main(String[] args)")
+                appendLine("  · static void main(Activity a, String[] args)")
+                appendLine("  · static void run(Activity a)")
+                appendLine("  · static void run()")
+                appendLine()
+                appendLine("【实际编出的类】")
+                if (compiled.isEmpty()) {
+                    appendLine("（无）— ecj 没产出任何 .class，请先看上面 ecj 日志排查语法/路径问题。")
+                } else {
+                    compiled.forEach { appendLine("  · $it") }
+                }
+                appendLine()
+                appendLine("【正确写法示例】")
+                appendLine("  package com.example.hello;")
+                appendLine("  public class Main {")
+                appendLine("      public static void main(String[] args) { /* 你的代码 */ }")
+                appendLine("  }")
+                appendLine("  // 文件可放在任意包名下，例如 MyApp/src/com/example/snake/Game.java")
+            }
+            saveBuildLog(ctx, log.append("\n").append(msg).toString())
+            return BuildResult(false, log.append("\n").append(msg).toString(), null)
+        }
+
+        log.append("\n✔ 编译成功：classes.dex（${dexFile.length()} 字节）位于 ${dexFile.absolutePath}  入口类=$entryClass")
+        return BuildResult(true, log.toString(), dexFile.absolutePath, null, entryClass)
     }
 }

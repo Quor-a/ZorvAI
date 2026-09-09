@@ -30,9 +30,12 @@ class BuildApkTool : QuroTool {
 【重要】编译的是「AI 用 workspace_write 写进工作区的源码」，不是构建台内置示例！必须告诉它源码在哪：
 · Java：src_path="MyApp/src"（你写的是 MyApp/src/Main.java）；不传默认 工作区/src。
 · HTML：src_path="MyWeb"（其下有 index.html）；不传自动在 workspace 找 index.html。
+【入口类·任意包名/类名】Java 工程无需再固定 com.example.hello.Main：构建台会自动扫描编出的类，
+找到带 public main/run 入口方法的类（静态或实例均可：main(String[])/main(Activity,String[])/run(Activity)/run()），
+把其全限定名写入 APK 的 assets/zorv_entry.txt，宿主运行时动态反射调用。也可用 entry_class="com.xxx.Yyy" 显式指定。
 端侧离线环境**无法**真正把 Go / C / C++ / Python 编译成 APK（需打进整套交叉编译/解释器工具链，体积巨大且不现实）；
 若传 lang="go"/"c"/"c++"/"python"，会如实说明并给出替代方案，不会假装成功。
-参数：{"lang":"语言(java/html/web/go/c/c++/python;不传按目录自动判断:有 index.html 且无 .java → web,否则 java)","src_path":"源码目录(相对工作区或绝对路径;Java 含 .java,HTML 含 index.html)","package_name":"APK 包名(可选)","app_label":"应用显示名(可选)","version_name":"版本名(可选)"}
+参数：{"lang":"语言(java/html/web/go/c/c++/python;不传按目录自动判断:有 index.html 且无 .java → web,否则 java)","src_path":"源码目录(相对工作区或绝对路径;Java 含 .java,HTML 含 index.html)","entry_class":"Java 入口类全限定名(可选,如 com.example.snake.Game;不传自动探测带 main/run 的类)","package_name":"APK 包名(可选)","app_label":"应用显示名(可选)","version_name":"版本名(可选)"}
 当用户要求「构建/打包/编译 APK、生成安卓安装包、把代码打成 apk、端侧打包」时使用。构建成功自动导出到可访问位置并返回安装 URI。"""
     override val parametersJson = """{
         "type":"object",
@@ -41,7 +44,8 @@ class BuildApkTool : QuroTool {
             "src_path":{"type":"string","description":"源码目录：相对当前工作区(QuroWorkspace)的路径或绝对路径。Java 工程含 .java 文件；HTML 工程含 index.html（及 js/css/资源）。如 AI 写的是 MyApp/src/Main.java 则传 MyApp/src；网页工程 MyWeb/index.html 则传 MyWeb。"},
             "package_name":{"type":"string","description":"APK 包名,如 com.example.myapp(可选,默认 java→com.example.buildapp / web→com.example.webapp)"},
             "app_label":{"type":"string","description":"应用显示名(可选,默认 java→BuildApp / web→WebApp)"},
-            "version_name":{"type":"string","description":"版本名(可选,默认 1.0.0)"}
+            "version_name":{"type":"string","description":"版本名(可选,默认 1.0.0)"},
+            "entry_class":{"type":"string","description":"Java 入口类全限定名(可选,如 com.example.snake.Game);不传则由构建台自动探测带 public main/run 入口方法的类(任意包名/类名均可)"}
         },
         "required":[]
     }"""
@@ -95,8 +99,9 @@ class BuildApkTool : QuroTool {
         if (!srcDir.exists() || !srcDir.isDirectory) {
             return "源码目录不存在（${srcDir.absolutePath}）。请先用 workspace_write 把 .java 源码写进工作区的源码目录（如 MyApp/src/Main.java），再调用 build_apk 时传 src_path=\"MyApp/src\"；或在构建台 UI 里写代码。"
         }
-        // 1) 编译 Java 工程 → classes.dex
-        val compile = BuildEngine.compileProject(context, srcDir, outDir)
+        // 1) 编译 Java 工程 → classes.dex（自动探测入口类，支持任意包名/类名）
+        val explicitEntry = args.optString("entry_class", "").trim().ifBlank { null }
+        val compile = BuildEngine.compileProject(context, srcDir, outDir, explicitEntry)
         if (!compile.ok || compile.dexPath == null) {
             return "❌ 编译失败（ecj/d8 日志如下）：\n${compile.log}"
         }
@@ -105,6 +110,7 @@ class BuildApkTool : QuroTool {
             packageName = args.optString("package_name", "com.example.buildapp").ifBlank { "com.example.buildapp" },
             appLabel = args.optString("app_label", "BuildApp").ifBlank { "BuildApp" },
             versionName = args.optString("version_name", "1.0.0").ifBlank { "1.0.0" },
+            entryClass = compile.entryClass,
         )
         val outApk = File(projectRoot, "app-${System.currentTimeMillis()}.apk")
         val res = BuildEngine.assembleApk(context, compile.dexPath, outApk, cfg)
