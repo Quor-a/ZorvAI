@@ -65,6 +65,15 @@ class QuroApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // 应用语言策略：跟随系统语言（不内置国家语言包，引用系统语言，手机系统用什么就用什么）。
+        // 读取 quro_ui 偏好（与 QuroChatViewModel 同一 SharedPreferences），在首屏前应用，
+        // 使 Activity 创建即采用正确语言；切换时 Android 会自动重建当前 Activity 生效。
+        try {
+            val follow = getSharedPreferences("quro_ui", Context.MODE_PRIVATE)
+                .getBoolean("follow_system_language", true)
+            com.ai.assistance.quro.util.QuroLocale.apply(follow)
+        } catch (_: Throwable) {
+        }
         // L2 Shizuku：进程启动即注册 Binder 监听（官方推荐做法）。
         // 确保 Shizuku 在应用存活期间任意时刻连接/授权都能被即时探知，
         // 修复「Shizuku 已装/已授权但权限页一直检测为未连接」的时序盲区（#915）。

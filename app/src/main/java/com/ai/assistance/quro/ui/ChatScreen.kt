@@ -414,6 +414,7 @@ fun ChatScreen(
     val fontTier by vm.fontTierPref.collectAsState()
     val soundOn by vm.soundOnPref.collectAsState()
     val enterSend by vm.enterSendPref.collectAsState()
+    val followSystemLang by vm.followSystemLangPref.collectAsState()
     val aiReplyNotify by vm.aiReplyNotifyPref.collectAsState()
     // 深色模式由 QuroApp 根部经 darkOverride 注入 QuroTheme，这里仅透传参数
     val ringtoneCtx = LocalContext.current
@@ -2084,6 +2085,8 @@ fun ChatScreen(
                     enterSend = enterSend, onToggleEnter = { vm.setEnterSend(!enterSend) },
                     fontName = fontNames[fontTier], onCycleFont = { vm.setFontTier((fontTier + 1) % 3) },
                     voiceBallEnabled = voiceBallEnabled, onToggleVoiceBall = onToggleVoiceBall,
+                    followSystemLang = followSystemLang,
+                    onToggleFollowSystemLang = { vm.setFollowSystemLang(!followSystemLang) },
                     historyRounds = vm.historyRoundsPref.collectAsState().value,
                     onSetHistoryRounds = { vm.setHistoryRounds(it) },
                     userProfile = liveProfile,
@@ -5782,6 +5785,7 @@ private fun QuroAppearanceSettingsScreen(
     enterSend: Boolean, onToggleEnter: () -> Unit,
     fontName: String, onCycleFont: () -> Unit,
     voiceBallEnabled: Boolean, onToggleVoiceBall: (Boolean) -> Unit,
+    followSystemLang: Boolean, onToggleFollowSystemLang: () -> Unit,
     historyRounds: Int? = null, onSetHistoryRounds: (Int?) -> Unit = {},
     userProfile: QuroChatViewModel.UserProfile,
     onSaveProfile: (QuroChatViewModel.UserProfile) -> Unit,
@@ -5824,6 +5828,13 @@ private fun QuroAppearanceSettingsScreen(
                     },
                     onClick = { showHistoryPicker = true },
                     scaled = scaled,
+                )
+            }
+            GroupCaption("语言")
+            SetGroup {
+                SetRow(
+                    Icons.Filled.Language, "跟随系统语言", "不内置语言包，使用手机系统语言",
+                    followSystemLang, onToggleFollowSystemLang, scaled,
                 )
             }
             GroupCaption("用户资料")

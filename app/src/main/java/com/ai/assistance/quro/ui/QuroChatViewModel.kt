@@ -356,6 +356,17 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     fun isEnterSend(): Boolean = _enterSend.value
     fun setEnterSend(on: Boolean) { _enterSend.value = on; uiPrefs.edit { putBoolean("enter_send", on) } }
 
+    // 外观与对话设置：跟随系统语言（不内置国家/地区语言资源包，直接引用手机系统语言）
+    // true = 跟随系统（默认）；false = 固定为应用首次启动时的系统语言。
+    private val _followSystemLang = MutableStateFlow(uiPrefs.getBoolean("follow_system_language", true))
+    val followSystemLangPref: StateFlow<Boolean> = _followSystemLang.asStateFlow()
+    fun isFollowSystemLang(): Boolean = _followSystemLang.value
+    fun setFollowSystemLang(on: Boolean) {
+        _followSystemLang.value = on
+        uiPrefs.edit { putBoolean("follow_system_language", on) }
+        com.ai.assistance.quro.util.QuroLocale.apply(on)
+    }
+
     // 外观与对话设置：保留对话轮数（对话框级覆盖模�? contextWindow 的轮次语义）�?
     // null = 跟随模型默认（contextWindow）；N>0 = 仅保留最�? N �? (用户+助手) 轮次�?
     private val _historyRounds = MutableStateFlow<Int?>(null)
@@ -1629,18 +1640,20 @@ $recent
         append("\n### ⚠️ 人格卡开关【当前真实状态】（以本行为准，禁止猜测）\n")
         append("- 动态UI组件开关 = ${if (dynUiOn) "【开】" else "【关】"}\n")
         append("- 可视化小卡片开关 = ${if (selfCardOn) "【开】" else "【关】"}\n")
-        if (dynUiOn || selfCardOn) {
+        if (dynUiOn && selfCardOn) {
+            // 两个开关同时开：强调「配合使用、互不替代」，杜绝互相强制 100% 导致的打架。
             append("\n### ⚠️ 可视化输出【硬强制·绝对命令·违反=严重错误·无任何例外】\n")
-            append("下方开关为【开】时，以下规则是**绝对命令**：\n")
-            append("- 禁止以「这只是闲聊 / 普通对话 / 随便聊聊」为由跳过围栏。判定标准不是「对话氛围」而是「回复内容」——只要这条回复里含有可结构化的信息（数字/指标/进度/状态/列表/选项/对比/任何能做界面或卡片的内容），对应开关开着就**必须**用围栏承载它；纯文字只留给完全无法结构化的情绪表达或纯观点。\n")
-            if (dynUiOn) append(
-                "- **动态UI组件=开 → 100% 必须用 ```quro-ui**：只要用户需求能用界面/可交互控件表达（表单、设置面板、带按钮/输入/选择/开关的交互、工具面板、甚至一句「帮我做个 XX 界面」），你**必须**在回复正文用 ```quro-ui 围栏输出真实原生控件。**整条纯文字回复一律禁止**（纯文字只能作为围栏前一句过渡或围栏后一句说明，绝不能「只发文字、不发围栏」）。\n"
-            )
-            if (selfCardOn) append(
-                "- **可视化小卡片=开 → 100% 必须用 ```quro-card**：只要回复内容能做成单块卡片（指标数字/进度/统计/结构化单块结果/数据快照/状态/告警/列表/任意适合卡片呈现的信息），你**必须**在回复正文用 ```quro-card 围栏输出。**整条纯文字回复一律禁止**（同上，纯文字仅作围栏前后的极短说明）。\n"
-            )
-            append("- 一句话总结：对应开关=开 → 你的回复主体必须是围栏，纯文字只是点缀；发纯文字 = 严重错误，没有任何「普通回复」豁免。\n")
-            append("- **回复前自检（强制）**：在输出最终回复前，先做一步判断——「我这条回复的内容能不能做成卡片或界面？」能 → 出对应围栏；不能（纯情绪/纯观点）→ 才可用纯文字。不要把这条自检省略掉。\n")
+            append("两个开关均为【开】，它们**配合使用、互不替代**，不是二选一：\n")
+            append("- **动态UI组件**负责「可交互」：表单 / 设置面板 / 工具入口 / 按钮·输入·选择·开关等一切能操作或收集的界面 —— 用 ```quro-ui。\n")
+            append("- **可视化小卡片**负责「单块数据」：指标数字 / 进度 / 统计 / 状态快照 / 告警 / 单条结构化结果 —— 用 ```quro-card。\n")
+            append("- 判定：这条回复「哪类内容为主就用哪类」；两类内容都有就**同时出两块**（一块 quro-ui + 一块 quro-card），不要硬塞进一种围栏。纯情绪 / 纯观点仍可用纯文字。\n")
+            append("- 禁止以「这只是闲聊」为由整条跳过：只要回复含可结构化信息就须用对应围栏承载，纯文字仅留作极短过渡。回复前自检：能做成界面或卡片吗？能 → 出对应围栏。\n")
+        } else if (dynUiOn) {
+            append("\n### ⚠️ 可视化输出【硬强制·绝对命令·违反=严重错误】\n")
+            append("- 动态UI组件=开 → 只要用户需求能用界面/可交互控件表达，你**必须**在回复正文用 ```quro-ui 围栏输出真实原生控件；纯文字只作极短过渡。\n")
+        } else if (selfCardOn) {
+            append("\n### ⚠️ 可视化输出【硬强制·绝对命令·违反=严重错误】\n")
+            append("- 可视化小卡片=开 → 只要回复内容能做成单块卡片，你**必须**用 ```quro-card 围栏输出；纯文字只作极短过渡。\n")
         } else {
             append("\n### 可视化输出（两个开关均为【关】→ 被动模式）\n")
             append("- 动态UI组件 / 可视化小卡片 开关都关闭，你不主动输出 ```quro-ui / ```quro-card 围栏，用正常文字/富卡片（ui_widget/ui_card）回答即可；仅当用户明确要求「小卡片/动态UI/quro-card/quro-ui」时才输出对应围栏。\n")
