@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -31,6 +32,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -139,6 +142,11 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
     var dev by remember { mutableStateOf<QuroGitHubClient.DeviceCode?>(null) }
     var cancelled by remember { mutableStateOf(false) }
 
+    // GitHub 镜像：设备无法直连 github.com（体现为 SocketTimeout）时，切到镜像域名即可连通。
+    var mirror by remember { mutableStateOf(QuroGitHubClient.getMirrorDomain(ctx)) }
+    var mirrorExpanded by remember { mutableStateOf(false) }
+    val mirrorPresets = listOf("github.com", "kkgithub.com", "bgithub.xyz")
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -148,6 +156,37 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
             "用你的 GitHub 账号授权本应用。两种方式都会真实登录官方 GitHub。",
             style = MaterialTheme.typography.bodySmall,
         )
+
+        // GitHub 镜像：设备无法直连 github.com（SocketTimeout）时，切到镜像域名即可连通。
+        Text("GitHub 镜像（无法连接官方时切换）", style = MaterialTheme.typography.bodyMedium)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = mirror,
+                onValueChange = {
+                    mirror = it.trim().lowercase()
+                    QuroGitHubClient.setMirrorDomain(ctx, mirror)
+                },
+                label = { Text("镜像域名") },
+                placeholder = { Text("github.com") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = { mirrorExpanded = true }) {
+                Icon(Icons.Filled.ArrowDropDown, "选择镜像")
+            }
+            DropdownMenu(expanded = mirrorExpanded, onDismissRequest = { mirrorExpanded = false }) {
+                mirrorPresets.forEach { p ->
+                    DropdownMenuItem(
+                        text = { Text(if (p == "github.com") "官方 github.com" else p) },
+                        onClick = {
+                            mirror = p
+                            QuroGitHubClient.setMirrorDomain(ctx, p)
+                            mirrorExpanded = false
+                        },
+                    )
+                }
+            }
+        }
 
         when (mode) {
             "menu" -> {
@@ -191,7 +230,7 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
                             scope.launch {
                                 val d = withContext(Dispatchers.IO) {
                                     QuroGitHubClient.setClientId(ctx, cid)
-                                    QuroGitHubClient.startDeviceFlow(cid)
+                                    QuroGitHubClient.startDeviceFlow(ctx, cid)
                                 }
                                 busy = false
                                 if (d == null) errorMsg = "发起设备流失败（Client ID 无效或未联网）" else dev = d
@@ -209,16 +248,19 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
                     Text("请在浏览器打开以下地址并输入验证码：", style = MaterialTheme.typography.bodyMedium)
                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                         Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                            Text(d.verificationUriComplete.ifBlank { d.verificationUri }, fontWeight = FontWeight.Bold)
+                            Text(
+                                QuroGitHubClient.mirrorUrl(ctx, d.verificationUriComplete.ifBlank { d.verificationUri }),
+                                fontWeight = FontWeight.Bold,
+                            )
                             Spacer(Modifier.height(8.dp))
                             Text("你的验证码：${d.userCode}", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                     LaunchedEffect(d) {
                         cancelled = false
-                        val res = withContext(Dispatchers.IO) {
-                            QuroGitHubClient.pollForToken(clientId, d.deviceCode, d.interval) { cancelled }
-                        }
+                            val res = withContext(Dispatchers.IO) {
+                                QuroGitHubClient.pollForToken(ctx, clientId, d.deviceCode, d.interval) { cancelled }
+                            }
                         when (res) {
                             is QuroGitHubClient.DeviceLoginResult.Token -> {
                                 if (QuroGitHubClient.login(ctx, res.value)) onLoggedIn()

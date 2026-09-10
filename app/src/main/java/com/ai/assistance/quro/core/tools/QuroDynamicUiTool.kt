@@ -61,7 +61,11 @@ class UiDslSpecTool : QuroTool {
 
     private companion object {
         val NODE_SPEC = """
-【节点类型】每个节点必须有 "type" 字段。所有节点都可带 "id"（交互节点必填，用于收集用户输入），
+【节点类型】每个节点必须有 "type" 字段。下面列出的是「常用组件速查表」，用于告诉你有哪些现成能力可用——
+**它绝不是穷举，也不是白名单**。你可以写任意 type：写清单里的 → 走对应原生渲染器；写清单外的新名字
+（如 kpi_grid / metric_card / gantt / calendar / drawer / navbar / orgchart …）→ 系统用「融合解释器」原样收下
+你给的全部字段和子节点，画成结构化富卡，绝不报错、绝不丢字段（详见文末【节点类型自由书写】）。
+所有节点都可带 "id"（交互节点必填，用于收集用户输入），
 且**任何节点都能挂一个通用 "style" 对象**描述视觉样式（背景/边框/圆角/阴影/边距/尺寸/对齐/显隐），
 让你像写 Compose 一样自由描述任意元素的样子——见文末【通用样式 style（v1.0.83）】。
 
@@ -170,13 +174,18 @@ red green blue yellow orange purple pink teal indigo gray primary secondary erro
 
 【节点类型自由书写】你可以写任意 type，不限于上面清单——这是「AI 自由书写、不被白名单限制」的设计。
 - 写了上面清单里的 type → 走对应原生渲染器（stat/table/pie/... 都已原生渲染，不再降级为普通容器）。
-- 写了清单之外的新 type（如 gantt / calendar / orgchart / metric_grid / 你自定义的组件名）→
-  系统用「捕获型兜底节点」原样收下你给的全部字段与子节点，**绝不丢字段、绝不报「未识别」**，
-  再由「多个融合解释器」把它画成结构化富卡：
+- 写了清单之外的新 type → 系统用「融合解释器」原样收下你给的全部字段与子节点，**绝不丢字段、绝不报「未识别」**，
+  画成结构化富卡：
     · 若字段里有 source/code → 当代码块渲染；html → 当 HTML 渲染；markdown/md → 当 Markdown 渲染；
     · 若字段里有 items/rows/segments/events/tags/crumbs/axes/columns/avatars/slides/fields/steps → 当列表/表格渲染；
     · 其余字段按「键: 值」逐行展示；children 递归渲染。
   所以你不必担心「写了没见过的节点就坏掉」，任何结构都会被合理呈现。
+- **任意节点都能挂动作**：不论清单内还是清单外的节点，只要写 "action"（或 "on_click"）就会变成可点击的，
+  例如 {"type":"kpi_card","title":"今日活跃","value":"1280","action":{"type":"callback","event":"open_dashboard"}}，
+  用户点这张卡就会触发事件回发给你。常用可直写的组件名（清单之外也完全允许）：
+  kpi_grid / metric_card / metric_grid / gantt / calendar / orgchart / drawer / navbar / sidebar /
+  link_preview / tooltip / snackbar / callout / segmented_control / searchbar / timeline_marker /
+  profile_card / stat_grid / feature_list / hero / showcase —— 这些都是「自由书写」示例，并非唯一选项。
 - 若某个 type 你希望以后变成「专属原生渲染」（更精致），告诉我，我再加一个渲染器即可；在此之前它已能正常显示。
 """.trimIndent()
 

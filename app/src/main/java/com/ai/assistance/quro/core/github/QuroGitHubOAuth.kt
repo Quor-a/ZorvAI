@@ -27,8 +27,6 @@ import java.security.SecureRandom
  */
 object QuroGitHubOAuth {
     const val REDIRECT_URI = "zorv://github-oauth-callback"
-    private const val AUTH_URL = "https://github.com/login/oauth/authorize"
-    private const val TOKEN_URL = "https://github.com/login/oauth/access_token"
     // 仓库读写 / 用户 / 邮箱 / 通知 / 组织 / Gist
     const val SCOPE = "repo read:user user:email notifications read:org gist"
 
@@ -49,10 +47,11 @@ object QuroGitHubOAuth {
         return Base64.encodeToString(digest, Base64.NO_WRAP or Base64.URL_SAFE).trimEnd('=')
     }
 
-    /** 拼出 GitHub 授权页 URL（在 WebView 中加载）。 */
-    fun buildAuthUrl(clientId: String, state: String, codeChallenge: String): String =
+    /** 拼出 GitHub 授权页 URL（在 WebView 中加载）。oauthBase 默认为官方，镜像环境下传对应镜像根地址。 */
+    fun buildAuthUrl(clientId: String, state: String, codeChallenge: String, oauthBase: String = "https://github.com"): String =
         buildString {
-            append(AUTH_URL)
+            append(oauthBase)
+            append("/login/oauth/authorize")
             append("?client_id=").append(URLEncoder.encode(clientId, "UTF-8"))
             append("&redirect_uri=").append(URLEncoder.encode(REDIRECT_URI, "UTF-8"))
             append("&scope=").append(URLEncoder.encode(SCOPE, "UTF-8"))
@@ -80,6 +79,7 @@ object QuroGitHubOAuth {
         clientId: String,
         code: String,
         codeVerifier: String,
+        oauthBase: String = "https://github.com",
     ): String? = withContext(Dispatchers.IO) {
         val body = buildString {
             append("client_id=").append(URLEncoder.encode(clientId, "UTF-8"))
@@ -88,7 +88,7 @@ object QuroGitHubOAuth {
             append("&code_verifier=").append(URLEncoder.encode(codeVerifier, "UTF-8"))
             append("&grant_type=authorization_code")
         }
-        val conn = (URL(TOKEN_URL).openConnection() as HttpURLConnection)
+        val conn = (URL("$oauthBase/login/oauth/access_token").openConnection() as HttpURLConnection)
         conn.requestMethod = "POST"
         conn.setRequestProperty("Accept", "application/json")
         conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
@@ -108,7 +108,7 @@ object QuroGitHubOAuth {
 
     /** 校验令牌并写入私有保险库，完成登录。成功返回 true。 */
     suspend fun applyLogin(ctx: Context, token: String): Boolean {
-        if (QuroGitHubClient.validateToken(token) == null) return false
+        if (QuroGitHubClient.validateToken(ctx, token) == null) return false
         return QuroGitHubClient.login(ctx, token)
     }
 }

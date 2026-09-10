@@ -5,6 +5,7 @@ import com.ai.assistance.quro.core.tools.QuroDownloadUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -41,6 +42,15 @@ object QuroHuggingFace {
     // API 镜像（hf-mirror.com 代理完整站，含 /api；ghproxy 只代理文件，不在内）
     private val API_MIRRORS = listOf("https://huggingface.co", "https://hf-mirror.com")
 
+    // ───────── ModelScope（魔搭社区）来源 ─────────
+    // MNN 官方 Android App（alibaba/MNN 的 MnnLlmApp / MnnLlmChat）的模型就来自 ModelScope，
+    // 经阿里 OSS CDN 分发，国内稳定可达。作为 MNN 的并行检索/下载源，
+    // 解决 HuggingFace 上 MNN 权重不全 / 国内访问不稳的问题。
+    private const val MS_BASE = "https://modelscope.cn"
+    private const val MS_SEARCH_URL = "$MS_BASE/api/v1/models"          // PUT 检索
+    private const val MS_FILES_TMPL = "$MS_BASE/api/v1/models/{id}/repo/files?Recursive=true" // GET 文件树
+    private const val MS_RESOLVE_TMPL = "$MS_BASE/models/{id}/resolve/master/"                // GET 文件下载（302→OSS）
+
     private var cachedFileOrder: List<String>? = null
     private var cachedApiBase: String? = null
     private var probeTs = 0L
@@ -51,6 +61,7 @@ object QuroHuggingFace {
         val fileName: String,        // GGUF 为具体文件名；MNN 为空（整包下载）
         val sizeBytes: Long,
         val type: String,            // "GGUF" / "MNN"
+        val source: String = "hf",   // "hf" = HuggingFace，"ms" = ModelScope（MNN 官方手机 App 的来源）
     ) {
         val sizeMB: Long get() = (sizeBytes / 1024 / 1024).coerceAtLeast(0)
     }
@@ -172,10 +183,24 @@ object QuroHuggingFace {
     }
 
     /**
-     * 搜索 MNN 模型仓库：以「仓库」为粒度返回（一个仓库一条），fileName 留空表示整包下载。
-     * 判定标准：仓库根含 llm_config.json（或 config.json）且至少一个 .mnn 文件。
+     * 搜索 MNN 模型仓库（合并来源）：先 HuggingFace，再 ModelScope，去重后返回。
+     * 以「仓库」为粒度（一个仓库一条），fileName 留空表示整包下载。
+     * 判定标准：仓库含 llm_config.json（或 config.json）且至少一个 .mnn 文件。
      */
     suspend fun searchMnn(query: String, limit: Int = 20): List<HfModelFile> = withContext(Dispatchers.IO) {
+        val hf = runCatching { searchMnnHf(query, limit) }.getOrElse { emptyList() }
+        val ms = runCatching { searchMnnModelScope(query, limit) }.getOrElse { emptyList() }
+        // 去重：同一 repoId 只保留一条（HuggingFace 优先）。
+        val seen = mutableSetOf<String>()
+        val merged = mutableListOf<HfModelFile>()
+        for (f in hf + ms) {
+            if (f.repoId !in seen) { seen.add(f.repoId); merged.add(f) }
+        }
+        merged
+    }
+
+    /** HuggingFace 上的 MNN 模型检索（原 searchMnn 逻辑）。 */
+    private suspend fun searchMnnHf(query: String, limit: Int = 20): List<HfModelFile> = withContext(Dispatchers.IO) {
         val q = URLEncoder.encode(query, "UTF-8")
         val (code, body) = httpGet("/api/models?search=$q&limit=$limit&sort=downloads&direction=-1")
         if (code !in 200..299) return@withContext emptyList()
@@ -191,9 +216,150 @@ object QuroHuggingFace {
             val mnns = tree.filter { it.first.endsWith(".mnn", ignoreCase = true) }
             if (mnns.isEmpty()) continue
             val total = mnns.sumOf { it.second }.coerceAtLeast(0L)
-            out.add(HfModelFile(repoId, "", total, "MNN"))
+            out.add(HfModelFile(repoId, "", total, "MNN", source = "hf"))
         }
         out.sortedBy { it.sizeBytes }
+    }
+
+    // ───────── ModelScope（魔搭）MNN 检索 / 下载 ─────────
+
+    /** GET 请求 ModelScope（跟随重定向）。 */
+    private fun msGet(url: String): Pair<Int, String> {
+        return try {
+            val conn = (URL(url).openConnection() as HttpURLConnection)
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("User-Agent", "ZorvAI")
+            conn.connectTimeout = 15000
+            conn.readTimeout = 25000
+            val code = conn.responseCode
+            val text = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.readText() ?: ""
+            conn.disconnect()
+            code to text
+        } catch (e: Exception) {
+            Log.e(TAG, "msGet 失败: $url -> ${e.message}")
+            -1 to ""
+        }
+    }
+
+    /** PUT JSON 到 ModelScope 检索接口。 */
+    private fun msPostJson(url: String, jsonBody: String): Pair<Int, String> {
+        return try {
+            val conn = (URL(url).openConnection() as HttpURLConnection)
+            conn.requestMethod = "PUT"
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("User-Agent", "ZorvAI")
+            conn.connectTimeout = 15000
+            conn.readTimeout = 25000
+            conn.doOutput = true
+            conn.outputStream.use { it.write(jsonBody.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            val text = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.readText() ?: ""
+            conn.disconnect()
+            code to text
+        } catch (e: Exception) {
+            Log.e(TAG, "msPostJson 失败: $url -> ${e.message}")
+            -1 to ""
+        }
+    }
+
+    /** 取某 ModelScope 仓库的文件树（path, size）。 */
+    private fun msListTree(repoId: String): List<Pair<String, Long>> {
+        val url = MS_FILES_TMPL.replace("{id}", repoId)
+        val (code, body) = msGet(url)
+        if (code !in 200..299) return emptyList()
+        val jo = runCatching { JSONObject(body) }.getOrNull() ?: return emptyList()
+        val files = jo.optJSONObject("Data")?.optJSONArray("Files") ?: return emptyList()
+        val out = mutableListOf<Pair<String, Long>>()
+        for (i in 0 until files.length()) {
+            val o = files.optJSONObject(i) ?: continue
+            val path = o.optString("Path").takeIf { it.isNotBlank() } ?: continue
+            val size = o.optLong("Size", -1L)
+            out.add(path to size)
+        }
+        return out
+    }
+
+    /** ModelScope 上的 MNN 模型检索（与 HuggingFace 并行来源，source="ms"）。 */
+    private suspend fun searchMnnModelScope(query: String, limit: Int = 20): List<HfModelFile> = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply {
+            put("Search", query)
+            put("PageSize", limit)
+            put("PageNumber", 1)
+        }.toString()
+        val (code, raw) = msPostJson(MS_SEARCH_URL, body)
+        if (code !in 200..299) return@withContext emptyList()
+        val jo = runCatching { JSONObject(raw) }.getOrNull() ?: return@withContext emptyList()
+        val models = jo.optJSONObject("Data")?.optJSONArray("Models") ?: return@withContext emptyList()
+        val ids = (0 until models.length()).mapNotNull { i ->
+            val m = models.optJSONObject(i) ?: return@mapNotNull null
+            val path = m.optString("Path").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val name = m.optString("Name").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            "$path/$name"
+        }.take(10)
+        val out = mutableListOf<HfModelFile>()
+        for (id in ids) {
+            val tree = msListTree(id)
+            val hasConfig = tree.any { it.first.equals("llm_config.json", ignoreCase = true) || it.first.equals("config.json", ignoreCase = true) }
+            if (!hasConfig) continue
+            val mnns = tree.filter { it.first.endsWith(".mnn", ignoreCase = true) }
+            if (mnns.isEmpty()) continue
+            val total = mnns.sumOf { it.second }.coerceAtLeast(0L)
+            out.add(HfModelFile(id, "", total, "MNN", source = "ms"))
+        }
+        out.sortedBy { it.sizeBytes }
+    }
+
+    /** 从 ModelScope 下载完整 MNN 模型目录（llm_config.json + .mnn + tokenizer 等）。 */
+    private suspend fun downloadFromModelScope(
+        repoId: String,
+        destDir: File,
+        onProgress: (Float) -> Unit,
+    ): String = withContext(Dispatchers.IO) {
+        destDir.mkdirs()
+        val tree = msListTree(repoId)
+        val keepExt = setOf("mnn", "json", "txt", "tiktoken", "model", "bin")
+        val files = tree.filter { (p, _) ->
+            val name = p.substringAfterLast('/')
+            val ext = name.substringAfterLast('.', "").lowercase()
+            !name.equals(".gitattributes", ignoreCase = true) &&
+                !name.startsWith("README", ignoreCase = true) &&
+                !name.startsWith("LICENSE", ignoreCase = true) &&
+                !name.endsWith(".md", ignoreCase = true) &&
+                ext in keepExt
+        }
+        if (files.isEmpty()) return@withContext "该 ModelScope 仓库没有任何可下载的 MNN 文件"
+        val mnns = files.filter { it.first.endsWith(".mnn", ignoreCase = true) }
+        if (mnns.isEmpty()) return@withContext "该仓库没有 .mnn 权重文件，无法作为 MNN 模型下载"
+
+        var done = 0
+        val total = files.size
+        for ((rel, _) in files) {
+            val url = MS_RESOLVE_TMPL.replace("{id}", repoId) + rel
+            val target = File(destDir, rel)
+            target.parentFile?.mkdirs()
+            val r = QuroDownloadUtil.downloadToFile(url, target, "ZorvAI/1.0") { _, _ -> }
+            if (!r.startsWith("OK")) return@withContext "下载失败：$rel -> $r"
+            done++
+            onProgress(done.toFloat() / total)
+        }
+
+        // 兼容加载器：保证 root 有 llm_config.json（部分仓库放在子目录或命名为 config.json）。
+        val rootCfg = File(destDir, "llm_config.json")
+        if (!rootCfg.isFile) {
+            val found = files.firstOrNull { it.first.endsWith("llm_config.json", ignoreCase = true) }
+                ?: files.firstOrNull { it.first.endsWith("config.json", ignoreCase = true) }
+            if (found != null) {
+                val src = File(destDir, found.first)
+                if (src.isFile) src.copyTo(rootCfg, overwrite = true)
+            }
+        }
+        if (!rootCfg.isFile || rootCfg.length() <= 0L) {
+            val listing = destDir.listFiles()?.joinToString { it.name } ?: "(空)"
+            return@withContext "下载完成但缺少 llm_config.json（需根目录或子目录含该配置）。目录内容：$listing"
+        }
+        "OK:已下载 MNN 模型目录（${total} 个文件：含 ${mnns.size} 个权重 + 配置/tokenizer，来源 ModelScope）"
     }
 
     /** 下载单个 HF 文件（网络自适应镜像顺序回退）。返回 "OK:..." 或错误文本。 */
@@ -227,7 +393,10 @@ object QuroHuggingFace {
         repoId: String,
         destDir: File,
         onProgress: (Float) -> Unit,
+        source: String = "hf",
     ): String = withContext(Dispatchers.IO) {
+        // ModelScope 来源走专属下载链路（阿里 OSS CDN，国内稳定）。
+        if (source == "ms") return@withContext downloadFromModelScope(repoId, destDir, onProgress)
         destDir.mkdirs()
         val tree = listTree(repoId)
         // 只保留 MNN 运行需要的文件：权重/配置/tokenizer 等；跳过文档与元数据。

@@ -51,14 +51,11 @@ object QuroUiCatalog {
     }
 
     private fun validateNode(node: QuroUiNode, path: String, v: MutableList<Violation>): QuroUiNode {
-        // 捕获型兜底节点：解析器已把它作为合法未知节点收下，原样放行，
-        // 由渲染层的「融合解释器」负责画出结构化富卡，不再二次降级。
+        // 自由书写：任何节点类型都原样放行，不再做「白名单」降级。
+        // 未知类型已由解析器收为 QuroUnknownNode，渲染层用「融合解释器」画成结构化富卡；
+        // 已知类型走各自的参数校验（URL 安全 / 进度 clamp / 样式回落等）后放行。
+        // 这是 quro-ui「AI 能自写任意组件、不被组件清单固定死」的关键。
         if (node is QuroUnknownNode) return node
-        val type = nodeType(node)
-        if (type !in COMPONENTS) {
-            v.add(Violation(path, "未知组件类型：$type（已降级为静态文本）", Severity.DEGRADE))
-            return QuroTextNode(value = "⚠️ 未识别的组件：$type", typography = "caption")
-        }
         return when (node) {
             is QuroColumnNode -> node.copy(children = node.children.map { validateNode(it, "$path/column", v) })
             is QuroRowNode -> node.copy(children = node.children.map { validateNode(it, "$path/row", v) })
@@ -132,6 +129,8 @@ object QuroUiCatalog {
         }
     }
 
+    // 备注：组件类型不再做白名单校验（见 validateNode）。nodeType 仅作为内部调试辅助保留。
+    @Suppress("unused")
     private fun nodeType(node: QuroUiNode): String = when (node) {
         is QuroColumnNode -> "column"
         is QuroRowNode -> "row"

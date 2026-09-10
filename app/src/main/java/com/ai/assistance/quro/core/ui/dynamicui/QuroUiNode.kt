@@ -548,6 +548,8 @@ data class QuroUnknownNode(
     override val id: String? = null,
     override val style: QuroUiStyle? = null,
     val type: String = "unknown",
+    /** AI 自写组件时可挂的点击动作（action / on_click）。融合解释器据此把整卡变可点击。 */
+    val action: QuroUiAction? = null,
     val fields: Map<String, Any?> = emptyMap(),
     val children: List<QuroUiNode> = emptyList(),
 ) : QuroUiNode

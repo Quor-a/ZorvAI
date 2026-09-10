@@ -122,7 +122,9 @@ private suspend fun downloadAndLoadMnn(
 ): String = withContext(Dispatchers.IO) {
     val id = hfId(entry.repoId, entry.fileName, "MNN")
     val dir = modelDir(id, ctx); dir.mkdirs()
-    val r = QuroHuggingFace.downloadMnnModel(entry.repoId, dir, onProgress)
+    // 传入 source：HuggingFace("hf") 走 HF 链路，ModelScope("ms") 走阿里 OSS CDN 链路（国内稳定）。
+    // 否则 ModelScope 来源的模型会被误判为 HF 而下载失败（直接对应「MNN 下载没搞对」）。
+    val r = QuroHuggingFace.downloadMnnModel(entry.repoId, dir, onProgress, entry.source)
     if (!r.startsWith("OK")) return@withContext "下载失败：$r"
     val model = QuroLocalModel(
         id = id,
