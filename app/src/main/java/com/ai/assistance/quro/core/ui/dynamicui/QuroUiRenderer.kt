@@ -995,10 +995,14 @@ private fun RenderUnknown(
     val f = node.fields
     val primary = f["value"] ?: f["text"] ?: f["content"] ?: f["title"] ?: f["label"] ?: f["name"]
     val desc = f["description"] ?: f["body"] ?: f["detail"] ?: f["subtitle"]
+    // AI 自写组件若带 action / on_click，整卡可点击：点击即派发该动作（回调/打开应用/打开链接/调工具…）。
+    val action = node.action
+    val clickModifier = if (action != null) modifier.clickable { dispatch(action, state, hidden, onAction) }
+    else modifier
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(10.dp),
-        modifier = modifier.fillMaxWidth(),
+        modifier = clickModifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1048,7 +1052,8 @@ private fun RenderUnknown(
             // 其余标量字段（已上屏的除外）
             val shown = setOf("value", "text", "content", "title", "label", "name", "description", "body", "detail",
                 "subtitle", "source", "code", "html", "markdown", "md", "lang", "language", "items", "rows",
-                "segments", "events", "tags", "crumbs", "axes", "columns", "avatars", "slides", "fields", "steps")
+                "segments", "events", "tags", "crumbs", "axes", "columns", "avatars", "slides", "fields", "steps",
+                "action", "on_click", "onClick")
             f.filterKeys { it !in shown }.forEach { (k, v) ->
                 if (v != null) Text(text = "$k: ${v}", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -27,12 +27,37 @@ import java.net.URLEncoder
  *  - 搜索：仓库 / 代码 / Issue / 用户
  */
 object QuroGitHubClient {
-    private const val API = "https://api.github.com"
-    private const val OAUTH_DEVICE_CODE = "https://github.com/login/device/code"
-    private const val OAUTH_TOKEN = "https://github.com/login/oauth/access_token"
     private const val PREF = "quro_github_oauth"
+    private const val PREF_MIRROR = "quro_github_mirror_domain"
+    private const val DEFAULT_MIRROR = "github.com"
     // 设备流默认申请范围：仓库读写 / 用户资料 / 邮箱 / 通知 / 组织 / Gist
     private const val DEFAULT_SCOPE = "repo read:user user:email notifications read:org gist"
+
+    // ───────── GitHub 镜像（设备无法直连 github.com 时可切到 kkgithub.com / bgithub.xyz 等）─────────
+    /** 当前镜像域名（默认官方 github.com）。 */
+    fun getMirrorDomain(ctx: Context): String {
+        val s = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString(PREF_MIRROR, "") ?: ""
+        return if (s.isBlank()) DEFAULT_MIRROR else s
+    }
+
+    /** 设置镜像域名（不含协议，例如 kkgithub.com；恢复官方传 github.com）。 */
+    fun setMirrorDomain(ctx: Context, domain: String) =
+        ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit()
+            .putString(PREF_MIRROR, domain.trim().lowercase()).apply()
+
+    /** REST API 根地址：镜像下为 https://api.<domain>（官方即 https://api.github.com）。 */
+    fun getApiBase(ctx: Context): String = "https://api.${getMirrorDomain(ctx)}"
+
+    /** OAuth 网页根地址：镜像下为 https://<domain>。 */
+    fun getOAuthBase(ctx: Context): String = "https://${getMirrorDomain(ctx)}"
+
+    /** 把 GitHub 官方链接改写成当前镜像域名（设备流验证码跳转页需在镜像打开，否则设备无法访问 github.com）。 */
+    fun mirrorUrl(ctx: Context, url: String): String {
+        val domain = getMirrorDomain(ctx)
+        if (domain == DEFAULT_MIRROR) return url
+        return url.replace("https://github.com", "https://$domain")
+            .replace("http://github.com", "https://$domain")
+    }
 
     // ───────── OAuth 设备流：Client ID 持久化（用户在登录屏填入，或构建时烤进 BuildConfig）─────────
     fun getClientId(ctx: Context): String {
@@ -131,10 +156,10 @@ object QuroGitHubClient {
     }
 
     /** 校验一个 GitHub Token 是否有效（直接带令牌请求 /user，不依赖保险库）。有效返回账户信息，否则 null。 */
-    suspend fun validateToken(token: String): Account? = withContext(Dispatchers.IO) {
+    suspend fun validateToken(ctx: Context, token: String): Account? = withContext(Dispatchers.IO) {
         val t = token.trim()
         if (t.isEmpty()) return@withContext null
-        val conn = (URL("$API/user").openConnection() as HttpURLConnection)
+        val conn = (URL("${getApiBase(ctx)}/user").openConnection() as HttpURLConnection)
         conn.requestMethod = "GET"
         conn.setRequestProperty("Accept", "application/vnd.github+json")
         conn.setRequestProperty("User-Agent", "ZorvAI")
@@ -160,7 +185,7 @@ object QuroGitHubClient {
 
     /** 校验并保存一个 GitHub Token（PAT 登录）：成功返回账户，失败返回 null。 */
     suspend fun loginWithToken(ctx: Context, token: String): Account? {
-        val acc = validateToken(token) ?: return null
+        val acc = validateToken(ctx, token) ?: return null
         if (!login(ctx, token)) return null
         return acc
     }
@@ -175,7 +200,7 @@ object QuroGitHubClient {
         body: String? = null,
         auth: Boolean = true,
     ): Pair<Int, String> {
-        val url = if (path.startsWith("http")) path else "$API$path"
+        val url = if (path.startsWith("http")) path else "${getApiBase(ctx)}$path"
         val conn = (URL(url).openConnection() as HttpURLConnection)
         conn.requestMethod = method
         conn.setRequestProperty("Accept", "application/vnd.github+json")
@@ -220,8 +245,8 @@ object QuroGitHubClient {
     }
 
     /** 发起设备流，换取 device_code / user_code / 验证地址。失败返回 null。 */
-    suspend fun startDeviceFlow(clientId: String, scope: String = DEFAULT_SCOPE): DeviceCode? = withContext(Dispatchers.IO) {
-        val (code, body) = postForm(OAUTH_DEVICE_CODE, mapOf("client_id" to clientId, "scope" to scope))
+    suspend fun startDeviceFlow(ctx: Context, clientId: String, scope: String = DEFAULT_SCOPE): DeviceCode? = withContext(Dispatchers.IO) {
+        val (code, body) = postForm("${getOAuthBase(ctx)}/login/device/code", mapOf("client_id" to clientId, "scope" to scope))
         if (code !in 200..299) return@withContext null
         val jo = runCatching { JSONObject(body) }.getOrNull() ?: return@withContext null
         val deviceCode = jo.optString("device_code")
@@ -242,6 +267,7 @@ object QuroGitHubClient {
      * isCancelled 返回 true 时立即中止（用户取消登录）。
      */
     suspend fun pollForToken(
+        ctx: Context,
         clientId: String,
         deviceCode: String,
         interval: Int,
@@ -254,7 +280,7 @@ object QuroGitHubClient {
             delay(wait * 1000L)
             if (isCancelled()) return@withContext DeviceLoginResult.Cancelled
             val (code, body) = postForm(
-                OAUTH_TOKEN,
+                "${getOAuthBase(ctx)}/login/oauth/access_token",
                 mapOf(
                     "client_id" to clientId,
                     "device_code" to deviceCode,

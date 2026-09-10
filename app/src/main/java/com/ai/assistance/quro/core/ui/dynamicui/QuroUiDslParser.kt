@@ -732,6 +732,39 @@ object QuroUiDslParser {
                     fields = json.optStringList("fields"),
                     title = json.optStringOrNull("title"),
                 )
+                // ── 常用组件别名：让 AI 用更直观的名字也能命中原生渲染（不再被固定死）──
+                // snackbar / callout → alert；segmented_control / segmented → chips；
+                // searchbar / search_bar / search → text_input；timeline_marker / milestone → timeline。
+                "snackbar", "callout" -> QuroAlertNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    severity = json.optStringOrNull("severity") ?: "info",
+                    title = json.optStringOrNull("title"),
+                    text = json.optStringOrNull("text")
+                        ?: json.optStringOrNull("content")
+                        ?: json.optStringOrNull("message") ?: "",
+                )
+                "segmented_control", "segmented" -> QuroChipsNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    items = buildStringList(json),
+                    selected = json.optStringOrNull("selected") ?: json.optStringOrNull("value"),
+                    onSelect = json.optJSONObject("on_select")?.let { buildAction(it) }
+                        ?: json.optJSONObject("onSelect")?.let { buildAction(it) },
+                )
+                "searchbar", "search_bar", "search" -> QuroTextInputNode(
+                    id = json.optStringOrNull("id") ?: stableId("input", json),
+                    style = buildStyle(json),
+                    label = json.optStringOrNull("label"),
+                    placeholder = json.optStringOrNull("placeholder") ?: json.optStringOrNull("hint"),
+                    value = json.optStringOrNull("value"),
+                    inputType = json.optStringOrNull("input_type") ?: json.optStringOrNull("inputType"),
+                )
+                "timeline_marker", "milestone" -> QuroTimelineNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    events = json.optStringList("events").ifEmpty { json.optStringList("items") },
+                )
                 // 捕获型兜底：任何未显式建模的 type 都保留为 QuroUnknownNode，
                 // 原始属性原样存入 fields，子节点递归解析。渲染层用「融合解释器」把它画成结构化富卡，
                 // 不再「降级为普通容器」、不再丢字段、不再出现「未识别的节点类型」提示。
@@ -751,6 +784,7 @@ object QuroUiDslParser {
         val reserved = setOf(
             "type", "kind", "id", "style", "children",
             "on_click", "onClick", "on_select", "onSelect",
+            "action", "on_click_action",
             "item", "item_template", "itemTemplate"
         )
         val fields = LinkedHashMap<String, Any?>()
@@ -766,6 +800,9 @@ object QuroUiDslParser {
             id = json.optStringOrNull("id"),
             style = buildStyle(json),
             type = type,
+            // AI 自写的任意组件都可挂 action / on_click，融合解释器据此把整卡变可点击。
+            action = json.optJSONObject("action")?.let { buildAction(it) }
+                ?: json.optJSONObject("on_click")?.let { buildAction(it) },
             fields = fields,
             children = buildChildren(json),
         )
