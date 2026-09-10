@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.github
 
 import android.content.Context
+import android.util.Log
 import com.ai.assistance.quro.BuildConfig
 import com.ai.assistance.quro.core.tools.AuthService
 import com.ai.assistance.quro.core.tools.QuroAuthStore
@@ -27,6 +28,7 @@ import java.net.URLEncoder
  *  - 搜索：仓库 / 代码 / Issue / 用户
  */
 object QuroGitHubClient {
+    private const val TAG = "QuroGitHubClient"
     private const val PREF = "quro_github_oauth"
     private const val PREF_MIRROR = "quro_github_mirror_domain"
     private const val DEFAULT_MIRROR = "github.com"
@@ -159,28 +161,34 @@ object QuroGitHubClient {
     suspend fun validateToken(ctx: Context, token: String): Account? = withContext(Dispatchers.IO) {
         val t = token.trim()
         if (t.isEmpty()) return@withContext null
-        val conn = (URL("${getApiBase(ctx)}/user").openConnection() as HttpURLConnection)
-        conn.requestMethod = "GET"
-        conn.setRequestProperty("Accept", "application/vnd.github+json")
-        conn.setRequestProperty("User-Agent", "ZorvAI")
-        conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
-        conn.setRequestProperty("Authorization", "Bearer $t")
-        conn.connectTimeout = 15000
-        conn.readTimeout = 20000
-        val code = conn.responseCode
-        val text = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.readText() ?: ""
-        conn.disconnect()
-        if (code !in 200..299) return@withContext null
-        val jo = runCatching { JSONObject(text) }.getOrNull() ?: return@withContext null
-        Account(
-            login = jo.optString("login"),
-            name = jo.optString("name").ifBlank { jo.optString("login") },
-            htmlUrl = jo.optString("html_url"),
-            bio = jo.optString("bio"),
-            publicRepos = jo.optInt("public_repos"),
-            followers = jo.optInt("followers"),
-            following = jo.optInt("following"),
-        )
+        try {
+            val conn = (URL("${getApiBase(ctx)}/user").openConnection() as HttpURLConnection)
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Accept", "application/vnd.github+json")
+            conn.setRequestProperty("User-Agent", "ZorvAI")
+            conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+            conn.setRequestProperty("Connection", "close")
+            conn.setRequestProperty("Authorization", "Bearer $t")
+            conn.connectTimeout = 15000
+            conn.readTimeout = 20000
+            val code = conn.responseCode
+            val text = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.readText() ?: ""
+            conn.disconnect()
+            if (code !in 200..299) return@withContext null
+            val jo = runCatching { JSONObject(text) }.getOrNull() ?: return@withContext null
+            Account(
+                login = jo.optString("login"),
+                name = jo.optString("name").ifBlank { jo.optString("login") },
+                htmlUrl = jo.optString("html_url"),
+                bio = jo.optString("bio"),
+                publicRepos = jo.optInt("public_repos"),
+                followers = jo.optInt("followers"),
+                following = jo.optInt("following"),
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "validateToken 失败 -> ${e.message}")
+            null
+        }
     }
 
     /** 校验并保存一个 GitHub Token（PAT 登录）：成功返回账户，失败返回 null。 */
@@ -192,7 +200,32 @@ object QuroGitHubClient {
 
     fun logout(ctx: Context) = QuroAuthStore.remove(ctx, "github")
 
+    // ───────── 镜像连通性自检 ─────────
+    /**
+     * 轻量探测某镜像域名是否可达（GET 根地址，8s 超时），返回 (是否可达, 延迟ms?)。
+     * 用于登录前自检：避免用户盲目选了已挂的镜像后登录时闪退。任何异常（证书过期/超时/解析失败）都返回不可达。
+     */
+    fun probeMirror(domain: String): Pair<Boolean, Long?> {
+        val host = if (domain.startsWith("http")) domain else "https://$domain"
+        return try {
+            val t = System.nanoTime()
+            val conn = (URL(host).openConnection() as HttpURLConnection)
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.setRequestProperty("User-Agent", "ZorvAI")
+            conn.instanceFollowRedirects = false
+            conn.responseCode
+            conn.disconnect()
+            true to ((System.nanoTime() - t) / 1_000_000)
+        } catch (e: Exception) {
+            Log.w(TAG, "probeMirror 不可达 $host -> ${e.message}")
+            false to null
+        }
+    }
+
     // ───────── 底层 HTTP ─────────
+    /** 所有请求都包了 try/catch：网络异常一律返回 (-1, 错误信息)，绝不抛到调用方（避免主线程崩溃闪退）。 */
     private fun request(
         ctx: Context,
         method: String,
@@ -200,48 +233,63 @@ object QuroGitHubClient {
         body: String? = null,
         auth: Boolean = true,
     ): Pair<Int, String> {
-        val url = if (path.startsWith("http")) path else "${getApiBase(ctx)}$path"
-        val conn = (URL(url).openConnection() as HttpURLConnection)
-        conn.requestMethod = method
-        conn.setRequestProperty("Accept", "application/vnd.github+json")
-        conn.setRequestProperty("User-Agent", "ZorvAI")
-        conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
-        if (auth) getToken(ctx)?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
-        conn.connectTimeout = 15000
-        conn.readTimeout = 20000
-        if (body != null) {
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+        return try {
+            val url = if (path.startsWith("http")) path else "${getApiBase(ctx)}$path"
+            val conn = (URL(url).openConnection() as HttpURLConnection)
+            conn.requestMethod = method
+            conn.setRequestProperty("Accept", "application/vnd.github+json")
+            conn.setRequestProperty("User-Agent", "ZorvAI")
+            conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+            // 禁用 keep-alive：部分代理/镜像会在复用连接时提前截断响应（unexpected end of stream）。
+            conn.setRequestProperty("Connection", "close")
+            if (auth) getToken(ctx)?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
+            conn.connectTimeout = 15000
+            conn.readTimeout = 20000
+            if (body != null) {
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            }
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val text = stream?.bufferedReader()?.readText() ?: ""
+            conn.disconnect()
+            code to text
+        } catch (e: Exception) {
+            Log.e(TAG, "request 失败: $path -> ${e.message}")
+            -1 to (e.message ?: "网络异常")
         }
-        val code = conn.responseCode
-        val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-        val text = stream?.bufferedReader()?.readText() ?: ""
-        conn.disconnect()
-        return code to text
     }
 
     private fun get(ctx: Context, path: String, auth: Boolean = true) = request(ctx, "GET", path, auth = auth)
 
     // ───────── OAuth 设备流：表单提交（非 JSON）─────────
+    /** 表单 POST。包了 try/catch：任何网络异常返回 (-1, 错误信息)，绝不抛到调用方（避免主线程崩溃闪退）。 */
     private fun postForm(url: String, params: Map<String, String>): Pair<Int, String> {
-        val body = params.entries.joinToString("&") {
-            "${it.key}=${URLEncoder.encode(it.value, "UTF-8")}"
+        return try {
+            val body = params.entries.joinToString("&") {
+                "${it.key}=${URLEncoder.encode(it.value, "UTF-8")}"
+            }
+            val conn = (URL(url).openConnection() as HttpURLConnection)
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            conn.setRequestProperty("User-Agent", "ZorvAI")
+            // 禁用 keep-alive：镜像/代理常因连接复用提前截断响应（unexpected end of stream on ...Address）。
+            conn.setRequestProperty("Connection", "close")
+            conn.connectTimeout = 15000
+            conn.readTimeout = 20000
+            conn.doOutput = true
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val text = stream?.bufferedReader()?.readText() ?: ""
+            conn.disconnect()
+            code to text
+        } catch (e: Exception) {
+            Log.e(TAG, "postForm 失败: $url -> ${e.message}")
+            -1 to (e.message ?: "网络异常")
         }
-        val conn = (URL(url).openConnection() as HttpURLConnection)
-        conn.requestMethod = "POST"
-        conn.setRequestProperty("Accept", "application/json")
-        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-        conn.setRequestProperty("User-Agent", "ZorvAI")
-        conn.connectTimeout = 15000
-        conn.readTimeout = 20000
-        conn.doOutput = true
-        conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-        val code = conn.responseCode
-        val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-        val text = stream?.bufferedReader()?.readText() ?: ""
-        conn.disconnect()
-        return code to text
     }
 
     /** 发起设备流，换取 device_code / user_code / 验证地址。失败返回 null。 */
