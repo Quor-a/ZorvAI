@@ -145,7 +145,10 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
     // GitHub 镜像：设备无法直连 github.com（体现为 SocketTimeout）时，切到镜像域名即可连通。
     var mirror by remember { mutableStateOf(QuroGitHubClient.getMirrorDomain(ctx)) }
     var mirrorExpanded by remember { mutableStateOf(false) }
-    val mirrorPresets = listOf("github.com", "kkgithub.com", "bgithub.xyz")
+    // 候选镜像（含若干公开镜像，连通性需自测；也可手填任意域名）。
+    val mirrorPresets = listOf("github.com", "kkgithub.com", "bgithub.xyz", "ghproxy.net", "mirror.ghproxy.com", "github.moeyy.xyz")
+    var mirrorStatus by remember { mutableStateOf<String?>(null) }
+    var mirrorTesting by remember { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -186,6 +189,32 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
                     )
                 }
             }
+        }
+
+        // 镜像连通性自检：登录前先测一下，避免盲选已挂的镜像导致请求被截断/闪退。
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Button(
+                onClick = {
+                    mirrorStatus = null; mirrorTesting = true
+                    scope.launch {
+                        val (ok, ms) = withContext(Dispatchers.IO) { QuroGitHubClient.probeMirror(mirror) }
+                        mirrorTesting = false
+                        mirrorStatus = if (ok) "✅ 镜像可达（约 ${ms ?: "?"} ms），可登录"
+                        else "❌ 无法连接该镜像（证书过期 / 超时 / 被墙）。换一个，或连能访问 GitHub 的网络"
+                    }
+                },
+                modifier = Modifier.weight(1f), enabled = !mirrorTesting,
+            ) { Text(if (mirrorTesting) "测试中…" else "测试镜像连通性") }
+        }
+        mirrorStatus?.let {
+            Text(it, color = if (it.startsWith("✅")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall)
+        }
+        if (mirror != "github.com") {
+            Text(
+                "提示：当前网络若连不上 GitHub 官方，设备流/PAT 都可能失败。先在能访问 GitHub 的网络下用 PAT 登录最稳妥。",
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
 
         when (mode) {

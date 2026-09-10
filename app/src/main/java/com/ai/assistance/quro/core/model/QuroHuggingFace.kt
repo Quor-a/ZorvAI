@@ -183,14 +183,57 @@ object QuroHuggingFace {
     }
 
     /**
-     * 搜索 MNN 模型仓库（合并来源）：先 HuggingFace，再 ModelScope，去重后返回。
-     * 以「仓库」为粒度（一个仓库一条），fileName 留空表示整包下载。
-     * 判定标准：仓库含 llm_config.json（或 config.json）且至少一个 .mnn 文件。
+     * MNN 官方模型清单（ModelScope 上 MNN 组织发布的、经核验含完整运行文件的仓库）。
+     * 这是 MNN 搜索的「可靠来源」：实测这些仓库都含 llm.mnn + llm.mnn.weight + llm_config.json + tokenizer.txt，
+     * 经阿里 OSS CDN 分发、国内可达。HuggingFace 上的 MNN 权重不全且国内不稳，故 MNN 默认走 ModelScope。
+     *
+     * 注意：MNN 模型的关键权重文件是 `llm.mnn.weight`（扩展名 .weight），下载白名单必须包含 "weight"，
+     * 否则会被当成无关文件丢弃，只剩结构文件 llm.mnn 导致加载器报「目录不完整」。
+     */
+    private data class MnnPreset(val id: String, val label: String, val approxMB: Int)
+    private val MNN_PRESETS = listOf(
+        MnnPreset("MNN/Qwen2.5-0.5B-Instruct-MNN", "Qwen2.5 0.5B Instruct", 265),
+        MnnPreset("MNN/Qwen2.5-1.5B-Instruct-MNN", "Qwen2.5 1.5B Instruct", 480),
+        MnnPreset("MNN/Qwen2.5-3B-Instruct-MNN", "Qwen2.5 3B Instruct", 604),
+        MnnPreset("MNN/Qwen2.5-7B-Instruct-MNN", "Qwen2.5 7B Instruct", 1051),
+        MnnPreset("MNN/Qwen2-0.5B-Instruct-MNN", "Qwen2 0.5B Instruct", 267),
+        MnnPreset("MNN/Qwen2-1.5B-Instruct-MNN", "Qwen2 1.5B Instruct", 455),
+        MnnPreset("MNN/Qwen2-7B-Instruct-MNN", "Qwen2 7B Instruct", 1056),
+        MnnPreset("MNN/Qwen1.5-0.5B-Chat-MNN", "Qwen1.5 0.5B Chat", 304),
+        MnnPreset("MNN/Qwen1.5-1.8B-Chat-MNN", "Qwen1.5 1.8B Chat", 480),
+        MnnPreset("MNN/Qwen1.5-4B-Chat-MNN", "Qwen1.5 4B Chat", 760),
+        MnnPreset("MNN/Qwen1.5-7B-Chat-MNN", "Qwen1.5 7B Chat", 1208),
+        MnnPreset("MNN/Llama-3.2-1B-Instruct-MNN", "Llama 3.2 1B Instruct", 507),
+        MnnPreset("MNN/Llama-3.2-3B-Instruct-MNN", "Llama 3.2 3B Instruct", 765),
+        MnnPreset("MNN/Phi-2-MNN", "Phi-2", 258),
+        MnnPreset("MNN/Gemma-2-2B-it-MNN", "Gemma-2 2B IT", 1147),
+        MnnPreset("MNN/Baichuan2-7B-Chat-MNN", "Baichuan2 7B Chat", 985),
+        MnnPreset("MNN/ChatGLM2-6B-MNN", "ChatGLM2 6B", 527),
+        MnnPreset("MNN/ChatGLM3-6B-MNN", "ChatGLM3 6B", 527),
+        MnnPreset("MNN/Qwen2.5-Coder-1.5B-Instruct-MNN", "Qwen2.5-Coder 1.5B", 500),
+    )
+
+    /**
+     * 搜索 MNN 模型仓库。
+     * 优先用经核验的 MNN 官方清单（必定可下、国内可达）；关键词命中清单即返回对应条目。
+     * 仅当关键词未命中清单时，才回退到在线检索（HuggingFace + ModelScope，仅保留真实含 .mnn 的仓库），
+     * 避免把纯文本大模型误当 MNN、或搜到不可下/不可达的仓库。所有条目 source="ms"。
      */
     suspend fun searchMnn(query: String, limit: Int = 20): List<HfModelFile> = withContext(Dispatchers.IO) {
+        val q = query.trim().lowercase()
+        // 关键词拆成 token（长度≥2），要求全部命中 preset 的 id 或展示名；空查询返回全部。
+        val tokens = q.split(Regex("[^a-z0-9]+")).filter { it.length >= 2 }
+        val fromPresets = (if (tokens.isEmpty()) MNN_PRESETS else MNN_PRESETS.filter { p ->
+            val hay = (p.id + " " + p.label).lowercase()
+            tokens.all { hay.contains(it) }
+        }).map { p ->
+            HfModelFile(p.id, "", p.approxMB * 1024L * 1024L, "MNN", source = "ms")
+        }
+        if (fromPresets.isNotEmpty()) return@withContext fromPresets.take(limit)
+
+        // 关键词未命中清单：回退在线检索（仅保留真实含 .mnn 的仓库）。
         val hf = runCatching { searchMnnHf(query, limit) }.getOrElse { emptyList() }
         val ms = runCatching { searchMnnModelScope(query, limit) }.getOrElse { emptyList() }
-        // 去重：同一 repoId 只保留一条（HuggingFace 优先）。
         val seen = mutableSetOf<String>()
         val merged = mutableListOf<HfModelFile>()
         for (f in hf + ms) {
@@ -319,7 +362,7 @@ object QuroHuggingFace {
     ): String = withContext(Dispatchers.IO) {
         destDir.mkdirs()
         val tree = msListTree(repoId)
-        val keepExt = setOf("mnn", "json", "txt", "tiktoken", "model", "bin")
+        val keepExt = setOf("mnn", "json", "txt", "tiktoken", "model", "bin", "weight")
         val files = tree.filter { (p, _) ->
             val name = p.substringAfterLast('/')
             val ext = name.substringAfterLast('.', "").lowercase()
@@ -400,7 +443,7 @@ object QuroHuggingFace {
         destDir.mkdirs()
         val tree = listTree(repoId)
         // 只保留 MNN 运行需要的文件：权重/配置/tokenizer 等；跳过文档与元数据。
-        val keepExt = setOf("mnn", "json", "txt", "tiktoken", "model", "bin")
+        val keepExt = setOf("mnn", "json", "txt", "tiktoken", "model", "bin", "weight")
         val files = tree.filter { (p, _) ->
             val name = p.substringAfterLast('/')
             val ext = name.substringAfterLast('.', "").lowercase()
