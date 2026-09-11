@@ -29,6 +29,8 @@ fun QuroApp(
     val chatVm = remember { QuroChatViewModel(ctx) }
     val modelVm = remember { QuroModelConfigViewModel(ctx) }
     val personaVm = remember { QuroPersonaViewModel(ctx) }
+    // 当前会话类型：genui = 非文本「生成式界面」渲染面（整个界面即 AI 回复），normal = 普通文本对话框
+    val genUiType by chatVm.genUiTypePref.collectAsState()
 
     val crash by QuroCrashReporter.lastCrash.collectAsState()
     val clipboard = LocalClipboardManager.current
@@ -53,20 +55,32 @@ fun QuroApp(
     }
 
     var darkMode by remember { mutableStateOf(chatVm.isDarkMode()) }
-    QuroTheme(darkOverride = darkMode) {
+        QuroTheme(darkOverride = darkMode) {
         Box(Modifier.fillMaxSize()) {
-            ChatScreen(
-                chatVm,
-                modelVm,
-                personaVm,
-                voiceBallEnabled = voiceBallEnabled,
-                onToggleVoiceBall = onToggleVoiceBall,
-                darkMode = darkMode,
-                onToggleDark = {
-                    darkMode = !darkMode
-                    chatVm.setDarkMode(darkMode)
-                },
-            )
+            if (genUiType == "genui") {
+                GenUiSurfaceScreen(
+                    vm = chatVm,
+                    modelVm = modelVm,
+                    darkMode = darkMode,
+                    onToggleDark = {
+                        darkMode = !darkMode
+                        chatVm.setDarkMode(darkMode)
+                    },
+                )
+            } else {
+                ChatScreen(
+                    chatVm,
+                    modelVm,
+                    personaVm,
+                    voiceBallEnabled = voiceBallEnabled,
+                    onToggleVoiceBall = onToggleVoiceBall,
+                    darkMode = darkMode,
+                    onToggleDark = {
+                        darkMode = !darkMode
+                        chatVm.setDarkMode(darkMode)
+                    },
+                )
+            }
         }
 
         // 崩溃自报告弹窗

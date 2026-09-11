@@ -5368,7 +5368,7 @@ private fun ChatToolMenu(
 // ---------------- 历史抽屉 ----------------
 
 @Composable
-private fun HistoryDrawer(
+fun HistoryDrawer(
     history: List<HistoryItem>,
     onClose: () -> Unit,
     onNew: () -> Unit,
@@ -7181,7 +7181,7 @@ private fun DynamicUiBlock(
  *  - callback    → 回传用户填写的值给模型（设计如此，让模型继续对话）
  *  - toggle      → 纯本地展开/收起，渲染器内部已处理
  */
-private fun handleDynamicUiAction(
+fun handleDynamicUiAction(
     action: QuroUiAction,
     values: Map<String, String>,
     ctx: Context,
@@ -8335,7 +8335,7 @@ private fun QuroPersona.toPersona(): Persona {
 }
 
 /** QuroConversationMeta → MoWen HistoryItem。 */
-private fun QuroConversationMeta.toHistoryItem(active: Boolean): HistoryItem {
+fun QuroConversationMeta.toHistoryItem(active: Boolean): HistoryItem {
     return HistoryItem(
         id = id,
         title = title.ifBlank { "新对话" },
