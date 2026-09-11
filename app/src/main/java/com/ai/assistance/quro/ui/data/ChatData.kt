@@ -36,7 +36,8 @@ data class HistoryItem(
     val sub: String,
     val time: String,
     val group: String,
-    val active: Boolean = false
+    val active: Boolean = false,
+    val genUiType: String = "normal"  // normal = 普通对话框；genui = GenUI 对话框
 )
 
 data class Attachment(

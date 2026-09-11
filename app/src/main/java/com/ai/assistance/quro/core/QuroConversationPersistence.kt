@@ -23,6 +23,7 @@ data class QuroConversationMeta(
     val title: String,
     val updatedAt: Long,
     val preview: String,
+    val genUiType: String = "normal",
 )
 
 /** 一个完整对话（含全部消息），用于内存与落盘。 */
@@ -33,8 +34,8 @@ data class QuroPersistedConversation(
     val updatedAt: Long,
     /** 保留对话轮数：null = 跟随模型默认（contextWindow）；N>0 = 仅保留最近 N 个 (用户+助手) 轮次。 */
     val historyRounds: Int? = null,
-    /** 本对话框的生成式 UI 渲染通道：html / xml / compose / canvas（默认 html）。按会话隔离，切换对话框各自记忆。 */
-    val genUiMode: String = "html",
+    /** 本对话框类型：normal = 普通对话框（正常聊天）；genui = GenUI 对话框（强制 AI 用原生 quro-ui 生成界面）。按会话隔离，切换/新建各自记忆。 */
+    val genUiType: String = "normal",
     val messages: List<QuroMessage>,
 )
 
@@ -165,7 +166,7 @@ class QuroConversationRepository(context: Context) {
             put("createdAt", c.createdAt)
             put("updatedAt", c.updatedAt)
             put("historyRounds", c.historyRounds ?: JSONObject.NULL)
-            put("genUiMode", c.genUiMode)
+            put("genUiType", c.genUiType)
             put("messages", msgs)
         }
     }
@@ -234,15 +235,15 @@ class QuroConversationRepository(context: Context) {
         }
         // 旧 JSON 无 historyRounds 字段 → null → 跟随模型默认（向后兼容）
         val historyRounds = if (o.has("historyRounds") && !o.isNull("historyRounds")) o.optInt("historyRounds", -1).let { if (it < 0) null else it } else null
-        // 旧 JSON 无 genUiMode 字段 → "html"（默认网页通道，向后兼容）
-        val genUiMode = if (o.has("genUiMode") && !o.isNull("genUiMode")) o.optString("genUiMode", "html") else "html"
+        // 旧 JSON 无 genUiType 字段 → "normal"（默认普通对话框，向后兼容）
+        val genUiType = if (o.has("genUiType") && !o.isNull("genUiType")) o.optString("genUiType", "normal") else "normal"
         return QuroPersistedConversation(
             id = o.optString("id", UUID.randomUUID().toString()),
             title = o.optString("title", "新对话"),
             createdAt = o.optLong("createdAt", System.currentTimeMillis()),
             updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
             historyRounds = historyRounds,
-            genUiMode = genUiMode,
+            genUiType = genUiType,
             messages = msgs,
         )
     }

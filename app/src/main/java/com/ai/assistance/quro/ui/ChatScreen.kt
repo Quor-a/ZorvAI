@@ -50,7 +50,6 @@ import com.ai.assistance.quro.core.ui.card.spec.CardSpec
 import com.ai.assistance.quro.core.ui.card.spec.parseCardSpec
 // ZorvAI 生成式 UI（:genui 模块）：AI 自写 JSX/HTML → 对话框内 WebView 渲染
 import com.zorv.genui.controller.GenUiController
-import com.zorv.genui.prompt.GenUiModes
 import com.zorv.genui.ui.GenUiCard
 import com.ai.assistance.quro.service.QuroMediaService
 import com.ai.assistance.quro.service.QuroMiniWindowManager
@@ -2322,6 +2321,7 @@ fun ChatScreen(
                     history = history,
                     onClose = { scope.launch { drawerState.close() } },
                     onNew = { vm.newConversation(); scope.launch { drawerState.close() } },
+                    onNewGenUi = { vm.newConversation(genUiType = "genui"); scope.launch { drawerState.close() } },
                     onPick = { id -> vm.selectConversation(id); scope.launch { drawerState.close() } },
                     onCopyAll = { copyConversation(ctx, uiMessages) },
                     onDelete = { vm.deleteConversation(it) },
@@ -5195,8 +5195,6 @@ private fun Composer(
                 }
             }
         }
-        // GenUI 渲染通道切换器：每个对话框独立记忆模式，再开一个对话框时自动载入其记忆的通道，点击即可切换
-        GenUiModeSwitcher()
         // 深度思考 + 权限模式控制条：移到底部（输入框下方），符合「权限模式在下面」的布局要求
         ChatPermissionModeBar(
             deepThink = deepThink,
@@ -5212,53 +5210,6 @@ private fun Composer(
             onOpenWorkspaceSelector = onOpenWorkspaceSelector,
             onOpenCodeBrowser = onOpenCodeBrowser,
         )
-    }
-}
-
-/**
- * GenUI 渲染通道切换器（融合 GenUI 到对话框：再开一个对话框即可点切换模式）。
- *
- * - 每个对话框独立记忆自己的通道（genUiMode），切换/新建对话框时自动载入该对话记忆的通道；
- * - 四个通道：网页(html) / 原生(xml) / Compose(compose) / 画布(canvas)，点击即切换；
- * - 切换只影响【后续】生成（已渲染的卡片不重绘），并持久化到会话 meta，下次打开仍是该模式。
- * 与「深度思考 + 权限模式」控制条并列位于输入框下方，互不干扰。
- */
-@Composable
-private fun GenUiModeSwitcher() {
-    val vm = QuroChatViewModel.instance
-    val cs = MaterialTheme.colorScheme
-    val current by vm.genUiModePref.collectAsState()
-    val modes = GenUiModes.ALL
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "GenUI 模式",
-            fontSize = 12.sp,
-            color = Muted,
-            modifier = Modifier.padding(end = 2.dp),
-        )
-        modes.forEach { m ->
-            val selected = m.id == current
-            FilterChip(
-                selected = selected,
-                onClick = { if (!selected) vm.setGenUiMode(m.id) },
-                label = { Text(m.label, fontSize = 12.sp) },
-                leadingIcon = if (selected) ({
-                    Icon(Icons.Filled.Check, null, Modifier.size(14.dp), tint = cs.primary)
-                }) else null,
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = cs.primaryContainer,
-                    selectedLabelColor = cs.onPrimaryContainer,
-                    selectedLeadingIconColor = cs.onPrimaryContainer,
-                ),
-            )
-        }
     }
 }
 
@@ -5421,6 +5372,7 @@ private fun HistoryDrawer(
     history: List<HistoryItem>,
     onClose: () -> Unit,
     onNew: () -> Unit,
+    onNewGenUi: () -> Unit,
     onPick: (String) -> Unit,
     onCopyAll: () -> Unit = {},
     onDelete: (String) -> Unit,
@@ -5470,6 +5422,24 @@ private fun HistoryDrawer(
             Spacer(Modifier.width(10.dp))
             Text("新建对话", fontSize = scaled(14), color = AccentPress, fontWeight = FontWeight.SemiBold)
         }
+        // 独立 GenUI 对话框入口：点开即新建一个 genui 类型会话（AI 强制用原生 quro-ui 生成界面），
+        // 与普通对话框完全隔离，互不干扰（两种对话框）。
+        Row(
+            Modifier
+                .padding(horizontal = 16.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(cs.primaryContainer)
+                .clickable(onClick = onNewGenUi)
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            LucideIcon("layout_dashboard", null, Modifier.size(18.dp), tint = cs.primary)
+            Spacer(Modifier.width(10.dp))
+            Text("GenUI 对话框", fontSize = scaled(14), color = cs.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            Text("原生 UI 生成", fontSize = scaled(11), color = cs.onPrimaryContainer.copy(alpha = 0.7f))
+        }
         Spacer(Modifier.height(8.dp))
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
             history.forEach { item ->
@@ -5487,7 +5457,19 @@ private fun HistoryDrawer(
                         .padding(12.dp, 10.dp)
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(item.title, fontSize = scaled(14), color = cs.onSurface, fontWeight = if (item.active) FontWeight.SemiBold else FontWeight.Normal)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(item.title, fontSize = scaled(14), color = cs.onSurface, fontWeight = if (item.active) FontWeight.SemiBold else FontWeight.Normal)
+                            if (item.genUiType == "genui") {
+                                Surface(
+                                    color = cs.primaryContainer,
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.padding(start = 8.dp)
+                                ) {
+                                    Text("GenUI", fontSize = scaled(11), color = cs.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                                }
+                            }
+                        }
                         Text(item.sub, fontSize = scaled(12), color = Muted,
                             maxLines = 1, modifier = Modifier.padding(top = 2.dp))
                     }
@@ -8361,6 +8343,7 @@ private fun QuroConversationMeta.toHistoryItem(active: Boolean): HistoryItem {
         time = formatChatTime(updatedAt),
         group = formatGroup(updatedAt),
         active = active,
+        genUiType = genUiType,
     )
 }
 
