@@ -50,6 +50,7 @@ import com.ai.assistance.quro.core.ui.card.spec.CardSpec
 import com.ai.assistance.quro.core.ui.card.spec.parseCardSpec
 // ZorvAI 生成式 UI（:genui 模块）：AI 自写 JSX/HTML → 对话框内 WebView 渲染
 import com.zorv.genui.controller.GenUiController
+import com.zorv.genui.prompt.GenUiModes
 import com.zorv.genui.ui.GenUiCard
 import com.ai.assistance.quro.service.QuroMediaService
 import com.ai.assistance.quro.service.QuroMiniWindowManager
@@ -5194,6 +5195,8 @@ private fun Composer(
                 }
             }
         }
+        // GenUI 渲染通道切换器：每个对话框独立记忆模式，再开一个对话框时自动载入其记忆的通道，点击即可切换
+        GenUiModeSwitcher()
         // 深度思考 + 权限模式控制条：移到底部（输入框下方），符合「权限模式在下面」的布局要求
         ChatPermissionModeBar(
             deepThink = deepThink,
@@ -5209,6 +5212,53 @@ private fun Composer(
             onOpenWorkspaceSelector = onOpenWorkspaceSelector,
             onOpenCodeBrowser = onOpenCodeBrowser,
         )
+    }
+}
+
+/**
+ * GenUI 渲染通道切换器（融合 GenUI 到对话框：再开一个对话框即可点切换模式）。
+ *
+ * - 每个对话框独立记忆自己的通道（genUiMode），切换/新建对话框时自动载入该对话记忆的通道；
+ * - 四个通道：网页(html) / 原生(xml) / Compose(compose) / 画布(canvas)，点击即切换；
+ * - 切换只影响【后续】生成（已渲染的卡片不重绘），并持久化到会话 meta，下次打开仍是该模式。
+ * 与「深度思考 + 权限模式」控制条并列位于输入框下方，互不干扰。
+ */
+@Composable
+private fun GenUiModeSwitcher() {
+    val vm = QuroChatViewModel.instance
+    val cs = MaterialTheme.colorScheme
+    val current by vm.genUiModePref.collectAsState()
+    val modes = GenUiModes.ALL
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "GenUI 模式",
+            fontSize = 12.sp,
+            color = Muted,
+            modifier = Modifier.padding(end = 2.dp),
+        )
+        modes.forEach { m ->
+            val selected = m.id == current
+            FilterChip(
+                selected = selected,
+                onClick = { if (!selected) vm.setGenUiMode(m.id) },
+                label = { Text(m.label, fontSize = 12.sp) },
+                leadingIcon = if (selected) ({
+                    Icon(Icons.Filled.Check, null, Modifier.size(14.dp), tint = cs.primary)
+                }) else null,
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = cs.primaryContainer,
+                    selectedLabelColor = cs.onPrimaryContainer,
+                    selectedLeadingIconColor = cs.onPrimaryContainer,
+                ),
+            )
+        }
     }
 }
 

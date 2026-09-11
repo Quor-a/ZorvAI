@@ -371,6 +371,25 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     // null = 跟随模型默认（contextWindow）；N>0 = 仅保留最�? N �? (用户+助手) 轮次�?
     private val _historyRounds = MutableStateFlow<Int?>(null)
     val historyRoundsPref: StateFlow<Int?> = _historyRounds.asStateFlow()
+
+    // ══════════════ 生成式 UI 渲染通道（GenUI 融合：对话框内"切换模式"）═════════════
+    // 每个对话框独立记忆自己的 GenUI 渲染通道（html / xml / compose / canvas），
+    // 切换对话框（再开一个对话框）会自动载入该对话记忆的通道，点击即可现场切换，切换即生效于后续生成。
+    private val _genUiMode = MutableStateFlow("html")
+    val genUiModePref: StateFlow<String> = _genUiMode.asStateFlow()
+    fun setGenUiMode(mode: String) {
+        if (mode !in com.zorv.genui.prompt.GenUiModes.ALL.map { it.id }) return
+        _genUiMode.value = mode
+        val id = _currentId.value
+        val idx = _convs.value.indexOfFirst { it.id == id }
+        if (idx >= 0) {
+            _convs.value = _convs.value.toMutableList().also { list ->
+                list[idx] = list[idx].copy(genUiMode = mode)
+            }
+            runCatching { convRepo.saveAll(_convs.value) }
+        }
+    }
+
     fun setHistoryRounds(n: Int?) {
         _historyRounds.value = n
         // 立即把设置写回当前会话并落盘，避免「改了设置但没发消息就关应用」导致设置丢失�?
@@ -588,6 +607,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         _currentId.value = id
         activeConversationId = id
         _historyRounds.value = null
+        _genUiMode.value = conv.genUiMode
         store.clear()
         store.add(welcome)
         _messages.value = store.all()
@@ -607,6 +627,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         store.clear()
         // 载入该会话已保存的「保留对话轮数」设置（null=跟随模型默认�?
         _historyRounds.value = conv.historyRounds
+        // 载入该会话已保存的 GenUI 渲染通道（再开一个对话框时，自动恢复其记忆的模式）
+        _genUiMode.value = conv.genUiMode
         // 优先取在线缓冲（生成�?/刚结束）�? 即时看到最新；否则取持久化消息�?
         val live = liveBuffers[id]
         if (live != null) live.all().forEach { store.add(it) }
@@ -1130,9 +1152,11 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 // 仅在写入「当前可见会话」时落盘用户设置的保留轮数；其它会话（后台生�? / 语音球绑定会话）
                 // 保留其自身已存的 historyRounds，避免把当前会话的设置串台覆盖到其它会话�?
                 val rounds = if (id == _currentId.value) _historyRounds.value else existing?.historyRounds
+                // GenUI 渲染通道同理：仅当前可见会话落盘其最新选择，其它会话保留各自记忆的通道
+                val mode = if (id == _currentId.value) _genUiMode.value else existing?.genUiMode
                 _convs.value = _convs.value.toMutableList().also { list ->
                     val idx = list.indexOfFirst { it.id == id }
-                    if (idx >= 0) list[idx] = list[idx].copy(messages = msgs, updatedAt = System.currentTimeMillis(), title = title, historyRounds = rounds)
+                    if (idx >= 0) list[idx] = list[idx].copy(messages = msgs, updatedAt = System.currentTimeMillis(), title = title, historyRounds = rounds, genUiMode = mode ?: "html")
                 }
                 QuroDiag.log("SAVE", "convId=$id msgs=${msgs.size} activeBufSame=${liveBuffers[id] === buf} force=$forceSave")
                 emitMeta()
@@ -2143,7 +2167,7 @@ $recent
         // ══════════════ 生成式 UI（ZorvAI 自写 JSX/HTML → 对话框内 WebView 渲染）═════════════
         // 让模型在需要可视化/交互时直接产出可运行界面，是「对话框动态 UI 组件」的本质能力。
         // 仅注入云端路径（本地小模型上下文过紧，已在上方 early-return 跳过）。
-        sb.append("\n\n").append(GenUiPrompt.SYSTEM_PROMPT.trimIndent())
+        sb.append("\n\n").append(GenUiPrompt.build(genUiModePref.value).trimIndent())
 
         // ══════════════ 人格卡可视化开关【硬强制】放最末尾 = 最高近因偏好（仅云端路径）═════════════
         // 本地离线模型不走到这里（已在上面 isLocal 分支 early-return），本段只在云端路径注入。
