@@ -1,19 +1,26 @@
 package com.ai.assistance.quro.ui
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.webkit.WebView
-import android.webkit.WebViewClient
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -23,29 +30,26 @@ import com.ai.assistance.quro.core.QuroConversationStore
 import com.ai.assistance.quro.core.QuroMessage
 import com.ai.assistance.quro.core.network.QuroLlmClient
 import com.ai.assistance.quro.core.tools.buildQuroRegistry
-import com.ai.assistance.quro.core.ui.dynamicui.QuroUiAction
-import com.ai.assistance.quro.core.ui.dynamicui.QuroUiDslParser
-import com.ai.assistance.quro.core.ui.dynamicui.QuroUiNode
-import com.ai.assistance.quro.core.ui.dynamicui.QuroUiParseResult
-import com.ai.assistance.quro.core.ui.dynamicui.QuroUiRenderer
-import com.ai.assistance.quro.core.ui.dynamicui.SurfaceHost
+import com.ai.assistance.quro.ui.genui.GenUiCanvas
 import com.ai.assistance.quro.ui.icons.LucideIcon
 import com.zorv.genui.prompt.GenUiPrompt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
- * 真正的「非文本 GenUI 渲染面」。
+ * 真正的「非文本 GenUI 渲染面」（忠实移植自 GenUI GenScaffold + A2UIRenderer）。
  *
- * 与「带 GenUI 标签的普通文本聊天框」完全不同：这里**没有文本气泡流**。
- * 整个界面就是 AI 用 quro-ui 原生 DSL 渲染出来的 UI（[QuroUiRenderer] + [SurfaceHost]），
- * 底部只有一条 prompt 输入。提交后一次性 [QuroAssistant.ask] 生成，解析 quro-ui 后**全屏重渲染**；
- * 界面内交互（按钮 callback / 工具调用 / 打开链接等）经 [handleDynamicUiAction] 处理，
- * 其中 callback / 工具结果回传被重定向为「重新生成」而非发到聊天。
+ * 与「普通文本聊天框 / 带 GenUI 标签的聊天框」本质不同：这里**没有文本气泡流**，
+ * 整个界面就是 AI 写出的一张完整 HTML 文档，由 WebView 画布渲染出来。
+ * 端上提供：离线运行时（echarts/three/vue/react/mermaid/gsap/anime/countup，经 /assets/runtimes/）、
+ * MoBridge 设备桥（time/store/notify/haptics/clipboard/net/device/ui）、原生组件（ui.widget → 真实 Android 控件叠层）。
  *
- * 会话上下文由本屏私有的 [QuroConversationStore] 持有（跨重组保留，离开本屏才清空），
- * 因此多轮「界面↔指令」可连续进行。尊重 A2UI 红线：原生渲染，绝不在 WebView 里执行 AI 代码。
+ * 底部只有一条 prompt 输入。提交后 QuroAssistant 一次性生成完整 HTML → 流式灌入画布。
+ * 安全边界（与 GenUI 一致）：禁文件/内容访问；外部网络仅走 bridge 的 net.proxy（https + 限流）；
+ * 外部链接交给系统浏览器；尊重 A2UI 红线——绝不在画布外执行任何未经验证的脚本。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,42 +73,57 @@ fun GenUiSurfaceScreen(
     val history = conversations.map { it.toHistoryItem(it.id == currentId) }
 
     // ── 渲染状态（本屏持有）──
-    var uiRoot by remember { mutableStateOf<QuroUiNode?>(null) }
     var isBusy by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
-    var input by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    var input by remember { mutableStateOf(TextFieldValue("")) }
     var browserUrl by remember { mutableStateOf<String?>(null) }
+    var widgetState by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-    // ── 会话上下文（跨重组保留；离开本屏才随 composable 销毁而清空）──
-    val store = remember { QuroConversationStore() }
-    val assistant = remember(ctx) { QuroAssistant(QuroLlmClient(), buildQuroRegistry(ctx), store) }
+    // ── 画布 ──
+    val canvasHost = remember { mutableStateOf<GenUiCanvas?>(null) }
+    val drawnHtml = remember { mutableStateMapOf<String, String>() }
+    // 每会话独立的对话上下文（让「界面 ↔ 指令」多轮连续）
+    val stores = remember { mutableMapOf<String, QuroConversationStore>() }
+    val assistants = remember { mutableMapOf<String, QuroAssistant>() }
+
+    fun storeFor(id: String): QuroConversationStore =
+        stores.getOrPut(id) { QuroConversationStore() }
+    fun assistantFor(id: String): QuroAssistant =
+        assistants.getOrPut(id) {
+            QuroAssistant(QuroLlmClient(), buildQuroRegistry(ctx), storeFor(id))
+        }
 
     fun generate(prompt: String) {
         val p = prompt.trim()
         if (p.isBlank() || isBusy) return
+        val cid = currentId
         isBusy = true
         errorText = null
-        input = androidx.compose.ui.text.input.TextFieldValue("")
-        // 用户意图进会话上下文：GenUI 没有文本气泡，但模型需要看到历史才能连续生成界面
-        store.add(QuroMessage(role = "user", content = p))
+        input = TextFieldValue("")
+        storeFor(cid).add(QuroMessage(role = "user", content = p))
         scope.launch(Dispatchers.IO) {
             try {
                 val sys = GenUiPrompt.build(force = true)
-                val text = assistant.ask(
+                val text = assistantFor(cid).ask(
                     ctx, cfg,
                     systemPrompt = sys,
                     autoSaveMemory = false,
                     stream = false,
-                    historyRounds = 8,
+                    historyRounds = 6,
                     deepThink = false,
                 )
-                val parsed = QuroUiDslParser.parseFirst(text)
-                withContext(Dispatchers.Main) {
-                    when (parsed) {
-                        is QuroUiParseResult.Success -> uiRoot = parsed.root
-                        is QuroUiParseResult.Failure -> errorText =
-                            "AI 未返回可用界面：${parsed.reason}\n\n${text.take(600)}"
-                        null -> errorText = "AI 未返回界面（无 quro-ui 块）。\n\n${text.take(600)}"
+                val html = stripFences(text)
+                if (html.isBlank()) {
+                    withContext(Dispatchers.Main) { errorText = "模型未输出任何界面内容，请换一种说法重试。" }
+                } else {
+                    drawnHtml[cid] = html
+                    withContext(Dispatchers.Main) {
+                        canvasHost.value?.let { cv ->
+                            cv.begin(null)
+                            val chunks = chunkHtml(html)
+                            chunks.forEach { cv.writeChunk(it) }
+                            cv.end()
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -112,6 +131,14 @@ fun GenUiSurfaceScreen(
             } finally {
                 withContext(Dispatchers.Main) { isBusy = false }
             }
+        }
+    }
+
+    // 切换会话：回放已绘制的界面（无则清空画布待命）
+    LaunchedEffect(currentId) {
+        canvasHost.value?.let { cv ->
+            val html = drawnHtml[currentId]
+            if (html != null) cv.replay(html) else cv.begin(null)
         }
     }
 
@@ -143,62 +170,48 @@ fun GenUiSurfaceScreen(
                             LucideIcon("panel_left", "菜单", Modifier.size(24.dp), tint = cs.onSurface)
                         }
                     },
+                    actions = {
+                        if (isBusy) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp).padding(end = 12.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        }
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.surface),
                 )
             },
         ) { pad ->
             Column(Modifier.fillMaxSize().padding(pad)) {
-                // 主渲染面：整个界面即 AI 回复（无文本气泡）
                 Box(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(10.dp),
+                        .background(Color(0xFFFCFAF5)),
                 ) {
-                    when {
-                        isBusy && uiRoot == null -> {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator()
-                            }
-                        }
-                        uiRoot != null -> {
-                            SurfaceHost(designWidthDp = 360f) {
-                                QuroUiRenderer(
-                                    root = uiRoot!!,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onAction = { action: QuroUiAction, values: Map<String, String> ->
-                                        handleDynamicUiAction(
-                                            action, values, ctx, scope,
-                                            onCommand = { generate(it) },
-                                            onOpenLink = { browserUrl = it },
-                                        )
-                                    },
-                                )
-                            }
-                        }
-                        else -> {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(
-                                    "输入需求，AI 将直接生成界面（没有文本气泡）。\n例如：「做一个带勾选的今日待办」「画一个计算器」",
-                                    color = cs.onSurfaceVariant,
-                                    fontSize = 14.sp,
-                                )
-                            }
+                    if (errorText != null && drawnHtml[currentId] == null) {
+                        Box(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
+                            contentAlignment = Alignment.Center) {
+                            Text(errorText ?: "", color = cs.error, fontSize = 13.sp)
                         }
                     }
-                }
-
-                // 错误条
-                errorText?.let { err ->
-                    Surface(color = cs.errorContainer, modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            err,
-                            color = cs.onErrorContainer,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(8.dp),
-                        )
-                    }
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { c: Context ->
+                            WebView(c).also { wv ->
+                                val cv = GenUiCanvas(
+                                    c, wv,
+                                    onFirstPaint = {},
+                                    onPageTitle = {},
+                                    onBridgeCall = {},
+                                    onWidget = { kind, payload -> widgetState = kind to payload },
+                                    onOpenLink = { url -> openInBrowser(ctx, url) },
+                                )
+                                canvasHost.value = cv
+                                cv.begin(null)
+                            }
+                        },
+                    )
                 }
 
                 // 底部单条 prompt 输入
@@ -222,36 +235,259 @@ fun GenUiSurfaceScreen(
             }
         }
 
-        // 浏览器覆盖层（open_url 动作触发）
-        browserUrl?.let { url ->
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .zIndex(200f)
-                    .background(cs.background),
+        // 原生组件（ui.widget）底部弹出：真实 Android 控件叠层
+        widgetState?.let { (kind, payload) ->
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ModalBottomSheet(
+                onDismissRequest = { widgetState = null },
+                sheetState = sheetState,
+                containerColor = cs.surface,
             ) {
-                Column(Modifier.fillMaxSize()) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Spacer(Modifier.weight(1f))
-                        IconButton(onClick = { browserUrl = null }) {
-                            LucideIcon("x", "关闭", Modifier.size(22.dp), tint = cs.onSurface)
-                        }
-                    }
-                    AndroidView(
-                        factory = { c: Context ->
-                            WebView(c).apply {
-                                webViewClient = WebViewClient()
-                                settings.javaScriptEnabled = true
-                                loadUrl(url)
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
+                NativeWidgetSheet(
+                    kind = kind,
+                    payload = payload,
+                    onResult = { json -> canvasHost.value?.dispatchWidgetEvent(json) },
+                    onDismiss = { widgetState = null },
+                )
             }
         }
     }
+
+    // 外部链接：系统浏览器
+    browserUrl?.let { url ->
+        Box(Modifier.fillMaxSize().zIndex(200f).background(cs.background)) {
+            Column(Modifier.fillMaxSize()) {
+                Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { browserUrl = null }) {
+                        LucideIcon("x", "关闭", Modifier.size(22.dp), tint = cs.onSurface)
+                    }
+                }
+                AndroidView(
+                    factory = { c: Context ->
+                        WebView(c).apply {
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            loadUrl(url)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+}
+
+// ────────────────────────── 原生组件（MoBridge.ui.widget）──────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NativeWidgetSheet(
+    kind: String,
+    payload: String,
+    onResult: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val data = remember(payload) { runCatching { JSONObject(payload) }.getOrDefault(JSONObject()) }
+    val title = data.optString("title", "")
+    val key = data.optString("key", "")
+
+    Column(Modifier.fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState())) {
+        Text(title.ifBlank { kind }, color = cs.onSurface, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        when (kind) {
+            "stat" -> {
+                val value = data.optString("value", "")
+                val delta = data.optString("delta", "")
+                Text(value, fontSize = 36.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = cs.onSurface)
+                if (delta.isNotBlank()) Text(delta, fontSize = 14.sp, color = cs.primary)
+                val trend = jsonIntArray(data.optJSONArray("trend"))
+                if (trend.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Sparkline(trend)
+                }
+            }
+            "bar" -> {
+                val items = jsonObjArray(data.optJSONArray("data"))
+                val max = (items.maxOfOrNull { it.optDouble("value", 0.0) } ?: 1.0).coerceAtLeast(1.0)
+                items.forEach { it2 ->
+                    val v = it2.optDouble("value", 0.0)
+                    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Text(it2.optString("label", ""), fontSize = 12.sp, color = cs.onSurfaceVariant)
+                        Box(Modifier.fillMaxWidth().height(18.dp).background(cs.surfaceVariant.copy(alpha = 0.4f))) {
+                            Box(Modifier.fillMaxWidth((v / max).toFloat()).height(18.dp).background(cs.primary))
+                        }
+                    }
+                }
+            }
+            "line" -> {
+                val arr = data.optJSONArray("data")
+                val nums = if (arr != null) jsonIntArray(arr) else emptyList()
+                if (nums.isNotEmpty()) LineChart(nums)
+            }
+            "progress" -> {
+                val value = data.optDouble("value", 0.0)
+                val frac = if (value > 1) value / 100.0 else value
+                LinearProgressIndicator(progress = frac.toFloat().coerceIn(0f, 1f), modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(6.dp))
+                Text("${(frac * 100).toInt()}%", fontSize = 13.sp, color = cs.onSurfaceVariant)
+            }
+            "list" -> {
+                val items = jsonObjArray(data.optJSONArray("data"))
+                items.forEachIndexed { idx, it2 ->
+                    var done by remember(idx) { mutableStateOf(it2.optBoolean("done", false)) }
+                    Row(Modifier.fillMaxWidth().clickable {
+                        done = !done
+                        onResult(JSONObject().put("key", key).put("index", idx).put("done", done).toString())
+                    }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = done, onCheckedChange = {
+                            done = it
+                            onResult(JSONObject().put("key", key).put("index", idx).put("done", done).toString())
+                        })
+                        Text(it2.optString("text", ""), fontSize = 15.sp, color = cs.onSurface)
+                    }
+                }
+            }
+            "form" -> {
+                val fields = jsonObjArray(data.optJSONArray("fields"))
+                val values = remember { mutableStateMapOf<String, String>() }
+                fields.forEach { f ->
+                    val fk = f.optString("key", "")
+                    val flabel = f.optString("label", fk)
+                    val ftype = f.optString("type", "text")
+                    val fdefault = f.optString("default", "")
+                    val funit = f.optString("unit", "")
+                    val txt = remember(fk) { mutableStateOf(fdefault) }
+                    values[fk] = txt.value
+                    OutlinedTextField(
+                        value = txt.value,
+                        onValueChange = { txt.value = it; values[fk] = it },
+                        label = { Text(flabel + if (funit.isNotBlank()) " ($funit)" else "") },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    )
+                }
+                Button(onClick = {
+                    val v = JSONObject()
+                    values.forEach { (k, vl) -> v.put(k, vl) }
+                    onResult(JSONObject().put("key", key).put("values", v).toString())
+                    onDismiss()
+                }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("提交") }
+            }
+            "slider" -> {
+                val min = data.optDouble("min", 0.0).toFloat()
+                val max = data.optDouble("max", 100.0).toFloat()
+                val sv = remember(key) { mutableStateOf(data.optDouble("value", (min + max) / 2.0).toFloat()) }
+                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    Text("${sv.value.toInt()}", fontSize = 20.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = cs.onSurface)
+                    Slider(value = sv.value, onValueChange = { sv.value = it }, valueRange = min..max)
+                    Button(onClick = {
+                        onResult(JSONObject().put("key", key).put("value", sv.value).toString())
+                        onDismiss()
+                    }, modifier = Modifier.fillMaxWidth()) { Text("确认") }
+                }
+            }
+            "timeline" -> {
+                val items = jsonObjArray(data.optJSONArray("data"))
+                items.forEach { it2 ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                        Column(Modifier.width(56.dp)) {
+                            Text(it2.optString("time", ""), fontSize = 12.sp, color = cs.primary)
+                        }
+                        Column {
+                            Text(it2.optString("title", ""), fontSize = 15.sp, color = cs.onSurface, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                            val d = it2.optString("desc", "")
+                            if (d.isNotBlank()) Text(d, fontSize = 13.sp, color = cs.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            else -> Text("未知原生组件：$kind", fontSize = 13.sp, color = cs.onSurfaceVariant)
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun Sparkline(values: List<Int>) {
+    val cs = MaterialTheme.colorScheme
+    Canvas(Modifier.fillMaxWidth().height(48.dp).padding(4.dp)) {
+        if (values.size < 2) return@Canvas
+        val max = values.maxOrNull()!!.toFloat().coerceAtLeast(1f)
+        val min = values.minOrNull()!!.toFloat()
+        val span = (max - min).coerceAtLeast(1f)
+        val stepX = size.width / (values.size - 1)
+        val path = Path()
+        values.forEachIndexed { i, v ->
+            val x = i * stepX
+            val y = size.height - ((v - min) / span) * size.height
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        drawPath(path, color = cs.primary, style = Stroke(width = 2.dp.toPx()))
+    }
+}
+
+@Composable
+private fun LineChart(values: List<Int>) {
+    val cs = MaterialTheme.colorScheme
+    Canvas(Modifier.fillMaxWidth().height(160.dp).padding(8.dp)) {
+        if (values.size < 2) return@Canvas
+        val max = values.maxOrNull()!!.toFloat().coerceAtLeast(1f)
+        val min = values.minOrNull()!!.toFloat()
+        val span = (max - min).coerceAtLeast(1f)
+        val stepX = size.width / (values.size - 1)
+        val path = Path()
+        values.forEachIndexed { i, v ->
+            val x = i * stepX
+            val y = size.height - ((v - min) / span) * size.height
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        drawPath(path, color = cs.primary, style = Stroke(width = 2.dp.toPx()))
+    }
+}
+
+// ────────────────────────── 工具函数 ───────────────────────────
+
+private fun jsonIntArray(a: JSONArray?): List<Int> {
+    if (a == null) return emptyList()
+    val out = mutableListOf<Int>()
+    for (i in 0 until a.length()) out.add(a.optInt(i, 0))
+    return out
+}
+
+private fun jsonObjArray(a: JSONArray?): List<JSONObject> {
+    if (a == null) return emptyList()
+    val out = mutableListOf<JSONObject>()
+    for (i in 0 until a.length()) out.add(a.optJSONObject(i) ?: JSONObject())
+    return out
+}
+
+/** 去掉模型偶尔顺手包在 HTML 外的 Markdown 围栏（开头 ```lang / 结尾 ```）。 */
+private fun stripFences(raw: String): String {
+    var s = raw.trimStart('\uFEFF').trim()
+    val lead = Regex("^\\s*```[a-zA-Z0-9_+#-]*\\s*\\n?", RegexOption.DOT_MATCHES_ALL)
+    s = lead.replaceFirst(s, "")
+    val trail = Regex("\\n?```\\s*$", RegexOption.DOT_MATCHES_ALL)
+    s = trail.replaceFirst(s, "")
+    return s
+}
+
+/** 把完整 HTML 切成若干 chunk，配合画布的流式 document.write。 */
+private fun chunkHtml(html: String, size: Int = 4000): List<String> {
+    if (html.length <= size) return listOf(html)
+    val out = mutableListOf<String>()
+    var i = 0
+    while (i < html.length) {
+        out.add(html.substring(i, (i + size).coerceAtMost(html.length)))
+        i += size
+    }
+    return out
+}
+
+private fun openInBrowser(ctx: Context, url: String) {
+    try {
+        val i = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        ctx.startActivity(i)
+    } catch (_: Exception) { /* 无可用浏览器时忽略 */ }
 }
