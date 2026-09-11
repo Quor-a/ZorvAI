@@ -30,6 +30,7 @@ import org.json.JSONTokener
 class GenUiCanvas(
     context: Context,
     private val webView: WebView,
+    private val dark: Boolean = false,
     private val onFirstPaint: () -> Unit = {},
     private val onPageTitle: (String) -> Unit = {},
     private val onBridgeCall: () -> Unit = {},
@@ -65,7 +66,7 @@ class GenUiCanvas(
             mediaPlaybackRequiresUserGesture = true
             loadsImagesAutomatically = true
         }
-        setBackgroundColor(Color.parseColor("#FCFAF5"))
+        setBackgroundColor(Color.parseColor(if (dark) "#0F1115" else "#FCFAF5"))
         isVerticalScrollBarEnabled = false
     }
 
