@@ -25,14 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
-import com.ai.assistance.quro.core.QuroAssistant
-import com.ai.assistance.quro.core.QuroConversationStore
-import com.ai.assistance.quro.core.QuroMessage
-import com.ai.assistance.quro.core.network.QuroLlmClient
-import com.ai.assistance.quro.core.tools.buildQuroRegistry
 import com.ai.assistance.quro.ui.genui.GenUiCanvas
 import com.ai.assistance.quro.ui.icons.LucideIcon
-import com.zorv.genui.prompt.GenUiPrompt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -69,7 +63,6 @@ fun GenUiSurfaceScreen(
     val conversations by vm.conversations.collectAsState()
     val currentId by vm.currentId.collectAsState()
     val generatingIds by vm.generatingIds.collectAsState()
-    val cfg by modelVm.cfg.collectAsState()
     val history = conversations.map { it.toHistoryItem(it.id == currentId) }
 
     // ── 渲染状态（本屏持有）──
@@ -81,17 +74,8 @@ fun GenUiSurfaceScreen(
 
     // ── 画布 ──
     val canvasHost = remember { mutableStateOf<GenUiCanvas?>(null) }
+    // 进程内切换会话时的本地回放缓存；跨进程重生走 vm.lastGenUiHtml 从持久化恢复
     val drawnHtml = remember { mutableStateMapOf<String, String>() }
-    // 每会话独立的对话上下文（让「界面 ↔ 指令」多轮连续）
-    val stores = remember { mutableMapOf<String, QuroConversationStore>() }
-    val assistants = remember { mutableMapOf<String, QuroAssistant>() }
-
-    fun storeFor(id: String): QuroConversationStore =
-        stores.getOrPut(id) { QuroConversationStore() }
-    fun assistantFor(id: String): QuroAssistant =
-        assistants.getOrPut(id) {
-            QuroAssistant(QuroLlmClient(), buildQuroRegistry(ctx), storeFor(id))
-        }
 
     fun generate(prompt: String) {
         val p = prompt.trim()
@@ -100,28 +84,19 @@ fun GenUiSurfaceScreen(
         isBusy = true
         errorText = null
         input = TextFieldValue("")
-        storeFor(cid).add(QuroMessage(role = "user", content = p))
         scope.launch(Dispatchers.IO) {
             try {
-                val sys = GenUiPrompt.build(force = true)
-                val text = assistantFor(cid).ask(
-                    ctx, cfg,
-                    systemPrompt = sys,
-                    autoSaveMemory = false,
-                    stream = false,
-                    historyRounds = 6,
-                    deepThink = false,
-                )
-                val html = stripFences(text)
-                if (html.isBlank()) {
+                // 走 vm 统一管线：记忆注入 + 灵魂/人格注入 + GenUiPrompt + 工具循环 + 会话落盘
+                val html = vm.generateGenUi(p)
+                val clean = stripFences(html)
+                if (clean.isBlank()) {
                     withContext(Dispatchers.Main) { errorText = "模型未输出任何界面内容，请换一种说法重试。" }
                 } else {
-                    drawnHtml[cid] = html
+                    drawnHtml[cid] = clean
                     withContext(Dispatchers.Main) {
                         canvasHost.value?.let { cv ->
                             cv.begin(null)
-                            val chunks = chunkHtml(html)
-                            chunks.forEach { cv.writeChunk(it) }
+                            chunkHtml(clean).forEach { cv.writeChunk(it) }
                             cv.end()
                         }
                     }
@@ -134,11 +109,17 @@ fun GenUiSurfaceScreen(
         }
     }
 
-    // 切换会话：回放已绘制的界面（无则清空画布待命）
+    // 切换会话：优先回放本地缓存；无则尝试从 vm 持久化会话恢复（跨进程重生后仍能回放）
     LaunchedEffect(currentId) {
         canvasHost.value?.let { cv ->
-            val html = drawnHtml[currentId]
-            if (html != null) cv.replay(html) else cv.begin(null)
+            val html = drawnHtml[currentId] ?: vm.lastGenUiHtml(currentId)
+            if (html != null) {
+                cv.begin(null)
+                chunkHtml(html).forEach { cv.writeChunk(it) }
+                cv.end()
+            } else {
+                cv.begin(null)
+            }
         }
     }
 
@@ -187,7 +168,7 @@ fun GenUiSurfaceScreen(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .background(Color(0xFFFCFAF5)),
+                        .background(if (darkMode) Color(0xFF0F1115) else Color(0xFFFCFAF5)),
                 ) {
                     if (errorText != null && drawnHtml[currentId] == null) {
                         Box(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
@@ -199,8 +180,10 @@ fun GenUiSurfaceScreen(
                         modifier = Modifier.fillMaxSize(),
                         factory = { c: Context ->
                             WebView(c).also { wv ->
+                                wv.setBackgroundColor(0) // 透明：露出主题色画布底，深色模式不刺眼
                                 val cv = GenUiCanvas(
                                     c, wv,
+                                    dark = darkMode,
                                     onFirstPaint = {},
                                     onPageTitle = {},
                                     onBridgeCall = {},

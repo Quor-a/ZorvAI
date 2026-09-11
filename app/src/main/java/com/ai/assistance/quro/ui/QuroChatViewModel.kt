@@ -657,6 +657,44 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     }
 
     /**
+     * GenUI 模式专用生成：复用统一系统提示（含**记忆注入** + **灵魂/人格注入** + GenUiPrompt）、
+     * 记忆自动沉淀（跟随 autoSaveMemory 开关）、QuroAI 工具循环，并把生成的完整 HTML 作为
+     * assistant 消息**落盘绑定到当前会话**（与普通对话框共用同一套会话持久化：切换不丢、进程重生可回放）。
+     *
+     * 与 ChatScreen.send() 的唯一区别：结果不渲染成文本气泡，而是由 GenUiSurfaceScreen 把返回的
+     * HTML 灌进 WebView 画布。记忆 / 灵魂 / 工具分类 / 对话绑定全部走 vm 统一管线，不再另起炉灶。
+     */
+    suspend fun generateGenUi(prompt: String, cfg: QuroModelConfig = repo.load()): String {
+        val convId = _currentId.value
+        // buildSystemPrompt 已内含：平台基座 + 人格/灵魂(QuroSoulPromptEngine) + 记忆 + GenUiPrompt(force=genui 时追加)
+        val sys = buildSystemPrompt(cfg)
+        val seed = _convs.value.firstOrNull { it.id == convId }?.messages ?: emptyList()
+        val buf = QuroConversationStore().apply { seed.forEach { add(it) } }
+        buf.add(QuroMessage(role = "user", content = prompt))
+        val text = QuroAssistant(QuroLlmClient(), registry, buf).ask(
+            appContext, cfg,
+            systemPrompt = sys,
+            autoSaveMemory = autoSaveMemory.value,
+            stream = false,
+            historyRounds = _historyRounds.value ?: 0,
+            deepThink = false,
+        )
+        buf.add(QuroMessage(role = "assistant", content = text))
+        commitCurrent(convId, buf, updateTitle = false)
+        return text
+    }
+
+    /**
+     * 读取某会话最近一次 GenUI 生成的 HTML（切回该会话时回放画布用）。
+     * 非 genui 会话或无内容返回 null。
+     */
+    fun lastGenUiHtml(convId: String = _currentId.value): String? {
+        val conv = _convs.value.firstOrNull { it.id == convId } ?: return null
+        if (conv.genUiType != "genui") return null
+        return conv.messages.lastOrNull { it.role == "assistant" }?.content
+    }
+
+    /**
      * 删除单条/聚合气泡对应的底层消息（v417 对话框缺失功能补全）�?
      * ids 为该气泡携带的全�? QuroMessage 原始 id；删除助手消息时，连带清理其隐藏�?
      * tool 结果消息（role=="tool" �? toolCallId 命中被删消息�? toolCall），避免孤儿消息残留�?
