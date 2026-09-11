@@ -372,19 +372,21 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     private val _historyRounds = MutableStateFlow<Int?>(null)
     val historyRoundsPref: StateFlow<Int?> = _historyRounds.asStateFlow()
 
-    // ══════════════ 生成式 UI 渲染通道（GenUI 融合：对话框内"切换模式"）═════════════
-    // 每个对话框独立记忆自己的 GenUI 渲染通道（html / xml / compose / canvas），
-    // 切换对话框（再开一个对话框）会自动载入该对话记忆的通道，点击即可现场切换，切换即生效于后续生成。
-    private val _genUiMode = MutableStateFlow("html")
-    val genUiModePref: StateFlow<String> = _genUiMode.asStateFlow()
-    fun setGenUiMode(mode: String) {
-        if (mode !in com.zorv.genui.prompt.GenUiModes.ALL.map { it.id }) return
-        _genUiMode.value = mode
+    // ══════════════ 对话框类型（GenUI 融合：两种对话框）═════════════
+    // 每个对话框独立记忆自己的类型：normal = 普通对话框（正常聊天）；
+    // genui = GenUI 对话框（强制 AI 用原生 quro-ui 生成界面）。
+    // 点「GenUI 对话框」入口新建的会话即为 genui 类型；切换/新建对话框自动载入其记忆的类型，
+    // 普通对话框完全不受影响（见 ChatScreen 的 GenUI 入口）。
+    private val _genUiType = MutableStateFlow("normal")
+    val genUiTypePref: StateFlow<String> = _genUiType.asStateFlow()
+    fun setGenUiType(type: String) {
+        if (type != "normal" && type != "genui") return
+        _genUiType.value = type
         val id = _currentId.value
         val idx = _convs.value.indexOfFirst { it.id == id }
         if (idx >= 0) {
             _convs.value = _convs.value.toMutableList().also { list ->
-                list[idx] = list[idx].copy(genUiMode = mode)
+                list[idx] = list[idx].copy(genUiType = type)
             }
             runCatching { convRepo.saveAll(_convs.value) }
         }
@@ -593,7 +595,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         }
     }
 
-    fun newConversation() {
+    fun newConversation(genUiType: String = "normal") {
         // 🔧 Bug修复「切对话框中断生成」：新建对话【不再打断】当前会话正在进行的生成�?
         // 每条在途生成有独立缓冲 liveBuffers[convId] 与按会话记账�? commitCurrent�?
         // 旧会话协程在后台续跑、按 id 落盘，不会污染新会话（与 selectConversation 同一原则�?
@@ -602,12 +604,12 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         val id = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
         val welcome = QuroMessage(role = "assistant", content = defaultWelcome())
-        val conv = QuroPersistedConversation(id = id, title = "新对�?", createdAt = now, updatedAt = now, messages = listOf(welcome))
+        val conv = QuroPersistedConversation(id = id, title = "新对�?", createdAt = now, updatedAt = now, genUiType = genUiType, messages = listOf(welcome))
         _convs.value = _convs.value + conv
         _currentId.value = id
         activeConversationId = id
         _historyRounds.value = null
-        _genUiMode.value = conv.genUiMode
+        _genUiType.value = conv.genUiType
         store.clear()
         store.add(welcome)
         _messages.value = store.all()
@@ -627,8 +629,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         store.clear()
         // 载入该会话已保存的「保留对话轮数」设置（null=跟随模型默认�?
         _historyRounds.value = conv.historyRounds
-        // 载入该会话已保存的 GenUI 渲染通道（再开一个对话框时，自动恢复其记忆的模式）
-        _genUiMode.value = conv.genUiMode
+        // 载入该会话已保存的对话框类型（normal / genui），自动恢复其记忆的类型
+        _genUiType.value = conv.genUiType
         // 优先取在线缓冲（生成�?/刚结束）�? 即时看到最新；否则取持久化消息�?
         val live = liveBuffers[id]
         if (live != null) live.all().forEach { store.add(it) }
@@ -1152,11 +1154,11 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 // 仅在写入「当前可见会话」时落盘用户设置的保留轮数；其它会话（后台生�? / 语音球绑定会话）
                 // 保留其自身已存的 historyRounds，避免把当前会话的设置串台覆盖到其它会话�?
                 val rounds = if (id == _currentId.value) _historyRounds.value else existing?.historyRounds
-                // GenUI 渲染通道同理：仅当前可见会话落盘其最新选择，其它会话保留各自记忆的通道
-                val mode = if (id == _currentId.value) _genUiMode.value else existing?.genUiMode
+                // GenUI 对话框类型同理：仅当前可见会话落盘其最新类型，其它会话保留各自记忆的类型
+                val type = if (id == _currentId.value) _genUiType.value else existing?.genUiType
                 _convs.value = _convs.value.toMutableList().also { list ->
                     val idx = list.indexOfFirst { it.id == id }
-                    if (idx >= 0) list[idx] = list[idx].copy(messages = msgs, updatedAt = System.currentTimeMillis(), title = title, historyRounds = rounds, genUiMode = mode ?: "html")
+                    if (idx >= 0) list[idx] = list[idx].copy(messages = msgs, updatedAt = System.currentTimeMillis(), title = title, historyRounds = rounds, genUiType = type ?: "normal")
                 }
                 QuroDiag.log("SAVE", "convId=$id msgs=${msgs.size} activeBufSame=${liveBuffers[id] === buf} force=$forceSave")
                 emitMeta()
@@ -1249,7 +1251,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             ?.take(40)
             ?.trim()
             ?: "空对�?"
-        return QuroConversationMeta(conv.id, conv.title, conv.updatedAt, preview)
+        return QuroConversationMeta(conv.id, conv.title, conv.updatedAt, preview, genUiType = conv.genUiType)
     }
 
     // ---- 人格�? / 记忆�? 接线 ----
@@ -2164,10 +2166,11 @@ $recent
 - **对话框 / 浏览器 化小窗** → 对话框顶栏与浏览器工具栏均有「化小窗」按钮，可将内容折叠为可拖拽悬浮小窗，不中断后台任务。
 """.trimIndent())
 
-        // ══════════════ 生成式 UI（ZorvAI 自写 JSX/HTML → 对话框内 WebView 渲染）═════════════
-        // 让模型在需要可视化/交互时直接产出可运行界面，是「对话框动态 UI 组件」的本质能力。
-        // 仅注入云端路径（本地小模型上下文过紧，已在上方 early-return 跳过）。
-        sb.append("\n\n").append(GenUiPrompt.build(genUiModePref.value).trimIndent())
+        // ══════════════ 生成式 UI（GenUI 对话框：原生 quro-ui 强制生成）═════════════
+        // 仅当当前会话为 genui 类型时，注入强制生成段（普通对话框走正常聊天，不注入）。
+        // 本地小模型上下文过紧（上方 isLocal 分支已 early-return），GenUI 强制段仅在云端路径注入。
+        val isGenuiConv = _convs.value.firstOrNull { it.id == _currentId.value }?.genUiType == "genui"
+        sb.append("\n\n").append(GenUiPrompt.build(force = isGenuiConv).trimIndent())
 
         // ══════════════ 人格卡可视化开关【硬强制】放最末尾 = 最高近因偏好（仅云端路径）═════════════
         // 本地离线模型不走到这里（已在上面 isLocal 分支 early-return），本段只在云端路径注入。

@@ -10,6 +10,9 @@ package com.zorv.genui.prompt
  *
  * 这条 prompt 通过 [SYSTEM_PROMPT] 拼进对话 system；[FEW_SHOT] 作为首轮 few-shot 示范。
  * 与 [com.ai.assistance.quro.ui.QuroChatViewModel] 里「动态 UI（quro-ui 原生组件）」段落保持一致口径。
+ *
+ * 融合 GenUI（独立「GenUI 对话框」入口）后：仅当当前会话为 genui 类型时，
+ * 才在 system 注入本规范并 [FORCE_PROMPT] 强制 AI 主动生成界面；普通对话框走正常聊天。
  */
 object GenUiPrompt {
 
@@ -88,86 +91,22 @@ object GenUiPrompt {
 ```
 """.trimIndent()
 
-    /** 拼装完整 system（可在此追加产品定制段落） */
-    fun build(): String = build("html")
-
     /**
-     * 按【对话框选择的 GenUI 渲染通道】拼装 system。
-     *
-     * 一个对话框可随时切换渲染通道（网页 / 原生布局 / Compose / 画布），切换即生效于后续生成。
-     * 通道决定模型该往「什么观感、什么结构」上靠——端上 A2UI 解释器统一把 quro-ui DSL
-     * 翻译成真实原生控件，因此这里不改 DSL 语法，只调整输出的风格侧重与题材导向，
-     * 让"切换模式"在生成结果上真实可见。
+     * GenUI 对话框专用：在 DSL 规范之外，强制 AI 主动用 quro-ui 生成界面。
+     * 仅在当前会话为 genui 类型时注入（普通对话框不注入，保持正常聊天）。
      */
-    fun build(mode: String): String = buildString {
+    val FORCE_PROMPT: String = """
+# GenUI 对话框（强制生成模式）
+你正处于「GenUI 对话框」。这里的核心能力是**直接用原生界面（quro-ui）回答**，不是纯文字。
+
+- 凡涉及可视化、交互、工具类需求（清单 / 表单 / 计算器 / 仪表盘 / 设置面板 / 带按钮输入选择的交互 / 任何能用界面表达的内容），**必须**在回复正文用 ```quro-ui 围栏输出真实原生控件；纯文字只作极短过渡，绝不默认回纯文字。
+- 用户只是闲聊时可用纯文字；但只要需求沾一点"界面/可交互/可视化"，就优先出 ```quro-ui。
+- 严格遵守上方「动态 UI 输出规范」的 DSL 语法与组件白名单（违反会降级为静态文本）。
+""".trimIndent()
+
+    /** 拼装完整 system。force=true 时追加「强制生成」段（GenUI 对话框用）。 */
+    fun build(force: Boolean = false): String = buildString {
         append(SYSTEM_PROMPT)
-        append("\n\n")
-        append(GenUiModes.byId(mode).promptSection())
+        if (force) append("\n\n").append(FORCE_PROMPT)
     }
-}
-
-/**
- * GenUI 渲染通道注册表 —— 对话框里"切换模式"的唯一事实来源。
- * 顺序即切换器里的展示顺序；id 即持久化到会话 meta 的 genUiMode 值。
- */
-object GenUiModes {
-    data class Mode(
-        val id: String,
-        val label: String,
-        /** 切换器副标题（简短说明该模式侧重） */
-        val hint: String,
-        /** 注入 system 的通道专属段落 */
-        val prompt: String
-    ) {
-        fun promptSection(): String = buildString {
-            appendLine("## 当前对话框 GenUI 渲染通道：$label（$id）")
-            appendLine(prompt)
-        }
-    }
-
-    val ALL: List<Mode> = listOf(
-        Mode(
-            id = "html",
-            label = "网页通道",
-            hint = "HTML/CSS 风格 · 最灵活",
-            prompt = """
-你应优先产出**网页质感**的可交互界面：卡片用圆角阴影、间距宽松、配色明快，
-图表/表单/清单尽量用 quro-ui 的 card / list / tabs / slider 等节点组合出接近 Web 页面的视觉。
-可大量使用 markdown 节点承载富文本与表格，整体观感对标一个精致的 H5 页面。
-            """.trimIndent()
-        ),
-        Mode(
-            id = "xml",
-            label = "原生布局",
-            hint = "安卓原生控件观感",
-            prompt = """
-你应优先产出**系统原生控件质感**的界面：多用真实的输入/选择类节点
-（text_input / checkbox / switch / select / slider / list），
-观感对标 Android 设置页/原生表单——扁平、克制的间距、系统级控件精确对齐。
-少用装饰性阴影，强调"这是能直接操作系统能力的原生面板"。
-            """.trimIndent()
-        ),
-        Mode(
-            id = "compose",
-            label = "Compose",
-            hint = "Material 声明式",
-            prompt = """
-你应优先产出**Material Design 风格**的声明式界面：用 column / row / card / box 做清晰的信息层级，
-圆角、 elevation、分类色板遵循 Material 3 审美；组件之间用一致的 padding 与 gap 形成呼吸感。
-多数列表面板、仪表盘、工具页都按"Material 组件树"方式组织节点。
-            """.trimIndent()
-        ),
-        Mode(
-            id = "canvas",
-            label = "画布",
-            hint = "绘制优先 · 视觉化",
-            prompt = """
-你应优先产出**绘制/可视化优先**的界面：信息图、仪表盘、进度环、插画风卡片、数据可视化占位，
-用大色块、图形、渐变与排版构成强烈视觉冲击，弱化表单、强调"画面"。
-适合做封面式汇报卡、统计看板、品牌风格页。结构仍用 quro-ui DSL 节点，但视觉上对标一张设计稿。
-            """.trimIndent()
-        )
-    )
-
-    fun byId(id: String): Mode = ALL.firstOrNull { it.id == id } ?: ALL.first()
 }
