@@ -108,6 +108,7 @@ fun GenScaffold(
     onNavigate: (NavTarget) -> Unit,
     dark: Boolean = false,
     onPushToChat: (html: String, title: String) -> Unit,
+    onExitToChat: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
@@ -407,6 +408,16 @@ fun GenScaffold(
                     .padding(horizontal = 14.dp, vertical = 9.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 返回 ZorvAI 对话框：显式入口（点按）+ 系统返回键（见 QuroGenUiApp 的 BackHandler）
+                    Text(
+                        "←",
+                        color = GenTheme.Amber, fontSize = 18.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier
+                            .clickable { onExitToChat() }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                    Spacer(Modifier.width(9.dp))
                     // 品牌章：极简字标，替代裸图标
                     Text(
                         soul.name.take(1),
@@ -499,6 +510,10 @@ fun GenScaffold(
                             modifier = Modifier.widthIn(min = 164.dp)
                         ) {
                             val navItems = listOf(
+                                Triple("对话框", "") {
+                                    onExitToChat()
+                                    showQuickNav = false
+                                },
                                 Triple("栈", stackCount.toString()) {
                                     browsing = true
                                     showQuickNav = false
@@ -529,8 +544,9 @@ fun GenScaffold(
                                     },
                                     onClick = { showQuickNav = false; action() },
                                     leadingIcon = {
-                                        Text(
+                                            Text(
                                             when (label) {
+                                                "对话框" -> "↩"
                                                 "栈" -> "◱"
                                                 "魂" -> "◎"
                                                 "记" -> "✦"
