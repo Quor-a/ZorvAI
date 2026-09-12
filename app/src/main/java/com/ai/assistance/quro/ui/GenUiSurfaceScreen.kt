@@ -455,15 +455,23 @@ private fun stripFences(raw: String): String {
     return s
 }
 
-/** 把完整 HTML 切成若干 chunk，配合画布的流式 document.write。 */
+/**
+ * 把完整 HTML 切成若干 chunk，配合画布的流式 document.write。
+ * 关键：只在【换行符】处切分，绝不把一行（尤其 <script> 内的 JS 文本）从中间劈断——
+ * 否则 \u003c 这类转义序列被拆开会导致脚本解析失败、整页白屏。
+ */
 private fun chunkHtml(html: String, size: Int = 4000): List<String> {
     if (html.length <= size) return listOf(html)
     val out = mutableListOf<String>()
-    var i = 0
-    while (i < html.length) {
-        out.add(html.substring(i, (i + size).coerceAtMost(html.length)))
-        i += size
+    val sb = StringBuilder()
+    for (line in html.split('\n')) {
+        if (sb.isNotEmpty() && sb.length + line.length + 1 > size) {
+            out.add(sb.toString())
+            sb.setLength(0)
+        }
+        if (sb.isEmpty()) sb.append(line) else sb.append('\n').append(line)
     }
+    if (sb.isNotEmpty()) out.add(sb.toString())
     return out
 }
 

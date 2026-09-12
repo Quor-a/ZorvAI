@@ -41,8 +41,8 @@ android {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1088
-        versionName = "1.0.88"
+        versionCode = 1089
+        versionName = "1.0.89"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -197,6 +197,12 @@ dependencies {
 
     // 应用内文档预览：WebViewAssetLoader（RC-A 内存炸弹 + RC-B pdf.js Worker 同源修复）
     implementation(libs.androidx.webkit)
+
+    // GenUI 完整版：原生画布（io.gencanvas）+ 三种原生叠加层（XML/Compose/Canvas）
+    implementation(libs.facebook.yoga)
+    implementation(libs.androidsvg)
+    implementation(libs.coil.compose)
+    implementation(libs.kotlinx.serialization.json)
 
     // ACI（Agent Capability Interface）协议层：让 QuroAI 成为 ACI 控制方（AI 中枢），
     // 发现并调用第三方 App 通过 ACI Service 暴露的能力。源码现已收进本仓 :aci-core 模块

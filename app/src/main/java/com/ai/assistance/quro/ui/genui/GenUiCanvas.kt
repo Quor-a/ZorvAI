@@ -46,6 +46,8 @@ class GenUiCanvas(
     var writing = false
         private set
     private var pageReady = false
+    /** end() 在页面未就绪时被调用：记下"想关"，等 onPageFinished 写完正文后再真正 close */
+    private var pendingEnd = false
     private val pendingChunks = ArrayDeque<String>()
     private var seedHtml: String? = null
     @Volatile var writtenBytes: Long = 0
@@ -95,6 +97,7 @@ class GenUiCanvas(
         main.post {
             writing = true
             pageReady = false
+            pendingEnd = false
             writtenBytes = 0
             pendingChunks.clear()
             this@GenUiCanvas.seedHtml = seedHtml
@@ -137,7 +140,12 @@ class GenUiCanvas(
                         val c = pendingChunks.removeFirstOrNull()
                         if (c != null) evalJs("document.write(${jsString(c)});")
                     }
-                    onFirstPaint()
+                    if (pendingEnd) {
+                        pendingEnd = false
+                        doClose()
+                    } else {
+                        onFirstPaint()
+                    }
                 }
             }
             webView.loadDataWithBaseURL(
@@ -159,15 +167,27 @@ class GenUiCanvas(
 
     fun end() {
         main.post {
-            if (!pageReady) { writing = false; return@post }
-            evalJs("document.close();")
-            evalJs("try{var t=document.body.innerHTML;document.body.innerHTML=t.replace(/\\n?```\\s*$/,'');}catch(e){}")
-            evalJs("document.title") { v ->
-                val t = v?.trim('"').orEmpty().ifBlank { "未命名界面" }
-                onPageTitle(t)
+            if (!writing) return@post
+            if (pageReady) {
+                doClose()
+            } else {
+                // 页面还没加载完（surface 屏一次性把完整 HTML 全灌进来时必然走到这里）。
+                // 不能把 writing 置 false，否则 onPageFinished 会判 !writing 直接 return，正文永远不写 → 白屏。
+                // 记下"想关"，等 onPageFinished 写完正文再真正 close。
+                pendingEnd = true
             }
-            writing = false
         }
+    }
+
+    /** 闭合文档、清理残留围栏、回读 <title>。仅在 pageReady 后调用。 */
+    private fun doClose() {
+        evalJs("document.close();")
+        evalJs("try{var t=document.body.innerHTML;document.body.innerHTML=t.replace(/\\n?```\\s*$/,'');}catch(e){}")
+        evalJs("document.title") { v ->
+            val t = v?.trim('"').orEmpty().ifBlank { "未命名界面" }
+            onPageTitle(t)
+        }
+        writing = false
     }
 
     fun replay(html: String) {
@@ -179,6 +199,7 @@ class GenUiCanvas(
 
     fun stop() {
         writing = false
+        pendingEnd = false
         main.post {
             webView.stopLoading()
             if (pageReady) {
@@ -201,6 +222,28 @@ class GenUiCanvas(
         main.post {
             evalJs(
                 "try{var ev=new Event('mo:widget'); ev.data=" + json + "; window.dispatchEvent(ev);}catch(e){}"
+            )
+        }
+    }
+
+    /**
+     * 原生 Compose 层的交互事件回传 AI 页面（页面侧监听 window 的 'mo:compose' 事件）。
+     */
+    fun dispatchComposeAction(action: String) {
+        main.post {
+            evalJs(
+                "try{var ev=new Event('mo:compose'); ev.data=" + action + "; window.dispatchEvent(ev);}catch(e){}"
+            )
+        }
+    }
+
+    /**
+     * GenCanvas 原生画布的交互事件回传 AI 页面（页面侧监听 window 的 'mo:canvas' 事件）。
+     */
+    fun dispatchCanvasAction(action: String) {
+        main.post {
+            evalJs(
+                "try{var ev=new Event('mo:canvas'); ev.data=" + action + "; window.dispatchEvent(ev);}catch(e){}"
             )
         }
     }
