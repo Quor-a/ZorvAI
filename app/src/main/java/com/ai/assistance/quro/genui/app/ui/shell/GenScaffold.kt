@@ -50,12 +50,12 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.Locale
 
-/** 判断模型产物是否为完整 HTML 文档（界面），而非纯文本回复。仅有 <html> 起始、无 </html> 收尾，
- *  或完全不含 HTML 标记的文案都视为「纯文本回复」，交由对话框承载而非甩在画布上。 */
+/** 判断模型产物是否为界面（含 HTML 标签），而非纯文本回复。
+ *  只要出现任何 HTML 标签（<div>/<body>/<p>/<svg>/<!DOCTYPE>…）即视为界面，渲染到画布；
+ *  只有完全不含 HTML 标记的纯散文才回写对话框。不再强制 </html> 收尾，
+ *  否则省略文档外壳的合法界面会被误清空画布。 */
 private fun isHtmlDoc(s: String): Boolean {
-    val t = s.trim()
-    return (t.contains("<!DOCTYPE", ignoreCase = true) || t.contains("<html", ignoreCase = true)) &&
-           t.contains("</html>", ignoreCase = true)
+    return s.contains(Regex("<[a-zA-Z/!][^>]*>"))
 }
 
     /** ThinkingTimeline.Kind 的短名，方便事件映射阅读 */
@@ -347,11 +347,15 @@ fun GenScaffold(
                         r.writeChunk(delta)
                     }
                 } else {
-                // 未确认：缓冲探测，直到出现 HTML 文档起始标记
+                // 未确认：缓冲探测，直到出现任何 HTML 标签（<div>/<body>/<p>/<svg>… 都算界面，
+                // 不强制 <!DOCTYPE>/<html>，避免合法界面因省略文档外壳被误判成纯文本而清空画布）
                 probe.append(delta)
-                if (probe.contains("<!DOCTYPE", ignoreCase = true) || probe.contains("<html", ignoreCase = true)) {
+                if (probe.contains(Regex("<[a-zA-Z/!][^>]*>", RegexOption.DOT_MATCHES_ALL))) {
                     htmlConfirmed = true
-                    val buf = probe.toString()
+                    // 去掉 HTML 文档起始前的解说前缀（如「好的，这是界面：」），只把真正的标签内容灌入画布
+                    val raw = probe.toString()
+                    val tagStart = raw.indexOfFirst { it == '<' }
+                    val buf = if (tagStart > 0) raw.substring(tagStart) else raw
                     probe.setLength(0)
                     main.post {
                         chunkBytes += buf.length
