@@ -61,7 +61,8 @@ fun QuroApp(
                 com.ai.assistance.quro.genui.app.QuroGenUiApp(
                     dark = darkMode,
                     onPushToChat = { html, title -> chatVm.pushGenUiHtmlToChat(html, title) },
-                    onExitToChat = { chatVm.setGenUiType("normal") }
+                    onExitToChat = { chatVm.setGenUiType("normal") },
+                    onTextReply = { chatVm.pushGenUiTextToChat(it) }
                 )
             } else {
                 ChatScreen(

@@ -40,6 +40,7 @@ fun QuroGenUiApp(
     dark: Boolean = false,
     onPushToChat: (html: String, title: String) -> Unit,
     onExitToChat: () -> Unit,
+    onTextReply: (text: String) -> Unit,
 ) {
     val ctx = LocalContext.current
     val store = remember { GenStore(ctx) }
@@ -82,6 +83,7 @@ fun QuroGenUiApp(
                 onNavigate = { screen = it },
                 onPushToChat = onPushToChat,
                 onExitToChat = onExitToChat,
+                onTextReply = onTextReply,
             )
 
             val target = screen
