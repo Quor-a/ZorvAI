@@ -3,6 +3,7 @@ package com.ai.assistance.quro.genui.app
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,6 +39,7 @@ import com.ai.assistance.quro.genui.app.ui.theme.GenTheme
 fun QuroGenUiApp(
     dark: Boolean = false,
     onPushToChat: (html: String, title: String) -> Unit,
+    onExitToChat: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val store = remember { GenStore(ctx) }
@@ -57,6 +59,19 @@ fun QuroGenUiApp(
         ) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
+    // 系统返回键拦截：GenUI 是根屏，默认返回会 finish Activity 直接退回手机桌面。
+    // 这里改为「设置子页开着 → 先关子页；否则退回 ZorvAI 文本对话框」。
+    // 注意：GenScaffold 内部还有一层 BackHandler（仅当界面栈 size>1 时启用，用于翻回上一屏），
+    // 它注册在更内层、优先级更高，所以多页时返回键先弹栈，到根屏才落到本处理。
+    BackHandler {
+        if (screen != null) {
+            if (screen == NavTarget.Settings) { configVersion++; screen = null }
+            else screen = NavTarget.Settings
+        } else {
+            onExitToChat()
+        }
+    }
+
     Surface(Modifier.fillMaxSize(), color = GenTheme.Screen) {
         Box(Modifier.fillMaxSize()) {
             // 主屏始终保留在组合树中，避免设置页返回时画布重建丢失已生成界面
@@ -66,6 +81,7 @@ fun QuroGenUiApp(
                 dark = dark,
                 onNavigate = { screen = it },
                 onPushToChat = onPushToChat,
+                onExitToChat = onExitToChat,
             )
 
             val target = screen
