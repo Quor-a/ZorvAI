@@ -5,6 +5,7 @@ import com.ai.assistance.quro.core.websearch.model.Article
 import com.ai.assistance.quro.core.websearch.model.Citation
 import com.ai.assistance.quro.core.websearch.model.SearchBundle
 import com.ai.assistance.quro.core.websearch.model.SearchHit
+import com.ai.assistance.quro.core.websearch.rank.DomainTrust
 import com.ai.assistance.quro.core.websearch.rank.EvidenceReranker
 
 /**
@@ -47,6 +48,9 @@ object ContextPacker {
         val sb = StringBuilder()
         var used = 0
         val dropped = ArrayList<SearchHit>()
+        val votesList = ArrayList<Int>()
+        var farmCount = 0
+        var freshCount = 0
 
         for (h in hits) {
             if (used >= tokenBudget) { dropped.add(h); continue }
@@ -78,6 +82,9 @@ object ContextPacker {
                     truncated = truncated
                 )
             )
+            votesList.add(h.votes)
+            if (DomainTrust.isContentFarm(domain)) farmCount++
+            if (h.publishedAt > 0) freshCount++
 
             sb.append("[$idx] ").append(h.title.trim()).append('\n')
                 .append("来源: ").append(domain)
@@ -94,9 +101,13 @@ object ContextPacker {
                 citations = emptyList(),
                 queries = queries,
                 dropped = hits,
-                timings = timings
+                timings = timings,
+                confidence = 0f,
+                confidenceNote = "无可用来源"
             )
         }
+
+        val (confidence, note) = computeConfidence(citations.size, votesList, farmCount, freshCount)
 
         val header = buildString {
             append("以下是联网检索到的实时资料，请基于这些资料回答；")
@@ -108,7 +119,9 @@ object ContextPacker {
             citations = citations,
             queries = queries,
             dropped = dropped,
-            timings = timings
+            timings = timings,
+            confidence = confidence,
+            confidenceNote = note
         )
     }
 
@@ -130,6 +143,9 @@ object ContextPacker {
         val sb = StringBuilder()
         var used = 0
         val perDocUsed = HashMap<String, Int>()
+        val votesList = ArrayList<Int>()
+        var farmCount = 0
+        var freshCount = 0
 
         for (e in evidence) {
             if (used >= tokenBudget) break
@@ -152,6 +168,9 @@ object ContextPacker {
                     excerpt = existing.excerpt + "\n" + excerpt,
                     truncated = existing.truncated || truncated
                 )
+                votesList.add(e.hit.votes)
+                if (DomainTrust.isContentFarm(domain)) farmCount++
+                if (e.hit.publishedAt > 0) freshCount++
             } else {
                 idx = citations.size + 1
                 citations.add(
@@ -165,6 +184,9 @@ object ContextPacker {
                         truncated = truncated
                     )
                 )
+                votesList.add(e.hit.votes)
+                if (DomainTrust.isContentFarm(domain)) farmCount++
+                if (e.hit.publishedAt > 0) freshCount++
             }
 
             // 带上标题路径，让模型知道这段出自文档的什么位置
@@ -180,14 +202,19 @@ object ContextPacker {
         }
 
         if (citations.isEmpty()) {
-            return SearchBundle("", emptyList(), queries, emptyList(), timings)
+            return SearchBundle("", emptyList(), queries, emptyList(), timings, 0f, "无可用来源")
         }
+
+        val (confidence, note) = computeConfidence(citations.size, votesList, farmCount, freshCount)
 
         val header = buildString {
             append("以下是联网检索到的实时资料，请基于这些资料回答；")
             append("引用处标注对应编号如 [1][2]。若资料不足以回答，请明确说明。\n\n")
         }
-        return SearchBundle(header + sb.toString().trim(), citations, queries, emptyList(), timings)
+        return SearchBundle(
+            header + sb.toString().trim(), citations, queries, emptyList(), timings,
+            confidence, note
+        )
     }
 
     /** token 预算换算为字符预算（按中英混合的经验系数） */
@@ -199,4 +226,32 @@ object ContextPacker {
 
     private fun fmtDate(ms: Long): String =
         java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.CHINA).format(java.util.Date(ms))
+
+    /**
+     * 估算检索置信度 [0,1] 并给出可读说明。
+     * 综合四个正交维度：
+     * - 覆盖度（covScore）：来源条数是否充足（>=3 视为充分）；
+     * - 跨引擎共识（voteScore）：平均被多少引擎同时命中，1 个→0.45，3+→1.0；
+     * - 时效覆盖（freshScore）：带发布时间的来源占比；
+     * - 内容农场占比（farmScore）：内容农场来源越多，置信度越低。
+     */
+    private fun computeConfidence(
+        n: Int,
+        votes: List<Int>,
+        farmCount: Int,
+        freshCount: Int
+    ): Pair<Float, String> {
+        if (n == 0) return 0f to "无可用来源"
+        val avgVotes = if (votes.isNotEmpty()) votes.average() else 1.0
+        val voteScore = minOf(1.0, (avgVotes - 1.0) / 2.0 + 0.45)
+        val farmRatio = farmCount.toDouble() / n
+        val farmScore = 1.0 - farmRatio * 0.6
+        val freshScore = if (freshCount > 0) minOf(1.0, freshCount.toDouble() / n + 0.15) else 0.7
+        val covScore = minOf(1.0, n / 3.0)
+        val conf = (0.35 * covScore + 0.30 * voteScore + 0.20 * freshScore + 0.15 * farmScore)
+            .coerceIn(0.0, 1.0)
+        val note = "来源 $n 条 · 跨引擎共识 ${"%.1f".format(avgVotes)} · " +
+            "内容农场占比 ${(farmRatio * 100).toInt()}% · 时效覆盖 ${(freshCount * 100 / n)}%"
+        return conf.toFloat() to note
+    }
 }

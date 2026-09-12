@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.core.websearch.rank
 
+import com.ai.assistance.quro.core.websearch.HanEntities
 import com.ai.assistance.quro.core.websearch.model.SearchHit
 
 /**
@@ -13,16 +14,8 @@ import com.ai.assistance.quro.core.websearch.model.SearchHit
  */
 object ResultReranker {
 
-    /** 域名权威加分：官方/百科/权威媒体/学术源 */
-    private val AUTHORITY = listOf(
-        Regex("""(^|\.)wikipedia\.org$""") to 1.25,
-        Regex("""(^|\.)(gov|gov\.cn|edu|edu\.cn|org\.cn)$""") to 1.2,
-        Regex("""(^|\.)(nature\.com|sciencedirect\.com|arxiv\.org|ieee\.org|acm\.org)$""") to 1.2,
-        Regex("""(^|\.)(xinhuanet\.com|people\.com\.cn|chinanews\.com\.cn|cctv\.com)$""") to 1.1,
-        Regex("""(^|\.)(github\.com|stackoverflow\.com|developer\.android\.com|developer\.apple\.com)$""") to 1.15,
-        Regex("""(^|\.)(zhihu\.com|jianshu\.com|csdn\.net|51cto\.com|juejin\.cn)$""") to 0.95,
-        Regex("""(^|\.)(baidu\.com|so\.com|sogou\.com)$""") to 0.85
-    )
+    /** 新鲜度半衰：以 30 天为半衰期做平滑指数衰减，替代原粗粒度分桶 */
+    private const val FRESH_HALF_LIFE_DAYS = 30.0
 
     private val STOP = setOf(
         "的", "了", "吗", "呢", "是", "在", "有", "和", "与", "怎么", "如何", "什么", "为什么",
@@ -70,20 +63,15 @@ object ResultReranker {
                 else -> 0.1
             }
 
-            // 4. 权威度
-            s += authorityBonus(domain)
+            // 4. 权威度（统一由 DomainTrust 评定，含内容农场降权）
+            s += DomainTrust.authorityBonus(domain)
+            if (DomainTrust.isContentFarm(domain)) s -= 0.5
 
-            // 5. 新鲜度
+            // 5. 新鲜度（平滑半衰衰减，替代粗粒度分桶）
             if (h.publishedAt > 0 && recencyBias > 0) {
                 val days = (now - h.publishedAt) / 86_400_000.0
-                val fresh = when {
-                    days <= 1 -> 1.5
-                    days <= 7 -> 1.0
-                    days <= 30 -> 0.5
-                    days <= 365 -> 0.1
-                    else -> 0.0
-                }
-                s += fresh * recencyBias
+                val fresh = Math.pow(0.5, days / FRESH_HALF_LIFE_DAYS)
+                s += fresh * recencyBias * 1.5
             }
 
             // 摘要过短通常意味着内容稀薄
@@ -102,16 +90,9 @@ object ResultReranker {
     }
 
     fun tokenize(q: String): List<String> {
-        // 中英混排切分：英文按空格，中文按 2-gram 滑动（无分词器下的高性价比方案）
-        val out = ArrayList<String>()
-        val en = Regex("""[a-zA-Z0-9]{2,}""").findAll(q.lowercase()).map { it.value }.toList()
-        out.addAll(en.filter { it !in STOP })
-        val cn = Regex("""[一-鿿]+""").findAll(q).map { it.value }.toList()
-        for (seg in cn) {
-            if (seg.length <= 2) out.add(seg)
-            else for (i in 0..seg.length - 2) out.add(seg.substring(i, i + 2))
-        }
-        return out.distinct().filter { it !in STOP }
+        // 委托 HanEntities 做端侧专有名词保护：命中实体（郑钦文 / C罗 / iPhone 17 Pro 等）
+        // 作为整体 token 保留，不被 2-gram 拆断；剩余中文仍走 2-gram，保证召回不退化。
+        return HanEntities.protectTokens(q).filter { it !in STOP }
     }
 
     private fun domainOf(url: String): String {
@@ -120,7 +101,6 @@ object ResultReranker {
     }
 
     private fun authorityBonus(domain: String): Double {
-        for ((re, w) in AUTHORITY) if (re.containsMatchIn(domain)) return (w - 1.0) * 3.0
-        return 0.0
+        return DomainTrust.authorityBonus(domain)
     }
 }

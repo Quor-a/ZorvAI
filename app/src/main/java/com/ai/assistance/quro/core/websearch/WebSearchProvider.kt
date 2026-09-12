@@ -1,7 +1,9 @@
 package com.ai.assistance.quro.core.websearch
 
 import com.ai.assistance.quro.core.websearch.cache.MemoryCacheStore
+import com.ai.assistance.quro.core.websearch.net.BaiduEngine
 import com.ai.assistance.quro.core.websearch.net.BingEngine
+import com.ai.assistance.quro.core.websearch.net.BraveEngine
 import com.ai.assistance.quro.core.websearch.net.DdgHtmlEngine
 import com.ai.assistance.quro.core.websearch.net.GoogleNewsRssEngine
 import com.ai.assistance.quro.core.websearch.net.SearXngEngine
@@ -12,6 +14,8 @@ import com.ai.assistance.quro.core.websearch.net.SearchEngine
  *
  * 检索层采用多引擎并发 + 投票去重（任一引擎不可达都不影响整体）：
  * - BingEngine（主力，RSS 优先 / HTML 兜底双通道，可用性最高）
+ * - BaiduEngine（中文原生索引，无需 key、默认开启，解单点 Bing 依赖）
+ * - BraveEngine（独立商业索引，API key 驱动；未配置 key 时自动跳过，数据不出设备）
  * - Google News RSS（时效类查询最佳源，境内不可达时自动熔断跳过）
  * - DuckDuckGo HTML（兜底，境内不可达时自动熔断跳过）
  * - SearXNG（自建元搜索，可选；baseUrl 为空则自动跳过）
@@ -26,6 +30,8 @@ object WebSearchProvider {
     private val engines: List<SearchEngine> by lazy {
         listOf(
             BingEngine(),
+            BaiduEngine(),
+            BraveEngine(),
             GoogleNewsRssEngine(),
             DdgHtmlEngine(),
             SearXngEngine(baseUrl = searxngUrl()),

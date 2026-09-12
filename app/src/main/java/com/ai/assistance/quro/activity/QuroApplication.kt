@@ -136,5 +136,11 @@ class QuroApplication : Application() {
         } catch (e: Throwable) {
             android.util.Log.e("QuroApplication", "ACI 原生层加载失败（不影响主流程）", e)
         }
+        // 联网检索可选 API 凭据本地存储初始化（仅注入 Context，数据不出设备）
+        try {
+            com.ai.assistance.quro.core.websearch.net.WebSearchKeys.init(applicationContext)
+        } catch (e: Throwable) {
+            android.util.Log.e("QuroApplication", "WebSearchKeys 初始化失败（不影响主流程）", e)
+        }
     }
 }

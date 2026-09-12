@@ -91,4 +91,66 @@ object HttpStack {
             resp.body?.string()
         }
     }.getOrNull()
+
+    /**
+     * 还原被搜索源包裹的跳转链接（如百度 `baidu.com/link?url=...`）。
+     *
+     * 做法：发一次不跟随重定向的 GET，读取 3xx 的 Location 头即真实地址。
+     * 单跳即可覆盖百度场景；解析失败返回 null（调用方应保留原始包裹链接兜底）。
+     * 仅取响应头、不下正文体，开销极小。
+     */
+    fun finalUrl(url: String): String? {
+        return try {
+            val req = Request.Builder()
+                .url(url)
+                .header("User-Agent", UA)
+                .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+                .get()
+                .build()
+            val c = client.newBuilder()
+                .followRedirects(false)
+                .readTimeout(6, TimeUnit.SECONDS)
+                .build()
+            c.newCall(req).execute().use { resp ->
+                if (resp.isRedirect) {
+                    resp.header("Location")?.let { loc ->
+                        if (loc.startsWith("http")) loc
+                        else runCatching { resp.request.url.resolve(loc).toString() }.getOrNull()
+                    }
+                } else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 带自定义请求头的 GET（用于需要鉴权的 API，如 Brave Search 的 X-Subscription-Token）。
+     * 失败时返回 null，不抛异常，便于上层按"引擎不可用"处理。
+     */
+    fun getWithHeaders(
+        url: String,
+        headers: Map<String, String>,
+        forHtml: Boolean = false,
+        timeoutMs: Long = 0
+    ): String? {
+        return try {
+            val b = Request.Builder().url(url).get()
+            b.header("User-Agent", UA)
+            b.header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+            if (forHtml) b.header("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
+            headers.forEach { (k, v) -> b.header(k, v) }
+            val c = if (timeoutMs > 0) {
+                client.newBuilder()
+                    .callTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+                    .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+                    .build()
+            } else if (forHtml) fetchClient else client
+            c.newCall(b.build()).execute().use { resp ->
+                if (!resp.isSuccessful) null else resp.body?.string()
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
 }
