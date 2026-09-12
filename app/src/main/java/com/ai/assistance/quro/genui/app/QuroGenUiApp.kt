@@ -37,6 +37,7 @@ import com.ai.assistance.quro.genui.app.ui.theme.GenTheme
 @Composable
 fun QuroGenUiApp(
     dark: Boolean = false,
+    onPushToChat: (html: String, title: String) -> Unit,
 ) {
     val ctx = LocalContext.current
     val store = remember { GenStore(ctx) }
@@ -63,7 +64,8 @@ fun QuroGenUiApp(
                 store = store,
                 configVersion = configVersion,
                 dark = dark,
-                onNavigate = { screen = it }
+                onNavigate = { screen = it },
+                onPushToChat = onPushToChat,
             )
 
             val target = screen

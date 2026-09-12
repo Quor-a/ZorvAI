@@ -695,6 +695,23 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     }
 
     /**
+     * GenUI 全屏模式生成完成后，把整屏 HTML 结果回写进当前 ZorvAI 对话。
+     *
+     * 关键：用 ```miniapp 围栏包裹，使 ChatScreen 的 parseBlocks 走 MsgBlock.MiniApp →
+     * WebView 小程序气泡，而不是被 isFullHtmlDocument 误判成「整段 HTML 代码块」。
+     * 这样 GenUI 的产物会作为一条助手消息出现在 ZorvAI 对话框里，实现「返回 ZorvAI 对话框」。
+     *
+     * 调用方需保证在主线程（GenScaffold.onDone 已 main.post）。GenUI 生成不占用 liveBuffers，
+     * 故 commitCurrent() 默认 buf=store 会正确刷新 _messages 并落盘。
+     */
+    fun pushGenUiHtmlToChat(html: String, title: String = "") {
+        if (html.isBlank()) return
+        val content = "```miniapp\n$html\n```"
+        store.add(QuroMessage(role = "assistant", content = content))
+        commitCurrent()
+    }
+
+    /**
      * 删除单条/聚合气泡对应的底层消息（v417 对话框缺失功能补全）�?
      * ids 为该气泡携带的全�? QuroMessage 原始 id；删除助手消息时，连带清理其隐藏�?
      * tool 结果消息（role=="tool" �? toolCallId 命中被删消息�? toolCall），避免孤儿消息残留�?
