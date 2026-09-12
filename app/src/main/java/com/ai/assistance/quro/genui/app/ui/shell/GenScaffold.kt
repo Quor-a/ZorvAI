@@ -106,7 +106,8 @@ fun GenScaffold(
     store: GenStore,
     configVersion: Int = 0,
     onNavigate: (NavTarget) -> Unit,
-    dark: Boolean = false
+    dark: Boolean = false,
+    onPushToChat: (html: String, title: String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
@@ -369,6 +370,9 @@ fun GenScaffold(
                     // AI 声明了 xml / compose 通道时，把画布上方交给真实原生渲染。
                     // 不影响 HTML 部分：网页继续承载整体排版，原生块叠在其上。
                     restoreNative(full)
+                    // 把整屏结果回写 ZorvAI 对话框：作为小程序 WebView 气泡出现在当前会话，
+                    // 实现「返回 ZorvAI 对话框」（用户可在普通对话里看到/点开这次 GenUI 产物）。
+                    onPushToChat(full, title)
                     phase = Phase.Done
                     phaseDetail = "「$title」· ${(full.length / 1024.0).format1()}KB" +
                         if (lastChannel != "html") " · 原生 $lastChannel" else ""

@@ -58,7 +58,10 @@ fun QuroApp(
         QuroTheme(darkOverride = darkMode) {
         Box(Modifier.fillMaxSize()) {
             if (genUiType == "genui") {
-                com.ai.assistance.quro.genui.app.QuroGenUiApp(dark = darkMode)
+                com.ai.assistance.quro.genui.app.QuroGenUiApp(
+                    dark = darkMode,
+                    onPushToChat = { html, title -> chatVm.pushGenUiHtmlToChat(html, title) }
+                )
             } else {
                 ChatScreen(
                     chatVm,
