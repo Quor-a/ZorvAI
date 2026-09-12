@@ -119,6 +119,11 @@ class WebSearchTool(private val toolName: String) : QuroTool {
                 sb.append("[").append(c.index).append("] ").append(c.title)
                     .append(" — ").append(c.url).append('\n')
             }
+            // 透出检索置信度，便于模型/用户判断结果可信程度
+            val pct = (b.confidence * 100).toInt()
+            sb.append("\n检索置信度：${pct}%")
+            if (b.confidenceNote.isNotBlank()) sb.append("（${b.confidenceNote}）")
+            sb.append('\n')
             return sb.toString()
         }
 

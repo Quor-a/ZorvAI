@@ -46,14 +46,32 @@ object QueryRewriter {
         question: String,
         nowIso: String
     ): Rewrite {
-        val fallback = Rewrite(listOf(ruleClean(question)), "any")
+        // 还原可能被空格拆碎的实体（如 "郑 钦 文" → "郑钦文"），再进入改写流程
+        val recovered = HanEntities.recoverFragmented(question)
+        val fallback = Rewrite(listOf(ruleClean(recovered)), "any")
         if (completer == null) return fallback
 
-        val user = "当前时间：$nowIso\n用户问题：$question"
+        val user = "当前时间：$nowIso\n用户问题：$recovered"
         val raw = runCatching { completer.complete(SYSTEM, user, 200) }.getOrNull()
             ?: return fallback
 
-        return parse(raw) ?: fallback
+        val parsed = parse(raw) ?: return fallback
+        // 实体保活：原问题专有名词若被改写丢掉，补一条原问兜底，确保不丢实体
+        return ensureEntities(parsed, recovered)
+    }
+
+    /**
+     * 实体保活：检测原问题中的专有名词，若任一未被任何改写查询覆盖，
+     * 则追加一条规则化原问（保留全部实体上下文），避免"郑钦文"这类实体被改写丢弃。
+     */
+    private fun ensureEntities(r: Rewrite, question: String): Rewrite {
+        val orig = HanEntities.detect(question).map { it.lowercase() }
+        if (orig.isEmpty()) return r
+        val allCovered = orig.all { e -> r.queries.any { q -> q.lowercase().contains(e) } }
+        if (allCovered) return r
+        val extra = ruleClean(question)
+        if (extra.isBlank()) return r
+        return r.copy(queries = (r.queries + extra).distinct().take(3))
     }
 
     /** 解析模型输出，容错对待代码块包裹、多余文字等情况 */

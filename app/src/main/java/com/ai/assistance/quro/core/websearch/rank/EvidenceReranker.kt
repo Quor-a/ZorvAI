@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.core.websearch.rank
 
+import com.ai.assistance.quro.core.websearch.HanEntities
 import com.ai.assistance.quro.core.websearch.html.SemanticChunker
 import com.ai.assistance.quro.core.websearch.model.SearchHit
 import kotlin.math.exp
@@ -135,26 +136,20 @@ object EvidenceReranker {
         }
     }
 
-    fun extractEntities(q: String): List<String> =
-        ENTITY.findAll(q).map { it.value }.distinct().toList()
+    fun extractEntities(q: String): List<String> {
+        // 结构正则（XX模型/XX系统/拉丁词）与 HanEntities 词典/型号检测合并，覆盖更多专有名词
+        val fromRegex = ENTITY.findAll(q).map { it.value }
+        val fromHan = HanEntities.detect(q)
+        return (fromRegex + fromHan).distinct().toList()
+    }
 
     /** 提取数值型声明，供引用校验检查"数字是否真的来自证据" */
     fun extractNumerics(text: String): List<String> =
         NUMERIC.findAll(text).map { it.value }.distinct().toList()
 
-    private val AUTH = listOf(
-        Regex("""(^|\.)wikipedia\.org$""") to 1.0,
-        Regex("""(^|\.)(gov|gov\.cn|edu|edu\.cn|org\.cn)$""") to 1.0,
-        Regex("""(^|\.)(nature\.com|sciencedirect\.com|arxiv\.org|ieee\.org|acm\.org)$""") to 1.0,
-        Regex("""(^|\.)(github\.com|stackoverflow\.com|developer\.android\.com|developer\.apple\.com)$""") to 0.85,
-        Regex("""(^|\.)(xinhuanet\.com|people\.com\.cn|chinanews\.com\.cn|cctv\.com)$""") to 0.8,
-        Regex("""(^|\.)(zhihu\.com|csdn\.net|juejin\.cn|jianshu\.com|51cto\.com)$""") to 0.5
-    )
-
     private fun authorityScore(url: String): Double {
         val d = url.removePrefix("https://").removePrefix("http://")
             .substringBefore('/').substringBefore(':').removePrefix("www.")
-        for ((re, w) in AUTH) if (re.containsMatchIn(d)) return w
-        return 0.4
+        return DomainTrust.authorityScore(d)
     }
 }

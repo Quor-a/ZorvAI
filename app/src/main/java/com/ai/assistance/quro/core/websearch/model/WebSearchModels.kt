@@ -64,5 +64,9 @@ data class SearchBundle(
     /** 命中但未被采用的候选，便于调试与"换一批" */
     val dropped: List<SearchHit> = emptyList(),
     /** 各阶段耗时，毫秒 */
-    val timings: Map<String, Long> = emptyMap()
+    val timings: Map<String, Long> = emptyMap(),
+    /** 检索置信度 [0,1]：综合来源覆盖、跨引擎共识、时效覆盖、内容农场占比估算 */
+    val confidence: Float = 0.5f,
+    /** 置信度说明（中文，可读的细分口径），供 UI / 模型透出 */
+    val confidenceNote: String = ""
 )
