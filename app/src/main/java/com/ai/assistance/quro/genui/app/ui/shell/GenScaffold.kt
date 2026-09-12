@@ -50,6 +50,14 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.Locale
 
+/** 判断模型产物是否为完整 HTML 文档（界面），而非纯文本回复。仅有 <html> 起始、无 </html> 收尾，
+ *  或完全不含 HTML 标记的文案都视为「纯文本回复」，交由对话框承载而非甩在画布上。 */
+private fun isHtmlDoc(s: String): Boolean {
+    val t = s.trim()
+    return (t.contains("<!DOCTYPE", ignoreCase = true) || t.contains("<html", ignoreCase = true)) &&
+           t.contains("</html>", ignoreCase = true)
+}
+
     /** ThinkingTimeline.Kind 的短名，方便事件映射阅读 */
 private typealias Kind = com.ai.assistance.quro.genui.app.agent.ThinkingTimeline.Kind
 
@@ -109,6 +117,8 @@ fun GenScaffold(
     dark: Boolean = false,
     onPushToChat: (html: String, title: String) -> Unit,
     onExitToChat: () -> Unit,
+    /** GenUI 模式下 AI 返回纯文本（非 HTML 界面）时，把文本作为普通回复写回 ZorvAI 对话框 */
+    onTextReply: (text: String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
@@ -319,18 +329,38 @@ fun GenScaffold(
 
         // Agent 回调发生在 IO 线程：所有 UI 状态更新与渲染注入都 post 回主线程
         val main = android.os.Handler(android.os.Looper.getMainLooper())
+        // 纯文本/非 HTML 探测：流式期间先缓冲，确认是 HTML 文档才灌入画布；
+        // 否则（AI 用文本回复而非生成界面）整段不写画布，留到 onDone 路由到对话框。
+        var htmlConfirmed = false
+        val probe = StringBuilder()
         val agent = AgentLoop(
             context = ctx,
             store = store,
             // onStatus 承载的是粗粒度人类文案，把它降级为细节行；阶段语义由 onEvent 负责
             onStatus = { s -> main.post { if (!building || phase != Phase.Rendering) phaseDetail = s } },
             onHtmlDelta = { delta ->
-                main.post {
-                    chunkBytes += delta.length
-                    // 渲染阶段的细节行显示实时体量 + 桥调用次数（真实数据，不是装饰）
-                    if (phase == Phase.Rendering)
-                        phaseDetail = "${(chunkBytes / 1024.0).format1()}KB · bridge ×$bridgeCalls"
-                    r.writeChunk(delta)
+                if (htmlConfirmed) {
+                    main.post {
+                        chunkBytes += delta.length
+                        if (phase == Phase.Rendering)
+                            phaseDetail = "${(chunkBytes / 1024.0).format1()}KB · bridge ×$bridgeCalls"
+                        r.writeChunk(delta)
+                    }
+                } else {
+                // 未确认：缓冲探测，直到出现 HTML 文档起始标记
+                probe.append(delta)
+                if (probe.contains("<!DOCTYPE", ignoreCase = true) || probe.contains("<html", ignoreCase = true)) {
+                    htmlConfirmed = true
+                    val buf = probe.toString()
+                    probe.setLength(0)
+                    main.post {
+                        chunkBytes += buf.length
+                        if (phase == Phase.Rendering)
+                            phaseDetail = "${(chunkBytes / 1024.0).format1()}KB · bridge ×$bridgeCalls"
+                        r.writeChunk(buf)
+                    }
+                }
+                // 仍未确认：继续缓冲，不写画布（纯文本会由 onDone 写回对话框）
                 }
             },
             // —— 思考/工具事件 → 时间线 + 状态行 ——
@@ -362,22 +392,35 @@ fun GenScaffold(
             onDone = { full, title ->
                 main.post {
                     r.end()
-                    val page = GeneratedPage(GenStore.newId(), title, full, provider.model, System.currentTimeMillis())
-                    store.appendPage(page)
-                    pushPage(page)
-                    stackCount = store.loadPages().size
-                    partialHtml = null
-                    // —— 渲染通道分派 ——
-                    // AI 声明了 xml / compose 通道时，把画布上方交给真实原生渲染。
-                    // 不影响 HTML 部分：网页继续承载整体排版，原生块叠在其上。
-                    restoreNative(full)
-                    // 把整屏结果回写 ZorvAI 对话框：作为小程序 WebView 气泡出现在当前会话，
-                    // 实现「返回 ZorvAI 对话框」（用户可在普通对话里看到/点开这次 GenUI 产物）。
-                    onPushToChat(full, title)
-                    phase = Phase.Done
-                    phaseDetail = "「$title」· ${(full.length / 1024.0).format1()}KB" +
-                        if (lastChannel != "html") " · 原生 $lastChannel" else ""
-                    building = false
+                    if (isHtmlDoc(full)) {
+                        // —— 正常：AI 生成了 HTML 界面，写画布 + 回写对话框（小程序气泡）——
+                        val page = GeneratedPage(GenStore.newId(), title, full, provider.model, System.currentTimeMillis())
+                        store.appendPage(page)
+                        pushPage(page)
+                        stackCount = store.loadPages().size
+                        partialHtml = null
+                        // —— 渲染通道分派 ——
+                        // AI 声明了 xml / compose 通道时，把画布上方交给真实原生渲染。
+                        // 不影响 HTML 部分：网页继续承载整体排版，原生块叠在其上。
+                        restoreNative(full)
+                        // 把整屏结果回写 ZorvAI 对话框：作为小程序 WebView 气泡出现在当前会话，
+                        // 实现「返回 ZorvAI 对话框」（用户可在普通对话里看到/点开这次 GenUI 产物）。
+                        onPushToChat(full, title)
+                        phase = Phase.Done
+                        phaseDetail = "「$title」· ${(full.length / 1024.0).format1()}KB" +
+                            if (lastChannel != "html") " · 原生 $lastChannel" else ""
+                        building = false
+                    } else {
+                        // —— 异常：AI 返回的是纯文本回复（不是界面）——
+                        // 绝不把回复文本直接甩在画布上；清空画布并把文本作为普通回复写回对话框。
+                        r.begin(null)
+                        partialHtml = null
+                        onTextReply(full.trim())
+                        phase = Phase.Done
+                        phaseDetail = "AI 以文本回复 · 已写入对话框"
+                        building = false
+                        scope.launch { snackbar.showSnackbar("AI 以文本回复，已写入 ZorvAI 对话框") }
+                    }
                 }
             },
             onError = { msg ->

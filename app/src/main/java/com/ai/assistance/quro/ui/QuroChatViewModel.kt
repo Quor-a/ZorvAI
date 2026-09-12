@@ -712,6 +712,17 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     }
 
     /**
+     * GenUI 模式下 AI 返回纯文本（非 HTML 界面）时，把文本作为一条普通助手回复写回当前会话。
+     * 与 pushGenUiHtmlToChat 的区别：不包 ```miniapp 围栏，直接以纯文本气泡出现在 ZorvAI 对话框，
+     * 避免「回复文本被甩在画布上」。调用方需在主线程（GenScaffold.onDone 已 main.post）。
+     */
+    fun pushGenUiTextToChat(text: String) {
+        if (text.isBlank()) return
+        store.add(QuroMessage(role = "assistant", content = text.trim()))
+        commitCurrent()
+    }
+
+    /**
      * 删除单条/聚合气泡对应的底层消息（v417 对话框缺失功能补全）�?
      * ids 为该气泡携带的全�? QuroMessage 原始 id；删除助手消息时，连带清理其隐藏�?
      * tool 结果消息（role=="tool" �? toolCallId 命中被删消息�? toolCall），避免孤儿消息残留�?
