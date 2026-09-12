@@ -20,6 +20,9 @@ navigation = "2.8.5"
 kotlinxSerialization = "1.8.0"
 room = "2.8.4"
 ksp = "2.3.9"
+facebookYoga = "2.0.1"
+androidsvg = "1.4"
+coil = "2.6.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -73,6 +76,11 @@ shizuku-provider = { group = "dev.rikka.shizuku", name = "provider", version.ref
 # 应用内文档预览：WebViewAssetLoader 把 assets 与目标文件挂到同源 https，
 # 让 WebView 拿到非 opaque origin（pdf.js Worker 可启动），并以流方式返回文件（去 base64 内存炸弹）
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "androidxWebkit" }
+
+# GenUI 原生画布（io.gencanvas）依赖：Flexbox 布局引擎 / SVG 兜底 / 图片加载
+facebook-yoga = { group = "com.facebook.yoga", name = "yoga", version.ref = "facebookYoga" }
+androidsvg = { group = "com.caverock", name = "androidsvg", version.ref = "androidsvg" }
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 
 # 端侧 ASR 引擎 Sherpa-NCNN：未使用版本目录条目。
 # 原因：Sherpa-NCNN 无 Maven Central / JitPack AAR（仓库根仅含 CMake，JitPack 构建全部失败）。

@@ -795,6 +795,12 @@
             </intent-filter>
         </receiver>
 
+        <!-- GenUI 闹钟广播接收器：alarm_set 工具到点后弹通知 -->
+        <receiver
+            android:name="com.ai.assistance.quro.genui.app.bridge.AlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
     </application>
 
 </manifest>
