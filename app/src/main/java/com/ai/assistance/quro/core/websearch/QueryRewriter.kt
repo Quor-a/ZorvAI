@@ -35,7 +35,8 @@ object QueryRewriter {
         2. 生成 1-3 个查询词，互相之间角度不同（如：一个查事实、一个查评测、一个查最新动态）；
         3. 查询词要短、关键词化，去掉口语词和礼貌用语；
         4. 保留专有名词、型号、数字等不可替换的信息；中文人名/地名/专有名词必须保持连续完整，禁止在字间插入空格或拆成单字（如"郑钦文"必须整体输出，不得写成"郑 钦文"或"郑"）；
-        5. recency 字段按问题需要填写：day / week / month / any。
+        5. 必须保留用户问题的全部核心语义（地点、主体、动作、时间），禁止只抽取其中一个修饰词（如"周末"）而丢弃主体（如"杭州/旅游/景点"）；每个查询词也要尽量覆盖核心词，不要只输出单一字面词（如"latest"）；
+        6. recency 字段按问题需要填写：day / week / month / any。
         输出格式：{"queries":["查询1","查询2"],"recency":"week"}
     """.trimIndent()
 
@@ -48,30 +49,37 @@ object QueryRewriter {
     ): Rewrite {
         // 还原可能被空格拆碎的实体（如 "郑 钦 文" → "郑钦文"），再进入改写流程
         val recovered = HanEntities.recoverFragmented(question)
-        val fallback = Rewrite(listOf(ruleClean(recovered)), "any")
-        if (completer == null) return fallback
+        // 意图保真查询：永远基于用户原问抽取核心词（实体 + 显著英文词 + 中文词），
+        // 不依赖模型质量——即使模型改写跑偏，送进引擎的查询仍锚定真实意图。
+        val intentQ = buildIntentQuery(recovered)
+        if (completer == null) return Rewrite(listOf(intentQ), "any")
 
         val user = "当前时间：$nowIso\n用户问题：$recovered"
         val raw = runCatching { completer.complete(SYSTEM, user, 200) }.getOrNull()
-            ?: return fallback
+            ?: return Rewrite(listOf(intentQ), "any")
 
-        val parsed = parse(raw) ?: return fallback
-        // 实体保活：原问题专有名词若被改写丢掉，补一条原问兜底，确保不丢实体
-        return ensureEntities(parsed, recovered)
+        val parsed = parse(raw) ?: return Rewrite(listOf(intentQ), "any")
+        // 意图查询置于首位：保证不被 maxQueries 截断丢弃；模型查询提供角度多样性
+        val queries = (listOf(intentQ) + parsed.queries)
+            .map { it.trim() }
+            .filter { it.length in 2..80 }
+            .distinct()
+            .take(3)
+        return Rewrite(queries, parsed.recency)
     }
 
     /**
-     * 实体保活：检测原问题中的专有名词，若任一未被任何改写查询覆盖，
-     * 则追加一条规则化原问（保留全部实体上下文），避免"郑钦文"这类实体被改写丢弃。
+     * 意图保真查询：把用户原问转成"实体 + 显著词"的关键词串，整体不被 2-gram 拆碎。
+     * 例："周末去杭州旅游推荐景点美食" → "杭州 周末 旅游 推荐 景点 美食"
+     *     "latest breakthrough in AI 2026" → "latest breakthrough ai 2026"
+     * 这是对抗"改写跑偏"的兜底：无论模型怎么改，这条查询永远锚定用户真实意图。
      */
-    private fun ensureEntities(r: Rewrite, question: String): Rewrite {
-        val orig = HanEntities.detect(question).map { it.lowercase() }
-        if (orig.isEmpty()) return r
-        val allCovered = orig.all { e -> r.queries.any { q -> q.lowercase().contains(e) } }
-        if (allCovered) return r
-        val extra = ruleClean(question)
-        if (extra.isBlank()) return r
-        return r.copy(queries = (r.queries + extra).distinct().take(3))
+    private fun buildIntentQuery(q: String): String {
+        return HanEntities.protectTokens(q)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+            .take(80)
+            .ifBlank { q.take(60) }
     }
 
     /** 解析模型输出，容错对待代码块包裹、多余文字等情况 */

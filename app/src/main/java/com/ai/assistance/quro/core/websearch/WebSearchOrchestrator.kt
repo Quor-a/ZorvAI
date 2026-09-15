@@ -128,7 +128,7 @@ class WebSearchOrchestrator(
         }
         val rankedFull = ResultReranker.rerank(
             merged.values.toList(),
-            queries.first(),
+            question,
             recencyBias = bias,
             maxPerDomain = 2
         )
@@ -239,7 +239,7 @@ class WebSearchOrchestrator(
 
         // 4. 结果级预排序后择优抓取
         val ranked = ResultReranker.rerank(
-            fused, queries.first(),
+            fused, question,
             recencyBias = when (rw.recency) {
                 "day" -> 1.0; "week" -> 0.8; "month" -> 0.5; else -> 0.3
             },
@@ -272,7 +272,7 @@ class WebSearchOrchestrator(
         }
         val evidence = EvidenceReranker.rank(
             chunks = pairs,
-            query = queries.first(),
+            query = question,
             recencyBias = if (rw.recency == "day") 0.8 else 0.4,
             maxPerDoc = config.maxChunksPerDoc
         ).take(config.evidenceTopK)

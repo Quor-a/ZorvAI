@@ -49,7 +49,7 @@ object WebSearchProvider {
                 readTopK = 5,
                 tokenBudget = 5000,
                 perArticleCap = 1500,
-                maxQueries = 2,
+                maxQueries = 3,
                 searchTimeoutMs = 9_000,
             ),
         )
