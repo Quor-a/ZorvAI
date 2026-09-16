@@ -20,6 +20,7 @@ import com.ai.assistance.quro.workflow.data.NotesRepository
 import com.ai.assistance.quro.workflow.data.RunStore
 import com.ai.assistance.quro.workflow.executor.WorkflowEngine
 import com.ai.assistance.quro.workflow.trigger.TriggerEngine
+import com.ai.assistance.quro.kaleidobox.android.KaleidoBoxHost
 
 /**
  * 应用入口（原创）。
@@ -141,6 +142,15 @@ class QuroApplication : Application() {
             com.ai.assistance.quro.core.websearch.net.WebSearchKeys.init(applicationContext)
         } catch (e: Throwable) {
             android.util.Log.e("QuroApplication", "WebSearchKeys 初始化失败（不影响主流程）", e)
+        }
+        // KaleidoBox：工具包运行器。进程内 JVM / Dex 引擎，承载 Kotlin/Java 工具包的
+        // manifest 解析 → 加载 → 调 unit → Compose 渲染声明式 UI → 宿主能力表完整链路。
+        // 失败不影响主流程（如类加载/权限异常）。
+        try {
+            KaleidoBoxHost.init(applicationContext, com.ai.assistance.quro.kaleidobox.QuroKaleidoBridge(applicationContext))
+            android.util.Log.i("QuroApplication", "KaleidoBox 初始化完成（已注入 AI/终端桥）")
+        } catch (e: Throwable) {
+            android.util.Log.e("QuroApplication", "KaleidoBox 初始化失败（不影响主流程）", e)
         }
     }
 }

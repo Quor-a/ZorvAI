@@ -801,6 +801,27 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!-- KaleidoBox 真 Android 组件：把某个插件 UI 表面全屏承载成独立可启动 Activity。
+             入口：显式 Intent（工具中心"打开"）或隐式 deep-link（桌面快捷方式/浏览器/分享）。 -->
+        <activity
+            android:name=".kaleidobox.KaleidoActivity"
+            android:exported="true"
+            android:label="KaleidoBox 插件"
+            android:theme="@style/Theme.Quro">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="kaleido"
+                    android:host="plugin" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.kaleidobox.ACTION_VIEW_PLUGIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
     </application>
 
 </manifest>

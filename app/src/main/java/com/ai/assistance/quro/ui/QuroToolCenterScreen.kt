@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -56,6 +57,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+// KaleidoBox 工具包运行器（进程内 JVM/Dex 引擎）
+import com.ai.assistance.quro.kaleidobox.android.KaleidoBoxHost
+import com.ai.assistance.quro.kaleidobox.android.KaleidoBoxBridge
+import com.ai.assistance.quro.kaleidobox.core.KaleidoRuntime
+import com.ai.assistance.quro.kaleidobox.core.model.KValue
+import com.ai.assistance.quro.kaleidobox.core.registry.PackageRecord
+import com.ai.assistance.quro.kaleidobox.samples.KaleidoBoxSamples
+import com.ai.assistance.quro.kaleidobox.samples.KaleidoCatalog
+import com.ai.assistance.quro.kaleidobox.samples.PluginScaffold
+// "真 Android 组件"：独立承载插件的 Activity + 共享契约
+import com.ai.assistance.quro.kaleidobox.KaleidoActivity
+import com.ai.assistance.quro.kaleidobox.android.KaleidoAppContract
 
 /**
  * 工具中心（能力聚合入口）。
@@ -96,6 +109,7 @@ fun QuroToolCenterScreen(
                     "vispro" -> "可视化编程"
                     "flow" -> "节点编辑器"
                     "miniapp" -> "小程序工作室"
+                    "kaleidobox" -> "工具包运行器"
                     else -> "工具中心"
                 },
                 style = MaterialTheme.typography.titleLarge,
@@ -114,6 +128,7 @@ fun QuroToolCenterScreen(
             "vispro" -> VisProPanel(context, onRenderInChat)
             "flow" -> NodeEditorPanel(context, onRenderInChat)
             "miniapp" -> MiniAppStudioPanel(context, onRenderInChat)
+            "kaleidobox" -> KaleidoBoxPanel(context, onRenderInChat, onAskAi)
             "pkgmgr" -> PackageManagerPanel(context)
         }
     }
@@ -133,6 +148,7 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         Triple("flow", "节点编辑器", "拖拽式节点流编程，导出 Mermaid"),
         Triple("browser_ai", "浏览器 AI 操控", "AI 用 browser_act 接管当前浏览器：snapshot/click/fill/eval（先 action=open）"),
         Triple("build", "构建台", "端侧 APK 构建器：Java → DEX → APK，内置工具链（ecj/d8/apksig），免 aapt2，生成可独立安装的应用"),
+        Triple("kaleidobox", "工具包运行器", "KaleidoBox：进程内 JVM/Dex 引擎运行 Kotlin/Java 工具包，列包/装包/调 unit/渲染可交互 UI 表面（内置示例计数器开箱即玩）"),
     )
     LazyColumn(
         Modifier.fillMaxSize().padding(16.dp),
@@ -1341,4 +1357,306 @@ private fun fallbackSaveToDir(dir: java.io.File?, name: String, content: String)
 private fun decodeJsString(raw: String?): String {
     if (raw == null) return ""
     return runCatching { JSONArray(raw).optString(0) }.getOrDefault(raw)
+}
+
+// ---------------------------------------------------------------------------
+// KaleidoBox 工具包运行器：把"进程内 JVM/Dex 引擎"的包列表 + 装包 + UI 渲染
+// 组装成一个可直接操作的面板，解决"kaleidobox 有引擎但用户没界面"的问题。
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun KaleidoBoxPanel(
+    context: Context,
+    onRenderInChat: (type: String, value: String, label: String) -> Unit,
+    onAskAi: (prompt: String) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val scope = rememberCoroutineScope()
+    val runtime = remember { runCatching { KaleidoBoxHost.get().runtime }.getOrNull() }
+    var packages by remember { mutableStateOf<List<PackageRecord>>(emptyList()) }
+    var status by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    val catalog = remember { KaleidoCatalog.entries }
+
+    fun refreshPackages() {
+        packages = runtime?.installedPackages() ?: emptyList()
+        status = if (runtime == null) "KaleidoBox 未初始化" else "已安装 ${packages.size} 个工具包"
+    }
+
+    // 导入本地 .zip 包（含 kaleido.json + classes.dex）
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val name = runCatching {
+            context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (c.moveToFirst() && i >= 0) c.getString(i) else null
+            }
+        }.getOrNull() ?: "plugin_${System.currentTimeMillis()}.zip"
+        val tmp = File(context.cacheDir, "kaleidobox/imports/${name.replace("[^A-Za-z0-9_.\\-]".toRegex(), "_")}")
+        tmp.parentFile?.mkdirs()
+        val copied = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { ins -> tmp.outputStream().use { ins.copyTo(it) } }; true
+        }.getOrNull() == true
+        if (!copied) {
+            Toast.makeText(context, "导入失败：无法读取文件", Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch(Dispatchers.IO) {
+            val out = KaleidoBoxBridge.installZip(context, tmp)
+            withContext(Dispatchers.Main) {
+                if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) {
+                    refreshPackages(); Toast.makeText(context, "已安装：${out.value["id"]?.asString()}", Toast.LENGTH_SHORT).show()
+                } else Toast.makeText(context, "安装失败：${out.asString()}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    // 从链接导入对话框
+    var urlDialog by remember { mutableStateOf(false) }
+    var urlText by remember { mutableStateOf("") }
+
+    // AI 生成并编译对话框
+    var genDialog by remember { mutableStateOf(false) }
+    var genSrc by remember { mutableStateOf("") }
+    var genClass by remember { mutableStateOf("com.ai.assistance.quro.kaleidobox.gen.MyToolkit") }
+    var genId by remember { mutableStateOf("dev.kaleidobox.gen.plugin") }
+    var genName by remember { mutableStateOf("我的工具") }
+    var genDesc by remember { mutableStateOf("AI 生成的 KaleidoBox 工具包") }
+
+    LaunchedEffect(Unit) { refreshPackages() }
+
+    fun firstSurfaceOf(pkgId: String): String? =
+        runtime?.installedPackages()?.firstOrNull { it.id == pkgId }?.manifest?.ui?.firstOrNull()?.id
+
+    fun openPlugin(pkgId: String) {
+        val surfaceId = firstSurfaceOf(pkgId)
+        if (surfaceId == null) {
+            Toast.makeText(context, "该工具包没有可打开的 UI 表面", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val intent = Intent(context, KaleidoActivity::class.java).apply {
+            putExtra(KaleidoAppContract.EXTRA_PKG_ID, pkgId)
+            putExtra(KaleidoAppContract.EXTRA_SURFACE_ID, surfaceId)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { context.startActivity(intent) }
+            .onFailure { Toast.makeText(context, "打开失败：${it.message}", Toast.LENGTH_LONG).show() }
+    }
+
+    fun installCatalog(id: String) {
+        if (busy) return
+        busy = true
+        scope.launch(Dispatchers.IO) {
+            val out = KaleidoBoxBridge.installCatalogEntry(context, id)
+            withContext(Dispatchers.Main) {
+                busy = false
+                if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) {
+                    refreshPackages()
+                    Toast.makeText(context, "已安装：${out.value["id"]?.asString()}", Toast.LENGTH_SHORT).show()
+                } else Toast.makeText(context, "安装失败：${out.asString()}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("工具包运行器", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
+            Button(onClick = {
+                if (runtime == null) { Toast.makeText(context, "KaleidoBox 未初始化", Toast.LENGTH_SHORT).show(); return@Button }
+                runCatching { KaleidoCatalog.installBuiltins(runtime) }
+                refreshPackages()
+                Toast.makeText(context, "已确保内置示例包装载", Toast.LENGTH_SHORT).show()
+            }) { Text("装示例包") }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(status.ifBlank { "（暂无工具包）" }, style = MaterialTheme.typography.bodySmall, color = Muted)
+
+        // —— 导入入口：从文件 / 从链接 / AI 生成 ——（解决"kaleidobox 没有导入 UI"）
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { importLauncher.launch("application/zip") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("从文件导入") }
+            OutlinedButton(onClick = { urlDialog = true }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("从链接导入") }
+            Button(onClick = {
+                genSrc = PluginScaffold.fillTemplate("MyToolkit")
+                genDialog = true
+            }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("AI 生成插件") }
+        }
+
+        // —— 已安装：每卡直接「打开」+「卸载」，不再点两次 ——
+        val availableCatalog = remember(packages) { catalog.filter { e -> packages.none { it.id == e.id } } }
+
+        if (packages.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text("已安装（${packages.size}）", style = MaterialTheme.typography.labelMedium, color = Muted)
+            Spacer(Modifier.height(6.dp))
+            packages.forEach { rec ->
+                val name = rec.manifest.name["zh"] ?: rec.manifest.name["en"] ?: rec.id
+                val cat = catalog.firstOrNull { it.id == rec.id }
+                val desc = cat?.descZh ?: rec.manifest.description["zh"] ?: rec.manifest.description["en"] ?: ""
+                val surfaces = rec.manifest.ui.takeIf { it.isNotEmpty() }?.joinToString { it.id } ?: "无"
+                Card(
+                    Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant),
+                ) {
+                    Row(
+                        Modifier
+                            .padding(12.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(name, style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                            Text(desc, style = MaterialTheme.typography.bodySmall, color = Muted, maxLines = 2)
+                            Text("v${rec.version} · 表面=$surfaces", style = MaterialTheme.typography.bodySmall, color = Muted)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Button(
+                                onClick = { openPlugin(rec.id) },
+                                enabled = !busy,
+                            ) { Text("打开") }
+                            TextButton(
+                                onClick = {
+                                    scope.launch(Dispatchers.IO) {
+                                        val out = KaleidoBoxBridge.uninstall(rec.id)
+                                        withContext(Dispatchers.Main) {
+                                            if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) {
+                                                refreshPackages(); Toast.makeText(context, "已卸载：${rec.id}", Toast.LENGTH_SHORT).show()
+                                            } else Toast.makeText(context, "卸载失败：${out.asString()}", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                },
+                                enabled = !busy,
+                            ) { Text("卸载", color = cs.error) }
+                        }
+                    }
+                }
+            }
+        }
+
+        // —— 插件目录：只显示未安装的，点安装后直接可打开 ——
+        if (availableCatalog.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text("插件目录（${availableCatalog.size} 个可安装）", style = MaterialTheme.typography.labelMedium, color = Muted)
+            Spacer(Modifier.height(6.dp))
+            availableCatalog.forEach { e ->
+                Card(
+                    Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant),
+                ) {
+                    Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("${e.displayName}  ·  ${e.kind.name}", style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                            Text(e.descZh, style = MaterialTheme.typography.bodySmall, color = Muted, maxLines = 2)
+                        }
+                        Button(
+                            onClick = { installCatalog(e.id) },
+                            enabled = !busy,
+                        ) { Text(if (e.kind == KaleidoCatalog.Kind.SRC) "编译并装" else "安装") }
+                    }
+                }
+            }
+        }
+
+        // 空状态
+        if (packages.isEmpty() && availableCatalog.isEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text("还没有工具包，且插件目录为空。点上方「装示例包」或「AI 生成插件」。", color = Muted)
+        } else if (packages.isEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text("还没有工具包。点上方「插件目录」一键装一个，或点「AI 生成插件」写一段 Java 让设备内编译运行。", color = Muted)
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = {
+                onAskAi("请使用 kaleido 工具为我安装一个 KaleidoBox 工具包（例如示例计数器或单位换算），并告诉我它提供了哪些 unit 和 UI 表面。")
+            }) { Text("让 AI 装一个包") }
+        } else if (availableCatalog.isEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text("插件目录已全部安装，点击「打开」运行插件。", color = Muted)
+        }
+    }
+
+    // 从链接导入对话框
+    if (urlDialog) {
+        AlertDialog(
+            onDismissRequest = { urlDialog = false },
+            title = { Text("从链接导入插件") },
+            text = {
+                Column {
+                    Text("输入 .zip 包下载地址（含 kaleido.json + classes.dex）：", style = MaterialTheme.typography.bodySmall, color = Muted)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = urlText,
+                        onValueChange = { urlText = it },
+                        placeholder = { Text("https://.../plugin.zip") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val url = urlText.trim()
+                    urlDialog = false
+                    if (url.isBlank()) return@TextButton
+                    scope.launch(Dispatchers.IO) {
+                        val out = KaleidoBoxBridge.installUrl(context, url)
+                        withContext(Dispatchers.Main) {
+                            if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) {
+                                refreshPackages(); Toast.makeText(context, "已安装：${out.value["id"]?.asString()}", Toast.LENGTH_SHORT).show()
+                            } else Toast.makeText(context, "安装失败：${out.asString()}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }) { Text("导入") }
+            },
+            dismissButton = { TextButton(onClick = { urlDialog = false }) { Text("取消") } },
+        )
+    }
+
+    // AI 生成并编译对话框
+    if (genDialog) {
+        AlertDialog(
+            onDismissRequest = { genDialog = false },
+            title = { Text("AI 生成插件（端侧编译）") },
+            text = {
+                Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
+                    Text("粘贴 Java 源码（实现 KaleidoToolkit，public 类名须等于下面入口类的末段）。点「编译并安装」将在设备内 ecj→d8 编译运行。", style = MaterialTheme.typography.bodySmall, color = Muted)
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(value = genClass, onValueChange = { genClass = it }, label = { Text("入口类全名") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(value = genId, onValueChange = { genId = it }, label = { Text("包 id") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(value = genName, onValueChange = { genName = it }, label = { Text("展示名") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = genSrc,
+                        onValueChange = { genSrc = it },
+                        label = { Text("Java 源码") },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 180.dp),
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        singleLine = false,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val src = genSrc.trim()
+                    val cls = genClass.trim()
+                    genDialog = false
+                    if (src.isBlank() || cls.isBlank()) { Toast.makeText(context, "源码与入口类不能为空", Toast.LENGTH_SHORT).show(); return@TextButton }
+                    scope.launch(Dispatchers.IO) {
+                        val manifest = PluginScaffold.buildManifest(genId.trim(), genName.trim(), genName.trim(), genDesc.trim(), cls)
+                        val out = KaleidoBoxBridge.writeAndInstall(context, src, cls, manifest, genId.trim())
+                        withContext(Dispatchers.Main) {
+                            if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) {
+                                refreshPackages(); Toast.makeText(context, "已编译并安装：${out.value["id"]?.asString()}", Toast.LENGTH_LONG).show()
+                            } else Toast.makeText(context, "编译/安装失败：${out.asString()}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }) { Text("编译并安装") }
+            },
+            dismissButton = { TextButton(onClick = { genDialog = false }) { Text("取消") } },
+        )
+    }
 }

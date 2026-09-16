@@ -1,0 +1,18 @@
+{
+  "id": "com.zorv.hello",
+  "name": { "zh": "你好插件", "en": "Hello App" },
+  "version": "1.0.0",
+  "description": { "zh": "最小可运行的 KaleidoBox 插件示例（一个独立 App）", "en": "Minimal KaleidoBox plugin example" },
+  "capabilities": ["data.kv", "ui.toast"],
+  "sandbox": { "level": "in_process", "memoryMb": 32, "netEgress": "deny" },
+  "runtime": [
+    { "id": "main", "lang": "kotlin", "engine": "jvm_dex", "entry": "com.zorv.hello.HelloApp", "warm": true }
+  ],
+  "units": [
+    { "name": "greet", "title": { "zh": "问候" }, "timeoutMs": 5000 }
+  ],
+  "ui": [
+    { "id": "main", "surface": "toolbox", "render": "main:render", "onAction": "main:onAction",
+      "title": { "zh": "你好" } }
+  ]
+}

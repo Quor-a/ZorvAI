@@ -769,6 +769,7 @@ fun ChatScreen(
             "ui_open_terminal" -> showTerminal = true
             "ui_open_editor" -> showEditor = true
             "ui_open_toolbox" -> showToolbox = true
+            "ui_open_kaleidobox" -> { toolCenterInitial = "kaleidobox"; showToolCenter = true }
             "ui_open_build" -> showBuild = true
             "ui_open_plugins" -> showPlugins = true
             "ui_open_skills" -> showSkills = true
@@ -876,6 +877,7 @@ fun ChatScreen(
                             "vispro" -> { toolCenterInitial = "vispro"; showToolCenter = true }
                             "node_editor" -> { toolCenterInitial = "flow"; showToolCenter = true }
                             "miniapp" -> { toolCenterInitial = "miniapp"; showToolCenter = true }
+                            "kaleidobox" -> { toolCenterInitial = "kaleidobox"; showToolCenter = true }
                             "workbench" -> { toolCenterInitial = "workbench"; showToolCenter = true }
                             else -> { /* 忽略未知界面 */ }
                         }
