@@ -270,7 +270,9 @@ class ApkPluginTool : QuroTool {
             val err = PluginSigning.sign(context, apk, signed)
             if (err == null) {
                 target = signed
-                signNote = "\n· 已用「${cfg.keystoreName}」(别名 ${cfg.alias}) 补签后再安装"
+                // 用「实际签成功的那个」而不是配置里的那个（内置密钥可能兜底）
+                val used = PluginSigning.lastKeystoreName ?: cfg.keystoreName
+                signNote = "\n· 已用「$used」(别名 ${cfg.alias}) 补签后再安装"
             } else {
                 signNote = "\n· 补签未成功，已按原包安装：$err"
             }

@@ -214,7 +214,10 @@ private fun PluginLauncherBody(context: Context) {
                         val err = PluginSigning.sign(context, tmp, signed)
                         if (err == null) {
                             target = signed
-                            note = "\n· 已用「${cfg.keystoreName}」(别名 ${cfg.alias}) 补签后再安装"
+                            // 用「实际签成功的那个」而不是配置里的那个：
+                            // 配置的那把可能在这台机器上读不了，由内置密钥兜底签成功
+                            val used = PluginSigning.lastKeystoreName ?: cfg.keystoreName
+                            note = "\n· 已用「$used」(别名 ${cfg.alias}) 补签后再安装"
                         } else {
                             note = "\n· 补签未成功，已按原包安装：$err"
                         }
@@ -286,6 +289,11 @@ private fun PluginLauncherBody(context: Context) {
                 onAlias = { v -> signCfg = signCfg.copy(alias = v); PluginSigning.save(context, signCfg) },
                 onStorePass = { v -> signCfg = signCfg.copy(storePassword = v); PluginSigning.save(context, signCfg) },
                 onKeyPass = { v -> signCfg = signCfg.copy(keyPassword = v); PluginSigning.save(context, signCfg) },
+                onUseBuiltIn = {
+                    signCfg = PluginSigning.useBuiltIn(context, signCfg)
+                    PluginSigning.save(context, signCfg)
+                    Toast.makeText(context, "已切换为内置宿主密钥", Toast.LENGTH_SHORT).show()
+                },
             )
 
             Spacer(Modifier.height(10.dp))
@@ -906,8 +914,10 @@ private fun SigningCard(
     onAlias: (String) -> Unit,
     onStorePass: (String) -> Unit,
     onKeyPass: (String) -> Unit,
+    onUseBuiltIn: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val usingBuiltIn = cfg.keystorePath.substringAfterLast('/') == PluginSigning.BUILTIN_NAME
     Surface(
         Modifier.fillMaxWidth().padding(top = 10.dp),
         shape = RoundedCornerShape(12.dp),
@@ -919,7 +929,7 @@ private fun SigningCard(
                 Column(Modifier.weight(1f)) {
                     Text("导入时先用宿主密钥补签", fontSize = 13.sp, color = cs.onSurface)
                     Text(
-                        if (cfg.ready) "已就绪：${cfg.keystoreName}"
+                        if (cfg.ready) "已就绪：${cfg.keystoreName}${if (usingBuiltIn) "（内置）" else ""}"
                         else "未就绪：还没选到可用的宿主密钥库",
                         fontSize = 11.sp,
                         color = if (cfg.ready) cs.primary else cs.error,
@@ -949,21 +959,33 @@ private fun SigningCard(
                     )
                 }
                 Spacer(Modifier.height(6.dp))
+                OutlinedButton(onClick = onUseBuiltIn) {
+                    Text(
+                        if (usingBuiltIn) "✓ 正在用内置宿主密钥" else "用内置宿主密钥（推荐）",
+                        fontSize = 12.sp,
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
                 OutlinedButton(onClick = onPickKeystore) {
-                    Text("选择密钥库（.jks / .p12）", fontSize = 12.sp)
+                    Text("改用我自己的密钥库（.jks / .p12 / .bks）", fontSize = 12.sp)
                 }
                 Spacer(Modifier.height(6.dp))
                 SigningField("别名 alias", cfg.alias, false, onAlias)
                 SigningField("keystore 密码", cfg.storePassword, true, onStorePass)
                 SigningField("密钥密码", cfg.keyPassword, true, onKeyPass)
                 Text(
-                    "必须选宿主自己的那把密钥库（本项目：zorvai_release.jks，别名 zorvai，" +
-                        "口令与 keystore.properties 里的一致）。" +
-                        "用别把密钥签出来的插件，照样会被同签名闸门拒绝。" +
-                        "若已在构建台「导入 keystore」里配过，这里会自动继承，不用重填。\n" +
-                        "注意：开关打开后，导入的插件包会先被重签成宿主身份、然后直接安装 —— " +
+                    "内置密钥随 App 一起分发，选它就能开箱即用，不用从电脑传任何文件；" +
+                        "它只用于证明「插件出自本机构建」，不作任何安全鉴权。" +
+                        "想换成自己那把，用上面第二个按钮选（本项目宿主密钥：zorvai_release.jks，" +
+                        "别名 zorvai，口令与 keystore.properties 里一致）。" +
+                        "用别把密钥签出来的插件，照样会被同签名闸门拒绝。\n" +
+                        "口径：内置库是 BKS 格式（原 .jks 实为 PKCS12，部分 ROM 读不了），" +
+                        "运行时经 BouncyCastle 加载。\n" +
+                        "开关打开后，导入的插件包会先被重签成宿主身份、然后直接安装 —— " +
                         "校验对刚签出来的包是同义反复所以不再重复卡；关掉则恢复" +
-                        "「只接受已经与宿主同签名的包」。",
+                        "「只接受已经与宿主同签名的包」（严格模式，第三方包会直接被拒）。\n" +
+                        "补签时若配置的那把密钥在本机读不了，会自动改用内置密钥继续签，" +
+                        "提示里写的是**实际生效**的那个文件名。",
                     fontSize = 11.sp, color = Muted,
                 )
             }
