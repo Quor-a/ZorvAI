@@ -1789,7 +1789,8 @@ class MyEntry : PluginEntry {
 2. 插件必须**与宿主同签名**（宿主安装时校验 SHA-256 证书），因为插件跑在宿主进程内、拥有同等权限。
 3. 插件里**不要写自己的 Activity**（独立 APK 不是系统安装的应用，Activity 起不来）；要界面就注册 `uiSurface`，宿主有通用承载 Activity。
 
-完整开发手册见分支 **`apk-plugin-arch`** 的 [`docs/APK_PLUGIN_DEVELOPMENT_MANUAL.md`](./docs/APK_PLUGIN_DEVELOPMENT_MANUAL.md)。
+完整开发手册见分支 **`apk-plugin-arch`**：**[docs/APK_PLUGIN_DEVELOPMENT_MANUAL.md](https://github.com/Quor-a/ZorvAI/blob/apk-plugin-arch/docs/APK_PLUGIN_DEVELOPMENT_MANUAL.md)**
+（17 章 + FAQ：架构 / 契约 API / 14 种扩展点 / DSL / 工程三铁律 / 打包安装 / AI 接入 / 插件界面 / ACI 互调 / 排错 / 版本管理 / 安全边界 / 完整示例 / 速查表）。
 
 ---
 
