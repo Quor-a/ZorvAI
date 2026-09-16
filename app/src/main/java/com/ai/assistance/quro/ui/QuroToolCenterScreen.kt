@@ -17,6 +17,7 @@ import android.widget.Toast
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -149,6 +150,7 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         Triple("browser_ai", "浏览器 AI 操控", "AI 用 browser_act 接管当前浏览器：snapshot/click/fill/eval（先 action=open）"),
         Triple("build", "构建台", "端侧 APK 构建器：Java → DEX → APK，内置工具链（ecj/d8/apksig），免 aapt2，生成可独立安装的应用"),
         Triple("kaleidobox", "工具包运行器", "KaleidoBox：进程内 JVM/Dex 引擎运行 Kotlin/Java 工具包，列包/装包/调 unit/渲染可交互 UI 表面（内置示例计数器开箱即玩）"),
+        Triple("plugins", "插件", "APK 级插件：装一个独立 APK 就给 AI 加工具（插件注册扩展点，宿主零改动）。查看/导入/重载/卸载，须与宿主同签名"),
     )
     LazyColumn(
         Modifier.fillMaxSize().padding(16.dp),
@@ -1364,6 +1366,55 @@ private fun decodeJsString(raw: String?): String {
 // 组装成一个可直接操作的面板，解决"kaleidobox 有引擎但用户没界面"的问题。
 // ---------------------------------------------------------------------------
 
+/**
+ * 标签小胶囊。
+ * 传 [onClick] = 可点的筛选按钮；传 null = 只读标记（用在卡片上标标签）。
+ */
+@Composable
+private fun KaleidoTagChip(
+    label: String,
+    selected: Boolean = false,
+    onClick: (() -> Unit)? = null,
+) {
+    val cs = MaterialTheme.colorScheme
+    val bg = if (selected) cs.primary else cs.surfaceVariant
+    val fg = if (selected) cs.onPrimary else Muted
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(bg)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = fg, maxLines = 1)
+    }
+}
+
+/** 分组标题：左侧色条 + 组名 + 组内数量。列表分区的视觉锚点。 */
+@Composable
+private fun KaleidoGroupHeader(label: String, count: Int) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(width = 3.dp, height = 14.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(cs.primary)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = cs.onSurface,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text("$count", style = MaterialTheme.typography.labelSmall, color = Muted)
+    }
+}
+
 @Composable
 private fun KaleidoBoxPanel(
     context: Context,
@@ -1463,9 +1514,21 @@ private fun KaleidoBoxPanel(
             Text("工具包运行器", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
             Button(onClick = {
                 if (runtime == null) { Toast.makeText(context, "KaleidoBox 未初始化", Toast.LENGTH_SHORT).show(); return@Button }
-                runCatching { KaleidoCatalog.installBuiltins(runtime) }
+                val failed = runCatching { KaleidoCatalog.installBuiltins(runtime) }
+                    .getOrElse { mapOf("<all>" to (it.message ?: it.javaClass.simpleName)) }
                 refreshPackages()
-                Toast.makeText(context, "已确保内置示例包装载", Toast.LENGTH_SHORT).show()
+                if (failed.isEmpty()) {
+                    Toast.makeText(context, "已确保内置示例包装载", Toast.LENGTH_SHORT).show()
+                } else {
+                    // 不再无条件报"已装载"：把真正失败的包和原因摊开，否则界面只是"少了一个包"，无从排查。
+                    Toast.makeText(
+                        context,
+                        "有 ${failed.size} 个内置包装载失败：\n" + failed.entries.joinToString("\n") {
+                            "${it.key} → ${it.value.lineSequence().firstOrNull() ?: "未知原因"}"
+                        },
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
             }) { Text("装示例包") }
         }
         Spacer(Modifier.height(4.dp))
@@ -1482,82 +1545,166 @@ private fun KaleidoBoxPanel(
             }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("AI 生成插件") }
         }
 
-        // —— 已安装：每卡直接「打开」+「卸载」，不再点两次 ——
+        // —— 已安装 / 插件目录：按「分组」分区展示，按「标签」筛选 ——
         val availableCatalog = remember(packages) { catalog.filter { e -> packages.none { it.id == e.id } } }
 
-        if (packages.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
+        // 标签筛选：状态存英文原标签（与清单 keywords 对齐），展示用中文
+        var tagFilter by remember { mutableStateOf<String?>(null) }
+        val allTags = remember(catalog) { KaleidoCatalog.tagsInUse() }
+
+        // 已安装但不在目录里的（导入的第三方包）没有分组信息，统一落到「其他」
+        fun groupOf(rec: PackageRecord): KaleidoCatalog.Group =
+            catalog.firstOrNull { it.id == rec.id }?.group ?: KaleidoCatalog.Group.OTHER
+
+        val shownInstalled = packages
+            .filter { rec -> tagFilter == null || rec.manifest.keywords.any { it.equals(tagFilter, true) } }
+            .groupBy { groupOf(it) }
+            .entries
+            .sortedBy { it.key.order }
+
+        val shownCatalog = KaleidoCatalog.grouped(
+            availableCatalog.filter { e -> tagFilter == null || e.tags.any { it.equals(tagFilter, true) } }
+        )
+
+        // —— 标签筛选条（横向滚动，单选，再点一次取消） ——
+        if (allTags.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                KaleidoTagChip("全部", selected = tagFilter == null) { tagFilter = null }
+                allTags.forEach { t ->
+                    KaleidoTagChip(
+                        KaleidoCatalog.TagLabels.zhOf(t),
+                        selected = tagFilter == t,
+                    ) { tagFilter = if (tagFilter == t) null else t }
+                }
+            }
+        }
+
+        // —— 已安装：每卡直接「打开」+「卸载」，不再点两次 ——
+        if (shownInstalled.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
             Text("已安装（${packages.size}）", style = MaterialTheme.typography.labelMedium, color = Muted)
-            Spacer(Modifier.height(6.dp))
-            packages.forEach { rec ->
-                val name = rec.manifest.name["zh"] ?: rec.manifest.name["en"] ?: rec.id
-                val cat = catalog.firstOrNull { it.id == rec.id }
-                val desc = cat?.descZh ?: rec.manifest.description["zh"] ?: rec.manifest.description["en"] ?: ""
-                val surfaces = rec.manifest.ui.takeIf { it.isNotEmpty() }?.joinToString { it.id } ?: "无"
-                Card(
-                    Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant),
-                ) {
-                    Row(
-                        Modifier
-                            .padding(12.dp)
-                            .fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+            shownInstalled.forEach { (group, list) ->
+                KaleidoGroupHeader(group.label, list.size)
+                list.forEach { rec ->
+                    val name = rec.manifest.name["zh"] ?: rec.manifest.name["en"] ?: rec.id
+                    val cat = catalog.firstOrNull { it.id == rec.id }
+                    val desc = cat?.descZh ?: rec.manifest.description["zh"] ?: rec.manifest.description["en"] ?: ""
+                    val surfaces = rec.manifest.ui.takeIf { it.isNotEmpty() }?.joinToString { it.id } ?: "无"
+                    val tags = KaleidoCatalog.TagLabels.display(rec.manifest.keywords)
+                    Card(
+                        Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant),
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(name, style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
-                            Text(desc, style = MaterialTheme.typography.bodySmall, color = Muted, maxLines = 2)
-                            Text("v${rec.version} · 表面=$surfaces", style = MaterialTheme.typography.bodySmall, color = Muted)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Button(
-                                onClick = { openPlugin(rec.id) },
-                                enabled = !busy,
-                            ) { Text("打开") }
-                            TextButton(
-                                onClick = {
-                                    scope.launch(Dispatchers.IO) {
-                                        val out = KaleidoBoxBridge.uninstall(rec.id)
-                                        withContext(Dispatchers.Main) {
-                                            if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) {
-                                                refreshPackages(); Toast.makeText(context, "已卸载：${rec.id}", Toast.LENGTH_SHORT).show()
-                                            } else Toast.makeText(context, "卸载失败：${out.asString()}", Toast.LENGTH_LONG).show()
-                                        }
+                        Row(
+                            Modifier
+                                .padding(12.dp)
+                                .fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(name, style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                                    // 目录外的包（从文件/链接/AI 生成导入）没有分组也没有标签，给个来源标记
+                                    if (cat == null) {
+                                        Spacer(Modifier.width(6.dp))
+                                        KaleidoTagChip("外部导入")
                                     }
-                                },
+                                }
+                                if (tags.isNotEmpty()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        tags.forEach { KaleidoTagChip(it) }
+                                    }
+                                }
+                                Text(desc, style = MaterialTheme.typography.bodySmall, color = Muted, maxLines = 2)
+                                Text("v${rec.version} · 表面=$surfaces", style = MaterialTheme.typography.bodySmall, color = Muted)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Button(
+                                    onClick = { openPlugin(rec.id) },
+                                    enabled = !busy,
+                                ) { Text("打开") }
+                                TextButton(
+                                    onClick = {
+                                        scope.launch(Dispatchers.IO) {
+                                            val out = KaleidoBoxBridge.uninstall(rec.id)
+                                            withContext(Dispatchers.Main) {
+                                                if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) {
+                                                    refreshPackages(); Toast.makeText(context, "已卸载：${rec.id}", Toast.LENGTH_SHORT).show()
+                                                } else Toast.makeText(context, "卸载失败：${out.asString()}", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                    },
+                                    enabled = !busy,
+                                ) { Text("卸载", color = cs.error) }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (packages.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "已安装的 ${packages.size} 个工具包都不带标签「${KaleidoCatalog.TagLabels.zhOf(tagFilter ?: "")}」，点上方「全部」清除筛选。",
+                style = MaterialTheme.typography.bodySmall,
+                color = Muted,
+            )
+        }
+
+        // —— 插件目录：分组分区，只显示未安装的，点安装后直接可打开 ——
+        if (shownCatalog.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text("插件目录（${availableCatalog.size} 个可安装）", style = MaterialTheme.typography.labelMedium, color = Muted)
+            shownCatalog.forEach { (group, list) ->
+                KaleidoGroupHeader(group.label, list.size)
+                list.forEach { e ->
+                    Card(
+                        Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant),
+                    ) {
+                        Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(e.displayName, style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                                if (e.displayTags.isNotEmpty()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        e.displayTags.forEach { KaleidoTagChip(it) }
+                                    }
+                                }
+                                Text(e.descZh, style = MaterialTheme.typography.bodySmall, color = Muted, maxLines = 2)
+                                Text(
+                                    "${e.kindLabel} · v${e.version}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Muted,
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Button(
+                                onClick = { installCatalog(e.id) },
                                 enabled = !busy,
-                            ) { Text("卸载", color = cs.error) }
+                            ) { Text(if (e.kind == KaleidoCatalog.Kind.SRC) "编译并装" else "安装") }
                         }
                     }
                 }
             }
         }
 
-        // —— 插件目录：只显示未安装的，点安装后直接可打开 ——
-        if (availableCatalog.isNotEmpty()) {
+        // 标签筛掉了整个目录时的提示（别让界面看起来像"目录空了"）
+        if (shownCatalog.isEmpty() && shownInstalled.isEmpty() && tagFilter != null) {
             Spacer(Modifier.height(12.dp))
-            Text("插件目录（${availableCatalog.size} 个可安装）", style = MaterialTheme.typography.labelMedium, color = Muted)
-            Spacer(Modifier.height(6.dp))
-            availableCatalog.forEach { e ->
-                Card(
-                    Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant),
-                ) {
-                    Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("${e.displayName}  ·  ${e.kind.name}", style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
-                            Text(e.descZh, style = MaterialTheme.typography.bodySmall, color = Muted, maxLines = 2)
-                        }
-                        Button(
-                            onClick = { installCatalog(e.id) },
-                            enabled = !busy,
-                        ) { Text(if (e.kind == KaleidoCatalog.Kind.SRC) "编译并装" else "安装") }
-                    }
-                }
-            }
+            Text(
+                "标签「${KaleidoCatalog.TagLabels.zhOf(tagFilter!!)}」下没有可显示的工具包，点上方「全部」清除筛选。",
+                style = MaterialTheme.typography.bodySmall,
+                color = Muted,
+            )
         }
 
         // 空状态

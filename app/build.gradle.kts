@@ -225,6 +225,11 @@ dependencies {
     // ZorvAI 生成式 UI：AI 自写源码 → 实时渲染进对话框（WebView 隔离运行时）
     implementation(project(":genui"))
 
+    // APK 级插件框架：插件是独立 APK，宿主用 DexClassLoader 加载，
+    // 插件通过扩展点（AI 工具 / ACI 能力 / 卡片 / 指令 / 设置…）往宿主里加功能，
+    // 宿主事先不认识这些能力也能调度它们（Tool-first，加插件不改宿主代码）。
+    implementation(project(":plugin-engine"))
+
     // KaleidoBox：工具包运行器（去品牌化移植自 kaleido）。
     // 以 JVM / Dex 进程内引擎运行 Kotlin/Java 工具包，承载 manifest 解析 → 加载 → 调 unit
     // → Compose 渲染声明式 UI → 宿主能力表 → ToolPkg 兼容 → 进程内 MCP 桥 的完整链路。

@@ -26,7 +26,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * 插件运行时入口屏。
+ * 【旧】JS 插件运行时屏（QuickJS 逻辑层 + WebView 渲染层）。
+ *
+ * ⚠ 这是「JS 级插件」的运行时演示壳，页面本身没有插件列表 —— 空白是正常的。
+ * 它**不是** APK 级插件框架的入口。APK 级插件的管理界面是 [PluginManagerScreen]。
+ * 对话页「插件」入口 / ui_open_plugins 已改指向 [PluginManagerScreen]，本屏目前不再被任何入口引用，
+ * 保留仅为不删除既有能力（js 插件运行时 + assets/plugin_runtime 下的全部资产）。
  *
  * 逻辑层 = QuickJS 原生沙箱（每插件一个 JSRuntime，内存上限 + 超时中断 + 关 eval），
  * 渲染层 = WebView DOM（评审结论：默认渲染层绕开 Cax 的 License:None）。
@@ -39,7 +44,7 @@ import kotlinx.coroutines.withContext
  * 自动回退到旧的同页自包含 plugin_runtime.html，保证可运行。
  */
 @Composable
-fun PluginsScreen(onClose: () -> Unit) {
+fun LegacyJsPluginRuntimeScreen(onClose: () -> Unit) {
     val ctx = LocalContext.current
     val store = remember { mutableMapOf<String, String>() }
     // 原生库可用性探测 + 初始化完成标记：必须在后台线程触发 System.loadLibrary，

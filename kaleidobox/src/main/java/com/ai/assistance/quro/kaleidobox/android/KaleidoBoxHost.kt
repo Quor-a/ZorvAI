@@ -119,9 +119,16 @@ object KaleidoBoxHost {
         instance = k
 
         // 自动装载内置示例包，保证用户打开 KaleidoBox 面板就有可交互的 UI（装完即见、点完即变）。
-        runCatching { KaleidoBoxSamples.installBuiltins(runtime) }
-            .onSuccess { Log.i(TAG, "内置示例包已装载") }
-            .onFailure { Log.w(TAG, "内置示例包装载失败: ${it.message}") }
+        // 逐条上报失败：以前 runCatching 一把吞，某个内置包清单坏了只会"这个包没出现"，无从排查。
+        val builtinFailures = runCatching { KaleidoBoxSamples.installBuiltins(runtime) }
+            .getOrElse { mapOf("<all>" to (it.message ?: it.javaClass.simpleName)) }
+        if (builtinFailures.isEmpty()) {
+            Log.i(TAG, "内置示例包已装载")
+        } else {
+            builtinFailures.forEach { (id, why) ->
+                Log.w(TAG, "内置示例包装载失败: $id → ${why.replace('\n', ' ')}")
+            }
+        }
 
         Log.i(TAG, "KaleidoBox 初始化完成 | ABI=${Build.SUPPORTED_ABIS.firstOrNull()} SDK=${Build.VERSION.SDK_INT}")
         return k

@@ -14,7 +14,6 @@ import com.ai.assistance.quro.kaleidobox.core.KaleidoRuntime
 object KaleidoBoxSamples {
 
     /** 安装内置包（幂等：已安装则跳过）。委托给 [KaleidoCatalog]（单一事实源）。 */
-    fun installBuiltins(runtime: KaleidoRuntime) {
+    fun installBuiltins(runtime: KaleidoRuntime): Map<String, String> =
         KaleidoCatalog.installBuiltins(runtime)
-    }
 }

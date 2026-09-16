@@ -1599,11 +1599,14 @@ fun ChatScreen(
             }
         }
 
-        // 插件运行时 Demo 页：全屏覆盖层（从设置页入口进入）
+        // 插件管理页：全屏覆盖层（从工具栏「插件」/ ui_open_plugins 进入）
+        // ★ 2026-09-16 修正：此前这里打开的是 PluginsScreen —— 那是「JS 插件运行时」的演示壳
+        //   （QuickJS + WebView，页面本身没有插件列表，所以看起来一片空白）。
+        //   APK 级插件框架的管理界面是 PluginManagerScreen，入口必须指到它。
         if (showPlugins) {
             BackHandler { showPlugins = false }
-            Box(Modifier.fillMaxSize().zIndex(100f).background(Color(0xFFF2F2F7))) {
-                PluginsScreen(onClose = { showPlugins = false })
+            Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
+                PluginManagerScreen(onClose = { showPlugins = false })
             }
         }
 

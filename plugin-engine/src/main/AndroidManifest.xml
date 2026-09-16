@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  插件引擎层：由宿主打包使用（DexClassLoader / 安装器 / 扩展注册表 / ACI 融合桥）。
+  不声明任何组件、权限。
+-->
+<manifest />

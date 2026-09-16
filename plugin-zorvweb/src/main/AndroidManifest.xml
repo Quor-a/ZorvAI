@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      注意：插件 APK 由宿主 DexClassLoader 加载，**不是**系统安装的应用，
+      因此这里的 uses-permission 不会在系统层面生效（真正的权限来自宿主 ZorvAI：
+      宿主清单已有 INTERNET；明文 HTTP 由宿主 network_security_config 全局放开）。
+      这里保留声明只为表明插件意图。
+
+      已删除（相对原 ZorvBrowser 受控端工程）：
+        - ai.aci.permission.CALL / DISCOVER / CALL_DANGEROUS 及其 tools:node="remove"
+        - <queries> 里的 ai.aci.core.ACTION_BIND / ACTION_WAKE（不再有 ACI Service / 唤醒 Receiver）
+        - <service> QuroControlledAciService、<receiver> QuroAciWakeReceiver
+        - <activity> BrowserActivity（插件不能注册界面）
+        这些都属于「受控端 App」形态，插件形态由宿主 QuroMainAciService 统一承载 ACI 能力。
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application android:label="@string/plugin_name">
+
+        <!-- ★ 必须声明：宿主靠这条 meta-data 反射实例化插件入口类 -->
+        <meta-data
+            android:name="quro.plugin.entry"
+            android:value="com.zorv.plugin.zorvweb.ZorvWebEntry" />
+
+    </application>
+</manifest>

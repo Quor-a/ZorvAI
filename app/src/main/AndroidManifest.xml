@@ -801,6 +801,18 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!-- APK 插件界面承载：插件没有自己的 Activity（独立 APK 不是系统安装的应用，
+             系统 PackageManager 里查不到它，Activity 起不来），
+             由宿主提供这个通用 Activity 显示插件返回的 View 树（uiSurface 扩展点）。
+             configChanges 必须带上，否则转屏/分屏会重建 Activity，WebView 会被重新挂载。
+             入口：插件管理面板「打开界面」按钮，或 AI 走 plugin_surface_open 工具。 -->
+        <activity
+            android:name=".ui.PluginSurfaceActivity"
+            android:exported="false"
+            android:label="插件界面"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:theme="@style/Theme.Quro" />
+
         <!-- KaleidoBox 真 Android 组件：把某个插件 UI 表面全屏承载成独立可启动 Activity。
              入口：显式 Intent（工具中心"打开"）或隐式 deep-link（桌面快捷方式/浏览器/分享）。 -->
         <activity
