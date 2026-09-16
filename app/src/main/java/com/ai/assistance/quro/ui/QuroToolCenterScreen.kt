@@ -111,6 +111,8 @@ fun QuroToolCenterScreen(
                     "flow" -> "节点编辑器"
                     "miniapp" -> "小程序工作室"
                     "kaleidobox" -> "工具包运行器"
+                    "pkgmgr" -> "包管理"
+                    "plugins" -> "插件"
                     else -> "工具中心"
                 },
                 style = MaterialTheme.typography.titleLarge,
@@ -131,6 +133,7 @@ fun QuroToolCenterScreen(
             "miniapp" -> MiniAppStudioPanel(context, onRenderInChat)
             "kaleidobox" -> KaleidoBoxPanel(context, onRenderInChat, onAskAi)
             "pkgmgr" -> PackageManagerPanel(context)
+            "plugins" -> PluginManagerPanel(context)
         }
     }
 }
