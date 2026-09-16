@@ -318,6 +318,44 @@ object BuildEngine {
         ks.store(java.io.FileOutputStream(file), storePass.toCharArray())
     }
 
+    /**
+     * 对**任意已有 APK** 做进程内补签（复用构建台同一套 apksig 能力，V1 / V2 / V3 全开）。
+     *
+     * 用途：插件导入流程的「先签名、再安装」。插件以宿主同等权限运行，宿主只接受与自身
+     * **同签名**的插件；而手头拿到的插件包未必是宿主密钥签的（自建包、第三方包、构建台用
+     * 别的密钥签出来的包），所以在交给安装器之前先用宿主密钥补签一遍。
+     *
+     * ⚠️ apksig 默认**不保留**原有签名者，所以已签名的包会被整包换签成 [keystore] 的身份 ——
+     * 这正是「补签」想要的行为。若想保留原签名者需显式 `setOtherSignersSignaturesPreserved(true)`。
+     *
+     * ⚠️ 补签用的密钥必须就是**宿主自身的那把**（本仓为 `zorvai_release.jks` / 别名 `zorvai`），
+     * 否则换签后仍然过不了插件的同签名闸门。
+     *
+     * @return 成功返回 null；失败返回原因文本（调用方负责回退到原包，不要因补签失败而拒绝安装）
+     */
+    fun reSignApk(
+        ctx: Context,
+        input: File,
+        output: File,
+        keystore: File,
+        alias: String,
+        storePassword: String,
+        keyPassword: String
+    ): String? = try {
+        when {
+            !input.exists() || input.length() == 0L -> "待签名的 APK 不存在或为空"
+            !keystore.exists() -> "密钥库不存在：${keystore.absolutePath}"
+            else -> {
+                output.parentFile?.mkdirs()
+                if (output.exists()) output.delete()
+                getToolchain(ctx).signApk(input, output, keystore, storePassword, keyPassword, alias)
+                if (output.exists() && output.length() > 0L) null else "签名后未产出文件"
+            }
+        }
+    } catch (e: Throwable) {
+        e.message ?: e.toString()
+    }
+
     // =============================================================================================
     // 进程内工具链：用 InMemoryDexClassLoader 内存加载端侧 dexed 工具 jar，并以反射缓存关键入口，避免重复查找。
     // =============================================================================================

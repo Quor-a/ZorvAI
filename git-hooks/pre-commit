@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# ============================================================================
+# pre-commit —— 禁止任何签名材料进入提交
+#
+# 安装：cp git-hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit
+# ============================================================================
+set -euo pipefail
+
+RED=$'\033[31m'; OFF=$'\033[0m'
+
+# ---------- 1. 密钥文件 ----------
+PATTERN='(\.jks|\.keystore|\.p12|\.bks|\.pk8|keystore\.properties|.*[_-]keystore.*|\.pem)$'
+BLOCKED="$(git diff --cached --name-only --diff-filter=ACM | grep -Ei "$PATTERN" || true)"
+if [[ -n "$BLOCKED" ]]; then
+    printf '%s[pre-commit] 拒绝提交：检测到签名私钥相关文件%s\n' "$RED" "$OFF"
+    printf '%s\n' "$BLOCKED"
+    printf '\n密钥应留在项目目录之外（~/.zorvai-signing），或确认已被 .gitignore 覆盖。\n'
+    printf '如确需提交，请人工复核后自行处理（强烈不建议用 --no-verify 绕过）。\n'
+    exit 1
+fi
+
+# ---------- 2. 硬编码口令 ----------
+STAGED="$(git diff --cached --name-only --diff-filter=ACM \
+          | grep -E '\.(kts|kt|gradle|properties|sh|yml|yaml)$' || true)"
+if [[ -n "$STAGED" ]]; then
+    LEAK="$(echo "$STAGED" | xargs grep -InE \
+            -e 'storePassword[[:space:]]*=[[:space:]]*"[^"]{1,}"' \
+            -e 'keyPassword[[:space:]]*=[[:space:]]*"[^"]{1,}"' \
+            -e '-----BEGIN (RSA |EC |)PRIVATE KEY-----' \
+            2>/dev/null || true)"
+    if [[ -n "$LEAK" ]]; then
+        printf '%s[pre-commit] 拒绝提交：疑似硬编码签名口令%s\n' "$RED" "$OFF"
+        printf '%s\n' "$LEAK"
+        printf '\n请改用 keystore.properties 或环境变量：ZORV_STORE_PASS / ZORV_KEY_PASS\n'
+        exit 1
+    fi
+fi
+
+# ---------- 3. 构建产物 ----------
+# 注意：`/build/` 也是合法源码包名的一部分（app/src/main/java/com/ai/assistance/quro/build/
+# 里就是端侧 APK 构建引擎），只按 `/build/` 匹配会误杀源码。
+# 真正的构建产物永远不会出现在 `/src/` 路径下，所以先排除含 `/src/` 的路径再判。
+ARTIFACT="$(git diff --cached --name-only --diff-filter=ACM \
+            | grep -v '/src/' \
+            | grep -E '(^|/)build/|.*-signed\.apk$|.*-unsigned\.apk$|.*-aligned\.apk$' || true)"
+if [[ -n "$ARTIFACT" ]]; then
+    printf '%s[pre-commit] 拒绝提交：构建产物%s\n' "$RED" "$OFF"
+    printf '%s\n' "$ARTIFACT" | head -10
+    printf '\n签名前后的 APK 都不应入库。\n'
+    exit 1
+fi
+
+exit 0

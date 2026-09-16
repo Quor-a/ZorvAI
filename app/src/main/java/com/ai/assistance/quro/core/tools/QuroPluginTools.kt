@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.tools
 
 import android.content.Context
+import com.ai.assistance.quro.core.plugin.PluginSigning
 import com.ai.assistance.quro.core.plugin.QuroPluginAciRegistry
 import com.ai.assistance.quro.core.plugin.QuroPluginHost
 import com.ai.assistance.quro.plugin.engine.bridge.HostToolBridge
@@ -93,7 +94,7 @@ class ApkPluginTool : QuroTool {
                 "tools" -> pluginTools()
                 "surfaces" -> surfaces()
                 "open" -> open(context, jo.optString("surface_id").trim())
-                "install" -> install(jo.optString("path").trim(), jo.optBoolean("skip_signature_check", false))
+                "install" -> install(context, jo.optString("path").trim(), jo.optBoolean("skip_signature_check", false))
                 "install_builtin" -> installBuiltin(context)
                 "uninstall" -> uninstall(jo.optString("plugin_id").trim())
                 "reload" -> reload(jo.optString("plugin_id").trim())
@@ -252,15 +253,36 @@ class ApkPluginTool : QuroTool {
         }
     }
 
-    private fun install(path: String, skipSignature: Boolean): String {
+    private fun install(context: Context, path: String, skipSignature: Boolean): String {
         if (!QuroPluginHost.isReady()) return NOT_READY
         if (path.isEmpty()) return "缺少参数 path"
         val apk = File(path)
         if (!apk.exists()) return "文件不存在：$path"
-        val r = QuroPluginHost.install(apk, requireSameSignature = !skipSignature)
-        if (!r.success) return "插件安装失败：${r.message}"
+
+        // 与「导入 APK」保持同一条路径：先用宿主密钥补签（若用户配过签名），再走同签名校验安装。
+        // 补签失败不阻断安装 —— 回退装原包，把原因带回去。
+        var target = apk
+        var signNote = ""
+        val cfg = runCatching { PluginSigning.load(context) }.getOrNull()
+        if (!skipSignature && cfg != null && cfg.enabled) {
+            val signed = File(context.cacheDir, "signed-${apk.name}")
+            if (signed.exists()) signed.delete()
+            val err = PluginSigning.sign(context, apk, signed)
+            if (err == null) {
+                target = signed
+                signNote = "\n· 已用「${cfg.keystoreName}」(别名 ${cfg.alias}) 补签后再安装"
+            } else {
+                signNote = "\n· 补签未成功，已按原包安装：$err"
+            }
+        }
+
+        // 补签成功 = 这个包是本机用自己的密钥刚签出来的，再拿「是否与宿主同签名」卡它是同义反复，直接放行
+        val resigned = target.absolutePath != apk.absolutePath
+        val r = QuroPluginHost.install(target, requireSameSignature = !skipSignature && !resigned)
+        if (target.absolutePath != apk.absolutePath) target.delete()
+        if (!r.success) return "插件安装失败：${r.message}$signNote"
         val exts = runCatching { QuroPluginHost.extensionSummary(r.pluginId) }.getOrDefault(emptyMap())
-        return "插件安装成功：${r.pluginId}\n" +
+        return "插件安装成功：${r.pluginId}$signNote\n" +
             "贡献扩展点：${exts.entries.joinToString { "${it.key}×${it.value}" }.ifBlank { "无" }}\n" +
             "新增 AI 工具：${aiToolNamesOf(r.pluginId).joinToString("、").ifBlank { "无" }}\n" +
             "（这些工具下一轮起会直接出现在你的工具集里；本工具 action=\"tools\" 可随时查看。）"
