@@ -121,6 +121,9 @@ object QuroPluginEngine {
     var lastLoadError: String? = null
         private set
 
+    /** 宿主 APK 当前签名的第一张证书 SHA-256 指纹（调试用） */
+    fun hostFingerprint(): String? = runCatching { installer?.hostFingerprint() }.getOrNull()
+
     // ==================== 内部 ====================
 
     private fun readEntryClass(ctx: Context, apk: File): String {

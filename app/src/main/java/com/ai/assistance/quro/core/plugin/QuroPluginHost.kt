@@ -127,6 +127,9 @@ object QuroPluginHost {
     fun install(apk: File, requireSameSignature: Boolean = true): InstallResult =
         QuroPluginEngine.install(apk, requireSameSignature)
 
+    /** 宿主 APK 当前签名的第一张证书 SHA-256 指纹（调试用） */
+    fun hostFingerprint(): String? = QuroPluginEngine.hostFingerprint()
+
     fun uninstall(pluginId: String): Boolean = QuroPluginEngine.uninstall(pluginId)
 
     fun reload(pluginId: String): Boolean =

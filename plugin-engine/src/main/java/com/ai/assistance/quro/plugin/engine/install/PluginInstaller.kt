@@ -186,6 +186,11 @@ internal class PluginInstaller(private val context: Context) {
         emptySet()
     }
 
+    /** 调试用：宿主 APK 当前签名的第一张证书 SHA-256 指纹 */
+    internal fun hostFingerprint(): String? = runCatching { hostSigCerts().firstOrNull() }
+        .onFailure { android.util.Log.w(TAG, "读取宿主证书失败", it) }
+        .getOrNull()
+
     private val sigEntryRe = Regex("META-INF/.*\\.(RSA|DSA|EC)", RegexOption.IGNORE_CASE)
 
     /** 收集一个 APK 上所有可见的签名证书 SHA-256（大写冒号分隔）。三级来源依次兜底 */

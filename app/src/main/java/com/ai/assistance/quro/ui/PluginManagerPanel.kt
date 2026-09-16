@@ -266,12 +266,17 @@ private fun PluginLauncherBody(context: Context) {
 
             if (log.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
-                Text(log, fontSize = 12.sp, color = cs.primary, fontFamily = FontFamily.Monospace)
+                // 可长按选中复制：安装失败的提示会列出「插件证书 / 宿主证书」两串指纹，
+                // 被 Toast 截断时用户能直接复制原文反馈，不必靠截图
+                androidx.compose.foundation.text.selection.SelectionContainer {
+                    Text(log, fontSize = 12.sp, color = cs.primary, fontFamily = FontFamily.Monospace)
+                }
             }
 
             SigningCard(
                 cfg = signCfg,
                 expanded = signExpanded,
+                hostFingerprint = runCatching { QuroPluginHost.hostFingerprint() }.getOrNull() ?: "无法读取",
                 onToggleExpand = { signExpanded = !signExpanded },
                 onToggleEnabled = { v ->
                     signCfg = signCfg.copy(enabled = v)
@@ -894,6 +899,7 @@ private fun extLabel(type: String): String = when (type) {
 private fun SigningCard(
     cfg: PluginSigning.Config,
     expanded: Boolean,
+    hostFingerprint: String,
     onToggleExpand: () -> Unit,
     onToggleEnabled: (Boolean) -> Unit,
     onPickKeystore: () -> Unit,
@@ -917,6 +923,10 @@ private fun SigningCard(
                         else "未就绪：还没选到可用的宿主密钥库",
                         fontSize = 11.sp,
                         color = if (cfg.ready) cs.primary else cs.error,
+                    )
+                    Text(
+                        "宿主当前签名：$hostFingerprint",
+                        fontSize = 11.sp, color = cs.onSurfaceVariant,
                     )
                 }
                 Switch(checked = cfg.enabled, onCheckedChange = onToggleEnabled)
