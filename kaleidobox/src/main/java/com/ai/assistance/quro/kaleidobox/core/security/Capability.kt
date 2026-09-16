@@ -51,7 +51,8 @@ object CapabilityLexicon {
     )
     val DATA = listOf(
         "data.kv", "data.sqlite", "data.memory.read", "data.memory.write",
-        "data.contacts", "data.location", "data.calendar"
+        "data.contacts", "data.location", "data.calendar",
+        "worldbook.entries"
     )
     val PKG = listOf(
         "pkg.register", "pkg.discover", "pkg.install", "pkg.invoke:any"

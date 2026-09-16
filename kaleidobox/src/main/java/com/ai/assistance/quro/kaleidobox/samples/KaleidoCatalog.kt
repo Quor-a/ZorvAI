@@ -56,7 +56,7 @@ object KaleidoCatalog {
         { "name": "about_aiassistant", "runtime": "main", "target": "main:about_aiassistant", "title": { "zh": "关于" }, "description": "返回工具说明" },
         { "name": "ask", "runtime": "main", "target": "main:ask", "title": { "zh": "提问" }, "description": "用宿主 AI 回答一个问题", "params": { "type": "object", "properties": { "prompt": { "type": "string" }, "system": { "type": "string" } } } }
       ],
-      "capabilities": ["ai.chat", "ai.available", "data.kv", "ui.clipboard"],
+      "capabilities": ["ai.chat", "ai.available", "data.kv", "ui.clipboard", "ui.toast", "worldbook.entries"],
       "sandbox": { "level": "in_process", "memoryMb": 64, "netEgress": "deny" },
       "ui": [ { "id": "main", "surface": "toolbox", "render": "main:render", "onAction": "main:onAction", "title": { "zh": "AI 助手" } } ]
     }
@@ -165,14 +165,14 @@ object KaleidoCatalog {
       "id": "dev.kaleidobox.webui",
       "version": "1.0.0",
       "name": { "zh": "WebUI 浏览器", "en": "WebUI Browser" },
-      "description": { "zh": "应用内浏览器，直接渲染网页，不跳出 App", "en": "In-app browser rendering web pages" },
+      "description": { "zh": "应用内多标签浏览器：前进后退、书签、历史、页内查找、桌面版、下载", "en": "In-app multi-tab browser with bookmarks, history, find-in-page" },
       "authors": ["ZorvAI"],
       "keywords": ["web", "browser", "ui"],
       "runtime": [ { "id": "main", "lang": "kotlin", "engine": "jvm_dex", "entry": "com.ai.assistance.quro.kaleidobox.samples.WebUiToolkit" } ],
       "units": [
         { "name": "about_webui", "runtime": "main", "target": "main:about_webui", "title": { "zh": "关于" }, "description": "返回工具说明" }
       ],
-      "capabilities": ["net.http", "data.kv", "ui.clipboard"],
+      "capabilities": ["data.kv", "ui.clipboard", "ui.toast"],
       "sandbox": { "level": "in_process", "memoryMb": 64, "netEgress": "allow" },
       "ui": [ { "id": "main", "surface": "toolbox", "render": "main:render", "onAction": "main:onAction", "title": { "zh": "WebUI 浏览器" } } ]
     }
@@ -184,9 +184,9 @@ object KaleidoCatalog {
       "id": "dev.kaleidobox.worldbook",
       "version": "1.0.0",
       "name": { "zh": "世界书", "en": "WorldBook" },
-      "description": { "zh": "持久化设定/知识卡片仓库（分类·正面·背面）", "en": "Persistent setting/knowledge card store" },
+      "description": { "zh": "Lorebook 提示词注入引擎：关键词/次关键词+触发逻辑、插入深度、权重、概率、常驻、包含组、递归，可测试扫描", "en": "Lorebook prompt-injection engine with keys, logic, depth, weight, probability" },
       "authors": ["ZorvAI"],
-      "keywords": ["worldbook", "memory", "cards"],
+      "keywords": ["worldbook", "lorebook", "memory"],
       "runtime": [ { "id": "main", "lang": "kotlin", "engine": "jvm_dex", "entry": "com.ai.assistance.quro.kaleidobox.samples.WorldBookToolkit" } ],
       "units": [
         { "name": "about_worldbook", "runtime": "main", "target": "main:about_worldbook", "title": { "zh": "关于" }, "description": "返回工具说明" }
@@ -232,12 +232,12 @@ object KaleidoCatalog {
         ),
         CatalogEntry(
             "dev.kaleidobox.webui", "1.0.0", "WebUI 浏览器", "WebUI Browser",
-            "应用内浏览器，直接渲染网页", listOf("web", "browser", "ui"), Kind.BUILTIN,
+            "应用内多标签浏览器：前进后退、书签、历史、查找、桌面版", listOf("web", "browser", "ui"), Kind.BUILTIN,
             "com.ai.assistance.quro.kaleidobox.samples.WebUiToolkit", WEBUI_MANIFEST,
         ),
         CatalogEntry(
             "dev.kaleidobox.worldbook", "1.0.0", "世界书", "WorldBook",
-            "持久化设定/知识卡片仓库", listOf("worldbook", "memory", "cards"), Kind.BUILTIN,
+            "Lorebook 提示词注入引擎（关键词触发/深度/权重/递归）", listOf("worldbook", "lorebook", "memory"), Kind.BUILTIN,
             "com.ai.assistance.quro.kaleidobox.samples.WorldBookToolkit", WORLDBOOK_MANIFEST,
         ),
     )

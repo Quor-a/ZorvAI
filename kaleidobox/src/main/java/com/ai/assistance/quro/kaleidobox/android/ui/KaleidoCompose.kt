@@ -21,13 +21,40 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path as ComposePath
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import android.app.DownloadManager
+import android.net.Uri
+import android.os.Environment
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.ai.assistance.quro.kaleidobox.core.ui.*
+
+/** 原生 webview 组件的指令去重缓存（放在重组之外，避免写 state 引发额外重组）。 */
+private class WvMemo {
+    var nav: String? = null
+    var find: String? = null
+    var clear: String? = null
+
+    /**
+     * 上一次"已请求加载"的 URL。
+     *
+     * 存在的意义（曾是一个真 bug）：不能用 `props.url != webView.url` 来决定是否加载 ——
+     * 服务端 301 到带斜杠的地址后，`webView.url` 永远不等于 props.url，
+     * 于是每次重组都再 loadUrl 一次 → 无限重载。
+     * 正确语义：**只有请求的 URL 发生变化时才加载**；"想重新加载同一个地址"由 nav=load 显式表达。
+     */
+    var loadedUrl: String? = null
+}
+
+/** 桌面版 UA（WebUI 的"桌面版网站"开关使用）。 */
+private const val DESKTOP_UA =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
 /**
  * UiNode 树 → Jetpack Compose 渲染器。
@@ -60,12 +87,50 @@ object KaleidoCompose {
     }
 
     init {
-        // 原生 WebView 组件：供 WebUI 插件在应用内渲染网页。
-        // props: url(String) — 要加载的地址；变化时自动重新加载。
-        // 内置后退/前进/刷新工具条，规避插件无法持有 WebView 引用的问题。
-        NativeComponentRegistry.register("webview") { props, _, _ ->
-            val ctxUrl = (props["url"] as? String)?.takeIf { it.isNotEmpty() } ?: "about:blank"
+        // 原生 WebView 组件：WebUI 浏览器插件的引擎。
+        //
+        // 为什么不是"插件自己 new 一个 WebView"：插件是纯数据树，拿不到 View 引用。
+        // 所以这里的契约是「双向」的 —— 插件下发 props，组件通过 onAction 回传页面状态。
+        //
+        // props:
+        //   url(String)           要加载的地址（变化即导航）
+        //   nav(String)           导航指令，形如 "back@12"（nonce 去重，变化即执行一次）：
+        //                         back / forward / reload / stop / zoomIn / zoomOut / top / bottom
+        //   desktop(Boolean)      桌面版 UA
+        //   find(String)          页内查找关键字（变化即查找并高亮）
+        //   clearData(String)     隐私清理 nonce（清历史/缓存/表单/Cookie）
+        //   showToolbar(Boolean)  是否渲染组件内置工具条（默认 false，由插件自绘）
+        //
+        // 事件 onAction：
+        //   wvPage     {url,title,canBack,canFwd,loading,progress}
+        //   wvError    {code,desc,url}
+        //   wvDownload {url,mime,ok}
+        //   wvFind     {matches}
+        //   wvCleared  {ok}
+        NativeComponentRegistry.register("webview") { props, _, onAction ->
+            val ctx = LocalContext.current
+            val url = (props["url"] as? String)?.takeIf { it.isNotEmpty() } ?: "about:blank"
+            val showToolbar = props["showToolbar"] as? Boolean ?: false
+
             var webView by remember { mutableStateOf<WebView?>(null) }
+            var progress by remember { mutableStateOf(0) }
+            val seen = remember { WvMemo() }
+
+            // 页面状态回传：把 WebView 内部状态"翻译"成插件能读的数据。
+            fun report(wv: WebView, loading: Boolean) {
+                onAction(
+                    "wvPage",
+                    mapOf(
+                        "url" to (wv.url ?: ""),
+                        "title" to (wv.title ?: ""),
+                        "canBack" to wv.canGoBack(),
+                        "canFwd" to wv.canGoForward(),
+                        "loading" to loading,
+                        "progress" to progress,
+                    ),
+                )
+            }
+
             Column(Modifier.fillMaxSize()) {
                 AndroidView(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -75,27 +140,153 @@ object KaleidoCompose {
                             settings.domStorageEnabled = true
                             settings.loadWithOverviewMode = true
                             settings.useWideViewPort = true
-                            webViewClient = WebViewClient()
-                            loadUrl(ctxUrl)
+                            settings.setSupportZoom(true)
+                            settings.builtInZoomControls = true
+                            settings.displayZoomControls = false
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageStarted(
+                                    view: WebView?, u: String?, favicon: android.graphics.Bitmap?,
+                                ) {
+                                    super.onPageStarted(view, u, favicon)
+                                    view?.let { report(it, loading = true) }
+                                }
+
+                                override fun onPageFinished(view: WebView?, u: String?) {
+                                    super.onPageFinished(view, u)
+                                    view?.let { report(it, loading = false) }
+                                }
+
+                                override fun onReceivedError(
+                                    view: WebView?, request: android.webkit.WebResourceRequest?,
+                                    error: android.webkit.WebResourceError?,
+                                ) {
+                                    super.onReceivedError(view, request, error)
+                                    if (request?.isForMainFrame == true) {
+                                        onAction(
+                                            "wvError",
+                                            mapOf(
+                                                "code" to (error?.errorCode ?: -1),
+                                                "desc" to (error?.description?.toString() ?: ""),
+                                                "url" to (request.url?.toString() ?: ""),
+                                            ),
+                                        )
+                                    }
+                                }
+                            }
+                            webChromeClient = object : WebChromeClient() {
+                                override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                    super.onProgressChanged(view, newProgress)
+                                    progress = newProgress
+                                }
+
+                                override fun onReceivedTitle(view: WebView?, title: String?) {
+                                    super.onReceivedTitle(view, title)
+                                    view?.let { report(it, loading = progress in 1..99) }
+                                }
+                            }
+                            @Suppress("DEPRECATION")
+                            setFindListener { _, numberOfMatches, _ ->
+                                onAction("wvFind", mapOf("matches" to numberOfMatches))
+                            }
+                            setDownloadListener { dlUrl, _, _, mime, _ ->
+                                // 浏览器该有的下载：交给系统下载器，落到「下载」目录并出通知。
+                                val ok = runCatching {
+                                    val req = DownloadManager.Request(Uri.parse(dlUrl))
+                                    req.setNotificationVisibility(
+                                        DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+                                    )
+                                    req.setDestinationInExternalPublicDir(
+                                        Environment.DIRECTORY_DOWNLOADS,
+                                        Uri.parse(dlUrl).lastPathSegment ?: "download",
+                                    )
+                                    val dm = c.getSystemService(android.content.Context.DOWNLOAD_SERVICE) as DownloadManager
+                                    dm.enqueue(req)
+                                    true
+                                }.getOrDefault(false)
+                                onAction("wvDownload", mapOf("url" to dlUrl, "mime" to (mime ?: ""), "ok" to ok))
+                            }
+                            loadUrl(url)
                         }.also { webView = it }
                     },
                     update = { wv ->
-                        val u = (props["url"] as? String)?.takeIf { it.isNotEmpty() }
-                        if (u != null && u != wv.url) wv.loadUrl(u)
-                    }
+                        // 1) 目标地址变化 → 导航（只在 props.url 变化时加载，见 WvMemo.loadedUrl 的说明）
+                        val want = (props["url"] as? String)?.takeIf { it.isNotEmpty() }
+                        if (want != null && want != seen.loadedUrl) {
+                            seen.loadedUrl = want
+                            wv.loadUrl(want)
+                        }
+
+                        // 2) 桌面版 UA 开关
+                        val wantDesktop = props["desktop"] as? Boolean ?: false
+                        val isDesktop = wv.settings.userAgentString?.contains("X11") == true
+                        if (wantDesktop != isDesktop) {
+                            wv.settings.userAgentString = if (wantDesktop) DESKTOP_UA else null
+                            wv.reload()
+                        }
+
+                        // 3) 导航指令（nonce 去重，保证"按一次走一次"）
+                        val nv = props["nav"] as? String
+                        if (!nv.isNullOrEmpty() && nv != seen.nav) {
+                            seen.nav = nv
+                            when (nv.substringBefore('@')) {
+                                // load：把 props.url 作为"显式导航目标"强制加载一次。
+                                // 必要性：同 URL 时上面那条"仅变化才加载"的规则判不出
+                                // "用户就是想重新进这个页"（例如地址栏又输了一遍当前域名）。
+                                "load" -> want?.let {
+                                    seen.loadedUrl = it
+                                    wv.loadUrl(it)
+                                }
+                                "back" -> if (wv.canGoBack()) wv.goBack()
+                                "forward" -> if (wv.canGoForward()) wv.goForward()
+                                "reload" -> wv.reload()
+                                "stop" -> wv.stopLoading()
+                                "zoomIn" -> wv.zoomIn()
+                                "zoomOut" -> wv.zoomOut()
+                                // 用 JS 滚动，避免 WebView.scale（已在 API 中废弃）
+                                "top" -> wv.evaluateJavascript("window.scrollTo(0,0)", null)
+                                "bottom" -> wv.evaluateJavascript(
+                                    "window.scrollTo(0, document.body ? document.body.scrollHeight : 0)", null
+                                )
+                            }
+                        }
+
+                        // 4) 页内查找
+                        val fd = props["find"] as? String
+                        if (!fd.isNullOrEmpty() && fd != seen.find) {
+                            seen.find = fd
+                            wv.findAllAsync(fd)
+                        }
+
+                        // 5) 隐私清理
+                        val cd = props["clearData"] as? String
+                        if (!cd.isNullOrEmpty() && cd != seen.clear) {
+                            seen.clear = cd
+                            val ok = runCatching {
+                                wv.clearHistory()
+                                wv.clearCache(true)
+                                wv.clearFormData()
+                                CookieManager.getInstance().removeAllCookies(null)
+                                CookieManager.getInstance().flush()
+                                true
+                            }.getOrDefault(false)
+                            onAction("wvCleared", mapOf("ok" to ok))
+                        }
+                    },
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Button(onClick = { webView?.goBack() }) { Text("←") }
-                    Button(onClick = { webView?.goForward() }) { Text("→") }
-                    Button(onClick = { webView?.reload() }) { Text("⟳") }
-                    Text(
-                        (props["url"] as? String) ?: "",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.weight(1f).padding(start = 8.dp)
-                    )
+                if (showToolbar) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Button(onClick = { webView?.goBack() }) { Text("←") }
+                        Button(onClick = { webView?.goForward() }) { Text("→") }
+                        Button(onClick = { webView?.reload() }) { Text("⟳") }
+                        Text(
+                            (props["url"] as? String) ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f).padding(start = 8.dp),
+                        )
+                    }
                 }
             }
         }
