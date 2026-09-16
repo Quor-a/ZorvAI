@@ -164,7 +164,11 @@ private fun PluginLauncherBody(context: Context) {
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    val name = uri.lastPathSegment?.substringAfterLast('/')?.takeWhile { it != '?' } ?: "plugin.apk"
+                    // 文件名从 SAF URI 推出来，可能根本没有 .apk 后缀
+                    // （不少 provider 的 lastPathSegment 是纯数字 id），补上再落盘。
+                    val raw = uri.lastPathSegment?.substringAfterLast('/')?.takeWhile { it != '?' }
+                    val name = (raw ?: "plugin.apk")
+                        .let { if (it.endsWith(".apk", ignoreCase = true)) it else "$it.apk" }
                     val tmp = File(context.cacheDir, name)
                     context.contentResolver.openInputStream(uri)?.use { i ->
                         tmp.outputStream().use { o -> i.copyTo(o) }

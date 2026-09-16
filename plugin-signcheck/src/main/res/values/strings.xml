@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 插件桌面显示的图标名 -->
+    <string name="plugin_name">签名核验</string>
+</resources>

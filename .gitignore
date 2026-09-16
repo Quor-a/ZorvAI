@@ -110,3 +110,30 @@ deliverables/
 # Keystore variants
 zorvai_release.jks
 debug-for-release.keystore
+
+# ===== ZorvAI 签名安全加固（scripts/sign.sh 配套）=====
+# 上游已有 *.jks / *.keystore / keystore.properties，此处补齐边界情况
+
+# 私钥与凭证（任何形态）
+*.keystore.*
+keystore.properties.*
+.env
+.env.*
+env.sh
+secrets/
+.secrets/
+
+# 签名产物（绝不入库）
+*-signed.apk
+*-unsigned.apk
+*-aligned.apk
+build/outputs/apk/
+
+# 本地签名环境（若有人误把密钥位放到项目内）
+.zorvai-signing/
+signing/
+
+# 例外：签名工具脚本本身不含私钥，必须可入库
+# （否则会被上面的 *keystore* 通配规则误伤）
+!scripts/setup-keystore.sh
+!scripts/lib/common.sh
