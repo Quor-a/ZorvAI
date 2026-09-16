@@ -123,8 +123,10 @@ class QuroKaleidoBoxTool : QuroTool {
                 "id" to e.id,
                 "name" to e.displayName,
                 "type" to e.kind.name,
-                "desc" to e.descZh,
+                "group" to e.group.label,
                 "tags" to e.tags,
+                "tagLabels" to e.displayTags,
+                "desc" to e.descZh,
                 "entryClass" to e.entryClass,
                 "hasSource" to (e.source != null),
             )

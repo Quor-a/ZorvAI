@@ -209,6 +209,9 @@ class QuroToolRegistry {
             "sandbox", "private_db",
             // KaleidoBox 工具包运行器：进程内 JVM / Dex 引擎运行 Kotlin/Java 工具包（list/install/invoke）
             "kaleidobox",
+            // ★ APK 级插件框架总控（唯一入口）：列/装/卸/重载插件 + 查看与调用插件贡献的 AI 工具
+            //   + 打开插件界面。插件动态贡献的工具由 pluginHostToolSpecs() 另行并入。
+            "apk_plugin",
         ) + uiActionToolNames() // 并入「UI 动作工具」：对话框界面/弹层/开关 → AI 可调用（见 QuroToolsUiActions）
         val base = map.values.filter { it.name in coreNames }.map {
             QuroToolSpec(it.name, it.description, it.parametersJson)

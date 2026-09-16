@@ -37,7 +37,8 @@ object ToolCapabilityDirectory {
         AI_CAPABILITIES("AI能力", "图像生成、视频生成、文档处理"),
         SECURITY("安全/权限", "Shizuku、ROOT、设备管理员"),
         CMS_DEVELOPMENT("CMS开发", "CMS模块、引擎、开发环境管理与部署"),
-        AIP_DOC("文档排版", "长文档/PPT/报告/思维导图的 AIP 结构化排版与文档生成")
+        AIP_DOC("文档排版", "长文档/PPT/报告/思维导图的 AIP 结构化排版与文档生成"),
+        PLUGIN("插件扩展", "APK 级插件框架：装独立 APK 给 AI 加能力（AI 工具 / ACI 能力 / 界面 / 指令）")
     }
     
     /**
@@ -60,6 +61,42 @@ object ToolCapabilityDirectory {
      * 真实注册表里不在本层的工具，会在 [install] 时用 description 兜底合成，分类走命名推断。
      */
     private val handbook = mapOf(
+        // ═══════════════ 插件扩展（APK 级插件框架总控）═══════════════
+        "apk_plugin" to ToolInfo(
+            name = "apk_plugin",
+            category = ToolCategory.PLUGIN,
+            description = "APK 级插件框架总控（装/卸/重载插件、查看插件贡献的 AI 工具、直接调用插件工具、打开插件界面）",
+            useCases = listOf(
+                "装了哪些插件", "插件能干什么", "帮我装个插件", "把这个插件 APK 装上",
+                "卸载某插件", "重载插件（改完插件让它生效）", "打开插件界面", "用某个插件的能力查一下",
+                "插件有哪些 AI 工具", "插件框架什么状态"
+            ),
+            examples = listOf(
+                "apk_plugin(action=\"status\")",
+                "apk_plugin(action=\"list\")",
+                "apk_plugin(action=\"tools\")",
+                "apk_plugin(action=\"install_builtin\")",
+                "apk_plugin(action=\"call\", name=\"unit_convert\", args=\"{\\\"value\\\":1,\\\"from\\\":\\\"km\\\",\\\"to\\\":\\\"m\\\"}\")",
+                "apk_plugin(action=\"open\", surface_id=\"zorvweb_browser\")"
+            ),
+            parameters = mapOf(
+                "action" to "status/list/info/tools/surfaces/open/install/install_builtin/uninstall/reload/call",
+                "plugin_id" to "插件包名（info / uninstall / reload）",
+                "surface_id" to "插件界面 id（open）",
+                "path" to "插件 APK 绝对路径（install）",
+                "name" to "插件 AI 工具名（call）",
+                "args" to "call 的参数 JSON 对象字符串"
+            ),
+            tips = listOf(
+                "这是插件框架的**唯一**入口，所有插件相关操作都走它，不要自己猜插件工具名。",
+                "插件贡献的 AI 工具通常已直接在你的工具集里；若没生效，用 action=call 兜底调用。",
+                "不确定插件有什么能力时：先 action=list 看插件，再 action=tools 看工具。",
+                "插件桌面（启动器式管理界面）用 ui_open_plugins 打开。"
+            ),
+            relatedTools = listOf("ui_open_plugins", "build_apk"),
+            priority = 4
+        ),
+
         // ═══════════════ 基础工具 ═══════════════
         "get_current_time" to ToolInfo(
             name = "get_current_time",
