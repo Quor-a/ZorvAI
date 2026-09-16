@@ -102,6 +102,19 @@ class QuroApplication : Application() {
         } catch (e: Throwable) {
             android.util.Log.e("QuroApplication", "ACI 初始化失败（不影响主流程）", e)
         }
+        // APK 级插件框架：初始化插件引擎、加载已装插件、把插件的 AI 工具 / ACI 能力接进宿主。
+        // 放在 ACI 初始化之后，这样「ACI 外部能力反向镜像成 AI 工具」能拿到已发现的能力清单。
+        // 整体包 try：插件异常绝不能拖垮应用启动。
+        try {
+            com.ai.assistance.quro.core.plugin.QuroPluginHost.attach(applicationContext)
+            android.util.Log.i(
+                "QuroApplication",
+                "插件框架初始化完成（已加载 ${com.ai.assistance.quro.core.plugin.QuroPluginHost.loadedIds().size} 个插件，" +
+                    "贡献 ${com.ai.assistance.quro.core.plugin.QuroPluginHost.toolSpecs().size} 个 AI 工具）"
+            )
+        } catch (e: Throwable) {
+            android.util.Log.e("QuroApplication", "插件框架初始化失败（不影响主流程）", e)
+        }
         // 心跳孵化：偏好就绪后启动全局后台循环（AtomicBoolean 守卫避免重复启动；默认开启）
         QuroPersonaViewModel.initHeartbeat(applicationContext)
         if (QuroPersonaViewModel.heartbeatEnabled.value) {

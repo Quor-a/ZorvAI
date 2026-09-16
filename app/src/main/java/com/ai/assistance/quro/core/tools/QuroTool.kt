@@ -217,7 +217,11 @@ class QuroToolRegistry {
         val imported = QuroImportedToolRegistry.all().map {
             QuroToolSpec(it.name, it.description, it.parametersJson)
         }
-        return (base + imported).plus(skillSpecs()).distinctBy { it.name }
+        // APK 级插件框架：宿主内置的插件管理工具（plugin_list/install/uninstall/reload/info）
+        // + 已装插件动态贡献的 AI 工具。二者都由 QuroPluginHost 统一产出，
+        // 保证「装了插件 → 下一轮 function calling 就能看到它的工具」。
+        val pluginTools = runCatching { pluginHostToolSpecs() }.getOrElse { emptyList() }
+        return (base + imported + pluginTools).plus(skillSpecs()).distinctBy { it.name }
     }
 
     /** 完整工具规格（全部内置工具 + 技能工具）。仅在 API 代理确认支持时使用（见 coreSpecs 说明）。 */
@@ -288,6 +292,17 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
                 }
                 return@map QuroToolResult(call.name, directive)
             }
+            // ══ 插件工具分支（APK 级插件注册的 AI_TOOL）══
+            // 插件执行体是 suspend，不能伪装成 QuroTool.run（同步）塞进 droidMcp，
+            // 所以在这里直接命中并执行，绕过注册表查找；未命中返回 null 继续走内置工具。
+            val pluginOut = runCatching {
+                com.ai.assistance.quro.core.plugin.QuroPluginHost.executePluginTool(
+                    call.name,
+                    runCatching { jsonToMap(call.arguments) }.getOrElse { emptyMap() }
+                )
+            }.getOrNull()
+            if (pluginOut != null) return@map QuroToolResult(call.name, pluginOut)
+
             val tool = registry.get(call.name)
             if (tool == null) {
                 return@map QuroToolResult(call.name, "未知工具: ${call.name}")

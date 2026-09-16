@@ -114,6 +114,26 @@ class QuroMainAciService : BaseAidlAciService() {
         caps.add(AciIntentBridge.capability())
         // ContentProvider 访问代理：受控端代读/代写 content:// URI。
         caps.add(AciProviderBridge.capability())
+        // ★ APK 级插件贡献的 ACI 能力：并入对外能力清单。
+        // 外部调用方看到的仍是标准 ACI 能力（id + description + params），
+        // 感知不到它其实由某个插件 APK 实现（见 AciBridge 方向一）。
+        runCatching {
+            com.ai.assistance.quro.core.plugin.QuroPluginAciRegistry.capabilities().forEach { spec ->
+                val cap = Capability.create(spec.name, spec.description)
+                spec.params.forEach { p -> cap.addParam(p.name, p.type, p.required, p.description) }
+                cap.addFlag(Capability.FLAG_BACKGROUND)
+                caps.add(cap)
+            }
+            Log.d(TAG, "并入插件 ACI 能力 ${com.ai.assistance.quro.core.plugin.QuroPluginAciRegistry.capabilities().size} 个")
+        }
+    }
+
+    /** Bundle → Map（供插件 suspend 执行体消费，插件 API 用 Map<String,Any?> 而非 Bundle） */
+    private fun bundleToMap(b: Bundle?): Map<String, Any?> {
+        if (b == null) return emptyMap()
+        val m = HashMap<String, Any?>()
+        b.keySet().forEach { k -> m[k] = b.get(k) }
+        return m
     }
 
     override fun onCheckPermission(req: AidlAciRequest?, callerPkg: String?): Boolean {
@@ -130,7 +150,22 @@ class QuroMainAciService : BaseAidlAciService() {
                 "aci_protocol" -> handleProtocol()
                 AciIntentBridge.CAP_ID -> AciIntentBridge.handle(this, req.params)
                 AciProviderBridge.CAP_ID -> AciProviderBridge.handle(this, req.params)
-                else -> AidlAciResponse.error(AidlAciError.CAPABILITY_NOT_FOUND, "unknown: ${req.capability}")
+                else -> {
+                    // ★ 插件能力兜底：命中则由插件处理（Binder 线程内同步等待其 suspend 执行体，12s 上限）
+                    val pluginOut = runCatching {
+                        kotlinx.coroutines.runBlocking {
+                            kotlinx.coroutines.withTimeout(12_000L) {
+                                com.ai.assistance.quro.core.plugin.QuroPluginAciRegistry
+                                    .dispatch(req.capability, bundleToMap(req.params))
+                            }
+                        }
+                    }.getOrNull()
+                    if (pluginOut != null) {
+                        AidlAciResponse.success(Bundle()).putResult("result", pluginOut)
+                    } else {
+                        AidlAciResponse.error(AidlAciError.CAPABILITY_NOT_FOUND, "unknown: ${req.capability}")
+                    }
+                }
             }
         } catch (e: Throwable) {
             Log.e(TAG, "onCall 异常: ${e.message}")

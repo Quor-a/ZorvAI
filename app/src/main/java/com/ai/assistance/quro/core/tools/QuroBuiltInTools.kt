@@ -507,6 +507,11 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
         r.register(QuroTaskSchedulerTool(ctx))   // task_scheduler  ：定时任务调度（Cron）
         r.register(QuroDataManagerTool(ctx))     // data_manager    ：数据导出 / 导入 / 加密备份
     }
+    // APK 级插件框架：插件管理工具（plugin_list / plugin_info / plugin_install / plugin_uninstall / plugin_reload）。
+    // 注册进运行时注册表后，它们既下发给 LLM 又能被 engine 真正执行；
+    // 插件自己贡献的 AI 工具不进 map（其执行体是 suspend，由 QuroToolEngine 单独分支处理），
+    // 只通过 coreSpecs() 里的 pluginHostToolSpecs() 下发给 LLM。
+    allPluginManagementTools.forEach { r.register(it) }
     // 工具能力目录以真实注册表为单一真相源动态生成（修复「分组目录残缺→AI 查不到/不主动用工具」）
     // 用 fullSpecs()（内置全部 + 技能工具），与模型实际下发集合严格一致（core/full 模式下目录==可调用全集）
     ToolCapabilityDirectory.install(r.fullSpecs())

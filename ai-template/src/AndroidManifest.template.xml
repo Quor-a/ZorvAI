@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 按需声明权限（宿主也需声明同名权限才会真正生效） -->
+    <!-- <uses-permission android:name="android.permission.INTERNET" /> -->
+
+    <application android:label="@string/plugin_name">
+
+        <!-- ★ 宿主靠这条 meta-data 反射实例化插件入口类，缺失则安装被拒 -->
+        <meta-data
+            android:name="quro.plugin.entry"
+            android:value="__PACKAGE__.__ENTRY_CLASS__" />
+
+    </application>
+</manifest>
