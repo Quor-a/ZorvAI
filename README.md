@@ -1867,7 +1867,7 @@ cd ZorvAI
 
 **最新版本：`v1.0.90`**（2026-09-16，APK 级插件框架完整化：插件桌面启动器 UI + 单一工具 `apk_plugin` + AI 可直接调用插件工具）：
 
-- 🟢 **[app-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.90/app-full-release.apk)**（约 366MB，Release 签名，**最新**）
+- 🟢 **[ZorvAI_v1.0.90_full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.90/ZorvAI_v1.0.90_full-release.apk)**（约 366MB，Release 签名，**最新**）
 
 ### v1.0.90 新增功能
 
