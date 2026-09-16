@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# ============================================================================
+# pre-push —— 推送前最后一道扫描
+#
+# 安装：cp git-hooks/pre-push .git/hooks/ && chmod +x .git/hooks/pre-push
+# 依赖：scripts/purge-before-push.sh 位于仓库内
+# ============================================================================
+set -euo pipefail
+
+RED=$'\033[31m'; OFF=$'\033[0m'
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PURGE="$REPO_ROOT/scripts/purge-before-push.sh"
+
+if [[ ! -x "$PURGE" ]]; then
+    printf '%s[pre-push] 未找到 scripts/purge-before-push.sh，跳过深度扫描%s\n' "$RED" "$OFF"
+    exit 0
+fi
+
+if ! "$PURGE"; then
+    printf '\n%s[pre-push] 已阻止推送%s\n' "$RED" "$OFF"
+    exit 1
+fi
+
+exit 0

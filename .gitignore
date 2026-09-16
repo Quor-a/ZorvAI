@@ -70,6 +70,7 @@ gradle_cache/
 *.jks
 *.keystore
 *.p12
+*.bks
 *keystore*
 # 注意：keystore.properties 包含密码，不应提交到 git
 # 但在本地开发时需要保留此文件
@@ -137,3 +138,12 @@ signing/
 # （否则会被上面的 *keystore* 通配规则误伤）
 !scripts/setup-keystore.sh
 !scripts/lib/common.sh
+
+# ⚠️ app/src/main/assets/keystore/ 下的内置宿主密钥**不入库**（2026-09-17 用户明确要求：
+# 「推送代码…注意别推送签名」）。它只打进 APK，不进仓库。
+# 因此下面这条目录解禁与文件解禁**必须保持关闭**，否则 pre-push 的第 1 层扫描会拦下推送。
+# 文件本身留在本机磁盘上，构建照常能打进 APK；新 clone 缺这两个文件也不影响编译，
+# 只是内置补签不可用（sign() 会明确报「内置密钥缺失」）。
+#!app/src/main/assets/keystore/
+#!app/src/main/assets/keystore/zorvai_release.bks
+#!app/src/main/assets/keystore/zorvai_release.p12

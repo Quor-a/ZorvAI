@@ -450,22 +450,33 @@ object BuildEngine {
             }
         }
 
-        private fun loadKeyStore(ksFile: File, pass: String): KeyStore {
-            val exceptions = mutableListOf<Throwable>()
-            for (type in listOf("JKS", "PKCS12", "BKS")) {
+    private fun loadKeyStore(ksFile: File, pass: String): KeyStore {
+        // ★ BKS 依赖 BouncyCastle，必须先注册 provider；
+        //   另外有些 ROM 的 PKCS12/BKS 实现较弱，带 BC 再试一遍能救回一批"Wrong version of key store"。
+        runCatching {
+            val bc = Class.forName("org.bouncycastle.jce.provider.BouncyCastleProvider")
+            if (java.security.Security.getProvider("BC") == null) {
+                java.security.Security.addProvider(bc.getDeclaredConstructor().newInstance() as java.security.Provider)
+            }
+        }
+        val exceptions = mutableListOf<Throwable>()
+        for (type in listOf("BKS", "PKCS12", "JKS")) {
+            for (provider in listOf<String?>(null, "BC")) {
                 try {
-                    val ks = KeyStore.getInstance(type)
+                    val ks = if (provider == null) KeyStore.getInstance(type)
+                    else KeyStore.getInstance(type, provider)
                     ksFile.inputStream().use { ks.load(it, pass.toCharArray()) }
                     return ks
                 } catch (e: Throwable) {
                     exceptions.add(e)
                 }
             }
-            throw IllegalStateException(
-                "无法加载密钥库（已尝试 JKS/PKCS12/BKS）：${ksFile.name}，" +
-                    "最后一次错误：${exceptions.lastOrNull()?.message}"
-            )
         }
+        throw IllegalStateException(
+            "无法加载密钥库（已尝试 BKS/PKCS12/JKS × 默认/BC）：${ksFile.name}，" +
+                "最后一次错误：${exceptions.lastOrNull()?.message}"
+        )
+    }
     }
 
     @Volatile private var cached: InProc? = null

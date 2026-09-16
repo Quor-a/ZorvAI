@@ -10,6 +10,10 @@ RED=$'\033[31m'; OFF=$'\033[0m'
 
 # ---------- 1. 密钥文件 ----------
 PATTERN='(\.jks|\.keystore|\.p12|\.bks|\.pk8|keystore\.properties|.*[_-]keystore.*|\.pem)$'
+
+# ⚠️ 这里**不要**为 app/src/main/assets/keystore/ 下的内置宿主密钥开白名单
+# （曾经开过，2026-09-17 已撤销）：用户明确要求「别推送签名」。
+# 那两个文件靠 .gitignore 保持不入库，只在本机参与构建、打包进 APK。
 BLOCKED="$(git diff --cached --name-only --diff-filter=ACM | grep -Ei "$PATTERN" || true)"
 if [[ -n "$BLOCKED" ]]; then
     printf '%s[pre-commit] 拒绝提交：检测到签名私钥相关文件%s\n' "$RED" "$OFF"
