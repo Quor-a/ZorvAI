@@ -93,6 +93,8 @@ object SamplesUi {
      *
      * @param fill  true → 较高的固定高度（约 320），适合终端输出占主区
      * @param minH  覆盖固定高度（用于响应块/剪贴板当前内容等较小块）
+     * @param weight 非空时改为"占据剩余高度"（放进竖向 [Column] 里用），
+     *               这样终端/日志能真正占满主区，而不是被压在一个固定高度里
      */
     fun codeBlock(
         id: String,
@@ -101,6 +103,7 @@ object SamplesUi {
         label: String? = null,
         fill: Boolean = false,
         minH: Int? = null,
+        weight: Float? = null,
     ): UiNode {
         val fixedH = minH ?: (if (fill) 320 else 140)
         val linesCol: UiNode = if (lines.isEmpty())
@@ -127,7 +130,9 @@ object SamplesUi {
         return UiNode.Box(
             id,
             modifier = Mod(
-                width = Size.Fill, height = Size.Dp(fixedH),
+                width = Size.Fill,
+                height = if (weight != null) Size.Fill else Size.Dp(fixedH),
+                weight = weight,
                 background = C.codeBg, cornerRadius = 14, padding = Edges.all(14),
             ),
             children = listOf(UiNode.Column("${id}_c", children = col)),
@@ -285,5 +290,41 @@ object SamplesUi {
     fun strList(state: Map<String, Any?>, key: String): List<String> {
         val v = state[key]
         return (v as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+    }
+
+    /**
+     * 布尔取值。
+     *
+     * 坑：状态经过 JSON 往返后，数字是 [Long]/[Double] 而不是 Int，
+     * 布尔是 [Boolean]；直接 `as Int` 会抛 ClassCastException。
+     * 这里统一宽松转换，插件侧不必各写一遍。
+     */
+    fun boolOf(state: Map<String, Any?>, key: String, default: Boolean = false): Boolean =
+        when (val v = state[key]) {
+            is Boolean -> v
+            is Number -> v.toInt() != 0
+            is String -> v.equals("true", true) || v == "1"
+            else -> default
+        }
+
+    /** 整数取值（宽松，见 [boolOf] 的类型说明）。 */
+    fun intOf(state: Map<String, Any?>, key: String, default: Int = 0): Int =
+        when (val v = state[key]) {
+            is Number -> v.toInt()
+            is String -> v.toIntOrNull() ?: default
+            is Boolean -> if (v) 1 else 0
+            else -> default
+        }
+
+    /** 字符串取值。 */
+    fun strOf(state: Map<String, Any?>, key: String, default: String = ""): String =
+        state[key]?.toString() ?: default
+
+    /** 对象数组取值：把 `List<Map>` 还原成可变的结构化列表（用于标签页 / 条目数组）。 */
+    fun mapList(state: Map<String, Any?>, key: String): MutableList<MutableMap<String, Any?>> {
+        val v = state[key] as? List<*> ?: return mutableListOf()
+        return v.mapNotNull { it as? Map<*, *> }
+            .map { row -> row.entries.associate { e -> e.key.toString() to e.value }.toMutableMap() }
+            .toMutableList()
     }
 }

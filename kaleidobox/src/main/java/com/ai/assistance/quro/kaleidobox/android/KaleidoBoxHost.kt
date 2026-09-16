@@ -171,6 +171,13 @@ object KaleidoBoxHost {
             }
         }
 
+        // ---- 内置世界书：读取「世界书」插件的条目，供 AI 对话按关键词动态注入 ----
+        // data.kv 是按包隔离的，AI 助手包读不到世界书包的私有 KV，故由宿主统一桥接。
+        reg.bind("worldbook.entries", "读取内置世界书条目（供 AI 对话按关键词注入）") { _, _ ->
+            val prefs = app.getSharedPreferences("kaleidobox_dev.kaleidobox.worldbook", Context.MODE_PRIVATE)
+            KValue.Str(prefs.all["worldbook_entries"]?.toString() ?: "[]")
+        }
+
         // ---- 作用域文件读写 ----
         // 注意：只给包私有目录。要访问共享存储必须走 fs.read:media 并由用户授权。
         reg.bind("fs.read:scoped", "读取本包私有目录内的文件") { args, ctx ->
