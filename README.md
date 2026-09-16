@@ -81,7 +81,6 @@
 - [系统返回手势支持](#系统返回手势支持)
 - [内置技能 · Skills（63 个）](#内置技能-skills63-个)
 - [截图预览 · Screenshots](#截图预览-screenshots)
-- [近期新增功能（v1.0.90）](#近期新增功能v1090)
 - [功能构架 · Architecture](#功能构架-architecture)
 - [引擎详解 · Engine](#引擎详解-engine)
 - [ACI · 智能体能力接口](#aci-智能体能力接口)
@@ -179,7 +178,7 @@
 - **富组件融进气泡（QuroChatCard）**：AI 经 `ui_widget` / `ui_card` 下发的图表、待办、表单、进度等可视化组件直接合体进气泡
 - **历史会话管理 / 会话导出**：创建 / 删除单条 / 清空全部、侧栏会话列表；设置入口「导出对话 → 导出为文本」
 
-### 1.5 对话框 IDE 能力（v1.0.56 重构 → v1.0.57 AI IDE 能力地图）
+### 1.5 对话框 IDE 能力
 对话框本身就是一个可自由使用的轻量 IDE，**不靠额外按钮堆叠**——IDE 级能力直接复用输入框「+」菜单与 AI 侧 `ui_open_*` 工具唤起，避免与已有入口重复：
 - **代码**：内置 CodeMirror 离线代码编辑器，支持以下语言的语法高亮和运行：
   - **JavaScript**：App 内置 QuickJS 原生沙箱离线执行
@@ -192,8 +191,8 @@
 - **终端**：打开 proot / 本地 Shell（应用内 Ubuntu 24.04 沙箱），可直接跑命令、查设备环境（入口：输入框「+」→ 终端，或 `ui_open_terminal`）
 - **工具箱**：文件 / 包名 / 浏览器等内置工具集合（入口：输入框「+」→ 工具箱，或 `ui_open_toolbox`）
 - **文件**：直接附件 / 上传到对话框（入口：输入框「+」→ 上传，或 `ui_open_upload`）
-- **mermaid 围栏即画即渲染（v1.0.56 新增的「可视化编程」缺口）**：无论是 AI 还是**用户自己**，只要在对话框里写 ` ```mermaid ` 代码块（流程 / 时序 / 状态机 / 思维导图 / 类图 / git 图 / 饼图等），对话框都会用离线 Mermaid.js 直接渲染成可缩放的真图——支持全屏查看、下载 SVG、复制源码。这补齐了此前「可视化编程只走 `ui_widget` JSON」的局限，让对话框真正成为人人可画的自由画布。
-- **手机 AI IDE（带可视化）——AI 自写代码并运行（v1.0.57 核心新增）**：`run_code` 工具不只是「给人点运行按钮」，而是 **AI 自己写代码、自己跑、产出物直接渲染在对话框里**的端侧编程能力（解决「手机上人手敲代码体验差」的痛点）。各语言在对话框里能做什么（已写入系统提示词「能力地图」，AI 会自动按此调用）：
+- **mermaid 围栏即画即渲染**：无论是 AI 还是**用户自己**，只要在对话框里写 ` ```mermaid ` 代码块（流程 / 时序 / 状态机 / 思维导图 / 类图 / git 图 / 饼图等），对话框都会用离线 Mermaid.js 直接渲染成可缩放的真图——支持全屏查看、下载 SVG、复制源码。这补齐了此前「可视化编程只走 `ui_widget` JSON」的局限，让对话框真正成为人人可画的自由画布。
+- **手机 AI IDE（带可视化）——AI 自写代码并运行**：`run_code` 工具不只是「给人点运行按钮」，而是 **AI 自己写代码、自己跑、产出物直接渲染在对话框里**的端侧编程能力（解决「手机上人手敲代码体验差」的痛点）。各语言在对话框里能做什么（已写入系统提示词「能力地图」，AI 会自动按此调用）：
   - `python`（默认）：**数据处理/清洗、网络爬虫（抓真实网页数据）、调用 AI/LLM API、算法计算、自动化脚本**——输出回灌给 AI 推理/总结，再做成图表。
   - `node`/`javascript`/`js`：App 内置 **QuickJS 原生沙箱离线执行**（无需 Termux），逻辑计算与 JSON/字符串处理。
   - `shell`：应用沙盒内 sh 命令。
@@ -203,7 +202,7 @@
   - **组合拳**：例如「抓数据(python) → 算指标(python) → 画看板(html 工件)」整条链路 AI 一人完成，全部在对话框呈现。工作流口诀：**算/抓/分析 → `run_code(python)`；画网页/图表/三维 → 返回 `html` 工件（或 ```html 围栏，二者等效）；画流程/架构图 → mermaid**。
 - 系统提示词（[`QuroPlatformManifest`](app/src/main/java/com/ai/assistance/quro/core/QuroPlatformManifest.kt) 「能力环境」段与 [`QuroChatViewModel`](app/src/main/java/com/ai/assistance/quro/ui/QuroChatViewModel.kt) 的「手机 AI IDE 能力地图」指引）已同步：引导 AI 主动用 `run_code` 跑代码、用 html 工件/```html 围栏渲染可视化、用 mermaid 画图，把「说」和「做 / 画 / 跑」自由组合。
 
-### 1.6 可视化弹窗 & 询问（v1.0.62 新增）
+### 1.6 可视化弹窗 & 询问
 AI 在执行任务时可以通过可视化方式与用户交互，**强制规则**：遇到模糊命令/缺少信息/需要确认时，必须立刻调用可视化工具询问用户，禁止猜测、禁止假设、禁止跳过。
 
 - **可视化弹窗（`visual_popup`）**：AI 创建结构化弹窗，支持 Markdown/HTML/纯文本内容、多按钮（不同样式）、输入框（文本/数字/密码/邮箱）、图片显示、自定义宽高、超时控制。弹窗在对话框中显示为可点击的小卡片，用户操作后结果返回给 AI。
@@ -351,7 +350,7 @@ AI 可以通过 Mermaid 语法创建流程图、架构图、时序图、状态�
 | **演示放映** | `DeckPresentOverlay` 全屏黑底，右 2/3 点按下一页、左 1/3 上一页 |
 | **流式渲染** | 流式期间残缺信封也可部分渲染（截断修复 `lastSafeCut`） |
 | **四级容错降级** | L1 字段修复（缺块自动合成）/ L2 块级降级（单块→Fallback）/ L3 通道降级（回退 Markdown）/ L4 纯文本兜底（永不空白） |
-| **表格修复** | 列宽均分 + 文本软换行，窄屏不重叠、不溢出（v1.0.84 修复「一层覆盖一层」） |
+| **表格修复** | 列宽均分 + 文本软换行，窄屏不重叠、不溢出（修复「一层覆盖一层」） |
 | **智能路由** | `CanvasRouter` 三档通道（A 增强 Markdown / B AIP 原生 / C WebView）+ 五级决策（硬指令/信封头/意图/复杂度/兜底）+ 中途软重路由 |
 
 **入口：**
@@ -403,7 +402,7 @@ BackHandler { showKnowledge = false }
 
 ### 2. 内置技能 Skills（63 个 · 首次启动自动注入）
 - 轻量技能系统：`QuroSkill` → 注册为 `skill__{name}` 工具，可被 LLM 自动编排
-- v1.0.16 起将 WorkBuddy 技能库全部 **63 个技能**转化为 Zorv AI 品牌版本，打包进 `app/src/main/assets/skills/zorv/`（含 `manifest.json`，每个技能含稳定 id `zorv_<sha1>`、名称、描述与正文）
+- 内置 WorkBuddy 技能库转化的 **63 个技能**（Zorv AI 品牌版本），打包进 `app/src/main/assets/skills/zorv/`（含 `manifest.json`，每个技能含稳定 id `zorv_<sha1>`、名称、描述与正文）
 - 首次启动经 `QuroSkillStore.seedBuiltinZorvSkills` **幂等注入**为默认启用、可调用内置技能；用户在「设置 → 技能」可查看/启停
 - 技能方向（部分）：前端/设计、部署/云、内容/创作、搜索/情报、IM/媒体、效率/工程、短视频/爬虫、写作/文档、付费咨询等
 
@@ -702,7 +701,7 @@ private fun runCommandInLinux(command: String, timeout: Long): String {
 | **proot 沙箱** | ✅ | 无需 ROOT，link2symlink 符号链接 |
 | **CMS 运行时** | ✅ | NODE/PYTHON/RUST/GO/JAVA 共享环境 |
 
-#### 4.10 AI 可调用的终端工具（LLM Tools · v1.0.75 新增）
+#### 4.10 AI 可调用的终端工具（LLM Tools）
 
 除终端自身的 ACI 跨进程 12 能力外，AI 在对话中还能直接调用两个**终端类 LLM 工具**（注册于 `QuroBuiltInTools`）：
 
@@ -780,8 +779,8 @@ private fun runCommandInLinux(command: String, timeout: Long): String {
 
 ### 8. 媒体 / 浏览器 / 文档
 - **内置浏览器**：`QuroBrowserScreen`（GeckoView）
-- **Python ↔ 浏览器会话桥（`QuroSessionBridge`，v1.0.75 新增）**：对话框内 Brython(Python) 与浏览器**共享 Cookie（全局 `CookieManager` 双向同步）+ Storage（`SharedPreferences` 镜像）**；Python 侧经 `window.QuroSession.browserAct()` 直接驱动 `QuroBrowserController`（open / read / crawl / script / act），会话上下文无需手动复制
-- **抓包记全（v1.0.75 增强）**：`browser_capture` 能力现记录完整链路——请求体（request body）+ 响应头 / 状态码 / 响应体（response headers / status / body），便于调试与审计（完整契约见 [ACI 开发者手册 §13](./docs/ACI_DEVELOPER_GUIDE.md)）
+- **Python ↔ 浏览器会话桥（`QuroSessionBridge`）**：对话框内 Brython(Python) 与浏览器**共享 Cookie（全局 `CookieManager` 双向同步）+ Storage（`SharedPreferences` 镜像）**；Python 侧经 `window.QuroSession.browserAct()` 直接驱动 `QuroBrowserController`（open / read / crawl / script / act），会话上下文无需手动复制
+- **抓包记全**：`browser_capture` 能力现记录完整链路——请求体（request body）+ 响应头 / 状态码 / 响应体（response headers / status / body），便于调试与审计（完整契约见 [ACI 开发者手册 §13](./docs/ACI_DEVELOPER_GUIDE.md)）
 - **媒体浏览器 / 音乐 / 视频**：`QuroMediaBrowser`、`QuroMusicPlayerScreen`、`QuroVideoPlayerScreen`
 - **文档查看**：`QuroDocumentViewer` / `QuroDocOpener`（分发 docx/xlsx/pptx/pdf 等）
 - **OnlyOffice**：`QuroOnlyOfficeScreen`
@@ -1103,7 +1102,7 @@ AI 可以通过 Mermaid 语法创建流程图、架构图、时序图、状态�
 
 ## 内置技能 · Skills（63 个）
 
-Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{name}` 工具，可被 LLM 自动编排）。v1.0.16 起将 WorkBuddy 技能库全部 **63 个技能**转化为 Zorv AI 品牌版本，打包进 `app/src/main/assets/skills/zorv/`（含 `manifest.json`，每个技能含稳定 id `zorv_<sha1>`、名称、描述与正文），**首次启动经 `QuroSkillStore.seedBuiltinZorvSkills` 幂等注入**为默认启用、可被调用的内置技能。
+Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{name}` 工具，可被 LLM 自动编排）。内置 WorkBuddy 技能库转化的 **63 个技能**（Zorv AI 品牌版本），打包进 `app/src/main/assets/skills/zorv/`（含 `manifest.json`，每个技能含稳定 id `zorv_<sha1>`、名称、描述与正文），**首次启动经 `QuroSkillStore.seedBuiltinZorvSkills` 幂等注入**为默认启用、可被调用的内置技能。
 
 技能覆盖以下方向（部分列举）：
 
@@ -1143,82 +1142,6 @@ Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{
 </table>
 
 ---
-
-## 近期新增功能（v1.0.90）
-
-### v1.0.90（本次）
-- **插件界面重构为「手机桌面启动器」**：`PluginManagerScreen` 从「卡片列表」改成完整的 Launcher 手感——
-  顶部状态条（引擎就绪 / 已装 / 已加载 / 贡献 AI 工具数 / 内置包数）、搜索框（按插件名 / 包名 / **贡献的 AI 工具名**过滤）、
-  **4 列图标网格**（图标直接读插件 APK 自带的 launcher 图标，取不到回退首字母渐变色块；未加载的图标压暗 + 红点角标；
-  有界面/工具时右下角显示数量小标）、**单击**图标=有自带界面就直接打开、没有才弹详情、**长按**图标=快捷菜单（打开界面 / 详情 / 重载 / 卸载）、
-  底部 Dock（导入 APK / 内置插件 / 插件工具 / 刷新）、详情底部面板（版本 / 入口类 / 安装时间 / 扩展点 / AI 工具 / 打开界面 / 重载 / 卸载）。
-- **插件框架收敛为单一 AI 工具 `apk_plugin`**：原来 6 个零散工具（`plugin_list` / `plugin_info` / `plugin_install` /
-  `plugin_uninstall` / `plugin_reload` / `plugin_surface_open`）合并成**一个**总控工具，用 `action` 分发
-  `status / list / info / tools / surfaces / open / install / install_builtin / uninstall / reload / call`——
-  模型只需记住一个名字，tools 字段 token 也降下来了。
-- **★ 新增 `action=call`：AI 可直接调用任意插件工具**。此前若插件贡献的 AI 工具因工具集裁剪没进会话，
-  AI 就完全用不了插件；现在 `apk_plugin(action="call", name="unit_convert", args="{...}")` 是兜底通道，
-  两条路都通（插件工具本身仍会照常进工具集）。「插件工具没注入会话」的死角到此关闭。
-- **工具分类构架扩展至 18 类**：新增 `PLUGIN`（插件扩展）分类；`ToolCapabilityDirectory` 补 `apk_plugin` 完整元数据
-  （useCases / examples / parameters / tips），`QuroToolRouter` 把 `apk_plugin` 纳入**常驻核心集**与分类推断，`coreNames` 同步。
-- **系统提示新增「🧩 APK 级插件框架」专章**：告诉 AI 插件系统存在、唯一入口是 `apk_plugin`、各 action 语义，
-  并立下 5 条行为铁律（提到插件一律走 `apk_plugin`、插件工具优先直接调、工具集里没有就用 `call` 兜底、
-  不确定先 list→tools、插件桌面用 `ui_open_plugins`）。
-- **修复「工具中心 → 插件」空白页**（上一版遗留）：标题与内容的 `when (selected)` 都缺 `"plugins"` 分支，
-  而内容那个 `when` 是**语句**（Kotlin 不要求穷尽）→ 静默什么都不渲染、不报错。已补分支并脚本核对全部 9 个走面板的 key。
-
-### v1.0.87
-- **端侧联网检索 `web_search` 修复（v4 引擎升级）**：旧版 `MiniHtml` 的 void 元素集合误含 `link`，导致 RSS `<link>url</link>` 被当成空元素、URL 取不到、所有结果被丢弃 → 联网返回空。v4 修复并升级：① `MiniHtml` 新增 `xmlMode`（RSS 解析强制开启）；② Bing 主力引擎改为 **RSS 优先 / HTML 兜底双通道**（`BingEngine`），单押 RSS 被拦时自动降级到普通搜索页；③ 新增 `EngineHealth` 熔断（不可达源连续失败 3 次进 10 分钟冷却，不再拖慢整体）；④ 新增 `AntiBot` 反爬页识别（验证码页 HTTP 200 但无结果时给出准确诊断）；⑤ `HttpStack` 返回状态码与错误原因，区分「网络不通 / 403 / 解析 0 条」；⑥ 中文 RSS 日期解析（如「周一, 07 9月 2026」）；⑦ 阅读改为超额抓取 + 成功优先。新增 L2 链路（意图路由 / RRF 融合 / 语义切块 / 片段级证据排序 / 引用校验），并附 `SearchDiagnostics` 自检工具。
-- **人格卡开关硬强制（真修）**：之前开关已开但 AI 仍回纯文字——根因是系统提示词里**动态UI组件开关根本没有「必须主动用」的硬规则**，且强制指令埋在千行提示词末尾被小模型忽略。v1.0.87 在工具清单**之前**新增显式「可视化输出硬强制」段（按开关状态生成）：动态UI组件开关=开 → 凡能做成界面/可交互控件必须写 ```quro-ui；可视化小卡片开关=开 → 凡能做成单块卡片必须写 ```quro-card；纯文字回复视为严重错误。同时在「可视化输出功能总览」路由表里给动态UI 补上「必须主动」规则。
-
-### v1.0.87 热修（同版本覆盖发布）
-- **补交漏提交的两个作者编译 bug（已在 APK 生效但未入 git，本轮一并提交）**：① `WebSearchOrchestrator` 的 `perQuery` 因 `to` 右结合写成 `((q,hits),weight)` 导致类型错；② `SemanticChunker` 误用未定义参数 `overlapChars`（应为 `overlap`）。
-- **修 `MiniHtml.parse` 的 `begin>end` 崩溃**：`skipToClose` 跳 `pos` 后，下一个 `findAll` 匹配可能落在 `pos` 之前，原 `cleaned.substring(pos, m.range.first)` 抛 `begin X, end Y, length Z` 异常（表现为 web_search 偶发「后端解析异常：begin 1989, end 1981」）。已加 `if (m.range.first < pos) continue` 守卫。
-- **节点编辑器白屏修复**：移除 `setLayerType(LAYER_TYPE_HARDWARE)`（部分 ROM/WebView 内核下强制硬件合成层会把 file:// WebView 渲染成空白，#667 加这行反而没修好）；并令 2.5MB `mermaid.min.js` 以 `defer` 非阻塞加载，静态编辑器 UI 立即绘制；补充 `allowContentAccess`。
-- **强化人格卡硬强制（绝对命令 + 显式状态）**：提示词先**显式声明当前开关真实状态**（开/关，禁止模型猜测），再下绝对命令——开关=开时「整条纯文字回复一律禁止、没有任何『普通回复』豁免」，关时明确进入被动模式。彻底消除「AI 把普通回复当成纯文字需求、跳过围栏输出」的问题。
-
-### v1.0.87 二次热修（同版本覆盖发布）
-- **web_search 中文人名分词缺陷**：用户测到「郑钦文」被拆成单字「郑」、返回字典释义。根因在 `QueryRewriter`——改写器把中文人名在字间插入空格（"郑 钦文"）或拆成单字，检索后端按单字分词命中字典义。已修：① 改写系统提示加规则「中文人名/地名必须保持连续完整，禁止插空格或拆单字」；② `parse()` 内对所有查询词做 `collapseHanGaps`，用正则 `(?<=\p{IsHan})\s+(?=\p{IsHan})` 把汉字间的空格合并掉（"郑 钦文"→"郑钦文"），且单字查询会被长度过滤兜底到 `ruleClean` 保留整句中文。
-- **节点编辑器白屏（真因修复）**：上一轮按「硬件合成层」成因移除 `setLayerType(HARDWARE)` 仍未解决——但「小程序工作室」面板带 HARDWARE 反而正常，说明不是它。真因是 `NodeEditorPanel` 比能正常渲染的 mermaid 面板**多设了 `loadWithOverviewMode=true` + `useWideViewPort=true`**，配合 `node_editor.html` 的 `html,body{height:100%;overflow:hidden}` + `meta viewport`，会让部分 WebView 内核算出 **0 高可见视口 → 整页纯白**。已移除这两项，完全对齐能正常渲染的 mermaid 面板配置。
-- **人格卡开关仍非绝对（根因修复）**：上一轮只在云分支中段加了强制段，但①**本地 MNN/LLAMA 极简分支根本不含任何开关内容**（只注入名字+人设+回复纪律），开关对本地模型完全不可见 → 表现成「开关没用 / 识别不出开还是关」；② 云分支段埋在千行提示词中段，小模型易忽略。已把开关强制段抽成 `buildVisualSwitchEnforcement()`，**本地分支末尾 + 云端分支最末尾（最高近因偏好）各注入一份**，且都先显式声明当前开关真实状态再下绝对命令（开关=开 → 整条纯文字回复一律禁止，无普通回复豁免）。
-
-### v1.0.86
-- **工具分类构架重构**：`ToolCapabilityDirectory` 工具能力目录补全 5 类新工具的显式分类元数据（端侧联网检索 `web_search`/`read_url` → 网络/Web；屏幕捕获授权 `enable_screen_capture` → 无障碍；节点编辑器 `node_editor` → UI/卡片；端侧 APK 构建 `build_apk`/`export_apk` → CMS 开发），分类枚举扩展至 17 类；`buildQuroRegistry` 顶部「工具分类架构」注释同步更新。
-- **端侧联网检索（AI 行动链）**：新增 `web_search`（多引擎并发 + 查询改写 + 正文密度抽取 + 五信号重排 + 上下文打包，返回带 [n] 编号可溯源引用）与 `read_url`（精读单页正文）两个工具，接入 AI 工具集，AI 自主决定联网、搜→挑→读→答，非浏览器套壳。
-- **屏幕理解主动授权**：新增 `enable_screen_capture` 工具，AI 可在用户要「看屏幕/截图」或自身需要像素级读屏时主动拉起 MediaProjection 系统授权，授权后视觉循环自动启用，无需手动长按开关；视觉循环内置自动重试与 30s 防抖。
-- **节点编辑器 AI 可驱动**：`node_editor` 工具暴露给 AI，可直接读写 `studio/flow/*.qne` 节点流工程（无需打开界面即可编排可视化流程）；面板 2s 轮询同步 AI 写入、打开自动恢复。
-- **构建台 AI 能力补全**：`build_apk` 扩展自定义包名、Release 签名生成与使用（`generate_keystore`）、依赖 JAR 引用（`-cp`/`--lib`）、自定义图标；入口类支持任意包名/类名（动态探测 `zorv_entry.txt`）；`export_apk` 替代 UI 文件选择器把产物导出到可访问位置。
-- **人格卡开关硬强制 + 系统提示词更新**：人格卡「动态UI组件」「可视化小卡片」开关开启时，对应回复必须主动用 ```quro-ui / ```quro-card，不再默认回纯文字；系统提示词新增「本版重点能力」段，显式告知 AI 五项新能力的主动触发条件。
-
-### v1.0.84（本次）
-- **端侧 Python 3.14 引擎（PyEngine）**：内置真·CPython 3.14 原生解释器（`libpython3.14.so` + libssl/libcrypto/libsqlite + 完整标准库 654 文件），对话框内直接跑真实 Python，替代旧版 Brython 翻译；配 Scripting 沙箱（`SandboxRuntime` 隔离执行 + `HostApiDispatcher`/`GitHostApi` 宿主能力调用 + `TsTranspiler` TypeScript 转译）+ 8 语言项目模板（android/flutter/go/java/node/python/typescript/web）+ 编辑器 TS/Python 支持与 HTML 预览。
-- **AIP 排版引擎（AI Presentation Protocol）**：AI 输出结构化信封（```aip 围栏 / `aip_compose` 工具），对话框原生渲染**长文档 / PPT 演示 / 思维导图**卡片；17 种块类型 + 四级容错降级、三向形态互转、导出 docx/pptx/md、全屏预览、演示放映、复制全文、智能路由（`CanvasRouter`）。
-- **AIP 围栏行首锚定修复**：`RE_FENCE` 正则加 `(?m)^` 行首锚定，修复 AI 正文里用反引号引用 `` ```aip `` 时真正信封围栏被吞、AIP 降级为 Markdown 的问题。
-- **AIP 表格 / 富文本重叠修复**：`AipTable` 去掉 `horizontalScroll`（无限宽约束下 weight 失效导致列错位、窄屏逐字竖排互相覆盖），改列宽均分 + 软换行；`InlineText` 补行高 + fillMaxWidth，修复「一层覆盖一层」。
-- **aip_compose blocks 自动合成**：blocks 缺失/为空时自动从 sections/content/markdown/text 构造块，不报「缺少 blocks 数组」、不白屏。
-
-### v1.0.80
-- **CMS 框架修复**：内置终端模块的 `entry.sh` 补齐环境变量花括号（`${VAR:-default}`），端口注入不再被展开成字面量；内置模块改为**版本化幂等播种**，`entry.sh` 内容一致则跳过重写——你在终端里的手动修复不再被 App 覆盖。
-- **引擎共享服务常驻化**：静态资源服务（8080）改为「前台命令 + 常驻 proot 子进程」模型，proot 存活即服务存活，彻底修掉「部署时端口通、部署完就打不开」；引擎健康态改为**按端口实测**刷新服务列表，状态与实际一致。
-- **CMS 能力参数默认值**：能力可声明 `defaultArgs`，调用未传时自动补齐（如 `term_httpd_list` 的 `dir`），不再出现 `ls -la ""`。
-- **USB / 无线调试功能补全**：修复无线 ADB「实际可连却显示未监听」的误判（原只匹配回环地址，实际监听 `0.0.0.0`）；新增 USB 数据线实际连接状态、「正在控制本机的客户端」列表（谁在操控这台设备）、`adb devices -l` 输出；「打开终端」改为真实跳转。
-
-### v1.0.79
-- **终端特权 / 远程接入**：终端顶栏新增「权限」「远程」两个入口；一键查看并申请 ROOT / LSPosed / ADB / Shizuku 权限，授权后打开终端直接可用；共享存储挂载改为自有路径（不再写死第三方路径）；离线模型（MNN / llama.cpp）无需再填 API 地址即可运行；终端支持 SSH / VNC 远程连接。
-
-### v1.0.77
-- **工具中心三面板对接对话框渲染**：小程序工作台 / 可视化编程 / 节点编辑器均支持「保存 / 删除 / 导入」，并一键把产物（小程序 / Mermaid 图）渲染到对话框内；节点编辑器修复「复制 Mermaid」乱码（详见「LSPosed / Xposed 模块」「对话框『化小窗』」「浏览器『化小窗』」章节与工具中心部分）。
-
-### 历史近期（v1.0.75）
-- **对话框 / 浏览器「化小窗」**：对话框顶栏与内置浏览器工具栏均新增「化小窗」按钮，可把对话或浏览器折叠为可拖拽、可缩放的悬浮小窗，不中断后台任务，随时还原 / 关闭。
-- **对话框文档排版内联预览**：docx / xlsx / pptx / pdf 等文档附件，在气泡内新增「对话框内预览排版」按钮，点击即在对话框内联渲染真实排版（docx→mammoth.js、xlsx→SheetJS、pdf→pdf.js），无需跳出全屏查看器即可看到版面。
-- **内置浏览器 AI 操控（`browser_act`）**：AI 可直接接管对话框内置浏览器，执行 snapshot / click / fill / eval / wait / read，实现自动化浏览、表单填写与数据抓取。
-- **LSPosed / Xposed 模块 AI 直驱（`lsposed`）**：opt-in 模块，AI 经 `lsposed` 工具读取作用域状态、驱动跨应用注入桥配置（写 `lsposed_bridge.json`）并感知桥上报的前台 App；模块的启用/停用/作用域勾选仍在 LSPosed Manager 内完成（详见下方「LSPosed / Xposed 模块」章节）。
-- **特权执行（`priv_exec`）与 ADB 终端（`adb_term`）**：`priv_exec` 走 Shizuku→ROOT 自动降级通道执行高风险命令；`adb_term` 提供无线调试中枢（shell / tcp 启用停用与管理）。
-- **AI 抓包（`packet_capture`）**：在应用内 Linux 沙箱中启动 mitmdump，流量落盘到 `/mnt/quro/mitm/`，供 AI 分析。
-- **对话框文档（`chat_doc`）**：AI 可在对话框内直接写并渲染 Markdown / HTML / 代码 / 文本，排版即时可见。
-
-> 工具现已按能力域分类注册（系统/设备、通信/日历、文件/工作区、网络/Web、终端/Linux、特权/ADB/LSPosed、抓包、内置浏览器操控、对话框文档、ACI/跨应用、无障碍控屏、系统控制、多媒体生成、文档生成、记忆/经验/技能、UI/可视化），详见 `core/tools/QuroBuiltInTools.kt` 的分类总览注释。
 
 ## LSPosed / Xposed 模块（AI 直驱）
 
@@ -1852,7 +1775,7 @@ cd ZorvAI
 | **终端 ACI 跨进程调用失败** | 检查 `Qu roTerminalAciService` 是否在 Manifest 中注册，权限 `ai.aci.permission.CALL` 是否声明。调用方需通过 `bindService()` 绑定服务。 |
 | **终端 Intent/Provider 不响应** | 检查 `TerminalProvider`、`TerminalBroadcastReceiver`、`TerminalDeepLinkHandler` 是否在 Manifest 中注册。Deep Link 需在 `QuroMainActivity` 的 `intent-filter` 中配置 `quro://terminal` scheme。 |
 | **终端会话状态不一致** | `QuroTerminalSessionManager` 管理多会话（默认/额外/UI/历史）。调用 `listSessions()` 获取真实状态。若默认会话丢失，前台服务每 15 秒自动重建。 |
-| **终端命令执行报 Illegal option -0** | 这是 proot 参数重复问题。`QuroTerminalController.runCommandInLinux` 中 `prootArgs` 已包含 `-0 root`，不应重复添加。更新到 v1.0.67+ 已修复。 |
+| **终端命令执行报 Illegal option -0** | 这是 proot 参数重复问题。`QuroTerminalController.runCommandInLinux` 中 `prootArgs` 已包含 `-0 root`，不应重复添加。已在后续版本修复。 |
 | **离线对话不可用** | 离线 LLM 随发布包内置；若所用构建不含离线引擎原生库则会提示未接入，请使用包含离线引擎的版本。 |
 | **网页 / HTML 预览不显示** | 确认已随包集成 GeckoView（MPL-2.0）运行时。 |
 | **本地语音识别不可用** | 本地 STT 模型为约 85MB 的 onnx 文件，首次使用需下载 / 放置到指定目录。 |
@@ -1865,115 +1788,25 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-**最新版本：`v1.0.90`**（2026-09-16，APK 级插件框架完整化：插件桌面启动器 UI + 单一工具 `apk_plugin` + AI 可直接调用插件工具）：
-
 - 🟢 **[ZorvAI_v1.0.90_full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.90/ZorvAI_v1.0.90_full-release.apk)**（约 366MB，Release 签名，**最新**）
 
-### v1.0.90 新增功能
+### 能做什么
 
-**APK 级插件框架完整化（2026-09-16）**：
-- 插件界面重构为**手机桌面启动器**（图标网格 / 搜索 / 长按菜单 / 底部 Dock / 详情面板）
-- 插件框架收敛为**单一 AI 工具 `apk_plugin`**（`action` 分发 status/list/info/tools/surfaces/open/install/install_builtin/uninstall/reload/**call**）
-- `action=call`：AI 可**直接调用任意插件工具**，关闭「插件工具没注入会话工具集」的死角
-- 工具分类扩展至 18 类（新增 `PLUGIN`），系统提示新增「🧩 APK 级插件框架」专章
-- 修复「工具中心 → 插件」空白页（`when(selected)` 缺 `"plugins"` 分支导致静默不渲染）
+一个跑在设备本地的对话式 Agent：AI 直接操作你的手机、跑终端、写代码、出文档，也能装插件给自己加能力。
 
-### v1.0.80 新增功能
+| 能力域 | 说明 |
+|--------|------|
+| **对话即执行** | **120+ 内置工具**：AI 直接读写文件、控屏点击输入、执行终端命令、抓包、自动化浏览网页、定时任务 |
+| **离线大模型** | 内置 **MNN / llama.cpp** 端侧推理，无网也能对话；亦可接云端模型 |
+| **终端 & Linux 沙箱** | proot + **Ubuntu 24.04 ARM64** 真实用户空间，多会话、SSH / VNC 远程接入、息屏不被杀 |
+| **特权通道（L1–L5）** | 无障碍 → Shizuku → 设备管理员 → ROOT → 应用内 Linux，**自动降级**，授权后 AI 可直接执行特权操作 |
+| **APK 级插件框架** | 装一个 APK 就给 AI 加能力；插件可贡献 AI 工具、ACI 能力、界面；AI 也能**直接调用**插件工具 |
+| **可视化与生成** | 60+ 可交互组件、Mermaid 图表、AIP 长文档 / 演示 / 脑图、小程序、语音合成与识别 |
+| **在线接入** | 飞书 / QQ / 微信机器人、**MCP** 客户端与服务、ACI 跨进程 12 能力（ContentProvider / Deep Link / Intent / 广播） |
+| **知识 / 记忆 / 人格** | 向量语义 RAG 知识库、记忆库、人格卡与灵魂配置 |
 
-**CMS 框架修复 + USB / 无线调试补全（2026-09-03）**：
-- `entry.sh` 环境变量花括号修复，端口注入生效
-- 内置模块版本化幂等播种，手动修复不再被覆盖
-- 引擎共享服务常驻化（proot 子进程），健康态按端口实测
-- CMS 能力参数 `defaultArgs` 默认值机制
-- 无线 ADB 监听状态误判修复（兼容 `0.0.0.0` 监听）
-- 新增 USB 数据线状态、正在控制本机的客户端列表、`adb devices`
-
-### v1.0.79 新增功能
-
-**终端特权 / 远程接入（2026-09-03）**：
-- 终端顶栏新增「权限」「远程」入口，一键查看并申请授权
-- 特权后端收敛：ROOT / LSPosed / ADB / Shizuku 统一对接，授权后打开终端直接可用
-- 共享存储挂载改用自有路径，不再写死第三方路径
-- 离线模型（MNN / llama.cpp）无需再填 API 地址即可运行
-- 终端支持 SSH（端口 2222）/ VNC（5901）远程连接
-
-### v1.0.78 新增功能
-
-**CMS 与终端 9 项 Bug 修复（清单 2026-09-02）**：
-- 共享服务状态未登记 → `setsid` 彻底脱离 + python 端口探测登记 `services`
-- 开发环境 PYTHON 未注册 → 去强制 uv，允许 `/opt`/`$HOME`/`/root` 的 cms-venv
-- bootstrap 安装 bc 失败 → `robust_install` 带 apt+dpkg 回退
-- 网络诊断命令缺失 → 补装 iputils-ping / dnsutils / net-tools / iproute2（ping/nslookup/dig/host/netstat/ifconfig/ip/ss）
-- apt 锁卡死 → 资产脚本 rm 锁 + pkill；BUILTIN 以 APT_LOCK_RELEASE_PROLOGUE 开头
-- ps aux / uptime 失效（hidepid）→ `getVncInfo` 改 `pgrep -af`，UI 快捷命令 `ps aux`→`ps -e`
-- netstat / ss 无法显示连接 → `isAdbdListening` 改解析 `/proc/net/tcp` LISTEN；UI「端口」改 python `connect_ex` 探测
-- bootstrap DNS heredoc 语法 → 确认资产/BUILTIN 均为干净 `if ! cat<<'DNS'` 形式
-- hosts 静态映射冗余 → 保留 `quro-engine-dns` 镜像加速（guarded 幂等，无害）
-
-### v1.0.77 新增功能
-
-**工具中心三面板对接对话框渲染（诉求⑦闭环）**：
-- **小程序工作台**：AI 在对话框内直接写小程序；工程可保存 / 删除 / 导入（`.html` 导入建项目），并一键「渲染到对话框」
-- **可视化编程**：Mermaid 工程保存（`.mmd`）/ 打开 / 删除 / 导入；「渲染到对话框」把图表直接长在对话里
-- **节点编辑器**：修复「复制 Mermaid」JSON 解析乱码（`JSON.stringify([expr])` + Kotlin 侧 `JSONArray` 还原）；支持「渲染到对话框」/ 保存工程（`.qne`）/ 导入工程
-- 三面板共用 `UiNavigationBus.RenderWidget` 渲染总线：对话框 `LaunchedEffect` 消费，按 type 构造 `MermaidCard` / `MiniAppCard` 挂到最近消息
-
-### v1.0.75 新增功能
-
-**终端类 LLM 工具（AI 直驱）**：
-- `priv_exec`：以 ZorvAI 授权 / Shizuku / ROOT（自动降级）执行命令；查询特权通道（Root / Shizuku / LSPosed / ZorvAI）状态（LSPosed 现为可选模块，纳入作用域后由 QuroXposedModule 写入真实作用域标记）
-- `adb_term`：本机 ADB shell；TCP/IP 无线调试中枢（开启/关闭 adbd、查 WiFi IP、端口、USB 调试状态）
-
-**Python ↔ 浏览器会话桥**：
-- 对话框内 Brython(Python) 与内置浏览器共享 Cookie（双向）+ Storage（镜像）
-- Python 侧经 `window.QuroSession.browserAct()` 直接驱动 `QuroBrowserController`
-
-**抓包记全**：
-- `browser_capture` 记录完整链路：请求体 + 响应头 / 状态码 / 响应体
-
-### v1.0.67 新增功能
-
-**终端前台服务保活**：
-- 修复 Android 14+ 前台服务被系统静默拒绝（dataSync → specialUse）
-- 息屏/切 App 终端会话不再被杀
-- 通知栏常驻「Zorv AI 终端运行中」
-- 开机自启动保活
-
-**ACI 跨进程接口（12 个能力）**：
-- exec / create_session / destroy_session / send_input
-- get_session_status / list_sessions / set/get_session_env
-- list_capabilities / get_service_status / get_audit_log / help
-
-**Intent / Provider / BroadcastReceiver / Deep Link**：
-- TerminalProvider: `content://com.ai.assistance.quro.terminal/...`
-- Deep Link: `quro://terminal/exec?cmd=...`
-- BroadcastReceiver: 6 个广播 Action
-- IntentHandler: TERMINAL_EXEC / TERMINAL_STATUS 等
-
-**屏幕视觉双模感知**：
-- `screenshot` - 截图保存文件
-- `screenshot_base64` - 截图返回 Base64（用于视觉模型）
-- `visual_analysis` - 截图 + 视觉模型分析（游戏/WebView/Flutter 场景）
-
-**系统级控制动作（一等公民）**：
-- `take_photo` - 拍照
-- `screen_record` - 录屏
-- `volume_control` - 音量控制
-- `brightness_control` - 亮度控制
-- `wifi_control` / `bluetooth_control` - WiFi/蓝牙开关
-- `notification_control` - 通知栏控制
-- `airplane_mode` - 飞行模式
-- `screen_rotation` - 屏幕旋转
-- `set_timer` - 倒计时
-- `open_app` - 打开应用
-
-> 💡 完整（含离线引擎）APK 体积较大；受 GitLab / Gitee 附件体积限制，大体积主程序包**仅 GitHub Releases 提供**，请勿到 GitLab / Gitee 找主程序 APK。所有历史版本（v1.0.2 起）与受控端浏览器、ACI 核心库 AAR 均在 [Releases 页面](https://github.com/Quor-a/ZorvAI/releases) 提供。
-
-**受控端浏览器（独立仓库，最新 APK 见其 [Releases](https://github.com/Quor-a/ZorvBrowser/releases)）**：[github.com/Quor-a/ZorvBrowser](https://github.com/Quor-a/ZorvBrowser)
-
-> ⚠️ 请务必从官方 Release 页面下载本应用。通过未知渠道获取的安装包可能被篡改，存在隐私泄露风险。
-
----
+> 逐模块的完整能力清单（每项均可在 `app/src/main/java/com/ai/assistance/quro/` 下查证）见
+> **[功能全览 · Feature Map](#功能全览-feature-map)**；速查表见 **[功能亮点 · Features](#功能亮点-features)**。
 
 ## 许可证 · License
 
