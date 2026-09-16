@@ -16,6 +16,7 @@ import com.ai.assistance.quro.core.cms.QuroCmsUndeployTool
 import com.ai.assistance.quro.core.cms.QuroCmsToolboxTool
 import com.ai.assistance.quro.core.cms.QuroPrivStatusTool
 import com.ai.assistance.quro.core.tools.QuroDevEnvTool
+import com.ai.assistance.quro.core.tools.QuroKaleidoBoxTool
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciCallTool
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciListTool
 import com.ai.assistance.quro.core.aidlaci.QuroAciHttpServerTool
@@ -459,6 +460,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(McpAciBridgeTool())
     // 工具发现工具：让 AI 主动查询工具能力目录，解决不会主动使用工具的问题
     r.register(ToolDiscoveryTool())
+    // KaleidoBox 工具包运行器：让 AI 以进程内 JVM / Dex 引擎运行 Kotlin/Java 工具包（list/install/invoke）
+    r.register(QuroKaleidoBoxTool())
     // 本地 MCP 部署工具：AI 创作并部署 MCP 服务器到本应用内（#Task8）
     r.register(McpDeployTool())
     r.register(McpUndeployTool())

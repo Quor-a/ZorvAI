@@ -225,6 +225,11 @@ dependencies {
     // ZorvAI 生成式 UI：AI 自写源码 → 实时渲染进对话框（WebView 隔离运行时）
     implementation(project(":genui"))
 
+    // KaleidoBox：工具包运行器（去品牌化移植自 kaleido）。
+    // 以 JVM / Dex 进程内引擎运行 Kotlin/Java 工具包，承载 manifest 解析 → 加载 → 调 unit
+    // → Compose 渲染声明式 UI → 宿主能力表 → ToolPkg 兼容 → 进程内 MCP 桥 的完整链路。
+    implementation(project(":kaleidobox"))
+
     // 旧契约兼容 AAR（ai.aci.core.*）：浏览器等第三方旧受控端在「ACI→AIDL ACI 重命名」重构前
     // 基于该契约构建，其 Service 描述符为 ai.aci.core.IACIService。控制端必须持有字节一致的旧类，
     // 才能 IAidlAciService.Stub.asInterface 成功并正确（反）序列化 ACIRequest/ACIResponse。

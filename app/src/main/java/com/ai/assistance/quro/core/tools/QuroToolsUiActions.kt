@@ -54,6 +54,7 @@ private val UI_ACTIONS = listOf(
     UiActionSpec("ui_open_terminal", "终端", "打开应用内终端 shell"),
     UiActionSpec("ui_open_editor", "代码编辑器", "打开内置代码编辑器"),
     UiActionSpec("ui_open_toolbox", "工具箱", "打开工具箱（文件管理/浏览器/IDE）"),
+    UiActionSpec("ui_open_kaleidobox", "工具包运行器", "打开 KaleidoBox 工具包运行器：以进程内 JVM/Dex 引擎运行 Kotlin/Java 工具包，列出已装包、装载内置示例计数器并渲染可交互 UI 表面（列包/装包/调 unit/渲染 UI）"),
     UiActionSpec("ui_open_build", "构建台", "打开 Zorv 构建台（端侧 APK 构建器：Java 工程 → DEX → APK，自带 ecj/d8/apksig 工具链，免 aapt2，可离线编译打包安卓安装包）"),
     UiActionSpec("ui_open_plugins", "插件", "打开插件管理"),
     UiActionSpec("ui_open_skills", "技能", "打开技能 SKILL 管理（查看/新增/编辑/启用用户自定义技能）"),
