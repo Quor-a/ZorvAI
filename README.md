@@ -1788,7 +1788,7 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[arm64-v8a-v1.0.90-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.90/arm64-v8a-v1.0.90-release.apk)**（约 366MB，Release 签名，**最新**）
+- 🟢 **[arm64-v8a-v1.0.91-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.91/arm64-v8a-v1.0.91-release.apk)**（约 366MB，Release 签名，**最新**）
 
 ### 能做什么
 
