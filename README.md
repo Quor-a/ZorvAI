@@ -58,6 +58,8 @@
 > **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34**
 >
 > Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **120+ 内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
+>
+> 它还是一套**可自我扩展的 Agent 运行时**：APK 级插件框架让「独立 APK」注册扩展点，就能给 AI 加**新工具 / 新 ACI 能力 / 新界面 / 新指令**——宿主不用改一行代码（详见 [APK 级插件框架](#apk-级插件框架--apk-plugin-framework)）。
 
 ---
 
@@ -79,7 +81,7 @@
 - [系统返回手势支持](#系统返回手势支持)
 - [内置技能 · Skills（63 个）](#内置技能-skills63-个)
 - [截图预览 · Screenshots](#截图预览-screenshots)
-- [近期新增功能（v1.0.80）](#近期新增功能v1080)
+- [近期新增功能（v1.0.90）](#近期新增功能v1090)
 - [功能构架 · Architecture](#功能构架-architecture)
 - [引擎详解 · Engine](#引擎详解-engine)
 - [ACI · 智能体能力接口](#aci-智能体能力接口)
@@ -91,6 +93,7 @@
 - [工具箱 · Toolbox](#工具箱-toolbox)
 - [开发工具与导入教程](#开发工具与导入教程)
 - [组件画廊 · Component Gallery](#组件画廊-component-gallery)
+- [APK 级插件框架 · APK Plugin Framework](#apk-级插件框架--apk-plugin-framework)
 - [插件运行时 · Plugin Runtime](#插件运行时-plugin-runtime)
 - [系统要求与从源码构建](#系统要求与从源码构建)
 - [排查与故障处理 · Troubleshooting](#排查与故障处理-troubleshooting)
@@ -1141,9 +1144,30 @@ Zorv AI 内置一套**轻量技能系统**（`QuroSkill` → 注册为 `skill__{
 
 ---
 
-## 近期新增功能（v1.0.87）
+## 近期新增功能（v1.0.90）
 
-### v1.0.87（本次）
+### v1.0.90（本次）
+- **插件界面重构为「手机桌面启动器」**：`PluginManagerScreen` 从「卡片列表」改成完整的 Launcher 手感——
+  顶部状态条（引擎就绪 / 已装 / 已加载 / 贡献 AI 工具数 / 内置包数）、搜索框（按插件名 / 包名 / **贡献的 AI 工具名**过滤）、
+  **4 列图标网格**（图标直接读插件 APK 自带的 launcher 图标，取不到回退首字母渐变色块；未加载的图标压暗 + 红点角标；
+  有界面/工具时右下角显示数量小标）、**单击**图标=有自带界面就直接打开、没有才弹详情、**长按**图标=快捷菜单（打开界面 / 详情 / 重载 / 卸载）、
+  底部 Dock（导入 APK / 内置插件 / 插件工具 / 刷新）、详情底部面板（版本 / 入口类 / 安装时间 / 扩展点 / AI 工具 / 打开界面 / 重载 / 卸载）。
+- **插件框架收敛为单一 AI 工具 `apk_plugin`**：原来 6 个零散工具（`plugin_list` / `plugin_info` / `plugin_install` /
+  `plugin_uninstall` / `plugin_reload` / `plugin_surface_open`）合并成**一个**总控工具，用 `action` 分发
+  `status / list / info / tools / surfaces / open / install / install_builtin / uninstall / reload / call`——
+  模型只需记住一个名字，tools 字段 token 也降下来了。
+- **★ 新增 `action=call`：AI 可直接调用任意插件工具**。此前若插件贡献的 AI 工具因工具集裁剪没进会话，
+  AI 就完全用不了插件；现在 `apk_plugin(action="call", name="unit_convert", args="{...}")` 是兜底通道，
+  两条路都通（插件工具本身仍会照常进工具集）。「插件工具没注入会话」的死角到此关闭。
+- **工具分类构架扩展至 18 类**：新增 `PLUGIN`（插件扩展）分类；`ToolCapabilityDirectory` 补 `apk_plugin` 完整元数据
+  （useCases / examples / parameters / tips），`QuroToolRouter` 把 `apk_plugin` 纳入**常驻核心集**与分类推断，`coreNames` 同步。
+- **系统提示新增「🧩 APK 级插件框架」专章**：告诉 AI 插件系统存在、唯一入口是 `apk_plugin`、各 action 语义，
+  并立下 5 条行为铁律（提到插件一律走 `apk_plugin`、插件工具优先直接调、工具集里没有就用 `call` 兜底、
+  不确定先 list→tools、插件桌面用 `ui_open_plugins`）。
+- **修复「工具中心 → 插件」空白页**（上一版遗留）：标题与内容的 `when (selected)` 都缺 `"plugins"` 分支，
+  而内容那个 `when` 是**语句**（Kotlin 不要求穷尽）→ 静默什么都不渲染、不报错。已补分支并脚本核对全部 9 个走面板的 key。
+
+### v1.0.87
 - **端侧联网检索 `web_search` 修复（v4 引擎升级）**：旧版 `MiniHtml` 的 void 元素集合误含 `link`，导致 RSS `<link>url</link>` 被当成空元素、URL 取不到、所有结果被丢弃 → 联网返回空。v4 修复并升级：① `MiniHtml` 新增 `xmlMode`（RSS 解析强制开启）；② Bing 主力引擎改为 **RSS 优先 / HTML 兜底双通道**（`BingEngine`），单押 RSS 被拦时自动降级到普通搜索页；③ 新增 `EngineHealth` 熔断（不可达源连续失败 3 次进 10 分钟冷却，不再拖慢整体）；④ 新增 `AntiBot` 反爬页识别（验证码页 HTTP 200 但无结果时给出准确诊断）；⑤ `HttpStack` 返回状态码与错误原因，区分「网络不通 / 403 / 解析 0 条」；⑥ 中文 RSS 日期解析（如「周一, 07 9月 2026」）；⑦ 阅读改为超额抓取 + 成功优先。新增 L2 链路（意图路由 / RRF 融合 / 语义切块 / 片段级证据排序 / 引用校验），并附 `SearchDiagnostics` 自检工具。
 - **人格卡开关硬强制（真修）**：之前开关已开但 AI 仍回纯文字——根因是系统提示词里**动态UI组件开关根本没有「必须主动用」的硬规则**，且强制指令埋在千行提示词末尾被小模型忽略。v1.0.87 在工具清单**之前**新增显式「可视化输出硬强制」段（按开关状态生成）：动态UI组件开关=开 → 凡能做成界面/可交互控件必须写 ```quro-ui；可视化小卡片开关=开 → 凡能做成单块卡片必须写 ```quro-card；纯文字回复视为严重错误。同时在「可视化输出功能总览」路由表里给动态UI 补上「必须主动」规则。
 
@@ -1686,6 +1710,89 @@ class HelloTool : QuroTool {
 
 ---
 
+## APK 级插件框架 · APK Plugin Framework
+
+> 一句话：**插件是独立 APK**，装进宿主后注册「扩展点」，就能给 AI 加能力——宿主不用改一行代码。
+
+这是 Zorv AI 的**自我扩展**机制：宿主不认识任何具体插件，只认识「扩展点」这一个抽象；
+插件往槽里放实现，宿主在对应场景自动取用。装上插件，AI 的工具集里立刻多出新工具。
+
+### 架构
+
+| 层 | 模块 | 职责 |
+|---|---|---|
+| 契约层 | `:plugin-contract` | 扩展点定义（`ExtensionPoints.kt`）+ 声明式 DSL（`PluginDsl.kt`）+ `PluginEntry` / `PluginContext` |
+| 引擎层 | `:plugin-engine` | `QuroPluginEngine`（DexClassLoader 装载 / 卸载 / 热重载）、`PluginInstaller`（同签名校验 + 清单解析）、`ExtensionRegistry`（收纳槽）、`HostToolBridge` / `AciBridge`（宿主取用桥） |
+| 宿主接入 | `QuroPluginHost` | **唯一一次性改动**：启动引擎、把插件工具转成宿主 `QuroToolSpec`、桥接 suspend 执行体、注入 ACI 双向桥 |
+| AI 入口 | `QuroPluginTools` | **单一工具 `apk_plugin`**，用 `action` 分发全部插件操作 |
+| 界面 | `PluginManagerScreen` / `PluginSurfaceActivity` | 启动器式插件桌面 + 通用界面承载 Activity |
+| 示例 | `:plugin-devkit` `:plugin-express` `:plugin-todo` `:plugin-units` `:plugin-sysinfo` `:plugin-zorvweb` | 6 个可编译的示例插件，随宿主打包在 `assets/plugins/` |
+
+### 14 种扩展点
+
+`AI_TOOL`（AI 工具 ★最常用）· `ACI_CAPABILITY`（暴露给其他 App/Agent）· `CHAT_CARD`（对话卡片）·
+`UI_WIDGET`（内联组件）· `UI_SURFACE`（插件自带完整界面）· `MODEL_PROVIDER`（新模型接入）·
+`RAG_SOURCE`（知识源）· `COMMAND`（斜杠指令）· `SETTING`（设置项）· `SCHEDULE_TASK`（定时任务类型）·
+`CHANNEL`（消息渠道）· `FILE_HANDLER`（文件处理器）· `CODE_RUNTIME`（代码运行时）· `SPEECH`（TTS/STT 引擎）
+
+### AI 操控：唯一工具 `apk_plugin`
+
+插件框架的所有操作都走**一个**工具，`action` 分发：
+
+| action | 作用 |
+|---|---|
+| `status` | 框架状态（引擎就绪 / 已装 / 已加载 / 贡献工具数 / 内置包数） |
+| `list` | 列出已装插件及其扩展点、贡献的 AI 工具名 |
+| `info` | 某插件明细（`plugin_id`） |
+| `tools` | **列出插件贡献的全部 AI 工具**（名字 + 说明 + 参数） |
+| `surfaces` / `open` | 列出 / 打开插件自带界面（`surface_id`） |
+| `install` | 从设备上的 APK 文件安装（`path`，可 `skip_signature_check`） |
+| `install_builtin` | 一键安装宿主内置示例插件 |
+| `uninstall` / `reload` | 卸载 / 热重载（改完插件立刻生效，不用重启应用） |
+| `call` | ★ **直接调用某个插件 AI 工具**（`name` + `args`）——兜底通道 |
+
+**为什么要有 `call`**：插件贡献的 AI 工具通常已直接进入会话工具集（可直接调用）；
+但当工具集被裁剪、或插件刚装完还没轮到下一轮 function calling 时，`call` 保证 AI **永远能用到插件能力**，
+不会出现「插件装了但 AI 说用不了」的死角。
+
+### 插件桌面（启动器 UI）
+
+入口：**对话框「插件」按钮 / `ui_open_plugins` / 工具中心 →「插件」**。
+
+启动器手感：状态条 + 搜索（按插件名 / 包名 / **AI 工具名**搜）+ 4 列图标网格（读插件 APK 真实图标）+
+单击开界面 / 长按快捷菜单（打开界面 · 详情 · 重载 · 卸载）+ 底部 Dock（导入 APK · 内置插件 · 插件工具 · 刷新）。
+
+### 开发一个插件（最短路径）
+
+```kotlin
+class MyEntry : PluginEntry {
+    override fun onCreate(ctx: PluginContext) {
+        plugin(ctx) {
+            aiTool("my_tool", "一句话描述这个工具干什么、什么时候该调用") {
+                param("text", ParamType.STRING, "输入文本")
+                execute { args -> ToolResult.text("处理结果：${args.string("text")}") }
+            }
+        }
+    }
+    override fun onDestroy(ctx: PluginContext) { ctx.unregisterAll() }
+}
+```
+
+清单必须声明入口类（宿主靠它反射实例化）：
+
+```xml
+<meta-data android:name="quro.plugin.entry" android:value="com.example.MyEntry" />
+```
+
+**三个必守规则**：
+1. 契约层用 `compileOnly(project(":plugin-contract"))`——**绝不能打进插件 APK**，否则插件与宿主各持一份接口 Class，调用即 `ClassCastException`（本框架第一大坑）。
+2. 插件必须**与宿主同签名**（宿主安装时校验 SHA-256 证书），因为插件跑在宿主进程内、拥有同等权限。
+3. 插件里**不要写自己的 Activity**（独立 APK 不是系统安装的应用，Activity 起不来）；要界面就注册 `uiSurface`，宿主有通用承载 Activity。
+
+完整开发手册见分支 **`apk-plugin-arch`** 的 [`docs/APK_PLUGIN_DEVELOPMENT_MANUAL.md`](./docs/APK_PLUGIN_DEVELOPMENT_MANUAL.md)。
+
+---
+
 ## 插件运行时 · Plugin Runtime
 
 入口：**对话框 → 设置底部弹层 → 「插件运行时」**。`PluginsScreen` 采用 **逻辑层 + 渲染层双后端**架构：
@@ -1757,9 +1864,18 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-**最新版本：`v1.0.80`**（2026-09-03，CMS 框架修复 + USB / 无线调试补全：entry.sh 不再被覆盖、引擎服务常驻化、能力参数默认值、ADB 监听状态与连接可见性）：
+**最新版本：`v1.0.90`**（2026-09-16，APK 级插件框架完整化：插件桌面启动器 UI + 单一工具 `apk_plugin` + AI 可直接调用插件工具）：
 
-- 🟢 **[app-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.80/app-full-release.apk)**（约 296MB，Release 签名，**最新**）
+- 🟢 **[app-full-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.90/app-full-release.apk)**（约 366MB，Release 签名，**最新**）
+
+### v1.0.90 新增功能
+
+**APK 级插件框架完整化（2026-09-16）**：
+- 插件界面重构为**手机桌面启动器**（图标网格 / 搜索 / 长按菜单 / 底部 Dock / 详情面板）
+- 插件框架收敛为**单一 AI 工具 `apk_plugin`**（`action` 分发 status/list/info/tools/surfaces/open/install/install_builtin/uninstall/reload/**call**）
+- `action=call`：AI 可**直接调用任意插件工具**，关闭「插件工具没注入会话工具集」的死角
+- 工具分类扩展至 18 类（新增 `PLUGIN`），系统提示新增「🧩 APK 级插件框架」专章
+- 修复「工具中心 → 插件」空白页（`when(selected)` 缺 `"plugins"` 分支导致静默不渲染）
 
 ### v1.0.80 新增功能
 
