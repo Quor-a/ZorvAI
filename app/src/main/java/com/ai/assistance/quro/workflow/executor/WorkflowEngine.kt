@@ -9,6 +9,9 @@ import com.ai.assistance.quro.workflow.data.model.FlowNode
 import com.ai.assistance.quro.workflow.data.model.NodeType
 import com.ai.assistance.quro.workflow.data.model.Workflow
 import com.ai.assistance.quro.workflow.platform.Device
+import com.ai.assistance.quro.core.tools.QuroJsExecutor
+import com.ai.assistance.quro.core.tools.QuroToolRegistry
+import java.util.Random
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
 import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
 import com.ai.assistance.quro.core.model.QuroFunctionType
@@ -197,6 +200,27 @@ object WorkflowEngine {
 
     private data class Outcome(val ok: Boolean, val error: String = "")
 
+    /**
+     * 简易 JSON 路径取值：按 "." 分隔逐级下钻（数组用数字下标）。
+     * 例：path="data.0.name" → root.data[0].name。命中返回其字符串；对象/数组返回整段 toString。
+     */
+    private fun jsonPath(root: Any?, path: String): String? {
+        var cur: Any? = root
+        for (seg in path.split(".")) {
+            if (seg.isBlank()) continue
+            cur = when (cur) {
+                is org.json.JSONObject -> cur.opt(seg)
+                is org.json.JSONArray -> seg.toIntOrNull()?.let { cur.opt(it) }
+                else -> null
+            }
+        }
+        return when (cur) {
+            null -> null
+            is org.json.JSONObject, is org.json.JSONArray -> cur.toString()
+            else -> cur.toString()
+        }
+    }
+
     private suspend fun runNode(node: FlowNode, vars: MutableMap<String, String>, log: StringBuilder): Outcome {
         val p = node.params.mapValues { (_, v) -> Expression.substitute(v, vars) }
         return try {
@@ -326,6 +350,88 @@ object WorkflowEngine {
                         is QuroLlmResult.Error -> Outcome(false, "AI 推理失败：${res.message}")
                         else -> Outcome(false, "AI 节点返回了不支持的结果类型")
                     }
+                }
+                // ══ 数据抽取节点：从文本/JSON 抽取值或生成随机量，结果写入 out 变量 ══
+                NodeType.EXTRACT -> {
+                    val op = (p["op"] ?: "regex").lowercase()
+                    val result: String = when (op) {
+                        "json" -> {
+                            val text = p["text"] ?: throw IllegalArgumentException("EXTRACT[json] 缺少 text")
+                            val path = p["path"] ?: throw IllegalArgumentException("EXTRACT[json] 缺少 path")
+                            val root = try { org.json.JSONObject(text) } catch (_: Exception) { org.json.JSONArray(text) }
+                            jsonPath(root, path) ?: throw IllegalArgumentException("EXTRACT[json] 路径 $path 无匹配")
+                        }
+                        "substring" -> {
+                            val text = p["text"] ?: ""
+                            val start = (p["start"] ?: "0").toIntOrNull() ?: 0
+                            val len = p["len"]?.toIntOrNull() ?: 0
+                            if (start < 0 || start > text.length) ""
+                            else {
+                                val end = if (len <= 0) text.length else minOf(start + len, text.length)
+                                text.substring(start, end.coerceAtMost(text.length))
+                            }
+                        }
+                        "concat" -> {
+                            val sep = p["sep"] ?: ""
+                            (p["parts"] ?: "").split("|").joinToString(sep)
+                        }
+                        "random" -> {
+                            val min = (p["min"]?.toIntOrNull() ?: 0)
+                            val max = (p["max"]?.toIntOrNull() ?: 1000)
+                            if (max <= min) max.toString()
+                            else (Random().nextInt(max - min + 1) + min).toString()
+                        }
+                        else -> { // regex
+                            val text = p["text"] ?: ""
+                            val pattern = p["pattern"] ?: throw IllegalArgumentException("EXTRACT[regex] 缺少 pattern")
+                            val group = (p["group"] ?: "0").toIntOrNull() ?: 0
+                            val global = (p["global"] ?: "false").toBooleanStrictOrNull() ?: false
+                            val m = java.util.regex.Pattern.compile(pattern).matcher(text)
+                            if (global) {
+                                val sb = StringBuilder()
+                                while (m.find()) {
+                                    if (sb.isNotEmpty()) sb.append("\n")
+                                    sb.append(if (group == 0) m.group() else (m.group(group) ?: ""))
+                                }
+                                sb.toString()
+                            } else if (m.find()) {
+                                if (group == 0) m.group() else (m.group(group) ?: "")
+                            } else ""
+                        }
+                    }
+                    val outVar = p["out"]
+                    if (outVar != null) {
+                        vars[outVar] = result
+                        log.appendLine("  EXTRACT[$op] → 存入 \$$outVar (${result.length} 字符)")
+                    } else {
+                        log.appendLine("  EXTRACT[$op] → $result")
+                    }
+                    Outcome(true)
+                }
+                // ══ 通用执行节点：js 走端侧 QuickJS 沙箱；tool 调用已注册 AI 工具；结果写入 out 变量 ══
+                NodeType.EXEC -> {
+                    val mode = (p["mode"] ?: "js").lowercase()
+                    val result: String = when (mode) {
+                        "tool" -> {
+                            val toolName = p["tool"] ?: throw IllegalArgumentException("EXEC[tool] 缺少 tool")
+                            val args = p["args"] ?: "{}"
+                            val tool = QuroToolRegistry.active?.get(toolName)
+                                ?: throw IllegalArgumentException("EXEC[tool] 找不到工具: $toolName")
+                            tool.run(appCtx, args)
+                        }
+                        else -> { // js
+                            val code = p["code"] ?: throw IllegalArgumentException("EXEC[js] 缺少 code")
+                            QuroJsExecutor.eval(code)
+                        }
+                    }
+                    val outVar = p["out"]
+                    if (outVar != null) {
+                        vars[outVar] = result
+                        log.appendLine("  EXEC[$mode] → 存入 \$$outVar (${result.length} 字符)")
+                    } else {
+                        log.appendLine("  EXEC[$mode] → $result")
+                    }
+                    Outcome(true)
                 }
             }
         } catch (e: Exception) {

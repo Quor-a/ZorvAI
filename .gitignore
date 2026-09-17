@@ -147,3 +147,34 @@ signing/
 #!app/src/main/assets/keystore/
 #!app/src/main/assets/keystore/zorvai_release.bks
 #!app/src/main/assets/keystore/zorvai_release.p12
+
+# ===== 发版清理：排除本地 scratch / 大体积参考目录（2026-09-17）=====
+# 参考项目目录体积大（~830MB），非核心源码，禁止入库
+reference-projects/
+# 本地验证/调试产物
+.verify/
+# 项目记忆与本地配置（不入库）
+.workbuddy/
+ZorvAI-Documentation.zip
+zorvai_homepage_miniapp.html
+
+# 一次性发版 / 上传脚本与中间日志（非项目源码，禁止入库）
+build_*.txt
+build_release_*.txt
+build_compile_*.txt
+build_fix*.txt
+release_*.json
+upload_*.py
+upload_*.json
+upload_resp_*.json
+upload_v*.json
+create_v*.py
+refresh_release_asset.py
+port_genui.py
+check_16kb_apk.py
+err_*.txt
+out_*.txt
+genui_errors.txt
+overview_*.md
+browser_act_test_prompt.md
+*_resp.json

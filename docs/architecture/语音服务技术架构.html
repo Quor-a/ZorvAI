@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>语音服务 介绍构架</title>
+<style>
+  :root{--bg:#f7f8fa;--card:#fff;--ink:#1f2430;--sub:#5b6472;--line:#e3e7ee;
+        --c1:#2f6df0;--c2:#16a34a;--c3:#d97706;--c4:#7c3aed;--c5:#0891b2;--c6:#db2777;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--ink);line-height:1.7}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 22px 60px}
+  h1{font-size:28px;margin:0 0 4px}
+  .tag{display:inline-block;background:#eef3ff;color:var(--c1);border-radius:6px;padding:2px 10px;font-size:13px;margin-bottom:18px}
+  h2{font-size:20px;margin:34px 0 12px;padding-left:10px;border-left:4px solid var(--c6)}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--c5)}
+  p{color:var(--sub);margin:8px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0;box-shadow:0 1px 3px rgba(20,30,60,.04)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#f0f3f8;font-weight:600}
+  td code{background:#eef1f6;padding:1px 6px;border-radius:4px;font-size:12.5px;color:#b4327a}
+  .layer{display:flex;gap:0;flex-wrap:wrap;margin:6px 0}
+  .layer .lname{writing-mode:vertical-rl;transform:rotate(180deg);background:#1f2430;color:#fff;
+       display:flex;align-items:center;justify-content:center;font-size:13px;padding:8px 4px;border-radius:8px 0 0 8px;min-width:34px}
+  .layer .lbody{flex:1;display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:#fff;border:1px solid var(--line);border-left:none;border-radius:0 8px 8px 0}
+  .box{border-radius:8px;padding:8px 11px;font-size:13px;color:#fff;min-width:120px}
+  .b1{background:var(--c1)}.b2{background:var(--c2)}.b3{background:var(--c3)}.b4{background:var(--c4)}
+  .b5{background:var(--c5)}.b6{background:var(--c6)}.b7{background:#475569}
+  .flow{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px}
+  .flow .step{display:flex;align-items:center;gap:10px;margin:6px 0}
+  .flow .num{width:26px;height:26px;border-radius:50%;background:var(--c6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+  .muted{color:#8a93a3;font-size:13px}
+  ul{margin:8px 0;padding-left:22px;color:var(--sub)}
+  li{margin:4px 0}
+  .pill{display:inline-block;background:#fce7f3;color:var(--c6);border:1px solid #fbcfe8;border-radius:999px;padding:1px 9px;font-size:12px;margin:2px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>语音服务 介绍构架</h1>
+  <span class="tag">ZorvAI 数字人控制台 · ASR / TTS / 语音唤醒</span>
+
+  <h2>一、构架介绍</h2>
+  <div class="card">
+    <p><b>语音服务</b>是 ZorvAI 数字人控制台的自然交互底座：用户用说话代替打字，AI 用语音代替文本，配合 3D 虚拟形象形成「听—想—说—演」的闭环。它脱胎于 OpenClaw AI Engine 的 <b>LatticeASR / LatticeTTS</b> 轻量自研模型（合计约 14.7M 参数），可端侧离线运行，也可接在线服务增强。</p>
+    <p>服务以「常驻守护 + 按需唤醒」方式存在：后台语音服务持续做唤醒词检测，命中后拉起完整识别—推理—合成链路；结果既驱动对话，也驱动数字人口型与动作。</p>
+    <ul>
+      <li><b>离线优先</b>：ASR / TTS 模型本地推理，弱网 / 无网可用；在线服务作为高保真补充。</li>
+      <li><b>流式流水线</b>：采集、VAD、识别、合成均支持流式，降低端到端延迟。</li>
+      <li><b>数字人联动</b>：合成音频的韵率（prosody）信号同步驱动 3D 形象口型与表情。</li>
+      <li><b>与终端 / 技能 / MCP 打通</b>：语音指令可触发 terminal_exec、调用技能、驱动 MCP 连接器。</li>
+    </ul>
+  </div>
+
+  <h2>二、技术构架（分层）</h2>
+  <div class="card">
+    <div class="layer"><div class="lname">L6 呈现</div><div class="lbody">
+      <div class="box b6">3D 虚拟形象 (角色卡)</div>
+      <div class="box b6">口型 / 表情同步</div>
+      <div class="box b6">对话 UI 播报</div>
+    </div></div>
+    <div class="layer"><div class="lname">L5 联动</div><div class="lbody">
+      <div class="box b4">语音指令 → terminal_exec</div>
+      <div class="box b4">语音 → 技能 / MCP 触发</div>
+      <div class="box b4">QuroAssistant 对话编排</div>
+    </div></div>
+    <div class="layer"><div class="lname">L4 合成</div><div class="lbody">
+      <div class="box b3">LatticeTTS (7.5M)</div>
+      <div class="box b3">音色管理 / 韵律控制</div>
+      <div class="box b3">流式 TTS</div>
+    </div></div>
+    <div class="layer"><div class="lname">L3 理解</div><div class="lbody">
+      <div class="box b5">NLU / 意图识别</div>
+      <div class="box b5">LLM 应答生成</div>
+      <div class="box b5">上下文记忆</div>
+    </div></div>
+    <div class="layer"><div class="lname">L2 识别</div><div class="lbody">
+      <div class="box b2">LatticeASR (7.2M)</div>
+      <div class="box b2">VAD 端点检测</div>
+      <div class="box b2">流式 ASR</div>
+    </div></div>
+    <div class="layer"><div class="lname">L1 前端</div><div class="lbody">
+      <div class="box b1">AudioRecord 采集</div>
+      <div class="box b1">降噪 / AGC</div>
+      <div class="box b1">唤醒词检测 (Wake-word)</div>
+      <div class="box b1">AudioTrack 播放</div>
+    </div></div>
+    <div class="layer"><div class="lname">L0 守护</div><div class="lbody">
+      <div class="box b7">语音服务后台进程</div>
+      <div class="box b7">唤醒监听 (低功耗)</div>
+      <div class="box b7">保活 / 权限 (RECORD_AUDIO)</div>
+    </div></div>
+  </div>
+
+  <h2>三、核心组件</h2>
+  <div class="card">
+    <table>
+      <tr><th>组件</th><th>职责</th><th>实现</th></tr>
+      <tr><td><b>LatticeASR</b></td><td>语音识别（约 7.2M 参数）</td><td>端侧流式识别，输出文本流</td></tr>
+      <tr><td><b>LatticeTTS</b></td><td>语音合成（约 7.5M 参数）</td><td>端侧流式合成，支持多音色</td></tr>
+      <tr><td><b>Wake-word</b></td><td>唤醒词检测</td><td>常驻低功耗监听，命中唤醒链路</td></tr>
+      <tr><td><b>VAD</b></td><td>语音活动 / 端点检测</td><td>决定何时开始 / 结束识别</td></tr>
+      <tr><td><b>数字人驱动</b></td><td>口型 / 表情同步</td><td>消费 TTS 韵律信号驱动 3D 模型</td></tr>
+      <tr><td><b>语音服务守护</b></td><td>后台常驻</td><td>类似 KeepAlive，保障随时可唤醒</td></tr>
+    </table>
+  </div>
+
+  <h2>四、关键流程（一次语音对话）</h2>
+  <div class="card">
+    <div class="flow">
+      <div class="step"><span class="num">1</span><span><b>唤醒</b>：守护进程 Wake-word 命中 → 拉起识别链路</span></div>
+      <div class="step"><span class="num">2</span><span><b>采集</b>：AudioRecord 取麦克风流，前端降噪 + VAD 切句</span></div>
+      <div class="step"><span class="num">3</span><span><b>识别</b>：LatticeASR 流式输出文本 → NLU / LLM 生成应答</span></div>
+      <div class="step"><span class="num">4</span><span><b>合成</b>：LatticeTTS 流式合成音频，韵律信号同步给数字人</span></div>
+      <div class="step"><span class="num">5</span><span><b>播放 / 演绎</b>：AudioTrack 播放语音，3D 形象口型同步</span></div>
+      <div class="step"><span class="num">6</span><span><b>联动</b>：指令类语句可路由到 terminal_exec / 技能 / MCP</span></div>
+    </div>
+  </div>
+
+  <h2>五、与系统其它模块的关系</h2>
+  <div class="card">
+    <p class="muted">语音服务并非孤岛，而是数字人控制台的「输入 / 输出总线」：</p>
+    <p>
+      <span class="pill">终端4.0：语音 → terminal_exec 执行命令</span>
+      <span class="pill">技能 Skills：语音触发技能工作流</span>
+      <span class="pill">MCP：语音驱动连接器动作（飞书/浏览器…）</span>
+      <span class="pill">数字人：语音 + 口型 = 拟人交互</span>
+    </p>
+  </div>
+</div>
+</body>
+</html>

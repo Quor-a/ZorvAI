@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>技能 Skills 技术构架</title>
+<style>
+  :root{--bg:#f7f8fa;--card:#fff;--ink:#1f2430;--sub:#5b6472;--line:#e3e7ee;
+        --c1:#2f6df0;--c2:#16a34a;--c3:#d97706;--c4:#7c3aed;--c5:#0891b2;--c6:#db2777;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--ink);line-height:1.7}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 22px 60px}
+  h1{font-size:28px;margin:0 0 4px}
+  .tag{display:inline-block;background:#eef3ff;color:var(--c1);border-radius:6px;padding:2px 10px;font-size:13px;margin-bottom:18px}
+  h2{font-size:20px;margin:34px 0 12px;padding-left:10px;border-left:4px solid var(--c4)}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--c5)}
+  p{color:var(--sub);margin:8px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0;box-shadow:0 1px 3px rgba(20,30,60,.04)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#f0f3f8;font-weight:600}
+  td code{background:#eef1f6;padding:1px 6px;border-radius:4px;font-size:12.5px;color:#b4327a}
+  .layer{display:flex;gap:0;flex-wrap:wrap;margin:6px 0}
+  .layer .lname{writing-mode:vertical-rl;transform:rotate(180deg);background:#1f2430;color:#fff;
+       display:flex;align-items:center;justify-content:center;font-size:13px;padding:8px 4px;border-radius:8px 0 0 8px;min-width:34px}
+  .layer .lbody{flex:1;display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:#fff;border:1px solid var(--line);border-left:none;border-radius:0 8px 8px 0}
+  .box{border-radius:8px;padding:8px 11px;font-size:13px;color:#fff;min-width:120px}
+  .b1{background:var(--c1)}.b2{background:var(--c2)}.b3{background:var(--c3)}.b4{background:var(--c4)}
+  .b5{background:var(--c5)}.b6{background:var(--c6)}.b7{background:#475569}
+  .flow{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px}
+  .flow .step{display:flex;align-items:center;gap:10px;margin:6px 0}
+  .flow .num{width:26px;height:26px;border-radius:50%;background:var(--c4);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+  .muted{color:#8a93a3;font-size:13px}
+  ul{margin:8px 0;padding-left:22px;color:var(--sub)}
+  li{margin:4px 0}
+  .pill{display:inline-block;background:#f3e8ff;color:var(--c4);border:1px solid #e9d5ff;border-radius:999px;padding:1px 9px;font-size:12px;margin:2px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>技能 Skills 技术构架</h1>
+  <span class="tag">ZorvAI / WorkBuddy · Skill 引擎</span>
+
+  <h2>一、构架介绍</h2>
+  <div class="card">
+    <p><b>技能（Skill）</b>是 WorkBuddy / ZorvAI 的「可复用专业能力包」：一段结构化的 <code>SKILL.md</code> + 可选的 <code>scripts/</code>、<code>references/</code>、<code>assets/</code>，在需要时由 Skill 工具加载进上下文，赋予主理人（Agent）领域知识与标准化工作流。</p>
+    <p>它的核心价值是把「某类任务怎么干」从模型记忆里外置成可版本化、可审计、可共享的工件，避免每次都靠 prompt 临时拼凑。当前会话可见 <b>100+ 专家 / 技能</b>（前端、安卓、区块链、文档、运维、设计等）。</p>
+    <p>设计三原则：</p>
+    <ul>
+      <li><b>两级作用域</b>：用户级 <code>~/.workbuddy/skills/</code>（跨项目）与项目级 <code>{workspace}/.workbuddy/skills/</code>（团队共享），互不污染。</li>
+      <li><b>安装即审计</b>：任何 install / import / download 的技能必须先过 <code>skills-security-check</code>，按 P0（致命）/ P1（警告）/ P2（安全）定级，P0 需用户显式确认方可落地。</li>
+      <li><b>积累即沉淀</b>：完成多步任务或修正 tricky 错误后，用 <code>SkillManage</code> 把可复用流程回写为新技能，形成正循环。</li>
+    </ul>
+  </div>
+
+  <h2>二、技术构架（分层）</h2>
+  <div class="card">
+    <div class="layer"><div class="lname">L5 集成</div><div class="lbody">
+      <div class="box b6">Agent Loop (主理人调度)</div>
+      <div class="box b6">expert-manager (专家包)</div>
+      <div class="box b6">aci-android-app 等域技能</div>
+    </div></div>
+    <div class="layer"><div class="lname">L4 执行</div><div class="lbody">
+      <div class="box b4">Skill 工具调用</div>
+      <div class="box b4">命令路由 / 上下文注入</div>
+      <div class="box b4">反思与修正 (Reflection)</div>
+    </div></div>
+    <div class="layer"><div class="lname">L3 发现</div><div class="lbody">
+      <div class="box b5">find-skills (市场检索)</div>
+      <div class="box b5">recommend-connectors</div>
+      <div class="box b5">marketplace 安装器</div>
+    </div></div>
+    <div class="layer"><div class="lname">L2 加载</div><div class="lbody">
+      <div class="box b2">Skill 注册表 / 索引</div>
+      <div class="box b2">SkillManage (建/改/删/列)</div>
+      <div class="box b2">skills-security-check (审计)</div>
+    </div></div>
+    <div class="layer"><div class="lname">L1 定义</div><div class="lbody">
+      <div class="box b3">SKILL.md (frontmatter: name/description/location/triggers)</div>
+      <div class="box b3">scripts/ · references/ · assets/</div>
+      <div class="box b3">agent_created 标记</div>
+    </div></div>
+    <div class="layer"><div class="lname">L0 存储</div><div class="lbody">
+      <div class="box b7">用户级 ~/.workbuddy/skills/</div>
+      <div class="box b7">项目级 {workspace}/.workbuddy/skills/</div>
+    </div></div>
+  </div>
+
+  <h2>三、核心组件</h2>
+  <div class="card">
+    <table>
+      <tr><th>组件</th><th>职责</th><th>关键点</th></tr>
+      <tr><td><b>SKILL.md</b></td><td>技能定义文件，frontmatter 声明名称、描述、触发词、位置</td><td><code>agent_created: true</code> 仅模型自建技能可被 SkillManage 改</td></tr>
+      <tr><td><b>SkillManage</b></td><td>创建 / 修改 / 删除 / 列出技能</td><td>用户级优先，除非用户显式要求项目级</td></tr>
+      <tr><td><b>skills-security-check</b></td><td>安装前安全审计</td><td>输出 P0/P1/P2 风险，P0 须用户确认</td></tr>
+      <tr><td><b>find-skills</b></td><td>检索并推荐可安装技能</td><td>能力缺口时首调，禁止直接说「做不到」</td></tr>
+      <tr><td><b>expert-manager</b></td><td>专家包全生命周期（转化 / 修改 / 合规 / 审查）</td><td>与 Skill 互补，面向「角色型」能力</td></tr>
+    </table>
+  </div>
+
+  <h2>四、生命周期（Skill Lifecycle）</h2>
+  <div class="card">
+    <div class="flow">
+      <div class="step"><span class="num">1</span><span><b>发现</b>：能力缺口 → <code>find-skills</code> 检索市场 / 本地</span></div>
+      <div class="step"><span class="num">2</span><span><b>安装</b>：download / import → 先跑 <code>skills-security-check</code> 出 P0-P2 报告</span></div>
+      <div class="step"><span class="num">3</span><span><b>加载</b>：命中触发词 → Skill 工具把 SKILL.md 注入上下文</span></div>
+      <div class="step"><span class="num">4</span><span><b>执行</b>：按工作流调用 scripts / 工具 / 子流程</span></div>
+      <div class="step"><span class="num">5</span><span><b>反思</b>：发现过时 / 错误 / 缺漏 → <code>SkillManage(modify)</code> 原地修正</span></div>
+      <div class="step"><span class="num">6</span><span><b>沉淀</b>：完成 8+ 步任务或 tricky 修复 → 回写为新技能</span></div>
+    </div>
+  </div>
+
+  <h2>五、分类速览</h2>
+  <div class="card">
+    <p class="muted">本会话 <code>available_skills</code> 中按域划分的代表：</p>
+    <p>
+      <span class="pill">前端：frontend-design / ui-design-system / html-deploy</span>
+      <span class="pill">安卓：android-native-dev / aci-android-app</span>
+      <span class="pill">区块链：blockchain-developer</span>
+      <span class="pill">文档：tencent-docx / minimax-docx / official-document-skill</span>
+      <span class="pill">运维：docker / cloudflare / github-pages-auto-deploy</span>
+      <span class="pill">设计：diagram-builder / ppt-generator / poster</span>
+      <span class="pill">检索：aihot / web-search-exa / news-summary</span>
+      <span class="pill">数据：minimax-xlsx / tencent-docs-sheetagent</span>
+    </p>
+  </div>
+</div>
+</body>
+</html>

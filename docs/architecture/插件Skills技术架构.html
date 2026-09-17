@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>插件 Skills 技术构架</title>
+<style>
+  :root{--bg:#f7f8fa;--card:#fff;--ink:#1f2430;--sub:#5b6472;--line:#e3e7ee;
+        --c1:#2f6df0;--c2:#16a34a;--c3:#d97706;--c4:#7c3aed;--c5:#0891b2;--c6:#db2777;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--ink);line-height:1.7}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 22px 60px}
+  h1{font-size:28px;margin:0 0 4px}
+  .tag{display:inline-block;background:#ecfeff;color:var(--c5);border-radius:6px;padding:2px 10px;font-size:13px;margin-bottom:18px}
+  h2{font-size:20px;margin:34px 0 12px;padding-left:10px;border-left:4px solid var(--c5)}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--c5)}
+  p{color:var(--sub);margin:8px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0;box-shadow:0 1px 3px rgba(20,30,60,.04)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#f0f3f8;font-weight:600}
+  td code{background:#eef1f6;padding:1px 6px;border-radius:4px;font-size:12.5px;color:#b4327a}
+  .layer{display:flex;gap:0;flex-wrap:wrap;margin:6px 0}
+  .layer .lname{writing-mode:vertical-rl;transform:rotate(180deg);background:#1f2430;color:#fff;
+       display:flex;align-items:center;justify-content:center;font-size:13px;padding:8px 4px;border-radius:8px 0 0 8px;min-width:34px}
+  .layer .lbody{flex:1;display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:#fff;border:1px solid var(--line);border-left:none;border-radius:0 8px 8px 0}
+  .box{border-radius:8px;padding:8px 11px;font-size:13px;color:#fff;min-width:120px}
+  .b1{background:var(--c1)}.b2{background:var(--c2)}.b3{background:var(--c3)}.b4{background:var(--c4)}
+  .b5{background:var(--c5)}.b6{background:var(--c6)}.b7{background:#475569}
+  .flow{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px}
+  .flow .step{display:flex;align-items:center;gap:10px;margin:6px 0}
+  .flow .num{width:26px;height:26px;border-radius:50%;background:var(--c5);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+  .muted{color:#8a93a3;font-size:13px}
+  ul{margin:8px 0;padding-left:22px;color:var(--sub)}
+  li{margin:4px 0}
+  .pill{display:inline-block;background:#ecfeff;color:var(--c5);border:1px solid #a5f3fc;border-radius:999px;padding:1px 9px;font-size:12px;margin:2px 0}
+  .pill.b{background:#f3e8ff;color:var(--c4);border-color:#e9d5ff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>插件 Skills 技术构架</h1>
+  <span class="tag">ZorvAI / WorkBuddy · 可安装技能插件</span>
+
+  <h2>一、构架介绍</h2>
+  <div class="card">
+    <p><b>插件 Skills</b> 是 Skills 体系中「可分发、可安装」的扩展形态。相对<b>内置技能</b>（随平台发布、默认可信），插件技能来自<b>市场 / 外部仓库 / URL</b>，以 <code>SKILL.md</code> + <code>scripts/</code> + <code>references/</code> + <code>assets/</code> 打包，经 <code>find-skills</code> 发现、<code>skills-security-check</code> 审计、<code>SkillManage</code> 安装后，与主理人运行时动态绑定。</p>
+    <p>它让 ZorvAI 的能力像插件一样热插拔扩展，并可与 <b>MCP 连接器桥接</b>（connector-bridged skills），把外部服务封装成「会自己调工具的技能」。所有安装动作强制走安全审计，按 P0（致命）/ P1（警告）/ P2（安全）定级，P0 须用户显式确认。</p>
+    <ul>
+      <li><b>外部来源</b>：市场检索、Git 仓库 import、URL 下载，区别于内置技能。</li>
+      <li><b>安装即审计</b>：<code>skills-security-check</code> 扫描 SKILL.md 与脚本，输出风险报告。</li>
+      <li><b>两级落盘</b>：用户级 <code>~/.workbuddy/skills/</code>（跨项目）/ 项目级 <code>{workspace}/.workbuddy/skills/</code>（团队）。</li>
+      <li><b>连接器桥接</b>：插件技能可内嵌 MCP 调用，成为「带外部能力的技能」。</li>
+    </ul>
+  </div>
+
+  <h2>二、技术构架（分层）</h2>
+  <div class="card">
+    <div class="layer"><div class="lname">L5 集成</div><div class="lbody">
+      <div class="box b6">Agent Loop 动态调用</div>
+      <div class="box b6">expert-manager (专家包)</div>
+      <div class="box b6">Connector 桥接技能</div>
+    </div></div>
+    <div class="layer"><div class="lname">L4 绑定</div><div class="lbody">
+      <div class="box b4">Skill 工具装载</div>
+      <div class="box b4">上下文注入</div>
+      <div class="box b4">反思 / 修正 (Reflection)</div>
+    </div></div>
+    <div class="layer"><div class="lname">L3 审计</div><div class="lbody">
+      <div class="box b3">skills-security-check</div>
+      <div class="box b3">P0 / P1 / P2 风险定级</div>
+      <div class="box b3">用户确认闸门</div>
+    </div></div>
+    <div class="layer"><div class="lname">L2 管理</div><div class="lbody">
+      <div class="box b2">SkillManage (建/改/删/列)</div>
+      <div class="box b2">marketplace 安装器</div>
+      <div class="box b2">用户级 / 项目级落盘</div>
+    </div></div>
+    <div class="layer"><div class="lname">L1 发现</div><div class="lbody">
+      <div class="box b5">find-skills (检索)</div>
+      <div class="box b5">recommend-connectors</div>
+      <div class="box b5">市场 / 仓库 / URL 源</div>
+    </div></div>
+    <div class="layer"><div class="lname">L0 包体</div><div class="lbody">
+      <div class="box b7">SKILL.md (frontmatter)</div>
+      <div class="box b7">scripts/ · references/ · assets/</div>
+      <div class="box b7">agent_created 标记</div>
+    </div></div>
+  </div>
+
+  <h2>三、核心组件</h2>
+  <div class="card">
+    <table>
+      <tr><th>组件</th><th>职责</th><th>关键点</th></tr>
+      <tr><td><b>SKILL.md</b></td><td>插件定义文件</td><td>frontmatter 声明名称、描述、触发词、位置</td></tr>
+      <tr><td><b>find-skills</b></td><td>发现可安装插件</td><td>能力缺口时首调，禁止直接说「做不到」</td></tr>
+      <tr><td><b>skills-security-check</b></td><td>安装前审计</td><td>输出 P0/P1/P2，P0 须用户确认</td></tr>
+      <tr><td><b>SkillManage</b></td><td>安装 / 修改 / 删除</td><td>用户级优先，除非要求项目级</td></tr>
+      <tr><td><b>marketplace 安装器</b></td><td>从推荐市场安装</td><td>一句话检索并安装技能</td></tr>
+      <tr><td><b>Connector 桥接</b></td><td>技能内嵌 MCP 调用</td><td>把外部服务封装为「带能力的技能」</td></tr>
+    </table>
+  </div>
+
+  <h2>四、安装生命周期</h2>
+  <div class="card">
+    <div class="flow">
+      <div class="step"><span class="num">1</span><span><b>发现</b>：能力缺口 → <code>find-skills</code> 检索市场 / 仓库 / URL</span></div>
+      <div class="step"><span class="num">2</span><span><b>获取</b>：download / import / URL 拉取插件包体</span></div>
+      <div class="step"><span class="num">3</span><span><b>审计</b>：<code>skills-security-check</code> 扫描，出 P0-P2 报告</span></div>
+      <div class="step"><span class="num">4</span><span><b>确认</b>：P0 风险须用户显式确认，P1 警告提示</span></div>
+      <div class="step"><span class="num">5</span><span><b>落盘</b>：<code>SkillManage</code> 写入用户级 / 项目级 skills 目录</span></div>
+      <div class="step"><span class="num">6</span><span><b>装载</b>：命中触发词 → Skill 工具注入上下文执行；可经连接器桥接外部能力</span></div>
+    </div>
+  </div>
+
+  <h2>五、与内置 Skills 的区别</h2>
+  <div class="card">
+    <p class="muted">插件 Skills 是 Skills 体系的「扩展面」，与内置 Skills 互补：</p>
+    <p>
+      <span class="pill">内置 Skills：随平台发布、默认可信、不可删</span>
+      <span class="pill b">插件 Skills：外部来源、须审计、可热装热卸</span>
+      <span class="pill b">Connector 桥接：插件技能内嵌 MCP 调用</span>
+    </p>
+    <p>两者共用同一套 <code>SKILL.md</code> 格式、<code>SkillManage</code> 生命周期与两级目录；差异仅在<b>来源可信度</b>与<b>是否强制安全审计</b>。详见《技能 Skills 技术构架》。</p>
+  </div>
+</div>
+</body>
+</html>

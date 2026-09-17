@@ -1,0 +1,32 @@
+# 供支持 .aiignore 的 AI 编码工具读取的排除清单
+# 与 .gitignore 目标不同：.gitignore 防入库，.aiignore 防 AI 读取
+#
+# 说明：本仓库的签名脚本（scripts/sign.sh 等）刻意**不列入**本清单——
+# 它们不含任何私钥内容，且需要 AI 能读以便排查问题；
+# 信任链靠 AGENTS.md 的红线 + git 钩子保障，而不是靠让文件不可读。
+
+# ---- 私钥与凭证（最高优先级，AI 不得读取）----
+~/.zorvai-signing/
+**/.zorvai-signing/
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.bks
+**/*.pk8
+**/*.pem
+**/keystore.properties
+**/*keystore*
+**/env.sh
+**/.env
+**/.env.*
+**/local.properties
+
+# ---- 签名产物（体积大、内容对分析无价值）----
+**/build/outputs/
+**/*-signed.apk
+**/*-unsigned.apk
+**/*-aligned.apk
+
+# ---- 注意 ----
+# 不要在此排除 gradle.properties / gradle/libs.versions.toml：
+# 它们是构建配置的正常组成，AI 需要读取以正确改动依赖。

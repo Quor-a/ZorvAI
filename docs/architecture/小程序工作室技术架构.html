@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小程序工作室 技术构架</title>
+<style>
+  :root{--bg:#f7f8fa;--card:#fff;--ink:#1f2430;--sub:#5b6472;--line:#e3e7ee;
+        --c1:#2f6df0;--c2:#16a34a;--c3:#d97706;--c4:#7c3aed;--c5:#0891b2;--c6:#db2777;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--ink);line-height:1.7}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 22px 60px}
+  h1{font-size:28px;margin:0 0 4px}
+  .tag{display:inline-block;background:#ecfdf5;color:var(--c2);border-radius:6px;padding:2px 10px;font-size:13px;margin-bottom:18px}
+  h2{font-size:20px;margin:34px 0 12px;padding-left:10px;border-left:4px solid var(--c2)}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--c5)}
+  p{color:var(--sub);margin:8px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0;box-shadow:0 1px 3px rgba(20,30,60,.04)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#f0f3f8;font-weight:600}
+  td code{background:#eef1f6;padding:1px 6px;border-radius:4px;font-size:12.5px;color:#b4327a}
+  .layer{display:flex;gap:0;flex-wrap:wrap;margin:6px 0}
+  .layer .lname{writing-mode:vertical-rl;transform:rotate(180deg);background:#1f2430;color:#fff;
+       display:flex;align-items:center;justify-content:center;font-size:13px;padding:8px 4px;border-radius:8px 0 0 8px;min-width:34px}
+  .layer .lbody{flex:1;display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:#fff;border:1px solid var(--line);border-left:none;border-radius:0 8px 8px 0}
+  .box{border-radius:8px;padding:8px 11px;font-size:13px;color:#fff;min-width:120px}
+  .b1{background:var(--c1)}.b2{background:var(--c2)}.b3{background:var(--c3)}.b4{background:var(--c4)}
+  .b5{background:var(--c5)}.b6{background:var(--c6)}.b7{background:#475569}
+  .flow{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px}
+  .flow .step{display:flex;align-items:center;gap:10px;margin:6px 0}
+  .flow .num{width:26px;height:26px;border-radius:50%;background:var(--c2);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+  .muted{color:#8a93a3;font-size:13px}
+  ul{margin:8px 0;padding-left:22px;color:var(--sub)}
+  li{margin:4px 0}
+  .pill{display:inline-block;background:#ecfdf5;color:var(--c2);border:1px solid #bbf7d0;border-radius:999px;padding:1px 9px;font-size:12px;margin:2px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>小程序工作室 技术构架</h1>
+  <span class="tag">ZorvAI · MiniAppFramework（AI 生成 HTML/JS 内联渲染）</span>
+
+  <h2>一、构架介绍</h2>
+  <div class="card">
+    <p><b>小程序工作室</b>是 ZorvAI 内「AI 生成即可运行」的可视化小程序工作台。核心是 <b>MiniAppFramework</b>：把 LLM 产出的 HTML/JS 在应用内渲染容器中沙箱运行，支持同目录资源（图片自动转 <code>data URI</code>）、私有 <code>app://</code> 协议、对话框内联预览与独立面板编辑。用户 / AI 可在小程序面板新建、编辑、运行小程序，无需打包上架。</p>
+    <p>它把「写代码」变成「对话即产物」：AI 生成 → 安全化写入 studio 目录 → 面板 / 对话框内联渲染 → 运行 / 分享，形成低门槛的可编程能力面，是 ZorvAI 工具生态的轻量扩展通道。</p>
+    <ul>
+      <li><b>内联渲染</b>：HTML/JS 跑在应用内 WebView/内联容器，免安装、即写即跑。</li>
+      <li><b>资源自包含</b>：同目录图片在预览时转 <code>data URI</code>，与面板内 <code>app://</code> 渲染一致，避免路径错位。</li>
+      <li><b>安全写入</b>：工程名 / 路径做安全化，防止 <code>..</code> 越界写入 studio 目录外。</li>
+      <li><b>双入口</b>：对话框内联预览 + 独立小程序面板编辑，互相打通。</li>
+    </ul>
+  </div>
+
+  <h2>二、技术构架（分层）</h2>
+  <div class="card">
+    <div class="layer"><div class="lname">L5 集成</div><div class="lbody">
+      <div class="box b6">对话框内联渲染</div>
+      <div class="box b6">工具中心小程序面板</div>
+      <div class="box b6">节点编辑器联动</div>
+      <div class="box b6">分享 / 导出</div>
+    </div></div>
+    <div class="layer"><div class="lname">L4 运行</div><div class="lbody">
+      <div class="box b5">MiniAppFramework Runtime</div>
+      <div class="box b5">app:// 协议解析</div>
+      <div class="box b5">资源解析 (data URI)</div>
+      <div class="box b5">生命周期管理</div>
+    </div></div>
+    <div class="layer"><div class="lname">L3 编辑</div><div class="lbody">
+      <div class="box b4">小程序面板 (新建/编辑/删除)</div>
+      <div class="box b4">run 对话框预览</div>
+      <div class="box b4">模板示例 (create)</div>
+      <div class="box b4">快照 / 状态</div>
+    </div></div>
+    <div class="layer"><div class="lname">L2 生成</div><div class="lbody">
+      <div class="box b2">AI 代码生成 (HTML/JS)</div>
+      <div class="box b2">安全化校验 (防越界写)</div>
+      <div class="box b2">writeFlow 工程写入</div>
+    </div></div>
+    <div class="layer"><div class="lname">L1 存储</div><div class="lbody">
+      <div class="box b3">小程序工程目录</div>
+      <div class="box b3">同目录资源</div>
+      <div class="box b3">配置 / 元数据</div>
+    </div></div>
+    <div class="layer"><div class="lname">L0 引擎</div><div class="lbody">
+      <div class="box b1">WebView / 内联渲染内核</div>
+      <div class="box b1">JS 执行沙箱</div>
+    </div></div>
+  </div>
+
+  <h2>三、核心组件</h2>
+  <div class="card">
+    <table>
+      <tr><th>组件</th><th>职责</th><th>说明</th></tr>
+      <tr><td><b>MiniAppFramework</b></td><td>小程序运行内核</td><td>内联渲染 HTML/JS、沙箱隔离</td></tr>
+      <tr><td><b>小程序面板</b></td><td>可视化编辑 / 管理入口</td><td>新建示例、编辑、删除、运行</td></tr>
+      <tr><td><b>run 对话框预览</b></td><td>对话框内联运行</td><td>同目录图片转 data URI，与 app:// 一致</td></tr>
+      <tr><td><b>app:// 协议</b></td><td>私有资源寻址</td><td>面板内资源定位，与预览同源</td></tr>
+      <tr><td><b>writeFlow (安全化)</b></td><td>工程写入</td><td>工程名 / 路径防 <code>..</code> 越界</td></tr>
+    </table>
+  </div>
+
+  <h2>四、关键流程（一次 AI 生成小程序）</h2>
+  <div class="card">
+    <div class="flow">
+      <div class="step"><span class="num">1</span><span><b>发起</b>：用户在小程序面板「新建示例」或对话框请求 → AI 生成 HTML/JS</span></div>
+      <div class="step"><span class="num">2</span><span><b>校验</b>：对工程名 / 路径做安全化，防止越界写入 studio 目录外</span></div>
+      <div class="step"><span class="num">3</span><span><b>写入</b>：<code>writeFlow</code> 落盘到 studio 工程目录（含同目录资源）</span></div>
+      <div class="step"><span class="num">4</span><span><b>渲染</b>：MiniAppFramework 内联渲染；预览时同目录图片转 <code>data URI</code>，<code>app://</code> 资源定位一致</span></div>
+      <div class="step"><span class="num">5</span><span><b>运行 / 分享</b>：面板或对话框内运行，支持导出 / 分享</span></div>
+    </div>
+  </div>
+
+  <h2>五、与系统其它模块的关系</h2>
+  <div class="card">
+    <p class="muted">小程序工作室是 ZorvAI 的「轻量可编程面」：</p>
+    <p>
+      <span class="pill">终端4.0：小程序可调用本地命令</span>
+      <span class="pill">技能 Skills：AI 生成逻辑复用技能工作流</span>
+      <span class="pill">MCP：小程序内唤起连接器动作</span>
+      <span class="pill">语音服务：语音驱动小程序交互</span>
+      <span class="pill">节点编辑器：可视化编排对接小程序</span>
+    </p>
+  </div>
+</div>
+</body>
+</html>

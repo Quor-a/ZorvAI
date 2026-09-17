@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>终端 4.0 技术构架</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --card:#ffffff; --ink:#1f2430; --sub:#5b6472; --line:#e3e7ee;
+    --c1:#2f6df0; --c2:#16a34a; --c3:#d97706; --c4:#7c3aed; --c5:#0891b2; --c6:#db2777;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--ink);line-height:1.7}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 22px 60px}
+  h1{font-size:28px;margin:0 0 4px}
+  .tag{display:inline-block;background:#eef3ff;color:var(--c1);border-radius:6px;padding:2px 10px;font-size:13px;margin-bottom:18px}
+  h2{font-size:20px;margin:34px 0 12px;padding-left:10px;border-left:4px solid var(--c1)}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--c5)}
+  p{color:var(--sub);margin:8px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0;box-shadow:0 1px 3px rgba(20,30,60,.04)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#f0f3f8;color:var(--ink);font-weight:600}
+  td code{background:#eef1f6;padding:1px 6px;border-radius:4px;font-size:12.5px;color:#b4327a}
+  .layer{display:flex;gap:0;flex-wrap:wrap;margin:6px 0}
+  .layer .lname{writing-mode:vertical-rl;transform:rotate(180deg);background:#1f2430;color:#fff;
+       display:flex;align-items:center;justify-content:center;font-size:13px;padding:8px 4px;border-radius:8px 0 0 8px;min-width:34px}
+  .layer .lbody{flex:1;display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:#fff;border:1px solid var(--line);border-left:none;border-radius:0 8px 8px 0}
+  .box{border-radius:8px;padding:8px 11px;font-size:13px;color:#fff;min-width:120px}
+  .b1{background:var(--c1)}.b2{background:var(--c2)}.b3{background:var(--c3)}.b4{background:var(--c4)}
+  .b5{background:var(--c5)}.b6{background:var(--c6)}.b7{background:#475569}
+  .flow{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px}
+  .flow .step{display:flex;align-items:center;gap:10px;margin:6px 0}
+  .flow .num{width:26px;height:26px;border-radius:50%;background:var(--c1);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+  .muted{color:#8a93a3;font-size:13px}
+  ul{margin:8px 0;padding-left:22px;color:var(--sub)}
+  li{margin:4px 0}
+  .pill{display:inline-block;background:#fff3e0;color:var(--c3);border:1px solid #ffe0b2;border-radius:999px;padding:1px 9px;font-size:12px;margin:2px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>终端 4.0 技术构架</h1>
+  <span class="tag">ZorvAI · 模块：terminal-core</span>
+
+  <h2>一、构架介绍</h2>
+  <div class="card">
+    <p><b>终端 4.0</b> 是 ZorvAI 内置的「开箱即用」Linux 终端引擎，目标是让用户无需任何下载 / apt 安装即可在 Android 上获得完整 Ubuntu 环境（apt、python3、node、git 等一应俱全），同时无缝对接 AI 工具调用与保活服务。</p>
+    <p>它直接继承并去品牌化移植自 <b>OperitTerminal v1.2</b>：把 <b>64MB 完整 Ubuntu rootfs</b> 作为 <code>assets</code> 打包进 APK，<code>TerminalManager.extractAssets()</code> 直接从 <code>context.assets.open</code> 解压，首启即拥有完整发行版，彻底取代旧方案「ubuntu-base 微镜像 + 运行时 apt-get 下载」的脆弱链路。</p>
+    <p>核心设计原则：</p>
+    <ul>
+      <li><b>Native 软链而非拷贝</b>：proot / loader / bash / busybox / sudo 五个预编译 <code>.so</code> 经 Java NIO <code>Files.createSymbolicLink</code> 软链进 <code>binDir</code>，零冗余体积、启动即就绪。</li>
+      <li><b>Provider 抽象</b>：本地 proot Ubuntu 与远程 SSH 终端统一在 <code>TerminalProvider</code> 接口之后，UI / AI 不感知底层差异。</li>
+      <li><b>AI 双向接入</b>：AI 的 <code>terminal_exec</code> / <code>terminal_write</code> 与用户在对话框内手敲命令走同一条 <code>TerminalManager → LocalTerminalProvider → Pty</code> 管线。</li>
+      <li><b>会话可多开</b>：<code>SessionManager</code> 管理多标签会话，<code>Pty</code>（JNI）持有真 pty 文件描述符，输出经 ANSI 模拟器渲染。</li>
+    </ul>
+  </div>
+
+  <h2>二、技术构架（分层）</h2>
+  <div class="card">
+    <div class="layer"><div class="lname">L6 UI</div><div class="lbody">
+      <div class="box b6">TerminalScreen (Compose 终端视图)</div>
+      <div class="box b6">TerminalHome / SetupScreen</div>
+      <div class="box b6">Settings / SSHConfig / VirtualKeyboard</div>
+      <div class="box b6">CanvasTerminalCompose (高性能画布渲染)</div>
+    </div></div>
+    <div class="layer"><div class="lname">L5 接入</div><div class="lbody">
+      <div class="box b4">QuroTerminalBridge<br>(terminal_exec / write)</div>
+      <div class="box b4">QuroToolsTerminal /<br>QuroTerminalTool (AI 工具)</div>
+      <div class="box b4">ChatScreen 终端面板</div>
+      <div class="box b4">QuroToolCenterScreen<br>(包管理/镜像源)</div>
+    </div></div>
+    <div class="layer"><div class="lname">L4 服务</div><div class="lbody">
+      <div class="box b5">TerminalService (前台)</div>
+      <div class="box b5">QuroTerminalKeepAliveService</div>
+      <div class="box b5">FtpServerManager / SSHDServerManager</div>
+      <div class="box b5">RemoteAccessManager / CacheManager</div>
+      <div class="box b5">SourceManager / UpdateChecker</div>
+    </div></div>
+    <div class="layer"><div class="lname">L3 Provider</div><div class="lbody">
+      <div class="box b2">TerminalProvider (接口)</div>
+      <div class="box b2">LocalTerminalProvider<br>(proot Ubuntu)</div>
+      <div class="box b2">SSHTerminalProvider<br>(远程)</div>
+      <div class="box b7">FileSystemProvider 体系</div>
+      <div class="box b7">UbuntuDocumentsProvider</div>
+    </div></div>
+    <div class="layer"><div class="lname">L2 会话</div><div class="lbody">
+      <div class="box b3">SessionManager (多标签)</div>
+      <div class="box b3">TerminalSession / TerminalSessionData</div>
+      <div class="box b3">Pty (JNI 包装)</div>
+      <div class="box b3">OutputProcessor / PromptDetector</div>
+      <div class="box b3">AnsiTerminalEmulator</div>
+    </div></div>
+    <div class="layer"><div class="lname">L1 环境</div><div class="lbody">
+      <div class="box b1">TerminalManager</div>
+      <div class="box b1">extractAssets / linkNativeLibs</div>
+      <div class="box b1">generateStartScript → common.sh</div>
+      <div class="box b1">install_ubuntu (解压 rootfs)</div>
+      <div class="box b1">TerminalEnv / TerminalEnvironment</div>
+    </div></div>
+    <div class="layer"><div class="lname">L0 原生</div><div class="lbody">
+      <div class="box b7">libproot.so → proot</div>
+      <div class="box b7">libloader.so → loader</div>
+      <div class="box b7">libbash.so → bash</div>
+      <div class="box b7">libbusybox.so → busybox</div>
+      <div class="box b7">libsudo.so → sudo</div>
+      <div class="box b7">liblibtalloc.so.2.so</div>
+      <div class="box b7">pty.c (JNI → libpty)</div>
+      <div class="box b7">rootfs: ubuntu-noble-aarch64-pd-v4.18.0.tar.xz (64MB)</div>
+    </div></div>
+  </div>
+
+  <h2>三、核心组件</h2>
+  <div class="card">
+    <table>
+      <tr><th>组件</th><th>职责</th><th>关键方法 / 文件</th></tr>
+      <tr><td><b>TerminalManager</b></td><td>环境总控：建目录、软链 native、解压 rootfs、生成 <code>common.sh</code></td><td><code>initializeEnvironment()</code>、<code>linkNativeLibs()</code>、<code>extractAssets()</code>、<code>generateStartScript()</code></td></tr>
+      <tr><td><b>SessionManager</b></td><td>多会话生命周期（创建 / 切换 / 关闭 / 清理）</td><td><code>createNewSession()</code>、<code>switchToSession()</code>、<code>closeSession()</code></td></tr>
+      <tr><td><b>Pty</b></td><td>JNI 封装 Linux pty，持有主从 fd，读写终端流</td><td><code>pty.c</code> → <code>libpty.so</code></td></tr>
+      <tr><td><b>LocalTerminalProvider</b></td><td>拉起 proot + <code>common.sh login_ubuntu</code> 启动 Ubuntu shell</td><td><code>startSession()</code>、<code>resolve_proot_runtime()</code></td></tr>
+      <tr><td><b>OutputProcessor</b></td><td>输出分块处理、提示符检测、ANSI 转义解析</td><td><code>PromptDetector</code>、<code>AnsiTerminalEmulator</code></td></tr>
+      <tr><td><b>QuroTerminalBridge</b></td><td>AI 命令总线：把 <code>terminal_exec</code> 派发到 TerminalManager 并返回结果</td><td><code>QuroToolsTerminal</code>、<code>QuroTerminalTool</code></td></tr>
+      <tr><td><b>UbuntuDocumentsProvider</b></td><td>让系统文件管理器直接访问 Ubuntu rootfs 文件</td><td><code>AndroidManifest</code> 注册</td></tr>
+    </table>
+  </div>
+
+  <h2>四、关键流程</h2>
+  <div class="card">
+    <h3>4.1 首启环境初始化</h3>
+    <div class="flow">
+      <div class="step"><span class="num">1</span><span><code>TerminalManager.initializeEnvironment()</code> → <code>createDirectories()</code> 建 usrDir / binDir / tmp</span></div>
+      <div class="step"><span class="num">2</span><span><code>linkNativeLibs()</code>：busybox + proot/loader/bash/sudo 从 <code>.so</code> 软链进 binDir 并 <code>setExecutable</code></span></div>
+      <div class="step"><span class="num">3</span><span><code>extractAssets()</code>：仅当不存在时解压 <code>ubuntu-noble-aarch64-pd-v4.18.0.tar.xz</code>（64MB）与 <code>setup_fake_sysdata.sh</code></span></div>
+      <div class="step"><span class="num">4</span><span><code>generateStartScript()</code> 写出 <code>common.sh</code>（含 <code>install_ubuntu()</code>、<code>resolve_proot_runtime()</code> 自动探测 <code>--link2symlink</code>）</span></div>
+      <div class="step"><span class="num">5</span><span>首条命令触发 <code>install_ubuntu()</code>：rootfs 解压到 <code>var/lib/proot-distro/installed-rootfs/ubuntu</code>，写 <code>.operit_installed_ok</code> 标记</span></div>
+    </div>
+    <h3>4.2 一次命令执行（用户 / AI 通用）</h3>
+    <div class="flow">
+      <div class="step"><span class="num">1</span><span>UI 输入 或 AI <code>terminal_exec</code> → <code>QuroTerminalBridge</code></span></div>
+      <div class="step"><span class="num">2</span><span><code>SessionManager</code> 取当前 <code>TerminalSession</code> → <code>LocalTerminalProvider.startSession()</code></span></div>
+      <div class="step"><span class="num">3</span><span>proot 进程执行 <code>common.sh login_ubuntu</code>，经 pty 回显</span></div>
+      <div class="step"><span class="num">4</span><span><code>OutputProcessor</code> + <code>AnsiTerminalEmulator</code> 渲染到 <code>TerminalScreen</code> / 回传 AI</span></div>
+    </div>
+  </div>
+
+  <h2>五、移植状态与缺口</h2>
+  <div class="card">
+    <p class="muted">当前 <code>terminal-core</code> 已落地 40 个 Kotlin 文件（全部去品牌化至 <code>com.ai.assistance.quro.terminal</code>），app 已 <code>implementation(project(":terminal-core"))</code>，ChatScreen 直接复用 Operit 原生 <code>TerminalScreen</code>。</p>
+    <p>相对 OperitTerminal v1.2 完整仓库，仍存在 <span class="pill">Provider 抽象层（TerminalProvider / Local / SSH）</span> <span class="pill">FileSystemProvider 体系</span> <span class="pill">UbuntuDocumentsProvider</span> <span class="pill">SSH 全栈（config/screen/manager）</span> <span class="pill">设置 / 虚拟键盘自定义</span> 等缺口，列为终端 4.0 后续迭代项。</p>
+  </div>
+</div>
+</body>
+</html>

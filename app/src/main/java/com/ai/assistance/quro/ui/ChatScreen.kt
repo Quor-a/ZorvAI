@@ -5413,37 +5413,42 @@ fun HistoryDrawer(
                 LucideIcon("x", "关闭", Modifier.size(20.dp), tint = cs.onSurface)
             }
         }
-        Row(
+        Column(
             Modifier
                 .padding(horizontal = 16.dp)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(AccentSoft)
-                .clickable(onClick = onNew)
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            LucideIcon("square_pen", null, Modifier.size(18.dp), tint = Accent)
-            Spacer(Modifier.width(10.dp))
-            Text("新建对话", fontSize = scaled(14), color = AccentPress, fontWeight = FontWeight.SemiBold)
-        }
-        // 独立 GenUI 对话框入口：点开即新建一个 genui 类型会话（AI 强制用原生 quro-ui 生成界面），
-        // 与普通对话框完全隔离，互不干扰（两种对话框）。
-        Row(
-            Modifier
-                .padding(horizontal = 16.dp)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(cs.primaryContainer)
-                .clickable(onClick = onNewGenUi)
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            LucideIcon("layout_dashboard", null, Modifier.size(18.dp), tint = cs.primary)
-            Spacer(Modifier.width(10.dp))
-            Text("GenUI 对话框", fontSize = scaled(14), color = cs.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.weight(1f))
-            Text("原生 UI 生成", fontSize = scaled(11), color = cs.onPrimaryContainer.copy(alpha = 0.7f))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(AccentSoft)
+                    .clickable(onClick = onNew)
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LucideIcon("square_pen", null, Modifier.size(18.dp), tint = Accent)
+                Spacer(Modifier.width(10.dp))
+                Text("新建对话", fontSize = scaled(14), color = AccentPress, fontWeight = FontWeight.SemiBold)
+            }
+            // 独立 GenUI 对话框入口：点开即新建一个 genui 类型会话（AI 强制用原生 quro-ui 生成界面），
+            // 与普通对话框完全隔离，互不干扰（两种对话框）。
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(cs.primaryContainer)
+                    .clickable(onClick = onNewGenUi)
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LucideIcon("layout_dashboard", null, Modifier.size(18.dp), tint = cs.primary)
+                Spacer(Modifier.width(10.dp))
+                Text("GenUI 对话框", fontSize = scaled(14), color = cs.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                Text("原生 UI 生成", fontSize = scaled(11), color = cs.onPrimaryContainer.copy(alpha = 0.7f))
+            }
         }
         Spacer(Modifier.height(8.dp))
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {

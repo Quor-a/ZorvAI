@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>浏览器 2.0 技术构架</title>
+<style>
+  :root{--bg:#f7f8fa;--card:#fff;--ink:#1f2430;--sub:#5b6472;--line:#e3e7ee;
+        --c1:#2f6df0;--c2:#16a34a;--c3:#d97706;--c4:#7c3aed;--c5:#0891b2;--c6:#db2777;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--ink);line-height:1.7}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 22px 60px}
+  h1{font-size:28px;margin:0 0 4px}
+  .tag{display:inline-block;background:#fff7ed;color:var(--c3);border-radius:6px;padding:2px 10px;font-size:13px;margin-bottom:18px}
+  h2{font-size:20px;margin:34px 0 12px;padding-left:10px;border-left:4px solid var(--c3)}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--c5)}
+  p{color:var(--sub);margin:8px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0;box-shadow:0 1px 3px rgba(20,30,60,.04)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#f0f3f8;font-weight:600}
+  td code{background:#eef1f6;padding:1px 6px;border-radius:4px;font-size:12.5px;color:#b4327a}
+  .layer{display:flex;gap:0;flex-wrap:wrap;margin:6px 0}
+  .layer .lname{writing-mode:vertical-rl;transform:rotate(180deg);background:#1f2430;color:#fff;
+       display:flex;align-items:center;justify-content:center;font-size:13px;padding:8px 4px;border-radius:8px 0 0 8px;min-width:34px}
+  .layer .lbody{flex:1;display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:#fff;border:1px solid var(--line);border-left:none;border-radius:0 8px 8px 0}
+  .box{border-radius:8px;padding:8px 11px;font-size:13px;color:#fff;min-width:120px}
+  .b1{background:var(--c1)}.b2{background:var(--c2)}.b3{background:var(--c3)}.b4{background:var(--c4)}
+  .b5{background:var(--c5)}.b6{background:var(--c6)}.b7{background:#475569}
+  .flow{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px}
+  .flow .step{display:flex;align-items:center;gap:10px;margin:6px 0}
+  .flow .num{width:26px;height:26px;border-radius:50%;background:var(--c3);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+  .muted{color:#8a93a3;font-size:13px}
+  ul{margin:8px 0;padding-left:22px;color:var(--sub)}
+  li{margin:4px 0}
+  .pill{display:inline-block;background:#fff7ed;color:var(--c3);border:1px solid #fed7aa;border-radius:999px;padding:1px 9px;font-size:12px;margin:2px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>浏览器 2.0 技术构架</h1>
+  <span class="tag">ZorvAI · 内置 AI 浏览器（GeckoView 内核 + 自动化）</span>
+
+  <h2>一、构架介绍</h2>
+  <div class="card">
+    <p><b>浏览器 2.0</b> 是 ZorvAI 内置的新一代 AI 浏览器：以 <b>GeckoView</b>（Mozilla 开源引擎，独立于系统 WebView、版本可控、扩展性强）为内核，叠加「AI 理解 + 自动化操作」能力，让浏览器从「看网页」升级为「替用户办事」的 Agent 入口。</p>
+    <p>它脱胎于项目内的 TitaniumBrowser 参考实现，并对接 <code>agent-browser</code> 技能与 <code>browser_act</code> 动作引擎，支持页面总结、问答、表单填写、点击导航、截图理解等任务，结果回流到 ZorvAI 对话框与数字人。</p>
+    <ul>
+      <li><b>双内核兜底</b>：主力 GeckoView，低端机或受限环境回退系统 WebView，保证可用性。</li>
+      <li><b>AI 原生</b>：页面 DOM / 视觉双通道理解，配合 LLM 做总结、抽取、决策。</li>
+      <li><b>自动化闭环</b>：<code>browser_act</code> 把「打开→定位→操作→取数」串成可重放动作流。</li>
+      <li><b>跨模块联动</b>：可被语音指令驱动、被技能/MCP 唤起、与终端 4.0 协同（网页端命令 → 本地执行）。</li>
+    </ul>
+  </div>
+
+  <h2>二、技术构架（分层）</h2>
+  <div class="card">
+    <div class="layer"><div class="lname">L6 服务</div><div class="lbody">
+      <div class="box b7">后台下载 / 推送</div>
+      <div class="box b7">保活 / 常驻</div>
+      <div class="box b7">跨设备同步</div>
+    </div></div>
+    <div class="layer"><div class="lname">L5 联动</div><div class="lbody">
+      <div class="box b4">语音驱动浏览</div>
+      <div class="box b4">技能 / MCP 唤起</div>
+      <div class="box b4">终端4.0 协同</div>
+      <div class="box b4">对话框 / 数字人回显</div>
+    </div></div>
+    <div class="layer"><div class="lname">L4 安全</div><div class="lbody">
+      <div class="box b2">追踪 / 广告拦截</div>
+      <div class="box b2">权限管理</div>
+      <div class="box b2">无痕模式</div>
+      <div class="box b2">安全浏览 / 反钓鱼</div>
+    </div></div>
+    <div class="layer"><div class="lname">L3 AI</div><div class="lbody">
+      <div class="box b6">browser_act 动作引擎</div>
+      <div class="box b6">agent-browser 技能</div>
+      <div class="box b6">页面理解 (DOM/视觉)</div>
+      <div class="box b6">总结 / 翻译 / 抽取</div>
+      <div class="box b6">截图理解</div>
+    </div></div>
+    <div class="layer"><div class="lname">L2 界面</div><div class="lbody">
+      <div class="box b3">Compose 浏览器 UI</div>
+      <div class="box b3">标签条 / 工具栏</div>
+      <div class="box b3">阅读模式 / 页内查找</div>
+      <div class="box b3">下载管理</div>
+    </div></div>
+    <div class="layer"><div class="lname">L1 核心</div><div class="lbody">
+      <div class="box b5">SessionManager (多标签)</div>
+      <div class="box b5">NavigationController</div>
+      <div class="box b5">历史 / 书签</div>
+      <div class="box b5">Cookie / 存储</div>
+    </div></div>
+    <div class="layer"><div class="lname">L0 内核</div><div class="lbody">
+      <div class="box b1">GeckoView (Mozilla)</div>
+      <div class="box b1">System WebView (兜底)</div>
+      <div class="box b1">网络栈 / 缓存</div>
+    </div></div>
+  </div>
+
+  <h2>三、核心组件</h2>
+  <div class="card">
+    <table>
+      <tr><th>组件</th><th>职责</th><th>说明</th></tr>
+      <tr><td><b>GeckoView</b></td><td>渲染内核</td><td>官方仓库 <code>maven.mozilla.org</code>，独立于系统 WebView</td></tr>
+      <tr><td><b>SessionManager</b></td><td>多标签会话</td><td>每个标签一个 GeckoSession，生命周期管理</td></tr>
+      <tr><td><b>browser_act</b></td><td>自动化动作引擎</td><td>open / click / fill / extract / screenshot 标准化动作</td></tr>
+      <tr><td><b>agent-browser</b></td><td>浏览器操控技能</td><td>把自然语言转为 browser_act 动作流</td></tr>
+      <tr><td><b>页面理解</b></td><td>DOM + 视觉双通道</td><td>抽取可交互元素，供 AI 决策</td></tr>
+      <tr><td><b>隐私拦截</b></td><td>追踪 / 广告过滤</td><td>规则订阅 + 无痕模式</td></tr>
+    </table>
+  </div>
+
+  <h2>四、关键流程（一次 AI 自动填表）</h2>
+  <div class="card">
+    <div class="flow">
+      <div class="step"><span class="num">1</span><span><b>唤起</b>：语音 / 对话框指令 → 浏览器 2.0 打开目标页（GeckoView Session）</span></div>
+      <div class="step"><span class="num">2</span><span><b>理解</b>：页面理解模块抽取 DOM 可交互元素 + 截图视觉校验</span></div>
+      <div class="step"><span class="num">3</span><span><b>规划</b>：LLM 生成 browser_act 动作序列（定位字段→填值→提交）</span></div>
+      <div class="step"><span class="num">4</span><span><b>执行</b>：agent-browser 逐动作回放，必要时视觉纠偏</span></div>
+      <div class="step"><span class="num">5</span><span><b>取数</b>：结果页抽取 → 总结回对话框 / 数字人</span></div>
+      <div class="step"><span class="num">6</span><span><b>联动</b>：如需本地处理，转 terminal_exec 走终端 4.0</span></div>
+    </div>
+  </div>
+
+  <h2>五、与系统其它模块的关系</h2>
+  <div class="card">
+    <p class="muted">浏览器 2.0 是 ZorvAI 的「行动入口」之一：</p>
+    <p>
+      <span class="pill">终端4.0：网页取数 → 本地命令处理</span>
+      <span class="pill">技能 Skills：浏览器类技能复用 agent-browser</span>
+      <span class="pill">MCP：浏览器触发连接器（飞书/云盘…）</span>
+      <span class="pill">语音服务：语音指令驱动浏览与填表</span>
+      <span class="pill">数字人：浏览结果口播 / 演示</span>
+    </p>
+  </div>
+</div>
+</body>
+</html>

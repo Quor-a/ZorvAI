@@ -3,7 +3,6 @@ package com.ai.assistance.quro.core.plugin
 import android.content.Context
 import android.util.Log
 import com.ai.assistance.quro.build.BuildEngine
-import org.json.JSONObject
 import java.io.File
 
 /**
@@ -19,13 +18,12 @@ import java.io.File
  * **完全复用构建台**（[BuildEngine] 的进程内 apksig，V1 / V2 / V3 全开），
  * 不另写一套签名逻辑，也不依赖电脑上的 apksigner。
  *
- * ## 密钥从哪来（三选一，从上往下兜底）
- * 1. 用户在插件页「选择密钥库」手动指定（落盘到 `filesDir/plugin_sign/<原名>`）；
- * 2. 首次加载时若本页没配过，**自动继承构建台** `filesDir/buildproject/project_config.json`
- *    里 `signing` 段已配好的 keystore / 别名 / 密码；
- * 3. **内置宿主密钥** —— APK 自带 `assets/keystore/zorvai_release.bks`，首次使用时释放到
- *    `filesDir/plugin_sign/`。**这条是默认兜底**：只要前两条都没配好，就自动用它，
- *    用户什么都不用做，导入插件即可补签成功。
+ * ## 密钥从哪来
+ * 导入补签**只使用内置宿主密钥**（APK 自带 `assets/keystore/zorvai_release.bks`），
+ * 首次使用时释放到 `filesDir/plugin_sign/`。
+ *
+ * 为什么不做自定义密钥库：插件必须和宿主**同签名**才能被加载，第三方密钥签出来的包
+ * 即使补签成功也过不了同签名闸门，所以 UI 只保留「开 / 关」开关，开启即自动用内置密钥。
  *
  * ### 关于「内置密钥」的取舍
  * 这把密钥**只用于证明「插件出自本机构建」**，是同签名闸门的比对基准，
@@ -56,9 +54,6 @@ object PluginSigning {
     private const val K_STORE_PASS = "store_password"
     private const val K_KEY_PASS = "key_password"
     private const val K_SEEDED = "seeded_from_build"
-
-    /** 构建台工程根目录（与 ProjectViewModel 保持一致） */
-    private const val BUILD_PROJECT = "buildproject"
 
     // ===== 内置宿主密钥 =====
     /**
@@ -124,25 +119,29 @@ object PluginSigning {
             storePassword = p.getString(K_STORE_PASS, "").orEmpty(),
             keyPassword = p.getString(K_KEY_PASS, "").orEmpty(),
         )
-        // 首次进入（本页从未配置过）：
-        // 优先继承构建台；构建台也没配 → 直接用内置宿主密钥（零配置可用）
+        val builtIn = builtInFiles(context).firstOrNull()
+        // 首次进入：直接用内置宿主密钥（零配置可用）
         if (!p.getBoolean(K_SEEDED, false)) {
-            val inherited = seedFromBuildProject(context)
-            cfg = if (inherited != null) {
-                Log.i(TAG, "已继承构建台签名配置：${inherited.keystorePath}")
+            cfg = if (builtIn != null) {
                 cfg.copy(
                     enabled = true,
-                    keystorePath = inherited.keystorePath,
-                    alias = inherited.alias.ifBlank { cfg.alias },
-                    storePassword = inherited.storePassword,
-                    keyPassword = inherited.keyPassword,
+                    keystorePath = builtIn.absolutePath,
+                    alias = BUILTIN_ALIAS,
+                    storePassword = BUILTIN_PASSWORD,
+                    keyPassword = BUILTIN_PASSWORD,
                 )
-            } else {
-                val builtIn = useBuiltIn(context, cfg)
-                Log.i(TAG, "未配置签名，自动启用内置宿主密钥：${builtIn.keystorePath}")
-                builtIn
-            }
+            } else cfg
             p.edit().putBoolean(K_SEEDED, true).apply()
+            save(context, cfg)
+        }
+        // 强制迁移到内置密钥：旧自定义配置不再生效；插件只接受宿主同签名
+        if (builtIn != null && cfg.keystorePath != builtIn.absolutePath) {
+            cfg = cfg.copy(
+                keystorePath = builtIn.absolutePath,
+                alias = BUILTIN_ALIAS,
+                storePassword = BUILTIN_PASSWORD,
+                keyPassword = BUILTIN_PASSWORD,
+            )
             save(context, cfg)
         }
         // 每次加载都自愈：开关开着但密钥库被删/路径失效 → 回落到内置，不让用户卡在无效配置上
@@ -250,26 +249,4 @@ object PluginSigning {
         return "补签未成功：${errors.joinToString(" ｜ ")}"
     }
 
-    /** 从构建台 `buildproject/project_config.json` 的 signing 段继承；没配自定义签名则返回 null */
-    private fun seedFromBuildProject(context: Context): Config? {
-        return try {
-            val f = File(File(context.filesDir, BUILD_PROJECT), "project_config.json")
-            if (!f.exists()) return null
-            val s = JSONObject(f.readText()).optJSONObject("signing") ?: return null
-            if (!s.optBoolean("useCustom", false)) return null
-            if (s.isNull("keystorePath")) return null
-            val path = s.optString("keystorePath", "")
-            if (path.isBlank() || !File(path).exists()) return null
-            Config(
-                enabled = true,
-                keystorePath = File(path).absolutePath,
-                alias = s.optString("alias", "zorvai"),
-                storePassword = s.optString("storePassword", ""),
-                keyPassword = s.optString("keyPassword", ""),
-            )
-        } catch (e: Throwable) {
-            Log.w(TAG, "读取构建台签名配置失败", e)
-            null
-        }
-    }
 }

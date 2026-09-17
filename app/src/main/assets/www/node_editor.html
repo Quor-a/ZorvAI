@@ -42,10 +42,11 @@
   }
   button.tb:hover { border-color: var(--accent); }
   button.tb.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.tb.run { background: #2ecc71; border-color: #2ecc71; color: #06281a; font-weight: 600; }
   button.tb.warn { border-color: var(--danger); color: var(--danger); }
   select.tb {
     background: var(--node); color: var(--text); border: 1px solid var(--node-border);
-    border-radius: 8px; padding: 7px 8px; font-size: 13px;
+    border-radius: 8px; padding: 7px 8px; font-size: 13px; max-width: 150px;
   }
 
   /* 画布 */
@@ -64,11 +65,12 @@
   #edges path { stroke: var(--edge); stroke-width: 2.5; fill: none; }
   #edges path.sel { stroke: var(--danger); stroke-width: 3; }
   #edges path.temp { stroke: var(--accent); stroke-dasharray: 5 4; }
+  #edges text.elabel { fill: var(--muted); font-size: 11px; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
 
   .node {
-    position: absolute; z-index: 2; min-width: 120px; max-width: 220px;
+    position: absolute; z-index: 2; min-width: 130px; max-width: 230px;
     background: var(--node); border: 1.5px solid var(--node-border);
-    border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.35);
+    border-left-width: 5px; border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.35);
     cursor: grab;
   }
   .node.sel { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79,140,255,.35), 0 4px 14px rgba(0,0,0,.35); }
@@ -83,10 +85,10 @@
     min-height: 20px; outline: none; word-break: break-word;
   }
   .node .body[contenteditable="true"] { background: #11151d; cursor: text; }
-  .node.decision { border-color: var(--accent2); }
-  .node.decision .hd .tag { background: rgba(245,166,35,.18); color: var(--accent2); }
   .node.start, .node.end { border-color: #43c59e; }
   .node.start .hd .tag, .node.end .hd .tag { background: rgba(67,197,158,.18); color: #43c59e; }
+  .node.end { border-color: var(--danger); }
+  .node.end .hd .tag { background: rgba(229,72,77,.18); color: var(--danger); }
 
   .port {
     position: absolute; width: 14px; height: 14px; border-radius: 50%;
@@ -97,10 +99,57 @@
   .port.out { right: -8px; cursor: crosshair; border-color: var(--accent2); }
   .port.out:hover { background: var(--accent2); }
 
+  /* 右侧属性面板 */
+  #props {
+    position: absolute; top: 0; right: 0; width: 290px; max-width: 88%; height: 100%;
+    background: var(--panel); border-left: 1px solid var(--node-border);
+    display: flex; flex-direction: column; z-index: 30;
+    transform: translateX(100%); transition: transform .18s ease;
+    box-shadow: -6px 0 24px rgba(0,0,0,.45);
+  }
+  #props.show { transform: translateX(0); }
+  #props .phd {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; border-bottom: 1px solid var(--node-border); font-size: 13px;
+  }
+  #props .phd .x { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; line-height: 1; }
+  #props .pbody { padding: 10px 12px; overflow: auto; flex: 1; }
+  .fld { margin-bottom: 12px; }
+  .fld > label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .fld input, .fld select, .fld textarea {
+    width: 100%; background: #11151d; color: var(--text); border: 1px solid var(--node-border);
+    border-radius: 8px; padding: 7px 8px; font-size: 13px; font-family: inherit;
+  }
+  .fld textarea { min-height: 60px; resize: vertical; }
+  .fld .hint { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+  .fld.chk { display: flex; align-items: center; gap: 8px; }
+  .fld.chk > label { margin: 0; }
+  .fld.chk input { width: auto; }
+  .pnote { font-size: 12px; color: var(--muted); line-height: 1.5; background: #11151d; border: 1px solid var(--node-border); border-radius: 8px; padding: 8px 10px; }
+
+  /* 连线槽位选择菜单 */
+  #edgeMenu {
+    position: fixed; z-index: 60; background: var(--panel); border: 1px solid var(--node-border);
+    border-radius: 10px; padding: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.5); max-width: 240px;
+    display: none;
+  }
+  #edgeMenu .et { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  #edgeMenu .opt {
+    display: block; width: 100%; text-align: left; background: var(--node); color: var(--text);
+    border: 1px solid var(--node-border); border-radius: 8px; padding: 7px 10px; font-size: 13px;
+    margin-bottom: 5px; cursor: pointer;
+  }
+  #edgeMenu .opt:hover { border-color: var(--accent); }
+  #edgeMenu .opt.err { border-color: var(--danger); color: var(--danger); }
+  #edgeMenu input.case {
+    width: 100%; background: #11151d; color: var(--text); border: 1px solid var(--node-border);
+    border-radius: 8px; padding: 6px 8px; font-size: 13px; margin-bottom: 5px;
+  }
+
   /* 底部 Mermaid 面板 */
   #bottom {
     flex: 0 0 auto; background: var(--panel); border-top: 1px solid var(--node-border);
-    display: flex; flex-direction: column; max-height: 42%;
+    display: flex; flex-direction: column; max-height: 38%;
   }
   #bottom .tabbar { display: flex; gap: 4px; padding: 6px 8px 0; }
   #bottom .tab {
@@ -113,15 +162,13 @@
   #mermaidSrc {
     flex: 1; width: 100%; resize: none; background: #11151d; color: var(--text);
     border: 1px solid var(--node-border); border-radius: 8px; padding: 8px;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px;
-    line-height: 1.5;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5;
   }
   #previewWrap { flex: 1; overflow: auto; background: #fff; border-radius: 8px; padding: 8px; }
   #previewWrap .err { color: #e5484d; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
   #previewWrap svg { max-width: 100%; height: auto; display: block; }
   .hint { font-size: 11px; color: var(--muted); padding: 2px 4px; }
 
-  /* 浮动提示 */
   #toast {
     position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
     background: rgba(0,0,0,.82); color: #fff; padding: 8px 14px; border-radius: 10px;
@@ -135,14 +182,13 @@
 <div id="app">
   <div id="toolbar">
     <div class="group">
-      <select id="nodeType" class="tb">
-        <option value="start">开始</option>
-        <option value="process" selected>处理</option>
-        <option value="decision">判断</option>
-        <option value="io">输入/输出</option>
-        <option value="end">结束</option>
-      </select>
+      <select id="nodeType" class="tb"></select>
       <button class="tb primary" id="addBtn">+ 添加节点</button>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <button class="tb run" id="runBtn">▶ 运行</button>
+      <button class="tb" id="copyWfBtn">复制工作流</button>
     </div>
     <div class="sep"></div>
     <div class="group">
@@ -153,7 +199,7 @@
     <div class="sep"></div>
     <div class="group">
       <button class="tb" id="copyBtn">复制 Mermaid</button>
-      <button class="tb" id="saveBtn">保存到文件</button>
+      <button class="tb" id="saveBtn">保存工作流</button>
     </div>
     <div class="sep"></div>
     <div class="group">
@@ -189,6 +235,18 @@
       <div id="previewWrap"><div class="hint">点「刷新预览」渲染当前 Mermaid 源码</div></div>
     </div>
   </div>
+
+  <!-- 右侧属性面板 -->
+  <div id="props">
+    <div class="phd"><span id="propTitle">属性</span><button class="x" id="propClose">✕</button></div>
+    <div class="pbody" id="propBody"></div>
+  </div>
+
+  <!-- 连线槽位菜单 -->
+  <div id="edgeMenu">
+    <div class="et" id="edgeMenuTitle"></div>
+    <div id="edgeMenuOpts"></div>
+  </div>
 </div>
 <div id="toast"></div>
 <input type="file" id="projFile" accept=".qne,application/json,.json" style="display:none">
@@ -205,13 +263,117 @@
   var previewWrap = document.getElementById('previewWrap');
   var toastEl = document.getElementById('toast');
 
-  var nodes = [];   // {id, type, x, y, label}
-  var edges = [];   // {id, from, to}
+  var nodes = [];   // {id, type, x, y, label, params:{}, onError}
+  var edges = [];   // {id, from, to, slot}
   var seq = 1;
   var selectedNode = null;
   var selectedEdge = null;
+  var flowName = 'default';
 
-  var TYPE_LABEL = { start: '开始', process: '处理', decision: '判断', io: '输入/输出', end: '结束' };
+  // ── 节点类型定义（15 个真实节点 + start/end 可视化标记）──
+  var TYPE_LIST = [
+    { v: 'start', t: '开始（入口）' },
+    { v: 'end', t: '结束（出口）' },
+    { v: 'http', t: 'HTTP 请求' },
+    { v: 'note', t: '备注' },
+    { v: 'wait', t: '延时等待' },
+    { v: 'open_app', t: '启动应用' },
+    { v: 'broadcast', t: '发送广播' },
+    { v: 'notify', t: '本地通知' },
+    { v: 'file', t: '文件读写' },
+    { v: 'condition', t: '条件分支' },
+    { v: 'switch', t: '多路分支' },
+    { v: 'loop', t: '循环' },
+    { v: 'parallel', t: '并行扇出' },
+    { v: 'open_media', t: '打开媒体' },
+    { v: 'play_media', t: '播放媒体' },
+    { v: 'capture_photo', t: '拍照' },
+    { v: 'ai', t: 'AI 推理' },
+    { v: 'extract', t: '数据抽取' },
+    { v: 'exec', t: '通用执行' }
+  ];
+  var TYPE_LABEL = {};
+  TYPE_LIST.forEach(function (o) { TYPE_LABEL[o.v] = o.t; });
+  var TYPE_COLOR = {
+    http: '#4f8cff', note: '#8a93a6', wait: '#f5a623', open_app: '#43c59e', broadcast: '#b388ff',
+    notify: '#ff7eb6', file: '#5bc0eb', condition: '#f5a623', switch: '#f5a623', loop: '#f5a623',
+    parallel: '#43c59e', open_media: '#5bc0eb', play_media: '#5bc0eb', capture_photo: '#5bc0eb',
+    ai: '#4f8cff', start: '#43c59e', end: '#e5484d',
+    extract: '#9b59b6', exec: '#e67e22'
+  };
+
+  // ── 每种节点的参数表单 schema ──
+  var NODE_SCHEMA = {
+    http: { fields: [
+      { key: 'url', label: 'URL', type: 'text', ph: 'https://api.example.com/x', req: true },
+      { key: 'method', label: '方法', type: 'select', opts: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], def: 'GET' },
+      { key: 'headers', label: '请求头 (JSON)', type: 'textarea', def: '{}' },
+      { key: 'body', label: '请求体', type: 'textarea' },
+      { key: 'out', label: '响应存入变量', type: 'text', ph: 'resp' }
+    ] },
+    note: { fields: [ { key: 'text', label: '备注内容', type: 'textarea', req: true } ] },
+    wait: { fields: [ { key: 'ms', label: '延时 (毫秒)', type: 'number', def: '1000' } ] },
+    open_app: { fields: [ { key: 'package', label: '应用包名', type: 'text', ph: 'com.android.chrome', req: true } ] },
+    broadcast: { fields: [
+      { key: 'action', label: '广播 Action', type: 'text', ph: 'com.example.ACTION', req: true },
+      { key: 'extras', label: '附加数据 (JSON)', type: 'textarea' },
+      { key: 'ordered', label: '有序广播', type: 'checkbox', def: false }
+    ] },
+    notify: { fields: [
+      { key: 'title', label: '标题', type: 'text', def: '工作流通知' },
+      { key: 'body', label: '内容', type: 'text' }
+    ] },
+    file: { fields: [
+      { key: 'path', label: '文件路径', type: 'text', req: true },
+      { key: 'mode', label: '模式', type: 'select', opts: ['read', 'write', 'append'], def: 'read' },
+      { key: 'content', label: '写入内容', type: 'textarea' },
+      { key: 'out', label: '读取结果存入变量', type: 'text' }
+    ] },
+    condition: { fields: [ { key: 'expr', label: '条件表达式', type: 'text', ph: 'resp != "" && n > 1', req: true, hint: '支持变量与比较/逻辑运算，如 a > 1 && b == "ok"' } ],
+      note: '从本节点拉出两条线，分别设为「是 / 否」分支。' },
+    switch: { fields: [ { key: 'value', label: '取值表达式', type: 'text', ph: '${type} 或字面量', req: true, hint: '按取值匹配出边标签；未命中走「默认分支」' } ],
+      note: '从本节点拉出多条线，每条线输入一个取值标签（如 case_a），或设为「默认分支 / 失败跳转」。' },
+    loop: { fields: [
+      { key: 'mode', label: '循环模式', type: 'select', opts: ['count', 'while'], def: 'count' },
+      { key: 'count', label: '次数 (count)', type: 'number', def: '3', showIf: { key: 'mode', val: 'count' } },
+      { key: 'while', label: '条件 (while)', type: 'text', ph: 'i < 10', showIf: { key: 'mode', val: 'while' } }
+    ], note: '拉出两条线，分别设为「循环体 / 退出」。' },
+    parallel: { fields: [], note: '本节点的所有出边将并发执行（扇出子节点）。' },
+    open_media: { fields: [ { key: 'target', label: '媒体地址 (URL 或本地路径)', type: 'text', req: true } ] },
+    play_media: { fields: [ { key: 'target', label: '媒体地址 (URL 或本地路径)', type: 'text', req: true } ] },
+    capture_photo: { fields: [ { key: 'path', label: '保存路径', type: 'text', ph: 'Pictures/shot.jpg' } ] },
+    ai: { fields: [
+      { key: 'prompt', label: '提示词', type: 'textarea', req: true },
+      { key: 'system', label: '系统提示', type: 'textarea' },
+      { key: 'temperature', label: '温度', type: 'number', def: '0.7' },
+      { key: 'maxTokens', label: '最大 Token', type: 'number', def: '1024' },
+      { key: 'out', label: '回复存入变量', type: 'text', ph: 'ai_out' }
+    ], note: 'AI 节点需要先在「设置」配置模型 API Key。' },
+    extract: { fields: [
+      { key: 'op', label: '抽取方式', type: 'select', opts: ['regex', 'json', 'substring', 'concat', 'random'], def: 'regex', req: true },
+      { key: 'text', label: '源文本', type: 'textarea', hint: 'regex / json / substring 的源文本' },
+      { key: 'pattern', label: '正则 (regex)', type: 'text', ph: '(\\d+)', showIf: { key: 'op', val: 'regex' } },
+      { key: 'group', label: '捕获组 (regex)', type: 'number', def: '0', showIf: { key: 'op', val: 'regex' } },
+      { key: 'global', label: '匹配全部 (regex)', type: 'checkbox', def: false, showIf: { key: 'op', val: 'regex' } },
+      { key: 'path', label: 'JSON 路径 (json)', type: 'text', ph: 'a.b.0.c', showIf: { key: 'op', val: 'json' } },
+      { key: 'start', label: '起始 (substring)', type: 'number', def: '0', showIf: { key: 'op', val: 'substring' } },
+      { key: 'len', label: '长度 (substring)', type: 'number', def: '0', showIf: { key: 'op', val: 'substring' } },
+      { key: 'parts', label: '片段 (concat, | 分隔)', type: 'text', showIf: { key: 'op', val: 'concat' } },
+      { key: 'sep', label: '分隔符 (concat)', type: 'text', def: '', showIf: { key: 'op', val: 'concat' } },
+      { key: 'min', label: '下限 (random)', type: 'number', def: '0', showIf: { key: 'op', val: 'random' } },
+      { key: 'max', label: '上限 (random)', type: 'number', def: '1000', showIf: { key: 'op', val: 'random' } },
+      { key: 'out', label: '结果存入变量', type: 'text', req: true, ph: 'data' }
+    ], note: '从文本 / JSON 中抽取值或生成随机量，写入 out 变量供后续节点（如 HTTP body / 条件）消费。' },
+    exec: { fields: [
+      { key: 'mode', label: '执行方式', type: 'select', opts: ['js', 'tool'], def: 'js', req: true },
+      { key: 'code', label: 'JS 代码 (js)', type: 'textarea', hint: 'console.log 输出即结果；走设备端 QuickJS 沙箱', showIf: { key: 'mode', val: 'js' } },
+      { key: 'tool', label: '工具名 (tool)', type: 'text', ph: 'http_request', showIf: { key: 'mode', val: 'tool' } },
+      { key: 'args', label: '工具参数 JSON (tool)', type: 'textarea', def: '{}', showIf: { key: 'mode', val: 'tool' } },
+      { key: 'out', label: '结果存入变量', type: 'text', ph: 'result' }
+    ], note: '通用执行：js=端侧 QuickJS 沙箱跑 JS（console.log 输出即结果）；tool=调用已注册 AI 工具（如 http_request）。结果写入 out 变量。' },
+    start: { fields: [], note: '入口标记：连出的线指向第一个真实节点。' },
+    end: { fields: [], note: '结束标记：连入的线代表流程在此终止。' }
+  };
 
   function uid(p) { return p + (seq++); }
 
@@ -222,10 +384,15 @@
     toast._t = setTimeout(function () { toastEl.classList.remove('show'); }, 1600);
   }
 
+  function mk(type, x, y, label, params) {
+    return { id: uid('n'), type: type, x: x, y: y, label: label, params: params || {} };
+  }
+  function addEdge(a, b, slot) { edges.push({ id: uid('e'), from: a.id, to: b.id, slot: slot || 'next' }); }
+
   // ---------- 历史 / 持久化 / 导出 ----------
   var history = [];
   var hidx = -1;
-  function snapshot() { return JSON.stringify({ nodes: nodes, edges: edges, seq: seq }); }
+  function snapshot() { return JSON.stringify({ nodes: nodes, edges: edges, seq: seq, name: flowName }); }
   function pushHistory() {
     history = history.slice(0, hidx + 1);
     history.push(snapshot());
@@ -236,27 +403,27 @@
     try {
       var o = JSON.parse(s);
       nodes = o.nodes || []; edges = o.edges || [];
-      // 容错：AI 写入的快照可能缺 x/y，或把数字写成字符串（LLM JSON 偶发），统一转数值，避免节点错位/连线坐标 NaN
       nodes.forEach(function (n) {
         n.x = (typeof n.x === 'number' && !isNaN(n.x)) ? n.x : (parseFloat(n.x) || 0);
         n.y = (typeof n.y === 'number' && !isNaN(n.y)) ? n.y : (parseFloat(n.y) || 0);
+        n.params = n.params || {};
       });
-      // 让 seq 超过现有最大编号：AI 写入的工程可能不含 seq（文档约定只含 nodes/edges），
-      // 若直接按 o.seq||1 重置，新增节点会拿到已存在的 id（如 n1）造成画布重复/错乱。
+      edges.forEach(function (e) { if (!e.slot) e.slot = 'next'; });
+      if (o.name) flowName = o.name;
       var maxSeq = 0;
       nodes.forEach(function (n) {
         var m = /(\d+)$/.exec(n.id || '');
         if (m) { var v = parseInt(m[1], 10); if (v > maxSeq) maxSeq = v; }
       });
       seq = (typeof o.seq === 'number' && o.seq > maxSeq) ? o.seq : (maxSeq + 1);
-      selectedNode = null; selectedEdge = null; renderAll();
+      selectedNode = null; selectedEdge = null; renderAll(); openProps(null);
     } catch (_) {}
   }
   function commit() { pushHistory(); autosave(); }
   function undo() { if (hidx > 0) { hidx--; restore(history[hidx]); autosave(); toast('已撤销'); } }
   function redo() { if (hidx < history.length - 1) { hidx++; restore(history[hidx]); autosave(); toast('已重做'); } }
 
-  var LS_KEY = 'quro_node_editor_v1';
+  var LS_KEY = 'quro_node_editor_v2';
   function autosave() { try { localStorage.setItem(LS_KEY, snapshot()); } catch (_) {} }
   function loadLocal() {
     try {
@@ -295,6 +462,31 @@
     }, 350);
   }
 
+  // ---------- 节点摘要（显示在节点 body）----------
+  function nodeSummary(n) {
+    var p = n.params || {};
+    switch (n.type) {
+      case 'http': return (p.method || 'GET') + ' ' + (p.url || '(无URL)');
+      case 'note': return p.text || '(备注)';
+      case 'wait': return '延时 ' + (p.ms || '0') + 'ms';
+      case 'open_app': return '启动 ' + (p.package || '(包名)');
+      case 'broadcast': return '广播 ' + (p.action || '(action)');
+      case 'notify': return (p.title || '通知') + '：' + (p.body || '');
+      case 'file': return (p.mode || 'read') + ' ' + (p.path || '');
+      case 'condition': return 'if ' + (p.expr || '');
+      case 'switch': return 'switch ' + (p.value || '');
+      case 'loop': return 'loop[' + (p.mode || 'count') + '] ' + (p.count || p['while'] || '');
+      case 'parallel': return '并行 ×N';
+      case 'open_media': return '查看 ' + (p.target || '');
+      case 'play_media': return '播放 ' + (p.target || '');
+      case 'capture_photo': return '拍照 ' + (p.path || '');
+      case 'ai': return 'AI：' + (p.prompt || '(提示词)');
+      case 'extract': return '抽取[' + (p.op || 'regex') + '] → ' + (p.out || '');
+      case 'exec': return '执行[' + (p.mode || 'js') + '] ' + (p.tool || p.code || '');
+      default: return TYPE_LABEL[n.type] || n.type;
+    }
+  }
+
   // ---------- 节点渲染 ----------
   function renderNode(n) {
     var el = document.getElementById(n.id);
@@ -303,35 +495,30 @@
       el.className = 'node ' + n.type;
       el.id = n.id;
       el.dataset.id = n.id;
+      el.style.borderLeftColor = TYPE_COLOR[n.type] || 'var(--node-border)';
       el.innerHTML =
         '<div class="hd"><span class="ttl">' + TYPE_LABEL[n.type] + '</span><span class="tag">' + n.type + '</span></div>' +
         '<div class="body" contenteditable="false"></div>' +
         '<div class="port in"></div>' +
         '<div class="port out"></div>';
       canvas.appendChild(el);
+      el.querySelector('.body').textContent = nodeSummary(n);
 
-      el.querySelector('.body').textContent = n.label;
-
-      // 拖拽
       el.addEventListener('pointerdown', function (e) {
         if (e.target.classList.contains('port')) return;
         if (e.target.classList.contains('body') && e.target.getAttribute('contenteditable') === 'true') return;
         startDrag(e, n);
       });
-      // 连线起点
       el.querySelector('.port.out').addEventListener('pointerdown', function (e) {
         e.stopPropagation(); startConnect(e, n);
       });
-      // 连线终点（在节点任意位置松开都算接到该节点）
       el.addEventListener('pointerup', function (e) {
         if (connecting) finishConnect(n);
       });
-      // 选中
       el.addEventListener('pointerdown', function (e) {
         if (e.target.classList.contains('port')) return;
         selectNode(n);
       });
-      // 双击改名
       el.querySelector('.body').addEventListener('dblclick', function (e) {
         e.stopPropagation();
         var b = el.querySelector('.body');
@@ -349,6 +536,7 @@
     }
     el.style.left = n.x + 'px';
     el.style.top = n.y + 'px';
+    el.querySelector('.body').textContent = nodeSummary(n);
     el.classList.toggle('sel', selectedNode === n.id);
   }
 
@@ -359,7 +547,6 @@
 
   function renderAll() {
     nodes.forEach(renderNode);
-    // 移除已删
     Array.prototype.slice.call(canvas.querySelectorAll('.node')).forEach(function (el) {
       if (!nodes.some(function (n) { return n.id === el.id; })) el.remove();
     });
@@ -368,7 +555,7 @@
 
   function portPoint(n, side) {
     var el = document.getElementById(n.id);
-    var w = el ? el.offsetWidth : 120;
+    var w = el ? el.offsetWidth : 130;
     var h = el ? el.offsetHeight : 44;
     return side === 'in'
       ? { x: n.x, y: n.y + h / 2 }
@@ -380,6 +567,22 @@
     return 'M ' + a.x + ' ' + a.y + ' C ' + (a.x + dx) + ' ' + a.y + ', ' + (b.x - dx) + ' ' + b.y + ', ' + b.x + ' ' + b.y;
   }
 
+  function edgeSlotLabel(slot) {
+    if (slot === 'error') return '✗ 失败';
+    if (slot === 'true') return '是';
+    if (slot === 'false') return '否';
+    if (slot === 'body') return '循环体';
+    if (slot === 'exit') return '退出';
+    if (slot === 'default') return '默认';
+    if (slot === 'next' || slot === 'child' || !slot) return '';
+    return slot; // switch 取值标签
+  }
+  function edgeColor(slot) {
+    if (slot === 'error') return 'var(--danger)';
+    if (slot === 'next' || slot === 'child' || !slot) return 'var(--edge)';
+    return 'var(--accent2)';
+  }
+
   function renderEdges() {
     var byId = {};
     nodes.forEach(function (n) { byId[n.id] = n; });
@@ -388,25 +591,80 @@
       var from = byId[e.from], to = byId[e.to];
       if (!from || !to) return;
       var a = portPoint(from, 'out'), b = portPoint(to, 'in');
-      html += '<path data-id="' + e.id + '" class="' + (selectedEdge === e.id ? 'sel' : '') + '" d="' + edgePath(a, b) + '"></path>';
+      var col = edgeColor(e.slot);
+      var sel = selectedEdge === e.id ? ' sel' : '';
+      html += '<path data-id="' + e.id + '" class="' + sel + '" stroke="' + col + '" d="' + edgePath(a, b) + '"></path>';
+      var lbl = edgeSlotLabel(e.slot);
+      if (lbl) {
+        var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        html += '<text class="elabel" x="' + mx + '" y="' + (my - 4) + '" text-anchor="middle">' + lbl + '</text>';
+      }
     });
     if (connecting && connectTemp) {
       html += '<path class="temp" d="' + edgePath(connectTemp.from, connectTemp.to) + '"></path>';
     }
     edgesSvg.innerHTML = html;
-    // 边点击选中
     Array.prototype.slice.call(edgesSvg.querySelectorAll('path')).forEach(function (p) {
       p.style.pointerEvents = 'stroke';
       p.addEventListener('pointerdown', function (ev) {
         ev.stopPropagation();
-        selectedEdge = p.dataset.id; selectedNode = null; renderAll();
+        selectedEdge = p.dataset.id; selectedNode = null; openProps(null); renderAll();
       });
     });
   }
 
   // ---------- 选择 / 删除 ----------
-  function selectNode(n) { selectedNode = n.id; selectedEdge = null; renderAll(); }
-  function clearSelect() { selectedNode = null; selectedEdge = null; renderAll(); }
+  function selectNode(n) { selectedNode = n ? n.id : null; selectedEdge = null; renderAll(); openProps(n); }
+  function clearSelect() { selectedNode = null; selectedEdge = null; renderAll(); openProps(null); }
+
+  // ---------- 属性面板 ----------
+  var propsEl = document.getElementById('props');
+  var propTitle = document.getElementById('propTitle');
+  var propBody = document.getElementById('propBody');
+  function openProps(n) {
+    if (!n) { propsEl.classList.remove('show'); return; }
+    var schema = NODE_SCHEMA[n.type] || { fields: [] };
+    propTitle.textContent = (TYPE_LABEL[n.type] || n.type) + ' · ' + n.id;
+    var html = '';
+    (schema.fields || []).forEach(function (f) {
+      if (f.showIf && n.params[f.showIf.key] !== f.showIf.val) return;
+      var val = (n.params[f.key] != null) ? n.params[f.key] : (f.def != null ? f.def : '');
+      if (f.type === 'select') {
+        html += '<div class="fld"><label>' + f.label + (f.req ? ' *' : '') + '</label><select data-k="' + f.key + '">';
+        f.opts.forEach(function (o) { html += '<option value="' + o + '"' + (o === val ? ' selected' : '') + '>' + o + '</option>'; });
+        html += '</select></div>';
+      } else if (f.type === 'textarea') {
+        html += '<div class="fld"><label>' + f.label + (f.req ? ' *' : '') + '</label><textarea data-k="' + f.key + '" placeholder="' + (f.ph || '') + '">' + escapeHtml('' + val) + '</textarea></div>';
+      } else if (f.type === 'checkbox') {
+        html += '<div class="fld chk"><input type="checkbox" data-k="' + f.key + '"' + (val === true || val === 'true' ? ' checked' : '') + '><label>' + f.label + '</label></div>';
+      } else {
+        html += '<div class="fld"><label>' + f.label + (f.req ? ' *' : '') + '</label><input type="' + (f.type === 'number' ? 'number' : 'text') + '" data-k="' + f.key + '" value="' + escapeHtml('' + val) + '" placeholder="' + (f.ph || '') + '"></div>';
+      }
+      if (f.hint) html += '<div class="fld"><div class="hint">' + f.hint + '</div></div>';
+    });
+    if (schema.note) html += '<div class="pnote">' + schema.note + '</div>';
+    if (!(schema.fields || []).length && !schema.note) html += '<div class="pnote">该节点无可配置参数。</div>';
+    propBody.innerHTML = html;
+    // 绑定输入
+    Array.prototype.slice.call(propBody.querySelectorAll('[data-k]')).forEach(function (inp) {
+      var ev = (inp.tagName === 'SELECT' || inp.type === 'checkbox') ? 'change' : 'change';
+      inp.addEventListener(ev, function () {
+        var k = inp.dataset.k;
+        var v = (inp.type === 'checkbox') ? (inp.checked ? 'true' : 'false') : inp.value;
+        n.params[k] = v;
+        // 同步 showIf 联动（如 loop mode 切换显示 count/while）
+        var schema2 = NODE_SCHEMA[n.type] || { fields: [] };
+        if (schema2.fields.some(function (x) { return x.showIf; })) { openProps(n); }
+        var el = document.getElementById(n.id);
+        if (el) el.querySelector('.body').textContent = nodeSummary(n);
+        commit();
+      });
+    });
+    propsEl.classList.add('show');
+  }
+  function escapeHtml(s) {
+    return ('' + s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
 
   // ---------- 拖拽 ----------
   var drag = null;
@@ -459,19 +717,89 @@
   function finishConnect(target) {
     if (!connectFrom || connectFrom.id === target.id) return;
     if (edges.some(function (e) { return e.from === connectFrom.id && e.to === target.id; })) {
-      toast('已存在该连线'); return;
+      toast('已存在该连线'); connectFrom = null; return;
     }
-    edges.push({ id: uid('e'), from: connectFrom.id, to: target.id });
+    var srcType = connectFrom.type;
+    var slot = (srcType === 'parallel') ? 'child' : 'next';
+    var e = { id: uid('e'), from: connectFrom.id, to: target.id, slot: slot };
+    edges.push(e);
     connectFrom = null;
     renderEdges();
+    if (srcType === 'start' || srcType === 'end' || srcType === 'parallel') {
+      if (srcType === 'parallel') toast('已添加并发子节点');
+      commit();
+      return;
+    }
+    openEdgeMenu(e, srcType);
     commit();
   }
 
+  // ---------- 连线槽位选择菜单 ----------
+  var edgeMenu = document.getElementById('edgeMenu');
+  var edgeMenuTitle = document.getElementById('edgeMenuTitle');
+  var edgeMenuOpts = document.getElementById('edgeMenuOpts');
+  function hideEdgeMenu() { edgeMenu.style.display = 'none'; }
+  function setSlot(e, slot) {
+    if (slot !== 'child') {
+      edges = edges.filter(function (x) { return !(x.from === e.from && x.slot === slot && x.id !== e.id); });
+    }
+    e.slot = slot;
+    renderEdges(); commit();
+    hideEdgeMenu();
+  }
+  function openEdgeMenu(e, srcType) {
+    edgeMenuTitle.textContent = '这条线代表：';
+    var opts = '';
+    if (srcType === 'condition') {
+      opts += '<button class="opt" data-slot="true">是（true）</button>';
+      opts += '<button class="opt" data-slot="false">否（false）</button>';
+      opts += '<button class="opt err" data-slot="error">失败跳转</button>';
+    } else if (srcType === 'loop') {
+      opts += '<button class="opt" data-slot="body">循环体</button>';
+      opts += '<button class="opt" data-slot="exit">退出</button>';
+      opts += '<button class="opt err" data-slot="error">失败跳转</button>';
+    } else if (srcType === 'switch') {
+      opts += '<input class="case" id="caseInput" placeholder="输入取值标签，如 case_a">';
+      opts += '<button class="opt" data-case="1">用该标签分支</button>';
+      opts += '<button class="opt" data-slot="default">默认分支</button>';
+      opts += '<button class="opt err" data-slot="error">失败跳转</button>';
+    } else {
+      opts += '<button class="opt" data-slot="next">默认后继</button>';
+      opts += '<button class="opt err" data-slot="error">失败跳转</button>';
+    }
+    edgeMenuOpts.innerHTML = opts;
+    Array.prototype.slice.call(edgeMenuOpts.querySelectorAll('.opt')).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.dataset.case) {
+          var v = document.getElementById('caseInput').value.trim();
+          if (!v) { toast('请先输入取值标签'); return; }
+          setSlot(e, v);
+        } else {
+          setSlot(e, btn.dataset.slot);
+        }
+      });
+    });
+    // 定位到连线中点
+    var from = nodes.find(function (n) { return n.id === e.from; });
+    var to = nodes.find(function (n) { return n.id === e.to; });
+    if (from && to) {
+      var a = portPoint(from, 'out'), b = portPoint(to, 'in');
+      var rect = canvas.getBoundingClientRect();
+      edgeMenu.style.left = (rect.left + (a.x + b.x) / 2) + 'px';
+      edgeMenu.style.top = (rect.top + (a.y + b.y) / 2) + 'px';
+    }
+    edgeMenu.style.display = 'block';
+  }
+  // 点击别处关闭菜单
+  window.addEventListener('pointerdown', function (ev) {
+    if (edgeMenu.style.display === 'block' && !edgeMenu.contains(ev.target)) hideEdgeMenu();
+  }, true);
+
   // ---------- 增删 ----------
   function addNode(type) {
-    var cx = stage.scrollLeft + stage.clientWidth / 2 - 70;
+    var cx = stage.scrollLeft + stage.clientWidth / 2 - 75;
     var cy = stage.scrollTop + stage.clientHeight / 2 - 30;
-    var n = { id: uid('n'), type: type, x: Math.max(0, cx), y: Math.max(0, cy), label: TYPE_LABEL[type] };
+    var n = mk(type, Math.max(0, cx), Math.max(0, cy), TYPE_LABEL[type]);
     nodes.push(n); selectNode(n);
     commit();
     toast('已添加：' + TYPE_LABEL[type]);
@@ -480,7 +808,7 @@
     if (selectedNode) {
       nodes = nodes.filter(function (n) { return n.id !== selectedNode; });
       edges = edges.filter(function (e) { return e.from !== selectedNode && e.to !== selectedNode; });
-      selectedNode = null; renderAll(); toast('已删除节点'); commit();
+      selectedNode = null; renderAll(); openProps(null); toast('已删除节点'); commit();
     } else if (selectedEdge) {
       edges = edges.filter(function (e) { return e.id !== selectedEdge; });
       selectedEdge = null; renderAll(); toast('已删除连线'); commit();
@@ -489,15 +817,74 @@
     }
   }
   function clearAll() {
-    nodes = []; edges = []; selectedNode = null; selectedEdge = null; renderAll();
+    nodes = []; edges = []; selectedNode = null; selectedEdge = null; renderAll(); openProps(null);
     srcArea.value = ''; toast('已清空');
     commit();
   }
 
-  // ---------- Mermaid 导入导出 ----------
-  function sanitizeId(id) {
-    return id.replace(/[^A-Za-z0-9_]/g, '_');
+  // ---------- 构建 Workflow JSON（供引擎执行）----------
+  function buildWorkflow() {
+    var realNodes = nodes.filter(function (n) { return n.type !== 'start' && n.type !== 'end'; });
+    if (!realNodes.length) return null;
+    var outEdges = {};
+    edges.forEach(function (e) { (outEdges[e.from] = outEdges[e.from] || []).push(e); });
+    var wfNodes = realNodes.map(function (n) {
+      var ne = outEdges[n.id] || [];
+      var params = n.params || {};
+      var next = null, onError = null, branches = {}, children = [];
+      if (n.type === 'parallel') {
+        ne.forEach(function (e) { if (e.to !== n.id) children.push(e.to); });
+      } else {
+        ne.forEach(function (e) {
+          if (e.to === n.id) return;
+          var slot = e.slot || 'next';
+          if (slot === 'error') onError = e.to;
+          else if (n.type === 'condition') { if (slot === 'true' || slot === 'false') branches[slot] = e.to; else if (slot === 'next') next = e.to; }
+          else if (n.type === 'loop') { if (slot === 'body' || slot === 'exit') branches[slot] = e.to; else if (slot === 'next') next = e.to; }
+          else if (n.type === 'switch') { if (slot && slot !== 'next' && slot !== 'error') branches[slot] = e.to; else if (slot === 'next') next = e.to; }
+          else next = e.to;
+        });
+      }
+      var o = { id: n.id, type: n.type };
+      Object.keys(params).forEach(function (k) { if (params[k] !== '' && params[k] != null) o[k] = params[k]; });
+      if (next) o.next = next;
+      if (onError) o.onError = onError;
+      if (n.type === 'condition' || n.type === 'switch' || n.type === 'loop') {
+        if (Object.keys(branches).length) o.branches = branches;
+      }
+      if (n.type === 'parallel' && children.length) o.children = children;
+      return o;
+    });
+    var startId = '';
+    var startMarker = nodes.find(function (n) { return n.type === 'start'; });
+    if (startMarker) {
+      var se = outEdges[startMarker.id];
+      if (se && se.length) startId = se[0].to;
+    }
+    if (!startId) startId = realNodes[0].id;
+    return {
+      id: 'wf_' + (flowName || 'default'),
+      name: (flowName || 'default'),
+      trigger: 'manual', schedule: '', enabled: true,
+      variables: [], start: startId, nodes: wfNodes
+    };
   }
+
+  function runWorkflow() {
+    var wf = buildWorkflow();
+    if (!wf) { toast('画布没有可运行的节点'); return; }
+    try {
+      if (window.AndroidBridge && AndroidBridge.runWorkflow) {
+        AndroidBridge.runWorkflow(JSON.stringify(wf));
+        toast('已提交运行，请在手机通知查看结果');
+      } else {
+        toast('当前环境不支持运行（需 App 内打开）');
+      }
+    } catch (e) { toast('运行失败：' + (e.message || e)); }
+  }
+
+  // ---------- Mermaid 导入导出 ----------
+  function sanitizeId(id) { return id.replace(/[^A-Za-z0-9_]/g, '_'); }
   function exportMermaid() {
     if (!nodes.length) { toast('画布为空'); return ''; }
     var lines = ['flowchart TD'];
@@ -505,7 +892,7 @@
     nodes.forEach(function (n) {
       var id = sanitizeId(n.id);
       var lbl = (n.label || TYPE_LABEL[n.type]).replace(/"/g, "'");
-      lines.push('  ' + id + shape[n.type] + '["' + lbl + '"]');
+      lines.push('  ' + id + (shape[n.type] || '[]') + '["' + lbl + '"]');
     });
     edges.forEach(function (e) {
       lines.push('  ' + sanitizeId(e.from) + ' --> ' + sanitizeId(e.to));
@@ -519,7 +906,6 @@
     if (!text) { toast('没有可导入的文本'); return; }
     var lines = text.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
     if (!lines.length) return;
-    // 去掉首行 graph/flowchart 声明
     var defs = {}, newEdges = [];
     var reDef = /^([A-Za-z0-9_]+)\s*(?:\[([^\]]*)\]|\(([^)]*)\)|\{([^}]*)\}|\[\(([^)]*)\)\]|\(\[([^\]]*)\]\))?/;
     var reEdge = /^([A-Za-z0-9_]+)\s*-+->\s*(?:\|([^|]*)\|\s*)?([A-Za-z0-9_]+)/;
@@ -531,36 +917,26 @@
       var dm = line.match(reDef);
       if (dm && dm[1]) {
         var lbl = dm[2] || dm[3] || dm[4] || dm[5] || dm[6] || dm[1];
-        defs[dm[1]] = lbl;
-        order.push(dm[1]);
+        defs[dm[1]] = lbl; order.push(dm[1]);
       }
     });
     if (!order.length) { toast('未解析到节点'); return; }
-    // 重建前先记录现有节点最大编号：历史里可能存有旧快照（undo 用），
-    // seq 从 max+1 继续，保证新生成的 id 与历史快照不重复，避免 renderNode 用 getElementById 复用旧 DOM
     var maxSeq = 0;
     nodes.forEach(function (n) { var mm = /(\d+)$/.exec(n.id || ''); if (mm) { var v = parseInt(mm[1], 10); if (v > maxSeq) maxSeq = v; } });
     nodes = []; edges = []; selectedNode = null; selectedEdge = null; seq = maxSeq + 1;
     var map = {};
     var cols = Math.ceil(Math.sqrt(order.length));
     order.forEach(function (oid, i) {
-      var type = /[?？]/.test(defs[oid]) ? 'decision' : 'process';
-      var n = {
-        id: uid('n'),
-        type: type,
-        x: 60 + (i % cols) * 230,
-        y: 60 + Math.floor(i / cols) * 130,
-        label: defs[oid]
-      };
-      map[oid] = n.id;
-      nodes.push(n);
+      var type = /[?？]/.test(defs[oid]) ? 'condition' : 'http';
+      var n = mk(type, 60 + (i % cols) * 230, 60 + Math.floor(i / cols) * 130, defs[oid]);
+      map[oid] = n.id; nodes.push(n);
     });
     newEdges.forEach(function (e) {
-      if (map[e.from] && map[e.to]) edges.push({ id: uid('e'), from: map[e.from], to: map[e.to] });
+      if (map[e.from] && map[e.to]) addEdge({ id: map[e.from] }, { id: map[e.to] }, 'next');
     });
     renderAll();
     exportMermaid();
-    toast('已导入 ' + nodes.length + ' 个节点');
+    toast('已导入 ' + nodes.length + ' 个节点（仅还原形状，参数请手动补）');
     commit();
   }
 
@@ -585,9 +961,7 @@
   // ---------- Android 桥 ----------
   function androidCopy(text) {
     try { if (window.AndroidBridge && AndroidBridge.copyText) { AndroidBridge.copyText(text); return true; } } catch (_) {}
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text); return true; }
-    } catch (_) {}
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text); return true; } } catch (_) {}
     return false;
   }
   function androidSave(filename, content) {
@@ -597,6 +971,13 @@
 
   // ---------- 按钮绑定 ----------
   document.getElementById('addBtn').addEventListener('click', function () { addNode(typeSel.value); });
+  document.getElementById('runBtn').addEventListener('click', runWorkflow);
+  document.getElementById('copyWfBtn').addEventListener('click', function () {
+    var wf = buildWorkflow();
+    if (!wf) { toast('画布没有可运行的节点'); return; }
+    var txt = JSON.stringify(wf, null, 2);
+    if (androidCopy(txt)) toast('已复制工作流 JSON'); else { srcArea.value = txt; srcArea.select(); toast('请手动复制'); }
+  });
   document.getElementById('exportBtn').addEventListener('click', function () { var t = exportMermaid(); toast(t ? '已生成 Mermaid 源码' : '画布为空'); });
   document.getElementById('importBtn').addEventListener('click', function () { importMermaid(); });
   document.getElementById('previewBtn').addEventListener('click', renderPreview);
@@ -606,16 +987,17 @@
     if (androidCopy(t)) toast('已复制到剪贴板'); else { srcArea.select(); toast('请手动复制（Ctrl+C）'); }
   });
   document.getElementById('saveBtn').addEventListener('click', function () {
-    var t = srcArea.value || exportMermaid();
-    if (!t) return;
-    var name = 'node-flow-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.mmd';
-    if (androidSave(name, t)) toast('已保存：' + name); else toast('当前环境不支持保存文件');
+    var wf = buildWorkflow();
+    if (!wf) { toast('画布没有可运行的节点'); return; }
+    var name = 'workflow-' + (flowName || 'default') + '.json';
+    if (androidSave(name, JSON.stringify(wf, null, 2))) toast('已保存工作流：' + name);
+    else { srcArea.value = JSON.stringify(wf, null, 2); toast('当前环境不支持保存文件'); }
   });
   document.getElementById('delBtn').addEventListener('click', deleteSelected);
   document.getElementById('clearBtn').addEventListener('click', clearAll);
   document.getElementById('sampleBtn').addEventListener('click', function () { seedExample(); pushHistory(); autosave(); toast('已加载内置示例'); });
+  document.getElementById('propClose').addEventListener('click', function () { propsEl.classList.remove('show'); });
 
-  // 历史 / 持久化 / 导出
   document.getElementById('undoBtn').addEventListener('click', undo);
   document.getElementById('redoBtn').addEventListener('click', redo);
   document.getElementById('saveProjBtn').addEventListener('click', function () {
@@ -654,16 +1036,15 @@
     });
   });
 
-  // 画布空白处点击取消选择
   stage.addEventListener('pointerdown', function (e) {
     if (e.target === stage || e.target === canvas || e.target === edgesSvg) clearSelect();
   });
-  // 键盘删除
   window.addEventListener('keydown', function (e) {
     if ((e.key === 'Delete' || e.key === 'Backspace')) {
       var ae = document.activeElement;
       if (ae && ae.getAttribute && ae.getAttribute('contenteditable') === 'true') return;
       if (srcArea === document.activeElement) return;
+      if (propsEl.contains(ae)) return;
       e.preventDefault(); deleteSelected();
     }
   });
@@ -671,40 +1052,41 @@
   // 暴露给 Kotlin 侧调用
   window.__getMermaid = function () { return exportMermaid(); };
   window.__setMermaid = function (txt) { srcArea.value = txt || ''; importMermaid(); };
-  window.__addNode = function (type) { addNode(type || 'process'); };
+  window.__addNode = function (type) { addNode(type || 'http'); };
   window.__clear = function () { clearAll(); };
-  // 供工具中心「保存工程 / 导入工程」直接程序化调用
   window.__snapshot = function () { return snapshot(); };
   window.__restore = function (txt) {
     try { restore(txt); pushHistory(); autosave(); renderPreview(); return true; } catch (_) { return false; }
   };
+  window.__setFlowName = function (name) { flowName = name || 'default'; };
+  window.__getFlowName = function () { return flowName; };
+  window.__exportWorkflow = function () { return JSON.stringify(buildWorkflow()); };
 
-  // 初始示例：打开即内置一张流程图，并自动在底部预览其 Mermaid 源码，让用户一眼看到「内置好的」
+  // 内置示例：HTTP → 条件 → 是:通知 / 否:备注
   function seedExample() {
     nodes = []; edges = []; selectedNode = null; selectedEdge = null; seq = 1;
-    var a = { id: uid('n'), type: 'start', x: 80, y: 80, label: '开始' };
-    var b = { id: uid('n'), type: 'process', x: 80, y: 190, label: '处理数据' };
-    var c = { id: uid('n'), type: 'decision', x: 360, y: 190, label: '是否通过?' };
-    var d = { id: uid('n'), type: 'end', x: 640, y: 80, label: '结束' };
-    nodes.push(a, b, c, d);
-    edges.push({ id: uid('e'), from: a.id, to: b.id });
-    edges.push({ id: uid('e'), from: b.id, to: c.id });
-    edges.push({ id: uid('e'), from: c.id, to: d.id });
-    renderAll();
-    exportMermaid();
-    renderPreview();
+    var s = mk('start', 60, 60, '开始', {});
+    var h = mk('http', 60, 190, '请求天气', { url: 'https://api.example.com/weather', method: 'GET', out: 'resp' });
+    var c = mk('condition', 60, 340, '有数据?', { expr: 'resp != ""' });
+    var n = mk('notify', 420, 300, '提醒', { title: '工作流', body: '天气：${resp}' });
+    var note = mk('note', 420, 460, '记录', { text: '本次无数据' });
+    nodes.push(s, h, c, n, note);
+    addEdge(s, h, 'next'); addEdge(h, c, 'next'); addEdge(c, n, 'true'); addEdge(c, note, 'false');
+    renderAll(); openProps(null);
+    exportMermaid(); renderPreview();
   }
-  // 初始化：优先恢复本地持久化的工程，否则加载内置示例
+
+  // 初始化下拉框
+  TYPE_LIST.forEach(function (o) {
+    var opt = document.createElement('option');
+    opt.value = o.v; opt.textContent = o.t;
+    typeSel.appendChild(opt);
+  });
+
   var restored = false;
   try { restored = loadLocal(); } catch (_) {}
-  if (restored) {
-    exportMermaid();
-    renderPreview();
-  } else {
-    seedExample();
-    pushHistory();
-    autosave();
-  }
+  if (restored) { exportMermaid(); renderPreview(); }
+  else { seedExample(); pushHistory(); autosave(); }
 
   try { if (window.AndroidBridge && AndroidBridge.onReady) AndroidBridge.onReady(); } catch (_) {}
 })();

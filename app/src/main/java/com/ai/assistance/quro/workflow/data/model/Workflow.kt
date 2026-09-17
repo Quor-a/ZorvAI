@@ -29,6 +29,12 @@ import java.util.UUID
  *  - AI           调用 ZorvAI 模型推理（prompt / system / out）：接入现模型能力，
  *                 使工作流能「用模型干活」（如生成文案、总结、决策），结果写入 out 变量供后续节点消费。
  *
+ * 数据 / 通用执行节点（无新依赖，纯端侧）：
+ *  - EXTRACT    数据抽取（op=regex/json/substring/concat/random）：从文本 / JSON 抽取值或生成随机量，
+ *                 写入 out 变量，供后续节点（HTTP body / 条件 / 拼接）消费。
+ *  - EXEC       通用执行（mode=js/tool）：js=设备端 QuickJS 沙箱跑 JS（console.log 输出即结果）；
+ *                 tool=调用已注册 AI 工具（如 http_request），结果写入 out 变量。
+ *
  * 节点 JSON 形态（与 ACI wf_create 的 graph.nodes 同构）：
  *   {"id":"n1","type":"http","url":"...","method":"POST",
  *    "next":"n2","onError":"n_err"}
@@ -48,7 +54,9 @@ enum class NodeType(val value: String) {
     OPEN_MEDIA("open_media"),
     PLAY_MEDIA("play_media"),
     CAPTURE_PHOTO("capture_photo"),
-    AI("ai");
+    AI("ai"),
+    EXTRACT("extract"),
+    EXEC("exec");
 
     companion object {
         fun from(v: String?): NodeType = when (v?.lowercase()) {
@@ -66,6 +74,8 @@ enum class NodeType(val value: String) {
             "play_media", "play", "media_play" -> PLAY_MEDIA
             "capture_photo", "photo", "capture", "camera" -> CAPTURE_PHOTO
             "ai", "llm", "model", "gpt" -> AI
+            "extract", "data", "parse", "regex" -> EXTRACT
+            "exec", "run", "shell", "js", "code" -> EXEC
             else -> HTTP
         }
     }
