@@ -113,7 +113,7 @@ object QuroDesktopInstaller {
         // 安装额外工具
         val toolsResult = QuroLinuxEnv.run(
             context,
-            "apt-get install -y --no-install-recommends dbus dbus-x11 xorg-server xorg-applications",
+            "apt-get install -y --no-install-recommends dbus dbus-x11 xorg-server xorg-applications xdotool",
             timeoutMs = 120_000)
         if (toolsResult.first != 0) {
             QuroDiag.log(TAG, "⚠ 安装额外工具失败，但不影响基本功能")
@@ -221,5 +221,40 @@ object QuroDesktopInstaller {
         } else {
             "VNC服务器未运行"
         }
+    }
+
+    /**
+     * VNC 输入控制：在 DISPLAY=:99 的虚拟桌面用 xdotool 执行指针/键盘操作。
+     * action:
+     *  - "tap"：移动到 (x,y) 并单击左键（点击型动作）
+     *  - "type"：向当前焦点窗口输入 text
+     *  - "key"：发送按键序列 key（如 "Return"、"ctrl+c"）
+     * 首次使用自动 apt 安装 xdotool。需桌面已 start。
+     */
+    fun input(
+        context: Context,
+        action: String,
+        x: Int = 0,
+        y: Int = 0,
+        text: String = "",
+        key: String = ""
+    ): Pair<Int, String> {
+        val body = buildString {
+            append("export DISPLAY=:99\n")
+            append("command -v xdotool >/dev/null 2>&1 || { apt-get update -qq >/dev/null 2>&1 && apt-get install -y xdotool >/dev/null 2>&1; }\n")
+            when (action) {
+                "tap" -> append("xdotool mousemove $x $y click 1")
+                "type" -> {
+                    val safe = text.replace("'", "'\\''")
+                    append("xdotool type -- '$safe'")
+                }
+                "key" -> {
+                    val safe = key.replace("'", "'\\''")
+                    append("xdotool key '$safe'")
+                }
+                else -> return Pair(-1, "未知输入动作：$action（支持 tap/type/key）")
+            }
+        }
+        return QuroLinuxEnv.run(context, body, timeoutMs = 30_000)
     }
 }

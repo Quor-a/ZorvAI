@@ -408,6 +408,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // Dim7 终端增强：tmux 会话管理 + 自定义按键绑定（对应「其他 AI」多 tmux/自定义按键）
     r.register(QuroTmuxTool())               // tmux
     r.register(QuroKeybindingTool())         // terminal_keys
+    // Dim5 文件与编辑补全：Git 集成 + 语法检查（对应「其他 AI」文件与编辑维的 Git/语法检查短板）
+    r.register(QuroGitTool())                // git：proot 内真实 git（status/log/diff/branch/remote/add/commit/clone/pull/push）
+    r.register(QuroSyntaxCheckTool())        // syntax_check：端侧+proot 多语言语法校验（json/xml/yaml/python/js/ruby/go/rust/kotlin）
     // 终端驱动工具（统一为单一 terminal 工具，action 分发；内部复用原 10 个终端子工具实例）
     r.register(QuroTerminalTool())
 

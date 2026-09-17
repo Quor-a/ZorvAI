@@ -771,6 +771,19 @@ private fun runCommandInLinux(command: String, timeout: Long): String {
 | 端侧 APK 构建 | BuildApk（自定义包名 / Release 签名生成 / 依赖 JAR / 图标，离线 Java→DEX→APK）、ExportApk（导出产物） |
 | MCP | McpServers/ListTools/Call、McpDeploy/Undeploy/ListLocal、**McpAciBridge/List/Call**（MCP-ACI 桥接） |
 
+### 6.5 七维能力补全（Dim1~Dim7 工具集）
+对照「其他 AI」的能力短板，Zorv AI 在同一对话框内补齐七大维度，全部为**已在 `QuroBuiltInTools.buildQuroRegistry()` 注册、并进入 `coreNames` 核心集**的真实工具（非占位）：
+
+| 维度 | 工具 | 说明 |
+|------|------|------|
+| **Dim1 扩展生态（联网/编排）** | `crossref_search`、`search_provider`、`img_gen_provider`、`train_12306`、`github_read`、`workflow_run`、`automatic_ui` | **多引擎搜索聚合 `search_provider`**：duckduckgo（默认·免费）/ tavily（Key）/ **google_search（Google 抓取）/ zhipu_search（智谱 web_search）/ various_search（聚合去重）** 五家引擎；`workflow_run` 多步编排、`automatic_ui` 脚本化 UI 序列 |
+| **Dim2 五语言真执行** | `polyglot_run` | JavaScript / Python / Ruby / Go / Rust 在 proot 真实运行（非沙箱模拟） |
+| **Dim3 UI 自动化（双方案）** | `ui_tree` | **本地**：`uiautomator dump` 控件树 + tap_text/id/desc/bounds 精准点击（支持虚拟显示器 `display` 参数）；**云端 AutoGLM**：`action=autoglm` 截图转 base64 供视觉/AutoGLM 模型理解界面（适合游戏/WebView/Flutter 等控件树不可见场景），可选 `task` 提示 |
+| **Dim4 媒体** | `ffmpeg` | 完整 FFmpeg 链：探测 / 转码 / 裁剪 / 合并 / 提取音频等 |
+| **Dim5 文件与编辑** | `writer`、`apk_editor`、`exe_editor`、`file_converter`、`git`、`syntax_check` | 结构化写 / 改包 / 格式转换；**`git`**：proot 内真实 Git（status/log/diff/branch/remote/add/commit/clone/pull/push，路径 `/storage/emulated/0 ↔ /sdcard`）；**`syntax_check`**：json/xml 端侧解析 + python/js/ruby 经解释器语法检查 + go/rust/kotlin 括号配平启发式 |
+| **Dim6 记忆系统** | `memory_save/list/search/delete`、`memory_space`、`memory_rebuild`、`memory_autosave`、`memory_window_plan`、`memory_export`、`experience_*` | 分层记忆：多空间 / 重建 / 自动保存候选 / 窗口规划 / 导入导出 + AI 经验闭环（日志/查询/纠错/版本差异） |
+| **Dim7 终端增强** | `tmux`、`terminal_keys`、`vnc` | tmux 会话管理、自定义按键绑定；**`vnc`**：VNC 虚拟桌面完整控制——install/start/stop/status + 输入控制 **`tap`(坐标点击)/`type`(输入文本)/`key`(发送按键)**（经 DISPLAY=:99 xdotool，安装时自动装 xdotool） |
+
 ### 7. 语音 / TTS / STT
 - **TTS 合成（多供应商）**：`QuroTtsProvider` 支持 EDGE_TTS、OPENAI_COMPAT、MINIMAX、SILICONFLOW、TTS302、COZECN、GIZWITS、ACGN、ALIYUN 等；情绪标签跟随文本
 - **STT 语音识别**：Android `SpeechRecognizer` + 端侧 `QuroOnDeviceAsr`（sherpa-onnx-whisper-tiny 本地 Whisper，约 85MB onnx，离线可用）
@@ -1788,7 +1801,7 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[arm64-v8a-v1.0.92-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.92/arm64-v8a-v1.0.92-release.apk)**（约 366MB，Release 签名，**最新**）
+- 🟢 **[arm64-v8a-v1.0.93-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.93/arm64-v8a-v1.0.93-release.apk)**（约 366MB，Release 签名，**最新**）
 
 ### 能做什么
 
