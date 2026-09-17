@@ -11,7 +11,7 @@ import org.json.JSONObject
  */
 class VncTool : QuroTool {
     override val name: String = "vnc"
-    override val description: String = "控制VNC虚拟桌面环境：安装、启动、停止、状态查询"
+    override val description: String = "控制VNC虚拟桌面环境：安装、启动、停止、状态查询，以及对虚拟桌面执行输入控制（tap/type/key）"
     // 🔧 toolfix-vnc：必须为合法 JSON Schema（type:"object"），否则 DeepSeek 报
     // "schema must be a JSON Schema of 'type: \"object\"', got 'type: null'" (HTTP 400)。
     override val parametersJson: String = JSONObject().apply {
@@ -19,13 +19,32 @@ class VncTool : QuroTool {
         put("properties", JSONObject().apply {
             put("action", JSONObject().apply {
                 put("type", "string")
-                put("description", "操作类型：install（安装）、start（启动）、stop（停止）、status（状态）")
+                put("description", "操作类型：install（安装）、start（启动）、stop（停止）、status（状态）、tap（点击坐标）、type（输入文本）、key（发送按键）")
                 put("enum", org.json.JSONArray().apply {
                     put("install")
                     put("start")
                     put("stop")
                     put("status")
+                    put("tap")
+                    put("type")
+                    put("key")
                 })
+            })
+            put("x", JSONObject().apply {
+                put("type", "integer")
+                put("description", "点击横坐标（tap 用）")
+            })
+            put("y", JSONObject().apply {
+                put("type", "integer")
+                put("description", "点击纵坐标（tap 用）")
+            })
+            put("text", JSONObject().apply {
+                put("type", "string")
+                put("description", "要输入的文本（type 用）")
+            })
+            put("key", JSONObject().apply {
+                put("type", "string")
+                put("description", "按键序列（key 用，如 Return / ctrl+c / alt+F4）")
             })
         })
         put("required", org.json.JSONArray().apply {
@@ -46,6 +65,9 @@ class VncTool : QuroTool {
                 "start" -> start(context)
                 "stop" -> stop(context)
                 "status" -> status(context)
+                "tap" -> tap(context, json)
+                "type" -> type(context, json)
+                "key" -> key(context, json)
                 else -> "未知操作：$action"
             }
         } catch (e: Exception) {
@@ -118,5 +140,42 @@ class VncTool : QuroTool {
         } catch (e: Exception) {
             "查询失败：${e.message}"
         }
+    }
+
+    /**
+     * VNC 输入：在虚拟桌面点击坐标 (x,y)
+     */
+    private fun tap(context: Context, json: JSONObject): String {
+        val x = json.optInt("x", -1)
+        val y = json.optInt("y", -1)
+        if (x < 0 || y < 0) return "❌ tap 需要有效的 x/y 坐标"
+        return try {
+            val r = QuroDesktopInstaller.input(context, "tap", x = x, y = y)
+            if (r.first == 0) "✅ 已在虚拟桌面 ($x,$y) 点击" else "❌ 点击失败：${r.second}"
+        } catch (e: Exception) { "点击失败：${e.message}" }
+    }
+
+    /**
+     * VNC 输入：向虚拟桌面当前焦点窗口输入文本
+     */
+    private fun type(context: Context, json: JSONObject): String {
+        val text = json.optString("text", "")
+        if (text.isEmpty()) return "❌ type 需要 text"
+        return try {
+            val r = QuroDesktopInstaller.input(context, "type", text = text)
+            if (r.first == 0) "✅ 已输入文本：${text.take(60)}" else "❌ 输入失败：${r.second}"
+        } catch (e: Exception) { "输入失败：${e.message}" }
+    }
+
+    /**
+     * VNC 输入：向虚拟桌面发送按键序列
+     */
+    private fun key(context: Context, json: JSONObject): String {
+        val key = json.optString("key", "")
+        if (key.isEmpty()) return "❌ key 需要 key（如 Return / ctrl+c / alt+F4）"
+        return try {
+            val r = QuroDesktopInstaller.input(context, "key", key = key)
+            if (r.first == 0) "✅ 已发送按键：$key" else "❌ 发送失败：${r.second}"
+        } catch (e: Exception) { "发送失败：${e.message}" }
     }
 }

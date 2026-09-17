@@ -37,6 +37,7 @@ class QuroUiTreeTool : QuroTool {
                 "tap_id" -> tap(context, null, jo.optString("id", ""), null)
                 "tap_desc" -> tap(context, null, null, jo.optString("desc", ""))
                 "tap_bounds" -> tapBounds(context, jo.optString("bounds", ""))
+                "autoglm" -> autoGlm(context, jo.optString("task", ""))
                 else -> dump(context, display)
             }
         }
@@ -128,5 +129,37 @@ class QuroUiTreeTool : QuroTool {
             }
         }
         return null
+    }
+
+    /**
+     * 云端 AutoGLM 视觉方案：截图 → base64（供视觉/AutoGLM 模型理解界面并规划操作）。
+     * 与本地 dump（uiautomator 无障碍树）形成双方案：dump 快且结构化、autoglm 适合游戏/WebView/Flutter 等控件树不可见场景。
+     * 若提供 task，会尝试调用 visual_analysis 取得即时结构化理解，并给出「将 base64 发给云端模型」的下一步指引。
+     */
+    private fun autoGlm(context: Context, task: String): String {
+        val shot = QuroToolRegistry.active?.get("screenshot_base64")?.run(context, "{}")
+            ?: return "❌ screenshot_base64 不可用（截图能力未就绪）"
+        val shotJson = runCatching { JSONObject(shot) }.getOrNull()
+        if (shotJson == null || !shot.startsWith("{")) return "❌ 截图失败：${shot.take(300)}"
+        val base64Len = shotJson.optInt("base64_length", 0)
+        val preview = shotJson.optString("base64_preview", "")
+        val path = shotJson.optString("path", "")
+        val sb = StringBuilder("🤖 AutoGLM 云端视觉方案（截图已就绪）：\n")
+        sb.append("截图路径: $path\n")
+        sb.append("base64 长度: $base64Len\n")
+        if (preview.isNotEmpty()) sb.append("base64 预览(前100字符): ${preview.take(100)}\n")
+        if (task.isNotBlank()) {
+            sb.append("\n🎯 任务: $task\n")
+            val va = QuroToolRegistry.active?.get("visual_analysis")?.run(
+                context, JSONObject().apply {
+                    put("question", "请基于截图描述当前屏幕，并指出为完成「$task」应点击哪个元素（给出其中心坐标或文本）")
+                }.toString()
+            )
+            if (va != null && va.startsWith("##")) sb.append("\n📝 视觉模型理解：\n${va.take(1500)}\n")
+            sb.append("\n💡 下一步：将 base64 截图与任务「$task」发送给视觉/AutoGLM 模型，按其返回的元素坐标用 ui_tree tap_bounds 或 tap_screen 执行点击。\n")
+        } else {
+            sb.append("\n💡 下一步：将 base64 截图发送给视觉/AutoGLM 模型，按其返回的元素坐标用 ui_tree tap_bounds 或 tap_screen 执行点击。\n")
+        }
+        return sb.toString().trim()
     }
 }
