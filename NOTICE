@@ -63,7 +63,8 @@ ncnn (Tencent)
   Source:  https://github.com/Tencent/ncnn
 
 GeckoView (Mozilla)
-  License: MPL-2.0 (file-level copyleft; source provided with the build)
+  License: MPL-2.0 (file-level copyleft; unmodified upstream build, source
+           available from Mozilla per MPL-2.0 §3.2)
 
 Health Connect (Google)
   License: Apache-2.0
@@ -95,6 +96,8 @@ MNN (Mobile Neural Network, Alibaba)
   License: Apache-2.0
   Copyright: 2018 Alibaba Group
   Source:  https://github.com/alibaba/MNN
+  Note:    Build pulls in KleidiAI (Arm) as a CMake sub-dependency
+           (Apache-2.0 / BSD-3-Clause, https://gitlab.arm.com/kleidiai).
 
 llama.cpp
   License: MIT
@@ -199,6 +202,29 @@ Sucrase
   Copyright: Alan Pierce
   Source:  https://github.com/alangpierce/sucrase
   Note:    JSX/TS transpiler used to run AI-generated code on-device.
+
+----------------------------------------------------------------------
+ANDROID UI / LAYOUT DEPENDENCIES (Gradle, compile-time)
+----------------------------------------------------------------------
+
+Coil (io.coil-kt:coil-compose)
+  License: Apache-2.0
+  Copyright: Coil contributors
+  Source:  https://github.com/coil-kt/coil
+  Note:    Image loading/async decoding in Compose UI (coil-compose).
+
+Facebook Yoga (com.facebook.yoga:yoga)
+  License: MIT
+  Copyright: Meta Platforms, Inc.
+  Source:  https://github.com/facebook/yoga
+  Note:    Flexbox layout engine backing the GenUI native canvas
+           (io.gencanvas).
+
+AndroidSVG (com.caverock:androidsvg)
+  License: Apache-2.0
+  Copyright: Caverock Ltd.
+  Source:  https://github.com/BigBadaboom/androidsvg
+  Note:    SVG rendering fallback for the GenUI native canvas.
 
 ----------------------------------------------------------------------
 DOCUMENT PROCESSING LIBRARIES (bundled in assets/docs/)

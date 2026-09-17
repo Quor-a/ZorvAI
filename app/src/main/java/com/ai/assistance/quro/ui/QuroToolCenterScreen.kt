@@ -50,6 +50,9 @@ import com.ai.assistance.quro.ui.theme.Muted
 import com.ai.assistance.quro.core.miniapp.MiniAppEngine
 import com.ai.assistance.quro.core.miniapp.MiniAppBridgeInterface
 import com.ai.assistance.quro.core.tools.MiniAppStudioTool
+import com.ai.assistance.quro.workflow.data.model.Workflow
+import com.ai.assistance.quro.workflow.data.WorkflowRepository
+import com.ai.assistance.quro.workflow.executor.WorkflowEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -644,6 +647,7 @@ private fun NodeEditorPanel(
     val flowDir = remember { File(context.filesDir, "studio/flow") }
     var flowName by remember { mutableStateOf("default") }
     var flowRefresh by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
     val flowProjects = remember(flowRefresh) {
         flowDir.listFiles()?.filter { it.extension == "qne" }?.map { it.nameWithoutExtension }?.sorted() ?: emptyList()
     }
@@ -653,7 +657,41 @@ private fun NodeEditorPanel(
         val raw = name.substringBeforeLast(".", name).ifBlank { name }.ifBlank { "default" }
         val base = raw.replace(Regex("[^A-Za-z0-9_.\\-]"), "_").replace("..", "_")
         val f = File(flowDir, "$base.qne")
-        return runCatching { f.writeText(content, Charsets.UTF_8); "已保存到工程「$base」" }.getOrElse { "保存失败：${it.message}" }
+        return runCatching { f.writeText(content, Charsets.UTF_8); "已保存到工程「$base」"         }.getOrElse { "保存失败：${it.message}" }
+    }
+
+    // 运行工作流：upsert 进仓库（id 稳定为 wf_<工程名>）→ 引擎执行 → 轮询 lastStatus 弹结果
+    suspend fun runWorkflowInternal(json: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                val o = JSONObject(json)
+                val wf = Workflow.fromJson(o)
+                WorkflowRepository.upsert(wf)
+                // 重置状态，避免复用旧结果导致轮询提前判成功
+                WorkflowRepository.updateRun(wf.id, "idle", "", "")
+                WorkflowEngine.run(wf.id, emptyMap())
+                var status = "idle"
+                var tries = 0
+                while (status == "idle" && tries < 120) {
+                    delay(1000)
+                    tries++
+                    status = WorkflowRepository.get(wf.id)?.lastStatus ?: "failed"
+                }
+                val log = WorkflowRepository.get(wf.id)?.lastLog ?: ""
+                withContext(Dispatchers.Main) {
+                    if (status == "success") {
+                        Toast.makeText(context, "工作流运行成功 ✅", Toast.LENGTH_LONG).show()
+                    } else {
+                        val tail = log.lines().lastOrNull { it.isNotBlank() } ?: ""
+                        Toast.makeText(context, "运行失败/超时 ❌ ${tail.take(60)}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "运行出错：${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 
     val bridge = remember {
@@ -674,6 +712,12 @@ private fun NodeEditorPanel(
 
             @JavascriptInterface
             fun onReady() {}
+
+            // 画布「运行」按钮：把工作流 JSON 交给引擎执行，并轮询结果弹 Toast
+            @JavascriptInterface
+            fun runWorkflow(json: String) {
+                scope.launch { runWorkflowInternal(json) }
+            }
         }
     }
 
@@ -682,7 +726,6 @@ private fun NodeEditorPanel(
     // 不再用全局 maxByOrNull 取最新 .qne —— 否则 AI 往别的工程写文件会强行切走你的画布视图与工程名。
     // 用户在画布上未保存的编辑不会改变文件 mtime，因此不会被轮询覆盖；只有 AI 调
     // node_editor 写入「当前工程」文件（或你点「保存工程」）才会触发刷新。
-    val scope = rememberCoroutineScope()
     var lastLoadedMtime by remember { mutableStateOf(0L) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -712,6 +755,13 @@ private fun NodeEditorPanel(
             "JSON.stringify([window.__restore(${JSONObject.quote(txt)})])"
         ) { r ->
             val ok = r?.let { it.trim().trim('"') == "true" || it.contains("true") } ?: false
+            // 同步编辑器内部工程名到 Kotlin 侧，使后续「保存工程」落到正确文件名
+            if (ok) {
+                wvRef.value?.evaluateJavascript("window.__getFlowName()") { rn ->
+                    val nm = decodeJsString(rn).ifBlank { "default" }
+                    flowName = nm
+                }
+            }
             Toast.makeText(
                 context,
                 if (ok) "已导入工程到画布" else "导入失败：文件不是有效的工程格式",
@@ -779,6 +829,7 @@ private fun NodeEditorPanel(
             TextButton(onClick = {
                 val f = File(flowDir, "${flowName.ifBlank { "default" }}.qne")
                 if (f.exists()) {
+                    wvRef.value?.evaluateJavascript("window.__setFlowName(${JSONObject.quote(flowName.ifBlank { "default" })})") {}
                     wvRef.value?.evaluateJavascript("window.__restore(${JSONObject.quote(f.readText(Charsets.UTF_8))})") {}
                     lastLoadedMtime = f.lastModified()
                     Toast.makeText(context, "已载入工程「${flowName}」", Toast.LENGTH_SHORT).show()
@@ -798,6 +849,7 @@ private fun NodeEditorPanel(
                         Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
                         TextButton(onClick = {
                             val f = File(flowDir, "$name.qne")
+                            wvRef.value?.evaluateJavascript("window.__setFlowName(${JSONObject.quote(name)})") {}
                             wvRef.value?.evaluateJavascript("window.__restore(${JSONObject.quote(f.readText(Charsets.UTF_8))})") {}
                             flowName = name
                             lastLoadedMtime = f.lastModified()
@@ -823,6 +875,7 @@ private fun NodeEditorPanel(
                             if (cur.exists()) {
                                 lastLoadedMtime = cur.lastModified()
                                 view?.post {
+                                    evaluateJavascript("window.__setFlowName(${JSONObject.quote(flowName.ifBlank { "default" })})") {}
                                     evaluateJavascript("window.__restore(${JSONObject.quote(cur.readText(Charsets.UTF_8))})") {}
                                 }
                             }

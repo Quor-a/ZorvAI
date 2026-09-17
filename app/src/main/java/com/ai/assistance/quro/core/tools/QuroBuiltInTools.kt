@@ -511,6 +511,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(VisualCustomPopupTool()) // AI自写UI可视化弹窗（完全自定义HTML）
     r.register(NodeEditorTool())       // 节点编辑器：AI 直接读写节点流工程（无需打开界面）
     r.register(VisualStudioTool())     // 可视化编程：命名工程多项目保存（产物+可视化）
+    // 工作流引擎 AI 侧调用入口：创建/点燃/查询（与节点编辑器、本地运行按钮共用同一引擎）
+    r.register(QuroWorkflowCreateTool())
+    r.register(QuroWorkflowTriggerTool())
+    r.register(QuroWorkflowRunStatusTool())
     // 动态 UI（必备输出）工具：AI 默认主动输出 quro-ui DSL 代码块 → 解析 → Compose 原生渲染（可交互、可回传表单值）
     r.register(UiDslSpecTool())     // 拉取 DSL 规范，避免长 schema 常驻系统提示词
     r.register(UiValidateTool())    // 输出前自检，把「渲染失败」变成事前修正

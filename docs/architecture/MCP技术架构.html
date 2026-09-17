@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCP 介绍构架</title>
+<style>
+  :root{--bg:#f7f8fa;--card:#fff;--ink:#1f2430;--sub:#5b6472;--line:#e3e7ee;
+        --c1:#2f6df0;--c2:#16a34a;--c3:#d97706;--c4:#7c3aed;--c5:#0891b2;--c6:#db2777;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--ink);line-height:1.7}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 22px 60px}
+  h1{font-size:28px;margin:0 0 4px}
+  .tag{display:inline-block;background:#eef3ff;color:var(--c1);border-radius:6px;padding:2px 10px;font-size:13px;margin-bottom:18px}
+  h2{font-size:20px;margin:34px 0 12px;padding-left:10px;border-left:4px solid var(--c5)}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--c5)}
+  p{color:var(--sub);margin:8px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0;box-shadow:0 1px 3px rgba(20,30,60,.04)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#f0f3f8;font-weight:600}
+  td code{background:#eef1f6;padding:1px 6px;border-radius:4px;font-size:12.5px;color:#b4327a}
+  .layer{display:flex;gap:0;flex-wrap:wrap;margin:6px 0}
+  .layer .lname{writing-mode:vertical-rl;transform:rotate(180deg);background:#1f2430;color:#fff;
+       display:flex;align-items:center;justify-content:center;font-size:13px;padding:8px 4px;border-radius:8px 0 0 8px;min-width:34px}
+  .layer .lbody{flex:1;display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:#fff;border:1px solid var(--line);border-left:none;border-radius:0 8px 8px 0}
+  .box{border-radius:8px;padding:8px 11px;font-size:13px;color:#fff;min-width:120px}
+  .b1{background:var(--c1)}.b2{background:var(--c2)}.b3{background:var(--c3)}.b4{background:var(--c4)}
+  .b5{background:var(--c5)}.b6{background:var(--c6)}.b7{background:#475569}
+  .flow{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px}
+  .flow .step{display:flex;align-items:center;gap:10px;margin:6px 0}
+  .flow .num{width:26px;height:26px;border-radius:50%;background:var(--c5);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+  .muted{color:#8a93a3;font-size:13px}
+  ul{margin:8px 0;padding-left:22px;color:var(--sub)}
+  li{margin:4px 0}
+  .pill{display:inline-block;background:#e0f2fe;color:var(--c5);border:1px solid #bae6fd;border-radius:999px;padding:1px 9px;font-size:12px;margin:2px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>MCP 介绍构架</h1>
+  <span class="tag">Model Context Protocol · 连接器 / 工具扩展</span>
+
+  <h2>一、构架介绍</h2>
+  <div class="card">
+    <p><b>MCP（Model Context Protocol，模型上下文协议）</b>是一套开放标准，让 AI 应用以统一方式接入外部工具、资源与数据源。WorkBuddy / ZorvAI 通过 <b>MCP 服务器</b>把「第三方能力」变成 Agent 可调用的工具（<code>mcp__&lt;server&gt;__&lt;tool&gt;</code>），而无需把每种集成写死进代码。</p>
+    <p>在 ZorvAI 体系中，MCP 与「连接器（Connector）」一体两面：连接器是面向用户的托管入口，MCP 是背后的协议实现。两者共同扩展了主理人的行动半径（浏览器、飞书、Git、云盘、数据库……）。</p>
+    <ul>
+      <li><b>配置即接入</b>：所有服务器集中于 <code>~/.workbuddy/mcp.json</code> 的 <code>mcpServers</code> 字段，按官方文档填 <code>command/args/env</code> 或 <code>url</code>。</li>
+      <li><b>信任即启用</b>：写入配置后服务器不会自动激活，须到连接器管理页面对新服务器点「信任」才生效——这是一道安全闸门。</li>
+      <li><b>三种传输</b>：stdio（本地进程，如 <code>npx @playwright/mcp</code>）、SSE / Streamable HTTP（远程服务）。</li>
+    </ul>
+  </div>
+
+  <h2>二、技术构架（分层）</h2>
+  <div class="card">
+    <div class="layer"><div class="lname">L5 业务</div><div class="lbody">
+      <div class="box b6">Agent Loop 调用 mcp 工具</div>
+      <div class="box b6">飞书 / Git / 云盘 业务流</div>
+      <div class="box b6">浏览器自动化 (agent-browser)</div>
+    </div></div>
+    <div class="layer"><div class="lname">L4 集成</div><div class="lbody">
+      <div class="box b4">连接器管理页 (Connector Mgmt)</div>
+      <div class="box b4">信任 / 启用闸门</div>
+      <div class="box b4">recommend-connectors</div>
+    </div></div>
+    <div class="layer"><div class="lname">L3 客户</div><div class="lbody">
+      <div class="box b5">WorkBuddy MCP Client</div>
+      <div class="box b5">工具发现 (tools/list)</div>
+      <div class="box b5">工具调用 (tools/call)</div>
+    </div></div>
+    <div class="layer"><div class="lname">L2 协议</div><div class="lbody">
+      <div class="box b2">JSON-RPC 2.0</div>
+      <div class="box b2">initialize / ping</div>
+      <div class="box b2">resources / prompts</div>
+      <div class="box b2">notifications</div>
+    </div></div>
+    <div class="layer"><div class="lname">L1 传输</div><div class="lbody">
+      <div class="box b3">stdio (本地子进程)</div>
+      <div class="box b3">SSE / Streamable HTTP</div>
+      <div class="box b3">鉴权 (headers / env / token)</div>
+    </div></div>
+    <div class="layer"><div class="lname">L0 服务</div><div class="lbody">
+      <div class="box b7">MCP Server (command/args)</div>
+      <div class="box b7">MCP Server (url)</div>
+      <div class="box b7">~/.workbuddy/mcp.json</div>
+    </div></div>
+  </div>
+
+  <h2>三、核心组件</h2>
+  <div class="card">
+    <table>
+      <tr><th>组件</th><th>职责</th><th>说明</th></tr>
+      <tr><td><b>mcp.json</b></td><td>服务器注册表</td><td>路径 <code>~/.workbuddy/mcp.json</code>（注意无 dot 前缀）；合并写入，保留其它服务器</td></tr>
+      <tr><td><b>MCP Client</b></td><td>协议实现 / 工具路由</td><td>自动把远程工具映射为 <code>mcp__server__tool</code></td></tr>
+      <tr><td><b>连接器管理</b></td><td>信任与启用</td><td>新服务器写入后须手动「信任」激活</td></tr>
+      <tr><td><b>Tools / Resources / Prompts</b></td><td>三类能力面</td><td>工具可调用、资源可读取、提示可模板化</td></tr>
+    </table>
+  </div>
+
+  <h2>四、接入流程</h2>
+  <div class="card">
+    <div class="flow">
+      <div class="step"><span class="num">1</span><span><b>查文档</b>：先读目标提供方官方 MCP 文档，取准确 <code>command/args/env/url</code>，不臆测字段</span></div>
+      <div class="step"><span class="num">2</span><span><b>读配置</b>：若 <code>~/.workbuddy/mcp.json</code> 已存在则合并，不覆盖其它服务器</span></div>
+      <div class="step"><span class="num">3</span><span><b>写配置</b>：以官方格式写入 <code>mcpServers</code>（stdio 用 <code>npx</code>；远程用 <code>url</code>）</span></div>
+      <div class="step"><span class="num">4</span><span><b>信任</b>：到连接器管理页面对新服务器点「信任」启用（写入不会自动激活）</span></div>
+      <div class="step"><span class="num">5</span><span><b>调用</b>：Agent Loop 经 <code>tools/list</code> 发现、<code>tools/call</code> 执行远程能力</span></div>
+    </div>
+  </div>
+
+  <h2>五、典型服务器示例</h2>
+  <div class="card">
+    <p class="muted">已接入 / 可接入的代表：</p>
+    <p>
+      <span class="pill">Playwright (浏览器自动化)</span>
+      <span class="pill">飞书 Lark (IM/文档/多维表格/日历)</span>
+      <span class="pill">GitHub (gh CLI)</span>
+      <span class="pill">云盘 / 空间</span>
+      <span class="pill">数据库 / 搜索引擎</span>
+      <span class="pill">自定义 stdio 工具</span>
+    </p>
+    <p class="muted">注：凡涉及凭据（token / API key）的服务器，凭据写入官方文档指定的位置（<code>env</code> / <code>headers</code> / <code>args</code>）；缺失则向用户索取，不外泄。</p>
+  </div>
+</div>
+</body>
+</html>

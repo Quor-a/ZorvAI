@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>终端 3.0 技术构架</title>
+<style>
+  :root{--bg:#f7f8fa;--card:#fff;--ink:#1f2430;--sub:#5b6472;--line:#e3e7ee;
+        --c1:#2f6df0;--c2:#16a34a;--c3:#d97706;--c4:#7c3aed;--c5:#0891b2;--c6:#db2777;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--ink);line-height:1.7}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 22px 60px}
+  h1{font-size:28px;margin:0 0 4px}
+  .tag{display:inline-block;background:#eef3ff;color:var(--c1);border-radius:6px;padding:2px 10px;font-size:13px;margin-bottom:18px}
+  h2{font-size:20px;margin:34px 0 12px;padding-left:10px;border-left:4px solid var(--c1)}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--c5)}
+  p{color:var(--sub);margin:8px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0;box-shadow:0 1px 3px rgba(20,30,60,.04)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#f0f3f8;font-weight:600}
+  td code{background:#eef1f6;padding:1px 6px;border-radius:4px;font-size:12.5px;color:#b4327a}
+  .layer{display:flex;gap:0;flex-wrap:wrap;margin:6px 0}
+  .layer .lname{writing-mode:vertical-rl;transform:rotate(180deg);background:#1f2430;color:#fff;
+       display:flex;align-items:center;justify-content:center;font-size:13px;padding:8px 4px;border-radius:8px 0 0 8px;min-width:34px}
+  .layer .lbody{flex:1;display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:#fff;border:1px solid var(--line);border-left:none;border-radius:0 8px 8px 0}
+  .box{border-radius:8px;padding:8px 11px;font-size:13px;color:#fff;min-width:120px}
+  .b1{background:var(--c1)}.b2{background:var(--c2)}.b3{background:var(--c3)}.b4{background:var(--c4)}
+  .b5{background:var(--c5)}.b6{background:var(--c6)}.b7{background:#475569}
+  .flow{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px}
+  .flow .step{display:flex;align-items:center;gap:10px;margin:6px 0}
+  .flow .num{width:26px;height:26px;border-radius:50%;background:var(--c1);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+  .muted{color:#8a93a3;font-size:13px}
+  ul{margin:8px 0;padding-left:22px;color:var(--sub)}
+  li{margin:4px 0}
+  .pill{display:inline-block;background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:999px;padding:1px 9px;font-size:12px;margin:2px 0}
+  .pill.ok{background:#dcfce7;color:#15803d;border-color:#bbf7d0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>终端 3.0 技术构架</h1>
+  <span class="tag">ZorvAI · 前代原生终端栈（VT 模拟器 + proot ubuntu-base）</span>
+
+  <h2>一、构架介绍</h2>
+  <div class="card">
+    <p><b>终端 3.0</b> 是 ZorvAI 在引入 <code>terminal-core</code>（OperitTerminal v1.2 移植，即<b>终端 4.0</b>）之前的原生终端实现。它在 UI 侧复用 Termux 式 <b>VT 终端模拟器</b>（<code>QuroTerminalPane</code> / <code>QuroTerminalInputView</code>），环境侧依赖「<b>ubuntu-base 微镜像 + 运行时 apt-get 下载</b>」的 proot 方案，并通过 <code>QuroTerminalController</code> / <code>QuroTerminalBridge</code> 打通 AI 的 <code>terminal_exec</code>。</p>
+    <p>该方案「能用但脆弱」：首启需联网从 apt 源下载补全工具链，受源可用性、网络、架构兼容影响，易失败、启动慢。这正是终端 4.0 用「完整 rootfs 作为 assets 打包进 APK、开箱即用」取代它的根本原因。</p>
+    <p>设计要点：</p>
+    <ul>
+      <li><b>VT 渲染</b>：基于 <code>QuroTerminalPane</code> 的终端模拟器，承接键盘/鼠标/快照，渲染真终端流。</li>
+      <li><b>proot + ubuntu-base</b>：<code>QuroLinuxEnv</code> 负责确保 proot 与基础 Ubuntu 环境可用，必要时 <code>apt install</code> 工具链。</li>
+      <li><b>AI 直连</b>：<code>QuroTerminalBridge</code> / <code>QuroToolsTerminal</code> 把 AI 指令派发到同一终端管线。</li>
+      <li><b>保活与权限</b>：<code>QuroTerminalKeepAliveService</code> + <code>QuroTerminalPrivilegeBridge</code> 保障常驻与特权操作。</li>
+    </ul>
+  </div>
+
+  <h2>二、技术构架（分层）</h2>
+  <div class="card">
+    <div class="layer"><div class="lname">L6 UI</div><div class="lbody">
+      <div class="box b6">novaterm TerminalScreen / ViewModel</div>
+      <div class="box b6">QuroTerminalPane</div>
+      <div class="box b6">QuroTerminalInputView</div>
+      <div class="box b6">TerminalScreen (vt)</div>
+    </div></div>
+    <div class="layer"><div class="lname">L5 接入</div><div class="lbody">
+      <div class="box b4">QuroTerminalBridge (terminal_exec)</div>
+      <div class="box b4">QuroToolsTerminal / QuroToolsTerminalDrive</div>
+      <div class="box b4">QuroTerminalTool (AI 工具)</div>
+      <div class="box b4">ChatScreen 终端面板</div>
+    </div></div>
+    <div class="layer"><div class="lname">L4 服务</div><div class="lbody">
+      <div class="box b5">QuroTerminalKeepAliveService</div>
+      <div class="box b5">QuroTerminalAciService</div>
+      <div class="box b5">QuroTerminalBootReceiver</div>
+      <div class="box b5">QuroTerminalReaper / Sentinel</div>
+    </div></div>
+    <div class="layer"><div class="lname">L3 控制</div><div class="lbody">
+      <div class="box b2">QuroTerminalController</div>
+      <div class="box b2">QuroTerminalSessionManager</div>
+      <div class="box b2">QuroTerminalHistory</div>
+      <div class="box b2">QuroTerminalPrefs</div>
+    </div></div>
+    <div class="layer"><div class="lname">L2 环境</div><div class="lbody">
+      <div class="box b3">QuroLinuxEnv (ubuntu-base + apt)</div>
+      <div class="box b3">QuroTerminalJNI (pty)</div>
+      <div class="box b3">QuroTerminalPrivilegeBridge</div>
+      <div class="box b3">CmsTerminalRuntime / Deployer</div>
+    </div></div>
+    <div class="layer"><div class="lname">L1 渲染</div><div class="lbody">
+      <div class="box b1">VT Emulator (QuroTerminalPane)</div>
+      <div class="box b1">TerminalKeys / TerminalMouse</div>
+      <div class="box b1">TerminalSnapshot</div>
+    </div></div>
+    <div class="layer"><div class="lname">L0 原生</div><div class="lbody">
+      <div class="box b7">proot (libproot-loader.so)</div>
+      <div class="box b7">ubuntu-base 微镜像 (apt 下载)</div>
+      <div class="box b7">pty (JNI)</div>
+    </div></div>
+  </div>
+
+  <h2>三、核心组件</h2>
+  <div class="card">
+    <table>
+      <tr><th>组件</th><th>职责</th><th>关键文件</th></tr>
+      <tr><td><b>QuroTerminalPane</b></td><td>VT 终端渲染与交互主体</td><td><code>app/.../terminal/vt/QuroTerminalPane.kt</code></td></tr>
+      <tr><td><b>QuroTerminalController</b></td><td>会话与命令调度中枢</td><td><code>core/terminal/QuroTerminalController.kt</code></td></tr>
+      <tr><td><b>QuroLinuxEnv</b></td><td>proot + ubuntu-base 环境保障（apt 补全）</td><td><code>core/linux/QuroLinuxEnv.kt</code></td></tr>
+      <tr><td><b>QuroTerminalBridge</b></td><td>AI terminal_exec 总线</td><td><code>core/terminal/QuroTerminalBridge.kt</code></td></tr>
+      <tr><td><b>QuroTerminalKeepAliveService</b></td><td>终端常驻保活</td><td><code>service/QuroTerminalKeepAliveService.kt</code></td></tr>
+      <tr><td><b>QuroTerminalPrivilegeBridge</b></td><td>ROOT/LSPosed/ADB/Shizuku 特权桥</td><td><code>core/privilege/QuroTerminalPrivilegeBridge.kt</code></td></tr>
+      <tr><td><b>QuroToolsTerminal</b></td><td>AI 工具终端执行实现</td><td><code>core/tools/QuroToolsTerminal.kt</code></td></tr>
+    </table>
+  </div>
+
+  <h2>四、关键流程</h2>
+  <div class="card">
+    <h3>4.1 首启环境准备（脆弱点）</h3>
+    <div class="flow">
+      <div class="step"><span class="num">1</span><span><code>QuroLinuxEnv</code> 检查 proot 与 ubuntu-base 是否已就绪</span></div>
+      <div class="step"><span class="num">2</span><span>缺失则联网 <code>apt-get</code> 下载 / 安装基础包与工具链（受源与网络影响，易失败）</span></div>
+      <div class="step"><span class="num">3</span><span>就绪后拉起 proot shell，经 pty 回显到 VT</span></div>
+    </div>
+    <h3>4.2 命令执行（用户 / AI 通用）</h3>
+    <div class="flow">
+      <div class="step"><span class="num">1</span><span>VT 输入 或 AI <code>terminal_exec</code> → <code>QuroTerminalBridge</code></span></div>
+      <div class="step"><span class="num">2</span><span><code>QuroTerminalController</code> 经 <code>QuroTerminalSessionManager</code> 取会话</span></div>
+      <div class="step"><span class="num">3</span><span>proot shell 执行，输出经 VT 模拟器渲染 / 回传 AI</span></div>
+    </div>
+  </div>
+
+  <h2>五、与终端 4.0 的关系</h2>
+  <div class="card">
+    <p class="muted">终端 3.0 是终端 4.0 的前身，二者共存于 ZorvAI：</p>
+    <p>
+      <span class="pill">终端3.0：ubuntu-base + apt（联网脆弱）</span>
+      <span class="pill ok">终端4.0：完整 rootfs 打包 assets（开箱即用）</span>
+    </p>
+    <p>演进路径：<code>QuroLinuxEnv</code> 的 apt 方案被 <code>terminal-core</code> 的 <code>TerminalManager</code>（rootfs 解压）取代；VT 渲染（<code>QuroTerminalPane</code>）与 AI 接入（<code>QuroTerminalBridge</code>）作为成熟层被保留，UI 侧另叠加终端 4.0 的 Compose <code>TerminalScreen</code>。保活 / 特权桥 / AI 工具等控制面在两条栈上复用。</p>
+  </div>
+</div>
+</body>
+</html>

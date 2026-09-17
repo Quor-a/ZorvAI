@@ -33,7 +33,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -160,31 +159,8 @@ private fun PluginLauncherBody(context: Context) {
     LaunchedEffect(Unit) { refresh() }
 
     // ── 导入补签：导入 APK → 先用宿主密钥签名 → 再安装 ──
-    // 签名能力复用构建台（BuildEngine 进程内 apksig，V1+V2+V3），密钥默认继承构建台已配好的 signing
+    // 签名能力复用构建台（BuildEngine 进程内 apksig，V1+V2+V3），密钥固定用内置宿主密钥
     var signCfg by remember { mutableStateOf(PluginSigning.load(context)) }
-    var signExpanded by remember { mutableStateOf(false) }
-
-    val keystorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            val msg = withContext(Dispatchers.IO) {
-                runCatching {
-                    val raw = uri.lastPathSegment?.substringAfterLast('/')?.takeWhile { it != '?' }
-                    val nm = (raw ?: "keystore.jks").ifBlank { "keystore.jks" }
-                    val dst = File(PluginSigning.keyDirOf(context), nm)
-                    context.contentResolver.openInputStream(uri)?.use { i ->
-                        dst.outputStream().use { o -> i.copyTo(o) }
-                    } ?: return@runCatching "读取密钥库失败：打不开所选文件"
-                    signCfg = signCfg.copy(keystorePath = dst.absolutePath, enabled = true)
-                    PluginSigning.save(context, signCfg)
-                    "已选择签名密钥库：${dst.name}\n" +
-                        "· 接着填对 别名 / keystore 密码 / 密钥密码（与 keystore.properties 里一致），再点开关。"
-                }.getOrElse { "读取密钥库异常：${it.message}" }
-            }
-            log = msg
-            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-        }
-    }
 
     // 选 APK → 拷到私有缓存 →（可选）用宿主密钥补签 → 交给引擎安装（走同签名校验）
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -278,21 +254,10 @@ private fun PluginLauncherBody(context: Context) {
 
             SigningCard(
                 cfg = signCfg,
-                expanded = signExpanded,
                 hostFingerprint = runCatching { QuroPluginHost.hostFingerprint() }.getOrNull() ?: "无法读取",
-                onToggleExpand = { signExpanded = !signExpanded },
                 onToggleEnabled = { v ->
-                    signCfg = signCfg.copy(enabled = v)
+                    signCfg = if (v) PluginSigning.useBuiltIn(context, signCfg) else signCfg.copy(enabled = false)
                     PluginSigning.save(context, signCfg)
-                },
-                onPickKeystore = { keystorePicker.launch(arrayOf("*/*")) },
-                onAlias = { v -> signCfg = signCfg.copy(alias = v); PluginSigning.save(context, signCfg) },
-                onStorePass = { v -> signCfg = signCfg.copy(storePassword = v); PluginSigning.save(context, signCfg) },
-                onKeyPass = { v -> signCfg = signCfg.copy(keyPassword = v); PluginSigning.save(context, signCfg) },
-                onUseBuiltIn = {
-                    signCfg = PluginSigning.useBuiltIn(context, signCfg)
-                    PluginSigning.save(context, signCfg)
-                    Toast.makeText(context, "已切换为内置宿主密钥", Toast.LENGTH_SHORT).show()
                 },
             )
 
@@ -897,27 +862,18 @@ private fun extLabel(type: String): String = when (type) {
 // ═══════════════════════════ 导入补签设置 ═══════════════════════════
 
 /**
- * 「导入 APK → 先签名 → 再安装」的设置卡片。
+ * 「导入 APK → 先签名 → 再安装」的开关卡片。
  *
  * 插件由宿主进程加载、权限等同宿主，所以只有与宿主**同签名**的插件才允许安装。
- * 手头拿到的插件包未必是宿主密钥签的，这里指定导入时用哪把密钥先补签一遍。
- * 签名能力**复用构建台**（进程内 apksig，V1/V2/V3 全开），密钥默认继承构建台已配好的 signing。
+ * 补签固定使用内置宿主密钥（zorvai_release.p12/bks），没有自定义密钥库选项。
  */
 @Composable
 private fun SigningCard(
     cfg: PluginSigning.Config,
-    expanded: Boolean,
     hostFingerprint: String,
-    onToggleExpand: () -> Unit,
     onToggleEnabled: (Boolean) -> Unit,
-    onPickKeystore: () -> Unit,
-    onAlias: (String) -> Unit,
-    onStorePass: (String) -> Unit,
-    onKeyPass: (String) -> Unit,
-    onUseBuiltIn: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val usingBuiltIn = cfg.keystorePath.substringAfterLast('/') == PluginSigning.BUILTIN_NAME
     Surface(
         Modifier.fillMaxWidth().padding(top = 10.dp),
         shape = RoundedCornerShape(12.dp),
@@ -927,12 +883,12 @@ private fun SigningCard(
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("导入时先用宿主密钥补签", fontSize = 13.sp, color = cs.onSurface)
+                    Text("导入插件时自动补签", fontSize = 13.sp, color = cs.onSurface)
                     Text(
-                        if (cfg.ready) "已就绪：${cfg.keystoreName}${if (usingBuiltIn) "（内置）" else ""}"
-                        else "未就绪：还没选到可用的宿主密钥库",
+                        if (cfg.enabled && cfg.ready) "已就绪：${cfg.keystoreName}（内置）"
+                        else "已关闭：只接受已与宿主同签名的插件",
                         fontSize = 11.sp,
-                        color = if (cfg.ready) cs.primary else cs.error,
+                        color = if (cfg.enabled && cfg.ready) cs.primary else cs.error,
                     )
                     Text(
                         "宿主当前签名：$hostFingerprint",
@@ -941,67 +897,6 @@ private fun SigningCard(
                 }
                 Switch(checked = cfg.enabled, onCheckedChange = onToggleEnabled)
             }
-            Text(
-                if (expanded) "收起签名设置 ▲" else "签名设置 ▼",
-                fontSize = 12.sp,
-                color = cs.primary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .combinedClickable(onClick = onToggleExpand)
-                    .padding(vertical = 6.dp),
-            )
-            if (expanded) {
-                Text("当前密钥库：${cfg.keystoreName}", fontSize = 11.sp, color = cs.onSurfaceVariant)
-                if (cfg.keystorePath.isNotBlank()) {
-                    Text(
-                        cfg.keystorePath, fontSize = 10.sp, color = Muted,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-                OutlinedButton(onClick = onUseBuiltIn) {
-                    Text(
-                        if (usingBuiltIn) "✓ 正在用内置宿主密钥" else "用内置宿主密钥（推荐）",
-                        fontSize = 12.sp,
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-                OutlinedButton(onClick = onPickKeystore) {
-                    Text("改用我自己的密钥库（.jks / .p12 / .bks）", fontSize = 12.sp)
-                }
-                Spacer(Modifier.height(6.dp))
-                SigningField("别名 alias", cfg.alias, false, onAlias)
-                SigningField("keystore 密码", cfg.storePassword, true, onStorePass)
-                SigningField("密钥密码", cfg.keyPassword, true, onKeyPass)
-                Text(
-                    "内置密钥随 App 一起分发，选它就能开箱即用，不用从电脑传任何文件；" +
-                        "它只用于证明「插件出自本机构建」，不作任何安全鉴权。" +
-                        "想换成自己那把，用上面第二个按钮选（本项目宿主密钥：zorvai_release.jks，" +
-                        "别名 zorvai，口令与 keystore.properties 里一致）。" +
-                        "用别把密钥签出来的插件，照样会被同签名闸门拒绝。\n" +
-                        "口径：内置库是 BKS 格式（原 .jks 实为 PKCS12，部分 ROM 读不了），" +
-                        "运行时经 BouncyCastle 加载。\n" +
-                        "开关打开后，导入的插件包会先被重签成宿主身份、然后直接安装 —— " +
-                        "校验对刚签出来的包是同义反复所以不再重复卡；关掉则恢复" +
-                        "「只接受已经与宿主同签名的包」（严格模式，第三方包会直接被拒）。\n" +
-                        "补签时若配置的那把密钥在本机读不了，会自动改用内置密钥继续签，" +
-                        "提示里写的是**实际生效**的那个文件名。",
-                    fontSize = 11.sp, color = Muted,
-                )
-            }
         }
     }
-}
-
-@Composable
-private fun SigningField(label: String, value: String, isPassword: Boolean, onChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        singleLine = true,
-        label = { Text(label, fontSize = 12.sp) },
-        visualTransformation = if (isPassword) PasswordVisualTransformation()
-        else androidx.compose.ui.text.input.VisualTransformation.None,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-    )
 }

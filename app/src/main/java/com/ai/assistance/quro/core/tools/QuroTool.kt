@@ -174,6 +174,8 @@ class QuroToolRegistry {
             "ui_widget",
             // 节点编辑器：AI 直接读写节点流工程（与工具中心面板共享 studio/flow/*.qne，面板打开自动恢复）
             "node_editor",
+            // 工作流引擎 AI 侧调用入口：创建/点燃/查询运行（缺口清单 · 可实现项）
+            "wf_create", "wf_trigger", "wf_run_status",
             // MCP 客户端：AI 调用外部 MCP 服务器工具（#402）
             "mcp_servers", "mcp_list_tools", "mcp_call", "mcp_deploy", "mcp_undeploy", "mcp_list_local",
             // MCP-ACI 桥接：通过 ACI 调用外部 MCP 服务器工具
