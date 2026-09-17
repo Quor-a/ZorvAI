@@ -776,7 +776,7 @@ private fun runCommandInLinux(command: String, timeout: Long): String {
 
 | 维度 | 工具 | 说明 |
 |------|------|------|
-| **Dim1 扩展生态（联网/编排）** | `crossref_search`、`search_provider`、`img_gen_provider`、`train_12306`、`github_read`、`workflow_run`、`automatic_ui` | **多引擎搜索聚合 `search_provider`**：duckduckgo（默认·免费）/ tavily（Key）/ **google_search（Google 抓取）/ zhipu_search（智谱 web_search）/ various_search（聚合去重）** 五家引擎；`workflow_run` 多步编排、`automatic_ui` 脚本化 UI 序列 |
+| **Dim1 扩展生态（联网/编排）** | `crossref_search`、`search_provider`、`img_gen_provider`、`train_12306`、`github_read`、`workflow_run`、`automatic_ui` | **多引擎搜索聚合 `search_provider`**：duckduckgo（默认·免费）/ tavily（Key）/ **google_search（Google 抓取）/ zhipu_search（智谱 web_search）/ various_search（聚合去重）** 五家引擎；`workflow_run` **工作流编排引擎**：变量表 `vars` + 赋值步 `set` + `save_as` 存输出 + `for_each` 遍历数组（绑定 `{{item}}`）+ `repeat` 固定循环 + `if_contains/if_not_contains/if_eq/if_ne` 条件跳过 + `timeout_ms` 单步超时 + `on_error: continue|abort`，占位符 `{{var}}/{{last}}/{{i}}/{{item}}`；`automatic_ui` 脚本化 UI 序列 |
 | **Dim2 五语言真执行** | `polyglot_run` | JavaScript / Python / Ruby / Go / Rust 在 proot 真实运行（非沙箱模拟） |
 | **Dim3 UI 自动化（双方案）** | `ui_tree` | **本地**：`uiautomator dump` 控件树 + tap_text/id/desc/bounds 精准点击（支持虚拟显示器 `display` 参数）；**云端 AutoGLM**：`action=autoglm` 截图转 base64 供视觉/AutoGLM 模型理解界面（适合游戏/WebView/Flutter 等控件树不可见场景），可选 `task` 提示 |
 | **Dim4 媒体** | `ffmpeg` | 完整 FFmpeg 链：探测 / 转码 / 裁剪 / 合并 / 提取音频等 |
