@@ -128,6 +128,12 @@ class QuroToolRegistry {
             "list_files", "read_text_file", "browse_files", "file_read",
             // 文件写/改/删（IDE 集成后默认开放；为高危工具，用户可在设置关闭「完整工具集」回退到只读集）
             "write_file", "delete_file", "make_directory", "move_file", "copy_file", "find_files", "file_info",
+            // 格式转换（csv↔json、markdown→html、json 美化；对应「其他 AI」扩展生态的 file_converter）
+            "file_converter",
+            // 文件编辑增强（writer 结构化写 / apk_editor 改包 / exe_editor 改 PE；对应「其他 AI」文件与编辑维）
+            "writer", "apk_editor", "exe_editor",
+            // 记忆系统工程化（多空间 / 重建 / 自动保存候选 / 窗口规划 / 导入导出；对应「其他 AI」记忆维分层架构）
+            "memory_space", "memory_rebuild", "memory_autosave", "memory_window_plan", "memory_export",
             // 网络 / Web
             "http_request", "open_web", "ai_browser",
             // 自研端侧联网检索（多引擎并发 + 查询改写 + 正文密度抽取 + 五信号重排 + 上下文打包）
@@ -212,6 +218,18 @@ class QuroToolRegistry {
             // ★ APK 级插件框架总控（唯一入口）：列/装/卸/重载插件 + 查看与调用插件贡献的 AI 工具
             //   + 打开插件界面。插件动态贡献的工具由 pluginHostToolSpecs() 另行并入。
             "apk_plugin",
+            // 七维能力补全（Dim1/2/3/4/7）：扩展生态 / 五语言真执行 / UI 自动化 / FFmpeg 链 / 终端增强
+            // Dim1 扩展生态（网络类 + 编排）
+            "crossref_search", "search_provider", "img_gen_provider", "train_12306", "github_read",
+            "workflow_run", "automatic_ui",
+            // Dim2 五语言真执行
+            "polyglot_run",
+            // Dim3 UI 自动化
+            "ui_tree",
+            // Dim4 媒体
+            "ffmpeg",
+            // Dim7 终端增强
+            "tmux", "terminal_keys",
         ) + uiActionToolNames() // 并入「UI 动作工具」：对话框界面/弹层/开关 → AI 可调用（见 QuroToolsUiActions）
         val base = map.values.filter { it.name in coreNames }.map {
             QuroToolSpec(it.name, it.description, it.parametersJson)

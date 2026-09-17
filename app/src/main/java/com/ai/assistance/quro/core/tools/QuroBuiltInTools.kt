@@ -265,6 +265,18 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(FileInfoTool())
     // 工具箱：文件管理 / 浏览器 / IDE
     r.register(BrowseFilesTool())
+    // 格式转换（对应「其他 AI」扩展生态里点名的 file_converter 能力：csv↔json、markdown→html、json 美化）
+    r.register(QuroFileConverterTool())
+    // 文件编辑增强（对应「其他 AI」文件与编辑维的 writer / ApkEditor / ExeEditor）
+    r.register(QuroWriterTool())
+    r.register(QuroApkEditorTool())
+    r.register(QuroExeEditorTool())
+    // 记忆系统工程化（对应「其他 AI」记忆维的 MemorySpace / Rebuild / AutoSaveCandidate / WindowPlanner / ExportModel）
+    r.register(QuroMemorySpaceTool())
+    r.register(QuroMemoryRebuildTool())
+    r.register(QuroMemoryAutoSaveTool())
+    r.register(QuroMemoryWindowPlanTool())
+    r.register(QuroMemoryExportTool())
     r.register(FileReadTool())
     r.register(OpenWebTool())
     r.register(RunCodeTool())
@@ -377,6 +389,25 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(AuthServiceListTool())
     r.register(AuthServiceRemoveTool())
     r.register(QuroGitHubSearchTool())   // github_search：对话框内把 GitHub 当作搜索引擎使用
+    // ═══ 七维能力补全（Dim1/2/3/4/7）：扩展生态 / 五语言真执行 / UI 自动化 / FFmpeg 链 / 终端增强 ═══
+    // Dim1 扩展生态（网络类 + 编排）：对应「其他 AI」JS 工具包量级差距，补齐可调用联网能力
+    r.register(QuroCrossrefTool())            // crossref_search：Crossref 学术文献检索（免费）
+    r.register(QuroSearchProviderTool())      // search_provider：多引擎搜索聚合（duckduckgo/tavily）
+    r.register(QuroImgGenProviderTool())     // img_gen_provider：多厂商文生图（openai/qwen/minimax/siliconflow/xai/nanobanana/zhipu）
+    r.register(QuroTrain12306Tool())         // train_12306：12306 余票查询
+    r.register(QuroGithubReadTool())         // github_read：读仓库文件/Issue/PR diff
+    // Dim1 编排：多步工作流 + 脚本化 UI 自动操作（链式调用其它已注册工具）
+    r.register(QuroWorkflowTool())           // workflow_run：多步编排/条件/循环
+    r.register(QuroAutomaticUiTool())        // automatic_ui：脚本化 UI 动作序列
+    // Dim2 五语言真执行：javascript/python/ruby/go/rust（proot 内真跑）
+    r.register(QuroPolyglotRunner())         // polyglot_run
+    // Dim3 UI 自动化：UI 控件树获取 + 精准点击（虚拟显示器 display 参数）
+    r.register(QuroUiTreeTool())             // ui_tree
+    // Dim4 媒体：完整 FFmpeg 链（探测/转码/裁剪/合并）
+    r.register(QuroFfmpegTool())             // ffmpeg
+    // Dim7 终端增强：tmux 会话管理 + 自定义按键绑定（对应「其他 AI」多 tmux/自定义按键）
+    r.register(QuroTmuxTool())               // tmux
+    r.register(QuroKeybindingTool())         // terminal_keys
     // 终端驱动工具（统一为单一 terminal 工具，action 分发；内部复用原 10 个终端子工具实例）
     r.register(QuroTerminalTool())
 
