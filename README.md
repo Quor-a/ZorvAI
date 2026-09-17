@@ -783,6 +783,7 @@ private fun runCommandInLinux(command: String, timeout: Long): String {
 | **Dim5 文件与编辑** | `writer`、`apk_editor`、`exe_editor`、`file_converter`、`git`、`syntax_check` | 结构化写 / 改包 / 格式转换；**`git`**：proot 内真实 Git（status/log/diff/branch/remote/add/commit/clone/pull/push，路径 `/storage/emulated/0 ↔ /sdcard`）；**`syntax_check`**：json/xml 端侧解析 + python/js/ruby 经解释器语法检查 + go/rust/kotlin 括号配平启发式 |
 | **Dim6 记忆系统** | `memory_save/list/search/delete`、`memory_space`、`memory_rebuild`、`memory_autosave`、`memory_window_plan`、`memory_export`、`experience_*` | 分层记忆：多空间 / 重建 / 自动保存候选 / 窗口规划 / 导入导出 + AI 经验闭环（日志/查询/纠错/版本差异） |
 | **Dim7 终端增强** | `tmux`、`terminal_keys`、`vnc` | tmux 会话管理、自定义按键绑定；**`vnc`**：VNC 虚拟桌面完整控制——install/start/stop/status + 输入控制 **`tap`(坐标点击)/`type`(输入文本)/`key`(发送按键)**（经 DISPLAY=:99 xdotool，安装时自动装 xdotool） |
+| **自动化集成（Tasker #39）** | `tasker` | **双向集成**：出站 `fire` 点燃指定 Tasker 任务 / `broadcast` 发任意自定义广播（带 extras）/ `state` 查安装；入站 `QuroTaskerReceiver` 接收 `com.ai.assistance.quro.TASKER_TRIGGER` 广播，按 `workflow`/`workflow_id` 触发本机已保存工作流、或把 `prompt` 转交对话——ZorvAI 既能被动被 Tasker 触发，也能主动向 Tasker 派发动作 |
 
 ### 7. 语音 / TTS / STT
 - **TTS 合成（多供应商）**：`QuroTtsProvider` 支持 EDGE_TTS、OPENAI_COMPAT、MINIMAX、SILICONFLOW、TTS302、COZECN、GIZWITS、ACGN、ALIYUN 等；情绪标签跟随文本

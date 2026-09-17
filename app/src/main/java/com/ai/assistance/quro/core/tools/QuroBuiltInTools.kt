@@ -413,6 +413,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(QuroSyntaxCheckTool())        // syntax_check：端侧+proot 多语言语法校验（json/xml/yaml/python/js/ruby/go/rust/kotlin）
     // 终端驱动工具（统一为单一 terminal 工具，action 分发；内部复用原 10 个终端子工具实例）
     r.register(QuroTerminalTool())
+    // Tasker 双向集成（#39）：ZorvAI 可被 Tasker 触发、也能向 Tasker 派发动作
+    r.register(QuroTaskerTool())           // tasker：fire 点燃任务 / broadcast 发广播 / state 查安装
 
     // ═════════════ L2 Shizuku 执行（CapOS 通道，需 Shizuku 已授权+运行中）══════════════
     r.register(ShizukuExecTool())

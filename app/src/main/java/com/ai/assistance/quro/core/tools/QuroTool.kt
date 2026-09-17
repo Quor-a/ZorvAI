@@ -232,6 +232,8 @@ class QuroToolRegistry {
             "tmux", "terminal_keys",
             // Dim5 文件与编辑补全：Git 集成 + 语法检查
             "git", "syntax_check",
+            // 自动化集成：Tasker 双向（#39）
+            "tasker",
         ) + uiActionToolNames() // 并入「UI 动作工具」：对话框界面/弹层/开关 → AI 可调用（见 QuroToolsUiActions）
         val base = map.values.filter { it.name in coreNames }.map {
             QuroToolSpec(it.name, it.description, it.parametersJson)

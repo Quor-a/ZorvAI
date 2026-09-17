@@ -675,6 +675,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- Tasker 入站触发器（#39）：接收 Tasker「发送意图」广播，按 workflow 触发本机工作流 / prompt 转交对话 -->
+        <receiver
+            android:name=".tasker.QuroTaskerReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.TASKER_TRIGGER" />
+            </intent-filter>
+        </receiver>
+
         <!-- 终端保活开机接收器：开机/应用更新后拉起终端保活服务，恢复默认会话存活 -->
         <receiver
             android:name=".receiver.QuroTerminalBootReceiver"
