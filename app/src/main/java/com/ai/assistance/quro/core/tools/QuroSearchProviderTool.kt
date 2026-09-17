@@ -126,7 +126,7 @@ class QuroSearchProviderTool : QuroTool {
         val links = linkRegex.findAll(html).map { m ->
             runCatching { java.net.URLDecoder.decode(m.groupValues[1], "UTF-8") }.getOrElse { m.groupValues[1] }
         }.filter { it.startsWith("http") }.distinct().take(maxResults).toList()
-        val titles = titleRegex.findAll(html).map { stripTags(m.groupValues[1]).trim() }.filter { it.isNotEmpty() }.toList()
+        val titles = titleRegex.findAll(html).map { stripTags(it.groupValues[1]).trim() }.filter { it.isNotEmpty() }.toList()
         if (links.isEmpty()) return "未找到结果（Google 可能返回了验证码或空页）。"
         val sb = StringBuilder("🔍 Google 搜索结果（${links.size}）：\n")
         links.forEachIndexed { i, link ->

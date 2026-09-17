@@ -22,12 +22,16 @@ class QuroWorkflowTool : QuroTool {
         "\"repeat\":N(可选固定循环N次,1-50),\"for_each\":[...]或\"{{var}}\"(可选遍历数组,绑定 {{item}})," +
         "\"timeout_ms\":可选单步超时(0=不限,最大300000),\"on_error\":\"continue|abort(默认continue)}\n" +
         " - 赋值步：{\"set\":\"变量名\",\"value\":\"值(支持 {{占位符}})\"}\n" +
-        "占位符在 args / if_* / value 中解析；返回每步结果汇总与最终变量表。"
+        " - 数据抽取步：{\"extract\":\"regex|json|substring|concat|random\",\"from\":\"源(默认{{last}})\"," +
+        "\"pattern\":\"正则(extract=regex)\",\"path\":\"a.b.c(JSON路径,extract=json)\"," +
+        "\"start\":0,\"end\":-1(extract=substring),\"value\":\"拼接串/源(extract=concat)\",\"length\":8(extract=random)," +
+        "\"save_as\":\"变量名(可选,存抽取结果)}\n" +
+        "占位符在 args / if_* / value / from / pattern / value 中解析；返回每步结果汇总与最终变量表。"
     override val parametersJson = """{
         "type":"object",
         "properties":{
             "vars":{"type":"object","description":"初始变量表（可选），步骤内用 {{key}} 引用"},
-            "steps":{"type":"array","description":"步骤数组。工具步: {tool,args,save_as?,if_contains?,if_not_contains?,if_eq?,if_ne?,repeat?,for_each?,timeout_ms?,on_error?}；赋值步: {set,value}"}
+            "steps":{"type":"array","description":"步骤数组。工具步: {tool,args,save_as?,if_contains?,if_not_contains?,if_eq?,if_ne?,repeat?,for_each?,timeout_ms?,on_error?}；赋值步: {set,value}；数据抽取步: {extract:regex|json|substring|concat|random, from?, pattern?, path?, start?, end?, value?, length?, save_as?}。from/pattern/value 支持 {{占位符}}"}
         },
         "required":["steps"]
     }"""
@@ -63,6 +67,46 @@ class QuroWorkflowTool : QuroTool {
                 val value = resolve(step.optString("value", ""))
                 vars[key] = value
                 sb.append("🔧 步骤${i + 1} [set $key = ${value.take(200)}]\n")
+                continue
+            }
+
+            // 数据抽取步：regex / json / substring / concat / random
+            if (step.has("extract")) {
+                val mode = step.optString("extract")
+                val src = resolve(step.optString("from", "{{last}}"))
+                val saveAs = step.optString("save_as", "")
+                val out = when (mode) {
+                    "regex" -> {
+                        val m = runCatching { Regex(step.optString("pattern", ""), setOf(RegexOption.DOT_MATCHES_ALL)).find(src) }.getOrNull()
+                        m?.groupValues?.let { if (it.size > 1) it[1] else it.getOrNull(0) ?: "" } ?: ""
+                    }
+                    "json" -> runCatching {
+                        var cur: Any? = JSONObject(src)
+                        step.optString("path", "").split('.').filter { it.isNotBlank() }.forEach { k ->
+                            cur = when (cur) {
+                                is JSONObject -> cur.opt(k)
+                                is JSONArray -> cur.opt(k.toIntOrNull() ?: 0)
+                                else -> null
+                            }
+                        }
+                        cur?.toString() ?: ""
+                    }.getOrDefault("")
+                    "substring" -> {
+                        val start = step.optInt("start", 0).coerceAtLeast(0)
+                        val end = step.optInt("end", -1)
+                        if (end in 0..src.length) src.substring(start, end) else src.substring(start)
+                    }
+                    "concat" -> resolve(step.optString("value", ""))
+                    "random" -> {
+                        val len = step.optInt("length", 8).coerceIn(1, 64)
+                        val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+                        (1..len).joinToString("") { chars.random().toString() }
+                    }
+                    else -> ""
+                }
+                if (saveAs.isNotBlank()) vars[saveAs] = out
+                last = out
+                sb.append("🔧 步骤${i + 1} [extract $mode${if (saveAs.isNotBlank()) " → $saveAs" else ""}]：${out.take(300)}\n")
                 continue
             }
 
