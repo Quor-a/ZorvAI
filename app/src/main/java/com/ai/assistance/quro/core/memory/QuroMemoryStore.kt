@@ -26,7 +26,7 @@ data class QuroMemoryEntry(
     val updatedAt: Long = System.currentTimeMillis(),
 )
 
-class QuroMemoryRepository(context: Context) {
+class QuroMemoryRepository(context: Context, fileName: String = "quro_memory") {
     companion object {
         // C1 修复：进程级写锁。QuroMemoryRepository 在多处（ViewModel / 语音球服务 / 记忆工具）各自 new 实例，
         // 但都指向同一个 quro_memory.json。用 companion 锁保证跨实例的 loadAll()→saveAll() 临界区原子，
@@ -34,7 +34,7 @@ class QuroMemoryRepository(context: Context) {
         private val writeLock = Any()
     }
 
-    private val file = File(context.filesDir, "quro_memory.json")
+    private val file = File(context.filesDir, "$fileName.json")
 
     fun loadAll(): List<QuroMemoryEntry> {
         if (!file.exists()) return emptyList()
