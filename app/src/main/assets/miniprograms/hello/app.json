@@ -1,0 +1,8 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "navigationBarTitleText": "Hello 自研小程序",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f6f7f9"
+  }
+}

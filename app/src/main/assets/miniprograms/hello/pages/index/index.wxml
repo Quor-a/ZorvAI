@@ -1,0 +1,30 @@
+<view class="page">
+  <view class="hero">
+    <text class="title">{{title}}</text>
+    <text class="subtitle">JS引擎 / Flex布局 / 渲染 全部自研</text>
+  </view>
+
+  <view class="card">
+    <text class="card-title">计数器</text>
+    <view class="row">
+      <button class="btn" bindtap="onMinus">-</button>
+      <text class="count">{{count}}</text>
+      <button class="btn primary" bindtap="onPlus">+</button>
+    </view>
+    <text class="hint" wx:if="{{count > 5}}">已经超过 5 啦 🎉</text>
+    <text class="hint muted" wx:else>再点几下试试</text>
+  </view>
+
+  <view class="card">
+    <text class="card-title">能力清单</text>
+    <view class="item" wx:for="{{items}}" wx:for-item="it">
+      <text class="dot">{{index + 1}}</text>
+      <text class="item-text">{{it}}</text>
+    </view>
+  </view>
+
+  <view class="card">
+    <button class="btn wide" bindtap="onSystemInfo">读取系统信息</button>
+    <text class="sysinfo" wx:if="{{systemInfo}}">{{systemInfo}}</text>
+  </view>
+</view>
