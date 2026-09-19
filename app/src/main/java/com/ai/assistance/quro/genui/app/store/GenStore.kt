@@ -57,6 +57,45 @@ class GenStore(context: Context) {
         // 集成模式：只有一个供应商，主脑/快速都指向 quro_main，分派无需持久化。
     }
 
+    // ---------- 能力模型注册表（视觉/图生成/视频生成/TTS/STT/声音克隆/视频通话/语音通话） ----------
+    // 每个能力槽可独立配置 OpenAI 兼容端点；工具在运行时读取对应槽位驱动调用。
+    // 未配置的槽位=该能力不可用，工具如实报错并引导去「能力模型」页配置。
+    // 移植自上游 GenUI com.genui.app.store.GenStore（去品牌化为 com.ai.assistance.quro.genui.app.store）。
+    val CAP_SLOTS = listOf(
+        "vision", "imageGen", "videoGen", "tts",
+        "stt", "voiceClone", "videoCall", "voiceCall"
+    )
+    val CAP_LABELS = mapOf(
+        "vision" to "视觉理解", "imageGen" to "图片生成", "videoGen" to "视频生成",
+        "tts" to "语音合成 TTS", "stt" to "语音识别 STT", "voiceClone" to "声音克隆",
+        "videoCall" to "视频通话", "voiceCall" to "语音通话"
+    )
+
+    fun capFile() = File(dir, "capability_models.json")
+
+    fun loadCapability(slot: String): Map<String, String> = runCatching {
+        val arr = org.json.JSONArray(capFile().readText())
+        (0 until arr.length()).map { arr.getJSONObject(it) }
+            .firstOrNull { it.optString("slot") == slot }
+            ?.let { mapOf("baseUrl" to it.optString("baseUrl"), "apiKey" to it.optString("apiKey"),
+                "model" to it.optString("model"), "protocol" to it.optString("protocol", "openai")) }
+            ?: emptyMap()
+    }.getOrDefault(emptyMap())
+
+    @Synchronized
+    fun saveCapability(slot: String, baseUrl: String, apiKey: String, model: String, protocol: String = "openai", enabled: Boolean = true) {
+        val arr = runCatching { org.json.JSONArray(capFile().readText()) }.getOrDefault(org.json.JSONArray())
+        val kept = org.json.JSONArray()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            if (o.optString("slot") != slot) kept.put(o)
+        }
+        kept.put(org.json.JSONObject()
+            .put("slot", slot).put("baseUrl", baseUrl).put("apiKey", apiKey)
+            .put("model", model).put("protocol", protocol).put("enabled", enabled))
+        capFile().writeText(kept.toString())
+    }
+
     // ---------- 界面栈 ----------
 
     @Synchronized

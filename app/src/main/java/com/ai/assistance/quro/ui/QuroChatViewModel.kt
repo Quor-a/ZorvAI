@@ -95,6 +95,12 @@ import android.util.Log
 private const val TAG = "QuroChatViewModel"
 
 /**
+ * ```miniapp 围栏内容若是这个前缀，表示「原生小程序（自研引擎 appId）」而非 HTML 小程序。
+ * 由 [QuroChatViewModel.pushGenUiMiniAppToChat] 写入，ChatScreen 侧据此构造带 config.app_id 的卡片。
+ */
+internal const val NATIVE_MINIAPP_PREFIX = "zorv-miniapp:"
+
+/**
  * 对话 ViewModel（原创）：支持多会话、历史记录持久化、新�?/切换/删除会话�?
  * 同一份内�? [store] 实例贯穿生命周期，避�? QuroAssistant 持有过期引用�?
  */
@@ -707,6 +713,27 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     fun pushGenUiHtmlToChat(html: String, title: String = "") {
         if (html.isBlank()) return
         val content = "```miniapp\n$html\n```"
+        store.add(QuroMessage(role = "assistant", content = content))
+        commitCurrent()
+    }
+
+    /**
+     * GenUI 里 create_miniapp 产出的**原生小程序**（微信语法 WXML/WXSS/JS，自研引擎渲染）→ 写进 ZorvAI 对话框。
+     *
+     * 为什么要单独一条通道：pushGenUiHtmlToChat 走 ```miniapp 围栏（WebView 运行时渲染 HTML），
+     * 而原生小程序根本没有 HTML 文件，塞进去只会得到一张"（无小程序内容）"的空卡。
+     * 这里走自研卡片围栏 ```quro-card + config.app_id，由对话框内的卡片就地用原生引擎渲染
+     * （见 QuroChatCards.MiniAppCardView 的 nativeAppId 分支）。
+     *
+     * 调用方需在主线程（GenScaffold 的事件回调已 main.post）。
+     */
+    fun pushGenUiMiniAppToChat(appId: String, title: String = "") {
+        val id = appId.trim()
+        if (id.isEmpty()) return
+        // 走 ```miniapp 围栏（对话框里唯一会把内容渲染成"小程序卡"的通道），
+        // 内容用原生标记前缀 —— 该围栏本来是 HTML 小程序，这里用标记区分出"原生小程序"，
+        // ChatScreen 见到标记就构造带 config.app_id 的 MiniAppCard，由自研引擎就地渲染。
+        val content = "```miniapp\n$NATIVE_MINIAPP_PREFIX$id\n```"
         store.add(QuroMessage(role = "assistant", content = content))
         commitCurrent()
     }

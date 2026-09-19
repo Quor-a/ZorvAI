@@ -9,6 +9,7 @@ import com.ai.assistance.quro.genui.app.store.ModelProvider
 import com.ai.assistance.quro.genui.app.store.Protocol
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -49,6 +50,28 @@ class AgentLoop(
     private var toolCallCount = 0
     private val startedAt = System.currentTimeMillis()
 
+    /** 小程序包体总字节（filesDir/miniapps/<appId>/ 递归求和），供时间线显示真实体量。 */
+    private fun miniAppBytes(appId: String): Long {
+        val dir = File(com.yuanbao.miniapp.core.MiniAppEngine.userAppsRoot(appContext), appId)
+        if (!dir.isDirectory) return 0L
+        var n = 0L
+        dir.walkTopDown().forEach { f -> if (f.isFile) n += f.length() }
+        return n
+    }
+
+    /**
+     * 本次生成期间新建/更新过的小程序 id（取最新的一个）。
+     * 用于 create_miniapp 成功但 id 没能回传时的兜底交付——包已经在磁盘上了，
+     * 不该因为一个字段缺失就让对话框里什么都没有。
+     */
+    private fun newestMiniAppSince(since: Long): String? = runCatching {
+        val root = com.yuanbao.miniapp.core.MiniAppEngine.userAppsRoot(appContext)
+        root.listFiles { f -> f.isDirectory && File(f, "app.json").isFile }
+            ?.filter { it.lastModified() >= since - 5_000L }
+            ?.maxByOrNull { it.lastModified() }
+            ?.name
+    }.getOrNull()
+
     suspend fun run(
         provider: ModelProvider,
         userPrompt: String,
@@ -66,14 +89,54 @@ class AgentLoop(
         // 决策轮专用提示：此阶段禁止写 HTML，只决定工具调用；否则模型会在决策轮
         // 就开始输出整页 HTML（非流式、耗时且被丢弃，导致画布空白）
         val decisionSystem = system + "\n\n# 当前阶段：工具决策（重要）\n" +
-            "现在是【决策阶段】，禁止输出 HTML 文档。只做两件事之一：\n" +
-            "a) 需要实时信息/记忆/设备能力 → 调用相应工具（可连续多个）；\n" +
-            "b) 无任何工具需求 → 只回复四个字符：NO_TOOLS。\n" +
-            "不要写界面、不要写代码、不要解释。"
+            "现在是【决策阶段】，**禁止输出任何界面代码**（HTML / WXML / 组件树 / 绘制指令都不要写），" +
+            "也不要写解释性文字。只做两件事之一：\n" +
+            "a) 需要实时信息 / 记忆 / 设备能力 → 调用相应工具（可连续多个）；\n" +
+            "b) 全都不需要 → 只回复四个字符：NO_TOOLS。\n" +
+            "本阶段只按系统提示「三、界面选择路由」判断：要不要工具、要哪些工具、要不要走小程序工具；" +
+            "各形态具体怎么写，留到成稿阶段按「二、渲染落在哪里」的手册落笔。\n" +
+            "★ 路由命中形态 3（小程序）→ 本阶段直接调 create_miniapp；命中形态 4（要原生桥）→ 本阶段调 miniapp(action=\"create\") 再 miniapp(action=\"run\")。\n" +
+            "   这两个工具成功后交付即已完成（产物自己内嵌进对话流），**不要再跟一份 HTML 盖上去**。\n" +
+            "★ 用户要『介绍你自己 / 展示你能做什么』→ 用 create_miniapp 渲染自我介绍小程序，严禁文字直答。"
 
         val messages = JSONArray()
             .put(JSONObject().put("role", "system").put("content", decisionSystem))
             .put(JSONObject().put("role", "user").put("content", userPrompt))
+
+        // 路由直通：交互类应用关键词命中 → 注入确定指令，不走犹豫的形态选择。
+        // 小程序渲染在对话流里（用户主交互面），是 GenUI 的第一等交付形态——HTML 只是展示型页面的备选。
+        var miniAppDelivered: String? = null
+        /** 本轮第一次调 create_miniapp 的时间戳（用于"包落盘了但没拿到 id"的最后兜底交付）。 */
+        var createdMiniAppAt: Long? = null
+        /** 需要原生桥接的小程序走 ZorvAI 小程序工作室（miniapp run）或任意返回完整 HTML 文档的
+         *  可视化工具产物：捕获后内嵌对话流渲染，跳过 HTML 渲染轮（与 miniAppDelivered 互斥）。 */
+        var studioHtmlDelivered: String? = null
+        /** 模型用 miniapp(action="create"/"write") 落地过的工作室工程名（用于"只 create 没 run"的兜底补跑）。 */
+        var studioProject: String? = null
+        val wantsMini = wantsMiniApp(userPrompt)
+        val wantsHtml = wantsHtmlPage(userPrompt)
+        val wantsNative = wantsNativeCapability(userPrompt)
+        if (wantsNative && !wantsHtml) {
+            // 路由表里"要原生能力"排在"有状态+频繁交互"之前 → 原生需求优先落形态 4（工作室 + native.* 桥）。
+            messages.put(JSONObject().put("role", "system").put("content",
+                "【路由直通：形态 4 小程序工作室】这条需求要调原生能力（storage/ui/device/network/router/kotlin/aci/crypto/db/location），" +
+                "按路由表落在小程序工作室，两步都要做完：\n" +
+                "1) miniapp(action=\"create\", name=\"英文短名\", files=[{path:\"app.json\",content:\"…\"}," +
+                "{path:\"pages/index/index.html\",content:\"<!DOCTYPE html>…\"}]) 落地工程；\n" +
+                "2) miniapp(action=\"run\", name=\"英文短名\", entry=\"pages/index/index.html\") 取回自包含 HTML。\n" +
+                "run 的产物会自动内嵌进对话流（已注入 window.native），这就是交付——不要再自己另写一份 HTML 盖上去。\n" +
+                "（若用户原话明确要求用 HTML/网页实现，则忽略本条，回复 NO_TOOLS 走形态 1。）\n"))
+            onEvent(AgentEvent.Thinking("路由直通：形态 4 小程序工作室"))
+        } else if (wantsMini && !wantsHtml) {
+            messages.put(JSONObject().put("role", "system").put("content",
+                "【路由直通：形态 3 小程序】这条需求按路由表落在小程序（直接内嵌对话流，用户可直接试玩）。\n" +
+                "本阶段就调 create_miniapp：app_id + title + files，files 必须给全 " +
+                "app.json / app.js / app.wxss / pages/index/index.{wxml,wxss,js}，真实逻辑 + 真实状态，尺寸全用 rpx。\n" +
+                "工具成功后交付即完成（产物自己内嵌进对话流），**不要再回复任何 HTML 或文字**。\n" +
+                "不要调用 open_miniapp——只有用户明确说『全屏打开』时才调。\n" +
+                "（若用户原话明确要求用 HTML/网页实现，则忽略本条，回复 NO_TOOLS 走形态 1。）\n"))
+            onEvent(AgentEvent.Thinking("路由直通：形态 3 小程序"))
+        }
 
         // 快速模型预检（专项模型分派的真实用途之一）：这条指令要不要先联网？
         // 失败/未配置时静默跳过，绝不阻塞主流程。
@@ -86,6 +149,7 @@ class AgentLoop(
             }
         }
 
+        val loopStart = System.currentTimeMillis()
         try {
             // ---------- 决策轮（带工具，OpenAI 兼容协议才支持 function calling） ----------
             if (provider.protocol == Protocol.OPENAI) {
@@ -100,8 +164,7 @@ class AgentLoop(
                 var rounds = 0
                 val seenSigs = LinkedHashSet<String>()
                 var redundant = 0
-                val loopStart = System.currentTimeMillis()
-                while (!cancelled) {
+                while (!cancelled && studioHtmlDelivered == null) {
                     rounds++
                     onEvent(AgentEvent.Thinking(
                         if (rounds == 1) "分析指令，判断需不需要查资料或调用设备能力…"
@@ -203,6 +266,34 @@ class AgentLoop(
                             if (denied) AgentEvent.ToolDenied(callId, name, summary)
                             else AgentEvent.ToolFinished(callId, name, cost, !hasError, summary)
                         )
+                        // GenUI 小程序创建成功 → 通知 UI 在画布渲染（此前这条链路是断的：
+                        // create_miniapp 只活在孤儿代码 ChatSession，活路径 AgentLoop 从不知情）
+                        if (name == "create_miniapp" && !result.has("error")) {
+                            if (createdMiniAppAt == null) createdMiniAppAt = System.currentTimeMillis()
+                            // app_id 优先取返回体；万一模型/适配器只回了 created 也能认。
+                            // 只认 "ok" 一个字段太脆：任一环节漏掉 ok，交给 AI 的东西就进不了对话框。
+                            val aid = result.optString("app_id")
+                                .ifBlank { result.optString("created") }
+                            if (aid.isNotBlank()) {
+                                miniAppDelivered = aid
+                                onEvent(AgentEvent.MiniAppCreated(aid))
+                            }
+                        }
+                        // ZorvAI 小程序工作室（miniapp run）或返回完整 HTML 文档的可视化工具产物：
+                        // 捕获自包含 HTML，内嵌对话流渲染，跳过 HTML 渲染轮。
+                        if (studioHtmlDelivered == null) {
+                            val rh = extractRenderableHtml(name, result)
+                            if (rh != null) {
+                                studioHtmlDelivered = rh
+                                onEvent(AgentEvent.StudioMiniApp(rh, studioTitleOf(name)))
+                            }
+                        }
+                        // 记下工作室工程名：模型只 create 忘了 run 时，下面替它补一步。
+                        if (name == "miniapp") {
+                            val act = args.optString("action")
+                            val nm = args.optString("name")
+                            if (nm.isNotBlank() && (act == "create" || act == "write")) studioProject = nm
+                        }
                         onStatus("工具完成：$name · ${kb(result.toString().length)}")
                         messages.put(JSONObject()
                             .put("role", "tool")
@@ -222,6 +313,49 @@ class AgentLoop(
 
             // ---------- 渲染轮（流式出 HTML） ----------
             if (cancelled) return
+            // ★ 兜底交付：模型只 create 了工作室工程、忘了 run → 替它把 run 补上。
+            // 少了这一步，工程躺在磁盘上，对话框里什么东西都不会出现（"AI 没有写进对话框"）。
+            if (studioHtmlDelivered == null && miniAppDelivered == null && studioProject != null) {
+                val nm = studioProject!!
+                onEvent(AgentEvent.Thinking("补齐一步：运行小程序工作室工程 $nm"))
+                val r = runCatching {
+                    executeTool("miniapp", JSONObject().put("action", "run").put("name", nm))
+                }.getOrNull()
+                val html = r?.let { extractRenderableHtml("miniapp", it) }
+                if (html != null) {
+                    studioHtmlDelivered = html
+                    onEvent(AgentEvent.StudioMiniApp(html, "小程序工作室"))
+                }
+            }
+            // ★ 最后一道交付兜底：这一轮确实调过 create_miniapp、包也已落盘，却因为某些环节
+            // （返回体里没带 app_id / 事件被吞）没拿到 id → 直接从 filesDir/miniapps 里挑本次
+            // 新建的那个包交付。目标是：只要 AI 真的生成了小程序，对话框里就一定有它。
+            if (miniAppDelivered == null && createdMiniAppAt != null) {
+                val newest = newestMiniAppSince(createdMiniAppAt!!)
+                if (newest != null) {
+                    miniAppDelivered = newest
+                    onEvent(AgentEvent.MiniAppCreated(newest))
+                    onStatus("小程序已落盘：$newest")
+                }
+            }
+            // ★ 小程序画布交付：create_miniapp 已成功 → 不再走 HTML 渲染轮。
+            // 可交互小程序已通过 MiniAppCreated 事件内嵌渲染到对话流；这里只标记完成，
+            // 避免模型紧接着又吐一份垃圾 HTML 盖在交互小程序上。
+            if (miniAppDelivered != null) {
+                val id = miniAppDelivered
+                val elapsed = System.currentTimeMillis() - loopStart
+                // 用真实包体大小：原来这里写死 0，时间线会显示「0KB · N 次工具调用」，
+                // 看起来像"什么都没生成"（用户据此判断小程序是空的，实际不是）。
+                onEvent(AgentEvent.Finished("小程序 · $id", miniAppBytes(id), toolCallCount, elapsed))
+                return
+            }
+            // ★ 小程序工作室 / 可视化交付：miniapp run 或可视化工具已返回自包含 HTML → 内嵌对话流渲染，
+            // 不走 HTML 渲染轮（避免模型又吐一份盖在上头）。
+            if (studioHtmlDelivered != null) {
+                val elapsed = System.currentTimeMillis() - loopStart
+                onEvent(AgentEvent.Finished("小程序工作室 · 预览", 0, toolCallCount, elapsed))
+                return
+            }
             onStatus("写界面 · 流式渲染中")
             onEvent(AgentEvent.Rendering(if (!seedHtml.isNullOrBlank()) "接着已中断的部分继续写…" else "开始绘制界面…"))
 
@@ -275,7 +409,11 @@ class AgentLoop(
             val fenceFilter = LeadingFenceFilter()
             // 渲染轮 system = 基座 + 灵魂（说话层+视觉签名层）：视觉签名只在此轮注入，影响 UI 美学方向
             val renderSystem = system + Soul.injectStyle(soul) +
-                "\n# 输出格式（务必遵守）\n" +
+                "\n# 当前阶段：成稿（按路由落笔）\n" +
+                "本阶段不再调工具。先按系统提示「三、界面选择路由」定形态，再照「二、渲染落在哪里」的手册写：\n" +
+                "· 形态 1 → 一次写完整 HTML；要系统原生控件质感就把形态 2 的块（<!--stack:compose--> 等）嵌进**同一个文档**。\n" +
+                "· 形态 5（路由判定为纯文本）→ 直接回文字答案，不要套下面的 HTML 契约与质量自检。\n" +
+                "\n# 输出格式（遵守即通过）\n" +
                 "直接输出写入 WebView 画布的原始 HTML 文档：以 <!DOCTYPE html> 开头、以 </html> 结尾。" +
                 "不要使用 Markdown 代码块包裹（不要写 ```html 或 ```），也不要写任何解释性文字——只输出纯 HTML。\n" +
                 "\n# 质量自检（输出前心里过一遍）\n" +
@@ -346,7 +484,64 @@ class AgentLoop(
         return prompt.contains("继续") || prompt.contains("接着写") || prompt.contains("补完")
     }
 
+    /** 交互类应用关键词 → 小程序画布直通（与上游 GenUI 一致的关键词表） */
+    private fun wantsMiniApp(prompt: String): Boolean {
+        val kws = listOf(
+            "记账", "账本", "待办", "清单", "todo", "TODO", "计算器", "番茄钟", "倒计时", "秒表",
+            "计时", "打卡", "签到", "记事", "日记", "笔记", "备忘", "换算", "抽签", "骰子",
+            "随机数", "小游戏", "密码生成", "bmi", "BMI", "小工具", "小程序", "习惯", "存钱", "预算")
+        return kws.any { prompt.contains(it, ignoreCase = true) } ||
+            listOf("你自己", "自我介绍", "介绍自己", "你是谁", "介绍下你", "介绍一下你",
+                "你的能力", "你能做什么", "展示一下你").any { prompt.contains(it) }
+    }
+
+    /** 信息展示类关键词（或用户点名 html/web）→ HTML 画布。用户点名永远最高优先。 */
+    private fun wantsHtmlPage(prompt: String): Boolean {
+        val kws = listOf(
+            "html", "HTML", "Html", "web 页", "web页", "web app", "WebApp",
+            "新闻", "资讯", "文章", "报告", "仪表盘", "看板", "图表", "数据可视化",
+            "落地页", "官网", "介绍页", "网页", "网页版", "图文", "海报", "简历", "专题")
+        return kws.any { prompt.contains(it, ignoreCase = true) }
+    }
+
+    /**
+     * 需要原生能力的意图 → 形态 4（小程序工作室 + native.* 桥）。
+     * 路由表里这条排在"有状态+频繁交互"之前：同样是待办，要"存到本地/发通知"就该走工作室。
+     */
+    private fun wantsNativeCapability(prompt: String): Boolean {
+        val kws = listOf(
+            "震动", "振动", "发通知", "系统通知", "通知栏", "分享到", "分享给", "分享按钮",
+            "剪贴板", "复制到", "定位", "当前位置", "获取位置", "地图标记",
+            "数据库", "sql", "SQL", "sqlite", "SQLite", "加密", "md5", "sha256",
+            "存到本地", "保存到本地", "本地存储", "持久化", "离线保存",
+            "跳转页面", "多页面", "页面跳转", "子页面", "返回上一页",
+            "打开其他应用", "打开应用", "启动应用")
+        return kws.any { prompt.contains(it, ignoreCase = true) }
+    }
+
     /** 工具结果摘要（给时间线看，不塞全文） */
+    /**
+     * 从工具结果里抽取"可直接内嵌对话流渲染的自包含 HTML"。
+     * 触发条件（与上游 ZorvAI 小程序工作室 / 可视化工具对齐）：
+     *  - 小程序工作室 miniapp 的 run 返回完整 <!DOCTYPE html> 文档（含 native.* 桥接）；
+     *  - 其他工具若返回以 <!DOCTYPE 开头的完整 HTML 文档也一并内联渲染（覆盖创意工作室等可视化工具）。
+     * 注意：ZorvToolAdapter.execute 对"非 JSON 文本"会按 looksFailed 包成 {error} 或 {result}，
+     * 因此两个字段都要试；只有"明显是完整 HTML 文档"才认，避免把普通错误文本当 HTML 渲成白屏。
+     */
+    private fun extractRenderableHtml(name: String, result: JSONObject): String? {
+        val candidate = result.optString("result").ifBlank { result.optString("error").ifBlank { null } }
+            ?: return null
+        val t = candidate.trimStart()
+        val isDoc = t.startsWith("<!doctype", ignoreCase = true) ||
+                (name == "miniapp" && t.startsWith("<html", ignoreCase = true))
+        if (!isDoc) return null
+        return candidate
+    }
+
+    /** 工作室 / 可视化内嵌卡的中文标题。 */
+    private fun studioTitleOf(name: String): String =
+        if (name == "miniapp") "小程序工作室" else "可视化预览"
+
     /** 把工具返回压缩成一行人类可读摘要，用于思考时间线。 */
     private fun summarizeToolResult(name: String, r: JSONObject): String = runCatching {
         when {

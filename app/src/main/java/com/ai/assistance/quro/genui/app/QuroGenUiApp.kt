@@ -39,6 +39,8 @@ import com.ai.assistance.quro.genui.app.ui.theme.GenTheme
 fun QuroGenUiApp(
     dark: Boolean = false,
     onPushToChat: (html: String, title: String) -> Unit,
+    /** 原生小程序（create_miniapp，微信语法）交付 → 写进 ZorvAI 对话框（HTML 之外的独立通道）。 */
+    onPushMiniAppToChat: (appId: String, title: String) -> Unit = { _, _ -> },
     onExitToChat: () -> Unit,
     onTextReply: (text: String) -> Unit,
 ) {
@@ -82,6 +84,7 @@ fun QuroGenUiApp(
                 dark = dark,
                 onNavigate = { screen = it },
                 onPushToChat = onPushToChat,
+                onPushMiniAppToChat = onPushMiniAppToChat,
                 onExitToChat = onExitToChat,
                 onTextReply = onTextReply,
             )
