@@ -64,6 +64,13 @@ class AgentLoop(
      * 用于 create_miniapp 成功但 id 没能回传时的兜底交付——包已经在磁盘上了，
      * 不该因为一个字段缺失就让对话框里什么都没有。
      */
+    /**
+     * 是否为本轮的「GenUI 原生 UI」工具调用（新名 `genui_native_ui`；旧名 `create_miniapp` 作别名一起认，
+     * 保证历史提示词/缓存里的旧调用不会失效）。
+     */
+    private fun isNativeUiTool(name: String): Boolean =
+        name == "genui_native_ui" || name == "create_miniapp"
+
     private fun newestMiniAppSince(since: Long): String? = runCatching {
         val root = com.yuanbao.miniapp.core.MiniAppEngine.userAppsRoot(appContext)
         root.listFiles { f -> f.isDirectory && File(f, "app.json").isFile }
@@ -95,9 +102,11 @@ class AgentLoop(
             "b) 全都不需要 → 只回复四个字符：NO_TOOLS。\n" +
             "本阶段只按系统提示「三、界面选择路由」判断：要不要工具、要哪些工具、要不要走小程序工具；" +
             "各形态具体怎么写，留到成稿阶段按「二、渲染落在哪里」的手册落笔。\n" +
-            "★ 路由命中形态 3（小程序）→ 本阶段直接调 create_miniapp；命中形态 4（要原生桥）→ 本阶段调 miniapp(action=\"create\") 再 miniapp(action=\"run\")。\n" +
+            "★ 路由命中形态 3（GenUI 原生 UI）→ 本阶段直接调 genui_native_ui；命中形态 4（要原生桥）→ 本阶段调 miniapp(action=\"create\") 再 miniapp(action=\"run\")。\n" +
+            "   **形态 3 与形态 4 二选一**：选了哪条就只走那条，两个都做会在对话流里并排出现两块画布（重复界面）。\n" +
+            "   注意两个工具的区别：genui_native_ui = WXML/WXSS 原生界面（自研引擎，无 HTML）；miniapp = HTML 小程序工作室（带 window.native 桥）。\n" +
             "   这两个工具成功后交付即已完成（产物自己内嵌进对话流），**不要再跟一份 HTML 盖上去**。\n" +
-            "★ 用户要『介绍你自己 / 展示你能做什么』→ 用 create_miniapp 渲染自我介绍小程序，严禁文字直答。"
+            "★ 用户要『介绍你自己 / 展示你能做什么』→ 用 genui_native_ui 渲染自我介绍界面，严禁文字直答。"
 
         val messages = JSONArray()
             .put(JSONObject().put("role", "system").put("content", decisionSystem))
@@ -111,6 +120,8 @@ class AgentLoop(
         /** 需要原生桥接的小程序走 ZorvAI 小程序工作室（miniapp run）或任意返回完整 HTML 文档的
          *  可视化工具产物：捕获后内嵌对话流渲染，跳过 HTML 渲染轮（与 miniAppDelivered 互斥）。 */
         var studioHtmlDelivered: String? = null
+        /** 与 [studioHtmlDelivered] 配套的卡片标题（交付事件延后到工具循环结束才发，标题要先留住）。 */
+        var studioHtmlTitle: String? = null
         /** 模型用 miniapp(action="create"/"write") 落地过的工作室工程名（用于"只 create 没 run"的兜底补跑）。 */
         var studioProject: String? = null
         val wantsMini = wantsMiniApp(userPrompt)
@@ -129,8 +140,8 @@ class AgentLoop(
             onEvent(AgentEvent.Thinking("路由直通：形态 4 小程序工作室"))
         } else if (wantsMini && !wantsHtml) {
             messages.put(JSONObject().put("role", "system").put("content",
-                "【路由直通：形态 3 小程序】这条需求按路由表落在小程序（直接内嵌对话流，用户可直接试玩）。\n" +
-                "本阶段就调 create_miniapp：app_id + title + files，files 必须给全 " +
+                "【路由直通：形态 3 GenUI 原生 UI】这条需求按路由表落在原生界面（直接内嵌对话流，用户可直接试玩）。\n" +
+                "本阶段就调 genui_native_ui：app_id + title + files，files 必须给全 " +
                 "app.json / app.js / app.wxss / pages/index/index.{wxml,wxss,js}，真实逻辑 + 真实状态，尺寸全用 rpx。\n" +
                 "工具成功后交付即完成（产物自己内嵌进对话流），**不要再回复任何 HTML 或文字**。\n" +
                 "不要调用 open_miniapp——只有用户明确说『全屏打开』时才调。\n" +
@@ -266,26 +277,25 @@ class AgentLoop(
                             if (denied) AgentEvent.ToolDenied(callId, name, summary)
                             else AgentEvent.ToolFinished(callId, name, cost, !hasError, summary)
                         )
-                        // GenUI 小程序创建成功 → 通知 UI 在画布渲染（此前这条链路是断的：
-                        // create_miniapp 只活在孤儿代码 ChatSession，活路径 AgentLoop 从不知情）
-                        if (name == "create_miniapp" && !result.has("error")) {
+                        // GenUI 小程序创建成功 → 记下 app_id（**先不广播**：交付事件统一在本轮工具循环
+                        // 结束后只发一次，见下方"一轮只交付一件"。此前在工具循环里就地 onEvent，
+                        // 于是模型只要又调了工作室（或再 create 一次），对话流里就并排出现两块画布）
+                        if (isNativeUiTool(name) && !result.has("error")) {
                             if (createdMiniAppAt == null) createdMiniAppAt = System.currentTimeMillis()
                             // app_id 优先取返回体；万一模型/适配器只回了 created 也能认。
                             // 只认 "ok" 一个字段太脆：任一环节漏掉 ok，交给 AI 的东西就进不了对话框。
                             val aid = result.optString("app_id")
                                 .ifBlank { result.optString("created") }
-                            if (aid.isNotBlank()) {
-                                miniAppDelivered = aid
-                                onEvent(AgentEvent.MiniAppCreated(aid))
-                            }
+                            // 后一次 create 覆盖前一次：模型"先建后改"时，用户要看到的是最终那一个
+                            if (aid.isNotBlank()) miniAppDelivered = aid
                         }
                         // ZorvAI 小程序工作室（miniapp run）或返回完整 HTML 文档的可视化工具产物：
-                        // 捕获自包含 HTML，内嵌对话流渲染，跳过 HTML 渲染轮。
+                        // 捕获自包含 HTML（同样先不广播），内嵌对话流渲染，跳过 HTML 渲染轮。
                         if (studioHtmlDelivered == null) {
                             val rh = extractRenderableHtml(name, result)
                             if (rh != null) {
                                 studioHtmlDelivered = rh
-                                onEvent(AgentEvent.StudioMiniApp(rh, studioTitleOf(name)))
+                                studioHtmlTitle = studioTitleOf(name)
                             }
                         }
                         // 记下工作室工程名：模型只 create 忘了 run 时，下面替它补一步。
@@ -324,7 +334,7 @@ class AgentLoop(
                 val html = r?.let { extractRenderableHtml("miniapp", it) }
                 if (html != null) {
                     studioHtmlDelivered = html
-                    onEvent(AgentEvent.StudioMiniApp(html, "小程序工作室"))
+                    studioHtmlTitle = "小程序工作室"
                 }
             }
             // ★ 最后一道交付兜底：这一轮确实调过 create_miniapp、包也已落盘，却因为某些环节
@@ -334,9 +344,17 @@ class AgentLoop(
                 val newest = newestMiniAppSince(createdMiniAppAt!!)
                 if (newest != null) {
                     miniAppDelivered = newest
-                    onEvent(AgentEvent.MiniAppCreated(newest))
                     onStatus("小程序已落盘：$newest")
                 }
+            }
+            // ★★ 一轮只交付一件（双画布的唯一开关）★★
+            // 本轮的交付事件在这里、且只在这里发一次：原生小程序（形态 3）优先，没有才回落到
+            // 工作室 HTML（形态 4）。此前"谁先被调用谁先广播"，模型同一轮既 create_miniapp 又
+            // run 工作室时，对话流里就会并排出现两块画布（用户报的"双画布"）。
+            if (miniAppDelivered != null) {
+                onEvent(AgentEvent.MiniAppCreated(miniAppDelivered!!))
+            } else if (studioHtmlDelivered != null) {
+                onEvent(AgentEvent.StudioMiniApp(studioHtmlDelivered!!, studioHtmlTitle ?: "小程序工作室"))
             }
             // ★ 小程序画布交付：create_miniapp 已成功 → 不再走 HTML 渲染轮。
             // 可交互小程序已通过 MiniAppCreated 事件内嵌渲染到对话流；这里只标记完成，

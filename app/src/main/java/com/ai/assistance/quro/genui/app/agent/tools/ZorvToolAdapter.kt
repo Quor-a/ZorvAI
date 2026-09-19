@@ -105,7 +105,7 @@ class ZorvToolAdapter(context: Context) {
      */
     suspend fun execute(name: String, args: JSONObject): JSONObject = withContext(Dispatchers.IO) {
         // GenUI 专属工具（小程序 / 离屏 JS / 插件）由本适配器直接接管，不走 ZorvAI 主工具引擎，
-        // 否则模型永远调不到 create_miniapp / run_js，GenUI 小程序就是死的。
+        // 否则模型永远调不到 genui_native_ui / run_js，GenUI 原生界面就是死的。
         if (name in GENUI_TOOLS || name.startsWith("plugin_")) {
             return@withContext executeGenUi(name, args)
         }
@@ -133,16 +133,30 @@ class ZorvToolAdapter(context: Context) {
 
     // ---------- GenUI 专属工具（移植自上游 GenUI，对接自研 miniapp-sdk + 离屏 JS 引擎） ----------
 
-    /** GenUI 专属工具名集合：由本适配器接管执行，不进 ZorvAI 主工具引擎。 */
+    /**
+     * GenUI 专属工具名集合：由本适配器接管执行，不进 ZorvAI 主工具引擎。
+     *
+     * 注意：原生 UI 工具已由 `create_miniapp` 改名为 `genui_native_ui`（声明名）——
+     * 旧名与工作室的 `miniapp`（HTML 小程序）撞概念，模型分不清该调哪个，于是什么都调一遍。
+     * 旧名保留为别名，保证历史会话 / 已缓存提示词里的旧调用不会变成"未知工具"。
+     */
     private val GENUI_TOOLS = setOf(
-        "create_miniapp", "open_miniapp", "list_miniapps",
+        "genui_native_ui", "create_miniapp",
+        "open_miniapp", "list_miniapps",
         "run_js", "install_plugin", "uninstall_plugin", "list_plugins"
     )
+
+    /** 原生 UI 工具的新名 / 旧名（别名）。判断调用时两个都认。 */
+    companion object {
+        const val TOOL_NATIVE_UI = "genui_native_ui"
+        const val TOOL_NATIVE_UI_ALIAS = "create_miniapp"
+        fun isNativeUiTool(name: String) = name == TOOL_NATIVE_UI || name == TOOL_NATIVE_UI_ALIAS
+    }
 
     /** 真正执行 GenUI 专属工具（均为同步实现，包在 IO 协程里调用）。 */
     private fun executeGenUi(name: String, args: JSONObject): JSONObject {
         return when (name) {
-            "create_miniapp" -> createMiniApp(args)
+            TOOL_NATIVE_UI, TOOL_NATIVE_UI_ALIAS -> createMiniApp(args)
             "open_miniapp" -> openMiniApp(args)
             "run_js" -> CodeRuntime.runJs(appContext, args.optString("code"), args.optLong("timeout_ms", 40000))
             "install_plugin" -> PluginRuntime.install(
@@ -268,7 +282,7 @@ class ZorvToolAdapter(context: Context) {
                 val names = keys.joinToString()
                 appDir.deleteRecursively()
                 return JSONObject().put("error",
-                    "页面文件缺失：${missing.joinToString()}（app.json pages 里声明了 $p）\n已提供文件：$names\n补齐后重新调 create_miniapp。")
+                    "页面文件缺失：${missing.joinToString()}（app.json pages 里声明了 $p）\n已提供文件：$names\n补齐后重新调 genui_native_ui。")
             }
         }
         // ③ WXML 试解析：软校验（fail-open）——解析器误报不删包不打回，警告随结果返回供 AI 自纠
@@ -292,7 +306,7 @@ class ZorvToolAdapter(context: Context) {
                     val err = engine.lastError().take(300)
                     appDir.deleteRecursively()
                     return JSONObject().put("error",
-                        "JS 语法错误 @$jsf：$err\n自研引擎语法边界（与工具说明一致）：禁用模板字符串(反引号)/解构/展开(...)/默认参数/对象方法简写/class/async/await/可选链?./空值合并??；字符串拼接用 + ；对象写 {key: function(){}} 不写方法简写。修正后重新调 create_miniapp。")
+                        "JS 语法错误 @$jsf：$err\n自研引擎语法边界（与工具说明一致）：禁用模板字符串(反引号)/解构/展开(...)/默认参数/对象方法简写/class/async/await/可选链?./空值合并??；字符串拼接用 + ；对象写 {key: function(){}} 不写方法简写。修正后重新调 genui_native_ui。")
                 }
             }
         } finally {
@@ -314,7 +328,7 @@ class ZorvToolAdapter(context: Context) {
         val appId = args.optString("app_id", "").ifBlank { args.optString("id") }
         if (appId.isBlank()) return JSONObject().put("error", "app_id 不能为空")
         if (MiniAppEngine.resolvePackage(appContext, appId) == null)
-            return JSONObject().put("error", "小程序 $appId 不存在，请先用 create_miniapp 创建")
+            return JSONObject().put("error", "GenUI 原生 UI $appId 不存在，请先用 genui_native_ui 创建")
         runCatching {
             val it = Intent(appContext, GenUiMiniAppActivity::class.java)
                 .putExtra("appId", appId)
@@ -324,7 +338,7 @@ class ZorvToolAdapter(context: Context) {
         return JSONObject().put("ok", true).put("app_id", appId)
     }
 
-    /** 列出全部小程序（内置示例 + AI 生成的），供 open_miniapp / create_miniapp 引导。 */
+    /** 列出全部界面（内置示例 + AI 生成的），供 open_miniapp / genui_native_ui 引导。 */
     private fun listMiniApps(): JSONObject {
         val arr = JSONArray()
         runCatching {
@@ -341,7 +355,7 @@ class ZorvToolAdapter(context: Context) {
                 arr.put(JSONObject().put("app_id", d.name).put("title", miniAppTitle(cfg, d.name)).put("source", "你创建的"))
             }
         return JSONObject().put("apps", arr)
-            .put("hint", "用 open_miniapp 全屏打开；用 create_miniapp 创建新的。")
+            .put("hint", "用 open_miniapp 全屏打开；用 genui_native_ui 创建新的。")
     }
 
     private fun listPlugins(): JSONObject {
@@ -361,17 +375,17 @@ class ZorvToolAdapter(context: Context) {
                 JSONObject().put("name", name).put("description", desc)
                     .put("parameters", JSONObject().put("type", "object")
                         .put("properties", props).put("required", JSONArray(required)))))
-        gdecl("create_miniapp",
-            "创建一个完整的小程序（微信小程序语法：app.json/app.js/app.wxss + pages/index/index.{wxml,wxss,js}），保存成功后自动内嵌画布渲染（用户可直接试玩），也可 open_miniapp 全屏打开。适合：待办、计算器、查数工具等小应用。【尺寸单位：全部用 rpx（750rpx=整屏宽），禁止 px】【布局：手机竖屏单列；display:flex 横排记得 flex-wrap】【多页】：app.json 的 pages 数组列出全部页面（每页 pages/xxx/xxx.{wxml,wxss,js} 四件套齐全），首屏页放 pages[0]。【JS 语法边界（自研引擎，必须严格遵守否则被打回）】：支持 var/let/const、function、箭头函数、闭包、对象/数组字面量、字符串 + 拼接、if/else/for/while、JSON、Page({data:{...}, onTap: function(){ this.setData({...}) }})、App({})、wx.* API；【禁用】模板字符串（反引号）、解构、展开(...)、默认参数、对象方法简写、class、async/await、可选链?.、空值合并??。",
+        gdecl(TOOL_NATIVE_UI,
+            "【GenUI 原生 UI（原 create_miniapp）】用自研原生引擎渲染一个真实可交互的界面（微信小程序语法：app.json/app.js/app.wxss + pages/index/index.{wxml,wxss,js}），保存成功后**自动内嵌 GenUI 对话流渲染**（用户可直接试玩），也可 open_miniapp 全屏打开。适合：待办、计算器、查数工具、记账等有状态小应用。【与 miniapp 工具的区别（别搞混）】：本工具产出的是**WXML/WXSS/JS 原生界面**，不走 HTML、不注入 window.native，要调原生能力请改用 miniapp（小程序工作室）。【尺寸单位：全部用 rpx（750rpx=整屏宽），禁止 px】【布局：手机竖屏单列；display:flex 横排记得 flex-wrap】【超过一屏：最外层用 <scroll-view scroll-y style=\"height:100%\"> 包住，普通 view 超出卡片视口的部分会被裁掉】【多页】：app.json 的 pages 数组列出全部页面（每页 pages/xxx/xxx.{wxml,wxss,js} 四件套齐全），首屏页放 pages[0]。【JS 语法边界（自研引擎，必须严格遵守否则被打回）】：支持 var/let/const、function、箭头函数、闭包、对象/数组字面量、字符串 + 拼接、if/else/for/while、JSON、Page({data:{...}, onTap: function(){ this.setData({...}) }})、App({})、wx.* API；【禁用】模板字符串（反引号）、解构、展开(...)、默认参数、对象方法简写、class、async/await、可选链?.、空值合并??。",
             JSONObject()
                 .put("app_id", JSONObject().put("type", "string").put("description", "英文短 id，如 weather-tool"))
                 .put("title", JSONObject().put("type", "string").put("description", "显示标题（写入 app.json 的 navigationBarTitleText）"))
                 .put("files", JSONObject().put("type", "object").put("description", "相对路径到文件内容的映射，路径不以 / 开头：{\"app.json\":\"...\",\"app.js\":\"...\",\"app.wxss\":\"...\",\"pages/index/index.wxml\":\"...\",\"pages/index/index.wxss\":\"...\",\"pages/index/index.js\":\"...\"}")),
             listOf("app_id", "files"))
         gdecl("open_miniapp",
-            "全屏打开一个已创建的小程序（校验存在性，不存在会报错提示先用 create_miniapp）。返回 {ok, app_id}。",
+            "全屏打开一个已创建的 GenUI 原生 UI（校验存在性，不存在会报错提示先用 $TOOL_NATIVE_UI）。返回 {ok, app_id}。",
             JSONObject().put("app_id", JSONObject().put("type", "string")
-                .put("description", "create_miniapp 返回的小程序 id（也可先 list_miniapps 查有哪些）")),
+                .put("description", "$TOOL_NATIVE_UI 返回的 id（也可先 list_miniapps 查有哪些）")),
             listOf("app_id"))
         gdecl("run_js",
             "运行 JavaScript 代码（离屏 WebView 真 Chromium 引擎，支持 ES2020+/async/await/fetch，console.* 捕获回传）。返回 {ok, result, logs}。",
@@ -390,7 +404,7 @@ class ZorvToolAdapter(context: Context) {
         gdecl("uninstall_plugin", "卸载指定插件（按 id 或名称）。",
             JSONObject().put("id_or_name", JSONObject().put("type", "string")), listOf("id_or_name"))
         gdecl("list_plugins", "列出已安装的全部插件及其工具。", JSONObject(), emptyList())
-        gdecl("list_miniapps", "列出 GenUI 里全部小程序（内置示例 + 你创建的），供 open_miniapp / create_miniapp 引导。", JSONObject(), emptyList())
+        gdecl("list_miniapps", "列出 GenUI 里全部可用界面（内置示例 + 你创建的 GenUI 原生 UI），供 open_miniapp / $TOOL_NATIVE_UI 引导。", JSONObject(), emptyList())
         return arr
     }
 }

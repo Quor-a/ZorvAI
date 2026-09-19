@@ -184,6 +184,10 @@ fun GenScaffold(
     var startedAt by remember { mutableStateOf(0L) }
     // 原生渲染层：AI 声明 xml / compose 通道时，这里持有待原生渲染的内容
     var nativeRender by remember { mutableStateOf<NativeRender?>(null) }
+    /** 本轮「交付卡」在 turns 里的下标：同一轮只允许一张交付卡，第二次交付就地替换。
+     *  没有这道闸，模型既 create_miniapp 又 run 工作室（或事件重放）时，对话流里会并排
+     *  出现两块画布——用户报的"双画布"。 */
+    var deliverSlot by remember { mutableStateOf<Int?>(null) }
     // 上一份产出的渲染通道，用于状态行标注"这一屏是用什么画的"
     var lastChannel by remember { mutableStateOf("html") }
     val snackbar = remember { SnackbarHostState() }
@@ -331,6 +335,20 @@ fun GenScaffold(
     }
 
     /**
+     * 本轮交付卡落位。**一轮只留一张交付卡**：本轮已经交付过就就地替换，没交付过才追加。
+     * 替代原来的"来一件 append 一件"——那是双画布的直接成因（同一轮里两件交付物并排入流）。
+     */
+    fun putDeliverable(t: GenTurn) {
+        val i = deliverSlot
+        if (i != null && i in turns.indices && turns[i].role == "assistant") {
+            turns[i] = t            // 同一轮的第二件交付 = 替换，不是并列
+        } else {
+            turns.add(t)
+            deliverSlot = turns.lastIndex
+        }
+    }
+
+    /**
      * 生成。
      * @param seed 续写种子：非空时把它作为已有内容写回画布，模型续写其后。
      */
@@ -344,6 +362,8 @@ fun GenScaffold(
         timeline.clear()
         // 生成式 UI 对话：用户这句指令先作为气泡入流（界面即回复，紧随其后内嵌）
         turns.add(GenTurn(GenStore.newId(), "user", text = prompt))
+        // 新的一轮：交付位清空（本轮的第一件交付物会重新占位，而不是替换上一轮的卡片）
+        deliverSlot = null
         // 新一轮生成：清掉上一屏的原生渲染层，避免它与流式内容叠加打架
         nativeRender = null
         phase = Phase.Thinking
@@ -404,18 +424,33 @@ fun GenScaffold(
                         if (tc > 0) toolCalls = tc
                         if (el > 0) lastElapsed = el
                     }
-                    // GenUI 小程序创建成功 → 作为对话内嵌卡片直接入流（无需点开，直接可玩）
+                    // GenUI 原生 UI（genui_native_ui）创建成功 → 作为对话内嵌卡片直接入流（无需点开，直接可玩）
                     if (ev is com.ai.assistance.quro.genui.app.agent.AgentEvent.MiniAppCreated) {
-                        turns.add(GenTurn(GenStore.newId(), "assistant", appId = ev.appId, title = "小程序"))
+                        putDeliverable(GenTurn(GenStore.newId(), "assistant", appId = ev.appId, title = "原生 UI"))
                         // 同时写进 ZorvAI 对话框：原生小程序没有 HTML，走独立通道（```quro-card + config.app_id），
                         // 对话框内的卡片用自研引擎就地渲染。缺了这一步，小程序就只存在于画布/历史页里。
                         onPushMiniAppToChat(ev.appId, "小程序 · ${ev.appId}")
                     }
                     // ZorvAI 小程序工作室 / 可视化产物 → 自包含 HTML 直接内嵌对话流（带原生桥接）
                     if (ev is com.ai.assistance.quro.genui.app.agent.AgentEvent.StudioMiniApp) {
-                        turns.add(GenTurn(GenStore.newId(), "assistant", studioHtml = ev.html, title = ev.title))
+                        putDeliverable(GenTurn(GenStore.newId(), "assistant", studioHtml = ev.html, title = ev.title))
                         // 同时把工作室小程序回写 ZorvAI 对话框（复用 MiniAppWebView 渲染）
                         onPushToChat(ev.html, ev.title)
+                    }
+                    // ★ 交付保底：本轮结束时若已产出 GenUI 原生 UI，却因为事件环节缺失（被吞/时序）
+                    // 没在对话流里落卡，就用 Finished 文案里的 app_id 补一张。缺了这道兜底，
+                    // 会只剩"ZorvAI 对话框里有卡片、GenUI 对话里什么都没有"（用户报的现状）。
+                    if (ev is com.ai.assistance.quro.genui.app.agent.AgentEvent.Finished) {
+                        val aid = ev.title.removePrefix("小程序 · ").takeIf { ev.title.startsWith("小程序 · ") }
+                        if (aid != null && aid.isNotBlank() && aid != ev.title) {
+                            val already = deliverSlot?.let { i ->
+                                i in turns.indices && turns[i].appId == aid
+                            } ?: false
+                            if (!already) {
+                                putDeliverable(GenTurn(GenStore.newId(), "assistant", appId = aid, title = "原生 UI"))
+                                onPushMiniAppToChat(aid, "小程序 · $aid")
+                            }
+                        }
                     }
                 }
             },
@@ -1126,6 +1161,46 @@ private fun sizeLabel(bytes: Long): String =
     if (bytes < 1024) "${bytes}B" else String.format(Locale.US, "%.1fKB", bytes / 1024.0)
 
 /**
+ * 量一段 HTML 的真实高度（px），**连量几次取最大值**。
+ *
+ * 只量一次必然量不准：onPageFinished 触发时页面里的 JS（Page() 运行时、ECharts、字体回填、
+ * 异步数据）往往还没把内容撑开，此刻的 scrollHeight 只是半截高度。用这个半截值当画布高度，
+ * 结果就是**内容被画布下边缘硬切一刀**——用户报的"文本泄露在画布"。
+ *
+ * @param samples 采样次数（默认 6 次）@param gapMs 采样间隔（默认 350ms）
+ */
+private fun measureHtmlHeight(
+    wv: WebView,
+    samples: Int = 6,
+    gapMs: Long = 350L,
+    onResult: (Int) -> Unit,
+) {
+    var best = 0
+    var taken = 0
+    val probe = object : Runnable {
+        override fun run() {
+            runCatching {
+                wv.evaluateJavascript(
+                    "(function(){return Math.max(document.documentElement.scrollHeight," +
+                        "document.body?document.body.scrollHeight:0)})()"
+                ) { r ->
+                    val h = r?.trim()?.removePrefix("\"")?.removeSuffix("\"")
+                        ?.toFloatOrNull()?.toInt() ?: 0
+                    // 只接受"长得更高"的读数：页面是逐步撑开的，回缩的读数通常是中途态
+                    if (h > best) {
+                        best = h
+                        onResult(h)
+                    }
+                    taken++
+                    if (taken < samples) wv.postDelayed(this, gapMs)
+                }
+            }.onFailure { /* WebView 已销毁等：静默放弃这次采样 */ }
+        }
+    }
+    wv.post(probe)
+}
+
+/**
  * 对话内嵌 HTML 卡片：与画布同款保真——挂 WebViewAssetLoader 解析 genui.local 运行时资源，
  * 高度自适应（onPageFinished 量 scrollHeight），可「展开」看全高、「画布 ↗」回写 ZorvAI 对话框。
  * 默认折叠到 220dp 预览，内容可交互，不跳独立程序。
@@ -1157,13 +1232,9 @@ private fun GenHtmlCard(html: String, onOpenCanvas: (String) -> Unit) {
                         view: WebView?, request: WebResourceRequest?
                     ): WebResourceResponse? = request?.url?.let { assetLoader.shouldInterceptRequest(it) }
                     override fun onPageFinished(view: WebView?, url: String?) {
-                        view?.evaluateJavascript(
-                            "(function(){return document.documentElement.scrollHeight})()"
-                        ) { r ->
-                            val sh = r?.trim()?.removePrefix("\"")?.removeSuffix("\"")
-                                ?.toFloatOrNull()?.toInt()
-                            if (sh != null && sh > 0) contentH = sh
-                        }
+                        // 连量几次取最大值：只量一次会拿到"页面还没长开"的半截高度，
+                        // 半截高度 = 卡片比内容矮 = 内容被下边缘切断（"文本泄露在画布"）
+                        view?.let { measureHtmlHeight(it) { sh -> contentH = sh } }
                     }
                 }
                 loadDataWithBaseURL("https://genui.local/", html, "text/html", "utf-8", null)
@@ -1249,9 +1320,12 @@ $html
                 webViewClient = object : android.webkit.WebViewClient() {
                     override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
                         super.onPageFinished(view, url)
-                        view?.evaluateJavascript("document.documentElement.scrollHeight") { value ->
-                            val px = value?.replace("\"", "")?.toIntOrNull() ?: return@evaluateJavascript
-                            contentH = px.coerceIn(160, 1440)
+                        // 同样连量几次取最大值：工作室页面是 JS（Page() 运行时）渲染的，
+                        // onPageFinished 时 DOM 常常才长到一半，早量 = 卡片比内容矮 = 下边缘切内容
+                        view?.let {
+                            measureHtmlHeight(it) { px ->
+                                contentH = px.coerceIn(160, 1440)
+                            }
                         }
                     }
                     override fun shouldInterceptRequest(
