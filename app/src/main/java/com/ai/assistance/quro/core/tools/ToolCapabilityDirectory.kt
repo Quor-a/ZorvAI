@@ -29,6 +29,7 @@ object ToolCapabilityDirectory {
         MEDIA("媒体", "音乐、视频、图片、音频处理"),
         UI_CARDS("UI/卡片", "对话框UI组件、可视化图表"),
         DYNAMIC_UI("动态UI", "quro-ui 原生组件：可交互原生界面、富媒体、可视化渲染"),
+        GENUI("生成式UI", "生成式 UI 画布（GenUI）：把「画界面」的活派给整屏画布，以及小程序工程（工作室 HTML / 原生 WXML）"),
         KNOWLEDGE_MEMORY("知识/记忆", "记忆库、知识库、经验库"),
         WORKSPACE("工作区", "工作区文件管理"),
         ACCESSIBILITY("无障碍", "屏幕读取、点击、滑动等"),
@@ -61,6 +62,79 @@ object ToolCapabilityDirectory {
      * 真实注册表里不在本层的工具，会在 [install] 时用 description 兜底合成，分类走命名推断。
      */
     private val handbook = mapOf(
+        // ═══════════════ 生成式 UI 画布（ZorvAI → GenUI 反向调用）═══════════════
+        "genui_open" to ToolInfo(
+            name = "genui_open",
+            category = ToolCategory.GENUI,
+            description = "把「画界面」的活派给生成式 UI 画布（GenUI）：切屏到画布并以 prompt 自动开跑，产物自动回写回本对话框",
+            useCases = listOf(
+                "用生成式UI画一个", "进GenUI画布", "GenUI 画一个", "用画布做",
+                "整屏打开一个界面", "全屏画一个应用", "用生成式UI做个可视化面板",
+                "要生成式UI形态的交付"
+            ),
+            examples = listOf(
+                "genui_open(prompt=\"做一个记账小程序：首页显示本月支出合计、可添加一笔支出（金额/分类/备注）、按分类汇总饼图，数据存本地\")",
+                "genui_open(prompt=\"做一个月度健身打卡界面：打卡日历、连续天数、每周柱状图\", mode=\"native\")",
+                "genui_open(prompt=\"做一个带本地存储的减肥记录小程序，能查历史记录、能发通知提醒\", mode=\"studio\")",
+                "genui_open(prompt=\"做一个产品介绍页，含特性卡片与价格表\", mode=\"html\")"
+            ),
+            parameters = mapOf(
+                "prompt" to "交给 GenUI 的完整任务描述（**必须自包含**：GenUI 看不到本对话历史）",
+                "mode" to "canvas=交给 GenUI 自己路由（默认）/ native=强制原生UI(WXML) / studio=强制工作室(HTML+原生桥) / html=强制HTML页面"
+            ),
+            tips = listOf(
+                "**用户点名 GenUI / 生成式 UI 才用**——这是「收口」通道，不是默认路径。",
+                "用户说「做个小程序 / 在这儿做个小程序 / 在这儿画个界面」→ 用 `miniapp` **就地做**，不许推给 GenUI。",
+                "能在本对话框内交付的（HTML 页面 / ui_widget 富卡片 / miniapp 小程序）就别换屏——换屏会打断用户阅读位置。",
+                "调下去会**换屏**到 GenUI 画布并自动开跑；产物（界面/原生小程序）会带 `GenUI · 生成式 UI` 署名自动回写进本对话框。",
+                "调用后本轮**立即收尾**：不要再写 HTML、不要再调画型工具（否则两块画布）。给一句极简交代即可。",
+                "prompt 要写清「做什么 + 要哪些功能 + 风格 + 有哪些数据」，写成「做那个」等于没写。"
+            ),
+            relatedTools = listOf("miniapp", "ui_dsl_spec", "visual_popup"),
+            priority = 5
+        ),
+
+        // ═══════════════ 小程序工程（工作室：HTML + Page() + native.* 桥）═══════════════
+        "miniapp" to ToolInfo(
+            name = "miniapp",
+            category = ToolCategory.GENUI,
+            description = "小程序工作室：创建/写入/读取/运行小程序工程（HTML + Page() 运行时 + native.* 原生桥），产物就地渲染成对话内小程序卡",
+            useCases = listOf(
+                "做个小程序", "在这儿做个小程序", "建一个小程序工程", "要能存数据的小程序",
+                "要能调本地能力的小程序", "小程序怎么跑起来", "改一下这个小程序", "小程序手册"
+            ),
+            examples = listOf(
+                "miniapp(action=\"manual\")",
+                "miniapp(action=\"manual\", topic=\"studio\")",
+                "miniapp(action=\"create\", name=\"todo\", files=[{\"path\":\"app.json\",\"content\":\"{\\\"pages\\\":[\\\"pages/index/index\\\"]}\"},{\"path\":\"pages/index/index.html\",\"content\":\"<!DOCTYPE html>…\"}])",
+                "miniapp(action=\"run\", name=\"todo\", entry=\"pages/index/index.html\")",
+                "miniapp(action=\"list\")"
+            ),
+            parameters = mapOf(
+                "action" to "create/write/read/list/delete/run/manual",
+                "name" to "工程名（create/write/read/delete/run 必填）",
+                "files" to "文件数组 [{path, content}]（create）",
+                "path" to "相对工程根的文件路径（write/read/删除单文件）",
+                "entry" to "入口页面（run，默认 pages/index/index.html）",
+                "topic" to "manual 主题：compare/studio/native/errors"
+            ),
+            tips = listOf(
+                "用户说「做个小程序 / 在这儿做个小程序」→ **就用它**，ZorvAI 自己会写小程序，不要推给 genui_open。",
+                "**create 之后必须再 run 一次**，否则界面根本没交付（用户什么都看不到）。",
+                "run 的结果会自动内嵌进对话流渲染；**run 完不要再自己写一份 HTML**（那是第二块画布）。",
+                "动手前先读手册：miniapp(action=\"manual\")。里面是**两份手册**："
+                    + "topic=\"studio\"（默认，含两工具对照）读小程序工作室（HTML + Page() + native.* 全函数 + 错误清单）；"
+                    + "topic=\"native\" / \"traps\" / \"errors\" 读 GenUI 那套原生 UI（WXML/WXSS/JS 自研引擎）的"
+                    + "组件表 / 事件表 / wx.* 全表 / 引擎陷阱 / 错误清单；topic=\"compare\" 只看两者区别。",
+                "要**原生能力**（存数据/跑SQL/加密/通知/分享/定位/拉起App）→ 本工具（native.* 桥）；"
+                    + "只要界面和交互、不要系统能力 → 也可以交给 genui_open(mode=\"native\") 在整屏画布里做。",
+                "同名的 genui_native_ui 是 GenUI 画布里的 WXML/WXSS/JS 原生引擎（无 HTML、无原生桥）。"
+                    + "两者**同一轮只能用其中一个**，都用 = 两块画布。"
+            ),
+            relatedTools = listOf("genui_open", "workspace_write", "ui_dsl_spec"),
+            priority = 4
+        ),
+
         // ═══════════════ 插件扩展（APK 级插件框架总控）═══════════════
         "apk_plugin" to ToolInfo(
             name = "apk_plugin",
@@ -994,6 +1068,8 @@ object ToolCapabilityDirectory {
     private fun inferCategory(name: String): ToolCategory {
         return when {
             name in setOf("ui_dsl_spec", "ui_validate") -> ToolCategory.DYNAMIC_UI
+            // 生成式 UI 画布 + 小程序工程：归一类（都是"交付一件界面"的能力，查起来在同一个篮子里）
+            name.startsWith("genui_") || name == "miniapp" -> ToolCategory.GENUI
             name.startsWith("workspace_") -> ToolCategory.WORKSPACE
             name.startsWith("aci_") -> ToolCategory.APP_MANAGEMENT
             name.startsWith("mcp_") -> ToolCategory.NETWORK_WEB

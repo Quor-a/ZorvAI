@@ -104,7 +104,15 @@ class AgentLoop(
             "各形态具体怎么写，留到成稿阶段按「二、渲染落在哪里」的手册落笔。\n" +
             "★ 路由命中形态 3（GenUI 原生 UI）→ 本阶段直接调 genui_native_ui；命中形态 4（要原生桥）→ 本阶段调 miniapp(action=\"create\") 再 miniapp(action=\"run\")。\n" +
             "   **形态 3 与形态 4 二选一**：选了哪条就只走那条，两个都做会在对话流里并排出现两块画布（重复界面）。\n" +
-            "   注意两个工具的区别：genui_native_ui = WXML/WXSS 原生界面（自研引擎，无 HTML）；miniapp = HTML 小程序工作室（带 window.native 桥）。\n" +
+            "   **两个工具到底哪个是哪个**（最常搞混的一处）：\n" +
+            "     · genui_native_ui = **WXML/WXSS/JS 原生界面**，自研引擎直接画，没有 HTML、没有 native.* 桥；\n" +
+            "     · miniapp = **HTML 小程序工作室**，WebView 跑真实网页 + window.native 原生桥，交付要 create 再 run 两步。\n" +
+            "     用户说「有状态、要交互、好看」→ 形态 3；用户说「要存数据/跑SQL/加密/通知/分享/定位/拉起App」→ 形态 4。\n" +
+            "     完整对照表见系统提示「二、渲染落在哪里」开头；**函数级手册与错误清单见「八、小程序手册」**——\n" +
+            "     落笔前照手册写，工具被打回时报错逐条对着错误清单改（不要盲试第二次）。\n" +
+            "     四条最致命（引擎事实）：① 只有 scroll-view 能滚动，超屏内容必须被 <scroll-view scroll-y style=\"height:100%\"> 包住；\n" +
+            "     ② switch/checkbox/radio/slider 是**纯文本**不是控件（自绘开关）；③ input 只有单行，bindinput 仅在键盘「完成」时触发一次。\n" +
+            "     ④ 视口宽高由宿主给（ZorvAI 对话框内只有约屏高 62%），且**横向没有滚动**：两列用 flex:1，别写死 50%（右侧会被裁）。\n" +
             "   这两个工具成功后交付即已完成（产物自己内嵌进对话流），**不要再跟一份 HTML 盖上去**。\n" +
             "★ 用户要『介绍你自己 / 展示你能做什么』→ 用 genui_native_ui 渲染自我介绍界面，严禁文字直答。"
 

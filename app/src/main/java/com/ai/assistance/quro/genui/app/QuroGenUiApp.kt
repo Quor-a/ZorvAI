@@ -46,6 +46,12 @@ fun QuroGenUiApp(
 ) {
     val ctx = LocalContext.current
     val store = remember { GenStore(ctx) }
+    // 退出画布统一走这里：顺带复位「本次是被 ZorvAI 召唤起来的」标记，
+    // 避免下次用户手点进来时还带着上一次的来源身份。
+    val exitToChat = {
+        com.ai.assistance.quro.core.tools.GenUiBridge.clearSummon()
+        onExitToChat()
+    }
     // null = 主屏；其他 = 设置类子页（叠在主屏之上，返回时主屏 WebView 不重建）
     var screen by remember { mutableStateOf<NavTarget?>(null) }
     // 设置页改了模型/灵魂/权限后 +1，让主屏供应商缓存失效并重读盘
@@ -71,7 +77,7 @@ fun QuroGenUiApp(
             if (screen == NavTarget.Settings) { configVersion++; screen = null }
             else screen = NavTarget.Settings
         } else {
-            onExitToChat()
+            exitToChat()
         }
     }
 
@@ -85,7 +91,7 @@ fun QuroGenUiApp(
                 onNavigate = { screen = it },
                 onPushToChat = onPushToChat,
                 onPushMiniAppToChat = onPushMiniAppToChat,
-                onExitToChat = onExitToChat,
+                onExitToChat = exitToChat,
                 onTextReply = onTextReply,
             )
 

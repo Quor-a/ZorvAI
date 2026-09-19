@@ -2031,7 +2031,17 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
     val cs = MaterialTheme.colorScheme
     val density = LocalDensity.current.density
     val context = LocalContext.current
-    var heightPx by remember(card.id) { mutableStateOf(360) }
+    // 初始高度按**屏高比例**算，不再写死 360。
+    //
+    // 为什么必须改：heightPx 的单位是**物理像素**（下面 `(heightPx / density).dp` 又乘回 density）。
+    // 写死 360 px 在 2.6x 密度屏上只有 ~137dp 高，小程序内容被挤进一条缝里、下半截完全看不到，
+    // 卡里还跟着一行诊断文字 —— 用户看到的就是"围栏围得不完整"。
+    // 取屏高 62%：一屏界面能完整看到，又不至于把对话流撑得看不见别的内容（用户仍可拖拽调高度）。
+    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+    val defaultHeightPx = remember(card.id) {
+        (screenH * density * 0.62f).toInt().coerceIn(640, 3600)
+    }
+    var heightPx by remember(card.id) { mutableStateOf(defaultHeightPx) }
     var fullscreen by remember(card.id) { mutableStateOf(false) }
     val title = card.title.ifBlank { "小程序（AI 生成）" }
     // ── 原生小程序（微信语法 WXML/WXSS/JS，由自研引擎渲染）──
@@ -2068,13 +2078,20 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
                     onStatus = { nativeStatus = it },
                     reloadKey = nativeReload,
                 )
-                Text(
-                    nativeStatus,
-                    color = cs.onSurfaceVariant,
-                    fontSize = 9.sp,
-                    maxLines = 3,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
-                )
+                // 诊断行**只在真出问题时**才出现：引擎没出首帧 / 没挂载 / 抛了 ⚠ 错误。
+                // 正常渲染时它只是一串噪声，用户看到的是"围栏下面还拖了一条状态字"（围栏不干净）。
+                // 排障信息并没有丢——出问题时它照样显示，仍是"页面空白时唯一的线索"。
+                val trouble = nativeStatus.contains("⚠") ||
+                    nativeStatus.contains("帧=无") || nativeStatus.contains("挂载=off")
+                if (trouble) {
+                    Text(
+                        nativeStatus,
+                        color = cs.error,
+                        fontSize = 9.sp,
+                        maxLines = 3,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp),
+                    )
+                }
             }
             return@CardShell
         }

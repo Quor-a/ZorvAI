@@ -291,6 +291,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // 后端工作区：多文件多语言项目
     r.register(WorkbenchTool())
     r.register(MiniAppStudioTool())    // 小程序工作台：AI 直接 CRUD/运行小程序工程（完整移植 MiniAppFramework）
+    // 生成式 UI 对话（GenUI）画布反向调用：ZorvAI 主动把「画界面」的活派给 GenUI（唯一入口，见 GenUiBridge）
+    r.register(GenUiOpenTool())
     // TTS 朗读
     r.register(SpeakTool())
     r.register(StopSpeakTool())
