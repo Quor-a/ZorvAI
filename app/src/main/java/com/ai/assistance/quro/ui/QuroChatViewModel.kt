@@ -101,6 +101,16 @@ private const val TAG = "QuroChatViewModel"
 internal const val NATIVE_MINIAPP_PREFIX = "zorv-miniapp:"
 
 /**
+ * GenUI 交付署名（回流到 ZorvAI 对话框时写在内容最前面的一行）。
+ *
+ * 为什么要有：GenUI 的产物是**回流**进对话框的（用户看不见生成过程，只看到一条助手消息），
+ * 没有署名就无从判断"这是生成式 UI 画布画的"还是"对话框里的 AI 自己答的"。
+ * 用户明确要求：GenUI 最后交付必须有 GenUI / 生成式 UI 的标识。
+ * 写成加粗短行，不参与任何围栏解析（在围栏之前，parseBlocks 会先出一段正文）。
+ */
+internal const val GENUI_ATTRIBUTION = "**GenUI · 生成式 UI**"
+
+/**
  * 对话 ViewModel（原创）：支持多会话、历史记录持久化、新�?/切换/删除会话�?
  * 同一份内�? [store] 实例贯穿生命周期，避�? QuroAssistant 持有过期引用�?
  */
@@ -396,6 +406,24 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             }
             runCatching { convRepo.saveAll(_convs.value) }
         }
+    }
+
+    /**
+     * ZorvAI → GenUI 反向调用入口（由 `genui_open` 工具经 [com.ai.assistance.quro.core.tools.GenUiBridge] 触发）。
+     *
+     * 与 [setGenUiType] 的唯一区别：这里先保证「有会话可供回写」。
+     * GenUI 的产物是经 push 通道路回到**当前会话**的（pushGenUiHtmlToChat 等直接写 store），
+     * 若此刻没有任何会话（冷启动瞬间、或用户把会话全删了），产物回来会无处安放——所以先建一个。
+     *
+     * 返回是否已切到 genui：UI 层据此回给工具"切屏成功/失败"。
+     */
+    fun enterGenUi(prompt: String, mode: String = "canvas"): Boolean {
+        if (_currentId.value.isBlank() || _convs.value.none { it.id == _currentId.value }) {
+            runCatching { newConversation() }
+        }
+        setGenUiType("genui")
+        QuroDiag.log("GenUiBridge", "enterGenUi | mode=$mode | prompt=${prompt.length}字 | conv=${_currentId.value}")
+        return _genUiType.value == "genui"
     }
 
     fun setHistoryRounds(n: Int?) {
@@ -712,7 +740,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
      */
     fun pushGenUiHtmlToChat(html: String, title: String = "") {
         if (html.isBlank()) return
-        val content = "```miniapp\n$html\n```"
+        // 署名行 + 围栏：署名在围栏之前，用户一眼能看出这是 GenUI 画的。
+        val content = "$GENUI_ATTRIBUTION\n\n```miniapp\n$html\n```"
         store.add(QuroMessage(role = "assistant", content = content))
         commitCurrent()
     }
@@ -733,7 +762,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // 走 ```miniapp 围栏（对话框里唯一会把内容渲染成"小程序卡"的通道），
         // 内容用原生标记前缀 —— 该围栏本来是 HTML 小程序，这里用标记区分出"原生小程序"，
         // ChatScreen 见到标记就构造带 config.app_id 的 MiniAppCard，由自研引擎就地渲染。
-        val content = "```miniapp\n$NATIVE_MINIAPP_PREFIX$id\n```"
+        val content = "$GENUI_ATTRIBUTION\n\n```miniapp\n$NATIVE_MINIAPP_PREFIX$id\n```"
         store.add(QuroMessage(role = "assistant", content = content))
         commitCurrent()
     }
@@ -745,7 +774,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
      */
     fun pushGenUiTextToChat(text: String) {
         if (text.isBlank()) return
-        store.add(QuroMessage(role = "assistant", content = text.trim()))
+        store.add(QuroMessage(role = "assistant", content = "$GENUI_ATTRIBUTION\n\n${text.trim()}"))
         commitCurrent()
     }
 
@@ -2299,6 +2328,12 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
    最后 `get_schema` 或直接按参数调用。
 5. 用户要打开插件桌面（启动器式管理界面）→ 调 `ui_open_plugins`。
 """.trimIndent())
+
+        // ══════════════ 生成式 UI 画布交接（ZorvAI → GenUI 反向调用）═════════════
+        // 此前只有 GenUI → ZorvAI 的单向回推，ZorvAI 侧连个入口工具都没有，等于"叫不动画布"。
+        // 现在补上 genui_open：模型据此知道可以把画界面的活派给 GenUI，且知道派完要收尾。
+        // 段落正文在 GenUiBridge.SYSTEM_SECTION（与工具通道同一处维护，避免漏改）。
+        sb.append("\n\n").append(com.ai.assistance.quro.core.tools.GenUiBridge.SYSTEM_SECTION)
 
         // ══════════════ 生成式 UI（GenUI 对话框：原生 quro-ui 强制生成）═════════════
         // 仅当当前会话为 genui 类型时，注入强制生成段（普通对话框走正常聊天，不注入）。

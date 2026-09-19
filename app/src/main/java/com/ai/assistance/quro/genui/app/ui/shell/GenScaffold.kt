@@ -522,6 +522,32 @@ fun GenScaffold(
         )
     }
 
+    // ══ ZorvAI → GenUI 反向调用：宿主派过来的任务自动开跑 ══
+    // 任务从桥里**在副作用里**取（不是组合期）：组合期取值一旦遇到"组合被丢弃"就会静默吃掉任务，
+    // 放在 LaunchedEffect 里则只在挂载成功后取一次，取不到就是没有（用户手点进来即如此）。
+    // 时机很关键：genui_open 切屏后本组合树是**新挂载**的，此刻 WebView 还没 attach、
+    // renderer.value 仍是 null（generate 第一步就拿它，null 会直接 return，任务就静默丢了）。
+    // 所以先等渲染器就绪（最多 4 秒），再多给 150ms 让 AndroidView 完成首次 layout，然后才真正开跑。
+    var autoDone by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val task = com.ai.assistance.quro.core.tools.GenUiBridge.consumePendingPrompt()
+            ?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        if (autoDone) return@LaunchedEffect
+        autoDone = true
+        var waited = 0
+        while (renderer.value == null && waited < 4000) {
+            kotlinx.coroutines.delay(50); waited += 50
+        }
+        if (renderer.value == null) {
+            scope.launch { snackbar.showSnackbar("画布未就绪，未能自动执行 ZorvAI 派来的任务，请手动发送") }
+            cmd = task
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(150)
+        cmd = ""
+        generate(task)
+    }
+
     Scaffold(
         containerColor = GenTheme.Screen,
         snackbarHost = { SnackbarHost(snackbar) },

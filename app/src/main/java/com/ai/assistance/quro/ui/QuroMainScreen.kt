@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.quro.core.QuroCrashReporter
+import com.ai.assistance.quro.core.tools.GenUiBridge
 import com.ai.assistance.quro.ui.theme.QuroTheme
 
 /**
@@ -31,6 +32,18 @@ fun QuroApp(
     val personaVm = remember { QuroPersonaViewModel(ctx) }
     // 当前会话类型：genui = 非文本「生成式界面」渲染面（整个界面即 AI 回复），normal = 普通文本对话框
     val genUiType by chatVm.genUiTypePref.collectAsState()
+
+    // ══ ZorvAI → GenUI 反向调用桥装配 ══
+    // 把「进入 GenUI 画布」的实现交给工具层（genui_open 工具 → GenUiBridge.open）。
+    // 此前只有 GenUI → ZorvAI 的单向回推，ZorvAI 侧叫不动 GenUI（工具拿不到 ViewModel、也够不到切屏开关）。
+    // 生命周期跟随 QuroApp：进入组合期注册、离开时注销，工具不可能在 UI 不在时误触发。
+    //
+    // 派过来的任务不在这里取：它留在桥里，由 GenUI 的 GenScaffold 挂载后在副作用中取一次
+    // （组合期取值一旦遇到"组合被丢弃"就会静默吃掉任务，见 GenScaffold 的说明）。
+    DisposableEffect(Unit) {
+        GenUiBridge.install { prompt, mode -> chatVm.enterGenUi(prompt, mode) }
+        onDispose { GenUiBridge.uninstall() }
+    }
 
     val crash by QuroCrashReporter.lastCrash.collectAsState()
     val clipboard = LocalClipboardManager.current

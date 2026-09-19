@@ -23,15 +23,15 @@ import java.nio.charset.StandardCharsets
  */
 class MiniAppStudioTool : QuroTool {
     override val name = "miniapp"
-    override val description = """小程序工作台：AI 直接创建/写入/读取/运行小程序工程（完整移植自 MiniAppFramework）。
+    override val description = """小程序工作室：AI 直接创建/写入/读取/运行小程序工程（HTML + Page() 运行时 + native.* 原生桥）。
 
-工程结构（存储在手机私有目录 filesDir/studio/miniapp/<name>/）：
+工程结构（存放在手机私有目录 filesDir/studio/miniapp/<name>/，与工具中心「小程序工作室」面板共享同一份文件）：
 - app.json：全局配置（appId/version/name/pages 路由表/window 样式）
-- pages/<page>/<page>.html：页面（用 Page() 运行时 + native.* SDK 调用原生能力）
-- components/<name>/<name>.js：可复用组件
+- pages/<page>/<page>.html：页面（完整 HTML，用 Page() 运行时组织状态，可调 native.*）
+- components/<name>/<name>.js：可复用组件（可选）
 
-原生能力（native.* SDK，由桥接注入）：
-- storage：setItem/getItem/removeItem/clear
+原生能力（native.* 桥，由宿主注入；这是用本工具的唯一理由）：
+- storage：setItem/getItem/removeItem/clear（跨启动持久化）
 - ui：toast/setNavigationBarTitle
 - device：getSystemInfo/vibrate
 - network：request
@@ -48,18 +48,26 @@ class MiniAppStudioTool : QuroTool {
 - read：读取文件内容（默认 app.json）
 - list：列出所有小程序工程
 - delete：删除整个工程，或删除某个文件（传 path）
-- run：返回可直接在对话框渲染的自包含 HTML（自动内联同目录的 .js/.css）
+- run：返回可直接在对话框渲染的自包含 HTML（自动内联同目录的 .js/.css）——**create 之后必须 run，否则界面根本没交付**
+- manual：取回开发手册（**两份都在这里**）。参数 topic：
+  · 不传 / "studio" → 【① 小程序工作室手册】两工具对照 + 工程结构 + Page() 运行时 + native.* 逐个函数 + 错误清单
+  · "native" → 【② create_miniapp 原生 UI 手册】组件标签实际渲染成什么 + 事件表与 dataset + wx.* 全表 + Page/setData + 三个可交互范式
+  · "traps" → 【② 配套】9 条引擎致命陷阱（scroll-view/控件/单行输入…违反必出黑盒故障）
+  · "errors" → 【② 配套】17 条错误清单（工具真实打回理由 → 成因 → 怎么改）
+  · "compare" → 只看两个小程序工具的区别
+  两份手册是同一份真相源（GenUI 画布侧用 genui_manual 取同样内容），不会出现"两边说法不一致"。
 
-示例：让 AI「用 miniapp 工具创建一个待办小程序，命名为 todo」，然后用 run 在对话框预览。"""
+""" + MiniAppManual.STUDIO_BRIEF
     override val parametersJson = """{
         "type":"object",
         "properties":{
-            "action":{"type":"string","description":"操作：create|write|read|list|delete|run"},
+            "action":{"type":"string","description":"操作：create|write|read|list|delete|run|manual"},
             "name":{"type":"string","description":"工程名（create/write/read/delete/run 时必填）"},
             "files":{"type":"array","description":"文件数组（仅 create 时需要），每项含 path 和 content","items":{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}}}},
             "path":{"type":"string","description":"文件路径，相对工程根（write/read/delete 单个文件时需要）"},
             "content":{"type":"string","description":"文件内容（write 时需要）"},
-            "entry":{"type":"string","description":"入口页面路径（run 时需要，默认 pages/index/index.html）"}
+            "entry":{"type":"string","description":"入口页面路径（run 时需要，默认 pages/index/index.html）"},
+            "topic":{"type":"string","description":"manual 的主题：studio（工作室手册，默认）/ native（create_miniapp 原生UI手册）/ traps（引擎陷阱）/ errors（错误清单）/ compare（两工具对照）"}
         },
         "required":["action"]
     }"""
@@ -89,7 +97,10 @@ class MiniAppStudioTool : QuroTool {
             "list" -> listProjects(context)
             "delete" -> deleteProject(context, json)
             "run" -> runProject(context, json)
-            else -> "未知操作：$action。支持：create/write/read/list/delete/run"
+            // manual：把完整手册（函数级细节 + 可交互范式 + 错误清单）返给 AI。
+            // 手册正文在 MiniAppManual 里（唯一真相源，GenUI 侧同源引用），此处只做分发。
+            "manual" -> MiniAppManual.section(json.optString("topic", ""))
+            else -> "未知操作：$action。支持：create/write/read/list/delete/run/manual"
         }
     }
 

@@ -143,6 +143,9 @@ class ZorvToolAdapter(context: Context) {
     private val GENUI_TOOLS = setOf(
         "genui_native_ui", "create_miniapp",
         "open_miniapp", "list_miniapps",
+        // 小程序手册（唯一真相源 MiniAppManual 的分册取用口）：写小程序前按纪律先读，
+        // 被打回时照 errors 分册逐条改。分册体量都压在 8000 字符内，避免被 AgentLoop 截断。
+        "genui_manual",
         "run_js", "install_plugin", "uninstall_plugin", "list_plugins"
     )
 
@@ -158,6 +161,12 @@ class ZorvToolAdapter(context: Context) {
         return when (name) {
             TOOL_NATIVE_UI, TOOL_NATIVE_UI_ALIAS -> createMiniApp(args)
             "open_miniapp" -> openMiniApp(args)
+            // 小程序手册分册：正文在 MiniAppManual（与 ZorvAI 侧的 miniapp(action="manual") 同一份）。
+            // 单独包一层必须放在 here（GENUI_TOOLS 里的工具不进 ZorvAI 引擎），否则模型调不到手册。
+            "genui_manual" -> JSONObject()
+                .put("ok", true)
+                .put("topic", args.optString("topic", "").ifBlank { "compare+studio" })
+                .put("manual", com.ai.assistance.quro.core.tools.MiniAppManual.section(args.optString("topic", "")))
             "run_js" -> CodeRuntime.runJs(appContext, args.optString("code"), args.optLong("timeout_ms", 40000))
             "install_plugin" -> PluginRuntime.install(
                 appContext, args.optString("name"), args.optString("version"),
@@ -376,7 +385,7 @@ class ZorvToolAdapter(context: Context) {
                     .put("parameters", JSONObject().put("type", "object")
                         .put("properties", props).put("required", JSONArray(required)))))
         gdecl(TOOL_NATIVE_UI,
-            "【GenUI 原生 UI（原 create_miniapp）】用自研原生引擎渲染一个真实可交互的界面（微信小程序语法：app.json/app.js/app.wxss + pages/index/index.{wxml,wxss,js}），保存成功后**自动内嵌 GenUI 对话流渲染**（用户可直接试玩），也可 open_miniapp 全屏打开。适合：待办、计算器、查数工具、记账等有状态小应用。【与 miniapp 工具的区别（别搞混）】：本工具产出的是**WXML/WXSS/JS 原生界面**，不走 HTML、不注入 window.native，要调原生能力请改用 miniapp（小程序工作室）。【尺寸单位：全部用 rpx（750rpx=整屏宽），禁止 px】【布局：手机竖屏单列；display:flex 横排记得 flex-wrap】【超过一屏：最外层用 <scroll-view scroll-y style=\"height:100%\"> 包住，普通 view 超出卡片视口的部分会被裁掉】【多页】：app.json 的 pages 数组列出全部页面（每页 pages/xxx/xxx.{wxml,wxss,js} 四件套齐全），首屏页放 pages[0]。【JS 语法边界（自研引擎，必须严格遵守否则被打回）】：支持 var/let/const、function、箭头函数、闭包、对象/数组字面量、字符串 + 拼接、if/else/for/while、JSON、Page({data:{...}, onTap: function(){ this.setData({...}) }})、App({})、wx.* API；【禁用】模板字符串（反引号）、解构、展开(...)、默认参数、对象方法简写、class、async/await、可选链?.、空值合并??。",
+            "【GenUI 原生 UI（原 create_miniapp）】用自研原生引擎渲染一个真实可交互的界面（微信小程序语法：app.json/app.js/app.wxss + pages/index/index.{wxml,wxss,js}），保存成功后**自动内嵌 GenUI 对话流渲染**（用户可直接试玩），也可 open_miniapp 全屏打开。适合：待办、计算器、查数工具、记账等有状态小应用。【与 miniapp 工具的区别（别搞混）】：本工具产出的是**WXML/WXSS/JS 原生界面**，不走 HTML、不注入 window.native，要调原生能力请改用 miniapp（小程序工作室）。【尺寸单位：全部用 rpx（750rpx=整屏宽），禁止 px】【布局：手机竖屏单列；横排两列用 display:flex + 每列 flex:1，**绝不要写死 50%**——容器有 padding 时两列相加超过内宽，右侧会被裁掉（引擎没有横向滚动）；更别指望卡片会自动长高，超屏内容必须自己用 scroll-view 承载】【超过一屏：最外层用 <scroll-view scroll-y style=\"height:100%\"> 包住，普通 view 超出卡片视口的部分会被裁掉】【多页】：app.json 的 pages 数组列出全部页面（每页 pages/xxx/xxx.{wxml,wxss,js} 四件套齐全），首屏页放 pages[0]。【JS 语法边界（自研引擎，必须严格遵守否则被打回）】：支持 var/let/const、function、箭头函数、闭包、对象/数组字面量、字符串 + 拼接、if/else/for/while、JSON、Page({data:{...}, onTap: function(){ this.setData({...}) }})、App({})、wx.* API；【禁用】模板字符串（反引号）、解构、展开(...)、默认参数、对象方法简写、class、async/await、可选链?.、空值合并??。【三条最致命的（引擎事实，违反必出黑盒故障）】：① 只有 scroll-view 能滚动——超屏内容必须用 <scroll-view scroll-y style=\"height:100%\"> 包住，否则被直接裁掉；② switch/checkbox/radio/slider 被引擎当**纯文本**渲染（没有控件形态，自闭合时宽高为 0、界面上什么都没有）——开关要用 view + WXSS 自绘；③ input 只有**单行**（textarea 也一样），且 bindinput 只在键盘\"完成\"时触发一次，不要设计\"输入即筛\"。【完整手册（组件标签实际渲染成什么 / 事件表 / wx.* 全表 / Page与setData / 三个可交互范式 / 17 条错误清单）见系统提示词第八节 A 手册；引擎打回时的报错应当照错误清单逐条改】",
             JSONObject()
                 .put("app_id", JSONObject().put("type", "string").put("description", "英文短 id，如 weather-tool"))
                 .put("title", JSONObject().put("type", "string").put("description", "显示标题（写入 app.json 的 navigationBarTitleText）"))
@@ -405,6 +414,18 @@ class ZorvToolAdapter(context: Context) {
             JSONObject().put("id_or_name", JSONObject().put("type", "string")), listOf("id_or_name"))
         gdecl("list_plugins", "列出已安装的全部插件及其工具。", JSONObject(), emptyList())
         gdecl("list_miniapps", "列出 GenUI 里全部可用界面（内置示例 + 你创建的 GenUI 原生 UI），供 open_miniapp / $TOOL_NATIVE_UI 引导。", JSONObject(), emptyList())
+        gdecl("genui_manual",
+            "取回小程序手册（唯一真相源，函数级）。写 genui_native_ui / miniapp 之前**必须先取对应分册**——" +
+                "手册由自研引擎源码反推而成，与微信小程序的常识有若干关键差异（组件渲染、事件、单行输入、只有 scroll-view 能滚动等），" +
+                "凭经验硬写会得到空白界面或点了没反应。工具被打回时取 errors 分册，对着「成因→怎么改」逐条修，不要盲试。",
+            JSONObject().put("topic", JSONObject().put("type", "string")
+                .put("description", "分册：" +
+                    "compare=两个小程序工具对照 / traps=genui_native_ui 引擎陷阱表 / " +
+                    "native=genui_native_ui 完整手册（组件标签实际渲染成什么·事件表与 dataset·wx.* 全表·Page与setData·三个可交互范式）/ " +
+                    "errors=genui_native_ui 错误清单（含工具真实打回理由）/ " +
+                    "studio=miniapp 工作室手册（工程结构·Page() 运行时·native.* 逐个函数·错误清单）；" +
+                    "不传=compare+studio")),
+            emptyList())
         return arr
     }
 }
