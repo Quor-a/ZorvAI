@@ -34,9 +34,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.*
 import com.ai.assistance.quro.genui.app.agent.AgentLoop
 import com.ai.assistance.quro.genui.app.agent.ToolGate
 import com.ai.assistance.quro.ui.genui.GenUiCanvas
@@ -108,6 +112,22 @@ private enum class Phase(val label: String, val color: androidx.compose.ui.graph
     Failed("失败", GenTheme.Red, false),
 }
 
+/**
+ * 一轮生成式 UI 对话的条目：用户一句话 + AI 回复（界面即回复，内嵌可交互）。
+ * 不预设「某类型必须走某通道」——HTML / 小程序 / 原生 / 纯文本都是对话里的内嵌卡片，
+ * 同屏滚动，没有覆盖层、没有「点开才能看」的启动器。
+ */
+private data class GenTurn(
+    val id: String,
+    val role: String,                 // "user" | "assistant"
+    val html: String? = null,
+    val appId: String? = null,
+    val studioHtml: String? = null,   // ZorvAI 小程序工作室 / 可视化工具返回的自包含 HTML（带 native.* 桥接）
+    val native: NativeRender? = null,
+    val text: String? = null,
+    val title: String = "",
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GenScaffold(
@@ -116,6 +136,8 @@ fun GenScaffold(
     onNavigate: (NavTarget) -> Unit,
     dark: Boolean = false,
     onPushToChat: (html: String, title: String) -> Unit,
+    /** 原生小程序（create_miniapp）交付 → 写进 ZorvAI 对话框（与 HTML 通道独立）。 */
+    onPushMiniAppToChat: (appId: String, title: String) -> Unit = { _, _ -> },
     onExitToChat: () -> Unit,
     /** GenUI 模式下 AI 返回纯文本（非 HTML 界面）时，把文本作为普通回复写回 ZorvAI 对话框 */
     onTextReply: (text: String) -> Unit,
@@ -262,6 +284,10 @@ fun GenScaffold(
 
     // —— 画布历史：系统返回 = 退回上一张纸 ——
     val canvasStack = remember { mutableStateListOf<GeneratedPage>() }
+    // —— 生成式 UI 对话：每一轮 = 用户一句话 + AI 回复（界面即回复，内嵌可交互）——
+    // 不区分"通道"：HTML / 小程序 / 原生 / 纯文本都是对话里的内嵌卡片，同屏滚动，
+    // 没有覆盖层、没有「点开才能看」的启动器。
+    val turns = remember { mutableStateListOf<GenTurn>() }
 
     /**
      * 根据一份产出的 HTML 恢复原生渲染层。
@@ -316,6 +342,8 @@ fun GenScaffold(
         building = true; chunkBytes = 0; bridgeCalls = 0; toolCalls = 0; ticks = 0
         startedAt = System.currentTimeMillis()
         timeline.clear()
+        // 生成式 UI 对话：用户这句指令先作为气泡入流（界面即回复，紧随其后内嵌）
+        turns.add(GenTurn(GenStore.newId(), "user", text = prompt))
         // 新一轮生成：清掉上一屏的原生渲染层，避免它与流式内容叠加打架
         nativeRender = null
         phase = Phase.Thinking
@@ -372,8 +400,22 @@ fun GenScaffold(
                 main.post {
                     applyEvent(timeline, ev, runSlot) { p, d, tc, el ->
                         phase = p; phaseDetail = d
+                        if (p == Phase.Done || p == Phase.Failed) building = false
                         if (tc > 0) toolCalls = tc
                         if (el > 0) lastElapsed = el
+                    }
+                    // GenUI 小程序创建成功 → 作为对话内嵌卡片直接入流（无需点开，直接可玩）
+                    if (ev is com.ai.assistance.quro.genui.app.agent.AgentEvent.MiniAppCreated) {
+                        turns.add(GenTurn(GenStore.newId(), "assistant", appId = ev.appId, title = "小程序"))
+                        // 同时写进 ZorvAI 对话框：原生小程序没有 HTML，走独立通道（```quro-card + config.app_id），
+                        // 对话框内的卡片用自研引擎就地渲染。缺了这一步，小程序就只存在于画布/历史页里。
+                        onPushMiniAppToChat(ev.appId, "小程序 · ${ev.appId}")
+                    }
+                    // ZorvAI 小程序工作室 / 可视化产物 → 自包含 HTML 直接内嵌对话流（带原生桥接）
+                    if (ev is com.ai.assistance.quro.genui.app.agent.AgentEvent.StudioMiniApp) {
+                        turns.add(GenTurn(GenStore.newId(), "assistant", studioHtml = ev.html, title = ev.title))
+                        // 同时把工作室小程序回写 ZorvAI 对话框（复用 MiniAppWebView 渲染）
+                        onPushToChat(ev.html, ev.title)
                     }
                 }
             },
@@ -397,28 +439,30 @@ fun GenScaffold(
                 main.post {
                     r.end()
                     if (isHtmlDoc(full)) {
-                        // —— 正常：AI 生成了 HTML 界面，写画布 + 回写对话框（小程序气泡）——
+                        // —— 正常：AI 生成了 HTML 界面，作为对话内嵌卡片入流 ——
                         val page = GeneratedPage(GenStore.newId(), title, full, provider.model, System.currentTimeMillis())
                         store.appendPage(page)
                         pushPage(page)
                         stackCount = store.loadPages().size
                         partialHtml = null
-                        // —— 渲染通道分派 ——
-                        // AI 声明了 xml / compose 通道时，把画布上方交给真实原生渲染。
-                        // 不影响 HTML 部分：网页继续承载整体排版，原生块叠在其上。
+                        // 生成式 UI 对话：HTML 回复直接内嵌（同屏滚动、可交互、不跳独立程序）
+                        turns.add(GenTurn(GenStore.newId(), "assistant", html = full, title = title))
+                        // —— 渲染通道分派：AI 声明 xml / compose / canvas 时，原生块内嵌在对话里 ——
                         restoreNative(full)
-                        // 把整屏结果回写 ZorvAI 对话框：作为小程序 WebView 气泡出现在当前会话，
-                        // 实现「返回 ZorvAI 对话框」（用户可在普通对话里看到/点开这次 GenUI 产物）。
+                        if (nativeRender != null) {
+                            turns.add(GenTurn(GenStore.newId(), "assistant", native = nativeRender, title = "原生 $lastChannel"))
+                        }
+                        // 同时把整屏结果回写 ZorvAI 对话框（用户可在普通对话里看到这次 GenUI 产物）
                         onPushToChat(full, title)
                         phase = Phase.Done
                         phaseDetail = "「$title」· ${(full.length / 1024.0).format1()}KB" +
                             if (lastChannel != "html") " · 原生 $lastChannel" else ""
                         building = false
                     } else {
-                        // —— 异常：AI 返回的是纯文本回复（不是界面）——
-                        // 绝不把回复文本直接甩在画布上；清空画布并把文本作为普通回复写回对话框。
+                        // —— 纯文本回复：作为对话气泡入流（不甩到画布上）——
                         r.begin(null)
                         partialHtml = null
+                        turns.add(GenTurn(GenStore.newId(), "assistant", text = full.trim()))
                         onTextReply(full.trim())
                         phase = Phase.Done
                         phaseDetail = "AI 以文本回复 · 已写入对话框"
@@ -621,17 +665,6 @@ fun GenScaffold(
                         }
                     }
                 }
-                // 第二行：细节（只有存在时才占位，避免空行浪费高度）
-                if (phaseDetail.isNotBlank()) {
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        phaseDetail,
-                        color = GenTheme.Dim, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 2.dp)
-                    )
-                }
                 // 生成中：一条极细的进度脉冲线（不确定进度，仅表达"还在跑"）
                 if (building) {
                     Spacer(Modifier.height(6.dp))
@@ -645,7 +678,7 @@ fun GenScaffold(
         bottomBar = {
             Column(Modifier.background(GenTheme.Screen).navigationBarsPadding()) {
                 // 空态：快速模型给的三个起点（点击直接生成）。已有内容或未配置快速模型时不显示。
-                if (!building && cmd.isEmpty() && partialHtml == null && suggestions.isNotEmpty() && canvasStack.isEmpty()) {
+                if (!building && cmd.isEmpty() && partialHtml == null && suggestions.isNotEmpty() && turns.isEmpty()) {
                     androidx.compose.foundation.lazy.LazyRow(
                         Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -700,12 +733,6 @@ fun GenScaffold(
                     verticalAlignment = Alignment.Bottom
                 ) {
                     Box(Modifier.weight(1f).padding(vertical = 9.dp)) {
-                        if (cmd.isEmpty()) {
-                            Text(
-                                if (building) "正在写…（可点右侧停止）" else "给 ${soul.name} 一句话，它来写整个界面…",
-                                color = GenTheme.Dim, fontSize = 14.sp
-                            )
-                        }
                         BasicTextField(
                             value = cmd, onValueChange = { if (it.length <= 4000) cmd = it },
                             enabled = !building,
@@ -761,90 +788,61 @@ fun GenScaffold(
         }
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize().background(GenTheme.Screen)) {
-            // —— A2UI 画布：AI 的世界 ——
-            // 注意：AndroidView 的 factory 在首次组合时仅执行一次。这里刻意不引用任何
-            // 会变化的状态（pages / stackCount 等），否则每次生成完成都会重建 WebView，
-            // 把刚流式写入的文档整个清掉（历史上的"生成完画布变白"）。
-            AndroidView(
-                factory = { c ->
-                    WebView(c).also { wv ->
-                        setupWebView(wv)
-                        webRef.value = wv
-                        renderer.value = GenUiCanvas(
-                            context = c,
-                            webView = wv,
-                            dark = dark,
-                            onFirstPaint = {},
-                            onPageTitle = {},
-                            onBridgeCall = { bridgeCalls++ },
-                            onWidget = { kind, payload -> nativeWidget = kind to payload }
-                        )
-                        wv.loadUrl("about:blank")
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-
-            // —— 原生渲染层 ——
-            // AI 声明了 xml / compose 通道时，画布交给真实原生渲染。
-            // 设计：画布是"HTML 宿主 + 原生叠加"。原生渲染是**独立于 WebView 的
-            // 第二条渲染通道**——AI 写 XML 布局或 Compose 组件树，端上用真实
-            // Android 控件 / Compose 组件渲染出来，不是网页仿真。
-            //
-            // 生成过程中不叠加（避免与流式内容打架）；生成完成后一次性呈现。
-            // 用户可以随时关掉原生层，回看 HTML 部分——两条通道互不破坏。
-            val native = nativeRender
-            if (!building && native != null) {
-                Box(
-                    Modifier.fillMaxSize()
-                        .background(GenTheme.Screen)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                when (native) {
-                                    is NativeRender.Xml -> "◧ 原生布局"
-                                    is NativeRender.Compose -> "◨ Compose"
-                                    is NativeRender.Canvas -> "◩ GenCanvas"
-                                    is NativeRender.Code -> "▤ 代码视图"
-                                },
-                                color = GenTheme.AmberDim, fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace, letterSpacing = 1.sp
-                            )
-                            Spacer(Modifier.weight(1f))
-                            Text(
-                                "关掉原生层",
-                                color = GenTheme.Dim, fontSize = 10.sp,
-                                modifier = Modifier.clickable { nativeRender = null }
-                                    .padding(horizontal = 4.dp, vertical = 2.dp)
-                            )
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        when (native) {
-                            is NativeRender.Xml -> XmlNativeView(native.xml)
-                            is NativeRender.Compose -> ComposeDescRenderer.Render(native.json) { action ->
-                                // 原生控件的事件回传给 AI 页面：派发 mo:compose 事件
-                                renderer.value?.dispatchComposeAction(action)
-                            }
-                            is NativeRender.Canvas -> CanvasNativeView(
-                                native.json,
-                                Modifier.fillMaxSize().padding(top = 4.dp)
-                            ) { action ->
-                                // 画布的事件回传给 AI 页面：派发 mo:canvas 事件
-                                renderer.value?.dispatchCanvasAction(action)
-                            }
-                            is NativeRender.Code -> Column(
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                native.blocks.forEach { block ->
-                                    com.ai.assistance.quro.genui.app.render.CodeBlockView(block)
-                                }
-                            }
-                        }
-                    }
+            // —— 生成式 UI 对话：用户一句话 → AI 回复（界面即回复）内嵌可交互 ——
+            // 没有覆盖层、没有「点开才能看」的启动器：HTML 走 GenHtmlCard、小程序走 MiniAppCard、
+            // 原生内嵌、纯文本走气泡，全部同屏滚动。流式 WebView 常驻挂载（空闲 0 高），
+            // 保证 renderer 跨轮存活、generate() 拿得到引用。
+            val convScroll = rememberScrollState()
+            LaunchedEffect(turns.size, building) {
+                if (turns.isNotEmpty() || building) {
+                    kotlinx.coroutines.delay(60)
+                    runCatching { convScroll.scrollTo(convScroll.maxValue) }
                 }
             }
+            Column(
+                Modifier.fillMaxSize().verticalScroll(convScroll)
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            ) {
+                turns.forEach { turn ->
+                    GenTurnRow(
+                        turn,
+                        onOpenCanvas = { onPushToChat(it, turn.title) },
+                        renderer = renderer
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+                // 流式中的当前项：常驻挂载，只在真的有 HTML 流过来时才展开；
+                // 决策/工具阶段或小程序交付时保持 0 高，避免白底占位块。
+                Box(
+                    Modifier.fillMaxWidth()
+                        .height(if (building && chunkBytes > 0) 384.dp else 0.dp)
+                        .background(GenTheme.Screen)
+                ) {
+                    AndroidView(
+                        factory = { c ->
+                            WebView(c).also { wv ->
+                                setupWebView(wv)
+                                webRef.value = wv
+                                renderer.value = GenUiCanvas(
+                                    context = c,
+                                    webView = wv,
+                                    dark = dark,
+                                    onFirstPaint = {},
+                                    onPageTitle = {},
+                                    onBridgeCall = { bridgeCalls++ },
+                                    onWidget = { kind, payload -> nativeWidget = kind to payload }
+                                )
+                                wv.loadUrl("about:blank")
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            // —— GenUI 小程序层（内嵌在对话流里，见下方 GenTurnRow，无需此独立 panel） ——
+
+            // —— 小程序全屏内嵌层已改为对话内嵌卡片（MiniAppCard），不再需要独立 Dialog ——
 
             // —— WebView 生命周期释放 ——
             // WebView 即使离开界面也会继续跑 JS 定时器、持有网络请求与 Context，
@@ -869,7 +867,7 @@ fun GenScaffold(
             // —— 首次使用 / 空画布：设计过的引导，而不是一屏空白 ——
             // 冷启动时用户看到的是 WebView 的空白页。不给引导 = 不知道该干什么。
             val hasProvider = cachedProvider != null
-            if (!building && canvasStack.isEmpty() && partialHtml == null) {
+            if (!building && turns.isEmpty() && partialHtml == null) {
                 Column(
                     Modifier.fillMaxSize().padding(horizontal = 34.dp),
                     verticalArrangement = Arrangement.Center,
@@ -960,8 +958,12 @@ fun GenScaffold(
         onDismiss = { showStack = false },
         onOpen = { p ->
             showStack = false
-            renderer.value?.replay(p.html)
+            turns.clear()
+            turns.add(GenTurn(GenStore.newId(), "assistant", html = p.html, title = p.title))
             restoreNative(p.html)
+            if (nativeRender != null) {
+                turns.add(GenTurn(GenStore.newId(), "assistant", native = nativeRender, title = "原生 $lastChannel"))
+            }
             canvasStack.clear()
             canvasStack.add(p)          // 回放 = 以该纸为新栈底，返回键不再穿透旧栈
             phase = Phase.Idle; phaseDetail = "回放「${p.title}」 · ${p.model}"
@@ -970,8 +972,333 @@ fun GenScaffold(
             store.clearPages()
             stackCount = 0
             canvasStack.clear()
+            turns.clear()
         }
     )
+}
+
+/**
+ * 对话流里的一行：用户指令（右对齐气泡）或 AI 回复（界面即回复，内嵌可交互）。
+ * 不预设通道——HTML / 小程序 / 原生 / 纯文本都直接渲染，没有「点开才能看」的启动器。
+ */
+@Composable
+private fun GenTurnRow(
+    turn: GenTurn,
+    onOpenCanvas: (String) -> Unit,
+    renderer: androidx.compose.runtime.MutableState<GenUiCanvas?>,
+) {
+    when (turn.role) {
+        "user" -> GenUserBubble(turn.text ?: "")
+        else -> GenAssistantCard(turn, onOpenCanvas, renderer)
+    }
+}
+
+@Composable
+private fun GenUserBubble(text: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Text(
+            text,
+            color = Color.White, fontSize = 14.sp, lineHeight = 21.sp,
+            modifier = Modifier.widthIn(max = 300.dp)
+                .clip(RoundedCornerShape(12.dp, 12.dp, 3.dp, 12.dp))
+                .background(GenTheme.Amber)
+                .padding(horizontal = 12.dp, vertical = 9.dp)
+        )
+    }
+}
+
+@Composable
+private fun GenTextBubble(text: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+        Text(
+            text,
+            color = GenTheme.Text, fontSize = 14.sp, lineHeight = 21.sp,
+            modifier = Modifier.widthIn(max = 320.dp)
+                .clip(RoundedCornerShape(12.dp, 12.dp, 12.dp, 3.dp))
+                .background(GenTheme.Panel)
+                .padding(horizontal = 12.dp, vertical = 9.dp)
+        )
+    }
+}
+
+@Composable
+private fun GenAssistantCard(
+    turn: GenTurn,
+    onOpenCanvas: (String) -> Unit,
+    renderer: androidx.compose.runtime.MutableState<GenUiCanvas?>,
+) {
+    when {
+        turn.html != null -> GenHtmlCard(turn.html, onOpenCanvas)
+        turn.appId != null -> GenMiniAppCard(turn.appId)
+        turn.studioHtml != null -> GenStudioAppCard(turn.studioHtml)
+        turn.native != null -> GenNativeCard(turn.native, renderer)
+        turn.text != null -> GenTextBubble(turn.text)
+    }
+}
+
+/**
+ * 对话流里的小程序卡片。
+ *
+ * 这里**必须**给确定高度：对话流是 verticalScroll，高度约束无界，
+ * MiniAppCard 内部的 AndroidView(fillMaxSize) 在无界约束下量成 0 高 →
+ * 条目存在但完全看不见（"对话框里没有小程序围栏"就是这么来的）。
+ *
+ * 状态行只在**异常**时出现（引擎没建起来 / 页面没布局 / 没出帧 / 包不存在），
+ * 正常画出来时保持干净，不打扰。
+ */
+@Composable
+private fun GenMiniAppCard(appId: String) {
+    var status by remember(appId) { mutableStateOf("引擎初始化中…") }
+    var reload by remember(appId) { mutableStateOf(0) }
+    val ctx = LocalContext.current
+    val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+    val h = (cfg.screenHeightDp * 0.58f).dp
+    Column(Modifier.fillMaxWidth()) {
+        // 一行极轻的标识：让用户知道这块是什么、并且有全屏/重载入口
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "▦ " + appId,
+                color = GenTheme.Dim, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                "⟳",
+                color = GenTheme.Dim, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { reload++ }
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            )
+            Text(
+                "⛶ 全屏",
+                color = GenTheme.Amber, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable {
+                        runCatching {
+                            ctx.startActivity(
+                                android.content.Intent(
+                                    ctx,
+                                    com.ai.assistance.quro.genui.app.miniapp.GenUiMiniAppActivity::class.java
+                                ).putExtra("appId", appId)
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                    }
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            )
+        }
+        // 诊断行**常显**：小程序是自研引擎画的，出问题时界面只有一块白，
+        // 没有这行字就只能靠猜。点它可复制完整状态。
+        Text(
+            status,
+            color = if (status.startsWith("⚠")) GenTheme.Red else GenTheme.Dim,
+            fontSize = 9.sp, fontFamily = FontFamily.Monospace,
+            maxLines = 3, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    runCatching {
+                        val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                            as android.content.ClipboardManager
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("miniapp-status", status))
+                        android.widget.Toast.makeText(ctx, "已复制小程序诊断", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+        )
+        MiniAppCard(
+            appId,
+            Modifier.fillMaxWidth().height(h),
+            onStatus = { status = it },
+            reloadKey = reload,
+        )
+    }
+}
+
+/** 体量文案：小于 1KB 显示字节数，避免"真的生成了东西"却被显示成 0KB。 */
+private fun sizeLabel(bytes: Long): String =
+    if (bytes < 1024) "${bytes}B" else String.format(Locale.US, "%.1fKB", bytes / 1024.0)
+
+/**
+ * 对话内嵌 HTML 卡片：与画布同款保真——挂 WebViewAssetLoader 解析 genui.local 运行时资源，
+ * 高度自适应（onPageFinished 量 scrollHeight），可「展开」看全高、「画布 ↗」回写 ZorvAI 对话框。
+ * 默认折叠到 220dp 预览，内容可交互，不跳独立程序。
+ */
+@Composable
+private fun GenHtmlCard(html: String, onOpenCanvas: (String) -> Unit) {
+    val ctx = LocalContext.current
+    val density = LocalDensity.current
+    var contentH by remember(html) { mutableStateOf<Int?>(null) }
+    var expanded by remember(html) { mutableStateOf(false) }
+    val maxH = with(density) { 460.dp.toPx() }.toInt()
+    val assetLoader = remember(ctx) {
+        WebViewAssetLoader.Builder().setDomain("genui.local")
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(ctx)).build()
+    }
+    // 完全放开：卡片不附加任何固定背景/边框/标题栏，背景、配色、布局 100% 由 AI 生成的 HTML 决定。
+    // WebView 设透明，让 HTML 的 body 背景原样透出（不再被宿主白底盖住）。
+    val hPx = if (expanded) contentH ?: maxH else contentH ?: with(density) { 600.dp.toPx() }.toInt()
+    AndroidView(
+        factory = { c ->
+            WebView(c).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                webViewClient = object : android.webkit.WebViewClient() {
+                    override fun shouldInterceptRequest(
+                        view: WebView?, request: WebResourceRequest?
+                    ): WebResourceResponse? = request?.url?.let { assetLoader.shouldInterceptRequest(it) }
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        view?.evaluateJavascript(
+                            "(function(){return document.documentElement.scrollHeight})()"
+                        ) { r ->
+                            val sh = r?.trim()?.removePrefix("\"")?.removeSuffix("\"")
+                                ?.toFloatOrNull()?.toInt()
+                            if (sh != null && sh > 0) contentH = sh
+                        }
+                    }
+                }
+                loadDataWithBaseURL("https://genui.local/", html, "text/html", "utf-8", null)
+            }
+        },
+        modifier = Modifier.fillMaxWidth().height(with(density) { hPx.toDp() })
+    )
+}
+
+/**
+ * 对话内嵌「小程序工作室 / 可视化」卡片：渲染 ZorvAI 小程序工作室（miniapp 工具 run 返回）
+ * 或任意返回完整 HTML 文档的可视化工具产物。
+ *
+ * 关键：注入 MiniAppBridgeInterface（window.native），让 Page() 运行时 / native.* SDK 可用；
+ * 资源走 AssetLibResolver 兜底（CDN 失败回本地库）；高度按 scrollHeight 自适应（上限 1440）。
+ * 完全放开：不附加固定背景/边框/标题栏，背景与配色 100% 由 HTML 决定（WebView 透明）。
+ */
+@Composable
+private fun GenStudioAppCard(html: String) {
+    val ctx = LocalContext.current
+    val density = LocalDensity.current
+    var contentH by remember(html) { mutableStateOf<Int?>(null) }
+    val maxH = with(density) { 640.dp.toPx() }.toInt()
+    val assetLibResolver = remember(ctx) { com.ai.assistance.quro.core.tools.AssetLibResolver(ctx) }
+
+    /** 把 AI 下发的 HTML 包成可加载文档：完整文档注入 bridge.js 到 <head>，否则套一层 <html>。 */
+    fun wrap(): String {
+        val bridgeJs = try {
+            ctx.assets.open("bridge/bridge.js").bufferedReader().use { it.readText() }
+        } catch (e: Exception) { "" }
+        val fallback = assetLibResolver.generateFallbackScript()
+        val isFullDoc = html.trimStart().startsWith("<!doctype", ignoreCase = true) || html.contains("<html", ignoreCase = true)
+        return if (isFullDoc) {
+            val injected = "$fallback\n<script>$bridgeJs</script>"
+            val hi = html.indexOf("</head>", ignoreCase = true)
+            if (hi >= 0) html.substring(0, hi) + injected + html.substring(hi)
+            else {
+                val si = html.indexOf("<html", ignoreCase = true)
+                if (si >= 0) {
+                    val e = html.indexOf(">", si)
+                    html.substring(0, e + 1) + injected + html.substring(e + 1)
+                } else injected + html
+            }
+        } else {
+            """<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+$fallback
+<script>$bridgeJs</script>
+</head>
+<body style="margin:0;padding:0;">
+$html
+</body>
+</html>""".trimIndent()
+        }
+    }
+
+    val hPx = contentH ?: maxH
+    AndroidView(
+        modifier = Modifier.fillMaxWidth().height(with(density) { hPx.toDp() }),
+        factory = { c ->
+            WebView(c).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.loadsImagesAutomatically = true
+                settings.useWideViewPort = true
+                settings.loadWithOverviewMode = true
+                settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                settings.allowFileAccess = true
+                settings.allowContentAccess = true
+                settings.allowUniversalAccessFromFileURLs = true
+                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                settings.javaScriptCanOpenWindowsAutomatically = true
+                settings.setSupportZoom(false)
+                settings.builtInZoomControls = false
+                settings.displayZoomControls = false
+                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                // 注入原生桥接：小程序工作室页面里的 Page()/native.* 全部走它
+                val bridge = com.ai.assistance.quro.core.miniapp.MiniAppBridgeInterface(c, this)
+                addJavascriptInterface(bridge, "native")
+                webViewClient = object : android.webkit.WebViewClient() {
+                    override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                        super.onPageFinished(view, url)
+                        view?.evaluateJavascript("document.documentElement.scrollHeight") { value ->
+                            val px = value?.replace("\"", "")?.toIntOrNull() ?: return@evaluateJavascript
+                            contentH = px.coerceIn(160, 1440)
+                        }
+                    }
+                    override fun shouldInterceptRequest(
+                        view: android.webkit.WebView?, request: android.webkit.WebResourceRequest?
+                    ): android.webkit.WebResourceResponse? {
+                        request?.let {
+                            val r = assetLibResolver.interceptRequest(it)
+                            if (r != null) return r
+                        }
+                        return super.shouldInterceptRequest(view, request)
+                    }
+                }
+                tag = html
+                loadDataWithBaseURL("file:///android_asset/", wrap(), "text/html", "UTF-8", null)
+            }
+        },
+        update = { wv ->
+            // 仅当 HTML 变化时才重载，避免每次 recomposition 闪烁
+            if (wv.tag != html) {
+                wv.tag = html
+                wv.loadDataWithBaseURL("file:///android_asset/", wrap(), "text/html", "UTF-8", null)
+            }
+        }
+    )
+}
+
+/** 对话内嵌原生卡片：xml / compose / canvas / 代码 真实原生渲染，直接叠在对话流里。 */
+@Composable
+private fun GenNativeCard(
+    native: NativeRender,
+    renderer: androidx.compose.runtime.MutableState<GenUiCanvas?>,
+) {
+    // 完全放开：原生渲染也不附加固定背景/边框/标题栏，背景配色由原生内容自己决定。
+    Column(Modifier.fillMaxWidth()) {
+        when (native) {
+            is NativeRender.Xml -> XmlNativeView(native.xml)
+            is NativeRender.Compose -> ComposeDescRenderer.Render(native.json) { action ->
+                renderer.value?.dispatchComposeAction(action)
+            }
+            is NativeRender.Canvas -> CanvasNativeView(native.json, Modifier.fillMaxWidth()) { action ->
+                renderer.value?.dispatchCanvasAction(action)
+            }
+            is NativeRender.Code -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                native.blocks.forEach { com.ai.assistance.quro.genui.app.render.CodeBlockView(it) }
+            }
+        }
+    }
 }
 
 private fun Double.format1(): String = String.format(Locale.US, "%.1f", this)
@@ -1071,13 +1398,17 @@ private inline fun applyEvent(
             // 收尾：把仍在 running 的绘制条目定格为完成，否则它永远转圈
             if (slot.paintIdx >= 0) { tl.update(slot.paintIdx, false); slot.paintIdx = -1 }
             tl.add(Kind.DONE, "完成「${ev.title}」",
-                "${ev.bytes / 1024}KB · ${ev.toolCalls} 次工具调用 · ${ev.elapsedMs / 1000.0}s")
-            report(Phase.Done, "「${ev.title}」· ${ev.bytes / 1024}KB", ev.toolCalls, ev.elapsedMs)
+                "${sizeLabel(ev.bytes)} · ${ev.toolCalls} 次工具调用 · ${ev.elapsedMs / 1000.0}s")
+            report(Phase.Done, "「${ev.title}」· ${sizeLabel(ev.bytes)}", ev.toolCalls, ev.elapsedMs)
         }
         is com.ai.assistance.quro.genui.app.agent.AgentEvent.Failed -> {
             tl.add(Kind.ERROR, "出错", "${ev.message}\n已保留 ${ev.partialBytes / 1024}KB 可续写")
             report(Phase.Failed, ev.message.take(80), 0, 0L)
         }
+        // 小程序创建事件不进时间线（渲染层单独处理），这里仅占位以满足 when 穷尽性
+        is com.ai.assistance.quro.genui.app.agent.AgentEvent.MiniAppCreated -> { }
+        // 小程序工作室 / 可视化产物事件不进时间线（渲染层单独处理），仅占位满足穷尽性
+        is com.ai.assistance.quro.genui.app.agent.AgentEvent.StudioMiniApp -> { }
     }
 }
 

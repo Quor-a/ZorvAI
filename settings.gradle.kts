@@ -25,6 +25,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Quro AI"
-include(":app", ":aidl-aci-browser", ":aidl-aci-core", ":mnn", ":llama", ":lib_aci", ":cap_main", ":xposed-stub", ":aci-app", ":terminal-core", ":genui", ":kaleidobox", ":plugin-contract", ":plugin-engine", ":plugin-express", ":plugin-devkit", ":plugin-units", ":plugin-todo", ":plugin-sysinfo", ":plugin-zorvweb", ":plugin-signcheck")
+include(":app", ":aidl-aci-browser", ":aidl-aci-core", ":mnn", ":llama", ":lib_aci", ":cap_main", ":xposed-stub", ":aci-app", ":terminal-core", ":genui", ":miniapp-sdk", ":kaleidobox", ":plugin-contract", ":plugin-engine", ":plugin-express", ":plugin-devkit", ":plugin-units", ":plugin-todo", ":plugin-sysinfo", ":plugin-zorvweb", ":plugin-signcheck")
 project(":mnn").projectDir = file("llm/mnn")
 project(":llama").projectDir = file("llm/llama")

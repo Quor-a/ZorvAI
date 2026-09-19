@@ -844,6 +844,15 @@
             </intent-filter>
         </activity>
 
+        <!-- GenUI 小程序全屏宿主：入口为 ChatPanel 小程序卡片"全屏"按钮（显式 Intent 传 appId）。
+             内联渲染走 AndroidView 直接 MiniAppEngine.createResolved，无需清单；此 Activity 仅承载全屏态。 -->
+        <activity
+            android:name=".genui.app.miniapp.GenUiMiniAppActivity"
+            android:exported="false"
+            android:label="小程序"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:theme="@style/Theme.Quro" />
+
     </application>
 
 </manifest>

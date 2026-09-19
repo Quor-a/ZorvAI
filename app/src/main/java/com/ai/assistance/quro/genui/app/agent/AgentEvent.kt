@@ -77,6 +77,22 @@ sealed class AgentEvent {
         override val ts: Long = System.currentTimeMillis()
     ) : AgentEvent()
 
+    /** GenUI 小程序创建成功：AI 用 create_miniapp 落地了一个微信语法小程序，UI 据此在画布渲染。 */
+    data class MiniAppCreated(
+        val appId: String,
+        override val ts: Long = System.currentTimeMillis()
+    ) : AgentEvent()
+
+    /**
+     * ZorvAI 小程序工作室（miniapp 工具）run 成功，或任意返回完整 HTML 文档的可视化工具产物：
+     * 自包含 HTML（含 native.* 桥接）已可内嵌对话流渲染，UI 据此在对话里渲染工作室小程序卡。
+     */
+    data class StudioMiniApp(
+        val html: String,
+        val title: String,
+        override val ts: Long = System.currentTimeMillis()
+    ) : AgentEvent()
+
     /** 开始流式渲染界面 */
     data class Rendering(
         val note: String,

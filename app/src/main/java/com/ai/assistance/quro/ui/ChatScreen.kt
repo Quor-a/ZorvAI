@@ -3352,15 +3352,29 @@ private fun MessageRow(
                                 is MsgBlock.Rule -> HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 4.dp))
                                 is MsgBlock.Table -> RenderTable(blk.header, blk.rows, scaled, textColor, onOpenLink)
                                 is MsgBlock.Code -> CodeBlock(lang = blk.lang, code = blk.code, scaled = scaled, onSend = onSend)
-                                is MsgBlock.MiniApp -> QuroChatCardView(
-                                    QuroChatCard.MiniAppCard(
-                                        id = "mini_" + blk.html.hashCode().toString(36).replace("-", "m"),
-                                        title = "小程序（AI 生成）",
-                                        html = blk.html,
-                                        config = emptyMap(),
-                                    ),
-                                    onCommand = onCommand
-                                )
+                                is MsgBlock.MiniApp -> {
+                                    // ```miniapp 围栏两种内容：
+                                    //  ① HTML 小程序（AI 自写 HTML+JS+CSS，WebView 运行时渲染）；
+                                    //  ② 原生小程序标记 `zorv-miniapp:<app_id>`（GenUI 的 create_miniapp 产物，
+                                    //     微信语法 WXML/WXSS/JS，交给自研引擎就地渲染）。
+                                    // 后者没有 HTML，若当 HTML 处理只会得到一张"（无小程序内容）"的空卡 ——
+                                    // 这正是"AI 把小程序写到画布/别处、对话框里看不到"的原因。
+                                    val nativeId = blk.html.trim()
+                                        .takeIf { it.startsWith(NATIVE_MINIAPP_PREFIX) }
+                                        ?.removePrefix(NATIVE_MINIAPP_PREFIX)
+                                        ?.trim()
+                                        ?.takeIf { it.isNotEmpty() }
+                                    QuroChatCardView(
+                                        QuroChatCard.MiniAppCard(
+                                            id = if (nativeId != null) "nai_$nativeId"
+                                                 else "mini_" + blk.html.hashCode().toString(36).replace("-", "m"),
+                                            title = if (nativeId != null) "小程序 · $nativeId" else "小程序（AI 生成）",
+                                            html = if (nativeId != null) "" else blk.html,
+                                            config = if (nativeId != null) mapOf("app_id" to nativeId) else emptyMap(),
+                                        ),
+                                        onCommand = onCommand
+                                    )
+                                }
                                 is MsgBlock.Mermaid -> QuroChatCardView(
                                     QuroChatCard.MermaidCard(
                                         id = "mmd_" + blk.source.hashCode().toString(36).replace("-", "m"),

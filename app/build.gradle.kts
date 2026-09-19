@@ -225,6 +225,11 @@ dependencies {
     // ZorvAI 生成式 UI：AI 自写源码 → 实时渲染进对话框（WebView 隔离运行时）
     implementation(project(":genui"))
 
+    // GenUI 小程序引擎（去品牌化移植自上游 GenUI 的 miniapp-sdk，com.yuanbao.miniapp）：
+    // 自研 JS 引擎 + WXML/WXSS 原生渲染，作为独立架构完整搬入。包名保留原 namespace
+    // 以避免破坏 JNI 符号（native 方法名编码了包路径）。
+    implementation(project(":miniapp-sdk"))
+
     // APK 级插件框架：插件是独立 APK，宿主用 DexClassLoader 加载，
     // 插件通过扩展点（AI 工具 / ACI 能力 / 卡片 / 指令 / 设置…）往宿主里加功能，
     // 宿主事先不认识这些能力也能调度它们（Tool-first，加插件不改宿主代码）。

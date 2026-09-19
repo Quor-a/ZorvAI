@@ -2034,6 +2034,14 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
     var heightPx by remember(card.id) { mutableStateOf(360) }
     var fullscreen by remember(card.id) { mutableStateOf(false) }
     val title = card.title.ifBlank { "小程序（AI 生成）" }
+    // ── 原生小程序（微信语法 WXML/WXSS/JS，由自研引擎渲染）──
+    // 特征：没有 html，只有 config.app_id。这类小程序**必须**交给自研引擎就地渲染，
+    // 走 WebView 运行时只会得到"（无小程序内容）"——这正是"AI 把小程序写到别处、
+    // 对话框里看不到"的根因：原生小程序缺一条写进对话框的通道。
+    val nativeAppId = card.config["app_id"]?.toString()?.takeIf { it.isNotBlank() }
+    // 原生小程序诊断行：自研引擎画不出来时对话框里只有一块白，这行字是唯一线索。
+    var nativeStatus by remember(card.id) { mutableStateOf("引擎初始化中…") }
+    var nativeReload by remember(card.id) { mutableStateOf(0) }
 
     CardShell(
         title = title,
@@ -2041,11 +2049,35 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
             IconButton(onClick = { fullscreen = true }, Modifier.size(30.dp)) {
                 Icon(Icons.Filled.Fullscreen, "全屏查看", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = { copyText(context, card.html, "已复制小程序源码") }, Modifier.size(30.dp)) {
-                Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            if (nativeAppId == null) {
+                IconButton(onClick = { copyText(context, card.html, "已复制小程序源码") }, Modifier.size(30.dp)) {
+                    Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                }
+            } else {
+                IconButton(onClick = { nativeReload++ }, Modifier.size(30.dp)) {
+                    Icon(Icons.Filled.Refresh, "重载小程序", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                }
             }
         },
     ) {
+        if (nativeAppId != null) {
+            Column(Modifier.fillMaxWidth()) {
+                com.ai.assistance.quro.genui.app.ui.shell.MiniAppCard(
+                    nativeAppId,
+                    Modifier.fillMaxWidth().height((heightPx / density).dp),
+                    onStatus = { nativeStatus = it },
+                    reloadKey = nativeReload,
+                )
+                Text(
+                    nativeStatus,
+                    color = cs.onSurfaceVariant,
+                    fontSize = 9.sp,
+                    maxLines = 3,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+            }
+            return@CardShell
+        }
         if (card.html.isBlank()) {
             Text("（无小程序内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
             return@CardShell
@@ -2081,19 +2113,28 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.weight(1f),
                             )
-                            IconButton(onClick = { copyText(context, card.html, "已复制小程序源码") }, Modifier.size(36.dp)) {
-                                Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                            if (nativeAppId == null) {
+                                IconButton(onClick = { copyText(context, card.html, "已复制小程序源码") }, Modifier.size(36.dp)) {
+                                    Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                                }
                             }
                             IconButton(onClick = { fullscreen = false }, Modifier.size(36.dp)) {
                                 Icon(Icons.Filled.Close, "关闭", tint = cs.onSurface, modifier = Modifier.size(20.dp))
                             }
                         }
                         HorizontalDivider(color = cs.outlineVariant)
-                        Box(Modifier.fillMaxSize().background(Color.White).padding(8.dp)) {
-                            MiniAppWebView(
-                                html = card.html,
-                                modifier = Modifier.fillMaxSize(),
+                        if (nativeAppId != null) {
+                            com.ai.assistance.quro.genui.app.ui.shell.MiniAppCard(
+                                nativeAppId,
+                                Modifier.fillMaxSize(),
                             )
+                        } else {
+                            Box(Modifier.fillMaxSize().background(Color.White).padding(8.dp)) {
+                                MiniAppWebView(
+                                    html = card.html,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
                         }
                     }
                 }

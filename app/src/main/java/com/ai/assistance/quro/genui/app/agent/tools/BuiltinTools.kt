@@ -50,6 +50,9 @@ class BuiltinTools(private val context: Context) {
                         .put("type", "object").put("properties", props)
                         .put("required", JSONArray(required))))
 
+        // 运行时工具声明（run_python/run_js 等）由 ChatSession 合并；ZorvAI 已把运行时工具
+        // 直接编入 declarations()，故此处保持空（编译期需有 runtimeDeclarations 成员方法，见下）。
+
         return JSONArray()
             .put(decl("web_search", "联网搜索最新信息。多引擎容错，返回去重后的标题/链接/摘要。凡涉及时效性信息（新闻、价格、版本号、赛事、天气、汇率、今天发生的事）必须先调用它，不要凭记忆回答。",
                 JSONObject()
@@ -142,6 +145,33 @@ class BuiltinTools(private val context: Context) {
                 listOf("title", "begin")))
     }
 
+    /**
+     * 运行时工具声明（run_js / install_plugin / uninstall_plugin / list_plugins）。
+     * 按上游 [GenUI] 约定由 ChatSession 每轮合并进工具集；run_python 由 ZorvAI 自有机制提供
+     * （Python 不在本次移植范围）。
+     */
+    private fun rtDecl(name: String, desc: String, props: JSONObject, required: List<String>): JSONObject =
+        JSONObject().put("type", "function").put("function",
+            JSONObject().put("name", name).put("description", desc)
+                .put("parameters", JSONObject().put("type", "object").put("properties", props).put("required", JSONArray(required))))
+
+    fun runtimeDeclarations(): JSONArray = JSONArray()
+        .put(rtDecl("run_js",
+            "运行 JavaScript 代码（离屏 WebView 真 Chromium 引擎，支持 ES2020+ / async / await / fetch，console.* 捕获回传）。返回 {ok, result, logs}。用于需要真实 JS 运行时的界面逻辑、数据转换、网络请求。",
+            JSONObject().put("code", JSONObject().put("type", "string").put("description", "JS 代码，函数体，支持 return；自动包 async IIFE")),
+            listOf("code")))
+        .put(rtDecl("install_plugin",
+            "安装 GenUI 插件：JS 代码 + 工具清单，安装后其工具自动并入工具列表（plugin_ 前缀），后续对话可直接调用。code 必须为返回函数映射的函数体，如：return { query: async (args) => { const r = await fetch(...); return await r.json(); } }",
+            JSONObject()
+                .put("name", JSONObject().put("type", "string").put("description", "插件名"))
+                .put("version", JSONObject().put("type", "string").put("description", "版本，默认 1.0"))
+                .put("tools_json", JSONObject().put("type", "string").put("description", "工具清单 JSON 数组字符串，每项 {name,description,parameters}"))
+                .put("code", JSONObject().put("type", "string").put("description", "JS 代码，函数体 return {工具名: async (args)=>{...}}")),
+            listOf("name", "tools_json", "code")))
+        .put(rtDecl("uninstall_plugin", "卸载指定插件（按 id 或名称）。",
+            JSONObject().put("id_or_name", JSONObject().put("type", "string")), listOf("id_or_name")))
+        .put(rtDecl("list_plugins", "列出已安装的全部插件及其工具。", JSONObject(), emptyList()))
+
     // ---------- 执行分发 ----------
 
     suspend fun execute(name: String, args: JSONObject): JSONObject = withContext(Dispatchers.IO) {
@@ -178,7 +208,16 @@ class BuiltinTools(private val context: Context) {
                 args.optString("title"), args.optString("begin"),
                 args.optInt("minutes", 60), args.optString("note")
             )
-            else -> JSONObject().put("error", "未知工具: $name")
+            // ---------- 运行时工具（GenUI 移植，非 Python） ----------
+            "run_js" -> runJs(args.optString("code"), args.optLong("timeout_ms", 40000))
+            "install_plugin" -> installPlugin(
+                args.optString("name"), args.optString("version"),
+                args.optString("tools_json"), args.optString("code")
+            )
+            "uninstall_plugin" -> uninstallPlugin(args.optString("id_or_name"))
+            "list_plugins" -> listPlugins()
+            else -> if (name.startsWith("plugin_")) callPlugin(name, args)
+                    else JSONObject().put("error", "未知工具: $name")
         }
     }
 
@@ -198,6 +237,28 @@ class BuiltinTools(private val context: Context) {
         name.startsWith("share") || name == "open_settings" -> "system"
         else -> name
     }
+
+    // ---------- 运行时工具实现（GenUI 移植：离屏 WebView JS 引擎 + JS 插件系统；Python 不在此范围） ----------
+    private fun runJs(code: String, timeoutMs: Long): JSONObject =
+        com.ai.assistance.quro.genui.app.agent.CodeRuntime.runJs(context, code, timeoutMs)
+
+    private fun installPlugin(name: String, version: String, toolsJson: String, code: String): JSONObject =
+        com.ai.assistance.quro.genui.app.agent.PluginRuntime.install(context, name, version, toolsJson, code)
+
+    private fun uninstallPlugin(idOrName: String): JSONObject =
+        com.ai.assistance.quro.genui.app.agent.PluginRuntime.uninstall(context, idOrName)
+
+    private fun listPlugins(): JSONObject {
+        val arr = JSONArray()
+        com.ai.assistance.quro.genui.app.agent.PluginRuntime.list(context).forEach { p ->
+            arr.put(JSONObject().put("id", p.id).put("name", p.name).put("version", p.version)
+                .put("tools", JSONArray(p.tools.map { it.name })))
+        }
+        return JSONObject().put("ok", true).put("plugins", arr)
+    }
+
+    private fun callPlugin(fqn: String, args: JSONObject): JSONObject =
+        com.ai.assistance.quro.genui.app.agent.PluginRuntime.callTool(context, fqn, args)
 
     // ---------- 各工具实现 ----------
 
