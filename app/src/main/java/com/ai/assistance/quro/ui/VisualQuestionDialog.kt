@@ -55,6 +55,10 @@ fun VisualQuestionDialog() {
         }
     }
 
+    // 系统级悬浮窗已经接管了询问（任何界面可见）→ 这里让位，别弹两遍。
+    // （eventFlow 是 Channel，两边同时 collect 会互相抢事件，导致一方永远收不到）
+    if (com.ai.assistance.quro.service.VisualQuestionOverlayService.isRunning) return
+
     currentQuestion?.let { (index, pending) ->
         Dialog(
             onDismissRequest = { /* 不允许关闭，必须回答 */ },
@@ -63,21 +67,45 @@ fun VisualQuestionDialog() {
                 dismissOnClickOutside = false
             )
         ) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = cs.surface
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp)
-                ) {
+            VisualQuestionCard(
+                index = index,
+                pending = pending,
+                onAnswered = { currentQuestion = null },
+            )
+        }
+    }
+}
+
+/**
+ * 可视化问答卡片（纯内容，不含 Dialog 外壳）。
+ *
+ * 抽出来是为了让「Activity 内弹窗」与「系统级悬浮窗」共用同一份 UI：
+ * 悬浮窗要能在任何界面（甚至 App 外）显示，就不能依赖某个 Activity 的 Dialog。
+ */
+@Composable
+fun VisualQuestionCard(
+    index: Int,
+    pending: VisualPendingQuestion,
+    onAnswered: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    var customAnswer by remember { mutableStateOf("") }
+    var showCustomInput by remember { mutableStateOf(false) }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = cs.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
                     // 标题
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -122,7 +150,7 @@ fun VisualQuestionDialog() {
                                         .padding(vertical = 4.dp)
                                         .clickable {
                                             VisualQuestionQueue.submitAnswer(index, option)
-                                            currentQuestion = null
+                                            onAnswered()
                                         },
                                     colors = CardDefaults.cardColors(
                                         containerColor = cs.surfaceVariant
@@ -183,7 +211,7 @@ fun VisualQuestionDialog() {
                                     onClick = {
                                         if (customAnswer.isNotBlank()) {
                                             VisualQuestionQueue.submitAnswer(index, customAnswer)
-                                            currentQuestion = null
+                                            onAnswered()
                                         }
                                     },
                                     enabled = customAnswer.isNotBlank()
@@ -196,8 +224,6 @@ fun VisualQuestionDialog() {
                 }
             }
         }
-    }
-}
 
 /**
  * 可视化操作弹窗 - 显示AI创建的操作按钮，用户点击执行对应操作
@@ -225,6 +251,9 @@ fun VisualActionDialog() {
         }
     }
 
+    // 同上：悬浮窗接管时让位
+    if (com.ai.assistance.quro.service.VisualQuestionOverlayService.isRunning) return
+
     currentAction?.let { (index, pending) ->
         Dialog(
             onDismissRequest = { /* 不允许关闭，必须选择 */ },
@@ -233,6 +262,22 @@ fun VisualActionDialog() {
                 dismissOnClickOutside = false
             )
         ) {
+            VisualActionCard(index = index, pending = pending, onDone = { currentAction = null })
+        }
+    }
+}
+
+/**
+ * 可视化操作卡片（纯内容，不含 Dialog 外壳），与 [VisualQuestionCard] 同理：
+ * 供 Activity 内弹窗与系统级悬浮窗共用。
+ */
+@Composable
+fun VisualActionCard(
+    index: Int,
+    pending: VisualPendingAction,
+    onDone: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -292,7 +337,7 @@ fun VisualActionDialog() {
                         Button(
                             onClick = {
                                 VisualActionQueue.submitAction(index, button.value)
-                                currentAction = null
+                                onDone()
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -312,8 +357,6 @@ fun VisualActionDialog() {
                 }
             }
         }
-    }
-}
 
 /**
  * 可视化弹窗容器 - 同时管理问答弹窗和操作弹窗

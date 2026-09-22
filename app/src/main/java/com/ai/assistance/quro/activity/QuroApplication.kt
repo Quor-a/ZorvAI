@@ -122,6 +122,18 @@ class QuroApplication : Application(), Configuration.Provider {
             return
         }
 
+        // 可视化「询问 / 操作」改走系统级悬浮窗：任何界面（主对话 / GenUI Agent / 设置页 /
+        // 甚至已退到别的 App）都能看到并作答。无悬浮窗权限时自动退回 Activity 内 Dialog。
+        // 必须在主进程内注册（副进程不能起前台服务）。
+        runCatching {
+            com.ai.assistance.quro.core.tools.VisualQuestionQueue.overlayLauncher = {
+                com.ai.assistance.quro.service.VisualQuestionOverlayService.start(this)
+            }
+            com.ai.assistance.quro.core.tools.VisualActionQueue.overlayLauncher = {
+                com.ai.assistance.quro.service.VisualQuestionOverlayService.start(this)
+            }
+        }
+
         // 应用语言策略：跟随系统语言（不内置国家语言包，引用系统语言，手机系统用什么就用什么）。
         // 读取 quro_ui 偏好（与 QuroChatViewModel 同一 SharedPreferences），在首屏前应用，
         // 使 Activity 创建即采用正确语言；切换时 Android 会自动重建当前 Activity 生效。

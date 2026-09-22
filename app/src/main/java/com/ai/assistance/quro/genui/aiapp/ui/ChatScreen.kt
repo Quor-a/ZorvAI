@@ -1436,6 +1436,17 @@ private fun ChannelAskingPlaceholder(modifier: Modifier = Modifier) {
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(Modifier.height(10.dp))
+            // 选项不在画布里，而在系统级悬浮窗上（任何界面都能看到、能点）。
+            // 没看到浮窗多半是没给悬浮窗权限 —— 明确告诉用户去哪作答，别让他干等。
+            Text(
+                if (com.ai.assistance.quro.service.VisualQuestionOverlayService.isRunning)
+                    "选项在屏幕上的悬浮窗里，直接点它"
+                else
+                    "没看到选项？去系统设置给本应用「悬浮窗」权限",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
