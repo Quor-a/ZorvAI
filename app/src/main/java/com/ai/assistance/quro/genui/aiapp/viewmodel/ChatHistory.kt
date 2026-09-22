@@ -111,14 +111,26 @@ internal object ChatHistory {
             noJson
         } else {
             // 已经折叠过 JSON，剩下的通常是人话；真还超长才截断
-            noJson.take(MAX_ASSISTANT_CHARS).trimEnd() + "…〔历史回复过长已截断〕"
+            noJson.take(MAX_ASSISTANT_CHARS).trimEnd() + foldNote("历史回复", noJson.length)
         }
     }
 
+    /**
+     * 折叠占位符的文案。
+     *
+     * ⚠️ 这行字是给**模型**看的（历史会进上下文），不是给人看的。
+     * 早先用「〔genui 内容 96 字符已省略〕」这种中性描述，模型会把它理解成
+     * 上一轮的界面内容，下一轮**原样复述**到画布上 —— 用户截图里画布孤零零一行
+     * 「〔genui 内容 96 字符已省略〕」就是这么来的。
+     * 所以措辞必须 ① 不像正文（方括号 + "系统提示"）② 明确叫它不要复述。
+     */
+    private fun foldNote(kind: String, length: Int): String =
+        "[系统折叠提示：此处原有 $kind 共 $length 字符，已从上下文中移除；" +
+            "不要在任何回复或界面里复述本提示]"
+
     /** 折叠 ```lang … ``` 代码围栏。 */
     fun foldFences(content: String): String = FENCE_REGEX.replace(content) { mr ->
-        val lang = mr.groupValues[1].ifBlank { "code" }
-        "〔${lang} 内容 " + mr.value.length + " 字符已省略〕"
+        foldNote(mr.groupValues[1].ifBlank { "code" }, mr.value.length)
     }
 
     /**
@@ -139,7 +151,7 @@ internal object ChatHistory {
             if (!inner.contains("\":")) break
             val isArr = inner.startsWith("[")
             val label = if (isArr) "结构化数据" else "界面 JSON"
-            s = s.substring(0, span.first) + "〔$label ${inner.length} 字符已省略〕" + s.substring(span.second)
+            s = s.substring(0, span.first) + foldNote(label, inner.length) + s.substring(span.second)
         }
         return s
     }

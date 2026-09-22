@@ -2,6 +2,7 @@ package com.ai.assistance.quro.genui.aiapp.viewmodel
 
 import com.ai.assistance.quro.genui.aiapp.core.GenUIChatMessage
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -65,7 +66,9 @@ class ChatHistoryTest {
         val api2 = ChatHistory.toApiMessages(more, maxTurns = 10, fullTurns = 2)
         val firstAssistant = api2.first { it.role == "assistant" }
         assertTrue("老轮次的界面 JSON 必须被折叠", firstAssistant.content.length < 200)
-        assertTrue(firstAssistant.content.contains("已省略"))
+        assertTrue(firstAssistant.content.contains("系统折叠提示"))
+        // 折叠标记必须明确叫模型别复述 —— 中性文案会被模型当成界面内容复述到画布上
+        assertTrue(firstAssistant.content.contains("不要在任何回复或界面里复述"))
         // 最后一轮的回复必须原样保留
         assertEquals("r6", api2.last().content)
     }
@@ -149,9 +152,20 @@ class ChatHistoryTest {
 
         val out = ChatHistory.compressAssistant(bare)
         assertTrue("人话要留着：$out", out.contains("给你做个天气卡"))
-        assertTrue("大段 JSON 要被折叠掉", out.contains("已省略"))
+        assertTrue("大段 JSON 要被折叠掉", out.contains("系统折叠提示"))
         assertTrue("不能留下任何 JSON 残片：$out", !out.contains("{"))
         assertTrue("压缩后应远短于原文", out.length < 300)
+    }
+
+    @Test
+    fun `折叠标记必须长得像系统提示且明确禁止复述`() {
+        // 回归：早先的文案是「〔genui 内容 96 字符已省略〕」，模型把它当成上一轮的界面内容
+        // 原样复述到画布上（用户截图里画布孤零零一行这个字样）。
+        // 折叠标记进的是**模型上下文**，措辞必须把"别复述"写死。
+        val folded = ChatHistory.foldFences("```genui\n{\"a\":1}\n```")
+        assertTrue("要标明是系统提示：$folded", folded.contains("系统折叠提示"))
+        assertTrue("要写明禁止复述：$folded", folded.contains("不要在任何回复或界面里复述"))
+        assertFalse("不能再用中性括号文案（会被模型当正文）：$folded", folded.contains("〔"))
     }
 
     @Test

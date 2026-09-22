@@ -574,7 +574,25 @@ fun ColumnRowRenderer(
             horizontalArrangement = ltbHorizontalArrangement(component.style.arrangement, spacing),
             verticalAlignment = ltbVerticalAlign(component.style.crossAlignment)
         ) {
-            RenderChildren(children = component.children, ctx = ctx)
+            // ⚠️ Row 里的 `width: match` 绝不能直接交给 fillMaxWidth。
+            //
+            // Row 测量非 weight 子节点时给的是**剩余宽度**：第一个 match 的子节点用 fillMaxWidth
+            // 会把整行吃掉，后面的兄弟只剩 0 宽 —— 里面的 Text 于是被压成 一个字符一行 的竖排。
+            // 用户截图里的「体感 29~32℃」贴着右边缘竖着排、《稻香》周杰伦 一行一个字，全是这个原因。
+            //
+            // 正确语义是 **weight**：先让 wrap 的兄弟按自然宽度占位，match 的子节点再分掉剩余空间。
+            // （Compose 的 Row 就是在非 weight 子节点测量完之后才分配 weight 份额。）
+            component.children.forEach { child ->
+                val key = child.id ?: "${child.type}_${child.hashCode()}"
+                androidx.compose.runtime.key(key) {
+                    when (val w = child.style.width) {
+                        is Dimension.Match -> Box(Modifier.weight(1f)) { RenderNode(child, ctx) }
+                        is Dimension.Weight ->
+                            Box(Modifier.weight(w.fraction.coerceIn(0.01f, 1f))) { RenderNode(child, ctx) }
+                        else -> RenderNode(child, ctx)
+                    }
+                }
+            }
         }
     } else {
         Column(
@@ -582,6 +600,8 @@ fun ColumnRowRenderer(
             verticalArrangement = ltbVerticalArrangement(component.style.arrangement, spacing),
             horizontalAlignment = ltbHorizontalAlign(component.style.crossAlignment)
         ) {
+            // 纵向不做同样的处理：Column 高度常常是 wrap_content / 无限约束（页面层已滚动），
+            // 此时 weight 拿不到确定高度会塌成 0，比 fillMaxHeight 更糟。
             RenderChildren(children = component.children, ctx = ctx)
         }
     }
@@ -603,6 +623,29 @@ fun BoxContainerRenderer(
         ComponentTypes.CENTER -> "center"
         ComponentTypes.ALIGN -> component.style.alignment ?: component.style.gravity ?: "center"
         else -> component.style.gravity ?: component.style.alignment
+    }
+
+    // `container` 是提示词里最常用的"分组容器"写法，AI 用它是想**把内容纵向摊开**；
+    // 但 Box 是叠加布局 —— 多个子节点会全部画在同一个位置。
+    // 用户截图里卡片底部那行"笔画糊成一团"的字，就是两个 Text 叠着渲染出来的。
+    //
+    // 所以：container + 多个孩子 + 没显式声明对齐 → 按 Column 纵向排。
+    // 其余类型（box / stack / center / align / expanded…）保持叠加语义，
+    // 徽章、头像堆叠、居中这些场景都要靠它。
+    val stackChildren = component.type != ComponentTypes.CONTAINER ||
+        gravity != null ||
+        component.children.size <= 1
+
+    if (!stackChildren) {
+        val spacing = component.propFloat("spacing", 0f)
+        Column(
+            modifier = modifier.fillMaxWidth(),
+            verticalArrangement = if (spacing > 0f) Arrangement.spacedBy(spacing.dp) else Arrangement.Top,
+            horizontalAlignment = ltbHorizontalAlign(component.style.crossAlignment)
+        ) {
+            RenderChildren(children = component.children, ctx = ctx)
+        }
+        return
     }
 
     Box(
