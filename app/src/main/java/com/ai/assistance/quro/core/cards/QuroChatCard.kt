@@ -490,6 +490,8 @@ sealed interface QuroChatCard {
         override val title: String,
         val html: String,
         val config: Map<String, Any> = emptyMap(),
+        /** 原生小程序 appId：非空时由对话框用原生引擎（MiniAppView）渲染，而非 WebView */
+        val nativeAppId: String = "",
     ) : QuroChatCard
 
     // ───────────── v1068 多语言组合渲染 ─────────────
@@ -840,17 +842,23 @@ fun parseComponentSpec(spec: String): QuroChatCard? {
             // ── v1057 Web 应用（MiniApp）──
             // 兼容两种字段名：ui_widget 的 spec JSON 用 `html`，ui_control(action:"widget",type:"miniapp")
             // 把内容放在 `value`（与 mermaid 一致）。两者都接受，避免 AI 用 value 传 HTML 时渲染为空。
-            "miniapp" -> QuroChatCard.MiniAppCard(
-                id, title,
-                s.optString("html", "").ifBlank { s.optString("value", "") },
-                s.optJSONObject("config")?.let { config ->
+            "miniapp" -> {
+                val miniappConfig = s.optJSONObject("config")?.let { config ->
                     mutableMapOf<String, Any>().apply {
-                        config.keys().forEach { key ->
-                            put(key, config.get(key) ?: "")
-                        }
+                        config.keys().forEach { key -> put(key, config.get(key) ?: "") }
                     }
-                } ?: emptyMap(),
-            )
+                } ?: emptyMap()
+                val nativeId = (miniappConfig["app_id"] as? String)?.takeIf { it.isNotBlank() }
+                    ?: s.optString("app_id", "").takeIf { it.isNotBlank() }
+                    ?: s.optString("appId", "").takeIf { it.isNotBlank() }
+                    ?: ""
+                QuroChatCard.MiniAppCard(
+                    id, title,
+                    s.optString("html", "").ifBlank { s.optString("value", "") },
+                    miniappConfig,
+                    nativeId,
+                )
+            }
             // ── v1068 多语言组合卡：聚合多个子卡为一个整体，支持单渲染 ──
             "composite" -> {
                 val layout = s.optString("layout", "stack").ifBlank { "stack" }
@@ -1104,6 +1112,9 @@ fun serializeCard(card: QuroChatCard): JSONObject {
             if (card.config.isNotEmpty()) {
                 o.put("config", JSONObject(card.config))
             }
+            if (card.nativeAppId.isNotBlank()) {
+                o.put("nativeAppId", card.nativeAppId)
+            }
         }
         is QuroChatCard.CompositeCard -> {
             o.put("layout", card.layout)
@@ -1256,17 +1267,23 @@ fun parseCard(o: JSONObject): QuroChatCard? {
                 id, title,
                 o.optString("html", ""),
             )
-            "miniapp" -> QuroChatCard.MiniAppCard(
-                id, title,
-                o.optString("html", ""),
-                o.optJSONObject("config")?.let { config ->
+            "miniapp" -> {
+                val miniappConfig = o.optJSONObject("config")?.let { config ->
                     mutableMapOf<String, Any>().apply {
-                        config.keys().forEach { key ->
-                            put(key, config.get(key) ?: "")
-                        }
+                        config.keys().forEach { key -> put(key, config.get(key) ?: "") }
                     }
-                } ?: emptyMap(),
-            )
+                } ?: emptyMap()
+                val nativeId = (miniappConfig["app_id"] as? String)?.takeIf { it.isNotBlank() }
+                    ?: o.optString("app_id", "").takeIf { it.isNotBlank() }
+                    ?: o.optString("appId", "").takeIf { it.isNotBlank() }
+                    ?: ""
+                QuroChatCard.MiniAppCard(
+                    id, title,
+                    o.optString("html", ""),
+                    miniappConfig,
+                    nativeId,
+                )
+            }
             "composite" -> {
                 val layout = o.optString("layout", "stack").ifBlank { "stack" }
                 val description = if (o.has("description") && !o.isNull("description")) o.optString("description") else null

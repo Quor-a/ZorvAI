@@ -63,6 +63,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.yuanbao.miniapp.core.MiniAppEngine as NativeMiniAppEngine
 import com.ai.assistance.quro.core.QuroBrowserBridge
 import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.ai.assistance.quro.core.cards.QuroChatCardStore
@@ -2027,7 +2028,8 @@ private fun NetworkImageBubble(url: String, modifier: Modifier = Modifier) {
  *  · 旧版有两条路：① HTML Web 应用走 WebView；② **原生小程序**（微信语法 WXML/WXSS/JS，
  *    config.app_id）走「小程序（原生引擎）」的**工具中心面板**渲染。旧的「原生小程序」自研引擎（miniapp-sdk，
  *    来自上游 Quor-a/GenUI）已重新接入：现作为工具中心「小程序（原生引擎）」面板 + 对话框 miniapp_sdk 工具，
- *    由 AI 生成 WXML/WXSS/JS 工程、面板用 MiniAppView 原生渲染（不再内嵌到对话气泡）。
+ *    由 AI 生成 WXML/WXSS/JS 工程；对话框气泡里用 MiniAppView 原生渲染（miniapp_sdk 创建后会自动挂卡片），
+ *    工具中心面板也能打开。
  *  · GenUI 画布（quro/genui/app）已随「删除全部旧 GenUI + 内置新 GenUI-Agent」整体移除。
  *  · 因此本卡片现在只保留 HTML 路径：带 app_id 的历史原生小程序卡片会退化成
  *    「HTML 为空」的提示，不再尝试拉起已不存在的内嵌引擎（原来的「引擎初始化中…」死循环也没了）。
@@ -2050,7 +2052,9 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
     }
     var heightPx by remember(card.id) { mutableStateOf(defaultHeightPx) }
     var fullscreen by remember(card.id) { mutableStateOf(false) }
-    val title = card.title.ifBlank { "Web 应用（AI 生成）" }
+    val title = card.title.ifBlank {
+        if (card.nativeAppId.isNotBlank()) "小程序（原生引擎）" else "Web 应用（AI 生成）"
+    }
 
     CardShell(
         title = title,
@@ -2065,31 +2069,43 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
             }
         },
     ) {
-        if (card.html.isBlank()) {
-            // 历史遗留：带 config.app_id 的原生小程序卡片（内嵌引擎已移除，无 HTML 可渲染）。
-            // 原生小程序现改走工具中心「小程序（原生引擎）」面板 + miniapp_sdk 对话框工具。
-            Column(Modifier.fillMaxWidth().padding(4.dp)) {
-                Text("（无 Web 应用内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
-                Text(
-                    "这是旧「原生小程序」卡片，内嵌引擎已移除。原生小程序现请走工具中心"
-                        + "「小程序（原生引擎）」面板（让 AI 用 miniapp_sdk 工具生成 WXML/WXSS/JS 工程）。"
-                        + "需要 GenUI 原生界面请让 AI 用 genui_agent_open 打开内置 GenUI Agent。",
-                    color = cs.onSurfaceVariant,
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(top = 4.dp),
+        when {
+            card.nativeAppId.isNotBlank() -> {
+                // 原生小程序：直接用原生引擎（MiniAppView）渲染到对话气泡，不再只走工具中心面板
+                MiniAppNativeView(
+                    appId = card.nativeAppId,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height((heightPx / density).dp)
+                        .clip(RoundedCornerShape(10.dp)),
                 )
             }
-            return@CardShell
+            card.html.isNotBlank() -> {
+                MiniAppWebView(
+                    html = card.html,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height((heightPx / density).dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.White),
+                    onHeight = { heightPx = it },
+                )
+            }
+            else -> {
+                // 历史遗留：带 config.app_id 的原生小程序卡片（内嵌引擎已移除，无 HTML 可渲染）。
+                Column(Modifier.fillMaxWidth().padding(4.dp)) {
+                    Text("（无 Web 应用内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+                    Text(
+                        "这是旧「原生小程序」卡片，内嵌引擎已移除。原生小程序现请走工具中心"
+                            + "「小程序（原生引擎）」面板（让 AI 用 miniapp_sdk 工具生成 WXML/WXSS/JS 工程）。"
+                            + "需要 GenUI 原生界面请让 AI 用 genui_agent_open 打开内置 GenUI Agent。",
+                        color = cs.onSurfaceVariant,
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
         }
-        MiniAppWebView(
-            html = card.html,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height((heightPx / density).dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color.White),
-            onHeight = { heightPx = it },
-        )
     }
 
     if (fullscreen) {
@@ -2123,13 +2139,16 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
                         }
                         HorizontalDivider(color = cs.outlineVariant)
                         Box(Modifier.fillMaxSize().background(Color.White).padding(8.dp)) {
-                            if (card.html.isBlank()) {
-                                Text("（无 Web 应用内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
-                            } else {
-                                MiniAppWebView(
-                                    html = card.html,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
+                            when {
+                                card.nativeAppId.isNotBlank() ->
+                                    MiniAppNativeView(appId = card.nativeAppId, modifier = Modifier.fillMaxSize())
+                                card.html.isBlank() ->
+                                    Text("（无 Web 应用内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+                                else ->
+                                    MiniAppWebView(
+                                        html = card.html,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
                             }
                         }
                     }
@@ -2144,6 +2163,34 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
  * 支持 JS 调用原生能力。渲染完成后按 `document.documentElement.scrollHeight` 自适应高度（上限 720dp）。
  * 增加CDN错误恢复：通过AssetLibResolver拦截CDN请求，加载本地库资源
  */
+/**
+ * 原生小程序视图：用移植自 Quor-a/GenUI 的**原生引擎**（C++ JS 引擎 + Flex + Canvas/GLES 自绘）
+ * 直接在对话框气泡里渲染 WXML/WXSS/JS 工程，与工具中心「小程序（原生引擎）」面板共用同一引擎。
+ * appId 对应的工程由 miniapp_sdk 工具落盘到 filesDir/miniapps/<appId>/（用户目录优先、回退 assets 内置）。
+ */
+@Composable
+private fun MiniAppNativeView(appId: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val density = LocalDensity.current.density
+    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+    val defaultHeightPx = remember(appId) {
+        (screenH * density * 0.62f).toInt().coerceIn(640, 3600)
+    }
+    var heightPx by remember(appId) { mutableStateOf(defaultHeightPx) }
+    AndroidView(
+        modifier = modifier.height((heightPx / density).dp),
+        factory = { ctx ->
+            NativeMiniAppEngine.init(ctx)
+            NativeMiniAppEngine.createResolved(ctx, appId) ?: android.widget.TextView(ctx).apply {
+                text = "（原生小程序「" + appId + "」未找到，请先让 AI 用 miniapp_sdk 工具创建该工程）"
+            }
+        },
+        onRelease = { view ->
+            (view as? com.yuanbao.miniapp.core.MiniAppView)?.let { NativeMiniAppEngine.destroy(it) }
+        },
+    )
+}
+
 @Composable
 private fun MiniAppWebView(
     html: String,
