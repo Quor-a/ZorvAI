@@ -2282,6 +2282,19 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "**适合场景**：计算器、待办事项、游戏、图表、表单、数据可视化、完整网站、工具应用\n" +
             "**优势**：多文件工程、会话持久化、native.* 原生桥调真·Android 能力、直接渲染在对话框（可交互）、无需外部部署\n"
         )
+        // ── 原生小程序（miniapp_sdk）：与上面的 Web 应用并列的第二套引擎（WXML/WXSS，不经过 WebView）──
+        // 背景：此前系统提示词只讲 miniapp（WebView），AI 遇到「原生小程序」只能猜，常误用 WebView 版。
+        sb.append("\n### 🧩 原生小程序（miniapp_sdk 工具）—— WXML/WXSS 原生引擎（与 Web 应用并列，别搞混）\n")
+        sb.append(
+            "除上面的「Web 应用」（`miniapp`，HTML + WebView）外，还有一套**并列的原生小程序引擎**——移植自上游 Quor-a/GenUI：" +
+            "自研 C++ JS 引擎 + WXML/WXSS + 自研 Flex 布局 + Canvas/GLES 自绘渲染，走**微信标准范式**，**不经过 WebView、不是 HTML**。\n" +
+            "**触发词**：用户说「小程序（原生引擎）」「原生小程序」「用 WXML/WXSS 写个小程序」时**必须**用 `miniapp_sdk`（不要用 `miniapp`）。\n" +
+            "用法：miniapp_sdk(action=create, appId=工程名, files={ \"app.json\": …, \"pages/index/index.wxml\": …, \"pages/index/index.wxss\": …, \"pages/index/index.js\": … })，files 是「相对路径 -> 内容」映射。\n" +
+            "语法：WXML 用 {{data}} 绑定、wx:if/wx:else、wx:for=\"{{list}}\" wx:for-item=\"it\"、bindtap/bindinput、data-index；组件 view/text/button/input/image/scroll-view。\n" +
+            "WXSS 用 rpx 单位 + Flex（flex-direction/align-items/justify-content）；JS 用 Page({data,方法}) + this.setData，**只支持 ES5**（var/function，别用箭头函数/模板字符串）。\n" +
+            "可用 wx.*：request（真网络）、getSystemInfo(Sync)、showToast、showModal、showActionSheet、set/get/removeStorageSync、setClipboardData/getClipboardData、navigateTo/redirectTo/navigateBack、setNavigationBarTitle、getNetworkType、makePhoneCall。\n" +
+            "**渲染位置**：工具只把工程写到 filesDir/miniapps/<appId>/，画面要去**工具中心 →「小程序（原生引擎）」面板**打开才看得到（对话框不自动渲染）。内置示例：hello / todo / weather。\n\n"
+        )
         // ── 可视化输出功能总览（统一术语路由表）──
         // 背景：可视化通道散落多个章节（弹窗工具族/富卡片/小卡片/动态UI/网页预览），AI 常认错对象。
         // 这里先给一张总表分清对象，后面各章节只展开细节。
