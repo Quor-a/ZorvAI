@@ -74,12 +74,25 @@ object VisualQuestionQueue {
         }
     }
 
+    /**
+     * 由 app 层注入的「悬浮窗拉起器」。
+     *
+     * 为什么需要它：core 层不能直接依赖 service 包（会形成反向依赖），
+     * 但询问必须能在**任何界面**弹出（用户在 GenUI 里发问时，界面可能在主对话、
+     * 在设置页、甚至在别的 App）。于是这里留一个钩子，由 QuroApplication 注入
+     * 「启动 VisualQuestionOverlayService」，有询问入队时自动拉起系统级悬浮窗。
+     * 注入为空则退回 Activity 内 Dialog 的老行为。
+     */
+    @Volatile
+    var overlayLauncher: (() -> Unit)? = null
+
     fun signalAdded() {
         synchronized(pendingQuestions) {
             if (pendingQuestions.isNotEmpty()) {
                 _eventChannel.trySend(QuestionEvent.QuestionAdded(0))
             }
         }
+        runCatching { overlayLauncher?.invoke() }
     }
 }
 
@@ -119,12 +132,17 @@ object VisualActionQueue {
         }
     }
 
+    /** 同 [VisualQuestionQueue.overlayLauncher]：由 app 层注入，用于拉起系统级悬浮窗。 */
+    @Volatile
+    var overlayLauncher: (() -> Unit)? = null
+
     fun signalAdded() {
         synchronized(pendingActions) {
             if (pendingActions.isNotEmpty()) {
                 _eventChannel.trySend(ActionEvent.ActionAdded(0))
             }
         }
+        runCatching { overlayLauncher?.invoke() }
     }
 }
 

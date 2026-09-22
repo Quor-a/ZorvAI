@@ -504,6 +504,12 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- 可视化「询问 / 操作」悬浮窗服务：让 AI 的提问漂浮在任何界面之上 -->
+        <service
+            android:name=".service.VisualQuestionOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <!-- 对话/浏览器系统级悬浮窗保活服务：前台常驻，让 WindowManager 上挂载的
              TYPE_APPLICATION_OVERLAY 小窗在 App 退后台/切其它软件时仍浮于桌面与其他应用之上。
              悬浮窗视图由 QuroMiniWindowManager（进程级单例）持有与增删，本服务仅保活进程。 -->
