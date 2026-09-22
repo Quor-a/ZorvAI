@@ -60,6 +60,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<ChatState> = _state.asStateFlow()
 
     private var streamJob: Job? = null
+    // 自校验返修计数（每轮生成重置，见 runToolCallingLoop）
+    private var verifyIteration = 0
 
     /**
      * 发给 LLM 的上下文窗口（见 [ChatHistory]）。
@@ -604,7 +606,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 toolCallRecords = emptyList(),
                 conversationHistory = newHistory,
                 pageStack = emptyList(),
-                activeChannel = channel
+                activeChannel = channel,
+                channel = null
             )
         }
 
@@ -669,11 +672,13 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         val tools = brain.toolSpecs(config).map {
             GenUIToolSpec(name = it.name, description = it.description, parametersJson = it.parametersJson)
         } + GenUIToolRegistry.getAllSpecs()
-        val maxRounds = getMaxToolCallRounds()
+        // 给自校验返修预留轮次额度，避免修到一半被轮次上限掐断
+        val maxRounds = getMaxToolCallRounds() + MAX_VERIFY_ITERATIONS
         var round = 0
         // 断流续写：genui 输出被截断时自动请求续写，而不是直接落入兜底卡片
         var continuationCount = 0
         var pendingText = ""
+        verifyIteration = 0 // 自校验返修计数：每轮生成重置""
 
         while (round < maxRounds) {
             round++
@@ -741,6 +746,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     val combined = if (pendingText.isBlank()) result.content
                                    else pendingText + "\n" + result.content
                     handleTextResult(GenUILlmResult.Text(combined, result.reasoning))
+                    // ── 自校验阶段：写完不立刻结束，检测不可用/显示异常/配色问题，有问题就返修 ──
+                    if (scheduleVerifyFixPass()) continue
                     return
                 }
 
@@ -793,6 +800,15 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             "第一行就直接输出 ```genui 代码块，内容是一个【完整且精简】的 JSON：" +
             "从 {\"id\" 开始到收尾括号完整闭合，控制在 600 字以内，" +
             "删掉可有可无的装饰性组件，但必须保留核心功能内容和完整闭合的结构。"
+
+        /** 自校验返修最大轮次：写完检测出问题后，最多让模型返修几轮 */
+        const val MAX_VERIFY_ITERATIONS = 2
+
+        /** 自校验返修提示词：把发现的问题退回给模型，要求修正后重新输出完整界面 */
+        const val GENUI_VERIFY_FIX_PROMPT =
+            "你刚生成的 GenUI 界面自检未通过，必须修复后重新输出。不要输出任何解释文字，" +
+            "第一行直接输出 ```genui 代码块，内容是修正后的【完整且闭合】的 JSON（从 {\"id\" 开始到收尾括号），" +
+            "确保以下问题全部解决：\n"
     }
 
     /** 判断文本中的 genui 代码块是否未闭合（输出被截断） */
@@ -805,6 +821,143 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         if (largest != null && StreamingParser.tryParsePartial(largest) != null) return false
         return true
     }
+
+    /**
+     * 自校验 - 返修调度：写完不立刻结束。
+     *
+     * 检查刚生成并渲染的 GenUI 界面是否「不可用 / 显示异常 / 配色不对」，
+     * 若发现问题且还有返修额度，就把问题清单作为一条 user 消息压回对话，
+     * 让模型下一轮修正后重新输出完整 genui JSON；修干净（或额度耗尽）才真正结束。
+     *
+     * 仅对 GenUI 原生通道生效；markdown/a2ui/html 走各自渲染链路，不在此校验。
+     *
+     * @return true 表示已安排返修（循环应 continue），false 表示可以结束。
+     */
+    private fun scheduleVerifyFixPass(): Boolean {
+        val st = _state.value
+        // 走了通道轮（非 genui）或未产出 genui 渲染 → 不校验
+        if (st.channel != null || st.currentGenUI == null) return false
+        val issues = verifyGenUI(st.currentGenUI!!)
+        if (issues.isEmpty()) return false
+        if (verifyIteration >= MAX_VERIFY_ITERATIONS) {
+            // 额度用尽：保留最后一次渲染结果，附诊断但不无限循环
+            return false
+        }
+        verifyIteration++
+        val issueBlock = issues.joinToString(separator = "\n- ", prefix = "- ")
+        _state.update {
+            it.copy(
+                isStreaming = true,
+                streamingText = "",
+                streamingReasoning = "",
+                conversationHistory = it.conversationHistory + GenUIChatMessage(
+                    role = "user",
+                    content = GENUI_VERIFY_FIX_PROMPT + issueBlock
+                )
+            )
+        }
+        return true
+    }
+
+    /**
+     * 校验一份 GenUI JSON 是否可用，返回问题描述清单（空 = 通过）。
+     *
+     * 检测维度：
+     *  1) 可解析性 —— JSON/DSL 损坏或未闭合 → 不可用；
+     *  2) 空内容 —— 没有任何组件或文字 → 显示异常；
+     *  3) 非法颜色 —— 十六进制格式错误；
+     *  4) 配色不对 —— 文字与（自身/继承）背景同色，文字不可见。
+     */
+    private fun verifyGenUI(json: String): List<String> {
+        val issues = mutableListOf<String>()
+        val parsed = runCatching { org.json.JSONObject(prepareForCanvas(json)) }.getOrNull()
+            ?: runCatching { org.json.JSONObject(json) }.getOrNull()
+        if (parsed == null) {
+            issues += "界面 JSON 无法解析（结构损坏或未闭合），请重新生成完整闭合的 genui JSON。"
+            return issues
+        }
+        val root = parsed.optJSONObject("root")
+        if (root == null) {
+            issues += "缺少 root 根节点，界面无法渲染。"
+            return issues
+        }
+        var componentCount = 0
+        var textCount = 0
+        walkGenUi(root) { node, inheritedBg ->
+            componentCount++
+            val type = node.optString("type", "")
+            val props = node.optJSONObject("properties")
+            val text = props?.optString("text") ?: props?.optString("label")
+                ?: props?.optString("title")
+            if (!text.isNullOrBlank()) textCount++
+            val style = node.optJSONObject("style")
+            val ownBg = style?.optString("background") ?: style?.optString("backgroundColor")
+            val effBg = if (!ownBg.isNullOrBlank()) ownBg else inheritedBg
+            val fg = style?.optString("color") ?: style?.optString("textColor")
+                ?: props?.optString("color")
+            // 非法颜色（仅十六进制格式错误才报，命名色/主题 token 放行）
+            for (c in listOfNotNull(
+                style?.optString("background"), style?.optString("backgroundColor"),
+                style?.optString("color"), style?.optString("textColor"),
+                props?.optString("color")
+            )) {
+                if (!isValidColor(c)) {
+                    issues += "颜色值非法：$c（组件 $type），请改用十六进制，如 #RRGGBB 或 #AARRGGBB。"
+                }
+            }
+            // 文字与（继承/自身）背景同色 → 不可见（配色不对）
+            if (!fg.isNullOrBlank() && !effBg.isNullOrBlank() && colorsEqual(fg, effBg)) {
+                issues += "文字颜色与背景颜色相同（$fg on $effBg），文字不可见，请调整对比度。"
+            }
+        }
+        if (componentCount <= 1 && textCount == 0) {
+            issues += "界面内容为空（没有任何可见组件或文字），请补充实际内容。"
+        } else if (textCount == 0) {
+            issues += "界面没有任何文字内容，可能不可读，请补充可见文本。"
+        }
+        return issues.distinct()
+    }
+
+    /** 递归遍历 GenUI 节点树；inheritedBg 为最近祖先的背景色（用于跨节点对比度检测）。 */
+    private fun walkGenUi(node: org.json.JSONObject, inheritedBg: String? = null,
+                          visit: (org.json.JSONObject, String?) -> Unit) {
+        val style = node.optJSONObject("style")
+        val ownBg = style?.optString("background") ?: style?.optString("backgroundColor")
+        val effBg = if (!ownBg.isNullOrBlank()) ownBg else inheritedBg
+        visit(node, effBg)
+        val kids = node.optJSONArray("children")
+        if (kids != null) {
+            for (i in 0 until kids.length()) {
+                val c = kids.optJSONObject(i)
+                if (c != null) walkGenUi(c, effBg, visit)
+            }
+        }
+    }
+
+    /** 颜色合法性：以 # 开头必须为 3/4/6/8 位 hex；非 # 开头视为命名色/主题 token，放行。 */
+    private fun isValidColor(c: String?): Boolean {
+        if (c.isNullOrBlank()) return true
+        if (!c.startsWith("#")) return true
+        return Regex("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$").matches(c)
+    }
+
+    /** 两个颜色是否等价（忽略大小写/#、3 位扩展；8 位按 CSS #RRGGBBAA 取 RGB）。 */
+    private fun colorsEqual(a: String?, b: String?): Boolean {
+        if (a.isNullOrBlank() || b.isNullOrBlank()) return false
+        val na = normalizeColor(a) ?: return false
+        val nb = normalizeColor(b) ?: return false
+        return na == nb
+    }
+
+    private fun normalizeColor(c: String): String? {
+        var x = c.lowercase().removePrefix("#")
+        if (x.isEmpty()) return null
+        if (x.length == 3) x = x.map { "$it$it" }.joinToString("")
+        if (x.length == 6) return x
+        if (x.length == 8) return x.substring(0, 6) // 假定 CSS #RRGGBBAA
+        return null
+    }
+
 
     /**
      * 处理文本结果（最终回复）
