@@ -319,7 +319,9 @@ fun ChatScreen(
                             viewModel.closeChannel()
                             viewModel.send(label)
                         }
-                    }
+                    },
+                    // html 通道「保存为小程序」：落盘到 filesDir/miniapp/<工程名>/，与工具中心「小程序」同源
+                    onSaveAsMiniApp = { title, html -> viewModel.saveChannelAsMiniApp(title, html) }
                 )
                 if (state.pageStack.isNotEmpty() || true) {
                     // 返回胶囊复用下方通用实现

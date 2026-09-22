@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
+import com.ai.assistance.quro.core.miniapp.MiniAppBridgeInterface
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +20,26 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+
+/**
+ * 往 html 通道页面注入 bridge.js 运行时（与「小程序工作室」同源）。
+ *
+ * 注入后页面里就能用 `native.storage.getItem(...)`、`native.db.query(...)` 等原生能力，
+ * 否则 html 通道产出的页面只是个没法持久化的沙盒。
+ * 读不到 bridge.js 时原样返回，页面照常渲染，不会白屏。
+ */
+private fun injectBridgeRuntime(ctx: android.content.Context, html: String): String {
+    val js = runCatching {
+        ctx.assets.open("bridge/bridge.js").bufferedReader(java.nio.charset.StandardCharsets.UTF_8).use { it.readText() }
+    }.getOrNull()
+    if (js.isNullOrEmpty()) return html
+    val script = "<script>\n$js\n</script>\n"
+    val idx = html.indexOf("<head", ignoreCase = true)
+    if (idx < 0) return script + html
+    val end = html.indexOf(">", idx)
+    if (end < 0) return html
+    return html.substring(0, end + 1) + script + html.substring(end + 1)
+}
 
 /** 通道页面模型 */
 sealed class ChannelPage {
@@ -32,7 +54,15 @@ sealed class ChannelPage {
  * 新架构通道查看器：Markdown（Markwon 原生渲染）/ 扁平邻接表 / 内联 HTML
  */
 @Composable
-fun ChannelViewer(page: ChannelPage, modifier: Modifier = Modifier, embedded: Boolean = false, onBack: () -> Unit = {}, onAction: (String) -> Unit = {}) {
+fun ChannelViewer(
+    page: ChannelPage,
+    modifier: Modifier = Modifier,
+    embedded: Boolean = false,
+    onBack: () -> Unit = {},
+    onAction: (String) -> Unit = {},
+    /** html 通道「保存为小程序」回调：(标题, 完整HTML)。不传则在 html 通道隐藏该按钮。 */
+    onSaveAsMiniApp: ((title: String, html: String) -> Unit)? = null,
+) {
     if (!embedded) BackHandler { onBack() }
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -136,13 +166,35 @@ fun ChannelViewer(page: ChannelPage, modifier: Modifier = Modifier, embedded: Bo
                     }
                 }
                 is ChannelPage.HtmlPage -> {
+                    Column(Modifier.fillMaxSize()) {
+                        // 操作条：把这一屏 HTML 固化成「小程序」工程（与工具中心「小程序」同源，
+                        // 存完就能在工具中心里打开、也能被 AI 用 miniapp 工具继续改）
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                page.title.ifBlank { "HTML 应用" },
+                                Modifier.weight(1f).padding(start = 4.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            TextButton(onClick = { onSaveAsMiniApp?.invoke(page.title, page.html) }) {
+                                Text("保存为小程序", style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
                     AndroidView(
+                        modifier = Modifier.fillMaxSize().weight(1f),
                         factory = { ctx ->
                             WebView(ctx).apply {
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
                                 settings.mediaPlaybackRequiresUserGesture = false
                                 settings.allowContentAccess = true
+                                // 与「小程序工作室」同源的 native.* 原生桥：
+                                // AI 在 html 通道里也能用 storage/device/network/db/location/crypto 等能力
+                                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                                addJavascriptInterface(MiniAppBridgeInterface(ctx, this), "native")
                                 settings.builtInZoomControls = false
                                 settings.loadWithOverviewMode = true
                                 settings.useWideViewPort = true
@@ -173,16 +225,18 @@ fun ChannelViewer(page: ChannelPage, modifier: Modifier = Modifier, embedded: Bo
                                 settings.allowContentAccess = false  // 安全：禁内容访问
                                 // 兜底：body 至少撑满视口（模型没写 min-height 时深色页不再半截）
                                 val css = "<style>html,body{min-height:100vh;margin:0;box-sizing:border-box;padding-bottom:130px}</style>"
-                                val patched = if (page.html.contains("min-height", ignoreCase = true)) page.html
+                                val patched0 = if (page.html.contains("min-height", ignoreCase = true)) page.html
                                     else if (page.html.contains("</head>", ignoreCase = true))
                                         page.html.replace("</head>", css + "</head>", ignoreCase = true)
                                     else css + page.html
+                                // 注入 bridge.js 运行时，让页面能用 native.* 调原生能力
+                                val patched = injectBridgeRuntime(ctx, patched0)
                                 // 外部依赖基址：https 域，CDN 相对/绝对引用均可解析
                                 loadDataWithBaseURL("https://localhost/", patched, "text/html", "utf-8", null)
                             }
-                        },
-                        modifier = Modifier.fillMaxSize()
+                        }
                     )
+                    }
                 }
             }
         }
