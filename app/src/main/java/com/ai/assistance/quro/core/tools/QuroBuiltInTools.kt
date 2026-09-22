@@ -57,7 +57,7 @@ import com.ai.assistance.quro.core.tools.SetCameraDisabledTool
 import com.ai.assistance.quro.core.tools.RootExecTool
 import com.ai.assistance.quro.core.tools.RootStatusTool
 import com.ai.assistance.quro.tools.VncTool
-import com.ai.assistance.quro.tools.WorkbenchTool
+import com.ai.assistance.quro.tools.MiniAppAliasTool
 import com.ai.assistance.quro.core.tools.LinuxRunTool
 import com.ai.assistance.quro.core.tools.LinuxInstallTool
 import com.ai.assistance.quro.core.tools.LinuxStartTool
@@ -288,11 +288,12 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // ═══ 构建台：端侧 APK 构建（Java → DEX → APK，AI 可真正触发编译打包）═══
     r.register(BuildApkTool())
     r.register(ExportApkTool())    // 让 AI 也能「导出产物」（构建台 UI 的导出是文件选择器、AI 调不起）
-    // 后端工作区：多文件多语言项目
-    r.register(WorkbenchTool())
-    // 小程序工作室：AI 直接 CRUD/运行小程序工程（自研引擎 miniapp-sdk，HTML+JS+CSS / WXML+WXSS+JS）。
-    // 产物经 ```miniapp 围栏回到对话框气泡渲染；工具箱「小程序工作室」面板与它共享同一份工程文件。
-    r.register(MiniAppStudioTool())
+    // 小程序：多文件多语言 Web 应用工程（WebView + native.* 原生桥）。
+    // workbench 是 miniapp 的兼容别名（MiniAppAliasTool），历史对话/手册仍可能引用。
+    r.register(MiniAppAliasTool())
+    // 小程序：AI 直接 CRUD/运行小程序工程（HTML + Page() 运行时 + native.* 原生桥）。
+    // 产物经 ```miniapp 围栏回到对话框气泡渲染；工具箱「小程序」面板与它共享同一份工程文件。
+    r.register(MiniAppTool())
     // 内置的完整 GenUI-Agent（独立应用，GenUI JSON DSL → 原生 Compose 组件，530+ 组件）。
     // 与上面的 miniapp 是**不同范式**的两套东西：miniapp 走 HTML/WXML 引擎，本工具走原生 Compose。
     r.register(GenUiAgentOpenTool())

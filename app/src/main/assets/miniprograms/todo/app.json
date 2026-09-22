@@ -1,7 +1,0 @@
-{
-  "pages": ["pages/index/index"],
-  "window": {
-    "navigationBarTitleText": "Todo",
-    "backgroundColor": "#ffffff"
-  }
-}

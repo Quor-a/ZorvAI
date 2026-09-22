@@ -49,7 +49,7 @@ import com.ai.assistance.quro.ui.icons.LucideIcon
 import com.ai.assistance.quro.ui.theme.Muted
 import com.ai.assistance.quro.core.miniapp.MiniAppEngine
 import com.ai.assistance.quro.core.miniapp.MiniAppBridgeInterface
-import com.ai.assistance.quro.core.tools.MiniAppStudioTool
+import com.ai.assistance.quro.core.tools.MiniAppTool
 import com.ai.assistance.quro.workflow.data.model.Workflow
 import com.ai.assistance.quro.workflow.data.WorkflowRepository
 import com.ai.assistance.quro.workflow.executor.WorkflowEngine
@@ -81,7 +81,7 @@ import com.ai.assistance.quro.kaleidobox.android.KaleidoAppContract
  * - 终端 / 小程序 / CMS / 工具箱：已有独立屏，点击直接经 [onLaunch] 打开；
  * - 隔离沙箱（[QuroSandboxTool]）：内联命令面板；
  * - 私有数据库（[QuroPrivateDbTool]）：内联只读查询面板；
- * - 小程序工作台：列出 filesDir/workbench 下的项目，点击用 WebView 渲染 index.html。
+ * - 小程序：列出 filesDir/miniapp 下的项目，点击用 WebView 渲染 index.html。
  */
 @Composable
 fun QuroToolCenterScreen(
@@ -109,10 +109,10 @@ fun QuroToolCenterScreen(
                 text = if (selected == null) "工具中心" else                 when (selected) {
                     "sandbox" -> "隔离沙箱"
                     "db" -> "私有数据库"
-                    "workbench" -> "小程序工作台"
+                    "workbench" -> "小程序"
                     "vispro" -> "可视化编程"
                     "flow" -> "节点编辑器"
-                    "miniapp" -> "小程序工作室"
+                    "miniapp" -> "小程序"
                     "kaleidobox" -> "工具包运行器"
                     "pkgmgr" -> "包管理"
                     "plugins" -> "插件"
@@ -132,7 +132,7 @@ fun QuroToolCenterScreen(
             "db" -> DbPanel(context)
             "vispro" -> VisProPanel(context, onRenderInChat)
             "flow" -> NodeEditorPanel(context, onRenderInChat)
-            "miniapp" -> MiniAppStudioPanel(context, onRenderInChat)
+            "miniapp" -> MiniAppPanel(context, onRenderInChat)
             "kaleidobox" -> KaleidoBoxPanel(context, onRenderInChat, onAskAi)
             "pkgmgr" -> PackageManagerPanel(context)
             "plugins" -> PluginManagerPanel(context)
@@ -802,17 +802,17 @@ private fun NodeEditorPanel(
 }
 
 // ---------------------------------------------------------------------------
-// 小程序工作室：完整移植 MiniAppFramework，AI 用 miniapp 工具写入的工程在此渲染
+// 小程序：完整移植 MiniAppFramework，AI 用 miniapp 工具写入的工程在此渲染
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun MiniAppStudioPanel(
+private fun MiniAppPanel(
     context: Context,
     onRenderInChat: (type: String, value: String, label: String) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     // 统一后的根目录：filesDir/miniapp（旧的 workbench/ 与 studio/miniapp/ 已自动迁入）
-    val root = remember { MiniAppStudioTool.getRoot(context) }
+    val root = remember { MiniAppTool.getRoot(context) }
     var refreshKey by remember { mutableStateOf(0) }
     val projects = remember(refreshKey) {
         root.listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
@@ -841,7 +841,7 @@ private fun MiniAppStudioPanel(
             return@rememberLauncherForActivityResult
         }
         scope.launch(Dispatchers.IO) {
-            val res = MiniAppStudioTool().run(
+            val res = MiniAppTool().run(
                 context,
                 JSONObject().put("action", "save").put("name", base).put("html", content).toString()
             )
@@ -865,7 +865,7 @@ private fun MiniAppStudioPanel(
                 TextButton(onClick = { importLauncher.launch("text/html") }) { Text("导入 HTML") }
                 TextButton(onClick = {
                     scope.launch(Dispatchers.IO) {
-                        val res = MiniAppStudioTool().run(context, JSONObject().put("action", "create").put("name", "demo").toString())
+                        val res = MiniAppTool().run(context, JSONObject().put("action", "create").put("name", "demo").toString())
                         withContext(Dispatchers.Main) { refreshKey++; Toast.makeText(context, res.take(120), Toast.LENGTH_SHORT).show() }
                     }
                 }) { Text("新建示例") }
@@ -895,7 +895,7 @@ private fun MiniAppStudioPanel(
                 Text(current ?: "", Modifier.weight(1f).padding(12.dp), color = Muted)
                 TextButton(onClick = {
                     scope.launch(Dispatchers.IO) {
-                        val html = MiniAppStudioTool().run(context, JSONObject().put("action", "run").put("name", current).toString())
+                        val html = MiniAppTool().run(context, JSONObject().put("action", "run").put("name", current).toString())
                         withContext(Dispatchers.Main) {
                             if (html.startsWith("❌")) Toast.makeText(context, html, Toast.LENGTH_SHORT).show()
                             else { onRenderInChat("miniapp", html, current ?: "小程序"); Toast.makeText(context, "已发送到对话框预览", Toast.LENGTH_SHORT).show() }

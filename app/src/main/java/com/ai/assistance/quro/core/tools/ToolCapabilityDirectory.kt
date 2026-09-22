@@ -121,7 +121,7 @@ object ToolCapabilityDirectory {
                 "prompt" to "可选：进去就执行的界面需求（**必须自包含**：GenUI Agent 看不到本对话历史）。留空只打开界面"
             ),
             tips = listOf(
-                "交付的是**原生控件**（不是网页、不是 HTML），这是它和小程序工作室的本质区别。",
+                "交付的是**原生控件**（不是网页、不是 HTML），这是它和小程序的本质区别。",
                 "它是**独立全屏应用**，有自己的对话页/历史/宠物与右侧抽屉；模型配置、人格灵魂、工具集全部沿用 ZorvAI 主设置。",
                 "用户说「小程序 / 网页 / HTML」→ 用 `miniapp` 或 ```html 围栏，不要开它。",
                 "prompt 要写清「做什么 + 要哪些功能 + 有哪些数据」，写成「做那个」等于没写。",
@@ -769,11 +769,11 @@ object ToolCapabilityDirectory {
         "workbench" to ToolInfo(
             name = "workbench",
             category = ToolCategory.AI_CAPABILITIES,
-            description = "创建完整多文件项目（已与「小程序工作室」合并为统一的「小程序」，本工具转发到 miniapp）",
+            description = "创建完整多文件项目（已合入统一的「小程序」（本工具为兼容别名，转发到 miniapp））",
             useCases = listOf("做个计算器", "写个多文件项目", "创建前后端分离项目", "做个完整的XX功能"),
             examples = listOf("workbench(action=\"create\", name=\"calculator\", files=[{path:\"index.html\", content:\"...\"}])"),
             parameters = mapOf("action" to "create/run/edit/save/wrap", "name" to "项目名", "files" to "文件列表", "entry" to "入口文件"),
-            tips = listOf("已与小程序工作室合并，工程统一存放在 filesDir/miniapp/", "自动合并CSS/JS到HTML", "运行后渲染在对话框", "优先用 miniapp 工具，多出路由与 native.* 原生桥"),
+            tips = listOf("已合入统一的「小程序」，工程统一存放在 filesDir/miniapp/", "自动合并CSS/JS到HTML", "运行后渲染在对话框", "优先用 miniapp 工具，多出路由与 native.* 原生桥"),
             relatedTools = listOf("miniapp", "run_code", "workspace_write"),
             priority = 5
         ),
@@ -1205,7 +1205,7 @@ object ToolCapabilityDirectory {
             "应用启动" to listOf("launch_app", "open_app"),
             "发短信" to listOf("send_sms"),
             "读联系人" to listOf("read_contacts"),
-            "代码执行" to listOf("run_code", "workbench"),
+            "代码执行" to listOf("run_code", "miniapp"),
             "文档生成（可下载）" to listOf("aiwps_create", "enhanced_doc_create"),
             "对话框写文档" to listOf("aip_compose", "chat_doc"),
             "对话框显示文档" to listOf("aip_compose", "chat_doc"),

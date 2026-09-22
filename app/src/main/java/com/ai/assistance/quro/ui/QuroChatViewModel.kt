@@ -1712,7 +1712,7 @@ $recent
             - 需要传数据？→ JSON
             - 需要装�? App？→ Java + XML
             - 需要性能？→ C/C++
-            - **需要完整功能（计算�?/游戏/网站/工具）？�? workbench 工具，多文件项目，渲染在对话�?**
+            - **需要完整功能（计算�?/游戏/网站/工具）？�? miniapp 工具，多文件项目，渲染在对话�?**
             - **需要推荐IDE？→ creative_studio 工具，获取完整广义IDE知识�?**
 
             ### 广义 IDE 知识（完整对应关系）
@@ -1897,9 +1897,9 @@ $recent
             - C/C++/Java/Kotlin：语法高亮代码显�?
             - Dart/Go/Rust/PHP/Ruby/Swift等：语法高亮代码显示
 
-            ### 后端工作区工具使�?
+            ### 小程序工具使用（多文件工程）
 
-            使用 `workbench` 工具创建多文件项目：
+            使用 `miniapp` 工具创建多文件 Web 应用工程：
             - 支持 HTML/CSS/JS/Python/C/Java 等多语言
             - 自动合并 CSS/JS �? HTML
             - 运行后直接渲染在对话�?
@@ -2270,16 +2270,17 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         sb.append("\n（其�? `ui_control` �?**统一界面控制工具**：调用后会在当前对话框直接打开对应界面/弹层/开关，例如 ui_control(action=\"open\", target=\"editor\") 打开编辑器、ui_control(action=\"toggle\", target=\"deepthink\") 切换深度思考、ui_control(action=\"chat\", action_type=\"clear\") 清空对话。它们同样可由你并行发起，让用户无需手动点击即可导航应用。）\n")
         sb.append("\n（CMS 模块与大部分能力在应用沙箱内执行（intent/js/api）；另有系统级通道 L1 无障碍控�? / L2 Shizuku / L3 设备管理�? / L4 ROOT / L5 Linux，对应工具已包含在上方清单中，运行时由系统授权与资产可用性把关，未授权时工具会返回明确引导，无需你做通道自查。）\n")
 
-        // ══�? WorkbenchTool 专项指引（让 AI 知道如何使用工作区工具） ══�?
-        sb.append("\n### 🚀 后端工作区（workbench 工具）——快速创建完整功能\n")
+        // ══�? 小程序（miniapp 工具）专项指引（让 AI 知道如何创建多文件 Web 应用） ══�?
+        sb.append("\n### 🚀 小程序（miniapp 工具）——快速创建完整 Web 应用\n")
         sb.append(
-            "当你需�?**创建一个完整功�?**（计算器、游戏、网站、工具、数据可视化、表单、图表等）时，使�? `workbench` 工具：\n" +
-            "1. **创建项目**：workbench(action=\"create\", name=\"项目名\", files=[{path:\"index.html\", content:\"...\"}, {path:\"style.css\", content:\"...\"}, {path:\"app.js\", content:\"...\"}])\n" +
-            "2. **运行并渲�?**：workbench(action=\"run\", entry=\"index.html\") �? 结果直接渲染在对话框（可交互）\n" +
-            "3. **修改后重新运�?**：workbench(action=\"edit\", file=\"app.js\", content:\"新代码\") �? workbench(action=\"run\", entry=\"index.html\")\n\n" +
-            "**支持的语言**：HTML/CSS/JS（自动合并到HTML）、Python、C/C++、Java 等\n" +
+            "当你需要**创建一个完整功能**（计算器、游戏、网站、工具、数据可视化、表单、图表等）时，使用 `miniapp` 工具：\n" +
+            "1. **创建工程**：miniapp(action=\"create\", name=\"项目名\", files=[{path:\"app.json\", content:\"{\\\"pages\\\":[\\\"pages/index/index\\\"]}\"}, {path:\"pages/index/index.html\", content:\"<!DOCTYPE html>…</html>\"}])\n" +
+            "2. **运行并渲染**：miniapp(action=\"run\", name=\"项目名\") → 返回自包含 HTML，直接渲染在对话框（可交互）\n" +
+            "3. **改单个文件后重跑**：miniapp(action=\"write\", name=\"项目名\", path=\"pages/index/index.html\", content=\"新代码\") → 再 run\n" +
+            "4. **把已有单页 HTML 固化成工程**：miniapp(action=\"save\", name=\"项目名\", html=\"<整段HTML>\")\n\n" +
+            "**支持的语言**：HTML/CSS/JS（自动合并到 HTML）、Python（Brython）、C/C++、Java 等\n" +
             "**适合场景**：计算器、待办事项、游戏、图表、表单、数据可视化、完整网站、工具应用\n" +
-            "**优势**：多文件项目、会话持久化、直接渲染在对话框（可交互）、无需外部部署\n"
+            "**优势**：多文件工程、会话持久化、native.* 原生桥调真·Android 能力、直接渲染在对话框（可交互）、无需外部部署\n"
         )
         // ── 可视化输出功能总览（统一术语路由表）──
         // 背景：可视化通道散落多个章节（弹窗工具族/富卡片/小卡片/动态UI/网页预览），AI 常认错对象。
@@ -2322,7 +2323,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
                 (if (overviewDynamicUiOn) "- **动态UI组件开关=开 → 主动默认用**：凡能做成界面/可交互控件的需求（表单/设置面板/带按钮输入选择的交互）你都**必须主动**用 ```quro-ui 输出，纯文字回复一律禁止（仅作围栏前后极短点缀）。\n" else "")
             ) +
             "- 屏幕弹窗 → visual_* 工具族（visual_question 问 / visual_action 选 / visual_popup 展示）。\n" +
-            "- 画图 → mermaid；做网页 → ```html；多文件工程 → workbench；整篇排版长文档/PPT/报告 → ```aip 围栏（AIP 信封）。\n" +
+            "- 画图 → mermaid；做网页 → ```html；多文件工程 → miniapp；整篇排版长文档/PPT/报告 → ```aip 围栏（AIP 信封）。\n" +
             (
                 if (overviewSelfCardOn)
                     "- **最常见错误（严禁再犯）**：用户要「小卡片」时用成富卡片/弹窗/HTML——小卡片就是 ```quro-card 围栏，AI 自写、非 HTML；反过来要组件库卡片/弹窗/网页时也别写 quro-card。\n"
@@ -2377,7 +2378,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "  **硬性规则（最重要）**：生成小程序时**严禁只把代码作为纯文本或普通代码块发出**——用户会看到一坨源码、看不到可交互页面。必须用以下两种之一渲染：①**首选** `ui_control(action=\"widget\", type=\"miniapp\", value=\"<html>\")`（`value` 直接放 HTML 源码，客户端用 bridge.js 运行时渲染成真小程序）；或 ②把小程序源码包进 **` ```miniapp ` 围栏代码块**（与 mermaid 围栏同理自动渲染）。两种等价。\n" +
             "  补充：除 `ui_control` 的 miniapp 组件外，**直接写 ` ```miniapp ` 围栏代码块也会被对话框渲染成小程序**（等价）；用户自己也能用 ` ```miniapp ` 围栏发小程序。小程序能力对人 / AI 都开放。\n" +
             "  识别要点：小程序 HTML 必含 bridge 运行时入口 `Page({...})` 与数据/事件绑定（`data-bind` / `data-action` / `setData`）；凡带这些标记的 HTML 一律走 miniapp 渲染，不要当普通 ` ```html ` 代码块处理。\n" +
-            "  · **工具中心能力对 AI 开放（重要）**：以下能力你都能用 `ui_control(action=\"open\", target=...)` 直接拉起，无需用户手动点：① `target=\"tool_center\"` 打开工具中心总览；② `target=\"vispro\"` 打开**可视化编程**（Mermaid 源码编辑 + 离线实时渲染 + 导出 SVG）——你要画架构图/流程图时，除了 ` ```mermaid ` 围栏，也能直接打开这个工作台编辑/导出；③ `target=\"node_editor\"` 打开**节点编辑器**（拖拽节点流编程，导出 Mermaid）；④ `target=\"miniapp\"` 打开**小程序工作台**（渲染 AI 生成的 HTML/JS 小程序）。当用户说「打开可视化编程 / 节点编辑器 / 工具中心 / 小程序」或要做可视化/流程图/节点编排时，直接调对应 ui_control 即可。\n" +
+            "  · **工具中心能力对 AI 开放（重要）**：以下能力你都能用 `ui_control(action=\"open\", target=...)` 直接拉起，无需用户手动点：① `target=\"tool_center\"` 打开工具中心总览；② `target=\"vispro\"` 打开**可视化编程**（Mermaid 源码编辑 + 离线实时渲染 + 导出 SVG）——你要画架构图/流程图时，除了 ` ```mermaid ` 围栏，也能直接打开这个工作台编辑/导出；③ `target=\"node_editor\"` 打开**节点编辑器**（拖拽节点流编程，导出 Mermaid）；④ `target=\"miniapp\"` 打开**小程序**（渲染 AI 生成的 HTML/JS 小程序）。当用户说「打开可视化编程 / 节点编辑器 / 工具中心 / 小程序」或要做可视化/流程图/节点编排时，直接调对应 ui_control 即可。\n" +
             "  · **广义 IDE 集成**：当用户提到图形/视频/音频/3D/游戏/低代码等创作需求时，使�? `creative_studio` 工具获取完整的广�? IDE 知识库和调用能力。该工具可以：列出所有广�? IDE 分类、推荐适合用户需求的工具、启动已安装的创作工具、生成可直接在对话框渲染�? HTML/CSS/JS 内容。\n"
         )
         sb.append(

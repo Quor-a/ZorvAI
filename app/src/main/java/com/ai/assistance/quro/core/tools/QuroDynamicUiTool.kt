@@ -213,7 +213,7 @@ red green blue yellow orange purple pink teal indigo gray primary secondary erro
   editor(代码编辑器) / terminal(终端) / toolbox(工具箱) / knowledge(知识库) / cms(内容管理) /
   aci(受控端) / about(关于) / appearance(外观) / soul(人格) / memory(记忆) / permission(权限) /
   model_config(模型配置) / voice(语音) / settings(设置) / tool_center(工具中心)，
-  以及工具中心子能力 vispro(可视化编程) / node_editor(流程图) / miniapp(小程序) / workbench(工作台)。
+  以及工具中心子能力 vispro(可视化编程) / node_editor(流程图) / miniapp(小程序)。
   例：点「打开终端」按钮 → 直接进入终端界面，无需你再解析指令。
 - {"type":"render_html","html":"<h1>你好</h1>"} → 把 HTML 直接渲染进对话气泡（第一层渲染，复用小程序运行时），
   不是弹出新页面，用户就在聊天里看到渲染结果。也可写 "type":"miniapp"。

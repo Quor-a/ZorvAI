@@ -1,25 +1,25 @@
 package com.ai.assistance.quro.tools
 
 import android.content.Context
-import com.ai.assistance.quro.core.tools.MiniAppStudioTool
+import com.ai.assistance.quro.core.tools.MiniAppTool
 import com.ai.assistance.quro.core.tools.QuroTool
 import org.json.JSONObject
 
 /**
- * 「小程序」（原 workbench）工具 —— 已与「小程序工作室」合体，本类只保留兼容外壳。
+ * 「小程序」工具的**别名外壳**（工具名 workbench，仅用于兼容旧调用）。
  *
  * 历史上工具中心有两个并存的入口：
- *  · 「小程序」    → workbench：单入口多文件，无路由、无原生桥
- *  · 「小程序工作室」→ miniapp：app.json 路由 + native.* 原生桥
- * 二者现已合并为**唯一的「小程序」**，工程统一存放在 filesDir/miniapp/。
+ *  · 「小程序」（原 workbench）→ 单入口多文件，无路由、无原生桥
+ *  · 「小程序」（统一 Web 应用工具，吸收原「小程序工作室」/workbench）→ app.json 路由 + native.* 原生桥
+ * 二者现已合并为**唯一的「小程序」**（工具 id = miniapp），工程统一存放在 filesDir/miniapp/。
  *
- * 这里不删工具名（历史对话、能力目录、旧手册都还可能引用它），
- * 而是把每个 action 翻译后转发给 [MiniAppStudioTool]，行为完全一致。
+ * 这里不删旧工具名（历史对话、能力目录、旧手册都还可能引用它），
+ * 而是把每个 action 翻译后转发给 [MiniAppTool]，行为完全一致。
  * 新代码请直接调用 miniapp 工具。
  */
-class WorkbenchTool : QuroTool {
+class MiniAppAliasTool : QuroTool {
     override val name = "workbench"
-    override val description = """（已与「小程序工作室」合并为统一的「小程序」，本工具保留仅为兼容旧调用）
+    override val description = """（已与「小程序」合并，本工具是 miniapp 的别名，仅保留用于兼容旧调用）
 
 请优先使用 miniapp 工具，它包含本工具的全部能力并多出：app.json 多页面路由、
 native.* 原生桥（存储/设备/网络/SQLite/定位/加密/第三方 App 关联启动）、save/wrap/manual。
@@ -91,7 +91,7 @@ native.* 原生桥（存储/设备/网络/SQLite/定位/加密/第三方 App 关
             }
             else -> return "未知操作：$action。支持：create/edit/run/list/get/delete/clean/save/wrap（均转发到 miniapp 工具）"
         }
-        return MiniAppStudioTool().run(context, mapped.toString())
+        return MiniAppTool().run(context, mapped.toString())
     }
 
     private companion object {

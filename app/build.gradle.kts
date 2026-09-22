@@ -222,11 +222,9 @@ dependencies {
     // 替换旧 Termux 可见终端。原 AI 工具链（QuroShellSession / QuroLinuxEnv）不动。
     implementation(project(":terminal-core"))
 
-    // 小程序工作室引擎（去品牌化移植自 macOS 版 ZorvAI 的 miniapp-sdk，com.yuanbao.miniapp）：
-    // 自研 JS 引擎 + WXML/WXSS 原生渲染。包名保留原 namespace 以避免破坏 JNI 符号
-    // （native 方法名编码了包路径）。工具侧入口 MiniAppStudioTool(name="miniapp")，
-    // 面板入口 QuroToolCenterScreen 的「小程序工作室」。
-    implementation(project(":miniapp-sdk"))
+    // 小程序引擎（WebView + native.* 桥，MiniAppEngine，com.ai.assistance.quro.core.miniapp）：
+    // 自研 WebView 运行时，AI 用 miniapp 工具写入的 HTML 工程在此渲染，可调用真实 Android 能力。
+    // 旧的「自研 JS 引擎 + WXML/WXSS 原生渲染」模块（miniapp-sdk / com.yuanbao.miniapp）已彻底删除。
 
     // GenUI Agent SDK（内置完整项目：https://github.com/Quor-a/GenUI-Agent 的 sdk/ 模块）。
     // 去品牌化后包名为 com.ai.assistance.quro.genui.sdk。
