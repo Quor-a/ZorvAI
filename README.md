@@ -57,7 +57,7 @@
 
 > **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34**
 >
-> Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **120+ 内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
+> Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **220+ 内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
 >
 > 它还是一套**可自我扩展的 Agent 运行时**：APK 级插件框架让「独立 APK」注册扩展点，就能给 AI 加**新工具 / 新 ACI 能力 / 新界面 / 新指令**——宿主不用改一行代码（详见 [APK 级插件框架](#apk-级插件框架--apk-plugin-framework)）。
 
@@ -73,7 +73,7 @@
 - [对话框与消息能力 · Chat & Messages](#对话框与消息能力-chat--messages)
 - [可视化弹窗 & 询问](#可视化弹窗--询问)
 - [多语言运行器](#多语言运行器)
-- [自研多语言小程序（MiniApp）](#自研多语言小程序miniapp)
+- [内置 GenUI Agent（生成式界面）](#内置-genui-agent生成式界面)
 - [可视化组件](#可视化组件)
 - [动态 UI 组件（quro-ui）](#动态-ui-组件quro-ui-围栏)
 - [可视化编程（Mermaid 图表）](#可视化编程mermaid-图表)
@@ -110,7 +110,7 @@
 
 从全局看，Zorv AI 解决了三件事：
 
-1. **让 AI 能动手**。它内置 120+ 工具，覆盖读屏/点按、文件、通信、定时、终端、知识库等；更高权限的能力（Shizuku、设备管理员、ROOT、应用内 Linux）按 L1–L5 分级，且**每一级都要你显式授权**，不会偷偷越权。
+1. **让 AI 能动手**。它内置 220+ 工具，覆盖读屏/点按、文件、通信、定时、终端、知识库等；更高权限的能力（Shizuku、设备管理员、ROOT、应用内 Linux）按 L1–L5 分级，且**每一级都要你显式授权**，不会偷偷越权。
 2. **让 AI 能离线**。MNN / llama.cpp 两个本地推理引擎编译进 APK，配合本地 STT、本地 TTS、本地 RAG 与应用内 Ubuntu 24.04 Linux 沙箱（proot），断网也能完成大部分任务。
 3. **让 AI 能跨应用**。通过 ACI（Agent Capability Interface）——一套同设备、基于 AIDL Binder、无 Root 的本地协议——任意 App 都能把自己暴露成「可被 AI 调用的能力」，由 Zorv AI 的 LLM 自动编排。
 
@@ -141,7 +141,7 @@
 |--------|----------|
 | **对话 UI（Compose）** | ChatScreen 对话框、PersonaBar 人格卡、PermissionModeBar（「AI 自动保存记忆」+「深度思考」并排胶囊，置于输入框**下方**）、对话框内 **IDE 能力入口**（代码编辑器 / 终端 / 工具箱 / 文件 经输入框「+」菜单与 `ui_open_*` 唤起，不叠加冗余按钮）、**支持 7 种编程语言**（JavaScript、Python、HTML、JSON、CSS、XML、C/C++/Java）、**mermaid 围栏即画即渲染**（AI 或用户写的 ` ```mermaid ` 代码块离线渲染成可缩放矢量图）、**AI 自写代码运行（run_code）：AI 直接写/跑代码，html 网页工件在对话框内联实时预览**（手机 AI IDE，可视化产出融入内容区）、回到底部浮动按钮、全屏预览、Markdown 与代码块渲染 |
 | **Agent 核心** | 多会话隔离（`liveBuffers` 按会话独立）、种子快照（`convBase`）、显示刷新闸门（`canUpdateDisplay`）、多轮 `[第N轮]` hidden 标记防串台、系统提示词构建、工具注册表（`QuroToolRegistry.active`）、技能系统（`QuroSkill` → 注册为 `skill__{name}` 工具） |
-| **工具 / 能力层** | **120+ 内置工具**（`buildQuroRegistry` 注册 123 项 + 导入工具 + 可调用技能）：无障碍 `input_text`/`tap_screen`/`read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text`/`ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
+| **工具 / 能力层** | **220+ 内置工具**（`buildQuroRegistry` 注册 226 项 + 导入工具 + 可调用技能）：无障碍 `input_text`/`tap_screen`/`read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text`/`ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
 | **离线 LLM 引擎** | 应用内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 剥离、本地工具调用、会话复用；离线也能对话 |
 | **特权层 L1–L5** | 无障碍 → Shizuku(uid 0/2000) → 设备管理员 → ROOT(su) → 应用内 Linux(proot + Ubuntu 24.04) |
 | **终端 / Linux 沙箱** | 完整终端模拟器：proot + Ubuntu 24.04 ARM64 真实用户空间（rootfs 首次使用自动下载）；PTY 伪终端（`/dev/ptmx` + `fork/exec`）；前台服务保活（specialUse，息屏/切 App 不被杀）；ACI 跨进程 12 个能力（exec/session/env/status）；4 种 IPC 接入（ContentProvider / Deep Link / Intent / BroadcastReceiver）；多会话管理；开机自启动；Android 14+ 兼容 |
@@ -153,7 +153,7 @@
 | **ACI 控制台 UI（LAN 控制台）** | 控制端 `QuroAidlAciCenterScreen` 按 `console_ui` 能力拉取 SDUI 快照、复用本地 `AciConsoleScreen` 渲染器（`core/aci` 包，纯本地零网络） |
 | **可视化弹窗 & 询问** | **可视化弹窗**（`visual_popup` / `visual_custom_popup`）：AI 创建结构化弹窗或自写 HTML 弹窗，对话框内小卡片展示历史；**可视化询问**（`visual_question` / `visual_action`）：AI 遇到模糊命令/缺少信息时强制弹出选择题/输入框，禁止猜测 |
 | **多语言运行器** | `QuroLanguageRunner`：对话框内支持 **7 种编程语言**（JavaScript、Python、HTML、JSON、CSS、XML、C/C++/Java）的检测、运行和渲染，手机端轻量 IDE；**Python 3.14 原生引擎（PyEngine）**：端侧 CPython 3.14 + 完整标准库 654 文件，配 Scripting 沙箱（`SandboxRuntime` + `HostApiDispatcher` + `GitHostApi` + `TsTranspiler`），8 语言项目模板一键生成 |
-| **自研多语言小程序（MiniApp）** | AI 生成完整小程序代码（HTML + JS + CSS），对话框内实时渲染为可交互小程序页面；支持 Page/Component 生命周期、data-bind 数据绑定、data-action 事件绑定；通过 JSBridge 调用原生能力（存储、网络、设备信息、UI、路由） |
+| **内置 GenUI Agent（生成式界面）** | 完整内置开源项目 **GenUI-Agent**：AI 产出 **GenUI JSON DSL**，SDK 直接映射成**原生 Compose 组件**（`genuiagent-sdk` 注册 **530+ 组件**，含样式/动画/交互/状态/技能）；以**独立全屏应用**运行（入口工具 `genui_agent_open`），复用 ZorvAI 的**模型配置 + 灵魂/人格 + 完整工具集** |
 | **可视化组件** | `ui_widget` 工具：**60+ 种可交互组件**（按钮、表单、图表、进度、评分、轮播、时间线等），直接融进聊天气泡；支持 `command` 语法触发动作（打开页面、执行命令、调用 AI 等）；**动态 UI 组件（```quro-ui 围栏）**：AI 写组合式 JSON DSL（任意嵌套节点成树），原生渲染为成体系的交互界面（表单+按钮+图表+列表联动） |
 | **可视化编程** | **Mermaid 图表离线渲染**：AI 或用户写 ` ```mermaid ` 围栏代码块，离线渲染成流程图/时序图/状态机/类图/思维导图等；支持全屏预览、SVG 导出、五种主题 |
 | **AIP 对话框文档排版** | **AIP 排版引擎**（AI Presentation Protocol）：AI 输出结构化信封（```aip 围栏 / `aip_compose` 工具），对话框原生渲染成**长文档 / PPT 演示 / 思维导图**卡片；支持 doc↔deck↔mindmap 形态互转、导出 docx/pptx/md、全屏预览、演示放映、复制全文、四级容错降级；工具调用入口 `aip_compose` |
@@ -226,23 +226,35 @@ AI 在执行任务时可以通过可视化方式与用户交互，**强制规则
 
 > **Python 3.14 引擎**：`core/python/PyEngine.kt` 封装端侧 CPython 3.14（arm64-v8a，`app/src/full/jniLibs` 预编译 `.so` + `app/src/full/assets/python` 完整 stdlib）。与旧版 Brython（浏览器内 Python 翻译）不同，这是**真·CPython 原生解释器**，支持标准库全量导入、网络、加密、sqlite，与 Scripting 沙箱共享运行时。
 
-### 1.8 自研多语言小程序（MiniApp）
-AI 可以生成完整小程序代码（HTML + JS + CSS），在对话框中实时渲染为可交互的小程序页面。
+### 1.8 内置 GenUI Agent（生成式界面）
+ZorvAI 内置了完整开源项目 **[GenUI-Agent](https://github.com/Quor-a/GenUI-Agent)**（去品牌化后以 `com.ai.assistance.quro.genui.aiapp` / `com.ai.assistance.quro.genui.sdk` 落地）。它和「对话框内 Markdown 渲染」是两个范式，别混为一谈：
 
-- **小程序框架**：支持完整的 Page/Component 生命周期、data-bind 数据绑定、data-action 事件绑定
-- **JSBridge 架构**：`MiniAppBridgeInterface` 通过 `@JavascriptInterface` 注解暴露原生能力给 JS
-- **模块化设计**：Storage（存储）、Device（设备信息）、Ui（Toast、导航栏）、Network（HTTP 请求）、Router（页面导航）五个内置模块
-- **双后端运行时**：逻辑层可选 QuickJS（Native 线程，带内存上限 + 超时中断 + 关闭 eval）或 WebView（零 NDK 依赖）
-- **完全离线**：所有运行时代码内联打包进 APK
+| | 对话内渲染 | GenUI Agent |
+|---|---|---|
+| AI 产出 | Markdown / 围栏代码块 | **GenUI JSON DSL** |
+| 渲染结果 | 文字、代码、Mermaid 图、HTML 网页工件 | **原生 Compose 组件树** |
+| 形态 | 聊天气泡里的一张卡片 | 一块**能点、能填、能改**的界面 |
 
-**使用方式**：AI 通过 `ui_widget` 工具下发 `type: "miniapp"` 组件：
+- **SDK 模块 `:genuiagent-sdk`**（`app/src/main/.../genui/sdk/` 之外的独立 Gradle 模块）：组件注册表 `ComponentRegistry` 内置 **530+ 组件**（`BuiltinComponents.kt` 单文件 545 处 `register()`，另有 IconMapper 图标族 68 项），覆盖布局 / 排版 / 按钮 / 表单 / 图表 / 反馈 / 媒体 / 导航 / 游戏交互 / 通知 / 胶囊族等家族
+- **DSL 与解析**：`dsl/` 提供 `UISpec`、`UIComponent`、`StyleBuilder`、`Dimension`、`GenUIAction` / `GenUIEvent`，`DslParser` 负责 JSON ↔ 组件树双向转换；`StreamingParser` 支持**流式增量解析**（AI 边生成边渲染）
+- **渲染与主题**：`render/GenUIRenderer` + `StyleResolver` + `RenderContext` 把 DSL 映射为 Compose；`style/` 提供完整的颜色 / 字体 / 形状 / 间距 / 排版体系（`GenUITheme.defaultTheme(isDark)`）
+- **交互回路**：`interaction/` 的 `ActionExecutor` / `ActionHost` 承载点击与提交，表单输入经 `FormState`（`collectFrom`）聚合后**回灌给 AI 继续对话**；`state/GenUIStateStore` 维护组件级状态
+- **技能化扩展**：`skill/GenUISkill` + `DynamicRegistry` 支持运行时注册新组件（ZorvAI 的 `register_component` 工具即走此通道）
+
+**入口（ZorvAI 侧唯一）**：工具 **`genui_agent_open`**（参数 `prompt` 可选，可把「做一个 BMI 计算器」这类需求直接带进去）。
+
 ```json
-{
-  "type": "miniapp",
-  "title": "计算器",
-  "html": "<div data-bind='count'>0</div><button data-action='increment'>+1</button><script>Page({data:{count:0},increment(){this.setData({count:this.data.count+1})}})</script>"
-}
+{ "prompt": "做一个季度销售看板，含柱状图与筛选" }
 ```
+
+- 它是一个**独立全屏应用**（Activity `GenUiAgentActivity`，包 `com.ai.assistance.quro.genui.aiapp`），有自己的对话页 / 历史 / 宠物 / 右侧抽屉，**不强占 ZorvAI 的主对话框**
+- **模型配置、灵魂与人格、工具能力全部由 ZorvAI 主设置统一管理**：`brain/ZorvBrain.kt` 负责装配——
+  - **模型配置**：直接读 `QuroModelConfigRepository`（与主设置同一份 SharedPreferences `quro_model_config`），GenUI Agent 内不再有独立模型配置页
+  - **灵魂/人格**：`QuroSoulPromptEngine.build(SoulContext(...))` + 当前激活人格卡，与主对话完全同源；「AI 自动保存记忆」开关同样生效
+  - **工具调用**：复用 `QuroToolRegistry.active` 的**完整工具集**（`fullSpecs()` / `coreSpecs()` 按配置切换），执行走 `QuroToolEngine.execute(...)`（权限预检 / 超时 / 重试 / 技能与插件分支全继承）
+- **何时该用它**：要一块**原生可交互界面**（计算器、表单、看板、小游戏、设置页）时用 `genui_agent_open`；单张流程图/思维导图用 ```mermaid 围栏；一个网页成品（HTML/JS）用 ```html 围栏
+
+> **历史沿革**：本项目早期自带一套「生成式 UI 对话画布」——自研小程序引擎（`miniapp-sdk`，AI 写 HTML/WXML+WXSS+JS，WebView 或自研 Canvas 渲染）。该套实现**已全部删除**，由上面的完整 GenUI-Agent 取代。
 
 ### 1.9 可视化组件（`ui_widget` + 动态 UI）
 `ui_widget` 工具支持 **60+ 种可交互组件**，直接融进聊天气泡（而非浮层）。
@@ -258,7 +270,7 @@ AI 可以生成完整小程序代码（HTML + JS + CSS），在对话框中实�
 | **Action 类** | actions、toolcall、timer |
 | **Navigation 类** | breadcrumb、segmented、list |
 | **Decoration 类** | alert、badge、avatargroup、tagcloud、color、note、info |
-| **可视化** | mermaid（AI 自写 Mermaid 离线渲染）、html（网页工件 WebView 内联预览）、miniapp（小程序运行时） |
+| **可视化** | mermaid（AI 自写 Mermaid 离线渲染）、html（网页工件 WebView 内联预览）、genui（原生可交互界面，经 `genui_agent_open` 打开内置 GenUI Agent 渲染） |
 | **组合** | composite（stack/tabs/accordion 多子卡聚合，可嵌套） |
 
 **技术特点：**
@@ -737,8 +749,8 @@ private fun runCommandInLinux(command: String, timeout: Long): String {
 - `mcp_list_local`：列出已部署的本地 MCP；
 - 应用启动 `QuroLocalMcpManager.startAll` 自动拉起所有已持久化的本地 MCP，实现「界面自动拉取注册」。
 
-### 6. 工具系统（120+ 内置工具）
-注册入口 `core/tools/QuroBuiltInTools.kt : buildQuroRegistry()`，实际注册 **123** 项（另含导入工具与可调用技能，运行时更多）。按能力归类：
+### 6. 工具系统（220+ 内置工具）
+注册入口 `core/tools/QuroBuiltInTools.kt : buildQuroRegistry()`，实际注册 **226** 项（另含导入工具与可调用技能，运行时更多）。按能力归类：
 
 | 类别 | 代表工具 |
 |------|----------|
@@ -769,6 +781,7 @@ private fun runCommandInLinux(command: String, timeout: Long): String {
 | UI 动作/卡片/组件 | UiAction 系列、UiCard、UiWidget（可交互内联 UI） |
 | 节点编辑器 | NodeEditor（AI 直接读写 .qne 节点流工程，可视化编程 / 流程编排，无需打开界面） |
 | 端侧 APK 构建 | BuildApk（自定义包名 / Release 签名生成 / 依赖 JAR / 图标，离线 Java→DEX→APK）、ExportApk（导出产物） |
+| 生成式界面 | **QuroGenUiAgentOpen（`genui_agent_open`）**：打开内置 **GenUI Agent** 独立应用（GenUI JSON DSL → 原生 Compose 组件，530+ 组件），可选 `prompt` 直接带入需求 |
 | MCP | McpServers/ListTools/Call、McpDeploy/Undeploy/ListLocal、**McpAciBridge/List/Call**（MCP-ACI 桥接） |
 
 ### 6.5 七维能力补全（Dim1~Dim7 工具集）
@@ -863,6 +876,7 @@ private fun runCommandInLinux(command: String, timeout: Long): String {
 | `EditorScreen` | 内置代码 / 文本编辑器 |
 | `QuroSoulUi` | 人格 / 灵魂配置 |
 | `QuroSystemStatusScreen` / `QuroToolboxScreen` / `QuroShareBridge` / `QuroComponentGalleryScreen` / `QuroAboutScreen` | 系统状态 / 工具箱 / 分享桥 / 组件库 / 关于 |
+| **`GenUiAgentActivity`**（`genui/aiapp/`，独立全屏应用） | **内置 GenUI Agent**：生成式界面智能体，AI 产出 GenUI JSON DSL → 原生 Compose 渲染（530+ 组件）。入口为工具 `genui_agent_open` 或抽屉按钮；模型配置 / 灵魂人格 / 工具集均复用 ZorvAI 主设置 |
 
 ---
 
@@ -938,28 +952,63 @@ AI 遇到模糊命令/缺少信息/需要确认时，弹出选择题/输入框�
 
 ---
 
-## 自研多语言小程序（MiniApp）
+## 内置 GenUI Agent（生成式界面）
 
-AI 可以生成完整小程序代码（HTML + JS + CSS），在对话框中实时渲染为可交互的小程序页面。
+ZorvAI 内置了完整开源项目 **[GenUI-Agent](https://github.com/Quor-a/GenUI-Agent)**（去品牌化后落在 `com.ai.assistance.quro.genui.aiapp` / `com.ai.assistance.quro.genui.sdk`）。
+
+**范式**：AI 不再写 HTML/JS，而是产出 **GenUI JSON DSL**；SDK 把 DSL 直接映射成**原生 Compose 组件树**，交付一块能点、能填、能改的界面，而不是一张静态卡片或一个网页。
+
+### 模块构成
+
+| 模块 | 包 / 路径 | 职责 |
+|------|-----------|------|
+| **GenUI SDK** | `:genuiagent-sdk` → `com.ai.assistance.quro.genui.sdk` | DSL 定义与解析、组件注册表、Compose 渲染器、主题体系、交互与状态、技能扩展 |
+| **GenUI Agent 应用** | `app/src/main/java/com/ai/assistance/quro/genui/aiapp/` | 独立全屏壳：对话页、历史、设置、宠物、右侧抽屉、思考链 UI、LLM 客户端 |
+| **宿主接入层** | `aiapp/brain/`（`ZorvBrain.kt` + `GenUiRules.kt`） | 把 GenUI Agent 接到 ZorvAI 的模型配置 / 灵魂人格 / 工具引擎上 |
+| **入口工具** | `core/tools/GenUiAgentOpenTool.kt` | 工具 `genui_agent_open`，ZorvAI 侧唯一入口 |
 
 ### 核心特性
 
-- **小程序框架**：支持完整的 Page/Component 生命周期、data-bind 数据绑定、data-action 事件绑定
-- **JSBridge 架构**：`MiniAppBridgeInterface` 通过 `@JavascriptInterface` 注解暴露原生能力给 JS
-- **模块化设计**：Storage（存储）、Device（设备信息）、Ui（Toast、导航栏）、Network（HTTP 请求）、Router（页面导航）五个内置模块
-- **双后端运行时**：逻辑层可选 QuickJS（Native 线程，带内存上限 + 超时中断 + 关闭 eval）或 WebView（零 NDK 依赖）
-- **完全离线**：所有运行时代码内联打包进 APK
+- **530+ 原生组件**：`components/BuiltinComponents.kt` 单文件 545 处 `register()`，另有图标族 `IconMapper` 68 项；覆盖布局 / 排版 / 按钮 / 表单 / 图表 / 反馈 / 数据 / 媒体 / 导航 / 游戏交互 / 通知 / 胶囊族 / 卡片族
+- **流式渲染**：`dsl/StreamingParser` + `tryParsePartial` 支持 AI 边生成边渲染，残缺 JSON 也能渐进出界面
+- **完整样式系统**：`style/` 下的颜色（`ColorParser`）、字体（`FontProvider`）、形状（`GenUIShapes` / `ExpressiveShapes`）、间距（`GenUISpacing`）、排版（`GenUITypography`）与明暗主题（`GenUITheme`）
+- **动画**：`animation/` 提供组件进出场与状态过渡动画
+- **交互回路**：`interaction/ActionExecutor` 执行点击/提交动作，`FormState` + `collectFrom` 聚合表单结果**回灌 AI 继续对话**；`state/GenUIStateStore` 维护组件级状态
+- **运行时扩展**：`skill/GenUISkill` + `DynamicRegistry` 允许运行时注册新组件——ZorvAI 的 `register_component` 工具即走此通道
+- **完全离线**：SDK 与组件库随 APK 打包，无网络依赖
+
+### 与 ZorvAI 宿主的关系（重要）
+
+GenUI Agent 是**独立全屏应用**（Activity `GenUiAgentActivity`，**不是**启动页，启动页仍是 `QuroMainActivity`），但它不再自带一套模型/人格/工具配置，而是**完全复用 ZorvAI 主设置**：
+
+| 能力 | 来源 | 说明 |
+|------|------|------|
+| **模型配置** | `QuroModelConfigRepository` | 与主设置同一份 SharedPreferences（`quro_model_config`），Agent 内的模型页已改为**只读展示** |
+| **灵魂 / 人格** | `QuroSoulPromptEngine.build(SoulContext(...))` + `QuroPersonaRepository.getActive()` | 系统提示词 = 平台清单 + 灵魂引擎 + GenUI 渲染规则；「AI 自动保存记忆」开关同样生效 |
+| **工具调用** | `QuroToolRegistry.active` → `QuroToolEngine.execute(...)` | 继承**完整工具集**（`fullSpecs()` / `coreSpecs()` 按配置切换），权限预检 / 60s 超时 / 重试 / 技能与插件分支全部沿用 |
+
+也就是说：**在 ZorvAI 里配好模型和人格，进 GenUI Agent 直接就能用**，两边行为一致，不会出现「两套配置各说各话」。
 
 ### 使用方式
 
-AI 通过 `ui_widget` 工具下发 `type: "miniapp"` 组件：
+**方式一**：AI 自动调用工具
 ```json
-{
-  "type": "miniapp",
-  "title": "计算器",
-  "html": "<div data-bind='count'>0</div><button data-action='increment'>+1</button><script>Page({data:{count:0},increment(){this.setData({count:this.data.count+1})}})</script>"
-}
+{ "name": "genui_agent_open", "arguments": { "prompt": "做一个 BMI 计算器" } }
 ```
+`prompt` 可选，带上则进去就替用户把这句需求发出去。
+
+**方式二**：手动入口——抽屉 / 设置中的「GenUI Agent」按钮。
+
+**工具选择速查（别选错）**：
+
+| 你要的东西 | 该用 |
+|-----------|------|
+| 单张流程图 / 架构图 / 思维导图 | ```mermaid 围栏 |
+| 一个网页成品（HTML/JS/CSS 页面） | ```html 围栏 |
+| 长文档 / PPT 演示 / 脑图 | `aip_compose` 工具 |
+| 一块**原生可交互界面 / 小应用** | **`genui_agent_open`** |
+
+> **历史沿革**：本项目早期曾自带「生成式 UI 对话画布」——自研小程序引擎（`miniapp-sdk`，AI 写 HTML/WXML+WXSS+JS，经 WebView 或自研 Canvas 引擎渲染，含 `MiniAppBridgeInterface` JSBridge 与 Storage/Device/Ui/Network/Router 五模块）。该套实现**已全部删除**，功能由上述完整 GenUI-Agent 取代。
 
 ---
 
@@ -978,7 +1027,7 @@ AI 通过 `ui_widget` 工具下发 `type: "miniapp"` 组件：
 | **Action 类** | actions、toolcall、timer |
 | **Navigation 类** | breadcrumb、segmented、list |
 | **Decoration 类** | alert、badge、avatargroup、tagcloud、color、note、info |
-| **可视化** | mermaid（AI 自写 Mermaid 离线渲染）、html（网页工件 WebView 内联预览）、miniapp（小程序运行时） |
+| **可视化** | mermaid（AI 自写 Mermaid 离线渲染）、html（网页工件 WebView 内联预览）、genui（原生可交互界面，经 `genui_agent_open` 打开内置 GenUI Agent 渲染） |
 | **组合** | composite（stack/tabs/accordion 多子卡聚合，可嵌套） |
 
 ### 技术特点
@@ -1215,7 +1264,7 @@ flowchart TB
         B1["多会话隔离 liveBuffers"]
         B2["种子快照 convBase"]
         B3["显示刷新闸门 canUpdateDisplay"]
-        B4["工具注册表 QuroToolRegistry (123+ 工具)"]
+        B4["工具注册表 QuroToolRegistry (226+ 工具)"]
         B5["技能系统 skill__{name}"]
         B6["离线 LLM 引擎 QuroLocalEngineNative"]
     end
@@ -1543,7 +1592,7 @@ flowchart LR
 | 查看软件包名 | 输入应用显示名（如「微信」），反查其精确包名 |
 | 工作区 | 在应用沙箱内（`externalFiles/QuroWorkspace`）创建 / 编辑 / 删除文件与文件夹 |
 | 文档生成（aiWPS） | 本地生成真实 `docx / xlsx / pptx / pdf / md / txt / csv / html`（后台 IO 协程执行，避免 ANR），可用应用内查看器或系统 WPS 打开 |
-| **已有工具** | 查看已注册工具清单（内置 120+ + 技能 `skill__*` + 导入工具），可删除技能工具（级联删技能）/ 导入工具（持久化移除防重启复活）；并可「导入工具（AI 自写 / 粘贴 JSON）」——详见下方「开发工具与导入教程」 |
+| **已有工具** | 查看已注册工具清单（内置 220+ + 技能 `skill__*` + 导入工具），可删除技能工具（级联删技能）/ 导入工具（持久化移除防重启复活）；并可「导入工具（AI 自写 / 粘贴 JSON）」——详见下方「开发工具与导入教程」 |
 | 文档 | 应用内预览本地与生成文档，文本可编辑，Office 文档调起系统 WPS 打开 |
 | 音乐 / 视频播放器 | 应用内后台播放本地媒体 |
 | 数字人 | 3D 模型查看器（GLB / glTF，离线 Three.js + Draco） |
@@ -1802,7 +1851,8 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[arm64-v8a-v1.0.95-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.95/arm64-v8a-v1.0.95-release.apk)**（约 366MB，Release 签名，**最新**）
+- 🟢 **[arm64-v8a-v1.0.96-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.96/arm64-v8a-v1.0.96-release.apk)**（约 369MB，Release 签名，**最新**）
+  - v1.0.96 变更：**内置 GenUI Agent**（完整 GenUI-Agent，530+ 原生 Compose 组件，复用 ZorvAI 模型配置 / 灵魂人格 / 完整工具集）；修复 `:asr` 副进程启动崩溃导致的**端侧语音识别不可用**（[#9](https://github.com/Quor-a/ZorvAI/issues/9)）
 
 ### 能做什么
 
@@ -1810,12 +1860,12 @@ cd ZorvAI
 
 | 能力域 | 说明 |
 |--------|------|
-| **对话即执行** | **120+ 内置工具**：AI 直接读写文件、控屏点击输入、执行终端命令、抓包、自动化浏览网页、定时任务 |
+| **对话即执行** | **220+ 内置工具**：AI 直接读写文件、控屏点击输入、执行终端命令、抓包、自动化浏览网页、定时任务 |
 | **离线大模型** | 内置 **MNN / llama.cpp** 端侧推理，无网也能对话；亦可接云端模型 |
 | **终端 & Linux 沙箱** | proot + **Ubuntu 24.04 ARM64** 真实用户空间，多会话、SSH / VNC 远程接入、息屏不被杀 |
 | **特权通道（L1–L5）** | 无障碍 → Shizuku → 设备管理员 → ROOT → 应用内 Linux，**自动降级**，授权后 AI 可直接执行特权操作 |
 | **APK 级插件框架** | 装一个 APK 就给 AI 加能力；插件可贡献 AI 工具、ACI 能力、界面；AI 也能**直接调用**插件工具 |
-| **可视化与生成** | 60+ 可交互组件、Mermaid 图表、AIP 长文档 / 演示 / 脑图、小程序、语音合成与识别 |
+| **可视化与生成** | 60+ 可交互组件、Mermaid 图表、AIP 长文档 / 演示 / 脑图、**内置 GenUI Agent（530+ 原生 Compose 组件）**、语音合成与识别 |
 | **在线接入** | 飞书 / QQ / 微信机器人、**MCP** 客户端与服务、ACI 跨进程 12 能力（ContentProvider / Deep Link / Intent / 广播） |
 | **知识 / 记忆 / 人格** | 向量语义 RAG 知识库、记忆库、人格卡与灵魂配置 |
 

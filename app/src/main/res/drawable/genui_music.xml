@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GenUI 图标 — 音乐
+  设计理念：简约的音符 + 音波弧线
+  不是标准的音符造型，而是更有设计感的几何形态
+  风格：精致线条风，2dp 线宽，圆角端点
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 音符头部（椭圆） -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#F0FDFA"
+        android:pathData="M7.5,17.5m-2.5,1.5a2.5,1.5 0,1 1,5 0a2.5,1.5 0,1 1,-5 0"/>
+
+    <!-- 音符杆（竖线） -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M10,6v11.5"/>
+
+    <!-- 音符横梁（斜线旗） -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#F0FDFA"
+        android:pathData="M10,6 L17,4.5 L17,7 L10,8.5 Z"/>
+
+    <!-- 音波弧线（装饰，右侧） -->
+    <path
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M18.5,10 Q20,8.5 21.5,10 Q20,11.5 18.5,10"/>
+
+    <path
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M19.5,13.5 Q21,12 22.5,13.5"/>
+
+    <!-- 第二个小音符头（装饰） -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="1.5"
+        android:fillColor="#CCFBF1"
+        android:pathData="M15,19m-1.8,1a1.8,1 0,1 1,3.6 0a1.8,1 0,1 1,-3.6 0"/>
+
+</vector>

@@ -23,6 +23,9 @@ ksp = "2.3.9"
 facebookYoga = "2.0.1"
 androidsvg = "1.4"
 coil = "2.6.0"
+# GenUI-Agent 内置（去品牌化移植）所需：Markdown 渲染 / YAML 解析
+markwon = "4.6.2"
+kaml = "0.55.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -81,6 +84,14 @@ androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "androidxWe
 facebook-yoga = { group = "com.facebook.yoga", name = "yoga", version.ref = "facebookYoga" }
 androidsvg = { group = "com.caverock", name = "androidsvg", version.ref = "androidsvg" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+
+# 内置 GenUI-Agent（com.ai.assistance.quro.genui.aiapp）依赖：
+#  · markwon：renderx/ChannelViewer 的 Markdown 频道渲染（core + 表格 + 删除线插件）
+#  · kaml：renderx/FlatDoc 的 YAML 文档解析（→ JsonElement）
+markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
+markwon-ext-tables = { group = "io.noties.markwon", name = "ext-tables", version.ref = "markwon" }
+markwon-ext-strikethrough = { group = "io.noties.markwon", name = "ext-strikethrough", version.ref = "markwon" }
+kaml = { group = "com.charleskorn.kaml", name = "kaml", version.ref = "kaml" }
 
 # 端侧 ASR 引擎 Sherpa-NCNN：未使用版本目录条目。
 # 原因：Sherpa-NCNN 无 Maven Central / JitPack AAR（仓库根仅含 CMake，JitPack 构建全部失败）。

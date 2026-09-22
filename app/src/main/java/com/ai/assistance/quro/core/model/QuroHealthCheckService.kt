@@ -14,7 +14,14 @@ private const val TAG = "QuroHealthCheck"
  * 使用 WorkManager 实现后台定期任务。
  */
 class QuroHealthCheckService(private val context: Context) {
-    private val workManager = WorkManager.getInstance(context)
+    /**
+     * ⚠️ 必须惰性获取（#9）：`WorkManager.getInstance()` 在 WorkManager 尚未初始化的进程里会抛
+     * `IllegalStateException: WorkManager is not initialized properly`。本类由 `QuroMultiProviderTool`
+     * 在 `buildQuroRegistry()` 中构造，而注册表在多个进程都会被构建——构造期就取 WorkManager 会让
+     * **副进程（`:asr`）启动即崩**（华为/小米实测必现，端侧语音因此完全不可用）。
+     * 改为 `by lazy`：只有真正要排程健康检查时才触碰 WorkManager。
+     */
+    private val workManager by lazy { WorkManager.getInstance(context.applicationContext) }
     private val repository = QuroMultiProviderRepository(context)
     
     /**

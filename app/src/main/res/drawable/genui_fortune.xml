@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GenUI 图标 — 运势
+  设计理念：不是水晶球或星星，而是"罗盘/指南针"的意象
+  一个简约的罗盘造型，指针指向命运
+  风格：精致线条风，2dp 线宽，圆角端点
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 外圆环 -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:pathData="M12,4m-8,0a8,8 0,1 1,16 0a8,8 0,1 1,-16 0"/>
+
+    <!-- 内圆环（刻度环） -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="1"
+        android:fillColor="#F0FDFA"
+        android:pathData="M12,6.5m-5.5,0a5.5,5.5 0,1 1,11 0a5.5,5.5 0,1 1,-11 0"/>
+
+    <!-- 刻度线（四个方向） -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M12,7.5v-1.5 M12,18v1.5 M7.5,12h-1.5 M18,12h1.5"/>
+
+    <!-- 指针：北半（琥珀色，指向） -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M12,7.5 L13.5,12 L12,12.5 L10.5,12 Z"/>
+
+    <!-- 指针：南半（深青色） -->
+    <path
+        android:fillColor="#0D9488"
+        android:pathData="M12,16.5 L13.5,12 L12,11.5 L10.5,12 Z"/>
+
+    <!-- 中心点 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#0D9488"
+        android:strokeWidth="1"
+        android:pathData="M12,12m-1.2,0a1.2,1.2 0,1 1,2.4 0a1.2,1.2 0,1 1,-2.4 0"/>
+
+    <!-- 顶部标记（小三角，代表北方/命运） -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M12,3 L13,5 L11,5 Z"/>
+
+</vector>

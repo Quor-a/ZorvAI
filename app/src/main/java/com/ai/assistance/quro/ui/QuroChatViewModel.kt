@@ -66,14 +66,6 @@ import com.ai.assistance.quro.core.tools.QuroTtsProviders
 import com.ai.assistance.quro.core.tools.QuroTtsProviderKind
 import com.ai.assistance.quro.core.tools.QuroVoiceFeaturePrefs
 import com.ai.assistance.quro.core.tools.QuroToolRouter
-// ZorvAI 生成式 UI（AI 自写 JSX/HTML → WebView 内渲染）：把 :genui 模块接入主对话运行时
-import com.zorv.genui.controller.GenUiController
-import com.zorv.genui.host.GenUiHost
-import com.zorv.genui.host.SnapshotPersister
-import com.zorv.genui.store.GenUiStore
-import com.zorv.genui.store.RoomBackedStore
-import com.zorv.genui.heal.GenUiSelfHeal
-import com.zorv.genui.prompt.GenUiPrompt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -93,22 +85,6 @@ import org.json.JSONObject
 import android.util.Log
 
 private const val TAG = "QuroChatViewModel"
-
-/**
- * ```miniapp 围栏内容若是这个前缀，表示「原生小程序（自研引擎 appId）」而非 HTML 小程序。
- * 由 [QuroChatViewModel.pushGenUiMiniAppToChat] 写入，ChatScreen 侧据此构造带 config.app_id 的卡片。
- */
-internal const val NATIVE_MINIAPP_PREFIX = "zorv-miniapp:"
-
-/**
- * GenUI 交付署名（回流到 ZorvAI 对话框时写在内容最前面的一行）。
- *
- * 为什么要有：GenUI 的产物是**回流**进对话框的（用户看不见生成过程，只看到一条助手消息），
- * 没有署名就无从判断"这是生成式 UI 画布画的"还是"对话框里的 AI 自己答的"。
- * 用户明确要求：GenUI 最后交付必须有 GenUI / 生成式 UI 的标识。
- * 写成加粗短行，不参与任何围栏解析（在围栏之前，parseBlocks 会先出一段正文）。
- */
-internal const val GENUI_ATTRIBUTION = "**GenUI · 生成式 UI**"
 
 /**
  * 对话 ViewModel（原创）：支持多会话、历史记录持久化、新�?/切换/删除会话�?
@@ -223,97 +199,9 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         private set
     private val uiPrefs = appContext.getSharedPreferences("quro_ui", Context.MODE_PRIVATE)
 
-    // ══════════════ ZorvAI 生成式 UI（:genui 模块）═════════════
-    // 每会话一个独立控制器（含独立 Room 库 + WebView 池），天然隔离跨会话卡片 id 与快照。
-    // 切换会话时释放上一会话的 WebView，避免无限增长；卡片数据仍在各自 Room 库，切回可重建。
-    private val genUiControllers = mutableMapOf<String, GenUiController>()
-    private var genUiActiveConv: String? = null
-    /** 每会话独立追踪「已喂给控制器的助理正文长度」，按消息 id 记录，避免工具调用轮次串文本 */
-    private val genUiIngestLen = mutableMapOf<String, Int>()
-
-    /**
-     * 生成式 UI 的「WebView 执行 AI 代码」路径开关。
-     * 按 A2UI 铁律（模型输出永远是数据不是代码，绝不在端上执行 AI 生成的 JSX/HTML，Play / App Store
-     * 2.5.2 红线）此路径已废弃，默认关闭。动态 UI 一律走原生 A2UI 解释器（quro-ui DSL + Catalog 校验
-     * + JSONL 信封 + 指针绑定 → QuroUiRenderer）。保留开关仅作调试沙箱用途。
-     */
-    private val GENUI_WEBVIEW_ENABLED = false
-
-    fun genUiControllerFor(convId: String): GenUiController {
-        synchronized(genUiControllers) {
-            val prev = genUiActiveConv
-            if (prev != null && prev != convId) {
-                // 释放上一会话的 WebView 池（内存生死线），数据仍在 Room，切回可重建。
-                // WebView.destroy 必须主线程，故投递到主线程执行（本方法可能在 IO 流线程被调用）。
-                genUiControllers[prev]?.let { ctrl ->
-                    Handler(Looper.getMainLooper()).post { runCatching { ctrl.releaseAll() } }
-                }
-            }
-            genUiActiveConv = convId
-            return genUiControllers.getOrPut(convId) {
-                val store: GenUiStore = RoomBackedStore(appContext, name = "zorv_genui_${convId.take(64)}")
-                val selfHeal = GenUiSelfHeal(maxAttempts = 3)
-                // 宿主要的是 SnapshotPersister（非 suspend 的 fire-and-forget 单方法接口），
-                // 而 RoomBackedStore.saveState 是 suspend；用 SAM 适配器在 IO 线程桥接。
-                val host = GenUiHost(
-                    appContext,
-                    snapshotPersister = SnapshotPersister { id, rev, state ->
-                        viewModelScope.launch(Dispatchers.IO) { store.saveState(id, rev, state) }
-                    }
-                )
-                GenUiController(host, store, selfHeal).also { ctrl ->
-                    // 自愈：模型写错 → 收到 <runtime-error> → 隐藏用户消息注入反馈 → 触发重写（rev+1）
-                    ctrl.onRepairRequest = { feedback -> repairGenUi(convId, feedback) }
-                    // 组件主动接话：AI 自写卡片里的按钮 emit('intent') → 作为一条用户消息让 AI 接手回应
-                    ctrl.onIntent = { _, type, payload ->
-                        val summary = buildString {
-                            append("【对话卡片交互】用户通过我生成的界面触发了 \"$type\"")
-                            payload?.let { p ->
-                                p.keys().forEach { k -> append("\n- $k: ${p.opt(k)}") }
-                            }
-                        }
-                        viewModelScope.launch { send(text = summary, repairConvId = convId) }
-                    }
-                }
-            }
-        }
-    }
-
-    /** 把流式累积的助理正文增量喂给生成式 UI 解析器（delta 跟踪，因 onToken 返回的是累计全文） */
-    private fun ingestGenUiFromBuffer(convId: String, buf: QuroConversationStore) {
-        if (!GENUI_WEBVIEW_ENABLED) return // A2UI 铁律：WebView 执行 AI 代码路径已废弃，统一走原生解释器
-        val m = buf.all().lastOrNull { it.role == "assistant" && !it.hidden } ?: return
-        val prev = genUiIngestLen[m.id] ?: 0
-        if (m.content.length <= prev) return
-        val delta = m.content.substring(prev)
-        genUiIngestLen[m.id] = m.content.length
-        if (delta.isNotEmpty()) genUiControllerFor(convId).ingest(delta)
-    }
-
-    /** 流结束后收尾：处理未闭合围栏，并把本轮产出的卡片 id 关联到对应助理消息（按围栏 id= 精确匹配） */
-    private fun finishAndAttachGenUi(convId: String, buf: QuroConversationStore) {
-        if (!GENUI_WEBVIEW_ENABLED) return // A2UI 铁律：WebView 执行 AI 代码路径已废弃，统一走原生解释器
-        val ctrl = genUiControllers[convId] ?: return
-        ctrl.finish()
-        val refs = ctrl.cards.value
-        if (refs.isEmpty()) return
-        buf.all().forEach { m ->
-            if (m.role != "assistant" || m.hidden) return@forEach
-            val ids = refs.filter { r ->
-                Regex("""zorv/ui[^\n]*\bid=${r.id}\b""").containsMatchIn(m.content)
-            }.map { it.id }
-            if (ids.isNotEmpty()) {
-                buf.update(m.id) { it.copy(genUiCardIds = (it.genUiCardIds + ids).distinct()) }
-            }
-        }
-        genUiIngestLen.clear()
-    }
-
-    /** 生成式 UI 自愈：把运行时错误反馈作为隐藏用户消息注入，触发模型完整重写该卡片 */
-    private fun repairGenUi(convId: String, feedback: String) {
-        viewModelScope.launch { send(text = "", repairFeedback = feedback, repairConvId = convId) }
-    }
-
+    // 注：原先这里维护 :genui 模块的「每会话 GenUiController / WebView 卡片池 / 自愈重写」
+    // 一整套链路。该模块已随「删除全部旧 GenUI + 内置新 GenUI-Agent」一起移除，
+    // 生成式界面改由独立内置应用 com.ai.assistance.quro.genui.aiapp 承担（工具 genui_agent_open）。
     companion object {
         /** 当前活跃�? ViewModel 实例，供语音球等外部组件委托对话写入「选中的对话框」�? */
         lateinit var instance: QuroChatViewModel
@@ -388,11 +276,13 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     private val _historyRounds = MutableStateFlow<Int?>(null)
     val historyRoundsPref: StateFlow<Int?> = _historyRounds.asStateFlow()
 
-    // ══════════════ 对话框类型（GenUI 融合：两种对话框）═════════════
+    // ══════════════ 对话框类型（历史遗留字段）═════════════
     // 每个对话框独立记忆自己的类型：normal = 普通对话框（正常聊天）；
-    // genui = GenUI 对话框（强制 AI 用原生 quro-ui 生成界面）。
-    // 点「GenUI 对话框」入口新建的会话即为 genui 类型；切换/新建对话框自动载入其记忆的类型，
-    // 普通对话框完全不受影响（见 ChatScreen 的 GenUI 入口）。
+    // genui = 旧 GenUI 对话框（整个界面即 AI 回复，走 QuroGenUiApp 渲染面）。
+    //
+    // 注意：旧的 GenUI 对话框渲染面**已整体删除**，现在所有会话都按普通对话框渲染
+    // （genUiType 仅作为历史/持久化字段保留，见 QuroConversationPersistence 的向后兼容）。
+    // 「生成式界面」改由内置的 GenUI-Agent 独立应用承担（工具 genui_agent_open）。
     private val _genUiType = MutableStateFlow("normal")
     val genUiTypePref: StateFlow<String> = _genUiType.asStateFlow()
     fun setGenUiType(type: String) {
@@ -406,24 +296,6 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             }
             runCatching { convRepo.saveAll(_convs.value) }
         }
-    }
-
-    /**
-     * ZorvAI → GenUI 反向调用入口（由 `genui_open` 工具经 [com.ai.assistance.quro.core.tools.GenUiBridge] 触发）。
-     *
-     * 与 [setGenUiType] 的唯一区别：这里先保证「有会话可供回写」。
-     * GenUI 的产物是经 push 通道路回到**当前会话**的（pushGenUiHtmlToChat 等直接写 store），
-     * 若此刻没有任何会话（冷启动瞬间、或用户把会话全删了），产物回来会无处安放——所以先建一个。
-     *
-     * 返回是否已切到 genui：UI 层据此回给工具"切屏成功/失败"。
-     */
-    fun enterGenUi(prompt: String, mode: String = "canvas"): Boolean {
-        if (_currentId.value.isBlank() || _convs.value.none { it.id == _currentId.value }) {
-            runCatching { newConversation() }
-        }
-        setGenUiType("genui")
-        QuroDiag.log("GenUiBridge", "enterGenUi | mode=$mode | prompt=${prompt.length}字 | conv=${_currentId.value}")
-        return _genUiType.value == "genui"
     }
 
     fun setHistoryRounds(n: Int?) {
@@ -488,17 +360,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         //   + saveAll() 写盘均为�? IO，对话量大时在主线程同步执行会直�? ANR（启�?/进聊天即卡死）�?
         //   这里只同步设置引用与空初始态，�? IO 全部挪到 IO 线程异步完成�?
         instance = this
-        // 生成式 UI 冷启动预热：当前会话确定后主线程预热该会话 WebView 池，消首张卡片 200-500ms 冷启动。
-        // warmUp 幂等：池满后再次调用为 no-op；后续每次切会话都会为活跃会话预热，无副作用。
-        // 注：WebView 执行 AI 代码路径已按 A2UI 铁律废弃（GENUI_WEBVIEW_ENABLED=false），此处一并停用预热。
-        if (GENUI_WEBVIEW_ENABLED) viewModelScope.launch {
-            currentId.collect { id ->
-                if (id.isBlank()) return@collect
-                Handler(Looper.getMainLooper()).post {
-                    runCatching { genUiControllerFor(id).warmUp() }
-                }
-            }
-        }
+        // 注：原先此处有 :genui 的「冷启动预热」——当前会话确定后主线程预热该会话 WebView 卡片池，
+        // 消掉首张卡片 200-500ms 冷启动。该模块已随旧 GenUI 整体删除，预热逻辑一并移除。
         _convs.value = emptyList()
         _messages.value = emptyList()
         viewModelScope.launch(AppExecutors.io) {
@@ -690,94 +553,10 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         emitMeta()
     }
 
-    /**
-     * GenUI 模式专用生成：复用统一系统提示（含**记忆注入** + **灵魂/人格注入** + GenUiPrompt）、
-     * 记忆自动沉淀（跟随 autoSaveMemory 开关）、QuroAI 工具循环，并把生成的完整 HTML 作为
-     * assistant 消息**落盘绑定到当前会话**（与普通对话框共用同一套会话持久化：切换不丢、进程重生可回放）。
-     *
-     * 与 ChatScreen.send() 的唯一区别：结果不渲染成文本气泡，而是由 GenUiSurfaceScreen 把返回的
-     * HTML 灌进 WebView 画布。记忆 / 灵魂 / 工具分类 / 对话绑定全部走 vm 统一管线，不再另起炉灶。
-     */
-    suspend fun generateGenUi(prompt: String, cfg: QuroModelConfig = repo.load()): String {
-        val convId = _currentId.value
-        // buildSystemPrompt 已内含：平台基座 + 人格/灵魂(QuroSoulPromptEngine) + 记忆 + GenUiPrompt(force=genui 时追加)
-        val sys = buildSystemPrompt(cfg)
-        val seed = _convs.value.firstOrNull { it.id == convId }?.messages ?: emptyList()
-        val buf = QuroConversationStore().apply { seed.forEach { add(it) } }
-        buf.add(QuroMessage(role = "user", content = prompt))
-        val text = QuroAssistant(QuroLlmClient(), registry, buf).ask(
-            appContext, cfg,
-            systemPrompt = sys,
-            autoSaveMemory = autoSaveMemory.value,
-            stream = false,
-            historyRounds = _historyRounds.value ?: 0,
-            deepThink = false,
-        )
-        buf.add(QuroMessage(role = "assistant", content = text))
-        commitCurrent(convId, buf, updateTitle = false)
-        return text
-    }
-
-    /**
-     * 读取某会话最近一次 GenUI 生成的 HTML（切回该会话时回放画布用）。
-     * 非 genui 会话或无内容返回 null。
-     */
-    fun lastGenUiHtml(convId: String = _currentId.value): String? {
-        val conv = _convs.value.firstOrNull { it.id == convId } ?: return null
-        if (conv.genUiType != "genui") return null
-        return conv.messages.lastOrNull { it.role == "assistant" }?.content
-    }
-
-    /**
-     * GenUI 全屏模式生成完成后，把整屏 HTML 结果回写进当前 ZorvAI 对话。
-     *
-     * 关键：用 ```miniapp 围栏包裹，使 ChatScreen 的 parseBlocks 走 MsgBlock.MiniApp →
-     * WebView 小程序气泡，而不是被 isFullHtmlDocument 误判成「整段 HTML 代码块」。
-     * 这样 GenUI 的产物会作为一条助手消息出现在 ZorvAI 对话框里，实现「返回 ZorvAI 对话框」。
-     *
-     * 调用方需保证在主线程（GenScaffold.onDone 已 main.post）。GenUI 生成不占用 liveBuffers，
-     * 故 commitCurrent() 默认 buf=store 会正确刷新 _messages 并落盘。
-     */
-    fun pushGenUiHtmlToChat(html: String, title: String = "") {
-        if (html.isBlank()) return
-        // 署名行 + 围栏：署名在围栏之前，用户一眼能看出这是 GenUI 画的。
-        val content = "$GENUI_ATTRIBUTION\n\n```miniapp\n$html\n```"
-        store.add(QuroMessage(role = "assistant", content = content))
-        commitCurrent()
-    }
-
-    /**
-     * GenUI 里 create_miniapp 产出的**原生小程序**（微信语法 WXML/WXSS/JS，自研引擎渲染）→ 写进 ZorvAI 对话框。
-     *
-     * 为什么要单独一条通道：pushGenUiHtmlToChat 走 ```miniapp 围栏（WebView 运行时渲染 HTML），
-     * 而原生小程序根本没有 HTML 文件，塞进去只会得到一张"（无小程序内容）"的空卡。
-     * 这里走自研卡片围栏 ```quro-card + config.app_id，由对话框内的卡片就地用原生引擎渲染
-     * （见 QuroChatCards.MiniAppCardView 的 nativeAppId 分支）。
-     *
-     * 调用方需在主线程（GenScaffold 的事件回调已 main.post）。
-     */
-    fun pushGenUiMiniAppToChat(appId: String, title: String = "") {
-        val id = appId.trim()
-        if (id.isEmpty()) return
-        // 走 ```miniapp 围栏（对话框里唯一会把内容渲染成"小程序卡"的通道），
-        // 内容用原生标记前缀 —— 该围栏本来是 HTML 小程序，这里用标记区分出"原生小程序"，
-        // ChatScreen 见到标记就构造带 config.app_id 的 MiniAppCard，由自研引擎就地渲染。
-        val content = "$GENUI_ATTRIBUTION\n\n```miniapp\n$NATIVE_MINIAPP_PREFIX$id\n```"
-        store.add(QuroMessage(role = "assistant", content = content))
-        commitCurrent()
-    }
-
-    /**
-     * GenUI 模式下 AI 返回纯文本（非 HTML 界面）时，把文本作为一条普通助手回复写回当前会话。
-     * 与 pushGenUiHtmlToChat 的区别：不包 ```miniapp 围栏，直接以纯文本气泡出现在 ZorvAI 对话框，
-     * 避免「回复文本被甩在画布上」。调用方需在主线程（GenScaffold.onDone 已 main.post）。
-     */
-    fun pushGenUiTextToChat(text: String) {
-        if (text.isBlank()) return
-        store.add(QuroMessage(role = "assistant", content = "$GENUI_ATTRIBUTION\n\n${text.trim()}"))
-        commitCurrent()
-    }
-
+    // 注：原先此处有 generateGenUi / lastGenUiHtml / pushGenUiHtmlToChat /
+    // pushGenUiMiniAppToChat / pushGenUiTextToChat 五个方法，用于把旧 GenUI 画布的产物
+    // 回流进 ZorvAI 对话框。旧 GenUI 已整体删除（新 GenUI-Agent 是独立内置应用，
+    // 自己持有会话，不再需要回流通道）。
     /**
      * 删除单条/聚合气泡对应的底层消息（v417 对话框缺失功能补全）�?
      * ids 为该气泡携带的全�? QuroMessage 原始 id；删除助手消息时，连带清理其隐藏�?
@@ -1013,8 +792,6 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         // 退出也能保留中间过程；commitCurrent 内部已对落盘�? �?1s 节流�?
                             if (firstTokenTs == 0L) { firstTokenTs = System.currentTimeMillis(); QuroDiag.log("GEN_FIRSTTOKEN", "convId=$convId ttfb=${firstTokenTs - askStart}ms") }
                             commitCurrent(convId, buf)
-                            // 生成式 UI：把本轮累积正文增量喂给 :genui 解析器（AI 自写 JSX/HTML → 对话框内渲染）
-                            ingestGenUiFromBuffer(convId, buf)
                         }
                         QuroDiag.log("GEN_ASK_MS", "convId=$convId total=${System.currentTimeMillis() - askStart}ms")
                     }.onFailure { e ->
@@ -1023,8 +800,6 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                             QuroDiag.log("SEND_CANCEL", "convId=$convId (job cancelled �? 已停止生�?)")
                             store.add(QuroMessage(role = "assistant", content = "�? 已停止生成�?"))
                             commitCurrent(convId, buf)
-                            // 生成式 UI：被中断也可能已产出完整卡片，仍尝试收尾挂载
-                            finishAndAttachGenUi(convId, buf)
                             return@onFailure
                         }
                         store.add(
@@ -1035,8 +810,6 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         )
                     }
                 }
-                // 生成式 UI：流结束收尾——处理未闭合围栏，并把本轮产出的卡片 id 关联到对应助理消息
-                finishAndAttachGenUi(convId, buf)
                 commitCurrent(convId, buf, forceSave = true)
                 // 对话一轮完�? �? 触发人格自动孵化（按轮次累计，静默、不阻塞主对话）
                 maybeAutoIncubate()
@@ -2329,17 +2102,11 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
 5. 用户要打开插件桌面（启动器式管理界面）→ 调 `ui_open_plugins`。
 """.trimIndent())
 
-        // ══════════════ 生成式 UI 画布交接（ZorvAI → GenUI 反向调用）═════════════
-        // 此前只有 GenUI → ZorvAI 的单向回推，ZorvAI 侧连个入口工具都没有，等于"叫不动画布"。
-        // 现在补上 genui_open：模型据此知道可以把画界面的活派给 GenUI，且知道派完要收尾。
-        // 段落正文在 GenUiBridge.SYSTEM_SECTION（与工具通道同一处维护，避免漏改）。
-        sb.append("\n\n").append(com.ai.assistance.quro.core.tools.GenUiBridge.SYSTEM_SECTION)
-
-        // ══════════════ 生成式 UI（GenUI 对话框：原生 quro-ui 强制生成）═════════════
-        // 仅当当前会话为 genui 类型时，注入强制生成段（普通对话框走正常聊天，不注入）。
-        // 本地小模型上下文过紧（上方 isLocal 分支已 early-return），GenUI 强制段仅在云端路径注入。
-        val isGenuiConv = _convs.value.firstOrNull { it.id == _currentId.value }?.genUiType == "genui"
-        sb.append("\n\n").append(GenUiPrompt.build(force = isGenuiConv).trimIndent())
+        // ══════════════ 生成式界面（GenUI）交接 ══════════════
+        // 旧实现：ZorvAI 通过 genui_open 工具把「画界面」的活派给内部 GenUI 画布，
+        // 并注入 GenUiBridge.SYSTEM_SECTION 告知模型这条反向通道。整套旧 GenUI 已删除，
+        // 现在换成**内置的完整 GenUI-Agent 独立应用**，入口为工具 `genui_agent_open`
+        // （见 core/tools/GenUiAgentOpenTool.kt，工具描述本身就是模型认知来源）。
 
         // ══════════════ 人格卡可视化开关【硬强制】放最末尾 = 最高近因偏好（仅云端路径）═════════════
         // 本地离线模型不走到这里（已在上面 isLocal 分支 early-return），本段只在云端路径注入。

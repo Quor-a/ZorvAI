@@ -290,9 +290,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(ExportApkTool())    // 让 AI 也能「导出产物」（构建台 UI 的导出是文件选择器、AI 调不起）
     // 后端工作区：多文件多语言项目
     r.register(WorkbenchTool())
-    r.register(MiniAppStudioTool())    // 小程序工作台：AI 直接 CRUD/运行小程序工程（完整移植 MiniAppFramework）
-    // 生成式 UI 对话（GenUI）画布反向调用：ZorvAI 主动把「画界面」的活派给 GenUI（唯一入口，见 GenUiBridge）
-    r.register(GenUiOpenTool())
+    // 注：旧的 MiniAppStudioTool（小程序工作台）与 GenUiOpenTool（切 GenUI 对话框画布）已随
+    // 「删除全部旧 GenUI + 内置新 GenUI-Agent」一起下线，取代它的是独立的内置应用
+    // GenUiAgentActivity（见 app/.../genui/aiapp/），入口为工具 genui_agent_open。
+    r.register(GenUiAgentOpenTool())
     // TTS 朗读
     r.register(SpeakTool())
     r.register(StopSpeakTool())

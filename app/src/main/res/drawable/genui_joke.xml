@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GenUI 图标 — 笑话/笑脸
+  设计理念：不是卡通 emoji，而是简约的"嘴角上扬"线条
+  一个圆角方框内的微笑曲线，配合两颗小圆眼睛
+  风格：精致线条风，2dp 线宽，圆角端点
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 外框：圆角方形 -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#F0FDFA"
+        android:pathData="M4,6h16a2,2 0,0 1,2 2v8a2,2 0,0 1,-2 2H4a2,2 0,0 1,-2 -2V8a2,2 0,0 1,2 -2z"/>
+
+    <!-- 左眼 -->
+    <path
+        android:fillColor="#0D9488"
+        android:pathData="M8.5,10.5m-1.2,0a1.2,1.2 0,1 1,2.4 0a1.2,1.2 0,1 1,-2.4 0"/>
+
+    <!-- 右眼 -->
+    <path
+        android:fillColor="#0D9488"
+        android:pathData="M15.5,10.5m-1.2,0a1.2,1.2 0,1 1,2.4 0a1.2,1.2 0,1 1,-2.4 0"/>
+
+    <!-- 嘴巴：微笑弧线（用描边画弧线） -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M8,14.5c1.5,2.5 6.5,2.5 8,0"/>
+
+    <!-- 琥珀色点缀：左腮红 -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M7,13.5m-0.8,0a0.8,0.8 0,1 1,1.6 0a0.8,0.8 0,1 1,-1.6 0"/>
+
+    <!-- 琥珀色点缀：右腮红 -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M17,13.5m-0.8,0a0.8,0.8 0,1 1,1.6 0a0.8,0.8 0,1 1,-1.6 0"/>
+
+</vector>
