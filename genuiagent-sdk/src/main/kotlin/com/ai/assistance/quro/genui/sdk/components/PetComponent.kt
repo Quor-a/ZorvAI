@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.genui.sdk.components
 
+import com.ai.assistance.quro.genui.sdk.style.ZorvPalette
+
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -60,9 +62,9 @@ enum class PetPhase(val bubble: String) {
 
 data class PetSpec(
     val name: String = "团子",
-    val body: List<Color> = listOf(Color(0xFFFFB5C2), Color(0xFFFFD9E0)),
-    val eye: Color = Color(0xFF3A2E39),
-    val accent: Color = Color(0xFFFF8FA3),
+    val body: List<Color> = listOf(ZorvPalette.ErrorSoft, ZorvPalette.ErrorSoft),
+    val eye: Color = ZorvPalette.InkSoft,
+    val accent: Color = ZorvPalette.ErrorWarm,
     val form: String = "blob",
     val size: Float = 76f
 ) {
@@ -105,9 +107,9 @@ data class PetSpec(
             }
             return PetSpec(
                 name = (obj["name"] as? JsonPrimitive)?.content ?: "团子",
-                body = body ?: listOf(Color(0xFFFFB5C2), Color(0xFFFFD9E0)),
-                eye = eye ?: Color(0xFF3A2E39),
-                accent = accent ?: Color(0xFFFF8FA3),
+                body = body ?: listOf(ZorvPalette.ErrorSoft, ZorvPalette.ErrorSoft),
+                eye = eye ?: ZorvPalette.InkSoft,
+                accent = accent ?: ZorvPalette.ErrorWarm,
                 form = ((obj["form"] as? JsonPrimitive)?.content ?: "blob").lowercase(),
                 size = ((obj["size"] as? JsonPrimitive)?.content?.toFloatOrNull() ?: 76f).coerceIn(48f, 160f)
             )
@@ -165,7 +167,7 @@ fun PetSprite(
         if (showBubble && bubbleText.isNotBlank()) {
             Surface(
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
                 shadowElevation = 3.dp
             ) {
                 Text(
@@ -208,7 +210,7 @@ fun PetSprite(
             // 头顶标记：思考=问号泡，工具=旋转环
             if (phase == PetPhase.THINKING || phase == PetPhase.PLANNING) {
                 drawCircle(Color.White.copy(alpha = 0.85f), radius = w * 0.09f, center = Offset(w * 0.86f, h * 0.12f))
-                drawCircle(Color(0xFF6750A4), radius = w * 0.045f, center = Offset(w * 0.86f, h * 0.12f))
+                drawCircle(ZorvPalette.Terracotta, radius = w * 0.045f, center = Offset(w * 0.86f, h * 0.12f))
             }
             if (phase == PetPhase.TOOL_CALLING) {
                 val c = Offset(w * 0.86f, h * 0.12f)
@@ -216,7 +218,7 @@ fun PetSprite(
                 repeat(3) { i ->
                     val a = spin + i * 120f
                     drawCircle(
-                        Color(0xFF6750A4).copy(alpha = 0.9f),
+                        ZorvPalette.Terracotta.copy(alpha = 0.9f),
                         radius = w * 0.025f,
                         center = Offset(c.x + cos(Math.toRadians(a.toDouble())).toFloat() * r,
                             c.y + sin(Math.toRadians(a.toDouble())).toFloat() * r)
@@ -224,7 +226,7 @@ fun PetSprite(
                 }
             }
             if (phase == PetPhase.DONE) {
-                drawCircle(Color(0xFF3DAA6C).copy(alpha = 0.9f), radius = w * 0.06f, center = Offset(w * 0.86f, h * 0.12f))
+                drawCircle(ZorvPalette.Success.copy(alpha = 0.9f), radius = w * 0.06f, center = Offset(w * 0.86f, h * 0.12f))
                 drawCircle(Color.White, radius = w * 0.028f, center = Offset(w * 0.86f, h * 0.12f))
             }
         }
@@ -285,7 +287,7 @@ private fun DrawScope.drawBody(w: Float, h: Float, spec: PetSpec, phaseT: Float)
     } else bodyPath(w, h, "blob")
     drawPath(
         outlinePath,
-        Color(0x22000000),
+        ZorvPalette.Ink,
         style = androidx.compose.ui.graphics.drawscope.Stroke(width = w * 0.022f)
     )
     // 小脚（blob/cat：底部两个半圆）

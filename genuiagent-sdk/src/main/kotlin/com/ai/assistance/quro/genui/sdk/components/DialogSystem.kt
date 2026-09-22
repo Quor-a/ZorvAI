@@ -2,6 +2,8 @@
 
 package com.ai.assistance.quro.genui.sdk.components
 
+import androidx.compose.material3.minimumInteractiveComponentSize
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -53,6 +55,7 @@ import com.ai.assistance.quro.genui.sdk.dsl.UIComponent
 import com.ai.assistance.quro.genui.sdk.render.RenderChildren
 import com.ai.assistance.quro.genui.sdk.render.RenderContext
 import com.ai.assistance.quro.genui.sdk.render.StyleResolver
+import com.ai.assistance.quro.genui.sdk.style.ZorvPalette
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -153,8 +156,8 @@ private fun getFeedbackVisuals(level: String, ctx: RenderContext): Pair<Color, a
     return when (level) {
         "success" -> scheme.primary to Icons.Filled.Check
         "error" -> scheme.error to Icons.Filled.Close
-        "warning" -> Color(0xFFF59E0B) to Icons.Filled.Warning
-        "info" -> Color(0xFF3B82F6) to Icons.Filled.Info
+        "warning" -> scheme.primary to Icons.Filled.Warning
+        "info" -> scheme.info to Icons.Filled.Info
         else -> scheme.onSurfaceVariant to Icons.Filled.Info
     }
 }
@@ -493,7 +496,7 @@ fun InputDialogRenderer(
                     .border(
                         width = 1.dp,
                         color = scheme.outline,
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(6.dp)
                     )
                     .padding(12.dp)
             ) {
@@ -588,8 +591,8 @@ fun ListDialogRenderer(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
+                        .clip(RoundedCornerShape(6.dp))
+                        .minimumInteractiveComponentSize().clickable {
                             if (multiSelect) {
                                 selectedSet = if (isSelected) {
                                     selectedSet.minus(element = value)
@@ -622,14 +625,14 @@ fun ListDialogRenderer(
                         Box(
                             modifier = Modifier
                                 .size(20.dp)
-                                .clip(RoundedCornerShape(4.dp))
+                                .clip(RoundedCornerShape(6.dp))
                                 .background(
                                     if (isSelected) scheme.primary else Color.Transparent
                                 )
                                 .border(
                                     width = 1.5.dp,
                                     color = if (isSelected) scheme.primary else scheme.outline,
-                                    shape = RoundedCornerShape(4.dp)
+                                    shape = RoundedCornerShape(6.dp)
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
@@ -844,10 +847,10 @@ fun RatingDialogRenderer(
                     Icon(
                         imageVector = Icons.Filled.Star,
                         contentDescription = "${index + 1} 星",
-                        tint = if (starFilled) Color(0xFFFFB300) else scheme.outlineVariant,
+                        tint = if (starFilled) scheme.primary else scheme.outlineVariant,
                         modifier = Modifier
                             .size(36.dp)
-                            .clickable { rating = (index + 1).toFloat() }
+                            .minimumInteractiveComponentSize().clickable { rating = (index + 1).toFloat() }
                     )
                     if (index < maxStars - 1) Spacer(Modifier.width(8.dp))
                 }
@@ -879,7 +882,7 @@ fun RatingDialogRenderer(
                         .border(
                             width = 1.dp,
                             color = scheme.outline,
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(6.dp)
                         )
                         .padding(12.dp)
                 ) {
@@ -1082,7 +1085,7 @@ fun PermissionDialogRenderer(
             Spacer(Modifier.height(8.dp))
             Surface(
                 color = ctx.theme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(6.dp)
             ) {
                 Text(
                     text = rationale,
@@ -1193,7 +1196,7 @@ fun AboutDialogRenderer(
             // Logo
             Surface(
                 color = scheme.primary,
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.size(64.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -1294,7 +1297,7 @@ fun ShareDialogRenderer(
                 platforms.take(4).forEach { (platform, label) ->
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable {
+                        modifier = Modifier.minimumInteractiveComponentSize().clickable {
                             ctx.clickHandler(component, "onShare")?.invoke()
                         }
                     ) {
@@ -1334,10 +1337,10 @@ private val platformNames = mapOf(
 )
 
 private val platformColors = mapOf(
-    "wechat" to Color(0xFF07C160),
-    "moments" to Color(0xFF07C160),
-    "qq" to Color(0xFF12B7F5),
-    "weibo" to Color(0xFFE6162D),
-    "copy" to Color(0xFF6B7280),
-    "more" to Color(0xFF6B7280)
+    "wechat" to ZorvPalette.Success,
+    "moments" to ZorvPalette.Success,
+    "qq" to ZorvPalette.Info,
+    "weibo" to ZorvPalette.ErrorWarm,
+    "copy" to ZorvPalette.Muted,
+    "more" to ZorvPalette.Muted
 )

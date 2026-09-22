@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.genui.sdk.components
 
+import com.ai.assistance.quro.genui.sdk.style.ZorvPalette
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -51,7 +53,7 @@ fun AndroidStatusBarRenderer(c: UIComponent, ctx: RenderContext) {
         Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(time, color = fg, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text(time, color = fg, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.weight(1f))
         Text("▮▮⋯ ⚡", color = fg, fontSize = 12.sp)
     }
@@ -61,10 +63,10 @@ fun AndroidStatusBarRenderer(c: UIComponent, ctx: RenderContext) {
 fun NotificationShadeRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f)).padding(14.dp)
     ) {
-        Text(p.s5("appEmoji", "📧") ?: "📧", fontSize = 22.sp)
+        Text(p.s5("appEmoji", "📧") ?: "📧", fontSize = 20.sp)
         Column(Modifier.weight(1f).padding(start = 10.dp)) {
             Row { Text(p.s5("app", "邮件") ?: "邮件", fontWeight = FontWeight.Bold, fontSize = 12.sp); Spacer(Modifier.weight(1f)); Text(p.s5("time", "现在") ?: "现在", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             Text(p.s5("title", "新通知") ?: "新通知", fontSize = 14.sp)
@@ -82,8 +84,8 @@ fun MemeGridRenderer(c: UIComponent, ctx: RenderContext) {
         emojis.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 row.forEach { e ->
-                    Box(Modifier.size(92.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFFFF7ED)), contentAlignment = Alignment.Center) {
-                        Text(e, fontSize = 42.sp)
+                    Box(Modifier.size(92.dp).clip(RoundedCornerShape(10.dp)).background(ctx.theme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                        Text(e, fontSize = 40.sp)
                     }
                 }
             }
@@ -95,8 +97,8 @@ fun MemeGridRenderer(c: UIComponent, ctx: RenderContext) {
 fun MemeLargeRenderer(c: UIComponent, ctx: RenderContext) {
     val emoji = c.properties.s5("emoji", "😎") ?: "😎"
     val caption = c.properties.s5("caption", "淡定") ?: "淡定"
-    Box(Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF111827)), contentAlignment = Alignment.Center) {
-        Text(emoji, fontSize = 84.sp)
+    Box(Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(10.dp)).background(ctx.theme.colorScheme.onSurface), contentAlignment = Alignment.Center) {
+        Text(emoji, fontSize = 40.sp)
         Text(
             caption, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Black,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)
@@ -110,14 +112,14 @@ fun MemeLargeRenderer(c: UIComponent, ctx: RenderContext) {
 fun PhoneMockupRenderer(c: UIComponent, ctx: RenderContext) {
     Column(
         Modifier.padding(14.dp).width(230.dp).clip(RoundedCornerShape(28.dp))
-            .background(Color(0xFF111827)).padding(8.dp)
+            .background(ctx.theme.colorScheme.onSurface).padding(8.dp)
     ) {
         Box(
-            Modifier.fillMaxWidth().height(400.dp).clip(RoundedCornerShape(22.dp))
+            Modifier.fillMaxWidth().height(400.dp).clip(RoundedCornerShape(20.dp))
                 .background(MaterialTheme.colorScheme.surface)
         ) {
             Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.Center) {
-                Box(Modifier.width(70.dp).height(16.dp).clip(RoundedCornerShape(999.dp)).background(Color(0xFF111827)))
+                Box(Modifier.width(70.dp).height(16.dp).clip(RoundedCornerShape(50.dp)).background(ctx.theme.colorScheme.onSurface))
             }
             Box(Modifier.fillMaxSize().padding(top = 26.dp)) { if (c.children.isNotEmpty()) RenderChildren(c.children, ctx) }
         }
@@ -132,13 +134,13 @@ fun CapsulePillRenderer(c: UIComponent, ctx: RenderContext) {
     val text = p.s5("text", "胶囊") ?: "胶囊"
     val progress = p.f5("progress", -1f)
     Box(
-        Modifier.fillMaxWidth().height(36.dp).clip(RoundedCornerShape(999.dp))
-            .background(Brush.horizontalGradient(listOf(Color(0xFF22D3EE), Color(0xFF3B82F6))))
+        Modifier.fillMaxWidth().height(36.dp).clip(RoundedCornerShape(50.dp))
+            .background(Brush.horizontalGradient(listOf(ctx.theme.colorScheme.info, ctx.theme.colorScheme.info)))
     ) {
         if (progress >= 0f) {
-            Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(36.dp).clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.35f)))
+            Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(36.dp).clip(RoundedCornerShape(50.dp)).background(Color.White.copy(alpha = 0.35f)))
         }
-        Text(text, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center))
+        Text(text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center))
     }
 }
 
@@ -149,8 +151,8 @@ fun DynamicIslandRenderer(c: UIComponent, ctx: RenderContext) {
         horizontalArrangement = Arrangement.Center
     ) {
         Row(
-            Modifier.width(230.dp).clip(RoundedCornerShape(999.dp))
-                .background(Color(0xFF0B0B0F)).padding(horizontal = 14.dp, vertical = 9.dp),
+            Modifier.width(230.dp).clip(RoundedCornerShape(50.dp))
+                .background(ctx.theme.colorScheme.onSurface).padding(horizontal = 14.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(c.properties.s5("left", "🎵") ?: "🎵", fontSize = 14.sp)
@@ -170,13 +172,13 @@ fun CodeEditorLineRenderer(c: UIComponent, ctx: RenderContext) {
     val no = p.i5("line", 1)
     val code = p.s5("code", "") ?: ""
     val kwColor = when {
-        code.trimStart().startsWith("//") || code.trimStart().startsWith("#") -> Color(0xFF6B7280)
-        "fun " in code || "class " in code || "def " in code -> Color(0xFFC084FC)
-        "return" in code -> Color(0xFFF472B6)
-        else -> Color(0xFF93C5FD)
+        code.trimStart().startsWith("//") || code.trimStart().startsWith("#") -> ctx.theme.colorScheme.outline
+        "fun " in code || "class " in code || "def " in code -> ctx.theme.colorScheme.primary
+        "return" in code -> ctx.theme.colorScheme.primary
+        else -> ctx.theme.colorScheme.info
     }
-    Row(Modifier.fillMaxWidth().background(Color(0xFF0D1117)).padding(horizontal = 12.dp, vertical = 3.dp)) {
-        Text("$no".padStart(3), color = Color(0xFF484F58), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+    Row(Modifier.fillMaxWidth().background(ctx.theme.colorScheme.onSurface).padding(horizontal = 12.dp, vertical = 3.dp)) {
+        Text("$no".padStart(3), color = ctx.theme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
         Spacer(Modifier.width(12.dp))
         Text(code, color = kwColor, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
     }
@@ -186,8 +188,8 @@ fun CodeEditorLineRenderer(c: UIComponent, ctx: RenderContext) {
 fun DiffRowRenderer(c: UIComponent, ctx: RenderContext) {
     val kind = c.properties.s5("kind", "add") ?: "add"
     val text = c.properties.s5("text", "") ?: ""
-    val bg = if (kind == "add") Color(0xFF12261A) else Color(0xFF2A1518)
-    val fg = if (kind == "add") Color(0xFF4ADE80) else Color(0xFFF87171)
+    val bg = if (kind == "add") ctx.theme.colorScheme.onSurface else ctx.theme.colorScheme.onSurface
+    val fg = if (kind == "add") ctx.theme.colorScheme.success else ctx.theme.colorScheme.error
     val sign = if (kind == "add") "+" else "-"
     Row(Modifier.fillMaxWidth().background(bg).padding(horizontal = 12.dp, vertical = 2.dp)) {
         Text("$sign $text", color = fg, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
@@ -203,15 +205,15 @@ fun NodeBoxRenderer(c: UIComponent, ctx: RenderContext) {
     val outputs = (c.properties["outputs"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content } ?: listOf("out")
     Column(
         Modifier.width(170.dp).clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF1E293B)).border(1.dp, Color(0xFF38BDF8), RoundedCornerShape(10.dp))
+            .background(ctx.theme.colorScheme.onSurface).border(1.dp, ctx.theme.colorScheme.info, RoundedCornerShape(10.dp))
     ) {
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp)).background(Color(0xFF0EA5E9)).padding(8.dp)) {
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp)).background(ctx.theme.colorScheme.info).padding(8.dp)) {
             Text(title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
         Row(Modifier.padding(10.dp)) {
-            Column { inputs.forEach { PortDot(it, Color(0xFF22D3EE)) } }
+            Column { inputs.forEach { PortDot(it, ctx.theme.colorScheme.info) } }
             Spacer(Modifier.weight(1f))
-            Column(horizontalAlignment = Alignment.End) { outputs.forEach { PortDot(it, Color(0xFFF472B6)) } }
+            Column(horizontalAlignment = Alignment.End) { outputs.forEach { PortDot(it, ctx.theme.colorScheme.primary) } }
         }
         if (c.children.isNotEmpty()) Column(Modifier.padding(8.dp)) { RenderChildren(c.children, ctx) }
     }
@@ -222,7 +224,7 @@ private fun PortDot(label: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(color))
         Spacer(Modifier.width(5.dp))
-        Text(label, color = Color(0xFFCBD5E1), fontSize = 10.sp)
+        Text(label, color = ZorvPalette.Info, fontSize = 11.sp)
     }
 }
 
@@ -230,8 +232,8 @@ private fun PortDot(label: String, color: Color) {
 fun NodeConnectorRenderer(c: UIComponent, ctx: RenderContext) {
     val label = c.properties.s5("label", "") ?: ""
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-        Box(Modifier.fillMaxWidth().height(2.dp).background(Brush.horizontalGradient(listOf(Color(0xFF22D3EE), Color(0xFFF472B6)))))
-        if (label.isNotBlank()) Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(Modifier.fillMaxWidth().height(2.dp).background(Brush.horizontalGradient(listOf(ctx.theme.colorScheme.info, ctx.theme.colorScheme.primary))))
+        if (label.isNotBlank()) Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -241,13 +243,13 @@ fun NodeConnectorRenderer(c: UIComponent, ctx: RenderContext) {
 fun RuntimeLogRowRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
     val level = p.s5("level", "INFO") ?: "INFO"
-    val lvColor = when (level) { "ERROR" -> Color(0xFFF87171); "WARN" -> Color(0xFFFBBF24); "DEBUG" -> Color(0xFF94A3B8); else -> Color(0xFF4ADE80) }
-    Row(Modifier.fillMaxWidth().background(Color(0xFF0D1117)).padding(horizontal = 12.dp, vertical = 2.dp)) {
-        Text(p.s5("time", "00:00") ?: "00:00", color = Color(0xFF484F58), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+    val lvColor = when (level) { "ERROR" -> ctx.theme.colorScheme.error; "WARN" -> ctx.theme.colorScheme.primary; "DEBUG" -> ctx.theme.colorScheme.info; else -> ctx.theme.colorScheme.success }
+    Row(Modifier.fillMaxWidth().background(ctx.theme.colorScheme.onSurface).padding(horizontal = 12.dp, vertical = 2.dp)) {
+        Text(p.s5("time", "00:00") ?: "00:00", color = ctx.theme.colorScheme.onSurfaceVariant, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
         Spacer(Modifier.width(8.dp))
         Text("[$level]", color = lvColor, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
         Spacer(Modifier.width(8.dp))
-        Text(p.s5("message", "") ?: "", color = Color(0xFFC9D1D9), fontSize = 11.sp, fontFamily = FontFamily.Monospace, maxLines = 2)
+        Text(p.s5("message", "") ?: "", color = ctx.theme.colorScheme.info, fontSize = 11.sp, fontFamily = FontFamily.Monospace, maxLines = 2)
     }
 }
 
@@ -260,8 +262,8 @@ fun MemoryMeterRenderer(c: UIComponent, ctx: RenderContext) {
     Column(Modifier.fillMaxWidth().padding(8.dp)) {
         Row { Text("内存", fontSize = 12.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.weight(1f)); Text("$used / $total GB", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         Spacer(Modifier.height(5.dp))
-        Row(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)).background(Color.LightGray.copy(alpha = 0.35f))) {
-            Box(Modifier.fillMaxWidth(frac.coerceIn(0f, 1f)).fillMaxHeight0().clip(RoundedCornerShape(5.dp)).background(Brush.horizontalGradient(listOf(Color(0xFF22C55E), Color(0xFFEF4444)))))
+        Row(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(6.dp)).background(Color.LightGray.copy(alpha = 0.35f))) {
+            Box(Modifier.fillMaxWidth(frac.coerceIn(0f, 1f)).fillMaxHeight0().clip(RoundedCornerShape(6.dp)).background(Brush.horizontalGradient(listOf(ctx.theme.colorScheme.success, ctx.theme.colorScheme.error))))
         }
     }
 }
@@ -282,7 +284,7 @@ fun VoiceMessageRenderer(c: UIComponent, ctx: RenderContext) {
         Spacer(Modifier.width(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             listOf(6, 12, 8, 16, 10, 14, 7, 11, 9, 15).forEach { h ->
-                Box(Modifier.width(3.dp).height(h.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)))
+                Box(Modifier.width(3.dp).height(h.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)))
             }
         }
         Spacer(Modifier.width(8.dp))
@@ -296,8 +298,8 @@ fun MicButtonRenderer(c: UIComponent, ctx: RenderContext) {
     Box(Modifier.fillMaxWidth().padding(14.dp), contentAlignment = Alignment.Center) {
         Box(
             Modifier.size(64.dp).clip(CircleShape)
-                .background(if (active) Color(0xFFEF4444) else MaterialTheme.colorScheme.primary),
+                .background(if (active) ctx.theme.colorScheme.error else MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center
-        ) { Text("🎤", fontSize = 26.sp) }
+        ) { Text("🎤", fontSize = 24.sp) }
     }
 }

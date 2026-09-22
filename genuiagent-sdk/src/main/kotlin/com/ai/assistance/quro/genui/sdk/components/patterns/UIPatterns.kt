@@ -2,6 +2,8 @@
 
 package com.ai.assistance.quro.genui.sdk.components.patterns
 
+import androidx.compose.material3.minimumInteractiveComponentSize
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -74,14 +76,14 @@ fun InfoCardPattern(
     val accentColor = when (level) {
         "success" -> scheme.primary
         "error" -> scheme.error
-        "warning" -> Color(0xFFF59E0B)
-        "info" -> Color(0xFF3B82F6)
+        "warning" -> scheme.primary
+        "info" -> scheme.info
         else -> scheme.primary
     }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = scheme.surface,
         tonalElevation = 2.dp,
         shadowElevation = 2.dp
@@ -187,11 +189,12 @@ fun StatCardPattern(
     val changePositive = component.propBool("changePositive", true)
     val iconName = component.propString("icon")
 
-    val changeColor = if (changePositive) Color(0xFF10B981) else Color(0xFFEF4444)
+    // 中国股市约定：涨=红、跌=绿（与欧美相反），因此走 rise/fall 语义色而非 success/error
+    val changeColor = if (changePositive) scheme.rise else scheme.fall
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = scheme.surface,
         tonalElevation = 2.dp
     ) {
@@ -275,7 +278,7 @@ fun MediaCardPattern(
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = scheme.surface,
         tonalElevation = 2.dp
     ) {
@@ -697,8 +700,8 @@ fun EmptyStatePattern(
             Spacer(Modifier.height(20.dp))
             Surface(
                 color = scheme.primary,
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.clickable {
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier.minimumInteractiveComponentSize().clickable {
                     ctx.clickHandler(component, "onAction")?.invoke()
                 }
             ) {
@@ -864,7 +867,7 @@ fun RatingRowPattern(
             Icon(
                 imageVector = Icons.Filled.Star,
                 contentDescription = "${index + 1}",
-                tint = if (filled) Color(0xFFFFB300) else scheme.outlineVariant,
+                tint = if (filled) scheme.primary else scheme.outlineVariant,
                 modifier = Modifier.size(size.dp)
             )
             if (index < maxStars - 1) {
@@ -997,7 +1000,7 @@ fun UserAvatarRowPattern(
                     modifier = Modifier
                         .size(12.dp)
                         .clip(CircleShape)
-                        .background(if (isOnline) Color(0xFF10B981) else scheme.outlineVariant)
+                        .background(if (isOnline) scheme.success else scheme.outlineVariant)
                         .border(2.dp, scheme.surface, CircleShape)
                         .align(Alignment.BottomEnd)
                 )

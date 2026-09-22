@@ -70,14 +70,14 @@ fun ComicPanelRenderer(c: UIComponent, ctx: RenderContext) {
     Box(
         Modifier
             .fillMaxWidth()
-            .border(3.dp, edge, RoundedCornerShape(8.dp))
+            .border(3.dp, edge, RoundedCornerShape(6.dp))
             .clip(RoundedCornerShape(6.dp))
     ) {
         if (c.children.isNotEmpty()) RenderChildren(c.children, ctx)
         else Text(
             c.properties.str2("text", "") ?: "",
             modifier = Modifier.padding(12.dp),
-            fontSize = 15.sp, lineHeight = 22.sp
+            fontSize = 14.sp, lineHeight = 22.sp
         )
         if (no > 0) Box(
             Modifier
@@ -86,7 +86,7 @@ fun ComicPanelRenderer(c: UIComponent, ctx: RenderContext) {
                 .size(24.dp)
                 .background(Color.Black, CircleShape),
             contentAlignment = Alignment.Center
-        ) { Text("$no", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black) }
+        ) { Text("$no", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Black) }
     }
 }
 
@@ -96,8 +96,8 @@ fun CaptionBoxRenderer(c: UIComponent, ctx: RenderContext) {
     Box(
         Modifier
             .fillMaxWidth()
-            .background(Color(0xFFFDE68A), RoundedCornerShape(4.dp))
-            .border(2.dp, Color.Black, RoundedCornerShape(4.dp))
+            .background(ctx.theme.colorScheme.warning, RoundedCornerShape(6.dp))
+            .border(2.dp, Color.Black, RoundedCornerShape(6.dp))
             .padding(10.dp)
     ) {
         Text(
@@ -205,7 +205,7 @@ fun ParticleBurstRenderer(c: UIComponent, ctx: RenderContext) {
 /** confetti_field — 彩带飘落 */
 @Composable
 fun ConfettiFieldRenderer(c: UIComponent, ctx: RenderContext) {
-    val colors = listOf(Color(0xFFF43F5E), Color(0xFF22C55E), Color(0xFF3B82F6), Color(0xFFF59E0B), Color(0xFFA855F7))
+    val colors = listOf(ctx.theme.colorScheme.error, ctx.theme.colorScheme.success, ctx.theme.colorScheme.info, ctx.theme.colorScheme.primary, ctx.theme.colorScheme.primary)
     val phase by rememberInfiniteTransition(label = "cf").animateFloat(
         0f, 1f, infiniteRepeatable(tween(2200, easing = LinearEasing)), label = "p"
     )
@@ -226,7 +226,7 @@ fun ConfettiFieldRenderer(c: UIComponent, ctx: RenderContext) {
 /** sparkle_rain — 星光闪烁 */
 @Composable
 fun SparkleRainRenderer(c: UIComponent, ctx: RenderContext) {
-    val tint = c.properties.color2("color", Color(0xFFFDE047))
+    val tint = c.properties.color2("color", ctx.theme.colorScheme.warning)
     val phase by rememberInfiniteTransition(label = "sp").animateFloat(
         0f, 1f, infiniteRepeatable(tween(1200, easing = LinearEasing), RepeatMode.Reverse), label = "p"
     )
@@ -244,7 +244,7 @@ fun SparkleRainRenderer(c: UIComponent, ctx: RenderContext) {
 /** rain_effect — 雨滴下落（天气氛围） */
 @Composable
 fun RainEffectRenderer(c: UIComponent, ctx: RenderContext) {
-    val tint = c.properties.color2("color", Color(0xFF93C5FD))
+    val tint = c.properties.color2("color", ctx.theme.colorScheme.info)
     val phase by rememberInfiniteTransition(label = "rn").animateFloat(
         0f, 1f, infiniteRepeatable(tween(700, easing = LinearEasing)), label = "p"
     )
@@ -274,7 +274,7 @@ fun PulseRingRenderer(c: UIComponent, ctx: RenderContext) {
                 drawCircle(tint.copy(alpha = (1f - t) * 0.5f), size.minDimension * 0.18f + t * size.minDimension * 0.32f, Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx()))
             }
         }
-        Text(c.properties.str2("emoji", "❤️") ?: "", fontSize = 30.sp)
+        Text(c.properties.str2("emoji", "❤️") ?: "", fontSize = 28.sp)
     }
 }
 
@@ -295,7 +295,7 @@ fun EqualizerBarsRenderer(c: UIComponent, ctx: RenderContext) {
                 Modifier
                     .weight(1f)
                     .hFraction(h)
-                    .background(tint.copy(alpha = 0.55f + 0.45f * h), RoundedCornerShape(3.dp))
+                    .background(tint.copy(alpha = 0.55f + 0.45f * h), RoundedCornerShape(6.dp))
             )
         }
     }
@@ -312,18 +312,18 @@ fun PlayerBarRenderer(c: UIComponent, ctx: RenderContext) {
     Row(
         Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(44.dp).background(accent.copy(alpha = 0.18f), CircleShape), contentAlignment = Alignment.Center) {
-            Text(cover, fontSize = 22.sp)
+            Text(cover, fontSize = 20.sp)
         }
         Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
             Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             Text(artist, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            Box(Modifier.fillMaxWidth().padding(top = 6.dp).height(4.dp).background(Color.LightGray.copy(alpha = 0.5f), RoundedCornerShape(2.dp))) {
-                Box(Modifier.wFraction(progress).height(4.dp).background(accent, RoundedCornerShape(2.dp)))
+            Box(Modifier.fillMaxWidth().padding(top = 6.dp).height(4.dp).background(Color.LightGray.copy(alpha = 0.5f), RoundedCornerShape(6.dp))) {
+                Box(Modifier.wFraction(progress).height(4.dp).background(accent, RoundedCornerShape(6.dp)))
             }
         }
         Text("▶", fontSize = 20.sp, color = accent, modifier = Modifier.padding(start = 6.dp))
@@ -341,15 +341,15 @@ fun VideoCardRenderer(c: UIComponent, ctx: RenderContext) {
             .fillMaxWidth()
             .height(180.dp)
             .background(
-                Brush.verticalGradient(listOf(Color(0xFF312E81), Color(0xFF0F172A))),
-                RoundedCornerShape(16.dp)
+                Brush.verticalGradient(listOf(ctx.theme.colorScheme.info, ctx.theme.colorScheme.onSurface)),
+                RoundedCornerShape(14.dp)
             )
     ) {
-        Text(emoji, fontSize = 44.sp, modifier = Modifier.align(Alignment.Center))
+        Text(emoji, fontSize = 40.sp, modifier = Modifier.align(Alignment.Center))
         Box(
             Modifier.align(Alignment.Center).size(52.dp).background(Color.White.copy(alpha = 0.22f), CircleShape),
             contentAlignment = Alignment.Center
-        ) { Text("▶", color = Color.White, fontSize = 22.sp) }
+        ) { Text("▶", color = Color.White, fontSize = 20.sp) }
         Box(
             Modifier.align(Alignment.BottomEnd).padding(8.dp)
                 .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(6.dp))
@@ -369,17 +369,17 @@ fun VideoCardRenderer(c: UIComponent, ctx: RenderContext) {
 fun XpBarRenderer(c: UIComponent, ctx: RenderContext) {
     val level = c.properties.int2("level", 1)
     val value = c.properties.flt2("value", 0.5f).coerceIn(0f, 1f)
-    val accent = c.properties.color2("color", Color(0xFF22C55E))
+    val accent = c.properties.color2("color", ctx.theme.colorScheme.success)
     Column {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Lv.$level", fontSize = 13.sp, fontWeight = FontWeight.Black, color = accent)
+            Text("Lv.$level", fontSize = 12.sp, fontWeight = FontWeight.Black, color = accent)
             Spacer(Modifier.width(8.dp))
             Text(c.properties.str2("hint", "") ?: "", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.weight(1f))
             Text("${(value * 100).toInt()}%", fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
-        Box(Modifier.fillMaxWidth().padding(top = 4.dp).height(10.dp).background(Color.LightGray.copy(alpha = 0.4f), RoundedCornerShape(5.dp))) {
-            Box(Modifier.wFraction(value).height(10.dp).background(Brush.horizontalGradient(listOf(accent, accent.copy(alpha = 0.6f))), RoundedCornerShape(5.dp)))
+        Box(Modifier.fillMaxWidth().padding(top = 4.dp).height(10.dp).background(Color.LightGray.copy(alpha = 0.4f), RoundedCornerShape(6.dp))) {
+            Box(Modifier.wFraction(value).height(10.dp).background(Brush.horizontalGradient(listOf(accent, accent.copy(alpha = 0.6f))), RoundedCornerShape(6.dp)))
         }
     }
 }
@@ -390,7 +390,7 @@ fun HpBarRenderer(c: UIComponent, ctx: RenderContext) {
     val cur = c.properties.int2("current", 50)
     val max = c.properties.int2("max", 100).coerceAtLeast(1)
     val frac = (cur.toFloat() / max).coerceIn(0f, 1f)
-    val col = if (frac > 0.5f) Color(0xFF22C55E) else if (frac > 0.2f) Color(0xFFF59E0B) else Color(0xFFEF4444)
+    val col = if (frac > 0.5f) ctx.theme.colorScheme.success else if (frac > 0.2f) ctx.theme.colorScheme.primary else ctx.theme.colorScheme.error
     Column {
         Row(Modifier.fillMaxWidth()) {
             Text("HP", fontSize = 12.sp, fontWeight = FontWeight.Black)
@@ -407,10 +407,10 @@ fun HpBarRenderer(c: UIComponent, ctx: RenderContext) {
 @Composable
 fun CoinStackRenderer(c: UIComponent, ctx: RenderContext) {
     val amount = c.properties.int2("amount", 0)
-    val gold = Color(0xFFF59E0B)
+    val gold = ctx.theme.colorScheme.primary
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(34.dp).background(Brush.verticalGradient(listOf(Color(0xFFFBBF24), gold)), CircleShape), contentAlignment = Alignment.Center) {
-            Text("🪙", fontSize = 17.sp)
+        Box(Modifier.size(34.dp).background(Brush.verticalGradient(listOf(ctx.theme.colorScheme.primary, gold)), CircleShape), contentAlignment = Alignment.Center) {
+            Text("🪙", fontSize = 16.sp)
         }
         Text(
             "+$amount", fontSize = 18.sp, fontWeight = FontWeight.Black, color = gold,
@@ -432,16 +432,16 @@ fun QuestCardRenderer(c: UIComponent, ctx: RenderContext) {
     val done = cur >= goal
     Column(
         Modifier.fillMaxWidth()
-            .background(if (done) Color(0xFFDCFCE7) else MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))
+            .background(if (done) ctx.theme.colorScheme.successContainer else MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))
             .padding(12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(if (done) "✅" else "🎯", fontSize = 18.sp)
             Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp).weight(1f), maxLines = 1)
-            Text(if (done) "已完成" else "$cur/$goal", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (done) Color(0xFF15803D) else MaterialTheme.colorScheme.primary)
+            Text(if (done) "已完成" else "$cur/$goal", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (done) ctx.theme.colorScheme.success else MaterialTheme.colorScheme.primary)
         }
-        Box(Modifier.fillMaxWidth().padding(top = 8.dp).height(6.dp).background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(3.dp))) {
-            Box(Modifier.wFraction((cur.toFloat() / goal).coerceIn(0f, 1f)).height(6.dp).background(Color(0xFF22C55E), RoundedCornerShape(3.dp)))
+        Box(Modifier.fillMaxWidth().padding(top = 8.dp).height(6.dp).background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(6.dp))) {
+            Box(Modifier.wFraction((cur.toFloat() / goal).coerceIn(0f, 1f)).height(6.dp).background(ctx.theme.colorScheme.success, RoundedCornerShape(6.dp)))
         }
         if (reward.isNotBlank()) Text("🎁 $reward", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
     }
@@ -457,18 +457,18 @@ fun LeaderboardRowRenderer(c: UIComponent, ctx: RenderContext) {
     val medal = mapOf(1 to "🥇", 2 to "🥈", 3 to "🥉")[rank]
     Row(
         Modifier.fillMaxWidth()
-            .background(if (rank <= 3) Color(0xFFFEF3C7) else MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+            .background(if (rank <= 3) ctx.theme.colorScheme.warningContainer else MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(medal ?: "$rank", fontSize = 16.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(34.dp))
         Box(Modifier.size(34.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), CircleShape), contentAlignment = Alignment.Center) {
-            Text(emoji, fontSize = 17.sp)
+            Text(emoji, fontSize = 16.sp)
         }
         Column(Modifier.weight(1f).padding(start = 10.dp)) {
             Text(name, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
         }
-        Text(score, fontSize = 15.sp, fontWeight = FontWeight.Black)
+        Text(score, fontSize = 14.sp, fontWeight = FontWeight.Black)
     }
 }
 
@@ -478,7 +478,7 @@ fun StreakFlameRenderer(c: UIComponent, ctx: RenderContext) {
     val days = c.properties.int2("days", 0)
     val hot = days >= 7
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(if (hot) "🔥" else "✨", fontSize = 26.sp)
+        Text(if (hot) "🔥" else "✨", fontSize = 24.sp)
         Column(Modifier.padding(start = 10.dp)) {
             Text("$days 天", fontSize = 20.sp, fontWeight = FontWeight.Black)
             Text(c.properties.str2("label", "连续打卡") ?: "", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)

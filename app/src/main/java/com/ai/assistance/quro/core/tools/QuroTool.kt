@@ -172,12 +172,11 @@ class QuroToolRegistry {
             "ui_card",
             // 对话框内联 UI 组件（v134：按钮/开关/滑块/进度/统计/提醒/表格/列表/分段/饼图/评分/倒计时/标签页/折叠/表单/标签/步骤/仪表/媒体/信息）
             "ui_widget",
-            // 生成式界面：三条通道必须都进核心集，否则默认配置（useFullTools=false）下模型看不到，
+            // 生成式界面：两条通道必须都进核心集，否则默认配置（useFullTools=false）下模型看不到，
             // 用户说「做个界面/小应用」时只会去凑 ui_widget 卡片。
             //   · genui_agent_open → 内置完整 GenUI-Agent 独立应用（GenUI JSON DSL → 原生 Compose 组件）
-            //   · miniapp          → 小程序工作室（自研引擎，HTML+JS+CSS / WXML+WXSS+JS）
-            //   · genui_open       → ZorvAI 对话框内的生成式 UI 画布（:genui 模块）
-            "genui_agent_open", "miniapp", "genui_open",
+            //   · miniapp          → 小程序工作室（自研引擎 miniapp-sdk，HTML+JS+CSS / WXML+WXSS+JS）
+            "genui_agent_open", "miniapp",
             // 节点编辑器：AI 直接读写节点流工程（与工具中心面板共享 studio/flow/*.qne，面板打开自动恢复）
             "node_editor",
             // 工作流引擎 AI 侧调用入口：创建/点燃/查询运行（缺口清单 · 可实现项）

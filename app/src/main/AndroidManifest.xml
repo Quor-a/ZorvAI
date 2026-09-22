@@ -227,6 +227,21 @@
         android:resizeableActivity="true"
         android:networkSecurityConfig="@xml/network_security_config">
 
+        <!-- ==================== GenUI Agent（内置完整项目） ====================
+             来源：https://github.com/Quor-a/GenUI-Agent（去品牌化后内置为 com.ai.assistance.quro.genui.aiapp / .sdk）。
+             - 不使用上游的 LAUNCHER 入口（避免抢占 ZorvAI 桌面图标），由 App 内导航显式拉起。
+             - 不注册上游的自定义 Application（ZorvAI 已有 QuroApplication；appCtx 由本 Activity 自行初始化）。 -->
+        <activity
+            android:name="com.ai.assistance.quro.genui.aiapp.GenUiAgentActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Quro" />
+        <activity
+            android:name="com.ai.assistance.quro.genui.aiapp.host.HtmlViewerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Quro" />
+
         <!-- LSPosed / Xposed 模块声明：本应用同时作为可选模块。LSPosed 据此识别并在「模块」列表呈现，
              经 assets/xposed_init 加载 QuroXposedModule 入口。xposedminversion=82 对应 LSPosed（API 82+）。
              不定义任何 ai.aci.permission.*（定义权属控制端）。 -->
@@ -805,12 +820,6 @@
             </intent-filter>
         </receiver>
 
-        <!-- GenUI 闹钟广播接收器：alarm_set 工具到点后弹通知 -->
-        <receiver
-            android:name="com.ai.assistance.quro.genui.app.bridge.AlarmReceiver"
-            android:enabled="true"
-            android:exported="false" />
-
         <!-- APK 插件界面承载：插件没有自己的 Activity（独立 APK 不是系统安装的应用，
              系统 PackageManager 里查不到它，Activity 起不来），
              由宿主提供这个通用 Activity 显示插件返回的 View 树（uiSurface 扩展点）。
@@ -843,33 +852,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
-
-        <!-- GenUI 小程序全屏宿主：入口为 ChatPanel 小程序卡片"全屏"按钮（显式 Intent 传 appId）。
-             内联渲染走 AndroidView 直接 MiniAppEngine.createResolved，无需清单；此 Activity 仅承载全屏态。 -->
-        <activity
-            android:name=".genui.app.miniapp.GenUiMiniAppActivity"
-            android:exported="false"
-            android:label="小程序"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
-            android:theme="@style/Theme.Quro" />
-
-        <!-- ==================== GenUI Agent（内置完整项目） ====================
-             来源：https://github.com/Quor-a/GenUI-Agent（去品牌化后内置为 com.ai.assistance.quro.genui.aiapp / .sdk）。
-             与上面的「生成式 UI 对话画布 / 自研小程序引擎（小程序工作室）」是两套独立的东西，互不替代：
-               · 旧画布：AI 写 HTML/JS，WebView 或自研引擎渲染小程序（WXML/WXSS）；
-               · GenUI Agent：AI 产出 GenUI JSON DSL → 原生 Compose 组件（530+ 组件），独立全屏应用。
-             - 不使用上游的 LAUNCHER 入口（避免抢占 ZorvAI 桌面图标），由 App 内导航显式拉起。
-             - 不注册上游的自定义 Application（ZorvAI 已有 QuroApplication；appCtx 由本 Activity 自行初始化）。 -->
-        <activity
-            android:name="com.ai.assistance.quro.genui.aiapp.GenUiAgentActivity"
-            android:exported="false"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
-            android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.Quro" />
-        <activity
-            android:name="com.ai.assistance.quro.genui.aiapp.host.HtmlViewerActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Quro" />
 
     </application>
 

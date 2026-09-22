@@ -290,15 +290,11 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(ExportApkTool())    // 让 AI 也能「导出产物」（构建台 UI 的导出是文件选择器、AI 调不起）
     // 后端工作区：多文件多语言项目
     r.register(WorkbenchTool())
-    r.register(MiniAppStudioTool())    // 小程序工作台：AI 直接 CRUD/运行小程序工程（完整移植 MiniAppFramework）
-    // 生成式 UI 对话（GenUI）画布反向调用：ZorvAI 主动把「画界面」的活派给 GenUI（唯一入口，见 GenUiBridge）
-    r.register(GenUiOpenTool())
-    // 内置的完整 GenUI-Agent（独立应用，GenUI JSON DSL → 原生 Compose 组件）：
-    // 注意它与上面两条是**不同的东西**——
-    //   · MiniAppStudioTool  → 自研小程序工作室（HTML+JS+CSS / WXML+WXSS+JS）
-    //   · GenUiOpenTool      → 切换 ZorvAI 对话框内的「生成式 UI 画布」会话类型（:genui 模块）
-    //   · GenUiAgentOpenTool → 拉起独立全屏的 GenUI Agent 应用（530+ 原生组件）
-    // 三者并存，各管一段；模型按 GenUiAgentOpenTool.description 里的「何时该用」自行择一。
+    // 小程序工作室：AI 直接 CRUD/运行小程序工程（自研引擎 miniapp-sdk，HTML+JS+CSS / WXML+WXSS+JS）。
+    // 产物经 ```miniapp 围栏回到对话框气泡渲染；工具箱「小程序工作室」面板与它共享同一份工程文件。
+    r.register(MiniAppStudioTool())
+    // 内置的完整 GenUI-Agent（独立应用，GenUI JSON DSL → 原生 Compose 组件，530+ 组件）。
+    // 与上面的 miniapp 是**不同范式**的两套东西：miniapp 走 HTML/WXML 引擎，本工具走原生 Compose。
     r.register(GenUiAgentOpenTool())
     // TTS 朗读
     r.register(SpeakTool())

@@ -7,8 +7,11 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 
 /**
- * GenUI 形状方案，基于 Material3 设计规范
- * 包含 6 种圆角形状：extraSmall, small, medium, large, extraLarge, full
+ * GenUI 形状方案 —— ZorvAI 纸质感圆角体系
+ * 6 种圆角：extraSmall, small, medium, large, extraLarge, full
+ *
+ * 审美基准：比 Material3 默认更圆一档（纸片/卡片的柔和边缘），
+ * 卡片默认走 large(20dp)，胶囊类走 full，避免「方框堆砌」的工具感。
  */
 data class GenUIShapes(
     val extraSmall: Shape,
@@ -20,10 +23,10 @@ data class GenUIShapes(
 ) {
     companion object {
         val Default = GenUIShapes(
-            extraSmall = RoundedCornerShape(4.dp),
-            small = RoundedCornerShape(8.dp),
-            medium = RoundedCornerShape(12.dp),
-            large = RoundedCornerShape(16.dp),
+            extraSmall = RoundedCornerShape(6.dp),
+            small = RoundedCornerShape(10.dp),
+            medium = RoundedCornerShape(14.dp),
+            large = RoundedCornerShape(20.dp),
             extraLarge = RoundedCornerShape(28.dp),
             full = RoundedCornerShape(CornerSize(50))
         )

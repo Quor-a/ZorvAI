@@ -110,7 +110,7 @@ object GenUI {
      * @param spec UI 规范描述
      * @param modifier 外层 Modifier
      * @param host Action 宿主，用于处理交互事件
-     * @param theme GenUI 主题
+     * @param theme GenUI 主题（默认跟随系统暗色：此前恒为亮色，暗色模式下生成界面会是刺眼白底）
      * @param registry 组件注册表
      */
     @Composable
@@ -118,7 +118,7 @@ object GenUI {
         spec: UISpec,
         modifier: Modifier = Modifier,
         host: ActionHost,
-        theme: GenUITheme = defaultTheme(isDark = false),
+        theme: GenUITheme = defaultTheme(isDark = androidx.compose.foundation.isSystemInDarkTheme()),
         registry: ComponentRegistry = BuiltinComponents.sharedRegistry()
     ) {
         GenUIRenderer(

@@ -1,5 +1,9 @@
 package com.ai.assistance.quro.genui.sdk.components
 
+import androidx.compose.material3.minimumInteractiveComponentSize
+
+import com.ai.assistance.quro.genui.sdk.style.ZorvPalette
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -42,12 +46,12 @@ object SyntaxHighlight {
     )
 
     val Dark = Palette(
-        keyword = Color(0xFFC792EA), string = Color(0xFFC3E88D), comment = Color(0xFF5C6773),
-        number = Color(0xFFF78C6C), fn = Color(0xFF82AAFF), type = Color(0xFFFFCB6B), plain = Color(0xFFD9DDE6)
+        keyword = ZorvPalette.Terracotta, string = ZorvPalette.Success, comment = ZorvPalette.InkSoft,
+        number = ZorvPalette.ErrorWarm, fn = ZorvPalette.Info, type = ZorvPalette.Terracotta, plain = ZorvPalette.InfoSoft
     )
     val Light = Palette(
-        keyword = Color(0xFF8250DF), string = Color(0xFF0A7D33), comment = Color(0xFF8B93A7),
-        number = Color(0xFFB35900), fn = Color(0xFF0550AE), type = Color(0xFF953800), plain = Color(0xFF24292F)
+        keyword = ZorvPalette.Terracotta, string = ZorvPalette.Success, comment = ZorvPalette.Info,
+        number = ZorvPalette.Terracotta, fn = ZorvPalette.Info, type = ZorvPalette.Terracotta, plain = ZorvPalette.Ink
     )
 
     private val keywords = mapOf(
@@ -165,35 +169,35 @@ fun CodeBlockV2(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFF14171F), RoundedCornerShape(12.dp))
+            .background(ZorvPalette.Ink, RoundedCornerShape(10.dp))
     ) {
         // 头部：语言标签 + 复制
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF1C2029))
+                .background(ZorvPalette.Ink)
                 .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
             Box(
                 Modifier
                     .width(8.dp)
-                    .background(palette.type, RoundedCornerShape(4.dp))
+                    .background(palette.type, RoundedCornerShape(6.dp))
                     .padding(vertical = 0.dp)
             ) { }
             Spacer(Modifier.width(8.dp))
             Text(
                 (language ?: "text").uppercase(),
                 fontSize = 11.sp,
-                color = Color(0xFF8B93A7),
+                color = ZorvPalette.Info,
                 fontFamily = FontFamily.Monospace
             )
             Spacer(Modifier.weight(1f))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .background(Color(0xFF262B36), RoundedCornerShape(8.dp))
-                    .clickable {
+                    .background(ZorvPalette.Ink, RoundedCornerShape(6.dp))
+                    .minimumInteractiveComponentSize().clickable {
                         clipboard.setText(androidx.compose.ui.text.AnnotatedString(code))
                         copied = true
                     }
@@ -202,11 +206,11 @@ fun CodeBlockV2(
                 Icon(
                     Icons.Filled.ContentCopy,
                     contentDescription = "复制",
-                    tint = Color(0xFF8B93A7),
+                    tint = ZorvPalette.Info,
                     modifier = Modifier.width(13.dp)
                 )
                 Spacer(Modifier.width(4.dp))
-                Text(if (copied) "已复制" else "复制", fontSize = 10.sp, color = Color(0xFF8B93A7))
+                Text(if (copied) "已复制" else "复制", fontSize = 11.sp, color = ZorvPalette.Info)
             }
         }
         // 代码体
@@ -217,7 +221,7 @@ fun CodeBlockV2(
                     fontSize = 12.sp,
                     lineHeight = 17.sp,
                     fontFamily = FontFamily.Monospace,
-                    color = Color(0xFF3A4152)
+                    color = ZorvPalette.Info
                 )
                 Spacer(Modifier.width(12.dp))
             }

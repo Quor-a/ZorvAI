@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.genui.sdk.components
 
+import androidx.compose.material3.minimumInteractiveComponentSize
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -136,13 +138,13 @@ private fun feedbackVisuals(level: String, ctx: RenderContext): FeedbackVisuals 
     return when (level.lowercase()) {
         "success" -> FeedbackVisuals(
             Icons.Filled.Check,
-            Color(0xFFE8F5E9),
-            Color(0xFF2E7D32)
+            scheme.successContainer,
+            scheme.success
         )
         "warning" -> FeedbackVisuals(
             Icons.Filled.Warning,
-            Color(0xFFFFF8E1),
-            Color(0xFFF57F17)
+            scheme.warningContainer,
+            scheme.primary
         )
         "error", "alert" -> FeedbackVisuals(
             Icons.Filled.Error,
@@ -180,7 +182,7 @@ private fun FeedbackMessageRenderer(
         ?: component.propStringResolved("body", ctx)
     val dismissible = component.propBool("dismissible", false)
     val pad = if (compact) 8.dp else 12.dp
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(6.dp)
     val containerColor = visuals.containerColor
     Row(
         modifier = modifier
@@ -233,7 +235,7 @@ private fun FeedbackMessageRenderer(
                 tint = visuals.contentColor,
                 modifier = Modifier
                     .size(if (compact) 16.dp else 20.dp)
-                    .clickable { dismissHandler?.invoke() }
+                    .minimumInteractiveComponentSize().clickable { dismissHandler?.invoke() }
             )
         }
     }
@@ -379,7 +381,7 @@ private fun StateRenderer(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .background(visuals.containerColor)
-                    .clickable { retryHandler?.invoke() }
+                    .minimumInteractiveComponentSize().clickable { retryHandler?.invoke() }
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -417,7 +419,7 @@ private fun LoadingScrimRenderer(
         contentAlignment = Alignment.Center
     ) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(14.dp),
             color = scheme.surface,
             tonalElevation = 6.dp
         ) {
@@ -463,7 +465,7 @@ private fun MediaPlaceholderRenderer(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(bg),
         contentAlignment = Alignment.Center
     ) {
@@ -506,7 +508,7 @@ private fun MediaGridBaseRenderer(
                         modifier = Modifier
                             .weight(1f)
                             .height(cellHeight)
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .background(bg),
                         contentAlignment = Alignment.Center
                     ) {
@@ -760,7 +762,7 @@ fun ProgressDialogRenderer(component: UIComponent, ctx: RenderContext, modifier:
     val scheme = ctx.theme.colorScheme
     val title = component.propStringResolved("title", ctx) ?: "Loading"
     val progress = component.propFloat("progress", -1f)
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(14.dp)
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = shape,
@@ -888,7 +890,7 @@ fun NotificationRenderer(component: UIComponent, ctx: RenderContext, modifier: M
     val scheme = ctx.theme.colorScheme
     val title = component.propStringResolved("title", ctx) ?: "Notification"
     val message = component.propStringResolved("message", ctx) ?: component.propStringResolved("text", ctx)
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(6.dp)
     Row(
         modifier = modifier.fillMaxWidth().clip(shape).background(visuals.containerColor, shape).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -959,7 +961,7 @@ fun ReviewPromptRenderer(component: UIComponent, ctx: RenderContext, modifier: M
     val message = component.propStringResolved("message", ctx) ?: "Please take a moment to rate us."
     var rating by remember { mutableStateOf(component.propInt("rating", 0)) }
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(12.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 2.dp
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -978,11 +980,11 @@ fun ReviewPromptRenderer(component: UIComponent, ctx: RenderContext, modifier: M
                     Icon(
                         imageVector = if (filled) Icons.Filled.Star else Icons.Filled.StarBorder,
                         contentDescription = "Star $i",
-                        tint = if (filled) Color(0xFFFFC107) else scheme.outline,
+                        tint = if (filled) scheme.warning else scheme.outline,
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .clickable { rating = i }
+                            .minimumInteractiveComponentSize().clickable { rating = i }
                     )
                 }
             }
@@ -1006,7 +1008,7 @@ fun FeedbackFormRenderer(component: UIComponent, ctx: RenderContext, modifier: M
     val title = component.propStringResolved("title", ctx) ?: "Feedback"
     val subtitle = component.propStringResolved("subtitle", ctx) ?: "Tell us what you think."
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(12.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 1.dp
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -1057,7 +1059,7 @@ private fun TableBaseRenderer(
     val borderColor = scheme.outlineVariant
     val onHeader = scheme.onSurfaceVariant
     val onRow = scheme.onSurface
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(6.dp)
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -1128,7 +1130,7 @@ private fun StatCardBaseRenderer(
     val onSurface = scheme.onSurface
     val onSurfaceVariant = scheme.onSurfaceVariant
     val accent = StyleResolver.resolveColor(component.style.textColor, scheme, scheme.primary)
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(12.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: (if (emphasize) 2.dp else 1.dp)
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -1179,7 +1181,7 @@ private fun ExpandableRenderer(
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
     val onSurface = scheme.onSurface
     val onSurfaceVariant = scheme.onSurfaceVariant
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(8.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(6.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 1.dp
     val toggleHandler = ctx.clickHandler(component, "onToggle")
     Surface(
@@ -1193,7 +1195,7 @@ private fun ExpandableRenderer(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
+                    .minimumInteractiveComponentSize().clickable {
                         expanded = !expanded
                         toggleHandler?.invoke()
                     }
@@ -1414,7 +1416,7 @@ private fun TreeNodeRenderer(component: UIComponent, ctx: RenderContext, modifie
         modifier = modifier
             .fillMaxWidth()
             .padding(start = (depth * 16).dp, top = 6.dp, bottom = 6.dp, end = 8.dp)
-            .clickable { if (hasChildren) expanded = !expanded },
+            .minimumInteractiveComponentSize().clickable { if (hasChildren) expanded = !expanded },
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (hasChildren) {
@@ -1652,7 +1654,7 @@ fun TimelineRenderer(component: UIComponent, ctx: RenderContext, modifier: Modif
 fun CalendarRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val scheme = ctx.theme.colorScheme
     val month = component.propStringResolved("month", ctx) ?: component.propStringResolved("title", ctx) ?: "Calendar"
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(6.dp)
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -1731,7 +1733,7 @@ private fun KanbanColumn(
     val scheme = ctx.theme.colorScheme
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(scheme.surfaceVariant)
             .padding(8.dp)
     ) {
@@ -1811,7 +1813,7 @@ fun SummaryCardRenderer(component: UIComponent, ctx: RenderContext, modifier: Mo
     val title = component.propStringResolved("title", ctx) ?: component.propStringResolved("label", ctx)
     val summary = component.propStringResolved("summary", ctx) ?: component.propStringResolved("body", ctx) ?: component.propStringResolved("description", ctx)
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(12.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 1.dp
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -1837,7 +1839,7 @@ fun DetailViewRenderer(component: UIComponent, ctx: RenderContext, modifier: Mod
     val scheme = ctx.theme.colorScheme
     val title = component.propStringResolved("title", ctx) ?: component.propStringResolved("name", ctx)
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(12.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 1.dp
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -1865,11 +1867,11 @@ fun DetailViewRenderer(component: UIComponent, ctx: RenderContext, modifier: Mod
 @Composable
 fun VideoPlayerRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val scheme = ctx.theme.colorScheme
-    val bg = StyleResolver.resolveColor(component.style.backgroundColor, scheme, Color(0xFF1C1B1F))
+    val bg = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.onSurface)
     val tint = StyleResolver.resolveColor(component.style.textColor, scheme, Color.White)
     val label = component.propStringResolved("title", ctx) ?: "Video Player"
     Box(
-        modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(bg),
+        modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp)).background(bg),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1894,7 +1896,7 @@ fun AudioPlayerRenderer(component: UIComponent, ctx: RenderContext, modifier: Mo
     val title = component.propStringResolved("title", ctx) ?: "Audio Track"
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
     val accent = StyleResolver.resolveColor(component.style.textColor, scheme, scheme.primary)
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(6.dp)
     Surface(modifier = modifier.fillMaxWidth(), shape = shape, color = container, tonalElevation = 1.dp) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1942,7 +1944,7 @@ fun ImageCarouselRenderer(component: UIComponent, ctx: RenderContext, modifier: 
                 modifier = Modifier
                     .weight(1f)
                     .height(140.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(6.dp))
                     .background(bg),
                 contentAlignment = Alignment.Center
             ) {
@@ -1959,11 +1961,11 @@ fun ImageCarouselRenderer(component: UIComponent, ctx: RenderContext, modifier: 
 @Composable
 fun VideoThumbnailRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val scheme = ctx.theme.colorScheme
-    val bg = StyleResolver.resolveColor(component.style.backgroundColor, scheme, Color(0xFF1C1B1F))
+    val bg = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.onSurface)
     val tint = StyleResolver.resolveColor(component.style.textColor, scheme, Color.White)
     val label = component.propStringResolved("title", ctx) ?: "Video"
     Box(
-        modifier = modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(8.dp)).background(bg),
+        modifier = modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(6.dp)).background(bg),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2011,7 +2013,7 @@ fun MediaCardRenderer(component: UIComponent, ctx: RenderContext, modifier: Modi
     val title = component.propStringResolved("title", ctx) ?: "Media"
     val subtitle = component.propStringResolved("subtitle", ctx) ?: component.propStringResolved("duration", ctx)
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(12.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 1.dp
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -2068,7 +2070,7 @@ fun FilePreviewRenderer(component: UIComponent, ctx: RenderContext, modifier: Mo
     val fileSize = component.propStringResolved("size", ctx) ?: component.propStringResolved("subtitle", ctx)
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
     val accent = StyleResolver.resolveColor(component.style.textColor, scheme, scheme.primary)
-    Surface(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), color = container, tonalElevation = 1.dp) {
+    Surface(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp), color = container, tonalElevation = 1.dp) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)).background(accent.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
                 Icon(imageVector = Icons.Filled.InsertDriveFile, contentDescription = null, tint = accent, modifier = Modifier.size(24.dp))
@@ -2102,7 +2104,7 @@ fun DocumentViewerRenderer(component: UIComponent, ctx: RenderContext, modifier:
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(120.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(RoundedCornerShape(6.dp))
                         .background(scheme.surfaceVariant)
                         .padding(16.dp),
                     contentAlignment = Alignment.TopStart
@@ -2213,7 +2215,7 @@ fun MediaPickerRenderer(component: UIComponent, ctx: RenderContext, modifier: Mo
                         modifier = Modifier
                             .weight(1f)
                             .height(100.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .background(bg),
                         contentAlignment = if (selected && idx % 2 == 0) Alignment.TopEnd else Alignment.Center
                     ) {
@@ -2251,10 +2253,10 @@ fun ScreenCaptureRenderer(component: UIComponent, ctx: RenderContext, modifier: 
 fun MediaStreamRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val scheme = ctx.theme.colorScheme
     val label = component.propStringResolved("title", ctx) ?: "Live Stream"
-    val bg = StyleResolver.resolveColor(component.style.backgroundColor, scheme, Color(0xFF1C1B1F))
+    val bg = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.onSurface)
     val tint = StyleResolver.resolveColor(component.style.textColor, scheme, Color.White)
     Box(
-        modifier = modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(8.dp)).background(bg),
+        modifier = modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(6.dp)).background(bg),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2266,7 +2268,7 @@ fun MediaStreamRenderer(component: UIComponent, ctx: RenderContext, modifier: Mo
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(8.dp)
-                .clip(RoundedCornerShape(4.dp))
+                .clip(RoundedCornerShape(6.dp))
                 .background(scheme.error)
                 .padding(horizontal = 6.dp, vertical = 2.dp)
         ) {
@@ -2279,7 +2281,7 @@ fun MediaStreamRenderer(component: UIComponent, ctx: RenderContext, modifier: Mo
 fun EmbedRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val scheme = ctx.theme.colorScheme
     val url = component.propStringResolved("url", ctx) ?: component.propStringResolved("src", ctx) ?: "embedded://content"
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(6.dp)
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -2302,7 +2304,7 @@ fun EmbedRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier
 fun IframeRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val scheme = ctx.theme.colorScheme
     val url = component.propStringResolved("src", ctx) ?: component.propStringResolved("url", ctx) ?: "about:blank"
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(6.dp)
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -2328,7 +2330,7 @@ fun IframeRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifie
 fun WebViewRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val scheme = ctx.theme.colorScheme
     val url = component.propStringResolved("url", ctx) ?: component.propStringResolved("src", ctx) ?: "https://example.com"
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(6.dp)
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -2376,7 +2378,7 @@ private fun SurfaceContainerRenderer(
 ) {
     val scheme = ctx.theme.colorScheme
     val resolvedShape = shape ?: StyleResolver.resolveShape(component.style).let { s ->
-        if (s == RectangleShape) RoundedCornerShape(12.dp) else s
+        if (s == RectangleShape) RoundedCornerShape(10.dp) else s
     }
     val containerColor = StyleResolver.resolveColor(
         component.style.backgroundColor, scheme, fallbackColor ?: scheme.surface
@@ -2429,7 +2431,7 @@ private fun BarBaseRenderer(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .clickable { backHandler?.invoke() },
+                        .minimumInteractiveComponentSize().clickable { backHandler?.invoke() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = "Back", tint = onContainer, modifier = Modifier.size(24.dp))
@@ -2454,7 +2456,7 @@ private fun BarBaseRenderer(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .clickable { ctx.clickHandler(component, "onMenu")?.invoke() },
+                    .minimumInteractiveComponentSize().clickable { ctx.clickHandler(component, "onMenu")?.invoke() },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "More", tint = onContainer, modifier = Modifier.size(24.dp))
@@ -2493,7 +2495,7 @@ private fun SheetBaseRenderer(
         Column {
             if (side == SheetSide.BOTTOM || side == SheetSide.TOP) {
                 Box(modifier = Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
-                    Box(modifier = Modifier.width(32.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(scheme.outline))
+                    Box(modifier = Modifier.width(32.dp).height(4.dp).clip(RoundedCornerShape(6.dp)).background(scheme.outline))
                 }
             }
             Column(modifier = Modifier.padding(16.dp)) {
@@ -2511,7 +2513,7 @@ fun GenCardRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifi
     val subtitle = component.propStringResolved("subtitle", ctx)
     val overline = component.propStringResolved("overline", ctx)
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(12.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 1.dp
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -2558,7 +2560,7 @@ fun PopoverRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifi
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 8.dp
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(10.dp),
         color = container,
         tonalElevation = elev,
         shadowElevation = elev
@@ -2692,7 +2694,7 @@ fun OutlinedSurfaceRenderer(component: UIComponent, ctx: RenderContext, modifier
 @Composable
 fun GlassCardRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val scheme = ctx.theme.colorScheme
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(16.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(14.dp) else it }
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -2733,7 +2735,7 @@ fun NeumorphicRenderer(component: UIComponent, ctx: RenderContext, modifier: Mod
 @Composable
 fun GradientSurfaceRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val scheme = ctx.theme.colorScheme
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(12.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val gradient = Brush.verticalGradient(listOf(scheme.primary, scheme.secondary))
     Box(
         modifier = modifier
@@ -2749,7 +2751,7 @@ fun GradientSurfaceRenderer(component: UIComponent, ctx: RenderContext, modifier
 @Composable
 fun MeshSurfaceRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val scheme = ctx.theme.colorScheme
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(12.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val mesh = Brush.linearGradient(
         listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.primary.copy(alpha = 0.6f))
     )
@@ -2769,7 +2771,7 @@ fun PatternSurfaceRenderer(component: UIComponent, ctx: RenderContext, modifier:
     val scheme = ctx.theme.colorScheme
     val base = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surfaceVariant)
     val dotColor = scheme.outline.copy(alpha = 0.3f)
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(12.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -2797,7 +2799,7 @@ fun PatternSurfaceRenderer(component: UIComponent, ctx: RenderContext, modifier:
 fun BlurContainerRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val scheme = ctx.theme.colorScheme
     val base = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface.copy(alpha = 0.6f))
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(12.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -2814,7 +2816,7 @@ fun BlurContainerRenderer(component: UIComponent, ctx: RenderContext, modifier: 
 fun ShadowBoxRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val scheme = ctx.theme.colorScheme
     val base = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(8.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(6.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 8.dp
     Box(
         modifier = modifier
@@ -2834,7 +2836,7 @@ fun BorderBoxRenderer(component: UIComponent, ctx: RenderContext, modifier: Modi
     val base = StyleResolver.resolveColor(component.style.backgroundColor, scheme, Color.Transparent)
     val borderColor = StyleResolver.resolveColor(component.style.borderColor, scheme, scheme.outline)
     val bw = component.style.borderWidth.takeIf { it > 0f }?.dp ?: 1.dp
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(8.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(6.dp) else it }
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -2870,7 +2872,7 @@ fun RoundedSurfaceRenderer(component: UIComponent, ctx: RenderContext, modifier:
 fun TonalSurfaceRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val scheme = ctx.theme.colorScheme
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surfaceVariant)
-    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(12.dp) else it }
+    val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 3.dp
     Surface(
         modifier = modifier.fillMaxWidth(),
