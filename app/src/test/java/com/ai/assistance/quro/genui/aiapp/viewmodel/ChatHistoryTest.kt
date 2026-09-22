@@ -136,4 +136,43 @@ class ChatHistoryTest {
         val toolMsg = api.first { it.role == "tool" }
         assertTrue(toolMsg.content.length < 2_100)
     }
+
+    @Test
+    fun `裸 JSON 没有围栏也必须整段折叠 绝不留下截断残片`() {
+        // 实测模型经常不写 ```genui 围栏，整段 JSON 裸着输出（诊断行 含genui围栏=false）。
+        // 旧实现只能"超长截 800 字符" → 历史里留半截 JSON → 模型接着往下编/把格式缝在一起。
+        val bare = "好的，给你做个天气卡。\n" +
+            "{\"id\":\"root\",\"root\":{\"type\":\"card\",\"children\":[" +
+            (1..60).joinToString(",") { "{\"type\":\"text\",\"properties\":{\"text\":\"行$it\"}}" } +
+            "]}}"
+        assertTrue("构造的样例要足够长", bare.length > 1_000)
+
+        val out = ChatHistory.compressAssistant(bare)
+        assertTrue("人话要留着：$out", out.contains("给你做个天气卡"))
+        assertTrue("大段 JSON 要被折叠掉", out.contains("已省略"))
+        assertTrue("不能留下任何 JSON 残片：$out", !out.contains("{"))
+        assertTrue("压缩后应远短于原文", out.length < 300)
+    }
+
+    @Test
+    fun `短的内联 JSON 不该被误折叠`() {
+        val s = "参数是 {\"a\":1} 这样传。"
+        assertEquals(s, ChatHistory.stripJsonBlobs(s))
+    }
+
+    @Test
+    fun `说明用的花括号不会被当成 JSON`() {
+        val s = "下面是「{说明}」这段文字，里面没有键值对，请朗读。"
+        assertEquals(s, ChatHistory.stripJsonBlobs(s))
+    }
+
+    @Test
+    fun `文本里多处 JSON 全部折叠 只留人话`() {
+        val big = (1..40).joinToString(",") { "\"k$it\":$it" }
+        val s = "前一句 {\"root\":{$big}} 中间 {\"another\":{$big}} 后一句"
+        val out = ChatHistory.stripJsonBlobs(s)
+        assertTrue("两处都要折掉：$out", !out.contains("\"k1\""))
+        assertTrue(out.contains("前一句"))
+        assertTrue(out.contains("后一句"))
+    }
 }

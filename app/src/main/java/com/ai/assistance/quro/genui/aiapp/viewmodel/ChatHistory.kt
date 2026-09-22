@@ -94,19 +94,105 @@ internal object ChatHistory {
         else -> m
     }
 
-    /** 把 assistant 历史回复里的代码围栏（界面 JSON / 长文档）折叠掉，只留人话部分。 */
+    /**
+     * 把 assistant 历史回复里的界面 DSL 折叠掉，只留人话。
+     *
+     * ⚠️ 只折叠 ``` 围栏是不够的 —— 诊断实测模型**经常不写围栏**
+     * （`含genui围栏=false`，整段 JSON 直接裸着输出，v1.0.96 用户截图两次都是这种）。
+     * 旧实现遇到裸 JSON 只能"超长就硬截 800 字符"，于是历史里留下的是一段**被拦腰砍断的 JSON**，
+     * 模型下一轮看到半截 JSON 就会接着往下编 / 把不同格式缝在一起 ——
+     * 用户看到的"a2ui 和 `<row><spacer>` 标签糊成一团""type 里塞了颜色值"就是这么滚出来的。
+     * 所以这里必须**整段**折叠，绝不留下截断的 JSON 残片。
+     */
     fun compressAssistant(content: String): String {
-        if (content.length <= MAX_ASSISTANT_CHARS) return content
-        val noFence = FENCE_REGEX.replace(content) { mr ->
-            val lang = mr.groupValues[1].ifBlank { "code" }
-            "〔${lang} 内容 " + mr.value.length + " 字符已省略〕"
-        }
-        return if (noFence.length <= MAX_ASSISTANT_CHARS) {
-            noFence
+        val folded = foldFences(content)
+        val noJson = stripJsonBlobs(folded)
+        return if (noJson.length <= MAX_ASSISTANT_CHARS) {
+            noJson
         } else {
-            noFence.take(MAX_ASSISTANT_CHARS) + "…〔历史回复过长已截断〕"
+            // 已经折叠过 JSON，剩下的通常是人话；真还超长才截断
+            noJson.take(MAX_ASSISTANT_CHARS).trimEnd() + "…〔历史回复过长已截断〕"
         }
     }
 
+    /** 折叠 ```lang … ``` 代码围栏。 */
+    fun foldFences(content: String): String = FENCE_REGEX.replace(content) { mr ->
+        val lang = mr.groupValues[1].ifBlank { "code" }
+        "〔${lang} 内容 " + mr.value.length + " 字符已省略〕"
+    }
+
+    /**
+     * 把文本里**最长的平衡 JSON 片段**换成占位符（`{…}` 与 `[…]` 都认，跳过字符串与转义）。
+     *
+     * 用"平衡扫描 + 取最长"，不用"第一个 `{` 到最后一个 `}`"：
+     * 后者在正文里出现 `{a}` 这种小括号时会误判整段。小于 [MIN_JSON_SPAN] 的片段不动
+     * （短内联 JSON 是正常表达，不必折）。
+     */
+    fun stripJsonBlobs(content: String, minJsonSpan: Int = MIN_JSON_SPAN): String {
+        var s = content
+        var guard = 0
+        while (guard++ < MAX_FOLD_ROUNDS) {
+            val span = largestBalancedSpan(s) ?: break
+            if (span.second - span.first < minJsonSpan) break
+            val inner = s.substring(span.first, span.second)
+            // 不像 JSON 就别动（纯粹的 { 文本 } 说明性括号）
+            if (!inner.contains("\":")) break
+            val isArr = inner.startsWith("[")
+            val label = if (isArr) "结构化数据" else "界面 JSON"
+            s = s.substring(0, span.first) + "〔$label ${inner.length} 字符已省略〕" + s.substring(span.second)
+        }
+        return s
+    }
+
+    /** 找出最长的 `{…}` / `[…]` 平衡片段，返回 [start, endExclusive)，找不到返回 null。 */
+    private fun largestBalancedSpan(s: String): Pair<Int, Int>? {
+        var best: Pair<Int, Int>? = null
+        var i = 0
+        while (i < s.length) {
+            val open = s[i]
+            if (open != '{' && open != '[') {
+                i++
+                continue
+            }
+            var depth = 0
+            var j = i
+            var inStr = false
+            var esc = false
+            while (j < s.length) {
+                val c = s[j]
+                if (inStr) {
+                    when {
+                        esc -> esc = false
+                        c == '\\' -> esc = true
+                        c == '"' -> inStr = false
+                    }
+                } else {
+                    when (c) {
+                        '"' -> inStr = true
+                        '{', '[' -> depth++
+                        '}', ']' -> {
+                            depth--
+                            if (depth == 0) break
+                        }
+                    }
+                }
+                j++
+            }
+            if (depth == 0 && j < s.length) {
+                val len = j + 1 - i
+                if (best == null || len > (best.second - best.first)) best = i to (j + 1)
+                i = j + 1
+            } else {
+                i++
+            }
+        }
+        return best
+    }
+
     private val FENCE_REGEX = Regex("```([A-Za-z0-9_-]*)\\s*\\n?([\\s\\S]*?)```")
+
+    /** 小于这个长度的 JSON 片段不折叠（正常内联表达）。 */
+    private const val MIN_JSON_SPAN = 200
+
+    private const val MAX_FOLD_ROUNDS = 8
 }

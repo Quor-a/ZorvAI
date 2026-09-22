@@ -639,9 +639,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     error = null,
                     // 通道轮也必须落一条 assistant 消息：旧实现直接 return，
                     // 导致连续几轮 A2UI/HTML 之后历史里只剩一堵 user 指令墙。
+                    // 同样只留人话，DSL/JSON 原文交给 works 存（见 historyNote 的说明）。
                     conversationHistory = it.conversationHistory + GenUIChatMessage(
                         role = "assistant",
-                        content = fullText,
+                        content = historyNote(fullText, page.title.ifBlank { "内容页" }),
                         reasoning = result.reasoning
                     ),
                     works = (listOf(com.ai.assistance.quro.genui.aiapp.data.GenUISessionStore.WorkItem(
@@ -761,7 +762,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 debugInfo = debugInfo,
                 conversationHistory = it.conversationHistory + GenUIChatMessage(
                     role = "assistant",
-                    content = fullText,
+                    // ⚠️ 只写人话，不写 DSL 原文：把生成好的 JSON 留在 works 里（回放用）。
+                    // 历史里塞原始 DSL 有两个后果，实测都发生了：
+                    //   ① 历史膨胀，每轮几千字符 × 10 轮；
+                    //   ② 模型下一轮会**模仿自己历史里的格式**，上一轮的残缺/混杂输出会被继承放大，
+                    //      越写越乱（用户看到的 a2ui 与 <row>/<spacer> 标签糊在一起就是这个后果）。
+                    content = historyNote(fullText, currentState.currentRequest.ifBlank { "界面" }),
                     reasoning = result.reasoning
                 )
             )
@@ -1308,6 +1314,74 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         return StreamingParser.tryParsePartial(json) != null
     }
 
+    /**
+     * 裸节点树判定：顶层直接是 `{type, style, children}`，**既没有 `root` 也没有 `id`**。
+     *
+     * 这是模型写 GenUI 时的高频形状（2026-09-22 用户截图里就是它）：
+     * `{"type":"column","style":{"padding":20,"spacing":16,"background":"#0F2140","cornerRadius":24},
+     *   "children":[{"type":"row","style":{...},"children":[…]}]}`
+     *
+     * 而 `UISpec` 反序列化**必须要 `root` 字段**，所以旧实现里所有提取路径
+     * （都先过 `containsRootKey` 闸门）一律返回 null → 落到「策略 5 兜底卡片」→
+     * **把整段 JSON 当文本画在画布上**，用户看到的就是"一屏源码"。
+     */
+    private fun looksLikeNodeTree(json: String): Boolean {
+        val o = try {
+            lenientJson.parseToJsonElement(json) as? kotlinx.serialization.json.JsonObject
+        } catch (_: Throwable) {
+            null
+        } ?: return false
+        if (o.containsKey("root") || o.containsKey("components")) return false
+        fun str(k: String) = (o[k] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty().lowercase()
+        val hasKids = o["children"] is kotlinx.serialization.json.JsonArray
+        // 节点形状：有 children / style / properties 之一，普通数据 JSON 三者皆无
+        if (!hasKids && !o.containsKey("style") && !o.containsKey("properties")) return false
+        val t = str("type").ifBlank { str("t") }
+        if (t.isBlank()) {
+            // 无 type 的容器（模型常这么写）：必须既有 children，又带布局样式键
+            return hasKids && NODE_TREE_STYLE_KEYS.any { o.containsKey(it) }
+        }
+        // 类型必须是 GenUI 认识的组件 —— 否则 `{"type":"user","name":"x"}` 这类数据
+        // 也会被当成界面画到画布上
+        return t in com.ai.assistance.quro.genui.sdk.dsl.ComponentTypes.ALL_TYPES ||
+            t in NODE_TREE_EXTRA_TYPES
+    }
+
+    /** GenUI 别名（SDK 注册表里有，但不在 ALL_TYPES 常量表里） */
+    private val NODE_TREE_EXTRA_TYPES = setOf(
+        "heading", "h1", "h2", "h3", "h4", "h5", "h6", "sub", "subtitle",
+        "label", "line", "panel", "container", "list", "btn", "caption",
+        "body", "paragraph", "input", "text_field", "chip"
+    )
+
+    /** 无 type 容器节点的布局样式键（出现任一即认为是个界面节点） */
+    private val NODE_TREE_STYLE_KEYS = setOf(
+        "padding", "spacing", "gap", "cornerRadius", "background", "elevation",
+        "margin", "width", "height", "alignItems", "justifyContent", "arrangement"
+    )
+
+    /** 裸节点树 → 补 `id`/`root` 信封，使其成为可被 `UISpec` 解析的完整文档。 */
+    private fun wrapBareNodeTree(json: String): String {
+        val s = json.trim()
+        if (!s.startsWith("{") || !looksLikeNodeTree(s)) return json
+        return "{\"id\":\"root\",\"root\":" + s + "}"
+    }
+
+    /**
+     * 提取候选的**唯一收口**：补信封 → 校验 → 空 root 修复。
+     * 三个提取器（围栏 / json 围栏 / 最大 JSON）共用，避免各写一遍漏掉补信封那步。
+     */
+    private fun acceptCandidate(json: String, strict: Boolean): String? {
+        val wrapped = wrapBareNodeTree(json)
+        if (validForCanvas(wrapped, strict)) return wrapped
+        repairEmptyRootValue(wrapped)?.let { if (validForCanvas(it, strict)) return it }
+        return null
+    }
+
+    /** 候选是否值得进一步校验：要么有 root 信封，要么是裸节点树 */
+    private fun isGenUiCandidate(json: String): Boolean =
+        containsRootKey(json) || looksLikeNodeTree(json)
+
     /** ```genui / ```gen-ui 代码块提取（多轮择优：完整(最长优先)→修复→宽松补全） */
     private fun extractFromGenuiFences(source: String, strict: Boolean): String? {
         val genuiRegex = Regex("```(?:genui|gen-ui)\\s*\\n?([\\s\\S]*?)```", RegexOption.IGNORE_CASE)
@@ -1316,17 +1390,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         if (candidates.isEmpty()) return null
         // 第一轮：完整候选，最长优先（避免被截断残段抢先）
         candidates.filter { it.endsWith("}") }.forEach { json ->
-            if (validForCanvas(json, strict)) return json
+            acceptCandidate(json, strict)?.let { return it }
         }
-        // 第二轮：空 root 修复轮
-        candidates.filter { it.endsWith("}") }.forEach { json ->
-            val repaired = repairEmptyRootValue(json) ?: return@forEach
-            if (validForCanvas(repaired, strict)) return repaired
-        }
-        // 第三轮：不完整候选 — 仅流式模式允许部分解析
+        // 第二轮：不完整候选 — 仅流式模式允许部分解析
         if (!strict) {
             candidates.filter { !it.endsWith("}") }.forEach { json ->
-                if (StreamingParser.tryParsePartial(json) != null) return json
+                if (StreamingParser.tryParsePartial(wrapBareNodeTree(json)) != null) return wrapBareNodeTree(json)
             }
         }
         return null
@@ -1336,24 +1405,18 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private fun extractFromJsonFences(source: String, strict: Boolean): String? {
         val jsonRegex = Regex("```json\\s*\\n?([\\s\\S]*?)```", RegexOption.IGNORE_CASE)
         val candidates = jsonRegex.findAll(source).map { it.groupValues[1].trim() }
-            .filter { it.startsWith("{") && it.endsWith("}") && containsRootKey(it) }
+            .filter { it.startsWith("{") && it.endsWith("}") && isGenUiCandidate(it) }
             .sortedByDescending { it.length }.toList()
-        candidates.forEach { json -> if (validForCanvas(json, strict)) return json }
-        candidates.forEach { json ->
-            val repaired = repairEmptyRootValue(json) ?: return@forEach
-            if (validForCanvas(repaired, strict)) return repaired
-        }
+        candidates.forEach { json -> acceptCandidate(json, strict)?.let { return it } }
         return null
     }
 
     /** 最大的完整 JSON 对象提取（含校验与空 root 修复） */
     private fun extractLargestGenUI(source: String, strict: Boolean): String? {
         val largestJson = extractLargestJson(source) ?: return null
-        if (!containsRootKey(largestJson)) return null
-        if (validForCanvas(largestJson, strict)) return largestJson
-        val repaired = repairEmptyRootValue(largestJson)
-        if (repaired != null && validForCanvas(repaired, strict)) return repaired
-        return null
+        // 裸节点树也放行：它没有 root 键，但就是一份完整的 GenUI 文档
+        if (!isGenUiCandidate(largestJson)) return null
+        return acceptCandidate(largestJson, strict)
     }
 
     private fun extractGenUIDsl(text: String, isStreaming: Boolean = false, strict: Boolean = false): String? {
@@ -1476,6 +1539,26 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun stripAssistantForDisplay(text: String): String =
         ChatHistory.compressAssistant(stripThinkingTags(text))
+
+    /**
+     * 写进对话历史时用的 assistant 内容：**只留人话**。
+     *
+     * 为什么不能直接把 `fullText` 存进历史（旧行为）：
+     * 模型每轮都会输出整套界面 JSON/DSL（几千字符），把它原样留在历史里，
+     * 下一轮模型会**照着自己历史里的格式继续写**。上一轮一旦出现混杂/残缺
+     * （实测：A2UI 与自造的 `<row>/<spacer>` 标签糊在一起、`type` 里塞进颜色值），
+     * 这个坏格式就会被继承并放大，越滚越乱 —— 这是"越生成越离谱"的主因。
+     *
+     * 界面本体不会丢：它已经存进 `works`（`GenUISessionStore`），回放走 works，不依赖历史。
+     * 历史只需要让模型知道"上一轮我做了什么"。
+     */
+    private fun historyNote(fullText: String, label: String): String {
+        val prose = ChatHistory.stripJsonBlobs(ChatHistory.foldFences(stripThinkingTags(fullText)))
+            .replace(Regex("\\n{3,}"), "\n\n")
+            .trim()
+        return if (prose.length >= 8) prose.take(400)
+        else "〔已生成：$label〕"
+    }
 
     private fun stripThinkingTags(text: String): String {
         var result = text
