@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.tools
 
 import android.content.Context
+import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.yuanbao.miniapp.core.MiniAppEngine
 import org.json.JSONArray
 import org.json.JSONObject
@@ -9,7 +10,8 @@ import java.io.File
 /**
  * miniapp_sdk 工具：把上游 Quor-a/GenUI 的**原生小程序引擎**（自研 C++ JS 引擎 + Flex 布局 +
  * Canvas/GLES 自绘渲染 + wx.* 原生能力）接入对话框，让 AI 能直接生成 WXML/WXSS/JS 小程序工程、
- * 列出/删除，落盘到 filesDir/miniapps/<appId>/，再由工具中心「小程序（原生引擎）」面板用 MiniAppView 渲染。
+ * 列出/删除，落盘到 filesDir/miniapps/<appId>/，对话框里创建后会**自动作为卡片用 MiniAppView 原生渲染到气泡**，
+ * 也可在工具中心「小程序（原生引擎）」面板打开。
  *
  * 这是与「Web 应用」（MiniAppTool，WebView + native.* 桥 HTML 运行时）并列的**另一套小程序引擎**，
  * 走的是微信标准 WXML/WXSS/JS 范式，不是 HTML。
@@ -25,7 +27,7 @@ class MiniAppSdkTool : QuroTool {
 
 这是移植自上游 Quor-a/GenUI 的**自研原生引擎**（C++ JS 引擎 + Flex 布局 + Canvas/GLES 自绘渲染），
 与「Web 应用」工具（WebView + HTML 运行时）是两套并列的小程序引擎。本工具负责**生成与治理工程文件**，
-渲染由工具中心「小程序（原生引擎）」面板的 MiniAppView 完成（对话框里调用本工具写好工程后，去工具中心打开即可看到画面）。
+渲染由对话框气泡里的 MiniAppView 完成（miniapp_sdk 创建后会自动在对话框渲染出来，也能去工具中心「小程序（原生引擎）」面板打开）。
 
 工程结构（存放在手机私有目录 filesDir/miniapps/<appId>/）：
 - app.json：全局配置，必须含 pages 路由表，如 {"pages":["pages/index/index"],"window":{...}}
@@ -50,7 +52,7 @@ class MiniAppSdkTool : QuroTool {
   至少要有 app.json 和一个页面 wxml。返回落盘路径与文件数
 - delete：删除整个工程目录 filesDir/miniapps/<appId>/
 
-注意：写好的工程**去工具中心「小程序（原生引擎）」面板打开才会渲染**——本工具只负责把文件落到磁盘。
+注意：写好的工程**创建后会自动渲染在对话框气泡**（MiniAppView 原生渲染），也能去工具中心「小程序（原生引擎）」面板打开——本工具负责把文件落到磁盘并触发对话框渲染。
 """
 
     override val parametersJson = """{
@@ -104,6 +106,19 @@ class MiniAppSdkTool : QuroTool {
             .put("path", root.absolutePath)
             .put("written", written)
         if (errors.isNotEmpty()) res.put("errors", JSONArray(errors))
+        // 对话框直接渲染：把刚创建的原生小程序作为卡片挂到当前助手消息气泡（原生引擎直接跑）。
+        // 桥未连接（非对话场景）时静默跳过，工程仍可在工具中心「小程序（原生引擎）」面板打开。
+        runCatching {
+            QuroUiActionBridge.onCard?.invoke(
+                QuroChatCard.MiniAppCard(
+                    id = "miniapp_sdk_" + appId + "_" + System.currentTimeMillis(),
+                    title = "小程序（原生引擎）· " + appId,
+                    html = "",
+                    config = mapOf("app_id" to appId),
+                    nativeAppId = appId,
+                )
+            )
+        }
         return res.toString()
     }
 

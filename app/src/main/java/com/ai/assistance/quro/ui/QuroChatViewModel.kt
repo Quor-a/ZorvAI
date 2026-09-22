@@ -2293,7 +2293,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "语法：WXML 用 {{data}} 绑定、wx:if/wx:else、wx:for=\"{{list}}\" wx:for-item=\"it\"、bindtap/bindinput、data-index；组件 view/text/button/input/image/scroll-view。\n" +
             "WXSS 用 rpx 单位 + Flex（flex-direction/align-items/justify-content）；JS 用 Page({data,方法}) + this.setData，**只支持 ES5**（var/function，别用箭头函数/模板字符串）。\n" +
             "可用 wx.*：request（真网络）、getSystemInfo(Sync)、showToast、showModal、showActionSheet、set/get/removeStorageSync、setClipboardData/getClipboardData、navigateTo/redirectTo/navigateBack、setNavigationBarTitle、getNetworkType、makePhoneCall。\n" +
-            "**渲染位置**：工具只把工程写到 filesDir/miniapps/<appId>/，画面要去**工具中心 →「小程序（原生引擎）」面板**打开才看得到（对话框不自动渲染）。内置示例：hello / todo / weather。\n\n"
+            "**渲染位置**：miniapp_sdk 创建后会**自动作为卡片渲染在对话框气泡里**（原生引擎直接跑，可全屏），也能去**工具中心 →「小程序（原生引擎）」面板**打开。内置示例：hello / todo / weather。\n\n"
         )
         // ── 可视化输出功能总览（统一术语路由表）──
         // 背景：可视化通道散落多个章节（弹窗工具族/富卡片/小卡片/动态UI/网页预览），AI 常认错对象。
