@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ai.assistance.quro.genui.aiapp.brain.ZorvBrain
+import com.ai.assistance.quro.genui.aiapp.data.GenUiDiag
 import com.ai.assistance.quro.genui.aiapp.data.GenUISessionStore
 import com.ai.assistance.quro.genui.aiapp.data.RenderChannel
 import com.ai.assistance.quro.genui.aiapp.renderx.ChannelPage
@@ -793,6 +794,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 is ChannelPage.FlatPage -> RenderChannel.A2UI
                 is ChannelPage.HtmlPage -> RenderChannel.HTML
             }
+            // 画布原文落盘（Download/QuroAI_logs）：通道轮存围栏原文，
+            // 用户报「不好看」时不用来回贴 JSON，直接看文件。
+            GenUiDiag.dump(
+                getApplication<Application>().applicationContext,
+                raw, currentState.currentRequest, pageChannel.key, null
+            )
             _state.update {
                 it.copy(
                     channel = page,
@@ -907,6 +914,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             val specTitle = runCatching {
                 org.json.JSONObject(genuiJson).optString("title")
             }.getOrNull()?.takeIf { it.isNotBlank() }
+            // 画布原文 + 提取链路诊断一起落盘（Download/QuroAI_logs/genui_last_spec.json）
+            GenUiDiag.dump(
+                getApplication<Application>().applicationContext,
+                genuiJson, currentState.currentRequest, RenderChannel.GENUI.key, debugInfo
+            )
             val newWork = com.ai.assistance.quro.genui.aiapp.data.GenUISessionStore.WorkItem(
                 title = specTitle ?: currentState.currentRequest.ifBlank { "未命名作品" },
                 request = currentState.currentRequest,
