@@ -314,29 +314,38 @@ object GenUiRules {
   独立网页/复杂样式/可玩小游戏 → html；轻量结构化展示 → a2ui
 非 GenUI 通道输出格式：直接输出对应围栏（```markdown / ```a2ui / ```html），
 围栏外不得有任何文字，不要输出 intent/plan/generate。
-a2ui 围栏内**两种结构都支持**（渲染器已适配官方协议，任选其一，别混合）：
+a2ui 围栏内**两种结构都支持**，但**默认只用第一种**（渲染管线就是照它写的，最稳）：
 
-【① 官方 A2UI 协议 · JSONL（推荐，一行一条报文）】
+【① 扁平邻接表 —— 默认写法，上游同款】
+{"title":"今日状态","root":"col","components":{
+  "col":{"t":"column","children":["h","d"],"padding":16,"gap":12},
+  "h":{"t":"h1","text":"今日状态"},
+  "d":{"t":"card","children":["t1"],"bg":"#FFF6F1EC","radius":16,"padding":14},
+  "t1":{"t":"text","text":"生命 72 / 金币 120","size":15}}}
+硬性要求：
+· 必须有 `root`（指向下面某个 id 的字符串）和 `components`（id → 节点 的对象表）。
+· 节点类型字段是 **`t`**（不是 type/component），只在白名单里选：
+  text/heading/column/row/scroll/card/button/divider/spacer/image/progress/chip/input；
+  用 h1/h2/h3/title/sub/label/line/panel/container/list/btn/caption/body 也会被自动归一。
+· **标题要分级别，这是版面有没有层次的关键**：h1（页标题）/h2（区块标题）/h3（小标题）
+  渲染成三档递减字号；只写 `heading` 一律按 h2 处理。
+  一页里不要所有标题都用同一级，也不要用 text+size 假装标题。
+· 层级用 `children`（id 数组）；文本用 `text`；样式平铺在节点上：
+  bg（底色）/ color（字色）/ size（字号）/ radius（圆角）/ padding / border / shape / bold。
+· 容器（column/row/scroll）用 **`gap`** 设子元素间距（默认 8）。
+  卡片内元素挤成一片就调大 gap，别用 spacer 堆。
+· 未知 `t` 自动降级成 text，不会炸页；但降级就是丢设计，所以别乱写。
+
+【② 官方 A2UI 协议 · JSONL —— 只在用户明确要求"官方协议/JSONL"时用】
 {"version":"v0.9","createSurface":{"surfaceId":"main","catalogId":"zorv"}}
 {"version":"v0.9","updateComponents":{"surfaceId":"main","components":[
-  {"id":"root","component":"Column","children":["h","d","b"]},
+  {"id":"root","component":"Column","children":["h","t"]},
   {"id":"h","component":"Text","text":"今日状态","variant":"h2"},
-  {"id":"d","component":"Card","child":"d1"},
-  {"id":"d1","component":"Text","text":"生命 72 / 金币 120"},
-  {"id":"b","component":"Button","child":"bt","action":{"event":{"name":"refresh"}}},
-  {"id":"bt","component":"Text","text":"刷新"}]}}
-规则：根组件 id 必须为 "root"（v0.8 用 beginRendering 的 root 字段指定）；
-child 引用单个子组件、children 引用多个；文本用 {path:"/x"} 时可配
-updateDataModel 取数。组件名用小驼峰官方名（Text/Card/Column/Row/Button/TextField/Image/Divider…）。
+  {"id":"t","component":"Text","text":"生命 72 / 金币 120"}]}}
+规则：根组件 id 必须为 "root"；child 引用单个子组件、children 引用多个；
+组件名用小驼峰官方名（Text/Card/Column/Row/Button/TextField/Image/Divider…）。
 
-【② 扁平邻接表（本家简写，省 token）】
-{"title":"今日状态","root":"col","components":{
-  "col":{"t":"column","children":["h","d"]},
-  "h":{"t":"heading","text":"今日状态"},
-  "d":{"t":"card","children":["t1"]},
-  "t1":{"t":"text","text":"生命 72 / 金币 120"}}}
-白名单 t：text/heading/column/row/scroll/card/button/divider/spacer/image/progress/chip/input；
-未知 t 自动降级。两种结构都解析失败时会把原文当代码块显示（不会再白屏）。
+**两种结构不要混写**；两种都解析失败时会把原文当代码块显示（不会再白屏）。
 
 ### 9.13 编排询问弹窗（模糊需求先问再做）
 用户需求模糊（没说要什么风格/通道/二选一犹豫）时，先画一张「编排询问」卡片页：

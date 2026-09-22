@@ -49,8 +49,11 @@ data class FlatDoc(
             val t = raw.lowercase().trim()
             return when {
                 t.isBlank() -> if (hasKids) "column" else "text"
-                t in whitelist -> t
+                // ⚠️ 别名必须先于白名单判断：白名单里同时住着 h1/h2/h3/sub/title/line/panel
+                // 这些**别名**，先判 whitelist 会把它们原样留下 → 渲染端没有 h1 分支，
+                // 标题/副标题/分隔线全掉进 else 分支当普通文字画出来。上游是别名优先。
                 typeAlias.containsKey(t) -> typeAlias[t]!!
+                t in whitelist -> t
                 // 未知类型但有子节点 → 当容器渲染，避免「丢内容」
                 hasKids -> "column"
                 else -> "text"
@@ -73,6 +76,24 @@ data class FlatDoc(
         }
 
         private fun primStr(e: JsonElement): String = (e as? JsonPrimitive)?.content ?: ""
+
+        /**
+         * 标题级别不能丢：`h1/h2/h3` 经 [normType] 一律变成 `heading`，
+         * 级别信息若不留进 props，下游只能吃默认值 —— 三级标题全长一个大小，版式层次就没了。
+         *
+         * 消费方是 FlatDocToGenUI.normalizeType：它读 `props["level"]` 决定映射到
+         * heading1/2/3（SDK 的字号由组件类型决定，见 typographyConfig）。官方协议那条路
+         * （A2uiProtocol）同样把 level 写进 props，两条路在这里对齐。
+         */
+        private fun withHeadingLevel(rawType: String, props: Map<String, String>): Map<String, String> {
+            if (props.containsKey("level")) return props
+            val lv = when (rawType.lowercase().trim()) {
+                "h1" -> "1"; "h2" -> "2"; "h3" -> "3"
+                else -> return props
+            }
+            return props + ("level" to lv)
+        }
+
 
         private fun kidsOf(o: JsonObject): List<String> =
             ((o["kids"] ?: o["children"]) as? JsonArray)?.mapNotNull { primStr(it.takeIf { n -> n is JsonPrimitive } ?: JsonPrimitive("")) }
@@ -124,7 +145,8 @@ data class FlatDoc(
             val nodes = LinkedHashMap<String, FlatNode>()
 
             fun walk(id: String, o: JsonObject) {
-                val (rawT, text, props) = flatten(o, topLevelProps = true)
+                val (rawT, text, props0) = flatten(o, topLevelProps = true)
+                val props = withHeadingLevel(rawT, props0)
                 val kidsArr = (o["children"] ?: o["kids"]) as? JsonArray
                     ?: ((o["props"] as? JsonObject)?.get("children") as? JsonArray)
                 val kids = ArrayList<String>()
@@ -173,7 +195,15 @@ data class FlatDoc(
             }
 
             fun addNode(id: String, o: JsonObject) {
-                val (rawT, text, props) = flatten(o)
+                // ⚠️ topLevelProps = true：邻接表里样式是**平铺在节点上**的
+                // （`{"t":"card","bg":"#FFF6F1EC","radius":16}`，上游提示词就是这么教的）。
+                // 只读 `props` 子对象的话，bg/color/size/radius/padding 会被**静默丢掉**，
+                // 卡片就没有底色、没有圆角、没有层次 —— 用户看到的"组件不好看"有相当一部分
+                // 是这里丢样式丢出来的，不是模型没写。A2UI 官方协议那条路(popsOf)本来就认平铺，
+                // 这里对齐，两种写法都能拿到样式。
+                val (rawT0, text, props0) = flatten(o, topLevelProps = true)
+                val rawT = rawT0
+                val props = withHeadingLevel(rawT, props0)
                 val kidsArr = (o["children"] ?: o["kids"]) as? JsonArray
                 var kids = kidsArr?.mapIndexed { idx, el -> kidRef(id, idx, el) }?.filterNotNull() ?: emptyList()
                 // 模型可能把 children 写在 props 里
