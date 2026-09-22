@@ -224,7 +224,10 @@ dependencies {
 
     // 小程序引擎（WebView + native.* 桥，MiniAppEngine，com.ai.assistance.quro.core.miniapp）：
     // 自研 WebView 运行时，AI 用 miniapp 工具写入的 HTML 工程在此渲染，可调用真实 Android 能力。
-    // 旧的「自研 JS 引擎 + WXML/WXSS 原生渲染」模块（miniapp-sdk / com.yuanbao.miniapp）已彻底删除。
+    // miniapp-sdk（com.yuanbao.miniapp）：从上游 Quor-a/GenUI 移植进来的**原生 WXML/WXSS 引擎**
+    // （自研 C++ JS 引擎 + Flex 布局 + Canvas/GLES 渲染 + native.* API），与上面的 WebView 运行时是
+    // 两套并列的小程序引擎；本模块提供 MiniAppView，可被工具中心面板与对话框工具直接挂载渲染。
+    implementation(project(":miniapp-sdk"))
 
     // GenUI Agent SDK（内置完整项目：https://github.com/Quor-a/GenUI-Agent 的 sdk/ 模块）。
     // 去品牌化后包名为 com.ai.assistance.quro.genui.sdk。

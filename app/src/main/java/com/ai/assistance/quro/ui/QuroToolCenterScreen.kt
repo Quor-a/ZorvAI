@@ -49,6 +49,7 @@ import com.ai.assistance.quro.ui.icons.LucideIcon
 import com.ai.assistance.quro.ui.theme.Muted
 import com.ai.assistance.quro.core.miniapp.MiniAppEngine
 import com.ai.assistance.quro.core.miniapp.MiniAppBridgeInterface
+import com.yuanbao.miniapp.core.MiniAppEngine as NativeMiniAppEngine
 import com.ai.assistance.quro.core.tools.MiniAppTool
 import com.ai.assistance.quro.workflow.data.model.Workflow
 import com.ai.assistance.quro.workflow.data.WorkflowRepository
@@ -133,6 +134,7 @@ fun QuroToolCenterScreen(
             "vispro" -> VisProPanel(context, onRenderInChat)
             "flow" -> NodeEditorPanel(context, onRenderInChat)
             "miniapp" -> MiniAppPanel(context, onRenderInChat)
+            "miniapp_sdk" -> MiniAppSdkPanel(context, onRenderInChat)
             "kaleidobox" -> KaleidoBoxPanel(context, onRenderInChat, onAskAi)
             "pkgmgr" -> PackageManagerPanel(context)
             "plugins" -> PluginManagerPanel(context)
@@ -145,6 +147,7 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
     val cs = MaterialTheme.colorScheme
     val cards = listOf(
         Triple("miniapp", "小程序", "Web 应用工程：AI 写 app.json + 多页面 HTML，native.* 原生桥调用真·Android 能力；支持导入 HTML、Python/JS/CSS 直接跑；可在对话框预览"),
+        Triple("miniapp_sdk", "小程序 (原生引擎)", "移植自 Quor-a/GenUI 的原生小程序引擎：自研 C++ JS 引擎 + WXML/WXSS + Flex 布局 + Canvas/GLES 自绘渲染，微信标准范式；AI 用 miniapp_sdk 工具生成工程，这里直接渲染"),
         Triple("toolbox", "工具箱", "文件管理 / 浏览器 / IDE"),
         Triple("pkgmgr", "包管理", "apt/apk/dnf/pacman 安装/卸载/升级/查询软件"),
         Triple("sandbox", "隔离沙箱", "免权限文件沙箱与 shell"),
@@ -922,6 +925,101 @@ private fun MiniAppPanel(
                         engineRef.value = engine
                         wvRef.value = this
                     }
+                },
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 原生小程序引擎面板：移植自 Quor-a/GenUI 的 miniapp-sdk
+// （自研 C++ JS 引擎 + WXML/WXSS + Flex 布局 + Canvas/GLES 自绘渲染）
+// AI 用 miniapp_sdk 工具生成工程（落 filesDir/miniapps/<id>），这里直接渲染。
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun MiniAppSdkPanel(
+    context: Context,
+    onRenderInChat: (type: String, value: String, label: String) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    var refreshKey by remember { mutableStateOf(0) }
+    val appIds = remember(refreshKey) { NativeMiniAppEngine.listAppIds(context) }
+    var current by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    // 引擎只需初始化一次（默认 Config：Canvas 后端 + 60fps + 日志开）
+    LaunchedEffect(Unit) { NativeMiniAppEngine.init(context) }
+
+    Column(Modifier.fillMaxSize()) {
+        if (current == null) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "小程序 (原生引擎)",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = cs.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { refreshKey++ }) { Text("刷新") }
+            }
+            Spacer(Modifier.height(4.dp))
+            if (appIds.isEmpty()) {
+                Text(
+                    "还没有原生小程序。让 AI 用 miniapp_sdk 工具创建（在对话框里就能生成 WXML/WXSS/JS 工程），" +
+                        "或先在工具中心用「小程序」导入。内置演示 hello / todo 也应出现在列表里。",
+                    color = Muted,
+                    modifier = Modifier.padding(16.dp),
+                )
+            } else {
+                LazyColumn(
+                    Modifier.fillMaxSize().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(appIds) { id ->
+                        Card(
+                            Modifier.fillMaxWidth().clickable { current = id },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant),
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(id, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
+                                val isBuiltin = runCatching { context.assets.list("miniprograms/$id")?.isNotEmpty() == true }.getOrDefault(false)
+                                if (!isBuiltin) {
+                                    TextButton(onClick = {
+                                        val dir = java.io.File(NativeMiniAppEngine.userAppsRoot(context), id)
+                                        if (dir.deleteRecursively()) { refreshKey++; Toast.makeText(context, "已删除 $id", Toast.LENGTH_SHORT).show() }
+                                    }) { Text("删除") }
+                                }
+                                TextButton(onClick = { current = id }) { Text("打开") }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { current = null }) { Text("← 返回列表") }
+                Text(current ?: "", Modifier.weight(1f).padding(12.dp), color = Muted)
+            }
+            AndroidView(
+                modifier = Modifier.fillMaxSize().weight(1f),
+                factory = { ctx ->
+                    NativeMiniAppEngine.createResolved(ctx, current!!) ?: android.widget.TextView(ctx).apply {
+                        text = "未找到小程序：${current}\n（工程需在 filesDir/miniapps/${current}/ 下含 app.json 与页面 wxml；" +
+                            "也可在 assets/miniprograms/ 下放内置演示）"
+                    }
+                },
+                onRelease = { view ->
+                    if (view is com.yuanbao.miniapp.core.MiniAppView) NativeMiniAppEngine.destroy(view)
                 },
             )
         }
