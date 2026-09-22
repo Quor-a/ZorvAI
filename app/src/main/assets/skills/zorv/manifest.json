@@ -558,6 +558,51 @@
       "size": 13626,
       "suite": "self",
       "signature": "0ec42042947e6c0aa2c6ae4445606870279163545aefaa305cbb905f570e3e8e"
+    },
+    {
+      "id": "zorv_2b7fc360bade",
+      "name": "zorv-ui-craft",
+      "description": "生成式界面手艺规范 —— 用 GenUI DSL 写界面时必须遵守的布局、尺寸、密度、命名规则。当用户要求生成界面 / 卡片 / 面板 / 仪表盘 / 落地页 / 表单 / 任何可视化 UI 时必须触发。专治「大片空白」「文字竖排」「文字叠在一起」「组件不会用」「自造标签」这五类实测高发问题。",
+      "file": "zorv-ui-craft.md",
+      "size": 6055,
+      "suite": "design-studio",
+      "signature": "5878f799af945c2112802f2dda7e452438226f2d6867069cd31ebd47c3a009c7"
+    },
+    {
+      "id": "zorv_2f533881c740",
+      "name": "zorv-design-systems",
+      "description": "品牌级设计系统速查 —— 12 套成熟配色的实际色值、字体配对、圆角与间距规范。当用户要求生成界面但没指定配色风格，或要求「高级感 / 专业 / 简约 / 科技 / 温暖 / 高端」等风格描述时触发。直接引用这里的 token，不要自己瞎编颜色。",
+      "file": "zorv-design-systems.md",
+      "size": 5310,
+      "suite": "design-studio",
+      "signature": "4eaa7a7b86fa3ba01e33807c8edd2de9349a2051c7a3b33eb2244df6d562b680"
+    },
+    {
+      "id": "zorv_01cb71ab3a2d",
+      "name": "zorv-ui-critique",
+      "description": "界面自检评分 —— 生成界面后按「布局 / 层次 / 配色 / 排版 / 密度」五个维度给自己打分，低于阈值必须重做。当用户要求生成或优化界面、或评价一个界面好不好看时触发。写完界面不要急着交付，先用这份清单过一遍。",
+      "file": "zorv-ui-critique.md",
+      "size": 3811,
+      "suite": "design-studio",
+      "signature": "5d15c3ab77440e19d12ae161044c6ad74a6d26b1d7ba6bec14cf8951ac801c76"
+    },
+    {
+      "id": "zorv_71be37fa3ed1",
+      "name": "zorv-visual-art",
+      "description": "美术指导技能 —— 配色理论、视觉风格决策、质感与光影、构图与留白、图标与装饰的克制使用。当用户要求「好看 / 高级 / 有设计感 / 配色 / 视觉风格 / 海报 / 封面 / 主题」或需要为界面做美术决策时触发。解决「颜色脏」「风格不统一」「装饰堆砌」三类问题。",
+      "file": "zorv-visual-art.md",
+      "size": 4611,
+      "suite": "design-studio",
+      "signature": "819f398bbf98c63a199bd5d5751df1a233217e2a633d9005c37c893a06368208"
+    },
+    {
+      "id": "zorv_35bc623eec5a",
+      "name": "zorv-mobile-patterns",
+      "description": "移动端界面模式库 —— 仪表盘、落地页、列表、详情、表单、空状态、设置、个人中心等 8 类常见界面的标准骨架与推荐组件结构。当用户要求生成任何具体界面（\"做个天气卡\"\"做个设置页\"\"做个列表\"）时触发，用来确定这一屏该由哪几块组成。",
+      "file": "zorv-mobile-patterns.md",
+      "size": 4620,
+      "suite": "design-studio",
+      "signature": "bdbb5302630cd8486683ffaf913b95051fc4c8905f19fa7d22c70384b6532964"
     }
   ]
 }

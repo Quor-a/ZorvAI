@@ -10,6 +10,7 @@ import com.ai.assistance.quro.core.QuroToolSpec
 import com.ai.assistance.quro.core.memory.QuroMemoryRepository
 import com.ai.assistance.quro.core.model.QuroModelConfig
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
+import com.ai.assistance.quro.core.skill.QuroSkillStore
 import com.ai.assistance.quro.core.soul.QuroSoulPromptEngine
 import com.ai.assistance.quro.core.soul.SoulContext
 import com.ai.assistance.quro.core.tools.QuroToolEngine
@@ -88,8 +89,27 @@ class ZorvBrain(private val context: Context) {
         sb.append("## GenUI 表达层（本会话的输出形态）\n")
         sb.append("以下约束的是「你怎么表达」，不改变你的身份：你的名字与人格始终以当前激活的人格卡为准。\n\n")
         sb.append(GenUiRules.RULES)
+        appendDesignSkills(sb)
 
         return sb.toString().trimEnd()
+    }
+
+    /**
+     * 设计/美术技能层（宿主的技能库，默认启用、可在「技能」页单独关掉）。
+     *
+     * GenUI 每一轮都是在写界面，所以这一层**总是注入**，不做触发词匹配——
+     * 触发词那套是给主对话省 token 用的，这里省了就等于让模型裸奔。
+     * 内容来自宿主 QuroSkillStore 的 design-studio 套件：界面手艺 / 设计系统 / 自检评分 / 美术指导 / 模式库。
+     */
+    private fun appendDesignSkills(sb: StringBuilder) {
+        val skills = runCatching { QuroSkillStore.designSkills(appCtx) }.getOrNull()
+        if (skills.isNullOrEmpty()) return
+        sb.append("\n\n## 设计技能层（宿主技能库 · 默认启用）\n")
+        sb.append("下面是若干份设计规范，生成界面时按其执行；与上文冲突时，以本层为准。\n\n")
+        skills.forEach { s ->
+            sb.append("### 技能：").append(s.name).append("\n")
+            sb.append(s.prompt.trim()).append("\n\n")
+        }
     }
 
     // ─────────────────────────── 工具（宿主的完整工具集） ───────────────────────────

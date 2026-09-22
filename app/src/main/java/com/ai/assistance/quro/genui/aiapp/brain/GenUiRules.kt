@@ -35,6 +35,34 @@ object GenUiRules {
 4. 如果发现用了不存在的组件，立即用 self_correct 步骤修正，替换为已有组件或先用 register_component 工具注册再使用。
 5. 这条规则是铁律，违反会导致运行时崩溃，必须严格遵守。
 
+【补充白名单 —— 上面 10 个领域没列、但同样已注册可用的类型】
+上面那张 10 领域清单并不完整。下面这些同样是 SDK 真实注册的类型，**可以直接用，不算违规**，
+尤其 §2 让你「优先使用的模式组件」全部在这里面 —— 之前它们被遗漏在清单外，
+导致「铁律说只能用清单里的」和「§2 让你优先用模式组件」自相矛盾。现在以本节为准：
+· 模式组件（**优先用它们，别从零拼基础组件**）：section, header_bar, two_column_grid,
+  info_card, stat_card_pattern, media_card_pattern, list_item_pattern, empty_state_pattern,
+  loading_state_pattern, chip_row, rating_row, progress_label, user_avatar_row
+· 对话框：simple_dialog, about_dialog, input_dialog, list_dialog, rating_dialog, share_dialog,
+  permission_dialog, bottom_sheet_dialog, fullscreen_dialog, delete_confirm_dialog, date_picker_dialog
+· 列表行 / 卡片 / 条：chat_row, article_row, file_row, contact_row, event_row, mail_row, server_row,
+  download_row, archive_row, chapter_row, auth_step_row, help_faq_row, theme_picker_row, search_result_row,
+  alarm_row, dependency_row, ide_tab_row, font_preview_row, like_list_row, sms_code_row, genui_feature_row,
+  agent_card, info_card, iso_card, license_card, map_pin_card, meal_card, memory_card, planet_card,
+  portfolio_card, pricing_card, scenery_card, dev_env_card, device_env_card, runtime_env_card,
+  element_card, compress_card, permission_card, genui_intro_card, official_account_card,
+  web_nav_bar, recording_bar, sms_bubble, ai_chat_bubble, float_panel, nebula_pill, server_status_pill
+· 场景 / 装饰 / 其它：ai_thinking, alarm_ring, app_icon, bg_grid_glow, bg_mesh, big_switch,
+  calendar_month, connection_status, cosmos_scene, cube_3d, desktop_window, dice_display, diet_summary,
+  dimension_axis, dir_tree, exec_progress, exec_step, feedback_box, flat_shapes, flow_background,
+  focus_timer, grain_overlay, greeting_hero, html_tag_view, icon_grid, ide_window, keyboard_input,
+  like_button, long_press_hint, memory_timeline, message_composer, novel_reader, orbit_ring, pager_dots,
+  panel_docked, particle_drift, pay_sheet, pay_success, permission_prompt, phone_mockup, pixel_avatar,
+  pixel_banner, rain_effect, route_steps, scroll_indicator, sparkle_rain, speed_test, storage_meter,
+  taskbar_dock, vip_banner, web_landing, welcome_banner, work_stats
+
+⛔ 已从规则中删除的「幽灵类型」（清单里写过但 SDK 根本没注册，写了就是未知组件卡）：
+stepper。需要步进器请用 row + text + button（±）自己拼，不要写 stepper。
+
 【GenUI DSL 格式】
 ```json
 {
@@ -831,7 +859,7 @@ add, arrowBack, arrowForward, call, check, clear, close, delete, edit, email, fa
 
 ### 8. 扩展组件库 v2（36 个新类型）
 数据可视化：bar_chart{data:[{label,value}],color} | line_chart{data,color} | donut_chart{value:0-100,label} | gauge{value,min,max} | stat_tile{value,label,delta,trend:up/down} | progress_ring{value:0-1} | heat_strip{data} | sparkline{data}
-交互控件：rating_bar{value:0-5} | slider{value,min,max} | switch_toggle{value,label} | checkbox_item{value,label} | stepper{value,step,min,max} | countdown_timer{totalSeconds,seconds} | chip_filter{options:[..],selectedIndex} | badge{count}
+交互控件：rating_bar{value:0-5} | slider{value,min,max} | switch_toggle{value,label} | checkbox_item{value,label} | countdown_timer{totalSeconds,seconds} | chip_filter{options:[..],selectedIndex} | badge{count}（⛔ 无 stepper，别写）
 动漫/人物/美术：avatar{emoji,name} | avatar_group{emojis:[..]} | character_card{emoji,name,title,mood,gradientStart,gradientEnd} | mood_badge{emoji,label} | gradient_orb{from,to} | sticker_emoji{emoji,rotate} | rank_medal{rank,label} | speech_bubble{text,role:left|right}
 布局/媒体：banner_hero{title,subtitle,cta,gradientStart,gradientEnd} | glass_card(含children) | audio_wave{track} | timer_progress{total,done}
 

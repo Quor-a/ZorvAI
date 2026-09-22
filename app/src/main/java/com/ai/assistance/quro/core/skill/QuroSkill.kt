@@ -125,13 +125,14 @@ data class QuroSkill(
  */
 object QuroSkillSuites {
     val ORDER: List<String> = listOf(
-        "cloudflare", "douyin-tiktok", "edgeone", "github", "deploy",
+        "design-studio", "cloudflare", "douyin-tiktok", "edgeone", "github", "deploy",
         "frontend-design", "humanizer", "search", "weather", "music",
         "ai-news", "document", "ppt-mindmap", "agent", "memory",
         "code", "self", "wxa", "ima", "qq-bot", "contract", "docker", "patent",
         "general",
     )
     val LABELS: Map<String, String> = mapOf(
+        "design-studio" to "设计 / 美术套件（默认启用）",
         "cloudflare" to "Cloudflare 套件",
         "douyin-tiktok" to "抖音 / TikTok 套件",
         "edgeone" to "EdgeOne 套件",
@@ -281,8 +282,15 @@ object QuroSkillStore {
      * - 内置技能的定位是「注入系统提示词的行为约束 / 能力说明」，不应默认全部开启、更不应
      *   默认注册成 function-calling 工具（否则离线模型会被 60+ 技能工具压垮 → 调一次工具就卡死/乱码）。
      * - 用户需要哪个技能，到「技能」页手动开启即可；开启后仍 alwaysOn=false（按需/触发注入，不污染全局提示词）。
+     *
+     * ✅ 唯一例外：[SUITE_DESIGN]（设计/美术套件）默认 enabled=true：
+     * 这一组教会模型「怎么写对界面」，是 GenUI 渲染质量的地基（见 [designSkills]）。
+     * 仍然 callable=false（不注册成工具，避免重演工具爆炸）+ alwaysOn=false（按触发词注入，不常驻）。
      */
     private const val KEY_BUILTIN_ZORV = "builtin_zorv_v1"
+
+    /** 设计/美术套件：默认启用、按需注入的那组内建技能。 */
+    const val SUITE_DESIGN = "design-studio"
 
     fun seedBuiltinZorvSkills(context: Context) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -317,7 +325,7 @@ object QuroSkillStore {
                         id = id,
                         suite = suite,
                         signState = signState,
-                        enabled = false,
+                        enabled = (suite == SUITE_DESIGN),
                         callable = false,
                         alwaysOn = false,
                         updatedAt = System.currentTimeMillis(),
@@ -347,7 +355,8 @@ object QuroSkillStore {
         val list = loadRaw(context)
         var changed = false
         val out = list.map { s ->
-            if (s.id.startsWith("zorv_") && (s.enabled || s.callable || s.alwaysOn)) {
+            // 设计套件是例外：它默认开，不能被这次「全部关掉」的迁移误伤
+            if (s.id.startsWith("zorv_") && s.suite != SUITE_DESIGN && (s.enabled || s.callable || s.alwaysOn)) {
                 changed = true
                 s.copy(enabled = false, callable = false, alwaysOn = false, updatedAt = System.currentTimeMillis())
             } else s
@@ -355,10 +364,47 @@ object QuroSkillStore {
         if (changed) save(context, out)
     }
 
+    /**
+     * 一次性迁移：把设计/美术套件翻转为默认启用（enabled=true / callable=false / alwaysOn=false）。
+     *
+     * 背景：旧版本把 62 个内置技能一律 enabled=false，导致模型完全读不到「怎么写对界面」的规范，
+     * 界面质量全靠模型自己猜 —— 这是「组件不好看 / 大片空白 / 文字叠印」的根因之一。
+     * 设计套件改为默认启用，但**保持 callable=false**：只注入提示词，不注册成 function-calling 工具，
+     * 因此不会重演离线模型被 60+ 技能工具压垮的问题。
+     * 幂等（KEY_BUILTIN_ZORV_DESIGN_ON 守卫）；新装设备由 seedBuiltinZorvSkills 的默认值兜底。
+     */
+    private const val KEY_BUILTIN_ZORV_DESIGN_ON = "builtin_zorv_design_on_v1"
+
+    fun migrateDesignSkillsOn(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_BUILTIN_ZORV_DESIGN_ON, false)) return
+        prefs.edit().putBoolean(KEY_BUILTIN_ZORV_DESIGN_ON, true).apply()
+        val list = loadRaw(context)
+        var changed = false
+        val out = list.map { s ->
+            if (s.suite == SUITE_DESIGN && (!s.enabled || s.callable || s.alwaysOn)) {
+                changed = true
+                s.copy(enabled = true, callable = false, alwaysOn = false, updatedAt = System.currentTimeMillis())
+            } else s
+        }
+        if (changed) save(context, out)
+    }
+
+    /**
+     * 当前启用、可被注入提示词的设计/美术套件技能。
+     *
+     * GenUI Agent 的大脑（ZorvBrain）用它拼「界面手艺 + 配色 + 自检 + 模式库」这几层，
+     * 让模型在生成界面前就有规矩可依；用户在「技能」页关掉哪个，这里就少哪个。
+     */
+    fun designSkills(context: Context): List<QuroSkill> =
+        runCatching { load(context).filter { it.suite == SUITE_DESIGN && it.enabled && it.prompt.isNotBlank() } }
+            .getOrDefault(emptyList())
+
     fun load(context: Context): List<QuroSkill> {
         clearBuiltinSkillsOnce(context)
         seedBuiltinZorvSkills(context)
         migrateBuiltinSkillsOff(context)
+        migrateDesignSkillsOn(context)
         val out = mutableListOf<QuroSkill>()
         runCatching {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -504,12 +550,17 @@ object QuroSkillStore {
             ?: Regex("^name:\\s*(.+)$", RegexOption.MULTILINE).find(text)?.groupValues?.get(1)?.trim()
             ?: return emptyList()
         val description = Regex("^description:\\s*(.+)$", RegexOption.MULTILINE).find(frontmatter)?.groupValues?.get(1)?.trim() ?: ""
+        // 触发词：开放标准 SKILL.md 的可选字段，逗号分隔。缺省回落到技能名，
+        // 这样内置技能（随包 SKILL.md）也能被 matchTriggerSkills 命中，做到「默认启用 + 按需注入」。
+        val trigger = Regex("^trigger:\\s*(.+)$", RegexOption.MULTILINE).find(frontmatter)?.groupValues?.get(1)?.trim()
+            ?: name
         val prompt = body.trim().ifBlank { return emptyList() }
         return listOf(
             QuroSkill(
                 id = UUID.randomUUID().toString(),
                 name = name,
                 description = description,
+                trigger = trigger,
                 prompt = prompt,
                 enabled = true,
                 updatedAt = System.currentTimeMillis(),
