@@ -2,7 +2,7 @@ package com.ai.assistance.quro.genui.sdk.render
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -90,10 +90,14 @@ class ComponentRegistry {
 fun FallbackRenderer(component: UIComponent, ctx: RenderContext) {
     val hasChildren = component.children.isNotEmpty()
 
+    // ⚠️ 这里曾经是 fillMaxSize()：一个 AI 随手自造的小类型（比如 `spacer2`）
+    //    会被渲染成占满整屏剩余高度的淡红错误卡 —— 界面上就是莫名其妙的一大片空白
+    //    （用户截图里「卡片下方一大块空」「卡片之间隔了 160dp」多半就是这么来的）。
+    //    未知类型只该占它该占的位置：横向撑满、纵向**包内容**。
     Surface(
         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f),
         shape = MaterialTheme.shapes.small,
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
             // 警告标签
