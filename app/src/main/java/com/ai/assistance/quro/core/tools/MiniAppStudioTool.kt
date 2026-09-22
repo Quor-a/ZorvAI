@@ -49,6 +49,10 @@ class MiniAppStudioTool : QuroTool {
 - list：列出所有小程序工程
 - delete：删除整个工程，或删除某个文件（传 path）
 - run：返回可直接在对话框渲染的自包含 HTML（自动内联同目录的 .js/.css）——**create 之后必须 run，否则界面根本没交付**
+- save：把一整段 HTML 直接存成标准工程（自动补 app.json + pages/index/index.html）。
+  **GenUI 的 ```html 通道产出、或对话里生成好的单页应用，用这个固化成小程序。**
+- wrap：把一段代码包装成可渲染 HTML（lang=js|python|css）。python 走 Brython，无需 Termux。
+- clean：清空全部小程序工程
 - manual：取回开发手册（参数 topic）：
   · 不传 / "studio" → 小程序工作室手册：工程结构 + Page() 运行时 + native.* 逐个函数 + 错误清单
   · 老 topic（"native" / "traps" / "errors" / "compare"）→ 返回「该能力已下线」说明
@@ -58,30 +62,64 @@ class MiniAppStudioTool : QuroTool {
     override val parametersJson = """{
         "type":"object",
         "properties":{
-            "action":{"type":"string","description":"操作：create|write|read|list|delete|run|manual"},
-            "name":{"type":"string","description":"工程名（create/write/read/delete/run 时必填）"},
+            "action":{"type":"string","description":"操作：create|write|read|list|delete|run|save|wrap|clean|manual"},
+            "name":{"type":"string","description":"工程名（create/write/read/delete/run/save 时必填）"},
             "files":{"type":"array","description":"文件数组（仅 create 时需要），每项含 path 和 content","items":{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}}}},
             "path":{"type":"string","description":"文件路径，相对工程根（write/read/delete 单个文件时需要）"},
             "content":{"type":"string","description":"文件内容（write 时需要）"},
             "entry":{"type":"string","description":"入口页面路径（run 时需要，默认 pages/index/index.html）"},
+            "html":{"type":"string","description":"完整 HTML 文本（save 时必填）"},
+            "code":{"type":"string","description":"代码文本（wrap 时必填）"},
+            "lang":{"type":"string","description":"wrap 的代码语言：js|python|css（省略时从 file 后缀推断）"},
+            "file":{"type":"string","description":"文件名（wrap 时用于推断 lang，如 app.py）"},
             "topic":{"type":"string","description":"manual 的主题：studio（工作室手册，默认）；老 topic native/traps/errors/compare 已下线，会返回下线说明"}
         },
         "required":["action"]
     }"""
 
     companion object {
-        private const val STUDIO = "studio/miniapp"
+        /**
+         * 统一后的小程序根目录：filesDir/miniapp。
+         *
+         * 历史上有两个并存的小程序体系：
+         *  · 工具中心「小程序」   → filesDir/workbench（单入口多文件，无路由/无原生桥）
+         *  · 工具中心「小程序工作室」→ filesDir/studio/miniapp（app.json 路由 + native.* 桥）
+         * 现已合体为唯一的「小程序」，目录也归一到 filesDir/miniapp，
+         * 两个旧目录在首次访问时一次性搬迁过来（幂等），旧工程不会丢。
+         */
+        private const val ROOT = "miniapp"
+        private const val LEGACY_STUDIO = "studio/miniapp"
+        private const val LEGACY_WORKBENCH = "workbench"
+        private const val KEY_MIGRATED = "miniapp_unified_v1"
 
         fun getRoot(context: Context): File {
-            val dir = File(context.filesDir, STUDIO)
+            val dir = File(context.filesDir, ROOT)
             if (!dir.exists()) dir.mkdirs()
+            migrateLegacyOnce(context, dir)
             return dir
         }
 
-        fun getProjectDir(context: Context, name: String): File {
-            val safe = name.replace(Regex("[^A-Za-z0-9_.\\-]"), "_").replace("..", "_")
-            return File(getRoot(context), safe)
+        /** 把 workbench/ 与 studio/miniapp/ 下的旧工程搬进统一目录；幂等，搬过的不再动。 */
+        private fun migrateLegacyOnce(context: Context, root: File) {
+            val prefs = context.getSharedPreferences("quro_miniapp", Context.MODE_PRIVATE)
+            if (prefs.getBoolean(KEY_MIGRATED, false)) return
+            prefs.edit().putBoolean(KEY_MIGRATED, true).apply()
+            listOf(LEGACY_STUDIO, LEGACY_WORKBENCH).forEach { legacy ->
+                val src = File(context.filesDir, legacy)
+                if (!src.exists() || !src.isDirectory) return@forEach
+                src.listFiles()?.filter { it.isDirectory }?.forEach { proj ->
+                    val dst = File(root, sanitize(proj.name))
+                    if (dst.exists()) return@forEach
+                    runCatching { proj.copyRecursively(dst, overwrite = false) }
+                }
+            }
         }
+
+        private fun sanitize(name: String): String =
+            name.replace(Regex("[^A-Za-z0-9_.\\-]"), "_").replace("..", "_")
+
+        fun getProjectDir(context: Context, name: String): File =
+            File(getRoot(context), sanitize(name))
     }
 
     override fun run(context: Context, arguments: String): String {
@@ -94,11 +132,227 @@ class MiniAppStudioTool : QuroTool {
             "list" -> listProjects(context)
             "delete" -> deleteProject(context, json)
             "run" -> runProject(context, json)
+            // save：把一整段 HTML 直接存成一个小程序工程（GenUI html 通道「保存为小程序」走这里，
+            // 也让 AI 能把对话里生成好的单页应用固化下来，不用手工拆成 app.json + pages）。
+            "save" -> saveHtml(context, json)
+            // wrap：把一段 js / python / css 包装成可渲染的 HTML 页面（原「小程序」=workbench 的能力）。
+            "wrap" -> wrapCode(context, json)
+            "clean" -> cleanAll(context)
             // manual：把完整手册（函数级细节 + 可交互范式 + 错误清单）返给 AI。
             // 手册正文在 MiniAppManual 里（唯一真相源，GenUI 侧同源引用），此处只做分发。
             "manual" -> MiniAppManual.section(json.optString("topic", ""))
-            else -> "未知操作：$action。支持：create/write/read/list/delete/run/manual"
+            else -> "未知操作：$action。支持：create/write/read/list/delete/run/save/wrap/clean/manual"
         }
+    }
+
+    /**
+     * 把一整段 HTML 存成小程序工程。
+     *
+     * 生成的工程是标准形态（app.json + pages/index/index.html），所以存完就能用
+     * `miniapp(action="run")` 预览、也能在工具中心「小程序」面板里看到。
+     */
+    private fun saveHtml(context: Context, json: JSONObject): String {
+        val name = json.optString("name", "").ifBlank { return "缺少 name 参数" }
+        val html = json.optString("html", "").ifBlank { return "缺少 html 参数" }
+        val dir = getProjectDir(context, name)
+        dir.mkdirs()
+        val pageDir = File(dir, "pages/index")
+        pageDir.mkdirs()
+        return try {
+            File(pageDir, "index.html").writeText(html, StandardCharsets.UTF_8)
+            val appJsonFile = File(dir, "app.json")
+            if (!appJsonFile.exists()) {
+                appJsonFile.writeText(
+                    JSONObject().apply {
+                        put("appId", "com.ai.assistance.quro.miniapp.${sanitize(name)}")
+                        put("version", "1.0.0")
+                        put("name", name)
+                        put("pages", JSONArray().apply { put("pages/index/index") })
+                        put("window", JSONObject().apply { put("navigationBarTitle", name) })
+                    }.toString(2),
+                    StandardCharsets.UTF_8
+                )
+            }
+            "✅ 已保存为小程序「$name」（pages/index/index.html，${html.length} 字符）\n" +
+                "用 miniapp(action=\"run\", name=\"$name\") 预览；也可在工具中心「小程序」里打开。"
+        } catch (e: Exception) {
+            "❌ 保存失败：${e.message}"
+        }
+    }
+
+    /**
+     * 把 js / python / css 包装成可渲染的 HTML 页面（原 workbench 的能力，合体后归到本工具）。
+     * - python 走 Brython（CDN 加载，无需 Termux）
+     * - js 注入 console 面板
+     * - css 套一个示例页面预览
+     */
+    private fun wrapCode(context: Context, json: JSONObject): String {
+        val lang = json.optString("lang", "").lowercase().ifBlank {
+            json.optString("file", "").substringAfterLast('.', "").lowercase()
+        }
+        val code = json.optString("code", "").ifBlank { return "缺少 code 参数" }
+        return when (lang) {
+            "js", "javascript" -> wrapJsAsHtml(code)
+            "py", "python" -> wrapPythonAsHtml(code)
+            "css" -> wrapCssAsHtml(code)
+            else -> "不支持的 lang：$lang（支持 js / python / css）"
+        }
+    }
+
+    private fun wrapJsAsHtml(jsCode: String): String {
+        return """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { margin: 0; padding: 16px; font-family: 'Fira Code', monospace; background: #1e1e1e; color: #d4d4d4; }
+        #output { margin-top: 16px; padding: 12px; background: #2d2d2d; border-radius: 8px; white-space: pre-wrap; }
+        .log { color: #d4d4d4; }
+        .error { color: #f44747; }
+        .warn { color: #cca700; }
+        .info { color: #569cd6; }
+    </style>
+</head>
+<body>
+    <div id="output"></div>
+    <script>
+        const output = document.getElementById('output');
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+
+        console.log = (...args) => {
+            const div = document.createElement('div');
+            div.className = 'log';
+            div.textContent = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            output.appendChild(div);
+            originalLog.apply(console, args);
+        };
+        console.error = (...args) => {
+            const div = document.createElement('div');
+            div.className = 'error';
+            div.textContent = args.join(' ');
+            output.appendChild(div);
+            originalError.apply(console, args);
+        };
+        console.warn = (...args) => {
+            const div = document.createElement('div');
+            div.className = 'warn';
+            div.textContent = args.join(' ');
+            output.appendChild(div);
+            originalWarn.apply(console, args);
+        };
+
+        try {
+            $jsCode
+        } catch(e) {
+            console.error('Error: ' + e.message);
+        }
+    </script>
+</body>
+</html>"""
+    }
+
+    private fun wrapCssAsHtml(cssCode: String): String {
+        return """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+$cssCode
+    </style>
+</head>
+<body>
+    <h1>CSS 预览</h1>
+    <p>这是一个示例段落，用于预览CSS效果。</p>
+    <button>示例按钮</button>
+    <div class="card">
+        <h2>卡片标题</h2>
+        <p>卡片内容</p>
+    </div>
+    <ul>
+        <li>列表项 1</li>
+        <li>列表项 2</li>
+        <li>列表项 3</li>
+    </ul>
+    <input type="text" placeholder="输入框">
+    <a href="#">链接</a>
+</body>
+</html>"""
+    }
+
+    private fun wrapPythonAsHtml(pythonCode: String): String {
+        val escaped = pythonCode
+            .replace("\\", "\\\\")
+            .replace("</script", "<\\/script")
+            .replace("`", "\\`")
+            .replace("\$", "\\$")
+        return """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1e1e1e; color: #d4d4d4; font-family: 'Fira Code', Consolas, monospace; font-size: 13px; }
+#header { background: #252526; padding: 8px 12px; border-bottom: 1px solid #3c3c3c; display: flex; align-items: center; gap: 8px; }
+#header .badge { background: #3b82f6; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+#output { padding: 12px; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+.stdout { color: #d4d4d4; }
+.stderr { color: #f44747; }
+</style>
+</head>
+<body>
+<div id="header"><span class="badge">Python</span><span>Workbench · Brython</span></div>
+<div id="output"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.13.1/brython.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.13.1/brython_stdlib.js"></script>
+<script id="python-code" type="text/python">$escaped</script>
+<script>
+var _out = document.getElementById('output');
+function _print() {
+    var args = Array.prototype.slice.call(arguments);
+    var line = args.map(function(a) {
+        if (a === undefined) return 'undefined';
+        if (a === null) return 'None';
+        if (typeof a === 'object') {
+            try { return JSON.stringify(a); } catch(e) { return String(a); }
+        }
+        return String(a);
+    }).join(' ');
+    var div = document.createElement('div');
+    div.className = 'stdout';
+    div.textContent = line;
+    _out.appendChild(div);
+}
+try {
+    brython({stdout: _print, stderr: function(s) {
+        var div = document.createElement('div');
+        div.className = 'stderr';
+        div.textContent = 'Error: ' + s;
+        _out.appendChild(div);
+    }});
+} catch(e) {
+    var div = document.createElement('div');
+    div.className = 'stderr';
+    div.textContent = 'Brython 加载失败: ' + e.message;
+    _out.appendChild(div);
+}
+</script>
+</body>
+</html>"""
+    }
+
+    /** 清空全部小程序工程。 */
+    private fun cleanAll(context: Context): String {
+        val root = getRoot(context)
+        val names = root.listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
+        if (names.isEmpty()) return "小程序目录为空，无需清理"
+        var ok = 0
+        names.forEach { if (runCatching { File(root, it).deleteRecursively() }.getOrDefault(false)) ok++ }
+        return "✅ 已清空 $ok/${names.size} 个小程序工程"
     }
 
     private fun createProject(context: Context, json: JSONObject): String {

@@ -130,7 +130,6 @@ fun QuroToolCenterScreen(
             null -> ToolGrid(onLaunch = onLaunch, onSelect = { selected = it })
             "sandbox" -> SandboxPanel(context)
             "db" -> DbPanel(context)
-            "workbench" -> WorkbenchPanel(context, onRenderInChat, onAskAi)
             "vispro" -> VisProPanel(context, onRenderInChat)
             "flow" -> NodeEditorPanel(context, onRenderInChat)
             "miniapp" -> MiniAppStudioPanel(context, onRenderInChat)
@@ -145,8 +144,7 @@ fun QuroToolCenterScreen(
 private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val cards = listOf(
-        Triple("workbench", "小程序", "AI 生成并在对话框渲染的 HTML/JS 小程序"),
-        Triple("miniapp", "小程序工作室", "完整移植 MiniAppFramework：AI 写 app.json+页面，原生桥调用真·Android 能力"),
+        Triple("miniapp", "小程序", "Web 应用工程：AI 写 app.json + 多页面 HTML，native.* 原生桥调用真·Android 能力；支持导入 HTML、Python/JS/CSS 直接跑；可在对话框预览"),
         Triple("toolbox", "工具箱", "文件管理 / 浏览器 / IDE"),
         Triple("pkgmgr", "包管理", "apt/apk/dnf/pacman 安装/卸载/升级/查询软件"),
         Triple("sandbox", "隔离沙箱", "免权限文件沙箱与 shell"),
@@ -306,127 +304,6 @@ private fun DbPanel(context: Context) {
                 fontFamily = FontFamily.Monospace,
                 color = cs.onSurface,
                 style = MaterialTheme.typography.bodySmall,
-            )
-        }
-    }
-}
-
-@Composable
-private fun WorkbenchPanel(
-    context: Context,
-    onRenderInChat: (type: String, value: String, label: String) -> Unit,
-    onAskAi: (prompt: String) -> Unit,
-) {
-    val cs = MaterialTheme.colorScheme
-    val root = remember { File(context.filesDir, "workbench") }
-    var refreshKey by remember { mutableStateOf(0) }
-    val projects = remember(refreshKey) {
-        root.listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
-    }
-    var html by remember { mutableStateOf<String?>(null) }
-    var current by remember { mutableStateOf<String?>(null) }
-
-    // 导入本地 HTML 文件为小程序项目（项目名取文件名）
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        val name = runCatching {
-            context.contentResolver.query(uri, null, null, null, null)?.use { c ->
-                val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                if (c.moveToFirst() && i >= 0) c.getString(i) else null
-            }
-        }.getOrNull() ?: "imported_${System.currentTimeMillis()}"
-        val base = name.substringBeforeLast(".", name).ifBlank { "imported_${System.currentTimeMillis()}" }
-        val content = runCatching {
-            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-        }.getOrNull()
-        if (content.isNullOrBlank()) {
-            Toast.makeText(context, "导入失败：无法读取文件", Toast.LENGTH_SHORT).show()
-            return@rememberLauncherForActivityResult
-        }
-        val dir = File(root, base)
-        if (dir.exists()) {
-            Toast.makeText(context, "已存在同名项目：$base", Toast.LENGTH_SHORT).show()
-            return@rememberLauncherForActivityResult
-        }
-        dir.mkdirs()
-        File(dir, "index.html").writeText(content, Charsets.UTF_8)
-        refreshKey++
-        Toast.makeText(context, "已导入项目：$base", Toast.LENGTH_SHORT).show()
-    }
-
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        if (html == null) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("小程序工作台", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
-                TextButton(onClick = { onAskAi("请使用 workbench 工具为我创建一个实用的 HTML/JS 小程序（例如：待办清单、计算器、记账本或单位换算器），并保存到小程序工作台（workbench）。生成后我会在工具中心-小程序工作台里打开并渲染到对话框。") }) { Text("AI 生成小程序") }
-                TextButton(onClick = { importLauncher.launch("text/html") }) { Text("导入") }
-            }
-            Spacer(Modifier.height(8.dp))
-            if (projects.isEmpty()) {
-                Text("小程序工作台为空（filesDir/workbench 下还没有项目）。点「AI 生成小程序」让 AI 用 workbench 工具创建，或点「导入」载入本地 HTML。", color = Muted)
-            } else {
-                LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(projects) { name ->
-                        Card(
-                            Modifier.fillMaxWidth().clickable {
-                                val idx = File(root, "$name/index.html")
-                                html = if (idx.exists()) idx.readText() else "<h3>$name</h3><p>未找到 index.html</p>"
-                                current = name
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant),
-                        ) {
-                            Text(name, Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
-                        }
-                    }
-                }
-            }
-        } else {
-            Row(Modifier.fillMaxWidth()) {
-                TextButton(onClick = { html = null; current = null }) { Text("← 返回列表") }
-                Text(current ?: "", Modifier.weight(1f).padding(12.dp), color = Muted)
-                TextButton(
-                    onClick = {
-                        onRenderInChat("miniapp", html ?: "", current ?: "小程序")
-                        Toast.makeText(context, "已发送到对话框渲染", Toast.LENGTH_SHORT).show()
-                    },
-                ) { Text("渲染到对话框") }
-                TextButton(
-                    onClick = {
-                        if (current != null && File(root, current!!).deleteRecursively()) {
-                            Toast.makeText(context, "已删除项目：$current", Toast.LENGTH_SHORT).show()
-                            html = null; current = null; refreshKey++
-                        } else {
-                            Toast.makeText(context, "删除失败", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                ) { Text("删除") }
-            }
-            AndroidView(
-                modifier = Modifier.fillMaxSize().weight(1f).clip(RoundedCornerShape(10.dp)),
-                factory = { ctx ->
-                    WebView(ctx).apply {
-                        webViewClient = WebViewClient()
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        loadDataWithBaseURL(
-                            "file://${File(root, current ?: "").absolutePath}/",
-                            html ?: "",
-                            "text/html",
-                            "utf-8",
-                            null,
-                        )
-                    }
-                },
-                update = { wv ->
-                    wv.loadDataWithBaseURL(
-                        "file://${File(root, current ?: "").absolutePath}/",
-                        html ?: "",
-                        "text/html",
-                        "utf-8",
-                        null,
-                    )
-                },
             )
         }
     }
@@ -934,7 +811,8 @@ private fun MiniAppStudioPanel(
     onRenderInChat: (type: String, value: String, label: String) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val root = remember { File(context.filesDir, "studio/miniapp") }
+    // 统一后的根目录：filesDir/miniapp（旧的 workbench/ 与 studio/miniapp/ 已自动迁入）
+    val root = remember { MiniAppStudioTool.getRoot(context) }
     var refreshKey by remember { mutableStateOf(0) }
     val projects = remember(refreshKey) {
         root.listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
@@ -943,6 +821,36 @@ private fun MiniAppStudioPanel(
     val wvRef = remember { mutableStateOf<WebView?>(null) }
     val engineRef = remember { mutableStateOf<MiniAppEngine?>(null) }
     val scope = rememberCoroutineScope()
+
+    // 导入本地 HTML 为小程序工程（合体前「小程序」=workbench 面板的能力，保留在此）
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val rawName = runCatching {
+            context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (c.moveToFirst() && i >= 0) c.getString(i) else null
+            }
+        }.getOrNull()
+        val base = (rawName?.substringBeforeLast(".", rawName) ?: "imported")
+            .ifBlank { "imported_${System.currentTimeMillis()}" }
+        val content = runCatching {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull()
+        if (content.isNullOrBlank()) {
+            Toast.makeText(context, "导入失败：无法读取文件", Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch(Dispatchers.IO) {
+            val res = MiniAppStudioTool().run(
+                context,
+                JSONObject().put("action", "save").put("name", base).put("html", content).toString()
+            )
+            withContext(Dispatchers.Main) {
+                refreshKey++
+                Toast.makeText(context, res.take(120), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     // 系统返回键：小程序内部有多页历史时先在小程序内返回（engine.handleBack），否则退回工程列表
     BackHandler(enabled = current != null) {
@@ -953,7 +861,8 @@ private fun MiniAppStudioPanel(
     Column(Modifier.fillMaxSize()) {
         if (current == null) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("小程序工作室", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
+                Text("小程序", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
+                TextButton(onClick = { importLauncher.launch("text/html") }) { Text("导入 HTML") }
                 TextButton(onClick = {
                     scope.launch(Dispatchers.IO) {
                         val res = MiniAppStudioTool().run(context, JSONObject().put("action", "create").put("name", "demo").toString())
@@ -963,7 +872,7 @@ private fun MiniAppStudioPanel(
             }
             Spacer(Modifier.height(8.dp))
             if (projects.isEmpty()) {
-                Text("小程序工作台为空（filesDir/studio/miniapp 下还没有工程）。点「新建示例」，或让 AI 用 miniapp 工具创建并写入。", color = Muted, modifier = Modifier.padding(16.dp))
+                Text("还没有小程序。点「新建示例」或「导入 HTML」，也可以让 AI 用 miniapp 工具创建（在对话框里就能预览）。", color = Muted, modifier = Modifier.padding(16.dp))
             } else {
                 LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(projects) { name ->

@@ -13,6 +13,7 @@ import com.ai.assistance.quro.genui.aiapp.core.GenUILlmResult
 import com.ai.assistance.quro.genui.aiapp.core.GenUIToolCall
 import com.ai.assistance.quro.genui.aiapp.core.GenUIToolSpec
 import com.ai.assistance.quro.core.model.QuroModelConfig
+import com.ai.assistance.quro.core.tools.MiniAppStudioTool
 import com.ai.assistance.quro.core.tools.VisualPendingQuestion
 import com.ai.assistance.quro.core.tools.VisualQuestionQueue
 import com.ai.assistance.quro.genui.aiapp.net.GenUILlmClient
@@ -345,6 +346,41 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeChannel() {
         _state.update { it.copy(channel = null) }
+    }
+
+    /**
+     * 把当前通道页（主要是 html 通道）保存成一个「小程序」工程。
+     *
+     * 落盘到宿主统一目录 filesDir/miniapp/<工程名>/，与工具中心「小程序」面板、
+     * miniapp 工具共享同一份文件——存完就能在工具中心打开，AI 也能用 miniapp 工具继续改。
+     * 走的是 MiniAppStudioTool 的 save，保证工程结构（app.json + pages/index/index.html）标准。
+     */
+    fun saveChannelAsMiniApp(title: String, html: String) {
+        val ctx = getApplication<Application>().applicationContext
+        viewModelScope.launch(Dispatchers.IO) {
+            val name = sanitizeAppName(title)
+            val res = runCatching {
+                MiniAppStudioTool().run(
+                    ctx,
+                    org.json.JSONObject()
+                        .put("action", "save")
+                        .put("name", name)
+                        .put("html", html)
+                        .toString()
+                )
+            }.getOrDefault("❌ 保存失败")
+            withContext(Dispatchers.Main) {
+                android.widget.Toast.makeText(ctx, res.take(140), android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun sanitizeAppName(title: String): String {
+        val base = title.trim()
+            .replace(Regex("[\\s/\\\\:*?\"<>|]+"), "_")
+            .replace(Regex("[^A-Za-z0-9_.\\-一-龥]"), "_")
+            .trim('_', '.')
+        return base.ifBlank { "html_app_${System.currentTimeMillis() % 100000}" }.take(40)
     }
 
     /** 画布返回聊天主页（保留历史记录，仅收起当前界面） */
