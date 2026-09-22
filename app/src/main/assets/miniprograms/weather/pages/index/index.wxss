@@ -1,0 +1,139 @@
+.page {
+  padding: 24rpx;
+  background-color: #0d1b3e;
+}
+.header {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+.loc {
+  flex-direction: column;
+}
+.city {
+  color: #ffffff;
+  font-size: 38rpx;
+  font-weight: bold;
+}
+.updated {
+  color: #9fb3d1;
+  font-size: 22rpx;
+  margin-top: 6rpx;
+}
+.switch {
+  background-color: #1a73e8;
+  color: #ffffff;
+  font-size: 24rpx;
+  height: 60rpx;
+  border-radius: 30rpx;
+}
+.loading {
+  padding: 80rpx 0;
+  align-items: center;
+}
+.loading-text {
+  color: #9fb3d1;
+  font-size: 28rpx;
+}
+.error {
+  padding: 60rpx 0;
+  align-items: center;
+}
+.error-text {
+  color: #ff8a80;
+  font-size: 28rpx;
+  margin-bottom: 24rpx;
+  text-align: center;
+}
+.retry {
+  background-color: #1a73e8;
+  color: #ffffff;
+  font-size: 26rpx;
+  height: 72rpx;
+  border-radius: 12rpx;
+}
+.current {
+  padding: 40rpx 0;
+  align-items: center;
+  background-color: #14264f;
+  border-radius: 20rpx;
+}
+.emoji {
+  font-size: 96rpx;
+}
+.temp {
+  color: #ffffff;
+  font-size: 88rpx;
+  font-weight: bold;
+  margin-top: 8rpx;
+}
+.cond {
+  color: #cfe0ff;
+  font-size: 32rpx;
+  margin-top: 8rpx;
+}
+.meta {
+  flex-direction: row;
+  margin-top: 24rpx;
+}
+.meta-item {
+  color: #9fb3d1;
+  font-size: 24rpx;
+  margin-left: 18rpx;
+  margin-right: 18rpx;
+}
+.forecast {
+  margin-top: 24rpx;
+  background-color: #14264f;
+  border-radius: 20rpx;
+  padding: 24rpx;
+}
+.forecast-title {
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: bold;
+}
+.forecast-list {
+  margin-top: 16rpx;
+  height: 560rpx;
+}
+.day {
+  flex-direction: row;
+  align-items: center;
+  padding: 18rpx 0;
+}
+.day-name {
+  color: #cfe0ff;
+  font-size: 26rpx;
+  width: 110rpx;
+}
+.day-emoji {
+  font-size: 36rpx;
+  width: 60rpx;
+}
+.day-cond {
+  color: #9fb3d1;
+  font-size: 24rpx;
+  width: 150rpx;
+}
+.day-hi {
+  color: #ffffff;
+  font-size: 26rpx;
+  width: 90rpx;
+  text-align: right;
+}
+.day-lo {
+  color: #6f86b0;
+  font-size: 26rpx;
+  width: 90rpx;
+  text-align: right;
+}
+.refresh {
+  margin-top: 24rpx;
+  background-color: #1a73e8;
+  color: #ffffff;
+  font-size: 28rpx;
+  height: 84rpx;
+  border-radius: 12rpx;
+}

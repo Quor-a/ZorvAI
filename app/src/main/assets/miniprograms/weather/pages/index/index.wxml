@@ -1,0 +1,46 @@
+<view class="page">
+  <view class="header">
+    <view class="loc">
+      <text class="city">{{city}}</text>
+      <text class="updated">{{updatedAt}}</text>
+    </view>
+    <button class="switch" bindtap="onSwitchCity">切换城市</button>
+  </view>
+
+  <view class="loading" wx:if="{{loading}}">
+    <text class="loading-text">加载中…</text>
+  </view>
+
+  <view class="error" wx:if="{{error}}">
+    <text class="error-text">{{error}}</text>
+    <button class="retry" bindtap="onRefresh">重试</button>
+  </view>
+
+  <view class="content" wx:if="{{ready}}">
+    <view class="current">
+      <text class="emoji">{{curEmoji}}</text>
+      <text class="temp">{{curTemp}}</text>
+      <text class="cond">{{curText}}</text>
+      <view class="meta">
+        <text class="meta-item">体感 {{feelsLike}}</text>
+        <text class="meta-item">湿度 {{humidity}}</text>
+        <text class="meta-item">风速 {{wind}}</text>
+      </view>
+    </view>
+
+    <view class="forecast">
+      <text class="forecast-title">未来 7 天</text>
+      <scroll-view class="forecast-list" scroll-y="true">
+        <view class="day" wx:for="{{forecast}}" wx:for-item="f">
+          <text class="day-name">{{f.day}}</text>
+          <text class="day-emoji">{{f.emoji}}</text>
+          <text class="day-cond">{{f.text}}</text>
+          <text class="day-hi">{{f.hi}}</text>
+          <text class="day-lo">{{f.lo}}</text>
+        </view>
+      </scroll-view>
+    </view>
+
+    <button class="refresh" bindtap="onRefresh">刷新</button>
+  </view>
+</view>
