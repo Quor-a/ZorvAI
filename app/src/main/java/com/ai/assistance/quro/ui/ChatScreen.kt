@@ -49,6 +49,8 @@ import com.ai.assistance.quro.core.ui.card.host.CardSurface
 import com.ai.assistance.quro.core.ui.card.spec.CardSpec
 import com.ai.assistance.quro.core.ui.card.spec.parseCardSpec
 // ZorvAI 生成式 UI（:genui 模块）：AI 自写 JSX/HTML → 对话框内 WebView 渲染
+import com.zorv.genui.controller.GenUiController
+import com.zorv.genui.ui.GenUiCard
 import com.ai.assistance.quro.service.QuroMediaService
 import com.ai.assistance.quro.service.QuroMiniWindowManager
 import com.ai.assistance.quro.service.QuroMiniWindowManager.MiniChatLine
@@ -2324,13 +2326,16 @@ fun ChatScreen(
                     history = history,
                     onClose = { scope.launch { drawerState.close() } },
                     onNew = { vm.newConversation(); scope.launch { drawerState.close() } },
-                    onNewGenUi = {
-                        // 旧行为：新建一个 genui 类型会话（渲染面是已删除的 QuroGenUiApp）。
-                        // 新行为：拉起**内置的 GenUI-Agent 独立应用**（AI 产出 GenUI JSON DSL →
-                        // 原生 Compose 组件渲染）。它有自己的会话与模型配置，不再占用 ZorvAI 的对话框。
+                    onNewGenUi = { vm.newConversation(genUiType = "genui"); scope.launch { drawerState.close() } },
+                    onOpenGenUiAgent = {
+                        // 内置的完整 GenUI-Agent（独立全屏应用，GenUI JSON DSL → 原生 Compose 组件）。
+                        // 与上面的「GenUI 对话框」是两套东西：那个是对话框内的生成式 UI 画布，这个是独立应用。
                         runCatching {
                             ctx.startActivity(
-                                android.content.Intent(ctx, com.ai.assistance.quro.genui.aiapp.GenUiAgentActivity::class.java)
+                                android.content.Intent(
+                                    ctx,
+                                    com.ai.assistance.quro.genui.aiapp.GenUiAgentActivity::class.java
+                                )
                             )
                         }
                         scope.launch { drawerState.close() }
@@ -2396,6 +2401,7 @@ fun ChatScreen(
                         currentId = currentId,
                         busy = busy,
                         traceLines = traceLines,
+                        genUiController = vm.genUiControllerFor(currentId),
                         onOpenLink = { browserUrl = it },
                         onCommand = { handleCardCommand(it) },
                         onSend = { send(it) },
@@ -2660,6 +2666,8 @@ private fun MessageList(
     onSend: (String) -> Unit = {},
     currentId: String,
     busy: Boolean = false,
+    /** 生成式 UI 控制器（:genui）：按会话隔离，供消息内 WebView 卡片挂载 */
+    genUiController: GenUiController,
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
@@ -2789,6 +2797,7 @@ private fun MessageList(
                         // 让流式 reasoning 实时可见（此前思考只藏在 9sp 收起胶囊后，等于看不见）。
                         streamingThink = busy && index == messages.lastIndex,
                         onSend = onSend,
+                        genUiController = genUiController,
                     )
             }
         }
@@ -2931,6 +2940,8 @@ private fun MessageRow(
     streamingThink: Boolean = false,
     /** 代码块自动修复：发送错误信息给 AI 分析修复 */
     onSend: (String) -> Unit = {},
+    /** 生成式 UI 控制器（:genui）：渲染本消息关联的 WebView 卡片 */
+    genUiController: GenUiController,
 ) {
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
@@ -3355,17 +3366,24 @@ private fun MessageRow(
                                 is MsgBlock.Table -> RenderTable(blk.header, blk.rows, scaled, textColor, onOpenLink)
                                 is MsgBlock.Code -> CodeBlock(lang = blk.lang, code = blk.code, scaled = scaled, onSend = onSend)
                                 is MsgBlock.MiniApp -> {
-                                    // ```miniapp 围栏：HTML 小程序（AI 自写 HTML+JS+CSS）→ WebView 渲染。
-                                    // 旧版还有第二种内容——`zorv-miniapp:<app_id>` 原生小程序标记（微信语法
-                                    // WXML/WXSS/JS，由自研引擎 miniapp-sdk 就地渲染）。该引擎与整套旧 GenUI
-                                    // 已一并删除，故这条分支（含 NATIVE_MINIAPP_PREFIX 标记解析）随之移除：
-                                    // 历史标记不再有引擎可拉，统一按 HTML 处理（空 HTML 时卡片自身给出提示）。
+                                    // ```miniapp 围栏两种内容：
+                                    //  ① HTML 小程序（AI 自写 HTML+JS+CSS，WebView 运行时渲染）；
+                                    //  ② 原生小程序标记 `zorv-miniapp:<app_id>`（GenUI 的 create_miniapp 产物，
+                                    //     微信语法 WXML/WXSS/JS，交给自研引擎就地渲染）。
+                                    // 后者没有 HTML，若当 HTML 处理只会得到一张"（无小程序内容）"的空卡 ——
+                                    // 这正是"AI 把小程序写到画布/别处、对话框里看不到"的原因。
+                                    val nativeId = blk.html.trim()
+                                        .takeIf { it.startsWith(NATIVE_MINIAPP_PREFIX) }
+                                        ?.removePrefix(NATIVE_MINIAPP_PREFIX)
+                                        ?.trim()
+                                        ?.takeIf { it.isNotEmpty() }
                                     QuroChatCardView(
                                         QuroChatCard.MiniAppCard(
-                                            id = "mini_" + blk.html.hashCode().toString(36).replace("-", "m"),
-                                            title = "小程序（AI 生成）",
-                                            html = blk.html,
-                                            config = emptyMap(),
+                                            id = if (nativeId != null) "nai_$nativeId"
+                                                 else "mini_" + blk.html.hashCode().toString(36).replace("-", "m"),
+                                            title = if (nativeId != null) "小程序 · $nativeId" else "小程序（AI 生成）",
+                                            html = if (nativeId != null) "" else blk.html,
+                                            config = if (nativeId != null) mapOf("app_id" to nativeId) else emptyMap(),
                                         ),
                                         onCommand = onCommand
                                     )
@@ -3440,9 +3458,29 @@ private fun MessageRow(
                 }
             }
             // （AIP 全宽内联块已移出 280dp 内容列，在消息 else 块末尾按全宽渲染，见本函数下方）
-            // 注：原先此处渲染 :genui 模块的「生成式 UI 卡片」（AI 自写 JSX/HTML → WebView 内渲染）。
-            // 该模块已随「删除全部旧 GenUI + 内置新 GenUI-Agent」整体移除，卡片渲染随之取消；
-            // 消息上可能残留的历史 genUiCardIds 字段不再有对应渲染（字段本身保留以兼容持久化）。
+            // ── 生成式 UI 卡片（ZorvAI 自写 JSX/HTML，WebView 内渲染进对话框）──
+            // 与正文气泡并列，置于其后；卡片 id 由 ViewModel 在流结束时按围栏 id= 精确关联到本消息。
+            // 外层 Box + clipToBounds：硬锁屏幕宽度，WebView 内任何比屏幕宽的 AI 自写内容一律裁在屏内，
+            // 移动端绝不横向溢出。
+            if (!msg.mine && msg.genUiCardIds.isNotEmpty()) {
+                Box(Modifier.fillMaxWidth().clipToBounds()) {
+                    Column(
+                        Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        msg.genUiCardIds.forEach { cardId ->
+                            key(cardId) {
+                                GenUiCard(
+                                    artifactId = cardId,
+                                    controller = genUiController,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+            }
             // 🔧 Bug修复「简短回复（快捷回复卡片）不显示」：此前卡片只在「有正文气泡」分支内
             //   渲染（见上方 bubbleCards）。AI 只下发卡片、没有正文时（如 quickreply 快捷回复建议、
             //   attachCardToLastAssistant 兜底建的 content="" 纯卡片消息），整条消息什么都不渲染。
@@ -5367,6 +5405,8 @@ fun HistoryDrawer(
     onClose: () -> Unit,
     onNew: () -> Unit,
     onNewGenUi: () -> Unit,
+    /** 拉起内置的完整 GenUI-Agent 独立应用（与 [onNewGenUi] 的对话框内画布是两套东西）。 */
+    onOpenGenUiAgent: () -> Unit = {},
     onPick: (String) -> Unit,
     onCopyAll: () -> Unit = {},
     onDelete: (String) -> Unit,
@@ -5421,8 +5461,8 @@ fun HistoryDrawer(
                 Spacer(Modifier.width(10.dp))
                 Text("新建对话", fontSize = scaled(14), color = AccentPress, fontWeight = FontWeight.SemiBold)
             }
-            // 内置 GenUI Agent 入口：拉起独立的生成式界面智能体应用
-            // （完整内置开源项目 GenUI-Agent，AI 产出 GenUI JSON DSL → 原生 Compose 组件）。
+            // 独立 GenUI 对话框入口：点开即新建一个 genui 类型会话（AI 强制用原生 quro-ui 生成界面），
+            // 与普通对话框完全隔离，互不干扰（两种对话框）。
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -5434,9 +5474,27 @@ fun HistoryDrawer(
             ) {
                 LucideIcon("layout_dashboard", null, Modifier.size(18.dp), tint = cs.primary)
                 Spacer(Modifier.width(10.dp))
-                Text("GenUI Agent", fontSize = scaled(14), color = cs.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
+                Text("GenUI 对话框", fontSize = scaled(14), color = cs.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
-                Text("生成式界面", fontSize = scaled(11), color = cs.onPrimaryContainer.copy(alpha = 0.7f))
+                Text("原生 UI 生成", fontSize = scaled(11), color = cs.onPrimaryContainer.copy(alpha = 0.7f))
+            }
+            // 内置 GenUI Agent 入口：拉起**独立全屏**的生成式界面智能体
+            // （完整内置开源项目 GenUI-Agent，AI 产出 GenUI JSON DSL → 原生 Compose 组件，530+ 组件）。
+            // 它复用 ZorvAI 主设置的模型配置 / 灵魂人格 / 完整工具集，是独立应用、不占当前对话框。
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(cs.secondaryContainer)
+                    .clickable(onClick = onOpenGenUiAgent)
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LucideIcon("layout_dashboard", null, Modifier.size(18.dp), tint = cs.secondary)
+                Spacer(Modifier.width(10.dp))
+                Text("GenUI Agent", fontSize = scaled(14), color = cs.onSecondaryContainer, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                Text("独立应用", fontSize = scaled(11), color = cs.onSecondaryContainer.copy(alpha = 0.7f))
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -5458,6 +5516,16 @@ fun HistoryDrawer(
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(item.title, fontSize = scaled(14), color = cs.onSurface, fontWeight = if (item.active) FontWeight.SemiBold else FontWeight.Normal)
+                            if (item.genUiType == "genui") {
+                                Surface(
+                                    color = cs.primaryContainer,
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.padding(start = 8.dp)
+                                ) {
+                                    Text("GenUI", fontSize = scaled(11), color = cs.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                                }
+                            }
                         }
                         Text(item.sub, fontSize = scaled(12), color = Muted,
                             maxLines = 1, modifier = Modifier.padding(top = 2.dp))
@@ -6746,9 +6814,9 @@ private fun parseBlocks(text: String, selfCard: Boolean = true): List<MsgBlock> 
             // 开关关闭（selfCard=false）时降级为普通代码块，内容不丢。
             isSelfCardLang(lang) ->
                 if (selfCard) blocks.add(MsgBlock.SelfCard(code)) else blocks.add(MsgBlock.Code(lang, code))
-            // 旧 GenUI（AI 自写 JSX/HTML → :genui WebView 管线）已整体删除，:genui 模块不存在，
-            // 判定函数恒为 false，此分支保留仅为让改动面最小（永不会命中）。
-            isGenUiLang(lang) -> { /* skip — 旧 GenUI WebView 路径，模块已删除 */ }
+            // 生成式 UI（AI 自写 JSX/HTML）：由 :genui WebView 管线渲染，此处不生成任何块，
+            // 避免被内置渲染器或裸代码块二次渲染。内容已在流式阶段 ingest 进 GenUiController。
+            isGenUiLang(lang) -> { /* skip — 已废弃的 GenUI WebView 路径（见 QuroChatViewModel.GENUI_WEBVIEW_ENABLED） */ }
             // 可视化编程：原始 mermaid / mmd 围栏直接渲染成离线矢量图（AI 或用户均可作者）
             lang.equals("mermaid", true) || lang.equals("mmd", true) ->
                 blocks.add(MsgBlock.Mermaid(code))
@@ -6788,7 +6856,7 @@ private fun parseBlocks(text: String, selfCard: Boolean = true): List<MsgBlock> 
  * 判定是否为「生成式 UI 围栏」（已废弃的 :genui WebView 代码执行路径）。
  *
  * 按 A2UI 铁律「模型输出永远是数据不是代码，绝不在端上执行 AI 生成的代码」，
- * 该 WebView 路径已废弃，且承载它的 :genui 模块也已随旧 GenUI 一并删除，恒为 false。
+ * 该 WebView 路径已关闭（见 [com.ai.assistance.quro.ui.QuroChatViewModel.GENUI_WEBVIEW_ENABLED]）。
  * 此处恒返回 false，使任何 zorv* / quro* 围栏都不再被截留给 WebView，
  * 而是统一走原生 A2UI 解释器（QuroUiDslParser + A2uiInterpreter → QuroUiRenderer）。
  */

@@ -1,0 +1,3 @@
+# 运行时依赖由 tools/setup_assets.sh 构建时生成（react/react-dom/recharts/lucide/sucrase + zorv-ui.js 除外）
+# 不进版本库：克隆后需先 bash genui/tools/setup_assets.sh
+lib/

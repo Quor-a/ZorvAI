@@ -222,6 +222,14 @@ dependencies {
     // 替换旧 Termux 可见终端。原 AI 工具链（QuroShellSession / QuroLinuxEnv）不动。
     implementation(project(":terminal-core"))
 
+    // ZorvAI 生成式 UI：AI 自写源码 → 实时渲染进对话框（WebView 隔离运行时）
+    implementation(project(":genui"))
+
+    // GenUI 小程序引擎（去品牌化移植自上游 GenUI 的 miniapp-sdk，com.yuanbao.miniapp）：
+    // 自研 JS 引擎 + WXML/WXSS 原生渲染，作为独立架构完整搬入。包名保留原 namespace
+    // 以避免破坏 JNI 符号（native 方法名编码了包路径）。
+    implementation(project(":miniapp-sdk"))
+
     // GenUI Agent SDK（内置完整项目：https://github.com/Quor-a/GenUI-Agent 的 sdk/ 模块）。
     // 去品牌化后包名为 com.ai.assistance.quro.genui.sdk。
     // 定位：AI 生成 GenUI JSON DSL → SDK 直接渲染成**原生 Compose 组件**（530+ 组件、样式/动画/交互/

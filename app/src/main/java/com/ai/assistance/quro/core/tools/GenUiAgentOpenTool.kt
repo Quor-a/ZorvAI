@@ -8,17 +8,18 @@ import org.json.JSONObject
 /**
  * 打开内置的 **GenUI Agent**（生成式界面智能体）。
  *
- * 背景：本 App 原先自带一套「生成式 UI 对话画布」（QuroGenUiApp / GenUI 对话框 + 自研小程序引擎
- * miniapp-sdk + 小程序工作台）。该套实现已**全部删除**，改为直接内置完整的开源项目
- * [GenUI-Agent](https://github.com/Quor-a/GenUI-Agent)（去品牌化后落在
- * `com.ai.assistance.quro.genui.aiapp` / `com.ai.assistance.quro.genui.sdk`）。
+ * 背景：本 App 原有两套「生成式界面」装置，加上本工具内置的 GenUI-Agent，现在是**三套并存**：
+ *  1. `genui_open`      → ZorvAI **对话框内**的「生成式 UI 画布」（`:genui` 模块，AI 写 HTML/JS，WebView 渲染）
+ *  2. `miniapp`         → **小程序工作室**（自研引擎 `miniapp-sdk`，HTML+JS+CSS 或微信语法 WXML/WXSS/JS）
+ *  3. 本工具            → **内置完整的开源项目 [GenUI-Agent](https://github.com/Quor-a/GenUI-Agent)**
+ *                        （去品牌化后落在 `com.ai.assistance.quro.genui.aiapp` / `com.ai.assistance.quro.genui.sdk`）
  *
- * 两者范式不同，别混为一谈：
- *  - 旧的：AI 写 **HTML / WXML+WXSS+JS**，用 WebView 或自研 Canvas 引擎画出来；
- *  - 新的：AI 产出 **GenUI JSON DSL**，SDK 直接映射成**原生 Compose 组件**（530+ 组件，
+ * 三者**互相独立、互不替代**，别混为一谈（范式不同）：
+ *  - 通道 1/2：AI 写 **HTML / WXML+WXSS+JS**，用 WebView 或自研 Canvas 引擎画出来；
+ *  - 通道 3（本工具）：AI 产出 **GenUI JSON DSL**，SDK 直接映射成**原生 Compose 组件**（530+ 组件，
  *    含样式 / 动画 / 交互 / 状态 / 技能），表单输入经 `collectFrom` 聚合回 AI 继续对话。
  *
- * 本工具是 ZorvAI 侧唯一入口：模型据此知道「画界面 / 做一个可交互小应用」这类活可以派给 GenUI Agent。
+ * 本工具是「独立应用」这一路的入口：模型据此知道「要一块原生可交互界面」时可以派给 GenUI Agent。
  * 它是一个**独立全屏应用**（有自己的对话页、历史、宠物与右侧抽屉），不强占 ZorvAI 的对话框；
  * 但其**模型配置 / 灵魂人格 / 工具集全部复用 ZorvAI 主设置**（见 `genui/aiapp/brain/ZorvBrain.kt`），
  * 不再自带独立的模型与灵魂配置页。
@@ -48,12 +49,15 @@ class GenUiAgentOpenTool : QuroTool {
 - 用户明确说「用 GenUI」「打开 GenUI Agent」「生成式界面」；
 - 你要交付的是一块**能点、能填、能改**的界面，而不是一段文字或一张图。
 
-它与对话框内渲染的区别（别选错）：
-- 单张流程图 / 架构图 / 思维导图 → 直接用 ```mermaid 围栏，不要开 GenUI Agent；
+它与另外两条「生成式界面」通道的区别（别选错）：
+- 单张流程图 / 架构图 / 思维导图 → 直接用 ```mermaid 围栏，**不要**开 GenUI Agent；
 - 一个网页成品（HTML/JS 页面）→ 用 ```html 围栏；
-- 一块原生可交互界面（GenUI JSON DSL → 原生 Compose 组件）→ **本工具**。
+- 要**网页形态**的界面成品、且希望产物落在对话框里 → `genui_open`（对话框内生成式 UI 画布）；
+- 要**小程序形态**（HTML+JS+CSS 或微信语法 WXML/WXSS/JS）的工程 → `miniapp`（小程序工作室）；
+- 要一块**原生可交互界面**（GenUI JSON DSL → 原生 Compose 组件，530+ 组件）→ **本工具**。
 
-调用后 GenUI Agent 会以全屏独立界面启动，它有自己的对话与模型配置；ZorvAI 侧不会替它生成内容。
+调用后 GenUI Agent 会以全屏独立界面启动，它有自己的一套独立界面与应用内状态；但模型配置、
+灵魂人格与工具集都读 ZorvAI 的主设置（在主设置里配一次即可），ZorvAI 侧不会替它生成内容。
 """.trimIndent()
 
     override fun run(context: Context, arguments: String): String {
@@ -69,7 +73,7 @@ class GenUiAgentOpenTool : QuroTool {
             }
             context.startActivity(intent)
             if (prompt.isEmpty()) {
-                "已打开 GenUI Agent。它有自己的对话界面与模型配置，请在那里继续描述你要的界面。"
+                "已打开 GenUI Agent（独立全屏应用，模型配置/人格/工具集沿用 ZorvAI 主设置）。请在那里继续描述你要的界面。"
             } else {
                 "已打开 GenUI Agent，并带上需求：「${prompt.take(80)}」。它是独立界面，后续交互在 GenUI Agent 内完成。"
             }

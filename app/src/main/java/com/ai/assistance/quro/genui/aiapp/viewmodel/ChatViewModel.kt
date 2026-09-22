@@ -193,6 +193,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         } else fences
         if (considered.isEmpty()) return null
         // 完整性优先：长的在前
+        var a2uiUnparsed: Pair<String, String>? = null
         for (m in considered.sortedByDescending { it.groupValues[2].length }) {
             val kind = m.groupValues[1].lowercase()
             val raw = "```" + m.groupValues[1] + "\n" + m.groupValues[2].trim() + "\n```"
@@ -203,6 +204,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     FlatDocParser(body, isYaml)?.let { doc ->
                         return ChannelPage.FlatPage(channelTitle(text, 1) ?: "界面", doc) to raw
                     }
+                    // 没认出结构也不静默失败：先记下，若本轮没有别的可用通道再开原文画布
+                    if (a2uiUnparsed == null) a2uiUnparsed = body to raw
                 }
                 "markdown", "md" -> if (body.length > 20) {
                     return ChannelPage.MarkdownPage(channelTitle(body, 2) ?: "文档", body) to raw
@@ -211,6 +214,14 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     return ChannelPage.HtmlPage(channelTitle(text, 0) ?: "网页", body) to raw
                 }
             }
+        }
+        // A2UI 结构（官方协议 / 扁平邻接表）都没识别出来 → 原文代码块开进画布，至少看得见内容
+        a2uiUnparsed?.let { (body, raw) ->
+            if (body.isBlank()) return null
+            return ChannelPage.MarkdownPage(
+                (channelTitle(text, 1) ?: "A2UI") + "（结构未识别，原文）",
+                "```json\n" + body + "\n```"
+            ) to raw
         }
         return null
     }

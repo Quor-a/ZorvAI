@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.quro.core.QuroCrashReporter
+import com.ai.assistance.quro.core.tools.GenUiBridge
 import com.ai.assistance.quro.ui.theme.QuroTheme
 
 /**
@@ -29,12 +30,20 @@ fun QuroApp(
     val chatVm = remember { QuroChatViewModel(ctx) }
     val modelVm = remember { QuroModelConfigViewModel(ctx) }
     val personaVm = remember { QuroPersonaViewModel(ctx) }
+    // 当前会话类型：genui = 非文本「生成式界面」渲染面（整个界面即 AI 回复），normal = 普通文本对话框
+    val genUiType by chatVm.genUiTypePref.collectAsState()
 
-    // 注：原先这里挂着「GenUI 对话框」全屏分支（genuiType == "genui" → QuroGenUiApp）
-    // 以及 ZorvAI ↔ GenUI 的双向调用桥 GenUiBridge。整套旧 GenUI（画布 + 自研小程序引擎 +
-    // 小程序工作台）已按要求**全部删除**，改为内置完整的 GenUI-Agent 作为**独立应用**
-    // （com.ai.assistance.quro.genui.aiapp，工具 genui_agent_open 拉起）。
-    // 因此主壳不再需要按会话类型切换渲染面，恒为普通对话框。
+    // ══ ZorvAI → GenUI 反向调用桥装配 ══
+    // 把「进入 GenUI 画布」的实现交给工具层（genui_open 工具 → GenUiBridge.open）。
+    // 此前只有 GenUI → ZorvAI 的单向回推，ZorvAI 侧叫不动 GenUI（工具拿不到 ViewModel、也够不到切屏开关）。
+    // 生命周期跟随 QuroApp：进入组合期注册、离开时注销，工具不可能在 UI 不在时误触发。
+    //
+    // 派过来的任务不在这里取：它留在桥里，由 GenUI 的 GenScaffold 挂载后在副作用中取一次
+    // （组合期取值一旦遇到"组合被丢弃"就会静默吃掉任务，见 GenScaffold 的说明）。
+    DisposableEffect(Unit) {
+        GenUiBridge.install { prompt, mode -> chatVm.enterGenUi(prompt, mode) }
+        onDispose { GenUiBridge.uninstall() }
+    }
 
     val crash by QuroCrashReporter.lastCrash.collectAsState()
     val clipboard = LocalClipboardManager.current
@@ -61,18 +70,28 @@ fun QuroApp(
     var darkMode by remember { mutableStateOf(chatVm.isDarkMode()) }
         QuroTheme(darkOverride = darkMode) {
         Box(Modifier.fillMaxSize()) {
-            ChatScreen(
-                chatVm,
-                modelVm,
-                personaVm,
-                voiceBallEnabled = voiceBallEnabled,
-                onToggleVoiceBall = onToggleVoiceBall,
-                darkMode = darkMode,
-                onToggleDark = {
-                    darkMode = !darkMode
-                    chatVm.setDarkMode(darkMode)
-                },
-            )
+            if (genUiType == "genui") {
+                com.ai.assistance.quro.genui.app.QuroGenUiApp(
+                    dark = darkMode,
+                    onPushToChat = { html, title -> chatVm.pushGenUiHtmlToChat(html, title) },
+                    onPushMiniAppToChat = { appId, title -> chatVm.pushGenUiMiniAppToChat(appId, title) },
+                    onExitToChat = { chatVm.setGenUiType("normal") },
+                    onTextReply = { chatVm.pushGenUiTextToChat(it) }
+                )
+            } else {
+                ChatScreen(
+                    chatVm,
+                    modelVm,
+                    personaVm,
+                    voiceBallEnabled = voiceBallEnabled,
+                    onToggleVoiceBall = onToggleVoiceBall,
+                    darkMode = darkMode,
+                    onToggleDark = {
+                        darkMode = !darkMode
+                        chatVm.setDarkMode(darkMode)
+                    },
+                )
+            }
         }
 
         // 崩溃自报告弹窗
