@@ -8,13 +8,14 @@ import org.json.JSONObject
 /**
  * 打开内置的 **GenUI Agent**（生成式界面智能体）。
  *
- * 背景：本 App 有两条「生成式界面」通道，加上本工具内置的 GenUI-Agent，共**两套范式**：
- *  1. `miniapp`         → **小程序工作室**（自研引擎 `miniapp-sdk`，HTML+JS+CSS 或微信语法 WXML/WXSS/JS）
+ * 背景：本 App 的「生成式界面」能力只剩**两套范式**（旧的第三套「生成式 UI 对话画布 `genui_open`」
+ * 已于 v1.0.96 随 `genui` 模块一并删除）：
+ *  1. `miniapp`         → **小程序工作室**（自研引擎 `miniapp-sdk`，HTML+Page() 运行时+native.* 原生桥）
  *  2. 本工具            → **内置完整的开源项目 [GenUI-Agent](https://github.com/Quor-a/GenUI-Agent)**
  *                        （去品牌化后落在 `com.ai.assistance.quro.genui.aiapp` / `com.ai.assistance.quro.genui.sdk`）
  *
  * 两者**互相独立、互不替代**，别混为一谈（范式不同）：
- *  - 通道 1：AI 写 **HTML / WXML+WXSS+JS**，用 WebView 或自研引擎画出来；
+ *  - 通道 1：AI 写 **HTML**，用 WebView 跑真实网页 + native.* 桥接本机能力；
  *  - 通道 2（本工具）：AI 产出 **GenUI JSON DSL**，SDK 直接映射成**原生 Compose 组件**（530+ 组件，
  *    含样式 / 动画 / 交互 / 状态 / 技能），表单输入经 `collectFrom` 聚合回 AI 继续对话。
  *
@@ -51,8 +52,7 @@ class GenUiAgentOpenTool : QuroTool {
 它与另外两条「生成式界面」通道的区别（别选错）：
 - 单张流程图 / 架构图 / 思维导图 → 直接用 ```mermaid 围栏，**不要**开 GenUI Agent；
 - 一个网页成品（HTML/JS 页面）→ 用 ```html 围栏；
-- 要**网页形态**的界面成品、且希望产物落在对话框里 → `genui_open`（对话框内生成式 UI 画布）；
-- 要**小程序形态**（HTML+JS+CSS 或微信语法 WXML/WXSS/JS）的工程 → `miniapp`（小程序工作室）；
+- 要**小程序形态**（HTML+JS+CSS，带 native.* 原生桥）的工程 → `miniapp`（小程序工作室）；
 - 要一块**原生可交互界面**（GenUI JSON DSL → 原生 Compose 组件，530+ 组件）→ **本工具**。
 
 调用后 GenUI Agent 会以全屏独立界面启动，它有自己的一套独立界面与应用内状态；但模型配置、

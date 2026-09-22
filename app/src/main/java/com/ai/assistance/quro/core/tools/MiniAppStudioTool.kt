@@ -49,13 +49,10 @@ class MiniAppStudioTool : QuroTool {
 - list：列出所有小程序工程
 - delete：删除整个工程，或删除某个文件（传 path）
 - run：返回可直接在对话框渲染的自包含 HTML（自动内联同目录的 .js/.css）——**create 之后必须 run，否则界面根本没交付**
-- manual：取回开发手册（**两份都在这里**）。参数 topic：
-  · 不传 / "studio" → 【① 小程序工作室手册】两工具对照 + 工程结构 + Page() 运行时 + native.* 逐个函数 + 错误清单
-  · "native" → 【② create_miniapp 原生 UI 手册】组件标签实际渲染成什么 + 事件表与 dataset + wx.* 全表 + Page/setData + 三个可交互范式
-  · "traps" → 【② 配套】9 条引擎致命陷阱（scroll-view/控件/单行输入…违反必出黑盒故障）
-  · "errors" → 【② 配套】17 条错误清单（工具真实打回理由 → 成因 → 怎么改）
-  · "compare" → 只看两个小程序工具的区别
-  两份手册是同一份真相源（GenUI 画布侧用 genui_manual 取同样内容），不会出现"两边说法不一致"。
+- manual：取回开发手册（参数 topic）：
+  · 不传 / "studio" → 小程序工作室手册：工程结构 + Page() 运行时 + native.* 逐个函数 + 错误清单
+  · 老 topic（"native" / "traps" / "errors" / "compare"）→ 返回「该能力已下线」说明
+    （旧的 WXML/WXSS 原生 UI 引擎 genui_native_ui 已随旧 GenUI 画布删除，别再调它）
 
 """ + MiniAppManual.STUDIO_BRIEF
     override val parametersJson = """{
@@ -67,7 +64,7 @@ class MiniAppStudioTool : QuroTool {
             "path":{"type":"string","description":"文件路径，相对工程根（write/read/delete 单个文件时需要）"},
             "content":{"type":"string","description":"文件内容（write 时需要）"},
             "entry":{"type":"string","description":"入口页面路径（run 时需要，默认 pages/index/index.html）"},
-            "topic":{"type":"string","description":"manual 的主题：studio（工作室手册，默认）/ native（create_miniapp 原生UI手册）/ traps（引擎陷阱）/ errors（错误清单）/ compare（两工具对照）"}
+            "topic":{"type":"string","description":"manual 的主题：studio（工作室手册，默认）；老 topic native/traps/errors/compare 已下线，会返回下线说明"}
         },
         "required":["action"]
     }"""
