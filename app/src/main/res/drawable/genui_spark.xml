@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GenUI 图标 — 闪光/生成
+  设计理念：不是俗套的星芒，而是"萌芽"的意象
+  一个圆润的种子破土而出，象征创意生成
+  风格：精致线条风，2dp 线宽，圆角端点
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 底部基座：半圆地面 -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M5,17c0,0 3.5,-2 7,-2s7,2 7,2"/>
+
+    <!-- 主芽：向上生长的曲线 -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M12,15c0,-3.5 0,-7 2.5,-9"/>
+
+    <!-- 左叶：向左展开的叶片 -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#CCFBF1"
+        android:pathData="M12,10c-1.5,-0.5 -3.5,-0.5 -4.5,1.5c1,1.5 3,2 4.5,1.5c0,-1 0,-2 0,-3z"/>
+
+    <!-- 右叶：向右展开的叶片（略大） -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#CCFBF1"
+        android:pathData="M13,7.5c1.5,-0.5 3.5,0 4.5,2c-1,1.5 -3,2 -4.5,1.5c0,-1.2 0,-2.4 0,-3.5z"/>
+
+    <!-- 顶端光点：琥珀色点缀 -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M15.5,5.5m-1.2,0a1.2,1.2 0,1 1,2.4 0a1.2,1.2 0,1 1,-2.4 0"/>
+
+</vector>

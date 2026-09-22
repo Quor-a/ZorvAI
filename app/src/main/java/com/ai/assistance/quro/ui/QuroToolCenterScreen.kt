@@ -47,9 +47,6 @@ import com.ai.assistance.quro.core.tools.QuroPrivateDbTool
 import com.ai.assistance.quro.core.tools.QuroSandboxTool
 import com.ai.assistance.quro.ui.icons.LucideIcon
 import com.ai.assistance.quro.ui.theme.Muted
-import com.ai.assistance.quro.core.miniapp.MiniAppEngine
-import com.ai.assistance.quro.core.miniapp.MiniAppBridgeInterface
-import com.ai.assistance.quro.core.tools.MiniAppStudioTool
 import com.ai.assistance.quro.workflow.data.model.Workflow
 import com.ai.assistance.quro.workflow.data.WorkflowRepository
 import com.ai.assistance.quro.workflow.executor.WorkflowEngine
@@ -112,7 +109,6 @@ fun QuroToolCenterScreen(
                     "workbench" -> "小程序工作台"
                     "vispro" -> "可视化编程"
                     "flow" -> "节点编辑器"
-                    "miniapp" -> "小程序工作室"
                     "kaleidobox" -> "工具包运行器"
                     "pkgmgr" -> "包管理"
                     "plugins" -> "插件"
@@ -133,7 +129,6 @@ fun QuroToolCenterScreen(
             "workbench" -> WorkbenchPanel(context, onRenderInChat, onAskAi)
             "vispro" -> VisProPanel(context, onRenderInChat)
             "flow" -> NodeEditorPanel(context, onRenderInChat)
-            "miniapp" -> MiniAppStudioPanel(context, onRenderInChat)
             "kaleidobox" -> KaleidoBoxPanel(context, onRenderInChat, onAskAi)
             "pkgmgr" -> PackageManagerPanel(context)
             "plugins" -> PluginManagerPanel(context)
@@ -146,7 +141,6 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
     val cs = MaterialTheme.colorScheme
     val cards = listOf(
         Triple("workbench", "小程序", "AI 生成并在对话框渲染的 HTML/JS 小程序"),
-        Triple("miniapp", "小程序工作室", "完整移植 MiniAppFramework：AI 写 app.json+页面，原生桥调用真·Android 能力"),
         Triple("toolbox", "工具箱", "文件管理 / 浏览器 / IDE"),
         Triple("pkgmgr", "包管理", "apt/apk/dnf/pacman 安装/卸载/升级/查询软件"),
         Triple("sandbox", "隔离沙箱", "免权限文件沙箱与 shell"),
@@ -924,100 +918,9 @@ private fun NodeEditorPanel(
     }
 }
 
-// ---------------------------------------------------------------------------
-// 小程序工作室：完整移植 MiniAppFramework，AI 用 miniapp 工具写入的工程在此渲染
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun MiniAppStudioPanel(
-    context: Context,
-    onRenderInChat: (type: String, value: String, label: String) -> Unit,
-) {
-    val cs = MaterialTheme.colorScheme
-    val root = remember { File(context.filesDir, "studio/miniapp") }
-    var refreshKey by remember { mutableStateOf(0) }
-    val projects = remember(refreshKey) {
-        root.listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
-    }
-    var current by remember { mutableStateOf<String?>(null) }
-    val wvRef = remember { mutableStateOf<WebView?>(null) }
-    val engineRef = remember { mutableStateOf<MiniAppEngine?>(null) }
-    val scope = rememberCoroutineScope()
-
-    // 系统返回键：小程序内部有多页历史时先在小程序内返回（engine.handleBack），否则退回工程列表
-    BackHandler(enabled = current != null) {
-        val handled = engineRef.value?.handleBack() ?: false
-        if (!handled) { current = null; engineRef.value = null }
-    }
-
-    Column(Modifier.fillMaxSize()) {
-        if (current == null) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("小程序工作室", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
-                TextButton(onClick = {
-                    scope.launch(Dispatchers.IO) {
-                        val res = MiniAppStudioTool().run(context, JSONObject().put("action", "create").put("name", "demo").toString())
-                        withContext(Dispatchers.Main) { refreshKey++; Toast.makeText(context, res.take(120), Toast.LENGTH_SHORT).show() }
-                    }
-                }) { Text("新建示例") }
-            }
-            Spacer(Modifier.height(8.dp))
-            if (projects.isEmpty()) {
-                Text("小程序工作台为空（filesDir/studio/miniapp 下还没有工程）。点「新建示例」，或让 AI 用 miniapp 工具创建并写入。", color = Muted, modifier = Modifier.padding(16.dp))
-            } else {
-                LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(projects) { name ->
-                        Card(
-                            Modifier.fillMaxWidth().clickable { current = name },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant),
-                        ) {
-                            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
-                                TextButton(onClick = { current = name }) { Text("打开") }
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { current = null; engineRef.value = null }) { Text("← 返回列表") }
-                Text(current ?: "", Modifier.weight(1f).padding(12.dp), color = Muted)
-                TextButton(onClick = {
-                    scope.launch(Dispatchers.IO) {
-                        val html = MiniAppStudioTool().run(context, JSONObject().put("action", "run").put("name", current).toString())
-                        withContext(Dispatchers.Main) {
-                            if (html.startsWith("❌")) Toast.makeText(context, html, Toast.LENGTH_SHORT).show()
-                            else { onRenderInChat("miniapp", html, current ?: "小程序"); Toast.makeText(context, "已发送到对话框预览", Toast.LENGTH_SHORT).show() }
-                        }
-                    }
-                }) { Text("对话框预览") }
-                TextButton(onClick = {
-                    if (current != null && File(root, current!!).deleteRecursively()) { refreshKey++; current = null; Toast.makeText(context, "已删除工程", Toast.LENGTH_SHORT).show() }
-                }) { Text("删除") }
-            }
-            AndroidView(
-                modifier = Modifier.fillMaxSize().weight(1f),
-                factory = { ctx ->
-                    WebView(ctx).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.allowFileAccess = true
-                        settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
-                        val bridge = MiniAppBridgeInterface(ctx, this)
-                        val engine = MiniAppEngine(this, bridge)
-                        engine.configure()
-                        engine.start(File(root, current ?: "demo"))
-                        engineRef.value = engine
-                        wvRef.value = this
-                    }
-                },
-            )
-        }
-    }
-}
+// 注：原先此处是「小程序工作室」面板（MiniAppStudioPanel）。它依赖 MiniAppStudioTool +
+// 自研小程序引擎（core/miniapp + miniapp-sdk），三者已随「删除全部旧 GenUI + 内置新
+// GenUI-Agent」整体移除，面板随之删除。需要原生可交互界面请用 GenUI Agent。
 
 // ---------------------------------------------------------------------------
 // 包管理：apt/apk/dnf/pacman 安装 / 查询 / 列表（Linux 沙箱内执行）

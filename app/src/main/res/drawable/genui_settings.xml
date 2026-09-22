@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GenUI 图标 — 设置
+  设计理念：不是通用的齿轮，而是"调节滑块"的意象
+  三个水平滑块，代表参数调节与个性化设置
+  风格：精致线条风，2dp 线宽，圆角端点
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 第一行滑块轨道 -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M5,7h14"/>
+
+    <!-- 第一行滑块按钮（偏左） -->
+    <path
+        android:fillColor="#0D9488"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M9,7m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"/>
+
+    <!-- 第二行滑块轨道 -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M5,12h14"/>
+
+    <!-- 第二行滑块按钮（中间） -->
+    <path
+        android:fillColor="#F59E0B"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M12,12m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"/>
+
+    <!-- 第三行滑块轨道 -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M5,17h14"/>
+
+    <!-- 第三行滑块按钮（偏右） -->
+    <path
+        android:fillColor="#0D9488"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M16,17m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"/>
+
+</vector>

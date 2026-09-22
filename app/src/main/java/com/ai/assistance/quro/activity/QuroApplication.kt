@@ -2,6 +2,8 @@ package com.ai.assistance.quro.activity
 
 import android.app.Application
 import android.content.Context
+import android.os.Build
+import androidx.work.Configuration
 import com.ai.assistance.quro.core.QuroCrashLogger
 import com.ai.assistance.quro.core.mcp.QuroLocalMcpManager
 import com.ai.assistance.quro.core.tools.QuroImportedToolRegistry
@@ -30,8 +32,18 @@ import com.ai.assistance.quro.kaleidobox.android.KaleidoBoxHost
  *    可捕获启动期最早发生的崩溃，便于无 adb 取回日志。
  * 2. 架构（v116 起最终态）：AI 默认即可见并自行选择调用 L1 无障碍 / L2 Shizuku /
  *    L3 设备管理员 / L4 ROOT / L5 应用内 Linux(proot) 全部工具，运行时由系统权限授予把关。
+ * 3. **主/副进程隔离（#9 修复）**：[onCreate] 内的全部宿主级初始化只在**主进程**执行。
+ *    本应用除主进程外还有 `:asr`（端侧 ASR 引擎进程，见 AndroidManifest 的 QuroAsrService，
+ *    隔离 Sherpa-NCNN 的原生 SIGSEGV）。此前 onCreate 在 `:asr` 里也照跑，会拉起
+ *    QuroBotManager → buildQuroRegistry → QuroMultiProviderTool → QuroHealthCheckService
+ *    → `WorkManager.getInstance()`；而 WorkManager 的 androidx.startup 初始化器只在主进程
+ *    生效，副进程直接抛 `IllegalStateException: WorkManager is not initialized properly`
+ *    → `:asr` 进程启动即 FATAL → 主进程 bind 8s 超时 → 报「端侧识别服务启动失败」，
+ *    端侧语音彻底不可用（华为/小米两台设备必现）。副进程真正需要的只有 attachBaseContext
+ *    里的 appCtx 与崩溃收集器，故此处提前 return；这同时避免副进程无谓加载整套 bot / 工具栈。
+ * 4. 另实现 [Configuration.Provider]：使 WorkManager 在任意进程按需自初始化（#9 的第二道防线）。
  */
-class QuroApplication : Application() {
+class QuroApplication : Application(), Configuration.Provider {
 
     companion object {
         /**
@@ -64,8 +76,52 @@ class QuroApplication : Application() {
         }
     }
 
+    /**
+     * WorkManager 配置（#9 第二道防线）。
+     *
+     * 实现 [Configuration.Provider] 后，WorkManager 的 androidx.startup 默认初始化器会让位，
+     * 改为在**首次 `WorkManager.getInstance()` 时按需自初始化**——这样即使在副进程
+     * （`:asr` 等）里被调用，也不会再抛 `IllegalStateException: WorkManager is not initialized properly`。
+     *
+     * 说明：真正的根因修复是 [onCreate] 的主进程守卫（副进程不再构建工具栈），
+     * 这里是纵深防御——未来若某个副进程确实需要 WorkManager，也不会再崩。
+     */
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setMinimumLoggingLevel(android.util.Log.INFO)
+            .build()
+
+    /** 当前进程名；取不到时返回 null（调用方按「主进程」保守处理，维持原有行为）。 */
+    private fun currentProcessName(): String? = try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            getProcessName()
+        } else {
+            // API 26/27 没有 Application.getProcessName()：读 /proc/self/cmdline（首段即进程名）
+            java.io.File("/proc/self/cmdline").readText().substringBefore('\u0000').trim().ifEmpty { null }
+        }
+    } catch (_: Throwable) {
+        null
+    }
+
+    /** 是否为主进程（进程名 == 包名）。副进程包括 `:asr`（端侧 ASR 引擎）。 */
+    private fun isMainProcess(): Boolean = currentProcessName()?.let { it == packageName } ?: true
+
     override fun onCreate() {
         super.onCreate()
+
+        // ══ 副进程到此为止（#9）══
+        // `:asr` 只需要 QuroAsrService 自己（Sherpa-NCNN + HandlerThread），
+        // 不需要 bot / 工具注册表 / 插件 / 终端 / 工作流等任何宿主级初始化。
+        // attachBaseContext 里已为所有进程准备好 appCtx 与崩溃收集器（副进程崩溃栈就是靠它取回的）。
+        if (!isMainProcess()) {
+            // 留一条可检索的日志：真机 logcat 里看到这行即说明副进程已正确跳过宿主初始化。
+            android.util.Log.i(
+                "QuroApplication",
+                "副进程启动（${currentProcessName()}），仅保留 appCtx + 崩溃收集器，跳过宿主级初始化"
+            )
+            return
+        }
+
         // 应用语言策略：跟随系统语言（不内置国家语言包，引用系统语言，手机系统用什么就用什么）。
         // 读取 quro_ui 偏好（与 QuroChatViewModel 同一 SharedPreferences），在首屏前应用，
         // 使 Activity 创建即采用正确语言；切换时 Android 会自动重建当前 Activity 生效。
@@ -84,15 +140,26 @@ class QuroApplication : Application() {
         try {
             TerminalPrivilegeBridgeHolder.set(QuroTerminalPrivilegeBridge(applicationContext))
         } catch (_: Throwable) {}
-        // 载入持久化的「导入工具」（AI 自写 / 用户粘贴 JSON 导入），使其在所有会话默认可用
-        QuroImportedToolRegistry.load(applicationContext)
-        // 自动拉起 AI 部署的本地 MCP 服务器，使其随应用启动即恢复可用（界面自动拉取注册）
-        QuroLocalMcpManager.startAll(applicationContext)
-        // 恢复所有定时任务调度（开机/重启后自动重新排程）
-        QuroScheduledTaskScheduler.ensureChannel(applicationContext)
-        QuroScheduledTaskScheduler.scheduleAll(applicationContext)
-        // 机器人框架（C2）：注册默认适配器并在「已启用且已配置」的平台启动（本地测试默认启用）
-        QuroBotManager.instance(applicationContext).startEnabled(applicationContext)
+        // 以下四项均为「启动期增强初始化」，任一失败都不应让用户进不去 App：
+        //  - 导入工具加载
+        //  - 本地 MCP 服务器拉起
+        //  - 定时任务恢复排程
+        //  - 机器人框架（C2）启动
+        // 统一包 try 并记录（此前未包：其中 QuroBotManager 会构建整套工具注册表，
+        // 任一工具构造异常都会直接 FATAL，参见 #9 中 :asr 进程的同类崩溃）。
+        try {
+            // 载入持久化的「导入工具」（AI 自写 / 用户粘贴 JSON 导入），使其在所有会话默认可用
+            QuroImportedToolRegistry.load(applicationContext)
+            // 自动拉起 AI 部署的本地 MCP 服务器，使其随应用启动即恢复可用（界面自动拉取注册）
+            QuroLocalMcpManager.startAll(applicationContext)
+            // 恢复所有定时任务调度（开机/重启后自动重新排程）
+            QuroScheduledTaskScheduler.ensureChannel(applicationContext)
+            QuroScheduledTaskScheduler.scheduleAll(applicationContext)
+            // 机器人框架（C2）：注册默认适配器并在「已启用且已配置」的平台启动（本地测试默认启用）
+            QuroBotManager.instance(applicationContext).startEnabled(applicationContext)
+        } catch (e: Throwable) {
+            android.util.Log.e("QuroApplication", "启动期增强初始化失败（不影响主流程）", e)
+        }
         // ACI（Agent Capability Interface）：让 Zorv AI 成为 ACI 控制方（AI 中枢），
         // 启动即发现并绑定设备上已安装的第三方 ACI App，使其能力可被 AI 调用。
         // 整体包在 try 中，避免 ACI 异常影响应用正常启动。

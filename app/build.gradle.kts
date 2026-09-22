@@ -41,8 +41,8 @@ android {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1095
-        versionName = "1.0.95"
+        versionCode = 1096
+        versionName = "1.0.96"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -222,13 +222,19 @@ dependencies {
     // 替换旧 Termux 可见终端。原 AI 工具链（QuroShellSession / QuroLinuxEnv）不动。
     implementation(project(":terminal-core"))
 
-    // ZorvAI 生成式 UI：AI 自写源码 → 实时渲染进对话框（WebView 隔离运行时）
-    implementation(project(":genui"))
+    // GenUI Agent SDK（内置完整项目：https://github.com/Quor-a/GenUI-Agent 的 sdk/ 模块）。
+    // 去品牌化后包名为 com.ai.assistance.quro.genui.sdk。
+    // 定位：AI 生成 GenUI JSON DSL → SDK 直接渲染成**原生 Compose 组件**（530+ 组件、样式/动画/交互/
+    // 状态/技能），并通过 collectFrom 把表单输入聚合回 AI。SDK 自身不调用 LLM、无网络依赖。
+    implementation(project(":genuiagent-sdk"))
 
-    // GenUI 小程序引擎（去品牌化移植自上游 GenUI 的 miniapp-sdk，com.yuanbao.miniapp）：
-    // 自研 JS 引擎 + WXML/WXSS 原生渲染，作为独立架构完整搬入。包名保留原 namespace
-    // 以避免破坏 JNI 符号（native 方法名编码了包路径）。
-    implementation(project(":miniapp-sdk"))
+    // ── 内置 GenUI-Agent 应用层（app/.../genui/aiapp/）所需依赖 ──
+    // 来源同上（上游 app/ 模块）：上游为独立 App，其依赖不继承宿主，故在此显式补齐。
+    implementation(libs.navigation.compose)     // 它自己的 AppNavHost（chat ↔ 模型配置）
+    implementation(libs.markwon.core)           // renderx/ChannelViewer：Markdown 频道渲染
+    implementation(libs.markwon.ext.tables)     //   └ 表格插件
+    implementation(libs.markwon.ext.strikethrough) // └ 删除线插件
+    implementation(libs.kaml)                   // renderx/FlatDoc：YAML 文档 → JsonElement
 
     // APK 级插件框架：插件是独立 APK，宿主用 DexClassLoader 加载，
     // 插件通过扩展点（AI 工具 / ACI 能力 / 卡片 / 指令 / 设置…）往宿主里加功能，

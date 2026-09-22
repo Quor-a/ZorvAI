@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GenUI 图标 — 计算器/算账
+  设计理念：简约的圆角矩形计算器，带显示屏和按键
+  不是写实风格，而是几何抽象
+  风格：精致线条风，2dp 线宽，圆角端点
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 机身外框 -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#FFFFFF"
+        android:pathData="M5,4h14a1.5,1.5 0,0 1,1.5 1.5v14a1.5,1.5 0,0 1,-1.5 1.5H5A1.5,1.5 0,0 1,3.5 19.5v-14A1.5,1.5 0,0 1,5 4z"/>
+
+    <!-- 显示屏 -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#F0FDFA"
+        android:pathData="M6,6h12v4H6z"/>
+
+    <!-- 显示屏数字线（简约化） -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M8,8.5h3 M14,8.5h2"/>
+
+    <!-- 分隔线 -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="1"
+        android:pathData="M6,11.5h12"/>
+
+    <!-- 按键行 1（圆形按键用描边） -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="1.5"
+        android:fillColor="#F0FDFA"
+        android:pathData="M7.5,13.5m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0"/>
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="1.5"
+        android:fillColor="#F0FDFA"
+        android:pathData="M12,13.5m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0"/>
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M16.5,13.5m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0"/>
+
+    <!-- 按键行 2 -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="1.5"
+        android:fillColor="#F0FDFA"
+        android:pathData="M7.5,16.5m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0"/>
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="1.5"
+        android:fillColor="#F0FDFA"
+        android:pathData="M12,16.5m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0"/>
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="1.5"
+        android:fillColor="#F0FDFA"
+        android:pathData="M16.5,16.5m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0"/>
+
+    <!-- 底部长按键（等号键） -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:fillColor="#0D9488"
+        android:pathData="M9,19.5h6"/>
+
+</vector>

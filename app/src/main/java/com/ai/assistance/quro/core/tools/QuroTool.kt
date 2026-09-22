@@ -103,7 +103,7 @@ class QuroToolRegistry {
         // 确保绝大多数 API 中转（含对「工具数 / 总 token」有上限的代理）能正常透传，
         // 不再静默丢弃整个 tools 字段（那是此前「纯问答、不执行动作」的根因）。
         // 若你的代理确认支持完整工具（直连 OpenAI / DeepSeek / SiliconFlow 等），
-        // 可在 QuroAssistant.ask 中将 registry.coreSpecs() 改为 registry.fullSpecs() 解锁全部 ~47 个。
+        // 可在 QuroAssistant.ask 中将 registry.coreSpecs() 改为 registry.fullSpecs() 解锁全部 ~226 个。
         // 扩展核心集：覆盖 95%+ 日常口语指令，让模型「知道有什么工具、该用哪个」。
         // 默认（useFullTools=false）即下发此集；fullSpecs 在其基础上再并入其余高级/小众工具。
         // 注意：菜单（appendCapabilityAwareness）与 tools 字段都由此集生成，二者严格一致，
@@ -172,6 +172,9 @@ class QuroToolRegistry {
             "ui_card",
             // 对话框内联 UI 组件（v134：按钮/开关/滑块/进度/统计/提醒/表格/列表/分段/饼图/评分/倒计时/标签页/折叠/表单/标签/步骤/仪表/媒体/信息）
             "ui_widget",
+            // 生成式界面：打开内置 GenUI Agent（GenUI JSON DSL → 原生 Compose 组件，530+ 组件）。
+            // 必须先于 ui_widget 被模型看到——否则用户说「做个原生界面/小应用」时模型只会去凑 ui_widget 卡片。
+            "genui_agent_open",
             // 节点编辑器：AI 直接读写节点流工程（与工具中心面板共享 studio/flow/*.qne，面板打开自动恢复）
             "node_editor",
             // 工作流引擎 AI 侧调用入口：创建/点燃/查询运行（缺口清单 · 可实现项）

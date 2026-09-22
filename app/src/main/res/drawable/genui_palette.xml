@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GenUI 图标 — 调色板/设计
+  设计理念：不是传统调色盘，而是"色卡叠放"的设计感
+  三张不同颜色的圆角卡片错落叠放，代表设计与配色
+  风格：精致线条风，2dp 线宽，圆角端点
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 底色卡（深青，左下） -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#0D9488"
+        android:pathData="M4,10.5h8a1.5,1.5 0,0 1,1.5 1.5v7a1.5,1.5 0,0 1,-1.5 1.5h-8A1.5,1.5 0,0 1,2.5 19v-7A1.5,1.5 0,0 1,4 10.5z"/>
+
+    <!-- 中色卡（琥珀，中间） -->
+    <path
+        android:strokeColor="#D97706"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#F59E0B"
+        android:pathData="M8,7.5h8a1.5,1.5 0,0 1,1.5 1.5v7a1.5,1.5 0,0 1,-1.5 1.5h-8A1.5,1.5 0,0 1,6.5 16v-7A1.5,1.5 0,0 1,8 7.5z"/>
+
+    <!-- 顶色卡（白色描边，右上） -->
+    <path
+        android:strokeColor="#0D9488"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,4.5h7.5a1.5,1.5 0,0 1,1.5 1.5v7a1.5,1.5 0,0 1,-1.5 1.5h-7.5A1.5,1.5 0,0 1,10.5 13v-7A1.5,1.5 0,0 1,12 4.5z"/>
+
+    <!-- 顶色卡上的小圆点（装饰） -->
+    <path
+        android:fillColor="#0D9488"
+        android:pathData="M13.5,7.5m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0"/>
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M16.5,7.5m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0"/>
+    <path
+        android:fillColor="#E11D48"
+        android:pathData="M15,10m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0"/>
+
+</vector>

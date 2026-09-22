@@ -20,7 +20,8 @@ private const val TAG = "QuroHeartbeat"
  * 5. 异常检测和告警
  */
 class QuroHeartbeatService(private val context: Context) {
-    private val workManager = WorkManager.getInstance(context)
+    /** ⚠️ 惰性获取（#9）：构造期取 WorkManager 会让未初始化 WorkManager 的副进程崩溃，见 QuroHealthCheckService 注释。 */
+    private val workManager by lazy { WorkManager.getInstance(context.applicationContext) }
     private val isRunning = AtomicBoolean(false)
     private val lastHeartbeatTime = AtomicLong(0L)
     private val heartbeatCount = AtomicLong(0L)

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GenUI 图标 — 停止
+  设计理念：不是普通的方形停止键
+  而是圆角方形内嵌一个"暂停"的竖线，更独特
+  风格：精致线条风，2dp 线宽，圆角端点
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 外圆（描边） -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:pathData="M12,4m-8,0a8,8 0,1 1,16 0a8,8 0,1 1,-16 0"/>
+
+    <!-- 停止方块（圆角方形，实心） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M8,8h8a2,2 0,0 1,2 2v4a2,2 0,0 1,-2 2H8a2,2 0,0 1,-2 -2v-4a2,2 0,0 1,2 -2z"/>
+
+    <!-- 方块内的竖线（装饰，增加识别度） -->
+    <path
+        android:strokeColor="#E11D48"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M11,10v4 M13,10v4"/>
+
+</vector>

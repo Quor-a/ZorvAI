@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GenUI 图标 — 发送
+  设计理念：不是纸飞机，而是"声波/涟漪"的意象
+  从圆点向外扩散的弧线，代表发送与传播
+  风格：精致线条风，2dp 线宽，圆角端点
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 起点圆点（实心） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M7,12m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"/>
+
+    <!-- 第一道涟漪（弧线） -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M12,8 Q15,12 12,16"/>
+
+    <!-- 第二道涟漪（更大的弧线） -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M16,5.5 Q20.5,12 16,18.5"/>
+
+    <!-- 方向指示线（向右的箭头暗示） -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M20.5,11 L22.5,12 L20.5,13"/>
+
+</vector>

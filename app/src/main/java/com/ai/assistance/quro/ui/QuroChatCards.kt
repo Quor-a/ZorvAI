@@ -2021,10 +2021,18 @@ private fun NetworkImageBubble(url: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * AI 自写小程序卡片（MiniApp）：AI 生成完整小程序代码（HTML + JS + CSS），
- * 客户端用 WebView 渲染，支持 JSBridge 调用原生能力（存储/网络/UI 等）。
+ * AI 自写「小程序」卡片（MiniApp）：AI 生成完整 HTML + JS + CSS，客户端用 **WebView** 渲染。
  *
- * 与 HtmlPreviewCard 类似，但增加了小程序运行时支持（Page/Component 生命周期、数据绑定等）。
+ * ⚠️ 与旧实现的关键差异（2026-09 移除自研小程序引擎后）：
+ *  · 旧版有两条路：① HTML 小程序走 WebView；② **原生小程序**（微信语法 WXML/WXSS/JS，
+ *    config.app_id）走自研引擎（miniapp-sdk + com.yuanbao.miniapp）就地渲染。
+ *  · 自研引擎（miniapp-sdk）、GenUI 画布（quro/genui/app）、小程序工作台（miniapp 工具）
+ *    已随「删除全部旧 GenUI + 内置新 GenUI-Agent」**整体移除**。
+ *  · 因此本卡片现在只保留 HTML 路径：带 app_id 的历史原生小程序卡片会退化成
+ *    「HTML 为空」的提示，不再尝试拉起已不存在的引擎（原来的「引擎初始化中…」死循环也没了）。
+ *
+ * 原生可交互界面请改用内置的 GenUI Agent（工具 genui_agent_open）——它用 GenUI JSON DSL
+ * 直接渲染成原生 Compose 组件，不需要 WebView，也不需要自研 JS 引擎。
  */
 @Composable
 private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
@@ -2032,10 +2040,8 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
     val density = LocalDensity.current.density
     val context = LocalContext.current
     // 初始高度按**屏高比例**算，不再写死 360。
-    //
-    // 为什么必须改：heightPx 的单位是**物理像素**（下面 `(heightPx / density).dp` 又乘回 density）。
-    // 写死 360 px 在 2.6x 密度屏上只有 ~137dp 高，小程序内容被挤进一条缝里、下半截完全看不到，
-    // 卡里还跟着一行诊断文字 —— 用户看到的就是"围栏围得不完整"。
+    // 为什么：heightPx 单位是**物理像素**（下面 `(heightPx / density).dp` 又乘回 density）。
+    // 写死 360px 在 2.6x 密度屏上只有 ~137dp 高，内容被挤进一条缝里、下半截看不到。
     // 取屏高 62%：一屏界面能完整看到，又不至于把对话流撑得看不见别的内容（用户仍可拖拽调高度）。
     val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
     val defaultHeightPx = remember(card.id) {
@@ -2044,14 +2050,6 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
     var heightPx by remember(card.id) { mutableStateOf(defaultHeightPx) }
     var fullscreen by remember(card.id) { mutableStateOf(false) }
     val title = card.title.ifBlank { "小程序（AI 生成）" }
-    // ── 原生小程序（微信语法 WXML/WXSS/JS，由自研引擎渲染）──
-    // 特征：没有 html，只有 config.app_id。这类小程序**必须**交给自研引擎就地渲染，
-    // 走 WebView 运行时只会得到"（无小程序内容）"——这正是"AI 把小程序写到别处、
-    // 对话框里看不到"的根因：原生小程序缺一条写进对话框的通道。
-    val nativeAppId = card.config["app_id"]?.toString()?.takeIf { it.isNotBlank() }
-    // 原生小程序诊断行：自研引擎画不出来时对话框里只有一块白，这行字是唯一线索。
-    var nativeStatus by remember(card.id) { mutableStateOf("引擎初始化中…") }
-    var nativeReload by remember(card.id) { mutableStateOf(0) }
 
     CardShell(
         title = title,
@@ -2059,44 +2057,25 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
             IconButton(onClick = { fullscreen = true }, Modifier.size(30.dp)) {
                 Icon(Icons.Filled.Fullscreen, "全屏查看", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
             }
-            if (nativeAppId == null) {
+            if (card.html.isNotBlank()) {
                 IconButton(onClick = { copyText(context, card.html, "已复制小程序源码") }, Modifier.size(30.dp)) {
                     Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                }
-            } else {
-                IconButton(onClick = { nativeReload++ }, Modifier.size(30.dp)) {
-                    Icon(Icons.Filled.Refresh, "重载小程序", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
                 }
             }
         },
     ) {
-        if (nativeAppId != null) {
-            Column(Modifier.fillMaxWidth()) {
-                com.ai.assistance.quro.genui.app.ui.shell.MiniAppCard(
-                    nativeAppId,
-                    Modifier.fillMaxWidth().height((heightPx / density).dp),
-                    onStatus = { nativeStatus = it },
-                    reloadKey = nativeReload,
-                )
-                // 诊断行**只在真出问题时**才出现：引擎没出首帧 / 没挂载 / 抛了 ⚠ 错误。
-                // 正常渲染时它只是一串噪声，用户看到的是"围栏下面还拖了一条状态字"（围栏不干净）。
-                // 排障信息并没有丢——出问题时它照样显示，仍是"页面空白时唯一的线索"。
-                val trouble = nativeStatus.contains("⚠") ||
-                    nativeStatus.contains("帧=无") || nativeStatus.contains("挂载=off")
-                if (trouble) {
-                    Text(
-                        nativeStatus,
-                        color = cs.error,
-                        fontSize = 9.sp,
-                        maxLines = 3,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp),
-                    )
-                }
-            }
-            return@CardShell
-        }
         if (card.html.isBlank()) {
-            Text("（无小程序内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+            // 历史遗留：带 config.app_id 的原生小程序卡片（自研引擎已移除，无 HTML 可渲染）。
+            Column(Modifier.fillMaxWidth().padding(4.dp)) {
+                Text("（无小程序内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+                Text(
+                    "这是旧「原生小程序」卡片，其渲染引擎（miniapp-sdk）已随旧 GenUI 一起移除。"
+                        + "需要原生可交互界面请让 AI 用 genui_agent_open 打开内置 GenUI Agent。",
+                    color = cs.onSurfaceVariant,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             return@CardShell
         }
         MiniAppWebView(
@@ -2130,7 +2109,7 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.weight(1f),
                             )
-                            if (nativeAppId == null) {
+                            if (card.html.isNotBlank()) {
                                 IconButton(onClick = { copyText(context, card.html, "已复制小程序源码") }, Modifier.size(36.dp)) {
                                     Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurface, modifier = Modifier.size(20.dp))
                                 }
@@ -2140,13 +2119,10 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
                             }
                         }
                         HorizontalDivider(color = cs.outlineVariant)
-                        if (nativeAppId != null) {
-                            com.ai.assistance.quro.genui.app.ui.shell.MiniAppCard(
-                                nativeAppId,
-                                Modifier.fillMaxSize(),
-                            )
-                        } else {
-                            Box(Modifier.fillMaxSize().background(Color.White).padding(8.dp)) {
+                        Box(Modifier.fillMaxSize().background(Color.White).padding(8.dp)) {
+                            if (card.html.isBlank()) {
+                                Text("（无小程序内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+                            } else {
                                 MiniAppWebView(
                                     html = card.html,
                                     modifier = Modifier.fillMaxSize(),
@@ -2197,9 +2173,12 @@ private fun MiniAppWebView(
                 // 设置硬件加速
                 setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
 
-                // 注入JSBridge接口
-                val bridge = com.ai.assistance.quro.core.miniapp.MiniAppBridgeInterface(ctx, this)
-                addJavascriptInterface(bridge, "native")
+                // 注：原先这里注入 `native` JSBridge（MiniAppBridgeInterface，供小程序的
+                // JS 调用原生能力：存储 / 网络 / UI / 定位 / ACI…）。该桥与自研小程序引擎
+                // （core/miniapp + miniapp-sdk）已随旧 GenUI 一起整体删除，因此不再注入。
+                // 现在的 ```miniapp 卡片退化为**普通网页容器**：HTML/JS/CSS 照常渲染，
+                // 但 `native.*` 调用会失败（AI 若需要真实原生能力，应改用内置 GenUI Agent
+                // 或对话框内的 ```quro-ui 原生组件）。
 
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
