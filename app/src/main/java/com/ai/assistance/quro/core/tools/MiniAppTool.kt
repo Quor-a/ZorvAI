@@ -8,10 +8,10 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 
 /**
- * 小程序工作台工具：AI 可以直接创建 / 写入 / 读取 / 运行小程序工程。
+ * 小程序工具：AI 可以直接创建 / 写入 / 读取 / 运行小程序（Web 应用）工程。
  *
- * 工程存储在 filesDir/studio/miniapp/<name>/（app.json + pages 下各页面 .html + 组件），
- * 与工具中心「小程序工作室」面板共享同一份文件，AI 写入后 UI 立即可见、可运行。
+ * 工程存储在 filesDir/miniapp/<name>/（app.json + pages 下各页面 .html + 组件），
+ * 与工具中心「小程序」面板共享同一份文件，AI 写入后 UI 立即可见、可运行。
  *
  * 用法：
  * - miniapp(action="create", name="todo", files=[{path:"app.json", content:"..."}, {path:"pages/index/index.html", content:"..."}])
@@ -21,11 +21,11 @@ import java.nio.charset.StandardCharsets
  * - miniapp(action="delete", name="todo")  // 或 delete(name="todo", path="pages/about/about.html")
  * - miniapp(action="run", name="todo", entry="pages/index/index.html")  // 返回可直接在对话框渲染的自包含 HTML
  */
-class MiniAppStudioTool : QuroTool {
+class MiniAppTool : QuroTool {
     override val name = "miniapp"
-    override val description = """小程序工作室：AI 直接创建/写入/读取/运行小程序工程（HTML + Page() 运行时 + native.* 原生桥）。
+    override val description = """小程序：AI 直接创建/写入/读取/运行小程序工程（HTML + Page() 运行时 + native.* 原生桥）。
 
-工程结构（存放在手机私有目录 filesDir/studio/miniapp/<name>/，与工具中心「小程序工作室」面板共享同一份文件）：
+工程结构（存放在手机私有目录 filesDir/miniapp/<name>/，与工具中心「小程序」面板共享同一份文件）：
 - app.json：全局配置（appId/version/name/pages 路由表/window 样式）
 - pages/<page>/<page>.html：页面（完整 HTML，用 Page() 运行时组织状态，可调 native.*）
 - components/<name>/<name>.js：可复用组件（可选）
@@ -54,11 +54,11 @@ class MiniAppStudioTool : QuroTool {
 - wrap：把一段代码包装成可渲染 HTML（lang=js|python|css）。python 走 Brython，无需 Termux。
 - clean：清空全部小程序工程
 - manual：取回开发手册（参数 topic）：
-  · 不传 / "studio" → 小程序工作室手册：工程结构 + Page() 运行时 + native.* 逐个函数 + 错误清单
+  · 不传 / "studio" → 小程序手册：工程结构 + Page() 运行时 + native.* 逐个函数 + 错误清单
   · 老 topic（"native" / "traps" / "errors" / "compare"）→ 返回「该能力已下线」说明
     （旧的 WXML/WXSS 原生 UI 引擎 genui_native_ui 已随旧 GenUI 画布删除，别再调它）
 
-""" + MiniAppManual.STUDIO_BRIEF
+""" + MiniAppManual.WEB_APP_BRIEF
     override val parametersJson = """{
         "type":"object",
         "properties":{
@@ -72,7 +72,7 @@ class MiniAppStudioTool : QuroTool {
             "code":{"type":"string","description":"代码文本（wrap 时必填）"},
             "lang":{"type":"string","description":"wrap 的代码语言：js|python|css（省略时从 file 后缀推断）"},
             "file":{"type":"string","description":"文件名（wrap 时用于推断 lang，如 app.py）"},
-            "topic":{"type":"string","description":"manual 的主题：studio（工作室手册，默认）；老 topic native/traps/errors/compare 已下线，会返回下线说明"}
+            "topic":{"type":"string","description":"manual 的主题：小程序手册（默认）；老 topic native/traps/errors/compare 已下线，会返回下线说明"}
         },
         "required":["action"]
     }"""
@@ -82,13 +82,13 @@ class MiniAppStudioTool : QuroTool {
          * 统一后的小程序根目录：filesDir/miniapp。
          *
          * 历史上有两个并存的小程序体系：
-         *  · 工具中心「小程序」   → filesDir/workbench（单入口多文件，无路由/无原生桥）
-         *  · 工具中心「小程序工作室」→ filesDir/studio/miniapp（app.json 路由 + native.* 桥）
+         *  · 「小程序」（原 workbench）   → filesDir/workbench（单入口多文件，无路由/无原生桥）
+         *  · 「小程序」（统一 Web 应用工具，吸收原「小程序工作室」/workbench）→ filesDir/miniapp（app.json 路由 + native.* 桥）
          * 现已合体为唯一的「小程序」，目录也归一到 filesDir/miniapp，
          * 两个旧目录在首次访问时一次性搬迁过来（幂等），旧工程不会丢。
          */
         private const val ROOT = "miniapp"
-        private const val LEGACY_STUDIO = "studio/miniapp"
+        private const val LEGACY_STUDIO_MINIAPP = "studio/miniapp"
         private const val LEGACY_WORKBENCH = "workbench"
         private const val KEY_MIGRATED = "miniapp_unified_v1"
 
@@ -104,7 +104,7 @@ class MiniAppStudioTool : QuroTool {
             val prefs = context.getSharedPreferences("quro_miniapp", Context.MODE_PRIVATE)
             if (prefs.getBoolean(KEY_MIGRATED, false)) return
             prefs.edit().putBoolean(KEY_MIGRATED, true).apply()
-            listOf(LEGACY_STUDIO, LEGACY_WORKBENCH).forEach { legacy ->
+            listOf(LEGACY_STUDIO_MINIAPP, LEGACY_WORKBENCH).forEach { legacy ->
                 val src = File(context.filesDir, legacy)
                 if (!src.exists() || !src.isDirectory) return@forEach
                 src.listFiles()?.filter { it.isDirectory }?.forEach { proj ->
@@ -432,7 +432,7 @@ try {
     private fun listProjects(context: Context): String {
         val root = getRoot(context)
         val names = root.listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
-        if (names.isEmpty()) return "小程序工作台为空（filesDir/studio/miniapp 下还没有工程）。用 miniapp(action=\"create\", name=\"demo\") 创建一个示例。"
+        if (names.isEmpty()) return "小程序目录为空（filesDir/miniapp 下还没有工程）。用 miniapp(action=\"create\", name=\"demo\") 创建一个示例。"
         return buildString {
             appendLine("📱 小程序工程（${names.size}）：")
             names.forEach { appendLine("  • $it") }
@@ -590,7 +590,7 @@ Page({
 <style>body{font-family:system-ui,sans-serif;padding:24px}</style></head>
 <body>
 <h2>关于</h2>
-<p>QuroAI 小程序工作台 · 完整移植自 MiniAppFramework。</p>
+<p>ZorvAI 小程序 · 完整移植自 MiniAppFramework。</p>
 <button onclick="native.router.navigateBack()">返回</button>
 </body>
 </html>""",

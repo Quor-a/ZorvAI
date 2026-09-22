@@ -2025,8 +2025,8 @@ private fun NetworkImageBubble(url: String, modifier: Modifier = Modifier) {
  *
  * ⚠️ 与旧实现的关键差异（2026-09 移除自研小程序引擎后）：
  *  · 旧版有两条路：① HTML 小程序走 WebView；② **原生小程序**（微信语法 WXML/WXSS/JS，
- *    config.app_id）走自研引擎（miniapp-sdk + com.yuanbao.miniapp）就地渲染。
- *  · 自研引擎（miniapp-sdk）、GenUI 画布（quro/genui/app）、小程序工作台（miniapp 工具）
+ *    config.app_id）走小程序工具（miniapp）/ 工具中心「小程序」面板渲染；旧的「原生小程序」自研引擎（miniapp-sdk）已随旧 GenUI 一起移除。
+ *  · GenUI 画布（quro/genui/app）、小程序（miniapp 工具）
  *    已随「删除全部旧 GenUI + 内置新 GenUI-Agent」**整体移除**。
  *  · 因此本卡片现在只保留 HTML 路径：带 app_id 的历史原生小程序卡片会退化成
  *    「HTML 为空」的提示，不再尝试拉起已不存在的引擎（原来的「引擎初始化中…」死循环也没了）。
@@ -2173,12 +2173,10 @@ private fun MiniAppWebView(
                 // 设置硬件加速
                 setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
 
-                // 注：原先这里注入 `native` JSBridge（MiniAppBridgeInterface，供小程序的
-                // JS 调用原生能力：存储 / 网络 / UI / 定位 / ACI…）。该桥与自研小程序引擎
-                // （core/miniapp + miniapp-sdk）已随旧 GenUI 一起整体删除，因此不再注入。
-                // 现在的 ```miniapp 卡片退化为**普通网页容器**：HTML/JS/CSS 照常渲染，
-                // 但 `native.*` 调用会失败（AI 若需要真实原生能力，应改用内置 GenUI Agent
-                // 或对话框内的 ```quro-ui 原生组件）。
+                // 注：本对话内卡片是轻量 WebView 预览，不带 native.* 原生桥；需要原生能力的
+                // 小程序工程请走工具中心「小程序」面板（MiniAppEngine 注入 MiniAppBridgeInterface）。
+                // 这里只渲染 HTML/JS/CSS，AI 若要真实原生能力，应改让工程在面板里运行，或改用
+                // 内置 GenUI Agent（原生 Compose 组件）/ 对话框内的 ```quro-ui 原生组件。
 
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {

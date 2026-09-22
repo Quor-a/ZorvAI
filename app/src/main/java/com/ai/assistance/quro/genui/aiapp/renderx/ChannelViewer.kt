@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
 /**
- * 往 html 通道页面注入 bridge.js 运行时（与「小程序工作室」同源）。
+ * 往 html 通道页面注入 bridge.js 运行时（与「小程序」同源）。
  *
  * 注入后页面里就能用 `native.storage.getItem(...)`、`native.db.query(...)` 等原生能力，
  * 否则 html 通道产出的页面只是个没法持久化的沙盒。
@@ -191,7 +191,7 @@ fun ChannelViewer(
                                 settings.domStorageEnabled = true
                                 settings.mediaPlaybackRequiresUserGesture = false
                                 settings.allowContentAccess = true
-                                // 与「小程序工作室」同源的 native.* 原生桥：
+                                // 与「小程序」同源的 native.* 原生桥：
                                 // AI 在 html 通道里也能用 storage/device/network/db/location/crypto 等能力
                                 setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                                 addJavascriptInterface(MiniAppBridgeInterface(ctx, this), "native")

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>小程序工作室 技术构架</title>
+<title>小程序 技术构架</title>
 <style>
   :root{--bg:#f7f8fa;--card:#fff;--ink:#1f2430;--sub:#5b6472;--line:#e3e7ee;
         --c1:#2f6df0;--c2:#16a34a;--c3:#d97706;--c4:#7c3aed;--c5:#0891b2;--c6:#db2777;}
@@ -39,17 +39,17 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>小程序工作室 技术构架</h1>
+  <h1>小程序 技术构架</h1>
   <span class="tag">ZorvAI · MiniAppFramework（AI 生成 HTML/JS 内联渲染）</span>
 
   <h2>一、构架介绍</h2>
   <div class="card">
-    <p><b>小程序工作室</b>是 ZorvAI 内「AI 生成即可运行」的可视化小程序工作台。核心是 <b>MiniAppFramework</b>：把 LLM 产出的 HTML/JS 在应用内渲染容器中沙箱运行，支持同目录资源（图片自动转 <code>data URI</code>）、私有 <code>app://</code> 协议、对话框内联预览与独立面板编辑。用户 / AI 可在小程序面板新建、编辑、运行小程序，无需打包上架。</p>
-    <p>它把「写代码」变成「对话即产物」：AI 生成 → 安全化写入 studio 目录 → 面板 / 对话框内联渲染 → 运行 / 分享，形成低门槛的可编程能力面，是 ZorvAI 工具生态的轻量扩展通道。</p>
+    <p><b>小程序</b>是 ZorvAI 内「AI 生成即可运行」的可视化小程序工作台。核心是 <b>MiniAppFramework</b>：把 LLM 产出的 HTML/JS 在应用内渲染容器中沙箱运行，支持同目录资源（图片自动转 <code>data URI</code>）、私有 <code>app://</code> 协议、对话框内联预览与独立面板编辑。用户 / AI 可在小程序面板新建、编辑、运行小程序，无需打包上架。</p>
+    <p>它把「写代码」变成「对话即产物」：AI 生成 → 安全化写入工程目录 → 面板 / 对话框内联渲染 → 运行 / 分享，形成低门槛的可编程能力面，是 ZorvAI 工具生态的轻量扩展通道。</p>
     <ul>
       <li><b>内联渲染</b>：HTML/JS 跑在应用内 WebView/内联容器，免安装、即写即跑。</li>
       <li><b>资源自包含</b>：同目录图片在预览时转 <code>data URI</code>，与面板内 <code>app://</code> 渲染一致，避免路径错位。</li>
-      <li><b>安全写入</b>：工程名 / 路径做安全化，防止 <code>..</code> 越界写入 studio 目录外。</li>
+      <li><b>安全写入</b>：工程名 / 路径做安全化，防止 <code>..</code> 越界写入工程目录外。</li>
       <li><b>双入口</b>：对话框内联预览 + 独立小程序面板编辑，互相打通。</li>
     </ul>
   </div>
@@ -106,8 +106,8 @@
   <div class="card">
     <div class="flow">
       <div class="step"><span class="num">1</span><span><b>发起</b>：用户在小程序面板「新建示例」或对话框请求 → AI 生成 HTML/JS</span></div>
-      <div class="step"><span class="num">2</span><span><b>校验</b>：对工程名 / 路径做安全化，防止越界写入 studio 目录外</span></div>
-      <div class="step"><span class="num">3</span><span><b>写入</b>：<code>writeFlow</code> 落盘到 studio 工程目录（含同目录资源）</span></div>
+      <div class="step"><span class="num">2</span><span><b>校验</b>：对工程名 / 路径做安全化，防止越界写入工程目录外</span></div>
+      <div class="step"><span class="num">3</span><span><b>写入</b>：<code>writeFlow</code> 落盘到小程序工程目录（含同目录资源）</span></div>
       <div class="step"><span class="num">4</span><span><b>渲染</b>：MiniAppFramework 内联渲染；预览时同目录图片转 <code>data URI</code>，<code>app://</code> 资源定位一致</span></div>
       <div class="step"><span class="num">5</span><span><b>运行 / 分享</b>：面板或对话框内运行，支持导出 / 分享</span></div>
     </div>
@@ -115,7 +115,7 @@
 
   <h2>五、与系统其它模块的关系</h2>
   <div class="card">
-    <p class="muted">小程序工作室是 ZorvAI 的「轻量可编程面」：</p>
+    <p class="muted">小程序是 ZorvAI 的「轻量可编程面」：</p>
     <p>
       <span class="pill">终端4.0：小程序可调用本地命令</span>
       <span class="pill">技能 Skills：AI 生成逻辑复用技能工作流</span>

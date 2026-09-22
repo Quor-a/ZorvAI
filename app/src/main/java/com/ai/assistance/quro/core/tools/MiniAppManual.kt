@@ -1,7 +1,7 @@
 package com.ai.assistance.quro.core.tools
 
 /**
- * 小程序手册 —— 小程序工作室（`miniapp`）的**唯一真相源**。
+ * 小程序手册 —— 小程序（`miniapp`）的**唯一真相源**。
  *
  * ── 为什么要有这个文件 ────────────────────────────────────────────
  * 「小程序」这个词在本项目里曾经对应两个完全不同的东西，模型极易搞混，于是「哪个都调一遍」
@@ -9,12 +9,12 @@ package com.ai.assistance.quro.core.tools
  * 用微信小程序的常识去写，会得到「一片空白 / 点了没反应 / 文字被裁」这类黑盒故障。
  *
  * 手册直接由**引擎源码**反推而成，不是凭微信文档抄的：
- *   · 页面运行时与 native.* 桥：miniapp-sdk（LogicRuntime / MiniAppView）
- *   · 落地校验与打回理由：MiniAppStudioTool（create/run 的真实打回条件）
+ *   · 页面运行时与 native.* 桥：MiniAppEngine（core/miniapp，WebView + 原生桥）
+ *   · 落地校验与打回理由：MiniAppTool（create/run 的真实打回条件）
  *
  * ── 谁在用 ──────────────────────────────────────────────────────
- * · ZorvAI 对话框：MiniAppStudioTool 的 action="manual" 按需返回
- *   （工具 description 里内联的是 [STUDIO_BRIEF] 精简版，模型每轮都会读到，必须短）
+ * · ZorvAI 对话框：MiniAppTool 的 action="manual" 按需返回
+ *   （工具 description 里内联的是 [WEB_APP_BRIEF] 精简版，模型每轮都会读到，必须短）
  *
  * ── 历史沿革（改这段前先读） ──────────────────────────────────────
  * 旧版还有第二套「小程序」——工具 `genui_native_ui`（旧名 `create_miniapp`）：
@@ -48,16 +48,16 @@ object MiniAppManual {
 """.trimIndent()
 
     // ════════════════════════════════════════════════════════════════
-    //  miniapp（小程序工作室）完整手册
+    //  miniapp（小程序）完整手册
     // ════════════════════════════════════════════════════════════════
 
-    val STUDIO: String = """
-【小程序工作室手册 · miniapp —— HTML + Page() 运行时 + native.* 原生桥】
+    val WEB_APP: String = """
+【小程序手册 · miniapp —— HTML + Page() 运行时 + native.* 原生桥】
 
 ── 1. 它是什么
 由 WebView 跑**真实 HTML 页面**的小程序工程，通过 native.* 桥调用本机的
 存储 / SQLite / 加密 / 通知 / 分享 / 定位 / 关联启动等真实能力。
-工程落在手机私有目录 filesDir/studio/miniapp/<name>/，与工具中心的「小程序工作室」面板**同一份文件**
+工程落在手机私有目录 filesDir/studio/miniapp/<name>/，与工具中心的「小程序」面板**同一份文件**
 ——AI 写完，面板里立刻能看到、能跑。
 
 ── 2. 工程结构
@@ -99,7 +99,7 @@ miniapp(action="run", name="todo", entry="pages/index/index.html")   ← 必须�
   或 <button data-id="3" onclick="del(this.dataset.id)">。
 · 持久化优先用 native.storage / native.db（见第 5 节），也可以配合 localStorage 但换设备会丢。
 
-── 5. native.* 桥（原生能力全表 —— 这是用工作室的唯一理由）
+── 5. native.* 桥（原生能力全表 —— 这是用小程序的唯一理由）
 模块      函数                                                   用途
 storage   setItem / getItem / removeItem / clear                 键值持久化（跨启动保留）
 ui        toast / setNavigationBarTitle                        轻提示、改标题
@@ -123,7 +123,7 @@ location  getLocation                                          获取定位
 · 存结构体要先 JSON.stringify 再 setItem，取出 JSON.parse。
 · SQLite 用 db.execSql 建表一次，之后 insert/query/update/delete（表名与字段自己定，别用 SQL 关键字）。
 
-── 6. 什么该选工作室（判断标准）
+── 6. 什么该选小程序（判断标准）
 ✅ 要跨启动保存数据、要按条件查历史记录、要算摘要/签名、要发通知、要系统分享、
    要定位、要拉起另一个 App、要跑 SQL —— 选它。
 ❌ 只是好看的界面 + 本地临时状态（待办、计算器、展示页）—— 直接写 ```html 围栏更快更稳。
@@ -164,8 +164,8 @@ location  getLocation                                          获取定位
 """.trimIndent()
 
     /** 精简版：塞进工具 description（模型每轮都会读到，必须短）。 */
-    val STUDIO_BRIEF: String = """
-【小程序工作室 = 本工具 miniapp】
+    val WEB_APP_BRIEF: String = """
+【小程序 = 本工具 miniapp】
 它是 **HTML 页面 + Page() 运行时 + native.* 原生桥**（能存数据 / 跑 SQL / 加密 / 通知 / 分享 / 定位 / 拉起 App）。
 交付必须两步：create 落地 → run 取回自包含 HTML 内嵌对话流。**只 create 不 run = 用户什么都看不到。**
 
@@ -199,8 +199,8 @@ location  getLocation                                          获取定位
         return when (t) {
             "traps", "陷阱", "native", "原生", "原生ui", "errors", "错误", "错误清单",
             "compare", "对比", "对照" -> RETIRED
-            // studio / 空 / all / 未知 topic → 工作室手册（也是当前唯一的一册）
-            else -> STUDIO
+            // studio / 空 / all / 未知 topic → 小程序手册（也是当前唯一的一册）
+            else -> WEB_APP
         }
     }
 }

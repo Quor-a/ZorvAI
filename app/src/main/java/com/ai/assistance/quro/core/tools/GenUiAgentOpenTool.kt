@@ -10,7 +10,7 @@ import org.json.JSONObject
  *
  * 背景：本 App 的「生成式界面」能力只剩**两套范式**（旧的第三套「生成式 UI 对话画布 `genui_open`」
  * 已于 v1.0.96 随 `genui` 模块一并删除）：
- *  1. `miniapp`         → **小程序工作室**（自研引擎 `miniapp-sdk`，HTML+Page() 运行时+native.* 原生桥）
+ *  1. `miniapp`         → **小程序**（WebView 运行时 + `Page()` 运行时 + `native.*` 原生桥，HTML+JS+CSS）
  *  2. 本工具            → **内置完整的开源项目 [GenUI-Agent](https://github.com/Quor-a/GenUI-Agent)**
  *                        （去品牌化后落在 `com.ai.assistance.quro.genui.aiapp` / `com.ai.assistance.quro.genui.sdk`）
  *
@@ -52,7 +52,7 @@ class GenUiAgentOpenTool : QuroTool {
 它与另外两条「生成式界面」通道的区别（别选错）：
 - 单张流程图 / 架构图 / 思维导图 → 直接用 ```mermaid 围栏，**不要**开 GenUI Agent；
 - 一个网页成品（HTML/JS 页面）→ 用 ```html 围栏；
-- 要**小程序形态**（HTML+JS+CSS，带 native.* 原生桥）的工程 → `miniapp`（小程序工作室）；
+- 要**小程序形态**（HTML+JS+CSS，带 native.* 原生桥）的工程 → `miniapp`（小程序）；
 - 要一块**原生可交互界面**（GenUI JSON DSL → 原生 Compose 组件，530+ 组件）→ **本工具**。
 
 调用后 GenUI Agent 会以全屏独立界面启动，它有自己的一套独立界面与应用内状态；但模型配置、

@@ -13,7 +13,7 @@ import com.ai.assistance.quro.genui.aiapp.core.GenUILlmResult
 import com.ai.assistance.quro.genui.aiapp.core.GenUIToolCall
 import com.ai.assistance.quro.genui.aiapp.core.GenUIToolSpec
 import com.ai.assistance.quro.core.model.QuroModelConfig
-import com.ai.assistance.quro.core.tools.MiniAppStudioTool
+import com.ai.assistance.quro.core.tools.MiniAppTool
 import com.ai.assistance.quro.core.tools.VisualPendingQuestion
 import com.ai.assistance.quro.core.tools.VisualQuestionQueue
 import com.ai.assistance.quro.genui.aiapp.net.GenUILlmClient
@@ -353,14 +353,14 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
      *
      * 落盘到宿主统一目录 filesDir/miniapp/<工程名>/，与工具中心「小程序」面板、
      * miniapp 工具共享同一份文件——存完就能在工具中心打开，AI 也能用 miniapp 工具继续改。
-     * 走的是 MiniAppStudioTool 的 save，保证工程结构（app.json + pages/index/index.html）标准。
+     * 走的是 MiniAppTool 的 save，保证工程结构（app.json + pages/index/index.html）标准。
      */
     fun saveChannelAsMiniApp(title: String, html: String) {
         val ctx = getApplication<Application>().applicationContext
         viewModelScope.launch(Dispatchers.IO) {
             val name = sanitizeAppName(title)
             val res = runCatching {
-                MiniAppStudioTool().run(
+                MiniAppTool().run(
                     ctx,
                     org.json.JSONObject()
                         .put("action", "save")
