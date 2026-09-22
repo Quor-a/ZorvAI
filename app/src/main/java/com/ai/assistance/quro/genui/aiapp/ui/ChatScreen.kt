@@ -149,7 +149,8 @@ fun ChatScreen(
     }
     // 对话回传：界面上的选择/落子 → 自动作为新消息继续编排
     actionHost.onSendMessage = { text ->
-        if (text.isNotBlank() && !state.isStreaming) {
+        // canSend 同时挡住「生成中」和「正在等用户选渲染通道」，避免压进第二个问题
+        if (text.isNotBlank() && state.canSend) {
             viewModel.send(text)
         }
     }
@@ -181,6 +182,8 @@ fun ChatScreen(
         if (layerStack.lastOrNull() == Layer.DRAWER) layerStack = layerStack.dropLast(1)
     }
     val isSidePanelOpen = remember { mutableStateOf(false) }
+    // 「每轮询问渲染通道」开关的本地镜像（真值落 SharedPreferences，由 ViewModel 读写）
+    var askChannelOn by remember { mutableStateOf(viewModel.askChannelEachTurn()) }
     // 根布局尺寸（宠物拖动 clamp 用）
     var rootSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     // 漂浮宠物：位置 / 定义 / 设置（持久化于 PetPrefs）
@@ -340,6 +343,10 @@ fun ChatScreen(
             }
 
             // 没有 UI + 正在生成 — 极简加载
+            state.awaitingChannel -> {
+                ChannelAskingPlaceholder()
+            }
+
             state.isStreaming -> {
                 MinimalLoadingPlaceholder()
             }
@@ -447,6 +454,11 @@ fun ChatScreen(
                 worksCount = state.works.size,
                 personaName = state.hostPersonaName.ifBlank { "跟随 ZorvAI" },
                 modelLabel = state.modelLabel.ifBlank { "跟随 ZorvAI" },
+                askChannel = askChannelOn,
+                onToggleAskChannel = { on ->
+                    askChannelOn = on
+                    viewModel.setAskChannelEachTurn(on)
+                },
                 onBack = { popLayer() },
                 onOpenHistory = { openLayer(Layer.HISTORY) }
             )
@@ -554,7 +566,15 @@ private fun SidePanelContent(
                     modifier = Modifier.fillMaxWidth().clickable { onReplayWork(w) }
                 ) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        Text(w.title.ifBlank { w.request.take(24) }, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                        // 渲染类型徽章 + 标题（老数据标题里的「[通道] 」前缀剥掉，有徽章了）
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RenderTypeBadge(w.channel, dense = true)
+                            Spacer(Modifier.width(5.dp))
+                            Text(
+                                w.title.removePrefix("[通道] ").ifBlank { w.request.take(24) },
+                                fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1
+                            )
+                        }
                         Text(
                             java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.CHINA).format(java.util.Date(w.time)),
                             fontSize = 10.sp, color = cs.onSurfaceVariant
@@ -1394,6 +1414,29 @@ private fun GeneratingDots(
 // ============================================================================
 // 极简加载占位
 // ============================================================================
+
+/**
+ * 「正在等你选渲染通道」占位。
+ *
+ * 正常情况下用户看到的是可视化询问弹窗，这块只是它背后的底衬 ——
+ * 万一弹窗没弹出（例如界面在后台等），至少不是一片空白。
+ */
+@Composable
+private fun ChannelAskingPlaceholder(modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("🎛", fontSize = 34.sp)
+            Spacer(Modifier.height(12.dp))
+            Text("请选择本次渲染通道", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "GenUI SDK / A2UI / Markdown / HTML —— 选完即开始生成",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
 
 @Composable
 private fun MinimalLoadingPlaceholder(

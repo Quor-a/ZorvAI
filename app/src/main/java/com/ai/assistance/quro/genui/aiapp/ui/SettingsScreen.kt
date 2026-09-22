@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,6 +31,8 @@ fun SettingsScreen(
     worksCount: Int,
     personaName: String,
     modelLabel: String,
+    askChannel: Boolean,
+    onToggleAskChannel: (Boolean) -> Unit,
     onBack: () -> Unit,
     onOpenHistory: () -> Unit
 ) {
@@ -72,6 +75,39 @@ fun SettingsScreen(
                 subtitle = "共 $worksCount 个界面记录 · 点击回放与查看往来",
                 onClick = onOpenHistory
             )
+
+            // ── 渲染通道：每轮生成前先问一句走哪条管线 ──
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "渲染通道",
+                fontSize = 11.sp, color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            Spacer(Modifier.height(4.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+            ) {
+                Row(
+                    Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("每轮询问渲染通道", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(
+                            if (askChannel)
+                                "已开启 · 每次生成前弹出四选一（GenUI / A2UI / Markdown / HTML），选完才开始生成"
+                            else
+                                "已关闭 · 不再询问，统一走 GenUI SDK；你若在话里点名通道仍会照办",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                    Switch(checked = askChannel, onCheckedChange = onToggleAskChannel)
+                }
+            }
 
             Spacer(Modifier.height(16.dp))
         }

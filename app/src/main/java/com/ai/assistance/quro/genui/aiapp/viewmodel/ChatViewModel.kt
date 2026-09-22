@@ -5,24 +5,32 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ai.assistance.quro.genui.aiapp.brain.ZorvBrain
 import com.ai.assistance.quro.genui.aiapp.data.GenUISessionStore
+import com.ai.assistance.quro.genui.aiapp.data.RenderChannel
 import com.ai.assistance.quro.genui.aiapp.renderx.ChannelPage
 import com.ai.assistance.quro.genui.aiapp.core.GenUIChatMessage
 import com.ai.assistance.quro.genui.aiapp.core.GenUILlmResult
 import com.ai.assistance.quro.genui.aiapp.core.GenUIToolCall
 import com.ai.assistance.quro.genui.aiapp.core.GenUIToolSpec
 import com.ai.assistance.quro.core.model.QuroModelConfig
+import com.ai.assistance.quro.core.tools.VisualPendingQuestion
+import com.ai.assistance.quro.core.tools.VisualQuestionQueue
 import com.ai.assistance.quro.genui.aiapp.net.GenUILlmClient
 import com.ai.assistance.quro.genui.aiapp.agent.AgentThinkingProcessor
 import com.ai.assistance.quro.genui.aiapp.tools.GenUIToolRegistry
 import com.ai.assistance.quro.genui.aiapp.tools.RegisterComponentTool
 import com.ai.assistance.quro.genui.sdk.dsl.StreamingParser
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withContext
 import kotlin.text.Regex
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 生成式 UI ViewModel
@@ -120,9 +128,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     lastGenUI = null
                 }
             }
-            val works = GenUISessionStore.loadWorks(ctx).map {
-                com.ai.assistance.quro.genui.aiapp.data.GenUISessionStore.WorkItem(it.title, it.request, it.json, it.time)
-            }
+            // loadWorks 已经带上了渲染类型（老数据也在读盘时按 payload 补全），
+            // 不要再 4 参数重建一次把它扔掉。
+            val works = GenUISessionStore.loadWorks(ctx)
             _state.update {
                 it.copy(
                     hostPersonaName = brain.activePersona().name,
@@ -177,14 +185,35 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         persistSession()
     }
 
-    /** 历史回看：恢复某次生成的界面（GenUI 或通道页） */
+    /**
+     * 历史回看：恢复某次生成的界面（GenUI 或通道页）。
+     *
+     * 路由以作品落库时记下的渲染类型为准，而不是靠猜 payload 长什么样 ——
+     * A2UI 的扁平 JSON 和 GenUI 的 DSL 都是 JSON，猜错这条回放就废了。
+     */
     fun restoreWork(work: com.ai.assistance.quro.genui.aiapp.data.GenUISessionStore.WorkItem) {
-        // 通道页（存的是原始围栏）→ 重新路由打开
-        if (work.json.startsWith("```")) {
-            detectChannel(work.json)?.let { (page, _) ->
-                _state.update { it.copy(channel = page, hasUI = true, pageStack = emptyList(), isStreaming = false, error = null) }
-                return
+        val ch = work.channel
+        val prevForced = forcedChannel
+        // 回放按「当初那条通道」路由，不能受上一轮残留的锁定影响
+        forcedChannel = ch.key
+        try {
+            if (ch != RenderChannel.GENUI) {
+                // 老数据可能存的是裸 JSON（没包围栏）→ 补一层，走同一套通道路由
+                val payload = if (work.json.startsWith("```")) work.json
+                else "```" + ch.key + "\n" + work.json + "\n```"
+                detectChannel(payload)?.let { (page, _) ->
+                    _state.update {
+                        it.copy(
+                            channel = page, hasUI = true, pageStack = emptyList(),
+                            isStreaming = false, error = null, currentRequest = work.request,
+                            activeChannel = ch
+                        )
+                    }
+                    return
+                }
             }
+        } finally {
+            forcedChannel = prevForced
         }
         _state.update {
             it.copy(
@@ -194,7 +223,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 currentRequest = work.request,
                 hasUI = true,
                 isStreaming = false,
-                error = null
+                error = null,
+                activeChannel = ch
             )
         }
         GenUISessionStore.saveLastPage(getApplication<Application>().applicationContext, work.json, work.request)
@@ -212,19 +242,29 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun FlatDocParser(body: String, isYaml: Boolean) = com.ai.assistance.quro.genui.aiapp.renderx.FlatDoc.parse(body, isYaml)
 
-    /** 用户点名通道：a2ui/markdown/html（发送时从用户消息提取） */
+    /** 用户点名通道：genui/a2ui/markdown/html（发送时从用户消息提取） */
     private var forcedChannel: String? = null
 
+    /**
+     * 从用户话里认通道。
+     *
+     * 顺序即优先级：先认 a2ui 再认 genui，这样「别用 genui，改用 a2ui」不会反过来。
+     */
     private fun channelFromRequest(request: String): String? = when {
         request.contains("a2ui", ignoreCase = true) -> "a2ui"
         request.contains("markdown", ignoreCase = true) -> "markdown"
         Regex("用\\s*html|html\\s*(写|版|页)|写\\s*html", RegexOption.IGNORE_CASE).containsMatchIn(request) -> "html"
+        Regex("genui|生成式界面|原生\\s*dsl", RegexOption.IGNORE_CASE).containsMatchIn(request) -> "genui"
         else -> null
     }
 
     /** 返回 (通道页, 原始围栏文本)——原始文本用于历史回放 */
     private fun detectChannel(text: String, userRequest: String = ""): Pair<ChannelPage, String>? {
         val forced = forcedChannel ?: channelFromRequest(userRequest)
+        // 本轮锁定 GenUI SDK（用户在询问弹窗里选的，或话里点名了）→ 直接交回 GenUI 提取管线。
+        // 没有这一条时：用户明明选了 GenUI，只要模型顺手写了个 ```markdown，
+        // 通道检测就会把它抢走，画布上出来的是文章而不是界面。
+        if (forced == "genui") return null
         // 用户点名 a2ui，但模型没写 ```a2ui 围栏（写成 ```json 或裸 JSON）→ 仍按 A2UI 渲染。
         // 不做这层兜底时 detectChannel 会直接返回 null，整篇 JSON 掉进 GenUI 提取管线，
         // 画布上就又是一屏源码（用户报的「A2UI 还是老样子」有一半是这种情况）。
@@ -311,6 +351,16 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(currentGenUI = null, hasUI = false) }
     }
 
+    /** 是否「每轮生成前先问一次渲染通道」（设置页开关，落 SharedPreferences） */
+    fun askChannelEachTurn(): Boolean =
+        GenUISessionStore.askChannelEachTurn(getApplication<Application>().applicationContext)
+
+    fun setAskChannelEachTurn(on: Boolean) {
+        GenUISessionStore.setAskChannelEachTurn(
+            getApplication<Application>().applicationContext, on
+        )
+    }
+
     /** 二级/多级界面：open_screen 动作压栈 */
     fun pushPage(spec: com.ai.assistance.quro.genui.sdk.dsl.UISpec) {
         val json = runCatching { com.ai.assistance.quro.genui.sdk.GenUI.encode(spec) }.getOrNull() ?: return
@@ -373,7 +423,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
      * 4. 循环直到 AI 返回文本回复或达到最大轮次
      */
     fun send(text: String) {
-        if (text.isBlank() || _state.value.isStreaming) return
+        // awaitingChannel：询问弹窗正开着，别让第二次点击压进第二个问题
+        if (text.isBlank() || _state.value.isStreaming || _state.value.awaitingChannel) return
 
         val config = brain.modelConfig()
         val personaName = brain.activePersona().name
@@ -404,8 +455,101 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-        // 用户点名通道（a2ui/markdown/html）→ 本轮锁定
-        forcedChannel = channelFromRequest(text)
+        val ctx = getApplication<Application>().applicationContext
+
+        // ① 用户话里点名了通道 → 直接锁定。他都已经说了，再弹一次窗只是多一步。
+        val named = channelFromRequest(text)
+        if (named != null) {
+            streamJob = viewModelScope.launch { startTurn(text, RenderChannel.fromKey(named), config) }
+            return
+        }
+
+        // ② 关掉了「每轮询问」→ 用默认通道直接生成
+        if (!GenUISessionStore.askChannelEachTurn(ctx)) {
+            streamJob = viewModelScope.launch { startTurn(text, RenderChannel.DEFAULT, config) }
+            return
+        }
+
+        // ③ 默认路径：先问一句走哪条渲染通道，选完再生成。
+        //    同一段需求走四条通道出来的东西完全不一样（界面 / 结构表 / 文章 / 网页），
+        //    与其让模型猜，不如让用户点一下——猜错就是用户说的「乱七八糟」。
+        streamJob = viewModelScope.launch {
+            _state.update { it.copy(awaitingChannel = true, error = null) }
+            val picked = try {
+                askRenderChannel()
+            } finally {
+                // ⚠️ 必须放 finally：用户点「停止」会取消整个协程，
+                // 若把复位写在 try 之后，取消时这行永远不执行 →
+                // awaitingChannel 卡在 true → canSend 恒为 false → 用户再也发不出消息。
+                _state.update { it.copy(awaitingChannel = false) }
+            }
+            if (picked == null) {
+                // 超时/取消：本轮不发送，明说原因，别让用户以为卡死了
+                _state.update { it.copy(error = "未选择渲染通道，本轮已取消。可直接再发一次。") }
+                return@launch
+            }
+            startTurn(text, picked, config)
+        }
+    }
+
+    /**
+     * 弹「本轮用哪条渲染通道？」并挂起等用户点。
+     *
+     * 复用 ZorvAI 主对话那套可视化询问：同一个全局队列 [VisualQuestionQueue] +
+     * 同一个弹窗（`VisualQuestionDialog`，已挂在 GenUI Agent 的导航外层）。
+     * 区别只在于——这里由 App 主动问，不指望模型自己记得调 `visual_question` 工具。
+     *
+     * ⚠️ [CountDownLatch.await] 是阻塞调用，必须切到 IO 线程等。
+     * 挂在主线程会让托管弹窗的 composition 无法重组 → 用户根本看不到弹窗 → 双方互等死锁。
+     *
+     * @return 用户选中的通道；超时、取消，或自定义答案里认不出通道 → null
+     */
+    private suspend fun askRenderChannel(): RenderChannel? {
+        val pending = VisualPendingQuestion(
+            question = "这一轮用哪条渲染通道？同一段需求，四条通道出来的东西完全不一样。",
+            options = RenderChannel.values().map { it.option },
+            allowCustom = true,
+            title = "选择本次渲染通道",
+            latch = CountDownLatch(1),
+            result = AtomicReference<String?>(null)
+        )
+        synchronized(VisualQuestionQueue.pendingQuestions) {
+            VisualQuestionQueue.pendingQuestions.add(pending)
+        }
+        VisualQuestionQueue.signalAdded()
+
+        val answered = try {
+            withContext(Dispatchers.IO) {
+                pending.latch.await(ASK_CHANNEL_TIMEOUT_SEC, TimeUnit.SECONDS)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // 用户点了停止 → 本轮作废。但问题还在全局队列里挂着，
+            // 弹窗的 onDismissRequest 是空的（不允许关闭），不摘掉就永远关不掉。
+            // submitAnswer 会顺带发 QuestionRemoved 事件，弹窗据此收起。
+            val idx = synchronized(VisualQuestionQueue.pendingQuestions) {
+                VisualQuestionQueue.pendingQuestions.indexOf(pending)
+            }
+            if (idx >= 0) VisualQuestionQueue.submitAnswer(idx, "")
+            throw e
+        }
+        if (!answered) {
+            synchronized(VisualQuestionQueue.pendingQuestions) {
+                VisualQuestionQueue.pendingQuestions.remove(pending)
+            }
+            return null
+        }
+        return RenderChannel.parse(pending.result.get())
+    }
+
+    /**
+     * 真正开一轮生成：锁定通道 → 压入 user 消息 → 跑工具调用循环。
+     *
+     * @param channel 本轮渲染通道，null 表示不锁定（沿用旧的自动判通道行为）
+     */
+    private suspend fun startTurn(text: String, channel: RenderChannel?, config: QuroModelConfig) {
+        // 本轮锁定通道。genui → detectChannel 直接放行给 GenUI 管线；
+        // a2ui/markdown/html → 只认该通道的围栏（防模型黏住旧通道）。
+        forcedChannel = channel?.key
 
         val newHistory = _state.value.conversationHistory + GenUIChatMessage(
             role = "user",
@@ -422,25 +566,24 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 hasUI = false,
                 toolCallRecords = emptyList(),
                 conversationHistory = newHistory,
-                pageStack = emptyList()
+                pageStack = emptyList(),
+                activeChannel = channel
             )
         }
 
-        streamJob = viewModelScope.launch {
-            // 初始化思考链
-            thinkingProcessor.startChain(text)
-            thinkingProcessor.onChainUpdate = { chain ->
-                _state.update { it.copy(thoughtChain = chain) }
-            }
-            _state.update { it.copy(thoughtChain = thinkingProcessor.getCurrentChain()) }
-
-            // 执行工具调用循环
-            runToolCallingLoop(config)
-
-            // 完成思考链
-            thinkingProcessor.completeChain()
-            _state.update { it.copy(thoughtChain = thinkingProcessor.getCurrentChain()) }
+        // 初始化思考链
+        thinkingProcessor.startChain(text)
+        thinkingProcessor.onChainUpdate = { chain ->
+            _state.update { it.copy(thoughtChain = chain) }
         }
+        _state.update { it.copy(thoughtChain = thinkingProcessor.getCurrentChain()) }
+
+        // 执行工具调用循环
+        runToolCallingLoop(config)
+
+        // 完成思考链
+        thinkingProcessor.completeChain()
+        _state.update { it.copy(thoughtChain = thinkingProcessor.getCurrentChain()) }
     }
 
     /**
@@ -454,7 +597,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             "禁止把历史里的旧指令重新执行、复述、编号或汇总成清单；" +
             "禁止回复「您发出了很多条指令」「我来逐条理解」这类元话术。\n" +
             "用户这一轮没提的事就不要提，直接用 UI 回应最后那条消息。\n\n"
-        + (if (forced != null)
+        + (if (forced == "genui")
+            "# 本轮通道已锁定：GenUI SDK（用户已在询问弹窗里确认，最高优先级）\n" +
+            "用户本轮选的是 GenUI SDK 原生通道，必须走 GenUI 流程，按下面的输出格式生成界面。\n" +
+            "绝对禁止输出 markdown / a2ui / html 围栏；不许用一篇文章代替界面。\n"
+        else if (forced != null)
             "# 本轮通道已由用户锁定（最高优先级）\n" +
             "用户明确指定本轮必须使用三反引号" + forced + "围栏输出。\n" +
             "绝对禁止输出任何其他围栏（markdown/a2ui/html/genui 都不行）；\n" +
@@ -467,8 +614,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             "独立网页/复杂样式/可玩小游戏 → html 围栏；简单结构化展示/省 token → a2ui 围栏\n" +
             "选择非 GenUI 通道时：直接输出对应围栏，围栏外不得输出任何文字，不要输出 intent/plan/generate。\n"
         ) + "\n"
-        + "# GenUI 流程输出格式（生成式界面时适用）\n"
-        + "1. content 通道结构固定：<intent>简短思考</intent> → <plan>规划</plan> → <generate>```genui\n{完整 JSON}\n```</generate>"
+        // GenUI 输出格式只在「走 GenUI 流程」时下发：锁了 markdown/a2ui/html 还塞这段，
+        // 等于一边禁 intent/plan/generate 一边教它怎么写，模型会两头打架。
+        + (if (forced == null || forced == "genui")
+            "# GenUI 流程输出格式（生成式界面时适用）\n" +
+            "1. content 通道结构固定：<intent>简短思考</intent> → <plan>规划</plan> → <generate>```genui\n{完整 JSON}\n```</generate>"
+        else "")
     )
 
     /**
@@ -595,6 +746,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         /** genui 断流续写的最大次数 */
         const val MAX_GENUI_CONTINUATIONS = 2
 
+        /** 「本轮用哪条渲染通道」询问的等待上限（秒）。四条选项要读完，给足时间。 */
+        const val ASK_CHANNEL_TIMEOUT_SEC = 120L
+
         /** 续写提示词 */
         const val GENUI_CONTINUE_PROMPT =
             "你的上一条输出在 genui 代码块中途被截断了。现在请【跳过所有思考过程】，" +
@@ -631,12 +785,21 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
         // ── 新架构通道优先（Markdown / A2UI 扁平表 / HTML）──
         detectChannel(fullText, currentState.currentRequest)?.let { (page, raw) ->
+            // 渲染类型按「最终实际渲染出来的 page」记，而不是按用户点的那条：
+            // 点名 a2ui 但结构没认出来时会退回 markdown 原文渲染，
+            // 那条就该记 markdown，回放时才不会又拿 A2UI 解析器去啃它。
+            val pageChannel = when (page) {
+                is ChannelPage.MarkdownPage -> RenderChannel.MARKDOWN
+                is ChannelPage.FlatPage -> RenderChannel.A2UI
+                is ChannelPage.HtmlPage -> RenderChannel.HTML
+            }
             _state.update {
                 it.copy(
                     channel = page,
                     isStreaming = false,
                     streamingText = "",
                     error = null,
+                    activeChannel = pageChannel,
                     // 通道轮也必须落一条 assistant 消息：旧实现直接 return，
                     // 导致连续几轮 A2UI/HTML 之后历史里只剩一堵 user 指令墙。
                     // 同样只留人话，DSL/JSON 原文交给 works 存（见 historyNote 的说明）。
@@ -649,7 +812,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                         title = "[通道] " + page.title.ifBlank { "内容页" },
                         request = currentState.currentRequest.ifBlank { page.title },
                         json = raw, // 存原始围栏，回放时重新路由
-                        time = System.currentTimeMillis()
+                        time = System.currentTimeMillis(),
+                        renderType = pageChannel.key
                     )) + it.works).distinctBy { w -> w.json }.take(20)
                 )
             }
@@ -747,7 +911,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 title = specTitle ?: currentState.currentRequest.ifBlank { "未命名作品" },
                 request = currentState.currentRequest,
                 json = genuiJson,
-                time = System.currentTimeMillis()
+                time = System.currentTimeMillis(),
+                renderType = RenderChannel.GENUI.key
             )
             _state.update { it.copy(works = (listOf(newWork) + it.works).distinctBy { w -> w.json }.take(20)) }
         }

@@ -47,4 +47,9 @@ fun AppNavHost(
             ChatScreen(viewModel = chatViewModel)
         }
     }
+
+    // 可视化询问弹窗（与 ZorvAI 主对话同一套）。
+    // 挂在 NavHost 之外，保证任何页面/覆盖层之上都能弹出——
+    // 「本轮用哪条渲染通道」就是靠它问的（见 ChatViewModel.askRenderChannel）。
+    com.ai.assistance.quro.ui.VisualDialogs()
 }
