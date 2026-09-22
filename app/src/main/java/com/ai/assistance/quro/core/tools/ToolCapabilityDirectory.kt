@@ -62,38 +62,6 @@ object ToolCapabilityDirectory {
      * 真实注册表里不在本层的工具，会在 [install] 时用 description 兜底合成，分类走命名推断。
      */
     private val handbook = mapOf(
-        // ═══════════════ 生成式 UI 画布（ZorvAI → GenUI 反向调用）═══════════════
-        "genui_open" to ToolInfo(
-            name = "genui_open",
-            category = ToolCategory.GENUI,
-            description = "把「画界面」的活派给生成式 UI 画布（GenUI）：切屏到画布并以 prompt 自动开跑，产物自动回写回本对话框",
-            useCases = listOf(
-                "用生成式UI画一个", "进GenUI画布", "GenUI 画一个", "用画布做",
-                "整屏打开一个界面", "全屏画一个应用", "用生成式UI做个可视化面板",
-                "要生成式UI形态的交付"
-            ),
-            examples = listOf(
-                "genui_open(prompt=\"做一个记账小程序：首页显示本月支出合计、可添加一笔支出（金额/分类/备注）、按分类汇总饼图，数据存本地\")",
-                "genui_open(prompt=\"做一个月度健身打卡界面：打卡日历、连续天数、每周柱状图\", mode=\"native\")",
-                "genui_open(prompt=\"做一个带本地存储的减肥记录小程序，能查历史记录、能发通知提醒\", mode=\"studio\")",
-                "genui_open(prompt=\"做一个产品介绍页，含特性卡片与价格表\", mode=\"html\")"
-            ),
-            parameters = mapOf(
-                "prompt" to "交给 GenUI 的完整任务描述（**必须自包含**：GenUI 看不到本对话历史）",
-                "mode" to "canvas=交给 GenUI 自己路由（默认）/ native=强制原生UI(WXML) / studio=强制工作室(HTML+原生桥) / html=强制HTML页面"
-            ),
-            tips = listOf(
-                "**用户点名 GenUI / 生成式 UI 才用**——这是「收口」通道，不是默认路径。",
-                "用户说「做个小程序 / 在这儿做个小程序 / 在这儿画个界面」→ 用 `miniapp` **就地做**，不许推给 GenUI。",
-                "能在本对话框内交付的（HTML 页面 / ui_widget 富卡片 / miniapp 小程序）就别换屏——换屏会打断用户阅读位置。",
-                "调下去会**换屏**到 GenUI 画布并自动开跑；产物（界面/原生小程序）会带 `GenUI · 生成式 UI` 署名自动回写进本对话框。",
-                "调用后本轮**立即收尾**：不要再写 HTML、不要再调画型工具（否则两块画布）。给一句极简交代即可。",
-                "prompt 要写清「做什么 + 要哪些功能 + 风格 + 有哪些数据」，写成「做那个」等于没写。"
-            ),
-            relatedTools = listOf("miniapp", "ui_dsl_spec", "visual_popup"),
-            priority = 5
-        ),
-
         // ═══════════════ 小程序工程（工作室：HTML + Page() + native.* 桥）═══════════════
         "miniapp" to ToolInfo(
             name = "miniapp",
@@ -119,19 +87,46 @@ object ToolCapabilityDirectory {
                 "topic" to "manual 主题：compare/studio/native/errors"
             ),
             tips = listOf(
-                "用户说「做个小程序 / 在这儿做个小程序」→ **就用它**，ZorvAI 自己会写小程序，不要推给 genui_open。",
+                "用户说「做个小程序 / 在这儿做个小程序」→ **就用它**，ZorvAI 自己会写小程序。",
                 "**create 之后必须再 run 一次**，否则界面根本没交付（用户什么都看不到）。",
                 "run 的结果会自动内嵌进对话流渲染；**run 完不要再自己写一份 HTML**（那是第二块画布）。",
-                "动手前先读手册：miniapp(action=\"manual\")。里面是**两份手册**："
-                    + "topic=\"studio\"（默认，含两工具对照）读小程序工作室（HTML + Page() + native.* 全函数 + 错误清单）；"
-                    + "topic=\"native\" / \"traps\" / \"errors\" 读 GenUI 那套原生 UI（WXML/WXSS/JS 自研引擎）的"
-                    + "组件表 / 事件表 / wx.* 全表 / 引擎陷阱 / 错误清单；topic=\"compare\" 只看两者区别。",
+                "动手前先读手册：miniapp(action=\"manual\") 或 topic=\"studio\""
+                    + "（工程结构 / Page() 运行时 / native.* 全函数 / 错误清单）。"
+                    + "老 topic native / traps / errors / compare 已随旧 GenUI 画布下线，只回下线说明。",
                 "要**原生能力**（存数据/跑SQL/加密/通知/分享/定位/拉起App）→ 本工具（native.* 桥）；"
-                    + "只要界面和交互、不要系统能力 → 也可以交给 genui_open(mode=\"native\") 在整屏画布里做。",
-                "同名的 genui_native_ui 是 GenUI 画布里的 WXML/WXSS/JS 原生引擎（无 HTML、无原生桥）。"
-                    + "两者**同一轮只能用其中一个**，都用 = 两块画布。"
+                    + "只要界面和交互、不要系统能力 → 直接写 ```html 围栏更快；"
+                    + "要**原生控件**的可交互界面 → genui_agent_open。",
+                "本轮只交付一件：本工具 run 完就收尾，不要再补 HTML 或再调别的画型工具。"
             ),
-            relatedTools = listOf("genui_open", "workspace_write", "ui_dsl_spec"),
+            relatedTools = listOf("genui_agent_open", "workspace_write", "ui_dsl_spec"),
+            priority = 4
+        ),
+
+        // ═══════════════ GenUI Agent（内置独立应用：GenUI JSON DSL → 原生 Compose）═══════════════
+        "genui_agent_open" to ToolInfo(
+            name = "genui_agent_open",
+            category = ToolCategory.GENUI,
+            description = "拉起内置的 GenUI Agent（生成式界面智能体，独立全屏应用）：GenUI JSON DSL → 原生 Compose 组件（530+），可点、可填、可改",
+            useCases = listOf(
+                "要原生控件的界面", "做个可交互的原生界面", "打开 GenUI Agent", "用 GenUI 做一个界面",
+                "来做个小应用", "要能填表单的界面", "整屏打开一个原生界面"
+            ),
+            examples = listOf(
+                "genui_agent_open(prompt=\"做一个 BMI 计算器：身高体重输入 + 实时结果 + 分级色带\")",
+                "genui_agent_open(prompt=\"做一个季度销售看板：指标卡 + 柱状图 + 明细表\")",
+                "genui_agent_open()"
+            ),
+            parameters = mapOf(
+                "prompt" to "可选：进去就执行的界面需求（**必须自包含**：GenUI Agent 看不到本对话历史）。留空只打开界面"
+            ),
+            tips = listOf(
+                "交付的是**原生控件**（不是网页、不是 HTML），这是它和小程序工作室的本质区别。",
+                "它是**独立全屏应用**，有自己的对话页/历史/宠物与右侧抽屉；模型配置、人格灵魂、工具集全部沿用 ZorvAI 主设置。",
+                "用户说「小程序 / 网页 / HTML」→ 用 `miniapp` 或 ```html 围栏，不要开它。",
+                "prompt 要写清「做什么 + 要哪些功能 + 有哪些数据」，写成「做那个」等于没写。",
+                "调用后本轮立即收尾，不要再补 HTML 或调别的画型工具。"
+            ),
+            relatedTools = listOf("miniapp", "ui_dsl_spec"),
             priority = 4
         ),
 

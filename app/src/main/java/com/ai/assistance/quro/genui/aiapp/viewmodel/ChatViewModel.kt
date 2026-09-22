@@ -50,7 +50,16 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<ChatState> = _state.asStateFlow()
 
     private var streamJob: Job? = null
-    private val maxHistory = 20
+
+    /**
+     * 发给 LLM 的上下文窗口（见 [ChatHistory]）。
+     * 旧实现是 `history.takeLast(20)`：历史超 20 条就把首位的 system 一起截掉，
+     * 模型丢掉全部 GenUI 规则后开始「把历史指令整理成清单」——本实现改为按用户轮次切窗。
+     */
+    private val maxHistoryTurns = ChatHistory.MAX_TURNS
+
+    /** 落盘的对话历史上限（条，不含 system）——防止 SharedPreferences 无限膨胀。 */
+    private val maxPersistedHistory = 60
 
     /**
      * 工具调用最大轮次，取自宿主模型配置。
@@ -87,11 +96,21 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         val ctx = getApplication<Application>().applicationContext
         runCatching {
             val savedHistory = GenUISessionStore.loadHistory(ctx)
+            // 只恢复最近 maxPersistedHistory 条（老库可能已存了几百条旧指令），
+            // 并补齐收尾 assistant：上次会话在 user 消息处被杀掉时，
+            // 恢复后紧接着的新命令会跟旧命令连成两条 user → 模型误判「你发了一堆指令」。
+            val restored = savedHistory.takeLast(maxPersistedHistory).map { (role, content) ->
+                GenUIChatMessage(role = role, content = content)
+            }.toMutableList()
+            while (restored.isNotEmpty() && (restored.first().role == "tool")) {
+                restored.removeAt(0)
+            }
+            if (restored.isNotEmpty() && restored.last().role != "assistant") {
+                restored.add(GenUIChatMessage(role = "assistant", content = "（上次会话在此中断）"))
+            }
             val history = listOf(
                 GenUIChatMessage(role = "system", content = buildSystemContent())
-            ) + savedHistory.map { (role, content) ->
-                GenUIChatMessage(role = role, content = content)
-            }
+            ) + restored
             var lastGenUI = GenUISessionStore.loadLastGenUI(ctx)
             // 上次保存的是通道页（markdown/a2ui/html 围栏）→ 恢复为通道而非 GenUI
             var restoredChannel: ChannelPage? = null
@@ -126,11 +145,36 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             val st = _state.value
             GenUISessionStore.saveHistory(
                 ctx,
-                st.conversationHistory.filter { it.role != "system" }.map { it.role to it.content }
+                // 只留最近 maxPersistedHistory 条：旧实现全量落盘，历史无上限增长，
+                // 冷启动恢复后一上来就是几百条旧指令，模型自然会「把指令整理成清单」。
+                st.conversationHistory.filter { it.role != "system" }
+                    .takeLast(maxPersistedHistory)
+                    .map { it.role to it.content }
             )
             GenUISessionStore.saveLastPage(ctx, st.currentGenUI, st.currentRequest)
             GenUISessionStore.saveWorks(ctx, st.works)
         }
+    }
+
+    /**
+     * 收尾本轮：保证对话历史以 assistant 结束。
+     *
+     * 中止 / 报错 / 通道输出这些路径过去都不写 assistant 消息，
+     * 于是历史里会堆出「user、user、user…」一堵指令墙，
+     * 模型下一轮就会回「您这一轮连续发出了很多条指令」。
+     */
+    private fun sealTurn(note: String) {
+        val tail = _state.value.conversationHistory.lastOrNull() ?: return
+        if (tail.role == "assistant") return
+        _state.update {
+            it.copy(
+                conversationHistory = it.conversationHistory + GenUIChatMessage(
+                    role = "assistant",
+                    content = note
+                )
+            )
+        }
+        persistSession()
     }
 
     /** 历史回看：恢复某次生成的界面（GenUI 或通道页） */
@@ -380,7 +424,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun renderRulesMessage(forced: String?): GenUIChatMessage = GenUIChatMessage(
         role = "system",
-        content = (if (forced != null)
+        content = "# 上下文用法（每轮都读）\n" +
+            "上面的历史消息只是背景资料。你只执行【最后一条】用户消息。\n" +
+            "禁止把历史里的旧指令重新执行、复述、编号或汇总成清单；" +
+            "禁止回复「您发出了很多条指令」「我来逐条理解」这类元话术。\n" +
+            "用户这一轮没提的事就不要提，直接用 UI 回应最后那条消息。\n\n"
+        + (if (forced != null)
             "# 本轮通道已由用户锁定（最高优先级）\n" +
             "用户明确指定本轮必须使用三反引号" + forced + "围栏输出。\n" +
             "绝对禁止输出任何其他围栏（markdown/a2ui/html/genui 都不行）；\n" +
@@ -421,7 +470,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 baseUrl = config.baseUrl,
                 apiKey = config.apiKey,
                 model = config.model,
-                messages = currentState.conversationHistory.takeLast(maxHistory) + renderRulesMessage(forcedChannel),
+                messages = ChatHistory.toApiMessages(
+                    currentState.conversationHistory,
+                    maxTurns = maxHistoryTurns
+                ) + renderRulesMessage(forcedChannel),
                 temperature = config.temperature,
                 maxTokens = config.maxTokens,
                 tools = tools.ifEmpty { null },
@@ -511,6 +563,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 error = "工具调用超过最大轮次（${getMaxToolCallRounds()}轮），已停止"
             )
         }
+        sealTurn("（本轮工具调用超过最大轮次，未产出界面）")
     }
 
     private companion object {
@@ -559,6 +612,13 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     isStreaming = false,
                     streamingText = "",
                     error = null,
+                    // 通道轮也必须落一条 assistant 消息：旧实现直接 return，
+                    // 导致连续几轮 A2UI/HTML 之后历史里只剩一堵 user 指令墙。
+                    conversationHistory = it.conversationHistory + GenUIChatMessage(
+                        role = "assistant",
+                        content = fullText,
+                        reasoning = result.reasoning
+                    ),
                     works = (listOf(com.ai.assistance.quro.genui.aiapp.data.GenUISessionStore.WorkItem(
                         title = "[通道] " + page.title.ifBlank { "内容页" },
                         request = currentState.currentRequest.ifBlank { page.title },
@@ -780,6 +840,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 error = result.message
             )
         }
+        sealTurn("（本轮请求失败：${result.message.take(80)}）")
     }
 
     fun stop() {
@@ -791,6 +852,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 streamingText = ""
             )
         }
+        sealTurn("（本轮已由用户中止，未产出界面）")
     }
 
     fun clear() {
@@ -818,9 +880,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
         runCatching {
-            // 清除只重置当前画布，历史库（对话/界面记录）必须保留
+            // 清除只重置当前画布与对话上下文，历史库（界面回放）必须保留
             val ctx = getApplication<Application>().applicationContext
             GenUISessionStore.saveLastPage(ctx, "", "")
+            // 上下文同时落盘清空：否则重开 App 会把刚清掉的旧指令重新灌回模型
+            GenUISessionStore.saveHistory(ctx, emptyList())
         }
     }
 
@@ -1380,6 +1444,13 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
      * 支持多行、非贪婪匹配。
      */
     fun stripThinkingTagsPublic(text: String): String = stripThinkingTags(text)
+
+    /**
+     * 历史对话页专用：剥思考标签 + 折叠大段代码围栏。
+     * 历史 assistant 消息里往往是整套界面 JSON（上万字符），原样贴出来就是一堵墙。
+     */
+    fun stripAssistantForDisplay(text: String): String =
+        ChatHistory.compressAssistant(stripThinkingTags(text))
 
     private fun stripThinkingTags(text: String): String {
         var result = text

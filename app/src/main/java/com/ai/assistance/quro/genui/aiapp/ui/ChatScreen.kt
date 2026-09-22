@@ -460,7 +460,7 @@ fun ChatScreen(
                 works = state.works,
                 messages = state.conversationHistory,
                 personaName = state.hostPersonaName.ifBlank { "跟随 ZorvAI" },
-                stripAssistant = { viewModel.stripThinkingTagsPublic(it) },
+                stripAssistant = { viewModel.stripAssistantForDisplay(it) },
                 formatTime = { formatTimestamp(it) },
                 onBack = { popLayer() },
                 onReplay = { w ->
