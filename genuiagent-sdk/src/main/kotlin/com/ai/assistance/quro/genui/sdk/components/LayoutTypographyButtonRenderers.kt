@@ -6,6 +6,8 @@
 
 package com.ai.assistance.quro.genui.sdk.components
 
+import androidx.compose.material3.minimumInteractiveComponentSize
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -1334,7 +1336,7 @@ fun LinkTextRenderer(
 
     var linkModifier = modifier
     if (clickHandler != null) {
-        linkModifier = linkModifier.clickable(onClick = clickHandler)
+        linkModifier = linkModifier.minimumInteractiveComponentSize().clickable(onClick = clickHandler)
     }
 
     Text(
@@ -1906,7 +1908,7 @@ fun ToggleButtonRenderer(
     ) {
         Row(
             modifier = Modifier
-                .clickable(onClick = onClick)
+                .minimumInteractiveComponentSize().clickable(onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1971,7 +1973,7 @@ fun SegmentedButtonRenderer(
             ) {
                 Row(
                     modifier = Modifier
-                        .clickable {
+                        .minimumInteractiveComponentSize().clickable {
                             selected = index
                             component.events["onChange"]?.let { event ->
                                 ctx.executor.execute(event, component)

@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.genui.sdk.components
 
+import com.ai.assistance.quro.genui.sdk.style.ZorvPalette
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -73,12 +75,12 @@ object NotificationFamily {
 
     /** 严重度 → 颜色语义（可被 style 覆盖） */
     fun severityColor(sev: String?): Color = when (sev?.lowercase()) {
-        "info" -> Color(0xFF3B82F6)
-        "success", "ok" -> Color(0xFF22C55E)
-        "warning", "warn" -> Color(0xFFF59E0B)
-        "error", "critical" -> Color(0xFFEF4444)
-        "neutral" -> Color(0xFF64748B)
-        else -> Color(0xFF6750A4)
+        "info" -> ZorvPalette.Info
+        "success", "ok" -> ZorvPalette.Success
+        "warning", "warn" -> ZorvPalette.Terracotta
+        "error", "critical" -> ZorvPalette.ErrorWarm
+        "neutral" -> ZorvPalette.Info
+        else -> ZorvPalette.Terracotta
     }
 
     /** 图标位映射 */
@@ -136,7 +138,7 @@ fun NotificationRenderer(component: UIComponent, ctx: RenderContext, kind: Strin
                     .background(accent),
                 contentAlignment = Alignment.Center
             ) {
-                Text(if (count > 99) "99+" else "$count", fontSize = 9.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                Text(if (count > 99) "99+" else "$count", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.width(6.dp))
             Text(title, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -147,12 +149,12 @@ fun NotificationRenderer(component: UIComponent, ctx: RenderContext, kind: Strin
             verticalAlignment = Alignment.CenterVertically,
             modifier = modifier
                 .clip(RoundedCornerShape(50))
-                .background(Color(0xEE1C2029))
+                .background(ZorvPalette.Ink)
                 .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
             Spacer(Modifier.width(8.dp))
-            Text(if (message.isNotBlank()) message else title, fontSize = 12.sp, color = Color(0xFFE5E9F0), maxLines = 1)
+            Text(if (message.isNotBlank()) message else title, fontSize = 12.sp, color = ZorvPalette.InfoSoft, maxLines = 1)
         }
 
         // ── 进度型（任务/上传/下载/同步/备份）──
@@ -160,13 +162,13 @@ fun NotificationRenderer(component: UIComponent, ctx: RenderContext, kind: Strin
             modifier = modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF1C2029))
+                .background(ZorvPalette.Ink)
                 .padding(14.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(10.dp).clip(CircleShape).background(accent))
                 Spacer(Modifier.width(8.dp))
-                Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFE5E9F0))
+                Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = ZorvPalette.InfoSoft)
                 Spacer(Modifier.weight(1f))
                 Text(
                     if (progress != null) "${(progress * 100).toInt()}%" else str("status", "进行中"),
@@ -176,13 +178,13 @@ fun NotificationRenderer(component: UIComponent, ctx: RenderContext, kind: Strin
             Spacer(Modifier.height(10.dp))
             LinearProgressIndicator(
                 progress = { (progress ?: 0.4f).coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(6.dp)),
                 color = accent,
-                trackColor = Color(0x33FFFFFF)
+                trackColor = ZorvPalette.LineSoft
             )
             if (message.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
-                Text(message, fontSize = 11.sp, color = Color(0xFF8B93A7), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(message, fontSize = 11.sp, color = ZorvPalette.Info, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
 
@@ -191,39 +193,39 @@ fun NotificationRenderer(component: UIComponent, ctx: RenderContext, kind: Strin
             verticalAlignment = Alignment.CenterVertically,
             modifier = modifier.padding(6.dp)
         ) {
-            Text("❤", fontSize = 22.sp, color = accent)
+            Text("❤", fontSize = 20.sp, color = accent)
             Spacer(Modifier.width(6.dp))
-            Text("$count", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE5E9F0))
+            Text("$count", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = ZorvPalette.InfoSoft)
             Spacer(Modifier.width(6.dp))
-            Text(title, fontSize = 12.sp, color = Color(0xFF8B93A7), maxLines = 1)
+            Text(title, fontSize = 12.sp, color = ZorvPalette.Info, maxLines = 1)
         }
 
         // ── 聚合堆栈 ──
         "notification_group", "digest_stack" -> Box(modifier) {
             // 层叠视觉：三层卡片错位
-            Box(Modifier.fillMaxWidth().padding(top = 8.dp, start = 8.dp).height(8.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x22888888)))
-            Box(Modifier.fillMaxWidth().padding(top = 4.dp, start = 4.dp).height(8.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF3A4152)))
+            Box(Modifier.fillMaxWidth().padding(top = 8.dp, start = 8.dp).height(8.dp).clip(RoundedCornerShape(10.dp)).background(ZorvPalette.Muted))
+            Box(Modifier.fillMaxWidth().padding(top = 4.dp, start = 4.dp).height(8.dp).clip(RoundedCornerShape(10.dp)).background(ZorvPalette.Info))
             Column(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFF1C2029))
+                    .background(ZorvPalette.Ink)
                     .padding(12.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("🔔", fontSize = 16.sp)
                     Spacer(Modifier.width(8.dp))
-                    Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFE5E9F0))
+                    Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = ZorvPalette.InfoSoft)
                     Spacer(Modifier.weight(1f))
                     Box(
                         Modifier.clip(CircleShape).background(accent).padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
-                        Text("$count 条", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("$count 条", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
                 if (message.isNotBlank()) {
                     Spacer(Modifier.height(4.dp))
-                    Text(message, fontSize = 11.sp, color = Color(0xFF8B93A7), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(message, fontSize = 11.sp, color = ZorvPalette.Info, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -234,7 +236,7 @@ fun NotificationRenderer(component: UIComponent, ctx: RenderContext, kind: Strin
             modifier = modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF1C2029))
+                .background(ZorvPalette.Ink)
                 .padding(12.dp)
         ) {
             // 左侧色条 + 图标位
@@ -256,14 +258,14 @@ fun NotificationRenderer(component: UIComponent, ctx: RenderContext, kind: Strin
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFE5E9F0), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = ZorvPalette.InfoSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (message.isNotBlank()) {
                     Spacer(Modifier.height(3.dp))
-                    Text(message, fontSize = 12.sp, color = Color(0xFF8B93A7), maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Text(message, fontSize = 12.sp, color = ZorvPalette.Info, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
                 if (str("time").isNotBlank()) {
                     Spacer(Modifier.height(4.dp))
-                    Text(str("time"), fontSize = 10.sp, color = Color(0xFF5C6773))
+                    Text(str("time"), fontSize = 11.sp, color = ZorvPalette.InkSoft)
                 }
             }
             // 优先级角标

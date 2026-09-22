@@ -59,7 +59,7 @@ fun FloatPanelRenderer(c: UIComponent, ctx: RenderContext) {
     Column(
         Modifier.fillMaxWidth().padding(16.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFFF8FAFC), Color(0xFFE2E8F0))))
+            .background(Brush.linearGradient(listOf(ctx.theme.colorScheme.infoContainer, ctx.theme.colorScheme.infoContainer)))
             .border(1.dp, Color.White, RoundedCornerShape(20.dp))
             .padding(16.dp)
     ) { com.ai.assistance.quro.genui.sdk.render.RenderChildren(c.children, ctx) }
@@ -68,8 +68,8 @@ fun FloatPanelRenderer(c: UIComponent, ctx: RenderContext) {
 /** 屏幕流动 — 全屏循环流动的波浪渐变背景 */
 @Composable
 fun FlowBackgroundRenderer(c: UIComponent, ctx: RenderContext) {
-    val c1 = c.properties.c7("from", Color(0xFF0F172A))
-    val c2 = c.properties.c7("to", Color(0xFF1E3A8A))
+    val c1 = c.properties.c7("from", ctx.theme.colorScheme.onSurface)
+    val c2 = c.properties.c7("to", ctx.theme.colorScheme.info)
     val inf = rememberInfiniteTransition(label = "flow")
     val phase by inf.animateFloat(0f, 1f, infiniteRepeatable(tween(4000, easing = LinearEasing), RepeatMode.Restart), label = "p")
     Canvas(Modifier.fillMaxWidth().height(220.dp)) {
@@ -113,9 +113,9 @@ fun NovelReaderRenderer(c: UIComponent, ctx: RenderContext) {
 fun ChapterRowRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(p.s7("index", "01") ?: "01", fontSize = 13.sp, color = theme7(ctx), fontWeight = FontWeight.Black)
+        Text(p.s7("index", "01") ?: "01", fontSize = 12.sp, color = theme7(ctx), fontWeight = FontWeight.Black)
         Spacer(Modifier.width(12.dp))
-        Text(p.s7("title", "") ?: "", fontSize = 15.sp, modifier = Modifier.weight(1f), maxLines = 1)
+        Text(p.s7("title", "") ?: "", fontSize = 14.sp, modifier = Modifier.weight(1f), maxLines = 1)
         Text(p.s7("meta", "") ?: "", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
     }
 }
@@ -142,8 +142,8 @@ fun PixelAvatarRenderer(c: UIComponent, ctx: RenderContext) {
 
 @Composable
 fun PixelBannerRenderer(c: UIComponent, ctx: RenderContext) {
-    Box(Modifier.fillMaxWidth().height(64.dp).background(Color(0xFF0F172A)), contentAlignment = Alignment.Center) {
-        Text(c.properties.s7("text", "GAME OVER") ?: "GAME OVER", color = Color(0xFF38BDF8), fontSize = 20.sp, fontWeight = FontWeight.Black)
+    Box(Modifier.fillMaxWidth().height(64.dp).background(ctx.theme.colorScheme.onSurface), contentAlignment = Alignment.Center) {
+        Text(c.properties.s7("text", "GAME OVER") ?: "GAME OVER", color = ctx.theme.colorScheme.info, fontSize = 20.sp, fontWeight = FontWeight.Black)
     }
 }
 
@@ -151,15 +151,15 @@ fun PixelBannerRenderer(c: UIComponent, ctx: RenderContext) {
 @Composable
 fun LicenseCardRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFF0F172A)).padding(16.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(ctx.theme.colorScheme.onSurface).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(p.s7("plan", "Pro 授权") ?: "Pro 授权", color = Color(0xFFFBBF24), fontWeight = FontWeight.Bold)
+            Text(p.s7("plan", "Pro 授权") ?: "Pro 授权", color = ctx.theme.colorScheme.primary, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
-            Text("✓ 已激活", color = Color(0xFF4ADE80), fontSize = 12.sp)
+            Text("✓ 已激活", color = ctx.theme.colorScheme.success, fontSize = 12.sp)
         }
         Spacer(Modifier.height(8.dp))
-        Text(p.s7("key", "XXXX-XXXX-XXXX") ?: "XXXX-XXXX-XXXX", color = Color(0xFF94A3B8), fontSize = 13.sp)
-        Text("有效期至 ${p.s7("until", "2099-12-31") ?: ""}", color = Color(0xFF64748B), fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+        Text(p.s7("key", "XXXX-XXXX-XXXX") ?: "XXXX-XXXX-XXXX", color = ctx.theme.colorScheme.info, fontSize = 12.sp)
+        Text("有效期至 ${p.s7("until", "2099-12-31") ?: ""}", color = ctx.theme.colorScheme.info, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
@@ -180,8 +180,8 @@ fun AuthStepRowRenderer(c: UIComponent, ctx: RenderContext) {
 @Composable
 fun MapPinCardRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(42.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFDCFCE7)), contentAlignment = Alignment.Center) { Text("📍", fontSize = 20.sp) }
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(42.dp).clip(RoundedCornerShape(10.dp)).background(ctx.theme.colorScheme.successContainer), contentAlignment = Alignment.Center) { Text("📍", fontSize = 20.sp) }
         Column(Modifier.padding(start = 10.dp).weight(1f)) {
             Text(p.s7("place", "") ?: "", fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
             Text(p.s7("addr", "") ?: "", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
@@ -200,7 +200,7 @@ fun RouteStepsRenderer(c: UIComponent, ctx: RenderContext) {
                 if (i < steps.lastIndex) Box(Modifier.width(2.dp).height(18.dp).background(Color.LightGray))
             }
             if (i < steps.lastIndex) Spacer(Modifier.height(2.dp))
-            Text(s, fontSize = 13.sp, modifier = Modifier.padding(start = 18.dp, bottom = 6.dp))
+            Text(s, fontSize = 12.sp, modifier = Modifier.padding(start = 18.dp, bottom = 6.dp))
         }
     }
 }
@@ -212,9 +212,9 @@ fun AppIconRenderer(c: UIComponent, ctx: RenderContext) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(56.dp).clip(RoundedCornerShape(14.dp))
-                .background(Brush.linearGradient(listOf(p.c7("g1", Color(0xFF6366F1)), p.c7("g2", Color(0xFFA855F7))))),
+                .background(Brush.linearGradient(listOf(p.c7("g1", ctx.theme.colorScheme.info), p.c7("g2", ctx.theme.colorScheme.primary)))),
             contentAlignment = Alignment.Center
-        ) { Text(p.s7("emoji", "🚀") ?: "🚀", fontSize = 26.sp) }
+        ) { Text(p.s7("emoji", "🚀") ?: "🚀", fontSize = 24.sp) }
         Text(p.s7("name", "") ?: "", fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp), maxLines = 1)
     }
 }
@@ -228,8 +228,8 @@ fun IconGridRenderer(c: UIComponent, ctx: RenderContext) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 chunk.forEachIndexed { i, e ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) { Text(e, fontSize = 22.sp) }
-                        Text(names.getOrNull(r * 4 + i) ?: "", fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) { Text(e, fontSize = 20.sp) }
+                        Text(names.getOrNull(r * 4 + i) ?: "", fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
             }
@@ -240,12 +240,12 @@ fun IconGridRenderer(c: UIComponent, ctx: RenderContext) {
 /** 自然风景 — 层叠山丘+太阳 Canvas */
 @Composable
 fun SceneryCardRenderer(c: UIComponent, ctx: RenderContext) {
-    val sky1 = c.properties.c7("sky1", Color(0xFF7DD3FC))
-    val sky2 = c.properties.c7("sky2", Color(0xFFE0F2FE))
-    val hill = c.properties.c7("hill", Color(0xFF16A34A))
+    val sky1 = c.properties.c7("sky1", ctx.theme.colorScheme.info)
+    val sky2 = c.properties.c7("sky2", ctx.theme.colorScheme.infoContainer)
+    val hill = c.properties.c7("hill", ctx.theme.colorScheme.success)
     Canvas(Modifier.fillMaxWidth().height(150.dp)) {
         drawRect(Brush.verticalGradient(listOf(sky1, sky2)))
-        drawCircle(Color(0xFFFDE047), 22f, Offset(size.width * 0.75f, size.height * 0.28f))
+        drawCircle(ctx.theme.colorScheme.warning, 22f, Offset(size.width * 0.75f, size.height * 0.28f))
         val hill1 = Path().apply {
             moveTo(0f, size.height)
             quadraticBezierTo(size.width * 0.3f, size.height * 0.45f, size.width * 0.62f, size.height)

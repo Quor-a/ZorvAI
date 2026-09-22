@@ -57,9 +57,18 @@ data class FlatDoc(
             }
         }
 
-        private fun flatten(o: JsonObject): Triple<String, String, Map<String, String>> {
-            val props = (o["props"] as? JsonObject)?.mapValues { (_, v) -> primStr(v) } ?: emptyMap()
-            val text = o["text"]?.let { primStr(it) } ?: props["text"] ?: props["title"] ?: props["content"] ?: ""
+        private fun flatten(o: JsonObject, topLevelProps: Boolean = false): Triple<String, String, Map<String, String>> {
+            // 结构键不算属性：type/id/children/kids/props 是骨架，混进 props 会污染样式解析
+            val structural = setOf("type", "t", "id", "children", "kids", "props", "items")
+            val own = if (topLevelProps) {
+                o.filterKeys { it !in structural }.mapValues { (_, v) -> primStr(v) }
+            } else emptyMap()
+            val props = own + ((o["props"] as? JsonObject)?.mapValues { (_, v) -> primStr(v) } ?: emptyMap())
+            // 文本落点兼容：text / props.text / title / content / value
+            //  —— `value` 是模型高频写法（与 A2UI 的 `text` 等价），此前不认会让整块文字渲染成空白。
+            val text = o["text"]?.let { primStr(it) }
+                ?: props["text"] ?: props["title"] ?: props["content"] ?: props["value"]
+                ?: ""
             return Triple(o["t"]?.let { primStr(it) } ?: o["type"]?.let { primStr(it) } ?: "text", text, props)
         }
 
@@ -73,11 +82,81 @@ data class FlatDoc(
             // ① A2UI 官方协议适配（createSurface / updateComponents / surfaceUpdate / beginRendering，
             //    支持 JSONL 逐行报文、v0.8 嵌套写法与 v0.9 扁平写法、数据模型指针绑定）
             A2uiProtocol.toFlatDoc(content)?.let { return it }
+            val el: JsonElement = runCatching {
+                if (isYaml) yamlToJson(content) else json.parseToJsonElement(content)
+            }.getOrNull() ?: return null
             // ② 本家扁平邻接表（root + components）
-            return runCatching {
-                val el: JsonElement = if (isYaml) yamlToJson(content) else json.parseToJsonElement(content)
-                flatFromJson(el.jsonObject)
-            }.getOrNull()
+            (el as? JsonObject)?.let { obj -> runCatching { flatFromJson(obj) }.getOrNull()?.let { return it } }
+            // ③ 裸嵌套节点树：顶层直接就是 {type, children:[...]}，既没有 root 也没有 components。
+            //    这是模型被 "a2ui" 触发时最常写的一种形状，此前三处都不认 →
+            //    整篇解析失败 → 通道退化成「原文画布」→ 用户看到的是一屏 JSON 源码而不是界面。
+            return bareTreeToFlatDoc(el)
+        }
+
+        /**
+         * ③ 裸嵌套节点树 → 扁平邻接表。
+         *
+         * 形状（模型高频写法，子节点内联，无任何信封）：
+         * ```
+         * {"type":"column","spacing":14,"children":[
+         *    {"type":"card","title":"…","backgroundColor":"#6C5CE7","children":[ … ]}
+         * ]}
+         * ```
+         * 与另外两种的区别：不是 `{root,components}` 邻接表，也不是 `createSurface` 报文。
+         * 顶层也可能是数组（此时按 column 包一层）。
+         *
+         * 在此路径上额外做两件事（模型这种写法特有的保真处理）：
+         *  · 节点属性取**顶层标量**（title/padding/corner_radius/backgroundColor…），
+         *    它们的写法是平铺的，不在 props 里，只读 props 会把卡片标题、底色全丢掉；
+         *  · `items:["a","b"]`（裸字符串数组）合成 text 子节点，否则列表内容整块消失。
+         */
+        private fun bareTreeToFlatDoc(el: JsonElement): FlatDoc? {
+            val rootObj: JsonObject = when (el) {
+                is JsonObject -> el
+                is JsonArray -> JsonObject(linkedMapOf<String, JsonElement>(
+                    "type" to JsonPrimitive("column"), "children" to el
+                ))
+                else -> return null
+            }
+            // 只认「节点」形状：必须带类型键，避免把 messages 信封之类的文档误当成节点树
+            if (!(rootObj.containsKey("type") || rootObj.containsKey("t"))) return null
+
+            val nodes = LinkedHashMap<String, FlatNode>()
+
+            fun walk(id: String, o: JsonObject) {
+                val (rawT, text, props) = flatten(o, topLevelProps = true)
+                val kidsArr = (o["children"] ?: o["kids"]) as? JsonArray
+                    ?: ((o["props"] as? JsonObject)?.get("children") as? JsonArray)
+                val kids = ArrayList<String>()
+
+                fun kidId(kidEl: JsonElement, idx: Int): String =
+                    (kidEl as? JsonObject)?.let { ko ->
+                        ko["id"]?.let { primStr(it) }.takeUnless { it.isNullOrBlank() }
+                    } ?: (id + "_" + idx)
+
+                // items 为裸字符串数组 → 合成 text 子节点（列表内容不丢）
+                val itemsArr = o["items"] as? JsonArray
+                if (kidsArr == null && itemsArr != null && itemsArr.all { it is JsonPrimitive }) {
+                    itemsArr.forEachIndexed { idx, itemEl ->
+                        val sid = id + "_i" + idx
+                        kids.add(sid)
+                        nodes[sid] = FlatNode(sid, "text", primStr(itemEl), emptyList(), emptyMap())
+                    }
+                } else {
+                    kidsArr?.forEachIndexed { idx, kidEl ->
+                        val kId = kidId(kidEl, idx)
+                        kids.add(kId)
+                        if (kidEl is JsonObject) walk(kId, kidEl)
+                        else nodes[kId] = FlatNode(kId, "text", primStr(kidEl), emptyList(), emptyMap())
+                    }
+                }
+                nodes[id] = FlatNode(id, normType(rawT, kids.isNotEmpty()), text, kids, props)
+            }
+
+            walk("root", rootObj)
+            val r = nodes["root"] ?: return null
+            if (r.kids.isEmpty() && r.text.isBlank()) return null
+            return FlatDoc("root", nodes)
         }
 
         /**

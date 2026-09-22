@@ -114,12 +114,12 @@ object GenUiRules {
 - margin: 同 padding 格式
 - size: {"width":200,"height":48}
 - textSize: 数字（14 = 14sp）
-- textColor: "#FF6C5CE7"
+- textColor: 语义色名（onSurface / onSurfaceVariant / muted / primary …）——**不要写 hex**
 - fontWeight: "normal" | "medium" | "bold" | "light"
-- backgroundColor: 颜色字符串
+- backgroundColor: 语义色名（background / surface / container / primaryContainer …）——**不要写 hex**
 - cornerRadius: 数字
 - elevation: 数字
-- border: {"width":1,"color":"#E0E0E0"}
+- border: {"width":1,"color":"outline"}  —— color 同样写语义色名
 - maxLines: 数字
 - overflow: "ellipsis" | "clip"
 - alignment: "start" | "center" | "end" | "space_between" | "space_evenly"
@@ -168,12 +168,15 @@ object GenUiRules {
   （用途示例：heart 情感徽章 / cookie9 签文卡 / flower 花瓣点赞 / ghostish 万圣节装饰 / sunny 天气图标）
 - 硬性规则：信息密集组件（卡片/列表/图文容器）别用 lg 以上大圆角，内容会被裁切；嵌套圆角内外层按比例缩放（外 16 内 8），同半径会视觉失衡；紧邻组合组件（按钮组/分段）内侧角小于外侧角
 - textColor: 文字颜色 #RRGGBB；textSize: 数字；fontWeight: "bold" | "500"..."900"
-- gradient: "#FF6B6B,#4ECDC4"（2-3色渐变）+ gradientAngle: 角度；glow: "#22D3EE" + glowRadius: 辉光
+- gradient: "primary,tertiary"（2-3 个**语义色名**渐变）+ gradientAngle: 角度；glow: "gold" + glowRadius: 辉光
+  · 一屏最多一处渐变/辉光；彩虹渐变按钮是明令禁止项
 - borderColor + borderWidth: 描边；elevation: 阴影；opacity: 0~1 透明度
-- 颜色可自由写：#RRGGBB / #AARRGGBB(带透明) / rgba(255,0,0,0.5) / 主题角色 surface,primary,error 等
+- 颜色一律写**语义色名**（见下文【配色】硬性规则）：background/surface/container/onSurface/muted/primary/gold/success/rise/fall…
+  · 手写 hex 会被渲染层收敛（去饱和+压亮度），你预期的紫色会变成脏灰紫 —— 写了也是白写
 - 徽章/标签/胶囊按钮一律 shape:"pill"，圆形头像 shape:"circle"
 - 胶囊组件家族（零配置，写类型名就是胶囊，无需 shape）：pill_badge(文字徽章) pill_chip(可选中标签) pill_tag(静态标签) pill_button(胶囊按钮,onClick) pill_toggle(开关) pill_counter(计数) pill_avatar_text(头像字+文字) pill_status(状态点) pill_filter(筛选) pill_stepper(步进) pill_icon(图标) pill_notification(通知角标) pill_input(输入) pill_search(搜索) pill_meter(度量,value 0-1/百分制)
-  · 支持 palette/density/mood 变体 + gradient/glow/border 效果引擎 + 任意 hex 配色 → 千款形态
+  · 支持 palette/density/mood 变体 + gradient/glow/border 效果引擎 → 千款形态
+  · palette 也请用语义名：brand / primary / gold / sage / success / warning / info / danger / rise / fall
   · 任何"带底色的小块标签"（签文/关键词/状态/分类）必须用 pill_* 组件或 box+shape:"pill"，严禁无圆角直角色块
 - 漂浮宠物组件：{"type":"pet","properties":{"spec":{"name":"团子","body":"#FFB5C2,#FFD9E0","eye":"#3A2E39","accent":"#FF8FA3","form":"blob|cat|ghost","size":76}},"properties":{"phase":"idle|thinking|tool|planning|generating|done"}}——可在页面里放宠物形象，form 三种：blob 果冻团子/cat 猫耳/ghost 幽灵
 - state: "default" | "pressed" | "focused" | "disabled" | "loading"
@@ -572,16 +575,17 @@ root 必须是单个组件对象；未注册/拼错的 type 会渲染成「未�
 - body — 正文内容 (14-16px)
 - caption — 辅助文字、时间戳 (12px)
 
-**颜色层次：**
-- 主文字：text-primary (#FF111827)
-- 次要文字：text-secondary (#FF6B7280)
-- 辅助文字：text-tertiary (#FF9CA3AF)
-- 强调色：primary 紫色
+**颜色层次（一律写语义色名，不写 hex）：**
+- 主文字：onSurface（暖墨，不是纯黑）
+- 次要文字：onSurfaceVariant
+- 辅助文字：muted
+- 强调色：primary（陶土，**不是紫色**）
+- 页面底 background / 卡片底 surface —— 两者必须有明暗层次
 
 **卡片层次：**
-- 主卡片：elevation=2dp, radius=16dp
-- 次要卡：elevation=1dp, radius=12dp
-- 列表项：无阴影，底部分隔线
+- 卡片统一：elevation=1, radius=12（**不要叠多层阴影**）
+- 卡片底用 surface，页面底用 background —— 靠明暗差分层，不靠厚阴影
+- 列表项：无阴影，用 outlineVariant 分隔线
 
 ### 7. 内容丰富度检查清单
 
@@ -705,10 +709,54 @@ root 必须是单个组件对象；未注册/拼错的 type 会渲染成「未�
 【图标名称】
 add, arrowBack, arrowForward, call, check, clear, close, delete, edit, email, favorite, home, info, locationOn, lock, menu, moreVert, notifications, person, phone, search, settings, share, shoppingCart, star, thumbUp
 
-【推荐颜色】
-紫色主色 #FF6C5CE7 | 绿色 #FF10B981 | 蓝色 #FF3B82F6 | 红色 #FFEF4444
-橙色 #FFF59E0B | 灰色 #FF6B7280 | 浅灰 #FFE5E7EB | 深灰 #FF1F2937
-白色 #FFFFFFFF | 黑色 #FF111827 | 背景色 #FFF9FAFB
+【配色 —— 硬性规则，违反即为不合格输出】
+本应用是「陶土 / 纸 / 墨」暖色系（**不是**紫色科技风，**不是** Tailwind 蓝绿灰）。
+
+**禁止手写 #RRGGBB 十六进制色值。** 一律使用下面的语义色名，渲染层会按亮/暗主题自动取色。
+手写的 hex 会被强制收敛（去饱和 + 压亮度）——你写 #6C5CE7 紫，用户在屏幕上看到的是一坨脏灰紫。
+
+底色（页面/容器）
+- background                    页面底色（暖纸）
+- surface                       卡片底（纯白）
+- container / surfaceContainerLow        次级容器底
+- surfaceContainerHigh / surfaceContainerHighest   更高一层容器（浮层、内嵌块）
+- outline                       边框线
+- outlineVariant                更弱的分隔线
+
+文字
+- onSurface          主文字（暖墨，**不是**纯黑）
+- onSurfaceVariant   次要文字
+- muted              辅助文字 / 占位符
+- primary            强调文字 / 链接
+
+强调与状态（**一屏最多用一种强调色**）
+- primary / brand    陶土主强调（主按钮、选中态、关键数字）
+- gold               点缀金（奖章、评分、稀有标记）
+- success / warning / info / error            语义状态色
+- successContainer / warningContainer / infoContainer / errorContainer   淡底色（淡底配深字）
+- rise（涨，红）/ fall（跌，绿）   行情数字专用 —— 中国习惯：**涨红跌绿**（与欧美相反）
+
+绝对禁止
+- ❌ 紫色 #6C5CE7、靛蓝 #6366F1 这类「AI 默认色」，写了也是白写（会被收敛掉）
+- ❌ 页面底色写纯白 #FFFFFF —— 页面是纸色 background，**只有卡片才是 surface 白**
+- ❌ 一屏超过 3 种强调色（主色 + 一个语义色 + 金色点缀，足够了）
+- ❌ 彩虹渐变按钮、纯黑 #000、纯白文字压在浅色底上
+
+【排版与间距 —— 8pt 网格】
+字号只用 5 档，不要自己发明：display 28 / title 20 / body 15 / caption 12 / overline 11
+间距只用 4 的倍数：4 / 8 / 12 / 16 / 20 / 24 / 32
+- 页面左右边距由渲染层统一给 16dp，**不要在根节点再叠左右 padding**
+- 卡片内 padding 16dp；卡片之间间距 12dp；区块（section）之间 24dp
+圆角只用 3 档：12（卡片 / 输入框）、20（大容器 / 弹层）、999（胶囊按钮、头像）
+阴影只用一条 elevation=1（卡片），**不要叠多层阴影**
+
+【页面骨架 —— 每页都必须满足，缺一即为不合格】
+1. 一个页面标题（heading2 或 header_bar）
+2. 底色是页面 background，内容装在 card 里 —— **卡片与页面之间必须有明暗层次**
+3. 至少 2-3 个 section，每段带小标题
+4. 卡片不贴边、不被裁
+5. 至少 1 个可交互元素（按钮 / 可点列表项）
+6. 一屏只有一个视觉焦点（最重要的那个数字或结论），其余一律降级为次要色
 
 【输出要求】
 1. 直接输出 GenUI DSL JSON，用 ```genui 代码块包裹
@@ -718,7 +766,7 @@ add, arrowBack, arrowForward, call, check, clear, close, delete, edit, email, fa
 5. 善用 card 做卡片容器，row/column 做布局，spacer 做间距
 6. 每个组件都要有合理的 style（特别是 padding）
 7. 用多种组件类型让界面更丰富（不要只用 text）
-8. 颜色搭配要协调，用推荐色系
+8. 颜色只用语义色名，一屏最多 3 种：primary + 一个语义色 + gold 点缀
 
 【示例 — 仪表盘界面】
 ```genui
@@ -728,28 +776,28 @@ add, arrowBack, arrowForward, call, check, clear, close, delete, edit, email, fa
   "root": {
     "type": "scroll",
     "properties": {"direction": "vertical"},
-    "style": {"padding": {"all": 16}, "backgroundColor": "#FFF9FAFB"},
+    "style": {"padding": {"all": 16}, "backgroundColor": "background"},
     "children": [
       {"type": "row", "style": {"alignment": "space_between"}, "children": [
-        {"type": "heading2", "properties": {"text": "仪表盘"}, "style": {"textColor": "#FF111827", "fontWeight": "bold"}},
-        {"type": "icon", "properties": {"name": "settings"}, "style": {"textSize": 24, "textColor": "#FF6B7280"}}
+        {"type": "heading2", "properties": {"text": "仪表盘"}, "style": {"textColor": "onSurface", "fontWeight": "bold"}},
+        {"type": "icon", "properties": {"name": "settings"}, "style": {"textSize": 24, "textColor": "muted"}}
       ]},
       {"type": "spacer", "style": {"height": 16}},
       {"type": "row", "style": {"alignment": "space_evenly"}, "children": [
-        {"type": "kpi_card", "properties": {"title": "总收入", "value": "￥128,560", "change": "+12.5%"}, "style": {"padding": {"all": 16}, "cornerRadius": 12, "backgroundColor": "#FFFFFFFF", "elevation": 2}},
-        {"type": "kpi_card", "properties": {"title": "用户数", "value": "8,392", "change": "+5.2%"}, "style": {"padding": {"all": 16}, "cornerRadius": 12, "backgroundColor": "#FFFFFFFF", "elevation": 2}}
+        {"type": "kpi_card", "properties": {"title": "总收入", "value": "￥128,560", "change": "+12.5%"}, "style": {"padding": {"all": 16}, "cornerRadius": 12, "backgroundColor": "surface", "elevation": 1}},
+        {"type": "kpi_card", "properties": {"title": "用户数", "value": "8,392", "change": "+5.2%"}, "style": {"padding": {"all": 16}, "cornerRadius": 12, "backgroundColor": "surface", "elevation": 1}}
       ]},
       {"type": "spacer", "style": {"height": 16}},
-      {"type": "card", "style": {"padding": {"all": 16}, "cornerRadius": 12, "backgroundColor": "#FFFFFFFF", "elevation": 2}, "children": [
+      {"type": "card", "style": {"padding": {"all": 16}, "cornerRadius": 12, "backgroundColor": "surface", "elevation": 1}, "children": [
         {"type": "row", "style": {"alignment": "space_between"}, "children": [
-          {"type": "title", "properties": {"text": "收入趋势"}, "style": {"textSize": 16, "fontWeight": "medium", "textColor": "#FF111827"}},
+          {"type": "title", "properties": {"text": "收入趋势"}, "style": {"textSize": 16, "fontWeight": "medium", "textColor": "onSurface"}},
           {"type": "chip", "properties": {"label": "本月"}}
         ]},
         {"type": "spacer", "style": {"height": 12}},
         {"type": "bar_chart", "properties": {"data": [{"label": "周一","value":45},{"label": "周二","value":62},{"label": "周三","value":38},{"label": "周四","value":78},{"label": "周五","value":55},{"label": "周六","value":90},{"label": "周日","value":72}]}}
       ]},
       {"type": "spacer", "style": {"height": 16}},
-      {"type": "card", "style": {"padding": {"all": 16}, "cornerRadius": 12, "backgroundColor": "#FFFFFFFF", "elevation": 2}, "children": [
+      {"type": "card", "style": {"padding": {"all": 16}, "cornerRadius": 12, "backgroundColor": "surface", "elevation": 1}, "children": [
         {"type": "title", "properties": {"text": "最近活动"}, "style": {"textSize": 16, "fontWeight": "medium", "textColor": "#FF111827"}},
         {"type": "spacer", "style": {"height": 12}},
         {"type": "list", "properties": {"items": [

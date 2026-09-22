@@ -1,5 +1,9 @@
 package com.ai.assistance.quro.genui.sdk.components
 
+import androidx.compose.material3.minimumInteractiveComponentSize
+
+import com.ai.assistance.quro.genui.sdk.style.ZorvPalette
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -118,8 +122,8 @@ fun PillRenderer(
     val text = str("text") ?: ""
     val count = str("count")?.toIntOrNull()
     val dotColor = str("dotColor")?.let {
-        StyleResolver.resolveColor(it, ctx.theme.colorScheme, Color(0xFF22C55E))
-    } ?: Color(0xFF22C55E)
+        StyleResolver.resolveColor(it, ctx.theme.colorScheme, ZorvPalette.Success)
+    } ?: ZorvPalette.Success
     val selected = str("selected") == "true"
     val active = str("active") == "true"
     val value = run {
@@ -159,7 +163,7 @@ fun PillRenderer(
         }
     }
     pillModifier = pillModifier
-        .clickable(
+        .minimumInteractiveComponentSize().clickable(
             enabled = kind == "pill_button" || kind == "pill_chip" || kind == "pill_filter",
             indication = null,
             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
@@ -185,7 +189,7 @@ fun PillRenderer(
                         .background(contentColor.copy(alpha = 0.18f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(av.take(1), color = contentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(av.take(1), color = contentColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

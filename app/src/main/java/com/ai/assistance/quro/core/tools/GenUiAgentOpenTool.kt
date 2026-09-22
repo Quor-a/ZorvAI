@@ -8,15 +8,14 @@ import org.json.JSONObject
 /**
  * 打开内置的 **GenUI Agent**（生成式界面智能体）。
  *
- * 背景：本 App 原有两套「生成式界面」装置，加上本工具内置的 GenUI-Agent，现在是**三套并存**：
- *  1. `genui_open`      → ZorvAI **对话框内**的「生成式 UI 画布」（`:genui` 模块，AI 写 HTML/JS，WebView 渲染）
- *  2. `miniapp`         → **小程序工作室**（自研引擎 `miniapp-sdk`，HTML+JS+CSS 或微信语法 WXML/WXSS/JS）
- *  3. 本工具            → **内置完整的开源项目 [GenUI-Agent](https://github.com/Quor-a/GenUI-Agent)**
+ * 背景：本 App 有两条「生成式界面」通道，加上本工具内置的 GenUI-Agent，共**两套范式**：
+ *  1. `miniapp`         → **小程序工作室**（自研引擎 `miniapp-sdk`，HTML+JS+CSS 或微信语法 WXML/WXSS/JS）
+ *  2. 本工具            → **内置完整的开源项目 [GenUI-Agent](https://github.com/Quor-a/GenUI-Agent)**
  *                        （去品牌化后落在 `com.ai.assistance.quro.genui.aiapp` / `com.ai.assistance.quro.genui.sdk`）
  *
- * 三者**互相独立、互不替代**，别混为一谈（范式不同）：
- *  - 通道 1/2：AI 写 **HTML / WXML+WXSS+JS**，用 WebView 或自研 Canvas 引擎画出来；
- *  - 通道 3（本工具）：AI 产出 **GenUI JSON DSL**，SDK 直接映射成**原生 Compose 组件**（530+ 组件，
+ * 两者**互相独立、互不替代**，别混为一谈（范式不同）：
+ *  - 通道 1：AI 写 **HTML / WXML+WXSS+JS**，用 WebView 或自研引擎画出来；
+ *  - 通道 2（本工具）：AI 产出 **GenUI JSON DSL**，SDK 直接映射成**原生 Compose 组件**（530+ 组件，
  *    含样式 / 动画 / 交互 / 状态 / 技能），表单输入经 `collectFrom` 聚合回 AI 继续对话。
  *
  * 本工具是「独立应用」这一路的入口：模型据此知道「要一块原生可交互界面」时可以派给 GenUI Agent。

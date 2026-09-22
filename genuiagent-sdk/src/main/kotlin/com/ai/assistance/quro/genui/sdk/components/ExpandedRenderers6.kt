@@ -46,7 +46,7 @@ private fun JsonObject.a6str(key: String): List<String> = ((this[key] as? JsonAr
 fun DocParagraphRenderer(c: UIComponent, ctx: RenderContext) {
     val text = c.properties.s6("text", "") ?: ""
     Text(
-        text, fontSize = 15.sp, lineHeight = 26.sp,
+        text, fontSize = 14.sp, lineHeight = 26.sp,
         modifier = Modifier.fillMaxWidth().padding(start = 30.dp, bottom = 10.dp)
     )
 }
@@ -55,8 +55,8 @@ fun DocParagraphRenderer(c: UIComponent, ctx: RenderContext) {
 fun DocHeadingRenderer(c: UIComponent, ctx: RenderContext) {
     val text = c.properties.s6("text", "标题") ?: "标题"
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(4.dp).height(20.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.primary))
-        Text(text, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
+        Box(Modifier.width(4.dp).height(20.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.primary))
+        Text(text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
     }
 }
 
@@ -65,9 +65,9 @@ fun PullQuoteRenderer(c: UIComponent, ctx: RenderContext) {
     val text = c.properties.s6("text", "") ?: ""
     val author = c.properties.s6("author", "") ?: ""
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Box(Modifier.width(4.dp).height(64.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.tertiary))
+        Box(Modifier.width(4.dp).height(64.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.tertiary))
         Column(Modifier.padding(start = 14.dp)) {
-            Text(text, fontSize = 15.sp, fontStyle = FontStyle.Italic)
+            Text(text, fontSize = 14.sp, fontStyle = FontStyle.Italic)
             if (author.isNotBlank()) Text("—— $author", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
         }
     }
@@ -79,9 +79,9 @@ fun PullQuoteRenderer(c: UIComponent, ctx: RenderContext) {
 fun SpecBadgeRenderer(c: UIComponent, ctx: RenderContext) {
     val code = c.properties.s6("code", "GB/T 0000-2024") ?: "GB/T 0000-2024"
     Box(
-        Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFFF1F5F9))
-            .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(6.dp)).padding(horizontal = 10.dp, vertical = 4.dp)
-    ) { Text(code, fontSize = 11.sp, color = Color(0xFF475569), fontWeight = FontWeight.Bold) }
+        Modifier.clip(RoundedCornerShape(6.dp)).background(ctx.theme.colorScheme.infoContainer)
+            .border(1.dp, ctx.theme.colorScheme.info, RoundedCornerShape(6.dp)).padding(horizontal = 10.dp, vertical = 4.dp)
+    ) { Text(code, fontSize = 11.sp, color = ctx.theme.colorScheme.info, fontWeight = FontWeight.Bold) }
 }
 
 @Composable
@@ -89,14 +89,14 @@ fun ComplianceCheckRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
     val pass = p.b6("pass", true)
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(22.dp).clip(CircleShape).background(if (pass) Color(0xFF22C55E) else Color(0xFFEF4444)), contentAlignment = Alignment.Center) {
-            Text(if (pass) "✓" else "✗", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black)
+        Box(Modifier.size(22.dp).clip(CircleShape).background(if (pass) ctx.theme.colorScheme.success else ctx.theme.colorScheme.error), contentAlignment = Alignment.Center) {
+            Text(if (pass) "✓" else "✗", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Black)
         }
         Column(Modifier.weight(1f).padding(start = 10.dp)) {
             Text(p.s6("item", "检查项") ?: "检查项", fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text(p.s6("standard", "") ?: "", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Text(if (pass) "合格" else "不合格", fontSize = 12.sp, color = if (pass) Color(0xFF16A34A) else Color(0xFFDC2626), fontWeight = FontWeight.Bold)
+        Text(if (pass) "合格" else "不合格", fontSize = 12.sp, color = if (pass) ctx.theme.colorScheme.success else ctx.theme.colorScheme.error, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -126,8 +126,8 @@ fun TableSortHeaderRenderer(c: UIComponent, ctx: RenderContext) {
     val label = c.properties.s6("label", "列") ?: "列"
     val dir = c.properties.s6("dir", "none") ?: "none"
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        Text(if (dir == "asc") " ▲" else if (dir == "desc") " ▼" else " ↕", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(if (dir == "asc") " ▲" else if (dir == "desc") " ▼" else " ↕", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -137,12 +137,12 @@ fun TableSortHeaderRenderer(c: UIComponent, ctx: RenderContext) {
 fun WeatherBigRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        Text(p.s6("emoji", "☀️") ?: "☀️", fontSize = 72.sp)
+        Text(p.s6("emoji", "☀️") ?: "☀️", fontSize = 40.sp)
         Row(verticalAlignment = Alignment.Top) {
-            Text(p.i6("temp", 25).toString(), fontSize = 64.sp, fontWeight = FontWeight.Thin)
-            Text("°C", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(p.i6("temp", 25).toString(), fontSize = 40.sp, fontWeight = FontWeight.Thin)
+            Text("°C", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Text(p.s6("desc", "晴") ?: "晴", fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(p.s6("desc", "晴") ?: "晴", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -151,12 +151,12 @@ fun HourlyForecastRenderer(c: UIComponent, ctx: RenderContext) {
     val hours = c.properties.a6str("hours")
     val temps = c.properties.a6str("temps")
     val emojis = c.properties.a6str("emojis")
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)).padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)).padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
         hours.forEachIndexed { i, h ->
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(h, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(emojis.getOrNull(i) ?: "☀️", fontSize = 20.sp)
-                Text(temps.getOrNull(i) ?: "--", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(temps.getOrNull(i) ?: "--", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -168,7 +168,7 @@ fun HourlyForecastRenderer(c: UIComponent, ctx: RenderContext) {
 fun WorldClockRowRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(p.s6("city", "上海") ?: "上海", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(p.s6("city", "上海") ?: "上海", fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.weight(1f))
         Column(horizontalAlignment = Alignment.End) {
             Text(p.s6("time", "12:00") ?: "12:00", fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -180,7 +180,7 @@ fun WorldClockRowRenderer(c: UIComponent, ctx: RenderContext) {
 @Composable
 fun TimeBadgeRenderer(c: UIComponent, ctx: RenderContext) {
     val time = c.properties.s6("time", "12:00") ?: "12:00"
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal = 12.dp, vertical = 5.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clip(RoundedCornerShape(50.dp)).background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal = 12.dp, vertical = 5.dp)) {
         Text("🕐", fontSize = 12.sp)
         Text(time, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.padding(start = 5.dp))
     }
@@ -196,14 +196,14 @@ fun ActionCardRenderer(c: UIComponent, ctx: RenderContext) {
             .background(MaterialTheme.colorScheme.surface).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
             Text(p.s6("emoji", "⚡") ?: "⚡", fontSize = 20.sp)
         }
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
-            Text(p.s6("title", "操作") ?: "操作", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text(p.s6("title", "操作") ?: "操作", fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Text(p.s6("desc", "") ?: "", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("›", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -228,9 +228,9 @@ fun QuickActionGridRenderer(c: UIComponent, ctx: RenderContext) {
 @Composable
 fun ElevatedCardRenderer(c: UIComponent, ctx: RenderContext) {
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
             .padding(16.dp)
     ) {
         c.properties.s6("title", "")?.takeIf { it.isNotBlank() }?.let {
@@ -244,9 +244,9 @@ fun ElevatedCardRenderer(c: UIComponent, ctx: RenderContext) {
 @Composable
 fun StackedCardsRenderer(c: UIComponent, ctx: RenderContext) {
     Box(Modifier.fillMaxWidth().height(190.dp).padding(top = 12.dp)) {
-        Box(Modifier.fillMaxWidth(0.86f).height(150.dp).align(Alignment.TopCenter).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)))
-        Box(Modifier.fillMaxWidth(0.93f).height(160.dp).align(Alignment.TopCenter).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f)))
-        Box(Modifier.fillMaxWidth().height(170.dp).align(Alignment.TopCenter).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surface).padding(16.dp)) {
+        Box(Modifier.fillMaxWidth(0.86f).height(150.dp).align(Alignment.TopCenter).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)))
+        Box(Modifier.fillMaxWidth(0.93f).height(160.dp).align(Alignment.TopCenter).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f)))
+        Box(Modifier.fillMaxWidth().height(170.dp).align(Alignment.TopCenter).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface).padding(16.dp)) {
             if (c.children.isNotEmpty()) RenderChildren(c.children, ctx)
             else Text(c.properties.s6("title", "叠卡") ?: "叠卡", fontWeight = FontWeight.Bold)
         }
@@ -260,7 +260,7 @@ fun EmotionFaceRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
     val intensity = p.f6("intensity", 0.6f)
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-        Text(p.s6("emoji", "😊") ?: "😊", fontSize = 64.sp)
+        Text(p.s6("emoji", "😊") ?: "😊", fontSize = 40.sp)
         Text(p.s6("label", "平静") ?: "平静", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         MiniBar6(intensity, MaterialTheme.colorScheme.tertiary)
@@ -276,7 +276,7 @@ fun MoodTrackerWeekRenderer(c: UIComponent, ctx: RenderContext) {
                 Box(Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
                     Text(e, fontSize = 18.sp)
                 }
-                Text(listOf("一", "二", "三", "四", "五", "六", "日").getOrElse(i) { "" }, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(listOf("一", "二", "三", "四", "五", "六", "日").getOrElse(i) { "" }, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -287,13 +287,13 @@ fun MoodTrackerWeekRenderer(c: UIComponent, ctx: RenderContext) {
 @Composable
 fun TagCloudRenderer(c: UIComponent, ctx: RenderContext) {
     val tags = c.properties.a6str("tags")
-    val colors = listOf(Color(0xFF3B82F6), Color(0xFF22C55E), Color(0xFFF59E0B), Color(0xFFEF4444), Color(0xFFA855F7), Color(0xFF06B6D4))
+    val colors = listOf(ctx.theme.colorScheme.info, ctx.theme.colorScheme.success, ctx.theme.colorScheme.primary, ctx.theme.colorScheme.error, ctx.theme.colorScheme.primary, ctx.theme.colorScheme.info)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         tags.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEachIndexed { i, t ->
-                    Box(Modifier.clip(RoundedCornerShape(999.dp)).background(colors[(tags.indexOf(t)) % colors.size].copy(alpha = 0.16f)).padding(horizontal = 14.dp, vertical = 6.dp)) {
-                        Text("#$t", fontSize = 13.sp, color = colors[(tags.indexOf(t)) % colors.size], fontWeight = FontWeight.Bold)
+                    Box(Modifier.clip(RoundedCornerShape(50.dp)).background(colors[(tags.indexOf(t)) % colors.size].copy(alpha = 0.16f)).padding(horizontal = 14.dp, vertical = 6.dp)) {
+                        Text("#$t", fontSize = 12.sp, color = colors[(tags.indexOf(t)) % colors.size], fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -306,7 +306,7 @@ fun LabelPillRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
     val bg = p.s6("color", "#3B82F6") ?: "#3B82F6"
     val c6 = ColorParser.toColor(bg, MaterialTheme.colorScheme.primary)
-    Box(Modifier.clip(RoundedCornerShape(999.dp)).background(c6.copy(alpha = 0.16f)).padding(horizontal = 12.dp, vertical = 5.dp)) {
+    Box(Modifier.clip(RoundedCornerShape(50.dp)).background(c6.copy(alpha = 0.16f)).padding(horizontal = 12.dp, vertical = 5.dp)) {
         Text(p.s6("text", "标签") ?: "标签", fontSize = 12.sp, color = c6, fontWeight = FontWeight.Bold)
     }
 }
@@ -338,11 +338,11 @@ fun TodoProgressRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
     val done = p.i6("done", 0); val total = p.i6("total", 10).coerceAtLeast(1)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Color(0xFF22C55E), Color(0xFF10B981)))), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(44.dp).clip(CircleShape).background(Brush.linearGradient(listOf(ctx.theme.colorScheme.success, ctx.theme.colorScheme.success))), contentAlignment = Alignment.Center) {
             Text("${(done * 100 / total)}%", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Black)
         }
         Column(Modifier.padding(start = 10.dp)) {
-            Text("今日完成", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Text("今日完成", fontWeight = FontWeight.Bold, fontSize = 12.sp)
             Text("$done / $total 项", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -355,7 +355,7 @@ fun PlaylistRowRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
     val playing = p.b6("playing", false)
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(46.dp).clip(RoundedCornerShape(8.dp)).background(Brush.verticalGradient(listOf(Color(0xFF818CF8), Color(0xFFC084FC)))), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(46.dp).clip(RoundedCornerShape(6.dp)).background(Brush.verticalGradient(listOf(ctx.theme.colorScheme.info, ctx.theme.colorScheme.primary))), contentAlignment = Alignment.Center) {
             Text(p.s6("emoji", "🎵") ?: "🎵", fontSize = 20.sp)
         }
         Column(Modifier.weight(1f).padding(start = 10.dp)) {
@@ -369,20 +369,20 @@ fun PlaylistRowRenderer(c: UIComponent, ctx: RenderContext) {
 @Composable
 fun MiniPlayerRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF1E1B4B)).padding(12.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(ctx.theme.colorScheme.onSurface).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(42.dp).clip(RoundedCornerShape(8.dp)).background(Brush.verticalGradient(listOf(Color(0xFFF472B6), Color(0xFF818CF8)))), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(6.dp)).background(Brush.verticalGradient(listOf(ctx.theme.colorScheme.primary, ctx.theme.colorScheme.info))), contentAlignment = Alignment.Center) {
                 Text(p.s6("emoji", "🎧") ?: "🎧", fontSize = 18.sp)
             }
             Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                Text(p.s6("title", "正在播放") ?: "正在播放", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text(p.s6("artist", "") ?: "", color = Color(0xFFA5B4FC), fontSize = 11.sp, maxLines = 1)
+                Text(p.s6("title", "正在播放") ?: "正在播放", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(p.s6("artist", "") ?: "", color = ctx.theme.colorScheme.info, fontSize = 11.sp, maxLines = 1)
             }
             Text("⏮  ▶  ⏭", color = Color.White, fontSize = 14.sp)
         }
         Spacer(Modifier.height(10.dp))
-        Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.2f))) {
-            Box(Modifier.fillMaxWidth(p.f6("progress", 0.35f).coerceIn(0f, 1f)).height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color.White))
+        Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.2f))) {
+            Box(Modifier.fillMaxWidth(p.f6("progress", 0.35f).coerceIn(0f, 1f)).height(3.dp).clip(RoundedCornerShape(6.dp)).background(Color.White))
         }
     }
 }
@@ -390,7 +390,7 @@ fun MiniPlayerRenderer(c: UIComponent, ctx: RenderContext) {
 // ── 文件内进度条 ──
 @Composable
 private fun MiniBar6(frac: Float, color: Color) {
-    Box(Modifier.fillMaxWidth(0.6f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color.LightGray.copy(alpha = 0.35f))) {
-        Box(Modifier.fillMaxWidth(frac.coerceIn(0f, 1f)).height(6.dp).clip(RoundedCornerShape(3.dp)).background(color))
+    Box(Modifier.fillMaxWidth(0.6f).height(6.dp).clip(RoundedCornerShape(6.dp)).background(Color.LightGray.copy(alpha = 0.35f))) {
+        Box(Modifier.fillMaxWidth(frac.coerceIn(0f, 1f)).height(6.dp).clip(RoundedCornerShape(6.dp)).background(color))
     }
 }

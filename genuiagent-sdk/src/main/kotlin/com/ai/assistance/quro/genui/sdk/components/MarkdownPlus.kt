@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.genui.sdk.components
 
+import com.ai.assistance.quro.genui.sdk.style.ZorvPalette
+
 import androidx.compose.ui.text.withStyle
 
 import androidx.compose.foundation.layout.Column
@@ -73,7 +75,7 @@ object MarkdownPlus {
                 c == '`' -> {
                     val end = text.indexOf('`', i + 1)
                     if (end != -1) {
-                        withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBg ?: Color(0x15000000))) { append(text.substring(i + 1, end)) }
+                        withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBg ?: ZorvPalette.Ink)) { append(text.substring(i + 1, end)) }
                         i = end + 1
                     } else { append(c); i++ }
                 }
@@ -167,12 +169,12 @@ object MarkdownPlus {
 
     /** Alert 色彩 */
     fun alertColor(kind: String): Color = when (kind) {
-        "NOTE" -> Color(0xFF4C9BE8)
-        "TIP" -> Color(0xFF3DAA6C)
-        "WARNING" -> Color(0xFFE8A13D)
-        "CAUTION" -> Color(0xFFE85D4C)
-        "IMPORTANT" -> Color(0xFF9B6CDF)
-        else -> Color(0xFF8B93A7)
+        "NOTE" -> ZorvPalette.Info
+        "TIP" -> ZorvPalette.Success
+        "WARNING" -> ZorvPalette.Terracotta
+        "CAUTION" -> ZorvPalette.ErrorWarm
+        "IMPORTANT" -> ZorvPalette.Terracotta
+        else -> ZorvPalette.Info
     }
 
     fun alertIcon(kind: String): String = when (kind) {
@@ -192,7 +194,7 @@ object MarkdownPlus {
 fun MarkdownPlusView(
     text: String,
     modifier: Modifier = Modifier,
-    linkColor: Color = Color(0xFF4C9BE8),
+    linkColor: Color = ZorvPalette.Info,
     codeBg: Color? = null,
     textColor: Color = Color.Unspecified
 ) {
@@ -212,7 +214,7 @@ fun MarkdownPlusView(
                     Text(MarkdownPlus.inline(b.text, linkColor, codeBg), color = textColor)
                 }
                 is MarkdownPlus.Block.Task -> Row {
-                    Text(if (b.done) "☑ " else "☐ ", color = if (b.done) Color(0xFF3DAA6C) else textColor, fontSize = 16.sp)
+                    Text(if (b.done) "☑ " else "☐ ", color = if (b.done) ZorvPalette.Success else textColor, fontSize = 16.sp)
                     Text(MarkdownPlus.inline(b.text, linkColor, codeBg), color = textColor)
                 }
                 is MarkdownPlus.Block.Quote -> Row {
@@ -223,13 +225,13 @@ fun MarkdownPlusView(
                     ) {}
                     Text(
                         MarkdownPlus.inline(b.text, linkColor, codeBg),
-                        color = if (textColor == Color.Unspecified) Color(0xFF6B7280) else textColor,
+                        color = if (textColor == Color.Unspecified) ZorvPalette.Muted else textColor,
                         fontStyle = FontStyle.Italic,
                         modifier = Modifier.padding(start = 10.dp, top = 2.dp, bottom = 2.dp)
                     )
                 }
                 is MarkdownPlus.Block.Alert -> Row {
-                    Text("${MarkdownPlus.alertIcon(b.kind)} ", fontSize = 15.sp)
+                    Text("${MarkdownPlus.alertIcon(b.kind)} ", fontSize = 14.sp)
                     Text(
                         MarkdownPlus.inline(b.text, linkColor, codeBg),
                         color = MarkdownPlus.alertColor(b.kind),
@@ -238,7 +240,7 @@ fun MarkdownPlusView(
                 }
                 is MarkdownPlus.Block.Divider -> Text(
                     "───────────",
-                    color = Color(0x33888888),
+                    color = ZorvPalette.Muted,
                     modifier = Modifier.padding(vertical = 2.dp)
                 )
                 is MarkdownPlus.Block.Table -> Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
@@ -248,21 +250,21 @@ fun MarkdownPlusView(
                             Text(
                                 MarkdownPlus.inline(cell, linkColor, codeBg),
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
+                                fontSize = 12.sp,
                                 color = textColor,
                                 modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 4.dp)
                             )
                         }
                     }
                     // 分隔线
-                    Text("─".repeat(40), color = Color(0x22888888), fontSize = 12.sp)
+                    Text("─".repeat(40), color = ZorvPalette.Muted, fontSize = 12.sp)
                     // 数据行
                     b.rows.forEach { row ->
                         Row {
                             row.forEach { cell ->
                                 Text(
                                     MarkdownPlus.inline(cell, linkColor, codeBg),
-                                    fontSize = 13.sp,
+                                    fontSize = 12.sp,
                                     color = textColor,
                                     modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 4.dp)
                                 )
@@ -272,7 +274,7 @@ fun MarkdownPlusView(
                 }
                 is MarkdownPlus.Block.Paragraph -> Text(
                     MarkdownPlus.inline(b.text, linkColor, codeBg),
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     color = textColor,
                     modifier = Modifier.padding(vertical = 2.dp)
                 )

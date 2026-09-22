@@ -74,20 +74,20 @@ fun PetCardRenderer(c: UIComponent, ctx: RenderContext) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(56.dp).clip(CircleShape).background(Brush.verticalGradient(listOf(Color(0xFFFFD54F), Color(0xFFFF8A65)))),
+            Modifier.size(56.dp).clip(CircleShape).background(Brush.verticalGradient(listOf(ctx.theme.colorScheme.warning, ctx.theme.colorScheme.error))),
             contentAlignment = Alignment.Center
-        ) { Text(emoji, fontSize = 30.sp) }
+        ) { Text(emoji, fontSize = 28.sp) }
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Text("$name · Lv.$level", fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
-            MiniBar4(hunger, Color(0xFFFB923C)); Spacer(Modifier.height(4.dp))
-            MiniBar4(energy, Color(0xFF34D399))
+            MiniBar4(hunger, ctx.theme.colorScheme.primary); Spacer(Modifier.height(4.dp))
+            MiniBar4(energy, ctx.theme.colorScheme.success)
         }
     }
 }
@@ -97,7 +97,7 @@ fun PetStateRenderer(c: UIComponent, ctx: RenderContext) {
     val mood = c.properties.s4("mood", "开心") ?: "开心"
     val emoji = c.properties.s4("emoji", "😺") ?: "😺"
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-        Text(emoji, fontSize = 52.sp)
+        Text(emoji, fontSize = 40.sp)
         Text(mood, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -112,11 +112,11 @@ fun LiveRoomCardRenderer(c: UIComponent, ctx: RenderContext) {
     val emoji = p.s4("emoji", "🎥") ?: "🎥"
     Box(
         Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(14.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF6366F1), Color(0xFFA855F7))))
+            .background(Brush.verticalGradient(listOf(ctx.theme.colorScheme.info, ctx.theme.colorScheme.primary)))
     ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(emoji, fontSize = 46.sp) }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(emoji, fontSize = 40.sp) }
         Row(Modifier.padding(10.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFFEF4444)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+            Box(Modifier.clip(RoundedCornerShape(6.dp)).background(ctx.theme.colorScheme.error).padding(horizontal = 8.dp, vertical = 2.dp)) {
                 Text("LIVE", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black)
             }
             Spacer(Modifier.weight(1f))
@@ -124,7 +124,7 @@ fun LiveRoomCardRenderer(c: UIComponent, ctx: RenderContext) {
                 Text("👁 $viewers", color = Color.White, fontSize = 11.sp)
             }
         }
-        Text(title, color = Color.White, fontSize = 13.sp, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
+        Text(title, color = Color.White, fontSize = 12.sp, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
     }
 }
 
@@ -134,14 +134,14 @@ fun GiftBannerRenderer(c: UIComponent, ctx: RenderContext) {
     val gift = c.properties.s4("gift", "火箭") ?: "火箭"
     val count = c.properties.i4("count", 1)
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(999.dp))
-            .background(Brush.horizontalGradient(listOf(Color(0xFFF59E0B), Color(0xFFEF4444))))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(50.dp))
+            .background(Brush.horizontalGradient(listOf(ctx.theme.colorScheme.primary, ctx.theme.colorScheme.error)))
             .padding(horizontal = 14.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("🎁", fontSize = 18.sp)
         Spacer(Modifier.width(8.dp))
-        Text("$user 送出 $gift ×$count", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text("$user 送出 $gift ×$count", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -178,10 +178,10 @@ fun MomentsGridRenderer(c: UIComponent, ctx: RenderContext) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 rowEmojis.forEach { e ->
                     Box(
-                        Modifier.size(86.dp).clip(RoundedCornerShape(8.dp))
+                        Modifier.size(86.dp).clip(RoundedCornerShape(6.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
-                    ) { Text(e, fontSize = 34.sp) }
+                    ) { Text(e, fontSize = 32.sp) }
                 }
             }
         }
@@ -197,15 +197,15 @@ fun GameHudRenderer(c: UIComponent, ctx: RenderContext) {
     val coins = p.i4("coins", 0)
     val score = p.i4("score", 0)
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
             .background(Color.Black.copy(alpha = 0.65f)).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("❤️", fontSize = 16.sp)
-        Box(Modifier.weight(1f).padding(horizontal = 8.dp).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.25f))) {
-            Box(Modifier.fillMaxWidth(hp.coerceIn(0f, 1f)).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFEF4444)))
+        Box(Modifier.weight(1f).padding(horizontal = 8.dp).height(8.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.25f))) {
+            Box(Modifier.fillMaxWidth(hp.coerceIn(0f, 1f)).height(8.dp).clip(RoundedCornerShape(6.dp)).background(ctx.theme.colorScheme.error))
         }
-        Text("🪙$coins  ⭐$score", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text("🪙$coins  ⭐$score", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -215,19 +215,19 @@ fun GamePadRenderer(c: UIComponent, ctx: RenderContext) {
     val b = c.properties.s4("b", "B") ?: "B"
     Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF334155)), contentAlignment = Alignment.Center) { Text("↑", color = Color.White) }
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).background(ctx.theme.colorScheme.info), contentAlignment = Alignment.Center) { Text("↑", color = Color.White) }
             Row {
-                Box(Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF334155)), contentAlignment = Alignment.Center) { Text("←", color = Color.White) }
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).background(ctx.theme.colorScheme.info), contentAlignment = Alignment.Center) { Text("←", color = Color.White) }
                 Spacer(Modifier.width(4.dp))
-                Box(Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF334155)), contentAlignment = Alignment.Center) { Text("→", color = Color.White) }
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).background(ctx.theme.colorScheme.info), contentAlignment = Alignment.Center) { Text("→", color = Color.White) }
             }
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF334155)), contentAlignment = Alignment.Center) { Text("↓", color = Color.White) }
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).background(ctx.theme.colorScheme.info), contentAlignment = Alignment.Center) { Text("↓", color = Color.White) }
         }
         Spacer(Modifier.width(30.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(56.dp).clip(CircleShape).background(Color(0xFF3B82F6)), contentAlignment = Alignment.Center) { Text(b, color = Color.White, fontWeight = FontWeight.Black) }
+            Box(Modifier.size(56.dp).clip(CircleShape).background(ctx.theme.colorScheme.info), contentAlignment = Alignment.Center) { Text(b, color = Color.White, fontWeight = FontWeight.Black) }
             Spacer(Modifier.width(12.dp))
-            Box(Modifier.size(56.dp).clip(CircleShape).background(Color(0xFFEF4444)), contentAlignment = Alignment.Center) { Text(a, color = Color.White, fontWeight = FontWeight.Black) }
+            Box(Modifier.size(56.dp).clip(CircleShape).background(ctx.theme.colorScheme.error), contentAlignment = Alignment.Center) { Text(a, color = Color.White, fontWeight = FontWeight.Black) }
         }
     }
 }
@@ -235,12 +235,12 @@ fun GamePadRenderer(c: UIComponent, ctx: RenderContext) {
 @Composable
 fun LootBoxRenderer(c: UIComponent, ctx: RenderContext) {
     val rarity = c.properties.s4("rarity", "稀有") ?: "稀有"
-    val rc = when (rarity) { "传说" -> Color(0xFFF59E0B); "史诗" -> Color(0xFFA855F7); else -> Color(0xFF3B82F6) }
+    val rc = when (rarity) { "传说" -> ctx.theme.colorScheme.primary; "史诗" -> ctx.theme.colorScheme.primary; else -> ctx.theme.colorScheme.info }
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(14.dp)) {
         Box(
             Modifier.size(96.dp).clip(RoundedCornerShape(20.dp)).background(Brush.verticalGradient(listOf(rc, rc.copy(alpha = 0.5f)))),
             contentAlignment = Alignment.Center
-        ) { Text("🎁", fontSize = 44.sp) }
+        ) { Text("🎁", fontSize = 40.sp) }
         Spacer(Modifier.height(8.dp))
         Text(rarity, fontWeight = FontWeight.Black, color = rc)
     }
@@ -253,13 +253,13 @@ fun TerminalViewRenderer(c: UIComponent, ctx: RenderContext) {
     val lines = c.properties.a4("lines").map { it.s4("text", "") ?: "" }
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF0D1117)).padding(12.dp),
+            .background(ctx.theme.colorScheme.onSurface).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Row { Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFEF4444))); Spacer(Modifier.width(5.dp)); Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFF59E0B))); Spacer(Modifier.width(5.dp)); Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF22C55E))) }
+        Row { Box(Modifier.size(8.dp).clip(CircleShape).background(ctx.theme.colorScheme.error)); Spacer(Modifier.width(5.dp)); Box(Modifier.size(8.dp).clip(CircleShape).background(ctx.theme.colorScheme.primary)); Spacer(Modifier.width(5.dp)); Box(Modifier.size(8.dp).clip(CircleShape).background(ctx.theme.colorScheme.success)) }
         Spacer(Modifier.height(8.dp))
-        if (lines.isEmpty()) Text("$ ls\nOK", color = Color(0xFF4ADE80), fontSize = 12.sp, lineHeight = 17.sp)
-        lines.forEach { ln -> Text(ln, color = if (ln.startsWith("$")) Color(0xFF4ADE80) else Color(0xFF8B949E), fontSize = 12.sp, lineHeight = 17.sp) }
+        if (lines.isEmpty()) Text("$ ls\nOK", color = ctx.theme.colorScheme.success, fontSize = 12.sp, lineHeight = 17.sp)
+        lines.forEach { ln -> Text(ln, color = if (ln.startsWith("$")) ctx.theme.colorScheme.success else ctx.theme.colorScheme.outline, fontSize = 12.sp, lineHeight = 17.sp) }
     }
 }
 
@@ -267,9 +267,9 @@ fun TerminalViewRenderer(c: UIComponent, ctx: RenderContext) {
 fun CommandHintRenderer(c: UIComponent, ctx: RenderContext) {
     val cmd = c.properties.s4("command", "help") ?: "help"
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF1F2937)).padding(horizontal = 12.dp, vertical = 8.dp)
-    ) { Text("$ ", color = Color(0xFF4ADE80), fontSize = 13.sp); Text(cmd, color = Color(0xFFE5E7EB), fontSize = 13.sp) }
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp))
+            .background(ctx.theme.colorScheme.onSurface).padding(horizontal = 12.dp, vertical = 8.dp)
+    ) { Text("$ ", color = ctx.theme.colorScheme.success, fontSize = 12.sp); Text(cmd, color = ctx.theme.colorScheme.infoContainer, fontSize = 12.sp) }
 }
 
 // ═══════════ 6. 可视化 ═══════════
@@ -277,14 +277,14 @@ fun CommandHintRenderer(c: UIComponent, ctx: RenderContext) {
 @Composable
 fun TreemapTileRenderer(c: UIComponent, ctx: RenderContext) {
     val data = c.properties.a4("data")
-    val palette = listOf(Color(0xFF3B82F6), Color(0xFF22C55E), Color(0xFFF59E0B), Color(0xFFEF4444), Color(0xFFA855F7))
+    val palette = listOf(ctx.theme.colorScheme.info, ctx.theme.colorScheme.success, ctx.theme.colorScheme.primary, ctx.theme.colorScheme.error, ctx.theme.colorScheme.primary)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         data.chunked(2).forEachIndexed { ri, rowItems ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 rowItems.forEachIndexed { ci, item ->
                     val v = item.f4("value", 1f).coerceAtLeast(0.5f)
                     Box(
-                        Modifier.weight(v).height(64.dp).clip(RoundedCornerShape(8.dp))
+                        Modifier.weight(v).height(64.dp).clip(RoundedCornerShape(6.dp))
                             .background(palette[(ri * 2 + ci) % palette.size]),
                         contentAlignment = Alignment.Center
                     ) { Text("${item.s4("label", "")}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
@@ -323,7 +323,7 @@ fun ModalConfirmRenderer(c: UIComponent, ctx: RenderContext) {
         Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surface).padding(20.dp)
     ) {
-        Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         if (message.isNotBlank()) Text(message, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
         Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.End) {
             Text(cancel, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 24.dp))
@@ -339,8 +339,8 @@ fun ToastPillRenderer(c: UIComponent, ctx: RenderContext) {
         Modifier.fillMaxWidth().padding(vertical = 20.dp),
         contentAlignment = Alignment.Center
     ) {
-        Box(Modifier.clip(RoundedCornerShape(999.dp)).background(Color.Black.copy(alpha = 0.78f)).padding(horizontal = 18.dp, vertical = 9.dp)) {
-            Text(text, color = Color.White, fontSize = 13.sp)
+        Box(Modifier.clip(RoundedCornerShape(50.dp)).background(Color.Black.copy(alpha = 0.78f)).padding(horizontal = 18.dp, vertical = 9.dp)) {
+            Text(text, color = Color.White, fontSize = 12.sp)
         }
     }
 }
@@ -351,13 +351,13 @@ fun ToastPillRenderer(c: UIComponent, ctx: RenderContext) {
 fun BrowserBarRenderer(c: UIComponent, ctx: RenderContext) {
     val url = c.properties.s4("url", "https://genui.app") ?: "https://genui.app"
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(999.dp))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(50.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 14.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("🔒", fontSize = 12.sp)
         Spacer(Modifier.width(8.dp))
-        Text(url, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+        Text(url, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
         Text("⟳", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -366,16 +366,16 @@ fun BrowserBarRenderer(c: UIComponent, ctx: RenderContext) {
 fun WebPreviewCardRenderer(c: UIComponent, ctx: RenderContext) {
     val p = c.properties
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
     ) {
-        Box(Modifier.fillMaxWidth().height(96.dp).background(Brush.verticalGradient(listOf(Color(0xFF93C5FD), Color(0xFF60A5FA)))), contentAlignment = Alignment.Center) {
-            Text(p.s4("favicon", "🌐") ?: "🌐", fontSize = 36.sp)
+        Box(Modifier.fillMaxWidth().height(96.dp).background(Brush.verticalGradient(listOf(ctx.theme.colorScheme.info, ctx.theme.colorScheme.info))), contentAlignment = Alignment.Center) {
+            Text(p.s4("favicon", "🌐") ?: "🌐", fontSize = 32.sp)
         }
         Column(Modifier.padding(12.dp)) {
             Text(p.s4("title", "网页标题") ?: "网页标题", fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
             Text(p.s4("desc", "") ?: "", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, modifier = Modifier.padding(top = 4.dp))
-            Text(p.s4("url", "") ?: "", fontSize = 11.sp, color = Color(0xFF3B82F6), modifier = Modifier.padding(top = 6.dp))
+            Text(p.s4("url", "") ?: "", fontSize = 11.sp, color = ctx.theme.colorScheme.info, modifier = Modifier.padding(top = 6.dp))
         }
     }
 }

@@ -33,7 +33,7 @@ fun DiceDisplayRenderer(c: UIComponent, ctx: RenderContext) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(8.dp)) {
         Box(
             Modifier.size(64.dp).clip(RoundedCornerShape(14.dp))
-                .background(Brush.linearGradient(listOf(Color.White, Color(0xFFE2E8F0))))
+                .background(Brush.linearGradient(listOf(Color.White, ctx.theme.colorScheme.infoContainer)))
                 .padding(10.dp)
         ) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceEvenly) {
@@ -41,7 +41,7 @@ fun DiceDisplayRenderer(c: UIComponent, ctx: RenderContext) {
                     Row(Modifier.fillMaxSize().weight(1f)) {
                         repeat(3) { cc ->
                             Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
-                                if ((r * 3 + cc) in pips) Box(Modifier.size(9.dp).clip(CircleShape).background(Color(0xFF0F172A)))
+                                if ((r * 3 + cc) in pips) Box(Modifier.size(9.dp).clip(CircleShape).background(ctx.theme.colorScheme.onSurface))
                             }
                         }
                     }

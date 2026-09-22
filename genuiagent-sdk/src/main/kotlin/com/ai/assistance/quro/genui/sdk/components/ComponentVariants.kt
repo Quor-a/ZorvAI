@@ -17,20 +17,38 @@ import kotlinx.serialization.json.JsonPrimitive
  */
 object ComponentVariants {
 
-    // ==================== 配色板（12） ====================
+    // ==================== 配色板（24：12 风格 + 12 语义） ====================
+    // 全部按 ZorvAI 暖色体系重调：原为 Tailwind 默认色（#3B82F6 蓝 / #22D3EE 青 / #A3E635 黄绿 …），
+    // 是典型的「AI 生成美学」，与 App 本体的陶土/纸/墨割裂。现统一为低饱和暖色和声。
+    // 语义板（success/warning/info/danger/rise/fall/brand）让 AI 不必手写十六进制也能表达语义。
     val palettes: Map<String, List<String>> = mapOf(
-        "default" to listOf("#3B82F6", "#1D4ED8"),
-        "ocean" to listOf("#0EA5E9", "#0369A1"),
-        "sunset" to listOf("#FB923C", "#E11D48"),
-        "neon" to listOf("#22D3EE", "#A3E635"),
-        "pastel" to listOf("#FBCFE8", "#BFDBFE"),
-        "forest" to listOf("#22C55E", "#15803D"),
-        "candy" to listOf("#F472B6", "#FB7185"),
-        "mono" to listOf("#525252", "#171717"),
-        "cyberpunk" to listOf("#F0ABFC", "#4C1D95"),
-        "sakura" to listOf("#FDA4AF", "#FECDD3"),
-        "gold" to listOf("#FBBF24", "#B45309"),
-        "aurora" to listOf("#34D399", "#818CF8")
+        // ---- 风格板（12）----
+        "default" to listOf("#C25A38", "#A8482B"),   // 陶土（品牌主色）
+        "ocean" to listOf("#3E6B85", "#2A4C61"),     // 暖靛蓝（低饱和，非 AI 蓝）
+        "sunset" to listOf("#D9814B", "#B8902F"),    // 陶土 → 金
+        "neon" to listOf("#C2452F", "#E0A33C"),      // 暖高能（保留冲击力，去荧光）
+        "pastel" to listOf("#EFD8CB", "#E6D9C4"),    // 纸粉
+        "forest" to listOf("#6E7C62", "#4E5A45"),    // 鼠尾草
+        "candy" to listOf("#C97B6E", "#D9A08F"),     // 暖玫瑰
+        "mono" to listOf("#544D44", "#211E1A"),      // 墨阶
+        "cyberpunk" to listOf("#7A4E86", "#B8902F"), // 暖紫 + 金
+        "sakura" to listOf("#D98C86", "#EBC9C0"),    // 淡樱
+        "gold" to listOf("#B8902F", "#8A6A1F"),      // 点缀金
+        "aurora" to listOf("#5E8E86", "#7C9A6B"),    // 暖青 → 苔绿
+
+        // ---- 语义板（12）----
+        "primary" to listOf("#C25A38", "#A8482B"),
+        "brand" to listOf("#C25A38", "#B8902F"),     // 品牌渐变对
+        "success" to listOf("#4E7A46", "#3A5C34"),
+        "warning" to listOf("#B08320", "#8A6516"),
+        "info" to listOf("#3F6E8C", "#2F5468"),
+        "danger" to listOf("#B23A2E", "#8E2C22"),
+        "error" to listOf("#B23A2E", "#8E2C22"),
+        "rise" to listOf("#C0392B", "#A02B20"),      // 涨（中国习惯：红）
+        "fall" to listOf("#2E7D5B", "#22624A"),      // 跌（中国习惯：绿）
+        "sage" to listOf("#6E7C62", "#4E5A45"),
+        "paper" to listOf("#F4F1EA", "#ECE7DC"),
+        "ink" to listOf("#211E1A", "#544D44")
     )
 
     // ==================== 形状（8） ====================

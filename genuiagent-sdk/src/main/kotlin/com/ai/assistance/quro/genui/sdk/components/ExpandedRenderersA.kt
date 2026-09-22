@@ -55,9 +55,9 @@ fun Cube3dRenderer(c: UIComponent, ctx: RenderContext) {
     val sizeDp = c.properties.fA("size", 120f).coerceIn(40f, 240f)
     val t = rememberInfiniteTransition(label = "cube")
     val spin by t.animateFloat(0f, 1f, infiniteRepeatable(tween(4000, easing = LinearEasing)), label = "s")
-    val top = c.properties.cA("top", Color(0xFF60A5FA))
-    val left = c.properties.cA("left", Color(0xFF2563EB))
-    val right = c.properties.cA("right", Color(0xFF1E40AF))
+    val top = c.properties.cA("top", ctx.theme.colorScheme.info)
+    val left = c.properties.cA("left", ctx.theme.colorScheme.info)
+    val right = c.properties.cA("right", ctx.theme.colorScheme.info)
     Canvas(Modifier.fillMaxWidth().height((sizeDp * 1.2f).dp)) {
         val s = sizeDp.dp.toPx() * (0.92f + 0.08f * spin) / 2f
         val cx = size.width / 2f; val cy = size.height / 2f
@@ -80,11 +80,11 @@ fun Cube3dRenderer(c: UIComponent, ctx: RenderContext) {
 /** iso_card — 2.5D 等轴测层叠卡（children 悬浮） */
 @Composable
 fun IsoCardRenderer(c: UIComponent, ctx: RenderContext) {
-    val base = c.properties.cA("base", Color(0xFF0F172A))
+    val base = c.properties.cA("base", ctx.theme.colorScheme.onSurface)
     Box(Modifier.fillMaxWidth().padding(16.dp)) {
-        Box(Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(16.dp)).background(base.copy(alpha = 0.25f)).padding(top = 6.dp, start = 6.dp)) {
-            Box(Modifier.fillMaxSize2().clip(RoundedCornerShape(16.dp)).background(base.copy(alpha = 0.55f)).padding(top = 6.dp, start = 6.dp)) {
-                Box(Modifier.fillMaxSize2().clip(RoundedCornerShape(16.dp)).background(base).padding(14.dp)) {
+        Box(Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(14.dp)).background(base.copy(alpha = 0.25f)).padding(top = 6.dp, start = 6.dp)) {
+            Box(Modifier.fillMaxSize2().clip(RoundedCornerShape(14.dp)).background(base.copy(alpha = 0.55f)).padding(top = 6.dp, start = 6.dp)) {
+                Box(Modifier.fillMaxSize2().clip(RoundedCornerShape(14.dp)).background(base).padding(14.dp)) {
                     RenderChildren(c.children, ctx)
                 }
             }
@@ -101,7 +101,7 @@ fun FlatShapesRenderer(c: UIComponent, ctx: RenderContext) {
     Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
         colors.take(6).forEachIndexed { i, hex ->
             val col = ColorParser.toColor(hex, themeA())
-            Box(Modifier.size((36 + (i % 3) * 10).dp).clip(if (i % 2 == 0) CircleShape else RoundedCornerShape(8.dp)).background(col))
+            Box(Modifier.size((36 + (i % 3) * 10).dp).clip(if (i % 2 == 0) CircleShape else RoundedCornerShape(6.dp)).background(col))
         }
     }
 }
@@ -112,11 +112,11 @@ fun DimensionAxisRenderer(c: UIComponent, ctx: RenderContext) {
     val labels = c.properties.aA("labels").ifEmpty { listOf("X", "Y", "Z", "T") }
     Canvas(Modifier.fillMaxWidth().height(130.dp)) {
         val ox = size.width / 2f; val oy = size.height * 0.72f
-        val ax = Color(0xFF94A3B8)
+        val ax = ctx.theme.colorScheme.info
         drawLine(ax, Offset(ox, oy), Offset(ox + size.width * 0.32f, oy), 3f)
         drawLine(ax, Offset(ox, oy), Offset(ox - size.width * 0.1f, oy - size.height * 0.7f), 3f)
         drawLine(ax, Offset(ox, oy), Offset(ox - size.width * 0.3f, oy - size.height * 0.18f), 3f)
-        drawLine(Color(0xFFA78BFA), Offset(ox, oy), Offset(ox + size.width * 0.14f, oy - size.height * 0.55f), 3f)
+        drawLine(ctx.theme.colorScheme.primary, Offset(ox, oy), Offset(ox + size.width * 0.14f, oy - size.height * 0.55f), 3f)
         listOf(Offset(ox + size.width * 0.32f, oy), Offset(ox - size.width * 0.1f, oy - size.height * 0.7f),
             Offset(ox - size.width * 0.3f, oy - size.height * 0.18f), Offset(ox + size.width * 0.14f, oy - size.height * 0.55f))
             .forEachIndexed { i, p -> drawCircle(Color.White.copy(alpha = 0.9f), 5f, p); }
@@ -129,12 +129,12 @@ fun DimensionAxisRenderer(c: UIComponent, ctx: RenderContext) {
 /** cosmos_scene — 宇宙星场（闪烁星星+星云） */
 @Composable
 fun CosmosSceneRenderer(c: UIComponent, ctx: RenderContext) {
-    val nebula = c.properties.cA("nebula", Color(0xFF7C3AED))
+    val nebula = c.properties.cA("nebula", ctx.theme.colorScheme.primary)
     val stars = c.properties.iA("stars", 60).coerceIn(10, 150)
     val t = rememberInfiniteTransition(label = "cosmos")
     val tw by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2200, easing = LinearEasing), RepeatMode.Reverse), label = "tw")
-    Canvas(Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(16.dp))) {
-        drawRect(Brush.verticalGradient(listOf(Color(0xFF0B1026), Color(0xFF1E1B4B))))
+    Canvas(Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(14.dp))) {
+        drawRect(Brush.verticalGradient(listOf(ctx.theme.colorScheme.surfaceContainerHighest, ctx.theme.colorScheme.onSurface)))
         drawCircle(nebula.copy(alpha = 0.25f), size.width * 0.3f, Offset(size.width * 0.7f, size.height * 0.35f))
         drawCircle(nebula.copy(alpha = 0.15f), size.width * 0.2f, Offset(size.width * 0.25f, size.height * 0.6f))
         repeat(stars) { i ->
@@ -152,11 +152,11 @@ fun PlanetCardRenderer(c: UIComponent, ctx: RenderContext) {
     val emoji = c.properties.sA("emoji", "🪐") ?: "🪐"
     val name = c.properties.sA("name", "土星") ?: "土星"
     val fact = c.properties.sA("fact", "") ?: ""
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFF0B1026)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(emoji, fontSize = 34.sp)
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(ctx.theme.colorScheme.surfaceContainerHighest).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(emoji, fontSize = 32.sp)
         Column(Modifier.padding(start = 12.dp)) {
-            Text(name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            if (fact.isNotBlank()) Text(fact, color = Color(0xFF94A3B8), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+            Text(name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            if (fact.isNotBlank()) Text(fact, color = ctx.theme.colorScheme.info, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
@@ -166,7 +166,7 @@ fun PlanetCardRenderer(c: UIComponent, ctx: RenderContext) {
 fun GrainOverlayRenderer(c: UIComponent, ctx: RenderContext) {
     val density = c.properties.iA("density", 90).coerceIn(20, 240)
     Canvas(Modifier.fillMaxWidth().height(110.dp).clip(RoundedCornerShape(14.dp))) {
-        drawRect(Color(0xFF111827))
+        drawRect(ctx.theme.colorScheme.onSurface)
         repeat(density) { i ->
             val gx = (i * 173.3f) % size.width
             val gy = (i * 61.7f) % size.height
@@ -179,7 +179,7 @@ fun GrainOverlayRenderer(c: UIComponent, ctx: RenderContext) {
 @Composable
 fun ParticleDriftRenderer(c: UIComponent, ctx: RenderContext) {
     val count = c.properties.iA("count", 24).coerceIn(6, 60)
-    val color = c.properties.cA("color", Color(0xFF38BDF8))
+    val color = c.properties.cA("color", ctx.theme.colorScheme.info)
     val t = rememberInfiniteTransition(label = "drift")
     val ph by t.animateFloat(0f, 1f, infiniteRepeatable(tween(3600, easing = LinearEasing)), label = "p")
     Canvas(Modifier.fillMaxWidth().height(120.dp)) {
@@ -195,11 +195,11 @@ fun ParticleDriftRenderer(c: UIComponent, ctx: RenderContext) {
 /** nebula_pill — 星云胶囊（渐变+漂浮点） */
 @Composable
 fun NebulaPillRenderer(c: UIComponent, ctx: RenderContext) {
-    val g1 = c.properties.cA("from", Color(0xFF6366F1))
-    val g2 = c.properties.cA("to", Color(0xFFEC4899))
+    val g1 = c.properties.cA("from", ctx.theme.colorScheme.info)
+    val g2 = c.properties.cA("to", ctx.theme.colorScheme.primary)
     Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
         Box(
-            Modifier.clip(RoundedCornerShape(999.dp))
+            Modifier.clip(RoundedCornerShape(50.dp))
                 .background(Brush.linearGradient(listOf(g1, g2)))
                 .padding(horizontal = 22.dp, vertical = 10.dp)
         ) { Text(c.properties.sA("text", "∞ 星云无限") ?: "∞ 星云无限", color = Color.White, fontWeight = FontWeight.Bold) }
@@ -213,10 +213,10 @@ fun OrbitRingRenderer(c: UIComponent, ctx: RenderContext) {
     val ang by t.animateFloat(0f, 1f, infiniteRepeatable(tween(3000, easing = LinearEasing)), label = "a")
     Canvas(Modifier.size(110.dp)) {
         val cx = size.width / 2f; val cy = size.height / 2f; val r = size.minDimension / 2f - 6f
-        drawCircle(Color(0xFF334155), r, Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+        drawCircle(ctx.theme.colorScheme.info, r, Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
         val a = ang * 2f * Math.PI.toFloat()
-        drawCircle(Color(0xFF38BDF8), 6f, Offset(cx + r * kotlin.math.cos(a), cy + r * kotlin.math.sin(a)))
-        drawCircle(Color(0xFFF472B6), 6f, Offset(cx - r * kotlin.math.cos(a), cy - r * kotlin.math.sin(a)))
-        drawCircle(Color(0xFF6366F1), 12f, Offset(cx, cy))
+        drawCircle(ctx.theme.colorScheme.info, 6f, Offset(cx + r * kotlin.math.cos(a), cy + r * kotlin.math.sin(a)))
+        drawCircle(ctx.theme.colorScheme.primary, 6f, Offset(cx - r * kotlin.math.cos(a), cy - r * kotlin.math.sin(a)))
+        drawCircle(ctx.theme.colorScheme.info, 12f, Offset(cx, cy))
     }
 }

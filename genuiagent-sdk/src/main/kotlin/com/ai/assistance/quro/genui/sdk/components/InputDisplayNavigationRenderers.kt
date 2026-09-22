@@ -2,6 +2,8 @@
 
 package com.ai.assistance.quro.genui.sdk.components
 
+import androidx.compose.material3.minimumInteractiveComponentSize
+
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -281,7 +283,7 @@ private fun FieldTrigger(
             .clip(shape)
             .border(1.dp, outline)
             .background(bg)
-            .clickable { ctx.clickHandler(component)?.invoke() }
+            .minimumInteractiveComponentSize().clickable { ctx.clickHandler(component)?.invoke() }
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -320,7 +322,7 @@ private fun StarsRow(
                 tint = starColor,
                 modifier = Modifier
                     .size(starSize)
-                    .clickable(enabled = interactive) { onRating(i + 1) }
+                    .minimumInteractiveComponentSize().clickable(enabled = interactive) { onRating(i + 1) }
             )
         }
     }
@@ -344,7 +346,7 @@ private fun OtpCell(initial: String, masked: Boolean, textColor: Color, borderCo
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(6.dp))
                     .background(bgColor)
                     .border(1.dp, borderColor),
                 contentAlignment = Alignment.Center
@@ -368,7 +370,7 @@ private fun NavItemRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .minimumInteractiveComponentSize().clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -489,7 +491,7 @@ fun RenderCheckbox(component: UIComponent, ctx: RenderContext, modifier: Modifie
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(enabled = enabled) { state = !state }
+            .minimumInteractiveComponentSize().clickable(enabled = enabled) { state = !state }
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -520,7 +522,7 @@ fun RenderRadio(component: UIComponent, ctx: RenderContext, modifier: Modifier =
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(enabled = enabled) { state = true }
+            .minimumInteractiveComponentSize().clickable(enabled = enabled) { state = true }
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -550,7 +552,7 @@ fun RenderRadioGroup(component: UIComponent, ctx: RenderContext, modifier: Modif
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = enabled) { selected = i }
+                    .minimumInteractiveComponentSize().clickable(enabled = enabled) { selected = i }
                     .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -578,7 +580,7 @@ fun RenderSwitch(component: UIComponent, ctx: RenderContext, modifier: Modifier 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(enabled = enabled) { state = !state }
+            .minimumInteractiveComponentSize().clickable(enabled = enabled) { state = !state }
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -659,7 +661,7 @@ fun RenderDropdown(component: UIComponent, ctx: RenderContext, modifier: Modifie
                 .fillMaxWidth()
                 .clip(shape)
                 .background(bg)
-                .clickable { expanded = true }
+                .minimumInteractiveComponentSize().clickable { expanded = true }
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -698,7 +700,7 @@ fun RenderSelect(component: UIComponent, ctx: RenderContext, modifier: Modifier 
                 .clip(shape)
                 .border(1.dp, outline)
                 .background(bg)
-                .clickable { expanded = true }
+                .minimumInteractiveComponentSize().clickable { expanded = true }
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -741,7 +743,7 @@ fun RenderMultiSelect(component: UIComponent, ctx: RenderContext, modifier: Modi
                 .clip(shape)
                 .border(1.dp, outline)
                 .background(bg)
-                .clickable { expanded = true }
+                .minimumInteractiveComponentSize().clickable { expanded = true }
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -831,7 +833,7 @@ fun RenderColorPicker(component: UIComponent, ctx: RenderContext, modifier: Modi
                         width = if (i == selected) 3.dp else 1.dp,
                         color = if (i == selected) ctx.theme.colorScheme.onSurface else Color.Transparent
                     )
-                    .clickable { selected = i }
+                    .minimumInteractiveComponentSize().clickable { selected = i }
             )
         }
     }
@@ -1080,7 +1082,7 @@ fun RenderSegmentedControl(component: UIComponent, ctx: RenderContext, modifier:
                 modifier = Modifier
                     .weight(1f)
                     .background(if (isSelected) color else Color.Transparent)
-                    .clickable { selected = i }
+                    .minimumInteractiveComponentSize().clickable { selected = i }
                     .padding(vertical = 8.dp, horizontal = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -1242,7 +1244,7 @@ fun RenderTag(component: UIComponent, ctx: RenderContext, modifier: Modifier = M
     )
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(bg)
             .padding(horizontal = 6.dp, vertical = 2.dp)
     ) {
@@ -1446,7 +1448,7 @@ fun RenderEmptyState(component: UIComponent, ctx: RenderContext, modifier: Modif
 fun RenderTooltip(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val text = component.titleOrLabel(ctx)
     Surface(
-        shape = RoundedCornerShape(4.dp),
+        shape = RoundedCornerShape(6.dp),
         color = ctx.theme.colorScheme.surfaceContainer,
         shadowElevation = 2.dp,
         modifier = modifier
@@ -1590,7 +1592,7 @@ fun RenderLogo(component: UIComponent, ctx: RenderContext, modifier: Modifier = 
     val textColor = ctx.theme.colorScheme.onPrimary
     val sizeDp = component.sizeDp(40.dp, horizontal = true)
     Box(
-        modifier = modifier.size(sizeDp).clip(RoundedCornerShape(8.dp)).background(bg),
+        modifier = modifier.size(sizeDp).clip(RoundedCornerShape(6.dp)).background(bg),
         contentAlignment = Alignment.Center
     ) {
         if (label != null) {
@@ -1973,7 +1975,7 @@ fun RenderPagination(component: UIComponent, ctx: RenderContext, modifier: Modif
                     .size(32.dp)
                     .clip(CircleShape)
                     .background(if (isSelected) color else ctx.theme.colorScheme.surfaceVariant)
-                    .clickable { current = page },
+                    .minimumInteractiveComponentSize().clickable { current = page },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -2061,7 +2063,7 @@ fun RenderLink(component: UIComponent, ctx: RenderContext, modifier: Modifier = 
         color = color,
         style = ctx.theme.typography.bodyMedium,
         textDecoration = TextDecoration.Underline,
-        modifier = modifier.clickable { ctx.clickHandler(component)?.invoke() }
+        modifier = modifier.minimumInteractiveComponentSize().clickable { ctx.clickHandler(component)?.invoke() }
     )
 }
 
@@ -2075,7 +2077,7 @@ fun RenderAnchor(component: UIComponent, ctx: RenderContext, modifier: Modifier 
         color = color,
         style = ctx.theme.typography.bodyMedium,
         textDecoration = TextDecoration.Underline,
-        modifier = modifier.clickable { ctx.clickHandler(component)?.invoke() }
+        modifier = modifier.minimumInteractiveComponentSize().clickable { ctx.clickHandler(component)?.invoke() }
     )
 }
 
@@ -2110,7 +2112,7 @@ fun RenderDropdownMenu(component: UIComponent, ctx: RenderContext, modifier: Mod
     Box {
         Row(
             modifier = modifier
-                .clickable { expanded = true }
+                .minimumInteractiveComponentSize().clickable { expanded = true }
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2134,7 +2136,7 @@ fun RenderDropdownMenu(component: UIComponent, ctx: RenderContext, modifier: Mod
 fun RenderContextMenu(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val items = component.optionItems(ctx)
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(6.dp),
         color = ctx.theme.colorScheme.surfaceContainer,
         shadowElevation = 4.dp,
         modifier = modifier
@@ -2144,7 +2146,7 @@ fun RenderContextMenu(component: UIComponent, ctx: RenderContext, modifier: Modi
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { ctx.clickHandler(component)?.invoke() }
+                        .minimumInteractiveComponentSize().clickable { ctx.clickHandler(component)?.invoke() }
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {

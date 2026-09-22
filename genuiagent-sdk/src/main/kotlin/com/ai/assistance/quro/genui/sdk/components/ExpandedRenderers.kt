@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.genui.sdk.components
 
+import androidx.compose.material3.minimumInteractiveComponentSize
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -85,7 +87,7 @@ private fun JsonObject.entries(key: String): List<Pair<String, Float>> =
 
 @Composable
 private fun themeColor(ctx: RenderContext, dark: Boolean = false): Color =
-    if (dark) Color(0xFF1A1A2E) else MaterialTheme.colorScheme.primary
+    if (dark) ctx.theme.colorScheme.onSurface else MaterialTheme.colorScheme.primary
 
 // ═══════════════════════════════════════════════════════════════
 // 一、数据可视化 DataViz（8 个）
@@ -170,7 +172,7 @@ fun DonutChartRenderer(c: UIComponent, ctx: RenderContext) {
             )
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("${value.toInt()}%", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("${value.toInt()}%", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             if (label.isNotEmpty()) Text(label, style = MaterialTheme.typography.labelSmall)
         }
     }
@@ -235,7 +237,7 @@ fun GaugeRenderer(c: UIComponent, ctx: RenderContext) {
         }
         Text(
             "${value.toInt()}",
-            fontSize = 26.sp, fontWeight = FontWeight.Bold
+            fontSize = 24.sp, fontWeight = FontWeight.Bold
         )
     }
 }
@@ -259,7 +261,7 @@ fun StatTileRenderer(c: UIComponent, ctx: RenderContext) {
             if (delta.isNotEmpty()) {
                 Text(
                     (if (up) "▲ " else "▼ ") + delta,
-                    color = if (up) Color(0xFF16A34A) else Color(0xFFDC2626),
+                    color = if (up) ctx.theme.colorScheme.success else ctx.theme.colorScheme.error,
                     style = MaterialTheme.typography.labelSmall
                 )
             }
@@ -290,15 +292,15 @@ fun ProgressRingRenderer(c: UIComponent, ctx: RenderContext) {
 fun RatingBarRenderer(c: UIComponent, ctx: RenderContext) {
     var rating by remember(c.id) { mutableStateOf(c.properties.flt("value", 5f).coerceIn(0f, 5f)) }
     val max = c.properties.int("max", 5).coerceIn(1, 10)
-    val starColor = c.properties.color("color", Color(0xFFF59E0B))
+    val starColor = c.properties.color("color", ctx.theme.colorScheme.primary)
     Row(verticalAlignment = Alignment.CenterVertically) {
         repeat(max) { i ->
             Text(
                 if (i < rating.toInt()) "★" else "☆",
-                fontSize = 26.sp,
+                fontSize = 24.sp,
                 color = if (i < rating.toInt()) starColor else Color.LightGray,
                 modifier = Modifier
-                    .clickable(
+                    .minimumInteractiveComponentSize().clickable(
                         interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource(),
                         indication = null
                     ) { rating = (i + 1).toFloat() }
@@ -359,14 +361,14 @@ fun StepperRenderer(c: UIComponent, ctx: RenderContext) {
         Text(
             "−", fontSize = 24.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier
-                .clickable { v = (v - step).coerceAtLeast(c.properties.flt("min", 0f)) }
+                .minimumInteractiveComponentSize().clickable { v = (v - step).coerceAtLeast(c.properties.flt("min", 0f)) }
                 .padding(horizontal = 16.dp, vertical = 6.dp)
         )
         Text("${v.toInt()}", modifier = Modifier.padding(horizontal = 8.dp), fontWeight = FontWeight.Bold)
         Text(
             "+", fontSize = 24.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier
-                .clickable { v = (v + step).coerceAtMost(c.properties.flt("max", 99f)) }
+                .minimumInteractiveComponentSize().clickable { v = (v + step).coerceAtMost(c.properties.flt("max", 99f)) }
                 .padding(horizontal = 16.dp, vertical = 6.dp)
         )
     }
@@ -387,7 +389,7 @@ fun CountdownTimerRenderer(c: UIComponent, ctx: RenderContext) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 String.format("%02d:%02d", remain / 60, remain % 60),
-                fontWeight = FontWeight.Bold, fontSize = 22.sp
+                fontWeight = FontWeight.Bold, fontSize = 20.sp
             )
             Text(c.properties.str("label", "剩余时间"), style = MaterialTheme.typography.labelSmall)
         }
@@ -412,7 +414,7 @@ fun ChipFilterRenderer(c: UIComponent, ctx: RenderContext) {
                         if (sel) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.surfaceVariant
                     )
-                    .clickable { selected = i }
+                    .minimumInteractiveComponentSize().clickable { selected = i }
                     .padding(horizontal = 14.dp, vertical = 7.dp)
             )
         }
@@ -428,7 +430,7 @@ fun BadgeRenderer(c: UIComponent, ctx: RenderContext) {
     Box(
         Modifier
             .clip(RoundedCornerShape(50))
-            .background(c.properties.color("color", Color(0xFFEF4444)))
+            .background(c.properties.color("color", ctx.theme.colorScheme.error))
             .padding(horizontal = 8.dp, vertical = 2.dp)
     ) {
         Text(label, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -491,8 +493,8 @@ fun CharacterCardRenderer(c: UIComponent, ctx: RenderContext) {
     val name = c.properties.str("name", "神秘角色")
     val title = c.properties.str("title", "")
     val mood = c.properties.str("mood", "平静")
-    val c1 = c.properties.color("gradientStart", Color(0xFF7C3AED))
-    val c2 = c.properties.color("gradientEnd", Color(0xFFEC4899))
+    val c1 = c.properties.color("gradientStart", ctx.theme.colorScheme.primary)
+    val c2 = c.properties.color("gradientEnd", ctx.theme.colorScheme.primary)
     Surface(
         shape = RoundedCornerShape(20.dp),
         modifier = Modifier.fillMaxWidth()
@@ -503,7 +505,7 @@ fun CharacterCardRenderer(c: UIComponent, ctx: RenderContext) {
                 .padding(18.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(emoji, fontSize = 52.sp)
+                Text(emoji, fontSize = 40.sp)
                 Spacer(Modifier.width(14.dp))
                 Column {
                     Text(name, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -541,8 +543,8 @@ fun MoodBadgeRenderer(c: UIComponent, ctx: RenderContext) {
 /** 渐变光球 gradient_orb — 装饰性美术元素 */
 @Composable
 fun GradientOrbRenderer(c: UIComponent, ctx: RenderContext) {
-    val c1 = c.properties.color("from", Color(0xFF60A5FA))
-    val c2 = c.properties.color("to", Color(0xFFA78BFA))
+    val c1 = c.properties.color("from", ctx.theme.colorScheme.info)
+    val c2 = c.properties.color("to", ctx.theme.colorScheme.primary)
     val sizeDp = (c.style.height?.let { 120f } ?: 120f).coerceIn(40f, 400f)
     Canvas(Modifier.size(sizeDp.dp)) {
         drawCircle(Brush.radialGradient(listOf(c1, c2.copy(alpha = 0.6f), Color.Transparent)))
@@ -567,9 +569,9 @@ fun RankMedalRenderer(c: UIComponent, ctx: RenderContext) {
     val rank = c.properties.int("rank", 1)
     val label = c.properties.str("label", "Lv.$rank")
     val color = when (rank) {
-        1 -> Color(0xFFFBBF24)
-        2 -> Color(0xFF94A3B8)
-        3 -> Color(0xFFB45309)
+        1 -> ctx.theme.colorScheme.primary
+        2 -> ctx.theme.colorScheme.info
+        3 -> ctx.theme.colorScheme.primary
         else -> MaterialTheme.colorScheme.primary
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -593,7 +595,7 @@ fun SpeechBubbleRenderer(c: UIComponent, ctx: RenderContext) {
     val from = c.properties.str("role", "left")
     val bubbleColor = c.properties.color("color", MaterialTheme.colorScheme.primaryContainer)
     Column(horizontalAlignment = if (from == "right") Alignment.End else Alignment.Start) {
-        Surface(color = bubbleColor, shape = RoundedCornerShape(16.dp)) {
+        Surface(color = bubbleColor, shape = RoundedCornerShape(14.dp)) {
             Text(text, Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
         }
         Canvas(Modifier.size(18.dp, 12.dp).padding(start = if (from == "right") 0.dp else 12.dp, end = if (from == "right") 12.dp else 0.dp)) {
@@ -619,19 +621,19 @@ fun BannerHeroRenderer(c: UIComponent, ctx: RenderContext) {
     val title = c.properties.str("title", "")
     val subtitle = c.properties.str("subtitle", "")
     val cta = c.properties.str("cta", "")
-    val c1 = c.properties.color("gradientStart", Color(0xFF2563EB))
-    val c2 = c.properties.color("gradientEnd", Color(0xFF7C3AED))
+    val c1 = c.properties.color("gradientStart", ctx.theme.colorScheme.info)
+    val c2 = c.properties.color("gradientEnd", ctx.theme.colorScheme.primary)
     val click = ctx.clickHandler(c)
     Box(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(Brush.linearGradient(listOf(c1, c2)))
-            .clickable(enabled = click != null) { click?.invoke() }
+            .minimumInteractiveComponentSize().clickable(enabled = click != null) { click?.invoke() }
             .padding(20.dp)
     ) {
         Column {
-            if (title.isNotEmpty()) Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            if (title.isNotEmpty()) Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
             if (subtitle.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.9f))
@@ -679,7 +681,7 @@ fun AudioWaveRenderer(c: UIComponent, ctx: RenderContext) {
                 Modifier
                     .width(5.dp)
                     .height((12f + frac * 36f).dp)
-                    .background(waveColor.copy(alpha = 0.4f + frac * 0.6f), RoundedCornerShape(3.dp))
+                    .background(waveColor.copy(alpha = 0.4f + frac * 0.6f), RoundedCornerShape(6.dp))
             )
         }
     }
@@ -697,7 +699,7 @@ fun TimerProgressRenderer(c: UIComponent, ctx: RenderContext) {
                 Modifier
                     .weight(1f)
                     .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
+                    .clip(RoundedCornerShape(6.dp))
                     .background(if (i < done) fillColor else Color.LightGray.copy(alpha = 0.4f))
             )
         }

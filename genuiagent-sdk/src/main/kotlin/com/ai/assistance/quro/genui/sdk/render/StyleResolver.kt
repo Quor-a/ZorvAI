@@ -28,6 +28,7 @@ import kotlin.math.sin
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -48,6 +49,7 @@ import com.ai.assistance.quro.genui.sdk.dsl.UIStyle
 import com.ai.assistance.quro.genui.sdk.style.ColorParser
 import com.ai.assistance.quro.genui.sdk.style.FontProvider
 import com.ai.assistance.quro.genui.sdk.style.GenUIColorScheme
+import com.ai.assistance.quro.genui.sdk.style.ZorvPalette
 import java.util.Locale
 import androidx.compose.runtime.Composable
 
@@ -138,16 +140,24 @@ object StyleResolver {
     }
 
     /**
-     * 解析颜色，支持主题色、命名颜色和十六进制颜色
+     * 解析颜色：语义角色（含 success/warning/info/rise/fall 等）→ 命名/十六进制（自动暖化收敛）
+     *
+     * 十六进制走 [ZorvPalette.harmonize]：把 AI 手写的霓虹/Tailwind 色收敛进 ZorvAI 暖色体系，
+     * 保证「AI 手写颜色」也不会跳出色板（只降饱和/压荧光，不改色相语义）。
      */
     fun resolveColor(value: String?, scheme: GenUIColorScheme, fallback: Color): Color {
         if (value.isNullOrBlank()) return fallback
 
-        // 先尝试主题色
+        // 语义角色优先（新角色由 scheme.semantic 统一收口）
+        scheme.semantic(value)?.let { return it }
+
+        // 兼容旧角色名表
         ColorParser.resolveThemeColor(value, scheme)?.let { return it }
 
-        // 再尝试命名颜色和十六进制
-        return ColorParser.toColor(value, fallback)
+        // 命名颜色和十六进制 → 审美收敛
+        val parsed = ColorParser.toColor(value, fallback)
+        return runCatching { ZorvPalette.harmonize(parsed, dark = scheme.background.luminance() < 0.5f) }
+            .getOrDefault(parsed)
     }
 
     /**

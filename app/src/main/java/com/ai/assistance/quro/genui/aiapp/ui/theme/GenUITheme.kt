@@ -8,181 +8,135 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.ai.assistance.quro.genui.sdk.style.ZorvPalette
 
 /**
- * GenUI 主题 — 深青琥珀配色系统
+ * GenUI Agent 应用主题 —— 与 ZorvAI 宿主同一视觉体系
  *
- * 设计理念：
- * - 主色：深青色(Teal) — 沉稳、专业、独特，避开 AI 紫俗套
- * - 辅助：暖琥珀色(Amber) — 温暖点缀，形成冷暖对比
- * - 中性色：暖灰色系(Stone) — 柔和、有温度、不刺眼
- * - 整体风格：精致、克制、有品质感
+ * 【为什么整体重写】
+ * 原为「深青 Teal #0D9488 + 玫红 #E11D48」自成一套，而 SDK 侧主题又是 Material 默认紫，
+ * 宿主 ZorvAI 本体是「陶土 #C25A38 + 纸 #F4F1EA + 墨」。三套配色并行 →
+ * GenUI Agent 打开后像另一个 App 贴进来的一块外来 UI，这就是「没有配色/没有审美」的根。
+ *
+ * 现在统一为 **陶土 / 纸 / 墨 / 鼠尾草 / 金**（取自 [ZorvPalette]，与宿主 QuroTheme 同源），
+ * 组件里 259 处 `MaterialTheme.colorScheme.*` 与 SDK 侧 `ctx.theme.colorScheme.*` 读到的是同一套颜色。
  */
 
-// ========== 浅色主题 ==========
+// ========== 浅色：纸感底 + 白卡 + 陶土强调 ==========
 private val LightColors = lightColorScheme(
-    // 主色 — 深青
-    primary = Color(0xFF0D9488),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFCCFBF1),
-    onPrimaryContainer = Color(0xFF134E4A),
+    primary = ZorvPalette.Terracotta,
+    onPrimary = Color.White,
+    primaryContainer = ZorvPalette.TerracottaSoft,
+    onPrimaryContainer = ZorvPalette.TerracottaPress,
+    inversePrimary = ZorvPalette.TerracottaDark,
 
-    // 次色 — 暖琥珀
-    secondary = Color(0xFFD97706),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFFEF3C7),
-    onSecondaryContainer = Color(0xFF78350F),
+    secondary = ZorvPalette.Sage,
+    onSecondary = Color.White,
+    secondaryContainer = ZorvPalette.SageSoft,
+    onSecondaryContainer = Color(0xFF3E4A36),
 
-    // 三级色 — 暖玫红（强调用）
-    tertiary = Color(0xFFE11D48),
-    onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFFFE4E6),
-    onTertiaryContainer = Color(0xFF881337),
+    tertiary = ZorvPalette.Gold,
+    onTertiary = Color.White,
+    tertiaryContainer = ZorvPalette.GoldSoft,
+    onTertiaryContainer = ZorvPalette.GoldPress,
 
-    // 背景/表面 — 暖灰
-    background = Color(0xFFFAFAF9),
-    onBackground = Color(0xFF1C1917),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF1C1917),
-    surfaceVariant = Color(0xFFF5F5F4),
-    onSurfaceVariant = Color(0xFF57534E),
-    surfaceTint = Color(0xFF0D9488),
+    background = ZorvPalette.Paper,
+    onBackground = ZorvPalette.Ink,
+    surface = ZorvPalette.Card,
+    onSurface = ZorvPalette.Ink,
+    surfaceVariant = ZorvPalette.Paper2,
+    onSurfaceVariant = ZorvPalette.InkSoft,
+    surfaceTint = ZorvPalette.Terracotta,
 
-    // 边框/分割线
-    outline = Color(0xFFD6D3D1),
-    outlineVariant = Color(0xFFE7E5E4),
+    // 纸感表面层叠（Lowest 最亮 → Highest 最暗）
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = ZorvPalette.PaperBright,
+    surfaceContainer = ZorvPalette.Paper,
+    surfaceContainerHigh = ZorvPalette.Paper2,
+    surfaceContainerHighest = ZorvPalette.Paper3,
+    surfaceBright = ZorvPalette.PaperBright,
+    surfaceDim = ZorvPalette.Paper3,
 
-    // 错误色
-    error = Color(0xFFE11D48),
-    onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFFFE4E6),
-    onErrorContainer = Color(0xFF881337),
+    outline = ZorvPalette.Line,
+    outlineVariant = ZorvPalette.LineSoft,
 
-    // 反色
-    inverseSurface = Color(0xFF292524),
-    inverseOnSurface = Color(0xFFF5F5F4),
-    inversePrimary = Color(0xFF5EEAD4),
+    error = ZorvPalette.ErrorWarm,
+    onError = Color.White,
+    errorContainer = ZorvPalette.ErrorSoft,
+    onErrorContainer = Color(0xFF7A2417),
 
-    // 其他
-    scrim = Color(0xFF0C0A09),
+    inverseSurface = ZorvPalette.Ink,
+    inverseOnSurface = ZorvPalette.PaperBright,
+    scrim = Color(0xFF000000)
 )
 
-// ========== 深色主题 ==========
+// ========== 深色：暖近黑（保留纸的温度，不用纯黑）==========
 private val DarkColors = darkColorScheme(
-    // 主色 — 深青亮色
-    primary = Color(0xFF5EEAD4),
-    onPrimary = Color(0xFF134E4A),
-    primaryContainer = Color(0xFF115E59),
-    onPrimaryContainer = Color(0xFFCCFBF1),
+    primary = ZorvPalette.TerracottaDark,
+    onPrimary = ZorvPalette.TerracottaDarkOn,
+    primaryContainer = ZorvPalette.TerracottaDarkContainer,
+    onPrimaryContainer = ZorvPalette.TerracottaSoft,
+    inversePrimary = ZorvPalette.Terracotta,
 
-    // 次色 — 暖琥珀亮色
-    secondary = Color(0xFFFCD34D),
-    onSecondary = Color(0xFF78350F),
-    secondaryContainer = Color(0xFFB45309),
-    onSecondaryContainer = Color(0xFFFEF3C7),
+    secondary = ZorvPalette.SageDark,
+    onSecondary = ZorvPalette.SageDarkOn,
+    secondaryContainer = ZorvPalette.SageDarkContainer,
+    onSecondaryContainer = Color(0xFFC7D2BB),
 
-    // 三级色
-    tertiary = Color(0xFFFDA4AF),
-    onTertiary = Color(0xFF881337),
-    tertiaryContainer = Color(0xFF9F1239),
-    onTertiaryContainer = Color(0xFFFFE4E6),
+    tertiary = ZorvPalette.GoldDark,
+    onTertiary = ZorvPalette.GoldDarkOn,
+    tertiaryContainer = ZorvPalette.GoldDarkContainer,
+    onTertiaryContainer = Color(0xFFF0DFAE),
 
-    // 背景/表面 — 深暖灰
-    background = Color(0xFF0C0A09),
-    onBackground = Color(0xFFE7E5E4),
-    surface = Color(0xFF1C1917),
-    onSurface = Color(0xFFE7E5E4),
-    surfaceVariant = Color(0xFF292524),
-    onSurfaceVariant = Color(0xFFA8A29E),
-    surfaceTint = Color(0xFF5EEAD4),
+    background = ZorvPalette.BrandBackgroundDark,
+    onBackground = ZorvPalette.OnDark,
+    surface = ZorvPalette.SurfaceDark,
+    onSurface = ZorvPalette.OnDark,
+    surfaceVariant = ZorvPalette.ContainerDark,
+    onSurfaceVariant = ZorvPalette.OnDarkSoft,
+    surfaceTint = ZorvPalette.TerracottaDark,
 
-    // 边框/分割线
-    outline = Color(0xFF44403C),
-    outlineVariant = Color(0xFF292524),
+    surfaceContainerLowest = ZorvPalette.SurfaceLowestDark,
+    surfaceContainerLow = ZorvPalette.SurfaceLowDark,
+    surfaceContainer = ZorvPalette.SurfaceDark,
+    surfaceContainerHigh = ZorvPalette.SurfaceHighDark,
+    surfaceContainerHighest = ZorvPalette.SurfaceHighestDark,
+    surfaceBright = ZorvPalette.SurfaceHighDark,
+    surfaceDim = ZorvPalette.SurfaceLowestDark,
 
-    // 错误色
-    error = Color(0xFFFDA4AF),
-    onError = Color(0xFF881337),
-    errorContainer = Color(0xFF9F1239),
-    onErrorContainer = Color(0xFFFFE4E6),
+    outline = ZorvPalette.LineDark,
+    outlineVariant = ZorvPalette.LineSoftDark,
 
-    // 反色
-    inverseSurface = Color(0xFFE7E5E4),
-    inverseOnSurface = Color(0xFF292524),
-    inversePrimary = Color(0xFF0D9488),
+    error = ZorvPalette.ErrorDark,
+    onError = ZorvPalette.ErrorDarkOn,
+    errorContainer = ZorvPalette.ErrorDarkContainer,
+    onErrorContainer = Color(0xFFF2C9C0),
 
-    // 其他
-    scrim = Color(0xFF000000),
+    inverseSurface = ZorvPalette.OnDark,
+    inverseOnSurface = ZorvPalette.BrandBackgroundDark,
+    scrim = Color(0xFF000000)
 )
 
-// ========== 自定义排版 ==========
-private val GenUITypography = Typography(
-    displayLarge = TextStyle(
-        fontSize = 32.sp,
-        fontWeight = FontWeight.Bold,
-        lineHeight = 40.sp,
-        letterSpacing = (-0.5).sp
-    ),
-    headlineLarge = TextStyle(
-        fontSize = 24.sp,
-        fontWeight = FontWeight.SemiBold,
-        lineHeight = 32.sp
-    ),
-    headlineMedium = TextStyle(
-        fontSize = 20.sp,
-        fontWeight = FontWeight.SemiBold,
-        lineHeight = 28.sp
-    ),
-    titleLarge = TextStyle(
-        fontSize = 18.sp,
-        fontWeight = FontWeight.SemiBold,
-        lineHeight = 26.sp
-    ),
-    titleMedium = TextStyle(
-        fontSize = 16.sp,
-        fontWeight = FontWeight.Medium,
-        lineHeight = 24.sp
-    ),
-    titleSmall = TextStyle(
-        fontSize = 14.sp,
-        fontWeight = FontWeight.Medium,
-        lineHeight = 20.sp
-    ),
-    bodyLarge = TextStyle(
-        fontSize = 15.sp,
-        fontWeight = FontWeight.Normal,
-        lineHeight = 22.sp
-    ),
-    bodyMedium = TextStyle(
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Normal,
-        lineHeight = 19.sp
-    ),
-    bodySmall = TextStyle(
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Normal,
-        lineHeight = 18.sp
-    ),
-    labelLarge = TextStyle(
-        fontSize = 14.sp,
-        fontWeight = FontWeight.Medium,
-        lineHeight = 20.sp,
-        letterSpacing = 0.1.sp
-    ),
-    labelMedium = TextStyle(
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Medium,
-        lineHeight = 16.sp,
-        letterSpacing = 0.3.sp
-    ),
-    labelSmall = TextStyle(
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Medium,
-        lineHeight = 14.sp,
-        letterSpacing = 0.5.sp
-    )
+// ========== 排版：标题衬线（墨问纸质风），正文无衬线 ==========
+private val GenUIAppTypography = Typography(
+    displayLarge = TextStyle(fontSize = 32.sp, fontWeight = FontWeight.SemiBold, lineHeight = 40.sp, letterSpacing = (-0.5).sp, fontFamily = FontFamily.Serif),
+    displayMedium = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.SemiBold, lineHeight = 36.sp, letterSpacing = (-0.4).sp, fontFamily = FontFamily.Serif),
+    displaySmall = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.SemiBold, lineHeight = 34.sp, letterSpacing = (-0.4).sp, fontFamily = FontFamily.Serif),
+    headlineLarge = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.SemiBold, lineHeight = 32.sp, letterSpacing = (-0.2).sp, fontFamily = FontFamily.Serif),
+    headlineMedium = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.SemiBold, lineHeight = 28.sp, letterSpacing = (-0.2).sp, fontFamily = FontFamily.Serif),
+    headlineSmall = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold, lineHeight = 26.sp, fontFamily = FontFamily.Serif),
+    titleLarge = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold, lineHeight = 26.sp, fontFamily = FontFamily.Serif),
+    titleMedium = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium, lineHeight = 24.sp),
+    titleSmall = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp),
+    bodyLarge = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Normal, lineHeight = 23.sp, letterSpacing = 0.1.sp),
+    bodyMedium = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Normal, lineHeight = 20.sp, letterSpacing = 0.1.sp),
+    bodySmall = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Normal, lineHeight = 18.sp),
+    labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp, letterSpacing = 0.1.sp),
+    labelMedium = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 16.sp, letterSpacing = 0.3.sp),
+    labelSmall = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium, lineHeight = 14.sp, letterSpacing = 0.5.sp)
 )
 
 /**
@@ -200,7 +154,7 @@ fun GenUITheme(
 
     MaterialTheme(
         colorScheme = colors,
-        typography = GenUITypography,
+        typography = GenUIAppTypography,
         content = content
     )
 }

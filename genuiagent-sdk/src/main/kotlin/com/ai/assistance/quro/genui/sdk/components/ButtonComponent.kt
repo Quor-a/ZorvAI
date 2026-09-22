@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.genui.sdk.components
 
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -63,13 +64,18 @@ fun ButtonRenderer(
                 ctx.executor.execute(event, component)
             }
         },
-        modifier = modifier,
+        // 触控目标 ≥44dp：M3 Button 默认只有 40dp，低于 Apple HIG / 无障碍 44dp 底线，
+        // 手指稍粗就点不中。
+        modifier = modifier.heightIn(min = 44.dp),
         enabled = enabled,
         colors = ButtonDefaults.buttonColors(
             containerColor = containerColor,
             contentColor = contentColor
         ),
-        shape = shape
+        shape = shape,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            horizontal = 20.dp, vertical = 10.dp
+        )
     ) {
         val hasIcon = iconName != null
         val hasText = !text.isNullOrEmpty()
@@ -77,10 +83,22 @@ fun ButtonRenderer(
         if (hasIcon && iconPosition == "left") {
             IconRenderer(component, ctx)
         }
+        if (hasIcon && hasText) {
+            androidx.compose.foundation.layout.Spacer(Modifier.size(8.dp))
+        }
         if (hasText) {
-            Text(text = text)
+            // 文字跟随组件字号（此前吃 M3 Button 默认 labelLarge，
+            // 模型写 textSize 时按钮文字纹丝不动，与卡片字号对不上）
+            Text(
+                text = text,
+                style = com.ai.assistance.quro.genui.sdk.render.StyleResolver.buildTextStyle(
+                    component.style, ctx, androidx.compose.material3.MaterialTheme.typography.labelLarge
+                ),
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+            )
         }
         if (hasIcon && iconPosition == "right") {
+            if (hasText) androidx.compose.foundation.layout.Spacer(Modifier.size(8.dp))
             IconRenderer(component, ctx)
         }
     }
@@ -103,7 +121,7 @@ private fun IconRenderer(
     Icon(
         imageVector = IconMapper.map(iconName),
         contentDescription = iconName,
-        modifier = Modifier.size(24.dp),
+        modifier = Modifier.size(18.dp),
         tint = tint
     )
 }
