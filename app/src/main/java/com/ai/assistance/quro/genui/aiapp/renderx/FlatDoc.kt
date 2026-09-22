@@ -45,11 +45,14 @@ data class FlatDoc(
             "caption" to "text", "body" to "text", "paragraph" to "text"
         )
 
-        private fun normType(raw: String): String {
+        private fun normType(raw: String, hasKids: Boolean = false): String {
             val t = raw.lowercase().trim()
             return when {
-                t in whitelist && (t.startsWith("h") && t != "heading").not() || t in setOf("heading", "text", "column", "row", "scroll", "card", "button", "divider", "spacer", "image", "progress", "chip", "input") -> t
+                t.isBlank() -> if (hasKids) "column" else "text"
+                t in whitelist -> t
                 typeAlias.containsKey(t) -> typeAlias[t]!!
+                // 未知类型但有子节点 → 当容器渲染，避免「丢内容」
+                hasKids -> "column"
                 else -> "text"
             }
         }
@@ -66,9 +69,22 @@ data class FlatDoc(
             ((o["kids"] ?: o["children"]) as? JsonArray)?.mapNotNull { primStr(it.takeIf { n -> n is JsonPrimitive } ?: JsonPrimitive("")) }
                 ?: emptyList()
 
-        fun parse(content: String, isYaml: Boolean): FlatDoc? = runCatching {
-            val el: JsonElement = if (isYaml) yamlToJson(content) else json.parseToJsonElement(content)
-            val obj = el.jsonObject
+        fun parse(content: String, isYaml: Boolean): FlatDoc? {
+            // ① A2UI 官方协议适配（createSurface / updateComponents / surfaceUpdate / beginRendering，
+            //    支持 JSONL 逐行报文、v0.8 嵌套写法与 v0.9 扁平写法、数据模型指针绑定）
+            A2uiProtocol.toFlatDoc(content)?.let { return it }
+            // ② 本家扁平邻接表（root + components）
+            return runCatching {
+                val el: JsonElement = if (isYaml) yamlToJson(content) else json.parseToJsonElement(content)
+                flatFromJson(el.jsonObject)
+            }.getOrNull()
+        }
+
+        /**
+         * 对已解析的 JSON 对象做扁平邻接表展开。
+         * 供 [parse] 与 A2UI 官方协议适配层（createSurface.root 为嵌套节点树时）复用。
+         */
+        internal fun flatFromJson(obj: JsonObject): FlatDoc? {
             val nodes = LinkedHashMap<String, FlatNode>()
 
             // 子节点引用 id：对象元素用显式 id 或 父id_序号（与展平注册完全一致）
@@ -79,7 +95,6 @@ data class FlatDoc(
 
             fun addNode(id: String, o: JsonObject) {
                 val (rawT, text, props) = flatten(o)
-                val type = normType(rawT)
                 val kidsArr = (o["children"] ?: o["kids"]) as? JsonArray
                 var kids = kidsArr?.mapIndexed { idx, el -> kidRef(id, idx, el) }?.filterNotNull() ?: emptyList()
                 // 模型可能把 children 写在 props 里
@@ -88,6 +103,7 @@ data class FlatDoc(
                         kids = ca.mapIndexedNotNull { i, el -> kidRef(id, i, el) }
                     }
                 }
+                val type = normType(rawT, kids.isNotEmpty())
                 nodes[id] = FlatNode(id, type, text, kids, props)
                 // 树形嵌套：children/kids 里直接放完整节点对象 → 注册为独立节点
                 kidsArr?.forEachIndexed { idx, kidEl ->
@@ -131,8 +147,8 @@ data class FlatDoc(
             val rootNode = nodes[rootId]
             if (nodes.isEmpty() || rootNode == null) return null
             if (rootNode.kids.isEmpty() && rootNode.text.isBlank()) return null
-            FlatDoc(rootId, nodes)
-        }.getOrNull()
+            return FlatDoc(rootId, nodes)
+        }
 
         private fun yamlToJson(yaml: String): JsonElement {
             val node = com.charleskorn.kaml.Yaml.default.parseToYamlNode(yaml)
