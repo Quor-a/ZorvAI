@@ -59,7 +59,16 @@ fun HistoryScreen(
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("🎨", fontSize = 18.sp)
                         Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                            Text(w.title, fontWeight = FontWeight.Medium, fontSize = 14.sp, maxLines = 1)
+                            // 渲染类型徽章：这条作品当初走的是哪条通道，一眼可辨。
+                            // 标题里历史遗留的「[通道] 」前缀顺手剥掉——有徽章就不需要它了。
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RenderTypeBadge(w.channel)
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    w.title.removePrefix("[通道] "),
+                                    fontWeight = FontWeight.Medium, fontSize = 14.sp, maxLines = 1
+                                )
+                            }
                             Text(w.request, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                         }
                         Text(formatTime(w.time), fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)

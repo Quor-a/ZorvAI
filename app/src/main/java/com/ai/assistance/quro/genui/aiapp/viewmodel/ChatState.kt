@@ -62,8 +62,12 @@ data class ChatState(
     val pageStack: List<String> = emptyList(),
     val works: List<com.ai.assistance.quro.genui.aiapp.data.GenUISessionStore.WorkItem> = emptyList(),
     /** 新架构通道页（Markdown / A2UI 扁平表 / 内联 HTML），非空时全屏显示 */
-    val channel: com.ai.assistance.quro.genui.aiapp.renderx.ChannelPage? = null
+    val channel: com.ai.assistance.quro.genui.aiapp.renderx.ChannelPage? = null,
+    /** 正在等用户选本轮渲染通道（询问弹窗已弹出，选完才真正开始生成） */
+    val awaitingChannel: Boolean = false,
+    /** 本轮锁定的渲染通道（选完/点名后写入，生成结束保持不变，用于落历史渲染类型） */
+    val activeChannel: com.ai.assistance.quro.genui.aiapp.data.RenderChannel? = null
 ) {
-    /** 是否可以发送消息 */
-    val canSend: Boolean get() = !isStreaming
+    /** 是否可以发送消息（生成中、或正在等用户选渲染通道时都不能发） */
+    val canSend: Boolean get() = !isStreaming && !awaitingChannel
 }
