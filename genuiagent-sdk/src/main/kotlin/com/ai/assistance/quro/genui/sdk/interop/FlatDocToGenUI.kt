@@ -46,7 +46,7 @@ object FlatDocToGenUI {
     private fun build(node: Node, nodes: Map<String, Node>, depth: Int): UIComponent? {
         if (depth > 24) return null // 深度保护
         val style = styleOf(node.props)
-        val type = normalizeType(node.type)
+        val type = normalizeType(node.type, node.props)
         val children = node.kids.mapNotNull { nodes[it] }
             .mapNotNull { build(it, nodes, depth + 1) }
 
@@ -59,8 +59,14 @@ object FlatDocToGenUI {
                 }
                 "text_field" -> put("placeholder", JsonPrimitive(node.props["hint"] ?: text))
                 "image" -> put("url", JsonPrimitive(node.props["url"] ?: node.text))
-                "progress" -> put("value", JsonPrimitive((node.props["value"]?.toFloatOrNull() ?: 0f) / 100f))
+                "progress" -> put("value", JsonPrimitive(progressValue(node.props["value"])))
                 else -> if (text.isNotBlank()) put("text", JsonPrimitive(text))
+            }
+            // 容器子间距：SDK 读的是**组件属性** spacing（默认 8dp），不是样式。
+            // 模型按上游 flat 习惯写的是 `gap`（FlatRenderer 里就是读 gap），此前一路丢到默认 8dp——
+            // 该松的地方没松开，卡片内元素挤成一片。这里两种写法都收。
+            if (type in CONTAINER_TYPES) {
+                spacingOf(node.props)?.let { put("spacing", JsonPrimitive(it)) }
             }
         }
 
@@ -84,13 +90,59 @@ object FlatDocToGenUI {
         )
     }
 
-    private fun normalizeType(t: String): String = when (t.lowercase()) {
-        "h1", "h2", "h3", "heading", "title" -> "heading"
-        "sub" -> "text"
-        "input" -> "text_field"
-        "line" -> "divider"
-        "panel" -> "card"
-        else -> t.lowercase().ifBlank { "text" }
+    /** 需要子间距的容器类型 */
+    private val CONTAINER_TYPES = setOf("column", "row", "scroll")
+
+    /**
+     * 子间距：节点上写 `gap` 或 `spacing` 都收（上游 flat 方言用 gap，SDK 用 spacing）。
+     * 返回 null 时交给 SDK 默认值（8dp），不硬塞。
+     */
+    private fun spacingOf(props: Map<String, String>): Float? =
+        (props["gap"] ?: props["spacing"])
+            ?.toFloatOrNull()?.takeIf { it > 0f && it <= 120f }
+
+    /**
+     * 进度值归一化到 0..1。
+     *
+     * 模型两种写法都有：`value:0.6`（比例）与 `value:60`（百分比）。上游转换器一律除以 100，
+     * 于是写 0.6 的进度条几乎不动；上游自己的 FlatRenderer 又一律按比例读，于是写 60 的会溢出到 100%。
+     * 这里按数值本身判断：>1 视为百分比，≤1 视为比例——两种写法都能画对。
+     */
+    private fun progressValue(raw: String?): Float {
+        val v = raw?.toFloatOrNull() ?: 0f
+        return (if (v > 1f) v / 100f else v).coerceIn(0f, 1f)
+    }
+
+    /**
+     * A2UI 类型 → SDK 组件类型。
+     *
+     * ⚠️ 标题级别必须落到**组件类型**上，不能只放在 props 里：
+     * SDK 的 HeadingRenderer 用 `typographyConfig(component.type)` 决定字号，而它只认
+     * `heading1..heading6`。`h1/h2/h3/heading/title` 若统一映射成裸 `"heading"`，
+     * typographyConfig 会落到 `else -> 14sp / Normal` —— **所有标题和正文一样大**，
+     * 版式层次直接消失（这正是 A2UI 页面「看着很平、没有设计感」的主因）。
+     * 上游 FlatRenderer 的意图是 level 1/2/3 三档递降，这里对上 SDK 自己的排版刻度。
+     */
+    private fun normalizeType(t: String, props: Map<String, String> = emptyMap()): String {
+        val base = t.lowercase().trim()
+        // 显式 h1..h6 直接对号入座
+        if (base.length == 2 && base[0] == 'h' && base[1] in '1'..'6') return "heading${base[1]}"
+        return when (base) {
+            // 裸 heading / title：读 level（扁平邻接表与官方协议两条路都会带 level），
+            // 缺省按上游 FlatRenderer 的默认值 level=2 —— 保证绝不再掉进 14sp 正文档。
+            "heading", "title", "headline" -> {
+                val lv = props["level"]?.toFloatOrNull()?.toInt()?.coerceIn(1, 6) ?: 2
+                "heading$lv"
+            }
+            "subhead", "subtitle", "sub" -> "text"
+            "input", "textfield", "text_field" -> "text_field"
+            "line", "hr" -> "divider"
+            "panel", "container" -> "card"
+            "btn" -> "button"
+            "list" -> "column"
+            "caption", "label", "body", "paragraph" -> "text"
+            else -> base.ifBlank { "text" }
+        }
     }
 
     /**
@@ -137,9 +189,9 @@ object FlatDocToGenUI {
         // 内/外边距：数字，或 "水平,垂直"
         s("padding")?.let { out = out.copy(padding = edge(it)) }
         s("margin")?.let { out = out.copy(margin = edge(it)) }
-        // 尺寸
-        f("width")?.let { out = out.copy(width = com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed(it)) }
-        f("height")?.let { out = out.copy(height = com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed(it)) }
+        // 尺寸：`h`/`w` 是上游 flat 方言的写法（image 高度、spacer 高度），别名一并收
+        f("width", "w")?.let { out = out.copy(width = com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed(it)) }
+        f("height", "h")?.let { out = out.copy(height = com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed(it)) }
         // 效果引擎（模型常用，此前全丢）
         s("gradient", "backgroundgradient")?.let { out = out.copy(gradient = it) }
         f("gradientangle")?.let { out = out.copy(gradientAngle = it) }

@@ -225,6 +225,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     /** 返回 (通道页, 原始围栏文本)——原始文本用于历史回放 */
     private fun detectChannel(text: String, userRequest: String = ""): Pair<ChannelPage, String>? {
         val forced = forcedChannel ?: channelFromRequest(userRequest)
+        // 用户点名 a2ui，但模型没写 ```a2ui 围栏（写成 ```json 或裸 JSON）→ 仍按 A2UI 渲染。
+        // 不做这层兜底时 detectChannel 会直接返回 null，整篇 JSON 掉进 GenUI 提取管线，
+        // 画布上就又是一屏源码（用户报的「A2UI 还是老样子」有一半是这种情况）。
+        if (forced == "a2ui") a2uiFallback(text)?.let { return it }
         val fences = Regex("```(a2ui|markdown|md|html)\\s*\\n?([\\s\\S]*?)```", RegexOption.IGNORE_CASE)
             .findAll(text).toList()
         if (fences.isEmpty()) return null
@@ -266,6 +270,27 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 (channelTitle(text, 1) ?: "A2UI") + "（结构未识别，原文）",
                 "```json\n" + body + "\n```"
             ) to raw
+        }
+        return null
+    }
+
+    /**
+     * 用户点名 a2ui 时的兜底：```json 围栏或裸 JSON，只要 FlatDoc 认得出就按 A2UI 渲染。
+     * GenUI DSL（带 "properties" 的组件树）不在此列，留给 GenUI 提取管线，避免被误抢。
+     */
+    private fun a2uiFallback(text: String): Pair<ChannelPage, String>? {
+        val bodies = ArrayList<String>()
+        Regex("```(?:json|a2ui|a2ui-json)\\s*\\n?([\\s\\S]*?)```", RegexOption.IGNORE_CASE)
+            .findAll(text).forEach { bodies.add(it.groupValues[1].trim()) }
+        if (bodies.isEmpty()) {
+            val s = text.trim()
+            if (s.startsWith("{") || s.startsWith("[")) bodies.add(s)
+        }
+        for (body in bodies.filter { it.isNotBlank() }.sortedByDescending { it.length }) {
+            if (body.contains("\"properties\"")) continue // GenUI DSL，别抢
+            val doc = FlatDocParser(body, false) ?: continue
+            val raw = "```a2ui\n" + body + "\n```"
+            return ChannelPage.FlatPage(channelTitle(text, 1) ?: "界面", doc) to raw
         }
         return null
     }
