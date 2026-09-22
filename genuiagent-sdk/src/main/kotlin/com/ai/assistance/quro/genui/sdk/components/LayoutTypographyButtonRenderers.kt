@@ -387,14 +387,66 @@ private fun ButtonContent(
 }
 
 /**
+ * 这段文本像不像 Markdown？
+ *
+ * 为什么要判这个：模型**极高频**把整篇 Markdown 塞进一个 `text` 组件的 `text` 里
+ * （而不是用 `markdown` 组件）。旧实现里 `text` 走纯 `Text()`，
+ * 于是用户看到的是满屏 `**粗体**`、`## 标题`、`| 环境 | 版本 |`、`|---|---|` 的原始符号
+ * —— 用户对"乱七八糟"的反馈，很大一部分就是这个。
+ * 与其指望模型每次都挑对组件，不如让 `text` 命中 Markdown 特征时自己按 Markdown 渲染。
+ */
+internal fun looksLikeMarkdown(text: String): Boolean {
+    if (text.length < 4) return false
+    if (MD_INLINE_REGEX.containsMatchIn(text)) return true
+    if (MD_TABLE_SEP_REGEX.containsMatchIn(text)) return true
+    return text.lineSequence().any { l ->
+        val t = l.trim()
+        t.startsWith("# ") || t.startsWith("## ") || t.startsWith("### ") ||
+            t.startsWith("- ") || t.startsWith("* ") || isTableRow(t)
+    }
+}
+
+private val MD_INLINE_REGEX = Regex("""\*\*[^*\n]+\*\*|`[^`\n]+`""")
+private val MD_TABLE_SEP_REGEX = Regex("""^\s*\|[\s:|-]+\|\s*$""", RegexOption.MULTILINE)
+
+private fun isTableRow(line: String): Boolean =
+    line.startsWith("|") && line.count { it == '|' } >= 2
+
+/** `|---|---|`、`| :-- | --: |` 这类分隔行，只用来标记表头，不渲染出来 */
+private fun isTableSeparator(line: String): Boolean {
+    val t = line.trim().trim('|').replace(" ", "").replace(":", "")
+    return t.isNotEmpty() && t.all { it == '-' || it == '=' }
+}
+
+/**
  * Parses simple markdown text into an AnnotatedString.
- * Supports: # ## ### headings, **bold**, *italic*, `code`, - list items.
+ *
+ * Supports: `# ## ###` headings, `**bold**`, `*italic*`, `` `code` ``, `- ` list items,
+ * and `|`-delimited tables (separator rows dropped, header row emphasised,
+ * cells joined by `·` — a real table composable isn't reachable from a Text node).
  */
 private fun parseMarkdown(text: String): AnnotatedString {
     return buildAnnotatedString {
         val lines = text.split("\n")
-        for ((index, line) in lines.withIndex()) {
-            val trimmed = line.trim()
+        var i = 0
+        var firstLine = true
+        fun startLine() {
+            if (!firstLine) append("\n")
+            firstLine = false
+        }
+        while (i < lines.size) {
+            val trimmed = lines[i].trim()
+            if (isTableRow(trimmed)) {
+                val block = ArrayList<String>()
+                while (i < lines.size && isTableRow(lines[i].trim())) {
+                    block.add(lines[i].trim())
+                    i++
+                }
+                startLine()
+                appendTableBlock(block)
+                continue
+            }
+            startLine()
             when {
                 trimmed.startsWith("### ") -> {
                     withStyle(SpanStyle(fontSize = 20.sp, fontWeight = FontWeight.SemiBold)) {
@@ -417,8 +469,28 @@ private fun parseMarkdown(text: String): AnnotatedString {
                 }
                 else -> appendInline(trimmed)
             }
-            if (index < lines.size - 1) {
-                append("\n")
+            i++
+        }
+    }
+}
+
+/**
+ * 渲染一个 Markdown 表格块：丢掉 `|---|` 分隔行，表头加粗，单元格用 `·` 连接。
+ * （`Text` 节点里做不了真正的表格布局，这样至少是可读的，而不是一屏竖线。）
+ */
+private fun AnnotatedString.Builder.appendTableBlock(rawRows: List<String>) {
+    val hasSeparator = rawRows.size >= 2 && isTableSeparator(rawRows[1])
+    val rows = rawRows.filterNot { isTableSeparator(it) }
+    rows.forEachIndexed { idx, row ->
+        if (idx > 0) append("\n")
+        val cells = row.trim().trim('|').split("|").map { it.trim() }.filter { it.isNotEmpty() }
+        val header = hasSeparator && idx == 0
+        cells.forEachIndexed { ci, cell ->
+            if (ci > 0) append("  \u00B7  ")
+            if (header) {
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { appendInline(cell) }
+            } else {
+                appendInline(cell)
             }
         }
     }
@@ -1059,8 +1131,13 @@ fun BodyTextRenderer(
     val maxLines = component.style.maxLines ?: Int.MAX_VALUE
     val overflow = StyleResolver.resolveOverflow(component.style.overflow)
 
+    // 模型习惯把整篇 Markdown（含 **粗体** / ## 标题 / | 表格 |）塞进 text 组件。
+    // 命中 Markdown 特征就按 Markdown 渲染，否则原样 —— 否则用户看到的就是一屏符号。
+    val body: AnnotatedString =
+        if (looksLikeMarkdown(text)) parseMarkdown(text) else AnnotatedString(text)
+
     Text(
-        text = text,
+        text = body,
         modifier = modifier,
         style = style,
         maxLines = maxLines,
