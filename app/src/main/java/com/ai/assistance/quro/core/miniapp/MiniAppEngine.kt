@@ -9,7 +9,7 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 
 /**
- * 小程序引擎（移植自 MiniAppFramework 并适配 QuroAI）。
+ * Web 应用引擎（移植自 MiniAppFramework 并适配 QuroAI）。
  *
  * 职责（与框架一致）：
  *  1. 解析项目目录下的 app.json（全局配置 + pages 路由表）；
@@ -19,7 +19,7 @@ import java.nio.charset.StandardCharsets
  *     （assets/bridge/bridge.js，提供 Page/Component 运行时 + JSBridge SDK）。
  *
  * 与框架的差异：框架从 assets/miniapp 读取，这里从磁盘项目目录（filesDir/studio/miniapp/<name>）读取，
- * 以支持 AI 通过 miniapp 工具动态写入的小程序工程。
+ * 以支持 AI 通过 miniapp 工具动态写入的 Web 应用工程。
  */
 class MiniAppEngine(
     private val webView: WebView,
@@ -29,7 +29,7 @@ class MiniAppEngine(
     private var config: AppConfig? = null
     private val pageStack = mutableListOf<String>()
 
-    /** 配置 WebView：启用 JS、注入 native 桥、拦截小程序本地资源请求。 */
+    /** 配置 WebView：启用 JS、注入 native 桥、拦截 Web 应用本地资源请求。 */
     fun configure() {
         webView.settings.apply {
             javaScriptEnabled = true
@@ -121,7 +121,7 @@ class MiniAppEngine(
         return html.substring(0, end + 1) + script + html.substring(end + 1)
     }
 
-    /** 拦截小程序本地资源请求：app://miniapp.local/... -> 项目目录内的文件。 */
+    /** 拦截 Web 应用本地资源请求：app://miniapp.local/... -> 项目目录内的文件。 */
     private fun intercept(url: String?): WebResourceResponse? {
         if (url == null) return null
         val rel = if (url.startsWith("app://miniapp.local/")) url.removePrefix("app://miniapp.local/") else return null
@@ -184,7 +184,7 @@ class MiniAppEngine(
         return map
     }
 
-    /** 小程序全局配置（对应 app.json）。 */
+    /** Web 应用全局配置（对应 app.json）。 */
     data class AppConfig(
         val appId: String,
         val version: String,

@@ -8,7 +8,7 @@ import org.json.JSONObject
 /**
  * ACI（Android Component Interface）模块：关联启动其他应用 / 组件。
  * 移植自 MiniAppFramework（com.miniapp），去品牌化为 QuroAI 的 MiniAppBridgeModule 协议。
- * 让 AI 生成的小程序可拉起第三方 App / 指定组件（HTML/JS 做不到的真·原生能力）。
+ * 让 AI 生成的 Web 应用可拉起第三方 App / 指定组件（HTML/JS 做不到的真·原生能力）。
  */
 class AciModule(private val context: Context) : MiniAppBridgeModule {
     override val name = "aci"

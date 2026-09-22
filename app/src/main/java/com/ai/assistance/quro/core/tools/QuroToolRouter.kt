@@ -260,7 +260,7 @@ class QuroToolRouter(allSpecs: List<QuroToolSpec>) {
             name == "apk_plugin" -> ToolCapabilityDirectory.ToolCategory.PLUGIN
             name.startsWith("aip_") -> ToolCapabilityDirectory.ToolCategory.AIP_DOC
             name in setOf("ui_dsl_spec", "ui_validate") -> ToolCapabilityDirectory.ToolCategory.DYNAMIC_UI
-            // 生成式 UI 画布 + 小程序工程：与 ToolCapabilityDirectory.inferCategory 同源，
+            // 生成式 UI 画布 + Web 应用工程：与 ToolCapabilityDirectory.inferCategory 同源，
             // 保证"目录里没手写条目的 genui_* 工具"也能落进 GENUI 分类，而不是掉到 BASIC。
             name.startsWith("genui_") || name == "miniapp" -> ToolCapabilityDirectory.ToolCategory.GENUI
             name.startsWith("workspace_") -> ToolCapabilityDirectory.ToolCategory.WORKSPACE

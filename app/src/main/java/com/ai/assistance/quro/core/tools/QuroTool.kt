@@ -175,7 +175,7 @@ class QuroToolRegistry {
             // 生成式界面：两条通道必须都进核心集，否则默认配置（useFullTools=false）下模型看不到，
             // 用户说「做个界面/小应用」时只会去凑 ui_widget 卡片。
             //   · genui_agent_open → 内置完整 GenUI-Agent 独立应用（GenUI JSON DSL → 原生 Compose 组件）
-            //   · miniapp          → 小程序（WebView + native.* 原生桥，MiniAppEngine，HTML+JS+CSS）
+            //   · miniapp          → Web 应用（WebView + native.* 原生桥，MiniAppEngine，HTML+JS+CSS）
             "genui_agent_open", "miniapp",
             // 节点编辑器：AI 直接读写节点流工程（与工具中心面板共享 studio/flow/*.qne，面板打开自动恢复）
             "node_editor",

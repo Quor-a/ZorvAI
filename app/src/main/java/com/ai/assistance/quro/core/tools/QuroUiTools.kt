@@ -63,7 +63,7 @@ action 说明:
 - sheet: 打开弹层 (target: model/persona/settings)
 - chat: 对话管理 (action_type: new/clear)
 - card: 渲染卡片 (title, content, style: info/success/warning/error)
-- widget: 渲染组件 (type: button/toggle/slider/input/select/mermaid/miniapp, id, label, value；mermaid 时 value 填 Mermaid 源码，对话框渲染成图；miniapp 时 value 填完整 HTML，对话框内联渲染小程序)
+- widget: 渲染组件 (type: button/toggle/slider/input/select/mermaid/miniapp, id, label, value；mermaid 时 value 填 Mermaid 源码，对话框渲染成图；miniapp 时 value 填完整 HTML，对话框内联渲染 Web 应用)
 - status: 查询组件状态 (component: header/sidebar/input/toolbox)
 - update: 更新组件属性 (component, props: {key:value})
 - scroll: 滚动到指定位置 (target: top/bottom/id)
@@ -175,7 +175,7 @@ action 说明:
     "type": {
       "type": "string",
       "enum": ["button", "toggle", "slider", "input", "select", "mermaid", "miniapp"],
-      "description": "组件类型（mermaid 用于渲染可视化编程图表，source/value 填 Mermaid 源码；miniapp 用于渲染 HTML 小程序，value 填完整 HTML）"
+      "description": "组件类型（mermaid 用于渲染可视化编程图表，source/value 填 Mermaid 源码；miniapp 用于渲染 HTML Web 应用，value 填完整 HTML）"
     },
     "id": {
       "type": "string",

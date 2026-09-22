@@ -2021,11 +2021,11 @@ private fun NetworkImageBubble(url: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * AI 自写「小程序」卡片（MiniApp）：AI 生成完整 HTML + JS + CSS，客户端用 **WebView** 渲染。
+ * AI 自写「Web 应用」卡片（MiniApp）：AI 生成完整 HTML + JS + CSS，客户端用 **WebView** 渲染。
  *
  * ⚠️ 与旧实现的关键差异：
- *  · 旧版有两条路：① HTML 小程序走 WebView；② **原生小程序**（微信语法 WXML/WXSS/JS，
- *    config.app_id）走小程序的**工具中心面板**渲染。旧的「原生小程序」自研引擎（miniapp-sdk，
+ *  · 旧版有两条路：① HTML Web 应用走 WebView；② **原生小程序**（微信语法 WXML/WXSS/JS，
+ *    config.app_id）走「小程序（原生引擎）」的**工具中心面板**渲染。旧的「原生小程序」自研引擎（miniapp-sdk，
  *    来自上游 Quor-a/GenUI）已重新接入：现作为工具中心「小程序（原生引擎）」面板 + 对话框 miniapp_sdk 工具，
  *    由 AI 生成 WXML/WXSS/JS 工程、面板用 MiniAppView 原生渲染（不再内嵌到对话气泡）。
  *  · GenUI 画布（quro/genui/app）已随「删除全部旧 GenUI + 内置新 GenUI-Agent」整体移除。
@@ -2050,7 +2050,7 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
     }
     var heightPx by remember(card.id) { mutableStateOf(defaultHeightPx) }
     var fullscreen by remember(card.id) { mutableStateOf(false) }
-    val title = card.title.ifBlank { "小程序（AI 生成）" }
+    val title = card.title.ifBlank { "Web 应用（AI 生成）" }
 
     CardShell(
         title = title,
@@ -2059,7 +2059,7 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
                 Icon(Icons.Filled.Fullscreen, "全屏查看", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
             }
             if (card.html.isNotBlank()) {
-                IconButton(onClick = { copyText(context, card.html, "已复制小程序源码") }, Modifier.size(30.dp)) {
+                IconButton(onClick = { copyText(context, card.html, "已复制 Web 应用源码") }, Modifier.size(30.dp)) {
                     Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
                 }
             }
@@ -2069,7 +2069,7 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
             // 历史遗留：带 config.app_id 的原生小程序卡片（内嵌引擎已移除，无 HTML 可渲染）。
             // 原生小程序现改走工具中心「小程序（原生引擎）」面板 + miniapp_sdk 对话框工具。
             Column(Modifier.fillMaxWidth().padding(4.dp)) {
-                Text("（无小程序内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+                Text("（无 Web 应用内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
                 Text(
                     "这是旧「原生小程序」卡片，内嵌引擎已移除。原生小程序现请走工具中心"
                         + "「小程序（原生引擎）」面板（让 AI 用 miniapp_sdk 工具生成 WXML/WXSS/JS 工程）。"
@@ -2113,7 +2113,7 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
                                 modifier = Modifier.weight(1f),
                             )
                             if (card.html.isNotBlank()) {
-                                IconButton(onClick = { copyText(context, card.html, "已复制小程序源码") }, Modifier.size(36.dp)) {
+                                IconButton(onClick = { copyText(context, card.html, "已复制 Web 应用源码") }, Modifier.size(36.dp)) {
                                     Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurface, modifier = Modifier.size(20.dp))
                                 }
                             }
@@ -2124,7 +2124,7 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
                         HorizontalDivider(color = cs.outlineVariant)
                         Box(Modifier.fillMaxSize().background(Color.White).padding(8.dp)) {
                             if (card.html.isBlank()) {
-                                Text("（无小程序内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+                                Text("（无 Web 应用内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
                             } else {
                                 MiniAppWebView(
                                     html = card.html,
@@ -2140,7 +2140,7 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
 }
 
 /**
- * 可复用的小程序 WebView：加载 AI 生成的 HTML，注入小程序运行时（Page/Component 生命周期、JSBridge），
+ * 可复用的 Web 应用 WebView：加载 AI 生成的 HTML，注入 Web 应用运行时（Page/Component 生命周期、JSBridge），
  * 支持 JS 调用原生能力。渲染完成后按 `document.documentElement.scrollHeight` 自适应高度（上限 720dp）。
  * 增加CDN错误恢复：通过AssetLibResolver拦截CDN请求，加载本地库资源
  */
@@ -2177,7 +2177,7 @@ private fun MiniAppWebView(
                 setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
 
                 // 注：本对话内卡片是轻量 WebView 预览，不带 native.* 原生桥；需要原生能力的
-                // 小程序工程请走工具中心「小程序」面板（MiniAppEngine 注入 MiniAppBridgeInterface）。
+                // Web 应用工程请走工具中心「Web 应用」面板（MiniAppEngine 注入 MiniAppBridgeInterface）。
                 // 这里只渲染 HTML/JS/CSS，AI 若要真实原生能力，应改让工程在面板里运行，或改用
                 // 内置 GenUI Agent（原生 Compose 组件）/ 对话框内的 ```quro-ui 原生组件。
 
@@ -2208,9 +2208,9 @@ private fun MiniAppWebView(
                     ""
                 }
 
-                // 注入CDN错误恢复脚本和小程序运行时
+                // 注入CDN错误恢复脚本和 Web 应用运行时
                 val fallbackScript = assetLibResolver.generateFallbackScript()
-                // 若 AI 下发的是完整 HTML 文档（如小程序 create 示例页），把桥运行时注入其 <head>，
+                // 若 AI 下发的是完整 HTML 文档（如 Web 应用 create 示例页），把桥运行时注入其 <head>，
                 // 而非再套一层 <html> —— 否则完整文档被嵌进 <body> 变成嵌套文档，DOM 解析错乱。
                 val isFullDoc = html.trimStart().startsWith("<!doctype", ignoreCase = true) || html.contains("<html", ignoreCase = true)
                 val wrappedHtml = if (isFullDoc) {
@@ -2253,7 +2253,7 @@ private fun MiniAppWebView(
                     ""
                 }
                 val fallbackScript = assetLibResolver.generateFallbackScript()
-                // 若 AI 下发的是完整 HTML 文档（如小程序 create 示例页），把桥运行时注入其 <head>，
+                // 若 AI 下发的是完整 HTML 文档（如 Web 应用 create 示例页），把桥运行时注入其 <head>，
                 // 而非再套一层 <html> —— 否则完整文档被嵌进 <body> 变成嵌套文档，DOM 解析错乱。
                 val isFullDoc = html.trimStart().startsWith("<!doctype", ignoreCase = true) || html.contains("<html", ignoreCase = true)
                 val wrappedHtml = if (isFullDoc) {
@@ -2295,7 +2295,7 @@ private fun MiniAppWebView(
  * - tabs：子卡以标签页呈现，一次只显示一个，互不干扰（类比原 TabsCard，但子卡是完整卡片而非纯文本）。
  * - accordion：子卡各自独立折叠/展开，任意张可同时展开。
  *
- * 每个子卡都通过 [QuroChatCardView] 递归渲染，因此子卡保持自身 id 与状态（如开关/滑块/小程序 WebView），
+ * 每个子卡都通过 [QuroChatCardView] 递归渲染，因此子卡保持自身 id 与状态（如开关/滑块/Web 应用 WebView），
  * 即使嵌套 CompositeCard 也能正确组合——实现「互相不影响、可单渲染、可组合」。
  */
 @Composable

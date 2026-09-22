@@ -608,12 +608,12 @@ data class QuroOpenAppAction(
 
 /**
  * 打开 ZorvAI 内置界面（深链导航）：让动态 UI 按钮直接跳进终端 / 模型配置 / 可视化编程 /
- * 小程序 / 工具中心等原生界面，而不只是回发文本。
+ * Web 应用 / 工具中心等原生界面，而不只是回发文本。
  *
  * target 与 [com.ai.assistance.quro.core.tools.ui.UiNavigationEvent.OpenScreen] 完全对齐：
  * editor / terminal / toolbox / knowledge / cms / aci / about / appearance / soul / memory /
  * permission / model_config / voice / settings / tool_center，以及工具中心子能力
- * vispro(可视化编程) / node_editor(flow) / miniapp(小程序) / workbench。
+ * vispro(可视化编程) / node_editor(flow) / miniapp(Web 应用) / workbench。
  */
 data class QuroOpenScreenAction(
     val target: String = "",

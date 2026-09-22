@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>小程序 技术构架</title>
+<title>Web 应用 技术构架</title>
 <style>
   :root{--bg:#f7f8fa;--card:#fff;--ink:#1f2430;--sub:#5b6472;--line:#e3e7ee;
         --c1:#2f6df0;--c2:#16a34a;--c3:#d97706;--c4:#7c3aed;--c5:#0891b2;--c6:#db2777;}
@@ -39,18 +39,18 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>小程序 技术构架</h1>
+  <h1>Web 应用 技术构架</h1>
   <span class="tag">ZorvAI · MiniAppFramework（AI 生成 HTML/JS 内联渲染）</span>
 
   <h2>一、构架介绍</h2>
   <div class="card">
-    <p><b>小程序</b>是 ZorvAI 内「AI 生成即可运行」的可视化小程序工作台。核心是 <b>MiniAppFramework</b>：把 LLM 产出的 HTML/JS 在应用内渲染容器中沙箱运行，支持同目录资源（图片自动转 <code>data URI</code>）、私有 <code>app://</code> 协议、对话框内联预览与独立面板编辑。用户 / AI 可在小程序面板新建、编辑、运行小程序，无需打包上架。</p>
+    <p><b>Web 应用</b>是 ZorvAI 内「AI 生成即可运行」的可视化 Web 应用工作台。核心是 <b>MiniAppFramework</b>：把 LLM 产出的 HTML/JS 在应用内渲染容器中沙箱运行，支持同目录资源（图片自动转 <code>data URI</code>）、私有 <code>app://</code> 协议、对话框内联预览与独立面板编辑。用户 / AI 可在 Web 应用面板新建、编辑、运行 Web 应用，无需打包上架。</p>
     <p>它把「写代码」变成「对话即产物」：AI 生成 → 安全化写入工程目录 → 面板 / 对话框内联渲染 → 运行 / 分享，形成低门槛的可编程能力面，是 ZorvAI 工具生态的轻量扩展通道。</p>
     <ul>
       <li><b>内联渲染</b>：HTML/JS 跑在应用内 WebView/内联容器，免安装、即写即跑。</li>
       <li><b>资源自包含</b>：同目录图片在预览时转 <code>data URI</code>，与面板内 <code>app://</code> 渲染一致，避免路径错位。</li>
       <li><b>安全写入</b>：工程名 / 路径做安全化，防止 <code>..</code> 越界写入工程目录外。</li>
-      <li><b>双入口</b>：对话框内联预览 + 独立小程序面板编辑，互相打通。</li>
+      <li><b>双入口</b>：对话框内联预览 + 独立 Web 应用面板编辑，互相打通。</li>
     </ul>
   </div>
 
@@ -58,7 +58,7 @@
   <div class="card">
     <div class="layer"><div class="lname">L5 集成</div><div class="lbody">
       <div class="box b6">对话框内联渲染</div>
-      <div class="box b6">工具中心小程序面板</div>
+      <div class="box b6">工具中心 Web 应用面板</div>
       <div class="box b6">节点编辑器联动</div>
       <div class="box b6">分享 / 导出</div>
     </div></div>
@@ -69,7 +69,7 @@
       <div class="box b5">生命周期管理</div>
     </div></div>
     <div class="layer"><div class="lname">L3 编辑</div><div class="lbody">
-      <div class="box b4">小程序面板 (新建/编辑/删除)</div>
+      <div class="box b4">Web 应用面板 (新建/编辑/删除)</div>
       <div class="box b4">run 对话框预览</div>
       <div class="box b4">模板示例 (create)</div>
       <div class="box b4">快照 / 状态</div>
@@ -80,7 +80,7 @@
       <div class="box b2">writeFlow 工程写入</div>
     </div></div>
     <div class="layer"><div class="lname">L1 存储</div><div class="lbody">
-      <div class="box b3">小程序工程目录</div>
+      <div class="box b3">Web 应用工程目录</div>
       <div class="box b3">同目录资源</div>
       <div class="box b3">配置 / 元数据</div>
     </div></div>
@@ -94,20 +94,20 @@
   <div class="card">
     <table>
       <tr><th>组件</th><th>职责</th><th>说明</th></tr>
-      <tr><td><b>MiniAppFramework</b></td><td>小程序运行内核</td><td>内联渲染 HTML/JS、沙箱隔离</td></tr>
-      <tr><td><b>小程序面板</b></td><td>可视化编辑 / 管理入口</td><td>新建示例、编辑、删除、运行</td></tr>
+      <tr><td><b>MiniAppFramework</b></td><td>Web 应用运行内核</td><td>内联渲染 HTML/JS、沙箱隔离</td></tr>
+      <tr><td><b>Web 应用面板</b></td><td>可视化编辑 / 管理入口</td><td>新建示例、编辑、删除、运行</td></tr>
       <tr><td><b>run 对话框预览</b></td><td>对话框内联运行</td><td>同目录图片转 data URI，与 app:// 一致</td></tr>
       <tr><td><b>app:// 协议</b></td><td>私有资源寻址</td><td>面板内资源定位，与预览同源</td></tr>
       <tr><td><b>writeFlow (安全化)</b></td><td>工程写入</td><td>工程名 / 路径防 <code>..</code> 越界</td></tr>
     </table>
   </div>
 
-  <h2>四、关键流程（一次 AI 生成小程序）</h2>
+  <h2>四、关键流程（一次 AI 生成 Web 应用）</h2>
   <div class="card">
     <div class="flow">
-      <div class="step"><span class="num">1</span><span><b>发起</b>：用户在小程序面板「新建示例」或对话框请求 → AI 生成 HTML/JS</span></div>
+      <div class="step"><span class="num">1</span><span><b>发起</b>：用户在 Web 应用面板「新建示例」或对话框请求 → AI 生成 HTML/JS</span></div>
       <div class="step"><span class="num">2</span><span><b>校验</b>：对工程名 / 路径做安全化，防止越界写入工程目录外</span></div>
-      <div class="step"><span class="num">3</span><span><b>写入</b>：<code>writeFlow</code> 落盘到小程序工程目录（含同目录资源）</span></div>
+      <div class="step"><span class="num">3</span><span><b>写入</b>：<code>writeFlow</code> 落盘到 Web 应用工程目录（含同目录资源）</span></div>
       <div class="step"><span class="num">4</span><span><b>渲染</b>：MiniAppFramework 内联渲染；预览时同目录图片转 <code>data URI</code>，<code>app://</code> 资源定位一致</span></div>
       <div class="step"><span class="num">5</span><span><b>运行 / 分享</b>：面板或对话框内运行，支持导出 / 分享</span></div>
     </div>
@@ -115,13 +115,13 @@
 
   <h2>五、与系统其它模块的关系</h2>
   <div class="card">
-    <p class="muted">小程序是 ZorvAI 的「轻量可编程面」：</p>
+    <p class="muted">Web 应用是 ZorvAI 的「轻量可编程面」：</p>
     <p>
-      <span class="pill">终端4.0：小程序可调用本地命令</span>
+      <span class="pill">终端4.0： Web 应用可调用本地命令</span>
       <span class="pill">技能 Skills：AI 生成逻辑复用技能工作流</span>
-      <span class="pill">MCP：小程序内唤起连接器动作</span>
-      <span class="pill">语音服务：语音驱动小程序交互</span>
-      <span class="pill">节点编辑器：可视化编排对接小程序</span>
+      <span class="pill">MCP： Web 应用内唤起连接器动作</span>
+      <span class="pill">语音服务：语音驱动 Web 应用交互</span>
+      <span class="pill">节点编辑器：可视化编排对接 Web 应用</span>
     </p>
   </div>
 </div>

@@ -4,7 +4,7 @@
  *   1) 轻量运行时：Page() / Component() / mountComponent() / 数据绑定 / 事件绑定；
  *   2) JSBridge SDK：封装 native.invoke，暴露 storage / ui / device / network / router / kotlin 命名空间，
  *      并接管 Native->JS 的 response / event 回调（Promise 化）。
- *      kotlin 命名空间即"原生 Kotlin 语言"——小程序可调用真·Android/Kotlin 能力（剪贴板/分享/打开App/通知/TTS 等）。
+ *      kotlin 命名空间即"原生 Kotlin 语言"——Web 应用可调用真·Android/Kotlin 能力（剪贴板/分享/打开App/通知/TTS 等）。
  */
 (function (global) {
   'use strict';
@@ -19,7 +19,7 @@
     for (var i = 0; i < nodes.length; i++) {
       var val = instance.data[key];
       // 值含 HTML 标签时用 innerHTML 渲染（富文本 / 标签页切换内容），否则用 textContent（纯文本，安全）。
-      // 这样 data-bind 既能绑普通文本，也能绑带样式的 HTML 片段（小程序常见用法）。
+      // 这样 data-bind 既能绑普通文本，也能绑带样式的 HTML 片段（Web 应用常见用法）。
       if (typeof val === 'string' && /<[a-z!]/i.test(val)) {
         nodes[i].innerHTML = val;
       } else {
@@ -211,7 +211,7 @@
       navigateTo: function (url) { return invoke('router', 'navigateTo', { url: url }); },
       navigateBack: function () { return invoke('router', 'navigateBack', {}); }
     },
-    // 原生 Kotlin 语言命名空间：融合原生能力到小程序
+    // 原生 Kotlin 语言命名空间：融合原生能力到 Web 应用
     kotlin: {
       getAppInfo: function () { return invoke('kotlin', 'getAppInfo', {}); },
       copyText: function (t) { return invoke('kotlin', 'copyText', { text: t }); },

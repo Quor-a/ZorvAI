@@ -80,7 +80,7 @@ val CARD_CATALOG: List<CardTemplate> = listOf(
     CardTemplate("avatargroup", "decoration", "重叠头像组，点击触发 command（v221）", """{"type":"avatargroup","title":"在线成员","avatars":[{"name":"小明","url":"","command":"screen:profile"},{"name":"小红","url":"","command":"screen:profile"}]}"""),
     // ── AI 自写 / 组合 ──
     CardTemplate("mermaid", "aiwrite", "AI 自写 Mermaid 可视化图表（流程/时序/状态机/类图/思维导图/git 图等）", """{"type":"mermaid","title":"流程图","source":"graph TD; A-->B; B-->C;"}"""),
-    CardTemplate("miniapp", "aiwrite", "AI 生成小程序（HTML+JS+CSS）实时渲染为可交互页面", """{"type":"miniapp","title":"计算器","html":"<button data-action='tap' data-bind='n'>点我</button>"}"""),
+    CardTemplate("miniapp", "aiwrite", "AI 生成 Web 应用（HTML+JS+CSS）实时渲染为可交互页面", """{"type":"miniapp","title":"计算器","html":"<button data-action='tap' data-bind='n'>点我</button>"}"""),
     CardTemplate("composite", "aiwrite", "组合卡：多子卡聚合成整体（stack 堆叠可单渲染 / tabs 标签页 / accordion 折叠）", """{"type":"composite","layout":"stack","children":[{"type":"stat","label":"内存","value":"6G"},{"type":"progress","label":"下载","value":60}],"description":"系统概览"}"""),
 )
 

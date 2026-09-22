@@ -956,13 +956,13 @@ object QuroUiDslParser {
                         ?: json.optStringOrNull("app") ?: "",
                 )
                 // ─── 多层渲染 / 深链导航（v1.0.82 新增）───
-                // 打开 ZorvAI 内置界面（终端/模型配置/可视化编程/小程序/工具中心等）
+                // 打开 ZorvAI 内置界面（终端/模型配置/可视化编程/Web 应用/工具中心等）
                 "open_screen", "open_screen_target", "screen", "openscreen" -> QuroOpenScreenAction(
                     target = json.optStringOrNull("target")
                         ?: json.optStringOrNull("screen")
                         ?: json.optStringOrNull("name") ?: "",
                 )
-                // 直接渲染 HTML / 小程序到对话气泡（第一层渲染）
+                // 直接渲染 HTML / Web 应用到对话气泡（第一层渲染）
                 "render_html", "open_html", "html", "miniapp", "render_miniapp" -> QuroRenderHtmlAction(
                     html = json.optStringOrNull("html")
                         ?: json.optStringOrNull("content")

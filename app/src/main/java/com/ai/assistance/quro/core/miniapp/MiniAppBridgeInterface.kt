@@ -19,7 +19,7 @@ import androidx.core.content.pm.PackageInfoCompat
 import org.json.JSONObject
 
 /**
- * 小程序JSBridge接口
+ * Web 应用JSBridge接口
  * 
  * 提供JavaScript调用原生能力的桥梁
  */
@@ -37,7 +37,7 @@ class MiniAppBridgeInterface(
         registerModule(UiModule(context))
         registerModule(NetworkModule(context))
         registerModule(RouterModule(context, this))
-        // 原生 Kotlin 能力：让 AI 生成的小程序可调用真·Android/Kotlin（剪贴板/分享/打开App/通知/TTS 等）
+        // 原生 Kotlin 能力：让 AI 生成的 Web 应用可调用真·Android/Kotlin（剪贴板/分享/打开App/通知/TTS 等）
         registerModule(KotlinModule(context))
         // 移植自 MiniAppFramework 的富能力模块（去品牌化，协议兼容 MiniAppBridgeModule）
         registerModule(AciModule(context))      // 关联启动第三方 App / 组件
@@ -321,8 +321,8 @@ class RouterModule(
 /**
  * 原生 Kotlin 桥接模块
  *
- * 把 Android/Kotlin 的**真·原生能力**暴露给小程序 JS（融合"原生 Kotlin 语言"到现有 HTML/JS/CSS 小程序），
- * 让 AI 生成的小程序不再只是 WebView 内网页，而能：
+ * 把 Android/Kotlin 的**真·原生能力**暴露给 Web 应用 JS（融合"原生 Kotlin 语言"到现有 HTML/JS/CSS Web 应用），
+ * 让 AI 生成的 Web 应用不再只是 WebView 内网页，而能：
  *  - 读写系统剪贴板、呼起系统分享、打开任意 URL / 第三方 App（HTML/JS 做不到）；
  *  - 读取宿主 App 信息、弹出系统通知、调用 TTS 朗读。
  * 所有调用都落在主线程/系统 Service，边界与权限已做防护。
@@ -404,7 +404,7 @@ class KotlinModule(private val context: Context) : MiniAppBridgeModule {
                 }.onFailure { callback(-1, null, it.message) }
             }
             "notify" -> {
-                val title = params.optString("title", "小程序通知")
+                val title = params.optString("title", "Web 应用通知")
                 val body = params.optString("body", "")
                 // Android 13+ 需要 POST_NOTIFICATIONS 权限
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -419,7 +419,7 @@ class KotlinModule(private val context: Context) : MiniAppBridgeModule {
                     val channelId = "miniapp"
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         val chan = NotificationChannel(
-                            channelId, "小程序通知", NotificationManager.IMPORTANCE_DEFAULT
+                            channelId, "Web 应用通知", NotificationManager.IMPORTANCE_DEFAULT
                         ).apply { setShowBadge(true) }
                         nm.createNotificationChannel(chan)
                     }

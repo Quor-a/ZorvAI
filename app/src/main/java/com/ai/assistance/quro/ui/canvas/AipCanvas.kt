@@ -442,7 +442,7 @@ fun AipCanvasBlock(b: Aip.Block, onLinkClick: (String) -> Unit = {}) {
 }
 
 /**
- * HTML 块渲染：复用对话框已有的 [HtmlPreviewWebView]（与 ```html 预览、小程序同源的 WebView 管线，
+ * HTML 块渲染：复用对话框已有的 [HtmlPreviewWebView]（与 ```html 预览、 Web 应用同源的 WebView 管线，
  * 含离线 CDN 兜底），在 AIP 文档内嵌区域渲染完整/片段 HTML。
  * 高度按页面真实内容自适应（onPageFinished 回传 scrollHeight → 160~1440dp），避免空白或裁切。
  */

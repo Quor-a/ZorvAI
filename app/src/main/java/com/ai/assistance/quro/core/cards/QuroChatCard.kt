@@ -478,12 +478,12 @@ sealed interface QuroChatCard {
     ) : QuroChatCard
 
     /**
-     * AI 自写小程序卡片（MiniApp）：AI 生成完整小程序代码（HTML + JS + CSS），
+     * AI 自写 Web 应用卡片（MiniApp）：AI 生成完整 Web 应用代码（HTML + JS + CSS），
      * 客户端用 MiniAppEngine 渲染，支持 JSBridge 调用原生能力（存储/网络/UI，以及原生 Kotlin 融合层
      * `window.native.kotlin.*`：剪贴板/分享/打开App/通知/TTS 等真·Android 能力）。
      *
      * @param html AI 生成的完整 HTML 源码（含内联或外部 JS/CSS）
-     * @param config 小程序配置（可选，如 appId、页面路由等）
+     * @param config Web 应用配置（可选，如 appId、页面路由等）
      */
     data class MiniAppCard(
         override val id: String,
@@ -502,7 +502,7 @@ sealed interface QuroChatCard {
      * - "tabs"：子卡以标签页呈现，一次只显示一个，互不干扰；
      * - "accordion"：子卡各自独立折叠展开，任意张可同时展开。
      *
-     * 该卡用于解决「小程序需要后端+前端组合完成」「可视化弹窗+可视化编程+多语言渲染」等产物被拆散渲染丢失组合关系的问题。
+     * 该卡用于解决「Web 应用需要后端+前端组合完成」「可视化弹窗+可视化编程+多语言渲染」等产物被拆散渲染丢失组合关系的问题。
      *
      * @param layout      "stack" | "tabs" | "accordion"
      * @param children    子卡列表，每个子卡独立 id/状态
@@ -837,7 +837,7 @@ fun parseComponentSpec(spec: String): QuroChatCard? {
                 s.optString("source", "").ifBlank { s.optString("text", "") },
                 s.optString("theme", "").ifBlank { "" },
             )
-            // ── v1057 小程序（MiniApp）──
+            // ── v1057 Web 应用（MiniApp）──
             // 兼容两种字段名：ui_widget 的 spec JSON 用 `html`，ui_control(action:"widget",type:"miniapp")
             // 把内容放在 `value`（与 mermaid 一致）。两者都接受，避免 AI 用 value 传 HTML 时渲染为空。
             "miniapp" -> QuroChatCard.MiniAppCard(
