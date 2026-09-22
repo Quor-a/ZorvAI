@@ -349,9 +349,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * 把当前通道页（主要是 html 通道）保存成一个「小程序」工程。
+     * 把当前通道页（主要是 html 通道）保存成一个「Web 应用」工程。
      *
-     * 落盘到宿主统一目录 filesDir/miniapp/<工程名>/，与工具中心「小程序」面板、
+     * 落盘到宿主统一目录 filesDir/miniapp/<工程名>/，与工具中心「Web 应用」面板、
      * miniapp 工具共享同一份文件——存完就能在工具中心打开，AI 也能用 miniapp 工具继续改。
      * 走的是 MiniAppTool 的 save，保证工程结构（app.json + pages/index/index.html）标准。
      */

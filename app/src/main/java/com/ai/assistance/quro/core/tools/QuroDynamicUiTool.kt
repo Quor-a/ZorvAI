@@ -213,9 +213,9 @@ red green blue yellow orange purple pink teal indigo gray primary secondary erro
   editor(代码编辑器) / terminal(终端) / toolbox(工具箱) / knowledge(知识库) / cms(内容管理) /
   aci(受控端) / about(关于) / appearance(外观) / soul(人格) / memory(记忆) / permission(权限) /
   model_config(模型配置) / voice(语音) / settings(设置) / tool_center(工具中心)，
-  以及工具中心子能力 vispro(可视化编程) / node_editor(流程图) / miniapp(小程序)。
+  以及工具中心子能力 vispro(可视化编程) / node_editor(流程图) / miniapp(Web 应用)。
   例：点「打开终端」按钮 → 直接进入终端界面，无需你再解析指令。
-- {"type":"render_html","html":"<h1>你好</h1>"} → 把 HTML 直接渲染进对话气泡（第一层渲染，复用小程序运行时），
+- {"type":"render_html","html":"<h1>你好</h1>"} → 把 HTML 直接渲染进对话气泡（第一层渲染，复用 Web 应用运行时），
   不是弹出新页面，用户就在聊天里看到渲染结果。也可写 "type":"miniapp"。
 - {"type":"render_vispro","source":"graph TD;A-->B"} → 把 mermaid 源码直接渲染成可视化图进对话气泡（第一层渲染），
   也可写 "type":"mermaid"。
@@ -224,7 +224,7 @@ red green blue yellow orange purple pink teal indigo gray primary secondary erro
   选中项会作为用户消息回发给你继续对话（轻量版「询问」，比 callback 表单更简单）。
 
 【多层渲染说明】动态 UI 组件既能渲染在第一层（如上面 render_html / render_vispro 直接进气泡），
-也能作为导航中枢：按钮点进去可进终端、模型配置、可视化编程、小程序等任意内置界面（open_screen），
+也能作为导航中枢：按钮点进去可进终端、模型配置、可视化编程、 Web 应用等任意内置界面（open_screen），
 或弹可视化弹窗 / 询问（visual_popup / visual_ask）。所有动作均在客户端真调用，无需你二次解析。
 
 【重要】以上动作在客户端即「真调用」，无需你再二次解析文本去执行——点一下按钮就落地（复制/打开应用/

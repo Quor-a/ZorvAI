@@ -288,14 +288,14 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // ═══ 构建台：端侧 APK 构建（Java → DEX → APK，AI 可真正触发编译打包）═══
     r.register(BuildApkTool())
     r.register(ExportApkTool())    // 让 AI 也能「导出产物」（构建台 UI 的导出是文件选择器、AI 调不起）
-    // 小程序：多文件多语言 Web 应用工程（WebView + native.* 原生桥）。
+    // Web 应用：多文件多语言 Web 应用工程（WebView + native.* 原生桥）。
     // workbench 是 miniapp 的兼容别名（MiniAppAliasTool），历史对话/手册仍可能引用。
     r.register(MiniAppAliasTool())
-    // 小程序：AI 直接 CRUD/运行小程序工程（HTML + Page() 运行时 + native.* 原生桥）。
-    // 产物经 ```miniapp 围栏回到对话框气泡渲染；工具箱「小程序」面板与它共享同一份工程文件。
+    // Web 应用：AI 直接 CRUD/运行 Web 应用工程（HTML + Page() 运行时 + native.* 原生桥）。
+    // 产物经 ```miniapp 围栏回到对话框气泡渲染；工具箱「Web 应用」面板与它共享同一份工程文件。
     r.register(MiniAppTool())
     // 原生小程序引擎（miniapp-sdk / com.yuanbao.miniapp，移植自 Quor-a/GenUI）：自研 C++ JS 引擎 + WXML/WXSS
-    // 原生渲染。与上面的 WebView「小程序」并列两套引擎；本工具让 AI 生成/治理 WXML 工程，
+    // 原生渲染。与上面的 WebView「Web 应用」并列两套引擎；本工具让 AI 生成/治理 WXML 工程，
     // 渲染由工具中心「小程序（原生引擎）」面板的 MiniAppView 完成。
     r.register(MiniAppSdkTool())
     // 内置的完整 GenUI-Agent（独立应用，GenUI JSON DSL → 原生 Compose 组件，530+ 组件）。

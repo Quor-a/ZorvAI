@@ -8,10 +8,10 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 
 /**
- * 小程序工具：AI 可以直接创建 / 写入 / 读取 / 运行小程序（Web 应用）工程。
+ * Web 应用工具：AI 可以直接创建 / 写入 / 读取 / 运行 Web 应用（Web 应用）工程。
  *
  * 工程存储在 filesDir/miniapp/<name>/（app.json + pages 下各页面 .html + 组件），
- * 与工具中心「小程序」面板共享同一份文件，AI 写入后 UI 立即可见、可运行。
+ * 与工具中心「Web 应用」面板共享同一份文件，AI 写入后 UI 立即可见、可运行。
  *
  * 用法：
  * - miniapp(action="create", name="todo", files=[{path:"app.json", content:"..."}, {path:"pages/index/index.html", content:"..."}])
@@ -23,9 +23,9 @@ import java.nio.charset.StandardCharsets
  */
 class MiniAppTool : QuroTool {
     override val name = "miniapp"
-    override val description = """小程序：AI 直接创建/写入/读取/运行小程序工程（HTML + Page() 运行时 + native.* 原生桥）。
+    override val description = """Web 应用：AI 直接创建/写入/读取/运行 Web 应用工程（HTML + Page() 运行时 + native.* 原生桥）。
 
-工程结构（存放在手机私有目录 filesDir/miniapp/<name>/，与工具中心「小程序」面板共享同一份文件）：
+工程结构（存放在手机私有目录 filesDir/miniapp/<name>/，与工具中心「Web 应用」面板共享同一份文件）：
 - app.json：全局配置（appId/version/name/pages 路由表/window 样式）
 - pages/<page>/<page>.html：页面（完整 HTML，用 Page() 运行时组织状态，可调 native.*）
 - components/<name>/<name>.js：可复用组件（可选）
@@ -43,18 +43,18 @@ class MiniAppTool : QuroTool {
 - location：getLocation
 
 操作：
-- create：创建工程，一次性写入多个文件（files 数组含 path+content）；不传 files 则写入一个示例小程序
+- create：创建工程，一次性写入多个文件（files 数组含 path+content）；不传 files 则写入一个示例 Web 应用
 - write：写入单个文件（path + content）
 - read：读取文件内容（默认 app.json）
-- list：列出所有小程序工程
+- list：列出所有 Web 应用工程
 - delete：删除整个工程，或删除某个文件（传 path）
 - run：返回可直接在对话框渲染的自包含 HTML（自动内联同目录的 .js/.css）——**create 之后必须 run，否则界面根本没交付**
 - save：把一整段 HTML 直接存成标准工程（自动补 app.json + pages/index/index.html）。
-  **GenUI 的 ```html 通道产出、或对话里生成好的单页应用，用这个固化成小程序。**
+  **GenUI 的 ```html 通道产出、或对话里生成好的单页应用，用这个固化成 Web 应用。**
 - wrap：把一段代码包装成可渲染 HTML（lang=js|python|css）。python 走 Brython，无需 Termux。
-- clean：清空全部小程序工程
+- clean：清空全部 Web 应用工程
 - manual：取回开发手册（参数 topic）：
-  · 不传 / "studio" → 小程序手册：工程结构 + Page() 运行时 + native.* 逐个函数 + 错误清单
+  · 不传 / "studio" → Web 应用手册：工程结构 + Page() 运行时 + native.* 逐个函数 + 错误清单
   · 老 topic（"native" / "traps" / "errors" / "compare"）→ 返回「该能力已下线」说明
     （旧的 WXML/WXSS 原生 UI 引擎 genui_native_ui 已随旧 GenUI 画布删除，别再调它）
 
@@ -72,19 +72,19 @@ class MiniAppTool : QuroTool {
             "code":{"type":"string","description":"代码文本（wrap 时必填）"},
             "lang":{"type":"string","description":"wrap 的代码语言：js|python|css（省略时从 file 后缀推断）"},
             "file":{"type":"string","description":"文件名（wrap 时用于推断 lang，如 app.py）"},
-            "topic":{"type":"string","description":"manual 的主题：小程序手册（默认）；老 topic native/traps/errors/compare 已下线，会返回下线说明"}
+            "topic":{"type":"string","description":"manual 的主题： Web 应用手册（默认）；老 topic native/traps/errors/compare 已下线，会返回下线说明"}
         },
         "required":["action"]
     }"""
 
     companion object {
         /**
-         * 统一后的小程序根目录：filesDir/miniapp。
+         * 统一后的 Web 应用根目录：filesDir/miniapp。
          *
-         * 历史上有两个并存的小程序体系：
-         *  · 「小程序」（原 workbench）   → filesDir/workbench（单入口多文件，无路由/无原生桥）
-         *  · 「小程序」（统一 Web 应用工具，吸收原「小程序工作室」/workbench）→ filesDir/miniapp（app.json 路由 + native.* 桥）
-         * 现已合体为唯一的「小程序」，目录也归一到 filesDir/miniapp，
+         * 历史上有两个并存的 Web 应用体系：
+         *  · 「Web 应用」（原 workbench）   → filesDir/workbench（单入口多文件，无路由/无原生桥）
+         *  · 「Web 应用」（统一 Web 应用工具，吸收原「Web 应用工作室」/workbench）→ filesDir/miniapp（app.json 路由 + native.* 桥）
+         * 现已合体为唯一的「Web 应用」，目录也归一到 filesDir/miniapp，
          * 两个旧目录在首次访问时一次性搬迁过来（幂等），旧工程不会丢。
          */
         private const val ROOT = "miniapp"
@@ -132,10 +132,10 @@ class MiniAppTool : QuroTool {
             "list" -> listProjects(context)
             "delete" -> deleteProject(context, json)
             "run" -> runProject(context, json)
-            // save：把一整段 HTML 直接存成一个小程序工程（GenUI html 通道「保存为小程序」走这里，
+            // save：把一整段 HTML 直接存成一个 Web 应用工程（GenUI html 通道「保存为 Web 应用」走这里，
             // 也让 AI 能把对话里生成好的单页应用固化下来，不用手工拆成 app.json + pages）。
             "save" -> saveHtml(context, json)
-            // wrap：把一段 js / python / css 包装成可渲染的 HTML 页面（原「小程序」=workbench 的能力）。
+            // wrap：把一段 js / python / css 包装成可渲染的 HTML 页面（原「Web 应用」=workbench 的能力）。
             "wrap" -> wrapCode(context, json)
             "clean" -> cleanAll(context)
             // manual：把完整手册（函数级细节 + 可交互范式 + 错误清单）返给 AI。
@@ -146,10 +146,10 @@ class MiniAppTool : QuroTool {
     }
 
     /**
-     * 把一整段 HTML 存成小程序工程。
+     * 把一整段 HTML 存成 Web 应用工程。
      *
      * 生成的工程是标准形态（app.json + pages/index/index.html），所以存完就能用
-     * `miniapp(action="run")` 预览、也能在工具中心「小程序」面板里看到。
+     * `miniapp(action="run")` 预览、也能在工具中心「Web 应用」面板里看到。
      */
     private fun saveHtml(context: Context, json: JSONObject): String {
         val name = json.optString("name", "").ifBlank { return "缺少 name 参数" }
@@ -173,8 +173,8 @@ class MiniAppTool : QuroTool {
                     StandardCharsets.UTF_8
                 )
             }
-            "✅ 已保存为小程序「$name」（pages/index/index.html，${html.length} 字符）\n" +
-                "用 miniapp(action=\"run\", name=\"$name\") 预览；也可在工具中心「小程序」里打开。"
+            "✅ 已保存为 Web 应用「$name」（pages/index/index.html，${html.length} 字符）\n" +
+                "用 miniapp(action=\"run\", name=\"$name\") 预览；也可在工具中心「Web 应用」里打开。"
         } catch (e: Exception) {
             "❌ 保存失败：${e.message}"
         }
@@ -345,14 +345,14 @@ try {
 </html>"""
     }
 
-    /** 清空全部小程序工程。 */
+    /** 清空全部 Web 应用工程。 */
     private fun cleanAll(context: Context): String {
         val root = getRoot(context)
         val names = root.listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
-        if (names.isEmpty()) return "小程序目录为空，无需清理"
+        if (names.isEmpty()) return "Web 应用目录为空，无需清理"
         var ok = 0
         names.forEach { if (runCatching { File(root, it).deleteRecursively() }.getOrDefault(false)) ok++ }
-        return "✅ 已清空 $ok/${names.size} 个小程序工程"
+        return "✅ 已清空 $ok/${names.size} 个 Web 应用工程"
     }
 
     private fun createProject(context: Context, json: JSONObject): String {
@@ -365,7 +365,7 @@ try {
         val files = json.optJSONArray("files")
         return if (files == null || files.length() == 0) {
             seedDemo(projectDir)
-            "✅ 已创建示例小程序「$name」（app.json + pages/index + pages/about），用 miniapp(action=\"run\", name=\"$name\") 预览"
+            "✅ 已创建示例 Web 应用「$name」（app.json + pages/index + pages/about），用 miniapp(action=\"run\", name=\"$name\") 预览"
         } else {
             var created = 0
             val errors = mutableListOf<String>()
@@ -396,7 +396,7 @@ try {
                 )
             }
             buildString {
-                appendLine("✅ 小程序「$name」已创建，$created 个文件")
+                appendLine("✅ Web 应用「$name」已创建，$created 个文件")
                 appendLine("📁 路径：${projectDir.absolutePath}")
                 if (errors.isNotEmpty()) appendLine("⚠ 错误：${errors.joinToString("; ")}")
                 appendLine("用 miniapp(action=\"run\", name=\"$name\") 预览")
@@ -432,9 +432,9 @@ try {
     private fun listProjects(context: Context): String {
         val root = getRoot(context)
         val names = root.listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
-        if (names.isEmpty()) return "小程序目录为空（filesDir/miniapp 下还没有工程）。用 miniapp(action=\"create\", name=\"demo\") 创建一个示例。"
+        if (names.isEmpty()) return "Web 应用目录为空（filesDir/miniapp 下还没有工程）。用 miniapp(action=\"create\", name=\"demo\") 创建一个示例。"
         return buildString {
-            appendLine("📱 小程序工程（${names.size}）：")
+            appendLine("📱 Web 应用工程（${names.size}）：")
             names.forEach { appendLine("  • $it") }
             appendLine("\n用 miniapp(action=\"run\", name=\"<工程名>\") 预览")
         }
@@ -510,7 +510,7 @@ try {
         return result
     }
 
-    /** 写入一个最小可运行的示例小程序。 */
+    /** 写入一个最小可运行的示例 Web 应用。 */
     private fun seedDemo(projectDir: File) {
         projectDir.mkdirs()
         File(projectDir, "app.json").writeText(
@@ -520,7 +520,7 @@ try {
                 put("name", projectDir.name)
                 put("pages", JSONArray().apply { put("pages/index/index"); put("pages/about/about") })
                 put("window", JSONObject().apply {
-                    put("navigationBarTitle", "示例小程序")
+                    put("navigationBarTitle", "示例 Web 应用")
                     put("navigationBarColor", "#1A73E8")
                     put("backgroundColor", "#FFFFFF")
                 })
@@ -543,17 +543,17 @@ button{margin-top:16px;background:#fff;color:#5a6fd6;border:none;padding:12px 20
 </head>
 <body>
 <h1 data-bind="title">Hello MiniApp</h1>
-<p data-bind="tip">这是用 MiniAppFramework 运行时渲染的小程序。</p>
+<p data-bind="tip">这是用 MiniAppFramework 运行时渲染的 Web 应用。</p>
 <button data-action="onTap">点我调用原生</button>
 <button data-action="onHash">算 SHA256（native.crypto）</button>
 <button data-action="onDbWrite">写DB（native.db）</button>
 <button data-action="onDbRead">读DB（native.db）</button>
 <script>
 Page({
-  data: { title: "Hello MiniApp", tip: "这是用 MiniAppFramework 运行时渲染的小程序。" },
+  data: { title: "Hello MiniApp", tip: "这是用 MiniAppFramework 运行时渲染的 Web 应用。" },
   onTap: function () {
     this.setData({ title: "你点了一下！" });
-    native.kotlin.toast({ text: "来自小程序的问候" });
+    native.kotlin.toast({ text: "来自 Web 应用的问候" });
   },
   onHash: function () {
     native.crypto.sha256("Hello MiniApp").then(function (h) {
@@ -590,7 +590,7 @@ Page({
 <style>body{font-family:system-ui,sans-serif;padding:24px}</style></head>
 <body>
 <h2>关于</h2>
-<p>ZorvAI 小程序 · 完整移植自 MiniAppFramework。</p>
+<p>ZorvAI Web 应用 · 完整移植自 MiniAppFramework。</p>
 <button onclick="native.router.navigateBack()">返回</button>
 </body>
 </html>""",

@@ -11,7 +11,7 @@ import java.io.File
  * Canvas/GLES 自绘渲染 + wx.* 原生能力）接入对话框，让 AI 能直接生成 WXML/WXSS/JS 小程序工程、
  * 列出/删除，落盘到 filesDir/miniapps/<appId>/，再由工具中心「小程序（原生引擎）」面板用 MiniAppView 渲染。
  *
- * 这是与「小程序」（MiniAppTool，WebView + native.* 桥 HTML 运行时）并列的**另一套小程序引擎**，
+ * 这是与「Web 应用」（MiniAppTool，WebView + native.* 桥 HTML 运行时）并列的**另一套小程序引擎**，
  * 走的是微信标准 WXML/WXSS/JS 范式，不是 HTML。
  *
  * 用法：
@@ -24,7 +24,7 @@ class MiniAppSdkTool : QuroTool {
     override val description = """miniapp_sdk：AI 直接创建 / 列出 / 删除**原生小程序**工程（WXML + WXSS + JS，走微信标准范式）。
 
 这是移植自上游 Quor-a/GenUI 的**自研原生引擎**（C++ JS 引擎 + Flex 布局 + Canvas/GLES 自绘渲染），
-与「小程序」工具（WebView + HTML 运行时）是两套并列的小程序引擎。本工具负责**生成与治理工程文件**，
+与「Web 应用」工具（WebView + HTML 运行时）是两套并列的小程序引擎。本工具负责**生成与治理工程文件**，
 渲染由工具中心「小程序（原生引擎）」面板的 MiniAppView 完成（对话框里调用本工具写好工程后，去工具中心打开即可看到画面）。
 
 工程结构（存放在手机私有目录 filesDir/miniapps/<appId>/）：

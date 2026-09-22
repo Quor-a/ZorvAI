@@ -1,11 +1,11 @@
 package com.ai.assistance.quro.core.tools
 
 /**
- * 小程序手册 —— 小程序（`miniapp`）的**唯一真相源**。
+ * Web 应用手册 —— Web 应用（`miniapp`）的**唯一真相源**。
  *
  * ── 为什么要有这个文件 ────────────────────────────────────────────
- * 「小程序」这个词在本项目里曾经对应两个完全不同的东西，模型极易搞混，于是「哪个都调一遍」
- * （结果：两块画布、或产物落进错误的宿主）。而且自研引擎的能力边界和微信小程序差得很远，
+ * 本项目里「Web 应用」（HTML + Page() 运行时）与「小程序」（原生 WXML/WXSS 引擎）是两套不同的东西，模型极易搞混，于是「哪个都调一遍」
+ * （结果：两块画布、或产物落进错误的宿主）。而且这套 HTML 运行时的能力边界和微信小程序差得很远，
  * 用微信小程序的常识去写，会得到「一片空白 / 点了没反应 / 文字被裁」这类黑盒故障。
  *
  * 手册直接由**引擎源码**反推而成，不是凭微信文档抄的：
@@ -17,12 +17,12 @@ package com.ai.assistance.quro.core.tools
  *   （工具 description 里内联的是 [WEB_APP_BRIEF] 精简版，模型每轮都会读到，必须短）
  *
  * ── 历史沿革（改这段前先读） ──────────────────────────────────────
- * 旧版还有第二套「小程序」——工具 `genui_native_ui`（旧名 `create_miniapp`）：
+ * 旧版还有第二套实现（原生 WXML 引擎）——工具 `genui_native_ui`（旧名 `create_miniapp`）：
  * WXML/WXSS/JS 微信语法 + 28 个 wx.* API + 自研 Canvas 引擎，只存在于已下线的
  * 「生成式 UI 对话画布」里。该工具与那套画布已在 v1.0.96 一并删除，
  * **本手册不再提供它的内容**（[section] 对老 topic 只会返回 [RETIRED] 说明）。
- * 现在要「原生界面」有两条路：`miniapp`（HTML + native.* 桥）或
- * `genui_agent_open`（GenUI JSON DSL → 原生 Compose 组件）。
+ * 现在要「原生界面」有三条路：`miniapp`（本手册，HTML + native.* 桥）、
+ * `miniapp_sdk`（原生 WXML 小程序引擎）或 `genui_agent_open`（GenUI JSON DSL → 原生 Compose 组件）。
  *
  * 两条铁律（改动前先读）：
  * 1. 手册里每一条都必须能在源码里找到依据，**不许写"微信支持所以应该也行"**；
@@ -39,25 +39,27 @@ object MiniAppManual {
 - 没有 `genui_native_ui` / `create_miniapp` / `genui_manual` 这三个工具了，调了只会报「未知工具」；
 - `topic="native" / "traps" / "errors" / "compare"` 没有内容可给。
 
-现在要「界面」时，按需求二选一（不要两个一起用）：
-· 网页形态的小程序（HTML + Page() 运行时 + native.* 原生桥：存数据 / 跑 SQL / 加密 / 通知 / 分享 / 定位 / 拉起 App）
+现在要「界面」时，按需求三选一（不要混用）：
+· 网页形态的 Web 应用（HTML + Page() 运行时 + native.* 原生桥：存数据 / 跑 SQL / 加密 / 通知 / 分享 / 定位 / 拉起 App）
   → `miniapp`（本工具），取本手册 `miniapp(action="manual")`。
+· 微信小程序形态的原生界面（WXML/WXSS/JS + wx.* 原生 API）
+  → `miniapp_sdk`（写工程文件），到工具中心「小程序 (原生引擎)」面板渲染。
 · 原生控件形态的可交互界面（GenUI JSON DSL → 原生 Compose 组件）
   → `genui_agent_open`（内置 GenUI Agent 独立应用）。
 · 只要一个网页成品、不需要系统能力 → 直接写 ```html 围栏。
 """.trimIndent()
 
     // ════════════════════════════════════════════════════════════════
-    //  miniapp（小程序）完整手册
+    //  miniapp（Web 应用）完整手册
     // ════════════════════════════════════════════════════════════════
 
     val WEB_APP: String = """
-【小程序手册 · miniapp —— HTML + Page() 运行时 + native.* 原生桥】
+【Web 应用手册 · miniapp —— HTML + Page() 运行时 + native.* 原生桥】
 
 ── 1. 它是什么
-由 WebView 跑**真实 HTML 页面**的小程序工程，通过 native.* 桥调用本机的
+由 WebView 跑**真实 HTML 页面**的 Web 应用工程，通过 native.* 桥调用本机的
 存储 / SQLite / 加密 / 通知 / 分享 / 定位 / 关联启动等真实能力。
-工程落在手机私有目录 filesDir/studio/miniapp/<name>/，与工具中心的「小程序」面板**同一份文件**
+工程落在手机私有目录 filesDir/studio/miniapp/<name>/，与工具中心的「Web 应用」面板**同一份文件**
 ——AI 写完，面板里立刻能看到、能跑。
 
 ── 2. 工程结构
@@ -99,7 +101,7 @@ miniapp(action="run", name="todo", entry="pages/index/index.html")   ← 必须�
   或 <button data-id="3" onclick="del(this.dataset.id)">。
 · 持久化优先用 native.storage / native.db（见第 5 节），也可以配合 localStorage 但换设备会丢。
 
-── 5. native.* 桥（原生能力全表 —— 这是用小程序的唯一理由）
+── 5. native.* 桥（原生能力全表 —— 这是用 Web 应用的唯一理由）
 模块      函数                                                   用途
 storage   setItem / getItem / removeItem / clear                 键值持久化（跨启动保留）
 ui        toast / setNavigationBarTitle                        轻提示、改标题
@@ -123,7 +125,7 @@ location  getLocation                                          获取定位
 · 存结构体要先 JSON.stringify 再 setItem，取出 JSON.parse。
 · SQLite 用 db.execSql 建表一次，之后 insert/query/update/delete（表名与字段自己定，别用 SQL 关键字）。
 
-── 6. 什么该选小程序（判断标准）
+── 6. 什么该选 Web 应用（判断标准）
 ✅ 要跨启动保存数据、要按条件查历史记录、要算摘要/签名、要发通知、要系统分享、
    要定位、要拉起另一个 App、要跑 SQL —— 选它。
 ❌ 只是好看的界面 + 本地临时状态（待办、计算器、展示页）—— 直接写 ```html 围栏更快更稳。
@@ -165,7 +167,7 @@ location  getLocation                                          获取定位
 
     /** 精简版：塞进工具 description（模型每轮都会读到，必须短）。 */
     val WEB_APP_BRIEF: String = """
-【小程序 = 本工具 miniapp】
+【Web 应用 = 本工具 miniapp】
 它是 **HTML 页面 + Page() 运行时 + native.* 原生桥**（能存数据 / 跑 SQL / 加密 / 通知 / 分享 / 定位 / 拉起 App）。
 交付必须两步：create 落地 → run 取回自包含 HTML 内嵌对话流。**只 create 不 run = 用户什么都看不到。**
 
@@ -199,7 +201,7 @@ location  getLocation                                          获取定位
         return when (t) {
             "traps", "陷阱", "native", "原生", "原生ui", "errors", "错误", "错误清单",
             "compare", "对比", "对照" -> RETIRED
-            // studio / 空 / all / 未知 topic → 小程序手册（也是当前唯一的一册）
+            // studio / 空 / all / 未知 topic → Web 应用手册（也是当前唯一的一册）
             else -> WEB_APP
         }
     }

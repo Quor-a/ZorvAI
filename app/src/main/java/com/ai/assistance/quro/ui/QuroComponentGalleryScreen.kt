@@ -30,7 +30,7 @@ import com.ai.assistance.quro.core.tools.UiWidgetTool
  * 现统一融合真实能力：
  *  - 富组件（ui_widget）：stat/progress/list/pie/rating/table/alert/tabs/steps/timeline …
  *  - 富卡片（ui_card）：todo/note/actions …
- *  - AI 自写（mermaid / miniapp）：AI 下发的流程图与小程序
+ *  - AI 自写（mermaid / miniapp）：AI 下发的流程图与 Web 应用
  * 点击任意样例，即通过真实工具把组件发送到对话卡片栏（回归全局卡片栏兜底），所见即所得。
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,7 +64,7 @@ fun QuroComponentGalleryScreen(
     // AI 自写（mermaid / miniapp）样例：标签 -> spec
     val aiSamples = listOf(
         "Mermaid 流程图" to """{"type":"mermaid","title":"登录流程","source":"flowchart TD\nA[开始] --> B{已登录?}\nB -- 否 --> C[跳登录页]\nB -- 是 --> D[进首页]"}""",
-        "小程序 MiniApp" to """{"type":"miniapp","title":"示例卡片","html":"<div style='padding:16px'><h3>AI 自写小程序</h3><p>这段 HTML/CSS/JS 由 AI 生成并在对话框内实时渲染。</p></div>"}""",
+        "Web 应用 MiniApp" to """{"type":"miniapp","title":"示例卡片","html":"<div style='padding:16px'><h3>AI 自写 Web 应用</h3><p>这段 HTML/CSS/JS 由 AI 生成并在对话框内实时渲染。</p></div>"}""",
     )
 
     Scaffold(

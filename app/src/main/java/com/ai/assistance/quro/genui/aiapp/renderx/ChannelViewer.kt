@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
 /**
- * 往 html 通道页面注入 bridge.js 运行时（与「小程序」同源）。
+ * 往 html 通道页面注入 bridge.js 运行时（与「Web 应用」同源）。
  *
  * 注入后页面里就能用 `native.storage.getItem(...)`、`native.db.query(...)` 等原生能力，
  * 否则 html 通道产出的页面只是个没法持久化的沙盒。
@@ -60,7 +60,7 @@ fun ChannelViewer(
     embedded: Boolean = false,
     onBack: () -> Unit = {},
     onAction: (String) -> Unit = {},
-    /** html 通道「保存为小程序」回调：(标题, 完整HTML)。不传则在 html 通道隐藏该按钮。 */
+    /** html 通道「保存为 Web 应用」回调：(标题, 完整HTML)。不传则在 html 通道隐藏该按钮。 */
     onSaveAsMiniApp: ((title: String, html: String) -> Unit)? = null,
 ) {
     if (!embedded) BackHandler { onBack() }
@@ -167,7 +167,7 @@ fun ChannelViewer(
                 }
                 is ChannelPage.HtmlPage -> {
                     Column(Modifier.fillMaxSize()) {
-                        // 操作条：把这一屏 HTML 固化成「小程序」工程（与工具中心「小程序」同源，
+                        // 操作条：把这一屏 HTML 固化成「Web 应用」工程（与工具中心「Web 应用」同源，
                         // 存完就能在工具中心里打开、也能被 AI 用 miniapp 工具继续改）
                         Row(
                             Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
@@ -180,7 +180,7 @@ fun ChannelViewer(
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             TextButton(onClick = { onSaveAsMiniApp?.invoke(page.title, page.html) }) {
-                                Text("保存为小程序", style = MaterialTheme.typography.labelLarge)
+                                Text("保存为 Web 应用", style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     AndroidView(
@@ -191,7 +191,7 @@ fun ChannelViewer(
                                 settings.domStorageEnabled = true
                                 settings.mediaPlaybackRequiresUserGesture = false
                                 settings.allowContentAccess = true
-                                // 与「小程序」同源的 native.* 原生桥：
+                                // 与「Web 应用」同源的 native.* 原生桥：
                                 // AI 在 html 通道里也能用 storage/device/network/db/location/crypto 等能力
                                 setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                                 addJavascriptInterface(MiniAppBridgeInterface(ctx, this), "native")

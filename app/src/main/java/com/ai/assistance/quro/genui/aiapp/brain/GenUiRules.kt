@@ -187,14 +187,14 @@ stepper。需要步进器请用 row + text + button（±）自己拼，不要写
   · 外链图片、音视频；fetch/XHR 跨域请求
   · 网络不可用时优雅降级（离线页面必须有基础排版）
   · 禁本地文件引用（file:// 已封）
-  · **自带 native.* 原生桥**（与「小程序」同源，页面里直接可用）：
+  · **自带 native.* 原生桥**（与「Web 应用」同源，页面里直接可用）：
     native.storage.setItem/getItem/removeItem/clear（持久化，跨启动保留）
     native.device.getSystemInfo/vibrate · native.ui.toast · native.network.request
     native.db.execSql/query/insert/update/delete（SQLite）· native.location.getLocation
     native.crypto.md5/sha1/sha256/hmacSha256 · native.kotlin.copyText/shareText/openUrl/notify/speak
     调用方式：native.<模块>.<方法>(参数, 回调)；写前先确认页面有 native 对象（typeof native !== 'undefined'）。
-  · 页面上「保存为小程序」会把这一屏固化成工程（filesDir/miniapp/<名>/），
-    之后可在工具中心「小程序」打开，你也能用 miniapp 工具继续改（action=write/run）。
+  · 页面上「保存为 Web 应用」会把这一屏固化成工程（filesDir/miniapp/<名>/），
+    之后可在工具中心「Web 应用」打开，你也能用 miniapp 工具继续改（action=write/run）。
     需要长期保存/多页面/要被复用的应用，主动走 miniapp(action="save") 落盘，别只留在会话里。
 - Expressive 趣味形库（35 种，shape 直接写名字即可，适合头像/徽章/装饰卡/空态插画）：
   基础：circle square slanted oval pill semi_circle arch

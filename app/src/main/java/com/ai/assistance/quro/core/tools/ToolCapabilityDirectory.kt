@@ -29,7 +29,7 @@ object ToolCapabilityDirectory {
         MEDIA("媒体", "音乐、视频、图片、音频处理"),
         UI_CARDS("UI/卡片", "对话框UI组件、可视化图表"),
         DYNAMIC_UI("动态UI", "quro-ui 原生组件：可交互原生界面、富媒体、可视化渲染"),
-        GENUI("生成式UI", "生成式 UI 画布（GenUI）：把「画界面」的活派给整屏画布，以及小程序工程（工作室 HTML / 原生 WXML）"),
+        GENUI("生成式UI", "生成式 UI 画布（GenUI）：把「画界面」的活派给整屏画布，以及 Web 应用工程（HTML）与原生小程序工程（WXML）"),
         KNOWLEDGE_MEMORY("知识/记忆", "记忆库、知识库、经验库"),
         WORKSPACE("工作区", "工作区文件管理"),
         ACCESSIBILITY("无障碍", "屏幕读取、点击、滑动等"),
@@ -62,15 +62,15 @@ object ToolCapabilityDirectory {
      * 真实注册表里不在本层的工具，会在 [install] 时用 description 兜底合成，分类走命名推断。
      */
     private val handbook = mapOf(
-        // ═══════════════ 小程序工程（工作室：HTML + Page() + native.* 桥）═══════════════
+        // ═══════════════ Web 应用工程（HTML + Page() + native.* 桥）═══════════════
         "miniapp" to ToolInfo(
             name = "miniapp",
             category = ToolCategory.GENUI,
-            description = "小程序：创建/写入/读取/运行 Web 应用工程（app.json 多页面路由 + HTML + Page() 运行时 + native.* 原生桥），产物就地渲染成对话内小程序卡；也支持 save（整段 HTML 存成工程）、wrap（js/python/css 包装成可渲染页面）",
+            description = "Web 应用：创建/写入/读取/运行 Web 应用工程（app.json 多页面路由 + HTML + Page() 运行时 + native.* 原生桥），产物就地渲染成对话内 Web 应用卡；也支持 save（整段 HTML 存成工程）、wrap（js/python/css 包装成可渲染页面）",
             useCases = listOf(
-                "做个小程序", "在这儿做个小程序", "建一个小程序工程", "要能存数据的小程序",
-                "要能调本地能力的小程序", "小程序怎么跑起来", "改一下这个小程序", "小程序手册",
-                "把这个页面存成小程序", "写个 Python 小工具跑起来", "导入一个 HTML 应用"
+                "做个 Web 应用", "在这儿做个 Web 应用", "建一个 Web 应用工程", "要能存数据的 Web 应用",
+                "要能调本地能力的 Web 应用", "Web 应用怎么跑起来", "改一下这个 Web 应用", "Web 应用手册",
+                "把这个页面存成 Web 应用", "写个 Python 小工具跑起来", "导入一个 HTML 应用"
             ),
             examples = listOf(
                 "miniapp(action=\"manual\")",
@@ -88,7 +88,7 @@ object ToolCapabilityDirectory {
                 "topic" to "manual 主题：compare/studio/native/errors"
             ),
             tips = listOf(
-                "用户说「做个小程序 / 在这儿做个小程序」→ **就用它**，ZorvAI 自己会写小程序。",
+                "用户说「做个 Web 应用 / 在这儿做个 Web 应用」→ **就用它**，ZorvAI 自己会写 Web 应用。",
                 "**create 之后必须再 run 一次**，否则界面根本没交付（用户什么都看不到）。",
                 "run 的结果会自动内嵌进对话流渲染；**run 完不要再自己写一份 HTML**（那是第二块画布）。",
                 "动手前先读手册：miniapp(action=\"manual\") 或 topic=\"studio\""
@@ -121,9 +121,9 @@ object ToolCapabilityDirectory {
                 "prompt" to "可选：进去就执行的界面需求（**必须自包含**：GenUI Agent 看不到本对话历史）。留空只打开界面"
             ),
             tips = listOf(
-                "交付的是**原生控件**（不是网页、不是 HTML），这是它和小程序的本质区别。",
+                "交付的是**原生控件**（不是网页、不是 HTML），这是它和 Web 应用的本质区别。",
                 "它是**独立全屏应用**，有自己的对话页/历史/宠物与右侧抽屉；模型配置、人格灵魂、工具集全部沿用 ZorvAI 主设置。",
-                "用户说「小程序 / 网页 / HTML」→ 用 `miniapp` 或 ```html 围栏，不要开它。",
+                "用户说「Web 应用 / 网页 / HTML」→ 用 `miniapp` 或 ```html 围栏，不要开它。",
                 "prompt 要写清「做什么 + 要哪些功能 + 有哪些数据」，写成「做那个」等于没写。",
                 "调用后本轮立即收尾，不要再补 HTML 或调别的画型工具。"
             ),
@@ -769,11 +769,11 @@ object ToolCapabilityDirectory {
         "workbench" to ToolInfo(
             name = "workbench",
             category = ToolCategory.AI_CAPABILITIES,
-            description = "创建完整多文件项目（已合入统一的「小程序」（本工具为兼容别名，转发到 miniapp））",
+            description = "创建完整多文件项目（已合入统一的「Web 应用」（本工具为兼容别名，转发到 miniapp））",
             useCases = listOf("做个计算器", "写个多文件项目", "创建前后端分离项目", "做个完整的XX功能"),
             examples = listOf("workbench(action=\"create\", name=\"calculator\", files=[{path:\"index.html\", content:\"...\"}])"),
             parameters = mapOf("action" to "create/run/edit/save/wrap", "name" to "项目名", "files" to "文件列表", "entry" to "入口文件"),
-            tips = listOf("已合入统一的「小程序」，工程统一存放在 filesDir/miniapp/", "自动合并CSS/JS到HTML", "运行后渲染在对话框", "优先用 miniapp 工具，多出路由与 native.* 原生桥"),
+            tips = listOf("已合入统一的「Web 应用」，工程统一存放在 filesDir/miniapp/", "自动合并CSS/JS到HTML", "运行后渲染在对话框", "优先用 miniapp 工具，多出路由与 native.* 原生桥"),
             relatedTools = listOf("miniapp", "run_code", "workspace_write"),
             priority = 5
         ),
@@ -1064,7 +1064,7 @@ object ToolCapabilityDirectory {
     private fun inferCategory(name: String): ToolCategory {
         return when {
             name in setOf("ui_dsl_spec", "ui_validate") -> ToolCategory.DYNAMIC_UI
-            // 生成式 UI 画布 + 小程序工程：归一类（都是"交付一件界面"的能力，查起来在同一个篮子里）
+            // 生成式 UI 画布 + Web 应用工程：归一类（都是"交付一件界面"的能力，查起来在同一个篮子里）
             name.startsWith("genui_") || name == "miniapp" -> ToolCategory.GENUI
             name.startsWith("workspace_") -> ToolCategory.WORKSPACE
             name.startsWith("aci_") -> ToolCategory.APP_MANAGEMENT

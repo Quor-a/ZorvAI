@@ -79,10 +79,10 @@ import com.ai.assistance.quro.kaleidobox.android.KaleidoAppContract
  * 工具中心（能力聚合入口）。
  *
  * 把此前的分散能力入口归一到一个屏：
- * - 终端 / 小程序 / CMS / 工具箱：已有独立屏，点击直接经 [onLaunch] 打开；
+ * - 终端 / Web 应用 / CMS / 工具箱：已有独立屏，点击直接经 [onLaunch] 打开；
  * - 隔离沙箱（[QuroSandboxTool]）：内联命令面板；
  * - 私有数据库（[QuroPrivateDbTool]）：内联只读查询面板；
- * - 小程序：列出 filesDir/miniapp 下的项目，点击用 WebView 渲染 index.html。
+ * - Web 应用：列出 filesDir/miniapp 下的项目，点击用 WebView 渲染 index.html。
  */
 @Composable
 fun QuroToolCenterScreen(
@@ -110,10 +110,10 @@ fun QuroToolCenterScreen(
                 text = if (selected == null) "工具中心" else                 when (selected) {
                     "sandbox" -> "隔离沙箱"
                     "db" -> "私有数据库"
-                    "workbench" -> "小程序"
+                    "workbench" -> "Web 应用"
                     "vispro" -> "可视化编程"
                     "flow" -> "节点编辑器"
-                    "miniapp" -> "小程序"
+                    "miniapp" -> "Web 应用"
                     "kaleidobox" -> "工具包运行器"
                     "pkgmgr" -> "包管理"
                     "plugins" -> "插件"
@@ -146,7 +146,7 @@ fun QuroToolCenterScreen(
 private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val cards = listOf(
-        Triple("miniapp", "小程序", "Web 应用工程：AI 写 app.json + 多页面 HTML，native.* 原生桥调用真·Android 能力；支持导入 HTML、Python/JS/CSS 直接跑；可在对话框预览"),
+        Triple("miniapp", "Web 应用", "Web 应用工程：AI 写 app.json + 多页面 HTML，native.* 原生桥调用真·Android 能力；支持导入 HTML、Python/JS/CSS 直接跑；可在对话框预览"),
         Triple("miniapp_sdk", "小程序 (原生引擎)", "移植自 Quor-a/GenUI 的原生小程序引擎：自研 C++ JS 引擎 + WXML/WXSS + Flex 布局 + Canvas/GLES 自绘渲染，微信标准范式；AI 用 miniapp_sdk 工具生成工程，这里直接渲染"),
         Triple("toolbox", "工具箱", "文件管理 / 浏览器 / IDE"),
         Triple("pkgmgr", "包管理", "apt/apk/dnf/pacman 安装/卸载/升级/查询软件"),
@@ -805,7 +805,7 @@ private fun NodeEditorPanel(
 }
 
 // ---------------------------------------------------------------------------
-// 小程序：完整移植 MiniAppFramework，AI 用 miniapp 工具写入的工程在此渲染
+// Web 应用：完整移植 MiniAppFramework，AI 用 miniapp 工具写入的工程在此渲染
 // ---------------------------------------------------------------------------
 
 @Composable
@@ -825,7 +825,7 @@ private fun MiniAppPanel(
     val engineRef = remember { mutableStateOf<MiniAppEngine?>(null) }
     val scope = rememberCoroutineScope()
 
-    // 导入本地 HTML 为小程序工程（合体前「小程序」=workbench 面板的能力，保留在此）
+    // 导入本地 HTML 为 Web 应用工程（合体前 workbench 面板的能力，保留在此）
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val rawName = runCatching {
@@ -855,7 +855,7 @@ private fun MiniAppPanel(
         }
     }
 
-    // 系统返回键：小程序内部有多页历史时先在小程序内返回（engine.handleBack），否则退回工程列表
+    // 系统返回键： Web 应用内部有多页历史时先在 Web 应用内返回（engine.handleBack），否则退回工程列表
     BackHandler(enabled = current != null) {
         val handled = engineRef.value?.handleBack() ?: false
         if (!handled) { current = null; engineRef.value = null }
@@ -864,7 +864,7 @@ private fun MiniAppPanel(
     Column(Modifier.fillMaxSize()) {
         if (current == null) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("小程序", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
+                Text("Web 应用", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
                 TextButton(onClick = { importLauncher.launch("text/html") }) { Text("导入 HTML") }
                 TextButton(onClick = {
                     scope.launch(Dispatchers.IO) {
@@ -875,7 +875,7 @@ private fun MiniAppPanel(
             }
             Spacer(Modifier.height(8.dp))
             if (projects.isEmpty()) {
-                Text("还没有小程序。点「新建示例」或「导入 HTML」，也可以让 AI 用 miniapp 工具创建（在对话框里就能预览）。", color = Muted, modifier = Modifier.padding(16.dp))
+                Text("还没有 Web 应用。点「新建示例」或「导入 HTML」，也可以让 AI 用 miniapp 工具创建（在对话框里就能预览）。", color = Muted, modifier = Modifier.padding(16.dp))
             } else {
                 LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(projects) { name ->
@@ -901,7 +901,7 @@ private fun MiniAppPanel(
                         val html = MiniAppTool().run(context, JSONObject().put("action", "run").put("name", current).toString())
                         withContext(Dispatchers.Main) {
                             if (html.startsWith("❌")) Toast.makeText(context, html, Toast.LENGTH_SHORT).show()
-                            else { onRenderInChat("miniapp", html, current ?: "小程序"); Toast.makeText(context, "已发送到对话框预览", Toast.LENGTH_SHORT).show() }
+                            else { onRenderInChat("miniapp", html, current ?: "Web 应用"); Toast.makeText(context, "已发送到对话框预览", Toast.LENGTH_SHORT).show() }
                         }
                     }
                 }) { Text("对话框预览") }
@@ -969,7 +969,7 @@ private fun MiniAppSdkPanel(
             if (appIds.isEmpty()) {
                 Text(
                     "还没有原生小程序。让 AI 用 miniapp_sdk 工具创建（在对话框里就能生成 WXML/WXSS/JS 工程），" +
-                        "或先在工具中心用「小程序」导入。内置演示 hello / todo 也应出现在列表里。",
+                        "内置演示 hello / todo 也应出现在列表里。",
                     color = Muted,
                     modifier = Modifier.padding(16.dp),
                 )

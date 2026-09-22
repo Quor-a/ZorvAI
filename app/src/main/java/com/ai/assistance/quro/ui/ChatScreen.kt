@@ -737,7 +737,7 @@ fun ChatScreen(
     var docViewerName by remember { mutableStateOf("") }
     // 应用内全屏音乐播放器
     var showMusicPlayer by remember { mutableStateOf(false) }
-    // 工具中心（能力聚合入口：终端/小程序/CMS/工具箱/沙箱/私有库）
+    // 工具中心（能力聚合入口：终端/Web 应用/CMS/工具箱/沙箱/私有库）
     var showToolCenter by remember { mutableStateOf(false) }
     // 工具中心初始进入的子面板（供 AI 经 ui_control(open,target=vispro|node_editor|miniapp 等) 直达）
     var toolCenterInitial by remember { mutableStateOf<String?>(null) }
@@ -952,11 +952,11 @@ fun ChatScreen(
                                 theme = ""
                             )
                             // v1057 修复：AI 经 ui_control(action:"widget", type:"miniapp", value:"<html>")
-                            // 渲染小程序，之前走 else→InfoCard 被当纯文本（HTML 整段显示）。这里直接构造
+                            // 渲染 Web 应用，之前走 else→InfoCard 被当纯文本（HTML 整段显示）。这里直接构造
                             // MiniAppCard，复用与 ui_widget 完全一致的 onCard→气泡→MiniAppCardView 运行时通路。
                             "miniapp" -> com.ai.assistance.quro.core.cards.QuroChatCard.MiniAppCard(
                                 id = event.id.ifBlank { "mini_${System.currentTimeMillis()}" },
-                                title = event.label.ifBlank { "小程序（AI 生成）" },
+                                title = event.label.ifBlank { "Web 应用（AI 生成）" },
                                 html = event.value,
                                 config = emptyMap(),
                             )
@@ -1988,7 +1988,7 @@ fun ChatScreen(
             }
         }
 
-        // 工具中心（能力聚合入口：终端/小程序/CMS/工具箱/沙箱/私有库）
+        // 工具中心（能力聚合入口：终端/Web 应用/CMS/工具箱/沙箱/私有库）
         if (showToolCenter) {
             BackHandler { showToolCenter = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
@@ -2044,7 +2044,7 @@ fun ChatScreen(
                         )
                         showToolCenter = false
                     },
-                    // 工具中心「AI 生成小程序」：把诉求作为用户消息发给 AI（AI 会用 workbench 工具落地）
+                    // 工具中心「AI 生成 Web 应用」：把诉求作为用户消息发给 AI（AI 会用 workbench 工具落地）
                     onAskAi = { prompt ->
                         send(prompt)
                         showToolCenter = false
@@ -3355,7 +3355,7 @@ private fun MessageRow(
                                 is MsgBlock.Table -> RenderTable(blk.header, blk.rows, scaled, textColor, onOpenLink)
                                 is MsgBlock.Code -> CodeBlock(lang = blk.lang, code = blk.code, scaled = scaled, onSend = onSend)
                                 is MsgBlock.MiniApp -> {
-                                    // ```miniapp 围栏：HTML 小程序（AI 自写 HTML+JS+CSS）→ WebView 渲染。
+                                    // ```miniapp 围栏：HTML Web 应用（AI 自写 HTML+JS+CSS）→ WebView 渲染。
                                     // 旧版还有第二种内容——`zorv-miniapp:<app_id>` 原生小程序标记（微信语法
                                     // WXML/WXSS/JS，由自研引擎 miniapp-sdk 就地渲染）。该引擎与整套旧 GenUI
                                     // 已一并删除，故这条分支（含 NATIVE_MINIAPP_PREFIX 标记解析）随之移除：
@@ -3363,7 +3363,7 @@ private fun MessageRow(
                                     QuroChatCardView(
                                         QuroChatCard.MiniAppCard(
                                             id = "mini_" + blk.html.hashCode().toString(36).replace("-", "m"),
-                                            title = "小程序（AI 生成）",
+                                            title = "Web 应用（AI 生成）",
                                             html = blk.html,
                                             config = emptyMap(),
                                         ),
@@ -5748,7 +5748,7 @@ private fun SettingsSheetContent(
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Info, "组件画廊", "可视化组件库：卡片 / 按钮 / 输入 / 交互 / 覆盖层", "", onOpenComponentGallery, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Extension, "插件运行时", "小程序式插件 Demo", "", onOpenPlugins, scaled)
+            SetRowClickable(Icons.Filled.Extension, "插件运行时", "Web 应用式插件 Demo", "", onOpenPlugins, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Person, "灵魂注入", "灵魂注入 · 灵魂卡 · 记忆库", "", onManagePersona, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
@@ -6493,7 +6493,7 @@ private sealed class MsgBlock {
     data class Text(val text: String) : MsgBlock()
     data class Code(val lang: String, val code: String) : MsgBlock()
     data class Mermaid(val source: String) : MsgBlock()
-    /** 小程序（MiniApp）：```miniapp 围栏或含 bridge 运行时的 HTML，渲染为可交互小程序页面（WebView 运行时）。 */
+    /** Web 应用（MiniApp）：```miniapp 围栏或含 bridge 运行时的 HTML，渲染为可交互 Web 应用页面（WebView 运行时）。 */
     data class MiniApp(val html: String) : MsgBlock()
     /** 动态 UI：```quro-ui 围栏，渲染为原生可交互控件（非 WebView）。 */
     data class DynamicUi(val source: String) : MsgBlock()
@@ -6758,14 +6758,14 @@ private fun parseBlocks(text: String, selfCard: Boolean = true): List<MsgBlock> 
             // A2UI JSONL 信封（application/a2ui+json）：流式声明式数据，由原生 A2UI 解释器增量渲染
             lang.equals("a2ui", true) || lang.equals("a2ui+json", true) ->
                 blocks.add(MsgBlock.DynamicUi(code))
-            // 小程序：```miniapp 围栏直接渲染为可交互小程序页面（bridge.js 运行时）
+            // Web 应用：```miniapp 围栏直接渲染为可交互 Web 应用页面（bridge.js 运行时）
             lang.equals("miniapp", true) || lang.equals("mini", true) ->
                 blocks.add(MsgBlock.MiniApp(code))
             // 动态 UI（quro-ui 固定 DSL）：AI 写的 UI DSL 渲染为原生可交互控件（可回传表单值给模型）
             // 内容兜底：语言标签写错/没写时，只要内容是合法动态 UI 节点树也照样渲染。
             isDynamicUiLang(lang) || looksLikeQuroUiDsl(code) ->
                 blocks.add(MsgBlock.DynamicUi(code))
-            // 兜底：AI 把小程序 HTML 写成 ```html 围栏却带了 bridge 运行时标记，也按小程序渲染
+            // 兜底：AI 把 Web 应用 HTML 写成 ```html 围栏却带了 bridge 运行时标记，也按 Web 应用渲染
             isMiniAppHtml(lang, code) ->
                 blocks.add(MsgBlock.MiniApp(code))
             else ->
@@ -6879,11 +6879,11 @@ private fun looksLikeQuroUiDsl(code: String): Boolean {
 }
 
 /**
- * 判断一段「HTML 围栏代码」是否为小程序（MiniApp）源码、应走小程序渲染而非纯代码块。
+ * 判断一段「HTML 围栏代码」是否为 Web 应用（MiniApp）源码、应走 Web 应用渲染而非纯代码块。
  * 触发条件（同时满足，避免误伤普通网页）：
  *  - 语言是 html/htm/markup（或为空，即 ``` 裸围栏里是 HTML）；
  *  - 内容含 bridge 运行时入口 `Page(` 且至少带一个 MiniApp 绑定标记（data-bind / data-action / setData）。
- * `data-bind` / `data-action` / `setData` 是 assets/bridge/bridge.js 小程序运行时专属语法，普通网页几乎不会同时出现。
+ * `data-bind` / `data-action` / `setData` 是 assets/bridge/bridge.js Web 应用运行时专属语法，普通网页几乎不会同时出现。
  */
 private fun isMiniAppHtml(lang: String, code: String): Boolean {
     val l = lang.trim().lowercase()
@@ -6920,7 +6920,7 @@ private fun parseTail(seg: String): List<MsgBlock> {
                 // 流式输出中 a2ui 信封围栏还没闭合时，也实时渲染（边写边出界面）
                 lang.equals("a2ui", true) || lang.equals("a2ui+json", true) ->
                     out.add(MsgBlock.DynamicUi(after))
-                // 流式输出中 miniapp 围栏还没闭合时，也实时渲染（边写边出小程序）
+                // 流式输出中 miniapp 围栏还没闭合时，也实时渲染（边写边出 Web 应用）
                 lang.equals("miniapp", true) || lang.equals("mini", true) ->
                     out.add(MsgBlock.MiniApp(after))
                 // 流式输出中 quro-ui 围栏还没闭合时，也实时渲染（边写边出界面）
@@ -7222,7 +7222,7 @@ fun handleDynamicUiAction(
 
         // ─── 多层渲染 / 深链导航（v1.0.82 新增）───
 
-        // 打开 ZorvAI 内置界面（终端/模型配置/可视化编程/小程序/工具中心等）：经 UI 控制总线打开。
+        // 打开 ZorvAI 内置界面（终端/模型配置/可视化编程/Web 应用/工具中心等）：经 UI 控制总线打开。
         is QuroOpenScreenAction -> {
             val target = action.target.ifBlank { values["target"] ?: "" }
             if (target.isBlank()) {

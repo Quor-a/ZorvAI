@@ -6,12 +6,12 @@ import com.ai.assistance.quro.core.tools.QuroTool
 import org.json.JSONObject
 
 /**
- * 「小程序」工具的**别名外壳**（工具名 workbench，仅用于兼容旧调用）。
+ * 「Web 应用」工具的**别名外壳**（工具名 workbench，仅用于兼容旧调用）。
  *
  * 历史上工具中心有两个并存的入口：
- *  · 「小程序」（原 workbench）→ 单入口多文件，无路由、无原生桥
- *  · 「小程序」（统一 Web 应用工具，吸收原「小程序工作室」/workbench）→ app.json 路由 + native.* 原生桥
- * 二者现已合并为**唯一的「小程序」**（工具 id = miniapp），工程统一存放在 filesDir/miniapp/。
+ *  · 「Web 应用」（原 workbench）→ 单入口多文件，无路由、无原生桥
+ *  · 「Web 应用」（统一 Web 应用工具，吸收原「Web 应用工作室」/workbench）→ app.json 路由 + native.* 原生桥
+ * 二者现已合并为**唯一的「Web 应用」**（工具 id = miniapp），工程统一存放在 filesDir/miniapp/。
  *
  * 这里不删旧工具名（历史对话、能力目录、旧手册都还可能引用它），
  * 而是把每个 action 翻译后转发给 [MiniAppTool]，行为完全一致。
@@ -19,15 +19,15 @@ import org.json.JSONObject
  */
 class MiniAppAliasTool : QuroTool {
     override val name = "workbench"
-    override val description = """（已与「小程序」合并，本工具是 miniapp 的别名，仅保留用于兼容旧调用）
+    override val description = """（已与「Web 应用」合并，本工具是 miniapp 的别名，仅保留用于兼容旧调用）
 
 请优先使用 miniapp 工具，它包含本工具的全部能力并多出：app.json 多页面路由、
 native.* 原生桥（存储/设备/网络/SQLite/定位/加密/第三方 App 关联启动）、save/wrap/manual。
 
 保留的旧操作（内部转发到 miniapp）：create / edit / run / list / get / delete / clean
-新增转发：save（整段 HTML 存成小程序）、wrap（js/python/css 包装成可渲染页面）
+新增转发：save（整段 HTML 存成 Web 应用）、wrap（js/python/css 包装成可渲染页面）
 
-工程统一存放在手机私有目录 filesDir/miniapp/<name>/，与工具中心「小程序」面板共享同一份文件。"""
+工程统一存放在手机私有目录 filesDir/miniapp/<name>/，与工具中心「Web 应用」面板共享同一份文件。"""
     override val parametersJson = """{
         "type":"object",
         "properties":{

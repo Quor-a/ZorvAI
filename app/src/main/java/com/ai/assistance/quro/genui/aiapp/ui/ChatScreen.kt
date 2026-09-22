@@ -320,7 +320,7 @@ fun ChatScreen(
                             viewModel.send(label)
                         }
                     },
-                    // html 通道「保存为小程序」：落盘到 filesDir/miniapp/<工程名>/，与工具中心「小程序」同源
+                    // html 通道「保存为 Web 应用」：落盘到 filesDir/miniapp/<工程名>/，与工具中心「Web 应用」同源
                     onSaveAsMiniApp = { title, html -> viewModel.saveChannelAsMiniApp(title, html) }
                 )
                 if (state.pageStack.isNotEmpty() || true) {
