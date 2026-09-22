@@ -294,6 +294,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // 小程序：AI 直接 CRUD/运行小程序工程（HTML + Page() 运行时 + native.* 原生桥）。
     // 产物经 ```miniapp 围栏回到对话框气泡渲染；工具箱「小程序」面板与它共享同一份工程文件。
     r.register(MiniAppTool())
+    // 原生小程序引擎（miniapp-sdk / com.yuanbao.miniapp，移植自 Quor-a/GenUI）：自研 C++ JS 引擎 + WXML/WXSS
+    // 原生渲染。与上面的 WebView「小程序」并列两套引擎；本工具让 AI 生成/治理 WXML 工程，
+    // 渲染由工具中心「小程序（原生引擎）」面板的 MiniAppView 完成。
+    r.register(MiniAppSdkTool())
     // 内置的完整 GenUI-Agent（独立应用，GenUI JSON DSL → 原生 Compose 组件，530+ 组件）。
     // 与上面的 miniapp 是**不同范式**的两套东西：miniapp 走 HTML/WXML 引擎，本工具走原生 Compose。
     r.register(GenUiAgentOpenTool())

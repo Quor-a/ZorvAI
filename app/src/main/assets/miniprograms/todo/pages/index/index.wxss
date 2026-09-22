@@ -1,0 +1,88 @@
+.page {
+  padding: 32rpx;
+  background-color: #ffffff;
+}
+.header {
+  font-size: 44rpx;
+  font-weight: bold;
+  color: #1f2430;
+}
+.input-row {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 32rpx;
+}
+.input {
+  width: 480rpx;
+  height: 80rpx;
+  padding: 0 20rpx;
+  background-color: #f3f5f9;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  color: #222222;
+}
+.add {
+  width: 160rpx;
+  height: 80rpx;
+  margin-left: 16rpx;
+  background-color: #2b6cff;
+  border-radius: 12rpx;
+  color: #ffffff;
+  font-size: 28rpx;
+}
+.list {
+  margin-top: 28rpx;
+  height: 720rpx;
+  overflow: scroll;
+}
+.todo {
+  flex-direction: row;
+  align-items: center;
+  padding: 18rpx 0;
+  border-bottom-width: 1rpx;
+  border-bottom-color: #f0f1f4;
+}
+.check {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 24rpx;
+  background-color: #eef1f6;
+  justify-content: center;
+  align-items: center;
+}
+.check-text {
+  color: #2b6cff;
+  font-size: 28rpx;
+}
+.todo-text {
+  margin-left: 20rpx;
+  font-size: 30rpx;
+  color: #2a2f3a;
+}
+.done {
+  color: #a8adb5;
+}
+.del {
+  width: 64rpx;
+  height: 64rpx;
+  margin-left: auto;
+  background-color: #ffece8;
+  border-radius: 10rpx;
+  color: #ff5b4a;
+  font-size: 30rpx;
+}
+.footer {
+  margin-top: 24rpx;
+}
+.stat {
+  font-size: 26rpx;
+  color: #8a9099;
+}
+.clear {
+  margin-top: 16rpx;
+  height: 76rpx;
+  background-color: #f3f5f9;
+  border-radius: 12rpx;
+  color: #444444;
+  font-size: 28rpx;
+}

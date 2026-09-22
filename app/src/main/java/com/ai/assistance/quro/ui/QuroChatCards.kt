@@ -2023,16 +2023,17 @@ private fun NetworkImageBubble(url: String, modifier: Modifier = Modifier) {
 /**
  * AI 自写「小程序」卡片（MiniApp）：AI 生成完整 HTML + JS + CSS，客户端用 **WebView** 渲染。
  *
- * ⚠️ 与旧实现的关键差异（2026-09 移除自研小程序引擎后）：
+ * ⚠️ 与旧实现的关键差异：
  *  · 旧版有两条路：① HTML 小程序走 WebView；② **原生小程序**（微信语法 WXML/WXSS/JS，
- *    config.app_id）走小程序工具（miniapp）/ 工具中心「小程序」面板渲染；旧的「原生小程序」自研引擎（miniapp-sdk）已随旧 GenUI 一起移除。
- *  · GenUI 画布（quro/genui/app）、小程序（miniapp 工具）
- *    已随「删除全部旧 GenUI + 内置新 GenUI-Agent」**整体移除**。
+ *    config.app_id）走小程序的**工具中心面板**渲染。旧的「原生小程序」自研引擎（miniapp-sdk，
+ *    来自上游 Quor-a/GenUI）已重新接入：现作为工具中心「小程序（原生引擎）」面板 + 对话框 miniapp_sdk 工具，
+ *    由 AI 生成 WXML/WXSS/JS 工程、面板用 MiniAppView 原生渲染（不再内嵌到对话气泡）。
+ *  · GenUI 画布（quro/genui/app）已随「删除全部旧 GenUI + 内置新 GenUI-Agent」整体移除。
  *  · 因此本卡片现在只保留 HTML 路径：带 app_id 的历史原生小程序卡片会退化成
- *    「HTML 为空」的提示，不再尝试拉起已不存在的引擎（原来的「引擎初始化中…」死循环也没了）。
+ *    「HTML 为空」的提示，不再尝试拉起已不存在的内嵌引擎（原来的「引擎初始化中…」死循环也没了）。
  *
- * 原生可交互界面请改用内置的 GenUI Agent（工具 genui_agent_open）——它用 GenUI JSON DSL
- * 直接渲染成原生 Compose 组件，不需要 WebView，也不需要自研 JS 引擎。
+ * 原生可交互界面两条路：① 工具中心「小程序（原生引擎）」+ miniapp_sdk 工具（WXML 范式）；
+ * ② 内置的 GenUI Agent（工具 genui_agent_open，GenUI JSON DSL 直接渲染成原生 Compose 组件）。
  */
 @Composable
 private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
@@ -2065,12 +2066,14 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
         },
     ) {
         if (card.html.isBlank()) {
-            // 历史遗留：带 config.app_id 的原生小程序卡片（自研引擎已移除，无 HTML 可渲染）。
+            // 历史遗留：带 config.app_id 的原生小程序卡片（内嵌引擎已移除，无 HTML 可渲染）。
+            // 原生小程序现改走工具中心「小程序（原生引擎）」面板 + miniapp_sdk 对话框工具。
             Column(Modifier.fillMaxWidth().padding(4.dp)) {
                 Text("（无小程序内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
                 Text(
-                    "这是旧「原生小程序」卡片，其渲染引擎（miniapp-sdk）已随旧 GenUI 一起移除。"
-                        + "需要原生可交互界面请让 AI 用 genui_agent_open 打开内置 GenUI Agent。",
+                    "这是旧「原生小程序」卡片，内嵌引擎已移除。原生小程序现请走工具中心"
+                        + "「小程序（原生引擎）」面板（让 AI 用 miniapp_sdk 工具生成 WXML/WXSS/JS 工程）。"
+                        + "需要 GenUI 原生界面请让 AI 用 genui_agent_open 打开内置 GenUI Agent。",
                     color = cs.onSurfaceVariant,
                     fontSize = 10.sp,
                     modifier = Modifier.padding(top = 4.dp),
