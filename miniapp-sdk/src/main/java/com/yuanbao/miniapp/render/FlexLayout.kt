@@ -94,8 +94,7 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
             else -> {
                 // container: children measured first for intrinsic size
                 val innerW = contentW ?: max(0f, availW - padH)
-                var intrinsicW = 0f
-                var intrinsicH = 0f
+                val innerH = max(0f, availH - padV)
                 val row = isRow(st)
                 // 页面根（ROOT）尺寸就是视口，对子元素而言是"已确定尺寸"的父级。
                 // 否则 `.page{height:100%}` 被判成 auto（父高未知，百分比退化），
@@ -106,21 +105,77 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
                 // 否则「flex 容器 + width:25%/50% 子项」会塌成一根竖条（截图 game2048 病态）。
                 val childWDefinite = specifiedW != null || rootNode || st.display == Display.BLOCK || st.display == Display.FLEX
                 val childHDefinite = specifiedH != null || rootNode
+                val measured = ArrayList<RenderNode>(node.children.size)
                 for (c in node.children) {
                     measure(c, innerW, availH, childWDefinite, childHDefinite)
                     // 注意：绝对定位子元素仍参与父级内在尺寸计算。
                     // 严格 CSS 里它不该参与，但端上大量 AI 生成页面用「父容器不写高度 +
                     // 绝对定位子元素」撑开布局；一旦排除，父高变 0，而 painter 对
                     // height<=0 的节点直接跳过 → 整棵子树不绘制（表现为整块空白）。
-                    val cm = marginOf(c, innerW, availH)
-                    val cw = c.width + cm.left + cm.right
-                    val ch = c.height + cm.top + cm.bottom
+                    // display:none 的子项不参与内在尺寸（与 layout 阶段一致）。
+                    if (c.style.display != Display.NONE) measured.add(c)
+                }
+                var intrinsicW = 0f
+                var intrinsicH = 0f
+                if (st.flexWrap == FlexWrap.WRAP && measured.isNotEmpty()) {
+                    // 换行容器的内在尺寸必须按「行」累加交叉轴，不能把所有子项当成一行。
+                    // 旧实现（row 分支 intrinsicH = max(子高)）把 4x4 网格的容器高算成「一行」，
+                    // 于是后继兄弟（「重新开始」按钮 / 2048 方向盘）被排在网格第 1 行之后，
+                    // 直接压在网格第 2~4 行上（截图 memory-match / game2048 的错位叠加）。
+                    // row 旧实现还把 intrinsicW 累加成所有子项之和（4 列 = 400% 容器宽），
+                    // 靠 min(availW, ...) 才没爆；这里改成「最宽一行」，语义与 CSS 一致。
+                    val mainSize = if (row) innerW else innerH
+                    val crossGap = if (row) (resolveOrNull(st.gapRow, innerH) ?: 0f)
+                                   else (resolveOrNull(st.gapColumn, innerW) ?: 0f)
+                    val lineMains = ArrayList<Float>()
+                    val lineCrosses = ArrayList<Float>()
+                    var lineMain = 0f
+                    var lineCross = 0f
+                    var open = false
+                    for (c in measured) {
+                        val cm = marginOf(c, innerW, availH)
+                        val cmain = if (row) c.width + cm.left + cm.right else c.height + cm.top + cm.bottom
+                        val ccross = if (row) c.height + cm.top + cm.bottom else c.width + cm.left + cm.right
+                        // +1f 容差与 layout 阶段的分行阈值保持一致（精确百分比浮点差不应多分一行）
+                        if (open && lineMain + cmain > mainSize + 1f) {
+                            lineMains.add(lineMain)
+                            lineCrosses.add(lineCross)
+                            lineMain = 0f
+                            lineCross = 0f
+                            open = false
+                        }
+                        lineMain += cmain
+                        lineCross = max(lineCross, ccross)
+                        open = true
+                    }
+                    if (open) {
+                        lineMains.add(lineMain)
+                        lineCrosses.add(lineCross)
+                    }
+                    val lineCount = lineMains.size
+                    val mainTotal = lineMains.maxOrNull() ?: 0f
+                    var crossTotal = 0f
+                    for (lc in lineCrosses) crossTotal += lc
+                    if (lineCount > 1) crossTotal += (lineCount - 1) * crossGap
                     if (row) {
-                        intrinsicW += cw
-                        intrinsicH = max(intrinsicH, ch)
+                        intrinsicW = mainTotal
+                        intrinsicH = crossTotal
                     } else {
-                        intrinsicW = max(intrinsicW, cw)
-                        intrinsicH += ch
+                        intrinsicH = mainTotal
+                        intrinsicW = crossTotal
+                    }
+                } else {
+                    for (c in measured) {
+                        val cm = marginOf(c, innerW, availH)
+                        val cw = c.width + cm.left + cm.right
+                        val ch = c.height + cm.top + cm.bottom
+                        if (row) {
+                            intrinsicW += cw
+                            intrinsicH = max(intrinsicH, ch)
+                        } else {
+                            intrinsicW = max(intrinsicW, cw)
+                            intrinsicH += ch
+                        }
                     }
                 }
                 node.width = specifiedW ?: min(availW, intrinsicW + padH)
