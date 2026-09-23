@@ -39,6 +39,7 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
             node.width = 0f; node.height = 0f
             return
         }
+        resolveFontStyle(st)
         // CSS 规范：显式 display:flex 的容器 flex-direction 初始值是 row；
         // 块级容器（未写 display，微信 view 默认）纵向堆叠（v0.26.7：修全屏横排 bug）
         if (!st.flexDirectionSet) {
@@ -100,7 +101,10 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
                 // 否则 `.page{height:100%}` 被判成 auto（父高未知，百分比退化），
                 // 页面背景只包住内容高度 → 表现为"背景被围栏框住、不满屏"，flex:1 的页脚也失效。
                 val rootNode = node.type == NodeType.ROOT
-                val childWDefinite = specifiedW != null || rootNode
+                // 块级/弹性容器（display:block/flex）在自动宽度下会填满可用宽度，
+                // 其内容的百分比尺寸应相对该可用宽度解析，而不是退化为 auto。
+                // 否则「flex 容器 + width:25%/50% 子项」会塌成一根竖条（截图 game2048 病态）。
+                val childWDefinite = specifiedW != null || rootNode || st.display == Display.BLOCK || st.display == Display.FLEX
                 val childHDefinite = specifiedH != null || rootNode
                 for (c in node.children) {
                     measure(c, innerW, availH, childWDefinite, childHDefinite)
@@ -133,6 +137,16 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
         if (maxW != null) node.width = min(node.width, maxW)
         if (minH != null) node.height = max(node.height, minH)
         if (maxH != null) node.height = min(node.height, maxH)
+    }
+
+    /**
+     * 在 layout 阶段把 rpx 单位的字号/行高换算成 px（仅当解析时标记过 rpx）。
+     * 就地改写 st.fontSize/st.lineHeight，使 measure 与 CanvasPainter/GLRenderer 都看到同一份 px。
+     * 改写后置标记 false，保证节点只被换算一次（measure 每节点只跑一次，双保险）。
+     */
+    private fun resolveFontStyle(st: Style) {
+        if (st.fontSizeIsRpx) { st.fontSize *= rpxRatio; st.fontSizeIsRpx = false }
+        if (st.lineHeightIsRpx) { st.lineHeight *= rpxRatio; st.lineHeightIsRpx = false }
     }
 
     // ---------------------------------------------------------------- layout
@@ -182,7 +196,9 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
             for (c in flow) {
                 val m = marginOf(c, contentW, contentH)
                 val main = (if (row) c.width + m.left + m.right else c.height + m.top + m.bottom)
-                if (current.isNotEmpty() && used + main > mainSizeOf(contentW, contentH, row)) {
+                // +1f 容差：25%/50% 等精确百分比在浮点下可能与容器宽差 1px，
+                // 不应因此换行（否则 4 格 2048 棋盘会多包一行变成 3+1）。
+                if (current.isNotEmpty() && used + main > mainSizeOf(contentW, contentH, row) + 1f) {
                     lines.add(current)
                     current = ArrayList()
                     used = 0f
