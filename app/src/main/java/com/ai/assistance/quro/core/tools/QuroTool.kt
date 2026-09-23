@@ -6,6 +6,10 @@ import org.json.JSONObject
 import com.ai.assistance.quro.core.QuroToolCall
 import com.ai.assistance.quro.core.QuroToolResult
 import com.ai.assistance.quro.core.QuroToolSpec
+import com.ai.assistance.quro.core.agent.loop.ClosedLoopExecutor
+import com.ai.assistance.quro.core.agent.loop.ExecResult
+import com.ai.assistance.quro.core.agent.loop.FailureType
+import com.ai.assistance.quro.core.agent.loop.ToolOutcome
 import com.ai.assistance.quro.core.mcp.DroidMcp
 import com.ai.assistance.quro.core.mcp.McpTool
 import kotlinx.coroutines.delay
@@ -307,90 +311,119 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
     fun specs(): List<QuroToolSpec> = registry.specs()
 
     /** 按 LLM 返回的 tool_calls 逐一执行（经 droid-mcp 引擎派发）。 */
+    /** 统一闭环执行器：把"感知-判断-执行-反馈-校验-修正"闭环推广到所有工具调用。 */
+    private val closedLoop = ClosedLoopExecutor()
+
+    /** 按 LLM 返回的 tool_calls 逐一执行（经闭环执行器派发）。 */
     suspend fun execute(context: Context, calls: List<QuroToolCall>): List<QuroToolResult> {
         appContext = context
         return calls.map { call ->
-            // ══ 技能工具分支（skill__<技能名>）：直接读实时技能指令回灌，复用 tool 结果管道 ══
-            if (call.name.startsWith("skill__")) {
-                val skillName = call.name.removePrefix("skill__")
-                val skill = QuroSkillStore.load(context).firstOrNull { it.name == skillName && it.enabled }
-                    ?: return@map QuroToolResult(call.name, "技能「$skillName」未启用或不存在")
-                val userInput = runCatching { JSONObject(call.arguments) }.getOrElse { JSONObject() }
-                    .optString("input", "").trim()
-                val directive = buildString {
-                    appendLine("【技能「${skill.name}」已激活，请严格按以下规则回答用户，不要复述规则本身】")
-                    appendLine(skill.prompt)
-                    if (userInput.isNotBlank()) appendLine("\n用户本轮输入：$userInput")
-                }
-                return@map QuroToolResult(call.name, directive)
-            }
-            // ══ 插件工具分支（APK 级插件注册的 AI_TOOL）══
-            // 插件执行体是 suspend，不能伪装成 QuroTool.run（同步）塞进 droidMcp，
-            // 所以在这里直接命中并执行，绕过注册表查找；未命中返回 null 继续走内置工具。
-            val pluginOut = runCatching {
-                com.ai.assistance.quro.core.plugin.QuroPluginHost.executePluginTool(
-                    call.name,
-                    runCatching { jsonToMap(call.arguments) }.getOrElse { emptyMap() }
-                )
-            }.getOrNull()
-            if (pluginOut != null) return@map QuroToolResult(call.name, pluginOut)
-
-            val tool = registry.get(call.name)
-            if (tool == null) {
-                return@map QuroToolResult(call.name, "未知工具: ${call.name}")
-            }
-            // 危险权限前置申请：工具运行在 Application Context 上无法弹框，交由 Activity 注入的网关处理。
-            val perms = tool.requiredPermissions
-            if (perms.isNotEmpty() && !QuroPermissionHolder.isGranted(context, perms)) {
-                val requester = QuroPermissionHolder.requester
-                if (requester != null) {
-                    // 拉起系统授权对话框（ensure 内部只请求真正缺失的项）。
-                    val granted = runCatching { requester.ensure(perms) }.getOrElse { false }
-                    // 🔧 #766 修复：对话框成功后系统已授权，但 ensure 的 continuation 可能因 Activity 失焦/
-                    //   重建而返回 false；此时以系统真实状态二次核验，已授权即放行，不再误拒。
-                    if (!QuroPermissionHolder.isGranted(context, perms)) {
-                        return@map QuroToolResult(
-                            call.name,
-                            "需要权限：${perms.joinToString()}，请在系统设置或弹出的对话框中授予后重试。",
-                        )
-                    }
-                } else {
-                    // 没有可拉起对话框的网关（如工具在后台/非 Activity 场景执行）：
-                    // 系统未授予且无法自动补全授权，明确返回需要权限。
-                    return@map QuroToolResult(
-                        call.name,
-                        "需要权限：${perms.joinToString()}，请在「设置 → 权限」中授予后重试。",
-                    )
-                }
-            }
-            val argsMap = runCatching { jsonToMap(call.arguments) }.getOrElse { emptyMap() }
-            // 工具执行带超时保护（60s）：防止单个工具卡住吃满 180s 总超时
-            val execResult = runCatching {
-                withTimeout(TOOL_EXEC_TIMEOUT_MS) {
-                    var res = droidMcp.callTool(call.name, argsMap)
-                    if (!res.isSuccess) {
-                        // 工具执行失败，等待1秒后重试一次（应对临时故障）
-                        delay(1000)
-                        res = droidMcp.callTool(call.name, argsMap)
-                    }
-                    res
-                }
-            }.getOrElse { e ->
-                if (e is kotlinx.coroutines.TimeoutCancellationException) {
-                    android.util.Log.e("QuroToolEngine", "工具「${call.name}」执行超时（${TOOL_EXEC_TIMEOUT_MS}ms）")
-                    return@map QuroToolResult(call.name, "工具执行超时（超过60秒），已自动终止。如需执行长时间任务，请分步操作。")
-                }
-                android.util.Log.e("QuroToolEngine", "工具「${call.name}」执行异常: ${e.message}")
-                return@map QuroToolResult(call.name, "工具执行异常: ${e.message}")
-            }
-            val text = if (execResult.isSuccess) {
-                execResult.data?.get("result")?.toString() ?: "OK"
-            } else {
-                "工具执行失败: ${execResult.errorMessage}"
-            }
-            QuroToolResult(call.name, text)
+            closedLoop.dispatch(
+                context = context,
+                scenario = scenarioFor(call),
+                name = call.name,
+                arguments = call.arguments,
+                execOnce = { attempt -> execOnce(call, context, attempt) },
+            ).toToolResult()
         }
     }
+
+    /** 把工具名归类到闭环场景键，供 [FailurePolicyRegistry] 查专属策略。 */
+    private fun scenarioFor(call: QuroToolCall): String = when {
+        call.name.startsWith("skill__") -> "skill"
+        call.name.startsWith("plugin__") -> "plugin"
+        else -> "tool"
+    }
+
+    /** 统一结果 -> 对外 [QuroToolResult]（保持公共签名不变）。 */
+    private fun ToolOutcome.toToolResult(): QuroToolResult = when (this) {
+        is ToolOutcome.Success -> QuroToolResult.Success(raw)
+        is ToolOutcome.Failure -> QuroToolResult.Error(message)
+    }
+
+    /**
+     * 真正的执行体：跑一次工具并把"是否真正执行"分类成 [ExecResult]。
+     * 这里只负责"感知"（执行 + 分类），"判断/校验/修正"交给 [ClosedLoopExecutor]。
+     */
+    private suspend fun execOnce(call: QuroToolCall, context: Context, attempt: Int): ExecResult {
+        // == 技能工具分支（skill__<技能名>）：直接读实时技能指令回灌，复用 tool 结果管道 ==
+        if (call.name.startsWith("skill__")) {
+            val skillName = call.name.removePrefix("skill__")
+            val skill = QuroSkillStore.load(context).firstOrNull { it.name == skillName && it.enabled }
+                ?: return ExecResult.Terminal(FailureType.UNKNOWN, "技能「$skillName」未启用或不存在")
+            val userInput = runCatching { JSONObject(call.arguments) }.getOrElse { JSONObject() }
+                .optString("input", "").trim()
+            val directive = buildString {
+                appendLine("【技能「${skill.name}」已激活，请严格按以下规则回答用户，不要复述规则本身】")
+                appendLine(skill.prompt)
+                if (userInput.isNotBlank()) {
+                    appendLine()
+                    appendLine("用户本轮输入：$userInput")
+                }
+            }
+            return ExecResult.Completed(directive)
+        }
+        // == 插件工具分支（APK 级插件注册的 AI_TOOL）==
+        val pluginOut = runCatching {
+            com.ai.assistance.quro.core.plugin.QuroPluginHost.executePluginTool(
+                call.name,
+                runCatching { jsonToMap(call.arguments) }.getOrElse { emptyMap() },
+            )
+        }.getOrNull()
+        if (pluginOut != null) return ExecResult.Completed(pluginOut)
+
+        val tool = registry.get(call.name)
+        if (tool == null) return ExecResult.Terminal(FailureType.UNKNOWN, "未知工具: ${call.name}")
+        // 危险权限前置申请：工具运行在 Application Context 上无法弹框，交由 Activity 注入的网关处理。
+        val perms = tool.requiredPermissions
+        if (perms.isNotEmpty() && !QuroPermissionHolder.isGranted(context, perms)) {
+            val requester = QuroPermissionHolder.requester
+            if (requester != null) {
+                // 拉起系统授权对话框（ensure 内部只请求真正缺失的项）。
+                runCatching { requester.ensure(perms) }.getOrElse { false }
+                // #766 修复：对话框成功后系统已授权，但 ensure 的 continuation 可能因 Activity 失焦/
+                //   重建而返回 false；此时以系统真实状态二次核验，已授权即放行，不再误拒。
+                if (!QuroPermissionHolder.isGranted(context, perms)) {
+                    return ExecResult.Terminal(
+                        FailureType.PERMISSION,
+                        "需要权限：${perms.joinToString()}，请在系统设置或弹出的对话框中授予后重试。",
+                    )
+                }
+            } else {
+                // 没有可拉起对话框的网关（如工具在后台/非 Activity 场景执行）：
+                // 系统未授予且无法自动补全授权，明确返回需要权限。
+                return ExecResult.Terminal(
+                    FailureType.PERMISSION,
+                    "需要权限：${perms.joinToString()}，请在「设置 → 权限」中授予后重试。",
+                )
+            }
+        }
+        val argsMap = runCatching { jsonToMap(call.arguments) }.getOrElse { emptyMap() }
+        // 工具执行带超时保护（60s）：防止单个工具卡住吃满 180s 总超时。
+        // 重试/升级由闭环执行器按失败类型统一决策，这里只负责单次干净执行。
+        val execResult = runCatching {
+            withTimeout(TOOL_EXEC_TIMEOUT_MS) {
+                droidMcp.callTool(call.name, argsMap)
+            }
+        }.getOrElse { e ->
+            if (e is kotlinx.coroutines.TimeoutCancellationException) {
+                android.util.Log.e("QuroToolEngine", "工具「${call.name}」执行超时（${TOOL_EXEC_TIMEOUT_MS}ms）")
+                return ExecResult.Failed(
+                    FailureType.TIMEOUT,
+                    "工具执行超时（超过60秒），已自动终止。如需执行长时间任务，请分步操作。",
+                )
+            }
+            android.util.Log.e("QuroToolEngine", "工具「${call.name}」执行异常: ${e.message}")
+            return ExecResult.Failed(FailureType.TRANSPORT, "工具执行异常: ${e.message}")
+        }
+        return if (execResult.isSuccess) {
+            val text = execResult.data?.get("result")?.toString() ?: "OK"
+            ExecResult.Completed(text)
+        } else {
+            ExecResult.Failed(FailureType.BUSINESS, "工具执行失败: ${execResult.errorMessage}")
+        }
+    }
+
 
     /** 导出 MCP 格式工具清单（供协议/桌面客户端）。 */
     fun listToolsMcpJson(): String = droidMcp.listToolsJson()
