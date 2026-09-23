@@ -1931,7 +1931,10 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[arm64-v8a-v1.0.96-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.96/arm64-v8a-v1.0.96-release.apk)**（约 369MB，Release 签名，**最新**）
+- 🟢 **[arm64-v8a-v1.0.97-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.97/arm64-v8a-v1.0.97-release.apk)**（约 371MB，Release 签名，**最新**）
+  - v1.0.97 变更：**新增长程任务编排（Long-Horizon Orchestration）**：落地「策划方案→规划方案→设计方案→执行→校验→修正→交付闸门」任务级闭环；交付闸门在产物不可交付时把原因/建议压回 Agent 继续编排执行，超上限再升级；该能力默认关闭（`taskPlanner`/`deliverabilityJudge` 为 null 时行为完全不变），不影响原有功能。
+
+- 🟢 **[arm64-v8a-v1.0.96-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.96/arm64-v8a-v1.0.96-release.apk)**（约 369MB，Release 签名）
   - v1.0.96 变更：**新增内置 GenUI Agent**（完整 GenUI-Agent，530+ 原生 Compose 组件，复用 ZorvAI 模型配置 / 灵魂人格 / 完整工具集，与原有「Web 应用」「生成式 UI 画布」三套并存）；修复 `:asr` 副进程启动崩溃导致的**端侧语音识别不可用**（[#9](https://github.com/Quor-a/ZorvAI/issues/9)）
 
 ### 能做什么
