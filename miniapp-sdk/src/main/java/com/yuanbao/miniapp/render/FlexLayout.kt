@@ -46,8 +46,11 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
             st.flexDirection = if (st.display == Display.FLEX) FlexDirection.ROW
                                else FlexDirection.COLUMN
         }
+        // CSS 规定 padding 百分比一律相对「包含块宽度」解析（与 margin 一致），不是高度。
+        // 旧实现把 top/bottom 当高度解析 -> padding-bottom:25% 正方形技巧被算成 25% x 容器高，
+        // 单元格被纵向拉成数百 px（截图 game2048/memory-match 单元格过高、控件叠网格的根因）。
         val padH = resolve(st.padding.left, availW) + resolve(st.padding.right, availW)
-        val padV = resolve(st.padding.top, availH) + resolve(st.padding.bottom, availH)
+        val padV = resolve(st.padding.top, availW) + resolve(st.padding.bottom, availW)
 
         // CSS 规范：父尺寸未定义（auto/内容撑开）时，子元素的百分比尺寸退化为 auto。
         // 修复：AI 给卡片写 height:100%（配 flex 居中），父高是内容撑开时被解析成
@@ -57,8 +60,10 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
         val specifiedH = if (st.height.unit == Length.Unit.PERCENT && !heightDefinite) null
                          else resolveOrNull(st.height, availH)
 
+        // box-sizing：默认 BORDER_BOX（与历史行为一致）；CONTENT 时 width 不含 padding。
+        val isBorderBox = st.boxSizing != BoxSizing.CONTENT
         val contentW = when {
-            specifiedW != null -> max(0f, specifiedW - padH)
+            specifiedW != null -> if (isBorderBox) max(0f, specifiedW - padH) else specifiedW
             else -> null
         }
 
@@ -95,6 +100,9 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
                 // container: children measured first for intrinsic size
                 val innerW = contentW ?: max(0f, availW - padH)
                 val innerH = max(0f, availH - padV)
+                if (st.display == Display.GRID && node.children.isNotEmpty()) {
+                    measureGridContainer(node, availW, availH, innerW, innerH, specifiedW, specifiedH, padH, padV)
+                } else {
                 val row = isRow(st)
                 // 页面根（ROOT）尺寸就是视口，对子元素而言是"已确定尺寸"的父级。
                 // 否则 `.page{height:100%}` 被判成 auto（父高未知，百分比退化），
@@ -178,9 +186,16 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
                         }
                     }
                 }
-                node.width = specifiedW ?: min(availW, intrinsicW + padH)
+                node.width = when { specifiedW != null -> if (isBorderBox) specifiedW else specifiedW + padH; else -> min(availW, intrinsicW + padH) }
                 node.height = specifiedH ?: (intrinsicH + padV)
+                }
             }
+        }
+
+        // 宽高比：仅当一边显式设定、另一边未设定时按比值推导另一边（AI 写正方形格子关键）。
+        if (st.aspectRatioSet && !st.aspectRatio.isNaN()) {
+            if (st.widthSet && !st.heightSet) node.height = node.width / st.aspectRatio
+            else if (st.heightSet && !st.widthSet) node.width = node.height * st.aspectRatio
         }
 
         // min / max constraints
@@ -207,15 +222,22 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
     // ---------------------------------------------------------------- layout
     private fun layoutChildren(node: RenderNode, availW: Float, availH: Float) {
         val st = node.style
+        // 同 measure：padding 百分比相对包含块宽度解析。
         val padL = resolve(st.padding.left, availW)
-        val padT = resolve(st.padding.top, availH)
+        val padT = resolve(st.padding.top, availW)
         val padR = resolve(st.padding.right, availW)
-        val padB = resolve(st.padding.bottom, availH)
+        val padB = resolve(st.padding.bottom, availW)
 
         val contentX = node.absX + padL
         val contentY = node.absY + padT
         val contentW = max(0f, node.width - padL - padR)
         val contentH = max(0f, node.height - padT - padB)
+
+        // 网格布局：自己定位子元素后直接返回（不走下方 flex 流程）。
+        if (st.display == Display.GRID && node.children.isNotEmpty()) {
+            layoutGrid(node, availW, availH, contentX, contentY, contentW, contentH)
+            return
+        }
 
         val flow = ArrayList<RenderNode>()
         for (c in node.children) {
@@ -365,14 +387,19 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
         val mainSize = if (row) contentW else contentH
         val free = max(0f, mainSize - totalMain)
 
+        // gap：主轴方向相邻子项的固定间距（row 方向=column-gap，column 方向=row-gap）。
+        val mainGapRaw = if (row) st.gapColumn else st.gapRow
+        val mainGap = if (st.gapSet) (resolveOrNull(mainGapRaw, mainSize) ?: 0f) else 0f
+        val nItems = ordered.size
+        val freeWithGap = max(0f, free - mainGap * max(0, nItems - 1))
         val (gapStart, gapBetween) = when (st.justifyContent) {
-            JustifyContent.FLEX_START -> 0f to 0f
-            JustifyContent.FLEX_END -> free to 0f
-            JustifyContent.CENTER -> free / 2f to 0f
-            JustifyContent.SPACE_BETWEEN -> 0f to (if (ordered.size > 1) free / (ordered.size - 1) else 0f)
+            JustifyContent.FLEX_START -> 0f to mainGap
+            JustifyContent.FLEX_END -> freeWithGap to mainGap
+            JustifyContent.CENTER -> freeWithGap / 2f to mainGap
+            JustifyContent.SPACE_BETWEEN -> 0f to (if (nItems > 1) mainGap + freeWithGap / (nItems - 1) else mainGap)
             JustifyContent.SPACE_AROUND -> {
-                val g = free / ordered.size
-                (g / 2f) to g
+                val g = if (nItems > 0) freeWithGap / nItems else 0f
+                (g / 2f) to (mainGap + g)
             }
         }
 
@@ -442,17 +469,18 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
     private fun isRow(st: Style) =
         st.flexDirection == FlexDirection.ROW || st.flexDirection == FlexDirection.ROW_REVERSE
 
-    fun resolve(len: Length, parent: Float): Float = len.resolve(parent, viewportWidth, rpxRatio) ?: 0f
+    fun resolve(len: Length, parent: Float): Float = len.resolve(parent, viewportWidth, rpxRatio, viewportHeight) ?: 0f
 
     private fun resolveOrNull(len: Length, parent: Float): Float? =
         if (len.unit == Length.Unit.RPX) len.value * rpxRatio
-        else len.resolve(parent, viewportWidth, rpxRatio)
+        else len.resolve(parent, viewportWidth, rpxRatio, viewportHeight)
 
     private fun marginOf(node: RenderNode, contentW: Float, contentH: Float): Margins {
         val m = node.style.margin
+        // 同 padding：margin 百分比相对包含块宽度解析（CSS 规范）。
         return Margins(
-            resolve(m.left, contentW), resolve(m.top, contentH),
-            resolve(m.right, contentW), resolve(m.bottom, contentH)
+            resolve(m.left, contentW), resolve(m.top, contentW),
+            resolve(m.right, contentW), resolve(m.bottom, contentW)
         )
     }
 
@@ -465,4 +493,139 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
     }
 
     private fun fallbackWidth(text: String, fontSize: Float): Float = text.length * fontSize * 0.6f
+
+    // ---------------------------------------------------------------- grid
+    /** 解析一组网格轨道尺寸（fr 占剩余、percent/px 固定、auto 近似 fr=1）。 */
+    private fun gridTrackSizes(tracks: List<GridTrack>, basis: Float): List<Float> {
+        if (tracks.isEmpty()) return listOf(basis)
+        val sizes = ArrayList<Float>(tracks.size)
+        var fixed = 0f
+        val frWeights = ArrayList<Float>()
+        for (t in tracks) {
+            when (t.type) {
+                TrackType.PX -> { sizes.add(t.value); fixed += t.value }
+                TrackType.PERCENT -> { val v = basis * t.value / 100f; sizes.add(v); fixed += v }
+                TrackType.FR -> { sizes.add(0f); frWeights.add(t.value) }
+                TrackType.AUTO -> { sizes.add(0f); frWeights.add(1f) }
+            }
+        }
+        val frTotal = frWeights.sum()
+        val leftover = basis - fixed
+        if (frTotal > 0f && leftover > 0f) {
+            var k = 0
+            for (i in tracks.indices) {
+                if (tracks[i].type == TrackType.FR || tracks[i].type == TrackType.AUTO) {
+                    sizes[i] = leftover * (frWeights[k] / frTotal); k++
+                }
+            }
+        }
+        return sizes
+    }
+
+    /** 网格容器在 measure 阶段的尺寸计算：按列宽测量子项、累加行高。 */
+    private fun measureGridContainer(node: RenderNode, availW: Float, availH: Float, innerW: Float, innerH: Float,
+                                    specifiedW: Float?, specifiedH: Float?, padH: Float, padV: Float) {
+        val st = node.style
+        val items = node.children.filter { it.style.display != Display.NONE }
+        val cols = if (st.gridColumns.isNotEmpty()) st.gridColumns.size else 1
+        val isBB = st.boxSizing != BoxSizing.CONTENT
+        val basisW = if (specifiedW != null) (if (isBB) specifiedW - padH else specifiedW) else innerW
+        val colWidths = gridTrackSizes(st.gridColumns, basisW)
+        val colGap = if (st.gapSet) (resolveOrNull(st.gapColumn, basisW) ?: 0f) else 0f
+        val basisH = if (specifiedH != null) (if (isBB) specifiedH - padV else specifiedH) else innerH
+        val rowGap = if (st.gapSet) (resolveOrNull(st.gapRow, basisH) ?: 0f) else 0f
+        val rowHeights = ArrayList<Float>()
+        for ((i, c) in items.withIndex()) {
+            val col = i % cols
+            val cw = colWidths[col]
+            measure(c, cw, availH, true, st.gridRows.isNotEmpty())
+            val cm = marginOf(c, cw, availH)
+            // 网格项默认拉伸填满列宽；若显式设定则保持。
+            val finalW = if (!c.style.widthSet) maxOf(0f, cw - cm.left - cm.right) else c.width
+            // 宽高比：仅一边未设定时按比值推导另一边（否则保持已设定的尺寸）。
+            val applyAspect = c.style.aspectRatioSet && !c.style.aspectRatio.isNaN()
+            val finalH = when {
+                c.style.heightSet -> c.height
+                applyAspect && c.style.widthSet -> c.width / c.style.aspectRatio
+                applyAspect && !c.style.widthSet -> finalW / c.style.aspectRatio
+                else -> c.height
+            }
+            c.width = finalW
+            c.height = finalH
+            val h = c.height + cm.top + cm.bottom
+            val row = i / cols
+            while (rowHeights.size <= row) rowHeights.add(0f)
+            rowHeights[row] = maxOf(rowHeights[row], h)
+        }
+        val rows = if (st.gridRows.isNotEmpty()) st.gridRows.size else rowHeights.size
+        val usedRows = if (st.gridRows.isNotEmpty()) gridTrackSizes(st.gridRows, basisH) else rowHeights
+        var contentWGrid = 0f; for (x in colWidths) contentWGrid += x
+        contentWGrid += (cols - 1) * colGap
+        var contentHGrid = 0f; for (x in usedRows) contentHGrid += x
+        contentHGrid += (rows - 1) * rowGap
+        node.width = when { specifiedW != null -> if (isBB) specifiedW else specifiedW + padH; else -> minOf(availW, contentWGrid + padH) }
+        node.height = when { specifiedH != null -> if (isBB) specifiedH else specifiedH + padV; else -> contentHGrid + padV }
+    }
+
+    /** 网格容器在 layout 阶段的子元素定位 + 递归子树布局。 */
+    private fun layoutGrid(node: RenderNode, availW: Float, availH: Float, contentX: Float, contentY: Float, contentW: Float, contentH: Float) {
+        val st = node.style
+        val items = node.children.filter { it.style.display != Display.NONE }
+        // 绝对定位子元素照常放置
+        for (c in node.children) {
+            if (c.style.display == Display.NONE) continue
+            if (c.style.position == PositionType.ABSOLUTE) placeAbsolute(c, contentX, contentY, contentW, contentH)
+        }
+        if (items.isEmpty()) return
+        val cols = if (st.gridColumns.isNotEmpty()) st.gridColumns.size else 1
+        val colWidths = gridTrackSizes(st.gridColumns, contentW)
+        val colGap = if (st.gapSet) (resolveOrNull(st.gapColumn, contentW) ?: 0f) else 0f
+        val rowGap = if (st.gapSet) (resolveOrNull(st.gapRow, contentH) ?: 0f) else 0f
+        val autoRowHeights = ArrayList<Float>()
+        for ((i, c) in items.withIndex()) {
+            val col = i % cols
+            val cw = colWidths[col]
+            val cm = marginOf(c, cw, contentH)
+            val h = c.height + cm.top + cm.bottom
+            val row = i / cols
+            while (autoRowHeights.size <= row) autoRowHeights.add(0f)
+            autoRowHeights[row] = maxOf(autoRowHeights[row], h)
+        }
+        val rowHeights = if (st.gridRows.isNotEmpty()) gridTrackSizes(st.gridRows, contentH) else autoRowHeights
+        for ((i, c) in items.withIndex()) {
+            val col = i % cols
+            val row = i / cols
+            var cx = contentX
+            for (k in 0 until col) cx += colWidths[k] + colGap
+            var cy = contentY
+            for (k in 0 until row) cy += rowHeights[k] + rowGap
+            val cw = colWidths[col]
+            val rh = rowHeights[row]
+            val cm = marginOf(c, cw, contentH)
+            // 与 measureGridContainer 一致：未显式设定则拉伸填满格；aspect-ratio 优先于拉伸。
+            val finalW = if (!c.style.widthSet) maxOf(0f, cw - cm.left - cm.right) else c.width
+            val applyAspect = c.style.aspectRatioSet && !c.style.aspectRatio.isNaN()
+            val finalH = when {
+                c.style.heightSet -> c.height
+                applyAspect && c.style.widthSet -> c.width / c.style.aspectRatio
+                applyAspect && !c.style.widthSet -> finalW / c.style.aspectRatio
+                else -> maxOf(0f, rh - cm.top - cm.bottom)
+            }
+            c.width = finalW
+            c.height = finalH
+            c.x = (cx - contentX) + cm.left
+            c.y = (cy - contentY) + cm.top
+            c.absX = cx + cm.left
+            c.absY = cy + cm.top
+        }
+        for ((i, c) in items.withIndex()) {
+            val cw = colWidths[i % cols]
+            val rh = rowHeights[i / cols]
+            layoutChildren(c, cw, rh)
+        }
+        for (c in node.children) {
+            if (c.style.display == Display.NONE) continue
+            if (c.style.position == PositionType.ABSOLUTE) layoutChildren(c, contentW, contentH)
+        }
+    }
 }

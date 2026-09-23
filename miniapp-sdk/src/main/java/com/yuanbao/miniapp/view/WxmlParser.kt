@@ -95,8 +95,15 @@ class WxmlParser {
             val nextClose = src.indexOf(closeTag, i)
             if (nextClose == -1) return -1
             if (nextOpen != -1 && nextOpen < nextClose) {
-                depth++
-                i = nextOpen + openTag.length
+                val gt = src.indexOf('>', nextOpen)
+                if (gt != -1 && gt > nextOpen && src[gt - 1] == '/') {
+                    // 自闭合标签（如 <view .../>）不计入深度，也无需配对结束标签，
+                    // 否则会让外层容器的 close 匹配失败、整段子内容被丢弃（AI 常写自闭合标签）。
+                    i = gt + 1
+                } else {
+                    depth++
+                    i = nextOpen + openTag.length
+                }
             } else {
                 if (depth == 0) return nextClose
                 depth--
