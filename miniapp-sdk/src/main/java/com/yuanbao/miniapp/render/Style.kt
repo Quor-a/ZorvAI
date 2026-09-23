@@ -3,17 +3,33 @@ package com.yuanbao.miniapp.render
 import android.graphics.Color
 
 /** Length value: px / rpx (750rpx = screen width) / percentage / auto. */
-data class Length(val value: Float, val unit: Unit) {
-    enum class Unit { PX, RPX, PERCENT, AUTO }
+data class Length(val value: Float, val unit: Unit, val calc: CalcExpr? = null) {
+    enum class Unit { PX, RPX, PERCENT, AUTO, VW, VH, VMIN, VMAX, CALC }
 
     companion object {
         val AUTO = Length(0f, Unit.AUTO)
         val ZERO = Length(0f, Unit.PX)
 
+        /** calc(...) 二元表达式载体：a [op] b，op 为 '+' 或 '-'。 */
+        fun calc(a: Length, op: Char, b: Length) = Length(0f, Unit.CALC, CalcExpr(a, op, b))
+
         fun parse(raw: String?): Length {
             val s = (raw ?: "").trim()
             if (s.isEmpty() || s == "auto") return AUTO
+            // calc(...) 两项式：calc(100% - 20px) / calc(20px + 5%)（AI 常用）
+            if (s.startsWith("calc(") && s.endsWith(")")) {
+                val inner = s.substring(5, s.length - 1).trim()
+                val m = Regex("""^\s*([^\s]+)\s*([+\-])\s*([^\s]+)\s*$""").matchEntire(inner)
+                if (m != null) {
+                    return calc(parse(m.groupValues[1]), if (m.groupValues[2] == "-") '-' else '+', parse(m.groupValues[3]))
+                }
+                return parse(inner)
+            }
             return when {
+                s.endsWith("vmin") -> Length(s.removeSuffix("vmin").toFloatOrNull() ?: 0f, Unit.VMIN)
+                s.endsWith("vmax") -> Length(s.removeSuffix("vmax").toFloatOrNull() ?: 0f, Unit.VMAX)
+                s.endsWith("vw") -> Length(s.removeSuffix("vw").toFloatOrNull() ?: 0f, Unit.VW)
+                s.endsWith("vh") -> Length(s.removeSuffix("vh").toFloatOrNull() ?: 0f, Unit.VH)
                 s.endsWith("rpx") -> Length(s.removeSuffix("rpx").toFloatOrNull() ?: 0f, Unit.RPX)
                 s.endsWith("%") -> Length(s.removeSuffix("%").toFloatOrNull() ?: 0f, Unit.PERCENT)
                 s.endsWith("px") -> Length(s.removeSuffix("px").toFloatOrNull() ?: 0f, Unit.PX)
@@ -22,14 +38,26 @@ data class Length(val value: Float, val unit: Unit) {
         }
     }
 
-    /** Resolves against [parentSize]; returns null when auto. */
-    fun resolve(parentSize: Float, screenWidth: Float, rpxRatio: Float): Float? = when (unit) {
+    /** Resolves against [parentSize]; returns null when auto。
+     *  [screenHeight] 用于 vh/vmin/vmax（默认 = screenWidth，旧调用不受影响）。 */
+    fun resolve(parentSize: Float, screenWidth: Float, rpxRatio: Float, screenHeight: Float = screenWidth): Float? = when (unit) {
         Unit.PX -> value
         Unit.RPX -> value * rpxRatio
         Unit.PERCENT -> parentSize * value / 100f
         Unit.AUTO -> null
+        Unit.VW -> value / 100f * screenWidth
+        Unit.VH -> value / 100f * screenHeight
+        Unit.VMIN -> value / 100f * minOf(screenWidth, screenHeight)
+        Unit.VMAX -> value / 100f * maxOf(screenWidth, screenHeight)
+        Unit.CALC -> calc?.let {
+            (it.a.resolve(parentSize, screenWidth, rpxRatio, screenHeight) ?: 0f) +
+                (if (it.op == '-') -1f else 1f) * (it.b.resolve(parentSize, screenWidth, rpxRatio, screenHeight) ?: 0f)
+        }
     }
 }
+
+/** calc 二元表达式载体（a +/- b，每项可为 px/rpx/%/vw/vh）。 */
+data class CalcExpr(val a: Length, val op: Char, val b: Length)
 
 data class EdgeInsets(val top: Length, val right: Length, val bottom: Length, val left: Length) {
     companion object {
@@ -38,7 +66,13 @@ data class EdgeInsets(val top: Length, val right: Length, val bottom: Length, va
 }
 
 /** Supported display / layout values (self-developed, not Android View layout). */
-enum class Display { FLEX, BLOCK, NONE }
+enum class Display { FLEX, BLOCK, NONE, GRID }
+
+/** 网格轨道类型。`fr` 占剩余空间；`percent`/`px` 固定；`auto` 近似 fr=1。 */
+enum class TrackType { FR, PERCENT, PX, AUTO }
+data class GridTrack(val type: TrackType, val value: Float)
+/** box-sizing：CONTENT 宽不含 padding/border；BORDER_BOX 则含（与历史行为默认一致）。 */
+enum class BoxSizing { CONTENT, BORDER_BOX }
 enum class FlexDirection { ROW, ROW_REVERSE, COLUMN, COLUMN_REVERSE }
 enum class JustifyContent { FLEX_START, FLEX_END, CENTER, SPACE_BETWEEN, SPACE_AROUND }
 enum class AlignItems { FLEX_START, FLEX_END, CENTER, STRETCH }
@@ -93,6 +127,30 @@ class Style {
     var gapRow: Length = Length.AUTO
     var gapColumn: Length = Length.AUTO
     var gapSet = false
+
+    // 网格布局（display:grid）：列/行模板与间隙。
+    var gridColumns: List<GridTrack> = emptyList()
+    var gridRows: List<GridTrack> = emptyList()
+
+    // 宽高比（AI 写正方形格子最常用 aspect-ratio:1）。
+    var aspectRatio: Float = Float.NaN   // NaN = 未设置
+
+    // box-sizing：BORDER_BOX（默认，与历史一致）宽含 padding；CONTENT 宽不含。
+    var boxSizing: BoxSizing = BoxSizing.BORDER_BOX
+
+    // 单元素交叉轴对齐（覆盖父 alignItems）。
+    var alignSelf: AlignItems = AlignItems.STRETCH
+
+    // 栅格/弹性排序。
+    var order: Int = 0
+
+    // 文本控制（AI 常用，缺失会导致溢出/不换行/不省略）。
+    var whiteSpace: Int = 0          // 0=normal 1=nowrap 2=pre 3=pre-wrap
+    var textOverflow: Int = 0        // 0=clip 1=ellipsis
+    var wordBreak: Int = 0           // 0=normal 1=break-all 2=keep-all
+    var textDecoration: Int = 0      // 0=none 1=underline 2=line-through
+    var letterSpacing: Float = 0f
+    var fontFamily: String = ""
 
     var backgroundColor: Int = Color.TRANSPARENT
     var color: Int = Color.BLACK
@@ -155,6 +213,18 @@ class Style {
             translateX = other.translateX; translateY = other.translateY; translateSet = true
         }
         if (other.gapSet) { gapRow = other.gapRow; gapColumn = other.gapColumn; gapSet = true }
+        if (other.gridColumnsSet) { gridColumns = other.gridColumns; gridColumnsSet = true }
+        if (other.gridRowsSet) { gridRows = other.gridRows; gridRowsSet = true }
+        if (other.aspectRatioSet) { aspectRatio = other.aspectRatio; aspectRatioSet = true }
+        if (other.boxSizingSet) { boxSizing = other.boxSizing; boxSizingSet = true }
+        if (other.alignSelfSet) { alignSelf = other.alignSelf; alignSelfSet = true }
+        if (other.orderSet) { order = other.order; orderSet = true }
+        if (other.whiteSpaceSet) { whiteSpace = other.whiteSpace; whiteSpaceSet = true }
+        if (other.textOverflowSet) { textOverflow = other.textOverflow; textOverflowSet = true }
+        if (other.wordBreakSet) { wordBreak = other.wordBreak; wordBreakSet = true }
+        if (other.textDecorationSet) { textDecoration = other.textDecoration; textDecorationSet = true }
+        if (other.letterSpacingSet) { letterSpacing = other.letterSpacing; letterSpacingSet = true }
+        if (other.fontFamilySet) { fontFamily = other.fontFamily; fontFamilySet = true }
         if (other.bgSet) { backgroundColor = other.backgroundColor; bgSet = true }
         if (other.colorSet) { color = other.color; colorSet = true }
         if (other.fontSizeSet) {
@@ -209,6 +279,18 @@ class Style {
     var zSet = false
     var overflowSet = false
     var maxLinesSet = false
+    var gridColumnsSet = false
+    var gridRowsSet = false
+    var aspectRatioSet = false
+    var boxSizingSet = false
+    var alignSelfSet = false
+    var orderSet = false
+    var whiteSpaceSet = false
+    var textOverflowSet = false
+    var wordBreakSet = false
+    var textDecorationSet = false
+    var letterSpacingSet = false
+    var fontFamilySet = false
 
     fun copy(): Style {
         val s = Style()
@@ -221,6 +303,18 @@ class Style {
         s.position = position; s.left = left; s.top = top; s.right = right; s.bottom = bottom
         s.translateX = translateX; s.translateY = translateY; s.translateSet = translateSet
         s.gapRow = gapRow; s.gapColumn = gapColumn; s.gapSet = gapSet
+        s.gridColumns = gridColumns; s.gridRows = gridRows
+        s.gridColumnsSet = gridColumnsSet; s.gridRowsSet = gridRowsSet
+        s.aspectRatio = aspectRatio; s.aspectRatioSet = aspectRatioSet
+        s.boxSizing = boxSizing; s.boxSizingSet = boxSizingSet
+        s.alignSelf = alignSelf; s.alignSelfSet = alignSelfSet
+        s.order = order; s.orderSet = orderSet
+        s.whiteSpace = whiteSpace; s.whiteSpaceSet = whiteSpaceSet
+        s.textOverflow = textOverflow; s.textOverflowSet = textOverflowSet
+        s.wordBreak = wordBreak; s.wordBreakSet = wordBreakSet
+        s.textDecoration = textDecoration; s.textDecorationSet = textDecorationSet
+        s.letterSpacing = letterSpacing; s.letterSpacingSet = letterSpacingSet
+        s.fontFamily = fontFamily; s.fontFamilySet = fontFamilySet
         s.backgroundColor = backgroundColor; s.color = color
         s.fontSize = fontSize; s.fontWeight = fontWeight; s.lineHeight = lineHeight
         s.textAlign = textAlign; s.borderRadius = borderRadius
@@ -289,12 +383,7 @@ class Style {
                         when (v) {
                             "none" -> Display.NONE
                             "block" -> Display.BLOCK
-                            "grid" -> { // 网格布局降级模拟：横排+换行（格子自带定宽即可成行成列）
-                                s.flexDirection = FlexDirection.ROW
-                                s.flexWrap = FlexWrap.WRAP
-                                s.wrapSet = true
-                                Display.FLEX
-                            }
+                            "grid" -> Display.GRID
                             else -> Display.FLEX
                         }.also { d -> s.display = d }
                     }
@@ -355,6 +444,23 @@ class Style {
                     "z-index" -> { s.zIndex = v.toIntOrNull() ?: 0; s.zSet = true }
                     "overflow" -> { s.overflow = when (v) { "hidden" -> Overflow.HIDDEN; "scroll", "auto" -> Overflow.SCROLL; else -> Overflow.VISIBLE }; s.overflowSet = true }
                     "-webkit-line-clamp", "max-lines" -> { s.maxLines = v.toIntOrNull() ?: 0; s.maxLinesSet = true }
+                    "grid-template-columns" -> { s.gridColumns = parseGridTemplate(v); s.gridColumnsSet = true }
+                    "grid-template-rows" -> { s.gridRows = parseGridTemplate(v); s.gridRowsSet = true }
+                    "aspect-ratio" -> { val r = parseAspectRatio(v); if (!r.isNaN()) { s.aspectRatio = r; s.aspectRatioSet = true } }
+                    "gap" -> { val p = v.split(Regex("\\s+")).filter { it.isNotEmpty() }; if (p.isNotEmpty()) { s.gapRow = Length.parse(p[0]); s.gapColumn = Length.parse(p.getOrElse(1) { p[0] }); s.gapSet = true } }
+                    "row-gap" -> { s.gapRow = Length.parse(v); s.gapSet = true }
+                    "column-gap" -> { s.gapColumn = Length.parse(v); s.gapSet = true }
+                    "transform" -> { parseTransform(v)?.let { (tx, ty) -> s.translateX = tx; s.translateY = ty; s.translateSet = true } }
+                    "box-sizing" -> { s.boxSizing = if (v == "border-box") BoxSizing.BORDER_BOX else BoxSizing.CONTENT; s.boxSizingSet = true }
+                    "border" -> parseBorder(v)?.let { (w, c) -> s.borderWidth = w; s.borderColor = c; s.borderWidthSet = true; s.borderColorSet = true }
+                    "align-self" -> { s.alignSelf = parseAlign(v); s.alignSelfSet = true }
+                    "order" -> { s.order = v.toIntOrNull() ?: 0; s.orderSet = true }
+                    "white-space" -> { s.whiteSpace = when (v) { "nowrap" -> 1; "pre" -> 2; "pre-wrap" -> 3; else -> 0 }; s.whiteSpaceSet = true }
+                    "text-overflow" -> { s.textOverflow = if (v == "ellipsis") 1 else 0; s.textOverflowSet = true }
+                    "word-break" -> { s.wordBreak = when (v) { "break-all" -> 1; "keep-all" -> 2; else -> 0 }; s.wordBreakSet = true }
+                    "text-decoration" -> { s.textDecoration = when { v.contains("line-through") -> 2; v.contains("underline") -> 1; else -> 0 }; s.textDecorationSet = true }
+                    "letter-spacing" -> { s.letterSpacing = parsePx(v); s.letterSpacingSet = true }
+                    "font-family" -> { s.fontFamily = v; s.fontFamilySet = true }
                     else -> Unit
                 }
             }
@@ -421,6 +527,59 @@ class Style {
                 }
             }
             return tx to ty
+        }
+
+        /** grid-template-columns/rows：支持 repeat(N, X) 与空格分隔的 fr/%/px/auto。 */
+        private fun parseGridTemplate(v: String): List<GridTrack> {
+            val out = ArrayList<GridTrack>()
+            val s = v.trim()
+            val rep = Regex("repeat\\(\\s*(\\d+)\\s*,\\s*([^)]+)\\)").find(s)
+            if (rep != null) {
+                val n = rep.groupValues[1].toIntOrNull() ?: 0
+                val inner = rep.groupValues[2].trim()
+                for (i in 0 until n) out.add(parseTrack(inner))
+                val before = s.substring(0, rep.range.first).trim()
+                val after = s.substring(rep.range.last + 1).trim()
+                for (seg in listOf(before, after)) {
+                    for (tok in seg.split(Regex("\\s+")).filter { it.isNotEmpty() }) out.add(parseTrack(tok))
+                }
+            } else {
+                for (tok in s.split(Regex("\\s+")).filter { it.isNotEmpty() }) out.add(parseTrack(tok))
+            }
+            return out
+        }
+
+        private fun parseTrack(tok: String): GridTrack {
+            val t = tok.trim()
+            return when {
+                t.endsWith("fr") -> GridTrack(TrackType.FR, t.removeSuffix("fr").toFloatOrNull() ?: 1f)
+                t.endsWith("%") -> GridTrack(TrackType.PERCENT, t.removeSuffix("%").toFloatOrNull() ?: 0f)
+                t == "auto" -> GridTrack(TrackType.AUTO, 1f)
+                else -> GridTrack(TrackType.PX, Length.parse(t).value)
+            }
+        }
+
+        /** aspect-ratio: "1" / "1/1" / "16/9" -> 宽/高 比值；无法解析返回 NaN。 */
+        private fun parseAspectRatio(v: String): Float {
+            val s = v.trim().replace(Regex("\\s+"), "")
+            if (s.contains("/")) {
+                val parts = s.split("/")
+                val a = parts.getOrNull(0)?.toFloatOrNull() ?: return Float.NaN
+                val b = parts.getOrNull(1)?.toFloatOrNull() ?: return Float.NaN
+                return if (b != 0f) a / b else Float.NaN
+            }
+            return v.trim().toFloatOrNull() ?: Float.NaN
+        }
+
+        /** border 简写：border: 1px solid #fff -> (width, color)，忽略线型。 */
+        private fun parseBorder(v: String): Pair<Float, Int>? {
+            var w = 0f
+            var c: Int? = null
+            for (part in v.trim().split(Regex("\\s+"))) {
+                if (part.endsWith("px")) w = parsePx(part)
+                parseColor(part)?.let { c = it }
+            }
+            return if (w > 0f || c != null) (w to (c ?: Color.TRANSPARENT)) else null
         }
     }
 }
