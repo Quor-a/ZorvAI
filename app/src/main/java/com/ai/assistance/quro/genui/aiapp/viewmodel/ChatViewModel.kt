@@ -801,12 +801,17 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             "从 {\"id\" 开始到收尾括号完整闭合，控制在 600 字以内，" +
             "删掉可有可无的装饰性组件，但必须保留核心功能内容和完整闭合的结构。"
 
-        /** 自校验返修最大轮次：写完检测出问题后，最多让模型返修几轮 */
-        const val MAX_VERIFY_ITERATIONS = 2
+        /**
+         * 自校验返修最大轮次：写完检测出问题后，持续返修直到自检通过才结束
+         * （即「一边写一边检查、最后完成才结束」，不无脑重复一两次就放弃）。
+         * 上限 5 是为防模型死循环——真修不好的界面 5 轮也修不好，再多只是浪费；
+         * 达到上限后保留多次返修后的最佳版本并写诊断，而不是默默交付残次界面。
+         */
+        const val MAX_VERIFY_ITERATIONS = 5
 
-        /** 自校验返修提示词：把发现的问题退回给模型，要求修正后重新输出完整界面 */
+        /** 自校验返修提示词：把发现的问题退回给模型，要求按设计规范针对性修正后重新输出完整界面 */
         const val GENUI_VERIFY_FIX_PROMPT =
-            "你刚生成的 GenUI 界面自检未通过，必须修复后重新输出。不要输出任何解释文字，" +
+            "你刚生成的 GenUI 界面自检未通过。请严格按《界面手艺规范》《设计系统速查》《界面自检评分》修复，只做针对性修改（不要推倒重来、不要引入新的空白/叠印/同色问题）、不要输出任何解释文字，" +
             "第一行直接输出 ```genui 代码块，内容是修正后的【完整且闭合】的 JSON（从 {\"id\" 开始到收尾括号），" +
             "确保以下问题全部解决：\n"
     }
@@ -840,7 +845,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         val issues = verifyGenUI(st.currentGenUI!!)
         if (issues.isEmpty()) return false
         if (verifyIteration >= MAX_VERIFY_ITERATIONS) {
-            // 额度用尽：保留最后一次渲染结果，附诊断但不无限循环
+            // 额度用尽：保留最后一次渲染结果（已是多次返修后的最佳版本），但把未解决的问题写进诊断日志，
+            // 让用户/开发者能直接看到「这版界面为什么仍不完美」，而不是默默交付一个残次界面。
+            runCatching {
+                val ctx = getApplication<Application>().applicationContext
+                GenUiDiag.dump(ctx, st.currentGenUI, "genui-verify-timeout", "genui", issues.joinToString("；"))
+            }
             return false
         }
         verifyIteration++
@@ -890,6 +900,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             val text = props?.optString("text") ?: props?.optString("label")
                 ?: props?.optString("title")
             if (!text.isNullOrBlank()) textCount++
+            // 标题类节点却没有任何文字 → 标题不可见（GenUI 的 heading/title 必须有文字内容）
+            val t = type.lowercase()
+            if ((t == "heading" || t == "title" || t.contains("heading")) && text.isNullOrBlank()) {
+                issues += "标题节点（type=$type）没有任何文字内容，标题将不可见，请补上 text/label/title。"
+            }
             val style = node.optJSONObject("style")
             val ownBg = style?.optString("background") ?: style?.optString("backgroundColor")
             val effBg = if (!ownBg.isNullOrBlank()) ownBg else inheritedBg

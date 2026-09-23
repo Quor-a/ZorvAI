@@ -400,6 +400,47 @@ object QuroSkillStore {
         runCatching { load(context).filter { it.suite == SUITE_DESIGN && it.enabled && it.prompt.isNotBlank() } }
             .getOrDefault(emptyList())
 
+    /**
+     * GenUI Agent 专用：设计/美术套件，**忽略用户在「技能」页的 enabled 开关**，永远给 GenUI 注入。
+     *
+     * 理由：GenUI 每一轮都是在写界面，没有「界面手艺 / 设计系统 / 自检评分」这套规范就会裸奔，
+     * 这正是「组件不好看 / 大片空白 / 文字叠印」的根因。主对话的按需注入仍可走 [designSkills]（遵守开关），
+     * 但 GenUI 强制带这套规范，不让用户在技能页随手关掉就废掉界面质量。
+     *
+     * 兜底：若用户技能库为空（极端情况），直接从随包 assets/skills/zorv 解析，保证 GenUI 永远拿得到规范。
+     */
+    fun designSkillsForGenUI(context: Context): List<QuroSkill> {
+        val fromStore = runCatching {
+            load(context).filter { it.suite == SUITE_DESIGN && it.prompt.isNotBlank() }
+        }.getOrDefault(emptyList())
+        if (fromStore.isNotEmpty()) return fromStore
+        return designSkillsFromAssets(context)
+    }
+
+    /** 直接从随包 assets 解析 design-studio 套件（不依赖用户技能库 / 迁移状态）。 */
+    private fun designSkillsFromAssets(context: Context): List<QuroSkill> {
+        return runCatching {
+            val am = context.assets
+            val manifest = JSONObject(
+                am.open("skills/zorv/manifest.json").bufferedReader().readText()
+            )
+            val arr = manifest.optJSONArray("skills") ?: return@runCatching emptyList()
+            val out = mutableListOf<QuroSkill>()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                if (o.optString("suite", "").trim() != SUITE_DESIGN) continue
+                val id = o.optString("id", "")
+                val file = o.optString("file", "")
+                if (id.isEmpty() || file.isEmpty()) continue
+                val md = runCatching { am.open("skills/zorv/$file").bufferedReader().readText() }.getOrNull()
+                    ?: continue
+                val parsed = parseSkillMd(md).firstOrNull() ?: continue
+                out.add(parsed.copy(id = id, suite = SUITE_DESIGN, enabled = true, callable = false, alwaysOn = false))
+            }
+            out
+        }.getOrDefault(emptyList())
+    }
+
     fun load(context: Context): List<QuroSkill> {
         clearBuiltinSkillsOnce(context)
         seedBuiltinZorvSkills(context)

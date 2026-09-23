@@ -95,14 +95,16 @@ class ZorvBrain(private val context: Context) {
     }
 
     /**
-     * 设计/美术技能层（宿主的技能库，默认启用、可在「技能」页单独关掉）。
+     * 设计/美术技能层（宿主的技能库，GenUI 强制注入，无视「技能」页的开关）。
      *
      * GenUI 每一轮都是在写界面，所以这一层**总是注入**，不做触发词匹配——
      * 触发词那套是给主对话省 token 用的，这里省了就等于让模型裸奔。
      * 内容来自宿主 QuroSkillStore 的 design-studio 套件：界面手艺 / 设计系统 / 自检评分 / 美术指导 / 模式库。
      */
     private fun appendDesignSkills(sb: StringBuilder) {
-        val skills = runCatching { QuroSkillStore.designSkills(appCtx) }.getOrNull()
+        // 用 designSkillsForGenUI 而非 designSkills：后者遵守用户在「技能」页的开关，
+        // 一旦被关掉 GenUI 就裸奔（这正是「GenUI 没用 skills」的根因）；GenUI 强制带这套规范。
+        val skills = runCatching { QuroSkillStore.designSkillsForGenUI(appCtx) }.getOrNull()
         if (skills.isNullOrEmpty()) return
         sb.append("\n\n## 设计技能层（宿主技能库 · 默认启用）\n")
         sb.append("下面是若干份设计规范，生成界面时按其执行；与上文冲突时，以本层为准。\n\n")
