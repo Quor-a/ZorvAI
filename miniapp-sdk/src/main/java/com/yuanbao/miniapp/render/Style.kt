@@ -98,6 +98,15 @@ class Style {
     var color: Int = Color.BLACK
     var fontSize: Float = 16f          // px
     var fontWeight: FontWeight = FontWeight.NORMAL
+    /**
+     * font-size / line-height 的原始单位是否为 rpx。
+     * 旧实现把 `32rpx` 的单位直接剥掉当 32px 用，而 width/padding/margin 走 Length
+     * 会乘 rpxRatio —— 同一份 WXSS 里字号不缩放、盒模型缩放，比例整体失真。
+     * 这里保留标记，由 FlexLayout 在 layout 前按 rpxRatio 换算（那时才知道视口宽）。
+     */
+    var fontSizeIsRpx = false
+    var lineHeightIsRpx = false
+
     var lineHeight: Float = Float.NaN  // px; NaN => auto (1.2 * fontSize)
     var textAlign: TextAlign = TextAlign.LEFT
     var borderRadius: Float = 0f
@@ -108,42 +117,61 @@ class Style {
     var overflow: Overflow = Overflow.VISIBLE
     var maxLines: Int = 0             // 0 = unlimited
 
-    /** Merges another style on top of this one (inline style wins). */
+    /**
+     * Merges another style on top of this one (inline style wins).
+     *
+     * ⚠️ 必须同时把 other 的 "已显式设置" 标记带过来。
+     * 旧实现只搬值、不搬标记 → merge 完 displaySet/flexDirectionSet 全是 false，
+     * 于是 FlexLayout.measure() 里那句
+     *   if (!st.flexDirectionSet) st.flexDirection = if (display==FLEX) ROW else COLUMN
+     * 会把 WXSS 里写死的 `flex-direction: column` **覆盖成 ROW**：
+     * 所有「display:flex + flex-direction:column」的容器都被横排渲染，
+     * 右侧信息列被挤成一条竖缝、文字一字一行 —— 这正是排版崩坏的根因。
+     */
     fun merge(other: Style) {
-        if (other.displaySet) display = other.display
-        if (other.flexDirectionSet) flexDirection = other.flexDirection
-        if (other.justifySet) justifyContent = other.justifyContent
-        if (other.alignSet) alignItems = other.alignItems
-        if (other.wrapSet) flexWrap = other.flexWrap
-        if (other.widthSet) width = other.width
-        if (other.heightSet) height = other.height
-        if (other.minWidthSet) minWidth = other.minWidth
-        if (other.minHeightSet) minHeight = other.minHeight
-        if (other.maxWidthSet) maxWidth = other.maxWidth
-        if (other.maxHeightSet) maxHeight = other.maxHeight
-        if (other.growSet) flexGrow = other.flexGrow
-        if (other.shrinkSet) flexShrink = other.flexShrink
-        if (other.basisSet) flexBasis = other.flexBasis
-        if (other.marginSet) margin = other.margin
-        if (other.paddingSet) padding = other.padding
-        if (other.positionSet) position = other.position
-        if (other.leftSet) left = other.left
-        if (other.topSet) top = other.top
-        if (other.rightSet) right = other.right
-        if (other.bottomSet) bottom = other.bottom
-        if (other.bgSet) backgroundColor = other.backgroundColor
-        if (other.colorSet) color = other.color
-        if (other.fontSizeSet) fontSize = other.fontSize
-        if (other.weightSet) fontWeight = other.fontWeight
-        if (other.lineHeightSet) lineHeight = other.lineHeight
-        if (other.textAlignSet) textAlign = other.textAlign
-        if (other.radiusSet) borderRadius = other.borderRadius
-        if (other.borderWidthSet) borderWidth = other.borderWidth
-        if (other.borderColorSet) borderColor = other.borderColor
-        if (other.opacitySet) opacity = other.opacity
-        if (other.zSet) zIndex = other.zIndex
-        if (other.overflowSet) overflow = other.overflow
-        if (other.maxLinesSet) maxLines = other.maxLines
+        if (other.displaySet) { display = other.display; displaySet = true }
+        if (other.flexDirectionSet) { flexDirection = other.flexDirection; flexDirectionSet = true }
+        if (other.justifySet) { justifyContent = other.justifyContent; justifySet = true }
+        if (other.alignSet) { alignItems = other.alignItems; alignSet = true }
+        if (other.wrapSet) { flexWrap = other.flexWrap; wrapSet = true }
+        if (other.widthSet) { width = other.width; widthSet = true }
+        if (other.heightSet) { height = other.height; heightSet = true }
+        if (other.minWidthSet) { minWidth = other.minWidth; minWidthSet = true }
+        if (other.minHeightSet) { minHeight = other.minHeight; minHeightSet = true }
+        if (other.maxWidthSet) { maxWidth = other.maxWidth; maxWidthSet = true }
+        if (other.maxHeightSet) { maxHeight = other.maxHeight; maxHeightSet = true }
+        if (other.growSet) { flexGrow = other.flexGrow; growSet = true }
+        if (other.shrinkSet) { flexShrink = other.flexShrink; shrinkSet = true }
+        if (other.basisSet) { flexBasis = other.flexBasis; basisSet = true }
+        if (other.marginSet) { margin = other.margin; marginSet = true }
+        if (other.paddingSet) { padding = other.padding; paddingSet = true }
+        if (other.positionSet) { position = other.position; positionSet = true }
+        if (other.leftSet) { left = other.left; leftSet = true }
+        if (other.topSet) { top = other.top; topSet = true }
+        if (other.rightSet) { right = other.right; rightSet = true }
+        if (other.bottomSet) { bottom = other.bottom; bottomSet = true }
+        // 旧实现整段漏合并 transform / gap → AI 写的 translate(-50%) 居中与 gap 间距永远失效
+        if (other.translateSet) {
+            translateX = other.translateX; translateY = other.translateY; translateSet = true
+        }
+        if (other.gapSet) { gapRow = other.gapRow; gapColumn = other.gapColumn; gapSet = true }
+        if (other.bgSet) { backgroundColor = other.backgroundColor; bgSet = true }
+        if (other.colorSet) { color = other.color; colorSet = true }
+        if (other.fontSizeSet) {
+            fontSize = other.fontSize; fontSizeIsRpx = other.fontSizeIsRpx; fontSizeSet = true
+        }
+        if (other.weightSet) { fontWeight = other.fontWeight; weightSet = true }
+        if (other.lineHeightSet) {
+            lineHeight = other.lineHeight; lineHeightIsRpx = other.lineHeightIsRpx; lineHeightSet = true
+        }
+        if (other.textAlignSet) { textAlign = other.textAlign; textAlignSet = true }
+        if (other.radiusSet) { borderRadius = other.borderRadius; radiusSet = true }
+        if (other.borderWidthSet) { borderWidth = other.borderWidth; borderWidthSet = true }
+        if (other.borderColorSet) { borderColor = other.borderColor; borderColorSet = true }
+        if (other.opacitySet) { opacity = other.opacity; opacitySet = true }
+        if (other.zSet) { zIndex = other.zIndex; zSet = true }
+        if (other.overflowSet) { overflow = other.overflow; overflowSet = true }
+        if (other.maxLinesSet) { maxLines = other.maxLines; maxLinesSet = true }
     }
 
     // "was explicitly set" flags, so merging only overrides real declarations
@@ -198,6 +226,23 @@ class Style {
         s.textAlign = textAlign; s.borderRadius = borderRadius
         s.borderWidth = borderWidth; s.borderColor = borderColor
         s.opacity = opacity; s.zIndex = zIndex; s.overflow = overflow; s.maxLines = maxLines
+        s.fontSizeIsRpx = fontSizeIsRpx; s.lineHeightIsRpx = lineHeightIsRpx
+        // 标记必须一起复制：否则 copy() 出来的隐式文本节点会被当成"没写过宽度"，
+        // 在列向 stretch 时被强行铺满父宽，定宽文字（如右对齐的温度列）全部失效。
+        s.displaySet = displaySet; s.flexDirectionSet = flexDirectionSet
+        s.justifySet = justifySet; s.alignSet = alignSet; s.wrapSet = wrapSet
+        s.widthSet = widthSet; s.heightSet = heightSet
+        s.minWidthSet = minWidthSet; s.minHeightSet = minHeightSet
+        s.maxWidthSet = maxWidthSet; s.maxHeightSet = maxHeightSet
+        s.growSet = growSet; s.shrinkSet = shrinkSet; s.basisSet = basisSet
+        s.marginSet = marginSet; s.paddingSet = paddingSet
+        s.positionSet = positionSet; s.leftSet = leftSet; s.topSet = topSet
+        s.rightSet = rightSet; s.bottomSet = bottomSet
+        s.bgSet = bgSet; s.colorSet = colorSet; s.fontSizeSet = fontSizeSet
+        s.weightSet = weightSet; s.lineHeightSet = lineHeightSet; s.textAlignSet = textAlignSet
+        s.radiusSet = radiusSet; s.borderWidthSet = borderWidthSet; s.borderColorSet = borderColorSet
+        s.opacitySet = opacitySet; s.zSet = zSet; s.overflowSet = overflowSet
+        s.maxLinesSet = maxLinesSet
         return s
     }
 
@@ -299,9 +344,9 @@ class Style {
                     "bottom" -> { s.bottom = Length.parse(v); s.bottomSet = true }
                     "background", "background-color" -> { parseColor(v)?.let { s.backgroundColor = it; s.bgSet = true } }
                     "color" -> { parseColor(v)?.let { s.color = it; s.colorSet = true } }
-                    "font-size" -> { s.fontSize = parsePx(v); s.fontSizeSet = true }
+                    "font-size" -> { s.fontSize = parsePx(v); if (v.trim().endsWith("rpx")) s.fontSizeIsRpx = true; s.fontSizeSet = true }
                     "font-weight" -> { s.fontWeight = if (v == "bold" || v.toIntOrNull() ?: 0 >= 600) FontWeight.BOLD else FontWeight.NORMAL; s.weightSet = true }
-                    "line-height" -> { s.lineHeight = parsePx(v); s.lineHeightSet = true }
+                    "line-height" -> { s.lineHeight = parsePx(v); if (v.trim().endsWith("rpx")) s.lineHeightIsRpx = true; s.lineHeightSet = true }
                     "text-align" -> { s.textAlign = when (v) { "center" -> TextAlign.CENTER; "right" -> TextAlign.RIGHT; else -> TextAlign.LEFT }; s.textAlignSet = true }
                     "border-radius" -> { s.borderRadius = parsePx(v); s.radiusSet = true }
                     "border-width" -> { s.borderWidth = parsePx(v); s.borderWidthSet = true }
