@@ -20,6 +20,10 @@ import com.ai.assistance.quro.core.QuroToolSpec
 import com.ai.assistance.quro.core.tools.QuroToolRouter
 import java.util.IdentityHashMap
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
+import com.ai.assistance.quro.core.agent.orchestration.TaskPlanner
+import com.ai.assistance.quro.core.agent.orchestration.DeliverabilityJudge
+import com.ai.assistance.quro.core.agent.orchestration.OrchestrationTrace
+import com.ai.assistance.quro.core.agent.orchestration.Deliverability
 import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.util.QuroStageHints
 import com.ai.assistance.quro.core.fluidcloud.FluidCloudBridge
@@ -42,6 +46,15 @@ class QuroAssistant(
     private val store: QuroConversationStore,
 ) {
     private val engine = QuroToolEngine(registry)
+
+    /**
+     * 长程任务编排（可选，默认关闭）：调用方显式注入 [taskPlanner] / [deliverabilityJudge] 时启用。
+     * 两者均为 null 时保持旧行为——LLM 返回文本即终态交付，不注入策划/规划/设计方案、也不过交付闸门。
+     */
+    var taskPlanner: TaskPlanner? = null
+    var deliverabilityJudge: DeliverabilityJudge? = null
+    /** 长程交付闸门：不可交付后允许继续编排的最大次数，超阈值强制交付避免死循环。 */
+    var deliverAttempts = 0
 
     /**
      * 渐进式工具披露：每个会话（store）一个 router 实例，跨轮次保留「已加载」工具集。
@@ -67,6 +80,51 @@ class QuroAssistant(
         // 剥掉独立的 [第N轮] 轮次标记
         out = out.replace(Regex("\\[第\\d+轮\\]"), "")
         return out.trim()
+    }
+
+    /**
+     * 提取最近一条可见 user 消息作为本轮任务 brief（供长程编排 planner 使用）。
+     * store.all() 为公开 API；过滤掉 hidden 与 system/assistant/tool 角色。
+     */
+    private fun userBrief(): String {
+        return runCatching {
+            store.all()
+                .lastOrNull { it.role == "user" && !it.hidden && it.content.isNotBlank() }
+                ?.content ?: ""
+        }.getOrDefault("")
+    }
+
+    /**
+     * 交付闸门（可选，默认关闭）：[deliverabilityJudge] 为 null 时直接放行，保持旧行为。
+     * @return null = 可交付（调用方应 return 最终文本）；
+     *         非 null = 不可交付的提示文案（调用方应注入该提示后 continue，让 LLM 继续修正）。
+     * 超过上限次数仍不可交付则强制放行，避免长程任务陷入死循环。
+     */
+    private fun maybeDeliver(candidate: String, context: String): String? {
+        val judge = deliverabilityJudge ?: return null
+        if (candidate.isBlank()) return null
+        val brief = userBrief()
+        return when (val verdict = runCatching { judge.judge(brief, candidate, context) }.getOrElse { return null }) {
+            is Deliverability.Deliverable -> {
+                OrchestrationTrace.deliver("assistant", "可交付")
+                null
+            }
+            is Deliverability.NotDeliverable -> {
+                deliverAttempts++
+                if (deliverAttempts >= 3) {
+                    OrchestrationTrace.deliver("assistant", "超阈值强制交付")
+                    null
+                } else {
+                    OrchestrationTrace.deliver("assistant", "不可交付：${verdict.reason}")
+                    buildString {
+                        append("[系统提示] 你刚才的答复尚不可直接交付：")
+                        append(verdict.reason)
+                        verdict.suggestion?.takeIf { it.isNotBlank() }?.let { append("。建议：$it") }
+                        append("。请基于已有上下文修正并重新给出可交付的答复。")
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -225,6 +283,7 @@ class QuroAssistant(
             // 仅保留一个极高的安全天花板作最后兜底（云端 2000 / 离线 12）；真实多步任务远不会触及。
             val roundLimit = if (isLocal) 12 else if (cfg.maxToolRounds in 1..2000) cfg.maxToolRounds else 2000
             var round = 0
+            deliverAttempts = 0  // 长程交付闸门计数：每个任务重置
             var prevCallSig: String? = null   // 上一轮工具调用签名，用于死循环检测
             var repeatStreak = 0
             var warnedForSig: String? = null  // 同一失败签名只提示一次，避免每条重复失败都再灌一条 [系统提示]
@@ -241,6 +300,28 @@ class QuroAssistant(
                 // 避免生成协程在「思考中」卡死无法中断（配合下方 client.chat 的取消透传）。
                 coroutineContext[Job]?.ensureActive()
                 round++
+                // 长程编排（可选，默认关闭）：首轮把策划/规划/设计方案作为隐藏 system 提示注入。
+                if (round == 1 && taskPlanner != null) {
+                    val brief = userBrief()
+                    if (brief.isNotBlank()) {
+                        runCatching {
+                            val plan = taskPlanner!!.plan(brief, "")
+                            OrchestrationTrace.strategize("assistant", "已生成任务方案")
+                            val planText = buildString {
+                                appendLine("【任务方案】")
+                                plan.strategy.takeIf { it.isNotBlank() }?.let { appendLine("· 策划方案：$it") }
+                                plan.plan.takeIf { it.isNotBlank() }?.let { appendLine("· 规划方案：$it") }
+                                plan.design.takeIf { it.isNotBlank() }?.let { appendLine("· 设计方案：$it") }
+                                if (plan.steps.isNotEmpty()) {
+                                    appendLine("· 执行步骤：")
+                                    plan.steps.forEachIndexed { i, st -> appendLine("  ${i + 1}. ${st.description}") }
+                                }
+                            }
+                            store.add(QuroMessage(role = "system", content = planText, hidden = true))
+                            emit()
+                        }
+                    }
+                }
                 // 🔧 #loop-guard：连续多轮纯工具调用保护。终端/排查类任务下，模型易反复发起
                 // 全新探测命令（签名各不相同）而永不归结结论，跑到 roundLimit（云端 2000）仍不停、
                 // 对话框持续重复「测试终端」式文本。round 达阈值后注入一次隐藏系统提示要求收尾；
@@ -466,7 +547,11 @@ class QuroAssistant(
                             emit()
                             // 自动结束流体云通知
                             finishFluidCloudSafe(context)
-                            return@withContext lastText
+                            val nudge = maybeDeliver(lastText, "")
+                            if (nudge == null) return@withContext lastText
+                            store.add(QuroMessage(role = "system", content = nudge, hidden = true))
+                            emit()
+                            continue
                         }
                         // 非流式（或流式未触发任何 content token，如纯 reasoning 的 MiMo reason 模式）：
                         // 按原逻辑落一条新气泡。
@@ -480,7 +565,11 @@ class QuroAssistant(
                         emit()
                         // 自动结束流体云通知
                         finishFluidCloudSafe(context)
-                        return@withContext lastText
+                        val nudge = maybeDeliver(lastText, "")
+                        if (nudge == null) return@withContext lastText
+                        store.add(QuroMessage(role = "system", content = nudge, hidden = true))
+                        emit()
+                        continue
                     }
                     is QuroLlmResult.ToolCalls -> {
                         // 死循环检测在下方 sig 计算处与 while 末尾统一处理（按「签名是否原地重复」判定，
@@ -578,6 +667,7 @@ class QuroAssistant(
                         // 自动更新流体云进度：基于轮次计算进度（每轮+10%，上限90%）
                         val fluidProgress = minOf(round * 10, 90)
                         val toolNames = callsWithId.joinToString(",") { it.name }
+                        OrchestrationTrace.execute("assistant", "执行工具：$toolNames", "$dur ms")
                         updateFluidCloudSafe(context, "ZorvAI", "执行工具: $toolNames", fluidProgress)
                         // 🔑 关键：把执行结果**回填进 assistant 消息的 toolCalls**（自包含）。
                         // UI 之后直接从这一条 assistant 消息读出「工具名 + 参数 + 结果」三件套，
