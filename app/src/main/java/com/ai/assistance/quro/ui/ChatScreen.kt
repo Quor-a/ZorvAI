@@ -283,6 +283,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ContentCopy
@@ -5729,6 +5730,8 @@ private fun SettingsSheetContent(
         GroupCaption("功能")
         SetGroup {
             SetRowClickable(Icons.Filled.Tune, "模型配置", "推理引擎、参数与能力范围", "", onOpenModelConfig, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(Icons.Filled.AutoAwesome, "技能管理", "自定义 SKILL：新增 / 编辑 / 启用 / 停用", "", onOpenSkills, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Build, "功能模型配置", "上下文总结 / 记忆 / 人格孵化 / 视频 / 图片", "", onOpenFeatureModelConfig, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))

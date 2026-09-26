@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import com.ai.assistance.quro.core.skill.DEFAULT_SKILL_PARAMS
+import com.ai.assistance.quro.core.skill.QuroSkill
 import com.ai.assistance.quro.core.skill.QuroSkillStore
 import org.json.JSONObject
 
@@ -16,18 +17,21 @@ import org.json.JSONObject
  * 名称约定：`skill__<技能名>`，与 [QuroToolRegistry.skillSpecs] 下发的工具名一一对应。
  */
 class QuroSkillTool(private val skillName: String, private val appCtx: Context) : QuroTool {
-    override val name = "skill__$skillName"
+    /** 本工具的真实名称：由技能名净化而来的合法 function-calling 工具名（修复 issue #10）。 */
+    private val token = QuroSkill.toolNameOf(skillName)
+
+    override val name = token
 
     override val description: String
-        get() = QuroSkillStore.load(appCtx).firstOrNull { it.name == skillName }?.description
+        get() = QuroSkillStore.load(appCtx).firstOrNull { QuroSkill.toolNameOf(it.name) == token }?.description
             ?: "用户技能：$skillName"
 
     override val parametersJson: String
-        get() = QuroSkillStore.load(appCtx).firstOrNull { it.name == skillName }?.parametersJson
+        get() = QuroSkillStore.load(appCtx).firstOrNull { QuroSkill.toolNameOf(it.name) == token }?.parametersJson
             ?: DEFAULT_SKILL_PARAMS
 
     override fun run(context: Context, arguments: String): String {
-        val skill = QuroSkillStore.load(context).firstOrNull { it.name == skillName && it.enabled }
+        val skill = QuroSkillStore.load(context).firstOrNull { QuroSkill.toolNameOf(it.name) == token && it.enabled }
             ?: return "技能「$skillName」未启用或不存在"
         val userInput = runCatching { JSONObject(arguments) }.getOrElse { JSONObject() }
             .optString("input", "").trim()
