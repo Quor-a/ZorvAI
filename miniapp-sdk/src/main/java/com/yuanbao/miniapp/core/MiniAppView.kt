@@ -20,6 +20,7 @@ import com.yuanbao.miniapp.pack.MiniPackage
 import com.yuanbao.miniapp.render.CanvasPainter
 import com.yuanbao.miniapp.render.FlexLayout
 import com.yuanbao.miniapp.render.NodeType
+import com.yuanbao.miniapp.render.Display
 import com.yuanbao.miniapp.render.Overflow
 import com.yuanbao.miniapp.render.RenderNode
 import com.yuanbao.miniapp.render.TextMeasurer
@@ -364,6 +365,7 @@ class MiniAppView @JvmOverloads constructor(
         }
         layoutEngine.layout(root, viewportW, viewportH)
         restoreScroll(entry, root)
+        applyPageScroll(root)
         entry.root = root
         markDirty()
     }
@@ -384,6 +386,42 @@ class MiniAppView @JvmOverloads constructor(
             node.children.forEach { walk(it) }
         }
         walk(root)
+    }
+
+    /**
+     * 整页滚动：微信小程序页面本身就是一个纵向滚动容器（无需显式 scroll-view）。
+     * 当内容真实高度超过视口时，把根节点标记为可滚动并算好内容高度，
+     * 这样 findScrollable / CanvasPainter 才能像处理 scroll-view 一样处理整页滚动。
+     * 不向下钻取 overflow=SCROLL 的子容器（它们各自管理自己的滚动，不撑高页面）。
+     */
+    private fun applyPageScroll(root: RenderNode) {
+        var maxBottom = root.height
+        var maxRight = root.width
+        fun rec(n: RenderNode) {
+            val bottom = n.absY + n.height
+            if (bottom > maxBottom) maxBottom = bottom
+            val right = n.absX + n.width
+            if (right > maxRight) maxRight = right
+            if (n.style.overflow == Overflow.SCROLL) return
+            for (c in n.children) {
+                if (c.style.display == Display.NONE) continue
+                rec(c)
+            }
+        }
+        for (c in root.children) {
+            if (c.style.display != Display.NONE) rec(c)
+        }
+        root.contentWidth = maxOf(root.width, maxRight)
+        root.contentHeight = maxBottom
+        // 隔离：root.style 可能 === entry.pageStyle（共享对象），copy 避免污染页面样式
+        root.style = root.style.copy()
+        if (root.contentHeight > root.height + 0.5f) {
+            root.style.overflow = Overflow.SCROLL
+        } else {
+            root.style.overflow = Overflow.VISIBLE
+            root.scrollTop = 0f
+            root.scrollLeft = 0f
+        }
     }
 
     // ------------------------------------------------------------ navigation
@@ -469,6 +507,7 @@ class MiniAppView @JvmOverloads constructor(
     private var downY = 0f
     private var scrollNode: RenderNode? = null
     private var scrollStartY = 0f
+    private var scrollStartX = 0f
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val entry = pageStack.lastOrNull() ?: return false
@@ -482,6 +521,7 @@ class MiniAppView @JvmOverloads constructor(
                 downY = event.y
                 scrollNode = findScrollable(root, event.x, event.y)
                 scrollStartY = event.y
+                scrollStartX = event.x
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -489,7 +529,10 @@ class MiniAppView @JvmOverloads constructor(
                 if (node != null) {
                     node.scrollTop = (node.scrollTop - (event.y - scrollStartY))
                         .coerceIn(0f, maxOf(0f, node.contentHeight - node.height))
+                    node.scrollLeft = (node.scrollLeft - (event.x - scrollStartX))
+                        .coerceIn(0f, maxOf(0f, node.contentWidth - node.width))
                     scrollStartY = event.y
+                    scrollStartX = event.x
                     markDirty()
                 }
                 return true
