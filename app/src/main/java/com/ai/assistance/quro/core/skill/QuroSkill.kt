@@ -73,13 +73,41 @@ data class QuroSkill(
      * {name:"skill__<name>", description, parameters:<JSON-Schema 对象>}。
      * 即「把技能注册成工具」的序列化形态（与 QuroToolRegistry 的 skillSpecs 命名一致）。
      */
+    /**
+     * 本技能作为 function-calling 工具时的合法名称。
+     * 永远满足服务端约束 ^[a-zA-Z0-9_-]+$（前缀 skill__ 之后也合法），
+     * 因此无论用户把技能名起成「cost/turn」「我的技能」还是带空格，
+     * 下发给模型的 tools 数组都合法，不会再触发 HTTP 400（修复 issue #10）。
+     */
+    fun toolName(): String = QuroSkill.toolNameOf(name)
+
     fun toToolSpecJson(): JSONObject = JSONObject().apply {
-        put("name", "skill__$name")
+        put("name", toolName())
         put("description", description.ifBlank { "用户技能：$name" })
         put("parameters", runCatching { JSONObject(parametersJson) }.getOrDefault(JSONObject(DEFAULT_SKILL_PARAMS)))
     }
 
     companion object {
+        /** OpenAI function-calling 工具名允许字符集（整名需满足 ^[a-zA-Z0-9_-]+$，前缀 skill__ 之后也必须合法）。 */
+        private val TOOL_NAME_LEGAL = Regex("[^A-Za-z0-9_-]")
+
+        /**
+         * 把任意技能名净化成合法的 function-calling 工具名片段：
+         * 剥掉可能误带的 skill__ 前缀 -> 非法字符（空格 / 中文 / 斜杠等）统一替换为 -
+         * -> 折叠连续 -、去首尾 -，保证非空（空则回退 "skill"）。
+         * 幂等：对已是合法名的输入返回自身，因此「原始名 <-> 工具名」可由本函数一致推导，
+         * 反向查找技能时直接比对 [toolNameOf] 即可，无需保存额外映射。
+         */
+        fun sanitizeToolName(raw: String): String {
+            val base = raw.removePrefix("skill__")
+            val cleaned = TOOL_NAME_LEGAL.replace(base) { "-" }
+                .replace(Regex("-+"), "-").trim('-')
+            return if (cleaned.isEmpty()) "skill" else cleaned
+        }
+
+        /** 由技能名生成与工具一一对应的合法工具名（带 skill__ 前缀）。 */
+        fun toolNameOf(raw: String): String = "skill__" + sanitizeToolName(raw)
+
         /**
          * 工具规格 JSON → 技能（"技能转换"的反向：工具 → 技能）。
          * 支持 name 带/不带 `skill__` 前缀；parameters 为 JSON-Schema 对象或 parametersJson 字符串。

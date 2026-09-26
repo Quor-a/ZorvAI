@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.tools
 
 import android.content.Context
+import com.ai.assistance.quro.core.skill.QuroSkill
 import com.ai.assistance.quro.core.skill.QuroSkillStore
 import org.json.JSONObject
 import com.ai.assistance.quro.core.QuroToolCall
@@ -57,9 +58,8 @@ class QuroToolRegistry {
     fun remove(name: String): Boolean {
         val removed = map.remove(name) != null
         if (removed && name.startsWith("skill__")) {
-            val skillName = name.removePrefix("skill__")
             appContext?.let { ctx ->
-                QuroSkillStore.load(ctx).firstOrNull { it.name == skillName }
+                QuroSkillStore.load(ctx).firstOrNull { QuroSkill.toolNameOf(it.name) == name }
                     ?.let { QuroSkillStore.remove(ctx, it.id) }
             }
         }
@@ -274,11 +274,14 @@ class QuroToolRegistry {
             .sortedByDescending { it.updatedAt }.take(maxSkillTools)
             .map {
                 QuroToolSpec(
-                    "skill__${it.name}",
+                    QuroSkill.toolNameOf(it.name),
                     it.description.ifBlank { "用户技能：${it.name}" },
                     it.parametersJson,
                 )
             }
+            // 下发前兜底：仅保留工具名合法者。sanitize 已保证合法，此处为防御性回退，
+            // 防止任何异常路径注入非法名导致整轮 tools 被服务端 400 拒收（issue #10）。
+            .filter { it.name.matches(Regex("^skill__[A-Za-z0-9_-]+$")) }
     }
 
     /** 把可调用技能注册为运行时工具实例（双保险：使 registry.get("skill__xxx") 也能命中）。 */
@@ -348,9 +351,8 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
     private suspend fun execOnce(call: QuroToolCall, context: Context, attempt: Int): ExecResult {
         // == 技能工具分支（skill__<技能名>）：直接读实时技能指令回灌，复用 tool 结果管道 ==
         if (call.name.startsWith("skill__")) {
-            val skillName = call.name.removePrefix("skill__")
-            val skill = QuroSkillStore.load(context).firstOrNull { it.name == skillName && it.enabled }
-                ?: return ExecResult.Terminal(FailureType.UNKNOWN, "技能「$skillName」未启用或不存在")
+            val skill = QuroSkillStore.load(context).firstOrNull { QuroSkill.toolNameOf(it.name) == call.name && it.enabled }
+                ?: return ExecResult.Terminal(FailureType.UNKNOWN, "技能未启用或不存在（工具名 ${call.name}）")
             val userInput = runCatching { JSONObject(call.arguments) }.getOrElse { JSONObject() }
                 .optString("input", "").trim()
             val directive = buildString {

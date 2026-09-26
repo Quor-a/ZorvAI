@@ -210,7 +210,7 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
                                 onExport = { pendingSkill = s; exportMdLauncher.launch("${s.name}.skill.md") },
                                 onDelete = {
                                     QuroSkillStore.remove(ctx, s.id)
-                                    QuroToolRegistry.active?.remove("skill__${s.name}")
+                                    QuroToolRegistry.active?.remove(QuroSkill.toolNameOf(s.name))
                                     refresh()
                                 },
                             )
