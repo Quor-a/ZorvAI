@@ -98,6 +98,8 @@ class UiDslSpecTool : QuroTool {
 - slider：滑块。label, value, min, max, step
 - list：列表。items[]（每项可为普通字符串或 JSON 对象字符串）, item(模板节点，可用 {{item}}、{{item.field}}、{{index}} 占位), max_height
 - tabs：标签页。tabs[{title, node}]
+- game_board：游戏棋盘/网格。rows, cols, cells[]（每格显示文本）
+- genui：在动态 UI 里直接渲染一段 GenUI DSL（原生 530+ 组件）。content（必填，GenUI DSL JSON 字符串）, theme（light/dark，默认 light）。把「生成式界面」原生组件嵌进动态 UI 面板，交互经 GenUI 的 ActionHost 桥接回主聊天 AI。, values[]（每格携带的值）, cellColors[]（每格背景色）, cellAction（点击回调，携带 row/col/index/value 回传）, clickable, cellSize。用于和 AI 对弈/互动的小游戏。
 
 ■ 富媒体 / 文档（v1.0.81 新增，原生渲染，非 HTML/WebView）
 - markdown：原生 Markdown 富文本排版（不是 HTML）。value（也接受 value/content/text）；

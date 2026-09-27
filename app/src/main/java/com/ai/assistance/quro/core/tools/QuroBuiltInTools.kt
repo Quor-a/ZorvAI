@@ -528,6 +528,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // 动态 UI（必备输出）工具：AI 默认主动输出 quro-ui DSL 代码块 → 解析 → Compose 原生渲染（可交互、可回传表单值）
     r.register(UiDslSpecTool())     // 拉取 DSL 规范，避免长 schema 常驻系统提示词
     r.register(UiValidateTool())    // 输出前自检，把「渲染失败」变成事前修正
+    r.register(GameUiTool())        // AI 现场写规则、和玩家互动的小游戏（game_board 组件 + callback 回传）
     // UI 导航工具集：让 AI 能操控自己的界面（ui_* 命名规范）
     registerUiTools(r)
     // 流体云工具：控制OPPO流体云，显示状态栏胶囊和卡片

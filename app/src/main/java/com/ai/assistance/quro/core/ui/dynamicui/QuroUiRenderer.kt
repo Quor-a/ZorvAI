@@ -1,5 +1,9 @@
 package com.ai.assistance.quro.core.ui.dynamicui
 
+import androidx.compose.runtime.remember
+import com.ai.assistance.quro.genui.sdk.GenUI
+import com.ai.assistance.quro.genui.sdk.style.GenUITheme
+
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
@@ -253,6 +257,8 @@ private fun RenderNode(
         is QuroColorNode -> RenderColor(node, styled)
         is QuroMediaNode -> RenderMedia(node, onAction, styled)
         is QuroFormNode -> RenderForm(node, state, hidden, onAction, styled)
+        is QuroGameBoardNode -> RenderGameBoard(node, state, hidden, onAction, styled)
+        is QuroGenUiNode -> RenderGenUi(node, state, hidden, onAction, styled)
         // 捕获型兜底节点：用「多个融合解释器」渲染成结构化富卡，绝不降级为普通容器。
         is QuroUnknownNode -> RenderUnknown(node, state, hidden, onAction, styled)
     }
@@ -2361,6 +2367,95 @@ private fun RenderTabs(
 // =============================================================================================
 
 /** 执行动作：先把 collectFrom 指定的控件值收集成 Map，再连同动作交给宿主。 */
+/** 游戏棋盘：NxM 可点击网格。每格点击回发 row/col/index/value（合并进 cellAction 的 data）。 */
+@Composable
+private fun RenderGameBoard(
+    node: QuroGameBoardNode,
+    state: MutableMap<String, Any>,
+    hidden: MutableMap<String, Boolean>,
+    onAction: (QuroUiAction, Map<String, String>) -> Unit,
+    modifier: Modifier,
+) {
+    val rows = node.rows.coerceAtLeast(1)
+    val cols = node.cols.coerceAtLeast(1)
+    val cells = node.cells
+    val values = node.values
+    val colors = node.cellColors
+    val cellDp = (node.cellSize ?: 56).dp
+    val enabled = node.clickable
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        for (r in 0 until rows) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+            ) {
+                for (c in 0 until cols) {
+                    val idx = r * cols + c
+                    val label = cells.getOrNull(idx) ?: ""
+                    val value = values.getOrNull(idx) ?: label
+                    val color = colors.getOrNull(idx)?.let { QuroUiColor.parse(it) }
+                    val cellData = mapOf(
+                        "row" to r.toString(),
+                        "col" to c.toString(),
+                        "index" to idx.toString(),
+                        "value" to value,
+                    )
+                    Box(modifier = Modifier.size(cellDp)) {
+                        if (enabled) {
+                            val action = when (val base = node.cellAction) {
+                                is QuroCallbackAction -> base.copy(data = base.data + cellData)
+                                null -> QuroCallbackAction(event = node.id ?: "game_move", data = cellData)
+                                else -> base
+                            }
+                            Button(
+                                onClick = { dispatch(action, state, hidden, onAction) },
+                                modifier = Modifier.fillMaxSize(),
+                                colors = if (color != null) {
+                                    ButtonDefaults.buttonColors(containerColor = color)
+                                } else {
+                                    ButtonDefaults.buttonColors()
+                                },
+                            ) { Text(label, maxLines = 1) }
+                        } else {
+                            Surface(
+                                color = color ?: MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                Box(contentAlignment = Alignment.Center) { Text(label, maxLines = 1) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RenderGenUi(
+    node: QuroGenUiNode,
+    state: MutableMap<String, Any>,
+    hidden: MutableMap<String, Boolean>,
+    onAction: (QuroUiAction, Map<String, String>) -> Unit,
+    modifier: Modifier,
+) {
+    val context = LocalContext.current
+    val host = remember(node.id ?: "genui") {
+        QuroUiGenUiHost(context = context, onAction = onAction)
+    }
+    val theme = GenUITheme.default(isDark = node.theme == "dark")
+    val spec = remember(node.content) { GenUI.safeParse(node.content) }
+    Box(modifier = modifier.fillMaxWidth()) {
+        GenUI.Screen(
+            spec = spec,
+            host = host,
+            theme = theme,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
 private fun dispatch(
     action: QuroUiAction,
     state: MutableMap<String, Any>,

@@ -22,7 +22,7 @@ object QuroUiCatalog {
         // v1.0.88 数据可视化 / 业务卡节点族
         "stat", "table", "alert", "rating", "gauge", "countdown", "steps", "timeline",
         "todo", "expandable", "pie", "compare", "radar", "heatmap", "kanban", "carousel",
-        "timer", "tagcloud", "avatargroup", "counter", "breadcrumb", "color", "media", "form"
+        "timer", "tagcloud", "avatargroup", "counter", "breadcrumb", "color", "media", "form", "game_board", "genui"
     )
 
     /** 允许出现的动作类型（A2UI 第②小语种：动作语言）。 */
@@ -123,6 +123,8 @@ object QuroUiCatalog {
             is QuroColorNode -> node
             is QuroMediaNode -> if (isSafeUrl(node.url)) node
                 else degradeText("$path.media.url", "非法媒体地址：${node.url}", v)
+            is QuroGameBoardNode -> node
+            is QuroGenUiNode -> node
             is QuroFormNode -> node
             // 捕获型兜底节点：原样放行（渲染层融合解释器处理）
             is QuroUnknownNode -> node
@@ -184,6 +186,8 @@ object QuroUiCatalog {
         is QuroBreadcrumbNode -> "breadcrumb"
         is QuroColorNode -> "color"
         is QuroMediaNode -> "media"
+        is QuroGameBoardNode -> "game_board"
+        is QuroGenUiNode -> "genui"
         is QuroFormNode -> "form"
         is QuroUnknownNode -> node.type
     }

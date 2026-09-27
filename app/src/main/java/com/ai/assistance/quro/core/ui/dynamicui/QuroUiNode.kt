@@ -562,6 +562,33 @@ data class QuroUnknownNode(
  * 节点动作。参照 Kai `UiAction`，并扩展 ZorvAI 特有的工具/技能调用能力，
  * 让动态 UI 不只是「展示」，而能驱动 Agent 真正做事。
  */
+/**
+ * 游戏棋盘（NxM 可点击网格）。每格点击把坐标 + 取值作为回调 data 回发模型，
+ * AI 据此维持游戏状态并驱动对局（井字棋 / 记忆翻牌 / 扫雷 / 海战 / 四子棋 ...）。
+ * cells: 每格显示文本（行优先，长度应 = rows*cols，不足补空）；values: 可选每格回发值（默认 cells）；
+ * cellColors: 可选每格背景色（HEX/命名色，非法回落默认）；cellAction: 点击触发动作（通常 callback，
+ * 系统自动注入 data={row,col,index,value}）；clickable: 是否可交互；cellSize: 可选格子边长 dp（默认56）。
+ */
+data class QuroGameBoardNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val rows: Int = 3,
+    val cols: Int = 3,
+    val cells: List<String> = emptyList(),
+    val values: List<String> = emptyList(),
+    val cellColors: List<String> = emptyList(),
+    val cellAction: QuroUiAction? = null,
+    val clickable: Boolean = true,
+    val cellSize: Int? = null,
+) : QuroUiNode
+
+data class QuroGenUiNode(
+    override val id: String? = null,
+    override val style: QuroUiStyle? = null,
+    val content: String = "",
+    val theme: String? = null,
+) : QuroUiNode
+
 sealed interface QuroUiAction
 
 /** 回传事件给对话：把 collectFrom 收集的控件值 + data 一并作为用户消息发回模型。 */
