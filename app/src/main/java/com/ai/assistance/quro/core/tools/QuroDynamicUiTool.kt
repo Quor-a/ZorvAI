@@ -189,6 +189,16 @@ red green blue yellow orange purple pink teal indigo gray primary secondary erro
   link_preview / tooltip / snackbar / callout / segmented_control / searchbar / timeline_marker /
   profile_card / stat_grid / feature_list / hero / showcase —— 这些都是「自由书写」示例，并非唯一选项。
 - 若某个 type 你希望以后变成「专属原生渲染」（更精致），告诉我，我再加一个渲染器即可；在此之前它已能正常显示。
+
+  【必读：让组件真的能用（写组件前先看这条）】
+  很多「写了但点了没反应 / 不显示」都因下面没做对——照做即可 100% 可用：
+  1) 往返铁律：用户点控件 → 你收到【事件名】+ key:value 用户消息 → 你必须在同一条回复里重新输出一整块新 ```quro-ui（带更新状态）。只回文字面板会像「死」的。
+  2) 围栏语言必须是 quro-ui（或 zorv-ui / quro_ui）；JSON 合法、无注释、键与字符串双引号；action 必须是对象 {"type":"callback",...}，写字符串不触发。
+  3) text_input/select/checkbox/switch/slider 必须给唯一 id（collect_from 才能收到）；button 用 action + 唯一 event（如 ttt_move / ttt_reset）。
+  4) game_board：cells 长度 = rows×cols；cellAction 写 callback 且 clickable=true 才有反应；点格自动回发 row/col/index/value。
+  5) genui：content 必须是合法 GenUI DSL（与全屏 Agent 同写法）；子树内交互用 GenUI 自己的事件机制，别用 quro-ui 的 button action 跨进子树。
+  6) 其它节点 / 任意新 type 随便写，非法字段回落默认、绝不整体崩。
+
 """.trimIndent()
 
         val ACTION_SPEC = """

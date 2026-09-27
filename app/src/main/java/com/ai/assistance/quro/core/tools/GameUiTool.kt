@@ -84,6 +84,15 @@ class GameUiTool : QuroTool {
 游戏在 GenUI Agent 中同样可玩（共用渲染与工具集）。游戏 UI 内还能用 tool_call 调用 Agent 能力：
 例如 run_code 跑牌堆/随机数逻辑、web 拉题库、skill 触发技能——让「AI 现场写规则」更强大。
 调 game_ui 拿完整组件与模板，再开玩。
+
+    ★ 必读：游戏「点了没反应」的 4 个原因（写游戏前先看）
+    - 原因1：围栏不是 ```quro-ui → 改成 quro-ui 才渲染。
+    - 原因2：你收到【事件名】后只回了文字、没重新输出 ```quro-ui 面板 → 必须每轮重建整块 UI（更新 cells / 比分 / 提示）。
+    - 原因3：game_board 的 cellAction 没写 callback，或 clickable 不是 true → 点格没反应。
+    - 原因4：收集输入时 text_input 没给 id → collect_from 收不到。
+    记住：你就是状态机。UI 不记忆上一局，每次回发你都重新生成最新面板，游戏就「活」了。
+    完整教程见 ui_dsl_spec 的【必读：让组件真的能用】段。
+
 """.trimIndent()
 
         val BOARD = """
