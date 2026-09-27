@@ -90,6 +90,8 @@ internal fun ChatPermissionModeBar(
     onToggleThink: () -> Unit = {},
     autoSaveMemory: Boolean = true,
     onToggleAutoSave: () -> Unit = {},
+    subAgentEnabled: Boolean = true,
+    onToggleSubAgent: () -> Unit = {},
     autoRead: Boolean = false,
     onToggleAutoRead: () -> Unit = {},
     visionEnabled: Boolean = false,
@@ -145,6 +147,7 @@ internal fun ChatPermissionModeBar(
                 ) {
                     if (deepThink) SummaryTag("深度思考")
                     if (autoSaveMemory) SummaryTag("记忆")
+                    if (subAgentEnabled) SummaryTag("子智能体")
                     if (autoRead) SummaryTag("朗读")
                     if (visionEnabled) SummaryTag("看懂屏幕")
                     val cmsBg = when (cmsPolicy) {
@@ -204,6 +207,13 @@ internal fun ChatPermissionModeBar(
                         title = "自动保存记忆",
                         desc = " — AI 自动沉淀长期记忆",
                         onClick = onToggleAutoSave,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    ModeToggleRow(
+                        active = subAgentEnabled,
+                        title = "子智能体",
+                        desc = " — AI 可派子智能体分担子任务",
+                        onClick = onToggleSubAgent,
                     )
                     Spacer(Modifier.height(6.dp))
                     ModeToggleRow(
