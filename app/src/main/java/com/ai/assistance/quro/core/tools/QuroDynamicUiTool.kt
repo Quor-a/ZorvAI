@@ -99,7 +99,7 @@ class UiDslSpecTool : QuroTool {
 - list：列表。items[]（每项可为普通字符串或 JSON 对象字符串）, item(模板节点，可用 {{item}}、{{item.field}}、{{index}} 占位), max_height
 - tabs：标签页。tabs[{title, node}]
 - game_board：游戏棋盘/网格。rows, cols, cells[]（每格显示文本）
-- genui：在动态 UI 里直接渲染一段 GenUI DSL（原生 530+ 组件）。content（必填，GenUI DSL JSON 字符串）, theme（light/dark，默认 light）。把「生成式界面」原生组件嵌进动态 UI 面板，交互经 GenUI 的 ActionHost 桥接回主聊天 AI。, values[]（每格携带的值）, cellColors[]（每格背景色）, cellAction（点击回调，携带 row/col/index/value 回传）, clickable, cellSize。用于和 AI 对弈/互动的小游戏。
+- genui：在动态 UI 面板里直接渲染一段 GenUI DSL（原生 530+ 组件，**与全屏 GenUI Agent 共享同一套组件与 ActionHost**）。content（必填，GenUI DSL JSON 字符串）, theme（light/dark，默认 light）。这就是把 GenUI Agent 的「任意组件类型」搬到对话框里用：按钮/表单/弹窗/导航/媒体/图表/列表等所有组件类型都受支持，交互（navigate、showDialog、openScreen、playMedia、emit、sendMessage 等）经 ActionHost 桥接回主聊天 AI，与全屏 Agent 行为完全一致。是否是全屏只是宿主差异，渲染与能力无关——同一段 DSL 既能跑在全屏 Agent，也能嵌进对话框。例：生成一个带「提交」按钮和输入框的表单卡片，点按钮即把内容回传给你继续对话。
 
 ■ 富媒体 / 文档（v1.0.81 新增，原生渲染，非 HTML/WebView）
 - markdown：原生 Markdown 富文本排版（不是 HTML）。value（也接受 value/content/text）；
