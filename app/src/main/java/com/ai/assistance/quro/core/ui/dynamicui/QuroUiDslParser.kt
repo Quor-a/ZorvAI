@@ -732,6 +732,27 @@ object QuroUiDslParser {
                     fields = json.optStringList("fields"),
                     title = json.optStringOrNull("title"),
                 )
+                // 游戏棋盘：NxM 可点击网格，点击回发坐标/取值给模型（AI 维持游戏状态）。
+                "game_board", "grid", "board" -> QuroGameBoardNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    rows = json.optIntOrNull("rows") ?: 3,
+                    cols = json.optIntOrNull("cols") ?: 3,
+                    cells = json.optStringList("cells"),
+                    values = json.optStringList("values"),
+                    cellColors = json.optStringList("cellColors").ifEmpty { json.optStringList("cell_colors") },
+                    cellAction = json.optJSONObject("cell_action")?.let { buildAction(it) }
+                        ?: json.optJSONObject("cellAction")?.let { buildAction(it) },
+                    clickable = json.optBoolean("clickable", true),
+                    cellSize = json.optIntOrNull("cell_size") ?: json.optIntOrNull("cellSize"),
+                )
+                "genui", "genui_screen", "genui_render" -> QuroGenUiNode(
+                    id = json.optStringOrNull("id"),
+                    style = buildStyle(json),
+                    content = json.optString("content", ""),
+                    theme = json.optStringOrNull("theme"),
+                )
+
                 // ── 常用组件别名：让 AI 用更直观的名字也能命中原生渲染（不再被固定死）──
                 // snackbar / callout → alert；segmented_control / segmented → chips；
                 // searchbar / search_bar / search → text_input；timeline_marker / milestone → timeline。

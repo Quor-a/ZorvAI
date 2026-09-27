@@ -503,6 +503,18 @@ object ToolCapabilityDirectory {
             priority = 5
         ),
 
+        "game_ui" to ToolInfo(
+            name = "game_ui",
+            category = ToolCategory.DYNAMIC_UI,
+            description = "进入可交互游戏模式：猜数字/井字棋/21点/记忆翻牌/RPS，或让用户描述新游戏你现场定规则带他玩",
+            useCases = listOf("用户想玩互动小游戏", "做游戏化互动", "用对话组件做可玩 demo", "现场发明新游戏规则"),
+            examples = listOf("game_ui()", "game_ui(section='games')"),
+            parameters = mapOf("section" to "overview/board/rules/games/all，默认 overview"),
+            tips = listOf("先 game_ui() 拿规范，再用 quro-ui 渲染棋盘/控件", "用 callback 回收用户操作，AI 在对话里维持状态", "棋盘用 game_board 组件，点格自动回发 row/col/index/value", "游戏在 GenUI Agent 中也通用，可 tool_call 调 Agent 能力"),
+            relatedTools = listOf("ui_dsl_spec", "ui_validate", "genui_agent_open"),
+            priority = 5
+        ),
+
         "ui_validate" to ToolInfo(
             name = "ui_validate",
             category = ToolCategory.DYNAMIC_UI,
