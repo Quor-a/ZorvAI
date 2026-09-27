@@ -236,6 +236,16 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         uiPrefs.edit { putBoolean("auto_save_memory", on) }
     }
 
+    // 子智能体（Sub-Agent）开关：默认开启，用户可在对话控制条「子智能体」开关控制。
+    // 开启时主智能体可派发独立子智能体分担聚焦子任务；关闭后 spawn_subagent 工具不再下发给模型。
+    private val _subAgentEnabled = MutableStateFlow(uiPrefs.getBoolean("sub_agent_enabled", true))
+    val subAgentEnabled: StateFlow<Boolean> = _subAgentEnabled.asStateFlow()
+
+    fun setSubAgentEnabled(on: Boolean) {
+        _subAgentEnabled.value = on
+        uiPrefs.edit { putBoolean("sub_agent_enabled", on) }
+    }
+
     // 外观与对话设置：深色模式（全局主题，需上提�? QuroApp 根部主题处生效）
     private val _darkMode = MutableStateFlow(uiPrefs.getBoolean("dark_mode", false))
     val darkModePref: StateFlow<Boolean> = _darkMode.asStateFlow()
@@ -787,7 +797,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         QuroDiag.log("GEN_SYSPROMPT_MS", "convId=$convId ms=${System.currentTimeMillis() - spStart}")
                         val askStart = System.currentTimeMillis()
                         var firstTokenTs = 0L
-                        genAssistant.ask(appContext, effectiveCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true, historyRounds = _historyRounds.value ?: 0, deepThink = thinking.value) {
+                        genAssistant.ask(appContext, effectiveCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, subAgentEnabled = subAgentEnabled.value, stream = true, historyRounds = _historyRounds.value ?: 0, deepThink = thinking.value) {
                         // 工具调用/结果产生、以及流�? token 到达时实时刷新并落盘（退出生效）�?
                         // 退出也能保留中间过程；commitCurrent 内部已对落盘�? �?1s 节流�?
                             if (firstTokenTs == 0L) { firstTokenTs = System.currentTimeMillis(); QuroDiag.log("GEN_FIRSTTOKEN", "convId=$convId ttfb=${firstTokenTs - askStart}ms") }
@@ -979,7 +989,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 var firstTokenTs = 0L
                 // #1110：语音球问答原默�? stream=false �? 整段回、不逐层；与主对话（stream=true）行为不一致，
                 // 表现为「部分返回不是一层一层返回、自己回到对话框」。云模型改为流式，与文本框主路径一致�?
-                val r = assistant.ask(appContext, effCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, stream = true, historyRounds = _historyRounds.value ?: 0, deepThink = thinking.value, onUpdate = {
+                val r = assistant.ask(appContext, effCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, subAgentEnabled = subAgentEnabled.value, stream = true, historyRounds = _historyRounds.value ?: 0, deepThink = thinking.value, onUpdate = {
                     if (firstTokenTs == 0L) { firstTokenTs = System.currentTimeMillis(); QuroDiag.log("VB_FIRSTTOKEN", "ttfb=${firstTokenTs - askStart}ms") }
                     onTick()
                 })

@@ -224,6 +224,7 @@ class QuroAssistant(
         stream: Boolean = false,
         historyRounds: Int = 0,
         deepThink: Boolean = false,
+        subAgentEnabled: Boolean = true,
         onUpdate: (() -> Unit)? = null,
     ): String =
         withContext(Dispatchers.IO) {
@@ -262,14 +263,25 @@ class QuroAssistant(
             }
             // 记忆开关关闭时摘除 memory_* 工具，与系统提示词中的记忆段保持一致（都不注入）
             val effectiveSpecs = if (autoSaveMemory) toolSpecs else toolSpecs.filter { !it.name.startsWith("memory_") }
+            // 子智能体开关：开启（且仅云端，本地小模型不派发）时把 spawn_subagent 工具并入下发列表，
+            // 关闭或从本地模型时摘除（用户可在对话控制条「子智能体」开关控制）。
+            val agentAwareSpecs = if (!subAgentEnabled || isLocal) {
+                effectiveSpecs.filter { it.name != SUBAGENT_TOOL_NAME }
+            } else {
+                effectiveSpecs + QuroToolSpec(
+                    SUBAGENT_TOOL_NAME,
+                    SUBAGENT_TOOL_DESC,
+                    SUBAGENT_TOOL_PARAMS,
+                )
+            }
             // 🔧 渐进式工具披露（toolfix10）：每轮只下发【路由目录 + 常驻核心 + 已加载】，而非全部工具。
             // router 实例按会话(store)保留，跨轮次累积「已加载」工具，避免每次都扫全量、也不需要每次 discovery。
             val activeToolRouter = if (QuroToolRouter.PROGRESSIVE && !isLocal) {
-                toolRouters.getOrPut(store) { QuroToolRouter(effectiveSpecs) }.also { it.setSpecs(effectiveSpecs) }
+                toolRouters.getOrPut(store) { QuroToolRouter(agentAwareSpecs) }.also { it.setSpecs(agentAwareSpecs) }
             } else null
-            Log.i("QuroAssistant", "tool mode=${if (!effEnableTools) "off" else if (cfg.useFullTools) "full(${toolSpecs.size})" else "core(${toolSpecs.size})"}")
+            Log.i("QuroAssistant", "tool mode=${if (!effEnableTools) "off" else if (cfg.useFullTools) "full(${agentAwareSpecs.size})" else "core(${agentAwareSpecs.size})"}")
             // 诊断日志：确认 aci/workspace 工具是否在下发列表中
-            val aciWsTools = effectiveSpecs.filter { it.name.startsWith("aci_") || it.name.startsWith("workspace_") }
+            val aciWsTools = agentAwareSpecs.filter { it.name.startsWith("aci_") || it.name.startsWith("workspace_") }
             if (aciWsTools.isNotEmpty()) {
                 Log.i("QuroAssistant", "aci/workspace tools included: ${aciWsTools.map { it.name }}")
             } else {
@@ -468,7 +480,7 @@ class QuroAssistant(
                             messages = llmMessages,
                             temperature = effTemperature,
                             maxTokens = effMaxTokens,
-                            tools = if (activeToolRouter != null) activeToolRouter.activeSpecs() else effectiveSpecs,
+                            tools = if (activeToolRouter != null) activeToolRouter.activeSpecs() else agentAwareSpecs,
                             stream = streaming,
                             // 注意：v384 已根除重组期重编译正则的 ANR 真凶，此处无需再用 500ms 粗节流保命。
                             onToken = if (streaming) emitStreamToken else null,
@@ -643,14 +655,15 @@ class QuroAssistant(
                         val t0 = System.currentTimeMillis()
                         // 🔧 渐进式工具披露：tool_router 调用由 router 处理（返回目录/加载工具），
                         // 不进 engine.execute（它不是真实可执行工具）。其余正常执行。
-                        val results = if (activeToolRouter != null && callsWithId.any { it.name == "tool_router" }) {
+                        val hasSubAgent = callsWithId.any { it.name == SUBAGENT_TOOL_NAME }
+                        val results = if ((activeToolRouter != null && callsWithId.any { it.name == "tool_router" }) || hasSubAgent) {
                             val byId = LinkedHashMap<String, QuroToolResult>()
                             val normalCalls = ArrayList<QuroToolCall>()
                             callsWithId.forEach { c ->
-                                if (c.name == "tool_router") {
-                                    byId[c.id] = QuroToolResult(c.name, activeToolRouter.handle(c.name, c.arguments))
-                                } else {
-                                    normalCalls.add(c)
+                                when (c.name) {
+                                    "tool_router" -> byId[c.id] = QuroToolResult(c.name, activeToolRouter!!.handle(c.name, c.arguments))
+                                    SUBAGENT_TOOL_NAME -> byId[c.id] = QuroToolResult(c.name, runSubAgent(c.arguments, cfg, context, effTemperature, effMaxTokens))
+                                    else -> normalCalls.add(c)
                                 }
                             }
                             if (normalCalls.isNotEmpty()) {
@@ -962,6 +975,123 @@ class QuroAssistant(
         } catch (_: Throwable) {
             QuroLocalEnginePlaceholder
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 子智能体（Sub-Agent）：主智能体可派发独立子智能体完成聚焦子任务。
+    // 设计要点：
+    //  - 隔离上下文（独立 QuroConversationStore），不影响主会话历史；
+    //  - 仅授予「只读 / 检索 / 计算」类工具，禁止再派发子智能体（防递归）与危险 / UI 工具；
+    //  - 限定最大轮数，控制成本与耗时。
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /** 子智能体可调用的「安全」工具白名单（只读 / 检索 / 计算，禁止任何写入、设备控制、UI 与递归派发）。 */
+    private val SUBAGENT_SAFE_TOOLS = setOf(
+        "get_current_time", "calculate", "get_device_info", "get_battery",
+        "get_network_info", "get_wifi_info",
+        "web_search", "read_url", "http_request",
+        "knowledge_search", "knowledge_rag_search", "memory_search",
+        "read_text_file", "browse_files", "list_files", "file_read", "file_info", "find_files",
+        "github_search", "github_read", "crossref_search",
+    )
+
+    /**
+     * 派发并运行一个子智能体，完成 [arguments] 中描述的聚焦子任务，返回其最终精炼结果。
+     * 由 [ask] 的工具执行分支（模型调用 [SUBAGENT_TOOL_NAME] 时）调用；在主会话的 IO 协程内同步等待完成。
+     */
+    private suspend fun runSubAgent(arguments: String, cfg: QuroModelConfig, context: Context, temperature: Float, maxTokens: Int): String {
+        val task = runCatching { JSONObject(arguments) }.getOrElse { JSONObject() }
+            .optString("task", "").trim()
+        if (task.isBlank()) {
+            return "⚠️ 子智能体未收到有效任务描述（参数 task 为空），已跳过派发。"
+        }
+        val subStore = QuroConversationStore()
+        val system = QuroMessage(role = "system", content = SUBAGENT_SYSTEM_PROMPT)
+        subStore.add(
+            QuroMessage(
+                role = "user",
+                content = "【子任务】\n$task\n\n请独立、聚焦地完成此子任务，直接给出可供主智能体继续工作的精炼结果（结论 / 草稿 / 分析 / 清单 / 代码片段），不要寒暄、不要向用户反问。若需要事实或资料，请直接调用可用的只读工具。",
+            )
+        )
+        val subSpecs = registry.coreSpecs().filter { it.name in SUBAGENT_SAFE_TOOLS }
+        val maxRounds = 6
+        var lastText = ""
+        for (round in 0 until maxRounds) {
+            val msgs = subStore.toLlmMessages(system, 0, 0)
+            val res = runCatching {
+                client.chat(
+                    baseUrl = cfg.baseUrl,
+                    apiKey = cfg.apiKey,
+                    model = cfg.model,
+                    messages = msgs,
+                    temperature = temperature,
+                    maxTokens = maxTokens,
+                    tools = subSpecs,
+                    stream = false,
+                )
+            }.getOrElse { e -> QuroLlmResult.Error("子智能体调用失败：${e.message}") }
+
+            when (res) {
+                is QuroLlmResult.Text -> {
+                    lastText = res.content
+                    subStore.add(QuroMessage(role = "assistant", content = lastText, reasoning = res.reasoning))
+                    return lastText.ifBlank { "(子智能体未产出内容)" }
+                }
+                is QuroLlmResult.ToolCalls -> {
+                    val calls = res.calls.mapIndexed { idx, c ->
+                        c.copy(id = "sub_${System.nanoTime()}_${round}_$idx")
+                    }
+                    subStore.add(
+                        QuroMessage(
+                            role = "assistant",
+                            content = res.content ?: "",
+                            toolCalls = calls,
+                            reasoning = res.reasoning,
+                            hidden = true,
+                        )
+                    )
+                    val results = calls.map { c ->
+                        if (c.name in SUBAGENT_SAFE_TOOLS) {
+                            runCatching { engine.execute(context, listOf(c)) }
+                                .getOrElse { e -> listOf(QuroToolResult.Error("子智能体工具执行异常：${e.message}")) }
+                                .firstOrNull() ?: QuroToolResult.Error("子智能体工具无结果")
+                        } else {
+                            QuroToolResult.Error("子智能体无权使用该工具：${c.name}")
+                        }
+                    }
+                    calls.zip(results).forEach { (c, r) ->
+                        subStore.add(
+                            QuroMessage(
+                                role = "tool",
+                                content = r.result,
+                                toolCallId = c.id,
+                                toolLabel = r.name,
+                                hidden = true,
+                            )
+                        )
+                    }
+                    lastText = res.content ?: ""
+                }
+                is QuroLlmResult.Error -> return "⚠️ 子智能体任务失败：${res.message}"
+            }
+        }
+        return lastText.ifBlank { "(子智能体未在限定轮数内产出结果)" }
+    }
+
+    companion object {
+        /** 子智能体工具名（function calling）。 */
+        const val SUBAGENT_TOOL_NAME: String = "spawn_subagent"
+        /** 子智能体工具的 LLM 描述。 */
+        const val SUBAGENT_TOOL_DESC: String =
+            "派发一个独立的子智能体去完成一个聚焦的子任务（如资料检索、长文总结、方案草稿、数据分析、代码/文档片段生成等）。" +
+            "子智能体在隔离上下文中独立推理，可调用只读类工具（联网搜索、读取知识库/文件、计算等），最终把精炼结果返回给你。" +
+            "当你判断某个子任务可独立完成时，优先派发子智能体以分担工作、保持主线专注。参数 task 描述要完成的子任务。"
+        /** 子智能体工具的 JSON-Schema 参数。 */
+        const val SUBAGENT_TOOL_PARAMS: String =
+            "{\"type\":\"object\",\"properties\":{\"task\":{\"type\":\"string\",\"description\":\"要派给子智能体完成的聚焦子任务描述（要具体、自包含）\"}},\"required\":[\"task\"]}"
+        /** 子智能体的系统提示词（聚焦、克制、只产出结果）。 */
+        const val SUBAGENT_SYSTEM_PROMPT: String =
+            "你是 ZorvAI 主智能体派发的「子智能体」。你的职责是独立、聚焦地完成一个明确的子任务，并向主智能体返回精炼、可直接使用的结果（结论、草稿、清单、分析或代码片段）。要求：1) 不寒暄、不向用户反问、不重复主任务整体目标；2) 若需要事实或资料，自行调用可用的只读工具（联网搜索、读取知识库与文件、计算等）；3) 结果务必简洁、结构清晰，便于主智能体直接采用。"
     }
 }
 

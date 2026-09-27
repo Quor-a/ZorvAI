@@ -388,6 +388,7 @@ fun ChatScreen(
     val currentId by vm.currentId.collectAsState()
     val thinking by vm.thinking.collectAsState()
     val autoSaveMemory by vm.autoSaveMemory.collectAsState()
+    val subAgentEnabled by vm.subAgentEnabled.collectAsState()
     val activePersona by personaVm.activePersona.collectAsState()
     val personas by personaVm.personas.collectAsState()
     val cfg by modelVm.cfg.collectAsState()
@@ -2517,6 +2518,8 @@ fun ChatScreen(
                         onRemoveAttach = { attachments.remove(it) },
                         onAttach = { sheet = SheetType.Upload },
                         autoSaveMemory = autoSaveMemory, onToggleAutoSave = { vm.setAutoSaveMemory(!autoSaveMemory) },
+                        subAgentEnabled = subAgentEnabled,
+                        onToggleSubAgent = { vm.setSubAgentEnabled(!subAgentEnabled) },
                         onSend = { send(it) },
                         text = inputText,
                         onTextChange = { inputText = it },
@@ -4989,6 +4992,8 @@ private fun Composer(
     onSend: (String) -> Unit,
     autoSaveMemory: Boolean = true,
     onToggleAutoSave: () -> Unit = {},
+    subAgentEnabled: Boolean = true,
+    onToggleSubAgent: () -> Unit = {},
     text: TextFieldValue,
     onTextChange: (TextFieldValue) -> Unit,
     enterSend: Boolean,
@@ -5196,6 +5201,8 @@ private fun Composer(
             onToggleThink = onToggleThink,
             autoSaveMemory = autoSaveMemory,
             onToggleAutoSave = onToggleAutoSave,
+            subAgentEnabled = subAgentEnabled,
+            onToggleSubAgent = onToggleSubAgent,
             autoRead = autoRead,
             onToggleAutoRead = onToggleAutoRead,
             visionEnabled = visionEnabled,
