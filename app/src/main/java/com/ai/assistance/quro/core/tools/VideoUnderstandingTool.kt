@@ -4,6 +4,8 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.util.Log
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -74,9 +76,22 @@ class VideoUnderstandingTool : QuroTool {
                 "请详细描述这个视频的内容，包括：1) 主要场景和动作 2) 文字内容（如有）3) 人物或物体 4) 整体情节和用途\n\n视频共提取了${frames.size}个关键帧："
             }
 
+            // 解析「视频识别」功能绑定的独立模型（设置→功能模型配置→视频识别）。
+            val ctx = context ?: return "未获取到上下文，视频理解终止"
+            val global = try { QuroModelConfigRepository(ctx).load() } catch (e: Exception) { null }
+            val vcfg = global?.let { g ->
+                try { QuroFunctionModelConfigRepository(ctx).resolveConfig(QuroFunctionType.VIDEO_RECOGNITION, g) } catch (e: Exception) { null }
+            }
+            val model = vcfg?.model?.takeIf { it.isNotBlank() } ?: "gpt-4o"
+            val apiKey = vcfg?.apiKey ?: ""
+            val baseUrl = vcfg?.baseUrl?.takeIf { it.isNotBlank() } ?: "https://api.openai.com/v1"
+            if (apiKey.isBlank()) {
+                return "视频识别未配置 API Key：请在「设置 → 功能模型配置 → 视频识别」中指定支持视觉的模型与密钥。"
+            }
+
             // 构建多帧图像请求
             val jsonBody = JSONObject().apply {
-                put("model", "gpt-4-vision-preview")
+                put("model", model)
                 put("messages", org.json.JSONArray().apply {
                     put(JSONObject().apply {
                         put("role", "user")
@@ -106,16 +121,11 @@ class VideoUnderstandingTool : QuroTool {
             val requestBody = jsonBody.toString()
                 .toRequestBody("application/json".toMediaType())
 
-            val baseUrl = getBaseUrl()
-            val apiUrl = if (baseUrl.isNotBlank()) {
-                "${baseUrl.trimEnd('/')}/chat/completions"
-            } else {
-                "https://api.openai.com/v1/chat/completions"
-            }
+            val apiUrl = baseUrl.trimEnd('/') + "/chat/completions"
             
             val request = Request.Builder()
                 .url(apiUrl)
-                .addHeader("Authorization", "Bearer ${getApiKey()}")
+                .addHeader("Authorization", "Bearer $apiKey")
                 .post(requestBody)
                 .build()
 
@@ -180,27 +190,4 @@ class VideoUnderstandingTool : QuroTool {
         return frames
     }
 
-    private fun getApiKey(): String {
-        // 从配置中获取 API Key
-        val ctx = context ?: return ""
-        return try {
-            val config = QuroModelConfigRepository(ctx).load()
-            config.apiKey
-        } catch (e: Exception) {
-            Log.e("VideoUnderstandingTool", "获取API密钥失败", e)
-            ""
-        }
-    }
-
-    private fun getBaseUrl(): String {
-        // 从配置中获取基础URL
-        val ctx = context ?: return ""
-        return try {
-            val config = QuroModelConfigRepository(ctx).load()
-            config.baseUrl
-        } catch (e: Exception) {
-            Log.e("VideoUnderstandingTool", "获取基础URL失败", e)
-            ""
-        }
-    }
 }

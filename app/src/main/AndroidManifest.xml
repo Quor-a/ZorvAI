@@ -378,6 +378,12 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- 视频通话前台服务：摄像头 + 麦克风，叠加视觉/视频识别层（参考语音球实现） -->
+        <service
+            android:name=".service.QuroVideoCallService"
+            android:exported="false"
+            android:foregroundServiceType="camera|microphone" />
+
         <!-- 屏幕捕获（MediaProjection）前台服务：Android 14+ 要求调用 getMediaProjection() 之前
              必须有一个 mediaProjection 类型前台服务在运行，否则抛 SecurityException（红线）。
              由 ChatScreen 在用户授权后 startForegroundService 拉起，服务内部调 getMediaProjection 并注入投影。 -->
@@ -658,6 +664,18 @@
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
             android:label="Zorv 语音球"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- 状态栏快捷开关：视频通话（点击启动/切换视频通话） -->
+        <service
+            android:name=".service.QuroVideoCallTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Zorv 视频通话"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />

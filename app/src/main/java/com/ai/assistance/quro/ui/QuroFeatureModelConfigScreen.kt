@@ -320,12 +320,16 @@ private data class EngineWired(val label: String, val active: Boolean)
 /**
  * 各功能「独立模型绑定」是否真的改变引擎行为。
  * CHAT / PERSONA_INCUBATE / UI_CONTROL 已有独立调用点接入 resolveConfig，开关即时生效；
+ * IMAGE_RECOGNITION 由 VisualAnalysisTool 的 Level2 降级路径接入 resolveConfig；
+ * VIDEO_RECOGNITION 由 video_understanding 工具接入 resolveConfig；二者均真实消费绑定模型。
  * 其余功能在单接入点架构下作为主对话内的工具调用，独立绑定无单独 LLM 调用可路由，故跟随主对话。
  */
 private fun engineWired(type: QuroFunctionType): EngineWired = when (type) {
     QuroFunctionType.CHAT,
     QuroFunctionType.PERSONA_INCUBATE,
-    QuroFunctionType.UI_CONTROL -> EngineWired("已接入引擎·开关生效", true)
+    QuroFunctionType.UI_CONTROL,
+    QuroFunctionType.IMAGE_RECOGNITION,
+    QuroFunctionType.VIDEO_RECOGNITION -> EngineWired("已接入引擎·开关生效", true)
     else -> EngineWired("对话内调用·跟随主对话", false)
 }
 

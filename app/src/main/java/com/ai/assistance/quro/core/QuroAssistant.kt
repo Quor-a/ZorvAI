@@ -687,11 +687,24 @@ class QuroAssistant(
                         // 彻底不再依赖「跨消息 resultMap 按 toolCallId 匹配 role=tool 结果」这种脆弱写法——
                         // 后者一旦 role=tool 消息被丢 / 被迁移裁剪 / id 错位，工具块就会「缺失结果」。
                         // 🔧 #879：同时回填本次执行耗时 durationMs，供 UI 展示「耗时 Xms」。
-                        val enrichedCalls = callsWithId.zip(results) { call, r -> call.copy(result = r.result, durationMs = dur) }
+                                                // 🔧 视觉分析等工具：工具结果文本可能携带 <!--QURO_INJECT_IMAGE:path--> 标记，
+                        //   表示把该图片作为隐藏 user 消息注入对话，让「当前多模态模型」直接看到截图
+                        //   （而非绕去独立视觉API）。先剥离标记，再按路径注入图片。
+                        val cleanedResults = results.map { r ->
+                            val mm = Regex("<!--QURO_INJECT_IMAGE:(.*?)-->").find(r.result)
+                            if (mm != null) {
+                                val p = mm.groupValues[1].trim()
+                                r.copy(result = r.result.replace(Regex("<!--QURO_INJECT_IMAGE:.*?-->"), "").trim()) to
+                                    (if (p.isNotBlank()) p else null)
+                            } else r to null
+                        }
+                        val injectPathByCall = callsWithId.zip(cleanedResults.map { it.second }).toMap()
+                        val cleanedResultList = cleanedResults.map { it.first }
+                        val enrichedCalls = callsWithId.zip(cleanedResultList) { call, r -> call.copy(result = r.result, durationMs = dur) }
                         store.update(assistantMsg.id) { it.copy(toolCalls = enrichedCalls) }
                         emit()
                         // 仍为 LLM 保留 role=tool 结果管道（下一轮上下文需要，与 UI 展示解耦）。
-                        callsWithId.zip(results).forEach { (call, r) ->
+                        callsWithId.zip(cleanedResultList).forEach { (call, r) ->
                             store.add(
                                 QuroMessage(
                                     role = "tool",
@@ -703,7 +716,27 @@ class QuroAssistant(
                             )
                             emit()
                         }
-                        // AI 发文件：工具 attach_file 成功 → 作为可见 AI 气泡附件呈现（图片/视频/文档直接预览）
+                        // 🔧 注入视觉分析截图：让当前多模态模型「亲眼」看屏幕（Level 1 主路径）。
+                        injectPathByCall.forEach { (_, imgPath) ->
+                            if (imgPath != null) {
+                                val f = java.io.File(imgPath)
+                                if (f.exists() && f.length() > 0) {
+                                    val att = QuroAttachmentKit.fromFile(context, f, "image/png")
+                                    if (att != null) {
+                                        store.add(
+                                            QuroMessage(
+                                                role = "user",
+                                                content = "[视觉分析：以下为当前屏幕实时截屏，请直接查看并描述画面]",
+                                                attachments = listOf(att),
+                                                hidden = true,
+                                            )
+                                        )
+                                        emit()
+                                    }
+                                }
+                            }
+                        }
+// AI 发文件：工具 attach_file 成功 → 作为可见 AI 气泡附件呈现（图片/视频/文档直接预览）
                         val aiAttPairs = callsWithId.zip(results).mapNotNull { (call, r) ->
                             if (call.name != "attach_file") return@mapNotNull null
                             parseAttachFileResult(r.result)?.let { att ->
