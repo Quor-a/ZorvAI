@@ -968,11 +968,11 @@ object ToolCapabilityDirectory {
         "visual_analysis" to ToolInfo(
             name = "visual_analysis",
             category = ToolCategory.ACCESSIBILITY,
-            description = "视觉分析屏幕内容",
-            useCases = listOf("看看屏幕上是什么", "分析这个页面", "屏幕上有什么按钮/文字/图标"),
-            examples = listOf("visual_analysis()"),
+            description = "视觉分析当前屏幕截图（真实视觉理解）：用视觉大模型识别内容，任何需要看见屏幕的场景都可使用",
+            useCases = listOf("看看屏幕上是什么", "分析这个页面/App/游戏界面", "屏幕上有什么按钮/文字/图标", "定位某个元素并操作", "OCR 提取截图文字", "辅助点击/操作"),
+            examples = listOf("visual_analysis()", "visual_analysis(question=\"这个按钮是做什么的\", mode=\"ui\")"),
             parameters = emptyMap(),
-            tips = listOf("用视觉模型分析截图", "适合游戏/WebView/Flutter", "比read_screen更全面"),
+            tips = listOf("任何场景都能用：只要看见屏幕有助于回答就用", "比 read_screen 更全面（游戏/WebView/Flutter/自绘UI）", "mode=general/ui/ocr/game/find", "需配置支持图像的模型"),
             relatedTools = listOf("screenshot", "read_screen"),
             priority = 4
         ),

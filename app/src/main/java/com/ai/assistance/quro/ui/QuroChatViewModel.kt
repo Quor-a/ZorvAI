@@ -270,15 +270,26 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     fun isEnterSend(): Boolean = _enterSend.value
     fun setEnterSend(on: Boolean) { _enterSend.value = on; uiPrefs.edit { putBoolean("enter_send", on) } }
 
-    // 外观与对话设置：跟随系统语言（不内置国家/地区语言资源包，直接引用手机系统语言）
-    // true = 跟随系统（默认）；false = 固定为应用首次启动时的系统语言。
-    private val _followSystemLang = MutableStateFlow(uiPrefs.getBoolean("follow_system_language", true))
+    // 外观与对话设置：应用语言（"system"=跟随系统；否则为语言代码如 "en"/"ja"）。
+    // 与 follow_system_language 布尔保持同步，便于旧逻辑兼容。
+    private val _appLanguage = MutableStateFlow(uiPrefs.getString("app_language", "system") ?: "system")
+    val appLanguagePref: StateFlow<String> = _appLanguage.asStateFlow()
+    fun getAppLanguage(): String = _appLanguage.value
+    private val _followSystemLang = MutableStateFlow((uiPrefs.getString("app_language", "system") ?: "system") == "system")
     val followSystemLangPref: StateFlow<Boolean> = _followSystemLang.asStateFlow()
-    fun isFollowSystemLang(): Boolean = _followSystemLang.value
+    fun isFollowSystemLang(): Boolean = _appLanguage.value == "system"
     fun setFollowSystemLang(on: Boolean) {
-        _followSystemLang.value = on
-        uiPrefs.edit { putBoolean("follow_system_language", on) }
-        com.ai.assistance.quro.util.QuroLocale.apply(on)
+        setAppLanguage(if (on) "system" else (_appLanguage.value.takeIf { it != "system" } ?: "en"))
+    }
+    fun setAppLanguage(code: String) {
+        val c = if (code.isBlank()) "system" else code
+        _appLanguage.value = c
+        _followSystemLang.value = (c == "system")
+        uiPrefs.edit {
+            putString("app_language", c)
+            putBoolean("follow_system_language", c == "system")
+        }
+        com.ai.assistance.quro.util.QuroLocale.apply(c)
     }
 
     // 外观与对话设置：保留对话轮数（对话框级覆盖模�? contextWindow 的轮次语义）�?
@@ -1645,6 +1656,13 @@ $recent
         // 平台/品牌自我认知基座（永远最先，不被人格卡覆盖）
         sb.append(QuroPlatformManifest.SYSTEM).append("\n\n")
 
+        // 应用语言感知：让用户所选语言成为 AI 默认回复语言（用户改用其他语言时自然跟随）
+        val appLang = _appLanguage.value
+        if (appLang != "system") {
+            val langName = com.ai.assistance.quro.util.QuroLocale.LANGUAGE_NAMES[appLang] ?: appLang
+            sb.append("## 回复语言\n请用 ").append(langName).append(" 回复用户（除非用户用其他语言提问）。\n\n")
+        }
+
         // ══════════════ 第一优先级：身份认知（人格卡 = AI 真实身份；Zorv AI = 开发者；运行环境靠工具自行发现） ══════════════
         // ══════════════ 灵魂层（人格/标签/语音/记忆）由自写编排引擎生成 ══════════════
         // Project B0：QuroSoulPromptEngine 负责"这张人格卡是谁、怎么说话、记得什么、用什么声�?"�?
@@ -1965,10 +1983,11 @@ $recent
             - 「下拉通知栏」→ notification_control(action: "expand")
             - 「清掉通知」→ notification_control(action: "clear")
 
-            **智能识别**�?
-            - 「屏幕上有什么按钮」→ visual_analysis（当节点树无法识别时用视觉模型）
-            - 「这个游戏界面怎么操作」→ visual_analysis + tap_screen
-            - 「这个网页上有什么」→ visual_analysis
+            **屏幕视觉理解（visual_analysis，任何场景可用）**
+            - visual_analysis 用视觉大模型真实「看」截图，比 read_screen 节点树更全面，任何需要「看见屏幕」的场景都可使用
+            - 「看看屏幕上是什么」「分析这个页面/App/游戏」「屏幕上有什么按钮/文字/图标」「定位某个元素」「OCR 提取文字」「辅助点击操作」等都调用
+            - mode 可选：general(综合描述) / ui(UI元素识别) / ocr(文字提取) / game(游戏/App界面) / find(定位目标元素)
+            - 例：「这个游戏界面怎么操作」→ visual_analysis(mode="game") + tap_screen；「这个网页上有什么」→ visual_analysis()
 
             """)
         }

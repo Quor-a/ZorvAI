@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Zorv AI</string>
+    <string name="quro_accessibility_desc">Zorv AI 접근성 서비스: UI 자동화 및 화면 내용 읽기 등 고급 기능에 사용됩니다. 이 버전은 권한 선언만 완료하며 개인정보를 수집하지 않습니다.</string>
+    <string name="quro_device_admin_label">Zorv AI 기기 관리자</string>
+    <string name="quro_device_admin_desc">화면 잠금, 카메라 비활성화 또는 복원 두 가지 작업에만 사용됩니다. 데이터를 삭제하지 않으며 잠금 화면 암호도 수정하지 않습니다.</string>
+    <string name="ime_label">Zorv AI 키보드</string>
+    <string name="sc_voice_short">음성 볼</string>
+    <string name="sc_voice_long">플로팅 음성 볼 열기</string>
+    <string name="sc_voice_disabled">음성 볼 비활성화됨</string>
+    <string name="sc_chat_short">미니 대화</string>
+    <string name="sc_chat_long">대화로 바로 이동</string>
+    <string name="sc_chat_disabled">대화 비활성화됨</string>
+    <string name="sc_browser_short">브라우저 콘솔</string>
+    <string name="sc_browser_long">ZorvAI 브라우저 콘솔</string>
+    <string name="sc_browser_disabled">브라우저 콘솔 비활성화됨</string>
+    <string name="settings_appearance">외관 및 대화</string>
+    <string name="appearance_group_appearance">외관</string>
+    <string name="appearance_group_conversation">대화</string>
+    <string name="appearance_dark_mode">다크 모드</string>
+    <string name="appearance_dark_mode_desc">야간에 밝기 자동 낮춤</string>
+    <string name="appearance_font_size">글자 크기</string>
+    <string name="appearance_sound">응답 알림음</string>
+    <string name="appearance_enter_send">Enter로 전송</string>
+    <string name="appearance_enter_send_desc">끄면 Enter로 줄바꿈</string>
+    <string name="appearance_voice_ball">플로팅 음성 볼</string>
+    <string name="appearance_voice_ball_desc">STT → LLM → TTS 언제든 음성 대화</string>
+    <string name="appearance_history_rounds">유지할 대화 라운드 수</string>
+    <string name="appearance_history_rounds_desc">모델에 보낼 최근 라운드 제한</string>
+    <string name="appearance_group_language">언어</string>
+    <string name="appearance_follow_system">시스템 언어 따르기</string>
+    <string name="appearance_follow_system_desc">언어 팩을 내장하지 않고 휴대폰 시스템 언어 사용</string>
+    <string name="appearance_app_language">앱 언어</string>
+    <string name="appearance_group_profile">사용자 정보</string>
+    <string name="appearance_profile">아바타와 이름</string>
+    <string name="appearance_profile_desc">프로필 설정</string>
+</resources>

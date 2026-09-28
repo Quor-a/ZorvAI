@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Zorv AI</string>
+    <string name="quro_accessibility_desc">Service d accessibilite Zorv AI : utilise pour l automation de l interface et la lecture du contenu d ecran, entre autres capacites avancees. Cette version ne fait que declarer les permissions et ne collecte aucune donnee privee.</string>
+    <string name="quro_device_admin_label">Administrateur d appareil Zorv AI</string>
+    <string name="quro_device_admin_desc">Utilise uniquement pour deux operations : verrouillage de l ecran, desactivation ou restauration de l appareil photo. Ne supprime pas les donnees et ne modifie pas le mot de passe de verrouillage.</string>
+    <string name="ime_label">Clavier Zorv AI</string>
+    <string name="sc_voice_short">Boule vocale</string>
+    <string name="sc_voice_long">Ouvrir la boule vocale flottante</string>
+    <string name="sc_voice_disabled">Boule vocale desactivee</string>
+    <string name="sc_chat_short">Mini dialogue</string>
+    <string name="sc_chat_long">Ouvrir la conversation directement</string>
+    <string name="sc_chat_disabled">Chat desactive</string>
+    <string name="sc_browser_short">Console de navigateur</string>
+    <string name="sc_browser_long">Console navigateur ZorvAI</string>
+    <string name="sc_browser_disabled">Console de navigateur desactivee</string>
+    <string name="settings_appearance">Apparence et conversation</string>
+    <string name="appearance_group_appearance">Apparence</string>
+    <string name="appearance_group_conversation">Conversation</string>
+    <string name="appearance_dark_mode">Mode sombre</string>
+    <string name="appearance_dark_mode_desc">Reduit la luminosite la nuit</string>
+    <string name="appearance_font_size">Taille de police</string>
+    <string name="appearance_sound">Son de reponse</string>
+    <string name="appearance_enter_send">Entree pour envoyer</string>
+    <string name="appearance_enter_send_desc">Entree fait un saut de ligne si desactive</string>
+    <string name="appearance_voice_ball">Boule vocale flottante</string>
+    <string name="appearance_voice_ball_desc">STT vers LLM vers TTS discussion vocale a tout moment</string>
+    <string name="appearance_history_rounds">Rounds de conversation conserves</string>
+    <string name="appearance_history_rounds_desc">Limite les rounds recents envoyes au modele</string>
+    <string name="appearance_group_language">Langue</string>
+    <string name="appearance_follow_system">Suivre la langue du systeme</string>
+    <string name="appearance_follow_system_desc">Pas de pack linguistique; utilise la langue du systeme</string>
+    <string name="appearance_app_language">Langue de l application</string>
+    <string name="appearance_group_profile">Profil utilisateur</string>
+    <string name="appearance_profile">Avatar et nom</string>
+    <string name="appearance_profile_desc">Definir votre profil</string>
+</resources>

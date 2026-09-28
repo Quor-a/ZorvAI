@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import android.util.Log
 import android.net.Uri
@@ -2092,6 +2094,8 @@ fun ChatScreen(
                     voiceBallEnabled = voiceBallEnabled, onToggleVoiceBall = onToggleVoiceBall,
                     followSystemLang = followSystemLang,
                     onToggleFollowSystemLang = { vm.setFollowSystemLang(!followSystemLang) },
+                    appLanguage = vm.appLanguagePref.collectAsState().value,
+                    onSetAppLanguage = { vm.setAppLanguage(it) },
                     historyRounds = vm.historyRoundsPref.collectAsState().value,
                     onSetHistoryRounds = { vm.setHistoryRounds(it) },
                     userProfile = liveProfile,
@@ -5817,6 +5821,7 @@ private fun QuroAppearanceSettingsScreen(
     fontName: String, onCycleFont: () -> Unit,
     voiceBallEnabled: Boolean, onToggleVoiceBall: (Boolean) -> Unit,
     followSystemLang: Boolean, onToggleFollowSystemLang: () -> Unit,
+    appLanguage: String, onSetAppLanguage: (String) -> Unit,
     historyRounds: Int? = null, onSetHistoryRounds: (Int?) -> Unit = {},
     userProfile: QuroChatViewModel.UserProfile,
     onSaveProfile: (QuroChatViewModel.UserProfile) -> Unit,
@@ -5826,9 +5831,10 @@ private fun QuroAppearanceSettingsScreen(
     val cs = MaterialTheme.colorScheme
     var showUserProfileEditor by remember { mutableStateOf(false) }
     var showHistoryPicker by remember { mutableStateOf(false) }
+    var showLangPicker by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(cs.background)) {
         TopAppBar(
-            title = { Text("外观与对话") },
+            title = { Text(stringResource(R.string.settings_appearance)) },
             navigationIcon = {
                 IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
             },
@@ -5837,22 +5843,22 @@ private fun QuroAppearanceSettingsScreen(
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
         ) {
-            GroupCaption("外观")
+            GroupCaption(stringResource(R.string.appearance_group_appearance))
             SetGroup {
-                SetRow(Icons.Filled.DarkMode, "深色模式", "夜间自动降低亮度", darkMode, onToggleDark, scaled)
+                SetRow(Icons.Filled.DarkMode, stringResource(R.string.appearance_dark_mode), stringResource(R.string.appearance_dark_mode_desc), darkMode, onToggleDark, scaled)
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                SetRowClickable(Icons.Filled.FormatSize, "字号", "", fontName, onCycleFont, scaled)
+                SetRowClickable(Icons.Filled.FormatSize, stringResource(R.string.appearance_font_size), "", fontName, onCycleFont, scaled)
             }
-            GroupCaption("对话")
+            GroupCaption(stringResource(R.string.appearance_group_conversation))
             SetGroup {
-                SetRow(Icons.Filled.Notifications, "回复提示音", "", soundOn, onToggleSound, scaled)
+                SetRow(Icons.Filled.Notifications, stringResource(R.string.appearance_sound), "", soundOn, onToggleSound, scaled)
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                SetRow(Icons.Filled.Keyboard, "回车发送", "关闭后回车换行", enterSend, onToggleEnter, scaled)
+                SetRow(Icons.Filled.Keyboard, stringResource(R.string.appearance_enter_send), stringResource(R.string.appearance_enter_send_desc), enterSend, onToggleEnter, scaled)
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                SetRow(Icons.Filled.Mic, "悬浮语音球", "STT → LLM → TTS 随时语音对话", voiceBallEnabled, { onToggleVoiceBall(!voiceBallEnabled) }, scaled)
+                SetRow(Icons.Filled.Mic, stringResource(R.string.appearance_voice_ball), stringResource(R.string.appearance_voice_ball_desc), voiceBallEnabled, { onToggleVoiceBall(!voiceBallEnabled) }, scaled)
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 SetRowClickable(
-                    Icons.Filled.History, "保留对话轮数", "限制发给模型的近期轮次",
+                    Icons.Filled.History, stringResource(R.string.appearance_history_rounds), stringResource(R.string.appearance_history_rounds_desc),
                     value = when (historyRounds) {
                         null -> "跟随模型默认"
                         else -> "${historyRounds} 轮"
@@ -5861,17 +5867,38 @@ private fun QuroAppearanceSettingsScreen(
                     scaled = scaled,
                 )
             }
-            GroupCaption("语言")
+            GroupCaption(stringResource(R.string.appearance_group_language))
             SetGroup {
                 SetRow(
-                    Icons.Filled.Language, "跟随系统语言", "不内置语言包，使用手机系统语言",
+                    Icons.Filled.Language, stringResource(R.string.appearance_follow_system), stringResource(R.string.appearance_follow_system_desc),
                     followSystemLang, onToggleFollowSystemLang, scaled,
                 )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                SetRowClickable(
+                    Icons.Filled.Language, stringResource(R.string.appearance_app_language),
+                    com.ai.assistance.quro.util.QuroLocale.LANGUAGE_NAMES[appLanguage] ?: appLanguage,
+                    onClick = { showLangPicker = !showLangPicker }, scaled = scaled,
+                )
+                if (showLangPicker) {
+                    val langs = com.ai.assistance.quro.util.QuroLocale.MAJOR_LANGUAGES.filter { it.first != "system" }
+                    langs.forEach { (code, name) ->
+                        val selected = appLanguage == code
+                        Row(
+                            Modifier.fillMaxWidth().clickable { onSetAppLanguage(code); showLangPicker = false }
+                                .padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (selected) Icon(Icons.Filled.Check, null, Modifier.size(18.dp), tint = cs.primary)
+                            else Spacer(Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(name, fontSize = scaled(14), color = cs.onSurface)
+                        }
+                    }
+                }
             }
-            GroupCaption("用户资料")
+            GroupCaption(stringResource(R.string.appearance_group_profile))
             SetGroup {
-                SetRowClickable(Icons.Filled.Person, "头像与名字",
-                    if (userProfile.name.isNotBlank()) userProfile.name else "设置你的资料",
+                SetRowClickable(Icons.Filled.Person, stringResource(R.string.appearance_profile),
+                    if (userProfile.name.isNotBlank()) userProfile.name else stringResource(R.string.appearance_profile_desc),
                     "", { showUserProfileEditor = true }, scaled)
             }
         }

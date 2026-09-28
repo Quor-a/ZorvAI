@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Zorv AI</string>
+    <string name="quro_accessibility_desc">Служба специальных возможностей Zorv AI: используется для автоматизации интерфейса и чтения содержимого экрана, а также других расширенных возможностей. В этой версии только объявление разрешений, никакие личные данные не собираются.</string>
+    <string name="quro_device_admin_label">Администратор устройства Zorv AI</string>
+    <string name="quro_device_admin_desc">Используется только для двух операций: блокировка экрана, отключение или восстановление камеры. Не удаляет данные и не меняет пароль блокировки.</string>
+    <string name="ime_label">Клавиатура Zorv AI</string>
+    <string name="sc_voice_short">Голосовой шар</string>
+    <string name="sc_voice_long">Открыть плавающий голосовой шар</string>
+    <string name="sc_voice_disabled">Голосовой шар отключён</string>
+    <string name="sc_chat_short">Мини-чат</string>
+    <string name="sc_chat_long">Открыть чат напрямую</string>
+    <string name="sc_chat_disabled">Чат отключён</string>
+    <string name="sc_browser_short">Консоль браузера</string>
+    <string name="sc_browser_long">Консоль браузера ZorvAI</string>
+    <string name="sc_browser_disabled">Консоль браузера отключена</string>
+    <string name="settings_appearance">Внешний вид и беседа</string>
+    <string name="appearance_group_appearance">Внешний вид</string>
+    <string name="appearance_group_conversation">Беседа</string>
+    <string name="appearance_dark_mode">Тёмная тема</string>
+    <string name="appearance_dark_mode_desc">Автоматически тускнеет ночью</string>
+    <string name="appearance_font_size">Размер шрифта</string>
+    <string name="appearance_sound">Звук ответа</string>
+    <string name="appearance_enter_send">Enter для отправки</string>
+    <string name="appearance_enter_send_desc">Enter = новая строка, если выключено</string>
+    <string name="appearance_voice_ball">Плавающий голосовой шар</string>
+    <string name="appearance_voice_ball_desc">STT → LLM → TTS голосовой чат в любое время</string>
+    <string name="appearance_history_rounds">Сохранять раунды беседы</string>
+    <string name="appearance_history_rounds_desc">Ограничивает недавние раунды для модели</string>
+    <string name="appearance_group_language">Язык</string>
+    <string name="appearance_follow_system">Следовать языку системы</string>
+    <string name="appearance_follow_system_desc">Нет языкового пакета; используется язык системы</string>
+    <string name="appearance_app_language">Язык приложения</string>
+    <string name="appearance_group_profile">Профиль пользователя</string>
+    <string name="appearance_profile">Аватар и имя</string>
+    <string name="appearance_profile_desc">Настроить профиль</string>
+</resources>

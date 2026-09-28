@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Zorv AI</string>
+    <string name="quro_accessibility_desc">Zorv AI Barrierefreiheitsdienst: wird fur UI-Automatisierung und Bildschirminhaltslesen sowie weitere erweiterte Funktionen genutzt. Diese Version deklariert nur Berechtigungen und erfasst keine privaten Daten.</string>
+    <string name="quro_device_admin_label">Zorv AI Geräteadministrator</string>
+    <string name="quro_device_admin_desc">Wird nur für zwei Vorgänge genutzt: Bildschirm sperren, Kamera deaktivieren oder wiederherstellen. Löscht keine Daten und ändert kein Sperrbildschirm-Passwort.</string>
+    <string name="ime_label">Zorv AI Tastatur</string>
+    <string name="sc_voice_short">Sprachkugel</string>
+    <string name="sc_voice_long">Schwebende Sprachkugel öffnen</string>
+    <string name="sc_voice_disabled">Sprachkugel deaktiviert</string>
+    <string name="sc_chat_short">Mini-Chat</string>
+    <string name="sc_chat_long">Direkt in den Chat gehen</string>
+    <string name="sc_chat_disabled">Chat deaktiviert</string>
+    <string name="sc_browser_short">Browser-Konsole</string>
+    <string name="sc_browser_long">ZorvAI Browser-Konsole</string>
+    <string name="sc_browser_disabled">Browser-Konsole deaktiviert</string>
+    <string name="settings_appearance">Erscheinungsbild und Konversation</string>
+    <string name="appearance_group_appearance">Erscheinungsbild</string>
+    <string name="appearance_group_conversation">Konversation</string>
+    <string name="appearance_dark_mode">Dunkler Modus</string>
+    <string name="appearance_dark_mode_desc">Nachts automatisch dimmen</string>
+    <string name="appearance_font_size">Schriftgröße</string>
+    <string name="appearance_sound">Antwortton</string>
+    <string name="appearance_enter_send">Eingabe zum Senden</string>
+    <string name="appearance_enter_send_desc">Bei Aus: Eingabe = Zeilenumbruch</string>
+    <string name="appearance_voice_ball">Schwebende Sprachkugel</string>
+    <string name="appearance_voice_ball_desc">STT zu LLM zu TTS Sprachchat jederzeit</string>
+    <string name="appearance_history_rounds">Beibehaltene Konversationsrunden</string>
+    <string name="appearance_history_rounds_desc">Begrenzt kürzliche Runden an Modell</string>
+    <string name="appearance_group_language">Sprache</string>
+    <string name="appearance_follow_system">Systemsprache folgen</string>
+    <string name="appearance_follow_system_desc">Kein Sprachpaket; nutzt Systemsprache</string>
+    <string name="appearance_app_language">App-Sprache</string>
+    <string name="appearance_group_profile">Benutzerprofil</string>
+    <string name="appearance_profile">Avatar und Name</string>
+    <string name="appearance_profile_desc">Profil festlegen</string>
+</resources>
