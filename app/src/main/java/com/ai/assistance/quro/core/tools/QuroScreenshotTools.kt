@@ -19,6 +19,8 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroFunctionType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -217,15 +219,15 @@ class ScreenshotBase64Tool : QuroTool {
  */
 class VisualAnalysisTool : QuroTool {
     override val name = "visual_analysis"
-    override val description = "👁️ 屏幕视觉分析（真实视觉理解）：截取当前屏幕并用视觉大模型分析。" +
-        "与 read_screen 的区别：read_screen 读无障碍节点树（快、结构化），visual_analysis 用视觉模型「看」截图（慢但全面，能识别游戏/WebView/Flutter/自绘 UI、图标、文字、布局）。" +
-        "与 image_recognition 的区别：visual_analysis 分析「当前屏幕截图」，image_recognition 分析「用户提供的图片文件」。" +
-        "可在任何场景调用：看屏幕内容、识别按钮/文字/图标、理解游戏或 App 界面、找某个元素、OCR 提取文字等。" +
-        "参数：question（可选，你想知道的内容）；mode（可选：general=综合描述 / ui=UI元素识别 / ocr=文字提取 / game=游戏界面理解 / find=定位目标元素）。"
+    override val description = "👁️ 屏幕视觉分析（真实视觉理解）：截取当前屏幕，把截图作为图片直接喂给当前多模态对话模型「亲眼」查看，" +
+        "不再绕去独立视觉API。与 read_screen 区别：read_screen 读无障碍节点树（快/结构化兜底），" +
+        "visual_analysis 让当前模型直接看截图（能识别游戏/WebView/Flutter/自绘UI、图标、文字、布局）。" +
+        "可在任何场景调用：看屏幕内容、识别按钮/文字/图标、理解游戏或App界面、找元素、OCR。若当前模型不支持视觉，自动降级为视觉模型API或节点树。" +
+        "参数：question（可选）；mode（general=综合描述/ui=UI元素/ocr=文字/game=游戏界面/find=定位元素）。"
     override val parametersJson = """{
         "type":"object",
         "properties":{
-            "question":{"type":"string","description":"你想了解屏幕上的什么内容（例如：这个按钮是做什么的 / 屏幕上有哪些文字）"},
+            "question":{"type":"string","description":"你想了解屏幕上的什么内容"},
             "mode":{"type":"string","description":"分析模式：general(综合描述,默认) / ui(识别按钮·输入框·图标等UI元素) / ocr(提取截图中所有文字) / game(理解游戏/App界面与操作) / find(定位你描述的目标元素并给出操作建议)"}
         },
         "required":[]
@@ -244,69 +246,90 @@ class VisualAnalysisTool : QuroTool {
         val question = args.optString("question", "").trim()
         val mode = args.optString("mode", "general").trim().lowercase().ifBlank { "general" }
 
-        // 1. 截图
-        val screenshotTool = ScreenshotTool()
-        val result = screenshotTool.run(context, arguments)
-        if (!result.startsWith("✅")) {
-            return "❌ 无法截图，视觉分析终止: " + result
+        // 1. 截图（无障碍 takeScreenshot；失败则直接退出）
+        val shotResult = ScreenshotTool().run(context, arguments)
+        if (!shotResult.startsWith("✅")) {
+            return "❌ 无法截图，视觉分析终止: " + shotResult
         }
-        val path = result.removePrefix("✅ 截图成功: ")
+        val path = shotResult.removePrefix("✅ 截图成功: ")
+        val imageFile = java.io.File(path)
+        if (!imageFile.exists()) return "❌ 截图文件不存在: " + path
 
-        // 2. 节点树辅助信息（上限 4000 字符）
+        // 2. 节点树（Level 3 兜底，始终准备）
         val nodeTreeInfo = try {
             ReadScreenTool().run(context, "{}").take(4000)
         } catch (e: Exception) { "" }
 
-        // 3. 截图转 base64
-        val imageFile = java.io.File(path)
-        if (!imageFile.exists()) return "❌ 截图文件不存在: " + path
-        val base64Image = try {
-            Base64.encodeToString(imageFile.readBytes(), Base64.NO_WRAP)
-        } catch (e: Exception) { return "❌ 读取截图为 Base64 失败: ${e.message}" }
+        // 3. 判断当前主模型是否具备视觉能力
+        val cfg = try { QuroModelConfigRepository(context).load() } catch (e: Exception) { null }
+        val modelName = cfg?.model ?: ""
 
-        // 4. 针对模式的提示词
-        val prompt = buildPrompt(mode, question)
-
-        // 5. 调用视觉模型
-        val analysis = try {
-            callVisionModel(prompt, base64Image)
-        } catch (e: Exception) {
-            Log.e("VisualAnalysisTool", "视觉分析异常", e)
-            null
-        }
-
-        return if (analysis != null) {
-            buildString {
-                appendLine("## 屏幕视觉分析结果")
+        return if (isLikelyVisionModel(modelName)) {
+            // ── Level 1（主路径）：把截图作为图片注入当前多模态模型的对话上下文 ──
+            val sb = buildString {
+                appendLine("## 屏幕视觉分析")
                 appendLine()
-                appendLine(analysis.trim())
+                appendLine("已把当前屏幕截图作为图片直接传入对话上下文，请直接「看」图并用你的视觉能力描述/回答。")
+                appendLine("分析模式：$mode")
+                if (question.isNotBlank()) appendLine("用户问题：$question")
                 appendLine()
-                appendLine("---")
-                appendLine("截图路径: " + path)
+                appendLine("请基于下方附带的屏幕截图直接作答；若截图不可见，可参考下面的节点树作为结构化兜底。")
                 if (nodeTreeInfo.isNotBlank()) {
                     appendLine()
-                    appendLine("## 辅助节点树（无障碍结构，供参考）")
+                    appendLine("## 辅助节点树（无障碍结构，兜底参考）")
                     appendLine(nodeTreeInfo)
                 }
             }
+            // 注入标记：QuroAssistant 解析后把该图片作为隐藏 user 消息注入对话，再剔除本标记。
+            sb + "\n\n<!--QURO_INJECT_IMAGE:" + path + "-->"
         } else {
-            buildString {
-                appendLine("## 视觉模型调用失败（已降级返回截图与节点树）")
-                appendLine()
-                appendLine("截图已保存: " + path)
-                appendLine()
-                appendLine("可能原因：未配置 API Key、所配置的模型不支持图像输入、或网络不可达。")
-                appendLine("可在「设置 → 模型配置」中配置一个支持视觉的模型（如 gpt-4o 或兼容 OpenAI 的视觉端点）。")
-                appendLine()
-                if (nodeTreeInfo.isNotBlank()) {
-                    appendLine("## 节点树信息（辅助）")
-                    appendLine(nodeTreeInfo)
+            // ── Level 2：当前模型非视觉模型 → 调用「图像识别」绑定的视觉模型 API ──
+            val analysis = try { callVisionModel(buildPrompt(mode, question), path) } catch (e: Exception) { null }
+            if (analysis != null) {
+                buildString {
+                    appendLine("## 屏幕视觉分析结果（视觉模型API）")
+                    appendLine()
+                    appendLine(analysis.trim())
+                    appendLine()
+                    appendLine("---")
+                    appendLine("截图路径: " + path)
+                    if (nodeTreeInfo.isNotBlank()) {
+                        appendLine()
+                        appendLine("## 辅助节点树（无障碍结构，供参考）")
+                        appendLine(nodeTreeInfo)
+                    }
                 }
-                appendLine()
-                appendLine("## 你的提问")
-                appendLine(question.ifBlank { "（无）" })
+            } else {
+                // ── Level 3：未配置视觉 API → 仅返回节点树 ──
+                buildString {
+                    appendLine("## 视觉模型不可用（当前模型不支持视觉，且未配置视觉API），降级返回节点树")
+                    appendLine()
+                    appendLine("截图已保存: " + path)
+                    appendLine("可在「设置 → 功能模型配置 → 图像识别」指定支持视觉的独立模型。")
+                    if (nodeTreeInfo.isNotBlank()) {
+                        appendLine()
+                        appendLine("## 节点树信息（辅助）")
+                        appendLine(nodeTreeInfo)
+                    }
+                }
             }
         }
+    }
+
+    /** 当前主模型是否大概率支持视觉输入（决定 Level 1 / Level 2）。默认乐观：现代模型大多支持视觉，优先让当前模型「看」。 */
+    private fun isLikelyVisionModel(name: String): Boolean {
+        val n = name.lowercase()
+        if (n.isBlank()) return true
+        val textOnly = listOf("gpt-3.5", "text-embedding", "babbage", "davinci", "ada", "tts-1", "whisper",
+            "embedding", "instruct", "llama-2", "llama2", "qwen2-0.5b", "qwen2-1.5b", "qwen2-7b-instruct",
+            "qwen2.5-0.5b", "qwen2.5-1.5b", "qwen3-0.6b", "qwen3-1.7b")
+        if (textOnly.any { n.contains(it) }) return false
+        val vision = listOf("vision", "-vl", "gpt-4o", "gpt-4-vision", "gpt-4-turbo", "gpt-4.1", "gpt-4.5",
+            "gemini", "claude-3", "claude-opus", "claude-sonnet", "qwen-vl", "qwen2-vl", "qwen2.5-vl",
+            "moonshot", "kimi", "pixtral", "llama-3.2-vision", "llama-4", "llama4", "step-", "minimax",
+            "deepseek-vl", "glm-4v", "glm-v", "yi-vl", "internvl", "visual", "qvq", "janus")
+        if (vision.any { n.contains(it) }) return true
+        return true
     }
 
     private fun buildPrompt(mode: String, question: String): String {
@@ -322,13 +345,16 @@ class VisualAnalysisTool : QuroTool {
         } else base
     }
 
-    private fun callVisionModel(prompt: String, base64Image: String): String? {
+    /** Level 2：调用「图像识别」功能绑定的视觉模型。未配置密钥则返回 null（交由 Level 3 节点树兜底）。 */
+    private fun callVisionModel(prompt: String, imagePath: String): String? {
         val ctx = contextRef ?: return null
-        val cfg = try { QuroModelConfigRepository(ctx).load() } catch (e: Exception) { return null }
+        val global = try { QuroModelConfigRepository(ctx).load() } catch (e: Exception) { return null }
+        val cfg = QuroFunctionModelConfigRepository(ctx).resolveConfig(QuroFunctionType.IMAGE_RECOGNITION, global)
         if (cfg.apiKey.isBlank()) return null
         val model = if (cfg.model.isNotBlank()) cfg.model else "gpt-4o"
         val baseUrl = if (cfg.baseUrl.isNotBlank()) cfg.baseUrl.trimEnd('/') else "https://api.openai.com/v1"
         val apiUrl = baseUrl + "/chat/completions"
+        val b64 = try { Base64.encodeToString(java.io.File(imagePath).readBytes(), Base64.NO_WRAP) } catch (e: Exception) { return null }
 
         val jsonBody = org.json.JSONObject().apply {
             put("model", model)
@@ -336,14 +362,11 @@ class VisualAnalysisTool : QuroTool {
                 put(org.json.JSONObject().apply {
                     put("role", "user")
                     put("content", org.json.JSONArray().apply {
-                        put(org.json.JSONObject().apply {
-                            put("type", "text")
-                            put("text", prompt)
-                        })
+                        put(org.json.JSONObject().apply { put("type", "text"); put("text", prompt) })
                         put(org.json.JSONObject().apply {
                             put("type", "image_url")
                             put("image_url", org.json.JSONObject().apply {
-                                put("url", "data:image/jpeg;base64," + base64Image)
+                                put("url", "data:image/jpeg;base64," + b64)
                                 put("detail", "high")
                             })
                         })
@@ -352,7 +375,6 @@ class VisualAnalysisTool : QuroTool {
             })
             put("max_tokens", 1500)
         }
-
         return try {
             val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
             val request = okhttp3.Request.Builder()
@@ -366,14 +388,8 @@ class VisualAnalysisTool : QuroTool {
                 val json = org.json.JSONObject(body)
                 val choices = json.getJSONArray("choices")
                 if (choices.length() > 0) choices.getJSONObject(0).getJSONObject("message").optString("content") else null
-            } else {
-                Log.e("VisualAnalysisTool", "API 错误 " + response.code + ": " + (response.body?.string()?.take(300) ?: ""))
-                null
-            }
-        } catch (e: Exception) {
-            Log.e("VisualAnalysisTool", "调用视觉模型失败", e)
-            null
-        }
+            } else { null }
+        } catch (e: Exception) { null }
     }
 }
 
