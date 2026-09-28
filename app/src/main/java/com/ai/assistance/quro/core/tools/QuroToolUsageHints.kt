@@ -173,7 +173,7 @@ object QuroToolUsageHints {
         // ── 屏幕视觉双模感知 ──
         "screenshot" to "「截个图」「截图保存」「把屏幕截下来」都调用——返回截图文件路径",
         "screenshot_base64" to "「截图发给视觉模型」「截屏分析」都调用——返回Base64编码的图片",
-        "visual_analysis" to "「看看屏幕上是什么」「分析这个页面」「屏幕上有什么按钮/文字/图标」都调用——当read_screen节点树不够用时（游戏/WebView/Flutter/自绘UI），用视觉模型分析截图",
+        "visual_analysis" to "任何需要「看见屏幕」的场景都调用：看屏幕内容、识别按钮/文字/图标、理解游戏或 App 界面、找某个元素、OCR 提取文字、辅助操作。当 read_screen 节点树不够用时（游戏/WebView/Flutter/自绘 UI），用视觉大模型真实分析截图，mode 可选 general/ui/ocr/game/find。",
 
         // ── 系统级控制动作 ──
         "take_photo" to "「拍照」「打开相机拍一张」「帮我拍照」都调用",

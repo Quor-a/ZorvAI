@@ -138,9 +138,9 @@ class QuroApplication : Application(), Configuration.Provider {
         // 读取 quro_ui 偏好（与 QuroChatViewModel 同一 SharedPreferences），在首屏前应用，
         // 使 Activity 创建即采用正确语言；切换时 Android 会自动重建当前 Activity 生效。
         try {
-            val follow = getSharedPreferences("quro_ui", Context.MODE_PRIVATE)
-                .getBoolean("follow_system_language", true)
-            com.ai.assistance.quro.util.QuroLocale.apply(follow)
+            val langPref = getSharedPreferences("quro_ui", Context.MODE_PRIVATE)
+                .getString("app_language", "system") ?: "system"
+            com.ai.assistance.quro.util.QuroLocale.apply(langPref)
         } catch (_: Throwable) {
         }
         // L2 Shizuku：进程启动即注册 Binder 监听（官方推荐做法）。

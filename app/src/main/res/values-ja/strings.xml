@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Zorv AI</string>
+    <string name="quro_accessibility_desc">Zorv AI アクセシビリティサービス：UI自動化や画面内容の読み取りなどの高度な機能に使用します。本バージョンは権限宣言のみで、いかなるプライバシーデータも収集しません。</string>
+    <string name="quro_device_admin_label">Zorv AI デバイス管理者</string>
+    <string name="quro_device_admin_desc">画面ロック、カメラの無効化または復元の2つの操作のみに使用します。データを削除せず、ロック画面のパスワードも変更しません。</string>
+    <string name="ime_label">Zorv AI キーボード</string>
+    <string name="sc_voice_short">音声ボール</string>
+    <string name="sc_voice_long">フローティング音声ボールを開く</string>
+    <string name="sc_voice_disabled">音声ボールは無効</string>
+    <string name="sc_chat_short">ミニ対話</string>
+    <string name="sc_chat_long">直接対話を開く</string>
+    <string name="sc_chat_disabled">対話は無効</string>
+    <string name="sc_browser_short">ブラウザコンソール</string>
+    <string name="sc_browser_long">ZorvAI ブラウザコンソール</string>
+    <string name="sc_browser_disabled">ブラウザコンソールは無効</string>
+    <string name="settings_appearance">外観と会話</string>
+    <string name="appearance_group_appearance">外観</string>
+    <string name="appearance_group_conversation">会話</string>
+    <string name="appearance_dark_mode">ダークモード</string>
+    <string name="appearance_dark_mode_desc">夜間に明るさを自動的に下げる</string>
+    <string name="appearance_font_size">文字サイズ</string>
+    <string name="appearance_sound">返信通知音</string>
+    <string name="appearance_enter_send">Enterで送信</string>
+    <string name="appearance_enter_send_desc">オフの場合 Enterで改行</string>
+    <string name="appearance_voice_ball">フローティング音声ボール</string>
+    <string name="appearance_voice_ball_desc">STT → LLM → TTS いつでも音声会話</string>
+    <string name="appearance_history_rounds">保持する対話ラウンド数</string>
+    <string name="appearance_history_rounds_desc">モデルに送る直近ラウンドを制限</string>
+    <string name="appearance_group_language">言語</string>
+    <string name="appearance_follow_system">システム言語に従う</string>
+    <string name="appearance_follow_system_desc">言語パックは内蔵せず、スマホのシステム言語を使用</string>
+    <string name="appearance_app_language">アプリの言語</string>
+    <string name="appearance_group_profile">ユーザー情報</string>
+    <string name="appearance_profile">アバターと名前</string>
+    <string name="appearance_profile_desc">あなたのプロフィールを設定</string>
+</resources>

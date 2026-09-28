@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Zorv AI</string>
+    <string name="quro_accessibility_desc">خدمة الوصول الخاصة بـ Zorv AI: تُستخدم لأتمتة الواجهة وقراءة محتوى الشاشة وغيرها من القدرات المتقدمة. هذا الإصدار يُعلن الأذونات فقط ولا يجمع أي بيانات خصوصية.</string>
+    <string name="quro_device_admin_label">مسؤول جهاز Zorv AI</string>
+    <string name="quro_device_admin_desc">يُستخدم فقط لعمليتين: قفل الشاشة، تعطيل الكاميرا أو استعادتها. لا يحذف البيانات ولا يعدل كلمة مرور القفل.</string>
+    <string name="ime_label">لوحة مفاتيح Zorv AI</string>
+    <string name="sc_voice_short">كرة صوت</string>
+    <string name="sc_voice_long">فتح كرة الصوت العائمة</string>
+    <string name="sc_voice_disabled">كرة الصوت معطلة</string>
+    <string name="sc_chat_short">محادثة مصغرة</string>
+    <string name="sc_chat_long">افتح المحادثة مباشرة</string>
+    <string name="sc_chat_disabled">المحادثة معطلة</string>
+    <string name="sc_browser_short">وحدة تحكم المتصفح</string>
+    <string name="sc_browser_long">وحدة تحكم متصفح ZorvAI</string>
+    <string name="sc_browser_disabled">وحدة تحكم المتصفح معطلة</string>
+    <string name="settings_appearance">المظهر والمحادثة</string>
+    <string name="appearance_group_appearance">المظهر</string>
+    <string name="appearance_group_conversation">المحادثة</string>
+    <string name="appearance_dark_mode">الوضع الداكن</string>
+    <string name="appearance_dark_mode_desc">تعتيم تلقائي ليلاً</string>
+    <string name="appearance_font_size">حجم الخط</string>
+    <string name="appearance_sound">صوت الرد</string>
+    <string name="appearance_enter_send">الإدخال للإرسال</string>
+    <string name="appearance_enter_send_desc">الإدخال يُنشئ سطراً جديداً عند الإيقاف</string>
+    <string name="appearance_voice_ball">كرة صوت عائمة</string>
+    <string name="appearance_voice_ball_desc">STT → LLM → TTS محادثة صوتية في أي وقت</string>
+    <string name="appearance_history_rounds">جولات المحادثة المحفوظة</string>
+    <string name="appearance_history_rounds_desc">يحدّ روينات المحادثة الأخيرة المرسلة للنموذج</string>
+    <string name="appearance_group_language">اللغة</string>
+    <string name="appearance_follow_system">اتباع لغة النظام</string>
+    <string name="appearance_follow_system_desc">لا حزمة لغة مدمجة؛ يستخدم لغة النظام</string>
+    <string name="appearance_app_language">لغة التطبيق</string>
+    <string name="appearance_group_profile">ملف المستخدم</string>
+    <string name="appearance_profile">الصورة والاسم</string>
+    <string name="appearance_profile_desc">اضبط ملفك الشخصي</string>
+</resources>

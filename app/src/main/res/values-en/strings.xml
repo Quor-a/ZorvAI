@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Zorv AI</string>
+    <string name="quro_accessibility_desc">Zorv AI accessibility service: used for UI automation and screen content reading and other advanced capabilities. This version only completes permission declaration and collects no private data.</string>
+    <string name="quro_device_admin_label">Zorv AI Device Admin</string>
+    <string name="quro_device_admin_desc">Used only for two operations: lock screen, disable or restore camera. Does not clear data and does not modify lock screen password.</string>
+    <string name="ime_label">Zorv AI Keyboard</string>
+    <string name="sc_voice_short">Voice ball</string>
+    <string name="sc_voice_long">Open floating voice ball</string>
+    <string name="sc_voice_disabled">Voice ball disabled</string>
+    <string name="sc_chat_short">Mini chat</string>
+    <string name="sc_chat_long">Enter chat directly</string>
+    <string name="sc_chat_disabled">Chat disabled</string>
+    <string name="sc_browser_short">Browser console</string>
+    <string name="sc_browser_long">ZorvAI Browser console</string>
+    <string name="sc_browser_disabled">Browser console disabled</string>
+    <string name="settings_appearance">Appearance and Conversation</string>
+    <string name="appearance_group_appearance">Appearance</string>
+    <string name="appearance_group_conversation">Conversation</string>
+    <string name="appearance_dark_mode">Dark mode</string>
+    <string name="appearance_dark_mode_desc">Auto-dim at night</string>
+    <string name="appearance_font_size">Font size</string>
+    <string name="appearance_sound">Reply sound</string>
+    <string name="appearance_enter_send">Enter to send</string>
+    <string name="appearance_enter_send_desc">New line with Enter when off</string>
+    <string name="appearance_voice_ball">Floating voice ball</string>
+    <string name="appearance_voice_ball_desc">STT to LLM to TTS voice chat anytime</string>
+    <string name="appearance_history_rounds">Keep conversation rounds</string>
+    <string name="appearance_history_rounds_desc">Limit recent rounds sent to model</string>
+    <string name="appearance_group_language">Language</string>
+    <string name="appearance_follow_system">Follow system language</string>
+    <string name="appearance_follow_system_desc">No bundled language pack; uses phone system language</string>
+    <string name="appearance_app_language">App language</string>
+    <string name="appearance_group_profile">User profile</string>
+    <string name="appearance_profile">Avatar and name</string>
+    <string name="appearance_profile_desc">Set your profile</string>
+</resources>
