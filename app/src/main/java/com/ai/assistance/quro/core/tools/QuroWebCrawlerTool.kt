@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ContentValues
 import android.content.Context
@@ -28,7 +30,7 @@ import java.net.URL
  */
 class WebCrawlerTool : QuroTool {
     override val name = "web_crawler"
-    override val description = "AI 驱动网页爬虫（用应用内置浏览器 WebView 逐页渲染抓取）。" +
+    override val description = qstr(R.string.qk_03640) +
         "支持 JS 动态页面；自动提取正文与外链，同域限流、去重、深度/页数上限。" +
         "参数 {\"start_url\":\"https://...\",\"max_depth\":2,\"max_pages\":15,\"same_host_only\":true," +
         "\"extract\":\"both|links|text\",\"render_wait_ms\":2500,\"save_markdown\":false}。" +
@@ -240,7 +242,7 @@ class WebCrawlerTool : QuroTool {
             f.writeText(content, Charsets.UTF_8)
             f.absolutePath
         } catch (e: Exception) {
-            "保存失败：${e.message}"
+            qstr(R.string.qk_02879, (e.message).toString())
         }
     }
 }

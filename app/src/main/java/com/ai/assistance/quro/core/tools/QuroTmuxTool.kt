@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
@@ -11,7 +13,7 @@ import org.json.JSONObject
  */
 class QuroTmuxTool : QuroTool {
     override val name = "tmux"
-    override val description = "在 proot 容器内用 tmux 管理终端会话（多窗格/后台任务/键盘发送）。" +
+    override val description = qstr(R.string.qk_03715) +
         "参数 {\"action\":\"new_session|list_sessions|send_keys|capture|kill_session\",\"name\":\"会话名\",\"command\":\"新建会话时执行的命令（可选）\",\"keys\":\"要发送的按键串（send_keys 用）,\"timeout_ms\":30000}。" +
         "会话通过固定 socket 持久化于 /root/.quro-tmux.sock。首次自动 apt 安装 tmux。"
     override val parametersJson = """{

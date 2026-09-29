@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.mcp.QuroLocalMcpManager
@@ -26,7 +28,7 @@ import org.json.JSONObject
  */
 class McpDeployTool : QuroTool {
     override val name = "mcp_deploy"
-    override val description = "部署一个本地 MCP 服务器：提交一组工具定义（JSON 数组），应用在本地启动一个 MCP 端点，" +
+    override val description = qstr(R.string.qk_03691) +
             "之后即可用 mcp_call 按别名调用这些工具，MCP 设置界面也会自动列出。参数 " +
             "{\"name\":\"服务器别名\",\"tools\":[...工具定义...]}。" +
             "每个工具定义含 name/description/parameters/handler_type/handler_config。" +
@@ -81,7 +83,7 @@ class McpUndeployTool : QuroTool {
 /** 列出已部署的本地 MCP 服务器。 */
 class McpListLocalTool : QuroTool {
     override val name = "mcp_list_local"
-    override val description = "列出当前已部署的本地 MCP 服务器（AI 通过 mcp_deploy 创作并部署的），含别名、工具数与连接地址。"
+    override val description = qstr(R.string.qk_03541)
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String {
         val locals = QuroMcpClientPrefs.loadLocal(context)

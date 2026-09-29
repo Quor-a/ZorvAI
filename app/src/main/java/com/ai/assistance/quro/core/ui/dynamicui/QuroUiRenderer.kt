@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.ui.dynamicui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import androidx.compose.runtime.remember
 import com.ai.assistance.quro.genui.sdk.GenUI
@@ -302,8 +304,7 @@ private fun RenderChips(
 @Composable
 private fun RenderMermaid(node: QuroMermaidNode, modifier: Modifier) {
     if (node.source.isBlank()) {
-        Text(
-            text = "⚠️ mermaid 节点缺少 source（图表源码）",
+        Text(text = stringResource(R.string.qk_03638),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )
@@ -575,7 +576,7 @@ private fun RenderExpandable(node: QuroExpandableNode, modifier: Modifier) {
         Surface(modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
             color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(10.dp)) {
             Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(text = node.title.ifBlank { "详情" }, style = MaterialTheme.typography.labelLarge,
+                Text(text = node.title.ifBlank { stringResource(R.string.qk_00429) }, style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Text(text = if (expanded) "▲" else "▼", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -1611,7 +1612,7 @@ private fun RenderImage(node: QuroImageNode, modifier: Modifier) {
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = node.alt ?: "图片",
+                text = node.alt ?: stringResource(R.string.qk_00149),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1751,7 +1752,7 @@ private fun RenderAudio(
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = if (isPlaying) "暂停" else "播放",
+                    contentDescription = if (isPlaying) stringResource(R.string.qk_03388) else stringResource(R.string.qk_00104),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }
@@ -1860,12 +1861,12 @@ private fun RenderBrowser(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             TextButton(onClick = { onAction(QuroOpenUrlAction(url), emptyMap()) }) {
-                Text("在浏览器打开")
+                Text(stringResource(R.string.qk_03480))
             }
             TextButton(onClick = { webView.value?.reload() }) {
-                Icon(Icons.Filled.Refresh, contentDescription = "刷新", modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.qk_00459), modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("刷新")
+                Text(stringResource(R.string.qk_00459))
             }
         }
         AndroidView(
@@ -1930,7 +1931,7 @@ private fun RenderCode(
                 }) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("运行")
+                    Text(stringResource(R.string.qk_00266))
                 }
             }
         }

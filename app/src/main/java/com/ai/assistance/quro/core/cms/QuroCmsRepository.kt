@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.cms
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONArray
@@ -146,9 +148,9 @@ class QuroCmsRepository(context: Context) {
         // 1. 终端·Python 运行时（proot 内真实 Python 后端；终端是后端，本软是前端）
         QuroCmsModule(
             id = "quro.term.python",
-            name = "终端·Python运行时",
+            name = qstr(R.string.qk_03732),
             version = "1.0.0",
-            description = "在 proot/Ubuntu 终端内运行 Python（bootstrap 已装 python3）。模块自带真实入口脚本：部署后在终端拉起一个本地 HTTP 后端（监听 0.0.0.0 端口），本 App 作为前端通过 cms_call/ACI 调用，实现「终端是后端、本软是前端」的互为主从。",
+            description = qstr(R.string.qk_03575),
             author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
@@ -198,9 +200,9 @@ PYEOF
         // 2. 终端·Node 运行时（proot 内真实 Node 后端）
         QuroCmsModule(
             id = "quro.term.node",
-            name = "终端·Node运行时",
+            name = qstr(R.string.qk_03683),
             version = "1.0.0",
-            description = "在 proot/Ubuntu 终端内运行 Node.js（bootstrap 已装 nodejs）。自带真实入口脚本：部署后拉起本地 HTTP 后端，作为「终端是后端」的另一实现，与 Python 后端可并存。",
+            description = qstr(R.string.qk_03452),
             author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(
@@ -244,9 +246,9 @@ JSEOF
         // 3. 终端·静态 HTTP 服务（终端作为后端，对外提供文件服务）
         QuroCmsModule(
             id = "quro.term.httpd",
-            name = "终端·静态HTTP服务",
+            name = qstr(R.string.qk_03704),
             version = "1.0.0",
-            description = "在 proot 内启动一个静态文件 HTTP 服务（python3 -m http.server），把终端变成一个可对外提供文件的后端。本 App 作为前端向其请求资源，落实「互为主从」。",
+            description = qstr(R.string.qk_03467),
             author = "Zorv AI", license = "Apache-2.0",
             state = ModuleState.Ready,
             permissions = listOf(

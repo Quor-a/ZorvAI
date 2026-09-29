@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.cards.QuroChatCard
@@ -50,39 +52,39 @@ private data class UiActionSpec(
 /** 全部可被 AI 打开/控制的界面、弹层与开关（对话框内 UI 组件 → 工具）。 */
 private val UI_ACTIONS = listOf(
     UiActionSpec("ui_open_onlyoffice", "文档查看器", "打开应用内文档查看器（本地渲染引擎，支持 Word/Excel/PPT/PDF/文本预览与编辑，无需联网、不依赖第三方）"),
-    UiActionSpec("ui_open_knowledge", "知识库", "打开知识库，浏览/导入/检索本地知识文档"),
-    UiActionSpec("ui_open_terminal", "终端", "打开应用内终端 shell"),
-    UiActionSpec("ui_open_editor", "代码编辑器", "打开内置代码编辑器"),
-    UiActionSpec("ui_open_toolbox", "工具箱", "打开工具箱（文件管理/浏览器/IDE）"),
-    UiActionSpec("ui_open_kaleidobox", "工具包运行器", "打开 KaleidoBox 工具包运行器：以进程内 JVM/Dex 引擎运行 Kotlin/Java 工具包，列出已装包、装载内置示例计数器并渲染可交互 UI 表面（列包/装包/调 unit/渲染 UI）"),
-    UiActionSpec("ui_open_build", "构建台", "打开 Zorv 构建台（端侧 APK 构建器：Java 工程 → DEX → APK，自带 ecj/d8/apksig 工具链，免 aapt2，可离线编译打包安卓安装包）"),
-    UiActionSpec("ui_open_plugins", "插件", "打开插件管理"),
-    UiActionSpec("ui_open_skills", "技能", "打开技能 SKILL 管理（查看/新增/编辑/启用用户自定义技能）"),
+    UiActionSpec("ui_open_knowledge", qstr(R.string.qk_00215), "打开知识库，浏览/导入/检索本地知识文档"),
+    UiActionSpec("ui_open_terminal", qstr(R.string.qk_00216), "打开应用内终端 shell"),
+    UiActionSpec("ui_open_editor", qstr(R.string.qk_00886), "打开内置代码编辑器"),
+    UiActionSpec("ui_open_toolbox", qstr(R.string.qk_00214), "打开工具箱（文件管理/浏览器/IDE）"),
+    UiActionSpec("ui_open_kaleidobox", qstr(R.string.qk_02777), "打开 KaleidoBox 工具包运行器：以进程内 JVM/Dex 引擎运行 Kotlin/Java 工具包，列出已装包、装载内置示例计数器并渲染可交互 UI 表面（列包/装包/调 unit/渲染 UI）"),
+    UiActionSpec("ui_open_build", qstr(R.string.qk_02791), "打开 Zorv 构建台（端侧 APK 构建器：Java 工程 → DEX → APK，自带 ecj/d8/apksig 工具链，免 aapt2，可离线编译打包安卓安装包）"),
+    UiActionSpec("ui_open_plugins", qstr(R.string.qk_02779), "打开插件管理"),
+    UiActionSpec("ui_open_skills", qstr(R.string.qk_00218), "打开技能 SKILL 管理（查看/新增/编辑/启用用户自定义技能）"),
     UiActionSpec("ui_open_cms", "能力模块(CMS)", "打开 CMS 能力模块"),
     UiActionSpec("ui_open_aci", "ACI 管理中心", "打开 ACI 管理中心：浏览已发现的第三方 App、查看绑定状态与能力清单、手动注册 / 刷新 / 重绑"),
     UiActionSpec("ui_open_permission", "权限中心", "打开 CapOS 权限中心（L1-L4）"),
-    UiActionSpec("ui_open_model_config", "模型配置", "打开模型配置"),
-    UiActionSpec("ui_open_voice", "语音服务", "打开语音服务设置（TTS/STT）"),
+    UiActionSpec("ui_open_model_config", qstr(R.string.qk_02103), "打开模型配置"),
+    UiActionSpec("ui_open_voice", qstr(R.string.qk_03057), "打开语音服务设置（TTS/STT）"),
     UiActionSpec("ui_open_tts", "文本转语音", "打开 TTS 设置"),
     UiActionSpec("ui_open_stt", "语音转文本", "打开 STT 设置"),
     UiActionSpec("ui_open_voice_service", "语音服务(高级)", "打开语音服务高级设置"),
     UiActionSpec("ui_open_about", "关于", "打开关于页"),
     UiActionSpec("ui_open_appearance", "外观", "打开外观设置"),
-    UiActionSpec("ui_open_soul", "灵魂注入", "打开人格/灵魂注入设置"),
+    UiActionSpec("ui_open_soul", qstr(R.string.qk_02449), "打开人格/灵魂注入设置"),
     UiActionSpec("ui_open_memory", "记忆管理", "打开记忆管理对话框"),
     UiActionSpec("ui_open_sheet_model", "模型选择弹层", "打开底部模型选择弹层"),
     UiActionSpec("ui_open_sheet_persona", "人格选择弹层", "打开底部人格选择弹层"),
     UiActionSpec("ui_open_sheet_settings", "设置弹层", "打开底部设置弹层"),
     UiActionSpec("ui_open_sheet_upload", "工具面板", "打开 +工具 上传/工具面板"),
     UiActionSpec("ui_open_sheet_voice", "语音面板", "打开语音面板（TTS/STT）"),
-    UiActionSpec("ui_open_upload", "上传文件", "打开文件上传选择（图片/文件/视频）"),
+    UiActionSpec("ui_open_upload", qstr(R.string.qk_00161), "打开文件上传选择（图片/文件/视频）"),
     UiActionSpec("ui_open_import_tool", "导入工具", "打开导入工具对话框（AI 自写/粘贴 JSON）"),
     UiActionSpec("ui_open_ai_search", "AI 搜索", "打开 AI 浏览器·联网搜索对话框"),
-    UiActionSpec("ui_open_doc_generate", "文档生成", "打开文档生成对话框（生成 WPS/Office）"),
+    UiActionSpec("ui_open_doc_generate", qstr(R.string.qk_02713), "打开文档生成对话框（生成 WPS/Office）"),
     UiActionSpec("ui_toggle_deepthink", "切换深度思考", "切换对话框「深度思考」开关（更慢但更深）"),
     UiActionSpec("ui_toggle_memory", "切换自动记忆", "切换「AI 自动保存记忆」开关"),
     UiActionSpec("ui_clear_chat", "清空对话", "清空当前对话消息"),
-    UiActionSpec("ui_new_chat", "新对话", "新建一个对话"),
+    UiActionSpec("ui_new_chat", qstr(R.string.qk_00282), "新建一个对话"),
 )
 
 private class UiActionTool(private val spec: UiActionSpec) : QuroTool {

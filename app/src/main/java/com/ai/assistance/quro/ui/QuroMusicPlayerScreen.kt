@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Intent
 import androidx.compose.foundation.clickable
@@ -86,9 +89,8 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, "返回") }
-                Text(
-                    "音乐播放器",
+                IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_00143)) }
+                Text(stringResource(R.string.qk_02262),
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f).padding(start = 8.dp),
                 )
@@ -121,13 +123,13 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
             Spacer(Modifier.height(24.dp))
 
             Text(
-                media.title.ifEmpty { "本地音乐" },
+                media.title.ifEmpty { stringResource(R.string.qk_00156) },
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                if (media.uri.isEmpty()) "未在播放" else (if (media.isPlaying) "正在播放" else "已暂停"),
+                if (media.uri.isEmpty()) stringResource(R.string.qk_02263) else (if (media.isPlaying) stringResource(R.string.qk_00157) else stringResource(R.string.qk_00158)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = cs.onSurfaceVariant,
             )
@@ -164,7 +166,7 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = { sendControl(QuroMediaService.ACTION_PREV) }) {
-                    Icon(Icons.Filled.SkipPrevious, "上一首", Modifier.size(36.dp))
+                    Icon(Icons.Filled.SkipPrevious, stringResource(R.string.qk_02264), Modifier.size(36.dp))
                 }
                 Spacer(Modifier.width(24.dp))
                 FloatingActionButton(
@@ -180,7 +182,7 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
                 }
                 Spacer(Modifier.width(24.dp))
                 IconButton(onClick = { sendControl(QuroMediaService.ACTION_NEXT) }) {
-                    Icon(Icons.Filled.SkipNext, "下一首", Modifier.size(36.dp))
+                    Icon(Icons.Filled.SkipNext, stringResource(R.string.qk_02265), Modifier.size(36.dp))
                 }
             }
 
@@ -209,7 +211,7 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
                 }) {
                     Icon(
                         loopIcon,
-                        "循环模式",
+                        stringResource(R.string.qk_02266),
                         tint = if (media.loopMode != QuroMediaController.LOOP_OFF) cs.primary else cs.onSurfaceVariant,
                     )
                 }
@@ -220,7 +222,7 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
                 }) {
                     Icon(
                         Icons.Filled.Shuffle,
-                        "随机播放",
+                        stringResource(R.string.qk_02267),
                         tint = if (media.shuffle) cs.primary else cs.onSurfaceVariant,
                     )
                 }
@@ -246,13 +248,13 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
                 OutlinedButton(onClick = { showQueue = true }) {
                     Icon(Icons.Filled.QueueMusic, null)
                     Spacer(Modifier.width(8.dp))
-                    Text("播放列表 (${media.queue.size})")
+                    Text(stringResource(R.string.qk_02268, (media.queue.size).toString()))
                 }
                 Spacer(Modifier.width(12.dp))
                 Button(onClick = { showPicker = true }) {
                     Icon(Icons.Filled.MusicNote, null)
                     Spacer(Modifier.width(8.dp))
-                    Text("选择音乐")
+                    Text(stringResource(R.string.qk_02094))
                 }
             }
         }
@@ -262,10 +264,10 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
     if (showQueue) {
         AlertDialog(
             onDismissRequest = { showQueue = false },
-            title = { Text("播放列表 (${media.queue.size})") },
+            title = { Text(stringResource(R.string.qk_02268, (media.queue.size).toString())) },
             text = {
                 if (media.queue.isEmpty()) {
-                    Text("队列为空，先去「选择音乐」添加吧。", color = cs.onSurfaceVariant)
+                    Text(stringResource(R.string.qk_02269), color = cs.onSurfaceVariant)
                 } else {
                     LazyColumn(Modifier.heightIn(max = 360.dp)) {
                         itemsIndexed(media.queue) { i, track ->
@@ -287,7 +289,7 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
                                 )
                                 Spacer(Modifier.width(10.dp))
                                 Text(
-                                    track.title.ifBlank { "曲目 ${i + 1}" },
+                                    track.title.ifBlank { stringResource(R.string.qk_02270, (i + 1).toString()) },
                                     fontSize = 14.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -295,7 +297,7 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
                                     modifier = Modifier.weight(1f),
                                 )
                                 IconButton(onClick = { showQueue = false }, Modifier.size(28.dp)) {
-                                    Icon(Icons.Filled.Close, "关闭", tint = cs.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Filled.Close, stringResource(R.string.qk_00065), tint = cs.onSurfaceVariant, modifier = Modifier.size(16.dp))
                                 }
                             }
                             HorizontalDivider()
@@ -308,10 +310,10 @@ fun QuroMusicPlayerScreen(onClose: () -> Unit) {
                     TextButton(onClick = {
                         sendControl(QuroMediaService.ACTION_STOP)
                         showQueue = false
-                    }) { Text("停止", color = cs.error) }
+                    }) { Text(qstr(R.string.qk_02271), color = cs.error) }
                 }
             },
-            dismissButton = { TextButton(onClick = { showQueue = false }) { Text("关闭") } },
+            dismissButton = { TextButton(onClick = { showQueue = false }) { Text(stringResource(R.string.qk_00065)) } },
         )
     }
 }

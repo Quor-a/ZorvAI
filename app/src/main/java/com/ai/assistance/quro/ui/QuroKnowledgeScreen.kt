@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -70,13 +73,13 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
             }
         }.getOrNull()
         if (name == null) {
-            Toast.makeText(ctx, "无法读取所选文件，导入失败", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, qstr(R.string.qk_01988), Toast.LENGTH_LONG).show()
             return@rememberLauncherForActivityResult
         }
         val ext = name.substringAfterLast('.', "").lowercase()
         val supported = setOf("md", "txt", "json", "csv", "docx", "xlsx", "pptx")
         if (ext !in supported) {
-            Toast.makeText(ctx, "暂不支持导入该类型：$ext（仅支持 md/txt/json/csv/docx/xlsx/pptx）", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, qstr(R.string.qk_01989, (ext).toString()), Toast.LENGTH_LONG).show()
             return@rememberLauncherForActivityResult
         }
         // takePersistableUriPermission 仅用于长期持久化，失败不影响本次读取，故忽略异常
@@ -88,11 +91,11 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                 target.outputStream().use { out -> input.copyTo(out) }
             }
         }.onFailure {
-            Toast.makeText(ctx, "导入失败：${it.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, qstr(R.string.qk_01990, (it.message).toString()), Toast.LENGTH_LONG).show()
         }.isSuccess
         if (ok) {
             files = listKnowledgeFiles(dir)
-            Toast.makeText(ctx, "已导入：$safe", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_01991, (safe).toString()), Toast.LENGTH_SHORT).show()
             scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
         }
     }
@@ -111,9 +114,9 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                         }
                     }
                 }
-                withContext(Dispatchers.Main) { Toast.makeText(ctx, "知识库已导出", Toast.LENGTH_SHORT).show() }
+                withContext(Dispatchers.Main) { Toast.makeText(ctx, qstr(R.string.qk_01992), Toast.LENGTH_SHORT).show() }
             }.onFailure {
-                withContext(Dispatchers.Main) { Toast.makeText(ctx, "导出失败：${it.message}", Toast.LENGTH_LONG).show() }
+                withContext(Dispatchers.Main) { Toast.makeText(ctx, qstr(R.string.qk_01993, (it.message).toString()), Toast.LENGTH_LONG).show() }
             }
         }
     }
@@ -144,11 +147,11 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
 
     fun loadFile(f: File) {
         selected = f
-        selectedText = "读取中…"
+        selectedText = qstr(R.string.qk_01994)
         // 点击回调跑在主线程，大文档 OOXML 解析/读盘会 ANR → 移至 IO 线程，先给占位文案避免界面假死。
         scope.launch(Dispatchers.IO) {
             selectedText = if (f.extension.lowercase() in setOf("docx", "xlsx", "pptx"))
-                extractOfficeText(f) else runCatching { f.readText() }.getOrDefault("（无法读取内容）")
+                extractOfficeText(f) else runCatching { f.readText() }.getOrDefault(qstr(R.string.qk_01995))
         }
     }
 
@@ -165,16 +168,16 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
         val safe = raw.replace(Regex("[\\\\/:*?\"<>|]"), "_")
         val target = File(f.parentFile, if (safe.contains('.')) safe else "$safe.${f.extension}")
         if (target.exists()) {
-            Toast.makeText(ctx, "已存在同名文件，无法重命名", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_01996), Toast.LENGTH_SHORT).show()
             return
         }
         if (f.renameTo(target)) {
             files = listKnowledgeFiles(dir)
             if (selected == f) selected = target
-            Toast.makeText(ctx, "已重命名为：${target.name}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_01997, (target.name).toString()), Toast.LENGTH_SHORT).show()
             scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
         } else {
-            Toast.makeText(ctx, "重命名失败", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_01998), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -193,7 +196,7 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                 onClose = { viewFile = null },
                 onExternal = {
                     if (!QuroDocOpener.open(ctx, viewFile!!)) {
-                        Toast.makeText(ctx, "未找到可打开该文档的其他应用", Toast.LENGTH_LONG).show()
+                        Toast.makeText(ctx, qstr(R.string.qk_01999), Toast.LENGTH_LONG).show()
                     } else viewFile = null
                 },
                 readOnly = false,
@@ -227,41 +230,41 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
             TopAppBar(
                 title = {
                     Text(
-                        if (selected != null) selected!!.name else "知识库",
+                        if (selected != null) selected!!.name else stringResource(R.string.qk_00215),
                         maxLines = 1,
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = { if (selected != null) { selected = null; selectedText = "" } else onClose() }) {
-                        Icon(Icons.Filled.ArrowBack, "返回")
+                        Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_00143))
                     }
                 },
                 actions = {
                     if (selected == null) {
                         IconButton(onClick = { exportLauncher.launch("quro_knowledge_${System.currentTimeMillis()}.zip") }) {
-                            Icon(Icons.Filled.Share, "导出知识库（ZIP）")
+                            Icon(Icons.Filled.Share, stringResource(R.string.qk_02000))
                         }
                         IconButton(onClick = { importLauncher.launch(arrayOf("*/*")) }) {
-                            Icon(Icons.Filled.FileDownload, "导入文档")
+                            Icon(Icons.Filled.FileDownload, stringResource(R.string.qk_02001))
                         }
-                        IconButton(onClick = { showAdd = true }) { Icon(Icons.Filled.Add, "添加文档") }
+                        IconButton(onClick = { showAdd = true }) { Icon(Icons.Filled.Add, stringResource(R.string.qk_02002)) }
                     } else {
                         // 文本类（md/txt/json/csv）走富编辑器（自带完整 md 预览）；Office 走 viewer
                         val openDoc: (File) -> Unit = { f ->
                             if (f.extension.lowercase() in KB_TEXT_EXTS) editorFile = f else viewFile = f
                         }
                         IconButton(onClick = { selected?.let { openDoc(it) } }) {
-                            Icon(Icons.Filled.OpenInNew, "打开预览（富文本/可编辑）")
+                            Icon(Icons.Filled.OpenInNew, stringResource(R.string.qk_02003))
                         }
                         // 所有支持的文档类型都可编辑（文本类用内置富编辑器，Office 文档用 viewer 编辑）
                         IconButton(onClick = { selected?.let { openDoc(it) } }) {
-                            Icon(Icons.Filled.EditNote, "编辑内容")
+                            Icon(Icons.Filled.EditNote, stringResource(R.string.qk_02004))
                         }
                         IconButton(onClick = { selected?.let { renameTarget = it; showRename = true } }) {
-                            Icon(Icons.Filled.Edit, "重命名文档")
+                            Icon(Icons.Filled.Edit, stringResource(R.string.qk_02005))
                         }
                         IconButton(onClick = { selected?.let { deleteFile(it) } }) {
-                            Icon(Icons.Filled.Delete, "删除文档", tint = MaterialTheme.colorScheme.error)
+                            Icon(Icons.Filled.Delete, stringResource(R.string.qk_02006), tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 },
@@ -275,25 +278,22 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                 Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                InfoBox(
-                    "本地知识库（RAG）。文档保存在应用私有 knowledge_base/ 目录，仅在你的设备上做向量化检索，" +
-                            "不上传任何云端。你也可以直接对 AI 说「把 XX 存进知识库」。",
+                InfoBox(stringResource(R.string.qk_02007) + stringResource(R.string.qk_02008),
                 )
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("搜索文件名…") },
+                    placeholder = { Text(stringResource(R.string.qk_02009)) },
                     leadingIcon = { Icon(Icons.Filled.Search, null) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
-                GroupCaption("文档（${filtered.size}）")
+                GroupCaption(stringResource(R.string.qk_02010, (filtered.size).toString()))
                 if (files.isEmpty()) {
                     SetGroup {
-                        Text(
-                            "知识库为空。点右上角 + 添加文档，或从系统文件选择器导入。",
+                        Text(stringResource(R.string.qk_02011),
                             Modifier.padding(16.dp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.sp,
@@ -316,8 +316,8 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                 SetGroup {
                     SetRowClickable(
                         icon = Icons.Filled.Refresh,
-                        name = "重建索引",
-                        sub = "重新扫描并向量化全部文档",
+                        name = stringResource(R.string.qk_02012),
+                        sub = stringResource(R.string.qk_02013),
                         onClick = {
                             scope.launch(Dispatchers.IO) { runCatching { buildRagPipeline(ctx).syncDirectory(dir) } }
                         },
@@ -359,8 +359,7 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                 }
                 if (selected!!.extension.lowercase() in KB_OFFICE_EXTS) {
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Office 文档（docx/xlsx/pptx）：点击右上角「打开预览」可在应用内查看与编辑文本内容。修改后会自动重建 RAG 索引。",
+                    Text(stringResource(R.string.qk_02014),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -385,7 +384,7 @@ fun QuroKnowledgeScreen(onClose: () -> Unit) {
                     // 直接进入富编辑器撰写（格式工具栏 + 完整 md 预览），保存即入库并重建索引
                     editorFile = f
                 }.onFailure {
-                    Toast.makeText(ctx, "创建失败：${it.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_02015, (it.message).toString()), Toast.LENGTH_LONG).show()
                 }
             }
         )
@@ -444,20 +443,19 @@ private fun AddDocDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
         dismissButton = {},
-        title = { Text("新建知识文档") },
+        title = { Text(stringResource(R.string.qk_02016)) },
         text = {
             Column(Modifier.fillMaxWidth()) {
-                Text(
-                    "输入文档名后直接进入富编辑器撰写（支持 Markdown 格式工具栏与实时预览）。",
+                Text(stringResource(R.string.qk_02017),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(10.dp))
                 UnderlineField(
-                    label = "文档名",
+                    label = stringResource(R.string.qk_02018),
                     value = path,
                     onValueChange = { path = it },
-                    placeholder = "如 编码规范（默认 .md）",
+                    placeholder = stringResource(R.string.qk_02019),
                 )
                 Spacer(Modifier.height(12.dp))
                 DialogActions(
@@ -479,15 +477,15 @@ private fun RenameDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { if (name.isNotBlank()) onConfirm(name) }) { Text("确定") }
+            TextButton(onClick = { if (name.isNotBlank()) onConfirm(name) }) { Text(qstr(R.string.qk_02020)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-        title = { Text("重命名文档") },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } },
+        title = { Text(stringResource(R.string.qk_02005)) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("新文件名") },
+                label = { Text(stringResource(R.string.qk_02021)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -507,15 +505,15 @@ private fun EditDocDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { onConfirm(content) }) { Text("保存") }
+            TextButton(onClick = { onConfirm(content) }) { Text(stringResource(R.string.qk_00198)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-        title = { Text("编辑内容 · ${file.name}") },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } },
+        title = { Text(stringResource(R.string.qk_02022, (file.name).toString())) },
         text = {
             OutlinedTextField(
                 value = content,
                 onValueChange = { content = it },
-                label = { Text("文档内容") },
+                label = { Text(stringResource(R.string.qk_02023)) },
                 modifier = Modifier.fillMaxWidth().height(320.dp),
                 maxLines = 20,
             )

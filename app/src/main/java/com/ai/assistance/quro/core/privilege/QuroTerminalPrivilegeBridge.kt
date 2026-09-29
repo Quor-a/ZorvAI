@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.privilege
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Activity
 import android.content.Context
@@ -123,7 +125,7 @@ class QuroTerminalPrivilegeBridge(
         val usb = runCatching { QuroAdbDebug.usbDebugEnabled(appContext) }.getOrNull()
         return TerminalPrivilegeEntry(
             key = KEY_ADB,
-            title = "ADB / 无线调试",
+            title = qstr(R.string.qk_03607),
             status = when {
                 privileged -> "已具备特权通道（可静默执行 ADB）"
                 usb == true -> "USB 调试已开启"
@@ -154,7 +156,7 @@ class QuroTerminalPrivilegeBridge(
         val ok = sharedStorageAccessible()
         return TerminalPrivilegeEntry(
             key = KEY_STORAGE,
-            title = "共享存储",
+            title = qstr(R.string.qk_00312),
             status = if (ok) "已授权（/sdcard 可挂载）" else "未授权所有文件访问",
             available = ok,
             detail = "授权后在终端内挂载 /sdcard，访问照片/下载等公共目录",
@@ -166,12 +168,12 @@ class QuroTerminalPrivilegeBridge(
     private fun requestRoot(activity: Activity) {
         // Root 无系统引导页；调用 isRootAvailable() 会触发 su 授权框（Magisk/KernelSU 弹窗）。
         QuroRootGateway.invalidateCache()
-        Toast.makeText(activity, "正在请求 Root…请在弹出的授权框中选择允许", Toast.LENGTH_SHORT).show()
+        Toast.makeText(activity, qstr(R.string.qk_03466), Toast.LENGTH_SHORT).show()
         scope.launch {
             withContext(Dispatchers.IO) { runCatching { QuroRootGateway.isRootAvailable() } }
             withContext(Dispatchers.Main) {
                 val ok = QuroRootGateway.cachedRootAvailable() == true
-                Toast.makeText(activity, if (ok) "Root 授权成功 ✓" else "未获取 Root（已拒绝或设备未 Root）", Toast.LENGTH_SHORT).show()
+                Toast.makeText(activity, if (ok) qstr(R.string.qk_03532) else qstr(R.string.qk_03593), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -197,21 +199,21 @@ class QuroTerminalPrivilegeBridge(
             return
         }
         if (QuroShizuku.isReady) {
-            Toast.makeText(activity, "Shizuku 已授权 ✓", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, qstr(R.string.qk_03649), Toast.LENGTH_SHORT).show()
             return
         }
-        Toast.makeText(activity, "正在请求 Shizuku 授权…", Toast.LENGTH_SHORT).show()
+        Toast.makeText(activity, qstr(R.string.qk_02306), Toast.LENGTH_SHORT).show()
         // Shizuku 未运行则先拉起管理器；Binder 就绪后再 requestPermission。
         if (!QuroShizuku.isAlive) {
             openShizukuManager(activity)
-            Toast.makeText(activity, "请先在 Shizuku 应用中启动服务，再回到本页点「请求授权」", Toast.LENGTH_LONG).show()
+            Toast.makeText(activity, qstr(R.string.qk_03519), Toast.LENGTH_LONG).show()
             return
         }
         val listener = rikka.shizuku.Shizuku.OnRequestPermissionResultListener { _req, grant ->
             if (grant == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(activity, "Shizuku 授权成功 ✓", Toast.LENGTH_SHORT).show()
+                Toast.makeText(activity, qstr(R.string.qk_02311), Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(activity, "Shizuku 授权被拒绝", Toast.LENGTH_SHORT).show()
+                Toast.makeText(activity, qstr(R.string.qk_02312), Toast.LENGTH_SHORT).show()
             }
         }
         runCatching {
@@ -228,7 +230,7 @@ class QuroTerminalPrivilegeBridge(
                 runCatching { QuroAdbDebug.hasPrivilegedChannel() }.getOrDefault(false)
             }
             if (privileged) {
-                Toast.makeText(activity, "已具备特权通道，可直接在终端执行 ADB shell", Toast.LENGTH_SHORT).show()
+                Toast.makeText(activity, qstr(R.string.qk_03702), Toast.LENGTH_SHORT).show()
             } else {
                 QuroAdbDebug.openWirelessDebugging(activity)
             }
@@ -238,7 +240,7 @@ class QuroTerminalPrivilegeBridge(
     private fun requestLsposed(activity: Activity) {
         val mgr = QuroLSPosed.installedManagers(activity).firstOrNull()
         if (mgr == null) {
-            Toast.makeText(activity, "未检测到 LSPosed/Xposed 管理器（本应用无需 Xposed 也能运行）", Toast.LENGTH_LONG).show()
+            Toast.makeText(activity, qstr(R.string.qk_03659), Toast.LENGTH_LONG).show()
             return
         }
         val launch = runCatching { activity.packageManager.getLaunchIntentForPackage(mgr.first) }.getOrNull()

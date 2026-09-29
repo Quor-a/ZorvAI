@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.adb
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -128,8 +130,8 @@ object QuroAdbDebug {
         val prop = r.output.substringAfter("---", "").trim().lowercase()
         return when {
             sysState.contains("configured") -> "已连接（已配置）"
-            sysState.contains("connected") -> "已连接"
-            sysState.contains("disconnected") -> "未连接"
+            sysState.contains("connected") -> qstr(R.string.qk_00771)
+            sysState.contains("disconnected") -> qstr(R.string.qk_00770)
             prop.isNotBlank() && prop != "disconnected" && prop != "none" ->
                 if (prop.contains("adb")) "已连接（ADB 功能已启用）" else "已连接（$prop）"
             else -> null

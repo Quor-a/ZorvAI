@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import com.ai.assistance.quro.core.QuroToolSpec
 
@@ -23,22 +25,22 @@ object ToolCapabilityDirectory {
     enum class ToolCategory(val displayName: String, val description: String) {
         BASIC("基础工具", "时间、设备信息、计算等基础功能"),
         SYSTEM_CONTROL("系统控制", "音量、亮度、WiFi、蓝牙等设备控制"),
-        FILE_OPERATION("文件操作", "文件读写、复制、移动、删除等"),
+        FILE_OPERATION(qstr(R.string.qk_03181), "文件读写、复制、移动、删除等"),
         TERMINAL_LINUX("终端/Linux", "终端命令执行、Linux环境管理"),
-        NETWORK_WEB("网络/Web", "HTTP请求、浏览器、MCP服务"),
+        NETWORK_WEB(qstr(R.string.qk_03306), "HTTP请求、浏览器、MCP服务"),
         MEDIA("媒体", "音乐、视频、图片、音频处理"),
         UI_CARDS("UI/卡片", "对话框UI组件、可视化图表"),
         DYNAMIC_UI("动态UI", "quro-ui 原生组件：可交互原生界面、富媒体、可视化渲染"),
         GENUI("生成式UI", "生成式 UI 画布（GenUI）：把「画界面」的活派给整屏画布，以及 Web 应用工程（HTML）与原生小程序工程（WXML）"),
         KNOWLEDGE_MEMORY("知识/记忆", "记忆库、知识库、经验库"),
-        WORKSPACE("工作区", "工作区文件管理"),
+        WORKSPACE(qstr(R.string.qk_00025), "工作区文件管理"),
         ACCESSIBILITY("无障碍", "屏幕读取、点击、滑动等"),
         APP_MANAGEMENT("应用管理", "应用启动、安装、冻结等"),
-        COMMUNICATION("通信", "短信、联系人、日历等"),
+        COMMUNICATION(qstr(R.string.qk_03313), "短信、联系人、日历等"),
         AI_CAPABILITIES("AI能力", "图像生成、视频生成、文档处理"),
         SECURITY("安全/权限", "Shizuku、ROOT、设备管理员"),
         CMS_DEVELOPMENT("CMS开发", "CMS模块、引擎、开发环境管理与部署"),
-        AIP_DOC("文档排版", "长文档/PPT/报告/思维导图的 AIP 结构化排版与文档生成"),
+        AIP_DOC(qstr(R.string.qk_00121), "长文档/PPT/报告/思维导图的 AIP 结构化排版与文档生成"),
         PLUGIN("插件扩展", "APK 级插件框架：装独立 APK 给 AI 加能力（AI 工具 / ACI 能力 / 界面 / 指令）")
     }
     
@@ -135,7 +137,7 @@ object ToolCapabilityDirectory {
         "apk_plugin" to ToolInfo(
             name = "apk_plugin",
             category = ToolCategory.PLUGIN,
-            description = "APK 级插件框架总控（装/卸/重载插件、查看插件贡献的 AI 工具、直接调用插件工具、打开插件界面）",
+            description = qstr(R.string.qk_03554),
             useCases = listOf(
                 "装了哪些插件", "插件能干什么", "帮我装个插件", "把这个插件 APK 装上",
                 "卸载某插件", "重载插件（改完插件让它生效）", "打开插件界面", "用某个插件的能力查一下",
@@ -171,7 +173,7 @@ object ToolCapabilityDirectory {
         "get_current_time" to ToolInfo(
             name = "get_current_time",
             category = ToolCategory.BASIC,
-            description = "获取当前日期与时间",
+            description = qstr(R.string.qk_03698),
             useCases = listOf("现在几点", "今天星期几", "现在什么日期", "距离某天还有多久", "现在是上午还是下午"),
             examples = listOf("get_current_time()"),
             parameters = emptyMap(),
@@ -183,7 +185,7 @@ object ToolCapabilityDirectory {
         "get_device_info" to ToolInfo(
             name = "get_device_info",
             category = ToolCategory.BASIC,
-            description = "获取设备型号与系统版本",
+            description = qstr(R.string.qk_03552),
             useCases = listOf("我手机什么型号", "系统版本多少", "内存/存储还剩多少", "处理器是什么"),
             examples = listOf("get_device_info()"),
             parameters = emptyMap(),
@@ -195,7 +197,7 @@ object ToolCapabilityDirectory {
         "calculate" to ToolInfo(
             name = "calculate",
             category = ToolCategory.BASIC,
-            description = "计算算术表达式",
+            description = qstr(R.string.qk_03682),
             useCases = listOf("算一下1+2*3", "帮我算个数", "计算百分比", "单位换算"),
             examples = listOf("calculate(expr=\"1+2*3\")", "calculate(expr=\"(100-20)/5\")"),
             parameters = mapOf("expr" to "算术表达式，支持+ - * /和括号"),
@@ -208,7 +210,7 @@ object ToolCapabilityDirectory {
         "volume_control" to ToolInfo(
             name = "volume_control",
             category = ToolCategory.SYSTEM_CONTROL,
-            description = "控制设备音量",
+            description = qstr(R.string.qk_03697),
             useCases = listOf("调高音量", "静音", "音量调到最大", "把声音关小"),
             examples = listOf("volume_control(action=\"set\", level=80)", "volume_control(action=\"mute\")"),
             parameters = mapOf("action" to "set/mute/unmute", "level" to "音量级别0-100"),
@@ -220,7 +222,7 @@ object ToolCapabilityDirectory {
         "wifi_control" to ToolInfo(
             name = "wifi_control",
             category = ToolCategory.SYSTEM_CONTROL,
-            description = "控制WiFi开关",
+            description = qstr(R.string.qk_03529),
             useCases = listOf("开WiFi", "关掉WiFi", "WiFi开一下"),
             examples = listOf("wifi_control(action=\"enable\")", "wifi_control(action=\"disable\")"),
             parameters = mapOf("action" to "enable/disable"),
@@ -233,10 +235,10 @@ object ToolCapabilityDirectory {
         "write_file" to ToolInfo(
             name = "write_file",
             category = ToolCategory.FILE_OPERATION,
-            description = "写入文件内容",
+            description = qstr(R.string.qk_03419),
             useCases = listOf("帮我建个文件", "把这段存成txt", "生成配置文件", "写代码到文件"),
             examples = listOf("write_file(path=\"/sdcard/test.txt\", content=\"Hello World\")"),
-            parameters = mapOf("path" to "文件路径", "content" to "文件内容"),
+            parameters = mapOf("path" to qstr(R.string.qk_01054), "content" to "文件内容"),
             tips = listOf("会自动创建缺失的父目录", "路径用绝对路径"),
             relatedTools = listOf("read_text_file", "workspace_write"),
             priority = 4
@@ -245,10 +247,10 @@ object ToolCapabilityDirectory {
         "read_text_file" to ToolInfo(
             name = "read_text_file",
             category = ToolCategory.FILE_OPERATION,
-            description = "读取文本文件内容",
+            description = qstr(R.string.qk_03741),
             useCases = listOf("读一下这个txt", "打开那个日志看看", "把md内容念给我"),
             examples = listOf("read_text_file(path=\"/sdcard/test.txt\")"),
-            parameters = mapOf("path" to "文件路径"),
+            parameters = mapOf("path" to qstr(R.string.qk_01054)),
             tips = listOf("只能读文本文件", "大文件会截断"),
             relatedTools = listOf("write_file", "workspace_read"),
             priority = 4
@@ -257,7 +259,7 @@ object ToolCapabilityDirectory {
         "list_files" to ToolInfo(
             name = "list_files",
             category = ToolCategory.FILE_OPERATION,
-            description = "列出目录内容",
+            description = qstr(R.string.qk_03629),
             useCases = listOf("看看Download里有什么", "列一下这个文件夹", "目录里有哪些文件"),
             examples = listOf("list_files(path=\"/sdcard/Download\")"),
             parameters = mapOf("path" to "目录路径"),
@@ -270,7 +272,7 @@ object ToolCapabilityDirectory {
         "terminal_run" to ToolInfo(
             name = "terminal_run",
             category = ToolCategory.TERMINAL_LINUX,
-            description = "在终端执行命令",
+            description = qstr(R.string.qk_03709),
             useCases = listOf("在终端跑条命令", "执行shell", "df -h看一下"),
             examples = listOf("terminal_run(command=\"ls -la\")", "terminal_run(command=\"df -h\")"),
             parameters = mapOf("command" to "要执行的shell命令"),
@@ -282,7 +284,7 @@ object ToolCapabilityDirectory {
         "linux_run" to ToolInfo(
             name = "linux_run",
             category = ToolCategory.TERMINAL_LINUX,
-            description = "在Linux环境执行命令",
+            description = qstr(R.string.qk_03602),
             useCases = listOf("在Linux环境跑XX", "执行个Linux命令", "apt装个包"),
             examples = listOf("linux_run(command=\"apt update\")", "linux_run(command=\"python3 script.py\")"),
             parameters = mapOf("command" to "要执行的Linux命令"),
@@ -294,7 +296,7 @@ object ToolCapabilityDirectory {
         "linux_install" to ToolInfo(
             name = "linux_install",
             category = ToolCategory.TERMINAL_LINUX,
-            description = "安装Linux环境",
+            description = qstr(R.string.qk_03479),
             useCases = listOf("装一下Linux环境", "初始化Ubuntu", "安装proot"),
             examples = listOf("linux_install()"),
             parameters = emptyMap(),
@@ -347,7 +349,7 @@ object ToolCapabilityDirectory {
         "http_request" to ToolInfo(
             name = "http_request",
             category = ToolCategory.NETWORK_WEB,
-            description = "发送HTTP请求",
+            description = qstr(R.string.qk_03559),
             useCases = listOf("调一下这个接口", "发个GET到XX", "请求这个URL", "对接某个API"),
             examples = listOf("http_request(url=\"https://api.example.com/data\", method=\"GET\")"),
             parameters = mapOf("url" to "请求URL", "method" to "GET/POST等", "headers" to "请求头", "body" to "请求体"),
@@ -359,7 +361,7 @@ object ToolCapabilityDirectory {
         "ai_browser" to ToolInfo(
             name = "ai_browser",
             category = ToolCategory.NETWORK_WEB,
-            description = "AI浏览器：联网搜索、抓取网页、自动研究",
+            description = qstr(R.string.qk_03535),
             useCases = listOf("帮我搜一下XX", "查资料", "研究一下这个主题", "打开网页看看"),
             examples = listOf("ai_browser(action=\"search\", query=\"Python教程\")", "ai_browser(action=\"open\", url=\"https://example.com\")"),
             parameters = mapOf("action" to "search/open/read", "query" to "搜索关键词", "url" to "网址"),
@@ -371,7 +373,7 @@ object ToolCapabilityDirectory {
         "open_web" to ToolInfo(
             name = "open_web",
             category = ToolCategory.NETWORK_WEB,
-            description = "打开网页（被动展示）",
+            description = qstr(R.string.qk_03584),
             useCases = listOf("打开百度", "访问XX网址", "看这个网页"),
             examples = listOf("open_web(url=\"https://www.baidu.com\")"),
             parameters = mapOf("url" to "要打开的网址"),
@@ -395,7 +397,7 @@ object ToolCapabilityDirectory {
         "read_url" to ToolInfo(
             name = "read_url",
             category = ToolCategory.NETWORK_WEB,
-            description = "精读单个网页：抓取URL正文并抽取可读文本/要点，供AI引用作答",
+            description = qstr(R.string.qk_03557),
             useCases = listOf("读一下这个链接", "把这个网页内容提炼给我", "打开XX网址看具体内容"),
             examples = listOf("read_url(url=\"https://example.com/article\")"),
             parameters = mapOf("url" to "要精读的网页地址"),
@@ -408,10 +410,10 @@ object ToolCapabilityDirectory {
         "image_gen" to ToolInfo(
             name = "image_gen",
             category = ToolCategory.MEDIA,
-            description = "AI图像生成",
+            description = qstr(R.string.qk_03571),
             useCases = listOf("生成一张图片", "画个图", "AI生成图片", "帮我设计个logo"),
             examples = listOf("image_gen(prompt=\"一只可爱的猫咪\", style=\"realistic\")"),
-            parameters = mapOf("prompt" to "图片描述", "style" to "风格"),
+            parameters = mapOf("prompt" to qstr(R.string.qk_01041), "style" to "风格"),
             tips = listOf("描述越详细效果越好", "支持多种风格"),
             relatedTools = listOf("image_recognition", "creative_studio"),
             priority = 4
@@ -420,10 +422,10 @@ object ToolCapabilityDirectory {
         "image_recognition" to ToolInfo(
             name = "image_recognition",
             category = ToolCategory.MEDIA,
-            description = "图像识别/分析",
+            description = qstr(R.string.qk_03443),
             useCases = listOf("识别这张图片", "看看图片里是什么", "分析这个图片"),
             examples = listOf("image_recognition(image_path=\"/sdcard/photo.jpg\")"),
-            parameters = mapOf("image_path" to "图片路径"),
+            parameters = mapOf("image_path" to qstr(R.string.qk_01046)),
             tips = listOf("支持多种图片格式", "可识别物体、文字、场景"),
             relatedTools = listOf("image_gen", "visual_analysis"),
             priority = 4
@@ -433,7 +435,7 @@ object ToolCapabilityDirectory {
         "ui_control" to ToolInfo(
             name = "ui_control",
             category = ToolCategory.UI_CARDS,
-            description = "统一UI控制工具：操控界面每个角落（打开界面/切换开关/打开弹层/对话管理/渲染卡片/组件/查询状态/更新属性/滚动/聚焦/隐藏/显示/导航/权限控制）",
+            description = qstr(R.string.qk_03533),
             useCases = listOf(
                 "打开编辑器/终端/工具箱/知识库",
                 "切换深度思考/自动记忆开关",
@@ -494,7 +496,7 @@ object ToolCapabilityDirectory {
         "ui_dsl_spec" to ToolInfo(
             name = "ui_dsl_spec",
             category = ToolCategory.DYNAMIC_UI,
-            description = "拉取 quro-ui DSL 完整规范（节点/属性/动作），避免长 schema 常驻系统提示词",
+            description = qstr(R.string.qk_03463),
             useCases = listOf("要写 quro-ui 界面但不确定节点名/属性", "写动态UI前查规范", "确认某个节点的可配字段"),
             examples = listOf("ui_dsl_spec()"),
             parameters = emptyMap(),
@@ -506,7 +508,7 @@ object ToolCapabilityDirectory {
         "game_ui" to ToolInfo(
             name = "game_ui",
             category = ToolCategory.DYNAMIC_UI,
-            description = "进入可交互游戏模式：猜数字/井字棋/21点/记忆翻牌/RPS，或让用户描述新游戏你现场定规则带他玩",
+            description = qstr(R.string.qk_03444),
             useCases = listOf("用户想玩互动小游戏", "做游戏化互动", "用对话组件做可玩 demo", "现场发明新游戏规则"),
             examples = listOf("game_ui()", "game_ui(section='games')"),
             parameters = mapOf("section" to "overview/board/rules/games/all，默认 overview"),
@@ -518,7 +520,7 @@ object ToolCapabilityDirectory {
         "ui_validate" to ToolInfo(
             name = "ui_validate",
             category = ToolCategory.DYNAMIC_UI,
-            description = "输出 quro-ui 前自检：把「渲染失败」变成事前修正",
+            description = qstr(R.string.qk_03580),
             useCases = listOf("写完 quro-ui JSON 想先验证", "界面渲染报错要定位", "确认节点树是否合法"),
             examples = listOf("ui_validate(code=\"\"\"{...quro-ui json...}\"\"\")"),
             parameters = mapOf("code" to "quro-ui JSON 节点树字符串"),
@@ -531,10 +533,10 @@ object ToolCapabilityDirectory {
         "visual_question" to ToolInfo(
             name = "visual_question",
             category = ToolCategory.UI_CARDS,
-            description = "⚠️【强制】模糊命令/缺少信息时必须调用此工具询问用户",
+            description = qstr(R.string.qk_03464),
             useCases = listOf("用户指令模糊", "缺少关键信息", "需要确认不可逆操作", "多个选项需要用户选择", "多种理解需要确认"),
             examples = listOf("visual_question(question=\"你想要什么风格？\", options=[\"正式\",\"轻松\"])"),
-            parameters = mapOf("question" to "问题", "options" to "选项列表", "allow_custom" to "允许自定义输入"),
+            parameters = mapOf("question" to "问题", "options" to "选项列表", "allow_custom" to qstr(R.string.qk_03114)),
             tips = listOf("【强制】遇到任何不确定必须调用", "禁止猜测、禁止假设、禁止跳过", "返回用户选择的答案"),
             relatedTools = listOf("visual_action", "visual_popup"),
             priority = 5
@@ -543,10 +545,10 @@ object ToolCapabilityDirectory {
         "visual_action" to ToolInfo(
             name = "visual_action",
             category = ToolCategory.UI_CARDS,
-            description = "可视化操作弹窗：让用户从多个操作中选择一个",
+            description = qstr(R.string.qk_03481),
             useCases = listOf("选择操作", "确认/取消", "选择打开方式"),
             examples = listOf("visual_action(title=\"选择操作\", buttons=[{\"text\":\"查看\",\"value\":\"view\"}])"),
-            parameters = mapOf("title" to "标题", "buttons" to "按钮列表"),
+            parameters = mapOf("title" to qstr(R.string.qk_01066), "buttons" to "按钮列表"),
             tips = listOf("适合让用户选择操作", "返回用户点击的按钮值"),
             relatedTools = listOf("visual_question", "visual_popup"),
             priority = 4
@@ -558,7 +560,7 @@ object ToolCapabilityDirectory {
             description = "节点编辑器：AI直接读写节点流工程（.qne），无需打开界面即可编排可视化流程；与工具中心面板共享 studio/flow/*.qne",
             useCases = listOf("画个流程图/节点流", "做个自动化节点", "把思路连成节点", "生成节点流工程"),
             examples = listOf("node_editor(action=\"create\", name=\"flow1\", nodes=[])"),
-            parameters = mapOf("action" to "create/read/write/list", "name" to "工程名", "nodes" to "节点列表"),
+            parameters = mapOf("action" to "create/read/write/list", "name" to qstr(R.string.qk_02815), "nodes" to "节点列表"),
             tips = listOf("AI可直接产出/修改节点工程，面板打开自动恢复", "适合可视化编程与流程编排", "导出可转 Mermaid/可视化"),
             relatedTools = listOf("ui_control", "visual_studio", "ui_widget"),
             priority = 4
@@ -568,7 +570,7 @@ object ToolCapabilityDirectory {
         "fluid_cloud_notify" to ToolInfo(
             name = "fluid_cloud_notify",
             category = ToolCategory.SYSTEM_CONTROL,
-            description = "控制OPPO流体云，显示状态栏胶囊和卡片",
+            description = qstr(R.string.qk_03427),
             useCases = listOf("AI思考中显示状态", "任务进度显示", "工具执行状态", "创建流体云", "更新进度", "结束流体云"),
             examples = listOf(
                 "fluid_cloud(action=create, title=AI思考中, content=正在处理请求...)",
@@ -596,10 +598,10 @@ object ToolCapabilityDirectory {
         "memory_save" to ToolInfo(
             name = "memory_save",
             category = ToolCategory.KNOWLEDGE_MEMORY,
-            description = "保存一条记忆",
+            description = qstr(R.string.qk_03648),
             useCases = listOf("记住我喜欢喝咖啡", "把这件事存进记忆", "记下XX偏好"),
             examples = listOf("memory_save(content=\"用户喜欢喝咖啡\", title=\"用户偏好\")"),
-            parameters = mapOf("content" to "记忆内容", "title" to "标题（可选）", "group" to "分组（可选）"),
+            parameters = mapOf("content" to "记忆内容", "title" to qstr(R.string.qk_02496), "group" to "分组（可选）"),
             tips = listOf("自动保存跨会话", "支持标签和分组", "主动保存用户透露的持久信息"),
             relatedTools = listOf("memory_list", "memory_search"),
             priority = 5
@@ -608,7 +610,7 @@ object ToolCapabilityDirectory {
         "knowledge_search" to ToolInfo(
             name = "knowledge_search",
             category = ToolCategory.KNOWLEDGE_MEMORY,
-            description = "搜索知识库",
+            description = qstr(R.string.qk_03712),
             useCases = listOf("在我的知识库里搜XX", "查资料（本地文档）", "找下我存过的关于YY的"),
             examples = listOf("knowledge_search(query=\"Python教程\")"),
             parameters = mapOf("query" to "搜索关键词"),
@@ -620,10 +622,10 @@ object ToolCapabilityDirectory {
         "knowledge_add" to ToolInfo(
             name = "knowledge_add",
             category = ToolCategory.KNOWLEDGE_MEMORY,
-            description = "添加文档到知识库",
+            description = qstr(R.string.qk_03526),
             useCases = listOf("把这篇文档加进知识库", "导入这个文件当知识", "存成知识条目"),
             examples = listOf("knowledge_add(path=\"/sdcard/doc.pdf\", title=\"文档标题\")"),
-            parameters = mapOf("path" to "文档路径", "title" to "标题"),
+            parameters = mapOf("path" to "文档路径", "title" to qstr(R.string.qk_01066)),
             tips = listOf("支持多种文档格式", "自动建立索引", "支持PDF、Word、TXT等"),
             relatedTools = listOf("knowledge_search", "knowledge_manage"),
             priority = 4
@@ -633,7 +635,7 @@ object ToolCapabilityDirectory {
         "workspace_write" to ToolInfo(
             name = "workspace_write",
             category = ToolCategory.WORKSPACE,
-            description = "写入工作区文件",
+            description = qstr(R.string.qk_03451),
             useCases = listOf("把这段代码保存到工作区", "写到我的工程里", "存成文件", "生成个项目放工作区"),
             examples = listOf("workspace_write(path=\"MyApp/src/Main.java\", content=\"代码内容\")"),
             parameters = mapOf("path" to "相对路径", "content" to "文件内容", "append" to "是否追加"),
@@ -645,7 +647,7 @@ object ToolCapabilityDirectory {
         "workspace_read" to ToolInfo(
             name = "workspace_read",
             category = ToolCategory.WORKSPACE,
-            description = "读取工作区文件",
+            description = qstr(R.string.qk_03496),
             useCases = listOf("读一下工作区里的XX文件", "看看MyApp/src/Main.java现在内容", "工作区那个配置长啥样"),
             examples = listOf("workspace_read(path=\"MyApp/src/Main.java\")"),
             parameters = mapOf("path" to "相对路径"),
@@ -657,7 +659,7 @@ object ToolCapabilityDirectory {
         "workspace_list" to ToolInfo(
             name = "workspace_list",
             category = ToolCategory.WORKSPACE,
-            description = "列出工作区内容",
+            description = qstr(R.string.qk_03727),
             useCases = listOf("工作区里有什么", "列出我的工程", "看下MyApp目录结构", "工作区根目录有哪些文件"),
             examples = listOf("workspace_list()", "workspace_list(path=\"MyApp/src\")"),
             parameters = mapOf("path" to "相对路径（可选）"),
@@ -670,7 +672,7 @@ object ToolCapabilityDirectory {
         "read_screen" to ToolInfo(
             name = "read_screen",
             category = ToolCategory.ACCESSIBILITY,
-            description = "读取当前屏幕内容",
+            description = qstr(R.string.qk_03536),
             useCases = listOf("看看现在屏幕上是啥", "读一下当前界面", "这个App现在显示啥"),
             examples = listOf("read_screen()"),
             parameters = emptyMap(),
@@ -682,7 +684,7 @@ object ToolCapabilityDirectory {
         "tap_screen" to ToolInfo(
             name = "tap_screen",
             category = ToolCategory.ACCESSIBILITY,
-            description = "点击屏幕指定位置",
+            description = qstr(R.string.qk_03591),
             useCases = listOf("点一下屏幕上的XX按钮", "帮我戳那个位置", "点击确认"),
             examples = listOf("tap_screen(x=500, y=800)", "tap_screen(resource_id=\"btn_confirm\")"),
             parameters = mapOf("x" to "X坐标", "y" to "Y坐标", "resource_id" to "控件ID"),
@@ -694,7 +696,7 @@ object ToolCapabilityDirectory {
         "swipe_screen" to ToolInfo(
             name = "swipe_screen",
             category = ToolCategory.ACCESSIBILITY,
-            description = "滑动屏幕",
+            description = qstr(R.string.qk_03556),
             useCases = listOf("往上滑", "左滑翻页", "划一下", "在(x1,y1)→(x2,y2)划"),
             examples = listOf("swipe_screen(x1=500, y1=1000, x2=500, y2=500)", "swipe_screen(direction=\"up\")"),
             parameters = mapOf("x1" to "起点X", "y1" to "起点Y", "x2" to "终点X", "y2" to "终点Y", "direction" to "方向up/down/left/right"),
@@ -706,7 +708,7 @@ object ToolCapabilityDirectory {
         "enable_screen_capture" to ToolInfo(
             name = "enable_screen_capture",
             category = ToolCategory.ACCESSIBILITY,
-            description = "主动发起屏幕捕获（MediaProjection）系统授权：让AI能看懂屏幕/截图，无需用户手动长按开关",
+            description = qstr(R.string.qk_03711),
             useCases = listOf("看懂现在屏幕", "截图看下当前界面", "看看屏幕在干嘛", "需要读屏/视觉理解时"),
             examples = listOf("enable_screen_capture()"),
             parameters = emptyMap(),
@@ -719,7 +721,7 @@ object ToolCapabilityDirectory {
         "launch_app" to ToolInfo(
             name = "launch_app",
             category = ToolCategory.APP_MANAGEMENT,
-            description = "启动应用",
+            description = qstr(R.string.qk_03680),
             useCases = listOf("打开微信", "启动相机", "帮我开XX应用"),
             examples = listOf("launch_app(package_name=\"com.tencent.mm\")"),
             parameters = mapOf("package_name" to "应用包名"),
@@ -731,7 +733,7 @@ object ToolCapabilityDirectory {
         "open_app" to ToolInfo(
             name = "open_app",
             category = ToolCategory.APP_MANAGEMENT,
-            description = "打开应用（按包名）",
+            description = qstr(R.string.qk_03484),
             useCases = listOf("打开XX应用", "启动XX"),
             examples = listOf("open_app(package_name=\"com.tencent.mm\")"),
             parameters = mapOf("package_name" to "应用包名"),
@@ -744,7 +746,7 @@ object ToolCapabilityDirectory {
         "send_sms" to ToolInfo(
             name = "send_sms",
             category = ToolCategory.COMMUNICATION,
-            description = "发送短信",
+            description = qstr(R.string.qk_03696),
             useCases = listOf("发短信给XX说…", "给我妈发条信息", "发个短信"),
             examples = listOf("send_sms(phone_number=\"13800138000\", message=\"你好\")"),
             parameters = mapOf("phone_number" to "手机号", "message" to "短信内容"),
@@ -756,7 +758,7 @@ object ToolCapabilityDirectory {
         "read_contacts" to ToolInfo(
             name = "read_contacts",
             category = ToolCategory.COMMUNICATION,
-            description = "读取联系人",
+            description = qstr(R.string.qk_03434),
             useCases = listOf("我通讯录里谁", "XX的电话多少", "找下联系人"),
             examples = listOf("read_contacts()", "read_contacts(query=\"张三\")"),
             parameters = mapOf("query" to "搜索关键词（可选）"),
@@ -769,7 +771,7 @@ object ToolCapabilityDirectory {
         "run_code" to ToolInfo(
             name = "run_code",
             category = ToolCategory.AI_CAPABILITIES,
-            description = "运行代码（Python/JS/Shell等）",
+            description = qstr(R.string.qk_03429),
             useCases = listOf("跑个Python脚本", "执行这段代码", "算一下这个", "写个程序"),
             examples = listOf("run_code(code=\"print('Hello')\", lang=\"python\")"),
             parameters = mapOf("code" to "代码内容", "lang" to "语言python/node/shell/html"),
@@ -781,7 +783,7 @@ object ToolCapabilityDirectory {
         "workbench" to ToolInfo(
             name = "workbench",
             category = ToolCategory.AI_CAPABILITIES,
-            description = "创建完整多文件项目（已合入统一的「Web 应用」（本工具为兼容别名，转发到 miniapp））",
+            description = qstr(R.string.qk_03588),
             useCases = listOf("做个计算器", "写个多文件项目", "创建前后端分离项目", "做个完整的XX功能"),
             examples = listOf("workbench(action=\"create\", name=\"calculator\", files=[{path:\"index.html\", content:\"...\"}])"),
             parameters = mapOf("action" to "create/run/edit/save/wrap", "name" to "项目名", "files" to "文件列表", "entry" to "入口文件"),
@@ -793,8 +795,8 @@ object ToolCapabilityDirectory {
         "creative_studio" to ToolInfo(
             name = "creative_studio",
             category = ToolCategory.AI_CAPABILITIES,
-            description = "广义IDE知识库和创作工具",
-            useCases = listOf("推荐IDE", "做个视频", "画个图", "做3D模型", "写音乐"),
+            description = qstr(R.string.qk_03581),
+            useCases = listOf("推荐IDE", qstr(R.string.qk_01042), "画个图", "做3D模型", "写音乐"),
             examples = listOf("creative_studio(action=\"list_categories\")", "creative_studio(action=\"recommend\", need=\"video_editing\")"),
             parameters = mapOf("action" to "list_categories/recommend/start", "need" to "需求描述"),
             tips = listOf("包含图形/视频/音频/3D/游戏等所有创作领域", "可推荐适合的工具", "可启动已安装的创作工具"),
@@ -806,7 +808,7 @@ object ToolCapabilityDirectory {
         "mcp_servers" to ToolInfo(
             name = "mcp_servers",
             category = ToolCategory.NETWORK_WEB,
-            description = "列出MCP服务器",
+            description = qstr(R.string.qk_03626),
             useCases = listOf("看看连了哪些MCP服务器", "MCP服务列表", "外部工具有哪些"),
             examples = listOf("mcp_servers()"),
             parameters = emptyMap(),
@@ -818,10 +820,10 @@ object ToolCapabilityDirectory {
         "mcp_call" to ToolInfo(
             name = "mcp_call",
             category = ToolCategory.NETWORK_WEB,
-            description = "调用MCP工具",
+            description = qstr(R.string.qk_03608),
             useCases = listOf("调用外部MCP的XX工具", "让连着的服务器干YY", "用外部工具"),
             examples = listOf("mcp_call(server=\"github\", tool=\"create_issue\", params={...})"),
-            parameters = mapOf("server" to "服务器名", "tool" to "工具名", "params" to "参数"),
+            parameters = mapOf("server" to "服务器名", "tool" to "工具名", "params" to qstr(R.string.qk_00142)),
             tips = listOf("先用mcp_list_tools查看可用工具", "支持参数验证", "返回结构化结果"),
             relatedTools = listOf("mcp_servers", "mcp_list_tools"),
             priority = 4
@@ -831,11 +833,11 @@ object ToolCapabilityDirectory {
         "cms_toolbox" to ToolInfo(
             name = "cms_toolbox",
             category = ToolCategory.CMS_DEVELOPMENT,
-            description = "CMS模块与引擎管理：查看/调用CMS模块、部署/检查CMS引擎状态、修复CMS部署、AI自写CMS模块脚本",
+            description = qstr(R.string.qk_03495),
             useCases = listOf(
                 "查看CMS模块列表",
                 "调用CMS能力模块",
-                "部署CMS引擎",
+                qstr(R.string.qk_01556),
                 "检查CMS引擎状态",
                 "修复CMS部署失败",
                 "AI自写CMS模块并部署"
@@ -872,10 +874,10 @@ object ToolCapabilityDirectory {
         "cms_call" to ToolInfo(
             name = "cms_call",
             category = ToolCategory.CMS_DEVELOPMENT,
-            description = "调用CMS能力模块（旧接口，建议使用cms_toolbox）",
+            description = qstr(R.string.qk_03668),
             useCases = listOf("调用XX能力模块做YY", "让模块执行", "用CMS功能"),
             examples = listOf("cms_call(capability_id=\"echo_text\", args={text:\"hello\"})"),
-            parameters = mapOf("capability_id" to "能力ID", "args" to "参数"),
+            parameters = mapOf("capability_id" to "能力ID", "args" to qstr(R.string.qk_00142)),
             tips = listOf("先用cms_list查看可用能力", "支持同步/异步", "可传参数", "建议使用cms_toolbox替代"),
             relatedTools = listOf("cms_list", "cms_status", "cms_toolbox"),
             priority = 3
@@ -884,7 +886,7 @@ object ToolCapabilityDirectory {
         "build_apk" to ToolInfo(
             name = "build_apk",
             category = ToolCategory.CMS_DEVELOPMENT,
-            description = "端侧APK构建：Java/Kotlin源码→DEX→APK，AI可真正触发离线编译打包（支持自定义签名/依赖JAR/图标）",
+            description = qstr(R.string.qk_03592),
             useCases = listOf("帮我做个App", "打包这个安卓工程", "生成APK", "编译并签名", "用自定义包名/图标出包"),
             examples = listOf("build_apk(source=\"...java代码...\", package_name=\"com.example.app\", generate_keystore=true)"),
             parameters = mapOf(
@@ -906,8 +908,8 @@ object ToolCapabilityDirectory {
         "export_apk" to ToolInfo(
             name = "export_apk",
             category = ToolCategory.CMS_DEVELOPMENT,
-            description = "导出构建产物：把构建台生成的APK导出到可访问位置（替代UI文件选择器，AI也能调起）",
-            useCases = listOf("把APK导出来", "保存到下载目录", "导出产物"),
+            description = qstr(R.string.qk_03454),
+            useCases = listOf("把APK导出来", "保存到下载目录", qstr(R.string.qk_03616)),
             examples = listOf("export_apk(path=\"/sdcard/Download/app.apk\")"),
             parameters = mapOf("path" to "导出目标路径"),
             tips = listOf("构建台UI的导出是文件选择器、AI用不了，本工具替代它"),
@@ -918,7 +920,7 @@ object ToolCapabilityDirectory {
         "cms_list" to ToolInfo(
             name = "cms_list",
             category = ToolCategory.CMS_DEVELOPMENT,
-            description = "列出CMS能力模块（旧接口，建议使用cms_toolbox）",
+            description = qstr(R.string.qk_03719),
             useCases = listOf("我装了哪些能力模块", "CMS模块列表", "有什么能力"),
             examples = listOf("cms_list()"),
             parameters = emptyMap(),
@@ -931,10 +933,10 @@ object ToolCapabilityDirectory {
         "aci_call" to ToolInfo(
             name = "aci_call",
             category = ToolCategory.APP_MANAGEMENT,
-            description = "调用第三方App的ACI能力",
+            description = qstr(R.string.qk_03502),
             useCases = listOf("让XX App帮我做YY", "调起外部App的能力", "用浏览器打开网页"),
             examples = listOf("aci_call(capability=\"browser_open\", args={url:\"https://example.com\"})"),
-            parameters = mapOf("target_package" to "目标包名（可选）", "capability" to "能力名", "args" to "参数"),
+            parameters = mapOf("target_package" to "目标包名（可选）", "capability" to "能力名", "args" to qstr(R.string.qk_00142)),
             tips = listOf("可省略target_package用默认应用", "先用aci_list查看可用能力", "支持多种能力组合"),
             relatedTools = listOf("aci_list", "browser_open"),
             priority = 5
@@ -943,7 +945,7 @@ object ToolCapabilityDirectory {
         "aci_list" to ToolInfo(
             name = "aci_list",
             category = ToolCategory.APP_MANAGEMENT,
-            description = "列出可用的ACI能力",
+            description = qstr(R.string.qk_03718),
             useCases = listOf("有哪些第三方App能让我调用", "可控制的外部能力", "ACI能力列表"),
             examples = listOf("aci_list()"),
             parameters = emptyMap(),
@@ -956,7 +958,7 @@ object ToolCapabilityDirectory {
         "screenshot" to ToolInfo(
             name = "screenshot",
             category = ToolCategory.ACCESSIBILITY,
-            description = "截取屏幕截图",
+            description = qstr(R.string.qk_03542),
             useCases = listOf("截个图", "截图保存", "把屏幕截下来"),
             examples = listOf("screenshot()"),
             parameters = emptyMap(),
@@ -968,7 +970,7 @@ object ToolCapabilityDirectory {
         "visual_analysis" to ToolInfo(
             name = "visual_analysis",
             category = ToolCategory.ACCESSIBILITY,
-            description = "视觉分析当前屏幕截图（真实视觉理解）：用视觉大模型识别内容，任何需要看见屏幕的场景都可使用",
+            description = qstr(R.string.qk_03497),
             useCases = listOf("看看屏幕上是什么", "分析这个页面/App/游戏界面", "屏幕上有什么按钮/文字/图标", "定位某个元素并操作", "OCR 提取截图文字", "辅助点击/操作"),
             examples = listOf("visual_analysis()", "visual_analysis(question=\"这个按钮是做什么的\", mode=\"ui\")"),
             parameters = emptyMap(),
@@ -981,7 +983,7 @@ object ToolCapabilityDirectory {
         "speak" to ToolInfo(
             name = "speak",
             category = ToolCategory.MEDIA,
-            description = "TTS语音合成",
+            description = qstr(R.string.qk_03742),
             useCases = listOf("读给我听", "念一下这段", "大声朗读", "用语音播报"),
             examples = listOf("speak(text=\"你好世界\", voice=\"xiaoxiao\")"),
             parameters = mapOf("text" to "要朗读的文本", "voice" to "音色（可选）"),
@@ -994,7 +996,7 @@ object ToolCapabilityDirectory {
         "schedule_task" to ToolInfo(
             name = "schedule_task",
             category = ToolCategory.AI_CAPABILITIES,
-            description = "创建定时任务",
+            description = qstr(R.string.qk_03628),
             useCases = listOf("每天定时提醒我喝水", "下周三自动发条消息", "10分钟后执行某个动作"),
             examples = listOf("schedule_task(action=\"create\", schedule=\"0 9 * * *\", task=\"提醒喝水\")"),
             parameters = mapOf("action" to "create/list/delete", "schedule" to "cron表达式", "task" to "任务内容"),
@@ -1007,10 +1009,10 @@ object ToolCapabilityDirectory {
         "aiwps_create" to ToolInfo(
             name = "aiwps_create",
             category = ToolCategory.AI_CAPABILITIES,
-            description = "生成真实Office文件（docx/xlsx/pptx/pdf），可下载/分享",
+            description = qstr(R.string.qk_03499),
             useCases = listOf("帮我生成一份Word周报", "做个Excel表格", "出个PPT关于XX", "生成PDF报告"),
             examples = listOf("aiwps_create(type=\"docx\", title=\"周报\", content=\"内容\")"),
-            parameters = mapOf("type" to "docx/xlsx/pptx/pdf", "title" to "标题", "content" to "内容"),
+            parameters = mapOf("type" to "docx/xlsx/pptx/pdf", "title" to qstr(R.string.qk_01066), "content" to qstr(R.string.qk_01059)),
             tips = listOf("生成真正的Office二进制文件", "可用WPS/Office打开", "文件保存到Downloads目录"),
             relatedTools = listOf("enhanced_doc_create", "chat_doc", "workspace_doc"),
             priority = 5
@@ -1019,10 +1021,10 @@ object ToolCapabilityDirectory {
         "chat_doc" to ToolInfo(
             name = "chat_doc",
             category = ToolCategory.AI_CAPABILITIES,
-            description = "对话框内直接写文档并渲染显示（不生成文件）",
+            description = qstr(R.string.qk_03539),
             useCases = listOf("写一篇文章在对话框显示", "生成代码示例", "写报告/方案", "生成表格"),
             examples = listOf("chat_doc(title=\"方案\", content=\"# 方案\\n...\", format=\"md\")"),
-            parameters = mapOf("title" to "标题", "content" to "内容", "format" to "md/html/code/text"),
+            parameters = mapOf("title" to qstr(R.string.qk_01066), "content" to qstr(R.string.qk_01059), "format" to "md/html/code/text"),
             tips = listOf("不生成文件，内容直接渲染在对话框", "适合快速展示", "支持Markdown/HTML/代码/文本"),
             relatedTools = listOf("aiwps_create", "enhanced_doc_create", "ui_widget"),
             priority = 5
@@ -1031,10 +1033,10 @@ object ToolCapabilityDirectory {
         "enhanced_doc_create" to ToolInfo(
             name = "enhanced_doc_create",
             category = ToolCategory.AIP_DOC,
-            description = "多格式文档创建（md/txt/csv/json/html等17种）",
+            description = qstr(R.string.qk_03736),
             useCases = listOf("创建Markdown文件", "生成JSON配置", "写HTML页面", "创建CSV数据"),
             examples = listOf("enhanced_doc_create(type=\"md\", title=\"笔记\", content=\"内容\")"),
-            parameters = mapOf("type" to "格式", "title" to "标题", "content" to "内容"),
+            parameters = mapOf("type" to qstr(R.string.qk_01065), "title" to qstr(R.string.qk_01066), "content" to qstr(R.string.qk_01059)),
             tips = listOf("支持17种格式", "文本类文档优先用此工具", "创建后自动渲染预览"),
             relatedTools = listOf("aiwps_create", "chat_doc", "workspace_doc"),
             priority = 4

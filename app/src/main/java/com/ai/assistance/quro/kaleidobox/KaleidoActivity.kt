@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.kaleidobox
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -45,6 +48,12 @@ import java.util.Locale
  * 让插件能响应前后台切换与销毁（如暂停计时器、保存状态）。
  */
 class KaleidoActivity : ComponentActivity() {
+    // 语言：ComponentActivity 不走 AppCompat，必须在 attachBaseContext 里自己包一层，
+    // 否则 Compose 的 stringResource 永远取系统语言（表现为「切了语言界面还是中文」）。
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(com.ai.assistance.quro.util.QuroLocale.wrap(newBase))
+    }
+
     private var pkgId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -161,7 +170,7 @@ private fun KaleidoPluginScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143))
                     }
                 },
                 actions = {
@@ -176,14 +185,14 @@ private fun KaleidoPluginScreen(
                                 )
                             }
                             val msg = if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) {
-                                "已固定到桌面（若系统支持）"
+                                qstr(R.string.qk_03511)
                             } else {
                                 "固定失败：${out.asString()}"
                             }
                             snackbarHostState.showSnackbar(msg)
                         }
                     }) {
-                        Icon(Icons.Filled.Add, contentDescription = "加到桌面")
+                        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.qk_03672))
                     }
                 },
             )
@@ -226,12 +235,12 @@ private fun KaleidoPluginScreen(
                     runtime == null -> {
                         CenteredState(
                             loading = true,
-                            text = "插件运行时未就绪，请稍候…",
+                            text = stringResource(R.string.qk_03630),
                         )
                     }
                     node == null -> {
                         CenteredState(
-                            text = "该插件暂未提供可交互界面",
+                            text = stringResource(R.string.qk_03512),
                             sub = "可在对话框里让 AI 调用它的能力",
                         )
                     }

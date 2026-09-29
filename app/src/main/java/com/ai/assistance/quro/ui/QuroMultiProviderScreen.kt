@@ -3,6 +3,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -54,22 +57,21 @@ fun QuroMultiProviderScreen(
         topBar = {
             TopAppBar(
                 title = { 
-                    Text(
-                        "多提供商管理",
+                    Text(stringResource(R.string.qk_02229),
                         fontWeight = FontWeight.Bold
                     ) 
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.qk_00143))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showFailoverSettings = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "故障转移设置")
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.qk_02230))
                     }
                     IconButton(onClick = { showHealthCheck = true }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "健康检查")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.qk_02231))
                     }
                 }
             )
@@ -79,7 +81,7 @@ fun QuroMultiProviderScreen(
                 onClick = { showAddDialog = true },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
-                Icon(Icons.Default.Add, contentDescription = "添加提供商")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.qk_02232))
             }
         }
     ) { padding ->
@@ -192,8 +194,7 @@ fun ProviderStatsCard(providers: List<QuroProviderConfig>) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            Text(
-                text = "提供商概览",
+            Text(text = stringResource(R.string.qk_02233),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -204,10 +205,10 @@ fun ProviderStatsCard(providers: List<QuroProviderConfig>) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                StatItem("总提供商", providers.size.toString())
-                StatItem("已启用", enabledCount.toString())
-                StatItem("健康", healthyCount.toString())
-                StatItem("故障", (enabledCount - healthyCount).toString())
+                StatItem(stringResource(R.string.qk_02234), providers.size.toString())
+                StatItem(stringResource(R.string.qk_02235), enabledCount.toString())
+                StatItem(stringResource(R.string.qk_02236), healthyCount.toString())
+                StatItem(stringResource(R.string.qk_02237), (enabledCount - healthyCount).toString())
             }
         }
     }
@@ -309,13 +310,13 @@ fun ProviderCard(
             // 详细信息
             Column {
                 InfoRow("URL", provider.baseUrl)
-                InfoRow("模型", provider.defaultModel)
-                InfoRow("优先级", provider.priority.toString())
+                InfoRow(stringResource(R.string.qk_02238), provider.defaultModel)
+                InfoRow(stringResource(R.string.qk_02239), provider.priority.toString())
                 if (provider.isLocal) {
-                    InfoRow("类型", "本地模型")
+                    InfoRow(stringResource(R.string.qk_02240), stringResource(R.string.qk_02241))
                 }
                 if (provider.lastError.isNotBlank()) {
-                    InfoRow("错误", provider.lastError, isError = true)
+                    InfoRow(stringResource(R.string.qk_00255), provider.lastError, isError = true)
                 }
             }
             
@@ -341,7 +342,7 @@ fun ProviderCard(
                 ) {
                     Icon(
                         Icons.Default.ArrowUpward,
-                        contentDescription = "上移",
+                        contentDescription = stringResource(R.string.qk_02242),
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -353,7 +354,7 @@ fun ProviderCard(
                 ) {
                     Icon(
                         Icons.Default.ArrowDownward,
-                        contentDescription = "下移",
+                        contentDescription = stringResource(R.string.qk_02243),
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -365,7 +366,7 @@ fun ProviderCard(
                 ) {
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = "编辑",
+                        contentDescription = stringResource(R.string.qk_00299),
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -380,7 +381,7 @@ fun ProviderCard(
                 ) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "删除",
+                        contentDescription = stringResource(R.string.qk_00091),
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -429,13 +430,13 @@ fun AddProviderDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("添加提供商") },
+        title = { Text(stringResource(R.string.qk_02232)) },
         text = {
             Column {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("提供商名称") },
+                    label = { Text(stringResource(R.string.qk_02244)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -450,7 +451,7 @@ fun AddProviderDialog(
                     OutlinedTextField(
                         value = providerType.name,
                         onValueChange = {},
-                        label = { Text("提供商类型") },
+                        label = { Text(stringResource(R.string.qk_02245)) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .menuAnchor(),
@@ -479,7 +480,7 @@ fun AddProviderDialog(
                 OutlinedTextField(
                     value = baseUrl,
                     onValueChange = { baseUrl = it },
-                    label = { Text("API基础URL") },
+                    label = { Text(stringResource(R.string.qk_02246)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -488,7 +489,7 @@ fun AddProviderDialog(
                 OutlinedTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it },
-                    label = { Text("API密钥") },
+                    label = { Text(stringResource(R.string.qk_02247)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -497,7 +498,7 @@ fun AddProviderDialog(
                 OutlinedTextField(
                     value = defaultModel,
                     onValueChange = { defaultModel = it },
-                    label = { Text("默认模型") },
+                    label = { Text(stringResource(R.string.qk_02248)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -506,7 +507,7 @@ fun AddProviderDialog(
                 OutlinedTextField(
                     value = priority.toString(),
                     onValueChange = { priority = it.toIntOrNull() ?: 0 },
-                    label = { Text("优先级") },
+                    label = { Text(stringResource(R.string.qk_02239)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -519,7 +520,7 @@ fun AddProviderDialog(
                         checked = isLocal,
                         onCheckedChange = { isLocal = it }
                     )
-                    Text("本地模型")
+                    Text(stringResource(R.string.qk_02241))
                 }
             }
         },
@@ -539,12 +540,12 @@ fun AddProviderDialog(
                 },
                 enabled = name.isNotBlank() && baseUrl.isNotBlank()
             ) {
-                Text("添加")
+                Text(stringResource(R.string.qk_01498))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(R.string.qk_00011))
             }
         }
     )
@@ -567,13 +568,13 @@ fun EditProviderDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("编辑提供商") },
+        title = { Text(stringResource(R.string.qk_02249)) },
         text = {
             Column {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("提供商名称") },
+                    label = { Text(stringResource(R.string.qk_02244)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -582,7 +583,7 @@ fun EditProviderDialog(
                 OutlinedTextField(
                     value = baseUrl,
                     onValueChange = { baseUrl = it },
-                    label = { Text("API基础URL") },
+                    label = { Text(stringResource(R.string.qk_02246)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -591,7 +592,7 @@ fun EditProviderDialog(
                 OutlinedTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it },
-                    label = { Text("API密钥") },
+                    label = { Text(stringResource(R.string.qk_02247)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -600,7 +601,7 @@ fun EditProviderDialog(
                 OutlinedTextField(
                     value = defaultModel,
                     onValueChange = { defaultModel = it },
-                    label = { Text("默认模型") },
+                    label = { Text(stringResource(R.string.qk_02248)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -609,7 +610,7 @@ fun EditProviderDialog(
                 OutlinedTextField(
                     value = priority,
                     onValueChange = { priority = it },
-                    label = { Text("优先级") },
+                    label = { Text(stringResource(R.string.qk_02239)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -622,7 +623,7 @@ fun EditProviderDialog(
                         checked = enabled,
                         onCheckedChange = { enabled = it }
                     )
-                    Text("启用")
+                    Text(stringResource(R.string.qk_02250))
                 }
                 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -634,7 +635,7 @@ fun EditProviderDialog(
                         checked = isLocal,
                         onCheckedChange = { isLocal = it }
                     )
-                    Text("本地模型")
+                    Text(stringResource(R.string.qk_02241))
                 }
             }
         },
@@ -654,12 +655,12 @@ fun EditProviderDialog(
                 },
                 enabled = name.isNotBlank() && baseUrl.isNotBlank()
             ) {
-                Text("更新")
+                Text(stringResource(R.string.qk_02251))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(R.string.qk_00011))
             }
         }
     )
@@ -676,7 +677,7 @@ fun FailoverSettingsDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("故障转移设置") },
+        title = { Text(stringResource(R.string.qk_02230)) },
         text = {
             Column {
                 Row(
@@ -686,7 +687,7 @@ fun FailoverSettingsDialog(
                         checked = config.enabled,
                         onCheckedChange = { config = config.copy(enabled = it) }
                     )
-                    Text("启用故障转移")
+                    Text(stringResource(R.string.qk_02252))
                 }
                 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -700,7 +701,7 @@ fun FailoverSettingsDialog(
                     OutlinedTextField(
                         value = config.strategy.name,
                         onValueChange = {},
-                        label = { Text("故障转移策略") },
+                        label = { Text(stringResource(R.string.qk_02253)) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .menuAnchor(),
@@ -729,7 +730,7 @@ fun FailoverSettingsDialog(
                 OutlinedTextField(
                     value = config.maxRetries.toString(),
                     onValueChange = { config = config.copy(maxRetries = it.toIntOrNull() ?: 3) },
-                    label = { Text("最大重试次数") },
+                    label = { Text(stringResource(R.string.qk_02254)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -738,7 +739,7 @@ fun FailoverSettingsDialog(
                 OutlinedTextField(
                     value = config.failureThreshold.toString(),
                     onValueChange = { config = config.copy(failureThreshold = it.toIntOrNull() ?: 3) },
-                    label = { Text("失败阈值（断路器）") },
+                    label = { Text(qstr(R.string.qk_02255)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -750,19 +751,19 @@ fun FailoverSettingsDialog(
                         val minutes = it.toLongOrNull() ?: 5
                         config = config.copy(healthCheckIntervalMs = minutes * 1000 * 60)
                     },
-                    label = { Text("健康检查间隔（分钟）") },
+                    label = { Text(qstr(R.string.qk_02256)) },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         },
         confirmButton = {
             TextButton(onClick = { onSave(config) }) {
-                Text("保存")
+                Text(stringResource(R.string.qk_00198))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(R.string.qk_00011))
             }
         }
     )
@@ -780,7 +781,7 @@ fun HealthCheckDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("健康检查") },
+        title = { Text(stringResource(R.string.qk_02231)) },
         text = {
             Column {
                 if (isChecking) {
@@ -788,15 +789,14 @@ fun HealthCheckDialog(
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "正在检查提供商健康状态...",
+                    Text(text = stringResource(R.string.qk_02257),
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
                 } else {
                     if (results.isEmpty()) {
-                        Text("点击下方按钮开始健康检查")
+                        Text(stringResource(R.string.qk_02258))
                     } else {
-                        Text("检查结果:")
+                        Text(stringResource(R.string.qk_02259))
                         Spacer(modifier = Modifier.height(8.dp))
                         results.forEach { (name, status) ->
                             Row(
@@ -810,7 +810,7 @@ fun HealthCheckDialog(
                                 )
                                 Text(
                                     text = status,
-                                    color = if (status == "健康") 
+                                    color = if (status == qstr(R.string.qk_02236)) 
                                         Color(0xFF4CAF50) 
                                     else 
                                         Color(0xFFF44336)
@@ -836,7 +836,7 @@ fun HealthCheckDialog(
                                            (config.apiKey.isNotBlank() || !config.requiresApiKey) &&
                                            config.defaultModel.isNotBlank()
                             
-                            checkResults.add(config.name to if (isHealthy) "健康" else "不健康")
+                            checkResults.add(config.name to if (isHealthy) qstr(R.string.qk_02236) else qstr(R.string.qk_02260))
                             
                             // 更新状态
                             repository.updateHealthStatus(
@@ -854,12 +854,12 @@ fun HealthCheckDialog(
                 },
                 enabled = !isChecking
             ) {
-                Text("开始检查")
+                Text(stringResource(R.string.qk_02261))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("关闭")
+                Text(stringResource(R.string.qk_00065))
             }
         }
     )

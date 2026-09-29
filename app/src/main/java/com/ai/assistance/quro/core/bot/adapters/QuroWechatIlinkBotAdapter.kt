@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.bot.adapters
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -199,7 +201,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
                             }
                             "expired" -> {
                                 loginState = QrLoginStatus.EXPIRED
-                                qrError = "二维码已过期"
+                                qrError = qstr(R.string.qk_00816)
                                 return@launch
                             }
                         }
@@ -216,7 +218,7 @@ class QuroWechatIlinkBotAdapter(context: Context) : QuroDirectBotAdapter(context
             } catch (e: Exception) {
                 de("扫码登录失败", e)
                 loginState = QrLoginStatus.UNKNOWN
-                qrError = e.message ?: "未知错误"
+                qrError = e.message ?: qstr(R.string.qk_00503)
             }
         }
     }

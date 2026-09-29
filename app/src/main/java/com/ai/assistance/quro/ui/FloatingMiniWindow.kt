@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -119,7 +121,7 @@ fun FloatingMiniWindow(
                 IconButton(onClick = onRestore, Modifier.size(30.dp)) {
                     Icon(
                         Icons.Filled.OpenInFull,
-                        "还原",
+                        stringResource(R.string.qk_00384),
                         tint = cs.onPrimaryContainer,
                         modifier = Modifier.size(16.dp),
                     )
@@ -127,7 +129,7 @@ fun FloatingMiniWindow(
                 IconButton(onClick = onClose, Modifier.size(30.dp)) {
                     Icon(
                         Icons.Filled.Close,
-                        "关闭",
+                        stringResource(R.string.qk_00065),
                         tint = cs.onPrimaryContainer,
                         modifier = Modifier.size(16.dp),
                     )

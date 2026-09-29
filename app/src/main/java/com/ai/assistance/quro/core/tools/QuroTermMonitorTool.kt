@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
@@ -19,7 +21,7 @@ import org.json.JSONObject
  */
 class TermMonitorTool : QuroTool {
     override val name = "term_monitor"
-    override val description = "终端资源与进程监控（proot 沙箱内读 /proc，无需 cgroups）。" +
+    override val description = qstr(R.string.qk_03586) +
         "返回 loadavg、内存概览、CPU 核数、Top 进程（pid/comm/cmdline）。" +
         "参数 {\"top_n\":15}（默认 15）。无 root 的 Android 应用无法用 namespaces/cgroups 做硬隔离，" +
         "但 /proc 监控可用。若 Linux 环境未初始化会返回提示。"
@@ -42,7 +44,7 @@ class TermMonitorTool : QuroTool {
             appendLine("  printf '%s\\t%s\\t%s\\n' \"\$pid\" \"\$comm\" \"\$cl\"; n=\$((n+1)); [ \$n -ge $topN ] && break;")
             appendLine("done")
         }
-        val res = runCatching { QuroLinuxEnv.run(context, script, timeoutMs = 15_000L) }.getOrElse { -1 to "执行失败：${it.message}" }
+        val res = runCatching { QuroLinuxEnv.run(context, script, timeoutMs = 15_000L) }.getOrElse { -1 to qstr(R.string.qk_02795, (it.message).toString()) }
         val (code, out) = res
         if (code != 0 && out.isBlank()) {
             return@runBlocking "⚠️ 监控失败（exit=$code）。请先确保 Linux 环境已初始化（终端页安装 rootfs，或先调 dev_env）。错误：$out"

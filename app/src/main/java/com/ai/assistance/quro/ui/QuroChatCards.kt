@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -110,8 +113,7 @@ fun QuroChatCardTray(onCommand: (String) -> Unit) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             // 头部：标题(含数量) + 展开/收起(多卡片时) + 一键清除
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "交互组件 · ${cards.size}",
+                Text(stringResource(R.string.qk_00943, (cards.size).toString()),
                     style = MaterialTheme.typography.labelMedium,
                     color = cs.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
@@ -120,14 +122,14 @@ fun QuroChatCardTray(onCommand: (String) -> Unit) {
                     IconButton(onClick = { expanded = !expanded }, Modifier.size(30.dp)) {
                         Icon(
                             imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                            contentDescription = if (expanded) "收起" else "展开",
+                            contentDescription = if (expanded) stringResource(R.string.qk_00818) else stringResource(R.string.qk_00944),
                             modifier = Modifier.size(18.dp),
                             tint = cs.onSurfaceVariant,
                         )
                     }
                 }
                 TextButton(onClick = { QuroChatCardStore.clear() }, Modifier.height(30.dp)) {
-                    Text("清除全部", color = cs.primary, style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.qk_00945), color = cs.primary, style = MaterialTheme.typography.labelMedium)
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -259,7 +261,7 @@ private fun CardShell(
                         IconButton(onClick = dismiss, Modifier.size(28.dp)) {
                             Icon(
                                 imageVector = Icons.Filled.Close,
-                                contentDescription = "关闭",
+                                contentDescription = stringResource(R.string.qk_00065),
                                 tint = cs.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp),
                             )
@@ -429,7 +431,7 @@ private fun TableCardView(card: QuroChatCard.TableCard) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
         if (card.headers.isEmpty() && card.rows.isEmpty()) {
-            Text("（无数据）", color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell
+            Text(stringResource(R.string.qk_00946), color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell
         }
         Column(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
             if (card.headers.isNotEmpty()) {
@@ -452,7 +454,7 @@ private fun TableCardView(card: QuroChatCard.TableCard) {
                 }
             }
             if (card.rows.size > shownRows.size) {
-                Text("… 还有 ${card.rows.size - shownRows.size} 行已省略渲染", color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp, horizontal = 8.dp))
+                Text(stringResource(R.string.qk_00947, (card.rows.size - shownRows.size).toString()), color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp, horizontal = 8.dp))
             }
         }
     }
@@ -489,7 +491,7 @@ private fun ListCardView(card: QuroChatCard.ListCard, onCommand: (String) -> Uni
             if (i < shownItems.lastIndex) HorizontalDivider(color = cs.outlineVariant)
         }
         if (card.items.size > shownItems.size) {
-            Text("… 还有 ${card.items.size - shownItems.size} 项已省略渲染", color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
+            Text(stringResource(R.string.qk_00948, (card.items.size - shownItems.size).toString()), color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
         }
     }
 }
@@ -523,7 +525,7 @@ private fun SegmentedCardView(card: QuroChatCard.SegmentedCard, onCommand: (Stri
 private fun PieCardView(card: QuroChatCard.PieCard) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
-        if (card.segments.isEmpty()) { Text("（无数据）", color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
+        if (card.segments.isEmpty()) { Text(stringResource(R.string.qk_00946), color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
         val total = card.segments.sumOf { it.value.toDouble() }.coerceAtLeast(0.0001)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Canvas(Modifier.size(96.dp)) {
@@ -592,10 +594,10 @@ private fun CountdownCardView(card: QuroChatCard.CountdownCard) {
     CardShell(card.title) {
         if (card.label.isNotBlank()) Text(card.label, color = cs.onSurfaceVariant, fontSize = 13.sp)
         Spacer(Modifier.height(4.dp))
-        val txt = if (remaining <= 0) "已结束" else run {
+        val txt = if (remaining <= 0) stringResource(R.string.qk_00949) else run {
             val s = (remaining / 1000).toInt()
             val d = s / 86400; val h = (s % 86400) / 3600; val m = (s % 3600) / 60; val sec = s % 60
-            buildString { if (d > 0) append("${d}天 "); append("%02d:%02d:%02d".format(h, m, sec)) }
+            buildString { if (d > 0) append(qstr(R.string.qk_00950, (d).toString())); append("%02d:%02d:%02d".format(h, m, sec)) }
         }
         Text(txt, color = cs.primary, fontSize = 22.sp, fontFamily = FontFamily.Monospace)
     }
@@ -606,7 +608,7 @@ private fun CountdownCardView(card: QuroChatCard.CountdownCard) {
 private fun TabsCardView(card: QuroChatCard.TabsCard) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
-        if (card.tabs.isEmpty()) { Text("（无内容）", color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
+        if (card.tabs.isEmpty()) { Text(stringResource(R.string.qk_00053), color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
         val idx = card.selectedIndex.coerceIn(0, card.tabs.lastIndex)
         ScrollableTabRow(
             selectedTabIndex = idx,
@@ -632,7 +634,7 @@ private fun ExpandableCardView(card: QuroChatCard.ExpandableCard) {
     CardShell(card.title) {
         Row(Modifier.fillMaxWidth().clickable { QuroChatCardStore.setExpandable(card.id, !card.expanded) },
             verticalAlignment = Alignment.CenterVertically) {
-            Text(card.title.ifBlank { "详情" }, color = cs.onSurface, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text(card.title.ifBlank { stringResource(R.string.qk_00429) }, color = cs.onSurface, fontSize = 13.sp, modifier = Modifier.weight(1f))
             Icon(if (card.expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = cs.onSurfaceVariant)
         }
         if (card.expanded) {
@@ -666,7 +668,7 @@ private fun FormCardView(card: QuroChatCard.FormCard, onCommand: (String) -> Uni
             Spacer(Modifier.height(6.dp))
         }
         Button(onClick = { onCommand(card.submitCommand) }, Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = cs.primary)) {
-            Text("提交", color = cs.onPrimary, fontSize = 13.sp)
+            Text(stringResource(R.string.qk_00951), color = cs.onPrimary, fontSize = 13.sp)
         }
     }
 }
@@ -709,7 +711,7 @@ private fun ChipsCardView(card: QuroChatCard.ChipsCard, onCommand: (String) -> U
 private fun StepsCardView(card: QuroChatCard.StepsCard) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
-        if (card.steps.isEmpty()) { Text("（无步骤）", color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
+        if (card.steps.isEmpty()) { Text(stringResource(R.string.qk_00952), color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
             card.steps.forEachIndexed { i, step ->
                 val done = step.status == "done" || i < card.current
@@ -783,7 +785,7 @@ private fun MediaCardView(card: QuroChatCard.MediaCard) {
                     Text(card.mediaUrl, color = cs.onSurfaceVariant, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 TextButton(onClick = { QuroBrowserBridge.open(card.mediaUrl) }) {
-                    Text("打开", color = cs.primary, fontSize = 12.sp)
+                    Text(stringResource(R.string.qk_00953), color = cs.primary, fontSize = 12.sp)
                 }
             }
         }
@@ -843,10 +845,10 @@ private fun toolIcon(name: String): ImageVector = when (name.lowercase()) {
 private fun ToolCallCardView(card: QuroChatCard.ToolCallCard) {
     val cs = MaterialTheme.colorScheme
     val (statusIcon, color, label) = when (card.status.lowercase()) {
-        "running" -> Triple(Icons.Filled.Autorenew, cs.primary, "执行中")
-        "done" -> Triple(Icons.Filled.CheckCircle, SUCCESS, "完成")
-        "error" -> Triple(Icons.Filled.Error, ERROR, "失败")
-        else -> Triple(Icons.Filled.Schedule, WARNING, "等待中")
+        "running" -> Triple(Icons.Filled.Autorenew, cs.primary, stringResource(R.string.qk_00954))
+        "done" -> Triple(Icons.Filled.CheckCircle, SUCCESS, stringResource(R.string.qk_00420))
+        "error" -> Triple(Icons.Filled.Error, ERROR, stringResource(R.string.qk_00139))
+        else -> Triple(Icons.Filled.Schedule, WARNING, stringResource(R.string.qk_00955))
     }
     CardShell(card.title) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -861,7 +863,7 @@ private fun ToolCallCardView(card: QuroChatCard.ToolCallCard) {
             }
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
-                Text(card.tool.ifBlank { "工具调用" }, color = cs.onSurface, fontSize = 13.sp)
+                Text(card.tool.ifBlank { stringResource(R.string.qk_00956) }, color = cs.onSurface, fontSize = 13.sp)
                 if (card.message.isNotBlank()) {
                     Spacer(Modifier.height(2.dp))
                     Text(
@@ -892,7 +894,7 @@ private fun StreamCardView(card: QuroChatCard.StreamCard) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
         if (card.lines.isEmpty()) {
-            Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(14.dp), color = cs.primary); Spacer(Modifier.width(6.dp)); Text("等待输出…", color = cs.onSurfaceVariant, fontSize = 11.sp) }
+            Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(14.dp), color = cs.primary); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.qk_00957), color = cs.onSurfaceVariant, fontSize = 11.sp) }
             return@CardShell
         }
         LazyColumn(Modifier.fillMaxWidth().heightIn(max = 200.dp).background(cs.outlineVariant.copy(alpha = 0.18f)).clip(RoundedCornerShape(8.dp)).padding(8.dp)) {
@@ -925,7 +927,7 @@ private fun MediaPlayCardView(card: QuroChatCard.MediaPlayCard) {
                     runCatching { ctx.startForegroundService(intent) }
                 }
             }) {
-                Icon(Icons.Filled.PlayArrow, "播放", tint = cs.primary, modifier = Modifier.size(28.dp))
+                Icon(Icons.Filled.PlayArrow, stringResource(R.string.qk_00104), tint = cs.primary, modifier = Modifier.size(28.dp))
             }
         }
     }
@@ -955,7 +957,7 @@ private fun TodoCardView(card: QuroChatCard.TodoCard) {
         }
         if (card.items.isNotEmpty()) {
             val done = card.items.count { it.done }
-            Text("已完成 $done / ${card.items.size}", color = SUCCESS, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(stringResource(R.string.qk_00958, (done).toString(), (card.items.size).toString()), color = SUCCESS, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
@@ -965,7 +967,7 @@ private fun ChartCardView(card: QuroChatCard.ChartCard) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
         if (card.series.isEmpty()) {
-            Text("（无数据）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+            Text(stringResource(R.string.qk_00946), color = cs.onSurfaceVariant, fontSize = 12.sp)
             return@CardShell
         }
         val max = card.series.maxOf { it.value }.coerceAtLeast(0.0001f)
@@ -1028,8 +1030,8 @@ private fun NoteCardView(card: QuroChatCard.NoteCard) {
             TextButton(onClick = {
                 val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                 cm.setPrimaryClip(android.content.ClipData.newPlainText(card.title, card.body))
-                Toast.makeText(ctx, "已复制", Toast.LENGTH_SHORT).show()
-            }) { Text("复制", color = cs.primary) }
+                Toast.makeText(ctx, qstr(R.string.qk_00023), Toast.LENGTH_SHORT).show()
+            }) { Text(stringResource(R.string.qk_00088), color = cs.primary) }
         }
     }
 }
@@ -1085,7 +1087,7 @@ private fun cardIcon(name: String): ImageVector = when (name.lowercase()) {
 private fun QuickReplyCardView(card: QuroChatCard.QuickReplyCard, onCommand: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
-        if (card.replies.isEmpty()) { Text("（无建议）", color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
+        if (card.replies.isEmpty()) { Text(stringResource(R.string.qk_00959), color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             card.replies.forEach { r ->
                 Button(
@@ -1104,7 +1106,7 @@ private fun QuickReplyCardView(card: QuroChatCard.QuickReplyCard, onCommand: (St
 private fun QuickActionCardView(card: QuroChatCard.QuickActionCard, onCommand: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
-        if (card.actions.isEmpty()) { Text("（无动作）", color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
+        if (card.actions.isEmpty()) { Text(stringResource(R.string.qk_00960), color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             card.actions.forEach { a ->
                 Column(
@@ -1129,7 +1131,7 @@ private fun QuickActionCardView(card: QuroChatCard.QuickActionCard, onCommand: (
 private fun TimelineCardView(card: QuroChatCard.TimelineCard) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
-        if (card.events.isEmpty()) { Text("（无事件）", color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
+        if (card.events.isEmpty()) { Text(stringResource(R.string.qk_00961), color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
         Column(Modifier.fillMaxWidth()) {
             // ★ ANR 防御：大时间线（工具/日志返回上百事件）原 Column+forEach 主线程一次性布局 → 卡顿/ANR。
             // 上限渲染 60 事件，超出显示脚注。
@@ -1151,7 +1153,7 @@ private fun TimelineCardView(card: QuroChatCard.TimelineCard) {
                 }
             }
             if (card.events.size > shownEvents.size) {
-                Text("… 还有 ${card.events.size - shownEvents.size} 个事件已省略渲染", color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+                Text(stringResource(R.string.qk_00962, (card.events.size - shownEvents.size).toString()), color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
             }
         }
     }
@@ -1162,7 +1164,7 @@ private fun TimelineCardView(card: QuroChatCard.TimelineCard) {
 private fun HeatmapCardView(card: QuroChatCard.HeatmapCard) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
-        if (card.values.isEmpty()) { Text("（无数据）", color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
+        if (card.values.isEmpty()) { Text(stringResource(R.string.qk_00946), color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
         val max = card.values.maxOrNull()?.coerceAtLeast(1) ?: 1
         val weeks = card.weeks.coerceAtLeast(1)
         Column(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
@@ -1215,7 +1217,7 @@ private fun CompareSideView(side: QuroChatCard.CompareCard.CompareSide, modifier
 private fun RadarCardView(card: QuroChatCard.RadarCard) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
-        if (card.axes.isEmpty()) { Text("（无数据）", color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
+        if (card.axes.isEmpty()) { Text(stringResource(R.string.qk_00946), color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
         val n = card.axes.size
         Canvas(Modifier.size(180.dp).align(Alignment.CenterHorizontally)) {
             val cx = size.width / 2f; val cy = size.height / 2f
@@ -1282,7 +1284,7 @@ private fun CarouselCardView(card: QuroChatCard.CarouselCard) {
     val cs = MaterialTheme.colorScheme
     var page by remember { mutableStateOf(0) }
     CardShell(card.title) {
-        if (card.slides.isEmpty()) { Text("（无内容）", color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
+        if (card.slides.isEmpty()) { Text(stringResource(R.string.qk_00053), color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
         val p = page.coerceIn(0, card.slides.lastIndex)
         val slide = card.slides[p]
         val accent = parseColor(slide.color.ifBlank { "#6CB6FF" }, PALETTE[0])
@@ -1312,7 +1314,7 @@ private fun CarouselCardView(card: QuroChatCard.CarouselCard) {
 private fun KanbanCardView(card: QuroChatCard.KanbanCard) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
-        if (card.columns.isEmpty()) { Text("（无看板）", color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
+        if (card.columns.isEmpty()) { Text(stringResource(R.string.qk_00963), color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // ★ ANR 防御：大看板（多列多卡）原 Column+forEach 主线程一次性布局 → 卡顿/ANR。
             // 上限渲染 12 列、每列 40 张卡，超出显示脚注。
@@ -1330,7 +1332,7 @@ private fun KanbanCardView(card: QuroChatCard.KanbanCard) {
             }
         }
         if (card.columns.size > 12) {
-            Text("… 还有 ${card.columns.size - 12} 列已省略渲染", color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+            Text(stringResource(R.string.qk_00964, (card.columns.size - 12).toString()), color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
         }
     }
 }
@@ -1339,11 +1341,11 @@ private fun KanbanCardView(card: QuroChatCard.KanbanCard) {
  *  卡片无可用链接时兜底展示，确保已登记的话题永远有去处。 */
 private val PRESET_YUANBAO_LINKS = listOf(
     QuroChatCard.YuanbaoLink(
-        "百分百开源安卓数字人",
+        qstr(R.string.qk_00965),
         "https://yb.tencent.com/s/I9x5hnu8zJqm",
     ),
     QuroChatCard.YuanbaoLink(
-        "二、3D 全离线（LLM+ASR+TTS+A2BS+渲染都在手机）",
+        qstr(R.string.qk_00966),
         "https://yb.tencent.com/s/TsfOddkjerlh",
     ),
 )
@@ -1355,11 +1357,11 @@ private fun YuanbaoCardView(card: QuroChatCard.YuanbaoCard) {
     val cs = MaterialTheme.colorScheme
     val items = when {
         card.links.isNotEmpty() -> card.links
-        card.url.isNotBlank() -> listOf(QuroChatCard.YuanbaoLink(card.title.ifBlank { "链接回答" }, card.url))
+        card.url.isNotBlank() -> listOf(QuroChatCard.YuanbaoLink(card.title.ifBlank { stringResource(R.string.qk_00236) }, card.url))
         else -> PRESET_YUANBAO_LINKS
     }
-    CardShell(card.title.ifBlank { "链接回答" }) {
-        Text("需要点击查看链接回答", color = cs.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    CardShell(card.title.ifBlank { stringResource(R.string.qk_00236) }) {
+        Text(stringResource(R.string.qk_00967), color = cs.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(6.dp))
         items.forEach { link ->
             Row(
@@ -1544,31 +1546,31 @@ private fun MermaidCardView(card: QuroChatCard.MermaidCard) {
     var heightPx by remember(card.id) { mutableStateOf(160) }
     var svgRef by remember(card.id) { mutableStateOf<String?>(null) }
     var fullscreen by remember(card.id) { mutableStateOf(false) }
-    val title = card.title.ifBlank { "流程图" }
+    val title = card.title.ifBlank { stringResource(R.string.qk_00968) }
 
     CardShell(
         title = title,
         headerEnd = {
             IconButton(onClick = { fullscreen = true }, Modifier.size(30.dp)) {
-                Icon(Icons.Filled.Fullscreen, "全屏查看", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Fullscreen, stringResource(R.string.qk_00969), tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
             }
             IconButton(onClick = {
                 if (svgRef != null) {
                     val ok = saveSvgToDownloads(context, "mermaid_${card.id}.svg", svgRef!!)
-                    Toast.makeText(context, if (ok) "已保存 SVG 到 Download 文件夹" else "保存失败", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, if (ok) qstr(R.string.qk_00970) else qstr(R.string.qk_00392), Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(context, "图表尚未渲染完成，请稍候", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, qstr(R.string.qk_00971), Toast.LENGTH_SHORT).show()
                 }
             }, Modifier.size(30.dp)) {
-                Icon(Icons.Filled.Download, "下载 SVG", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Download, stringResource(R.string.qk_00972), tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = { copyText(context, card.source, "已复制 Mermaid 源码") }, Modifier.size(30.dp)) {
-                Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            IconButton(onClick = { copyText(context, card.source, qstr(R.string.qk_00973)) }, Modifier.size(30.dp)) {
+                Icon(Icons.Filled.ContentCopy, stringResource(R.string.qk_00974), tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
             }
         },
     ) {
         if (card.source.isBlank()) {
-            Text("（无图表内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+            Text(stringResource(R.string.qk_00975), color = cs.onSurfaceVariant, fontSize = 12.sp)
             return@CardShell
         }
         MermaidWebView(
@@ -1653,7 +1655,7 @@ internal fun MermaidWebView(
 
                     override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
                         super.onReceivedError(view, errorCode, description, failingUrl)
-                        renderError = "WebView 错误: $description (code=$errorCode)"
+                        renderError = qstr(R.string.qk_00976, (description).toString(), (errorCode).toString())
                     }
                 }
                 webViewRef.value = this
@@ -1674,8 +1676,7 @@ internal fun MermaidWebView(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    "渲染失败: ${err.take(100)}",
+                Text(qstr(R.string.qk_00977, (err.take(100)).toString()),
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 11.sp,
                     maxLines = 3,
@@ -1693,8 +1694,7 @@ internal fun MermaidWebView(
                         }
                     }
                 ) {
-                    Text(
-                        "重试",
+                    Text(qstr(R.string.qk_00092),
                         color = MaterialTheme.colorScheme.primary,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
@@ -1724,7 +1724,7 @@ private fun MermaidFullscreen(card: QuroChatCard.MermaidCard, onDismiss: () -> U
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        card.title.ifBlank { "流程图" },
+                        card.title.ifBlank { stringResource(R.string.qk_00968) },
                         color = cs.onSurface,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
@@ -1733,18 +1733,18 @@ private fun MermaidFullscreen(card: QuroChatCard.MermaidCard, onDismiss: () -> U
                     IconButton(onClick = {
                         if (svgRef != null) {
                             val ok = saveSvgToDownloads(context, "mermaid_${card.id}.svg", svgRef!!)
-                            Toast.makeText(context, if (ok) "已保存 SVG 到 Download 文件夹" else "保存失败", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, if (ok) qstr(R.string.qk_00970) else qstr(R.string.qk_00392), Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "图表尚未渲染完成，请稍候", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, qstr(R.string.qk_00971), Toast.LENGTH_SHORT).show()
                         }
                     }, Modifier.size(36.dp)) {
-                        Icon(Icons.Filled.Download, "下载 SVG", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Filled.Download, qstr(R.string.qk_00972), tint = cs.onSurface, modifier = Modifier.size(20.dp))
                     }
-                    IconButton(onClick = { copyText(context, card.source, "已复制 Mermaid 源码") }, Modifier.size(36.dp)) {
-                        Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                    IconButton(onClick = { copyText(context, card.source, qstr(R.string.qk_00973)) }, Modifier.size(36.dp)) {
+                        Icon(Icons.Filled.ContentCopy, qstr(R.string.qk_00974), tint = cs.onSurface, modifier = Modifier.size(20.dp))
                     }
                     IconButton(onClick = onDismiss, Modifier.size(36.dp)) {
-                        Icon(Icons.Filled.Close, "关闭", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Filled.Close, stringResource(R.string.qk_00065), tint = cs.onSurface, modifier = Modifier.size(20.dp))
                     }
                 }
                 HorizontalDivider(color = cs.outlineVariant)
@@ -1776,21 +1776,21 @@ private fun HtmlPreviewCardView(card: QuroChatCard.HtmlPreviewCard) {
     val context = LocalContext.current
     var heightPx by remember(card.id) { mutableStateOf(360) }
     var fullscreen by remember(card.id) { mutableStateOf(false) }
-    val title = card.title.ifBlank { "网页预览（AI 运行产物）" }
+    val title = card.title.ifBlank { stringResource(R.string.qk_00018) }
 
     CardShell(
         title = title,
         headerEnd = {
             IconButton(onClick = { fullscreen = true }, Modifier.size(30.dp)) {
-                Icon(Icons.Filled.Fullscreen, "全屏查看", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Fullscreen, stringResource(R.string.qk_00969), tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = { copyText(context, card.html, "已复制网页源码") }, Modifier.size(30.dp)) {
-                Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            IconButton(onClick = { copyText(context, card.html, qstr(R.string.qk_00978)) }, Modifier.size(30.dp)) {
+                Icon(Icons.Filled.ContentCopy, qstr(R.string.qk_00974), tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
             }
         },
     ) {
         if (card.html.isBlank()) {
-            Text("（无网页内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+            Text(stringResource(R.string.qk_00979), color = cs.onSurfaceVariant, fontSize = 12.sp)
             return@CardShell
         }
         HtmlPreviewWebView(
@@ -1822,11 +1822,11 @@ private fun HtmlPreviewCardView(card: QuroChatCard.HtmlPreviewCard) {
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.weight(1f),
                         )
-                        IconButton(onClick = { copyText(context, card.html, "已复制网页源码") }, Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                        IconButton(onClick = { copyText(context, card.html, qstr(R.string.qk_00978)) }, Modifier.size(36.dp)) {
+                            Icon(Icons.Filled.ContentCopy, qstr(R.string.qk_00974), tint = cs.onSurface, modifier = Modifier.size(20.dp))
                         }
                         IconButton(onClick = { fullscreen = false }, Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.Close, "关闭", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Filled.Close, stringResource(R.string.qk_00065), tint = cs.onSurface, modifier = Modifier.size(20.dp))
                         }
                     }
                     HorizontalDivider(color = cs.outlineVariant)
@@ -1929,9 +1929,9 @@ private fun saveSvgToDownloads(context: Context, fileName: String, svg: String):
             }
         }
         val uri: Uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-            ?: throw IOException("无法在 Download 目录创建文件")
+            ?: throw IOException(qstr(R.string.qk_00980))
         resolver.openOutputStream(uri)?.use { os -> os.write(svg.toByteArray(Charsets.UTF_8)) }
-            ?: throw IOException("无法写入 SVG 文件")
+            ?: throw IOException(qstr(R.string.qk_00981))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             values.clear()
             values.put(MediaStore.Downloads.IS_PENDING, 0)
@@ -2053,18 +2053,18 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
     var heightPx by remember(card.id) { mutableStateOf(defaultHeightPx) }
     var fullscreen by remember(card.id) { mutableStateOf(false) }
     val title = card.title.ifBlank {
-        if (card.nativeAppId.isNotBlank()) "小程序（原生引擎）" else "Web 应用（AI 生成）"
+        if (card.nativeAppId.isNotBlank()) qstr(R.string.qk_00982) else qstr(R.string.qk_00022)
     }
 
     CardShell(
         title = title,
         headerEnd = {
             IconButton(onClick = { fullscreen = true }, Modifier.size(30.dp)) {
-                Icon(Icons.Filled.Fullscreen, "全屏查看", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Fullscreen, qstr(R.string.qk_00969), tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
             }
             if (card.html.isNotBlank()) {
-                IconButton(onClick = { copyText(context, card.html, "已复制 Web 应用源码") }, Modifier.size(30.dp)) {
-                    Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                IconButton(onClick = { copyText(context, card.html, qstr(R.string.qk_00983)) }, Modifier.size(30.dp)) {
+                    Icon(Icons.Filled.ContentCopy, qstr(R.string.qk_00974), tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
                 }
             }
         },
@@ -2094,11 +2094,9 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
             else -> {
                 // 历史遗留：带 config.app_id 的原生小程序卡片（内嵌引擎已移除，无 HTML 可渲染）。
                 Column(Modifier.fillMaxWidth().padding(4.dp)) {
-                    Text("（无 Web 应用内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+                    Text(stringResource(R.string.qk_00984), color = cs.onSurfaceVariant, fontSize = 12.sp)
                     Text(
-                        "这是旧「原生小程序」卡片，内嵌引擎已移除。原生小程序现请走工具中心"
-                            + "「小程序（原生引擎）」面板（让 AI 用 miniapp_sdk 工具生成 WXML/WXSS/JS 工程）。"
-                            + "需要 GenUI 原生界面请让 AI 用 genui_agent_open 打开内置 GenUI Agent。",
+                        stringResource(R.string.qk_00985) + stringResource(R.string.qk_00986) + stringResource(R.string.qk_00987),
                         color = cs.onSurfaceVariant,
                         fontSize = 10.sp,
                         modifier = Modifier.padding(top = 4.dp),
@@ -2129,12 +2127,12 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
                                 modifier = Modifier.weight(1f),
                             )
                             if (card.html.isNotBlank()) {
-                                IconButton(onClick = { copyText(context, card.html, "已复制 Web 应用源码") }, Modifier.size(36.dp)) {
-                                    Icon(Icons.Filled.ContentCopy, "复制源码", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                                IconButton(onClick = { copyText(context, card.html, qstr(R.string.qk_00983)) }, Modifier.size(36.dp)) {
+                                    Icon(Icons.Filled.ContentCopy, stringResource(R.string.qk_00974), tint = cs.onSurface, modifier = Modifier.size(20.dp))
                                 }
                             }
                             IconButton(onClick = { fullscreen = false }, Modifier.size(36.dp)) {
-                                Icon(Icons.Filled.Close, "关闭", tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                                Icon(Icons.Filled.Close, stringResource(R.string.qk_00065), tint = cs.onSurface, modifier = Modifier.size(20.dp))
                             }
                         }
                         HorizontalDivider(color = cs.outlineVariant)
@@ -2143,7 +2141,7 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
                                 card.nativeAppId.isNotBlank() ->
                                     MiniAppNativeView(appId = card.nativeAppId, modifier = Modifier.fillMaxSize())
                                 card.html.isBlank() ->
-                                    Text("（无 Web 应用内容）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+                                    Text(stringResource(R.string.qk_00984), color = cs.onSurfaceVariant, fontSize = 12.sp)
                                 else ->
                                     MiniAppWebView(
                                         html = card.html,
@@ -2182,7 +2180,7 @@ private fun MiniAppNativeView(appId: String, modifier: Modifier = Modifier) {
         factory = { ctx ->
             NativeMiniAppEngine.init(ctx)
             NativeMiniAppEngine.createResolved(ctx, appId) ?: android.widget.TextView(ctx).apply {
-                text = "（原生小程序「" + appId + "」未找到，请先让 AI 用 miniapp_sdk 工具创建该工程）"
+                text = qstr(R.string.qk_00988) + appId + qstr(R.string.qk_00989)
             }
         },
         onRelease = { view ->
@@ -2361,7 +2359,7 @@ private fun CompositeCardView(card: QuroChatCard.CompositeCard, onCommand: (Stri
         headerEnd = {
             if (singleIndex != null && layout == "stack") {
                 TextButton(onClick = { singleIndex = null }) {
-                    Text("显示全部", color = cs.primary, fontSize = 12.sp)
+                    Text(stringResource(R.string.qk_00990), color = cs.primary, fontSize = 12.sp)
                 }
             }
         },
@@ -2371,7 +2369,7 @@ private fun CompositeCardView(card: QuroChatCard.CompositeCard, onCommand: (Stri
             Spacer(Modifier.height(8.dp))
         }
         if (card.children.isEmpty()) {
-            Text("（组合为空）", color = cs.onSurfaceVariant, fontSize = 12.sp)
+            Text(stringResource(R.string.qk_00991), color = cs.onSurfaceVariant, fontSize = 12.sp)
             return@CardShell
         }
 
@@ -2391,7 +2389,7 @@ private fun CompositeCardView(card: QuroChatCard.CompositeCard, onCommand: (Stri
                             onClick = { tabIndex = i },
                             text = {
                                 Text(
-                                    child.title.ifBlank { "组件 ${i + 1}" },
+                                    child.title.ifBlank { qstr(R.string.qk_00992, (i + 1).toString()) },
                                     color = if (i == idx) cs.primary else cs.onSurfaceVariant,
                                     fontSize = 12.sp,
                                 )
@@ -2416,7 +2414,7 @@ private fun CompositeCardView(card: QuroChatCard.CompositeCard, onCommand: (Stri
                     ) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                child.title.ifBlank { "组件 ${i + 1}" },
+                                child.title.ifBlank { qstr(R.string.qk_00992, (i + 1).toString()) },
                                 color = cs.onSurface,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -2455,8 +2453,7 @@ private fun CompositeCardView(card: QuroChatCard.CompositeCard, onCommand: (Stri
                                         shape = RoundedCornerShape(6.dp),
                                         modifier = Modifier.clickable { singleIndex = i },
                                     ) {
-                                        Text(
-                                            "单独",
+                                        Text(qstr(R.string.qk_00993),
                                             color = cs.primary,
                                             fontSize = 11.sp,
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),

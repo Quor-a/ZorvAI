@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
@@ -11,7 +13,7 @@ import org.json.JSONObject
  */
 class QuroFfmpegTool : QuroTool {
     override val name = "ffmpeg"
-    override val description = "在 proot 容器内跑 FFmpeg 完整链路：媒体探测/转码/裁剪/合并/提取音频等。" +
+    override val description = qstr(R.string.qk_03485) +
         "参数 {\"action\":\"info|convert|execute\",\"input\":\"输入文件（容器内 /sdcard/...）\",\"output\":\"输出文件（convert 用）\",\"options\":\"转码参数（convert 用，如 -vf scale=640:-1 -b:v 1M）\",\"args\":\"原始 FFmpeg 参数（execute 用）,\"timeout_ms\":60000}。" +
         "首次使用自动 apt 安装 ffmpeg。"
     override val parametersJson = """{

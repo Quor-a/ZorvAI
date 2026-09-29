@@ -1,4 +1,5 @@
 package com.ai.assistance.quro.ui
+import com.ai.assistance.quro.util.qstr
 import androidx.compose.ui.res.stringResource
 import com.ai.assistance.quro.R
 
@@ -315,6 +316,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Folder
@@ -380,7 +382,7 @@ fun ChatScreen(
 ) {
     val cs = MaterialTheme.colorScheme
     val fontTiers = listOf(0.92f, 1f, 1.14f)
-    val fontNames = listOf("小", "标准", "大")
+    val fontNames = listOf(stringResource(R.string.qk_00012), stringResource(R.string.qk_00013), stringResource(R.string.qk_00014))
 
     // ---- Zorv AI 后端状态（单一真相源） ----
     val messages by vm.messages.collectAsState()
@@ -437,13 +439,13 @@ fun ChatScreen(
     // 选中模型：直接用 cfg.model 合成（真实配置的模型，不再反查示例假数据）
     val selectedModel: ChatModel = remember(cfg.model) {
         ChatModel(
-            name = cfg.model.ifBlank { "未配置" }, id = cfg.model,
-            desc = "当前配置的模型。", provider = cfg.provider,
+            name = cfg.model.ifBlank { qstr(R.string.qk_00015) }, id = cfg.model,
+            desc = qstr(R.string.qk_00016), provider = cfg.provider,
             mark = cfg.provider.firstOrNull()?.uppercase() ?: "Q",
         )
     }
     // 顶栏芯片显示「真正配置 / 真正发送给 API 的模型」（不再经示例列表翻译，确保与模型配置一致）
-    val modelLabel = remember(cfg) { if (cfg.model.isBlank()) "未配置模型" else cfg.model }
+    val modelLabel = remember(cfg) { if (cfg.model.isBlank()) qstr(R.string.qk_00017) else cfg.model }
     val selectedPersona: Persona = remember(activePersona) {
         (activePersona ?: fallbackPersona()).toPersona()
     }
@@ -530,7 +532,7 @@ fun ChatScreen(
                                     aggCards.add(
                                         QuroChatCard.HtmlPreviewCard(
                                             id = "rh_" + (c.id ?: r.hashCode().toString()),
-                                            title = "网页预览（AI 运行产物）",
+                                            title = qstr(R.string.qk_00018),
                                             html = r,
                                         )
                                     )
@@ -541,7 +543,7 @@ fun ChatScreen(
                                     aggCards.add(
                                         QuroChatCard.MediaCard(
                                             id = "ri_" + (c.id ?: r.hashCode().toString()),
-                                            title = "图片预览（AI 运行产物）",
+                                            title = qstr(R.string.qk_00019),
                                             mediaUrl = imagePath,
                                             mediaType = "image",
                                         )
@@ -821,7 +823,7 @@ fun ChatScreen(
             QuroDocLauncher.file.collect { f ->
                 if (f != null) {
                     if (!QuroDocOpener.open(appCtx, f)) {
-                        Toast.makeText(appCtx, "未找到可打开该文档的应用，可尝试用应用内文档查看器或安装 WPS / Office", Toast.LENGTH_LONG).show()
+                        Toast.makeText(appCtx, qstr(R.string.qk_00020), Toast.LENGTH_LONG).show()
                     }
                     QuroDocLauncher.consume()
                 }
@@ -951,7 +953,7 @@ fun ChatScreen(
                             // 复用与 ui_widget 完全一致的 onCard→气泡→MermaidCardView 离线渲染通路。
                             "mermaid" -> com.ai.assistance.quro.core.cards.QuroChatCard.MermaidCard(
                                 id = event.id.ifBlank { "mermaid_${System.currentTimeMillis()}" },
-                                title = event.label.ifBlank { "可视化编程" },
+                                title = event.label.ifBlank { qstr(R.string.qk_00021) },
                                 source = event.value,
                                 theme = ""
                             )
@@ -960,7 +962,7 @@ fun ChatScreen(
                             // MiniAppCard，复用与 ui_widget 完全一致的 onCard→气泡→MiniAppCardView 运行时通路。
                             "miniapp" -> com.ai.assistance.quro.core.cards.QuroChatCard.MiniAppCard(
                                 id = event.id.ifBlank { "mini_${System.currentTimeMillis()}" },
-                                title = event.label.ifBlank { "Web 应用（AI 生成）" },
+                                title = event.label.ifBlank { qstr(R.string.qk_00022) },
                                 html = event.value,
                                 config = emptyMap(),
                             )
@@ -1176,7 +1178,7 @@ fun ChatScreen(
                 val text = cmd.removePrefix("copy:").trim()
                 val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                 cm.setPrimaryClip(android.content.ClipData.newPlainText("Zorv", text))
-                Toast.makeText(ctx, "已复制", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, qstr(R.string.qk_00023), Toast.LENGTH_SHORT).show()
             }
             cmd.startsWith("ai:") -> {
                 val t = cmd.removePrefix("ai:").trim()
@@ -1235,7 +1237,7 @@ fun ChatScreen(
             }
             ctx.startForegroundService(svcIntent)
         } else {
-            Toast.makeText(ctx, "屏幕捕获授权被取消，已 fallback 到无障碍节点树", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_00024), Toast.LENGTH_SHORT).show()
         }
     }
     fun requestMediaProjection() {
@@ -1258,34 +1260,34 @@ fun ChatScreen(
         val ctxParts = mutableListOf<String>()
         val wsPath = currentWorkspace
         if (wsPath != null) {
-            val wsName = wsPath.substringAfterLast("/").ifBlank { "工作区" }
-            ctxParts.add("工作区: $wsName ($wsPath)")
+            val wsName = wsPath.substringAfterLast("/").ifBlank { qstr(R.string.qk_00025) }
+            ctxParts.add(qstr(R.string.qk_00026, (wsName).toString(), (wsPath).toString()))
         }
         val aciName = currentAciName
         if (aciName != null) {
             val pkg = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultPackage(ctx)
             if (pkg != null) {
-                ctxParts.add("ACI应用: $aciName (包名: $pkg)")
+                ctxParts.add(qstr(R.string.qk_00027, (aciName).toString(), (pkg).toString()))
             }
         }
         if (pendingVisualPopup.value) {
-            ctxParts.add("用户选择了：可视化弹窗，请立即调用visual_popup工具创建一个可视化弹窗")
+            ctxParts.add(qstr(R.string.qk_00028))
             pendingVisualPopup.value = false
         }
         if (pendingVisualQuestion.value) {
-            ctxParts.add("用户选择了：可视化询问，请立即调用visual_question工具创建一个可视化询问")
+            ctxParts.add(qstr(R.string.qk_00029))
             pendingVisualQuestion.value = false
         }
         if (pendingSelfCard.value) {
-            ctxParts.add("用户选择了：可视化小卡片，请立即在回复中用 ```quro-card 围栏输出一张自研可视化小卡片（指标/进度/结构化单块结果），纯文字回复禁止")
+            ctxParts.add(qstr(R.string.qk_00030))
             pendingSelfCard.value = false
         }
         if (pendingDynamicUi.value) {
-            ctxParts.add("用户选择了：动态UI组件，请立即在回复中用 ```quro-ui 围栏输出原生可交互界面（表单/面板/工具入口等），纯文字回复禁止")
+            ctxParts.add(qstr(R.string.qk_00031))
             pendingDynamicUi.value = false
         }
         if (pendingAipDoc.value) {
-            ctxParts.add("用户选择了：AIP文档排版，请用 ```aip 围栏（或 aip_compose 工具）输出整篇排版的文档/PPT/报告（doc/deck/mindmap），不要只回纯文本")
+            ctxParts.add(qstr(R.string.qk_00032))
             pendingAipDoc.value = false
         }
         if (enabledSkillsCount > 0) {
@@ -1307,12 +1309,12 @@ fun ChatScreen(
         val modelFetchError = (modelList as? QuroModelListResult.Error)?.message
 
         val currentModelGroup = remember(cfg) {
-            listOf(ModelGroup("当前配置", listOf(
+            listOf(ModelGroup(qstr(R.string.qk_00034), listOf(
                 ChatModel(
-                    name = cfg.model.ifBlank { "未配置" },
+                    name = cfg.model.ifBlank { qstr(R.string.qk_00015) },
                     id = cfg.model,
                     desc = "提供商: ${cfg.provider} · ${cfg.baseUrl.takeIf { it.isNotBlank() } ?: "未设置BaseURL"}",
-                    provider = cfg.provider.ifBlank { "自定义" },
+                    provider = cfg.provider.ifBlank { qstr(R.string.qk_00036) },
                     mark = cfg.provider.firstOrNull()?.uppercase() ?: "Q"
                 )
             )))
@@ -1323,7 +1325,7 @@ fun ChatScreen(
         var savedProfiles by remember { mutableStateOf(profileRepo.loadAll()) }
         val savedProfileGroup: ModelGroup? = remember(savedProfiles) {
             if (savedProfiles.isEmpty()) null
-            else ModelGroup("已保存预设", savedProfiles.map { p ->
+            else ModelGroup(qstr(R.string.qk_00037), savedProfiles.map { p ->
                 ChatModel(
                     name = p.name,
                     id = "__profile__${p.id}",  // 特殊 id 前缀标识这是预设
@@ -1339,12 +1341,12 @@ fun ChatScreen(
         var customProviders by remember { mutableStateOf(customProviderRepo.loadAll()) }
         val customProviderGroup: ModelGroup? = remember(customProviders) {
             if (customProviders.isEmpty()) null
-            else ModelGroup("其他供应商（自建）", customProviders.map { p ->
+            else ModelGroup(qstr(R.string.qk_00038), customProviders.map { p ->
                 ChatModel(
-                    name = p.name.ifBlank { "未命名供应商" },
+                    name = p.name.ifBlank { qstr(R.string.qk_00039) },
                     id = "__custom__${p.id}",
                     desc = "${p.defaultModel.ifBlank { "（请在模型配置填写默认模型）" }} @ ${p.baseUrl.ifBlank { "未设置地址" }}",
-                    provider = p.name.ifBlank { "其他供应商" },
+                    provider = p.name.ifBlank { qstr(R.string.qk_00040) },
                     mark = p.name.firstOrNull()?.uppercase() ?: "C"
                 )
             })
@@ -1355,7 +1357,7 @@ fun ChatScreen(
         var localModels by remember { mutableStateOf(localModelRepo.loadAll()) }
         val localModelGroup: ModelGroup? = remember(localModels) {
             if (localModels.isEmpty()) null
-            else ModelGroup("本地离线模型", localModels.map { m ->
+            else ModelGroup(qstr(R.string.qk_00041), localModels.map { m ->
                 val typeLabel = if (m.type == QuroLocalModelType.LLAMA_CPP) "llama.cpp" else "MNN"
                 ChatModel(
                     name = m.name.ifBlank { typeLabel },
@@ -1382,9 +1384,9 @@ fun ChatScreen(
         // 将拉取结果转换为可选模型分组
         val fetchedGroup: ModelGroup? = when (val ml = modelList) {
             is QuroModelListResult.Success -> ModelGroup(
-                "可用模型 (API)",
+                stringResource(R.string.qk_00043),
                 ml.models.map { info ->
-                    ChatModel(name = info.id, id = info.id, desc = "来自 ${cfg.baseUrl}", provider = cfg.provider.ifBlank { "自定义" }, mark = info.id.firstOrNull()?.uppercase() ?: "M")
+                    ChatModel(name = info.id, id = info.id, desc = qstr(R.string.qk_00044, (cfg.baseUrl).toString()), provider = cfg.provider.ifBlank { qstr(R.string.qk_00036) }, mark = info.id.firstOrNull()?.uppercase() ?: "M")
                 }
             )
             else -> null
@@ -1480,14 +1482,14 @@ fun ChatScreen(
             onExport = {
                 val path = exportConversation(ctx, uiMessages)
                 if (path != null) {
-                    Toast.makeText(ctx, "已导出对话：$path", Toast.LENGTH_LONG).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_00045, (path).toString()), Toast.LENGTH_LONG).show()
                     val share = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "QuroAI 对话导出，文件已保存至：$path")
+                        putExtra(Intent.EXTRA_TEXT, qstr(R.string.qk_00046, (path).toString()))
                     }
-                    runCatching { ctx.startActivity(Intent.createChooser(share, "分享对话")) }
+                    runCatching { ctx.startActivity(Intent.createChooser(share, qstr(R.string.qk_00047))) }
                 } else {
-                    Toast.makeText(ctx, "导出失败，请重试", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_00048), Toast.LENGTH_SHORT).show()
                 }
             },
             onClear = { vm.clear() },
@@ -1750,14 +1752,14 @@ fun ChatScreen(
                         ctx, packageName, appName
                     )
                     currentAciName = appName
-                    Toast.makeText(ctx, "已设置默认 ACI 应用: $appName", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_00049, (appName).toString()), Toast.LENGTH_SHORT).show()
                     showAciSelector = false
                 },
                 onClearSelection = {
                     // 清除默认 ACI 应用
                     com.ai.assistance.quro.core.aidlaci.AciAppPreferences.clearDefaultApp(ctx)
                     currentAciName = null
-                    Toast.makeText(ctx, "已清除默认 ACI 应用", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_00050), Toast.LENGTH_SHORT).show()
                 },
                 initialSelectedPackage = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultPackage(ctx),
             )
@@ -1770,12 +1772,12 @@ fun ChatScreen(
                 onWorkspaceSelected = { path ->
                     currentWorkspace = path
                     com.ai.assistance.quro.core.tools.WorkspacePreferences.setCurrentWorkspace(ctx, path)
-                    Toast.makeText(ctx, "已选择工作区: ${path.substringAfterLast('/')}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_00051, (path.substringAfterLast('/')).toString()), Toast.LENGTH_SHORT).show()
                 },
                 onClearWorkspace = {
                     currentWorkspace = null
                     com.ai.assistance.quro.core.tools.WorkspacePreferences.clearCurrentWorkspace(ctx)
-                    Toast.makeText(ctx, "已恢复默认工作区", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_00052), Toast.LENGTH_SHORT).show()
                 },
                 initialSelectedPath = currentWorkspace,
             )
@@ -1897,12 +1899,12 @@ fun ChatScreen(
                 } else null,
                 text = {
                     Text(
-                        visualPopupContent.ifBlank { "（无内容）" },
+                        visualPopupContent.ifBlank { stringResource(R.string.qk_00053) },
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 },
                 confirmButton = {
-                    TextButton(onClick = { showVisualPopup = false }) { Text("知道了") }
+                    TextButton(onClick = { showVisualPopup = false }) { Text(stringResource(R.string.qk_00054)) }
                 },
             )
         }
@@ -1917,7 +1919,7 @@ fun ChatScreen(
                 text = {
                     Column(Modifier.verticalScroll(rememberScrollState())) {
                         if (visualAskOptions.isEmpty()) {
-                            Text("（无选项）", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                            Text(stringResource(R.string.qk_00055), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                         }
                         visualAskOptions.forEach { opt ->
                             TextButton(
@@ -1933,7 +1935,7 @@ fun ChatScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showVisualAsk = false }) { Text("取消") }
+                    TextButton(onClick = { showVisualAsk = false }) { Text(stringResource(R.string.qk_00011)) }
                 },
             )
         }
@@ -2008,17 +2010,17 @@ fun ChatScreen(
                             "browser_ai" -> {
                                 com.ai.assistance.quro.core.QuroBrowserBridge.open("https://www.baidu.com")
                                 showToolCenter = false
-                                android.widget.Toast.makeText(appCtx, "AI 可用 browser_act 操控此浏览器", android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(appCtx, qstr(R.string.qk_00056), android.widget.Toast.LENGTH_SHORT).show()
                             }
                             "crawler" -> {
                                 com.ai.assistance.quro.core.QuroBrowserBridge.open("https://www.baidu.com")
                                 showToolCenter = false
-                                android.widget.Toast.makeText(appCtx, "AI 可用 web_crawler 批量抓取（网页爬虫）：告诉它起始 URL 即可", android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(appCtx, qstr(R.string.qk_00057), android.widget.Toast.LENGTH_LONG).show()
                             }
                             "python_ai" -> {
                                 showTerminal = true
                                 showToolCenter = false
-                                android.widget.Toast.makeText(appCtx, "AI 可用 python_run 跑 Python", android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(appCtx, qstr(R.string.qk_00058), android.widget.Toast.LENGTH_SHORT).show()
                             }
                             "mitm" -> {
                                 showToolCenter = false
@@ -2185,7 +2187,7 @@ fun ChatScreen(
         if (!useSystemOverlay) browserFloatUrl?.let { furl ->
             Box(Modifier.fillMaxSize().zIndex(300f)) {
                 FloatingMiniWindow(
-                    title = "浏览器小窗",
+                    title = qstr(R.string.qk_00059),
                     initialX = 40.dp, initialY = 150.dp,
                     initialWidth = 320.dp, initialHeight = 400.dp,
                     onRestore = { browserUrl = furl; browserFloatUrl = null },
@@ -2216,7 +2218,7 @@ fun ChatScreen(
         if (!useSystemOverlay && chatMinimized) {
             Box(Modifier.fillMaxSize().zIndex(300f)) {
                 FloatingMiniWindow(
-                    title = "对话小窗",
+                    title = stringResource(R.string.qk_00060),
                     initialX = 24.dp, initialY = 120.dp,
                     initialWidth = 300.dp, initialHeight = 420.dp,
                     onRestore = { chatMinimized = false },
@@ -2230,7 +2232,7 @@ fun ChatScreen(
                             val recent = uiMessages.takeLast(15)
                             items(recent.size) { idx ->
                                 val m = recent[idx]
-                                val label = if (m.mine) "我" else "AI"
+                                val label = if (m.mine) stringResource(R.string.qk_00061) else "AI"
                                 Text(
                                     "$label：${(m.text ?: "").take(200)}",
                                     fontSize = 12.sp,
@@ -2245,11 +2247,11 @@ fun ChatScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             TextButton(onClick = { vm.newConversation(); chatMinimized = false }) {
-                                Text("新建对话")
+                                Text(stringResource(R.string.qk_00062))
                             }
                             Spacer(Modifier.weight(1f))
                             TextButton(onClick = { chatMinimized = false }) {
-                                Text("展开对话")
+                                Text(stringResource(R.string.qk_00063))
                             }
                         }
                     }
@@ -2301,7 +2303,7 @@ fun ChatScreen(
                     )
                 } else {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("文件不存在：$docViewerPath", color = cs.error, fontSize = 13.sp)
+                        Text(stringResource(R.string.qk_00064, (docViewerPath).toString()), color = cs.error, fontSize = 13.sp)
                     }
                 }
             }
@@ -2392,7 +2394,7 @@ fun ChatScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text("⚠️ $err", color = cs.onErrorContainer, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                                TextButton(onClick = { vm.clearError() }) { Text("关闭", color = cs.onErrorContainer) }
+                                TextButton(onClick = { vm.clearError() }) { Text(qstr(R.string.qk_00065), color = cs.onErrorContainer) }
                             }
                         }
                     }
@@ -2407,7 +2409,7 @@ fun ChatScreen(
                         onSend = { send(it) },
                         onAskFollowup = { txt ->
                             inputText = TextFieldValue(
-                                "针对上面的回答，我想追问：\n> " + txt.take(200).replace("\n", "\n> ") + "\n\n"
+                                qstr(R.string.qk_00066) + txt.take(200).replace("\n", "\n> ") + "\n\n"
                             )
                         },
                         onShare = { txt -> shareText(ctx, txt) },
@@ -2463,7 +2465,7 @@ fun ChatScreen(
                     val voiceInputEnabled = remember { QuroVoiceFeaturePrefs.getDialogVoiceButton(ctx) }
                     fun startDialogStt() {
                         if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
-                            Toast.makeText(ctx, "设备不支持语音识别", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(ctx, qstr(R.string.qk_00067), Toast.LENGTH_SHORT).show()
                             return
                         }
                         QuroSttHolder.startListening(
@@ -2477,7 +2479,7 @@ fun ChatScreen(
                                     inputText = inputText.copy(text = if (cur.isBlank()) txt else "$cur $txt")
                                 }
                             },
-                            onError = { _, msg -> Toast.makeText(ctx, "语音识别出错：$msg", Toast.LENGTH_SHORT).show() }
+                            onError = { _, msg -> Toast.makeText(ctx, qstr(R.string.qk_00068, (msg).toString()), Toast.LENGTH_SHORT).show() }
                         )
                     }
                     // 自动朗读：AI 回复完成后 TTS 朗读（受「语音设置 · 自动朗读」开关控制）
@@ -2501,7 +2503,7 @@ fun ChatScreen(
                                 // ★ 朗读协调：若本回合 AI 已用 speak 工具主动播报（用户要求"让 AI 控制朗读顺序"），
                                 //   自动朗读让位，不再重复朗读同一回复；AI 的多次 speak 调用由串行队列按调用顺序播放。
                                 if (QuroTtsHolder.consumeSpeakToolFired()) {
-                                    Log.d("TTS", "自动朗读让位：本回合 AI 已用 speak 工具控制播报顺序")
+                                    Log.d("TTS", qstr(R.string.qk_00069))
                                 } else {
                                     // v414 修复：ensureReady/speak 是挂起调用，改由稳定 scope 承接，UI 状态变化不再杀掉朗读。
                                     ttsScope.launch {
@@ -2544,32 +2546,32 @@ fun ChatScreen(
                         onSelectVisualPopup = {
                             pendingVisualPopup.value = !pendingVisualPopup.value
                             if (pendingVisualPopup.value) {
-                                Toast.makeText(ctx, "已选择：可视化弹窗，发送消息时将触发", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(ctx, qstr(R.string.qk_00070), Toast.LENGTH_SHORT).show()
                             } else {
-                                Toast.makeText(ctx, "已取消：可视化弹窗", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(ctx, qstr(R.string.qk_00071), Toast.LENGTH_SHORT).show()
                             }
                         },
                         onSelectVisualQuestion = {
                             pendingVisualQuestion.value = !pendingVisualQuestion.value
                             if (pendingVisualQuestion.value) {
-                                Toast.makeText(ctx, "已选择：可视化询问，发送消息时将触发", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(ctx, qstr(R.string.qk_00072), Toast.LENGTH_SHORT).show()
                             } else {
-                                Toast.makeText(ctx, "已取消：可视化询问", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(ctx, qstr(R.string.qk_00073), Toast.LENGTH_SHORT).show()
                             }
                         },
                         pendingVisualPopup = pendingVisualPopup.value,
                         pendingVisualQuestion = pendingVisualQuestion.value,
                         onSelectSelfCard = {
                             pendingSelfCard.value = !pendingSelfCard.value
-                            Toast.makeText(ctx, if (pendingSelfCard.value) "已选择：可视化小卡片，发送消息时将触发" else "已取消：可视化小卡片", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(ctx, if (pendingSelfCard.value) qstr(R.string.qk_00074) else qstr(R.string.qk_00075), Toast.LENGTH_SHORT).show()
                         },
                         onSelectDynamicUi = {
                             pendingDynamicUi.value = !pendingDynamicUi.value
-                            Toast.makeText(ctx, if (pendingDynamicUi.value) "已选择：动态UI组件，发送消息时将触发" else "已取消：动态UI组件", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(ctx, if (pendingDynamicUi.value) qstr(R.string.qk_00076) else qstr(R.string.qk_00077), Toast.LENGTH_SHORT).show()
                         },
                         onSelectAipDoc = {
                             pendingAipDoc.value = !pendingAipDoc.value
-                            Toast.makeText(ctx, if (pendingAipDoc.value) "已选择：AIP文档排版，发送消息时将触发" else "已取消：AIP文档排版", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(ctx, if (pendingAipDoc.value) qstr(R.string.qk_00078) else qstr(R.string.qk_00079), Toast.LENGTH_SHORT).show()
                         },
                         pendingSelfCard = pendingSelfCard.value,
                         pendingDynamicUi = pendingDynamicUi.value,
@@ -2768,7 +2770,7 @@ private fun MessageList(
     ) {
         item {
             val today = java.time.LocalDate.now()
-            val dateLabel = today.format(java.time.format.DateTimeFormatter.ofPattern("M月d日"))
+            val dateLabel = today.format(java.time.format.DateTimeFormatter.ofPattern(stringResource(R.string.qk_00080)))
             Text(dateLabel, fontSize = scaled(12), color = Muted, modifier = Modifier.padding(start = 2.dp, bottom = 2.dp))
         }
         // 执行轨迹已「融和升级」进工具调用输出：
@@ -2816,7 +2818,7 @@ private fun MessageList(
             modifier = Modifier.size(36.dp).shadow(4.dp, CircleShape),
         ) {
             Box(contentAlignment = Alignment.Center) {
-                LucideIcon("chevron-down", "回到底部", Modifier.size(18.dp), tint = cs.onSurfaceVariant)
+                LucideIcon("chevron-down", stringResource(R.string.qk_00081), Modifier.size(18.dp), tint = cs.onSurfaceVariant)
             }
         }
     }
@@ -2831,10 +2833,10 @@ private fun MessageList(
 @Composable
 private fun TraceRow(ev: QuroAgentTrace.AgentTraceEvent) {
     val (color, label, icon) = when (ev.kind) {
-        QuroAgentTrace.TraceKind.THOUGHT -> Triple(Color(0xFF9C27B0), "思考", "sparkles")
-        QuroAgentTrace.TraceKind.ACTION -> Triple(Color(0xFF2196F3), "行动", "play")
-        QuroAgentTrace.TraceKind.RESULT -> Triple(Color(0xFF4CAF50), "结果", "check-circle")
-        QuroAgentTrace.TraceKind.STATUS -> Triple(Color(0xFF757575), "状态", "clock")
+        QuroAgentTrace.TraceKind.THOUGHT -> Triple(Color(0xFF9C27B0), stringResource(R.string.qk_00082), "sparkles")
+        QuroAgentTrace.TraceKind.ACTION -> Triple(Color(0xFF2196F3), stringResource(R.string.qk_00083), "play")
+        QuroAgentTrace.TraceKind.RESULT -> Triple(Color(0xFF4CAF50), stringResource(R.string.qk_00084), "check-circle")
+        QuroAgentTrace.TraceKind.STATUS -> Triple(Color(0xFF757575), stringResource(R.string.qk_00085), "clock")
     }
     Row(
         Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
@@ -2880,7 +2882,7 @@ private fun shareText(context: android.content.Context, text: String) {
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, text)
     }
-    context.startActivity(Intent.createChooser(intent, "分享给"))
+    context.startActivity(Intent.createChooser(intent, qstr(R.string.qk_00086)))
 }
 
 @Composable
@@ -3002,7 +3004,7 @@ private fun MessageRow(
                     AvatarContent(msg.avatarUri, msg.avatar, avatarSize)
                     DropdownMenu(expanded = showAvatarMenu, onDismissRequest = { showAvatarMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text("编辑灵魂卡", fontSize = 14.sp) },
+                            text = { Text(stringResource(R.string.qk_00087), fontSize = 14.sp) },
                             onClick = { showAvatarMenu = false; onCommand("__edit_soul_card__") },
                             leadingIcon = { Icon(Icons.Filled.Edit, null, Modifier.size(18.dp)) }
                         )
@@ -3030,11 +3032,11 @@ private fun MessageRow(
                     // 操作按钮（复制/追问/分享/删除/重试）—— 与气泡消息一致的动作栏
                     Spacer(Modifier.height(6.dp))
                     val bubbleActions: @Composable () -> Unit = {
-                        BubbleActionButton("复制", Muted) { copyToClipboard(displayText) }
-                        BubbleActionButton("追问", cs.primary) { onAskFollowup(msg.text ?: "") }
-                        BubbleActionButton("分享", Muted) { onShare(msg.text ?: "") }
-                        BubbleActionButton("删除", Muted) { onDelete(msg.uids) }
-                        BubbleActionButton("重试", Muted) { onRegenerate() }
+                        BubbleActionButton(stringResource(R.string.qk_00088), Muted) { copyToClipboard(displayText) }
+                        BubbleActionButton(stringResource(R.string.qk_00089), cs.primary) { onAskFollowup(msg.text ?: "") }
+                        BubbleActionButton(stringResource(R.string.qk_00090), Muted) { onShare(msg.text ?: "") }
+                        BubbleActionButton(stringResource(R.string.qk_00091), Muted) { onDelete(msg.uids) }
+                        BubbleActionButton(stringResource(R.string.qk_00092), Muted) { onRegenerate() }
                     }
                     if (narrow) {
                         FlowRow(
@@ -3063,7 +3065,7 @@ private fun MessageRow(
                 AvatarContent(msg.avatarUri, msg.avatar, avatarSize)
                 DropdownMenu(expanded = showAvatarMenu, onDismissRequest = { showAvatarMenu = false }) {
                     DropdownMenuItem(
-                        text = { Text("编辑灵魂卡", fontSize = 14.sp) },
+                        text = { Text(stringResource(R.string.qk_00087), fontSize = 14.sp) },
                         onClick = { showAvatarMenu = false; onCommand("__edit_soul_card__") },
                         leadingIcon = { Icon(Icons.Filled.Edit, null, Modifier.size(18.dp)) }
                     )
@@ -3099,7 +3101,7 @@ private fun MessageRow(
                             LucideIcon("sparkles", null, Modifier.size(10.dp), tint = Accent)
                             Spacer(Modifier.width(3.dp))
                             // 生成中显示「思考中」，完成后显示「思考过程 · N 步」（此前恒为「思考中」，完成后文案误导）
-                            Text(if (streamingThink) "思考中" else "思考过程 · ${msg.think.steps.size}步", fontSize = 9.sp, color = Accent)
+                            Text(if (streamingThink) stringResource(R.string.qk_00093) else stringResource(R.string.qk_00094, (msg.think.steps.size).toString()), fontSize = 9.sp, color = Accent)
                         }
                     }
                     // 工具调用按钮（紧凑胶囊）
@@ -3111,7 +3113,7 @@ private fun MessageRow(
                         ) {
                             LucideIcon("wrench", null, Modifier.size(10.dp), tint = cs.primary.copy(alpha = 0.7f))
                             Spacer(Modifier.width(3.dp))
-                            Text("· ${msg.tools.size} 工具", fontSize = 9.sp, color = cs.primary.copy(alpha = 0.7f))
+                            Text(stringResource(R.string.qk_00095, (msg.tools.size).toString()), fontSize = 9.sp, color = cs.primary.copy(alpha = 0.7f))
                         }
                     }
                 }
@@ -3144,11 +3146,11 @@ private fun MessageRow(
                     val popupCardInfo = remember(t.args) {
                         runCatching {
                             val json = org.json.JSONObject(t.args)
-                            val title = json.optString("title", "可视化弹窗")
+                            val title = json.optString("title", qstr(R.string.qk_00096))
                             val cardTitle = json.optString("card_title", title)
-                            val cardDescription = json.optString("card_description", "点击查看详情")
+                            val cardDescription = json.optString("card_description", qstr(R.string.qk_00097))
                             Triple(title, cardTitle, cardDescription)
-                        }.getOrDefault(Triple("可视化弹窗", "可视化弹窗", "点击查看详情"))
+                        }.getOrDefault(Triple(qstr(R.string.qk_00096), qstr(R.string.qk_00096), qstr(R.string.qk_00097)))
                     }
                     val (_, cardTitle, cardDescription) = popupCardInfo
                     Card(
@@ -3157,7 +3159,7 @@ private fun MessageRow(
                             .clickable {
                                 runCatching {
                                     val json = org.json.JSONObject(t.args)
-                                    val pTitle = json.optString("title", "可视化弹窗")
+                                    val pTitle = json.optString("title", qstr(R.string.qk_00096))
                                     val content = json.optString("content", "")
                                     val btns = mutableListOf<PopupButton>()
                                     json.optJSONArray("buttons")?.let { arr ->
@@ -3186,7 +3188,7 @@ private fun MessageRow(
                                         width = if (json.has("width")) json.optInt("width") else null,
                                         height = if (json.has("height")) json.optInt("height") else null,
                                         cardTitle = json.optString("card_title", pTitle),
-                                        cardDescription = json.optString("card_description", "点击查看详情"),
+                                        cardDescription = json.optString("card_description", qstr(R.string.qk_00097)),
                                         cancelable = json.optBoolean("cancelable", true),
                                         timeout = json.optInt("timeout", 60),
                                         latch = latch, result = resultRef
@@ -3204,7 +3206,7 @@ private fun MessageRow(
                                 Text(cardTitle, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = cs.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 if (cardDescription.isNotBlank()) Text(cardDescription, fontSize = 10.sp, color = cs.onPrimaryContainer.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            Icon(Icons.AutoMirrored.Filled.OpenInNew, "打开弹窗", tint = cs.primary, modifier = Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, qstr(R.string.qk_00098), tint = cs.primary, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
@@ -3213,11 +3215,11 @@ private fun MessageRow(
                     val popupCardInfo = remember(t.args) {
                         runCatching {
                             val json = org.json.JSONObject(t.args)
-                            val title = json.optString("title", "自定义弹窗")
+                            val title = json.optString("title", qstr(R.string.qk_00099))
                             val cardTitle = json.optString("card_title", title)
-                            val cardDescription = json.optString("card_description", "点击查看详情")
+                            val cardDescription = json.optString("card_description", qstr(R.string.qk_00097))
                             Triple(title, cardTitle, cardDescription)
-                        }.getOrDefault(Triple("自定义弹窗", "自定义弹窗", "点击查看详情"))
+                        }.getOrDefault(Triple(qstr(R.string.qk_00099), qstr(R.string.qk_00099), qstr(R.string.qk_00097)))
                     }
                     val (_, cardTitle, cardDescription) = popupCardInfo
                     Card(
@@ -3226,11 +3228,11 @@ private fun MessageRow(
                             .clickable {
                                 runCatching {
                                     val json = org.json.JSONObject(t.args)
-                                    val title = json.optString("title", "自定义弹窗")
+                                    val title = json.optString("title", qstr(R.string.qk_00099))
                                     val html = json.optString("html", "")
                                     if (html.isBlank()) return@runCatching
                                     val cardTitle = json.optString("card_title", title)
-                                    val cardDescription = json.optString("card_description", "点击查看详情")
+                                    val cardDescription = json.optString("card_description", qstr(R.string.qk_00097))
                                     val width = if (json.has("width")) json.optInt("width") else null
                                     val height = if (json.has("height")) json.optInt("height") else null
                                     val cancelable = json.optBoolean("cancelable", true)
@@ -3265,7 +3267,7 @@ private fun MessageRow(
                                 Text(cardTitle, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = cs.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 if (cardDescription.isNotBlank()) Text(cardDescription, fontSize = 10.sp, color = cs.onPrimaryContainer.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            Icon(Icons.AutoMirrored.Filled.OpenInNew, "打开弹窗", tint = cs.primary, modifier = Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, qstr(R.string.qk_00098), tint = cs.primary, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
@@ -3371,7 +3373,7 @@ private fun MessageRow(
                                     QuroChatCardView(
                                         QuroChatCard.MiniAppCard(
                                             id = "mini_" + blk.html.hashCode().toString(36).replace("-", "m"),
-                                            title = "Web 应用（AI 生成）",
+                                            title = stringResource(R.string.qk_00022),
                                             html = blk.html,
                                             config = emptyMap(),
                                         ),
@@ -3381,7 +3383,7 @@ private fun MessageRow(
                                 is MsgBlock.Mermaid -> QuroChatCardView(
                                     QuroChatCard.MermaidCard(
                                         id = "mmd_" + blk.source.hashCode().toString(36).replace("-", "m"),
-                                        title = "流程图 / 可视化",
+                                        title = stringResource(R.string.qk_00100),
                                         source = blk.source,
                                         theme = "",
                                     ),
@@ -3411,7 +3413,7 @@ private fun MessageRow(
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
                                 Icon(Icons.Filled.Check, null, Modifier.size(12.dp), tint = Color.White)
                                 Spacer(Modifier.width(4.dp))
-                                Text("已复制", fontSize = 11.sp, color = Color.White)
+                                Text(stringResource(R.string.qk_00023), fontSize = 11.sp, color = Color.White)
                             }
                         }
                         // 2 秒后自动隐藏
@@ -3426,11 +3428,11 @@ private fun MessageRow(
                 if (!msg.mine) {
                     Spacer(Modifier.height(6.dp))
                     val bubbleActions: @Composable () -> Unit = {
-                        BubbleActionButton("复制", Muted) { copyToClipboard(displayText) }
-                        BubbleActionButton("追问", cs.primary) { onAskFollowup(msg.text ?: "") }
-                        BubbleActionButton("分享", Muted) { onShare(msg.text ?: "") }
-                        BubbleActionButton("删除", Muted) { onDelete(msg.uids) }
-                        BubbleActionButton("重试", Muted) { onRegenerate() }
+                        BubbleActionButton(stringResource(R.string.qk_00088), Muted) { copyToClipboard(displayText) }
+                        BubbleActionButton(stringResource(R.string.qk_00089), cs.primary) { onAskFollowup(msg.text ?: "") }
+                        BubbleActionButton(stringResource(R.string.qk_00090), Muted) { onShare(msg.text ?: "") }
+                        BubbleActionButton(stringResource(R.string.qk_00091), Muted) { onDelete(msg.uids) }
+                        BubbleActionButton(stringResource(R.string.qk_00092), Muted) { onRegenerate() }
                     }
                     if (narrow) {
                         FlowRow(
@@ -3475,7 +3477,7 @@ private fun MessageRow(
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-                    BubbleActionButton("删除", Muted) { onDelete(msg.uids) }
+                    BubbleActionButton(stringResource(R.string.qk_00091), Muted) { onDelete(msg.uids) }
                 }
             }
         }
@@ -3587,7 +3589,7 @@ private fun AttachmentBubble(
                 Text(att.meta, fontSize = scaled(11), color = Muted)
             }
             IconButton(onClick = onDownload, Modifier.size(32.dp)) {
-                LucideIcon("download", "下载", Modifier.size(16.dp), tint = cs.primary)
+                LucideIcon("download", stringResource(R.string.qk_00101), Modifier.size(16.dp), tint = cs.primary)
             }
         }
     }
@@ -3636,10 +3638,10 @@ private fun AttachmentImagePreview(att: Attachment, onActivate: () -> Unit) {
                 Modifier.align(Alignment.TopEnd).padding(6.dp)
                     .background(Color.Black.copy(alpha = 0.4f), CircleShape).padding(4.dp)
             ) {
-                LucideIcon("maximize", "查看大图", Modifier.size(14.dp), tint = Color.White)
+                LucideIcon("maximize", stringResource(R.string.qk_00102), Modifier.size(14.dp), tint = Color.White)
             }
         } else {
-            Text("图片预览不可用", color = Muted, fontSize = 12.sp)
+            Text(stringResource(R.string.qk_00103), color = Muted, fontSize = 12.sp)
         }
     }
 }
@@ -3677,7 +3679,7 @@ private fun AttachmentVideoPreview(att: Attachment, onActivate: () -> Unit) {
             Modifier.size(48.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Filled.PlayArrow, "播放", Modifier.size(28.dp), tint = Color.White)
+            Icon(Icons.Filled.PlayArrow, stringResource(R.string.qk_00104), Modifier.size(28.dp), tint = Color.White)
         }
     }
 }
@@ -3739,7 +3741,7 @@ private fun AttachmentFilePreview(att: Attachment, onActivate: () -> Unit) {
                     fontWeight = FontWeight.SemiBold, maxLines = 1,
                 )
                 Text(
-                    if (isPreviewable) "点击在应用内预览排版" else "点击打开文件",
+                    if (isPreviewable) stringResource(R.string.qk_00105) else stringResource(R.string.qk_00106),
                     fontSize = 11.sp, color = cs.primary,
                 )
             }
@@ -3766,8 +3768,7 @@ private fun AttachmentFilePreview(att: Attachment, onActivate: () -> Unit) {
                     .background(cs.surfaceVariant.copy(alpha = 0.6f))
                     .padding(horizontal = 10.dp, vertical = 8.dp),
             ) {
-                Text(
-                    "内容预览",
+                Text(stringResource(R.string.qk_00107),
                     fontSize = 10.sp,
                     color = Muted,
                     fontWeight = FontWeight.Medium,
@@ -3794,14 +3795,14 @@ private fun AttachmentFilePreview(att: Attachment, onActivate: () -> Unit) {
             ) {
                 TextButton(onClick = { inlineExpanded = !inlineExpanded }) {
                     Text(
-                        if (inlineExpanded) "收起排版预览" else "对话框内预览排版",
+                        if (inlineExpanded) stringResource(R.string.qk_00108) else stringResource(R.string.qk_00109),
                         color = cs.primary,
                         fontSize = 12.sp,
                     )
                 }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = onActivate) {
-                    Text("全屏预览", color = cs.primary.copy(alpha = 0.8f), fontSize = 12.sp)
+                    Text(stringResource(R.string.qk_00110), color = cs.primary.copy(alpha = 0.8f), fontSize = 12.sp)
                 }
             }
             if (inlineExpanded && docFile.exists()) {
@@ -3824,8 +3825,7 @@ private fun AttachmentFilePreview(att: Attachment, onActivate: () -> Unit) {
                     )
                 }
             } else if (inlineExpanded) {
-                Text(
-                    "文件不存在：${att.path}",
+                Text(stringResource(R.string.qk_00111, (att.path).toString()),
                     color = cs.error,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(8.dp),
@@ -3847,7 +3847,7 @@ private fun FullScreenImageViewer(path: String, name: String, onClose: () -> Uni
     }
     Box(Modifier.fillMaxSize().zIndex(130f).background(Color.Black)) {
         IconButton(onClick = onClose, Modifier.align(Alignment.TopEnd).padding(8.dp).size(40.dp)) {
-            LucideIcon("x", "关闭", Modifier.size(22.dp), tint = Color.White)
+            LucideIcon("x", stringResource(R.string.qk_00065), Modifier.size(22.dp), tint = Color.White)
         }
         if (bmp != null) {
             Image(
@@ -3861,7 +3861,7 @@ private fun FullScreenImageViewer(path: String, name: String, onClose: () -> Uni
                     .clickable { scale = if (scale > 1f) 1f else 2.5f; offset = Offset.Zero },
             )
         } else {
-            Text("图片加载失败", color = Color.White, modifier = Modifier.align(Alignment.Center))
+            Text(stringResource(R.string.qk_00112), color = Color.White, modifier = Modifier.align(Alignment.Center))
         }
     }
 }
@@ -3869,7 +3869,7 @@ private fun FullScreenImageViewer(path: String, name: String, onClose: () -> Uni
 /** 用系统查看器打开文档 / 视频（FileProvider 共享，无需写权限）。 */
 private fun openFileWithSystemViewer(ctx: Context, att: Attachment) {
     val file = att.path?.let { File(it) }?.takeIf { it.exists() } ?: run {
-        Toast.makeText(ctx, "源文件不存在", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, qstr(R.string.qk_00113), Toast.LENGTH_SHORT).show()
         return
     }
     val mime = when (att.type) {
@@ -3883,9 +3883,9 @@ private fun openFileWithSystemViewer(ctx: Context, att: Attachment) {
             setDataAndType(uri, mime)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        ctx.startActivity(Intent.createChooser(intent, "打开文件"))
+        ctx.startActivity(Intent.createChooser(intent, qstr(R.string.qk_00114)))
     }.onFailure {
-        Toast.makeText(ctx, "无法打开：${it.message}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, qstr(R.string.qk_00115, (it.message).toString()), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -3944,7 +3944,7 @@ private fun ToolCallBlock(
             }
             Spacer(Modifier.width(8.dp))
             Text(
-                text = if (tools.size == 1) tools.first().name else "调用工具 ×${tools.size}",
+                text = if (tools.size == 1) tools.first().name else qstr(R.string.qk_00116, (tools.size).toString()),
                 fontSize = scaled(12), color = cs.onSurface, fontWeight = FontWeight.SemiBold,
             )
             if (tools.size > 1) {
@@ -3980,7 +3980,7 @@ private fun ToolCallBlock(
                 val pulse by rememberInfiniteTransition().animateFloat(0.35f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse))
                 Box(Modifier.size(8.dp).clip(CircleShape).background(cs.primary.copy(alpha = pulse)))
                 Spacer(Modifier.width(6.dp))
-                Text("执行中…", fontSize = 10.sp, color = cs.primary, fontWeight = FontWeight.Medium)
+                Text(qstr(R.string.qk_00117), fontSize = 10.sp, color = cs.primary, fontWeight = FontWeight.Medium)
             }
             Spacer(Modifier.weight(1f))
             LucideIcon(if (expanded) "chevron_up" else "chevron_down", null, Modifier.size(14.dp), tint = Muted)
@@ -4013,11 +4013,11 @@ private fun ToolCallBlock(
                         modifier = Modifier.clickable { traceExpanded = !traceExpanded },
                     ) {
                         Box(Modifier.size(16.dp).clip(RoundedCornerShape(4.dp)).background(cs.primary.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                            LucideIcon("git-branch", "执行轨迹", Modifier.size(10.dp), tint = cs.primary)
+                            LucideIcon("git-branch", qstr(R.string.qk_00118), Modifier.size(10.dp), tint = cs.primary)
                         }
                         Spacer(Modifier.width(6.dp))
-                        Text("执行轨迹", fontSize = scaled(11), color = cs.primary, fontWeight = FontWeight.SemiBold)
-                        Text("（实时）", fontSize = 10.sp, color = Muted)
+                        Text(qstr(R.string.qk_00118), fontSize = scaled(11), color = cs.primary, fontWeight = FontWeight.SemiBold)
+                        Text(qstr(R.string.qk_00119), fontSize = 10.sp, color = Muted)
                         Spacer(Modifier.weight(1f))
                         LucideIcon(if (traceExpanded) "chevron_up" else "chevron_down", null, Modifier.size(13.dp), tint = Muted)
                     }
@@ -4039,7 +4039,7 @@ private fun ToolCallBlock(
                             if (traceLines.isEmpty()) {
                                 Row(Modifier.padding(vertical = 8.dp)) {
                                     Text("⏳ ", fontSize = 11.sp)
-                                    Text("等待 AI 行动…", fontSize = 11.sp, color = Muted)
+                                    Text(qstr(R.string.qk_00120), fontSize = 11.sp, color = Muted)
                                 }
                             } else {
                                 // 封顶渲染最近 100 条，避免几百条事件全量重组打爆主线程
@@ -4059,56 +4059,56 @@ data class ToolCategory(val icon: String, val color: Color, val label: String)
 
 private fun toolCategory(name: String): ToolCategory = when {
     name == "aip_compose" || name == "aiwps_create" || name == "enhanced_doc_create" || name.contains("doc") ->
-        ToolCategory("file_text", Color(0xFF0EA5E9), "文档排版")
+        ToolCategory("file_text", Color(0xFF0EA5E9), qstr(R.string.qk_00121))
 
     name.startsWith("read_screen") || name.startsWith("tap") || name.startsWith("swipe") ||
     name.startsWith("input_text") || name.startsWith("scroll") || name.startsWith("global_action") ||
     name.startsWith("get_foreground") || name.startsWith("get_screen_state") ->
-        ToolCategory("monitor-smartphone", Color(0xFF6366F1), "无障碍控屏")
+        ToolCategory("monitor-smartphone", Color(0xFF6366F1), qstr(R.string.qk_00122))
 
     name.contains("shizuku") || name.contains("root_exec") || name.contains("root_status") ||
     name.contains("device_admin") || name.contains("lock_screen") || name.contains("set_camera") ->
-        ToolCategory("shield-check", Color(0xFFEF4444), "系统权限")
+        ToolCategory("shield-check", Color(0xFFEF4444), qstr(R.string.qk_00123))
 
     name.contains("terminal") || name.contains("run_shell") || name.startsWith("linux_") ||
     name.startsWith("open_12306") || name == "home" || name == "open_app" ->
-        ToolCategory("terminal", Color(0xFFF59E0B), "终端执行")
+        ToolCategory("terminal", Color(0xFFF59E0B), qstr(R.string.qk_00124))
 
     name == "cms_list" || name == "cms_call" || name == "priv_status" ||
     name == "get_device_info" || name.contains("draw_qwen") ||
     name == "open_repo" || name == "open_calendar" || name == "set_alarm" ->
-        ToolCategory("cpu", Color(0xFF06B6D4), "系统能力")
+        ToolCategory("cpu", Color(0xFF06B6D4), qstr(R.string.qk_00125))
 
     name.contains("list_dir") || name.contains("read_file") || name.contains("write_file") ||
     name.contains("file_") || name.contains("download") ->
-        ToolCategory("folder-open", Color(0xFF8B5CF6), "文件工具")
+        ToolCategory("folder-open", Color(0xFF8B5CF6), qstr(R.string.qk_00126))
 
     name.contains("web_search") || name.contains("open_url") || name.startsWith("web_") ->
-        ToolCategory("globe", Color(0xFF10B981), "网络能力")
+        ToolCategory("globe", Color(0xFF10B981), qstr(R.string.qk_00127))
 
     name == "echo_step" || name == "open_calendar" || name == "set_alarm" ->
-        ToolCategory("bell-ring", Color(0xFFEC4899), "提醒与步骤")
+        ToolCategory("bell-ring", Color(0xFFEC4899), qstr(R.string.qk_00128))
 
     name.startsWith("ui_open_") || name.startsWith("ui_toggle_") ||
     name.startsWith("ui_clear_") || name.startsWith("ui_new_") ->
-        ToolCategory("layout-panel", Color(0xFF14B8A6), "界面控制")
+        ToolCategory("layout-panel", Color(0xFF14B8A6), qstr(R.string.qk_00129))
 
     name.contains("image_gen") || name.contains("generate_image") || name.contains("text_to_image") ->
-        ToolCategory("image", Color(0xFFEC4899), "图像生成")
+        ToolCategory("image", Color(0xFFEC4899), qstr(R.string.qk_00130))
 
     name.contains("video_gen") || name.contains("generate_video") ->
-        ToolCategory("video", Color(0xFF8B5CF6), "视频生成")
+        ToolCategory("video", Color(0xFF8B5CF6), qstr(R.string.qk_00131))
 
     name.contains("memory_save") || name.contains("memory_list") || name.contains("memory_search") || name.contains("memory_delete") ->
-        ToolCategory("brain", Color(0xFF06B6D4), "记忆库")
+        ToolCategory("brain", Color(0xFF06B6D4), qstr(R.string.qk_00132))
 
     name.contains("summary") || name.contains("context") ->
-        ToolCategory("file-text", Color(0xFF14B8A6), "上下文总结")
+        ToolCategory("file-text", Color(0xFF14B8A6), qstr(R.string.qk_00133))
 
     name.contains("incubate") || name == "persona_hatch" ->
-        ToolCategory("user-round", Color(0xFFF59E0B), "人格孵化")
+        ToolCategory("user-round", Color(0xFFF59E0B), qstr(R.string.qk_00134))
 
-    else -> ToolCategory("wrench", Color(0xFF64748B), "工具")
+    else -> ToolCategory("wrench", Color(0xFF64748B), qstr(R.string.qk_00135))
 }
 
 data class RiskLevel(val label: String, val color: Color, val bgAlpha: Float)
@@ -4117,10 +4117,10 @@ private fun parseRiskLevel(text: String): RiskLevel? {
     val regex = RE_RISK_LEVEL
     val match = regex.find(text) ?: return null
     return when (match.groupValues[1].lowercase()) {
-        "critical", "高危" -> RiskLevel("高危", Color(0xFFEF4444), 0.18f)
-        "warning", "中危" -> RiskLevel("中危", Color(0xFFF59E0B), 0.16f)
+        "critical", qstr(R.string.qk_00136) -> RiskLevel(qstr(R.string.qk_00136), Color(0xFFEF4444), 0.18f)
+        "warning", qstr(R.string.qk_00137) -> RiskLevel(qstr(R.string.qk_00137), Color(0xFFF59E0B), 0.16f)
         "normal", "low", "normal" -> RiskLevel("Normal", Color(0xFF22C55E), 0.14f)
-        "safe", "安全" -> RiskLevel("安全", Color(0xFF06B6D4), 0.14f)
+        "safe", qstr(R.string.qk_00138) -> RiskLevel(qstr(R.string.qk_00138), Color(0xFF06B6D4), 0.14f)
         else -> RiskLevel(match.groupValues[1], Muted, 0.12f)
     }
 }
@@ -4194,13 +4194,13 @@ private fun SingleToolCard(t: ToolCallUi, scaled: (Int) -> androidx.compose.ui.u
                     ResultStatus.WARNING -> "alert-triangle"
                     ResultStatus.INFO -> "info"
                 }
-                LucideIcon(statusIcon, "状态", Modifier.size(13.dp), tint = statusColor)
+                LucideIcon(statusIcon, stringResource(R.string.qk_00085), Modifier.size(13.dp), tint = statusColor)
             } else {
                 // 🔧 执行中指示：结果尚未回填 → 脉冲点 + 「执行中…」，让慢任务在对话框里有明确「进行中」展示。
                 val pulse by rememberInfiniteTransition().animateFloat(0.35f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse))
                 Box(Modifier.size(9.dp).clip(CircleShape).background(cs.primary.copy(alpha = pulse)))
                 Spacer(Modifier.width(4.dp))
-                Text("执行中…", fontSize = 9.sp, color = cs.primary, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.qk_00117), fontSize = 9.sp, color = cs.primary, fontWeight = FontWeight.Medium)
             }
             Spacer(Modifier.width(4.dp))
             LucideIcon(if (cardExpanded) "chevron_down" else "chevron_right", null,
@@ -4217,9 +4217,9 @@ private fun SingleToolCard(t: ToolCallUi, scaled: (Int) -> androidx.compose.ui.u
 
                 if (t.args.isNotBlank() && t.args != "{}") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        LucideIcon("sliders-horizontal", "参数", Modifier.size(11.dp), tint = Muted)
+                        LucideIcon("sliders-horizontal", stringResource(R.string.qk_00142), Modifier.size(11.dp), tint = Muted)
                         Spacer(Modifier.width(4.dp))
-                        Text("参数", fontSize = 10.sp, color = Muted, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.qk_00142), fontSize = 10.sp, color = Muted, fontWeight = FontWeight.Medium)
                     }
                     Spacer(Modifier.height(4.dp))
                     ParsedArgsContent(t.args, scaled)
@@ -4240,9 +4240,9 @@ private fun SingleToolCard(t: ToolCallUi, scaled: (Int) -> androidx.compose.ui.u
                             ResultStatus.WARNING -> Color(0xFFF59E0B)
                             ResultStatus.INFO -> Muted
                         }
-                        LucideIcon(sIcon, "结果", Modifier.size(11.dp), tint = sColor)
+                        LucideIcon(sIcon, stringResource(R.string.qk_00084), Modifier.size(11.dp), tint = sColor)
                         Spacer(Modifier.width(4.dp))
-                        Text("返回", fontSize = 10.sp, color = Muted, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.qk_00143), fontSize = 10.sp, color = Muted, fontWeight = FontWeight.Medium)
                         val risk = parseRiskLevel(t.result)
                         if (risk != null) {
                             Spacer(Modifier.width(6.dp))
@@ -4257,10 +4257,10 @@ private fun SingleToolCard(t: ToolCallUi, scaled: (Int) -> androidx.compose.ui.u
                     // 后台 AIP 排版：任何发出 AIP 信封的工具结果（aip_compose 或工具箱-文档类工具
                     // chat_doc / workspace_doc / enhanced_doc_create 发出的 kind=doc 信封）都在对话框内
                     // 用 Canvas 引擎渲染成完整 AIP 文档（"工具调用形式，最后渲染在对话框"）。
-                    val aipJson = t.result!!.substringBefore("\n\n[导出]")
+                    val aipJson = t.result!!.substringBefore(stringResource(R.string.qk_00144))
                     if (com.ai.assistance.quro.core.canvas.Aip.looksLikeAip(aipJson)) {
                         AipCanvas(source = aipJson)
-                        val exportNote = t.result!!.substringAfter("\n\n[导出]", "")
+                        val exportNote = t.result!!.substringAfter(stringResource(R.string.qk_00144), "")
                         if (exportNote.isNotBlank()) {
                             Spacer(Modifier.height(6.dp))
                             Text(exportNote, fontSize = scaled(11), color = Muted)
@@ -4272,7 +4272,7 @@ private fun SingleToolCard(t: ToolCallUi, scaled: (Int) -> androidx.compose.ui.u
 
                 if (t.name.startsWith("ui_")) {
                     Spacer(Modifier.height(8.dp))
-                    val actLabel = if (t.name.startsWith("ui_open_")) "重新打开" else "再次执行"
+                    val actLabel = if (t.name.startsWith("ui_open_")) stringResource(R.string.qk_00145) else stringResource(R.string.qk_00146)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { QuroUiActionBridge.dispatch?.invoke(t.name) }) {
                             LucideIcon("external-link", null, Modifier.size(12.dp), tint = cs.primary)
@@ -4446,8 +4446,8 @@ private fun RenderCardView(card: RenderCard, scaled: (Int) -> androidx.compose.u
                 val icon = when (card.type) {
                     "HTML" -> Icons.Filled.Code
                     "Markdown" -> Icons.Filled.Description
-                    "代码" -> Icons.Filled.Code
-                    "图片" -> Icons.Filled.Description // 使用描述图标作为图片占位
+                    stringResource(R.string.qk_00148) -> Icons.Filled.Code
+                    stringResource(R.string.qk_00149) -> Icons.Filled.Description // 使用描述图标作为图片占位
                     "PDF" -> Icons.Filled.Description // 使用描述图标作为PDF占位
                     else -> Icons.Filled.Description
                 }
@@ -4488,7 +4488,7 @@ private fun RenderCardView(card: RenderCard, scaled: (Int) -> androidx.compose.u
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-                "代码" -> {
+                stringResource(R.string.qk_00148) -> {
                     // 代码渲染
                     Surface(
                         color = cs.surfaceContainerLowest,
@@ -4505,7 +4505,7 @@ private fun RenderCardView(card: RenderCard, scaled: (Int) -> androidx.compose.u
                         )
                     }
                 }
-                "图片" -> {
+                stringResource(R.string.qk_00149) -> {
                     // 图片渲染（如果路径有效）
                     card.path?.let { path ->
                         AndroidView(
@@ -4524,8 +4524,7 @@ private fun RenderCardView(card: RenderCard, scaled: (Int) -> androidx.compose.u
                 }
                 "PDF" -> {
                     // PDF 说明
-                    Text(
-                        text = "PDF 文件已保存到工作区，可在文件管理器中打开查看",
+                    Text(text = stringResource(R.string.qk_00150),
                         fontSize = scaled(11),
                         color = cs.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth()
@@ -4634,9 +4633,9 @@ private fun ThinkBubble(think: ThinkBlock, scaled: (Int) -> androidx.compose.ui.
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.clickable { expanded = !expanded },
         ) {
-            LucideIcon("sparkles", "思考", Modifier.size(16.dp), tint = Accent)
+            LucideIcon("sparkles", stringResource(R.string.qk_00082), Modifier.size(16.dp), tint = Accent)
             Spacer(Modifier.width(6.dp))
-            Text("思考中", fontSize = scaled(12), color = Accent, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.qk_00093), fontSize = scaled(12), color = Accent, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             LucideIcon(if (expanded) "chevron_up" else "chevron_down", null, Modifier.size(15.dp), tint = Muted)
         }
@@ -4693,9 +4692,9 @@ private fun ThinkingWithToolsBubble(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.clickable { expanded = !expanded },
         ) {
-            LucideIcon("sparkles", "思考", Modifier.size(16.dp), tint = Accent)
+            LucideIcon("sparkles", stringResource(R.string.qk_00082), Modifier.size(16.dp), tint = Accent)
             Spacer(Modifier.width(6.dp))
-            Text("思考中", fontSize = scaled(12), color = Accent, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.qk_00093), fontSize = scaled(12), color = Accent, fontWeight = FontWeight.SemiBold)
             if (tools.isNotEmpty()) {
                 Spacer(Modifier.width(6.dp))
                 // 工具调用计数角标
@@ -4705,7 +4704,7 @@ private fun ThinkingWithToolsBubble(
                         .background(cs.primary.copy(alpha = 0.12f))
                         .padding(horizontal = 5.dp, vertical = 1.dp)
                 ) {
-                    Text("· ${tools.size} 工具", fontSize = 9.sp, color = cs.primary.copy(alpha = 0.7f))
+                    Text(stringResource(R.string.qk_00151, (tools.size).toString()), fontSize = 9.sp, color = cs.primary.copy(alpha = 0.7f))
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -4742,7 +4741,7 @@ private fun ThinkingWithToolsBubble(
                         var traceExpanded by remember { mutableStateOf(true) }
                         Row(verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.clickable { traceExpanded = !traceExpanded }) {
-                            Text("执行追踪", fontSize = scaled(10), color = Muted)
+                            Text(stringResource(R.string.qk_00152), fontSize = scaled(10), color = Muted)
                             Spacer(Modifier.weight(1f))
                             LucideIcon(if (traceExpanded) "chevron_up" else "chevron_down", null,
                                 Modifier.size(12.dp), tint = Muted)
@@ -4820,8 +4819,7 @@ private fun WorkingIndicator() {
         Spacer(Modifier.width(8.dp))
         WaitingDots()
         Spacer(Modifier.width(6.dp))
-        Text(
-            "AI 正在执行工具…",
+        Text(stringResource(R.string.qk_00153),
             fontSize = 12.sp, color = cs.primary, fontWeight = FontWeight.Medium,
         )
     }
@@ -4912,11 +4910,11 @@ private fun ToolsInlineContent(
                 Box(Modifier.size(8.dp).clip(CircleShape).background(statusColor))
             }
             if (t.args.isNotBlank()) {
-                Text("  参数: ${formatJsonValue(t.args)}",
+                Text(qstr(R.string.qk_00154, (formatJsonValue(t.args)).toString()),
                     fontSize = scaled(9), color = Muted, fontFamily = FontFamily.Monospace)
             }
             if (!t.result.isNullOrBlank()) {
-                Text("  结果: ${formatJsonValue(t.result)}",
+                Text(qstr(R.string.qk_00155, (formatJsonValue(t.result)).toString()),
                     fontSize = scaled(9), color = Muted, fontFamily = FontFamily.Monospace)
             }
             if (idx < tools.size - 1) {
@@ -4932,7 +4930,7 @@ private fun ToolsInlineContent(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 LucideIcon("sparkles", null, Modifier.size(13.dp), tint = cs.primary)
                 Spacer(Modifier.width(5.dp))
-                Text("执行轨迹", fontSize = scaled(11), color = cs.primary, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.qk_00118), fontSize = scaled(11), color = cs.primary, fontWeight = FontWeight.Medium)
             }
             Spacer(Modifier.height(4.dp))
             embeddedTrace.forEach { ev -> TraceRow(ev) }
@@ -4969,12 +4967,12 @@ private fun QuroMusicPlayerCard(
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                media.title.ifEmpty { "本地音乐" },
+                media.title.ifEmpty { stringResource(R.string.qk_00156) },
                 fontSize = scaled(13), color = cs.onSurface, maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                if (media.isPlaying) "正在播放" else "已暂停",
+                if (media.isPlaying) stringResource(R.string.qk_00157) else stringResource(R.string.qk_00158),
                 fontSize = scaled(11), color = cs.onSurfaceVariant, maxLines = 1,
             )
         }
@@ -5059,7 +5057,7 @@ private fun Composer(
                         Text(att.name, fontSize = scaled(12), color = cs.onSurface, maxLines = 1)
                         Spacer(Modifier.width(6.dp))
                         Box(Modifier.clickable { onRemoveAttach(att) }) {
-                            LucideIcon("x", "移除", Modifier.size(14.dp), tint = Muted)
+                            LucideIcon("x", qstr(R.string.qk_00159), Modifier.size(14.dp), tint = Muted)
                         }
                     }
                 }
@@ -5114,7 +5112,7 @@ private fun Composer(
                     ) {
                         LucideIcon("sparkles", null, Modifier.size(12.dp), tint = cs.tertiary)
                         Spacer(Modifier.width(4.dp))
-                        Text("🧩 ${enabledSkillsCount}个技能", fontSize = scaled(11), color = cs.onTertiaryContainer)
+                        Text(stringResource(R.string.qk_00160, (enabledSkillsCount).toString()), fontSize = scaled(11), color = cs.onTertiaryContainer)
                     }
                 }
             }
@@ -5131,7 +5129,7 @@ private fun Composer(
         ) {
             val ctx = LocalContext.current
             IconButton(onClick = onAttach, Modifier.size(44.dp).padding(2.dp)) {
-                Icon(Icons.Filled.Add, "上传文件", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
+                Icon(Icons.Filled.Add, stringResource(R.string.qk_00161), Modifier.size(22.dp), tint = cs.onSurfaceVariant)
             }
             // 工具菜单按钮：合并技能选择、ACI 应用选择、编辑器、可视化交互工具
             ChatToolMenu(
@@ -5152,7 +5150,7 @@ private fun Composer(
             )
             if (voiceInputEnabled) {
                 IconButton(onClick = onVoiceInput, Modifier.size(44.dp).padding(2.dp)) {
-                    Icon(Icons.Filled.Mic, "语音输入", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
+                    Icon(Icons.Filled.Mic, stringResource(R.string.qk_00162), Modifier.size(22.dp), tint = cs.onSurfaceVariant)
                 }
             }
             BasicTextField(
@@ -5174,7 +5172,7 @@ private fun Composer(
                 ),
                 decorationBox = { inner ->
                         if (text.text.isEmpty()) {
-                            Text("和 Zorv 说点什么…", fontSize = scaled(15), color = Muted)
+                            Text(stringResource(R.string.qk_00163), fontSize = scaled(15), color = Muted)
                         }
                     inner()
                 },
@@ -5186,7 +5184,7 @@ private fun Composer(
                     onClick = onStop,
                     modifier = Modifier.size(44.dp).padding(2.dp)
                 ) {
-                    LucideIcon("square", "停止生成", Modifier.size(22.dp), tint = cs.error)
+                    LucideIcon("square", stringResource(R.string.qk_00164), Modifier.size(22.dp), tint = cs.error)
                 }
             } else {
                 IconButton(
@@ -5194,7 +5192,7 @@ private fun Composer(
                     modifier = Modifier.size(44.dp).padding(2.dp),
                     enabled = text.text.isNotBlank() || attachments.isNotEmpty()
                 ) {
-                    LucideIcon("arrow_up", "发送", Modifier.size(22.dp),
+                    LucideIcon("arrow_up", stringResource(R.string.qk_00165), Modifier.size(22.dp),
                         tint = if (text.text.isNotBlank() || attachments.isNotEmpty()) cs.primary else Muted)
                 }
             }
@@ -5244,14 +5242,14 @@ private fun ChatToolMenu(
     var showToolMenu by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { showToolMenu = true }, Modifier.size(44.dp).padding(2.dp)) {
-            Icon(Icons.Filled.Build, "工具", Modifier.size(22.dp), tint = cs.onSurfaceVariant)
+            Icon(Icons.Filled.Build, stringResource(R.string.qk_00135), Modifier.size(22.dp), tint = cs.onSurfaceVariant)
         }
         DropdownMenu(
             expanded = showToolMenu,
             onDismissRequest = { showToolMenu = false },
         ) {
             DropdownMenuItem(
-                text = { Text("选择技能") },
+                text = { Text(stringResource(R.string.qk_00166)) },
                 onClick = {
                     showToolMenu = false
                     onOpenSkills()
@@ -5261,7 +5259,7 @@ private fun ChatToolMenu(
                 },
             )
             DropdownMenuItem(
-                text = { Text("选择 ACI 应用") },
+                text = { Text(stringResource(R.string.qk_00001)) },
                 onClick = {
                     showToolMenu = false
                     onOpenAciSelector()
@@ -5271,7 +5269,7 @@ private fun ChatToolMenu(
                 },
             )
             DropdownMenuItem(
-                text = { Text("编辑文本") },
+                text = { Text(stringResource(R.string.qk_00167)) },
                 onClick = {
                     showToolMenu = false
                     onOpenEditor()
@@ -5287,10 +5285,10 @@ private fun ChatToolMenu(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.DesktopWindows, null, Modifier.size(18.dp), tint = cs.primary)
                         Spacer(Modifier.width(8.dp))
-                        Text("可视化弹窗")
+                        Text(stringResource(R.string.qk_00096))
                         if (pendingVisualPopup) {
                             Spacer(Modifier.width(8.dp))
-                            Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
+                            Icon(Icons.Filled.Check, stringResource(R.string.qk_00168), Modifier.size(16.dp), tint = cs.primary)
                         }
                     }
                 },
@@ -5304,10 +5302,10 @@ private fun ChatToolMenu(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.TouchApp, null, Modifier.size(18.dp), tint = cs.primary)
                         Spacer(Modifier.width(8.dp))
-                        Text("可视化询问")
+                        Text(stringResource(R.string.qk_00169))
                         if (pendingVisualQuestion) {
                             Spacer(Modifier.width(8.dp))
-                            Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
+                            Icon(Icons.Filled.Check, stringResource(R.string.qk_00168), Modifier.size(16.dp), tint = cs.primary)
                         }
                     }
                 },
@@ -5321,10 +5319,10 @@ private fun ChatToolMenu(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         LucideIcon("credit_card", null, Modifier.size(18.dp), tint = cs.primary)
                         Spacer(Modifier.width(8.dp))
-                        Text("可视化小卡片")
+                        Text(stringResource(R.string.qk_00170))
                         if (pendingSelfCard) {
                             Spacer(Modifier.width(8.dp))
-                            Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
+                            Icon(Icons.Filled.Check, stringResource(R.string.qk_00168), Modifier.size(16.dp), tint = cs.primary)
                         }
                     }
                 },
@@ -5338,10 +5336,10 @@ private fun ChatToolMenu(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         LucideIcon("layout-dashboard", null, Modifier.size(18.dp), tint = cs.primary)
                         Spacer(Modifier.width(8.dp))
-                        Text("动态UI组件")
+                        Text(stringResource(R.string.qk_00171))
                         if (pendingDynamicUi) {
                             Spacer(Modifier.width(8.dp))
-                            Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
+                            Icon(Icons.Filled.Check, stringResource(R.string.qk_00168), Modifier.size(16.dp), tint = cs.primary)
                         }
                     }
                 },
@@ -5355,10 +5353,10 @@ private fun ChatToolMenu(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         LucideIcon("file-text", null, Modifier.size(18.dp), tint = cs.primary)
                         Spacer(Modifier.width(8.dp))
-                        Text("AIP文档排版")
+                        Text(stringResource(R.string.qk_00172))
                         if (pendingAipDoc) {
                             Spacer(Modifier.width(8.dp))
-                            Icon(Icons.Filled.Check, "已选择", Modifier.size(16.dp), tint = cs.primary)
+                            Icon(Icons.Filled.Check, stringResource(R.string.qk_00168), Modifier.size(16.dp), tint = cs.primary)
                         }
                     }
                 },
@@ -5401,17 +5399,17 @@ fun HistoryDrawer(
             Modifier.fillMaxWidth().padding(16.dp, 16.dp, 16.dp, 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("对话", fontSize = scaled(18), fontWeight = FontWeight.SemiBold, color = cs.onSurface,
+            Text(stringResource(R.string.qk_00173), fontSize = scaled(18), fontWeight = FontWeight.SemiBold, color = cs.onSurface,
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Serif)
             Spacer(Modifier.weight(1f))
             IconButton(onClick = onCopyAll, Modifier.size(36.dp)) {
-                Icon(Icons.Filled.ContentCopy, "复制全部对话", Modifier.size(20.dp), tint = cs.onSurface)
+                Icon(Icons.Filled.ContentCopy, stringResource(R.string.qk_00174), Modifier.size(20.dp), tint = cs.onSurface)
             }
             IconButton(onClick = { showDeleteAllConfirm = true }, Modifier.size(36.dp)) {
-                Icon(Icons.Filled.Delete, "删除全部对话", Modifier.size(20.dp), tint = cs.error)
+                Icon(Icons.Filled.Delete, qstr(R.string.qk_00175), Modifier.size(20.dp), tint = cs.error)
             }
             IconButton(onClick = onClose, Modifier.size(36.dp)) {
-                LucideIcon("x", "关闭", Modifier.size(20.dp), tint = cs.onSurface)
+                LucideIcon("x", stringResource(R.string.qk_00065), Modifier.size(20.dp), tint = cs.onSurface)
             }
         }
         Column(
@@ -5431,7 +5429,7 @@ fun HistoryDrawer(
             ) {
                 LucideIcon("square_pen", null, Modifier.size(18.dp), tint = Accent)
                 Spacer(Modifier.width(10.dp))
-                Text("新建对话", fontSize = scaled(14), color = AccentPress, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.qk_00062), fontSize = scaled(14), color = AccentPress, fontWeight = FontWeight.SemiBold)
             }
             // 内置 GenUI Agent 入口：拉起独立的生成式界面智能体应用
             // （完整内置开源项目 GenUI-Agent，AI 产出 GenUI JSON DSL → 原生 Compose 组件）。
@@ -5448,7 +5446,7 @@ fun HistoryDrawer(
                 Spacer(Modifier.width(10.dp))
                 Text("GenUI Agent", fontSize = scaled(14), color = cs.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
-                Text("生成式界面", fontSize = scaled(11), color = cs.onPrimaryContainer.copy(alpha = 0.7f))
+                Text(stringResource(R.string.qk_00176), fontSize = scaled(11), color = cs.onPrimaryContainer.copy(alpha = 0.7f))
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -5481,13 +5479,13 @@ fun HistoryDrawer(
                             shape = RoundedCornerShape(6.dp),
                             modifier = Modifier.padding(start = 8.dp)
                         ) {
-                            Text("生成中", fontSize = scaled(11), color = AccentPress,
+                            Text(qstr(R.string.qk_00177), fontSize = scaled(11), color = AccentPress,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
                         }
                     }
                     Text(item.time, fontSize = scaled(11), color = Muted, modifier = Modifier.padding(start = 8.dp))
                     IconButton(onClick = { pendingDeleteId = item.id }, Modifier.size(32.dp)) {
-                        Icon(Icons.Filled.Delete, "删除", Modifier.size(18.dp), tint = cs.onSurfaceVariant)
+                        Icon(Icons.Filled.Delete, qstr(R.string.qk_00091), Modifier.size(18.dp), tint = cs.onSurfaceVariant)
                     }
                 }
             }
@@ -5497,30 +5495,30 @@ fun HistoryDrawer(
     if (pendingDeleteId != null) {
         AlertDialog(
             onDismissRequest = { pendingDeleteId = null },
-            title = { Text("删除对话") },
-            text = { Text("确定删除这条对话记录吗？删除后不可恢复。") },
+            title = { Text(stringResource(R.string.qk_00178)) },
+            text = { Text(stringResource(R.string.qk_00179)) },
             confirmButton = {
                 TextButton(onClick = { onDelete(pendingDeleteId!!); pendingDeleteId = null }) {
-                    Text("删除", color = cs.error)
+                    Text(qstr(R.string.qk_00091), color = cs.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDeleteId = null }) { Text("取消") }
+                TextButton(onClick = { pendingDeleteId = null }) { Text(qstr(R.string.qk_00011)) }
             }
         )
     }
     if (showDeleteAllConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteAllConfirm = false },
-            title = { Text("清空全部对话") },
-            text = { Text("确定删除全部对话记录吗？此操作不可恢复。") },
+            title = { Text(stringResource(R.string.qk_00180)) },
+            text = { Text(stringResource(R.string.qk_00181)) },
             confirmButton = {
                 TextButton(onClick = { onDeleteAll(); showDeleteAllConfirm = false }) {
-                    Text("全部删除", color = cs.error)
+                    Text(qstr(R.string.qk_00182), color = cs.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteAllConfirm = false }) { Text("取消") }
+                TextButton(onClick = { showDeleteAllConfirm = false }) { Text(stringResource(R.string.qk_00011)) }
             }
         )
     }
@@ -5729,44 +5727,44 @@ private fun SettingsSheetContent(
         Modifier.fillMaxWidth().heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
     ) {
-        SheetHeader("设置", "偏好、外观与功能，随手可调。", scaled)
+        SheetHeader(stringResource(R.string.qk_01760), "偏好、外观与功能，随手可调。", scaled)
         GroupCaption("外观与对话")
         SetGroup {
             SetRowClickable(Icons.Filled.ColorLens, "外观与对话", "深色模式 · 字号 · 提示音 · 回车发送 · 语音球", "", onOpenAppearance, scaled)
         }
-        GroupCaption("语音")
+        GroupCaption(stringResource(R.string.qk_00485))
         SetGroup {
-            SetRowClickable(Icons.Filled.VolumeUp, "语音服务", "合成 / 识别 / 设置", "", onOpenVoiceService, scaled)
+            SetRowClickable(Icons.Filled.VolumeUp, stringResource(R.string.qk_03057), "合成 / 识别 / 设置", "", onOpenVoiceService, scaled)
         }
         GroupCaption("功能")
         SetGroup {
-            SetRowClickable(Icons.Filled.Tune, "模型配置", "推理引擎、参数与能力范围", "", onOpenModelConfig, scaled)
+            SetRowClickable(Icons.Filled.Tune, stringResource(R.string.qk_02103), "推理引擎、参数与能力范围", "", onOpenModelConfig, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.AutoAwesome, "技能管理", "自定义 SKILL：新增 / 编辑 / 启用 / 停用", "", onOpenSkills, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Build, "功能模型配置", "上下文总结 / 记忆 / 人格孵化 / 视频 / 图片", "", onOpenFeatureModelConfig, scaled)
+            SetRowClickable(Icons.Filled.Build, stringResource(R.string.qk_03764), "上下文总结 / 记忆 / 人格孵化 / 视频 / 图片", "", onOpenFeatureModelConfig, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Security, "权限", "L1 无障碍 / L2 Shizuku / L3 设备管理员 / L4 ROOT", "", onOpenPermission, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Extension, "LSPosed 模块", "钩子注入 / 作用域管理", "", onOpenLspose, scaled)
+            SetRowClickable(Icons.Filled.Extension, stringResource(R.string.qk_02024), "钩子注入 / 作用域管理", "", onOpenLspose, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Usb, "USB / 无线调试", "ADB：被电脑控制 · 本机客户端 · TCP 监听", "", onOpenUsbDebug, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Apps, "默认应用", "桌面启动器 / 浏览器 / 相册 / 视频 / 邮箱 / 文档 / 短信 / 拨号", "", onOpenDefaultApp, scaled)
+            SetRowClickable(Icons.Filled.Apps, stringResource(R.string.qk_01687), "桌面启动器 / 浏览器 / 相册 / 视频 / 邮箱 / 文档 / 短信 / 拨号", "", onOpenDefaultApp, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Public, "GitHub 管理", "登录后管理仓库 / Issue / Star / 通知，对话框内可搜 GitHub", "", onOpenGitHub, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Download, "离线模型下载", "内置多官方镜像直链，一键下载 GGUF 本地推理权重", "", onOpenModelHub, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Info, "系统状态", "设备 / 权限能力 / 模块运行态 / 人格心跳", "", onOpenSystemStatus, scaled)
+            SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_02642), "设备 / 权限能力 / 模块运行态 / 人格心跳", "", onOpenSystemStatus, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Info, "组件画廊", "可视化组件库：卡片 / 按钮 / 输入 / 交互 / 覆盖层", "", onOpenComponentGallery, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Extension, "插件运行时", "Web 应用式插件 Demo", "", onOpenPlugins, scaled)
+            SetRowClickable(Icons.Filled.Extension, stringResource(R.string.qk_00491), "Web 应用式插件 Demo", "", onOpenPlugins, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Person, "灵魂注入", "灵魂注入 · 灵魂卡 · 记忆库", "", onManagePersona, scaled)
+            SetRowClickable(Icons.Filled.Person, stringResource(R.string.qk_02449), "灵魂注入 · 灵魂卡 · 记忆库", "", onManagePersona, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Hub, "MCP 服务", "把内置工具以 MCP 协议暴露给本机客户端", "", onOpenMcp, scaled)
+            SetRowClickable(Icons.Filled.Hub, stringResource(R.string.qk_02058), "把内置工具以 MCP 协议暴露给本机客户端", "", onOpenMcp, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Public, "ACI 管理中心", "已发现第三方 App / 绑定状态 / 能力清单 / 手动注册刷新重绑", "", onOpenAci, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
@@ -5785,7 +5783,7 @@ private fun SettingsSheetContent(
                 },
             )
         }
-        GroupCaption("通知")
+        GroupCaption(stringResource(R.string.qk_01945))
         SetGroup {
             SetRow(Icons.Filled.Notifications, "AI 回复通知", "离开软件时系统弹窗通知 / 桌面卡片", settingsAiReplyNotify, onSettingsToggleAiReplyNotify, scaled)
         }
@@ -5794,13 +5792,13 @@ private fun SettingsSheetContent(
             SetRowClickable(Icons.Filled.Download, "导出对话", "", "导出为文本", onExport, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.DeleteSweep, "清理存储", "分类清理日志、缓存、AI产物等", "", onOpenCleanup, scaled)
-            SetRowClickable(Icons.Filled.FolderOpen, "文件管理", "浏览沙箱目录 · 在系统文件管理器中打开", "", onOpenFileManager, scaled)
+            SetRowClickable(Icons.Filled.FolderOpen, stringResource(R.string.qk_02669), "浏览沙箱目录 · 在系统文件管理器中打开", "", onOpenFileManager, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.DeleteSweep, "清除全部对话", "", "", onClear, scaled, danger = true)
         }
         GroupCaption("关于")
         SetGroup {
-            SetRowClickable(Icons.Filled.Info, "关于 Zorv AI", "项目地址 / 开源许可 / 开发者", "", onOpenAbout, scaled)
+            SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_00497), "项目地址 / 开源许可 / 开发者", "", onOpenAbout, scaled)
         }
         Text("Zorv AI · v${BuildConfig.VERSION_NAME}",
             fontSize = scaled(11), color = Muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
@@ -5829,6 +5827,8 @@ private fun QuroAppearanceSettingsScreen(
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
 ) {
     val cs = MaterialTheme.colorScheme
+    // 视频通话入口需要 context 启动前台服务
+    val vcCtx = LocalContext.current
     var showUserProfileEditor by remember { mutableStateOf(false) }
     var showHistoryPicker by remember { mutableStateOf(false) }
     var showLangPicker by remember { mutableStateOf(false) }
@@ -5857,11 +5857,30 @@ private fun QuroAppearanceSettingsScreen(
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 SetRow(Icons.Filled.Mic, stringResource(R.string.appearance_voice_ball), stringResource(R.string.appearance_voice_ball_desc), voiceBallEnabled, { onToggleVoiceBall(!voiceBallEnabled) }, scaled)
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 视频通话入口：拉起 QuroVideoCallService（相机 + 麦克风前台服务，
+                // 叠加「实时画面注入当前多模态模型」与 VIDEO_RECOGNITION 两层理解）。
+                SetRow(
+                    Icons.Filled.Videocam, stringResource(R.string.qk_00183), stringResource(R.string.qk_03743),
+                    false,
+                    {
+                        runCatching {
+                            val it2 = Intent(vcCtx, com.ai.assistance.quro.service.QuroVideoCallService::class.java)
+                                .setAction(com.ai.assistance.quro.service.QuroVideoCallService.ACTION_VIDEO_CALL)
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                vcCtx.startForegroundService(it2)
+                            } else {
+                                vcCtx.startService(it2)
+                            }
+                        }
+                    },
+                    scaled,
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 SetRowClickable(
                     Icons.Filled.History, stringResource(R.string.appearance_history_rounds), stringResource(R.string.appearance_history_rounds_desc),
                     value = when (historyRounds) {
-                        null -> "跟随模型默认"
-                        else -> "${historyRounds} 轮"
+                        null -> stringResource(R.string.qk_00185)
+                        else -> stringResource(R.string.qk_00186, (historyRounds).toString())
                     },
                     onClick = { showHistoryPicker = true },
                     scaled = scaled,
@@ -5919,14 +5938,14 @@ private fun QuroAppearanceSettingsScreen(
             AlertDialog(
                 onDismissRequest = { showHistoryPicker = false },
                 confirmButton = {},
-                title = { Text("保留对话轮数") },
+                title = { Text(stringResource(R.string.qk_00187)) },
                 text = {
                     Column {
                         val presets = listOf(
-                            10 to "10 轮",
-                            20 to "20 轮",
-                            50 to "50 轮",
-                            null to "全部（跟随模型默认）",
+                            10 to stringResource(R.string.qk_00188),
+                            20 to stringResource(R.string.qk_00189),
+                            50 to stringResource(R.string.qk_00190),
+                            null to stringResource(R.string.qk_00191),
                         )
                         presets.forEach { (n, label) ->
                             val selected = historyRounds == n
@@ -5994,7 +6013,7 @@ private fun UserProfileEditDialog(
         onDismissRequest = onDismiss,
         containerColor = cs.surface,
         shape = RoundedCornerShape(20.dp),
-        title = { Text("用户资料", fontSize = scaled(18), fontWeight = FontWeight.Bold) },
+        title = { Text(stringResource(R.string.qk_00192), fontSize = scaled(18), fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // 头像预览 + 导入（复制进应用私有目录，路径稳定可持久）
@@ -6003,12 +6022,12 @@ private fun UserProfileEditDialog(
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Button(onClick = { pickAvatar.launch("image/*") }) {
-                            Text("导入图片", fontSize = scaled(13))
+                            Text(qstr(R.string.qk_00193), fontSize = scaled(13))
                         }
                         if (avatarUri.isNotBlank()) {
                             Spacer(Modifier.height(6.dp))
                             TextButton(onClick = { avatarUri = "" }) {
-                                Text("清除头像", fontSize = scaled(12))
+                                Text(stringResource(R.string.qk_00194), fontSize = scaled(12))
                             }
                         }
                     }
@@ -6017,15 +6036,15 @@ private fun UserProfileEditDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("你的名字", fontSize = scaled(12)) },
+                    label = { Text(stringResource(R.string.qk_00195), fontSize = scaled(12)) },
                     modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    placeholder = { Text("AI 会知道你叫什么", fontSize = scaled(12), color = cs.onSurfaceVariant) },
+                    placeholder = { Text(stringResource(R.string.qk_00196), fontSize = scaled(12), color = cs.onSurfaceVariant) },
                 )
                 // 签名/简介
                 OutlinedTextField(
                     value = bio,
                     onValueChange = { bio = it },
-                    label = { Text("个人签名（可选）", fontSize = scaled(12)) },
+                    label = { Text(stringResource(R.string.qk_00197), fontSize = scaled(12)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 80.dp),
@@ -6035,11 +6054,11 @@ private fun UserProfileEditDialog(
         },
         confirmButton = {
             Button(onClick = { onSave(QuroChatViewModel.UserProfile(name, avatarUri, bio)) }) {
-                Text("保存")
+                Text(qstr(R.string.qk_00198))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) }
         },
     )
 }
@@ -6062,7 +6081,7 @@ private fun ModelSheetContent(
         Modifier.fillMaxWidth().heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
     ) {
-        SheetHeader("选择模型", "「当前配置」为你在设置中配置的真实模型；「可用模型」为从接口拉取到的真实列表，点选即切换。", scaled)
+        SheetHeader(stringResource(R.string.qk_00199), stringResource(R.string.qk_00200), scaled)
         // 手动拉取入口：v396 起进入不再自动联网，需用户点此按钮才拉取，结果会本地缓存
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
@@ -6075,7 +6094,7 @@ private fun ModelSheetContent(
             LucideIcon(if (isFetching) "loader" else "refresh_cw", null, Modifier.size(18.dp), tint = Accent)
             Spacer(Modifier.width(8.dp))
             Text(
-                if (isFetching) "正在拉取可用模型…" else "从 API 拉取可用模型（手动）",
+                if (isFetching) stringResource(R.string.qk_00201) else stringResource(R.string.qk_00202),
                 fontSize = scaled(13), color = AccentPress, fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.weight(1f))
@@ -6083,23 +6102,23 @@ private fun ModelSheetContent(
         }
         // 拉取状态：失败 / 仅当前配置（无可用预设）
         if (fetchError != null) {
-            Text("拉取失败：$fetchError。请到「模型配置」填写正确的 Base URL / API Key 后重试。",
+            Text(stringResource(R.string.qk_00203, (fetchError).toString()),
                 fontSize = scaled(12), color = Color(android.graphics.Color.parseColor("#C0432F")),
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
         }
         if (!isFetching && fetchError == null && groups.size <= 1) {
-            Text("当前仅有「当前配置」的模型。需要更多可选模型，请到「模型配置」填写 Base URL 与 API Key 后拉取，或手动填入模型名。",
+            Text(stringResource(R.string.qk_00204),
                 fontSize = scaled(12), color = Muted,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
         }
         groups.forEach { g ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
                 Box(Modifier.size(7.dp).clip(CircleShape).background(
-                    if (g.provider == "当前配置") Accent else Sage
+                    if (g.provider == qstr(R.string.qk_00034)) Accent else Sage
                 ))
                 Spacer(Modifier.width(8.dp))
                 Text(g.provider, fontSize = scaled(13), fontWeight = FontWeight.SemiBold,
-                    color = if (g.provider == "当前配置") AccentPress else cs.onSurface)
+                    color = if (g.provider == qstr(R.string.qk_00034)) AccentPress else cs.onSurface)
             }
             g.models.forEach { m ->
                 val sel = m.id == selected.id || (m.id.isNotBlank() && m.id == selected.id)
@@ -6138,13 +6157,13 @@ private fun ModelSheetContent(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            LucideIcon("settings", "模型配置", Modifier.size(20.dp), tint = Accent)
+            LucideIcon("settings", stringResource(R.string.qk_02103), Modifier.size(20.dp), tint = Accent)
             Spacer(Modifier.width(8.dp))
-            Text("前往模型配置 · 设置 API Key / Base URL / 参数", fontSize = scaled(13), color = AccentPress, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.qk_00205), fontSize = scaled(13), color = AccentPress, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             LucideIcon("chevron_right", null, Modifier.size(15.dp), tint = Muted)
         }
-        Text("当前选中「${selected.name}」· 切换即生效",
+        Text(stringResource(R.string.qk_00206, (selected.name).toString()),
             fontSize = scaled(11), color = Muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
     }
 }
@@ -6170,7 +6189,7 @@ private fun PersonaSheetContent(
         // ── 两个独立功能开关已迁至「灵魂注入 · 灵魂编辑」对话框（QuroSoulUi.PersonaEditDialog）──
         // 语义：开 = 提示词带完整功能章节（AI 百分百主动使用）；关 = 仅用户提醒才使用（渲染管线常开）。
 
-        SheetHeader("选择灵魂", "每个灵魂是不同语气与专长的「对话伙伴」，切换即换一种相处方式。", scaled)
+        SheetHeader(stringResource(R.string.qk_00207), stringResource(R.string.qk_00208), scaled)
         list.forEach { p ->
             val sel = p.name == selected.name
             Row(
@@ -6208,11 +6227,11 @@ private fun PersonaSheetContent(
                 Text("+", fontSize = scaled(16), color = Color.White, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.width(8.dp))
-            Text("灵魂注入 · 完整设定（头像/角色/语气/标签）", fontSize = scaled(13), color = AccentPress, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.qk_00209), fontSize = scaled(13), color = AccentPress, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             LucideIcon("chevron_right", null, Modifier.size(15.dp), tint = Muted)
         }
-        Text("人格仅改变语气与专长，不改变事实与能力边界",
+        Text(stringResource(R.string.qk_00210),
             fontSize = scaled(11), color = Muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp))
     }
 }
@@ -6249,22 +6268,22 @@ private fun UploadSheetContent(
         Modifier.fillMaxWidth().heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
     ) {
-        SheetHeader("工具", "点击下方工具快速执行操作；也可导入工具 / 让 AI 自写工具，导入成功即成为可调用工具。", scaled)
+        SheetHeader(stringResource(R.string.qk_00135), stringResource(R.string.qk_00211), scaled)
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp).horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            ToolTile({ Icon(Icons.Filled.Add, "上传", Modifier.size(22.dp), tint = cs.primary) }, "上传", { showUploadChooser = true }, scaled)
-            ToolTile({ Icon(Icons.Filled.Public, "AI 浏览器", Modifier.size(22.dp), tint = cs.primary) }, "AI 浏览器", { showAiSearch = true }, scaled)
-            ToolTile({ Icon(Icons.Filled.VolumeUp, "语音服务", Modifier.size(22.dp), tint = cs.primary) }, "语音服务", onOpenVoiceService, scaled)
-            ToolTile({ Icon(Icons.Filled.Build, "工具箱", Modifier.size(22.dp), tint = cs.primary) }, "工具箱", onOpenToolbox, scaled)
+            ToolTile({ Icon(Icons.Filled.Add, stringResource(R.string.qk_00212), Modifier.size(22.dp), tint = cs.primary) }, stringResource(R.string.qk_00212), { showUploadChooser = true }, scaled)
+            ToolTile({ Icon(Icons.Filled.Public, stringResource(R.string.qk_00213), Modifier.size(22.dp), tint = cs.primary) }, stringResource(R.string.qk_00213), { showAiSearch = true }, scaled)
+            ToolTile({ Icon(Icons.Filled.VolumeUp, stringResource(R.string.qk_03057), Modifier.size(22.dp), tint = cs.primary) }, stringResource(R.string.qk_03057), onOpenVoiceService, scaled)
+            ToolTile({ Icon(Icons.Filled.Build, stringResource(R.string.qk_00214), Modifier.size(22.dp), tint = cs.primary) }, stringResource(R.string.qk_00214), onOpenToolbox, scaled)
             ToolTile({ Icon(Icons.Filled.Extension, "CMS v2", Modifier.size(22.dp), tint = cs.primary) }, "CMS v2", onOpenCms, scaled)
-            ToolTile({ Icon(Icons.Filled.Description, "知识库", Modifier.size(22.dp), tint = cs.primary) }, "知识库", onOpenKnowledge, scaled)
-            ToolTile({ Icon(Icons.Filled.Terminal, "终端", Modifier.size(22.dp), tint = cs.primary) }, "终端", onOpenTerminal, scaled)
-            ToolTile({ LucideIcon("trash_2", "清屏", Modifier.size(22.dp), tint = cs.primary) }, "清屏", onClearChat, scaled)
-            ToolTile({ LucideIcon("sparkles", "技能", Modifier.size(22.dp), tint = cs.primary) }, "技能", onOpenSkills, scaled)
-            ToolTile({ Icon(Icons.Filled.Schedule, "定时", Modifier.size(22.dp), tint = cs.primary) }, "定时", onOpenSchedule, scaled)
-            ToolTile({ LucideIcon("bot", "机器人", Modifier.size(22.dp), tint = cs.primary) }, "机器人", onOpenBots, scaled)
+            ToolTile({ Icon(Icons.Filled.Description, stringResource(R.string.qk_00215), Modifier.size(22.dp), tint = cs.primary) }, stringResource(R.string.qk_00215), onOpenKnowledge, scaled)
+            ToolTile({ Icon(Icons.Filled.Terminal, stringResource(R.string.qk_00216), Modifier.size(22.dp), tint = cs.primary) }, stringResource(R.string.qk_00216), onOpenTerminal, scaled)
+            ToolTile({ LucideIcon("trash_2", stringResource(R.string.qk_00217), Modifier.size(22.dp), tint = cs.primary) }, stringResource(R.string.qk_00217), onClearChat, scaled)
+            ToolTile({ LucideIcon("sparkles", stringResource(R.string.qk_00218), Modifier.size(22.dp), tint = cs.primary) }, stringResource(R.string.qk_00218), onOpenSkills, scaled)
+            ToolTile({ Icon(Icons.Filled.Schedule, stringResource(R.string.qk_00219), Modifier.size(22.dp), tint = cs.primary) }, stringResource(R.string.qk_00219), onOpenSchedule, scaled)
+            ToolTile({ LucideIcon("bot", stringResource(R.string.qk_00220), Modifier.size(22.dp), tint = cs.primary) }, stringResource(R.string.qk_00220), onOpenBots, scaled)
         }
     }
     showMediaBrowser?.let { k ->
@@ -6289,7 +6308,7 @@ private fun UploadSheetContent(
         AlertDialog(
             onDismissRequest = { showUploadChooser = false },
             confirmButton = {},
-            title = { Text("选择上传类型（可多选）", color = cs.onSurface) },
+            title = { Text(stringResource(R.string.qk_00221), color = cs.onSurface) },
             text = {
                 Column(Modifier.fillMaxWidth()) {
                     listOf("图片" to "image/*", "文件" to "*/*", "视频" to "video/*").forEach { (label, mime) ->
@@ -6312,25 +6331,25 @@ private fun UploadSheetContent(
                         if (text.startsWith("http://") || text.startsWith("https://")) {
                             onOpenBrowser(text)
                         } else {
-                            onAiSearch("请联网搜索：$text")
+                            onAiSearch(qstr(R.string.qk_00224, (text).toString()))
                         }
                     }
                     showAiSearch = false
                     q = ""
-                }) { Text("搜索 / 打开") }
+                }) { Text(qstr(R.string.qk_00225)) }
             },
-            dismissButton = { TextButton(onClick = { showAiSearch = false }) { Text("取消") } },
-            title = { Text("AI 浏览器 · 联网搜索") },
+            dismissButton = { TextButton(onClick = { showAiSearch = false }) { Text(stringResource(R.string.qk_00011)) } },
+            title = { Text(stringResource(R.string.qk_00226)) },
             text = {
                 Column(Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         q, { q = it },
-                        label = { Text("搜索词或网址") },
+                        label = { Text(stringResource(R.string.qk_00227)) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("如：今天的新闻 / https://example.com") },
+                        placeholder = { Text(stringResource(R.string.qk_00228)) },
                     )
                     Spacer(Modifier.height(6.dp))
-                    Text("输入网址→在内置浏览器打开；输入关键词→交给 AI 联网检索（后台可用）。", fontSize = scaled(11), color = Muted)
+                    Text(stringResource(R.string.qk_00229), fontSize = scaled(11), color = Muted)
                 }
             }
         )
@@ -6349,14 +6368,14 @@ private fun VoiceSheetContent(
         Modifier.fillMaxWidth().heightIn(max = 420.dp)
             .verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
     ) {
-        SheetHeader("语音服务", "语音合成、语音识别与语音设置入口。", scaled)
+        SheetHeader(stringResource(R.string.qk_03057), stringResource(R.string.qk_00230), scaled)
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp).horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            ToolTile({ Icon(Icons.Filled.VolumeUp, "语音合成", Modifier.size(22.dp), tint = cs.primary) }, "语音合成 (TTS)", onOpenTts, scaled)
-            ToolTile({ Icon(Icons.Filled.Mic, "语音识别", Modifier.size(22.dp), tint = cs.primary) }, "语音识别 (STT)", onOpenStt, scaled)
-            ToolTile({ Icon(Icons.Filled.Settings, "语音设置", Modifier.size(22.dp), tint = cs.primary) }, "语音设置", onOpenVoice, scaled)
+            ToolTile({ Icon(Icons.Filled.VolumeUp, stringResource(R.string.qk_00231), Modifier.size(22.dp), tint = cs.primary) }, stringResource(R.string.qk_00232), onOpenTts, scaled)
+            ToolTile({ Icon(Icons.Filled.Mic, stringResource(R.string.qk_00233), Modifier.size(22.dp), tint = cs.primary) }, stringResource(R.string.qk_00234), onOpenStt, scaled)
+            ToolTile({ Icon(Icons.Filled.Settings, stringResource(R.string.qk_00235), Modifier.size(22.dp), tint = cs.primary) }, stringResource(R.string.qk_00235), onOpenVoice, scaled)
         }
     }
 }
@@ -6624,7 +6643,7 @@ private fun extractInlineComponents(text: String): Pair<String, List<QuroChatCar
             cards.add(
                 QuroChatCard.YuanbaoCard(
                     id = "yb_" + url.hashCode().toString(36).replace("-", "m"),
-                    title = "链接回答",
+                    title = qstr(R.string.qk_00236),
                     url = url,
                 )
             )
@@ -7179,8 +7198,7 @@ private fun DynamicUiBlock(
         is QuroUiParseResult.Failure -> Column(
             Modifier.fillMaxWidth().padding(vertical = 4.dp).clipToBounds(),
         ) {
-            Text(
-                text = "⚠️ 动态 UI 解析失败：${parsed.reason}",
+            Text(text = stringResource(R.string.qk_00238, (parsed.reason).toString()),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -7233,7 +7251,7 @@ fun handleDynamicUiAction(
             if (text.isNotBlank()) {
                 copyPlain(ctx, text)
             } else {
-                Toast.makeText(ctx, "没有可复制的内容", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, qstr(R.string.qk_00239), Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -7241,7 +7259,7 @@ fun handleDynamicUiAction(
         is QuroOpenAppAction -> {
             val target = action.packageName.ifBlank { values.values.firstOrNull() ?: "" }
             if (target.isBlank()) {
-                Toast.makeText(ctx, "未指定要打开的应用", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, qstr(R.string.qk_00240), Toast.LENGTH_SHORT).show()
                 return
             }
             scope.launch(Dispatchers.Main) {
@@ -7249,7 +7267,7 @@ fun handleDynamicUiAction(
                     LaunchAppTool().run(ctx, JSONObject().apply {
                         if (target.contains(".")) put("package", target) else put("name", target)
                     }.toString())
-                }.getOrDefault("启动失败")
+                }.getOrDefault(qstr(R.string.qk_00241))
                 Toast.makeText(ctx, result.take(120), Toast.LENGTH_SHORT).show()
             }
         }
@@ -7263,7 +7281,7 @@ fun handleDynamicUiAction(
         is QuroOpenScreenAction -> {
             val target = action.target.ifBlank { values["target"] ?: "" }
             if (target.isBlank()) {
-                Toast.makeText(ctx, "未指定要打开的界面", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, qstr(R.string.qk_00242), Toast.LENGTH_SHORT).show()
                 return
             }
             UiNavigationBus.navEvent = UiNavigationEvent.OpenScreen(target)
@@ -7273,14 +7291,14 @@ fun handleDynamicUiAction(
         is QuroRenderHtmlAction -> {
             val html = action.html.ifBlank { values.values.firstOrNull() ?: "" }
             if (html.isBlank()) {
-                Toast.makeText(ctx, "没有可渲染的 HTML 内容", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, qstr(R.string.qk_00243), Toast.LENGTH_SHORT).show()
                 return
             }
             UiNavigationBus.navEvent = UiNavigationEvent.RenderWidget(
                 type = "miniapp",
                 // 修复：System.currentTimeMillis() 连点两次同毫秒 → 卡片 id 重复。改用 nanoTime。
                 id = "dyn_html_${System.nanoTime()}",
-                label = "HTML 预览",
+                label = qstr(R.string.qk_00244),
                 value = html,
             )
         }
@@ -7289,14 +7307,14 @@ fun handleDynamicUiAction(
         is QuroRenderVisproAction -> {
             val source = action.source.ifBlank { values.values.firstOrNull() ?: "" }
             if (source.isBlank()) {
-                Toast.makeText(ctx, "没有可渲染的可视化内容", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, qstr(R.string.qk_00245), Toast.LENGTH_SHORT).show()
                 return
             }
             UiNavigationBus.navEvent = UiNavigationEvent.RenderWidget(
                 type = "mermaid",
                 // 修复：同上，防同毫秒 id 重复
                 id = "dyn_mermaid_${System.nanoTime()}",
-                label = "可视化编程",
+                label = qstr(R.string.qk_00021),
                 value = source,
             )
         }
@@ -7321,14 +7339,14 @@ fun handleDynamicUiAction(
             val args = LinkedHashMap(action.arguments).apply { putAll(values) }
             val toolName = action.tool.ifBlank { values["tool"] ?: "" }
             if (toolName.isBlank()) {
-                Toast.makeText(ctx, "未指定要调用的工具", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, qstr(R.string.qk_00246), Toast.LENGTH_SHORT).show()
                 return
             }
             scope.launch(Dispatchers.IO) {
                 val tool = QuroToolRegistry.active?.get(toolName)
                 if (tool == null) {
                     // 兜底：走模型二次解析
-                    withContext(Dispatchers.Main) { onCommand("请调用工具 $toolName") }
+                    withContext(Dispatchers.Main) { onCommand(qstr(R.string.qk_00247, (toolName).toString())) }
                     return@launch
                 }
                 // 需要危险权限的工具（如手电筒/蓝牙）从 UI 点击直接执行无法弹授权框，
@@ -7343,13 +7361,13 @@ fun handleDynamicUiAction(
                     return@launch
                 }
                 val argsJson = JSONObject().apply { args.forEach { (k, v) -> put(k, v) } }.toString()
-                val result = runCatching { tool.run(ctx, argsJson) }.getOrDefault("工具执行异常")
+                val result = runCatching { tool.run(ctx, argsJson) }.getOrDefault(qstr(R.string.qk_00248))
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(ctx, "已执行 $toolName", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_00249, (toolName).toString()), Toast.LENGTH_SHORT).show()
                     // 工具返回的文本（如 get_battery / run_code / http_request 的结果）回传模型，
                     // 让 AI 把结果组织成自然语言回复给用户。超长结果截断，避免刷屏。
-                    val feedback = if (result.length > 2000) result.take(2000) + "\n…(结果已截断)" else result
-                    onCommand("【工具 $toolName 执行结果】\n$feedback")
+                    val feedback = if (result.length > 2000) result.take(2000) + qstr(R.string.qk_00250) else result
+                    onCommand(qstr(R.string.qk_00251, (toolName).toString(), (feedback).toString()))
                 }
             }
         }
@@ -7360,7 +7378,7 @@ fun handleDynamicUiAction(
             // 拼成 "skill__skill__xxx" 查不到 → 误报「技能未启用」。先去掉重复前缀。
             val skillName = (action.skill.ifBlank { values["skill"] ?: "" }).removePrefix("skill__")
             if (skillName.isBlank()) {
-                Toast.makeText(ctx, "未指定要执行的技能", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, qstr(R.string.qk_00252), Toast.LENGTH_SHORT).show()
                 return
             }
             val input = action.input?.takeIf { it.isNotBlank() }
@@ -7369,7 +7387,7 @@ fun handleDynamicUiAction(
                 val directive = runCatching {
                     (QuroToolRegistry.active?.get("skill__$skillName") ?: QuroSkillTool(skillName, ctx))
                         .run(ctx, JSONObject().apply { put("input", input) }.toString())
-                }.getOrDefault("技能「$skillName」未启用或不存在")
+                }.getOrDefault(qstr(R.string.qk_00253, (skillName).toString()))
                 withContext(Dispatchers.Main) { onCommand(directive) }
             }
         }
@@ -7404,7 +7422,7 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
 
     // 错误检测辅助函数
     fun isErrorCode(result: String): Boolean {
-        return result.startsWith("运行失败") ||
+        return result.startsWith(qstr(R.string.qk_00254)) ||
             result.contains("错误") ||
             result.contains("error", ignoreCase = true) ||
             result.contains("Traceback") ||
@@ -7446,7 +7464,7 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                 }
                 output = r
             } catch (e: Exception) {
-                output = "运行失败：${e.message}"
+                output = qstr(R.string.qk_00256, (e.message).toString())
             } finally {
                 isRunning = false
             }
@@ -7490,11 +7508,11 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                     }
                     Spacer(Modifier.width(4.dp))
                 IconButton(onClick = { showFullscreen = true }, Modifier.size(28.dp)) {
-                    LucideIcon("maximize", "全屏预览", Modifier.size(16.dp), tint = Muted)
+                    LucideIcon("maximize", stringResource(R.string.qk_00110), Modifier.size(16.dp), tint = Muted)
                 }
                 Spacer(Modifier.width(2.dp))
                 IconButton(onClick = { copyPlain(ctx, code) }, Modifier.size(28.dp)) {
-                    LucideIcon("corner_down_left", "复制代码", Modifier.size(14.dp), tint = Muted)
+                    LucideIcon("corner_down_left", stringResource(R.string.qk_00258), Modifier.size(14.dp), tint = Muted)
                 }
                 IconButton(onClick = {
                     val extension = when (lang.lowercase()) {
@@ -7513,29 +7531,29 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                     val fileName = "quro_code_${System.currentTimeMillis()}$extension"
                     saveCodeToDownloads(ctx, fileName, code)
                 }, Modifier.size(28.dp)) {
-                    LucideIcon("download", "下载代码", Modifier.size(14.dp), tint = Muted)
+                    LucideIcon("download", stringResource(R.string.qk_00259), Modifier.size(14.dp), tint = Muted)
                 }
                 // 自动修复按钮：仅在有错误输出时显示
                 if (output != null && isErrorCode(output!!)) {
                     Spacer(Modifier.width(2.dp))
                     IconButton(onClick = {
                         val fixPrompt = buildString {
-                            appendLine("代码运行出错，请分析并修复：")
+                            appendLine(qstr(R.string.qk_00260))
                             appendLine()
-                            appendLine("语言：$lang")
-                            appendLine("代码：")
+                            appendLine(qstr(R.string.qk_00261, (lang).toString()))
+                            appendLine(qstr(R.string.qk_00262))
                             appendLine("```$lang")
                             appendLine(code)
                             appendLine("```")
                             appendLine()
-                            appendLine("错误信息：")
+                            appendLine(qstr(R.string.qk_00263))
                             appendLine(output)
                             appendLine()
-                            appendLine("请分析错误原因，提供修复后的完整代码，并解释修复内容。")
+                            appendLine(qstr(R.string.qk_00264))
                         }
                         onSend(fixPrompt)
                     }, Modifier.size(28.dp)) {
-                        LucideIcon("sparkles", "自动修复", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.error)
+                        LucideIcon("sparkles", stringResource(R.string.qk_00265), Modifier.size(14.dp), tint = MaterialTheme.colorScheme.error)
                     }
                 }
                 IconButton(onClick = {
@@ -7550,7 +7568,7 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                                 )
                                 withContext(Dispatchers.Main) { output = r }
                             } catch (e: Exception) {
-                                withContext(Dispatchers.Main) { output = "运行失败：${e.message}" }
+                                withContext(Dispatchers.Main) { output = qstr(R.string.qk_00256, (e.message).toString()) }
                             } finally {
                                 withContext(Dispatchers.Main) { isRunning = false }
                             }
@@ -7560,7 +7578,7 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                     if (isRunning) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = cs.primary)
                     } else {
-                        Icon(Icons.Filled.PlayArrow, "运行", Modifier.size(16.dp), tint = cs.primary)
+                        Icon(Icons.Filled.PlayArrow, stringResource(R.string.qk_00266), Modifier.size(16.dp), tint = cs.primary)
                     }
                 }
                 }  // end of inner action row
@@ -7680,8 +7698,7 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    "✅ 运行结果（交互式）",
+                                Text(qstr(R.string.qk_00267),
                                     fontSize = 11.sp,
                                     color = Muted,
                                     fontWeight = FontWeight.SemiBold
@@ -7692,11 +7709,11 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                                         val fileName = "quro_html_${System.currentTimeMillis()}.html"
                                         saveCodeToDownloads(context, fileName, result)
                                     }, modifier = Modifier.size(24.dp)) {
-                                        LucideIcon("download", "下载HTML", Modifier.size(14.dp), tint = Muted)
+                                        LucideIcon("download", qstr(R.string.qk_00268), Modifier.size(14.dp), tint = Muted)
                                     }
                                     // 全屏按钮
                                     IconButton(onClick = { showFullscreen = true }, modifier = Modifier.size(24.dp)) {
-                                        LucideIcon("maximize", "全屏预览", Modifier.size(14.dp), tint = Muted)
+                                        LucideIcon("maximize", qstr(R.string.qk_00110), Modifier.size(14.dp), tint = Muted)
                                     }
                                 }
                             }
@@ -7769,7 +7786,7 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                             ) {
                                 Text(
                                     if (isErrorCode(result))
-                                        "❌ 运行结果" else "✅ 运行结果",
+                                        qstr(R.string.qk_00269) else qstr(R.string.qk_00270),
                                     fontSize = 11.sp,
                                     color = if (isErrorCode(result))
                                         MaterialTheme.colorScheme.error else Muted,
@@ -7781,7 +7798,7 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                                         val fileName = "quro_result_${System.currentTimeMillis()}.txt"
                                         saveCodeToDownloads(context, fileName, result)
                                     }, modifier = Modifier.size(24.dp)) {
-                                        LucideIcon("download", "下载结果", Modifier.size(14.dp), tint = Muted)
+                                        LucideIcon("download", qstr(R.string.qk_00271), Modifier.size(14.dp), tint = Muted)
                                     }
                                 }
                             }
@@ -7870,7 +7887,7 @@ private fun FullscreenPreview(code: String, isHtml: Boolean, lang: String = "", 
                     }
                 }, modifier = Modifier.fillMaxSize())
                 IconButton(onClick = onDismiss, Modifier.align(Alignment.TopEnd).padding(12.dp).size(36.dp)) {
-                    LucideIcon("x", "关闭全屏", Modifier.size(22.dp), tint = Color.White)
+                    LucideIcon("x", stringResource(R.string.qk_00272), Modifier.size(22.dp), tint = Color.White)
                 }
             }
         }
@@ -7949,7 +7966,7 @@ private fun Context.findActivity(): Activity? {
 private fun copyPlain(ctx: Context, text: String) {
     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
     cm.setPrimaryClip(android.content.ClipData.newPlainText("Zorv", text))
-    Toast.makeText(ctx, "已复制", Toast.LENGTH_SHORT).show()
+    Toast.makeText(ctx, qstr(R.string.qk_00023), Toast.LENGTH_SHORT).show()
 }
 
 private fun saveCodeToDownloads(context: Context, fileName: String, content: String) {
@@ -7966,17 +7983,17 @@ private fun saveCodeToDownloads(context: Context, fileName: String, content: Str
                     context.contentResolver.openOutputStream(it)?.use { outputStream ->
                         outputStream.write(content.toByteArray())
                     }
-                    Toast.makeText(context, "✅ 已保存到 Downloads/$fileName", Toast.LENGTH_SHORT).show()
-                } ?: Toast.makeText(context, "❌ 保存失败：无法创建文件", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, qstr(R.string.qk_00273, (fileName).toString()), Toast.LENGTH_SHORT).show()
+                } ?: Toast.makeText(context, qstr(R.string.qk_00274), Toast.LENGTH_SHORT).show()
             } else {
                 val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                 if (!downloadsDir.exists()) downloadsDir.mkdirs()
                 val file = java.io.File(downloadsDir, fileName)
                 file.writeText(content)
-                Toast.makeText(context, "✅ 已保存到 Downloads/$fileName", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, qstr(R.string.qk_00273, (fileName).toString()), Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
-            Toast.makeText(context, "❌ 保存失败：${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, qstr(R.string.qk_00275, (e.message).toString()), Toast.LENGTH_SHORT).show()
         }
     }
 }
@@ -8249,7 +8266,7 @@ private fun highlightXml(code: String): String {
 private fun copyConversation(ctx: Context, messages: List<Message>) {
     val sb = StringBuilder()
     messages.forEach { m ->
-        val who = if (m.mine) "我" else m.author
+        val who = if (m.mine) qstr(R.string.qk_00061) else m.author
         sb.append("$who：${m.text ?: ""}\n")
     }
     copyPlain(ctx, sb.toString().trim())
@@ -8262,12 +8279,12 @@ private fun exportConversation(ctx: Context, messages: List<Message>): String? {
         val stamp = java.time.format.DateTimeFormatter
             .ofPattern("yyyyMMdd_HHmmss")
             .format(java.time.LocalDateTime.now())
-        val file = File(dir, "QuroAI_对话_$stamp.md")
+        val file = File(dir, qstr(R.string.qk_00276, (stamp).toString()))
         val sb = StringBuilder()
-        sb.append("# QuroAI 对话导出\n\n")
-        sb.append("_导出时间：${java.time.LocalDateTime.now()}_\n\n")
+        sb.append(qstr(R.string.qk_00277))
+        sb.append(qstr(R.string.qk_00278, (java.time.LocalDateTime.now()).toString()))
         messages.forEach { m ->
-            val who = if (m.mine) "我" else m.author
+            val who = if (m.mine) qstr(R.string.qk_00061) else m.author
             val body = (m.text ?: "").trim()
             if (body.isNotBlank()) {
                 sb.append("**$who**：\n\n$body\n\n---\n\n")
@@ -8276,7 +8293,7 @@ private fun exportConversation(ctx: Context, messages: List<Message>): String? {
         file.writeText(sb.toString())
         file.absolutePath
     }.getOrElse { e ->
-        Log.e("ChatScreen", "导出对话失败", e)
+        Log.e("ChatScreen", qstr(R.string.qk_00279), e)
         null
     }
 }
@@ -8284,7 +8301,7 @@ private fun exportConversation(ctx: Context, messages: List<Message>): String? {
 // ---------------- Zorv AI 后端 → MoWen UI 适配器 ----------------
 
 /** 无激活人格时的兜底人格。 */
-private fun fallbackPersona() = QuroPersona(name = "Zorv", description = "智能助手", avatarEmoji = "🤖")
+private fun fallbackPersona() = QuroPersona(name = "Zorv", description = qstr(R.string.qk_00280), avatarEmoji = "🤖")
 
 /** QuroMessage → MoWen Message（mine 由 role 决定）。 */
 /** 判断工具结果是否为已知的垃圾值（旧版 bug 残留 / 异常调用）。渲染期与持久化迁移共用。 */
@@ -8317,8 +8334,8 @@ private fun QuroMessage.toMessage(
         id = id.hashCode(),
         uids = listOf(id),
         mine = mine,
-        author = if (mine) (senderName ?: userName).ifBlank { "我" } else assistantName,
-        avatar = if (mine) (senderName ?: userName).ifBlank { "我" } else assistantAvatar,
+        author = if (mine) (senderName ?: userName).ifBlank { qstr(R.string.qk_00061) } else assistantName,
+        avatar = if (mine) (senderName ?: userName).ifBlank { qstr(R.string.qk_00061) } else assistantAvatar,
         avatarUri = if (mine) (avatarUrl ?: userAvatarUri) else assistantAvatarUri,
         time = formatChatTime(createdAt),
         text = stripGenUiFences(content).ifBlank { null },
@@ -8351,8 +8368,8 @@ private fun QuroPersona.toPersona(): Persona {
     return Persona(
         id = id,
         name = name.ifBlank { "Zorv" },
-        role = description.ifBlank { "智能助手" },
-        desc = description.ifBlank { "你的 AI 助手，随时待命。" },
+        role = description.ifBlank { qstr(R.string.qk_00280) },
+        desc = description.ifBlank { qstr(R.string.qk_00281) },
         ava = ava,
         color = "#211E1A",
         avatarUri = if (avatarType == "image") avatarUri else "",
@@ -8364,8 +8381,8 @@ private fun QuroPersona.toPersona(): Persona {
 fun QuroConversationMeta.toHistoryItem(active: Boolean): HistoryItem {
     return HistoryItem(
         id = id,
-        title = title.ifBlank { "新对话" },
-        sub = preview.ifBlank { "空对话" },
+        title = title.ifBlank { qstr(R.string.qk_00282) },
+        sub = preview.ifBlank { qstr(R.string.qk_00283) },
         time = formatChatTime(updatedAt),
         group = formatGroup(updatedAt),
         active = active,
@@ -8386,15 +8403,15 @@ private fun formatChatTime(ts: Long): String {
 private fun formatGroup(ts: Long): String {
     val diffDays = ((System.currentTimeMillis() - ts) / 86_400_000L).toInt()
     return when {
-        diffDays < 1 -> "今天"
-        diffDays < 7 -> "本周"
-        else -> "更早"
+        diffDays < 1 -> qstr(R.string.qk_00284)
+        diffDays < 7 -> qstr(R.string.qk_00285)
+        else -> qstr(R.string.qk_00286)
     }
 }
 
 private fun formatSize(bytes: Long): String {
     return when {
-        bytes <= 0 -> "附件"
+        bytes <= 0 -> qstr(R.string.qk_00287)
         bytes < 1024 -> "$bytes B"
         bytes < 1024 * 1024 -> "${bytes / 1024} KB"
         else -> "%.1f MB".format(bytes / 1024.0 / 1024.0)
@@ -8408,7 +8425,7 @@ private fun formatSize(bytes: Long): String {
  */
 private fun downloadAttachment(ctx: Context, att: Attachment) {
     val src = att.path?.let { File(it) }?.takeIf { it.exists() } ?: run {
-        Toast.makeText(ctx, "源文件不存在", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, qstr(R.string.qk_00113), Toast.LENGTH_SHORT).show()
         return
     }
     val collectedName = att.name.ifBlank { "quro_${System.currentTimeMillis()}" }
@@ -8439,7 +8456,7 @@ private fun downloadAttachment(ctx: Context, att: Attachment) {
         ctx.contentResolver.openOutputStream(uri)?.use { os ->
             src.inputStream().use { it.copyTo(os) }
         } ?: run { fallbackCopy(ctx, src, collectedName); return }
-        Toast.makeText(ctx, "已下载：$collectedName", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, qstr(R.string.qk_00288, (collectedName).toString()), Toast.LENGTH_SHORT).show()
     } catch (e: Exception) {
         fallbackCopy(ctx, src, collectedName)
     }
@@ -8450,9 +8467,9 @@ private fun fallbackCopy(ctx: Context, src: File, name: String) {
         val dir = ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: ctx.filesDir
         val out = File(dir, name)
         src.inputStream().use { ins -> out.outputStream().use { os -> ins.copyTo(os) } }
-        Toast.makeText(ctx, "已保存到应用目录：${out.absolutePath}", Toast.LENGTH_LONG).show()
+        Toast.makeText(ctx, qstr(R.string.qk_00289, (out.absolutePath).toString()), Toast.LENGTH_LONG).show()
     }.onFailure {
-        Toast.makeText(ctx, "下载失败：${it.message}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, qstr(R.string.qk_00290, (it.message).toString()), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -8482,15 +8499,15 @@ internal fun QuroWorkflowScreen(onClose: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("工作流管理", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.qk_00291), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143))
                     }
                 },
                 actions = {
                     IconButton(onClick = { editingWorkflow = null; showCreateDialog = true }) {
-                        Icon(Icons.Filled.Add, contentDescription = "新建工作流")
+                        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.qk_00292))
                     }
                 }
             )
@@ -8504,9 +8521,9 @@ internal fun QuroWorkflowScreen(onClose: () -> Unit) {
             ) {
                 Icon(Icons.Filled.List, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
                 Spacer(Modifier.height(16.dp))
-                Text("还没有工作流", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                Text(stringResource(R.string.qk_00293), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                 Spacer(Modifier.height(8.dp))
-                Text("点击右上角 + 新建，或让 AI 帮你创建", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                Text(stringResource(R.string.qk_00294), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
             }
         } else {
             LazyColumn(
@@ -8527,11 +8544,11 @@ internal fun QuroWorkflowScreen(onClose: () -> Unit) {
                                 try {
                                     com.ai.assistance.quro.workflow.executor.WorkflowEngine.run(workflow.id)
                                     withContext(Dispatchers.Main) {
-                                        Toast.makeText(context, "工作流执行完成", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, qstr(R.string.qk_00295), Toast.LENGTH_SHORT).show()
                                     }
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
-                                        Toast.makeText(context, "执行失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, qstr(R.string.qk_00296, (e.message).toString()), Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
@@ -8590,14 +8607,12 @@ private fun WorkflowCard(
                         fontWeight = FontWeight.Bold,
                         color = cs.onSurface
                     )
-                    Text(
-                        text = "触发: ${workflow.trigger} | 节点: ${workflow.nodes.size}",
+                    Text(text = stringResource(R.string.qk_00297, (workflow.trigger).toString(), (workflow.nodes.size).toString()),
                         style = MaterialTheme.typography.bodySmall,
                         color = cs.onSurfaceVariant
                     )
                     if (workflow.lastStatus != "idle") {
-                        Text(
-                            text = "上次状态: ${workflow.lastStatus}",
+                        Text(text = stringResource(R.string.qk_00298, (workflow.lastStatus).toString()),
                             style = MaterialTheme.typography.bodySmall,
                             color = when (workflow.lastStatus) {
                                 "success" -> Color(0xFF4CAF50)
@@ -8626,7 +8641,7 @@ private fun WorkflowCard(
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("运行")
+                    Text(stringResource(R.string.qk_00266))
                 }
                 OutlinedButton(
                     onClick = onEdit,
@@ -8634,13 +8649,13 @@ private fun WorkflowCard(
                 ) {
                     Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("编辑")
+                    Text(stringResource(R.string.qk_00299))
                 }
                 IconButton(
                     onClick = onDelete,
                     colors = IconButtonDefaults.iconButtonColors(contentColor = cs.error)
                 ) {
-                    Icon(Icons.Filled.Delete, contentDescription = "删除")
+                    Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.qk_00091))
                 }
             }
         }
@@ -8660,27 +8675,27 @@ private fun WorkflowCreateDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (workflow != null) "编辑工作流" else "新建工作流") },
+        title = { Text(if (workflow != null) stringResource(R.string.qk_00300) else stringResource(R.string.qk_00292)) },
         text = {
             Column {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("工作流名称") },
+                    label = { Text(stringResource(R.string.qk_00301)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = trigger,
                     onValueChange = { trigger = it },
-                    label = { Text("触发类型 (manual/time/event)") },
+                    label = { Text(stringResource(R.string.qk_00302)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = schedule,
                     onValueChange = { schedule = it },
-                    label = { Text("调度规则 (如 daily:09:00)") },
+                    label = { Text(stringResource(R.string.qk_00303)) },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -8700,12 +8715,12 @@ private fun WorkflowCreateDialog(
                 },
                 enabled = name.isNotBlank()
             ) {
-                Text("保存")
+                Text(stringResource(R.string.qk_00198))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(R.string.qk_00011))
             }
         }
     )
@@ -8739,7 +8754,7 @@ private fun FileManagerDialog(
 
     fun openInSystemFileManager(dir: File) {
         if (!dir.exists()) {
-            Toast.makeText(ctx, "目录不存在：${dir.absolutePath}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_00309, (dir.absolutePath).toString()), Toast.LENGTH_SHORT).show()
             return
         }
         // 路径 1：用 FileProvider 暴露 content:// URI，再 ACTION_OPEN_DOCUMENT_TREE 落到 SAF。
@@ -8750,7 +8765,7 @@ private fun FileManagerDialog(
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             ctx.startActivity(treeIntent)
-            Toast.makeText(ctx, "请在系统文件管理器中导航到：${dir.absolutePath}", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, qstr(R.string.qk_00310, (dir.absolutePath).toString()), Toast.LENGTH_LONG).show()
         } catch (_: Exception) {
             try {
                 val authority = "${ctx.packageName}.fileprovider"
@@ -8764,7 +8779,7 @@ private fun FileManagerDialog(
             } catch (_: Exception) {
                 val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                 cm.setPrimaryClip(android.content.ClipData.newPlainText("path", dir.absolutePath))
-                Toast.makeText(ctx, "已复制路径，请在文件管理器粘贴：${dir.absolutePath}", Toast.LENGTH_LONG).show()
+                Toast.makeText(ctx, qstr(R.string.qk_00311, (dir.absolutePath).toString()), Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -8774,9 +8789,9 @@ private fun FileManagerDialog(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") }
+            IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.qk_00143)) }
             Spacer(Modifier.width(8.dp))
-            Text("文件管理", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+            Text(stringResource(R.string.qk_02669), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
         }
         // 共享存储状态
         Row(
@@ -8792,9 +8807,9 @@ private fun FileManagerDialog(
             )
             Spacer(Modifier.width(10.dp))
             Column {
-                Text("共享存储", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+                Text(stringResource(R.string.qk_00312), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
                 Text(
-                    if (sharedMounted) "已挂载（Android 11+ 应用私有目录在系统文件管理器可见）" else "未挂载或不可用",
+                    if (sharedMounted) stringResource(R.string.qk_00313) else stringResource(R.string.qk_00314),
                     fontSize = 12.sp, color = cs.onSurfaceVariant,
                 )
             }
@@ -8818,16 +8833,16 @@ private fun FileManagerDialog(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AssistChip(
                             onClick = { openInSystemFileManager(dir) },
-                            label = { Text("在系统文件管理器中打开") },
+                            label = { Text(stringResource(R.string.qk_00315)) },
                             leadingIcon = { Icon(Icons.Filled.FolderOpen, null, Modifier.size(16.dp)) },
                         )
                         AssistChip(
                             onClick = {
                                 val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                 cm.setPrimaryClip(android.content.ClipData.newPlainText("path", dir.absolutePath))
-                                Toast.makeText(ctx, "已复制路径", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(ctx, qstr(R.string.qk_00316), Toast.LENGTH_SHORT).show()
                             },
-                            label = { Text("复制路径") },
+                            label = { Text(stringResource(R.string.qk_00317)) },
                             leadingIcon = { Icon(Icons.Filled.ContentCopy, null, Modifier.size(16.dp)) },
                         )
                     }
@@ -8847,7 +8862,7 @@ private fun StorageManagementSection() {
     val cs = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
     val cacheManager = remember { CacheManager(ctx) }
-    var cacheSizeText by remember { mutableStateOf("计算中…") }
+    var cacheSizeText by remember { mutableStateOf(qstr(R.string.qk_00318)) }
     var clearing by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -8864,12 +8879,11 @@ private fun StorageManagementSection() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.FormatSize, null, tint = cs.primary, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("存储管理", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.qk_00319), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.weight(1f))
                 Text(cacheSizeText, fontSize = 13.sp, color = cs.onSurfaceVariant)
             }
             Spacer(Modifier.height(6.dp))
-            Text(
-                "Linux rootfs 缓存（usr/tmp）占用，清除后需重新初始化终端环境。",
+            Text(stringResource(R.string.qk_00320),
                 fontSize = 12.sp, color = cs.onSurfaceVariant,
             )
             Spacer(Modifier.height(10.dp))
@@ -8883,12 +8897,12 @@ private fun StorageManagementSection() {
                             withContext(Dispatchers.Main) {
                                 cacheSizeText = "0 B"
                                 clearing = false
-                                Toast.makeText(ctx, "缓存已清除", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(ctx, qstr(R.string.qk_00321), Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
                     enabled = !clearing,
-                ) { Text(if (clearing) "清除中…" else "清除缓存") }
+                ) { Text(if (clearing) stringResource(R.string.qk_00322) else stringResource(R.string.qk_00323)) }
             }
         }
     }
@@ -8917,8 +8931,8 @@ private fun FtpServerSection() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Usb, null, tint = if (running) cs.primary else cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("FTP 文件服务器", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.weight(1f))
-                Text(if (running) "运行中" else "已停止", fontSize = 13.sp, color = if (running) cs.primary else cs.onSurfaceVariant)
+                Text(stringResource(R.string.qk_00324), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.weight(1f))
+                Text(if (running) stringResource(R.string.qk_00325) else stringResource(R.string.qk_00326), fontSize = 13.sp, color = if (running) cs.primary else cs.onSurfaceVariant)
             }
             Spacer(Modifier.height(6.dp))
             Text(info, fontSize = 12.sp, color = cs.onSurfaceVariant, fontFamily = FontFamily.Monospace)
@@ -8935,14 +8949,14 @@ private fun FtpServerSection() {
                             busy = false
                             Toast.makeText(
                                 ctx,
-                                if (ok) (if (running) "FTP 服务器已启动" else "FTP 服务器已停止") else "FTP 服务器操作失败",
+                                if (ok) (if (running) qstr(R.string.qk_00327) else qstr(R.string.qk_00328)) else qstr(R.string.qk_00329),
                                 Toast.LENGTH_SHORT,
                             ).show()
                         }
                     }
                 },
                 enabled = !busy,
-            ) { Text(if (busy) "处理中…" else if (running) "停止服务器" else "启动服务器") }
+            ) { Text(if (busy) stringResource(R.string.qk_00330) else if (running) stringResource(R.string.qk_00331) else stringResource(R.string.qk_00332)) }
         }
     }
 }
@@ -8975,16 +8989,16 @@ private fun TerminalRootfsSection() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Folder, null, tint = cs.primary, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("终端 rootfs 文件", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.weight(1f))
-                Text(if (envReady) "就绪" else "环境未就绪", fontSize = 13.sp, color = if (envReady) cs.primary else cs.error)
+                Text(stringResource(R.string.qk_00333), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.weight(1f))
+                Text(if (envReady) stringResource(R.string.qk_00334) else stringResource(R.string.qk_00335), fontSize = 13.sp, color = if (envReady) cs.primary else cs.error)
             }
             Spacer(Modifier.height(6.dp))
-            Text("浏览/读写 Ubuntu rootfs 内文件（/root、/etc、/sdcard…），与终端共用同一文件系统。", fontSize = 12.sp, color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.qk_00336), fontSize = 12.sp, color = cs.onSurfaceVariant)
             Spacer(Modifier.height(10.dp))
             OutlinedTextField(
                 value = path,
                 onValueChange = { path = it },
-                label = { Text("rootfs 路径") },
+                label = { Text(stringResource(R.string.qk_00337)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !busy,
@@ -8997,10 +9011,10 @@ private fun TerminalRootfsSection() {
                         val r = withContext(Dispatchers.IO) { QuroTerminalBridge.listDir(ctx, path.trim()) }
                         withContext(Dispatchers.Main) {
                             busy = false
-                            result = if (r.success) r.output.ifBlank { "(空目录)" } else "错误：${r.error}"
+                            result = if (r.success) r.output.ifBlank { qstr(R.string.qk_00338) } else qstr(R.string.qk_00339, (r.error).toString())
                         }
                     }
-                }) { Text(if (busy) "…" else "列出") }
+                }) { Text(if (busy) "…" else stringResource(R.string.qk_00340)) }
                 OutlinedButton(enabled = !busy && path.isNotBlank(), onClick = {
                     busy = true
                     scope.launch {
@@ -9009,39 +9023,39 @@ private fun TerminalRootfsSection() {
                             busy = false
                             if (r.success) {
                                 content = r.output
-                                result = "已读取 ${r.output.length} 字符（可编辑后「写入」回同一路径）"
+                                result = qstr(R.string.qk_00341, (r.output.length).toString())
                             } else {
-                                result = "错误：${r.error}"
+                                result = qstr(R.string.qk_00339, (r.error).toString())
                             }
                         }
                     }
-                }) { Text("读取") }
+                }) { Text(qstr(R.string.qk_00342)) }
                 OutlinedButton(enabled = !busy && path.isNotBlank(), onClick = {
                     busy = true
                     scope.launch {
                         val r = withContext(Dispatchers.IO) { QuroTerminalBridge.writeFile(ctx, path.trim(), content) }
                         withContext(Dispatchers.Main) {
                             busy = false
-                            result = if (r.success) "已写入 ${path.trim()}" else "错误：${r.error}"
+                            result = if (r.success) qstr(R.string.qk_00343, (path.trim()).toString()) else qstr(R.string.qk_00339, (r.error).toString())
                         }
                     }
-                }) { Text("写入") }
+                }) { Text(qstr(R.string.qk_00344)) }
                 OutlinedButton(enabled = !busy && path.isNotBlank(), onClick = {
                     busy = true
                     scope.launch {
                         val r = withContext(Dispatchers.IO) { QuroTerminalBridge.deleteFile(ctx, path.trim()) }
                         withContext(Dispatchers.Main) {
                             busy = false
-                            result = if (r.success) "已删除 ${path.trim()}" else "错误：${r.error}"
+                            result = if (r.success) qstr(R.string.qk_00345, (path.trim()).toString()) else qstr(R.string.qk_00339, (r.error).toString())
                         }
                     }
-                }) { Text("删除", color = cs.error) }
+                }) { Text(qstr(R.string.qk_00091), color = cs.error) }
             }
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = content,
                 onValueChange = { content = it },
-                label = { Text("文件内容（读取后显示，可编辑后「写入」）") },
+                label = { Text(stringResource(R.string.qk_00346)) },
                 minLines = 3,
                 maxLines = 8,
                 modifier = Modifier.fillMaxWidth(),
@@ -9049,7 +9063,7 @@ private fun TerminalRootfsSection() {
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                result ?: "提示：输入路径后点「列出」看目录，或直接「读取 / 写入 / 删除」文件。",
+                result ?: stringResource(R.string.qk_00347),
                 fontSize = 12.sp,
                 color = cs.onSurfaceVariant,
                 fontFamily = FontFamily.Monospace,
@@ -9110,45 +9124,45 @@ private fun CleanupScreen(
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
         ) {
-            GroupCaption("存储概览")
+            GroupCaption(stringResource(R.string.qk_00348))
             SetGroup {
                 SetRowClickable(
                     Icons.Filled.Info,
-                    "可清理总大小",
+                    stringResource(R.string.qk_00349),
                     formatFileSize(total()),
-                    "以下分类之和（不含离线模型等用户外部文件）",
+                    stringResource(R.string.qk_00350),
                     { },
                     scaled
                 )
             }
 
-            GroupCaption("分类清理（谨慎选择，重要数据会丢失）")
+            GroupCaption(stringResource(R.string.qk_00351))
             SetGroup {
-                CleanupRow(Icons.Filled.List, "应用数据", formatFileSize(sizes["appdata"] ?: 0),
-                    "对话 / 设置 / 模型配置", scaled) { cleanupType = "appdata"; showCleanupDialog = true }
+                CleanupRow(Icons.Filled.List, stringResource(R.string.qk_00352), formatFileSize(sizes["appdata"] ?: 0),
+                    stringResource(R.string.qk_00353), scaled) { cleanupType = "appdata"; showCleanupDialog = true }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                CleanupRow(Icons.Filled.Folder, "Linux 沙箱 (rootfs)", formatFileSize(sizes["sandbox"] ?: 0),
-                    "Ubuntu rootfs / 缓存，清理后需重新下载", scaled) { cleanupType = "sandbox"; showCleanupDialog = true }
+                CleanupRow(Icons.Filled.Folder, stringResource(R.string.qk_00354), formatFileSize(sizes["sandbox"] ?: 0),
+                    stringResource(R.string.qk_00355), scaled) { cleanupType = "sandbox"; showCleanupDialog = true }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                CleanupRow(Icons.Filled.Description, "诊断日志", formatFileSize(sizes["logs"] ?: 0),
-                    "手机 Download/QuroAI_logs", scaled) { cleanupType = "logs"; showCleanupDialog = true }
+                CleanupRow(Icons.Filled.Description, stringResource(R.string.qk_00356), formatFileSize(sizes["logs"] ?: 0),
+                    stringResource(R.string.qk_00357), scaled) { cleanupType = "logs"; showCleanupDialog = true }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                CleanupRow(Icons.Filled.Folder, "导出文件", formatFileSize(sizes["exports"] ?: 0),
-                    "导出的 ZIP 数据包", scaled) { cleanupType = "exports"; showCleanupDialog = true }
+                CleanupRow(Icons.Filled.Folder, stringResource(R.string.qk_00358), formatFileSize(sizes["exports"] ?: 0),
+                    stringResource(R.string.qk_00359), scaled) { cleanupType = "exports"; showCleanupDialog = true }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                CleanupRow(Icons.Filled.Build, "备份文件", formatFileSize(sizes["backups"] ?: 0),
-                    "数据备份归档", scaled) { cleanupType = "backups"; showCleanupDialog = true }
+                CleanupRow(Icons.Filled.Build, stringResource(R.string.qk_00360), formatFileSize(sizes["backups"] ?: 0),
+                    stringResource(R.string.qk_00361), scaled) { cleanupType = "backups"; showCleanupDialog = true }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                CleanupRow(Icons.Filled.Delete, "缓存目录", formatFileSize(sizes["cache"] ?: 0),
-                    "图片 / WebView / 临时缓存", scaled) { cleanupType = "cache"; showCleanupDialog = true }
+                CleanupRow(Icons.Filled.Delete, stringResource(R.string.qk_00362), formatFileSize(sizes["cache"] ?: 0),
+                    stringResource(R.string.qk_00363), scaled) { cleanupType = "cache"; showCleanupDialog = true }
             }
 
-            GroupCaption("全部清理")
+            GroupCaption(stringResource(R.string.qk_00364))
             SetGroup {
                 SetRowClickable(
                     Icons.Filled.DeleteSweep,
-                    "清理所有以上项",
-                    "删除应用数据 / 沙箱 / 日志 / 导出 / 备份 / 缓存",
+                    stringResource(R.string.qk_00365),
+                    stringResource(R.string.qk_00366),
                     "",
                     {
                         cleanupType = "all"
@@ -9163,24 +9177,24 @@ private fun CleanupScreen(
 
     if (showCleanupDialog) {
         val title = when (cleanupType) {
-            "appdata" -> "清理应用数据"
-            "sandbox" -> "清理 Linux 沙箱"
-            "logs" -> "清理诊断日志"
-            "exports" -> "清理导出文件"
-            "backups" -> "清理备份文件"
-            "cache" -> "清理缓存目录"
-            "all" -> "清理所有以上项"
-            else -> "清理"
+            "appdata" -> stringResource(R.string.qk_00367)
+            "sandbox" -> stringResource(R.string.qk_00368)
+            "logs" -> stringResource(R.string.qk_00369)
+            "exports" -> stringResource(R.string.qk_00370)
+            "backups" -> stringResource(R.string.qk_00371)
+            "cache" -> stringResource(R.string.qk_00372)
+            "all" -> stringResource(R.string.qk_00365)
+            else -> stringResource(R.string.qk_00373)
         }
         val message = when (cleanupType) {
-            "appdata" -> "将删除所有对话 / 设置 / 模型配置（不可恢复），确定吗？"
-            "sandbox" -> "将删除 Ubuntu rootfs 与沙箱缓存，下次使用 CMS/终端需重新下载，确定吗？"
-            "logs" -> "将删除手机 Download/QuroAI_logs 诊断日志，确定吗？"
-            "exports" -> "将删除所有导出的 ZIP 数据包，确定吗？"
-            "backups" -> "将删除所有数据备份归档，确定吗？"
-            "cache" -> "将删除应用缓存目录，确定吗？"
-            "all" -> "将删除以上全部项（不含离线模型等用户外部文件），确定吗？"
-            else -> "确定要清理吗？"
+            "appdata" -> stringResource(R.string.qk_00374)
+            "sandbox" -> stringResource(R.string.qk_00375)
+            "logs" -> stringResource(R.string.qk_00376)
+            "exports" -> stringResource(R.string.qk_00377)
+            "backups" -> stringResource(R.string.qk_00378)
+            "cache" -> stringResource(R.string.qk_00379)
+            "all" -> stringResource(R.string.qk_00380)
+            else -> stringResource(R.string.qk_00381)
         }
 
         AlertDialog(
@@ -9197,10 +9211,10 @@ private fun CleanupScreen(
                             sizes = paths.mapValues { (_, f) -> calculateDirSize(f) }
                         }
                     }
-                ) { Text("确定清理") }
+                ) { Text(stringResource(R.string.qk_00382)) }
             },
             dismissButton = {
-                TextButton(onClick = { showCleanupDialog = false }) { Text("取消") }
+                TextButton(onClick = { showCleanupDialog = false }) { Text(qstr(R.string.qk_00011)) }
             }
         )
     }
@@ -9263,4 +9277,3 @@ private fun formatFileSize(bytes: Long): String {
         else -> "${bytes / (1024 * 1024 * 1024)} GB"
     }
 }
-

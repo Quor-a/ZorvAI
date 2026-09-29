@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -94,30 +97,30 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
         // ★ 修复「选了云模型没生效」：保存云模型配置即把 TTS 来源切到云模型服务，
         // 否则「语音来源」仍停在 local，真实朗读（聊天/语音球）不会进 QuroCloudTts.play。
         QuroTtsPrefs.setSource(ctx, QuroTtsPrefs.SOURCE_CLOUD)
-        status = "已保存并启用云模型服务 ✓"
-        Toast.makeText(ctx, "云模型配置已保存", Toast.LENGTH_SHORT).show()
+        status = qstr(R.string.qk_01466)
+        Toast.makeText(ctx, qstr(R.string.qk_01467), Toast.LENGTH_SHORT).show()
     }
 
     /** 删除当前服务商的已保存配置（删除已配置模型 / 服务商），回落到「未配置」状态。 */
     fun clearCurrentConfig() {
         QuroTtsProviderPrefs.clearConfig(ctx, providerId)
         loadFor(providerId)
-        status = "已清除「${def.name}」的已保存配置"
+        status = qstr(R.string.qk_01468, (def.name).toString())
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("云模型配置 · 语音合成") },
+                title = { Text(stringResource(R.string.qk_01469)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回") }
+                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143)) }
                 },
                 actions = {
                     if (saving) {
                         CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Accent)
                     } else {
-                        TextButton(onClick = { clearCurrentConfig() }) { Text("清除", color = cs.error) }
-                        TextButton(onClick = { save() }) { Text("保存", color = Accent) }
+                        TextButton(onClick = { clearCurrentConfig() }) { Text(stringResource(R.string.qk_01470), color = cs.error) }
+                        TextButton(onClick = { save() }) { Text(stringResource(R.string.qk_00198), color = Accent) }
                     }
                 },
             )
@@ -127,15 +130,13 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                "选择一个云端 TTS 服务商并填写所需参数。保存后自动启用「云模型服务」作为语音来源，聊天/语音球朗读立即走云端，无需再到「语音合成」里手动切换。",
+            Text(stringResource(R.string.qk_01471),
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
             )
 
             // ── 服务商选择（可折叠卡片 + 上下滑动） ───────────────────────
-            Text("服务商", style = MaterialTheme.typography.titleSmall)
-            Text(
-                "点击卡片选择服务商，选中后展开查看所需参数；列表可上下滑动浏览全部 ${QuroTtsProviders.ALL.size} 家。",
+            Text(stringResource(R.string.qk_01472), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.qk_01473, (QuroTtsProviders.ALL.size).toString()),
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
             )
             LazyColumn(
@@ -180,21 +181,21 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                             HorizontalDivider(color = cs.outline.copy(alpha = 0.6f))
                             Spacer(Modifier.height(8.dp))
                             val need = if (p.requiredFields.isEmpty()) {
-                                "无需任何参数（免费可用）"
+                                stringResource(R.string.qk_01474)
                             } else {
-                                "必填：" + p.requiredFields.joinToString(" / ") { fk ->
+                                stringResource(R.string.qk_01475) + p.requiredFields.joinToString(" / ") { fk ->
                                     p.fields.firstOrNull { it.key == fk }?.label ?: fk
                                 }
                             }
                             val cfgState = if (p.requiredFields.isEmpty()) {
-                                "默认可用"
+                                stringResource(R.string.qk_01476)
                             } else {
-                                if (QuroTtsProviderPrefs.isConfiguredFor(ctx, p.id)) "已配置 ✓" else "未配置"
+                                if (QuroTtsProviderPrefs.isConfiguredFor(ctx, p.id)) stringResource(R.string.qk_01477) else stringResource(R.string.qk_00015)
                             }
                             Text(
                                 "$need · $cfgState",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (cfgState.startsWith("已配置") || p.requiredFields.isEmpty()) cs.primary else cs.error,
+                                color = if (cfgState.startsWith(stringResource(R.string.qk_01478)) || p.requiredFields.isEmpty()) cs.primary else cs.error,
                             )
                         }
                     }
@@ -205,13 +206,13 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
             HorizontalDivider()
 
             // ── 当前服务商参数 ───────────────────────────────────────────
-            Text("「${def.name}」参数", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.qk_01479, (def.name).toString()), style = MaterialTheme.typography.titleSmall)
 
             if (def.fields.isEmpty()) {
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant)) {
                     Column(Modifier.padding(16.dp)) {
-                        Text("该服务商无需任何密钥/参数即可使用（如 Edge TTS）。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        Text(stringResource(R.string.qk_01480), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                 }
             } else {
@@ -229,12 +230,12 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
             }
 
             // ── 音色 ─────────────────────────────────────────────────────
-            Text("音色 (Voice)", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.qk_01481), style = MaterialTheme.typography.titleSmall)
             val cloneVoices = customVoices.filter { it.type == "clone" }
             if (def.voices.isNotEmpty() || cloneVoices.isNotEmpty()) {
                 var voiceMenu by remember { mutableStateOf(false) }
                 val voiceLabel = if (voice.isBlank()) {
-                    "请选择音色"
+                    stringResource(R.string.qk_01482)
                 } else if (voice.startsWith("custom::")) {
                     val cn = voice.removePrefix("custom::")
                     val cv = cloneVoices.firstOrNull { it.name == cn }
@@ -244,7 +245,7 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                 }
                 ListItem(
                     headlineContent = { Text(voiceLabel) },
-                    supportingContent = { Text("点击选择预置音色 / 已创建的复刻音色") },
+                    supportingContent = { Text(stringResource(R.string.qk_01484)) },
                     trailingContent = { Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = cs.onSurfaceVariant) },
                     modifier = Modifier.fillMaxWidth()
                         .border(1.dp, cs.outline, RoundedCornerShape(12.dp))
@@ -267,26 +268,25 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
             }
             if (def.voiceFreeText) {
                 UnderlineField(
-                    label = "音色名称（自由填写）",
+                    label = stringResource(R.string.qk_01486),
                     value = voice,
                     onValueChange = { voice = it },
-                    placeholder = "如 alloy / 自定义网关音色 ID / 或上方选择复刻音色",
+                    placeholder = stringResource(R.string.qk_01487),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (def.cloneSupport) {
-                    Text(
-                        "提示：启用「语音克隆」并在上方「自定义音色」中创建复刻条目后，可直接从「音色」下拉选择；也可在此填入官方平台创建的克隆音色 ID。",
+                    Text(stringResource(R.string.qk_01488),
                         style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
                     )
                 }
             }
             if (def.voices.isEmpty() && !def.voiceFreeText && cloneVoices.isEmpty()) {
-                Text("该服务商无需指定音色。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                Text(stringResource(R.string.qk_01489), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
 
             // ── 输出格式 ─────────────────────────────────────────────────
             if (def.formatOptions.size > 1) {
-                Text("输出格式", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.qk_01490), style = MaterialTheme.typography.titleSmall)
                 var fmtMenu by remember { mutableStateOf(false) }
                 ListItem(
                     headlineContent = { Text(format) },
@@ -311,9 +311,8 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("流式输出 (Streaming)", style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            "实时逐句返回音频，降低首字延迟。已支持边收边播：Edge / 讯飞（WebSocket）与 MiMo / OpenAI / MiniMax（HTTP 流式）。火山 / 腾讯当前为整段合成后播放（其 WebSocket 流式在部分账号引发卡顿，暂未启用）。",
+                        Text(stringResource(R.string.qk_01492), style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.qk_01493),
                             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                         )
                     }
@@ -327,9 +326,8 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
 
             // ── 风格标签（支持的服务商） ──────────────────────────────────
             if (def.styleSupport) {
-                Text("风格标签", style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "每个标签独立开关：开启 = 允许 AI 在语音合成时自由组合该风格；关闭 = 禁用。默认全部关闭，按需开启，不会强制「全部使用」。",
+                Text(stringResource(R.string.qk_01494), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.qk_01495),
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                 )
                 val tagPool = if (def.providerTags.isNotEmpty()) def.providerTags else QuroCloudTtsCatalog.ALL_EMOTION_TAGS
@@ -357,7 +355,7 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                 // 自定义风格标签
                 if (customStyleTags.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
-                    Text("自定义标签", style = MaterialTheme.typography.labelSmall, color = cs.primary)
+                    Text(stringResource(R.string.qk_01496), style = MaterialTheme.typography.labelSmall, color = cs.primary)
                     androidx.compose.foundation.layout.FlowRow(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -368,7 +366,7 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                                 selected = true,
                                 onClick = { customStyleTags = customStyleTags - tag },
                                 label = { Text(tag) },
-                                trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "移除", Modifier.size(14.dp)) },
+                                trailingIcon = { Icon(Icons.Filled.Close, contentDescription = qstr(R.string.qk_00159), Modifier.size(14.dp)) },
                             )
                         }
                     }
@@ -376,7 +374,7 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                 var newTag by remember { mutableStateOf("") }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     UnderlineField(
-                        label = "添加自定义标签",
+                        label = stringResource(R.string.qk_01497),
                         value = newTag,
                         onValueChange = { newTag = it },
                         placeholder = "",
@@ -388,7 +386,7 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                             customStyleTags = customStyleTags + t
                             newTag = ""
                         }
-                    }, colors = ButtonDefaults.buttonColors(containerColor = cs.surfaceVariant)) { Text("添加") }
+                    }, colors = ButtonDefaults.buttonColors(containerColor = cs.surfaceVariant)) { Text(stringResource(R.string.qk_01498)) }
                 }
                 HorizontalDivider()
             }
@@ -412,13 +410,13 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                                     Text(
                                         when (cv.type) {
                                             "clone" -> "复刻：${cv.cloneUri}${if (cv.registeredId.isNotBlank()) " · 已注册(${cv.registeredId.take(24)})" else ""}"
-                                            else -> "设计：${cv.designText}"
+                                            else -> qstr(R.string.qk_01501, (cv.designText).toString())
                                         },
                                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                                     )
                                 }
                                 IconButton(onClick = { customVoices = customVoices - cv }) {
-                                    Icon(Icons.Filled.Delete, contentDescription = "删除", tint = cs.error)
+                                    Icon(Icons.Filled.Delete, contentDescription = qstr(R.string.qk_00091), tint = cs.error)
                                 }
                             }
                             HorizontalDivider()
@@ -431,24 +429,24 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                 var cvDesc by remember { mutableStateOf("") }       // 设计文本
                 var cvUri by remember { mutableStateOf("") }        // 复刻音频 URI/URL
                 var cvNarration by remember { mutableStateOf("") }  // 复刻旁白文本
-                UnderlineField(value = cvName, onValueChange = { cvName = it }, label = "音色名称", placeholder = "", modifier = Modifier.fillMaxWidth())
+                UnderlineField(value = cvName, onValueChange = { cvName = it }, label = stringResource(R.string.qk_01502), placeholder = "", modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("类型：", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.qk_01503), style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.width(8.dp))
                     if (def.id == "mimo") {
-                        FilterChip(selected = cvType == "design", onClick = { cvType = "design" }, label = { Text("文字设计") })
+                        FilterChip(selected = cvType == "design", onClick = { cvType = "design" }, label = { Text(stringResource(R.string.qk_01504)) })
                         Spacer(Modifier.width(8.dp))
                     }
-                    FilterChip(selected = cvType == "clone", onClick = { cvType = "clone" }, label = { Text("音频复刻") })
+                    FilterChip(selected = cvType == "clone", onClick = { cvType = "clone" }, label = { Text(stringResource(R.string.qk_01505)) })
                 }
                 Spacer(Modifier.height(8.dp))
                 if (cvType == "design") {
                     UnderlineField(
                         value = cvDesc,
                         onValueChange = { cvDesc = it },
-                        label = "音色描述（如：温柔的少女音）",
-                        placeholder = "如：温柔的少女音，20-30岁女性",
+                        label = stringResource(R.string.qk_01506),
+                        placeholder = stringResource(R.string.qk_01507),
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
@@ -461,24 +459,24 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                     UnderlineField(
                         value = cvUri,
                         onValueChange = { cvUri = it },
-                        label = "音频样本（导入/URI）",
-                        placeholder = "点「导入」选择音频文件，或粘贴音频 URI/URL",
+                        label = stringResource(R.string.qk_01508),
+                        placeholder = stringResource(R.string.qk_01509),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(6.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Button(onClick = { audioPicker.launch("audio/*") }) { Text("📁 导入音频文件") }
-                        Text("或粘贴公网可访问的音频 URL", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                        Button(onClick = { audioPicker.launch("audio/*") }) { Text(stringResource(R.string.qk_01510)) }
+                        Text(stringResource(R.string.qk_01511), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                     }
                     if (cvUri.isNotBlank() && cvUri.startsWith("content://")) {
-                        Text("✅ 已选择本地音频文件（零样本克隆）", style = MaterialTheme.typography.labelSmall, color = cs.primary)
+                        Text(stringResource(R.string.qk_01512), style = MaterialTheme.typography.labelSmall, color = cs.primary)
                     }
                     Spacer(Modifier.height(6.dp))
                     UnderlineField(
                         value = cvNarration,
                         onValueChange = { cvNarration = it },
-                        label = "参考音频旁白文本",
-                        placeholder = "硅基流动复刻必需：参考音频对应的文字内容",
+                        label = stringResource(R.string.qk_01513),
+                        placeholder = stringResource(R.string.qk_01514),
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -487,8 +485,8 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                     if (cvName.isNotBlank()) {
                         val (uri, desc, narr) = if (cvType == "clone") Triple(cvUri.trim(), "", cvNarration.trim()) else Triple("", cvDesc.trim(), "")
                         when {
-                            cvType == "clone" && uri.isBlank() -> status = "请先导入或粘贴复刻音频样本"
-                            cvType == "clone" && def.id == "siliconflow" && narr.isBlank() -> status = "硅基流动复刻需填写「参考音频旁白文本」"
+                            cvType == "clone" && uri.isBlank() -> status = qstr(R.string.qk_01515)
+                            cvType == "clone" && def.id == "siliconflow" && narr.isBlank() -> status = qstr(R.string.qk_01516)
                             else -> {
                                 customVoices = customVoices + CloudCustomVoice(
                                     name = cvName.trim(), type = cvType,
@@ -498,22 +496,22 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                             }
                         }
                     }
-                }, colors = ButtonDefaults.buttonColors(containerColor = cs.surfaceVariant)) { Text("添加自定义音色") }
+                }, colors = ButtonDefaults.buttonColors(containerColor = cs.surfaceVariant)) { Text(stringResource(R.string.qk_01517)) }
                 HorizontalDivider()
             }
 
             // ── 语音克隆（支持的服务商） ─────────────────────────────────
             if (def.cloneSupport) {
-                Text("语音克隆 (Voice Cloning)", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.qk_01518), style = MaterialTheme.typography.titleSmall)
                 Card(
                     Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant),
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         val tip = when (def.id) {
-                            "mimo" -> "MiMo 为零样本内联复刻：在上方「自定义音色」添加「音频复刻」条目并选中即可，无需预注册，合成时直接内联音频样本。"
-                            "minimax", "siliconflow" -> "为注册式复刻：在上方「自定义音色」添加「音频复刻」条目（硅基流动需填旁白文本）并选中，合成时会自动上传样本并创建克隆音色（首次联网，之后复用已注册 ID）。"
-                            else -> "请先在「${def.name}」官方平台创建克隆音色，再于「音色」字段（自由填写）填入克隆音色 ID/名称即可调用。"
+                            "mimo" -> stringResource(R.string.qk_01519)
+                            "minimax", "siliconflow" -> stringResource(R.string.qk_01520)
+                            else -> stringResource(R.string.qk_01521, (def.name).toString())
                         }
                         Text(tip, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
@@ -524,19 +522,19 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text("启用语音克隆", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.qk_01522), style = MaterialTheme.typography.bodyMedium)
                     Switch(checked = cloneEnabled, onCheckedChange = { cloneEnabled = it })
                 }
                 HorizontalDivider()
             }
 
             // ── 试听文本 + 操作 ───────────────────────────────────────────
-            Text("试听文本", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.qk_01523), style = MaterialTheme.typography.titleSmall)
             OutlinedTextField(
                 value = preview,
                 onValueChange = { preview = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("输入要朗读的文本") },
+                placeholder = { Text(stringResource(R.string.qk_01524)) },
                 minLines = 2, maxLines = 4, singleLine = false,
             )
             status?.let {
@@ -550,11 +548,11 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                             saving = true
                             try {
                                 save()
-                                status = "正在试听…"
+                                status = qstr(R.string.qk_01525)
                                 QuroCloudTts.play(ctx, preview.ifBlank { " " })
-                                status = "试听已发起 ✅"
+                                status = qstr(R.string.qk_01526)
                             } catch (e: Exception) {
-                                status = "试听失败 ❌\n${e.message}"
+                                status = qstr(R.string.qk_01527, (e.message).toString())
                             } finally {
                                 saving = false
                             }
@@ -562,16 +560,15 @@ fun QuroCloudTtsConfigScreen(onBack: () -> Unit = {}) {
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Accent),
                     modifier = Modifier.weight(1f),
-                ) { Text("保存并试听") }
+                ) { Text(stringResource(R.string.qk_01528)) }
                 OutlinedButton(
                     onClick = { save() },
                     modifier = Modifier.weight(1f),
-                ) { Text("仅保存") }
+                ) { Text(stringResource(R.string.qk_01529)) }
             }
 
             Spacer(Modifier.height(8.dp))
-            Text(
-                "提示：保存即自动启用「云模型服务」语音来源（如未填写必填项，状态会显示「未配置参数」，需在「语音合成 (TTS)」来源中选回本地系统）。",
+            Text(stringResource(R.string.qk_01530),
                 style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
             )
         }

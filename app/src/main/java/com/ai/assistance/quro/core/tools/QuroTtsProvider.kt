@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -6,7 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** 语音试听默认文本（文件级常量，供 QuroTtsProviderConfig 与 QuroTtsProviderPrefs 共用）。 */
-private const val DEFAULT_PREVIEW = "这是一条语音合成测试，Zorv AI 正在朗读。"
+private val DEFAULT_PREVIEW = qstr(R.string.qk_02922)
 
 /**
  * 云端 TTS 服务商目录 + 配置持久化。
@@ -76,7 +78,7 @@ data class QuroTtsProviderDef(
 object QuroTtsProviders {
     // ─────────────────────────── Edge TTS（默认免费） ───────────────────────────
     private val EDGE : QuroTtsProviderDef = QuroTtsProviderDef(
-        id = "edge", name = "Edge TTS（微软）", desc = "基于微软语音合成，免费使用，无需任何 API Key。支持 SSML express-as 情感风格控制。",
+        id = "edge", name = qstr(R.string.qk_03567), desc = "基于微软语音合成，免费使用，无需任何 API Key。支持 SSML express-as 情感风格控制。",
         kind = QuroTtsProviderKind.EDGE_TTS, defaultBaseUrl = "",
         fields = emptyList(),
         styleSupport = true,
@@ -119,7 +121,7 @@ object QuroTtsProviders {
         fields = listOf(
             QuroTtsField("api_key", "API Key", "sk-...", secret = true),
             QuroTtsField("base_url", "Base URL", "https://api.openai.com/v1"),
-            QuroTtsField("model", "模型", "tts-1"),
+            QuroTtsField("model", qstr(R.string.qk_02238), "tts-1"),
         ),
         styleSupport = true,
         formatOptions = listOf("mp3", "wav", "pcm16"), defaultFormat = "mp3", defaultModel = "tts-1",
@@ -146,7 +148,7 @@ object QuroTtsProviders {
             QuroTtsField("group_id", "Group ID", ""),
             QuroTtsField("api_key", "API Key", "", secret = true),
             QuroTtsField("base_url", "Base URL", "https://api.minimax.chat/v1"),
-            QuroTtsField("model", "模型", "speech-01-turbo"),
+            QuroTtsField("model", qstr(R.string.qk_02238), "speech-01-turbo"),
         ),
         styleSupport = true,
         formatOptions = listOf("mp3", "wav", "pcm16"), defaultFormat = "mp3", defaultModel = "speech-01-turbo",
@@ -166,12 +168,12 @@ object QuroTtsProviders {
 
     // ─────────────────────────── 硅基流动 CosyVoice ───────────────────────────
     private val SILICONFLOW : QuroTtsProviderDef = QuroTtsProviderDef(
-        id = "siliconflow", name = "硅基流动 CosyVoice", desc = "SiliconFlow 兼容 OpenAI /audio/speech，内置 CosyVoice2。支持情感控制、用户预置/动态音色克隆。",
+        id = "siliconflow", name = qstr(R.string.qk_03439), desc = "SiliconFlow 兼容 OpenAI /audio/speech，内置 CosyVoice2。支持情感控制、用户预置/动态音色克隆。",
         kind = QuroTtsProviderKind.OPENAI_COMPAT, defaultBaseUrl = "https://api.siliconflow.cn/v1",
         fields = listOf(
             QuroTtsField("api_key", "API Key", "", secret = true),
             QuroTtsField("base_url", "Base URL", "https://api.siliconflow.cn/v1"),
-            QuroTtsField("model", "模型", "FunAudioLLM/CosyVoice2-0.9B"),
+            QuroTtsField("model", qstr(R.string.qk_02238), "FunAudioLLM/CosyVoice2-0.9B"),
         ),
         styleSupport = true,
         formatOptions = listOf("mp3", "wav"), defaultFormat = "mp3", defaultModel = "FunAudioLLM/CosyVoice2-0.9B",
@@ -193,7 +195,7 @@ object QuroTtsProviders {
         fields = listOf(
             QuroTtsField("api_key", "API Key", "", secret = true),
             QuroTtsField("base_url", "Base URL", "https://api.tts302.ai/v1"),
-            QuroTtsField("model", "模型", "tts-1"),
+            QuroTtsField("model", qstr(R.string.qk_02238), "tts-1"),
         ),
         styleSupport = true,
         formatOptions = listOf("mp3", "wav"), defaultFormat = "mp3", defaultModel = "tts-1",
@@ -208,7 +210,7 @@ object QuroTtsProviders {
         fields = listOf(
             QuroTtsField("api_key", "API Key / PAT", "", secret = true),
             QuroTtsField("base_url", "Base URL", "https://api.coze.cn/v1"),
-            QuroTtsField("model", "模型", "alloy"),
+            QuroTtsField("model", qstr(R.string.qk_02238), "alloy"),
         ),
         styleSupport = true,
         formatOptions = listOf("mp3"), defaultFormat = "mp3", defaultModel = "alloy",
@@ -223,7 +225,7 @@ object QuroTtsProviders {
         fields = listOf(
             QuroTtsField("api_key", "API Key", "", secret = true),
             QuroTtsField("base_url", "Base URL", "https://your-gizwits-gateway/v1"),
-            QuroTtsField("model", "模型", "tts-1"),
+            QuroTtsField("model", qstr(R.string.qk_02238), "tts-1"),
         ),
         styleSupport = true,
         formatOptions = listOf("mp3"), defaultFormat = "mp3", defaultModel = "tts-1",
@@ -238,7 +240,7 @@ object QuroTtsProviders {
         fields = listOf(
             QuroTtsField("api_key", "API Key", "", secret = true),
             QuroTtsField("base_url", "Base URL", "https://your-acgn-gateway/v1"),
-            QuroTtsField("model", "模型", "tts-1"),
+            QuroTtsField("model", qstr(R.string.qk_02238), "tts-1"),
         ),
         styleSupport = true,
         formatOptions = listOf("mp3"), defaultFormat = "mp3", defaultModel = "tts-1",
@@ -248,12 +250,12 @@ object QuroTtsProviders {
 
     // ─────────────────────────── 阿里百炼 CosyVoice（DashScope OpenAI 兼容） ───────────────────────────
     private val ALIYUN : QuroTtsProviderDef = QuroTtsProviderDef(
-        id = "aliyun", name = "阿里百炼 CosyVoice", desc = "DashScope 兼容 OpenAI /audio/speech。CosyVoice3 支持 3s 零样本音色复刻、9 种情感控制、双向流式合成。",
+        id = "aliyun", name = qstr(R.string.qk_03570), desc = "DashScope 兼容 OpenAI /audio/speech。CosyVoice3 支持 3s 零样本音色复刻、9 种情感控制、双向流式合成。",
         kind = QuroTtsProviderKind.OPENAI_COMPAT, defaultBaseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1",
         fields = listOf(
             QuroTtsField("api_key", "DashScope API Key", "", secret = true),
             QuroTtsField("base_url", "Base URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
-            QuroTtsField("model", "模型", "cosyvoice-v1"),
+            QuroTtsField("model", qstr(R.string.qk_02238), "cosyvoice-v1"),
         ),
         styleSupport = true,
         formatOptions = listOf("mp3", "wav"), defaultFormat = "mp3", defaultModel = "cosyvoice-v1",
@@ -268,19 +270,19 @@ object QuroTtsProviders {
             "闲聊对话", "课堂教学", "比赛解说", "深夜电台", "剧情解说",
             "科普推广", "产品推广", "脱口秀", "广告促销", "语音导航", "儿童内容解说",
             // ═══ CosyVoice Instruct 角色标签 ═══
-            "温和客服", "傲娇公主", "元气少女", "可爱孩童", "机器人", "小猪佩奇",
+            "温和客服", "傲娇公主", "元气少女", "可爱孩童", qstr(R.string.qk_00220), "小猪佩奇",
             "旁白", "故事机", "儿童玩具",
         ),
     )
 
     // ─────────────────────────── 小米 MiMo ───────────────────────────
     private val MIMO : QuroTtsProviderDef = QuroTtsProviderDef(
-        id = "mimo", name = "小米 MiMo TTS", desc = "MiMo-V2.5-TTS 系列：预置/设计/复刻三模型。支持自然语言指令+音频标签[crying][pause]等多情绪混合控制，流式输出。",
+        id = "mimo", name = qstr(R.string.qk_03585), desc = "MiMo-V2.5-TTS 系列：预置/设计/复刻三模型。支持自然语言指令+音频标签[crying][pause]等多情绪混合控制，流式输出。",
         kind = QuroTtsProviderKind.MIMO, defaultBaseUrl = "https://api.xiaomimimo.com/v1",
         fields = listOf(
             QuroTtsField("api_key", "API Key", "MIMO_API_KEY", secret = true),
             QuroTtsField("base_url", "Base URL", "https://api.xiaomimimo.com/v1"),
-            QuroTtsField("model", "模型", "mimo-v2.5-tts"),
+            QuroTtsField("model", qstr(R.string.qk_02238), "mimo-v2.5-tts"),
         ),
         styleSupport = true,
         formatOptions = listOf("wav", "pcm16"), defaultFormat = "wav", defaultModel = "mimo-v2.5-tts",
@@ -300,7 +302,7 @@ object QuroTtsProviders {
             // ═══ 人设腔调（官方：夹子音/御姐音/正太音/大叔音/台湾腔） ═══
             "夹子音", "御姐音", "正太音", "大叔音", "台湾腔",
             // ═══ 方言（官方：东北话/四川话/河南话/粤语） ═══
-            "东北话", "四川话", "河南话", "粤语",
+            "东北话", "四川话", "河南话", qstr(R.string.qk_02503),
             // ═══ 角色扮演 / 唱歌（官方：孙悟空/林黛玉/唱歌） ═══
             "孙悟空", "林黛玉", "唱歌",
             // ═══ 语气态度扩展（既有合理词，官方未单列分类） ═══
@@ -323,7 +325,7 @@ object QuroTtsProviders {
 
     // ─────────────────────────── 火山引擎 豆包 / 灵犀 ───────────────────────────
     private val VOLCENGINE : QuroTtsProviderDef = QuroTtsProviderDef(
-        id = "volcengine", name = "火山引擎 豆包 TTS", desc = "字节豆包语音合成 2.0（Doubao-Seed-TTS）。支持指令式情感控制、5s 极速声音复刻（97.5%相似度）、WebSocket 流式 <300ms 延迟。",
+        id = "volcengine", name = qstr(R.string.qk_03534), desc = "字节豆包语音合成 2.0（Doubao-Seed-TTS）。支持指令式情感控制、5s 极速声音复刻（97.5%相似度）、WebSocket 流式 <300ms 延迟。",
         kind = QuroTtsProviderKind.VOLCENGINE, defaultBaseUrl = "https://openspeech.bytedance.com/api/v1/tts",
         fields = listOf(
             QuroTtsField("app_id", "App ID", ""),
@@ -345,7 +347,7 @@ object QuroTtsProviders {
 
     // ─────────────────────────── 科大讯飞 ───────────────────────────
     private val IFLYTEK : QuroTtsProviderDef = QuroTtsProviderDef(
-        id = "iflytek", name = "科大讯飞 TTS", desc = "讯飞开放平台语音合成 + 一句话声音复刻（标准版/多风格版，支持8语种5方言）。WebSocket 流式。",
+        id = "iflytek", name = qstr(R.string.qk_03521), desc = "讯飞开放平台语音合成 + 一句话声音复刻（标准版/多风格版，支持8语种5方言）。WebSocket 流式。",
         kind = QuroTtsProviderKind.IFLYTEK, defaultBaseUrl = "wss://iat-api.xfyun.cn/v2/tts",
         fields = listOf(
             QuroTtsField("app_id", "APP ID", ""),
@@ -359,14 +361,14 @@ object QuroTtsProviders {
         cloneSupport = true,
         providerTags = listOf(
             // ═══ 科大讯飞 多风格/情感（发音人内置风格，非固定枚举，按官方音色描述归纳） ═══
-            "标准","温柔","活泼","高冷","沉稳","甜美","磁性","激情","知性","俏皮","慵懒","清冷","诙谐","严肃",
+            qstr(R.string.qk_00013),"温柔","活泼","高冷","沉稳","甜美","磁性","激情","知性","俏皮","慵懒","清冷","诙谐","严肃",
             "新闻播报","故事讲述","客服语气","纪录旁白","广告促销","广播电台","撒娇","傲娇","亲切","治愈",
         ),
     )
 
     // ─────────────────────────── 腾讯云 ───────────────────────────
     private val TENCENT : QuroTtsProviderDef = QuroTtsProviderDef(
-        id = "tencent", name = "腾讯云 TTS", desc = "腾讯云语音合成 + 一句话声音复刻（5-15s）。支持 EmotionCategory 情感控制（15种+强度）、实时流式 WebSocket。",
+        id = "tencent", name = qstr(R.string.qk_03589), desc = "腾讯云语音合成 + 一句话声音复刻（5-15s）。支持 EmotionCategory 情感控制（15种+强度）、实时流式 WebSocket。",
         kind = QuroTtsProviderKind.TENCENT, defaultBaseUrl = "https://tts.tencentcloudapi.com/",
         fields = listOf(
             QuroTtsField("secret_id", "SecretId", "", secret = true),

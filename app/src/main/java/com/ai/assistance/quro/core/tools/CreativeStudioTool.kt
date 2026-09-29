@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -140,7 +142,7 @@ AI 图像生成：
 - DesignCap（信息图设计）
             """.trimIndent()
             
-            "视频", "video" -> """
+            qstr(R.string.qk_00223), "video" -> """
 🎬 视频 IDE：
 
 专业剪辑：
@@ -318,7 +320,7 @@ AI 应用搭建：
 - Make（自动化）
             """.trimIndent()
             
-            "代码", "code" -> """
+            qstr(R.string.qk_00148), "code" -> """
 💻 代码 IDE 完整对应关系：
 
 ═══ 移动/桌面原生 ═══
@@ -384,7 +386,7 @@ AI 应用搭建：
 - Vim/Neovim（LSP）→ 理论上无语言上限
             """.trimIndent()
             
-            "网页", "前端", "web" -> """
+            qstr(R.string.qk_02288), "前端", "web" -> """
 🌐 网页/前端 IDE：
 
 代码编辑：
@@ -542,7 +544,7 @@ AI 网页生成：
             """.trimIndent()
 
             // 终端/命令行
-            "终端", "命令行", "terminal", "cli", "bash", "shell", "zsh", "powershell", "vim", "emacs" -> """
+            qstr(R.string.qk_00216), "命令行", "terminal", "cli", "bash", "shell", "zsh", "powershell", "vim", "emacs" -> """
 💻 终端/命令行 IDE：
 
 | 工具 | 类型 | 用途 |
@@ -653,7 +655,7 @@ AI 网页生成：
             """.trimIndent()
 
             // 机器人/IoT IDE
-            "机器人", "iot", "物联网", "硬件" -> """
+            qstr(R.string.qk_00220), "iot", "物联网", "硬件" -> """
 🤖 机器人/IoT IDE：
 
 | 工具 | 类型 | 用途 |
@@ -960,12 +962,12 @@ AI 网页生成：
     private fun generate(contentType: String, prompt: String): String {
         return when (contentType.lowercase()) {
             "graphic", "图形", "图像" -> generateGraphic(prompt)
-            "video", "视频" -> generateVideo(prompt)
+            "video", qstr(R.string.qk_00223) -> generateVideo(prompt)
             "audio", "音频" -> generateAudio(prompt)
             "3d", "建模" -> generate3D(prompt)
             "game", "游戏" -> generateGame(prompt)
             "lowcode", "低代码" -> generateLowCode(prompt)
-            "code", "代码" -> generateCode(prompt)
+            "code", qstr(R.string.qk_00148) -> generateCode(prompt)
             else -> "不支持的内容类型：$contentType。支持：graphic, video, audio, 3d, game, lowcode, code"
         }
     }

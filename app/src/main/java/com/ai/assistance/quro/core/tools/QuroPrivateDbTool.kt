@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.database.Cursor
@@ -59,7 +61,7 @@ class QuroPrivateDbTool : QuroTool {
                 else -> err("未知 action: $action（可选 db_list/db_tables/db_schema/db_query）")
             }
         } catch (e: Exception) {
-            err("执行失败: ${e.message}")
+            err(qstr(R.string.qk_00296, (e.message).toString()))
         }
     }
 

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONArray
@@ -12,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class QuroWorkflowTool : QuroTool {
     override val name = "workflow_run"
-    override val description = "多步工作流编排引擎：把已注册工具串成流水线，支持变量、循环、条件、错误处理与超时，用它编排其它工具补齐能力缺口。" +
+    override val description = qstr(R.string.qk_03695) +
         "参数 {\"vars\":{初始变量(可选)},\"steps\":[ 步骤... ]}。" +
         "步骤类型：\n" +
         " - 工具步：{\"tool\":\"工具名\",\"args\":{...}(支持占位符 {{var}}/{{last}}/{{i}}/{{item}})," +

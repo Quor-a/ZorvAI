@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.genui.aiapp.data
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONArray
@@ -37,7 +39,7 @@ object GenUISessionStore {
         val time: Long,
         val renderType: String = ""
     ) {
-        /** 渲染通道对象（老数据自动推断，永不返回 null，界面上不会出现"未知"） */
+        /** 渲染通道对象（老数据自动推断，永不返回 null，界面上不会出现qstr(R.string.qk_00472)） */
         val channel: RenderChannel
             get() = RenderChannel.fromKey(renderType) ?: RenderChannel.infer(json)
     }

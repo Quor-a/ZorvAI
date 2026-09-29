@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.genui.aiapp.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
@@ -395,8 +397,7 @@ fun ChatScreen(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(text = "←", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-                    Text(
-                        text = "返回",
+                    Text(text = stringResource(R.string.qk_00143),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(start = 4.dp)
@@ -425,7 +426,7 @@ fun ChatScreen(
                         onTap = { if (petSettings.tapOpensPanel) openSidePanel() },
                         onLongPress = {
                             if (petSettings.tapInteract) {
-                                viewModel.send("（我摸了摸宠物）")
+                                viewModel.send(qstr(R.string.qk_03783))
                             }
                         }
                     )
@@ -454,8 +455,8 @@ fun ChatScreen(
         Surface(Modifier.fillMaxSize()) {
             SettingsScreen(
                 worksCount = state.works.size,
-                personaName = state.hostPersonaName.ifBlank { "跟随 ZorvAI" },
-                modelLabel = state.modelLabel.ifBlank { "跟随 ZorvAI" },
+                personaName = state.hostPersonaName.ifBlank { stringResource(R.string.qk_03784) },
+                modelLabel = state.modelLabel.ifBlank { stringResource(R.string.qk_03784) },
                 askChannel = askChannelOn,
                 onToggleAskChannel = { on ->
                     askChannelOn = on
@@ -473,7 +474,7 @@ fun ChatScreen(
             HistoryScreen(
                 works = state.works,
                 messages = state.conversationHistory,
-                personaName = state.hostPersonaName.ifBlank { "跟随 ZorvAI" },
+                personaName = state.hostPersonaName.ifBlank { stringResource(R.string.qk_03784) },
                 stripAssistant = { viewModel.stripAssistantForDisplay(it) },
                 formatTime = { formatTimestamp(it) },
                 onBack = { popLayer() },
@@ -541,25 +542,25 @@ private fun SidePanelContent(
         modifier = Modifier.fillMaxSize().padding(14.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("快捷操作", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.qk_03722), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
         // 功能卡 2×2
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            PanelActionCard("思考面板", "查看推理过程", Modifier.weight(1f)) { onThinkingClick() }
-            PanelActionCard("设置中心", "身份 / 模型 / 历史", Modifier.weight(1f)) { onSettingsClick() }
+            PanelActionCard(stringResource(R.string.qk_03785), stringResource(R.string.qk_03786), Modifier.weight(1f)) { onThinkingClick() }
+            PanelActionCard(stringResource(R.string.qk_03787), stringResource(R.string.qk_03788), Modifier.weight(1f)) { onSettingsClick() }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            PanelActionCard("宠物管理", "切换/导入导出", Modifier.weight(1f)) { onPetImport() }
-            PanelActionCard("清空画布", "回到空白状态", Modifier.weight(1f)) { onClear() }
+            PanelActionCard(stringResource(R.string.qk_03713), stringResource(R.string.qk_03789), Modifier.weight(1f)) { onPetImport() }
+            PanelActionCard(stringResource(R.string.qk_03790), stringResource(R.string.qk_03791), Modifier.weight(1f)) { onClear() }
         }
         Spacer(Modifier.height(4.dp))
         // ── 历史记录（独立滚动区占满剩余空间，输入栏固定底部永不遮挡）──
-        Text("历史记录", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.qk_00896), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
         Column(
             modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (works.isEmpty()) {
-                Text("暂无界面记录", fontSize = 12.sp, color = cs.onSurfaceVariant)
+                Text(stringResource(R.string.qk_03422), fontSize = 12.sp, color = cs.onSurfaceVariant)
             }
             works.take(8).forEach { w ->
                 Surface(
@@ -641,13 +642,13 @@ private fun FloatingActionBar(
         if (hasUI) {
             GenUIconButton(
                 iconRes = R.drawable.genui_clear,
-                contentDescription = "清除",
+                contentDescription = stringResource(R.string.qk_01470),
                 onClick = onClear
             )
         }
         GenUIconButton(
             iconRes = R.drawable.genui_settings,
-            contentDescription = "设置",
+            contentDescription = stringResource(R.string.qk_01760),
             onClick = onSettingsClick
         )
     }
@@ -665,7 +666,7 @@ private fun ThinkingBottomSheet(
     onDismiss: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("思考过程", "工具调用", "原始输出")
+    val tabs = listOf(qstr(R.string.qk_03618), stringResource(R.string.qk_00956), stringResource(R.string.qk_03792))
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -688,8 +689,7 @@ private fun ThinkingBottomSheet(
                 .fillMaxWidth()
                 .navigationBarsPadding()
         ) {
-            Text(
-                text = "AI 思考面板",
+            Text(text = stringResource(R.string.qk_03687),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
@@ -778,8 +778,7 @@ private fun ThinkingTabContent(state: ChatState) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
-                            Text(
-                                text = "实时推理",
+                            Text(text = stringResource(R.string.qk_03418),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.primary
@@ -809,8 +808,7 @@ private fun ThinkingTabContent(state: ChatState) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        text = "实时推理",
+                    Text(text = stringResource(R.string.qk_03418),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
@@ -838,8 +836,7 @@ private fun ThinkingTabContent(state: ChatState) {
                     modifier = Modifier.size(48.dp)
                 )
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    text = "暂无思考过程",
+                Text(text = stringResource(R.string.qk_03693),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -869,8 +866,7 @@ private fun ToolCallsTabContent(records: List<ToolCallRecord>) {
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    text = "暂无工具调用",
+                Text(text = stringResource(R.string.qk_03731),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -955,8 +951,7 @@ private fun ToolCallRecordItem(record: ToolCallRecord) {
                 exit = fadeOut(tween(150)) + slideOutVertically(tween(150)) { -it / 2 }
             ) {
                 Column(modifier = Modifier.padding(top = 10.dp)) {
-                    Text(
-                        text = "参数",
+                    Text(text = stringResource(R.string.qk_00142),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -968,7 +963,7 @@ private fun ToolCallRecordItem(record: ToolCallRecord) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = record.arguments.takeIf { it.isNotBlank() } ?: "(无参数)",
+                            text = record.arguments.takeIf { it.isNotBlank() } ?: stringResource(R.string.qk_03793),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(10.dp),
@@ -977,8 +972,7 @@ private fun ToolCallRecordItem(record: ToolCallRecord) {
                         )
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "结果",
+                    Text(text = stringResource(R.string.qk_00084),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1011,10 +1005,10 @@ private fun ToolCallRecordItem(record: ToolCallRecord) {
 private fun formatTimestamp(ts: Long): String {
     val diff = System.currentTimeMillis() - ts
     return when {
-        diff < 1000 -> "刚刚"
-        diff < 60000 -> "${diff / 1000} 秒前"
-        diff < 3600000 -> "${diff / 60000} 分钟前"
-        else -> "${diff / 3600000} 小时前"
+        diff < 1000 -> qstr(R.string.qk_02665)
+        diff < 60000 -> qstr(R.string.qk_03795, (diff / 1000).toString())
+        diff < 3600000 -> qstr(R.string.qk_03796, (diff / 60000).toString())
+        else -> qstr(R.string.qk_03797, (diff / 3600000).toString())
     }
 }
 
@@ -1059,8 +1053,7 @@ private fun RawOutputTabContent(state: ChatState) {
                     modifier = Modifier.size(48.dp)
                 )
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    text = "暂无原始输出",
+                Text(text = stringResource(R.string.qk_03663),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1134,7 +1127,7 @@ private fun ThinkingButton(
     ) {
         Icon(
             imageVector = Icons.Rounded.Psychology,
-            contentDescription = "思考",
+            contentDescription = stringResource(R.string.qk_00082),
             tint = if (enabled) {
                 if (hasNewThought) {
                     MaterialTheme.colorScheme.primary
@@ -1193,7 +1186,7 @@ private fun GenUICanvas(
 ) {
     val currentSpec = remember(json, isStreaming) {
         if (isStreaming) {
-            runCatching { GenUI.safeParseStreaming(json, "AI 正在生成界面...") }.getOrNull()
+            runCatching { GenUI.safeParseStreaming(json, qstr(R.string.qk_03798)) }.getOrNull()
         } else {
             runCatching { GenUI.safeParse(json) }.getOrNull()
         }
@@ -1277,15 +1270,13 @@ private fun GenUICanvas(
                             }
                         }
                         Spacer(Modifier.width(10.dp))
-                        Text(
-                            text = "UI 解析失败",
+                        Text(text = stringResource(R.string.qk_03656),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.error
                         )
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = "AI 返回的数据格式不正确，请重试或调整描述。",
+                    Text(text = stringResource(R.string.qk_03681),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1368,8 +1359,7 @@ private fun StreamingMiniIndicator(
                         size = 4.dp
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "生成中",
+                    Text(text = stringResource(R.string.qk_00177),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 11.sp,
@@ -1429,10 +1419,9 @@ private fun ChannelAskingPlaceholder(modifier: Modifier = Modifier) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("🎛", fontSize = 34.sp)
             Spacer(Modifier.height(12.dp))
-            Text("请选择本次渲染通道", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.qk_03627), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
-            Text(
-                "GenUI SDK / A2UI / Markdown / HTML —— 选完即开始生成",
+            Text(stringResource(R.string.qk_03633),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1441,9 +1430,9 @@ private fun ChannelAskingPlaceholder(modifier: Modifier = Modifier) {
             // 没看到浮窗多半是没给悬浮窗权限 —— 明确告诉用户去哪作答，别让他干等。
             Text(
                 if (com.ai.assistance.quro.service.VisualQuestionOverlayService.isRunning)
-                    "选项在屏幕上的悬浮窗里，直接点它"
+                    stringResource(R.string.qk_03667)
                 else
-                    "没看到选项？去系统设置给本应用「悬浮窗」权限",
+                    stringResource(R.string.qk_03565),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -1548,8 +1537,7 @@ private fun WelcomePlaceholder(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        Text(
-            text = "GenUI 生成式画布",
+        Text(text = stringResource(R.string.qk_03643),
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
@@ -1557,8 +1545,7 @@ private fun WelcomePlaceholder(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        Text(
-            text = "我用界面跟你对话，说点什么吧",
+        Text(text = stringResource(R.string.qk_03468),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -1572,20 +1559,20 @@ private fun WelcomePlaceholder(
         ) {
             CapabilityCard(
                 iconRes = R.drawable.genui_layers,
-                title = "UI 即回复",
-                subtitle = "用界面回答",
+                title = stringResource(R.string.qk_03515),
+                subtitle = stringResource(R.string.qk_03737),
                 modifier = Modifier.weight(1f)
             )
             CapabilityCard(
                 iconRes = R.drawable.genui_palette,
-                title = "精美设计",
-                subtitle = "精致细节",
+                title = stringResource(R.string.qk_03547),
+                subtitle = stringResource(R.string.qk_03620),
                 modifier = Modifier.weight(1f)
             )
             CapabilityCard(
                 iconRes = R.drawable.genui_spark,
-                title = "实时生成",
-                subtitle = "即想即得",
+                title = stringResource(R.string.qk_03671),
+                subtitle = stringResource(R.string.qk_03437),
                 modifier = Modifier.weight(1f)
             )
         }
@@ -1596,8 +1583,7 @@ private fun WelcomePlaceholder(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "试试这些",
+            Text(text = stringResource(R.string.qk_03436),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold
@@ -1614,12 +1600,12 @@ private fun WelcomePlaceholder(
         Spacer(modifier = Modifier.height(14.dp))
 
         val prompts = listOf(
-            Triple("今天天气怎么样", R.drawable.genui_weather, "weather"),
-            Triple("讲个笑话听听", R.drawable.genui_joke, "joke"),
-            Triple("帮我算个账", R.drawable.genui_calc, "calc"),
-            Triple("推荐一首音乐", R.drawable.genui_music, "music"),
-            Triple("今日运势", R.drawable.genui_fortune, "fortune"),
-            Triple("说晚安", R.drawable.genui_night, "night")
+            Triple(stringResource(R.string.qk_03799), R.drawable.genui_weather, "weather"),
+            Triple(stringResource(R.string.qk_03800), R.drawable.genui_joke, "joke"),
+            Triple(stringResource(R.string.qk_03801), R.drawable.genui_calc, "calc"),
+            Triple(stringResource(R.string.qk_03802), R.drawable.genui_music, "music"),
+            Triple(stringResource(R.string.qk_03803), R.drawable.genui_fortune, "fortune"),
+            Triple(stringResource(R.string.qk_03804), R.drawable.genui_night, "night")
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1666,8 +1652,7 @@ private fun WelcomePlaceholder(
                     }
                 }
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "试着描述具体的颜色、布局、功能",
+                Text(text = stringResource(R.string.qk_03612),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
@@ -1817,8 +1802,7 @@ private fun ErrorPlaceholder(
                 }
             }
             Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = "生成失败",
+            Text(text = stringResource(R.string.qk_02274),
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -1839,8 +1823,7 @@ private fun ErrorPlaceholder(
                     tonalElevation = 0.dp,
                     modifier = Modifier.clickable(onClick = onViewDetails)
                 ) {
-                    Text(
-                        text = "查看详情",
+                    Text(text = stringResource(R.string.qk_03531),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
@@ -1853,8 +1836,7 @@ private fun ErrorPlaceholder(
                     shadowElevation = 2.dp,
                     modifier = Modifier.clickable(onClick = onRetry)
                 ) {
-                    Text(
-                        text = "重试",
+                    Text(text = stringResource(R.string.qk_00092),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp)
@@ -1925,8 +1907,7 @@ private fun FloatingInputBar(
                     decorationBox = { innerTextField ->
                         Box {
                             if (text.isEmpty()) {
-                                Text(
-                                    text = "说点什么...",
+                                Text(text = stringResource(R.string.qk_03686),
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                 )
@@ -1952,7 +1933,7 @@ private fun FloatingInputBar(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             painter = painterResource(id = R.drawable.genui_stop),
-                            contentDescription = "停止",
+                            contentDescription = stringResource(R.string.qk_02271),
                             tint = Color.Unspecified,
                             modifier = Modifier.size(20.dp)
                         )
@@ -1976,7 +1957,7 @@ private fun FloatingInputBar(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             painter = painterResource(id = R.drawable.genui_send),
-                            contentDescription = "生成",
+                            contentDescription = stringResource(R.string.qk_03424),
                             tint = if (sendEnabled) Color.Unspecified
                             else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
                             modifier = Modifier.size(20.dp)

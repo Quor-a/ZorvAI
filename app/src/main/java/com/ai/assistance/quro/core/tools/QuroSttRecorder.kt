@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.Manifest
 import android.content.Context
@@ -117,7 +119,7 @@ object QuroSttRecorder {
             if (!QuroSttHolder.providerSupportsAudio(provider)) {
                 QuroSttHolder.pushLog("ℹ️ provider($provider) 不在已知音频转写白名单，仍尝试请求")
             }
-            onStatus("聆听中（云端）…")
+            onStatus(qstr(R.string.qk_02579))
             val pcm = recordUtterance(ctx, onStatus) ?: run {
                 main { onError(-2, "未识别到语音") }
                 return@launch
@@ -160,23 +162,23 @@ object QuroSttRecorder {
                 return@launch
             }
             if (!QuroOnDeviceAsr.isReady()) {
-                onStatus("端侧模型加载中…")
+                onStatus(qstr(R.string.qk_01790))
                 if (!QuroOnDeviceAsr.ensureLoaded(ctx)) {
                     // 把引擎给出的具体原因原样透出，不再只有「加载失败」四个字
                     main { onError(-1, QuroOnDeviceAsr.lastError.ifBlank { "端侧模型加载失败" }) }
                     return@launch
                 }
             }
-            onStatus("聆听中（端侧）…")
+            onStatus(qstr(R.string.qk_02548))
             val pcm = recordUtterance(ctx, onStatus) ?: run {
                 main { onError(-2, "没有听到说话内容（可能离麦太远或环境太吵）") }
                 return@launch
             }
-            onStatus("识别中…")
+            onStatus(qstr(R.string.qk_01796))
             val text = QuroOnDeviceAsr.recognize(pcm)
             main {
                 if (text.isNotBlank()) onFinal(text)
-                else onError(-2, QuroOnDeviceAsr.lastError.ifBlank { "未识别到文字" })
+                else onError(-2, QuroOnDeviceAsr.lastError.ifBlank { qstr(R.string.qk_02582) })
             }
         }
     }
@@ -197,7 +199,7 @@ object QuroSttRecorder {
             ?: createRecord(MediaRecorder.AudioSource.MIC, minBuf)
         if (rec == null) { onStatus("无法创建录音器（麦克风可能被其他应用占用）"); return null }
 
-        onStatus("聆听中…")
+        onStatus(qstr(R.string.qk_01757))
         val pcm = ByteArrayOutputStream()
         try {
             val frame = ShortArray(minBuf / 2)
@@ -229,7 +231,7 @@ object QuroSttRecorder {
             }
             rec.stop()
         } catch (e: Throwable) {
-            onStatus("录音异常：${e.message}")
+            onStatus(qstr(R.string.qk_01795, (e.message).toString()))
         } finally {
             activeRec = null
             try { rec.release() } catch (_: Throwable) {}

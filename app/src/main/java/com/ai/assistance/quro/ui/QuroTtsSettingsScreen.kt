@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ClipboardManager
 import android.content.ClipData
@@ -58,7 +61,7 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
     var rate by remember { mutableFloatStateOf(QuroTtsPrefs.getRate(ctx)) }
     var pitch by remember { mutableFloatStateOf(QuroTtsPrefs.getPitch(ctx)) }
 
-    var previewText by remember { mutableStateOf("这是一条语音合成测试，Zorv AI 正在朗读。") }
+    var previewText by remember { mutableStateOf(qstr(R.string.qk_02922)) }
     var speakStatus by remember { mutableStateOf<String?>(null) }
 
     // ── Bug 日志区域 ──
@@ -89,21 +92,21 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
     }
 
     LaunchedEffect(Unit) {
-        addLog("页面加载：开始预初始化 TTS")
+        addLog(qstr(R.string.qk_02923))
         QuroTtsHolder.ensure(ctx) { ok ->
             runCatching {
                 addLog("LaunchedEffect ensure 回调: ok=$ok, voices=${runCatching { QuroTtsHolder.getVoices().size }.getOrDefault(0)}")
                 refreshVoices()
-            }.onFailure { e -> addLog("初始化回调异常(已忽略): ${e.message}") }
+            }.onFailure { e -> addLog(qstr(R.string.qk_02925, (e.message).toString())) }
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("语音合成 (TTS)") },
+                title = { Text(stringResource(R.string.qk_00232)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回") }
+                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143)) }
                 },
             )
         }
@@ -112,16 +115,16 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text("文字转语音配置。朗读与悬浮语音球均跟随此处设置；语音引擎由手机系统默认 TTS 引擎接管（本地系统）或由所选云端服务商接管（云模型服务）。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.qk_02926), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
 
             // ── 01 语音来源 ───────────────────────────────────────────────
-            ChapterLabel("01", "语音来源")
+            ChapterLabel("01", stringResource(R.string.qk_02927))
             SetGroup {
                 Column {
                     SourceRadioRow(
                         id = QuroTtsPrefs.SOURCE_LOCAL,
-                        title = "本地系统 (TTS 引擎)",
-                        sub = "使用手机自带语音引擎，离线可用",
+                        title = stringResource(R.string.qk_02928),
+                        sub = stringResource(R.string.qk_02929),
                         selected = source == QuroTtsPrefs.SOURCE_LOCAL,
                         onSelect = {
                             source = it
@@ -131,8 +134,8 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
                     HorizontalDivider()
                     SourceRadioRow(
                         id = QuroTtsPrefs.SOURCE_CLOUD,
-                        title = "云模型服务（多服务商）",
-                        sub = "Edge / 小米 MiMo / 火山 / 讯飞 / 腾讯 / 阿里 / OpenAI 等，详见「语音服务」",
+                        title = stringResource(R.string.qk_02930),
+                        sub = stringResource(R.string.qk_02931),
                         selected = source == QuroTtsPrefs.SOURCE_CLOUD,
                         onSelect = {
                             source = it
@@ -144,11 +147,11 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
 
             if (source == QuroTtsPrefs.SOURCE_LOCAL) {
                 // ── 02 本地系统引擎 ───────────────────────────────────────
-                ChapterLabel("02", "本地系统引擎")
+                ChapterLabel("02", stringResource(R.string.qk_02932))
                 SetGroup {
                     SetRowClickable(
                         icon = Icons.Filled.ChevronRight,
-                        name = "识别语言",
+                        name = stringResource(R.string.qk_02631),
                         sub = TTS_LANGUAGES.firstOrNull { it.second == language }?.first ?: language,
                         onClick = { langMenu = true },
                     )
@@ -163,16 +166,15 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
                         }
                     }
                 }
-                Text(
-                    "语音引擎：由手机系统默认 TTS 引擎接管（设置 → 语言与输入 → 文字转语音）。无需在此选择。",
+                Text(stringResource(R.string.qk_02933),
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
 
                 // ── 03 声音 ───────────────────────────────────────────────
-                ChapterLabel("03", "声音 (Voice)")
+                ChapterLabel("03", stringResource(R.string.qk_02934))
                 if (voices.isEmpty()) {
-                    Text("当前语言无可用声音，请换语言或安装对应 TTS 语音包。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
+                    Text(stringResource(R.string.qk_02935), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
                 } else {
                     SetGroup {
                         Column {
@@ -207,7 +209,7 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
                 }
 
                 // ── 04 语速与音高 ─────────────────────────────────────────
-                ChapterLabel("04", "语速与音高")
+                ChapterLabel("04", stringResource(R.string.qk_02936))
                 SetGroup {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("语速：${"%.2f".format(rate)}x", style = MaterialTheme.typography.bodyMedium)
@@ -224,19 +226,19 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
                             valueRange = 0.5f..2.0f,
                             steps = 15,
                         )
-                        Text("范围 0.5x – 2.0x，默认 1.0x。", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                        Text(stringResource(R.string.qk_02939), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                     }
                 }
 
                 // ── 05 试听 ────────────────────────────────────────────────
-                ChapterLabel("05", "试听")
+                ChapterLabel("05", stringResource(R.string.qk_02940))
                 SetGroup {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedTextField(
                             value = previewText,
                             onValueChange = { previewText = it },
                             modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("输入要朗读的文本") },
+                            placeholder = { Text(stringResource(R.string.qk_01524)) },
                             minLines = 2, maxLines = 4, singleLine = false,
                         )
                         speakStatus?.let {
@@ -253,63 +255,63 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
                             Button(
                                 onClick = {
                                     bugLogs = emptyList()
-                                    addLog("━━━ 点击试听 ━━━")
+                                    addLog(qstr(R.string.qk_02941))
                                     scope.launch {
-                                        speakStatus = "初始化中…"
+                                        speakStatus = qstr(R.string.qk_02942)
                                         try {
                                             val diag = QuroTtsHolder.audioDiagnostics(ctx)
-                                            addLog("音频环境: $diag")
+                                            addLog(qstr(R.string.qk_02943, (diag).toString()))
                                             val ok = QuroTtsHolder.ensureReady(ctx)
-                                            addLog("ensureReady 返回: $ok")
+                                            addLog(qstr(R.string.qk_02944, (ok).toString()))
                                             if (!ok) {
                                                 val engineDiag = QuroTtsHolder.diagnoseEngines(ctx)
-                                                addLog("诊断: $engineDiag")
-                                                speakStatus = "初始化失败 ❌\n音频: $diag\n引擎: $engineDiag"
+                                                addLog(qstr(R.string.qk_02945, (engineDiag).toString()))
+                                                speakStatus = qstr(R.string.qk_02946, (diag).toString(), (engineDiag).toString())
                                                 return@launch
                                             }
-                                            speakStatus = "正在朗读…"
-                                            addLog("调用 speak()...")
+                                            speakStatus = qstr(R.string.qk_02947)
+                                            addLog(qstr(R.string.qk_02948))
                                             val r = QuroTtsHolder.speak(previewText.ifBlank { " " })
                                             speakStatus = when (r) {
-                                                0 -> "已发送朗读请求 ✅\n$diag"
-                                                -1 -> "引擎未就绪 ❌\n$diag"
+                                                0 -> qstr(R.string.qk_02949, (diag).toString())
+                                                -1 -> qstr(R.string.qk_02950, (diag).toString())
                                                 -2 -> {
-                                                    addLog("正常模式失败(r=-2)，尝试安全模式...")
+                                                    addLog(qstr(R.string.qk_02951))
                                                     val r2 = QuroTtsHolder.speakMinimal(previewText.ifBlank { " " })
-                                                    addLog("speakMinimal 返回: $r2")
-                                                    if (r2 == 0) "✅ 安全模式成功\n$diag" else "朗读仍失败 ❌\n$diag"
+                                                    addLog(qstr(R.string.qk_02952, (r2).toString()))
+                                                    if (r2 == 0) qstr(R.string.qk_02953, (diag).toString()) else qstr(R.string.qk_02954, (diag).toString())
                                                 }
-                                                else -> "未知状态($r)\n$diag"
+                                                else -> qstr(R.string.qk_02955, (r).toString(), (diag).toString())
                                             }
                                         } catch (e: Exception) {
-                                            addLog("异常: ${e.javaClass.simpleName}: ${e.message}")
-                                            speakStatus = "异常: ${e.message}"
+                                            addLog(qstr(R.string.qk_02956, (e.javaClass.simpleName).toString(), (e.message).toString()))
+                                            speakStatus = qstr(R.string.qk_02957, (e.message).toString())
                                         }
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Accent),
                                 modifier = Modifier.weight(1f),
-                            ) { Text("试听") }
+                            ) { Text(stringResource(R.string.qk_02940)) }
                             Button(
                                 onClick = {
                                     scope.launch {
-                                        addLog("━━━ 安全试听（裸调） ━━━")
+                                        addLog(qstr(R.string.qk_02958))
                                         val r = QuroTtsHolder.speakMinimal(previewText.ifBlank { " " })
-                                        speakStatus = if (r == 0) "安全模式成功 ✅" else "安全模式也失败 (r=$r) ❌"
+                                        speakStatus = if (r == 0) qstr(R.string.qk_02959) else qstr(R.string.qk_02960, (r).toString())
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = cs.surfaceVariant),
                                 modifier = Modifier.weight(1f),
-                            ) { Text("安全试听") }
+                            ) { Text(stringResource(R.string.qk_02961)) }
                             Button(
                                 onClick = {
-                                    addLog("━━━ 强制重置 TTS ━━━")
+                                    addLog(qstr(R.string.qk_02962))
                                     QuroTtsHolder.reset()
-                                    speakStatus = "已重置，请重新点试听"
+                                    speakStatus = qstr(R.string.qk_02963)
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = cs.errorContainer),
                                 modifier = Modifier.weight(1f),
-                            ) { Text("重置") }
+                            ) { Text(stringResource(R.string.qk_02964)) }
                         }
                     }
                 }
@@ -318,15 +320,15 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
                 if (bugLogs.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("📋 Bug 日志 (${bugLogs.size})", style = MaterialTheme.typography.titleSmall, color = cs.primary)
+                        Text(stringResource(R.string.qk_02965, (bugLogs.size).toString()), style = MaterialTheme.typography.titleSmall, color = cs.primary)
                         Row {
                             TextButton(onClick = {
                                 val text = bugLogs.joinToString("\n")
                                 val clip = ClipData.newPlainText("QuroTTS", text)
                                 (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
-                                speakStatus = "日志已复制到剪贴板 ✅ 直接粘贴给我即可"
-                            }) { Text("复制", style = MaterialTheme.typography.labelSmall) }
-                            TextButton(onClick = { bugLogs = emptyList() }) { Text("清空", style = MaterialTheme.typography.labelSmall) }
+                                speakStatus = qstr(R.string.qk_02641)
+                            }) { Text(stringResource(R.string.qk_00088), style = MaterialTheme.typography.labelSmall) }
+                            TextButton(onClick = { bugLogs = emptyList() }) { Text(stringResource(R.string.qk_00764), style = MaterialTheme.typography.labelSmall) }
                         }
                     }
                     Card(
@@ -353,7 +355,7 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
                 }
             } else if (source == QuroTtsPrefs.SOURCE_CLOUD) {
                 // ── 02 云模型服务 ─────────────────────────────────────────
-                ChapterLabel("02", "云模型服务")
+                ChapterLabel("02", stringResource(R.string.qk_02966))
                 val providerId = QuroTtsProviderPrefs.getProvider(ctx)
                 val def = QuroTtsProviders.byId(providerId)
                 val configured = QuroTtsProviderPrefs.isConfigured(ctx)
@@ -361,8 +363,8 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
                     Column {
                         SetRowClickable(
                             icon = Icons.Filled.ChevronRight,
-                            name = "当前服务商",
-                            sub = "点击进入「语音服务」选择服务商并配置参数",
+                            name = stringResource(R.string.qk_02967),
+                            sub = stringResource(R.string.qk_02968),
                             value = def?.name ?: providerId,
                             onClick = onOpenCloudConfig,
                         )
@@ -372,7 +374,7 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                if (configured) "✅ 已配置参数" else "⚠️ 未配置参数，请先进入配置",
+                                if (configured) stringResource(R.string.qk_02969) else stringResource(R.string.qk_02970),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = if (configured) Color(0xFF2E7D32) else cs.error,
                             )
@@ -380,16 +382,15 @@ fun QuroTtsSettingsScreen(onBack: () -> Unit = {}, onOpenCloudConfig: () -> Unit
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                PrimaryButton(text = "前往语音服务设置 ›", onClick = onOpenCloudConfig)
-                Text(
-                    "已接入 Edge TTS / 小米 MiMo / 火山引擎 / 科大讯飞 / 腾讯云 / 阿里百炼 CosyVoice / OpenAI / MiniMax / 硅基流动 / TTS302 / CozeCn / Gizwits / ACGN 等多家云端 TTS。",
+                PrimaryButton(text = stringResource(R.string.qk_02971), onClick = onOpenCloudConfig)
+                Text(stringResource(R.string.qk_02972),
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                     modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp),
                 )
             } else {
                 // ── 残留无效来源（如历史 SOURCE_MODEL）─────────────────────
-                ChapterLabel("02", "语音来源")
-                InfoBox("当前语音来源无效，请回到顶部「语音来源」重新选择「本地系统」或「云模型服务」。")
+                ChapterLabel("02", stringResource(R.string.qk_02927))
+                InfoBox(stringResource(R.string.qk_02973))
             }
 
             Spacer(Modifier.height(12.dp))

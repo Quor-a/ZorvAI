@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.skill
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONArray
@@ -235,7 +237,7 @@ object QuroSkillStore {
     /** 旧版本内置的 22 款硬编码技能名（用于一次性清理，不再随 App 内置）。 */
     private val BUILTIN_NAMES = setOf(
         "翻译助手", "写作润色", "代码审查", "长文摘要", "头脑风暴", "日程规划", "学习辅导",
-        "邮件撰写", "演讲稿", "数据分析", "营销文案", "诗词创作", "算法面试", "旅行规划",
+        "邮件撰写", "演讲稿", qstr(R.string.qk_03368), "营销文案", "诗词创作", "算法面试", "旅行规划",
         "美食推荐", "健康建议", "读书笔记", "实时翻译", "成语词典", "职场建议", "故事创作", "提问优化",
     )
 

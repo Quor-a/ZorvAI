@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONArray
@@ -11,7 +13,7 @@ import java.io.File
  */
 class QuroKeybindingTool : QuroTool {
     override val name = "terminal_keys"
-    override val description = "终端自定义按键绑定管理：保存/查询/删除/重置按键→动作映射，持久化于应用私有目录，供终端加载。" +
+    override val description = qstr(R.string.qk_03624) +
         "参数 {\"action\":\"save|list|get|delete|reset\",\"name\":\"绑定名（如 ctrl_k）\",\"key\":\"按键组合（如 Ctrl+K）\",\"command\":\"触发的命令/动作\",\"description\":\"说明\"}。"
     override val parametersJson = """{
         "type":"object",

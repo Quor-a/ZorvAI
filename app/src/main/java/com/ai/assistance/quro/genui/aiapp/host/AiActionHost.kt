@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.genui.aiapp.host
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -90,7 +92,7 @@ class AiActionHost(
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = ClipData.newPlainText("GenUI", text)
             clipboard.setPrimaryClip(clip)
-            Toast.makeText(context, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, qstr(R.string.qk_02826), Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(context, "复制失败：${e.message}", Toast.LENGTH_SHORT).show()
         }
@@ -190,7 +192,7 @@ class AiActionHost(
 
     override fun sendMessage(text: String) {
         onSendMessage?.invoke(text)
-            ?: Toast.makeText(context, "当前无法回传对话", Toast.LENGTH_SHORT).show()
+            ?: Toast.makeText(context, qstr(R.string.qk_03475), Toast.LENGTH_SHORT).show()
     }
 
     override fun refresh(targetId: String?) {
@@ -216,7 +218,7 @@ class AiActionHost(
                 if (title != null) putExtra(Intent.EXTRA_TITLE, title)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(Intent.createChooser(intent, title ?: "分享"))
+            context.startActivity(Intent.createChooser(intent, title ?: qstr(R.string.qk_00090)))
         } catch (e: Exception) {
             Toast.makeText(context, "分享失败：${e.message}", Toast.LENGTH_SHORT).show()
         }
@@ -253,7 +255,7 @@ class AiActionHost(
                 }
                 context.startActivity(intent)
             } catch (e: Exception) {
-                Toast.makeText(context, "未找到视频播放器", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, qstr(R.string.qk_03417), Toast.LENGTH_SHORT).show()
             }
             return
         }
@@ -264,7 +266,7 @@ class AiActionHost(
             mp.setDataSource(url)
             mp.setOnPreparedListener {
                 it.start()
-                Toast.makeText(context, if (title.isBlank()) "▶ 正在播放" else "▶ 正在播放：$title", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, if (title.isBlank()) qstr(R.string.qk_03420) else "▶ 正在播放：$title", Toast.LENGTH_SHORT).show()
             }
             mp.setOnErrorListener { _, what, extra ->
                 Toast.makeText(context, "播放失败($what/$extra)", Toast.LENGTH_SHORT).show()
@@ -284,7 +286,7 @@ class AiActionHost(
     override fun openScreen(spec: UISpec) {
         val cb = onOpenScreen
         if (cb != null) cb(spec)
-        else Toast.makeText(context, "当前页面不支持二级跳转", Toast.LENGTH_SHORT).show()
+        else Toast.makeText(context, qstr(R.string.qk_03598), Toast.LENGTH_SHORT).show()
     }
 
     override fun openHtml(html: String, title: String) {

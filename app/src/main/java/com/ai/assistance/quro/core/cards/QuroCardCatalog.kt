@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.cards
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 /**
  * 卡片目录（声明式）：AI 可据此「照单点菜」生成数百款可交互卡片。
@@ -41,7 +43,7 @@ val CARD_CATALOG: List<CardTemplate> = listOf(
     // ── 数据展示 ──
     CardTemplate("chart", "data", "柱状/折线图", """{"type":"chart","chart_type":"bar","series":[{"label":"周一","value":3},{"label":"周二","value":5}]}"""),
     CardTemplate("stat", "data", "关键指标卡（含涨跌趋势）", """{"type":"stat","label":"用户","value":"1.2k","unit":"人","delta":"+5%","trend":"up"}"""),
-    CardTemplate("table", "data", "表格", """{"type":"table","headers":["名称","数量"],"rows":[["苹果","3"],["香蕉","5"]]}"""),
+    CardTemplate("table", "data", qstr(R.string.qk_01668), """{"type":"table","headers":["名称","数量"],"rows":[["苹果","3"],["香蕉","5"]]}"""),
     CardTemplate("pie", "data", "饼图（支持自定义颜色）", """{"type":"pie","segments":[{"name":"工作","value":40,"color":"#4CAF50"},{"name":"生活","value":60,"color":"#2196F3"}]}"""),
     CardTemplate("gauge", "data", "仪表盘", """{"type":"gauge","label":"CPU","value":72,"max":100,"unit":"%"}"""),
     CardTemplate("progress", "data", "进度条", """{"type":"progress","label":"下载","value":60,"max":100,"suffix":"%"}"""),
@@ -62,9 +64,9 @@ val CARD_CATALOG: List<CardTemplate> = listOf(
     CardTemplate("note", "layout", "笔记/代码块", """{"type":"note","body":"代码：println(1)","lang":"kotlin"}"""),
     CardTemplate("info", "layout", "信息文字块", """{"type":"info","body":"这是一段说明文字","align":"start"}"""),
     CardTemplate("expandable", "layout", "可折叠面板", """{"type":"expandable","body":"展开内容","expanded":false}"""),
-    CardTemplate("tabs", "layout", "标签页", """{"type":"tabs","tabs":[{"title":"概览","body":"内容"},{"title":"详情","body":"..."}],"selectedIndex":0}"""),
+    CardTemplate("tabs", "layout", qstr(R.string.qk_01670), """{"type":"tabs","tabs":[{"title":"概览","body":"内容"},{"title":"详情","body":"..."}],"selectedIndex":0}"""),
     CardTemplate("steps", "layout", "步骤条", """{"type":"steps","steps":[{"title":"下单","status":"done"},{"title":"发货","status":"active"},{"title":"收货","status":"todo"}],"current":1}"""),
-    CardTemplate("timeline", "layout", "时间线", """{"type":"timeline","events":[{"time":"09:00","title":"起床","desc":"","status":"done"},{"time":"12:00","title":"午饭","status":"active"}]}"""),
+    CardTemplate("timeline", "layout", qstr(R.string.qk_01672), """{"type":"timeline","events":[{"time":"09:00","title":"起床","desc":"","status":"done"},{"time":"12:00","title":"午饭","status":"active"}]}"""),
     CardTemplate("kanban", "layout", "看板（多列）", """{"type":"kanban","columns":[{"name":"待办","items":["任务1","任务2"]},{"name":"完成","items":["任务0"]}]}"""),
     // ── 动作/快捷 ──
     CardTemplate("actions", "action", "动作按钮组", """{"type":"actions","actions":[{"label":"复制","command":"copy:文本"},{"label":"打开","command":"open:https://example.com"}]}"""),

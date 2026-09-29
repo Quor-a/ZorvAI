@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONObject
@@ -19,7 +21,7 @@ import com.ai.assistance.quro.ui.extractOfficeText
  */
 class AiwpsReadTool : QuroTool {
     override val name = "aiwps_read"
-    override val description = "读取本地已有文档并抽取纯文本，供 AI 理解内容后改写/总结。" +
+    override val description = qstr(R.string.qk_03558) +
         "参数 {\"path\":\"文档绝对路径\",\"limit\":可选最大字符数(默认 20000)}。" +
         "支持 docx/xlsx/pptx/txt/md/csv/json/xml/代码；PDF 暂不支持进程内文本提取（请用 aiwps_edit 整篇重写）。" +
         "常用于：先 aiwps_read 读取用户文档，再 aiwps_edit 按指令重写并生成新文件。"

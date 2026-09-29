@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.model.QuroModelConfig
@@ -152,10 +154,10 @@ class QuroAssistant(
             || t.contains("execution success") || t.contains("操作成功") || t.contains("done")
         ) return false
         val strong = arrayOf(
-            "调用失败", "执行失败", "请求失败", "操作失败", "运行失败", "任务失败", "连接失败",
-            "授权失败", "初始化失败", "加载失败", "生成失败", "保存失败", "提交失败", "下载失败",
+            "调用失败", qstr(R.string.qk_01012), "请求失败", "操作失败", qstr(R.string.qk_00254), "任务失败", qstr(R.string.qk_02077),
+            "授权失败", "初始化失败", "加载失败", qstr(R.string.qk_02274), qstr(R.string.qk_00392), "提交失败", "下载失败",
             "无法执行", "执行出错", "执行异常", "发生错误", "出现错误", "报错", "未就绪",
-            "不可用", "无响应", "权限不足", "没有权限", "连接超时", "连接被拒绝", "找不到",
+            qstr(R.string.qk_01929), "无响应", "权限不足", "没有权限", "连接超时", "连接被拒绝", "找不到",
             "error:", "error_code", "[error]", "exception in thread", "traceback",
             "http 4", "http 5", "timed out", "connection refused", "command not found", "no such file",
         )
@@ -648,7 +650,7 @@ class QuroAssistant(
                                 .replace(Regex("<[^>]*>"), " ")
                                 .replace(Regex("\\s+"), " ")
                                 .trim()
-                            QuroAgentTrace.thought("llm", "思考", cleanReasoning)
+                            QuroAgentTrace.thought("llm", qstr(R.string.qk_00082), cleanReasoning)
                         }
                         // 工具执行异常不得上抛：降级为每个 call 各一条错误结果，保持 id 配对正确，
                         // 让 LLM 能看到错误并自行兜底答复。
@@ -786,7 +788,7 @@ class QuroAssistant(
                     repeatStreak++
                     // 同一失败签名只提示一次，避免每条重复失败都再灌一条 [系统提示] 污染上下文/打扰模型
                     if (warnedForSig != sig) {
-                        val failedTool = result.calls.firstOrNull()?.name ?: "工具"
+                        val failedTool = result.calls.firstOrNull()?.name ?: qstr(R.string.qk_00135)
                         store.add(
                             QuroMessage(
                                 role = "system",

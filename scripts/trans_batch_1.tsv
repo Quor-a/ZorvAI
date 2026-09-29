@@ -1,0 +1,198 @@
+﻿未选择	Not selected
+选择 ACI 应用	Select ACI App
+搜索	Search
+搜索应用...	Search apps...
+未找到匹配的 ACI 应用	No matching ACI app found
+${app.capabilities.size} 个能力	${app.capabilities.size} capabilities
+已选择: ${selectedApp.appName}	Selected: ${selectedApp.appName}
+取消选择	Clear selection
+能力 (${selectedApp.capabilities.size}):	Capabilities (${selectedApp.capabilities.size}):
+...还有 ${selectedApp.capabilities.size - 3} 个能力	...and ${selectedApp.capabilities.size - 3} more capabilities
+选择	Select
+小	Small
+标准	Standard
+大	Large
+未配置	Not configured
+当前配置的模型。	The currently configured model.
+未配置模型	Model not configured
+图片预览（AI 运行产物）	Image preview (AI output)
+未找到可打开该文档的应用，可尝试用应用内文档查看器或安装 WPS / Office	No app found to open this document. Try the in-app document viewer or install WPS / Office
+屏幕捕获授权被取消，已 fallback 到无障碍节点树	Screen capture permission denied; fell back to accessibility node tree
+工作区: $wsName ($wsPath)	Workspace: $wsName ($wsPath)
+ACI应用: $aciName (包名: $pkg)	ACI app: $aciName (package: $pkg)
+用户选择了：可视化弹窗，请立即调用visual_popup工具创建一个可视化弹窗	User selected: Visual Popup. Please call the visual_popup tool to create a visual popup now.
+用户选择了：可视化询问，请立即调用visual_question工具创建一个可视化询问	User selected: Visual Question. Please call the visual_question tool to create a visual question now.
+用户选择了：可视化小卡片，请立即在回复中用 ```quro-card 围栏输出一张自研可视化小卡片（指标/进度/结构化单块结果），纯文字回复禁止	User selected: Visual Card. Please output a self-developed visual card (metric/progress/structured block) using the ```quro-card fence. Plain text replies are forbidden.
+用户选择了：动态UI组件，请立即在回复中用 ```quro-ui 围栏输出原生可交互界面（表单/面板/工具入口等），纯文字回复禁止	User selected: Dynamic UI. Please output a native interactive UI (form/panel/tool entry) using the ```quro-ui fence. Plain text replies are forbidden.
+用户选择了：AIP文档排版，请用 ```aip 围栏（或 aip_compose 工具）输出整篇排版的文档/PPT/报告（doc/deck/mindmap），不要只回纯文本	User selected: AIP Layout. Please output a fully laid-out document/PPT/report (doc/deck/mindmap) using the ```aip fence (or aip_compose tool). Do not reply with plain text only.
+已启用技能(${enabledSkillsCount}个): ${enabledSkills.joinToString(	Enabled skills (${enabledSkillsCount}): ${enabledSkills.joinToString(
+当前配置	Current configuration
+提供商: ${cfg.provider} · ${cfg.baseUrl.takeIf { it.isNotBlank() } ?:	Provider: ${cfg.provider} · ${cfg.baseUrl.takeIf { it.isNotBlank() } ?:
+自定义	Custom
+已保存预设	Saved preset
+其他供应商（自建）	Other provider (self-hosted)
+未命名供应商	Unnamed provider
+其他供应商	Other provider
+本地离线模型	Local offline model
+$typeLabel 本地推理 · ${m.path.ifBlank {	$typeLabel local inference · ${m.path.ifBlank {
+可用模型 (API)	Available models (API)
+来自 ${cfg.baseUrl}	From ${cfg.baseUrl}
+已导出对话：$path	Conversation exported: $path
+QuroAI 对话导出，文件已保存至：$path	QuroAI conversation exported. File saved to: $path
+分享对话	Share conversation
+导出失败，请重试	Export failed, please retry
+已设置默认 ACI 应用: $appName	Default ACI app set: $appName
+已选择工作区: ${path.substringAfterLast('/')}	Selected workspace: ${path.substringAfterLast('/')}
+知道了	Got it
+（无选项）	(No options)
+AI 可用 browser_act 操控此浏览器	AI can control this browser via browser_act
+AI 可用 web_crawler 批量抓取（网页爬虫）：告诉它起始 URL 即可	AI can batch-scrape via web_crawler: just tell it the start URL
+AI 可用 python_run 跑 Python	AI can run Python via python_run
+我	Me
+展开对话	Expand conversation
+文件不存在：$docViewerPath	File does not exist: $docViewerPath
+针对上面的回答，我想追问：\n>	Follow-up on the above answer: \n>
+设备不支持语音识别	Device does not support speech recognition
+语音识别出错：$msg	Speech recognition error: $msg
+自动朗读让位：本回合 AI 已用 speak 工具控制播报顺序	Auto-read yielded: this turn the AI used the speak tool to control playback order
+已选择：可视化弹窗，发送消息时将触发	Selected: Visual Popup, triggers when sending a message
+已取消：可视化弹窗	Cancelled: Visual Popup
+已选择：可视化询问，发送消息时将触发	Selected: Visual Question, triggers when sending a message
+已取消：可视化询问	Cancelled: Visual Question
+M月d日	MMM d
+回到底部	Back to bottom
+思考	Thinking
+行动	Action
+状态	Status
+分享给	Share with
+编辑灵魂卡	Edit soul card
+追问	Ask follow-up
+分享	Share
+思考过程 · ${msg.think.steps.size}步	Thinking process · ${msg.think.steps.size} steps
+· ${msg.tools.size} 工具	· ${msg.tools.size} tools
+可视化弹窗	Visual Popup
+点击查看详情	Tap to view details
+打开弹窗	Open popup
+自定义弹窗	Custom popup
+下载	Download
+查看大图	View full image
+图片预览不可用	Image preview unavailable
+播放	Play
+内容预览	Content preview
+收起排版预览	Collapse layout preview
+全屏预览	Fullscreen preview
+文件不存在：${att.path}	File does not exist: ${att.path}
+图片加载失败	Image failed to load
+源文件不存在	Source file does not exist
+打开文件	Open file
+无法打开：${it.message}	Cannot open: ${it.message}
+调用工具 ×${tools.size}	Tool calls ×${tools.size}
+执行轨迹	Execution trace
+（实时）	(Live)
+等待 AI 行动…	Waiting for AI action…
+文档排版	Document layout
+无障碍控屏	Accessibility control
+系统权限	System permissions
+终端执行	Terminal execution
+系统能力	System capabilities
+文件工具	File tools
+网络能力	Network capabilities
+提醒与步骤	Reminders & steps
+界面控制	UI control
+图像生成	Image generation
+视频生成	Video generation
+记忆库	Memory library
+上下文总结	Context summary
+人格孵化	Persona incubation
+工具	Tools
+高危	High risk
+中危	Medium risk
+安全	Safe
+警告	Warning
+成功	Success
+参数	Parameters
+\n\n[导出]	\n\n[Export]
+重新打开	Reopen
+再次执行	Run again
+PDF 文件已保存到工作区，可在文件管理器中打开查看	PDF saved to workspace; open it in the file manager
+· ${tools.size} 工具	· ${tools.size} tools
+执行追踪	Execution tracking
+AI 正在执行工具…	AI is executing tools…
+  参数: ${formatJsonValue(t.args)}	  Parameters: ${formatJsonValue(t.args)}
+  结果: ${formatJsonValue(t.result)}	  Result: ${formatJsonValue(t.result)}
+🧩 ${enabledSkillsCount}个技能	🧩 ${enabledSkillsCount} skills
+上传文件	Upload file
+语音输入	Voice input
+和 Zorv 说点什么…	Say something to Zorv…
+停止生成	Stop generating
+选择技能	Select skill
+编辑文本	Edit text
+已选择	Selected
+可视化询问	Visual Question
+动态UI组件	Dynamic UI
+AIP文档排版	AIP Layout
+对话	Conversation
+复制全部对话	Copy entire conversation
+删除全部对话	Delete entire conversation
+生成式界面	Generative UI
+生成中	Generating
+删除对话	Delete conversation
+确定删除这条对话记录吗？删除后不可恢复。	Delete this conversation? This cannot be undone.
+清空全部对话	Clear all conversations
+确定删除全部对话记录吗？此操作不可恢复。	Delete all conversations? This cannot be undone.
+全部删除	Delete all
+视频通话	Video call
+摄像头预览 + 实时对话 + 画面识别	Camera preview + real-time conversation + scene recognition
+跟随模型默认	Follow model default
+${historyRounds} 轮	${historyRounds} rounds
+保留对话轮数	Rounds to keep
+10 轮	10 rounds
+20 轮	20 rounds
+50 轮	50 rounds
+全部（跟随模型默认）	All (follow model default)
+用户资料	User profile
+导入图片	Import image
+清除头像	Remove avatar
+你的名字	Your name
+AI 会知道你叫什么	AI will know what to call you
+个人签名（可选）	Personal signature (optional)
+「当前配置」为你在设置中配置的真实模型；「可用模型」为从接口拉取到的真实列表，点选即切换。	"Current configuration" is the real model you set in Settings; "Available models" is the real list fetched from the API. Tap to switch.
+从 API 拉取可用模型（手动）	Fetch available models from API (manual)
+拉取失败：$fetchError。请到「模型配置」填写正确的 Base URL / API Key 后重试。	Fetch failed: $fetchError. Go to "Model Configuration" and enter the correct Base URL / API Key, then retry.
+当前仅有「当前配置」的模型。需要更多可选模型，请到「模型配置」填写 Base URL 与 API Key 后拉取，或手动填入模型名。	Currently only the "Current configuration" model is available. For more options, go to "Model Configuration" to enter Base URL and API Key to fetch, or enter a model name manually.
+前往模型配置 · 设置 API Key / Base URL / 参数	Go to Model Configuration · set API Key / Base URL / parameters
+当前选中「${selected.name}」· 切换即生效	Currently selected: "${selected.name}" · applies on switch
+选择灵魂	Select soul
+每个灵魂是不同语气与专长的「对话伙伴」，切换即换一种相处方式。	Each soul is a "conversation partner" with a different tone and expertise; switching changes how you interact.
+灵魂注入 · 完整设定（头像/角色/语气/标签）	Soul injection · full profile (avatar/role/tone/tags)
+人格仅改变语气与专长，不改变事实与能力边界	Persona only changes tone and expertise, not facts or capability boundaries
+点击下方工具快速执行操作；也可导入工具 / 让 AI 自写工具，导入成功即成为可调用工具。	Tap a tool below to run it quickly; you can also import tools or let AI write tools. Once imported, they become callable tools.
+上传	Upload
+AI 浏览器	AI Browser
+终端	Terminal
+清屏	Clear screen
+技能	Skills
+定时	Schedule
+机器人	Bot
+选择上传类型（可多选）	Select upload type (multi-select)
+文件	File
+请联网搜索：$text	Please search online: $text
+搜索 / 打开	Search / Open
+AI 浏览器 · 联网搜索	AI Browser · web search
+搜索词或网址	Search term or URL
+如：今天的新闻 / https://example.com	e.g. today's news / https://example.com
+输入网址→在内置浏览器打开；输入关键词→交给 AI 联网检索（后台可用）。	Enter a URL to open in the built-in browser; enter a keyword to let AI search online (runs in background).
+语音合成、语音识别与语音设置入口。	Entry point for TTS, speech recognition, and voice settings.
+语音合成	Text-to-Speech
+语音合成 (TTS)	Text-to-Speech (TTS)
+语音识别	Speech Recognition
+语音识别 (STT)	Speech Recognition (STT)
+链接回答	Linked answer
+⚠️ 动态 UI 解析失败：${parsed.reason}	⚠️ Dynamic UI parse failed: ${parsed.reason}
+没有可复制的内容	Nothing to copy
+未指定要打开的应用	No app specified to open
+启动失败	Launch failed
+未指定要打开的界面	No screen specified to open
+没有可渲染的 HTML 内容	No HTML content to render
+HTML 预览	HTML preview
+没有可渲染的可视化内容	No visual content to render

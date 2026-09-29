@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
@@ -37,7 +40,7 @@ fun QuroAuditScreen(onClose: () -> Unit) {
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 Column(Modifier.fillMaxSize()) {
                     TopAppBar(
-                        title = { Text("CapOS 审计") },
+                        title = { Text(stringResource(R.string.qk_00756)) },
                         navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, null) } },
                         actions = {
                             IconButton(onClick = { showClear = true }) { Icon(Icons.Filled.DeleteSweep, null) }
@@ -47,7 +50,7 @@ fun QuroAuditScreen(onClose: () -> Unit) {
                         Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text("权限状态概览", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.qk_00757), style = MaterialTheme.typography.titleMedium)
                         states.values.forEach { s ->
                             Card(
                                 Modifier.fillMaxWidth(),
@@ -70,7 +73,7 @@ fun QuroAuditScreen(onClose: () -> Unit) {
                                     Column {
                                         Text("Level ${s.level.name}", fontWeight = FontWeight.Bold)
                                         Text(
-                                            s.details.ifBlank { if (s.available) "可用" else "未授权" },
+                                            s.details.ifBlank { if (s.available) qstr(R.string.qk_00758) else qstr(R.string.qk_00759) },
                                             style = MaterialTheme.typography.bodySmall,
                                         )
                                     }
@@ -79,9 +82,9 @@ fun QuroAuditScreen(onClose: () -> Unit) {
                         }
 
                         Spacer(Modifier.height(8.dp))
-                        Text("最近审计日志", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.qk_00760), style = MaterialTheme.typography.titleMedium)
                         if (logs.isEmpty()) {
-                            Text("暂无审计记录。任何权限提升都会被记录在这里。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.qk_00761), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         } else {
                             logs.reversed().forEach { log ->
                                 Text(
@@ -100,16 +103,16 @@ fun QuroAuditScreen(onClose: () -> Unit) {
     if (showClear) {
         AlertDialog(
             onDismissRequest = { showClear = false },
-            title = { Text("清空审计日志") },
-            text = { Text("确定要删除全部 ${logs.size} 条审计记录吗？此操作不可撤销。") },
+            title = { Text(stringResource(R.string.qk_00762)) },
+            text = { Text(stringResource(R.string.qk_00763, (logs.size).toString())) },
             confirmButton = {
                 TextButton(onClick = {
                     QuroPrivilegeAudit.clear(ctx)
                     logs = emptyList()
                     showClear = false
-                }) { Text("清空") }
+                }) { Text(qstr(R.string.qk_00764)) }
             },
-            dismissButton = { TextButton(onClick = { showClear = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { showClear = false }) { Text(stringResource(R.string.qk_00011)) } },
         )
     }
 }

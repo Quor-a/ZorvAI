@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONArray
@@ -84,7 +86,7 @@ class QuroTagRepository(context: Context) {
             "领域" to listOf(
                 Triple("编程", "软件开发与技术实现", "代码优先、给出可运行示例、注意边界情况"),
                 Triple("写作", "文案创作与文字表达", "注重行文节奏、修辞手法、读者感受"),
-                Triple("翻译", "跨语言转换与信达雅", "保留原文风味、符合目标语习惯"),
+                Triple(qstr(R.string.qk_03342), "跨语言转换与信达雅", "保留原文风味、符合目标语习惯"),
                 Triple("情感", "情绪疏导与关系建议", "共情优先、不给生硬建议而是引导思考"),
                 Triple("游戏", "游戏攻略与电竞讨论", "用游戏术语、了解主流游戏文化"),
                 Triple("科普", "知识普及与概念解释", "由浅入深、用类比帮助理解复杂概念"),

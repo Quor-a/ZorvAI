@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Activity
 import android.content.Context
@@ -119,10 +122,10 @@ fun QuroVideoPlayerScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = onClose) {
-                        Icon(Icons.Filled.ArrowBack, "返回", tint = Color.White)
+                        Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_00143), tint = Color.White)
                     }
                     Text(
-                        currentTitle.ifEmpty { "视频播放" },
+                        currentTitle.ifEmpty { stringResource(R.string.qk_03055) },
                         color = Color.White,
                         fontSize = 16.sp,
                         maxLines = 1,
@@ -155,7 +158,7 @@ fun QuroVideoPlayerScreen(
                                 }
                                 setOnErrorListener { _, _, _ ->
                                     isPlaying = false
-                                    errorMsg = "视频加载失败：格式不支持或文件损坏"
+                                    errorMsg = qstr(R.string.qk_03056)
                                     true
                                 }
                             }.also { videoView = it }

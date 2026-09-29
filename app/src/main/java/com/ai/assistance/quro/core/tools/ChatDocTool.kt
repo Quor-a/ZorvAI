@@ -1,4 +1,6 @@
-﻿package com.ai.assistance.quro.core.tools
+package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONObject
@@ -20,7 +22,7 @@ import org.json.JSONObject
  */
 class ChatDocTool : QuroTool {
     override val name = "chat_doc"
-    override val description = "📝 对话框文档：在对话框内直接写文档并渲染显示（不生成文件）。" +
+    override val description = qstr(R.string.qk_03473) +
         "与 aiwps_create 的区别：chat_doc 不生成文件，内容直接在对话框内渲染；aiwps_create 生成可下载的 Office 文件。" +
         "与 run_code(lang=html) 的区别：chat_doc 专注文档排版（Markdown/文本/表格），run_code 专注代码执行。" +
         "参数：{\"title\":\"标题\",\"content\":\"内容\",\"format\":\"md|html|code|text\",\"language\":\"代码语言(可选)\"}。"

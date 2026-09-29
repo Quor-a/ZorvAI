@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.kaleidobox.android.KaleidoBoxBridge
@@ -160,7 +162,7 @@ class QuroKaleidoBoxTool : QuroTool {
         val out = KaleidoBoxBridge.installZip(context, file)
         return if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true)
             "已安装插件：${out.value["id"]?.asString() ?: ""}@${out.value["version"]?.asString() ?: ""}"
-        else "安装失败：${out.asString()}"
+        else qstr(R.string.qk_02883, (out.asString()).toString())
     }
 
     private fun doInstallUrl(context: Context, args: JSONObject): String {
@@ -169,7 +171,7 @@ class QuroKaleidoBoxTool : QuroTool {
         val out = KaleidoBoxBridge.installUrl(context, url)
         return if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true)
             "已安装插件：${out.value["id"]?.asString() ?: ""}@${out.value["version"]?.asString() ?: ""}"
-        else "安装失败：${out.asString()}"
+        else qstr(R.string.qk_02883, (out.asString()).toString())
     }
 
     private fun doWrite(context: Context, args: JSONObject): String {
@@ -183,7 +185,7 @@ class QuroKaleidoBoxTool : QuroTool {
             val id = args.optString("id", "dev.kaleidobox.gen.plugin").trim()
             val nameZh = args.optString("pkgName", id).trim()
             val nameEn = args.optString("nameEn", nameZh).trim()
-            val desc = args.optString("desc", "AI 生成的 KaleidoBox 工具包").trim()
+            val desc = args.optString("desc", qstr(R.string.qk_02885)).trim()
             val units = args.optString("units", "").split(",").map { it.trim() }.filter { it.isNotBlank() }
                 .map { it to "AI 生成的单元" }
             PluginScaffold.buildManifest(id, nameZh, nameEn, desc, className, units)
@@ -217,6 +219,6 @@ class QuroKaleidoBoxTool : QuroTool {
         if (id.isEmpty()) return "uninstall 需要提供 pkgId。"
         val out = KaleidoBoxBridge.uninstall(id)
         return if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) "已卸载：$id"
-        else "卸载失败：${out.asString()}"
+        else qstr(R.string.qk_02899, (out.asString()).toString())
     }
 }

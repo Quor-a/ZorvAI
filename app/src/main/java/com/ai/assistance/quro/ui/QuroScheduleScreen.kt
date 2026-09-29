@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -36,7 +39,7 @@ import java.util.UUID
 
 /** RRULE 星期代码 → 中文。 */
 private val RRULE_DAYS = listOf("MO", "TU", "WE", "TH", "FR", "SA", "SU")
-private val RRULE_DAY_LABELS = listOf("一", "二", "三", "四", "五", "六", "日")
+private val RRULE_DAY_LABELS = listOf(qstr(R.string.qk_02370), qstr(R.string.qk_02371), qstr(R.string.qk_02372), qstr(R.string.qk_02373), qstr(R.string.qk_02374), qstr(R.string.qk_02375), qstr(R.string.qk_02376))
 
 private fun todayRruleDay(): String {
     val c = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
@@ -109,15 +112,15 @@ fun QuroScheduleScreen(onClose: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("定时任务 / 自动化", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.qk_02377), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143))
                     }
                 },
                 actions = {
                     IconButton(onClick = { editingTask = null; showEditor = true }) {
-                        Icon(Icons.Filled.Add, contentDescription = "新增")
+                        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.qk_02378))
                     }
                 }
             )
@@ -131,9 +134,9 @@ fun QuroScheduleScreen(onClose: () -> Unit) {
             ) {
                 Icon(Icons.Filled.Schedule, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
                 Spacer(Modifier.height(16.dp))
-                Text("还没有定时任务", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                Text(stringResource(R.string.qk_02379), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                 Spacer(Modifier.height(8.dp))
-                Text("点击右上角 + 添加，或让 AI 帮你创建", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                Text(stringResource(R.string.qk_02380), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
             }
         } else {
             LazyColumn(
@@ -185,7 +188,7 @@ private fun TaskCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val scheduleSummary = if (task.scheduleType == "once") "一次性 @ ${task.scheduledAt}"
+    val scheduleSummary = if (task.scheduleType == "once") stringResource(R.string.qk_02381, (task.scheduledAt).toString())
     else QuroScheduledTaskScheduler.humanRrule(task.rrule).takeIf { it.isNotBlank() } ?: task.rrule
     val nextTime = QuroScheduledTaskScheduler.nextTriggerTime(task)
     Card(
@@ -199,7 +202,7 @@ private fun TaskCard(
                     Text(task.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     if (!task.enabled) {
                         Spacer(Modifier.width(8.dp))
-                        Text("已禁用", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                        Text(stringResource(R.string.qk_00777), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -258,20 +261,20 @@ private fun TaskEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isNew) "新建定时任务" else "编辑定时任务") },
+        title = { Text(if (isNew) stringResource(R.string.qk_02383) else stringResource(R.string.qk_02384)) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("标题") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = prompt, onValueChange = { prompt = it }, label = { Text("指令 / 提醒内容（可选）") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text(stringResource(R.string.qk_01066)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = prompt, onValueChange = { prompt = it }, label = { Text(stringResource(R.string.qk_02385)) }, modifier = Modifier.fillMaxWidth(), minLines = 2)
 
-                Text("类型", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.qk_02240), style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = scheduleType == "once", onClick = { scheduleType = "once" }, label = { Text("一次性") }, modifier = Modifier.weight(1f))
-                    FilterChip(selected = scheduleType == "recurring", onClick = { scheduleType = "recurring" }, label = { Text("重复") }, modifier = Modifier.weight(1f))
+                    FilterChip(selected = scheduleType == "once", onClick = { scheduleType = "once" }, label = { Text(stringResource(R.string.qk_02386)) }, modifier = Modifier.weight(1f))
+                    FilterChip(selected = scheduleType == "recurring", onClick = { scheduleType = "recurring" }, label = { Text(stringResource(R.string.qk_02387)) }, modifier = Modifier.weight(1f))
                 }
 
                 if (scheduleType == "once") {
-                    Text("触发时间", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.qk_02388), style = MaterialTheme.typography.labelMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(
                             onClick = {
@@ -284,7 +287,7 @@ private fun TaskEditorDialog(
                                 ).show()
                             },
                             modifier = Modifier.weight(1f)
-                        ) { Text(if (onceDate.isBlank()) "选择日期" else onceDate) }
+                        ) { Text(if (onceDate.isBlank()) stringResource(R.string.qk_02389) else onceDate) }
                         Button(
                             onClick = {
                                 val c = Calendar.getInstance()
@@ -302,13 +305,13 @@ private fun TaskEditorDialog(
                                 ).show()
                             },
                             modifier = Modifier.weight(1f)
-                        ) { Text(if (onceTime.isBlank()) "选择时间" else onceTime) }
+                        ) { Text(if (onceTime.isBlank()) stringResource(R.string.qk_02390) else onceTime) }
                     }
-                    if (dateError) Text("请先选择日期和时间", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    if (dateError) Text(stringResource(R.string.qk_02391), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                 } else {
-                    Text("频率", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.qk_02392), style = MaterialTheme.typography.labelMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("DAILY" to "每天", "WEEKLY" to "每周", "MONTHLY" to "每月", "YEARLY" to "每年").forEach { (f, label) ->
+                        listOf("DAILY" to stringResource(R.string.qk_02393), "WEEKLY" to stringResource(R.string.qk_02394), "MONTHLY" to stringResource(R.string.qk_02395), "YEARLY" to stringResource(R.string.qk_02396)).forEach { (f, label) ->
                             FilterChip(selected = freq == f, onClick = { freq = f }, label = { Text(label, fontSize = 11.sp) }, modifier = Modifier.weight(1f))
                         }
                     }
@@ -316,13 +319,13 @@ private fun TaskEditorDialog(
                         OutlinedTextField(
                             value = interval.toString(),
                             onValueChange = { it.toIntOrNull()?.let { v -> if (v in 1..365) interval = v } },
-                            label = { Text("间隔") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            label = { Text(stringResource(R.string.qk_02397)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true, modifier = Modifier.width(80.dp)
                         )
-                        Text("（每 ${interval} 个周期）", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.qk_02398, (interval).toString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     if (freq == "WEEKLY") {
-                        Text("星期（可多选）", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.qk_02399), style = MaterialTheme.typography.labelMedium)
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             RRULE_DAYS.forEachIndexed { idx, code ->
                                 FilterChip(
@@ -340,7 +343,7 @@ private fun TaskEditorDialog(
                         OutlinedTextField(
                             value = monthDay.toString(),
                             onValueChange = { it.toIntOrNull()?.let { v -> if (v in 1..31) monthDay = v } },
-                            label = { Text("几号 (1-31)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            label = { Text(stringResource(R.string.qk_02400)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true, modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -348,12 +351,12 @@ private fun TaskEditorDialog(
                         OutlinedTextField(
                             value = yearMonth.toString(),
                             onValueChange = { it.toIntOrNull()?.let { v -> if (v in 1..12) yearMonth = v } },
-                            label = { Text("几月 (1-12)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            label = { Text(stringResource(R.string.qk_02401)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true, modifier = Modifier.fillMaxWidth()
                         )
                     }
                     // 结束日期（可选）：到达后停止重复
-                    Text("结束日期（可选，留空=永久重复）", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.qk_02402), style = MaterialTheme.typography.labelMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Button(
                             onClick = {
@@ -366,22 +369,22 @@ private fun TaskEditorDialog(
                                 ).show()
                             },
                             modifier = Modifier.weight(1f)
-                        ) { Text(if (endDate.isBlank()) "选择结束日期" else endDate) }
+                        ) { Text(if (endDate.isBlank()) stringResource(R.string.qk_02403) else endDate) }
                         if (endDate.isNotBlank()) {
-                            TextButton(onClick = { endDate = "" }) { Text("清除") }
+                            TextButton(onClick = { endDate = "" }) { Text(stringResource(R.string.qk_01470)) }
                         }
                     }
                 }
 
-                Text("目标会话", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.qk_02404), style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = targetMode == "specific", onClick = { targetMode = "specific" }, label = { Text("指定会话") }, modifier = Modifier.weight(1f))
-                    FilterChip(selected = targetMode == "auto", onClick = { targetMode = "auto" }, label = { Text("自动新建会话") }, modifier = Modifier.weight(1f))
+                    FilterChip(selected = targetMode == "specific", onClick = { targetMode = "specific" }, label = { Text(stringResource(R.string.qk_02405)) }, modifier = Modifier.weight(1f))
+                    FilterChip(selected = targetMode == "auto", onClick = { targetMode = "auto" }, label = { Text(stringResource(R.string.qk_02406)) }, modifier = Modifier.weight(1f))
                 }
                 if (targetMode == "specific") {
                     val convs = QuroChatViewModel.instance.conversations.value.sortedByDescending { it.updatedAt }
                     if (convs.isEmpty()) {
-                        Text("暂无历史会话，可改用「自动新建会话」", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.qk_02407), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
                         Card(Modifier.fillMaxWidth().heightIn(max = 220.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))) {
@@ -397,7 +400,7 @@ private fun TaskEditorDialog(
                                         RadioButton(selected = sel, onClick = { selectedConvId = c.id })
                                         Spacer(Modifier.width(8.dp))
                                         Column(Modifier.weight(1f)) {
-                                            Text(c.title.ifBlank { "未命名会话" }, style = MaterialTheme.typography.bodyMedium)
+                                            Text(c.title.ifBlank { stringResource(R.string.qk_02408) }, style = MaterialTheme.typography.bodyMedium)
                                             if (c.preview.isNotBlank())
                                                 Text(c.preview, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                                         }
@@ -407,9 +410,9 @@ private fun TaskEditorDialog(
                         }
                     }
                 } else if (targetMode == "auto") {
-                    Text("每次触发都会新建一个独立会话，不污染当前 / 历史对话。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.qk_02409), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
-                    Text("不指定则沿用当前 / 最近的会话。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.qk_02410), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         },
@@ -439,8 +442,8 @@ private fun TaskEditorDialog(
                     onSave(saved)
                 },
                 enabled = title.isNotBlank()
-            ) { Text("保存") }
+            ) { Text(stringResource(R.string.qk_00198)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } }
     )
 }

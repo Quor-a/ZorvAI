@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.mcp
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.tools.QuroTool
@@ -13,7 +15,7 @@ import org.json.JSONObject
 /** 列出所有可通过 ACI 调用的 MCP 工具。 */
 class McpAciListTool : QuroTool {
     override val name = "mcp_aci_list"
-    override val description = "列出所有可通过 ACI 调用的 MCP 工具（外部 MCP 服务器暴露的工具）。" +
+    override val description = qstr(R.string.qk_03544) +
             "这些工具来自已配置的 MCP 服务器，可以通过 mcp_aci_call 调用。参数为空 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
     
@@ -49,7 +51,7 @@ class McpAciListTool : QuroTool {
 /** 通过 ACI 调用 MCP 工具。 */
 class McpAciCallTool : QuroTool {
     override val name = "mcp_aci_call"
-    override val description = "通过 ACI 调用外部 MCP 服务器的工具。这是调用 MCP 工具的统一入口。" +
+    override val description = qstr(R.string.qk_03450) +
             "参数 {\"capability\":\"mcp_{工具名}\",\"args\":{...}}。" +
             "先用 mcp_aci_list 查看可用工具。" +
             "示例：{\"capability\":\"mcp_web_search\",\"args\":{\"query\":\"AI 新闻\"}}"
@@ -122,7 +124,7 @@ class McpAciCallTool : QuroTool {
 /** MCP-ACI 桥接管理工具。 */
 class McpAciBridgeTool : QuroTool {
     override val name = "mcp_aci_bridge"
-    override val description = "管理 MCP-ACI 桥接器。支持操作：refresh（刷新 MCP 服务器工具列表）、status（查看桥接状态）。" +
+    override val description = qstr(R.string.qk_03590) +
             "参数：{\"action\":\"refresh|status\"}"
     override val parametersJson = """{
         "type":"object",

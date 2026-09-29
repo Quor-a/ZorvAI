@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -43,7 +46,7 @@ fun LocalOfficeEditorScreen(
     
     var content by remember { mutableStateOf("") }
     var isModified by remember { mutableStateOf(false) }
-    var fileStatus by remember { mutableStateOf("就绪") }
+    var fileStatus by remember { mutableStateOf(qstr(R.string.qk_00334)) }
     var isSaving by remember { mutableStateOf(false) }
     var editor by remember { mutableStateOf<LocalOfficeEditor.DocumentEditor?>(null) }
     var wordCount by remember { mutableIntStateOf(0) }
@@ -53,7 +56,7 @@ fun LocalOfficeEditorScreen(
     LaunchedEffect(file) {
         if (file != null && file.exists()) {
             withContext(Dispatchers.Main) {
-                fileStatus = "正在打开: ${file.name}"
+                fileStatus = qstr(R.string.qk_00385, (file.name).toString())
             }
             withContext(Dispatchers.IO) {
                 val officeEditor = LocalOfficeEditor(ctx)
@@ -64,21 +67,21 @@ fun LocalOfficeEditorScreen(
                     withContext(Dispatchers.Main) {
                         content = fileContent
                         isModified = false
-                        fileStatus = "已打开: ${file.name}"
+                        fileStatus = qstr(R.string.qk_00386, (file.name).toString())
                         kotlinx.coroutines.delay(2000)
-                        fileStatus = "就绪"
+                        fileStatus = qstr(R.string.qk_00334)
                     }
                 } else {
                     withContext(Dispatchers.Main) {
-                        fileStatus = "无法打开: ${file.name}"
+                        fileStatus = qstr(R.string.qk_00387, (file.name).toString())
                         kotlinx.coroutines.delay(3000)
-                        fileStatus = "就绪"
+                        fileStatus = qstr(R.string.qk_00334)
                     }
                 }
             }
         } else {
             withContext(Dispatchers.Main) {
-                fileStatus = "无文件"
+                fileStatus = qstr(R.string.qk_00388)
             }
         }
     }
@@ -96,7 +99,7 @@ fun LocalOfficeEditorScreen(
         scope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) {
                 isSaving = true
-                fileStatus = "保存中..."
+                fileStatus = qstr(R.string.qk_00389)
             }
             
             val success = docEditor.writeContent(content)
@@ -105,14 +108,14 @@ fun LocalOfficeEditorScreen(
                 isSaving = false
                 if (success) {
                     isModified = false
-                    fileStatus = "已保存: ${file?.name}"
-                    Toast.makeText(ctx, "已保存到 ${file?.absolutePath}", Toast.LENGTH_SHORT).show()
+                    fileStatus = qstr(R.string.qk_00390, (file?.name).toString())
+                    Toast.makeText(ctx, qstr(R.string.qk_00391, (file?.absolutePath).toString()), Toast.LENGTH_SHORT).show()
                 } else {
-                    fileStatus = "保存失败"
-                    Toast.makeText(ctx, "保存失败", Toast.LENGTH_SHORT).show()
+                    fileStatus = qstr(R.string.qk_00392)
+                    Toast.makeText(ctx, qstr(R.string.qk_00392), Toast.LENGTH_SHORT).show()
                 }
                 kotlinx.coroutines.delay(3000)
-                fileStatus = "就绪"
+                fileStatus = qstr(R.string.qk_00334)
             }
         }
     }
@@ -131,13 +134,13 @@ fun LocalOfficeEditorScreen(
     // 获取文档类型名称
     fun getFileTypeName(extension: String): String {
         return when (extension.lowercase()) {
-            "docx" -> "Word文档"
-            "doc" -> "Word 97-2003文档"
-            "xlsx" -> "Excel表格"
-            "xls" -> "Excel 97-2003表格"
-            "pptx" -> "PowerPoint演示文稿"
-            "ppt" -> "PowerPoint 97-2003演示文稿"
-            else -> "文档"
+            "docx" -> qstr(R.string.qk_00393)
+            "doc" -> qstr(R.string.qk_00394)
+            "xlsx" -> qstr(R.string.qk_00395)
+            "xls" -> qstr(R.string.qk_00396)
+            "pptx" -> qstr(R.string.qk_00397)
+            "ppt" -> qstr(R.string.qk_00398)
+            else -> qstr(R.string.qk_00399)
         }
     }
     
@@ -147,7 +150,7 @@ fun LocalOfficeEditorScreen(
                 title = {
                     Column {
                         Text(
-                            text = file?.name ?: "Office编辑器",
+                            text = file?.name ?: stringResource(R.string.qk_00400),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1
@@ -166,8 +169,7 @@ fun LocalOfficeEditorScreen(
                             modifier = Modifier.padding(top = 2.dp)
                         ) {
                             if (isModified) {
-                                Text(
-                                    text = "●未保存",
+                                Text(text = stringResource(R.string.qk_00401),
                                     fontSize = 11.sp,
                                     color = cs.error,
                                     maxLines = 1
@@ -200,7 +202,7 @@ fun LocalOfficeEditorScreen(
                         editor?.close()
                         onClose()
                     }) {
-                        Icon(Icons.Filled.ArrowBack, "返回")
+                        Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_00143))
                     }
                 },
                 actions = {
@@ -211,14 +213,14 @@ fun LocalOfficeEditorScreen(
                     ) {
                         Icon(
                             Icons.Filled.Save,
-                            contentDescription = "保存",
+                            contentDescription = stringResource(R.string.qk_00198),
                             tint = if (isModified) cs.primary else cs.onSurface.copy(alpha = 0.5f)
                         )
                     }
                     
                     // 更多选项
                     IconButton(onClick = { /* 更多选项 */ }) {
-                        Icon(Icons.Filled.MoreVert, "更多")
+                        Icon(Icons.Filled.MoreVert, stringResource(R.string.qk_00404))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -240,13 +242,11 @@ fun LocalOfficeEditorScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "行 $lineCount · 字 $wordCount",
+                    Text(text = stringResource(R.string.qk_00405, (lineCount).toString(), (wordCount).toString()),
                         fontSize = 12.sp,
                         color = cs.onSurfaceVariant
                     )
-                    Text(
-                        text = "本地Office编辑器",
+                    Text(text = stringResource(R.string.qk_00406),
                         fontSize = 12.sp,
                         color = cs.onSurfaceVariant
                     )
@@ -283,8 +283,7 @@ fun LocalOfficeEditorScreen(
                             fontWeight = FontWeight.Medium,
                             color = cs.onSurface
                         )
-                        Text(
-                            text = "使用Apache POI本地编辑",
+                        Text(text = stringResource(R.string.qk_00407),
                             fontSize = 10.sp,
                             color = cs.onSurfaceVariant
                         )
@@ -319,8 +318,7 @@ fun LocalOfficeEditorScreen(
                             fontFamily = FontFamily.Monospace
                         ),
                         placeholder = {
-                            Text(
-                                text = "开始编辑文档内容...",
+                            Text(text = stringResource(R.string.qk_00408),
                                 fontSize = 14.sp,
                                 color = cs.onSurfaceVariant.copy(alpha = 0.5f)
                             )

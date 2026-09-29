@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -63,16 +66,16 @@ fun QuroLsposeScreen(onClose: () -> Unit) {
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回", tint = MaterialTheme.colorScheme.onSurface) }
+            IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143), tint = MaterialTheme.colorScheme.onSurface) }
             Spacer(Modifier.width(8.dp))
-            Text("LSPosed 模块", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Text(stringResource(R.string.qk_02024), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.weight(1f))
             val cs = MaterialTheme.colorScheme
             Box(
                 Modifier.clip(RoundedCornerShape(8.dp)).background(if (managers.isNotEmpty()) Accent else Card).padding(horizontal = 10.dp, vertical = 4.dp),
             ) {
                 Text(
-                    if (probing) "探测中…" else if (managers.isNotEmpty()) "已安装" else "未安装",
+                    if (probing) stringResource(R.string.qk_01688) else if (managers.isNotEmpty()) stringResource(R.string.qk_00443) else stringResource(R.string.qk_02025),
                     fontSize = 12.sp, color = if (managers.isNotEmpty()) Color.White else cs.onSurfaceVariant,
                 )
             }
@@ -80,52 +83,52 @@ fun QuroLsposeScreen(onClose: () -> Unit) {
         HorizontalDivider(color = Line)
 
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            GroupCaption("框架状态")
+            GroupCaption(stringResource(R.string.qk_02026))
             SetGroup {
                 if (probing) {
-                    SetRowClickable(Icons.Filled.Sync, "正在探测本机框架…", "读取已安装管理器列表", "", {}, scaled = { it.sp })
+                    SetRowClickable(Icons.Filled.Sync, stringResource(R.string.qk_02027), stringResource(R.string.qk_02028), "", {}, scaled = { it.sp })
                 } else if (managers.isEmpty()) {
                     SetRowClickable(
-                        Icons.Filled.Extension, "未检测到 LSPosed / Xposed",
-                        "安装 LSPosed (zygisk) 后，这里会显示管理器入口", "", {}, scaled = { it.sp },
+                        Icons.Filled.Extension, stringResource(R.string.qk_02029),
+                        stringResource(R.string.qk_02030), "", {}, scaled = { it.sp },
                     )
                 } else {
                     managers.forEachIndexed { idx, (pkg, name) ->
                         if (idx > 0) HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                         SetRowClickable(
-                            Icons.Filled.Extension, name, "已安装 · 点击打开做作用域 / 模块管理", "",
+                            Icons.Filled.Extension, name, qstr(R.string.qk_02031), "",
                             onClick = { openManager(ctx, pkg) }, scaled = { it.sp },
                         )
                     }
                 }
             }
 
-            GroupCaption("Zorv AI 作用域")
+            GroupCaption(stringResource(R.string.qk_02032))
             SetGroup {
                 SetRowClickable(
-                    Icons.Filled.CheckCircle, "把 Zorv AI 纳入作用域",
-                    "在管理器「应用」里勾选本应用，框架钩子才对其生效", "",
+                    Icons.Filled.CheckCircle, stringResource(R.string.qk_02033),
+                    stringResource(R.string.qk_02034), "",
                     onClick = {
                         if (managers.isNotEmpty()) openManager(ctx, managers.first().first)
-                        else Toast.makeText(ctx, "请先安装 LSPosed 管理器", Toast.LENGTH_SHORT).show()
+                        else Toast.makeText(ctx, qstr(R.string.qk_02035), Toast.LENGTH_SHORT).show()
                     }, scaled = { it.sp },
                 )
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 SetRowClickable(
-                    Icons.Filled.Tune, "激活 Zorv AI 模块",
-                    "在 LSPosed「模块」列表启用 Zorv AI，并在「应用」勾选本应用以纳入作用域", "",
+                    Icons.Filled.Tune, stringResource(R.string.qk_02036),
+                    stringResource(R.string.qk_02037), "",
                     onClick = {
                         if (managers.isNotEmpty()) openManager(ctx, managers.first().first)
-                        else Toast.makeText(ctx, "请先安装 LSPosed 管理器", Toast.LENGTH_SHORT).show()
+                        else Toast.makeText(ctx, qstr(R.string.qk_02035), Toast.LENGTH_SHORT).show()
                     }, scaled = { it.sp },
                 )
             }
 
-            GroupCaption("说明")
+            GroupCaption(stringResource(R.string.qk_01691))
             SetGroup {
-                InfoLine("Zorv AI 的终端 / ACI / 自动化能力走自有管线（无障碍 · Shizuku · 设备管理员 · ROOT），不依赖 Xposed 也能运行。")
-                InfoLine("Zorv AI 现已提供 opt-in LSPosed 模块：被纳入作用域即写入作用域标记；可选开启跨应用注入 / 系统重定向桥（需外部 lsposed_bridge.json 配置，默认关闭）。本页不定义任何 ai.aci.permission.*。")
-                InfoLine("权限定义（ai.aci.permission.* 等）由控制端工程维护，本应用只声明与使用，不重复定义。")
+                InfoLine(stringResource(R.string.qk_02038))
+                InfoLine(stringResource(R.string.qk_02039))
+                InfoLine(stringResource(R.string.qk_02040))
             }
         }
     }
@@ -163,7 +166,7 @@ private fun openManager(ctx: Context, pkg: String) {
             ctx.startActivity(details)
         }
     }.onFailure {
-        Toast.makeText(ctx, "无法打开 ${pkg}：${it.message}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, qstr(R.string.qk_02041, (pkg).toString(), (it.message).toString()), Toast.LENGTH_SHORT).show()
     }
 }
 

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.cms2
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONArray
@@ -26,10 +28,10 @@ enum class Cms2ModuleState(val code: String, val label: String) {
     DRAFT("draft", "草稿"),
     BUILT("built", "已构建"),
     DEPLOYED("deployed", "已部署"),
-    RUNNING("running", "运行中"),
-    STOPPED("stopped", "已停止"),
-    FAILED("failed", "失败"),
-    UNKNOWN("unknown", "未知");
+    RUNNING("running", qstr(R.string.qk_00325)),
+    STOPPED("stopped", qstr(R.string.qk_00326)),
+    FAILED("failed", qstr(R.string.qk_00139)),
+    UNKNOWN("unknown", qstr(R.string.qk_00472));
 
     companion object {
         fun fromCode(c: String?): Cms2ModuleState =

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.cms
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.policy.QuroPolicy
@@ -570,8 +572,8 @@ echo "🎉 修复完成！"
             val engineSnapshot = CmsEngineStore.snapshot.value
             val engineState = when {
                 engineSnapshot.deploying -> "部署中"
-                engineSnapshot.ready -> "就绪"
-                else -> "未安装"
+                engineSnapshot.ready -> qstr(R.string.qk_00334)
+                else -> qstr(R.string.qk_02025)
             }
             status.add("引擎: $engineState (版本: ${engineSnapshot.engineVersion.ifEmpty { "未知" }})")
             

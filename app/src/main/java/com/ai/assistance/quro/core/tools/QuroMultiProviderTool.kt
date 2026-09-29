@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.QuroToolResult
@@ -51,7 +53,7 @@ class QuroMultiProviderTool(private val context: Context) : QuroTool {
     fun getToolSpec(): QuroToolSpec {
         return QuroToolSpec(
             name = "multi_provider",
-            description = "管理多提供商配置，支持自动故障转移、健康检查和优先级排序。可以添加、更新、删除提供商配置，执行健康检查，查看故障转移状态。",
+            description = qstr(R.string.qk_03442),
             // QuroToolSpec 第三个参数是 parametersJson（JSON Schema 字符串）。项目只依赖 org.json，
             // 没有 parameters=mapOf(...) + QuroToolSpec.Parameter(...) 这套 DSL，必须手写 schema。
             parametersJson = JSONObject().apply {
@@ -75,11 +77,11 @@ class QuroMultiProviderTool(private val context: Context) : QuroTool {
                     })
                     put("base_url", JSONObject().apply {
                         put("type", "string")
-                        put("description", "API基础URL")
+                        put("description", qstr(R.string.qk_02246))
                     })
                     put("api_key", JSONObject().apply {
                         put("type", "string")
-                        put("description", "API密钥")
+                        put("description", qstr(R.string.qk_02247))
                     })
                     put("default_model", JSONObject().apply {
                         put("type", "string")

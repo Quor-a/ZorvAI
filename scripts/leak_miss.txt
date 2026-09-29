@@ -1,0 +1,1026 @@
+### 失败  (13 处)
+  com\ai\assistance\quro\core\QuroAssistant.kt:166
+  com\ai\assistance\quro\core\aidlaci\QuroAidlAciTools.kt:183
+  com\ai\assistance\quro\core\cms\CmsExecutionEngine.kt:63
+  com\ai\assistance\quro\core\linux\QuroLinuxEnv.kt:3250
+  com\ai\assistance\quro\core\tools\QuroPluginTools.kt:338
+  com\ai\assistance\quro\ui\ChatScreen.kt:4134
+  com\ai\assistance\quro\ui\LocalOfficeEditorScreen.kt:191
+  com\ai\assistance\quro\ui\QuroCloudTtsConfigScreen.kt:542
+  com\ai\assistance\quro\ui\QuroDocEditorScreen.kt:261
+  com\ai\assistance\quro\ui\QuroSttSettingsScreen.kt:1112
+  com\ai\assistance\quro\ui\QuroTtsSettingsScreen.kt:248
+  com\ai\assistance\quro\workflow\executor\WorkflowEngine.kt:284
+  com\ai\assistance\quro\workflow\executor\WorkflowEngine.kt:319
+### 标题  (12 处)
+  com\ai\assistance\quro\core\tools\EnhancedDocTool.kt:20
+  com\ai\assistance\quro\core\tools\VisualActionTool.kt:17
+  com\ai\assistance\quro\core\tools\VisualPopupTool.kt:168
+  com\ai\assistance\quro\core\tools\VisualQuestionTool.kt:158
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:117
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:138
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:422
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:571
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1325
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1364
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1378
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1395
+### 内容  (8 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:62
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:62
+  com\ai\assistance\quro\core\tools\EnhancedDocTool.kt:20
+  com\ai\assistance\quro\core\tools\WorkspaceDocTool.kt:17
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:113
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:422
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1307
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1325
+### 未知错误  (8 处)
+  com\ai\assistance\quro\core\mcp\QuroMcpClient.kt:89
+  com\ai\assistance\quro\core\mcp\QuroMcpClient.kt:89
+  com\ai\assistance\quro\core\mcp\QuroMcpClient.kt:154
+  com\ai\assistance\quro\core\mcp\QuroMcpClient.kt:154
+  com\ai\assistance\quro\core\mcp\QuroMcpClient.kt:207
+  com\ai\assistance\quro\core\mcp\QuroMcpClient.kt:207
+  com\ai\assistance\quro\core\mcp\QuroMcpClient.kt:247
+  com\ai\assistance\quro\core\mcp\QuroMcpClient.kt:247
+### 无  (7 处)
+  com\ai\assistance\quro\core\cms\QuroCmsToolboxTool.kt:238
+  com\ai\assistance\quro\core\tools\QuroPluginTools.kt:290
+  com\ai\assistance\quro\core\tools\QuroPluginTools.kt:291
+  com\ai\assistance\quro\core\tools\QuroPluginTools.kt:309
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:222
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:226
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:228
+### 新对�?  (6 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:397
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:525
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:971
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1069
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1160
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1160
+### 设置  (5 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:77
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:131
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:322
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:326
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:531
+### 视频  (5 处)
+  com\ai\assistance\quro\core\tools\CreativeStudioTool.kt:716
+  com\ai\assistance\quro\core\tools\CreativeStudioTool.kt:746
+  com\ai\assistance\quro\ui\ChatScreen.kt:6292
+  com\ai\assistance\quro\ui\QuroMediaBrowser.kt:143
+  com\ai\assistance\quro\ui\QuroMediaBrowser.kt:153
+### 提示  (5 处)
+  com\ai\assistance\quro\core\tools\QuroDynamicUiTool.kt:220
+  com\ai\assistance\quro\core\tools\QuroDynamicUiTool.kt:236
+  com\ai\assistance\quro\core\tools\VisualPopupTool.kt:171
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:121
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1398
+### 关闭  (5 处)
+  com\ai\assistance\quro\core\tools\QuroMemoryEngineeringTools.kt:221
+  com\ai\assistance\quro\core\tools\QuroMultiProviderTool.kt:265
+  com\ai\assistance\quro\core\tools\QuroMultiProviderTool.kt:321
+  com\ai\assistance\quro\core\tools\QuroScreenshotTools.kt:583
+  com\ai\assistance\quro\core\tools\QuroScreenshotTools.kt:711
+### 成功  (4 处)
+  com\ai\assistance\quro\core\QuroAssistant.kt:153
+  com\ai\assistance\quro\core\cms\CmsExecutionEngine.kt:63
+  com\ai\assistance\quro\ui\ChatScreen.kt:4136
+  com\ai\assistance\quro\ui\QuroBotSettingsScreen.kt:382
+### 文档：(.+?)（  (4 处)
+  com\ai\assistance\quro\core\tools\AiwpsEditTool.kt:69
+  com\ai\assistance\quro\ui\QuroOnlyOfficeScreen.kt:164
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:175
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:380
+### 文档内容  (4 处)
+  com\ai\assistance\quro\core\tools\ChatDocTool.kt:33
+  com\ai\assistance\quro\core\tools\EnhancedDocTool.kt:26
+  com\ai\assistance\quro\core\tools\QuroToolsKnowledge.kt:117
+  com\ai\assistance\quro\core\tools\WorkspaceDocTool.kt:22
+### 今天  (4 处)
+  com\ai\assistance\quro\core\tools\QuroDynamicUiTool.kt:256
+  com\ai\assistance\quro\core\tools\QuroDynamicUiTool.kt:256
+  com\ai\assistance\quro\ui\data\ChatData.kt:139
+  com\ai\assistance\quro\ui\data\ChatData.kt:140
+### 按钮文本  (4 处)
+  com\ai\assistance\quro\core\tools\VisualActionTool.kt:17
+  com\ai\assistance\quro\core\tools\VisualPopupTool.kt:170
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1378
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1397
+### 弹窗标题  (4 处)
+  com\ai\assistance\quro\core\tools\VisualActionTool.kt:23
+  com\ai\assistance\quro\core\tools\VisualCustomPopupTool.kt:122
+  com\ai\assistance\quro\core\tools\VisualCustomPopupTool.kt:150
+  com\ai\assistance\quro\core\tools\VisualPopupTool.kt:186
+### 文件路径  (4 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1301
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1307
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1312
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1318
+### ⛔ 部署失败  (4 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:366
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:645
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:803
+  com\ai\assistance\quro\ui\QuroSystemStatusScreen.kt:189
+### 前往应用设置  (4 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:221
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:291
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:296
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:328
+### 错误  (3 处)
+  com\ai\assistance\quro\core\QuroAssistant.kt:166
+  com\ai\assistance\quro\core\aidlaci\QuroAidlAciTools.kt:182
+  com\ai\assistance\quro\ui\ChatScreen.kt:7404
+### 异常  (3 处)
+  com\ai\assistance\quro\core\QuroAssistant.kt:166
+  com\ai\assistance\quro\ui\QuroSttSettingsScreen.kt:1112
+  com\ai\assistance\quro\ui\QuroTtsSettingsScreen.kt:248
+### 文件  (3 处)
+  com\ai\assistance\quro\core\bot\adapters\QuroFeishuBotAdapter.kt:180
+  com\ai\assistance\quro\ui\ChatScreen.kt:6292
+  com\ai\assistance\quro\ui\WorkspaceCodeScreen.kt:342
+### 输入  (3 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:37
+  com\ai\assistance\quro\core\tools\QuroDynamicUiTool.kt:217
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:359
+### 预览  (3 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:56
+  com\ai\assistance\quro\core\tools\QuroDynamicUiTool.kt:306
+  com\ai\assistance\quro\ui\ChatScreen.kt:7474
+### 打开  (3 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:72
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:74
+  com\ai\assistance\quro\kaleidobox\KaleidoActivity.kt:41
+### 终端  (3 处)
+  com\ai\assistance\quro\core\cms\CmsDeployPackage.kt:11
+  com\ai\assistance\quro\core\cms\QuroCmsExecutor.kt:26
+  com\ai\assistance\quro\core\cms\QuroCmsExecutor.kt:247
+### 微信  (3 处)
+  com\ai\assistance\quro\core\tools\QuroDynamicUiTool.kt:153
+  com\ai\assistance\quro\core\tools\QuroDynamicUiTool.kt:222
+  com\ai\assistance\quro\core\tools\QuroDynamicUiTool.kt:288
+### 取消  (3 处)
+  com\ai\assistance\quro\core\tools\QuroDynamicUiTool.kt:237
+  com\ai\assistance\quro\core\tools\QuroDynamicUiTool.kt:266
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1387
+### 本周  (3 处)
+  com\ai\assistance\quro\core\tools\QuroDynamicUiTool.kt:256
+  com\ai\assistance\quro\ui\data\ChatData.kt:141
+  com\ai\assistance\quro\ui\data\ChatData.kt:142
+### 已停止  (3 处)
+  com\ai\assistance\quro\core\tools\QuroHeartbeatTool.kt:114
+  com\ai\assistance\quro\core\tools\QuroTaskSchedulerTool.kt:149
+  com\ai\assistance\quro\core\tools\QuroVirtualDisplayTool.kt:158
+### 标签  (3 处)
+  com\ai\assistance\quro\core\tools\VisualPopupTool.kt:171
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:121
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1398
+### 已连接  (3 处)
+  com\ai\assistance\quro\ui\QuroBotSettingsScreen.kt:159
+  com\ai\assistance\quro\ui\QuroBotSettingsScreen.kt:382
+  com\ai\assistance\quro\ui\QuroBotSettingsScreen.kt:621
+### 断开  (3 处)
+  com\ai\assistance\quro\ui\QuroBotSettingsScreen.kt:160
+  com\ai\assistance\quro\ui\QuroBotSettingsScreen.kt:383
+  com\ai\assistance\quro\ui\QuroBotSettingsScreen.kt:622
+### 未连接  (3 处)
+  com\ai\assistance\quro\ui\QuroBotSettingsScreen.kt:160
+  com\ai\assistance\quro\ui\QuroBotSettingsScreen.kt:383
+  com\ai\assistance\quro\ui\QuroBotSettingsScreen.kt:622
+### [本轮已根据触发词自动激活以下技能，请按其对用户消息作答]\n$inject  (3 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:754
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:933
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:960
+### ○ 未部署  (3 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:646
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:804
+  com\ai\assistance\quro\ui\QuroSystemStatusScreen.kt:190
+### 你  (3 处)
+  com\ai\assistance\quro\ui\QuroDigitalHumanScreen.kt:523
+  com\ai\assistance\quro\ui\data\ChatData.kt:151
+  com\ai\assistance\quro\ui\data\ChatData.kt:173
+### 已生成  (3 处)
+  com\ai\assistance\quro\ui\QuroOnlyOfficeScreen.kt:158
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:171
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:376
+### 文档：  (3 处)
+  com\ai\assistance\quro\ui\QuroOnlyOfficeScreen.kt:162
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:174
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:379
+### 已安装：${out.value[  (3 处)
+  com\ai\assistance\quro\ui\QuroToolCenterScreen.kt:1521
+  com\ai\assistance\quro\ui\QuroToolCenterScreen.kt:1568
+  com\ai\assistance\quro\ui\QuroToolCenterScreen.kt:1815
+### 砚生  (3 处)
+  com\ai\assistance\quro\ui\data\ChatData.kt:25
+  com\ai\assistance\quro\ui\data\ChatData.kt:120
+  com\ai\assistance\quro\ui\data\ChatData.kt:156
+### 用户  (2 处)
+  com\ai\assistance\quro\core\bot\adapters\QuroQqBotAdapter.kt:167
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:45
+### 开关  (2 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:35
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:123
+### 评分  (2 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:40
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:54
+### 下载  (2 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:49
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:86
+### 输入框  (2 处)
+  com\ai\assistance\quro\core\terminal\QuroLanguageRunner.kt:262
+  com\ai\assistance\quro\core\tools\MiniAppTool.kt:282
+### 音频路径  (2 处)
+  com\ai\assistance\quro\core\tools\AudioRecognitionTool.kt:21
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1287
+### 可选语言  (2 处)
+  com\ai\assistance\quro\core\tools\AudioRecognitionTool.kt:21
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1287
+### 生成  (2 处)
+  com\ai\assistance\quro\core\tools\CreativeStudioTool.kt:866
+  com\ai\assistance\quro\core\tools\QuroDynamicUiTool.kt:264
+### 格式  (2 处)
+  com\ai\assistance\quro\core\tools\EnhancedDocTool.kt:20
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1325
+### 图片描述  (2 处)
+  com\ai\assistance\quro\core\tools\ImageGenTool.kt:27
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1272
+### 未启用  (2 处)
+  com\ai\assistance\quro\core\tools\QuroAdbTermTool.kt:82
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:225
+### 未加载  (2 处)
+  com\ai\assistance\quro\core\tools\QuroLocalModelTool.kt:128
+  com\ai\assistance\quro\core\tools\QuroLocalModelTool.kt:238
+### 视频描述  (2 处)
+  com\ai\assistance\quro\core\tools\VideoGenTool.kt:24
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1277
+### 视频路径  (2 处)
+  com\ai\assistance\quro\core\tools\VideoUnderstandingTool.kt:25
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1292
+### 说明文字  (2 处)
+  com\ai\assistance\quro\core\tools\VisualActionTool.kt:17
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1378
+### 问题内容  (2 处)
+  com\ai\assistance\quro\core\tools\VisualQuestionTool.kt:158
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1364
+### 选项1  (2 处)
+  com\ai\assistance\quro\core\tools\VisualQuestionTool.kt:158
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1364
+### 选项2  (2 处)
+  com\ai\assistance\quro\core\tools\VisualQuestionTool.kt:158
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1364
+### 确定  (2 处)
+  com\ai\assistance\quro\core\ui\card\spec\CardSpecParser.kt:25
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:239
+### 工具  (2 处)
+  com\ai\assistance\quro\core\websearch\WebSearchTools.kt:18
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1106
+### 清除缓存  (2 处)
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:329
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:332
+### 网页  (2 处)
+  com\ai\assistance\quro\genui\aiapp\data\RenderChannel.kt:66
+  com\ai\assistance\quro\genui\aiapp\data\RenderChannel.kt:80
+### 生成式界面  (2 处)
+  com\ai\assistance\quro\genui\aiapp\data\RenderChannel.kt:67
+  com\ai\assistance\quro\genui\aiapp\data\RenderChannel.kt:77
+### 保存中  (2 处)
+  com\ai\assistance\quro\ui\LocalOfficeEditorScreen.kt:192
+  com\ai\assistance\quro\ui\QuroDocEditorScreen.kt:262
+### 回显文本  (2 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:76
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:185
+### 要回显的内容  (2 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:77
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:186
+### 回显结果  (2 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:78
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:187
+### 你发了：${'$'}text  (2 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:87
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:201
+### 未知能力：${'$'}capability  (2 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:89
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:209
+### 我的控制台  (2 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:331
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:360
+### 自动  (2 处)
+  com\ai\assistance\quro\ui\QuroBrowserScreen.kt:100
+  com\ai\assistance\quro\ui\QuroModelConfigScreen.kt:848
+### 截图  (2 处)
+  com\ai\assistance\quro\ui\QuroBrowserScreen.kt:382
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:107
+### ⚠️ 尚未配置模型 API Key，请点右上角模型芯片 →「在模型设置中管理」填�? baseUrl / apiKey / model�?  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:793
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:990
+### �? 已停止生成�?  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:822
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1010
+### 帮我处理一�?  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1209
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1346
+### 搞个那个  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1209
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1346
+### 弄一�?  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1209
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1346
+### 弄一下那�?  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1209
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1346
+### 那个  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1214
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1351
+### 这个  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1214
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1351
+### 我猜你是想要...  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1220
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1358
+### 大概是这个意�?  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1221
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1357
+### 看起来很明确  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1222
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1359
+### 之前用户说过类似的话  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1223
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1360
+### 可选问�?  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1282
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1292
+### 创建文档  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1306
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1323
+### 新建文件  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1306
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1323
+### 播放工作区里的音�?  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1311
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1332
+### 返回�?  (2 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1378
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1397
+### ● 部署中…  (2 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:363
+  com\ai\assistance\quro\ui\QuroDevEnvScreen.kt:452
+### ● 部署中  (2 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:801
+  com\ai\assistance\quro\ui\QuroSystemStatusScreen.kt:187
+### ● 已部署  (2 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:802
+  com\ai\assistance\quro\ui\QuroSystemStatusScreen.kt:188
+### 中文（普通话）  (2 处)
+  com\ai\assistance\quro\ui\QuroSttSettingsScreen.kt:76
+  com\ai\assistance\quro\ui\QuroTtsSettingsScreen.kt:39
+### 中文（繁体）  (2 处)
+  com\ai\assistance\quro\ui\QuroSttSettingsScreen.kt:77
+  com\ai\assistance\quro\ui\QuroTtsSettingsScreen.kt:40
+### 粤语  (2 处)
+  com\ai\assistance\quro\ui\QuroSttSettingsScreen.kt:78
+  com\ai\assistance\quro\ui\QuroTtsSettingsScreen.kt:41
+### 日本語  (2 处)
+  com\ai\assistance\quro\ui\QuroSttSettingsScreen.kt:81
+  com\ai\assistance\quro\ui\QuroTtsSettingsScreen.kt:44
+### 关  (2 处)
+  com\ai\assistance\quro\ui\QuroSystemStatusScreen.kt:230
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:223
+### 未知  (2 处)
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:914
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:634
+### 开  (2 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:223
+  com\ai\assistance\quro\ui\weather\VizButton.kt:70
+### 更早  (2 处)
+  com\ai\assistance\quro\ui\data\ChatData.kt:143
+  com\ai\assistance\quro\ui\data\ChatData.kt:144
+### 我  (2 处)
+  com\ai\assistance\quro\ui\data\ChatData.kt:151
+  com\ai\assistance\quro\ui\data\ChatData.kt:173
+### 执行  (1 处)
+  com\ai\assistance\quro\core\agent\orchestration\LongHorizonOrchestrator.kt:13
+### 排版引擎已降级为 Markdown 显示  (1 处)
+  com\ai\assistance\quro\core\canvas\Aip.kt:219
+### 启用通知  (1 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:35
+### 选择  (1 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:38
+### 说明  (1 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:41
+### 播放  (1 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:59
+### 完成  (1 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:70
+### 复制  (1 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:72
+### 搜索  (1 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:74
+### 流程图  (1 处)
+  com\ai\assistance\quro\core\cards\QuroCardCatalog.kt:84
+### 重试  (1 处)
+  com\ai\assistance\quro\core\linux\QuroLinuxEnv.kt:160
+### 结束  (1 处)
+  com\ai\assistance\quro\core\terminal\QuroTerminalSentinel.kt:16
+### 模型  (1 处)
+  com\ai\assistance\quro\core\tools\CreativeStudioTool.kt:806
+### 文件名  (1 处)
+  com\ai\assistance\quro\core\tools\EnhancedDocTool.kt:20
+### 模块  (1 处)
+  com\ai\assistance\quro\core\tools\MiniAppManual.kt:120
+### 未安装  (1 处)
+  com\ai\assistance\quro\core\tools\QuroDevEnvTool.kt:205
+### 已加载  (1 处)
+  com\ai\assistance\quro\core\tools\QuroLocalModelTool.kt:238
+### (无标题)  (1 处)
+  com\ai\assistance\quro\core\tools\QuroMemoryEngineeringTools.kt:195
+### 启用  (1 处)
+  com\ai\assistance\quro\core\tools\QuroScheduledTask.kt:717
+### 已创建  (1 处)
+  com\ai\assistance\quro\core\tools\QuroVirtualDisplayTool.kt:162
+### 设备信息  (1 处)
+  com\ai\assistance\quro\core\tools\ToolCapabilityDirectory.kt:1198
+### 文件操作  (1 处)
+  com\ai\assistance\quro\core\tools\ToolCapabilityDirectory.kt:1200
+### 定时任务  (1 处)
+  com\ai\assistance\quro\core\tools\ToolCapabilityDirectory.kt:1226
+### 弹窗标题（可选）  (1 处)
+  com\ai\assistance\quro\core\tools\VisualQuestionTool.kt:172
+### 创建  (1 处)
+  com\ai\assistance\quro\core\tools\VisualStudioTool.kt:86
+### 功能开关  (1 处)
+  com\ai\assistance\quro\core\websearch\WebSearchTools.kt:18
+### 日  (1 处)
+  com\ai\assistance\quro\core\websearch\pack\CitationVerifier.kt:95
+### 文档  (1 处)
+  com\ai\assistance\quro\core\websearch\pack\ContextPacker.kt:131
+### 已完成  (1 处)
+  com\ai\assistance\quro\genui\aiapp\agent\ui\AgentThinkingUI.kt:111
+### 描述  (1 处)
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:115
+### 提交  (1 处)
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:181
+### 团子  (1 处)
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:218
+### 操作  (1 处)
+  com\ai\assistance\quro\genui\aiapp\brain\GenUiRules.kt:574
+### 生成失败  (1 处)
+  com\ai\assistance\quro\genui\aiapp\viewmodel\ChatViewModel.kt:983
+### 全部  (1 处)
+  com\ai\assistance\quro\genui\aiapp\viewmodel\ChatViewModel.kt:1399
+### 加到桌面  (1 处)
+  com\ai\assistance\quro\kaleidobox\KaleidoActivity.kt:45
+### 拒绝  (1 处)
+  com\ai\assistance\quro\service\QuroMainAciService.kt:141
+### 已启用技能(${enabledSkillsCount}个): ${enabledSkills.joinToString(  (1 处)
+  com\ai\assistance\quro\ui\ChatScreen.kt:1296
+### 提供商: ${cfg.provider} · ${cfg.baseUrl.takeIf { it.isNotBlank() } ?:   (1 处)
+  com\ai\assistance\quro\ui\ChatScreen.kt:1315
+### $typeLabel 本地推理 · ${m.path.ifBlank {   (1 处)
+  com\ai\assistance\quro\ui\ChatScreen.kt:1364
+### 警告  (1 处)
+  com\ai\assistance\quro\ui\ChatScreen.kt:4135
+### 图片  (1 处)
+  com\ai\assistance\quro\ui\ChatScreen.kt:6292
+### 代码  (1 处)
+  com\ai\assistance\quro\ui\ChatScreen.kt:7474
+### 应用私有文件  (1 处)
+  com\ai\assistance\quro\ui\ChatScreen.kt:8722
+### 应用数据(quro_data)  (1 处)
+  com\ai\assistance\quro\ui\ChatScreen.kt:8723
+### 导出(quro_exports)  (1 处)
+  com\ai\assistance\quro\ui\ChatScreen.kt:8724
+### 备份(quro_backups)  (1 处)
+  com\ai\assistance\quro\ui\ChatScreen.kt:8725
+### 公共下载/QuroAI_logs  (1 处)
+  com\ai\assistance\quro\ui\ChatScreen.kt:8726
+### 打开中  (1 处)
+  com\ai\assistance\quro\ui\LocalOfficeEditorScreen.kt:192
+### 内置插件${if (builtinCount > 0)   (1 处)
+  com\ai\assistance\quro\ui\PluginManagerPanel.kt:676
+### 一、基础网络与设备权限  (1 处)
+  com\ai\assistance\quro\ui\QuroAboutScreen.kt:525
+### 二、音频与媒体权限  (1 处)
+  com\ai\assistance\quro\ui\QuroAboutScreen.kt:531
+### 三、存储与文件权限  (1 处)
+  com\ai\assistance\quro\ui\QuroAboutScreen.kt:535
+### 四、电话与短信权限  (1 处)
+  com\ai\assistance\quro\ui\QuroAboutScreen.kt:540
+### 五、联系人与日历权限  (1 处)
+  com\ai\assistance\quro\ui\QuroAboutScreen.kt:547
+### 六、位置权限  (1 处)
+  com\ai\assistance\quro\ui\QuroAboutScreen.kt:554
+### 七、通知与显示权限  (1 处)
+  com\ai\assistance\quro\ui\QuroAboutScreen.kt:559
+### 八、系统与特殊权限  (1 处)
+  com\ai\assistance\quro\ui\QuroAboutScreen.kt:564
+### 九、无障碍与自动化权限  (1 处)
+  com\ai\assistance\quro\ui\QuroAboutScreen.kt:573
+### 十、前台服务权限  (1 处)
+  com\ai\assistance\quro\ui\QuroAboutScreen.kt:578
+### 十一、包可见性权限  (1 处)
+  com\ai\assistance\quro\ui\QuroAboutScreen.kt:585
+### 十二、健康数据权限  (1 处)
+  com\ai\assistance\quro\ui\QuroAboutScreen.kt:589
+### 十三、ACI 协议权限  (1 处)
+  com\ai\assistance\quro\ui\QuroAboutScreen.kt:593
+### 请求缺少 ACI Token，caller: ${'$'}callerPkg  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:102
+### ACI Token 格式无效，caller: ${'$'}callerPkg  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:108
+### ACI Token 验证通过，caller: ${'$'}callerPkg  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:117
+### 危险操作示例  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:190
+### 是否执行成功  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:192
+### 需要用户确认  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:206
+### 后端驱动渲染 · 免发版  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:332
+### <原action>  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:350
+### <可读结果>  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:350
+### 我的 App 控制台  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:356
+### 执行操作  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:357
+### 名字  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:358
+### 已执行  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:364
+### 你好,   (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:365
+### 未知 action  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:366
+### 已绑定  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:871
+### 未绑定  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:871
+### 最近活动 ${SimpleDateFormat(  (1 处)
+  com\ai\assistance\quro\ui\QuroAidlAciCenterScreen.kt:908
+### Token 过期  (1 处)
+  com\ai\assistance\quro\ui\QuroBotSettingsScreen.kt:704
+### token过期  (1 处)
+  com\ai\assistance\quro\ui\QuroBotSettingsScreen.kt:705
+### 过期  (1 处)
+  com\ai\assistance\quro\ui\QuroBotSettingsScreen.kt:706
+### 桌面版 (Chrome 120)  (1 处)
+  com\ai\assistance\quro\ui\QuroBrowserScreen.kt:101
+### 手机版 (Chrome 120 Mobile)  (1 处)
+  com\ai\assistance\quro\ui\QuroBrowserScreen.kt:102
+### 平板版 (Chrome 120 Tablet)  (1 处)
+  com\ai\assistance\quro\ui\QuroBrowserScreen.kt:103
+### 兼容模式 (Chrome 88 旧版)  (1 处)
+  com\ai\assistance\quro\ui\QuroBrowserScreen.kt:104
+### ⚠ 脚本错误: ${o.optString(  (1 处)
+  com\ai\assistance\quro\ui\QuroBrowserScreen.kt:181
+### 开源地址（Iceraven 浏览器）  (1 处)
+  com\ai\assistance\quro\ui\QuroBrowserScreen.kt:402
+### 链接回答·开源浏览器清单  (1 处)
+  com\ai\assistance\quro\ui\QuroBrowserScreen.kt:403
+### 链接回答·百分百开源安卓数字人  (1 处)
+  com\ai\assistance\quro\ui\QuroBrowserScreen.kt:404
+### 链接回答·3D 全离线（LLM+ASR+TTS+A2BS+渲染都在手机）  (1 处)
+  com\ai\assistance\quro\ui\QuroBrowserScreen.kt:405
+### 这是来自 ${platform.label} 用户 $userId 的机器人对话�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:478
+### 对话已清空�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:624
+### \n\n[当前屏幕 UI 结构]\n$it  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:680
+### [屏幕理解：以下为当前屏幕实时截屏（MediaProjection 媒体投影 / 屏幕捕获）]  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:737
+### [用户已选择技能�?${skill.name}」，请严格按以下指令处理其本条消息]\n### ${skill.name}\n${skill.prompt}  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:764
+### [上下文信�? - 用户当前选择的工作区/ACI/技能]\n$contextMessage  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:774
+### convId=$convId (job cancelled �? 已停止生�?)  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:821
+### ⚠️ 回复生成失败�?${(e.message ?:   (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:829
+### 生成回复异常 convId=$convId  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:847
+### 回复生成失败�?${e.message ?:   (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:848
+### ⚠️ 发生错误�?${(e.message ?:   (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:852
+### ⚠️ 语音球出错了�?${e.message ?:   (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1010
+### 执行�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1099
+### 执行完成  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1100
+### 执行失败  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1101
+### 等待执行  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1102
+### 丢弃后台延迟卡片 ownerId=$ownerId（非可见且无 liveBuffer，避免串台）  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1128
+### 空对�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1169
+### 帮我打开/查一�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1183
+### 帮我打开 / 查一�? / 调用 XX  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1186
+### 我要调用 XX 工具  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1186
+### 有点�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1187
+### 要我帮你做吗  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1188
+### 打开快手  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1198
+### 快手  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1198
+### 好的我来帮你打开  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1198
+### 电量多少  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1199
+### 有什么应�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1200
+### 你是�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1245
+### 你能做什�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1245
+### 画一�?...  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1271
+### 生成图片  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1271
+### 帮我做张海报  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1271
+### 做个视频  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1276
+### 生成视频  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1276
+### 帮我剪个视频  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1276
+### 图片路径  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1282
+### 预览这个文件  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1300
+### 渲染一�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1300
+### 看看这个  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1300
+### 可选标�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1301
+### 写个HTML  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1306
+### 播放视频  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1311
+### 打开这个文档  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1317
+### 查看PDF  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1317
+### 写个XX  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1323
+### 帮我写个网页  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1329
+### 看看 index.html  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1330
+### 修改这个文件  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1331
+### 打开这个PDF  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1333
+### 创建一个Word文档  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1334
+### 写个JSON配置  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1335
+### 选项3  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1364
+### 帮我写篇文章  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1368
+### 你希望文章是正式风格还是轻松风格？主题是什么？  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1368
+### 删除这个文件  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1369
+### 确定要删除文�? XXX 吗？此操作不可恢�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1369
+### 发条消息  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1370
+### 发给谁？内容是什么？  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1370
+### 打开应用  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1371
+### 打开哪个应用�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1371
+### 帮我查一�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1372
+### 查什么内容？从哪里查�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1372
+### 设置一�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1373
+### 设置什么？具体参数是什么？  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1373
+### 运行一�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1374
+### 运行什么？在哪里运行？  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1374
+### 编辑  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1386
+### 删除  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1386
+### 安装  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1387
+### 内容(Markdown/HTML/纯文�?)  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1396
+### 图片URL(可�?)  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1399
+### 点击的按钮�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1408
+### 输入的�?  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:1408
+### 当前用户的名字是�?${userName}」。在合适的场合可以直接用这个名字称呼用户，但不要每句话都刻意叫名字。\n  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:2031
+### （ACI 尚未就绪�?${e.message}）\n  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:2631
+### - 路径规则：path �?**相对工作区根目录**的路径（�? MyApp/src/Main.java），不要带盘�?/绝对路径、不�? .. 逃逸；写完后告诉用户文件在「工具箱-工作区」里，绝对路径是 $wsRoot/相对路径。\n  (1 处)
+  com\ai\assistance\quro\ui\QuroChatViewModel.kt:2649
+### 复刻：$cn${if (cv?.registeredId?.isNotBlank() == true)   (1 处)
+  com\ai\assistance\quro\ui\QuroCloudTtsConfigScreen.kt:242
+### 复刻：${cv.name}${if (cv.registeredId.isNotBlank())   (1 处)
+  com\ai\assistance\quro\ui\QuroCloudTtsConfigScreen.kt:263
+### 可选：${def.formatOptions.joinToString(  (1 处)
+  com\ai\assistance\quro\ui\QuroCloudTtsConfigScreen.kt:293
+### 自定义音色（${if (def.id ==   (1 处)
+  com\ai\assistance\quro\ui\QuroCloudTtsConfigScreen.kt:396
+### 音频复刻  (1 处)
+  com\ai\assistance\quro\ui\QuroCloudTtsConfigScreen.kt:396
+### 复刻：${cv.cloneUri}${if (cv.registeredId.isNotBlank())   (1 处)
+  com\ai\assistance\quro\ui\QuroCloudTtsConfigScreen.kt:412
+### ● 引擎已就绪  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:364
+### ● 已部署（健康检查异常）  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:365
+### ○ 未部署引擎  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:367
+###  }} · ${es.services.size} 个共享服务  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:380
+### 共享服务：${es.services.joinToString(  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:394
+### 🖥 终端  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:625
+### 🔁 双端  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:626
+### 📱 手机  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:627
+### 权限 ${m.permissions.size} · 能力 ${m.capabilities.size}${if (m.dependencies.isNotEmpty())   (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:638
+### ● 部署中 ${deployTask?.progressPct ?: 0}%  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:643
+### ● 已部署到终端  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:644
+### 版本: ${module.version} · 作者: ${module.author.ifBlank {   (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:829
+###   需权限：${c.requiresPermissions.joinToString(  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:841
+###   约束：${conItems.joinToString(  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:851
+### 生命周期：${module.lifecycle} · 目录：${module.catalog.ifBlank {   (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:863
+### 宿主：${c.runOn.joinToString(  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:1021
+### 需权限：${c.requiresPermissions.joinToString(  (1 处)
+  com\ai\assistance\quro\ui\QuroCmsScreen.kt:1023
+### 统计卡  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:50
+### 进度卡  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:51
+### 列表卡  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:52
+### 饼图  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:53
+### 表格  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:55
+### 名称  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:55
+### 提醒  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:56
+### 标签页  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:57
+### 概览  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:57
+### 详情  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:57
+### 步骤  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:58
+### 时间线  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:59
+### 待办卡  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:63
+### 笔记卡  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:64
+### 动作卡  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:65
+### 打开终端  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:65
+### Mermaid 流程图  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:69
+### Web 应用 MiniApp  (1 处)
+  com\ai\assistance\quro\ui\QuroComponentGalleryScreen.kt:70
+### ● 已安装  (1 处)
+  com\ai\assistance\quro\ui\QuroDevEnvScreen.kt:453
+### ○ 未安装  (1 处)
+  com\ai\assistance\quro\ui\QuroDevEnvScreen.kt:454
+### 聆听中  (1 处)
+  com\ai\assistance\quro\ui\QuroDigitalHumanScreen.kt:374
+### 识别中  (1 处)
+  com\ai\assistance\quro\ui\QuroDigitalHumanScreen.kt:375
+### 思考中  (1 处)
+  com\ai\assistance\quro\ui\QuroDigitalHumanScreen.kt:376
+### 回复中  (1 处)
+  com\ai\assistance\quro\ui\QuroDigitalHumanScreen.kt:377
+### 出错了  (1 处)
+  com\ai\assistance\quro\ui\QuroDigitalHumanScreen.kt:378
+### 待命中  (1 处)
+  com\ai\assistance\quro\ui\QuroDigitalHumanScreen.kt:379
+### 已载入：${dh.customModelPath.substringAfterLast(  (1 处)
+  com\ai\assistance\quro\ui\QuroDigitalHumanScreen.kt:422
+### 数字人  (1 处)
+  com\ai\assistance\quro\ui\QuroDigitalHumanScreen.kt:534
+### WebView 创建；modelFile=${modelFile?.absolutePath ?:   (1 处)
+  com\ai\assistance\quro\ui\QuroDigitalHumanScreen.kt:646
+### 创建中  (1 处)
+  com\ai\assistance\quro\ui\QuroDocEditorScreen.kt:262
+### 读取失败: ${it.message}  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:123
+### 导出示例文件  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:216
+### 请求媒体权限  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:217
+### 打开 / 安装 Health Connect  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:236
+### 管理 Health Connect  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:237
+### 探测中…  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:238
+### 授权健康数据  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:239
+### 测试提醒（5 秒后）  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:260
+### 开启精确闹钟  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:264
+### 请求健身与运动权限  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:292
+### 前往默认助理设置  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:323
+### 设为默认数字助理  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:324
+### 不可用  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:417
+### 探测中  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:418
+### 已授权  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:419
+### 需授权  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:420
+### 去设置  (1 处)
+  com\ai\assistance\quro\ui\QuroFeaturePermissionScreen.kt:421
+### ✅ 镜像可达（约 ${ms ?:   (1 处)
+  com\ai\assistance\quro\ui\QuroGitHubScreen.kt:204
+### } ms），可登录  (1 处)
+  com\ai\assistance\quro\ui\QuroGitHubScreen.kt:204
+### 需要读取${if (kind ==   (1 处)
+  com\ai\assistance\quro\ui\QuroMediaBrowser.kt:143
+### 没有找到${if (kind ==   (1 处)
+  com\ai\assistance\quro\ui\QuroMediaBrowser.kt:153
+### 模型路径：${cfg.localModelPath.ifBlank {   (1 处)
+  com\ai\assistance\quro\ui\QuroModelConfigScreen.kt:188
+### 模型：${ep.model.ifBlank {   (1 处)
+  com\ai\assistance\quro\ui\QuroModelConfigScreen.kt:502
+### 地址：${ep.baseUrl.ifBlank {   (1 处)
+  com\ai\assistance\quro\ui\QuroModelConfigScreen.kt:503
+### 可用模型：${if (m.modelNames.isEmpty())   (1 处)
+  com\ai\assistance\quro\ui\QuroModelConfigScreen.kt:745
+### 拉取失败  (1 处)
+  com\ai\assistance\quro\ui\QuroModelConfigViewModel.kt:85
+### 未找到可下载的${if (type ==   (1 处)
+  com\ai\assistance\quro\ui\QuroModelHubScreen.kt:168
+### }模型，换个关键词试试  (1 处)
+  com\ai\assistance\quro\ui\QuroModelHubScreen.kt:168
+### 全局动作(最近任务)：${if (ok)   (1 处)
+  com\ai\assistance\quro\ui\QuroPermissionScreen.kt:294
+### 孵化诊断双写失败: ${it.message}  (1 处)
+  com\ai\assistance\quro\ui\QuroPersonaViewModel.kt:240
+### 孵化超时(${INCUBATE_TIMEOUT_MS}ms)，疑似 LLM 调用卡死，已中止该卡孵化  (1 处)
+  com\ai\assistance\quro\ui\QuroPersonaViewModel.kt:276
+### 下次: ${SimpleDateFormat(  (1 处)
+  com\ai\assistance\quro\ui\QuroScheduleScreen.kt:216
+### 城市名  (1 处)
+  com\ai\assistance\quro\ui\QuroSkillsScreen.kt:63
+### ，⚠️ 失败(疑似篡改) ${r.failed}：${r.failedNames.joinToString(  (1 处)
+  com\ai\assistance\quro\ui\QuroSkillsScreen.kt:172
+### ${skills.count { it.enabled }} 启用 / ${skills.size} 共  (1 处)
+  com\ai\assistance\quro\ui\QuroSkillsScreen.kt:180
+### 签名已校验  (1 处)
+  com\ai\assistance\quro\ui\QuroSkillsScreen.kt:346
+### 签名失败·疑似篡改  (1 处)
+  com\ai\assistance\quro\ui\QuroSkillsScreen.kt:347
+### 未签名  (1 处)
+  com\ai\assistance\quro\ui\QuroSkillsScreen.kt:348
+### AI 模型（Phase1 回退原生识别）  (1 处)
+  com\ai\assistance\quro\ui\QuroSttSettingsScreen.kt:371
+### 本地识别（原生 SpeechRecognizer）  (1 处)
+  com\ai\assistance\quro\ui\QuroSttSettingsScreen.kt:372
+### 未识别到文字  (1 处)
+  com\ai\assistance\quro\ui\QuroSttSettingsScreen.kt:524
+### 心跳总开关：${if (heartbeatOn)   (1 处)
+  com\ai\assistance\quro\ui\QuroSystemStatusScreen.kt:230
+### 最近孵化：$ago${if (inc)   (1 处)
+  com\ai\assistance\quro\ui\QuroSystemStatusScreen.kt:245
+### ${min / 1440} 天前 (${SimpleDateFormat(  (1 处)
+  com\ai\assistance\quro\ui\QuroSystemStatusScreen.kt:306
+### 空白  (1 处)
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:142
+### • 列表  (1 处)
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:279
+### ━━ 分割  (1 处)
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:308
+### 确定删除「${deleteTarget!!.name}」${if (deleteTarget!!.isDirectory)   (1 处)
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:848
+### }？此操作不可恢复。  (1 处)
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:848
+### 类型：${if (f.isDirectory)   (1 处)
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:914
+### 修改时间：${java.text.SimpleDateFormat(  (1 处)
+  com\ai\assistance\quro\ui\QuroToolboxScreen.kt:917
+### 数据库：${if (chosen.isBlank())   (1 处)
+  com\ai\assistance\quro\ui\QuroToolCenterScreen.kt:267
+### 发行版：${distro?.displayName ?:   (1 处)
+  com\ai\assistance\quro\ui\QuroToolCenterScreen.kt:1106
+### 包管理器：${pm?.let {   (1 处)
+  com\ai\assistance\quro\ui\QuroToolCenterScreen.kt:1110
+### 已安装的 ${packages.size} 个工具包都不带标签「${KaleidoCatalog.TagLabels.zhOf(tagFilter ?:   (1 处)
+  com\ai\assistance\quro\ui\QuroToolCenterScreen.kt:1717
+### )}」，点上方「全部」清除筛选。  (1 处)
+  com\ai\assistance\quro\ui\QuroToolCenterScreen.kt:1717
+### 已编译并安装：${out.value[  (1 处)
+  com\ai\assistance\quro\ui\QuroToolCenterScreen.kt:1861
+### LaunchedEffect ensure 回调: ok=$ok, voices=${runCatching { QuroTtsHolder.getVoices().size }.getOrDefault(0)}  (1 处)
+  com\ai\assistance\quro\ui\QuroTtsSettingsScreen.kt:98
+### 语速：${  (1 处)
+  com\ai\assistance\quro\ui\QuroTtsSettingsScreen.kt:215
+### 音高：${  (1 处)
+  com\ai\assistance\quro\ui\QuroTtsSettingsScreen.kt:222
+### 锁屏  (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:108
+### 回桌面  (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:109
+### 多任务  (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:110
+### 音量+  (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:111
+### 音量-  (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:112
+### 重启  (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:113
+### 提权通道: ${if (hasPriv)   (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:222
+### USB 调试: ${when (usbOn) { null ->   (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:223
+### USB 数据线: ${usbCable ?:   (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:224
+###  (未监听)  (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:225
+### 连接命令: ${if (tcpPort > 0 && ip != null)   (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:227
+### 已连接客户端: ${clients.joinToString(  (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:228
+### 已开启  (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:635
+### 未开启  (1 处)
+  com\ai\assistance\quro\ui\QuroUsbDebugScreen.kt:636
+### 当前播放服务商：$providerLabel。${if (isMimo)   (1 处)
+  com\ai\assistance\quro\ui\QuroVoiceSettingsScreen.kt:266
+### 已启用 ${skills.count { it.enabled }} / ${skills.size} 个技能  (1 处)
+  com\ai\assistance\quro\ui\SkillSelector.kt:72
+### 可视化弹窗  (1 处)
+  com\ai\assistance\quro\ui\VisualConfigDialogs.kt:18
+### 可视化询问  (1 处)
+  com\ai\assistance\quro\ui\VisualConfigDialogs.kt:102
+### 删除${if (target.isDirectory)   (1 处)
+  com\ai\assistance\quro\ui\WorkspaceCodeScreen.kt:342
+### 确定删除「${target.name}」吗？${if (target.isDirectory)   (1 处)
+  com\ai\assistance\quro\ui\WorkspaceCodeScreen.kt:343
+### }此操作不可撤销。  (1 处)
+  com\ai\assistance\quro\ui\WorkspaceCodeScreen.kt:343
+### 厉锋  (1 处)
+  com\ai\assistance\quro\ui\data\ChatData.kt:125
+### 阿木  (1 处)
+  com\ai\assistance\quro\ui\data\ChatData.kt:130
+### 会议纪要行动清单  (1 处)
+  com\ai\assistance\quro\ui\data\ChatData.kt:139
+### 竞品首页改版思路  (1 处)
+  com\ai\assistance\quro\ui\data\ChatData.kt:140
+### 小红书文案三版  (1 处)
+  com\ai\assistance\quro\ui\data\ChatData.kt:141
+### 读书笔记 ·《安静》  (1 处)
+  com\ai\assistance\quro\ui\data\ChatData.kt:142
+### 京都行程规划  (1 处)
+  com\ai\assistance\quro\ui\data\ChatData.kt:143
+### SQL 慢查询排查  (1 处)
+  com\ai\assistance\quro\ui\data\ChatData.kt:144
+### 好，草拟一下，语气正式一点。  (1 处)
+  com\ai\assistance\quro\ui\data\ChatData.kt:174

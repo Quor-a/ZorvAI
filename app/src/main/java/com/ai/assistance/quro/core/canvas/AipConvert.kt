@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.canvas
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import com.ai.assistance.quro.core.canvas.Aip.Block
 import com.ai.assistance.quro.core.canvas.Aip.Envelope
@@ -61,14 +63,14 @@ object AipConvert {
             when (b) {
                 is Block.Heading -> newSlide(if (b.level <= 1) "section" else "titleBody", b.text)
                 is Block.Section -> newSlide(if (b.level <= 1) "section" else "titleBody", b.title)
-                is Block.Paragraph -> { if (cur == null) newSlide("titleBody", env.title.ifBlank { "内容" }); (cur!!.bullets as ArrayList<String>).add(b.text) }
+                is Block.Paragraph -> { if (cur == null) newSlide("titleBody", env.title.ifBlank { qstr(R.string.qk_01059) }); (cur!!.bullets as ArrayList<String>).add(b.text) }
                 is Block.ListBlock -> { if (cur == null) newSlide("titleBody", env.title.ifBlank { "要点" }); (cur!!.bullets as ArrayList<String>).addAll(b.items) }
                 is Block.Chart -> { flush(); slides.add(Block.Slide(nid(), "chart", b.title.ifBlank { "图表" }, "", emptyList(), emptyList(), emptyList(), b, null, "", "", "", "")) }
-                is Block.Table -> { flush(); slides.add(Block.Slide(nid(), "table", "表格", "", emptyList(), emptyList(), emptyList(), null, b, "", "", "", "")) }
+                is Block.Table -> { flush(); slides.add(Block.Slide(nid(), "table", qstr(R.string.qk_01668), "", emptyList(), emptyList(), emptyList(), null, b, "", "", "", "")) }
                 is Block.Quote -> { flush(); slides.add(Block.Slide(nid(), "quote", "", "", emptyList(), emptyList(), emptyList(), null, null, "", b.text, b.cite, "")) }
-                is Block.Callout -> { flush(); slides.add(Block.Slide(nid(), "titleBody", b.title.ifBlank { "提示" }, "", arrayListOf(b.text), emptyList(), emptyList(), null, null, "", "", "", "")) }
-                is Block.Steps -> { newSlide("titleBody", "步骤"); (cur!!.bullets as ArrayList<String>).addAll(b.items) }
-                is Block.Timeline -> { newSlide("titleBody", "时间线"); (cur!!.bullets as ArrayList<String>).addAll(b.items.map { "${it.time} · ${it.title}" }) }
+                is Block.Callout -> { flush(); slides.add(Block.Slide(nid(), "titleBody", b.title.ifBlank { qstr(R.string.qk_01096) }, "", arrayListOf(b.text), emptyList(), emptyList(), null, null, "", "", "", "")) }
+                is Block.Steps -> { newSlide("titleBody", qstr(R.string.qk_01671)); (cur!!.bullets as ArrayList<String>).addAll(b.items) }
+                is Block.Timeline -> { newSlide("titleBody", qstr(R.string.qk_01672)); (cur!!.bullets as ArrayList<String>).addAll(b.items.map { "${it.time} · ${it.title}" }) }
                 is Block.Columns -> {
                     flush()
                     val cols = b.children.map { col -> "" to col.joinToString("\n") { blkText(it) } }
@@ -76,11 +78,11 @@ object AipConvert {
                 }
                 is Block.Image -> { if (cur == null) newSlide("titleBody", b.caption.ifBlank { "插图" }); (cur!!.bullets as ArrayList<String>).add(b.caption.ifBlank { "（图 ${b.ref}）" }) }
                 is Block.Code -> { flush(); slides.add(Block.Slide(nid(), "titleBody", "代码 · ${b.lang.ifBlank { "snippet" }}", "", b.code.lines().take(14), emptyList(), emptyList(), null, null, "", "", "", b.code)) }
-                is Block.Mindmap -> { newSlide("titleBody", "导图"); (cur!!.bullets as ArrayList<String>).add(flattenMindmap(b.root, 2)) }
+                is Block.Mindmap -> { newSlide("titleBody", qstr(R.string.qk_03203)); (cur!!.bullets as ArrayList<String>).add(flattenMindmap(b.root, 2)) }
                 is Block.Divider -> flush()
                 is Block.Slide -> {} // doc 里不应出现；防御性忽略（toDeck 入口已排除 deck）
-                is Block.Html -> { flush(); slides.add(Block.Slide(nid(), "titleBody", "网页", "", emptyList(), emptyList(), emptyList(), null, null, "", "", "", b.html)) }
-                is Block.Fallback -> { if (cur == null) newSlide("titleBody", env.title.ifBlank { "内容" }); (cur!!.bullets as ArrayList<String>).add(b.text.take(200)) }
+                is Block.Html -> { flush(); slides.add(Block.Slide(nid(), "titleBody", qstr(R.string.qk_02288), "", emptyList(), emptyList(), emptyList(), null, null, "", "", "", b.html)) }
+                is Block.Fallback -> { if (cur == null) newSlide("titleBody", env.title.ifBlank { qstr(R.string.qk_01059) }); (cur!!.bullets as ArrayList<String>).add(b.text.take(200)) }
             }
         }
         flush()
@@ -141,7 +143,7 @@ object AipConvert {
                 // 按标题层级建树（1~3 级），正文挂当前最深标题下
                 val stack = ArrayDeque<Block.Mindmap.Node>()
                 fun current(): Block.Mindmap.Node =
-                    stack.lastOrNull() ?: Block.Mindmap.Node(nid(), "内容", "default", ArrayList()).also { roots.add(it); stack.addLast(it) }
+                    stack.lastOrNull() ?: Block.Mindmap.Node(nid(), qstr(R.string.qk_01059), "default", ArrayList()).also { roots.add(it); stack.addLast(it) }
                 fun addLeaf(text: String) {
                     if (text.isBlank()) return
                     val node = current()
@@ -174,7 +176,7 @@ object AipConvert {
                 }
             }
         }
-        val root = Block.Mindmap.Node("nroot", env.title.ifBlank { "导图" }, "accent", roots)
+        val root = Block.Mindmap.Node("nroot", env.title.ifBlank { qstr(R.string.qk_03203) }, "accent", roots)
         return env.copy(kind = "mindmap", blocks = listOf(Block.Mindmap("mm0", "right", root)))
     }
 
@@ -183,7 +185,7 @@ object AipConvert {
     /** docx / md 导出：信封 → Markdown 全文。 */
     fun toMarkdown(env: Envelope): String {
         val sb = StringBuilder()
-        sb.append("# ").append(env.title.ifBlank { if (env.kind == "deck") "演示文稿" else "文档" }).append("\n\n")
+        sb.append("# ").append(env.title.ifBlank { if (env.kind == "deck") "演示文稿" else qstr(R.string.qk_00399) }).append("\n\n")
         if (env.subtitle.isNotBlank()) sb.append("*").append(env.subtitle).append("*\n\n")
         for (b in env.blocks) sb.append(blockToMarkdown(b)).append('\n')
         return sb.toString().trimEnd() + "\n"
@@ -252,7 +254,7 @@ object AipConvert {
 
     /** 导出文件名（净化标题）。 */
     fun exportFileStem(env: Envelope): String =
-        env.title.ifBlank { if (env.kind == "deck") "幻灯片" else if (env.kind == "mindmap") "导图" else "文档" }
+        env.title.ifBlank { if (env.kind == "deck") "幻灯片" else if (env.kind == "mindmap") qstr(R.string.qk_03203) else qstr(R.string.qk_00399) }
             .replace(Regex("[\\\\/:*?\"<>|\\s]+"), "_").take(40).ifBlank { "aip_export" }
 
     private fun blkText(b: Block): String = when (b) {

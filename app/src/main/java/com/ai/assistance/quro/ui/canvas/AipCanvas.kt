@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui.canvas
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -130,7 +133,7 @@ fun AipCanvas(
                         Modifier.fillMaxWidth().padding(top = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        listOf("doc" to "文档", "deck" to "幻灯", "mindmap" to "导图").forEach { (k, label) ->
+                        listOf("doc" to stringResource(R.string.qk_00399), "deck" to stringResource(R.string.qk_03202), "mindmap" to stringResource(R.string.qk_03203)).forEach { (k, label) ->
                             FilterChip(
                                 selected = kind == k,
                                 onClick = { kindOverride = k },
@@ -144,29 +147,29 @@ fun AipCanvas(
                             val slides = env.blocks.filterIsInstance<Aip.Block.Slide>()
                             if (slides.isNotEmpty()) {
                                 IconButton(onClick = { presenting = true }, modifier = Modifier.size(30.dp)) {
-                                    androidx.compose.material3.Icon(Icons.Filled.Slideshow, "演示模式", Modifier.size(18.dp), tint = cs.primary)
+                                    androidx.compose.material3.Icon(Icons.Filled.Slideshow, stringResource(R.string.qk_03204), Modifier.size(18.dp), tint = cs.primary)
                                 }
                             }
                         }
                         FilterChip(
                             selected = false,
                             onClick = { fullscreen = true },
-                            label = { Text("全屏", fontSize = 11.sp) },
+                            label = { Text(stringResource(R.string.qk_03205), fontSize = 11.sp) },
                             modifier = Modifier.height(28.dp),
                         )
                         Spacer(Modifier.width(4.dp))
                         IconButton(onClick = { copyAip(ctx, scope, env) }, modifier = Modifier.size(30.dp)) {
-                            androidx.compose.material3.Icon(Icons.Filled.ContentCopy, "复制", Modifier.size(18.dp), tint = cs.onSurfaceVariant)
+                            androidx.compose.material3.Icon(Icons.Filled.ContentCopy, stringResource(R.string.qk_00088), Modifier.size(18.dp), tint = cs.onSurfaceVariant)
                         }
                         Spacer(Modifier.width(4.dp))
                         Box {
                             IconButton(onClick = { exportMenu = true }, modifier = Modifier.size(30.dp)) {
-                                androidx.compose.material3.Icon(Icons.Filled.FileDownload, "导出", Modifier.size(18.dp), tint = cs.onSurfaceVariant)
+                                androidx.compose.material3.Icon(Icons.Filled.FileDownload, stringResource(R.string.qk_02491), Modifier.size(18.dp), tint = cs.onSurfaceVariant)
                             }
                             DropdownMenu(expanded = exportMenu, onDismissRequest = { exportMenu = false }) {
-                                DropdownMenuItem(text = { Text("导出 Word (.docx)") }, onClick = { exportMenu = false; exportAip(ctx, scope, env, "docx") })
-                                DropdownMenuItem(text = { Text("导出 PPT (.pptx)") }, onClick = { exportMenu = false; exportAip(ctx, scope, env, "pptx") })
-                                DropdownMenuItem(text = { Text("导出 Markdown (.md)") }, onClick = { exportMenu = false; exportAip(ctx, scope, env, "md") })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.qk_03206)) }, onClick = { exportMenu = false; exportAip(ctx, scope, env, "docx") })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.qk_03207)) }, onClick = { exportMenu = false; exportAip(ctx, scope, env, "pptx") })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.qk_03208)) }, onClick = { exportMenu = false; exportAip(ctx, scope, env, "md") })
                             }
                         }
                     }
@@ -203,8 +206,8 @@ fun AipCanvas(
                     modifier = Modifier.padding(vertical = 4.dp),
                 ) {
                     Text(
-                        if (result.degradation == Aip.Degradation.ChannelDown) "排版引擎已降级为 Markdown 显示"
-                        else "排版失败，已按纯文本显示",
+                        if (result.degradation == Aip.Degradation.ChannelDown) stringResource(R.string.qk_03209)
+                        else stringResource(R.string.qk_03210),
                         fontSize = 11.sp,
                         color = cs.onErrorContainer,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -226,7 +229,7 @@ private fun exportAip(ctx: Context, scope: CoroutineScope, env: Aip.Envelope, ty
                 put("content", content)
                 put("filename", AipConvert.exportFileStem(env))
             }.toString())
-        }.getOrElse { "导出失败：${it.message}" }
+        }.getOrElse { qstr(R.string.qk_01993, (it.message).toString()) }
         withContext(Dispatchers.Main) { Toast.makeText(ctx, r, Toast.LENGTH_LONG).show() }
     }
 }
@@ -237,8 +240,8 @@ private fun copyAip(ctx: Context, scope: CoroutineScope, env: Aip.Envelope) {
         val md = AipConvert.toMarkdown(env)
         withContext(Dispatchers.Main) {
             val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText(env.title.ifBlank { "AIP 排版内容" }, md))
-            Toast.makeText(ctx, "已复制排版内容", Toast.LENGTH_SHORT).show()
+            cm.setPrimaryClip(ClipData.newPlainText(env.title.ifBlank { qstr(R.string.qk_03211) }, md))
+            Toast.makeText(ctx, qstr(R.string.qk_03212), Toast.LENGTH_SHORT).show()
         }
     }
 }
@@ -259,7 +262,7 @@ private fun DeckPresentOverlay(slides: List<Aip.Block.Slide>, onDismiss: () -> U
                 Box(Modifier.fillMaxHeight().weight(2f).clickable { if (p < slides.lastIndex) page = p + 1 })
             }
             IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) {
-                androidx.compose.material3.Icon(Icons.Filled.Close, "退出", tint = Color.White)
+                androidx.compose.material3.Icon(Icons.Filled.Close, stringResource(R.string.qk_03213), tint = Color.White)
             }
             Text(
                 "${p + 1} / ${slides.size}",
@@ -289,13 +292,13 @@ private fun AipFullscreenSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    env.title.ifBlank { "排版预览" },
+                    env.title.ifBlank { stringResource(R.string.qk_03214) },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = onDismiss) {
-                    androidx.compose.material3.Icon(Icons.Filled.Close, "退出", tint = cs.onSurface)
+                    androidx.compose.material3.Icon(Icons.Filled.Close, stringResource(R.string.qk_03213), tint = cs.onSurface)
                 }
             }
             HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.4f))
@@ -610,7 +613,7 @@ private fun AipChart(b: Aip.Block.Chart) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(8.dp).clip(CircleShape).background(CHART_COLORS[i % CHART_COLORS.size]))
                         Spacer(Modifier.width(3.dp))
-                        Text(s.name.ifBlank { "系列${i + 1}" }, fontSize = 10.sp)
+                        Text(s.name.ifBlank { qstr(R.string.qk_03215, (i + 1).toString()) }, fontSize = 10.sp)
                     }
                 }
             }
@@ -863,7 +866,7 @@ fun SlideCard(b: Aip.Block.Slide) {
                 b.table?.let { AipTable(it) }
             }
             "summary" -> Column {
-                Text(b.title.ifBlank { "要点汇总" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(b.title.ifBlank { stringResource(R.string.qk_03216) }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 b.bullets.forEach {
                     Row(Modifier.padding(top = 4.dp)) {
                         Text("✓ ", color = accent, fontWeight = FontWeight.Bold)

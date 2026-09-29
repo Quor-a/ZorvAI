@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.miniapp
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -374,7 +376,7 @@ class KotlinModule(private val context: Context) : MiniAppBridgeModule {
                         if (title.isNotEmpty()) putExtra(Intent.EXTRA_TITLE, title)
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                    context.startActivity(Intent.createChooser(intent, title.ifEmpty { "分享" }))
+                    context.startActivity(Intent.createChooser(intent, title.ifEmpty { qstr(R.string.qk_00090) }))
                     callback(0, null, null)
                 }.onFailure { callback(-1, null, it.message) }
             }

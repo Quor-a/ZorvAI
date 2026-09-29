@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.canvas
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 /**
  * Canvas 混合路由器（PRD 3.3）：三档通道，四级决策。
@@ -29,8 +31,8 @@ object CanvasRouter {
 
     /* ---- 形态关键词（意图分类规则表，PRD 表 2-1 的场景映射） ---- */
 
-    private val DECK_WORDS = listOf("ppt", "幻灯", "汇报材料", "演示文稿", "slide", "做成演示", "deck")
-    private val MINDMAP_WORDS = listOf("思维导图", "导图", "脑图", "mindmap", "发散一下", "头脑风暴", "梳理一下结构")
+    private val DECK_WORDS = listOf("ppt", qstr(R.string.qk_03202), "汇报材料", "演示文稿", "slide", "做成演示", "deck")
+    private val MINDMAP_WORDS = listOf("思维导图", qstr(R.string.qk_03203), "脑图", "mindmap", "发散一下", "头脑风暴", "梳理一下结构")
     private val DOC_WORDS = listOf("写成文档", "写一份", "调研报告", "建设方案", "行业方案", "长文档", "word", "docx")
 
     /**

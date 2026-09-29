@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONObject
@@ -97,7 +99,7 @@ fun AuthService.resolveHeaders(): List<Pair<String, String>> {
 /** 保存 / 更新一个第三方服务授权。 */
 class AuthServiceAddTool : QuroTool {
     override val name = "auth_service_add"
-    override val description = "保存或更新一个第三方服务授权，供 http_request 用 service 参数自动带鉴权。" +
+    override val description = qstr(R.string.qk_03438) +
         "参数 {\"name\":\"服务别名\",\"type\":\"bearer|apikey|basic\",\"token\":\"凭据\",\"baseUrl\":\"可选前缀地址\",\"extra\":\"可选额外头JSON\"}。" +
         "type=bearer 时 token 为令牌；apikey 时 token 为 API Key（注入 X-API-Key 头）；basic 时 token 为 user:password。" +
         "baseUrl 用于相对 url 自动补全。凭据存于应用私有保险库，列表时脱敏。"

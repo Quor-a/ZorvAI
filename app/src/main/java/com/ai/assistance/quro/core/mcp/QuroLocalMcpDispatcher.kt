@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.mcp
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.util.Log
 import okhttp3.OkHttpClient
@@ -76,7 +78,7 @@ object QuroLocalMcpDispatcher {
             val text = java.io.File(path).readText(Charsets.UTF_8)
             if (text.length > 8000) text.take(8000) + "\n...[结果已截断]" else text
         } catch (e: Exception) {
-            "读取失败: ${e.message}"
+            qstr(R.string.qk_03169, (e.message).toString())
         }
     }
 }

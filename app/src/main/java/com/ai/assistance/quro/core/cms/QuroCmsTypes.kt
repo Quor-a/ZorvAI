@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.cms
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 /**
  * CMS v2 能力模块系统 — 类型定义。
@@ -47,7 +49,7 @@ enum class InvocationTarget(val label: String) {
     companion object {
         fun parse(s: String?): InvocationTarget = when ((s ?: "auto").trim().lowercase()) {
             "app", "frontend", "应用", "前端" -> APP
-            "terminal", "backend", "后端", "终端" -> TERMINAL
+            "terminal", "backend", "后端", qstr(R.string.qk_00216) -> TERMINAL
             else -> AUTO
         }
     }

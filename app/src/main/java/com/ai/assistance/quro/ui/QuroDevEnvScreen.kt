@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -55,25 +58,25 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
     data class EnvSection(val title: String, val items: List<Pair<String, DevEnvInfo>>)
 
     val envSections = listOf(
-        EnvSection("Python 环境", listOf(
+        EnvSection(stringResource(R.string.qk_01702), listOf(
             "python" to DevEnvInfo(Icons.Filled.Code, "Python3", "Python 3 + pip + venv", Color(0xFF3776AB)),
         )),
-        EnvSection("Node.js 环境", listOf(
-            "node" to DevEnvInfo(Icons.Filled.Javascript, "Node.js", "JavaScript 运行时 + npm", Color(0xFF339933)),
-            "pnpm" to DevEnvInfo(Icons.Filled.Apps, "PNPM + TypeScript", "快速的包管理器和 TypeScript", Color(0xFF339933)),
+        EnvSection(stringResource(R.string.qk_01703), listOf(
+            "node" to DevEnvInfo(Icons.Filled.Javascript, "Node.js", stringResource(R.string.qk_01704), Color(0xFF339933)),
+            "pnpm" to DevEnvInfo(Icons.Filled.Apps, "PNPM + TypeScript", stringResource(R.string.qk_01705), Color(0xFF339933)),
         )),
-        EnvSection("SSH 工具", listOf(
-            "ssh" to DevEnvInfo(Icons.Filled.VpnKey, "SSH 完整工具链", "SSH 客户端 + sshpass + sshd", Color(0xFF0055A5)),
+        EnvSection(stringResource(R.string.qk_01706), listOf(
+            "ssh" to DevEnvInfo(Icons.Filled.VpnKey, stringResource(R.string.qk_01707), stringResource(R.string.qk_01708), Color(0xFF0055A5)),
         )),
-        EnvSection("Java 环境", listOf(
+        EnvSection(stringResource(R.string.qk_01709), listOf(
             "java" to DevEnvInfo(Icons.Filled.Coffee, "Java", "OpenJDK 17", Color(0xFFE6794A)),
-            "gradle" to DevEnvInfo(Icons.Filled.Build, "Gradle", "构建自动化工具", Color(0xFFE6794A)),
+            "gradle" to DevEnvInfo(Icons.Filled.Build, "Gradle", stringResource(R.string.qk_01710), Color(0xFFE6794A)),
         )),
-        EnvSection("Rust 环境", listOf(
-            "rust" to DevEnvInfo(Icons.Filled.Memory, "Rust / Cargo", "Rust 工具链和 Cargo 包管理器", Color(0xFFE65100)),
+        EnvSection(stringResource(R.string.qk_01711), listOf(
+            "rust" to DevEnvInfo(Icons.Filled.Memory, "Rust / Cargo", stringResource(R.string.qk_01712), Color(0xFFE65100)),
         )),
-        EnvSection("Go 环境", listOf(
-            "go" to DevEnvInfo(Icons.Filled.SmartToy, "Go", "Go 编程语言开发环境", Color(0xFF00ADD8)),
+        EnvSection(stringResource(R.string.qk_01713), listOf(
+            "go" to DevEnvInfo(Icons.Filled.SmartToy, "Go", stringResource(R.string.qk_01714), Color(0xFF00ADD8)),
         )),
     )
 
@@ -131,15 +134,15 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
     // 简化的环境检查命令
     fun getCheckCommand(envName: String): String {
         return when (envName) {
-            "python" -> "python3 --version && pip --version || echo '未安装'"
-            "node" -> "node -v && npm -v || echo '未安装'"
-            "pnpm" -> "pnpm -v && tsc -v || echo '未安装'"
-            "ssh" -> "ssh -V && sshpass -V || echo '未安装'"
-            "java" -> "java -version 2>&1 | head -1 || echo '未安装'"
-            "gradle" -> "gradle --version | head -3 || echo '未安装'"
-            "rust" -> "rustc --version && cargo --version || echo '未安装'"
-            "go" -> "go version || echo '未安装'"
-            else -> "echo '未知环境'"
+            "python" -> qstr(R.string.qk_01715)
+            "node" -> qstr(R.string.qk_01716)
+            "pnpm" -> qstr(R.string.qk_01717)
+            "ssh" -> qstr(R.string.qk_01718)
+            "java" -> qstr(R.string.qk_01719)
+            "gradle" -> qstr(R.string.qk_01720)
+            "rust" -> qstr(R.string.qk_01721)
+            "go" -> qstr(R.string.qk_01722)
+            else -> qstr(R.string.qk_01723)
         }
     }
 
@@ -154,7 +157,7 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
             "gradle" -> "apt-get update && apt-get install -y gradle 2>&1 | tail -20"
             "rust" -> "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y 2>&1 | tail -20"
             "go" -> "apt-get update && apt-get install -y golang 2>&1 | tail -20"
-            else -> "echo '未知环境'"
+            else -> qstr(R.string.qk_01723)
         }
     }
 
@@ -169,14 +172,14 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
             "gradle" -> "apt-get remove -y gradle 2>&1 | tail -20"
             "rust" -> "apt-get remove -y rustc cargo && rm -rf /root/.cargo /root/.rustup 2>&1 | tail -20"
             "go" -> "apt-get remove -y golang && rm -rf /usr/local/go 2>&1 | tail -20"
-            else -> "echo '未知环境'"
+            else -> qstr(R.string.qk_01723)
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("开发环境", style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
+                title = { Text(stringResource(R.string.qk_01724), style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } },
             )
         },
@@ -198,16 +201,16 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                         .background(MaterialTheme.colorScheme.errorContainer)
                         .padding(16.dp)
                 ) {
-                    Text("⚠️ 终端环境未就绪", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onErrorContainer)
+                    Text(stringResource(R.string.qk_01725), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onErrorContainer)
                     Spacer(Modifier.height(4.dp))
-                    Text("请先在「终端」页面安装 Linux 环境，再部署开发环境。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                    Text(stringResource(R.string.qk_01726), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
                 }
             } else {
                 Row(Modifier.padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("终端环境已就绪 ✓", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.qk_01727), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(8.dp))
                     TextButton(onClick = { scope.launch(Dispatchers.IO) { reprobeEnvStates() } }) {
-                        Text("刷新状态", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                        Text(stringResource(R.string.qk_01728), fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
@@ -241,16 +244,16 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                                     // 确保终端会话存在
                                     val session = QuroTerminalController.createSession(ctx)
                                     withContext(Dispatchers.Main) {
-                                        Toast.makeText(ctx, "发送安装命令到终端", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(ctx, qstr(R.string.qk_01729), Toast.LENGTH_SHORT).show()
                                     }
                                     // 发送安装命令给终端
                                     QuroTerminalController.sendToShell(command)
                                     withContext(Dispatchers.Main) {
-                                        deployLogs = deployLogs + "✅ 已发送安装命令到终端: ${envName}"
+                                        deployLogs = deployLogs + qstr(R.string.qk_01730, (envName).toString())
                                     }
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
-                                        deployLogs = deployLogs + "❌ 发送命令失败: ${e.message}"
+                                        deployLogs = deployLogs + qstr(R.string.qk_01731, (e.message).toString())
                                     }
                                 }
                             }
@@ -261,15 +264,15 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                                 try {
                                     val deleteCommand = getUninstallCommand(envName)
                                     withContext(Dispatchers.Main) {
-                                        Toast.makeText(ctx, "发送删除命令到终端", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(ctx, qstr(R.string.qk_01732), Toast.LENGTH_SHORT).show()
                                     }
                                     QuroTerminalController.sendToShell(deleteCommand)
                                     withContext(Dispatchers.Main) {
-                                        deployLogs = deployLogs + "✅ 已发送删除命令: ${envName}"
+                                        deployLogs = deployLogs + qstr(R.string.qk_01733, (envName).toString())
                                     }
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
-                                        deployLogs = deployLogs + "❌ 删除命令发送失败: ${e.message}"
+                                        deployLogs = deployLogs + qstr(R.string.qk_01734, (e.message).toString())
                                     }
                                 }
                             }
@@ -294,7 +297,7 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                                 // 确保终端会话存在
                                 val session = QuroTerminalController.createSession(ctx)
                                 withContext(Dispatchers.Main) {
-                                    Toast.makeText(ctx, "发送全部安装命令到终端", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(ctx, qstr(R.string.qk_01735), Toast.LENGTH_SHORT).show()
                                 }
                                 
                                 // 发送所有安装命令给终端
@@ -303,18 +306,18 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                                         val command = getInstallCommand(envName)
                                         QuroTerminalController.sendToShell(command)
                                         withContext(Dispatchers.Main) {
-                                            deployLogs = deployLogs + "✅ 已发送安装命令: ${envName}"
+                                            deployLogs = deployLogs + qstr(R.string.qk_01736, (envName).toString())
                                         }
                                     }
                                 }
                                 
                                 withContext(Dispatchers.Main) {
-                                    Toast.makeText(ctx, "全部安装命令已发送到终端", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(ctx, qstr(R.string.qk_01737), Toast.LENGTH_LONG).show()
                                     deployProgress = ""
                                 }
                             } catch (e: Exception) {
                                 withContext(Dispatchers.Main) {
-                                    deployLogs = deployLogs + "❌ 发送命令失败: ${e.message}"
+                                    deployLogs = deployLogs + qstr(R.string.qk_01731, (e.message).toString())
                                 }
                             } finally {
                                 withContext(Dispatchers.Main) {
@@ -328,7 +331,7 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !busyAll && deploying == null,
                 ) {
-                    Text(if (busyAll) "发送中…" else "一键发送全部安装命令")
+                    Text(if (busyAll) stringResource(R.string.qk_01738) else stringResource(R.string.qk_01739))
                 }
             }
 
@@ -355,18 +358,18 @@ fun QuroDevEnvScreen(onBack: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("部署日志：", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.qk_01740), style = MaterialTheme.typography.labelLarge)
                     TextButton(
                         onClick = {
                             val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val clip = ClipData.newPlainText("部署日志", deployLogs.joinToString("\n"))
+                            val clip = ClipData.newPlainText(qstr(R.string.qk_01741), deployLogs.joinToString("\n"))
                             clipboard.setPrimaryClip(clip)
-                            Toast.makeText(ctx, "日志已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(ctx, qstr(R.string.qk_01742), Toast.LENGTH_SHORT).show()
                         }
                     ) {
-                        Icon(Icons.Filled.ContentCopy, contentDescription = "复制", modifier = Modifier.size(16.dp))
+                        Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.qk_00088), modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("复制全部")
+                        Text(stringResource(R.string.qk_01743))
                     }
                 }
                 Column(
@@ -473,9 +476,9 @@ private fun DevEnvCard(
             ) {
                 Text(
                     when {
-                        isDeploying -> "发送中…"
-                        isReady -> "重新安装"
-                        else -> "发送到终端"
+                        isDeploying -> stringResource(R.string.qk_01738)
+                        isReady -> stringResource(R.string.qk_01746)
+                        else -> stringResource(R.string.qk_01747)
                     },
                     color = if (isReady) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -488,7 +491,7 @@ private fun DevEnvCard(
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                 ) {
-                    Text("删除", color = MaterialTheme.colorScheme.onErrorContainer)
+                    Text(stringResource(R.string.qk_00091), color = MaterialTheme.colorScheme.onErrorContainer)
                 }
             }
 
@@ -496,7 +499,7 @@ private fun DevEnvCard(
             IconButton(onClick = { showCommandBox = !showCommandBox }) {
                 Icon(
                     if (showCommandBox) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = "查看命令",
+                    contentDescription = stringResource(R.string.qk_01748),
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
@@ -512,8 +515,7 @@ private fun DevEnvCard(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(8.dp)
             ) {
-                Text(
-                    "安装命令",
+                Text(stringResource(R.string.qk_01749),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -527,8 +529,7 @@ private fun DevEnvCard(
                         .verticalScroll(rememberScrollState())
                 )
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "检查命令",
+                Text(stringResource(R.string.qk_01750),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

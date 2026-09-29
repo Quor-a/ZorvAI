@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.adb.QuroAdbDebug
@@ -12,7 +14,7 @@ import org.json.JSONObject
  */
 class QuroUiTreeTool : QuroTool {
     override val name = "ui_tree"
-    override val description = "获取当前界面 UI 控件树（UI Tree），用于精准自动化。" +
+    override val description = qstr(R.string.qk_03563) +
         "参数 {\"action\":\"dump|tap_text|tap_id|tap_desc|tap_bounds\",\"text\":..,\"id\":..,\"desc\":..,\"bounds\":\"x1,y1,x2,y2\",\"display\":可选虚拟显示器编号}。" +
         "dump 返回 JSON 数组（每节点含 class/text/id/desc/bounds/clickable）；tap_* 自动定位并调用无障碍点击。需已授权 ADB/ROOT 或 Shizuku 通道。"
     override val parametersJson = """{

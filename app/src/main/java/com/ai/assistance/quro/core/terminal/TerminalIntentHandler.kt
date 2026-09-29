@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.terminal
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Activity
 import android.content.ComponentName
@@ -150,7 +152,7 @@ class TerminalIntentHandler(private val context: Context) {
         val execResult = try {
             QuroTerminalController.runCommand(command, timeout * 1000, context)
         } catch (e: Exception) {
-            ShellResult(output = "", exitCode = -1, error = e.message ?: "未知错误")
+            ShellResult(output = "", exitCode = -1, error = e.message ?: qstr(R.string.qk_00503))
         }
 
         result.putInt("result_code", if (execResult.exitCode == 0) RESULT_SUCCESS else RESULT_ERROR)

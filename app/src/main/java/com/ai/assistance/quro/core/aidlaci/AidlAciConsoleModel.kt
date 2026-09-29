@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.aidlaci
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.util.Log
 import org.json.JSONArray
@@ -56,14 +58,14 @@ object AciConsoleModel {
             components += when (o.optString("type", "")) {
                 "heading" -> AciComponent.Heading(o.optString("text", ""))
                 "text" -> AciComponent.Text(o.optString("text", ""))
-                "button" -> AciComponent.Button(o.optString("action", ""), o.optString("label", "按钮"))
+                "button" -> AciComponent.Button(o.optString("action", ""), o.optString("label", qstr(R.string.qk_03650)))
                 "card" -> AciComponent.Card(o.optString("title", ""), o.optString("body", ""))
                 "divider" -> AciComponent.Divider
                 "spacer" -> AciComponent.Spacer
                 "listitem" -> AciComponent.ListItem(o.optString("text", ""))
                 "input" -> AciComponent.Input(
                     key = o.optString("key", ""),
-                    label = o.optString("label", "输入"),
+                    label = o.optString("label", qstr(R.string.qk_00694)),
                     placeholder = o.optString("placeholder", ""),
                     value = o.optString("value", ""),
                     action = o.optString("action", "")

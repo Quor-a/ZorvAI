@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.service
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -169,7 +171,7 @@ class QuroTerminalKeepAliveService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val chan = NotificationChannel(
                 CHANNEL_ID, "Zorv AI 终端", NotificationManager.IMPORTANCE_LOW,
-            ).apply { description = "终端会话前台保活服务" }
+            ).apply { description = qstr(R.string.qk_03488) }
             nm.createNotificationChannel(chan)
         }
         val openIntent = Intent(this, QuroMainActivity::class.java)

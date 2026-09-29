@@ -1,0 +1,56 @@
+viewport=1080x2400 rpxRatio=1.44
+
+===== A 卡片内 space-between 行 + 右侧列 =====
+root w=1080 h=2400 x=0 lines=0
+  view[page] w=1080 h=509 x=0 lines=0
+    view[card] w=1010 h=440 x=0 lines=0
+      view[today-row] w=930 h=237 x=0 lines=0
+        view[today-left] w=172 h=237 x=74 lines=0
+          text[cond] w=172 h=54 x=0 lines=1 text="多云转晴"
+        view[today-right] w=278 h=237 x=726 lines=0
+          text[temp] w=278 h=158 x=0 lines=1 text="29°C"
+          text[updated] w=248 h=39 x=30 lines=1 text="当前 09:16 更新"
+          text[updated] w=277 h=39 x=1 lines=1 text="紫外线指数 24% 强"
+      text[hi-label] w=930 h=43 x=0 lines=1 text="最高"
+      text[hi] w=930 h=79 x=0 lines=1 text="32.6°C"
+
+===== B 列表行 定宽子项 + flex:1 =====
+root w=1080 h=2400 x=0 lines=0
+  view[page] w=1080 h=162 x=0 lines=0
+    view[day] w=1010 h=93 x=0 lines=0
+      text[d-name] w=172 h=93 x=34 lines=2 lines=[周四 9/2, 4] text="周四 9/24"
+      text[d-cond] w=607 h=43 x=207 lines=1 text="阴天 · 无降水"
+      text[d-hi] w=115 h=46 x=815 lines=1 text="33.1°"
+      text[d-lo] w=115 h=46 x=930 lines=1 text="25.4°"
+
+===== C 2 列网格 width:50% =====
+root w=1080 h=2400 x=0 lines=0
+  view[page] w=1080 h=115 x=0 lines=0
+    view[grid] w=1010 h=46 x=0 lines=0
+      view[cell] w=505 h=46 x=34 lines=0
+        text[t] w=505 h=46 x=0 lines=1 text="最高温度"
+      view[cell] w=505 h=46 x=540 lines=0
+        text[t] w=505 h=46 x=0 lines=1 text="最低温度"
+
+===== D calc / vw / fr 宽度 =====
+root w=1080 h=2400 x=0 lines=0
+  view[page] w=1080 h=209 x=0 lines=0
+    view[half] w=476 h=46 x=0 lines=0
+      text[t] w=476 h=46 x=0 lines=1 text="calc 减半"
+    view[vw] w=540 h=46 x=0 lines=0
+      text[t] w=540 h=46 x=0 lines=1 text="vw 宽"
+    view[fr] w=0 h=46 x=0 lines=0
+      text[t] w=0 h=46 x=0 lines=1 text="fr 宽"
+
+===== E 4x4 棋盘 flex-wrap + 25% =====
+root w=1080 h=2400 x=0 lines=0
+  view[page] w=1080 h=334 x=0 lines=0
+    view[board] w=1010 h=264 x=0 lines=0
+      view[cell] w=244 h=230 x=51 lines=0
+        text[n] w=31 h=72 x=106 lines=1 text="2"
+      view[cell] w=244 h=230 x=295 lines=0
+        text[n] w=31 h=72 x=106 lines=1 text="2"
+      view[cell] w=244 h=230 x=540 lines=0
+        text[n] w=31 h=72 x=106 lines=1 text="4"
+      view[cell] w=244 h=230 x=784 lines=0
+        text[n] w=31 h=72 x=106 lines=1 text="8"

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ContentValues
 import android.content.Context
@@ -131,7 +133,7 @@ object QuroDownloadUtil {
         ctx.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
         "OK:$fileName"
     } catch (e: Exception) {
-        "保存失败：${e.message}"
+        qstr(R.string.qk_02879, (e.message).toString())
     }
 
     /**

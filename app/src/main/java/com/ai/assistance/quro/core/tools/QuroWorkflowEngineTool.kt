@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.workflow.data.RunStore
@@ -52,7 +54,7 @@ class QuroWorkflowCreateTool : QuroTool {
 class QuroWorkflowTriggerTool : QuroTool {
     override val name = "wf_trigger"
     override val description =
-        "点燃（立即异步执行）一个已存在的工作流，返回 runId。参数 id（wf_<name>）或 name 二选一。执行后用 wf_run_status 传入 runId 轮询进度与结果。"
+        qstr(R.string.qk_03447)
     override val parametersJson = """{
         "type":"object",
         "properties":{

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.privilege
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.admin.DevicePolicyManager
@@ -56,7 +58,7 @@ class QuroPrivilegeManager(private val context: Context) {
         return PrivilegeState(
             PrivilegeLevel.L1,
             enabled,
-            if (enabled) "已连接" else "无障碍服务未开启",
+            if (enabled) qstr(R.string.qk_00771) else "无障碍服务未开启",
         )
     }
 

@@ -1,4 +1,5 @@
 package com.ai.assistance.quro.workflow.platform
+import com.ai.assistance.quro.util.qstr
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -33,7 +34,7 @@ object Device {
     private fun fileAuthority(ctx: Context): String = ctx.packageName + ".fileprovider"
 
     private const val CHANNEL_ID = "workflow_aci"
-    private const val CHANNEL_NAME = "工作流"
+    private val CHANNEL_NAME = qstr(R.string.qk_02723)
     private var notifSeq = 1000
 
     fun ensureChannel(ctx: Context) {
@@ -52,7 +53,7 @@ object Device {
         ensureChannel(ctx)
         val mgr = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val nb = NotificationCompat.Builder(ctx, CHANNEL_ID)
-            .setContentTitle(title.ifBlank { "工作流" })
+            .setContentTitle(title.ifBlank { qstr(R.string.qk_02723) })
             .setContentText(body)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

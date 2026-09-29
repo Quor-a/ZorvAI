@@ -62,8 +62,16 @@ class QuroApplication : Application(), Configuration.Provider {
     }
 
     override fun attachBaseContext(base: Context) {
-        super.attachBaseContext(base)
+        // 语言：Android 12 及以下 AppCompatDelegate.setApplicationLocales 不会更新 Application
+        // 的资源配置，Service / ContentProvider / qstr() 会一直用系统语言。这里自己包一层，
+        // 让整个进程的默认资源也跟随所选语言。
+        val localizedBase = com.ai.assistance.quro.util.QuroLocale.wrap(base)
+        super.attachBaseContext(localizedBase)
+        // 注意仍取原始 base 的 applicationContext：必须保持 appCtx 是真正的 Application 实例。
         appCtx = base.applicationContext ?: base
+        // 尽早注入：qstr() 在 attachBaseContext / ContentProvider 阶段就可能被调用，
+        // 晚注入会短暂返回空串（表现成界面文案空白、磁贴标题空白）。
+        com.ai.assistance.quro.util.QuroI18nRt.appContext = appCtx
         QuroCrashLogger.install(this)
         // LSPosed 作用域标记自愈：每次启动先清除旧标记；若本应用被 LSPosed 纳入作用域，
         // QuroXposedModule 会在 attachBaseContext 的 Xposed 钩子（afterHookedMethod）重新写入，
@@ -108,6 +116,16 @@ class QuroApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+
+        // 非 @Composable 位置的取串运行时（工具类 / 回调 / 协程里的界面文案）依赖它。
+        com.ai.assistance.quro.util.QuroI18nRt.appContext = applicationContext
+
+        // 记录 Activity 生命周期：切语言后立即重建已打开的界面，
+        // 否则要等下次冷启才生效（用户会以为「切了语言没反应」）。
+        try {
+            com.ai.assistance.quro.util.QuroLocale.track(this)
+        } catch (_: Throwable) {
+        }
 
         // ══ 副进程到此为止（#9）══
         // `:asr` 只需要 QuroAsrService 自己（Sherpa-NCNN + HandlerThread），

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import android.content.Intent
 import android.graphics.Bitmap
@@ -71,7 +73,7 @@ fun CodeBlock(code: String, lang: String) {
                 ) {
                     Icon(
                         Icons.Filled.ContentCopy,
-                        contentDescription = "复制代码",
+                        contentDescription = stringResource(R.string.qk_00258),
                         tint = Color(0xFF94A3B8),
                         modifier = Modifier.size(16.dp),
                     )
@@ -186,7 +188,7 @@ fun FileAttachmentCard(att: QuroAttachment) {
             Spacer(Modifier.width(10.dp))
             Column {
                 Text(att.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-                Text("文件$sizeText", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.qk_02368, (sizeText).toString()), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -208,8 +210,8 @@ fun ThinkingCard(reasoning: String) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("💭 思考过程", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
-                Text(if (expanded) "收起" else "展开", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.qk_02369), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+                Text(if (expanded) stringResource(R.string.qk_00818) else stringResource(R.string.qk_00944), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (expanded) {
                 Spacer(Modifier.height(4.dp))
@@ -225,7 +227,7 @@ fun TypingIndicator() {
     val transition = rememberInfiniteTransition()
     val dots = listOf(0, 1, 2)
     Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("思考中", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.qk_00093), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         dots.forEach { i ->
             val alpha by transition.animateFloat(
                 initialValue = 0.3f,

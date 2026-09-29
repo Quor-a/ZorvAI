@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.knowledge
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ContentValues
 import android.content.Context
@@ -504,7 +506,7 @@ class QuroRagPipeline(
 class QuroRagKnowledgeTool : QuroTool {
     override val name = "knowledge_rag_search"
     override val description =
-        "（RAG 混合检索）在本地知识库做检索并返回最相关的文档片段。优先用语义（若已配置可用 Embedding Key），" +
+        qstr(R.string.qk_03465) +
         "否则自动降级为本地「CJK 二元分词 + 词频余弦」词法检索（零依赖、无 Key 也能用）。" +
         "参数 {\"query\":\"问题\",\"limit\":4}；或 {\"action\":\"reindex\"} 全量重建索引、{\"action\":\"count\"} 查看索引量。" +
         "找不到时再考虑 knowledge_search（关键词）。"

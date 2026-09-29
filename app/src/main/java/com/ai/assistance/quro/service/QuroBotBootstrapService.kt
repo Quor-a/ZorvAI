@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.service
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -92,7 +94,7 @@ class QuroBotBootstrapService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val chan = NotificationChannel(
                 CHANNEL_ID, "Zorv 机器人", NotificationManager.IMPORTANCE_LOW,
-            ).apply { description = "机器人后台运行中" }
+            ).apply { description = qstr(R.string.qk_03660) }
             nm.createNotificationChannel(chan)
         }
         val openIntent = Intent(this, QuroMainActivity::class.java)

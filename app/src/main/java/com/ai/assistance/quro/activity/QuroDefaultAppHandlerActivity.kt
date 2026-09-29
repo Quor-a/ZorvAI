@@ -1,4 +1,8 @@
 package com.ai.assistance.quro.activity
+import android.content.Context
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -46,6 +50,12 @@ import java.util.regex.Pattern
  * 故本 Activity 不处理 HOME 角色；HOME 仅经 RoleManager 申请入口提交（见 QuroDefaultAppScreen）。
  */
 class QuroDefaultAppHandlerActivity : ComponentActivity() {
+    // 语言：ComponentActivity 不走 AppCompat，必须在 attachBaseContext 里自己包一层，
+    // 否则 Compose 的 stringResource 永远取系统语言（表现为「切了语言界面还是中文」）。
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(com.ai.assistance.quro.util.QuroLocale.wrap(newBase))
+    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,14 +73,14 @@ class QuroDefaultAppHandlerActivity : ComponentActivity() {
 /** 处理模式（按入站 Intent 分类）。 */
 private sealed interface HandleMode {
     val label: String
-    data class Image(val uri: Uri?) : HandleMode { override val label = "图片" }
-    data class Video(val uri: Uri?) : HandleMode { override val label = "视频" }
+    data class Image(val uri: Uri?) : HandleMode { override val label = qstr(R.string.qk_00149) }
+    data class Video(val uri: Uri?) : HandleMode { override val label = qstr(R.string.qk_00223) }
     data class Pdf(val uri: Uri?) : HandleMode { override val label = "文档 (PDF)" }
-    data class Text(val uri: Uri?) : HandleMode { override val label = "文本" }
-    data class Web(val url: String?) : HandleMode { override val label = "网页" }
-    data class Email(val address: String?, val subject: String?, val body: String?) : HandleMode { override val label = "邮件" }
-    data class Dial(val number: String?) : HandleMode { override val label = "拨号" }
-    data object Unknown : HandleMode { override val label = "未知类型" }
+    data class Text(val uri: Uri?) : HandleMode { override val label = qstr(R.string.qk_02287) }
+    data class Web(val url: String?) : HandleMode { override val label = qstr(R.string.qk_02288) }
+    data class Email(val address: String?, val subject: String?, val body: String?) : HandleMode { override val label = qstr(R.string.qk_03562) }
+    data class Dial(val number: String?) : HandleMode { override val label = qstr(R.string.qk_03448) }
+    data object Unknown : HandleMode { override val label = qstr(R.string.qk_03670) }
 }
 
 /** 把入站 Intent 分类为处理模式。 */
@@ -126,7 +136,7 @@ private fun HandlerScreen(mode: HandleMode, onClose: () -> Unit) {
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "关闭", tint = MaterialTheme.colorScheme.onSurface) }
+            IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = qstr(R.string.qk_00065), tint = MaterialTheme.colorScheme.onSurface) }
             Spacer(Modifier.width(8.dp))
             Text("Zorv AI · ${mode.label}", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
         }
@@ -186,15 +196,15 @@ private fun PdfHandler(uri: Uri?) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(Icons.Filled.Description, null, Modifier.size(48.dp), tint = Muted)
         Spacer(Modifier.height(12.dp))
-        Text("Zorv AI 暂未内置 PDF 渲染器", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+        Text(stringResource(R.string.qk_03560), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.height(16.dp))
         Button(onClick = {
             if (uri != null) {
                 val view = Intent(Intent.ACTION_VIEW).setData(uri).setType("application/pdf").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                runCatching { ctx.startActivity(Intent.createChooser(view, "用其他应用打开")) }
-                    .onFailure { Toast.makeText(ctx, "无法打开：${it.message}", Toast.LENGTH_SHORT).show() }
-            } else Toast.makeText(ctx, "无文档 URI", Toast.LENGTH_SHORT).show()
-        }) { Text("用其他应用打开") }
+                runCatching { ctx.startActivity(Intent.createChooser(view, qstr(R.string.qk_03597))) }
+                    .onFailure { Toast.makeText(ctx, qstr(R.string.qk_00115, (it.message).toString()), Toast.LENGTH_SHORT).show() }
+            } else Toast.makeText(ctx, qstr(R.string.qk_03615), Toast.LENGTH_SHORT).show()
+        }) { Text(stringResource(R.string.qk_03597)) }
     }
 }
 
@@ -270,8 +280,8 @@ private fun EmailHandler(address: String?, subject: String?, body: String?) {
             }
             runCatching { ctx.startActivity(Intent.createChooser(mail, "发送邮件")) }
                 .onFailure { Toast.makeText(ctx, "无邮件应用：${it.message}", Toast.LENGTH_SHORT).show() }
-        }) { Text("发送") }
-        Text("Zorv AI 不存储邮件，发送经你选择的邮件应用完成。", fontSize = 12.sp, color = Muted)
+        }) { Text(stringResource(R.string.qk_00165)) }
+        Text(stringResource(R.string.qk_03678), fontSize = 12.sp, color = Muted)
     }
 }
 
@@ -286,8 +296,8 @@ private fun DialHandler(number: String?) {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             runCatching { ctx.startActivity(dial) }.onFailure { Toast.makeText(ctx, "无法拨号：${it.message}", Toast.LENGTH_SHORT).show() }
-        }) { Text("拨打") }
-        Text("Zorv AI 仅拉起系统拨号盘，不自动外呼。", fontSize = 12.sp, color = Muted)
+        }) { Text(stringResource(R.string.qk_03645)) }
+        Text(stringResource(R.string.qk_03655), fontSize = 12.sp, color = Muted)
     }
 }
 

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.fluidcloud
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ContentProviderClient
 import android.content.Context
@@ -83,7 +85,7 @@ object FluidCloudBridge {
                         put("type", "PROGRESS")
                         put("progress", progress.coerceIn(0, 100))
                         put("style", "inside")
-                        put("nodeLabels", arrayOf("开始", "执行中", "完成"))
+                        put("nodeLabels", arrayOf("开始", qstr(R.string.qk_00954), qstr(R.string.qk_00420)))
                     })
                 }
             })

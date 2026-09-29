@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.service
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -55,10 +57,10 @@ class QuroBootReceiver : BroadcastReceiver() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = NotificationChannel(
                     CHANNEL_ID,
-                    "无障碍服务",
+                    qstr(R.string.qk_02300),
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
-                    description = "提醒用户开启无障碍服务"
+                    description = qstr(R.string.qk_03641)
                 }
                 val nm = context.getSystemService(NotificationManager::class.java)
                 nm.createNotificationChannel(channel)

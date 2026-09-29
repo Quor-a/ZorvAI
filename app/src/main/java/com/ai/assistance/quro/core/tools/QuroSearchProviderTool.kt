@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
@@ -15,7 +17,7 @@ import java.net.URLEncoder
  */
 class QuroSearchProviderTool : QuroTool {
     override val name = "search_provider"
-    override val description = "多引擎联网搜索聚合（统一入口）：支持 duckduckgo（默认，免费无需密钥）、tavily（需先在 auth_service 配置名为 tavily 的 API Key，type=apikey）。" +
+    override val description = qstr(R.string.qk_03644) +
         "参数 {\"provider\":\"duckduckgo|tavily\",\"query\":\"搜索词（必填）\",\"max_results\":10（1-20）}。" +
         "返回结构化结果（标题/链接/摘要）。duckduckgo 走 HTML 结果解析；tavily 走官方 API。"
     override val parametersJson = """{

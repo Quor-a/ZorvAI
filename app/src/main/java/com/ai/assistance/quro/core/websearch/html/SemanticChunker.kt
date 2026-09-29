@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.websearch.html
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 /**
  * SemanticChunker —— 按语义单元切块，替代"整篇按 token 截断"。
@@ -23,7 +25,7 @@ object SemanticChunker {
         val docId: String,
         val index: Int,
         val text: String,
-        /** 所属标题路径，如 ["安装", "常见问题"] */
+        /** 所属标题路径，如 [qstr(R.string.qk_02860), "常见问题"] */
         val headingPath: List<String>,
         /** 块类型，表格/代码需独立计预算 */
         val kind: Kind,

@@ -1,0 +1,961 @@
+147	app/src/main/java/com/ai/assistance/quro/ui\ChatScreen.kt	?	\[渲染卡片\]\s*\n类型：(.+?)\s*\n标题：(.+?)\s*\n(路径：(.+?)\s*\n)?(语言：(.+?)\s*\n)?内容：\s*\n([\s\S]*?)\[/渲染卡片\]
+237	app/src/main/java/com/ai/assistance/quro/ui\ChatScreen.kt	?	风险级别[：:]\s*(\S+)
+1466	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	已保存并启用云模型服务 ✓
+1468	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	已清除「${def.name}」的已保存配置
+1474	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	无需任何参数（免费可用）
+1475	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	必填：
+1476	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	默认可用
+1477	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	已配置 ✓
+1479	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	「${def.name}」参数
+1481	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	音色 (Voice)
+1482	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	请选择音色
+1483	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	复刻：$cn${if (cv?.registeredId?.isNotBlank() == true) 
+1485	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	复刻：${cv.name}${if (cv.registeredId.isNotBlank()) 
+1491	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	可选：${def.formatOptions.joinToString(
+1492	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	流式输出 (Streaming)
+1499	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	自定义音色（${if (def.id == 
+1500	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	复刻：${cv.cloneUri}${if (cv.registeredId.isNotBlank()) 
+1501	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	设计：${cv.designText}
+1515	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	请先导入或粘贴复刻音频样本
+1516	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	硅基流动复刻需填写「参考音频旁白文本」
+1518	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	语音克隆 (Voice Cloning)
+1519	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	MiMo 为零样本内联复刻：在上方「自定义音色」添加「音频复刻」条目并选中即可，无需预注册，合成时直接内联音频样本。
+1520	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	为注册式复刻：在上方「自定义音色」添加「音频复刻」条目（硅基流动需填旁白文本）并选中，合成时会自动上传样本并创建克隆音色（首次联网，之后复用已注册 ID）。
+1525	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	正在试听…
+1526	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	试听已发起 ✅
+1527	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	试听失败 ❌\n${e.message}
+1530	app/src/main/java/com/ai/assistance/quro/ui\QuroCloudTtsConfigScreen.kt	?	提示：保存即自动启用「云模型服务」语音来源（如未填写必填项，状态会显示「未配置参数」，需在「语音合成 (TTS)」来源中选回本地系统）。
+1533	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	模块导出失败：${it.message}
+1534	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	已导入 $n 个模块
+1536	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	模块导入失败：${it.message}
+1542	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	导出选中 (${selected.size})
+1545	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	🖥 终端
+1546	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	🔁 双端
+1547	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	📱 手机
+1548	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	● 部署中…
+1549	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	● 引擎已就绪
+1550	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	● 已部署（健康检查异常）
+1551	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	⛔ 部署失败
+1552	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	○ 未部署引擎
+1554	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	 }} · ${es.services.size} 个共享服务
+1556	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	部署CMS引擎
+1559	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	共享服务：${es.services.joinToString(
+1563	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	Bootstrap脚本
+1566	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	Provisioner脚本
+1574	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	CMSv2_添加模块说明.md
+1578	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	📱 手机模块（应用内执行）
+1579	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	🖥 终端模块（proot 内执行）
+1580	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	🔁 双端模块（手机 / 终端皆可）
+1581	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	权限 ${m.permissions.size} · 能力 ${m.capabilities.size}${if (m.dependencies.isNotEmpty()) 
+1582	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	通道：$ats · 级别 ${m.maxRequiredLevel().name}
+1583	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	● 部署中 ${deployTask?.progressPct ?: 0}%
+1584	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	● 已部署到终端
+1585	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	○ 未部署
+1593	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	● 部署中
+1594	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	● 已部署
+1595	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	版本: ${module.version} · 作者: ${module.author.ifBlank { 
+1597	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	能力 (${module.capabilities.size})：
+1598	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	  需权限：${c.requiresPermissions.joinToString(
+1599	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	路径=${con.allowedPaths}
+1600	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	命令=${con.allowedCommands}
+1601	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	域名=${con.allowedDomains}
+1604	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	  约束：${conItems.joinToString(
+1605	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	依赖 (${module.dependencies.size})：
+1607	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	生命周期：${module.lifecycle} · 目录：${module.catalog.ifBlank { 
+1608	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	签名：${module.signature.take(32)}…
+1610	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	模块 ID *
+1616	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	权限声明 (${perms.size})
+1617	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	+ 权限
+1620	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	+ 能力
+1623	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	动作(intent JSON / js 脚本 / api 操作 / terminal 命令)
+1624	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	所需权限 id(逗号分隔)
+1626	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	命令白名单(逗号分隔)
+1627	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	允许路径(逗号分隔)
+1628	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	允许域名(逗号分隔)
+1632	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	+ 依赖
+1639	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	宿主：${c.runOn.joinToString(
+1640	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	需权限：${c.requiresPermissions.joinToString(
+1643	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	调用能力 · ${cap.id}
+1644	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	模块：${module.name} · 通道级别：${module.maxRequiredLevel().name}
+1645	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	JS 脚本（应用内 QuickJS 沙箱）
+1646	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	API 操作
+1647	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	终端命令（应用内 proot/Ubuntu 沙箱）
+1648	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	Intent（应用内派发）
+1649	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	参数 $name
+1655	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	理由：${perm.rationale}
+1656	app/src/main/java/com/ai/assistance/quro/ui\QuroCmsScreen.kt	?	作用域：${perm.scope}
+1663	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	统计卡
+1664	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	进度卡
+1665	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	列表卡
+1666	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	饼图
+1669	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	提醒
+1670	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	标签页
+1671	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	步骤
+1672	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	时间线
+1673	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	待办卡
+1674	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	笔记卡
+1675	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	动作卡
+1676	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	Mermaid 流程图
+1677	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	Web 应用 MiniApp
+1679	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	富组件（ui_widget）
+1680	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	富卡片（ui_card）
+1681	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	AI 自写（mermaid / miniapp）
+1683	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	已发送：$label
+1684	app/src/main/java/com/ai/assistance/quro/ui\QuroComponentGalleryScreen.kt	?	发送失败：$label
+1685	app/src/main/java/com/ai/assistance/quro/ui\QuroDefaultAppScreen.kt	?	当前系统不支持该角色（需 Android 10+）
+1686	app/src/main/java/com/ai/assistance/quro/ui\QuroDefaultAppScreen.kt	?	无法发起系统选择：${it.message}
+1689	app/src/main/java/com/ai/assistance/quro/ui\QuroDefaultAppScreen.kt	?	平台角色（系统角色，API 29+）
+1690	app/src/main/java/com/ai/assistance/quro/ui\QuroDefaultAppScreen.kt	?	其它默认（靠系统选择器设为默认）
+1692	app/src/main/java/com/ai/assistance/quro/ui\QuroDefaultAppScreen.kt	?	设为默认后，打开对应类型（网页 / 图片 / 视频 / 邮件 / 文档 / 拨号 / 短信 / 桌面）时由 Zorv AI 接管处理。
+1693	app/src/main/java/com/ai/assistance/quro/ui\QuroDefaultAppScreen.kt	?	平台角色（桌面启动器 / 浏览器 / 拨号 / 短信）经系统角色框申请；本应用未实现桌面 UI，故「桌面启动器」仅提交角色申请，是否生效取决于系统是否将其列为合格候选。
+1694	app/src/main/java/com/ai/assistance/quro/ui\QuroDefaultAppScreen.kt	?	相册 / 视频 / 邮箱 / 文档无系统角色，点「设为默认」会弹出系统选择器，请选择 Zorv AI 并勾选「总是」。
+1695	app/src/main/java/com/ai/assistance/quro/ui\QuroDefaultAppScreen.kt	?	取消默认请到系统设置 → 应用 → Zorv AI → 默认打开 / 默认应用，或对应类型的默认应用管理页。
+1698	app/src/main/java/com/ai/assistance/quro/ui\QuroDefaultAppScreen.kt	?	✓ Zorv AI 已是默认
+1699	app/src/main/java/com/ai/assistance/quro/ui\QuroDefaultAppScreen.kt	?	当前默认：${shortPkg(holder)}
+1700	app/src/main/java/com/ai/assistance/quro/ui\QuroDefaultAppScreen.kt	?	当前未设置默认
+1701	app/src/main/java/com/ai/assistance/quro/ui\QuroDefaultAppScreen.kt	?	请在系统默认应用管理中查看
+1702	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	Python 环境
+1703	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	Node.js 环境
+1704	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	JavaScript 运行时 + npm
+1705	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	快速的包管理器和 TypeScript
+1706	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	SSH 工具
+1707	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	SSH 完整工具链
+1708	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	SSH 客户端 + sshpass + sshd
+1709	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	Java 环境
+1710	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	构建自动化工具
+1711	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	Rust 环境
+1712	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	Rust 工具链和 Cargo 包管理器
+1713	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	Go 环境
+1714	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	Go 编程语言开发环境
+1715	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	python3 --version && pip --version || echo '未安装'
+1716	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	node -v && npm -v || echo '未安装'
+1717	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	pnpm -v && tsc -v || echo '未安装'
+1718	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	ssh -V && sshpass -V || echo '未安装'
+1719	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	java -version 2>&1 | head -1 || echo '未安装'
+1720	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	gradle --version | head -3 || echo '未安装'
+1721	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	rustc --version && cargo --version || echo '未安装'
+1722	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	go version || echo '未安装'
+1723	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	echo '未知环境'
+1730	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	✅ 已发送安装命令到终端: ${envName}
+1731	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	❌ 发送命令失败: ${e.message}
+1736	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	✅ 已发送安装命令: ${envName}
+1744	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	● 已安装
+1745	app/src/main/java/com/ai/assistance/quro/ui\QuroDevEnvScreen.kt	?	○ 未安装
+1751	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	点击话筒说话，或在下方输入文字与数字人对话
+1752	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	已选择自定义 3D 模型，点击话筒即可对话
+1753	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	GLB 文件拷贝失败，请换一个文件重试
+1755	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	需要录音权限才能进行语音输入
+1756	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	当前 STT 引擎为「AI 模型」转写，需先在「设置→语音→STT」部署端侧模型，或改用原生/离线引擎
+1757	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	聆听中…
+1758	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	已停止，点击话筒继续
+1768	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	聆听中
+1769	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	识别中
+1770	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	回复中
+1771	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	出错了
+1772	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	待命中
+1780	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	重新选择 GLB 模型
+1781	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	选择 GLB 模型文件
+1782	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	已载入：${dh.customModelPath.substringAfterLast(
+1784	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	读取 assets/$path 失败：${it.message}
+1785	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	Draco 资源提取失败：${it.message}
+1786	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	点击话筒继续
+1787	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	数字人正在说…
+1788	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	数字人思考中…
+1789	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	⚠️ 出错了，请检查模型配置（离线模式请确认本地端点可用）
+1790	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	端侧模型加载中…
+1791	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	端侧模型加载失败，请到 STT 设置重试
+1792	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	录音初始化失败
+1793	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	无法创建录音器
+1794	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	录音器不可用
+1795	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	录音异常：${e.message}
+1796	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	识别中…
+1797	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	WebView 创建；modelFile=${modelFile?.absolutePath ?: 
+1798	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	页面加载完成：$url
+1799	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	离线引擎 assets 读取失败；threeJs=$threeJs gltfLoader=$gltfLoader orbit=$orbit
+1800	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	<body style='margin:0;background:#15151a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;font-size:13px;text-align:center;padding:16px'>离线 3D 引擎缺失<br>请确认 APK 包含 assets/www/three/</body>
+1803	app/src/main/java/com/ai/assistance/quro/ui\QuroDigitalHumanScreen.kt	?	<body style='margin:0;background:#15151a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;font-size:13px'>未选择 GLB 模型</body>
+1804	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	正在读取: ${file.name}
+1805	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	已加载: ${file.name}
+1806	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	读取失败: ${it.message}
+1808	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	正在写入: ${file.absolutePath}
+1809	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	已保存: ${file.name}
+1810	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	已保存到 ${file.absolutePath}
+1811	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	文档_$timestamp.md
+1812	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	正在创建: ${newFile.absolutePath}
+1813	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	已创建: $fileName
+1815	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	保存失败: ${it.message}
+1816	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	加粗
+1817	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	斜体
+1818	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	标题1
+1819	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	标题2
+1820	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	标题3
+1821	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	无序列表
+1822	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	有序列表
+1823	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	引用
+1824	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	代码块
+1825	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	分割线
+1826	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	链接
+1827	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	[链接文本](url)
+1828	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	![图片描述](图片链接)
+1834	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	分享 ${target.name}
+1836	app/src/main/java/com/ai/assistance/quro/ui\QuroDocEditorScreen.kt	?	文件: ${file.name}
+1842	app/src/main/java/com/ai/assistance/quro/ui\QuroDocOpener.kt	?	用以下应用打开
+1846	app/src/main/java/com/ai/assistance/quro/ui\QuroDocumentViewer.kt	?	无法读取文档：$loadErr
+1847	app/src/main/java/com/ai/assistance/quro/ui\QuroDocumentViewer.kt	?	文件过大（约 ${sizeBytes / 1024 / 1024} MB），应用内预览可能较慢或内存占用较大。请点右上角「其他应用」用 WPS / Office 打开。
+1849	app/src/main/java/com/ai/assistance/quro/ui\QuroDocumentViewer.kt	?	加载错误
+1851	app/src/main/java/com/ai/assistance/quro/ui\QuroDocumentViewer.kt	?	文档渲染失败：$loadErr\n可尝试用「其他应用」打开。
+1853	app/src/main/java/com/ai/assistance/quro/ui\QuroDocumentViewer.kt	?	上一页
+1854	app/src/main/java/com/ai/assistance/quro/ui\QuroDocumentViewer.kt	?	第 ${idx + 1} / ${slides.size} 页
+1855	app/src/main/java/com/ai/assistance/quro/ui\QuroDocumentViewer.kt	?	下一页
+1856	app/src/main/java/com/ai/assistance/quro/ui\QuroDocumentViewer.kt	?	(无标题)
+1868	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	<!doctype html><html><body><h1>ZorvAI 导出示例</h1><p>由功能权限演示经 MediaStore 导出，无需存储权限。</p></body></html>
+1869	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	已导出到 Download/ZorvAI ✓
+1870	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	导出失败（请检查存储可用性）
+1871	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	ZorvAI 跑步
+1872	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	已写入一条跑步记录（来源=本应用）✓
+1873	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	写入失败: ${it.message}
+1877	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	导出示例文件
+1878	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	请求媒体权限
+1881	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	读取本地素材、把生成结果导出到公共 Download。导出走 MediaStore，无需任何存储权限。
+1882	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	已被永久拒绝，需到「设置 → 应用 → 权限」手动开启。
+1883	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	打开 / 安装 Health Connect
+1884	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	管理 Health Connect
+1885	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	授权健康数据
+1887	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	读取/写入步数、心率、睡眠等健康数据，并在多来源间区分优先级。
+1888	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	设备未提供 Health Connect（Android 14+ 应为系统模块）。可尝试在应用商店安装，或后续接入厂商健康 SDK。
+1889	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	已授权 ${manager.health.requiredPermissions.size} 项数据类型。
+1890	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	测试提醒（5 秒后）
+1891	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	ZorvAI 提醒
+1892	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	这是一条测试提醒
+1893	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	已设置 5 秒后精确闹钟 ✓
+1894	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	开启精确闹钟
+1896	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	在设定的时间精准提醒你运动、喝水等。精确闹钟为特殊权限，无法运行时弹窗，必须到设置页开启。
+1897	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	需到「设置 → 应用 → 精确闹钟」手动开启。
+1899	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	让 AI 助手以悬浮窗 / 锁屏卡片形式常驻显示，随时唤出对话与快捷操作。该权限为特殊权限，需到设置页开启。
+1900	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	前往设置（可关闭）
+1901	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	开启锁屏显示
+1902	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	已授权，可在系统设置中关闭。
+1903	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	需到「设置 → 应用 → 特殊应用权限 → 显示在其他应用上层」手动开启。
+1904	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	请求健身与运动权限
+1906	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	读取设备活动识别（步行 / 跑步等），自动记录运动状态、联动健康数据。Android 10+ 需运行时授予。
+1907	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	当前系统版本无需此权限。
+1909	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	访问设备全部文件系统（含文档、下载、外部 SD），便于跨目录读取/整理你的文件与资料。该权限为特殊权限，需到设置页开启。
+1910	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	开启所有文件访问
+1911	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	需到「设置 → 应用 → 特殊应用权限 → 所有文件访问权限」手动开启。
+1912	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	当前系统版本无需此特殊权限。
+1913	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	前往默认助理设置
+1914	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	设为默认数字助理
+1916	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	将 Zorv AI 设为系统默认数字助理，接管长按 Home / 侧键唤醒的助手手势，提供全局语音/文本助理能力。经系统角色选择框授予。
+1917	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	已是默认数字助理。可在「设置 → 默认应用 → 数字助理」更改。
+1918	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	当前系统版本不支持数字助理角色。
+1919	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	经系统「默认数字助理」选择框授予，确认后即可全局唤醒。
+1920	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	说明：精确闹钟在 Android 12+ 属特殊权限，没有系统弹窗，只能跳转设置页；媒体与健康的运行时请求在首次或曾被拒（未选「不再询问」）时才会弹窗，一旦勾选「不再询问」即降级为「去设置页」。
+1928	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	两项均为「是」但系统「特殊应用权限」列表仍无本应用：① 重开设置页或重启设备让系统重新索引；② 闹钟与提醒列表需 Android 12+，所有文件访问需 Android 11+；③ 确认安装的是本版本而非旧包（旧包仍含 USE_EXACT_ALARM 会被系统隐藏）。
+1930	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	探测中
+1931	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	已授权
+1932	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	需授权
+1933	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	去设置
+1942	app/src/main/java/com/ai/assistance/quro/ui\QuroFeaturePermissionScreen.kt	?	$steps 步
+1943	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	概览
+1945	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	通知
+1951	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	选择镜像
+1953	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	✅ 镜像可达（约 ${ms ?: 
+1954	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	} ms），可登录
+1955	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	❌ 无法连接该镜像（证书过期 / 超时 / 被墙）。换一个，或连能访问 GitHub 的网络
+1961	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	请先粘贴 Token
+1962	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	令牌无效或网络异常，请检查后重试
+1966	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	请填写 Client ID
+1967	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	发起设备流失败（Client ID 无效或未联网）
+1972	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	你的验证码：${d.userCode}
+1973	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	登录失败：令牌保存异常
+1974	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	获取账户失败（Token 无效或网络异常）
+1975	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	仓库 ${a.publicRepos}
+1979	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	没有仓库或获取失败
+1980	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	更新 ${repo.updatedAt}
+1981	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	取消 Star
+1982	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	没有 Issue 或获取失败
+1983	app/src/main/java/com/ai/assistance/quro/ui\QuroGitHubScreen.kt	?	没有通知或获取失败
+1990	app/src/main/java/com/ai/assistance/quro/ui\QuroKnowledgeScreen.kt	?	导入失败：${it.message}
+1991	app/src/main/java/com/ai/assistance/quro/ui\QuroKnowledgeScreen.kt	?	已导入：$safe
+1994	app/src/main/java/com/ai/assistance/quro/ui\QuroKnowledgeScreen.kt	?	读取中…
+1995	app/src/main/java/com/ai/assistance/quro/ui\QuroKnowledgeScreen.kt	?	（无法读取内容）
+1997	app/src/main/java/com/ai/assistance/quro/ui\QuroKnowledgeScreen.kt	?	已重命名为：${target.name}
+2007	app/src/main/java/com/ai/assistance/quro/ui\QuroKnowledgeScreen.kt	?	本地知识库（RAG）。文档保存在应用私有 knowledge_base/ 目录，仅在你的设备上做向量化检索，
+2008	app/src/main/java/com/ai/assistance/quro/ui\QuroKnowledgeScreen.kt	?	不上传任何云端。你也可以直接对 AI 说「把 XX 存进知识库」。
+2010	app/src/main/java/com/ai/assistance/quro/ui\QuroKnowledgeScreen.kt	?	文档（${filtered.size}）
+2011	app/src/main/java/com/ai/assistance/quro/ui\QuroKnowledgeScreen.kt	?	知识库为空。点右上角 + 添加文档，或从系统文件选择器导入。
+2013	app/src/main/java/com/ai/assistance/quro/ui\QuroKnowledgeScreen.kt	?	重新扫描并向量化全部文档
+2015	app/src/main/java/com/ai/assistance/quro/ui\QuroKnowledgeScreen.kt	?	创建失败：${it.message}
+2026	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	框架状态
+2027	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	正在探测本机框架…
+2028	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	读取已安装管理器列表
+2029	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	未检测到 LSPosed / Xposed
+2030	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	安装 LSPosed (zygisk) 后，这里会显示管理器入口
+2031	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	已安装 · 点击打开做作用域 / 模块管理
+2032	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	Zorv AI 作用域
+2033	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	把 Zorv AI 纳入作用域
+2034	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	在管理器「应用」里勾选本应用，框架钩子才对其生效
+2036	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	激活 Zorv AI 模块
+2037	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	在 LSPosed「模块」列表启用 Zorv AI，并在「应用」勾选本应用以纳入作用域
+2038	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	Zorv AI 的终端 / ACI / 自动化能力走自有管线（无障碍 · Shizuku · 设备管理员 · ROOT），不依赖 Xposed 也能运行。
+2039	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	Zorv AI 现已提供 opt-in LSPosed 模块：被纳入作用域即写入作用域标记；可选开启跨应用注入 / 系统重定向桥（需外部 lsposed_bridge.json 配置，默认关闭）。本页不定义任何 ai.aci.permission.*。
+2040	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	权限定义（ai.aci.permission.* 等）由控制端工程维护，本应用只声明与使用，不重复定义。
+2041	app/src/main/java/com/ai/assistance/quro/ui\QuroLsposeScreen.kt	?	无法打开 ${pkg}：${it.message}
+2049	app/src/main/java/com/ai/assistance/quro/ui\QuroMarkdownEditor.kt	?	**文本**
+2050	app/src/main/java/com/ai/assistance/quro/ui\QuroMarkdownEditor.kt	?	*文本*
+2051	app/src/main/java/com/ai/assistance/quro/ui\QuroMarkdownEditor.kt	?	删除线
+2052	app/src/main/java/com/ai/assistance/quro/ui\QuroMarkdownEditor.kt	?	~~文本~~
+2053	app/src/main/java/com/ai/assistance/quro/ui\QuroMarkdownEditor.kt	?	`代码`
+2054	app/src/main/java/com/ai/assistance/quro/ui\QuroMarkdownEditor.kt	?	任务列表
+2055	app/src/main/java/com/ai/assistance/quro/ui\QuroMarkdownEditor.kt	?	```\n代码\n```
+2056	app/src/main/java/com/ai/assistance/quro/ui\QuroMarkdownEditor.kt	?	![图片描述](url)
+2057	app/src/main/java/com/ai/assistance/quro/ui\QuroMarkdownEditor.kt	?	| 列1 | 列2 |\n|------|------|\n| 内容 | 内容 |
+2059	app/src/main/java/com/ai/assistance/quro/ui\QuroMcpSettingsScreen.kt	?	把 Zorv AI 的 $toolCount 个内置工具以 MCP（Model Context Protocol）协议暴露给本机其它 AI 客户端
+2062	app/src/main/java/com/ai/assistance/quro/ui\QuroMcpSettingsScreen.kt	?	正在监听 127.0.0.1:$port
+2066	app/src/main/java/com/ai/assistance/quro/ui\QuroMcpSettingsScreen.kt	?	传输：JSON-RPC 2.0 over HTTP（单 POST + 普通 JSON 响应）\n
+2067	app/src/main/java/com/ai/assistance/quro/ui\QuroMcpSettingsScreen.kt	?	监听：127.0.0.1（仅本机，外部不可达）\n
+2068	app/src/main/java/com/ai/assistance/quro/ui\QuroMcpSettingsScreen.kt	?	方法：initialize / tools/list / tools/call\n
+2069	app/src/main/java/com/ai/assistance/quro/ui\QuroMcpSettingsScreen.kt	?	工具：与 AI 对话内工具 100% 同源（共 $toolCount 个）
+2071	app/src/main/java/com/ai/assistance/quro/ui\QuroMcpSettingsScreen.kt	?	客户端配置示例（Claude Desktop / Cursor 的 mcp.json）：\n
+2079	app/src/main/java/com/ai/assistance/quro/ui\QuroMcpSettingsScreen.kt	?	已配置 ${clientServers.size} 个外部服务器（可继续添加，AI 通过 mcp_call 按别名调用）
+2081	app/src/main/java/com/ai/assistance/quro/ui\QuroMcpSettingsScreen.kt	?	服务器地址 (http(s)://host/path)
+2084	app/src/main/java/com/ai/assistance/quro/ui\QuroMcpSettingsScreen.kt	?	已添加服务器：$a
+2090	app/src/main/java/com/ai/assistance/quro/ui\QuroMcpSettingsScreen.kt	?	${srv.url} · $n 个工具
+2091	app/src/main/java/com/ai/assistance/quro/ui\QuroMcpSettingsScreen.kt	?	已注销：${srv.alias}
+2093	app/src/main/java/com/ai/assistance/quro/ui\QuroMediaBrowser.kt	?	未知文件
+2096	app/src/main/java/com/ai/assistance/quro/ui\QuroMediaBrowser.kt	?	需要读取${if (kind == 
+2097	app/src/main/java/com/ai/assistance/quro/ui\QuroMediaBrowser.kt	?	}文件的权限才能浏览媒体库。
+2100	app/src/main/java/com/ai/assistance/quro/ui\QuroMediaBrowser.kt	?	没有找到${if (kind == 
+2101	app/src/main/java/com/ai/assistance/quro/ui\QuroMediaBrowser.kt	?	}文件
+2104	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	导入模型
+2106	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	模型路径：${cfg.localModelPath.ifBlank { 
+2110	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	选择或自定义 API 服务商以自动填入默认地址
+2112	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	模型名
+2117	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	最大生成令牌
+2122	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	最大令牌
+2123	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	工具轮次
+2125	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	上下文窗口
+2134	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	删除预设
+2135	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	预设 ${savedProfiles.size + 1}
+2140	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	模型：${ep.model.ifBlank { 
+2141	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	地址：${ep.baseUrl.ifBlank { 
+2143	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	选择模型 (${ml.models.size}个)
+2146	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	当前：${cfg.provider} · ${cfg.model.ifBlank { 
+2147	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	未选择本地模型
+2148	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	MNN / llama.cpp 本地模型
+2149	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	MNN .mnn / llama.cpp 文件夹
+2150	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	正在导入模型，请稍候…
+2151	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	复制失败：目录可能为空或无法访问，请重新选择。
+2152	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	导入失败：${e.message ?: e.javaClass.simpleName}
+2159	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	可用模型：${if (m.modelNames.isEmpty()) 
+2160	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	路径：${m.path}
+2162	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	运行参数
+2164	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	运行参数 · ${model.name}
+2166	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	线程数（自动：$autoThreads）
+2189	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	OpenAI Responses (自定义)
+2190	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	OpenAI 兼容 (自定义)
+2191	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	Anthropic 兼容 (自定义)
+2192	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	Gemini 兼容 (自定义)
+2193	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	百度文心一言
+2194	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	阿里云通义千问
+2195	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	讯飞星火
+2196	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	智谱 GLM
+2197	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	百川大模型
+2198	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	月之暗面 Kimi
+2199	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	小米 MiMo
+2200	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	硅基流动
+2201	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	无问芯穹
+2202	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	支付宝百灵
+2203	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	火山豆包
+2204	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	LM Studio (本地)
+2205	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	Ollama (本地)
+2206	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	OpenAI 兼容 (本地)
+2207	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	MNN (本地)
+2208	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	llama.cpp (本地)
+2209	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	派欧云
+2210	app/src/main/java/com/ai/assistance/quro/ui\QuroModelConfigScreen.kt	?	其他 / 自定义
+2211	app/src/main/java/com/ai/assistance/quro/ui\QuroModelHubScreen.kt	?	我的模型
+2214	app/src/main/java/com/ai/assistance/quro/ui\QuroModelHubScreen.kt	?	OK:已下载并动态加载（llama.cpp）
+2216	app/src/main/java/com/ai/assistance/quro/ui\QuroModelHubScreen.kt	?	OK:已下载并动态加载（MNN）
+2217	app/src/main/java/com/ai/assistance/quro/ui\QuroModelHubScreen.kt	?	未找到可下载的${if (type == 
+2218	app/src/main/java/com/ai/assistance/quro/ui\QuroModelHubScreen.kt	?	}模型，换个关键词试试
+2221	app/src/main/java/com/ai/assistance/quro/ui\QuroModelHubScreen.kt	?	(完整模型包：配置 + 全部权重文件)
+2222	app/src/main/java/com/ai/assistance/quro/ui\QuroModelHubScreen.kt	?	大小约 ${entry.sizeMB} MB
+2223	app/src/main/java/com/ai/assistance/quro/ui\QuroModelHubScreen.kt	?	${(progress * 100).toInt()}% 下载中…
+2234	app/src/main/java/com/ai/assistance/quro/ui\QuroMultiProviderScreen.kt	?	总提供商
+2235	app/src/main/java/com/ai/assistance/quro/ui\QuroMultiProviderScreen.kt	?	已启用
+2237	app/src/main/java/com/ai/assistance/quro/ui\QuroMultiProviderScreen.kt	?	故障
+2238	app/src/main/java/com/ai/assistance/quro/ui\QuroMultiProviderScreen.kt	?	模型
+2264	app/src/main/java/com/ai/assistance/quro/ui\QuroMusicPlayerScreen.kt	?	上一首
+2265	app/src/main/java/com/ai/assistance/quro/ui\QuroMusicPlayerScreen.kt	?	下一首
+2266	app/src/main/java/com/ai/assistance/quro/ui\QuroMusicPlayerScreen.kt	?	循环模式
+2267	app/src/main/java/com/ai/assistance/quro/ui\QuroMusicPlayerScreen.kt	?	随机播放
+2268	app/src/main/java/com/ai/assistance/quro/ui\QuroMusicPlayerScreen.kt	?	播放列表 (${media.queue.size})
+2276	app/src/main/java/com/ai/assistance/quro/ui\QuroOnlyOfficeScreen.kt	?	已生成\s+\w+\s+文档：(.+?)（
+2278	app/src/main/java/com/ai/assistance/quro/ui\QuroOnlyOfficeScreen.kt	?	文档：(.+?)（
+2291	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	正在探测…
+2292	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	Zorv AI 闹钟测试
+2293	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	未找到系统时钟应用，请到 设置→应用→Zorv AI→所有权限 中查看「设置闹钟」
+2301	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	UI 交互 / 屏幕内容读取（基础自动化）。
+2302	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	需要无障碍权限以执行界面自动化与屏幕读取。
+2303	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	全局动作(最近任务)：${if (ok) 
+2305	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	系统 API 调用 / 静默安装 / 冻结应用（免 Root）。
+2318	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	锁屏 / 禁用摄像头（仅此两项）。
+2319	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	需要设备管理员权限，仅用于锁定屏幕和禁用/恢复摄像头两项操作。
+2320	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	设备管理员：${st(PrivilegeLevel.L3).details}（纯净架构下不主动锁屏）
+2322	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	内核级操作 / 系统文件修改 / SELinux（最高风险）。
+2325	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	标准运行时权限
+2331	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	功能权限（AI 助手能力）
+2335	app/src/main/java/com/ai/assistance/quro/ui\QuroPermissionScreen.kt	?	权限提升确认 · ${level.name}
+2370	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	一
+2371	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	二
+2372	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	三
+2373	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	四
+2374	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	五
+2375	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	六
+2376	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	日
+2380	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	点击右上角 + 添加，或让 AI 帮你创建
+2382	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	下次: ${SimpleDateFormat(
+2393	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	每天
+2394	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	每周
+2395	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	每月
+2396	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	每年
+2398	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	（每 ${interval} 个周期）
+2400	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	几号 (1-31)
+2401	app/src/main/java/com/ai/assistance/quro/ui\QuroScheduleScreen.kt	?	几月 (1-12)
+2411	app/src/main/java/com/ai/assistance/quro/ui\QuroSettingsComponents.kt	?	切换可见
+2413	app/src/main/java/com/ai/assistance/quro/ui\QuroSkillsScreen.kt	?	城市名
+2416	app/src/main/java/com/ai/assistance/quro/ui\QuroSkillsScreen.kt	?	已导入 ${imported.size} 个技能
+2421	app/src/main/java/com/ai/assistance/quro/ui\QuroSkillsScreen.kt	?	内置签名排查：
+2422	app/src/main/java/com/ai/assistance/quro/ui\QuroSkillsScreen.kt	?	校验通过 ${r.verified} / ${r.total}
+2423	app/src/main/java/com/ai/assistance/quro/ui\QuroSkillsScreen.kt	?	，⚠️ 失败(疑似篡改) ${r.failed}：${r.failedNames.joinToString(
+2426	app/src/main/java/com/ai/assistance/quro/ui\QuroSkillsScreen.kt	?	${skills.count { it.enabled }} 启用 / ${skills.size} 共
+2427	app/src/main/java/com/ai/assistance/quro/ui\QuroSkillsScreen.kt	?	还没有技能。\n点右上角导入按钮，从开源 SKILL.md 粘贴导入；\n或点右下角 + 新增一个，也可在对话框里让 AI 帮你写。
+2434	app/src/main/java/com/ai/assistance/quro/ui\QuroSkillsScreen.kt	?	指令 ${skill.prompt.length} 字
+2435	app/src/main/java/com/ai/assistance/quro/ui\QuroSkillsScreen.kt	?	签名已校验
+2436	app/src/main/java/com/ai/assistance/quro/ui\QuroSkillsScreen.kt	?	签名失败·疑似篡改
+2437	app/src/main/java/com/ai/assistance/quro/ui\QuroSkillsScreen.kt	?	未签名
+2445	app/src/main/java/com/ai/assistance/quro/ui\QuroSkillsScreen.kt	?	参数 Schema (JSON，function calling 入参)
+2451	app/src/main/java/com/ai/assistance/quro/ui\QuroSoulUi.kt	?	心跳孵化
+2456	app/src/main/java/com/ai/assistance/quro/ui\QuroSoulUi.kt	?	AI孵化
+2459	app/src/main/java/com/ai/assistance/quro/ui\QuroSoulUi.kt	?	最近孵化 ${mins / 60}小时前
+2460	app/src/main/java/com/ai/assistance/quro/ui\QuroSoulUi.kt	?	未孵化
+2479	app/src/main/java/com/ai/assistance/quro/ui\QuroSoulUi.kt	?	开：AI 主动用 ```quro-ui 输出原生交互界面；关：仅用户要求时输出。
+2480	app/src/main/java/com/ai/assistance/quro/ui\QuroSoulUi.kt	?	开：AI 主动用 ```quro-card 输出自研小卡片；关：仅用户要求时输出。
+2483	app/src/main/java/com/ai/assistance/quro/ui\QuroSoulUi.kt	?	还没有标签，点右上角 + 新建。
+2484	app/src/main/java/com/ai/assistance/quro/ui\QuroSoulUi.kt	?	已选
+2485	app/src/main/java/com/ai/assistance/quro/ui\QuroSoulUi.kt	?	删除标签
+2493	app/src/main/java/com/ai/assistance/quro/ui\QuroSoulUi.kt	?	暂无记忆。点右上角 + 添加，或从文件导入一份备份。
+2494	app/src/main/java/com/ai/assistance/quro/ui\QuroSoulUi.kt	?	分组:
+2501	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	中文（普通话）
+2502	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	中文（繁体）
+2503	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	粤语
+2504	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	日本語
+2505	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	当前活跃配置
+2506	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	(未配置)
+2507	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	(未命名模型)
+2509	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	❌ baseUrl 为空，无法拉取模型
+2510	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	baseUrl 为空
+2512	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	拉取成功 ${res.models.size} 个
+2513	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	✅ 拉取成功: ${res.models.size} 个模型
+2514	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	❌ 拉取失败: ${res.message}
+2515	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	❌ 异常: ${e.javaClass.simpleName}: ${e.message}
+2516	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	页面加载：开始初始化 STT
+2517	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	已加载 ${modelOptions.size} 个模型选项（活跃配置 + 已保存预设）
+2518	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	⚠️ 已部署记录存在，但磁盘模型不完整/与引擎不兼容，需重新下载：${e.dir}
+2519	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	本机架构不支持端侧识别（需 arm64-v8a）
+2521	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	请先粘贴模型下载链接
+2522	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	❌ 链接为空
+2523	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	自定义模型
+2524	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	自定义链接，需为 Sherpa-NCNN 流式 transducer 压缩包
+2525	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	未选择模型
+2526	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	❌ 未选择模型
+2527	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	准备下载…
+2528	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	开始下载并部署端侧模型: ${spec.displayName}（${spec.type.label}）→ ${spec.downloadUrl}
+2529	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	✅ 模型已部署，端侧引擎可用
+2530	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	❌ 部署未成功，请检查链接或网络（详见上方状态）
+2532	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	━━━ 开始录音测试 ━━━
+2533	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	AI 模型（Phase1 回退原生识别）
+2534	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	本地识别（原生 SpeechRecognizer）
+2535	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	⚠️ 已选 AI 模型，但 Phase2 模型转写未实现，本测试使用原生识别
+2536	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	识别完成 ✅
+2537	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	没听清，再试一次
+2539	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	⚠️ 未识别到文字
+2541	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	手动停止录音
+2542	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	━━━ 端侧模型测试 ━━━
+2543	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	本机不支持端侧识别 ❌
+2544	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	已部署的是旧模型，引擎跑不了 ❌
+2545	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	❌ 当前部署的是旧版模型（SenseVoice / ONNX），本机引擎无对应实现——这正是此前「端侧识别一直没反应」的根因。请删除后重新下载推荐模型。
+2546	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	未找到端侧模型 ❌
+2547	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	❌ 还没有下载语音识别模型，请在上方「下载并部署」（推荐 22MB 的中文 14M 模型）
+2548	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	聆听中（端侧）…
+2549	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	开始录音（最长 8 秒）…
+2550	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	⚠️ 原生崩溃被拦截
+2551	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	端侧引擎异常 ❌
+2552	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	❌ 原生层崩溃(${e.javaClass.simpleName}): ${e.message}
+2553	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	端侧模型目录: $deployDir
+2554	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	模型目录不存在 ❌
+2555	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	❌ 目录不存在: $deployDir
+2556	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	模型加载中…
+2557	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	⏳ 加载端侧模型
+2558	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	调用 QuroOnDeviceAsr.ensureLoaded()（独立 :asr 进程）…
+2559	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	引擎未给出原因
+2560	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	模型加载失败 ❌
+2561	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	✅ 端侧模型就绪
+2562	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	录音缓冲初始化失败 ❌
+2563	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	无法录音 ❌
+2564	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	录音器不可用 ❌
+2565	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	无法开始录音 ❌
+2566	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	录音结束 (${pcm.size()} bytes)，开始识别…
+2567	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	识别完成 ✅（耗时 ${costMs} ms）
+2568	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	识别未成功 ❌
+2570	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	端侧测试异常
+2571	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	端侧测试异常 ❌
+2572	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	━━━ 云端转写测试 ━━━
+2573	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	未配置 Base URL ❌
+2574	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	❌ 请先在模型配置页填写 API 地址
+2575	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	未配置 API Key ❌
+2576	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	❌ 请先在模型配置页填写 API Key
+2577	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	测试引擎: AI 模型（云端转写）
+2579	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	聆听中（云端）…
+2580	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	录音结束 (${pcmBytes.size} bytes)，发送转写请求…
+2581	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	转写完成 ✅
+2582	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	未识别到文字
+2584	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	⚠️ 转写结果为空
+2585	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	转写失败 ❌
+2586	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	云端测试异常
+2587	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	云端测试异常 ❌
+2588	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	需要录音权限才能测试
+2589	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	❌ 录音权限被拒绝
+2590	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	（未选择模型）
+2592	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	识别引擎
+2595	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	切换到 AI 模型引擎，已刷新模型列表
+2600	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	端侧模型下载与部署
+2604	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	已部署：$deployedName（占用 ${formatBytes(deployedSize)}）
+2605	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	上一次部署失败
+2606	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	尚未部署模型
+2607	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	状态：$statusText
+2609	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	请点「删除模型」后重新下载上方推荐模型（约 22MB）。
+2610	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	自定义链接
+2611	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	（未选择）
+2617	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	已下载 $pct%  (${formatBytes(dlDownloaded)} / ${formatBytes(dlTotal)})
+2618	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	本机不支持
+2619	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	下载并部署
+2623	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	从接口刷新
+2625	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	已选实时模型: $m (provider=$fetchedProvider)
+2627	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	关闭=标准 /audio/transcriptions；开启=把音频塞进 chat 消息（兼容不支持转写端点的网关）
+2628	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	✅ 已开启 /chat/completions 模式
+2629	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	已关闭 /chat/completions 模式
+2630	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	识别设置
+2633	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	说话时实时回显识别中间结果
+2634	app/src/main/java/com/ai/assistance/quro/ui\QuroSttSettingsScreen.kt	?	语音转文本测试
+2644	app/src/main/java/com/ai/assistance/quro/ui\QuroSystemStatusScreen.kt	?	设备型号
+2645	app/src/main/java/com/ai/assistance/quro/ui\QuroSystemStatusScreen.kt	?	Android 版本
+2646	app/src/main/java/com/ai/assistance/quro/ui\QuroSystemStatusScreen.kt	?	应用版本
+2647	app/src/main/java/com/ai/assistance/quro/ui\QuroSystemStatusScreen.kt	?	可用存储
+2648	app/src/main/java/com/ai/assistance/quro/ui\QuroSystemStatusScreen.kt	?	无障碍 (Accessibility)
+2649	app/src/main/java/com/ai/assistance/quro/ui\QuroSystemStatusScreen.kt	?	设备管理员 (Device Admin)
+2651	app/src/main/java/com/ai/assistance/quro/ui\QuroSystemStatusScreen.kt	?	已授权通道：$granted / ${rows.size}
+2658	app/src/main/java/com/ai/assistance/quro/ui\QuroSystemStatusScreen.kt	?	心跳总开关：${if (heartbeatOn) 
+2660	app/src/main/java/com/ai/assistance/quro/ui\QuroSystemStatusScreen.kt	?	(未命名人格)
+2661	app/src/main/java/com/ai/assistance/quro/ui\QuroSystemStatusScreen.kt	?	最近孵化：$ago${if (inc) 
+2664	app/src/main/java/com/ai/assistance/quro/ui\QuroSystemStatusScreen.kt	?	从未孵化
+2665	app/src/main/java/com/ai/assistance/quro/ui\QuroSystemStatusScreen.kt	?	刚刚
+2668	app/src/main/java/com/ai/assistance/quro/ui\QuroSystemStatusScreen.kt	?	${min / 1440} 天前 (${SimpleDateFormat(
+2671	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	空白
+2672	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	会议纪要
+2673	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	# 会议纪要\n时间：\n地点：\n参会人：\n议题：\n决议：\n行动项：
+2674	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	合同
+2675	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	# 合作协议\n甲方：\n乙方：\n标的：\n金额：\n期限：\n违约责任：
+2676	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	简历
+2677	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	# 个人简历\n姓名：\n联系方式：\n教育背景：\n工作经历：\n技能：
+2678	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	报表
+2679	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	| 项目 | 数值 |\n| --- | --- |\n| 收入 | 0 |\n| 支出 | 0 |
+2682	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	✏️ 编辑
+2683	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	👁️ 预览
+2684	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	• 列表
+2685	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	${prefix}粗体文本${prefix}
+2686	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	📊 表格
+2687	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	| 列1 | 列2 |\n| --- | --- |\n| 数据 | 数据 |
+2688	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	━━ 分割
+2689	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	> 引用
+2690	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	> 引用文本\n
+2691	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	🔗 链接
+2692	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	[链接文本](https://)
+2693	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	</> 代码
+2694	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	```\n代码\n```\n
+2695	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	☑️ 待办
+2696	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	- [ ] 待办事项\n
+2710	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	浏览应用文件、查看文本/代码内容
+2711	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	输入应用显示名，反查其精确包名
+2712	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	在应用沙箱内创建/编辑文件与文件夹
+2713	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	文档生成
+2714	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	生成 Word/Excel/PPT/PDF 等真实文档
+2715	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	已有工具
+2716	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	查看已注册工具，可导入 AI 自写工具
+2717	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	在应用内预览本地与生成文档（Word/Excel/PPT/PDF/文本）；文本可编辑，Office 文档可调起系统 WPS 打开
+2718	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	在应用内播放本地音乐（后台持续播放）
+2719	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	视频播放器
+2720	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	在应用内全功能视频播放器播放本地视频
+2721	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	AI 键盘
+2722	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	AI 替你打字·注册为系统输入法·任意 App 可用
+2723	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	工作流
+2724	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	创建和管理自动化工作流，支持定时触发、条件分支
+2725	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	本地工具能力，全部在设备上运行，无需联网即可使用大部分功能。
+2727	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	未找到可打开 ${f.name} 的应用
+2728	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	内部存储（应用私有）
+2729	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	外部存储（应用私有）
+2730	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	公共存储（内部 SD 卡）
+2731	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	上一级
+2735	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	操作
+2743	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	确定删除「${deleteTarget!!.name}」${if (deleteTarget!!.isDirectory) 
+2744	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	}？此操作不可恢复。
+2755	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	类型：${if (f.isDirectory) 
+2757	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	路径：${f.absolutePath}
+2758	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	修改时间：${java.text.SimpleDateFormat(
+2765	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	📂 根目录 (QuroWorkspace)
+2768	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	文件过大（${(f.length() / 1024)}KB），建议用其他方式查看
+2769	app/src/main/java/com/ai/assistance/quro/ui\QuroToolboxScreen.kt	?	（无法读取，可能不是文本文件）
+2780	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	Web 应用工程：AI 写 app.json + 多页面 HTML，native.* 原生桥调用真·Android 能力；支持导入 HTML、Python/JS/CSS 直接跑；可在对话框预览
+2781	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	小程序 (原生引擎)
+2782	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	移植自 Quor-a/GenUI 的原生小程序引擎：自研 C++ JS 引擎 + WXML/WXSS + Flex 布局 + Canvas/GLES 自绘渲染，微信标准范式；AI 用 miniapp_sdk 工具生成工程，这里直接渲染
+2783	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	文件管理 / 浏览器 / IDE
+2784	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	apt/apk/dnf/pacman 安装/卸载/升级/查询软件
+2785	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	免权限文件沙箱与 shell
+2786	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	只读查询应用自有 SQLite
+2787	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	查看 / 编辑 Mermaid 源码，实时渲染并导出 SVG
+2788	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	拖拽式节点流编程，导出 Mermaid
+2789	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	浏览器 AI 操控
+2790	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	AI 用 browser_act 接管当前浏览器：snapshot/click/fill/eval（先 action=open）
+2791	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	构建台
+2792	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	端侧 APK 构建器：Java → DEX → APK，内置工具链（ecj/d8/apksig），免 aapt2，生成可独立安装的应用
+2793	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	KaleidoBox：进程内 JVM/Dex 引擎运行 Kotlin/Java 工具包，列包/装包/调 unit/渲染可交互 UI 表面（内置示例计数器开箱即玩）
+2794	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	APK 级插件：装一个独立 APK 就给 AI 加工具（插件注册扩展点，宿主零改动）。查看/导入/重载/卸载，须与宿主同签名
+2795	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	执行失败：${it.message}
+2800	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	数据库：${if (chosen.isBlank()) 
+2802	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	请先选择数据库
+2816	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	已载入工程「$name」
+2817	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	工程不存在：$name
+2820	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	已保存工程（${savedFiles.size}）
+2824	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	运行失败/超时 ❌ ${tail.take(60)}
+2825	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	运行出错：${e.message}
+2827	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	已导入工程到画布
+2828	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	导入失败：文件不是有效的工程格式
+2829	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	拖拽节点 / 端口连线 / 双击改名；AI 可直接用 node_editor 工具读写本工程
+2830	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	导入工程
+2831	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	画布为空，无可保存内容
+2832	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	保存工程
+2833	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	画布为空，暂无可复制的 Mermaid
+2834	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	复制 Mermaid
+2835	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	画布为空，暂无可渲染内容
+2836	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	已载入工程「${flowName}」
+2837	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	工程不存在：$flowName
+2848	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	已删除 $id
+2849	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	未找到小程序：${current}\n（工程需在 filesDir/miniapps/${current}/ 下含 app.json 与页面 wxml；
+2850	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	也可在 assets/miniprograms/ 下放内置演示）
+2857	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	发行版：${distro?.displayName ?: 
+2858	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	包管理器：${pm?.let { 
+2869	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	选择 ${pmType.displayName} 源
+2870	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	+ 自定义
+2871	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	已切换 ${pmType.displayName} 源：${chosen.name}
+2872	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	源命令执行失败（exit=${res.first}）：${res.second.take(200)}
+2873	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	Rust 镜像源已更新为: ${chosen.name}（下次安装 Rust 时生效）
+2879	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	保存失败：${e.message}
+2882	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	已安装：${out.value[
+2883	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	安装失败：${out.asString()}
+2884	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	我的工具
+2885	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	AI 生成的 KaleidoBox 工具包
+2894	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	全部
+2896	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	外部导入
+2897	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	v${rec.version} · 表面=$surfaces
+2898	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	已卸载：${rec.id}
+2900	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	已安装的 ${packages.size} 个工具包都不带标签「${KaleidoCatalog.TagLabels.zhOf(tagFilter ?: 
+2901	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	)}」，点上方「全部」清除筛选。
+2902	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	插件目录（${availableCatalog.size} 个可安装）
+2904	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	标签「${KaleidoCatalog.TagLabels.zhOf(tagFilter!!)}」下没有可显示的工具包，点上方「全部」清除筛选。
+2907	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	请使用 kaleido 工具为我安装一个 KaleidoBox 工具包（例如示例计数器或单位换算），并告诉我它提供了哪些 unit 和 UI 表面。
+2911	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	输入 .zip 包下载地址（含 kaleido.json + classes.dex）：
+2919	app/src/main/java/com/ai/assistance/quro/ui\QuroToolCenterScreen.kt	?	已编译并安装：${out.value[
+2922	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	这是一条语音合成测试，Zorv AI 正在朗读。
+2923	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	页面加载：开始预初始化 TTS
+2924	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	LaunchedEffect ensure 回调: ok=$ok, voices=${runCatching { QuroTtsHolder.getVoices().size }.getOrDefault(0)}
+2927	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	语音来源
+2928	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	本地系统 (TTS 引擎)
+2929	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	使用手机自带语音引擎，离线可用
+2931	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	Edge / 小米 MiMo / 火山 / 讯飞 / 腾讯 / 阿里 / OpenAI 等，详见「语音服务」
+2932	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	本地系统引擎
+2934	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	声音 (Voice)
+2936	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	语速与音高
+2937	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	语速：${
+2938	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	音高：${
+2941	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	━━━ 点击试听 ━━━
+2942	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	初始化中…
+2944	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	ensureReady 返回: $ok
+2945	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	诊断: $engineDiag
+2947	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	正在朗读…
+2948	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	调用 speak()...
+2949	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	已发送朗读请求 ✅\n$diag
+2950	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	引擎未就绪 ❌\n$diag
+2951	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	正常模式失败(r=-2)，尝试安全模式...
+2952	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	speakMinimal 返回: $r2
+2953	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	✅ 安全模式成功\n$diag
+2955	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	未知状态($r)\n$diag
+2956	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	异常: ${e.javaClass.simpleName}: ${e.message}
+2958	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	━━━ 安全试听（裸调） ━━━
+2959	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	安全模式成功 ✅
+2962	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	━━━ 强制重置 TTS ━━━
+2963	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	已重置，请重新点试听
+2965	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	📋 Bug 日志 (${bugLogs.size})
+2966	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	云模型服务
+2968	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	点击进入「语音服务」选择服务商并配置参数
+2973	app/src/main/java/com/ai/assistance/quro/ui\QuroTtsSettingsScreen.kt	?	当前语音来源无效，请回到顶部「语音来源」重新选择「本地系统」或「云模型服务」。
+2974	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	锁屏
+2975	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	回桌面
+2976	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	多任务
+2977	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	音量+
+2978	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	音量-
+2982	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	已复制：$text
+2983	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	分享连接命令
+2984	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	QuroAI ADB / 默认应用诊断
+2985	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	提权通道: ${if (hasPriv) 
+2986	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	USB 调试: ${when (usbOn) { null -> 
+2987	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	USB 数据线: ${usbCable ?: 
+2988	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	 (已监听)
+2989	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	 (未监听)
+2990	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	连接命令: ${if (tcpPort > 0 && ip != null) 
+2991	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	已连接客户端: ${clients.joinToString(
+2992	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	默认应用角色:
+2995	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	✅ 已关闭 TCP ADB\n${r.output}
+2996	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	❌ 执行失败：${r.render()}
+2999	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	USB / 无线调试 (ADB)
+3002	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	通道状态
+3003	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	提权通道
+3004	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	root 或 Shizuku 可用于启动 TCP adbd
+3005	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	USB 调试
+3006	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	系统开发者选项里的 USB 调试开关
+3007	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	USB 数据线
+3008	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	线缆实际连接状态（区别于 USB 调试开关）
+3009	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	监听端口 $tcpPort${if (listening) 
+3010	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	未启用
+3011	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	无线 ADB（被电脑控制）
+3012	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	启用无线 ADB (TCP)
+3013	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	root/Shizuku 下启动 adbd 监听，电脑可连接
+3014	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	无提权：点此打开系统无线调试配对
+3016	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	电脑/手机连接本机（被控制）
+3017	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	在电脑或另一台手机的终端执行该命令即可连接本机；连接后对方即可控制本机（安装/卸载/截屏/文件/Shell）
+3020	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	电脑连接本机
+3021	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	TCP ADB 已启用，但未检测到 WiFi 局域网 IP（请连接 WiFi）。连上后这里会显示 adb connect 命令。
+3022	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	正在控制本机的客户端
+3026	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	本机作为客户端（控制对方）
+3027	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	本机也可作为 ADB 客户端去连其它设备、或连自身（adb connect 127.0.0.1:$tcpPort）。输入对方 ip:port 即可反向连接并控制对方。
+3031	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	打开终端
+3032	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	到终端里执行 adb / shell 命令控制本机或远端
+3033	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	宿主无 adb 客户端二进制，无法在此列出 adb devices；上面的「连接」会返回 not found。请在上方「打开终端」里用终端自带的 adb，或用系统「无线调试」配对。
+3034	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	系统入口（无提权时手动配对）
+3035	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	开发者选项
+3036	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	打开系统开发者选项（USB 调试开关）
+3037	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	无线调试
+3038	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	Android 11+ 无线调试配对（配对码 + 端口）
+3039	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	ADB Shell（控制代码 / 控制手机）
+3042	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	设备控制（快捷动作 / 控制手机）
+3043	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	截图存到 App 私有存储（$extDir/quro_screencap.png）；锁屏/回桌面/多任务/音量经 input keyevent 注入；重启需二次确认。
+3044	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	最近执行结果
+3045	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	诊断（无需 adb，手机上自证状态）
+3046	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	一键汇总当前 ADB 通道、TCP 监听、连接命令与 8 项默认应用角色状态，可分享给开发者定位；不写任何外部日志。
+3048	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	USB 调试 / 无线调试是系统能力；本应用只负责探测状态、在提权下启停 TCP adbd、展示连接命令，并引导你到系统设置手动配对。
+3049	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	启用无线 ADB 后，同一 WiFi 下的电脑可 adb connect 接管本机；在不可信网络请务必用完即关（关掉 TCP ADB）。
+3050	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	无 root / Shizuku 时无法静默启停 adbd，请使用系统「无线调试」配对（Android 11+ 支持配对码）。
+3053	app/src/main/java/com/ai/assistance/quro/ui\QuroUsbDebugScreen.kt	?	未开启
+3056	app/src/main/java/com/ai/assistance/quro/ui\QuroVideoPlayerScreen.kt	?	视频加载失败：格式不支持或文件损坏
+3058	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceServiceScreen.kt	?	能力分层
+3059	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceServiceScreen.kt	?	云端服务商 · 音色 · 风格标签 · 试听
+3060	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceServiceScreen.kt	?	本地 / 云端模型 / 端侧引擎
+3061	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceServiceScreen.kt	?	悬浮语音球 · 自动朗读 · 对话框语音按钮
+3062	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceServiceScreen.kt	?	待命
+3067	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	任意界面挂可点击的球，STT→LLM→TTS 随时语音对话（需悬浮窗与麦克风权限）。语音能力总闸。
+3071	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	收到 AI 文字回复时，自动用 TTS 朗读出来。
+3072	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	朗读使用「语音合成 (TTS)」页所选的模型与服务商，可在「语音服务 → 语音合成」中更改；语音球对话、数字人也使用同一全局设置。
+3074	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	输入框旁显示语音输入按钮，长按说话、放开结束，识别文本填入输入框。
+3075	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	本地识别（设备原生 SpeechRecognizer）
+3076	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	云端模型（已配置的 AI 转写）
+3077	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	端侧模型（离线 Sherpa-NCNN）
+3078	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	已配置模型：$modelName
+3081	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	默认把对话写进「当前正在看的对话框」；开启后可固定写进某个会话。
+3086	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	开机后自动拉起常住语音球（含通知栏），不自动聆听，等点按开始。
+3089	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	开启后 AI 回复自然穿插情绪 / 语气，让语音更有温度。情绪来源自动跟随「语音合成」所选服务商。
+3090	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	当前语音来源为本地系统 TTS，不解析情绪标记，AI 会以自然语言（措辞 / 语气词）体现情绪，朗读无额外情感起伏。
+3091	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	当前播放服务商：$providerLabel。${if (isMimo) 
+3092	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	更换情绪效果，请到「语音服务 → 语音合成 (TTS)」切换云服务商（如选小米 MiMo 可获得最佳情感合成）。自动朗读、数字人均使用同一全局设置，无需分别配置。
+3094	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	开启后 AI 按内容自动为不同段落分配不同音色（如旁白 / 角色音），并可「边播边合成」无缝衔接。
+3096	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	当前语音来源为本地系统 TTS，不解析语色标记，请到「语音服务 → 语音合成 (TTS)」切换为云端服务商。
+3097	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	可选语色（取自当前服务商 $providerLabel 的真实音色，AI 自由选用）：
+3098	app/src/main/java/com/ai/assistance/quro/ui\QuroVoiceSettingsScreen.kt	?	语色路由与「LLM 情绪标签」互补——情绪决定语气，语色决定音色。两者可叠加，例如 (语色:旁白)(温柔) 故事开始了……
+3099	app/src/main/java/com/ai/assistance/quro/ui\SkillSelector.kt	?	暂无已导入的技能。\n可在「技能管理」中新增或导入技能。
+3100	app/src/main/java/com/ai/assistance/quro/ui\SkillSelector.kt	?	已启用 ${skills.count { it.enabled }} / ${skills.size} 个技能
+3113	app/src/main/java/com/ai/assistance/quro/ui\VisualConfigDialogs.kt	?	选项1\n选项2\n选项3
+3118	app/src/main/java/com/ai/assistance/quro/ui\VisualPopupDialog.kt	?	已完成
+3119	app/src/main/java/com/ai/assistance/quro/ui\VisualPopupDialog.kt	?	已取消
+3124	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	信息展示
+3125	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	按钮选择
+3126	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	表单输入
+3127	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	确认操作
+3128	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	自由HTML
+3145	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	选择题
+3146	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	输入框
+3147	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	开关
+3159	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	调用 visual_popup 工具，参数：$args
+3160	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	（请根据以下描述生成HTML内容：$content）
+3162	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	请选择
+3163	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	请输入
+3165	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	（请生成一个开关界面：$options）
+3167	app/src/main/java/com/ai/assistance/quro/ui\VisualToolDialogs.kt	?	（请根据以下描述生成HTML：$question）
+3169	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceCodeScreen.kt	?	读取失败: ${e.message}
+3170	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceCodeScreen.kt	?	已保存 ${f.name}
+3171	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceCodeScreen.kt	?	保存失败: ${e.message}
+3174	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceCodeScreen.kt	?	空工作区\n右上角新建文件或文件夹
+3175	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceCodeScreen.kt	?	从左侧选择文件开始编辑\n或点击右上角「+」新建
+3177	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceCodeScreen.kt	?	已创建 $name
+3178	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceCodeScreen.kt	?	创建失败: ${e.message}
+3183	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceCodeScreen.kt	?	删除${if (target.isDirectory) 
+3184	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceCodeScreen.kt	?	确定删除「${target.name}」吗？${if (target.isDirectory) 
+3185	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceCodeScreen.kt	?	}此操作不可撤销。
+3186	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceCodeScreen.kt	?	已删除 ${target.name}
+3187	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceCodeScreen.kt	?	名称不能为空
+3188	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceCodeScreen.kt	?	名称不能包含路径分隔符
+3200	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceSelector.kt	?	请输入名称
+3201	app/src/main/java/com/ai/assistance/quro/ui\WorkspaceSelector.kt	?	名称只能包含字母、数字、下划线、连字符或中文
+3202	app/src/main/java/com/ai/assistance/quro/ui\canvas\AipCanvas.kt	?	幻灯
+3203	app/src/main/java/com/ai/assistance/quro/ui\canvas\AipCanvas.kt	?	导图
+3204	app/src/main/java/com/ai/assistance/quro/ui\canvas\AipCanvas.kt	?	演示模式
+3206	app/src/main/java/com/ai/assistance/quro/ui\canvas\AipCanvas.kt	?	导出 Word (.docx)
+3207	app/src/main/java/com/ai/assistance/quro/ui\canvas\AipCanvas.kt	?	导出 PPT (.pptx)
+3208	app/src/main/java/com/ai/assistance/quro/ui\canvas\AipCanvas.kt	?	导出 Markdown (.md)
+3211	app/src/main/java/com/ai/assistance/quro/ui\canvas\AipCanvas.kt	?	AIP 排版内容
+3213	app/src/main/java/com/ai/assistance/quro/ui\canvas\AipCanvas.kt	?	退出
+3215	app/src/main/java/com/ai/assistance/quro/ui\canvas\AipCanvas.kt	?	系列${i + 1}
+3217	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	收起权限模式
+3218	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	展开权限模式
+3220	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	记忆
+3222	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	朗读
+3224	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	特权:${policyLabel(privPolicy)}
+3225	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	 — 显示 AI 推理过程
+3227	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	 — AI 自动沉淀长期记忆
+3228	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	 — AI 可派子智能体分担子任务
+3229	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	 — AI 回复自动朗读
+3230	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	 — AI 实时理解当前屏幕（长按申请屏幕捕获）
+3232	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	 — 选择工作目录
+3234	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	 — 写代码 / 浏览工作区文件
+3235	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	允许
+3236	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	禁止
+3238	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	开启$title
+3239	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatPermissionModeBar.kt	?	长按：${title}（高级）
+3240	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatTopBar.kt	?	对话历史
+3241	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatTopBar.kt	?	切换模型
+3242	app/src/main/java/com/ai/assistance/quro/ui\chat\ChatTopBar.kt	?	切换人格
+3305	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	文件系统
+3306	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	网络/Web
+3307	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	终端/Shell
+3308	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	代码执行
+3309	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	AI/模型
+3310	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	媒体生成
+3311	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	UI自动化
+3312	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	系统信息
+3313	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	通信
+3314	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	数据处理
+3315	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	时间/日程
+3316	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	定位/地图
+3317	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	天气/环境
+3318	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	媒体控制
+3319	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	CMS/模块
+3320	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	可视化
+3321	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	读取文件
+3322	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	写入文件
+3323	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	删除文件
+3324	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	网页搜索
+3325	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	抓取网页
+3326	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	打开链接
+3327	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	内置浏览器
+3328	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	API 调用
+3329	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	命令行执行
+3330	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	Shell 运行
+3331	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	Linux 环境
+3332	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	Proot 容器
+3333	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	ROOT 执行
+3334	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	运行代码
+3335	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	编辑代码
+3336	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	代码检查
+3337	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	打开 IDE
+3338	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	运行测试
+3339	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	包管理器
+3340	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	LLM 对话
+3341	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	文本分类
+3342	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	翻译
+3343	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	OCR 识别
+3344	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	向量嵌入
+3345	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	裁剪图片
+3346	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	音频生成
+3347	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	图像编辑
+3348	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	滤镜处理
+3349	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	点击元素
+3350	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	滑动手势
+3351	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	滚动屏幕
+3352	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	输入文字
+3353	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	截屏/读屏
+3354	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	网格点击
+3356	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	网络状态
+3358	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	CPU 监控
+3359	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	发通知
+3360	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	发邮件
+3361	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	打电话
+3362	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	发消息
+3363	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	推送广播
+3364	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	数据库查询
+3365	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	CSV 解析
+3366	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	JSON 转换
+3367	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	数据图表
+3368	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	数据分析
+3369	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	加密
+3370	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	解密
+3371	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	权限检查
+3372	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	签名验证
+3373	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	风险检查
+3374	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	设闹钟
+3375	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	计时器
+3376	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	日历事件
+3377	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	计划任务
+3378	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	倒计时
+3379	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	GPS 定位
+3380	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	地理编码
+3381	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	导航
+3382	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	轨迹追踪
+3383	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	实时天气
+3384	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	天气预报
+3385	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	天气预警
+3386	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	空气质量
+3387	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	播放音乐
+3388	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	暂停
+3389	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	音量控制
+3390	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	Git 操作
+3391	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	构建项目
+3392	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	部署发布
+3393	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	Docker 容器
+3394	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	CI/CD 流水线
+3395	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	CMS 部署
+3396	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	CMS 插件
+3397	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	CMS 模块
+3398	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	CMS 终端
+3399	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	Bot 发消息
+3400	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	Bot 收消息
+3401	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	Webhook 推送
+3402	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	Bot 卡片消息
+3403	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	保存记忆
+3404	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	搜索记忆
+3405	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	列出记忆
+3406	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	删除记忆
+3407	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	柱状图
+3408	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	折线图
+3409	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	表格渲染
+3410	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	日志查看
+3411	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	错误告警
+3412	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	性能统计
+3413	app/src/main/java/com/ai/assistance/quro/ui\weather\ToolCallIcon.kt	?	通用工具

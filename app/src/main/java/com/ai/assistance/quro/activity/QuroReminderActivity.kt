@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.activity
+import android.content.Context
+import com.ai.assistance.quro.util.qstr
 
 import android.os.Build
 import android.os.Bundle
@@ -23,6 +25,12 @@ import com.ai.assistance.quro.R
  * 不依赖任何 UI 状态（Compose 未组合时也能工作），是纯系统层提醒。
  */
 class QuroReminderActivity : AppCompatActivity() {
+    // 语言：ComponentActivity 不走 AppCompat，必须在 attachBaseContext 里自己包一层，
+    // 否则 Compose 的 stringResource 永远取系统语言（表现为「切了语言界面还是中文」）。
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(com.ai.assistance.quro.util.QuroLocale.wrap(newBase))
+    }
+
 
     companion object {
         const val EXTRA_TITLE = "reminder_title"
@@ -58,7 +66,7 @@ class QuroReminderActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_reminder)
 
-        val title = intent.getStringExtra(EXTRA_TITLE) ?: "提醒"
+        val title = intent.getStringExtra(EXTRA_TITLE) ?: qstr(R.string.qk_01669)
         val text = intent.getStringExtra(EXTRA_TEXT) ?: ""
         val badge = intent.getStringExtra(EXTRA_BADGE) ?: "Zorv AI 提醒"
 

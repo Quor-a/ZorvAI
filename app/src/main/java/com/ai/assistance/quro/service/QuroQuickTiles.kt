@@ -1,4 +1,5 @@
 package com.ai.assistance.quro.service
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Intent
 import android.graphics.drawable.Icon
@@ -24,7 +25,7 @@ class QuroChatTileService : TileService() {
         super.onStartListening()
         qsTile?.apply {
             state = Tile.STATE_ACTIVE
-            label = "Zorv 对话"
+            label = qstr(R.string.qk_03460)
             icon = Icon.createWithResource(this@QuroChatTileService, R.mipmap.ic_launcher)
             updateTile()
         }
@@ -47,7 +48,7 @@ class QuroVoiceTileService : TileService() {
         super.onStartListening()
         qsTile?.apply {
             state = Tile.STATE_INACTIVE
-            label = "Zorv 语音球"
+            label = qstr(R.string.qk_03572)
             icon = Icon.createWithResource(this@QuroVoiceTileService, R.mipmap.ic_launcher)
             updateTile()
         }

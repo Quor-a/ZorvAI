@@ -1,0 +1,175 @@
+﻿2923	Page load: start pre-initializing TTS
+2924	LaunchedEffect ensure callback: ok=$ok, voices=${runCatching { QuroTtsHolder.getVoices().size }.getOrDefault(0)}
+2927	Voice source
+2928	Local system (TTS engine)
+2929	Use the phone's built-in voice engine, works offline
+2931	Edge / Xiaomi MiMo / Volcano / iFlytek / Tencent / Alibaba / OpenAI etc., see "Voice Service"
+2932	Local system engine
+2934	Voice
+2936	Speed and pitch
+2937	Speed: ${
+2938	Pitch: ${
+2941	━━━ Tap to preview ━━━
+2942	Initializing…
+2944	ensureReady returned: $ok
+2945	Diagnostics: $engineDiag
+2947	Reading aloud…
+2948	Calling speak()...
+2949	Speak request sent ✅\n$diag
+2950	Engine not ready ❌\n$diag
+2951	Normal mode failed (r=-2), trying safe mode...
+2952	speakMinimal returned: $r2
+2953	✅ Safe mode succeeded\n$diag
+2955	Unknown status ($r)\n$diag
+2956	Exception: ${e.javaClass.simpleName}: ${e.message}
+2958	━━━ Safe preview (bare call) ━━━
+2959	Safe mode succeeded ✅
+2962	━━━ Force reset TTS ━━━
+2963	Reset done, tap preview again
+2965	📋 Bug logs (${bugLogs.size})
+2966	Cloud model service
+2968	Tap to enter "Voice Service" to choose a provider and configure parameters
+2973	Current voice source is invalid; go back to the top "Voice source" and reselect "Local system" or "Cloud model service".
+2974	Lock screen
+2975	Home
+2976	Recents
+2977	Volume +
+2978	Volume -
+2982	Copied: $text
+2983	Share connection command
+2984	QuroAI ADB / default app diagnostics
+2985	Privilege channel: ${if (hasPriv)
+2986	USB debugging: ${when (usbOn) { null ->
+2987	USB cable: ${usbCable ?:
+2988	 (listening)
+2989	 (not listening)
+2990	Connect command: ${if (tcpPort > 0 && ip != null)
+2991	Connected clients: ${clients.joinToString(
+2992	Default app role:
+2995	✅ TCP ADB stopped\n${r.output}
+2996	❌ Execution failed: ${r.render()}
+2999	USB / wireless debug (ADB)
+3002	Channel status
+3003	Privilege channel
+3004	root or Shizuku can start TCP adbd
+3005	USB debugging
+3006	USB debugging switch in system developer options
+3007	USB cable
+3008	Actual cable connection state (distinct from USB debug switch)
+3009	Listening on port $tcpPort${if (listening)
+3010	Not enabled
+3011	Wireless ADB (controlled by PC)
+3012	Enable wireless ADB (TCP)
+3013	Start adbd listening under root/Shizuku so a PC can connect
+3014	No privilege: tap to open system wireless debug pairing
+3016	PC/phone connects to this device (controlled)
+3017	Run this command in a terminal on a PC or another phone to connect to this device; once connected, the other side can control this device (install/uninstall/screenshot/file/shell)
+3020	PC connects to this device
+3021	TCP ADB enabled but no WiFi LAN IP detected (please connect WiFi). The adb connect command shows here once connected.
+3022	Clients currently controlling this device
+3026	This device as client (controls the other side)
+3027	This device can also act as an ADB client to connect to other devices, or to itself (adb connect 127.0.0.1:$tcpPort). Enter the other side's ip:port to reverse-connect and control it.
+3031	Open terminal
+3032	Run adb / shell commands in the terminal to control this device or a remote
+3033	Host has no adb client binary, cannot list adb devices here; the "connect" above returns not found. Use the terminal's built-in adb via "Open terminal" above, or the system "Wireless debug" pairing.
+3034	System entry (manual pairing without privilege)
+3035	Developer options
+3036	Open system developer options (USB debug switch)
+3037	Wireless debug
+3038	Android 11+ wireless debug pairing (pairing code + port)
+3039	ADB Shell (control code / control phone)
+3042	Device control (quick actions / control phone)
+3043	Screenshot saved to app-private storage ($extDir/quro_screencap.png); lock screen/home/recents/volume injected via input keyevent; reboot needs second confirmation.
+3044	Recent execution result
+3045	Diagnostics (no adb needed, self-prove status on phone)
+3046	One-tap summary of current ADB channel, TCP listening, connection command and 8 default app role states, shareable with developers for diagnosis; writes no external logs.
+3048	USB debug / wireless debug are system capabilities; this app only probes status, starts/stops TCP adbd under privilege, shows connection commands, and guides you to system settings for manual pairing.
+3049	After enabling wireless ADB, a PC on the same WiFi can adb connect to take over this device; on untrusted networks, turn it off right after use (disable TCP ADB).
+3050	Without root / Shizuku, cannot silently start/stop adbd; use system "Wireless debug" pairing (Android 11+ supports pairing code).
+3053	Not enabled
+3056	Video load failed: format unsupported or file corrupted
+3058	Capability tiers
+3059	Cloud provider · voice · style tags · preview
+3060	Local / cloud model / on-device engine
+3061	Floating voice ball · auto-read · dialog voice button
+3062	Standby
+3067	Show a clickable ball on any screen, STT→LLM→TTS for voice chat anytime (needs floating window and mic permission). Master switch for voice.
+3071	When an AI text reply is received, automatically read it aloud with TTS.
+3072	Reading uses the model and provider selected on the "TTS" page; changeable in "Voice Service → TTS"; the voice ball chat and digital human use the same global setting.
+3074	Show a voice input button next to the input box; press and hold to speak, release to end, recognized text fills the input.
+3075	Local recognition (device native SpeechRecognizer)
+3076	Cloud model (configured AI transcription)
+3077	On-device model (offline Sherpa-NCNN)
+3078	Configured model: $modelName
+3081	By default, write the chat into "the dialog currently being viewed"; after enabling, pin it to a specific session.
+3086	Auto-launch the resident voice ball after boot (with notification bar), no auto-listen; waits for tap to start.
+3089	When enabled, AI replies naturally weave in emotion / tone, making the voice warmer. Emotion source auto-follows the provider selected in "TTS".
+3090	Current voice source is local system TTS, which does not parse emotion tags; the AI conveys emotion via natural language (wording / interjections), with no extra emotional inflection in reading.
+3091	Current playback provider: $providerLabel. ${if (isMimo)
+3092	To change the emotion effect, go to "Voice Service → TTS" and switch to a cloud provider (e.g. Xiaomi MiMo for the best emotional synthesis). Auto-read and digital human use the same global setting, no separate config.
+3094	When enabled, the AI auto-assigns different voices to different paragraphs by content (e.g. narration / character voice), and can "synthesize while playing" seamlessly.
+3096	Current voice source is local system TTS, which does not parse voice-color tags; go to "Voice Service → TTS" and switch to a cloud provider.
+3097	Optional voice colors (from the current provider $providerLabel's real voices, freely chosen by AI):
+3098	Voice-color routing complements the "LLM emotion tag" — emotion decides tone, voice color decides timbre. They can stack, e.g. (voice color: narration)(gentle) the story begins…
+3099	No imported skills yet.\nAdd or import skills in "Skill Management".
+3100	Enabled ${skills.count { it.enabled }} / ${skills.size} skills
+3113	Option 1\nOption 2\nOption 3
+3118	Completed
+3119	Cancelled
+3124	Info display
+3125	Button choice
+3126	Form input
+3127	Confirm action
+3128	Free HTML
+3145	Multiple choice
+3146	Input box
+3147	Switch
+3159	Calling visual_popup tool, params: $args
+3160	(Generate HTML content based on the following description: $content)
+3162	Please select
+3163	Please input
+3165	(Generate a switch UI: $options)
+3167	(Generate HTML based on the following description: $question)
+3169	Read failed: ${e.message}
+3170	Saved ${f.name}
+3171	Save failed: ${e.message}
+3174	Empty workspace\nCreate a file or folder at top right
+3175	Select a file from the left to start editing\nor tap "+" at top right to create
+3177	Created $name
+3178	Create failed: ${e.message}
+3183	Delete${if (target.isDirectory)
+3184	Confirm delete "${target.name}"?${if (target.isDirectory)
+3185	} This action cannot be undone.
+3186	Deleted ${target.name}
+3187	Name cannot be empty
+3188	Name cannot contain path separators
+3200	Please enter a name
+3201	Name can only contain letters, digits, underscores, hyphens or Chinese
+3202	Slides
+3203	Mind map
+3204	Presentation mode
+3206	Export Word (.docx)
+3207	Export PPT (.pptx)
+3208	Export Markdown (.md)
+3211	AIP layout content
+3213	Exit
+3215	Series ${i + 1}
+3217	Collapse permission mode
+3218	Expand permission mode
+3220	Memory
+3222	Read aloud
+3224	Privilege:${policyLabel(privPolicy)}
+3225	 — show AI reasoning process
+3227	 — AI auto-crystallizes long-term memory
+3228	 — AI can dispatch sub-agents for subtasks
+3229	 — AI replies auto-read aloud
+3230	 — AI understands the current screen in real time (long-press to request screen capture)
+3232	 — select working directory
+3234	 — write code / browse workspace files
+3235	Allow
+3236	Deny
+3238	Enable$title
+3239	Long-press: ${title} (advanced)
+3240	Chat history
+3241	Switch model
+3242	Switch persona

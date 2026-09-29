@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.aidlaci
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.os.Bundle
@@ -16,7 +18,7 @@ import org.json.JSONObject
 class QuroAidlAciListTool : QuroTool {
     override val name = "aci_list"
     override val description =
-        "列出当前已发现的所有 ACI 第三方 App 及其暴露的能力（id / 说明 / 参数 / 是否需用户确认）。" +
+        qstr(R.string.qk_03546) +
             "当用户问「你能控制哪些 App / 有哪些第三方能力可用」时使用。参数为空 {}。" +
             "注意：第三方 App 必须在设备上已安装且声明了 ACI Service，应用启动时会自动发现；若列表为空，仅说明目标 App 未安装或未声明 ACI Service，请直接告知用户去安装。" +
             "ACI 是本地无 Root 的 AIDL 框架，列表为空时【禁止】用 dumpsys/Shizuku/ROOT 去排查——那不是 ACI 的排障方式。"
@@ -38,7 +40,7 @@ class QuroAidlAciListTool : QuroTool {
 class QuroAidlAciCallTool : QuroTool {
     override val name = "aci_call"
     override val description =
-        "调用一个第三方 App 通过 ACI（Agent Capability Interface）暴露的能力（如发消息 / 查未读 / 建群 / 打开网页 / 执行网页 JS / 发起 HTTP 请求 / 共享工作空间读写 workspace_write·workspace_read·workspace_list·workspace_delete）。" +
+        qstr(R.string.qk_03677) +
             "参数：{\"target_package\":\"第三方 App 包名（用 aci_list 查到的 pkg，可选，若留空则自动使用用户在 ACI 管理中心设置的默认应用）\",\"capability\":\"能力 id（如 send_message / browser_open / http_request）\",\"args\":{参数名:参数值}}。" +
             "调用会跨进程发往目标 App 的 ACI Service 并同步等待结果（最长约 15 秒）。" +
             "【重要】target_package 是可选参数！如果用户已经在 ACI 管理中心设置了默认应用，你可以省略 target_package，系统会自动使用默认应用。" +
@@ -238,7 +240,7 @@ class QuroAidlAciCallTool : QuroTool {
 class QuroAciHttpServerTool : QuroTool {
     override val name = "aci_http_server"
     override val description =
-        "控制 ACI HTTP 模拟服务器（当真实 ACI API 尚未完成时使用）。" +
+        qstr(R.string.qk_03675) +
             "支持操作：start（启动服务器）、stop（停止）、status（查看状态）、add_capability（添加模拟能力）、remove_capability（移除模拟能力）。" +
             "服务器提供 RESTful API 端点，可供前端/测试调用 ACI 功能。" +
             "参数：{\"action\":\"start|stop|status|add_capability|remove_capability\",\"port\":8848,\"capability_id\":\"...\",\"capability\":{...}}"

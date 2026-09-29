@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.net.Uri
@@ -20,7 +22,7 @@ import java.util.UUID
 class AttachFileTool : QuroTool {
     override val name = "attach_file"
     override val description =
-        "把设备上的文件（图片/视频/文档/压缩包等）作为消息附件发到对话框，用户可直接预览。例如用户让你“把这张图发出来/把刚才生成的文件发给我”时调用。" +
+        qstr(R.string.qk_03601) +
         "参数 {\"path\":\"文件绝对路径（如 /sdcard/Pictures/x.jpg）或 content:// URI\",\"caption\":\"可选，随附件显示的一句说明\"}。"
 
     override val parametersJson = """{"type":"object","properties":{"path":{"type":"string","description":"要发送的文件绝对路径或 content:// URI"},"caption":{"type":"string","description":"可选，随附件显示的一句说明文字"}}}"""
@@ -69,7 +71,7 @@ class AttachFileTool : QuroTool {
                 put("size", srcFile.length())
                 put("caption", caption)
             }.toString()
-        }.getOrElse { err(it.message ?: "未知错误") }
+        }.getOrElse { err(it.message ?: qstr(R.string.qk_00503)) }
     }
 
     private fun guessMime(name: String): String {

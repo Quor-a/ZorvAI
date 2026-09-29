@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.linux
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.Manifest
@@ -450,7 +452,7 @@ object QuroLinuxEnv {
                 val logPath = File(sandboxDir(context), "setup-diag.log").absolutePath
                 // 把完整诊断（含 apt-get 真实输出 60+ 行）写到公共 Download 目录，
                 // 用户用手机文件管理器能直接读出"哪个域名拉不到 / 哪个包 404"等根因。
-                val fullDetail = (e.message ?: "未知错误") + "\n\n沙箱内诊断日志: " + logPath
+                val fullDetail = (e.message ?: qstr(R.string.qk_00503)) + "\n\n沙箱内诊断日志: " + logPath
                 writeLastErrorToDownloads(context, fullDetail)
                 _state.value = SandboxState.Error("${e.message}\n\n诊断日志: $logPath\n详细错误已写入 Download/QuroAI_last_setup_error.txt")
                 lastSetupFailAt = System.currentTimeMillis()

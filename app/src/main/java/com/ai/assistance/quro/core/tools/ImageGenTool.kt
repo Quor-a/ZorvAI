@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.util.Log
@@ -111,7 +113,7 @@ class ImageGenTool : QuroTool {
                     null
                 }
             } catch (e: Exception) {
-                Log.e("ImageGenTool", "生成失败", e)
+                Log.e("ImageGenTool", qstr(R.string.qk_02274), e)
                 null
             }
         }

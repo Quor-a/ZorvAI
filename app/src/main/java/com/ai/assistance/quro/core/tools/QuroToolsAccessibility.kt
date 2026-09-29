@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.accessibilityservice.AccessibilityService
@@ -115,7 +117,7 @@ class GetForegroundAppTool : QuroTool {
             runCatching {
                 val root = svc.rootInActiveWindow
                 val pkg = root?.packageName?.toString()
-                if (!pkg.isNullOrEmpty() && pkg != "未知") {
+                if (!pkg.isNullOrEmpty() && pkg != qstr(R.string.qk_00472)) {
                     val label = context.packageManager.getPackageInfo(pkg, 0)
                         .applicationInfo?.loadLabel(context.packageManager)?.toString() ?: pkg
                     return """{"package":"$pkg","label":"$label","source":"accessibility"}"""
@@ -157,9 +159,9 @@ class GetScreenStateTool : QuroTool {
                 1 -> "横屏左转(90°)"
                 2 -> "倒置(180°)"
                 3 -> "横屏右转(270°)"
-                else -> "未知"
+                else -> qstr(R.string.qk_00472)
             }
-        } catch (_: Exception) { "未知" }
+        } catch (_: Exception) { qstr(R.string.qk_00472) }
         val dm = context.resources.displayMetrics
         return """{"screen_on":true,"rotation":"$rotation","width_px":${dm.widthPixels},"height_px":${dm.heightPixels},"density":${dm.densityDpi}}"""
     }
@@ -454,7 +456,7 @@ class LongPressScreenTool : QuroTool {
 /** 在屏幕上滑动（上滑 / 下滑 / 左滑 / 右滑 / 自定义起止坐标）。 */
 class SwipeScreenTool : QuroTool {
     override val name = "swipe_screen"
-    override val description = "在屏幕上执行滑动手势。支持预设方向或自定义起止坐标。"
+    override val description = qstr(R.string.qk_03543)
     override val parametersJson = """{
         "type":"object",
         "properties":{
@@ -525,7 +527,7 @@ class SwipeScreenTool : QuroTool {
 /** 在可编辑框内输入文本（先查找再输入）。 */
 class InputTextTool : QuroTool {
     override val name = "input_text"
-    override val description = "在屏幕上找到输入框并填入文本。可通过 hint/text/description 定位输入框。"
+    override val description = qstr(R.string.qk_03651)
     override val parametersJson = """{
         "type":"object",
         "properties":{
@@ -583,7 +585,7 @@ class InputTextTool : QuroTool {
 /** 滚动列表（向前/向后）。 */
 class ScrollScreenTool : QuroTool {
     override val name = "scroll_screen"
-    override val description = "滚动当前屏幕上的可滚动容器（列表/页面）。"
+    override val description = qstr(R.string.qk_03734)
     override val parametersJson = """{
         "type":"object",
         "properties":{
@@ -632,7 +634,7 @@ class ScrollScreenTool : QuroTool {
 /** 执行全局无障碍动作（返回键 / 最近任务 / 展开通知栏等）。 */
 class GlobalActionTool : QuroTool {
     override val name = "global_action"
-    override val description = "执行全局系统级动作：back（返回）、home（主页）、recents（最近任务）、notifications（展开通知栏）、lock_screen（锁屏）。"
+    override val description = qstr(R.string.qk_03661)
     override val parametersJson = """{
         "type":"object",
         "properties":{

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.genui.aiapp.agent
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import com.ai.assistance.quro.genui.aiapp.agent.ThoughtStepType.*
 import kotlinx.serialization.json.JsonObject
@@ -227,7 +229,7 @@ class AgentThinkingProcessor {
             steps[lastIndex] = oldStep.copy(
                 content = currentStepContent.toString().trim(),
                 status = status,
-                result = if (status == ThoughtStatus.SUCCESS) "完成" else null
+                result = if (status == ThoughtStatus.SUCCESS) qstr(R.string.qk_00420) else null
             )
         }
 

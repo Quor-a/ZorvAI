@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import android.content.Context
 import android.os.Handler
@@ -96,7 +98,7 @@ fun LegacyJsPluginRuntimeScreen(onClose: () -> Unit) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 CircularProgressIndicator()
                 Spacer(Modifier.height(8.dp))
-                Text("插件运行时初始化中…", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.qk_00490), style = MaterialTheme.typography.bodyMedium)
             }
         }
         return
@@ -112,12 +114,11 @@ fun LegacyJsPluginRuntimeScreen(onClose: () -> Unit) {
                 Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回") }
-                Text("插件运行时", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp))
+                IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143)) }
+                Text(stringResource(R.string.qk_00491), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp))
                 Spacer(Modifier.weight(1f))
                 if (useQuickJs) {
-                    Text(
-                        "QuickJS 沙箱",
+                    Text(stringResource(R.string.qk_00492),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(end = 8.dp),

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
@@ -34,7 +36,7 @@ class LinuxRunTool : QuroTool {
         }
         QuroAgentTrace.action("linux", "执行命令", cmd)
         val (code, out) = QuroLinuxEnv.run(context, cmd)
-        QuroAgentTrace.result("linux", "输出", out.take(800))
+        QuroAgentTrace.result("linux", qstr(R.string.qk_02865), out.take(800))
         return if (code == 0) out else "exit=$code\n$out"
     }
 }

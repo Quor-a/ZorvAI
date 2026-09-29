@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.aidlaci
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.util.Log
@@ -66,19 +68,19 @@ class QuroAciHttpServer(private val appContext: Context) {
         val capabilities = listOf(
             createMockCapability(
                 id = "browser_open",
-                description = "打开网页浏览器并导航到指定URL",
+                description = qstr(R.string.qk_03700),
                 params = listOf("url" to "string"),
                 packageName = "com.ai.assistance.quro.browser"
             ),
             createMockCapability(
                 id = "browser_read",
-                description = "读取当前网页内容",
+                description = qstr(R.string.qk_03555),
                 params = listOf("selector" to "string"),
                 packageName = "com.ai.assistance.quro.browser"
             ),
             createMockCapability(
                 id = "http_request",
-                description = "发起HTTP请求并返回响应",
+                description = qstr(R.string.qk_03654),
                 params = listOf(
                     "url" to "string",
                     "method" to "string",
@@ -89,13 +91,13 @@ class QuroAciHttpServer(private val appContext: Context) {
             ),
             createMockCapability(
                 id = "file_read",
-                description = "读取文件内容",
+                description = qstr(R.string.qk_03636),
                 params = listOf("path" to "string"),
                 packageName = "com.ai.assistance.quro"
             ),
             createMockCapability(
                 id = "file_write",
-                description = "写入文件内容",
+                description = qstr(R.string.qk_03419),
                 params = listOf(
                     "path" to "string",
                     "content" to "string"
@@ -104,7 +106,7 @@ class QuroAciHttpServer(private val appContext: Context) {
             ),
             createMockCapability(
                 id = "shell_exec",
-                description = "执行Shell命令",
+                description = qstr(R.string.qk_03634),
                 params = listOf("command" to "string"),
                 packageName = "com.ai.assistance.quro"
             )

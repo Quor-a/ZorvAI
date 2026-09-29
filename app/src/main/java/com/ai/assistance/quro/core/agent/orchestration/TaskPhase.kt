@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.agent.orchestration
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 /** 长程任务的阶段（策划-规划-设计-执行-校验-修正-交付）。 */
 enum class TaskPhase(val label: String) {
@@ -9,7 +11,7 @@ enum class TaskPhase(val label: String) {
     /** 设计方案：实现细节与约束。 */
     DESIGN("设计方案"),
     /** 执行：调用工具/子 Agent 落地。 */
-    EXECUTE("执行"),
+    EXECUTE(qstr(R.string.qk_01642)),
     /** 校验：结果是否符合预期。 */
     VERIFY("校验"),
     /** 修正：未通过时回到规划/执行。 */

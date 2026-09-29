@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import java.io.File
@@ -22,7 +24,7 @@ object QuroKnowledgeFiles {
 /** 在知识库里按关键词检索，返回命中片段（文件:行号 + 内容），按命中词数排序。 */
 class KnowledgeSearchTool : QuroTool {
     override val name = "knowledge_search"
-    override val description = "🔍 知识库关键词检索：在本地知识库里按关键词精确匹配。" +
+    override val description = qstr(R.string.qk_03582) +
         "与 knowledge_rag_search 的区别：knowledge_search 是简单关键词匹配（快、精确），" +
         "knowledge_rag_search 是语义/词法混合检索（更智能、支持同义词）。" +
         "日常检索优先用 knowledge_rag_search，需要精确关键词匹配时用此工具。" +

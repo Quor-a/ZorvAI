@@ -1,0 +1,230 @@
+﻿724	No ACI app found. After installing a third-party app that supports the ACI protocol, tap "Refresh" in the top-right;
+725	Or enter the package name in "Add ACI App" above to register manually. \n\n
+726	ACI is a local, root-free AIDL framework between apps. When the list is empty, do NOT use dumpsys / Shizuku / ROOT to troubleshoot.
+727	Started: ${s.appName}
+728	Start failed: ${s.packageName}
+729	Developer documentation
+733	ACI_Controlled_Device_Access_Guide.md
+744	Package name format is incorrect (should contain a dot)
+746	Generation failed: ${e.message}
+748	Bound
+749	Unbound
+750	Capabilities (${s.capabilities.size})
+752	  ⚠️ Needs confirmation
+755	Recent activity ${SimpleDateFormat(
+763	Are you sure you want to delete all ${logs.size} audit records? This operation cannot be undone.
+766	QQ / Feishu / WeChat connect directly to official gateways; the app holds the key for outbound.
+767	Feishu
+768	WeChat
+769	Not registered
+770	Not connected
+771	Connected
+772	Disconnect
+778	WS connected
+779	WS disconnected
+780	Polling connected
+781	Polling disconnected
+782	Direct official domain (HTTP long polling)
+785	Reconnect
+786	Gateway credentials
+787	You need to enable im:message / im:message.send_as_bot permission + im.message.receive_v1 event subscription.
+788	Session binding
+789	No binding
+790	Auto create
+791	Fixed
+792	Select session
+793	Messages written to this conversation
+795	Create a bot on the QQ Open Platform to get AppID/Secret; add yourself as a tester during the sandbox period. IP allowlist can be left blank.
+796	Create a self-built app on the Feishu Open Platform to get App ID/Secret; choose "long connection" for event subscription to avoid filling in a callback.
+797	WeChat iLink connects directly to the official domain via mobile HTTP long polling; no public endpoint is needed.
+800	Token expired
+801	token expired
+802	Expired
+804	Scan QR code to log in
+806	Failed to start login: ${e.message}
+809	QR code generation failed: $qrData
+817	Manually enter Token (advanced)
+821	Can be obtained via command line: curl "https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3"
+823	After login, the Bot Token is valid for about 24 hours; re-scan when it expires. \n
+830	Branch count
+831	Max depth
+832	Message count
+833	${node.branch.messages.size} messages
+838	↓ ${node.branch.childBranchIds.size} sub-branches
+843	Create
+846	Total branches
+847	Total messages
+848	Active branch ID
+849	Root branch ID
+850	Auto
+851	Desktop (Chrome 120)
+852	Mobile (Chrome 120 Mobile)
+853	Tablet (Chrome 120 Tablet)
+854	Compatibility mode (Chrome 88 legacy)
+855	Eye: capture current page
+856	Click text containing "Next"
+857	tap_text:Next
+858	Count visible clickable controls
+859	(no return value)
+860	⚠ Script error: ${o.optString(
+861	👆 Clicked the control whose text contains "$key"
+862	Control found but click failed
+863	No visible control found whose text contains "$key"
+864	New script
+865	[${nowTs()}] ⚠ Unable to get Activity, screenshot failed\n
+866	[${nowTs()}] ⚠ Interface not laid out yet, screenshot failed\n
+867	[${nowTs()}] 👁 Eye screenshot succeeded: ${file.absolutePath} (${bmp.width}x${bmp.height})\n
+868	[${nowTs()}] ⚠ Screenshot save failed: ${e.message}\n
+869	[${nowTs()}] ⚠ Eye screenshot failed: code=$res\n
+870	Screenshot
+871	👁 Eye screenshot in progress…
+872	⚠ Unable to get interface
+873	Visible clickable controls: ${countClickable(root)}
+874	⚠ This script is not yet supported (system WebView does not expose in-page JS evaluation; current automation uses native "eye + hand").
+875	Open-source address (Iceraven browser)
+876	Link answer · open-source browser list
+877	Link answer · fully open-source Android digital human
+878	Link answer · 3D fully offline (LLM+ASR+TTS+A2BS+rendering all on phone)
+879	Open-source address (tap to view link answer)
+880	Link · open-source browser reference
+881	Share link
+882	Back
+883	Forward
+885	Stop loading
+886	Code editor
+888	Minimize to floating window
+902	Load failed: $it (tap to retry)
+904	Previous
+905	Next
+906	Close find
+913	Select script
+915	[${nowTs()}] Saved: ${updated.name}\n
+917	[${nowTs()}] Script deleted\n
+940	The proxy is injected into the browser WebView network stack in real time (Android 11+ via ProxyController, Android 10 via setHttpProxy). HTTP/SOCKS5 are both supported; proxy authentication (username/password) may not be supported by the underlying WebView under ProxyController.
+941	Proxy saved and injected: ${proxyType} $proxyHost:$proxyPort
+943	Interactive component · ${cards.size}
+946	(no data)
+947	… ${card.rows.size - shownRows.size} more rows omitted from rendering
+948	… ${card.items.size - shownItems.size} more items omitted from rendering
+949	Ended
+950	${d} days 
+951	Submit
+954	Executing
+955	Waiting
+958	Completed $done / ${card.items.size}
+962	… ${card.events.size - shownEvents.size} more events omitted from rendering
+964	… ${card.columns.size - 12} more columns omitted from rendering
+965	Fully open-source Android digital human
+966	II. 3D fully offline (LLM+ASR+TTS+A2BS+rendering all on phone)
+969	View fullscreen
+973	Mermaid source copied
+974	Copy source
+976	WebView error: $description (code=$errorCode)
+977	Render failed: ${err.take(100)}
+978	Web page source copied
+980	Unable to create file in Download directory
+981	Unable to write SVG file
+982	Mini-program (native engine)
+983	Web app source copied
+989	") not found; please ask AI to create this project first using the miniapp_sdk tool)
+992	Component ${i + 1}
+994	New chat
+995	This is a bot conversation from ${platform.label} user $userId
+996	Conversation cleared
+997	⚠️ Model API Key not configured yet. Tap the model chip in the top-right → "Manage in model settings" to fill in baseUrl / apiKey / model
+998	\n\n[Current screen UI structure]\n$it
+999	[Screen understanding: the following is a real-time screenshot of the current screen (MediaProjection / screen capture)]
+1000	[User has selected skill "${skill.name}"; please strictly follow the instructions below to handle this message]\n### ${skill.name}\n${skill.prompt}
+1001	[Context info - the user's currently selected workspace/ACI/skills]\n$contextMessage
+1002	convId=$convId (job cancelled, generation stopped)
+1003	Generation stopped
+1004	Execute
+1005	⚠️ Reply generation failed: ${(e.message ?:
+1006	Exception generating reply convId=$convId
+1007	Reply generation failed: ${e.message ?:
+1008	⚠️ An error occurred: ${(e.message ?:
+1009	⚠️ The voice ball encountered an error: ${e.message ?:
+1010	Execute
+1011	Execution complete
+1013	Waiting to execute
+1014	Discarded background delayed card ownerId=$ownerId (not visible and no liveBuffer, to avoid cross-talk)
+1015	Empty chat
+1016	Help me open/look up a
+1017	Help me open / look up / call XX
+1018	I want to call the XX tool
+1019	A bit
+1020	Want me to help you do it?
+1021	Open Kuaishou
+1022	Kuaishou
+1023	OK, I'll help you open it
+1024	How much battery
+1025	What apps are there
+1026	Help me handle a
+1027	Make that one
+1028	Do a
+1029	Do that one
+1030	That one
+1031	This one
+1032	I guess you want...
+1033	Probably means this
+1034	Looks very clear
+1035	User said something similar before
+1036	Who are you
+1037	What can you do
+1038	Draw a...
+1039	Generate image
+1040	Help me make a poster
+1041	Image description
+1042	Make a video
+1043	Generate video
+1044	Help me edit a video
+1045	Video description
+1046	Image path
+1047	Optional question
+1048	Audio path
+1049	Optional language
+1050	Video path
+1051	Preview this file
+1052	Render a
+1053	Take a look at this
+1054	File path
+1055	Optional label
+1056	Create document
+1058	Write an HTML
+1060	Play audio in workspace
+1061	Play video
+1062	Open this document
+1063	View PDF
+1064	Write an XX
+1066	Title
+1067	Help me write a web page
+1068	Look at index.html
+1069	Modify this file
+1070	Open this PDF
+1071	Create a Word document
+1072	Write a JSON config
+1074	Option 1
+1075	Option 2
+1076	Option 3
+1077	Help me write an article
+1078	Do you want the article in a formal or casual style? What is the topic?
+1079	Delete this file
+1080	Are you sure you want to delete XXX? This operation cannot be undone.
+1081	Send a message
+1082	To whom? What is the content?
+1083	Open app
+1084	Which app to open?
+1085	Help me look up a
+1086	What to look up? From where?
+1087	Set a
+1088	What to set? What are the specific parameters?
+1089	Run a
+1090	What to run? Where to run?
+1091	Caption text
+1092	Button text
+1093	Back
+1094	Content (Markdown/HTML/plain text)
+1096	Hint
+1097	Image URL (optional)
+1098	Clicked button
+1099	Input

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.canvas
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import org.json.JSONArray
 import org.json.JSONObject
@@ -426,7 +428,7 @@ object Aip {
         return JSONObject().apply {
             put("v", PROTOCOL_VERSION)
             put("kind", "doc")
-            put("meta", JSONObject().apply { put("title", title.ifBlank { "文档" }) })
+            put("meta", JSONObject().apply { put("title", title.ifBlank { qstr(R.string.qk_00399) }) })
             put("theme", JSONObject().apply { put("name", "aurora"); put("accent", "#2E6BE6") })
             put("blocks", blocks)
         }.toString()

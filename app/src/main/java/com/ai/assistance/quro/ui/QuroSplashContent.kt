@@ -1,4 +1,5 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -48,8 +49,7 @@ fun QuroSplashContent(modifier: Modifier = Modifier) {
                 letterSpacing = 0.08.sp,
             )
             Spacer(Modifier.height(6.dp))
-            Text(
-                "你的端侧 AI 执行体",
+            Text(stringResource(R.string.qk_02500),
                 color = colorResource(R.color.quro_brand_cyan),
                 fontSize = 14.sp,
                 letterSpacing = 0.12.sp,

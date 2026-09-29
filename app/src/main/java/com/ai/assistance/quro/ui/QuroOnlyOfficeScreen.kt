@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -76,7 +79,7 @@ fun QuroDocScreen(onClose: () -> Unit) {
         if (dest.exists() && dest.length() > 0) {
             viewerFile = dest
         } else {
-            Toast.makeText(ctx, "无法读取该文档，请选择 .docx/.xlsx/.pptx/.pdf 等文件", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_02273), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -87,7 +90,7 @@ fun QuroDocScreen(onClose: () -> Unit) {
                 onClose = { viewerFile = null },
                 onExternal = {
                     if (!QuroDocOpener.open(ctx, viewerFile!!)) {
-                        Toast.makeText(ctx, "未找到可打开该文档的其他应用", Toast.LENGTH_LONG).show()
+                        Toast.makeText(ctx, qstr(R.string.qk_01999), Toast.LENGTH_LONG).show()
                     } else viewerFile = null
                 },
                 readOnly = false
@@ -149,7 +152,7 @@ fun QuroDocScreen(onClose: () -> Unit) {
                                 put("title", title.ifBlank { filename })
                                 put("content", content.ifBlank { " " }) // 空白内容
                             }.toString()
-                            val r = runCatching { AiwpsCreateTool().run(ctx, json) }.getOrDefault("生成失败")
+                            val r = runCatching { AiwpsCreateTool().run(ctx, json) }.getOrDefault(qstr(R.string.qk_02274))
                             // 从结果中提取文件路径（兼容多种格式）
                             val path = when {
                                 r.contains("已生成") -> {
@@ -173,7 +176,7 @@ fun QuroDocScreen(onClose: () -> Unit) {
                                 }
                             } ?: run {
                                 withContext(Dispatchers.Main) {
-                                    Toast.makeText(ctx, "创建失败: $r", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(ctx, qstr(R.string.qk_02279, (r).toString()), Toast.LENGTH_SHORT).show()
                                     showCreate = false
                                 }
                             }
@@ -196,16 +199,15 @@ fun QuroDocScreen(onClose: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("文档") },
-                navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, "返回") } },
+                title = { Text(stringResource(R.string.qk_00399)) },
+                navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_00143)) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
     ) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(16.dp)) {
             Text(
-                "文档在应用内直接打开与查看，无需安装任何第三方办公软件。" +
-                        "支持 Word / Excel / PPT / PDF / TXT / Markdown / 代码 / 图片；TXT / Markdown / 代码可在应用内编辑。",
+                stringResource(R.string.qk_02280) + stringResource(R.string.qk_02281),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp
             )
             Spacer(Modifier.height(12.dp))
@@ -223,20 +225,19 @@ fun QuroDocScreen(onClose: () -> Unit) {
                         )
                     },
                     modifier = Modifier.weight(1f)
-                ) { Text("选择本地文档…") }
+                ) { Text(stringResource(R.string.qk_02282)) }
                 OutlinedButton(
                     onClick = { showCreate = true },
                     modifier = Modifier.weight(1f)
-                ) { Text("新建文档") }
+                ) { Text(stringResource(R.string.qk_01807)) }
             }
 
             Spacer(Modifier.height(20.dp))
             HorizontalDivider()
-            Text("本机 Office 文档", fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
+            Text(stringResource(R.string.qk_02283), fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
 
             if (files.isEmpty()) {
-                Text(
-                    "暂无文档。可用 AI「文档生成」产出，或点上方按钮选择本地文件。",
+                Text(stringResource(R.string.qk_02284),
                     color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp
                 )
             } else {
@@ -256,10 +257,9 @@ fun QuroDocScreen(onClose: () -> Unit) {
 
             Spacer(Modifier.height(20.dp))
             HorizontalDivider()
-            Text("说明", fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
+            Text(stringResource(R.string.qk_01691), fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
             Text(
-                "文档渲染引擎随包内置（mammoth.js / SheetJS / pdf.js），断网也能打开。" +
-                        "AI 亦可在对话中直接调用 aiwps_create 生成真实 .docx/.xlsx/.pptx 文档。",
+                stringResource(R.string.qk_02285) + stringResource(R.string.qk_02286),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp
             )
         }
@@ -298,7 +298,7 @@ private fun CreateDocDialog(
     var type by remember { mutableStateOf("docx") }
     val types = listOf(
         "docx" to "Word", "xlsx" to "Excel", "pptx" to "PPT",
-        "pdf" to "PDF", "md" to "Markdown", "txt" to "文本", "csv" to "表格", "html" to "网页"
+        "pdf" to "PDF", "md" to "Markdown", "txt" to stringResource(R.string.qk_02287), "csv" to stringResource(R.string.qk_01668), "html" to stringResource(R.string.qk_02288)
     )
     val cs = MaterialTheme.colorScheme
     AlertDialog(
@@ -307,13 +307,13 @@ private fun CreateDocDialog(
             TextButton(onClick = { 
                 // 创建空白文档，标题为空，内容为空
                 onCreate(type, "", "") 
-            }) { Text("创建") }
+            }) { Text(stringResource(R.string.qk_00843)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-        title = { Text("新建文档") },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } },
+        title = { Text(stringResource(R.string.qk_01807)) },
         text = {
             Column(Modifier.fillMaxWidth()) {
-                Text("选择文档类型", fontSize = 14.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+                Text(stringResource(R.string.qk_02289), fontSize = 14.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
                 types.chunked(4).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
                         row.forEach { (t, label) ->
@@ -341,8 +341,7 @@ private fun CreateDocDialog(
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    "选择类型后将创建空白文档并进入编辑器。",
+                Text(stringResource(R.string.qk_02290),
                     fontSize = 12.sp, color = cs.onSurfaceVariant
                 )
             }

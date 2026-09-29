@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONObject
@@ -20,7 +22,7 @@ private fun resolveAppFile(context: Context, rel: String): File? {
 
 class WriteFileTool : QuroTool {
     override val name = "write_file"
-    override val description = "📝 设备文件写入：写入文本到设备存储（应用专属目录）。" +
+    override val description = qstr(R.string.qk_03523) +
         "与 workspace_write 的区别：write_file 用相对路径（相对于应用外部存储），写入设备通用位置；" +
         "workspace_write 写入工作区（用户在工具箱-工作区可见）。" +
         "参数：{\"path\":\"sub/a.txt\",\"content\":\"文本\",\"append\":false}。"
@@ -129,7 +131,7 @@ class FileInfoTool : QuroTool {
         if (rel.isEmpty()) return "缺少 path 参数"
         val f = resolveAppFile(context, rel) ?: return "无法访问外部存储"
         if (!f.exists()) return "不存在: $rel"
-        val kind = if (f.isDirectory) "目录" else "文件"
+        val kind = if (f.isDirectory) "目录" else qstr(R.string.qk_00222)
         val size = if (f.isFile) "${f.length()} 字节" else "-"
         val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
         val mt = fmt.format(Date(f.lastModified()))

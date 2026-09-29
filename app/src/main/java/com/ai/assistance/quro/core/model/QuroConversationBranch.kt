@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.model
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -17,7 +19,7 @@ import java.util.UUID
 data class QuroConversationBranch(
     val id: String = UUID.randomUUID().toString(),
     val parentId: String? = null, // 父分支ID，null表示根分支
-    val name: String = "新分支",
+    val name: String = qstr(R.string.qk_00842),
     val messages: List<QuroChatMessage> = emptyList(),
     val childBranchIds: List<String> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
@@ -155,7 +157,7 @@ class QuroConversationBranchRepository(context: Context) {
     /**
      * 创建新的对话树
      */
-    fun createTree(name: String = "新对话"): QuroConversationTree {
+    fun createTree(name: String = qstr(R.string.qk_00282)): QuroConversationTree {
         val rootBranch = QuroConversationBranch(
             name = name,
             parentId = null
@@ -197,7 +199,7 @@ class QuroConversationBranchRepository(context: Context) {
     fun createBranch(
         treeId: String,
         parentBranchId: String,
-        name: String = "新分支",
+        name: String = qstr(R.string.qk_00842),
         initialMessages: List<QuroChatMessage> = emptyList()
     ): QuroConversationBranch? {
         val tree = trees[treeId] ?: return null

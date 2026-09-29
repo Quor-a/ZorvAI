@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.adb.QuroAdbDebug
@@ -19,7 +21,7 @@ import org.json.JSONObject
 class QuroAdbTermTool : QuroTool {
     override val name = "adb_term"
     override val description =
-        "把本机变成可被 ADB 控制的终端（无线调试中枢）。" +
+        qstr(R.string.qk_03577) +
             "action=shell 经特权通道(Shizuku/ROOT)以 root 执行命令，等价于「本机 ADB shell」；" +
             "action=tcp_status 查看 TCP adbd 监听端口与局域网 IP；" +
             "action=tcp_enable 开启无线 ADB（port 默认 5555）；action=tcp_disable 关闭无线 ADB。" +

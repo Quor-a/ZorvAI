@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONArray
@@ -22,7 +24,7 @@ import com.ai.assistance.quro.core.canvas.AipConvert
  */
 class AipComposeTool : QuroTool {
     override val name = "aip_compose"
-    override val description = "📐 后台 AIP 排版合成：用于整篇长文档 / PPT / 报告 / 思维导图的结构化排版。" +
+    override val description = qstr(R.string.qk_03657) +
         "传入 AIP 信封（kind=doc|deck|mindmap + blocks 块数组），工具做字段修复与规范化后回传，" +
         "对话框用原生排版引擎渲染成精美卡片（doc=文档流带分节、deck=16:9 横滑幻灯片、mindmap=导图）。" +
         "可选 export=docx|pptx|md|pdf 时一并生成可分享/打开的真实文件（自研 OOXML，无需联网）。" +
@@ -99,7 +101,7 @@ class AipComposeTool : QuroTool {
                         put("filename", AipConvert.exportFileStem(envelope))
                     }.toString(),
                 )
-            }.getOrElse { "导出失败：${it.message}" }
+            }.getOrElse { qstr(R.string.qk_01993, (it.message).toString()) }
             "\n\n[导出] $r"
         } else ""
 

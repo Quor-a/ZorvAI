@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.widget.Toast
@@ -70,7 +73,7 @@ fun QuroComponentGalleryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("可视化组件库") },
+                title = { Text(stringResource(R.string.qk_01678)) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } },
             )
         },
@@ -79,7 +82,7 @@ fun QuroComponentGalleryScreen(
             Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item { SectionTitle("富组件（ui_widget）", cs) }
+            item { SectionTitle(stringResource(R.string.qk_01679), cs) }
             item {
                 FlowRow(
                     Modifier.fillMaxWidth(),
@@ -96,7 +99,7 @@ fun QuroComponentGalleryScreen(
                 }
             }
 
-            item { SectionTitle("富卡片（ui_card）", cs) }
+            item { SectionTitle(stringResource(R.string.qk_01680), cs) }
             item {
                 FlowRow(
                     Modifier.fillMaxWidth(),
@@ -113,7 +116,7 @@ fun QuroComponentGalleryScreen(
                 }
             }
 
-            item { SectionTitle("AI 自写（mermaid / miniapp）", cs) }
+            item { SectionTitle(stringResource(R.string.qk_01681), cs) }
             item {
                 FlowRow(
                     Modifier.fillMaxWidth(),
@@ -142,8 +145,7 @@ fun QuroComponentGalleryScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(Icons.Filled.Info, null, tint = cs.onPrimaryContainer)
-                        Text(
-                            "点击任意组件，真实样例会发送到对话卡片栏。ui_widget / ui_card / mermaid / miniapp 均为真实渲染能力，已并入本组件库；旧版写死的「内置组件」Demo 已移除。",
+                        Text(stringResource(R.string.qk_01682),
                             color = cs.onPrimaryContainer,
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -160,7 +162,7 @@ fun QuroComponentGalleryScreen(
 private fun launchSpec(context: Context, tool: QuroTool, spec: String, label: String) {
     val result = runCatching { tool.run(context, spec) }.getOrElse { """{"error":"$it"}""" }
     val ok = result.contains("\"ok\":true") || !result.contains("\"error\"")
-    Toast.makeText(context, if (ok) "已发送：$label" else "发送失败：$label", Toast.LENGTH_SHORT).show()
+    Toast.makeText(context, if (ok) qstr(R.string.qk_01683, (label).toString()) else qstr(R.string.qk_01684, (label).toString()), Toast.LENGTH_SHORT).show()
 }
 
 @Composable

@@ -1,0 +1,338 @@
+﻿2141	Address: ${ep.baseUrl.ifBlank {
+2143	Select model (${ml.models.size})
+2146	Current: ${cfg.provider} · ${cfg.model.ifBlank {
+2147	No local model selected
+2148	MNN / llama.cpp local model
+2149	MNN .mnn / llama.cpp folder
+2150	Importing model, please wait…
+2151	Copy failed: folder may be empty or inaccessible, please reselect.
+2152	Import failed: ${e.message ?: e.javaClass.simpleName}
+2159	Available models: ${if (m.modelNames.isEmpty())
+2160	Path: ${m.path}
+2162	Runtime parameters
+2164	Runtime parameters · ${model.name}
+2166	Threads (auto: $autoThreads)
+2189	OpenAI Responses (custom)
+2190	OpenAI compatible (custom)
+2191	Anthropic compatible (custom)
+2192	Gemini compatible (custom)
+2193	Baidu Wenxin Yiyan
+2194	Alibaba Tongyi Qianwen
+2195	iFlytek Spark
+2196	Zhipu GLM
+2197	Baichuan
+2198	Moonshot Kimi
+2199	Xiaomi MiMo
+2200	Silicon Flow
+2201	Infinigence Wujie
+2202	Alipay Bailing
+2203	Volcano Doubao
+2204	LM Studio (local)
+2205	Ollama (local)
+2206	OpenAI compatible (local)
+2207	MNN (local)
+2208	llama.cpp (local)
+2209	PPIO Cloud
+2210	Other / custom
+2211	My models
+2214	OK: downloaded and dynamically loaded (llama.cpp)
+2216	OK: downloaded and dynamically loaded (MNN)
+2217	No downloadable ${if (type ==
+2218	} model found, try another keyword
+2221	(Full model package: config + all weight files)
+2222	About ${entry.sizeMB} MB
+2223	${(progress * 100).toInt()}% downloading…
+2234	Total providers
+2235	Enabled
+2237	Fault
+2238	Model
+2264	Previous track
+2265	Next track
+2266	Loop mode
+2267	Shuffle
+2268	Playlist (${media.queue.size})
+2278	Document: (.+?)（
+2291	Detecting…
+2292	Zorv AI alarm test
+2293	No system clock app found; go to Settings→Apps→Zorv AI→All permissions to view "Set alarm"
+2301	UI interaction / screen content reading (basic automation).
+2302	Accessibility permission required to run UI automation and screen reading.
+2303	Global actions (recent tasks): ${if (ok)
+2305	System API calls / silent install / freeze apps (Root-free).
+2318	Lock screen / disable camera (only these two).
+2319	Device admin permission required, only for locking screen and disabling/restoring camera.
+2320	Device admin: ${st(PrivilegeLevel.L3).details} (no proactive lock in clean architecture)
+2322	Kernel-level operations / system file modification / SELinux (highest risk).
+2325	Standard runtime permissions
+2331	Feature permissions (AI assistant capabilities)
+2335	Permission escalation confirm · ${level.name}
+2370	Mon
+2371	Tue
+2372	Wed
+2373	Thu
+2374	Fri
+2375	Sat
+2376	Sun
+2380	Tap + at top right to add, or let the AI create one for you
+2382	Next: ${SimpleDateFormat(
+2393	Daily
+2394	Weekly
+2395	Monthly
+2396	Yearly
+2398	(every ${interval} cycles)
+2400	Day of month (1-31)
+2401	Month (1-12)
+2411	Toggle visibility
+2413	City name
+2416	Imported ${imported.size} skills
+2421	Built-in signature check:
+2422	Verified ${r.verified} / ${r.total}
+2423	, ⚠️ failed (possible tampering) ${r.failed}: ${r.failedNames.joinToString(
+2426	${skills.count { it.enabled }} enabled / ${skills.size} total
+2427	No skills yet.\nTap the import button at top right to paste-import from an open-source SKILL.md;\nor tap + at bottom right to add one, or ask the AI in chat to write one for you.
+2434	Instruction ${skill.prompt.length} chars
+2435	Signature verified
+2436	Signature failed · possible tampering
+2437	Not signed
+2445	Parameter Schema (JSON, function calling input)
+2451	Heartbeat incubation
+2456	AI incubation
+2459	Last incubated ${mins / 60} hours ago
+2460	Not incubated
+2479	On: AI proactively outputs native interactive UI via ```quro-ui; Off: only when the user asks.
+2480	On: AI proactively outputs self-built small cards via ```quro-card; Off: only when the user asks.
+2483	No tags yet, tap + at top right to create one.
+2484	Selected
+2485	Delete tag
+2493	No memory yet. Tap + at top right to add, or import a backup from file.
+2494	Group:
+2501	Chinese (Mandarin)
+2502	Chinese (Traditional)
+2503	Cantonese
+2504	Japanese
+2505	Current active config
+2506	(not configured)
+2507	(unnamed model)
+2509	❌ baseUrl is empty, cannot fetch models
+2510	baseUrl is empty
+2512	Fetch succeeded, ${res.models.size} models
+2513	✅ Fetch succeeded: ${res.models.size} models
+2514	❌ Fetch failed: ${res.message}
+2515	❌ Exception: ${e.javaClass.simpleName}: ${e.message}
+2516	Page load: initializing STT
+2517	Loaded ${modelOptions.size} model options (active config + saved presets)
+2518	⚠️ Deploy record exists but disk model incomplete/incompatible with engine, re-download needed: ${e.dir}
+2519	This device architecture does not support on-device recognition (requires arm64-v8a)
+2521	Please paste a model download link first
+2522	❌ Link is empty
+2523	Custom model
+2524	Custom link, must be a Sherpa-NCNN streaming transducer archive
+2525	No model selected
+2526	❌ No model selected
+2527	Preparing download…
+2528	Start downloading and deploying on-device model: ${spec.displayName} (${spec.type.label}) → ${spec.downloadUrl}
+2529	✅ Model deployed, on-device engine available
+2530	❌ Deployment failed, check link or network (see status above)
+2532	━━━ Start recording test ━━━
+2533	AI model (Phase1 fallback to native recognition)
+2534	Local recognition (native SpeechRecognizer)
+2535	⚠️ AI model selected but Phase2 model transcription not implemented; this test uses native recognition
+2536	Recognition complete ✅
+2537	Didn't catch that, try again
+2539	⚠️ No text recognized
+2541	Manual stop recording
+2542	━━━ On-device model test ━━━
+2543	This device does not support on-device recognition ❌
+2544	Deployed model is old, engine can't run it ❌
+2545	❌ The currently deployed model is an old version (SenseVoice / ONNX); this device's engine has no matching implementation — this is exactly why on-device recognition was unresponsive before. Delete and re-download the recommended model.
+2546	No on-device model found ❌
+2547	❌ No speech recognition model downloaded yet; please "Download & Deploy" above (recommended 22MB Chinese 14M model)
+2548	Listening (on-device)…
+2549	Start recording (max 8s)…
+2550	⚠️ Native crash intercepted
+2551	On-device engine exception ❌
+2552	❌ Native layer crash (${e.javaClass.simpleName}): ${e.message}
+2553	On-device model dir: $deployDir
+2554	Model dir does not exist ❌
+2555	❌ Dir does not exist: $deployDir
+2556	Model loading…
+2557	⏳ Loading on-device model
+2558	Calling QuroOnDeviceAsr.ensureLoaded() (separate :asr process)…
+2559	Engine gave no reason
+2560	Model load failed ❌
+2561	✅ On-device model ready
+2562	Recording buffer init failed ❌
+2563	Cannot record ❌
+2564	Recorder unavailable ❌
+2565	Cannot start recording ❌
+2566	Recording ended (${pcm.size()} bytes), starting recognition…
+2567	Recognition complete ✅ (took ${costMs} ms)
+2568	Recognition failed ❌
+2570	On-device test exception
+2571	On-device test exception ❌
+2572	━━━ Cloud transcription test ━━━
+2573	Base URL not configured ❌
+2574	❌ Please fill API address in model config page first
+2575	API Key not configured ❌
+2576	❌ Please fill API Key in model config page first
+2577	Test engine: AI model (cloud transcription)
+2579	Listening (cloud)…
+2580	Recording ended (${pcmBytes.size} bytes), sending transcription request…
+2581	Transcription complete ✅
+2582	No text recognized
+2584	⚠️ Transcription result empty
+2585	Transcription failed ❌
+2586	Cloud test exception
+2587	Cloud test exception ❌
+2588	Microphone permission required to test
+2589	❌ Microphone permission denied
+2590	(no model selected)
+2592	Recognition engine
+2595	Switched to AI model engine, refreshed model list
+2600	On-device model download & deploy
+2604	Deployed: $deployedName (occupies ${formatBytes(deployedSize)})
+2605	Last deployment failed
+2606	No model deployed yet
+2607	Status: $statusText
+2609	Please tap "Delete model" then re-download the recommended model above (about 22MB).
+2610	Custom link
+2611	(not selected)
+2617	Downloaded $pct% (${formatBytes(dlDownloaded)} / ${formatBytes(dlTotal)})
+2618	Unsupported on this device
+2619	Download & deploy
+2623	Refresh from API
+2625	Selected realtime model: $m (provider=$fetchedProvider)
+2627	Off=standard /audio/transcriptions; On=embed audio into chat message (compatible with gateways that lack a transcription endpoint)
+2628	✅ Enabled /chat/completions mode
+2629	Disabled /chat/completions mode
+2630	Recognition settings
+2633	Show live interim results while speaking
+2634	Speech-to-text test
+2644	Device model
+2645	Android version
+2646	App version
+2647	Available storage
+2648	Accessibility
+2649	Device admin
+2651	Granted channels: $granted / ${rows.size}
+2658	Heartbeat master switch: ${if (heartbeatOn)
+2660	(unnamed persona)
+2661	Last incubated: $ago${if (inc)
+2664	Never incubated
+2665	Just now
+2668	${min / 1440} days ago (${SimpleDateFormat(
+2671	Blank
+2672	Meeting minutes
+2673	# Meeting Minutes\nTime:\nLocation:\nAttendees:\nTopics:\nResolutions:\nAction items:
+2674	Contract
+2675	# Cooperation Agreement\nParty A:\nParty B:\nSubject:\nAmount:\nTerm:\nLiability for breach:
+2676	Resume
+2677	# Resume\nName:\nContact:\nEducation:\nWork experience:\nSkills:
+2678	Report
+2679	| Item | Value |\n| --- | --- |\n| Income | 0 |\n| Expense | 0 |
+2682	✏️ Edit
+2683	👁️ Preview
+2684	• List
+2685	${prefix}Bold text${prefix}
+2686	📊 Table
+2687	| Col1 | Col2 |\n| --- | --- |\n| Data | Data |
+2688	━━ Divider
+2689	> Quote
+2690	> Quote text\n
+2691	🔗 Link
+2692	[link text](https://)
+2693	</> Code
+2694	```\nCode\n```\n
+2695	☑️ Todo
+2696	- [ ] Todo item\n
+2710	Browse app files, view text/code content
+2711	Enter an app display name to look up its exact package name
+2712	Create/edit files and folders inside the app sandbox
+2713	Document generation
+2714	Generate real documents like Word/Excel/PPT/PDF
+2715	Existing tools
+2716	View registered tools; can import AI-written tools
+2717	Preview local and generated documents in-app (Word/Excel/PPT/PDF/text); text is editable, Office docs can launch system WPS
+2718	Play local music in-app (background playback)
+2719	Video player
+2720	Play local video with a full-featured in-app video player
+2721	AI keyboard
+2722	AI types for you · registered as a system input method · usable in any app
+2723	Workflow
+2724	Create and manage automation workflows with scheduled triggers and conditional branches
+2725	Local tool capabilities, all run on-device, most features work offline.
+2727	No app found to open ${f.name}
+2728	Internal storage (app-private)
+2729	External storage (app-private)
+2730	Public storage (internal SD card)
+2731	Up one level
+2735	Action
+2743	Confirm delete "${deleteTarget!!.name}"${if (deleteTarget!!.isDirectory)
+2744	}? This action cannot be undone.
+2755	Type: ${if (f.isDirectory)
+2757	Path: ${f.absolutePath}
+2758	Modified: ${java.text.SimpleDateFormat(
+2765	📂 Root (QuroWorkspace)
+2768	File too large (${(f.length() / 1024)}KB), use another method to view
+2769	(cannot read, may not be a text file)
+2780	Web app project: AI writes app.json + multi-page HTML, native.* bridge calls real Android capabilities; supports importing HTML, running Python/JS/CSS directly; previewable in chat
+2781	Mini program (native engine)
+2782	Native mini-program engine ported from Quor-a/GenUI: self-built C++ JS engine + WXML/WXSS + Flex layout + Canvas/GLES custom rendering, WeChat-standard paradigm; AI uses miniapp_sdk tool to generate projects, rendered here directly
+2783	File management / browser / IDE
+2784	apt/apk/dnf/pacman install/uninstall/upgrade/query software
+2785	Permission-free file sandbox and shell
+2786	Read-only query of app's own SQLite
+2787	View / edit Mermaid source, live render and export SVG
+2788	Drag-and-drop node-flow programming, export Mermaid
+2789	Browser AI control
+2790	AI uses browser_act to take over the current browser: snapshot/click/fill/eval (action=open first)
+2791	Build station
+2792	On-device APK builder: Java → DEX → APK, built-in toolchain (ecj/d8/apksig), no aapt2, generates an independently installable app
+2793	KaleidoBox: in-process JVM/Dex engine runs Kotlin/Java tool packages, list/install packages, run unit, render interactive UI surfaces (built-in counter example ready to play)
+2794	APK-level plugin: install a standalone APK to add tools to the AI (plugin registration extension point, host zero change). View/import/reload/unload, must be same-signed as host
+2795	Execution failed: ${it.message}
+2800	Database: ${if (chosen.isBlank())
+2802	Please select a database first
+2816	Loaded project "$name"
+2817	Project does not exist: $name
+2820	Saved projects (${savedFiles.size})
+2824	Run failed/timeout ❌ ${tail.take(60)}
+2825	Run error: ${e.message}
+2827	Imported project to canvas
+2828	Import failed: file is not a valid project format
+2829	Drag nodes / connect ports / double-click to rename; AI can directly read/write this project with the node_editor tool
+2830	Import project
+2831	Canvas is empty, nothing to save
+2832	Save project
+2833	Canvas is empty, no Mermaid to copy
+2834	Copy Mermaid
+2835	Canvas is empty, nothing to render
+2836	Loaded project "${flowName}"
+2837	Project does not exist: $flowName
+2848	Deleted $id
+2849	Mini program not found: ${current}\n(Project needs app.json and page wxml under filesDir/miniapps/${current}/;
+2850	or place a built-in demo under assets/miniprograms/)
+2857	Distro: ${distro?.displayName ?:
+2858	Package manager: ${pm?.let {
+2869	Select ${pmType.displayName} source
+2870	+ Custom
+2871	Switched ${pmType.displayName} source: ${chosen.name}
+2872	Source command failed (exit=${res.first}): ${res.second.take(200)}
+2873	Rust mirror source updated to: ${chosen.name} (takes effect next time Rust is installed)
+2879	Save failed: ${e.message}
+2882	Installed: ${out.value[
+2883	Install failed: ${out.asString()}
+2884	My tools
+2885	KaleidoBox tool package generated by AI
+2894	All
+2896	External import
+2897	v${rec.version} · surfaces=$surfaces
+2898	Uninstalled: ${rec.id}
+2900	None of the ${packages.size} installed tool packages carry the tag "${KaleidoCatalog.TagLabels.zhOf(tagFilter ?:
+2901	)}", tap "All" above to clear the filter.
+2902	Plugin catalog (${availableCatalog.size} installable)
+2904	No tool packages under tag "${KaleidoCatalog.TagLabels.zhOf(tagFilter!!)}" to display, tap "All" above to clear the filter.
+2907	Please use the kaleido tool to install a KaleidoBox tool package for me (e.g. the sample counter or unit converter), and tell me what units and UI surfaces it provides.
+2911	Enter the .zip package download address (with kaleido.json + classes.dex):
+2919	Compiled and installed: ${out.value[
+2922	This is a text-to-speech test; Zorv AI is reading it aloud.

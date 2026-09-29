@@ -4,6 +4,9 @@
 )
 
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -71,8 +74,7 @@ fun PluginManagerScreen(onClose: () -> Unit) {
                 IconButton(onClick = onClose) {
                     Text("←", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurface)
                 }
-                Text(
-                    "插件桌面",
+                Text(stringResource(R.string.qk_00409),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = 4.dp),
                     color = MaterialTheme.colorScheme.onSurface,
@@ -177,7 +179,7 @@ private fun PluginLauncherBody(context: Context) {
                     val tmp = File(context.cacheDir, name)
                     context.contentResolver.openInputStream(uri)?.use { i ->
                         tmp.outputStream().use { o -> i.copyTo(o) }
-                    } ?: return@runCatching "无法读取所选文件"
+                    } ?: return@runCatching qstr(R.string.qk_00410)
 
                     // ★ 导入即补签：插件必须以宿主密钥签名才能装（宿主同签名闸门）。
                     //   补签失败绝不阻断安装 —— 回退装原包，把原因显示出来即可。
@@ -193,9 +195,9 @@ private fun PluginLauncherBody(context: Context) {
                             // 用「实际签成功的那个」而不是配置里的那个：
                             // 配置的那把可能在这台机器上读不了，由内置密钥兜底签成功
                             val used = PluginSigning.lastKeystoreName ?: cfg.keystoreName
-                            note = "\n· 已用「$used」(别名 ${cfg.alias}) 补签后再安装"
+                            note = qstr(R.string.qk_00411, (used).toString(), (cfg.alias).toString())
                         } else {
-                            note = "\n· 补签未成功，已按原包安装：$err"
+                            note = qstr(R.string.qk_00412, (err).toString())
                         }
                     }
                     val r = if (target.absolutePath != tmp.absolutePath)
@@ -205,8 +207,8 @@ private fun PluginLauncherBody(context: Context) {
                     else QuroPluginHost.install(target)
                     tmp.delete()
                     if (target.absolutePath != tmp.absolutePath) target.delete()
-                    (if (r.success) "安装成功：${r.pluginId}" else "安装失败：${r.message}") + note
-                }.getOrElse { "安装异常：${it.message}" }
+                    (if (r.success) qstr(R.string.qk_00413, (r.pluginId).toString()) else qstr(R.string.qk_00414, (r.message).toString())) + note
+                }.getOrElse { qstr(R.string.qk_00415, (it.message).toString()) }
             }
             log = result
             busy = false
@@ -237,8 +239,7 @@ private fun PluginLauncherBody(context: Context) {
             if (!ready) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "⚠ 插件引擎未初始化（Application 启动阶段未执行到 QuroPluginHost.attach）。" +
-                        "下面的操作用不了，请把此现象连同 logcat 里 QuroApplication / QuroPluginHost 的报错一起反馈。",
+                    stringResource(R.string.qk_00416) + stringResource(R.string.qk_00417),
                     fontSize = 12.sp, color = cs.error,
                 )
             }
@@ -254,7 +255,7 @@ private fun PluginLauncherBody(context: Context) {
 
             SigningCard(
                 cfg = signCfg,
-                hostFingerprint = runCatching { QuroPluginHost.hostFingerprint() }.getOrNull() ?: "无法读取",
+                hostFingerprint = runCatching { QuroPluginHost.hostFingerprint() }.getOrNull() ?: stringResource(R.string.qk_00418),
                 onToggleEnabled = { v ->
                     signCfg = if (v) PluginSigning.useBuiltIn(context, signCfg) else signCfg.copy(enabled = false)
                     PluginSigning.save(context, signCfg)
@@ -268,7 +269,7 @@ private fun PluginLauncherBody(context: Context) {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                placeholder = { Text("搜索插件 / 包名 / AI 工具", fontSize = 13.sp, color = Muted) },
+                placeholder = { Text(stringResource(R.string.qk_00419), fontSize = 13.sp, color = Muted) },
             )
 
             Spacer(Modifier.height(14.dp))
@@ -284,7 +285,7 @@ private fun PluginLauncherBody(context: Context) {
                             val out = withContext(Dispatchers.IO) { installBuiltin(context) }
                             log = out
                             busy = false
-                            Toast.makeText(context, out.lineSequence().lastOrNull() ?: "完成", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, out.lineSequence().lastOrNull() ?: qstr(R.string.qk_00420), Toast.LENGTH_LONG).show()
                             refresh()
                         }
                     },
@@ -333,7 +334,7 @@ private fun PluginLauncherBody(context: Context) {
                     val out = withContext(Dispatchers.IO) { installBuiltin(context) }
                     log = out
                     busy = false
-                    Toast.makeText(context, out.lineSequence().lastOrNull() ?: "完成", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, out.lineSequence().lastOrNull() ?: qstr(R.string.qk_00420), Toast.LENGTH_LONG).show()
                     refresh()
                 }
             },
@@ -341,7 +342,7 @@ private fun PluginLauncherBody(context: Context) {
             onRefresh = {
                 scope.launch {
                     refresh()
-                    Toast.makeText(context, "已刷新", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, qstr(R.string.qk_00421), Toast.LENGTH_SHORT).show()
                 }
             },
         )
@@ -359,7 +360,7 @@ private fun PluginLauncherBody(context: Context) {
             onReload = {
                 scope.launch {
                     val ok = withContext(Dispatchers.IO) { QuroPluginHost.reload(rec.pluginId) }
-                    log = if (ok) "已重载：${rec.pluginId}" else "重载失败：${rec.pluginId}"
+                    log = if (ok) qstr(R.string.qk_00422, (rec.pluginId).toString()) else qstr(R.string.qk_00423, (rec.pluginId).toString())
                     detailOf = null
                     Toast.makeText(context, log, Toast.LENGTH_SHORT).show()
                     refresh()
@@ -368,7 +369,7 @@ private fun PluginLauncherBody(context: Context) {
             onUninstall = {
                 scope.launch {
                     val ok = withContext(Dispatchers.IO) { QuroPluginHost.uninstall(rec.pluginId) }
-                    log = if (ok) "已卸载：${rec.pluginId}" else "卸载失败：${rec.pluginId}"
+                    log = if (ok) qstr(R.string.qk_00424, (rec.pluginId).toString()) else qstr(R.string.qk_00425, (rec.pluginId).toString())
                     detailOf = null
                     Toast.makeText(context, log, Toast.LENGTH_SHORT).show()
                     refresh()
@@ -391,7 +392,7 @@ private fun PluginLauncherBody(context: Context) {
                         Text(rec.pluginId, fontSize = 11.sp, color = Muted, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Text(
-                        if (rec.pluginId in loadedIds) "已加载" else "未加载",
+                        if (rec.pluginId in loadedIds) qstr(R.string.qk_00426) else qstr(R.string.qk_00427),
                         fontSize = 11.sp,
                         color = if (rec.pluginId in loadedIds) cs.primary else cs.error,
                     )
@@ -399,36 +400,36 @@ private fun PluginLauncherBody(context: Context) {
                 Spacer(Modifier.height(12.dp))
                 if (surfaces.isNotEmpty()) {
                     ListItem(
-                        headlineContent = { Text("打开界面") },
+                        headlineContent = { Text(qstr(R.string.qk_00428)) },
                         supportingContent = { Text(surfaces.joinToString("、") { it.second }) },
                         modifier = Modifier.combinedClickable { openSurface(context, surfaces.first().first, surfaces.first().second); menuOf = null },
                     )
                 }
                 ListItem(
-                    headlineContent = { Text("详情") },
-                    supportingContent = { Text("扩展点 / AI 工具 / 版本信息") },
+                    headlineContent = { Text(qstr(R.string.qk_00429)) },
+                    supportingContent = { Text(qstr(R.string.qk_00430)) },
                     modifier = Modifier.combinedClickable { detailOf = rec; menuOf = null },
                 )
                 ListItem(
-                    headlineContent = { Text("重载") },
-                    supportingContent = { Text("重新实例化插件入口，改完插件立刻生效") },
+                    headlineContent = { Text(qstr(R.string.qk_00431)) },
+                    supportingContent = { Text(qstr(R.string.qk_00432)) },
                     modifier = Modifier.combinedClickable {
                         menuOf = null
                         scope.launch {
                             val ok = withContext(Dispatchers.IO) { QuroPluginHost.reload(rec.pluginId) }
-                            Toast.makeText(context, if (ok) "已重载：${rec.pluginId}" else "重载失败", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, if (ok) qstr(R.string.qk_00422, (rec.pluginId).toString()) else qstr(R.string.qk_00433), Toast.LENGTH_SHORT).show()
                             refresh()
                         }
                     },
                 )
                 ListItem(
-                    headlineContent = { Text("卸载", color = cs.error) },
-                    supportingContent = { Text("连同它贡献的 AI 工具 / ACI 能力 / 界面一起移除") },
+                    headlineContent = { Text(qstr(R.string.qk_00434), color = cs.error) },
+                    supportingContent = { Text(qstr(R.string.qk_00435)) },
                     modifier = Modifier.combinedClickable {
                         menuOf = null
                         scope.launch {
                             val ok = withContext(Dispatchers.IO) { QuroPluginHost.uninstall(rec.pluginId) }
-                            Toast.makeText(context, if (ok) "已卸载：${rec.pluginId}" else "卸载失败", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, if (ok) qstr(R.string.qk_00424, (rec.pluginId).toString()) else qstr(R.string.qk_00436), Toast.LENGTH_SHORT).show()
                             refresh()
                         }
                     },
@@ -444,16 +445,15 @@ private fun PluginLauncherBody(context: Context) {
                 Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)
                     .heightIn(max = 520.dp).verticalScroll(rememberScrollState())
             ) {
-                Text("插件贡献的 AI 工具（${allToolSpecs.size}）", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.qk_00437, (allToolSpecs.size).toString()), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "这些工具已直接进入 AI 的工具集，对话框里直接说需求即可（例如「查一下 SF1234567890」→ express_query）。" +
-                        "若某个工具没生效，AI 也能用 apk_plugin(action=\"call\", name=\"工具名\") 兜底调用。",
+                    stringResource(R.string.qk_00438) + stringResource(R.string.qk_00439),
                     fontSize = 12.sp, color = Muted,
                 )
                 Spacer(Modifier.height(12.dp))
                 if (allToolSpecs.isEmpty()) {
-                    Text("暂无插件工具。先装几个插件吧。", fontSize = 13.sp, color = Muted)
+                    Text(stringResource(R.string.qk_00440), fontSize = 13.sp, color = Muted)
                 }
                 allToolSpecs.forEach { (n, d) ->
                     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
@@ -499,7 +499,7 @@ private fun LauncherStatusBar(ready: Boolean, installed: Int, loaded: Int, toolC
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    if (ready) "插件引擎就绪" else "插件引擎未初始化",
+                    if (ready) stringResource(R.string.qk_00441) else stringResource(R.string.qk_00442),
                     fontSize = 13.sp, fontWeight = FontWeight.Medium, color = cs.onSurface,
                 )
                 Spacer(Modifier.weight(1f))
@@ -507,10 +507,10 @@ private fun LauncherStatusBar(ready: Boolean, installed: Int, loaded: Int, toolC
             }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth()) {
-                StatCell("已安装", installed.toString(), Modifier.weight(1f))
-                StatCell("已加载", loaded.toString(), Modifier.weight(1f))
-                StatCell("AI 工具", toolCount.toString(), Modifier.weight(1f))
-                StatCell("内置包", builtinCount.toString(), Modifier.weight(1f))
+                StatCell(stringResource(R.string.qk_00443), installed.toString(), Modifier.weight(1f))
+                StatCell(stringResource(R.string.qk_00426), loaded.toString(), Modifier.weight(1f))
+                StatCell(stringResource(R.string.qk_00444), toolCount.toString(), Modifier.weight(1f))
+                StatCell(stringResource(R.string.qk_00445), builtinCount.toString(), Modifier.weight(1f))
             }
         }
     }
@@ -558,7 +558,7 @@ private fun LauncherIconCell(
                         .padding(horizontal = 4.dp)
                 ) {
                     Text(
-                        if (surfaceCount > 0) "$surfaceCount 界面" else "$toolCount 工具",
+                        if (surfaceCount > 0) stringResource(R.string.qk_00446, (surfaceCount).toString()) else stringResource(R.string.qk_00447, (toolCount).toString()),
                         fontSize = 8.sp, color = cs.onPrimary,
                     )
                 }
@@ -628,27 +628,26 @@ private fun LauncherEmptyState(
         Spacer(Modifier.height(10.dp))
         Text(
             when {
-                hasQuery -> "没有匹配「$query」的插件"
-                hasAny -> "没有匹配的插件"
-                else -> "插件桌面还是空的"
+                hasQuery -> stringResource(R.string.qk_00448, (query).toString())
+                hasAny -> stringResource(R.string.qk_00449)
+                else -> stringResource(R.string.qk_00450)
             },
             fontSize = 15.sp, color = cs.onSurface,
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            if (hasQuery) "换个关键词试试，也可以搜插件贡献的 AI 工具名。"
-            else "插件是独立 APK，装上就能给 AI 加能力：AI 工具 / ACI 能力 / 斜杠指令 / 自带界面，宿主不用改代码。",
+            if (hasQuery) stringResource(R.string.qk_00451)
+            else stringResource(R.string.qk_00452),
             fontSize = 12.sp, color = Muted, textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (hasBuiltin) Button(onClick = onInstallBuiltin) { Text("一键安装内置插件") }
-            OutlinedButton(onClick = onImport) { Text("导入插件 APK") }
+            if (hasBuiltin) Button(onClick = onInstallBuiltin) { Text(stringResource(R.string.qk_00453)) }
+            OutlinedButton(onClick = onImport) { Text(stringResource(R.string.qk_00454)) }
         }
         if (hasBuiltin) {
             Spacer(Modifier.height(12.dp))
-            Text(
-                "装完可以试试：对话框里问「帮我查快递 SF1234567890」，AI 会调用插件新增的工具。",
+            Text(stringResource(R.string.qk_00455),
                 fontSize = 11.sp, color = Muted, textAlign = TextAlign.Center,
             )
         }
@@ -673,10 +672,10 @@ private fun LauncherDock(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            DockItem("导入 APK", "📥", enabled, onImport)
+            DockItem(stringResource(R.string.qk_00456), "📥", enabled, onImport)
             DockItem("内置插件${if (builtinCount > 0) " $builtinCount" else ""}", "🎁", enabled, onInstallBuiltin)
-            DockItem("插件工具 $toolCount", "🧠", true, onToolList)
-            DockItem("刷新", "⟳", !busy, onRefresh)
+            DockItem(stringResource(R.string.qk_00458, (toolCount).toString()), "🧠", true, onToolList)
+            DockItem(stringResource(R.string.qk_00459), "⟳", !busy, onRefresh)
         }
     }
 }
@@ -725,17 +724,17 @@ private fun PluginDetailSheet(
                     Text(rec.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(rec.pluginId, fontSize = 11.sp, color = Muted, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                AssistChip(onClick = {}, label = { Text(if (loaded) "已加载" else "未加载", fontSize = 11.sp) })
+                AssistChip(onClick = {}, label = { Text(if (loaded) stringResource(R.string.qk_00426) else stringResource(R.string.qk_00427), fontSize = 11.sp) })
             }
 
             Spacer(Modifier.height(12.dp))
             Text("v${rec.versionName} (${rec.versionCode})", fontSize = 12.sp, color = Muted)
-            Text("入口：${rec.entryClass}", fontSize = 11.sp, color = Muted, fontFamily = FontFamily.Monospace)
-            Text("安装于：${formatTime(rec.installedAt)}", fontSize = 11.sp, color = Muted)
+            Text(stringResource(R.string.qk_00460, (rec.entryClass).toString()), fontSize = 11.sp, color = Muted, fontFamily = FontFamily.Monospace)
+            Text(stringResource(R.string.qk_00461, (formatTime(rec.installedAt)).toString()), fontSize = 11.sp, color = Muted)
 
             if (exts.isNotEmpty()) {
                 Spacer(Modifier.height(14.dp))
-                Text("扩展点", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = cs.onSurface)
+                Text(stringResource(R.string.qk_00462), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = cs.onSurface)
                 Spacer(Modifier.height(6.dp))
                 exts.entries.forEach { (k, v) ->
                     Text("· ${extLabel(k)} × $v", fontSize = 12.sp, color = cs.onSurface)
@@ -743,30 +742,30 @@ private fun PluginDetailSheet(
             }
 
             Spacer(Modifier.height(14.dp))
-            Text("贡献的 AI 工具（${tools.size}）", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = cs.onSurface)
+            Text(stringResource(R.string.qk_00463, (tools.size).toString()), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = cs.onSurface)
             Spacer(Modifier.height(6.dp))
             if (tools.isEmpty()) {
-                Text("无", fontSize = 12.sp, color = Muted)
+                Text(stringResource(R.string.qk_00464), fontSize = 12.sp, color = Muted)
             } else {
                 tools.forEach { Text("· $it", fontSize = 12.sp, color = cs.primary, fontFamily = FontFamily.Monospace) }
             }
 
             if (surfaces.isNotEmpty()) {
                 Spacer(Modifier.height(14.dp))
-                Text("自带界面（${surfaces.size}）", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = cs.onSurface)
+                Text(stringResource(R.string.qk_00465, (surfaces.size).toString()), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = cs.onSurface)
                 Spacer(Modifier.height(6.dp))
                 surfaces.forEach { (sid, label) ->
-                    TextButton(onClick = { onOpenSurface(sid, label) }) { Text("打开 $label") }
+                    TextButton(onClick = { onOpenSurface(sid, label) }) { Text(qstr(R.string.qk_00466, (label).toString())) }
                 }
             }
 
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = { if (surfaces.isNotEmpty()) onOpenSurface(surfaces.first().first, surfaces.first().second) }, enabled = surfaces.isNotEmpty()) {
-                    Text("打开界面")
+                    Text(stringResource(R.string.qk_00428))
                 }
-                OutlinedButton(onClick = onReload) { Text("重载") }
-                OutlinedButton(onClick = onUninstall) { Text("卸载", color = cs.error) }
+                OutlinedButton(onClick = onReload) { Text(stringResource(R.string.qk_00431)) }
+                OutlinedButton(onClick = onUninstall) { Text(stringResource(R.string.qk_00434), color = cs.error) }
             }
         }
     }
@@ -778,7 +777,7 @@ private fun openSurface(context: Context, surfaceId: String, label: String) {
     runCatching {
         context.startActivity(PluginSurfaceActivity.intent(context, surfaceId, label))
     }.onFailure {
-        Toast.makeText(context, "打开失败：${it.message}", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, qstr(R.string.qk_00467, (it.message).toString()), Toast.LENGTH_LONG).show()
     }
 }
 
@@ -786,15 +785,15 @@ private fun openSurface(context: Context, surfaceId: String, label: String) {
 private fun installBuiltin(context: Context): String {
     val names = runCatching { context.assets.list("plugins")?.toList() }.getOrNull().orEmpty()
         .filter { it.endsWith(".apk") }
-    if (names.isEmpty()) return "宿主未内置示例插件"
+    if (names.isEmpty()) return qstr(R.string.qk_00468)
     val sb = StringBuilder()
     names.forEach { n ->
         val tmp = File(context.cacheDir, "builtin_$n")
         runCatching {
             context.assets.open("plugins/$n").use { i -> tmp.outputStream().use { o -> i.copyTo(o) } }
             val r = QuroPluginHost.install(tmp)
-            sb.appendLine(if (r.success) "内置插件安装成功：${r.pluginId}" else "内置插件安装失败：${r.message}")
-        }.onFailure { sb.appendLine("内置插件安装异常：${it.message}") }
+            sb.appendLine(if (r.success) qstr(R.string.qk_00469, (r.pluginId).toString()) else qstr(R.string.qk_00470, (r.message).toString()))
+        }.onFailure { sb.appendLine(qstr(R.string.qk_00471, (it.message).toString())) }
         tmp.delete()
     }
     return sb.toString().trim()
@@ -836,26 +835,26 @@ private fun gradientFor(seed: String): List<Color> {
 }
 
 private fun formatTime(ms: Long): String {
-    if (ms <= 0) return "未知"
+    if (ms <= 0) return qstr(R.string.qk_00472)
     return java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
         .format(java.util.Date(ms))
 }
 
 private fun extLabel(type: String): String = when (type) {
-    "AI_TOOL" -> "AI 工具"
-    "ACI_CAPABILITY" -> "ACI 能力"
-    "CHAT_CARD" -> "对话卡片"
-    "UI_WIDGET" -> "内联组件"
-    "UI_SURFACE" -> "界面"
-    "MODEL_PROVIDER" -> "模型接入"
-    "RAG_SOURCE" -> "知识源"
-    "COMMAND" -> "斜杠指令"
-    "SETTING" -> "设置项"
-    "SCHEDULE_TASK" -> "定时任务"
-    "CHANNEL" -> "消息渠道"
-    "FILE_HANDLER" -> "文件处理"
-    "CODE_RUNTIME" -> "代码运行时"
-    "SPEECH" -> "语音"
+    "AI_TOOL" -> qstr(R.string.qk_00444)
+    "ACI_CAPABILITY" -> qstr(R.string.qk_00473)
+    "CHAT_CARD" -> qstr(R.string.qk_00474)
+    "UI_WIDGET" -> qstr(R.string.qk_00475)
+    "UI_SURFACE" -> qstr(R.string.qk_00476)
+    "MODEL_PROVIDER" -> qstr(R.string.qk_00477)
+    "RAG_SOURCE" -> qstr(R.string.qk_00478)
+    "COMMAND" -> qstr(R.string.qk_00479)
+    "SETTING" -> qstr(R.string.qk_00480)
+    "SCHEDULE_TASK" -> qstr(R.string.qk_00481)
+    "CHANNEL" -> qstr(R.string.qk_00482)
+    "FILE_HANDLER" -> qstr(R.string.qk_00483)
+    "CODE_RUNTIME" -> qstr(R.string.qk_00484)
+    "SPEECH" -> qstr(R.string.qk_00485)
     else -> type
 }
 
@@ -883,15 +882,14 @@ private fun SigningCard(
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("导入插件时自动补签", fontSize = 13.sp, color = cs.onSurface)
+                    Text(stringResource(R.string.qk_00486), fontSize = 13.sp, color = cs.onSurface)
                     Text(
-                        if (cfg.enabled && cfg.ready) "已就绪：${cfg.keystoreName}（内置）"
-                        else "已关闭：只接受已与宿主同签名的插件",
+                        if (cfg.enabled && cfg.ready) stringResource(R.string.qk_00487, (cfg.keystoreName).toString())
+                        else stringResource(R.string.qk_00488),
                         fontSize = 11.sp,
                         color = if (cfg.enabled && cfg.ready) cs.primary else cs.error,
                     )
-                    Text(
-                        "宿主当前签名：$hostFingerprint",
+                    Text(stringResource(R.string.qk_00489, (hostFingerprint).toString()),
                         fontSize = 11.sp, color = cs.onSurfaceVariant,
                     )
                 }

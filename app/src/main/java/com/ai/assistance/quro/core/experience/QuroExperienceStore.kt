@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.experience
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONArray
@@ -27,10 +29,10 @@ enum class ExperienceType(val key: String) {
 
     companion object {
         fun from(s: String?): ExperienceType = when (s?.lowercase()?.trim()) {
-            "error", "errors", "bug", "报错", "失败" -> ERROR
+            "error", "errors", "bug", "报错", qstr(R.string.qk_00139) -> ERROR
             "solution", "solutions", "fix", "方案", "解决" -> SOLUTION
-            "pattern", "patterns", "tool", "模式", "工具" -> PATTERN
-            "compatibility", "compat", "version", "兼容", "版本" -> COMPAT
+            "pattern", "patterns", "tool", "模式", qstr(R.string.qk_00135) -> PATTERN
+            "compatibility", "compat", "version", "兼容", qstr(R.string.qk_01612) -> COMPAT
             else -> ERROR
         }
     }

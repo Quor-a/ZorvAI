@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.genui.aiapp.agent
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -163,7 +165,7 @@ val ThoughtStepType.displayIcon: String
 val ThoughtStepType.displayName: String
     get() = when (this) {
         ThoughtStepType.INTENT -> "理解意图"
-        ThoughtStepType.THINK -> "深度思考"
+        ThoughtStepType.THINK -> qstr(R.string.qk_03219)
         ThoughtStepType.PLAN -> "制定计划"
         ThoughtStepType.RETRIEVE -> "检索知识"
         ThoughtStepType.TOOL_CALL -> "调用技能"

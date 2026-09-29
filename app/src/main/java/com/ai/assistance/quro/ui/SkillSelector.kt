@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -30,12 +32,11 @@ fun SkillSelectionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("选择技能")
+            Text(stringResource(R.string.qk_00166))
         },
         text = {
             if (skills.isEmpty()) {
-                Text(
-                    "暂无已导入的技能。\n可在「技能管理」中新增或导入技能。",
+                Text(stringResource(R.string.qk_03099),
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -74,7 +75,7 @@ fun SkillSelectionDialog(
                     modifier = Modifier.align(Alignment.CenterVertically),
                 )
                 Button(onClick = onDismiss) {
-                    Text("完成")
+                    Text(stringResource(R.string.qk_00420))
                 }
             }
         },

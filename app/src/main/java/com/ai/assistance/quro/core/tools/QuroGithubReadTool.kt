@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.util.Base64
@@ -15,7 +17,7 @@ import java.net.URL
  */
 class QuroGithubReadTool : QuroTool {
     override val name = "github_read"
-    override val description = "读取 GitHub 仓库内容：文件源码 / 目录列表 / Issue / PR 文件变更 / PR diff。" +
+    override val description = qstr(R.string.qk_03739) +
         "参数 {\"owner\":\"所有者（必填）\",\"repo\":\"仓库名（必填）\",\"action\":\"file|dir|issue|pr_files|pr_diff\",\"path\":\"文件路径（file/dir 用）\",\"number\":123（issue/pr 用）,\"ref\":\"分支或 SHA 可选\"}。" +
         "已登录 GitHub（auth_service 中 name=github）会带令牌提升限额。"
     override val parametersJson = """{

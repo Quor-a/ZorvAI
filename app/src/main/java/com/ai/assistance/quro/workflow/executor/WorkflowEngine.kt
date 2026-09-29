@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.workflow.executor
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 // HttpCapability 已删除（ACI 部分不移植）
@@ -283,7 +285,7 @@ object WorkflowEngine {
                     Outcome(ok)
                 }
                 NodeType.NOTIFY -> {
-                    Device.notify(appCtx, p["title"] ?: "工作流", p["body"] ?: "")
+                    Device.notify(appCtx, p["title"] ?: qstr(R.string.qk_02723), p["body"] ?: "")
                     log.appendLine("  NOTIFY: ${p["title"]} / ${p["body"]}")
                     Outcome(true)
                 }

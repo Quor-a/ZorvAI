@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import org.json.JSONArray
 import org.json.JSONObject
@@ -77,20 +79,20 @@ object QuroCloudTtsCatalog {
         // ═══ 场景/角色（阿里百炼/腾讯云/火山引擎） ═══
         "聊天", "客服", "新闻播报", "新闻-随意", "新闻-正式",
         "故事讲述", "广播", "诗歌朗诵", "解说", "体育解说", "体育解说-激情",
-        "广告- upbeat", "智能助手", "撒娇", "傲娇", "震惊", "厌恶",
+        "广告- upbeat", qstr(R.string.qk_00280), "撒娇", "傲娇", "震惊", "厌恶",
         "害怕-颤抖", " shout(喊叫)", " whisper(耳语)", " unfriendly(冷淡)",
         // ═══ 音色类型 ═══
         "磁性", "醇厚", "清亮", "空灵", "稚嫩", "苍老", "甜美", "沙哑", "醇雅",
         "夹子音", "御姐音", "正太音", "大叔音", "台湾腔",
         // ═══ 方言（CosyVoice3 官方支持列表扩展） ═══
-        "东北话", "四川话", "河南话", "粤语", "山东话", "湖南话", "陕西话",
+        "东北话", "四川话", "河南话", qstr(R.string.qk_02503), "山东话", "湖南话", "陕西话",
         // ═══ 角色/特殊 ═══
         "孙悟空", "林黛玉", "唱歌",
         // ═══ 阿里百炼 CosyVoice3 专属情境标签 ═══
         "闲聊对话", "课堂教学", "比赛解说", "深夜电台", "剧情解说", "科普推广",
         "产品推广", "脱口秀", "广告促销", "语音导航", "儿童内容解说",
         // ═══ 阿里百炼 CosyVoice3 专属角色标签 ═══
-        "温和客服", "傲娇公主", "元气少女", "可爱孩童", "机器人", "小猪佩奇",
+        "温和客服", "傲娇公主", "元气少女", "可爱孩童", qstr(R.string.qk_00220), "小猪佩奇",
         "旁白", "故事机", "儿童玩具",
     )
 
@@ -123,20 +125,20 @@ object QuroCloudTtsCatalog {
         TagGroup("场景角色", listOf(
             "聊天", "客服", "新闻播报", "新闻-随意", "新闻-正式",
             "故事讲述", "广播", "诗歌朗诵", "解说", "体育解说", "体育解说-激情",
-            "广告-upbeat", "智能助手", "撒娇", "傲娇", "震惊", "厌恶",
+            "广告-upbeat", qstr(R.string.qk_00280), "撒娇", "傲娇", "震惊", "厌恶",
             "害怕-颤抖", "shout(喊叫)", "whisper(耳语)", "unfriendly(冷淡)",
         )),
         TagGroup("音色类型", listOf(
             "磁性", "醇厚", "清亮", "空灵", "稚嫩", "苍老", "甜美", "沙哑", "醇雅",
             "夹子音", "御姐音", "正太音", "大叔音", "台湾腔",
         )),
-        TagGroup("方言", listOf("东北话", "四川话", "河南话", "粤语", "山东话", "湖南话", "陕西话")),
+        TagGroup("方言", listOf("东北话", "四川话", "河南话", qstr(R.string.qk_02503), "山东话", "湖南话", "陕西话")),
         TagGroup("CosyVoice3 情境", listOf(
             "闲聊对话", "课堂教学", "比赛解说", "深夜电台", "剧情解说", "科普推广",
             "产品推广", "脱口秀", "广告促销", "语音导航", "儿童内容解说",
         )),
         TagGroup("CosyVoice3 角色", listOf(
-            "温和客服", "傲娇公主", "元气少女", "可爱孩童", "机器人", "小猪佩奇",
+            "温和客服", "傲娇公主", "元气少女", "可爱孩童", qstr(R.string.qk_00220), "小猪佩奇",
             "旁白", "故事机", "儿童玩具",
         )),
         TagGroup("角色/特殊", listOf("孙悟空", "林黛玉", "唱歌")),
@@ -203,7 +205,7 @@ object QuroCloudTtsCatalog {
         val lines = mutableListOf<String>()
         if (def.voices.isNotEmpty()) {
             for (v in def.voices) {
-                val lang = v.lang.ifBlank { "未知" }
+                val lang = v.lang.ifBlank { qstr(R.string.qk_00472) }
                 lines += "${v.name} [id=${v.id} · 语言=$lang]"
             }
             cfg.customVoices.forEach {

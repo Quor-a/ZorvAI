@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONArray
@@ -10,7 +12,7 @@ import org.json.JSONObject
  */
 class QuroAutomaticUiTool : QuroTool {
     override val name = "automatic_ui"
-    override val description = "脚本化 UI 自动操作：按顺序执行一组界面动作（dump 当前界面 / 按文本·id·描述·坐标点击 / 输入文本 / 滑动 / 滚动 / 等待）。" +
+    override val description = qstr(R.string.qk_03520) +
         "可结合 ui_tree 的节点信息精准点击。参数 {\"actions\":[ {\"action\":\"dump|tap_text|tap_id|tap_desc|tap_bounds|input_text|swipe|scroll|wait\",\"text\":..,\"id\":..,\"desc\":..,\"bounds\":\"x1,y1,x2,y2\",\"value\":..,\"direction\":..,\"ms\":..} ]}。"
     override val parametersJson = """{
         "type":"object",

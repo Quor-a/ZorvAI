@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONObject
@@ -19,7 +21,7 @@ import java.io.FileInputStream
  */
 class AiwpsEditTool : QuroTool {
     override val name = "aiwps_edit"
-    override val description = "改写/重写本地已有文档：读取其类型，用提供的新正文重生成同类型真实文档。" +
+    override val description = qstr(R.string.qk_03587) +
         "参数 {\"path\":\"原文档绝对路径(用于推断类型与文件名)\",\"content\":\"新正文(完整)\",\"title\":\"可选标题\"," +
         "\"overwrite\":false(默认生成 _edited 新文件)/true(覆盖原文件)}。" +
         "支持 docx/xlsx/pptx/pdf/md/txt/csv/html。典型流程：aiwps_read 读取 → 改写正文 → aiwps_edit 落盘。"
@@ -62,7 +64,7 @@ class AiwpsEditTool : QuroTool {
 
         val genResult = runCatching { AiwpsCreateTool().run(context, json) }
             .getOrElse { return "aiwps_edit 生成失败：$it" }
-        if (!genResult.startsWith("已生成")) return genResult // 透传工具自身错误（缺 content / 类型不支持等）
+        if (!genResult.startsWith(qstr(R.string.qk_02275))) return genResult // 透传工具自身错误（缺 content / 类型不支持等）
 
         val genPath = Regex("""文档：(.+?)（""").find(genResult)?.groupValues?.getOrNull(1)?.trim()
             ?: return "aiwps_edit 生成成功但无法解析路径：$genResult"

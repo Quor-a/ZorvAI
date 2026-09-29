@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.service
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -152,7 +154,7 @@ class VisualQuestionOverlayService : Service(), CoroutineScope by CoroutineScope
             .setContentText("点此回到应用作答")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pi)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "关闭", stopPi)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, qstr(R.string.qk_00065), stopPi)
             .build()
     }
 

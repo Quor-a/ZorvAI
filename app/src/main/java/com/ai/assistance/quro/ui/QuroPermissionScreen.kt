@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.Manifest
 import android.app.Activity
@@ -67,7 +70,7 @@ import androidx.compose.runtime.collectAsState
 private const val L2_POLL_INTERVAL_MS = 2500L
 
 /** 异步探测尚未返回时的占位文案。 */
-private const val PROBING_HINT = "正在探测…"
+private val PROBING_HINT = qstr(R.string.qk_02291)
 
 /**
  * 生成「探测中」占位状态，保证 states 在任何时刻都含全部四个等级。
@@ -158,14 +161,14 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                     val intent = Intent(android.provider.AlarmClock.ACTION_SET_ALARM).apply {
                         putExtra(android.provider.AlarmClock.EXTRA_HOUR, java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY))
                         putExtra(android.provider.AlarmClock.EXTRA_MINUTES, (java.util.Calendar.getInstance().get(java.util.Calendar.MINUTE) + 1) % 60)
-                        putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "Zorv AI 闹钟测试")
+                        putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, qstr(R.string.qk_02292))
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                     ctx.startActivity(intent)
                 }.onFailure {
                     // 无系统时钟 App 时落到应用详情页
                     item.guideIntent?.let { ctx.startActivity(it) }
-                    android.widget.Toast.makeText(ctx, "未找到系统时钟应用，请到 设置→应用→Zorv AI→所有权限 中查看「设置闹钟」", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(ctx, qstr(R.string.qk_02293), android.widget.Toast.LENGTH_LONG).show()
                 }
             }
             "exact_alarm" -> item.guideIntent?.let { ctx.startActivity(it) }
@@ -245,15 +248,14 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回") }
-                Text("系统权限", style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold), modifier = Modifier.weight(1f))
+                IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143)) }
+                Text(stringResource(R.string.qk_00123), style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold), modifier = Modifier.weight(1f))
                 IconButton(onClick = { showAudit = true }) {
-                    Icon(Icons.Filled.History, contentDescription = "审计日志")
+                    Icon(Icons.Filled.History, contentDescription = stringResource(R.string.qk_02294))
                 }
             }
 
-            Text(
-                "分层、受控、可审计：L1 无障碍 → L2 Shizuku → L3 设备管理员 → L4 ROOT，逐级提升。任何越权操作都需经过「意图→策略检查→用户确认→审计」四阶段。",
+            Text(stringResource(R.string.qk_02295),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -263,12 +265,12 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                 shape = RoundedCornerShape(10.dp),
             ) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("权限模式", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.qk_02296), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                     Text(
                         when (privPolicy) {
-                            com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW -> "允许（全部允许，不再询问）"
-                            com.ai.assistance.quro.core.policy.QuroPolicy.DENY -> "禁止（任何提升都被拒绝）"
-                            com.ai.assistance.quro.core.policy.QuroPolicy.ASK -> "询问（每次弹确认）"
+                            com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW -> stringResource(R.string.qk_02297)
+                            com.ai.assistance.quro.core.policy.QuroPolicy.DENY -> stringResource(R.string.qk_02298)
+                            com.ai.assistance.quro.core.policy.QuroPolicy.ASK -> stringResource(R.string.qk_02299)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
@@ -279,12 +281,12 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
             // ---- 特权层级 L1-L4 ----
             PrivilegeCard(
                 level = PrivilegeLevel.L1,
-                title = "无障碍服务",
+                title = stringResource(R.string.qk_02300),
                 channel = "AccessibilityService",
                 state = st(PrivilegeLevel.L1),
-                rationale = "UI 交互 / 屏幕内容读取（基础自动化）。",
-                onRequest = { requestElevation(PrivilegeLevel.L1, "需要无障碍权限以执行界面自动化与屏幕读取。") },
-                testLabel = if (st(PrivilegeLevel.L1).available) "测试" else null,
+                rationale = stringResource(R.string.qk_02301),
+                onRequest = { requestElevation(PrivilegeLevel.L1, qstr(R.string.qk_02302)) },
+                testLabel = if (st(PrivilegeLevel.L1).available) stringResource(R.string.qk_02078) else null,
                 onTest = if (st(PrivilegeLevel.L1).available) {
                     {
                         val ok = QuroAccessibilityService.instance
@@ -295,13 +297,13 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
             )
             PrivilegeCard(
                 level = PrivilegeLevel.L2,
-                title = "Shizuku 服务",
+                title = stringResource(R.string.qk_02304),
                 channel = "Shizuku / ADB Bridge",
                 state = st(PrivilegeLevel.L2),
-                rationale = "系统 API 调用 / 静默安装 / 冻结应用（免 Root）。",
+                rationale = stringResource(R.string.qk_02305),
                 onRequest = {
                     // 🔧 立即可见反馈：杜绝"点了按钮完全没反应"的体感
-                    Toast.makeText(ctx, "正在请求 Shizuku 授权…", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_02306), Toast.LENGTH_SHORT).show()
 
                     // 拉起 Shizuku 应用本身，让用户在应用内把本应用加入允许列表并授权（最可靠的兜底路径，
                     // 因为 Shizuku 的权限本来就是在 Shizuku Manager 应用里授予的；程序化 requestPermission
@@ -314,7 +316,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                         // 注意：action 字符串里的 moe.shizuku.manager.* 是协议命名空间不是包名，保持原样。
                         val pkg = QuroShizukuPkg.installed(ctx)
                         if (pkg == null) {
-                            Toast.makeText(ctx, "未检测到 Shizuku，请先安装后再授权", Toast.LENGTH_LONG).show()
+                            Toast.makeText(ctx, qstr(R.string.qk_02307), Toast.LENGTH_LONG).show()
                             runCatching {
                                 ctx.startActivity(
                                     android.content.Intent(android.content.Intent.ACTION_VIEW)
@@ -346,7 +348,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                             // getLaunchIntentForPackage 返回 null 不代表未安装——
                             // Shizuku Manager 的 Launcher Activity 可能被隐藏或受 ROM 限制。
                             // 此时 installed() 已确认包存在，应引导用户手动打开。
-                            Toast.makeText(ctx, "无法自动打开 Shizuku 管理器，请手动打开 Shizuku 应用并授权本应用", Toast.LENGTH_LONG).show()
+                            Toast.makeText(ctx, qstr(R.string.qk_02308), Toast.LENGTH_LONG).show()
                             // 尝试用通用 ACTION 启动（不依赖 launcher intent）
                             try {
                                 ctx.startActivity(android.content.Intent(QuroShizukuPkg.Action.MAIN_ACTIVITY)
@@ -362,7 +364,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                         return@PrivilegeCard
                     }
                     if (QuroShizuku.isReady) {
-                        Toast.makeText(ctx, "Shizuku 已授权 ✓ 可直接使用", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, qstr(R.string.qk_02309), Toast.LENGTH_SHORT).show()
                         return@PrivilegeCard
                     }
                     // 解包 ContextWrapper 获取真实 Activity（Compose LocalContext 可能返回包装层）
@@ -377,21 +379,21 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                     val act = unwrapActivity(ctx)
                     if (act == null) {
                         // 取不到 Activity（极少见）：直接打开 Shizuku 应用授权，不依赖系统弹框
-                        Toast.makeText(ctx, "当前上下文无法弹系统框，已打开 Shizuku 应用授权", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, qstr(R.string.qk_02310), Toast.LENGTH_SHORT).show()
                         openShizukuManager()
                         return@PrivilegeCard
                     }
                     // 授权结果监听（两路复用）
                     val listener = Shizuku.OnRequestPermissionResultListener { _req, _grant ->
                         refresh()
-                        Toast.makeText(ctx, if (_grant == android.content.pm.PackageManager.PERMISSION_GRANTED) "Shizuku 授权成功 ✓" else "Shizuku 授权被拒绝", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, if (_grant == android.content.pm.PackageManager.PERMISSION_GRANTED) qstr(R.string.qk_02311) else qstr(R.string.qk_02312), Toast.LENGTH_SHORT).show()
                     }
                     // ═══ 关键修复（v436）：requestPermission 仅在 Shizuku Binder 存活（服务运行中）时才会弹系统授权框；
                     // 若 Shizuku 已装但未运行（Binder dead / 服务未启动），调用会「静默失败」——既不弹框也不报错，
                     // 正是之前「点了按钮只打开 App、不弹授权框」的真凶。故先确认 isAlive，未运行则先拉起 Shizuku 并
                     // 等待 Binder 就绪，再授权；避免落入无意义的 fallback。
                     if (!QuroShizuku.isAlive) {
-                        Toast.makeText(ctx, "Shizuku 未运行，正在打开并等待服务启动…", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, qstr(R.string.qk_02313), Toast.LENGTH_SHORT).show()
                         openShizukuManager()
                         // 轮询等待 Binder 就绪（用户在 Shizuku 应用中通过 ADB/无线调试启动服务后 Binder 才会 ping 通），最多约 12s
                         scope.launch {
@@ -403,7 +405,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                             if (alive) {
                                 QuroShizuku.requestPermission(act, 1024, listener)
                             } else {
-                                Toast.makeText(ctx, "Shizuku 仍未就绪：请先在该应用中启动服务（ADB 无线调试/配对），再点此按钮授权", Toast.LENGTH_LONG).show()
+                                Toast.makeText(ctx, qstr(R.string.qk_02314), Toast.LENGTH_LONG).show()
                             }
                         }
                         return@PrivilegeCard
@@ -415,49 +417,49 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                         scope.launch {
                             kotlinx.coroutines.delay(3000)
                             if (!QuroShizuku.isReady) {
-                                Toast.makeText(ctx, "未弹出授权框，已为你打开 Shizuku 应用，请手动授权本应用", Toast.LENGTH_LONG).show()
+                                Toast.makeText(ctx, qstr(R.string.qk_02315), Toast.LENGTH_LONG).show()
                                 openShizukuManager()
                             }
                         }
                     } catch (e: Exception) {
-                        Toast.makeText(ctx, "程序化授权失败，已改为在 Shizuku 应用中授权", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, qstr(R.string.qk_02316), Toast.LENGTH_SHORT).show()
                         openShizukuManager()
                     }
                 },
-                testLabel = if (st(PrivilegeLevel.L2).available) "状态" else null,
+                testLabel = if (st(PrivilegeLevel.L2).available) stringResource(R.string.qk_00085) else null,
                 onTest = if (st(PrivilegeLevel.L2).available) {
                     { QuroShizukuBridge.state(ctx).details }
                 } else null,
             )
             PrivilegeCard(
                 level = PrivilegeLevel.L3,
-                title = "设备管理员",
+                title = stringResource(R.string.qk_02317),
                 channel = "DevicePolicyManager",
                 state = st(PrivilegeLevel.L3),
                 // E-5/E-11：device admin policy 已收敛到 force-lock + disable-camera 两条，
                 // 文案必须逐条对应，不得出现「等高级系统管理能力」这类无实现的宽泛表述。
-                rationale = "锁屏 / 禁用摄像头（仅此两项）。",
-                onRequest = { requestElevation(PrivilegeLevel.L3, "需要设备管理员权限，仅用于锁定屏幕和禁用/恢复摄像头两项操作。") },
-                testLabel = if (st(PrivilegeLevel.L3).available) "状态" else null,
+                rationale = qstr(R.string.qk_02318),
+                onRequest = { requestElevation(PrivilegeLevel.L3, qstr(R.string.qk_02319)) },
+                testLabel = if (st(PrivilegeLevel.L3).available) stringResource(R.string.qk_00085) else null,
                 onTest = if (st(PrivilegeLevel.L3).available) {
-                    { "设备管理员：${st(PrivilegeLevel.L3).details}（纯净架构下不主动锁屏）" }
+                    { qstr(R.string.qk_02320, (st(PrivilegeLevel.L3).details).toString()) }
                 } else null,
             )
             PrivilegeCard(
                 level = PrivilegeLevel.L4,
-                title = "ROOT 访问",
+                title = stringResource(R.string.qk_02321),
                 channel = "su / Magisk",
                 state = st(PrivilegeLevel.L4),
-                rationale = "内核级操作 / 系统文件修改 / SELinux（最高风险）。",
-                onRequest = { Toast.makeText(ctx, "请在 Root 管理器中允许 CapOS", Toast.LENGTH_LONG).show() },
-                testLabel = if (st(PrivilegeLevel.L4).available) "状态" else null,
+                rationale = stringResource(R.string.qk_02322),
+                onRequest = { Toast.makeText(ctx, qstr(R.string.qk_02323), Toast.LENGTH_LONG).show() },
+                testLabel = if (st(PrivilegeLevel.L4).available) stringResource(R.string.qk_00085) else null,
                 onTest = if (st(PrivilegeLevel.L4).available) {
-                    { "ROOT：${st(PrivilegeLevel.L4).details}（root 命令经 root_exec / shizuku_root_exec 工具真实执行，受「权限模式」策略约束）" }
+                    { qstr(R.string.qk_02324, (st(PrivilegeLevel.L4).details).toString()) }
                 } else null,
             )
 
             // ---- 标准运行时权限（保留，不回归） ----
-            GroupCaption("标准运行时权限")
+            GroupCaption(stringResource(R.string.qk_02325))
             SetGroup {
                 stdItems.forEachIndexed { idx, item ->
                     StdPermRow(
@@ -480,7 +482,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                                                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                                         }
                                                     )
-                                                    Toast.makeText(ctx, "请在系统设置开启「精确闹钟」，返回后再次点击测试", Toast.LENGTH_LONG).show()
+                                                    Toast.makeText(ctx, qstr(R.string.qk_02326), Toast.LENGTH_LONG).show()
                                                 } catch (e: Exception) {
                                                     // Android 14+ 部分 ROM 跳不到精确闹钟页，落到应用信息页；退回应用详情页并提示手动路径
                                                     ctx.startActivity(
@@ -489,7 +491,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                                                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                                         }
                                                     )
-                                                    Toast.makeText(ctx, "请到 设置→应用→Zorv AI→通知/权限 中开启「精确闹钟」", Toast.LENGTH_LONG).show()
+                                                    Toast.makeText(ctx, qstr(R.string.qk_02327), Toast.LENGTH_LONG).show()
                                                 }
                                                 return@alarmTest
                                             }
@@ -497,12 +499,12 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                                         helper.ensureReminderChannel()
                                         helper.setExactAlarm(
                                             System.currentTimeMillis() + 10_000,
-                                            "Zorv AI 测试闹钟",
-                                            "测试提醒：精确闹钟权限已生效"
+                                            qstr(R.string.qk_02328),
+                                            qstr(R.string.qk_02329)
                                         )
-                                        Toast.makeText(ctx, "已设置，约 10 秒后弹出提醒通知", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(ctx, qstr(R.string.qk_02330), Toast.LENGTH_SHORT).show()
                                     }
-                                ) { Text("测试", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold) }
+                                ) { Text(qstr(R.string.qk_02078), fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold) }
                             }
                         } else null,
                     )
@@ -513,7 +515,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
             }
 
             // ---- 功能权限（媒体 / 健康 / 闹钟 / 数据源）入口 ----
-            GroupCaption("功能权限（AI 助手能力）")
+            GroupCaption(stringResource(R.string.qk_02331))
             SetGroup {
                 Surface(
                     Modifier
@@ -529,16 +531,15 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("功能权限引导", fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
-                            Text("媒体读写 · 健康数据 · 精确闹钟 · 数据源优先级", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.qk_02332), fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.qk_02333), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Icon(Icons.Filled.ChevronRight, null, tint = Muted)
                     }
                 }
             }
 
-            Text(
-                "运行时权限会弹系统授权框；ROOT / Shizuku / 设备管理员需你在系统界面主动授权。所有权限使用都会被记录到审计日志。",
+            Text(stringResource(R.string.qk_02334),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -557,13 +558,12 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                 deferred.value = null
                 pending = null
             },
-            title = { Text("权限提升确认 · ${level.name}") },
+            title = { Text(stringResource(R.string.qk_02335, (level.name).toString())) },
             text = {
                 Column {
                     Text(rationale)
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        "通道：${QuroPrivilegeManager.channelOf(level)}",
+                    Text(stringResource(R.string.qk_02336, (QuroPrivilegeManager.channelOf(level)).toString()),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -589,14 +589,14 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                         refresh()
                     }
                     pending = null
-                }) { Text("授权") }
+                }) { Text(stringResource(R.string.qk_01539)) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     deferred.value?.complete(false)
                     deferred.value = null
                     pending = null
-                }) { Text("拒绝") }
+                }) { Text(stringResource(R.string.qk_01662)) }
             },
         )
     }
@@ -641,7 +641,7 @@ private fun PrivilegeCard(
                     shape = RoundedCornerShape(20.dp),
                 ) {
                     Text(
-                        if (state.available) "可用" else "未授权",
+                        if (state.available) stringResource(R.string.qk_00758) else stringResource(R.string.qk_00759),
                         color = statusColor,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -654,9 +654,9 @@ private fun PrivilegeCard(
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (level != PrivilegeLevel.L4) {
-                    PrimaryButton(text = "请求授权", modifier = Modifier.weight(1f), onClick = onRequest)
+                    PrimaryButton(text = stringResource(R.string.qk_02337), modifier = Modifier.weight(1f), onClick = onRequest)
                 } else {
-                    Text("Root 无法在应用内引导，请在 Root 管理器中授权。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.qk_02338), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                 }
             }
             PrivilegeTestSlot(testLabel, onTest)
@@ -705,13 +705,13 @@ private fun StdPermRow(
             trailing()
         }
         if (item.granted) {
-            Text("已开启", color = Sage, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.qk_02339), color = Sage, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         } else {
             Box(
                 Modifier.clip(RoundedCornerShape(8.dp)).background(AccentSoft)
                     .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
             ) {
-                Text("开启", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.qk_02340), fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
             }
         }
     }

@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.net.Uri
@@ -48,14 +51,14 @@ fun WorkspaceSelectionDialog(
                 onWorkspaceSelected(path)
                 onDismiss()
             } else {
-                Toast.makeText(ctx, "无法获取文件夹路径", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, qstr(R.string.qk_03189), Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择工作区") },
+        title = { Text(stringResource(R.string.qk_03190)) },
         text = {
             Column(Modifier.fillMaxWidth()) {
                 // 当前选中
@@ -73,7 +76,7 @@ fun WorkspaceSelectionDialog(
                             Icon(Icons.Filled.FolderOpen, null, tint = MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.width(8.dp))
                             Column(Modifier.weight(1f)) {
-                                Text("当前工作区", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.qk_03191), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                 Text(
                                     selectedPath!!.substringAfterLast('/'),
                                     style = MaterialTheme.typography.bodySmall,
@@ -84,7 +87,7 @@ fun WorkspaceSelectionDialog(
                                 selectedPath = null
                                 onClearWorkspace()
                             }) {
-                                Text("取消选择")
+                                Text(stringResource(R.string.qk_00007))
                             }
                         }
                     }
@@ -104,8 +107,8 @@ fun WorkspaceSelectionDialog(
                 // 默认工作区
                 WorkspaceOption(
                     icon = Icons.Filled.Home,
-                    title = "默认工作区",
-                    subtitle = "QuroWorkspace（应用沙箱）",
+                    title = stringResource(R.string.qk_03192),
+                    subtitle = stringResource(R.string.qk_03193),
                     selected = selectedPath == defaultPath,
                     onClick = {
                         selectedPath = defaultPath
@@ -136,23 +139,23 @@ fun WorkspaceSelectionDialog(
                 // 创建新工作区
                 WorkspaceOption(
                     icon = Icons.Filled.Add,
-                    title = "创建工作区",
-                    subtitle = "在默认工作区内新建文件夹",
+                    title = stringResource(R.string.qk_03194),
+                    subtitle = stringResource(R.string.qk_03195),
                     onClick = { showCreateDialog = true },
                 )
 
                 // 自定义选择文件夹
                 WorkspaceOption(
                     icon = Icons.Filled.CreateNewFolder,
-                    title = "自定义选择文件夹",
-                    subtitle = "选择手机上任意文件夹作为工作区",
+                    title = stringResource(R.string.qk_03196),
+                    subtitle = stringResource(R.string.qk_03197),
                     onClick = { folderPicker.launch(null) },
                 )
             }
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00065)) }
         },
     )
 
@@ -222,14 +225,14 @@ private fun CreateWorkspaceDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("创建工作区") },
+        title = { Text(stringResource(R.string.qk_03194)) },
         text = {
             Column {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it; error = "" },
-                    label = { Text("工作区名称") },
-                    placeholder = { Text("例如：MyProject") },
+                    label = { Text(stringResource(R.string.qk_03198)) },
+                    placeholder = { Text(stringResource(R.string.qk_03199)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     isError = error.isNotEmpty(),
@@ -241,12 +244,12 @@ private fun CreateWorkspaceDialog(
         },
         confirmButton = {
             Button(onClick = {
-                if (name.isBlank()) { error = "请输入名称"; return@Button }
-                if (!name.matches(Regex("^[a-zA-Z0-9_\\-\\u4e00-\\u9fa5]+$"))) { error = "名称只能包含字母、数字、下划线、连字符或中文"; return@Button }
+                if (name.isBlank()) { error = qstr(R.string.qk_03200); return@Button }
+                if (!name.matches(Regex("^[a-zA-Z0-9_\\-\\u4e00-\\u9fa5]+$"))) { error = qstr(R.string.qk_03201); return@Button }
                 onCreate(name)
-            }) { Text("创建") }
+            }) { Text(stringResource(R.string.qk_00843)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } },
     )
 }
 

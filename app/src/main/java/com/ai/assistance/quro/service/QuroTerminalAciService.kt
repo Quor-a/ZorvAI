@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.service
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import ai.aidl.aci.core.AidlAciError
 import ai.aidl.aci.core.AidlAciRequest
@@ -191,7 +193,7 @@ class QuroTerminalAciService : BaseAidlAciService() {
         val channel = android.app.NotificationChannel(
             CHANNEL_ID, "终端 ACI 服务",
             android.app.NotificationManager.IMPORTANCE_LOW
-        ).apply { description = "终端会话 ACI 服务运行中" }
+        ).apply { description = qstr(R.string.qk_03576) }
 
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         nm.createNotificationChannel(channel)
@@ -313,7 +315,7 @@ class QuroTerminalAciService : BaseAidlAciService() {
             Capability.create("get_session_env", "获取终端会话的环境变量信息。")
                 .addParam("session_id", "string", true, "目标会话 ID")
                 .addResult("env", "string", "环境变量 JSON 对象")
-                .addResult("message", "string", "说明")
+                .addResult("message", "string", qstr(R.string.qk_01691))
                 .addFlag(Capability.FLAG_NO_UI)
         )
 

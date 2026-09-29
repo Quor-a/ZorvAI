@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ContentUris
 import android.content.Context
@@ -29,7 +31,7 @@ object QuroMediaLibLoader {
                 val nameIdx = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
                 while (c.moveToNext()) {
                     val uri = ContentUris.withAppendedId(coll, c.getLong(idIdx)).toString()
-                    val name = c.getString(nameIdx) ?: "未知"
+                    val name = c.getString(nameIdx) ?: qstr(R.string.qk_00472)
                     out.add(uri to name)
                 }
             }

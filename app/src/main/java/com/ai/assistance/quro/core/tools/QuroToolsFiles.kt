@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import java.io.File
@@ -41,7 +43,7 @@ class ReadTextFileTool : QuroTool {
             val bytes = f.readBytes().take(max).toByteArray()
             String(bytes, Charsets.UTF_8)
         } catch (e: Exception) {
-            "读取失败: ${e.message}"
+            qstr(R.string.qk_03169, (e.message).toString())
         }
     }
 }

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.cards
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -537,7 +539,7 @@ fun parseComponentSpec(spec: String): QuroChatCard? {
         when (type) {
             // ── v134 内联交互组件 ──
             "button" -> QuroChatCard.ButtonCard(
-                id, title, s.optString("label", "按钮"),
+                id, title, s.optString("label", qstr(R.string.qk_03650)),
                 s.optString("command", ""), s.optString("variant", "filled"), s.optString("icon", "").ifBlank { null },
             )
             "toggle" -> QuroChatCard.ToggleCard(
@@ -1150,7 +1152,7 @@ fun parseCard(o: JSONObject): QuroChatCard? {
                 val it = o.optJSONArray("actions")!!.optJSONObject(i)
                 QuroChatCard.ActionCard.CardAction(it.optString("label", "动作"), it.optString("command", ""))
             })
-            "button" -> QuroChatCard.ButtonCard(id, title, o.optString("label", "按钮"), o.optString("command", ""), o.optString("variant", "filled"), if (o.has("icon") && !o.isNull("icon")) o.optString("icon") else null)
+            "button" -> QuroChatCard.ButtonCard(id, title, o.optString("label", qstr(R.string.qk_03650)), o.optString("command", ""), o.optString("variant", "filled"), if (o.has("icon") && !o.isNull("icon")) o.optString("icon") else null)
             "toggle" -> QuroChatCard.ToggleCard(id, title, o.optString("label", ""), o.optBoolean("checked", false), o.optString("command", ""))
             "slider" -> QuroChatCard.SliderCard(id, title, o.optString("label", ""), o.optDouble("value", 0.0).toFloat(), o.optDouble("min", 0.0).toFloat(), o.optDouble("max", 100.0).toFloat(), o.optDouble("step", 1.0).toFloat(), o.optString("unit", ""), o.optString("command", ""))
             "progress" -> QuroChatCard.ProgressCard(id, title, o.optString("label", ""), o.optDouble("value", 0.0).toFloat(), o.optDouble("max", 100.0).toFloat(), o.optString("suffix", "%"))

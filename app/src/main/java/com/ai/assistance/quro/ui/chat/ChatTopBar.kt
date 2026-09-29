@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui.chat
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -71,7 +73,7 @@ internal fun ChatTopBar(
     ) {
         // ① 左侧固定：历史抽屉。无 weight → 先被测量，永远拿得到 48dp
         IconButton(onClick = onMenu, modifier = Modifier.size(TOP_BAR_TOUCH)) {
-            LucideIcon("panel_left", "对话历史", Modifier.size(22.dp), tint = cs.onBackground)
+            LucideIcon("panel_left", stringResource(R.string.qk_03240), Modifier.size(22.dp), tint = cs.onBackground)
         }
         // ② 中间弹性区：吃满剩余空间。有人格时两端分布（人格靠左、模型靠右），无人格时模型整体靠右
         Row(
@@ -99,13 +101,13 @@ internal fun ChatTopBar(
         // ③ 右侧固定：终端 + 设置。无 weight → 与 ① 同批被测量，长模型名/长人格名都挤不掉它
         Spacer(Modifier.width(4.dp))
         IconButton(onClick = onToolCenter, modifier = Modifier.size(TOP_BAR_TOUCH)) {
-            LucideIcon("blocks", "工具中心", Modifier.size(21.dp), tint = cs.onBackground)
+            LucideIcon("blocks", stringResource(R.string.qk_02772), Modifier.size(21.dp), tint = cs.onBackground)
         }
         IconButton(onClick = onSettings, modifier = Modifier.size(TOP_BAR_TOUCH)) {
-            LucideIcon("settings", "设置", Modifier.size(21.dp), tint = cs.onBackground)
+            LucideIcon("settings", stringResource(R.string.qk_01760), Modifier.size(21.dp), tint = cs.onBackground)
         }
         IconButton(onClick = onMinimize, modifier = Modifier.size(TOP_BAR_TOUCH)) {
-            LucideIcon("maximize", "化小窗", Modifier.size(21.dp), tint = cs.onBackground)
+            LucideIcon("maximize", stringResource(R.string.qk_00888), Modifier.size(21.dp), tint = cs.onBackground)
         }
     }
 }
@@ -135,7 +137,7 @@ private fun ModelChip(
             .heightIn(min = CHIP_MIN_HEIGHT)
             .clip(RoundedCornerShape(999.dp))
             .border(1.dp, Line, RoundedCornerShape(999.dp))
-            .clickable(onClickLabel = "切换模型", onClick = onModel)
+            .clickable(onClickLabel = stringResource(R.string.qk_03241), onClick = onModel)
             .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -173,7 +175,7 @@ private fun PersonaChip(
             .heightIn(min = CHIP_MIN_HEIGHT)
             .clip(RoundedCornerShape(999.dp))
             .border(1.dp, Line, RoundedCornerShape(999.dp))
-            .clickable(onClickLabel = "切换人格", onClick = onPick)
+            .clickable(onClickLabel = stringResource(R.string.qk_03242), onClick = onPick)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

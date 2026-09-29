@@ -1,0 +1,2007 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="qk_00000" formatted="false">未选择</string>
+    <string name="qk_00001" formatted="false">选择 ACI 应用</string>
+    <string name="qk_00002" formatted="false">搜索</string>
+    <string name="qk_00003" formatted="false">搜索应用...</string>
+    <string name="qk_00004" formatted="false">未找到匹配的 ACI 应用</string>
+    <string name="qk_00005">%1$s 个能力</string>
+    <string name="qk_00006">已选择: %1$s</string>
+    <string name="qk_00007" formatted="false">取消选择</string>
+    <string name="qk_00008">能力 (%1$s):</string>
+    <string name="qk_00009">...还有 %1$s 个能力</string>
+    <string name="qk_00010" formatted="false">选择</string>
+    <string name="qk_00011" formatted="false">取消</string>
+    <string name="qk_00012" formatted="false">小</string>
+    <string name="qk_00013" formatted="false">标准</string>
+    <string name="qk_00014" formatted="false">大</string>
+    <string name="qk_00015" formatted="false">未配置</string>
+    <string name="qk_00016" formatted="false">当前配置的模型。</string>
+    <string name="qk_00017" formatted="false">未配置模型</string>
+    <string name="qk_00018" formatted="false">网页预览（AI 运行产物）</string>
+    <string name="qk_00019" formatted="false">图片预览（AI 运行产物）</string>
+    <string name="qk_00020" formatted="false">未找到可打开该文档的应用，可尝试用应用内文档查看器或安装 WPS / Office</string>
+    <string name="qk_00021" formatted="false">可视化编程</string>
+    <string name="qk_00022" formatted="false">Web 应用（AI 生成）</string>
+    <string name="qk_00023" formatted="false">已复制</string>
+    <string name="qk_00024" formatted="false">屏幕捕获授权被取消，已 fallback 到无障碍节点树</string>
+    <string name="qk_00025" formatted="false">工作区</string>
+    <string name="qk_00026">工作区: %1$s (%2$s)</string>
+    <string name="qk_00027">ACI应用: %1$s (包名: %2$s)</string>
+    <string name="qk_00028" formatted="false">用户选择了：可视化弹窗，请立即调用visual_popup工具创建一个可视化弹窗</string>
+    <string name="qk_00029" formatted="false">用户选择了：可视化询问，请立即调用visual_question工具创建一个可视化询问</string>
+    <string name="qk_00030" formatted="false">用户选择了：可视化小卡片，请立即在回复中用 ```quro-card 围栏输出一张自研可视化小卡片（指标/进度/结构化单块结果），纯文字回复禁止</string>
+    <string name="qk_00031" formatted="false">用户选择了：动态UI组件，请立即在回复中用 ```quro-ui 围栏输出原生可交互界面（表单/面板/工具入口等），纯文字回复禁止</string>
+    <string name="qk_00032" formatted="false">用户选择了：AIP文档排版，请用 ```aip 围栏（或 aip_compose 工具）输出整篇排版的文档/PPT/报告（doc/deck/mindmap），不要只回纯文本</string>
+    <string name="qk_00033" formatted="false">已启用技能(${enabledSkillsCount}个): ${enabledSkills.joinToString(</string>
+    <string name="qk_00034" formatted="false">当前配置</string>
+    <string name="qk_00036" formatted="false">自定义</string>
+    <string name="qk_00037" formatted="false">已保存预设</string>
+    <string name="qk_00038" formatted="false">其他供应商（自建）</string>
+    <string name="qk_00039" formatted="false">未命名供应商</string>
+    <string name="qk_00040" formatted="false">其他供应商</string>
+    <string name="qk_00041" formatted="false">本地离线模型</string>
+    <string name="qk_00043" formatted="false">可用模型 (API)</string>
+    <string name="qk_00044">来自 %1$s</string>
+    <string name="qk_00045">已导出对话：%1$s</string>
+    <string name="qk_00046">QuroAI 对话导出，文件已保存至：%1$s</string>
+    <string name="qk_00047" formatted="false">分享对话</string>
+    <string name="qk_00048" formatted="false">导出失败，请重试</string>
+    <string name="qk_00049">已设置默认 ACI 应用: %1$s</string>
+    <string name="qk_00050" formatted="false">已清除默认 ACI 应用</string>
+    <string name="qk_00051">已选择工作区: %1$s</string>
+    <string name="qk_00052" formatted="false">已恢复默认工作区</string>
+    <string name="qk_00053" formatted="false">（无内容）</string>
+    <string name="qk_00054" formatted="false">知道了</string>
+    <string name="qk_00055" formatted="false">（无选项）</string>
+    <string name="qk_00056" formatted="false">AI 可用 browser_act 操控此浏览器</string>
+    <string name="qk_00057" formatted="false">AI 可用 web_crawler 批量抓取（网页爬虫）：告诉它起始 URL 即可</string>
+    <string name="qk_00058" formatted="false">AI 可用 python_run 跑 Python</string>
+    <string name="qk_00059" formatted="false">浏览器小窗</string>
+    <string name="qk_00060" formatted="false">对话小窗</string>
+    <string name="qk_00061" formatted="false">我</string>
+    <string name="qk_00062" formatted="false">新建对话</string>
+    <string name="qk_00063" formatted="false">展开对话</string>
+    <string name="qk_00064">文件不存在：%1$s</string>
+    <string name="qk_00065" formatted="false">关闭</string>
+    <string name="qk_00067" formatted="false">设备不支持语音识别</string>
+    <string name="qk_00068">语音识别出错：%1$s</string>
+    <string name="qk_00069" formatted="false">自动朗读让位：本回合 AI 已用 speak 工具控制播报顺序</string>
+    <string name="qk_00070" formatted="false">已选择：可视化弹窗，发送消息时将触发</string>
+    <string name="qk_00071" formatted="false">已取消：可视化弹窗</string>
+    <string name="qk_00072" formatted="false">已选择：可视化询问，发送消息时将触发</string>
+    <string name="qk_00073" formatted="false">已取消：可视化询问</string>
+    <string name="qk_00074" formatted="false">已选择：可视化小卡片，发送消息时将触发</string>
+    <string name="qk_00075" formatted="false">已取消：可视化小卡片</string>
+    <string name="qk_00076" formatted="false">已选择：动态UI组件，发送消息时将触发</string>
+    <string name="qk_00077" formatted="false">已取消：动态UI组件</string>
+    <string name="qk_00078" formatted="false">已选择：AIP文档排版，发送消息时将触发</string>
+    <string name="qk_00079" formatted="false">已取消：AIP文档排版</string>
+    <string name="qk_00080" formatted="false">M月d日</string>
+    <string name="qk_00081" formatted="false">回到底部</string>
+    <string name="qk_00082" formatted="false">思考</string>
+    <string name="qk_00083" formatted="false">行动</string>
+    <string name="qk_00084" formatted="false">结果</string>
+    <string name="qk_00085" formatted="false">状态</string>
+    <string name="qk_00086" formatted="false">分享给</string>
+    <string name="qk_00087" formatted="false">编辑灵魂卡</string>
+    <string name="qk_00088" formatted="false">复制</string>
+    <string name="qk_00089" formatted="false">追问</string>
+    <string name="qk_00090" formatted="false">分享</string>
+    <string name="qk_00091" formatted="false">删除</string>
+    <string name="qk_00092" formatted="false">重试</string>
+    <string name="qk_00093" formatted="false">思考中</string>
+    <string name="qk_00094">思考过程 · %1$s步</string>
+    <string name="qk_00095">· %1$s 工具</string>
+    <string name="qk_00096" formatted="false">可视化弹窗</string>
+    <string name="qk_00097" formatted="false">点击查看详情</string>
+    <string name="qk_00098" formatted="false">打开弹窗</string>
+    <string name="qk_00099" formatted="false">自定义弹窗</string>
+    <string name="qk_00100" formatted="false">流程图 / 可视化</string>
+    <string name="qk_00101" formatted="false">下载</string>
+    <string name="qk_00102" formatted="false">查看大图</string>
+    <string name="qk_00103" formatted="false">图片预览不可用</string>
+    <string name="qk_00104" formatted="false">播放</string>
+    <string name="qk_00105" formatted="false">点击在应用内预览排版</string>
+    <string name="qk_00106" formatted="false">点击打开文件</string>
+    <string name="qk_00107" formatted="false">内容预览</string>
+    <string name="qk_00108" formatted="false">收起排版预览</string>
+    <string name="qk_00109" formatted="false">对话框内预览排版</string>
+    <string name="qk_00110" formatted="false">全屏预览</string>
+    <string name="qk_00111">文件不存在：%1$s</string>
+    <string name="qk_00112" formatted="false">图片加载失败</string>
+    <string name="qk_00113" formatted="false">源文件不存在</string>
+    <string name="qk_00114" formatted="false">打开文件</string>
+    <string name="qk_00115">无法打开：%1$s</string>
+    <string name="qk_00116">调用工具 ×%1$s</string>
+    <string name="qk_00117" formatted="false">执行中…</string>
+    <string name="qk_00118" formatted="false">执行轨迹</string>
+    <string name="qk_00119" formatted="false">（实时）</string>
+    <string name="qk_00120" formatted="false">等待 AI 行动…</string>
+    <string name="qk_00121" formatted="false">文档排版</string>
+    <string name="qk_00122" formatted="false">无障碍控屏</string>
+    <string name="qk_00123" formatted="false">系统权限</string>
+    <string name="qk_00124" formatted="false">终端执行</string>
+    <string name="qk_00125" formatted="false">系统能力</string>
+    <string name="qk_00126" formatted="false">文件工具</string>
+    <string name="qk_00127" formatted="false">网络能力</string>
+    <string name="qk_00128" formatted="false">提醒与步骤</string>
+    <string name="qk_00129" formatted="false">界面控制</string>
+    <string name="qk_00130" formatted="false">图像生成</string>
+    <string name="qk_00131" formatted="false">视频生成</string>
+    <string name="qk_00132" formatted="false">记忆库</string>
+    <string name="qk_00133" formatted="false">上下文总结</string>
+    <string name="qk_00134" formatted="false">人格孵化</string>
+    <string name="qk_00135" formatted="false">工具</string>
+    <string name="qk_00136" formatted="false">高危</string>
+    <string name="qk_00137" formatted="false">中危</string>
+    <string name="qk_00138" formatted="false">安全</string>
+    <string name="qk_00139" formatted="false">失败</string>
+    <string name="qk_00140" formatted="false">警告</string>
+    <string name="qk_00141" formatted="false">成功</string>
+    <string name="qk_00142" formatted="false">参数</string>
+    <string name="qk_00143" formatted="false">返回</string>
+    <string name="qk_00144" formatted="false">
+
+[导出]</string>
+    <string name="qk_00145" formatted="false">重新打开</string>
+    <string name="qk_00146" formatted="false">再次执行</string>
+    <string name="qk_00148" formatted="false">代码</string>
+    <string name="qk_00149" formatted="false">图片</string>
+    <string name="qk_00150" formatted="false">PDF 文件已保存到工作区，可在文件管理器中打开查看</string>
+    <string name="qk_00151">· %1$s 工具</string>
+    <string name="qk_00152" formatted="false">执行追踪</string>
+    <string name="qk_00153" formatted="false">AI 正在执行工具…</string>
+    <string name="qk_00154">  参数: %1$s</string>
+    <string name="qk_00155">  结果: %1$s</string>
+    <string name="qk_00156" formatted="false">本地音乐</string>
+    <string name="qk_00157" formatted="false">正在播放</string>
+    <string name="qk_00158" formatted="false">已暂停</string>
+    <string name="qk_00159" formatted="false">移除</string>
+    <string name="qk_00160">🧩 %1$s个技能</string>
+    <string name="qk_00161" formatted="false">上传文件</string>
+    <string name="qk_00162" formatted="false">语音输入</string>
+    <string name="qk_00163" formatted="false">和 Zorv 说点什么…</string>
+    <string name="qk_00164" formatted="false">停止生成</string>
+    <string name="qk_00165" formatted="false">发送</string>
+    <string name="qk_00166" formatted="false">选择技能</string>
+    <string name="qk_00167" formatted="false">编辑文本</string>
+    <string name="qk_00168" formatted="false">已选择</string>
+    <string name="qk_00169" formatted="false">可视化询问</string>
+    <string name="qk_00170" formatted="false">可视化小卡片</string>
+    <string name="qk_00171" formatted="false">动态UI组件</string>
+    <string name="qk_00172" formatted="false">AIP文档排版</string>
+    <string name="qk_00173" formatted="false">对话</string>
+    <string name="qk_00174" formatted="false">复制全部对话</string>
+    <string name="qk_00175" formatted="false">删除全部对话</string>
+    <string name="qk_00176" formatted="false">生成式界面</string>
+    <string name="qk_00177" formatted="false">生成中</string>
+    <string name="qk_00178" formatted="false">删除对话</string>
+    <string name="qk_00179" formatted="false">确定删除这条对话记录吗？删除后不可恢复。</string>
+    <string name="qk_00180" formatted="false">清空全部对话</string>
+    <string name="qk_00181" formatted="false">确定删除全部对话记录吗？此操作不可恢复。</string>
+    <string name="qk_00182" formatted="false">全部删除</string>
+    <string name="qk_00183" formatted="false">视频通话</string>
+    <string name="qk_00184" formatted="false">摄像头预览 + 实时对话 + 画面识别</string>
+    <string name="qk_00185" formatted="false">跟随模型默认</string>
+    <string name="qk_00186">%1$s 轮</string>
+    <string name="qk_00187" formatted="false">保留对话轮数</string>
+    <string name="qk_00188" formatted="false">10 轮</string>
+    <string name="qk_00189" formatted="false">20 轮</string>
+    <string name="qk_00190" formatted="false">50 轮</string>
+    <string name="qk_00191" formatted="false">全部（跟随模型默认）</string>
+    <string name="qk_00192" formatted="false">用户资料</string>
+    <string name="qk_00193" formatted="false">导入图片</string>
+    <string name="qk_00194" formatted="false">清除头像</string>
+    <string name="qk_00195" formatted="false">你的名字</string>
+    <string name="qk_00196" formatted="false">AI 会知道你叫什么</string>
+    <string name="qk_00197" formatted="false">个人签名（可选）</string>
+    <string name="qk_00198" formatted="false">保存</string>
+    <string name="qk_00199" formatted="false">选择模型</string>
+    <string name="qk_00200" formatted="false">「当前配置」为你在设置中配置的真实模型；「可用模型」为从接口拉取到的真实列表，点选即切换。</string>
+    <string name="qk_00201" formatted="false">正在拉取可用模型…</string>
+    <string name="qk_00202" formatted="false">从 API 拉取可用模型（手动）</string>
+    <string name="qk_00203">拉取失败：%1$s。请到「模型配置」填写正确的 Base URL / API Key 后重试。</string>
+    <string name="qk_00204" formatted="false">当前仅有「当前配置」的模型。需要更多可选模型，请到「模型配置」填写 Base URL 与 API Key 后拉取，或手动填入模型名。</string>
+    <string name="qk_00205" formatted="false">前往模型配置 · 设置 API Key / Base URL / 参数</string>
+    <string name="qk_00206">当前选中「%1$s」· 切换即生效</string>
+    <string name="qk_00207" formatted="false">选择灵魂</string>
+    <string name="qk_00208" formatted="false">每个灵魂是不同语气与专长的「对话伙伴」，切换即换一种相处方式。</string>
+    <string name="qk_00209" formatted="false">灵魂注入 · 完整设定（头像/角色/语气/标签）</string>
+    <string name="qk_00210" formatted="false">人格仅改变语气与专长，不改变事实与能力边界</string>
+    <string name="qk_00211" formatted="false">点击下方工具快速执行操作；也可导入工具 / 让 AI 自写工具，导入成功即成为可调用工具。</string>
+    <string name="qk_00212" formatted="false">上传</string>
+    <string name="qk_00213" formatted="false">AI 浏览器</string>
+    <string name="qk_00214" formatted="false">工具箱</string>
+    <string name="qk_00215" formatted="false">知识库</string>
+    <string name="qk_00216" formatted="false">终端</string>
+    <string name="qk_00217" formatted="false">清屏</string>
+    <string name="qk_00218" formatted="false">技能</string>
+    <string name="qk_00219" formatted="false">定时</string>
+    <string name="qk_00220" formatted="false">机器人</string>
+    <string name="qk_00221" formatted="false">选择上传类型（可多选）</string>
+    <string name="qk_00222" formatted="false">文件</string>
+    <string name="qk_00223" formatted="false">视频</string>
+    <string name="qk_00224">请联网搜索：%1$s</string>
+    <string name="qk_00225" formatted="false">搜索 / 打开</string>
+    <string name="qk_00226" formatted="false">AI 浏览器 · 联网搜索</string>
+    <string name="qk_00227" formatted="false">搜索词或网址</string>
+    <string name="qk_00228" formatted="false">如：今天的新闻 / https://example.com</string>
+    <string name="qk_00229" formatted="false">输入网址→在内置浏览器打开；输入关键词→交给 AI 联网检索（后台可用）。</string>
+    <string name="qk_00230" formatted="false">语音合成、语音识别与语音设置入口。</string>
+    <string name="qk_00231" formatted="false">语音合成</string>
+    <string name="qk_00232" formatted="false">语音合成 (TTS)</string>
+    <string name="qk_00233" formatted="false">语音识别</string>
+    <string name="qk_00234" formatted="false">语音识别 (STT)</string>
+    <string name="qk_00235" formatted="false">语音设置</string>
+    <string name="qk_00236" formatted="false">链接回答</string>
+    <string name="qk_00238">⚠️ 动态 UI 解析失败：%1$s</string>
+    <string name="qk_00239" formatted="false">没有可复制的内容</string>
+    <string name="qk_00240" formatted="false">未指定要打开的应用</string>
+    <string name="qk_00241" formatted="false">启动失败</string>
+    <string name="qk_00242" formatted="false">未指定要打开的界面</string>
+    <string name="qk_00243" formatted="false">没有可渲染的 HTML 内容</string>
+    <string name="qk_00244" formatted="false">HTML 预览</string>
+    <string name="qk_00245" formatted="false">没有可渲染的可视化内容</string>
+    <string name="qk_00246" formatted="false">未指定要调用的工具</string>
+    <string name="qk_00247">请调用工具 %1$s</string>
+    <string name="qk_00248" formatted="false">工具执行异常</string>
+    <string name="qk_00249">已执行 %1$s</string>
+    <string name="qk_00252" formatted="false">未指定要执行的技能</string>
+    <string name="qk_00253">技能「%1$s」未启用或不存在</string>
+    <string name="qk_00254" formatted="false">运行失败</string>
+    <string name="qk_00255" formatted="false">错误</string>
+    <string name="qk_00256">运行失败：%1$s</string>
+    <string name="qk_00257" formatted="false">预览</string>
+    <string name="qk_00258" formatted="false">复制代码</string>
+    <string name="qk_00259" formatted="false">下载代码</string>
+    <string name="qk_00260" formatted="false">代码运行出错，请分析并修复：</string>
+    <string name="qk_00261">语言：%1$s</string>
+    <string name="qk_00262" formatted="false">代码：</string>
+    <string name="qk_00263" formatted="false">错误信息：</string>
+    <string name="qk_00264" formatted="false">请分析错误原因，提供修复后的完整代码，并解释修复内容。</string>
+    <string name="qk_00265" formatted="false">自动修复</string>
+    <string name="qk_00266" formatted="false">运行</string>
+    <string name="qk_00267" formatted="false">✅ 运行结果（交互式）</string>
+    <string name="qk_00268" formatted="false">下载HTML</string>
+    <string name="qk_00269" formatted="false">❌ 运行结果</string>
+    <string name="qk_00270" formatted="false">✅ 运行结果</string>
+    <string name="qk_00271" formatted="false">下载结果</string>
+    <string name="qk_00272" formatted="false">关闭全屏</string>
+    <string name="qk_00273">✅ 已保存到 Downloads/%1$s</string>
+    <string name="qk_00274" formatted="false">❌ 保存失败：无法创建文件</string>
+    <string name="qk_00275">❌ 保存失败：%1$s</string>
+    <string name="qk_00280" formatted="false">智能助手</string>
+    <string name="qk_00281" formatted="false">你的 AI 助手，随时待命。</string>
+    <string name="qk_00282" formatted="false">新对话</string>
+    <string name="qk_00283" formatted="false">空对话</string>
+    <string name="qk_00284" formatted="false">今天</string>
+    <string name="qk_00285" formatted="false">本周</string>
+    <string name="qk_00286" formatted="false">更早</string>
+    <string name="qk_00287" formatted="false">附件</string>
+    <string name="qk_00288">已下载：%1$s</string>
+    <string name="qk_00289">已保存到应用目录：%1$s</string>
+    <string name="qk_00290">下载失败：%1$s</string>
+    <string name="qk_00291" formatted="false">工作流管理</string>
+    <string name="qk_00292" formatted="false">新建工作流</string>
+    <string name="qk_00293" formatted="false">还没有工作流</string>
+    <string name="qk_00294" formatted="false">点击右上角 + 新建，或让 AI 帮你创建</string>
+    <string name="qk_00295" formatted="false">工作流执行完成</string>
+    <string name="qk_00296">执行失败: %1$s</string>
+    <string name="qk_00297">触发: %1$s | 节点: %2$s</string>
+    <string name="qk_00298">上次状态: %1$s</string>
+    <string name="qk_00299" formatted="false">编辑</string>
+    <string name="qk_00300" formatted="false">编辑工作流</string>
+    <string name="qk_00301" formatted="false">工作流名称</string>
+    <string name="qk_00302" formatted="false">触发类型 (manual/time/event)</string>
+    <string name="qk_00303" formatted="false">调度规则 (如 daily:09:00)</string>
+    <string name="qk_00304" formatted="false">应用私有文件</string>
+    <string name="qk_00305" formatted="false">应用数据(quro_data)</string>
+    <string name="qk_00306" formatted="false">导出(quro_exports)</string>
+    <string name="qk_00307" formatted="false">备份(quro_backups)</string>
+    <string name="qk_00308" formatted="false">公共下载/QuroAI_logs</string>
+    <string name="qk_00309">目录不存在：%1$s</string>
+    <string name="qk_00310">请在系统文件管理器中导航到：%1$s</string>
+    <string name="qk_00311">已复制路径，请在文件管理器粘贴：%1$s</string>
+    <string name="qk_00312" formatted="false">共享存储</string>
+    <string name="qk_00313" formatted="false">已挂载（Android 11+ 应用私有目录在系统文件管理器可见）</string>
+    <string name="qk_00314" formatted="false">未挂载或不可用</string>
+    <string name="qk_00315" formatted="false">在系统文件管理器中打开</string>
+    <string name="qk_00316" formatted="false">已复制路径</string>
+    <string name="qk_00317" formatted="false">复制路径</string>
+    <string name="qk_00318" formatted="false">计算中…</string>
+    <string name="qk_00319" formatted="false">存储管理</string>
+    <string name="qk_00320" formatted="false">Linux rootfs 缓存（usr/tmp）占用，清除后需重新初始化终端环境。</string>
+    <string name="qk_00321" formatted="false">缓存已清除</string>
+    <string name="qk_00322" formatted="false">清除中…</string>
+    <string name="qk_00323" formatted="false">清除缓存</string>
+    <string name="qk_00324" formatted="false">FTP 文件服务器</string>
+    <string name="qk_00325" formatted="false">运行中</string>
+    <string name="qk_00326" formatted="false">已停止</string>
+    <string name="qk_00327" formatted="false">FTP 服务器已启动</string>
+    <string name="qk_00328" formatted="false">FTP 服务器已停止</string>
+    <string name="qk_00329" formatted="false">FTP 服务器操作失败</string>
+    <string name="qk_00330" formatted="false">处理中…</string>
+    <string name="qk_00331" formatted="false">停止服务器</string>
+    <string name="qk_00332" formatted="false">启动服务器</string>
+    <string name="qk_00333" formatted="false">终端 rootfs 文件</string>
+    <string name="qk_00334" formatted="false">就绪</string>
+    <string name="qk_00335" formatted="false">环境未就绪</string>
+    <string name="qk_00336" formatted="false">浏览/读写 Ubuntu rootfs 内文件（/root、/etc、/sdcard…），与终端共用同一文件系统。</string>
+    <string name="qk_00337" formatted="false">rootfs 路径</string>
+    <string name="qk_00338" formatted="false">(空目录)</string>
+    <string name="qk_00339">错误：%1$s</string>
+    <string name="qk_00340" formatted="false">列出</string>
+    <string name="qk_00341">已读取 %1$s 字符（可编辑后「写入」回同一路径）</string>
+    <string name="qk_00342" formatted="false">读取</string>
+    <string name="qk_00343">已写入 %1$s</string>
+    <string name="qk_00344" formatted="false">写入</string>
+    <string name="qk_00345">已删除 %1$s</string>
+    <string name="qk_00346" formatted="false">文件内容（读取后显示，可编辑后「写入」）</string>
+    <string name="qk_00347" formatted="false">提示：输入路径后点「列出」看目录，或直接「读取 / 写入 / 删除」文件。</string>
+    <string name="qk_00348" formatted="false">存储概览</string>
+    <string name="qk_00349" formatted="false">可清理总大小</string>
+    <string name="qk_00350" formatted="false">以下分类之和（不含离线模型等用户外部文件）</string>
+    <string name="qk_00351" formatted="false">分类清理（谨慎选择，重要数据会丢失）</string>
+    <string name="qk_00352" formatted="false">应用数据</string>
+    <string name="qk_00353" formatted="false">对话 / 设置 / 模型配置</string>
+    <string name="qk_00354" formatted="false">Linux 沙箱 (rootfs)</string>
+    <string name="qk_00355" formatted="false">Ubuntu rootfs / 缓存，清理后需重新下载</string>
+    <string name="qk_00356" formatted="false">诊断日志</string>
+    <string name="qk_00357" formatted="false">手机 Download/QuroAI_logs</string>
+    <string name="qk_00358" formatted="false">导出文件</string>
+    <string name="qk_00359" formatted="false">导出的 ZIP 数据包</string>
+    <string name="qk_00360" formatted="false">备份文件</string>
+    <string name="qk_00361" formatted="false">数据备份归档</string>
+    <string name="qk_00362" formatted="false">缓存目录</string>
+    <string name="qk_00363" formatted="false">图片 / WebView / 临时缓存</string>
+    <string name="qk_00364" formatted="false">全部清理</string>
+    <string name="qk_00365" formatted="false">清理所有以上项</string>
+    <string name="qk_00366" formatted="false">删除应用数据 / 沙箱 / 日志 / 导出 / 备份 / 缓存</string>
+    <string name="qk_00367" formatted="false">清理应用数据</string>
+    <string name="qk_00368" formatted="false">清理 Linux 沙箱</string>
+    <string name="qk_00369" formatted="false">清理诊断日志</string>
+    <string name="qk_00370" formatted="false">清理导出文件</string>
+    <string name="qk_00371" formatted="false">清理备份文件</string>
+    <string name="qk_00372" formatted="false">清理缓存目录</string>
+    <string name="qk_00373" formatted="false">清理</string>
+    <string name="qk_00374" formatted="false">将删除所有对话 / 设置 / 模型配置（不可恢复），确定吗？</string>
+    <string name="qk_00375" formatted="false">将删除 Ubuntu rootfs 与沙箱缓存，下次使用 CMS/终端需重新下载，确定吗？</string>
+    <string name="qk_00376" formatted="false">将删除手机 Download/QuroAI_logs 诊断日志，确定吗？</string>
+    <string name="qk_00377" formatted="false">将删除所有导出的 ZIP 数据包，确定吗？</string>
+    <string name="qk_00378" formatted="false">将删除所有数据备份归档，确定吗？</string>
+    <string name="qk_00379" formatted="false">将删除应用缓存目录，确定吗？</string>
+    <string name="qk_00380" formatted="false">将删除以上全部项（不含离线模型等用户外部文件），确定吗？</string>
+    <string name="qk_00381" formatted="false">确定要清理吗？</string>
+    <string name="qk_00382" formatted="false">确定清理</string>
+    <string name="qk_00383">⚠️ 运行异常：%1$s</string>
+    <string name="qk_00384" formatted="false">还原</string>
+    <string name="qk_00385">正在打开: %1$s</string>
+    <string name="qk_00386">已打开: %1$s</string>
+    <string name="qk_00387">无法打开: %1$s</string>
+    <string name="qk_00388" formatted="false">无文件</string>
+    <string name="qk_00389" formatted="false">保存中...</string>
+    <string name="qk_00390">已保存: %1$s</string>
+    <string name="qk_00391">已保存到 %1$s</string>
+    <string name="qk_00392" formatted="false">保存失败</string>
+    <string name="qk_00393" formatted="false">Word文档</string>
+    <string name="qk_00394" formatted="false">Word 97-2003文档</string>
+    <string name="qk_00395" formatted="false">Excel表格</string>
+    <string name="qk_00396" formatted="false">Excel 97-2003表格</string>
+    <string name="qk_00397" formatted="false">PowerPoint演示文稿</string>
+    <string name="qk_00398" formatted="false">PowerPoint 97-2003演示文稿</string>
+    <string name="qk_00399" formatted="false">文档</string>
+    <string name="qk_00400" formatted="false">Office编辑器</string>
+    <string name="qk_00401" formatted="false">●未保存</string>
+    <string name="qk_00402" formatted="false">保存中</string>
+    <string name="qk_00403" formatted="false">打开中</string>
+    <string name="qk_00404" formatted="false">更多</string>
+    <string name="qk_00405">行 %1$s · 字 %2$s</string>
+    <string name="qk_00406" formatted="false">本地Office编辑器</string>
+    <string name="qk_00407" formatted="false">使用Apache POI本地编辑</string>
+    <string name="qk_00408" formatted="false">开始编辑文档内容...</string>
+    <string name="qk_00409" formatted="false">插件桌面</string>
+    <string name="qk_00410" formatted="false">无法读取所选文件</string>
+    <string name="qk_00411">
+· 已用「%1$s」(别名 %2$s) 补签后再安装</string>
+    <string name="qk_00412">
+· 补签未成功，已按原包安装：%1$s</string>
+    <string name="qk_00413">安装成功：%1$s</string>
+    <string name="qk_00414">安装失败：%1$s</string>
+    <string name="qk_00415">安装异常：%1$s</string>
+    <string name="qk_00416" formatted="false">⚠ 插件引擎未初始化（Application 启动阶段未执行到 QuroPluginHost.attach）。</string>
+    <string name="qk_00417" formatted="false">下面的操作用不了，请把此现象连同 logcat 里 QuroApplication / QuroPluginHost 的报错一起反馈。</string>
+    <string name="qk_00418" formatted="false">无法读取</string>
+    <string name="qk_00419" formatted="false">搜索插件 / 包名 / AI 工具</string>
+    <string name="qk_00420" formatted="false">完成</string>
+    <string name="qk_00421" formatted="false">已刷新</string>
+    <string name="qk_00422">已重载：%1$s</string>
+    <string name="qk_00423">重载失败：%1$s</string>
+    <string name="qk_00424">已卸载：%1$s</string>
+    <string name="qk_00425">卸载失败：%1$s</string>
+    <string name="qk_00426" formatted="false">已加载</string>
+    <string name="qk_00427" formatted="false">未加载</string>
+    <string name="qk_00428" formatted="false">打开界面</string>
+    <string name="qk_00429" formatted="false">详情</string>
+    <string name="qk_00430" formatted="false">扩展点 / AI 工具 / 版本信息</string>
+    <string name="qk_00431" formatted="false">重载</string>
+    <string name="qk_00432" formatted="false">重新实例化插件入口，改完插件立刻生效</string>
+    <string name="qk_00433" formatted="false">重载失败</string>
+    <string name="qk_00434" formatted="false">卸载</string>
+    <string name="qk_00435" formatted="false">连同它贡献的 AI 工具 / ACI 能力 / 界面一起移除</string>
+    <string name="qk_00436" formatted="false">卸载失败</string>
+    <string name="qk_00437">插件贡献的 AI 工具（%1$s）</string>
+    <string name="qk_00438" formatted="false">这些工具已直接进入 AI 的工具集，对话框里直接说需求即可（例如「查一下 SF1234567890」→ express_query）。</string>
+    <string name="qk_00440" formatted="false">暂无插件工具。先装几个插件吧。</string>
+    <string name="qk_00441" formatted="false">插件引擎就绪</string>
+    <string name="qk_00442" formatted="false">插件引擎未初始化</string>
+    <string name="qk_00443" formatted="false">已安装</string>
+    <string name="qk_00444" formatted="false">AI 工具</string>
+    <string name="qk_00445" formatted="false">内置包</string>
+    <string name="qk_00446">%1$s 界面</string>
+    <string name="qk_00447">%1$s 工具</string>
+    <string name="qk_00448">没有匹配「%1$s」的插件</string>
+    <string name="qk_00449" formatted="false">没有匹配的插件</string>
+    <string name="qk_00450" formatted="false">插件桌面还是空的</string>
+    <string name="qk_00451" formatted="false">换个关键词试试，也可以搜插件贡献的 AI 工具名。</string>
+    <string name="qk_00452" formatted="false">插件是独立 APK，装上就能给 AI 加能力：AI 工具 / ACI 能力 / 斜杠指令 / 自带界面，宿主不用改代码。</string>
+    <string name="qk_00453" formatted="false">一键安装内置插件</string>
+    <string name="qk_00454" formatted="false">导入插件 APK</string>
+    <string name="qk_00455" formatted="false">装完可以试试：对话框里问「帮我查快递 SF1234567890」，AI 会调用插件新增的工具。</string>
+    <string name="qk_00456" formatted="false">导入 APK</string>
+    <string name="qk_00457" formatted="false">内置插件${if (builtinCount &gt; 0) </string>
+    <string name="qk_00458">插件工具 %1$s</string>
+    <string name="qk_00459" formatted="false">刷新</string>
+    <string name="qk_00460">入口：%1$s</string>
+    <string name="qk_00461">安装于：%1$s</string>
+    <string name="qk_00462" formatted="false">扩展点</string>
+    <string name="qk_00463">贡献的 AI 工具（%1$s）</string>
+    <string name="qk_00464" formatted="false">无</string>
+    <string name="qk_00465">自带界面（%1$s）</string>
+    <string name="qk_00466">打开 %1$s</string>
+    <string name="qk_00467">打开失败：%1$s</string>
+    <string name="qk_00468" formatted="false">宿主未内置示例插件</string>
+    <string name="qk_00469">内置插件安装成功：%1$s</string>
+    <string name="qk_00470">内置插件安装失败：%1$s</string>
+    <string name="qk_00471">内置插件安装异常：%1$s</string>
+    <string name="qk_00472" formatted="false">未知</string>
+    <string name="qk_00473" formatted="false">ACI 能力</string>
+    <string name="qk_00474" formatted="false">对话卡片</string>
+    <string name="qk_00475" formatted="false">内联组件</string>
+    <string name="qk_00476" formatted="false">界面</string>
+    <string name="qk_00477" formatted="false">模型接入</string>
+    <string name="qk_00478" formatted="false">知识源</string>
+    <string name="qk_00479" formatted="false">斜杠指令</string>
+    <string name="qk_00480" formatted="false">设置项</string>
+    <string name="qk_00481" formatted="false">定时任务</string>
+    <string name="qk_00482" formatted="false">消息渠道</string>
+    <string name="qk_00483" formatted="false">文件处理</string>
+    <string name="qk_00484" formatted="false">代码运行时</string>
+    <string name="qk_00485" formatted="false">语音</string>
+    <string name="qk_00486" formatted="false">导入插件时自动补签</string>
+    <string name="qk_00487">已就绪：%1$s（内置）</string>
+    <string name="qk_00488" formatted="false">已关闭：只接受已与宿主同签名的插件</string>
+    <string name="qk_00489">宿主当前签名：%1$s</string>
+    <string name="qk_00490" formatted="false">插件运行时初始化中…</string>
+    <string name="qk_00491" formatted="false">插件运行时</string>
+    <string name="qk_00492" formatted="false">QuickJS 沙箱</string>
+    <string name="qk_00493">插件界面不存在：%1$s
+（插件可能已被卸载或重载）</string>
+    <string name="qk_00494">插件界面构建失败: %1$s</string>
+    <string name="qk_00495">插件界面构建失败：%1$s
+%2$s</string>
+    <string name="qk_00496">无法打开链接：%1$s</string>
+    <string name="qk_00497" formatted="false">关于 Zorv AI</string>
+    <string name="qk_00498" formatted="false">开源 AI 助手 · 原创构建。</string>
+    <string name="qk_00499" formatted="false">更新与支持</string>
+    <string name="qk_00500" formatted="false">检查更新</string>
+    <string name="qk_00501" formatted="false">检查中…</string>
+    <string name="qk_00502">当前版本 v%1$s</string>
+    <string name="qk_00503" formatted="false">未知错误</string>
+    <string name="qk_00504">发现新版本 v%1$s</string>
+    <string name="qk_00505">已是最新版本 v%1$s</string>
+    <string name="qk_00506">检查更新失败：%1$s</string>
+    <string name="qk_00507" formatted="false">项目地址</string>
+    <string name="qk_00508" formatted="false">在 GitHub 点个 Star</string>
+    <string name="qk_00509" formatted="false">如果喜欢 Zorv AI，欢迎点个 Star ⭐</string>
+    <string name="qk_00510" formatted="false">开源许可声明</string>
+    <string name="qk_00511" formatted="false">查看本应用所用第三方依赖的许可证</string>
+    <string name="qk_00512" formatted="false">法律与合规</string>
+    <string name="qk_00513" formatted="false">权限使用声明</string>
+    <string name="qk_00514" formatted="false">本应用所申请权限的用途说明</string>
+    <string name="qk_00515" formatted="false">用户使用协议</string>
+    <string name="qk_00516" formatted="false">使用本应用前请阅读并了解</string>
+    <string name="qk_00517" formatted="false">开发者</string>
+    <string name="qk_00518" formatted="false">© 2025 - 2026 Zorv AI. 保留所有权利。</string>
+    <string name="qk_00519" formatted="false">Zorv AI（本应用）</string>
+    <string name="qk_00520" formatted="false">源码以 Apache-2.0 开源，见仓库 LICENSE 文件</string>
+    <string name="qk_00521" formatted="false">Google - core-ktx、appcompat、lifecycle、activity-compose、webkit、concurrent-futures 等</string>
+    <string name="qk_00522" formatted="false">Google - UI、Material3、icons-extended 等组件</string>
+    <string name="qk_00523" formatted="false">Square - HTTP 客户端</string>
+    <string name="qk_00524" formatted="false">JetBrains - 异步编程框架</string>
+    <string name="qk_00525" formatted="false">Rikka - ADB 级 IPC 通道，免 Root 系统命令执行</string>
+    <string name="qk_00526" formatted="false">Vanniktech - 图片裁剪组件</string>
+    <string name="qk_00527" formatted="false">Apache 软件基金会 - 压缩文件处理</string>
+    <string name="qk_00528" formatted="false">Fabrice Bellard - 轻量级 JavaScript 引擎，用于插件运行时</string>
+    <string name="qk_00529" formatted="false">k2-fsa - 端侧语音识别引擎（SenseVoice）</string>
+    <string name="qk_00530" formatted="false">Mozilla - 开源浏览器引擎，文件级 Copyleft，源码随包提供</string>
+    <string name="qk_00532" formatted="false">Google - 健康数据连接客户端</string>
+    <string name="qk_00533" formatted="false">JUnit 团队 - 单元测试框架（Eclipse Public License 2.0）</string>
+    <string name="qk_00534" formatted="false">阿里巴巴 - 端侧 AI 推理框架，源码编译，full 风味</string>
+    <string name="qk_00535" formatted="false">ggml authors - 本地大语言模型推理引擎，源码编译，full 风味</string>
+    <string name="qk_00536" formatted="false">腾讯 - 高性能神经网络推理框架，预编译 .so</string>
+    <string name="qk_00537" formatted="false">PRoot - 无 Root 用户空间 chroot/mount 模拟，预编译 .so。源码见 https://github.com/proot-me/proot</string>
+    <string name="qk_00538" formatted="false">Samba 项目 - 层级内存分配库，预编译 .so，动态链接。源码见 https://talloc.samba.org</string>
+    <string name="qk_00539" formatted="false">Ubuntu 24.04 环境</string>
+    <string name="qk_00540" formatted="false">包含 glibc、coreutils、apt 包管理器等，用于应用内 Linux 环境</string>
+    <string name="qk_00541" formatted="false">Three.js Authors - 3D 渲染引擎，用于 GLB 头像显示</string>
+    <string name="qk_00542" formatted="false">Google - 3D 数据压缩/解压库（draco_decoder.wasm）</string>
+    <string name="qk_00543" formatted="false">CodeMirror - 代码编辑器组件（v5.65.16）</string>
+    <string name="qk_00544" formatted="false">Pierre Quentel - 浏览器 Python 运行时</string>
+    <string name="qk_00545" formatted="false">Mermaid - 图表/流程图渲染库</string>
+    <string name="qk_00546" formatted="false">Mozilla - PDF 渲染引擎</string>
+    <string name="qk_00547" formatted="false">Adobe CMap 资源</string>
+    <string name="qk_00548" formatted="false">Adobe Systems - PDF 字符映射表（cmaps/ 目录）</string>
+    <string name="qk_00549" formatted="false">Michael Williamson - DOCX 转 HTML 转换器</string>
+    <string name="qk_00550" formatted="false">SheetJS - 电子表格解析/写入库（xlsx.js）</string>
+    <string name="qk_00551" formatted="false">Google/Red Hat - PDF 标准字体</string>
+    <string name="qk_00552" formatted="false">PDFium Authors (Google) - PDF 标准字体</string>
+    <string name="qk_00553" formatted="false">ACI 控制台 UI</string>
+    <string name="qk_00554" formatted="false">本应用自研（core/aci + consolekit），无第三方依赖</string>
+    <string name="qk_00555">发现新版本 v%1$s</string>
+    <string name="qk_00556" formatted="false">检测到新版本，正在直接下载 APK…</string>
+    <string name="qk_00557" formatted="false">如果下载未自动开始，请点击下方按钮手动下载：</string>
+    <string name="qk_00558" formatted="false">手动下载 APK</string>
+    <string name="qk_00559" formatted="false">使用 Gitee 镜像下载</string>
+    <string name="qk_00560" formatted="false">下载 ZorvAI 更新</string>
+    <string name="qk_00561">正在下载新版本 v%1$s...</string>
+    <string name="qk_00562" formatted="false">开始下载更新…</string>
+    <string name="qk_00563">下载失败: %1$s</string>
+    <string name="qk_00564" formatted="false">本声明随应用版本更新可能调整，最新版本以本页为准。</string>
+    <string name="qk_00680">未知能力：%1$scapability</string>
+    <string name="qk_00698" formatted="false">控制台</string>
+    <string name="qk_00699" formatted="false">（原始输出，未识别为 SDUI 快照）</string>
+    <string name="qk_00700" formatted="false">（空快照）</string>
+    <string name="qk_00701">打开控制台失败（错误码=%1$s）：%2$s</string>
+    <string name="qk_00702" formatted="false">ACT 关联启动</string>
+    <string name="qk_00703" formatted="false">ACT 关联启动（底层协议 ACI，Agent Capability Interface）是本地无 Root 的 App 间 AIDL 调用框架，可让 AI 控制支持协议的第三方 App。</string>
+    <string name="qk_00704" formatted="false">下面可手动添加应用、查看已发现应用的能力，并手动启动或重绑。</string>
+    <string name="qk_00706" formatted="false">包名或应用名</string>
+    <string name="qk_00707" formatted="false">如 com.example.chat 或 微信</string>
+    <string name="qk_00708" formatted="false">请输入包名</string>
+    <string name="qk_00709">已注册并启动：%1$s</string>
+    <string name="qk_00711" formatted="false">按包名注册并启动</string>
+    <string name="qk_00712">已启动：%1$s</string>
+    <string name="qk_00714" formatted="false">启动</string>
+    <string name="qk_00715">已注册并启动：%1$s</string>
+    <string name="qk_00716" formatted="false">注册并启动</string>
+    <string name="qk_00719" formatted="false">发现统计（实时）</string>
+    <string name="qk_00721">能力总数：%1$s</string>
+    <string name="qk_00730" formatted="false">ACI 被控方接入手册</string>
+    <string name="qk_00731" formatted="false">已保存依赖模板到 Download/Quro/aci_core_stub.kt</string>
+    <string name="qk_00732" formatted="false">保存依赖模板</string>
+    <string name="qk_00734" formatted="false">已保存开发者文档到 Download/Quro/</string>
+    <string name="qk_00735" formatted="false">下载开发者文档</string>
+    <string name="qk_00736" formatted="false">申请API密钥</string>
+    <string name="qk_00737" formatted="false">申请 ACI API 密钥</string>
+    <string name="qk_00738" formatted="false">输入第三方应用包名，系统将生成 ACI Token 用于认证。</string>
+    <string name="qk_00739" formatted="false">第三方应用包名</string>
+    <string name="qk_00740" formatted="false">例如：com.example.myapp</string>
+    <string name="qk_00741" formatted="false">生成的 ACI Token：</string>
+    <string name="qk_00742" formatted="false">Token 已复制到剪贴板</string>
+    <string name="qk_00743" formatted="false">复制 Token</string>
+    <string name="qk_00745" formatted="false">Token 生成成功</string>
+    <string name="qk_00746">生成失败：%1$s</string>
+    <string name="qk_00747" formatted="false">生成 Token</string>
+    <string name="qk_00751" formatted="false">（无能力：可能尚未绑定，或该 App 未声明能力）</string>
+    <string name="qk_00753" formatted="false">重绑</string>
+    <string name="qk_00754" formatted="false">打开控制台</string>
+    <string name="qk_00756" formatted="false">CapOS 审计</string>
+    <string name="qk_00757" formatted="false">权限状态概览</string>
+    <string name="qk_00758" formatted="false">可用</string>
+    <string name="qk_00759" formatted="false">未授权</string>
+    <string name="qk_00760" formatted="false">最近审计日志</string>
+    <string name="qk_00761" formatted="false">暂无审计记录。任何权限提升都会被记录在这里。</string>
+    <string name="qk_00762" formatted="false">清空审计日志</string>
+    <string name="qk_00763">确定要删除全部 %1$s 条审计记录吗？此操作不可撤销。</string>
+    <string name="qk_00764" formatted="false">清空</string>
+    <string name="qk_00765" formatted="false">机器人接入</string>
+    <string name="qk_00770" formatted="false">未连接</string>
+    <string name="qk_00771" formatted="false">已连接</string>
+    <string name="qk_00772" formatted="false">断开</string>
+    <string name="qk_00773" formatted="false">本地测试</string>
+    <string name="qk_00774" formatted="false">App 内验证</string>
+    <string name="qk_00775" formatted="false">发一条消息试试，回复以气泡显示</string>
+    <string name="qk_00776" formatted="false">输入测试消息…</string>
+    <string name="qk_00777" formatted="false">已禁用</string>
+    <string name="qk_00783" formatted="false">直连官方网关</string>
+    <string name="qk_00784" formatted="false">内置常开</string>
+    <string name="qk_00785" formatted="false">重连</string>
+    <string name="qk_00792" formatted="false">选择会话</string>
+    <string name="qk_00794" formatted="false">暂无会话，请先新建。</string>
+    <string name="qk_00798" formatted="false">微信 iLink 机器人</string>
+    <string name="qk_00799" formatted="false">直连官方域名，零公网端点</string>
+    <string name="qk_00803" formatted="false">⚠ Token 已过期，请点击下方「获取微信登录二维码」重新扫码</string>
+    <string name="qk_00805" formatted="false">适配器未初始化，请重启 App</string>
+    <string name="qk_00806">启动登录失败: %1$s</string>
+    <string name="qk_00807" formatted="false">获取微信登录二维码</string>
+    <string name="qk_00808" formatted="false">微信登录二维码</string>
+    <string name="qk_00810" formatted="false">请用微信扫描二维码完成登录</string>
+    <string name="qk_00811" formatted="false">正在获取二维码...</string>
+    <string name="qk_00812" formatted="false">✓ 登录成功！</string>
+    <string name="qk_00813" formatted="false">登录被拒绝或取消</string>
+    <string name="qk_00814" formatted="false">重新获取二维码</string>
+    <string name="qk_00815" formatted="false">登录被用户拒绝</string>
+    <string name="qk_00816" formatted="false">二维码已过期</string>
+    <string name="qk_00818" formatted="false">收起</string>
+    <string name="qk_00819" formatted="false">手动填入 Bot Token</string>
+    <string name="qk_00820" formatted="false">粘贴从 ilinkai.weixin.qq.com 获取的 token</string>
+    <string name="qk_00822" formatted="false">微信 iLink 通过手机端 HTTP 长轮询直连 ilinkai.weixin.qq.com，无需公网端点。</string>
+    <string name="qk_00824" formatted="false">注：扫码需要手机能访问 ilinkai.weixin.qq.com 域名，如遇网络问题请切换网络或使用手动填 Token。</string>
+    <string name="qk_00825" formatted="false">对话分支</string>
+    <string name="qk_00826" formatted="false">统计信息</string>
+    <string name="qk_00827" formatted="false">创建分支</string>
+    <string name="qk_00828" formatted="false">对话树不存在</string>
+    <string name="qk_00829" formatted="false">分支概览</string>
+    <string name="qk_00833">%1$s 条消息</string>
+    <string name="qk_00834" formatted="false">当前分支</string>
+    <string name="qk_00835" formatted="false">切换到此分支</string>
+    <string name="qk_00836" formatted="false">创建子分支</string>
+    <string name="qk_00837" formatted="false">重命名</string>
+    <string name="qk_00838">↓ %1$s 个子分支</string>
+    <string name="qk_00839" formatted="false">创建新分支</string>
+    <string name="qk_00840" formatted="false">分支名称</string>
+    <string name="qk_00841" formatted="false">输入分支名称</string>
+    <string name="qk_00842" formatted="false">新分支</string>
+    <string name="qk_00843" formatted="false">创建</string>
+    <string name="qk_00844" formatted="false">重命名分支</string>
+    <string name="qk_00845" formatted="false">分支统计</string>
+    <string name="qk_00850" formatted="false">自动</string>
+    <string name="qk_00868">[%1$s] ⚠ 截图保存失败：%2$s
+</string>
+    <string name="qk_00884" formatted="false">输入网址…</string>
+    <string name="qk_00887" formatted="false">眼睛截图</string>
+    <string name="qk_00889" formatted="false">桌面版网站</string>
+    <string name="qk_00890" formatted="false">UA 切换</string>
+    <string name="qk_00891" formatted="false">兼容性模式</string>
+    <string name="qk_00892" formatted="false">代理设置</string>
+    <string name="qk_00893" formatted="false">取消收藏</string>
+    <string name="qk_00894" formatted="false">收藏此页</string>
+    <string name="qk_00895" formatted="false">书签</string>
+    <string name="qk_00896" formatted="false">历史记录</string>
+    <string name="qk_00897" formatted="false">查找</string>
+    <string name="qk_00898" formatted="false">复制链接</string>
+    <string name="qk_00899" formatted="false">在系统浏览器打开</string>
+    <string name="qk_00900" formatted="false">运行脚本</string>
+    <string name="qk_00901" formatted="false">Python 控制台</string>
+    <string name="qk_00903" formatted="false">查找…</string>
+    <string name="qk_00907" formatted="false">收藏夹</string>
+    <string name="qk_00908" formatted="false">还没有收藏，点右上角「更多 → 收藏此页」添加。</string>
+    <string name="qk_00909" formatted="false">暂无浏览记录。</string>
+    <string name="qk_00910" formatted="false">网页正文</string>
+    <string name="qk_00911" formatted="false">正文已复制</string>
+    <string name="qk_00912" formatted="false">网页自动化脚本</string>
+    <string name="qk_00914" formatted="false">未命名</string>
+    <string name="qk_00915">[%1$s] 已保存：%2$s
+</string>
+    <string name="qk_00916" formatted="false">新建</string>
+    <string name="qk_00918" formatted="false">脚本名称…</string>
+    <string name="qk_00919" formatted="false">运行结果将显示在这里…</string>
+    <string name="qk_00920" formatted="false">👁 眼睛截图（页面像素）</string>
+    <string name="qk_00921" formatted="false">User-Agent 切换</string>
+    <string name="qk_00922" formatted="false">选择预设 UA 或自定义</string>
+    <string name="qk_00923" formatted="false">自定义 UA</string>
+    <string name="qk_00924" formatted="false">自定义 UA 字符串</string>
+    <string name="qk_00925" formatted="false">应用自定义 UA</string>
+    <string name="qk_00926" formatted="false">优化老旧网站渲染</string>
+    <string name="qk_00927" formatted="false">禁用 JavaScript</string>
+    <string name="qk_00928" formatted="false">适用于老旧/不兼容的网站</string>
+    <string name="qk_00929" formatted="false">禁用图片加载</string>
+    <string name="qk_00930" formatted="false">加速加载，节省流量</string>
+    <string name="qk_00931" formatted="false">当前 UA</string>
+    <string name="qk_00932" formatted="false">启用代理</string>
+    <string name="qk_00933" formatted="false">代理类型</string>
+    <string name="qk_00934" formatted="false">代理地址</string>
+    <string name="qk_00935" formatted="false">例如: 127.0.0.1</string>
+    <string name="qk_00936" formatted="false">端口</string>
+    <string name="qk_00937" formatted="false">例如: 1080</string>
+    <string name="qk_00938" formatted="false">用户名（可选）</string>
+    <string name="qk_00939" formatted="false">密码（可选）</string>
+    <string name="qk_00942" formatted="false">代理已关闭</string>
+    <string name="qk_00944" formatted="false">展开</string>
+    <string name="qk_00945" formatted="false">清除全部</string>
+    <string name="qk_00946" formatted="false">（无数据）</string>
+    <string name="qk_00948">… 还有 %1$s 项已省略渲染</string>
+    <string name="qk_00951" formatted="false">提交</string>
+    <string name="qk_00952" formatted="false">（无步骤）</string>
+    <string name="qk_00953" formatted="false">打开</string>
+    <string name="qk_00956" formatted="false">工具调用</string>
+    <string name="qk_00957" formatted="false">等待输出…</string>
+    <string name="qk_00958">已完成 %1$s / %2$s</string>
+    <string name="qk_00959" formatted="false">（无建议）</string>
+    <string name="qk_00960" formatted="false">（无动作）</string>
+    <string name="qk_00961" formatted="false">（无事件）</string>
+    <string name="qk_00962">… 还有 %1$s 个事件已省略渲染</string>
+    <string name="qk_00963" formatted="false">（无看板）</string>
+    <string name="qk_00967" formatted="false">需要点击查看链接回答</string>
+    <string name="qk_00968" formatted="false">流程图</string>
+    <string name="qk_00970" formatted="false">已保存 SVG 到 Download 文件夹</string>
+    <string name="qk_00971" formatted="false">图表尚未渲染完成，请稍候</string>
+    <string name="qk_00972" formatted="false">下载 SVG</string>
+    <string name="qk_00974" formatted="false">复制源码</string>
+    <string name="qk_00975" formatted="false">（无图表内容）</string>
+    <string name="qk_00979" formatted="false">（无网页内容）</string>
+    <string name="qk_00984" formatted="false">（无 Web 应用内容）</string>
+    <string name="qk_00985" formatted="false">这是旧「原生小程序」卡片，内嵌引擎已移除。原生小程序现请走工具中心</string>
+    <string name="qk_00986" formatted="false">「小程序（原生引擎）」面板（让 AI 用 miniapp_sdk 工具生成 WXML/WXSS/JS 工程）。</string>
+    <string name="qk_00987" formatted="false">需要 GenUI 原生界面请让 AI 用 genui_agent_open 打开内置 GenUI Agent。</string>
+    <string name="qk_00988" formatted="false">（原生小程序「</string>
+    <string name="qk_00990" formatted="false">显示全部</string>
+    <string name="qk_00991" formatted="false">（组合为空）</string>
+    <string name="qk_00993" formatted="false">单独</string>
+    <string name="qk_00995">这是来自 %1$s 用户 %2$s 的机器人对话�?</string>
+    <string name="qk_00999">[本轮已根据触发词自动激活以下技能，请按其对用户消息作答]
+%1$s</string>
+    <string name="qk_01006">生成回复异常 convId=%1$s</string>
+    <string name="qk_01012" formatted="false">执行失败</string>
+    <string name="qk_01054" formatted="false">文件路径</string>
+    <string name="qk_01057" formatted="false">新建文件</string>
+    <string name="qk_01059" formatted="false">内容</string>
+    <string name="qk_01065" formatted="false">格式</string>
+    <string name="qk_01066" formatted="false">标题</string>
+    <string name="qk_01073" formatted="false">问题内容</string>
+    <string name="qk_01095" formatted="false">标签</string>
+    <string name="qk_01134">当前用户的名字是�?%1$s」。在合适的场合可以直接用这个名字称呼用户，但不要每句话都刻意叫名字。
+</string>
+    <string name="qk_01430">（ACI 尚未就绪�?%1$s）
+</string>
+    <string name="qk_01443">- 路径规则：path �?**相对工作区根目录**的路径（�? MyApp/src/Main.java），不要带盘�?/绝对路径、不�? .. 逃逸；写完后告诉用户文件在「工具箱-工作区」里，绝对路径是 %1$s/相对路径。
+</string>
+    <string name="qk_01467" formatted="false">云模型配置已保存</string>
+    <string name="qk_01469" formatted="false">云模型配置 · 语音合成</string>
+    <string name="qk_01470" formatted="false">清除</string>
+    <string name="qk_01471" formatted="false">选择一个云端 TTS 服务商并填写所需参数。保存后自动启用「云模型服务」作为语音来源，聊天/语音球朗读立即走云端，无需再到「语音合成」里手动切换。</string>
+    <string name="qk_01472" formatted="false">服务商</string>
+    <string name="qk_01473">点击卡片选择服务商，选中后展开查看所需参数；列表可上下滑动浏览全部 %1$s 家。</string>
+    <string name="qk_01478" formatted="false">已配置</string>
+    <string name="qk_01480" formatted="false">该服务商无需任何密钥/参数即可使用（如 Edge TTS）。</string>
+    <string name="qk_01484" formatted="false">点击选择预置音色 / 已创建的复刻音色</string>
+    <string name="qk_01486" formatted="false">音色名称（自由填写）</string>
+    <string name="qk_01487" formatted="false">如 alloy / 自定义网关音色 ID / 或上方选择复刻音色</string>
+    <string name="qk_01488" formatted="false">提示：启用「语音克隆」并在上方「自定义音色」中创建复刻条目后，可直接从「音色」下拉选择；也可在此填入官方平台创建的克隆音色 ID。</string>
+    <string name="qk_01489" formatted="false">该服务商无需指定音色。</string>
+    <string name="qk_01490" formatted="false">输出格式</string>
+    <string name="qk_01493" formatted="false">实时逐句返回音频，降低首字延迟。已支持边收边播：Edge / 讯飞（WebSocket）与 MiMo / OpenAI / MiniMax（HTTP 流式）。火山 / 腾讯当前为整段合成后播放（其 WebSocket 流式在部分账号引发卡顿，暂未启用）。</string>
+    <string name="qk_01494" formatted="false">风格标签</string>
+    <string name="qk_01495" formatted="false">每个标签独立开关：开启 = 允许 AI 在语音合成时自由组合该风格；关闭 = 禁用。默认全部关闭，按需开启，不会强制「全部使用」。</string>
+    <string name="qk_01496" formatted="false">自定义标签</string>
+    <string name="qk_01497" formatted="false">添加自定义标签</string>
+    <string name="qk_01498" formatted="false">添加</string>
+    <string name="qk_01502" formatted="false">音色名称</string>
+    <string name="qk_01503" formatted="false">类型：</string>
+    <string name="qk_01504" formatted="false">文字设计</string>
+    <string name="qk_01505" formatted="false">音频复刻</string>
+    <string name="qk_01506" formatted="false">音色描述（如：温柔的少女音）</string>
+    <string name="qk_01507" formatted="false">如：温柔的少女音，20-30岁女性</string>
+    <string name="qk_01508" formatted="false">音频样本（导入/URI）</string>
+    <string name="qk_01509" formatted="false">点「导入」选择音频文件，或粘贴音频 URI/URL</string>
+    <string name="qk_01510" formatted="false">📁 导入音频文件</string>
+    <string name="qk_01511" formatted="false">或粘贴公网可访问的音频 URL</string>
+    <string name="qk_01512" formatted="false">✅ 已选择本地音频文件（零样本克隆）</string>
+    <string name="qk_01513" formatted="false">参考音频旁白文本</string>
+    <string name="qk_01514" formatted="false">硅基流动复刻必需：参考音频对应的文字内容</string>
+    <string name="qk_01517" formatted="false">添加自定义音色</string>
+    <string name="qk_01521">请先在「%1$s」官方平台创建克隆音色，再于「音色」字段（自由填写）填入克隆音色 ID/名称即可调用。</string>
+    <string name="qk_01522" formatted="false">启用语音克隆</string>
+    <string name="qk_01523" formatted="false">试听文本</string>
+    <string name="qk_01524" formatted="false">输入要朗读的文本</string>
+    <string name="qk_01528" formatted="false">保存并试听</string>
+    <string name="qk_01529" formatted="false">仅保存</string>
+    <string name="qk_01531" formatted="false">已保存CMS引擎到 Download/Quro/</string>
+    <string name="qk_01532">CMS引擎导入失败：%1$s</string>
+    <string name="qk_01535" formatted="false">未识别到有效的 cms.io/v2 模块</string>
+    <string name="qk_01537" formatted="false">CMSv2模块</string>
+    <string name="qk_01538" formatted="false">模块</string>
+    <string name="qk_01539" formatted="false">授权</string>
+    <string name="qk_01540" formatted="false">能力</string>
+    <string name="qk_01541" formatted="false">未选择任何模块</string>
+    <string name="qk_01543" formatted="false">选择要导出的模块</string>
+    <string name="qk_01544" formatted="false">当前没有可导出的模块。</string>
+    <string name="qk_01553" formatted="false">🔧 CMS引擎</string>
+    <string name="qk_01555" formatted="false">部署中…</string>
+    <string name="qk_01557" formatted="false">导入CMS引擎</string>
+    <string name="qk_01558" formatted="false">导出CMS引擎</string>
+    <string name="qk_01560" formatted="false">收起脚本</string>
+    <string name="qk_01561" formatted="false">查看/编辑引擎脚本</string>
+    <string name="qk_01562" formatted="false">Bootstrap 引导脚本</string>
+    <string name="qk_01564" formatted="false">脚本已复制</string>
+    <string name="qk_01565" formatted="false">Provisioner 环境脚本</string>
+    <string name="qk_01567" formatted="false">添加模块</string>
+    <string name="qk_01568" formatted="false">一键部署到终端</string>
+    <string name="qk_01569" formatted="false">导出模块</string>
+    <string name="qk_01570" formatted="false">导入模块</string>
+    <string name="qk_01571" formatted="false">💡 CMS 模块部署到应用内 proot/Ubuntu Linux 沙箱运行。首次请先在「终端」页安装 Linux 环境（约需联网下载 30MB）；部署时按需 apt-get install 基础包。</string>
+    <string name="qk_01572" formatted="false">还没有模块。点上方「添加模块」创建一个能力模块（cms.io/v2）。</string>
+    <string name="qk_01573" formatted="false">查看添加说明</string>
+    <string name="qk_01575" formatted="false">已保存说明到 Download/Quro/</string>
+    <string name="qk_01576" formatted="false">下载说明</string>
+    <string name="qk_01577" formatted="false">怎么添加 CMS v2 模块</string>
+    <string name="qk_01586" formatted="false">· 运行中</string>
+    <string name="qk_01587" formatted="false">⚠ 含需解析依赖</string>
+    <string name="qk_01588" formatted="false">部署到终端</string>
+    <string name="qk_01589" formatted="false">收起 entry.sh</string>
+    <string name="qk_01590" formatted="false">查看/编辑 entry.sh</string>
+    <string name="qk_01591" formatted="false">entry.sh 脚本</string>
+    <string name="qk_01592" formatted="false">📦 终端已部署（未在模块库）</string>
+    <string name="qk_01596" formatted="false">权限声明：</string>
+    <string name="qk_01602">超时=%1$ss</string>
+    <string name="qk_01603">内存=%1$sMB</string>
+    <string name="qk_01606" formatted="false">元信息：</string>
+    <string name="qk_01609" formatted="false">添加能力模块</string>
+    <string name="qk_01611" formatted="false">显示名</string>
+    <string name="qk_01612" formatted="false">版本</string>
+    <string name="qk_01613" formatted="false">描述</string>
+    <string name="qk_01614" formatted="false">作者</string>
+    <string name="qk_01615" formatted="false">许可证</string>
+    <string name="qk_01618" formatted="false">理由</string>
+    <string name="qk_01619">能力 (%1$s)</string>
+    <string name="qk_01621" formatted="false">能力 id</string>
+    <string name="qk_01622" formatted="false">摘要</string>
+    <string name="qk_01625" formatted="false">约束（可选，越细越安全）</string>
+    <string name="qk_01629" formatted="false">最大执行秒数</string>
+    <string name="qk_01630" formatted="false">最大内存 MB</string>
+    <string name="qk_01631">依赖 (%1$s)</string>
+    <string name="qk_01633" formatted="false">可选依赖</string>
+    <string name="qk_01634" formatted="false">导出备份</string>
+    <string name="qk_01635" formatted="false">导入</string>
+    <string name="qk_01636" formatted="false">暂无授权记录。在「能力」页调用能力时，会按 4 级授权（临时/会话/永久/全局）向用户请求。</string>
+    <string name="qk_01637">授权级别：%1$s</string>
+    <string name="qk_01638" formatted="false">还没有能力。先到「模块」页添加含能力的模块。</string>
+    <string name="qk_01641" formatted="false">调用</string>
+    <string name="qk_01642" formatted="false">执行</string>
+    <string name="qk_01650" formatted="false">审计日志（上帝视角）</string>
+    <string name="qk_01651" formatted="false">暂无审计记录。</string>
+    <string name="qk_01652" formatted="false">🔐 权限请求</string>
+    <string name="qk_01653" formatted="false">模块能力需要权限：</string>
+    <string name="qk_01654">权限：%1$s [%2$s]</string>
+    <string name="qk_01657" formatted="false">请选择授权级别：</string>
+    <string name="qk_01658" formatted="false">仅本次允许（推荐）</string>
+    <string name="qk_01659" formatted="false">本次会话允许</string>
+    <string name="qk_01660" formatted="false">永久允许</string>
+    <string name="qk_01661" formatted="false">全局允许（危险!）</string>
+    <string name="qk_01662" formatted="false">拒绝</string>
+    <string name="qk_01667" formatted="false">评分</string>
+    <string name="qk_01668" formatted="false">表格</string>
+    <string name="qk_01678" formatted="false">可视化组件库</string>
+    <string name="qk_01682" formatted="false">点击任意组件，真实样例会发送到对话卡片栏。ui_widget / ui_card / mermaid / miniapp 均为真实渲染能力，已并入本组件库；旧版写死的「内置组件」Demo 已移除。</string>
+    <string name="qk_01687" formatted="false">默认应用</string>
+    <string name="qk_01688" formatted="false">探测中…</string>
+    <string name="qk_01691" formatted="false">说明</string>
+    <string name="qk_01696" formatted="false">已是默认</string>
+    <string name="qk_01697" formatted="false">设为默认</string>
+    <string name="qk_01724" formatted="false">开发环境</string>
+    <string name="qk_01725" formatted="false">⚠️ 终端环境未就绪</string>
+    <string name="qk_01726" formatted="false">请先在「终端」页面安装 Linux 环境，再部署开发环境。</string>
+    <string name="qk_01727" formatted="false">终端环境已就绪 ✓</string>
+    <string name="qk_01728" formatted="false">刷新状态</string>
+    <string name="qk_01729" formatted="false">发送安装命令到终端</string>
+    <string name="qk_01732" formatted="false">发送删除命令到终端</string>
+    <string name="qk_01733">✅ 已发送删除命令: %1$s</string>
+    <string name="qk_01734">❌ 删除命令发送失败: %1$s</string>
+    <string name="qk_01735" formatted="false">发送全部安装命令到终端</string>
+    <string name="qk_01737" formatted="false">全部安装命令已发送到终端</string>
+    <string name="qk_01738" formatted="false">发送中…</string>
+    <string name="qk_01739" formatted="false">一键发送全部安装命令</string>
+    <string name="qk_01740" formatted="false">部署日志：</string>
+    <string name="qk_01741" formatted="false">部署日志</string>
+    <string name="qk_01742" formatted="false">日志已复制到剪贴板</string>
+    <string name="qk_01743" formatted="false">复制全部</string>
+    <string name="qk_01746" formatted="false">重新安装</string>
+    <string name="qk_01747" formatted="false">发送到终端</string>
+    <string name="qk_01748" formatted="false">查看命令</string>
+    <string name="qk_01749" formatted="false">安装命令</string>
+    <string name="qk_01750" formatted="false">检查命令</string>
+    <string name="qk_01754" formatted="false">没听清，请重试</string>
+    <string name="qk_01759" formatted="false">数字人</string>
+    <string name="qk_01760" formatted="false">设置</string>
+    <string name="qk_01761" formatted="false">🔊 离线 ASR</string>
+    <string name="qk_01762" formatted="false">🔊 离线 TTS</string>
+    <string name="qk_01763" formatted="false">🖥 离线 LLM</string>
+    <string name="qk_01764" formatted="false">☁ 云端口 LLM</string>
+    <string name="qk_01765" formatted="false">离线模式未配置本地端点：点右上「设置」填写 baseUrl / model</string>
+    <string name="qk_01766" formatted="false">你</string>
+    <string name="qk_01767" formatted="false">输入文字与数字人对话…</string>
+    <string name="qk_01773" formatted="false">LLM 来源</string>
+    <string name="qk_01774" formatted="false">☁ 云端口</string>
+    <string name="qk_01775" formatted="false">🖥 离线本地端点</string>
+    <string name="qk_01776" formatted="false">本地端点 baseUrl</string>
+    <string name="qk_01777" formatted="false">API Key（可空）</string>
+    <string name="qk_01778" formatted="false">模型名（如 llava / qwen2.5）</string>
+    <string name="qk_01779" formatted="false">3D 模型</string>
+    <string name="qk_01783" formatted="false">3D 预览已内置离线 Three.js 引擎（assets/www/three/），无需联网即可渲染。</string>
+    <string name="qk_01801">Draco 提取=%1$s；dracoPath=%2$s</string>
+    <string name="qk_01802">HTML 已写入 %1$s；engine.len=%2$s；b64.len=%3$s</string>
+    <string name="qk_01807" formatted="false">新建文档</string>
+    <string name="qk_01814">已创建并保存到 %1$s</string>
+    <string name="qk_01829" formatted="false">创建中</string>
+    <string name="qk_01830" formatted="false">切换格式栏</string>
+    <string name="qk_01831" formatted="false">请先保存文档，再分享给其他应用</string>
+    <string name="qk_01832" formatted="false">文件不存在，请先保存</string>
+    <string name="qk_01833" formatted="false">无法分享该文件（路径未被允许）</string>
+    <string name="qk_01835" formatted="false">没有可分享的应用</string>
+    <string name="qk_01837" formatted="false">开始输入文档内容...</string>
+    <string name="qk_01838" formatted="false">保存更改</string>
+    <string name="qk_01839" formatted="false">文档已修改，是否保存更改？</string>
+    <string name="qk_01840" formatted="false">放弃</string>
+    <string name="qk_01841" formatted="false">点击开始编辑...</string>
+    <string name="qk_01843" formatted="false">已保存修改</string>
+    <string name="qk_01844" formatted="false">用 WPS 打开</string>
+    <string name="qk_01845" formatted="false">其他应用</string>
+    <string name="qk_01848">不支持的文档类型：%1$s
+请用「其他应用」打开。</string>
+    <string name="qk_01850" formatted="false">文件较大，应用内预览可能较慢；若长时间无响应，请点「其他应用」打开。</string>
+    <string name="qk_01852">无法解析 PPTX：%1$s</string>
+    <string name="qk_01857" formatted="false">文件不存在</string>
+    <string name="qk_01858" formatted="false">无法共享该文件（路径未被允许）</string>
+    <string name="qk_01859" formatted="false">已用 WPS 打开</string>
+    <string name="qk_01860" formatted="false">无法打开该文件</string>
+    <string name="qk_01861" formatted="false">未找到可打开该文件的应用</string>
+    <string name="qk_01862" formatted="false">模型名（可手动输入）</string>
+    <string name="qk_01863" formatted="false">高级配置（可选）</string>
+    <string name="qk_01864" formatted="false">自定义基础URL（可选）</string>
+    <string name="qk_01865" formatted="false">留空则使用主模型配置的URL</string>
+    <string name="qk_01866" formatted="false">自定义API密钥（可选）</string>
+    <string name="qk_01867" formatted="false">留空则使用主模型配置的密钥</string>
+    <string name="qk_01874" formatted="false">功能权限</string>
+    <string name="qk_01875" formatted="false">AI 助手需要这些权限来读写你的文件与文档、健康与健身数据、识别运动状态、常驻锁屏/悬浮窗、设为默认数字助理，并设置精准提醒。所有请求都走系统标准授权流程，你可随时在系统设置中撤销。</string>
+    <string name="qk_01876" formatted="false">当前上下文无法初始化权限管理器（缺少 Activity），请联系开发者。</string>
+    <string name="qk_01879" formatted="false">前往应用设置</string>
+    <string name="qk_01880" formatted="false">文件与媒体</string>
+    <string name="qk_01886" formatted="false">健康与健身</string>
+    <string name="qk_01895" formatted="false">闹钟与提醒</string>
+    <string name="qk_01898" formatted="false">锁屏显示</string>
+    <string name="qk_01905" formatted="false">健身与运动</string>
+    <string name="qk_01908" formatted="false">文件与文档</string>
+    <string name="qk_01915" formatted="false">数字助理应用完整功能</string>
+    <string name="qk_01921" formatted="false">本机诊断</string>
+    <string name="qk_01922" formatted="false">已安装版本</string>
+    <string name="qk_01923" formatted="false">系统版本</string>
+    <string name="qk_01924" formatted="false">已声明 SCHEDULE_EXACT_ALARM</string>
+    <string name="qk_01925" formatted="false">是 ✓</string>
+    <string name="qk_01926" formatted="false">否 ✗</string>
+    <string name="qk_01927" formatted="false">已声明 MANAGE_EXTERNAL_STORAGE</string>
+    <string name="qk_01929" formatted="false">不可用</string>
+    <string name="qk_01934" formatted="false">数据源与优先级</string>
+    <string name="qk_01935" formatted="false">DataOrigin 分组 · 本应用来源可溯源</string>
+    <string name="qk_01936" formatted="false">健康数据可能来自多个 App（手表、Google Fit、本应用等）。通过 DataOrigin.packageName 分组，可区分并优先采用本应用录入的数据。</string>
+    <string name="qk_01937" formatted="false">读取各来源步数</string>
+    <string name="qk_01938" formatted="false">写入跑步记录</string>
+    <string name="qk_01939" formatted="false">需先授权健康数据后使用本演示。</string>
+    <string name="qk_01940" formatted="false">近 7 天步数（按来源）：</string>
+    <string name="qk_01941" formatted="false">无数据</string>
+    <string name="qk_01944" formatted="false">仓库</string>
+    <string name="qk_01946" formatted="false">退出登录</string>
+    <string name="qk_01947" formatted="false">登录 GitHub</string>
+    <string name="qk_01948" formatted="false">用你的 GitHub 账号授权本应用。两种方式都会真实登录官方 GitHub。</string>
+    <string name="qk_01949" formatted="false">GitHub 镜像（无法连接官方时切换）</string>
+    <string name="qk_01950" formatted="false">镜像域名</string>
+    <string name="qk_01952" formatted="false">官方 github.com</string>
+    <string name="qk_01956" formatted="false">测试中…</string>
+    <string name="qk_01957" formatted="false">测试镜像连通性</string>
+    <string name="qk_01958" formatted="false">提示：当前网络若连不上 GitHub 官方，设备流/PAT 都可能失败。先在能访问 GitHub 的网络下用 PAT 登录最稳妥。</string>
+    <string name="qk_01959" formatted="false">用 Personal Access Token 登录</string>
+    <string name="qk_01960" formatted="false">用 OAuth 设备流登录</string>
+    <string name="qk_01963" formatted="false">登录中…</string>
+    <string name="qk_01964" formatted="false">登录</string>
+    <string name="qk_01965" formatted="false">github.com/settings/developers 注册的 Client ID</string>
+    <string name="qk_01968" formatted="false">发起中…</string>
+    <string name="qk_01969" formatted="false">发起授权</string>
+    <string name="qk_01970" formatted="false">没有 Client ID？在 github.com/settings/developers → New OAuth App 创建一个（无需填回调地址），把 Client ID 粘上来即可。</string>
+    <string name="qk_01971" formatted="false">请在浏览器打开以下地址并输入验证码：</string>
+    <string name="qk_01976">关注者 %1$s</string>
+    <string name="qk_01977">关注中 %1$s</string>
+    <string name="qk_01978" formatted="false">在浏览器打开主页</string>
+    <string name="qk_01984" formatted="false">无结果</string>
+    <string name="qk_01985" formatted="false">搜索 GitHub</string>
+    <string name="qk_01986" formatted="false">用户</string>
+    <string name="qk_01987" formatted="false">输入关键词后点搜索（仓库 / 代码 / Issue / 用户）</string>
+    <string name="qk_01988" formatted="false">无法读取所选文件，导入失败</string>
+    <string name="qk_01989">暂不支持导入该类型：%1$s（仅支持 md/txt/json/csv/docx/xlsx/pptx）</string>
+    <string name="qk_01992" formatted="false">知识库已导出</string>
+    <string name="qk_01993">导出失败：%1$s</string>
+    <string name="qk_01996" formatted="false">已存在同名文件，无法重命名</string>
+    <string name="qk_01998" formatted="false">重命名失败</string>
+    <string name="qk_01999" formatted="false">未找到可打开该文档的其他应用</string>
+    <string name="qk_02000" formatted="false">导出知识库（ZIP）</string>
+    <string name="qk_02001" formatted="false">导入文档</string>
+    <string name="qk_02002" formatted="false">添加文档</string>
+    <string name="qk_02003" formatted="false">打开预览（富文本/可编辑）</string>
+    <string name="qk_02004" formatted="false">编辑内容</string>
+    <string name="qk_02005" formatted="false">重命名文档</string>
+    <string name="qk_02006" formatted="false">删除文档</string>
+    <string name="qk_02009" formatted="false">搜索文件名…</string>
+    <string name="qk_02012" formatted="false">重建索引</string>
+    <string name="qk_02014" formatted="false">Office 文档（docx/xlsx/pptx）：点击右上角「打开预览」可在应用内查看与编辑文本内容。修改后会自动重建 RAG 索引。</string>
+    <string name="qk_02016" formatted="false">新建知识文档</string>
+    <string name="qk_02017" formatted="false">输入文档名后直接进入富编辑器撰写（支持 Markdown 格式工具栏与实时预览）。</string>
+    <string name="qk_02018" formatted="false">文档名</string>
+    <string name="qk_02019" formatted="false">如 编码规范（默认 .md）</string>
+    <string name="qk_02020" formatted="false">确定</string>
+    <string name="qk_02021" formatted="false">新文件名</string>
+    <string name="qk_02022">编辑内容 · %1$s</string>
+    <string name="qk_02023" formatted="false">文档内容</string>
+    <string name="qk_02024" formatted="false">LSPosed 模块</string>
+    <string name="qk_02025" formatted="false">未安装</string>
+    <string name="qk_02035" formatted="false">请先安装 LSPosed 管理器</string>
+    <string name="qk_02042" formatted="false">复制并关闭</string>
+    <string name="qk_02043" formatted="false">仅关闭</string>
+    <string name="qk_02044" formatted="false">⚠️ 运行出错（已捕获）</string>
+    <string name="qk_02045" formatted="false">上次运行崩溃（已捕获）</string>
+    <string name="qk_02046" formatted="false">请把下方内容复制发给开发者，以便定位「设置闪退 / 无法对话」的真凶。</string>
+    <string name="qk_02047" formatted="false">清除并继续</string>
+    <string name="qk_02048" formatted="false">开始输入Markdown内容...</string>
+    <string name="qk_02058" formatted="false">MCP 服务</string>
+    <string name="qk_02060" formatted="false">（Claude Desktop / Cursor / MCP Inspector 等）。</string>
+    <string name="qk_02061" formatted="false">启用本地 MCP Server</string>
+    <string name="qk_02063" formatted="false">关闭（不监听任何端口）</string>
+    <string name="qk_02064" formatted="false">连接地址</string>
+    <string name="qk_02065" formatted="false">已复制连接地址</string>
+    <string name="qk_02070" formatted="false">技术详情</string>
+    <string name="qk_02072" formatted="false">安全说明：服务只绑定环回地址，任何外部网络请求均无法抵达。工具调用复用应用内同一套</string>
+    <string name="qk_02073" formatted="false">权限与确认机制；涉及敏感操作（如安装/卸载应用、ROOT 命令）仍受系统权限与运行时确认约束。</string>
+    <string name="qk_02074" formatted="false">MCP 客户端（连接外部服务器）</string>
+    <string name="qk_02075" formatted="false">在此添加外部 MCP 服务器（如其它 AI 客户端、云端工具网关），添加后 AI 即可通过 mcp_call 调用其暴露的工具。</string>
+    <string name="qk_02076">连接成功，发现 %1$s 个工具</string>
+    <string name="qk_02077" formatted="false">连接失败</string>
+    <string name="qk_02078" formatted="false">测试</string>
+    <string name="qk_02080" formatted="false">别名</string>
+    <string name="qk_02082" formatted="false">Token（可选，Bearer）</string>
+    <string name="qk_02083" formatted="false">别名与地址必填</string>
+    <string name="qk_02085" formatted="false">保存并继续添加</string>
+    <string name="qk_02086" formatted="false">本地 MCP（AI 部署）</string>
+    <string name="qk_02087" formatted="false">由 AI 通过 mcp_deploy 创作并部署到本应用内的 MCP 服务器。部署后自动在本机启动端点，</string>
+    <string name="qk_02088" formatted="false">可在对话中用 mcp_call 按别名调用，下方列出当前已部署的实例。</string>
+    <string name="qk_02089" formatted="false">暂无本地 MCP。在对话中让 AI 使用 mcp_deploy 提交工具定义即可部署。</string>
+    <string name="qk_02092" formatted="false">注销</string>
+    <string name="qk_02094" formatted="false">选择音乐</string>
+    <string name="qk_02095" formatted="false">选择视频</string>
+    <string name="qk_02098" formatted="false">授予权限</string>
+    <string name="qk_02099">读取失败：%1$s</string>
+    <string name="qk_02102" formatted="false">设置 · Settings</string>
+    <string name="qk_02103" formatted="false">模型配置</string>
+    <string name="qk_02105" formatted="false">本地离线模式</string>
+    <string name="qk_02107" formatted="false">该模型在设备本地离线运行，不经过任何云端服务，无需 Base URL / Api Key。</string>
+    <string name="qk_02108" formatted="false">切换回云端模型</string>
+    <string name="qk_02109">已选自定义厂商：%1$s</string>
+    <string name="qk_02111" formatted="false">连接</string>
+    <string name="qk_02113" formatted="false">拉取中…</string>
+    <string name="qk_02114" formatted="false">拉取模型列表</string>
+    <string name="qk_02115" formatted="false">以下参数仅影响本地离线模型，与云端模型设置互不影响。</string>
+    <string name="qk_02116" formatted="false">温度</string>
+    <string name="qk_02118" formatted="false">本地模型单次回复的最大 token 数。手机 CPU 每 token 几十~几百毫秒，建议 256–1024。</string>
+    <string name="qk_02119" formatted="false">启用工具调用</string>
+    <string name="qk_02120" formatted="false">开启后本地模型可通过 function calling 调用工具。关闭则纯对话模式，节省上下文窗口。</string>
+    <string name="qk_02121" formatted="false">提示：线程数、上下文长度、GPU 层数、计算精度等参数请在「导入模型 → 运行参数」中设置。</string>
+    <string name="qk_02124" formatted="false">0 = 不限制（默认）：工具调用不设次数上限，ReAct 循环持续直到模型给出最终答复；填正数则按该值封顶。内置 200 轮安全天花板防失控。</string>
+    <string name="qk_02126" formatted="false">输入 token 预算（0=不限制）。长对话自动丢弃最旧轮次、始终保留身份/人格/工具指引，避免窗口撑爆导致丢失上下文或工具调用失效。小米 MiMo 建议 16000–32000。</string>
+    <string name="qk_02127" formatted="false">开启后云端模型通过 function calling 调用工具；关闭则纯对话模式。若模型「不主动调工具」，先确认此开关为开。</string>
+    <string name="qk_02128" formatted="false">完整工具集</string>
+    <string name="qk_02129" formatted="false">开启下发全部 ~50 个工具（全面能力）；若你的 API 中转对工具数敏感（&gt;25 可能静默丢弃 tools 字段导致无法调用），可关闭仅发核心 14 个。</string>
+    <string name="qk_02130" formatted="false">保存为预设</string>
+    <string name="qk_02131" formatted="false">保存配置</string>
+    <string name="qk_02132" formatted="false">编辑预设</string>
+    <string name="qk_02133" formatted="false">加载</string>
+    <string name="qk_02136" formatted="false">预设名称</string>
+    <string name="qk_02137" formatted="false">例如：我的 DeepSeek</string>
+    <string name="qk_02138" formatted="false">保存修改</string>
+    <string name="qk_02139">服务商：%1$s</string>
+    <string name="qk_02142" formatted="false">修改名称后点「保存修改」即可更新预设显示名。其他字段请删除后重新创建。</string>
+    <string name="qk_02144" formatted="false">未获取到模型，请检查地址 / 密钥。</string>
+    <string name="qk_02145" formatted="false">拉取失败</string>
+    <string name="qk_02153" formatted="false">导入方式任选其一：① MNN 选含 llm_config.json 的模型目录；② llama.cpp 选含 .gguf 的文件夹；</string>
+    <string name="qk_02154" formatted="false">③ 直接选单个 .gguf 文件（最简单，推荐）。模型会完整复制到应用私有目录，完全离线运行。</string>
+    <string name="qk_02155" formatted="false">MNN 模型目录（选文件夹）</string>
+    <string name="qk_02156" formatted="false">llama.cpp 文件夹（选文件夹）</string>
+    <string name="qk_02157" formatted="false">选 .gguf 文件（推荐）</string>
+    <string name="qk_02158" formatted="false">还没有本地模型。按上面任一方式导入后，点列表项即可设为当前对话模型。</string>
+    <string name="qk_02161" formatted="false">● 已激活（常驻内存，对话跨轮复用）</string>
+    <string name="qk_02163" formatted="false">提示：本地模型经原生推理运行时（MNN / llama.cpp）在设备端离线执行，选中后即以该模型对话，无需联网。</string>
+    <string name="qk_02165" formatted="false">留空 / 0 表示自动。修改后需要重新点「加载」才会生效。</string>
+    <string name="qk_02167" formatted="false">上下文长度 n_ctx（自动：按提示词估算）</string>
+    <string name="qk_02168" formatted="false">越大越吃内存：3B 模型 n_ctx=8192 的 KV-Cache 约 300MB，分配本身就要数秒。</string>
+    <string name="qk_02169" formatted="false">GPU 卸载层数 n_gpu_layers（默认 0 = 纯 CPU）</string>
+    <string name="qk_02170" formatted="false">使用 mmap 映射权重</string>
+    <string name="qk_02171" formatted="false">建议关闭。开启后在外部存储上的大 GGUF 会逐页读盘，常表现为「一直卡在模型加载」。</string>
+    <string name="qk_02172" formatted="false">统一 KV 缓存</string>
+    <string name="qk_02173" formatted="false">建议开启。单序列推理只分配一份 KV，省内存、加载更快。</string>
+    <string name="qk_02174" formatted="false">计算后端</string>
+    <string name="qk_02175" formatted="false">GPU 后端（opencl/vulkan）不是所有机型都可用，失败会退回 CPU。</string>
+    <string name="qk_02176" formatted="false">计算精度</string>
+    <string name="qk_02177" formatted="false">手机端建议 low（半精度/量化算子最快）；输出明显跑偏时再调高。</string>
+    <string name="qk_02178" formatted="false">内存模式</string>
+    <string name="qk_02179" formatted="false">添加并选择</string>
+    <string name="qk_02180" formatted="false">添加其他供应商</string>
+    <string name="qk_02181" formatted="false">上传头像</string>
+    <string name="qk_02182" formatted="false">供应商名称</string>
+    <string name="qk_02183" formatted="false">例如：我的私有服务</string>
+    <string name="qk_02184" formatted="false">Base URL（基址）</string>
+    <string name="qk_02185" formatted="false">默认模型名（可选）</string>
+    <string name="qk_02186" formatted="false">添加后会出现在列表里，可随时重新选择；选择即回填 Base URL。</string>
+    <string name="qk_02187" formatted="false">选择服务商</string>
+    <string name="qk_02188" formatted="false">搜索服务商</string>
+    <string name="qk_02212" formatted="false">离线模型下载中心</string>
+    <string name="qk_02213">下载失败：%1$s</string>
+    <string name="qk_02215">已下载，但引擎加载失败：%1$s</string>
+    <string name="qk_02219" formatted="false">搜索 GGUF 模型</string>
+    <string name="qk_02220" formatted="false">搜索 MNN 模型</string>
+    <string name="qk_02224" formatted="false">下载中…</string>
+    <string name="qk_02225" formatted="false">下载并加载</string>
+    <string name="qk_02226">已登记 %1$s 个模型</string>
+    <string name="qk_02227" formatted="false">还没有模型。去上方 GGUF / MNN 标签页搜索并下载一个吧。</string>
+    <string name="qk_02228">类型：%1$s</string>
+    <string name="qk_02229" formatted="false">多提供商管理</string>
+    <string name="qk_02230" formatted="false">故障转移设置</string>
+    <string name="qk_02231" formatted="false">健康检查</string>
+    <string name="qk_02232" formatted="false">添加提供商</string>
+    <string name="qk_02233" formatted="false">提供商概览</string>
+    <string name="qk_02236" formatted="false">健康</string>
+    <string name="qk_02239" formatted="false">优先级</string>
+    <string name="qk_02240" formatted="false">类型</string>
+    <string name="qk_02241" formatted="false">本地模型</string>
+    <string name="qk_02242" formatted="false">上移</string>
+    <string name="qk_02243" formatted="false">下移</string>
+    <string name="qk_02244" formatted="false">提供商名称</string>
+    <string name="qk_02245" formatted="false">提供商类型</string>
+    <string name="qk_02246" formatted="false">API基础URL</string>
+    <string name="qk_02247" formatted="false">API密钥</string>
+    <string name="qk_02248" formatted="false">默认模型</string>
+    <string name="qk_02249" formatted="false">编辑提供商</string>
+    <string name="qk_02250" formatted="false">启用</string>
+    <string name="qk_02251" formatted="false">更新</string>
+    <string name="qk_02252" formatted="false">启用故障转移</string>
+    <string name="qk_02253" formatted="false">故障转移策略</string>
+    <string name="qk_02254" formatted="false">最大重试次数</string>
+    <string name="qk_02255" formatted="false">失败阈值（断路器）</string>
+    <string name="qk_02256" formatted="false">健康检查间隔（分钟）</string>
+    <string name="qk_02257" formatted="false">正在检查提供商健康状态...</string>
+    <string name="qk_02258" formatted="false">点击下方按钮开始健康检查</string>
+    <string name="qk_02259" formatted="false">检查结果:</string>
+    <string name="qk_02260" formatted="false">不健康</string>
+    <string name="qk_02261" formatted="false">开始检查</string>
+    <string name="qk_02262" formatted="false">音乐播放器</string>
+    <string name="qk_02263" formatted="false">未在播放</string>
+    <string name="qk_02269" formatted="false">队列为空，先去「选择音乐」添加吧。</string>
+    <string name="qk_02270">曲目 %1$s</string>
+    <string name="qk_02271" formatted="false">停止</string>
+    <string name="qk_02272" formatted="false">关闭沙盒终端</string>
+    <string name="qk_02273" formatted="false">无法读取该文档，请选择 .docx/.xlsx/.pptx/.pdf 等文件</string>
+    <string name="qk_02274" formatted="false">生成失败</string>
+    <string name="qk_02275" formatted="false">已生成</string>
+    <string name="qk_02277" formatted="false">文档：</string>
+    <string name="qk_02279">创建失败: %1$s</string>
+    <string name="qk_02280" formatted="false">文档在应用内直接打开与查看，无需安装任何第三方办公软件。</string>
+    <string name="qk_02281" formatted="false">支持 Word / Excel / PPT / PDF / TXT / Markdown / 代码 / 图片；TXT / Markdown / 代码可在应用内编辑。</string>
+    <string name="qk_02282" formatted="false">选择本地文档…</string>
+    <string name="qk_02283" formatted="false">本机 Office 文档</string>
+    <string name="qk_02284" formatted="false">暂无文档。可用 AI「文档生成」产出，或点上方按钮选择本地文件。</string>
+    <string name="qk_02285" formatted="false">文档渲染引擎随包内置（mammoth.js / SheetJS / pdf.js），断网也能打开。</string>
+    <string name="qk_02286" formatted="false">AI 亦可在对话中直接调用 aiwps_create 生成真实 .docx/.xlsx/.pptx 文档。</string>
+    <string name="qk_02287" formatted="false">文本</string>
+    <string name="qk_02288" formatted="false">网页</string>
+    <string name="qk_02289" formatted="false">选择文档类型</string>
+    <string name="qk_02290" formatted="false">选择类型后将创建空白文档并进入编辑器。</string>
+    <string name="qk_02294" formatted="false">审计日志</string>
+    <string name="qk_02295" formatted="false">分层、受控、可审计：L1 无障碍 → L2 Shizuku → L3 设备管理员 → L4 ROOT，逐级提升。任何越权操作都需经过「意图→策略检查→用户确认→审计」四阶段。</string>
+    <string name="qk_02296" formatted="false">权限模式</string>
+    <string name="qk_02297" formatted="false">允许（全部允许，不再询问）</string>
+    <string name="qk_02298" formatted="false">禁止（任何提升都被拒绝）</string>
+    <string name="qk_02299" formatted="false">询问（每次弹确认）</string>
+    <string name="qk_02300" formatted="false">无障碍服务</string>
+    <string name="qk_02304" formatted="false">Shizuku 服务</string>
+    <string name="qk_02306" formatted="false">正在请求 Shizuku 授权…</string>
+    <string name="qk_02307" formatted="false">未检测到 Shizuku，请先安装后再授权</string>
+    <string name="qk_02308" formatted="false">无法自动打开 Shizuku 管理器，请手动打开 Shizuku 应用并授权本应用</string>
+    <string name="qk_02309" formatted="false">Shizuku 已授权 ✓ 可直接使用</string>
+    <string name="qk_02310" formatted="false">当前上下文无法弹系统框，已打开 Shizuku 应用授权</string>
+    <string name="qk_02311" formatted="false">Shizuku 授权成功 ✓</string>
+    <string name="qk_02312" formatted="false">Shizuku 授权被拒绝</string>
+    <string name="qk_02313" formatted="false">Shizuku 未运行，正在打开并等待服务启动…</string>
+    <string name="qk_02314" formatted="false">Shizuku 仍未就绪：请先在该应用中启动服务（ADB 无线调试/配对），再点此按钮授权</string>
+    <string name="qk_02315" formatted="false">未弹出授权框，已为你打开 Shizuku 应用，请手动授权本应用</string>
+    <string name="qk_02316" formatted="false">程序化授权失败，已改为在 Shizuku 应用中授权</string>
+    <string name="qk_02317" formatted="false">设备管理员</string>
+    <string name="qk_02321" formatted="false">ROOT 访问</string>
+    <string name="qk_02323" formatted="false">请在 Root 管理器中允许 CapOS</string>
+    <string name="qk_02324">ROOT：%1$s（root 命令经 root_exec / shizuku_root_exec 工具真实执行，受「权限模式」策略约束）</string>
+    <string name="qk_02326" formatted="false">请在系统设置开启「精确闹钟」，返回后再次点击测试</string>
+    <string name="qk_02327" formatted="false">请到 设置→应用→Zorv AI→通知/权限 中开启「精确闹钟」</string>
+    <string name="qk_02328" formatted="false">Zorv AI 测试闹钟</string>
+    <string name="qk_02329" formatted="false">测试提醒：精确闹钟权限已生效</string>
+    <string name="qk_02330" formatted="false">已设置，约 10 秒后弹出提醒通知</string>
+    <string name="qk_02332" formatted="false">功能权限引导</string>
+    <string name="qk_02333" formatted="false">媒体读写 · 健康数据 · 精确闹钟 · 数据源优先级</string>
+    <string name="qk_02334" formatted="false">运行时权限会弹系统授权框；ROOT / Shizuku / 设备管理员需你在系统界面主动授权。所有权限使用都会被记录到审计日志。</string>
+    <string name="qk_02336">通道：%1$s</string>
+    <string name="qk_02337" formatted="false">请求授权</string>
+    <string name="qk_02338" formatted="false">Root 无法在应用内引导，请在 Root 管理器中授权。</string>
+    <string name="qk_02339" formatted="false">已开启</string>
+    <string name="qk_02340" formatted="false">开启</string>
+    <string name="qk_02350">孵化诊断双写失败: %1$s</string>
+    <string name="qk_02352">孵化超时(%1$sms)，疑似 LLM 调用卡死，已中止该卡孵化</string>
+    <string name="qk_02368">文件%1$s</string>
+    <string name="qk_02369" formatted="false">💭 思考过程</string>
+    <string name="qk_02377" formatted="false">定时任务 / 自动化</string>
+    <string name="qk_02378" formatted="false">新增</string>
+    <string name="qk_02379" formatted="false">还没有定时任务</string>
+    <string name="qk_02381">一次性 @ %1$s</string>
+    <string name="qk_02383" formatted="false">新建定时任务</string>
+    <string name="qk_02384" formatted="false">编辑定时任务</string>
+    <string name="qk_02385" formatted="false">指令 / 提醒内容（可选）</string>
+    <string name="qk_02386" formatted="false">一次性</string>
+    <string name="qk_02387" formatted="false">重复</string>
+    <string name="qk_02388" formatted="false">触发时间</string>
+    <string name="qk_02389" formatted="false">选择日期</string>
+    <string name="qk_02390" formatted="false">选择时间</string>
+    <string name="qk_02391" formatted="false">请先选择日期和时间</string>
+    <string name="qk_02392" formatted="false">频率</string>
+    <string name="qk_02397" formatted="false">间隔</string>
+    <string name="qk_02399" formatted="false">星期（可多选）</string>
+    <string name="qk_02402" formatted="false">结束日期（可选，留空=永久重复）</string>
+    <string name="qk_02403" formatted="false">选择结束日期</string>
+    <string name="qk_02404" formatted="false">目标会话</string>
+    <string name="qk_02405" formatted="false">指定会话</string>
+    <string name="qk_02406" formatted="false">自动新建会话</string>
+    <string name="qk_02407" formatted="false">暂无历史会话，可改用「自动新建会话」</string>
+    <string name="qk_02408" formatted="false">未命名会话</string>
+    <string name="qk_02409" formatted="false">每次触发都会新建一个独立会话，不污染当前 / 历史对话。</string>
+    <string name="qk_02410" formatted="false">不指定则沿用当前 / 最近的会话。</string>
+    <string name="qk_02412" formatted="false">确认</string>
+    <string name="qk_02414" formatted="false">读取文件失败或内容为空</string>
+    <string name="qk_02415" formatted="false">导入失败：内容不是有效的 SKILL.md / 技能 JSON / 工具规格 JSON</string>
+    <string name="qk_02417" formatted="false">技能 SKILL</string>
+    <string name="qk_02418" formatted="false">导出全部技能（JSON）</string>
+    <string name="qk_02419" formatted="false">从 SKILL.md / JSON / 工具规格导入技能</string>
+    <string name="qk_02420" formatted="false">如何添加技能（说明）</string>
+    <string name="qk_02424">，未签名 %1$s</string>
+    <string name="qk_02425" formatted="false">验证内置技能签名（签名排查）</string>
+    <string name="qk_02428" formatted="false">新增技能</string>
+    <string name="qk_02429" formatted="false">未选择任何技能</string>
+    <string name="qk_02430" formatted="false">选择要导出的技能</string>
+    <string name="qk_02431" formatted="false">当前没有可导出的技能。</string>
+    <string name="qk_02432" formatted="false">如何添加技能</string>
+    <string name="qk_02433" formatted="false">（无指令，启用也不会注入）</string>
+    <string name="qk_02438" formatted="false">导出 SKILL.md</string>
+    <string name="qk_02439">%1$s 个</string>
+    <string name="qk_02440" formatted="false">编辑技能</string>
+    <string name="qk_02441" formatted="false">名称（必填）</string>
+    <string name="qk_02442" formatted="false">简介（可选）</string>
+    <string name="qk_02443" formatted="false">技能指令（注入系统提示词）</string>
+    <string name="qk_02444" formatted="false">触发词 / trigger（可选，逗号分隔，用于将来自动匹配）</string>
+    <string name="qk_02446" formatted="false">可作为工具调用（注册为 AI 可调用函数）</string>
+    <string name="qk_02447" formatted="false">常驻系统提示词（关闭则仅触发词命中时注入）</string>
+    <string name="qk_02448" formatted="false">启用（关闭则不会注入系统提示词）</string>
+    <string name="qk_02449" formatted="false">灵魂注入</string>
+    <string name="qk_02450" formatted="false">选择一张灵魂卡，AI 将以它的身份与你交流</string>
+    <string name="qk_02452" formatted="false">心跳孵化（后台自动孵化每张灵魂卡）</string>
+    <string name="qk_02453" formatted="false">还没有灵魂卡</string>
+    <string name="qk_02454" formatted="false">点击「新建」创建第一张灵魂卡</string>
+    <string name="qk_02455" formatted="false">暂无描述</string>
+    <string name="qk_02457" formatted="false">孵化中…</string>
+    <string name="qk_02458">最近孵化 %1$s分钟前</string>
+    <string name="qk_02461" formatted="false">头像</string>
+    <string name="qk_02462" formatted="false">灵魂编辑</string>
+    <string name="qk_02463" formatted="false">图片头像</string>
+    <string name="qk_02464" formatted="false">更换 / 裁剪图片</string>
+    <string name="qk_02465" formatted="false">未设置头像（将显示名称首字母）</string>
+    <string name="qk_02466" formatted="false">上传图片</string>
+    <string name="qk_02467" formatted="false">灵魂卡名称</string>
+    <string name="qk_02468" formatted="false">角色设定（系统提示词核心）</string>
+    <string name="qk_02469" formatted="false">开场白</string>
+    <string name="qk_02470" formatted="false">聊天设定</string>
+    <string name="qk_02471" formatted="false">语音设定（自然语言，可选）</string>
+    <string name="qk_02472" formatted="false">AI 孵化</string>
+    <string name="qk_02473" formatted="false">已回填 ✓</string>
+    <string name="qk_02474" formatted="false">管理标签</string>
+    <string name="qk_02475" formatted="false">还没有标签，点「管理标签」新建并选择。</string>
+    <string name="qk_02476" formatted="false">功能开关</string>
+    <string name="qk_02477" formatted="false">两项独立控制，互不影响。开 = 百分百主动使用；关 = 用户提醒才使用。</string>
+    <string name="qk_02478" formatted="false">动态 UI 组件</string>
+    <string name="qk_02481" formatted="false">保存灵魂卡</string>
+    <string name="qk_02482" formatted="false">标签管理</string>
+    <string name="qk_02486" formatted="false">名称</string>
+    <string name="qk_02487" formatted="false">AI 提示内容</string>
+    <string name="qk_02488" formatted="false">JSON 配置（可选，自定义结构化参数）</string>
+    <string name="qk_02489" formatted="false">新建标签</string>
+    <string name="qk_02490" formatted="false">编辑标签</string>
+    <string name="qk_02491" formatted="false">导出</string>
+    <string name="qk_02492" formatted="false">搜索内容 / 标题 / 标签 / 分组</string>
+    <string name="qk_02495" formatted="false">记忆详情</string>
+    <string name="qk_02496" formatted="false">标题（可选）</string>
+    <string name="qk_02497" formatted="false">分组（可选，如 偏好 / 工作）</string>
+    <string name="qk_02498" formatted="false">标签（可选）</string>
+    <string name="qk_02499" formatted="false">加标签</string>
+    <string name="qk_02500" formatted="false">你的端侧 AI 执行体</string>
+    <string name="qk_02508">已选模型: %1$s / %2$s / provider=%3$s</string>
+    <string name="qk_02511">正在从 %1$s 拉取模型…</string>
+    <string name="qk_02520">❌ 本机架构不支持端侧离线识别，已禁用下载：%1$s</string>
+    <string name="qk_02531">已删除模型: %1$s</string>
+    <string name="qk_02538">最终识别: %1$s</string>
+    <string name="qk_02540">识别出错: %1$s ❌</string>
+    <string name="qk_02569">最终识别（%1$s ms）: %2$s</string>
+    <string name="qk_02578">模型: %1$s (provider=%2$s)</string>
+    <string name="qk_02583">最终转写: %1$s</string>
+    <string name="qk_02591" formatted="false">语音转文字配置，设置后悬浮语音球的识别语言生效。可切换「本地识别 / AI 模型 / 本地模型（端侧）」引擎；本地模型为手机离线运行的 Sherpa-NCNN 流式模型，最小 22MB，说完自动断句。</string>
+    <string name="qk_02593" formatted="false">本地识别</string>
+    <string name="qk_02594" formatted="false">使用手机原生 SpeechRecognizer，离线可用、开箱即用</string>
+    <string name="qk_02596" formatted="false">AI 模型</string>
+    <string name="qk_02597" formatted="false">使用对话中已配置的 AI 模型转写（Phase 2 开放）</string>
+    <string name="qk_02598" formatted="false">本地模型（端侧）</string>
+    <string name="qk_02599" formatted="false">手机离线运行 Sherpa-NCNN 流式模型，22MB 起、低延迟、说完自动断句</string>
+    <string name="qk_02601" formatted="false">手机离线运行的模型需先下载。内置全部为流式 transducer（encoder/decoder/joiner 三件套），已按手机适配程度排序，第一项即推荐项。下载后自动解压部署并立即可用。</string>
+    <string name="qk_02602" formatted="false">✅ 本机架构 arm64-v8a，支持端侧离线识别引擎。</string>
+    <string name="qk_02603">⚠️ %1$s 下载与部署已禁用，请改用「本地识别」或「AI 模型」引擎。</string>
+    <string name="qk_02608" formatted="false">⚠️ 当前部署的是旧版模型（SenseVoice / ONNX），本机引擎没有对应实现，识别会一直没反应。</string>
+    <string name="qk_02612">下载体积：%1$s</string>
+    <string name="qk_02613" formatted="false">✅ 已部署</string>
+    <string name="qk_02614" formatted="false">➕ 自定义链接（需为 Sherpa-NCNN 流式模型）</string>
+    <string name="qk_02615" formatted="false">自定义模型下载链接</string>
+    <string name="qk_02616" formatted="false">模型类型</string>
+    <string name="qk_02620" formatted="false">删除模型</string>
+    <string name="qk_02621">🎙 支持语音转写 · %1$s</string>
+    <string name="qk_02622" formatted="false">🎙 支持语音转写</string>
+    <string name="qk_02624" formatted="false">选择实时模型</string>
+    <string name="qk_02626" formatted="false">走 /chat/completions（多模态音频）</string>
+    <string name="qk_02631" formatted="false">识别语言</string>
+    <string name="qk_02632" formatted="false">部分结果</string>
+    <string name="qk_02635" formatted="false">选「本地模型（端侧）」时，本测试用手机离线 Sherpa-NCNN 识别；选其他引擎走原生 SpeechRecognizer。</string>
+    <string name="qk_02636" formatted="false">⏹ 停止</string>
+    <string name="qk_02637" formatted="false">🎙 开始录音</string>
+    <string name="qk_02638" formatted="false">异常</string>
+    <string name="qk_02639" formatted="false">识别出的文字会显示在这里</string>
+    <string name="qk_02640">📋 Bug 日志 (%1$s)</string>
+    <string name="qk_02641" formatted="false">日志已复制到剪贴板 ✅ 直接粘贴给我即可</string>
+    <string name="qk_02642" formatted="false">系统状态</string>
+    <string name="qk_02643" formatted="false">设备信息</string>
+    <string name="qk_02650" formatted="false">权限与能力</string>
+    <string name="qk_02652" formatted="false">权限探测中…</string>
+    <string name="qk_02653" formatted="false">模块运行态</string>
+    <string name="qk_02654" formatted="false">来自 CMS v2 状态系统</string>
+    <string name="qk_02655" formatted="false">暂无模块运行态记录（部署模块后这里会显示实时状态）。</string>
+    <string name="qk_02656">最近任务：%1$s</string>
+    <string name="qk_02657" formatted="false">人格心跳</string>
+    <string name="qk_02659" formatted="false">暂无人格卡。</string>
+    <string name="qk_02662" formatted="false">开</string>
+    <string name="qk_02663" formatted="false">关</string>
+    <string name="qk_02666">%1$s 分钟前</string>
+    <string name="qk_02667">%1$s 小时前</string>
+    <string name="qk_02669" formatted="false">文件管理</string>
+    <string name="qk_02670" formatted="false">查看软件包名</string>
+    <string name="qk_02680">生成失败：%1$s</string>
+    <string name="qk_02681" formatted="false">模板（点击填充示例）</string>
+    <string name="qk_02697" formatted="false">正文（支持 Markdown 排版）</string>
+    <string name="qk_02698" formatted="false">使用工具栏快速插入格式，docx 按换行分段；xlsx 按换行分行；md/txt/html 原样写入</string>
+    <string name="qk_02699" formatted="false">（暂无内容，请切换到编辑模式输入）</string>
+    <string name="qk_02700" formatted="false">打开文档</string>
+    <string name="qk_02701" formatted="false">后台生成真实文件（docx/xlsx/pptx/pdf 为二进制格式，md/txt/csv/html 为纯文本），可用应用内查看器或 WPS / Office 打开。</string>
+    <string name="qk_02702">已注册工具（%1$s）</string>
+    <string name="qk_02703" formatted="false">暂无已注册工具。</string>
+    <string name="qk_02704" formatted="false">导入工具（AI 自写 / 粘贴 JSON）</string>
+    <string name="qk_02705" formatted="false">name 不能为空</string>
+    <string name="qk_02706" formatted="false">kind 仅支持 http / intent / broadcast</string>
+    <string name="qk_02707">JSON 解析失败：%1$s</string>
+    <string name="qk_02708" formatted="false">工具 JSON</string>
+    <string name="qk_02709" formatted="false">支持 kind：http / intent / broadcast。也可让 AI 生成 JSON 后粘贴导入（AI 自写工具）。</string>
+    <string name="qk_02726">%1$s 项</string>
+    <string name="qk_02732" formatted="false">选择存储位置</string>
+    <string name="qk_02733" formatted="false">新建文件夹</string>
+    <string name="qk_02734" formatted="false">搜索当前目录…</string>
+    <string name="qk_02736" formatted="false">打开方式（外部）</string>
+    <string name="qk_02737" formatted="false">复制到…</string>
+    <string name="qk_02738" formatted="false">移动到…</string>
+    <string name="qk_02739" formatted="false">属性</string>
+    <string name="qk_02740" formatted="false">新名称</string>
+    <string name="qk_02741" formatted="false">已存在同名文件</string>
+    <string name="qk_02742" formatted="false">已重命名</string>
+    <string name="qk_02745" formatted="false">已删除</string>
+    <string name="qk_02746" formatted="false">删除失败</string>
+    <string name="qk_02747" formatted="false">复制到目录</string>
+    <string name="qk_02748" formatted="false">移动到目录</string>
+    <string name="qk_02749" formatted="false">目标目录的完整路径（须已存在）：</string>
+    <string name="qk_02750" formatted="false">目标目录路径</string>
+    <string name="qk_02751" formatted="false">目标目录不存在</string>
+    <string name="qk_02752" formatted="false">目标已存在同名文件</string>
+    <string name="qk_02753" formatted="false">已移动</string>
+    <string name="qk_02754">名称：%1$s</string>
+    <string name="qk_02756">大小：%1$s</string>
+    <string name="qk_02759">可读：%1$s  可写：%2$s</string>
+    <string name="qk_02760" formatted="false">已创建</string>
+    <string name="qk_02761" formatted="false">创建失败（或已存在）</string>
+    <string name="qk_02762" formatted="false">输入应用显示名（如「微信」「快手」），反查其精确包名。</string>
+    <string name="qk_02763" formatted="false">应用名称</string>
+    <string name="qk_02764" formatted="false">查询包名</string>
+    <string name="qk_02766" formatted="false">工作区根目录（QuroWorkspace）</string>
+    <string name="qk_02767" formatted="false">← 返回列表</string>
+    <string name="qk_02770" formatted="false">文件名</string>
+    <string name="qk_02771" formatted="false">文件夹名</string>
+    <string name="qk_02772" formatted="false">工具中心</string>
+    <string name="qk_02773" formatted="false">隔离沙箱</string>
+    <string name="qk_02774" formatted="false">私有数据库</string>
+    <string name="qk_02775" formatted="false">Web 应用</string>
+    <string name="qk_02776" formatted="false">节点编辑器</string>
+    <string name="qk_02777" formatted="false">工具包运行器</string>
+    <string name="qk_02778" formatted="false">包管理</string>
+    <string name="qk_02779" formatted="false">插件</string>
+    <string name="qk_02796" formatted="false">输入 shell 命令，在沙箱内执行</string>
+    <string name="qk_02797" formatted="false">列目录</string>
+    <string name="qk_02798" formatted="false">清空沙箱</string>
+    <string name="qk_02799" formatted="false">（暂无输出）</string>
+    <string name="qk_02801" formatted="false">只读 SQL（SELECT/PRAGMA/WITH）</string>
+    <string name="qk_02803" formatted="false">查询</string>
+    <string name="qk_02804" formatted="false">导入失败：无法读取文件</string>
+    <string name="qk_02805" formatted="false">已导入 Mermaid 源码</string>
+    <string name="qk_02806" formatted="false">Mermaid 源码</string>
+    <string name="qk_02807" formatted="false">源码为空</string>
+    <string name="qk_02808" formatted="false">已发送到对话框渲染</string>
+    <string name="qk_02809" formatted="false">渲染到对话框</string>
+    <string name="qk_02810" formatted="false">源码为空，无法保存</string>
+    <string name="qk_02811" formatted="false">请先填写工程名</string>
+    <string name="qk_02812">已保存到工程「%1$s」</string>
+    <string name="qk_02813" formatted="false">请先等待渲染完成</string>
+    <string name="qk_02814" formatted="false">已复制源码</string>
+    <string name="qk_02815" formatted="false">工程名</string>
+    <string name="qk_02818" formatted="false">载入</string>
+    <string name="qk_02819" formatted="false">粘贴 Mermaid 源码查看 / 编辑（AI 可用 visual 工具直接写入命名工程）</string>
+    <string name="qk_02821">已保存到工程「%1$s」</string>
+    <string name="qk_02822">保存失败：%1$s</string>
+    <string name="qk_02823" formatted="false">工作流运行成功 ✅</string>
+    <string name="qk_02826" formatted="false">已复制到剪贴板</string>
+    <string name="qk_02838">已删除：%1$s</string>
+    <string name="qk_02839">节点编辑器加载失败: %1$s (code=%2$s)</string>
+    <string name="qk_02840" formatted="false">导入 HTML</string>
+    <string name="qk_02841" formatted="false">新建示例</string>
+    <string name="qk_02842" formatted="false">还没有 Web 应用。点「新建示例」或「导入 HTML」，也可以让 AI 用 miniapp 工具创建（在对话框里就能预览）。</string>
+    <string name="qk_02843" formatted="false">已发送到对话框预览</string>
+    <string name="qk_02844" formatted="false">对话框预览</string>
+    <string name="qk_02845" formatted="false">已删除工程</string>
+    <string name="qk_02846" formatted="false">还没有原生小程序。让 AI 用 miniapp_sdk 工具创建（在对话框里就能生成 WXML/WXSS/JS 工程），</string>
+    <string name="qk_02847" formatted="false">内置演示 hello / todo 也应出现在列表里。</string>
+    <string name="qk_02851" formatted="false">环境未就绪：请先在终端页安装 rootfs</string>
+    <string name="qk_02852" formatted="false">请先输入软件名</string>
+    <string name="qk_02853">执行：%1$s</string>
+    <string name="qk_02854" formatted="false">包管理（Linux 沙箱）</string>
+    <string name="qk_02855" formatted="false">环境状态</string>
+    <string name="qk_02856" formatted="false">未就绪（请先在终端页安装 rootfs）</string>
+    <string name="qk_02859" formatted="false">搜索 / 安装软件名</string>
+    <string name="qk_02860" formatted="false">安装</string>
+    <string name="qk_02861" formatted="false">列表已装</string>
+    <string name="qk_02862" formatted="false">查看信息</string>
+    <string name="qk_02863" formatted="false">更新源</string>
+    <string name="qk_02864" formatted="false">升级</string>
+    <string name="qk_02865" formatted="false">输出</string>
+    <string name="qk_02866" formatted="false">尚无输出。安装/搜索/列表 命令执行后会在此显示（截取 4000 字）。</string>
+    <string name="qk_02867" formatted="false">软件源管理</string>
+    <string name="qk_02868">当前源：%1$s</string>
+    <string name="qk_02874">添加自定义 %1$s 源</string>
+    <string name="qk_02875" formatted="false">源名称</string>
+    <string name="qk_02876" formatted="false">源地址</string>
+    <string name="qk_02877">已保存到下载目录：%1$s</string>
+    <string name="qk_02878">已保存到：%1$s</string>
+    <string name="qk_02880" formatted="false">KaleidoBox 未初始化</string>
+    <string name="qk_02881">已安装 %1$s 个工具包</string>
+    <string name="qk_02886" formatted="false">该工具包没有可打开的 UI 表面</string>
+    <string name="qk_02887" formatted="false">已确保内置示例包装载</string>
+    <string name="qk_02888">有 %1$s 个内置包装载失败：
+</string>
+    <string name="qk_02889" formatted="false">装示例包</string>
+    <string name="qk_02890" formatted="false">（暂无工具包）</string>
+    <string name="qk_02891" formatted="false">从文件导入</string>
+    <string name="qk_02892" formatted="false">从链接导入</string>
+    <string name="qk_02893" formatted="false">AI 生成插件</string>
+    <string name="qk_02895">已安装（%1$s）</string>
+    <string name="qk_02899">卸载失败：%1$s</string>
+    <string name="qk_02903" formatted="false">编译并装</string>
+    <string name="qk_02905" formatted="false">还没有工具包，且插件目录为空。点上方「装示例包」或「AI 生成插件」。</string>
+    <string name="qk_02906" formatted="false">还没有工具包。点上方「插件目录」一键装一个，或点「AI 生成插件」写一段 Java 让设备内编译运行。</string>
+    <string name="qk_02908" formatted="false">让 AI 装一个包</string>
+    <string name="qk_02909" formatted="false">插件目录已全部安装，点击「打开」运行插件。</string>
+    <string name="qk_02910" formatted="false">从链接导入插件</string>
+    <string name="qk_02912" formatted="false">AI 生成插件（端侧编译）</string>
+    <string name="qk_02913" formatted="false">粘贴 Java 源码（实现 KaleidoToolkit，public 类名须等于下面入口类的末段）。点「编译并安装」将在设备内 ecj→d8 编译运行。</string>
+    <string name="qk_02914" formatted="false">入口类全名</string>
+    <string name="qk_02915" formatted="false">包 id</string>
+    <string name="qk_02916" formatted="false">展示名</string>
+    <string name="qk_02917" formatted="false">Java 源码</string>
+    <string name="qk_02918" formatted="false">源码与入口类不能为空</string>
+    <string name="qk_02920">编译/安装失败：%1$s</string>
+    <string name="qk_02921" formatted="false">编译并安装</string>
+    <string name="qk_02925">初始化回调异常(已忽略): %1$s</string>
+    <string name="qk_02926" formatted="false">文字转语音配置。朗读与悬浮语音球均跟随此处设置；语音引擎由手机系统默认 TTS 引擎接管（本地系统）或由所选云端服务商接管（云模型服务）。</string>
+    <string name="qk_02930" formatted="false">云模型服务（多服务商）</string>
+    <string name="qk_02933" formatted="false">语音引擎：由手机系统默认 TTS 引擎接管（设置 → 语言与输入 → 文字转语音）。无需在此选择。</string>
+    <string name="qk_02935" formatted="false">当前语言无可用声音，请换语言或安装对应 TTS 语音包。</string>
+    <string name="qk_02939" formatted="false">范围 0.5x – 2.0x，默认 1.0x。</string>
+    <string name="qk_02940" formatted="false">试听</string>
+    <string name="qk_02943">音频环境: %1$s</string>
+    <string name="qk_02946">初始化失败 ❌
+音频: %1$s
+引擎: %2$s</string>
+    <string name="qk_02954">朗读仍失败 ❌
+%1$s</string>
+    <string name="qk_02957">异常: %1$s</string>
+    <string name="qk_02960">安全模式也失败 (r=%1$s) ❌</string>
+    <string name="qk_02961" formatted="false">安全试听</string>
+    <string name="qk_02964" formatted="false">重置</string>
+    <string name="qk_02967" formatted="false">当前服务商</string>
+    <string name="qk_02969" formatted="false">✅ 已配置参数</string>
+    <string name="qk_02970" formatted="false">⚠️ 未配置参数，请先进入配置</string>
+    <string name="qk_02971" formatted="false">前往语音服务设置 ›</string>
+    <string name="qk_02972" formatted="false">已接入 Edge TTS / 小米 MiMo / 火山引擎 / 科大讯飞 / 腾讯云 / 阿里百炼 CosyVoice / OpenAI / MiniMax / 硅基流动 / TTS302 / CozeCn / Gizwits / ACGN 等多家云端 TTS。</string>
+    <string name="qk_02979" formatted="false">重启</string>
+    <string name="qk_02980" formatted="false">需要 root / Shizuku 才能执行本机 ADB shell</string>
+    <string name="qk_02981" formatted="false">需要 root / Shizuku 才能执行 adb connect</string>
+    <string name="qk_02993" formatted="false">无 root/Shizuku：改用系统无线调试配对</string>
+    <string name="qk_02994">✅ 已启用 TCP ADB，监听端口 %1$s
+%2$s</string>
+    <string name="qk_02997" formatted="false">已启用无线 ADB</string>
+    <string name="qk_02998" formatted="false">已关闭</string>
+    <string name="qk_03000" formatted="false">可提权</string>
+    <string name="qk_03001" formatted="false">无提权</string>
+    <string name="qk_03015" formatted="false">默认 5555，与 adb tcpip 对齐</string>
+    <string name="qk_03018" formatted="false">adb connect 二维码</string>
+    <string name="qk_03019" formatted="false">扫码即得连接命令（另一台手机/电脑相机扫码后可复制），实现被手机/电脑控制</string>
+    <string name="qk_03023">暂无客户端连接（本机仅在监听）。对方执行 adb connect %1$s:%2$s 后会出现在这里。</string>
+    <string name="qk_03024">以上为已与本机 ADB 端口 %1$s 建立 TCP 连接的控制端。要断开：关闭上方「启用无线 ADB」开关，或让对方 adb disconnect。</string>
+    <string name="qk_03025" formatted="false">连接列表不会自动刷新</string>
+    <string name="qk_03028" formatted="false">对方 ip:port</string>
+    <string name="qk_03029" formatted="false">如 192.168.1.10:5555</string>
+    <string name="qk_03030" formatted="false">连接中…</string>
+    <string name="qk_03040" formatted="false">命令</string>
+    <string name="qk_03041" formatted="false">如 getprop ro.build.version.release</string>
+    <string name="qk_03047" formatted="false">分享诊断信息</string>
+    <string name="qk_03051" formatted="false">确认重启？</string>
+    <string name="qk_03052" formatted="false">重启会立即关闭设备，未保存的数据可能丢失。</string>
+    <string name="qk_03054" formatted="false">连接命令</string>
+    <string name="qk_03055" formatted="false">视频播放</string>
+    <string name="qk_03057" formatted="false">语音服务</string>
+    <string name="qk_03063" formatted="false">语音能力中心</string>
+    <string name="qk_03064" formatted="false">语音合成 · 语音识别 · 语音设置，统一入口。</string>
+    <string name="qk_03065" formatted="false">统一配置语音球、自动朗读、对话框语音按钮与情绪 / 语色能力。各开关独立控制，互不影响。</string>
+    <string name="qk_03066" formatted="false">悬浮语音球</string>
+    <string name="qk_03068" formatted="false">关闭后，自动朗读 / 对话框语音按钮等仍可按各自开关独立工作。</string>
+    <string name="qk_03069" formatted="false">自动朗读</string>
+    <string name="qk_03070" formatted="false">自动朗读 AI 回复</string>
+    <string name="qk_03073" formatted="false">对话框语音按钮</string>
+    <string name="qk_03079" formatted="false">对话框按钮与语音球共用全局 STT 引擎设置。云端 / 端侧引擎需在「语音识别（STT）」页先配置模型与 API Key。</string>
+    <string name="qk_03080" formatted="false">语音球绑定对话框</string>
+    <string name="qk_03082" formatted="false">选择目标对话框：</string>
+    <string name="qk_03083" formatted="false">跟随当前对话框（自动）</string>
+    <string name="qk_03084" formatted="false">暂无其它对话框。</string>
+    <string name="qk_03085" formatted="false">后台自启动</string>
+    <string name="qk_03087" formatted="false">开启后，设备开机完成会尝试启动前台语音球服务（仅挂通知栏、不主动录音）。若厂商 ROM 限制了自启动，请在系统「电池 / 自启动管理」里允许 Zorv AI。</string>
+    <string name="qk_03088" formatted="false">LLM 情绪标签</string>
+    <string name="qk_03093" formatted="false">语色路由（AI 自动选角）</string>
+    <string name="qk_03095">✅ 当前播放服务商：%1$s。语色路由已可生效——下方为该服务商真实音色清单，AI 会从中自动选角（不再写死单一服务商）。</string>
+    <string name="qk_03101" formatted="false">在此输入文本内容...</string>
+    <string name="qk_03102" formatted="false">配置可视化弹窗</string>
+    <string name="qk_03103" formatted="false">弹窗标题</string>
+    <string name="qk_03104" formatted="false">例如：用户反馈</string>
+    <string name="qk_03105" formatted="false">弹窗内容</string>
+    <string name="qk_03106" formatted="false">描述弹窗要展示的内容</string>
+    <string name="qk_03107" formatted="false">小卡片标题（可选）</string>
+    <string name="qk_03108" formatted="false">对话框中显示的标题</string>
+    <string name="qk_03109" formatted="false">小卡片描述（可选）</string>
+    <string name="qk_03110" formatted="false">配置可视化询问</string>
+    <string name="qk_03111" formatted="false">例如：你想要哪种风格？</string>
+    <string name="qk_03112" formatted="false">预设选项（每行一个，可选）</string>
+    <string name="qk_03114" formatted="false">允许自定义输入</string>
+    <string name="qk_03115" formatted="false">弹窗标题（可选）</string>
+    <string name="qk_03116" formatted="false">AI 问题</string>
+    <string name="qk_03117" formatted="false">拖动</string>
+    <string name="qk_03120" formatted="false">输入自定义答案</string>
+    <string name="qk_03121" formatted="false">输入你的答案</string>
+    <string name="qk_03122" formatted="false">请输入...</string>
+    <string name="qk_03123" formatted="false">选择弹窗类型</string>
+    <string name="qk_03129" formatted="false">例如：选择操作</string>
+    <string name="qk_03130" formatted="false">展示内容</string>
+    <string name="qk_03131" formatted="false">支持 Markdown/HTML</string>
+    <string name="qk_03132" formatted="false">提示文本</string>
+    <string name="qk_03133" formatted="false">请选择一个操作</string>
+    <string name="qk_03134" formatted="false">按钮（逗号分隔）</string>
+    <string name="qk_03135" formatted="false">查看,编辑,删除</string>
+    <string name="qk_03136" formatted="false">表单描述</string>
+    <string name="qk_03137" formatted="false">请填写以下信息</string>
+    <string name="qk_03138" formatted="false">字段（逗号分隔）</string>
+    <string name="qk_03139" formatted="false">姓名,邮箱,电话</string>
+    <string name="qk_03140" formatted="false">确认内容</string>
+    <string name="qk_03141" formatted="false">确定要执行此操作吗？</string>
+    <string name="qk_03142" formatted="false">HTML内容描述</string>
+    <string name="qk_03143" formatted="false">描述你想要的界面，AI会生成完整HTML</string>
+    <string name="qk_03144" formatted="false">选择询问方式</string>
+    <string name="qk_03148" formatted="false">你想问用户什么？</string>
+    <string name="qk_03149" formatted="false">选项（逗号分隔）</string>
+    <string name="qk_03150" formatted="false">选项A,选项B,选项C</string>
+    <string name="qk_03151" formatted="false">输入框提示</string>
+    <string name="qk_03152" formatted="false">请输入你的答案</string>
+    <string name="qk_03153" formatted="false">评分描述（可选）</string>
+    <string name="qk_03154" formatted="false">请为体验打分 1-5</string>
+    <string name="qk_03155" formatted="false">开关标签</string>
+    <string name="qk_03156" formatted="false">启用通知</string>
+    <string name="qk_03157" formatted="false">HTML描述</string>
+    <string name="qk_03158" formatted="false">描述你想要的询问界面</string>
+    <string name="qk_03161">调用 visual_custom_popup 工具，参数：%1$s</string>
+    <string name="qk_03164">（请生成一个评分界面：%1$s）</string>
+    <string name="qk_03166" formatted="false">询问</string>
+    <string name="qk_03168" formatted="false">不支持的文件类型或文件过大（&gt;1MB）</string>
+    <string name="qk_03172" formatted="false">代码浏览</string>
+    <string name="qk_03173" formatted="false">文件树</string>
+    <string name="qk_03176" formatted="false">文件名（如 Main.kt / app.py / index.html）</string>
+    <string name="qk_03179" formatted="false">文件夹名称</string>
+    <string name="qk_03180" formatted="false">文件夹操作</string>
+    <string name="qk_03181" formatted="false">文件操作</string>
+    <string name="qk_03182">已重命名为 %1$s</string>
+    <string name="qk_03189" formatted="false">无法获取文件夹路径</string>
+    <string name="qk_03190" formatted="false">选择工作区</string>
+    <string name="qk_03191" formatted="false">当前工作区</string>
+    <string name="qk_03192" formatted="false">默认工作区</string>
+    <string name="qk_03193" formatted="false">QuroWorkspace（应用沙箱）</string>
+    <string name="qk_03194" formatted="false">创建工作区</string>
+    <string name="qk_03195" formatted="false">在默认工作区内新建文件夹</string>
+    <string name="qk_03196" formatted="false">自定义选择文件夹</string>
+    <string name="qk_03197" formatted="false">选择手机上任意文件夹作为工作区</string>
+    <string name="qk_03198" formatted="false">工作区名称</string>
+    <string name="qk_03199" formatted="false">例如：MyProject</string>
+    <string name="qk_03205" formatted="false">全屏</string>
+    <string name="qk_03209" formatted="false">排版引擎已降级为 Markdown 显示</string>
+    <string name="qk_03210" formatted="false">排版失败，已按纯文本显示</string>
+    <string name="qk_03212" formatted="false">已复制排版内容</string>
+    <string name="qk_03214" formatted="false">排版预览</string>
+    <string name="qk_03216" formatted="false">要点汇总</string>
+    <string name="qk_03219" formatted="false">深度思考</string>
+    <string name="qk_03221" formatted="false">子智能体</string>
+    <string name="qk_03223" formatted="false">看懂屏幕</string>
+    <string name="qk_03226" formatted="false">自动保存记忆</string>
+    <string name="qk_03231" formatted="false">特权</string>
+    <string name="qk_03233" formatted="false">代码编辑</string>
+    <string name="qk_03237">关闭%1$s</string>
+    <string name="qk_03243" formatted="false">砚生</string>
+    <string name="qk_03262" formatted="false">厉锋</string>
+    <string name="qk_03269" formatted="false">阿木</string>
+    <string name="qk_03276" formatted="false">会议纪要行动清单</string>
+    <string name="qk_03278" formatted="false">竞品首页改版思路</string>
+    <string name="qk_03280" formatted="false">小红书文案三版</string>
+    <string name="qk_03283" formatted="false">读书笔记 ·《安静》</string>
+    <string name="qk_03286" formatted="false">京都行程规划</string>
+    <string name="qk_03288" formatted="false">SQL 慢查询排查</string>
+    <string name="qk_03304" formatted="false">好，草拟一下，语气正式一点。</string>
+    <string name="qk_03355" formatted="false">电池状态</string>
+    <string name="qk_03357" formatted="false">存储空间</string>
+    <string name="qk_03414" formatted="false">  已开启</string>
+    <string name="qk_03415" formatted="false">  已关闭</string>
+    <string name="qk_03416" formatted="false">← 返回</string>
+    <string name="qk_03417" formatted="false">未找到视频播放器</string>
+    <string name="qk_03418" formatted="false">实时推理</string>
+    <string name="qk_03419" formatted="false">写入文件内容</string>
+    <string name="qk_03420" formatted="false">▶ 正在播放</string>
+    <string name="qk_03421" formatted="false">新建目录</string>
+    <string name="qk_03422" formatted="false">暂无界面记录</string>
+    <string name="qk_03423" formatted="false">历史对话</string>
+    <string name="qk_03424" formatted="false">生成</string>
+    <string name="qk_03425" formatted="false">工程设置</string>
+    <string name="qk_03426" formatted="false">设置闹钟</string>
+    <string name="qk_03427" formatted="false">控制OPPO流体云，显示状态栏胶囊和卡片</string>
+    <string name="qk_03428" formatted="false">AI 粘贴键盘</string>
+    <string name="qk_03429" formatted="false">运行代码（Python/JS/Shell等）</string>
+    <string name="qk_03430" formatted="false">保持无障碍服务运行</string>
+    <string name="qk_03431" formatted="false">暂无往来记录</string>
+    <string name="qk_03432" formatted="false">我的宠物</string>
+    <string name="qk_03433" formatted="false">沉淀一条 AI 经验（报错/解决方案/工具模式/版本差异），让下次相关对话自动复用。当一轮对话里你遇到、解决或可复用一个问题时主动调用。</string>
+    <string name="qk_03434" formatted="false">读取联系人</string>
+    <string name="qk_03435" formatted="false">已关闭 · 不再询问，统一走 GenUI SDK；你若在话里点名通道仍会照办</string>
+    <string name="qk_03436" formatted="false">试试这些</string>
+    <string name="qk_03437" formatted="false">即想即得</string>
+    <string name="qk_03438" formatted="false">保存或更新一个第三方服务授权，供 http_request 用 service 参数自动带鉴权。</string>
+    <string name="qk_03439" formatted="false">硅基流动 CosyVoice</string>
+    <string name="qk_03440" formatted="false">通过 Zorv AI 智能体键盘触发当前输入框的『发送』动作（EditorInfo.IME_ACTION_SEND），</string>
+    <string name="qk_03441" formatted="false">目录名</string>
+    <string name="qk_03442" formatted="false">管理多提供商配置，支持自动故障转移、健康检查和优先级排序。可以添加、更新、删除提供商配置，执行健康检查，查看故障转移状态。</string>
+    <string name="qk_03443" formatted="false">图像识别/分析</string>
+    <string name="qk_03444" formatted="false">进入可交互游戏模式：猜数字/井字棋/21点/记忆翻牌/RPS，或让用户描述新游戏你现场定规则带他玩</string>
+    <string name="qk_03445" formatted="false">管理数据导出、导入、备份、恢复和加密存储。支持 ZIP 格式导出、AES 加密、完整备份和选择性恢复。</string>
+    <string name="qk_03446" formatted="false">保存为 Web 应用</string>
+    <string name="qk_03447" formatted="false">点燃（立即异步执行）一个已存在的工作流，返回 runId。参数 id（wf_&lt;name&gt;）或 name 二选一。执行后用 wf_run_status 传入 runId 轮询进度与结果。</string>
+    <string name="qk_03448" formatted="false">拨号</string>
+    <string name="qk_03449" formatted="false">网络连接</string>
+    <string name="qk_03450" formatted="false">通过 ACI 调用外部 MCP 服务器的工具。这是调用 MCP 工具的统一入口。</string>
+    <string name="qk_03451" formatted="false">写入工作区文件</string>
+    <string name="qk_03452" formatted="false">在 proot/Ubuntu 终端内运行 Node.js（bootstrap 已装 nodejs）。自带真实入口脚本：部署后拉起本地 HTTP 后端，作为「终端是后端」的另一实现，与 Python 后端可并存。</string>
+    <string name="qk_03453" formatted="false">存储权限</string>
+    <string name="qk_03454" formatted="false">导出构建产物：把构建台生成的APK导出到可访问位置（替代UI文件选择器，AI也能调起）</string>
+    <string name="qk_03455" formatted="false">Zorv CMS引擎</string>
+    <string name="qk_03456" formatted="false">Tasker 双向集成：fire 点燃指定 Tasker 任务；broadcast 发送任意自定义广播（带 extras）；state 查询 Tasker 是否安装。</string>
+    <string name="qk_03457" formatted="false">未连接到受控端</string>
+    <string name="qk_03458" formatted="false">检索 Crossref 学术文献数据库（免费、无需鉴权）：按关键词查找论文/书籍/章节，返回标题、作者、年份、DOI 与链接。</string>
+    <string name="qk_03459" formatted="false">经 Shizuku 以 ADB/Shell 权限执行命令（比普通 Runtime.exec 更高权限）。</string>
+    <string name="qk_03460" formatted="false">Zorv 对话</string>
+    <string name="qk_03461" formatted="false">默认使用内置占位图标；导入后该 PNG 会替换 APK 桌面图标。</string>
+    <string name="qk_03462" formatted="false">屏幕捕获已启用，长按可再次申请</string>
+    <string name="qk_03463" formatted="false">拉取 quro-ui DSL 完整规范（节点/属性/动作），避免长 schema 常驻系统提示词</string>
+    <string name="qk_03464" formatted="false">⚠️【强制】模糊命令/缺少信息时必须调用此工具询问用户</string>
+    <string name="qk_03465" formatted="false">（RAG 混合检索）在本地知识库做检索并返回最相关的文档片段。优先用语义（若已配置可用 Embedding Key），</string>
+    <string name="qk_03466" formatted="false">正在请求 Root…请在弹出的授权框中选择允许</string>
+    <string name="qk_03467" formatted="false">在 proot 内启动一个静态文件 HTTP 服务（python3 -m http.server），把终端变成一个可对外提供文件的后端。本 App 作为前端向其请求资源，落实「互为主从」。</string>
+    <string name="qk_03468" formatted="false">我用界面跟你对话，说点什么吧</string>
+    <string name="qk_03469" formatted="false">离开软件时收到 AI 回复以系统弹窗（heads-up）形式提醒</string>
+    <string name="qk_03470" formatted="false">文件名（如 Main.java）</string>
+    <string name="qk_03471" formatted="false">CMS 静态资源服务</string>
+    <string name="qk_03472" formatted="false">禁用或启用设备的摄像头（需 L3 设备管理员已激活）。</string>
+    <string name="qk_03473" formatted="false">📝 对话框文档：在对话框内直接写文档并渲染显示（不生成文件）。</string>
+    <string name="qk_03474" formatted="false">回放 ▶</string>
+    <string name="qk_03475" formatted="false">当前无法回传对话</string>
+    <string name="qk_03476" formatted="false">停止 TTS 朗读</string>
+    <string name="qk_03477" formatted="false">墨墨</string>
+    <string name="qk_03478" formatted="false">前往</string>
+    <string name="qk_03479" formatted="false">安装Linux环境</string>
+    <string name="qk_03480" formatted="false">在浏览器打开</string>
+    <string name="qk_03481" formatted="false">可视化操作弹窗：让用户从多个操作中选择一个</string>
+    <string name="qk_03482" formatted="false">往来记录</string>
+    <string name="qk_03483" formatted="false">📦 调用工作区脚本包（ToolPkg）里的某个工具：加载包入口模块并执行其导出函数。</string>
+    <string name="qk_03484" formatted="false">打开应用（按包名）</string>
+    <string name="qk_03485" formatted="false">在 proot 容器内跑 FFmpeg 完整链路：媒体探测/转码/裁剪/合并/提取音频等。</string>
+    <string name="qk_03486" formatted="false">在 proot Ubuntu 24.04 容器内执行 Python 代码并返回结果。</string>
+    <string name="qk_03487" formatted="false">在 proot 容器内启动/停止/查询 mitmdump 抓包服务，flow 实时写入 /mnt/quro/mitm/。</string>
+    <string name="qk_03488" formatted="false">终端会话前台保活服务</string>
+    <string name="qk_03489" formatted="false">在左侧文件树选择或新建文件开始编写代码…</string>
+    <string name="qk_03490" formatted="false">ROOT 访问权限</string>
+    <string name="qk_03491" formatted="false">粘贴：先在目标 App 点一下输入框，再点「粘贴」（走无障碍 SET_TEXT / PASTE）。需开启 ZorvAI 无障碍服务。</string>
+    <string name="qk_03492" formatted="false">▶️ 完整 JS/TS 脚本运行器（SandboxPackage）：在 QuickJS 沙箱里运行「工作区脚本文件」或「内联代码片段」，</string>
+    <string name="qk_03493" formatted="false">APK 级插件框架总控（ZorvAI 的插件系统只有一个入口，就是这个工具）。</string>
+    <string name="qk_03494" formatted="false">波波</string>
+    <string name="qk_03495" formatted="false">CMS模块与引擎管理：查看/调用CMS模块、部署/检查CMS引擎状态、修复CMS部署、AI自写CMS模块脚本</string>
+    <string name="qk_03496" formatted="false">读取工作区文件</string>
+    <string name="qk_03497" formatted="false">视觉分析当前屏幕截图（真实视觉理解）：用视觉大模型识别内容，任何需要看见屏幕的场景都可使用</string>
+    <string name="qk_03498" formatted="false">进入「和 AI 玩的可交互游戏」模式：猜数字 / 井字棋人机 / 21点 / 记忆翻牌 / 石头剪刀布，</string>
+    <string name="qk_03499" formatted="false">生成真实Office文件（docx/xlsx/pptx/pdf），可下载/分享</string>
+    <string name="qk_03500" formatted="false">尚未检测，点击刷新。</string>
+    <string name="qk_03501" formatted="false">电池优化豁免</string>
+    <string name="qk_03502" formatted="false">调用第三方App的ACI能力</string>
+    <string name="qk_03503" formatted="false">停止聆听</string>
+    <string name="qk_03504" formatted="false">编译日志</string>
+    <string name="qk_03505" formatted="false">在执行 AI 任务时，于状态栏显示流体云胶囊/实时更新通知（创建/更新/结束）。</string>
+    <string name="qk_03506" formatted="false">列出所有定时任务/自动化提醒。无参数。返回任务列表（id/标题/时间/重复类型/状态）。</string>
+    <string name="qk_03507" formatted="false">构建 APK</string>
+    <string name="qk_03508" formatted="false">渲染通道</string>
+    <string name="qk_03509" formatted="false">小程序（原生引擎）·</string>
+    <string name="qk_03510" formatted="false">通过 Zorv AI 智能体键盘，把文本直接打字进当前聚焦的输入框（如 WPS 文档）。</string>
+    <string name="qk_03511" formatted="false">已固定到桌面（若系统支持）</string>
+    <string name="qk_03512" formatted="false">该插件暂未提供可交互界面</string>
+    <string name="qk_03513" formatted="false">已开启 · 每次生成前弹出四选一（GenUI / A2UI / Markdown / HTML），选完才开始生成</string>
+    <string name="qk_03514" formatted="false">📁 工作区文件写入：把文本写入工作区（QuroWorkspace）的相对路径文件。</string>
+    <string name="qk_03515" formatted="false">UI 即回复</string>
+    <string name="qk_03516" formatted="false">导入图标 PNG</string>
+    <string name="qk_03517" formatted="false">导出 JSON</string>
+    <string name="qk_03518" formatted="false">工具链状态</string>
+    <string name="qk_03519" formatted="false">请先在 Shizuku 应用中启动服务，再回到本页点「请求授权」</string>
+    <string name="qk_03520" formatted="false">脚本化 UI 自动操作：按顺序执行一组界面动作（dump 当前界面 / 按文本·id·描述·坐标点击 / 输入文本 / 滑动 / 滚动 / 等待）。</string>
+    <string name="qk_03521" formatted="false">科大讯飞 TTS</string>
+    <string name="qk_03522" formatted="false">管理自主心跳服务，支持启动/停止心跳、查看心跳状态、执行健康检查、生成状态报告。</string>
+    <string name="qk_03523" formatted="false">📝 设备文件写入：写入文本到设备存储（应用专属目录）。</string>
+    <string name="qk_03524" formatted="false">团子</string>
+    <string name="qk_03525" formatted="false">Python 演示模块</string>
+    <string name="qk_03526" formatted="false">添加文档到知识库</string>
+    <string name="qk_03527" formatted="false">🧰 从内置模板在工作区创建项目骨架（复制到 工作区/&lt;项目名&gt;/，已存在同名目录则报错）。</string>
+    <string name="qk_03528" formatted="false">ZorvAI 任务实时状态（流体云/实时更新）</string>
+    <string name="qk_03529" formatted="false">控制WiFi开关</string>
+    <string name="qk_03530" formatted="false">以 ROOT 权限执行 shell 命令（最高风险通道！慎用）。优先使用 Shizuku root 通道，降级为 su 直调。</string>
+    <string name="qk_03531" formatted="false">查看详情</string>
+    <string name="qk_03532" formatted="false">Root 授权成功 ✓</string>
+    <string name="qk_03533" formatted="false">统一UI控制工具：操控界面每个角落（打开界面/切换开关/打开弹层/对话管理/渲染卡片/组件/查询状态/更新属性/滚动/聚焦/隐藏/显示/导航/权限控制）</string>
+    <string name="qk_03534" formatted="false">火山引擎 豆包 TTS</string>
+    <string name="qk_03535" formatted="false">AI浏览器：联网搜索、抓取网页、自动研究</string>
+    <string name="qk_03536" formatted="false">读取当前屏幕内容</string>
+    <string name="qk_03537" formatted="false">导入 keystore</string>
+    <string name="qk_03538" formatted="false">界面回放 · 点条目恢复到画布</string>
+    <string name="qk_03539" formatted="false">对话框内直接写文档并渲染显示（不生成文件）</string>
+    <string name="qk_03540" formatted="false">列出当前所有应用内闹钟（含 id、时间、重复日、是否启用、下次响铃时间）。无参数。</string>
+    <string name="qk_03541" formatted="false">列出当前已部署的本地 MCP 服务器（AI 通过 mcp_deploy 创作并部署的），含别名、工具数与连接地址。</string>
+    <string name="qk_03542" formatted="false">截取屏幕截图</string>
+    <string name="qk_03543" formatted="false">在屏幕上执行滑动手势。支持预设方向或自定义起止坐标。</string>
+    <string name="qk_03544" formatted="false">列出所有可通过 ACI 调用的 MCP 工具（外部 MCP 服务器暴露的工具）。</string>
+    <string name="qk_03545" formatted="false">功能设置</string>
+    <string name="qk_03546" formatted="false">列出当前已发现的所有 ACI 第三方 App 及其暴露的能力（id / 说明 / 参数 / 是否需用户确认）。</string>
+    <string name="qk_03547" formatted="false">精美设计</string>
+    <string name="qk_03548" formatted="false">终端直用特权通道执行命令（Shizuku→ROOT 自动降级）。</string>
+    <string name="qk_03549" formatted="false">强制锁定手机屏幕（需 L3 设备管理员已激活）。</string>
+    <string name="qk_03550" formatted="false">Zorv 视频通话</string>
+    <string name="qk_03551" formatted="false">给 AI 的指令，例如：写一条夸朋友的评论</string>
+    <string name="qk_03552" formatted="false">获取设备型号与系统版本</string>
+    <string name="qk_03553" formatted="false">服务状态</string>
+    <string name="qk_03554" formatted="false">APK 级插件框架总控（装/卸/重载插件、查看插件贡献的 AI 工具、直接调用插件工具、打开插件界面）</string>
+    <string name="qk_03555" formatted="false">读取当前网页内容</string>
+    <string name="qk_03556" formatted="false">滑动屏幕</string>
+    <string name="qk_03557" formatted="false">精读单个网页：抓取URL正文并抽取可读文本/要点，供AI引用作答</string>
+    <string name="qk_03558" formatted="false">读取本地已有文档并抽取纯文本，供 AI 理解内容后改写/总结。</string>
+    <string name="qk_03559" formatted="false">发送HTTP请求</string>
+    <string name="qk_03560" formatted="false">Zorv AI 暂未内置 PDF 渲染器</string>
+    <string name="qk_03561" formatted="false">屏幕捕获授权失败，已 fallback 到无障碍节点树</string>
+    <string name="qk_03562" formatted="false">邮件</string>
+    <string name="qk_03563" formatted="false">获取当前界面 UI 控件树（UI Tree），用于精准自动化。</string>
+    <string name="qk_03564" formatted="false">百分百开源的本地视频播放器：在应用内全功能播放器播放设备上的视频（支持播放/暂停、进度、倍速、静音、横竖屏）。</string>
+    <string name="qk_03565" formatted="false">没看到选项？去系统设置给本应用「悬浮窗」权限</string>
+    <string name="qk_03566" formatted="false">· 其它文件 → 放入 assets/，打包进 APK 的 assets/（代码经 AssetManager 读取）。</string>
+    <string name="qk_03567" formatted="false">Edge TTS（微软）</string>
+    <string name="qk_03568" formatted="false">柚柚</string>
+    <string name="qk_03569" formatted="false">来自飞书 / QQ / 微信 等机器人的消息（离开软件时系统弹窗）</string>
+    <string name="qk_03570" formatted="false">阿里百炼 CosyVoice</string>
+    <string name="qk_03571" formatted="false">AI图像生成</string>
+    <string name="qk_03572" formatted="false">Zorv 语音球</string>
+    <string name="qk_03573" formatted="false">调用一个 CMS v2 能力模块暴露的应用内能力（如 run_node / device_model / open_url / web_search）。</string>
+    <string name="qk_03574" formatted="false">位置权限</string>
+    <string name="qk_03575" formatted="false">在 proot/Ubuntu 终端内运行 Python（bootstrap 已装 python3）。模块自带真实入口脚本：部署后在终端拉起一个本地 HTTP 后端（监听 0.0.0.0 端口），本 App 作为前端通过 cms_call/ACI 调用，实现「终端是后端、本软是前端」的互为主从。</string>
+    <string name="qk_03576" formatted="false">终端会话 ACI 服务运行中</string>
+    <string name="qk_03577" formatted="false">把本机变成可被 ADB 控制的终端（无线调试中枢）。</string>
+    <string name="qk_03578" formatted="false">确认删除</string>
+    <string name="qk_03579" formatted="false">管理定时任务调度，支持创建、修改、删除、暂停、恢复定时任务。支持 Cron 表达式和多种调度方式。</string>
+    <string name="qk_03580" formatted="false">输出 quro-ui 前自检：把「渲染失败」变成事前修正</string>
+    <string name="qk_03581" formatted="false">广义IDE知识库和创作工具</string>
+    <string name="qk_03582" formatted="false">🔍 知识库关键词检索：在本地知识库里按关键词精确匹配。</string>
+    <string name="qk_03583" formatted="false">列出 ZorvAI 工作区（QuroWorkspace）里某个目录的内容（子目录/文件），默认列根目录。</string>
+    <string name="qk_03584" formatted="false">打开网页（被动展示）</string>
+    <string name="qk_03585" formatted="false">小米 MiMo TTS</string>
+    <string name="qk_03586" formatted="false">终端资源与进程监控（proot 沙箱内读 /proc，无需 cgroups）。</string>
+    <string name="qk_03587" formatted="false">改写/重写本地已有文档：读取其类型，用提供的新正文重生成同类型真实文档。</string>
+    <string name="qk_03588" formatted="false">创建完整多文件项目（已合入统一的「Web 应用」（本工具为兼容别名，转发到 miniapp））</string>
+    <string name="qk_03589" formatted="false">腾讯云 TTS</string>
+    <string name="qk_03590" formatted="false">管理 MCP-ACI 桥接器。支持操作：refresh（刷新 MCP 服务器工具列表）、status（查看桥接状态）。</string>
+    <string name="qk_03591" formatted="false">点击屏幕指定位置</string>
+    <string name="qk_03592" formatted="false">端侧APK构建：Java/Kotlin源码→DEX→APK，AI可真正触发离线编译打包（支持自定义签名/依赖JAR/图标）</string>
+    <string name="qk_03593" formatted="false">未获取 Root（已拒绝或设备未 Root）</string>
+    <string name="qk_03594" formatted="false">结束</string>
+    <string name="qk_03595" formatted="false">保存一条长期记忆（用户偏好、事实、约定、项目背景等）。当用户透露了值得跨会话记住的信息时，应主动调用本工具「自动保存」。</string>
+    <string name="qk_03596" formatted="false">工程文件</string>
+    <string name="qk_03597" formatted="false">用其他应用打开</string>
+    <string name="qk_03598" formatted="false">当前页面不支持二级跳转</string>
+    <string name="qk_03599" formatted="false">选择本次渲染通道</string>
+    <string name="qk_03600" formatted="false">（已生成界面，见上方回放）</string>
+    <string name="qk_03601" formatted="false">把设备上的文件（图片/视频/文档/压缩包等）作为消息附件发到对话框，用户可直接预览。例如用户让你“把这张图发出来/把刚才生成的文件发给我”时调用。</string>
+    <string name="qk_03602" formatted="false">在Linux环境执行命令</string>
+    <string name="qk_03603" formatted="false">在对话框内渲染一张可交互富卡片（可视化组件；注意：用户说「小卡片」指的是 ```quro-card 围栏，不是本工具）。</string>
+    <string name="qk_03604" formatted="false">工具发现：查询可用工具、根据意图匹配工具、获取工具使用指南</string>
+    <string name="qk_03605" formatted="false">悬浮窗权限</string>
+    <string name="qk_03606" formatted="false">获取「动态 UI」的 DSL 规范：可用的节点类型、字段、动作以及完整示例。</string>
+    <string name="qk_03607" formatted="false">ADB / 无线调试</string>
+    <string name="qk_03608" formatted="false">调用MCP工具</string>
+    <string name="qk_03609" formatted="false">LSPosed/Xposed 模块 AI 直驱（完整对接）。</string>
+    <string name="qk_03610" formatted="false">管理本地模型，支持加载、卸载、推理、查看状态等操作。可以使用 MNN、llama.cpp、LiteRT 等推理引擎。</string>
+    <string name="qk_03611" formatted="false">📄 生成真实Office文件（docx/xlsx/pptx/pdf），自研构造零依赖，后台生成可下载/分享的文件。</string>
+    <string name="qk_03612" formatted="false">试着描述具体的颜色、布局、功能</string>
+    <string name="qk_03613" formatted="false">📦 列出工作区 packages/ 目录下所有「脚本包（ToolPkg）」提供的 AI 工具。</string>
+    <string name="qk_03614" formatted="false">生成依赖设备 BouncyCastle，部分机型可能不可用；若失败请用「导入 keystore」（用 keytool 在电脑生成后导入）。</string>
+    <string name="qk_03615" formatted="false">无文档 URI</string>
+    <string name="qk_03616" formatted="false">导出产物</string>
+    <string name="qk_03617" formatted="false">尚未选择 keystore（生成或导入后生效）。</string>
+    <string name="qk_03618" formatted="false">思考过程</string>
+    <string name="qk_03619" formatted="false">Zorv 构建台</string>
+    <string name="qk_03620" formatted="false">精致细节</string>
+    <string name="qk_03621" formatted="false">GenUI · 生成式 UI 对话</string>
+    <string name="qk_03622" formatted="false">准备中...</string>
+    <string name="qk_03623" formatted="false">内置</string>
+    <string name="qk_03624" formatted="false">终端自定义按键绑定管理：保存/查询/删除/重置按键→动作映射，持久化于应用私有目录，供终端加载。</string>
+    <string name="qk_03625" formatted="false">全能 AI 助手，理性、高效、温暖，随时为你效劳。</string>
+    <string name="qk_03626" formatted="false">列出MCP服务器</string>
+    <string name="qk_03627" formatted="false">请选择本次渲染通道</string>
+    <string name="qk_03628" formatted="false">创建定时任务</string>
+    <string name="qk_03629" formatted="false">列出目录内容</string>
+    <string name="qk_03630" formatted="false">插件运行时未就绪，请稍候…</string>
+    <string name="qk_03631" formatted="false">读取 ZorvAI 工作区（QuroWorkspace）里指定相对路径的文本文件内容，返回完整文本。</string>
+    <string name="qk_03632" formatted="false">按依赖编排执行一组 terminal 命令（DAG）：无依赖并行、上游 stdout 作为下游输入、任一失败中止后续。</string>
+    <string name="qk_03633" formatted="false">GenUI SDK / A2UI / Markdown / HTML —— 选完即开始生成</string>
+    <string name="qk_03634" formatted="false">执行Shell命令</string>
+    <string name="qk_03635" formatted="false">导入 JSON</string>
+    <string name="qk_03636" formatted="false">读取文件内容</string>
+    <string name="qk_03637" formatted="false">导入文件</string>
+    <string name="qk_03638" formatted="false">⚠️ mermaid 节点缺少 source（图表源码）</string>
+    <string name="qk_03639" formatted="false">使用自定义签名</string>
+    <string name="qk_03640" formatted="false">AI 驱动网页爬虫（用应用内置浏览器 WebView 逐页渲染抓取）。</string>
+    <string name="qk_03641" formatted="false">提醒用户开启无障碍服务</string>
+    <string name="qk_03642" formatted="false">精确闹钟</string>
+    <string name="qk_03643" formatted="false">GenUI 生成式画布</string>
+    <string name="qk_03644" formatted="false">多引擎联网搜索聚合（统一入口）：支持 duckduckgo（默认，免费无需密钥）、tavily（需先在 auth_service 配置名为 tavily 的 API Key，type=apikey）。</string>
+    <string name="qk_03645" formatted="false">拨打</string>
+    <string name="qk_03646" formatted="false">当前使用内置 debug.keystore（android/android/androiddebugkey）。</string>
+    <string name="qk_03647" formatted="false">调用外部 MCP 服务器暴露的某个工具，让 AI 能够使用其它 MCP 服务的能力。</string>
+    <string name="qk_03648" formatted="false">保存一条记忆</string>
+    <string name="qk_03649" formatted="false">Shizuku 已授权 ✓</string>
+    <string name="qk_03650" formatted="false">按钮</string>
+    <string name="qk_03651" formatted="false">在屏幕上找到输入框并填入文本。可通过 hint/text/description 定位输入框。</string>
+    <string name="qk_03652" formatted="false">在 QuroTerm 自研沙盒终端执行命令（ls/cd/cat/echo/grep/ps/top/netstat/ping/curl/wget/dns/</string>
+    <string name="qk_03653" formatted="false">内存使用</string>
+    <string name="qk_03654" formatted="false">发起HTTP请求并返回响应</string>
+    <string name="qk_03655" formatted="false">Zorv AI 仅拉起系统拨号盘，不自动外呼。</string>
+    <string name="qk_03656" formatted="false">UI 解析失败</string>
+    <string name="qk_03657" formatted="false">📐 后台 AIP 排版合成：用于整篇长文档 / PPT / 报告 / 思维导图的结构化排版。</string>
+    <string name="qk_03658" formatted="false">AI 操控应用内置浏览器（接管当前显示的 WebView，页面已加载时可直接看到/操作内容）。</string>
+    <string name="qk_03659" formatted="false">未检测到 LSPosed/Xposed 管理器（本应用无需 Xposed 也能运行）</string>
+    <string name="qk_03660" formatted="false">机器人后台运行中</string>
+    <string name="qk_03661" formatted="false">执行全局系统级动作：back（返回）、home（主页）、recents（最近任务）、notifications（展开通知栏）、lock_screen（锁屏）。</string>
+    <string name="qk_03662" formatted="false">编译工程</string>
+    <string name="qk_03663" formatted="false">暂无原始输出</string>
+    <string name="qk_03664" formatted="false">生成新签名</string>
+    <string name="qk_03665" formatted="false">校验一段动态 UI 的 DSL（JSON）能否被正确解析。输出前先自检，可避免渲染失败。</string>
+    <string name="qk_03666" formatted="false">冻结或解冻指定应用（冻结后应用不驻内存、不收推送）。</string>
+    <string name="qk_03667" formatted="false">选项在屏幕上的悬浮窗里，直接点它</string>
+    <string name="qk_03668" formatted="false">调用CMS能力模块（旧接口，建议使用cms_toolbox）</string>
+    <string name="qk_03669" formatted="false">Tasker 触发缺少 workflow / workflow_id / prompt</string>
+    <string name="qk_03670" formatted="false">未知类型</string>
+    <string name="qk_03671" formatted="false">实时生成</string>
+    <string name="qk_03672" formatted="false">加到桌面</string>
+    <string name="qk_03673" formatted="false">🖼️ 图片内容识别：分析用户提供的图片文件，返回详细描述。</string>
+    <string name="qk_03674" formatted="false">查询 CMS v2 各模块与最近任务的执行状态（部署态/运行中/任务终态），让 AI 确认「部署/调用是否成功」。</string>
+    <string name="qk_03675" formatted="false">控制 ACI HTTP 模拟服务器（当真实 ACI API 尚未完成时使用）。</string>
+    <string name="qk_03676" formatted="false">无法渲染 GenUI 内容</string>
+    <string name="qk_03677" formatted="false">调用一个第三方 App 通过 ACI（Agent Capability Interface）暴露的能力（如发消息 / 查未读 / 建群 / 打开网页 / 执行网页 JS / 发起 HTTP 请求 / 共享工作空间读写 workspace_write·workspace_read·workspace_list·workspace_delete）。</string>
+    <string name="qk_03678" formatted="false">Zorv AI 不存储邮件，发送经你选择的邮件应用完成。</string>
+    <string name="qk_03679" formatted="false">设备管理员权限</string>
+    <string name="qk_03680" formatted="false">启动应用</string>
+    <string name="qk_03681" formatted="false">AI 返回的数据格式不正确，请重试或调整描述。</string>
+    <string name="qk_03682" formatted="false">计算算术表达式</string>
+    <string name="qk_03683" formatted="false">终端·Node运行时</string>
+    <string name="qk_03684" formatted="false">查询「CMS 引擎（系统资源包）」的部署就绪态、健康度、版本、拉起的共享服务（NODE/PYTHON/SSH/JAVA/RUST/GO 等运行时）、部署进度与日志。</string>
+    <string name="qk_03685" formatted="false">列出当前已连接的外部 MCP 服务器（别名与地址）。调用外部工具前先用本工具查看可用服务器。</string>
+    <string name="qk_03686" formatted="false">说点什么...</string>
+    <string name="qk_03687" formatted="false">AI 思考面板</string>
+    <string name="qk_03688" formatted="false">在对话框内把 GitHub 当作搜索引擎使用：直接检索 GitHub 的仓库 / 代码 / Issue / 用户。</string>
+    <string name="qk_03689" formatted="false">粘贴</string>
+    <string name="qk_03690" formatted="false">终端环境</string>
+    <string name="qk_03691" formatted="false">部署一个本地 MCP 服务器：提交一组工具定义（JSON 数组），应用在本地启动一个 MCP 端点，</string>
+    <string name="qk_03692" formatted="false">每轮询问渲染通道</string>
+    <string name="qk_03693" formatted="false">暂无思考过程</string>
+    <string name="qk_03694" formatted="false">Java 工程 → DEX → APK</string>
+    <string name="qk_03695" formatted="false">多步工作流编排引擎：把已注册工具串成流水线，支持变量、循环、条件、错误处理与超时，用它编排其它工具补齐能力缺口。</string>
+    <string name="qk_03696" formatted="false">发送短信</string>
+    <string name="qk_03697" formatted="false">控制设备音量</string>
+    <string name="qk_03698" formatted="false">获取当前日期与时间</string>
+    <string name="qk_03699" formatted="false">每个工程用不同包名，安装时才不会互相冲突（覆盖安装还需同签名）。</string>
+    <string name="qk_03700" formatted="false">打开网页浏览器并导航到指定URL</string>
+    <string name="qk_03701" formatted="false">本地 Git 版本控制集成：在 proot 容器内对设备存储上的仓库执行 git 命令。</string>
+    <string name="qk_03702" formatted="false">已具备特权通道，可直接在终端执行 ADB shell</string>
+    <string name="qk_03703" formatted="false">ZorvAI 沙盒终端</string>
+    <string name="qk_03704" formatted="false">终端·静态HTTP服务</string>
+    <string name="qk_03705" formatted="false">HTML 应用</string>
+    <string name="qk_03706" formatted="false">输入…</string>
+    <string name="qk_03707" formatted="false">输入消息…</string>
+    <string name="qk_03708" formatted="false">提供商健康</string>
+    <string name="qk_03709" formatted="false">在终端执行命令</string>
+    <string name="qk_03710" formatted="false">👁️ 屏幕视觉分析（真实视觉理解）：截取当前屏幕，把截图作为图片直接喂给当前多模态对话模型「亲眼」查看，</string>
+    <string name="qk_03711" formatted="false">主动发起屏幕捕获（MediaProjection）系统授权：让AI能看懂屏幕/截图，无需用户手动长按开关</string>
+    <string name="qk_03712" formatted="false">搜索知识库</string>
+    <string name="qk_03713" formatted="false">宠物管理</string>
+    <string name="qk_03714" formatted="false">」及其全部内容？</string>
+    <string name="qk_03715" formatted="false">在 proot 容器内用 tmux 管理终端会话（多窗格/后台任务/键盘发送）。</string>
+    <string name="qk_03716" formatted="false">通过 Zorv AI 智能体键盘发送回车键（提交/换行）。前置条件同 ai_type_text：已启用并切到『Zorv AI 键盘』且目标 App 输入框已聚焦。</string>
+    <string name="qk_03717" formatted="false">工具链</string>
+    <string name="qk_03718" formatted="false">列出可用的ACI能力</string>
+    <string name="qk_03719" formatted="false">列出CMS能力模块（旧接口，建议使用cms_toolbox）</string>
+    <string name="qk_03720" formatted="false">管理虚拟显示器和后台自动化，支持启动/停止虚拟显示器、创建和执行自动化任务、截图等。</string>
+    <string name="qk_03721" formatted="false">经 Shizuku 以 Root 权限执行命令（需设备已 Root 且 Shizuku 以 root 模式运行）。</string>
+    <string name="qk_03722" formatted="false">快捷操作</string>
+    <string name="qk_03723" formatted="false">说话</string>
+    <string name="qk_03724" formatted="false">百分百开源的本地音乐播放器：在后台播放设备上的本地音频文件（不打开前台也能持续播放）。</string>
+    <string name="qk_03725" formatted="false">复制日志</string>
+    <string name="qk_03726" formatted="false">开启语音球需授予「悬浮窗」权限</string>
+    <string name="qk_03727" formatted="false">列出工作区内容</string>
+    <string name="qk_03728" formatted="false">生成中…</string>
+    <string name="qk_03729" formatted="false">请先在系统设置开启 ZorvAI 无障碍服务</string>
+    <string name="qk_03730" formatted="false">Zorv AI 定时任务到时提醒</string>
+    <string name="qk_03731" formatted="false">暂无工具调用</string>
+    <string name="qk_03732" formatted="false">终端·Python运行时</string>
+    <string name="qk_03733" formatted="false">已接入 ZorvAI 人格卡/记忆/标签体系，与主对话共用同一个身份，无需在此单独设置</string>
+    <string name="qk_03734" formatted="false">滚动当前屏幕上的可滚动容器（列表/页面）。</string>
+    <string name="qk_03735" formatted="false">身份与模型</string>
+    <string name="qk_03736" formatted="false">多格式文档创建（md/txt/csv/json/html等17种）</string>
+    <string name="qk_03737" formatted="false">用界面回答</string>
+    <string name="qk_03738" formatted="false">查询 12306 余票（车次/出发到达时间/历时/各席别余票）。</string>
+    <string name="qk_03739" formatted="false">读取 GitHub 仓库内容：文件源码 / 目录列表 / Issue / PR 文件变更 / PR diff。</string>
+    <string name="qk_03740" formatted="false">百分百开源的本地音乐播放器（播放列表）：后台连续播放多首本地音频文件。</string>
+    <string name="qk_03741" formatted="false">读取文本文件内容</string>
+    <string name="qk_03742" formatted="false">TTS语音合成</string>
+</resources>

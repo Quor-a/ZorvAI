@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -109,7 +112,7 @@ fun QuroCmsScreen(onClose: () -> Unit) {
     // 导出官方CMS引擎到 Download/Quro（.cmsengine，可分享/本地留存）
     fun exportEngine() {
         val r = QuroDownloadUtil.saveTextToDownloads(ctx, "QuroEngine.cmsengine", "application/json", CmsEngineDeployer.exportPackage(CmsEnginePackage.builtin()))
-        Toast.makeText(ctx, if (r.startsWith("OK:")) "已保存CMS引擎到 Download/Quro/" else r, Toast.LENGTH_LONG).show()
+        Toast.makeText(ctx, if (r.startsWith("OK:")) qstr(R.string.qk_01531) else r, Toast.LENGTH_LONG).show()
     }
     // 导入CMS引擎（.cmsengine）→ 解析后一键部署
     val importEngineLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -124,7 +127,7 @@ fun QuroCmsScreen(onClose: () -> Unit) {
                 }
             }
         }.onFailure {
-            Toast.makeText(ctx, "CMS引擎导入失败：${it.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, qstr(R.string.qk_01532, (it.message).toString()), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -185,7 +188,7 @@ fun QuroCmsScreen(onClose: () -> Unit) {
             ctx.contentResolver.openOutputStream(uri)?.use { it.write(repo.exportModules(list).toByteArray()) }
             refresh()
         }.onFailure {
-            Toast.makeText(ctx, "模块导出失败：${it.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, qstr(R.string.qk_01533, (it.message).toString()), Toast.LENGTH_LONG).show()
         }
     }
     val importModulesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -193,17 +196,17 @@ fun QuroCmsScreen(onClose: () -> Unit) {
         runCatching {
             val text = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return@runCatching
             val n = repo.importModules(text)
-            Toast.makeText(ctx, if (n > 0) "已导入 $n 个模块" else "未识别到有效的 cms.io/v2 模块", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, if (n > 0) qstr(R.string.qk_01534, (n).toString()) else qstr(R.string.qk_01535), Toast.LENGTH_LONG).show()
             refresh()
         }.onFailure {
-            Toast.makeText(ctx, "模块导入失败：${it.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, qstr(R.string.qk_01536, (it.message).toString()), Toast.LENGTH_LONG).show()
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("CMSv2模块", style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
+                title = { Text(stringResource(R.string.qk_01537), style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
                 navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, null) } },
                 actions = {
                     IconButton(onClick = { showAudit = true }) { Icon(Icons.Filled.History, null) }
@@ -214,9 +217,9 @@ fun QuroCmsScreen(onClose: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(padding)) {
             // 分区切换
             Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = section == "modules", onClick = { section = "modules" }, label = { Text("模块") })
-                FilterChip(selected = section == "auth", onClick = { section = "auth" }, label = { Text("授权") })
-                FilterChip(selected = section == "caps", onClick = { section = "caps" }, label = { Text("能力") })
+                FilterChip(selected = section == "modules", onClick = { section = "modules" }, label = { Text(stringResource(R.string.qk_01538)) })
+                FilterChip(selected = section == "auth", onClick = { section = "auth" }, label = { Text(stringResource(R.string.qk_01539)) })
+                FilterChip(selected = section == "caps", onClick = { section = "caps" }, label = { Text(stringResource(R.string.qk_01540)) })
             }
             when (section) {
                 "modules" -> ModulesSection(
@@ -278,18 +281,18 @@ fun QuroCmsScreen(onClose: () -> Unit) {
                     val pick = modules.filter { it.id in selected }
                     showExportPicker = false
                     if (pick.isEmpty()) {
-                        Toast.makeText(ctx, "未选择任何模块", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, qstr(R.string.qk_01541), Toast.LENGTH_SHORT).show()
                     } else {
                         pendingExport = pick
                         exportModulesLauncher.launch("cms-modules-${pick.size}.json")
                     }
-                }) { Text("导出选中 (${selected.size})") }
+                }) { Text(qstr(R.string.qk_01542, (selected.size).toString())) }
             },
-            dismissButton = { TextButton(onClick = { showExportPicker = false }) { Text("取消") } },
-            title = { Text("选择要导出的模块") },
+            dismissButton = { TextButton(onClick = { showExportPicker = false }) { Text(stringResource(R.string.qk_00011)) } },
+            title = { Text(stringResource(R.string.qk_01543)) },
             text = {
                 if (modules.isEmpty()) {
-                    Text("当前没有可导出的模块。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.qk_01544), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     LazyColumn(Modifier.heightIn(max = 360.dp)) {
                         items(modules) { m ->
@@ -329,9 +332,9 @@ private fun cmsHostCategory(m: QuroCmsModule): String {
 
 /** 宿主分组中文标签（用于卡片徽标）。 */
 private fun cmsHostLabel(m: QuroCmsModule): String = when (cmsHostCategory(m)) {
-    "terminal" -> "🖥 终端"
-    "dual" -> "🔁 双端"
-    else -> "📱 手机"
+    "terminal" -> qstr(R.string.qk_01545)
+    "dual" -> qstr(R.string.qk_01546)
+    else -> qstr(R.string.qk_01547)
 }
 
 @Composable
@@ -373,7 +376,7 @@ private fun ModulesSection(
         Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).border(1.dp, Line, RoundedCornerShape(12.dp))) {
             Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("🔧 CMS引擎", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.qk_01553), style = MaterialTheme.typography.bodyLarge)
                     Text("${es.engineVersion.ifBlank { "-" }} · ${es.services.size} 个共享服务", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(eLabel, style = MaterialTheme.typography.labelSmall, color = eColor)
                     if (es.lastError.isNotBlank())
@@ -381,11 +384,11 @@ private fun ModulesSection(
                 }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-                PrimaryButton(text = if (busyDeployEngine) "部署中…" else "部署CMS引擎", modifier = Modifier.fillMaxWidth(), enabled = !busyDeployEngine, onClick = onDeployEngine)
+                PrimaryButton(text = if (busyDeployEngine) stringResource(R.string.qk_01555) else stringResource(R.string.qk_01556), modifier = Modifier.fillMaxWidth(), enabled = !busyDeployEngine, onClick = onDeployEngine)
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onImportEngine, modifier = Modifier.weight(1f)) { Text("导入CMS引擎") }
-                OutlinedButton(onClick = onExportEngine, modifier = Modifier.weight(1f)) { Text("导出CMS引擎") }
+                OutlinedButton(onClick = onImportEngine, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.qk_01557)) }
+                OutlinedButton(onClick = onExportEngine, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.qk_01558)) }
             }
             if (es.services.isNotEmpty()) {
                 Text("共享服务：${es.services.joinToString(", ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp))
@@ -403,7 +406,7 @@ private fun ModulesSection(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(if (showEngineScripts) "收起脚本" else "查看/编辑引擎脚本")
+                    Text(if (showEngineScripts) stringResource(R.string.qk_01560) else stringResource(R.string.qk_01561))
                 }
             }
 
@@ -423,18 +426,18 @@ private fun ModulesSection(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Bootstrap 引导脚本", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.qk_01562), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row {
                             IconButton(
                                 onClick = {
                                     val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clip = ClipData.newPlainText("Bootstrap脚本", enginePackage.bootstrapContent)
+                                    val clip = ClipData.newPlainText(qstr(R.string.qk_01563), enginePackage.bootstrapContent)
                                     clipboard.setPrimaryClip(clip)
-                                    Toast.makeText(ctx, "脚本已复制", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(ctx, qstr(R.string.qk_01564), Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier.size(24.dp)
                             ) {
-                                Icon(Icons.Filled.ContentCopy, "复制", modifier = Modifier.size(16.dp))
+                                Icon(Icons.Filled.ContentCopy, stringResource(R.string.qk_00088), modifier = Modifier.size(16.dp))
                             }
                             IconButton(
                                 onClick = {
@@ -445,7 +448,7 @@ private fun ModulesSection(
                             ) {
                                 Icon(
                                     if (isEditingBootstrap) Icons.Filled.Save else Icons.Filled.Edit,
-                                    if (isEditingBootstrap) "保存" else "编辑",
+                                    if (isEditingBootstrap) stringResource(R.string.qk_00198) else stringResource(R.string.qk_00299),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -480,18 +483,18 @@ private fun ModulesSection(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Provisioner 环境脚本", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.qk_01565), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row {
                             IconButton(
                                 onClick = {
                                     val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clip = ClipData.newPlainText("Provisioner脚本", enginePackage.provisionerContent)
+                                    val clip = ClipData.newPlainText(qstr(R.string.qk_01566), enginePackage.provisionerContent)
                                     clipboard.setPrimaryClip(clip)
-                                    Toast.makeText(ctx, "脚本已复制", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(ctx, qstr(R.string.qk_01564), Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier.size(24.dp)
                             ) {
-                                Icon(Icons.Filled.ContentCopy, "复制", modifier = Modifier.size(16.dp))
+                                Icon(Icons.Filled.ContentCopy, stringResource(R.string.qk_00088), modifier = Modifier.size(16.dp))
                             }
                             IconButton(
                                 onClick = {
@@ -502,7 +505,7 @@ private fun ModulesSection(
                             ) {
                                 Icon(
                                     if (isEditingProvisioner) Icons.Filled.Save else Icons.Filled.Edit,
-                                    if (isEditingProvisioner) "保存" else "编辑",
+                                    if (isEditingProvisioner) stringResource(R.string.qk_00198) else stringResource(R.string.qk_00299),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -535,7 +538,7 @@ private fun ModulesSection(
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PrimaryButton(text = "添加模块", modifier = Modifier.weight(1f), onClick = onAdd)
+            PrimaryButton(text = stringResource(R.string.qk_01567), modifier = Modifier.weight(1f), onClick = onAdd)
             OutlinedButton(
                 onClick = {
                     busyOneClick = true
@@ -557,16 +560,15 @@ private fun ModulesSection(
                 },
                 modifier = Modifier.weight(1f),
                 enabled = !busyOneClick,
-            ) { Text(if (busyOneClick) "部署中…" else "一键部署到终端") }
+            ) { Text(if (busyOneClick) stringResource(R.string.qk_01555) else stringResource(R.string.qk_01568)) }
         }
         // 模块导入 / 导出（SAF）
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onExport, modifier = Modifier.weight(1f)) { Text("导出模块") }
-            OutlinedButton(onClick = onImport, modifier = Modifier.weight(1f)) { Text("导入模块") }
+            OutlinedButton(onClick = onExport, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.qk_01569)) }
+            OutlinedButton(onClick = onImport, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.qk_01570)) }
         }
         Spacer(Modifier.height(6.dp))
-        Text(
-            "💡 CMS 模块部署到应用内 proot/Ubuntu Linux 沙箱运行。首次请先在「终端」页安装 Linux 环境（约需联网下载 30MB）；部署时按需 apt-get install 基础包。",
+        Text(stringResource(R.string.qk_01571),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -574,22 +576,22 @@ private fun ModulesSection(
         var showAddGuide by remember { mutableStateOf(false) }
         if (modules.isEmpty()) {
             Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Text("还没有模块。点上方「添加模块」创建一个能力模块（cms.io/v2）。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.qk_01572), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { showAddGuide = true }, modifier = Modifier.weight(1f)) { Text("查看添加说明") }
+                    Button(onClick = { showAddGuide = true }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.qk_01573)) }
                     Button(onClick = {
-                        val r = QuroDownloadUtil.saveTextToDownloads(ctx, "CMSv2_添加模块说明.md", "text/markdown", CMS_ADD_MODULE_GUIDE)
-                        Toast.makeText(ctx, if (r.startsWith("OK:")) "已保存说明到 Download/Quro/" else r, Toast.LENGTH_LONG).show()
-                    }, modifier = Modifier.weight(1f)) { Text("下载说明") }
+                        val r = QuroDownloadUtil.saveTextToDownloads(ctx, qstr(R.string.qk_01574), "text/markdown", CMS_ADD_MODULE_GUIDE)
+                        Toast.makeText(ctx, if (r.startsWith("OK:")) qstr(R.string.qk_01575) else r, Toast.LENGTH_LONG).show()
+                    }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.qk_01576)) }
                 }
             }
         }
         if (showAddGuide) {
             AlertDialog(
                 onDismissRequest = { showAddGuide = false },
-                confirmButton = { TextButton(onClick = { showAddGuide = false }) { Text("知道了") } },
-                title = { Text("怎么添加 CMS v2 模块") },
+                confirmButton = { TextButton(onClick = { showAddGuide = false }) { Text(stringResource(R.string.qk_00054)) } },
+                title = { Text(stringResource(R.string.qk_01577)) },
                 text = {
                     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                         Text(CMS_ADD_MODULE_GUIDE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -599,9 +601,9 @@ private fun ModulesSection(
         }
         // 按宿主（手机 / 终端 / 双端）分组渲染，落实「手机模块与终端模块分开」
         val groups = listOf(
-            "app" to "📱 手机模块（应用内执行）",
-            "terminal" to "🖥 终端模块（proot 内执行）",
-            "dual" to "🔁 双端模块（手机 / 终端皆可）",
+            "app" to stringResource(R.string.qk_01578),
+            "terminal" to stringResource(R.string.qk_01579),
+            "dual" to stringResource(R.string.qk_01580),
         )
         val byCat = modules.groupBy { cmsHostCategory(it) }
         groups.forEach { (cat, title) ->
@@ -635,7 +637,7 @@ private fun ModulesSection(
                         val ats = m.capabilities.map { it.actionType }.distinct().joinToString("/")
                         Text("权限 ${m.permissions.size} · 能力 ${m.capabilities.size}${if (m.dependencies.isNotEmpty()) " · 依赖 ${m.dependencies.size}" else ""}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (ats.isNotBlank())
-                            Text("通道：$ats · 级别 ${m.maxRequiredLevel().name}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(qstr(R.string.qk_01582, (ats).toString(), (m.maxRequiredLevel().name).toString()), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         // 部署状态（实时，来自状态系统；进入即 re-query，跨重启持久化）
                         val (statusText, statusColor) = when (deployStatus) {
                             "deploying" -> "● 部署中 ${deployTask?.progressPct ?: 0}%" to MaterialTheme.colorScheme.primary
@@ -647,11 +649,11 @@ private fun ModulesSection(
                             Text(statusText, style = MaterialTheme.typography.labelSmall, color = statusColor)
                             if (running) {
                                 Spacer(Modifier.width(8.dp))
-                                Text("· 运行中", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                                Text(qstr(R.string.qk_01586), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                             }
                             if (hasBlockingDep) {
                                 Spacer(Modifier.width(8.dp))
-                                Text("⚠ 含需解析依赖", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                                Text(qstr(R.string.qk_01587), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -687,7 +689,7 @@ private fun ModulesSection(
                         },
                         enabled = !busy && deployStatus != "deploying",
                     ) {
-                        Text(if (busy) "部署中…" else "部署到终端")
+                        Text(if (busy) qstr(R.string.qk_01555) else qstr(R.string.qk_01588))
                     }
                 }
 
@@ -712,7 +714,7 @@ private fun ModulesSection(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(if (showModuleScript) "收起 entry.sh" else "查看/编辑 entry.sh")
+                            Text(if (showModuleScript) qstr(R.string.qk_01589) else qstr(R.string.qk_01590))
                         }
                     }
 
@@ -730,18 +732,18 @@ private fun ModulesSection(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("entry.sh 脚本", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(qstr(R.string.qk_01591), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Row {
                                     IconButton(
                                         onClick = {
                                             val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                             val clip = ClipData.newPlainText("entry.sh", m.terminalEntry)
                                             clipboard.setPrimaryClip(clip)
-                                            Toast.makeText(ctx, "脚本已复制", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(ctx, qstr(R.string.qk_01564), Toast.LENGTH_SHORT).show()
                                         },
                                         modifier = Modifier.size(24.dp)
                                     ) {
-                                        Icon(Icons.Filled.ContentCopy, "复制", modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Filled.ContentCopy, qstr(R.string.qk_00088), modifier = Modifier.size(16.dp))
                                     }
                                     IconButton(
                                         onClick = {
@@ -752,7 +754,7 @@ private fun ModulesSection(
                                     ) {
                                         Icon(
                                             if (isEditingModuleEntry) Icons.Filled.Save else Icons.Filled.Edit,
-                                            if (isEditingModuleEntry) "保存" else "编辑",
+                                            if (isEditingModuleEntry) qstr(R.string.qk_00198) else qstr(R.string.qk_00299),
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -793,7 +795,7 @@ private fun ModulesSection(
             }
             if (terminalDeployed.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
-                Text("📦 终端已部署（未在模块库）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(qstr(R.string.qk_01592), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 terminalDeployed.forEach { (id, rec) ->
                     val (stxt, scol) = when (rec.deployStatus) {
                         "deploying" -> "● 部署中" to MaterialTheme.colorScheme.primary
@@ -819,7 +821,7 @@ private fun ModulesSection(
 private fun ModuleInfoDialog(module: QuroCmsModule, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00065)) } },
         title = { Text(module.name) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
@@ -827,40 +829,40 @@ private fun ModuleInfoDialog(module: QuroCmsModule, onDismiss: () -> Unit) {
                 Text("版本: ${module.version} · 作者: ${module.author.ifBlank { "-" }}", style = MaterialTheme.typography.bodySmall)
                 Text(module.description, style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(8.dp))
-                Text("权限声明：", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.qk_01596), style = MaterialTheme.typography.labelMedium)
                 module.permissions.forEach { p ->
                     Text("• ${p.id} [${p.level.name}] → ${p.authorization.name}：${p.rationale}", style = MaterialTheme.typography.bodySmall)
                 }
                 Spacer(Modifier.height(8.dp))
-                Text("能力 (${module.capabilities.size})：", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.qk_01597, (module.capabilities.size).toString()), style = MaterialTheme.typography.labelMedium)
                 module.capabilities.forEach { c ->
                     Text("• ${c.id} [${c.actionType}] ${c.runOn.joinToString("/") { it.label }}：${c.summary}", style = MaterialTheme.typography.bodySmall)
                     if (c.requiresPermissions.isNotEmpty())
                         Text("  需权限：${c.requiresPermissions.joinToString(", ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     val con = c.constraints
                     val conItems = buildList {
-                        if (con.allowedPaths.isNotEmpty()) add("路径=${con.allowedPaths}")
-                        if (con.allowedCommands.isNotEmpty()) add("命令=${con.allowedCommands}")
-                        if (con.allowedDomains.isNotEmpty()) add("域名=${con.allowedDomains}")
-                        if (con.maxExecutionTimeSecs != 30) add("超时=${con.maxExecutionTimeSecs}s")
-                        if (con.maxMemoryMb != 64) add("内存=${con.maxMemoryMb}MB")
+                        if (con.allowedPaths.isNotEmpty()) add(qstr(R.string.qk_01599, (con.allowedPaths).toString()))
+                        if (con.allowedCommands.isNotEmpty()) add(qstr(R.string.qk_01600, (con.allowedCommands).toString()))
+                        if (con.allowedDomains.isNotEmpty()) add(qstr(R.string.qk_01601, (con.allowedDomains).toString()))
+                        if (con.maxExecutionTimeSecs != 30) add(qstr(R.string.qk_01602, (con.maxExecutionTimeSecs).toString()))
+                        if (con.maxMemoryMb != 64) add(qstr(R.string.qk_01603, (con.maxMemoryMb).toString()))
                     }
                     if (conItems.isNotEmpty())
                         Text("  约束：${conItems.joinToString(" · ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (module.dependencies.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
-                    Text("依赖 (${module.dependencies.size})：", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.qk_01605, (module.dependencies.size).toString()), style = MaterialTheme.typography.labelMedium)
                     module.dependencies.forEach { d ->
                         val tgt = d.spec.ifBlank { d.capability }
                         Text("• [${d.kind.name}] $tgt @${d.version}${if (d.optional) "（可选）" else ""}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text("元信息：", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.qk_01606), style = MaterialTheme.typography.labelMedium)
                 Text("生命周期：${module.lifecycle} · 目录：${module.catalog.ifBlank { "-" }}", style = MaterialTheme.typography.bodySmall)
                 if (module.signature.isNotBlank())
-                    Text("签名：${module.signature.take(32)}…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.qk_01608, (module.signature.take(32)).toString()), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
     )
@@ -894,24 +896,24 @@ private fun AddModuleDialog(onDismiss: () -> Unit, onConfirm: (QuroCmsModule) ->
                     )
                 },
                 enabled = id.isNotBlank(),
-            ) { Text("创建") }
+            ) { Text(stringResource(R.string.qk_00843)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-        title = { Text("添加能力模块", style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } },
+        title = { Text(stringResource(R.string.qk_01609), style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                OutlinedTextField(id, { id = it }, label = { Text("模块 ID *") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(name, { name = it }, label = { Text("显示名") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(version, { version = it }, label = { Text("版本") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(description, { description = it }, label = { Text("描述") }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp), minLines = 2)
-                OutlinedTextField(author, { author = it }, label = { Text("作者") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(license, { license = it }, label = { Text("许可证") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(id, { id = it }, label = { Text(stringResource(R.string.qk_01610)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.qk_01611)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(version, { version = it }, label = { Text(stringResource(R.string.qk_01612)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(description, { description = it }, label = { Text(stringResource(R.string.qk_01613)) }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp), minLines = 2)
+                OutlinedTextField(author, { author = it }, label = { Text(stringResource(R.string.qk_01614)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(license, { license = it }, label = { Text(stringResource(R.string.qk_01615)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
 
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("权限声明 (${perms.size})", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.qk_01616, (perms.size).toString()), style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { perms.add(QuroCmsPermission("perm_${perms.size}", PermissionLevel.Normal, "", "*", AuthorizationLevel.Session)) }) { Text("+ 权限") }
+                    TextButton(onClick = { perms.add(QuroCmsPermission("perm_${perms.size}", PermissionLevel.Normal, "", "*", AuthorizationLevel.Session)) }) { Text(stringResource(R.string.qk_01617)) }
                 }
                 perms.forEachIndexed { i, p ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -919,49 +921,49 @@ private fun AddModuleDialog(onDismiss: () -> Unit, onConfirm: (QuroCmsModule) ->
                         EnumDropdown(p.level) { perms[i] = p.copy(level = it) }
                         IconButton(onClick = { perms.removeAt(i) }) { Icon(Icons.Filled.Delete, null) }
                     }
-                    OutlinedTextField(p.rationale, { perms[i] = p.copy(rationale = it) }, label = { Text("理由") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(p.rationale, { perms[i] = p.copy(rationale = it) }, label = { Text(qstr(R.string.qk_01618)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 }
 
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("能力 (${caps.size})", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.qk_01619, (caps.size).toString()), style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { caps.add(QuroCmsCapability("cap_${caps.size}", "", "{}", emptyList(), PermissionConstraints(), "intent", "")) }) { Text("+ 能力") }
+                    TextButton(onClick = { caps.add(QuroCmsCapability("cap_${caps.size}", "", "{}", emptyList(), PermissionConstraints(), "intent", "")) }) { Text(stringResource(R.string.qk_01620)) }
                 }
                 caps.forEachIndexed { i, c ->
-                    OutlinedTextField(c.id, { caps[i] = c.copy(id = it) }, label = { Text("能力 id") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(c.summary, { caps[i] = c.copy(summary = it) }, label = { Text("摘要") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(c.id, { caps[i] = c.copy(id = it) }, label = { Text(qstr(R.string.qk_01621)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(c.summary, { caps[i] = c.copy(summary = it) }, label = { Text(qstr(R.string.qk_01622)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(c.action, { caps[i] = c.copy(action = it) }, label = { Text("动作(intent JSON / js 脚本 / api 操作 / terminal 命令)") }, singleLine = true, modifier = Modifier.weight(1f))
+                        OutlinedTextField(c.action, { caps[i] = c.copy(action = it) }, label = { Text(qstr(R.string.qk_01623)) }, singleLine = true, modifier = Modifier.weight(1f))
                         StringDropdown(c.actionType, listOf("intent", "js", "api", "terminal")) { caps[i] = c.copy(actionType = it) }
                     }
-                    OutlinedTextField(c.requiresPermissions.joinToString(","), { caps[i] = c.copy(requiresPermissions = it.split(",").map { s -> s.trim() }.filter { s -> s.isNotBlank() }) }, label = { Text("所需权限 id(逗号分隔)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(c.requiresPermissions.joinToString(","), { caps[i] = c.copy(requiresPermissions = it.split(",").map { s -> s.trim() }.filter { s -> s.isNotBlank() }) }, label = { Text(qstr(R.string.qk_01624)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(4.dp))
-                    Text("约束（可选，越细越安全）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    OutlinedTextField(c.constraints.allowedCommands.joinToString(","), { caps[i] = c.copy(constraints = c.constraints.copy(allowedCommands = it.split(",").map { s -> s.trim() }.filter { s -> s.isNotBlank() })) }, label = { Text("命令白名单(逗号分隔)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(c.constraints.allowedPaths.joinToString(","), { caps[i] = c.copy(constraints = c.constraints.copy(allowedPaths = it.split(",").map { s -> s.trim() }.filter { s -> s.isNotBlank() })) }, label = { Text("允许路径(逗号分隔)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(c.constraints.allowedDomains.joinToString(","), { caps[i] = c.copy(constraints = c.constraints.copy(allowedDomains = it.split(",").map { s -> s.trim() }.filter { s -> s.isNotBlank() })) }, label = { Text("允许域名(逗号分隔)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Text(qstr(R.string.qk_01625), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(c.constraints.allowedCommands.joinToString(","), { caps[i] = c.copy(constraints = c.constraints.copy(allowedCommands = it.split(",").map { s -> s.trim() }.filter { s -> s.isNotBlank() })) }, label = { Text(qstr(R.string.qk_01626)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(c.constraints.allowedPaths.joinToString(","), { caps[i] = c.copy(constraints = c.constraints.copy(allowedPaths = it.split(",").map { s -> s.trim() }.filter { s -> s.isNotBlank() })) }, label = { Text(qstr(R.string.qk_01627)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(c.constraints.allowedDomains.joinToString(","), { caps[i] = c.copy(constraints = c.constraints.copy(allowedDomains = it.split(",").map { s -> s.trim() }.filter { s -> s.isNotBlank() })) }, label = { Text(qstr(R.string.qk_01628)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(c.constraints.maxExecutionTimeSecs.toString(), { v -> v.toIntOrNull()?.let { caps[i] = c.copy(constraints = c.constraints.copy(maxExecutionTimeSecs = it)) } }, label = { Text("最大执行秒数") }, singleLine = true, modifier = Modifier.weight(1f))
+                        OutlinedTextField(c.constraints.maxExecutionTimeSecs.toString(), { v -> v.toIntOrNull()?.let { caps[i] = c.copy(constraints = c.constraints.copy(maxExecutionTimeSecs = it)) } }, label = { Text(qstr(R.string.qk_01629)) }, singleLine = true, modifier = Modifier.weight(1f))
                         Spacer(Modifier.width(8.dp))
-                        OutlinedTextField(c.constraints.maxMemoryMb.toString(), { v -> v.toIntOrNull()?.let { caps[i] = c.copy(constraints = c.constraints.copy(maxMemoryMb = it)) } }, label = { Text("最大内存 MB") }, singleLine = true, modifier = Modifier.weight(1f))
+                        OutlinedTextField(c.constraints.maxMemoryMb.toString(), { v -> v.toIntOrNull()?.let { caps[i] = c.copy(constraints = c.constraints.copy(maxMemoryMb = it)) } }, label = { Text(qstr(R.string.qk_01630)) }, singleLine = true, modifier = Modifier.weight(1f))
                     }
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("依赖 (${deps.size})", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.qk_01631, (deps.size).toString()), style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { deps.add(QuroCmsDependency(capability = "", version = "1.0.0", optional = false)) }) { Text("+ 依赖") }
+                    TextButton(onClick = { deps.add(QuroCmsDependency(capability = "", version = "1.0.0", optional = false)) }) { Text(stringResource(R.string.qk_01632)) }
                 }
                 deps.forEachIndexed { i, d ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(d.capability, { deps[i] = d.copy(capability = it) }, label = { Text("能力 id") }, singleLine = true, modifier = Modifier.weight(1f))
-                        OutlinedTextField(d.version, { deps[i] = d.copy(version = it) }, label = { Text("版本") }, singleLine = true, modifier = Modifier.weight(1f))
+                        OutlinedTextField(d.capability, { deps[i] = d.copy(capability = it) }, label = { Text(qstr(R.string.qk_01621)) }, singleLine = true, modifier = Modifier.weight(1f))
+                        OutlinedTextField(d.version, { deps[i] = d.copy(version = it) }, label = { Text(qstr(R.string.qk_01612)) }, singleLine = true, modifier = Modifier.weight(1f))
                         IconButton(onClick = { deps.removeAt(i) }) { Icon(Icons.Filled.Delete, null) }
                     }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = d.optional, onCheckedChange = { deps[i] = d.copy(optional = it) })
-                        Text("可选依赖", style = MaterialTheme.typography.bodySmall)
+                        Text(qstr(R.string.qk_01633), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -980,19 +982,19 @@ private fun AuthSection(
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PrimaryButton(text = "导出备份", modifier = Modifier.weight(1f), onClick = onExport)
-            PrimaryButton(text = "导入", modifier = Modifier.weight(1f), onClick = onImport)
+            PrimaryButton(text = stringResource(R.string.qk_01634), modifier = Modifier.weight(1f), onClick = onExport)
+            PrimaryButton(text = stringResource(R.string.qk_01635), modifier = Modifier.weight(1f), onClick = onImport)
         }
         Spacer(Modifier.height(8.dp))
         if (auths.isEmpty()) {
-            Text("暂无授权记录。在「能力」页调用能力时，会按 4 级授权（临时/会话/永久/全局）向用户请求。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.qk_01636), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         auths.forEach { a ->
             Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).border(1.dp, Line, RoundedCornerShape(12.dp))) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("${a.moduleId} : ${a.permissionId}", style = MaterialTheme.typography.bodyMedium)
-                        Text("授权级别：${a.level.name}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        Text(qstr(R.string.qk_01637, (a.level.name).toString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     }
                     IconButton(onClick = { onRevoke(a) }) { Icon(Icons.Filled.Delete, null, tint = MaterialTheme.colorScheme.error) }
                 }
@@ -1009,7 +1011,7 @@ private fun CapsSection(
     onCall: (Pair<QuroCmsModule, QuroCmsCapability>) -> Unit,
 ) {
     LazyColumn(Modifier.fillMaxSize().padding(12.dp)) {
-        if (caps.isEmpty()) item { Text("还没有能力。先到「模块」页添加含能力的模块。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (caps.isEmpty()) item { Text(stringResource(R.string.qk_01638), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(caps) { (m, c) ->
             Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).border(1.dp, Line, RoundedCornerShape(12.dp))) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1020,7 +1022,7 @@ private fun CapsSection(
                         if (c.requiresPermissions.isNotEmpty())
                             Text("需权限：${c.requiresPermissions.joinToString(", ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    PrimaryButton(text = "调用", modifier = Modifier.width(IntrinsicSize.Min), onClick = { onCall(m to c) })
+                    PrimaryButton(text = stringResource(R.string.qk_01641), modifier = Modifier.width(IntrinsicSize.Min), onClick = { onCall(m to c) })
                 }
             }
         }
@@ -1055,25 +1057,25 @@ private fun CallDialog(
                     }
                 },
                 enabled = !running,
-            ) { Text(if (running) "执行中…" else "执行") }
+            ) { Text(if (running) stringResource(R.string.qk_00117) else stringResource(R.string.qk_01642)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
-        title = { Text("调用能力 · ${cap.id}", style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00065)) } },
+        title = { Text(stringResource(R.string.qk_01643, (cap.id).toString()), style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
         text = {
             Column {
                 Text(cap.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("模块：${module.name} · 通道级别：${module.maxRequiredLevel().name}", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.qk_01644, (module.name).toString(), (module.maxRequiredLevel().name).toString()), style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(8.dp))
                 val actionLabel = when (cap.actionType) {
-                    "js" -> "JS 脚本（应用内 QuickJS 沙箱）"
-                    "api" -> "API 操作"
-                    "terminal" -> "终端命令（应用内 proot/Ubuntu 沙箱）"
-                    else -> "Intent（应用内派发）"
+                    "js" -> stringResource(R.string.qk_01645)
+                    "api" -> stringResource(R.string.qk_01646)
+                    "terminal" -> stringResource(R.string.qk_01647)
+                    else -> stringResource(R.string.qk_01648)
                 }
                 Text("$actionLabel：${cap.action}", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
                 Spacer(Modifier.height(8.dp))
                 argNames.forEach { name ->
-                    OutlinedTextField(args[name]!!.value, { args[name]!!.value = it }, label = { Text("参数 $name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(args[name]!!.value, { args[name]!!.value = it }, label = { Text(qstr(R.string.qk_01649, (name).toString())) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 }
                 result?.let {
                     Spacer(Modifier.height(8.dp))
@@ -1091,14 +1093,14 @@ private fun AuditDialog(storage: QuroCmsStorage, onDismiss: () -> Unit) {
     var entries by remember { mutableStateOf(storage.loadAudit()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00065)) } },
         dismissButton = {
-            TextButton(onClick = { storage.clearAudit(); entries = emptyList() }) { Text("清空") }
+            TextButton(onClick = { storage.clearAudit(); entries = emptyList() }) { Text(stringResource(R.string.qk_00764)) }
         },
-        title = { Text("审计日志（上帝视角）", style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
+        title = { Text(stringResource(R.string.qk_01650), style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
         text = {
             if (entries.isEmpty()) {
-                Text("暂无审计记录。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.qk_01651), color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 LazyColumn(Modifier.heightIn(max = 360.dp)) {
                     items(entries) { e ->
@@ -1125,26 +1127,26 @@ private fun PermissionRequestDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDeny,
-        title = { Text("🔐 权限请求", style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
+        title = { Text(stringResource(R.string.qk_01652), style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
         text = {
             Column {
-                Text("模块能力需要权限：", style = MaterialTheme.typography.bodySmall)
-                Text("权限：${perm.id} [${perm.level.name}]", style = MaterialTheme.typography.bodyMedium)
-                Text("理由：${perm.rationale}", style = MaterialTheme.typography.bodySmall)
-                Text("作用域：${perm.scope}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.qk_01653), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.qk_01654, (perm.id).toString(), (perm.level.name).toString()), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.qk_01655, (perm.rationale).toString()), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.qk_01656, (perm.scope).toString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
-                Text("请选择授权级别：", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.qk_01657), style = MaterialTheme.typography.labelMedium)
             }
         },
         confirmButton = {
             Column {
-                TextButton(onClick = { onChoose(AuthorizationLevel.Temporary) }) { Text("仅本次允许（推荐）") }
-                TextButton(onClick = { onChoose(AuthorizationLevel.Session) }) { Text("本次会话允许") }
-                TextButton(onClick = { onChoose(AuthorizationLevel.Permanent) }) { Text("永久允许") }
-                TextButton(onClick = { onChoose(AuthorizationLevel.Global) }) { Text("全局允许（危险!）") }
+                TextButton(onClick = { onChoose(AuthorizationLevel.Temporary) }) { Text(stringResource(R.string.qk_01658)) }
+                TextButton(onClick = { onChoose(AuthorizationLevel.Session) }) { Text(stringResource(R.string.qk_01659)) }
+                TextButton(onClick = { onChoose(AuthorizationLevel.Permanent) }) { Text(stringResource(R.string.qk_01660)) }
+                TextButton(onClick = { onChoose(AuthorizationLevel.Global) }) { Text(stringResource(R.string.qk_01661)) }
             }
         },
-        dismissButton = { TextButton(onClick = onDeny) { Text("拒绝") } },
+        dismissButton = { TextButton(onClick = onDeny) { Text(stringResource(R.string.qk_01662)) } },
     )
 }
 

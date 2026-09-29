@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
@@ -202,14 +204,14 @@ echo "Git/Curl/Wget 已卸载"
     private val checkCommands = mapOf(
         "node" to """echo -n "Node: " && node -v 2>/dev/null || echo "未安装"
 echo -n "NPM: " && npm -v 2>/dev/null || echo "未安装\"""",
-        "python" to """echo -n "Python: " && python3 --version 2>/dev/null || echo "未安装"
+        "python" to """echo -n "Python: " && python3 --version 2>/dev/null || echo qstr(R.string.qk_02025)
 echo -n "Pip: " && pip3 --version 2>/dev/null || echo "未安装\"""",
         "java" to """echo -n "Java: " && java -version 2>&1 | head -1 || echo "未安装\"""",
-        "rust" to """echo -n "Rust: " && rustc --version 2>/dev/null || echo "未安装"
+        "rust" to """echo -n "Rust: " && rustc --version 2>/dev/null || echo qstr(R.string.qk_02025)
 echo -n "Cargo: " && cargo --version 2>/dev/null || echo "未安装\"""",
         "go" to """echo -n "Go: " && go version 2>/dev/null || echo "未安装\"""",
-        "git" to """echo -n "Git: " && git --version 2>/dev/null || echo "未安装"
-echo -n "Curl: " && curl --version 2>/dev/null | head -1 || echo "未安装"
+        "git" to """echo -n "Git: " && git --version 2>/dev/null || echo qstr(R.string.qk_02025)
+echo -n "Curl: " && curl --version 2>/dev/null | head -1 || echo qstr(R.string.qk_02025)
 echo -n "Wget: " && wget --version 2>/dev/null | head -1 || echo "未安装\"""",
     )
 

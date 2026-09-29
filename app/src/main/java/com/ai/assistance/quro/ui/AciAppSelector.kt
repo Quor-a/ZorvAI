@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -55,7 +58,7 @@ fun AciAppSelector(
 
     // 找到当前选中的应用名称
     val selectedAppName = remember(selectedPackage, statuses) {
-        statuses.find { it.packageName == selectedPackage }?.appName ?: selectedPackage ?: "未选择"
+        statuses.find { it.packageName == selectedPackage }?.appName ?: selectedPackage ?: qstr(R.string.qk_00000)
     }
 
     Column(modifier = modifier) {
@@ -68,7 +71,7 @@ fun AciAppSelector(
                 value = selectedAppName,
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("选择 ACI 应用") },
+                label = { Text(stringResource(R.string.qk_00001)) },
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
                 },
@@ -76,7 +79,7 @@ fun AciAppSelector(
                     .menuAnchor()
                     .fillMaxWidth(),
                 leadingIcon = {
-                    Icon(Icons.Filled.Search, "搜索", tint = Color.Gray)
+                    Icon(Icons.Filled.Search, stringResource(R.string.qk_00002), tint = Color.Gray)
                 }
             )
 
@@ -88,7 +91,7 @@ fun AciAppSelector(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("搜索应用...") },
+                    placeholder = { Text(stringResource(R.string.qk_00003)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -99,8 +102,7 @@ fun AciAppSelector(
                 if (filteredApps.isEmpty()) {
                     DropdownMenuItem(
                         text = {
-                            Text(
-                                "未找到匹配的 ACI 应用",
+                            Text(stringResource(R.string.qk_00004),
                                 color = Color.Gray,
                                 style = MaterialTheme.typography.bodyMedium
                             )
@@ -123,8 +125,7 @@ fun AciAppSelector(
                                         style = MaterialTheme.typography.bodySmall,
                                         color = Color.Gray
                                     )
-                                    Text(
-                                        "${app.capabilities.size} 个能力",
+                                    Text(qstr(R.string.qk_00005, (app.capabilities.size).toString()),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = if (app.bound) Color(0xFF34C759) else Color(0xFFFF3B30)
                                     )
@@ -172,8 +173,7 @@ fun AciAppSelector(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
-                                "已选择: ${selectedApp.appName}",
+                            Text(stringResource(R.string.qk_00006, (selectedApp.appName).toString()),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -182,12 +182,11 @@ fun AciAppSelector(
                                 onClick = onClearSelection,
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             ) {
-                                Text("取消选择", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.qk_00007), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            "能力 (${selectedApp.capabilities.size}):",
+                        Text(stringResource(R.string.qk_00008, (selectedApp.capabilities.size).toString()),
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.Gray
                         )
@@ -201,8 +200,7 @@ fun AciAppSelector(
                             )
                         }
                         if (selectedApp.capabilities.size > 3) {
-                            Text(
-                                "...还有 ${selectedApp.capabilities.size - 3} 个能力",
+                            Text(stringResource(R.string.qk_00009, (selectedApp.capabilities.size - 3).toString()),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.Gray,
                                 modifier = Modifier.padding(start = 8.dp)
@@ -234,7 +232,7 @@ fun AciAppSelectionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("选择 ACI 应用")
+            Text(stringResource(R.string.qk_00001))
         },
         text = {
             AciAppSelector(
@@ -266,7 +264,7 @@ fun AciAppSelectionDialog(
                             onClearSelection()
                         },
                     ) {
-                        Text("取消选择")
+                        Text(stringResource(R.string.qk_00007))
                     }
                 } else {
                     Spacer(modifier = Modifier)
@@ -281,13 +279,13 @@ fun AciAppSelectionDialog(
                     },
                     enabled = selectedPackage != null,
                 ) {
-                    Text("选择")
+                    Text(stringResource(R.string.qk_00010))
                 }
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(R.string.qk_00011))
             }
         },
     )

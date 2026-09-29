@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -463,14 +466,14 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                 // 而是降级为单个文本组件展示原始内容，保证操控台始终可用。
                 consoleScreen = runCatching { AciConsoleModel.parse(JSONObject(snap)) }.getOrElse {
                     AidlAciScreen(
-                        title = "控制台",
-                        subtitle = "（原始输出，未识别为 SDUI 快照）",
+                        title = qstr(R.string.qk_00698),
+                        subtitle = qstr(R.string.qk_00699),
                         updatedAt = System.currentTimeMillis(),
-                        components = listOf(AciComponent.Text(snap.ifEmpty { "（空快照）" }))
+                        components = listOf(AciComponent.Text(snap.ifEmpty { qstr(R.string.qk_00700) }))
                     )
                 }
             } else {
-                consoleError = "打开控制台失败（错误码=${resp.errorCode}）：${resp.errorMessage}"
+                consoleError = qstr(R.string.qk_00701, (resp.errorCode).toString(), (resp.errorMessage).toString())
             }
             consoleLoading = false
         }
@@ -489,10 +492,10 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                 val snap = r2.result?.getString("snapshot") ?: ""
                 consoleScreen = runCatching { AciConsoleModel.parse(JSONObject(snap)) }.getOrElse {
                     AidlAciScreen(
-                        title = "控制台",
-                        subtitle = "（原始输出，未识别为 SDUI 快照）",
+                        title = qstr(R.string.qk_00698),
+                        subtitle = qstr(R.string.qk_00699),
                         updatedAt = System.currentTimeMillis(),
-                        components = listOf(AciComponent.Text(snap.ifEmpty { "（空快照）" }))
+                        components = listOf(AciComponent.Text(snap.ifEmpty { qstr(R.string.qk_00700) }))
                     )
                 }
             }
@@ -524,9 +527,9 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("ACT 关联启动") },
+                title = { Text(stringResource(R.string.qk_00702)) },
                 navigationIcon = {
-                    IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, "返回") }
+                    IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_00143)) }
                 },
                 actions = {
                     IconButton(onClick = {
@@ -536,11 +539,11 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                             delay(800)
                             reload()
                             busy = false
-                            Toast.makeText(ctx, "已刷新", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(ctx, qstr(R.string.qk_00421), Toast.LENGTH_SHORT).show()
                         }
                     }) {
                         if (busy) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        else Icon(Icons.Filled.Refresh, "刷新")
+                        else Icon(Icons.Filled.Refresh, stringResource(R.string.qk_00459))
                     }
                 }
             )
@@ -551,21 +554,20 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "ACT 关联启动（底层协议 ACI，Agent Capability Interface）是本地无 Root 的 App 间 AIDL 调用框架，可让 AI 控制支持协议的第三方 App。" +
-                    "下面可手动添加应用、查看已发现应用的能力，并手动启动或重绑。",
+                stringResource(R.string.qk_00703) + stringResource(R.string.qk_00704),
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant
             )
             HorizontalDivider()
 
             // ── 01 添加 ACI 应用（手动注册 + 按名称搜索 合体）──────────────────────
-            ChapterLabel("01", "添加 ACI 应用")
+            ChapterLabel("01", stringResource(R.string.qk_00705))
             SetGroup {
                 Column {
                     UnderlineField(
-                        label = "包名或应用名",
+                        label = stringResource(R.string.qk_00706),
                         value = pkgInput,
                         onValueChange = { pkgInput = it },
-                        placeholder = "如 com.example.chat 或 微信",
+                        placeholder = stringResource(R.string.qk_00707),
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                     Row(
@@ -573,7 +575,7 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         PrimaryButton(
-                            text = "搜索",
+                            text = stringResource(R.string.qk_00002),
                             onClick = {
                                 searched = true
                                 val kw = pkgInput.trim()
@@ -593,7 +595,7 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                                 .clickable {
                                     val pkg = pkgInput.trim()
                                     if (pkg.isEmpty()) {
-                                        Toast.makeText(ctx, "请输入包名", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(ctx, qstr(R.string.qk_00708), Toast.LENGTH_SHORT).show()
                                         return@clickable
                                     }
                                     val ok = mgr.registerPackage(pkg)
@@ -601,7 +603,7 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                                     scope.launch { delay(800); reload() }
                                     Toast.makeText(
                                         ctx,
-                                        if (ok) "已注册并启动：$pkg" else "未找到 $pkg 的 ACI 服务",
+                                        if (ok) qstr(R.string.qk_00709, (pkg).toString()) else qstr(R.string.qk_00710, (pkg).toString()),
                                         Toast.LENGTH_SHORT
                                     ).show()
                                     if (ok) pkgInput = ""
@@ -609,7 +611,7 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                                 .padding(vertical = 14.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text("按包名注册并启动", fontSize = 15.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.qk_00711), fontSize = 15.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
                         }
                     }
 
@@ -628,32 +630,32 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                                     val ok = mgr.launchApp(app.packageName)
                                     Toast.makeText(
                                         ctx,
-                                        if (ok) "已启动：${app.appName}" else "启动失败：${app.packageName}",
+                                        if (ok) qstr(R.string.qk_00712, (app.appName).toString()) else qstr(R.string.qk_00713, (app.packageName).toString()),
                                         Toast.LENGTH_SHORT
                                     ).show()
-                                }) { Text("启动") }
+                                }) { Text(qstr(R.string.qk_00714)) }
                                 TextButton(onClick = {
                                     mgr.registerPackage(app.packageName)
                                     val ok = mgr.launchApp(app.packageName)
                                     scope.launch { delay(800); reload() }
                                     Toast.makeText(
                                         ctx,
-                                        if (ok) "已注册并启动：${app.appName}" else "启动失败：${app.packageName}",
+                                        if (ok) qstr(R.string.qk_00715, (app.appName).toString()) else qstr(R.string.qk_00713, (app.packageName).toString()),
                                         Toast.LENGTH_SHORT
                                     ).show()
-                                }) { Text("注册并启动") }
+                                }) { Text(qstr(R.string.qk_00716)) }
                             }
                             if (idx < searchResults.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                         }
                     } else if (searched) {
                         Spacer(Modifier.height(4.dp))
-                        InfoBox("未找到匹配的应用。可确认名称/包名是否正确，或直接用「按包名注册并启动」。", tone = Muted)
+                        InfoBox(stringResource(R.string.qk_00717), tone = Muted)
                     }
                 }
             }
 
             // ── 02 已发现的 ACI 应用（含手动启动）────────────────────────────────
-            ChapterLabel("02", "已发现的 ACI 应用")
+            ChapterLabel("02", stringResource(R.string.qk_00718))
             if (statuses.isNotEmpty()) {
                 val totalCaps = statuses.sumOf { it.capabilities.size }
                 val boundCount = statuses.count { it.bound }
@@ -662,18 +664,16 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                     colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant.copy(alpha = 0.5f))
                 ) {
                     Column(Modifier.padding(12.dp)) {
-                        Text("发现统计（实时）", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.qk_00719), fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(4.dp))
-                        Text(
-                            "App 数：${statuses.size}（已绑定 $boundCount / 未绑定 ${statuses.size - boundCount}）",
+                        Text(stringResource(R.string.qk_00720, (statuses.size).toString(), (boundCount).toString(), (statuses.size - boundCount).toString()),
                             style = MaterialTheme.typography.bodySmall
                         )
-                        Text("能力总数：$totalCaps", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.qk_00721, (totalCaps).toString()), style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(4.dp))
                         statuses.forEach { s ->
-                            val suffix = if (s.bound) "" else "（未绑定）"
-                            Text(
-                                "• ${s.appName}: ${s.capabilities.size} 项$suffix",
+                            val suffix = if (s.bound) "" else qstr(R.string.qk_00722)
+                            Text(qstr(R.string.qk_00723, (s.appName).toString(), (s.capabilities.size).toString(), (suffix).toString()),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (s.bound) Color.Unspecified else Muted
                             )
@@ -683,10 +683,8 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
             }
             if (statuses.isEmpty()) {
-                InfoBox(
-                    "未发现任何 ACI App。安装支持 ACI 协议的第三方 App 后点右上「刷新」；" +
-                        "或在上方「添加 ACI 应用」输入包名手动注册。\n\n" +
-                        "ACI 是本地无 Root 的 App 间 AIDL 框架，列表为空时【禁止】用 dumpsys / Shizuku / ROOT 排查。"
+                InfoBox(stringResource(R.string.qk_00724) +
+                        stringResource(R.string.qk_00725) + stringResource(R.string.qk_00726)
                 )
             } else {
                 statuses.forEach { s ->
@@ -701,7 +699,7 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                             val ok = mgr.launchApp(s.packageName)
                             Toast.makeText(
                                 ctx,
-                                if (ok) "已启动：${s.appName}" else "启动失败：${s.packageName}",
+                                if (ok) qstr(R.string.qk_00727, (s.appName).toString()) else qstr(R.string.qk_00728, (s.packageName).toString()),
                                 Toast.LENGTH_SHORT
                             ).show()
                         },
@@ -710,7 +708,7 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
             }
 
             // ── 03 开发者文档（正确开发姿势 + 全链路踩坑）────────────────────────
-            ChapterLabel("03", "开发者文档")
+            ChapterLabel("03", stringResource(R.string.qk_00729))
             var showDevDoc by remember { mutableStateOf(false) }
             SetGroup {
                 Column {
@@ -721,7 +719,7 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                     ) {
                         Icon(Icons.Filled.MenuBook, null, Modifier.size(20.dp), tint = cs.onSurfaceVariant)
                         Spacer(Modifier.width(12.dp))
-                        Text("ACI 被控方接入手册", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.qk_00730), fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                         Icon(
                             if (showDevDoc) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                             null, Modifier.size(16.dp), tint = Muted
@@ -743,23 +741,23 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                         Button(
                             onClick = {
                                 val r = QuroDownloadUtil.saveTextToDownloads(ctx, "aci_core_stub.kt", "text/plain", ACI_STUB_SOURCE)
-                                Toast.makeText(ctx, if (r.startsWith("OK:")) "已保存依赖模板到 Download/Quro/aci_core_stub.kt" else r, Toast.LENGTH_LONG).show()
+                                Toast.makeText(ctx, if (r.startsWith("OK:")) qstr(R.string.qk_00731) else r, Toast.LENGTH_LONG).show()
                             },
                             modifier = Modifier.weight(1f),
-                        ) { Text("保存依赖模板") }
+                        ) { Text(stringResource(R.string.qk_00732)) }
                         Button(
                             onClick = {
-                                val r = QuroDownloadUtil.saveTextToDownloads(ctx, "ACI_被控方接入手册.md", "text/markdown", ACI_DEV_DOC)
-                                Toast.makeText(ctx, if (r.startsWith("OK:")) "已保存开发者文档到 Download/Quro/" else r, Toast.LENGTH_LONG).show()
+                                val r = QuroDownloadUtil.saveTextToDownloads(ctx, qstr(R.string.qk_00733), "text/markdown", ACI_DEV_DOC)
+                                Toast.makeText(ctx, if (r.startsWith("OK:")) qstr(R.string.qk_00734) else r, Toast.LENGTH_LONG).show()
                             },
                             modifier = Modifier.weight(1f),
-                        ) { Text("下载开发者文档") }
+                        ) { Text(stringResource(R.string.qk_00735)) }
                         Button(
                             onClick = {
                                 showAciTokenDialog = true
                             },
                             modifier = Modifier.weight(1f),
-                        ) { Text("申请API密钥") }
+                        ) { Text(stringResource(R.string.qk_00736)) }
                     }
                 }
             }
@@ -777,13 +775,13 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                 Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            consoleScreen?.title ?: "控制台",
+                            consoleScreen?.title ?: stringResource(R.string.qk_00698),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(onClick = { consolePkg = null; consoleScreen = null; consoleError = null }) {
-                            Icon(Icons.Filled.Close, "关闭")
+                            Icon(Icons.Filled.Close, stringResource(R.string.qk_00065))
                         }
                     }
                     Spacer(Modifier.height(8.dp))
@@ -811,13 +809,13 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(0.92f).wrapContentHeight()
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("申请 ACI API 密钥", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-                    Text("输入第三方应用包名，系统将生成 ACI Token 用于认证。", style = MaterialTheme.typography.bodySmall, color = Color.Gray, modifier = Modifier.padding(bottom = 12.dp))
-                    OutlinedTextField(value = tokenInput, onValueChange = { tokenInput = it }, label = { Text("第三方应用包名") }, placeholder = { Text("例如：com.example.myapp") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    Text(stringResource(R.string.qk_00737), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                    Text(stringResource(R.string.qk_00738), style = MaterialTheme.typography.bodySmall, color = Color.Gray, modifier = Modifier.padding(bottom = 12.dp))
+                    OutlinedTextField(value = tokenInput, onValueChange = { tokenInput = it }, label = { Text(stringResource(R.string.qk_00739)) }, placeholder = { Text(stringResource(R.string.qk_00740)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     if (tokenError.isNotEmpty()) { Text(tokenError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp)) }
                     if (generatedToken.isNotEmpty()) {
                         Spacer(Modifier.height(12.dp))
-                        Text("生成的 ACI Token：", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(bottom = 4.dp))
+                        Text(stringResource(R.string.qk_00741), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(bottom = 4.dp))
                         Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
                             Text(generatedToken, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp))
                         }
@@ -825,23 +823,23 @@ fun QuroAidlAciCenterScreen(onClose: () -> Unit) {
                         Button(onClick = {
                             val clipboard = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                             clipboard.setPrimaryClip(android.content.ClipData.newPlainText("ACI Token", generatedToken))
-                            Toast.makeText(ctx, "Token 已复制到剪贴板", Toast.LENGTH_SHORT).show()
-                        }, modifier = Modifier.fillMaxWidth()) { Text("复制 Token") }
+                            Toast.makeText(ctx, qstr(R.string.qk_00742), Toast.LENGTH_SHORT).show()
+                        }, modifier = Modifier.fillMaxWidth()) { Text(qstr(R.string.qk_00743)) }
                     }
                     Spacer(Modifier.height(16.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { showAciTokenDialog = false }) { Text("取消") }
+                        TextButton(onClick = { showAciTokenDialog = false }) { Text(stringResource(R.string.qk_00011)) }
                         Spacer(Modifier.width(8.dp))
                         Button(onClick = {
-                            if (tokenInput.isBlank()) { tokenError = "请输入包名"; return@Button }
-                            if (!tokenInput.contains(".")) { tokenError = "包名格式不正确（应包含点号）"; return@Button }
+                            if (tokenInput.isBlank()) { tokenError = qstr(R.string.qk_00708); return@Button }
+                            if (!tokenInput.contains(".")) { tokenError = qstr(R.string.qk_00744); return@Button }
                             try {
                                 val tokenManager = ai.aidl.aci.core.AciTokenManager.getInstance(ctx)
                                 generatedToken = tokenManager.getOrCreateToken(tokenInput)
                                 tokenError = ""
-                                Toast.makeText(ctx, "Token 生成成功", Toast.LENGTH_SHORT).show()
-                            } catch (e: Exception) { tokenError = "生成失败：${e.message}" }
-                        }) { Text("生成 Token") }
+                                Toast.makeText(ctx, qstr(R.string.qk_00745), Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) { tokenError = qstr(R.string.qk_00746, (e.message).toString()) }
+                        }) { Text(stringResource(R.string.qk_00747)) }
                     }
                 }
             }
@@ -877,32 +875,31 @@ private fun AciAppCard(
                 ) { Text(label, color = color, style = MaterialTheme.typography.labelSmall) }
             }
             Spacer(Modifier.height(10.dp))
-            Text("能力（${s.capabilities.size}）", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.qk_00750, (s.capabilities.size).toString()), fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(2.dp))
             if (s.capabilities.isEmpty()) {
-                Text(
-                    "（无能力：可能尚未绑定，或该 App 未声明能力）",
+                Text(stringResource(R.string.qk_00751),
                     color = Color.Gray, style = MaterialTheme.typography.bodySmall
                 )
             } else {
                 s.capabilities.forEach { c ->
-                    val danger = if (c.isRequireUserConfirm) "  ⚠️需确认" else ""
+                    val danger = if (c.isRequireUserConfirm) qstr(R.string.qk_00752) else ""
                     Text("• ${c.id}：${c.description}$danger", style = MaterialTheme.typography.bodySmall)
                 }
             }
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onRebind) { Text("重绑") }
+                TextButton(onClick = onRebind) { Text(stringResource(R.string.qk_00753)) }
                 TextButton(onClick = onLaunch) {
                     Icon(Icons.Filled.PlayArrow, null, Modifier.size(16.dp))
                     Spacer(Modifier.width(2.dp))
-                    Text("启动")
+                    Text(stringResource(R.string.qk_00714))
                 }
                 if (s.capabilities.any { it.id == "console_ui" }) {
                     TextButton(onClick = { onOpenConsole(s.packageName) }) {
                         Icon(Icons.Filled.Dashboard, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(2.dp))
-                        Text("打开控制台")
+                        Text(stringResource(R.string.qk_00754))
                     }
                 }
                 if (s.lastSeen > 0) {

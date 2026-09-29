@@ -1,5 +1,7 @@
 @file:Suppress("FunctionName", "unused")
 package com.ai.assistance.quro.ui.weather
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
@@ -46,26 +48,26 @@ data class ToolCategoryToken(
 }
 
 val TOOL_CATEGORIES = listOf(
-    ToolCategoryToken("file",   "文件系统", Color(0xFF7C3AED), Color(0xFFA78BFA)),
-    ToolCategoryToken("web",    "网络/Web", Color(0xFF059669), Color(0xFF34D399)),
-    ToolCategoryToken("term",   "终端/Shell", Color(0xFFD97706), Color(0xFFFBBF24)),
-    ToolCategoryToken("code",   "代码执行", Color(0xFF0891B2), Color(0xFF22D3EE)),
-    ToolCategoryToken("ai",     "AI/模型",  Color(0xFFDB2777), Color(0xFFF472B6)),
-    ToolCategoryToken("media",  "媒体生成", Color(0xFFC026D3), Color(0xFFE879F9)),
-    ToolCategoryToken("ui",     "UI自动化", Color(0xFF4F46E5), Color(0xFF818CF8)),
-    ToolCategoryToken("sys",    "系统信息", Color(0xFFEA580C), Color(0xFFFB923C)),
-    ToolCategoryToken("com",    "通信",     Color(0xFF16A34A), Color(0xFF4ADE80)),
-    ToolCategoryToken("data",   "数据处理", Color(0xFF0284C7), Color(0xFF38BDF8)),
-    ToolCategoryToken("sec",    "安全",     Color(0xFFDC2626), Color(0xFFF87171)),
-    ToolCategoryToken("time",   "时间/日程",Color(0xFFCA8A04), Color(0xFFFACC15)),
-    ToolCategoryToken("loc",    "定位/地图",Color(0xFF65A30D), Color(0xFFA3E635)),
-    ToolCategoryToken("wx",     "天气/环境",Color(0xFF0369A1), Color(0xFF7DD3FC)),
-    ToolCategoryToken("mus",    "媒体控制", Color(0xFFBE185D), Color(0xFFF9A8D4)),
+    ToolCategoryToken("file",   qstr(R.string.qk_03305), Color(0xFF7C3AED), Color(0xFFA78BFA)),
+    ToolCategoryToken("web",    qstr(R.string.qk_03306), Color(0xFF059669), Color(0xFF34D399)),
+    ToolCategoryToken("term",   qstr(R.string.qk_03307), Color(0xFFD97706), Color(0xFFFBBF24)),
+    ToolCategoryToken("code",   qstr(R.string.qk_03308), Color(0xFF0891B2), Color(0xFF22D3EE)),
+    ToolCategoryToken("ai",     qstr(R.string.qk_03309),  Color(0xFFDB2777), Color(0xFFF472B6)),
+    ToolCategoryToken("media",  qstr(R.string.qk_03310), Color(0xFFC026D3), Color(0xFFE879F9)),
+    ToolCategoryToken("ui",     qstr(R.string.qk_03311), Color(0xFF4F46E5), Color(0xFF818CF8)),
+    ToolCategoryToken("sys",    qstr(R.string.qk_03312), Color(0xFFEA580C), Color(0xFFFB923C)),
+    ToolCategoryToken("com",    qstr(R.string.qk_03313),     Color(0xFF16A34A), Color(0xFF4ADE80)),
+    ToolCategoryToken("data",   qstr(R.string.qk_03314), Color(0xFF0284C7), Color(0xFF38BDF8)),
+    ToolCategoryToken("sec",    qstr(R.string.qk_00138),     Color(0xFFDC2626), Color(0xFFF87171)),
+    ToolCategoryToken("time",   qstr(R.string.qk_03315),Color(0xFFCA8A04), Color(0xFFFACC15)),
+    ToolCategoryToken("loc",    qstr(R.string.qk_03316),Color(0xFF65A30D), Color(0xFFA3E635)),
+    ToolCategoryToken("wx",     qstr(R.string.qk_03317),Color(0xFF0369A1), Color(0xFF7DD3FC)),
+    ToolCategoryToken("mus",    qstr(R.string.qk_03318), Color(0xFFBE185D), Color(0xFFF9A8D4)),
     ToolCategoryToken("dev",    "DevOps",   Color(0xFF475569), Color(0xFF94A3B8)),
-    ToolCategoryToken("cms",    "CMS/模块", Color(0xFF86198F), Color(0xFFC084FC)),
+    ToolCategoryToken("cms",    qstr(R.string.qk_03319), Color(0xFF86198F), Color(0xFFC084FC)),
     ToolCategoryToken("bot",    "Bot/IM",   Color(0xFF0D9488), Color(0xFF5EEAD4)),
-    ToolCategoryToken("mem",    "记忆库",   Color(0xFF1D4ED8), Color(0xFF93C5FD)),
-    ToolCategoryToken("viz",    "可视化",   Color(0xFFB45309), Color(0xFFFDBA74)),
+    ToolCategoryToken("mem",    qstr(R.string.qk_00132),   Color(0xFF1D4ED8), Color(0xFF93C5FD)),
+    ToolCategoryToken("viz",    qstr(R.string.qk_03320),   Color(0xFFB45309), Color(0xFFFDBA74)),
 )
 
 /**
@@ -74,155 +76,155 @@ val TOOL_CATEGORIES = listOf(
  */
 enum class ToolKind(val category: String, val displayName: String, val shortDesc: String) {
     // ── File System ──
-    READ_FILE("file","read_file","读取文件"),
-    WRITE_FILE("file","write_file","写入文件"),
-    DELETE_FILE("file","delete_file","删除文件"),
-    CREATE_FILE("file","create_file","新建文件"),
-    LIST_DIR("file","list_dir","列目录"),
-    DOWNLOAD("file","download","下载"),
+    READ_FILE("file","read_file",qstr(R.string.qk_03321)),
+    WRITE_FILE("file","write_file",qstr(R.string.qk_03322)),
+    DELETE_FILE("file","delete_file",qstr(R.string.qk_03323)),
+    CREATE_FILE("file","create_file",qstr(R.string.qk_01057)),
+    LIST_DIR("file","list_dir",qstr(R.string.qk_02797)),
+    DOWNLOAD("file","download",qstr(R.string.qk_00101)),
 
     // ── Web / Network ──
-    WEB_SEARCH("web","web_search","网页搜索"),
-    WEB_FETCH("web","web_fetch","抓取网页"),
-    OPEN_URL("web","open_url","打开链接"),
-    BROWSER("web","browser","内置浏览器"),
-    API_CALL("web","api_call","API 调用"),
-    CLI_EXEC("web","cli_exec","命令行执行"),
+    WEB_SEARCH("web","web_search",qstr(R.string.qk_03324)),
+    WEB_FETCH("web","web_fetch",qstr(R.string.qk_03325)),
+    OPEN_URL("web","open_url",qstr(R.string.qk_03326)),
+    BROWSER("web","browser",qstr(R.string.qk_03327)),
+    API_CALL("web","api_call",qstr(R.string.qk_03328)),
+    CLI_EXEC("web","cli_exec",qstr(R.string.qk_03329)),
 
     // ── Terminal / Shell ──
-    TERMINAL("term","terminal","终端执行"),
-    SHELL_RUN("term","shell_run","Shell 运行"),
-    LINUX_ENV("term","linux_env","Linux 环境"),
-    PROOT("term","proot","Proot 容器"),
-    ROOT_EXEC("term","root_exec","ROOT 执行"),
+    TERMINAL("term","terminal",qstr(R.string.qk_00124)),
+    SHELL_RUN("term","shell_run",qstr(R.string.qk_03330)),
+    LINUX_ENV("term","linux_env",qstr(R.string.qk_03331)),
+    PROOT("term","proot",qstr(R.string.qk_03332)),
+    ROOT_EXEC("term","root_exec",qstr(R.string.qk_03333)),
 
     // ── Code Execution ──
-    CODE_RUN("code","code_run","运行代码"),
-    CODE_EDIT("code","code_edit","编辑代码"),
-    CODE_LINT("code","code_lint","代码检查"),
-    IDE_OPEN("code","ide_open","打开 IDE"),
-    TEST_RUN("code","test_run","运行测试"),
-    PACKAGE_MGR("code","package_mgr","包管理器"),
+    CODE_RUN("code","code_run",qstr(R.string.qk_03334)),
+    CODE_EDIT("code","code_edit",qstr(R.string.qk_03335)),
+    CODE_LINT("code","code_lint",qstr(R.string.qk_03336)),
+    IDE_OPEN("code","ide_open",qstr(R.string.qk_03337)),
+    TEST_RUN("code","test_run",qstr(R.string.qk_03338)),
+    PACKAGE_MGR("code","package_mgr",qstr(R.string.qk_03339)),
 
     // ── AI / Model ──
-    LLM_CHAT("ai","llm_chat","LLM 对话"),
-    CLASSIFY("ai","classify","文本分类"),
-    TRANSLATE("ai","translate","翻译"),
-    SUMMARIZE("ai","summarize","摘要"),
-    OCR("ai","ocr","OCR 识别"),
-    EMBEDDING("ai","embedding","向量嵌入"),
+    LLM_CHAT("ai","llm_chat",qstr(R.string.qk_03340)),
+    CLASSIFY("ai","classify",qstr(R.string.qk_03341)),
+    TRANSLATE("ai","translate",qstr(R.string.qk_03342)),
+    SUMMARIZE("ai","summarize",qstr(R.string.qk_01622)),
+    OCR("ai","ocr",qstr(R.string.qk_03343)),
+    EMBEDDING("ai","embedding",qstr(R.string.qk_03344)),
 
     // ── Media Generation ──
-    IMAGE_GEN("media","image_gen","图像生成"),
-    IMAGE_CROP("media","image_crop","裁剪图片"),
-    VIDEO_GEN("media","video_gen","视频生成"),
-    AUDIO_GEN("media","audio_gen","音频生成"),
-    IMAGE_EDIT("media","image_edit","图像编辑"),
-    FILTER_APPLY("media","filter_apply","滤镜处理"),
+    IMAGE_GEN("media","image_gen",qstr(R.string.qk_00130)),
+    IMAGE_CROP("media","image_crop",qstr(R.string.qk_03345)),
+    VIDEO_GEN("media","video_gen",qstr(R.string.qk_00131)),
+    AUDIO_GEN("media","audio_gen",qstr(R.string.qk_03346)),
+    IMAGE_EDIT("media","image_edit",qstr(R.string.qk_03347)),
+    FILTER_APPLY("media","filter_apply",qstr(R.string.qk_03348)),
 
     // ── UI Automation ──
-    TAP("ui","tap","点击元素"),
-    SWIPE("ui","swipe","滑动手势"),
-    SCROLL("ui","scroll","滚动屏幕"),
-    INPUT_TEXT("ui","input_text","输入文字"),
-    GET_SCREEN("ui","get_screen","截屏/读屏"),
-    GRID_TAP("ui","grid_tap","网格点击"),
+    TAP("ui","tap",qstr(R.string.qk_03349)),
+    SWIPE("ui","swipe",qstr(R.string.qk_03350)),
+    SCROLL("ui","scroll",qstr(R.string.qk_03351)),
+    INPUT_TEXT("ui","input_text",qstr(R.string.qk_03352)),
+    GET_SCREEN("ui","get_screen",qstr(R.string.qk_03353)),
+    GRID_TAP("ui","grid_tap",qstr(R.string.qk_03354)),
 
     // ── System Info ──
-    DEVICE_INFO("sys","device_info","设备信息"),
-    BATTERY("sys","battery","电池状态"),
-    NETWORK("sys","network","网络状态"),
-    STORAGE("sys","storage","存储空间"),
-    CPU_MONITOR("sys","cpu_monitor","CPU 监控"),
+    DEVICE_INFO("sys","device_info",qstr(R.string.qk_02643)),
+    BATTERY("sys","battery",qstr(R.string.qk_03355)),
+    NETWORK("sys","network",qstr(R.string.qk_03356)),
+    STORAGE("sys","storage",qstr(R.string.qk_03357)),
+    CPU_MONITOR("sys","cpu_monitor",qstr(R.string.qk_03358)),
 
     // ── Communication ──
-    NOTIFY("com","notify","发通知"),
-    SEND_EMAIL("com","send_email","发邮件"),
-    PHONE_CALL("com","phone_call","打电话"),
-    SEND_MSG("com","send_msg","发消息"),
-    PUSH_BROADCAST("com","push_broadcast","推送广播"),
+    NOTIFY("com","notify",qstr(R.string.qk_03359)),
+    SEND_EMAIL("com","send_email",qstr(R.string.qk_03360)),
+    PHONE_CALL("com","phone_call",qstr(R.string.qk_03361)),
+    SEND_MSG("com","send_msg",qstr(R.string.qk_03362)),
+    PUSH_BROADCAST("com","push_broadcast",qstr(R.string.qk_03363)),
 
     // ── Data Processing ──
-    DB_QUERY("data","db_query","数据库查询"),
-    CSV_PARSE("data","csv_parse","CSV 解析"),
-    JSON_XFORM("data","json_xform","JSON 转换"),
-    DATA_CHART("data","data_chart","数据图表"),
-    ANALYTICS("data","analytics","数据分析"),
+    DB_QUERY("data","db_query",qstr(R.string.qk_03364)),
+    CSV_PARSE("data","csv_parse",qstr(R.string.qk_03365)),
+    JSON_XFORM("data","json_xform",qstr(R.string.qk_03366)),
+    DATA_CHART("data","data_chart",qstr(R.string.qk_03367)),
+    ANALYTICS("data","analytics",qstr(R.string.qk_03368)),
 
     // ── Security ──
-    ENCRYPT("sec","encrypt","加密"),
-    DECRYPT("sec","decrypt","解密"),
-    PERMISSION("sec","permission","权限检查"),
-    VERIFY("sec","verify","签名验证"),
-    RISK_CHECK("sec","risk_check","风险检查"),
+    ENCRYPT("sec","encrypt",qstr(R.string.qk_03369)),
+    DECRYPT("sec","decrypt",qstr(R.string.qk_03370)),
+    PERMISSION("sec","permission",qstr(R.string.qk_03371)),
+    VERIFY("sec","verify",qstr(R.string.qk_03372)),
+    RISK_CHECK("sec","risk_check",qstr(R.string.qk_03373)),
 
     // ── Time / Schedule ──
-    SET_ALARM("time","set_alarm","设闹钟"),
-    TIMER("time","timer","计时器"),
-    CALENDAR("time","calendar","日历事件"),
-    SCHEDULE_TASK("time","schedule_task","计划任务"),
-    COUNTDOWN("time","countdown","倒计时"),
+    SET_ALARM("time","set_alarm",qstr(R.string.qk_03374)),
+    TIMER("time","timer",qstr(R.string.qk_03375)),
+    CALENDAR("time","calendar",qstr(R.string.qk_03376)),
+    SCHEDULE_TASK("time","schedule_task",qstr(R.string.qk_03377)),
+    COUNTDOWN("time","countdown",qstr(R.string.qk_03378)),
 
     // ── Location / Map ──
-    GPS_LOC("loc","gps_loc","GPS 定位"),
-    GEOCODE("loc","geocode","地理编码"),
-    NAVIGATE_TO("loc","navigate_to","导航"),
-    TRACK_ROUTE("loc","track_route","轨迹追踪"),
+    GPS_LOC("loc","gps_loc",qstr(R.string.qk_03379)),
+    GEOCODE("loc","geocode",qstr(R.string.qk_03380)),
+    NAVIGATE_TO("loc","navigate_to",qstr(R.string.qk_03381)),
+    TRACK_ROUTE("loc","track_route",qstr(R.string.qk_03382)),
 
     // ── Weather / Environment ──
-    WEATHER_NOW("wx","weather_now","实时天气"),
-    WEATHER_FORECAST("wx","weather_forecast","天气预报"),
-    WEATHER_ALERT("wx","weather_alert","天气预警"),
-    AIR_QUALITY("wx","air_quality","空气质量"),
+    WEATHER_NOW("wx","weather_now",qstr(R.string.qk_03383)),
+    WEATHER_FORECAST("wx","weather_forecast",qstr(R.string.qk_03384)),
+    WEATHER_ALERT("wx","weather_alert",qstr(R.string.qk_03385)),
+    AIR_QUALITY("wx","air_quality",qstr(R.string.qk_03386)),
 
     // ── Media Control ──
-    MUSIC_PLAY("mus","music_play","播放音乐"),
-    MUSIC_PAUSE("mus","music_pause","暂停"),
-    VIDEO_PLAY("mus","video_play","播放视频"),
-    VOLUME_CTRL("mus","volume_ctrl","音量控制"),
+    MUSIC_PLAY("mus","music_play",qstr(R.string.qk_03387)),
+    MUSIC_PAUSE("mus","music_pause",qstr(R.string.qk_03388)),
+    VIDEO_PLAY("mus","video_play",qstr(R.string.qk_01061)),
+    VOLUME_CTRL("mus","volume_ctrl",qstr(R.string.qk_03389)),
 
     // ── DevOps ──
-    GIT_OP("dev","git_op","Git 操作"),
-    BUILD_PROJ("dev","build_proj","构建项目"),
-    DEPLOY("dev","deploy","部署发布"),
-    DOCKER("dev","docker","Docker 容器"),
-    CI_CD("dev","ci_cd","CI/CD 流水线"),
+    GIT_OP("dev","git_op",qstr(R.string.qk_03390)),
+    BUILD_PROJ("dev","build_proj",qstr(R.string.qk_03391)),
+    DEPLOY("dev","deploy",qstr(R.string.qk_03392)),
+    DOCKER("dev","docker",qstr(R.string.qk_03393)),
+    CI_CD("dev","ci_cd",qstr(R.string.qk_03394)),
 
     // ── CMS / Module ──
-    CMS_DEPLOY("cms","cms_deploy","CMS 部署"),
-    CMS_PLUGIN("cms","cms_plugin","CMS 插件"),
-    CMS_MODULE("cms","cms_module","CMS 模块"),
-    CMS_TERMINAL("cms","cms_terminal","CMS 终端"),
+    CMS_DEPLOY("cms","cms_deploy",qstr(R.string.qk_03395)),
+    CMS_PLUGIN("cms","cms_plugin",qstr(R.string.qk_03396)),
+    CMS_MODULE("cms","cms_module",qstr(R.string.qk_03397)),
+    CMS_TERMINAL("cms","cms_terminal",qstr(R.string.qk_03398)),
 
     // ── Bot / IM ──
-    BOT_SEND("bot","bot_send","Bot 发消息"),
-    BOT_RECV("bot","bot_recv","Bot 收消息"),
-    BOT_WEBHOOK("bot","bot_webhook","Webhook 推送"),
-    BOT_CARD("bot","bot_card","Bot 卡片消息"),
+    BOT_SEND("bot","bot_send",qstr(R.string.qk_03399)),
+    BOT_RECV("bot","bot_recv",qstr(R.string.qk_03400)),
+    BOT_WEBHOOK("bot","bot_webhook",qstr(R.string.qk_03401)),
+    BOT_CARD("bot","bot_card",qstr(R.string.qk_03402)),
 
     // ── Memory ──
-    MEM_SAVE("mem","mem_save","保存记忆"),
-    MEM_SEARCH("mem","mem_search","搜索记忆"),
-    MEM_LIST("mem","mem_list","列出记忆"),
-    MEM_DELETE("mem","mem_delete","删除记忆"),
+    MEM_SAVE("mem","mem_save",qstr(R.string.qk_03403)),
+    MEM_SEARCH("mem","mem_search",qstr(R.string.qk_03404)),
+    MEM_LIST("mem","mem_list",qstr(R.string.qk_03405)),
+    MEM_DELETE("mem","mem_delete",qstr(R.string.qk_03406)),
 
     // ── Visualization ──
-    CHART_BAR("viz","chart_bar","柱状图"),
-    CHART_PIE("viz","chart_pie","饼图"),
-    CHART_LINE("viz","chart_line","折线图"),
-    TABLE_RENDER("viz","table_render","表格渲染"),
+    CHART_BAR("viz","chart_bar",qstr(R.string.qk_03407)),
+    CHART_PIE("viz","chart_pie",qstr(R.string.qk_01666)),
+    CHART_LINE("viz","chart_line",qstr(R.string.qk_03408)),
+    TABLE_RENDER("viz","table_render",qstr(R.string.qk_03409)),
 
     // ── Health / Monitor ──
-    HEALTH_CHECK("health","health_check","健康检查"),
-    LOG_VIEW("health","log_view","日志查看"),
-    ERROR_ALERT("health","error_alert","错误告警"),
-    PERF_STATS("health","perf_stats","性能统计"),
+    HEALTH_CHECK("health","health_check",qstr(R.string.qk_02231)),
+    LOG_VIEW("health","log_view",qstr(R.string.qk_03410)),
+    ERROR_ALERT("health","error_alert",qstr(R.string.qk_03411)),
+    PERF_STATS("health","perf_stats",qstr(R.string.qk_03412)),
 
     // ── Speech ──
-    TTS("ai","tts","语音合成"),
+    TTS("ai","tts",qstr(R.string.qk_00231)),
 
     // ── Fallback for unknown tools ──
-    GENERIC("tool","*","通用工具"),
+    GENERIC("tool","*",qstr(R.string.qk_03413)),
     ;
 
     companion object {

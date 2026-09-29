@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.genui.aiapp.brain
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.QuroPersona
@@ -58,7 +60,7 @@ class ZorvBrain(private val context: Context) {
     /** 供 UI 显示的一行摘要：人格卡名 + 模型名。 */
     fun summary(): String {
         val p = runCatching { activePersona().name }.getOrDefault("默认人格")
-        val m = runCatching { modelConfig().model }.getOrDefault("未配置")
+        val m = runCatching { modelConfig().model }.getOrDefault(qstr(R.string.qk_00015))
         return "$p · $m"
     }
 

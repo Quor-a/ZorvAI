@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.genui.aiapp.renderx
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import android.webkit.WebView
 import androidx.activity.compose.BackHandler
@@ -80,10 +82,10 @@ fun ChannelViewer(
                 Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("← 返回", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp,
+                Text(stringResource(R.string.qk_03416), color = MaterialTheme.colorScheme.primary, fontSize = 13.sp,
                     modifier = Modifier.clickable { onBack() }.padding(horizontal = 8.dp, vertical = 4.dp))
                 Spacer(Modifier.weight(1f))
-                Text(page.title.ifBlank { "内容" }, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(page.title.ifBlank { stringResource(R.string.qk_01059) }, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
                 Spacer(Modifier.width(64.dp))
             }
@@ -174,13 +176,13 @@ fun ChannelViewer(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                page.title.ifBlank { "HTML 应用" },
+                                page.title.ifBlank { stringResource(R.string.qk_03705) },
                                 Modifier.weight(1f).padding(start = 4.dp),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             TextButton(onClick = { onSaveAsMiniApp?.invoke(page.title, page.html) }) {
-                                Text("保存为 Web 应用", style = MaterialTheme.typography.labelLarge)
+                                Text(stringResource(R.string.qk_03446), style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     AndroidView(

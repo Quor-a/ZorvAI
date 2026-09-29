@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.mcp.QuroMcpClient
@@ -15,7 +17,7 @@ import org.json.JSONObject
 /** 列出已配置的外部 MCP 服务器。 */
 class McpServersTool : QuroTool {
     override val name = "mcp_servers"
-    override val description = "列出当前已连接的外部 MCP 服务器（别名与地址）。调用外部工具前先用本工具查看可用服务器。"
+    override val description = qstr(R.string.qk_03685)
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String {
         val list = QuroMcpClientPrefs.load(context)
@@ -53,7 +55,7 @@ class McpListToolsTool : QuroTool {
 /** 调用外部 MCP 服务器的某个工具（AI 使用 MCP 的核心入口）。 */
 class McpCallTool : QuroTool {
     override val name = "mcp_call"
-    override val description = "调用外部 MCP 服务器暴露的某个工具，让 AI 能够使用其它 MCP 服务的能力。" +
+    override val description = qstr(R.string.qk_03647) +
             "参数 {\"server\":\"别名或地址\",\"tool\":\"工具名\",\"arguments\":{...}}。" +
             "先用 mcp_servers / mcp_list_tools 了解可用服务器与工具。"
     override val parametersJson = """{

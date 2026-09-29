@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.novaterm.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -130,8 +132,7 @@ private fun TerminalToolbar(
 
                 Spacer(Modifier.width(8.dp))
 
-                Text(
-                    "ZorvAI 沙盒终端",
+                Text(stringResource(R.string.qk_03703),
                     color = theme.toolbarFg,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,

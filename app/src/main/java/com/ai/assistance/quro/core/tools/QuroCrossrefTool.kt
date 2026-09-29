@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
@@ -14,7 +16,7 @@ import java.net.URLEncoder
  */
 class QuroCrossrefTool : QuroTool {
     override val name = "crossref_search"
-    override val description = "检索 Crossref 学术文献数据库（免费、无需鉴权）：按关键词查找论文/书籍/章节，返回标题、作者、年份、DOI 与链接。" +
+    override val description = qstr(R.string.qk_03458) +
         "参数 {\"query\":\"关键词（必填）\",\"rows\":10（1-30 默认 10），\"type\":\"可选过滤 article|book|chapter|journal_article\"}。" +
         "适用：AI 做文献调研、引用溯源、找相关论文。"
     override val parametersJson = """{
@@ -66,7 +68,7 @@ class QuroCrossrefTool : QuroTool {
         for (i in 0 until items.length()) {
             val it = items.optJSONObject(i) ?: continue
             val titleArr = it.optJSONArray("title")
-            val title = if (titleArr != null && titleArr.length() > 0) titleArr.optString(0) else "(无标题)"
+            val title = if (titleArr != null && titleArr.length() > 0) titleArr.optString(0) else qstr(R.string.qk_01856)
             val doi = it.optString("DOI", "")
             val year = it.optJSONObject("issued")?.optJSONArray("date-parts")?.optJSONArray(0)?.optInt(0, -1) ?: -1
             sb.append("${i + 1}. $title")

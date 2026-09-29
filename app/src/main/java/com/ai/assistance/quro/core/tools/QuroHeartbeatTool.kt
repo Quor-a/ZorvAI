@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.QuroToolResult
@@ -47,7 +49,7 @@ class QuroHeartbeatTool(private val context: Context) : QuroTool {
     fun getToolSpec(): QuroToolSpec {
         return QuroToolSpec(
             name = "heartbeat",
-            description = "管理自主心跳服务，支持启动/停止心跳、查看心跳状态、执行健康检查、生成状态报告。",
+            description = qstr(R.string.qk_03522),
             // QuroToolSpec 第三个参数是 parametersJson（JSON Schema 字符串）。项目只依赖 org.json，
             // 没有 parameters=mapOf(...) + QuroToolSpec.Parameter(...) 这套 DSL，必须手写 schema。
             parametersJson = JSONObject().apply {

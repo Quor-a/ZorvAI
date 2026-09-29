@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.core.aidlaci
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -30,7 +33,7 @@ fun AciConsoleScreen(
             Spacer(Modifier.height(12.dp))
             s.components.forEach { comp -> AciComponentView(comp, onAction) }
         } ?: run {
-            Text("未连接到受控端", style = MaterialTheme.typography.bodyLarge)
+            Text(qstr(R.string.qk_03457), style = MaterialTheme.typography.bodyLarge)
         }
     }
 }
@@ -89,7 +92,7 @@ private fun AciComponentView(comp: AciComponent, onAction: (String, Map<String, 
                 onClick = { onAction(comp.action, mapOf("value" to text, "key" to comp.key)) },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("提交")
+                Text(stringResource(R.string.qk_00951))
             }
         }
     }

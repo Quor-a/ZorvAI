@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.webkit.WebView
 import android.content.Context
@@ -81,9 +84,9 @@ fun QuroDocumentViewer(
         if (isEditableText && !readOnly) {
             runCatching {
                 file.writeText(editText, Charsets.UTF_8)
-                Toast.makeText(ctx, "已保存修改", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, qstr(R.string.qk_01843), Toast.LENGTH_SHORT).show()
                 dirty = false
-            }.onFailure { Toast.makeText(ctx, "保存失败: ${it.message}", Toast.LENGTH_SHORT).show() }
+            }.onFailure { Toast.makeText(ctx, qstr(R.string.qk_01815, (it.message).toString()), Toast.LENGTH_SHORT).show() }
         }
     }
     // 返回键：若处于编辑态且有未保存改动，先写回再关闭（尊重 readOnly）。
@@ -106,7 +109,7 @@ fun QuroDocumentViewer(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = handleClose) { Icon(Icons.Filled.ArrowBack, "关闭", tint = cs.onSurface) }
+            IconButton(onClick = handleClose) { Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_00065), tint = cs.onSurface) }
             Text(
                 file.name,
                 color = cs.onSurface, fontSize = 15.sp, maxLines = 1,
@@ -116,22 +119,22 @@ fun QuroDocumentViewer(
                 TextButton(onClick = {
                     if (editing) saveEdits()
                     editing = !editing
-                }) { Text(if (editing) "保存" else "编辑", color = cs.primary) }
+                }) { Text(if (editing) stringResource(R.string.qk_00198) else stringResource(R.string.qk_00299), color = cs.primary) }
             }
             // ★ 真·WPS 深链：优先用已安装的 WPS 打开，未安装则回退通用选择器。
             TextButton(onClick = { openWithWpsOrFallback(ctx, file) }) {
-                Text("用 WPS 打开", color = cs.primary.copy(alpha = 0.9f))
+                Text(stringResource(R.string.qk_01844), color = cs.primary.copy(alpha = 0.9f))
             }
-            TextButton(onClick = onExternal) { Text("其他应用", color = cs.onSurface.copy(alpha = 0.7f)) }
+            TextButton(onClick = onExternal) { Text(stringResource(R.string.qk_01845), color = cs.onSurface.copy(alpha = 0.7f)) }
         }
         HorizontalDivider()
 
         when {
             loadErr != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("无法读取文档：$loadErr", color = cs.error, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+                Text(stringResource(R.string.qk_01846, (loadErr).toString()), color = cs.error, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
             }
             tooLarge -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("文件过大（约 ${sizeBytes / 1024 / 1024} MB），应用内预览可能较慢或内存占用较大。请点右上角「其他应用」用 WPS / Office 打开。", color = cs.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+                Text(stringResource(R.string.qk_01847, (sizeBytes / 1024 / 1024).toString()), color = cs.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
             }
             editing && isEditableText -> {
                 OutlinedTextField(
@@ -144,7 +147,7 @@ fun QuroDocumentViewer(
             isPptx -> PptxDeck(file)
             isWebView -> BuiltInWebView(file = file, type = imageType ?: ext, warnLarge = sizeBytes > WARN_SIZE)
             else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("不支持的文档类型：$ext\n请用「其他应用」打开。", color = cs.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+                Text(stringResource(R.string.qk_01848, (ext).toString()), color = cs.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
             }
         }
     }
@@ -228,7 +231,7 @@ private fun BuiltInWebView(file: File, type: String, warnLarge: Boolean = false)
                             error: WebResourceError?
                         ) {
                             if (request?.isForMainFrame == true) {
-                                loadErr = error?.description?.toString() ?: "加载错误"
+                                loadErr = error?.description?.toString() ?: qstr(R.string.qk_01849)
                                 loading = false
                             }
                         }
@@ -239,7 +242,7 @@ private fun BuiltInWebView(file: File, type: String, warnLarge: Boolean = false)
         )
         if (warnLarge) {
             Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(cs.errorContainer.copy(alpha = 0.18f)).padding(8.dp)) {
-                Text("文件较大，应用内预览可能较慢；若长时间无响应，请点「其他应用」打开。", color = cs.onSurfaceVariant, fontSize = 12.sp)
+                Text(stringResource(R.string.qk_01850), color = cs.onSurfaceVariant, fontSize = 12.sp)
             }
         }
         if (loading && loadErr == null) {
@@ -249,7 +252,7 @@ private fun BuiltInWebView(file: File, type: String, warnLarge: Boolean = false)
         }
         if (loadErr != null) {
             Box(Modifier.fillMaxSize().background(cs.background), contentAlignment = Alignment.Center) {
-                Text("文档渲染失败：$loadErr\n可尝试用「其他应用」打开。", color = cs.error, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+                Text(stringResource(R.string.qk_01851, (loadErr).toString()), color = cs.error, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
             }
         }
     }
@@ -274,7 +277,7 @@ private fun PptxDeck(file: File) {
 
     when {
         err != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("无法解析 PPTX：$err", color = cs.error, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+            Text(stringResource(R.string.qk_01852, (err).toString()), color = cs.error, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
         }
         slides.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = cs.primary)
@@ -283,16 +286,16 @@ private fun PptxDeck(file: File) {
             val slide = slides.getOrNull(idx) ?: slides.first()
             Column(Modifier.fillMaxSize().padding(16.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { if (idx > 0) idx-- }, enabled = idx > 0) { Icon(Icons.Filled.ArrowBack, "上一页", tint = cs.onSurface) }
-                    Text("第 ${idx + 1} / ${slides.size} 页", color = cs.onSurface, fontSize = 14.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                    IconButton(onClick = { if (idx < slides.lastIndex) idx++ }, enabled = idx < slides.lastIndex) { Icon(Icons.Filled.ArrowForward, "下一页", tint = cs.onSurface) }
+                    IconButton(onClick = { if (idx > 0) idx-- }, enabled = idx > 0) { Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_01853), tint = cs.onSurface) }
+                    Text(stringResource(R.string.qk_01854, (idx + 1).toString(), (slides.size).toString()), color = cs.onSurface, fontSize = 14.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    IconButton(onClick = { if (idx < slides.lastIndex) idx++ }, enabled = idx < slides.lastIndex) { Icon(Icons.Filled.ArrowForward, stringResource(R.string.qk_01855), tint = cs.onSurface) }
                 }
                 Spacer(Modifier.height(12.dp))
                 Column(
                     Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                         .background(cs.surfaceVariant, RoundedCornerShape(14.dp)).padding(20.dp),
                 ) {
-                    Text(slide.title.ifBlank { "(无标题)" }, color = cs.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text(slide.title.ifBlank { stringResource(R.string.qk_01856) }, color = cs.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(14.dp))
                     slide.bullets.forEach { b ->
                         Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
@@ -398,11 +401,11 @@ private fun colRow(ref: String): Pair<Int, Int> {
  */
 private fun openWithWpsOrFallback(context: Context, file: File) {
     if (!file.exists()) {
-        Toast.makeText(context, "文件不存在", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, qstr(R.string.qk_01857), Toast.LENGTH_SHORT).show()
         return
     }
     val uri = QuroDocOpener.safeUri(context, file) ?: run {
-        Toast.makeText(context, "无法共享该文件（路径未被允许）", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, qstr(R.string.qk_01858), Toast.LENGTH_SHORT).show()
         return
     }
     val mime = QuroDocOpener.guessMime(file.name)
@@ -419,17 +422,17 @@ private fun openWithWpsOrFallback(context: Context, file: File) {
         }
         runCatching {
             context.startActivity(intent)
-            Toast.makeText(context, "已用 WPS 打开", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, qstr(R.string.qk_01859), Toast.LENGTH_SHORT).show()
         }.onFailure {
             // WPS 无法处理该类型，回退通用选择器
             if (!QuroDocOpener.open(context, file)) {
-                Toast.makeText(context, "无法打开该文件", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, qstr(R.string.qk_01860), Toast.LENGTH_SHORT).show()
             }
         }
     } else {
         // 未安装 WPS：回退到系统/通用选择器
         if (!QuroDocOpener.open(context, file)) {
-            Toast.makeText(context, "未找到可打开该文件的应用", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, qstr(R.string.qk_01861), Toast.LENGTH_SHORT).show()
         }
     }
 }

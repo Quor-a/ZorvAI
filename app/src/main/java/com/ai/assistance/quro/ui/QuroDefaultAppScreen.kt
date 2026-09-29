@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -83,11 +86,11 @@ fun QuroDefaultAppScreen(onClose: () -> Unit) {
     fun request(role: DefaultAppRole) {
         val intent = runCatching { QuroDefaultAppManager.requestIntent(ctx, role) }.getOrNull()
         if (intent == null) {
-            Toast.makeText(ctx, "当前系统不支持该角色（需 Android 10+）", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_01685), Toast.LENGTH_SHORT).show()
             return
         }
         runCatching { launcher.launch(intent) }.onFailure {
-            Toast.makeText(ctx, "无法发起系统选择：${it.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_01686, (it.message).toString()), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -96,20 +99,20 @@ fun QuroDefaultAppScreen(onClose: () -> Unit) {
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回", tint = MaterialTheme.colorScheme.onSurface) }
+            IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143), tint = MaterialTheme.colorScheme.onSurface) }
             Spacer(Modifier.width(8.dp))
-            Text("默认应用", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Text(stringResource(R.string.qk_01687), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.weight(1f))
             if (!probing) {
-                IconButton(onClick = { refresh() }) { Icon(Icons.Filled.Sync, contentDescription = "刷新", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                IconButton(onClick = { refresh() }) { Icon(Icons.Filled.Sync, contentDescription = stringResource(R.string.qk_00459), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             } else {
-                Text("探测中…", fontSize = 12.sp, color = Muted)
+                Text(stringResource(R.string.qk_01688), fontSize = 12.sp, color = Muted)
             }
         }
         HorizontalDivider(color = Line)
 
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            GroupCaption("平台角色（系统角色，API 29+）")
+            GroupCaption(stringResource(R.string.qk_01689))
             SetGroup {
                 (listOf(DefaultAppRole.HOME, DefaultAppRole.BROWSER, DefaultAppRole.DIALER, DefaultAppRole.SMS)).forEachIndexed { idx, role ->
                     if (idx > 0) HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
@@ -117,7 +120,7 @@ fun QuroDefaultAppScreen(onClose: () -> Unit) {
                 }
             }
 
-            GroupCaption("其它默认（靠系统选择器设为默认）")
+            GroupCaption(stringResource(R.string.qk_01690))
             SetGroup {
                 (listOf(DefaultAppRole.GALLERY, DefaultAppRole.VIDEO, DefaultAppRole.EMAIL, DefaultAppRole.DOCUMENT)).forEachIndexed { idx, role ->
                     if (idx > 0) HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
@@ -125,12 +128,12 @@ fun QuroDefaultAppScreen(onClose: () -> Unit) {
                 }
             }
 
-            GroupCaption("说明")
+            GroupCaption(stringResource(R.string.qk_01691))
             SetGroup {
-                InfoLine("设为默认后，打开对应类型（网页 / 图片 / 视频 / 邮件 / 文档 / 拨号 / 短信 / 桌面）时由 Zorv AI 接管处理。")
-                InfoLine("平台角色（桌面启动器 / 浏览器 / 拨号 / 短信）经系统角色框申请；本应用未实现桌面 UI，故「桌面启动器」仅提交角色申请，是否生效取决于系统是否将其列为合格候选。")
-                InfoLine("相册 / 视频 / 邮箱 / 文档无系统角色，点「设为默认」会弹出系统选择器，请选择 Zorv AI 并勾选「总是」。")
-                InfoLine("取消默认请到系统设置 → 应用 → Zorv AI → 默认打开 / 默认应用，或对应类型的默认应用管理页。")
+                InfoLine(stringResource(R.string.qk_01692))
+                InfoLine(stringResource(R.string.qk_01693))
+                InfoLine(stringResource(R.string.qk_01694))
+                InfoLine(stringResource(R.string.qk_01695))
             }
         }
     }
@@ -165,23 +168,23 @@ private fun RoleRow(role: DefaultAppRole, isHeld: Boolean, holder: String?, prob
                 .clickable(onClick = onRequest)
                 .padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
-            Text(if (isHeld) "已是默认" else "设为默认", fontSize = 13.sp, color = if (isHeld) Sage else Accent, fontWeight = FontWeight.SemiBold)
+            Text(if (isHeld) stringResource(R.string.qk_01696) else stringResource(R.string.qk_01697), fontSize = 13.sp, color = if (isHeld) Sage else Accent, fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
 /** 当前默认状态文案。 */
 private fun statusText(role: DefaultAppRole, isHeld: Boolean, holder: String?, probing: Boolean): String {
-    if (probing) return "探测中…"
+    if (probing) return qstr(R.string.qk_01688)
     if (role.platformRole != null) {
         return when {
-            isHeld -> "✓ Zorv AI 已是默认"
-            holder != null && holder.isNotBlank() -> "当前默认：${shortPkg(holder)}"
-            else -> "当前未设置默认"
+            isHeld -> qstr(R.string.qk_01698)
+            holder != null && holder.isNotBlank() -> qstr(R.string.qk_01699, (shortPkg(holder)).toString())
+            else -> qstr(R.string.qk_01700)
         }
     }
     // 非平台角色无法用 RoleManager 查询，引导到系统查看
-    return if (isHeld) "✓ Zorv AI 已是默认" else "请在系统默认应用管理中查看"
+    return if (isHeld) qstr(R.string.qk_01698) else qstr(R.string.qk_01701)
 }
 
 private fun shortPkg(pkg: String): String = pkg.substringAfterLast('.').ifBlank { pkg }
