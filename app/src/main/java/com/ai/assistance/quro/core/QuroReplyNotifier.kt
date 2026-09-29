@@ -49,7 +49,7 @@ object QuroReplyNotifier {
             if (nm.getNotificationChannel(CHANNEL_ID) == null) {
                 val ch = NotificationChannel(
                     CHANNEL_ID,
-                    "AI 回复通知",
+                    qstr(R.string.qk_03842),
                     NotificationManager.IMPORTANCE_HIGH,
                 ).apply {
                     description = qstr(R.string.qk_03469)

@@ -1,0 +1,294 @@
+0	你
+1	开
+2	代码
+3	关于
+4	功能
+5	合同
+6	名字
+7	图片
+8	失败
+9	异常
+10	成功
+11	截图
+12	报表
+13	提醒
+14	数据
+15	文件
+16	断开
+17	未知
+18	权限
+19	步骤
+20	空白
+21	简历
+22	粤语
+23	自动
+24	表格
+25	视频
+26	警告
+27	评分
+28	输入
+29	过期
+30	重启
+31	锁屏
+32	错误
+33	预览
+34	饼图
+35	}文件
+36	不可用
+37	保存中
+38	出错了
+39	列表卡
+40	创建中
+41	动作卡
+42	去设置
+43	回复中
+44	回桌面
+45	城市名
+46	多任务
+47	已开启
+48	已执行
+49	已授权
+50	已生成
+51	已绑定
+52	已连接
+53	待办卡
+54	待命中
+55	思考中
+56	打开中
+57	探测中
+58	数字人
+59	文档：
+60	日本語
+61	时间线
+62	未开启
+63	未签名
+64	未绑定
+65	未连接
+66	标签页
+67	笔记卡
+68	统计卡
+69	聆听中
+70	识别中
+71	进度卡
+72	需授权
+73	音量+
+74	音量-
+75	> 引用
+76	• 列表
+77	会议纪要
+78	你好, 
+79	回显文本
+80	回显结果
+81	导出对话
+82	执行操作
+83	技能管理
+84	拉取失败
+85	探测中…
+86	清理存储
+87	组件画廊
+88	📊 表格
+89	📱 手机
+90	🔁 双端
+91	🔗 链接
+92	🖥 终端
+93	━━ 分割
+94	○ 未安装
+95	○ 未部署
+96	● 已安装
+97	● 已部署
+98	● 部署中
+99	☑️ 待办
+100	外观与对话
+101	导出为文本
+102	我们的承诺
+103	我的控制台
+104	签名已校验
+105	语速：${
+106	音高：${
+107	 (已监听)
+108	 (未监听)
+109	</> 代码
+110	<可读结果>
+111	● 部署中…
+112	⛔ 部署失败
+113	一、服务说明
+114	中文（繁体）
+115	九、法律责任
+116	六、位置权限
+117	六、知识产权
+118	前往应用设置
+119	危险操作示例
+120	导出示例文件
+121	应用私有文件
+122	开启精确闹钟
+123	授权健康数据
+124	是否执行成功
+125	清除全部对话
+126	离线模型下载
+127	要回显的内容
+128	请求媒体权限
+129	需要用户确认
+130	AI 回复通知
+131	token过期
+132	○ 未部署引擎
+133	● 引擎已就绪
+134	中文（普通话）
+135	十五、其他条款
+136	十六、联系我们
+137	四、数据与隐私
+138	ACI 管理中心
+139	Token 过期
+140	● 已部署到终端
+141	八、法律风险提示
+142	前往默认助理设置
+143	十、前台服务权限
+144	十三、协议的变更
+145	权限的查询与撤销
+146	设为默认数字助理
+147	<原action>
+148	GitHub 管理
+149	} ms），可登录
+150	}此操作不可撤销。
+151	七、通知与显示权限
+152	三、存储与文件权限
+153	二、音频与媒体权限
+154	八、系统与特殊权限
+155	十、违法使用及后果
+156	十一、包可见性权限
+157	十一、未成年人保护
+158	十二、健康数据权限
+159	四、电话与短信权限
+160	文档：(.+?)（
+161	未知 action
+162	签名失败·疑似篡改
+163	请求健身与运动权限
+164	USB / 无线调试
+165	}？此操作不可恢复。
+166	五、联系人与日历权限
+167	十二、违规处理与终止
+168	我的 App 控制台
+169	测试提醒（5 秒后）
+170	Mermaid 流程图
+171	}模型，换个关键词试试
+172	一、基础网络与设备权限
+173	三、用户义务与禁止行为
+174	九、无障碍与自动化权限
+175	十三、ACI 协议权限
+176	七、关于 AI 生成内容
+177	五、第三方服务与开源组件
+178	十四、法律适用与争议解决
+179	合成 / 识别 / 设置
+180	后端驱动渲染 · 免发版
+181	推理引擎、参数与能力范围
+182	钩子注入 / 作用域管理
+183	链接回答·开源浏览器清单
+184	● 已部署（健康检查异常）
+185	真实 PTY 终端（实验）
+186	破坏性命令二次确认（授权）
+187	Web 应用 MiniApp
+188	Web 应用式插件 Demo
+189	}文件的权限才能浏览媒体库。
+190	你发了：${'$'}text
+191	偏好、外观与功能，随手可调。
+192	分类清理日志、缓存、AI产物等
+193	应用数据(quro_data)
+194	链接回答·百分百开源安卓数字人
+195	)}」，点上方「全部」清除筛选。
+196	二、账户、凭证与 API Key
+197	公共下载/QuroAI_logs
+198	备份(quro_backups)
+199	导出(quro_exports)
+200	已安装：${out.value[
+201	桌面版 (Chrome 120)
+202	灵魂注入 · 灵魂卡 · 记忆库
+203	风险级别[：:]\s*(\S+)
+204	✅ 镜像可达（约 ${ms ?: 
+205	包管理器：${pm?.let { 
+206	管理 Health Connect
+207	项目地址 / 开源许可 / 开发者
+208	开源地址（Iceraven 浏览器）
+209	没有找到${if (kind == 
+210	离开软件时系统弹窗通知 / 桌面卡片
+211	需要读取${if (kind == 
+212	兼容模式 (Chrome 88 旧版)
+213	已编译并安装：${out.value[
+214	读取失败: ${it.message}
+215	AI 模型（Phase1 回退原生识别）
+216	最近孵化：$ago${if (inc) 
+217	浏览沙箱目录 · 在系统文件管理器中打开
+218	全局动作(最近任务)：${if (ok) 
+219	已生成\s+\w+\s+文档：(.+?)（
+220	把内置工具以 MCP 协议暴露给本机客户端
+221	提权通道: ${if (hasPriv) 
+222	未找到可下载的${if (type == 
+223	未知能力：${'$'}capability
+224	⚠ 脚本错误: ${o.optString(
+225	打开 / 安装 Health Connect
+226	自定义音色（${if (def.id == 
+227	USB 数据线: ${usbCable ?: 
+228	下次: ${SimpleDateFormat(
+229	平板版 (Chrome 120 Tablet)
+230	手机版 (Chrome 120 Mobile)
+231	最近活动 ${SimpleDateFormat(
+232	模型：${ep.model.ifBlank { 
+233	类型：${if (f.isDirectory) 
+234	设备 / 权限能力 / 模块运行态 / 人格心跳
+235	心跳总开关：${if (heartbeatOn) 
+236	本地识别（原生 SpeechRecognizer）
+237	ADB：被电脑控制 · 本机客户端 · TCP 监听
+238	内置多官方镜像直链，一键下载 GGUF 本地推理权重
+239	地址：${ep.baseUrl.ifBlank { 
+240	宿主：${c.runOn.joinToString(
+241	上下文总结 / 记忆 / 人格孵化 / 视频 / 图片
+242	自定义 SKILL：新增 / 编辑 / 启用 / 停用
+243	内置插件${if (builtinCount > 0) 
+244	删除${if (target.isDirectory) 
+245	数据库：${if (chosen.isBlank()) 
+246	深色模式 · 字号 · 提示音 · 回车发送 · 语音球
+247	  约束：${conItems.joinToString(
+248	发行版：${distro?.displayName ?: 
+249	可视化组件库：卡片 / 按钮 / 输入 / 交互 / 覆盖层
+250	监听端口 $tcpPort${if (listening) 
+251	 }} · ${es.services.size} 个共享服务
+252	已连接客户端: ${clients.joinToString(
+253	共享服务：${es.services.joinToString(
+254	USB 调试: ${when (usbOn) { null -> 
+255	修改时间：${java.text.SimpleDateFormat(
+256	可用模型：${if (m.modelNames.isEmpty()) 
+257	已发现第三方 App / 绑定状态 / 能力清单 / 手动注册刷新重绑
+258	可选：${def.formatOptions.joinToString(
+259	模型路径：${cfg.localModelPath.ifBlank { 
+260	链接回答·3D 全离线（LLM+ASR+TTS+A2BS+渲染都在手机）
+261	$typeLabel 本地推理 · ${m.path.ifBlank { 
+262	${min / 1440} 天前 (${SimpleDateFormat(
+263	当前播放服务商：$providerLabel。${if (isMimo) 
+264	ACI Token 格式无效，caller: ${'$'}callerPkg
+265	ACI Token 验证通过，caller: ${'$'}callerPkg
+266	● 部署中 ${deployTask?.progressPct ?: 0}%
+267	请求缺少 ACI Token，caller: ${'$'}callerPkg
+268	连接命令: ${if (tcpPort > 0 && ip != null) 
+269	L1 无障碍 / L2 Shizuku / L3 设备管理员 / L4 ROOT
+270	伪终端：vim/top/REPL 可交互、SIGINT 正常；出问题请关闭回退管道
+271	桌面启动器 / 浏览器 / 相册 / 视频 / 邮箱 / 文档 / 短信 / 拨号
+272	登录后管理仓库 / Issue / Star / 通知，对话框内可搜 GitHub
+273	需权限：${c.requiresPermissions.joinToString(
+274	  需权限：${c.requiresPermissions.joinToString(
+275	当前：${cfg.provider} · ${cfg.model.ifBlank { 
+276	已载入：${dh.customModelPath.substringAfterLast(
+277	开启后 rm -rf / dd / mkfs 等危险命令需再次发送或 confirm 才执行
+278	确定删除「${target.name}」吗？${if (target.isDirectory) 
+279	复刻：${cv.name}${if (cv.registeredId.isNotBlank()) 
+280	WebView 创建；modelFile=${modelFile?.absolutePath ?: 
+281	${skills.count { it.enabled }} 启用 / ${skills.size} 共
+282	复刻：$cn${if (cv?.registeredId?.isNotBlank() == true) 
+283	复刻：${cv.cloneUri}${if (cv.registeredId.isNotBlank()) 
+284	版本: ${module.version} · 作者: ${module.author.ifBlank { 
+285	，⚠️ 失败(疑似篡改) ${r.failed}：${r.failedNames.joinToString(
+286	已启用 ${skills.count { it.enabled }} / ${skills.size} 个技能
+287	生命周期：${module.lifecycle} · 目录：${module.catalog.ifBlank { 
+288	已启用技能(${enabledSkillsCount}个): ${enabledSkills.joinToString(
+289	确定删除「${deleteTarget!!.name}」${if (deleteTarget!!.isDirectory) 
+290	提供商: ${cfg.provider} · ${cfg.baseUrl.takeIf { it.isNotBlank() } ?: 
+291	已安装的 ${packages.size} 个工具包都不带标签「${KaleidoCatalog.TagLabels.zhOf(tagFilter ?: 
+292	权限 ${m.permissions.size} · 能力 ${m.capabilities.size}${if (m.dependencies.isNotEmpty()) 
+293	\[渲染卡片\]\s*\n类型：(.+?)\s*\n标题：(.+?)\s*\n(路径：(.+?)\s*\n)?(语言：(.+?)\s*\n)?内容：\s*\n([\s\S]*?)\[/渲染卡片\]

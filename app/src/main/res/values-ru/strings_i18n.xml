@@ -3808,4 +3808,47 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03827">Persona incubation failed: %1$s</string>
     <string name="qk_03828">Automatic persona incubation failed: %1$s</string>
     <string name="qk_03829" formatted="false">Привет, я Zorv AI. Готов к общению и работе с инструментами. Слева вверху — история, ＋ — новый диалог.</string>
+    <string name="qk_03830" formatted="false">About</string>
+    <string name="qk_03831" formatted="false">Features</string>
+    <string name="qk_03832" formatted="false">Data</string>
+    <string name="qk_03833" formatted="false">Permissions</string>
+    <string name="qk_03834" formatted="false">Export chat</string>
+    <string name="qk_03835" formatted="false">Skill management</string>
+    <string name="qk_03836" formatted="false">Clean storage</string>
+    <string name="qk_03837" formatted="false">Component gallery</string>
+    <string name="qk_03838" formatted="false">Appearance &amp; chat</string>
+    <string name="qk_03839" formatted="false">Export as text</string>
+    <string name="qk_03840" formatted="false">Clear all chats</string>
+    <string name="qk_03841" formatted="false">Offline model download</string>
+    <string name="qk_03842" formatted="false">AI reply notifications</string>
+    <string name="qk_03843" formatted="false">ACI console</string>
+    <string name="qk_03844" formatted="false">GitHub manager</string>
+    <string name="qk_03845" formatted="false">USB / wireless debug</string>
+    <string name="qk_03846" formatted="false">Synthesis / recognition / settings</string>
+    <string name="qk_03847" formatted="false">Inference engine, parameters and capabilities</string>
+    <string name="qk_03848" formatted="false">Hook injection / scope management</string>
+    <string name="qk_03849" formatted="false">Real PTY terminal (experimental)</string>
+    <string name="qk_03850" formatted="false">Confirm destructive commands twice (authorized)</string>
+    <string name="qk_03851" formatted="false">Web-app plugin demo</string>
+    <string name="qk_03852" formatted="false">Preferences, appearance and features — adjustable anytime.</string>
+    <string name="qk_03853" formatted="false">Clean logs, caches and AI artifacts by category</string>
+    <string name="qk_03854" formatted="false">Soul injection · soul cards · memory library</string>
+    <string name="qk_03855" formatted="false">Project URL / open-source license / developer</string>
+    <string name="qk_03856" formatted="false">System popup / home-screen card when leaving the app</string>
+    <string name="qk_03857" formatted="false">Browse sandbox directory · open in system file manager</string>
+    <string name="qk_03858" formatted="false">Expose built-in tools to local clients over MCP</string>
+    <string name="qk_03859" formatted="false">Device / permissions / module runtime / persona heartbeat</string>
+    <string name="qk_03860" formatted="false">ADB: controlled by PC · local client · TCP listener</string>
+    <string name="qk_03861" formatted="false">Built-in official mirrors to fetch GGUF weights in one tap</string>
+    <string name="qk_03862" formatted="false">Context summary / memory / persona incubation / video / image</string>
+    <string name="qk_03863" formatted="false">Custom SKILL: add / edit / enable / disable</string>
+    <string name="qk_03864" formatted="false">Dark mode · font size · sounds · enter to send · voice ball</string>
+    <string name="qk_03865" formatted="false">Visual component library: cards / buttons / inputs / interactions / overlays</string>
+    <string name="qk_03866" formatted="false">Discovered third-party apps / binding / capability list / manual register &amp; rebind</string>
+    <string name="qk_03867" formatted="false">L1 Accessibility / L2 Shizuku / L3 Device admin / L4 ROOT</string>
+    <string name="qk_03868" formatted="false">PTY: vim/top/REPL interactive, SIGINT works; disable the fallback pipe if issues occur</string>
+    <string name="qk_03869" formatted="false">Launcher / browser / gallery / video / mail / docs / SMS / dialer</string>
+    <string name="qk_03870" formatted="false">Sign in to manage repos / issues / stars / notifications; search GitHub inside the chat</string>
+    <string name="qk_03871" formatted="false">When on, dangerous commands (rm -rf / dd / mkfs) require a second send or confirm</string>
+    <string name="qk_03872" formatted="false">Follow system</string>
 </resources>

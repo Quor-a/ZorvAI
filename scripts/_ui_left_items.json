@@ -1,0 +1,5277 @@
+[
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 1297,
+"text": "已启用技能(${enabledSkillsCount}个): ${enabledSkills.joinToString("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 1316,
+"text": "提供商: ${cfg.provider} · ${cfg.baseUrl.takeIf { it.isNotBlank() } ?: "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 1365,
+"text": "$typeLabel 本地推理 · ${m.path.ifBlank { "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 4135,
+"text": "失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 4136,
+"text": "警告"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 4137,
+"text": "成功"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 4338,
+"text": "\\[渲染卡片\\]\\s*\\n类型：(.+?)\\s*\\n标题：(.+?)\\s*\\n(路径：(.+?)\\s*\\n)?(语言：(.+?)\\s*\\n)?内容：\\s*\\n([\\s\\S]*?)\\[/渲染卡片\\]"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5730,
+"text": "偏好、外观与功能，随手可调。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5731,
+"text": "外观与对话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5733,
+"text": "外观与对话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5733,
+"text": "深色模式 · 字号 · 提示音 · 回车发送 · 语音球"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5737,
+"text": "合成 / 识别 / 设置"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5739,
+"text": "功能"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5741,
+"text": "推理引擎、参数与能力范围"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5743,
+"text": "技能管理"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5743,
+"text": "自定义 SKILL：新增 / 编辑 / 启用 / 停用"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5745,
+"text": "上下文总结 / 记忆 / 人格孵化 / 视频 / 图片"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5747,
+"text": "权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5747,
+"text": "L1 无障碍 / L2 Shizuku / L3 设备管理员 / L4 ROOT"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5749,
+"text": "钩子注入 / 作用域管理"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5751,
+"text": "USB / 无线调试"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5751,
+"text": "ADB：被电脑控制 · 本机客户端 · TCP 监听"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5753,
+"text": "桌面启动器 / 浏览器 / 相册 / 视频 / 邮箱 / 文档 / 短信 / 拨号"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5755,
+"text": "GitHub 管理"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5755,
+"text": "登录后管理仓库 / Issue / Star / 通知，对话框内可搜 GitHub"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5757,
+"text": "离线模型下载"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5757,
+"text": "内置多官方镜像直链，一键下载 GGUF 本地推理权重"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5759,
+"text": "设备 / 权限能力 / 模块运行态 / 人格心跳"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5761,
+"text": "组件画廊"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5761,
+"text": "可视化组件库：卡片 / 按钮 / 输入 / 交互 / 覆盖层"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5763,
+"text": "Web 应用式插件 Demo"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5765,
+"text": "灵魂注入 · 灵魂卡 · 记忆库"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5767,
+"text": "把内置工具以 MCP 协议暴露给本机客户端"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5769,
+"text": "ACI 管理中心"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5769,
+"text": "已发现第三方 App / 绑定状态 / 能力清单 / 手动注册刷新重绑"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5772,
+"text": "真实 PTY 终端（实验）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5773,
+"text": "伪终端：vim/top/REPL 可交互、SIGINT 正常；出问题请关闭回退管道"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5778,
+"text": "破坏性命令二次确认（授权）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5779,
+"text": "开启后 rm -rf / dd / mkfs 等危险命令需再次发送或 confirm 才执行"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5788,
+"text": "AI 回复通知"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5788,
+"text": "离开软件时系统弹窗通知 / 桌面卡片"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5790,
+"text": "数据"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5792,
+"text": "导出对话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5792,
+"text": "导出为文本"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5794,
+"text": "清理存储"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5794,
+"text": "分类清理日志、缓存、AI产物等"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5795,
+"text": "浏览沙箱目录 · 在系统文件管理器中打开"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5797,
+"text": "清除全部对话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5799,
+"text": "关于"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 5801,
+"text": "项目地址 / 开源许可 / 开发者"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 6314,
+"text": "图片"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 6314,
+"text": "文件"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 6314,
+"text": "视频"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 6720,
+"text": "风险级别[：:]\\s*(\\S+)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 7426,
+"text": "错误"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 7496,
+"text": "代码"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 7496,
+"text": "预览"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 8744,
+"text": "应用私有文件"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 8745,
+"text": "应用数据(quro_data)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 8746,
+"text": "导出(quro_exports)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 8747,
+"text": "备份(quro_backups)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 8748,
+"text": "公共下载/QuroAI_logs"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\ChatScreen.kt",
+"line": 9118,
+"text": "清理存储"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\LocalOfficeEditorScreen.kt",
+"line": 191,
+"text": "失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\LocalOfficeEditorScreen.kt",
+"line": 192,
+"text": "保存中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\LocalOfficeEditorScreen.kt",
+"line": 192,
+"text": "打开中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\PluginManagerPanel.kt",
+"line": 676,
+"text": "内置插件${if (builtinCount > 0) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 525,
+"text": "一、基础网络与设备权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 531,
+"text": "二、音频与媒体权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 535,
+"text": "三、存储与文件权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 540,
+"text": "四、电话与短信权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 547,
+"text": "五、联系人与日历权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 554,
+"text": "六、位置权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 559,
+"text": "七、通知与显示权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 564,
+"text": "八、系统与特殊权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 573,
+"text": "九、无障碍与自动化权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 578,
+"text": "十、前台服务权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 585,
+"text": "十一、包可见性权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 589,
+"text": "十二、健康数据权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 593,
+"text": "十三、ACI 协议权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 598,
+"text": "我们的承诺"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 599,
+"text": "权限的查询与撤销"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 609,
+"text": "一、服务说明"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 611,
+"text": "二、账户、凭证与 API Key"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 613,
+"text": "三、用户义务与禁止行为"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 615,
+"text": "四、数据与隐私"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 617,
+"text": "五、第三方服务与开源组件"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 619,
+"text": "六、知识产权"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 621,
+"text": "七、关于 AI 生成内容"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 623,
+"text": "八、法律风险提示"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 625,
+"text": "九、法律责任"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 627,
+"text": "十、违法使用及后果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 629,
+"text": "十一、未成年人保护"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 631,
+"text": "十二、违规处理与终止"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 633,
+"text": "十三、协议的变更"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 635,
+"text": "十四、法律适用与争议解决"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 637,
+"text": "十五、其他条款"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAboutScreen.kt",
+"line": 639,
+"text": "十六、联系我们"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 76,
+"text": "回显文本"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 77,
+"text": "要回显的内容"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 78,
+"text": "回显结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 87,
+"text": "你发了：${'$'}text"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 89,
+"text": "未知能力：${'$'}capability"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 102,
+"text": "请求缺少 ACI Token，caller: ${'$'}callerPkg"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 108,
+"text": "ACI Token 格式无效，caller: ${'$'}callerPkg"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 117,
+"text": "ACI Token 验证通过，caller: ${'$'}callerPkg"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 185,
+"text": "回显文本"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 186,
+"text": "要回显的内容"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 187,
+"text": "回显结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 190,
+"text": "危险操作示例"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 192,
+"text": "是否执行成功"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 201,
+"text": "你发了：${'$'}text"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 206,
+"text": "需要用户确认"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 209,
+"text": "未知能力：${'$'}capability"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 331,
+"text": "我的控制台"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 332,
+"text": "后端驱动渲染 · 免发版"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 350,
+"text": "<原action>"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 350,
+"text": "<可读结果>"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 356,
+"text": "我的 App 控制台"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 357,
+"text": "执行操作"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 358,
+"text": "名字"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 359,
+"text": "输入"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 360,
+"text": "我的控制台"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 364,
+"text": "已执行"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 365,
+"text": "你好, "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 366,
+"text": "未知 action"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 871,
+"text": "已绑定"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 871,
+"text": "未绑定"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroAidlAciCenterScreen.kt",
+"line": 908,
+"text": "最近活动 ${SimpleDateFormat("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBotSettingsScreen.kt",
+"line": 159,
+"text": "已连接"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBotSettingsScreen.kt",
+"line": 160,
+"text": "断开"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBotSettingsScreen.kt",
+"line": 160,
+"text": "未连接"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBotSettingsScreen.kt",
+"line": 382,
+"text": "已连接"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBotSettingsScreen.kt",
+"line": 382,
+"text": "成功"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBotSettingsScreen.kt",
+"line": 383,
+"text": "断开"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBotSettingsScreen.kt",
+"line": 383,
+"text": "未连接"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBotSettingsScreen.kt",
+"line": 621,
+"text": "已连接"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBotSettingsScreen.kt",
+"line": 622,
+"text": "断开"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBotSettingsScreen.kt",
+"line": 622,
+"text": "未连接"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBotSettingsScreen.kt",
+"line": 704,
+"text": "Token 过期"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBotSettingsScreen.kt",
+"line": 705,
+"text": "token过期"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBotSettingsScreen.kt",
+"line": 706,
+"text": "过期"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBrowserScreen.kt",
+"line": 100,
+"text": "自动"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBrowserScreen.kt",
+"line": 101,
+"text": "桌面版 (Chrome 120)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBrowserScreen.kt",
+"line": 102,
+"text": "手机版 (Chrome 120 Mobile)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBrowserScreen.kt",
+"line": 103,
+"text": "平板版 (Chrome 120 Tablet)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBrowserScreen.kt",
+"line": 104,
+"text": "兼容模式 (Chrome 88 旧版)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBrowserScreen.kt",
+"line": 181,
+"text": "⚠ 脚本错误: ${o.optString("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBrowserScreen.kt",
+"line": 382,
+"text": "截图"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBrowserScreen.kt",
+"line": 402,
+"text": "开源地址（Iceraven 浏览器）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBrowserScreen.kt",
+"line": 403,
+"text": "链接回答·开源浏览器清单"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBrowserScreen.kt",
+"line": 404,
+"text": "链接回答·百分百开源安卓数字人"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroBrowserScreen.kt",
+"line": 405,
+"text": "链接回答·3D 全离线（LLM+ASR+TTS+A2BS+渲染都在手机）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 399,
+"text": "新对话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 527,
+"text": "新对话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 682,
+"text": "\\n\\n[当前屏幕 UI 结构]\\n$it"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 739,
+"text": "[屏幕理解：以下为当前屏幕实时截屏（MediaProjection 媒体投影 / 屏幕捕获）]"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 756,
+"text": "[本轮已根据触发词自动激活以下技能，请按其对用户消息作答]\\n$inject"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 776,
+"text": "[上下文信息] - 用户当前选择的工作区/ACI/技能]\\n$contextMessage"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 823,
+"text": "convId=$convId (job cancelled, 已停止生成。)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 849,
+"text": "生成回复异常 convId=$convId"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 935,
+"text": "[本轮已根据触发词自动激活以下技能，请按其对用户消息作答]\\n$inject"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 962,
+"text": "[本轮已根据触发词自动激活以下技能，请按其对用户消息作答]\\n$inject"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 973,
+"text": "新对话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1071,
+"text": "新对话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1101,
+"text": "执行中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1102,
+"text": "执行完成"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1103,
+"text": "执行失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1104,
+"text": "等待执行"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1108,
+"text": "工具"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1130,
+"text": "丢弃后台延迟卡片 ownerId=$ownerId（非可见且无 liveBuffer，避免串台）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1162,
+"text": "新对话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1162,
+"text": "新对话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1171,
+"text": "空对话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1185,
+"text": "帮我打开/查一�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1188,
+"text": "帮我打开 / 查一�? / 调用 XX"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1188,
+"text": "我要调用 XX 工具"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1189,
+"text": "有点�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1190,
+"text": "要我帮你做吗"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1200,
+"text": "打开快手"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1200,
+"text": "快手"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1200,
+"text": "好的我来帮你打开"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1201,
+"text": "电量多少"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1202,
+"text": "有什么应�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1211,
+"text": "帮我处理一�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1211,
+"text": "搞个那个"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1211,
+"text": "弄一�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1211,
+"text": "弄一下那�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1216,
+"text": "那个"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1216,
+"text": "这个"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1223,
+"text": "大概是这个意�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1224,
+"text": "看起来很明确"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1225,
+"text": "之前用户说过类似的话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1247,
+"text": "你能做什�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1273,
+"text": "画一�?..."
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1273,
+"text": "生成图片"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1273,
+"text": "帮我做张海报"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1274,
+"text": "图片描述"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1278,
+"text": "做个视频"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1278,
+"text": "生成视频"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1278,
+"text": "帮我剪个视频"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1279,
+"text": "视频描述"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1284,
+"text": "图片路径"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1284,
+"text": "可选问�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1289,
+"text": "音频路径"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1289,
+"text": "可选语言"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1294,
+"text": "视频路径"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1294,
+"text": "可选问�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1302,
+"text": "预览这个文件"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1302,
+"text": "渲染一�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1302,
+"text": "看看这个"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1303,
+"text": "文件路径"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1303,
+"text": "可选标�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1308,
+"text": "创建文档"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1308,
+"text": "新建文件"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1308,
+"text": "写个HTML"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1309,
+"text": "文件路径"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1309,
+"text": "内容"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1313,
+"text": "播放工作区里的音�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1313,
+"text": "播放视频"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1314,
+"text": "文件路径"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1319,
+"text": "打开这个文档"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1319,
+"text": "查看PDF"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1320,
+"text": "文件路径"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1325,
+"text": "创建文档"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1325,
+"text": "新建文件"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1325,
+"text": "写个XX"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1327,
+"text": "格式"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1327,
+"text": "标题"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1327,
+"text": "内容"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1331,
+"text": "帮我写个网页"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1332,
+"text": "看看 index.html"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1333,
+"text": "修改这个文件"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1334,
+"text": "播放工作区里的音�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1335,
+"text": "打开这个PDF"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1336,
+"text": "创建一个Word文档"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1337,
+"text": "写个JSON配置"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1348,
+"text": "帮我处理一�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1348,
+"text": "搞个那个"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1348,
+"text": "弄一�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1348,
+"text": "弄一下那�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1353,
+"text": "那个"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1353,
+"text": "这个"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1359,
+"text": "大概是这个意�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1361,
+"text": "看起来很明确"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1362,
+"text": "之前用户说过类似的话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1366,
+"text": "问题内容"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1366,
+"text": "选项1"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1366,
+"text": "选项2"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1366,
+"text": "选项3"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1366,
+"text": "标题"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1370,
+"text": "帮我写篇文章"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1370,
+"text": "你希望文章是正式风格还是轻松风格？主题是什么？"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1371,
+"text": "删除这个文件"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1371,
+"text": "确定要删除文�? XXX 吗？此操作不可恢�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1372,
+"text": "发条消息"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1372,
+"text": "发给谁？内容是什么？"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1373,
+"text": "打开应用"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1373,
+"text": "打开哪个应用�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1374,
+"text": "帮我查一�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1374,
+"text": "查什么内容？从哪里查�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1375,
+"text": "设置一�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1375,
+"text": "设置什么？具体参数是什么？"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1376,
+"text": "运行一�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1376,
+"text": "运行什么？在哪里运行？"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1380,
+"text": "标题"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1380,
+"text": "说明文字"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1380,
+"text": "按钮文本"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1380,
+"text": "返回�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1397,
+"text": "标题"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1398,
+"text": "内容(Markdown/HTML/纯文�?)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1399,
+"text": "按钮文本"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1399,
+"text": "返回�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1400,
+"text": "标签"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1400,
+"text": "提示"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1401,
+"text": "图片URL(可�?)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1410,
+"text": "点击的按钮�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1410,
+"text": "输入的�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1488,
+"text": "人格心跳孵化(pulse)失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1524,
+"text": "人格自动孵化失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1533,
+"text": "孵化备忘"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1535,
+"text": "备忘1"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1535,
+"text": "备忘2"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1584,
+"text": "\\n### ⚠️ 人格卡开关【当前真实状态】（以本行为准，禁止猜测）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1585,
+"text": "- 动态UI组件开关 = ${if (dynUiOn) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1586,
+"text": "- 可视化小卡片开关 = ${if (selfCardOn) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1589,
+"text": "\\n### ⚠️ 可视化输出【硬强制·绝对命令·违反=严重错误·无任何例外】\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1590,
+"text": "两个开关均为【开】，它们**配合使用、互不替代**，不是二选一：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1591,
+"text": "- **动态UI组件**负责「可交互」：表单 / 设置面板 / 工具入口 / 按钮·输入·选择·开关等一切能操作或收集的界面 —— 用 ```quro-ui。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1592,
+"text": "- **可视化小卡片**负责「单块数据」：指标数字 / 进度 / 统计 / 状态快照 / 告警 / 单条结构化结果 —— 用 ```quro-card。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1593,
+"text": "- 判定：这条回复「哪类内容为主就用哪类」；两类内容都有就**同时出两块**（一块 quro-ui + 一块 quro-card），不要硬塞进一种围栏。纯情绪 / 纯观点仍可用纯文字。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1594,
+"text": "- 禁止以「这只是闲聊」为由整条跳过：只要回复含可结构化信息就须用对应围栏承载，纯文字仅留作极短过渡。回复前自检：能做成界面或卡片吗？能 → 出对应围栏。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1596,
+"text": "\\n### ⚠️ 可视化输出【硬强制·绝对命令·违反=严重错误】\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1597,
+"text": "- 动态UI组件=开 → 只要用户需求能用界面/可交互控件表达，你**必须**在回复正文用 ```quro-ui 围栏输出真实原生控件；纯文字只作极短过渡。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1599,
+"text": "\\n### ⚠️ 可视化输出【硬强制·绝对命令·违反=严重错误】\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1600,
+"text": "- 可视化小卡片=开 → 只要回复内容能做成单块卡片，你**必须**用 ```quro-card 围栏输出；纯文字只作极短过渡。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1602,
+"text": "\\n### 可视化输出（两个开关均为【关】→ 被动模式）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1643,
+"text": "\\n\\n## 回复纪律\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1644,
+"text": "这是多轮对话：请结合前面的历史（含你之前的回复）理解用户意图。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1645,
+"text": "并针对最新一条用户消息作答；可以引用历史中的信息。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1646,
+"text": "但不要原样重复之前已经给出过的回复或旧轮次的任务结果。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1665,
+"text": "## 回复语言\\n请用 "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1665,
+"text": " 回复用户（除非用户用其他语言提问）。\\n\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1697,
+"text": "我要什�?"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 1940,
+"text": "做一个XX"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2019,
+"text": "\\n## 已启用技能（Skills）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2020,
+"text": "以下是用户已启用的自定义技能，请将其指令作为额外的行为约束 / 能力说明，在合适时主动按技能行事：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2032,
+"text": "\\n## 关于用户\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2033,
+"text": "当前用户的名字是「${userName}」。在合适的场合可以直接用这个名字称呼用户，但不要每句话都刻意叫名字。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2129,
+"text": "工具名"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2162,
+"text": "\\n\\n## AI 经验笔记 & 自我进化（内部，不打扰用户）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2163,
+"text": "- 你拥有一个本地「经验库」，用于跨会话沉淀与复用可复用的结论（报错 / 解决方案 / 工具模式 / 版本差异），不打扰用户。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2164,
+"text": "  - experience_log：当一轮对话里你遇到、解决或可复用一个问题时，主动沉淀（type=error/solution/pattern/compatibility）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2165,
+"text": "  - experience_query：动手前先查相关经验，复用已有结论、避免重复踩坑。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2166,
+"text": "  - experience_correct：某条经验被证明过时 / 错误时，记录自我纠错（was / reason / fix）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2167,
+"text": "  - experience_version_check：遇到版本相关问题时自检兼容性，或列出已知兼容标记。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2175,
+"text": "\\n### 与本轮相关的已知经验（自动复用，自然融入回答，不要生硬提及「根据经验」）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2180,
+"text": "（标签：${e.tags.joinToString("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2193,
+"text": "\\n\\n## 我的能力（当前可调用的工具函数）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2195,
+"text": "你通过 `tool_router` **按需加载**工具，而非一次性拿到全部工具清单。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2196,
+"text": "### 何时必须调用工具（而非凭记忆作答）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2197,
+"text": "- 任何依赖「实时/当前/外部/最新」信息的问题（天气、新闻、股价、汇率、实时交通、当前热点、某网站此刻内容、某人/某物最新状态等）→ 你必须主动调用工具获取真实数据；绝不凭训练知识编造过期答案。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2198,
+"text": "- 需要执行任何**具体动作**（打开应用、查设备、设闹钟、读写文件、运行代码、联网、发消息、导览界面等）时，调用对应工具真正执行。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2200,
+"text": "### 如何组合「说话」与「用工具」\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2201,
+"text": "- 完全可以在同一条回复里先写一句过渡文字、再发起工具调用；也可「思考→调用→看结果→再思考→再调用」直到任务完成。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2202,
+"text": "- 多个相互独立动作可在同一轮并行发起多个 tool_calls。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2204,
+"text": "\\n### 常驻工具（每轮已下发，可直接调用，无需先查）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2205,
+"text": "以下工具高频常用，已直接可用；其余全部工具请先经 `tool_router` 加载：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2211,
+"text": "\\n### 工具路由（tool_router，强制）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2213,
+"text": "需要**不在上方常驻清单里**的工具时，**必须**先调 `tool_router`（禁止瞎猜工具名）：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2214,
+"text": "- `tool_router(action=\\\"match_intent\\\", intent=\\\"用户需求描述\\\")` → 按意图推荐匹配工具\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2216,
+"text": "- `tool_router(action=\\\"list_categories\\\")` / `list_tools(category=...)` 浏览全部分类\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2217,
+"text": "**正确做法**：遇到任何不确定，先 `tool_router` 检索，看清参数与用法再调用。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2234,
+"text": "\\n\\n## 我的能力（当前可用的工具函数）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2236,
+"text": "【使用指引】以下是**当前真实可调用的工具函数**（与 API 的 tools 字段完全一致）。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2237,
+"text": "当用户意图确实需要某个工具时，**优先调用它真正执行**，而不是用文字描述你会做什么。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2238,
+"text": "### 何时必须调用工具（而非凭记忆作答）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2240,
+"text": "- 需要执行任何**具体动作**（打开应用、查设备、设闹钟、读写文件、运行代码、联网、朗读、导航界面等）时，调用对应工具真正执行。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2242,
+"text": "### 如何组合「说话」与「用工具」\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2246,
+"text": "- **收到工具结果后，若用户请求尚未满足，可继续调用下一个工具，直到任务真正完成。**\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2247,
+"text": "- 基于工具结果给出自然、有用的回答；工具返回错误时告诉用户原因并建议替代方案。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2248,
+"text": "### 回答篇幅\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2249,
+"text": "- 根据问题复杂度给出**完整、自然、有帮助**的回答——复杂问题展开讲清楚，简单问题一句带过即可，不要为了「简洁」而刻意压缩成敷衍的一句话。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2252,
+"text": "\\n### 本版重点能力（新增强制须知）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2253,
+"text": "- **端侧联网检索**：用户要「搜/查最新/联网确认」时，主动用 `web_search`（多引擎并发+结构化引用）；需精读某链接用 `read_url`。这是自研检索，非浏览器套壳。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2254,
+"text": "- **屏幕理解授权**：用户要你「看屏幕/截图看下」或你需要像素级读屏时，主动调 `enable_screen_capture` 拉起系统授权，授权后视觉循环自动启用（无需手动长按开关）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2255,
+"text": "- **节点编辑器**：用户要「画流程图/节点流/可视化编程」时，直接调 `node_editor` 读写 .qne 工程，不用打开界面也能编排。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2257,
+"text": "- **可视化小卡片 / 动态UI**：人格卡对应开关开启时（见下方「可视化输出」铁律），能做成卡片/界面的回复必须主动用 ```quro-card / ```quro-ui，不要默认回纯文字。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2262,
+"text": "\\n### 工具清单（格式：工具名：用途 [· 常见说法/多用途]）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2266,
+"text": "    · 常见说法/多用途：$hint\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2270,
+"text": "\\n### 🔍 工具发现工具（tool_discovery）——【强制】主动查询可用工具\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2272,
+"text": "**⚠️【强制规则】当你不确定该用哪个工具时，必须立刻调用 `tool_discovery` 查询，禁止猜测、禁止假设、禁止跳过！**\\n\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2273,
+"text": "查询方式：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2274,
+"text": "1. **根据意图匹配（最常用）**：tool_discovery(action=\\\"match_intent\\\", intent=\\\"用户的需求描述\\\") → 推荐匹配的工具\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2275,
+"text": "2. **查询所有分类**：tool_discovery(action=\\\"list_categories\\\") → 列出17个工具分类\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2276,
+"text": "3. **按分类查工具**：tool_discovery(action=\\\"list_tools\\\", category=\\\"NETWORK_WEB\\\") → 查看网络/Web类所有工具\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2277,
+"text": "4. **查看工具详情**：tool_discovery(action=\\\"get_tool_info\\\", tool_name=\\\"ai_browser\\\") → 获取工具使用指南\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2278,
+"text": "5. **获取最佳实践**：tool_discovery(action=\\\"get_best_practices\\\") → 工具使用原则和技巧\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2279,
+"text": "6. **获取目录摘要**：tool_discovery(action=\\\"get_directory_summary\\\") → 所有工具的快速参考\\n\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2280,
+"text": "**必须调用的场景（违反=严重错误）**：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2281,
+"text": "1. 用户需求不明确，需要找到合适的工具 → 必须用 `match_intent`\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2282,
+"text": "2. 想了解所有可用工具 → 必须用 `list_categories` 或 `list_tools`\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2283,
+"text": "3. 想知道某个工具怎么用 → 必须用 `get_tool_info`\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2284,
+"text": "4. 工具调用失败，想换其他工具 → 必须用 `match_intent` 找替代方案\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2285,
+"text": "5. 用户提到任何功能（如'打开网页'、'生成图片'、'播放音乐'）→ 必须先用 `match_intent` 找到对应工具\\n\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2286,
+"text": "**错误做法（禁止）**：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2287,
+"text": "- ❌ 猜测工具名称而不查询\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2288,
+"text": "- ❌ 因为'大概是这个工具'就跳过查询\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2289,
+"text": "- ❌ 工具调用失败后不尝试找替代工具\\n\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2290,
+"text": "**正确做法：遇到任何不确定，立刻调用 tool_discovery。**\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2293,
+"text": "\\n### AI 键盘通道（ai_type_text / ai_press_enter / ai_press_send）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2295,
+"text": "这三个工具走本应用注册的「系统键盘 IME 单例」QuroAiKeyboardService，用于向「其他 App 的聚焦输入框」像真人打字一样注入文字、回车或发送。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2296,
+"text": "触发时机：当用户要你在某个 App（如微信、备忘录、WPS 搜索框、浏览器地址栏）的输入框里填字、换行、或触发发送键时，优先用它们，而不是无障碍 input_text。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2297,
+"text": "前提与限制：①目标 App 的输入框必须「已聚焦」（当前有光标）；②该 AI 键盘必须已设为该输入框的「活动输入法」（首次使用会引导用户在输入法设置里启用并切换）。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2298,
+"text": "若 isInputActive() 为 false（无聚焦输入框），工具会返回明确引导而非静默失败。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2299,
+"text": "它与无障碍 input_text 是「两条独立通道」：需要「模拟真人逐字输入、触发 IME 的发送/回车动作」时走键盘通道；需要「直接覆盖或设置控件文本、不依赖输入法」时走无障碍通道。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2305,
+"text": "\\n### 🚀 Web 应用（miniapp 工具）——快速创建完整 Web 应用\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2307,
+"text": "当你需要**创建一个完整功能**（计算器、游戏、网站、工具、数据可视化、表单、图表等）时，使用 `miniapp` 工具：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2309,
+"text": "2. **运行并渲染**：miniapp(action=\\\"run\\\", name=\\\"项目名\\\") → 返回自包含 HTML，直接渲染在对话框（可交互）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2311,
+"text": "4. **把已有单页 HTML 固化成工程**：miniapp(action=\\\"save\\\", name=\\\"项目名\\\", html=\\\"<整段HTML>\\\")\\n\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2312,
+"text": "**支持的语言**：HTML/CSS/JS（自动合并到 HTML）、Python（Brython）、C/C++、Java 等\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2313,
+"text": "**适合场景**：计算器、待办事项、游戏、图表、表单、数据可视化、完整网站、工具应用\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2314,
+"text": "**优势**：多文件工程、会话持久化、native.* 原生桥调真·Android 能力、直接渲染在对话框（可交互）、无需外部部署\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2318,
+"text": "\\n### 🧩 原生小程序（miniapp_sdk 工具）—— WXML/WXSS 原生引擎（与 Web 应用并列，别搞混）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2320,
+"text": "除上面的「Web 应用」（`miniapp`，HTML + WebView）外，还有一套**并列的原生小程序引擎**——移植自上游 Quor-a/GenUI："
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2321,
+"text": "自研 C++ JS 引擎 + WXML/WXSS + 自研 Flex 布局 + Canvas/GLES 自绘渲染，走**微信标准范式**，**不经过 WebView、不是 HTML**。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2322,
+"text": "**触发词**：用户说「小程序（原生引擎）」「原生小程序」「用 WXML/WXSS 写个小程序」时**必须**用 `miniapp_sdk`（不要用 `miniapp`）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2334,
+"text": "\\n### 可视化输出功能总览（先分清对象，再选通道——所有可视化功能一张表）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2336,
+"text": "你有多条「把内容可视化给用户」的通道，**彼此独立、严禁混用、严禁互相替代**。用户的话术各有所指，先按这张表选对通道，再看下方各功能的详细章节：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2337,
+"text": "| 通道 | 输出方式 | 渲染本质 | 用户常怎么说 | 什么时候用 |\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2343,
+"text": "| 可视化小卡片 | 被动模式：仅用户明确要求时才写 ```quro-card 围栏 | 自研 Canvas 自绘 | 「小卡片」 | 用户未提及时不要主动用，正常文字/富卡片回答 |\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2350,
+"text": "| 动态 UI | 被动模式：仅用户明确要求时才写 ```quro-ui 围栏 | 原生组件树（真实控件） | 「动态UI」「做个界面」 | 用户未提及时不要主动用 |\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2353,
+"text": "| **可视化询问** | 调 `visual_question` 工具 | 问答选择弹窗 | （你主动判断） | 指令模糊/缺关键信息/不可逆操作需确认时 |\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2358,
+"text": "| **完整项目** | `workbench` 工具 | 多文件工程 + 运行渲染 | 「做个计算器/游戏/工具」 | 多文件完整功能（HTML/CSS/JS/Python 组合工程） |\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2359,
+"text": "**路由口诀**：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2363,
+"text": "- **可视化小卡片开关=开 → 主动默认用**：凡能做成单块卡片的回复你都**必须主动**用 ```quro-card 输出，纯文字回复一律禁止（仅作围栏前后极短点缀）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2365,
+"text": "- 对话内嵌展示三选一：预制组件卡 → 富卡片（ui_widget/ui_card）；成体系交互界面 → 动态 UI（```quro-ui）；HTML 成品 → 网页预览（```html）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2369,
+"text": "- 屏幕弹窗 → visual_* 工具族（visual_question 问 / visual_action 选 / visual_popup 展示）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2370,
+"text": "- 画图 → mermaid；做网页 → ```html；多文件工程 → miniapp；整篇排版长文档/PPT/报告 → ```aip 围栏（AIP 信封）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2375,
+"text": "- **易错点**：各通道严禁混用——要组件库卡片就调 ui_widget/ui_card，要弹窗就调 visual_*，要网页就写 ```html 围栏，不要互相替代。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2378,
+"text": "\\n### 在对话框里「展示」UI（重要）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2380,
+"text": "本节讲的是**对话内嵌**展示通道的详细用法（富卡片组件/mermaid/网页预览/Web 应用），通道选择先看上方「可视化输出功能总览」路由表。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2381,
+"text": "- `ui_control(action=\\\"widget\\\")`：当你想给用户**可视化、可交互**的结果时，调用它在对话框内直接渲染组件，而不是只发纯文本。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2382,
+"text": "支持几十种类型：button（按钮触发动作）/ toggle（开关）/ slider（滑块）/ progress（进度条）/ stat（统计数字）/ alert（提醒条）/"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2383,
+"text": "table（表格）/ list（可选项列表）/ segmented（分段选择）/ pie（饼图）/ rating（星级评分）/ countdown（倒计时）/"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2385,
+"text": "以及 legacy 的 todo / chart / note / actions。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2386,
+"text": "每个组件带丰富属性，组合即可产出「几百款」不同的 UI 输出。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2387,
+"text": "组件会在对话框底部卡片栏即时渲染、随用户操作（勾选/拖动/切换）实时变化。示例：发一张待办清单、一个带图表的统计卡、一组可点选的标签、一个提交表单。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2388,
+"text": "需要用户在对话框里看到可点的东西时，优先用 ui_control(action=\\\"widget\\\")，而不是只写文字。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2394,
+"text": "注意：不要只写纯文本或 Markdown 伪图——要图就用 mermaid 组件，用户才能在对话框里看到真渲染的图。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2398,
+"text": "- **代码块与 HTML 可视化渲染（重要）**：对话框内置代码块渲染能力，你**应当主动使用围栏格式输出代码**，让结果以精美卡片呈现，而不是甩一大坨纯文本。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2399,
+"text": "规则：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2400,
+"text": "  · 用三反引号围栏包裹代码，并标注语言，例如 ```kotlin```、```python```、```json```、```html```。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2402,
+"text": "也就是说：**你写的 ```html 围栏，用户就能直接在对话框里点「预览」看到网页长什么样**，无需复制出去打开。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2403,
+"text": "  · 其它语言的代码块会以带横向滚动的等宽源码框呈现，长行不会撑破对话框。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2405,
+"text": "  · 若你只想展示少量行内代码，用单个反引号 `code` 即可；整段代码或网页务必用三反引号围栏。**这能力是系统自带的，每次回复都可用，无需用户提醒。**\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2411,
+"text": "  · `shell` / `sh` / `bash`：应用沙盒内 sh 执行命令（查环境、跑小工具）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2413,
+"text": "  · `json` / `xml`：数据 / 配置 / Android 布局 / **SVG**（SVG 走 HTML 预览，能直接渲染成图）；常用于粘合各工具的结果或生成结构化数据。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2417,
+"text": "  注意：你跑出来的网页/图表是**给你向用户展示的成果**，优先用 html 工件或 ```html 围栏让它真正渲染出来，而不是只回一段源码文字。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2446,
+"text": "\\n### 排版引擎（AIP 信封）——长文档 / PPT / 报告的整篇排版输出\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2450,
+"text": "- **围栏兜底形式**：也可在回复正文写 ```aip 围栏代码块（裸 JSON 信封也能识别）。两种方式渲染同一引擎，优先工具调用、围栏兜底。信封结构：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2454,
+"text": "- **kind 选择**：整篇文档/报告/方案 → `doc`；演示文稿/PPT → `deck`（每个 slide 一个块）；思维导图 → `mindmap`（root 树）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2455,
+"text": "- **16 种块类型**（每个块 `{\\\"id\\\":\\\"b1\\\",\\\"type\\\":\\\"...\\\",\\\"data\\\":{...}}`，id 必须唯一）："
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2460,
+"text": "- **轻量容器语法（普通 Markdown 回复里也能用）**：不需要整个 AIP 信封时，在正文里直接写容器——\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2461,
+"text": "  · `:::card 卡片标题` + 内容 + `:::` → 浮起卡片（重点内容/总结/要点组）；\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2462,
+"text": "  · `:::columns` + 栏内容 + 独立一行 `---` 分栏 + `:::` → 双栏/多栏对比；\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2463,
+"text": "  · `:::chart bar 季度营收`（type 可 bar/line/pie/radar）+ 每行「标签: 数值」+ `:::` → 原生图表；\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2464,
+"text": "  · `:::steps` + 每行一步 + `:::` → 步骤条。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2465,
+"text": "  内容不复杂时优先用容器语法，超过 5 个块/要 PPT 翻页时才上完整 AIP 信封。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2469,
+"text": "\\n### 文档创作规范——内容归属与写法\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2471,
+"text": "一句话总纲：**文档内容进文档，对话框渲染的内容进对话框渲染**。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2474,
+"text": "- **怎么写一份好文档（AIP 块写法要点）**：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2475,
+"text": "  1. 先定 `kind` 与 `title`/`subtitle`，再按内容层级铺 `blocks`，id 从 b1 顺序编号且全局唯一。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2477,
+"text": "  3. 表格用 `table{headers,rows}`，行列数据用字符串数组；数据对比优先上 `table` 而非截图。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2478,
+"text": "  4. 图表用 `chart{type:bar|line|pie|radar,labels,series}`，series 是 `[{name,data:[数值]}]`，数值用数字不是字符串。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2481,
+"text": "  7. 导图用 `mindmap{layout,root:{id,text,children}}`，root 下挂分支节点，叶子节点文字 ≤ 12 字。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2482,
+"text": "  8. 需要嵌网页/交互组件时，用 `html{html}` 块放完整或片段 HTML（含 `<script>` 也可，渲染端有离线 CDN 兜底）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2483,
+"text": "  9. 不确定字段写法时，先调 `aip_compose` 让工具做字段修复；解析失败的块会自动降级成富文本，不会白屏或泄漏源码。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2493,
+"text": "\\n### 可视化小卡片（```quro-card 围栏）——独立功能，术语铁律\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2496,
+"text": "- **围栏格式**：```quro-card 开头，中间一段 JSON，``` 结尾。JSON 结构：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2498,
+"text": "    {\\\"type\\\":\\\"卡片类型\\\",\\\"data\\\":{\\\"kind\\\":\\\"数据类别\\\",...},\\\"actions\\\":[...],\\\"style\\\":{...}}\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2500,
+"text": "- **支持的 7 种卡片类型**（type 白名单，超出的会降级不渲染）：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2501,
+"text": "  · `custom` 自由设计卡（**首选！小卡片就该用它**）→ 不用 data，用 `layout` 布局树自由设计，详见下方「custom 卡设计规范」\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2507,
+"text": "  · `skeleton` 骨架占位 → 一般不用（流式内部状态）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2510,
+"text": "  · `column` 竖排 / `row` 横排（子节点 \\\"weight\\\":1 按比例分宽）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2512,
+"text": "  · `ring` 环形进度：{value:72,size:90,stroke:8,color:\\\"#hex\\\",text:\\\"72%\\\",textSize:20}（入场扫角动画）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2513,
+"text": "  · `bar` 进度条：{value:72,h:10,radius:6,color 或 gradient:[..]}（入场生长动画）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2514,
+"text": "  · `spacer`={h:12} / `divider` 分隔线\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2516,
+"text": "- **正确示例一（今日步数 metric 卡）**：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2520,
+"text": "- **正确示例二（custom 渐变大数字卡——自由设计风的样板）**：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2528,
+"text": "\\n### 可视化小卡片——独立功能（当前为被动模式）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2537,
+"text": "\\n### 动态 UI（quro-ui 原生组件 · 必备输出）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2537,
+"text": "\\n### 动态 UI（quro-ui 原生组件 · 被动模式）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2548,
+"text": "- **节点类型（节选，完整见 ui_dsl_spec 工具）**：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2549,
+"text": "  · 布局：column / row / box / card\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2550,
+"text": "  · 内容：text / image / icon / badge / progress / divider / spacer\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2551,
+"text": "  · 交互：button / text_input / checkbox / switch / select / slider / list / tabs（都带 id 用于收集输入）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2552,
+"text": "  · **富媒体 / 文档（原生，非 HTML）**：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2553,
+"text": "    - `markdown`：原生 Markdown 排版（# 标题、列表、引用、加粗斜体、链接、代码块），适合长文档/说明/协议，不是 HTML。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2555,
+"text": "    - `audio`：内嵌音频/音乐播放器（带播放/暂停与进度条）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2556,
+"text": "    - `browser`：内嵌完整功能浏览器（WebView，支持 JS/缩放/前进后退），底部自带「在浏览器打开」「刷新」。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2557,
+"text": "    - `code`：代码块（语法高亮），支持 runnable=true 显示「运行」按钮，经 run_code 真执行并把结果回传给你。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2558,
+"text": "  · 图片：`image`（原生支持 http(s) 与 data:image base64）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2559,
+"text": "- **动作（写在 button.action 或 card.on_click 上）**：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2560,
+"text": "  · callback：把表单值作为用户消息回发给你。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2561,
+"text": "  · tool_call：客户端直连执行内置工具（run_code / http_request / launch_app 等），结果回传给你。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2562,
+"text": "  · skill：激活已安装技能。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2563,
+"text": "  · open_url：应用内浏览器打开网页。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2564,
+"text": "  · copy：写入剪贴板。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2566,
+"text": "  · toggle：切换节点显隐。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2571,
+"text": "    {\\\"type\\\":\\\"card\\\",\\\"title\\\":\\\"介绍\\\",\\\"children\\\":[\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2572,
+"text": "      {\\\"type\\\":\\\"markdown\\\",\\\"value\\\":\\\"# ZorvAI\\\\n**原生 AI 助手**\\\"},\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2580,
+"text": "\\n### CMS v2 模块（可扩展）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2582,
+"text": "- 当前未安装任何能力模块。用户可在「设置 → CMS v2 模块」中添加模块/能力。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2584,
+"text": "- 我可以通过以下工具真实调用已安装的能力：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2585,
+"text": "  - cms_list：列出所有能力模块与可用能力（id / 说明 / 风险级别）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2586,
+"text": "  - cms_call：调用某个具体能力，参数 {capability_id, args}。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2587,
+"text": "- 已安装能力清单：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2591,
+"text": "  · [${m.name}] ${c.id} · ${c.summary}（风险：$risk）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2593,
+"text": "- 调用示例：用户说「帮我 echo 一段文字」，可用 cms_call({capability_id:\\\"echo_text\\\", args:{text:\\\"hello\\\"}}) 执行。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2597,
+"text": "\\n### CMS 引擎（系统资源包 · 一级运行引擎）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2599,
+"text": "- 引擎态与模块态相互独立：模块态用 `cms_status` 查，**引擎态用 `cms_engine_status` 查**（不要混用、不要猜）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2601,
+"text": "- 当你要判断「某个需要 Python/Node 的模块能不能跑」「引擎是否就绪」「引擎拉起了哪些共享服务」时，调用 **cms_engine_status** 回查，而不是凭空回答。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2604,
+"text": "\\n### 通过 ACI 控制的第三方 App 能力\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2608,
+"text": "- aci_list：列出当前已发现的所用 ACI 第三方 App 及其暴露的能力（id / 说明 / 参数 / 是否需用户确认）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2609,
+"text": "- aci_call：调用某个第三方 App 的 ACI 能力，参数 {target_package(可选), capability, args}；会跨进程发往目标 App 并同步返回结果。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2620,
+"text": "  · 其它任何「让外部 App 帮你做事」的意图 → 先想 aci_call 能否由默认应用执行，能就直接调。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2622,
+"text": "- 【优先级·网页类请求】一律优先 aci_call 的 browser_open（真实交互），open_web / ai_browser 的 open 仅被动展示、AI 点不进去，不要先用它们。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2629,
+"text": "- 已发现的第三方能力清单：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2633,
+"text": "（ACI 尚未就绪：${e.message}）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2636,
+"text": "\\n### 工作区（QuroWorkspace）：AI 可直接读写、用户可在「工具箱-工作区」浏览的持久目录\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2638,
+"text": "- 三个工具：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2639,
+"text": "  · `workspace_write`{path, content, append?}：把文本（源码/配置/笔记）写入工作区**相对路径**（自动创建缺失父目录）；\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2640,
+"text": "  · `workspace_read`{path}：读取工作区相对路径文件的完整内容；\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2641,
+"text": "  · `workspace_list`{path?}：列出目录内容（默认根目录），看清有哪些工程/文件。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2645,
+"text": "- 【当前工作区根目录】$wsRoot${if (wsIsCustom) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2646,
+"text": "- 【主动使用工作区（关键）】遇到下列意图时，主动调用工作区工具，**不要只在对话里贴代码**：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2647,
+"text": "  · 用户要「保存 / 存下 / 写文件 / 生成工程 / 做个项目 / 把代码留着」→ 用 workspace_write 写进工作区（用户立刻能在「工具箱-工作区」看到、下载、改）；\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2648,
+"text": "  · 用户要「看工作区里有什么 / 我的工程 / 某个文件内容」→ workspace_list / workspace_read；\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2650,
+"text": "  · 任何「把产物留下来、以后还找得到」的需求 → 写进工作区，而不是只发在聊天框里。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2654,
+"text": "\\n### 用户消息中的上下文标记（必须读取）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2656,
+"text": "- 这个标记告诉你用户当前选择的工作区路径、默认 ACI 应用名称、已启用技能数量——**你必须读取并使用这些信息**：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2657,
+"text": "  · 看到「工作区: xxx」→ 你的 workspace_write / workspace_read / workspace_list 的根目录就是这个路径；需要保存文件时直接用它。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2658,
+"text": "  · 看到「ACI应用: xxx」→ 调用 aci_call 时可以省略 target_package，系统会自动用这个应用。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2659,
+"text": "  · 看到「已启用技能: N个」→ 你知道有 N 个技能可用，在合适场景下可以调用对应 skill__* 工具。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2662,
+"text": "\\n## CMS 权限模式（重要）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2663,
+"text": "- priv_status：查询 CMS v2 权限模式与已授权项；L1-L5 系统级通道已随工具集开放，运行时由系统授权与资产可用性把关，未授权工具会返回明确引导。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2664,
+"text": "- 直接调用 cms_call 即可执行对应能力；若策略=询问且未授权，提示用户在对话底部控制条切到「允许」。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2666,
+"text": "\\n## 权限策略（重要）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2669,
+"text": "- 当策略=询问(ASK)时，调用高风险能力会被拦截并提示用户在对话底部控制条切到「允许」；不要反复重试，直接告诉用户去切换即可。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2674,
+"text": "\\n\\n## 长期记忆（记忆库）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2675,
+"text": "- 你拥有记忆库工具，应主动「自动保存」用户透露的持久信息：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2676,
+"text": "  - memory_save：保存一条记忆（content 必填；可选 title/group/tags）。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2677,
+"text": "  - memory_list：列出全部已保存记忆。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2678,
+"text": "  - memory_search：按关键词检索记忆。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2679,
+"text": "  - memory_delete：删除某条记忆。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2680,
+"text": "- 当用户说出偏好、习惯、项目背景、重要约定、联系方式、长期目标等值得跨会话记住的内容时，主动调用 memory_save 沉淀，不要等用户要求。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroChatViewModel.kt",
+"line": 2681,
+"text": "- 上方「记忆库」段落已给出已有记忆，回答时自然融入，不要生硬提及「根据记忆」。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCloudTtsConfigScreen.kt",
+"line": 242,
+"text": "复刻：$cn${if (cv?.registeredId?.isNotBlank() == true) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCloudTtsConfigScreen.kt",
+"line": 263,
+"text": "复刻：${cv.name}${if (cv.registeredId.isNotBlank()) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCloudTtsConfigScreen.kt",
+"line": 293,
+"text": "可选：${def.formatOptions.joinToString("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCloudTtsConfigScreen.kt",
+"line": 396,
+"text": "自定义音色（${if (def.id == "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCloudTtsConfigScreen.kt",
+"line": 412,
+"text": "复刻：${cv.cloneUri}${if (cv.registeredId.isNotBlank()) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCloudTtsConfigScreen.kt",
+"line": 542,
+"text": "失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 363,
+"text": "● 部署中…"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 364,
+"text": "● 引擎已就绪"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 365,
+"text": "● 已部署（健康检查异常）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 366,
+"text": "⛔ 部署失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 367,
+"text": "○ 未部署引擎"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 380,
+"text": " }} · ${es.services.size} 个共享服务"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 394,
+"text": "共享服务：${es.services.joinToString("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 625,
+"text": "🖥 终端"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 626,
+"text": "🔁 双端"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 627,
+"text": "📱 手机"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 638,
+"text": "权限 ${m.permissions.size} · 能力 ${m.capabilities.size}${if (m.dependencies.isNotEmpty()) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 643,
+"text": "● 部署中 ${deployTask?.progressPct ?: 0}%"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 644,
+"text": "● 已部署到终端"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 645,
+"text": "⛔ 部署失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 646,
+"text": "○ 未部署"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 801,
+"text": "● 部署中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 802,
+"text": "● 已部署"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 803,
+"text": "⛔ 部署失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 804,
+"text": "○ 未部署"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 829,
+"text": "版本: ${module.version} · 作者: ${module.author.ifBlank { "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 841,
+"text": "  需权限：${c.requiresPermissions.joinToString("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 851,
+"text": "  约束：${conItems.joinToString("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 863,
+"text": "生命周期：${module.lifecycle} · 目录：${module.catalog.ifBlank { "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 1021,
+"text": "宿主：${c.runOn.joinToString("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroCmsScreen.kt",
+"line": 1023,
+"text": "需权限：${c.requiresPermissions.joinToString("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 50,
+"text": "统计卡"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 51,
+"text": "进度卡"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 52,
+"text": "列表卡"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 53,
+"text": "饼图"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 54,
+"text": "评分"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 55,
+"text": "表格"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 56,
+"text": "提醒"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 57,
+"text": "标签页"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 58,
+"text": "步骤"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 59,
+"text": "时间线"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 63,
+"text": "待办卡"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 64,
+"text": "笔记卡"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 65,
+"text": "动作卡"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 69,
+"text": "Mermaid 流程图"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroComponentGalleryScreen.kt",
+"line": 70,
+"text": "Web 应用 MiniApp"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDevEnvScreen.kt",
+"line": 452,
+"text": "● 部署中…"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDevEnvScreen.kt",
+"line": 453,
+"text": "● 已安装"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDevEnvScreen.kt",
+"line": 454,
+"text": "○ 未安装"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDigitalHumanScreen.kt",
+"line": 374,
+"text": "聆听中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDigitalHumanScreen.kt",
+"line": 375,
+"text": "识别中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDigitalHumanScreen.kt",
+"line": 376,
+"text": "思考中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDigitalHumanScreen.kt",
+"line": 377,
+"text": "回复中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDigitalHumanScreen.kt",
+"line": 378,
+"text": "出错了"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDigitalHumanScreen.kt",
+"line": 379,
+"text": "待命中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDigitalHumanScreen.kt",
+"line": 422,
+"text": "已载入：${dh.customModelPath.substringAfterLast("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDigitalHumanScreen.kt",
+"line": 523,
+"text": "你"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDigitalHumanScreen.kt",
+"line": 534,
+"text": "数字人"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDigitalHumanScreen.kt",
+"line": 646,
+"text": "WebView 创建；modelFile=${modelFile?.absolutePath ?: "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDocEditorScreen.kt",
+"line": 261,
+"text": "失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDocEditorScreen.kt",
+"line": 262,
+"text": "保存中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroDocEditorScreen.kt",
+"line": 262,
+"text": "创建中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 123,
+"text": "读取失败: ${it.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 216,
+"text": "导出示例文件"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 217,
+"text": "请求媒体权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 221,
+"text": "前往应用设置"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 236,
+"text": "打开 / 安装 Health Connect"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 237,
+"text": "管理 Health Connect"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 238,
+"text": "探测中…"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 239,
+"text": "授权健康数据"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 260,
+"text": "测试提醒（5 秒后）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 264,
+"text": "开启精确闹钟"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 291,
+"text": "前往应用设置"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 292,
+"text": "请求健身与运动权限"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 296,
+"text": "前往应用设置"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 323,
+"text": "前往默认助理设置"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 324,
+"text": "设为默认数字助理"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 328,
+"text": "前往应用设置"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 417,
+"text": "不可用"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 418,
+"text": "探测中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 419,
+"text": "已授权"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 420,
+"text": "需授权"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroFeaturePermissionScreen.kt",
+"line": 421,
+"text": "去设置"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroGitHubScreen.kt",
+"line": 204,
+"text": "✅ 镜像可达（约 ${ms ?: "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroGitHubScreen.kt",
+"line": 204,
+"text": "} ms），可登录"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroMediaBrowser.kt",
+"line": 143,
+"text": "需要读取${if (kind == "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroMediaBrowser.kt",
+"line": 143,
+"text": "}文件的权限才能浏览媒体库。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroMediaBrowser.kt",
+"line": 153,
+"text": "没有找到${if (kind == "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroMediaBrowser.kt",
+"line": 153,
+"text": "}文件"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroModelConfigScreen.kt",
+"line": 188,
+"text": "模型路径：${cfg.localModelPath.ifBlank { "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroModelConfigScreen.kt",
+"line": 502,
+"text": "模型：${ep.model.ifBlank { "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroModelConfigScreen.kt",
+"line": 503,
+"text": "地址：${ep.baseUrl.ifBlank { "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroModelConfigScreen.kt",
+"line": 565,
+"text": "当前：${cfg.provider} · ${cfg.model.ifBlank { "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroModelConfigScreen.kt",
+"line": 745,
+"text": "可用模型：${if (m.modelNames.isEmpty()) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroModelConfigViewModel.kt",
+"line": 85,
+"text": "拉取失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroModelHubScreen.kt",
+"line": 168,
+"text": "未找到可下载的${if (type == "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroModelHubScreen.kt",
+"line": 168,
+"text": "}模型，换个关键词试试"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroOnlyOfficeScreen.kt",
+"line": 158,
+"text": "已生成"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroOnlyOfficeScreen.kt",
+"line": 160,
+"text": "已生成\\s+\\w+\\s+文档：(.+?)（"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroOnlyOfficeScreen.kt",
+"line": 162,
+"text": "文档："
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroOnlyOfficeScreen.kt",
+"line": 164,
+"text": "文档：(.+?)（"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPermissionScreen.kt",
+"line": 294,
+"text": "全局动作(最近任务)：${if (ok) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 122,
+"text": "孵化超时(${INCUBATE_TIMEOUT_MS}ms)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 232,
+"text": "时间: ${SimpleDateFormat("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 233,
+"text": "人格 id: ${p.id}\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 234,
+"text": "人格名: ${p.name}\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 235,
+"text": "描述: ${p.description}\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 236,
+"text": "问题: $msg\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 237,
+"text": "（由孵化超时/失败触发，与 ANR 监控共用 Download/QuroAI_logs 双写路径，无需 adb 即可在文件管理器取阅）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 239,
+"text": "孵化诊断已双写Download: $it"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 240,
+"text": "孵化诊断双写失败: ${it.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 272,
+"text": "孵化返回错误: ${(r as IncubateResult.Error).message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 276,
+"text": "孵化超时(${INCUBATE_TIMEOUT_MS}ms)，疑似 LLM 调用卡死，已中止该卡孵化"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 291,
+"text": "请先在「模型」设置中填写 API Key"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 315,
+"text": "连接超时（服务器响应太慢），请检查网络或换一个模型"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 316,
+"text": "DNS 解析失败，请检查网络连接或 API 地址是否正确"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 317,
+"text": "连接被拒绝，请确认 API 地址 (${cfg.baseUrl.take(30)}) 可访问"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 318,
+"text": "网络不可达，请检查 WiFi/数据网络后重试"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 319,
+"text": "请求失败：$msg"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 327,
+"text": "孵化过程不支持工具调用"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 334,
+"text": "（无）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 338,
+"text": "角色设定：2-4 句，定义身份、性格、说话风格"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 339,
+"text": "开场白：一句话，作为首次对话时 AI 的问候语"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 340,
+"text": "聊天设定：1-3 句，约束回复长度、语气、禁忌"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 341,
+"text": "语音设定：一句话，描述推荐音色与语速，例如'温柔女声，中等语速'"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 346,
+"text": "中文女"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroPersonaViewModel.kt",
+"line": 386,
+"text": "解析孵化结果失败：${e.message}\\n原始内容：${content.take(200)}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroScheduleScreen.kt",
+"line": 216,
+"text": "下次: ${SimpleDateFormat("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSkillsScreen.kt",
+"line": 63,
+"text": "城市名"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSkillsScreen.kt",
+"line": 172,
+"text": "，⚠️ 失败(疑似篡改) ${r.failed}：${r.failedNames.joinToString("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSkillsScreen.kt",
+"line": 180,
+"text": "${skills.count { it.enabled }} 启用 / ${skills.size} 共"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSkillsScreen.kt",
+"line": 346,
+"text": "签名已校验"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSkillsScreen.kt",
+"line": 347,
+"text": "签名失败·疑似篡改"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSkillsScreen.kt",
+"line": 348,
+"text": "未签名"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSttSettingsScreen.kt",
+"line": 76,
+"text": "中文（普通话）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSttSettingsScreen.kt",
+"line": 77,
+"text": "中文（繁体）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSttSettingsScreen.kt",
+"line": 78,
+"text": "粤语"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSttSettingsScreen.kt",
+"line": 81,
+"text": "日本語"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSttSettingsScreen.kt",
+"line": 371,
+"text": "AI 模型（Phase1 回退原生识别）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSttSettingsScreen.kt",
+"line": 372,
+"text": "本地识别（原生 SpeechRecognizer）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSttSettingsScreen.kt",
+"line": 1112,
+"text": "失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSttSettingsScreen.kt",
+"line": 1112,
+"text": "异常"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSystemStatusScreen.kt",
+"line": 187,
+"text": "● 部署中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSystemStatusScreen.kt",
+"line": 188,
+"text": "● 已部署"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSystemStatusScreen.kt",
+"line": 189,
+"text": "⛔ 部署失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSystemStatusScreen.kt",
+"line": 190,
+"text": "○ 未部署"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSystemStatusScreen.kt",
+"line": 230,
+"text": "心跳总开关：${if (heartbeatOn) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSystemStatusScreen.kt",
+"line": 245,
+"text": "最近孵化：$ago${if (inc) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroSystemStatusScreen.kt",
+"line": 306,
+"text": "${min / 1440} 天前 (${SimpleDateFormat("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 142,
+"text": "空白"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 143,
+"text": "会议纪要"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 144,
+"text": "合同"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 145,
+"text": "简历"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 146,
+"text": "报表"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 171,
+"text": "已生成"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 172,
+"text": "已生成\\s+\\w+\\s+文档：(.+?)（"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 174,
+"text": "文档："
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 175,
+"text": "文档：(.+?)（"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 279,
+"text": "• 列表"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 307,
+"text": "📊 表格"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 308,
+"text": "━━ 分割"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 309,
+"text": "> 引用"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 310,
+"text": "🔗 链接"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 311,
+"text": "</> 代码"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 312,
+"text": "☑️ 待办"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 376,
+"text": "已生成"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 377,
+"text": "已生成\\s+\\w+\\s+文档：(.+?)（"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 379,
+"text": "文档："
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 380,
+"text": "文档：(.+?)（"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 848,
+"text": "确定删除「${deleteTarget!!.name}」${if (deleteTarget!!.isDirectory) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 848,
+"text": "}？此操作不可恢复。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 914,
+"text": "类型：${if (f.isDirectory) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolboxScreen.kt",
+"line": 917,
+"text": "修改时间：${java.text.SimpleDateFormat("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolCenterScreen.kt",
+"line": 267,
+"text": "数据库：${if (chosen.isBlank()) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolCenterScreen.kt",
+"line": 1106,
+"text": "发行版：${distro?.displayName ?: "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolCenterScreen.kt",
+"line": 1110,
+"text": "包管理器：${pm?.let { "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolCenterScreen.kt",
+"line": 1521,
+"text": "已安装：${out.value["
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolCenterScreen.kt",
+"line": 1568,
+"text": "已安装：${out.value["
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolCenterScreen.kt",
+"line": 1717,
+"text": "已安装的 ${packages.size} 个工具包都不带标签「${KaleidoCatalog.TagLabels.zhOf(tagFilter ?: "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolCenterScreen.kt",
+"line": 1717,
+"text": ")}」，点上方「全部」清除筛选。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolCenterScreen.kt",
+"line": 1815,
+"text": "已安装：${out.value["
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroToolCenterScreen.kt",
+"line": 1861,
+"text": "已编译并安装：${out.value["
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroTtsSettingsScreen.kt",
+"line": 39,
+"text": "中文（普通话）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroTtsSettingsScreen.kt",
+"line": 40,
+"text": "中文（繁体）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroTtsSettingsScreen.kt",
+"line": 41,
+"text": "粤语"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroTtsSettingsScreen.kt",
+"line": 44,
+"text": "日本語"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroTtsSettingsScreen.kt",
+"line": 215,
+"text": "语速：${"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroTtsSettingsScreen.kt",
+"line": 222,
+"text": "音高：${"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroTtsSettingsScreen.kt",
+"line": 248,
+"text": "失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroTtsSettingsScreen.kt",
+"line": 248,
+"text": "异常"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 107,
+"text": "截图"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 108,
+"text": "锁屏"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 109,
+"text": "回桌面"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 110,
+"text": "多任务"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 111,
+"text": "音量+"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 112,
+"text": "音量-"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 113,
+"text": "重启"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 222,
+"text": "提权通道: ${if (hasPriv) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 223,
+"text": "USB 调试: ${when (usbOn) { null -> "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 224,
+"text": "USB 数据线: ${usbCable ?: "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 225,
+"text": " (已监听)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 225,
+"text": " (未监听)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 227,
+"text": "连接命令: ${if (tcpPort > 0 && ip != null) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 228,
+"text": "已连接客户端: ${clients.joinToString("
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 305,
+"text": "监听端口 $tcpPort${if (listening) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 634,
+"text": "未知"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 635,
+"text": "已开启"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroUsbDebugScreen.kt",
+"line": 636,
+"text": "未开启"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\QuroVoiceSettingsScreen.kt",
+"line": 266,
+"text": "当前播放服务商：$providerLabel。${if (isMimo) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\SkillSelector.kt",
+"line": 72,
+"text": "已启用 ${skills.count { it.enabled }} / ${skills.size} 个技能"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\WorkspaceCodeScreen.kt",
+"line": 342,
+"text": "删除${if (target.isDirectory) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\WorkspaceCodeScreen.kt",
+"line": 343,
+"text": "确定删除「${target.name}」吗？${if (target.isDirectory) "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\WorkspaceCodeScreen.kt",
+"line": 343,
+"text": "}此操作不可撤销。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/ui\\weather\\VizButton.kt",
+"line": 70,
+"text": "开"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\agent\\AgentThought.kt",
+"line": 167,
+"text": "理解意图"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\agent\\AgentThought.kt",
+"line": 169,
+"text": "制定计划"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\agent\\AgentThought.kt",
+"line": 170,
+"text": "检索知识"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\agent\\AgentThought.kt",
+"line": 171,
+"text": "调用技能"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\agent\\AgentThought.kt",
+"line": 172,
+"text": "方案决策"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\agent\\AgentThought.kt",
+"line": 173,
+"text": "记录经验"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\agent\\AgentThought.kt",
+"line": 174,
+"text": "生成界面"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\agent\\AgentThought.kt",
+"line": 175,
+"text": "自我修正"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\agent\\ui\\AgentThinkingUI.kt",
+"line": 111,
+"text": "已完成"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\agent\\ui\\AgentThinkingUI.kt",
+"line": 111,
+"text": "进行中"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\agent\\ui\\AgentThinkingUI.kt",
+"line": 278,
+"text": "工具: ${step.toolCall.toolName}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 17,
+"text": "做界面的工具"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 18,
+"text": "回答"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 19,
+"text": "你好"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 19,
+"text": "讲个笑话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 19,
+"text": "我想你了"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 19,
+"text": "帮我算账"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 21,
+"text": "完整全屏界面"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 69,
+"text": "界面唯一标识"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 70,
+"text": "界面标题"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 72,
+"text": "根组件类型"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 73,
+"text": "属性名"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 73,
+"text": "属性值"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 74,
+"text": "样式名"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 74,
+"text": "样式值"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 113,
+"text": "内容"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 114,
+"text": "按钮文字"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 115,
+"text": "描述"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 117,
+"text": "标题"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 117,
+"text": "副标题"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 120,
+"text": "项1"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 120,
+"text": "描述1"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 120,
+"text": "项2"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 121,
+"text": "提示"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 121,
+"text": "标签"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 122,
+"text": "选项"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 123,
+"text": "开关"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 125,
+"text": "标签名"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 130,
+"text": "标签1"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 130,
+"text": "标签2"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 131,
+"text": "首页"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 131,
+"text": "设置"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 133,
+"text": "收入"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 134,
+"text": "事件1"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 134,
+"text": "事件2"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 137,
+"text": "消息"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 138,
+"text": "标题"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 179,
+"text": "姓名"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 181,
+"text": "提交"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 217,
+"text": "带底色的小块标签"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 218,
+"text": "团子"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 239,
+"text": "确定"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 322,
+"text": "设置"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 326,
+"text": "设置"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 329,
+"text": "清除缓存"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 332,
+"text": "清除缓存"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 332,
+"text": "128MB 缓存文件"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 333,
+"text": "已清除"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 345,
+"text": "堆组件"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 345,
+"text": "设计界面"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 357,
+"text": "用 markdown/a2ui/html 写"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 365,
+"text": "今日状态"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 367,
+"text": "今日状态"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 369,
+"text": "生命 72 / 金币 120"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 384,
+"text": "官方协议/JSONL"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 388,
+"text": "今日状态"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 389,
+"text": "生命 72 / 金币 120"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 397,
+"text": "帮我确认一下"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 398,
+"text": "你想要哪种风格？"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 399,
+"text": "GenUI 交互界面"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 399,
+"text": "HTML 网页"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 399,
+"text": "Markdown 文章"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 399,
+"text": "我选："
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 422,
+"text": "内容"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 422,
+"text": "标题"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 424,
+"text": "详情页"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 469,
+"text": "标签1"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 469,
+"text": "标签2"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 504,
+"text": "数据概览"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 511,
+"text": "最近动态"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 531,
+"text": "设置"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 533,
+"text": "通用"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 536,
+"text": "隐私"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 544,
+"text": "我的"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 549,
+"text": "我的服务"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 552,
+"text": "其他"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 571,
+"text": "标题"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 574,
+"text": "操作"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 588,
+"text": "我的自定义卡片"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 599,
+"text": "默认标题"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 599,
+"text": "默认描述"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 607,
+"text": "新标题"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 607,
+"text": "新描述"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 617,
+"text": "我的自定义卡片"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 693,
+"text": "工具名"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 693,
+"text": "{参数JSON}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 739,
+"text": "你好"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 739,
+"text": "讲个笑话"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 744,
+"text": "帮我看天气"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 744,
+"text": "做个计算器"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 749,
+"text": "做一个电商首页"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 829,
+"text": "数据仪表盘"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 836,
+"text": "仪表盘"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 841,
+"text": "总收入"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 842,
+"text": "用户数"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 847,
+"text": "收入趋势"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 848,
+"text": "本月"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 851,
+"text": "周一"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 851,
+"text": "周二"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 851,
+"text": "周三"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 851,
+"text": "周四"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 851,
+"text": "周五"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 851,
+"text": "周六"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 851,
+"text": "周日"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 855,
+"text": "最近活动"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 858,
+"text": "新用户注册"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 858,
+"text": "5分钟前"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 859,
+"text": "新订单 #3920"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 859,
+"text": "15分钟前"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 860,
+"text": "新评价 4.8"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 860,
+"text": "1小时前"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\GenUiRules.kt",
+"line": 864,
+"text": "刷新数据"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\ZorvBrain.kt",
+"line": 62,
+"text": "默认人格"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\ZorvBrain.kt",
+"line": 91,
+"text": "## GenUI 表达层（本会话的输出形态）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\ZorvBrain.kt",
+"line": 92,
+"text": "以下约束的是「你怎么表达」，不改变你的身份：你的名字与人格始终以当前激活的人格卡为准。\\n\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\ZorvBrain.kt",
+"line": 111,
+"text": "\\n\\n## 设计技能层（宿主技能库 · 默认启用）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\ZorvBrain.kt",
+"line": 112,
+"text": "下面是若干份设计规范，生成界面时按其执行；与上文冲突时，以本层为准。\\n\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\ZorvBrain.kt",
+"line": 114,
+"text": "### 技能："
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\ZorvBrain.kt",
+"line": 140,
+"text": "工具「$name」未返回内容"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\brain\\ZorvBrain.kt",
+"line": 142,
+"text": "工具执行异常: ${e.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\GenUiDiag.kt",
+"line": 89,
+"text": "画布诊断已写入 Download/$DIR_NAME/$name"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\GenUiDiag.kt",
+"line": 90,
+"text": "MediaStore 写画布诊断失败: ${it.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\GenUiDiag.kt",
+"line": 99,
+"text": "旧版写画布诊断失败: ${it.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\GenUiDiag.kt",
+"line": 105,
+"text": "兜底写画布诊断失败: ${it.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\RenderChannel.kt",
+"line": 23,
+"text": "原生 DSL · 组件/交互最全，默认主力"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\RenderChannel.kt",
+"line": 24,
+"text": "扁平 JSON · 省 token · 结构化展示"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\RenderChannel.kt",
+"line": 25,
+"text": "纯文章 / 攻略 / 长文"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\RenderChannel.kt",
+"line": 26,
+"text": "独立网页 / 复杂样式 / 小游戏"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\RenderChannel.kt",
+"line": 56,
+"text": "(别用|不要用|不要|不用|禁止用)\\\\s*([a-z0-9 ]+)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\RenderChannel.kt",
+"line": 66,
+"text": "网页"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\RenderChannel.kt",
+"line": 66,
+"text": "小游戏"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\RenderChannel.kt",
+"line": 67,
+"text": "生成式界面"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\RenderChannel.kt",
+"line": 67,
+"text": "原生 dsl"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\RenderChannel.kt",
+"line": 77,
+"text": "生成式界面"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\RenderChannel.kt",
+"line": 77,
+"text": "原生 dsl"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\RenderChannel.kt",
+"line": 80,
+"text": "网页"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\data\\RenderChannel.kt",
+"line": 80,
+"text": "小游戏"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\host\\AiActionHost.kt",
+"line": 82,
+"text": "无法打开链接：${e.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\host\\AiActionHost.kt",
+"line": 97,
+"text": "复制失败：${e.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\host\\AiActionHost.kt",
+"line": 223,
+"text": "分享失败：${e.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\host\\AiActionHost.kt",
+"line": 241,
+"text": "未找到目标应用"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\host\\AiActionHost.kt",
+"line": 244,
+"text": "无法打开应用：${e.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\host\\AiActionHost.kt",
+"line": 269,
+"text": "▶ 正在播放：$title"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\host\\AiActionHost.kt",
+"line": 272,
+"text": "播放失败($what/$extra)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\host\\AiActionHost.kt",
+"line": 277,
+"text": "播放失败：${e.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\host\\AiActionHost.kt",
+"line": 302,
+"text": "无法打开页面：${e.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\host\\AiActionHost.kt",
+"line": 320,
+"text": "无法执行：${e.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 86,
+"text": ">>> max_tokens 钳到 $effectiveMaxTokens（原 $maxTokens 超限）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 93,
+"text": ">>> reasoning model: max_completion_tokens, 省略 temperature (model=$model)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 173,
+"text": "响应体超限 ${rawBody.length}ch, 截断处理"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 195,
+"text": "连接模型服务超时（${NET_CALL_TIMEOUT_MS / 1000} 秒无响应），请检查网络或模型服务地址后重试"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 290,
+"text": "响应体为空"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 304,
+"text": "响应过大，超过 ${MAX_RESPONSE_BYTES / 1024 / 1024}MB 限制"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 438,
+"text": "响应中没有 choices"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 443,
+"text": "响应中没有 message"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 470,
+"text": "解析响应失败: ${e.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 574,
+"text": "模型服务网关暂时不可用（502 Bad Gateway），请稍后重试"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 576,
+"text": "模型服务暂时不可用（503），请稍后重试"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 578,
+"text": "模型服务响应超时（504），请稍后重试"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 580,
+"text": "请求过于频繁（429），请稍后重试"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 583,
+"text": "模型上游服务返回 500（Internal Server Error）。通常是模型服务端临时故障或该模型/中转不可用，"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 584,
+"text": "请稍后重试；若持续出现，请到「模型配置」检查模型名与中转地址。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 586,
+"text": "API 密钥无效或已过期（401），请在模型配置中检查 API Key"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 588,
+"text": "请求的模型或端点不存在（404），请检查模型名和 Base URL 是否正确"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 591,
+"text": "请求参数错误（400）：$msg"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 595,
+"text": "请求失败（HTTP $code）：$msg"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 623,
+"text": "无法连接到模型服务（连接被拒绝或超时），请检查网络或模型服务地址后重试"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 625,
+"text": "连接模型服务超时，请检查网络后重试"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 628,
+"text": "无法解析模型服务地址（DNS 失败），请检查 baseUrl 是否正确"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 630,
+"text": "模型服务 TLS/证书校验失败，请检查地址是否为 https 且证书有效"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 632,
+"text": "请求被重定向过多，请检查 baseUrl 是否正确"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 634,
+"text": "<<< friendlyNetError: 异常 message 为空, 类名=$simpleName"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 635,
+"text": "网络错误（$simpleName）：未知网络故障，请检查 baseUrl 是否正确、网络是否可达"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClient.kt",
+"line": 637,
+"text": "网络错误（$simpleName）：$message"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\net\\GenUILlmClientKt.kt",
+"line": 81,
+"text": "网络错误：$masked"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\GenUITool.kt",
+"line": 87,
+"text": "工具不存在: $name"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\RegisterComponentTool.kt",
+"line": 25,
+"text": "注册一个新的自定义组件类型到 GenUI SDK。注册后可以在后续的 UI 生成中直接使用该组件类型。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\RegisterComponentTool.kt",
+"line": 26,
+"text": "当你需要的组件不在内置组件列表中时，使用此工具先注册再使用。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\RegisterComponentTool.kt",
+"line": 34,
+"text": "组件类型名称，使用小写字母和下划线，如 weather_card"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\RegisterComponentTool.kt",
+"line": 38,
+"text": "组件功能描述，说明这个组件的用途"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\RegisterComponentTool.kt",
+"line": 42,
+"text": "组件分类，如 custom/layout/display/button/input 等"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\RegisterComponentTool.kt",
+"line": 47,
+"text": "组件模板，一个完整的 UIComponent JSON 对象，包含 type、properties、style、children 等"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\RegisterComponentTool.kt",
+"line": 51,
+"text": "变量映射，key 是变量名，value 是默认值说明"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\RegisterComponentTool.kt",
+"line": 67,
+"text": "组件名称不能为空"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\RegisterComponentTool.kt",
+"line": 72,
+"text": "组件模板 template 不能为空"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\RegisterComponentTool.kt",
+"line": 92,
+"text": "组件模板解析失败: ${e.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\RegisterComponentTool.kt",
+"line": 98,
+"text": "动态注册表未初始化"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\RegisterComponentTool.kt",
+"line": 112,
+"text": "组件 $compName 注册成功"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\tools\\RegisterComponentTool.kt",
+"line": 119,
+"text": "注册组件失败: ${e.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatHistory.kt",
+"line": 91,
+"text": "…〔工具结果过长已截断〕"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatHistory.kt",
+"line": 114,
+"text": "历史回复"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatHistory.kt",
+"line": 128,
+"text": "[系统折叠提示：此处原有 $kind 共 $length 字符，已从上下文中移除；"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatHistory.kt",
+"line": 129,
+"text": "不要在任何回复或界面里复述本提示]"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatHistory.kt",
+"line": 153,
+"text": "结构化数据"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatHistory.kt",
+"line": 153,
+"text": "界面 JSON"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 123,
+"text": "（上次会话在此中断）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 262,
+"text": "用\\\\s*html|html\\\\s*(写|版|页)|写\\\\s*html"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 263,
+"text": "genui|生成式界面|原生\\\\s*dsl"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 316,
+"text": "（结构未识别，原文）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 375,
+"text": "❌ 保存失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 385,
+"text": "[^A-Za-z0-9_.\\\\-一-龥]"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 481,
+"text": "当前选的是本地离线模型（${config.provider}），GenUI 助手需要云端模型。请到 ZorvAI 主设置切换模型后重试。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 486,
+"text": "ZorvAI 尚未配置 API Key，请到主设置 → 模型配置 填写后重试"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 490,
+"text": "ZorvAI 尚未配置 Base URL，请到主设置 → 模型配置 填写后重试"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 494,
+"text": "ZorvAI 尚未选择模型，请到主设置 → 模型配置 选择后重试"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 529,
+"text": "未选择渲染通道，本轮已取消。可直接再发一次。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 550,
+"text": "这一轮用哪条渲染通道？同一段需求，四条通道出来的东西完全不一样。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 637,
+"text": "# 上下文用法（每轮都读）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 638,
+"text": "上面的历史消息只是背景资料。你只执行【最后一条】用户消息。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 639,
+"text": "禁止把历史里的旧指令重新执行、复述、编号或汇总成清单；"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 640,
+"text": "禁止回复「您发出了很多条指令」「我来逐条理解」这类元话术。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 641,
+"text": "用户这一轮没提的事就不要提，直接用 UI 回应最后那条消息。\\n\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 643,
+"text": "# 本轮通道已锁定：GenUI SDK（用户已在询问弹窗里确认，最高优先级）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 645,
+"text": "绝对禁止输出 markdown / a2ui / html 围栏；不许用一篇文章代替界面。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 647,
+"text": "# 本轮通道已由用户锁定（最高优先级）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 648,
+"text": "用户明确指定本轮必须使用三反引号"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 648,
+"text": "围栏输出。\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 649,
+"text": "绝对禁止输出任何其他围栏（markdown/a2ui/html/genui 都不行）；\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 652,
+"text": "# 输出通道选择（第一优先级）\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 653,
+"text": "- GenUI SDK 通道是主力默认：生成式界面/交互应用一律走 GenUI 流程\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 654,
+"text": "- 用户点名要某通道（用 markdown/a2ui/html 写）→ 必须按用户指定的通道输出\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 655,
+"text": "- 用户未点名时，按内容类型自选：纯文章/攻略/新闻/长文 → markdown 围栏；"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 656,
+"text": "独立网页/复杂样式/可玩小游戏 → html 围栏；简单结构化展示/省 token → a2ui 围栏\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 785,
+"text": "工具调用超过最大轮次（${getMaxToolCallRounds()}轮），已停止"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 788,
+"text": "（本轮工具调用超过最大轮次，未产出界面）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 800,
+"text": "你的上一条输出在 genui 代码块中途被截断了。现在请【跳过所有思考过程】，"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 801,
+"text": "禁止输出 <intent>、<plan>、<think> 等任何标签和解释文字，"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 802,
+"text": "第一行就直接输出 ```genui 代码块，内容是一个【完整且精简】的 JSON："
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 803,
+"text": "从 {\\\"id\\\" 开始到收尾括号完整闭合，控制在 600 字以内，"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 804,
+"text": "删掉可有可无的装饰性组件，但必须保留核心功能内容和完整闭合的结构。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 817,
+"text": "第一行直接输出 ```genui 代码块，内容是修正后的【完整且闭合】的 JSON（从 {\\\"id\\\" 开始到收尾括号），"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 818,
+"text": "确保以下问题全部解决：\\n"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 888,
+"text": "界面 JSON 无法解析（结构损坏或未闭合），请重新生成完整闭合的 genui JSON。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 893,
+"text": "缺少 root 根节点，界面无法渲染。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 908,
+"text": "标题节点（type=$type）没有任何文字内容，标题将不可见，请补上 text/label/title。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 922,
+"text": "颜色值非法：$c（组件 $type），请改用十六进制，如 #RRGGBB 或 #AARRGGBB。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 927,
+"text": "文字颜色与背景颜色相同（$fg on $effBg），文字不可见，请调整对比度。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 931,
+"text": "界面内容为空（没有任何可见组件或文字），请补充实际内容。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 933,
+"text": "界面没有任何文字内容，可能不可读，请补充可见文本。"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1021,
+"text": "内容页"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1025,
+"text": "内容页"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1070,
+"text": "【画布诊断】"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1071,
+"text": "字符"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1072,
+"text": " | 含genui围栏="
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1073,
+"text": " | 含root键="
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1074,
+"text": " | root值已开始="
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1076,
+"text": " | 清洗后="
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1076,
+"text": "字符"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1082,
+"text": " || 画布收到: "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1082,
+"text": "字符, root.type="
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1084,
+"text": " || 画布收到: 兜底卡片(提取全部失败)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1089,
+"text": "宽松候选可解析但strict失败"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1090,
+"text": "无完整候选"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1091,
+"text": " | 失败原因: "
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1104,
+"text": "（AI 未返回有效 UI，请重试）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1129,
+"text": "未命名作品"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1239,
+"text": "工具执行失败: ${e.message}"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1257,
+"text": "（本轮请求失败：${result.message.take(80)}）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1269,
+"text": "（本轮已由用户中止，未产出界面）"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1373,
+"text": "逐一检查"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1373,
+"text": "检查所有"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1373,
+"text": "逐个检查"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1373,
+"text": "依次检查"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1373,
+"text": "组件合规"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1374,
+"text": "组件检查"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1374,
+"text": "类型检查"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1374,
+"text": "格式检查"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1375,
+"text": "让我想想"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1375,
+"text": "我来分析"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1376,
+"text": "分析过程"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1377,
+"text": "核心需求不是"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1377,
+"text": "视觉上要有"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1377,
+"text": "语气要"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1394,
+"text": "\\\\*\\\\*(组件|类型|格式|合规|检查|验证|校验)"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1398,
+"text": "个领域"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1398,
+"text": "组件类型"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1399,
+"text": "全部"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1399,
+"text": "种组件均在"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 1943,
+"text": "〔已生成：$label〕"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2027,
+"text": "分析"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2027,
+"text": "分析过程"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2028,
+"text": "计划"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2029,
+"text": "检索"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2030,
+"text": "判断"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2030,
+"text": "反思"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2031,
+"text": "工具使用"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2044,
+"text": "(?i)^\\\\s*\\\\*\\\\*(思考|分析|计划|决策|检索|工具调用|生成|反思|判断)\\\\*\\\\*[：:].*$"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2052,
+"text": "信息已获取"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2052,
+"text": "获取到信息"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2052,
+"text": "已获取信息"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2053,
+"text": "工具调用结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2053,
+"text": "工具结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2053,
+"text": "工具返回"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2053,
+"text": "工具执行结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2056,
+"text": "执行结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2056,
+"text": "运行结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2056,
+"text": "调用结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2057,
+"text": "返回结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2057,
+"text": "响应结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2058,
+"text": "查询结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2058,
+"text": "搜索结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2059,
+"text": "组件注册"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2059,
+"text": "注册结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2073,
+"text": "根据.*信息"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2073,
+"text": "根据.*结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2073,
+"text": "基于.*信息"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2073,
+"text": "基于.*结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2074,
+"text": "结合.*信息"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2074,
+"text": "结合.*结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2074,
+"text": "按照.*信息"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2074,
+"text": "按照.*结果"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2280,
+"text": "AI 界面"
+},
+{
+"file": "app/src/main/java/com/ai/assistance/quro/genui/aiapp\\viewmodel\\ChatViewModel.kt",
+"line": 2285,
+"text": "{\\\"type\\\":\\\"text\\\",\\\"properties\\\":{\\\"text\\\":\\\"界面内容生成不完整，请点击重试\\\"},\\\"style\\\":{\\\"textSize\\\":14}}]}"
+}
+]

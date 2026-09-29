@@ -470,7 +470,7 @@ AI 网页生成：
             """.trimIndent()
 
             // 数据/科学
-            "数据", "科学", "r", "matlab", "julia", "sql" -> """
+            qstr(R.string.qk_03832), "科学", "r", "matlab", "julia", "sql" -> """
 📊 数据/科学 IDE：
 
 | 语言 | 语言专属 IDE | 通用 IDE |

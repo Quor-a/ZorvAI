@@ -3809,4 +3809,47 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_03827">人格孵化失败：%1$s</string>
     <string name="qk_03828">人格自动孵化失败：%1$s</string>
     <string name="qk_03829" formatted="false">你好，我是 Zorv AI。已就绪，可以聊天、调用工具。点左上角菜单查看历史对话，或点 ＋ 新建对话。</string>
+    <string name="qk_03830" formatted="false">关于</string>
+    <string name="qk_03831" formatted="false">功能</string>
+    <string name="qk_03832" formatted="false">数据</string>
+    <string name="qk_03833" formatted="false">权限</string>
+    <string name="qk_03834" formatted="false">导出对话</string>
+    <string name="qk_03835" formatted="false">技能管理</string>
+    <string name="qk_03836" formatted="false">清理存储</string>
+    <string name="qk_03837" formatted="false">组件画廊</string>
+    <string name="qk_03838" formatted="false">外观与对话</string>
+    <string name="qk_03839" formatted="false">导出为文本</string>
+    <string name="qk_03840" formatted="false">清除全部对话</string>
+    <string name="qk_03841" formatted="false">离线模型下载</string>
+    <string name="qk_03842" formatted="false">AI 回复通知</string>
+    <string name="qk_03843" formatted="false">ACI 管理中心</string>
+    <string name="qk_03844" formatted="false">GitHub 管理</string>
+    <string name="qk_03845" formatted="false">USB / 无线调试</string>
+    <string name="qk_03846" formatted="false">合成 / 识别 / 设置</string>
+    <string name="qk_03847" formatted="false">推理引擎、参数与能力范围</string>
+    <string name="qk_03848" formatted="false">钩子注入 / 作用域管理</string>
+    <string name="qk_03849" formatted="false">真实 PTY 终端（实验）</string>
+    <string name="qk_03850" formatted="false">破坏性命令二次确认（授权）</string>
+    <string name="qk_03851" formatted="false">Web 应用式插件 Demo</string>
+    <string name="qk_03852" formatted="false">偏好、外观与功能，随手可调。</string>
+    <string name="qk_03853" formatted="false">分类清理日志、缓存、AI产物等</string>
+    <string name="qk_03854" formatted="false">灵魂注入 · 灵魂卡 · 记忆库</string>
+    <string name="qk_03855" formatted="false">项目地址 / 开源许可 / 开发者</string>
+    <string name="qk_03856" formatted="false">离开软件时系统弹窗通知 / 桌面卡片</string>
+    <string name="qk_03857" formatted="false">浏览沙箱目录 · 在系统文件管理器中打开</string>
+    <string name="qk_03858" formatted="false">把内置工具以 MCP 协议暴露给本机客户端</string>
+    <string name="qk_03859" formatted="false">设备 / 权限能力 / 模块运行态 / 人格心跳</string>
+    <string name="qk_03860" formatted="false">ADB：被电脑控制 · 本机客户端 · TCP 监听</string>
+    <string name="qk_03861" formatted="false">内置多官方镜像直链，一键下载 GGUF 本地推理权重</string>
+    <string name="qk_03862" formatted="false">上下文总结 / 记忆 / 人格孵化 / 视频 / 图片</string>
+    <string name="qk_03863" formatted="false">自定义 SKILL：新增 / 编辑 / 启用 / 停用</string>
+    <string name="qk_03864" formatted="false">深色模式 · 字号 · 提示音 · 回车发送 · 语音球</string>
+    <string name="qk_03865" formatted="false">可视化组件库：卡片 / 按钮 / 输入 / 交互 / 覆盖层</string>
+    <string name="qk_03866" formatted="false">已发现第三方 App / 绑定状态 / 能力清单 / 手动注册刷新重绑</string>
+    <string name="qk_03867" formatted="false">L1 无障碍 / L2 Shizuku / L3 设备管理员 / L4 ROOT</string>
+    <string name="qk_03868" formatted="false">伪终端：vim/top/REPL 可交互、SIGINT 正常；出问题请关闭回退管道</string>
+    <string name="qk_03869" formatted="false">桌面启动器 / 浏览器 / 相册 / 视频 / 邮箱 / 文档 / 短信 / 拨号</string>
+    <string name="qk_03870" formatted="false">登录后管理仓库 / Issue / Star / 通知，对话框内可搜 GitHub</string>
+    <string name="qk_03871" formatted="false">开启后 rm -rf / dd / mkfs 等危险命令需再次发送或 confirm 才执行</string>
+    <string name="qk_03872" formatted="false">跟随系统</string>
 </resources>
