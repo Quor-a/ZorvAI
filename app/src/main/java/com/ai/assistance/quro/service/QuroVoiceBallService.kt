@@ -48,6 +48,7 @@ import com.ai.assistance.quro.core.QuroAssistant
 import com.ai.assistance.quro.core.util.QuroServiceLifecycleOwner
 import com.ai.assistance.quro.core.tools.QuroSttHolder
 import com.ai.assistance.quro.core.QuroPlatformManifest
+import com.ai.assistance.quro.core.QuroReplyLanguage
 import com.ai.assistance.quro.core.QuroConversationStore
 import com.ai.assistance.quro.core.network.QuroLlmClient
 import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
@@ -737,6 +738,10 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         // 平台/品牌自我认知基座（永远最先，不被人格覆盖）
         sb.append(QuroPlatformManifest.SYSTEM).append("\n\n")
 
+        // 「AI 回复语言」：语音球此前**完全没有**语言指令，而基座提示词全中文
+        // → 界面切英文/其他语言时，语音球照样用中文说话（且 TTS 也照念中文）。
+        sb.append(QuroReplyLanguage.directive(applicationContext))
+
         // 用户身份（来自「设置 > 外观与对话 > 用户资料」；让 AI 知道对话对象是谁）
         val userProfile = runCatching { QuroChatViewModel.instance.userProfile.value }.getOrNull()
         if (userProfile != null && userProfile.name.isNotBlank()) {
@@ -803,6 +808,8 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 sb.append(m.content).append("\n")
             }
         }
+        // 语言指令在结尾再复述一次（近因强化）：本提示词含工具清单与使用纪律，篇幅很长。
+        sb.append(QuroReplyLanguage.tailReminder(applicationContext))
         return sb.toString().trim()
     }
 

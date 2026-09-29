@@ -6,6 +6,7 @@ import android.content.Context
 import com.ai.assistance.quro.core.QuroPersona
 import com.ai.assistance.quro.core.QuroPersonaRepository
 import com.ai.assistance.quro.core.QuroPlatformManifest
+import com.ai.assistance.quro.core.QuroReplyLanguage
 import com.ai.assistance.quro.core.QuroTagRepository
 import com.ai.assistance.quro.core.QuroToolCall
 import com.ai.assistance.quro.core.QuroToolSpec
@@ -74,6 +75,10 @@ class ZorvBrain(private val context: Context) {
         val sb = StringBuilder()
         sb.append(QuroPlatformManifest.SYSTEM).append("\n\n")
 
+        // 「AI 回复语言」：GenUI Agent 走独立提示词，此前没有语言指令 → 界面切英文后
+        // 它生成的界面文案与对话文字仍是中文。
+        sb.append(QuroReplyLanguage.directive(appCtx))
+
         val persona = runCatching { activePersona() }.getOrNull()
         val soul = QuroSoulPromptEngine.build(
             SoulContext(
@@ -92,6 +97,9 @@ class ZorvBrain(private val context: Context) {
         sb.append("以下约束的是「你怎么表达」，不改变你的身份：你的名字与人格始终以当前激活的人格卡为准。\n\n")
         sb.append(GenUiRules.RULES)
         appendDesignSkills(sb)
+
+        // 语言指令结尾复述（近因强化）：设计技能层篇幅很长，必须压在最末尾。
+        sb.append(QuroReplyLanguage.tailReminder(appCtx))
 
         return sb.toString().trimEnd()
     }

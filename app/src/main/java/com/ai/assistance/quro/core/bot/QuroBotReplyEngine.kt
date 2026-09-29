@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.bot
 
 import android.content.Context
 import com.ai.assistance.quro.core.QuroAssistant
+import com.ai.assistance.quro.core.QuroReplyLanguage
 import com.ai.assistance.quro.core.QuroConversationStore
 import com.ai.assistance.quro.core.QuroMessage
 import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
@@ -46,10 +47,16 @@ class QuroBotReplyEngine(private val appContext: Context) {
     /** 机器人系统提示词（精简身份 + 平台语境；工具由 QuroAssistant 按 registry 下发）。 */
     private fun systemPrompt(platform: QuroBotPlatform, displayName: String): String = buildString {
         append("你是**运行在 Zorv AI 这个端侧运行环境里的 AI 助手**，正在通过「${platform.label}」与用户「$displayName」对话。\n")
-        append("用简洁、自然的中文回答；遇到需要查资料或调用能力时直接做，不要复述工具名。\n")
+        append("用简洁、自然、口语化的表达回答（**具体用哪种语言**以文件末尾的「回复语言」指令为准）；"
+            + "遇到需要查资料或调用能力时直接做，不要复述工具名。\n")
         append("这是一个聊天机器人场景，不要主动操控用户设备做危险动作，除非用户明确要求。\n")
         append("知识库检索可用 knowledge_rag_search（语义检索）与 knowledge_search（关键词）。\n")
         append("不要自称「AI 语言模型 / 大语言模型 / 聊天机器人」；Zorv AI 是你运行的端侧环境，不是你的名字。")
+
+        // 「AI 回复语言」：机器人此前写死「用中文回答」，与界面语言直接冲突。
+        // 放在最末尾 = 最高近因偏好，避免被上面几句中文指令盖过。
+        append("\n")
+        append(QuroReplyLanguage.directive(appContext.applicationContext))
     }
 
     /** 取得/创建某用户的会话内核。 */
