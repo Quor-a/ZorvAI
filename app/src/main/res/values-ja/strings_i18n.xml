@@ -478,9 +478,9 @@
     <string name="qk_00466">%1$s を開く</string>
     <string name="qk_00467">Open failed: %1$s</string>
     <string name="qk_00468" formatted="false">ホストにサンプルプラグインが内蔵されていません</string>
-    <string name="qk_00469">Built-in plugin installed: %1$s</string>
-    <string name="qk_00470">Built-in plugin install failed: %1$s</string>
-    <string name="qk_00471">Built-in plugin install error: %1$s</string>
+    <string name="qk_00469">組み込みプラグインのインストールに成功：%1$s</string>
+    <string name="qk_00470">組み込みプラグインのインストールに失敗：%1$s</string>
+    <string name="qk_00471">組み込みプラグインのインストールで例外：%1$s</string>
     <string name="qk_00472" formatted="false">不明</string>
     <string name="qk_00473" formatted="false">ACI 機能</string>
     <string name="qk_00474" formatted="false">会話カード</string>
@@ -496,9 +496,9 @@
     <string name="qk_00484" formatted="false">コード実行環境</string>
     <string name="qk_00485" formatted="false">音声</string>
     <string name="qk_00486" formatted="false">プラグイン取り込み時に自動で署名を補完</string>
-    <string name="qk_00487">Ready: %1$s (built-in)</string>
+    <string name="qk_00487">準備完了：%1$s（組み込み）</string>
     <string name="qk_00488" formatted="false">All install commands sent to terminal</string>
-    <string name="qk_00489">Host signature: %1$s</string>
+    <string name="qk_00489">ホストの現在の署名：%1$s</string>
     <string name="qk_00490" formatted="false">プラグインランタイムを初期化中…</string>
     <string name="qk_00491" formatted="false">プラグインランタイム</string>
     <string name="qk_00492" formatted="false">QuickJS サンドボックス</string>
@@ -509,7 +509,7 @@
 %2$s</string>
     <string name="qk_00496">リンクを開けません：%1$s</string>
     <string name="qk_00497" formatted="false">Zorv AI について</string>
-    <string name="qk_00498" formatted="false">Open-source AI assistant · original build.</string>
+    <string name="qk_00498" formatted="false">オープンソースAIアシスタント · 独自ビルド。</string>
     <string name="qk_00499" formatted="false">更新とサポート</string>
     <string name="qk_00500" formatted="false">更新を確認</string>
     <string name="qk_00501" formatted="false">確認中…</string>
@@ -517,15 +517,15 @@
     <string name="qk_00503" formatted="false">不明なエラー</string>
     <string name="qk_00504">新バージョン v%1$s が見つかりました</string>
     <string name="qk_00505">Already the latest version v%1$s</string>
-    <string name="qk_00506">Update check failed: %1$s</string>
+    <string name="qk_00506">更新の確認に失敗：%1$s</string>
     <string name="qk_00507" formatted="false">プロジェクトURL</string>
-    <string name="qk_00508" formatted="false">Star on GitHub</string>
-    <string name="qk_00509" formatted="false">If you like Zorv AI, feel free to give it a Star ⭐</string>
+    <string name="qk_00508" formatted="false">GitHub で Star を付ける</string>
+    <string name="qk_00509" formatted="false">Zorv AI が気に入ったら Star ⭐ をお願いします</string>
     <string name="qk_00510" formatted="false">オープンソースライセンス</string>
     <string name="qk_00511" formatted="false">View licenses of third-party dependencies used by this app</string>
     <string name="qk_00512" formatted="false">法務とコンプライアンス</string>
     <string name="qk_00513" formatted="false">権限使用の声明</string>
-    <string name="qk_00514" formatted="false">Description of the purposes of permissions requested by this app</string>
+    <string name="qk_00514" formatted="false">本アプリが要求する権限の用途説明</string>
     <string name="qk_00515" formatted="false">利用規約</string>
     <string name="qk_00516" formatted="false">本アプリの使用前に必ずお読みください</string>
     <string name="qk_00517" formatted="false">開発者</string>
@@ -538,44 +538,44 @@
     <string name="qk_00524" formatted="false">JetBrains - asynchronous programming framework</string>
     <string name="qk_00525" formatted="false">Rikka - ADB-level IPC channel for root-free system command execution</string>
     <string name="qk_00526" formatted="false">Vanniktech - image cropping component</string>
-    <string name="qk_00527" formatted="false">Apache Software Foundation - archive file handling</string>
+    <string name="qk_00527" formatted="false">Apache Software Foundation - 圧縮ファイル処理</string>
     <string name="qk_00528" formatted="false">Fabrice Bellard - lightweight JavaScript engine used for the plugin runtime</string>
-    <string name="qk_00529" formatted="false">k2-fsa - on-device speech recognition engine (SenseVoice)</string>
+    <string name="qk_00529" formatted="false">k2-fsa - 端末側音声認識エンジン（SenseVoice）</string>
     <string name="qk_00530" formatted="false">Mozilla - open-source browser engine, file-level Copyleft, source shipped with the package</string>
     <string name="qk_00531" formatted="false">Public Domain - the &quot;Good, not Evil&quot; clause has been removed since version 20220924</string>
     <string name="qk_00532" formatted="false">Google - Health Connect client</string>
     <string name="qk_00533" formatted="false">JUnit team - unit testing framework (Eclipse Public License 2.0)</string>
     <string name="qk_00534" formatted="false">Alibaba - on-device AI inference framework, source-compiled, full flavor</string>
     <string name="qk_00535" formatted="false">ggml authors - local LLM inference engine, source-compiled, full flavor</string>
-    <string name="qk_00536" formatted="false">Tencent - high-performance neural network inference framework, prebuilt .so</string>
+    <string name="qk_00536" formatted="false">Tencent - 高性能ニューラルネット推論フレームワーク、プリコンパイル済み .so</string>
     <string name="qk_00537" formatted="false">PRoot - root-free user-space chroot/mount emulation, prebuilt .so. Source: https://github.com/proot-me/proot</string>
     <string name="qk_00538" formatted="false">Samba project - hierarchical memory allocator, prebuilt .so, dynamically linked. Source: https://talloc.samba.org</string>
-    <string name="qk_00539" formatted="false">Ubuntu 24.04 environment</string>
+    <string name="qk_00539" formatted="false">Ubuntu 24.04 環境</string>
     <string name="qk_00540" formatted="false">Includes glibc, coreutils, apt package manager, etc., for the in-app Linux environment</string>
     <string name="qk_00541" formatted="false">Three.js Authors - 3D rendering engine used for GLB avatar display</string>
     <string name="qk_00542" formatted="false">Google - 3D data compression/decompression library (draco_decoder.wasm)</string>
-    <string name="qk_00543" formatted="false">CodeMirror - code editor component (v5.65.16)</string>
+    <string name="qk_00543" formatted="false">CodeMirror - コードエディタコンポーネント（v5.65.16）</string>
     <string name="qk_00544" formatted="false">Pierre Quentel - in-browser Python runtime</string>
     <string name="qk_00545" formatted="false">Mermaid - chart/flowchart rendering library</string>
     <string name="qk_00546" formatted="false">Mozilla - PDF rendering engine</string>
-    <string name="qk_00547" formatted="false">Adobe CMap resources</string>
+    <string name="qk_00547" formatted="false">Adobe CMap リソース</string>
     <string name="qk_00548" formatted="false">Adobe Systems - PDF character mapping tables (cmaps/ directory)</string>
     <string name="qk_00549" formatted="false">Michael Williamson - DOCX to HTML converter</string>
-    <string name="qk_00550" formatted="false">SheetJS - spreadsheet parsing/writing library (xlsx.js)</string>
-    <string name="qk_00551" formatted="false">Google/Red Hat - PDF standard fonts</string>
+    <string name="qk_00550" formatted="false">SheetJS - 表計算の解析/書き込みライブラリ（xlsx.js）</string>
+    <string name="qk_00551" formatted="false">Google/Red Hat - PDF 標準フォント</string>
     <string name="qk_00552" formatted="false">PDFium Authors (Google) - PDF standard fonts</string>
     <string name="qk_00553" formatted="false">ACI コンソール UI</string>
     <string name="qk_00554" formatted="false">Self-developed by this app (core/aci + consolekit), no third-party dependencies</string>
-    <string name="qk_00555">New version found: v%1$s</string>
+    <string name="qk_00555">新バージョン v%1$s が見つかりました</string>
     <string name="qk_00556" formatted="false">New version detected, downloading APK directly…</string>
-    <string name="qk_00557" formatted="false">If the download doesn’t start automatically, tap the button below to download manually:</string>
+    <string name="qk_00557" formatted="false">ダウンロードが自動で始まらない場合は、下のボタンで手動ダウンロードしてください：</string>
     <string name="qk_00558" formatted="false">APKを手動でダウンロード</string>
-    <string name="qk_00559" formatted="false">Type</string>
+    <string name="qk_00559" formatted="false">Gitee ミラーからダウンロード</string>
     <string name="qk_00560" formatted="false">ZorvAI の更新をダウンロード</string>
     <string name="qk_00561">Downloading new version v%1$s...</string>
     <string name="qk_00562" formatted="false">更新のダウンロードを開始…</string>
     <string name="qk_00563">Download failed: %1$s</string>
-    <string name="qk_00564" formatted="false">This statement may change with app version updates; the latest version on this page prevails.</string>
+    <string name="qk_00564" formatted="false">本声明はアプリのバージョン更新に伴い調整される場合があります。最新版は本ページを基準とします。</string>
     <string name="qk_00565" formatted="false">To ensure core functions run properly, Zorv AI uses the following system permissions on demand after your active authorization. We adhere to the principle of &quot;minimum necessary, lawful, and transparent&quot;: 
 · Permissions are requested and invoked only when you actively trigger the corresponding feature; 
 · We do not silently collect, in the background, data unrelated to the current feature; 
@@ -647,7 +647,7 @@ Purpose: write to external storage files.
 Required: only needed on lower-version devices. 
 
 </string>
-    <string name="qk_00580" formatted="false">Impact after revocation: file-related features are limited; pure conversation features are unaffected.</string>
+    <string name="qk_00580" formatted="false">取り消しの影響：ファイル系機能が制限されますが、会話機能は影響を受けません。</string>
     <string name="qk_00581" formatted="false">IV. Phone and SMS Permissions</string>
     <string name="qk_00582" formatted="false">1. Phone state (READ_PHONE_STATE / READ_PHONE_NUMBERS) 
 Purpose: obtain device information (e.g., SIM card state, network type) for network diagnostics. 
@@ -674,7 +674,7 @@ Purpose: read and write call logs.
 Required: No. 
 
 </string>
-    <string name="qk_00587" formatted="false">Impact after revocation: related phone, SMS, and call-log features become unavailable.</string>
+    <string name="qk_00587" formatted="false">取り消しの影響：電話・SMS・通話履歴の関連機能が使えなくなります。</string>
     <string name="qk_00588" formatted="false">V. Contacts and Calendar Permissions</string>
     <string name="qk_00589" formatted="false">1. Contacts read (READ_CONTACTS) 
 Purpose: read contact information for communication-related features. 
@@ -718,7 +718,7 @@ Purpose: continuously obtain location in the background.
 Required: No. 
 
 </string>
-    <string name="qk_00599" formatted="false">Impact after revocation: location-related features become unavailable.</string>
+    <string name="qk_00599" formatted="false">取り消しの影響：位置情報関連の機能が使えなくなります。</string>
     <string name="qk_00600" formatted="false">VII. Notification and Display Permissions</string>
     <string name="qk_00601" formatted="false">1. Notifications (POST_NOTIFICATIONS) 
 Purpose: provide a persistent notification-bar entry and voice-service keep-alive prompt, so you can quickly summon the voice ball from the notification bar. 
@@ -830,7 +830,7 @@ Purpose: background media playback service.
 Purpose: screen recording service (must be explicitly declared on Android 14+). 
 
 </string>
-    <string name="qk_00625" formatted="false">Impact after revocation: related background keep-alive capabilities are limited.</string>
+    <string name="qk_00625" formatted="false">取り消しの影響：バックグラウンド維持機能が制限されます。</string>
     <string name="qk_00626" formatted="false">XI. Package Visibility Permissions</string>
     <string name="qk_00627" formatted="false">1. Query all packages (QUERY_ALL_PACKAGES) 
 Purpose: query the installed app list for features such as &quot;view package name&quot; and &quot;launch app&quot;. 
@@ -842,7 +842,7 @@ Purpose: query specific types of apps (e.g., TTS engines, ACI apps).
 Required: Yes. 
 
 </string>
-    <string name="qk_00629" formatted="false">Impact after revocation: cannot query installed apps; related features are limited.</string>
+    <string name="qk_00629" formatted="false">取り消しの影響：インストール済みアプリを照会できず、関連機能が制限されます。</string>
     <string name="qk_00630" formatted="false">XII. Health Data Permissions</string>
     <string name="qk_00631" formatted="false">1. Health data connection (Health Connect) 
 Purpose: read and write health data (e.g., steps, heart rate, sleep, exercise). 
@@ -871,7 +871,7 @@ Purpose: ADB-level IPC communication via Shizuku.
 Required: No (only needed for Shizuku features). 
 
 </string>
-    <string name="qk_00638" formatted="false">Impact after revocation: ACI and Shizuku related features become unavailable.</string>
+    <string name="qk_00638" formatted="false">取り消しの影響：ACI と Shizuku の関連機能が使えなくなります。</string>
     <string name="qk_00639" formatted="false">Our Commitment</string>
     <string name="qk_00640" formatted="false">· We will not silently record, photograph, or screenshot in the background; 
 · We will not upload your chat content to third parties unrelated to the app’s functions; 
@@ -991,53 +991,53 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_00704" formatted="false">Below you can manually add apps, view discovered app capabilities, and manually start or rebind.</string>
     <string name="qk_00705" formatted="false">ACIアプリを追加</string>
     <string name="qk_00706" formatted="false">パッケージ名またはアプリ名</string>
-    <string name="qk_00707" formatted="false">E.g. com.example.chat or WeChat</string>
+    <string name="qk_00707" formatted="false">例：com.example.chat または WeChat</string>
     <string name="qk_00708" formatted="false">パッケージ名を入力してください</string>
     <string name="qk_00709">登録して起動しました：%1$s</string>
     <string name="qk_00710">ACI service for %1$s not found</string>
     <string name="qk_00711" formatted="false">パッケージ名で登録して起動</string>
     <string name="qk_00712">Started: %1$s</string>
-    <string name="qk_00713">Start failed: %1$s</string>
+    <string name="qk_00713">起動に失敗：%1$s</string>
     <string name="qk_00714" formatted="false">起動</string>
-    <string name="qk_00715">Registered and started: %1$s</string>
+    <string name="qk_00715">登録して起動しました：%1$s</string>
     <string name="qk_00716" formatted="false">登録して起動</string>
     <string name="qk_00717" formatted="false">No matching app found. Verify the name/package name, or use &quot;Register and start by package name&quot;.</string>
     <string name="qk_00718" formatted="false">検出されたACIアプリ</string>
     <string name="qk_00719" formatted="false">検出統計（リアルタイム）</string>
     <string name="qk_00720">Apps: %1$s (bound %2$s / unbound %3$s)</string>
-    <string name="qk_00721">Total capabilities: %1$s</string>
+    <string name="qk_00721">機能の総数：%1$s</string>
     <string name="qk_00722" formatted="false">（未バインド）</string>
     <string name="qk_00723">• %1$s: %2$s items%3$s</string>
     <string name="qk_00724" formatted="false">No ACI app found. After installing a third-party app that supports the ACI protocol, tap &quot;Refresh&quot; in the top-right;</string>
-    <string name="qk_00725" formatted="false">Or enter the package name in &quot;Add ACI App&quot; above to register manually. 
+    <string name="qk_00725" formatted="false">または上の「ACIアプリを追加」でパッケージ名を入力して手動登録してください。
 
 </string>
     <string name="qk_00726" formatted="false">ACI is a local, root-free AIDL framework between apps. When the list is empty, do NOT use dumpsys / Shizuku / ROOT to troubleshoot.</string>
-    <string name="qk_00727">Started: %1$s</string>
-    <string name="qk_00728">Start failed: %1$s</string>
+    <string name="qk_00727">起動しました：%1$s</string>
+    <string name="qk_00728">起動に失敗：%1$s</string>
     <string name="qk_00729" formatted="false">開発者ドキュメント</string>
     <string name="qk_00730" formatted="false">ACI 被制御側の導入マニュアル</string>
     <string name="qk_00731" formatted="false">Memory Details</string>
     <string name="qk_00732" formatted="false">依存関係テンプレートを保存</string>
     <string name="qk_00733" formatted="false">ACI_Controlled_Device_Access_Guide.md</string>
-    <string name="qk_00734" formatted="false">Open Document</string>
+    <string name="qk_00734" formatted="false">開発者ドキュメントを Download/Quro/ に保存しました</string>
     <string name="qk_00735" formatted="false">開発者ドキュメントをダウンロード</string>
     <string name="qk_00736" formatted="false">APIキーを申請</string>
-    <string name="qk_00737" formatted="false">Apply for ACI API key</string>
+    <string name="qk_00737" formatted="false">ACI API キーを申請</string>
     <string name="qk_00738" formatted="false">Enter a third-party app package name; the system generates an ACI Token for authentication.</string>
     <string name="qk_00739" formatted="false">サードパーティアプリのパッケージ名</string>
     <string name="qk_00740" formatted="false">Example: com.example.myapp</string>
-    <string name="qk_00741" formatted="false">Favorite this page</string>
-    <string name="qk_00742" formatted="false">Token copied to clipboard</string>
+    <string name="qk_00741" formatted="false">生成された ACI Token：</string>
+    <string name="qk_00742" formatted="false">Token をクリップボードにコピーしました</string>
     <string name="qk_00743" formatted="false">Tokenをコピー</string>
-    <string name="qk_00744" formatted="false">Package name format is incorrect (should contain a dot)</string>
+    <string name="qk_00744" formatted="false">パッケージ名の形式が正しくありません（ドットが必要）</string>
     <string name="qk_00745" formatted="false">Token生成成功</string>
     <string name="qk_00746">Generation failed: %1$s</string>
     <string name="qk_00747" formatted="false">Tokenを生成</string>
     <string name="qk_00748" formatted="false">Bound</string>
     <string name="qk_00749" formatted="false">Unbound</string>
-    <string name="qk_00750">Capabilities (%1$s)</string>
-    <string name="qk_00751" formatted="false">(No capability: may not be bound yet, or the app has not declared any)</string>
+    <string name="qk_00750">機能（%1$s）</string>
+    <string name="qk_00751" formatted="false">（機能なし：未連携か、そのアプリが機能を宣言していない可能性があります）</string>
     <string name="qk_00752" formatted="false">  ⚠️要確認</string>
     <string name="qk_00753" formatted="false">再バインド</string>
     <string name="qk_00754" formatted="false">コンソールを開く</string>
@@ -1047,12 +1047,12 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_00758" formatted="false">利用可能</string>
     <string name="qk_00759" formatted="false">未承認</string>
     <string name="qk_00760" formatted="false">最近の監査ログ</string>
-    <string name="qk_00761" formatted="false">No audit records yet. Any privilege escalation is recorded here.</string>
+    <string name="qk_00761" formatted="false">監査記録はありません。権限昇格はすべてここに記録されます。</string>
     <string name="qk_00762" formatted="false">監査ログを消去</string>
     <string name="qk_00763">Are you sure you want to delete all %1$s audit records? This operation cannot be undone.</string>
     <string name="qk_00764" formatted="false">クリア</string>
     <string name="qk_00765" formatted="false">ボット連携</string>
-    <string name="qk_00766" formatted="false">QQ / Feishu / WeChat connect directly to official gateways; the app holds the key for outbound.</string>
+    <string name="qk_00766" formatted="false">QQ / Feishu / WeChat は公式ゲートウェイへ直結。アプリが鍵を保持して送信します。</string>
     <string name="qk_00767" formatted="false">Feishu</string>
     <string name="qk_00768" formatted="false">WeChat</string>
     <string name="qk_00769" formatted="false">未登録</string>
@@ -1061,7 +1061,7 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_00772" formatted="false">切断</string>
     <string name="qk_00773" formatted="false">ローカルテスト</string>
     <string name="qk_00774" formatted="false">アプリ内検証</string>
-    <string name="qk_00775" formatted="false">Send a message to try; replies show as bubbles</string>
+    <string name="qk_00775" formatted="false">メッセージを送ってみてください。返信は吹き出しで表示されます</string>
     <string name="qk_00776" formatted="false">テストメッセージを入力…</string>
     <string name="qk_00777" formatted="false">無効</string>
     <string name="qk_00778" formatted="false">WS接続済み</string>
@@ -1091,21 +1091,21 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_00802" formatted="false">Expired</string>
     <string name="qk_00803" formatted="false">⚠ Token expired, please tap &quot;Get WeChat Login QR Code&quot; below to scan again</string>
     <string name="qk_00804" formatted="false">QRコードでログイン</string>
-    <string name="qk_00805" formatted="false">Adapter not initialized; please restart the App</string>
+    <string name="qk_00805" formatted="false">アダプタが初期化されていません。アプリを再起動してください</string>
     <string name="qk_00806">Failed to start login: %1$s</string>
     <string name="qk_00807" formatted="false">WeChatログインQRコードを取得</string>
     <string name="qk_00808" formatted="false">WeChatログインQRコード</string>
-    <string name="qk_00809">QR code generation failed: %1$s</string>
-    <string name="qk_00810" formatted="false">Please scan the QR code with WeChat to log in</string>
+    <string name="qk_00809">QRコードの生成に失敗: %1$s</string>
+    <string name="qk_00810" formatted="false">WeChatでQRコードを読み取ってログインしてください</string>
     <string name="qk_00811" formatted="false">QRコードを取得中...</string>
     <string name="qk_00812" formatted="false">✓ ログイン成功！</string>
     <string name="qk_00813" formatted="false">ログインが拒否またはキャンセルされました</string>
     <string name="qk_00814" formatted="false">QRコードを再取得</string>
     <string name="qk_00815" formatted="false">ログインが拒否されました</string>
     <string name="qk_00816" formatted="false">QRコードの有効期限が切れました</string>
-    <string name="qk_00817" formatted="false">Manually enter Token (advanced)</string>
+    <string name="qk_00817" formatted="false">Tokenを手動入力（詳細）</string>
     <string name="qk_00818" formatted="false">折りたたむ</string>
-    <string name="qk_00819" formatted="false">Manually enter Bot Token</string>
+    <string name="qk_00819" formatted="false">Bot Token を手動入力</string>
     <string name="qk_00820" formatted="false">Paste the token obtained from ilinkai.weixin.qq.com</string>
     <string name="qk_00821" formatted="false">Can be obtained via command line: curl &quot;https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3&quot;</string>
     <string name="qk_00822" formatted="false">WeChat iLink connects directly to ilinkai.weixin.qq.com via phone-side HTTP long polling, no public endpoint needed.</string>
@@ -1154,7 +1154,7 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_00864" formatted="false">新規スクリプト</string>
     <string name="qk_00865">[%1$s] ⚠ Unable to get Activity, screenshot failed
 </string>
-    <string name="qk_00866">[%1$s] ⚠ Interface not laid out yet, screenshot failed
+    <string name="qk_00866">[%1$s] ⚠ 画面のレイアウトが未完了のため、スクリーンショットに失敗
 </string>
     <string name="qk_00867">[%1$s] 👁 Eye screenshot succeeded: %2$s (%3$sx%4$s)
 </string>
@@ -1171,7 +1171,7 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_00876" formatted="false">Link answer · open-source browser list</string>
     <string name="qk_00877" formatted="false">Link answer · fully open-source Android digital human</string>
     <string name="qk_00878" formatted="false">Link answer · 3D fully offline (LLM+ASR+TTS+A2BS+rendering all on phone)</string>
-    <string name="qk_00879" formatted="false">Open-source address (tap to view link answer)</string>
+    <string name="qk_00879" formatted="false">オープンソースURL（タップでリンク回答を表示）</string>
     <string name="qk_00880" formatted="false">リンク·オープンソースブラウザの参考</string>
     <string name="qk_00881" formatted="false">リンクを共有</string>
     <string name="qk_00882" formatted="false">戻る</string>
@@ -1194,13 +1194,13 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_00899" formatted="false">システムブラウザで開く</string>
     <string name="qk_00900" formatted="false">スクリプトを実行</string>
     <string name="qk_00901" formatted="false">Python コンソール</string>
-    <string name="qk_00902">Load failed: %1$s (tap to retry)</string>
+    <string name="qk_00902">読み込みに失敗：%1$s（タップして再試行）</string>
     <string name="qk_00903" formatted="false">検索…</string>
     <string name="qk_00904" formatted="false">前へ</string>
     <string name="qk_00905" formatted="false">次へ</string>
     <string name="qk_00906" formatted="false">検索を閉じる</string>
     <string name="qk_00907" formatted="false">お気に入り</string>
-    <string name="qk_00908" formatted="false">No favorites yet; tap &quot;More → Favorite this page&quot; at top-right to add.</string>
+    <string name="qk_00908" formatted="false">お気に入りはまだありません。右上の「もっと見る → このページをお気に入り」で追加できます。</string>
     <string name="qk_00909" formatted="false">閲覧履歴はありません。</string>
     <string name="qk_00910" formatted="false">ページ本文</string>
     <string name="qk_00911" formatted="false">本文をコピーしました</string>
@@ -1214,22 +1214,22 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
 </string>
     <string name="qk_00918" formatted="false">スクリプト名…</string>
     <string name="qk_00919" formatted="false">実行結果はここに表示されます…</string>
-    <string name="qk_00920" formatted="false">👁 Eye screenshot (page pixels)</string>
-    <string name="qk_00921" formatted="false">User-Agent Switch</string>
-    <string name="qk_00922" formatted="false">Select preset UA or custom</string>
+    <string name="qk_00920" formatted="false">👁 アイでキャプチャ（ページのピクセル）</string>
+    <string name="qk_00921" formatted="false">User-Agent 切替</string>
+    <string name="qk_00922" formatted="false">プリセットUAまたはカスタムを選択</string>
     <string name="qk_00923" formatted="false">カスタム UA</string>
     <string name="qk_00924" formatted="false">カスタムUA文字列</string>
     <string name="qk_00925" formatted="false">カスタムUAを適用</string>
     <string name="qk_00926" formatted="false">古いサイトの描画を最適化</string>
-    <string name="qk_00927" formatted="false">Disable JavaScript</string>
-    <string name="qk_00928" formatted="false">For old/incompatible websites</string>
+    <string name="qk_00927" formatted="false">JavaScript を無効化</string>
+    <string name="qk_00928" formatted="false">古い/非互換のサイト向け</string>
     <string name="qk_00929" formatted="false">画像読み込みを無効化</string>
     <string name="qk_00930" formatted="false">読み込みを高速化し通信量を節約</string>
     <string name="qk_00931" formatted="false">現在のUA</string>
     <string name="qk_00932" formatted="false">プロキシを有効化</string>
     <string name="qk_00933" formatted="false">プロキシ種別</string>
     <string name="qk_00934" formatted="false">プロキシアドレス</string>
-    <string name="qk_00935" formatted="false">e.g. 127.0.0.1</string>
+    <string name="qk_00935" formatted="false">例: 127.0.0.1</string>
     <string name="qk_00936" formatted="false">ポート</string>
     <string name="qk_00937" formatted="false">例: 1080</string>
     <string name="qk_00938" formatted="false">ユーザー名（任意）</string>
@@ -1264,21 +1264,21 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_00967" formatted="false">リンクをタップして回答を表示する必要があります</string>
     <string name="qk_00968" formatted="false">フローチャート</string>
     <string name="qk_00969" formatted="false">全画面表示</string>
-    <string name="qk_00970" formatted="false">Saved SVG to Download folder</string>
+    <string name="qk_00970" formatted="false">SVGをDownloadフォルダに保存しました</string>
     <string name="qk_00971" formatted="false">グラフの描画が完了していません。しばらくお待ちください</string>
     <string name="qk_00972" formatted="false">SVGをダウンロード</string>
-    <string name="qk_00973" formatted="false">Mermaid source copied</string>
+    <string name="qk_00973" formatted="false">Mermaid ソースをコピーしました</string>
     <string name="qk_00974" formatted="false">ソースをコピー</string>
     <string name="qk_00975" formatted="false">（グラフの内容なし）</string>
     <string name="qk_00976">WebView error: %1$s (code=%2$s)</string>
-    <string name="qk_00977">Render failed: %1$s</string>
+    <string name="qk_00977">レンダリングに失敗: %1$s</string>
     <string name="qk_00978" formatted="false">ページソースをコピーしました</string>
     <string name="qk_00979" formatted="false">（ページの内容なし）</string>
     <string name="qk_00980" formatted="false">Unable to create file in Download directory</string>
     <string name="qk_00981" formatted="false">SVGファイルに書き込めません</string>
     <string name="qk_00982" formatted="false">ミニアプリ（ネイティブエンジン）</string>
     <string name="qk_00983" formatted="false">Webアプリのソースをコピーしました</string>
-    <string name="qk_00984" formatted="false">(No Web App content)</string>
+    <string name="qk_00984" formatted="false">（Webアプリの内容なし）</string>
     <string name="qk_00985" formatted="false">This is an old &quot;native mini-program&quot; card; the embedded engine has been removed. For native mini-programs, use the Tool Center now</string>
     <string name="qk_00986" formatted="false">&quot;Mini-program (native engine)&quot; panel (let the AI generate WXML/WXSS/JS projects with the miniapp_sdk tool).</string>
     <string name="qk_00987" formatted="false">Need the GenUI native interface? Have the AI open the built-in GenUI Agent with genui_agent_open.</string>
@@ -1406,9 +1406,9 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
 </string>
     <string name="qk_01443">- Path rule: path is a **path relative to the workspace root** (e.g. MyApp/src/Main.java), without drive letter / absolute path, and without .. escape; after writing, tell the user the file is in &quot;Toolbox - Workspace&quot;, absolute path is %1$s/relative-path.
 </string>
-    <string name="qk_01466" formatted="false">Cloud model service saved and enabled ✓</string>
+    <string name="qk_01466" formatted="false">保存してクラウドモデルサービスを有効化 ✓</string>
     <string name="qk_01467" formatted="false">クラウドモデル設定を保存しました</string>
-    <string name="qk_01468">Cleared saved config for &quot;%1$s&quot;</string>
+    <string name="qk_01468">「%1$s」の保存済み設定を消去しました</string>
     <string name="qk_01469" formatted="false">クラウドモデル設定 · 音声合成</string>
     <string name="qk_01470" formatted="false">クリア</string>
     <string name="qk_01471" formatted="false">Select a cloud TTS provider and fill required params. After saving, &quot;Cloud Model Service&quot; is auto-enabled as the voice source; chat/voice-ball reading immediately uses the cloud, no need to manually switch in &quot;Speech Synthesis&quot;.</string>
@@ -1419,7 +1419,7 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01476" formatted="false">既定で有効</string>
     <string name="qk_01477" formatted="false">✓ 設定済み</string>
     <string name="qk_01478" formatted="false">設定済み</string>
-    <string name="qk_01479">&quot;%1$s&quot; parameter</string>
+    <string name="qk_01479">「%1$s」のパラメータ</string>
     <string name="qk_01480" formatted="false">This provider needs no key/params to use (e.g. Edge TTS).</string>
     <string name="qk_01481" formatted="false">音色 (Voice)</string>
     <string name="qk_01482" formatted="false">音色を選択してください</string>
@@ -1446,16 +1446,16 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01503" formatted="false">種類：</string>
     <string name="qk_01504" formatted="false">タイポグラフィ</string>
     <string name="qk_01505" formatted="false">音声クローン</string>
-    <string name="qk_01506" formatted="false">Voice description (e.g. gentle girlish voice)</string>
+    <string name="qk_01506" formatted="false">音色の説明（例：優しい少女の声）</string>
     <string name="qk_01507" formatted="false">e.g. gentle girlish voice, 20-30 yo female</string>
-    <string name="qk_01508" formatted="false">Audio Sample (import/URI)</string>
-    <string name="qk_01509" formatted="false">Tap &quot;Import&quot; to select an audio file, or paste an audio URI/URL</string>
+    <string name="qk_01508" formatted="false">音声サンプル（インポート/URI）</string>
+    <string name="qk_01509" formatted="false">「インポート」をタップして音声ファイルを選択、または音声のURI/URLを貼り付け</string>
     <string name="qk_01510" formatted="false">📁 音声ファイルをインポート</string>
-    <string name="qk_01511" formatted="false">Or paste a publicly accessible audio URL</string>
+    <string name="qk_01511" formatted="false">または公開アクセス可能な音声URLを貼り付け</string>
     <string name="qk_01512" formatted="false">Generate New Signature</string>
     <string name="qk_01513" formatted="false">参照音声のナレーションテキスト</string>
     <string name="qk_01514" formatted="false">Required for SiliconFlow clone: the text content corresponding to the reference audio</string>
-    <string name="qk_01515" formatted="false">Please import or paste a clone audio sample first</string>
+    <string name="qk_01515" formatted="false">先にクローン用の音声サンプルをインポートまたは貼り付けしてください</string>
     <string name="qk_01516" formatted="false">Silicon Flow cloning requires the &quot;reference audio narration text&quot;</string>
     <string name="qk_01517" formatted="false">カスタム音色を追加</string>
     <string name="qk_01518" formatted="false">Voice Cloning</string>
@@ -1472,8 +1472,8 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01528" formatted="false">保存して試聴</string>
     <string name="qk_01529" formatted="false">保存のみ</string>
     <string name="qk_01530" formatted="false">Tip: saving auto-enables the &quot;Cloud Model Service&quot; voice source (if required fields are blank, status shows &quot;Params not configured&quot;; switch back to local system in the &quot;TTS&quot; source).</string>
-    <string name="qk_01531" formatted="false">Saved CMS engine to Download/Quro/</string>
-    <string name="qk_01532">CMS engine import failed: %1$s</string>
+    <string name="qk_01531" formatted="false">CMSエンジンを Download/Quro/ に保存しました</string>
+    <string name="qk_01532">CMSエンジンのインポートに失敗：%1$s</string>
     <string name="qk_01533">Module export failed: %1$s</string>
     <string name="qk_01534">%1$s 個のモジュールをインポートしました</string>
     <string name="qk_01535" formatted="false">No valid cms.io/v2 module recognized</string>
@@ -1483,7 +1483,7 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01539" formatted="false">許可</string>
     <string name="qk_01540" formatted="false">機能</string>
     <string name="qk_01541" formatted="false">モジュールが未選択</string>
-    <string name="qk_01542">Export selected (%1$s)</string>
+    <string name="qk_01542">選択分をエクスポート (%1$s)</string>
     <string name="qk_01543" formatted="false">エクスポートするモジュールを選択</string>
     <string name="qk_01544" formatted="false">エクスポートできるモジュールがありません。</string>
     <string name="qk_01545" formatted="false">🖥 ターミナル</string>
@@ -1503,11 +1503,11 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01559" formatted="false">Shared services: ${es.services.joinToString(</string>
     <string name="qk_01560" formatted="false">スクリプトを折りたたむ</string>
     <string name="qk_01561" formatted="false">エンジンスクリプトの表示/編集</string>
-    <string name="qk_01562" formatted="false">Bootstrap Script</string>
+    <string name="qk_01562" formatted="false">Bootstrap 起動スクリプト</string>
     <string name="qk_01563" formatted="false">Bootstrapスクリプト</string>
     <string name="qk_01564" formatted="false">スクリプトをコピーしました</string>
-    <string name="qk_01565" formatted="false">Provisioner environment script</string>
-    <string name="qk_01566" formatted="false">Provisioner script</string>
+    <string name="qk_01565" formatted="false">Provisioner 環境スクリプト</string>
+    <string name="qk_01566" formatted="false">Provisioner スクリプト</string>
     <string name="qk_01567" formatted="false">モジュールを追加</string>
     <string name="qk_01568" formatted="false">ワンタップでターミナルへデプロイ</string>
     <string name="qk_01569" formatted="false">モジュールをエクスポート</string>
@@ -1516,10 +1516,10 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01572" formatted="false">No module yet. Tap &quot;Add module&quot; above to create a capability module (cms.io/v2).</string>
     <string name="qk_01573" formatted="false">追加説明を表示</string>
     <string name="qk_01574" formatted="false">CMSv2_add_module_notes.md</string>
-    <string name="qk_01575" formatted="false">Saved notes to Download/Quro/</string>
+    <string name="qk_01575" formatted="false">説明を Download/Quro/ に保存しました</string>
     <string name="qk_01576" formatted="false">説明をダウンロード</string>
-    <string name="qk_01577" formatted="false">How to add a CMS v2 module</string>
-    <string name="qk_01578" formatted="false">📱 Phone module (runs in-app)</string>
+    <string name="qk_01577" formatted="false">CMS v2 モジュールの追加方法</string>
+    <string name="qk_01578" formatted="false">📱 スマホモジュール（アプリ内実行）</string>
     <string name="qk_01579" formatted="false">🖥 Terminal module (runs in proot)</string>
     <string name="qk_01580" formatted="false">🔁 Dual-end module (phone / terminal)</string>
     <string name="qk_01581">Permissions %1$s · Capabilities %2$s${if (m.dependencies.isNotEmpty())</string>
@@ -1531,20 +1531,20 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01587" formatted="false">⚠ 解析が必要な依存関係を含む</string>
     <string name="qk_01588" formatted="false">ターミナルへデプロイ</string>
     <string name="qk_01589" formatted="false">entry.sh を折りたたむ</string>
-    <string name="qk_01590" formatted="false">View/Edit entry.sh</string>
+    <string name="qk_01590" formatted="false">entry.sh を表示/編集</string>
     <string name="qk_01591" formatted="false">entry.sh スクリプト</string>
-    <string name="qk_01592" formatted="false">📦 Terminal deployed (not in module library)</string>
+    <string name="qk_01592" formatted="false">📦 ターミナルにデプロイ済み（モジュールライブラリには未登録）</string>
     <string name="qk_01593" formatted="false">● Deploying</string>
     <string name="qk_01594" formatted="false">● Deployed</string>
     <string name="qk_01595">Version: %1$s · Author: ${module.author.ifBlank {</string>
     <string name="qk_01596" formatted="false">権限の宣言：</string>
     <string name="qk_01597">Capabilities (%1$s):</string>
     <string name="qk_01598" formatted="false">   Required permissions: ${c.requiresPermissions.joinToString(</string>
-    <string name="qk_01599">Path=%1$s</string>
-    <string name="qk_01600">Command=%1$s</string>
-    <string name="qk_01601">Domain=%1$s</string>
+    <string name="qk_01599">パス=%1$s</string>
+    <string name="qk_01600">コマンド=%1$s</string>
+    <string name="qk_01601">ドメイン=%1$s</string>
     <string name="qk_01602">Timeout=%1$ss</string>
-    <string name="qk_01603">Memory=%1$sMB</string>
+    <string name="qk_01603">メモリ=%1$sMB</string>
     <string name="qk_01604" formatted="false">   Constraints: ${conItems.joinToString(</string>
     <string name="qk_01605">Dependencies (%1$s):</string>
     <string name="qk_01606" formatted="false">メタ情報：</string>
@@ -1565,7 +1565,7 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01621" formatted="false">機能 ID</string>
     <string name="qk_01622" formatted="false">要約</string>
     <string name="qk_01623" formatted="false">Action (intent JSON / js script / api op / terminal command)</string>
-    <string name="qk_01624" formatted="false">Required permission id (comma separated)</string>
+    <string name="qk_01624" formatted="false">必要な権限 id(カンマ区切り)</string>
     <string name="qk_01625" formatted="false">制約（任意、細かいほど安全）</string>
     <string name="qk_01626" formatted="false">コマンド許可リスト(カンマ区切り)</string>
     <string name="qk_01627" formatted="false">許可パス(カンマ区切り)</string>
@@ -1579,17 +1579,17 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01635" formatted="false">インポート</string>
     <string name="qk_01636" formatted="false">No authorization records yet. When calling a capability on the &quot;Capabilities&quot; page, it requests from the user by 4 levels (temporary/session/permanent/global).</string>
     <string name="qk_01637">Authorization level: %1$s</string>
-    <string name="qk_01638" formatted="false">No capabilities yet. Go to the &quot;Modules&quot; page to add a module with capabilities.</string>
+    <string name="qk_01638" formatted="false">機能がまだありません。先に「モジュール」ページで機能を含むモジュールを追加してください。</string>
     <string name="qk_01639" formatted="false">Host: ${c.runOn.joinToString(</string>
     <string name="qk_01640" formatted="false">Required permissions: ${c.requiresPermissions.joinToString(</string>
     <string name="qk_01641" formatted="false">呼び出し</string>
     <string name="qk_01642" formatted="false">実行</string>
     <string name="qk_01643">Call capability · %1$s</string>
     <string name="qk_01644">Module: %1$s · Channel level: %2$s</string>
-    <string name="qk_01645" formatted="false">JS script (in-app QuickJS sandbox)</string>
+    <string name="qk_01645" formatted="false">JSスクリプト（アプリ内QuickJSサンドボックス）</string>
     <string name="qk_01646" formatted="false">API操作</string>
-    <string name="qk_01647" formatted="false">Terminal command (in-app proot/Ubuntu sandbox)</string>
-    <string name="qk_01648" formatted="false">Intent (in-app dispatch)</string>
+    <string name="qk_01647" formatted="false">ターミナルコマンド（アプリ内 proot/Ubuntu サンドボックス）</string>
+    <string name="qk_01648" formatted="false">Intent（アプリ内ディスパッチ）</string>
     <string name="qk_01649">パラメータ %1$s</string>
     <string name="qk_01650" formatted="false">監査ログ（神の視点）</string>
     <string name="qk_01651" formatted="false">監査記録はありません。</string>
@@ -1620,18 +1620,18 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01676" formatted="false">Mermaid flowchart</string>
     <string name="qk_01677" formatted="false">Web app MiniApp</string>
     <string name="qk_01678" formatted="false">可視化コンポーネントライブラリ</string>
-    <string name="qk_01679" formatted="false">Rich component (ui_widget)</string>
+    <string name="qk_01679" formatted="false">リッチコンポーネント（ui_widget）</string>
     <string name="qk_01680" formatted="false">リッチカード（ui_card）</string>
-    <string name="qk_01681" formatted="false">AI-written (mermaid / miniapp)</string>
+    <string name="qk_01681" formatted="false">AIが自作（mermaid / miniapp）</string>
     <string name="qk_01682" formatted="false">Click any component; the real sample is sent to the chat card bar. ui_widget / ui_card / mermaid / miniapp are all real rendering capabilities, merged into this component library; the old hard-coded &quot;built-in components&quot; demo has been removed.</string>
     <string name="qk_01683">送信しました：%1$s</string>
     <string name="qk_01684">送信に失敗：%1$s</string>
-    <string name="qk_01685" formatted="false">Current system does not support this role (requires Android 10+)</string>
-    <string name="qk_01686">Cannot launch system chooser: %1$s</string>
+    <string name="qk_01685" formatted="false">現在のシステムはこのロールに非対応（Android 10+ が必要）</string>
+    <string name="qk_01686">システムの選択画面を開けません：%1$s</string>
     <string name="qk_01687" formatted="false">既定のアプリ</string>
     <string name="qk_01688" formatted="false">検出中…</string>
     <string name="qk_01689" formatted="false">Platform role (system role, API 29+)</string>
-    <string name="qk_01690" formatted="false">Other default (set as default via system chooser)</string>
+    <string name="qk_01690" formatted="false">その他の既定（システムの選択画面で既定に設定）</string>
     <string name="qk_01691" formatted="false">説明</string>
     <string name="qk_01692" formatted="false">After setting as default, Zorv AI takes over when opening the corresponding type (web / image / video / mail / doc / dialer / SMS / desktop).</string>
     <string name="qk_01693" formatted="false">Platform roles (desktop launcher / browser / dialer / SMS) are requested via the system role dialog; this app has no desktop UI, so &quot;Desktop launcher&quot; only submits a role request, and whether it takes effect depends on whether the system lists it as an eligible candidate.</string>
@@ -1639,17 +1639,17 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01695" formatted="false">To clear default, go to System Settings → Apps → Zorv AI → Open by default / Default apps, or the default app management page for that type.</string>
     <string name="qk_01696" formatted="false">既に既定</string>
     <string name="qk_01697" formatted="false">既定に設定</string>
-    <string name="qk_01698" formatted="false">✓ Zorv AI is already default</string>
-    <string name="qk_01699">Current default: %1$s</string>
+    <string name="qk_01698" formatted="false">✓ Zorv AI は既に既定です</string>
+    <string name="qk_01699">現在の既定：%1$s</string>
     <string name="qk_01700" formatted="false">現在は既定が未設定</string>
-    <string name="qk_01701" formatted="false">Check in system default app management</string>
+    <string name="qk_01701" formatted="false">システムの既定アプリ管理で確認してください</string>
     <string name="qk_01702" formatted="false">Python 環境</string>
     <string name="qk_01703" formatted="false">Node.js 環境</string>
     <string name="qk_01704" formatted="false">JavaScript runtime + npm</string>
     <string name="qk_01705" formatted="false">Fast package manager and TypeScript</string>
     <string name="qk_01706" formatted="false">SSHツール</string>
     <string name="qk_01707" formatted="false">SSH フルツールチェーン</string>
-    <string name="qk_01708" formatted="false">SSH client + sshpass + sshd</string>
+    <string name="qk_01708" formatted="false">SSH クライアント + sshpass + sshd</string>
     <string name="qk_01709" formatted="false">Java環境</string>
     <string name="qk_01710" formatted="false">自動化ツールを構築</string>
     <string name="qk_01711" formatted="false">Rust環境</string>
@@ -1667,17 +1667,17 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01723" formatted="false">echo ’不明な環境’</string>
     <string name="qk_01724" formatted="false">開発環境</string>
     <string name="qk_01725" formatted="false">⚠️ ターミナル環境が未準備</string>
-    <string name="qk_01726" formatted="false">Install the Linux environment on the Terminal page first, then deploy the dev environment.</string>
+    <string name="qk_01726" formatted="false">先に「ターミナル」ページでLinux環境をインストールしてから、開発環境をデプロイしてください。</string>
     <string name="qk_01727" formatted="false">ターミナル環境の準備完了 ✓</string>
     <string name="qk_01728" formatted="false">状態を更新</string>
     <string name="qk_01729" formatted="false">インストールコマンドをターミナルへ送信</string>
-    <string name="qk_01730">✅ Install command sent to terminal: %1$s</string>
-    <string name="qk_01731">❌ Failed to send command: %1$s</string>
+    <string name="qk_01730">✅ インストールコマンドをターミナルへ送信しました: %1$s</string>
+    <string name="qk_01731">❌ コマンド送信に失敗: %1$s</string>
     <string name="qk_01732" formatted="false">削除コマンドをターミナルへ送信</string>
-    <string name="qk_01733">✅ Delete command sent: %1$s</string>
-    <string name="qk_01734">❌ Delete command send failed: %1$s</string>
+    <string name="qk_01733">✅ 削除コマンドを送信しました: %1$s</string>
+    <string name="qk_01734">❌ 削除コマンドの送信に失敗: %1$s</string>
     <string name="qk_01735" formatted="false">すべてのインストールコマンドをターミナルへ送信</string>
-    <string name="qk_01736">✅ Install command sent: %1$s</string>
+    <string name="qk_01736">✅ インストールコマンドを送信しました: %1$s</string>
     <string name="qk_01737" formatted="false">すべてのインストールコマンドをターミナルへ送信しました</string>
     <string name="qk_01738" formatted="false">送信中…</string>
     <string name="qk_01739" formatted="false">ワンタップですべてのインストールコマンドを送信</string>
@@ -1692,11 +1692,11 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01748" formatted="false">コマンドを表示</string>
     <string name="qk_01749" formatted="false">インストールコマンド</string>
     <string name="qk_01750" formatted="false">コマンドを確認</string>
-    <string name="qk_01751" formatted="false">Tap the mic to speak, or type below to talk with the digital human</string>
-    <string name="qk_01752" formatted="false">Custom 3D model selected; tap the mic to talk</string>
+    <string name="qk_01751" formatted="false">マイクをタップして話すか、下欄に入力してデジタルヒューマンと会話</string>
+    <string name="qk_01752" formatted="false">カスタム3Dモデルを選択済み。マイクをタップで会話できます</string>
     <string name="qk_01753" formatted="false">GLB file copy failed, please choose another file</string>
     <string name="qk_01754" formatted="false">聞き取れませんでした。再試行してください</string>
-    <string name="qk_01755" formatted="false">Microphone permission required for voice input</string>
+    <string name="qk_01755" formatted="false">音声入力には録音権限が必要です</string>
     <string name="qk_01756" formatted="false">Current STT engine is &quot;AI model&quot; transcription; deploy an on-device model in &quot;Settings → Voice → STT&quot; first, or switch to native/offline engine</string>
     <string name="qk_01757" formatted="false">聞き取り中…</string>
     <string name="qk_01758" formatted="false">停止中。マイクをタップして続行</string>
@@ -1719,18 +1719,18 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01775" formatted="false">🖥 オフラインのローカルエンドポイント</string>
     <string name="qk_01776" formatted="false">ローカルエンドポイント baseUrl</string>
     <string name="qk_01777" formatted="false">API Key（空欄可）</string>
-    <string name="qk_01778" formatted="false">Model Name (e.g. llava / qwen2.5)</string>
+    <string name="qk_01778" formatted="false">モデル名（例：llava / qwen2.5）</string>
     <string name="qk_01779" formatted="false">3D モデル</string>
     <string name="qk_01780" formatted="false">GLB モデルを選び直す</string>
     <string name="qk_01781" formatted="false">GLB モデルファイルを選択</string>
     <string name="qk_01782" formatted="false">Loaded: ${dh.customModelPath.substringAfterLast(</string>
     <string name="qk_01783" formatted="false">3D preview has a built-in offline Three.js engine (assets/www/three/), no network needed to render.</string>
     <string name="qk_01784">Failed to read assets/%1$s: %2$s</string>
-    <string name="qk_01785">Draco resource extraction failed: %1$s</string>
+    <string name="qk_01785">Dracoリソースの抽出に失敗：%1$s</string>
     <string name="qk_01786" formatted="false">マイクをタップして続行</string>
     <string name="qk_01787" formatted="false">デジタルヒューマン発話中…</string>
     <string name="qk_01788" formatted="false">デジタルヒューマン思考中…</string>
-    <string name="qk_01789" formatted="false">⚠️ Error, please check model config (in offline mode confirm the local endpoint is available)</string>
+    <string name="qk_01789" formatted="false">⚠️ エラーが発生しました。モデル設定を確認してください（オフラインモードではローカルエンドポイントの可用性を確認）</string>
     <string name="qk_01790" formatted="false">端末モデル読み込み中…</string>
     <string name="qk_01791" formatted="false">On-device model load failed, retry in STT settings</string>
     <string name="qk_01792" formatted="false">録音の初期化に失敗</string>
@@ -1749,12 +1749,12 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01805">Loaded: %1$s</string>
     <string name="qk_01806">Read failed: %1$s</string>
     <string name="qk_01807" formatted="false">新規ドキュメント</string>
-    <string name="qk_01808">Writing: %1$s</string>
+    <string name="qk_01808">書き込み中: %1$s</string>
     <string name="qk_01809">Saved: %1$s</string>
-    <string name="qk_01810">Saved to %1$s</string>
+    <string name="qk_01810">%1$s に保存しました</string>
     <string name="qk_01811">Document_%1$s.md</string>
-    <string name="qk_01812">Creating: %1$s</string>
-    <string name="qk_01813">Created: %1$s</string>
+    <string name="qk_01812">作成中: %1$s</string>
+    <string name="qk_01813">作成しました: %1$s</string>
     <string name="qk_01814">Created and saved to %1$s</string>
     <string name="qk_01815">Save failed: %1$s</string>
     <string name="qk_01816" formatted="false">太字</string>
@@ -1769,51 +1769,51 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01825" formatted="false">区切り線</string>
     <string name="qk_01826" formatted="false">リンク</string>
     <string name="qk_01827" formatted="false">[リンクテキスト](url)</string>
-    <string name="qk_01828" formatted="false">![image description](image link)</string>
+    <string name="qk_01828" formatted="false">![画像の説明](画像URL)</string>
     <string name="qk_01829" formatted="false">Creating</string>
     <string name="qk_01830" formatted="false">書式バー切替</string>
-    <string name="qk_01831" formatted="false">Please save the document first, then share to other apps</string>
+    <string name="qk_01831" formatted="false">先にドキュメントを保存してから他のアプリへ共有してください</string>
     <string name="qk_01832" formatted="false">ファイルが存在しません。先に保存してください</string>
-    <string name="qk_01833" formatted="false">Cannot share this file (path not allowed)</string>
+    <string name="qk_01833" formatted="false">このファイルを共有できません（パスが許可されていません）</string>
     <string name="qk_01834">Share %1$s</string>
     <string name="qk_01835" formatted="false">共有できるアプリがありません</string>
     <string name="qk_01836">File: %1$s</string>
     <string name="qk_01837" formatted="false">ドキュメント内容を入力...</string>
     <string name="qk_01838" formatted="false">変更を保存</string>
-    <string name="qk_01839" formatted="false">Document modified; save changes?</string>
+    <string name="qk_01839" formatted="false">ドキュメントが変更されています。保存しますか？</string>
     <string name="qk_01840" formatted="false">破棄</string>
     <string name="qk_01841" formatted="false">クリックして編集を開始...</string>
     <string name="qk_01842" formatted="false">次のアプリで開く</string>
     <string name="qk_01843" formatted="false">変更を保存しました</string>
     <string name="qk_01844" formatted="false">WPSで開く</string>
     <string name="qk_01845" formatted="false">他のアプリ</string>
-    <string name="qk_01846">Cannot read document: %1$s</string>
+    <string name="qk_01846">ドキュメントを読み取れません：%1$s</string>
     <string name="qk_01847">File is large (about %1$s MB); in-app preview may be slow or memory-heavy. Tap &quot;Other app&quot; at top right to open with WPS / Office.</string>
-    <string name="qk_01848">Unsupported document type: %1$s
-Please open with &quot;Other Apps&quot;.</string>
+    <string name="qk_01848">未対応のドキュメント形式：%1$s
+「他のアプリ」で開いてください。</string>
     <string name="qk_01849" formatted="false">読み込みエラー</string>
     <string name="qk_01850" formatted="false">File is large; in-app preview may be slow. If unresponsive for a long time, tap &quot;Other app&quot; to open.</string>
     <string name="qk_01851">Document render failed: %1$s
 Try opening with &quot;Other app&quot;.</string>
-    <string name="qk_01852">Cannot parse PPTX: %1$s</string>
+    <string name="qk_01852">PPTXを解析できません：%1$s</string>
     <string name="qk_01853" formatted="false">前のページ</string>
     <string name="qk_01854">Page %1$s / %2$s</string>
     <string name="qk_01855" formatted="false">次のページ</string>
     <string name="qk_01856" formatted="false">(無題)</string>
     <string name="qk_01857" formatted="false">ファイルが存在しません</string>
-    <string name="qk_01858" formatted="false">Cannot share this file (path not allowed)</string>
+    <string name="qk_01858" formatted="false">このファイルを共有できません（パスが許可されていません）</string>
     <string name="qk_01859" formatted="false">WPSで開きました</string>
     <string name="qk_01860" formatted="false">このファイルを開けません</string>
     <string name="qk_01861" formatted="false">このファイルを開けるアプリが見つかりません</string>
     <string name="qk_01862" formatted="false">モデル名（手入力可）</string>
     <string name="qk_01863" formatted="false">詳細設定（任意）</string>
     <string name="qk_01864" formatted="false">カスタムベースURL（任意）</string>
-    <string name="qk_01865" formatted="false">Leave blank to use the main model’s URL</string>
+    <string name="qk_01865" formatted="false">空欄の場合はメインモデルのURLを使用</string>
     <string name="qk_01866" formatted="false">カスタムAPIキー（任意）</string>
-    <string name="qk_01867" formatted="false">Leave blank to use the main model’s key</string>
+    <string name="qk_01867" formatted="false">空欄の場合はメインモデルのキーを使用</string>
     <string name="qk_01868" formatted="false">&lt;!doctype html&gt;&lt;html&gt;&lt;body&gt;&lt;h1&gt;ZorvAI export sample&lt;/h1&gt;&lt;p&gt;Exported by the feature-permission demo via MediaStore, no storage permission needed.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-    <string name="qk_01869" formatted="false">Exported to Download/ZorvAI ✓</string>
-    <string name="qk_01870" formatted="false">Export failed (please check storage availability)</string>
+    <string name="qk_01869" formatted="false">Download/ZorvAI にエクスポートしました ✓</string>
+    <string name="qk_01870" formatted="false">エクスポートに失敗（ストレージの空きを確認してください）</string>
     <string name="qk_01871" formatted="false">ZorvAI ランニング</string>
     <string name="qk_01872" formatted="false">Wrote a running record (source=this app) ✓</string>
     <string name="qk_01873">Write failed: %1$s</string>
@@ -1825,7 +1825,7 @@ Try opening with &quot;Other app&quot;.</string>
     <string name="qk_01879" formatted="false">アプリ設定へ</string>
     <string name="qk_01880" formatted="false">ファイルとメディア</string>
     <string name="qk_01881" formatted="false">Read local assets and export generated results to public Download. Export uses MediaStore, no storage permission needed.</string>
-    <string name="qk_01882" formatted="false">Permanently denied; go to &quot;Settings → Apps → Permissions&quot; to enable manually.</string>
+    <string name="qk_01882" formatted="false">恒久的に拒否されています。「設定 → アプリ → 権限」で手動で有効にしてください。</string>
     <string name="qk_01883" formatted="false">Open / install Health Connect</string>
     <string name="qk_01884" formatted="false">Manage Health Connect</string>
     <string name="qk_01885" formatted="false">Authorize health data</string>
@@ -1836,16 +1836,16 @@ Try opening with &quot;Other app&quot;.</string>
     <string name="qk_01890" formatted="false">Test reminder (in 5 seconds)</string>
     <string name="qk_01891" formatted="false">ZorvAI リマインダー</string>
     <string name="qk_01892" formatted="false">これはテスト通知です</string>
-    <string name="qk_01893" formatted="false">Set precise alarm 5s later ✓</string>
+    <string name="qk_01893" formatted="false">5秒後の正確なアラームを設定 ✓</string>
     <string name="qk_01894" formatted="false">Enable precise alarm</string>
     <string name="qk_01895" formatted="false">アラームとリマインダー</string>
     <string name="qk_01896" formatted="false">Remind you to exercise, drink water, etc. at set times. Precise alarm is a special permission with no runtime popup; must be enabled in Settings.</string>
-    <string name="qk_01897" formatted="false">Go to &quot;Settings → Apps → Alarms &amp; reminders&quot; to enable manually.</string>
+    <string name="qk_01897" formatted="false">「設定 → アプリ → 正確なアラーム」で手動で有効にしてください。</string>
     <string name="qk_01898" formatted="false">ロック画面に表示</string>
     <string name="qk_01899" formatted="false">Keep the AI assistant always visible as a floating window / lock-screen card, ready to summon chat and quick actions anytime. This is a special permission; enable in Settings.</string>
     <string name="qk_01900" formatted="false">設定へ移動（オフにできます）</string>
     <string name="qk_01901" formatted="false">ロック画面表示を有効化</string>
-    <string name="qk_01902" formatted="false">Authorized; can be turned off in system settings.</string>
+    <string name="qk_01902" formatted="false">許可しました。システム設定で無効にできます。</string>
     <string name="qk_01903" formatted="false">Go to &quot;Settings → Apps → Special app access → Display over other apps&quot; to enable manually.</string>
     <string name="qk_01904" formatted="false">Request fitness &amp; activity permission</string>
     <string name="qk_01905" formatted="false">フィットネスと運動</string>
@@ -1855,22 +1855,22 @@ Try opening with &quot;Other app&quot;.</string>
     <string name="qk_01909" formatted="false">Access the entire device file system (docs, downloads, external SD) for cross-directory reading/organizing your files. Special permission; enable in Settings.</string>
     <string name="qk_01910" formatted="false">すべてのファイルへのアクセスを有効化</string>
     <string name="qk_01911" formatted="false">Go to &quot;Settings → Apps → Special app access → All files access&quot; to enable manually.</string>
-    <string name="qk_01912" formatted="false">Current system version does not require this special permission.</string>
+    <string name="qk_01912" formatted="false">現在のシステムバージョンではこの特殊権限は不要です。</string>
     <string name="qk_01913" formatted="false">Go to default assistant settings</string>
     <string name="qk_01914" formatted="false">Set as default digital assistant</string>
     <string name="qk_01915" formatted="false">デジタルアシスタントアプリの全機能</string>
     <string name="qk_01916" formatted="false">Set Zorv AI as the system default digital assistant to take over the assistant gesture (long-press Home / side key), providing global voice/text assistant. Granted via the system role chooser.</string>
     <string name="qk_01917" formatted="false">Already the default digital assistant. Change in &quot;Settings → Default apps → Digital assistant&quot;.</string>
-    <string name="qk_01918" formatted="false">Current system version does not support the digital assistant role.</string>
-    <string name="qk_01919" formatted="false">Granted via the system &quot;Default digital assistant&quot; chooser; confirm to wake globally.</string>
+    <string name="qk_01918" formatted="false">現在のシステムバージョンはデジタルアシスタントロールに非対応です。</string>
+    <string name="qk_01919" formatted="false">システムの「既定のデジタルアシスタント」選択画面で付与します。確認後はどこからでも呼び出せます。</string>
     <string name="qk_01920" formatted="false">Note: precise alarm is a special permission on Android 12+ with no system popup, only Settings redirect; media and health runtime requests pop up only on first ask or after denial (without &quot;Don’t ask again&quot;), and downgrade to &quot;go to Settings&quot; once &quot;Don’t ask again&quot; is checked.</string>
     <string name="qk_01921" formatted="false">端末診断</string>
     <string name="qk_01922" formatted="false">インストール済みバージョン</string>
     <string name="qk_01923" formatted="false">システムバージョン</string>
-    <string name="qk_01924" formatted="false">Declared SCHEDULE_EXACT_ALARM</string>
+    <string name="qk_01924" formatted="false">SCHEDULE_EXACT_ALARM を宣言済み</string>
     <string name="qk_01925" formatted="false">はい ✓</string>
     <string name="qk_01926" formatted="false">いいえ ✗</string>
-    <string name="qk_01927" formatted="false">MANAGE_EXTERNAL_STORAGE declared</string>
+    <string name="qk_01927" formatted="false">MANAGE_EXTERNAL_STORAGE を宣言済み</string>
     <string name="qk_01928" formatted="false">Both are &quot;Yes&quot; but the system &quot;Special app access&quot; list still lacks this app: ① reopen Settings or reboot to let the system re-index; ② alarm &amp; reminder list needs Android 12+, all-files access needs Android 11+; ③ confirm you installed this version, not an old package (old package still has USE_EXACT_ALARM and is hidden by the system).</string>
     <string name="qk_01929" formatted="false">利用不可</string>
     <string name="qk_01930" formatted="false">Detecting</string>
@@ -1878,12 +1878,12 @@ Try opening with &quot;Other app&quot;.</string>
     <string name="qk_01932" formatted="false">Needs authorization</string>
     <string name="qk_01933" formatted="false">Go to Settings</string>
     <string name="qk_01934" formatted="false">データソースと優先度</string>
-    <string name="qk_01935" formatted="false">DataOrigin grouping · this app’s source is traceable</string>
+    <string name="qk_01935" formatted="false">DataOrigin グループ · 本アプリの出所を追跡可能</string>
     <string name="qk_01936" formatted="false">Health data may come from multiple Apps (watch, Google Fit, this app, etc.). Grouped by DataOrigin.packageName, you can distinguish and prefer data entered by this app.</string>
     <string name="qk_01937" formatted="false">各ソースのステップ数を読み込み</string>
     <string name="qk_01938" formatted="false">ランニング記録を書き込む</string>
-    <string name="qk_01939" formatted="false">Please authorize health data before using this demo.</string>
-    <string name="qk_01940" formatted="false">Steps in last 7 days (by source):</string>
+    <string name="qk_01939" formatted="false">このデモを使うには先に健康データの許可が必要です。</string>
+    <string name="qk_01940" formatted="false">直近7日間の歩数（ソース別）：</string>
     <string name="qk_01941" formatted="false">データなし</string>
     <string name="qk_01942">%1$s ステップ</string>
     <string name="qk_01943" formatted="false">概要</string>
@@ -1895,29 +1895,29 @@ Try opening with &quot;Other app&quot;.</string>
     <string name="qk_01949" formatted="false">GitHub Mirror (switch when official is unreachable)</string>
     <string name="qk_01950" formatted="false">ミラードメイン</string>
     <string name="qk_01951" formatted="false">イメージを選択</string>
-    <string name="qk_01952" formatted="false">Official github.com</string>
+    <string name="qk_01952" formatted="false">公式 github.com</string>
     <string name="qk_01953" formatted="false">✅ Mirror reachable (about ${ms ?:</string>
     <string name="qk_01954" formatted="false">} ms), can log in</string>
     <string name="qk_01955" formatted="false">❌ Cannot connect to this mirror (cert expired / timeout / blocked). Pick another, or use a network that can reach GitHub</string>
     <string name="qk_01956" formatted="false">テスト中…</string>
     <string name="qk_01957" formatted="false">ミラーの接続をテスト</string>
     <string name="qk_01958" formatted="false">Tip: if the current network can’t reach official GitHub, device flow / PAT may both fail. Log in with PAT on a GitHub-reachable network first for safety.</string>
-    <string name="qk_01959" formatted="false">Log in with Personal Access Token</string>
-    <string name="qk_01960" formatted="false">Log in with OAuth device flow</string>
+    <string name="qk_01959" formatted="false">Personal Access Token でログイン</string>
+    <string name="qk_01960" formatted="false">OAuth デバイスフローでログイン</string>
     <string name="qk_01961" formatted="false">先にTokenを貼り付けてください</string>
-    <string name="qk_01962" formatted="false">Token invalid or network error, please check and retry</string>
+    <string name="qk_01962" formatted="false">トークンが無効かネットワーク異常です。確認して再試行してください</string>
     <string name="qk_01963" formatted="false">ログイン中…</string>
     <string name="qk_01964" formatted="false">ログイン</string>
     <string name="qk_01965" formatted="false">Client ID registered at github.com/settings/developers</string>
-    <string name="qk_01966" formatted="false">Please fill in Client ID</string>
-    <string name="qk_01967" formatted="false">Failed to start device flow (invalid Client ID or no network)</string>
+    <string name="qk_01966" formatted="false">Client ID を入力してください</string>
+    <string name="qk_01967" formatted="false">デバイスフローの開始に失敗（Client IDが無効かオフライン）</string>
     <string name="qk_01968" formatted="false">開始中…</string>
     <string name="qk_01969" formatted="false">認可を開始</string>
     <string name="qk_01970" formatted="false">No Client ID? Create one at github.com/settings/developers → New OAuth App (no callback URL needed), then paste the Client ID here.</string>
     <string name="qk_01971" formatted="false">Please open the following address in a browser and enter the verification code:</string>
     <string name="qk_01972">Your verification code: %1$s</string>
     <string name="qk_01973" formatted="false">ログインに失敗：トークンの保存エラー</string>
-    <string name="qk_01974" formatted="false">Failed to fetch account (token invalid or network error)</string>
+    <string name="qk_01974" formatted="false">アカウントの取得に失敗（Tokenが無効かネットワーク異常）</string>
     <string name="qk_01975">Repos %1$s</string>
     <string name="qk_01976">Followers %1$s</string>
     <string name="qk_01977">Following %1$s</string>
@@ -1925,13 +1925,13 @@ Try opening with &quot;Other app&quot;.</string>
     <string name="qk_01979" formatted="false">リポジトリがないか取得に失敗しました</string>
     <string name="qk_01980">Update %1$s</string>
     <string name="qk_01981" formatted="false">Star解除</string>
-    <string name="qk_01982" formatted="false">No Issues or fetch failed</string>
+    <string name="qk_01982" formatted="false">Issueがないか取得に失敗しました</string>
     <string name="qk_01983" formatted="false">通知がないか取得に失敗しました</string>
     <string name="qk_01984" formatted="false">結果なし</string>
     <string name="qk_01985" formatted="false">GitHub を検索</string>
     <string name="qk_01986" formatted="false">ユーザー</string>
     <string name="qk_01987" formatted="false">Enter a keyword then tap search (repository / code / Issue / user)</string>
-    <string name="qk_01988" formatted="false">Cannot read the selected file, import failed</string>
+    <string name="qk_01988" formatted="false">選択したファイルを読み取れず、インポートに失敗</string>
     <string name="qk_01989">Import of this type is not yet supported: %1$s (only md/txt/json/csv/docx/xlsx/pptx)</string>
     <string name="qk_01990">Import failed: %1$s</string>
     <string name="qk_01991">インポートしました：%1$s</string>
@@ -1939,14 +1939,14 @@ Try opening with &quot;Other app&quot;.</string>
     <string name="qk_01993">Export failed: %1$s</string>
     <string name="qk_01994" formatted="false">読み込み中…</string>
     <string name="qk_01995" formatted="false">（内容を読み取れません）</string>
-    <string name="qk_01996" formatted="false">Evaluate Arithmetic Expression</string>
+    <string name="qk_01996" formatted="false">同名ファイルがあるため名前を変更できません</string>
     <string name="qk_01997">Renamed to: %1$s</string>
     <string name="qk_01998" formatted="false">名前の変更に失敗</string>
-    <string name="qk_01999" formatted="false">No other app found to open this document</string>
+    <string name="qk_01999" formatted="false">このドキュメントを開ける他のアプリが見つかりません</string>
     <string name="qk_02000" formatted="false">ナレッジベースをエクスポート（ZIP）</string>
     <string name="qk_02001" formatted="false">ドキュメントをインポート</string>
     <string name="qk_02002" formatted="false">ドキュメントを追加</string>
-    <string name="qk_02003" formatted="false">Open preview (rich text / editable)</string>
+    <string name="qk_02003" formatted="false">プレビューを開く（リッチテキスト/編集可）</string>
     <string name="qk_02004" formatted="false">内容を編集</string>
     <string name="qk_02005" formatted="false">ドキュメント名を変更</string>
     <string name="qk_02006" formatted="false">ドキュメントを削除</string>
@@ -1956,13 +1956,13 @@ Try opening with &quot;Other app&quot;.</string>
     <string name="qk_02010">Documents (%1$s)</string>
     <string name="qk_02011" formatted="false">Knowledge base is empty. Tap + at top right to add documents, or import from the system file picker.</string>
     <string name="qk_02012" formatted="false">インデックス再構築</string>
-    <string name="qk_02013" formatted="false">Re-scan and vectorize all documents</string>
+    <string name="qk_02013" formatted="false">すべてのドキュメントを再スキャンしてベクトル化</string>
     <string name="qk_02014" formatted="false">Office documents (docx/xlsx/pptx): tap &quot;Open Preview&quot; top-right to view and edit text in-app. After editing, the RAG index is rebuilt automatically.</string>
     <string name="qk_02015">Create failed: %1$s</string>
     <string name="qk_02016" formatted="false">ナレッジ文書を作成</string>
     <string name="qk_02017" formatted="false">Enter a document name to go straight into the rich editor (supports a Markdown toolbar and live preview).</string>
     <string name="qk_02018" formatted="false">ドキュメント名</string>
-    <string name="qk_02019" formatted="false">E.g. coding standard (default .md)</string>
+    <string name="qk_02019" formatted="false">例：コーディング規約（既定 .md）</string>
     <string name="qk_02020" formatted="false">決定</string>
     <string name="qk_02021" formatted="false">新しいファイル名</string>
     <string name="qk_02022">Edit content · %1$s</string>
@@ -1972,19 +1972,19 @@ Try opening with &quot;Other app&quot;.</string>
     <string name="qk_02026" formatted="false">フレームワーク状態</string>
     <string name="qk_02027" formatted="false">本機のフレームワークを検出中…</string>
     <string name="qk_02028" formatted="false">インストール済みマネージャー一覧を取得</string>
-    <string name="qk_02029" formatted="false">No LSPosed / Xposed detected</string>
+    <string name="qk_02029" formatted="false">LSPosed / Xposed が検出されません</string>
     <string name="qk_02030" formatted="false">After installing LSPosed (zygisk), manager entries appear here</string>
-    <string name="qk_02031" formatted="false">Installed · tap to open for scope / module management</string>
+    <string name="qk_02031" formatted="false">インストール済み · タップしてスコープ / モジュール管理を開く</string>
     <string name="qk_02032" formatted="false">Zorv AI スコープ</string>
-    <string name="qk_02033" formatted="false">Add Zorv AI to scope</string>
-    <string name="qk_02034" formatted="false">In the manager’s &quot;Apps&quot;, check this app so the framework hooks take effect on it</string>
+    <string name="qk_02033" formatted="false">Zorv AI をスコープに含める</string>
+    <string name="qk_02034" formatted="false">マネージャーの「アプリ」で本アプリにチェックを入れた場合のみ、フレームワークのフックが有効になります</string>
     <string name="qk_02035" formatted="false">Please install LSPosed manager first</string>
-    <string name="qk_02036" formatted="false">Activate Zorv AI module</string>
+    <string name="qk_02036" formatted="false">Zorv AI モジュールを有効化</string>
     <string name="qk_02037" formatted="false">Enable Zorv AI in LSPosed &quot;Modules&quot;, and check this app in &quot;Apps&quot; to include it in scope</string>
     <string name="qk_02038" formatted="false">Zorv AI’s terminal / ACI / automation capabilities run on their own pipeline (accessibility · Shizuku · device admin · ROOT) and work without Xposed.</string>
     <string name="qk_02039" formatted="false">Zorv AI now provides an opt-in LSPosed module: writing a scope marker when included in scope; optional cross-app injection / system redirect bridge (requires external lsposed_bridge.json, off by default). This page defines no ai.aci.permission.*.</string>
     <string name="qk_02040" formatted="false">Permission definitions (ai.aci.permission.* etc.) are maintained by the control-end project; this app only declares and uses them, no duplication.</string>
-    <string name="qk_02041">Cannot open %1$s: %2$s</string>
+    <string name="qk_02041">%1$s を開けません：%2$s</string>
     <string name="qk_02042" formatted="false">コピーして閉じる</string>
     <string name="qk_02043" formatted="false">閉じるのみ</string>
     <string name="qk_02044" formatted="false">⚠️ 実行時エラー（捕捉済み）</string>
@@ -1999,7 +1999,7 @@ Try opening with &quot;Other app&quot;.</string>
     <string name="qk_02053" formatted="false">`コード`</string>
     <string name="qk_02054" formatted="false">タスク一覧</string>
     <string name="qk_02055" formatted="false">```
-Code
+コード
 ```</string>
     <string name="qk_02056" formatted="false">![画像の説明](url)</string>
     <string name="qk_02057" formatted="false">| Col1 | Col2 |
@@ -2008,14 +2008,14 @@ Code
     <string name="qk_02058" formatted="false">MCPサービス</string>
     <string name="qk_02059">Expose Zorv AI’s %1$s built-in tools to other local AI clients via MCP (Model Context Protocol)</string>
     <string name="qk_02060" formatted="false">(Claude Desktop / Cursor / MCP Inspector, etc.).</string>
-    <string name="qk_02061" formatted="false">Enable Local MCP Server</string>
+    <string name="qk_02061" formatted="false">ローカル MCP Server を有効化</string>
     <string name="qk_02062">Listening on 127.0.0.1:%1$s</string>
     <string name="qk_02063" formatted="false">オフ（どのポートも待ち受けません）</string>
     <string name="qk_02064" formatted="false">接続アドレス</string>
     <string name="qk_02065" formatted="false">接続アドレスをコピーしました</string>
     <string name="qk_02066" formatted="false">Transport: JSON-RPC 2.0 over HTTP (single POST + plain JSON response)
 </string>
-    <string name="qk_02067" formatted="false">Listen: 127.0.0.1 (local only, not reachable externally)
+    <string name="qk_02067" formatted="false">待ち受け：127.0.0.1（本機のみ、外部からは到達不可）
 </string>
     <string name="qk_02068" formatted="false">Methods: initialize / tools/list / tools/call
 </string>
@@ -2025,24 +2025,24 @@ Code
 </string>
     <string name="qk_02072" formatted="false">Security note: the service binds only the loopback address; no external network request can reach it. Tool calls reuse the app’s same</string>
     <string name="qk_02073" formatted="false">Permission &amp; confirmation mechanism; sensitive operations (e.g. install/uninstall apps, ROOT commands) are still constrained by system permissions and runtime confirmation.</string>
-    <string name="qk_02074" formatted="false">MCP Client (connect external server)</string>
+    <string name="qk_02074" formatted="false">MCP クライアント（外部サーバーに接続）</string>
     <string name="qk_02075" formatted="false">Add an external MCP server here (e.g. another AI client, a cloud tool gateway); once added, the AI can call its exposed tools via mcp_call.</string>
-    <string name="qk_02076">Connection successful, discovered %1$s tools</string>
+    <string name="qk_02076">接続成功、%1$s 個のツールを検出</string>
     <string name="qk_02077" formatted="false">接続に失敗</string>
     <string name="qk_02078" formatted="false">テスト</string>
     <string name="qk_02079">Configured %1$s external servers (keep adding; AI calls them by alias via mcp_call)</string>
     <string name="qk_02080" formatted="false">別名</string>
-    <string name="qk_02081" formatted="false">Server address (http(s)://host/path)</string>
-    <string name="qk_02082" formatted="false">Token (optional, Bearer)</string>
+    <string name="qk_02081" formatted="false">サーバーアドレス (http(s)://host/path)</string>
+    <string name="qk_02082" formatted="false">Token（任意、Bearer）</string>
     <string name="qk_02083" formatted="false">別名とアドレスは必須です</string>
     <string name="qk_02084">サーバーを追加しました：%1$s</string>
     <string name="qk_02085" formatted="false">保存して続けて追加</string>
-    <string name="qk_02086" formatted="false">Unified config for voice ball, auto-read, chat voice button and emotion / voice-role capabilities. Each switch is independent.</string>
+    <string name="qk_02086" formatted="false">ローカル MCP（AIデプロイ）</string>
     <string name="qk_02087" formatted="false">An MCP server created and deployed into this app by the AI via mcp_deploy. After deployment it auto-starts the endpoint on this device,</string>
     <string name="qk_02088" formatted="false">Call it in chat by alias with mcp_call; deployed instances are listed below.</string>
     <string name="qk_02089" formatted="false">Multi-step workflow orchestration engine: chain registered tools into a pipeline, supports variables, loops, conditions, error handling and timeouts; use it to orchestrate other tools to fill capability gaps.</string>
     <string name="qk_02090">%1$s · %2$s tools</string>
-    <string name="qk_02091">Logged out: %1$s</string>
+    <string name="qk_02091">ログアウトしました：%1$s</string>
     <string name="qk_02092" formatted="false">ログアウト</string>
     <string name="qk_02093" formatted="false">不明なファイル</string>
     <string name="qk_02094" formatted="false">音楽を選択</string>
@@ -2050,10 +2050,10 @@ Code
     <string name="qk_02096" formatted="false">Requires ${if (kind ==</string>
     <string name="qk_02097" formatted="false">} file permission to browse the media library.</string>
     <string name="qk_02098" formatted="false">権限を付与</string>
-    <string name="qk_02099">Load failed: %1$s</string>
+    <string name="qk_02099">読み取りに失敗：%1$s</string>
     <string name="qk_02100" formatted="false">No ${if (kind ==</string>
     <string name="qk_02101" formatted="false">} files found</string>
-    <string name="qk_02102" formatted="false">Settings · Settings</string>
+    <string name="qk_02102" formatted="false">設定 · Settings</string>
     <string name="qk_02103" formatted="false">モデル設定</string>
     <string name="qk_02104" formatted="false">モデルをインポート</string>
     <string name="qk_02105" formatted="false">ローカルオフラインモード</string>
@@ -2061,12 +2061,12 @@ Code
     <string name="qk_02107" formatted="false">This model runs offline locally on the device, without any cloud service; no Base URL / API Key needed.</string>
     <string name="qk_02108" formatted="false">クラウドモデルに戻す</string>
     <string name="qk_02109">Selected custom provider: %1$s</string>
-    <string name="qk_02110" formatted="false">Select or customize an API provider to auto-fill the default address</string>
+    <string name="qk_02110" formatted="false">APIプロバイダーを選択またはカスタムすると既定のアドレスが自動入力されます</string>
     <string name="qk_02111" formatted="false">接続</string>
     <string name="qk_02112" formatted="false">モデル名</string>
     <string name="qk_02113" formatted="false">取得中…</string>
     <string name="qk_02114" formatted="false">モデル一覧を取得</string>
-    <string name="qk_02115" formatted="false">The following params only affect the local offline model, independent of cloud model settings.</string>
+    <string name="qk_02115" formatted="false">以下の設定はローカルのオフラインモデルのみに影響し、クラウドモデルの設定とは干渉しません。</string>
     <string name="qk_02116" formatted="false">温度</string>
     <string name="qk_02117" formatted="false">最大生成トークン</string>
     <string name="qk_02118" formatted="false">Max tokens per local-model reply. Phone CPU takes tens to hundreds of ms per token; 256–1024 recommended.</string>
@@ -2086,45 +2086,45 @@ Code
     <string name="qk_02132" formatted="false">プリセットを編集</string>
     <string name="qk_02133" formatted="false">読み込み</string>
     <string name="qk_02134" formatted="false">プリセットを削除</string>
-    <string name="qk_02135">Preset %1$s</string>
+    <string name="qk_02135">プリセット %1$s</string>
     <string name="qk_02136" formatted="false">プリセット名</string>
-    <string name="qk_02137" formatted="false">e.g. My DeepSeek</string>
+    <string name="qk_02137" formatted="false">例：自分の DeepSeek</string>
     <string name="qk_02138" formatted="false">変更を保存</string>
     <string name="qk_02139">Provider: %1$s</string>
     <string name="qk_02140" formatted="false">Model: ${ep.model.ifBlank {</string>
     <string name="qk_02141" formatted="false">Address: ${ep.baseUrl.ifBlank {</string>
     <string name="qk_02142" formatted="false">After changing the name, tap &quot;Save changes&quot; to update the preset display name. For other fields, delete and recreate.</string>
-    <string name="qk_02143">Select model (%1$s)</string>
+    <string name="qk_02143">モデルを選択 (%1$s 件)</string>
     <string name="qk_02144" formatted="false">No model obtained; please check address / key.</string>
     <string name="qk_02145" formatted="false">取得に失敗</string>
     <string name="qk_02146">Current: %1$s · ${cfg.model.ifBlank {</string>
     <string name="qk_02147" formatted="false">ローカルモデルが未選択</string>
     <string name="qk_02148" formatted="false">MNN / llama.cpp local model</string>
-    <string name="qk_02149" formatted="false">MNN .mnn / llama.cpp folder</string>
+    <string name="qk_02149" formatted="false">MNN .mnn / llama.cpp フォルダ</string>
     <string name="qk_02150" formatted="false">モデルをインポート中です。しばらくお待ちください…</string>
-    <string name="qk_02151" formatted="false">Copy failed: folder may be empty or inaccessible, please reselect.</string>
+    <string name="qk_02151" formatted="false">コピーに失敗：ディレクトリが空かアクセスできません。選び直してください。</string>
     <string name="qk_02152">Import failed: %1$s</string>
     <string name="qk_02153" formatted="false">Please copy the content below and send it to the developer to locate the real cause of &quot;settings crash / cannot chat&quot;.</string>
     <string name="qk_02154" formatted="false">③ Directly select a single .gguf file (simplest, recommended). The model is fully copied to the app’s private directory and runs completely offline.</string>
-    <string name="qk_02155" formatted="false">MNN Model Directory (select folder)</string>
+    <string name="qk_02155" formatted="false">MNN モデルディレクトリ（フォルダを選択）</string>
     <string name="qk_02156" formatted="false">llama.cpp folder (select folder)</string>
-    <string name="qk_02157" formatted="false">Select .gguf file (recommended)</string>
+    <string name="qk_02157" formatted="false">.gguf ファイルを選択（推奨）</string>
     <string name="qk_02158" formatted="false">No local model yet. After importing by any of the above methods, tap the list item to set it as the current chat model.</string>
     <string name="qk_02159" formatted="false">Available models: ${if (m.modelNames.isEmpty())</string>
-    <string name="qk_02160">Path: %1$s</string>
+    <string name="qk_02160">パス：%1$s</string>
     <string name="qk_02161" formatted="false">● Activated (resident in memory, reused across chat turns)</string>
     <string name="qk_02162" formatted="false">実行パラメータ</string>
     <string name="qk_02163" formatted="false">Tip: Local models run on-device offline via the native inference runtime (MNN / llama.cpp); once selected, chats use that model with no network needed.</string>
     <string name="qk_02164">Runtime parameters · %1$s</string>
-    <string name="qk_02165" formatted="false">Blank / 0 means auto. After changing, re-tap &quot;Load&quot; to take effect.</string>
+    <string name="qk_02165" formatted="false">空欄 / 0 は自動を意味します。変更後は「読み込み」を押し直すと反映されます。</string>
     <string name="qk_02166">Threads (auto: %1$s)</string>
-    <string name="qk_02167" formatted="false">Context length n_ctx (auto: estimated from prompt)</string>
+    <string name="qk_02167" formatted="false">コンテキスト長 n_ctx（自動：プロンプトから推定）</string>
     <string name="qk_02168" formatted="false">Re-instantiate the plugin entry; changes take effect immediately</string>
     <string name="qk_02169" formatted="false">GPU offload layers n_gpu_layers (default 0 = pure CPU)</string>
     <string name="qk_02170" formatted="false">mmap で重みをマップ</string>
     <string name="qk_02171" formatted="false">Recommended off. When on, large GGUF on external storage reads disk page by page, often showing &quot;stuck at model loading&quot;.</string>
     <string name="qk_02172" formatted="false">統合KVキャッシュ</string>
-    <string name="qk_02173" formatted="false">Recommended on. Single-sequence inference allocates only one KV, saving memory and loading faster.</string>
+    <string name="qk_02173" formatted="false">有効化を推奨。単一シーケンス推論ではKVが1つだけ割り当てられ、省メモリで読み込みも高速です。</string>
     <string name="qk_02174" formatted="false">計算バックエンド</string>
     <string name="qk_02175" formatted="false">GPU backend (opencl/vulkan) is not available on all devices; on failure it falls back to CPU.</string>
     <string name="qk_02176" formatted="false">計算精度</string>
@@ -2140,10 +2140,10 @@ Code
     <string name="qk_02186" formatted="false">Deploy to Terminal</string>
     <string name="qk_02187" formatted="false">プロバイダーを選択</string>
     <string name="qk_02188" formatted="false">プロバイダーを検索</string>
-    <string name="qk_02189" formatted="false">OpenAI Responses (custom)</string>
-    <string name="qk_02190" formatted="false">OpenAI compatible (custom)</string>
+    <string name="qk_02189" formatted="false">OpenAI Responses (カスタム)</string>
+    <string name="qk_02190" formatted="false">OpenAI 互換 (カスタム)</string>
     <string name="qk_02191" formatted="false">Anthropic compatible (custom)</string>
-    <string name="qk_02192" formatted="false">Gemini compatible (custom)</string>
+    <string name="qk_02192" formatted="false">Gemini 互換 (カスタム)</string>
     <string name="qk_02193" formatted="false">Baidu ERNIE</string>
     <string name="qk_02194" formatted="false">Alibaba Qwen</string>
     <string name="qk_02195" formatted="false">iFlytek Spark</string>
@@ -2155,31 +2155,31 @@ Code
     <string name="qk_02201" formatted="false">Infinigence</string>
     <string name="qk_02202" formatted="false">Alipay Bailing</string>
     <string name="qk_02203" formatted="false">Volcano Doubao</string>
-    <string name="qk_02204" formatted="false">LM Studio (local)</string>
+    <string name="qk_02204" formatted="false">LM Studio (ローカル)</string>
     <string name="qk_02205" formatted="false">Ollama (ローカル)</string>
-    <string name="qk_02206" formatted="false">OpenAI compatible (local)</string>
+    <string name="qk_02206" formatted="false">OpenAI 互換 (ローカル)</string>
     <string name="qk_02207" formatted="false">MNN (ローカル)</string>
-    <string name="qk_02208" formatted="false">llama.cpp (local)</string>
+    <string name="qk_02208" formatted="false">llama.cpp (ローカル)</string>
     <string name="qk_02209" formatted="false">PPIO Cloud</string>
     <string name="qk_02210" formatted="false">その他 / カスタム</string>
     <string name="qk_02211" formatted="false">マイモデル</string>
     <string name="qk_02212" formatted="false">オフラインモデルのダウンロードセンター</string>
     <string name="qk_02213">ダウンロード失敗：%1$s</string>
-    <string name="qk_02214" formatted="false">OK: downloaded and dynamically loaded (llama.cpp)</string>
-    <string name="qk_02215">Downloaded, but engine load failed: %1$s</string>
-    <string name="qk_02216" formatted="false">OK: downloaded and dynamically loaded (MNN)</string>
+    <string name="qk_02214" formatted="false">OK: ダウンロードして動的ロード済み（llama.cpp）</string>
+    <string name="qk_02215">ダウンロードは完了しましたが、エンジンの読み込みに失敗：%1$s</string>
+    <string name="qk_02216" formatted="false">OK: ダウンロードして動的ロード済み（MNN）</string>
     <string name="qk_02217" formatted="false">No downloadable ${if (type ==</string>
     <string name="qk_02218" formatted="false">} model found, try another keyword</string>
     <string name="qk_02219" formatted="false">GGUF モデルを検索</string>
     <string name="qk_02220" formatted="false">MNN モデルを検索</string>
     <string name="qk_02221" formatted="false">(Full model package: config + all weight files)</string>
-    <string name="qk_02222">About %1$s MB</string>
+    <string name="qk_02222">サイズ約 %1$s MB</string>
     <string name="qk_02223" formatted="false">%1$s% downloading…</string>
     <string name="qk_02224" formatted="false">ダウンロード中…</string>
     <string name="qk_02225" formatted="false">ダウンロードして読み込み</string>
-    <string name="qk_02226">Registered %1$s models</string>
+    <string name="qk_02226">%1$s 個のモデルを登録しました</string>
     <string name="qk_02227" formatted="false">No model yet. Go to the GGUF / MNN tab above to search and download one.</string>
-    <string name="qk_02228">Type: %1$s</string>
+    <string name="qk_02228">種類：%1$s</string>
     <string name="qk_02229" formatted="false">マルチプロバイダー管理</string>
     <string name="qk_02230" formatted="false">フェイルオーバー設定</string>
     <string name="qk_02231" formatted="false">ヘルスチェック</string>
@@ -2208,7 +2208,7 @@ Code
     <string name="qk_02254" formatted="false">最大リトライ回数</string>
     <string name="qk_02255" formatted="false">失敗しきい値（サーキットブレーカー）</string>
     <string name="qk_02256" formatted="false">ヘルスチェック間隔（分）</string>
-    <string name="qk_02257" formatted="false">Checking provider health status...</string>
+    <string name="qk_02257" formatted="false">プロバイダーの稼働状態を確認中...</string>
     <string name="qk_02258" formatted="false">下のボタンをタップしてヘルスチェックを開始</string>
     <string name="qk_02259" formatted="false">検査結果:</string>
     <string name="qk_02260" formatted="false">異常</string>
@@ -2219,7 +2219,7 @@ Code
     <string name="qk_02265" formatted="false">次の曲</string>
     <string name="qk_02266" formatted="false">ループモード</string>
     <string name="qk_02267" formatted="false">シャッフル再生</string>
-    <string name="qk_02268">Playlist (%1$s)</string>
+    <string name="qk_02268">プレイリスト (%1$s)</string>
     <string name="qk_02269" formatted="false">Use GitHub as a search engine inside the chat: directly search GitHub’s repositories / code / Issues / users.</string>
     <string name="qk_02270">曲目 %1$s</string>
     <string name="qk_02271" formatted="false">停止</string>
@@ -2230,7 +2230,7 @@ Code
     <string name="qk_02277" formatted="false">Document:</string>
     <string name="qk_02278" formatted="false">Document: (.+?)（</string>
     <string name="qk_02279">作成に失敗: %1$s</string>
-    <string name="qk_02280" formatted="false">Documents open and view directly in-app, no third-party office software needed.</string>
+    <string name="qk_02280" formatted="false">ドキュメントはアプリ内で直接開いて閲覧できます。サードパーティのオフィスソフトは不要です。</string>
     <string name="qk_02281" formatted="false">Supports Word / Excel / PPT / PDF / TXT / Markdown / code / images; TXT / Markdown / code can be edited in-app.</string>
     <string name="qk_02282" formatted="false">ローカルドキュメントを選択…</string>
     <string name="qk_02283" formatted="false">本機のOfficeドキュメント</string>
@@ -2247,26 +2247,26 @@ Code
     <string name="qk_02294" formatted="false">監査ログ</string>
     <string name="qk_02295" formatted="false">Layered, controlled, auditable: L1 Accessibility → L2 Shizuku → L3 Device Admin → L4 ROOT, escalating step by step. Any privilege escalation must pass four stages: intent → policy check → user confirmation → audit.</string>
     <string name="qk_02296" formatted="false">権限モード</string>
-    <string name="qk_02297" formatted="false">Allow (allow all, no more asking)</string>
+    <string name="qk_02297" formatted="false">許可（すべて許可し、今後確認しない）</string>
     <string name="qk_02298" formatted="false">禁止（いかなる昇格も拒否）</string>
     <string name="qk_02299" formatted="false">確認（毎回ダイアログ）</string>
     <string name="qk_02300" formatted="false">アクセシビリティサービス</string>
-    <string name="qk_02301" formatted="false">UI interaction / screen content reading (basic automation).</string>
-    <string name="qk_02302" formatted="false">Accessibility permission required to run UI automation and screen reading.</string>
+    <string name="qk_02301" formatted="false">UI操作 / 画面内容の読み取り（基本自動化）。</string>
+    <string name="qk_02302" formatted="false">画面操作の自動化と画面読み取りにはアクセシビリティ権限が必要です。</string>
     <string name="qk_02303" formatted="false">Global actions (recent tasks): ${if (ok)</string>
     <string name="qk_02304" formatted="false">Shizuku サービス</string>
     <string name="qk_02305" formatted="false">System API calls / silent install / freeze apps (Root-free).</string>
     <string name="qk_02306" formatted="false">Requesting Shizuku permission…</string>
-    <string name="qk_02307" formatted="false">Shizuku not detected; please install it first then authorize</string>
+    <string name="qk_02307" formatted="false">Shizuku が検出されません。先にインストールしてから許可してください</string>
     <string name="qk_02308" formatted="false">Cannot auto-open the Shizuku manager; please manually open the Shizuku app and authorize this app</string>
     <string name="qk_02309" formatted="false">Shizuku authorized ✓ ready to use</string>
-    <string name="qk_02310" formatted="false">Current context cannot pop system dialog; opened Shizuku app authorization</string>
-    <string name="qk_02311" formatted="false">Shizuku authorized ✓</string>
-    <string name="qk_02312" formatted="false">Shizuku permission denied</string>
-    <string name="qk_02313" formatted="false">Shizuku not running, opening and waiting for service to start…</string>
+    <string name="qk_02310" formatted="false">現在のコンテキストではシステムダイアログを出せないため、Shizuku アプリでの許可画面を開きました</string>
+    <string name="qk_02311" formatted="false">Shizuku の許可に成功 ✓</string>
+    <string name="qk_02312" formatted="false">Shizuku の許可が拒否されました</string>
+    <string name="qk_02313" formatted="false">Shizuku が動作していません。起動してサービスの開始を待機中…</string>
     <string name="qk_02314" formatted="false">Shizuku still not ready: start the service in that app first (ADB wireless debugging/pairing), then tap this button to authorize</string>
     <string name="qk_02315" formatted="false">No permission dialog appeared; opened the Shizuku app for you, please authorize this app manually</string>
-    <string name="qk_02316" formatted="false">Programmatic authorization failed; switched to authorizing in the Shizuku app</string>
+    <string name="qk_02316" formatted="false">プログラムによる許可に失敗したため、Shizuku アプリ内での許可に切り替えました</string>
     <string name="qk_02317" formatted="false">デバイス管理者</string>
     <string name="qk_02318" formatted="false">Lock screen / disable camera (only these two).</string>
     <string name="qk_02319" formatted="false">Device admin permission required, only for locking screen and disabling/restoring camera.</string>
@@ -2276,19 +2276,19 @@ Code
     <string name="qk_02323" formatted="false">Allow CapOS in the Root manager</string>
     <string name="qk_02324">ROOT: %1$s (root commands are executed for real via root_exec / shizuku_root_exec tools, constrained by the &quot;Permission Mode&quot; policy)</string>
     <string name="qk_02325" formatted="false">標準ランタイム権限</string>
-    <string name="qk_02326" formatted="false">Enable &quot;Exact Alarm&quot; in system settings, then return and tap test again</string>
+    <string name="qk_02326" formatted="false">システム設定で「正確なアラーム」を有効にし、戻ってもう一度テストをタップしてください</string>
     <string name="qk_02327" formatted="false">Go to Settings→Apps→Zorv AI→Notifications/Permissions to enable &quot;Exact Alarm&quot;</string>
     <string name="qk_02328" formatted="false">Zorv AI テストアラーム</string>
-    <string name="qk_02329" formatted="false">About Zorv AI</string>
+    <string name="qk_02329" formatted="false">テスト通知：正確なアラーム権限が有効になりました</string>
     <string name="qk_02330" formatted="false">Set; a reminder notification will pop up in about 10 seconds</string>
-    <string name="qk_02331" formatted="false">Feature permissions (AI assistant capabilities)</string>
+    <string name="qk_02331" formatted="false">機能権限（AIアシスタント機能）</string>
     <string name="qk_02332" formatted="false">機能権限ガイド</string>
-    <string name="qk_02333" formatted="false">Media read/write · Health data · Exact alarm · Data source priority</string>
+    <string name="qk_02333" formatted="false">メディア読み書き · 健康データ · 正確なアラーム · データソースの優先度</string>
     <string name="qk_02334" formatted="false">Runtime permissions pop the system authorization dialog; ROOT / Shizuku / Device Admin require your active authorization in the system UI. All permission usage is recorded in the audit log.</string>
-    <string name="qk_02335">Permission escalation confirm · %1$s</string>
+    <string name="qk_02335">権限昇格の確認 · %1$s</string>
     <string name="qk_02336">Channel: %1$s</string>
     <string name="qk_02337" formatted="false">権限を要求</string>
-    <string name="qk_02338" formatted="false">Fields (comma-separated)</string>
+    <string name="qk_02338" formatted="false">Root はアプリ内で案内できません。Root マネージャーで許可してください。</string>
     <string name="qk_02339" formatted="false">オン</string>
     <string name="qk_02340" formatted="false">オン</string>
     <string name="qk_02350">Incubation diagnostics double-write failed: %1$s</string>
@@ -2305,12 +2305,12 @@ Code
     <string name="qk_02377" formatted="false">定期タスク / 自動化</string>
     <string name="qk_02378" formatted="false">追加</string>
     <string name="qk_02379" formatted="false">定期タスクはまだありません</string>
-    <string name="qk_02380" formatted="false">Tap + at top right to add, or let the AI create one for you</string>
-    <string name="qk_02381">One-time @ %1$s</string>
+    <string name="qk_02380" formatted="false">右上の + をタップして追加、またはAIに作成させてください</string>
+    <string name="qk_02381">1回限り @ %1$s</string>
     <string name="qk_02382" formatted="false">Next: ${SimpleDateFormat(</string>
     <string name="qk_02383" formatted="false">定期タスクを作成</string>
     <string name="qk_02384" formatted="false">定期タスクを編集</string>
-    <string name="qk_02385" formatted="false">Instruction / reminder content (optional)</string>
+    <string name="qk_02385" formatted="false">指示 / リマインダー内容（任意）</string>
     <string name="qk_02386" formatted="false">1回限り</string>
     <string name="qk_02387" formatted="false">繰り返し</string>
     <string name="qk_02388" formatted="false">トリガー時刻</string>
@@ -2334,23 +2334,23 @@ Code
     <string name="qk_02406" formatted="false">セッションを自動作成</string>
     <string name="qk_02407" formatted="false">No history session yet; you can use &quot;Auto-create session&quot;</string>
     <string name="qk_02408" formatted="false">無名のセッション</string>
-    <string name="qk_02409" formatted="false">Each trigger creates an independent session, not polluting the current / history chats.</string>
+    <string name="qk_02409" formatted="false">トリガーごとに独立したセッションを新規作成し、現在 / 過去の会話を汚しません。</string>
     <string name="qk_02410" formatted="false">If not specified, use the current / most recent session.</string>
     <string name="qk_02411" formatted="false">表示切替</string>
     <string name="qk_02412" formatted="false">確認</string>
     <string name="qk_02413" formatted="false">City name</string>
     <string name="qk_02414" formatted="false">ファイルの読み取りに失敗、または内容が空です</string>
     <string name="qk_02415" formatted="false">Import failed: content is not a valid SKILL.md / skill JSON / tool spec JSON</string>
-    <string name="qk_02416">Imported %1$s skills</string>
+    <string name="qk_02416">%1$s 個のスキルをインポートしました</string>
     <string name="qk_02417" formatted="false">スキル SKILL</string>
     <string name="qk_02418" formatted="false">すべてのスキルをエクスポート（JSON）</string>
-    <string name="qk_02419" formatted="false">Import skill from SKILL.md / JSON / tool spec</string>
+    <string name="qk_02419" formatted="false">SKILL.md / JSON / ツール仕様からスキルをインポート</string>
     <string name="qk_02420" formatted="false">スキルの追加方法（説明）</string>
     <string name="qk_02421" formatted="false">内蔵署名の確認：</string>
     <string name="qk_02422">Verified %1$s / %2$s</string>
     <string name="qk_02423">, ⚠️ failed (possible tampering) %1$s: ${r.failedNames.joinToString(</string>
     <string name="qk_02424">, unsigned %1$s</string>
-    <string name="qk_02425" formatted="false">Verify built-in skill signature (signature troubleshooting)</string>
+    <string name="qk_02425" formatted="false">内蔵スキルの署名を検証（署名チェック）</string>
     <string name="qk_02426">%1$s enabled / %2$s total</string>
     <string name="qk_02427" formatted="false">No skills yet.
 Tap the import button at top right to paste-import from an open-source SKILL.md;
@@ -2360,8 +2360,8 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02430" formatted="false">エクスポートするスキルを選択</string>
     <string name="qk_02431" formatted="false">エクスポートできるスキルがありません。</string>
     <string name="qk_02432" formatted="false">スキルの追加方法</string>
-    <string name="qk_02433" formatted="false">(No instruction, won’t inject even if enabled)</string>
-    <string name="qk_02434">Instruction %1$s chars</string>
+    <string name="qk_02433" formatted="false">（指示なし。有効にしても注入されません）</string>
+    <string name="qk_02434">指示 %1$s 文字</string>
     <string name="qk_02435" formatted="false">Signature verified</string>
     <string name="qk_02436" formatted="false">Signature failed · possible tampering</string>
     <string name="qk_02437" formatted="false">Not signed</string>
@@ -2370,35 +2370,35 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02440" formatted="false">スキルを編集</string>
     <string name="qk_02441" formatted="false">名前（必須）</string>
     <string name="qk_02442" formatted="false">概要（任意）</string>
-    <string name="qk_02443" formatted="false">Skill instruction (inject system prompt)</string>
+    <string name="qk_02443" formatted="false">スキル指示（システムプロンプトに注入）</string>
     <string name="qk_02444" formatted="false">Trigger words / trigger (optional, comma-separated, for future auto-matching)</string>
     <string name="qk_02445" formatted="false">Parameter Schema (JSON, function calling input)</string>
-    <string name="qk_02446" formatted="false">Can be used as a tool call (registered as an AI-callable function)</string>
-    <string name="qk_02447" formatted="false">Persistent system prompt (if off, injected only when a trigger word matches)</string>
-    <string name="qk_02448" formatted="false">Enabled (disabled means system prompt won’t be injected)</string>
+    <string name="qk_02446" formatted="false">ツールとして呼び出し可能（AIが呼べる関数として登録）</string>
+    <string name="qk_02447" formatted="false">常駐システムプロンプト（オフにするとトリガーワード一致時のみ注入）</string>
+    <string name="qk_02448" formatted="false">有効化（オフにするとシステムプロンプトに注入されません）</string>
     <string name="qk_02449" formatted="false">ソウル注入</string>
-    <string name="qk_02450" formatted="false">Select a soul card; the AI will communicate with you as its identity</string>
+    <string name="qk_02450" formatted="false">ソウルカードを選ぶと、AIがその人格で会話します</string>
     <string name="qk_02451" formatted="false">心拍孵化</string>
     <string name="qk_02452" formatted="false">Heartbeat Hatching (auto-hatch every soul card in background)</string>
     <string name="qk_02453" formatted="false">ソウルカードはまだありません</string>
-    <string name="qk_02454" formatted="false">Tap &quot;New&quot; to create your first soul card</string>
+    <string name="qk_02454" formatted="false">「新規作成」をタップして最初のソウルカードを作成</string>
     <string name="qk_02455" formatted="false">説明なし</string>
     <string name="qk_02456" formatted="false">AI孵化</string>
     <string name="qk_02457" formatted="false">孵化中…</string>
-    <string name="qk_02458">Incubated %1$s minutes ago</string>
+    <string name="qk_02458">最近の孵化：%1$s分前</string>
     <string name="qk_02459">Last incubated %1$s hours ago</string>
     <string name="qk_02460" formatted="false">未孵化</string>
     <string name="qk_02461" formatted="false">アバター</string>
     <string name="qk_02462" formatted="false">ソウル編集</string>
     <string name="qk_02463" formatted="false">プロフィール画像</string>
     <string name="qk_02464" formatted="false">画像の差し替え / トリミング</string>
-    <string name="qk_02465" formatted="false">No avatar set (shows first letter of name)</string>
+    <string name="qk_02465" formatted="false">アバター未設定（名前の頭文字を表示します）</string>
     <string name="qk_02466" formatted="false">画像をアップロード</string>
     <string name="qk_02467" formatted="false">ソウルカード名</string>
-    <string name="qk_02468" formatted="false">Role Setting (system prompt core)</string>
+    <string name="qk_02468" formatted="false">ロール設定（システムプロンプトの中核）</string>
     <string name="qk_02469" formatted="false">冒頭メッセージ</string>
     <string name="qk_02470" formatted="false">チャット設定</string>
-    <string name="qk_02471" formatted="false">Open the web browser and navigate to the specified URL</string>
+    <string name="qk_02471" formatted="false">音声設定（自然言語、任意）</string>
     <string name="qk_02472" formatted="false">AI孵化</string>
     <string name="qk_02473" formatted="false">✓ 反映済み</string>
     <string name="qk_02474" formatted="false">タグ管理</string>
@@ -2420,11 +2420,11 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02490" formatted="false">タグを編集</string>
     <string name="qk_02491" formatted="false">エクスポート</string>
     <string name="qk_02492" formatted="false">Search content / title / tag / group</string>
-    <string name="qk_02493" formatted="false">No memory yet. Tap + at top right to add, or import a backup from file.</string>
+    <string name="qk_02493" formatted="false">メモリはまだありません。右上の + で追加、またはファイルからバックアップをインポートしてください。</string>
     <string name="qk_02494" formatted="false">グループ:</string>
     <string name="qk_02495" formatted="false">メモリ詳細</string>
     <string name="qk_02496" formatted="false">タイトル（任意）</string>
-    <string name="qk_02497" formatted="false">Group (optional, e.g. Preference / Work)</string>
+    <string name="qk_02497" formatted="false">グループ（任意、例：環境設定 / 仕事）</string>
     <string name="qk_02498" formatted="false">タグ（任意）</string>
     <string name="qk_02499" formatted="false">タグを追加</string>
     <string name="qk_02500" formatted="false">あなたの端末AI実行体</string>
@@ -2438,15 +2438,15 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02508">Selected model: %1$s / %2$s / provider=%3$s</string>
     <string name="qk_02509" formatted="false">❌ baseUrl is empty, cannot fetch models</string>
     <string name="qk_02510" formatted="false">baseUrl が空です</string>
-    <string name="qk_02511">Pulling models from %1$s…</string>
-    <string name="qk_02512">Fetch succeeded, %1$s models</string>
+    <string name="qk_02511">%1$s からモデルを取得中…</string>
+    <string name="qk_02512">%1$s 個の取得に成功</string>
     <string name="qk_02513">✅ Fetch succeeded: %1$s models</string>
-    <string name="qk_02514">❌ Fetch failed: %1$s</string>
+    <string name="qk_02514">❌ 取得に失敗: %1$s</string>
     <string name="qk_02515">❌ Exception: %1$s: %2$s</string>
-    <string name="qk_02516" formatted="false">Page load: initializing STT</string>
+    <string name="qk_02516" formatted="false">ページ読込：STT の初期化を開始</string>
     <string name="qk_02517">Loaded %1$s model options (active config + saved presets)</string>
     <string name="qk_02518">⚠️ Deploy record exists but disk model incomplete/incompatible with engine, re-download needed: %1$s</string>
-    <string name="qk_02519" formatted="false">This device architecture does not support on-device recognition (requires arm64-v8a)</string>
+    <string name="qk_02519" formatted="false">本機のアーキテクチャは端末側認識に非対応（arm64-v8a が必要）</string>
     <string name="qk_02520">❌ This device’s architecture does not support on-device offline recognition; download disabled: %1$s</string>
     <string name="qk_02521" formatted="false">先にモデルのダウンロードリンクを貼り付けてください</string>
     <string name="qk_02522" formatted="false">❌ リンクが空です</string>
@@ -2456,10 +2456,10 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02526" formatted="false">❌ モデル未選択</string>
     <string name="qk_02527" formatted="false">ダウンロード準備中…</string>
     <string name="qk_02528">Start downloading and deploying on-device model: %1$s (%2$s) → %3$s</string>
-    <string name="qk_02529" formatted="false">✅ Model deployed, on-device engine available</string>
-    <string name="qk_02530" formatted="false">❌ Deployment failed, check link or network (see status above)</string>
+    <string name="qk_02529" formatted="false">✅ モデルをデプロイ済み、端末エンジンが利用可能</string>
+    <string name="qk_02530" formatted="false">❌ デプロイに失敗しました。リンクまたはネットワークを確認してください（詳細は上の状態欄）</string>
     <string name="qk_02531">モデルを削除: %1$s</string>
-    <string name="qk_02532" formatted="false">━━━ Start recording test ━━━</string>
+    <string name="qk_02532" formatted="false">━━━ 録音テスト開始 ━━━</string>
     <string name="qk_02533" formatted="false">AI model (Phase1 fallback to native recognition)</string>
     <string name="qk_02534" formatted="false">Local recognition (native SpeechRecognizer)</string>
     <string name="qk_02535" formatted="false">⚠️ AI model selected but Phase2 model transcription not implemented; this test uses native recognition</string>
@@ -2469,14 +2469,14 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02539" formatted="false">⚠️ 文字を認識できませんでした</string>
     <string name="qk_02540">認識エラー: %1$s ❌</string>
     <string name="qk_02541" formatted="false">録音を手動停止</string>
-    <string name="qk_02542" formatted="false">━━━ On-device model test ━━━</string>
+    <string name="qk_02542" formatted="false">━━━ 端末モデルテスト ━━━</string>
     <string name="qk_02543" formatted="false">本機は端末側認識に非対応 ❌</string>
-    <string name="qk_02544" formatted="false">Deployed model is old, engine can’t run it ❌</string>
+    <string name="qk_02544" formatted="false">デプロイ済みのモデルが古く、エンジンで実行できません ❌</string>
     <string name="qk_02545" formatted="false">❌ The currently deployed model is an old version (SenseVoice / ONNX); this device’s engine has no matching implementation — this is exactly why on-device recognition was unresponsive before. Delete and re-download the recommended model.</string>
     <string name="qk_02546" formatted="false">端末モデルが見つかりません ❌</string>
     <string name="qk_02547" formatted="false">❌ No speech recognition model downloaded yet; please &quot;Download &amp; Deploy&quot; above (recommended 22MB Chinese 14M model)</string>
     <string name="qk_02548" formatted="false">聞き取り中（端末）…</string>
-    <string name="qk_02549" formatted="false">Start recording (max 8s)…</string>
+    <string name="qk_02549" formatted="false">録音を開始（最長8秒）…</string>
     <string name="qk_02550" formatted="false">⚠️ ネイティブクラッシュを捕捉</string>
     <string name="qk_02551" formatted="false">端末エンジン異常 ❌</string>
     <string name="qk_02552">❌ Native layer crash (%1$s): %2$s</string>
@@ -2494,15 +2494,15 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02564" formatted="false">レコーダーが利用できません ❌</string>
     <string name="qk_02565" formatted="false">録音を開始できません ❌</string>
     <string name="qk_02566">Recording ended (%1$s bytes), starting recognition…</string>
-    <string name="qk_02567">Recognition complete ✅ (took %1$s ms)</string>
+    <string name="qk_02567">認識完了 ✅（所要時間 %1$s ms）</string>
     <string name="qk_02568" formatted="false">認識に失敗 ❌</string>
-    <string name="qk_02569">Final recognition (%1$s ms): %2$s</string>
+    <string name="qk_02569">最終認識（%1$s ms）: %2$s</string>
     <string name="qk_02570" formatted="false">端末テスト異常</string>
     <string name="qk_02571" formatted="false">端末テスト異常 ❌</string>
-    <string name="qk_02572" formatted="false">━━━ Cloud transcription test ━━━</string>
-    <string name="qk_02573" formatted="false">Base URL not configured ❌</string>
+    <string name="qk_02572" formatted="false">━━━ クラウド文字起こしテスト ━━━</string>
+    <string name="qk_02573" formatted="false">Base URL 未設定 ❌</string>
     <string name="qk_02574" formatted="false">❌ Please fill API address in model config page first</string>
-    <string name="qk_02575" formatted="false">API Key not configured ❌</string>
+    <string name="qk_02575" formatted="false">API Key 未設定 ❌</string>
     <string name="qk_02576" formatted="false">❌ Please fill API Key in model config page first</string>
     <string name="qk_02577" formatted="false">Test engine: AI model (cloud transcription)</string>
     <string name="qk_02578">Model: %1$s (provider=%2$s)</string>
@@ -2524,50 +2524,50 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02594" formatted="false">Use the phone’s native SpeechRecognizer, offline-capable, works out of the box</string>
     <string name="qk_02595" formatted="false">Switched to AI model engine, refreshed model list</string>
     <string name="qk_02596" formatted="false">AIモデル</string>
-    <string name="qk_02597" formatted="false">Use the AI model configured in chat for transcription (opens in Phase 2)</string>
+    <string name="qk_02597" formatted="false">会話で設定済みのAIモデルで文字起こし（Phase 2 で公開）</string>
     <string name="qk_02598" formatted="false">ローカルモデル（端末）</string>
     <string name="qk_02599" formatted="false">Phone runs Sherpa-NCNN streaming model offline, from 22MB, low latency, auto sentence-break after speaking</string>
     <string name="qk_02600" formatted="false">端末モデルのダウンロードとデプロイ</string>
     <string name="qk_02601" formatted="false">Models running offline on the phone must be downloaded first. All built-in are streaming transducers (encoder/decoder/joiner trio), sorted by phone adaptation; the first item is recommended. Auto-unzip and deploy after download, ready to use immediately.</string>
-    <string name="qk_02602" formatted="false">✅ Device architecture arm64-v8a, supports on-device offline recognition engine.</string>
+    <string name="qk_02602" formatted="false">✅ 本機のアーキテクチャは arm64-v8a。端末側オフライン認識エンジンに対応します。</string>
     <string name="qk_02603">⚠️ %1$s Download and deployment disabled; please use the &quot;Local Recognition&quot; or &quot;AI Model&quot; engine instead.</string>
     <string name="qk_02604">Deployed: %1$s (occupies %2$s)</string>
     <string name="qk_02605" formatted="false">前回のデプロイに失敗</string>
     <string name="qk_02606" formatted="false">モデル未デプロイ</string>
-    <string name="qk_02607">Status: %1$s</string>
+    <string name="qk_02607">状態：%1$s</string>
     <string name="qk_02608" formatted="false">⚠️ The currently deployed model is an old version (SenseVoice / ONNX); this device’s engine has no matching implementation, recognition will stay unresponsive.</string>
-    <string name="qk_02609" formatted="false">Please tap &quot;Delete model&quot; then re-download the recommended model above (about 22MB).</string>
+    <string name="qk_02609" formatted="false">「モデルを削除」をタップしてから、上の推奨モデル（約22MB）をダウンロードし直してください。</string>
     <string name="qk_02610" formatted="false">カスタムリンク</string>
     <string name="qk_02611" formatted="false">（未選択）</string>
     <string name="qk_02612">Download size: %1$s</string>
     <string name="qk_02613" formatted="false">✅ デプロイ済み</string>
-    <string name="qk_02614" formatted="false">➕ Custom link (must be a Sherpa-NCNN streaming model)</string>
+    <string name="qk_02614" formatted="false">➕ カスタムリンク（Sherpa-NCNN ストリーミングモデルが必要）</string>
     <string name="qk_02615" formatted="false">カスタムモデルのダウンロードリンク</string>
     <string name="qk_02616" formatted="false">モデル種別</string>
     <string name="qk_02617" formatted="false">Downloaded %1$s% (%2$s / %3$s)</string>
     <string name="qk_02618" formatted="false">本機では非対応</string>
     <string name="qk_02619" formatted="false">ダウンロードしてデプロイ</string>
     <string name="qk_02620" formatted="false">モデルを削除</string>
-    <string name="qk_02621">🎤 Supports voice transcription · %1$s</string>
+    <string name="qk_02621">🎙 文字起こし対応 · %1$s</string>
     <string name="qk_02622" formatted="false">🎙 音声の文字起こしに対応</string>
     <string name="qk_02623" formatted="false">APIから更新</string>
     <string name="qk_02624" formatted="false">リアルタイムモデルを選択</string>
     <string name="qk_02625">Selected realtime model: %1$s (provider=%2$s)</string>
-    <string name="qk_02626" formatted="false">Use /chat/completions (multimodal audio)</string>
+    <string name="qk_02626" formatted="false">/chat/completions を使用（マルチモーダル音声）</string>
     <string name="qk_02627" formatted="false">Off=standard /audio/transcriptions; On=embed audio into chat message (compatible with gateways that lack a transcription endpoint)</string>
-    <string name="qk_02628" formatted="false">✅ Enabled /chat/completions mode</string>
-    <string name="qk_02629" formatted="false">Disabled /chat/completions mode</string>
+    <string name="qk_02628" formatted="false">✅ /chat/completions モードをオンにしました</string>
+    <string name="qk_02629" formatted="false">/chat/completions モードをオフにしました</string>
     <string name="qk_02630" formatted="false">認識設定</string>
     <string name="qk_02631" formatted="false">認識言語</string>
     <string name="qk_02632" formatted="false">部分結果</string>
-    <string name="qk_02633" formatted="false">Show live interim results while speaking</string>
+    <string name="qk_02633" formatted="false">発話中に認識の中間結果をリアルタイム表示</string>
     <string name="qk_02634" formatted="false">音声→テキストのテスト</string>
     <string name="qk_02635" formatted="false">When &quot;Local Model (on-device)&quot; is selected, this test uses the phone’s offline Sherpa-NCNN recognition; other engines use native SpeechRecognizer.</string>
     <string name="qk_02636" formatted="false">⏹ 停止</string>
     <string name="qk_02637" formatted="false">🎙 録音開始</string>
     <string name="qk_02638" formatted="false">Exception</string>
     <string name="qk_02639" formatted="false">認識した文字はここに表示されます</string>
-    <string name="qk_02640">📋 Bug logs (%1$s)</string>
+    <string name="qk_02640">📋 Bug ログ (%1$s)</string>
     <string name="qk_02641" formatted="false">Log copied to clipboard ✅ just paste it to me</string>
     <string name="qk_02642" formatted="false">システム状態</string>
     <string name="qk_02643" formatted="false">デバイス情報</string>
@@ -2578,12 +2578,12 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02648" formatted="false">Accessibility</string>
     <string name="qk_02649" formatted="false">Device admin</string>
     <string name="qk_02650" formatted="false">権限と機能</string>
-    <string name="qk_02651">Granted channels: %1$s / %2$s</string>
+    <string name="qk_02651">許可済みチャネル：%1$s / %2$s</string>
     <string name="qk_02652" formatted="false">権限確認中…</string>
     <string name="qk_02653" formatted="false">モジュール実行状態</string>
-    <string name="qk_02654" formatted="false">From CMS v2 status system</string>
-    <string name="qk_02655" formatted="false">No module runtime record yet (real-time status shows here after deploying a module).</string>
-    <string name="qk_02656">Recent task: %1$s</string>
+    <string name="qk_02654" formatted="false">CMS v2 ステータスシステムより</string>
+    <string name="qk_02655" formatted="false">モジュールの実行状態の記録はありません（モジュールをデプロイするとここにリアルタイム状態が表示されます）。</string>
+    <string name="qk_02656">最近のタスク：%1$s</string>
     <string name="qk_02657" formatted="false">ペルソナ心拍</string>
     <string name="qk_02658" formatted="false">Heartbeat master switch: ${if (heartbeatOn)</string>
     <string name="qk_02659" formatted="false">ペルソナカードはまだありません。</string>
@@ -2594,7 +2594,7 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02664" formatted="false">未孵化</string>
     <string name="qk_02665" formatted="false">たった今</string>
     <string name="qk_02666">%1$s 分前</string>
-    <string name="qk_02667">%1$s hours ago</string>
+    <string name="qk_02667">%1$s 時間前</string>
     <string name="qk_02668">%1$s days ago (${SimpleDateFormat(</string>
     <string name="qk_02669" formatted="false">ファイル管理</string>
     <string name="qk_02670" formatted="false">パッケージ名を表示</string>
@@ -2632,43 +2632,43 @@ Skills:</string>
     <string name="qk_02682" formatted="false">✏️ 編集</string>
     <string name="qk_02683" formatted="false">👁️ プレビュー</string>
     <string name="qk_02684" formatted="false">• List</string>
-    <string name="qk_02685">%1$sBold text%2$s</string>
+    <string name="qk_02685">%1$s太字テキスト%2$s</string>
     <string name="qk_02686" formatted="false">📊 Table</string>
     <string name="qk_02687" formatted="false">| Col1 | Col2 |
 | --- | --- |
 | Data | Data |</string>
     <string name="qk_02688" formatted="false">━━ Divider</string>
     <string name="qk_02689" formatted="false">&gt; Quote</string>
-    <string name="qk_02690" formatted="false">&gt; Quote text
+    <string name="qk_02690" formatted="false">&gt; 引用テキスト
 </string>
     <string name="qk_02691" formatted="false">🔗 Link</string>
-    <string name="qk_02692" formatted="false">[link text](https://)</string>
+    <string name="qk_02692" formatted="false">[リンクテキスト](https://)</string>
     <string name="qk_02693" formatted="false">&lt;/&gt; Code</string>
     <string name="qk_02694" formatted="false">```
-Code
+コード
 ```
 </string>
     <string name="qk_02695" formatted="false">☑️ Todo</string>
-    <string name="qk_02696" formatted="false">- [ ] Todo item
+    <string name="qk_02696" formatted="false">- [ ] やること
 </string>
     <string name="qk_02697" formatted="false">Validate whether a dynamic UI DSL (JSON) can be parsed correctly. Self-check before output avoids render failure.</string>
     <string name="qk_02698" formatted="false">Use the toolbar to quickly insert formatting; docx splits by newline into paragraphs; xlsx splits by newline into rows; md/txt/html written as-is</string>
     <string name="qk_02699" formatted="false">Tasker trigger missing workflow / workflow_id / prompt</string>
     <string name="qk_02700" formatted="false">ドキュメントを開く</string>
     <string name="qk_02701" formatted="false">Generate real files in the background (docx/xlsx/pptx/pdf are binary, md/txt/csv/html are plain text), openable with the in-app viewer or WPS / Office.</string>
-    <string name="qk_02702">Registered tools (%1$s)</string>
+    <string name="qk_02702">登録済みツール（%1$s）</string>
     <string name="qk_02703" formatted="false">登録済みのツールはありません。</string>
-    <string name="qk_02704" formatted="false">Import Tool (AI-written / paste JSON)</string>
+    <string name="qk_02704" formatted="false">ツールをインポート（AIが自作 / JSONを貼り付け）</string>
     <string name="qk_02705" formatted="false">name は必須です</string>
     <string name="qk_02706" formatted="false">kind only supports http / intent / broadcast</string>
-    <string name="qk_02707">JSON parse failed: %1$s</string>
+    <string name="qk_02707">JSONの解析に失敗：%1$s</string>
     <string name="qk_02708" formatted="false">ツール JSON</string>
     <string name="qk_02709" formatted="false">Supports kind: http / intent / broadcast. You can also let the AI generate JSON then paste to import (AI self-written tool).</string>
     <string name="qk_02710" formatted="false">Browse app files, view text/code content</string>
-    <string name="qk_02711" formatted="false">Enter an app display name to look up its exact package name</string>
+    <string name="qk_02711" formatted="false">アプリの表示名を入力して正確なパッケージ名を調べる</string>
     <string name="qk_02712" formatted="false">Create/edit files and folders inside the app sandbox</string>
     <string name="qk_02713" formatted="false">ドキュメント生成</string>
-    <string name="qk_02714" formatted="false">Generate real documents like Word/Excel/PPT/PDF</string>
+    <string name="qk_02714" formatted="false">Word/Excel/PPT/PDF などの実ファイルを生成</string>
     <string name="qk_02715" formatted="false">既存ツール</string>
     <string name="qk_02716" formatted="false">View registered tools; can import AI-written tools</string>
     <string name="qk_02717" formatted="false">Preview local and generated documents in-app (Word/Excel/PPT/PDF/text); text is editable, Office docs can launch system WPS</string>
@@ -2676,15 +2676,15 @@ Code
     <string name="qk_02719" formatted="false">動画プレーヤー</string>
     <string name="qk_02720" formatted="false">Play local video with a full-featured in-app video player</string>
     <string name="qk_02721" formatted="false">AIキーボード</string>
-    <string name="qk_02722" formatted="false">AI types for you · registered as a system input method · usable in any app</string>
+    <string name="qk_02722" formatted="false">AIが代わりに入力 · システムIMEとして登録 · どのアプリでも利用可</string>
     <string name="qk_02723" formatted="false">ワークフロー</string>
-    <string name="qk_02724" formatted="false">Create and manage automation workflows with scheduled triggers and conditional branches</string>
+    <string name="qk_02724" formatted="false">自動化ワークフローを作成・管理。定期トリガーや条件分岐に対応</string>
     <string name="qk_02725" formatted="false">Local tool capabilities, all run on-device, most features work offline.</string>
     <string name="qk_02726">%1$s 件</string>
     <string name="qk_02727">No app found to open %1$s</string>
     <string name="qk_02728" formatted="false">内部ストレージ（アプリ専用）</string>
     <string name="qk_02729" formatted="false">外部ストレージ（アプリ専用）</string>
-    <string name="qk_02730" formatted="false">Public storage (internal SD card)</string>
+    <string name="qk_02730" formatted="false">共有ストレージ（内部SDカード）</string>
     <string name="qk_02731" formatted="false">上の階層</string>
     <string name="qk_02732" formatted="false">保存先を選択</string>
     <string name="qk_02733" formatted="false">新規フォルダ</string>
@@ -2716,14 +2716,14 @@ Code
     <string name="qk_02759">Readable: %1$s  Writable: %2$s</string>
     <string name="qk_02760" formatted="false">作成済み</string>
     <string name="qk_02761" formatted="false">作成に失敗（または既に存在）</string>
-    <string name="qk_02762" formatted="false">Enter the app display name (e.g. &quot;WeChat&quot; &quot;Kuaishou&quot;) to look up its exact package name.</string>
+    <string name="qk_02762" formatted="false">アプリの表示名（例：「WeChat」「Kuaishou」）を入力して、正確なパッケージ名を調べます。</string>
     <string name="qk_02763" formatted="false">アプリ名</string>
     <string name="qk_02764" formatted="false">パッケージ名を検索</string>
-    <string name="qk_02765" formatted="false">📂 Root (QuroWorkspace)</string>
-    <string name="qk_02766" formatted="false">Workspace root (QuroWorkspace)</string>
+    <string name="qk_02765" formatted="false">📂 ルート (QuroWorkspace)</string>
+    <string name="qk_02766" formatted="false">ワークスペースのルート（QuroWorkspace）</string>
     <string name="qk_02767" formatted="false">← 一覧へ戻る</string>
     <string name="qk_02768">File too large (%1$sKB), use another method to view</string>
-    <string name="qk_02769" formatted="false">(cannot read, may not be a text file)</string>
+    <string name="qk_02769" formatted="false">（読み取れません。テキストファイルではない可能性があります）</string>
     <string name="qk_02770" formatted="false">ファイル名</string>
     <string name="qk_02771" formatted="false">フォルダ名</string>
     <string name="qk_02772" formatted="false">ツールセンター</string>
@@ -2739,8 +2739,8 @@ Code
     <string name="qk_02782" formatted="false">Native mini-program engine ported from Quor-a/GenUI: self-built C++ JS engine + WXML/WXSS + Flex layout + Canvas/GLES custom rendering, WeChat-standard paradigm; AI uses miniapp_sdk tool to generate projects, rendered here directly</string>
     <string name="qk_02783" formatted="false">File management / browser / IDE</string>
     <string name="qk_02784" formatted="false">apt/apk/dnf/pacman install/uninstall/upgrade/query software</string>
-    <string name="qk_02785" formatted="false">Permission-free file sandbox and shell</string>
-    <string name="qk_02786" formatted="false">Read-only query of app’s own SQLite</string>
+    <string name="qk_02785" formatted="false">権限不要のファイルサンドボックスと shell</string>
+    <string name="qk_02786" formatted="false">アプリ内SQLiteを読み取り専用で照会</string>
     <string name="qk_02787" formatted="false">View / edit Mermaid source, live render and export SVG</string>
     <string name="qk_02788" formatted="false">Drag-and-drop node-flow programming, export Mermaid</string>
     <string name="qk_02789" formatted="false">ブラウザAI操作</string>
@@ -2755,11 +2755,11 @@ Code
     <string name="qk_02798" formatted="false">サンドボックスを初期化</string>
     <string name="qk_02799" formatted="false">（出力なし）</string>
     <string name="qk_02800" formatted="false">Database: ${if (chosen.isBlank())</string>
-    <string name="qk_02801" formatted="false">Read-only SQL (SELECT/PRAGMA/WITH)</string>
+    <string name="qk_02801" formatted="false">読み取り専用SQL（SELECT/PRAGMA/WITH）</string>
     <string name="qk_02802" formatted="false">先にデータベースを選択してください</string>
     <string name="qk_02803" formatted="false">クエリ</string>
     <string name="qk_02804" formatted="false">インポートに失敗：ファイルを読み取れません</string>
-    <string name="qk_02805" formatted="false">Imported Mermaid source</string>
+    <string name="qk_02805" formatted="false">Mermaid ソースをインポートしました</string>
     <string name="qk_02806" formatted="false">Mermaid ソース</string>
     <string name="qk_02807" formatted="false">ソースが空です</string>
     <string name="qk_02808" formatted="false">ダイアログへ送信してレンダリング</string>
@@ -2774,15 +2774,15 @@ Code
     <string name="qk_02817">プロジェクトが存在しません：%1$s</string>
     <string name="qk_02818" formatted="false">読み込み</string>
     <string name="qk_02819" formatted="false">Paste Mermaid source to view / edit (AI can write directly to a named project with the visual tool)</string>
-    <string name="qk_02820">Saved projects (%1$s)</string>
-    <string name="qk_02821">Saved to project &quot;%1$s&quot;</string>
+    <string name="qk_02820">プロジェクトを保存しました（%1$s）</string>
+    <string name="qk_02821">プロジェクト「%1$s」に保存しました</string>
     <string name="qk_02822">Save failed: %1$s</string>
     <string name="qk_02823" formatted="false">ワークフロー実行成功 ✅</string>
-    <string name="qk_02824">Run failed/timeout ❌ %1$s</string>
+    <string name="qk_02824">実行失敗/タイムアウト ❌ %1$s</string>
     <string name="qk_02825">Run error: %1$s</string>
     <string name="qk_02826" formatted="false">クリップボードにコピーしました</string>
     <string name="qk_02827" formatted="false">プロジェクトをキャンバスにインポートしました</string>
-    <string name="qk_02828" formatted="false">Import failed: file is not a valid project format</string>
+    <string name="qk_02828" formatted="false">インポートに失敗：有効なプロジェクト形式ではありません</string>
     <string name="qk_02829" formatted="false">Drag nodes / connect ports / double-click to rename; AI can directly read/write this project with the node_editor tool</string>
     <string name="qk_02830" formatted="false">プロジェクトをインポート</string>
     <string name="qk_02831" formatted="false">キャンバスが空のため保存できません</string>
@@ -2791,7 +2791,7 @@ Code
     <string name="qk_02834" formatted="false">Mermaid をコピー</string>
     <string name="qk_02835" formatted="false">キャンバスが空です。表示できる内容がありません</string>
     <string name="qk_02836">Loaded project &quot;%1$s&quot;</string>
-    <string name="qk_02837">Project does not exist: %1$s</string>
+    <string name="qk_02837">プロジェクトが存在しません：%1$s</string>
     <string name="qk_02838">削除しました：%1$s</string>
     <string name="qk_02839">Node editor load failed: %1$s (code=%2$s)</string>
     <string name="qk_02840" formatted="false">HTMLをインポート</string>
@@ -2801,15 +2801,15 @@ Code
     <string name="qk_02844" formatted="false">ダイアログプレビュー</string>
     <string name="qk_02845" formatted="false">プロジェクトを削除しました</string>
     <string name="qk_02846" formatted="false">No native mini-program yet. Let the AI create one with the miniapp_sdk tool (generate a WXML/WXSS/JS project right in the chat),</string>
-    <string name="qk_02847" formatted="false">The built-in demos hello / todo should also appear in the list.</string>
+    <string name="qk_02847" formatted="false">組み込みデモの hello / todo も一覧に表示されるはずです。</string>
     <string name="qk_02848">削除しました %1$s</string>
     <string name="qk_02849">Mini program not found: %1$s
 (Project needs app.json and page wxml under filesDir/miniapps/%2$s/;</string>
     <string name="qk_02850" formatted="false">or place a built-in demo under assets/miniprograms/)</string>
-    <string name="qk_02851" formatted="false">Environment not ready: install rootfs on the Terminal page first</string>
+    <string name="qk_02851" formatted="false">環境が未準備：先にターミナルページで rootfs をインストールしてください</string>
     <string name="qk_02852" formatted="false">先にソフトウェア名を入力してください</string>
     <string name="qk_02853">実行：%1$s</string>
-    <string name="qk_02854" formatted="false">Package management (Linux sandbox)</string>
+    <string name="qk_02854" formatted="false">パッケージ管理（Linuxサンドボックス）</string>
     <string name="qk_02855" formatted="false">環境ステータス</string>
     <string name="qk_02856" formatted="false">Not ready (install rootfs on the Terminal page first)</string>
     <string name="qk_02857" formatted="false">Distro: ${distro?.displayName ?:</string>
@@ -2824,26 +2824,26 @@ Code
     <string name="qk_02866" formatted="false">No output yet. Install/search/list command output appears here after execution (truncated to 4000 chars).</string>
     <string name="qk_02867" formatted="false">ソフトウェアソース管理</string>
     <string name="qk_02868">Current source: %1$s</string>
-    <string name="qk_02869">Select %1$s source</string>
+    <string name="qk_02869">%1$s ソースを選択</string>
     <string name="qk_02870" formatted="false">+ カスタム</string>
     <string name="qk_02871">Switched %1$s source: %2$s</string>
     <string name="qk_02872">Source command failed (exit=%1$s): %2$s</string>
     <string name="qk_02873">Rust mirror source updated to: %1$s (takes effect next time Rust is installed)</string>
-    <string name="qk_02874">Add custom %1$s source</string>
+    <string name="qk_02874">カスタム %1$s ソースを追加</string>
     <string name="qk_02875" formatted="false">ソース名</string>
     <string name="qk_02876" formatted="false">ソースアドレス</string>
-    <string name="qk_02877">Saved to download directory: %1$s</string>
-    <string name="qk_02878">Saved to: %1$s</string>
+    <string name="qk_02877">ダウンロード先に保存しました：%1$s</string>
+    <string name="qk_02878">保存先：%1$s</string>
     <string name="qk_02879">Save failed: %1$s</string>
-    <string name="qk_02880" formatted="false">KaleidoBox not initialized</string>
-    <string name="qk_02881">Installed %1$s tool packages</string>
+    <string name="qk_02880" formatted="false">KaleidoBox が初期化されていません</string>
+    <string name="qk_02881">%1$s 個のツールキットをインストール済み</string>
     <string name="qk_02882" formatted="false">Installed: ${out.value[</string>
-    <string name="qk_02883">Install failed: %1$s</string>
+    <string name="qk_02883">インストールに失敗：%1$s</string>
     <string name="qk_02884" formatted="false">マイツール</string>
-    <string name="qk_02885" formatted="false">KaleidoBox tool package generated by AI</string>
+    <string name="qk_02885" formatted="false">AIが生成したKaleidoBoxツールキット</string>
     <string name="qk_02886" formatted="false">This toolkit has no openable UI surface</string>
     <string name="qk_02887" formatted="false">内蔵サンプルパッケージの読み込みを確認しました</string>
-    <string name="qk_02888">%1$s built-in packages failed to load:
+    <string name="qk_02888">%1$s 個の組み込みパッケージの読み込みに失敗しました：
 </string>
     <string name="qk_02889" formatted="false">サンプルパッケージを導入</string>
     <string name="qk_02890" formatted="false">（ツールキットなし）</string>
@@ -2851,11 +2851,11 @@ Code
     <string name="qk_02892" formatted="false">リンクからインポート</string>
     <string name="qk_02893" formatted="false">AI生成プラグイン</string>
     <string name="qk_02894" formatted="false">すべて</string>
-    <string name="qk_02895">Installed (%1$s)</string>
+    <string name="qk_02895">インストール済み（%1$s）</string>
     <string name="qk_02896" formatted="false">外部からインポート</string>
     <string name="qk_02897">v%1$s · surfaces=%2$s</string>
-    <string name="qk_02898">Uninstalled: %1$s</string>
-    <string name="qk_02899">Uninstall failed: %1$s</string>
+    <string name="qk_02898">アンインストールしました：%1$s</string>
+    <string name="qk_02899">アンインストールに失敗：%1$s</string>
     <string name="qk_02900">None of the %1$s installed tool packages carry the tag &quot;${KaleidoCatalog.TagLabels.zhOf(tagFilter ?:</string>
     <string name="qk_02901" formatted="false">)}&quot;, tap &quot;All&quot; above to clear the filter.</string>
     <string name="qk_02902">Plugin catalog (%1$s installable)</string>
@@ -2865,10 +2865,10 @@ Code
     <string name="qk_02906" formatted="false">No toolkit yet. Tap &quot;Plugin Directory&quot; above to install one, or tap &quot;AI Generate Plugin&quot; to write Java that compiles and runs on-device.</string>
     <string name="qk_02907" formatted="false">Please use the kaleido tool to install a KaleidoBox tool package for me (e.g. the sample counter or unit converter), and tell me what units and UI surfaces it provides.</string>
     <string name="qk_02908" formatted="false">AIにパッケージを入れてもらう</string>
-    <string name="qk_02909" formatted="false">Plugin directory fully installed; tap &quot;Open&quot; to run the plugin.</string>
+    <string name="qk_02909" formatted="false">プラグインはすべてインストール済みです。「開く」をタップして実行してください。</string>
     <string name="qk_02910" formatted="false">リンクからプラグインをインポート</string>
     <string name="qk_02911" formatted="false">Enter the .zip package download address (with kaleido.json + classes.dex):</string>
-    <string name="qk_02912" formatted="false">AI Generate Plugin (on-device compile)</string>
+    <string name="qk_02912" formatted="false">AI生成プラグイン（端末側でコンパイル）</string>
     <string name="qk_02913" formatted="false">Paste Java source (implement KaleidoToolkit; the public class name must equal the last segment of the entry class below). Tap &quot;Compile and Install&quot; to compile and run on-device via ecj→d8.</string>
     <string name="qk_02914" formatted="false">エントリクラスの完全名</string>
     <string name="qk_02915" formatted="false">パッケージ ID</string>
@@ -2876,64 +2876,64 @@ Code
     <string name="qk_02917" formatted="false">Javaソース</string>
     <string name="qk_02918" formatted="false">ソースとエントリクラスは必須です</string>
     <string name="qk_02919" formatted="false">Compiled and installed: ${out.value[</string>
-    <string name="qk_02920">Compile/install failed: %1$s</string>
+    <string name="qk_02920">ビルド/インストールに失敗：%1$s</string>
     <string name="qk_02921" formatted="false">ビルドしてインストール</string>
-    <string name="qk_02922" formatted="false">This is a text-to-speech test; Zorv AI is reading it aloud.</string>
-    <string name="qk_02923" formatted="false">Page load: start pre-initializing TTS</string>
+    <string name="qk_02922" formatted="false">これは音声合成のテストです。Zorv AI が読み上げています。</string>
+    <string name="qk_02923" formatted="false">ページ読込：TTS の事前初期化を開始</string>
     <string name="qk_02924">LaunchedEffect ensure callback: ok=%1$s, voices=%2$s</string>
-    <string name="qk_02925">Init callback exception (ignored): %1$s</string>
+    <string name="qk_02925">初期化コールバックで例外（無視）: %1$s</string>
     <string name="qk_02926" formatted="false">Text-to-speech config. Reading and the floating voice ball both follow this setting; the voice engine is taken over by the phone’s system default TTS engine (local) or the selected cloud provider (cloud model service).</string>
     <string name="qk_02927" formatted="false">音声ソース</string>
-    <string name="qk_02928" formatted="false">Local system (TTS engine)</string>
-    <string name="qk_02929" formatted="false">Use the phone’s built-in voice engine, works offline</string>
+    <string name="qk_02928" formatted="false">ローカルシステム (TTS エンジン)</string>
+    <string name="qk_02929" formatted="false">スマホ標準の音声エンジンを使用、オフラインで利用可</string>
     <string name="qk_02930" formatted="false">クラウドモデルサービス（マルチプロバイダー）</string>
     <string name="qk_02931" formatted="false">Edge / Xiaomi MiMo / Volcano / iFlytek / Tencent / Alibaba / OpenAI etc., see &quot;Voice Service&quot;</string>
     <string name="qk_02932" formatted="false">ローカルシステムエンジン</string>
     <string name="qk_02933" formatted="false">Voice engine: taken over by the phone’s system default TTS engine (Settings → Language &amp; input → Text-to-speech). No need to select here.</string>
     <string name="qk_02934" formatted="false">声 (Voice)</string>
-    <string name="qk_02935" formatted="false">No voice available for the current language; switch language or install the corresponding TTS voice pack.</string>
+    <string name="qk_02935" formatted="false">現在の言語で利用できる音声がありません。言語を変えるか、対応するTTS音声パックをインストールしてください。</string>
     <string name="qk_02936" formatted="false">話速とピッチ</string>
     <string name="qk_02937" formatted="false">Speed: ${</string>
     <string name="qk_02938" formatted="false">Pitch: ${</string>
-    <string name="qk_02939" formatted="false">Range 0.5x – 2.0x, default 1.0x.</string>
+    <string name="qk_02939" formatted="false">範囲 0.5x – 2.0x、既定 1.0x。</string>
     <string name="qk_02940" formatted="false">試聴</string>
     <string name="qk_02941" formatted="false">━━━ タップして試聴 ━━━</string>
     <string name="qk_02942" formatted="false">初期化中…</string>
     <string name="qk_02943">音声環境: %1$s</string>
     <string name="qk_02944">ensureReady returned: %1$s</string>
-    <string name="qk_02945">Diagnostics: %1$s</string>
+    <string name="qk_02945">診断: %1$s</string>
     <string name="qk_02946">Initialization failed ❌
 Audio: %1$s
 Engine: %2$s</string>
     <string name="qk_02947" formatted="false">読み上げ中…</string>
-    <string name="qk_02948" formatted="false">Calling speak()...</string>
-    <string name="qk_02949">Speak request sent ✅
+    <string name="qk_02948" formatted="false">speak() を呼び出し中...</string>
+    <string name="qk_02949">読み上げ要求を送信しました ✅
 %1$s</string>
-    <string name="qk_02950">Engine not ready ❌
+    <string name="qk_02950">エンジン未準備 ❌
 %1$s</string>
-    <string name="qk_02951" formatted="false">Normal mode failed (r=-2), trying safe mode...</string>
+    <string name="qk_02951" formatted="false">通常モード失敗(r=-2)。セーフモードを試行中...</string>
     <string name="qk_02952">speakMinimal returned: %1$s</string>
-    <string name="qk_02953">✅ Safe mode succeeded
+    <string name="qk_02953">✅ セーフモード成功
 %1$s</string>
-    <string name="qk_02954">Read-aloud still failed ❌
+    <string name="qk_02954">読み上げに失敗 ❌
 %1$s</string>
-    <string name="qk_02955">Unknown status (%1$s)
+    <string name="qk_02955">不明な状態(%1$s)
 %2$s</string>
     <string name="qk_02956">Exception: %1$s: %2$s</string>
-    <string name="qk_02957">Exception: %1$s</string>
-    <string name="qk_02958" formatted="false">━━━ Safe preview (bare call) ━━━</string>
+    <string name="qk_02957">例外: %1$s</string>
+    <string name="qk_02958" formatted="false">━━━ 安全な試聴（素の呼び出し） ━━━</string>
     <string name="qk_02959" formatted="false">セーフモード成功 ✅</string>
-    <string name="qk_02960">Safe mode also failed (r=%1$s) ❌</string>
+    <string name="qk_02960">セーフモードも失敗 (r=%1$s) ❌</string>
     <string name="qk_02961" formatted="false">安全な試聴</string>
-    <string name="qk_02962" formatted="false">━━━ Force reset TTS ━━━</string>
+    <string name="qk_02962" formatted="false">━━━ TTSを強制リセット ━━━</string>
     <string name="qk_02963" formatted="false">リセットしました。もう一度試聴をタップしてください</string>
     <string name="qk_02964" formatted="false">リセット</string>
-    <string name="qk_02965">📋 Bug logs (%1$s)</string>
+    <string name="qk_02965">📋 Bug ログ (%1$s)</string>
     <string name="qk_02966" formatted="false">クラウドモデルサービス</string>
     <string name="qk_02967" formatted="false">現在のプロバイダー</string>
     <string name="qk_02968" formatted="false">Tap to enter &quot;Voice Service&quot; to choose a provider and configure parameters</string>
     <string name="qk_02969" formatted="false">✅ パラメータ設定済み</string>
-    <string name="qk_02970" formatted="false">⚠️ No params configured, please enter config first</string>
+    <string name="qk_02970" formatted="false">⚠️ パラメータ未設定です。先に設定を開いてください</string>
     <string name="qk_02971" formatted="false">音声サービス設定へ ›</string>
     <string name="qk_02972" formatted="false">Voice description (e.g.: gentle girlish voice)</string>
     <string name="qk_02973" formatted="false">Current voice source is invalid; go back to the top &quot;Voice source&quot; and reselect &quot;Local system&quot; or &quot;Cloud model service&quot;.</string>
@@ -2956,34 +2956,34 @@ Engine: %2$s</string>
     <string name="qk_02990" formatted="false">Connect command: ${if (tcpPort &gt; 0 &amp;&amp; ip != null)</string>
     <string name="qk_02991" formatted="false">Connected clients: ${clients.joinToString(</string>
     <string name="qk_02992" formatted="false">既定のアプリロール:</string>
-    <string name="qk_02993" formatted="false">No root/Shizuku: use system wireless debugging pairing instead</string>
+    <string name="qk_02993" formatted="false">root/Shizuku なし：システムのワイヤレスデバッグのペアリングを使用</string>
     <string name="qk_02994">✅ TCP ADB enabled, listening on port %1$s
 %2$s</string>
-    <string name="qk_02995">✅ TCP ADB stopped
+    <string name="qk_02995">✅ TCP ADB をオフにしました
 %1$s</string>
     <string name="qk_02996">❌ Execution failed: %1$s</string>
     <string name="qk_02997" formatted="false">ワイヤレスADBを有効化しました</string>
     <string name="qk_02998" formatted="false">クローズ済み</string>
-    <string name="qk_02999" formatted="false">USB / wireless debug (ADB)</string>
+    <string name="qk_02999" formatted="false">USB / ワイヤレスデバッグ (ADB)</string>
     <string name="qk_03000" formatted="false">昇格可</string>
     <string name="qk_03001" formatted="false">昇格なし</string>
     <string name="qk_03002" formatted="false">チャネル状態</string>
     <string name="qk_03003" formatted="false">昇格チャネル</string>
-    <string name="qk_03004" formatted="false">root or Shizuku can start TCP adbd</string>
+    <string name="qk_03004" formatted="false">root または Shizuku で TCP adbd を起動できます</string>
     <string name="qk_03005" formatted="false">USBデバッグ</string>
     <string name="qk_03006" formatted="false">USB debugging switch in system developer options</string>
     <string name="qk_03007" formatted="false">USBケーブル</string>
-    <string name="qk_03008" formatted="false">Actual cable connection state (distinct from USB debug switch)</string>
+    <string name="qk_03008" formatted="false">ケーブルの実際の接続状態（USBデバッグのスイッチとは別）</string>
     <string name="qk_03009">Listening on port %1$s${if (listening)</string>
     <string name="qk_03010" formatted="false">無効</string>
-    <string name="qk_03011" formatted="false">Wireless ADB (controlled by PC)</string>
-    <string name="qk_03012" formatted="false">Enable wireless ADB (TCP)</string>
+    <string name="qk_03011" formatted="false">ワイヤレスADB（PCから制御）</string>
+    <string name="qk_03012" formatted="false">ワイヤレスADBを有効化 (TCP)</string>
     <string name="qk_03013" formatted="false">Start adbd listening under root/Shizuku so a PC can connect</string>
     <string name="qk_03014" formatted="false">No privilege: tap to open system wireless debug pairing</string>
-    <string name="qk_03015" formatted="false">Default 5555, aligned with adb tcpip</string>
-    <string name="qk_03016" formatted="false">PC/phone connects to this device (controlled)</string>
+    <string name="qk_03015" formatted="false">既定は 5555（adb tcpip と合わせる）</string>
+    <string name="qk_03016" formatted="false">PC/スマホを本機に接続（被制御）</string>
     <string name="qk_03017" formatted="false">Run this command in a terminal on a PC or another phone to connect to this device; once connected, the other side can control this device (install/uninstall/screenshot/file/shell)</string>
-    <string name="qk_03018" formatted="false">adb connect QR Code</string>
+    <string name="qk_03018" formatted="false">adb connect のQRコード</string>
     <string name="qk_03019" formatted="false">Scan the code to get the connection command (copy after scanning with another phone/PC camera), enabling phone/PC control</string>
     <string name="qk_03020" formatted="false">PCを本機に接続</string>
     <string name="qk_03021" formatted="false">TCP ADB enabled but no WiFi LAN IP detected (please connect WiFi). The adb connect command shows here once connected.</string>
@@ -2991,20 +2991,20 @@ Engine: %2$s</string>
     <string name="qk_03023">No client connection yet (this device is only listening). After the other party runs adb connect %1$s:%2$s it will appear here.</string>
     <string name="qk_03024">The above are control ends that have established a TCP connection with this device’s ADB port %1$s. To disconnect: turn off the &quot;Enable Wireless ADB&quot; switch above, or let the other party adb disconnect.</string>
     <string name="qk_03025" formatted="false">接続一覧は自動更新されません</string>
-    <string name="qk_03026" formatted="false">This device as client (controls the other side)</string>
+    <string name="qk_03026" formatted="false">本機をクライアントとして（相手を制御）</string>
     <string name="qk_03027">This device can also act as an ADB client to connect to other devices, or to itself (adb connect 127.0.0.1:%1$s). Enter the other side’s ip:port to reverse-connect and control it.</string>
     <string name="qk_03028" formatted="false">相手 ip:port</string>
     <string name="qk_03029" formatted="false">e.g. 192.168.1.10:5555</string>
     <string name="qk_03030" formatted="false">接続中…</string>
     <string name="qk_03031" formatted="false">ターミナルを開く</string>
-    <string name="qk_03032" formatted="false">Run adb / shell commands in the terminal to control this device or a remote</string>
+    <string name="qk_03032" formatted="false">ターミナルで adb / shell コマンドを実行して本機やリモートを制御</string>
     <string name="qk_03033" formatted="false">Host has no adb client binary, cannot list adb devices here; the &quot;connect&quot; above returns not found. Use the terminal’s built-in adb via &quot;Open terminal&quot; above, or the system &quot;Wireless debug&quot; pairing.</string>
-    <string name="qk_03034" formatted="false">System entry (manual pairing without privilege)</string>
+    <string name="qk_03034" formatted="false">システム入口（昇格なしの場合は手動ペアリング）</string>
     <string name="qk_03035" formatted="false">開発者向けオプション</string>
     <string name="qk_03036" formatted="false">Open system developer options (USB debug switch)</string>
     <string name="qk_03037" formatted="false">ワイヤレスデバッグ</string>
-    <string name="qk_03038" formatted="false">Android 11+ wireless debug pairing (pairing code + port)</string>
-    <string name="qk_03039" formatted="false">ADB Shell (control code / control phone)</string>
+    <string name="qk_03038" formatted="false">Android 11+ のワイヤレスデバッグのペアリング（ペアリングコード + ポート）</string>
+    <string name="qk_03039" formatted="false">ADB Shell（コード制御 / 端末制御）</string>
     <string name="qk_03040" formatted="false">コマンド</string>
     <string name="qk_03041" formatted="false">e.g. getprop ro.build.version.release</string>
     <string name="qk_03042" formatted="false">Device control (quick actions / control phone)</string>
@@ -3017,33 +3017,33 @@ Engine: %2$s</string>
     <string name="qk_03049" formatted="false">After enabling wireless ADB, a PC on the same WiFi can adb connect to take over this device; on untrusted networks, turn it off right after use (disable TCP ADB).</string>
     <string name="qk_03050" formatted="false">Without root / Shizuku, cannot silently start/stop adbd; use system &quot;Wireless debug&quot; pairing (Android 11+ supports pairing code).</string>
     <string name="qk_03051" formatted="false">再起動しますか？</string>
-    <string name="qk_03052" formatted="false">Restart will immediately shut down the device; unsaved data may be lost.</string>
+    <string name="qk_03052" formatted="false">再起動すると即座に電源が切れ、未保存のデータが失われる可能性があります。</string>
     <string name="qk_03053" formatted="false">Not enabled</string>
     <string name="qk_03054" formatted="false">接続コマンド</string>
     <string name="qk_03055" formatted="false">動画再生</string>
     <string name="qk_03056" formatted="false">Video load failed: format unsupported or file corrupted</string>
     <string name="qk_03057" formatted="false">音声サービス</string>
     <string name="qk_03058" formatted="false">機能階層</string>
-    <string name="qk_03059" formatted="false">Cloud provider · voice · style tags · preview</string>
+    <string name="qk_03059" formatted="false">クラウドプロバイダー · 音色 · スタイルタグ · 試聴</string>
     <string name="qk_03060" formatted="false">Local / cloud model / on-device engine</string>
-    <string name="qk_03061" formatted="false">Floating voice ball · auto-read · dialog voice button</string>
+    <string name="qk_03061" formatted="false">フローティング音声ボール · 自動読み上げ · ダイアログの音声ボタン</string>
     <string name="qk_03062" formatted="false">待機</string>
     <string name="qk_03063" formatted="false">音声機能センター</string>
-    <string name="qk_03064" formatted="false">Speech Synthesis · Speech Recognition · Voice Settings, unified entry.</string>
+    <string name="qk_03064" formatted="false">音声合成 · 音声認識 · 音声設定の統合入口。</string>
     <string name="qk_03065" formatted="false">Unified config for voice ball, auto-read, chat voice button and emotion / voice-tone capabilities. Each switch is independent.</string>
     <string name="qk_03066" formatted="false">フローティング音声ボール</string>
     <string name="qk_03067" formatted="false">Show a clickable ball on any screen, STT→LLM→TTS for voice chat anytime (needs floating window and mic permission). Master switch for voice.</string>
     <string name="qk_03068" formatted="false">After closing, auto-read / chat voice button etc. still work independently per their own switches.</string>
     <string name="qk_03069" formatted="false">自動読み上げ</string>
     <string name="qk_03070" formatted="false">AIの返信を自動読み上げ</string>
-    <string name="qk_03071" formatted="false">When an AI text reply is received, automatically read it aloud with TTS.</string>
+    <string name="qk_03071" formatted="false">AIのテキスト返信を受け取ると、自動でTTSで読み上げます。</string>
     <string name="qk_03072" formatted="false">Reading uses the model and provider selected on the &quot;TTS&quot; page; changeable in &quot;Voice Service → TTS&quot;; the voice ball chat and digital human use the same global setting.</string>
     <string name="qk_03073" formatted="false">ダイアログの音声ボタン</string>
     <string name="qk_03074" formatted="false">Show a voice input button next to the input box; press and hold to speak, release to end, recognized text fills the input.</string>
-    <string name="qk_03075" formatted="false">Local recognition (device native SpeechRecognizer)</string>
-    <string name="qk_03076" formatted="false">Cloud model (configured AI transcription)</string>
+    <string name="qk_03075" formatted="false">ローカル認識（デバイス標準の SpeechRecognizer）</string>
+    <string name="qk_03076" formatted="false">クラウドモデル（設定済みのAI文字起こし）</string>
     <string name="qk_03077" formatted="false">On-device model (offline Sherpa-NCNN)</string>
-    <string name="qk_03078">Configured model: %1$s</string>
+    <string name="qk_03078">設定済みモデル：%1$s</string>
     <string name="qk_03079" formatted="false">The chat button and voice ball share the global STT engine settings. Cloud / on-device engines must be configured with model and API Key on the &quot;Speech Recognition (STT)&quot; page first.</string>
     <string name="qk_03080" formatted="false">音声ボールを連携するダイアログ</string>
     <string name="qk_03081" formatted="false">By default, write the chat into &quot;the dialog currently being viewed&quot;; after enabling, pin it to a specific session.</string>
@@ -3058,14 +3058,14 @@ Engine: %2$s</string>
     <string name="qk_03090" formatted="false">Current voice source is local system TTS, which does not parse emotion tags; the AI conveys emotion via natural language (wording / interjections), with no extra emotional inflection in reading.</string>
     <string name="qk_03091">Current playback provider: %1$s. ${if (isMimo)</string>
     <string name="qk_03092" formatted="false">To change the emotion effect, go to &quot;Voice Service → TTS&quot; and switch to a cloud provider (e.g. Xiaomi MiMo for the best emotional synthesis). Auto-read and digital human use the same global setting, no separate config.</string>
-    <string name="qk_03093" formatted="false">Models running offline on the phone must be downloaded first. All built-in are streaming transducers (encoder/decoder/joiner trio), sorted by phone adaptation; the first item is recommended. Auto-unzip and deploy after download, ready to use immediately.</string>
+    <string name="qk_03093" formatted="false">音色ルーティング（AIが自動で担当を選択）</string>
     <string name="qk_03094" formatted="false">When enabled, the AI auto-assigns different voices to different paragraphs by content (e.g. narration / character voice), and can &quot;synthesize while playing&quot; seamlessly.</string>
     <string name="qk_03095">✅ Current playback provider: %1$s. Voice-color routing is now active—below is that provider’s real voice list; the AI will auto-cast roles from it (no longer hardcoding a single provider).</string>
     <string name="qk_03096" formatted="false">Current voice source is local system TTS, which does not parse voice-color tags; go to &quot;Voice Service → TTS&quot; and switch to a cloud provider.</string>
     <string name="qk_03097">Optional voice colors (from the current provider %1$s’s real voices, freely chosen by AI):</string>
     <string name="qk_03098" formatted="false">Voice-color routing complements the &quot;LLM emotion tag&quot; — emotion decides tone, voice color decides timbre. They can stack, e.g. (voice color: narration)(gentle) the story begins…</string>
-    <string name="qk_03099" formatted="false">No imported skills yet.
-Add or import skills in &quot;Skill Management&quot;.</string>
+    <string name="qk_03099" formatted="false">インポート済みのスキルはありません。
+「スキル管理」で追加またはインポートできます。</string>
     <string name="qk_03100">Enabled %1$s / %2$s skills</string>
     <string name="qk_03101" formatted="false">ここにテキストを入力...</string>
     <string name="qk_03102" formatted="false">可視化ダイアログを設定</string>
@@ -3078,10 +3078,10 @@ Add or import skills in &quot;Skill Management&quot;.</string>
     <string name="qk_03109" formatted="false">小カードの説明（任意）</string>
     <string name="qk_03110" formatted="false">可視化質問を設定</string>
     <string name="qk_03111" formatted="false">例：どのようなスタイルがよいですか？</string>
-    <string name="qk_03112" formatted="false">Preset options (one per line, optional)</string>
-    <string name="qk_03113" formatted="false">Option 1
-Option 2
-Option 3</string>
+    <string name="qk_03112" formatted="false">プリセット選択肢（1行に1つ、任意）</string>
+    <string name="qk_03113" formatted="false">選択肢1
+選択肢2
+選択肢3</string>
     <string name="qk_03114" formatted="false">カスタム入力を許可</string>
     <string name="qk_03115" formatted="false">ダイアログのタイトル（任意）</string>
     <string name="qk_03116" formatted="false">AIへの質問</string>
@@ -3099,7 +3099,7 @@ Option 3</string>
     <string name="qk_03128" formatted="false">自由HTML</string>
     <string name="qk_03129" formatted="false">例：操作を選択</string>
     <string name="qk_03130" formatted="false">表示内容</string>
-    <string name="qk_03131" formatted="false">Supports Markdown/HTML</string>
+    <string name="qk_03131" formatted="false">Markdown/HTML 対応</string>
     <string name="qk_03132" formatted="false">ヒントテキスト</string>
     <string name="qk_03133" formatted="false">操作を選択してください</string>
     <string name="qk_03134" formatted="false">ボタン（カンマ区切り）</string>
@@ -3127,25 +3127,25 @@ Option 3</string>
     <string name="qk_03156" formatted="false">通知を有効化</string>
     <string name="qk_03157" formatted="false">HTML説明</string>
     <string name="qk_03158" formatted="false">希望する質問UIを説明してください</string>
-    <string name="qk_03159">Calling visual_popup tool, params: %1$s</string>
-    <string name="qk_03160">(Generate HTML content based on the following description: %1$s)</string>
+    <string name="qk_03159">visual_popup ツールを呼び出し、引数：%1$s</string>
+    <string name="qk_03160">（以下の説明に従ってHTML内容を生成してください：%1$s）</string>
     <string name="qk_03161">Call visual_custom_popup tool, params: %1$s</string>
     <string name="qk_03162" formatted="false">選択してください</string>
     <string name="qk_03163" formatted="false">入力してください</string>
-    <string name="qk_03164">(Please generate a rating UI: %1$s)</string>
+    <string name="qk_03164">（評価UIを生成してください：%1$s）</string>
     <string name="qk_03165">(Generate a switch UI: %1$s)</string>
     <string name="qk_03166" formatted="false">質問</string>
-    <string name="qk_03167">(Generate HTML based on the following description: %1$s)</string>
+    <string name="qk_03167">（以下の説明に従ってHTMLを生成してください：%1$s）</string>
     <string name="qk_03168" formatted="false">Unsupported file type or file too large (&gt;1MB)</string>
     <string name="qk_03169">Read failed: %1$s</string>
-    <string name="qk_03170">Saved %1$s</string>
+    <string name="qk_03170">保存しました %1$s</string>
     <string name="qk_03171">Save failed: %1$s</string>
     <string name="qk_03172" formatted="false">コード閲覧</string>
     <string name="qk_03173" formatted="false">ファイルツリー</string>
     <string name="qk_03174" formatted="false">Empty workspace
 Create a file or folder at top right</string>
-    <string name="qk_03175" formatted="false">Select a file from the left to start editing
-or tap &quot;+&quot; at top right to create</string>
+    <string name="qk_03175" formatted="false">左側からファイルを選んで編集を開始
+または右上の「+」で新規作成</string>
     <string name="qk_03176" formatted="false">File name (e.g. Main.kt / app.py / index.html)</string>
     <string name="qk_03177">%1$s を作成しました</string>
     <string name="qk_03178">Create failed: %1$s</string>
@@ -3167,17 +3167,17 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03194" formatted="false">ワークスペース作成</string>
     <string name="qk_03195" formatted="false">既定のワークスペースにフォルダを作成</string>
     <string name="qk_03196" formatted="false">フォルダを自分で選択</string>
-    <string name="qk_03197" formatted="false">Select any folder on the phone as the workspace</string>
+    <string name="qk_03197" formatted="false">スマホ上の任意のフォルダを作業ディレクトリに選択</string>
     <string name="qk_03198" formatted="false">ワークスペース名</string>
     <string name="qk_03199" formatted="false">例：MyProject</string>
     <string name="qk_03200" formatted="false">名前を入力してください</string>
-    <string name="qk_03201" formatted="false">Name can only contain letters, digits, underscores, hyphens or Chinese</string>
+    <string name="qk_03201" formatted="false">名前には英数字・アンダースコア・ハイフン・漢字のみ使用できます</string>
     <string name="qk_03202" formatted="false">スライド</string>
     <string name="qk_03203" formatted="false">マインドマップ</string>
     <string name="qk_03204" formatted="false">デモモード</string>
     <string name="qk_03205" formatted="false">全画面</string>
-    <string name="qk_03206" formatted="false">Export Word (.docx)</string>
-    <string name="qk_03207" formatted="false">Export PPT (.pptx)</string>
+    <string name="qk_03206" formatted="false">Wordをエクスポート (.docx)</string>
+    <string name="qk_03207" formatted="false">PPTをエクスポート (.pptx)</string>
     <string name="qk_03208" formatted="false">Export Markdown (.md)</string>
     <string name="qk_03209" formatted="false">Java Project → DEX → APK</string>
     <string name="qk_03210" formatted="false">レイアウトに失敗。プレーンテキストで表示します</string>
@@ -3194,22 +3194,22 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03221" formatted="false">サブエージェント</string>
     <string name="qk_03222" formatted="false">読み上げ</string>
     <string name="qk_03223" formatted="false">画面を理解</string>
-    <string name="qk_03224">Privilege:%1$s</string>
-    <string name="qk_03225" formatted="false"> — show AI reasoning process</string>
+    <string name="qk_03224">特権:%1$s</string>
+    <string name="qk_03225" formatted="false"> — AIの推論過程を表示</string>
     <string name="qk_03226" formatted="false">メモリを自動保存</string>
-    <string name="qk_03227" formatted="false"> — AI auto-crystallizes long-term memory</string>
+    <string name="qk_03227" formatted="false"> — AIが長期記憶を自動蓄積</string>
     <string name="qk_03228" formatted="false"> — AI can dispatch sub-agents for subtasks</string>
     <string name="qk_03229" formatted="false"> — AIの返信を自動読み上げ</string>
-    <string name="qk_03230" formatted="false"> — AI understands the current screen in real time (long-press to request screen capture)</string>
+    <string name="qk_03230" formatted="false"> — AIが現在の画面をリアルタイムで理解（長押しで画面キャプチャを申請）</string>
     <string name="qk_03231" formatted="false">特権</string>
     <string name="qk_03232" formatted="false"> — 作業ディレクトリを選択</string>
     <string name="qk_03233" formatted="false">コード編集</string>
-    <string name="qk_03234" formatted="false"> — write code / browse workspace files</string>
+    <string name="qk_03234" formatted="false"> — コードを書く / ワークスペースのファイルを閲覧</string>
     <string name="qk_03235" formatted="false">許可</string>
     <string name="qk_03236" formatted="false">禁止</string>
     <string name="qk_03237">%1$s を閉じる</string>
     <string name="qk_03238">%1$s を開く</string>
-    <string name="qk_03239">Long-press: %1$s (advanced)</string>
+    <string name="qk_03239">長押し：%1$s（詳細）</string>
     <string name="qk_03240" formatted="false">会話履歴</string>
     <string name="qk_03241" formatted="false">モデル切替</string>
     <string name="qk_03242" formatted="false">ペルソナ切替</string>
@@ -3439,13 +3439,13 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03459" formatted="false">Execute commands via Shizuku with ADB/Shell permission (higher than plain Runtime.exec).</string>
     <string name="qk_03460" formatted="false">Zorv 会話</string>
     <string name="qk_03461" formatted="false">Uses the built-in placeholder icon by default; after import this PNG replaces the APK desktop icon.</string>
-    <string name="qk_03462" formatted="false">Screen capture enabled; long-press to request again</string>
+    <string name="qk_03462" formatted="false">画面キャプチャが有効です。長押しで再申請できます</string>
     <string name="qk_03463" formatted="false">Pull the full quro-ui DSL spec (nodes/attributes/actions) to avoid keeping a long schema resident in the system prompt</string>
     <string name="qk_03464" formatted="false">⚠️ [Mandatory] When a command is ambiguous or information is missing, you must call this tool to ask the user</string>
     <string name="qk_03465" formatted="false">(RAG hybrid retrieval) Search the local knowledge base and return the most relevant document snippets. Prefer semantic (if an Embedding Key is configured),</string>
     <string name="qk_03466" formatted="false">Requesting Root… please select Allow in the popup</string>
     <string name="qk_03467" formatted="false">Start a static-file HTTP service inside proot (python3 -m http.server), turning the terminal into a backend serving files. This App acts as the frontend requesting resources from it, realizing &quot;mutual master-slave&quot;.</string>
-    <string name="qk_03468" formatted="false">I’ll talk to you through the UI; say something</string>
+    <string name="qk_03468" formatted="false">画面で会話します。何か入力してください</string>
     <string name="qk_03469" formatted="false">When leaving the app, receive AI replies as system pop-up (heads-up) reminders</string>
     <string name="qk_03470" formatted="false">File name (e.g. Main.java)</string>
     <string name="qk_03471" formatted="false">CMS Static Resource Service</string>
@@ -3488,8 +3488,8 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03508" formatted="false">レンダリングチャネル</string>
     <string name="qk_03509" formatted="false">Mini-program (native engine)·</string>
     <string name="qk_03510" formatted="false">Via the Zorv AI agent keyboard, type text directly into the currently focused input box (e.g. a WPS document).</string>
-    <string name="qk_03511" formatted="false">Pinned to home screen (if supported)</string>
-    <string name="qk_03512" formatted="false">This plugin does not yet provide an interactive UI</string>
+    <string name="qk_03511" formatted="false">ホーム画面に固定しました（システムが対応する場合）</string>
+    <string name="qk_03512" formatted="false">このプラグインはまだ操作できる画面を提供していません</string>
     <string name="qk_03513" formatted="false">Enabled · before each generation a 4-choice pops up (GenUI / A2UI / Markdown / HTML); generation starts after selection</string>
     <string name="qk_03514" formatted="false">📁 Workspace file write: write text to a relative-path file in the workspace (QuroWorkspace).</string>
     <string name="qk_03515" formatted="false">UI即返答</string>
@@ -3515,7 +3515,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03535" formatted="false">AI Browser: web search, scrape pages, auto-research</string>
     <string name="qk_03536" formatted="false">Read Current Screen Content</string>
     <string name="qk_03537" formatted="false">keystore をインポート</string>
-    <string name="qk_03538" formatted="false">UI Replay · tap an item to restore to canvas</string>
+    <string name="qk_03538" formatted="false">画面の回放 · 項目をタップしてキャンバスに復元</string>
     <string name="qk_03539" formatted="false">Write a document directly in the chat and render it (no file generated)</string>
     <string name="qk_03540" formatted="false">List all in-app alarms (id, time, repeat days, enabled, next ring time). No params.</string>
     <string name="qk_03541" formatted="false">List currently deployed local MCP servers (created and deployed by the AI via mcp_deploy), with alias, tool count and connection address.</string>
@@ -3528,7 +3528,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03548" formatted="false">Terminal uses the privileged channel to execute commands (Shizuku→ROOT auto-downgrade).</string>
     <string name="qk_03549" formatted="false">Force-lock the phone screen (requires L3 Device Admin activated).</string>
     <string name="qk_03550" formatted="false">Zorv ビデオ通話</string>
-    <string name="qk_03551" formatted="false">Instructions for the AI, e.g.: write a compliment for a friend</string>
+    <string name="qk_03551" formatted="false">AIへの指示、例：友人を褒めるコメントを書く</string>
     <string name="qk_03552" formatted="false">Get device model and system version</string>
     <string name="qk_03553" formatted="false">Service Status</string>
     <string name="qk_03554" formatted="false">APK-level plugin framework master control (install/uninstall/reload plugins, view AI tools contributed by plugins, call plugin tools directly, open plugin UI)</string>
@@ -3538,11 +3538,11 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03558" formatted="false">Read a local existing document and extract plain text, for the AI to understand and then rewrite/summarize.</string>
     <string name="qk_03559" formatted="false">Send HTTP Request</string>
     <string name="qk_03560" formatted="false">Zorv AI has no built-in PDF renderer yet</string>
-    <string name="qk_03561" formatted="false">Screen capture authorization failed; fell back to accessibility node tree</string>
+    <string name="qk_03561" formatted="false">画面キャプチャの許可に失敗したため、アクセシビリティのノードツリーにフォールバックしました</string>
     <string name="qk_03562" formatted="false">メール</string>
     <string name="qk_03563" formatted="false">Get the current UI control tree (UI Tree) for precise automation.</string>
     <string name="qk_03564" formatted="false">100% open-source local video player: a full-featured in-app player plays device videos (supports play/pause, progress, speed, mute, landscape/portrait).</string>
-    <string name="qk_03565" formatted="false">No options shown? Go to system settings and grant this app &quot;floating window&quot; permission</string>
+    <string name="qk_03565" formatted="false">選択肢が見えない場合は、システム設定で本アプリに「オーバーレイ」権限を付与してください</string>
     <string name="qk_03566" formatted="false">· Other files → put into assets/, packaged into the APK’s assets/ (code read via AssetManager).</string>
     <string name="qk_03567" formatted="false">Edge TTS (Microsoft)</string>
     <string name="qk_03568" formatted="false">柚柚</string>
@@ -3553,7 +3553,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03573" formatted="false">Local Diagnostics</string>
     <string name="qk_03574" formatted="false">Type:</string>
     <string name="qk_03575" formatted="false">Example: my DeepSeek</string>
-    <string name="qk_03576" formatted="false">You</string>
+    <string name="qk_03576" formatted="false">ターミナルセッションのACIサービスが実行中</string>
     <string name="qk_03577" formatted="false">Save and Preview</string>
     <string name="qk_03578" formatted="false">削除の確認</string>
     <string name="qk_03579" formatted="false">Options are in the floating window on screen; just tap it</string>
@@ -3577,7 +3577,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03597" formatted="false">他のアプリで開く</string>
     <string name="qk_03598" formatted="false">Select preset UA or custom</string>
     <string name="qk_03599" formatted="false">entry.sh Script</string>
-    <string name="qk_03600" formatted="false">Project Address</string>
+    <string name="qk_03600" formatted="false">（画面を生成しました。上の回放を参照）</string>
     <string name="qk_03601" formatted="false">Voice Name (free to fill)</string>
     <string name="qk_03602" formatted="false">☁ Cloud Port LLM</string>
     <string name="qk_03603" formatted="false">Select local document…</string>
@@ -3589,12 +3589,12 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03609" formatted="false">HTML App</string>
     <string name="qk_03610" formatted="false">Manage local models: load, unload, infer, view status, etc. Supports MNN, llama.cpp, LiteRT and other inference engines.</string>
     <string name="qk_03611" formatted="false">📄 Generate real Office files (docx/xlsx/pptx/pdf), self-built zero-dependency, generated in background for download/share.</string>
-    <string name="qk_03612" formatted="false">Try describing specific colors, layout, features</string>
+    <string name="qk_03612" formatted="false">具体的な色・レイアウト・機能を説明してください</string>
     <string name="qk_03613" formatted="false">📦 List all AI tools provided by &quot;script packages (ToolPkg)&quot; under the workspace packages/ directory.</string>
     <string name="qk_03614" formatted="false">Generating dependencies requires BouncyCastle, may be unavailable on some devices; if it fails use &quot;Import keystore&quot; (generate with keytool on PC then import).</string>
     <string name="qk_03615" formatted="false">ドキュメントURIがありません</string>
     <string name="qk_03616" formatted="false">成果物をエクスポート</string>
-    <string name="qk_03617" formatted="false">No keystore selected yet (takes effect after generate or import).</string>
+    <string name="qk_03617" formatted="false">keystore が未選択です（生成またはインポート後に有効になります）。</string>
     <string name="qk_03618" formatted="false">思考プロセス</string>
     <string name="qk_03619" formatted="false">Zorv ビルドコンソール</string>
     <string name="qk_03620" formatted="false">精巧なディテール</string>
@@ -3607,7 +3607,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03627" formatted="false">今回のレンダリングチャネルを選択</string>
     <string name="qk_03628" formatted="false">Create Scheduled Task</string>
     <string name="qk_03629" formatted="false">List Directory Contents</string>
-    <string name="qk_03630" formatted="false">Plugin runtime not ready, please wait…</string>
+    <string name="qk_03630" formatted="false">プラグインランタイムが未準備です。しばらくお待ちください…</string>
     <string name="qk_03631" formatted="false">Read the text file content at the specified relative path in the ZorvAI workspace (QuroWorkspace) and return the full text.</string>
     <string name="qk_03632" formatted="false">Orchestrate a group of terminal commands by dependency (DAG): no-dependency run in parallel, upstream stdout as downstream input, any failure aborts the rest.</string>
     <string name="qk_03633" formatted="false">GenUI SDK / A2UI / Markdown / HTML —— generation starts once selected</string>
@@ -3632,7 +3632,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03652" formatted="false">Execute commands in the self-developed sandbox terminal QuroTerm (ls/cd/cat/echo/grep/ps/top/netstat/ping/curl/wget/dns/</string>
     <string name="qk_03653" formatted="false">Memory Usage</string>
     <string name="qk_03654" formatted="false">Send HTTP request and return response</string>
-    <string name="qk_03655" formatted="false">Zorv AI only launches the system dialer, does not auto-call out.</string>
+    <string name="qk_03655" formatted="false">Zorv AI はシステムのダイヤル画面を開くだけで、自動発信はしません。</string>
     <string name="qk_03656" formatted="false">UI解析失敗</string>
     <string name="qk_03657" formatted="false">📐 Background AIP layout synthesis: structured layout for full long documents / PPT / reports / mind maps.</string>
     <string name="qk_03658" formatted="false">AI controls the app’s built-in browser (takes over the currently displayed WebView; when the page is loaded you can directly see/operate content).</string>
@@ -3653,12 +3653,12 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03673" formatted="false">🖼️ Image content recognition: analyze the image file provided by the user, return a detailed description.</string>
     <string name="qk_03674" formatted="false">Query CMS v2 modules’ and recent tasks’ execution status (deploy state / running / terminal), letting the AI confirm &quot;deploy/call succeeded&quot;.</string>
     <string name="qk_03675" formatted="false">Control the ACI HTTP mock server (used when the real ACI API is not done yet).</string>
-    <string name="qk_03676" formatted="false">Cannot render GenUI content</string>
+    <string name="qk_03676" formatted="false">GenUI の内容をレンダリングできません</string>
     <string name="qk_03677" formatted="false">Call a capability exposed by a third-party app via ACI (Agent Capability Interface) (e.g. send message / check unread / create group / open web / run web JS / initiate HTTP request / shared workspace read-write workspace_write·workspace_read·workspace_list·workspace_delete).</string>
-    <string name="qk_03678" formatted="false">Zorv AI doesn’t store email; sending is done via your chosen email app.</string>
+    <string name="qk_03678" formatted="false">Zorv AI はメールを保存しません。送信は選択したメールアプリで行われます。</string>
     <string name="qk_03679" formatted="false">Device admin permission</string>
     <string name="qk_03680" formatted="false">Launch app</string>
-    <string name="qk_03681" formatted="false">The data format returned by the AI is incorrect; please retry or adjust the description.</string>
+    <string name="qk_03681" formatted="false">AIが返したデータ形式が正しくありません。再試行するか説明を調整してください。</string>
     <string name="qk_03682" formatted="false">Evaluate arithmetic expression</string>
     <string name="qk_03683" formatted="false">Terminal · Node runtime</string>
     <string name="qk_03684" formatted="false">Query the deploy readiness, health, version, launched shared services (NODE/PYTHON/SSH/JAVA/RUST/GO runtimes), deploy progress and logs of the &quot;CMS Engine (system resource package)&quot;.</string>
@@ -3703,10 +3703,10 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03723" formatted="false">発話</string>
     <string name="qk_03724" formatted="false">100% open-source local music player: plays local audio files in the background (keeps playing without a foreground window).</string>
     <string name="qk_03725" formatted="false">ログをコピー</string>
-    <string name="qk_03726" formatted="false">Enabling the voice ball requires the &quot;floating window&quot; permission</string>
+    <string name="qk_03726" formatted="false">音声ボールを有効にするには「オーバーレイ」権限が必要です</string>
     <string name="qk_03727" formatted="false">List workspace contents</string>
     <string name="qk_03728" formatted="false">生成中…</string>
-    <string name="qk_03729" formatted="false">Enable ZorvAI accessibility service in system settings first</string>
+    <string name="qk_03729" formatted="false">先にシステム設定で ZorvAI のアクセシビリティサービスを有効にしてください</string>
     <string name="qk_03730" formatted="false">Zorv AI scheduled-task due reminder</string>
     <string name="qk_03731" formatted="false">ツール呼び出しはありません</string>
     <string name="qk_03732" formatted="false">Terminal · Python runtime</string>
@@ -3808,4 +3808,47 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03827">ペルソナ孵化に失敗：%1$s</string>
     <string name="qk_03828">ペルソナの自動孵化に失敗：%1$s</string>
     <string name="qk_03829" formatted="false">こんにちは、Zorv AI です。準備完了、チャットもツールも使えます。左上のメニューで履歴、＋ で新しい会話を開始できます。</string>
+    <string name="qk_03830" formatted="false">情報</string>
+    <string name="qk_03831" formatted="false">機能</string>
+    <string name="qk_03832" formatted="false">データ</string>
+    <string name="qk_03833" formatted="false">権限</string>
+    <string name="qk_03834" formatted="false">会話をエクスポート</string>
+    <string name="qk_03835" formatted="false">スキル管理</string>
+    <string name="qk_03836" formatted="false">ストレージを整理</string>
+    <string name="qk_03837" formatted="false">コンポーネントギャラリー</string>
+    <string name="qk_03838" formatted="false">外観と会話</string>
+    <string name="qk_03839" formatted="false">テキストとしてエクスポート</string>
+    <string name="qk_03840" formatted="false">すべての会話を消去</string>
+    <string name="qk_03841" formatted="false">オフラインモデルのダウンロード</string>
+    <string name="qk_03842" formatted="false">AI返信の通知</string>
+    <string name="qk_03843" formatted="false">ACI コンソール</string>
+    <string name="qk_03844" formatted="false">GitHub 管理</string>
+    <string name="qk_03845" formatted="false">USB / ワイヤレスデバッグ</string>
+    <string name="qk_03846" formatted="false">合成 / 認識 / 設定</string>
+    <string name="qk_03847" formatted="false">推論エンジン・パラメータ・機能範囲</string>
+    <string name="qk_03848" formatted="false">フック注入 / スコープ管理</string>
+    <string name="qk_03849" formatted="false">本物のPTYターミナル（実験）</string>
+    <string name="qk_03850" formatted="false">破壊的コマンドの再確認（承認）</string>
+    <string name="qk_03851" formatted="false">Webアプリ型プラグイン Demo</string>
+    <string name="qk_03852" formatted="false">環境設定・外観・機能をいつでも調整できます。</string>
+    <string name="qk_03853" formatted="false">ログ・キャッシュ・AI生成物などを分類して整理</string>
+    <string name="qk_03854" formatted="false">ソウル注入 · ソウルカード · メモリライブラリ</string>
+    <string name="qk_03855" formatted="false">プロジェクトURL / オープンソースライセンス / 開発者</string>
+    <string name="qk_03856" formatted="false">アプリを離れたときのシステム通知 / ホーム画面カード</string>
+    <string name="qk_03857" formatted="false">サンドボックスを閲覧 · システムのファイルマネージャーで開く</string>
+    <string name="qk_03858" formatted="false">内蔵ツールをMCPプロトコルで本機クライアントに公開</string>
+    <string name="qk_03859" formatted="false">デバイス / 権限 / モジュール実行状態 / ペルソナ心拍</string>
+    <string name="qk_03860" formatted="false">ADB：PCから制御 · 本機クライアント · TCP待ち受け</string>
+    <string name="qk_03861" formatted="false">公式ミラーの直リンク内蔵、ワンタップでGGUF重みを取得</string>
+    <string name="qk_03862" formatted="false">コンテキスト要約 / メモリ / ペルソナ孵化 / 動画 / 画像</string>
+    <string name="qk_03863" formatted="false">カスタムSKILL：追加 / 編集 / 有効化 / 無効化</string>
+    <string name="qk_03864" formatted="false">ダークモード · 文字サイズ · 通知音 · Enterで送信 · 音声ボール</string>
+    <string name="qk_03865" formatted="false">可視化コンポーネント：カード / ボタン / 入力 / インタラクション / オーバーレイ</string>
+    <string name="qk_03866" formatted="false">検出した第三者アプリ / 連携状態 / 機能一覧 / 手動登録・再バインド</string>
+    <string name="qk_03867" formatted="false">L1 アクセシビリティ / L2 Shizuku / L3 デバイス管理者 / L4 ROOT</string>
+    <string name="qk_03868" formatted="false">疑似端末：vim/top/REPL が対話可、SIGINT も正常。問題があればフォールバックパイプをオフに</string>
+    <string name="qk_03869" formatted="false">ランチャー / ブラウザ / ギャラリー / 動画 / メール / ドキュメント / SMS / 電話</string>
+    <string name="qk_03870" formatted="false">ログイン後はリポジトリ / Issue / Star / 通知を管理。チャット内でGitHub検索も可能</string>
+    <string name="qk_03871" formatted="false">オンにすると rm -rf / dd / mkfs などの危険コマンドは再送信か confirm が必要</string>
+    <string name="qk_03872" formatted="false">システムに従う</string>
 </resources>

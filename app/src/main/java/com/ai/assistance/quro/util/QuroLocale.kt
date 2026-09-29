@@ -133,8 +133,9 @@ object QuroLocale {
     }
 
     /** 语言代码 → 中文显示名（用于设置界面与系统提示词）。 */
-    val LANGUAGE_NAMES: Map<String, String> = mapOf(
-        "system" to "跟随系统",
+    val LANGUAGE_NAMES: Map<String, String>
+        get() = mapOf(
+        "system" to qstr(R.string.qk_03872),
         "zh" to "简体中文", "zh-rCN" to "简体中文", "zh-rTW" to "繁體中文",
         "en" to "English", "ja" to qstr(R.string.qk_02504), "ko" to "한국어",
         "fr" to "Français", "de" to "Deutsch", "es" to "Español",
@@ -142,8 +143,9 @@ object QuroLocale {
     )
 
     /** 大国语言列表（设置界面选择器使用；小国语言后续补充）。 */
-    val MAJOR_LANGUAGES: List<Pair<String, String>> = listOf(
-        "system" to (LANGUAGE_NAMES["system"] ?: "跟随系统"),
+    val MAJOR_LANGUAGES: List<Pair<String, String>>
+        get() = listOf(
+        "system" to (LANGUAGE_NAMES["system"] ?: qstr(R.string.qk_03872)),
         "zh" to (LANGUAGE_NAMES["zh"] ?: "简体中文"),
         "en" to (LANGUAGE_NAMES["en"] ?: "English"),
         "ja" to (LANGUAGE_NAMES["ja"] ?: qstr(R.string.qk_02504)),

@@ -5727,56 +5727,56 @@ private fun SettingsSheetContent(
         Modifier.fillMaxWidth().heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
     ) {
-        SheetHeader(stringResource(R.string.qk_01760), "偏好、外观与功能，随手可调。", scaled)
-        GroupCaption("外观与对话")
+        SheetHeader(stringResource(R.string.qk_01760), stringResource(R.string.qk_03852), scaled)
+        GroupCaption(stringResource(R.string.qk_03838))
         SetGroup {
-            SetRowClickable(Icons.Filled.ColorLens, "外观与对话", "深色模式 · 字号 · 提示音 · 回车发送 · 语音球", "", onOpenAppearance, scaled)
+            SetRowClickable(Icons.Filled.ColorLens, stringResource(R.string.qk_03838), stringResource(R.string.qk_03864), "", onOpenAppearance, scaled)
         }
         GroupCaption(stringResource(R.string.qk_00485))
         SetGroup {
-            SetRowClickable(Icons.Filled.VolumeUp, stringResource(R.string.qk_03057), "合成 / 识别 / 设置", "", onOpenVoiceService, scaled)
+            SetRowClickable(Icons.Filled.VolumeUp, stringResource(R.string.qk_03057), stringResource(R.string.qk_03846), "", onOpenVoiceService, scaled)
         }
-        GroupCaption("功能")
+        GroupCaption(stringResource(R.string.qk_03831))
         SetGroup {
-            SetRowClickable(Icons.Filled.Tune, stringResource(R.string.qk_02103), "推理引擎、参数与能力范围", "", onOpenModelConfig, scaled)
+            SetRowClickable(Icons.Filled.Tune, stringResource(R.string.qk_02103), stringResource(R.string.qk_03847), "", onOpenModelConfig, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.AutoAwesome, "技能管理", "自定义 SKILL：新增 / 编辑 / 启用 / 停用", "", onOpenSkills, scaled)
+            SetRowClickable(Icons.Filled.AutoAwesome, stringResource(R.string.qk_03835), stringResource(R.string.qk_03863), "", onOpenSkills, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Build, stringResource(R.string.qk_03764), "上下文总结 / 记忆 / 人格孵化 / 视频 / 图片", "", onOpenFeatureModelConfig, scaled)
+            SetRowClickable(Icons.Filled.Build, stringResource(R.string.qk_03764), stringResource(R.string.qk_03862), "", onOpenFeatureModelConfig, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Security, "权限", "L1 无障碍 / L2 Shizuku / L3 设备管理员 / L4 ROOT", "", onOpenPermission, scaled)
+            SetRowClickable(Icons.Filled.Security, stringResource(R.string.qk_03833), stringResource(R.string.qk_03867), "", onOpenPermission, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Extension, stringResource(R.string.qk_02024), "钩子注入 / 作用域管理", "", onOpenLspose, scaled)
+            SetRowClickable(Icons.Filled.Extension, stringResource(R.string.qk_02024), stringResource(R.string.qk_03848), "", onOpenLspose, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Usb, "USB / 无线调试", "ADB：被电脑控制 · 本机客户端 · TCP 监听", "", onOpenUsbDebug, scaled)
+            SetRowClickable(Icons.Filled.Usb, stringResource(R.string.qk_03845), stringResource(R.string.qk_03860), "", onOpenUsbDebug, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Apps, stringResource(R.string.qk_01687), "桌面启动器 / 浏览器 / 相册 / 视频 / 邮箱 / 文档 / 短信 / 拨号", "", onOpenDefaultApp, scaled)
+            SetRowClickable(Icons.Filled.Apps, stringResource(R.string.qk_01687), stringResource(R.string.qk_03869), "", onOpenDefaultApp, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Public, "GitHub 管理", "登录后管理仓库 / Issue / Star / 通知，对话框内可搜 GitHub", "", onOpenGitHub, scaled)
+            SetRowClickable(Icons.Filled.Public, stringResource(R.string.qk_03844), stringResource(R.string.qk_03870), "", onOpenGitHub, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Download, "离线模型下载", "内置多官方镜像直链，一键下载 GGUF 本地推理权重", "", onOpenModelHub, scaled)
+            SetRowClickable(Icons.Filled.Download, stringResource(R.string.qk_03841), stringResource(R.string.qk_03861), "", onOpenModelHub, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_02642), "设备 / 权限能力 / 模块运行态 / 人格心跳", "", onOpenSystemStatus, scaled)
+            SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_02642), stringResource(R.string.qk_03859), "", onOpenSystemStatus, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Info, "组件画廊", "可视化组件库：卡片 / 按钮 / 输入 / 交互 / 覆盖层", "", onOpenComponentGallery, scaled)
+            SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_03837), stringResource(R.string.qk_03865), "", onOpenComponentGallery, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Extension, stringResource(R.string.qk_00491), "Web 应用式插件 Demo", "", onOpenPlugins, scaled)
+            SetRowClickable(Icons.Filled.Extension, stringResource(R.string.qk_00491), stringResource(R.string.qk_03851), "", onOpenPlugins, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Person, stringResource(R.string.qk_02449), "灵魂注入 · 灵魂卡 · 记忆库", "", onManagePersona, scaled)
+            SetRowClickable(Icons.Filled.Person, stringResource(R.string.qk_02449), stringResource(R.string.qk_03854), "", onManagePersona, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Hub, stringResource(R.string.qk_02058), "把内置工具以 MCP 协议暴露给本机客户端", "", onOpenMcp, scaled)
+            SetRowClickable(Icons.Filled.Hub, stringResource(R.string.qk_02058), stringResource(R.string.qk_03858), "", onOpenMcp, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Public, "ACI 管理中心", "已发现第三方 App / 绑定状态 / 能力清单 / 手动注册刷新重绑", "", onOpenAci, scaled)
+            SetRowClickable(Icons.Filled.Public, stringResource(R.string.qk_03843), stringResource(R.string.qk_03866), "", onOpenAci, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRow(
-                Icons.Filled.Code, "真实 PTY 终端（实验）",
-                "伪终端：vim/top/REPL 可交互、SIGINT 正常；出问题请关闭回退管道", usePty,
+                Icons.Filled.Code, stringResource(R.string.qk_03849),
+                stringResource(R.string.qk_03868), usePty,
                 onToggle = { usePty = !usePty; QuroTerminalPrefs.usePty = usePty },
             )
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRow(
-                Icons.Filled.Warning, "破坏性命令二次确认（授权）",
-                "开启后 rm -rf / dd / mkfs 等危险命令需再次发送或 confirm 才执行", requireDestructiveConfirm,
+                Icons.Filled.Warning, stringResource(R.string.qk_03850),
+                stringResource(R.string.qk_03871), requireDestructiveConfirm,
                 onToggle = {
                     requireDestructiveConfirm = !requireDestructiveConfirm
                     QuroTerminalPrefs.requireDestructiveConfirm = requireDestructiveConfirm
@@ -5785,20 +5785,20 @@ private fun SettingsSheetContent(
         }
         GroupCaption(stringResource(R.string.qk_01945))
         SetGroup {
-            SetRow(Icons.Filled.Notifications, "AI 回复通知", "离开软件时系统弹窗通知 / 桌面卡片", settingsAiReplyNotify, onSettingsToggleAiReplyNotify, scaled)
+            SetRow(Icons.Filled.Notifications, stringResource(R.string.qk_03842), stringResource(R.string.qk_03856), settingsAiReplyNotify, onSettingsToggleAiReplyNotify, scaled)
         }
-        GroupCaption("数据")
+        GroupCaption(stringResource(R.string.qk_03832))
         SetGroup {
-            SetRowClickable(Icons.Filled.Download, "导出对话", "", "导出为文本", onExport, scaled)
+            SetRowClickable(Icons.Filled.Download, stringResource(R.string.qk_03834), "", stringResource(R.string.qk_03839), onExport, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.DeleteSweep, "清理存储", "分类清理日志、缓存、AI产物等", "", onOpenCleanup, scaled)
-            SetRowClickable(Icons.Filled.FolderOpen, stringResource(R.string.qk_02669), "浏览沙箱目录 · 在系统文件管理器中打开", "", onOpenFileManager, scaled)
+            SetRowClickable(Icons.Filled.DeleteSweep, stringResource(R.string.qk_03836), stringResource(R.string.qk_03853), "", onOpenCleanup, scaled)
+            SetRowClickable(Icons.Filled.FolderOpen, stringResource(R.string.qk_02669), stringResource(R.string.qk_03857), "", onOpenFileManager, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.DeleteSweep, "清除全部对话", "", "", onClear, scaled, danger = true)
+            SetRowClickable(Icons.Filled.DeleteSweep, stringResource(R.string.qk_03840), "", "", onClear, scaled, danger = true)
         }
-        GroupCaption("关于")
+        GroupCaption(stringResource(R.string.qk_03830))
         SetGroup {
-            SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_00497), "项目地址 / 开源许可 / 开发者", "", onOpenAbout, scaled)
+            SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_00497), stringResource(R.string.qk_03855), "", onOpenAbout, scaled)
         }
         Text("Zorv AI · v${BuildConfig.VERSION_NAME}",
             fontSize = scaled(11), color = Muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
@@ -9115,7 +9115,7 @@ private fun CleanupScreen(
 
     Column(Modifier.fillMaxSize().background(cs.background)) {
         TopAppBar(
-            title = { Text("清理存储") },
+            title = { Text(stringResource(R.string.qk_03836)) },
             navigationIcon = {
                 IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
             },
