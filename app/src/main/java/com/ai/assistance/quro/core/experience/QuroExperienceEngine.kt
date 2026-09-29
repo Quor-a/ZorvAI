@@ -23,13 +23,13 @@ class QuroExperienceEngine(private val repo: QuroExperienceRepository) {
         if (hint != ExperienceType.ERROR) return hint // 显式指定且非默认 error 时尊重
         val t = text.lowercase()
         return when {
-            listOf("报错", "崩溃", qstr(R.string.qk_02638), qstr(R.string.qk_00139), "crash", "exception", "error", "bug", "anr", "闪退", "不生效", "没反应")
+            listOf("报错", "崩溃", "异常", "失败", "crash", "exception", "error", "bug", "anr", "闪退", "不生效", "没反应")
                 .any { t.contains(it) } -> ExperienceType.ERROR
-            listOf("解决", "修复", "方案", qstr(R.string.qk_00758), qstr(R.string.qk_00141), "workaround", "fix", "修复后", "应该这样")
+            listOf("解决", "修复", "方案", "可用", "成功", "workaround", "fix", "修复后", "应该这样")
                 .any { t.contains(it) } -> ExperienceType.SOLUTION
-            listOf("模式", qstr(R.string.qk_00135), "用法", "习惯", "每次", "pattern", "tool", "prefer", "默认")
+            listOf("模式", "工具", "用法", "习惯", "每次", "pattern", "tool", "prefer", "默认")
                 .any { t.contains(it) } -> ExperienceType.PATTERN
-            listOf(qstr(R.string.qk_01612), "兼容", "android", "sdk", "api", "kotlin", "兼容", "broken_since")
+            listOf("版本", "兼容", "android", "sdk", "api", "kotlin", "兼容", "broken_since")
                 .any { t.contains(it) } -> ExperienceType.COMPAT
             else -> ExperienceType.ERROR
         }

@@ -85,7 +85,7 @@ object FluidCloudBridge {
                         put("type", "PROGRESS")
                         put("progress", progress.coerceIn(0, 100))
                         put("style", "inside")
-                        put("nodeLabels", arrayOf("开始", qstr(R.string.qk_00954), qstr(R.string.qk_00420)))
+                        put("nodeLabels", arrayOf("开始", "执行中", "完成"))
                     })
                 }
             })

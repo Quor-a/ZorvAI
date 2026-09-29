@@ -1525,7 +1525,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_01580" formatted="false">🔁 双端模块（手机 / 终端皆可）</string>
     <string name="qk_01581" formatted="false">权限 ${m.permissions.size} · 能力 ${m.capabilities.size}${if (m.dependencies.isNotEmpty()) </string>
     <string name="qk_01582">通道：%1$s · 级别 %2$s</string>
-    <string name="qk_01583" formatted="false">● 部署中 %1$s%</string>
+    <string name="qk_01583" formatted="false">● 部署中 %1$s%%</string>
     <string name="qk_01584" formatted="false">● 已部署到终端</string>
     <string name="qk_01585" formatted="false">○ 未部署</string>
     <string name="qk_01586" formatted="false">· 运行中</string>
@@ -2020,7 +2020,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
 </string>
     <string name="qk_02068" formatted="false">方法：initialize / tools/list / tools/call
 </string>
-    <string name="qk_02069" formatted="false">工具：与 AI 对话内工具 100% 同源（共 %1$s 个）</string>
+    <string name="qk_02069" formatted="false">工具：与 AI 对话内工具 100%% 同源（共 %1$s 个）</string>
     <string name="qk_02070" formatted="false">技术详情</string>
     <string name="qk_02071" formatted="false">客户端配置示例（Claude Desktop / Cursor 的 mcp.json）：
 </string>
@@ -2175,7 +2175,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_02220" formatted="false">搜索 MNN 模型</string>
     <string name="qk_02221" formatted="false">(完整模型包：配置 + 全部权重文件)</string>
     <string name="qk_02222">大小约 %1$s MB</string>
-    <string name="qk_02223" formatted="false">%1$s% 下载中…</string>
+    <string name="qk_02223" formatted="false">%1$s%% 下载中…</string>
     <string name="qk_02224" formatted="false">下载中…</string>
     <string name="qk_02225" formatted="false">下载并加载</string>
     <string name="qk_02226">已登记 %1$s 个模型</string>
@@ -2545,7 +2545,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_02614" formatted="false">➕ 自定义链接（需为 Sherpa-NCNN 流式模型）</string>
     <string name="qk_02615" formatted="false">自定义模型下载链接</string>
     <string name="qk_02616" formatted="false">模型类型</string>
-    <string name="qk_02617" formatted="false">已下载 %1$s%  (%2$s / %3$s)</string>
+    <string name="qk_02617" formatted="false">已下载 %1$s%%  (%2$s / %3$s)</string>
     <string name="qk_02618" formatted="false">本机不支持</string>
     <string name="qk_02619" formatted="false">下载并部署</string>
     <string name="qk_02620" formatted="false">删除模型</string>
@@ -3852,4 +3852,36 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_03870" formatted="false">登录后管理仓库 / Issue / Star / 通知，对话框内可搜 GitHub</string>
     <string name="qk_03871" formatted="false">开启后 rm -rf / dd / mkfs 等危险命令需再次发送或 confirm 才执行</string>
     <string name="qk_03872" formatted="false">跟随系统</string>
+    <string name="qk_03873" formatted="false">视频通话中的实时对话与画面理解所使用的模型（需支持视觉）</string>
+    <string name="qk_03874" formatted="false">点我开始视频通话</string>
+    <string name="qk_03875" formatted="false">视频通话待命</string>
+    <string name="qk_03876" formatted="false">摄像头已开启 · 点麦克风开始说话</string>
+    <string name="qk_03877" formatted="false">已结束视频通话</string>
+    <string name="qk_03878" formatted="false">缺少悬浮窗权限，请在系统设置中开启</string>
+    <string name="qk_03879">聆听中：%1$s</string>
+    <string name="qk_03880" formatted="false">没听清，请再说一次</string>
+    <string name="qk_03881" formatted="false">语音识别不可用，请在 STT 设置中切换引擎</string>
+    <string name="qk_03882">识别出错(%1$s)</string>
+    <string name="qk_03883" formatted="false">无法启动语音识别</string>
+    <string name="qk_03884" formatted="false">未配置 API Key</string>
+    <string name="qk_03885" formatted="false">请先在模型配置页填写 API Key</string>
+    <string name="qk_03886" formatted="false">AI 回复中</string>
+    <string name="qk_03887">出错了：%1$s</string>
+    <string name="qk_03888" formatted="false">麦克风已静音</string>
+    <string name="qk_03889" formatted="false">麦克风已开启</string>
+    <string name="qk_03890" formatted="false">已切换到前置摄像头</string>
+    <string name="qk_03891" formatted="false">已切换到后置摄像头</string>
+    <string name="qk_03892" formatted="false">缺少相机权限，仅使用语音</string>
+    <string name="qk_03893" formatted="false">ZorvAI 视频通话</string>
+    <string name="qk_03894" formatted="false">开关通话</string>
+    <string name="qk_03895" formatted="false">聊天框</string>
+    <string name="qk_03896" formatted="false">麦克风</string>
+    <string name="qk_03897" formatted="false">静音</string>
+    <string name="qk_03898" formatted="false">切换摄像头</string>
+    <string name="qk_03899" formatted="false">挂断</string>
+    <string name="qk_03900">你说：%1$s</string>
+    <string name="qk_03901" formatted="false">需要相机与麦克风权限才能开始视频通话</string>
+    <string name="qk_03902" formatted="false">需要悬浮窗权限才能显示视频通话界面</string>
+    <string name="qk_03903" formatted="false">每个功能可「跟随主模型」或指定独立模型；指定独立模型时还可单独填写基础 URL 与 API Key。已接入引擎并实时生效：常规对话、人格孵化、UI 控制、图像识别、视频识别、视频通话。</string>
+    <string name="qk_03904" formatted="false">视觉类能力：图像识别、视频识别与视频通话都需要支持视觉能力的模型（如 GPT-4V）。为它们指定独立模型并填好基础 URL / API Key 后，视觉分析、视频画面理解与视频通话即改用该模型。</string>
 </resources>

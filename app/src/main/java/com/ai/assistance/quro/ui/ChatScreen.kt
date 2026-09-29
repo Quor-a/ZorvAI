@@ -82,6 +82,7 @@ import android.content.ContentValues
 import android.widget.Toast
 import java.io.File
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import com.canhub.cropper.CropImageContract
@@ -273,6 +274,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import org.json.JSONObject
 import com.ai.assistance.quro.core.tools.RunCodeTool
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import androidx.compose.foundation.Image
@@ -1219,6 +1221,27 @@ fun ChatScreen(
             val mime = ctx.contentResolver.getType(uri) ?: "*/*"
             QuroAttachmentKit.fromUri(ctx, uri, mime)?.let { a -> attachments.add(a) }
         }
+    }
+
+    // 视频通话：先申请相机/麦克风（Android 14+ 前台服务类型 camera|microphone 要求运行时权限已授予），
+    // 再检查悬浮窗权限（通话界面是 WindowManager 悬浮窗），最后拉起 QuroVideoCallService。
+    val videoCallLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { result ->
+        val cam = result[android.Manifest.permission.CAMERA] == true
+        val mic = result[android.Manifest.permission.RECORD_AUDIO] == true
+        if (cam && mic) startVideoCall(ctx)
+        else Toast.makeText(ctx, qstr(R.string.qk_03901), Toast.LENGTH_LONG).show()
+    }
+    val openVideoCall: () -> Unit = {
+        val cam = ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        val mic = ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        if (cam && mic) startVideoCall(ctx)
+        else videoCallLauncher.launch(
+            arrayOf(android.Manifest.permission.CAMERA, android.Manifest.permission.RECORD_AUDIO)
+        )
     }
 
     // 屏幕捕获（MediaProjection 媒体投影 / 录屏投屏）系统授权 launcher：
@@ -2367,6 +2390,7 @@ fun ChatScreen(
                         onModel = { sheet = SheetType.Model },
                         onSettings = { sheet = SheetType.Settings },
                         onToolCenter = { showToolCenter = true },
+                        onVideoCall = openVideoCall,
                         onMinimize = { chatMinimized = true },
                         persona = selectedPersona,
                         onPick = { sheet = SheetType.Persona },
@@ -5829,6 +5853,15 @@ private fun QuroAppearanceSettingsScreen(
     val cs = MaterialTheme.colorScheme
     // 视频通话入口需要 context 启动前台服务
     val vcCtx = LocalContext.current
+    // 视频通话权限 launcher：与本页入口同一套（先授权 → 检查悬浮窗 → 拉起服务）
+    val videoCallPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { result ->
+        val cam = result[android.Manifest.permission.CAMERA] == true
+        val mic = result[android.Manifest.permission.RECORD_AUDIO] == true
+        if (cam && mic) startVideoCall(vcCtx)
+        else Toast.makeText(vcCtx, qstr(R.string.qk_03901), Toast.LENGTH_LONG).show()
+    }
     var showUserProfileEditor by remember { mutableStateOf(false) }
     var showHistoryPicker by remember { mutableStateOf(false) }
     var showLangPicker by remember { mutableStateOf(false) }
@@ -5863,15 +5896,14 @@ private fun QuroAppearanceSettingsScreen(
                     Icons.Filled.Videocam, stringResource(R.string.qk_00183), stringResource(R.string.qk_03743),
                     false,
                     {
-                        runCatching {
-                            val it2 = Intent(vcCtx, com.ai.assistance.quro.service.QuroVideoCallService::class.java)
-                                .setAction(com.ai.assistance.quro.service.QuroVideoCallService.ACTION_VIDEO_CALL)
-                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                                vcCtx.startForegroundService(it2)
-                            } else {
-                                vcCtx.startService(it2)
-                            }
-                        }
+                        val cam = ContextCompat.checkSelfPermission(vcCtx, android.Manifest.permission.CAMERA) ==
+                            PackageManager.PERMISSION_GRANTED
+                        val mic = ContextCompat.checkSelfPermission(vcCtx, android.Manifest.permission.RECORD_AUDIO) ==
+                            PackageManager.PERMISSION_GRANTED
+                        if (cam && mic) startVideoCall(vcCtx)
+                        else videoCallPermLauncher.launch(
+                            arrayOf(android.Manifest.permission.CAMERA, android.Manifest.permission.RECORD_AUDIO)
+                        )
                     },
                     scaled,
                 )
@@ -9275,5 +9307,31 @@ private fun formatFileSize(bytes: Long): String {
         bytes < 1024 * 1024 -> "${bytes / 1024} KB"
         bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
         else -> "${bytes / (1024 * 1024 * 1024)} GB"
+    }
+}
+
+
+/**
+ * 拉起视频通话（[com.ai.assistance.quro.service.QuroVideoCallService]）。
+ * 通话界面是该服务的 WindowManager 悬浮窗，因此必须先有悬浮窗权限；没有则引导去系统设置。
+ */
+private fun startVideoCall(ctx: Context) {
+    if (!android.provider.Settings.canDrawOverlays(ctx)) {
+        Toast.makeText(ctx, qstr(R.string.qk_03902), Toast.LENGTH_LONG).show()
+        runCatching {
+            ctx.startActivity(
+                Intent(
+                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + ctx.packageName),
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
+        return
+    }
+    runCatching {
+        val i = Intent(ctx, com.ai.assistance.quro.service.QuroVideoCallService::class.java)
+            .setAction(com.ai.assistance.quro.service.QuroVideoCallService.ACTION_START)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(i)
+        else ctx.startService(i)
     }
 }

@@ -57,6 +57,8 @@ internal fun ChatTopBar(
     onModel: () -> Unit,
     onSettings: () -> Unit,
     onToolCenter: () -> Unit = {},
+    /** 视频通话入口：拉起 QuroVideoCallService（相机 + 麦克风前台服务，通话界面在悬浮窗）。 */
+    onVideoCall: () -> Unit = {},
     onMinimize: () -> Unit = {},
     persona: Persona? = null,
     onPick: () -> Unit = {},
@@ -98,10 +100,14 @@ internal fun ChatTopBar(
                 modifier = Modifier.weight(1f, fill = false),
             )
         }
-        // ③ 右侧固定：终端 + 设置。无 weight → 与 ① 同批被测量，长模型名/长人格名都挤不掉它
+        // ③ 右侧固定：终端 + 视频通话 + 设置 + 最小化。无 weight → 与 ① 同批被测量，
+        //    长模型名/长人格名都挤不掉它们
         Spacer(Modifier.width(4.dp))
         IconButton(onClick = onToolCenter, modifier = Modifier.size(TOP_BAR_TOUCH)) {
             LucideIcon("blocks", stringResource(R.string.qk_02772), Modifier.size(21.dp), tint = cs.onBackground)
+        }
+        IconButton(onClick = onVideoCall, modifier = Modifier.size(TOP_BAR_TOUCH)) {
+            LucideIcon("video", stringResource(R.string.qk_00183), Modifier.size(21.dp), tint = cs.onBackground)
         }
         IconButton(onClick = onSettings, modifier = Modifier.size(TOP_BAR_TOUCH)) {
             LucideIcon("settings", stringResource(R.string.qk_01760), Modifier.size(21.dp), tint = cs.onBackground)

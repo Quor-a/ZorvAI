@@ -24,7 +24,7 @@ object AlwaysDeliverable : DeliverabilityJudge {
  * 作为落地默认候选——比 AlwaysDeliverable 多一道最低限度体检，但仍保守（不解析语义）。
  */
 object HeuristicDeliverabilityJudge : DeliverabilityJudge {
-    private val BAD = listOf("工具执行失败", qstr(R.string.qk_00248), "工具执行超时", "未知工具", "需要权限")
+    private val BAD = listOf("工具执行失败", "工具执行异常", "工具执行超时", "未知工具", "需要权限")
     override fun judge(brief: String, finalAnswer: String, context: String): Deliverability {
         val a = finalAnswer.trim()
         if (a.isEmpty() || a == "(已思考完毕)") {

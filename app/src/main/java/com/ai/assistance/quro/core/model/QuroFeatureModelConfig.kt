@@ -19,7 +19,9 @@ import androidx.core.content.edit
  *   全局 QuroModelConfig，否则返回替换了 model 字段的副本。主对话 (CHAT) 恒用主模型，行为不变。
  *
  * 功能类型覆盖 FunctionType 全集（CHAT/SUMMARY/MEMORY/UI_CONTROL/TRANSLATION/GREP/
- * PERSONA_INCUBATE/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION/IMAGE_GEN/VIDEO_GEN）。
+ * PERSONA_INCUBATE/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION/VIDEO_CALL/
+ * IMAGE_GEN/VIDEO_GEN）。其中 VIDEO_CALL 为「视频通话」独立模型绑定，
+ * 由 QuroVideoCallService 的实时对话与画面理解消费。
  */
 enum class QuroFunctionType(@StringRes val labelRes: Int, @StringRes val descRes: Int) {
     CHAT(R.string.qk_03744, R.string.qk_03752),
@@ -32,6 +34,7 @@ enum class QuroFunctionType(@StringRes val labelRes: Int, @StringRes val descRes
     IMAGE_RECOGNITION(R.string.qk_03748, R.string.qk_03759),
     AUDIO_RECOGNITION(R.string.qk_03749, R.string.qk_03760),
     VIDEO_RECOGNITION(R.string.qk_03750, R.string.qk_03761),
+    VIDEO_CALL(R.string.qk_00183, R.string.qk_03873),
     IMAGE_GEN(R.string.qk_03751, R.string.qk_03762),
     VIDEO_GEN(R.string.qk_00131, R.string.qk_03763),
 }
