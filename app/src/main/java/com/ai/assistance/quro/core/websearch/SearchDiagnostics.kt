@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.websearch
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import com.ai.assistance.quro.core.websearch.model.SearchHit
 import com.ai.assistance.quro.core.websearch.net.AntiBot
@@ -60,7 +62,7 @@ object SearchDiagnostics {
         for (e in engines) {
             if (!e.enabled) {
                 reports.add(
-                    EngineReport(e.id, false, 0, null, 0, 0, null, "已禁用")
+                    EngineReport(e.id, false, 0, null, 0, 0, null, qstr(R.string.qk_00777))
                 )
                 continue
             }
@@ -81,7 +83,7 @@ object SearchDiagnostics {
             val blocked = raw?.body?.let { AntiBot.isBlocked(it) } ?: false
             val blockReason = raw?.body?.let { AntiBot.reason(it) }
             val verdict = when {
-                hits.isNotEmpty() -> "可用"
+                hits.isNotEmpty() -> qstr(R.string.qk_00758)
                 blocked -> "被反爬拦截（HTTP 200 但无真实结果）"
                 url == null -> "未配置探测地址（以 search 实测结果为准）"
                 code == -1 -> "连接失败（超时/无网络/DNS）"

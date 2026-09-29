@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -92,7 +95,7 @@ fun VisualCustomPopupCard(
             // 打开按钮
             Icon(
                 Icons.Filled.OpenInNew,
-                contentDescription = "打开",
+                contentDescription = stringResource(R.string.qk_00953),
                 tint = cs.primary,
                 modifier = Modifier.size(20.dp)
             )
@@ -196,7 +199,7 @@ fun VisualCustomPopupDialog() {
                         ) {
                             Icon(
                                 Icons.Filled.Close,
-                                contentDescription = "关闭",
+                                contentDescription = qstr(R.string.qk_00065),
                                 tint = cs.onPrimaryContainer,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -301,7 +304,7 @@ fun VisualCustomPopupDialog() {
                         ) {
                             Icon(Icons.Filled.Minimize, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("收起")
+                            Text(qstr(R.string.qk_00818))
                         }
                         Spacer(Modifier.width(8.dp))
                         Button(
@@ -313,7 +316,7 @@ fun VisualCustomPopupDialog() {
                                 )
                             }
                         ) {
-                            Text("确认")
+                            Text(qstr(R.string.qk_02412))
                         }
                     }
                 }

@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -80,7 +83,7 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
 
     fun openFile(f: File) {
         if (!isEditableText(f)) {
-            Toast.makeText(ctx, "不支持的文件类型或文件过大（>1MB）", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_03168), Toast.LENGTH_SHORT).show()
             return
         }
         try {
@@ -88,7 +91,7 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
             editorText = f.readText()
             dirty = false
         } catch (e: Exception) {
-            Toast.makeText(ctx, "读取失败: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_03169, (e.message).toString()), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -97,9 +100,9 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
         try {
             f.writeText(editorText)
             dirty = false
-            Toast.makeText(ctx, "已保存 ${f.name}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_03170, (f.name).toString()), Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Toast.makeText(ctx, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_03171, (e.message).toString()), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -115,7 +118,7 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
                 title = {
                     Column {
                         Text(
-                            (editorFile?.let { it.name } ?: "代码浏览") + if (dirty) " •" else "",
+                            (editorFile?.let { it.name } ?: stringResource(R.string.qk_03172)) + if (dirty) " •" else "",
                             style = MaterialTheme.typography.titleMedium,
                             maxLines = 1,
                         )
@@ -130,21 +133,21 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
                 },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showTree = !showTree }) {
-                        Icon(Icons.Filled.List, contentDescription = "文件树")
+                        Icon(Icons.Filled.List, contentDescription = stringResource(R.string.qk_03173))
                     }
                     IconButton(onClick = { refresh() }) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "刷新")
+                        Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.qk_00459))
                     }
                     IconButton(onClick = { newFileTarget = targetDir() }) {
-                        Icon(Icons.Filled.NoteAdd, contentDescription = "新建文件")
+                        Icon(Icons.Filled.NoteAdd, contentDescription = stringResource(R.string.qk_01057))
                     }
                     IconButton(onClick = { newDirTarget = targetDir() }) {
-                        Icon(Icons.Filled.CreateNewFolder, contentDescription = "新建文件夹")
+                        Icon(Icons.Filled.CreateNewFolder, contentDescription = stringResource(R.string.qk_02733))
                     }
                     IconButton(
                         onClick = { saveFile() },
@@ -152,7 +155,7 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
                     ) {
                         Icon(
                             Icons.Filled.Save,
-                            contentDescription = "保存",
+                            contentDescription = stringResource(R.string.qk_00198),
                             tint = if (dirty) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -189,8 +192,7 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     if (entries.isEmpty()) {
-                        Text(
-                            "空工作区\n右上角新建文件或文件夹",
+                        Text(stringResource(R.string.qk_03174),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(16.dp),
@@ -227,8 +229,7 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
             val f = editorFile
             if (f == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        "从左侧选择文件开始编辑\n或点击右上角「+」新建",
+                    Text(stringResource(R.string.qk_03175),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -250,8 +251,8 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
     // 新建文件
     if (newFileTarget != null) {
         NameInputDialog(
-            title = "新建文件",
-            label = "文件名（如 Main.kt / app.py / index.html）",
+            title = stringResource(R.string.qk_01057),
+            label = stringResource(R.string.qk_03176),
             initial = "",
             onDismiss = { newFileTarget = null },
             onConfirm = { name ->
@@ -261,9 +262,9 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
                     file.writeText("")
                     refresh()
                     openFile(file)
-                    Toast.makeText(ctx, "已创建 $name", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_03177, (name).toString()), Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
-                    Toast.makeText(ctx, "创建失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_03178, (e.message).toString()), Toast.LENGTH_SHORT).show()
                 }
                 newFileTarget = null
             },
@@ -273,17 +274,17 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
     // 新建文件夹
     if (newDirTarget != null) {
         NameInputDialog(
-            title = "新建文件夹",
-            label = "文件夹名称",
+            title = stringResource(R.string.qk_02733),
+            label = stringResource(R.string.qk_03179),
             initial = "",
             onDismiss = { newDirTarget = null },
             onConfirm = { name ->
                 try {
                     File(newDirTarget!!, name).mkdirs()
                     refresh()
-                    Toast.makeText(ctx, "已创建 $name", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_03177, (name).toString()), Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
-                    Toast.makeText(ctx, "创建失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_03178, (e.message).toString()), Toast.LENGTH_SHORT).show()
                 }
                 newDirTarget = null
             },
@@ -296,15 +297,15 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
         AlertDialog(
             onDismissRequest = { actionTarget = null },
             title = { Text(target.name) },
-            text = { Text(if (target.isDirectory) "文件夹操作" else "文件操作") },
+            text = { Text(if (target.isDirectory) stringResource(R.string.qk_03180) else stringResource(R.string.qk_03181)) },
             confirmButton = {
                 TextButton(onClick = { renameTarget = target; actionTarget = null }) {
-                    Text("重命名", color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.qk_00837), color = MaterialTheme.colorScheme.primary)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { deleteTarget = target; actionTarget = null }) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.qk_00091), color = MaterialTheme.colorScheme.error)
                 }
             },
         )
@@ -314,8 +315,8 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
     if (renameTarget != null) {
         val target = renameTarget!!
         NameInputDialog(
-            title = "重命名",
-            label = "新名称",
+            title = stringResource(R.string.qk_00837),
+            label = stringResource(R.string.qk_02740),
             initial = target.name,
             onDismiss = { renameTarget = null },
             onConfirm = { name ->
@@ -324,9 +325,9 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
                 if (ok) {
                     if (editorFile?.absolutePath == target.absolutePath) editorFile = renamed
                     refresh()
-                    Toast.makeText(ctx, "已重命名为 $name", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_03182, (name).toString()), Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(ctx, "重命名失败", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_01998), Toast.LENGTH_SHORT).show()
                 }
                 renameTarget = null
             },
@@ -350,17 +351,17 @@ fun WorkspaceCodeScreen(rootPath: String, onClose: () -> Unit) {
                             dirty = false
                         }
                         refresh()
-                        Toast.makeText(ctx, "已删除 ${target.name}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, qstr(R.string.qk_03186, (target.name).toString()), Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(ctx, "删除失败", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, qstr(R.string.qk_02746), Toast.LENGTH_SHORT).show()
                     }
                     deleteTarget = null
                 }) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
+                    Text(qstr(R.string.qk_00091), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deleteTarget = null }) { Text("取消") }
+                TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.qk_00011)) }
             },
         )
     }
@@ -564,13 +565,13 @@ private fun NameInputDialog(
             Button(onClick = {
                 val n = name.trim()
                 when {
-                    n.isBlank() -> error = "名称不能为空"
-                    n.contains('/') || n.contains('\\') -> error = "名称不能包含路径分隔符"
+                    n.isBlank() -> error = qstr(R.string.qk_03187)
+                    n.contains('/') || n.contains('\\') -> error = qstr(R.string.qk_03188)
                     else -> onConfirm(n)
                 }
-            }) { Text("确定") }
+            }) { Text(qstr(R.string.qk_02020)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } },
     )
 }
 

@@ -1,0 +1,198 @@
+﻿0	Not selected
+35	Provider: ${cfg.provider} · ${cfg.baseUrl.takeIf { it.isNotBlank() } ?: 
+42	$typeLabel Local inference · ${m.path.ifBlank { 
+66	Regarding the above answer, I would like to ask: \n> 
+246	No tool specified to call
+247	Please call tool $toolName
+248	Tool execution error
+249	Executed $toolName
+250	\n… (result truncated)
+251	[Tool $toolName execution result] \n$feedback
+253	Skill "$skillName" is not enabled or does not exist
+254	Run failed
+255	Error
+256	Run failed: ${e.message}
+257	Preview
+258	Copy code
+259	Download code
+260	Code execution error, please analyze and fix:
+261	Language: $lang
+262	Code:
+263	Error message:
+264	Please analyze the cause of the error, provide the complete corrected code, and explain the fix.
+265	Auto fix
+267	✅ Run result (interactive)
+268	Download HTML
+269	❌ Run result
+271	Download result
+272	Close fullscreen
+273	✅ Saved to Downloads/$fileName
+274	❌ Save failed: cannot create file
+275	❌ Save failed: ${e.message}
+276	QuroAI_Chat_$stamp.md
+277	# QuroAI Chat Export\n\n
+278	_Export time: ${java.time.LocalDateTime.now()}_\n\n
+279	Failed to export chat
+281	Your AI assistant, always at your service.
+283	Empty conversation
+284	Today
+285	This week
+286	Earlier
+287	Attachments
+288	Downloaded: $collectedName
+289	Saved to app directory: ${out.absolutePath}
+290	Download failed: ${it.message}
+291	Workflow management
+293	No workflows yet
+294	Tap + in the top-right to create one, or let AI create it for you
+295	Workflow execution completed
+296	Execution failed: ${e.message}
+297	Trigger: ${workflow.trigger} | Nodes: ${workflow.nodes.size}
+439	If a tool doesn't work, AI can fall back to calling it via apk_plugin(action="call", name="tool name").
+531	Public Domain - the "Good, not Evil" clause has been removed since version 20220924
+565	To ensure core functions run properly, Zorv AI uses the following system permissions on demand after your active authorization. We adhere to the principle of "minimum necessary, lawful, and transparent": \n· Permissions are requested and invoked only when you actively trigger the corresponding feature; \n· We do not silently collect, in the background, data unrelated to the current feature; \n· Any permission can be viewed and revoked at any time in system settings; revoking affects only that feature and will not crash the app. \nThe following sections explain each permission's purpose, when it is invoked, whether it is required, and the impact after revocation.
+566	I. Basic Network and Device Permissions
+567	1. Network access (INTERNET / ACCESS_NETWORK_STATE) \nPurpose: connect to your configured cloud model, check for version updates, and load necessary resources. \nRequired: Yes (basic networking capability). \nImpact after revocation: cloud model and updates become unavailable; the on-device local engine still runs. \n\n
+568	2. Wi-Fi state (ACCESS_WIFI_STATE / CHANGE_WIFI_STATE) \nPurpose: check Wi-Fi connection status for network diagnostics and optimization. \nRequired: No. \nImpact after revocation: cannot obtain Wi-Fi state; core functions are unaffected. \n\n
+569	3. Multicast lock (CHANGE_WIFI_MULTICAST_STATE) \nPurpose: access this device from the web (LAN web service / NSD service discovery). \nRequired: No (only needed for LAN features). \nImpact after revocation: LAN-related features are limited. \n\n
+570	4. Vibration (VIBRATE) \nPurpose: voice-ball tap feedback, notification reminders, and other interaction feedback. \nRequired: No. \nImpact after revocation: no haptic feedback; functions are unaffected. \n\n
+571	5. Bluetooth (BLUETOOTH / BLUETOOTH_CONNECT) \nPurpose: connect Bluetooth devices (e.g., Bluetooth headset, Bluetooth keyboard). \nRequired: No. \nImpact after revocation: Bluetooth device connectivity becomes unavailable.
+572	II. Audio and Media Permissions
+573	1. Microphone (RECORD_AUDIO) \nPurpose: speech recognition (STT), transcribing what you say into text and sending it to the AI or a local recognition engine. \nWhen invoked: when you press the record button for voice conversation or voice input. \nRequired: only needed for voice-input features. \nData flow: audio is processed locally only, or sent to your configured recognition engine (on-device sherpa-ncnn / native recognition / cloud STT); it is never silently recorded in the background. \nImpact after revocation: voice input becomes unavailable; text input and all text functions are unaffected. \n\n
+574	2. Audio file read (READ_MEDIA_AUDIO) \nPurpose: read audio files (e.g., recordings, music) for AI analysis or playback. \nRequired: No. \nImpact after revocation: cannot read audio files. \n\n
+575	3. Camera (CAMERA) \nPurpose: photo capture or QR code scanning. \nRequired: No. \nImpact after revocation: photo and QR-code scanning become unavailable.
+576	III. Storage and File Permissions
+577	1. Storage read (READ_EXTERNAL_STORAGE / READ_MEDIA_IMAGES / READ_MEDIA_VIDEO) \nPurpose: import and export of knowledge-base documents, file read/write, and local saving of AI-generated content (documents / images / code, etc.). \nWhen invoked: when you perform import, export, or save operations. \nRequired: needed for document and file-related features. \nData involved: only the files you explicitly select or operate on are accessed; the entire disk is never scanned or uploaded. \n\n
+578	2. All files access (MANAGE_EXTERNAL_STORAGE) \nPurpose: full file-system read/write (special permission on Android 11+). \nRequired: No (only needed for certain advanced features). \n\n
+579	3. Storage write (WRITE_EXTERNAL_STORAGE, Android 9 and below) \nPurpose: write to external storage files. \nRequired: only needed on lower-version devices. \n\n
+580	Impact after revocation: file-related features are limited; pure conversation features are unaffected.
+581	IV. Phone and SMS Permissions
+582	1. Phone state (READ_PHONE_STATE / READ_PHONE_NUMBERS) \nPurpose: obtain device information (e.g., SIM card state, network type) for network diagnostics. \nRequired: No. \n\n
+583	2. Call phone (CALL_PHONE) \nPurpose: AI call-out feature. \nRequired: No. \n\n
+584	3. SMS read and send (READ_SMS / SEND_SMS / RECEIVE_SMS) \nPurpose: SMS read, send, and receive features. \nRequired: No. \n\n
+585	4. MMS send and receive (RECEIVE_MMS / SEND_MMS) \nPurpose: MMS send and receive features. \nRequired: No. \n\n
+586	5. Call log (READ_CALL_LOG / WRITE_CALL_LOG) \nPurpose: read and write call logs. \nRequired: No. \n\n
+587	Impact after revocation: related phone, SMS, and call-log features become unavailable.
+588	V. Contacts and Calendar Permissions
+589	1. Contacts read (READ_CONTACTS) \nPurpose: read contact information for communication-related features. \nRequired: No. \n\n
+590	2. Contacts write (WRITE_CONTACTS) \nPurpose: write or delete contacts. \nRequired: No. \n\n
+591	3. Account access (GET_ACCOUNTS) \nPurpose: access the device account list. \nRequired: No. \n\n
+592	4. Calendar read (READ_CALENDAR) \nPurpose: read calendar events for schedule management. \nRequired: No. \n\n
+593	5. Calendar write (WRITE_CALENDAR) \nPurpose: write or delete calendar events. \nRequired: No. \n\n
+594	Impact after revocation: contacts and calendar related features become unavailable.
+595	VI. Location Permissions
+596	1. Precise location (ACCESS_FINE_LOCATION) \nPurpose: obtain precise location information for location-related features. \nRequired: No. \n\n
+597	2. Approximate location (ACCESS_COARSE_LOCATION) \nPurpose: obtain approximate location information. \nRequired: No. \n\n
+598	3. Background location (ACCESS_BACKGROUND_LOCATION) \nPurpose: continuously obtain location in the background. \nRequired: No. \n\n
+599	Impact after revocation: location-related features become unavailable.
+600	VII. Notification and Display Permissions
+601	1. Notifications (POST_NOTIFICATIONS) \nPurpose: provide a persistent notification-bar entry and voice-service keep-alive prompt, so you can quickly summon the voice ball from the notification bar. \nWhen invoked: requested on Android 13+ when a persistent notification is first needed. \nRequired: No. \nImpact after revocation: cannot summon the voice ball from the notification bar; core conversation features are unaffected. \n\n
+602	2. Full-screen intent (USE_FULL_SCREEN_INTENT) \nPurpose: send full-screen notifications (e.g., incoming-call reminders, important alerts). \nRequired: No. \n\n
+603	3. Notification policy access (ACCESS_NOTIFICATION_POLICY) \nPurpose: read/set Do-Not-Disturb status. \nRequired: No. \n\n
+604	4. System alert window (SYSTEM_ALERT_WINDOW) \nPurpose: display a persistent "floating voice ball" so you can summon voice conversation and quick actions at any time. \nWhen invoked: requested when you first enable the "floating voice ball" switch. \nRequired: No. \nData involved: only draws the interface overlay; it does not read any content of the covered interface. \nImpact after revocation: the floating voice ball becomes unavailable; chat, tools, digital human, and other functions are completely unaffected.
+605	VIII. System and Special Permissions
+606	1. Exact alarm (SCHEDULE_EXACT_ALARM) \nPurpose: the "set alarm / timed reminder" tool triggers timed tasks precisely. \nWhen invoked: requested when you use the timed-reminder or alarm tool (Android 12+ requires manual authorization in system settings). \nRequired: No. \nImpact after revocation: exact alarm becomes unavailable; system fuzzy alarm can serve as a fallback. \n\n
+607	2. Device admin (DeviceAdmin, optional) \nPurpose: provide advanced security capabilities such as "anti-uninstall / remote lock". \nRequired: No, not requested by default. \nImpact after revocation: related advanced security capabilities become unavailable; all basic functions are unaffected. \n\n
+608	3. Usage access (PACKAGE_USAGE_STATS) \nPurpose: obtain foreground app information for agent operations. \nRequired: No. \n\n
+609	4. Modify system settings (WRITE_SETTINGS) \nPurpose: modify system settings (e.g., brightness, volume). \nRequired: No. \n\n
+610	5. Wake lock (WAKE_LOCK) \nPurpose: keep the device awake. \nRequired: No. \n\n
+611	6. NFC (NFC) \nPurpose: NFC launch control. \nRequired: No. \n\n
+612	7. Battery optimization ignore (REQUEST_IGNORE_BATTERY_OPTIMIZATIONS) \nPurpose: prevent the system from killing background services. \nRequired: No. \n\n
+613	8. Boot completed (RECEIVE_BOOT_COMPLETED) \nPurpose: auto-start related services on boot. \nRequired: No.
+614	IX. Accessibility and Automation Permissions
+615	1. Accessibility service (AccessibilityService) \nPurpose: supports "agent operation" capabilities, such as auto form-filling, simulated tapping, cross-app operations, and reading interface controls to achieve automation. \nWhen invoked: when you first enable the "agent operation / automation" capability, by your active authorization. \nRequired: No. \nData involved: only while an agent task is actively triggered by you, reads the current interface's control information to complete automation; no persistent background collection. \nSecurity note: this permission is powerful; please enable it only in trusted scenarios and disable it at any time in system Settings → Accessibility. \nImpact after revocation: automation and cross-app operation capabilities become unavailable; other functions are unaffected. \n\n
+616	2. Autofill service (AutofillService) \nPurpose: provide AI-generated fill suggestions in other apps' input boxes. \nRequired: No. \n\n
+617	3. Notification listener service (NotificationListenerService) \nPurpose: read/clear notifications and trigger notification buttons. \nRequired: No. \n\n
+618	4. Input method service (InputMethod) \nPurpose: used as a system input method. \nRequired: No.
+619	X. Foreground Service Permissions
+620	1. Foreground service (FOREGROUND_SERVICE) \nPurpose: the voice ball and voice conversation keep running in the background to avoid being reclaimed by the system and causing conversation interruption. \nRequired: needed when using background voice capability. \n\n
+621	2. Microphone foreground service (FOREGROUND_SERVICE_MICROPHONE) \nPurpose: background voice recognition service. \n\n
+622	3. Data sync foreground service (FOREGROUND_SERVICE_DATA_SYNC) \nPurpose: background data sync service. \n\n
+623	4. Media playback foreground service (FOREGROUND_SERVICE_MEDIA_PLAYBACK) \nPurpose: background media playback service. \n\n
+624	5. Screen recording foreground service (FOREGROUND_SERVICE_MEDIA_PROJECTION) \nPurpose: screen recording service (must be explicitly declared on Android 14+). \n\n
+625	Impact after revocation: related background keep-alive capabilities are limited.
+626	XI. Package Visibility Permissions
+627	1. Query all packages (QUERY_ALL_PACKAGES) \nPurpose: query the installed app list for features such as "view package name" and "launch app". \nRequired: Yes. \n\n
+628	2. Query specific apps (queries) \nPurpose: query specific types of apps (e.g., TTS engines, ACI apps). \nRequired: Yes. \n\n
+629	Impact after revocation: cannot query installed apps; related features are limited.
+630	XII. Health Data Permissions
+631	1. Health data connection (Health Connect) \nPurpose: read and write health data (e.g., steps, heart rate, sleep, exercise). \nRequired: No. \n\n
+632	2. Activity recognition (ACTIVITY_RECOGNITION) \nPurpose: read step count and activity recognition (Android 10+ runtime dangerous permission). \nRequired: No. \n\n
+633	Impact after revocation: health-data related features become unavailable.
+634	XIII. ACI Protocol Permissions
+635	1. ACI call permission (ai.aci.permission.CALL) \nPurpose: the controller's capability to call third-party ACI apps. \nRequired: Yes (required for ACI features). \n\n
+636	2. ACI discovery permission (ai.aci.permission.DISCOVER) \nPurpose: discover third-party ACI apps. \nRequired: Yes (required for ACI features). \n\n
+637	3. Shizuku permission (moe.shizuku.manager.permission.API / API_V23) \nPurpose: ADB-level IPC communication via Shizuku. \nRequired: No (only needed for Shizuku features). \n\n
+638	Impact after revocation: ACI and Shizuku related features become unavailable.
+639	Our Commitment
+640	· We will not silently record, photograph, or screenshot in the background; \n· We will not upload your chat content to third parties unrelated to the app's functions; \n· We will not request permissions unrelated to the functions; \n· The purpose and timing of all permission requests are disclosed in this statement.
+641	Querying and Revoking Permissions
+642	You can view granted permissions at any time in system Settings → Apps → Zorv AI → Permissions, and revoke them one by one. After revoking a permission, only that feature is limited and the rest of the app remains usable; if a required permission is revoked and causes a malfunction, re-granting it restores normal operation.
+643	Welcome to Zorv AI (hereinafter "the App"). Before downloading, installing, or using this App, please read the following terms carefully. By using it, you agree to be bound; if you disagree, please do not use it.
+644	I. Service Description
+645	This App provides dialogue, speech synthesis and recognition, and tool-calling capabilities based on large language models. Models run on cloud service providers you configure yourself, or on the device's local on-device engine. This App is provided "as is" and is not responsible for the content or stability of third-party model providers. \nThis App is open-source software, and its source code is published under the Apache-2.0 license. It may contain experimental features that are unstable or subject to change at any time.
+646	II. Accounts, Credentials, and API Keys
+647	This App follows a local-first principle and usually requires no account registration. If you enter credentials such as an API Key, you are responsible for keeping them safe; they are stored only on this device and must not be disclosed to others. Losses caused by poor safekeeping are your responsibility. \nThis App will not actively collect or transmit your API Key to third-party servers. You should ensure that your API Key has legal usage rights and complies with the terms of the corresponding service provider.
+648	III. User Obligations and Prohibited Conduct
+649	You promise to use this App lawfully and must not engage in the following: \n· Violating national laws, regulations, or public order and good morals; \n· Infringing on others' intellectual property, privacy, reputation, or other lawful rights; \n· Generating or disseminating illegal or harmful information for fraud, harassment, manipulation, or other harmful purposes; \n· Creating or spreading computer viruses or malicious code for cyberattacks; \n· Abusing deep-synthesis technology to forge others' voices or likeness for fraud or infringement; \n· Circumventing or undermining the security measures of this App or third-party services; \n· Using this App to endanger national security, social stability, or public interest. \nYou bear all consequences arising from improper use.
+650	IV. Data and Privacy
+651	Conversation records, model configurations, and API Keys are stored on this device by default and are not uploaded automatically. When using a cloud model, conversation content is sent to the corresponding service provider. Diagnostic logs are written to the local "Downloads / QuroAI_logs" directory and are not actively transmitted externally. \nWe do not sell personal data; except for the cloud services you actively configure, we will not upload chat content to unrelated third parties. Uninstalling the app usually clears local data; manually exported files must be deleted by you. \nFor specific permissions and data access methods, see "Permission Usage Statement".
+652	V. Third-Party Services and Open-Source Components
+653	This App may integrate third-party models, open-source dependencies, and components (see "Open-Source License Statement"). When using related third-party services, you must also comply with their respective terms of service; this App is not responsible for issues caused by third-party services. \nThis App may contain links to third-party websites, provided for convenience only; we are not responsible for third-party content.
+654	VI. Intellectual Property
+655	This App's source code is open-sourced under the Apache-2.0 license; you may use, modify, and redistribute it in compliance with that license. The trademark rights of the "Zorv AI" name and brand identity are independent of the code license and may not be used without authorization to imply official endorsement or misleading commercial use. \nThe intellectual property of content you generate using this App is governed by applicable law and your input; this App does not claim ownership of generated content by providing generation services.
+656	VII. About AI-Generated Content
+657	AI-generated content is automatically produced by models and is for reference only; accuracy, completeness, timeliness, or suitability is not guaranteed, and it does not constitute professional advice (including but not limited to medical, legal, financial, and other fields). You should judge independently and bear the risk of use yourself. \nAI-generated content may contain bias, errors, or outdated information; please verify important information yourself. This App does not guarantee that AI-generated content does not infringe third-party rights; you should ensure that your use does not violate relevant laws and regulations.
+658	VIII. Legal Risk Disclosure
+659	Using this App may involve the following legal risks; please fully understand them: \n\n1. Legal risks of AI-generated content \nAI-generated content may involve intellectual property issues such as copyright, trademark, portrait rights, and privacy. Before using AI-generated content for commercial activities, public release, or dissemination, you should verify its legality yourself and confirm that it does not infringe third-party rights. You bear the infringement liability arising from the use of AI-generated content. \n\n2. Deep-synthesis technology risks \nThis App may involve deep-synthesis technologies such as voice synthesis and image generation. According to the "Administrative Provisions on Deep Synthesis of Internet Information Services", you must not use deep-synthesis services to create, copy, publish, or disseminate false news information, nor use them to infringe on others' portrait rights, reputation rights, privacy rights, or other lawful rights. Users should label deep-synthesis content to avoid public confusion. \n\n3. Automation operation risks \nThis App's agent operation and accessibility automation features can simulate user operations on other apps. You should ensure that the objects and content of automated operations are lawful and compliant, and must not use automation to perform unauthorized access, data theft, or system sabotage. \n\n4. Data security risks \nAlthough this App prioritizes local storage, data is transmitted over the network when using cloud models. You should understand the inherent risks of network transmission; sensitive data (such as trade secrets and personal privacy) is recommended to be processed with on-device models. \n\n5. Third-party service risks \nCloud model services that this App depends on may be interrupted or changed due to policy or technical reasons. You should assess the reliability of third-party services yourself; critical business should not rely entirely on a single service.
+660	IX. Legal Liability
+661	All behaviors and their consequences arising from your use of this App are your own legal responsibility, including but not limited to: \n· Legal disputes triggered by the content (Prompt) you input; \n· Decisions and actions you make based on AI-generated content; \n· Consequences of operating other apps through this App's automation features; \n· Intellectual property, consumer-rights, and other issues involved in using AI-generated content for commercial purposes.
+662	X. Illegal Use and Consequences
+663	The following constitute illegal or non-compliant use; once discovered, this App has the right to take restrictive measures immediately and reserves the right to cooperate with law-enforcement agencies in investigations: \n\n1. Using this App to commit fraud, extortion, defamation, or infringements on citizens' personal information; \n2. Using deep-synthesis features to forge others' identities, create false evidence, or commit identity impersonation; \n3. Using automation features to illegally obtain, tamper with, or delete others' data; \n4. Using this App to bypass network security measures, intrude into others' systems, or steal trade secrets; \n5. Using AI to generate large amounts of false information for dissemination, marketing fraud, or public-opinion manipulation; \n6. Violating the Cybersecurity Law, Data Security Law, Personal Information Protection Law, Interim Measures for the Management of Generative AI Services, and other laws and regulations. \n\nFor the above behaviors, this App will take the following measures as appropriate: \n· Restrict or terminate your access to part or all of the functions; \n· Retain relevant logs and evidence and cooperate with public security organs and network security authorities in investigations; \n· Pursue your civil compensation liability according to law; \n· If a crime is suspected, report it to judicial authorities according to law.
+664	XI. Minor Protection
+665	This App is primarily aimed at adult users. If you are a minor, please use it with the accompaniment and consent of a guardian, pay attention to protecting personal privacy, and do not disclose sensitive information such as your real name, address, or school to the AI. Guardians should supervise minors' usage behavior.
+666	XII. Violation Handling and Termination
+667	If you violate this Agreement or relevant laws and regulations, this App has the right to restrict or terminate your access to part or all of the functions. You may also stop using and uninstall this App at any time. This App reserves the right to modify or terminate the service when necessary, but will notify users in advance. This App bears no liability for any loss caused by your violation of this Agreement.
+668	XIII. Changes to the Agreement
+669	We may update this Agreement from time to time. After an update, it will be visible in "About Zorv AI"; continued use is deemed acceptance of the updated terms. Major changes are announced via in-app notifications. You have the right to stop using this App after the Agreement changes.
+670	XIV. Governing Law and Dispute Resolution
+671	The formation, validity, interpretation, and dispute resolution of this Agreement are governed by the laws of mainland China. Disputes arising from this Agreement shall first be resolved through friendly negotiation between the parties; if negotiation fails, either party may file a lawsuit with the people's court having jurisdiction over the location of the App's operator. \nIf any clause of this Agreement is found invalid or unenforceable, that clause shall be enforced to the maximum extent permitted by law, and the remaining clauses remain in effect.
+672	XV. Miscellaneous
+673	This Agreement constitutes the entire agreement between the parties regarding the use of this App and supersedes all prior oral or written agreements. Any modification or waiver of this Agreement must be in writing. This App's failure to exercise or delay in exercising any right does not constitute a waiver of that right.
+674	XVI. Contact Us
+675	If you have questions about this Agreement or privacy matters, contact us via the repository Issues in "About Zorv AI → Project Address".
+676	Echo text
+677	Content to echo
+678	Echo result
+679	You sent: ${'$'}text
+680	Unknown capability: ${'$'}capability
+681	Request missing ACI Token, caller: ${'$'}callerPkg
+682	ACI Token format invalid, caller: ${'$'}callerPkg
+683	ACI Token verified, caller: ${'$'}callerPkg
+684	Dangerous operation example
+685	Whether execution succeeded
+686	Requires user confirmation
+687	My console
+688	Backend-driven rendering · no release required
+689	<original action>
+690	<readable result>
+691	My App console
+692	Execute operation
+693	Name
+694	Input
+695	Executed
+696	Hello, 
+697	Unknown action
+701	Failed to open console (error code=${resp.errorCode}): ${resp.errorMessage}
+705	Add ACI app
+709	Registered and started: $pkg
+710	ACI service for $pkg not found
+712	Started: ${app.appName}
+713	Start failed: ${app.packageName}
+715	Registered and started: ${app.appName}
+717	No matching app found. Verify the name/package name, or use "Register and start by package name".
+718	Discovered ACI apps
+720	Apps: ${statuses.size} (bound $boundCount / unbound ${statuses.size - boundCount})
+721	Total capabilities: $totalCaps
+722	(unbound)
+723	• ${s.appName}: ${s.capabilities.size} items$suffix

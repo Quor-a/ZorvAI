@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -88,20 +91,20 @@ fun QuroGitHubScreen(onClose: () -> Unit, initialQuery: String = "") {
     }
 
     var tab by remember { mutableStateOf(if (initialQuery.isNotBlank()) 4 else 0) }
-    val tabs = listOf("概览", "仓库", "Issue", "通知", "搜索")
+    val tabs = listOf(stringResource(R.string.qk_01943), stringResource(R.string.qk_01944), "Issue", stringResource(R.string.qk_01945), stringResource(R.string.qk_00002))
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("GitHub") },
                 navigationIcon = {
-                    IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, "返回") }
+                    IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_00143)) }
                 },
                 actions = {
                     IconButton(onClick = {
                         QuroGitHubClient.logout(ctx)
                         loggedIn = false
-                    }) { Icon(Icons.Filled.Logout, "退出登录") }
+                    }) { Icon(Icons.Filled.Logout, stringResource(R.string.qk_01946)) }
                 },
             )
         },
@@ -154,14 +157,13 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("登录 GitHub", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text(
-            "用你的 GitHub 账号授权本应用。两种方式都会真实登录官方 GitHub。",
+        Text(stringResource(R.string.qk_01947), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.qk_01948),
             style = MaterialTheme.typography.bodySmall,
         )
 
         // GitHub 镜像：设备无法直连 github.com（SocketTimeout）时，切到镜像域名即可连通。
-        Text("GitHub 镜像（无法连接官方时切换）", style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.qk_01949), style = MaterialTheme.typography.bodyMedium)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = mirror,
@@ -169,18 +171,18 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
                     mirror = it.trim().lowercase()
                     QuroGitHubClient.setMirrorDomain(ctx, mirror)
                 },
-                label = { Text("镜像域名") },
+                label = { Text(stringResource(R.string.qk_01950)) },
                 placeholder = { Text("github.com") },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { mirrorExpanded = true }) {
-                Icon(Icons.Filled.ArrowDropDown, "选择镜像")
+                Icon(Icons.Filled.ArrowDropDown, stringResource(R.string.qk_01951))
             }
             DropdownMenu(expanded = mirrorExpanded, onDismissRequest = { mirrorExpanded = false }) {
                 mirrorPresets.forEach { p ->
                     DropdownMenuItem(
-                        text = { Text(if (p == "github.com") "官方 github.com" else p) },
+                        text = { Text(if (p == "github.com") qstr(R.string.qk_01952) else p) },
                         onClick = {
                             mirror = p
                             QuroGitHubClient.setMirrorDomain(ctx, p)
@@ -200,27 +202,26 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
                         val (ok, ms) = withContext(Dispatchers.IO) { QuroGitHubClient.probeMirror(mirror) }
                         mirrorTesting = false
                         mirrorStatus = if (ok) "✅ 镜像可达（约 ${ms ?: "?"} ms），可登录"
-                        else "❌ 无法连接该镜像（证书过期 / 超时 / 被墙）。换一个，或连能访问 GitHub 的网络"
+                        else qstr(R.string.qk_01955)
                     }
                 },
                 modifier = Modifier.weight(1f), enabled = !mirrorTesting,
-            ) { Text(if (mirrorTesting) "测试中…" else "测试镜像连通性") }
+            ) { Text(if (mirrorTesting) stringResource(R.string.qk_01956) else stringResource(R.string.qk_01957)) }
         }
         mirrorStatus?.let {
             Text(it, color = if (it.startsWith("✅")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall)
         }
         if (mirror != "github.com") {
-            Text(
-                "提示：当前网络若连不上 GitHub 官方，设备流/PAT 都可能失败。先在能访问 GitHub 的网络下用 PAT 登录最稳妥。",
+            Text(stringResource(R.string.qk_01958),
                 style = MaterialTheme.typography.bodySmall,
             )
         }
 
         when (mode) {
             "menu" -> {
-                Button(onClick = { mode = "pat" }, modifier = Modifier.fillMaxWidth()) { Text("用 Personal Access Token 登录") }
-                Button(onClick = { mode = "device" }, modifier = Modifier.fillMaxWidth()) { Text("用 OAuth 设备流登录") }
+                Button(onClick = { mode = "pat" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.qk_01959)) }
+                Button(onClick = { mode = "device" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.qk_01960)) }
             }
             "pat" -> {
                 OutlinedTextField(
@@ -231,30 +232,30 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
                 )
                 Button(
                     onClick = {
-                        if (pat.isBlank()) { errorMsg = "请先粘贴 Token"; return@Button }
+                        if (pat.isBlank()) { errorMsg = qstr(R.string.qk_01961); return@Button }
                         errorMsg = null; busy = true
                         scope.launch {
                             val acc = withContext(Dispatchers.IO) { QuroGitHubClient.loginWithToken(ctx, pat) }
                             busy = false
-                            if (acc != null) onLoggedIn() else errorMsg = "令牌无效或网络异常，请检查后重试"
+                            if (acc != null) onLoggedIn() else errorMsg = qstr(R.string.qk_01962)
                         }
                     },
                     modifier = Modifier.fillMaxWidth(), enabled = !busy,
-                ) { Text(if (busy) "登录中…" else "登录") }
-                Button(onClick = { mode = "menu"; pat = "" }, modifier = Modifier.fillMaxWidth()) { Text("返回") }
+                ) { Text(if (busy) stringResource(R.string.qk_01963) else stringResource(R.string.qk_01964)) }
+                Button(onClick = { mode = "menu"; pat = "" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.qk_00143)) }
             }
             "device" -> {
                 if (dev == null) {
                     OutlinedTextField(
                         value = clientId, onValueChange = { clientId = it },
                         label = { Text("OAuth App Client ID") },
-                        placeholder = { Text("github.com/settings/developers 注册的 Client ID") },
+                        placeholder = { Text(stringResource(R.string.qk_01965)) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     Button(
                         onClick = {
                             val cid = clientId.trim()
-                            if (cid.isBlank()) { errorMsg = "请填写 Client ID"; return@Button }
+                            if (cid.isBlank()) { errorMsg = qstr(R.string.qk_01966); return@Button }
                             errorMsg = null; busy = true
                             scope.launch {
                                 val d = withContext(Dispatchers.IO) {
@@ -262,19 +263,18 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
                                     QuroGitHubClient.startDeviceFlow(ctx, cid)
                                 }
                                 busy = false
-                                if (d == null) errorMsg = "发起设备流失败（Client ID 无效或未联网）" else dev = d
+                                if (d == null) errorMsg = qstr(R.string.qk_01967) else dev = d
                             }
                         },
                         modifier = Modifier.fillMaxWidth(), enabled = !busy,
-                    ) { Text(if (busy) "发起中…" else "发起授权") }
-                    Text(
-                        "没有 Client ID？在 github.com/settings/developers → New OAuth App 创建一个（无需填回调地址），把 Client ID 粘上来即可。",
+                    ) { Text(if (busy) stringResource(R.string.qk_01968) else stringResource(R.string.qk_01969)) }
+                    Text(stringResource(R.string.qk_01970),
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    Button(onClick = { mode = "menu" }, modifier = Modifier.fillMaxWidth()) { Text("返回") }
+                    Button(onClick = { mode = "menu" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.qk_00143)) }
                 } else {
                     val d = dev!!
-                    Text("请在浏览器打开以下地址并输入验证码：", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.qk_01971), style = MaterialTheme.typography.bodyMedium)
                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                         Column(Modifier.fillMaxWidth().padding(12.dp)) {
                             Text(
@@ -282,7 +282,7 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
                                 fontWeight = FontWeight.Bold,
                             )
                             Spacer(Modifier.height(8.dp))
-                            Text("你的验证码：${d.userCode}", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                            Text(stringResource(R.string.qk_01972, (d.userCode).toString()), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                     LaunchedEffect(d) {
@@ -293,14 +293,14 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
                         when (res) {
                             is QuroGitHubClient.DeviceLoginResult.Token -> {
                                 if (QuroGitHubClient.login(ctx, res.value)) onLoggedIn()
-                                else errorMsg = "登录失败：令牌保存异常"
+                                else errorMsg = qstr(R.string.qk_01973)
                             }
                             is QuroGitHubClient.DeviceLoginResult.Error -> errorMsg = res.message
                             QuroGitHubClient.DeviceLoginResult.Cancelled -> {}
                         }
                     }
                     errorMsg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                    Button(onClick = { cancelled = true; dev = null; errorMsg = null }, modifier = Modifier.fillMaxWidth()) { Text("取消") }
+                    Button(onClick = { cancelled = true; dev = null; errorMsg = null }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.qk_00011)) }
                 }
             }
         }
@@ -308,7 +308,7 @@ private fun GitHubLoginScreen(onLoggedIn: () -> Unit, onClose: () -> Unit) {
         errorMsg?.let { if (mode != "device" || dev == null) Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         if (mode != "device" || dev == null) {
             Spacer(Modifier.height(8.dp))
-            Button(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("关闭") }
+            Button(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.qk_00065)) }
         }
     }
 }
@@ -341,7 +341,7 @@ private fun GitHubOverviewTab(ctx: Context, scope: kotlinx.coroutines.CoroutineS
         state = LoadState.Loading
         scope.launch {
             val acc = withContext(Dispatchers.IO) { QuroGitHubClient.getAccount(ctx) }
-            if (acc == null) state = LoadState.Error("获取账户失败（Token 无效或网络异常）")
+            if (acc == null) state = LoadState.Error(qstr(R.string.qk_01974))
             else { account = acc; state = LoadState.Idle }
         }
     }
@@ -353,7 +353,7 @@ private fun GitHubOverviewTab(ctx: Context, scope: kotlinx.coroutines.CoroutineS
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text((state as LoadState.Error).msg, color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { load() }) { Text("重试") }
+                Button(onClick = { load() }) { Text(stringResource(R.string.qk_00092)) }
             }
         }
         account != null -> {
@@ -364,12 +364,12 @@ private fun GitHubOverviewTab(ctx: Context, scope: kotlinx.coroutines.CoroutineS
                 if (a.bio.isNotBlank()) { Spacer(Modifier.height(4.dp)); Text(a.bio) }
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("仓库 ${a.publicRepos}")
-                    Text("关注者 ${a.followers}")
-                    Text("关注中 ${a.following}")
+                    Text(stringResource(R.string.qk_01975, (a.publicRepos).toString()))
+                    Text(stringResource(R.string.qk_01976, (a.followers).toString()))
+                    Text(stringResource(R.string.qk_01977, (a.following).toString()))
                 }
                 Spacer(Modifier.height(12.dp))
-                Button(onClick = { openUrl(ctx, a.htmlUrl) }) { Text("在浏览器打开主页") }
+                Button(onClick = { openUrl(ctx, a.htmlUrl) }) { Text(stringResource(R.string.qk_01978)) }
             }
         }
     }
@@ -384,7 +384,7 @@ private fun GitHubReposTab(ctx: Context, scope: kotlinx.coroutines.CoroutineScop
         state = LoadState.Loading
         scope.launch {
             val list = withContext(Dispatchers.IO) { QuroGitHubClient.listRepos(ctx) }
-            if (list.isEmpty()) state = LoadState.Error("没有仓库或获取失败")
+            if (list.isEmpty()) state = LoadState.Error(qstr(R.string.qk_01979))
             else { repos = list; state = LoadState.Idle }
         }
     }
@@ -399,7 +399,7 @@ private fun GitHubReposTab(ctx: Context, scope: kotlinx.coroutines.CoroutineScop
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text((state as LoadState.Error).msg, color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { load() }) { Text("重试") }
+                Button(onClick = { load() }) { Text(stringResource(R.string.qk_00092)) }
             }
         }
         return
@@ -431,7 +431,7 @@ private fun RepoCard(ctx: Context, scope: kotlinx.coroutines.CoroutineScope, rep
                 Row {
                     if (repo.language.isNotBlank()) Text("${repo.language}  ", style = MaterialTheme.typography.bodySmall)
                     Text("★${repo.stars}  ", style = MaterialTheme.typography.bodySmall)
-                    Text("更新 ${repo.updatedAt}", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.qk_01980, (repo.updatedAt).toString()), style = MaterialTheme.typography.bodySmall)
                 }
             }
             IconButton(onClick = {
@@ -444,7 +444,7 @@ private fun RepoCard(ctx: Context, scope: kotlinx.coroutines.CoroutineScope, rep
                 }
             }) {
                 when (starred) {
-                    true -> Icon(Icons.Filled.Star, "取消 Star", tint = MaterialTheme.colorScheme.primary)
+                    true -> Icon(Icons.Filled.Star, stringResource(R.string.qk_01981), tint = MaterialTheme.colorScheme.primary)
                     false -> Icon(Icons.Filled.StarBorder, "Star")
                     null -> CircularProgressIndicator()
                 }
@@ -462,7 +462,7 @@ private fun GitHubIssuesTab(ctx: Context, scope: kotlinx.coroutines.CoroutineSco
         state = LoadState.Loading
         scope.launch {
             val list = withContext(Dispatchers.IO) { QuroGitHubClient.listMyIssues(ctx) }
-            if (list.isEmpty()) state = LoadState.Error("没有 Issue 或获取失败")
+            if (list.isEmpty()) state = LoadState.Error(qstr(R.string.qk_01982))
             else { issues = list; state = LoadState.Idle }
         }
     }
@@ -477,7 +477,7 @@ private fun GitHubIssuesTab(ctx: Context, scope: kotlinx.coroutines.CoroutineSco
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text((state as LoadState.Error).msg, color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { load() }) { Text("重试") }
+                Button(onClick = { load() }) { Text(stringResource(R.string.qk_00092)) }
             }
         }
         return
@@ -504,7 +504,7 @@ private fun GitHubNotificationsTab(ctx: Context, scope: kotlinx.coroutines.Corou
         state = LoadState.Loading
         scope.launch {
             val list = withContext(Dispatchers.IO) { QuroGitHubClient.listNotifications(ctx) }
-            if (list.isEmpty()) state = LoadState.Error("没有通知或获取失败")
+            if (list.isEmpty()) state = LoadState.Error(qstr(R.string.qk_01983))
             else { notes = list; state = LoadState.Idle }
         }
     }
@@ -519,7 +519,7 @@ private fun GitHubNotificationsTab(ctx: Context, scope: kotlinx.coroutines.Corou
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text((state as LoadState.Error).msg, color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { load() }) { Text("重试") }
+                Button(onClick = { load() }) { Text(stringResource(R.string.qk_00092)) }
             }
         }
         return
@@ -558,10 +558,10 @@ private fun GitHubSearchTab(ctx: Context, scope: kotlinx.coroutines.CoroutineSco
         scope.launch {
             results = withContext(Dispatchers.IO) {
                 when (type) {
-                    "code" -> QuroGitHubClient.searchCode(ctx, query).joinToString("\n") { "• ${it.repo}/${it.path}\n  ${it.htmlUrl}" }.ifBlank { "无结果" }
-                    "issues" -> QuroGitHubClient.searchIssues(ctx, query).joinToString("\n") { "• [${it.state}] ${it.repo}#${it.number} ${it.title}\n  ${it.htmlUrl}" }.ifBlank { "无结果" }
-                    "users" -> QuroGitHubClient.searchUsers(ctx, query).joinToString("\n") { "• ${it.login} (${it.type}) ★${it.followers}\n  ${it.htmlUrl}" }.ifBlank { "无结果" }
-                    else -> QuroGitHubClient.searchRepositories(ctx, query).joinToString("\n") { "• ${it.fullName} ★${it.stars}${if (it.language.isNotBlank()) " · ${it.language}" else ""}\n  ${it.htmlUrl}" }.ifBlank { "无结果" }
+                    "code" -> QuroGitHubClient.searchCode(ctx, query).joinToString("\n") { "• ${it.repo}/${it.path}\n  ${it.htmlUrl}" }.ifBlank { qstr(R.string.qk_01984) }
+                    "issues" -> QuroGitHubClient.searchIssues(ctx, query).joinToString("\n") { "• [${it.state}] ${it.repo}#${it.number} ${it.title}\n  ${it.htmlUrl}" }.ifBlank { qstr(R.string.qk_01984) }
+                    "users" -> QuroGitHubClient.searchUsers(ctx, query).joinToString("\n") { "• ${it.login} (${it.type}) ★${it.followers}\n  ${it.htmlUrl}" }.ifBlank { qstr(R.string.qk_01984) }
+                    else -> QuroGitHubClient.searchRepositories(ctx, query).joinToString("\n") { "• ${it.fullName} ★${it.stars}${if (it.language.isNotBlank()) " · ${it.language}" else ""}\n  ${it.htmlUrl}" }.ifBlank { qstr(R.string.qk_01984) }
                 }
             }
             loading = false
@@ -577,10 +577,10 @@ private fun GitHubSearchTab(ctx: Context, scope: kotlinx.coroutines.CoroutineSco
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text("搜索 GitHub") },
+            label = { Text(qstr(R.string.qk_01985)) },
             modifier = Modifier.fillMaxWidth(),
             trailingIcon = {
-                IconButton(onClick = { doSearch() }) { Icon(Icons.Filled.Search, "搜索") }
+                IconButton(onClick = { doSearch() }) { Icon(Icons.Filled.Search, stringResource(R.string.qk_00002)) }
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { doSearch() }),
@@ -594,10 +594,10 @@ private fun GitHubSearchTab(ctx: Context, scope: kotlinx.coroutines.CoroutineSco
                 },
                     modifier = Modifier.weight(1f)) {
                     Text(when (t) {
-                        "repositories" -> "仓库"
-                        "code" -> "代码"
+                        "repositories" -> qstr(R.string.qk_01944)
+                        "code" -> qstr(R.string.qk_00148)
                         "issues" -> "Issue"
-                        else -> "用户"
+                        else -> qstr(R.string.qk_01986)
                     }, maxLines = 1)
                 }
             }
@@ -611,7 +611,7 @@ private fun GitHubSearchTab(ctx: Context, scope: kotlinx.coroutines.CoroutineSco
             }
         } else {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("输入关键词后点搜索（仓库 / 代码 / Issue / 用户）")
+                Text(stringResource(R.string.qk_01987))
             }
         }
     }

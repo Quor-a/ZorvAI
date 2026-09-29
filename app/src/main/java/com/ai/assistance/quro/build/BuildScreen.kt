@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.build
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ClipboardManager
 import android.content.ClipData
@@ -107,16 +110,16 @@ fun BuildApp(vm: ProjectViewModel = viewModel(), onClose: (() -> Unit)? = null) 
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Zorv 构建台", fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    title = { Text(stringResource(R.string.qk_03619), fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
                         Row {
                             if (onClose != null) {
                                 IconButton(onClick = onClose) {
-                                    Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.qk_00143))
                                 }
                             }
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(Icons.Default.Menu, contentDescription = "文件树")
+                                Icon(Icons.Default.Menu, contentDescription = stringResource(R.string.qk_03173))
                             }
                         }
                     },
@@ -125,31 +128,31 @@ fun BuildApp(vm: ProjectViewModel = viewModel(), onClose: (() -> Unit)? = null) 
                             onClick = { vm.buildProject() },
                             enabled = !vm.isBuilding
                         ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = "编译工程")
+                            Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.qk_03662))
                         }
                         IconButton(
                             onClick = { vm.buildApk() },
                             enabled = !vm.isBuilding && vm.dexPath != null
                         ) {
-                            Icon(Icons.Default.Android, contentDescription = "构建 APK")
+                            Icon(Icons.Default.Android, contentDescription = stringResource(R.string.qk_03507))
                         }
                         var menuOpen by remember { mutableStateOf(false) }
                         IconButton(onClick = { menuOpen = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.qk_00404))
                         }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                             DropdownMenuItem(
-                                text = { Text("工程设置") },
+                                text = { Text(stringResource(R.string.qk_03425)) },
                                 enabled = !vm.isBuilding,
                                 onClick = { menuOpen = false; showSettings = true }
                             )
                             DropdownMenuItem(
-                                text = { Text("工具链") },
+                                text = { Text(stringResource(R.string.qk_03717)) },
                                 enabled = !vm.isBuilding,
                                 onClick = { menuOpen = false; showTools = true }
                             )
                             DropdownMenuItem(
-                                text = { Text("导出产物") },
+                                text = { Text(stringResource(R.string.qk_03616)) },
                                 enabled = vm.dexPath != null,
                                 onClick = {
                                     menuOpen = false
@@ -165,10 +168,10 @@ fun BuildApp(vm: ProjectViewModel = viewModel(), onClose: (() -> Unit)? = null) 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SmallFloatingActionButton(
                         onClick = { showNewDialog = NewDialogState("", true) }
-                    ) { Icon(Icons.Default.Add, contentDescription = "新建文件") }
+                    ) { Icon(Icons.Default.Add, contentDescription = stringResource(R.string.qk_01057)) }
                     SmallFloatingActionButton(
                         onClick = { showNewDialog = NewDialogState("", false) }
-                    ) { Icon(Icons.Default.CreateNewFolder, contentDescription = "新建目录") }
+                    ) { Icon(Icons.Default.CreateNewFolder, contentDescription = stringResource(R.string.qk_03421)) }
                 }
             }
         ) { padding ->
@@ -179,8 +182,7 @@ fun BuildApp(vm: ProjectViewModel = viewModel(), onClose: (() -> Unit)? = null) 
                     .padding(horizontal = 12.dp)
             ) {
                 // 副标题（从 TopAppBar 移出，避免标题被挤竖排）
-                Text(
-                    "Java 工程 → DEX → APK",
+                Text(stringResource(R.string.qk_03694),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)
@@ -200,7 +202,7 @@ fun BuildApp(vm: ProjectViewModel = viewModel(), onClose: (() -> Unit)? = null) 
                         .fillMaxWidth()
                         .weight(1f),
                     textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
-                    placeholder = { Text("在左侧文件树选择或新建文件开始编写代码…") }
+                    placeholder = { Text(stringResource(R.string.qk_03489)) }
                 )
                 Spacer(Modifier.height(8.dp))
                 // 日志
@@ -208,8 +210,7 @@ fun BuildApp(vm: ProjectViewModel = viewModel(), onClose: (() -> Unit)? = null) 
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        "编译日志",
+                    Text(stringResource(R.string.qk_03504),
                         fontSize = 14.sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                         modifier = Modifier.weight(1f)
@@ -218,10 +219,10 @@ fun BuildApp(vm: ProjectViewModel = viewModel(), onClose: (() -> Unit)? = null) 
                         onClick = {
                             val cm = context.getSystemService(ClipboardManager::class.java)
                             cm.setPrimaryClip(ClipData.newPlainText("build_log", vm.log))
-                            Toast.makeText(context, "日志已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, qstr(R.string.qk_01742), Toast.LENGTH_SHORT).show()
                         }
                     ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "复制日志")
+                        Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.qk_03725))
                     }
                 }
                 Surface(
@@ -273,15 +274,15 @@ fun BuildApp(vm: ProjectViewModel = viewModel(), onClose: (() -> Unit)? = null) 
     fileToDelete?.let { file ->
         AlertDialog(
             onDismissRequest = { fileToDelete = null },
-            title = { Text("确认删除") },
-            text = { Text("确定删除「${file.name}" + (if (file.isDirectory) "」及其全部内容？" else "」？")) },
+            title = { Text(qstr(R.string.qk_03578)) },
+            text = { Text("确定删除「${file.name}" + (if (file.isDirectory) qstr(R.string.qk_03714) else "」？")) },
             confirmButton = {
                 TextButton(onClick = { vm.delete(file); fileToDelete = null }) {
-                    Text("删除")
+                    Text(qstr(R.string.qk_00091))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { fileToDelete = null }) { Text("取消") }
+                TextButton(onClick = { fileToDelete = null }) { Text(qstr(R.string.qk_00011)) }
             }
         )
     }
@@ -330,8 +331,7 @@ private fun FileTreeDrawer(
     onDelete: (ProjectFile) -> Unit
 ) {
     Column(Modifier.fillMaxHeight().widthIn(min = 240.dp, max = 320.dp)) {
-        Text(
-            "工程文件",
+        Text(stringResource(R.string.qk_03596),
             fontSize = 18.sp,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
             modifier = Modifier.padding(16.dp)
@@ -424,18 +424,18 @@ private fun FileTreeItem(
             if (file.isDirectory) {
                 Row {
                     IconButton(onClick = onAddFile, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Add, contentDescription = "新建文件", modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.qk_01057), modifier = Modifier.size(18.dp))
                     }
                     IconButton(onClick = onAddFolder, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.CreateNewFolder, contentDescription = "新建目录", modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.CreateNewFolder, contentDescription = stringResource(R.string.qk_03421), modifier = Modifier.size(18.dp))
                     }
                 }
             } else {
                 IconButton(onClick = onRename, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Edit, contentDescription = "重命名", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.qk_00837), modifier = Modifier.size(18.dp))
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Delete, contentDescription = "删除", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.qk_00091), modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -458,7 +458,7 @@ private fun NewItemDialog(
     onDismiss: () -> Unit
 ) {
     var name by rememberSaveable { mutableStateOf("") }
-    val title = if (isFile) "新建文件" else "新建目录"
+    val title = if (isFile) stringResource(R.string.qk_01057) else stringResource(R.string.qk_03421)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -471,7 +471,7 @@ private fun NewItemDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text(if (isFile) "文件名（如 Main.java）" else "目录名") },
+                    label = { Text(if (isFile) stringResource(R.string.qk_03470) else stringResource(R.string.qk_03441)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
                 )
@@ -479,10 +479,10 @@ private fun NewItemDialog(
         },
         confirmButton = {
             TextButton(onClick = { if (name.isNotBlank()) onConfirm(name) }, enabled = name.isNotBlank()) {
-                Text("确定")
+                Text(stringResource(R.string.qk_02020))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } }
     )
 }
 
@@ -495,22 +495,22 @@ private fun RenameDialog(
     var name by rememberSaveable { mutableStateOf(currentName) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("重命名") },
+        title = { Text(stringResource(R.string.qk_00837)) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("新名称") },
+                label = { Text(stringResource(R.string.qk_02740)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
             )
         },
         confirmButton = {
             TextButton(onClick = { if (name.isNotBlank()) onConfirm(name) }, enabled = name.isNotBlank()) {
-                Text("确定")
+                Text(qstr(R.string.qk_02020))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } }
     )
 }
 
@@ -522,11 +522,11 @@ private fun ToolStatusDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("工具链状态") },
+        title = { Text(stringResource(R.string.qk_03518)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 if (tools.isEmpty()) {
-                    Text("尚未检测，点击刷新。")
+                    Text(stringResource(R.string.qk_03500))
                 } else {
                     tools.forEach { t ->
                         Row(
@@ -559,10 +559,10 @@ private fun ToolStatusDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onRefresh) { Text("刷新") }
+            TextButton(onClick = onRefresh) { Text(stringResource(R.string.qk_00459)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00065)) }
         }
     )
 }
@@ -610,8 +610,8 @@ private fun ProjectSettingsSheet(
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("工程设置", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "关闭") }
+            Text(stringResource(R.string.qk_03425), fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = stringResource(R.string.qk_00065)) }
         }
         Spacer(Modifier.height(8.dp))
         HorizontalDivider()
@@ -620,8 +620,7 @@ private fun ProjectSettingsSheet(
         LabeledField("包名（applicationId）", cfg.packageName) { vm.setPackageName(it) }
         LabeledField("应用名（桌面显示）", cfg.appLabel) { vm.setAppLabel(it) }
         LabeledField("版本名", cfg.versionName) { vm.setVersionName(it) }
-        Text(
-            "每个工程用不同包名，安装时才不会互相冲突（覆盖安装还需同签名）。",
+        Text(stringResource(R.string.qk_03699),
             fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
@@ -644,11 +643,10 @@ private fun ProjectSettingsSheet(
             Button(onClick = onPickIcon) {
                 Icon(Icons.Default.Image, contentDescription = null)
                 Spacer(Modifier.width(4.dp))
-                Text("导入图标 PNG")
+                Text(stringResource(R.string.qk_03516))
             }
         }
-        Text(
-            "默认使用内置占位图标；导入后该 PNG 会替换 APK 桌面图标。",
+        Text(stringResource(R.string.qk_03461),
             fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
@@ -657,7 +655,7 @@ private fun ProjectSettingsSheet(
 
         SectionTitle("签名")
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("使用自定义签名", Modifier.weight(1f))
+            Text(stringResource(R.string.qk_03639), Modifier.weight(1f))
             Switch(checked = cfg.signing.useCustom, onCheckedChange = { vm.setUseCustomSigning(it) })
         }
         if (cfg.signing.useCustom) {
@@ -668,26 +666,24 @@ private fun ProjectSettingsSheet(
                 Button(onClick = { onGenerateKeystore(cfg.signing.alias, cfg.signing.storePassword, cfg.signing.keyPassword) }) {
                     Icon(Icons.Default.VpnKey, contentDescription = null)
                     Spacer(Modifier.width(4.dp))
-                    Text("生成新签名")
+                    Text(stringResource(R.string.qk_03664))
                 }
                 Button(onClick = { onPickKeystore(cfg.signing.alias, cfg.signing.storePassword, cfg.signing.keyPassword) }) {
                     Icon(Icons.Default.Upload, contentDescription = null)
                     Spacer(Modifier.width(4.dp))
-                    Text("导入 keystore")
+                    Text(stringResource(R.string.qk_03537))
                 }
             }
             if (!cfg.signing.keystorePath.isNullOrBlank()) {
                 Text("当前 keystore：${cfg.signing.keystorePath}", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
             } else {
-                Text("尚未选择 keystore（生成或导入后生效）。", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.qk_03617), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(
-                "生成依赖设备 BouncyCastle，部分机型可能不可用；若失败请用「导入 keystore」（用 keytool 在电脑生成后导入）。",
+            Text(stringResource(R.string.qk_03614),
                 fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
-            Text(
-                "当前使用内置 debug.keystore（android/android/androiddebugkey）。",
+            Text(stringResource(R.string.qk_03646),
                 fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -699,11 +695,10 @@ private fun ProjectSettingsSheet(
         Button(onClick = onPickFile) {
             Icon(Icons.Default.FileOpen, contentDescription = null)
             Spacer(Modifier.width(4.dp))
-            Text("导入文件")
+            Text(stringResource(R.string.qk_03637))
         }
         Text(
-            "· .java / .kt → 按源码 package 落位到 src/，参与编译；\n" +
-                "· 其它文件 → 放入 assets/，打包进 APK 的 assets/（代码经 AssetManager 读取）。",
+            "· .java / .kt → 按源码 package 落位到 src/，参与编译；\n" + stringResource(R.string.qk_03566),
             fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }

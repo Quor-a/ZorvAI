@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.util.Log
@@ -167,7 +169,7 @@ visual_custom_popup({
         if (html.isBlank()) return "visual_custom_popup 需要 html（HTML内容）"
 
         val cardTitle = args.optString("card_title", "").trim().ifBlank { title }
-        val cardDescription = args.optString("card_description", "").trim().ifBlank { "点击查看详情" }
+        val cardDescription = args.optString("card_description", "").trim().ifBlank { qstr(R.string.qk_00097) }
         val width = if (args.has("width")) args.optInt("width") else null
         val height = if (args.has("height")) args.optInt("height") else null
         val cancelable = args.optBoolean("cancelable", true)

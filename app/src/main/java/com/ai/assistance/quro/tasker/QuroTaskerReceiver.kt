@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.tasker
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -47,7 +49,7 @@ class QuroTaskerReceiver : BroadcastReceiver() {
                 context.sendBroadcast(Intent(ACTION_PROMPT).apply { putExtra("prompt", prompt) })
                 toast(context, "Tasker 收到指令：$prompt（已转交对话）")
             }
-            else -> toast(context, "Tasker 触发缺少 workflow / workflow_id / prompt")
+            else -> toast(context, qstr(R.string.qk_03669))
         }
     }
 

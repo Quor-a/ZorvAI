@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import androidx.compose.runtime.snapshots.Snapshot
@@ -22,7 +24,7 @@ import org.json.JSONObject
  */
 class UiCardTool : QuroTool {
     override val name = "ui_card"
-    override val description = "在对话框内渲染一张可交互富卡片（可视化组件；注意：用户说「小卡片」指的是 ```quro-card 围栏，不是本工具）。" +
+    override val description = qstr(R.string.qk_03603) +
         "用于把结构化结果以可视化、可操作的方式呈现给用户，而非纯文本。参数 spec 为 JSON 字符串。" +
         "kind 取值：todo（items:[{text,done}]）、chart（chart_type:bar|line, series:[{label,value}]）、" +
         "note（body, lang 可选）、actions（actions:[{label,command}]）。" +

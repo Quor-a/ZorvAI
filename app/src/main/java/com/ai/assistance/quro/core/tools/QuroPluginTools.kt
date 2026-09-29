@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.plugin.PluginSigning
@@ -49,7 +51,7 @@ class ApkPluginTool : QuroTool {
     override val name = "apk_plugin"
 
     override val description =
-        "APK 级插件框架总控（ZorvAI 的插件系统只有一个入口，就是这个工具）。" +
+        qstr(R.string.qk_03493) +
             "插件是独立 APK，宿主用 DexClassLoader 装进来，插件注册「扩展点」给 AI 加能力（AI 工具 / ACI 能力 / 斜杠指令 / 插件界面等），宿主不用改代码。" +
             "动作用 action 指定：" +
             "status=看框架状态；" +
@@ -272,9 +274,9 @@ class ApkPluginTool : QuroTool {
                 target = signed
                 // 用「实际签成功的那个」而不是配置里的那个（内置密钥可能兜底）
                 val used = PluginSigning.lastKeystoreName ?: cfg.keystoreName
-                signNote = "\n· 已用「$used」(别名 ${cfg.alias}) 补签后再安装"
+                signNote = qstr(R.string.qk_00411, (used).toString(), (cfg.alias).toString())
             } else {
-                signNote = "\n· 补签未成功，已按原包安装：$err"
+                signNote = qstr(R.string.qk_00412, (err).toString())
             }
         }
 

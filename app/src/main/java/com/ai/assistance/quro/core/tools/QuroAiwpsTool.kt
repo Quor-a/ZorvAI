@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.os.Environment
@@ -67,13 +69,13 @@ class AiwpsCreateTool : QuroTool {
                     }
                 }
             } catch (e: Exception) {
-                "生成失败：${e.message}"
+                qstr(R.string.qk_00746, (e.message).toString())
             }
         }
     }
 
     override val name = "aiwps_create"
-    override val description = "📄 生成真实Office文件（docx/xlsx/pptx/pdf），自研构造零依赖，后台生成可下载/分享的文件。" +
+    override val description = qstr(R.string.qk_03611) +
         "与 enhanced_doc_create 的区别：aiwps_create 生成真正的 .docx/.xlsx/.pptx 二进制文件（可用 WPS/Office 打开），" +
         "enhanced_doc_create 生成的是简化格式（如 HTML 包装的 docx）。需要生成可分享的正式文档时优先用此工具。" +
         "参数 {\"type\":\"docx|xlsx|pptx|pdf\",\"title\":\"标题\",\"content\":\"正文\",\"filename\":\"文件名\"}。"
@@ -143,7 +145,7 @@ class AiwpsCreateTool : QuroTool {
                 }
             }
         } catch (e: Exception) {
-            "生成失败：${e.message}"
+            qstr(R.string.qk_00746, (e.message).toString())
         }
     }
 

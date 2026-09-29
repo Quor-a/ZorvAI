@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.service
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -151,7 +154,7 @@ object QuroMiniWindowManager {
         return msgs.filter { !it.hidden && it.role != "tool" }
             .takeLast(15)
             .map { m ->
-                val label = if (m.role == "user") (m.senderName ?: "我") else "AI"
+                val label = if (m.role == "user") (m.senderName ?: qstr(R.string.qk_00061)) else "AI"
                 MiniChatLine(label, m.content.ifBlank { m.reasoning ?: "" })
             }
     }
@@ -183,7 +186,7 @@ object QuroMiniWindowManager {
                         // 面板填满窗口；初始屏幕位置由 chatParams.x/y 决定，拖拽由 onDrag 移动整窗，
                         // 缩放由 onResize 触发重新测量。改版后浮窗不再满屏拦截，面板外区域点击穿透到下层 App。
                         FloatingMiniWindow(
-                            title = "对话小窗",
+                            title = qstr(R.string.qk_00060),
                             initialX = 0.dp, initialY = 0.dp,
                             initialWidth = 300.dp, initialHeight = 420.dp,
                             onRestore = { onExpandChat?.invoke() },
@@ -251,7 +254,7 @@ object QuroMiniWindowManager {
                     MaterialTheme(colorScheme = colorScheme) {
                         // 窗口仅包围面板（WRAP_CONTENT），面板外点击穿透到下层 App；拖拽移动整窗、缩放重测量。
                         FloatingMiniWindow(
-                            title = "浏览器小窗",
+                            title = qstr(R.string.qk_00059),
                             initialX = 0.dp, initialY = 0.dp,
                             initialWidth = 320.dp, initialHeight = 400.dp,
                             onRestore = {
@@ -376,7 +379,7 @@ object QuroMiniWindowManager {
                     onValueChange = { inputText = it },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
-                    placeholder = { Text("输入消息…", fontSize = 11.sp) },
+                    placeholder = { Text(stringResource(R.string.qk_03707), fontSize = 11.sp) },
                     textStyle = TextStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface),
                 )
                 TextButton(onClick = {
@@ -386,7 +389,7 @@ object QuroMiniWindowManager {
                         inputText = TextFieldValue("")
                     }
                 }) {
-                    Text("发送")
+                    Text(stringResource(R.string.qk_00165))
                 }
             }
             Row(
@@ -395,11 +398,11 @@ object QuroMiniWindowManager {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(onClick = { onNewConversation?.invoke() }) {
-                    Text("新建对话")
+                    Text(stringResource(R.string.qk_00062))
                 }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = { onExpandChat?.invoke() }) {
-                    Text("展开对话")
+                    Text(stringResource(R.string.qk_00063))
                 }
             }
         }
@@ -425,7 +428,7 @@ object QuroMiniWindowManager {
                     onValueChange = { currentUrl = it },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
-                    placeholder = { Text("输入网址…", fontSize = 11.sp) },
+                    placeholder = { Text(stringResource(R.string.qk_00884), fontSize = 11.sp) },
                     textStyle = TextStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface),
                 )
                 TextButton(onClick = {
@@ -440,7 +443,7 @@ object QuroMiniWindowManager {
                         currentUrl = TextFieldValue(target)
                     }
                 }) {
-                    Text("前往")
+                    Text(stringResource(R.string.qk_03478))
                 }
             }
             // 加载错误提示（点击重试）：让「部分网页打不开」有可见反馈，而非静默失败

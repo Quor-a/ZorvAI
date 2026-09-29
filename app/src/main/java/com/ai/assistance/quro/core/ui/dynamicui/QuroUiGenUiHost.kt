@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.ui.dynamicui
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -201,7 +203,7 @@ class QuroUiGenUiHost(
         runCatching {
             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("genui", text))
-            Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, qstr(R.string.qk_00023), Toast.LENGTH_SHORT).show()
         }.onFailure {
             Toast.makeText(context, "复制失败：${it.message}", Toast.LENGTH_SHORT).show()
         }
@@ -269,7 +271,7 @@ class QuroUiGenUiHost(
                 if (title != null) putExtra(Intent.EXTRA_TITLE, title)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(Intent.createChooser(intent, title ?: "分享"))
+            context.startActivity(Intent.createChooser(intent, title ?: qstr(R.string.qk_00090)))
         }.onFailure {
             Toast.makeText(context, "分享失败：${it.message}", Toast.LENGTH_SHORT).show()
         }
@@ -303,7 +305,7 @@ class QuroUiGenUiHost(
                 }
                 context.startActivity(intent)
             }.onFailure {
-                Toast.makeText(context, "未找到视频播放器", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, qstr(R.string.qk_03417), Toast.LENGTH_SHORT).show()
             }
             return
         }
@@ -316,7 +318,7 @@ class QuroUiGenUiHost(
                 it.start()
                 Toast.makeText(
                     context,
-                    if (title.isBlank()) "▶ 正在播放" else "▶ 正在播放：$title",
+                    if (title.isBlank()) qstr(R.string.qk_03420) else "▶ 正在播放：$title",
                     Toast.LENGTH_SHORT,
                 ).show()
             }

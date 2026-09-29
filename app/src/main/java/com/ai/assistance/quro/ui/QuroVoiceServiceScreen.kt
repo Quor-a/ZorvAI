@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -52,8 +54,8 @@ fun QuroVoiceServiceScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("语音服务") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回") } },
+                title = { Text(stringResource(R.string.qk_03057)) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143)) } },
             )
         }
     ) { padding ->
@@ -66,24 +68,24 @@ fun QuroVoiceServiceScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             VoiceServiceHero()
-            ChapterLabel("01", "能力分层")
+            ChapterLabel("01", stringResource(R.string.qk_03058))
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 CapabilityTile(
                     icon = Icons.Filled.VolumeUp,
-                    title = "语音合成 (TTS)",
-                    sub = "云端服务商 · 音色 · 风格标签 · 试听",
+                    title = stringResource(R.string.qk_00232),
+                    sub = stringResource(R.string.qk_03059),
                     onClick = onOpenTts,
                 )
                 CapabilityTile(
                     icon = Icons.Filled.Mic,
-                    title = "语音识别 (STT)",
-                    sub = "本地 / 云端模型 / 端侧引擎",
+                    title = stringResource(R.string.qk_00234),
+                    sub = stringResource(R.string.qk_03060),
                     onClick = onOpenStt,
                 )
                 CapabilityTile(
                     icon = Icons.Filled.Settings,
-                    title = "语音设置",
-                    sub = "悬浮语音球 · 自动朗读 · 对话框语音按钮",
+                    title = stringResource(R.string.qk_00235),
+                    sub = stringResource(R.string.qk_03061),
                     onClick = onOpenVoiceSettings,
                 )
             }
@@ -104,13 +106,12 @@ private fun VoiceServiceHero() {
             .padding(20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        QuroVoiceBall(listening = false, speaking = false, paused = false, status = "待命")
+        QuroVoiceBall(listening = false, speaking = false, paused = false, status = stringResource(R.string.qk_03062))
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text("语音能力中心", style = MaterialTheme.typography.titleLarge, color = cs.onSurface)
+            Text(stringResource(R.string.qk_03063), style = MaterialTheme.typography.titleLarge, color = cs.onSurface)
             Spacer(Modifier.height(4.dp))
-            Text(
-                "语音合成 · 语音识别 · 语音设置，统一入口。",
+            Text(stringResource(R.string.qk_03064),
                 style = MaterialTheme.typography.bodySmall,
                 color = cs.onSurfaceVariant,
             )

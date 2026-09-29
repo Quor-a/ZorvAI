@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.github.QuroGitHubClient
@@ -20,7 +22,7 @@ import org.json.JSONObject
  */
 class QuroGitHubSearchTool : QuroTool {
     override val name = "github_search"
-    override val description = "在对话框内把 GitHub 当作搜索引擎使用：直接检索 GitHub 的仓库 / 代码 / Issue / 用户。" +
+    override val description = qstr(R.string.qk_03688) +
         "参数 {\"type\":\"repositories|code|issues|users\",\"query\":\"搜索词\",\"per_page\":20}。" +
         "type=repositories 搜仓库（如 'kotlin coroutine'）；code 搜代码（如 'language:Kotlin suspend'）；" +
         "issues 搜 Issue/PR（如 'repo:facebook/react bug'）；users 搜用户。返回结构化结果（名称/链接/星级等）。"

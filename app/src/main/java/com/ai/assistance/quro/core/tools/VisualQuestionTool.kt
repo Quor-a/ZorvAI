@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.util.Log
@@ -187,7 +189,7 @@ class VisualQuestionTool : QuroTool {
         }
 
         val allowCustom = args.optBoolean("allow_custom", true)
-        val title = args.optString("title", "AI 问题").ifBlank { "AI 问题" }
+        val title = args.optString("title", qstr(R.string.qk_03116)).ifBlank { qstr(R.string.qk_03116) }
         val timeout = args.optInt("timeout", 60)
 
         return try {

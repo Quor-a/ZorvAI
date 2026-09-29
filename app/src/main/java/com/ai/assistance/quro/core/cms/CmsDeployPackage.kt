@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.cms
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import org.json.JSONObject
 import java.security.MessageDigest
@@ -99,7 +101,7 @@ data class CmsDeployPackage(
         fun samplePython(): CmsDeployPackage = signed(
             CmsDeployPackage(
                 moduleId = "demo-py",
-                name = "Python 演示模块",
+                name = qstr(R.string.qk_03525),
                 version = "1.0.0",
                 entry = "entry.py",
                 entryContent = "#!/usr/bin/env python3\n" +

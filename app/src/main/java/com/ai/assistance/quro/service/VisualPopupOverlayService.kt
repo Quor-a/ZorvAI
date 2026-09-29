@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.service
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -162,7 +164,7 @@ class VisualPopupOverlayService : Service(), CoroutineScope by CoroutineScope(Di
         )
         
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("可视化弹窗")
+            .setContentTitle(qstr(R.string.qk_00096))
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pi)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "隐藏", hidePi)

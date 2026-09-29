@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -58,7 +60,7 @@ fun QuroMarkdownEditor(
                     FilterChip(
                         selected = !isPreviewMode,
                         onClick = { isPreviewMode = false },
-                        label = { Text("编辑", fontSize = 12.sp) },
+                        label = { Text(stringResource(R.string.qk_00299), fontSize = 12.sp) },
                         leadingIcon = if (!isPreviewMode) {
                             { Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp)) }
                         } else null
@@ -66,7 +68,7 @@ fun QuroMarkdownEditor(
                     FilterChip(
                         selected = isPreviewMode,
                         onClick = { isPreviewMode = true },
-                        label = { Text("预览", fontSize = 12.sp) },
+                        label = { Text(stringResource(R.string.qk_00257), fontSize = 12.sp) },
                         leadingIcon = if (isPreviewMode) {
                             { Icon(Icons.Filled.Visibility, contentDescription = null, modifier = Modifier.size(16.dp)) }
                         } else null
@@ -80,7 +82,7 @@ fun QuroMarkdownEditor(
                 ) {
                     Icon(
                         if (showFormatBar) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                        contentDescription = "切换格式栏",
+                        contentDescription = stringResource(R.string.qk_01830),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -121,8 +123,7 @@ fun QuroMarkdownEditor(
                         fontFamily = FontFamily.Monospace
                     ),
                     placeholder = {
-                        Text(
-                            text = "开始输入Markdown内容...",
+                        Text(text = stringResource(R.string.qk_02048),
                             fontSize = 16.sp,
                             color = cs.onSurfaceVariant.copy(alpha = 0.5f)
                         )
@@ -149,22 +150,22 @@ private fun MarkdownFormatToolbar(
     val cs = MaterialTheme.colorScheme
     
     val formatActions = listOf(
-        Triple("加粗", Icons.Filled.FormatBold, "**文本**"),
-        Triple("斜体", Icons.Filled.FormatItalic, "*文本*"),
-        Triple("删除线", Icons.Filled.FormatStrikethrough, "~~文本~~"),
-        Triple("代码", Icons.Filled.Code, "`代码`"),
-        Triple("标题1", Icons.Filled.Title, "# "),
-        Triple("标题2", Icons.Filled.Title, "## "),
-        Triple("标题3", Icons.Filled.Title, "### "),
-        Triple("无序列表", Icons.Filled.FormatListBulleted, "- "),
-        Triple("有序列表", Icons.Filled.FormatListNumbered, "1. "),
-        Triple("任务列表", Icons.Filled.CheckBox, "- [ ] "),
-        Triple("引用", Icons.Filled.FormatQuote, "> "),
-        Triple("代码块", Icons.Filled.DataObject, "```\n代码\n```"),
-        Triple("分割线", Icons.Filled.HorizontalRule, "\n---\n"),
-        Triple("链接", Icons.Filled.Link, "[链接文本](url)"),
-        Triple("图片", Icons.Filled.Image, "![图片描述](url)"),
-        Triple("表格", Icons.Filled.GridView, "| 列1 | 列2 |\n|------|------|\n| 内容 | 内容 |")
+        Triple(stringResource(R.string.qk_01816), Icons.Filled.FormatBold, stringResource(R.string.qk_02049)),
+        Triple(stringResource(R.string.qk_01817), Icons.Filled.FormatItalic, stringResource(R.string.qk_02050)),
+        Triple(stringResource(R.string.qk_02051), Icons.Filled.FormatStrikethrough, stringResource(R.string.qk_02052)),
+        Triple(stringResource(R.string.qk_00148), Icons.Filled.Code, stringResource(R.string.qk_02053)),
+        Triple(stringResource(R.string.qk_01818), Icons.Filled.Title, "# "),
+        Triple(stringResource(R.string.qk_01819), Icons.Filled.Title, "## "),
+        Triple(stringResource(R.string.qk_01820), Icons.Filled.Title, "### "),
+        Triple(stringResource(R.string.qk_01821), Icons.Filled.FormatListBulleted, "- "),
+        Triple(stringResource(R.string.qk_01822), Icons.Filled.FormatListNumbered, "1. "),
+        Triple(stringResource(R.string.qk_02054), Icons.Filled.CheckBox, "- [ ] "),
+        Triple(stringResource(R.string.qk_01823), Icons.Filled.FormatQuote, "> "),
+        Triple(stringResource(R.string.qk_01824), Icons.Filled.DataObject, stringResource(R.string.qk_02055)),
+        Triple(stringResource(R.string.qk_01825), Icons.Filled.HorizontalRule, "\n---\n"),
+        Triple(stringResource(R.string.qk_01826), Icons.Filled.Link, stringResource(R.string.qk_01827)),
+        Triple(stringResource(R.string.qk_00149), Icons.Filled.Image, stringResource(R.string.qk_02056)),
+        Triple(stringResource(R.string.qk_01668), Icons.Filled.GridView, stringResource(R.string.qk_02057))
     )
     
     LazyRow(

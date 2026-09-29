@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -43,13 +46,12 @@ fun VisualPopupSelectorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("可视化弹窗") },
+        title = { Text(stringResource(R.string.qk_00096)) },
         text = {
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
             ) {
-                Text(
-                    "选择弹窗类型",
+                Text(stringResource(R.string.qk_03123),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -57,11 +59,11 @@ fun VisualPopupSelectorDialog(
 
                 // 弹窗类型选项
                 val types = listOf(
-                    Triple("info", "信息展示", Icons.Filled.Info),
-                    Triple("buttons", "按钮选择", Icons.Filled.TouchApp),
-                    Triple("form", "表单输入", Icons.Filled.EditNote),
-                    Triple("confirm", "确认操作", Icons.Filled.CheckCircle),
-                    Triple("custom", "自由HTML", Icons.Filled.Code),
+                    Triple("info", stringResource(R.string.qk_03124), Icons.Filled.Info),
+                    Triple("buttons", stringResource(R.string.qk_03125), Icons.Filled.TouchApp),
+                    Triple("form", stringResource(R.string.qk_03126), Icons.Filled.EditNote),
+                    Triple("confirm", stringResource(R.string.qk_03127), Icons.Filled.CheckCircle),
+                    Triple("custom", stringResource(R.string.qk_03128), Icons.Filled.Code),
                 )
 
                 types.forEach { (type, label, icon) ->
@@ -100,8 +102,8 @@ fun VisualPopupSelectorDialog(
                     OutlinedTextField(
                         value = title,
                         onValueChange = { title = it },
-                        label = { Text("弹窗标题") },
-                        placeholder = { Text("例如：选择操作") },
+                        label = { Text(stringResource(R.string.qk_03103)) },
+                        placeholder = { Text(stringResource(R.string.qk_03129)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
@@ -113,8 +115,8 @@ fun VisualPopupSelectorDialog(
                             OutlinedTextField(
                                 value = content,
                                 onValueChange = { content = it },
-                                label = { Text("展示内容") },
-                                placeholder = { Text("支持 Markdown/HTML") },
+                                label = { Text(stringResource(R.string.qk_03130)) },
+                                placeholder = { Text(stringResource(R.string.qk_03131)) },
                                 modifier = Modifier.fillMaxWidth().heightIn(min = 80.dp),
                                 maxLines = 5,
                             )
@@ -123,8 +125,8 @@ fun VisualPopupSelectorDialog(
                             OutlinedTextField(
                                 value = content,
                                 onValueChange = { content = it },
-                                label = { Text("提示文本") },
-                                placeholder = { Text("请选择一个操作") },
+                                label = { Text(stringResource(R.string.qk_03132)) },
+                                placeholder = { Text(stringResource(R.string.qk_03133)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
@@ -132,8 +134,8 @@ fun VisualPopupSelectorDialog(
                             OutlinedTextField(
                                 value = buttonsText,
                                 onValueChange = { buttonsText = it },
-                                label = { Text("按钮（逗号分隔）") },
-                                placeholder = { Text("查看,编辑,删除") },
+                                label = { Text(stringResource(R.string.qk_03134)) },
+                                placeholder = { Text(stringResource(R.string.qk_03135)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
@@ -142,8 +144,8 @@ fun VisualPopupSelectorDialog(
                             OutlinedTextField(
                                 value = content,
                                 onValueChange = { content = it },
-                                label = { Text("表单描述") },
-                                placeholder = { Text("请填写以下信息") },
+                                label = { Text(stringResource(R.string.qk_03136)) },
+                                placeholder = { Text(stringResource(R.string.qk_03137)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
@@ -151,8 +153,8 @@ fun VisualPopupSelectorDialog(
                             OutlinedTextField(
                                 value = buttonsText,
                                 onValueChange = { buttonsText = it },
-                                label = { Text("字段（逗号分隔）") },
-                                placeholder = { Text("姓名,邮箱,电话") },
+                                label = { Text(stringResource(R.string.qk_03138)) },
+                                placeholder = { Text(stringResource(R.string.qk_03139)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
@@ -161,8 +163,8 @@ fun VisualPopupSelectorDialog(
                             OutlinedTextField(
                                 value = content,
                                 onValueChange = { content = it },
-                                label = { Text("确认内容") },
-                                placeholder = { Text("确定要执行此操作吗？") },
+                                label = { Text(stringResource(R.string.qk_03140)) },
+                                placeholder = { Text(stringResource(R.string.qk_03141)) },
                                 modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp),
                                 maxLines = 3,
                             )
@@ -171,8 +173,8 @@ fun VisualPopupSelectorDialog(
                             OutlinedTextField(
                                 value = content,
                                 onValueChange = { content = it },
-                                label = { Text("HTML内容描述") },
-                                placeholder = { Text("描述你想要的界面，AI会生成完整HTML") },
+                                label = { Text(stringResource(R.string.qk_03142)) },
+                                placeholder = { Text(stringResource(R.string.qk_03143)) },
                                 modifier = Modifier.fillMaxWidth().heightIn(min = 80.dp),
                                 maxLines = 5,
                             )
@@ -190,10 +192,10 @@ fun VisualPopupSelectorDialog(
                     onDismiss()
                 },
                 enabled = selectedType.isNotEmpty() && title.isNotBlank(),
-            ) { Text("发送") }
+            ) { Text(stringResource(R.string.qk_00165)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) }
         },
     )
 }
@@ -221,24 +223,23 @@ fun VisualQuestionSelectorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("可视化询问") },
+        title = { Text(stringResource(R.string.qk_00169)) },
         text = {
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
             ) {
-                Text(
-                    "选择询问方式",
+                Text(stringResource(R.string.qk_03144),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
                 val types = listOf(
-                    Triple("choice", "选择题", Icons.Filled.List),
-                    Triple("input", "输入框", Icons.Filled.TextFields),
-                    Triple("rating", "评分", Icons.Filled.Star),
-                    Triple("toggle", "开关", Icons.Filled.ToggleOn),
-                    Triple("custom", "自由HTML", Icons.Filled.Code),
+                    Triple("choice", stringResource(R.string.qk_03145), Icons.Filled.List),
+                    Triple("input", stringResource(R.string.qk_03146), Icons.Filled.TextFields),
+                    Triple("rating", stringResource(R.string.qk_01667), Icons.Filled.Star),
+                    Triple("toggle", stringResource(R.string.qk_03147), Icons.Filled.ToggleOn),
+                    Triple("custom", stringResource(R.string.qk_03128), Icons.Filled.Code),
                 )
 
                 types.forEach { (type, label, icon) ->
@@ -276,8 +277,8 @@ fun VisualQuestionSelectorDialog(
                     OutlinedTextField(
                         value = question,
                         onValueChange = { question = it },
-                        label = { Text("问题内容") },
-                        placeholder = { Text("你想问用户什么？") },
+                        label = { Text(stringResource(R.string.qk_01073)) },
+                        placeholder = { Text(stringResource(R.string.qk_03148)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
@@ -289,8 +290,8 @@ fun VisualQuestionSelectorDialog(
                             OutlinedTextField(
                                 value = optionsText,
                                 onValueChange = { optionsText = it },
-                                label = { Text("选项（逗号分隔）") },
-                                placeholder = { Text("选项A,选项B,选项C") },
+                                label = { Text(stringResource(R.string.qk_03149)) },
+                                placeholder = { Text(stringResource(R.string.qk_03150)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
@@ -299,8 +300,8 @@ fun VisualQuestionSelectorDialog(
                             OutlinedTextField(
                                 value = optionsText,
                                 onValueChange = { optionsText = it },
-                                label = { Text("输入框提示") },
-                                placeholder = { Text("请输入你的答案") },
+                                label = { Text(stringResource(R.string.qk_03151)) },
+                                placeholder = { Text(stringResource(R.string.qk_03152)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
@@ -309,8 +310,8 @@ fun VisualQuestionSelectorDialog(
                             OutlinedTextField(
                                 value = optionsText,
                                 onValueChange = { optionsText = it },
-                                label = { Text("评分描述（可选）") },
-                                placeholder = { Text("请为体验打分 1-5") },
+                                label = { Text(stringResource(R.string.qk_03153)) },
+                                placeholder = { Text(stringResource(R.string.qk_03154)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
@@ -319,8 +320,8 @@ fun VisualQuestionSelectorDialog(
                             OutlinedTextField(
                                 value = optionsText,
                                 onValueChange = { optionsText = it },
-                                label = { Text("开关标签") },
-                                placeholder = { Text("启用通知") },
+                                label = { Text(stringResource(R.string.qk_03155)) },
+                                placeholder = { Text(stringResource(R.string.qk_03156)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
@@ -329,8 +330,8 @@ fun VisualQuestionSelectorDialog(
                             OutlinedTextField(
                                 value = optionsText,
                                 onValueChange = { optionsText = it },
-                                label = { Text("HTML描述") },
-                                placeholder = { Text("描述你想要的询问界面") },
+                                label = { Text(qstr(R.string.qk_03157)) },
+                                placeholder = { Text(stringResource(R.string.qk_03158)) },
                                 modifier = Modifier.fillMaxWidth().heightIn(min = 80.dp),
                                 maxLines = 5,
                             )
@@ -348,10 +349,10 @@ fun VisualQuestionSelectorDialog(
                     onDismiss()
                 },
                 enabled = selectedType.isNotEmpty() && question.isNotBlank(),
-            ) { Text("发送") }
+            ) { Text(stringResource(R.string.qk_00165)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) }
         },
     )
 }
@@ -369,12 +370,12 @@ private fun buildVisualPopupPrompt(type: String, title: String, content: String,
                 put("title", title)
                 put("content", content)
                 put("buttons", JSONObject().apply {
-                    put("text", "确认")
+                    put("text", qstr(R.string.qk_02412))
                     put("value", "ok")
                     put("style", "primary")
                 })
             }
-            "调用 visual_popup 工具，参数：$args"
+            qstr(R.string.qk_03159, (args).toString())
         }
         "buttons" -> {
             val btnList = options.split(",").map { it.trim() }.filter { it.isNotEmpty() }
@@ -391,7 +392,7 @@ private fun buildVisualPopupPrompt(type: String, title: String, content: String,
                 put("content", content)
                 put("buttons", btns)
             }
-            "调用 visual_popup 工具，参数：$args"
+            qstr(R.string.qk_03159, (args).toString())
         }
         "form" -> {
             val fields = options.split(",").map { it.trim() }.filter { it.isNotEmpty() }
@@ -404,41 +405,41 @@ private fun buildVisualPopupPrompt(type: String, title: String, content: String,
                 })
             }
             val buttons = JSONArray()
-            buttons.put(JSONObject().apply { put("text", "提交"); put("value", "submit"); put("style", "primary") })
-            buttons.put(JSONObject().apply { put("text", "取消"); put("value", "cancel"); put("style", "secondary") })
+            buttons.put(JSONObject().apply { put("text", qstr(R.string.qk_00951)); put("value", "submit"); put("style", "primary") })
+            buttons.put(JSONObject().apply { put("text", qstr(R.string.qk_00011)); put("value", "cancel"); put("style", "secondary") })
             val args = JSONObject().apply {
                 put("title", title)
                 put("content", content)
                 put("inputs", inputs)
                 put("buttons", buttons)
             }
-            "调用 visual_popup 工具，参数：$args"
+            qstr(R.string.qk_03159, (args).toString())
         }
         "confirm" -> {
             val buttons = JSONArray()
-            buttons.put(JSONObject().apply { put("text", "确定"); put("value", "confirm"); put("style", "primary") })
-            buttons.put(JSONObject().apply { put("text", "取消"); put("value", "cancel"); put("style", "secondary") })
+            buttons.put(JSONObject().apply { put("text", qstr(R.string.qk_02020)); put("value", "confirm"); put("style", "primary") })
+            buttons.put(JSONObject().apply { put("text", qstr(R.string.qk_00011)); put("value", "cancel"); put("style", "secondary") })
             val args = JSONObject().apply {
                 put("title", title)
                 put("content", content)
                 put("buttons", buttons)
             }
-            "调用 visual_popup 工具，参数：$args"
+            qstr(R.string.qk_03159, (args).toString())
         }
         "custom" -> {
             val args = JSONObject().apply {
                 put("title", title)
-                put("html", "（请根据以下描述生成HTML内容：$content）")
+                put("html", qstr(R.string.qk_03160, (content).toString()))
                 put("card_title", title)
             }
-            "调用 visual_custom_popup 工具，参数：$args"
+            qstr(R.string.qk_03161, (args).toString())
         }
         else -> {
             val args = JSONObject().apply {
                 put("title", title)
                 put("content", content)
             }
-            "调用 visual_popup 工具，参数：$args"
+            qstr(R.string.qk_03159, (args).toString())
         }
     }
 }
@@ -461,11 +462,11 @@ private fun buildVisualQuestionPrompt(type: String, question: String, options: S
                 })
             }
             val args = JSONObject().apply {
-                put("title", "请选择")
+                put("title", qstr(R.string.qk_03162))
                 put("content", question)
                 put("buttons", btns)
             }
-            "调用 visual_popup 工具，参数：$args"
+            qstr(R.string.qk_03159, (args).toString())
         }
         "input" -> {
             val inputs = JSONArray()
@@ -475,45 +476,45 @@ private fun buildVisualQuestionPrompt(type: String, question: String, options: S
                 put("type", "text")
             })
             val buttons = JSONArray()
-            buttons.put(JSONObject().apply { put("text", "提交"); put("value", "submit"); put("style", "primary") })
+            buttons.put(JSONObject().apply { put("text", qstr(R.string.qk_00951)); put("value", "submit"); put("style", "primary") })
             val args = JSONObject().apply {
-                put("title", "请输入")
+                put("title", qstr(R.string.qk_03163))
                 put("content", question)
                 put("inputs", inputs)
                 put("buttons", buttons)
             }
-            "调用 visual_popup 工具，参数：$args"
+            qstr(R.string.qk_03159, (args).toString())
         }
         "rating" -> {
             val args = JSONObject().apply {
-                put("title", "评分")
-                put("html", "（请生成一个评分界面：$question）")
-                put("card_title", "评分")
+                put("title", qstr(R.string.qk_01667))
+                put("html", qstr(R.string.qk_03164, (question).toString()))
+                put("card_title", qstr(R.string.qk_01667))
             }
-            "调用 visual_custom_popup 工具，参数：$args"
+            qstr(R.string.qk_03161, (args).toString())
         }
         "toggle" -> {
             val args = JSONObject().apply {
-                put("title", "开关")
-                put("html", "（请生成一个开关界面：$options）")
+                put("title", qstr(R.string.qk_03147))
+                put("html", qstr(R.string.qk_03165, (options).toString()))
                 put("card_title", options)
             }
-            "调用 visual_custom_popup 工具，参数：$args"
+            qstr(R.string.qk_03161, (args).toString())
         }
         "custom" -> {
             val args = JSONObject().apply {
-                put("title", "询问")
-                put("html", "（请根据以下描述生成HTML：$question）")
-                put("card_title", "询问")
+                put("title", qstr(R.string.qk_03166))
+                put("html", qstr(R.string.qk_03167, (question).toString()))
+                put("card_title", qstr(R.string.qk_03166))
             }
-            "调用 visual_custom_popup 工具，参数：$args"
+            qstr(R.string.qk_03161, (args).toString())
         }
         else -> {
             val args = JSONObject().apply {
-                put("title", "询问")
+                put("title", qstr(R.string.qk_03166))
                 put("content", question)
             }
-            "调用 visual_popup 工具，参数：$args"
+            qstr(R.string.qk_03159, (args).toString())
         }
     }
 }

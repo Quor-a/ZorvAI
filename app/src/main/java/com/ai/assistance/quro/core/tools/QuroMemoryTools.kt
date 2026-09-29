@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.memory.QuroMemoryEntry
@@ -18,7 +20,7 @@ import java.util.UUID
 class QuroMemorySaveTool : QuroTool {
     override val name = "memory_save"
     override val description =
-        "保存一条长期记忆（用户偏好、事实、约定、项目背景等）。当用户透露了值得跨会话记住的信息时，应主动调用本工具「自动保存」。" +
+        qstr(R.string.qk_03595) +
             "参数：{\"title\":\"可选标题\",\"content\":\"记忆内容(必填)\",\"group\":\"分组如 偏好/工作/项目(可选)\",\"tags\":\"标签数组(可选)\"}。"
     override val parametersJson = """{
         "type":"object",

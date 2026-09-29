@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -107,8 +110,8 @@ fun VisualPopupCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     when (popupData.status) {
-                        PopupStatus.COMPLETED -> StatusPill("已完成", accentColor, cs.onSecondary)
-                        PopupStatus.CANCELLED -> StatusPill("已取消", accentColor, cs.onError)
+                        PopupStatus.COMPLETED -> StatusPill(stringResource(R.string.qk_03118), accentColor, cs.onSecondary)
+                        PopupStatus.CANCELLED -> StatusPill(stringResource(R.string.qk_03119), accentColor, cs.onError)
                         else -> { /* 待处理不显示徽标 */ }
                     }
                 }
@@ -369,7 +372,7 @@ fun VisualPopupDialog() {
                             },
                             modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(Icons.Filled.Close, "关闭", modifier = Modifier.size(20.dp))
+                            Icon(Icons.Filled.Close, qstr(R.string.qk_00065), modifier = Modifier.size(20.dp))
                         }
                     }
 

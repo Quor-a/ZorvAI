@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.novaterm.command.CommandResult
@@ -17,7 +19,7 @@ import org.json.JSONObject
 class QuroTermTool : QuroTool {
     override val name = "quroterm_exec"
     override val description =
-        "在 QuroTerm 自研沙盒终端执行命令（ls/cd/cat/echo/grep/ps/top/netstat/ping/curl/wget/dns/" +
+        qstr(R.string.qk_03652) +
             "pkg/run/alias/sandbox/encrypt/compress/base64 等），独立虚拟文件系统，不触碰真实系统。" +
             "与 terminal_exec 的区别：terminal_exec 走 proot/Linux（有 apt/python3），quroterm_exec 走自研沙盒（更快更轻）。" +
             "参数：{\"command\":\"要执行的命令\"}。返回命令输出文本。"

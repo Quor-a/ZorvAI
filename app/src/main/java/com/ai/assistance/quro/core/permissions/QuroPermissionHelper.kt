@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.permissions
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
@@ -69,7 +71,7 @@ object QuroPermissionHelper {
         }
         return QuroPermissionItem(
             id = "storage",
-            title = "存储权限",
+            title = qstr(R.string.qk_03453),
             desc = "读取/保存图片、文件与本地数据",
             granted = granted,
             guideIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -83,7 +85,7 @@ object QuroPermissionHelper {
         val granted = Settings.canDrawOverlays(ctx)
         return QuroPermissionItem(
             id = "overlay",
-            title = "悬浮窗权限",
+            title = qstr(R.string.qk_03605),
             desc = "支持全局悬浮语音球随时唤醒",
             granted = granted,
             guideIntent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
@@ -98,7 +100,7 @@ object QuroPermissionHelper {
         val granted = pm.isIgnoringBatteryOptimizations(pkg)
         return QuroPermissionItem(
             id = "battery",
-            title = "电池优化豁免",
+            title = qstr(R.string.qk_03501),
             desc = "后台保活，避免语音球被系统回收",
             granted = granted,
             guideIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
@@ -119,7 +121,7 @@ object QuroPermissionHelper {
         val granted = ctx.hasPermission(android.Manifest.permission.SET_ALARM)
         return QuroPermissionItem(
             id = "set_alarm",
-            title = "设置闹钟",
+            title = qstr(R.string.qk_03426),
             desc = "跳转到系统时钟 App 设置闹钟/提醒（普通权限，安装即授）",
             granted = granted,
             // 点击直接跳到本应用的「应用信息」页，用户可在此处直观看到「设置闹钟」项
@@ -140,7 +142,7 @@ object QuroPermissionHelper {
         }
         return QuroPermissionItem(
             id = "exact_alarm",
-            title = "精确闹钟",
+            title = qstr(R.string.qk_03642),
             desc = "应用自管闹钟/提醒（无需跳转系统时钟，Android 12+ 需用户授权）",
             granted = granted,
             guideIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -160,7 +162,7 @@ object QuroPermissionHelper {
             ctx.hasPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION)
         return QuroPermissionItem(
             id = "location",
-            title = "位置权限",
+            title = qstr(R.string.qk_03574),
             desc = "基于位置的工具能力（如天气、附近搜索）",
             granted = granted,
             guideIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -175,7 +177,7 @@ object QuroPermissionHelper {
         val enabled = isAccessibilityServiceEnabled(ctx, cn.flattenToString())
         return QuroPermissionItem(
             id = "accessibility",
-            title = "无障碍服务",
+            title = qstr(R.string.qk_02300),
             desc = "屏幕内容读取与界面自动化（高级能力）",
             granted = enabled,
             guideIntent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
@@ -197,7 +199,7 @@ object QuroPermissionHelper {
         val authorized = installed && QuroShizukuBridge.isAuthorized(ctx)
         return QuroPermissionItem(
             id = "shizuku",
-            title = "Shizuku 服务",
+            title = qstr(R.string.qk_02304),
             desc = "通过 Shizuku 获取 adb/系统级能力（免 root）",
             granted = authorized,
             guideIntent = when {
@@ -229,7 +231,7 @@ object QuroPermissionHelper {
         }
         return QuroPermissionItem(
             id = "admin",
-            title = "设备管理员权限",
+            title = qstr(R.string.qk_03679),
             desc = "锁定屏幕、禁用/恢复摄像头（仅此两项）",
             granted = active,
             guideIntent = intent,
@@ -262,7 +264,7 @@ object QuroPermissionHelper {
         }
         return QuroPermissionItem(
             id = "root",
-            title = "ROOT 访问权限",
+            title = qstr(R.string.qk_03490),
             desc = "最高系统权限，可执行任意 shell 命令",
             granted = verified == true,
             guideIntent = null,

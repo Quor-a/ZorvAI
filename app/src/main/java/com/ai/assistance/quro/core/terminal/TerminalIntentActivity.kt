@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.terminal
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Activity
 import android.content.ComponentName
@@ -60,6 +62,12 @@ import android.util.Log
  *   startActivity(intent)
  */
 class TerminalIntentActivity : Activity() {
+    // 语言：ComponentActivity 不走 AppCompat，必须在 attachBaseContext 里自己包一层，
+    // 否则 Compose 的 stringResource 永远取系统语言（表现为「切了语言界面还是中文」）。
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(com.ai.assistance.quro.util.QuroLocale.wrap(newBase))
+    }
+
 
     companion object {
         private const val TAG = "TerminalIntentActivity"
@@ -153,7 +161,7 @@ class TerminalIntentActivity : Activity() {
         val execResult = try {
             QuroTerminalController.runCommand(command, timeout * 1000, this)
         } catch (e: Exception) {
-            ShellResult(output = "", exitCode = -1, error = e.message ?: "未知错误")
+            ShellResult(output = "", exitCode = -1, error = e.message ?: qstr(R.string.qk_00503))
         }
 
         val code = if (execResult.exitCode == 0) RESULT_OK else RESULT_FIRST_USER
@@ -323,7 +331,7 @@ class TerminalIntentActivity : Activity() {
                     val execResult = try {
                         QuroTerminalController.runCommand(cmd, timeout * 1000, this)
                     } catch (e: Exception) {
-                        ShellResult(output = "", exitCode = -1, error = e.message ?: "未知错误")
+                        ShellResult(output = "", exitCode = -1, error = e.message ?: qstr(R.string.qk_00503))
                     }
                     val code = if (execResult.exitCode == 0) RESULT_OK else RESULT_FIRST_USER
                     putResult(result, code, "Exit Code: ${execResult.exitCode}")

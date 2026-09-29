@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.policy.QuroPolicy
@@ -20,7 +22,7 @@ import org.json.JSONObject
 /** 经 Shizuku 执行 Shell 命令。 */
 class ShizukuExecTool : QuroTool {
     override val name = "shizuku_exec"
-    override val description = "经 Shizuku 以 ADB/Shell 权限执行命令（比普通 Runtime.exec 更高权限）。"
+    override val description = qstr(R.string.qk_03459)
     override val parametersJson = """{
         "type":"object",
         "properties":{
@@ -38,7 +40,7 @@ class ShizukuExecTool : QuroTool {
 /** 经 Shizuku 以 Root 执行命令（需 Shizuku 以 root 模式运行）。 */
 class ShizukuRootExecTool : QuroTool {
     override val name = "shizuku_root_exec"
-    override val description = "经 Shizuku 以 Root 权限执行命令（需设备已 Root 且 Shizuku 以 root 模式运行）。"
+    override val description = qstr(R.string.qk_03721)
     override val parametersJson = """{
         "type":"object",
         "properties":{
@@ -60,7 +62,7 @@ class ShizukuRootExecTool : QuroTool {
 /** 冻结/解冻指定包名的应用。 */
 class FreezeAppTool : QuroTool {
     override val name = "freeze_app"
-    override val description = "冻结或解冻指定应用（冻结后应用不驻内存、不收推送）。"
+    override val description = qstr(R.string.qk_03666)
     override val parametersJson = """{
         "type":"object",
         "properties":{

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -180,7 +182,7 @@ class QuroPersonaRepository(val context: Context) {
                 avatarEmoji = "✦",
                 avatarType = "image",
                 avatarUri = builtinAvatar("avatars/avatar_quro_ai.jpg"),
-                description = "全能 AI 助手，理性、高效、温暖，随时为你效劳。",
+                description = qstr(R.string.qk_03625),
                 roleSetting = "你叫 Zorv AI，是一个全能型 AI 助手。你理性客观、逻辑清晰，同时温暖贴心。你擅长回答各类问题、协助创作、分析数据、编写代码、翻译语言、策划方案。你说话简洁有力但不冷漠，会在用户需要时给出详尽解释和多种方案。",
                 opening = "你好！我是 Zorv AI ✦ 随时为你效劳，今天想做什么？",
                 chatSetting = "简洁专业有温度；复杂问题善用分点；适时用 emoji 增加亲和力；主动追问关键细节。",

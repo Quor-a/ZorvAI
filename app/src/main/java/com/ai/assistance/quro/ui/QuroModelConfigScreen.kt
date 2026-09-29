@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.graphics.BitmapFactory
@@ -96,12 +99,11 @@ fun QuroModelConfigScreen(vm: QuroModelConfigViewModel, onBack: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack, Modifier.size(40.dp)) {
-                    Icon(Icons.Filled.ArrowBack, "返回", Modifier.size(22.dp), tint = cs.onBackground)
+                    Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_00143), Modifier.size(22.dp), tint = cs.onBackground)
                 }
                 Column(Modifier.padding(start = 4.dp)) {
-                    Text("设置 · Settings", fontSize = 11.sp, color = Muted, letterSpacing = 0.5.sp)
-                    Text(
-                        "模型配置",
+                    Text(stringResource(R.string.qk_02102), fontSize = 11.sp, color = Muted, letterSpacing = 0.5.sp)
+                    Text(stringResource(R.string.qk_02103),
                         style = TextStyle(
                             fontFamily = FontFamily.Serif,
                             fontWeight = FontWeight.SemiBold,
@@ -157,7 +159,7 @@ fun QuroModelConfigForm(
             .then(if (scroll) Modifier.verticalScroll(rememberScrollState()) else Modifier),
     ) {
         // ====== 01 导入模型 ======
-        ChapterLabel("01", "导入模型")
+        ChapterLabel("01", stringResource(R.string.qk_02104))
         LocalModelEntryRow(vm = vm, onClick = { showLocalDialog = true })
         Spacer(Modifier.height(18.dp))
 
@@ -177,7 +179,7 @@ fun QuroModelConfigForm(
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("本地离线模式", fontSize = 14.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.qk_02105), fontSize = 14.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
                             Text("${cfg.provider} · ${cfg.model.ifBlank { "未选模型" }}", fontSize = 11.sp, color = Muted, modifier = Modifier.padding(top = 2.dp))
                         }
                     }
@@ -189,8 +191,7 @@ fun QuroModelConfigForm(
                         maxLines = 3,
                     )
                     Spacer(Modifier.height(6.dp))
-                    Text(
-                        "该模型在设备本地离线运行，不经过任何云端服务，无需 Base URL / Api Key。",
+                    Text(stringResource(R.string.qk_02107),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -200,7 +201,7 @@ fun QuroModelConfigForm(
                             copy(provider = "OPENAI", localModelPath = "", model = "gpt-4o-mini",
                                 baseUrl = "https://api.openai.com/v1", customProviderName = "")
                         }
-                    }) { Text("切换回云端模型") }
+                    }) { Text(stringResource(R.string.qk_02108)) }
                 }
             }
             Spacer(Modifier.height(18.dp))
@@ -211,11 +212,11 @@ fun QuroModelConfigForm(
             } else {
                 getProviderDisplayName(selectedProvider)
             }
-            ChapterLabel("02", "服务商")
+            ChapterLabel("02", stringResource(R.string.qk_01472))
             SettingsSelectorRow(
-                title = "服务商",
+                title = stringResource(R.string.qk_01472),
                 subtitle = if (cfg.provider == "OTHER" && cfg.customProviderName.isNotBlank())
-                    "已选自定义厂商：${cfg.customProviderName}" else "选择或自定义 API 服务商以自动填入默认地址",
+                    stringResource(R.string.qk_02109, (cfg.customProviderName).toString()) else stringResource(R.string.qk_02110),
                 value = selectedName,
                 color = getProviderColor(selectedProvider),
                 onClick = { showProviderDialog = true },
@@ -223,7 +224,7 @@ fun QuroModelConfigForm(
             Spacer(Modifier.height(18.dp))
 
             // ====== 03 连接 ======
-            ChapterLabel("03", "连接")
+            ChapterLabel("03", stringResource(R.string.qk_02111))
             QuroField("Base URL", cfg.baseUrl, KeyboardOptions.Default) { vm.update { copy(baseUrl = it) } }
             Spacer(Modifier.height(12.dp))
             ApiKeyField(value = cfg.apiKey, onValueChange = { vm.update { copy(apiKey = it) } })
@@ -231,13 +232,13 @@ fun QuroModelConfigForm(
         }
 
         // ====== 04 参数 ======
-        ChapterLabel("04", "参数")
-        QuroField("模型名", cfg.model, KeyboardOptions.Default) { vm.update { copy(model = it) } }
+        ChapterLabel("04", stringResource(R.string.qk_00142))
+        QuroField(stringResource(R.string.qk_02112), cfg.model, KeyboardOptions.Default) { vm.update { copy(model = it) } }
         Spacer(Modifier.height(6.dp))
         if (!isLocal) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { vm.fetchModels() }, enabled = !isFetchingModels && cfg.baseUrl.isNotBlank()) {
-                    Text(if (isFetchingModels) "拉取中…" else "拉取模型列表")
+                    Text(if (isFetchingModels) stringResource(R.string.qk_02113) else stringResource(R.string.qk_02114))
                 }
                 if (isFetchingModels) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
             }
@@ -246,8 +247,7 @@ fun QuroModelConfigForm(
 
         if (isLocal) {
             // ══════════════ 本地离线模型独立参数（与云端完全隔离） ══════════════
-            Text(
-                "以下参数仅影响本地离线模型，与云端模型设置互不影响。",
+            Text(stringResource(R.string.qk_02115),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -255,7 +255,7 @@ fun QuroModelConfigForm(
 
             // 本地温度（滑块）
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("温度", fontSize = 14.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.qk_02116), fontSize = 14.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
                 Text("%.2f".format(cfg.localTemperature), fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
             }
@@ -272,12 +272,11 @@ fun QuroModelConfigForm(
             Spacer(Modifier.height(6.dp))
 
             QuroField(
-                "最大生成令牌", cfg.localMaxTokens.toString(),
+                stringResource(R.string.qk_02117), cfg.localMaxTokens.toString(),
                 KeyboardOptions(keyboardType = KeyboardType.Number),
             ) { vm.update { copy(localMaxTokens = it.toIntOrNull() ?: 512) } }
             Spacer(Modifier.height(4.dp))
-            Text(
-                "本地模型单次回复的最大 token 数。手机 CPU 每 token 几十~几百毫秒，建议 256–1024。",
+            Text(stringResource(R.string.qk_02118),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -288,17 +287,15 @@ fun QuroModelConfigForm(
                 Switch(checked = cfg.localEnableTools, onCheckedChange = { vm.update { copy(localEnableTools = it) } })
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("启用工具调用", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        "开启后本地模型可通过 function calling 调用工具。关闭则纯对话模式，节省上下文窗口。",
+                    Text(stringResource(R.string.qk_02119), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.qk_02120),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Text(
-                "提示：线程数、上下文长度、GPU 层数、计算精度等参数请在「导入模型 → 运行参数」中设置。",
+            Text(stringResource(R.string.qk_02121),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -306,7 +303,7 @@ fun QuroModelConfigForm(
             // ══════════════ 云端模型参数 ══════════════
             // 温度（滑块）
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("温度", fontSize = 14.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.qk_02116), fontSize = 14.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
                 Text("%.2f".format(cfg.temperature), fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
             }
@@ -323,29 +320,27 @@ fun QuroModelConfigForm(
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 QuroField(
-                    "最大令牌", cfg.maxTokens.toString(),
+                    stringResource(R.string.qk_02122), cfg.maxTokens.toString(),
                     KeyboardOptions(keyboardType = KeyboardType.Number), Modifier.weight(1f),
                 ) { vm.update { copy(maxTokens = it.toIntOrNull() ?: 65536) } }
                 StepperField(
-                    "工具轮次", cfg.maxToolRounds,
+                    stringResource(R.string.qk_02123), cfg.maxToolRounds,
                     { vm.update { copy(maxToolRounds = it) } }, Modifier.weight(1f),
                 )
             }
             Spacer(Modifier.height(10.dp))
-            Text(
-                "0 = 不限制（默认）：工具调用不设次数上限，ReAct 循环持续直到模型给出最终答复；填正数则按该值封顶。内置 200 轮安全天花板防失控。",
+            Text(stringResource(R.string.qk_02124),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
             )
             Spacer(Modifier.height(8.dp))
             QuroField(
-                "上下文窗口", cfg.contextWindow.toString(),
+                stringResource(R.string.qk_02125), cfg.contextWindow.toString(),
                 KeyboardOptions(keyboardType = KeyboardType.Number),
             ) { vm.update { copy(contextWindow = it.toIntOrNull() ?: 262144) } }
             Spacer(Modifier.height(10.dp))
-            Text(
-                "输入 token 预算（0=不限制）。长对话自动丢弃最旧轮次、始终保留身份/人格/工具指引，避免窗口撑爆导致丢失上下文或工具调用失效。小米 MiMo 建议 16000–32000。",
+            Text(stringResource(R.string.qk_02126),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
@@ -357,9 +352,8 @@ fun QuroModelConfigForm(
                 Switch(checked = cfg.enableTools, onCheckedChange = { vm.update { copy(enableTools = it) } })
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("启用工具调用", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        "开启后云端模型通过 function calling 调用工具；关闭则纯对话模式。若模型「不主动调工具」，先确认此开关为开。",
+                    Text(stringResource(R.string.qk_02119), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.qk_02127),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -370,9 +364,8 @@ fun QuroModelConfigForm(
                 Switch(checked = cfg.useFullTools, onCheckedChange = { vm.update { copy(useFullTools = it) } })
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("完整工具集", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        "开启下发全部 ~50 个工具（全面能力）；若你的 API 中转对工具数敏感（>25 可能静默丢弃 tools 字段导致无法调用），可关闭仅发核心 14 个。",
+                    Text(stringResource(R.string.qk_02128), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.qk_02129),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -385,7 +378,7 @@ fun QuroModelConfigForm(
             TextButton(onClick = { showSaveDialog = true }) {
                 Icon(Icons.Filled.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("保存为预设")
+                Text(stringResource(R.string.qk_02130))
             }
         }
         Spacer(Modifier.height(20.dp))
@@ -396,13 +389,13 @@ fun QuroModelConfigForm(
                 .clickable { vm.save() }.padding(14.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text("保存配置", fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.qk_02131), fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
         }
         Spacer(Modifier.height(22.dp))
 
         // ====== 已保存预设 ======
         if (savedProfiles.isNotEmpty()) {
-            ChapterLabel("已保存预设", savedProfiles.size.toString())
+            ChapterLabel(stringResource(R.string.qk_00037), savedProfiles.size.toString())
             savedProfiles.forEach { profile ->
                 Card(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -424,11 +417,11 @@ fun QuroModelConfigForm(
                             editProfileName = profile.name
                             showEditProfileDialog = true
                         }) {
-                            Icon(Icons.Filled.Edit, "编辑预设", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Filled.Edit, qstr(R.string.qk_02132), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                         }
-                        TextButton(onClick = { profileRepo.applyToConfig(profile, vm.repo); vm.reload() }) { Text("加载") }
+                        TextButton(onClick = { profileRepo.applyToConfig(profile, vm.repo); vm.reload() }) { Text(qstr(R.string.qk_02133)) }
                         IconButton(onClick = { profileRepo.delete(profile.id); savedProfiles = profileRepo.loadAll() }) {
-                            Icon(Icons.Filled.Delete, "删除预设", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                            Icon(Icons.Filled.Delete, qstr(R.string.qk_02134), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -468,17 +461,17 @@ fun QuroModelConfigForm(
             onDismissRequest = { showSaveDialog = false },
             confirmButton = {
                 Button(onClick = {
-                    val name = presetName.trim().ifBlank { "预设 ${savedProfiles.size + 1}" }
+                    val name = presetName.trim().ifBlank { qstr(R.string.qk_02135, (savedProfiles.size + 1).toString()) }
                     profileRepo.save(cfg.toProfile(name))
                     savedProfiles = profileRepo.loadAll()
                     showSaveDialog = false
-                }) { Text("保存") }
+                }) { Text(stringResource(R.string.qk_00198)) }
             },
-            dismissButton = { TextButton(onClick = { showSaveDialog = false }) { Text("取消") } },
-            title = { Text("保存为预设") },
+            dismissButton = { TextButton(onClick = { showSaveDialog = false }) { Text(stringResource(R.string.qk_00011)) } },
+            title = { Text(stringResource(R.string.qk_02130)) },
             text = {
                 OutlinedTextField(value = presetName, onValueChange = { presetName = it },
-                    label = { Text("预设名称") }, placeholder = { Text("例如：我的 DeepSeek") },
+                    label = { Text(stringResource(R.string.qk_02136)) }, placeholder = { Text(stringResource(R.string.qk_02137)) },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
             },
         )
@@ -496,19 +489,19 @@ fun QuroModelConfigForm(
                     savedProfiles = profileRepo.loadAll()
                     showEditProfileDialog = false
                     editingProfile = null
-                }, enabled = editProfileName.isNotBlank()) { Text("保存修改") }
+                }, enabled = editProfileName.isNotBlank()) { Text(stringResource(R.string.qk_02138)) }
             },
-            dismissButton = { TextButton(onClick = { showEditProfileDialog = false; editingProfile = null }) { Text("取消") } },
-            title = { Text("编辑预设", style = TextStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
+            dismissButton = { TextButton(onClick = { showEditProfileDialog = false; editingProfile = null }) { Text(qstr(R.string.qk_00011)) } },
+            title = { Text(stringResource(R.string.qk_02132), style = TextStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(value = editProfileName, onValueChange = { editProfileName = it },
-                        label = { Text("预设名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        label = { Text(stringResource(R.string.qk_02136)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     // 只读信息展示
-                    Text("服务商：${ep.provider}", style = MaterialTheme.typography.bodySmall, color = Muted)
+                    Text(stringResource(R.string.qk_02139, (ep.provider).toString()), style = MaterialTheme.typography.bodySmall, color = Muted)
                     Text("模型：${ep.model.ifBlank { "未设置" }}", style = MaterialTheme.typography.bodySmall, color = Muted)
                     Text("地址：${ep.baseUrl.ifBlank { "未设置" }}", style = MaterialTheme.typography.bodySmall, color = Muted, maxLines = 1)
-                    Text("修改名称后点「保存修改」即可更新预设显示名。其他字段请删除后重新创建。", style = MaterialTheme.typography.bodySmall, color = Muted)
+                    Text(stringResource(R.string.qk_02142), style = MaterialTheme.typography.bodySmall, color = Muted)
                 }
             },
         )
@@ -524,9 +517,9 @@ fun QuroModelConfigForm(
         when (ml) {
             is QuroModelListResult.Success -> {
                 AlertDialog(onDismissRequest = { vm.clearModelList() }, confirmButton = {},
-                    title = { Text("选择模型 (${ml.models.size}个)") },
+                    title = { Text(stringResource(R.string.qk_02143, (ml.models.size).toString())) },
                     text = {
-                        if (ml.models.isEmpty()) Text("未获取到模型，请检查地址 / 密钥。")
+                        if (ml.models.isEmpty()) Text(stringResource(R.string.qk_02144))
                         else LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
                             items(ml.models) { info ->
                                 TextButton(onClick = {
@@ -554,8 +547,8 @@ fun QuroModelConfigForm(
             }
             is QuroModelListResult.Error -> {
                 AlertDialog(onDismissRequest = { vm.clearModelList() },
-                    confirmButton = { TextButton(onClick = { vm.clearModelList() }) { Text("确定") } },
-                    title = { Text("拉取失败") }, text = { Text(ml.message) })
+                    confirmButton = { TextButton(onClick = { vm.clearModelList() }) { Text(stringResource(R.string.qk_02020)) } },
+                    title = { Text(stringResource(R.string.qk_02145)) }, text = { Text(ml.message) })
             }
         }
     }
@@ -569,8 +562,8 @@ private fun LocalModelEntryRow(vm: QuroModelConfigViewModel, onClick: () -> Unit
     val cfg by vm.cfg.collectAsState()
     val cs = MaterialTheme.colorScheme
     val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
-    val title = if (isLocal) "当前：${cfg.provider} · ${cfg.model.ifBlank { "未选模型" }}" else "未选择本地模型"
-    val sub = if (isLocal) "MNN / llama.cpp 本地模型" else "MNN .mnn / llama.cpp 文件夹"
+    val title = if (isLocal) "当前：${cfg.provider} · ${cfg.model.ifBlank { "未选模型" }}" else stringResource(R.string.qk_02147)
+    val sub = if (isLocal) stringResource(R.string.qk_02148) else stringResource(R.string.qk_02149)
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(cs.surface)
             .border(1.dp, if (isLocal) Accent else Line, RoundedCornerShape(14.dp))
@@ -611,7 +604,7 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
     // 只做 IO，state 改写回到主线程，并整体 try/catch 兜底，失败时仅在 UI 提示而非崩溃。
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { treeUri: Uri? ->
         treeUri?.let { uri ->
-            importing = "正在导入模型，请稍候…"
+            importing = qstr(R.string.qk_02150)
             errorMsg = null
             val treeName = DocumentFile.fromTreeUri(ctx, uri)?.name ?: "local-model"
             val id = UUID.randomUUID().toString()
@@ -644,11 +637,11 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
                     }
                     models = repo.loadAll()
                     importing = null
-                    if (!ok) errorMsg = "复制失败：目录可能为空或无法访问，请重新选择。"
+                    if (!ok) errorMsg = qstr(R.string.qk_02151)
                 } catch (e: Exception) {
                     QuroDiag.log("LocalModel", "folder import error: ${e.stackTraceToString()}")
                     importing = null
-                    errorMsg = "导入失败：${e.message ?: e.javaClass.simpleName}"
+                    errorMsg = qstr(R.string.qk_02152, (e.message ?: e.javaClass.simpleName).toString())
                 }
             }
         }
@@ -657,7 +650,7 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
     // 直接选单个 .gguf 文件（最简单直观），复制到私有目录按绝对路径加载。
     val ggufPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { fileUri: Uri? ->
         fileUri?.let { uri ->
-            importing = "正在导入模型，请稍候…"
+            importing = qstr(R.string.qk_02150)
             errorMsg = null
             val id = UUID.randomUUID().toString()
             val rawName = DocumentFile.fromSingleUri(ctx, uri)?.name ?: "model.gguf"
@@ -684,7 +677,7 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
                 } catch (e: Exception) {
                     QuroDiag.log("LocalModel", "gguf import error: ${e.stackTraceToString()}")
                     importing = null
-                    errorMsg = "导入失败：${e.message ?: e.javaClass.simpleName}"
+                    errorMsg = qstr(R.string.qk_02152, (e.message ?: e.javaClass.simpleName).toString())
                 }
             }
         }
@@ -693,25 +686,24 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
-        title = { Text("本地离线模型") },
+        title = { Text(stringResource(R.string.qk_00041)) },
         text = {
             Column(Modifier.fillMaxWidth().heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
                 Text(
-                    "导入方式任选其一：① MNN 选含 llm_config.json 的模型目录；② llama.cpp 选含 .gguf 的文件夹；" +
-                        "③ 直接选单个 .gguf 文件（最简单，推荐）。模型会完整复制到应用私有目录，完全离线运行。",
+                    stringResource(R.string.qk_02153) + stringResource(R.string.qk_02154),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(10.dp))
                 OutlinedButton(onClick = { folderPicker.launch(null) }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Filled.Folder, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("MNN 模型目录（选文件夹）")
+                    Icon(Icons.Filled.Folder, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.qk_02155))
                 }
                 Spacer(Modifier.height(6.dp))
                 OutlinedButton(onClick = { folderPicker.launch(null) }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Filled.Folder, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("llama.cpp 文件夹（选文件夹）")
+                    Icon(Icons.Filled.Folder, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.qk_02156))
                 }
                 Spacer(Modifier.height(6.dp))
                 Button(onClick = { ggufPicker.launch("application/octet-stream") }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("选 .gguf 文件（推荐）")
+                    Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.qk_02157))
                 }
                 Spacer(Modifier.height(8.dp))
                 if (importing != null) {
@@ -727,7 +719,7 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
                     Spacer(Modifier.height(8.dp))
                 }
                 if (models.isEmpty()) {
-                    Text("还没有本地模型。按上面任一方式导入后，点列表项即可设为当前对话模型。",
+                    Text(stringResource(R.string.qk_02158),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 val loader = LocalModelLoaders.get()
@@ -752,10 +744,10 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
                                     style = MaterialTheme.typography.bodyMedium)
                                 Text("可用模型：${if (m.modelNames.isEmpty()) "（无）" else m.modelNames.joinToString(", ")}",
                                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                                Text("路径：${m.path}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                Text(qstr(R.string.qk_02160, (m.path).toString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                                 Text(localModelCapabilitySummary(m), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
                                 if (active) {
-                                    Text("● 已激活（常驻内存，对话跨轮复用）",
+                                    Text(qstr(R.string.qk_02161),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.primary, maxLines = 1)
                                 }
@@ -769,7 +761,7 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
                                             withContext(Dispatchers.Main) { loadTick++ }
                                         }
                                     }) {
-                                        Text("卸载")
+                                        Text(qstr(R.string.qk_00434))
                                     }
                                 } else {
                                     TextButton(
@@ -802,7 +794,7 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
                                                 modifier = Modifier.size(16.dp), strokeWidth = 2.dp
                                             )
                                         } else {
-                                            Text("加载")
+                                            Text(qstr(R.string.qk_02133))
                                         }
                                     }
                                 }
@@ -811,7 +803,7 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
                                     // 以前这些只能吃硬编码默认值，MNN 只跑单后端、llama 窗口固定，
                                     // 这里给出可视化入口，改完需重新「加载」才生效。
                                     IconButton(onClick = { paramsTarget = m }) {
-                                        Icon(Icons.Filled.Edit, "运行参数", Modifier.size(18.dp))
+                                        Icon(Icons.Filled.Edit, qstr(R.string.qk_02162), Modifier.size(18.dp))
                                     }
                                     IconButton(onClick = {
                                         scope.launch {
@@ -827,7 +819,7 @@ private fun LocalModelDialog(vm: QuroModelConfigViewModel, onDismiss: () -> Unit
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text("提示：本地模型经原生推理运行时（MNN / llama.cpp）在设备端离线执行，选中后即以该模型对话，无需联网。",
+                Text(stringResource(R.string.qk_02163),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
@@ -876,7 +868,7 @@ private fun LocalModelParamsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("运行参数 · ${model.name}") },
+        title = { Text(stringResource(R.string.qk_02164, (model.name).toString())) },
         confirmButton = {
             TextButton(onClick = {
                 onSave(
@@ -891,13 +883,12 @@ private fun LocalModelParamsDialog(
                         memoryMode = memoryMode,
                     )
                 )
-            }) { Text("保存") }
+            }) { Text(qstr(R.string.qk_00198)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } },
         text = {
             Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                Text(
-                    "留空 / 0 表示自动。修改后需要重新点「加载」才会生效。",
+                Text(stringResource(R.string.qk_02165),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -905,7 +896,7 @@ private fun LocalModelParamsDialog(
 
                 OutlinedTextField(
                     value = threads, onValueChange = { s -> threads = s.filter { it.isDigit() }.take(2) },
-                    label = { Text("线程数（自动：$autoThreads）") },
+                    label = { Text(stringResource(R.string.qk_02166, (autoThreads).toString())) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
@@ -914,13 +905,12 @@ private fun LocalModelParamsDialog(
                 if (isLlama) {
                     OutlinedTextField(
                         value = ctxSize, onValueChange = { s -> ctxSize = s.filter { it.isDigit() }.take(5) },
-                        label = { Text("上下文长度 n_ctx（自动：按提示词估算）") },
+                        label = { Text(stringResource(R.string.qk_02167)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        "越大越吃内存：3B 模型 n_ctx=8192 的 KV-Cache 约 300MB，分配本身就要数秒。",
+                    Text(stringResource(R.string.qk_02168),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -928,7 +918,7 @@ private fun LocalModelParamsDialog(
 
                     OutlinedTextField(
                         value = gpuLayers, onValueChange = { s -> gpuLayers = s.filter { it.isDigit() }.take(3) },
-                        label = { Text("GPU 卸载层数 n_gpu_layers（默认 0 = 纯 CPU）") },
+                        label = { Text(stringResource(R.string.qk_02169)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
@@ -938,9 +928,8 @@ private fun LocalModelParamsDialog(
                         Switch(checked = useMmap, onCheckedChange = { useMmap = it })
                         Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("使用 mmap 映射权重", style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                "建议关闭。开启后在外部存储上的大 GGUF 会逐页读盘，常表现为「一直卡在模型加载」。",
+                            Text(stringResource(R.string.qk_02170), style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.qk_02171),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -951,48 +940,45 @@ private fun LocalModelParamsDialog(
                         Switch(checked = kvUnified, onCheckedChange = { kvUnified = it })
                         Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("统一 KV 缓存", style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                "建议开启。单序列推理只分配一份 KV，省内存、加载更快。",
+                            Text(stringResource(R.string.qk_02172), style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.qk_02173),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                 } else {
-                    Text("计算后端", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.qk_02174), style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(4.dp))
                     ParamChipRow(
                         options = listOf("cpu", "opencl", "opengl", "vulkan"),
                         selected = backend,
                         onSelect = { backend = it },
                     )
-                    Text(
-                        "GPU 后端（opencl/vulkan）不是所有机型都可用，失败会退回 CPU。",
+                    Text(stringResource(R.string.qk_02175),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(10.dp))
 
-                    Text("计算精度", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.qk_02176), style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(4.dp))
                     ParamChipRow(
                         options = listOf("low", "normal", "high"),
                         selected = precision,
                         onSelect = { precision = it },
                     )
-                    Text(
-                        "手机端建议 low（半精度/量化算子最快）；输出明显跑偏时再调高。",
+                    Text(stringResource(R.string.qk_02177),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(10.dp))
 
-                    Text("内存模式", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.qk_02178), style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(4.dp))
                     ParamChipRow(
                         options = listOf("", "low", "normal"),
-                        labels = listOf("自动", "low", "normal"),
+                        labels = listOf(stringResource(R.string.qk_00850), "low", "normal"),
                         selected = memoryMode,
                         onSelect = { memoryMode = it },
                     )
@@ -1094,10 +1080,10 @@ private fun ApiProviderDialogWithCustom(
                     customProviders = customRepo.loadAll()
                     onCustomSelected(cp)
                     showCustomForm = false
-                }) { Text("添加并选择") }
+                }) { Text(qstr(R.string.qk_02179)) }
             },
-            dismissButton = { TextButton(onClick = { showCustomForm = false }) { Text("返回") } },
-            title = { Text("添加其他供应商", style = TextStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
+            dismissButton = { TextButton(onClick = { showCustomForm = false }) { Text(stringResource(R.string.qk_00143)) } },
+            title = { Text(stringResource(R.string.qk_02180), style = TextStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     // 头像行
@@ -1106,22 +1092,22 @@ private fun ApiProviderDialogWithCustom(
                         Spacer(Modifier.width(12.dp))
                         Column {
                             TextButton(onClick = { dialogPickAvatar.launch("image/*") }) {
-                                Text("上传头像", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
+                                Text(stringResource(R.string.qk_02181), fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
                             }
                             if (dialogAvatar != null) {
                                 TextButton(onClick = { dialogAvatar = null }) {
-                                    Text("清除头像", fontSize = 12.sp, color = Muted)
+                                    Text(stringResource(R.string.qk_00194), fontSize = 12.sp, color = Muted)
                                 }
                             }
                         }
                     }
-                    OutlinedTextField(value = cName, onValueChange = { cName = it }, label = { Text("供应商名称") },
-                        placeholder = { Text("例如：我的私有服务") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = cUrl, onValueChange = { cUrl = it }, label = { Text("Base URL（基址）") },
+                    OutlinedTextField(value = cName, onValueChange = { cName = it }, label = { Text(stringResource(R.string.qk_02182)) },
+                        placeholder = { Text(stringResource(R.string.qk_02183)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = cUrl, onValueChange = { cUrl = it }, label = { Text(stringResource(R.string.qk_02184)) },
                         placeholder = { Text("https://api.example.com/v1") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = cModel, onValueChange = { cModel = it }, label = { Text("默认模型名（可选）") },
+                    OutlinedTextField(value = cModel, onValueChange = { cModel = it }, label = { Text(stringResource(R.string.qk_02185)) },
                         singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Text("添加后会出现在列表里，可随时重新选择；选择即回填 Base URL。",
+                    Text(stringResource(R.string.qk_02186),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
@@ -1131,9 +1117,9 @@ private fun ApiProviderDialogWithCustom(
             Surface(Modifier.fillMaxWidth().heightIn(max = 520.dp), shape = MaterialTheme.shapes.extraLarge,
                 tonalElevation = 6.dp, shadowElevation = 8.dp) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(text = "选择服务商", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+                    Text(text = stringResource(R.string.qk_02187), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
                     OutlinedTextField(value = searchQuery, onValueChange = { searchQuery = it },
-                        placeholder = { Text("搜索服务商", style = MaterialTheme.typography.bodySmall) },
+                        placeholder = { Text(stringResource(R.string.qk_02188), style = MaterialTheme.typography.bodySmall) },
                         leadingIcon = { Icon(Icons.Filled.Search, null) },
                         trailingIcon = { if (searchQuery.isNotEmpty()) IconButton({ searchQuery = "" }, Modifier.size(36.dp)) { Icon(Icons.Filled.Clear, null) } },
                         singleLine = true, modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), shape = RoundedCornerShape(8.dp))
@@ -1142,7 +1128,7 @@ private fun ApiProviderDialogWithCustom(
                         // 自定义「其他供应商」分组
                         if (customProviders.isNotEmpty()) {
                             item {
-                                Text("其他供应商", style = MaterialTheme.typography.labelMedium,
+                                Text(stringResource(R.string.qk_00040), style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(vertical = 4.dp))
                             }
                             items(customProviders) { cp ->
@@ -1187,12 +1173,12 @@ private fun ApiProviderDialogWithCustom(
                         Row(Modifier.padding(vertical = 12.dp, horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.Add, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.width(12.dp))
-                            Text("添加其他供应商", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                            Text(stringResource(R.string.qk_02180), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
                         }
                     }
 
                     Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = onDismissRequest) { Text("取消") }
+                        TextButton(onClick = onDismissRequest) { Text(stringResource(R.string.qk_00011)) }
                     }
                 }
             }
@@ -1206,39 +1192,39 @@ private fun getProviderDisplayName(provider: ApiProviderType): String =
     when (provider) {
         ApiProviderType.OPENAI -> "OpenAI"
         ApiProviderType.OPENAI_RESPONSES -> "OpenAI Responses"
-        ApiProviderType.OPENAI_RESPONSES_GENERIC -> "OpenAI Responses (自定义)"
-        ApiProviderType.OPENAI_GENERIC -> "OpenAI 兼容 (自定义)"
+        ApiProviderType.OPENAI_RESPONSES_GENERIC -> qstr(R.string.qk_02189)
+        ApiProviderType.OPENAI_GENERIC -> qstr(R.string.qk_02190)
         ApiProviderType.ANTHROPIC -> "Anthropic Claude"
-        ApiProviderType.ANTHROPIC_GENERIC -> "Anthropic 兼容 (自定义)"
+        ApiProviderType.ANTHROPIC_GENERIC -> qstr(R.string.qk_02191)
         ApiProviderType.GOOGLE -> "Google Gemini"
-        ApiProviderType.GEMINI_GENERIC -> "Gemini 兼容 (自定义)"
-        ApiProviderType.BAIDU -> "百度文心一言"
-        ApiProviderType.ALIYUN -> "阿里云通义千问"
-        ApiProviderType.XUNFEI -> "讯飞星火"
-        ApiProviderType.ZHIPU -> "智谱 GLM"
-        ApiProviderType.BAICHUAN -> "百川大模型"
-        ApiProviderType.MOONSHOT -> "月之暗面 Kimi"
-        ApiProviderType.MIMO -> "小米 MiMo"
+        ApiProviderType.GEMINI_GENERIC -> qstr(R.string.qk_02192)
+        ApiProviderType.BAIDU -> qstr(R.string.qk_02193)
+        ApiProviderType.ALIYUN -> qstr(R.string.qk_02194)
+        ApiProviderType.XUNFEI -> qstr(R.string.qk_02195)
+        ApiProviderType.ZHIPU -> qstr(R.string.qk_02196)
+        ApiProviderType.BAICHUAN -> qstr(R.string.qk_02197)
+        ApiProviderType.MOONSHOT -> qstr(R.string.qk_02198)
+        ApiProviderType.MIMO -> qstr(R.string.qk_02199)
         ApiProviderType.DEEPSEEK -> "DeepSeek"
         ApiProviderType.MISTRAL -> "Mistral AI"
-        ApiProviderType.SILICONFLOW -> "硅基流动"
+        ApiProviderType.SILICONFLOW -> qstr(R.string.qk_02200)
         ApiProviderType.IFLOW -> "iFlow"
         ApiProviderType.OPENROUTER -> "OpenRouter"
         ApiProviderType.FOUR_ROUTER -> "4Router"
         ApiProviderType.NOUS_PORTAL -> "Nous Portal"
-        ApiProviderType.INFINIAI -> "无问芯穹"
-        ApiProviderType.ALIPAY_BAILING -> "支付宝百灵"
-        ApiProviderType.DOUBAO -> "火山豆包"
+        ApiProviderType.INFINIAI -> qstr(R.string.qk_02201)
+        ApiProviderType.ALIPAY_BAILING -> qstr(R.string.qk_02202)
+        ApiProviderType.DOUBAO -> qstr(R.string.qk_02203)
         ApiProviderType.NVIDIA -> "NVIDIA NIM"
-        ApiProviderType.LMSTUDIO -> "LM Studio (本地)"
-        ApiProviderType.OLLAMA -> "Ollama (本地)"
-        ApiProviderType.OPENAI_LOCAL -> "OpenAI 兼容 (本地)"
-        ApiProviderType.MNN -> "MNN (本地)"
-        ApiProviderType.LLAMA_CPP -> "llama.cpp (本地)"
-        ApiProviderType.PPINFRA -> "派欧云"
+        ApiProviderType.LMSTUDIO -> qstr(R.string.qk_02204)
+        ApiProviderType.OLLAMA -> qstr(R.string.qk_02205)
+        ApiProviderType.OPENAI_LOCAL -> qstr(R.string.qk_02206)
+        ApiProviderType.MNN -> qstr(R.string.qk_02207)
+        ApiProviderType.LLAMA_CPP -> qstr(R.string.qk_02208)
+        ApiProviderType.PPINFRA -> qstr(R.string.qk_02209)
         ApiProviderType.NOVITA -> "Novita AI"
         ApiProviderType.OPENCODE_GO -> "OpenCode Go"
-        ApiProviderType.OTHER -> "其他 / 自定义"
+        ApiProviderType.OTHER -> qstr(R.string.qk_02210)
     }
 
 @Composable
@@ -1317,4 +1303,3 @@ private fun ProviderAvatar(avatar: String?, mark: String, size: Dp) {
         }
     }
 }
-

@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -55,14 +58,14 @@ fun QuroDocEditorScreen(
     var wordCount by remember { mutableIntStateOf(0) }
     var lineCount by remember { mutableIntStateOf(0) }
     var cursorPosition by remember { mutableStateOf("1:1") }
-    var fileStatus by remember { mutableStateOf("就绪") }
+    var fileStatus by remember { mutableStateOf(qstr(R.string.qk_00334)) }
     var isSaving by remember { mutableStateOf(false) }
     
     // 初始化文件内容
     LaunchedEffect(file) {
         if (file != null && file.exists()) {
             withContext(Dispatchers.Main) {
-                fileStatus = "正在读取: ${file.name}"
+                fileStatus = qstr(R.string.qk_01804, (file.name).toString())
             }
             withContext(Dispatchers.IO) {
                 runCatching {
@@ -70,23 +73,23 @@ fun QuroDocEditorScreen(
                     withContext(Dispatchers.Main) {
                         content = fileContent
                         isModified = false
-                        fileStatus = "已加载: ${file.name}"
+                        fileStatus = qstr(R.string.qk_01805, (file.name).toString())
                         // 2秒后恢复状态
                         kotlinx.coroutines.delay(2000)
-                        fileStatus = "就绪"
+                        fileStatus = qstr(R.string.qk_00334)
                     }
                 }.onFailure {
                     withContext(Dispatchers.Main) {
-                        fileStatus = "读取失败: ${it.message}"
+                        fileStatus = qstr(R.string.qk_01806, (it.message).toString())
                         // 3秒后恢复状态
                         kotlinx.coroutines.delay(3000)
-                        fileStatus = "就绪"
+                        fileStatus = qstr(R.string.qk_00334)
                     }
                 }
             }
         } else {
             withContext(Dispatchers.Main) {
-                fileStatus = "新建文档"
+                fileStatus = qstr(R.string.qk_01807)
             }
         }
     }
@@ -102,57 +105,57 @@ fun QuroDocEditorScreen(
         scope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) {
                 isSaving = true
-                fileStatus = "保存中..."
+                fileStatus = qstr(R.string.qk_00389)
             }
             
             runCatching {
                 if (file != null) {
                     withContext(Dispatchers.Main) {
-                        fileStatus = "正在写入: ${file.absolutePath}"
+                        fileStatus = qstr(R.string.qk_01808, (file.absolutePath).toString())
                     }
                     file.writeText(content, Charsets.UTF_8)
                     withContext(Dispatchers.Main) {
                         isModified = false
                         isSaving = false
-                        fileStatus = "已保存: ${file.name}"
-                        Toast.makeText(ctx, "已保存到 ${file.absolutePath}", Toast.LENGTH_SHORT).show()
+                        fileStatus = qstr(R.string.qk_01809, (file.name).toString())
+                        Toast.makeText(ctx, qstr(R.string.qk_01810, (file.absolutePath).toString()), Toast.LENGTH_SHORT).show()
                         onSave(content)
                         // 3秒后恢复状态
                         kotlinx.coroutines.delay(3000)
-                        fileStatus = "就绪"
+                        fileStatus = qstr(R.string.qk_00334)
                     }
                 } else {
                     // 新建文件：保存到应用私有 Documents 目录（Android 10+ 分区存储无法直写公共 Download）
                     val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                    val fileName = "文档_$timestamp.md"
+                    val fileName = qstr(R.string.qk_01811, (timestamp).toString())
                     val docsDir = ctx.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
                         ?: File(ctx.filesDir, "documents")
                     if (!docsDir.exists()) docsDir.mkdirs()
                     val newFile = File(docsDir, fileName)
                     
                     withContext(Dispatchers.Main) {
-                        fileStatus = "正在创建: ${newFile.absolutePath}"
+                        fileStatus = qstr(R.string.qk_01812, (newFile.absolutePath).toString())
                     }
                     newFile.writeText(content, Charsets.UTF_8)
                     withContext(Dispatchers.Main) {
                         isModified = false
                         isSaving = false
-                        fileStatus = "已创建: $fileName"
-                        Toast.makeText(ctx, "已创建并保存到 ${newFile.absolutePath}", Toast.LENGTH_SHORT).show()
+                        fileStatus = qstr(R.string.qk_01813, (fileName).toString())
+                        Toast.makeText(ctx, qstr(R.string.qk_01814, (newFile.absolutePath).toString()), Toast.LENGTH_SHORT).show()
                         onSave(content)
                         // 3秒后恢复状态
                         kotlinx.coroutines.delay(3000)
-                        fileStatus = "就绪"
+                        fileStatus = qstr(R.string.qk_00334)
                     }
                 }
             }.onFailure {
                 withContext(Dispatchers.Main) {
                     isSaving = false
-                    fileStatus = "保存失败: ${it.message}"
-                    Toast.makeText(ctx, "保存失败: ${it.message}", Toast.LENGTH_SHORT).show()
+                    fileStatus = qstr(R.string.qk_01815, (it.message).toString())
+                    Toast.makeText(ctx, qstr(R.string.qk_01815, (it.message).toString()), Toast.LENGTH_SHORT).show()
                     // 3秒后恢复状态
                     kotlinx.coroutines.delay(3000)
-                    fileStatus = "就绪"
+                    fileStatus = qstr(R.string.qk_00334)
                 }
             }
         }
@@ -162,18 +165,18 @@ fun QuroDocEditorScreen(
     @Composable
     fun FormatToolbar() {
         val formatActions = listOf(
-            Triple("加粗", Icons.Filled.FormatBold, "**"),
-            Triple("斜体", Icons.Filled.FormatItalic, "*"),
-            Triple("标题1", Icons.Filled.Title, "# "),
-            Triple("标题2", Icons.Filled.Title, "## "),
-            Triple("标题3", Icons.Filled.Title, "### "),
-            Triple("无序列表", Icons.Filled.FormatListBulleted, "- "),
-            Triple("有序列表", Icons.Filled.FormatListNumbered, "1. "),
-            Triple("引用", Icons.Filled.FormatQuote, "> "),
-            Triple("代码块", Icons.Filled.Code, "```\n"),
-            Triple("分割线", Icons.Filled.HorizontalRule, "---\n"),
-            Triple("链接", Icons.Filled.Link, "[链接文本](url)"),
-            Triple("图片", Icons.Filled.Image, "![图片描述](图片链接)")
+            Triple(stringResource(R.string.qk_01816), Icons.Filled.FormatBold, "**"),
+            Triple(stringResource(R.string.qk_01817), Icons.Filled.FormatItalic, "*"),
+            Triple(stringResource(R.string.qk_01818), Icons.Filled.Title, "# "),
+            Triple(stringResource(R.string.qk_01819), Icons.Filled.Title, "## "),
+            Triple(stringResource(R.string.qk_01820), Icons.Filled.Title, "### "),
+            Triple(stringResource(R.string.qk_01821), Icons.Filled.FormatListBulleted, "- "),
+            Triple(stringResource(R.string.qk_01822), Icons.Filled.FormatListNumbered, "1. "),
+            Triple(stringResource(R.string.qk_01823), Icons.Filled.FormatQuote, "> "),
+            Triple(stringResource(R.string.qk_01824), Icons.Filled.Code, "```\n"),
+            Triple(stringResource(R.string.qk_01825), Icons.Filled.HorizontalRule, "---\n"),
+            Triple(stringResource(R.string.qk_01826), Icons.Filled.Link, stringResource(R.string.qk_01827)),
+            Triple(stringResource(R.string.qk_00149), Icons.Filled.Image, stringResource(R.string.qk_01828))
         )
         
         LazyRow(
@@ -215,7 +218,7 @@ fun QuroDocEditorScreen(
                 title = {
                     Column {
                         Text(
-                            text = if (file != null) file.name else "新建文档",
+                            text = if (file != null) file.name else stringResource(R.string.qk_01807),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1
@@ -236,8 +239,7 @@ fun QuroDocEditorScreen(
                             modifier = Modifier.padding(top = 2.dp)
                         ) {
                             if (isModified) {
-                                Text(
-                                    text = "●未保存",
+                                Text(text = stringResource(R.string.qk_00401),
                                     fontSize = 11.sp,
                                     color = cs.error,
                                     maxLines = 1
@@ -273,7 +275,7 @@ fun QuroDocEditorScreen(
                             onClose()
                         }
                     }) {
-                        Icon(Icons.Filled.ArrowBack, "返回")
+                        Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_00143))
                     }
                 },
                 actions = {
@@ -281,7 +283,7 @@ fun QuroDocEditorScreen(
                     IconButton(onClick = { showFormatBar = !showFormatBar }) {
                         Icon(
                             if (showFormatBar) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                            contentDescription = "切换格式栏"
+                            contentDescription = stringResource(R.string.qk_01830)
                         )
                     }
                     
@@ -292,7 +294,7 @@ fun QuroDocEditorScreen(
                     ) {
                         Icon(
                             Icons.Filled.Save,
-                            contentDescription = "保存",
+                            contentDescription = stringResource(R.string.qk_00198),
                             tint = if (isModified) cs.primary else cs.onSurface.copy(alpha = 0.5f)
                         )
                     }
@@ -300,16 +302,16 @@ fun QuroDocEditorScreen(
                     // 更多选项：真实分享/导出（通过 FileProvider 授权给系统分享面板）
                     IconButton(onClick = {
                         val target = file ?: run {
-                            Toast.makeText(ctx, "请先保存文档，再分享给其他应用", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(ctx, qstr(R.string.qk_01831), Toast.LENGTH_SHORT).show()
                             return@IconButton
                         }
                         if (!target.exists()) {
-                            Toast.makeText(ctx, "文件不存在，请先保存", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(ctx, qstr(R.string.qk_01832), Toast.LENGTH_SHORT).show()
                             return@IconButton
                         }
                         val uri = QuroDocOpener.safeUri(ctx, target)
                         if (uri == null) {
-                            Toast.makeText(ctx, "无法分享该文件（路径未被允许）", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(ctx, qstr(R.string.qk_01833), Toast.LENGTH_SHORT).show()
                             return@IconButton
                         }
                         val share = Intent(Intent.ACTION_SEND).apply {
@@ -318,12 +320,12 @@ fun QuroDocEditorScreen(
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
                         runCatching {
-                            ctx.startActivity(Intent.createChooser(share, "分享 ${target.name}"))
+                            ctx.startActivity(Intent.createChooser(share, qstr(R.string.qk_01834, (target.name).toString())))
                         }.onFailure {
-                            Toast.makeText(ctx, "没有可分享的应用", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(ctx, qstr(R.string.qk_01835), Toast.LENGTH_SHORT).show()
                         }
                     }) {
-                        Icon(Icons.Filled.Share, "分享")
+                        Icon(Icons.Filled.Share, stringResource(R.string.qk_00090))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -349,8 +351,7 @@ fun QuroDocEditorScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "文件: ${file.name}",
+                            Text(text = stringResource(R.string.qk_01836, (file.name).toString()),
                                 fontSize = 11.sp,
                                 color = cs.onSurfaceVariant.copy(alpha = 0.8f),
                                 maxLines = 1,
@@ -371,8 +372,7 @@ fun QuroDocEditorScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "行 $lineCount · 字 $wordCount",
+                        Text(text = stringResource(R.string.qk_00405, (lineCount).toString(), (wordCount).toString()),
                             fontSize = 12.sp,
                             color = cs.onSurfaceVariant
                         )
@@ -443,8 +443,7 @@ fun QuroDocEditorScreen(
                                 fontFamily = FontFamily.Monospace
                             ),
                             placeholder = {
-                                Text(
-                                    text = "开始输入文档内容...",
+                                Text(text = stringResource(R.string.qk_01837),
                                     fontSize = 16.sp,
                                     color = cs.onSurfaceVariant.copy(alpha = 0.5f)
                                 )
@@ -465,8 +464,8 @@ fun QuroDocEditorScreen(
     if (showSaveDialog) {
         AlertDialog(
             onDismissRequest = { showSaveDialog = false },
-            title = { Text("保存更改") },
-            text = { Text("文档已修改，是否保存更改？") },
+            title = { Text(stringResource(R.string.qk_01838)) },
+            text = { Text(stringResource(R.string.qk_01839)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -475,7 +474,7 @@ fun QuroDocEditorScreen(
                         onClose()
                     }
                 ) {
-                    Text("保存")
+                    Text(stringResource(R.string.qk_00198))
                 }
             },
             dismissButton = {
@@ -485,7 +484,7 @@ fun QuroDocEditorScreen(
                         onClose()
                     }
                 ) {
-                    Text("放弃")
+                    Text(stringResource(R.string.qk_01840))
                 }
             }
         )
@@ -512,7 +511,7 @@ fun DocumentEditorPreview(
     ) {
         SelectionContainer {
             Text(
-                text = content.ifBlank { "点击开始编辑..." },
+                text = content.ifBlank { stringResource(R.string.qk_01841) },
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 color = if (content.isBlank()) cs.onSurfaceVariant.copy(alpha = 0.5f) else cs.onSurface

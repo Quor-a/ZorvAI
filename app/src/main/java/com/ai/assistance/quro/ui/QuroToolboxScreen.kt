@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -91,11 +94,11 @@ fun QuroToolboxScreen(
 
     Column(Modifier.fillMaxSize().background(cs.background)) {
         TopAppBar(
-            title = { Text(if (screen == "home") "工具箱" else when (screen) {
-                "files" -> "文件管理"
-                "package" -> "查看软件包名"
-                "workspace" -> "工作区"
-                else -> "工具箱"
+            title = { Text(if (screen == "home") stringResource(R.string.qk_00214) else when (screen) {
+                "files" -> stringResource(R.string.qk_02669)
+                "package" -> stringResource(R.string.qk_02670)
+                "workspace" -> stringResource(R.string.qk_00025)
+                else -> stringResource(R.string.qk_00214)
             }, style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
             navigationIcon = {
                 IconButton(onClick = { if (screen == "home") onClose() else screen = "home" }) {
@@ -127,20 +130,20 @@ fun QuroToolboxScreen(
         var docType by remember { mutableStateOf("docx") }
         var docTitle by remember { mutableStateOf("") }
         var docContent by remember { mutableStateOf("") }
-        var docTemplate by remember { mutableStateOf("空白") }
+        var docTemplate by remember { mutableStateOf(qstr(R.string.qk_02671)) }
         var docResult by remember { mutableStateOf<String?>(null) }
         // 编辑器模式：edit = 富文本编辑, preview = 实时预览
         var editorMode by remember { mutableStateOf("edit") }
         val formats = listOf(
             "docx" to "Word", "xlsx" to "Excel", "pptx" to "PPT",
-            "pdf" to "PDF", "md" to "Markdown", "txt" to "文本", "csv" to "表格", "html" to "网页"
+            "pdf" to "PDF", "md" to "Markdown", "txt" to stringResource(R.string.qk_02287), "csv" to stringResource(R.string.qk_01668), "html" to stringResource(R.string.qk_02288)
         )
         val templates = mapOf(
             "空白" to "",
-            "会议纪要" to "# 会议纪要\n时间：\n地点：\n参会人：\n议题：\n决议：\n行动项：",
-            "合同" to "# 合作协议\n甲方：\n乙方：\n标的：\n金额：\n期限：\n违约责任：",
-            "简历" to "# 个人简历\n姓名：\n联系方式：\n教育背景：\n工作经历：\n技能：",
-            "报表" to "| 项目 | 数值 |\n| --- | --- |\n| 收入 | 0 |\n| 支出 | 0 |"
+            "会议纪要" to stringResource(R.string.qk_02673),
+            "合同" to stringResource(R.string.qk_02675),
+            "简历" to stringResource(R.string.qk_02677),
+            "报表" to stringResource(R.string.qk_02679)
         )
         val ctx = LocalContext.current
         val scope = rememberCoroutineScope()
@@ -160,7 +163,7 @@ fun QuroToolboxScreen(
                     }.toString()
                     scope.launch(Dispatchers.IO) {
                         val r = runCatching { AiwpsCreateTool().run(ctx, json) }
-                            .getOrElse { "生成失败：$it" }
+                            .getOrElse { qstr(R.string.qk_02680, (it).toString()) }
                         withContext(Dispatchers.Main) {
                             docResult = r
                             // 从结果中提取文件路径并打开编辑器（兼容多种格式）
@@ -180,13 +183,13 @@ fun QuroToolboxScreen(
                             }
                         }
                     }
-                }) { Text("创建") }
+                }) { Text(stringResource(R.string.qk_00843)) }
             },
-            dismissButton = { TextButton(onClick = { showDocGen = false }) { Text("关闭") } },
-            title = { Text("新建文档") },
+            dismissButton = { TextButton(onClick = { showDocGen = false }) { Text(stringResource(R.string.qk_00065)) } },
+            title = { Text(stringResource(R.string.qk_01807)) },
             text = {
                 Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                    Text("格式", fontSize = scaled(12), color = Muted)
+                    Text(stringResource(R.string.qk_01065), fontSize = scaled(12), color = Muted)
                     formats.chunked(4).forEach { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
                             row.forEach { (t, label) ->
@@ -203,7 +206,7 @@ fun QuroToolboxScreen(
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text("模板（点击填充示例）", fontSize = scaled(12), color = Muted)
+                    Text(stringResource(R.string.qk_02681), fontSize = scaled(12), color = Muted)
                     templates.keys.chunked(3).forEach { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
                             row.forEach { name ->
@@ -223,7 +226,7 @@ fun QuroToolboxScreen(
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(docTitle, { docTitle = it }, label = { Text("标题（可选）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(docTitle, { docTitle = it }, label = { Text(stringResource(R.string.qk_02496)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
 
                     // —— 编辑/预览模式切换 ——
@@ -234,7 +237,7 @@ fun QuroToolboxScreen(
                             .padding(2.dp),
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        listOf("edit" to "✏️ 编辑", "preview" to "👁️ 预览").forEach { (mode, label) ->
+                        listOf("edit" to stringResource(R.string.qk_02682), "preview" to stringResource(R.string.qk_02683)).forEach { (mode, label) ->
                             val selected = editorMode == mode
                             Text(
                                 label,
@@ -286,7 +289,7 @@ fun QuroToolboxScreen(
                                             .background(cs.background)
                                             .clickable {
                                                 val insertText = if (prefix.length == 1 && (prefix == "*" || prefix == "_")) {
-                                                    "${prefix}粗体文本${prefix}"
+                                                    qstr(R.string.qk_02685, (prefix).toString(), (prefix).toString())
                                                 } else prefix
                                                 docContent = docContent + insertText
                                             }
@@ -301,12 +304,12 @@ fun QuroToolboxScreen(
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 listOf(
-                                    "📊 表格" to "| 列1 | 列2 |\n| --- | --- |\n| 数据 | 数据 |",
+                                    "📊 表格" to stringResource(R.string.qk_02687),
                                     "━━ 分割" to "\n---\n",
-                                    "> 引用" to "> 引用文本\n",
-                                    "🔗 链接" to "[链接文本](https://)",
-                                    "</> 代码" to "```\n代码\n```\n",
-                                    "☑️ 待办" to "- [ ] 待办事项\n",
+                                    "> 引用" to stringResource(R.string.qk_02690),
+                                    "🔗 链接" to stringResource(R.string.qk_02692),
+                                    "</> 代码" to stringResource(R.string.qk_02694),
+                                    "☑️ 待办" to stringResource(R.string.qk_02696),
                                 ).forEach { (label, insert) ->
                                     Text(
                                         label,
@@ -324,7 +327,7 @@ fun QuroToolboxScreen(
                         Spacer(Modifier.height(6.dp))
                         OutlinedTextField(
                             docContent, { docContent = it; cursorPos = it.length },
-                            label = { Text("正文（支持 Markdown 排版）") },
+                            label = { Text(stringResource(R.string.qk_02697)) },
                             minLines = 6,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp, max = 320.dp),
                             textStyle = LocalTextStyle.current.copy(
@@ -332,7 +335,7 @@ fun QuroToolboxScreen(
                                 fontFamily = FontFamily.Monospace,
                                 lineHeight = 18.sp,
                             ),
-                            placeholder = { Text("使用工具栏快速插入格式，docx 按换行分段；xlsx 按换行分行；md/txt/html 原样写入") }
+                            placeholder = { Text(stringResource(R.string.qk_02698)) }
                         )
                     } else {
                         // —— 实时预览区（Markdown 渲染）——
@@ -355,7 +358,7 @@ fun QuroToolboxScreen(
                                 )
                             }
                             if (docContent.isBlank()) {
-                                Text("（暂无内容，请切换到编辑模式输入）", color = Muted, fontSize = 13.sp)
+                                Text(stringResource(R.string.qk_02699), color = Muted, fontSize = 13.sp)
                             } else {
                                 // 简易 Markdown 预览渲染
                                 DocMarkdownPreview(docContent, scaled)
@@ -365,7 +368,7 @@ fun QuroToolboxScreen(
 
                     Spacer(Modifier.height(8.dp))
                     if (docResult != null) {
-                        val ok = (docResult ?: "").startsWith("已生成")
+                        val ok = (docResult ?: "").startsWith(stringResource(R.string.qk_02275))
                         Text(docResult ?: "", fontSize = scaled(12), color = if (ok) cs.primary else cs.error)
                         if (ok) {
                             // 兼容多种返回格式
@@ -383,12 +386,12 @@ fun QuroToolboxScreen(
                                 Spacer(Modifier.height(6.dp))
                                 TextButton(onClick = {
                                     QuroDocLauncher.open(genFile)
-                                }) { Text("打开文档", color = cs.primary) }
+                                }) { Text(stringResource(R.string.qk_02700), color = cs.primary) }
                             }
                         }
                     }
                     Spacer(Modifier.height(6.dp))
-                    Text("后台生成真实文件（docx/xlsx/pptx/pdf 为二进制格式，md/txt/csv/html 为纯文本），可用应用内查看器或 WPS / Office 打开。", fontSize = scaled(11), color = Muted)
+                    Text(stringResource(R.string.qk_02701), fontSize = scaled(11), color = Muted)
                 }
             }
         )
@@ -401,11 +404,11 @@ fun QuroToolboxScreen(
         AlertDialog(
             onDismissRequest = { showToolsList = false },
             confirmButton = {},
-            title = { Text("已注册工具（${toolList.size}）") },
+            title = { Text(stringResource(R.string.qk_02702, (toolList.size).toString())) },
             text = {
                 Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                     if (toolList.isEmpty()) {
-                        Text("暂无已注册工具。", fontSize = scaled(12), color = Muted)
+                        Text(stringResource(R.string.qk_02703), fontSize = scaled(12), color = Muted)
                     }
                     toolList.forEach { t ->
                         val deletable = t.name.startsWith("skill__") || t.name in importedNames
@@ -421,7 +424,7 @@ fun QuroToolboxScreen(
                                     if (t.name in importedNames) QuroImportedToolRegistry.remove(ctx, t.name)
                                     toolList = toolList.filter { it.name != t.name }
                                 }) {
-                                    Icon(Icons.Filled.Delete, "删除", Modifier.size(18.dp), tint = cs.error)
+                                    Icon(Icons.Filled.Delete, qstr(R.string.qk_00091), Modifier.size(18.dp), tint = cs.error)
                                 }
                             }
                         }
@@ -431,7 +434,7 @@ fun QuroToolboxScreen(
                     Button(onClick = { showImport = true }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Filled.Download, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("导入工具（AI 自写 / 粘贴 JSON）")
+                        Text(stringResource(R.string.qk_02704))
                     }
                 }
             }
@@ -449,8 +452,8 @@ fun QuroToolboxScreen(
                         val o = JSONObject(jsonText)
                         val name = o.optString("name", "").trim()
                         val kind = o.optString("kind", "http").trim()
-                        if (name.isBlank()) { err = "name 不能为空"; return@TextButton }
-                        if (kind !in setOf("http", "intent", "broadcast")) { err = "kind 仅支持 http / intent / broadcast"; return@TextButton }
+                        if (name.isBlank()) { err = qstr(R.string.qk_02705); return@TextButton }
+                        if (kind !in setOf("http", "intent", "broadcast")) { err = qstr(R.string.qk_02706); return@TextButton }
                         onImportTool(
                             ImportedToolDef(
                                 name = name,
@@ -464,17 +467,17 @@ fun QuroToolboxScreen(
                         jsonText = ""
                         err = ""
                     } catch (e: Exception) {
-                        err = "JSON 解析失败：${e.message}"
+                        err = qstr(R.string.qk_02707, (e.message).toString())
                     }
-                }) { Text("导入") }
+                }) { Text(qstr(R.string.qk_01635)) }
             },
-            dismissButton = { TextButton(onClick = { showImport = false }) { Text("取消") } },
-            title = { Text("导入工具（AI 自写 / 粘贴 JSON）") },
+            dismissButton = { TextButton(onClick = { showImport = false }) { Text(stringResource(R.string.qk_00011)) } },
+            title = { Text(stringResource(R.string.qk_02704)) },
             text = {
                 Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                     OutlinedTextField(
                         jsonText, { jsonText = it },
-                        label = { Text("工具 JSON") },
+                        label = { Text(stringResource(R.string.qk_02708)) },
                         minLines = 6, modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("{\"name\":\"my_tool\",\"description\":\"...\",\"parametersJson\":\"{...}\",\"kind\":\"http\",\"config\":\"{\\\"url\\\":\\\"https://...\\\"}\"}") },
                     )
@@ -483,7 +486,7 @@ fun QuroToolboxScreen(
                         Text(err, color = cs.error, fontSize = scaled(11))
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text("支持 kind：http / intent / broadcast。也可让 AI 生成 JSON 后粘贴导入（AI 自写工具）。", fontSize = scaled(11), color = Muted)
+                    Text(stringResource(R.string.qk_02709), fontSize = scaled(11), color = Muted)
                 }
             }
         )
@@ -516,15 +519,15 @@ private fun ToolboxHome(
 ) {
     val ctx = LocalContext.current
     val tools = listOf(
-        ToolItem(Icons.Filled.Folder, "文件管理", "浏览应用文件、查看文本/代码内容", onOpenFiles),
-        ToolItem(Icons.Filled.Apps, "查看软件包名", "输入应用显示名，反查其精确包名", onOpenPackage),
-        ToolItem(Icons.Filled.FolderOpen, "工作区", "在应用沙箱内创建/编辑文件与文件夹", onOpenWorkspace),
-        ToolItem(Icons.Filled.Article, "文档生成", "生成 Word/Excel/PPT/PDF 等真实文档", onOpenDocGen),
-        ToolItem(Icons.Filled.List, "已有工具", "查看已注册工具，可导入 AI 自写工具", onOpenToolsList),
-        ToolItem(Icons.Filled.Description, "文档", "在应用内预览本地与生成文档（Word/Excel/PPT/PDF/文本）；文本可编辑，Office 文档可调起系统 WPS 打开", onOpenOnlyOffice),
-        ToolItem(Icons.Filled.MusicNote, "音乐播放器", "在应用内播放本地音乐（后台持续播放）", onOpenMusic),
-        ToolItem(Icons.Filled.Movie, "视频播放器", "在应用内全功能视频播放器播放本地视频", { onOpenVideo("", "") }),
-        ToolItem(Icons.Filled.Keyboard, "AI 键盘", "AI 替你打字·注册为系统输入法·任意 App 可用", onClick = {
+        ToolItem(Icons.Filled.Folder, stringResource(R.string.qk_02669), stringResource(R.string.qk_02710), onOpenFiles),
+        ToolItem(Icons.Filled.Apps, stringResource(R.string.qk_02670), stringResource(R.string.qk_02711), onOpenPackage),
+        ToolItem(Icons.Filled.FolderOpen, stringResource(R.string.qk_00025), stringResource(R.string.qk_02712), onOpenWorkspace),
+        ToolItem(Icons.Filled.Article, stringResource(R.string.qk_02713), stringResource(R.string.qk_02714), onOpenDocGen),
+        ToolItem(Icons.Filled.List, stringResource(R.string.qk_02715), stringResource(R.string.qk_02716), onOpenToolsList),
+        ToolItem(Icons.Filled.Description, stringResource(R.string.qk_00399), stringResource(R.string.qk_02717), onOpenOnlyOffice),
+        ToolItem(Icons.Filled.MusicNote, stringResource(R.string.qk_02262), stringResource(R.string.qk_02718), onOpenMusic),
+        ToolItem(Icons.Filled.Movie, stringResource(R.string.qk_02719), stringResource(R.string.qk_02720), { onOpenVideo("", "") }),
+        ToolItem(Icons.Filled.Keyboard, stringResource(R.string.qk_02721), stringResource(R.string.qk_02722), onClick = {
             // 打开系统输入法设置页，引导用户启用 Zorv AI 键盘
             try {
                 ctx.startActivity(android.content.Intent("android.settings.INPUT_METHOD_SETTINGS"))
@@ -532,14 +535,14 @@ private fun ToolboxHome(
                 ctx.startActivity(android.content.Intent("android.settings.INPUT_METHOD_SUBTYPE_SETTINGS"))
             }
         }),
-        ToolItem(Icons.Filled.AccountTree, "工作流", "创建和管理自动化工作流，支持定时触发、条件分支", onOpenWorkflow),
+        ToolItem(Icons.Filled.AccountTree, stringResource(R.string.qk_02723), stringResource(R.string.qk_02724), onOpenWorkflow),
     )
     // 使用手动 Row+weight 布局替代 LazyVerticalGrid（GridCells.Fixed(2) 在某些容器内退化为单列）
     Column(
         Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        GroupCaption("本地工具能力，全部在设备上运行，无需联网即可使用大部分功能。")
+        GroupCaption(stringResource(R.string.qk_02725))
         tools.chunked(2).forEach { row ->
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -640,7 +643,7 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
     fun sizeText(f: File): String {
         if (f.isDirectory) {
             val n = f.listFiles()?.size ?: 0
-            return "$n 项"
+            return qstr(R.string.qk_02726, (n).toString())
         }
         val b = f.length()
         return when {
@@ -660,7 +663,7 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
         if (ext in viewerExts || ext.isBlank()) {
             viewFile = f
         } else if (!QuroDocOpener.open(ctx, f)) {
-            Toast.makeText(ctx, "未找到可打开 ${f.name} 的应用", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, qstr(R.string.qk_02727, (f.name).toString()), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -681,7 +684,7 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
                 onClose = { viewFile = null; refresh++ },
                 onExternal = {
                     if (!QuroDocOpener.open(ctx, viewFile!!)) {
-                        Toast.makeText(ctx, "未找到可打开该文件的应用", Toast.LENGTH_LONG).show()
+                        Toast.makeText(ctx, qstr(R.string.qk_01861), Toast.LENGTH_LONG).show()
                     } else viewFile = null
                 },
                 readOnly = false,
@@ -693,9 +696,9 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
     val entries = remember(currentPath, refresh) {
         if (currentPath == null) {
             buildList {
-                add(FileEntry("内部存储（应用私有）", internalRoot, true))
-                add(FileEntry("外部存储（应用私有）", externalRoot, true))
-                if (publicReadable) add(FileEntry("公共存储（内部 SD 卡）", publicRoot, true))
+                add(FileEntry(qstr(R.string.qk_02728), internalRoot, true))
+                add(FileEntry(qstr(R.string.qk_02729), externalRoot, true))
+                if (publicReadable) add(FileEntry(qstr(R.string.qk_02730), publicRoot, true))
             }
         } else {
             val dir = File(currentPath!!)
@@ -711,11 +714,11 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (currentPath != null) {
                     IconButton(onClick = { currentPath = parentOf(currentPath!!) }, Modifier.size(32.dp)) {
-                        Icon(Icons.Filled.ArrowUpward, "上一级", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Filled.ArrowUpward, stringResource(R.string.qk_02731), tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     }
                 }
                 Text(
-                    currentPath ?: "选择存储位置",
+                    currentPath ?: stringResource(R.string.qk_02732),
                     style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant,
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
@@ -724,10 +727,10 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
                 )
                 if (currentPath != null) {
                     IconButton(onClick = { newName = ""; newIsFolder = false; showNew = true }, Modifier.size(32.dp)) {
-                        Icon(Icons.Filled.NoteAdd, "新建文件", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Filled.NoteAdd, stringResource(R.string.qk_01057), tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     }
                     IconButton(onClick = { newName = ""; newIsFolder = true; showNew = true }, Modifier.size(32.dp)) {
-                        Icon(Icons.Filled.CreateNewFolder, "新建文件夹", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Filled.CreateNewFolder, stringResource(R.string.qk_02733), tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -737,7 +740,7 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("搜索当前目录…", fontSize = 13.sp) },
+                placeholder = { Text(stringResource(R.string.qk_02734), fontSize = 13.sp) },
                 leadingIcon = { Icon(Icons.Filled.Search, null, modifier = Modifier.size(18.dp)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
@@ -771,36 +774,36 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
                         Box {
                             var showItemMenu by remember { mutableStateOf(false) }
                             IconButton(onClick = { showItemMenu = true }, Modifier.size(32.dp)) {
-                                Icon(Icons.Filled.MoreVert, "操作", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Filled.MoreVert, stringResource(R.string.qk_02735), tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
                             }
                             DropdownMenu(expanded = showItemMenu, onDismissRequest = { showItemMenu = false }) {
                                 DropdownMenuItem(
-                                    text = { Text("打开方式（外部）") },
+                                    text = { Text(stringResource(R.string.qk_02736)) },
                                     leadingIcon = { Icon(Icons.Filled.OpenInNew, null, modifier = Modifier.size(16.dp)) },
-                                    onClick = { showItemMenu = false; if (!QuroDocOpener.open(ctx, f)) Toast.makeText(ctx, "未找到可打开该文件的应用", Toast.LENGTH_SHORT).show() },
+                                    onClick = { showItemMenu = false; if (!QuroDocOpener.open(ctx, f)) Toast.makeText(ctx, qstr(R.string.qk_01861), Toast.LENGTH_SHORT).show() },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("重命名") },
+                                    text = { Text(stringResource(R.string.qk_00837)) },
                                     leadingIcon = { Icon(Icons.Filled.Edit, null, modifier = Modifier.size(16.dp)) },
                                     onClick = { showItemMenu = false; renameTarget = f; renameText = f.name },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("复制到…") },
+                                    text = { Text(stringResource(R.string.qk_02737)) },
                                     leadingIcon = { Icon(Icons.Filled.ContentCopy, null, modifier = Modifier.size(16.dp)) },
                                     onClick = { showItemMenu = false; opMode = "copy"; opTarget = f; destPath = f.parent ?: "" },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("移动到…") },
+                                    text = { Text(stringResource(R.string.qk_02738)) },
                                     leadingIcon = { Icon(Icons.Filled.ArrowForward, null, modifier = Modifier.size(16.dp)) },
                                     onClick = { showItemMenu = false; opMode = "move"; opTarget = f; destPath = f.parent ?: "" },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("属性") },
+                                    text = { Text(stringResource(R.string.qk_02739)) },
                                     leadingIcon = { Icon(Icons.Filled.Info, null, modifier = Modifier.size(16.dp)) },
                                     onClick = { showItemMenu = false; infoTarget = f },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("删除", color = cs.error) },
+                                    text = { Text(stringResource(R.string.qk_00091), color = cs.error) },
                                     leadingIcon = { Icon(Icons.Filled.Delete, null, Modifier.size(16.dp), tint = cs.error) },
                                     onClick = { showItemMenu = false; deleteTarget = f },
                                 )
@@ -816,9 +819,9 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
     if (renameTarget != null) {
         AlertDialog(
             onDismissRequest = { renameTarget = null },
-            title = { Text("重命名") },
+            title = { Text(stringResource(R.string.qk_00837)) },
             text = {
-                OutlinedTextField(renameText, { renameText = it }, label = { Text("新名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(renameText, { renameText = it }, label = { Text(stringResource(R.string.qk_02740)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -826,14 +829,14 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
                     val raw = renameText.trim()
                     if (raw.isNotBlank() && raw != t.name) {
                         val target = File(t.parentFile, raw.replace(Regex("[\\\\/:*?\"<>|]"), "_"))
-                        if (target.exists()) Toast.makeText(ctx, "已存在同名文件", Toast.LENGTH_SHORT).show()
-                        else if (t.renameTo(target)) { Toast.makeText(ctx, "已重命名", Toast.LENGTH_SHORT).show(); refresh++ }
-                        else Toast.makeText(ctx, "重命名失败", Toast.LENGTH_SHORT).show()
+                        if (target.exists()) Toast.makeText(ctx, qstr(R.string.qk_02741), Toast.LENGTH_SHORT).show()
+                        else if (t.renameTo(target)) { Toast.makeText(ctx, qstr(R.string.qk_02742), Toast.LENGTH_SHORT).show(); refresh++ }
+                        else Toast.makeText(ctx, qstr(R.string.qk_01998), Toast.LENGTH_SHORT).show()
                     }
                     renameTarget = null
-                }) { Text("确定") }
+                }) { Text(qstr(R.string.qk_02020)) }
             },
-            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text(stringResource(R.string.qk_00011)) } },
         )
     }
 
@@ -841,18 +844,18 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
     if (deleteTarget != null) {
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("删除") },
+            title = { Text(stringResource(R.string.qk_00091)) },
             text = { Text("确定删除「${deleteTarget!!.name}」${if (deleteTarget!!.isDirectory) "及其全部内容" else ""}？此操作不可恢复。") },
             confirmButton = {
                 TextButton(onClick = {
                     val t = deleteTarget!!
                     val ok = runCatching { if (t.isDirectory) t.deleteRecursively() else t.delete() }.getOrDefault(false)
-                    Toast.makeText(ctx, if (ok) "已删除" else "删除失败", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, if (ok) qstr(R.string.qk_02745) else qstr(R.string.qk_02746), Toast.LENGTH_SHORT).show()
                     deleteTarget = null
                     refresh++
-                }) { Text("删除", color = cs.error) }
+                }) { Text(qstr(R.string.qk_00091), color = cs.error) }
             },
-            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.qk_00011)) } },
         )
     }
 
@@ -860,11 +863,11 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
     if (opTarget != null && opMode.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { opTarget = null; opMode = "" },
-            title = { Text(if (opMode == "copy") "复制到目录" else "移动到目录") },
+            title = { Text(if (opMode == "copy") stringResource(R.string.qk_02747) else stringResource(R.string.qk_02748)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("目标目录的完整路径（须已存在）：", fontSize = 13.sp, color = cs.onSurfaceVariant)
-                    OutlinedTextField(destPath, { destPath = it }, label = { Text("目标目录路径") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Text(stringResource(R.string.qk_02749), fontSize = 13.sp, color = cs.onSurfaceVariant)
+                    OutlinedTextField(destPath, { destPath = it }, label = { Text(stringResource(R.string.qk_02750)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 }
             },
             confirmButton = {
@@ -872,11 +875,11 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
                     val src = opTarget!!
                     val dir = File(destPath.trim())
                     val ok = if (!dir.isDirectory) {
-                        Toast.makeText(ctx, "目标目录不存在", Toast.LENGTH_SHORT).show(); false
+                        Toast.makeText(ctx, qstr(R.string.qk_02751), Toast.LENGTH_SHORT).show(); false
                     } else {
                         val target = File(dir, src.name)
                         runCatching {
-                            if (target.exists()) { Toast.makeText(ctx, "目标已存在同名文件", Toast.LENGTH_SHORT).show(); false }
+                            if (target.exists()) { Toast.makeText(ctx, qstr(R.string.qk_02752), Toast.LENGTH_SHORT).show(); false }
                                 else if (opMode == "copy") {
                                     if (src.isDirectory) src.copyRecursively(target)
                                     else { src.copyTo(target); true }
@@ -890,12 +893,12 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
                                 }
                         }.getOrDefault(false)
                     }
-                    if (ok) Toast.makeText(ctx, if (opMode == "copy") "已复制" else "已移动", Toast.LENGTH_SHORT).show()
+                    if (ok) Toast.makeText(ctx, if (opMode == "copy") qstr(R.string.qk_00023) else qstr(R.string.qk_02753), Toast.LENGTH_SHORT).show()
                     opTarget = null; opMode = ""
                     refresh++
-                }) { Text("确定") }
+                }) { Text(qstr(R.string.qk_02020)) }
             },
-            dismissButton = { TextButton(onClick = { opTarget = null; opMode = "" }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { opTarget = null; opMode = "" }) { Text(stringResource(R.string.qk_00011)) } },
         )
     }
 
@@ -904,18 +907,18 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
         val f = infoTarget!!
         AlertDialog(
             onDismissRequest = { infoTarget = null },
-            title = { Text("属性") },
+            title = { Text(stringResource(R.string.qk_02739)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("名称：${f.name}", fontSize = 14.sp)
+                    Text(stringResource(R.string.qk_02754, (f.name).toString()), fontSize = 14.sp)
                     Text("类型：${if (f.isDirectory) "文件夹" else f.extension.ifBlank { "未知" }.uppercase()}", fontSize = 14.sp)
-                    Text("大小：${sizeText(f)}", fontSize = 14.sp)
-                    Text("路径：${f.absolutePath}", fontSize = 13.sp)
+                    Text(stringResource(R.string.qk_02756, (sizeText(f)).toString()), fontSize = 14.sp)
+                    Text(qstr(R.string.qk_02757, (f.absolutePath).toString()), fontSize = 13.sp)
                     Text("修改时间：${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(f.lastModified()))}", fontSize = 13.sp)
-                    Text("可读：${f.canRead()}  可写：${f.canWrite()}", fontSize = 13.sp)
+                    Text(stringResource(R.string.qk_02759, (f.canRead()).toString(), (f.canWrite()).toString()), fontSize = 13.sp)
                 }
             },
-            confirmButton = { TextButton(onClick = { infoTarget = null }) { Text("关闭") } },
+            confirmButton = { TextButton(onClick = { infoTarget = null }) { Text(stringResource(R.string.qk_00065)) } },
         )
     }
 
@@ -923,9 +926,9 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
     if (showNew) {
         AlertDialog(
             onDismissRequest = { showNew = false },
-            title = { Text(if (newIsFolder) "新建文件夹" else "新建文件") },
+            title = { Text(if (newIsFolder) stringResource(R.string.qk_02733) else stringResource(R.string.qk_01057)) },
             text = {
-                OutlinedTextField(newName, { newName = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(newName, { newName = it }, label = { Text(stringResource(R.string.qk_02486)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -935,13 +938,13 @@ private fun QuroFileManager(onExitToHome: () -> Unit) {
                         val ok = runCatching {
                             if (newIsFolder) target.mkdirs() else target.createNewFile()
                         }.getOrDefault(false)
-                        Toast.makeText(ctx, if (ok) "已创建" else "创建失败（或已存在）", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, if (ok) qstr(R.string.qk_02760) else qstr(R.string.qk_02761), Toast.LENGTH_SHORT).show()
                         refresh++
                     }
                     showNew = false
-                }) { Text("创建") }
+                }) { Text(qstr(R.string.qk_00843)) }
             },
-            dismissButton = { TextButton(onClick = { showNew = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { showNew = false }) { Text(qstr(R.string.qk_00011)) } },
         )
     }
 }
@@ -959,16 +962,16 @@ private fun PackageNameFinder() {
     val scope = rememberCoroutineScope()
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("输入应用显示名（如「微信」「快手」），反查其精确包名。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.qk_02762), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(
             value = name, onValueChange = { name = it },
-            label = { Text("应用名称") },
+            label = { Text(stringResource(R.string.qk_02763)) },
             singleLine = true, modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(10.dp))
         PrimaryButton(
-            text = "查询包名",
+            text = stringResource(R.string.qk_02764),
             enabled = name.trim().isNotEmpty(),
             onClick = {
                 scope.launch(Dispatchers.IO) {
@@ -1013,7 +1016,7 @@ private fun WorkspaceScreen(onExitToHome: () -> Unit) {
     val dir = if (currentPath == null) root else File(currentPath!!)
     val entries = remember(currentPath, refresh) {
         if (currentPath == null) {
-            listOf(FileEntry("📂 根目录 (QuroWorkspace)", root.absolutePath, true))
+            listOf(FileEntry(qstr(R.string.qk_02765), root.absolutePath, true))
         } else {
             val list = dir.listFiles()?.sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() }) ?: emptyList()
             list.map { FileEntry(it.name + if (it.isDirectory) "/" else "", it.absolutePath, it.isDirectory) }
@@ -1023,20 +1026,20 @@ private fun WorkspaceScreen(onExitToHome: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Surface(color = cs.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
             Text(
-                currentPath ?: "工作区根目录（QuroWorkspace）",
+                currentPath ?: stringResource(R.string.qk_02766),
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
         }
         Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PrimaryButton(text = "新建文件", modifier = Modifier.weight(1f), onClick = { newName = ""; newFileContent = ""; showNewFile = true })
-            PrimaryButton(text = "新建文件夹", modifier = Modifier.weight(1f), onClick = { newName = ""; showNewFolder = true })
+            PrimaryButton(text = stringResource(R.string.qk_01057), modifier = Modifier.weight(1f), onClick = { newName = ""; newFileContent = ""; showNewFile = true })
+            PrimaryButton(text = stringResource(R.string.qk_02733), modifier = Modifier.weight(1f), onClick = { newName = ""; showNewFolder = true })
         }
         if (content != null) {
             Column(Modifier.fillMaxSize()) {
                 Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { content = null }) { Text("← 返回列表") }
+                    TextButton(onClick = { content = null }) { Text(stringResource(R.string.qk_02767)) }
                     Spacer(Modifier.weight(1f))
                 }
                 SelectionContainer(Modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState())) {
@@ -1055,8 +1058,8 @@ private fun WorkspaceScreen(onExitToHome: () -> Unit) {
                                 if (e.isDir) currentPath = e.path
                                 else {
                                     val f = File(e.path)
-                                    content = if (f.length() > 512 * 1024) "文件过大（${(f.length() / 1024)}KB），建议用其他方式查看"
-                                    else runCatching { f.readText(Charsets.UTF_8) }.getOrNull() ?: "（无法读取，可能不是文本文件）"
+                                    content = if (f.length() > 512 * 1024) qstr(R.string.qk_02768, ((f.length() / 1024)).toString())
+                                    else runCatching { f.readText(Charsets.UTF_8) }.getOrNull() ?: qstr(R.string.qk_02769)
                                 }
                             }
                             .padding(12.dp),
@@ -1085,11 +1088,11 @@ private fun WorkspaceScreen(onExitToHome: () -> Unit) {
     if (showNewFile) {
         AlertDialog(
             onDismissRequest = { showNewFile = false },
-            title = { Text("新建文件") },
+            title = { Text(stringResource(R.string.qk_01057)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(newName, { newName = it }, label = { Text("文件名") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(newFileContent, { newFileContent = it }, label = { Text("内容") }, modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp))
+                    OutlinedTextField(newName, { newName = it }, label = { Text(stringResource(R.string.qk_02770)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(newFileContent, { newFileContent = it }, label = { Text(stringResource(R.string.qk_01059)) }, modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp))
                 }
             },
             confirmButton = {
@@ -1101,18 +1104,18 @@ private fun WorkspaceScreen(onExitToHome: () -> Unit) {
                         refresh++
                     }
                     showNewFile = false
-                }) { Text("创建") }
+                }) { Text(qstr(R.string.qk_00843)) }
             },
-            dismissButton = { TextButton(onClick = { showNewFile = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { showNewFile = false }) { Text(qstr(R.string.qk_00011)) } },
         )
     }
 
     if (showNewFolder) {
         AlertDialog(
             onDismissRequest = { showNewFolder = false },
-            title = { Text("新建文件夹") },
+            title = { Text(stringResource(R.string.qk_02733)) },
             text = {
-                OutlinedTextField(newName, { newName = it }, label = { Text("文件夹名") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(newName, { newName = it }, label = { Text(stringResource(R.string.qk_02771)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
             },
             confirmButton = {
                 Button(onClick = {
@@ -1123,9 +1126,9 @@ private fun WorkspaceScreen(onExitToHome: () -> Unit) {
                         refresh++
                     }
                     showNewFolder = false
-                }) { Text("创建") }
+                }) { Text(qstr(R.string.qk_00843)) }
             },
-            dismissButton = { TextButton(onClick = { showNewFolder = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { showNewFolder = false }) { Text(qstr(R.string.qk_00011)) } },
         )
     }
 }

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.ui.card.widgets
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -117,7 +119,7 @@ class StatusRenderer : CardRenderer<StatusState> {
             }
             "error" -> {
                 val titleY = padTop
-                backend.drawText("错误", pad, titleY, backend.resolve(ColorToken.Danger), titleFs, 700)
+                backend.drawText(qstr(R.string.qk_00255), pad, titleY, backend.resolve(ColorToken.Danger), titleFs, 700)
                 val reason = st.reason ?: st.text
                 val reasonY = titleY + spPx(titleFs, d) + 4f
                 if (reason.isNotEmpty()) {

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -28,7 +30,7 @@ fun QuroNovaTermScreen(onClose: () -> Unit) {
             onClick = onClose,
             modifier = Modifier.align(Alignment.TopEnd).zIndex(50f)
         ) {
-            Icon(Icons.Filled.Close, contentDescription = "关闭沙盒终端", tint = Color.White)
+            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.qk_02272), tint = Color.White)
         }
     }
 }

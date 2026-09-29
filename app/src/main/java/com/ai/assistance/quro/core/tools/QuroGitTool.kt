@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
@@ -12,7 +14,7 @@ import org.json.JSONObject
  */
 class QuroGitTool : QuroTool {
     override val name = "git"
-    override val description = "本地 Git 版本控制集成：在 proot 容器内对设备存储上的仓库执行 git 命令。" +
+    override val description = qstr(R.string.qk_03701) +
         "参数 {\"action\":\"status|log|diff|branch|remote|add|commit|clone|pull|push\"," +
         "\"repo\":\"仓库本地路径（/storage/emulated/0/... 或 /sdcard/...；clone 时为目标目录）\"," +
         "\"url\":\"远程地址（clone 用）\",\"message\":\"提交说明（commit 用）\",\"args\":\"附加参数（可选）,\"timeout_ms\":60000}。" +

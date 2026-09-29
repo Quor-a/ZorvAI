@@ -1,0 +1,480 @@
+取消
+返回
+关闭
+删除
+保存
+复制
+刷新
+编辑
+新建文件
+重试
+失败
+创建
+点击查看详情
+执行中…
+清空
+打开
+复制源码
+确认
+搜索
+状态
+可视化弹窗
+卸载
+未连接
+断开
+收起
+重命名
+新对话
+没听清，请重试
+确定
+新建文件夹
+可视化编程
+已复制
+分享
+思考中
+代码
+图片
+已选择
+工具箱
+完成
+已加载
+（无数据）
+标题
+部署中…
+导入
+探测中…
+新建文档
+Web 应用
+询问
+工作区
+自定义弹窗
+记忆库
+工具
+发送
+语音设置
+文档
+未知
+重连
+选择会话
+自动
+提交
+文件路径
+内容
+添加
+部署失败
+评分
+表格
+说明
+你
+前往应用设置
+无结果
+已生成
+就绪
+已连接
+小
+标准
+大
+未配置
+当前配置的模型。
+未配置模型
+网页预览（AI 运行产物）
+图片预览（AI 运行产物）
+未找到可打开该文档的应用，可尝试用应用内文档查看器或安装 WPS / Office
+屏幕捕获授权被取消，已 fallback 到无障碍节点树
+我
+对话小窗
+浏览器小窗
+（无内容）
+知道了
+（无选项）
+AI 可用 browser_act 操控此浏览器
+AI 可用 web_crawler 批量抓取（网页爬虫）：告诉它起始 URL 即可
+AI 可用 python_run 跑 Python
+回到底部
+思考
+行动
+结果
+分享给
+追问
+流程图 / 可视化
+下载
+查看大图
+图片预览不可用
+播放
+点击在应用内预览排版
+点击打开文件
+内容预览
+收起排版预览
+对话框内预览排版
+全屏预览
+图片加载失败
+源文件不存在
+打开文件
+执行轨迹
+（实时）
+等待 AI 行动…
+文档排版
+无障碍控屏
+系统权限
+终端执行
+系统能力
+文件工具
+网络能力
+提醒与步骤
+界面控制
+图像生成
+视频生成
+上下文总结
+人格孵化
+高危
+中危
+安全
+警告
+成功
+参数
+重新打开
+再次执行
+选择
+选择 ACI 应用
+搜索应用...
+未找到匹配的 ACI 应用
+未选择
+取消选择
+编辑灵魂卡
+设备不支持语音识别
+针对上面的回答，我想追问：
+自动朗读让位：本回合 AI 已用 speak 工具控制播报顺序
+已选择：可视化弹窗，发送消息时将触发
+已取消：可视化弹窗
+已选择：可视化询问，发送消息时将触发
+已取消：可视化询问
+已选择：可视化小卡片，发送消息时将触发
+已取消：可视化小卡片
+已选择：动态UI组件，发送消息时将触发
+已取消：动态UI组件
+已选择：AIP文档排版，发送消息时将触发
+已取消：AIP文档排版
+展开对话
+打开弹窗
+导出失败，请重试
+分享对话
+QuroAI 对话导出，文件已保存至：$path
+已导出对话：$path
+当前配置
+自定义
+已保存预设
+其他供应商（自建）
+未命名供应商
+其他供应商
+本地离线模型
+可用模型 (API)
+PDF 文件已保存到工作区，可在文件管理器中打开查看
+执行追踪
+AI 正在执行工具…
+本地音乐
+正在播放
+已暂停
+移除
+上传文件
+语音输入
+和 Zorv 说点什么…
+停止生成
+选择技能
+编辑文本
+可视化询问
+可视化小卡片
+动态UI组件
+AIP文档排版
+对话
+复制全部对话
+删除全部对话
+生成式界面
+生成中
+删除对话
+确定删除这条对话记录吗？删除后不可恢复。
+清空全部对话
+确定删除全部对话记录吗？此操作不可恢复。
+全部删除
+视频通话
+摄像头预览 + 实时对话 + 画面识别
+跟随模型默认
+保留对话轮数
+10 轮
+20 轮
+50 轮
+全部（跟随模型默认）
+用户资料
+导入图片
+清除头像
+你的名字
+AI 会知道你叫什么
+个人签名（可选）
+选择模型
+「当前配置」为你在设置中配置的真实模型；「可用模型」为从接口拉取到的真实列表，点选即切换。
+从 API 拉取可用模型（手动）
+当前仅有「当前配置」的模型。需要更多可选模型，请到「模型配置」填写 Base URL 与 API Key 后拉取，或手动填入模型名。
+前往模型配置 · 设置 API Key / Base URL / 参数
+选择灵魂
+每个灵魂是不同语气与专长的「对话伙伴」，切换即换一种相处方式。
+灵魂注入 · 完整设定（头像/角色/语气/标签）
+人格仅改变语气与专长，不改变事实与能力边界
+点击下方工具快速执行操作；也可导入工具 / 让 AI 自写工具，导入成功即成为可调用工具。
+AI 浏览器
+知识库
+清屏
+技能
+定时
+机器人
+选择上传类型（可多选）
+文件
+视频
+搜索 / 打开
+AI 浏览器 · 联网搜索
+搜索词或网址
+如：今天的新闻 / https://example.com
+输入网址→在内置浏览器打开；输入关键词→交给 AI 联网检索（后台可用）。
+语音合成、语音识别与语音设置入口。
+语音合成
+语音合成 (TTS)
+语音识别
+语音识别 (STT)
+链接回答
+没有可复制的内容
+未指定要打开的应用
+启动失败
+未指定要打开的界面
+没有可渲染的 HTML 内容
+HTML 预览
+没有可渲染的可视化内容
+未指定要调用的工具
+工具执行异常
+文件不存在：${att.path}
+无法打开：${it.message}
+运行失败：${e.message}
+调用工具 ×${tools.size}
+· ${tools.size} 工具
+${historyRounds} 轮
+当前选中「${selected.name}」· 切换即生效
+⚠️ 动态 UI 解析失败：${parsed.reason}
+已保存到应用目录：${out.absolutePath}
+下载失败：${it.message}
+错误：${r.error}
+已读取 ${r.output.length} 字符（可编辑后「写入」回同一路径）
+已写入 ${path.trim()}
+已删除 ${path.trim()}
+导出失败：${it.message}
+执行失败: ${e.message}
+触发: ${workflow.trigger} | 节点: ${workflow.nodes.size}
+上次状态: ${workflow.lastStatus}
+请调用工具 $toolName
+已执行 $toolName
+技能「$skillName」未启用或不存在
+❌ 保存失败：${e.message}
+❌ 保存失败：无法创建文件
+✅ 已保存到 Downloads/$fileName
+已复制路径，请在文件管理器粘贴：${dir.absolutePath}
+请在系统文件管理器中导航到：${dir.absolutePath}
+目录不存在：${dir.absolutePath}
+计算中…
+存储管理
+存储概览
+可清理总大小
+缓存已清除
+清除中…
+清除缓存
+FTP 文件服务器
+运行中
+已停止
+FTP 服务器已启动
+FTP 服务器已停止
+FTP 服务器操作失败
+处理中…
+停止服务器
+启动服务器
+终端 rootfs 文件
+环境未就绪
+浏览/读写 Ubuntu rootfs 内文件（/root、/etc、/sdcard…），与终端共用同一文件系统。
+rootfs 路径
+(空目录)
+列出
+读取
+写入
+文件内容（读取后显示，可编辑后「写入」）
+提示：输入路径后点「列出」看目录，或直接「读取 / 写入 / 删除」文件。
+已复制路径
+复制路径
+已挂载（Android 11+ 应用私有目录在系统文件管理器可见）
+未挂载或不可用
+在系统文件管理器中打开
+共享存储
+应用私有文件
+应用数据(quro_data)
+导出(quro_exports)
+备份(quro_backups)
+公共下载/QuroAI_logs
+工作流管理
+新建工作流
+还没有工作流
+点击右上角 + 新建，或让 AI 帮你创建
+工作流执行完成
+编辑工作流
+工作流名称
+触发类型 (manual/time/event)
+调度规则 (如 daily:09:00)
+智能助手
+你的 AI 助手，随时待命。
+空对话
+今天
+本周
+更早
+附件
+已下载：$collectedName
+预览
+复制代码
+下载代码
+代码运行出错，请分析并修复：
+语言：$lang
+代码：
+错误信息：
+请分析错误原因，提供修复后的完整代码，并解释修复内容。
+自动修复
+运行
+✅ 运行结果（交互式）
+下载HTML
+❌ 运行结果
+✅ 运行结果
+下载结果
+关闭全屏
+错误
+运行失败
+CMS引擎导入失败：${it.message}
+启动登录失败: ${e.message}
+创建失败: $r
+最终识别（${costMs} ms）: $text
+编辑内容 · ${file.name}
+可读：${f.canRead()}  可写：${f.canWrite()}
+授权级别：${a.level.name}
+初始化失败 ❌\n音频: $diag\n引擎: $engineDiag
+无法打开链接：$url
+读取失败：$loadErr
+已删除模型: $key
+… 还有 ${card.events.size - shownEvents.size} 个事件已省略渲染
+最终转写: $text
+语音识别出错：$msg
+当前版本 v$versionName
+🎙 支持语音转写 · $selectedProvider
+生成失败：$it
+正在从 ${cfg.baseUrl} 拉取模型…
+卸载失败：${rec.pluginId}
+安全模式也失败 (r=$r) ❌
+${min / 60} 小时前
+✅ 已发送删除命令: ${envName}
+关注者 ${a.followers}
+JSON 解析失败：${e.message}
+HTML 已写入 ${htmlFile.absolutePath}；engine.len=${threeJs.length}；b64.len=${b64.length}
+$count 个
+最近孵化 ${mins}分钟前
+安装于：${formatTime(rec.installedAt)}
+已安装 ${packages.size} 个工具包
+（ACI 尚未就绪�?${e.message}）\n
+已启动：${app.appName}
+服务商：${ep.provider}
+📋 Bug 日志 (${sttLogs.size})
+🧩 ${enabledSkillsCount}个技能
+保存失败：${it.message}
+已下载，但引擎加载失败：${res.message}
+生成失败：${e.message}
+✅ 已启用 TCP ADB，监听端口 $portNum\n${r.output}
+请先在「${def.name}」官方平台创建克隆音色，再于「音色」字段（自由填写）填入克隆音色 ID/名称即可调用。
+内存=${con.maxMemoryMb}MB
+已选自定义厂商：${cfg.customProviderName}
+当前用户的名字是�?${userName}」。在合适的场合可以直接用这个名字称呼用户，但不要每句话都刻意叫名字。\n
+\n· 补签未成功，已按原包安装：$err
+ROOT：${st(PrivilegeLevel.L4).details}（root 命令经 root_exec / shizuku_root_exec 工具真实执行，受「权限模式」策略约束）
+最近任务：$taskEnd
+，未签名 ${r.unsigned}
+已保存到：${f.absolutePath}
+无法解析 PPTX：$err
+最终识别: $text
+卸载失败：${out.asString()}
+超时=${con.maxExecutionTimeSecs}s
+编译/安装失败：${out.asString()}
+关闭$title
+已保存到工程「$base」
+✅ 当前播放服务商：$providerLabel。语色路由已可生效——下方为该服务商真实音色清单，AI 会从中自动选角（不再写死单一服务商）。
+下载体积：${formatBytes(spec.downloadBytes)}
+❌ 本机架构不支持端侧离线识别，已禁用下载：${AsrDeviceCompat.unsupportedReason(ctx)}
+重载失败：${rec.pluginId}
+权限：${perm.id} [${perm.level.name}]
+Draco 提取=$dracoOk；dracoPath=$dracoPath
+未知能力：${'$'}capability
+名称：${f.name}
+已登记 ${models.size} 个模型
+以上为已与本机 ADB 端口 $tcpPort 建立 TCP 连接的控制端。要断开：关闭上方「启用无线 ADB」开关，或让对方 adb disconnect。
+${min} 分钟前
+${node.branch.messages.size} 条消息
+模型: $modelName (provider=$provider)
+类型：$typeLabel
+添加自定义 ${pmType.displayName} 源
+孵化超时(${INCUBATE_TIMEOUT_MS}ms)，疑似 LLM 调用卡死，已中止该卡孵化
+已安装（${packages.size}）
+↓ ${node.branch.childBranchIds.size} 个子分支
+关注中 ${a.following}
+发现新版本 v$lv
+[本轮已根据触发词自动激活以下技能，请按其对用户消息作答]\n$inject
+点击卡片选择服务商，选中后展开查看所需参数；列表可上下滑动浏览全部 ${QuroTtsProviders.ALL.size} 家。
+已选择: ${selectedApp.appName}
+朗读仍失败 ❌\n$diag
+插件工具 $toolCount
+当前源：${selected.name}
+暂无客户端连接（本机仅在监听）。对方执行 adb connect $ip:$tcpPort 后会出现在这里。
+孵化诊断双写失败: ${it.message}
+有 ${failed.size} 个内置包装载失败：\n
+插件贡献的 AI 工具（${allToolSpecs.size}）
+… 还有 ${card.items.size - shownItems.size} 项已省略渲染
+节点编辑器加载失败: $description (code=$errorCode)
+- 路径规则：path �?**相对工作区根目录**的路径（�? MyApp/src/Main.java），不要带盘�?/绝对路径、不�? .. 逃逸；写完后告诉用户文件在「工具箱-工作区」里，绝对路径是 $wsRoot/相对路径。\n
+大小：${sizeText(f)}
+文件$sizeText
+识别出错: $msg ❌
+$n 项
+已保存到下载目录：$name
+❌ 删除命令发送失败: ${e.message}
+能力 (${selectedApp.capabilities.size}):
+[${nowTs()}] ⚠ 截图保存失败：${e.message}\n
+调用 visual_custom_popup 工具，参数：$args
+$toolCount 工具
+执行：$cmd
+已重命名为 $name
+已保存到工程「$projName」
+已完成 $done / ${card.items.size}
+下载失败：$r
+能力总数：$totalCaps
+初始化回调异常(已忽略): ${e.message}
+确定要删除全部 ${logs.size} 条审计记录吗？此操作不可撤销。
+一次性 @ ${task.scheduledAt}
+已删除：$name
+已保存: ${file?.name}
+已创建并保存到 ${newFile.absolutePath}
+（请生成一个评分界面：$question）
+[${nowTs()}] 已保存：${updated.name}\n
+生成回复异常 convId=$convId
+已注册工具（${toolList.size}）
+能力 (${caps.size})
+打开控制台失败（错误码=${resp.errorCode}）：${resp.errorMessage}
+打开 $label
+· ${msg.tools.size} 工具
+已注册并启动：${app.appName}
+已选模型: ${opt.sourceLabel} / ${opt.modelName} / provider=${opt.provider}
+异常: ${e.message}
+⚠️ ${AsrDeviceCompat.unsupportedReason(ctx)} 下载与部署已禁用，请改用「本地识别」或「AI 模型」引擎。
+正在下载新版本 v$version...
+音频环境: $diag
+这是来自 ${platform.label} 用户 $userId 的机器人对话�?
+连接成功，发现 $n 个工具
+通道：${QuroPrivilegeManager.channelOf(level)}
+不支持的文档类型：$ext\n请用「其他应用」打开。
+暂不支持导入该类型：$ext（仅支持 md/txt/json/csv/docx/xlsx/pptx）
+已注册并启动：$pkg
+曲目 ${i + 1}
+依赖 (${deps.size})

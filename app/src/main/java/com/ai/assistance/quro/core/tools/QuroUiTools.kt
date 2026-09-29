@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.tools.ui.UiNavigationEvent
@@ -272,13 +274,13 @@ action 说明:
             "screenshot" -> { UiNavigationBus.navEvent = UiNavigationEvent.Screenshot; "已截屏" }
             "share" -> { UiNavigationBus.navEvent = UiNavigationEvent.Share(target); "已分享" }
             "search" -> { UiNavigationBus.navEvent = UiNavigationEvent.Search(target); "已搜索: $target" }
-            "refresh" -> { UiNavigationBus.navEvent = UiNavigationEvent.Refresh; "已刷新" }
-            "stop" -> { UiNavigationBus.navEvent = UiNavigationEvent.StopLoading; "已停止" }
+            "refresh" -> { UiNavigationBus.navEvent = UiNavigationEvent.Refresh; qstr(R.string.qk_00421) }
+            "stop" -> { UiNavigationBus.navEvent = UiNavigationEvent.StopLoading; qstr(R.string.qk_00326) }
             "bookmark" -> { UiNavigationBus.navEvent = UiNavigationEvent.Bookmark(target); "已收藏" }
             "fullscreen" -> { UiNavigationBus.navEvent = UiNavigationEvent.Fullscreen; "已全屏" }
             "minimize" -> { UiNavigationBus.navEvent = UiNavigationEvent.Minimize; "已最小化" }
             "maximize" -> { UiNavigationBus.navEvent = UiNavigationEvent.Maximize; "已最大化" }
-            "close" -> { UiNavigationBus.navEvent = UiNavigationEvent.Close; "已关闭" }
+            "close" -> { UiNavigationBus.navEvent = UiNavigationEvent.Close; qstr(R.string.qk_02998) }
             "minimize_app" -> { UiNavigationBus.navEvent = UiNavigationEvent.MinimizeApp; "已最小化应用" }
             "lock_screen" -> { UiNavigationBus.navEvent = UiNavigationEvent.LockScreen; "已锁屏" }
             "wake_screen" -> { UiNavigationBus.navEvent = UiNavigationEvent.WakeScreen; "已唤醒" }
@@ -290,7 +292,7 @@ action 说明:
             "start_recording" -> { UiNavigationBus.navEvent = UiNavigationEvent.StartRecording; "已开始录屏" }
             "stop_recording" -> { UiNavigationBus.navEvent = UiNavigationEvent.StopRecording; "已停止录屏" }
             "play" -> { UiNavigationBus.navEvent = UiNavigationEvent.PlayMedia; "已播放" }
-            "pause" -> { UiNavigationBus.navEvent = UiNavigationEvent.PauseMedia; "已暂停" }
+            "pause" -> { UiNavigationBus.navEvent = UiNavigationEvent.PauseMedia; qstr(R.string.qk_00158) }
             "stop_media" -> { UiNavigationBus.navEvent = UiNavigationEvent.StopMedia; "已停止媒体" }
             "next_track" -> { UiNavigationBus.navEvent = UiNavigationEvent.NextTrack; "下一曲" }
             "prev_track" -> { UiNavigationBus.navEvent = UiNavigationEvent.PrevTrack; "上一曲" }

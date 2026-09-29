@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.graphics.BitmapFactory
@@ -102,21 +105,20 @@ fun SoulInjectionSheet(
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(16.dp).padding(bottom = 24.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("灵魂注入", style = MaterialTheme.typography.titleLarge)
+                Text(stringResource(R.string.qk_02449), style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = onCreate) {
                     Icon(Icons.Filled.Add, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("新建")
+                    Text(stringResource(R.string.qk_00916))
                 }
                 TextButton(onClick = onManageMemory) {
                     Icon(Icons.Filled.Memory, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("记忆库")
+                    Text(stringResource(R.string.qk_00132))
                 }
             }
-            Text(
-                "选择一张灵魂卡，AI 将以它的身份与你交流",
+            Text(stringResource(R.string.qk_02450),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
@@ -129,14 +131,14 @@ fun SoulInjectionSheet(
             ) {
                 Icon(
                     Icons.Filled.Favorite,
-                    "心跳孵化",
+                    stringResource(R.string.qk_02451),
                     tint = if (heartbeatOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("心跳孵化（后台自动孵化每张灵魂卡）", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.qk_02452), style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
                 Text(
-                    if (heartbeatOn) "开启" else "关闭",
+                    if (heartbeatOn) stringResource(R.string.qk_02340) else stringResource(R.string.qk_00065),
                     style = MaterialTheme.typography.labelMedium,
                     color = if (heartbeatOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -168,8 +170,8 @@ fun SoulInjectionSheet(
             if (personas.isEmpty()) {
                 Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("还没有灵魂卡", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("点击「新建」创建第一张灵魂卡", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.qk_02453), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.qk_02454), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -204,12 +206,12 @@ private fun PersonaSmallCard(
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        persona.name.ifBlank { "未命名" },
+                        persona.name.ifBlank { stringResource(R.string.qk_00914) },
                         style = MaterialTheme.typography.labelLarge,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        persona.description.ifBlank { "暂无描述" },
+                        persona.description.ifBlank { stringResource(R.string.qk_02455) },
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isActive) cs.onPrimaryContainer else cs.onSurfaceVariant,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -219,29 +221,29 @@ private fun PersonaSmallCard(
                     Icon(Icons.Filled.Check, null, tint = cs.primary, modifier = Modifier.size(18.dp))
                 }
                 IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Filled.Edit, "编辑", Modifier.size(16.dp), tint = cs.onSurfaceVariant)
+                    Icon(Icons.Filled.Edit, stringResource(R.string.qk_00299), Modifier.size(16.dp), tint = cs.onSurfaceVariant)
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Filled.Delete, "删除", Modifier.size(16.dp), tint = cs.error)
+                    Icon(Icons.Filled.Delete, stringResource(R.string.qk_00091), Modifier.size(16.dp), tint = cs.error)
                 }
                 // 手动「AI孵化」按钮（独立触发该卡孵化）
                 IconButton(onClick = onIncubate, enabled = !incubating, modifier = Modifier.size(28.dp)) {
                     if (incubating) {
                         CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
                     } else {
-                        Icon(Icons.Filled.Favorite, "AI孵化", Modifier.size(16.dp), tint = cs.primary)
+                        Icon(Icons.Filled.Favorite, stringResource(R.string.qk_02456), Modifier.size(16.dp), tint = cs.primary)
                     }
                 }
             }
 
             // 每卡独立孵化状态
             val status = when {
-                incubating -> "孵化中…"
+                incubating -> stringResource(R.string.qk_02457)
                 lastIncubatedAt > 0 -> {
                     val mins = (System.currentTimeMillis() - lastIncubatedAt) / 60000
-                    if (mins < 60) "最近孵化 ${mins}分钟前" else "最近孵化 ${mins / 60}小时前"
+                    if (mins < 60) stringResource(R.string.qk_02458, (mins).toString()) else stringResource(R.string.qk_02459, (mins / 60).toString())
                 }
-                else -> "未孵化"
+                else -> stringResource(R.string.qk_02460)
             }
             Row(
                 Modifier.fillMaxWidth().padding(top = 2.dp),
@@ -300,7 +302,7 @@ fun AvatarContent(avatarUri: String, name: String, size: Int = 40) {
             }
         }
         if (bmp != null) {
-            Image(bitmap = bmp!!, contentDescription = name.ifBlank { "头像" },
+            Image(bitmap = bmp!!, contentDescription = name.ifBlank { stringResource(R.string.qk_02461) },
                 modifier = Modifier.size(size.dp).clip(CircleShape))
             return
         }
@@ -382,7 +384,7 @@ fun PersonaEditDialog(
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize()) {
                 TopAppBar(
-                    title = { Text(if (isNew) "灵魂注入" else "灵魂编辑") },
+                    title = { Text(if (isNew) stringResource(R.string.qk_02449) else stringResource(R.string.qk_02462)) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) { Icon(Icons.Filled.ArrowBack, null) }
                     },
@@ -399,24 +401,24 @@ fun PersonaEditDialog(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     // ── 头像区（仅图片上传 + 裁剪，无表情头像） ──
-                    Text("头像", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.qk_02461), style = MaterialTheme.typography.labelMedium)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         AvatarContent(avatarUri, name, 64)
                         Spacer(Modifier.width(16.dp))
                         Column {
                             if (avatarUri.isNotBlank()) {
-                                Text("图片头像", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                Text(stringResource(R.string.qk_02463), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                 OutlinedButton(onClick = { imagePicker.launch("image/*") }, modifier = Modifier.padding(top = 4.dp)) {
                                     Icon(Icons.Filled.Edit, null, Modifier.size(16.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("更换 / 裁剪图片")
+                                    Text(stringResource(R.string.qk_02464))
                                 }
                             } else {
-                                Text("未设置头像（将显示名称首字母）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(stringResource(R.string.qk_02465), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 OutlinedButton(onClick = { imagePicker.launch("image/*") }, modifier = Modifier.padding(top = 4.dp)) {
                                     Icon(Icons.Filled.Add, null, Modifier.size(16.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("上传图片")
+                                    Text(stringResource(R.string.qk_02466))
                                 }
                             }
                         }
@@ -425,13 +427,13 @@ fun PersonaEditDialog(
 
                     HorizontalDivider(Modifier.padding(vertical = 4.dp))
 
-                    OutlinedTextField(name, { name = it }, label = { Text("灵魂卡名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(description, { description = it }, label = { Text("描述") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                    OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.qk_02467)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(description, { description = it }, label = { Text(stringResource(R.string.qk_01613)) }, modifier = Modifier.fillMaxWidth(), minLines = 2)
 
-                    OutlinedTextField(roleSetting, { roleSetting = it }, label = { Text("角色设定（系统提示词核心）") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-                    OutlinedTextField(opening, { opening = it }, label = { Text("开场白") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
-                    OutlinedTextField(chatSetting, { chatSetting = it }, label = { Text("聊天设定") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
-                    OutlinedTextField(voiceSetting, { voiceSetting = it }, label = { Text("语音设定（自然语言，可选）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(roleSetting, { roleSetting = it }, label = { Text(stringResource(R.string.qk_02468)) }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+                    OutlinedTextField(opening, { opening = it }, label = { Text(stringResource(R.string.qk_02469)) }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                    OutlinedTextField(chatSetting, { chatSetting = it }, label = { Text(stringResource(R.string.qk_02470)) }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                    OutlinedTextField(voiceSetting, { voiceSetting = it }, label = { Text(stringResource(R.string.qk_02471)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
 
                                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         OutlinedButton(
@@ -442,14 +444,14 @@ fun PersonaEditDialog(
                                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                                 Spacer(Modifier.width(6.dp))
                             }
-                            Text(if (incubating) "孵化中…" else "AI 孵化")
+                            Text(if (incubating) stringResource(R.string.qk_02457) else stringResource(R.string.qk_02472))
                         }
                         if (result is IncubateResult.Error) {
                             Text((result as IncubateResult.Error).message, color = MaterialTheme.colorScheme.error,
                                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp))
                         }
                         if (result is IncubateResult.Success) {
-                            Text("已回填 ✓", color = MaterialTheme.colorScheme.primary,
+                            Text(stringResource(R.string.qk_02473), color = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp))
                         }
                     }
@@ -458,12 +460,12 @@ fun PersonaEditDialog(
 
                     // ── 标签：从全局标签池选择 / 进入标签管理 ──
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("标签", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.qk_01095), style = MaterialTheme.typography.labelMedium)
                         Spacer(Modifier.weight(1f))
                         TextButton(onClick = { showTagManager = true }) {
                             Icon(Icons.Filled.Memory, null, Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("管理标签")
+                            Text(stringResource(R.string.qk_02474))
                         }
                     }
 
@@ -479,7 +481,7 @@ fun PersonaEditDialog(
                             }
                         }
                     } else {
-                        Text("还没有标签，点「管理标签」新建并选择。",
+                        Text(stringResource(R.string.qk_02475),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
 
@@ -490,12 +492,12 @@ fun PersonaEditDialog(
                     // 关 = AI 不主动用，仅当用户明确提醒/要求时才使用（用户要求后输出仍能正常渲染）。
                     var featDynamicUi by remember { mutableStateOf(PersonaFeatureToggles.isDynamicUiEnabled(ctx)) }
                     var featSelfCard by remember { mutableStateOf(PersonaFeatureToggles.isSelfCardEnabled(ctx)) }
-                    Text("功能开关", style = MaterialTheme.typography.labelMedium)
-                    Text("两项独立控制，互不影响。开 = 百分百主动使用；关 = 用户提醒才使用。",
+                    Text(qstr(R.string.qk_02476), style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.qk_02477),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     SoulFeatureToggleRow(
-                        title = "动态 UI 组件",
-                        desc = "开：AI 主动用 ```quro-ui 输出原生交互界面；关：仅用户要求时输出。",
+                        title = stringResource(R.string.qk_02478),
+                        desc = stringResource(R.string.qk_02479),
                         checked = featDynamicUi,
                         onChanged = {
                             featDynamicUi = it
@@ -503,8 +505,8 @@ fun PersonaEditDialog(
                         },
                     )
                     SoulFeatureToggleRow(
-                        title = "可视化小卡片",
-                        desc = "开：AI 主动用 ```quro-card 输出自研小卡片；关：仅用户要求时输出。",
+                        title = stringResource(R.string.qk_00170),
+                        desc = stringResource(R.string.qk_02480),
                         checked = featSelfCard,
                         onChanged = {
                             featSelfCard = it
@@ -535,7 +537,7 @@ fun PersonaEditDialog(
                         )
                         onDismiss()
                     }) {
-                        Text("保存灵魂卡")
+                        Text(stringResource(R.string.qk_02481))
                     }
                 }
             }
@@ -573,7 +575,7 @@ fun TagManageScreen(
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize()) {
                 TopAppBar(
-                    title = { Text("标签管理") },
+                    title = { Text(stringResource(R.string.qk_02482)) },
                     navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } },
                     actions = {
                         IconButton(onClick = { showCreate = true }) {
@@ -597,7 +599,7 @@ fun TagManageScreen(
                 }
                 if (tags.isEmpty()) {
                     Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        Text("还没有标签，点右上角 + 新建。", style = MaterialTheme.typography.bodySmall,
+                        Text(stringResource(R.string.qk_02483), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -642,13 +644,13 @@ private fun TagManageCard(
                 IconButton(onClick = { onToggleSelect(tag.name) }, modifier = Modifier.size(28.dp)) {
                     Icon(
                         if (selected) Icons.Filled.Check else Icons.Filled.Add,
-                        if (selected) "已选" else "选择",
+                        if (selected) stringResource(R.string.qk_02484) else stringResource(R.string.qk_00010),
                         Modifier.size(16.dp),
                         tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Filled.Delete, "删除标签", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Filled.Delete, stringResource(R.string.qk_02485), Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
                 }
             }
             if (expanded) {
@@ -669,14 +671,14 @@ private fun TagEditFields(
     var hint by remember(tag) { mutableStateOf(tag.hint) }
     var json by remember(tag) { mutableStateOf(tag.json) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
-        OutlinedTextField(name, { name = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(desc, { desc = it }, label = { Text("描述") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(hint, { hint = it }, label = { Text("AI 提示内容") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(json, { json = it }, label = { Text("JSON 配置（可选，自定义结构化参数）") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+        OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.qk_02486)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(desc, { desc = it }, label = { Text(stringResource(R.string.qk_01613)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(hint, { hint = it }, label = { Text(stringResource(R.string.qk_02487)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(json, { json = it }, label = { Text(stringResource(R.string.qk_02488)) }, modifier = Modifier.fillMaxWidth(), minLines = 2)
         TextButton(onClick = {
             val n = name.trim()
             if (n.isNotEmpty()) onSave(QuroTag(n, desc.trim(), hint.trim(), json.trim()))
-        }, enabled = name.isNotBlank()) { Text("保存") }
+        }, enabled = name.isNotBlank()) { Text(stringResource(R.string.qk_00198)) }
     }
 }
 
@@ -691,10 +693,10 @@ private fun TagEditDialog(
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.widthIn(max = 420.dp).heightIn(max = 560.dp).verticalScroll(rememberScrollState()).padding(20.dp)) {
-            Text(if (initial == null) "新建标签" else "编辑标签", style = MaterialTheme.typography.titleMedium)
+            Text(if (initial == null) stringResource(R.string.qk_02489) else stringResource(R.string.qk_02490), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(12.dp))
                 TagEditFields(tag = base, onSave = onSave)
-                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) { Text("取消") }
+                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) { Text(stringResource(R.string.qk_00011)) }
             }
         }
     }
@@ -743,24 +745,24 @@ fun MemoryDialog(
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize()) {
                 TopAppBar(
-                    title = { Text("记忆库") },
+                    title = { Text(stringResource(R.string.qk_00132)) },
                     navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Filled.ArrowBack, null) } },
                     actions = {
-                        IconButton(onClick = { exportLauncher.launch("quro_memory_export.json") }) { Icon(Icons.Filled.FileDownload, "导出") }
-                        IconButton(onClick = { importLauncher.launch(arrayOf("application/json", "text/plain")) }) { Icon(Icons.Filled.FileUpload, "导入") }
-                        IconButton(onClick = { showAdd = true }) { Icon(Icons.Filled.Add, "添加") }
+                        IconButton(onClick = { exportLauncher.launch("quro_memory_export.json") }) { Icon(Icons.Filled.FileDownload, stringResource(R.string.qk_02491)) }
+                        IconButton(onClick = { importLauncher.launch(arrayOf("application/json", "text/plain")) }) { Icon(Icons.Filled.FileUpload, stringResource(R.string.qk_01635)) }
+                        IconButton(onClick = { showAdd = true }) { Icon(Icons.Filled.Add, stringResource(R.string.qk_01498)) }
                     },
                 )
                 OutlinedTextField(
                     query, { query = it },
-                    placeholder = { Text("搜索内容 / 标题 / 标签 / 分组") },
+                    placeholder = { Text(stringResource(R.string.qk_02492)) },
                     leadingIcon = { Icon(Icons.Filled.Search, null) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 )
                 LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp)) {
                     if (shown.isEmpty()) {
-                        item { Text("暂无记忆。点右上角 + 添加，或从文件导入一份备份。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        item { Text(stringResource(R.string.qk_02493), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                     items(shown) { e ->
                         Card(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { editing = e }) {
@@ -771,7 +773,7 @@ fun MemoryDialog(
                                     }
                                     Text(e.content, style = MaterialTheme.typography.bodySmall)
                                     val meta = buildList {
-                                        if (e.group.isNotBlank()) add("分组:" + e.group)
+                                        if (e.group.isNotBlank()) add(stringResource(R.string.qk_02494) + e.group)
                                         if (e.tags.isNotEmpty()) add(e.tags.joinToString(","))
                                     }
                                     if (meta.isNotEmpty()) {
@@ -832,15 +834,15 @@ private fun MemoryEditDialog(
                     ),
                 )
                 onDismiss()
-            }) { Text("保存") }
+            }) { Text(qstr(R.string.qk_00198)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-        title = { Text("记忆详情") },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } },
+        title = { Text(stringResource(R.string.qk_02495)) },
         text = {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(title, { title = it }, label = { Text("标题（可选）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(content, { content = it }, label = { Text("内容") }, minLines = 3, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(group, { group = it }, label = { Text("分组（可选，如 偏好 / 工作）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.qk_02496)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(content, { content = it }, label = { Text(stringResource(R.string.qk_01059)) }, minLines = 3, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(group, { group = it }, label = { Text(stringResource(R.string.qk_02497)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 if (tags.isNotEmpty()) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         tags.forEach { tag ->
@@ -857,12 +859,12 @@ private fun MemoryEditDialog(
                     }
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(tagInput, { tagInput = it }, label = { Text("标签（可选）") }, singleLine = true, modifier = Modifier.weight(1f))
+                    OutlinedTextField(tagInput, { tagInput = it }, label = { Text(stringResource(R.string.qk_02498)) }, singleLine = true, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(8.dp))
                     TextButton(onClick = {
                         val t = tagInput.trim()
                         if (t.isNotBlank() && !tags.contains(t)) { tags = tags + t; tagInput = "" }
-                    }) { Text("加标签") }
+                    }) { Text(stringResource(R.string.qk_02499)) }
                 }
             }
         },

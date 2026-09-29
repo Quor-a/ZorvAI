@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.os.Build
@@ -77,7 +80,7 @@ fun QuroSystemStatusScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("系统状态", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.qk_02642), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
@@ -117,11 +120,11 @@ private fun readDeviceInfo(ctx: Context): DeviceInfo {
 
 @Composable
 private fun DeviceSection(info: DeviceInfo) {
-    SectionCard(title = "设备信息") {
-        InfoRow("设备型号", info.model)
-        InfoRow("Android 版本", info.androidVersion)
-        InfoRow("应用版本", "v${info.appVersion}")
-        InfoRow("可用存储", "%.1f GB".format(info.storageFreeGb))
+    SectionCard(title = stringResource(R.string.qk_02643)) {
+        InfoRow(stringResource(R.string.qk_02644), info.model)
+        InfoRow(stringResource(R.string.qk_02645), info.androidVersion)
+        InfoRow(stringResource(R.string.qk_02646), "v${info.appVersion}")
+        InfoRow(stringResource(R.string.qk_02647), "%.1f GB".format(info.storageFreeGb))
     }
 }
 
@@ -130,15 +133,15 @@ private fun DeviceSection(info: DeviceInfo) {
 @Composable
 private fun PermissionSection(priv: Map<PrivilegeLevel, PrivilegeState>) {
     val rows = listOf(
-        PrivilegeLevel.L1 to "无障碍 (Accessibility)",
+        PrivilegeLevel.L1 to stringResource(R.string.qk_02648),
         PrivilegeLevel.L2 to "Shizuku / ADB",
-        PrivilegeLevel.L3 to "设备管理员 (Device Admin)",
+        PrivilegeLevel.L3 to stringResource(R.string.qk_02649),
         PrivilegeLevel.L4 to "Root (su)",
     )
     val granted = rows.count { (lvl, _) -> priv[lvl]?.available == true }
-    SectionCard(title = "权限与能力", subtitle = "已授权通道：$granted / ${rows.size}") {
+    SectionCard(title = stringResource(R.string.qk_02650), subtitle = stringResource(R.string.qk_02651, (granted).toString(), (rows.size).toString())) {
         if (priv.isEmpty()) {
-            Text("权限探测中…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.qk_02652), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         rows.forEach { (lvl, label) ->
             val st = priv[lvl]
@@ -161,7 +164,7 @@ private fun PermissionSection(priv: Map<PrivilegeLevel, PrivilegeState>) {
                         Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text(
-                    if (ok) "可用" else "不可用",
+                    if (ok) qstr(R.string.qk_00758) else qstr(R.string.qk_01929),
                     style = MaterialTheme.typography.labelSmall,
                     color = if (ok) Color(0xFF34C759) else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -174,10 +177,10 @@ private fun PermissionSection(priv: Map<PrivilegeLevel, PrivilegeState>) {
 
 @Composable
 private fun ModuleSection(store: CmsStateStore.Snapshot) {
-    SectionCard(title = "模块运行态", subtitle = "来自 CMS v2 状态系统") {
+    SectionCard(title = stringResource(R.string.qk_02653), subtitle = stringResource(R.string.qk_02654)) {
         val modules = store.modules.values.toList()
         if (modules.isEmpty()) {
-            Text("暂无模块运行态记录（部署模块后这里会显示实时状态）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.qk_02655), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         modules.forEach { m ->
             val (statusText, statusColor) = when (m.deployStatus) {
@@ -191,9 +194,9 @@ private fun ModuleSection(store: CmsStateStore.Snapshot) {
                 ?: store.tasks.values.filter { it.target == m.moduleId }.maxByOrNull { it.startedAt }
             val taskEnd = task?.let {
                 when (it.status) {
-                    "success" -> "成功"
-                    "failed" -> "失败"
-                    "running" -> "运行中"
+                    "success" -> qstr(R.string.qk_00141)
+                    "failed" -> qstr(R.string.qk_00139)
+                    "running" -> qstr(R.string.qk_00325)
                     else -> it.status
                 } + if (it.message.isNotBlank()) " · ${it.message}" else ""
             }
@@ -203,11 +206,11 @@ private fun ModuleSection(store: CmsStateStore.Snapshot) {
                     Text(statusText, style = MaterialTheme.typography.labelSmall, color = statusColor)
                     if (m.running) {
                         Spacer(Modifier.width(8.dp))
-                        Text("· 运行中", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                        Text(qstr(R.string.qk_01586), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                     }
                 }
                 if (taskEnd != null)
-                    Text("最近任务：$taskEnd", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(qstr(R.string.qk_02656, (taskEnd).toString()), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (m != modules.last()) HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(top = 6.dp))
         }
@@ -223,11 +226,11 @@ private fun PersonaSection(
     incubating: Map<String, Boolean>,
 ) {
     SectionCard(
-        title = "人格心跳",
+        title = stringResource(R.string.qk_02657),
         subtitle = "心跳总开关：${if (heartbeatOn) "开" else "关"}",
     ) {
         if (personas.isEmpty()) {
-            Text("暂无人格卡。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.qk_02659), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         personas.forEachIndexed { idx, p ->
             Row(
@@ -235,7 +238,7 @@ private fun PersonaSection(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(p.name.ifBlank { "(未命名人格)" }, style = MaterialTheme.typography.bodyMedium)
+                    Text(p.name.ifBlank { qstr(R.string.qk_02660) }, style = MaterialTheme.typography.bodyMedium)
                     val ago = formatAgo(p.lastIncubatedAt)
                     val inc = incubating[p.id] == true
                     Text(
@@ -252,7 +255,7 @@ private fun PersonaSection(
                     ),
                 )
                 Spacer(Modifier.width(6.dp))
-                Text(if (heartbeatOn) "开" else "关", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (heartbeatOn) qstr(R.string.qk_02662) else qstr(R.string.qk_02663), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (idx != personas.lastIndex) HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(top = 6.dp))
         }
@@ -293,13 +296,13 @@ private fun InfoRow(label: String, value: String) {
 }
 
 private fun formatAgo(ts: Long): String {
-    if (ts <= 0) return "从未孵化"
+    if (ts <= 0) return qstr(R.string.qk_02664)
     val diff = System.currentTimeMillis() - ts
     val min = diff / 60000
     return when {
-        min < 1 -> "刚刚"
-        min < 60 -> "${min} 分钟前"
-        min < 1440 -> "${min / 60} 小时前"
+        min < 1 -> qstr(R.string.qk_02665)
+        min < 60 -> qstr(R.string.qk_02666, (min).toString())
+        min < 1440 -> qstr(R.string.qk_02667, (min / 60).toString())
         else -> "${min / 1440} 天前 (${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(ts))})"
     }
 }

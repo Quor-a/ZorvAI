@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -58,24 +61,23 @@ fun QuroBranchVisualizationScreen(
         topBar = {
             TopAppBar(
                 title = { 
-                    Text(
-                        "对话分支",
+                    Text(stringResource(R.string.qk_00825),
                         fontWeight = FontWeight.Bold
                     ) 
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.qk_00143))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showStatistics = true }) {
-                        Icon(Icons.Default.Info, contentDescription = "统计信息")
+                        Icon(Icons.Default.Info, contentDescription = stringResource(R.string.qk_00826))
                     }
                     IconButton(onClick = { 
                         showCreateBranchDialog = tree?.activeBranchId
                     }) {
-                        Icon(Icons.Default.Add, contentDescription = "创建分支")
+                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.qk_00827))
                     }
                 }
             )
@@ -137,7 +139,7 @@ fun QuroBranchVisualizationScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("对话树不存在")
+                    Text(qstr(R.string.qk_00828))
                 }
             }
         }
@@ -202,8 +204,7 @@ fun BranchStatsCard(stats: BranchStatistics) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            Text(
-                text = "分支概览",
+            Text(text = stringResource(R.string.qk_00829),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -214,9 +215,9 @@ fun BranchStatsCard(stats: BranchStatistics) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                StatItem("分支数", stats.totalBranches.toString())
-                StatItem("最大深度", stats.maxDepth.toString())
-                StatItem("消息数", stats.totalMessages.toString())
+                StatItem(stringResource(R.string.qk_00830), stats.totalBranches.toString())
+                StatItem(stringResource(R.string.qk_00831), stats.maxDepth.toString())
+                StatItem(stringResource(R.string.qk_00832), stats.totalMessages.toString())
             }
         }
     }
@@ -285,8 +286,7 @@ fun BranchNodeCard(
                                 MaterialTheme.colorScheme.onSurface
                         )
                         
-                        Text(
-                            text = "${node.branch.messages.size} 条消息",
+                        Text(text = stringResource(R.string.qk_00833, (node.branch.messages.size).toString()),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
@@ -298,7 +298,7 @@ fun BranchNodeCard(
                     if (isActive) {
                         Icon(
                             Icons.Default.CheckCircle,
-                            contentDescription = "当前分支",
+                            contentDescription = stringResource(R.string.qk_00834),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -309,7 +309,7 @@ fun BranchNodeCard(
                         ) {
                             Icon(
                                 Icons.Default.SwapHoriz,
-                                contentDescription = "切换到此分支",
+                                contentDescription = stringResource(R.string.qk_00835),
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -321,7 +321,7 @@ fun BranchNodeCard(
                     ) {
                         Icon(
                             Icons.Default.Add,
-                            contentDescription = "创建子分支",
+                            contentDescription = stringResource(R.string.qk_00836),
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -332,7 +332,7 @@ fun BranchNodeCard(
                     ) {
                         Icon(
                             Icons.Default.Edit,
-                            contentDescription = "重命名",
+                            contentDescription = stringResource(R.string.qk_00837),
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -347,7 +347,7 @@ fun BranchNodeCard(
                         ) {
                             Icon(
                                 Icons.Default.Delete,
-                                contentDescription = "删除",
+                                contentDescription = stringResource(R.string.qk_00091),
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -378,8 +378,7 @@ fun BranchNodeCard(
             // 子分支指示器
             if (node.branch.childBranchIds.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "↓ ${node.branch.childBranchIds.size} 个子分支",
+                Text(text = stringResource(R.string.qk_00838, (node.branch.childBranchIds.size).toString()),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                 )
@@ -397,27 +396,27 @@ fun CreateBranchDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("创建新分支") },
+        title = { Text(stringResource(R.string.qk_00839)) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("分支名称") },
+                label = { Text(stringResource(R.string.qk_00840)) },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("输入分支名称") }
+                placeholder = { Text(stringResource(R.string.qk_00841)) }
             )
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreate(name.ifBlank { "新分支" }) },
+                onClick = { onCreate(name.ifBlank { qstr(R.string.qk_00842) }) },
                 enabled = true
             ) {
-                Text("创建")
+                Text(stringResource(R.string.qk_00843))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(R.string.qk_00011))
             }
         }
     )
@@ -433,12 +432,12 @@ fun RenameBranchDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("重命名分支") },
+        title = { Text(stringResource(R.string.qk_00844)) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("分支名称") },
+                label = { Text(stringResource(R.string.qk_00840)) },
                 modifier = Modifier.fillMaxWidth()
             )
         },
@@ -447,12 +446,12 @@ fun RenameBranchDialog(
                 onClick = { onRename(name) },
                 enabled = name.isNotBlank()
             ) {
-                Text("重命名")
+                Text(stringResource(R.string.qk_00837))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(R.string.qk_00011))
             }
         }
     )
@@ -465,19 +464,19 @@ fun StatisticsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("分支统计") },
+        title = { Text(stringResource(R.string.qk_00845)) },
         text = {
             Column {
-                StatRow("总分支数", stats.totalBranches.toString())
-                StatRow("最大深度", stats.maxDepth.toString())
-                StatRow("总消息数", stats.totalMessages.toString())
-                StatRow("活跃分支ID", stats.activeBranchId.take(8) + "...")
-                StatRow("根分支ID", stats.rootBranchId.take(8) + "...")
+                StatRow(stringResource(R.string.qk_00846), stats.totalBranches.toString())
+                StatRow(stringResource(R.string.qk_00831), stats.maxDepth.toString())
+                StatRow(stringResource(R.string.qk_00847), stats.totalMessages.toString())
+                StatRow(stringResource(R.string.qk_00848), stats.activeBranchId.take(8) + "...")
+                StatRow(stringResource(R.string.qk_00849), stats.rootBranchId.take(8) + "...")
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("关闭")
+                Text(stringResource(R.string.qk_00065))
             }
         }
     )

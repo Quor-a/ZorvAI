@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.genui.aiapp.host
+import android.content.Context
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.graphics.Color
 import android.os.Bundle
@@ -17,12 +20,18 @@ import androidx.appcompat.app.AppCompatActivity
  * 由 open_url 动作（应用内模式）调起：真加载网页 URL。
  */
 class HtmlViewerActivity : AppCompatActivity() {
+    // 语言：ComponentActivity 不走 AppCompat，必须在 attachBaseContext 里自己包一层，
+    // 否则 Compose 的 stringResource 永远取系统语言（表现为「切了语言界面还是中文」）。
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(com.ai.assistance.quro.util.QuroLocale.wrap(newBase))
+    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val html = intent.getStringExtra("html")
         val url = intent.getStringExtra("url")
-        val title = intent.getStringExtra("title") ?: "详情"
+        val title = intent.getStringExtra("title") ?: qstr(R.string.qk_00429)
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL

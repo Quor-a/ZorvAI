@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.genui.aiapp.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -53,17 +55,15 @@ fun GenUIPreviewCard(
                     modifier = modifier.fillMaxWidth()
                 )
             } else {
-                Text(
-                    text = "无法渲染 GenUI 内容",
+                Text(text = stringResource(R.string.qk_03676),
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(16.dp)
                 )
             }
         }
         specResult.isFailure -> {
-            val error = specResult.exceptionOrNull()?.message ?: "未知错误"
-            Text(
-                text = "解析失败：$error",
+            val error = specResult.exceptionOrNull()?.message ?: stringResource(R.string.qk_00503)
+            Text(text = stringResource(R.string.qk_03818, (error).toString()),
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(16.dp)
             )

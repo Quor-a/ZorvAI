@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.service
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
@@ -114,10 +116,10 @@ class QuroAccessibilityService : AccessibilityService() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = NotificationChannel(
                     CHANNEL_ID,
-                    "无障碍服务",
+                    qstr(R.string.qk_02300),
                     NotificationManager.IMPORTANCE_LOW
                 ).apply {
-                    description = "保持无障碍服务运行"
+                    description = qstr(R.string.qk_03430)
                     setShowBadge(false)
                 }
                 val nm = getSystemService(NotificationManager::class.java)

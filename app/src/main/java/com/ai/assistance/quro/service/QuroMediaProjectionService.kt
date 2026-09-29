@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.service
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Activity
 import android.app.Notification
@@ -81,12 +83,12 @@ class QuroMediaProjectionService : Service() {
                         ctrl.attach(mp)
                         ctrl.start()
                     }
-                    mainHandler.post { Toast.makeText(applicationContext, "屏幕捕获已启用，长按可再次申请", Toast.LENGTH_SHORT).show() }
+                    mainHandler.post { Toast.makeText(applicationContext, qstr(R.string.qk_03462), Toast.LENGTH_SHORT).show() }
                 } else {
-                    mainHandler.post { Toast.makeText(applicationContext, "屏幕捕获授权失败，已 fallback 到无障碍节点树", Toast.LENGTH_SHORT).show() }
+                    mainHandler.post { Toast.makeText(applicationContext, qstr(R.string.qk_03561), Toast.LENGTH_SHORT).show() }
                 }
             } else {
-                mainHandler.post { Toast.makeText(applicationContext, "屏幕捕获授权被取消，已 fallback 到无障碍节点树", Toast.LENGTH_SHORT).show() }
+                mainHandler.post { Toast.makeText(applicationContext, qstr(R.string.qk_00024), Toast.LENGTH_SHORT).show() }
             }
         } catch (e: Throwable) {
             mainHandler.post { Toast.makeText(applicationContext, "屏幕捕获启动失败：${e.message}", Toast.LENGTH_SHORT).show() }

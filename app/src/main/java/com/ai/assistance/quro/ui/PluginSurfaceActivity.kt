@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Activity
 import android.content.Context
@@ -30,6 +32,12 @@ import com.ai.assistance.quro.plugin.extension.SurfaceHost
  * 用户从插件管理面板点开，或由 AI 走 `plugin_surface_open` 工具打开。
  */
 class PluginSurfaceActivity : ComponentActivity() {
+    // 语言：ComponentActivity 不走 AppCompat，必须在 attachBaseContext 里自己包一层，
+    // 否则 Compose 的 stringResource 永远取系统语言（表现为「切了语言界面还是中文」）。
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(com.ai.assistance.quro.util.QuroLocale.wrap(newBase))
+    }
+
 
     companion object {
         const val EXTRA_SURFACE_ID = "plugin_surface_id"
@@ -54,7 +62,7 @@ class PluginSurfaceActivity : ComponentActivity() {
         surfaceId = intent?.getStringExtra(EXTRA_SURFACE_ID) ?: ""
         val ext = HostToolBridge.surface(surfaceId)
         if (ext == null) {
-            setContentView(messageView("插件界面不存在：$surfaceId\n（插件可能已被卸载或重载）"))
+            setContentView(messageView(qstr(R.string.qk_00493, (surfaceId).toString())))
             return
         }
 
@@ -73,12 +81,12 @@ class PluginSurfaceActivity : ComponentActivity() {
         val view = try {
             ext.build(this, host)
         } catch (t: Throwable) {
-            android.util.Log.w("PluginSurface", "插件界面构建失败: $surfaceId", t)
+            android.util.Log.w("PluginSurface", qstr(R.string.qk_00494, (surfaceId).toString()), t)
             null
         }
 
         if (view == null) {
-            setContentView(messageView("插件界面构建失败：$surfaceId\n${ext.label}"))
+            setContentView(messageView(qstr(R.string.qk_00495, (surfaceId).toString(), (ext.label).toString())))
             return
         }
 

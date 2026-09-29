@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import androidx.compose.foundation.background
@@ -65,7 +68,7 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
             TopAppBar(
                 title = {
                     Text(
-                        "功能模型配置",
+                        stringResource(R.string.qk_03764),
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontFamily = FontFamily.Serif,
                             fontWeight = FontWeight.SemiBold,
@@ -73,7 +76,7 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回") }
+                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143)) }
                 },
             )
         }
@@ -81,19 +84,13 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
         Column(
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())
         ) {
-            GroupCaption("为各类 AI 能力绑定模型")
+            GroupCaption(stringResource(R.string.qk_03765))
             InfoBox(
-                text = "参考「功能 → 配置」设计：每个功能可「跟随主模型」或指定独立模型。" +
-                        "已接入引擎并实时生效：主对话(CHAT)、语音球问答(CHAT)、人格蒸馏/自动孵化(PERSONA_INCUBATE)、" +
-                        "语音风格推导(UI_CONTROL)。指定独立模型后，对应调用即改用该模型。",
+                text = stringResource(R.string.qk_03766),
                 tone = Accent,
             )
             InfoBox(
-                text = "视觉模型配置：图像识别和视频识别需要支持视觉能力的模型（如GPT-4 Vision）。" +
-                        "请在「设置 → 模型配置」中配置视觉模型的API密钥和基础URL，" +
-                        "然后在下方为图像识别和视频识别选择对应的模型。\n\n" +
-                        "路径配置说明：所有功能共享主模型配置的基础URL和API密钥。" +
-                        "如需为视觉模型使用不同的端点，请在「设置 → 模型配置」中配置对应的端点地址。",
+                text = stringResource(R.string.qk_03767),
                 tone = Color(0xFF10B981),
             )
             Spacer(Modifier.height(10.dp))
@@ -113,8 +110,7 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
             }
             Spacer(Modifier.height(12.dp))
             Text(
-                "提示：默认所有能力跟随主模型（设置 → 模型配置）。图片 / 视频生成建议独立指定对应模型。" +
-                        "当前为单接入点架构，独立绑定复用主接入点的地址与密钥，仅替换模型名。",
+                stringResource(R.string.qk_03768),
                 fontSize = 11.sp, color = Muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
         }
@@ -166,10 +162,10 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
                     ))
                     cfg = repo.load()
                     pickerType = null
-                }) { Text("确定") }
+                }) { Text(stringResource(R.string.qk_02020)) }
             },
-            dismissButton = { TextButton(onClick = { pickerType = null }) { Text("取消") } },
-            title = { Text("选择 ${type.label} 模型") },
+            dismissButton = { TextButton(onClick = { pickerType = null }) { Text(stringResource(R.string.qk_00011)) } },
+            title = { Text(stringResource(R.string.qk_03774, stringResource(type.labelRes))) },
             text = {
                 Column(Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
                     Row(
@@ -178,17 +174,19 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         TextButton(onClick = { fetchFeatureModels() }, enabled = !loading) {
-                            Text(if (loading) "拉取中…" else "拉取模型列表")
+                            Text(if (loading) stringResource(R.string.qk_02113) else stringResource(R.string.qk_02114))
                         }
-                        Text("需先在主模型配置填好接入点", fontSize = 11.sp, color = Muted)
+                        Text(stringResource(R.string.qk_03769), fontSize = 11.sp, color = Muted)
                     }
                     Spacer(Modifier.height(8.dp))
                     if (loading) {
-                        Text("正在拉取模型列表…", fontSize = 13.sp, color = Muted)
+                        Text(stringResource(R.string.qk_03770), fontSize = 13.sp, color = Muted)
                         Spacer(Modifier.height(6.dp))
                     }
                     if (error != null) {
-                        Text("拉取失败：$error\n已为你保留已配置的模型，也可直接手动输入模型名。", fontSize = 12.sp, color = Muted)
+                        // error 是 remember 委托属性，不能智能转换为非空；先取本地快照
+                        val err = error ?: ""
+                        Text(stringResource(R.string.qk_03771, err), fontSize = 12.sp, color = Muted)
                         Spacer(Modifier.height(8.dp))
                     }
                     if (models.isNotEmpty()) {
@@ -209,20 +207,20 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
                     OutlinedTextField(
                         value = manual,
                         onValueChange = { manual = it },
-                        label = { Text("模型名（可手动输入）") },
+                        label = { Text(stringResource(R.string.qk_01862)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     
                     // 高级配置：基础URL和API密钥
                     Spacer(Modifier.height(12.dp))
-                    Text("高级配置（可选）", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Muted)
+                    Text(stringResource(R.string.qk_01863), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Muted)
                     Spacer(Modifier.height(4.dp))
                     OutlinedTextField(
                         value = customBaseUrl,
                         onValueChange = { customBaseUrl = it },
-                        label = { Text("自定义基础URL（可选）") },
-                        placeholder = { Text("留空则使用主模型配置的URL") },
+                        label = { Text(stringResource(R.string.qk_01864)) },
+                        placeholder = { Text(stringResource(R.string.qk_01865)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -230,8 +228,8 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
                     OutlinedTextField(
                         value = customApiKey,
                         onValueChange = { customApiKey = it },
-                        label = { Text("自定义API密钥（可选）") },
-                        placeholder = { Text("留空则使用主模型配置的密钥") },
+                        label = { Text(stringResource(R.string.qk_01866)) },
+                        placeholder = { Text(stringResource(R.string.qk_01867)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -254,8 +252,8 @@ private fun FeatureModelRow(
             Icon(featureIcon(type), null, Modifier.size(20.dp), tint = Accent)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(type.label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
-                Text(type.desc, fontSize = 11.sp, color = Muted, modifier = Modifier.padding(top = 2.dp))
+                Text(stringResource(type.labelRes), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+                Text(stringResource(type.descRes), fontSize = 11.sp, color = Muted, modifier = Modifier.padding(top = 2.dp))
                 val wired = engineWired(type)
                 Text(
                     wired.label,
@@ -268,14 +266,14 @@ private fun FeatureModelRow(
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (b.useGlobal) "跟随主模型" else "独立模型",
+                if (b.useGlobal) stringResource(R.string.qk_03775) else stringResource(R.string.qk_03776),
                 fontSize = 13.sp,
                 color = if (b.useGlobal) cs.onSurface else Accent,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(1f),
             )
             Text(
-                if (b.useGlobal) "开启" else "关闭",
+                if (b.useGlobal) stringResource(R.string.qk_02340) else stringResource(R.string.qk_00065),
                 fontSize = 11.sp,
                 color = if (b.useGlobal) Accent else Muted,
                 modifier = Modifier.padding(end = 6.dp),
@@ -293,7 +291,7 @@ private fun FeatureModelRow(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    if (b.model.isBlank()) "点击选择模型" else b.model,
+                    if (b.model.isBlank()) stringResource(R.string.qk_03777) else b.model,
                     fontSize = 13.sp,
                     color = if (b.model.isBlank()) Muted else cs.onSurface,
                     modifier = Modifier.weight(1f),
@@ -305,7 +303,11 @@ private fun FeatureModelRow(
             if (b.baseUrl.isNotBlank() || b.apiKey.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "高级配置：${if (b.baseUrl.isNotBlank()) "自定义端点" else ""}${if (b.baseUrl.isNotBlank() && b.apiKey.isNotBlank()) " + " else ""}${if (b.apiKey.isNotBlank()) "自定义密钥" else ""}",
+                    when {
+                        b.baseUrl.isNotBlank() && b.apiKey.isNotBlank() -> stringResource(R.string.qk_03782)
+                        b.baseUrl.isNotBlank() -> stringResource(R.string.qk_03780)
+                        else -> stringResource(R.string.qk_03781)
+                    },
                     fontSize = 10.sp,
                     color = Muted,
                     modifier = Modifier.padding(horizontal = 4.dp),
@@ -329,8 +331,8 @@ private fun engineWired(type: QuroFunctionType): EngineWired = when (type) {
     QuroFunctionType.PERSONA_INCUBATE,
     QuroFunctionType.UI_CONTROL,
     QuroFunctionType.IMAGE_RECOGNITION,
-    QuroFunctionType.VIDEO_RECOGNITION -> EngineWired("已接入引擎·开关生效", true)
-    else -> EngineWired("对话内调用·跟随主对话", false)
+    QuroFunctionType.VIDEO_RECOGNITION -> EngineWired(qstr(R.string.qk_03778), true)
+    else -> EngineWired(qstr(R.string.qk_03779), false)
 }
 
 private fun featureIcon(type: QuroFunctionType): ImageVector = when (type) {

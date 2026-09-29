@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.util.Log
@@ -239,7 +241,7 @@ class QuroConversationRepository(context: Context) {
         val genUiType = if (o.has("genUiType") && !o.isNull("genUiType")) o.optString("genUiType", "normal") else "normal"
         return QuroPersistedConversation(
             id = o.optString("id", UUID.randomUUID().toString()),
-            title = o.optString("title", "新对话"),
+            title = o.optString("title", qstr(R.string.qk_00282)),
             createdAt = o.optLong("createdAt", System.currentTimeMillis()),
             updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
             historyRounds = historyRounds,

@@ -1,4 +1,5 @@
 package com.ai.assistance.quro.genui.aiapp
+import android.content.Context
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -14,6 +15,12 @@ import com.ai.assistance.quro.genui.aiapp.ui.theme.GenUITheme
  * 应用的入口 Activity，承载 Compose 导航
  */
 class GenUiAgentActivity : ComponentActivity() {
+    // 语言：ComponentActivity 不走 AppCompat，必须在 attachBaseContext 里自己包一层，
+    // 否则 Compose 的 stringResource 永远取系统语言（表现为「切了语言界面还是中文」）。
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(com.ai.assistance.quro.util.QuroLocale.wrap(newBase))
+    }
+
 
     companion object {
         /**

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.policy.QuroPolicy
@@ -20,7 +22,7 @@ import org.json.JSONObject
 /** 以 ROOT 权限执行命令。优先走 Shizuku root exec，降级为 Runtime.exec(su)。 */
 class RootExecTool : QuroTool {
     override val name = "root_exec"
-    override val description = "以 ROOT 权限执行 shell 命令（最高风险通道！慎用）。优先使用 Shizuku root 通道，降级为 su 直调。"
+    override val description = qstr(R.string.qk_03530)
     override val parametersJson = """{
         "type":"object",
         "properties":{

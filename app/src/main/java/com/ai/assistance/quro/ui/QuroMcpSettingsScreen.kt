@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -45,8 +48,8 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("MCP 服务") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回") } },
+                title = { Text(stringResource(R.string.qk_02058)) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143)) } },
             )
         }
     ) { pad ->
@@ -55,8 +58,7 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "把 Zorv AI 的 $toolCount 个内置工具以 MCP（Model Context Protocol）协议暴露给本机其它 AI 客户端" +
-                        "（Claude Desktop / Cursor / MCP Inspector 等）。",
+                stringResource(R.string.qk_02059, (toolCount).toString()) + stringResource(R.string.qk_02060),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -66,9 +68,9 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("启用本地 MCP Server", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.qk_02061), style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        if (enabled) "正在监听 127.0.0.1:$port" else "关闭（不监听任何端口）",
+                        if (enabled) stringResource(R.string.qk_02062, (port).toString()) else stringResource(R.string.qk_02063),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -91,7 +93,7 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
 
             HorizontalDivider()
 
-            Text("连接地址", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.qk_02064), style = MaterialTheme.typography.titleSmall)
             Row(
                 Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -105,24 +107,23 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
                 IconButton(onClick = {
                     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     cm.setPrimaryClip(ClipData.newPlainText("MCP Endpoint", endpoint))
-                    Toast.makeText(ctx, "已复制连接地址", Toast.LENGTH_SHORT).show()
-                }) { Icon(Icons.Filled.ContentCopy, "复制", tint = MaterialTheme.colorScheme.primary) }
+                    Toast.makeText(ctx, qstr(R.string.qk_02065), Toast.LENGTH_SHORT).show()
+                }) { Icon(Icons.Filled.ContentCopy, stringResource(R.string.qk_00088), tint = MaterialTheme.colorScheme.primary) }
             }
 
             OutlinedTextField(
-                value = "传输：JSON-RPC 2.0 over HTTP（单 POST + 普通 JSON 响应）\n" +
-                        "监听：127.0.0.1（仅本机，外部不可达）\n" +
-                        "方法：initialize / tools/list / tools/call\n" +
-                        "工具：与 AI 对话内工具 100% 同源（共 $toolCount 个）",
+                value = stringResource(R.string.qk_02066) +
+                        stringResource(R.string.qk_02067) +
+                        stringResource(R.string.qk_02068) + stringResource(R.string.qk_02069, (toolCount).toString()),
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("技术详情") },
+                label = { Text(stringResource(R.string.qk_02070)) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 5,
             )
 
             Text(
-                "客户端配置示例（Claude Desktop / Cursor 的 mcp.json）：\n" +
+                stringResource(R.string.qk_02071) +
                         "{ \"mcpServers\": { \"quro\": { \"url\": \"$endpoint\" } } }",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -130,17 +131,15 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
 
             Spacer(Modifier.height(8.dp))
             Text(
-                "安全说明：服务只绑定环回地址，任何外部网络请求均无法抵达。工具调用复用应用内同一套" +
-                        "权限与确认机制；涉及敏感操作（如安装/卸载应用、ROOT 命令）仍受系统权限与运行时确认约束。",
+                stringResource(R.string.qk_02072) + stringResource(R.string.qk_02073),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             HorizontalDivider()
 
-            Text("MCP 客户端（连接外部服务器）", style = MaterialTheme.typography.titleSmall)
-            Text(
-                "在此添加外部 MCP 服务器（如其它 AI 客户端、云端工具网关），添加后 AI 即可通过 mcp_call 调用其暴露的工具。",
+            Text(stringResource(R.string.qk_02074), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.qk_02075),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -168,19 +167,18 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
                                 val n = withContext(Dispatchers.IO) {
                                     runCatching { QuroMcpClient.listTools(srv).size }.getOrNull()
                                 }
-                                Toast.makeText(ctx, if (n != null) "连接成功，发现 $n 个工具" else "连接失败", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(ctx, if (n != null) qstr(R.string.qk_02076, (n).toString()) else qstr(R.string.qk_02077), Toast.LENGTH_SHORT).show()
                             }
-                        }) { Text("测试") }
+                        }) { Text(qstr(R.string.qk_02078)) }
                         TextButton(onClick = {
                             QuroMcpClientPrefs.remove(ctx, srv.alias)
                             clientServers.remove(srv)
-                        }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                        }) { Text(qstr(R.string.qk_00091), color = MaterialTheme.colorScheme.error) }
                     }
                 }
             }
 
-            Text(
-                "已配置 ${clientServers.size} 个外部服务器（可继续添加，AI 通过 mcp_call 按别名调用）",
+            Text(stringResource(R.string.qk_02079, (clientServers.size).toString()),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -188,29 +186,28 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
             var newAlias by remember { mutableStateOf("") }
             var newUrl by remember { mutableStateOf("") }
             var newToken by remember { mutableStateOf("") }
-            OutlinedTextField(newAlias, { newAlias = it }, label = { Text("别名") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(newUrl, { newUrl = it }, label = { Text("服务器地址 (http(s)://host/path)") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(newToken, { newToken = it }, label = { Text("Token（可选，Bearer）") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(newAlias, { newAlias = it }, label = { Text(stringResource(R.string.qk_02080)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(newUrl, { newUrl = it }, label = { Text(stringResource(R.string.qk_02081)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(newToken, { newToken = it }, label = { Text(stringResource(R.string.qk_02082)) }, modifier = Modifier.fillMaxWidth())
             Button(onClick = {
                 val a = newAlias.trim(); val u = newUrl.trim()
                 if (a.isEmpty() || u.isEmpty()) {
-                    Toast.makeText(ctx, "别名与地址必填", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_02083), Toast.LENGTH_SHORT).show()
                 } else {
                     val cfg = QuroMcpClient.McpServerConfig(a, u, newToken.trim())
                     QuroMcpClientPrefs.add(ctx, cfg)
                     if (clientServers.none { it.alias == a }) clientServers.add(cfg)
                     newAlias = ""; newUrl = ""; newToken = ""
-                    Toast.makeText(ctx, "已添加服务器：$a", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, qstr(R.string.qk_02084, (a).toString()), Toast.LENGTH_SHORT).show()
                 }
-            }, modifier = Modifier.fillMaxWidth()) { Text("保存并继续添加") }
+            }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.qk_02085)) }
 
             HorizontalDivider()
 
             // ════════════ 本地 MCP（AI 部署）═══════════
-            Text("本地 MCP（AI 部署）", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.qk_02086), style = MaterialTheme.typography.titleSmall)
             Text(
-                "由 AI 通过 mcp_deploy 创作并部署到本应用内的 MCP 服务器。部署后自动在本机启动端点，" +
-                        "可在对话中用 mcp_call 按别名调用，下方列出当前已部署的实例。",
+                stringResource(R.string.qk_02087) + stringResource(R.string.qk_02088),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -220,8 +217,7 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
                 }
             }
             if (localServers.isEmpty()) {
-                Text(
-                    "暂无本地 MCP。在对话中让 AI 使用 mcp_deploy 提交工具定义即可部署。",
+                Text(stringResource(R.string.qk_02089),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -238,13 +234,13 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(srv.alias, style = MaterialTheme.typography.bodyMedium)
-                            Text("${srv.url} · $n 个工具", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(qstr(R.string.qk_02090, (srv.url).toString(), (n).toString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         TextButton(onClick = {
                             QuroLocalMcpManager.undeploy(ctx, srv.alias)
                             localServers.remove(srv)
-                            Toast.makeText(ctx, "已注销：${srv.alias}", Toast.LENGTH_SHORT).show()
-                        }) { Text("注销", color = MaterialTheme.colorScheme.error) }
+                            Toast.makeText(ctx, qstr(R.string.qk_02091, (srv.alias).toString()), Toast.LENGTH_SHORT).show()
+                        }) { Text(qstr(R.string.qk_02092), color = MaterialTheme.colorScheme.error) }
                     }
                 }
             }

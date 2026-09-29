@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONArray
@@ -18,7 +20,7 @@ import org.json.JSONObject
 class GameUiTool : QuroTool {
     override val name = "game_ui"
     override val description =
-        "进入「和 AI 玩的可交互游戏」模式：猜数字 / 井字棋人机 / 21点 / 记忆翻牌 / 石头剪刀布，" +
+        qstr(R.string.qk_03498) +
             "或让用户描述一个新游戏、你现场定规则带他玩。先调本工具拿到「游戏搭建 + 对局规范」，然后" +
             "在回复里输出 ```quro-ui 渲染棋盘/控件，用 callback 回收用户操作，你维持状态继续对局。" +
             "适用于：用户想玩互动小游戏、做游戏化互动、用对话组件做可玩 demo。"

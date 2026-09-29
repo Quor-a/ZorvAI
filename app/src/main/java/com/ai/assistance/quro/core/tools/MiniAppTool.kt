@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.util.Base64
@@ -176,7 +178,7 @@ class MiniAppTool : QuroTool {
             "✅ 已保存为 Web 应用「$name」（pages/index/index.html，${html.length} 字符）\n" +
                 "用 miniapp(action=\"run\", name=\"$name\") 预览；也可在工具中心「Web 应用」里打开。"
         } catch (e: Exception) {
-            "❌ 保存失败：${e.message}"
+            qstr(R.string.qk_00275, (e.message).toString())
         }
     }
 

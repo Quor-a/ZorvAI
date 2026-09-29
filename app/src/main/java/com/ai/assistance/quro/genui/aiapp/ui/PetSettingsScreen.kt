@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.genui.aiapp.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -78,10 +81,10 @@ data class PetSettings(
 
 /** 内置预置宠物 */
 val BUILTIN_PETS = listOf(
-    PetSpec(name = "团子", body = listOf(Color(0xFFFFB5C2), Color(0xFFFFD9E0)), eye = Color(0xFF3A2E39), accent = Color(0xFFFF8FA3), form = "blob"),
-    PetSpec(name = "墨墨", body = listOf(Color(0xFF9B8CFF), Color(0xFFD9D2FF)), eye = Color(0xFF2A2440), accent = Color(0xFFB5A8FF), form = "cat"),
-    PetSpec(name = "波波", body = listOf(Color(0xFF7FD8E8), Color(0xFFD6F4FA)), eye = Color(0xFF1E3D47), accent = Color(0xFF9FE3F0), form = "ghost"),
-    PetSpec(name = "柚柚", body = listOf(Color(0xFFFFC66B), Color(0xFFFFE8C2)), eye = Color(0xFF4A3418), accent = Color(0xFFFFB25A), form = "cat")
+    PetSpec(name = qstr(R.string.qk_03524), body = listOf(Color(0xFFFFB5C2), Color(0xFFFFD9E0)), eye = Color(0xFF3A2E39), accent = Color(0xFFFF8FA3), form = "blob"),
+    PetSpec(name = qstr(R.string.qk_03477), body = listOf(Color(0xFF9B8CFF), Color(0xFFD9D2FF)), eye = Color(0xFF2A2440), accent = Color(0xFFB5A8FF), form = "cat"),
+    PetSpec(name = qstr(R.string.qk_03494), body = listOf(Color(0xFF7FD8E8), Color(0xFFD6F4FA)), eye = Color(0xFF1E3D47), accent = Color(0xFF9FE3F0), form = "ghost"),
+    PetSpec(name = qstr(R.string.qk_03568), body = listOf(Color(0xFFFFC66B), Color(0xFFFFE8C2)), eye = Color(0xFF4A3418), accent = Color(0xFFFFB25A), form = "cat")
 )
 
 @Composable
@@ -106,8 +109,8 @@ fun PetSettingsScreen(
                 PetSpec.parseOrNull(text)?.let { spec ->
                     onSettingsChange(settings.copy(current = spec, pets = (settings.pets + spec).distinctBy { it.name }))
                     importError = null
-                } ?: run { importError = "JSON 解析失败：字段不完整" }
-            } ?: run { importError = "无法读取文件" }
+                } ?: run { importError = qstr(R.string.qk_03807) }
+            } ?: run { importError = qstr(R.string.qk_03808) }
         }
     }
 
@@ -119,16 +122,16 @@ fun PetSettingsScreen(
             putExtra(Intent.EXTRA_TEXT, json)
             putExtra(Intent.EXTRA_TITLE, "${settings.current.name}.json")
         }
-        ctx.startActivity(Intent.createChooser(intent, "导出宠物 JSON"))
+        ctx.startActivity(Intent.createChooser(intent, qstr(R.string.qk_03809)))
     }
 
     Surface(color = cs.background, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
             // 顶栏
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = onBack) { Text("← 返回") }
+                TextButton(onClick = onBack) { Text(stringResource(R.string.qk_03416)) }
                 Spacer(Modifier.weight(1f))
-                Text("宠物管理", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.qk_03713), fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
                 Spacer(Modifier.width(64.dp))
             }
@@ -139,7 +142,7 @@ fun PetSettingsScreen(
             }
 
             // ── 宠物切换 ──
-            Text("我的宠物", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.qk_03432), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 val all = (BUILTIN_PETS + settings.pets)
@@ -164,7 +167,7 @@ fun PetSettingsScreen(
                         Spacer(Modifier.height(4.dp))
                         Text(p.name, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         Text(
-                            if (idx < BUILTIN_PETS.size) "内置" else "导入",
+                            if (idx < BUILTIN_PETS.size) stringResource(R.string.qk_03623) else stringResource(R.string.qk_01635),
                             fontSize = 10.sp,
                             color = cs.onSurfaceVariant
                         )
@@ -176,10 +179,10 @@ fun PetSettingsScreen(
             // ── 导入 / 导出 ──
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(onClick = { importLauncher.launch("*/*") }, modifier = Modifier.weight(1f)) {
-                    Text("导入 JSON")
+                    Text(stringResource(R.string.qk_03635))
                 }
                 OutlinedButton(onClick = { exportPet() }, modifier = Modifier.weight(1f)) {
-                    Text("导出 JSON")
+                    Text(stringResource(R.string.qk_03517))
                 }
             }
             importError?.let {
@@ -189,18 +192,18 @@ fun PetSettingsScreen(
             Spacer(Modifier.height(18.dp))
 
             // ── 功能开关 ──
-            Text("功能设置", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.qk_03545), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
             Spacer(Modifier.height(6.dp))
-            PetSwitch("显示宠物", "关闭后画布上隐藏宠物", settings.petVisible) {
+            PetSwitch(stringResource(R.string.qk_03810), stringResource(R.string.qk_03811), settings.petVisible) {
                 onSettingsChange(settings.copy(petVisible = it))
             }
-            PetSwitch("点击宠物打开侧边栏", "轻点宠物弹出输入侧边栏", settings.tapOpensPanel) {
+            PetSwitch(stringResource(R.string.qk_03812), stringResource(R.string.qk_03813), settings.tapOpensPanel) {
                 onSettingsChange(settings.copy(tapOpensPanel = it))
             }
-            PetSwitch("长按宠物与 AI 互动", "长按宠物，AI 会回应你的抚摸", settings.tapInteract) {
+            PetSwitch(stringResource(R.string.qk_03814), stringResource(R.string.qk_03815), settings.tapInteract) {
                 onSettingsChange(settings.copy(tapInteract = it))
             }
-            PetSwitch("状态气泡播报", "展示思考/工具/生成状态气泡", settings.bubbleEnabled) {
+            PetSwitch(stringResource(R.string.qk_03816), stringResource(R.string.qk_03817), settings.bubbleEnabled) {
                 onSettingsChange(settings.copy(bubbleEnabled = it))
             }
         }

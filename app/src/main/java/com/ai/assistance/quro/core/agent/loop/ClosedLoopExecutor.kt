@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.agent.loop
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 
@@ -60,7 +62,7 @@ class ClosedLoopExecutor(
 
             when (r) {
                 is ExecResult.Completed -> {
-                    trace.feedback(name, "执行完成", r.raw.take(300))
+                    trace.feedback(name, qstr(R.string.qk_01011), r.raw.take(300))
                     val issues = verifier.verify(name, arguments, r.raw, attempt)
                     val errors = issues.filter { it.severity == LoopIssue.Severity.ERROR }
                     if (errors.isEmpty()) {

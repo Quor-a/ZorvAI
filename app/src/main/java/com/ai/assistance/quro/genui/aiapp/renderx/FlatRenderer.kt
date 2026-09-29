@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.genui.aiapp.renderx
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -80,7 +83,7 @@ private fun renderNode(doc: FlatDoc, id: String, onAction: (String) -> Unit, mod
             shape = RoundedCornerShape(12.dp),
             modifier = modifier.then(outer).clickable { onAction(text) }
         ) {
-            Text(text.ifBlank { "按钮" }, color = colorOf(n.props["color"], Color.White), fontSize = 14.sp, fontWeight = FontWeight.Bold,
+            Text(text.ifBlank { stringResource(R.string.qk_03650) }, color = colorOf(n.props["color"], Color.White), fontSize = 14.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp))
         }
         "image" -> Box(
@@ -95,7 +98,7 @@ private fun renderNode(doc: FlatDoc, id: String, onAction: (String) -> Unit, mod
             Text(text, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
         }
         "input" -> Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(10.dp), modifier = modifier.then(outer).fillMaxWidth()) {
-            Text(text.ifBlank { n.props["hint"] ?: "输入…" }, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(10.dp))
+            Text(text.ifBlank { n.props["hint"] ?: qstr(R.string.qk_03706) }, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(10.dp))
         }
         else -> Text(text.ifBlank { n.type }, modifier = modifier.then(outer))
     }

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.os.Build
@@ -102,7 +104,7 @@ enum class AsrModelType(val label: String) {
     /** 历史遗留的 SenseVoice 非流式部署——引擎不含对应符号，无法加载，仅用于提示迁移。 */
     SENSE_VOICE_LEGACY("SenseVoice（旧版·引擎不支持）"),
 
-    UNKNOWN("未知");
+    UNKNOWN(qstr(R.string.qk_00472));
 }
 
 /** 端侧 ASR 模型在磁盘上的实际文件（已定位的绝对路径）。 */

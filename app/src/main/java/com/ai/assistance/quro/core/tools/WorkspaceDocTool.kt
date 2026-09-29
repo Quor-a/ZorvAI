@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import java.io.File
@@ -77,8 +79,8 @@ class WorkspaceDocTool : QuroTool {
             val renderType = when (fileType) {
                 "html" -> "HTML"
                 "md" -> "Markdown"
-                "json", "js", "py", "java", "kotlin", "css" -> "代码"
-                else -> "文本"
+                "json", "js", "py", "java", "kotlin", "css" -> qstr(R.string.qk_00148)
+                else -> qstr(R.string.qk_02287)
             }
             val (aipFormat, aipLang) = when (fileType) {
                 "html" -> "html" to ""

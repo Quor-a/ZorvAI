@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
@@ -60,13 +63,13 @@ import java.io.File
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuroModelHubScreen(onClose: () -> Unit) {
-    val tabs = listOf("GGUF (llama.cpp)", "MNN", "我的模型")
+    val tabs = listOf("GGUF (llama.cpp)", "MNN", stringResource(R.string.qk_02211))
     var tab by remember { mutableStateOf(0) }
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("离线模型下载中心") },
-                navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, "返回") } },
+                title = { Text(stringResource(R.string.qk_02212)) },
+                navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_00143)) } },
             )
         },
     ) { pad ->
@@ -98,7 +101,7 @@ private suspend fun downloadAndLoadGguf(
     val dir = modelDir(id, ctx); dir.mkdirs()
     val target = File(dir, entry.fileName)
     val r = QuroHuggingFace.downloadFile(entry.repoId, entry.fileName, target, onProgress)
-    if (!r.startsWith("OK")) { target.delete(); return@withContext "下载失败：$r" }
+    if (!r.startsWith("OK")) { target.delete(); return@withContext qstr(R.string.qk_02213, (r).toString()) }
     val stem = QuroGgufNaming.stem(entry.fileName)
     val model = QuroLocalModel(
         id = id,
@@ -109,8 +112,8 @@ private suspend fun downloadAndLoadGguf(
     )
     QuroLocalModelRepository(ctx).upsert(model)
     return@withContext when (val res = LocalModelLoaders.get().load(model)) {
-        is LocalModelLoader.LoadResult.Success -> "OK:已下载并动态加载（llama.cpp）"
-        is LocalModelLoader.LoadResult.Failure -> "已下载，但引擎加载失败：${res.message}"
+        is LocalModelLoader.LoadResult.Success -> qstr(R.string.qk_02214)
+        is LocalModelLoader.LoadResult.Failure -> qstr(R.string.qk_02215, (res.message).toString())
     }
 }
 
@@ -125,7 +128,7 @@ private suspend fun downloadAndLoadMnn(
     // 传入 source：HuggingFace("hf") 走 HF 链路，ModelScope("ms") 走阿里 OSS CDN 链路（国内稳定）。
     // 否则 ModelScope 来源的模型会被误判为 HF 而下载失败（直接对应「MNN 下载没搞对」）。
     val r = QuroHuggingFace.downloadMnnModel(entry.repoId, dir, onProgress, entry.source)
-    if (!r.startsWith("OK")) return@withContext "下载失败：$r"
+    if (!r.startsWith("OK")) return@withContext qstr(R.string.qk_02213, (r).toString())
     val model = QuroLocalModel(
         id = id,
         type = QuroLocalModelType.MNN,
@@ -134,8 +137,8 @@ private suspend fun downloadAndLoadMnn(
     )
     QuroLocalModelRepository(ctx).upsert(model)
     return@withContext when (val res = LocalModelLoaders.get().load(model)) {
-        is LocalModelLoader.LoadResult.Success -> "OK:已下载并动态加载（MNN）"
-        is LocalModelLoader.LoadResult.Failure -> "已下载，但引擎加载失败：${res.message}"
+        is LocalModelLoader.LoadResult.Success -> qstr(R.string.qk_02216)
+        is LocalModelLoader.LoadResult.Failure -> qstr(R.string.qk_02215, (res.message).toString())
     }
 }
 
@@ -171,12 +174,12 @@ private fun SearchHubTab(type: String) {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text(if (type == "GGUF") "搜索 GGUF 模型" else "搜索 MNN 模型") },
+                label = { Text(if (type == "GGUF") stringResource(R.string.qk_02219) else stringResource(R.string.qk_02220)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.padding(start = 8.dp))
-            IconButton(onClick = { doSearch() }) { Icon(Icons.Filled.Search, "搜索") }
+            IconButton(onClick = { doSearch() }) { Icon(Icons.Filled.Search, stringResource(R.string.qk_00002)) }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             presets.forEach { p ->
@@ -211,16 +214,16 @@ private fun ResultRow(ctx: Context, scope: kotlinx.coroutines.CoroutineScope, en
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Text(entry.repoId, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             Text(
-                if (entry.type == "MNN" && entry.fileName.isBlank()) "(完整模型包：配置 + 全部权重文件)"
+                if (entry.type == "MNN" && entry.fileName.isBlank()) stringResource(R.string.qk_02221)
                 else entry.fileName,
                 style = MaterialTheme.typography.bodySmall,
             )
-            Text("大小约 ${entry.sizeMB} MB", style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.qk_02222, (entry.sizeMB).toString()), style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
             if (downloading) {
                 LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(4.dp))
-                Text("${(progress * 100).toInt()}% 下载中…", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.qk_02223, ((progress * 100).toInt()).toString()), style = MaterialTheme.typography.bodySmall)
             }
             if (status != null && !downloading) {
                 Spacer(Modifier.height(4.dp))
@@ -233,7 +236,7 @@ private fun ResultRow(ctx: Context, scope: kotlinx.coroutines.CoroutineScope, en
                     if (downloading) return@Button
                     downloading = true
                     progress = 0f
-                    status = "下载中…"
+                    status = qstr(R.string.qk_02224)
                     scope.launch {
                         val r = if (type == "GGUF") downloadAndLoadGguf(ctx, entry) { progress = it }
                         else downloadAndLoadMnn(ctx, entry) { progress = it }
@@ -244,8 +247,8 @@ private fun ResultRow(ctx: Context, scope: kotlinx.coroutines.CoroutineScope, en
                 enabled = !downloading,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Icon(Icons.Filled.Download, "下载", modifier = Modifier.padding(end = 4.dp))
-                Text("下载并加载")
+                Icon(Icons.Filled.Download, stringResource(R.string.qk_00101), modifier = Modifier.padding(end = 4.dp))
+                Text(stringResource(R.string.qk_02225))
             }
         }
     }
@@ -267,12 +270,12 @@ private fun MyModelsTab() {
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("已登记 ${models.size} 个模型", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            IconButton(onClick = { reload() }) { Icon(Icons.Filled.Refresh, "刷新") }
+            Text(stringResource(R.string.qk_02226, (models.size).toString()), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            IconButton(onClick = { reload() }) { Icon(Icons.Filled.Refresh, stringResource(R.string.qk_00459)) }
         }
         if (models.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                Text("还没有模型。去上方 GGUF / MNN 标签页搜索并下载一个吧。")
+                Text(stringResource(R.string.qk_02227))
             }
         } else {
             LazyColumn(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
@@ -327,20 +330,20 @@ private fun MyModelCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(model.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 if (isLoaded) {
-                    Icon(Icons.Filled.CheckCircle, "已加载", tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Filled.CheckCircle, stringResource(R.string.qk_00426), tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.padding(start = 4.dp))
-                    Text("已加载", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.qk_00426), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            Text("类型：$typeLabel", style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.qk_02228, (typeLabel).toString()), style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (isLoaded) {
-                    Button(onClick = onUnload) { Text("卸载") }
+                    Button(onClick = onUnload) { Text(stringResource(R.string.qk_00434)) }
                 } else {
-                    Button(onClick = onLoad) { Text("加载") }
+                    Button(onClick = onLoad) { Text(stringResource(R.string.qk_02133)) }
                 }
-                Button(onClick = onDelete) { Text("删除") }
+                Button(onClick = onDelete) { Text(stringResource(R.string.qk_00091)) }
             }
         }
     }

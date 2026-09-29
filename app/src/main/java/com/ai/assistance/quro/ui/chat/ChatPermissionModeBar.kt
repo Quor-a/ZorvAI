@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui.chat
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -122,15 +125,14 @@ internal fun ChatPermissionModeBar(
                 Modifier
                     .fillMaxWidth()
                     .clickable(
-                        onClickLabel = if (expanded) "收起权限模式" else "展开权限模式",
+                        onClickLabel = if (expanded) stringResource(R.string.qk_03217) else stringResource(R.string.qk_03218),
                         onClick = { expanded = !expanded },
                     )
                     .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // 固定标题：无 weight，先被测量
-                Text(
-                    "权限模式",
+                Text(stringResource(R.string.qk_02296),
                     fontSize = 11.sp,
                     color = Muted,
                     fontWeight = FontWeight.Medium,
@@ -145,11 +147,11 @@ internal fun ChatPermissionModeBar(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (deepThink) SummaryTag("深度思考")
-                    if (autoSaveMemory) SummaryTag("记忆")
-                    if (subAgentEnabled) SummaryTag("子智能体")
-                    if (autoRead) SummaryTag("朗读")
-                    if (visionEnabled) SummaryTag("看懂屏幕")
+                    if (deepThink) SummaryTag(stringResource(R.string.qk_03219))
+                    if (autoSaveMemory) SummaryTag(stringResource(R.string.qk_03220))
+                    if (subAgentEnabled) SummaryTag(stringResource(R.string.qk_03221))
+                    if (autoRead) SummaryTag(stringResource(R.string.qk_03222))
+                    if (visionEnabled) SummaryTag(stringResource(R.string.qk_03223))
                     val cmsBg = when (cmsPolicy) {
                         QuroPolicy.ALLOW -> OkGreen.copy(alpha = 0.18f)
                         QuroPolicy.DENY -> DenyRed.copy(alpha = 0.18f)
@@ -172,14 +174,14 @@ internal fun ChatPermissionModeBar(
                         QuroPolicy.DENY -> DenyRed
                         else -> cs.primary
                     }
-                    SummaryTag("特权:${policyLabel(privPolicy)}", background = privBg, foreground = privFg)
+                    SummaryTag(stringResource(R.string.qk_03224, (policyLabel(privPolicy)).toString()), background = privBg, foreground = privFg)
                 }
                 Spacer(Modifier.width(6.dp))
                 // 常驻收起/展开按钮：固定 40dp、不参与 weight —— 无论摘要多长都不会被压成 0 宽
                 Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
                     LucideIcon(
                         if (expanded) "chevron_up" else "chevron_down",
-                        if (expanded) "收起权限模式" else "展开权限模式",
+                        if (expanded) stringResource(R.string.qk_03217) else stringResource(R.string.qk_03218),
                         Modifier.size(16.dp),
                         tint = Muted,
                     )
@@ -197,36 +199,36 @@ internal fun ChatPermissionModeBar(
 
                     ModeToggleRow(
                         active = deepThink,
-                        title = "深度思考",
-                        desc = " — 显示 AI 推理过程",
+                        title = stringResource(R.string.qk_03219),
+                        desc = stringResource(R.string.qk_03225),
                         onClick = onToggleThink,
                     )
                     Spacer(Modifier.height(6.dp))
                     ModeToggleRow(
                         active = autoSaveMemory,
-                        title = "自动保存记忆",
-                        desc = " — AI 自动沉淀长期记忆",
+                        title = stringResource(R.string.qk_03226),
+                        desc = stringResource(R.string.qk_03227),
                         onClick = onToggleAutoSave,
                     )
                     Spacer(Modifier.height(6.dp))
                     ModeToggleRow(
                         active = subAgentEnabled,
-                        title = "子智能体",
-                        desc = " — AI 可派子智能体分担子任务",
+                        title = stringResource(R.string.qk_03221),
+                        desc = stringResource(R.string.qk_03228),
                         onClick = onToggleSubAgent,
                     )
                     Spacer(Modifier.height(6.dp))
                     ModeToggleRow(
                         active = autoRead,
-                        title = "自动朗读",
-                        desc = " — AI 回复自动朗读",
+                        title = stringResource(R.string.qk_03069),
+                        desc = stringResource(R.string.qk_03229),
                         onClick = onToggleAutoRead,
                     )
                     Spacer(Modifier.height(6.dp))
                     ModeToggleRow(
                         active = visionEnabled,
-                        title = "看懂屏幕",
-                        desc = " — AI 实时理解当前屏幕（长按申请屏幕捕获）",
+                        title = stringResource(R.string.qk_03223),
+                        desc = stringResource(R.string.qk_03230),
                         onClick = onToggleVision,
                         onLongClick = onRequestMediaProjection,
                     )
@@ -239,7 +241,7 @@ internal fun ChatPermissionModeBar(
                     )
                     Spacer(Modifier.height(4.dp))
                     PolicyChipGroup(
-                        label = "特权",
+                        label = stringResource(R.string.qk_03231),
                         current = privPolicy,
                         onSet = { QuroPolicyStore.setPriv(ctx, it) },
                     )
@@ -247,16 +249,16 @@ internal fun ChatPermissionModeBar(
                     // 工作区选择器
                     ModeToggleRow(
                         active = currentWorkspace != null,
-                        title = "工作区",
-                        desc = if (currentWorkspace != null) " — ${currentWorkspace.substringAfterLast('/')}" else " — 选择工作目录",
+                        title = stringResource(R.string.qk_00025),
+                        desc = if (currentWorkspace != null) " — ${currentWorkspace.substringAfterLast('/')}" else stringResource(R.string.qk_03232),
                         onClick = onOpenWorkspaceSelector,
                     )
                     Spacer(Modifier.height(6.dp))
                     // 工作区代码编辑器：写代码 / 浏览代码
                     ModeToggleRow(
                         active = false,
-                        title = "代码编辑",
-                        desc = " — 写代码 / 浏览工作区文件",
+                        title = stringResource(R.string.qk_03233),
+                        desc = stringResource(R.string.qk_03234),
                         onClick = onOpenCodeBrowser,
                     )
                 }
@@ -267,9 +269,9 @@ internal fun ChatPermissionModeBar(
 
 /** 策略枚举 → 中文标签。 */
 private fun policyLabel(p: QuroPolicy): String = when (p) {
-    QuroPolicy.ALLOW -> "允许"
-    QuroPolicy.DENY -> "禁止"
-    QuroPolicy.ASK -> "询问"
+    QuroPolicy.ALLOW -> qstr(R.string.qk_03235)
+    QuroPolicy.DENY -> qstr(R.string.qk_03236)
+    QuroPolicy.ASK -> qstr(R.string.qk_03166)
 }
 
 /** 摘要行里的状态小标签（横向滚动容器内，永远单行不换行）。 */
@@ -314,12 +316,12 @@ private fun ModeToggleRow(
         .background(if (active) AccentSoft else cs.surface)
         .then(
             if (onLongClick != null) Modifier.combinedClickable(
-                onClickLabel = if (active) "关闭$title" else "开启$title",
-                onLongClickLabel = "长按：${title}（高级）",
+                onClickLabel = if (active) stringResource(R.string.qk_03237, (title).toString()) else stringResource(R.string.qk_03238, (title).toString()),
+                onLongClickLabel = stringResource(R.string.qk_03239, (title).toString()),
                 onClick = onClick,
                 onLongClick = onLongClick,
             ) else Modifier.clickable(
-                onClickLabel = if (active) "关闭$title" else "开启$title",
+                onClickLabel = if (active) stringResource(R.string.qk_03237, (title).toString()) else stringResource(R.string.qk_03238, (title).toString()),
                 onClick = onClick,
             )
         )
@@ -361,9 +363,9 @@ private fun PolicyChipGroup(
     val cs = MaterialTheme.colorScheme
     val options = remember {
         listOf(
-            QuroPolicy.ALLOW to "允许",
-            QuroPolicy.DENY to "禁止",
-            QuroPolicy.ASK to "询问",
+            QuroPolicy.ALLOW to qstr(R.string.qk_03235),
+            QuroPolicy.DENY to qstr(R.string.qk_03236),
+            QuroPolicy.ASK to qstr(R.string.qk_03166),
         )
     }
     val scroll = rememberScrollState()

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.ui.dynamicui.QuroUiColor
@@ -24,7 +26,7 @@ import org.json.JSONObject
 class UiDslSpecTool : QuroTool {
     override val name = "ui_dsl_spec"
     override val description =
-        "获取「动态 UI」的 DSL 规范：可用的节点类型、字段、动作以及完整示例。" +
+        qstr(R.string.qk_03606) +
             "当你需要生成一个可交互的原生界面（表单、卡片、设置面板、数据展示等）时，" +
             "先调用本工具了解规范，然后在回复中输出 ```quro-ui 代码块即可渲染成真实原生控件。"
 
@@ -324,7 +326,7 @@ svg, c, cpp, java, kotlin, dart, go, rust, php, ruby, swift 等 ZorvAI 已接入
 class UiValidateTool : QuroTool {
     override val name = "ui_validate"
     override val description =
-        "校验一段动态 UI 的 DSL（JSON）能否被正确解析。输出前先自检，可避免渲染失败。" +
+        qstr(R.string.qk_03665) +
             "返回解析结果、修复后的 JSON（若语法有误）以及节点统计。"
 
     override val parametersJson: String = JSONObject().apply {

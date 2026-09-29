@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -60,7 +62,7 @@ object QuroDocOpener {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         return runCatching {
-            context.startActivity(Intent.createChooser(intent, "用以下应用打开"))
+            context.startActivity(Intent.createChooser(intent, qstr(R.string.qk_01842)))
             true
         }.getOrDefault(false)
     }

@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -116,7 +119,7 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
         val c = cmd.trim()
         if (c.isBlank()) return
         if (!QuroAdbDebug.hasPrivilegedChannel()) {
-            Toast.makeText(ctx, "需要 root / Shizuku 才能执行本机 ADB shell", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, qstr(R.string.qk_02980), Toast.LENGTH_LONG).show()
             return
         }
         scope.launch {
@@ -172,7 +175,7 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
         val t = clientTarget.trim()
         if (t.isBlank()) return
         if (!QuroAdbDebug.hasPrivilegedChannel()) {
-            Toast.makeText(ctx, "需要 root / Shizuku 才能执行 adb connect", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, qstr(R.string.qk_02981), Toast.LENGTH_LONG).show()
             return
         }
         scope.launch {
@@ -198,7 +201,7 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
         runCatching {
             val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("adb", text))
-            Toast.makeText(ctx, "已复制：$text", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_02982, (text).toString()), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -209,13 +212,13 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                 putExtra(Intent.EXTRA_TEXT, text)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            ctx.startActivity(Intent.createChooser(intent, "分享连接命令"))
+            ctx.startActivity(Intent.createChooser(intent, qstr(R.string.qk_02983)))
         }
     }
 
     fun shareDiagnostic() {
         val sb = StringBuilder()
-        sb.appendLine("QuroAI ADB / 默认应用诊断")
+        sb.appendLine(qstr(R.string.qk_02984))
         sb.appendLine("提权通道: ${if (hasPriv) "可用(root/Shizuku)" else "无"}")
         sb.appendLine("USB 调试: ${when (usbOn) { null -> "未知"; true -> "开"; false -> "关" }}")
         sb.appendLine("USB 数据线: ${usbCable ?: "未知"}")
@@ -224,14 +227,14 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
         sb.appendLine("连接命令: ${if (tcpPort > 0 && ip != null) "adb connect $ip:$tcpPort" else "—"}")
         sb.appendLine("已连接客户端: ${clients.joinToString(", ").ifEmpty { "无" }}")
         sb.appendLine("adb devices: ${adbOut?.replace('\n', ';') ?: "宿主无 adb 客户端二进制"}")
-        sb.appendLine("默认应用角色:")
+        sb.appendLine(qstr(R.string.qk_02992))
         for ((r, h) in roleHeld) sb.appendLine("  ${r.label}: ${if (h) "已设为默认" else "未设"}")
         share(sb.toString())
     }
 
     fun onToggle(newVal: Boolean) {
         if (!QuroAdbDebug.hasPrivilegedChannel()) {
-            Toast.makeText(ctx, "无 root/Shizuku：改用系统无线调试配对", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, qstr(R.string.qk_02993), Toast.LENGTH_LONG).show()
             QuroAdbDebug.openWirelessDebugging(ctx)
             return
         }
@@ -241,9 +244,9 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
             val r = withContext(Dispatchers.IO) { QuroAdbDebug.setTcpAdb(ctx, newVal, portNum) }
             busy = false
             log = if (r.success) {
-                if (newVal) "✅ 已启用 TCP ADB，监听端口 $portNum\n${r.output}" else "✅ 已关闭 TCP ADB\n${r.output}"
-            } else "❌ 执行失败：${r.render()}"
-            Toast.makeText(ctx, if (r.success) (if (newVal) "已启用无线 ADB" else "已关闭") else "执行失败", Toast.LENGTH_SHORT).show()
+                if (newVal) qstr(R.string.qk_02994, (portNum).toString(), (r.output).toString()) else qstr(R.string.qk_02995, (r.output).toString())
+            } else qstr(R.string.qk_02996, (r.render()).toString())
+            Toast.makeText(ctx, if (r.success) (if (newVal) qstr(R.string.qk_02997) else qstr(R.string.qk_02998)) else qstr(R.string.qk_01012), Toast.LENGTH_SHORT).show()
             // adbd 重启后要等一两秒再探监听状态
             delay(1500)
             refresh()
@@ -256,9 +259,9 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回", tint = MaterialTheme.colorScheme.onSurface) }
+            IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143), tint = MaterialTheme.colorScheme.onSurface) }
             Spacer(Modifier.width(8.dp))
-            Text("USB / 无线调试 (ADB)", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Text(stringResource(R.string.qk_02999), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.weight(1f))
             val cs = MaterialTheme.colorScheme
             Box(
@@ -267,48 +270,48 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                     .padding(horizontal = 10.dp, vertical = 4.dp),
             ) {
                 Text(
-                    if (probing) "探测中…" else if (hasPriv) "可提权" else "无提权",
+                    if (probing) stringResource(R.string.qk_01688) else if (hasPriv) stringResource(R.string.qk_03000) else stringResource(R.string.qk_03001),
                     fontSize = 12.sp, color = if (hasPriv) Color.White else cs.onSurfaceVariant,
                 )
             }
             if (!probing) {
                 Spacer(Modifier.width(8.dp))
-                IconButton(onClick = { refresh() }) { Icon(Icons.Filled.Sync, contentDescription = "刷新", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                IconButton(onClick = { refresh() }) { Icon(Icons.Filled.Sync, contentDescription = stringResource(R.string.qk_00459), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
         HorizontalDivider(color = Line)
 
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            GroupCaption("通道状态")
+            GroupCaption(stringResource(R.string.qk_03002))
             SetGroup {
-                StatusRow(Icons.Filled.Shield, "提权通道", "root 或 Shizuku 可用于启动 TCP adbd", hasPriv)
+                StatusRow(Icons.Filled.Shield, stringResource(R.string.qk_03003), stringResource(R.string.qk_03004), hasPriv)
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 StatusRow(
-                    Icons.Filled.Usb, "USB 调试",
-                    "系统开发者选项里的 USB 调试开关",
+                    Icons.Filled.Usb, stringResource(R.string.qk_03005),
+                    stringResource(R.string.qk_03006),
                     usbOn ?: false,
                     unknown = usbOn == null,
                 )
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 TextStateRow(
-                    Icons.Filled.Cable, "USB 数据线",
-                    "线缆实际连接状态（区别于 USB 调试开关）",
+                    Icons.Filled.Cable, stringResource(R.string.qk_03007),
+                    stringResource(R.string.qk_03008),
                     usbCable,
                 )
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 StatusRow(
                     Icons.Filled.Router,
                     "TCP ADB",
-                    if (tcpPort > 0) "监听端口 $tcpPort${if (listening) " · 已监听" else " · 未监听"}" else "未启用",
+                    if (tcpPort > 0) "监听端口 $tcpPort${if (listening) " · 已监听" else " · 未监听"}" else stringResource(R.string.qk_03010),
                     tcpEnabled,
                 )
             }
 
-            GroupCaption("无线 ADB（被电脑控制）")
+            GroupCaption(stringResource(R.string.qk_03011))
             SetGroup {
                 SetRow(
-                    Icons.Filled.Wifi, "启用无线 ADB (TCP)",
-                    if (hasPriv) "root/Shizuku 下启动 adbd 监听，电脑可连接" else "无提权：点此打开系统无线调试配对",
+                    Icons.Filled.Wifi, stringResource(R.string.qk_03012),
+                    if (hasPriv) stringResource(R.string.qk_03013) else stringResource(R.string.qk_03014),
                     tcpEnabled,
                     onToggle = { onToggle(!tcpEnabled) },
                     scaled = { it.sp },
@@ -322,7 +325,7 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                         OutlinedTextField(
                             value = portText,
                             onValueChange = { portText = it.filter { c -> c.isDigit() }.take(5) },
-                            label = { Text("端口", fontSize = 12.sp) },
+                            label = { Text(stringResource(R.string.qk_00936), fontSize = 12.sp) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             modifier = Modifier.width(120.dp),
@@ -332,9 +335,9 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                         if (busy) {
                             CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(8.dp))
-                            Text("执行中…", fontSize = 12.sp, color = Muted)
+                            Text(stringResource(R.string.qk_00117), fontSize = 12.sp, color = Muted)
                         } else {
-                            Text("默认 5555，与 adb tcpip 对齐", fontSize = 12.sp, color = Muted)
+                            Text(stringResource(R.string.qk_03015), fontSize = 12.sp, color = Muted)
                         }
                     }
                 }
@@ -342,12 +345,12 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
 
             // 连接信息：被电脑控制 / 被手机控制（同一 TCP adbd，控制端可是电脑也可是另一台手机）
             if (tcpEnabled && ip != null) {
-                GroupCaption("电脑/手机连接本机（被控制）")
+                GroupCaption(stringResource(R.string.qk_03016))
                 SetGroup {
                     val cmd = "adb connect $ip:$tcpPort"
                     ConnectInfoRow(
                         cmd,
-                        "在电脑或另一台手机的终端执行该命令即可连接本机；连接后对方即可控制本机（安装/卸载/截屏/文件/Shell）",
+                        stringResource(R.string.qk_03017),
                         onCopy = { copy(cmd) },
                         onShare = { share(cmd) },
                     )
@@ -376,30 +379,30 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                         Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
                             androidx.compose.foundation.Image(
                                 bitmap = qrBitmap.asImageBitmap(),
-                                contentDescription = "adb connect 二维码",
+                                contentDescription = stringResource(R.string.qk_03018),
                                 modifier = Modifier.size(180.dp).clip(RoundedCornerShape(8.dp)).background(Color.White).padding(12.dp),
                             )
                         }
-                        Text("扫码即得连接命令（另一台手机/电脑相机扫码后可复制），实现被手机/电脑控制", fontSize = 11.sp, color = Muted, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
+                        Text(stringResource(R.string.qk_03019), fontSize = 11.sp, color = Muted, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
                     }
                 }
             } else if (tcpEnabled && ip == null) {
-                GroupCaption("电脑连接本机")
+                GroupCaption(stringResource(R.string.qk_03020))
                 SetGroup {
-                    InfoLine("TCP ADB 已启用，但未检测到 WiFi 局域网 IP（请连接 WiFi）。连上后这里会显示 adb connect 命令。")
+                    InfoLine(stringResource(R.string.qk_03021))
                 }
             }
 
             // 谁正在控制本机：解析 /proc/net/tcp 中与 ADB 端口 ESTABLISHED 的连接（补齐「被控制」闭环）
             if (tcpEnabled) {
-                GroupCaption("正在控制本机的客户端")
+                GroupCaption(stringResource(R.string.qk_03022))
                 SetGroup {
                     if (clients.isEmpty()) {
-                        InfoLine("暂无客户端连接（本机仅在监听）。对方执行 adb connect $ip:$tcpPort 后会出现在这里。")
+                        InfoLine(stringResource(R.string.qk_03023, (ip).toString(), (tcpPort).toString()))
                     } else {
                         clients.forEach { c -> InfoLine("● $c") }
                         HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                        InfoLine("以上为已与本机 ADB 端口 $tcpPort 建立 TCP 连接的控制端。要断开：关闭上方「启用无线 ADB」开关，或让对方 adb disconnect。")
+                        InfoLine(stringResource(R.string.qk_03024, (tcpPort).toString()))
                     }
                     if (!probing) {
                         HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
@@ -407,17 +410,17 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("连接列表不会自动刷新", fontSize = 12.sp, color = Muted, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { refresh() }) { Text("刷新", fontSize = 13.sp, color = Accent) }
+                            Text(stringResource(R.string.qk_03025), fontSize = 12.sp, color = Muted, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { refresh() }) { Text(stringResource(R.string.qk_00459), fontSize = 13.sp, color = Accent) }
                         }
                     }
                 }
             }
 
             // 本机作为 ADB 客户端：反向连接对方（被手机控制 / 本机作为客户端）
-            GroupCaption("本机作为客户端（控制对方）")
+            GroupCaption(stringResource(R.string.qk_03026))
             SetGroup {
-                InfoLine("本机也可作为 ADB 客户端去连其它设备、或连自身（adb connect 127.0.0.1:$tcpPort）。输入对方 ip:port 即可反向连接并控制对方。")
+                InfoLine(stringResource(R.string.qk_03027, (tcpPort).toString()))
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
@@ -426,8 +429,8 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                     OutlinedTextField(
                         value = clientTarget,
                         onValueChange = { clientTarget = it.filter { c -> c.isDigit() || c == '.' || c == ':' } },
-                        label = { Text("对方 ip:port", fontSize = 12.sp) },
-                        placeholder = { Text("如 192.168.1.10:5555", fontSize = 12.sp, color = Muted) },
+                        label = { Text(stringResource(R.string.qk_03028), fontSize = 12.sp) },
+                        placeholder = { Text(stringResource(R.string.qk_03029), fontSize = 12.sp, color = Muted) },
                         singleLine = true,
                         enabled = !shellBusy,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Send),
@@ -440,13 +443,13 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                         enabled = !shellBusy && clientTarget.isNotBlank(),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                     ) {
-                        if (shellBusy) Text("连接中…", fontSize = 13.sp) else Text("连接", fontSize = 13.sp)
+                        if (shellBusy) Text(stringResource(R.string.qk_03030), fontSize = 13.sp) else Text(stringResource(R.string.qk_02111), fontSize = 13.sp)
                     }
                 }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 // 此前是弹 Toast 的占位行，改为真正跳到终端页
                 SetRowClickable(
-                    Icons.Filled.Terminal, "打开终端", "到终端里执行 adb / shell 命令控制本机或远端", "",
+                    Icons.Filled.Terminal, stringResource(R.string.qk_03031), stringResource(R.string.qk_03032), "",
                     onClick = { onOpenTerminal() },
                     scaled = { it.sp },
                 )
@@ -455,25 +458,25 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                     InfoLine("adb devices -l：\n$adbOut")
                 } else {
                     HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                    InfoLine("宿主无 adb 客户端二进制，无法在此列出 adb devices；上面的「连接」会返回 not found。请在上方「打开终端」里用终端自带的 adb，或用系统「无线调试」配对。")
+                    InfoLine(stringResource(R.string.qk_03033))
                 }
             }
 
-            GroupCaption("系统入口（无提权时手动配对）")
+            GroupCaption(stringResource(R.string.qk_03034))
             SetGroup {
                 SetRowClickable(
-                    Icons.Filled.DeveloperMode, "开发者选项", "打开系统开发者选项（USB 调试开关）", "",
+                    Icons.Filled.DeveloperMode, stringResource(R.string.qk_03035), stringResource(R.string.qk_03036), "",
                     onClick = { QuroAdbDebug.openDeveloperOptions(ctx) }, scaled = { it.sp },
                 )
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 SetRowClickable(
-                    Icons.Filled.Wifi, "无线调试", "Android 11+ 无线调试配对（配对码 + 端口）", "",
+                    Icons.Filled.Wifi, stringResource(R.string.qk_03037), stringResource(R.string.qk_03038), "",
                     onClick = { QuroAdbDebug.openWirelessDebugging(ctx) }, scaled = { it.sp },
                 )
             }
 
             // 本机 ADB Shell：经特权通道以 root 执行命令（控制代码 / 控制手机）
-            GroupCaption("ADB Shell（控制代码 / 控制手机）")
+            GroupCaption(stringResource(R.string.qk_03039))
             SetGroup {
                 // 常用命令快捷芯片：点按即填入输入框
                 LazyRow(
@@ -495,8 +498,8 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                     OutlinedTextField(
                         value = shellCmd,
                         onValueChange = { shellCmd = it },
-                        label = { Text("命令", fontSize = 12.sp) },
-                        placeholder = { Text("如 getprop ro.build.version.release", fontSize = 12.sp, color = Muted) },
+                        label = { Text(stringResource(R.string.qk_03040), fontSize = 12.sp) },
+                        placeholder = { Text(stringResource(R.string.qk_03041), fontSize = 12.sp, color = Muted) },
                         singleLine = true,
                         enabled = !shellBusy,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Send),
@@ -509,7 +512,7 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                         enabled = !shellBusy && shellCmd.isNotBlank(),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                     ) {
-                        if (shellBusy) Text("执行中…", fontSize = 13.sp) else Text("执行", fontSize = 13.sp)
+                        if (shellBusy) Text(stringResource(R.string.qk_00117), fontSize = 13.sp) else Text(stringResource(R.string.qk_01642), fontSize = 13.sp)
                     }
                 }
                 if (shellOut.isNotBlank()) {
@@ -518,9 +521,9 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("输出", fontSize = 12.sp, color = Muted, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { copy(shellOut) }) { Text("复制", fontSize = 12.sp, color = Accent) }
-                        TextButton(onClick = { shellOut = "" }) { Text("清空", fontSize = 12.sp, color = Accent) }
+                        Text(stringResource(R.string.qk_02865), fontSize = 12.sp, color = Muted, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { copy(shellOut) }) { Text(stringResource(R.string.qk_00088), fontSize = 12.sp, color = Accent) }
+                        TextButton(onClick = { shellOut = "" }) { Text(stringResource(R.string.qk_00764), fontSize = 12.sp, color = Accent) }
                     }
                     Box(
                         Modifier.fillMaxWidth().heightIn(max = 200.dp)
@@ -537,7 +540,7 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
             }
 
             // 设备控制快捷动作：直接执行高频"控制手机"指令
-            GroupCaption("设备控制（快捷动作 / 控制手机）")
+            GroupCaption(stringResource(R.string.qk_03042))
             SetGroup {
                 LazyRow(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -554,11 +557,11 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                     }
                 }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                InfoLine("截图存到 App 私有存储（$extDir/quro_screencap.png）；锁屏/回桌面/多任务/音量经 input keyevent 注入；重启需二次确认。")
+                InfoLine(stringResource(R.string.qk_03043, (extDir).toString()))
             }
 
             if (log.isNotBlank()) {
-                GroupCaption("最近执行结果")
+                GroupCaption(stringResource(R.string.qk_03044))
                 SetGroup {
                     Text(
                         log, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary,
@@ -568,9 +571,9 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
             }
 
             // 诊断：无需 adb，在手机上即可确认 ADB 与默认应用状态
-            GroupCaption("诊断（无需 adb，手机上自证状态）")
+            GroupCaption(stringResource(R.string.qk_03045))
             SetGroup {
-                InfoLine("一键汇总当前 ADB 通道、TCP 监听、连接命令与 8 项默认应用角色状态，可分享给开发者定位；不写任何外部日志。")
+                InfoLine(stringResource(R.string.qk_03046))
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
@@ -580,18 +583,18 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                         onClick = { shareDiagnostic() },
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                     ) {
-                        Text("分享诊断信息", fontSize = 13.sp)
+                        Text(stringResource(R.string.qk_03047), fontSize = 13.sp)
                     }
                     Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = { refresh() }) { Text("刷新", fontSize = 13.sp, color = Accent) }
+                    TextButton(onClick = { refresh() }) { Text(stringResource(R.string.qk_00459), fontSize = 13.sp, color = Accent) }
                 }
             }
 
-            GroupCaption("说明")
+            GroupCaption(stringResource(R.string.qk_01691))
             SetGroup {
-                InfoLine("USB 调试 / 无线调试是系统能力；本应用只负责探测状态、在提权下启停 TCP adbd、展示连接命令，并引导你到系统设置手动配对。")
-                InfoLine("启用无线 ADB 后，同一 WiFi 下的电脑可 adb connect 接管本机；在不可信网络请务必用完即关（关掉 TCP ADB）。")
-                InfoLine("无 root / Shizuku 时无法静默启停 adbd，请使用系统「无线调试」配对（Android 11+ 支持配对码）。")
+                InfoLine(stringResource(R.string.qk_03048))
+                InfoLine(stringResource(R.string.qk_03049))
+                InfoLine(stringResource(R.string.qk_03050))
             }
         }
     }
@@ -599,15 +602,15 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
     if (showRebootConfirm) {
         AlertDialog(
             onDismissRequest = { showRebootConfirm = false },
-            title = { Text("确认重启？") },
-            text = { Text("重启会立即关闭设备，未保存的数据可能丢失。") },
+            title = { Text(stringResource(R.string.qk_03051)) },
+            text = { Text(stringResource(R.string.qk_03052)) },
             confirmButton = {
                 TextButton(onClick = { showRebootConfirm = false; runShell("reboot") }) {
-                    Text("重启", color = MaterialTheme.colorScheme.error)
+                    Text(qstr(R.string.qk_02979), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showRebootConfirm = false }) { Text("取消") }
+                TextButton(onClick = { showRebootConfirm = false }) { Text(stringResource(R.string.qk_00011)) }
             },
         )
     }
@@ -652,10 +655,10 @@ private fun TextStateRow(icon: androidx.compose.ui.graphics.vector.ImageVector, 
             Text(name, fontSize = 14.sp, color = cs.onSurface)
             Text(sub, fontSize = 11.sp, color = Muted, modifier = Modifier.padding(top = 2.dp))
         }
-        val connected = value?.startsWith("已连接") == true
+        val connected = value?.startsWith(stringResource(R.string.qk_00771)) == true
         val col = if (connected) Sage else Muted
         Box(Modifier.clip(RoundedCornerShape(20.dp)).background(col.copy(alpha = 0.15f)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-            Text(value ?: "未知", color = col, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(value ?: stringResource(R.string.qk_00472), color = col, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -666,11 +669,11 @@ private fun ConnectInfoRow(cmd: String, desc: String, onCopy: () -> Unit, onShar
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("连接命令", fontSize = 13.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.qk_03054), fontSize = 13.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             if (onShare != null) {
-                TextButton(onClick = onShare) { Text("分享", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold) }
+                TextButton(onClick = onShare) { Text(stringResource(R.string.qk_00090), fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold) }
             }
-            TextButton(onClick = onCopy) { Text("复制", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold) }
+            TextButton(onClick = onCopy) { Text(stringResource(R.string.qk_00088), fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold) }
         }
         Spacer(Modifier.height(6.dp))
         Box(

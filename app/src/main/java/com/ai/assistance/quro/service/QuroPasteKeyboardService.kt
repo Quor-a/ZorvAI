@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.service
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Service
 import android.content.ClipData
@@ -133,7 +135,7 @@ class QuroPasteKeyboardService : Service(), CoroutineScope by CoroutineScope(Dis
     private fun generate() {
         val p = prompt.trim()
         if (p.isBlank() || busy) return
-        busy = true; result = "生成中…"
+        busy = true; result = qstr(R.string.qk_03728)
         launch {
             val out = runCatching {
                 val cfg = QuroModelConfigRepository(applicationContext).load()
@@ -148,13 +150,13 @@ class QuroPasteKeyboardService : Service(), CoroutineScope by CoroutineScope(Dis
         if (result.isBlank()) return
         val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(ClipData.newPlainText("quro", result))
-        showToast("已复制到剪贴板")
+        showToast(qstr(R.string.qk_02826))
     }
 
     private fun pasteResult() {
         if (result.isBlank()) return
         val svc = QuroAccessibilityService.instance
-        if (svc == null) { showToast("请先在系统设置开启 ZorvAI 无障碍服务"); return }
+        if (svc == null) { showToast(qstr(R.string.qk_03729)); return }
         showToast(svc.performPaste(result))
     }
 
@@ -180,28 +182,28 @@ class QuroPasteKeyboardService : Service(), CoroutineScope by CoroutineScope(Dis
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Keyboard, null, tint = cs.primary, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("AI 粘贴键盘", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = cs.onSurface, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "收起" else "展开") }
-                    TextButton(onClick = { removeWindow(); stopSelf() }) { Text("关闭") }
+                    Text(qstr(R.string.qk_03428), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = cs.onSurface, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) qstr(R.string.qk_00818) else qstr(R.string.qk_00944)) }
+                    TextButton(onClick = { removeWindow(); stopSelf() }) { Text(qstr(R.string.qk_00065)) }
                 }
                 if (expanded) {
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = prompt,
                         onValueChange = { prompt = it },
-                        placeholder = { Text("给 AI 的指令，例如：写一条夸朋友的评论") },
+                        placeholder = { Text(qstr(R.string.qk_03551)) },
                         singleLine = false,
                         modifier = Modifier.fillMaxWidth().heightIn(max = 100.dp),
                     )
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { generate() }, enabled = !busy && prompt.isNotBlank(), modifier = Modifier.weight(1f)) {
-                            Text(if (busy) "生成中…" else "生成")
+                            Text(if (busy) qstr(R.string.qk_03728) else qstr(R.string.qk_03424))
                         }
-                        OutlinedButton(onClick = { copyResult() }, enabled = result.isNotBlank()) { Text("复制") }
+                        OutlinedButton(onClick = { copyResult() }, enabled = result.isNotBlank()) { Text(qstr(R.string.qk_00088)) }
                         OutlinedButton(onClick = { pasteResult() }, enabled = result.isNotBlank()) {
                             Icon(Icons.Filled.ContentPaste, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp)); Text("粘贴")
+                            Spacer(Modifier.width(4.dp)); Text(qstr(R.string.qk_03689))
                         }
                     }
                     Spacer(Modifier.height(8.dp))
@@ -218,8 +220,7 @@ class QuroPasteKeyboardService : Service(), CoroutineScope by CoroutineScope(Dis
                         }
                     }
                     Spacer(Modifier.height(6.dp))
-                    Text(
-                        "粘贴：先在目标 App 点一下输入框，再点「粘贴」（走无障碍 SET_TEXT / PASTE）。需开启 ZorvAI 无障碍服务。",
+                    Text(qstr(R.string.qk_03491),
                         fontSize = 11.sp, color = cs.onSurfaceVariant,
                     )
                 }

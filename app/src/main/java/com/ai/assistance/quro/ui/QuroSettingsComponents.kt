@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -258,7 +261,7 @@ fun UnderlineField(
                 Box(Modifier.clickable(onClick = onToggleSecret)) {
                     Icon(
                         if (showSecret) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                        "切换可见", Modifier.size(18.dp), tint = Muted,
+                        stringResource(R.string.qk_02411), Modifier.size(18.dp), tint = Muted,
                     )
                 }
             }
@@ -406,8 +409,8 @@ fun DangerButton(
 fun DialogActions(
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
-    cancelText: String = "取消",
-    confirmText: String = "确认",
+    cancelText: String = qstr(R.string.qk_00011),
+    confirmText: String = qstr(R.string.qk_02412),
     confirmFilled: Boolean = true,
 ) {
     val danger = Color(android.graphics.Color.parseColor("#C0432F"))

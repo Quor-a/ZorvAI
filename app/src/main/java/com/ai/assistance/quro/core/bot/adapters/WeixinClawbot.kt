@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.bot.adapters
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.util.Log
@@ -262,7 +264,7 @@ class QrLoginSession(
                             return@launch
                         }
                         QrLoginStatus.DENIED -> {
-                            _events.emit(QrLoginEvent.Error("登录被用户拒绝"))
+                            _events.emit(QrLoginEvent.Error(qstr(R.string.qk_00815)))
                             return@launch
                         }
                         QrLoginStatus.UNKNOWN -> {

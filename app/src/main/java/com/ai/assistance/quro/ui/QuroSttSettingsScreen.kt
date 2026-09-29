@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.Manifest
 import android.content.ClipboardManager
@@ -85,7 +88,7 @@ private data class SttModelOption(
     val label: String,      // 模型名
     val provider: String,   // 厂商枚举名
     val modelName: String,  // 模型 id
-    val sourceLabel: String,// "当前活跃配置" / 预设名
+    val sourceLabel: String,// qstr(R.string.qk_02505) / 预设名
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -158,20 +161,20 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
         opts.add(
             SttModelOption(
                 ref = "active",
-                label = cfg.model.ifBlank { "(未配置)" },
+                label = cfg.model.ifBlank { qstr(R.string.qk_02506) },
                 provider = cfg.provider,
                 modelName = cfg.model,
-                sourceLabel = "当前活跃配置",
+                sourceLabel = qstr(R.string.qk_02505),
             )
         )
         profiles.forEach { p: QuroSavedProfile ->
             opts.add(
                 SttModelOption(
                     ref = p.id,
-                    label = p.model.ifBlank { "(未命名模型)" },
+                    label = p.model.ifBlank { qstr(R.string.qk_02507) },
                     provider = p.provider,
                     modelName = p.model,
-                    sourceLabel = p.name.ifBlank { "已保存预设" },
+                    sourceLabel = p.name.ifBlank { qstr(R.string.qk_00037) },
                 )
             )
         }
@@ -183,7 +186,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
         selectedName = opt.modelName
         selectedProvider = opt.provider
         QuroSttPrefs.setModelSelection(ctx, opt.ref, opt.modelName, opt.provider)
-        addLog("已选模型: ${opt.sourceLabel} / ${opt.modelName} / provider=${opt.provider}")
+        addLog(qstr(R.string.qk_02508, (opt.sourceLabel).toString(), (opt.modelName).toString(), (opt.provider).toString()))
     }
 
     fun refreshFromApi() {
@@ -200,28 +203,28 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                 }
                 fetchedProvider = cfg.provider
                 if (cfg.baseUrl.isBlank()) {
-                    addLog("❌ baseUrl 为空，无法拉取模型")
-                    fetchStatus = "baseUrl 为空"
+                    addLog(qstr(R.string.qk_02509))
+                    fetchStatus = qstr(R.string.qk_02510)
                     fetching = false
                     return@launch
                 }
-                addLog("正在从 ${cfg.baseUrl} 拉取模型…")
+                addLog(qstr(R.string.qk_02511, (cfg.baseUrl).toString()))
                 val res = QuroModelListFetcher().fetch(cfg.baseUrl, cfg.apiKey)
                 when (res) {
                     is QuroModelListResult.Success -> {
                         fetchedModels = res.models.map { it.id }
-                        fetchStatus = "拉取成功 ${res.models.size} 个"
-                        addLog("✅ 拉取成功: ${res.models.size} 个模型")
+                        fetchStatus = qstr(R.string.qk_02512, (res.models.size).toString())
+                        addLog(qstr(R.string.qk_02513, (res.models.size).toString()))
                         fetchMenu = true
                     }
                     is QuroModelListResult.Error -> {
                         fetchStatus = res.message
-                        addLog("❌ 拉取失败: ${res.message}")
+                        addLog(qstr(R.string.qk_02514, (res.message).toString()))
                     }
                 }
             } catch (e: Exception) {
                 fetchStatus = e.message
-                addLog("❌ 异常: ${e.javaClass.simpleName}: ${e.message}")
+                addLog(qstr(R.string.qk_02515, (e.javaClass.simpleName).toString(), (e.message).toString()))
             } finally {
                 fetching = false
             }
@@ -238,9 +241,9 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
     }
 
     LaunchedEffect(Unit) {
-        addLog("页面加载：开始初始化 STT")
+        addLog(qstr(R.string.qk_02516))
         reloadModels()
-        addLog("已加载 ${modelOptions.size} 个模型选项（活跃配置 + 已保存预设）")
+        addLog(qstr(R.string.qk_02517, (modelOptions.size).toString()))
     }
 
     /** 当前选中模型的稳定 key（与下载部署时写入的 key 一致）。 */
@@ -270,7 +273,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             QuroOnDeviceModelPrefs.setEntryStatus(ctx, key, QuroOnDeviceModelPrefs.STATUS_ERROR)
             deployStatus = QuroOnDeviceModelPrefs.STATUS_ERROR
             deployedName = e.name
-            addLog("⚠️ 已部署记录存在，但磁盘模型不完整/与引擎不兼容，需重新下载：${e.dir}")
+            addLog(qstr(R.string.qk_02518, (e.dir).toString()))
             return
         }
         deployStatus = e.status
@@ -300,20 +303,20 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
     fun downloadAndDeployModel() {
         // 设备兼容性前置校验：架构不支持则明确报错并禁用，不再假装可部署
         if (!asrSupported) {
-            dlState = "本机架构不支持端侧识别（需 arm64-v8a）"
-            addLog("❌ 本机架构不支持端侧离线识别，已禁用下载：${AsrDeviceCompat.unsupportedReason(ctx)}")
+            dlState = qstr(R.string.qk_02519)
+            addLog(qstr(R.string.qk_02520, (AsrDeviceCompat.unsupportedReason(ctx)).toString()))
             return
         }
         val spec: AsrModelSpec = if (customMode) {
             if (customLink.isBlank()) {
-                dlState = "请先粘贴模型下载链接"
-                addLog("❌ 链接为空")
+                dlState = qstr(R.string.qk_02521)
+                addLog(qstr(R.string.qk_02522))
                 return
             }
             AsrModelSpec(
                 id = "custom-${customLink.hashCode()}",
-                displayName = "自定义模型",
-                note = "自定义链接，需为 Sherpa-NCNN 流式 transducer 压缩包",
+                displayName = qstr(R.string.qk_02523),
+                note = qstr(R.string.qk_02524),
                 type = customType,
                 downloadUrl = customLink,
                 downloadBytes = 0L,
@@ -321,16 +324,16 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             )
         } else {
             AsrModelCatalog.byId(selectedSpecId) ?: run {
-                dlState = "未选择模型"
-                addLog("❌ 未选择模型")
+                dlState = qstr(R.string.qk_02525)
+                addLog(qstr(R.string.qk_02526))
                 return
             }
         }
         downloading = true
         dlDownloaded = 0L
         dlTotal = 0L
-        dlState = "准备下载…"
-        addLog("开始下载并部署端侧模型: ${spec.displayName}（${spec.type.label}）→ ${spec.downloadUrl}")
+        dlState = qstr(R.string.qk_02527)
+        addLog(qstr(R.string.qk_02528, (spec.displayName).toString(), (spec.type.label).toString(), (spec.downloadUrl).toString()))
         scope.launch(Dispatchers.IO) {
             val ok = QuroOnDeviceModelManager.downloadAndDeploy(
                 ctx, spec,
@@ -340,8 +343,8 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             withContext(Dispatchers.Main) {
                 downloading = false
                 refreshDeployStatus()
-                if (ok) addLog("✅ 模型已部署，端侧引擎可用")
-                else addLog("❌ 部署未成功，请检查链接或网络（详见上方状态）")
+                if (ok) addLog(qstr(R.string.qk_02529))
+                else addLog(qstr(R.string.qk_02530))
             }
         }
     }
@@ -355,13 +358,13 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             QuroOnDeviceModelPrefs.clearEntry(ctx, key)
             withContext(Dispatchers.Main) {
                 refreshDeployStatus()
-                addLog("已删除模型: $key")
+                addLog(qstr(R.string.qk_02531, (key).toString()))
             }
         }
     }
 
     fun startNativeListen() {
-        addLog("━━━ 开始录音测试 ━━━")
+        addLog(qstr(R.string.qk_02532))
         val src = QuroSttPrefs.getSource(ctx)
         addLog(
             "测试引擎: ${
@@ -370,10 +373,10 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             }"
         )
         if (src == QuroSttPrefs.SOURCE_MODEL) {
-            addLog("⚠️ 已选 AI 模型，但 Phase2 模型转写未实现，本测试使用原生识别")
+            addLog(qstr(R.string.qk_02535))
         }
         recording = true
-        testStatus = "聆听中…"
+        testStatus = qstr(R.string.qk_01757)
         resultText = ""
         QuroSttHolder.startListening(
             context = ctx,
@@ -381,17 +384,17 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             partialResults = QuroSttPrefs.getPartial(ctx),
             onPartial = { t ->
                 resultText = t
-                testStatus = "聆听中…"
+                testStatus = qstr(R.string.qk_01757)
             },
             onFinal = { text ->
                 recording = false
                 resultText = text
-                testStatus = if (text.isNotBlank()) "识别完成 ✅" else "没听清，再试一次"
-                addLog(if (text.isNotBlank()) "最终识别: $text" else "⚠️ 未识别到文字")
+                testStatus = if (text.isNotBlank()) qstr(R.string.qk_02536) else qstr(R.string.qk_02537)
+                addLog(if (text.isNotBlank()) qstr(R.string.qk_02538, (text).toString()) else qstr(R.string.qk_02539))
             },
             onError = { code, msg ->
                 recording = false
-                testStatus = "识别出错: $msg ❌"
+                testStatus = qstr(R.string.qk_02540, (msg).toString())
                 addLog("❌ $msg")
             },
         )
@@ -400,48 +403,48 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
     fun stopNativeListen() {
         recording = false
         QuroSttHolder.stopListening()
-        testStatus = "已停止"
-        addLog("手动停止录音")
+        testStatus = qstr(R.string.qk_00326)
+        addLog(qstr(R.string.qk_02541))
     }
 
     /** 端侧（本地模型）测试：录音最长 8 秒 → QuroOnDeviceAsr 离线识别。 */
     fun startOnDeviceTest() {
-        addLog("━━━ 端侧模型测试 ━━━")
+        addLog(qstr(R.string.qk_02542))
         if (!asrSupported) {
-            testStatus = "本机不支持端侧识别 ❌"
+            testStatus = qstr(R.string.qk_02543)
             addLog("❌ ${AsrDeviceCompat.unsupportedReason(ctx)}")
             return
         }
         if (QuroOnDeviceModelManager.isLegacyIncompatible(ctx)) {
-            testStatus = "已部署的是旧模型，引擎跑不了 ❌"
-            addLog("❌ 当前部署的是旧版模型（SenseVoice / ONNX），本机引擎无对应实现——这正是此前「端侧识别一直没反应」的根因。请删除后重新下载推荐模型。")
+            testStatus = qstr(R.string.qk_02544)
+            addLog(qstr(R.string.qk_02545))
             return
         }
         if (!QuroOnDeviceAsr.isModelAvailable(ctx)) {
-            testStatus = "未找到端侧模型 ❌"
-            addLog("❌ 还没有下载语音识别模型，请在上方「下载并部署」（推荐 22MB 的中文 14M 模型）")
+            testStatus = qstr(R.string.qk_02546)
+            addLog(qstr(R.string.qk_02547))
             return
         }
         recording = true
-        testStatus = "聆听中（端侧）…"
+        testStatus = qstr(R.string.qk_02548)
         resultText = ""
-        addLog("开始录音（最长 8 秒）…")
+        addLog(qstr(R.string.qk_02549))
         scope.launch(Dispatchers.IO) {
             // 兜底：原生 SIGSEGV 时 Java try/catch 无法捕获，用线程级 handler 防闪退
             val prevHandler = Thread.getDefaultUncaughtExceptionHandler()
             Thread.setDefaultUncaughtExceptionHandler { t, e ->
-                android.util.Log.e("QuroSttSettings", "⚠️ 原生崩溃被拦截", e)
+                android.util.Log.e("QuroSttSettings", qstr(R.string.qk_02550), e)
                 // 切回主线程更新 UI（不崩 App）——用 Handler 而非 withContext（此处非协程上下文）
                 Handler(Looper.getMainLooper()).post {
                     recording = false
-                    testStatus = "端侧引擎异常 ❌"
-                    addLog("❌ 原生层崩溃(${e.javaClass.simpleName}): ${e.message}")
+                    testStatus = qstr(R.string.qk_02551)
+                    addLog(qstr(R.string.qk_02552, (e.javaClass.simpleName).toString(), (e.message).toString()))
                 }
             }
             try {
                 // 预检：打印部署目录与文件详情
                 val deployDir = QuroOnDeviceAsr.getDeployedDir(ctx)
-                addLog("端侧模型目录: $deployDir")
+                addLog(qstr(R.string.qk_02553, (deployDir).toString()))
                 if (deployDir != null) {
                     val dirFile = File(deployDir)
                     if (dirFile.exists()) {
@@ -450,39 +453,39 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                         }
                     } else {
                         withContext(Dispatchers.Main) {
-                            recording = false; testStatus = "模型目录不存在 ❌"; addLog("❌ 目录不存在: $deployDir")
+                            recording = false; testStatus = qstr(R.string.qk_02554); addLog(qstr(R.string.qk_02555, (deployDir).toString()))
                         }
                         return@launch
                     }
                 }
 
                 if (!QuroOnDeviceAsr.isReady()) {
-                    withContext(Dispatchers.Main) { testStatus = "模型加载中…"; addLog("⏳ 加载端侧模型") }
-                    addLog("调用 QuroOnDeviceAsr.ensureLoaded()（独立 :asr 进程）…")
+                    withContext(Dispatchers.Main) { testStatus = qstr(R.string.qk_02556); addLog(qstr(R.string.qk_02557)) }
+                    addLog(qstr(R.string.qk_02558))
                     if (!QuroOnDeviceAsr.ensureLoaded(ctx)) {
-                        val reason = QuroOnDeviceAsr.lastError.ifBlank { "引擎未给出原因" }
+                        val reason = QuroOnDeviceAsr.lastError.ifBlank { qstr(R.string.qk_02559) }
                         withContext(Dispatchers.Main) {
-                            recording = false; testStatus = "模型加载失败 ❌"; addLog("❌ $reason")
+                            recording = false; testStatus = qstr(R.string.qk_02560); addLog("❌ $reason")
                         }
                         return@launch
                     }
-                    addLog("✅ 端侧模型就绪")
+                    addLog(qstr(R.string.qk_02561))
                 }
 
                 val minBuf = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 if (minBuf <= 0) {
-                    withContext(Dispatchers.Main) { recording = false; testStatus = "录音缓冲初始化失败 ❌" }
+                    withContext(Dispatchers.Main) { recording = false; testStatus = qstr(R.string.qk_02562) }
                     return@launch
                 }
                 val rec = try {
                     AudioRecord(MediaRecorder.AudioSource.MIC, 16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minBuf * 2)
                 } catch (e: Throwable) {
-                    withContext(Dispatchers.Main) { recording = false; testStatus = "无法录音 ❌"; addLog("❌ ${e.message}") }
+                    withContext(Dispatchers.Main) { recording = false; testStatus = qstr(R.string.qk_02563); addLog("❌ ${e.message}") }
                     return@launch
                 }
                 if (rec.state != AudioRecord.STATE_INITIALIZED) {
                     rec.release()
-                    withContext(Dispatchers.Main) { recording = false; testStatus = "录音器不可用 ❌" }
+                    withContext(Dispatchers.Main) { recording = false; testStatus = qstr(R.string.qk_02564) }
                     return@launch
                 }
                 val pcm = ByteArrayOutputStream()
@@ -491,7 +494,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                     rec.startRecording()
                 } catch (e: Throwable) {
                     rec.release()
-                    withContext(Dispatchers.Main) { recording = false; testStatus = "无法开始录音 ❌"; addLog("❌ ${e.message}") }
+                    withContext(Dispatchers.Main) { recording = false; testStatus = qstr(R.string.qk_02565); addLog("❌ ${e.message}") }
                     return@launch
                 }
                 val end = System.currentTimeMillis() + 8000
@@ -507,7 +510,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                     try { rec.stop() } catch (_: Throwable) {}
                     try { rec.release() } catch (_: Throwable) {}
                 }
-                addLog("录音结束 (${pcm.size()} bytes)，开始识别…")
+                addLog(qstr(R.string.qk_02566, (pcm.size()).toString()))
                 val startedAt = System.currentTimeMillis()
                 val text = QuroOnDeviceAsr.recognize(pcm.toByteArray())
                 val costMs = System.currentTimeMillis() - startedAt
@@ -515,18 +518,18 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                 withContext(Dispatchers.Main) {
                     recording = false
                     resultText = text
-                    testStatus = if (text.isNotBlank()) "识别完成 ✅（耗时 ${costMs} ms）" else "识别未成功 ❌"
+                    testStatus = if (text.isNotBlank()) qstr(R.string.qk_02567, (costMs).toString()) else qstr(R.string.qk_02568)
                     addLog(
-                        if (text.isNotBlank()) "最终识别（${costMs} ms）: $text"
+                        if (text.isNotBlank()) qstr(R.string.qk_02569, (costMs).toString(), (text).toString())
                         else "❌ ${failReason.ifBlank { "未识别到文字" }}"
                     )
                 }
             } catch (e: Throwable) {
-                android.util.Log.e("QuroSttSettings", "端侧测试异常", e)
+                android.util.Log.e("QuroSttSettings", qstr(R.string.qk_02570), e)
                 withContext(Dispatchers.Main) {
                     recording = false
-                    testStatus = "端侧测试异常 ❌"
-                    addLog("❌ 异常: ${e.javaClass.simpleName}: ${e.message}")
+                    testStatus = qstr(R.string.qk_02571)
+                    addLog(qstr(R.string.qk_02515, (e.javaClass.simpleName).toString(), (e.message).toString()))
                 }
             } finally {
                 // 恢复默认 handler（避免泄漏到其他协程）
@@ -559,50 +562,50 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
 
     /** 录音 → 写 WAV → 调 /audio/transcriptions API → 显示结果。 */
     fun startCloudTest() {
-        addLog("━━━ 云端转写测试 ━━━")
+        addLog(qstr(R.string.qk_02572))
         val cfg = QuroModelConfigRepository(ctx).load()
         if (cfg.baseUrl.isBlank()) {
-            testStatus = "未配置 Base URL ❌"
-            addLog("❌ 请先在模型配置页填写 API 地址")
+            testStatus = qstr(R.string.qk_02573)
+            addLog(qstr(R.string.qk_02574))
             return
         }
         if (cfg.apiKey.isBlank()) {
-            testStatus = "未配置 API Key ❌"
-            addLog("❌ 请先在模型配置页填写 API Key")
+            testStatus = qstr(R.string.qk_02575)
+            addLog(qstr(R.string.qk_02576))
             return
         }
         val modelName = QuroSttPrefs.getModelName(ctx).ifBlank { "whisper-1" }
         val provider = QuroSttPrefs.getModelProvider(ctx)
-        addLog("测试引擎: AI 模型（云端转写）")
+        addLog(qstr(R.string.qk_02577))
         addLog("Endpoint: ${cfg.baseUrl.take(50)}")
-        addLog("模型: $modelName (provider=$provider)")
+        addLog(qstr(R.string.qk_02578, (modelName).toString(), (provider).toString()))
         recording = true
-        testStatus = "聆听中（云端）…"
+        testStatus = qstr(R.string.qk_02579)
         resultText = ""
-        addLog("开始录音（最长 8 秒）…")
+        addLog(qstr(R.string.qk_02549))
         scope.launch(Dispatchers.IO) {
             try {
                 val minBuf = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 if (minBuf <= 0) {
-                    withContext(Dispatchers.Main) { recording = false; testStatus = "录音缓冲初始化失败 ❌" }
+                    withContext(Dispatchers.Main) { recording = false; testStatus = qstr(R.string.qk_02562) }
                     return@launch
                 }
                 val rec = try {
                     AudioRecord(MediaRecorder.AudioSource.MIC, 16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minBuf * 2)
                 } catch (e: Throwable) {
-                    withContext(Dispatchers.Main) { recording = false; testStatus = "无法录音 ❌"; addLog("❌ ${e.message}") }
+                    withContext(Dispatchers.Main) { recording = false; testStatus = qstr(R.string.qk_02563); addLog("❌ ${e.message}") }
                     return@launch
                 }
                 if (rec.state != AudioRecord.STATE_INITIALIZED) {
                     rec.release()
-                    withContext(Dispatchers.Main) { recording = false; testStatus = "录音器不可用 ❌" }
+                    withContext(Dispatchers.Main) { recording = false; testStatus = qstr(R.string.qk_02564) }
                     return@launch
                 }
                 val pcm = ByteArrayOutputStream()
                 val frame = ShortArray(16000)
                 try { rec.startRecording() } catch (e: Throwable) {
                     rec.release()
-                    withContext(Dispatchers.Main) { recording = false; testStatus = "无法开始录音 ❌"; addLog("❌ ${e.message}") }
+                    withContext(Dispatchers.Main) { recording = false; testStatus = qstr(R.string.qk_02565); addLog("❌ ${e.message}") }
                     return@launch
                 }
                 val end = System.currentTimeMillis() + 8000
@@ -619,7 +622,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                     try { rec.release() } catch (_: Throwable) {}
                 }
                 val pcmBytes = pcm.toByteArray()
-                addLog("录音结束 (${pcmBytes.size} bytes)，发送转写请求…")
+                addLog(qstr(R.string.qk_02580, (pcmBytes.size).toString()))
 
                 // 写临时 WAV 文件
                 val wavFile = File(ctx.cacheDir, "stt_test_${System.nanoTime()}.wav")
@@ -638,22 +641,22 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                         wavFile.delete()
                         Handler(Looper.getMainLooper()).post {
                             recording = false; resultText = text
-                            testStatus = if (text.isNotBlank()) "转写完成 ✅" else "未识别到文字"
-                            addLog(if (text.isNotBlank()) "最终转写: $text" else "⚠️ 转写结果为空")
+                            testStatus = if (text.isNotBlank()) qstr(R.string.qk_02581) else qstr(R.string.qk_02582)
+                            addLog(if (text.isNotBlank()) qstr(R.string.qk_02583, (text).toString()) else qstr(R.string.qk_02584))
                         }
                     },
                     onError = { code, msg ->
                         errorShown = true
                         wavFile.delete()
                         Handler(Looper.getMainLooper()).post {
-                            recording = false; testStatus = "转写失败 ❌"; addLog("❌ [$code] $msg")
+                            recording = false; testStatus = qstr(R.string.qk_02585); addLog("❌ [$code] $msg")
                         }
                     },
                 )
             } catch (e: Throwable) {
-                android.util.Log.e("QuroSttSettings", "云端测试异常", e)
+                android.util.Log.e("QuroSttSettings", qstr(R.string.qk_02586), e)
                 withContext(Dispatchers.Main) {
-                    recording = false; testStatus = "云端测试异常 ❌"; addLog("❌ ${e.javaClass.simpleName}: ${e.message}")
+                    recording = false; testStatus = qstr(R.string.qk_02587); addLog("❌ ${e.javaClass.simpleName}: ${e.message}")
                 }
             }
         }
@@ -672,21 +675,21 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
     val recordPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startTest()
         else {
-            testStatus = "需要录音权限才能测试"
-            addLog("❌ 录音权限被拒绝")
+            testStatus = qstr(R.string.qk_02588)
+            addLog(qstr(R.string.qk_02589))
         }
     }
 
     val selectedOption = modelOptions.firstOrNull { it.ref == selectedRef }
     val selectedDisplay = selectedOption?.let { "${it.sourceLabel}: ${it.modelName}" }
-        ?: selectedName.ifBlank { "（未选择模型）" }
+        ?: selectedName.ifBlank { qstr(R.string.qk_02590) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("语音识别 (STT)", style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
+                title = { Text(stringResource(R.string.qk_00234), style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回") }
+                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143)) }
                 },
             )
         }
@@ -695,11 +698,11 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             Modifier.padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("语音转文字配置，设置后悬浮语音球的识别语言生效。可切换「本地识别 / AI 模型 / 本地模型（端侧）」引擎；本地模型为手机离线运行的 Sherpa-NCNN 流式模型，最小 22MB，说完自动断句。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.qk_02591), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             HorizontalDivider()
 
             // ── 识别引擎选择 ───────────────────────────────────────────────
-            ChapterLabel("01", "识别引擎")
+            ChapterLabel("01", stringResource(R.string.qk_02592))
             SetGroup {
                 Column {
                     Row(
@@ -718,8 +721,8 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                         )
                         Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("本地识别", style = MaterialTheme.typography.bodyMedium)
-                            Text("使用手机原生 SpeechRecognizer，离线可用、开箱即用", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            Text(stringResource(R.string.qk_02593), style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.qk_02594), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                     }
                     HorizontalDivider()
@@ -728,7 +731,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                             source = QuroSttPrefs.SOURCE_MODEL
                             QuroSttPrefs.setSource(ctx, QuroSttPrefs.SOURCE_MODEL)
                             reloadModels()
-                            addLog("切换到 AI 模型引擎，已刷新模型列表")
+                            addLog(qstr(R.string.qk_02595))
                         }.padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -738,13 +741,13 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                                 source = QuroSttPrefs.SOURCE_MODEL
                                 QuroSttPrefs.setSource(ctx, QuroSttPrefs.SOURCE_MODEL)
                                 reloadModels()
-                                addLog("切换到 AI 模型引擎，已刷新模型列表")
+                                addLog(qstr(R.string.qk_02595))
                             },
                         )
                         Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("AI 模型", style = MaterialTheme.typography.bodyMedium)
-                            Text("使用对话中已配置的 AI 模型转写（Phase 2 开放）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            Text(stringResource(R.string.qk_02596), style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.qk_02597), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                     }
                     HorizontalDivider()
@@ -764,8 +767,8 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                         )
                         Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("本地模型（端侧）", style = MaterialTheme.typography.bodyMedium)
-                            Text("手机离线运行 Sherpa-NCNN 流式模型，22MB 起、低延迟、说完自动断句", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            Text(stringResource(R.string.qk_02598), style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.qk_02599), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                     }
                 }
@@ -773,21 +776,20 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
 
             // ── 端侧模型管理（仅选「本地模型（端侧）」时显示） ──────────────
             if (source == QuroSttPrefs.SOURCE_ONDEVICE) {
-                ChapterLabel("02", "端侧模型下载与部署")
-                Text(
-                    "手机离线运行的模型需先下载。内置全部为流式 transducer（encoder/decoder/joiner 三件套），已按手机适配程度排序，第一项即推荐项。下载后自动解压部署并立即可用。",
+                ChapterLabel("02", stringResource(R.string.qk_02600))
+                Text(stringResource(R.string.qk_02601),
                     style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant,
                 )
                 if (asrSupported) {
                     InfoBox(
-                        text = "✅ 本机架构 arm64-v8a，支持端侧离线识别引擎。",
+                        text = stringResource(R.string.qk_02602),
                         tone = Sage,
                     )
                 } else {
                     val warnColor = Color(android.graphics.Color.parseColor("#C0432F"))
                     InfoBox(
-                        text = "⚠️ ${AsrDeviceCompat.unsupportedReason(ctx)} 下载与部署已禁用，请改用「本地识别」或「AI 模型」引擎。",
+                        text = stringResource(R.string.qk_02603, (AsrDeviceCompat.unsupportedReason(ctx)).toString()),
                         tone = warnColor,
                     )
                 }
@@ -799,13 +801,13 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                     ) {
                         val statusText = when (deployStatus) {
                             QuroOnDeviceModelPrefs.STATUS_DEPLOYED ->
-                                "已部署：$deployedName（占用 ${formatBytes(deployedSize)}）"
-                            QuroOnDeviceModelPrefs.STATUS_DOWNLOADING -> "部署中…"
-                            QuroOnDeviceModelPrefs.STATUS_ERROR -> "上一次部署失败"
-                            else -> "尚未部署模型"
+                                stringResource(R.string.qk_02604, (deployedName).toString(), (formatBytes(deployedSize)).toString())
+                            QuroOnDeviceModelPrefs.STATUS_DOWNLOADING -> stringResource(R.string.qk_01555)
+                            QuroOnDeviceModelPrefs.STATUS_ERROR -> stringResource(R.string.qk_02605)
+                            else -> stringResource(R.string.qk_02606)
                         }
                         InfoBox(
-                            text = "状态：$statusText",
+                            text = stringResource(R.string.qk_02607, (statusText).toString()),
                             tone = if (deployStatus == QuroOnDeviceModelPrefs.STATUS_DEPLOYED) Sage else cs.onSurfaceVariant,
                         )
 
@@ -814,8 +816,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                         if (legacyDeployed) {
                             val warnColor = Color(android.graphics.Color.parseColor("#C0432F"))
                             InfoBox(
-                                text = "⚠️ 当前部署的是旧版模型（SenseVoice / ONNX），本机引擎没有对应实现，识别会一直没反应。" +
-                                    "请点「删除模型」后重新下载上方推荐模型（约 22MB）。",
+                                text = stringResource(R.string.qk_02608) + stringResource(R.string.qk_02609),
                                 tone = warnColor,
                             )
                         }
@@ -823,10 +824,10 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                         // 模型选择（内置目录）
                         SetRowClickable(
                             icon = Icons.Filled.Memory,
-                            name = "选择模型",
+                            name = stringResource(R.string.qk_00199),
                             sub = run {
                                 val selSpec = if (customMode) null else AsrModelCatalog.byId(selectedSpecId)
-                                if (customMode) "自定义链接" else (selSpec?.displayName ?: selectedSpecId.ifBlank { "（未选择）" })
+                                if (customMode) qstr(R.string.qk_02610) else (selSpec?.displayName ?: selectedSpecId.ifBlank { qstr(R.string.qk_02611) })
                             },
                             onClick = { specMenu = true },
                         )
@@ -839,9 +840,9 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                                         Column {
                                             Text(spec.displayName, style = MaterialTheme.typography.bodyMedium)
                                             Text(spec.note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                                            Text("下载体积：${formatBytes(spec.downloadBytes)}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                                            Text(qstr(R.string.qk_02612, (formatBytes(spec.downloadBytes)).toString()), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                                             if (deployedKeys.contains(QuroOnDeviceModelPrefs.deployedKeyFor(spec.id, spec.downloadUrl)))
-                                                Text("✅ 已部署", style = MaterialTheme.typography.bodySmall, color = Sage)
+                                                Text(qstr(R.string.qk_02613), style = MaterialTheme.typography.bodySmall, color = Sage)
                                         }
                                     },
                                     onClick = { selectSpec(spec.id, false) },
@@ -849,7 +850,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                             }
                             HorizontalDivider()
                             DropdownMenuItem(
-                                text = { Text("➕ 自定义链接（需为 Sherpa-NCNN 流式模型）", style = MaterialTheme.typography.bodyMedium) },
+                                text = { Text(stringResource(R.string.qk_02614), style = MaterialTheme.typography.bodyMedium) },
                                 onClick = { selectSpec("", true) },
                             )
                         }
@@ -857,14 +858,14 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                         // 自定义链接 + 类型选择
                         if (customMode) {
                             UnderlineField(
-                                label = "自定义模型下载链接",
+                                label = stringResource(R.string.qk_02615),
                                 value = customLink,
                                 onValueChange = { customLink = it; QuroOnDeviceModelPrefs.setCustomLink(ctx, it); refreshDeployStatus() },
                                 placeholder = "https://.../sherpa-onnx-xxx.tar.bz2",
                             )
                             SetRowClickable(
                                 icon = Icons.Filled.Category,
-                                name = "模型类型",
+                                name = stringResource(R.string.qk_02616),
                                 sub = customType.label,
                                 onClick = { customTypeMenu = true },
                             )
@@ -891,8 +892,8 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                             }
                             val pct = if (dlTotal > 0) (dlDownloaded * 100 / dlTotal).toInt() else 0
                             Text(
-                                if (dlTotal > 0) "已下载 $pct%  (${formatBytes(dlDownloaded)} / ${formatBytes(dlTotal)})"
-                                else (dlState ?: "下载中…"),
+                                if (dlTotal > 0) stringResource(R.string.qk_02617, (pct).toString(), (formatBytes(dlDownloaded)).toString(), (formatBytes(dlTotal)).toString())
+                                else (dlState ?: stringResource(R.string.qk_02224)),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = cs.onSurfaceVariant,
                             )
@@ -906,9 +907,9 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PrimaryButton(
                                 text = when {
-                                    !asrSupported -> "本机不支持"
-                                    downloading -> "部署中…"
-                                    else -> "下载并部署"
+                                    !asrSupported -> stringResource(R.string.qk_02618)
+                                    downloading -> stringResource(R.string.qk_01555)
+                                    else -> stringResource(R.string.qk_02619)
                                 },
                                 onClick = { downloadAndDeployModel() },
                                 enabled = !downloading && asrSupported,
@@ -916,7 +917,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                             )
                             if (deployStatus == QuroOnDeviceModelPrefs.STATUS_DEPLOYED) {
                                 DangerButton(
-                                    text = "删除模型",
+                                    text = stringResource(R.string.qk_02620),
                                     onClick = { deleteDeployedModel() },
                                     filled = true,
                                     modifier = Modifier.weight(1f),
@@ -929,7 +930,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
 
             // ── AI 模型下拉（仅选「AI 模型」时显示） ───────────────────────
             if (source == QuroSttPrefs.SOURCE_MODEL) {
-                ChapterLabel("03", "模型")
+                ChapterLabel("03", stringResource(R.string.qk_02238))
                 SetGroup {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                         SetRowClickable(
@@ -943,7 +944,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                                     || selModelName.contains("transcribe", true)
                                     || selModelName.contains("stt", true)
                                     || selModelName.contains("speech", true)
-                                if (audioCapable) "🎙 支持语音转写 · $selectedProvider" else "provider=${selectedProvider.ifBlank { "未知" }}"
+                                if (audioCapable) qstr(R.string.qk_02621, (selectedProvider).toString()) else "provider=${selectedProvider.ifBlank { "未知" }}"
                             },
                             onClick = { modelMenu = true },
                         )
@@ -963,7 +964,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                                                 || opt.modelName.contains("stt", true)
                                                 || opt.modelName.contains("speech", true)
                                             if (optAudioCapable) {
-                                                Text("🎙 支持语音转写", style = MaterialTheme.typography.bodySmall, color = cs.primary)
+                                                Text(qstr(R.string.qk_02622), style = MaterialTheme.typography.bodySmall, color = cs.primary)
                                             } else {
                                                 Text("provider=${opt.provider}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                                             }
@@ -983,14 +984,14 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             PrimaryButton(
-                                text = if (fetching) "拉取中…" else "从接口刷新",
+                                text = if (fetching) stringResource(R.string.qk_02113) else stringResource(R.string.qk_02623),
                                 onClick = { refreshFromApi() },
                                 enabled = !fetching,
                                 modifier = Modifier.weight(1f),
                             )
                             if (fetchedModels.isNotEmpty()) {
                                 PrimaryButton(
-                                    text = "选择实时模型",
+                                    text = stringResource(R.string.qk_02624),
                                     onClick = { fetchMenu = true },
                                     modifier = Modifier.weight(1f),
                                 )
@@ -1005,7 +1006,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                                         selectedName = m
                                         selectedProvider = fetchedProvider
                                         QuroSttPrefs.setModelSelection(ctx, selectedRef, selectedName, selectedProvider)
-                                        addLog("已选实时模型: $m (provider=$fetchedProvider)")
+                                        addLog(qstr(R.string.qk_02625, (m).toString(), (fetchedProvider).toString()))
                                         fetchMenu = false
                                     },
                                 )
@@ -1020,14 +1021,14 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                         // 但支持在 chat 消息里带音频走 /chat/completions。
                         SetRow(
                             icon = Icons.Filled.Chat,
-                            name = "走 /chat/completions（多模态音频）",
-                            sub = "关闭=标准 /audio/transcriptions；开启=把音频塞进 chat 消息（兼容不支持转写端点的网关）",
+                            name = stringResource(R.string.qk_02626),
+                            sub = stringResource(R.string.qk_02627),
                             checked = useChat,
                             onToggle = {
                                 val it = !useChat
                                 useChat = it
                                 QuroSttPrefs.setUseChatCompletions(ctx, it)
-                                addLog(if (it) "✅ 已开启 /chat/completions 模式" else "已关闭 /chat/completions 模式")
+                                addLog(if (it) qstr(R.string.qk_02628) else qstr(R.string.qk_02629))
                             },
                         )
                     }
@@ -1035,11 +1036,11 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             }
 
             // ── 识别语言 + 部分结果（保留） ─────────────────────────────────
-            ChapterLabel("04", "识别设置")
+            ChapterLabel("04", stringResource(R.string.qk_02630))
             SetGroup {
                 SetRowClickable(
                     icon = Icons.Filled.Language,
-                    name = "识别语言",
+                    name = stringResource(R.string.qk_02631),
                     sub = STT_LANGUAGES.firstOrNull { it.second == language }?.first ?: language,
                     onClick = { langMenu = true },
                 )
@@ -1055,8 +1056,8 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                 HorizontalDivider()
                 SetRow(
                     icon = Icons.Filled.GraphicEq,
-                    name = "部分结果",
-                    sub = "说话时实时回显识别中间结果",
+                    name = stringResource(R.string.qk_02632),
+                    sub = stringResource(R.string.qk_02633),
                     checked = partial,
                     onToggle = {
                         val it = !partial
@@ -1067,16 +1068,15 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             }
 
             // ── 语音转文本测试区 ───────────────────────────────────────────
-            ChapterLabel("05", "语音转文本测试")
-            Text(
-                "选「本地模型（端侧）」时，本测试用手机离线 Sherpa-NCNN 识别；选其他引擎走原生 SpeechRecognizer。",
+            ChapterLabel("05", stringResource(R.string.qk_02634))
+            Text(stringResource(R.string.qk_02635),
                 style = MaterialTheme.typography.bodySmall,
                 color = cs.onSurfaceVariant,
             )
 
             if (recording) {
                 DangerButton(
-                    text = "⏹ 停止",
+                    text = stringResource(R.string.qk_02636),
                     onClick = {
                         if (recording) {
                             stopNativeListen()
@@ -1090,7 +1090,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
                 )
             } else {
                 PrimaryButton(
-                    text = "🎙 开始录音",
+                    text = stringResource(R.string.qk_02637),
                     onClick = {
                         if (recording) {
                             stopNativeListen()
@@ -1122,7 +1122,7 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             ) {
                 SelectionContainer {
                     Text(
-                        resultText.ifBlank { "识别出的文字会显示在这里" },
+                        resultText.ifBlank { stringResource(R.string.qk_02639) },
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (resultText.isBlank()) cs.onSurfaceVariant else cs.onSurface,
                     )
@@ -1133,21 +1133,21 @@ fun QuroSttSettingsScreen(onBack: () -> Unit = {}) {
             if (sttLogs.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("📋 Bug 日志 (${sttLogs.size})", style = MaterialTheme.typography.titleSmall.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold), color = cs.primary)
+                    Text(stringResource(R.string.qk_02640, (sttLogs.size).toString()), style = MaterialTheme.typography.titleSmall.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold), color = cs.primary)
                     Row {
                         Box(
                             Modifier.clip(RoundedCornerShape(8.dp)).clickable {
                                 val text = sttLogs.joinToString("\n")
                                 val clip = ClipData.newPlainText("QuroSTT", text)
                                 (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
-                                testStatus = "日志已复制到剪贴板 ✅ 直接粘贴给我即可"
+                                testStatus = qstr(R.string.qk_02641)
                             }.padding(horizontal = 10.dp, vertical = 4.dp),
-                        ) { Text("复制", fontSize = 12.sp, color = Accent) }
+                        ) { Text(stringResource(R.string.qk_00088), fontSize = 12.sp, color = Accent) }
                         Spacer(Modifier.width(8.dp))
                         Box(
                             Modifier.clip(RoundedCornerShape(8.dp)).clickable { sttLogs = emptyList() }
                                 .padding(horizontal = 10.dp, vertical = 4.dp),
-                        ) { Text("清空", fontSize = 12.sp, color = cs.onSurfaceVariant) }
+                        ) { Text(stringResource(R.string.qk_00764), fontSize = 12.sp, color = cs.onSurfaceVariant) }
                     }
                 }
                 SetGroup {

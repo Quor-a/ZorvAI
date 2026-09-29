@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.net.Uri
@@ -99,7 +102,7 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
             ctx.contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() }
         }.getOrNull()
         if (text.isNullOrBlank()) {
-            Toast.makeText(ctx, "读取文件失败或内容为空", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, qstr(R.string.qk_02414), Toast.LENGTH_SHORT).show()
             return@rememberLauncherForActivityResult
         }
         // 宽松导入策略：依次尝试 SKILL.md 解析（兼容 anthropics/skills 等生态）→ 应用内技能 JSON →
@@ -109,12 +112,12 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
             ?: runCatching { parseSkillJson(text) }.getOrNull()?.takeIf { it.isNotEmpty() }
             ?: toolSpecSkill?.let { listOf(it) }
         if (imported.isNullOrEmpty()) {
-            Toast.makeText(ctx, "导入失败：内容不是有效的 SKILL.md / 技能 JSON / 工具规格 JSON", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, qstr(R.string.qk_02415), Toast.LENGTH_LONG).show()
             return@rememberLauncherForActivityResult
         }
         imported.forEach { QuroSkillStore.addOrUpdate(ctx, it) }
         refresh()
-        Toast.makeText(ctx, "已导入 ${imported.size} 个技能", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, qstr(R.string.qk_02416, (imported.size).toString()), Toast.LENGTH_SHORT).show()
     }
 
     // ═══ 导出技能 ═══
@@ -126,7 +129,7 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
         pendingSkill = null
         runCatching {
             ctx.contentResolver.openOutputStream(uri)?.use { it.write(s.toSkillMd().toByteArray()) }
-        }.onFailure { Toast.makeText(ctx, "导出失败：${it.message}", Toast.LENGTH_LONG).show() }
+        }.onFailure { Toast.makeText(ctx, qstr(R.string.qk_01993, (it.message).toString()), Toast.LENGTH_LONG).show() }
     }
     // 选择部分技能导出为应用内 JSON 数组（可被本 App 重新导入）
     val exportSelectedLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -136,7 +139,7 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
             val arr = JSONArray()
             list.forEach { arr.put(it.toExportJson()) }
             ctx.contentResolver.openOutputStream(uri)?.use { it.write(arr.toString(2).toByteArray()) }
-        }.onFailure { Toast.makeText(ctx, "导出失败：${it.message}", Toast.LENGTH_LONG).show() }
+        }.onFailure { Toast.makeText(ctx, qstr(R.string.qk_01993, (it.message).toString()), Toast.LENGTH_LONG).show() }
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -149,29 +152,29 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
                     Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") }
-                    Text("技能 SKILL", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp))
+                    IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143)) }
+                    Text(stringResource(R.string.qk_02417), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp))
                     Spacer(Modifier.weight(1f))
                     IconButton(onClick = { showExportPicker = true }) {
-                        Icon(Icons.Filled.Share, contentDescription = "导出全部技能（JSON）", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.qk_02418), tint = MaterialTheme.colorScheme.primary)
                     }
                     IconButton(onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }) {
-                        Icon(Icons.Filled.FileDownload, contentDescription = "从 SKILL.md / JSON / 工具规格导入技能", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Filled.FileDownload, contentDescription = stringResource(R.string.qk_02419), tint = MaterialTheme.colorScheme.primary)
                     }
                     IconButton(onClick = { showAuthorGuide = true }) {
-                        Icon(Icons.Filled.Help, contentDescription = "如何添加技能（说明）", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Filled.Help, contentDescription = stringResource(R.string.qk_02420), tint = MaterialTheme.colorScheme.primary)
                     }
                     IconButton(onClick = {
                         val r = QuroSkillStore.verifyBuiltinSignatures(ctx)
                         val msg = buildString {
-                            append("内置签名排查：")
-                            append("校验通过 ${r.verified} / ${r.total}")
+                            append(qstr(R.string.qk_02421))
+                            append(qstr(R.string.qk_02422, (r.verified).toString(), (r.total).toString()))
                             if (r.failed > 0) append("，⚠️ 失败(疑似篡改) ${r.failed}：${r.failedNames.joinToString("、")}")
-                            if (r.unsigned > 0) append("，未签名 ${r.unsigned}")
+                            if (r.unsigned > 0) append(qstr(R.string.qk_02424, (r.unsigned).toString()))
                         }
                         Toast.makeText(ctx, msg, if (r.failed > 0) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
                     }) {
-                        Icon(Icons.Filled.Verified, contentDescription = "验证内置技能签名（签名排查）", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Filled.Verified, contentDescription = stringResource(R.string.qk_02425), tint = MaterialTheme.colorScheme.primary)
                     }
                     Text(
                         "${skills.count { it.enabled }} 启用 / ${skills.size} 共",
@@ -184,8 +187,7 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
 
             if (skills.isEmpty()) {
                 Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                    Text(
-                        "还没有技能。\n点右上角导入按钮，从开源 SKILL.md 粘贴导入；\n或点右下角 + 新增一个，也可在对话框里让 AI 帮你写。",
+                    Text(stringResource(R.string.qk_02427),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -226,7 +228,7 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
             containerColor = MaterialTheme.colorScheme.primary,
         ) {
-            Icon(Icons.Filled.Add, contentDescription = "新增技能", tint = MaterialTheme.colorScheme.onPrimary)
+            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.qk_02428), tint = MaterialTheme.colorScheme.onPrimary)
         }
     }
 
@@ -239,18 +241,18 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
                     val pick = skills.filter { it.id in selected }
                     showExportPicker = false
                     if (pick.isEmpty()) {
-                        Toast.makeText(ctx, "未选择任何技能", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, qstr(R.string.qk_02429), Toast.LENGTH_SHORT).show()
                     } else {
                         pendingExport = pick
                         exportSelectedLauncher.launch("quro_skills_${pick.size}_${System.currentTimeMillis()}.json")
                     }
-                }) { Text("导出选中 (${selected.size})") }
+                }) { Text(stringResource(R.string.qk_01542, (selected.size).toString())) }
             },
-            dismissButton = { TextButton(onClick = { showExportPicker = false }) { Text("取消") } },
-            title = { Text("选择要导出的技能") },
+            dismissButton = { TextButton(onClick = { showExportPicker = false }) { Text(stringResource(R.string.qk_00011)) } },
+            title = { Text(stringResource(R.string.qk_02430)) },
             text = {
                 if (skills.isEmpty()) {
-                    Text("当前没有可导出的技能。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.qk_02431), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     LazyColumn(Modifier.heightIn(max = 360.dp)) {
                         items(skills) { s ->
@@ -305,8 +307,8 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
     if (showAuthorGuide) {
         AlertDialog(
             onDismissRequest = { showAuthorGuide = false },
-            confirmButton = { TextButton(onClick = { showAuthorGuide = false }) { Text("知道了") } },
-            title = { Text("如何添加技能") },
+            confirmButton = { TextButton(onClick = { showAuthorGuide = false }) { Text(stringResource(R.string.qk_00054)) } },
+            title = { Text(stringResource(R.string.qk_02432)) },
             text = {
                 Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                     Text(SKILL_AUTHOR_GUIDE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -335,7 +337,7 @@ private fun SkillRow(
                 Text(skill.description, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2)
             }
             Text(
-                if (skill.prompt.isBlank()) "（无指令，启用也不会注入）" else "指令 ${skill.prompt.length} 字",
+                if (skill.prompt.isBlank()) stringResource(R.string.qk_02433) else stringResource(R.string.qk_02434, (skill.prompt.length).toString()),
                 style = MaterialTheme.typography.labelSmall,
                 color = if (skill.prompt.isBlank()) cs.error else cs.onSurfaceVariant,
             )
@@ -352,9 +354,9 @@ private fun SkillRow(
                 }
             }
         }
-        IconButton(onClick = onExport) { Icon(Icons.Filled.FileDownload, contentDescription = "导出 SKILL.md", tint = cs.primary) }
-        IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = cs.primary) }
-        IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "删除", tint = cs.error) }
+        IconButton(onClick = onExport) { Icon(Icons.Filled.FileDownload, contentDescription = stringResource(R.string.qk_02438), tint = cs.primary) }
+        IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.qk_00299), tint = cs.primary) }
+        IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.qk_00091), tint = cs.error) }
         Switch(checked = skill.enabled, onCheckedChange = onToggle)
     }
 }
@@ -377,8 +379,7 @@ private fun SuiteHeader(suiteId: String, count: Int) {
                 color = cs.primary,
             )
             Spacer(Modifier.width(8.dp))
-            Text(
-                "$count 个",
+            Text(stringResource(R.string.qk_02439, (count).toString()),
                 style = MaterialTheme.typography.labelSmall,
                 color = cs.onSurfaceVariant,
             )
@@ -408,57 +409,57 @@ private fun SkillEditorDialog(
             Button(onClick = {
                 val n = name.text.trim()
                 if (n.isNotEmpty()) onSave(n, description.text.trim(), prompt.text, enabled, trigger.text.trim(), parametersJson.text.ifBlank { DEFAULT_SKILL_PARAMS }, callable, alwaysOn)
-            }) { Text("保存") }
+            }) { Text(qstr(R.string.qk_00198)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-        title = { Text(if (initial == null) "新增技能" else "编辑技能") },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } },
+        title = { Text(if (initial == null) stringResource(R.string.qk_02428) else stringResource(R.string.qk_02440)) },
         text = {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
                     value = name, onValueChange = { name = it },
-                    label = { Text("名称（必填）") }, singleLine = true,
+                    label = { Text(stringResource(R.string.qk_02441)) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = description, onValueChange = { description = it },
-                    label = { Text("简介（可选）") }, singleLine = true,
+                    label = { Text(stringResource(R.string.qk_02442)) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = prompt, onValueChange = { prompt = it },
-                    label = { Text("技能指令（注入系统提示词）") },
+                    label = { Text(stringResource(R.string.qk_02443)) },
                     modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp),
                     maxLines = 12,
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = trigger, onValueChange = { trigger = it },
-                    label = { Text("触发词 / trigger（可选，逗号分隔，用于将来自动匹配）") },
+                    label = { Text(stringResource(R.string.qk_02444)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = parametersJson, onValueChange = { parametersJson = it },
-                    label = { Text("参数 Schema (JSON，function calling 入参)") },
+                    label = { Text(stringResource(R.string.qk_02445)) },
                     modifier = Modifier.fillMaxWidth().heightIn(min = 80.dp),
                     maxLines = 8,
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("可作为工具调用（注册为 AI 可调用函数）", modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.qk_02446), modifier = Modifier.weight(1f))
                     Switch(checked = callable, onCheckedChange = { callable = it })
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("常驻系统提示词（关闭则仅触发词命中时注入）", modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.qk_02447), modifier = Modifier.weight(1f))
                     Switch(checked = alwaysOn, onCheckedChange = { alwaysOn = it })
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("启用（关闭则不会注入系统提示词）", modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.qk_02448), modifier = Modifier.weight(1f))
                     Switch(checked = enabled, onCheckedChange = { enabled = it })
                 }
             }

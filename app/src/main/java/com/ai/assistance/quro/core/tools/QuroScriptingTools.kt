@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.scripting.SandboxRuntime
@@ -100,7 +102,7 @@ object ToolPkgScanner {
 class CodeRunnerTool : QuroTool {
     override val name = "code_runner"
     override val description =
-        "▶️ 完整 JS/TS 脚本运行器（SandboxPackage）：在 QuickJS 沙箱里运行「工作区脚本文件」或「内联代码片段」，" +
+        qstr(R.string.qk_03492) +
             "带完整宿主 API 与 CommonJS 模块系统（与 run_code 的区别：run_code 只跑一次性片段、无宿主 API；" +
             "code_runner 带完整环境，适合多文件项目与真实脚本工程）。运行环境内置：\n" +
             "· Tools.Files：read/write/append/list/exists/remove/mkdir/stat（限制在工作区内）\n" +
@@ -145,7 +147,7 @@ class CodeRunnerTool : QuroTool {
 class ToolPkgListTool : QuroTool {
     override val name = "toolpkg_list"
     override val description =
-        "📦 列出工作区 packages/ 目录下所有「脚本包（ToolPkg）」提供的 AI 工具。" +
+        qstr(R.string.qk_03613) +
             "脚本包 = 工作区 packages/<包名>/ 目录（manifest.json + 入口 .js/.ts），" +
             "包内代码可用 Tools.* 宿主 API、require() 相对引用、_/dataUtils——写 .js 包即可扩展 AI 能力。" +
             "参数：{}（无参数，列出全部）。"
@@ -170,7 +172,7 @@ class ToolPkgListTool : QuroTool {
 class ToolPkgCallTool : QuroTool {
     override val name = "toolpkg_call"
     override val description =
-        "📦 调用工作区脚本包（ToolPkg）里的某个工具：加载包入口模块并执行其导出函数。" +
+        qstr(R.string.qk_03483) +
             "先用 toolpkg_list 查看可用工具。参数：{\"package\":\"包名\",\"tool\":\"工具名\",\"params\":{...工具参数对象...}}。"
     override val parametersJson = """{
         "type":"object",
@@ -204,7 +206,7 @@ class ToolPkgCallTool : QuroTool {
 class ProjectCreateTool : QuroTool {
     override val name = "project_create"
     override val description =
-        "🧰 从内置模板在工作区创建项目骨架（复制到 工作区/<项目名>/，已存在同名目录则报错）。" +
+        qstr(R.string.qk_03527) +
             "模板：web（网页：HTML/CSS/JS）、android（Android 工程）、flutter（Flutter 应用）、" +
             "node（Node.js 脚本项目）、typescript（TS 项目）、python（Python 项目）、java（Java 项目）、go（Go 项目）。" +
             "参数：{\"template\":\"web|android|flutter|node|typescript|python|java|go\",\"name\":\"项目名（英文/数字/横线）\"}。"

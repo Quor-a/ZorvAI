@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.bot
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.util.Log
@@ -34,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap
 enum class QuroBotPlatform(val label: String) {
     QQ("QQ 机器人"),
     FEISHU("飞书机器人"),
-    WECHAT("微信 iLink 机器人"),
+    WECHAT(qstr(R.string.qk_00798)),
 }
 
 /** 平台 → Quro 的入站消息。 */
@@ -286,7 +288,7 @@ class QuroBotManager(
                 deliverAdapter?.deliver(out)
                 bd("D", "processInbound 回复已发送到平台")
             } catch (e: Exception) {
-                val reason = deliverAdapter?.lastError ?: e.message ?: "未知错误"
+                val reason = deliverAdapter?.lastError ?: e.message ?: qstr(R.string.qk_00503)
                 bd("E", "processInbound 回复发回${message.platform.label}失败: $reason | exc=${e.message}")
                 // 把失败原因直接回显到对话（无需翻 logcat/adb）：平台投递失败时至少应用内对话框可见，便于定位
                 uiMirror?.invoke(

@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ClipboardManager
 import android.content.Context
@@ -153,16 +156,16 @@ private val DEFAULT_SCRIPT = """// 原生「眼 + 手」自动化指令（系统
 """
 
 private val SAMPLE_SCRIPTS = listOf(
-    BrowserScript("eye_capture", "眼睛：截取当前页面", "eye_capture"),
-    BrowserScript("tap_text_next", "点击文本含「下一步」", "tap_text:下一步"),
-    BrowserScript("count_buttons", "统计可见可点控件", "count_buttons"),
+    BrowserScript("eye_capture", qstr(R.string.qk_00855), "eye_capture"),
+    BrowserScript("tap_text_next", qstr(R.string.qk_00856), qstr(R.string.qk_00857)),
+    BrowserScript("count_buttons", qstr(R.string.qk_00858), "count_buttons"),
 )
 
 private fun nowTs(): String =
     SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
 
 private fun formatEvalResult(raw: String?): String {
-    if (raw == null) return "(无返回值)"
+    if (raw == null) return qstr(R.string.qk_00859)
     val r = raw.trim().removeSurrounding("\"")
     return try {
         val o = JSONObject(r)
@@ -172,7 +175,7 @@ private fun formatEvalResult(raw: String?): String {
                 null, JSONObject.NULL -> "(null)"
                 is JSONObject -> v.toString(2)
                 is JSONArray -> v.toString(2)
-                else -> v?.toString() ?: "(无返回值)"
+                else -> v?.toString() ?: qstr(R.string.qk_00859)
             }
         } else {
             "⚠ 脚本错误: ${o.optString("error")}"
@@ -226,9 +229,9 @@ private fun tapByText(root: View, key: String): String {
         v is TextView && v.visibility == View.VISIBLE && (v.text?.toString()?.contains(key) == true)
     }
     return if (target != null) {
-        if (tapView(target)) "👆 已点击文本包含「$key」的控件" else "找到控件但点击失败"
+        if (tapView(target)) qstr(R.string.qk_00861, (key).toString()) else qstr(R.string.qk_00862)
     } else {
-        "未找到文本包含「$key」的可见控件"
+        qstr(R.string.qk_00863, (key).toString())
     }
 }
 
@@ -305,7 +308,7 @@ fun QuroBrowserScreen(
     var readerText by remember { mutableStateOf("") }
 
     // —— 浏览器增强功能 ——
-    var selectedUa by remember { mutableStateOf("自动") }
+    var selectedUa by remember { mutableStateOf(qstr(R.string.qk_00850)) }
     var customUa by remember { mutableStateOf("") }
     var showUaPicker by remember { mutableStateOf(false) }
     var jsEnabled by remember { mutableStateOf(true) }
@@ -324,7 +327,7 @@ fun QuroBrowserScreen(
     var showScript by remember { mutableStateOf(false) }
     var scripts by remember { mutableStateOf(loadScripts(ctx)) }
     var activeId by remember { mutableStateOf(scripts.firstOrNull()?.id ?: "") }
-    var scriptName by remember { mutableStateOf(scripts.firstOrNull()?.name ?: "新脚本") }
+    var scriptName by remember { mutableStateOf(scripts.firstOrNull()?.name ?: qstr(R.string.qk_00864)) }
     var scriptCode by remember {
         mutableStateOf(scripts.firstOrNull()?.code ?: DEFAULT_SCRIPT)
     }
@@ -343,13 +346,13 @@ fun QuroBrowserScreen(
     fun captureScreen() {
         val activity = ctx.findActivity()
         if (activity == null) {
-            scriptLog += "[${nowTs()}] ⚠ 无法获取 Activity，截图失败\n"
+            scriptLog += qstr(R.string.qk_00865, (nowTs()).toString())
             return
         }
         val win = activity.window
         val decor = win.decorView
         if (decor.width <= 0 || decor.height <= 0) {
-            scriptLog += "[${nowTs()}] ⚠ 界面尚未布局完成，截图失败\n"
+            scriptLog += qstr(R.string.qk_00866, (nowTs()).toString())
             return
         }
         val bmp = Bitmap.createBitmap(decor.width, decor.height, Bitmap.Config.ARGB_8888)
@@ -360,12 +363,12 @@ fun QuroBrowserScreen(
                     val dir = ctx.getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: ctx.filesDir
                     val file = File(dir, "quro_eye_${System.currentTimeMillis()}.png")
                     FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                    scriptLog += "[${nowTs()}] 👁 眼睛截图成功：${file.absolutePath} (${bmp.width}x${bmp.height})\n"
+                    scriptLog += qstr(R.string.qk_00867, (nowTs()).toString(), (file.absolutePath).toString(), (bmp.width).toString(), (bmp.height).toString())
                 }.onFailure { e ->
-                    scriptLog += "[${nowTs()}] ⚠ 截图保存失败：${e.message}\n"
+                    scriptLog += qstr(R.string.qk_00868, (nowTs()).toString(), (e.message).toString())
                 }
             } else {
-                scriptLog += "[${nowTs()}] ⚠ 眼睛截图失败：code=$res\n"
+                scriptLog += qstr(R.string.qk_00869, (nowTs()).toString(), (res).toString())
             }
         }, Handler(Looper.getMainLooper()))
     }
@@ -378,16 +381,16 @@ fun QuroBrowserScreen(
         val result = when {
             code.trim() == "eye_capture" || code.contains("截图") -> {
                 captureScreen()
-                "👁 眼睛截图进行中…"
+                qstr(R.string.qk_00871)
             }
             code.startsWith("tap_text:") -> {
                 val key = code.substringAfter("tap_text:").trim()
-                if (root == null) "⚠ 无法获取界面" else tapByText(root, key)
+                if (root == null) qstr(R.string.qk_00872) else tapByText(root, key)
             }
             code.trim() == "count_buttons" -> {
-                if (root == null) "⚠ 无法获取界面" else "可见可点控件数：${countClickable(root)}"
+                if (root == null) qstr(R.string.qk_00872) else qstr(R.string.qk_00873, (countClickable(root)).toString())
             }
-            else -> "⚠ 暂不支持该脚本（系统 WebView 不开放网页内 JS 求值接口，当前自动化走原生「眼+手」）。"
+            else -> qstr(R.string.qk_00874)
         }
         scriptLog += "[${nowTs()}] $result\n"
         running = false
@@ -401,7 +404,7 @@ fun QuroBrowserScreen(
             "链接回答·百分百开源安卓数字人" to "https://yb.tencent.com/s/I9x5hnu8zJqm",
             "链接回答·3D 全离线（LLM+ASR+TTS+A2BS+渲染都在手机）" to "https://yb.tencent.com/s/TsfOddkjerlh",
         )
-        val oldSeedTitles = setOf("开源地址（点击查看链接回答）", "链接·开源浏览器参考")
+        val oldSeedTitles = setOf(qstr(R.string.qk_00879), qstr(R.string.qk_00880))
         var next = bookmarks.filterNot { (t, u) ->
             t in oldSeedTitles || u == "https://yb.tencent.com/s/oRnfpcJJ7fic"
         }
@@ -441,7 +444,7 @@ fun QuroBrowserScreen(
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, cur)
         }
-        runCatching { ctx.startActivity(Intent.createChooser(intent, "分享链接")) }
+        runCatching { ctx.startActivity(Intent.createChooser(intent, qstr(R.string.qk_00881))) }
     }
 
     fun copyLink() {
@@ -455,8 +458,8 @@ fun QuroBrowserScreen(
     fun applyDesktopMode() {
         val wv = webView ?: return
         val ua = when {
-            selectedUa == "自定义" && customUa.isNotBlank() -> customUa
-            selectedUa != "自动" -> UA_PRESETS.find { it.first == selectedUa }?.second ?: ""
+            selectedUa == qstr(R.string.qk_00036) && customUa.isNotBlank() -> customUa
+            selectedUa != qstr(R.string.qk_00850) -> UA_PRESETS.find { it.first == selectedUa }?.second ?: ""
             desktopMode -> DESKTOP_UA
             else -> ""
         }
@@ -498,7 +501,7 @@ fun QuroBrowserScreen(
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
-                        "后退",
+                        stringResource(R.string.qk_00882),
                         tint = if (canGoBack) cs.onSurface else cs.onSurfaceVariant.copy(alpha = 0.4f),
                     )
                 }
@@ -509,7 +512,7 @@ fun QuroBrowserScreen(
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowForward,
-                        "前进",
+                        stringResource(R.string.qk_00883),
                         tint = if (canGoForward) cs.onSurface else cs.onSurfaceVariant.copy(alpha = 0.4f),
                     )
                 }
@@ -535,7 +538,7 @@ fun QuroBrowserScreen(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
                         decorationBox = { inner ->
                             if (address.isEmpty()) {
-                                Text("输入网址…", color = cs.onSurfaceVariant, fontSize = 14.sp)
+                                Text(stringResource(R.string.qk_00884), color = cs.onSurfaceVariant, fontSize = 14.sp)
                             }
                             inner()
                         },
@@ -547,22 +550,22 @@ fun QuroBrowserScreen(
                 ) {
                     Icon(
                         if (isLoading) Icons.Filled.Close else Icons.Filled.Refresh,
-                        if (isLoading) "停止加载" else "刷新",
+                        if (isLoading) stringResource(R.string.qk_00885) else stringResource(R.string.qk_00459),
                         tint = cs.primary,
                     )
                 }
                 IconButton(onClick = { showEditor = true }, Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.Code, "代码编辑器", tint = cs.onSurfaceVariant)
+                    Icon(Icons.Filled.Code, stringResource(R.string.qk_00886), tint = cs.onSurfaceVariant)
                 }
                 IconButton(onClick = { captureScreen() }, Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.Visibility, "眼睛截图", tint = cs.onSurfaceVariant)
+                    Icon(Icons.Filled.Visibility, stringResource(R.string.qk_00887), tint = cs.onSurfaceVariant)
                 }
                 IconButton(onClick = onMinimize, Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.CloseFullscreen, "化小窗", tint = cs.onSurfaceVariant)
+                    Icon(Icons.Filled.CloseFullscreen, stringResource(R.string.qk_00888), tint = cs.onSurfaceVariant)
                 }
                 Box {
                     IconButton(onClick = { showMenu = true }, Modifier.size(36.dp)) {
-                        Icon(Icons.Filled.MoreVert, "更多", tint = cs.onSurfaceVariant)
+                        Icon(Icons.Filled.MoreVert, stringResource(R.string.qk_00404), tint = cs.onSurfaceVariant)
                     }
                     val curUrl = address
                     val isBookmarked = curUrl.isNotBlank() && bookmarks.any { it.second == curUrl }
@@ -571,12 +574,12 @@ fun QuroBrowserScreen(
                         onDismissRequest = { showMenu = false },
                     ) {
                         DropdownMenuItem(
-                            text = { Text("刷新") },
+                            text = { Text(stringResource(R.string.qk_00459)) },
                             leadingIcon = { Icon(Icons.Filled.Refresh, null) },
                             onClick = { showMenu = false; webView?.reload() },
                         )
                         DropdownMenuItem(
-                            text = { Text("桌面版网站") },
+                            text = { Text(stringResource(R.string.qk_00889)) },
                             leadingIcon = { Icon(Icons.Filled.Computer, null) },
                             trailingIcon = { Checkbox(checked = desktopMode, onCheckedChange = null) },
                             onClick = {
@@ -585,22 +588,22 @@ fun QuroBrowserScreen(
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("UA 切换") },
+                            text = { Text(stringResource(R.string.qk_00890)) },
                             leadingIcon = { Icon(Icons.Filled.PhoneAndroid, null) },
                             onClick = { showMenu = false; showUaPicker = true },
                         )
                         DropdownMenuItem(
-                            text = { Text("兼容性模式") },
+                            text = { Text(stringResource(R.string.qk_00891)) },
                             leadingIcon = { Icon(Icons.Filled.Tune, null) },
                             onClick = { showMenu = false; showCompatibilitySettings = true },
                         )
                         DropdownMenuItem(
-                            text = { Text("代理设置") },
+                            text = { Text(stringResource(R.string.qk_00892)) },
                             leadingIcon = { Icon(Icons.Filled.Security, null) },
                             onClick = { showMenu = false; showProxySettings = true },
                         )
                         DropdownMenuItem(
-                            text = { Text(if (isBookmarked) "取消收藏" else "收藏此页") },
+                            text = { Text(if (isBookmarked) stringResource(R.string.qk_00893) else stringResource(R.string.qk_00894)) },
                             leadingIcon = {
                                 Icon(
                                     if (isBookmarked) Icons.Filled.Star else Icons.Filled.StarBorder,
@@ -610,12 +613,12 @@ fun QuroBrowserScreen(
                             onClick = { showMenu = false; toggleBookmark() },
                         )
                         DropdownMenuItem(
-                            text = { Text("书签") },
+                            text = { Text(stringResource(R.string.qk_00895)) },
                             leadingIcon = { Icon(Icons.Filled.Bookmarks, null) },
                             onClick = { showMenu = false; showBookmarks = true },
                         )
                         DropdownMenuItem(
-                            text = { Text("历史记录") },
+                            text = { Text(stringResource(R.string.qk_00896)) },
                             leadingIcon = { Icon(Icons.Filled.History, null) },
                             onClick = {
                                 showMenu = false
@@ -624,27 +627,27 @@ fun QuroBrowserScreen(
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("查找") },
+                            text = { Text(stringResource(R.string.qk_00897)) },
                             leadingIcon = { Icon(Icons.Filled.Search, null) },
                             onClick = { showMenu = false; showFind = true },
                         )
                         DropdownMenuItem(
-                            text = { Text("复制链接") },
+                            text = { Text(stringResource(R.string.qk_00898)) },
                             leadingIcon = { Icon(Icons.Filled.Link, null) },
                             onClick = { showMenu = false; copyLink() },
                         )
                         DropdownMenuItem(
-                            text = { Text("分享") },
+                            text = { Text(stringResource(R.string.qk_00090)) },
                             leadingIcon = { Icon(Icons.Filled.Share, null) },
                             onClick = { showMenu = false; shareLink() },
                         )
                         DropdownMenuItem(
-                            text = { Text("在系统浏览器打开") },
+                            text = { Text(stringResource(R.string.qk_00899)) },
                             leadingIcon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, null) },
                             onClick = { showMenu = false; onOpenInSystem(address) },
                         )
                         DropdownMenuItem(
-                            text = { Text("眼睛截图") },
+                            text = { Text(stringResource(R.string.qk_00887)) },
                             leadingIcon = { Icon(Icons.Filled.Visibility, null) },
                             onClick = {
                                 showMenu = false
@@ -652,7 +655,7 @@ fun QuroBrowserScreen(
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("运行脚本") },
+                            text = { Text(stringResource(R.string.qk_00900)) },
                             leadingIcon = { Icon(Icons.Filled.Code, null) },
                             onClick = {
                                 showMenu = false
@@ -660,7 +663,7 @@ fun QuroBrowserScreen(
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Python 控制台") },
+                            text = { Text(stringResource(R.string.qk_00901)) },
                             leadingIcon = { Icon(Icons.Filled.Terminal, null) },
                             onClick = {
                                 showMenu = false
@@ -691,14 +694,13 @@ fun QuroBrowserScreen(
                         Modifier.fillMaxWidth().padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            "加载失败：$it（点击重试）",
+                        Text(qstr(R.string.qk_00902, (it).toString()),
                             color = cs.onErrorContainer,
                             fontSize = 12.sp,
                             modifier = Modifier.weight(1f),
                         )
                         IconButton(onClick = { webView?.reload() }, Modifier.size(28.dp)) {
-                            Icon(Icons.Filled.Refresh, "重试", tint = cs.onErrorContainer)
+                            Icon(Icons.Filled.Refresh, qstr(R.string.qk_00092), tint = cs.onErrorContainer)
                         }
                     }
                 }
@@ -718,21 +720,21 @@ fun QuroBrowserScreen(
                         textStyle = TextStyle(fontSize = 14.sp, color = cs.onSurface),
                         modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                         decorationBox = { inner ->
-                            if (findQuery.isEmpty()) Text("查找…", color = cs.onSurfaceVariant, fontSize = 14.sp)
+                            if (findQuery.isEmpty()) Text(stringResource(R.string.qk_00903), color = cs.onSurfaceVariant, fontSize = 14.sp)
                             inner()
                         },
                     )
                     IconButton(onClick = { webView?.findNext(false) }, Modifier.size(32.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "上一个", tint = cs.onSurfaceVariant)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.qk_00904), tint = cs.onSurfaceVariant)
                     }
                     IconButton(onClick = { webView?.findNext(true) }, Modifier.size(32.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, "下一个", tint = cs.onSurfaceVariant)
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, stringResource(R.string.qk_00905), tint = cs.onSurfaceVariant)
                     }
                     IconButton(
                         onClick = { showFind = false; webView?.clearMatches(); findQuery = "" },
                         Modifier.size(32.dp),
                     ) {
-                        Icon(Icons.Filled.Close, "关闭查找", tint = cs.onSurfaceVariant)
+                        Icon(Icons.Filled.Close, stringResource(R.string.qk_00906), tint = cs.onSurfaceVariant)
                     }
                 }
             }
@@ -748,13 +750,13 @@ fun QuroBrowserScreen(
                             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("收藏夹", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                            Text(stringResource(R.string.qk_00907), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                             IconButton(onClick = { showBookmarks = false }, Modifier.size(32.dp)) {
-                                Icon(Icons.Filled.Close, "关闭", tint = cs.onSurfaceVariant)
+                                Icon(Icons.Filled.Close, stringResource(R.string.qk_00065), tint = cs.onSurfaceVariant)
                             }
                         }
                         if (bookmarks.isEmpty()) {
-                            Text("还没有收藏，点右上角「更多 → 收藏此页」添加。", color = cs.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+                            Text(stringResource(R.string.qk_00908), color = cs.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
                         } else {
                             LazyColumn {
                                 items(bookmarks) { (title, u) ->
@@ -779,7 +781,7 @@ fun QuroBrowserScreen(
                                             },
                                             Modifier.size(32.dp),
                                         ) {
-                                            Icon(Icons.Filled.Delete, "删除", tint = cs.onSurfaceVariant)
+                                            Icon(Icons.Filled.Delete, stringResource(R.string.qk_00091), tint = cs.onSurfaceVariant)
                                         }
                                     }
                                 }
@@ -800,19 +802,19 @@ fun QuroBrowserScreen(
                             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("历史记录", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                            Text(stringResource(R.string.qk_00896), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                             if (history.isNotEmpty()) {
                                 TextButton(onClick = {
                                     com.ai.assistance.quro.core.tools.QuroBrowserViewHost.clearHistory(ctx)
                                     history = emptyList()
-                                }) { Text("清空", color = cs.error, fontSize = 13.sp) }
+                                }) { Text(stringResource(R.string.qk_00764), color = cs.error, fontSize = 13.sp) }
                             }
                             IconButton(onClick = { showHistory = false }, Modifier.size(32.dp)) {
-                                Icon(Icons.Filled.Close, "关闭", tint = cs.onSurfaceVariant)
+                                Icon(Icons.Filled.Close, stringResource(R.string.qk_00065), tint = cs.onSurfaceVariant)
                             }
                         }
                         if (history.isEmpty()) {
-                            Text("暂无浏览记录。", color = cs.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+                            Text(stringResource(R.string.qk_00909), color = cs.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
                         } else {
                             LazyColumn {
                                 items(history) { h ->
@@ -852,7 +854,7 @@ fun QuroBrowserScreen(
                                             },
                                             Modifier.size(32.dp),
                                         ) {
-                                            Icon(Icons.Filled.Delete, "删除", tint = cs.onSurfaceVariant)
+                                            Icon(Icons.Filled.Delete, stringResource(R.string.qk_00091), tint = cs.onSurfaceVariant)
                                         }
                                     }
                                 }
@@ -910,8 +912,7 @@ fun QuroBrowserScreen(
                             .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            "网页正文",
+                        Text(stringResource(R.string.qk_00910),
                             style = MaterialTheme.typography.titleSmall,
                             modifier = Modifier.weight(1f).padding(start = 8.dp),
                         )
@@ -921,14 +922,14 @@ fun QuroBrowserScreen(
                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.HONEYCOMB) {
                                     cm.setPrimaryClip(android.content.ClipData.newPlainText("page_text", readerText))
                                 }
-                                Toast.makeText(ctx, "正文已复制", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(ctx, qstr(R.string.qk_00911), Toast.LENGTH_SHORT).show()
                             },
                             Modifier.size(36.dp),
                         ) {
-                            Icon(Icons.Filled.ContentCopy, "复制", tint = cs.onSurfaceVariant)
+                            Icon(Icons.Filled.ContentCopy, stringResource(R.string.qk_00088), tint = cs.onSurfaceVariant)
                         }
                         IconButton(onClick = { showReader = false }, Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.Close, "关闭", tint = cs.onSurfaceVariant)
+                            Icon(Icons.Filled.Close, qstr(R.string.qk_00065), tint = cs.onSurfaceVariant)
                         }
                     }
                     LazyColumn(Modifier.fillMaxSize().padding(12.dp)) {
@@ -954,8 +955,7 @@ fun QuroBrowserScreen(
                             .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            "网页自动化脚本",
+                        Text(stringResource(R.string.qk_00912),
                             style = MaterialTheme.typography.titleSmall,
                             modifier = Modifier.weight(1f).padding(start = 8.dp),
                         )
@@ -963,7 +963,7 @@ fun QuroBrowserScreen(
                         var pickerOpen by remember { mutableStateOf(false) }
                         Box {
                             IconButton(onClick = { pickerOpen = true }, Modifier.size(36.dp)) {
-                                Icon(Icons.Filled.List, "选择脚本", tint = cs.onSurfaceVariant)
+                                Icon(Icons.Filled.List, stringResource(R.string.qk_00913), tint = cs.onSurfaceVariant)
                             }
                             DropdownMenu(expanded = pickerOpen, onDismissRequest = { pickerOpen = false }) {
                                 scripts.forEach { s ->
@@ -983,7 +983,7 @@ fun QuroBrowserScreen(
                             onClick = {
                                 // 保存当前编辑的脚本
                                 val id = if (activeId.isBlank()) java.util.UUID.randomUUID().toString() else activeId
-                                val updated = BrowserScript(id, scriptName.ifBlank { "未命名" }, scriptCode)
+                                val updated = BrowserScript(id, scriptName.ifBlank { qstr(R.string.qk_00914) }, scriptCode)
                                 scripts = if (scripts.any { it.id == id }) {
                                     scripts.map { if (it.id == id) updated else it }
                                 } else {
@@ -991,17 +991,17 @@ fun QuroBrowserScreen(
                                 }
                                 activeId = id
                                 saveScripts(ctx, scripts)
-                                scriptLog += "[${nowTs()}] 已保存：${updated.name}\n"
+                                scriptLog += qstr(R.string.qk_00915, (nowTs()).toString(), (updated.name).toString())
                             },
                             Modifier.size(36.dp),
                         ) {
-                            Icon(Icons.Filled.Save, "保存", tint = cs.primary)
+                            Icon(Icons.Filled.Save, stringResource(R.string.qk_00198), tint = cs.primary)
                         }
                         IconButton(
                             onClick = {
                                 // 新建空白脚本
                                 val id = java.util.UUID.randomUUID().toString()
-                                val ns = BrowserScript(id, "新脚本", DEFAULT_SCRIPT)
+                                val ns = BrowserScript(id, qstr(R.string.qk_00864), DEFAULT_SCRIPT)
                                 scripts = scripts + ns
                                 activeId = id
                                 scriptName = ns.name
@@ -1010,7 +1010,7 @@ fun QuroBrowserScreen(
                             },
                             Modifier.size(36.dp),
                         ) {
-                            Icon(Icons.Filled.Add, "新建", tint = cs.onSurfaceVariant)
+                            Icon(Icons.Filled.Add, stringResource(R.string.qk_00916), tint = cs.onSurfaceVariant)
                         }
                         IconButton(
                             onClick = {
@@ -1018,24 +1018,24 @@ fun QuroBrowserScreen(
                                     scripts = scripts.filter { it.id != activeId }
                                     saveScripts(ctx, scripts)
                                     activeId = scripts.firstOrNull()?.id ?: ""
-                                    scriptName = scripts.firstOrNull()?.name ?: "新脚本"
+                                    scriptName = scripts.firstOrNull()?.name ?: qstr(R.string.qk_00864)
                                     scriptCode = scripts.firstOrNull()?.code ?: DEFAULT_SCRIPT
-                                    scriptLog += "[${nowTs()}] 已删除脚本\n"
+                                    scriptLog += qstr(R.string.qk_00917, (nowTs()).toString())
                                 }
                             },
                             Modifier.size(36.dp),
                         ) {
-                            Icon(Icons.Filled.Delete, "删除", tint = cs.error)
+                            Icon(Icons.Filled.Delete, stringResource(R.string.qk_00091), tint = cs.error)
                         }
                         IconButton(
                             onClick = { if (!running) runScript(scriptCode) },
                             Modifier.size(36.dp),
                             enabled = !running,
                         ) {
-                            Icon(Icons.Filled.PlayArrow, "运行", tint = if (running) cs.onSurfaceVariant else cs.primary)
+                            Icon(Icons.Filled.PlayArrow, stringResource(R.string.qk_00266), tint = if (running) cs.onSurfaceVariant else cs.primary)
                         }
                         IconButton(onClick = { showScript = false }, Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.Close, "关闭", tint = cs.onSurfaceVariant)
+                            Icon(Icons.Filled.Close, stringResource(R.string.qk_00065), tint = cs.onSurfaceVariant)
                         }
                     }
                     // 脚本名称
@@ -1047,7 +1047,7 @@ fun QuroBrowserScreen(
                         modifier = Modifier.fillMaxWidth().background(cs.surfaceVariant)
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         decorationBox = { inner ->
-                            if (scriptName.isEmpty()) Text("脚本名称…", color = cs.onSurfaceVariant, fontSize = 13.sp)
+                            if (scriptName.isEmpty()) Text(stringResource(R.string.qk_00918), color = cs.onSurfaceVariant, fontSize = 13.sp)
                             inner()
                         },
                     )
@@ -1063,7 +1063,7 @@ fun QuroBrowserScreen(
                         LazyColumn(Modifier.padding(12.dp)) {
                             item {
                                 Text(
-                                    if (scriptLog.isBlank()) "运行结果将显示在这里…" else scriptLog,
+                                    if (scriptLog.isBlank()) stringResource(R.string.qk_00919) else scriptLog,
                                     color = cs.onSurface,
                                     fontSize = 12.sp,
                                     fontFamily = FontFamily.Monospace,
@@ -1081,7 +1081,7 @@ fun QuroBrowserScreen(
                     Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text("👁 眼睛截图（页面像素）", color = Color.White, modifier = Modifier.padding(12.dp))
+                    Text(qstr(R.string.qk_00920), color = Color.White, modifier = Modifier.padding(12.dp))
                     AndroidView(
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         factory = { ImageView(it) },
@@ -1095,7 +1095,7 @@ fun QuroBrowserScreen(
                         color = cs.primary,
                         modifier = Modifier.padding(12.dp).clickable { eyeBitmap = null },
                     ) {
-                        Text("关闭", color = cs.onPrimary, modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
+                        Text(qstr(R.string.qk_00065), color = cs.onPrimary, modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
                     }
                 }
             }
@@ -1105,10 +1105,10 @@ fun QuroBrowserScreen(
         if (showUaPicker) {
             AlertDialog(
                 onDismissRequest = { showUaPicker = false },
-                title = { Text("User-Agent 切换") },
+                title = { Text(stringResource(R.string.qk_00921)) },
                 text = {
                     Column {
-                        Text("选择预设 UA 或自定义", fontSize = 12.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+                        Text(stringResource(R.string.qk_00922), fontSize = 12.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
                         UA_PRESETS.forEach { (name, _) ->
                             Row(
                                 Modifier.fillMaxWidth().clickable {
@@ -1133,20 +1133,20 @@ fun QuroBrowserScreen(
                         HorizontalDivider(Modifier.padding(vertical = 8.dp))
                         Row(
                             Modifier.fillMaxWidth().clickable {
-                                selectedUa = "自定义"
+                                selectedUa = qstr(R.string.qk_00036)
                             }.padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            RadioButton(selected = selectedUa == "自定义", onClick = { selectedUa = "自定义" })
+                            RadioButton(selected = selectedUa == qstr(R.string.qk_00036), onClick = { selectedUa = qstr(R.string.qk_00036) })
                             Spacer(Modifier.width(8.dp))
-                            Text("自定义 UA", fontSize = 14.sp)
+                            Text(stringResource(R.string.qk_00923), fontSize = 14.sp)
                         }
-                        if (selectedUa == "自定义") {
+                        if (selectedUa == qstr(R.string.qk_00036)) {
                             Spacer(Modifier.height(8.dp))
                             OutlinedTextField(
                                 value = customUa,
                                 onValueChange = { customUa = it },
-                                label = { Text("自定义 UA 字符串") },
+                                label = { Text(stringResource(R.string.qk_00924)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
@@ -1157,12 +1157,12 @@ fun QuroBrowserScreen(
                                     applyDesktopMode()
                                 },
                                 enabled = customUa.isNotBlank(),
-                            ) { Text("应用自定义 UA") }
+                            ) { Text(stringResource(R.string.qk_00925)) }
                         }
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showUaPicker = false }) { Text("关闭") }
+                    TextButton(onClick = { showUaPicker = false }) { Text(stringResource(R.string.qk_00065)) }
                 },
             )
         }
@@ -1171,10 +1171,10 @@ fun QuroBrowserScreen(
         if (showCompatibilitySettings) {
             AlertDialog(
                 onDismissRequest = { showCompatibilitySettings = false },
-                title = { Text("兼容性模式") },
+                title = { Text(stringResource(R.string.qk_00891)) },
                 text = {
                     Column {
-                        Text("优化老旧网站渲染", fontSize = 12.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+                        Text(stringResource(R.string.qk_00926), fontSize = 12.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
                         Row(
                             Modifier.fillMaxWidth().clickable {
                                 jsEnabled = !jsEnabled
@@ -1185,8 +1185,8 @@ fun QuroBrowserScreen(
                             Checkbox(checked = !jsEnabled, onCheckedChange = { jsEnabled = !it; applyDesktopMode() })
                             Spacer(Modifier.width(8.dp))
                             Column {
-                                Text("禁用 JavaScript", fontSize = 14.sp)
-                                Text("适用于老旧/不兼容的网站", fontSize = 11.sp, color = cs.onSurfaceVariant)
+                                Text(stringResource(R.string.qk_00927), fontSize = 14.sp)
+                                Text(stringResource(R.string.qk_00928), fontSize = 11.sp, color = cs.onSurfaceVariant)
                             }
                         }
                         HorizontalDivider(Modifier.padding(vertical = 4.dp))
@@ -1200,17 +1200,17 @@ fun QuroBrowserScreen(
                             Checkbox(checked = !imagesEnabled, onCheckedChange = { imagesEnabled = !it; applyDesktopMode() })
                             Spacer(Modifier.width(8.dp))
                             Column {
-                                Text("禁用图片加载", fontSize = 14.sp)
-                                Text("加速加载，节省流量", fontSize = 11.sp, color = cs.onSurfaceVariant)
+                                Text(stringResource(R.string.qk_00929), fontSize = 14.sp)
+                                Text(stringResource(R.string.qk_00930), fontSize = 11.sp, color = cs.onSurfaceVariant)
                             }
                         }
                         HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                        Text("当前 UA", fontSize = 12.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                        Text(stringResource(R.string.qk_00931), fontSize = 12.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                         Text(selectedUa, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showCompatibilitySettings = false }) { Text("关闭") }
+                    TextButton(onClick = { showCompatibilitySettings = false }) { Text(qstr(R.string.qk_00065)) }
                 },
             )
         }
@@ -1219,7 +1219,7 @@ fun QuroBrowserScreen(
         if (showProxySettings) {
             AlertDialog(
                 onDismissRequest = { showProxySettings = false },
-                title = { Text("代理设置") },
+                title = { Text(stringResource(R.string.qk_00892)) },
                 text = {
                     Column {
                         Row(
@@ -1228,13 +1228,13 @@ fun QuroBrowserScreen(
                         ) {
                             Switch(checked = proxyEnabled, onCheckedChange = { proxyEnabled = it })
                             Spacer(Modifier.width(12.dp))
-                            Text("启用代理", fontSize = 14.sp)
+                            Text(stringResource(R.string.qk_00932), fontSize = 14.sp)
                         }
                         if (proxyEnabled) {
                             HorizontalDivider(Modifier.padding(vertical = 4.dp))
                             Spacer(Modifier.height(8.dp))
                             // 代理类型
-                            Text("代理类型", fontSize = 12.sp, color = cs.onSurfaceVariant)
+                            Text(stringResource(R.string.qk_00933), fontSize = 12.sp, color = cs.onSurfaceVariant)
                             Row(Modifier.padding(top = 4.dp)) {
                                 listOf("HTTP", "SOCKS5").forEach { type ->
                                     FilterChip(
@@ -1249,8 +1249,8 @@ fun QuroBrowserScreen(
                             OutlinedTextField(
                                 value = proxyHost,
                                 onValueChange = { proxyHost = it },
-                                label = { Text("代理地址") },
-                                placeholder = { Text("例如: 127.0.0.1") },
+                                label = { Text(stringResource(R.string.qk_00934)) },
+                                placeholder = { Text(stringResource(R.string.qk_00935)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
@@ -1258,8 +1258,8 @@ fun QuroBrowserScreen(
                             OutlinedTextField(
                                 value = proxyPort,
                                 onValueChange = { proxyPort = it },
-                                label = { Text("端口") },
-                                placeholder = { Text("例如: 1080") },
+                                label = { Text(stringResource(R.string.qk_00936)) },
+                                placeholder = { Text(stringResource(R.string.qk_00937)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
@@ -1267,7 +1267,7 @@ fun QuroBrowserScreen(
                             OutlinedTextField(
                                 value = proxyUsername,
                                 onValueChange = { proxyUsername = it },
-                                label = { Text("用户名（可选）") },
+                                label = { Text(stringResource(R.string.qk_00938)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
@@ -1275,13 +1275,12 @@ fun QuroBrowserScreen(
                             OutlinedTextField(
                                 value = proxyPassword,
                                 onValueChange = { proxyPassword = it },
-                                label = { Text("密码（可选）") },
+                                label = { Text(qstr(R.string.qk_00939)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
                             Spacer(Modifier.height(12.dp))
-                            Text(
-                                "代理将实时注入浏览器 WebView 网络栈（Android 11+ 经 ProxyController，Android 10 经 setHttpProxy）。HTTP/SOCKS5 均支持；代理认证（用户名/密码）在 ProxyController 下可能不被底层 WebView 支持。",
+                            Text(stringResource(R.string.qk_00940),
                                 fontSize = 11.sp, color = cs.onSurfaceVariant,
                             )
                         }
@@ -1302,13 +1301,13 @@ fun QuroBrowserScreen(
                         // 通知 BrowserCore 立即把代理真正注入 WebView 网络栈（Android 11+ 经 ProxyController）
                         ctx.sendBroadcast(Intent("com.ai.assistance.quro.browser.ACTION_PROXY_CHANGED"))
                         showProxySettings = false
-                        val tip = if (proxyEnabled) "代理已保存并注入：${proxyType} $proxyHost:$proxyPort"
-                                  else "代理已关闭"
+                        val tip = if (proxyEnabled) qstr(R.string.qk_00941, (proxyType).toString(), (proxyHost).toString(), (proxyPort).toString())
+                                  else qstr(R.string.qk_00942)
                         Toast.makeText(ctx, tip, Toast.LENGTH_SHORT).show()
-                    }) { Text("保存") }
+                    }) { Text(qstr(R.string.qk_00198)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showProxySettings = false }) { Text("取消") }
+                    TextButton(onClick = { showProxySettings = false }) { Text(stringResource(R.string.qk_00011)) }
                 },
             )
         }

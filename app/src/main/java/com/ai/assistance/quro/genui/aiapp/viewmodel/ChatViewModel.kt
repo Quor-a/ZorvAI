@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.genui.aiapp.viewmodel
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -294,16 +296,16 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 "a2ui" -> {
                     val isYaml = !body.startsWith("{") && !body.startsWith("[")
                     FlatDocParser(body, isYaml)?.let { doc ->
-                        return ChannelPage.FlatPage(channelTitle(text, 1) ?: "界面", doc) to raw
+                        return ChannelPage.FlatPage(channelTitle(text, 1) ?: qstr(R.string.qk_00476), doc) to raw
                     }
                     // 没认出结构也不静默失败：先记下，若本轮没有别的可用通道再开原文画布
                     if (a2uiUnparsed == null) a2uiUnparsed = body to raw
                 }
                 "markdown", "md" -> if (body.length > 20) {
-                    return ChannelPage.MarkdownPage(channelTitle(body, 2) ?: "文档", body) to raw
+                    return ChannelPage.MarkdownPage(channelTitle(body, 2) ?: qstr(R.string.qk_00399), body) to raw
                 }
                 "html" -> if (body.length > 40) {
-                    return ChannelPage.HtmlPage(channelTitle(text, 0) ?: "网页", body) to raw
+                    return ChannelPage.HtmlPage(channelTitle(text, 0) ?: qstr(R.string.qk_02288), body) to raw
                 }
             }
         }
@@ -334,7 +336,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             if (body.contains("\"properties\"")) continue // GenUI DSL，别抢
             val doc = FlatDocParser(body, false) ?: continue
             val raw = "```a2ui\n" + body + "\n```"
-            return ChannelPage.FlatPage(channelTitle(text, 1) ?: "界面", doc) to raw
+            return ChannelPage.FlatPage(channelTitle(text, 1) ?: qstr(R.string.qk_00476), doc) to raw
         }
         return null
     }
@@ -548,7 +550,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             question = "这一轮用哪条渲染通道？同一段需求，四条通道出来的东西完全不一样。",
             options = RenderChannel.values().map { it.option },
             allowCustom = true,
-            title = "选择本次渲染通道",
+            title = qstr(R.string.qk_03599),
             latch = CountDownLatch(1),
             result = AtomicReference<String?>(null)
         )
@@ -1077,7 +1079,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 val rootType = runCatching {
                     org.json.JSONObject(resolved).optJSONObject("root")?.optString("type")
                 }.getOrNull()
-                append(" || 画布收到: ").append(resolved.length).append("字符, root.type=").append(rootType ?: "无")
+                append(" || 画布收到: ").append(resolved.length).append("字符, root.type=").append(rootType ?: qstr(R.string.qk_00464))
             } else {
                 append(" || 画布收到: 兜底卡片(提取全部失败)")
                 // 深挖：取宽松候选拿到 strict 解析的具体异常
@@ -1148,7 +1150,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     //   ① 历史膨胀，每轮几千字符 × 10 轮；
                     //   ② 模型下一轮会**模仿自己历史里的格式**，上一轮的残缺/混杂输出会被继承放大，
                     //      越写越乱（用户看到的 a2ui 与 <row>/<spacer> 标签糊在一起就是这个后果）。
-                    content = historyNote(fullText, currentState.currentRequest.ifBlank { "界面" }),
+                    content = historyNote(fullText, currentState.currentRequest.ifBlank { qstr(R.string.qk_00476) }),
                     reasoning = result.reasoning
                 )
             )
@@ -1371,7 +1373,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             "逐一检查", "检查所有", "逐个检查", "依次检查", "组件合规",
             "组件检查", "类型检查", "格式检查",
             "让我想想", "我来分析",
-            "思考过程", "分析过程",
+            qstr(R.string.qk_03618), "分析过程",
             "核心需求不是", "视觉上要有", "语气要",
             "self correct", "self-correct", "self_correct"
         )
@@ -2022,11 +2024,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         // ── 2. Markdown 风格思考段落 ──────────────────────────
         // 匹配 "## 思考"、"### 思考过程" 等标题开头的段落
         val mdThinkingHeaders = listOf(
-            "思考", "思考过程", "分析", "分析过程",
-            "计划", "规划", "步骤", "行动",
-            "检索", "搜索", "查询",
-            "决策", "判断", "反思",
-            "工具调用", "工具使用", "tool", "thinking", "reasoning"
+            qstr(R.string.qk_00082), qstr(R.string.qk_03618), "分析", "分析过程",
+            "计划", qstr(R.string.qk_03261), qstr(R.string.qk_01671), qstr(R.string.qk_00083),
+            "检索", qstr(R.string.qk_00002), qstr(R.string.qk_02803),
+            qstr(R.string.qk_03268), "判断", "反思",
+            qstr(R.string.qk_00956), "工具使用", "tool", "thinking", "reasoning"
         )
         for (header in mdThinkingHeaders) {
             // 匹配 ## 标题 到下一个 ## 标题或文末之间的内容
@@ -2050,7 +2052,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             "信息已获取", "获取到信息", "已获取信息",
             "工具调用结果", "工具结果", "工具返回", "工具执行结果",
             "tool result", "tool_result", "tool output", "tool response",
-            "设备信息", "device info",
+            qstr(R.string.qk_02643), "device info",
             "执行结果", "运行结果", "调用结果",
             "返回结果", "响应结果",
             "查询结果", "搜索结果",

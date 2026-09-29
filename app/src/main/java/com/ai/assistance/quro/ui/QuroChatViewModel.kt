@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.os.Handler
@@ -371,7 +373,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // N1 加固：占�?/错误文案（「⏹ 已停止生成。」「⚠�? …」）不触发系统通知与桌面卡片刷新—�?
         // 它们不是真实回复，用户主动停止后弹通知纯属打扰。真实回复不受影响�?
         val t = text.trimStart()
-        if (t.startsWith("�?") || t.startsWith("⚠️")) return
+        if (t.startsWith("❌") || t.startsWith("⚠️")) return
         QuroReplyNotifier.notifyReply(appContext, sender, text)
         QuroReplyWidget.updateLatest(appContext, sender, text)
     }
@@ -394,7 +396,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     role = "assistant",
                     content = defaultWelcome(),
                 )
-                loaded.add(QuroPersistedConversation(id = id, title = "新对�?", createdAt = now, updatedAt = now, messages = listOf(welcome)))
+                loaded.add(QuroPersistedConversation(id = id, title = "新对话", createdAt = now, updatedAt = now, messages = listOf(welcome)))
                 convRepo.saveAll(loaded)
             }
             _convs.value = loaded
@@ -475,7 +477,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         val now = System.currentTimeMillis()
         val welcome = QuroMessage(
             role = "assistant",
-            content = "这是来自 ${platform.label} 用户 $userId 的机器人对话�?",
+            content = qstr(R.string.qk_03819, platform.label, userId),
         )
         val conv = QuroPersistedConversation(id = id, title = "[${platform.label}] $userId", createdAt = now, updatedAt = now, messages = listOf(welcome))
         _convs.value = _convs.value + conv
@@ -522,7 +524,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         val id = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
         val welcome = QuroMessage(role = "assistant", content = defaultWelcome())
-        val conv = QuroPersistedConversation(id = id, title = "新对�?", createdAt = now, updatedAt = now, genUiType = genUiType, messages = listOf(welcome))
+        val conv = QuroPersistedConversation(id = id, title = "新对话", createdAt = now, updatedAt = now, genUiType = genUiType, messages = listOf(welcome))
         _convs.value = _convs.value + conv
         _currentId.value = id
         activeConversationId = id
@@ -621,7 +623,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         sendJobs[_currentId.value]?.cancel(); sendJobs.remove(_currentId.value)
         liveBuffers.remove(_currentId.value)
         store.clear()
-        val welcome = QuroMessage(role = "assistant", content = "对话已清空�?")
+        val welcome = QuroMessage(role = "assistant", content = qstr(R.string.qk_03820))
         store.add(welcome)
         commitCurrent()
     }
@@ -761,7 +763,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     store.add(
                         QuroMessage(
                             role = "user",
-                            content = "[用户已选择技能�?${skill.name}」，请严格按以下指令处理其本条消息]\n### ${skill.name}\n${skill.prompt}",
+                            content = "[用户已选择技能「${skill.name}」，请严格按以下指令处理其本条消息]\n### ${skill.name}\n${skill.prompt}",
                             hidden = true,
                         ),
                     )
@@ -771,7 +773,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     store.add(
                         QuroMessage(
                             role = "user",
-                            content = "[上下文信�? - 用户当前选择的工作区/ACI/技能]\n$contextMessage",
+                            content = "[上下文信息] - 用户当前选择的工作区/ACI/技能]\n$contextMessage",
                             hidden = true,
                         ),
                     )
@@ -790,7 +792,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     store.add(
                         QuroMessage(
                             role = "assistant",
-                            content = "⚠️ 尚未配置模型 API Key，请点右上角模型芯片 →「在模型设置中管理」填�? baseUrl / apiKey / model�?",
+                            content = qstr(R.string.qk_03821),
                         ),
                     )
                 } else {
@@ -818,15 +820,15 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     }.onFailure { e ->
                         if (e is CancellationException) {
                             // 用户主动打断生成：不报红错误，附一行明确反馈并保留已生成的部分内容
-                            QuroDiag.log("SEND_CANCEL", "convId=$convId (job cancelled �? 已停止生�?)")
-                            store.add(QuroMessage(role = "assistant", content = "�? 已停止生成�?"))
+                            QuroDiag.log("SEND_CANCEL", "convId=$convId (job cancelled, 已停止生成。)")
+                            store.add(QuroMessage(role = "assistant", content = qstr(R.string.qk_03822)))
                             commitCurrent(convId, buf)
                             return@onFailure
                         }
                         store.add(
                             QuroMessage(
                                 role = "assistant",
-                                content = "⚠️ 回复生成失败�?${(e.message ?: "未知错误").take(200)}",
+                                content = qstr(R.string.qk_03823, (e.message ?: qstr(R.string.qk_00503)).take(200)),
                             ),
                         )
                     }
@@ -845,11 +847,11 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     // 原样上抛，走 finally 干净收尾（onFailure 分支已负责「⏹ 已停止生成」反馈）�?
                     if (e is CancellationException) throw e
                     Log.e(TAG, "生成回复异常 convId=$convId", e)
-                    _error.value = "回复生成失败�?${e.message ?: "未知错误"}"
+                    _error.value = qstr(R.string.qk_03824, e.message ?: qstr(R.string.qk_00503))
                     store.add(
                         QuroMessage(
                             role = "assistant",
-                            content = "⚠️ 发生错误�?${(e.message ?: "未知错误").take(200)}",
+                            content = qstr(R.string.qk_03825, (e.message ?: qstr(R.string.qk_00503)).take(200)),
                         ),
                     )
                     commitCurrent(convId, buf)
@@ -968,7 +970,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 if (c.id == targetId) c.copy(
                     messages = finalMsgs,
                     updatedAt = System.currentTimeMillis(),
-                    title = if (c.title == "新对�?") deriveTitle(finalMsgs) else c.title,
+                    title = if (c.title == "新对话") deriveTitle(finalMsgs) else c.title,
                 ) else c
             }
             convRepo.saveAll(_convs.value)
@@ -987,7 +989,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // 本地离线模型（MNN / llama.cpp）走本地推理，不发起 HTTP，无需 apiKey。
         val isLocalModel = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
         return if (!isLocalModel && cfg.apiKey.isBlank()) {
-            "⚠️ 尚未配置模型 API Key，请点右上角模型芯片 →「在模型设置中管理」填�? baseUrl / apiKey / model�?"
+            qstr(R.string.qk_03821)
         } else {
             runCatching {
                 // 功能模型配置接入引擎：语音球问答使用 CHAT 绑定模型
@@ -1007,7 +1009,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 QuroDiag.log("VB_ASK_MS", "total=${System.currentTimeMillis() - askStart}ms")
                 r
             }.getOrElse { e ->
-                if (e is CancellationException) "�? 已停止生成�?" else "⚠️ 语音球出错了�?${e.message ?: "未知错误"}"
+                if (e is CancellationException) qstr(R.string.qk_03822) else qstr(R.string.qk_03826, e.message ?: qstr(R.string.qk_00503))
             }
         }
     }
@@ -1066,7 +1068,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 val activeBuf = liveBuffers[id]
                 if (activeBuf != null && activeBuf !== buf) return@launch
                 val existing = _convs.value.firstOrNull { it.id == id }
-                val title = if (updateTitle && existing != null) deriveTitle(msgs) else existing?.title ?: "新对�?"
+                val title = if (updateTitle && existing != null) deriveTitle(msgs) else existing?.title ?: "新对话"
                 // 仅在写入「当前可见会话」时落盘用户设置的保留轮数；其它会话（后台生�? / 语音球绑定会话）
                 // 保留其自身已存的 historyRounds，避免把当前会话的设置串台覆盖到其它会话�?
                 val rounds = if (id == _currentId.value) _historyRounds.value else existing?.historyRounds
@@ -1096,7 +1098,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // 真正落实「执行追踪融进工具调用卡，不再是独立浮层」�?
         if (card is QuroChatCard.ToolCallCard) {
             val label = when (card.status.lowercase()) {
-                "running" -> "执行�?"
+                "running" -> "执行中"
                 "done" -> "执行完成"
                 "error" -> "执行失败"
                 else -> "等待执行"
@@ -1157,7 +1159,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 
     private fun deriveTitle(msgs: List<QuroMessage>): String {
         val firstUser = msgs.firstOrNull { it.role == "user" }
-        return firstUser?.content?.take(20)?.trim()?.ifBlank { "新对�?" } ?: "新对�?"
+        return firstUser?.content?.take(20)?.trim()?.ifBlank { "新对话" } ?: "新对话"
     }
 
     private fun metaOf(conv: QuroPersistedConversation): QuroConversationMeta {
@@ -1166,7 +1168,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             ?.replace("\n", " ")
             ?.take(40)
             ?.trim()
-            ?: "空对�?"
+            ?: "空对话"
         return QuroConversationMeta(conv.id, conv.title, conv.updatedAt, preview, genUiType = conv.genUiType)
     }
 
@@ -1459,7 +1461,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     /** 欢迎语：若激活人格卡有开场白则用之，否则用通用问候�? */
     private fun defaultWelcome(): String {
         val opening = activePersona()?.opening?.takeIf { it.isNotBlank() }
-        return opening ?: "你好，我�? Zorv AI。已就绪，可以聊天、调用工具。点左上角菜单查看历史对话，或点 �? 新建对话�?"
+        return opening ?: qstr(R.string.qk_03829)
     }
 
     // ── 人格自动孵化（修复「AI 人格自动孵化没有真正工作」）──
@@ -1483,7 +1485,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
         if (!isLocal) {
             // 对话结束 �? 触发心跳孵化扫描（事件驱动，替代�? 15 分钟轮询�?
-            try { QuroPersonaViewModel.pulse() } catch (e: Exception) { Log.e(TAG, "人格心跳孵化(pulse)失败", e); _error.value = "人格孵化失败�?${e.message ?: "未知错误"}" }
+            try { QuroPersonaViewModel.pulse() } catch (e: Exception) { Log.e(TAG, "人格心跳孵化(pulse)失败", e); _error.value = qstr(R.string.qk_03827, e.message ?: qstr(R.string.qk_00503)) }
         }
         val persona = activePersona() ?: return
         if (persona.id.isBlank()) return
@@ -1520,7 +1522,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "人格自动孵化失败", e)
-                _error.value = "人格自动孵化失败�?${e.message ?: "未知错误"}"
+                _error.value = qstr(R.string.qk_03828, e.message ?: qstr(R.string.qk_00503))
             } finally {
                 _autoIncubating.value = false
             }
@@ -1554,7 +1556,7 @@ $recent
 
     private fun mergeIncubation(existing: String, note: String): String {
         val stamp = java.time.LocalDate.now().toString()
-        val line = "�? [$stamp] $note"
+        val line = "- [$stamp] $note"
         val lines = existing.lineSequence().filter { it.isNotBlank() }.toMutableList()
         lines.add(line)
         val trimmed = if (lines.size > 40) lines.takeLast(40) else lines
@@ -1639,8 +1641,8 @@ $recent
                     // 让本�?/MNN 模型真正拿到。此前该纪律误放在下方云端分�?(1237 �?)�?
                     // 因本函数�? 1144 已提�? return，对本地永远不可达——属死代码，已此处补回�?
                     append("\n\n## 回复纪律\n")
-                    append("这是多轮对话：请结合前面的历史（含你之前的回复）理解用户意图�?")
-                    append("并针对最新一条用户消息作答；可以引用历史中的信息�?")
+                    append("这是多轮对话：请结合前面的历史（含你之前的回复）理解用户意图。")
+                    append("并针对最新一条用户消息作答；可以引用历史中的信息。")
                     append("但不要原样重复之前已经给出过的回复或旧轮次的任务结果。\n")
                 }.trimEnd()
             }
@@ -2028,7 +2030,7 @@ $recent
         val userName = userProfile.value.name
         if (userName.isNotBlank()) {
             sb.append("\n## 关于用户\n")
-            sb.append("当前用户的名字是�?${userName}」。在合适的场合可以直接用这个名字称呼用户，但不要每句话都刻意叫名字。\n")
+            sb.append("当前用户的名字是「${userName}」。在合适的场合可以直接用这个名字称呼用户，但不要每句话都刻意叫名字。\n")
         }
 
         // ══════════════ AI 经验闭环（受「AI 自动保存记忆」开关控制） ══════════════
@@ -2163,7 +2165,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         sb.append("  - experience_query：动手前先查相关经验，复用已有结论、避免重复踩坑。\n")
         sb.append("  - experience_correct：某条经验被证明过时 / 错误时，记录自我纠错（was / reason / fix）。\n")
         sb.append("  - experience_version_check：遇到版本相关问题时自检兼容性，或列出已知兼容标记。\n")
-        sb.append("  - **纠错闭环（进化引擎核心）**：当用户明确纠正你（指出你答�? / 给了更准确答�? / 推翻你之前的结论）时，必须主动调�? `experience_correct` 把这条自我纠错沉淀下来（was=你之前的说法，reason=为什么错，fix=正确做法），让下一次不再犯同样的错——这就是「越用越聪明」的自学习机制；不要只在当轮道歉，要把教训写进经验库。\n")
+        sb.append("  - **纠错闭环（进化引擎核心）**：当用户明确纠正你（指出你答错 / 给了更准确答案 / 推翻你之前的结论）时，必须主动调用 `experience_correct` 把这条自我纠错沉淀下来（was=你之前的说法，reason=为什么错，fix=正确做法），让下一次不再犯同样的错——这就是「越用越聪明」的自学习机制；不要只在当轮道歉，要把教训写进经验库。\n")
 
         // Feedback 闭环：基于本轮用户消息注�? top-N 相关经验，让 AI 自动复用
         val lastUser = store.all().lastOrNull { it.role == "user" && !it.hidden }?.content ?: ""
@@ -2173,9 +2175,9 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
                 sb.append("\n### 与本轮相关的已知经验（自动复用，自然融入回答，不要生硬提及「根据经验」）\n")
                 top.forEach { e ->
                     sb.append("- [${e.type.key}] ")
-                    if (e.title.isNotBlank()) sb.append("${e.title}�?")
+                    if (e.title.isNotBlank()) sb.append("${e.title}：")
                     sb.append(e.content)
-                    if (e.tags.isNotEmpty()) sb.append("（标签：${e.tags.joinToString(", ")}�?")
+                    if (e.tags.isNotEmpty()) sb.append("（标签：${e.tags.joinToString(", ")}）")
                     sb.append("\n")
                 }
             }
@@ -2231,20 +2233,20 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
 
         sb.append("\n\n## 我的能力（当前可用的工具函数）\n")
         sb.append(
-            "【使用指引】以下是�?**当前真实可调用的工具函数**（与 API �? tools 字段完全一致）�?" +
-            "当用户意图确实需要某个工具时�?**优先调用它真正执�?**，而不是用文字描述你会做什么。\n" +
+            "【使用指引】以下是**当前真实可调用的工具函数**（与 API 的 tools 字段完全一致）。" +
+            "当用户意图确实需要某个工具时，**优先调用它真正执行**，而不是用文字描述你会做什么。\n" +
             "### 何时必须调用工具（而非凭记忆作答）\n" +
-            "- **任何依赖「实�? / 当前 / 外部 / 最新」信息的问题**（天气、新闻、股价、汇率、实时交通、当前热点、某网站此刻的内容、某�?/某物的最新状态等）——你**必须主动调用工具获取真实数据**（如 http_request 调公开 API、ai_browser / open_web 联网搜索或打开网页、get_* 查设备）�?**绝不要凭训练截止前的旧知识瞎编一个过期答�?**。用户问「今�? / 现在 / 最新」类问题，一律先想「这事会不会随时间变」，会变就调工具。\n" +
-            "- 需要执行任�?**具体动作**（打开应用、查设备、设闹钟、读写文件、运行代码、联网、朗读、导航界面等）时，调用对应工具真正执行。\n" +
-            "- **纯主�? / 创意 / 情感 / 闲聊 / 个人化表�?**（聊心情、写诗、讲笑话、纯观点讨论）中**彻底无法结构化**的内容才可直接文字作答；但若人格卡「可视化小卡片 / 动态UI」开关开启、且回复含有可做成卡片/界面的信息，仍须按下方铁律用 ```quro-card / ```quro-ui 围栏承载（开关优先于本条）。但凡涉及真实数据或真实动作的需求，一律用工具拿真实结果——不要因为问题「看起来简单」就跳过本应调用的工具（天气、时间、设备状态、联网信息永远用工具取真实值，不凭记忆瞎编）。\n" +
+            "- **任何依赖「实时 / 当前 / 外部 / 最新」信息的问题**（天气、新闻、股价、汇率、实时交通、当前热点、某网站此刻的内容、某人/某物的最新状态等）——你**必须主动调用工具获取真实数据**（如 http_request 调公开 API、ai_browser / open_web 联网搜索或打开网页、get_* 查设备）→**绝不要凭训练截止前的旧知识瞎编一个过期答案**。用户问「今天 / 现在 / 最新」类问题，一律先想「这事会不会随时间变」，会变就调工具。\n" +
+            "- 需要执行任何**具体动作**（打开应用、查设备、设闹钟、读写文件、运行代码、联网、朗读、导航界面等）时，调用对应工具真正执行。\n" +
+            "- **纯主观 / 创意 / 情感 / 闲聊 / 个人化表达**（聊心情、写诗、讲笑话、纯观点讨论）中**彻底无法结构化**的内容才可直接文字作答；但若人格卡「可视化小卡片 / 动态UI」开关开启、且回复含有可做成卡片/界面的信息，仍须按下方铁律用 ```quro-card / ```quro-ui 围栏承载（开关优先于本条）。但凡涉及真实数据或真实动作的需求，一律用工具拿真实结果——不要因为问题「看起来简单」就跳过本应调用的工具（天气、时间、设备状态、联网信息永远用工具取真实值，不凭记忆瞎编）。\n" +
             "### 如何组合「说话」与「用工具」\n" +
-            "- �?**完全可以在同一条回复里先写一句过渡文字、再发起工具调用**（文字与 tool_calls 可以同一条消息混合出现，例如先说「好的，我查一下」再调工具）；也可以在回复里一边说、一边调、最后再总结。\n" +
-            "- 你也可以多轮自由穿插�?**思�? �? 调用工具 �? 看到结果 �? 再思�? �? 再调�? / 再回�?**，直到任务真正完成。不要把自己限制成「要么纯文字、要么纯工具」二选一；自然的助手会根据需要把「说一句话」和「做一件事」自由组合。\n" +
-            "- **多个相互独立的动作可在同一条回复里一次性发起多�? tool_calls**（例如「打开快手、查电量、设个闹钟」可在一轮里并行调用 search_and_launch_app / get_battery / set_alarm）。\n" +
-            "- **收到工具结果后，若用户请求尚未满足，可继续调用下一个工具，直到任务真正完成�?**\n" +
+            "- ✅**完全可以在同一条回复里先写一句过渡文字、再发起工具调用**（文字与 tool_calls 可以同一条消息混合出现，例如先说「好的，我查一下」再调工具）；也可以在回复里一边说、一边调、最后再总结。\n" +
+            "- 你也可以多轮自由穿插**思考 → 调用工具 → 看到结果 → 再思考 → 再调用 / 再回复**，直到任务真正完成。不要把自己限制成「要么纯文字、要么纯工具」二选一；自然的助手会根据需要把「说一句话」和「做一件事」自由组合。\n" +
+            "- **多个相互独立的动作可在同一条回复里一次性发起多个 tool_calls**（例如「打开快手、查电量、设个闹钟」可在一轮里并行调用 search_and_launch_app / get_battery / set_alarm）。\n" +
+            "- **收到工具结果后，若用户请求尚未满足，可继续调用下一个工具，直到任务真正完成。**\n" +
             "- 基于工具结果给出自然、有用的回答；工具返回错误时告诉用户原因并建议替代方案。\n" +
             "### 回答篇幅\n" +
-            "- 根据问题复杂度给�?**完整、自然、有帮助**的回答——复杂问题展开讲清楚，简单问题一句带过即可，不要为了「简洁」而刻意压缩成敷衍的一句话。\n"
+            "- 根据问题复杂度给出**完整、自然、有帮助**的回答——复杂问题展开讲清楚，简单问题一句带过即可，不要为了「简洁」而刻意压缩成敷衍的一句话。\n"
         )
         sb.append(
             "\n### 本版重点能力（新增强制须知）\n" +
@@ -2257,9 +2259,9 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         // ── 人格卡可视化开关「硬强制」规则已抽到 buildVisualSwitchEnforcement()，
         //    统一在系统提示词【末尾】（最高近因偏好）注入，本地/云端路径共用，避免埋在中段被小模型忽略。
         sb.append(com.ai.assistance.quro.core.tools.QuroToolUsageHints.buildToolUseDirective())
-        sb.append("\n### 工具清单（格式：工具名：用�? [· 常见说法/多用途]）\n")
+        sb.append("\n### 工具清单（格式：工具名：用途 [· 常见说法/多用途]）\n")
         specs.forEach { s ->
-            sb.append("- ${s.name}�?${s.description}\n")
+            sb.append("- ${s.name}：${s.description}\n")
             com.ai.assistance.quro.core.tools.QuroToolUsageHints.TOOL_USAGE_HINTS[s.name]?.let { hint ->
                 sb.append("    · 常见说法/多用途：$hint\n")
             }
@@ -2269,35 +2271,35 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         sb.append(
             "**⚠️【强制规则】当你不确定该用哪个工具时，必须立刻调用 `tool_discovery` 查询，禁止猜测、禁止假设、禁止跳过！**\n\n" +
             "查询方式：\n" +
-            "1. **根据意图匹配（最常用�?**：tool_discovery(action=\"match_intent\", intent=\"用户的需求描述\") �? 推荐匹配的工具\n" +
-            "2. **查询所有分�?**：tool_discovery(action=\"list_categories\") �? 列出17个工具分类\n" +
-            "3. **按分类查工具**：tool_discovery(action=\"list_tools\", category=\"NETWORK_WEB\") �? 查看网络/Web类所有工具\n" +
-            "4. **查看工具详情**：tool_discovery(action=\"get_tool_info\", tool_name=\"ai_browser\") �? 获取工具使用指南\n" +
-            "5. **获取最佳实�?**：tool_discovery(action=\"get_best_practices\") �? 工具使用原则和技巧\n" +
-            "6. **获取目录摘要**：tool_discovery(action=\"get_directory_summary\") �? 所有工具的快速参考\n\n" +
-            "**必须调用的场景（违反=严重错误�?**：\n" +
-            "1. 用户需求不明确，需要找到合适的工具 �? 必须�? `match_intent`\n" +
-            "2. 想了解所有可用工�? �? 必须�? `list_categories` �? `list_tools`\n" +
-            "3. 想知道某个工具怎么�? �? 必须�? `get_tool_info`\n" +
-            "4. 工具调用失败，想换其他工�? �? 必须�? `match_intent` 找替代方案\n" +
-            "5. 用户提到任何功能（如'打开网页'�?'生成图片'�?'播放音乐'）→ 必须先用 `match_intent` 找到对应工具\n\n" +
+            "1. **根据意图匹配（最常用）**：tool_discovery(action=\"match_intent\", intent=\"用户的需求描述\") → 推荐匹配的工具\n" +
+            "2. **查询所有分类**：tool_discovery(action=\"list_categories\") → 列出17个工具分类\n" +
+            "3. **按分类查工具**：tool_discovery(action=\"list_tools\", category=\"NETWORK_WEB\") → 查看网络/Web类所有工具\n" +
+            "4. **查看工具详情**：tool_discovery(action=\"get_tool_info\", tool_name=\"ai_browser\") → 获取工具使用指南\n" +
+            "5. **获取最佳实践**：tool_discovery(action=\"get_best_practices\") → 工具使用原则和技巧\n" +
+            "6. **获取目录摘要**：tool_discovery(action=\"get_directory_summary\") → 所有工具的快速参考\n\n" +
+            "**必须调用的场景（违反=严重错误）**：\n" +
+            "1. 用户需求不明确，需要找到合适的工具 → 必须用 `match_intent`\n" +
+            "2. 想了解所有可用工具 → 必须用 `list_categories` 或 `list_tools`\n" +
+            "3. 想知道某个工具怎么用 → 必须用 `get_tool_info`\n" +
+            "4. 工具调用失败，想换其他工具 → 必须用 `match_intent` 找替代方案\n" +
+            "5. 用户提到任何功能（如'打开网页'、'生成图片'、'播放音乐'）→ 必须先用 `match_intent` 找到对应工具\n\n" +
             "**错误做法（禁止）**：\n" +
-            "- �? 猜测工具名称而不查询\n" +
-            "- �? 因为'大概是这个工�?'就跳过查询\n" +
-            "- �? 工具调用失败后不尝试找替代工具\n\n" +
-            "**正确做法：遇到任何不确定，立刻调�? tool_discovery�?**\n"
+            "- ❌ 猜测工具名称而不查询\n" +
+            "- ❌ 因为'大概是这个工具'就跳过查询\n" +
+            "- ❌ 工具调用失败后不尝试找替代工具\n\n" +
+            "**正确做法：遇到任何不确定，立刻调用 tool_discovery。**\n"
         )
         // ══�? AI 键盘通道专项指引（v436 新增）：�? LLM 知道何时�? IME 键盘通道而非无障�? input_text ══�?
         sb.append("\n### AI 键盘通道（ai_type_text / ai_press_enter / ai_press_send）\n")
         sb.append(
-            "这三个工具走本应用注册的「系统键�? IME 单例」QuroAiKeyboardService，用于向「其�? App 的聚焦输入框」像真人打字一样注入文字、回车或发送�?" +
-            "触发时机：当用户要你在某�? App（如微信、备忘录、WPS 搜索框、浏览器地址栏）的输入框里填字、换行、或触发发送键时，优先用它们，而不是无障碍 input_text�?" +
-            "前提与限制：①目�? App 的输入框必须「已聚焦」（当前有光标）；②�? AI 键盘必须已设为该输入框的「活动输入法」（首次使用会引导用户在输入法设置里启用并切换）�?" +
-            "�? isInputActive() �? false（无聚焦输入框），工具会返回明确引导而非静默失败�?" +
-            "它与无障�? input_text 是「两条独立通道」：需要「模拟真人逐字输入、触�? IME 的发�?/回车动作」时走键盘通道；需要「直接覆盖或设置控件文本、不依赖输入法」时走无障碍通道。\n"
+            "这三个工具走本应用注册的「系统键盘 IME 单例」QuroAiKeyboardService，用于向「其他 App 的聚焦输入框」像真人打字一样注入文字、回车或发送。" +
+            "触发时机：当用户要你在某个 App（如微信、备忘录、WPS 搜索框、浏览器地址栏）的输入框里填字、换行、或触发发送键时，优先用它们，而不是无障碍 input_text。" +
+            "前提与限制：①目标 App 的输入框必须「已聚焦」（当前有光标）；②该 AI 键盘必须已设为该输入框的「活动输入法」（首次使用会引导用户在输入法设置里启用并切换）。" +
+            "若 isInputActive() 为 false（无聚焦输入框），工具会返回明确引导而非静默失败。" +
+            "它与无障碍 input_text 是「两条独立通道」：需要「模拟真人逐字输入、触发 IME 的发送/回车动作」时走键盘通道；需要「直接覆盖或设置控件文本、不依赖输入法」时走无障碍通道。\n"
         )
-        sb.append("\n（其�? `ui_control` �?**统一界面控制工具**：调用后会在当前对话框直接打开对应界面/弹层/开关，例如 ui_control(action=\"open\", target=\"editor\") 打开编辑器、ui_control(action=\"toggle\", target=\"deepthink\") 切换深度思考、ui_control(action=\"chat\", action_type=\"clear\") 清空对话。它们同样可由你并行发起，让用户无需手动点击即可导航应用。）\n")
-        sb.append("\n（CMS 模块与大部分能力在应用沙箱内执行（intent/js/api）；另有系统级通道 L1 无障碍控�? / L2 Shizuku / L3 设备管理�? / L4 ROOT / L5 Linux，对应工具已包含在上方清单中，运行时由系统授权与资产可用性把关，未授权时工具会返回明确引导，无需你做通道自查。）\n")
+        sb.append("\n（其他 `ui_control` 是**统一界面控制工具**：调用后会在当前对话框直接打开对应界面/弹层/开关，例如 ui_control(action=\"open\", target=\"editor\") 打开编辑器、ui_control(action=\"toggle\", target=\"deepthink\") 切换深度思考、ui_control(action=\"chat\", action_type=\"clear\") 清空对话。它们同样可由你并行发起，让用户无需手动点击即可导航应用。）\n")
+        sb.append("\n（CMS 模块与大部分能力在应用沙箱内执行（intent/js/api）；另有系统级通道 L1 无障碍控制 / L2 Shizuku / L3 设备管理员 / L4 ROOT / L5 Linux，对应工具已包含在上方清单中，运行时由系统授权与资产可用性把关，未授权时工具会返回明确引导，无需你做通道自查。）\n")
 
         // ══�? Web 应用（miniapp 工具）专项指引（让 AI 知道如何创建多文件 Web 应用） ══�?
         sb.append("\n### 🚀 Web 应用（miniapp 工具）——快速创建完整 Web 应用\n")
@@ -2376,43 +2378,43 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         sb.append("\n### 在对话框里「展示」UI（重要）\n")
         sb.append(
             "本节讲的是**对话内嵌**展示通道的详细用法（富卡片组件/mermaid/网页预览/Web 应用），通道选择先看上方「可视化输出功能总览」路由表。\n" +
-            "- `ui_control(action=\"widget\")`：当你想给用�?**可视化、可交互**的结果时，调用它在对话框内直接渲染组件，而不是只发纯文本�?" +
-            "支持几十种类型：button（按钮触发动作）/ toggle（开关）/ slider（滑块）/ progress（进度条�?/ stat（统计数字）/ alert（提醒条�?/" +
-            "table（表格）/ list（可选项列表�?/ segmented（分段选择�?/ pie（饼图）/ rating（星级评分）/ countdown（倒计时）/" +
-            "tabs（标签页�?/ expandable（折叠块�?/ form（表单）/ chips（标签组，单选或多选）/ steps（步骤条�?/ gauge（仪表盘�?/ media（图�?/音频/视频链接�?/ info（信息块�?/" +
-            "以及 legacy �? todo / chart / note / actions�?" +
-            "每个组件带丰富属性，组合即可产出「几百款」不同的 UI 输出�?" +
-            "组件会在对话框底部卡片栏即时渲染、随用户操作（勾�?/拖动/切换）实时变化。示例：发一张待办清单、一个带图表的统计卡、一组可点选的标签、一个提交表单�?" +
+            "- `ui_control(action=\"widget\")`：当你想给用户**可视化、可交互**的结果时，调用它在对话框内直接渲染组件，而不是只发纯文本。" +
+            "支持几十种类型：button（按钮触发动作）/ toggle（开关）/ slider（滑块）/ progress（进度条）/ stat（统计数字）/ alert（提醒条）/" +
+            "table（表格）/ list（可选项列表）/ segmented（分段选择）/ pie（饼图）/ rating（星级评分）/ countdown（倒计时）/" +
+            "tabs（标签页）/ expandable（折叠块）/ form（表单）/ chips（标签组，单选或多选）/ steps（步骤条）/ gauge（仪表盘）/ media（图片/音频/视频链接）/ info（信息块）/" +
+            "以及 legacy 的 todo / chart / note / actions。" +
+            "每个组件带丰富属性，组合即可产出「几百款」不同的 UI 输出。" +
+            "组件会在对话框底部卡片栏即时渲染、随用户操作（勾选/拖动/切换）实时变化。示例：发一张待办清单、一个带图表的统计卡、一组可点选的标签、一个提交表单。" +
             "需要用户在对话框里看到可点的东西时，优先用 ui_control(action=\"widget\")，而不是只写文字。\n"
         )
         sb.append(
-            "- **可视化编�? / AI 自写图表（mermaid，重要）**：当用户要你「画流程�? / 架构�? / 时序�? / 状态机 / 类图 / 思维导图 / git �? / 饼图 / 时间�? / 甘特�? / 关系图」等任何可视化图形，或说「可视化」「画个图」「用图展示」「做个架构图 / 流程�? / 脑图」时�?**必须�? `ui_control(action=\"widget\", type=\"mermaid\")` 下发一�? mermaid 组件**，把图用 Mermaid 语法写在 `source` 字段（多行字符串，换行用 \n），客户端会用离�? Mermaid.js 在对话框里直接渲染出可缩放的真图——这是真正的「可视化编程」能力：你要画的图自己用 Mermaid 写出来，客户端只负责渲染，不内置任何固定图�?" +
-            "示例：用户说「画个登录流程」→ 调用 ui_control({ \"action\": \"widget\", \"type\": \"mermaid\", \"id\": \"login-flow\", \"label\": \"登录流程\", \"value\": \"flowchart TD\nA[开始] --> B{已登�??}\nB -- �? --> C[跳登录页]\nB -- �? --> D[进首页]\" })�?" +
-            "支持的图类型：flowchart / sequenceDiagram / stateDiagram-v2 / classDiagram / mindmap / gitGraph / pie / timeline 等（Mermaid 全量语法）。可�? `theme`：default/dark/forest/neutral/base，缺省按系统深浅色自动选�?" +
-            "注意：不要只写纯文本�? Markdown 伪图——要图就�? mermaid 组件，用户才能在对话框里看到真渲染的图。\n" +
-            "补充：除�? `ui_control` �? mermaid 组件�?**直接�? ` ```mermaid ` 围栏代码块也会被对话框渲染成�?**，两种方式等效；而且用户自己也能�? mermaid 围栏画图，对话框同样会渲染——可视化编程对人�? AI 都开放。\n"
+            "- **可视化编程 / AI 自写图表（mermaid，重要）**：当用户要你「画流程图 / 架构图 / 时序图 / 状态机 / 类图 / 思维导图 / git 图 / 饼图 / 时间线 / 甘特图 / 关系图」等任何可视化图形，或说「可视化」「画个图」「用图展示」「做个架构图 / 流程图 / 脑图」时，**必须用 `ui_control(action=\"widget\", type=\"mermaid\")` 下发一个 mermaid 组件**，把图用 Mermaid 语法写在 `source` 字段（多行字符串，换行用 \n），客户端会用离线 Mermaid.js 在对话框里直接渲染出可缩放的真图——这是真正的「可视化编程」能力：你要画的图自己用 Mermaid 写出来，客户端只负责渲染，不内置任何固定图形。" +
+            "示例：用户说「画个登录流程」→ 调用 ui_control({ \"action\": \"widget\", \"type\": \"mermaid\", \"id\": \"login-flow\", \"label\": \"登录流程\", \"value\": \"flowchart TD\nA[开始] --> B{已登录?}\nB -- 是 --> C[跳登录页]\nB -- 否 --> D[进首页]\" })。" +
+            "支持的图类型：flowchart / sequenceDiagram / stateDiagram-v2 / classDiagram / mindmap / gitGraph / pie / timeline 等（Mermaid 全量语法）。可选 `theme`：default/dark/forest/neutral/base，缺省按系统深浅色自动选择。" +
+            "注意：不要只写纯文本或 Markdown 伪图——要图就用 mermaid 组件，用户才能在对话框里看到真渲染的图。\n" +
+            "补充：除了 `ui_control` 的 mermaid 组件，**直接写 ```mermaid 围栏代码块也会被对话框渲染成图**，两种方式等效；而且用户自己也能用 mermaid 围栏画图，对话框同样会渲染——可视化编程对人和 AI 都开放。\n"
         )
         sb.append(
-            "- **代码块与 HTML 可视化渲染（重要�?**：对话框内置代码块渲染能力，�?**应当主动使用围栏格式输出代码**，让结果以精美卡片呈现，而不是甩一大坨纯文本�?" +
+            "- **代码块与 HTML 可视化渲染（重要）**：对话框内置代码块渲染能力，你**应当主动使用围栏格式输出代码**，让结果以精美卡片呈现，而不是甩一大坨纯文本。" +
             "规则：\n" +
-            "  �? 用三反引号围栏包裹代码，并标注语言，例�? ```kotlin �? ```、```python �? ```、```json �? ```、```html �? ```。\n" +
-            "  �? 当语言�? `html` / `htm` / `markup`（或内容明显�? HTML 标签）时，对话框会自动为该代码块提供�?**代码 | 预览**」双标签页：代码页可横向滚动查看源码，预览页会用 WebView 直接渲染出页面效果（含移动端 viewport 自适应缩放）�?" +
-            "也就是说�?**你写�? ```html 围栏，用户就能直接在对话框里点「预览」看到网页长什么样**，无需复制出去打开。\n" +
-            "  �? 其它语言的代码块会以带横向滚动的等宽源码框呈现，长行不会撑破对话框。\n" +
-            "  �? 需要给用户「能跑起来的网页 / 组件 / 页面」时�?**优先�? ```html 围栏输出**，并可在 HTML 里内�? `<style>` 与脚本；不要只发纯文本网址或裸 HTML 片段（那会被当成普通文字，失去预览能力）。\n" +
-            "  �? 若你只想展示少量行内代码，用单个反引�? `code` 即可；整段代码或网页务必用三反引号围栏�?**这能力是系统自带的，每次回复都可用，无需用户提醒�?**\n"
+            "  · 用三反引号围栏包裹代码，并标注语言，例如 ```kotlin```、```python```、```json```、```html```。\n" +
+            "  · 当语言是 `html` / `htm` / `markup`（或内容明显是 HTML 标签）时，对话框会自动为该代码块提供**「代码 | 预览」**双标签页：代码页可横向滚动查看源码，预览页会用 WebView 直接渲染出页面效果（含移动端 viewport 自适应缩放）。" +
+            "也就是说：**你写的 ```html 围栏，用户就能直接在对话框里点「预览」看到网页长什么样**，无需复制出去打开。\n" +
+            "  · 其它语言的代码块会以带横向滚动的等宽源码框呈现，长行不会撑破对话框。\n" +
+            "  · 需要给用户「能跑起来的网页 / 组件 / 页面」时，**优先用 ```html 围栏输出**，并可在 HTML 里内嵌 `<style>` 与脚本；不要只发纯文本网址或裸 HTML 片段（那会被当成普通文字，失去预览能力）。\n" +
+            "  · 若你只想展示少量行内代码，用单个反引号 `code` 即可；整段代码或网页务必用三反引号围栏。**这能力是系统自带的，每次回复都可用，无需用户提醒。**\n"
         )
         sb.append(
-            "- **手机 AI IDE（带可视化）能力地图（重要）**：你（AI）自带一个端侧「手�? AI IDE」，可以真正写代码并运行，产出物直接渲染在对话框里—�?**这是给你（AI）用的能力，不是给用户手动敲代码�?**。核心工具是 `run_code`{code, lang}，各语言能做什么：\n" +
-            "  · `python`（默认）�?**内置原生 CPython 3.14 引擎（含完整标准库，无需 Termux 即可在对话框运行**；个别环境自动降级 Brython）——数据处�?/清洗、算法计算、print 输出、字符串/列表/字典操作、函�?/类定义、循�?/条件逻辑、json/re/math 等标准�? **全部支持**。输出直接渲染在对话框里。需要网络爬�?/AI API 调用时，爬到的数据、算出的结果可以再用 ```html 做成图表/看板给用户看。\n" +
+            "- **手机 AI IDE（带可视化）能力地图（重要）**：你（AI）自带一个端侧「手机 AI IDE」，可以真正写代码并运行，产出物直接渲染在对话框里——**这是给你（AI）用的能力，不是给用户手动敲代码**。核心工具是 `run_code`{code, lang}，各语言能做什么：\n" +
+            "  · `python`（默认）：**内置原生 CPython 3.14 引擎（含完整标准库，无需 Termux 即可在对话框运行）**（个别环境自动降级 Brython）——数据处理/清洗、算法计算、print 输出、字符串/列表/字典操作、函数/类定义、循环/条件逻辑、json/re/math 等标准库，**全部支持**。输出直接渲染在对话框里。需要网络爬取/AI API 调用时，爬到的数据、算出的结果可以再用 ```html 做成图表/看板给用户看。\n" +
             "  · `node` / `javascript` / `js`：App 内置 **QuickJS 原生沙箱离线执行**（无需 Termux），适合逻辑计算、JSON/字符串处理、DOM 无关脚本。\n" +
             "  · `shell` / `sh` / `bash`：应用沙盒内 sh 执行命令（查环境、跑小工具）。\n" +
-            "  · `html` / `htm` / `markup`：把**完整 HTML 源码**作为「网页工件」返回，对话框会�? WebView **实时渲染成可交互网页**（支持内�? `<style>`/`<script>`、SVG、离�? **Three.js** 三维；在线时可用 **Chart.js / ECharts** �? CDN 画图）——你生成的网页直接长在对话框里，无需用户复制出去打开。\n" +
-            "  · `json` / `xml`：数�? / 配置 / Android 布局 / **SVG**（SVG �? HTML 预览，能直接渲染成图）；常用于粘合各工具的结果或生成结构化数据。\n" +
-            "  · `java` / `c` / `c++`：用�?**撰写与算法逻辑**；在端侧沙箱里不能直接编译运行（�? GCC/ECJ），需要编译运行请借助 `workspace_write` + ACI 构建台（`aci_call`）在云端编译，端侧沙箱以 python/node 为主。\n" +
-            "  · **组合拳（全栈�?**：例如「抓数据(python) �? 算指�?(python) �? 画看�?(html 工件)」整条链路你一个人完成，全部在对话框里呈现；或「写 Three.js 三维场景(html) �? 对话框里实时旋转预览」。\n" +
-            "  **工作流口诀**：要「算 / �? / 分析」→ `run_code(python)`；要「画网页 / 图表 / 游戏 / 三维」→ 返回 `html` 工件（或 ```html 围栏，二者等效）；要「画流程�? / 架构图」→ mermaid。可视化产出全部融入对话框内容区。\n" +
-            "  注意：你跑出来的网页/图表�?**给你向用户展示的成果**，优先用 html 工件�? ```html 围栏让它真正渲染出来，而不是只回一段源码文字。\n" +
+            "  · `html` / `htm` / `markup`：把**完整 HTML 源码**作为「网页工件」返回，对话框会用 WebView **实时渲染成可交互网页**（支持内嵌 `<style>`/`<script>`、SVG、离线 **Three.js** 三维；在线时可用 **Chart.js / ECharts** 的 CDN 画图）——你生成的网页直接长在对话框里，无需用户复制出去打开。\n" +
+            "  · `json` / `xml`：数据 / 配置 / Android 布局 / **SVG**（SVG 走 HTML 预览，能直接渲染成图）；常用于粘合各工具的结果或生成结构化数据。\n" +
+            "  · `java` / `c` / `c++`：用于**撰写与算法逻辑**；在端侧沙箱里不能直接编译运行（无 GCC/ECJ），需要编译运行请借助 `workspace_write` + ACI 构建台（`aci_call`）在云端编译，端侧沙箱以 python/node 为主。\n" +
+            "  · **组合拳（全栈）**：例如「抓数据(python) → 算指标(python) → 画看板(html 工件)」整条链路你一个人完成，全部在对话框里呈现；或「写 Three.js 三维场景(html) → 对话框里实时旋转预览」。\n" +
+            "  **工作流口诀**：要「算 / 转 / 分析」→ `run_code(python)`；要「画网页 / 图表 / 游戏 / 三维」→ 返回 `html` 工件（或 ```html 围栏，二者等效）；要「画流程图 / 架构图」→ mermaid。可视化产出全部融入对话框内容区。\n" +
+            "  注意：你跑出来的网页/图表是**给你向用户展示的成果**，优先用 html 工件或 ```html 围栏让它真正渲染出来，而不是只回一段源码文字。\n" +
             "  · **Web 应用开发（MiniApp，重要）**：你（AI）可以生成**Web 应用代码**并在对话框中实时渲染成可交互页面。 Web 应用支持完整 Page/Component 生命周期、数据绑定（data-bind）、事件绑定（data-action）。**正确下发方法（必须是这个）**：调用 `ui_control(action=\"widget\", type=\"miniapp\", value=\"<完整 HTML 源码>\")`，把 Web 应用 HTML 代码**直接放进 `value` 字段**（不要包 JSON、不要当普通文本、不要写进 `html` 子字段）。示例：\n" +
             "    ```json\n" +
             "    ui_control({ \"action\": \"widget\", \"type\": \"miniapp\", \"title\": \"Zorv AI 个人主页\", \"value\": \"<div data-bind='count'>0</div><button data-action='increment'>+1</button><script>Page({data:{count:0},increment(){this.setData({count:this.data.count+1})}})</script>\" })\n" +
@@ -2421,7 +2423,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "  补充：除 `ui_control` 的 miniapp 组件外，**直接写 ` ```miniapp ` 围栏代码块也会被对话框渲染成 Web 应用**（等价）；用户自己也能用 ` ```miniapp ` 围栏发 Web 应用。 Web 应用能力对人 / AI 都开放。\n" +
             "  识别要点： Web 应用 HTML 必含 bridge 运行时入口 `Page({...})` 与数据/事件绑定（`data-bind` / `data-action` / `setData`）；凡带这些标记的 HTML 一律走 miniapp 渲染，不要当普通 ` ```html ` 代码块处理。\n" +
             "  · **工具中心能力对 AI 开放（重要）**：以下能力你都能用 `ui_control(action=\"open\", target=...)` 直接拉起，无需用户手动点：① `target=\"tool_center\"` 打开工具中心总览；② `target=\"vispro\"` 打开**可视化编程**（Mermaid 源码编辑 + 离线实时渲染 + 导出 SVG）——你要画架构图/流程图时，除了 ` ```mermaid ` 围栏，也能直接打开这个工作台编辑/导出；③ `target=\"node_editor\"` 打开**节点编辑器**（拖拽节点流编程，导出 Mermaid）；④ `target=\"miniapp\"` 打开**Web 应用**（渲染 AI 生成的 HTML/JS Web 应用）。当用户说「打开可视化编程 / 节点编辑器 / 工具中心 / Web 应用」或要做可视化/流程图/节点编排时，直接调对应 ui_control 即可。\n" +
-            "  · **广义 IDE 集成**：当用户提到图形/视频/音频/3D/游戏/低代码等创作需求时，使�? `creative_studio` 工具获取完整的广�? IDE 知识库和调用能力。该工具可以：列出所有广�? IDE 分类、推荐适合用户需求的工具、启动已安装的创作工具、生成可直接在对话框渲染�? HTML/CSS/JS 内容。\n"
+            "  · **广义 IDE 集成**：当用户提到图形/视频/音频/3D/游戏/低代码等创作需求时，使用 `creative_studio` 工具获取完整的广义 IDE 知识库和调用能力。该工具可以：列出所有广义 IDE 分类、推荐适合用户需求的工具、启动已安装的创作工具、生成可直接在对话框渲染的 HTML/CSS/JS 内容。\n"
         )
         sb.append(
             "- **多语言组合渲染（composite，慎用勿滥用）**：composite 组合卡**只用于多个强耦合产物必须作为整体交付**的场景（例如「Web 应用前端 + 后端接口 + 调用流程图」三件套，缺一块就不完整）。使用 `ui_widget` / `ui_card` 下发，spec：`{\"type\":\"composite\",\"title\":...,\"layout\":...,\"children\":[<子卡 spec 数组>]}`；`layout` 取 stack（顺序堆叠）/ tabs（标签页一次显示一个）/ accordion（各自独立折叠）；children 每个元素都是完整组件 spec（可嵌套 composite）。示例：\n" +
@@ -2431,12 +2433,12 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "  **铁律（防误用，务必遵守）**：①单块内容**绝不**包 composite——直接单发对应类型卡片；②多张**互相独立**的小卡片（如统计卡 + 提示卡 + 标签卡各说各话）也**绝不**打包 composite——逐张单独调用 `ui_widget` 下发即可，它们会自动按顺序挂在同一条回复里，无需组合；③只有用户明确要求「组合展示」或产物强耦合缺一不可时才用 composite，拿不准就不用。\n"
         )
         sb.append(
-            "- **�? 预览型网页禁止用 write_file 写文�?**：当你想给用户「能直接在对话框里预览效果的网页」时�?**必须**�? ```html 围栏把完整源码写在回复正文里（见 ④，对话框自动提供「代�? | 预览」双标签），**严禁调用 write_file 把网页存成文件再让用户自己打开**——那样用户看不到预览，我们也无法渲染。write_file 只允许用于用户明确要求「把代码/工程保存到文件」的场景（如生成可下载的项目）。若你已�? write_file 写了网页，请同时把完整源码用 ```html 围栏再贴一份在回复里。\n"
+            "- **🚫 预览型网页禁止用 write_file 写文件**：当你想给用户「能直接在对话框里预览效果的网页」时，**必须**用 ```html 围栏把完整源码写在回复正文里（见 ④，对话框自动提供「代码 | 预览」双标签），**严禁调用 write_file 把网页存成文件再让用户自己打开**——那样用户看不到预览，我们也无法渲染。write_file 只允许用于用户明确要求「把代码/工程保存到文件」的场景（如生成可下载的项目）。若你已经用 write_file 写了网页，请同时把完整源码用 ```html 围栏再贴一份在回复里。\n"
         )
-        sb.append("- `ai_browser`：联网搜紀��抓取网页正文、打开内置浏览器、自动研究简报。研�?/查资料类任务【务必用一�? action=automate】（它内部完成搜�?+抓取+合并，一次返回）；不要分步调�? search �? read，那会拖慢对话。需要联网信息时调用。\n")
-        sb.append("- 语音能力：你可通过 `speak` / `stop_speak` 工具进行 **TTS 语音合成输出**（音�?/语速等配置见「设�? �? 语音」）�?**STT 语音识别是用户的输入通道**——用户说的话会被转写成文字作为消息发给你，你无需、也不能去「调�? STT 工具」，直接基于收到的文字消息作答即可。\n" +
-            "  - **`speak` 是与「自动朗读」开关完全独立的语音通道**：无论用户是否开启自动朗读，当你需要主动「出声」（如唱歌、讲故事、朗诵、分角色演绎、或任何希望用声音而非仅文字表达的场景）时，都应主动调�? `speak`；语音播报的文本允许与你回复的文字内容不同（文字回复是一份，语音可以是另一份）。\n")
-        sb.append("- **多语�? / 分角�? / 讲故事朗读的编排**：当用户要求「用多语�? / 分角�? / 讲故事」等方式朗读时，你应�?**主动编排**而非只产出一段会被统一念出的纯文本——在回复里用 `(语色:任意名称)` 为不同段�? / 角色分配音色，让 TTS 自动切换声音�?**语色标记的名称由你按内容自由�?**（角色名、情绪、旁白、叙述者、场景等任何类型都可以，不被限定为固定几种），需要时配合 `speak` 显式播报。若用户要「先讲完故事、再朗读某段文本」，就严格按这个顺序组织内容。自动朗读（回复后自动念）与显式 `speak` 调用走同一引擎——你用文本里的语�? / 情绪标记决定「怎么念」，而不是把整段交给系统默认念白；任意类型的内容（含代码 / 表格 / 列表）只要用户要求多语色演绎，都可加语色标记。\n")
+        sb.append("- `ai_browser`：联网搜索并抓取网页正文、打开内置浏览器、自动研究简报。研究/查资料类任务【务必用一次 action=automate】（它内部完成搜索+抓取+合并，一次返回）；不要分步调用 search → read，那会拖慢对话。需要联网信息时调用。\n")
+        sb.append("- 语音能力：你可通过 `speak` / `stop_speak` 工具进行 **TTS 语音合成输出**（音色/语速等配置见「设置 → 语音」）→**STT 语音识别是用户的输入通道**——用户说的话会被转写成文字作为消息发给你，你无需、也不能去「调用 STT 工具」，直接基于收到的文字消息作答即可。\n" +
+            "  - **`speak` 是与「自动朗读」开关完全独立的语音通道**：无论用户是否开启自动朗读，当你需要主动「出声」（如唱歌、讲故事、朗诵、分角色演绎、或任何希望用声音而非仅文字表达的场景）时，都应主动调用 `speak`；语音播报的文本允许与你回复的文字内容不同（文字回复是一份，语音可以是另一份）。\n")
+        sb.append("- **多语色 / 分角色 / 讲故事朗读的编排**：当用户要求「用多语色 / 分角色 / 讲故事」等方式朗读时，你应当**主动编排**而非只产出一段会被统一念出的纯文本——在回复里用 `(语色:任意名称)` 为不同段落 / 角色分配音色，让 TTS 自动切换声音。**语色标记的名称由你按内容自由命名**（角色名、情绪、旁白、叙述者、场景等任何类型都可以，不被限定为固定几种），需要时配合 `speak` 显式播报。若用户要「先讲完故事、再朗读某段文本」，就严格按这个顺序组织内容。自动朗读（回复后自动念）与显式 `speak` 调用走同一引擎——你用文本里的语色 / 情绪标记决定「怎么念」，而不是把整段交给系统默认念白；任意类型的内容（含代码 / 表格 / 列表）只要用户要求多语色演绎，都可加语色标记。\n")
 
         // ── 排版引擎（AIP 信封）——Canvas 三档通道中的 B 通道 ──
         // core/canvas/Aip.kt 解析 + ui/canvas/AipCanvas.kt 渲染；流式截断容错 + 四级降级。
@@ -2577,7 +2579,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         )
         sb.append("\n### CMS v2 模块（可扩展）\n")
         if (caps.isEmpty()) {
-            sb.append("- 当前未安装任何能力模块。用户可在「设�? �? CMS v2 模块」中添加模块/能力。\n")
+            sb.append("- 当前未安装任何能力模块。用户可在「设置 → CMS v2 模块」中添加模块/能力。\n")
         } else {
             sb.append("- 我可以通过以下工具真实调用已安装的能力：\n")
             sb.append("  - cms_list：列出所有能力模块与可用能力（id / 说明 / 风险级别）。\n")
@@ -2586,92 +2588,92 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             caps.forEach { (m, c) ->
                 val risk = c.requiresPermissions.mapNotNull { m.findPermission(it)?.level?.name }.distinct()
                     .joinToString("/").ifBlank { "Normal" }
-                sb.append("  · [${m.name}] ${c.id} �? ${c.summary}（风险：$risk）\n")
+                sb.append("  · [${m.name}] ${c.id} · ${c.summary}（风险：$risk）\n")
             }
-            sb.append("- 调用示例：用户说「帮�? echo 一段文字」，可用 cms_call({capability_id:\"echo_text\", args:{text:\"hello\"}}) 执行。\n")
+            sb.append("- 调用示例：用户说「帮我 echo 一段文字」，可用 cms_call({capability_id:\"echo_text\", args:{text:\"hello\"}}) 执行。\n")
         }
 
         // ══════════════ CMS 引擎（系统资源包）�? 一级运行引擎（区别于模块） ══════════════
         sb.append("\n### CMS 引擎（系统资源包 · 一级运行引擎）\n")
-        sb.append("- **CMS 引擎**�? CMS 的一级运行引擎（区别于上方「能力模块」）：它不是某个业务模块，而是整套终端运行引擎，提�? NODE / PYTHON / SSH / JAVA / RUST / GO �?**共享运行�?**，是依赖这些运行时的能力模块能运行的基础底座。\n")
-        sb.append("- 引擎态与模块态相互独立：模块态用 `cms_status` 查，**引擎态用 `cms_engine_status` �?**（不要混用、不要猜）。\n")
-        sb.append("- 用户可在「设�? �? CMS v2 模块」页的「�? CMS引擎」卡进行：部署官�? CMS 引擎、导�?/导出 CMS 引擎包（.cmsengine，可分享/本地留存）。引擎部署依赖终�? Linux 环境（proot/Ubuntu），未就绪时 cms_engine_status 会给出引导。\n")
-        sb.append("- 当你要判断「某个需�? Python/Node 的模块能不能跑」「引擎是否就绪」「引擎拉起了哪些共享服务」时，调�? **cms_engine_status** 回查，而不是凭空回答。\n")
+        sb.append("- **CMS 引擎**：CMS 的一级运行引擎（区别于上方「能力模块」）：它不是某个业务模块，而是整套终端运行引擎，提供 NODE / PYTHON / SSH / JAVA / RUST / GO 的**共享运行时**，是依赖这些运行时的能力模块能运行的基础底座。\n")
+        sb.append("- 引擎态与模块态相互独立：模块态用 `cms_status` 查，**引擎态用 `cms_engine_status` 查**（不要混用、不要猜）。\n")
+        sb.append("- 用户可在「设置 → CMS v2 模块」页的「部署 CMS引擎」卡进行：部署官方 CMS 引擎、导入/导出 CMS 引擎包（.cmsengine，可分享/本地留存）。引擎部署依赖终端 Linux 环境（proot/Ubuntu），未就绪时 cms_engine_status 会给出引导。\n")
+        sb.append("- 当你要判断「某个需要 Python/Node 的模块能不能跑」「引擎是否就绪」「引擎拉起了哪些共享服务」时，调用 **cms_engine_status** 回查，而不是凭空回答。\n")
 
         // ══════════════ ACI（Agent Capability Interface）：AI 作为控制方调用第三方 App ══════════════
         sb.append("\n### 通过 ACI 控制的第三方 App 能力\n")
-        sb.append("- ACI 性质（重要）：ACI 是【本地、无 Root、App �? AIDL】调用框架。第三方 App 声明 exported Service + 权限 ai.aci.permission.CALL（protectionLevel=normal，安装即自动授予，不弹窗、不需提权）。\n")
-        sb.append("- ACI Token 认证：控制端（ZorvAI）在每次调用时自动添�? Token（_aci_token 参数），受控端可选择验证 Token 以增强安全性。Token 使用 AndroidKeyStore 加密存储，每个目标应用独�? Token。\n")
-        sb.append("- ACI 不使用、也不需要：Shizuku / dumpsys / OPLUS 权限 / ROOT / 无障�? / 设备管理员。遇到任�? ACI 问题时【禁歀��用这些系统工具去\"诊断\"或\"修复\"——那会偏�? ACI 的设计，且对解决问题毫无帮助。\n")
-        sb.append("- aci_list：列出当前已发现的所�? ACI 第三�? App 及其暴露的能力（id / 说明 / 参数 / 是否需用户确认）。\n")
-        sb.append("- aci_call：调用某个第三方 App �? ACI 能力，参�? {target_package(可�?), capability, args}；会跨进程发往目标 App 并同步返回结果。\n")
+        sb.append("- ACI 性质（重要）：ACI 是【本地、无 Root、App 间 AIDL】调用框架。第三方 App 声明 exported Service + 权限 ai.aci.permission.CALL（protectionLevel=normal，安装即自动授予，不弹窗、不需提权）。\n")
+        sb.append("- ACI Token 认证：控制端（ZorvAI）在每次调用时自动添加 Token（_aci_token 参数），受控端可选择验证 Token 以增强安全性。Token 使用 AndroidKeyStore 加密存储，每个目标应用独立 Token。\n")
+        sb.append("- ACI 不使用、也不需要：Shizuku / dumpsys / OPLUS 权限 / ROOT / 无障碍 / 设备管理员。遇到任何 ACI 问题时【禁止使用这些系统工具去\"诊断\"或\"修复\"——那会偏离 ACI 的设计，且对解决问题毫无帮助。\n")
+        sb.append("- aci_list：列出当前已发现的所用 ACI 第三方 App 及其暴露的能力（id / 说明 / 参数 / 是否需用户确认）。\n")
+        sb.append("- aci_call：调用某个第三方 App 的 ACI 能力，参数 {target_package(可选), capability, args}；会跨进程发往目标 App 并同步返回结果。\n")
         // 动态注入当前默�? ACI 应用，并强制模型【主动】调�? aci_call
         val defaultAciPkg = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultPackage(appContext)
         val defaultAciName = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultAppName(appContext)
         if (defaultAciPkg != null) {
-            sb.append("- 【重要·默�? ACI 应用已设置】用户已�? ACI 管理中心把默�? ACI 应用设为�?${defaultAciName ?: defaultAciPkg}（包�? $defaultAciPkg）。\n")
-            sb.append("- 【主动调�? ACI（关键）】既然已设默认应用，遇到下列任何用户意图时，你必须【主动调�? aci_call】真正执行，不要只用文字回答、也不要改用 open_web / ai_browser �? open 等「被动展示」工具：\n")
-            sb.append("  · 打开 / 访问 / 浏览某个网址、看某个网页 �? aci_call({capability:\"browser_open\", args:{url:\"...\"}})（真实可点击交互，远强于 open_web 被动展示）；\n")
-            sb.append("  · 操作网页（点链接 / 填表 / 翻页 / 读取点击后内容）�? browser_open 后用 browser_elements �? browser_action �? browser_read（加载中 browser_wait）；\n")
-            sb.append("  · 发消�? / 查未�? / 建群 / 读通知 等社交类能力 �? aci_call({capability:\"send_message\" �?, args:{...}})（capability 名以 aci_list / 上方清单为准）；\n")
-            sb.append("  · 发起 HTTP 请求（含同网�? LAN 明文 http://192.168.x.x�?*.local）→ aci_call({capability:\"http_request\", args:{...}})；\n")
-            sb.append("  · 其它任何「让外部 App 帮你做事」的意图 �? 先想 aci_call 能否由默认应用执行，能就直接调。\n")
-            sb.append("- 调用 aci_call 时【可以省�? target_package】，系统会自动使用默认应�? ${defaultAciName ?: defaultAciPkg}；只有要调其它非默认应用才显式传 target_package。\n")
-            sb.append("- 【优先级·网页类请求】一律优�? aci_call �? browser_open（真实交互），open_web / ai_browser �? open 仅被动展示、AI 点不进去，不要先用它们。\n")
+            sb.append("- 【重要·默认 ACI 应用已设置】用户已在 ACI 管理中心把默认 ACI 应用设为「${defaultAciName ?: defaultAciPkg}」（包名 $defaultAciPkg）。\n")
+            sb.append("- 【主动调用 ACI（关键）】既然已设默认应用，遇到下列任何用户意图时，你必须【主动调用 aci_call】真正执行，不要只用文字回答、也不要改用 open_web / ai_browser 的 open 等「被动展示」工具：\n")
+            sb.append("  · 打开 / 访问 / 浏览某个网址、看某个网页 → aci_call({capability:\"browser_open\", args:{url:\"...\"}})（真实可点击交互，远强于 open_web 被动展示）；\n")
+            sb.append("  · 操作网页（点链接 / 填表 / 翻页 / 读取点击后内容）→ browser_open 后用 browser_elements → browser_action → browser_read（加载中 browser_wait）；\n")
+            sb.append("  · 发消息 / 查未读 / 建群 / 读通知 等社交类能力 → aci_call({capability:\"send_message\" ...}, args:{...}})（capability 名以 aci_list / 上方清单为准）；\n")
+            sb.append("  · 发起 HTTP 请求（含同网段 LAN 明文 http://192.168.x.x、*.local）→ aci_call({capability:\"http_request\", args:{...}})；\n")
+            sb.append("  · 其它任何「让外部 App 帮你做事」的意图 → 先想 aci_call 能否由默认应用执行，能就直接调。\n")
+            sb.append("- 调用 aci_call 时【可以省略 target_package】，系统会自动使用默认应用 ${defaultAciName ?: defaultAciPkg}；只有要调其它非默认应用才显式传 target_package。\n")
+            sb.append("- 【优先级·网页类请求】一律优先 aci_call 的 browser_open（真实交互），open_web / ai_browser 的 open 仅被动展示、AI 点不进去，不要先用它们。\n")
         } else {
-            sb.append("- 用户尚未设置默认 ACI 应用；调�? aci_call 时需显式�? target_package（用 aci_list 查到�? pkg）。建议提示用户去「设�? �? 功能 �? ACI 管理中心」设一个默认应用，之后即可省略 target_package 并主动调用。\n")
+            sb.append("- 用户尚未设置默认 ACI 应用；调用 aci_call 时需显式传 target_package（用 aci_list 查到的 pkg）。建议提示用户去「设置 → 功能 → ACI 管理中心」设一个默认应用，之后即可省略 target_package 并主动调用。\n")
         }
-        sb.append("- 应用启动时会自动发现设备上已安装�? ACI App；若 aci_list 为空，仅说明目标 App 未安装或未声�? ACI Service �? 直接告知用户去安装该 App，【不要】跑 dumpsys/Shizuku 去查。\n")
-        sb.append("- 排障边界（重要）：若 aci_call 返回 503（服务未绑定），这是绑定生命周期问题，框架会自动重绑 �? 直接重试一�? aci_call 即可，【不要】去授权任何系统权限。其他错误码请原样转告用户，不要臆测为\"权限不足\"。\n")
-        sb.append("- 官方参考受控端「ZorvAI 浏览器�?(包名 com.ai.assistance.quro.browser) 已暴露能力：browser_open(打开网址) / browser_read(读当前页URL+标题+HTML) / browser_crawl(爬结构化正文+出站链接) / browser_search(搜索引擎检�?) / browser_script(执行任意JS) / browser_list(列出标签�?) / browser_info(版本信息) / browser_capture(抓包) / browser_find(页内查找文本) / browser_nav(前进/后退/刷新) / browser_screenshot(截图存Pictures/QuroAI_screenshots/) / console_ui(控制台UI描述JSON) / console_action(控制台动�?) / browser_elements(元素树·稳定ID) / browser_action(按ID/CSS操作·点击/输入/滚动) / browser_wait(条件等待·可见/网络空闲) / browser_snapshot(页面状态快�?) / browser_restore(快照回滚) / browser_events(页面事件�?) / browser_audit(ACI调用审计) / browser_media(媒体/文件资源) / browser_share(系统分享面板) / browser_console(抓取console输出) / browser_query(CSS选择器查DOM) / browser_tabnew(新建标签�?) / browser_tabs(列出标签�?) / browser_tab(切换标签�?) / browser_tabclose(关闭标签�?) / browser_mouse(屏幕坐标模拟鼠标) / http_request(代发HTTP·支持LAN明文) / inject_touch(设备级真实触摸注入·Uinput·需root/系统签名)。（此为依据受控�? onCreateCapabilities 的全量参考，�? 31 项；完整实时清单与参数以 aci_list / 下方「已发现的第三方能力清单」为准，二者应一致。）browser_read/browser_crawl 已修复，�? SPA 大页(�? news.sina.cn)也能稳定返回内容。\n")
+        sb.append("- 应用启动时会自动发现设备上已安装的 ACI App；若 aci_list 为空，仅说明目标 App 未安装或未声明 ACI Service —— 直接告知用户去安装该 App，【不要】跑 dumpsys/Shizuku 去查。\n")
+        sb.append("- 排障边界（重要）：若 aci_call 返回 503（服务未绑定），这是绑定生命周期问题，框架会自动重绑 → 直接重试一次 aci_call 即可，【不要】去授权任何系统权限。其他错误码请原样转告用户，不要臆测为\"权限不足\"。\n")
+        sb.append("- 官方参考受控端「ZorvAI 浏览器」(包名 com.ai.assistance.quro.browser) 已暴露能力：browser_open(打开网址) / browser_read(读当前页URL+标题+HTML) / browser_crawl(爬结构化正文+出站链接) / browser_search(搜索引擎检索) / browser_script(执行任意JS) / browser_list(列出标签页) / browser_info(版本信息) / browser_capture(抓包) / browser_find(页内查找文本) / browser_nav(前进/后退/刷新) / browser_screenshot(截图存Pictures/QuroAI_screenshots/) / console_ui(控制台UI描述JSON) / console_action(控制台动作) / browser_elements(元素树·稳定ID) / browser_action(按ID/CSS操作·点击/输入/滚动) / browser_wait(条件等待·可见/网络空闲) / browser_snapshot(页面状态快照) / browser_restore(快照回滚) / browser_events(页面事件流) / browser_audit(ACI调用审计) / browser_media(媒体/文件资源) / browser_share(系统分享面板) / browser_console(抓取console输出) / browser_query(CSS选择器查DOM) / browser_tabnew(新建标签页) / browser_tabs(列出标签页) / browser_tab(切换标签页) / browser_tabclose(关闭标签页) / browser_mouse(屏幕坐标模拟鼠标) / http_request(代发HTTP·支持LAN明文) / inject_touch(设备级真实触摸注入·Uinput·需root/系统签名)。（此为依据受控端 onCreateCapabilities 的全量参考，共 31 项；完整实时清单与参数以 aci_list / 下方「已发现的第三方能力清单」为准，二者应一致。）browser_read/browser_crawl 已修复，对 SPA 大页(如 news.sina.cn)也能稳定返回内容。\n")
         sb.append("- 已发现的第三方能力清单：\n")
         try {
             sb.append(QuroAidlAciManager.getInstance().getCapabilityPrompt())
         } catch (e: Throwable) {
-            sb.append("（ACI 尚未就绪�?${e.message}）\n")
+            sb.append("（ACI 尚未就绪：${e.message}）\n")
         }
         // ══════════════ 工作区（QuroWorkspace）：AI 持久化读写、用户可浏览的共享目�? ══════════════
-        sb.append("\n### 工作区（QuroWorkspace）�? AI 可直接读写、用户可在「工具箱-工作区」浏览的持久目录\n")
-        sb.append("- 这是什么：工作区是设备上的一�?**持久存储目录**，AI 能直接读写文本文件，用户�? App 内「工具箱 �? 工作区」就能看到、下载、手动编辑这些文件。它是你和用户之�?**真正的文件共享通道**，内容跨会话保留。\n")
+        sb.append("\n### 工作区（QuroWorkspace）：AI 可直接读写、用户可在「工具箱-工作区」浏览的持久目录\n")
+        sb.append("- 这是什么：工作区是设备上的一个**持久存储目录**，AI 能直接读写文本文件，用户在 App 内「工具箱 → 工作区」就能看到、下载、手动编辑这些文件。它是你和用户之间**真正的文件共享通道**，内容跨会话保留。\n")
         sb.append("- 三个工具：\n")
-        sb.append("  · `workspace_write`{path, content, append?}：把文本（源�?/配置/笔记）写入工作区**相对路径**（自动创建缺失父目录）；\n")
+        sb.append("  · `workspace_write`{path, content, append?}：把文本（源码/配置/笔记）写入工作区**相对路径**（自动创建缺失父目录）；\n")
         sb.append("  · `workspace_read`{path}：读取工作区相对路径文件的完整内容；\n")
         sb.append("  · `workspace_list`{path?}：列出目录内容（默认根目录），看清有哪些工程/文件。\n")
         val wsPath = com.ai.assistance.quro.core.tools.WorkspacePreferences.getCurrentWorkspace(appContext)
         val wsRoot = wsPath ?: ((appContext.getExternalFilesDir(null)?.absolutePath ?: "QuroWorkspace") + "/QuroWorkspace")
         val wsIsCustom = wsPath != null
-        sb.append("- 【当前工作区根目录�?$wsRoot${if (wsIsCustom) "（这是用户在对话框权限模式栏**自定义选择**的工作区�?" else "（默认工作区，用户尚未自定义�?"}。\n")
-        sb.append("- 【主动使用工作区（关键）】遇到下列意图时，主动调用工作区工具�?**不要只在对话里贴代码**：\n")
-        sb.append("  · 用户要「保�? / 存下 / 写文�? / 生成工程 / 做个项目 / 把代码留着」→ �? workspace_write 写进工作区（用户立刻能在「工具箱-工作区」看到、下载、改）；\n")
-        sb.append("  · 用户要「看工作区里有什�? / 我的工程 / 某个文件内容」→ workspace_list / workspace_read；\n")
-        sb.append("  · �? ACI 构建台协作写码→编译（aci_call �? create_project / build_apk）：工程文件夹就建在这个工作区里，写源码�? workspace_write、查结构�? workspace_list；\n")
-        sb.append("  · 任何「把产物留下来、以后还找得到」的需�? �? 写进工作区，而不是只发在聊天框里。\n")
-        sb.append("- 路径规则：path �?**相对工作区根目录**的路径（�? MyApp/src/Main.java），不要带盘�?/绝对路径、不�? .. 逃逸；写完后告诉用户文件在「工具箱-工作区」里，绝对路径是 $wsRoot/相对路径。\n")
+        sb.append("- 【当前工作区根目录】$wsRoot${if (wsIsCustom) "（这是用户在对话框权限模式栏**自定义选择**的工作区。" else "（默认工作区，用户尚未自定义）。"}。\n")
+        sb.append("- 【主动使用工作区（关键）】遇到下列意图时，主动调用工作区工具，**不要只在对话里贴代码**：\n")
+        sb.append("  · 用户要「保存 / 存下 / 写文件 / 生成工程 / 做个项目 / 把代码留着」→ 用 workspace_write 写进工作区（用户立刻能在「工具箱-工作区」看到、下载、改）；\n")
+        sb.append("  · 用户要「看工作区里有什么 / 我的工程 / 某个文件内容」→ workspace_list / workspace_read；\n")
+        sb.append("  · 用 ACI 构建台协作写码→编译（aci_call 的 create_project / build_apk）：工程文件夹就建在这个工作区里，写源码用 workspace_write、查结构用 workspace_list；\n")
+        sb.append("  · 任何「把产物留下来、以后还找得到」的需求 → 写进工作区，而不是只发在聊天框里。\n")
+        sb.append("- 路径规则：path 是**相对工作区根目录**的路径（如 MyApp/src/Main.java），不要带盘符/绝对路径、不用 .. 逃逸；写完后告诉用户文件在「工具箱-工作区」里，绝对路径是 $wsRoot/相对路径。\n")
 
         // ══════════════ 上下文元数据读取指令 ══════════════
         sb.append("\n### 用户消息中的上下文标记（必须读取）\n")
-        sb.append("- 用户发送的每条消息**开�?**可能带有 `[上下文|...]` 标记，例如：`[上下文|工作�?: /storage/.../MyProject | ACI应用: ZorvAI浏览�? | 已启用技�?: 3个]`\n")
-        sb.append("- 这个标记告诉你用户当前选择的工作区路径、默�? ACI 应用名称、已启用技能数量—�?**你必须读取并使用这些信息**：\n")
+        sb.append("- 用户发送的每条消息**开头**可能带有 `[上下文|...]` 标记，例如：`[上下文|工作区: /storage/.../MyProject | ACI应用: ZorvAI浏览器 | 已启用技能: 3个]`\n")
+        sb.append("- 这个标记告诉你用户当前选择的工作区路径、默认 ACI 应用名称、已启用技能数量——**你必须读取并使用这些信息**：\n")
         sb.append("  · 看到「工作区: xxx」→ 你的 workspace_write / workspace_read / workspace_list 的根目录就是这个路径；需要保存文件时直接用它。\n")
-        sb.append("  · 看到「ACI应用: xxx」→ 调用 aci_call 时可以省�? target_package，系统会自动用这个应用。\n")
-        sb.append("  · 看到「已启用技�?: N个」→ 你知道有 N 个技能可用，在合适场景下可以调用对应 skill__* 工具。\n")
-        sb.append("- 若消息没�? `[上下文]` 标记，则按系统提示词中的默认值执行。\n")
+        sb.append("  · 看到「ACI应用: xxx」→ 调用 aci_call 时可以省略 target_package，系统会自动用这个应用。\n")
+        sb.append("  · 看到「已启用技能: N个」→ 你知道有 N 个技能可用，在合适场景下可以调用对应 skill__* 工具。\n")
+        sb.append("- 若消息没有 `[上下文]` 标记，则按系统提示词中的默认值执行。\n")
 
         sb.append("\n## CMS 权限模式（重要）\n")
-        sb.append("- priv_status：查�? CMS v2 权限模式与已授权项；L1-L5 系统级通道已随工具集开放，运行时由系统授权与资产可用性把关，未授权工具会返回明确引导。\n")
+        sb.append("- priv_status：查询 CMS v2 权限模式与已授权项；L1-L5 系统级通道已随工具集开放，运行时由系统授权与资产可用性把关，未授权工具会返回明确引导。\n")
         sb.append("- 直接调用 cms_call 即可执行对应能力；若策略=询问且未授权，提示用户在对话底部控制条切到「允许」。\n")
 
         sb.append("\n## 权限策略（重要）\n")
         sb.append("- 本会话开始时权限模式：CMS v2 = ${cmsPolicy.name}，特权子系统 = ${privPolicy.name}（仅供参考；调用高风险能力前请以 priv_status 实时查询为准）。\n")
-        sb.append("- **权限策略为运行时动�?**：调用任�? CMS v2 能力模块或特权通道（L4 无障�? / L5 管理员等）前，先�? priv_status 工具查询**实时**授权模式（允�? / 禁止 / 询问），再决定直接执行、拒绝或先询问用户。不要凭本提示词或记忆假定当前权限状态。\n")
-        sb.append("- 当策�?=询问(ASK)时，调用高风险能力会被拦截并提示用户在对话底部控制条切到「允许」；不要反复重试，直接告诉用户去切换即可。\n")
+        sb.append("- **权限策略为运行时动态**：调用任何 CMS v2 能力模块或特权通道（L4 无障碍 / L5 管理员等）前，先用 priv_status 工具查询**实时**授权模式（允许 / 禁止 / 询问），再决定直接执行、拒绝或先询问用户。不要凭本提示词或记忆假定当前权限状态。\n")
+        sb.append("- 当策略=询问(ASK)时，调用高风险能力会被拦截并提示用户在对话底部控制条切到「允许」；不要反复重试，直接告诉用户去切换即可。\n")
     }
 
     /** 把记忆库工具（AI 自动沉淀长期记忆）的用法注入系统提示词�? */
     private fun appendMemoryAwareness(sb: StringBuilder) {
         sb.append("\n\n## 长期记忆（记忆库）\n")
         sb.append("- 你拥有记忆库工具，应主动「自动保存」用户透露的持久信息：\n")
-        sb.append("  - memory_save：保存一条记忆（content 必填；可�? title/group/tags）。\n")
+        sb.append("  - memory_save：保存一条记忆（content 必填；可选 title/group/tags）。\n")
         sb.append("  - memory_list：列出全部已保存记忆。\n")
         sb.append("  - memory_search：按关键词检索记忆。\n")
         sb.append("  - memory_delete：删除某条记忆。\n")

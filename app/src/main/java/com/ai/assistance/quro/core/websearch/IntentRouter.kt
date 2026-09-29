@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.websearch
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 /**
  * IntentRouter —— 决定"该不该联网"，发生在任何网络请求之前。
@@ -32,14 +34,14 @@ object IntentRouter {
 
     /** 强时效信号：出现即倾向检索 */
     private val TIME_SIGNALS = listOf(
-        "今天", "明天", "昨天", "现在", "目前", "刚刚", "最新", "近日", "本周", "本月",
+        qstr(R.string.qk_00284), "明天", "昨天", "现在", "目前", qstr(R.string.qk_02665), "最新", "近日", qstr(R.string.qk_00285), "本月",
         "今年", "最近", "实时", "当前", "今日", "这周", "几个月", "几年",
         "latest", "today", "now", "current", "recent", "2026", "2025", "2027"
     )
 
     /** 事实/数值型：需要外部核实 */
     private val FACT_SIGNALS = listOf(
-        "多少钱", "价格", "股价", "汇率", "市值", "销量", "票房", "评分", "版本",
+        "多少钱", "价格", "股价", "汇率", "市值", "销量", "票房", qstr(R.string.qk_01667), qstr(R.string.qk_01612),
         "什么时候", "哪一年", "多久", "多少", "几个", "排名第", "占比", "增速",
         "是多少", "叫什么", "在哪", "是谁", "怎么去", "多少度",
         "price", "how much", "when", "who is", "what is the"
@@ -110,8 +112,8 @@ object IntentRouter {
         val hasTime = TIME_SIGNALS.any { lower.contains(it) }
         if (hasTime) {
             val f = when {
-                listOf("今天", "现在", "刚刚", "实时", "今日", "today", "now").any { lower.contains(it) } -> Freshness.DAY
-                listOf("本周", "这周", "近日", "最近", "recent").any { lower.contains(it) } -> Freshness.WEEK
+                listOf(qstr(R.string.qk_00284), "现在", qstr(R.string.qk_02665), "实时", "今日", "today", "now").any { lower.contains(it) } -> Freshness.DAY
+                listOf(qstr(R.string.qk_00285), "这周", "近日", "最近", "recent").any { lower.contains(it) } -> Freshness.WEEK
                 else -> Freshness.MONTH
             }
             return Decision(Action.SEARCH, 0.95, "含时效信号，必须联网核实", freshness = f)

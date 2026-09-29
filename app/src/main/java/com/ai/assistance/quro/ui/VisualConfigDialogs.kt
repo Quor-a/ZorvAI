@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -27,7 +29,7 @@ fun VisualPopupConfigDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("配置可视化弹窗") },
+        title = { Text(stringResource(R.string.qk_03102)) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -36,32 +38,32 @@ fun VisualPopupConfigDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("弹窗标题") },
-                    placeholder = { Text("例如：用户反馈") },
+                    label = { Text(stringResource(R.string.qk_03103)) },
+                    placeholder = { Text(stringResource(R.string.qk_03104)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
                 OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
-                    label = { Text("弹窗内容") },
-                    placeholder = { Text("描述弹窗要展示的内容") },
+                    label = { Text(stringResource(R.string.qk_03105)) },
+                    placeholder = { Text(stringResource(R.string.qk_03106)) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
                 )
                 OutlinedTextField(
                     value = cardTitle,
                     onValueChange = { cardTitle = it },
-                    label = { Text("小卡片标题（可选）") },
-                    placeholder = { Text("对话框中显示的标题") },
+                    label = { Text(stringResource(R.string.qk_03107)) },
+                    placeholder = { Text(stringResource(R.string.qk_03108)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
                 OutlinedTextField(
                     value = cardDescription,
                     onValueChange = { cardDescription = it },
-                    label = { Text("小卡片描述（可选）") },
-                    placeholder = { Text("点击查看详情") },
+                    label = { Text(stringResource(R.string.qk_03109)) },
+                    placeholder = { Text(stringResource(R.string.qk_00097)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
@@ -84,12 +86,12 @@ fun VisualPopupConfigDialog(
                 },
                 enabled = title.isNotBlank() || content.isNotBlank(),
             ) {
-                Text("确认")
+                Text(stringResource(R.string.qk_02412))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(R.string.qk_00011))
             }
         },
     )
@@ -111,7 +113,7 @@ fun VisualQuestionConfigDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("配置可视化询问") },
+        title = { Text(stringResource(R.string.qk_03110)) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -120,16 +122,16 @@ fun VisualQuestionConfigDialog(
                 OutlinedTextField(
                     value = question,
                     onValueChange = { question = it },
-                    label = { Text("问题内容") },
-                    placeholder = { Text("例如：你想要哪种风格？") },
+                    label = { Text(stringResource(R.string.qk_01073)) },
+                    placeholder = { Text(stringResource(R.string.qk_03111)) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                 )
                 OutlinedTextField(
                     value = options,
                     onValueChange = { options = it },
-                    label = { Text("预设选项（每行一个，可选）") },
-                    placeholder = { Text("选项1\n选项2\n选项3") },
+                    label = { Text(stringResource(R.string.qk_03112)) },
+                    placeholder = { Text(stringResource(R.string.qk_03113)) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
                 )
@@ -141,13 +143,13 @@ fun VisualQuestionConfigDialog(
                         checked = allowCustom,
                         onCheckedChange = { allowCustom = it },
                     )
-                    Text("允许自定义输入", modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.qk_03114), modifier = Modifier.weight(1f))
                 }
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("弹窗标题（可选）") },
-                    placeholder = { Text("AI 问题") },
+                    label = { Text(stringResource(R.string.qk_03115)) },
+                    placeholder = { Text(stringResource(R.string.qk_03116)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
@@ -177,12 +179,12 @@ fun VisualQuestionConfigDialog(
                 },
                 enabled = question.isNotBlank(),
             ) {
-                Text("确认")
+                Text(stringResource(R.string.qk_02412))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(R.string.qk_00011))
             }
         },
     )

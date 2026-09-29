@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.QuroToolResult
@@ -50,7 +52,7 @@ class QuroTaskSchedulerTool(private val context: Context) : QuroTool {
     fun getToolSpec(): QuroToolSpec {
         return QuroToolSpec(
             name = "task_scheduler",
-            description = "管理定时任务调度，支持创建、修改、删除、暂停、恢复定时任务。支持 Cron 表达式和多种调度方式。",
+            description = qstr(R.string.qk_03579),
             // QuroToolSpec 第三个参数是 parametersJson（JSON Schema 字符串）。项目只依赖 org.json，
             // 没有 parameters=mapOf(...) + QuroToolSpec.Parameter(...) 这套 DSL，必须手写 schema。
             parametersJson = JSONObject().apply {

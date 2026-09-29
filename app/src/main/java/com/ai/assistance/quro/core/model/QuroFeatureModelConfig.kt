@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.core.model
+import androidx.annotation.StringRes
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -18,19 +21,19 @@ import androidx.core.content.edit
  * 功能类型覆盖 FunctionType 全集（CHAT/SUMMARY/MEMORY/UI_CONTROL/TRANSLATION/GREP/
  * PERSONA_INCUBATE/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION/IMAGE_GEN/VIDEO_GEN）。
  */
-enum class QuroFunctionType(val label: String, val desc: String) {
-    CHAT("常规对话", "主对话使用的模型（恒为主模型）"),
-    SUMMARY("上下文总结", "对话 / 历史压缩与总结所使用的模型"),
-    MEMORY("记忆处理", "记忆库自动沉淀与检索所使用的模型"),
-    UI_CONTROL("UI 控制", "UI 自动化控制 / 屏幕理解所使用的模型"),
-    TRANSLATION("翻译", "文本翻译所使用的模型"),
-    GREP("代码检索", "代码检索 / 检索规划所使用的模型"),
-    PERSONA_INCUBATE("人格孵化", "灵魂卡自动孵化蒸馏所使用的模型"),
-    IMAGE_RECOGNITION("图像识别", "图片内容理解所使用的模型"),
-    AUDIO_RECOGNITION("音频识别", "音频内容理解所使用的模型"),
-    VIDEO_RECOGNITION("视频识别", "视频内容理解所使用的模型"),
-    IMAGE_GEN("图片生成", "AI 可直接调用的图片生成模型"),
-    VIDEO_GEN("视频生成", "AI 可直接调用的视频生成模型"),
+enum class QuroFunctionType(@StringRes val labelRes: Int, @StringRes val descRes: Int) {
+    CHAT(R.string.qk_03744, R.string.qk_03752),
+    SUMMARY(R.string.qk_00133, R.string.qk_03753),
+    MEMORY(R.string.qk_03745, R.string.qk_03754),
+    UI_CONTROL(R.string.qk_03746, R.string.qk_03755),
+    TRANSLATION(R.string.qk_03342, R.string.qk_03756),
+    GREP(R.string.qk_03747, R.string.qk_03757),
+    PERSONA_INCUBATE(R.string.qk_00134, R.string.qk_03758),
+    IMAGE_RECOGNITION(R.string.qk_03748, R.string.qk_03759),
+    AUDIO_RECOGNITION(R.string.qk_03749, R.string.qk_03760),
+    VIDEO_RECOGNITION(R.string.qk_03750, R.string.qk_03761),
+    IMAGE_GEN(R.string.qk_03751, R.string.qk_03762),
+    VIDEO_GEN(R.string.qk_00131, R.string.qk_03763),
 }
 
 data class QuroFunctionModelBinding(

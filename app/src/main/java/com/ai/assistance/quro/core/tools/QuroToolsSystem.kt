@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import com.ai.assistance.quro.core.QuroBrowserBridge
 import android.Manifest
@@ -47,7 +49,7 @@ class GetWifiTool : QuroTool {
     override fun run(context: Context, arguments: String): String {
         val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         val info = wm.connectionInfo
-        val ssid = if (info.ssid == "<unknown ssid>") "未知" else (info.ssid ?: "未知").trim('"')
+        val ssid = if (info.ssid == "<unknown ssid>") qstr(R.string.qk_00472) else (info.ssid ?: qstr(R.string.qk_00472)).trim('"')
         return "SSID=$ssid, IP=${info.ipAddress}, 已连接=${info.networkId >= 0}"
     }
 }
@@ -674,7 +676,7 @@ class RunCodeTool : QuroTool {
             return result
         }
         val sys = execShell(ctx, "python3 -c ${quoteShell(code)}")
-        if (!sys.contains("not found") && !sys.startsWith("执行失败")) {
+        if (!sys.contains("not found") && !sys.startsWith(qstr(R.string.qk_01012))) {
             return sys
         }
 
@@ -1022,4 +1024,3 @@ try {
 // ==================== 手势控制（无障碍服务）已按纯净架构移除 ====================
 // swipe_screen / tap_screen 等无障碍屏幕控制工具已移除：AI 是纯应用内执行体，
 // 不通过无障碍 / Shell / Root 控制系统（详见 QuroCmsExecutor 与 QuroPlatformManifest）。
-

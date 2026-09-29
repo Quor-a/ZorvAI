@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.approle
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.role.RoleManager
 import android.content.Context
@@ -35,9 +37,9 @@ enum class DefaultAppRole(
     DIALER("dialer", "默认拨号", "拨打电话", RoleManager.ROLE_DIALER),
     SMS("sms", "默认短信", "收发短信", RoleManager.ROLE_SMS),
     GALLERY("gallery", "默认相册", "查看图片", null),
-    VIDEO("video", "默认视频", "播放视频", null),
+    VIDEO("video", "默认视频", qstr(R.string.qk_01061), null),
     EMAIL("email", "默认邮箱", "收发邮件", null),
-    DOCUMENT("document", "默认文档", "打开文档", null),
+    DOCUMENT("document", "默认文档", qstr(R.string.qk_02700), null),
     ;
 
     /** 图标名（UI 层映射为 Material 图标）。 */

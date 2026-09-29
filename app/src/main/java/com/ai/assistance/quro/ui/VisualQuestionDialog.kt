@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -181,15 +183,15 @@ fun VisualQuestionCard(
                             ) {
                                 Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("输入自定义答案")
+                                Text(stringResource(R.string.qk_03120))
                             }
                         } else {
                             OutlinedTextField(
                                 value = customAnswer,
                                 onValueChange = { customAnswer = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("输入你的答案") },
-                                placeholder = { Text("请输入...") },
+                                label = { Text(stringResource(R.string.qk_03121)) },
+                                placeholder = { Text(stringResource(R.string.qk_03122)) },
                                 minLines = 2,
                                 maxLines = 4
                             )
@@ -204,7 +206,7 @@ fun VisualQuestionCard(
                                         customAnswer = ""
                                     }
                                 ) {
-                                    Text("取消")
+                                    Text(stringResource(R.string.qk_00011))
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Button(
@@ -216,7 +218,7 @@ fun VisualQuestionCard(
                                     },
                                     enabled = customAnswer.isNotBlank()
                                 ) {
-                                    Text("提交")
+                                    Text(stringResource(R.string.qk_00951))
                                 }
                             }
                         }

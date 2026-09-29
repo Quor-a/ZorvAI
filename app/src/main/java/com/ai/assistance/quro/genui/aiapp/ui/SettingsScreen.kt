@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.genui.aiapp.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import androidx.compose.foundation.background
 import androidx.compose.material3.Icon
@@ -42,16 +44,15 @@ fun SettingsScreen(
                 Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("← 返回", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp,
+                Text(stringResource(R.string.qk_03416), color = MaterialTheme.colorScheme.primary, fontSize = 13.sp,
                     modifier = Modifier.clickable { onBack() }.padding(horizontal = 8.dp, vertical = 4.dp))
                 Spacer(Modifier.weight(1f))
-                Text("设置", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.qk_01760), fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
                 Spacer(Modifier.width(64.dp))
             }
 
-            Text(
-                "GenUI · 生成式 UI 对话",
+            Text(stringResource(R.string.qk_03621),
                 fontSize = 11.sp, color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
@@ -59,27 +60,26 @@ fun SettingsScreen(
 
             SettingsRow(
                 iconRes = com.ai.assistance.quro.R.drawable.ic_set_model,
-                iconDesc = "身份与模型", title = "身份与模型",
-                subtitle = "人格卡：$personaName · 模型：$modelLabel（由 ZorvAI 主设置统一管理）",
+                iconDesc = stringResource(R.string.qk_03735), title = stringResource(R.string.qk_03735),
+                subtitle = stringResource(R.string.qk_03805, (personaName).toString(), (modelLabel).toString()),
                 onClick = null
             )
             SettingsRow(
                 iconRes = com.ai.assistance.quro.R.drawable.ic_set_soul,
-                iconDesc = "灵魂注入", title = "灵魂注入",
-                subtitle = "已接入 ZorvAI 人格卡/记忆/标签体系，与主对话共用同一个身份，无需在此单独设置",
+                iconDesc = stringResource(R.string.qk_02449), title = stringResource(R.string.qk_02449),
+                subtitle = stringResource(R.string.qk_03733),
                 onClick = null
             )
             SettingsRow(
                 iconRes = com.ai.assistance.quro.R.drawable.ic_set_history,
-                iconDesc = "历史对话", title = "历史对话",
-                subtitle = "共 $worksCount 个界面记录 · 点击回放与查看往来",
+                iconDesc = stringResource(R.string.qk_03423), title = stringResource(R.string.qk_03423),
+                subtitle = stringResource(R.string.qk_03806, (worksCount).toString()),
                 onClick = onOpenHistory
             )
 
             // ── 渲染通道：每轮生成前先问一句走哪条管线 ──
             Spacer(Modifier.height(8.dp))
-            Text(
-                "渲染通道",
+            Text(stringResource(R.string.qk_03508),
                 fontSize = 11.sp, color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
@@ -94,12 +94,12 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("每轮询问渲染通道", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(stringResource(R.string.qk_03692), fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         Text(
                             if (askChannel)
-                                "已开启 · 每次生成前弹出四选一（GenUI / A2UI / Markdown / HTML），选完才开始生成"
+                                stringResource(R.string.qk_03513)
                             else
-                                "已关闭 · 不再询问，统一走 GenUI SDK；你若在话里点名通道仍会照办",
+                                stringResource(R.string.qk_03435),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 2.dp)

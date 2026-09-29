@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.activity
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.Manifest
 import android.app.PendingIntent
@@ -49,6 +51,12 @@ import kotlin.coroutines.resume
  * 负责麦克风/悬浮窗权限、悬浮语音球开关，并作为工具运行时权限请求的网关。
  */
 class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
+    // 语言：ComponentActivity 不走 AppCompat，必须在 attachBaseContext 里自己包一层，
+    // 否则 Compose 的 stringResource 永远取系统语言（表现为「切了语言界面还是中文」）。
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(com.ai.assistance.quro.util.QuroLocale.wrap(newBase))
+    }
+
     private val RECORD_CODE = 1001
     private val NOTIF_CODE = 1002
     private var voiceBallEnabled by mutableStateOf(false)
@@ -336,7 +344,7 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
         if (enabled && !Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, "开启语音球需授予「悬浮窗」权限", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, qstr(R.string.qk_03726), Toast.LENGTH_LONG).show()
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         }
     }

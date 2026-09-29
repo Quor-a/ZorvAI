@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.ContextWrapper
@@ -104,10 +107,10 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
 
     fun exportSample() {
         val m = manager ?: return
-        val html = "<!doctype html><html><body><h1>ZorvAI 导出示例</h1><p>由功能权限演示经 MediaStore 导出，无需存储权限。</p></body></html>"
+        val html = qstr(R.string.qk_01868)
             .toByteArray(Charsets.UTF_8)
         val uri = m.media.exportToDownloads(ctx, "zorv_export_sample.html", "text/html", "ZorvAI", html)
-        exportMsg = if (uri != null) "已导出到 Download/ZorvAI ✓" else "导出失败（请检查存储可用性）"
+        exportMsg = if (uri != null) qstr(R.string.qk_01869) else qstr(R.string.qk_01870)
     }
 
     fun loadSteps() {
@@ -127,9 +130,9 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
             runCatching {
                 val end = Instant.now()
                 val start = end.minus(Duration.ofMinutes(30))
-                m.health.writeWorkout(start, end, "ZorvAI 跑步")
-                dataSourceMsg = "已写入一条跑步记录（来源=本应用）✓"
-            }.onFailure { dataSourceMsg = "写入失败: ${it.message}" }
+                m.health.writeWorkout(start, end, qstr(R.string.qk_01871))
+                dataSourceMsg = qstr(R.string.qk_01872)
+            }.onFailure { dataSourceMsg = qstr(R.string.qk_01873, (it.message).toString()) }
         }
     }
 
@@ -169,16 +172,14 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回") }
-                Text(
-                    "功能权限",
+                IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143)) }
+                Text(stringResource(R.string.qk_01874),
                     style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold),
                     modifier = Modifier.weight(1f),
                 )
             }
 
-            Text(
-                "AI 助手需要这些权限来读写你的文件与文档、健康与健身数据、识别运动状态、常驻锁屏/悬浮窗、设为默认数字助理，并设置精准提醒。所有请求都走系统标准授权流程，你可随时在系统设置中撤销。",
+            Text(stringResource(R.string.qk_01875),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -193,7 +194,7 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
             val installedVersion = pkgInfo?.let {
                 val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) it.longVersionCode else it.versionCode.toLong()
                 "${it.versionName} ($code)"
-            } ?: "未知"
+            } ?: stringResource(R.string.qk_00472)
             val declaredPerms = pkgInfo?.requestedPermissions?.toSet().orEmpty()
             val hasExactAlarm = declaredPerms.contains("android.permission.SCHEDULE_EXACT_ALARM")
             val hasAllFiles = declaredPerms.contains("android.permission.MANAGE_EXTERNAL_STORAGE")
@@ -206,7 +207,7 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
             )
 
             if (manager == null) {
-                Text("当前上下文无法初始化权限管理器（缺少 Activity），请联系开发者。", color = Muted)
+                Text(stringResource(R.string.qk_01876), color = Muted)
                 return@Column
             }
 
@@ -221,13 +222,13 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
             }
             FeaturePermCard(
                 icon = Icons.Filled.Folder,
-                title = "文件与媒体",
+                title = stringResource(R.string.qk_01880),
                 caption = "READ_MEDIA_IMAGES / VIDEO / AUDIO",
                 state = mediaState,
-                rationale = "读取本地素材、把生成结果导出到公共 Download。导出走 MediaStore，无需任何存储权限。",
+                rationale = stringResource(R.string.qk_01881),
                 actionLabel = mediaAction.first,
                 onAction = mediaAction.second,
-                note = if (mediaState == PermState.NeedSettings) "已被永久拒绝，需到「设置 → 应用 → 权限」手动开启。" else exportMsg,
+                note = if (mediaState == PermState.NeedSettings) stringResource(R.string.qk_01882) else exportMsg,
             )
 
             // ---- 2. 健康与健身 ----
@@ -239,17 +240,17 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
             }
             FeaturePermCard(
                 icon = Icons.Filled.FavoriteBorder,
-                title = "健康与健身",
+                title = stringResource(R.string.qk_01886),
                 caption = "Health Connect (Steps / HeartRate / Sleep / Weight / Exercise)",
                 state = if (healthAvail == false) null else healthState,
                 unavailable = healthAvail == false,
-                rationale = "读取/写入步数、心率、睡眠等健康数据，并在多来源间区分优先级。",
+                rationale = stringResource(R.string.qk_01887),
                 actionLabel = healthAction.first,
                 onAction = healthAction.second,
                 enabled = healthState != null,
                 note = when {
-                    healthAvail == false -> "设备未提供 Health Connect（Android 14+ 应为系统模块）。可尝试在应用商店安装，或后续接入厂商健康 SDK。"
-                    healthState == PermState.Granted -> "已授权 ${manager.health.requiredPermissions.size} 项数据类型。"
+                    healthAvail == false -> stringResource(R.string.qk_01888)
+                    healthState == PermState.Granted -> stringResource(R.string.qk_01889, (manager.health.requiredPermissions.size).toString())
                     else -> null
                 },
             )
@@ -257,32 +258,32 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
             // ---- 3. 闹钟与提醒 ----
             val alarmAction = when (alarmState) {
                 PermState.Granted -> "测试提醒（5 秒后）" to {
-                    manager.alarm.setExactAlarm(System.currentTimeMillis() + 5000, "ZorvAI 提醒", "这是一条测试提醒")
-                    alarmMsg = "已设置 5 秒后精确闹钟 ✓"
+                    manager.alarm.setExactAlarm(System.currentTimeMillis() + 5000, qstr(R.string.qk_01891), qstr(R.string.qk_01892))
+                    alarmMsg = qstr(R.string.qk_01893)
                 }
                 else -> "开启精确闹钟" to { manager.alarm.openExactAlarmSettings() }
             }
             FeaturePermCard(
                 icon = Icons.Filled.Alarm,
-                title = "闹钟与提醒",
+                title = stringResource(R.string.qk_01895),
                 caption = "SCHEDULE_EXACT_ALARM",
                 state = alarmState,
-                rationale = "在设定的时间精准提醒你运动、喝水等。精确闹钟为特殊权限，无法运行时弹窗，必须到设置页开启。",
+                rationale = stringResource(R.string.qk_01896),
                 actionLabel = alarmAction.first,
                 onAction = alarmAction.second,
-                note = if (alarmState == PermState.NeedSettings) "需到「设置 → 应用 → 精确闹钟」手动开启。" else alarmMsg,
+                note = if (alarmState == PermState.NeedSettings) stringResource(R.string.qk_01897) else alarmMsg,
             )
 
             // ---- 4. 锁屏显示 / 悬浮窗 ----
             FeaturePermCard(
                 icon = Icons.Filled.Home,
-                title = "锁屏显示",
+                title = stringResource(R.string.qk_01898),
                 caption = "SYSTEM_ALERT_WINDOW",
                 state = overlayState,
-                rationale = "让 AI 助手以悬浮窗 / 锁屏卡片形式常驻显示，随时唤出对话与快捷操作。该权限为特殊权限，需到设置页开启。",
-                actionLabel = if (overlayState == PermState.Granted) "前往设置（可关闭）" else "开启锁屏显示",
+                rationale = stringResource(R.string.qk_01899),
+                actionLabel = if (overlayState == PermState.Granted) stringResource(R.string.qk_01900) else stringResource(R.string.qk_01901),
                 onAction = { manager.overlay.openOverlaySettings() },
-                note = if (overlayState == PermState.Granted) "已授权，可在系统设置中关闭。" else "需到「设置 → 应用 → 特殊应用权限 → 显示在其他应用上层」手动开启。",
+                note = if (overlayState == PermState.Granted) stringResource(R.string.qk_01902) else stringResource(R.string.qk_01903),
             )
 
             // ---- 5. 健身与运动 ----
@@ -296,25 +297,25 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
             }
             FeaturePermCard(
                 icon = Icons.Filled.Favorite,
-                title = "健身与运动",
+                title = stringResource(R.string.qk_01905),
                 caption = "ACTIVITY_RECOGNITION",
                 state = fitnessState,
-                rationale = "读取设备活动识别（步行 / 跑步等），自动记录运动状态、联动健康数据。Android 10+ 需运行时授予。",
+                rationale = stringResource(R.string.qk_01906),
                 actionLabel = fitnessAction.first,
                 onAction = fitnessAction.second,
-                note = if (fitnessState == PermState.NeedSettings) "已被永久拒绝，需到「设置 → 应用 → 权限」手动开启。" else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) "当前系统版本无需此权限。" else null,
+                note = if (fitnessState == PermState.NeedSettings) stringResource(R.string.qk_01882) else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) stringResource(R.string.qk_01907) else null,
             )
 
             // ---- 6. 文件与文档（所有文件访问）----
             FeaturePermCard(
                 icon = Icons.Filled.Description,
-                title = "文件与文档",
+                title = stringResource(R.string.qk_01908),
                 caption = "MANAGE_EXTERNAL_STORAGE",
                 state = allFilesState,
-                rationale = "访问设备全部文件系统（含文档、下载、外部 SD），便于跨目录读取/整理你的文件与资料。该权限为特殊权限，需到设置页开启。",
-                actionLabel = if (allFilesState == PermState.Granted) "前往设置（可关闭）" else "开启所有文件访问",
+                rationale = stringResource(R.string.qk_01909),
+                actionLabel = if (allFilesState == PermState.Granted) stringResource(R.string.qk_01900) else stringResource(R.string.qk_01910),
                 onAction = { manager.allFiles.openAllFilesSettings() },
-                note = if (allFilesState == PermState.Granted) "已授权，可在系统设置中关闭。" else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "需到「设置 → 应用 → 特殊应用权限 → 所有文件访问权限」手动开启。" else "当前系统版本无需此特殊权限。",
+                note = if (allFilesState == PermState.Granted) stringResource(R.string.qk_01902) else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) stringResource(R.string.qk_01911) else stringResource(R.string.qk_01912),
             )
 
             // ---- 7. 数字助理应用完整功能 ----
@@ -328,13 +329,13 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
             }
             FeaturePermCard(
                 icon = Icons.Filled.Assistant,
-                title = "数字助理应用完整功能",
+                title = stringResource(R.string.qk_01915),
                 caption = "ROLE_ASSISTANT",
                 state = assistantState,
-                rationale = "将 Zorv AI 设为系统默认数字助理，接管长按 Home / 侧键唤醒的助手手势，提供全局语音/文本助理能力。经系统角色选择框授予。",
+                rationale = stringResource(R.string.qk_01916),
                 actionLabel = assistantAction.first,
                 onAction = assistantAction.second,
-                note = if (assistantState == PermState.Granted) "已是默认数字助理。可在「设置 → 默认应用 → 数字助理」更改。" else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) "当前系统版本不支持数字助理角色。" else "经系统「默认数字助理」选择框授予，确认后即可全局唤醒。",
+                note = if (assistantState == PermState.Granted) stringResource(R.string.qk_01917) else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) stringResource(R.string.qk_01918) else stringResource(R.string.qk_01919),
             )
 
             // ---- 8. 数据源与优先级 ----
@@ -346,8 +347,7 @@ fun QuroFeaturePermissionScreen(onClose: () -> Unit) {
                 onWrite = { writeWorkout() },
             )
 
-            Text(
-                "说明：精确闹钟在 Android 12+ 属特殊权限，没有系统弹窗，只能跳转设置页；媒体与健康的运行时请求在首次或曾被拒（未选「不再询问」）时才会弹窗，一旦勾选「不再询问」即降级为「去设置页」。",
+            Text(stringResource(R.string.qk_01920),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -375,25 +375,24 @@ private fun DiagnosticCard(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text("本机诊断", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.qk_01921), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("已安装版本", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.qk_01922), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(installedVersion, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("系统版本", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.qk_01923), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(androidVer, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("已声明 SCHEDULE_EXACT_ALARM", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (hasExactAlarm) "是 ✓" else "否 ✗", color = if (hasExactAlarm) pass else fail, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.qk_01924), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (hasExactAlarm) stringResource(R.string.qk_01925) else stringResource(R.string.qk_01926), color = if (hasExactAlarm) pass else fail, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("已声明 MANAGE_EXTERNAL_STORAGE", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (hasAllFiles) "是 ✓" else "否 ✗", color = if (hasAllFiles) pass else fail, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.qk_01927), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (hasAllFiles) stringResource(R.string.qk_01925) else stringResource(R.string.qk_01926), color = if (hasAllFiles) pass else fail, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
         }
-        Text(
-            "两项均为「是」但系统「特殊应用权限」列表仍无本应用：① 重开设置页或重启设备让系统重新索引；② 闹钟与提醒列表需 Android 12+，所有文件访问需 Android 11+；③ 确认安装的是本版本而非旧包（旧包仍含 USE_EXACT_ALARM 会被系统隐藏）。",
+        Text(stringResource(R.string.qk_01928),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -477,32 +476,31 @@ private fun DataSourceCard(
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("数据源与优先级", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                Text("DataOrigin 分组 · 本应用来源可溯源", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.qk_01934), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.qk_01935), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Text(
-            "健康数据可能来自多个 App（手表、Google Fit、本应用等）。通过 DataOrigin.packageName 分组，可区分并优先采用本应用录入的数据。",
+        Text(stringResource(R.string.qk_01936),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PrimaryButton(text = "读取各来源步数", onClick = onLoadSteps, modifier = Modifier.weight(1f), enabled = enabled)
-            PrimaryButton(text = "写入跑步记录", onClick = onWrite, modifier = Modifier.weight(1f), enabled = enabled)
+            PrimaryButton(text = stringResource(R.string.qk_01937), onClick = onLoadSteps, modifier = Modifier.weight(1f), enabled = enabled)
+            PrimaryButton(text = stringResource(R.string.qk_01938), onClick = onWrite, modifier = Modifier.weight(1f), enabled = enabled)
         }
         if (!enabled) {
-            Text("需先授权健康数据后使用本演示。", style = MaterialTheme.typography.bodySmall, color = Muted)
+            Text(stringResource(R.string.qk_01939), style = MaterialTheme.typography.bodySmall, color = Muted)
         }
         stepsBySource?.let { map ->
             Spacer(Modifier.height(4.dp))
-            Text("近 7 天步数（按来源）：", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+            Text(qstr(R.string.qk_01940), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
             if (map.isEmpty()) {
-                Text("无数据", style = MaterialTheme.typography.bodySmall, color = Muted)
+                Text(qstr(R.string.qk_01941), style = MaterialTheme.typography.bodySmall, color = Muted)
             } else {
                 map.forEach { (pkg, steps) ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(pkg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("$steps 步", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                        Text(qstr(R.string.qk_01942, (steps).toString()), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

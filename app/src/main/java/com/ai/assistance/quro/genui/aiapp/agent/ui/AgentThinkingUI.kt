@@ -1,4 +1,5 @@
 package com.ai.assistance.quro.genui.aiapp.agent.ui
+import androidx.compose.ui.res.stringResource
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -100,8 +101,7 @@ fun AgentThinkingPanel(
 
                 // 标题和进度
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "思考过程",
+                    Text(text = stringResource(R.string.qk_03618),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -128,7 +128,7 @@ fun AgentThinkingPanel(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             painter = painterResource(id = R.drawable.genui_clear),
-                            contentDescription = if (expanded) "收起" else "展开",
+                            contentDescription = if (expanded) stringResource(R.string.qk_00818) else stringResource(R.string.qk_00944),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
                                 .size(12.dp)
@@ -416,8 +416,7 @@ fun ThoughtCompactIndicator(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                Text(
-                    text = "准备中...",
+                Text(text = stringResource(R.string.qk_03622),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

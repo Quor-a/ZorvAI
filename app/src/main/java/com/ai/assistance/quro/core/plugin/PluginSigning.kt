@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.plugin
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.util.Log
@@ -107,7 +109,7 @@ object PluginSigning {
                 .getOrDefault(false)
 
         val keystoreName: String
-            get() = keystorePath.takeIf { it.isNotBlank() }?.let { File(it).name } ?: "未选择"
+            get() = keystorePath.takeIf { it.isNotBlank() }?.let { File(it).name } ?: qstr(R.string.qk_00000)
     }
 
     fun load(context: Context): Config {

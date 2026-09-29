@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.Manifest
 import android.content.Context
@@ -76,7 +79,7 @@ private fun loadMedia(ctx: Context, kind: String): List<MediaItem> {
             while (c.moveToNext()) {
                 val id = c.getLong(idIdx)
                 val uri = ContentUris.withAppendedId(coll, id)
-                val name = c.getString(nameIdx) ?: "未知文件"
+                val name = c.getString(nameIdx) ?: qstr(R.string.qk_02093)
                 val size = c.getLong(sizeIdx)
                 val dur = if (durIdx >= 0) c.getLong(durIdx) else 0L
                 out.add(MediaItem(uri, name, size, dur))
@@ -122,9 +125,9 @@ fun QuroMediaBrowser(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, "返回") }
+                    IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_00143)) }
                     Text(
-                        if (kind == "music") "选择音乐" else "选择视频",
+                        if (kind == "music") stringResource(R.string.qk_02094) else stringResource(R.string.qk_02095),
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f).padding(start = 8.dp),
                     )
@@ -141,10 +144,10 @@ fun QuroMediaBrowser(
                             style = MaterialTheme.typography.bodyLarge,
                         )
                         Spacer(Modifier.height(16.dp))
-                        Button(onClick = { permLauncher.launch(neededPerm) }) { Text("授予权限") }
+                        Button(onClick = { permLauncher.launch(neededPerm) }) { Text(stringResource(R.string.qk_02098)) }
                     }
                     loadErr != null -> Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                        Text("读取失败：$loadErr", color = cs.error)
+                        Text(stringResource(R.string.qk_02099, (loadErr).toString()), color = cs.error)
                     }
                     items.isEmpty() -> Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                         Text("没有找到${if (kind == "music") "音乐" else "视频"}文件")

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -34,20 +36,20 @@ fun TextEditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("编辑文本") },
+                title = { Text(stringResource(R.string.qk_00167)) },
                 navigationIcon = {
                     IconButton(onClick = { onClose(text) }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.qk_00143))
                     }
                 },
                 actions = {
                     // 清空按钮
                     IconButton(onClick = { text = "" }) {
-                        Icon(Icons.Filled.Delete, contentDescription = "清空")
+                        Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.qk_00764))
                     }
                     // 完成按钮
                     IconButton(onClick = { onClose(text) }) {
-                        Icon(Icons.Filled.Check, contentDescription = "完成")
+                        Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.qk_00420))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -70,8 +72,7 @@ fun TextEditorScreen(
                 lineHeight = 24.sp
             ),
             placeholder = {
-                Text(
-                    "在此输入文本内容...",
+                Text(stringResource(R.string.qk_03101),
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
             },

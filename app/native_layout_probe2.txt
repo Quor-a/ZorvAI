@@ -1,0 +1,30 @@
+
+===== F 显式 flex-direction:column =====
+root w=1080 h=2400 x=0 lines=0
+  view[page] w=1080 h=177 x=0 lines=0
+    view[col] w=1010 h=108 x=0 lines=0
+      text[a] w=1010 h=54 x=0 lines=1 text="第一行"
+      text[b] w=1010 h=54 x=0 lines=1 text="第二行"
+
+===== G 窄定宽容器 200rpx + 长文本 =====
+root w=1080 h=2400 x=0 lines=0
+  view[page] w=1080 h=162 x=0 lines=0
+    view[narrow] w=288 h=93 x=0 lines=0
+      text[t] w=288 h=93 x=0 lines=2 lines=[紫外线指数 24%,  强 注意防晒] text="紫外线指数 24% 强 注意防晒"
+
+===== H 四格 flex:1 行 =====
+root w=1080 h=2400 x=0 lines=0
+  view[page] w=1080 h=162 x=0 lines=0
+    view[stats] w=1010 h=93 x=0 lines=0
+      view[stat] w=264 h=93 x=34 lines=0
+        text[k] w=264 h=39 x=0 lines=1 text="最高温"
+        text[v] w=264 h=54 x=0 lines=1 text="32.7°C"
+      view[stat] w=264 h=93 x=299 lines=0
+        text[k] w=264 h=39 x=0 lines=1 text="最低温"
+        text[v] w=264 h=54 x=0 lines=1 text="28.3°C"
+      view[stat] w=240 h=93 x=563 lines=0
+        text[k] w=240 h=39 x=0 lines=1 text="日出"
+        text[v] w=240 h=54 x=0 lines=1 text="06:03"
+      view[stat] w=240 h=93 x=804 lines=0
+        text[k] w=240 h=39 x=0 lines=1 text="日落"
+        text[v] w=240 h=54 x=0 lines=1 text="18:10"

@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -95,9 +98,9 @@ fun QuroBotSettingsScreen(onClose: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("机器人接入") },
+                title = { Text(stringResource(R.string.qk_00765)) },
                 navigationIcon = {
-                    IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, "返回") }
+                    IconButton(onClick = onClose) { Icon(Icons.Filled.ArrowBack, stringResource(R.string.qk_00143)) }
                 },
             )
         }
@@ -109,7 +112,7 @@ fun QuroBotSettingsScreen(onClose: () -> Unit) {
             // ── 说明条 ──
             item {
                 Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                    InfoBox("QQ / 飞书 / 微信直连官方网关，App 持密钥出站。")
+                    InfoBox(stringResource(R.string.qk_00766))
                 }
             }
 
@@ -130,8 +133,8 @@ private fun ConnectionStatusBar(manager: QuroBotManager) {
     val cs = MaterialTheme.colorScheme
     val items = listOf(
         Triple(QuroBotPlatform.QQ, "QQ", Icons.Filled.Chat),
-        Triple(QuroBotPlatform.FEISHU, "飞书", Icons.Filled.Forum),
-        Triple(QuroBotPlatform.WECHAT, "微信", Icons.Filled.Chat),
+        Triple(QuroBotPlatform.FEISHU, stringResource(R.string.qk_00767), Icons.Filled.Forum),
+        Triple(QuroBotPlatform.WECHAT, stringResource(R.string.qk_00768), Icons.Filled.Chat),
     )
     val statuses = remember {
         mutableStateListOf<Triple<String, Color, Boolean>>().apply {
@@ -144,13 +147,13 @@ private fun ConnectionStatusBar(manager: QuroBotManager) {
             items.forEachIndexed { i, (p, _, _) ->
                 val adapter = manager.getAdapter(p)
                 val text = when {
-                    adapter == null -> "未注册"
-                    !adapter.isConnected -> "未连接"
+                    adapter == null -> qstr(R.string.qk_00769)
+                    !adapter.isConnected -> qstr(R.string.qk_00770)
                     else -> when (adapter) {
-                        is QuroQqBotAdapter -> if (adapter.wsConnected.get()) "已连接" else "断开"
-                        is QuroFeishuBotAdapter -> if (adapter.wsConnected.get()) "已连接" else "断开"
-                        is QuroWechatIlinkBotAdapter -> if (adapter.isConnected) "已连接" else "断开"
-                        else -> "已连接"
+                        is QuroQqBotAdapter -> if (adapter.wsConnected.get()) qstr(R.string.qk_00771) else qstr(R.string.qk_00772)
+                        is QuroFeishuBotAdapter -> if (adapter.wsConnected.get()) qstr(R.string.qk_00771) else qstr(R.string.qk_00772)
+                        is QuroWechatIlinkBotAdapter -> if (adapter.isConnected) qstr(R.string.qk_00771) else qstr(R.string.qk_00772)
+                        else -> qstr(R.string.qk_00771)
                     }
                 }
                 val ok = text.contains("已连接")
@@ -207,9 +210,9 @@ private fun LocalTestConsole(
                 Icon(Icons.Filled.Android, null, Modifier.size(15.dp), tint = Accent)
             }
             Spacer(Modifier.width(8.dp))
-            Text("本地测试", fontSize = 13.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.qk_00773), fontSize = 13.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.width(6.dp))
-            Text("App 内验证", fontSize = 10.sp, color = Muted)
+            Text(stringResource(R.string.qk_00774), fontSize = 10.sp, color = Muted)
         }
 
         // 气泡区（紧凑）
@@ -220,7 +223,7 @@ private fun LocalTestConsole(
                 .padding(8.dp),
         ) {
             if (sent.isEmpty() && replies.isEmpty()) {
-                Text("发一条消息试试，回复以气泡显示", fontSize = 11.sp, color = Muted, modifier = Modifier.padding(vertical = 4.dp))
+                Text(stringResource(R.string.qk_00775), fontSize = 11.sp, color = Muted, modifier = Modifier.padding(vertical = 4.dp))
             } else {
                 val max = if (sent.size > replies.size) sent.size else replies.size
                 val turns = mutableListOf<Pair<Boolean, String>>()
@@ -247,7 +250,7 @@ private fun LocalTestConsole(
                 label = "",
                 value = testInput,
                 onValueChange = onInput,
-                placeholder = "输入测试消息…",
+                placeholder = stringResource(R.string.qk_00776),
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(6.dp))
@@ -255,7 +258,7 @@ private fun LocalTestConsole(
                 onClick = onSend,
                 modifier = Modifier.size(34.dp).clip(CircleShape).background(Accent),
             ) {
-                Icon(Icons.Filled.Send, "发送", tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.Send, stringResource(R.string.qk_00165), tint = Color.White, modifier = Modifier.size(16.dp))
             }
         }
     }
@@ -364,14 +367,14 @@ private fun BotPlatformCard(
         while (true) {
             val adapter = manager.getAdapter(platform)
             statusText = when {
-                adapter == null -> "未注册"
-                !sw -> "已禁用"
-                !adapter.isConnected -> "未连接"
+                adapter == null -> qstr(R.string.qk_00769)
+                !sw -> qstr(R.string.qk_00777)
+                !adapter.isConnected -> qstr(R.string.qk_00770)
                 else -> when (adapter) {
-                    is QuroQqBotAdapter -> if (adapter.wsConnected.get()) "WS 已连接" else "WS 断开"
-                    is QuroFeishuBotAdapter -> if (adapter.wsConnected.get()) "WS 已连接" else "WS 断开"
-                    is QuroWechatIlinkBotAdapter -> if (adapter.isConnected) "轮询已连接" else "轮询断开"
-                    else -> "已连接"
+                    is QuroQqBotAdapter -> if (adapter.wsConnected.get()) qstr(R.string.qk_00778) else qstr(R.string.qk_00779)
+                    is QuroFeishuBotAdapter -> if (adapter.wsConnected.get()) qstr(R.string.qk_00778) else qstr(R.string.qk_00779)
+                    is QuroWechatIlinkBotAdapter -> if (adapter.isConnected) qstr(R.string.qk_00780) else qstr(R.string.qk_00781)
+                    else -> qstr(R.string.qk_00771)
                 }
             }
             statusColor = when {
@@ -408,8 +411,8 @@ private fun BotPlatformCard(
                 }
                 Text(
                     when (platform) {
-                        QuroBotPlatform.WECHAT -> "直连官方域名 (HTTP 长轮询)"
-                        else -> if (isRelay) "直连官方网关" else "内置常开"
+                        QuroBotPlatform.WECHAT -> stringResource(R.string.qk_00782)
+                        else -> if (isRelay) stringResource(R.string.qk_00783) else stringResource(R.string.qk_00784)
                     },
                     fontSize = 10.sp, color = Muted
                 )
@@ -459,9 +462,9 @@ private fun BotPlatformCard(
                         modifier = Modifier.height(28.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                     ) {
-                        Icon(Icons.Filled.Refresh, "重连", modifier = Modifier.size(12.dp))
+                        Icon(Icons.Filled.Refresh, stringResource(R.string.qk_00785), modifier = Modifier.size(12.dp))
                         Spacer(Modifier.width(3.dp))
-                        Text("重连", fontSize = 10.sp)
+                        Text(stringResource(R.string.qk_00785), fontSize = 10.sp)
                     }
                     if (detailText.isNotBlank()) {
                         Text("⚠ $detailText", fontSize = 10.sp, color = Color(0xFFE53935), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -472,7 +475,7 @@ private fun BotPlatformCard(
             Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // 凭据
                 if (fields.isNotEmpty()) {
-                    GroupCaption("网关凭据")
+                    GroupCaption(stringResource(R.string.qk_00786))
                     fields.forEach { (key, label) ->
                         UnderlineField(
                             label = label,
@@ -489,15 +492,14 @@ private fun BotPlatformCard(
 
                 // 飞书权限说明
                 if (platform == QuroBotPlatform.FEISHU) {
-                    InfoBox(
-                        "需开启 im:message / im:message.send_as_bot 权限 + im.message.receive_v1 事件订阅。"
+                    InfoBox(stringResource(R.string.qk_00787)
                     )
                 }
 
                 // 会话绑定
-                GroupCaption("会话绑定")
+                GroupCaption(stringResource(R.string.qk_00788))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("none" to "不绑定", "auto" to "自动创建", "fixed" to "固定").forEach { (mode, label) ->
+                    listOf("none" to stringResource(R.string.qk_00789), "auto" to stringResource(R.string.qk_00790), "fixed" to stringResource(R.string.qk_00791)).forEach { (mode, label) ->
                         val selected = bindMode == mode
                         OutlinedButton(
                             onClick = {
@@ -515,16 +517,16 @@ private fun BotPlatformCard(
                 }
                 if (bindMode == "fixed") {
                     val convs = QuroChatViewModel.instance.conversations.collectAsState()
-                    val selectedTitle = convs.value.firstOrNull { it.id == bindConvId }?.title ?: "选择会话"
-                    SetRowClickable(icon = Icons.Filled.ChevronRight, name = selectedTitle, sub = "消息写入此对话", onClick = { showConvPicker = true })
+                    val selectedTitle = convs.value.firstOrNull { it.id == bindConvId }?.title ?: stringResource(R.string.qk_00792)
+                    SetRowClickable(icon = Icons.Filled.ChevronRight, name = selectedTitle, sub = stringResource(R.string.qk_00793), onClick = { showConvPicker = true })
                     if (showConvPicker) {
                         val convsList = convs.value
                         AlertDialog(
                             onDismissRequest = { showConvPicker = false },
-                            title = { Text("选择会话") },
+                            title = { Text(stringResource(R.string.qk_00792)) },
                             text = {
                                 Column {
-                                    if (convsList.isEmpty()) Text("暂无会话，请先新建。", fontSize = 13.sp)
+                                    if (convsList.isEmpty()) Text(stringResource(R.string.qk_00794), fontSize = 13.sp)
                                     else convsList.forEach { conv ->
                                         Row(
                                             Modifier.fillMaxWidth().clickable {
@@ -545,16 +547,16 @@ private fun BotPlatformCard(
                                     }
                                 }
                             },
-                            confirmButton = { OutlinedButton(onClick = { showConvPicker = false }) { Text("关闭") } },
+                            confirmButton = { OutlinedButton(onClick = { showConvPicker = false }) { Text(stringResource(R.string.qk_00065)) } },
                         )
                     }
                 }
 
                 // 平台提示
                 val hint = when (platform) {
-                    QuroBotPlatform.QQ -> "QQ 开放平台建机器人拿 AppID/Secret；沙箱期加自己为测试成员。IP 白名单不填即可。"
-                    QuroBotPlatform.FEISHU -> "飞书开放平台建自建应用拿 App ID/Secret；事件订阅选「长连接」免填回调。"
-                    QuroBotPlatform.WECHAT -> "微信 iLink 通过手机端 HTTP 长轮询直连官方域名，无需公网端点。"
+                    QuroBotPlatform.QQ -> stringResource(R.string.qk_00795)
+                    QuroBotPlatform.FEISHU -> stringResource(R.string.qk_00796)
+                    QuroBotPlatform.WECHAT -> stringResource(R.string.qk_00797)
                     else -> ""
                 }
                 if (hint.isNotBlank()) {
@@ -609,10 +611,10 @@ private fun WechatBotPlatformCard(
     LaunchedEffect(Unit) {
         while (true) {
             statusText = when {
-                adapter == null -> "未注册"
-                !sw -> "已禁用"
-                !adapter.isConnected -> "未连接"
-                else -> "已连接"
+                adapter == null -> qstr(R.string.qk_00769)
+                !sw -> qstr(R.string.qk_00777)
+                !adapter.isConnected -> qstr(R.string.qk_00770)
+                else -> qstr(R.string.qk_00771)
             }
             statusColor = when {
                 !sw || adapter == null -> Color.Gray
@@ -644,13 +646,13 @@ private fun WechatBotPlatformCard(
             // 名称 + 副标
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("微信 iLink 机器人", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.qk_00798), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
                     if (sw) {
                         Spacer(Modifier.width(6.dp))
                         StatusPill(statusText, statusColor)
                     }
                 }
-                Text("直连官方域名，零公网端点", fontSize = 10.sp, color = Muted)
+                Text(stringResource(R.string.qk_00799), fontSize = 10.sp, color = Muted)
             }
             // 展开/收起图标
             Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null,
@@ -693,9 +695,9 @@ private fun WechatBotPlatformCard(
                         modifier = Modifier.height(28.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                     ) {
-                        Icon(Icons.Filled.Refresh, "重连", modifier = Modifier.size(12.dp))
+                        Icon(Icons.Filled.Refresh, stringResource(R.string.qk_00785), modifier = Modifier.size(12.dp))
                         Spacer(Modifier.width(3.dp))
-                        Text("重连", fontSize = 10.sp)
+                        Text(stringResource(R.string.qk_00785), fontSize = 10.sp)
                     }
                     if (adapter?.lastError?.isNotBlank() == true) {
                         val errorText = adapter?.lastError ?: ""
@@ -706,8 +708,7 @@ private fun WechatBotPlatformCard(
                         
                         if (isTokenExpired) {
                             // Token 过期特殊提示
-                            Text(
-                                "⚠ Token 已过期，请点击下方「获取微信登录二维码」重新扫码",
+                            Text(stringResource(R.string.qk_00803),
                                 fontSize = 10.sp, 
                                 color = Color(0xFFFF9800), // 橙色警告
                                 maxLines = 2, 
@@ -720,24 +721,24 @@ private fun WechatBotPlatformCard(
                 }
             }
 
-            GroupCaption("扫码登录")
+            GroupCaption(stringResource(R.string.qk_00804))
             when (loginState.value) {
                 QrLoginStatus.WAIT -> {
                     OutlinedButton(
                         onClick = {
                             if (adapter == null) {
-                                qrError.value = "适配器未初始化，请重启 App"
+                                qrError.value = qstr(R.string.qk_00805)
                                 return@OutlinedButton
                             }
                             try {
                                 adapter!!.startQrLogin()
                             } catch (e: Exception) {
-                                qrError.value = "启动登录失败: ${e.message}"
+                                qrError.value = qstr(R.string.qk_00806, (e.message).toString())
                             }
                         },
                         Modifier.fillMaxWidth().height(36.dp),
                     ) {
-                        Text("获取微信登录二维码", fontSize = 12.sp)
+                        Text(stringResource(R.string.qk_00807), fontSize = 12.sp)
                     }
                 }
                 QrLoginStatus.SCANNED -> {
@@ -747,7 +748,7 @@ private fun WechatBotPlatformCard(
                         if (directImg != null) {
                             androidx.compose.foundation.Image(
                                 bitmap = directImg,
-                                contentDescription = "微信登录二维码",
+                                contentDescription = stringResource(R.string.qk_00808),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .aspectRatio(1f)
@@ -783,7 +784,7 @@ private fun WechatBotPlatformCard(
                             if (qrBitmap != null) {
                                 androidx.compose.foundation.Image(
                                     bitmap = qrBitmap.asImageBitmap(),
-                                    contentDescription = "微信登录二维码",
+                                    contentDescription = stringResource(R.string.qk_00808),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .aspectRatio(1f)
@@ -792,45 +793,45 @@ private fun WechatBotPlatformCard(
                                         .padding(16.dp),
                                 )
                             } else {
-                                Text("二维码生成失败: $qrData", fontSize = 11.sp, color = Color.Red)
+                                Text(stringResource(R.string.qk_00809, (qrData).toString()), fontSize = 11.sp, color = Color.Red)
                             }
                         }
                         Spacer(Modifier.height(4.dp))
-                        Text("请用微信扫描二维码完成登录", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.qk_00810), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
-                        Text("正在获取二维码...", fontSize = 12.sp, color = Muted)
+                        Text(stringResource(R.string.qk_00811), fontSize = 12.sp, color = Muted)
                     }
                     OutlinedButton(
                         onClick = { adapter?.cancelQrLogin() },
                         Modifier.fillMaxWidth().height(32.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFE53935)),
                     ) {
-                        Text("取消", fontSize = 11.sp)
+                        Text(stringResource(R.string.qk_00011), fontSize = 11.sp)
                     }
                 }
                 QrLoginStatus.CONFIRMED -> {
-                    Text("✓ 登录成功！", fontSize = 13.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.qk_00812), fontSize = 13.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.SemiBold)
                 }
                 QrLoginStatus.UNKNOWN -> {
-                    Text("登录被拒绝或取消", fontSize = 12.sp, color = Color(0xFFE53935))
+                    Text(stringResource(R.string.qk_00813), fontSize = 12.sp, color = Color(0xFFE53935))
                     OutlinedButton(
                         onClick = { adapter?.startQrLogin() },
                         Modifier.fillMaxWidth().height(32.dp),
-                    ) { Text("重新获取二维码", fontSize = 11.sp) }
+                    ) { Text(stringResource(R.string.qk_00814), fontSize = 11.sp) }
                 }
                 QrLoginStatus.DENIED -> {
-                    Text("登录被用户拒绝", fontSize = 12.sp, color = Color(0xFFE53935))
+                    Text(stringResource(R.string.qk_00815), fontSize = 12.sp, color = Color(0xFFE53935))
                     OutlinedButton(
                         onClick = { adapter?.startQrLogin() },
                         Modifier.fillMaxWidth().height(32.dp),
-                    ) { Text("重新获取二维码", fontSize = 11.sp) }
+                    ) { Text(stringResource(R.string.qk_00814), fontSize = 11.sp) }
                 }
                 QrLoginStatus.EXPIRED -> {
-                    Text("二维码已过期", fontSize = 12.sp, color = Color(0xFFFF9800))
+                    Text(stringResource(R.string.qk_00816), fontSize = 12.sp, color = Color(0xFFFF9800))
                     OutlinedButton(
                         onClick = { adapter?.startQrLogin() },
                         Modifier.fillMaxWidth().height(32.dp),
-                    ) { Text("重新获取二维码", fontSize = 11.sp) }
+                    ) { Text(stringResource(R.string.qk_00814), fontSize = 11.sp) }
                 }
             }
 
@@ -845,13 +846,13 @@ private fun WechatBotPlatformCard(
         if (expanded) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // ===== 手动填 Token =====
-                GroupCaption("手动填 Token（高级）")
+                GroupCaption(stringResource(R.string.qk_00817))
                 OutlinedButton(
                     onClick = { showManualInput = !showManualInput },
                     Modifier.fillMaxWidth().height(32.dp),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                 ) {
-                    Text(if (showManualInput) "收起" else "手动填入 Bot Token", fontSize = 11.sp)
+                    Text(if (showManualInput) stringResource(R.string.qk_00818) else stringResource(R.string.qk_00819), fontSize = 11.sp)
                 }
                 if (showManualInput) {
                     UnderlineField(
@@ -865,16 +866,16 @@ private fun WechatBotPlatformCard(
                             wechatPrefs.edit().putString("bot_token", v).apply()
                             wechatPrefs.edit().putBoolean("logged_in", v.isNotBlank()).apply()
                         },
-                        placeholder = "粘贴从 ilinkai.weixin.qq.com 获取的 token",
+                        placeholder = qstr(R.string.qk_00820),
                         isSecret = true,
                     )
-                    Text("可通过命令行获取: curl \"https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3\"", fontSize = 9.sp, color = Muted)
+                    Text(stringResource(R.string.qk_00821), fontSize = 9.sp, color = Muted)
                 }
 
                 // ===== 会话绑定 =====
-                GroupCaption("会话绑定")
+                GroupCaption(qstr(R.string.qk_00788))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("none" to "不绑定", "auto" to "自动创建", "fixed" to "固定").forEach { (mode, label) ->
+                    listOf("none" to stringResource(R.string.qk_00789), "auto" to stringResource(R.string.qk_00790), "fixed" to stringResource(R.string.qk_00791)).forEach { (mode, label) ->
                         val selected = bindMode == mode
                         OutlinedButton(
                             onClick = {
@@ -892,16 +893,16 @@ private fun WechatBotPlatformCard(
                 }
                 if (bindMode == "fixed") {
                     val convs = QuroChatViewModel.instance.conversations.collectAsState()
-                    val selectedTitle = convs.value.firstOrNull { it.id == bindConvId }?.title ?: "选择会话"
-                    SetRowClickable(icon = Icons.Filled.ChevronRight, name = selectedTitle, sub = "消息写入此对话", onClick = { showConvPicker = true })
+                    val selectedTitle = convs.value.firstOrNull { it.id == bindConvId }?.title ?: qstr(R.string.qk_00792)
+                    SetRowClickable(icon = Icons.Filled.ChevronRight, name = selectedTitle, sub = stringResource(R.string.qk_00793), onClick = { showConvPicker = true })
                     if (showConvPicker) {
                         val convsList = convs.value
                         AlertDialog(
                             onDismissRequest = { showConvPicker = false },
-                            title = { Text("选择会话") },
+                            title = { Text(stringResource(R.string.qk_00792)) },
                             text = {
                                 Column {
-                                    if (convsList.isEmpty()) Text("暂无会话，请先新建。", fontSize = 13.sp)
+                                    if (convsList.isEmpty()) Text(stringResource(R.string.qk_00794), fontSize = 13.sp)
                                     else convsList.forEach { conv ->
                                         Row(
                                             Modifier.fillMaxWidth().clickable {
@@ -922,16 +923,15 @@ private fun WechatBotPlatformCard(
                                     }
                                 }
                             },
-                            confirmButton = { OutlinedButton(onClick = { showConvPicker = false }) { Text("关闭") } },
+                            confirmButton = { OutlinedButton(onClick = { showConvPicker = false }) { Text(qstr(R.string.qk_00065)) } },
                         )
                     }
                 }
 
                 // ===== 平台说明 =====
                 Text(
-                    "微信 iLink 通过手机端 HTTP 长轮询直连 ilinkai.weixin.qq.com，无需公网端点。" +
-                    "登录后 Bot Token 有效期约 24 小时，过期需重新扫码。\n" +
-                    "注：扫码需要手机能访问 ilinkai.weixin.qq.com 域名，如遇网络问题请切换网络或使用手动填 Token。",
+                    stringResource(R.string.qk_00822) +
+                    stringResource(R.string.qk_00823) + stringResource(R.string.qk_00824),
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 15.sp,

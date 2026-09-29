@@ -1,4 +1,5 @@
 package com.ai.assistance.quro.service
+import com.ai.assistance.quro.util.qstr
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -270,17 +271,17 @@ class QuroMediaService : android.app.Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notif = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(track?.title?.ifBlank { "本地音乐" } ?: "本地音乐")
-            .setContentText(if (preparing) "正在准备…" else if (playing) "正在播放" else "已暂停")
+            .setContentTitle(track?.title?.ifBlank { qstr(R.string.qk_00156) } ?: qstr(R.string.qk_00156))
+            .setContentText(if (preparing) "正在准备…" else if (playing) qstr(R.string.qk_00157) else qstr(R.string.qk_00158))
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(openIntent)
-            .addAction(android.R.drawable.ic_media_previous, "上一首", prevIntent)
+            .addAction(android.R.drawable.ic_media_previous, qstr(R.string.qk_02264), prevIntent)
             .addAction(
                 if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-                if (playing) "暂停" else "播放", playPauseIntent
+                if (playing) qstr(R.string.qk_03388) else qstr(R.string.qk_00104), playPauseIntent
             )
-            .addAction(android.R.drawable.ic_media_next, "下一首", nextIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "停止", stopIntent)
+            .addAction(android.R.drawable.ic_media_next, qstr(R.string.qk_02265), nextIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, qstr(R.string.qk_02271), stopIntent)
             .setOngoing(playing)
             .setOnlyAlertOnce(true)
             .build()

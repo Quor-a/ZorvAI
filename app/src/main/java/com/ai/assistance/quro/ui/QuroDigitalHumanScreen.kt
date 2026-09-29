@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.Manifest
 import android.content.Context
@@ -117,7 +120,7 @@ fun QuroDigitalHumanScreen(onExitToHome: () -> Unit) {
     }
 
     var phase by remember { mutableStateOf("idle") } // idle/listening/recognizing/thinking/speaking/error
-    var statusText by remember { mutableStateOf("点击话筒说话，或在下方输入文字与数字人对话") }
+    var statusText by remember { mutableStateOf(qstr(R.string.qk_01751)) }
     var mouthOpen by remember { mutableStateOf(0f) }
     var inputText by remember { mutableStateOf("") }
     val transcript = remember { mutableStateListOf<Pair<String, String>>() }
@@ -133,9 +136,9 @@ fun QuroDigitalHumanScreen(onExitToHome: () -> Unit) {
             if (path != null) {
                 dh = dh.copy(avatarSource = "custom", customModelPath = path)
                 repo.save(dh)
-                setStatus("已选择自定义 3D 模型，点击话筒即可对话")
+                setStatus(qstr(R.string.qk_01752))
             } else {
-                setStatus("GLB 文件拷贝失败，请换一个文件重试")
+                setStatus(qstr(R.string.qk_01753))
             }
         }
     }
@@ -146,10 +149,10 @@ fun QuroDigitalHumanScreen(onExitToHome: () -> Unit) {
         if (granted) {
             startListeningSession(ctx, scope, listening, setPhase, setStatus) { text ->
                 if (text.isNotBlank()) ask(ctx, vm, scope, transcript, setMouth, setPhase, setStatus, text, effectiveCfg)
-                else { setPhase("idle"); setStatus("没听清，请重试") }
+                else { setPhase("idle"); setStatus(qstr(R.string.qk_01754)) }
             }
         } else {
-            setStatus("需要录音权限才能进行语音输入")
+            setStatus(qstr(R.string.qk_01755))
         }
     }
 
@@ -165,7 +168,7 @@ fun QuroDigitalHumanScreen(onExitToHome: () -> Unit) {
             // 端侧离线识别（sherpa-ncnn）
             startListeningSession(ctx, scope, listening, setPhase, setStatus) { text ->
                 if (text.isNotBlank()) ask(ctx, vm, scope, transcript, setMouth, setPhase, setStatus, text, effectiveCfg)
-                else { setPhase("idle"); setStatus("没听清，请重试") }
+                else { setPhase("idle"); setStatus(qstr(R.string.qk_01754)) }
             }
             return
         }
@@ -174,17 +177,17 @@ fun QuroDigitalHumanScreen(onExitToHome: () -> Unit) {
             if (QuroOnDeviceAsr.isModelAvailable(ctx)) {
                 startListeningSession(ctx, scope, listening, setPhase, setStatus) { text ->
                     if (text.isNotBlank()) ask(ctx, vm, scope, transcript, setMouth, setPhase, setStatus, text, effectiveCfg)
-                    else { setPhase("idle"); setStatus("没听清，请重试") }
+                    else { setPhase("idle"); setStatus(qstr(R.string.qk_01754)) }
                 }
             } else {
-                setStatus("当前 STT 引擎为「AI 模型」转写，需先在「设置→语音→STT」部署端侧模型，或改用原生/离线引擎")
+                setStatus(qstr(R.string.qk_01756))
                 setPhase("idle")
             }
             return
         }
         // 默认 SOURCE_LOCAL：原生 SpeechRecognizer，不依赖离线模型
         setPhase("listening")
-        setStatus("聆听中…")
+        setStatus(qstr(R.string.qk_01757))
         QuroSttHolder.startListening(
             ctx,
             QuroSttPrefs.getLanguage(ctx),
@@ -192,7 +195,7 @@ fun QuroDigitalHumanScreen(onExitToHome: () -> Unit) {
             onPartial = { p -> setPhase("listening"); setStatus(p) },
             onFinal = { text ->
                 if (text.isNotBlank()) ask(ctx, vm, scope, transcript, setMouth, setPhase, setStatus, text, effectiveCfg)
-                else { setPhase("idle"); setStatus("没听清，请重试") }
+                else { setPhase("idle"); setStatus(qstr(R.string.qk_01754)) }
             },
             onError = { _, msg -> setPhase("idle"); setStatus(msg) },
         )
@@ -200,7 +203,7 @@ fun QuroDigitalHumanScreen(onExitToHome: () -> Unit) {
 
     fun stopListening() {
         listening.set(false)
-        if (phase == "listening") { setPhase("idle"); setStatus("已停止，点击话筒继续") }
+        if (phase == "listening") { setPhase("idle"); setStatus(qstr(R.string.qk_01758)) }
     }
 
     val avatarFile = remember(dh.avatarSource, dh.customModelPath) {
@@ -209,12 +212,12 @@ fun QuroDigitalHumanScreen(onExitToHome: () -> Unit) {
 
     Column(Modifier.fillMaxSize().background(cs.background)) {
         TopAppBar(
-            title = { Text("数字人", style = MaterialTheme.typography.titleLarge) },
+            title = { Text(stringResource(R.string.qk_01759), style = MaterialTheme.typography.titleLarge) },
             navigationIcon = {
                 IconButton(onClick = onExitToHome) { Icon(Icons.Filled.Person, null) }
             },
             actions = {
-                TextButton(onClick = { showSettings = !showSettings }) { Text(if (showSettings) "收起" else "设置") }
+                TextButton(onClick = { showSettings = !showSettings }) { Text(if (showSettings) stringResource(R.string.qk_00818) else stringResource(R.string.qk_01760)) }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
         )
@@ -244,16 +247,16 @@ fun QuroDigitalHumanScreen(onExitToHome: () -> Unit) {
                         statusText = statusText,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        AssistChip(onClick = {}, label = { Text("🔊 离线 ASR", fontSize = 11.sp) })
-                        AssistChip(onClick = {}, label = { Text("🔊 离线 TTS", fontSize = 11.sp) })
+                        AssistChip(onClick = {}, label = { Text(stringResource(R.string.qk_01761), fontSize = 11.sp) })
+                        AssistChip(onClick = {}, label = { Text(stringResource(R.string.qk_01762), fontSize = 11.sp) })
                         AssistChip(
                             onClick = {},
-                            label = { Text(if (dh.llmMode == "offline") "🖥 离线 LLM" else "☁ 云端口 LLM", fontSize = 11.sp) },
+                            label = { Text(if (dh.llmMode == "offline") stringResource(R.string.qk_01763) else stringResource(R.string.qk_01764), fontSize = 11.sp) },
                         )
                     }
                     if (dh.llmMode == "offline" && !dh.isOfflineConfigured()) {
                         Spacer(Modifier.height(6.dp))
-                        Text("离线模式未配置本地端点：点右上「设置」填写 baseUrl / model", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.qk_01765), fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(Modifier.height(8.dp))
                 }
@@ -273,7 +276,7 @@ fun QuroDigitalHumanScreen(onExitToHome: () -> Unit) {
 
             // 对话记录（沉浸式气泡舞台）
             items(transcript) { (who, msg) ->
-                val isUser = who == "你"
+                val isUser = who == stringResource(R.string.qk_01766)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start) {
                     Surface(
                         color = if (isUser) Accent else AccentSoft,
@@ -314,7 +317,7 @@ fun QuroDigitalHumanScreen(onExitToHome: () -> Unit) {
             OutlinedTextField(
                 value = inputText,
                 onValueChange = { inputText = it },
-                placeholder = { Text("输入文字与数字人对话…") },
+                placeholder = { Text(stringResource(R.string.qk_01767)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
@@ -390,27 +393,27 @@ private fun DigitalHumanSettingsCard(
     var om by remember(dh.offlineModel) { mutableStateOf(dh.offlineModel) }
 
     SetGroup {
-        Text("LLM 来源", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+        Text(stringResource(R.string.qk_01773), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
         Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = dh.llmMode == "cloud", onClick = { onModeChange("cloud") }, label = { Text("☁ 云端口") })
-            FilterChip(selected = dh.llmMode == "offline", onClick = { onModeChange("offline") }, label = { Text("🖥 离线本地端点") })
+            FilterChip(selected = dh.llmMode == "cloud", onClick = { onModeChange("cloud") }, label = { Text(stringResource(R.string.qk_01774)) })
+            FilterChip(selected = dh.llmMode == "offline", onClick = { onModeChange("offline") }, label = { Text(stringResource(R.string.qk_01775)) })
         }
         if (dh.llmMode == "offline") {
             Spacer(Modifier.height(8.dp))
-            UnderlineField(label = "本地端点 baseUrl", value = ob, onValueChange = { ob = it; onOfflineChange(ob, ok, om) }, placeholder = "http://127.0.0.1:1234/v1")
+            UnderlineField(label = stringResource(R.string.qk_01776), value = ob, onValueChange = { ob = it; onOfflineChange(ob, ok, om) }, placeholder = "http://127.0.0.1:1234/v1")
             Spacer(Modifier.height(8.dp))
-            UnderlineField(label = "API Key（可空）", value = ok, onValueChange = { ok = it; onOfflineChange(ob, ok, om) }, placeholder = "sk-...", isSecret = true)
+            UnderlineField(label = stringResource(R.string.qk_01777), value = ok, onValueChange = { ok = it; onOfflineChange(ob, ok, om) }, placeholder = "sk-...", isSecret = true)
             Spacer(Modifier.height(8.dp))
-            UnderlineField(label = "模型名（如 llava / qwen2.5）", value = om, onValueChange = { om = it; onOfflineChange(ob, ok, om) }, placeholder = "qwen2.5")
+            UnderlineField(label = stringResource(R.string.qk_01778), value = om, onValueChange = { om = it; onOfflineChange(ob, ok, om) }, placeholder = "qwen2.5")
         }
         Spacer(Modifier.height(12.dp))
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
-        Text("3D 模型", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+        Text(stringResource(R.string.qk_01779), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
         Spacer(Modifier.height(10.dp))
         Box(Modifier.padding(horizontal = 16.dp)) {
             PrimaryButton(
-                text = if (dh.customModelPath.isNotBlank()) "重新选择 GLB 模型" else "选择 GLB 模型文件",
+                text = if (dh.customModelPath.isNotBlank()) stringResource(R.string.qk_01780) else stringResource(R.string.qk_01781),
                 onClick = onPickGlb,
             )
         }
@@ -419,7 +422,7 @@ private fun DigitalHumanSettingsCard(
             Text("已载入：${dh.customModelPath.substringAfterLast("/")}", fontSize = 11.sp, color = Muted, modifier = Modifier.padding(horizontal = 16.dp))
         }
         Spacer(Modifier.height(4.dp))
-        Text("3D 预览已内置离线 Three.js 引擎（assets/www/three/），无需联网即可渲染。", fontSize = 11.sp, color = Muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        Text(stringResource(R.string.qk_01783), fontSize = 11.sp, color = Muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
     }
 }
 
@@ -436,7 +439,7 @@ private fun copyGlbToCache(ctx: Context, uri: Uri): String? = runCatching {
 /** 从 assets 读取文本内容；失败返回 null 并记录诊断日志。 */
 private fun readAssetText(ctx: Context, path: String): String? = runCatching {
     ctx.assets.open(path).bufferedReader().use { it.readText() }
-}.onFailure { QuroDiag.log("GLB", "读取 assets/$path 失败：${it.message}") }.getOrNull()
+}.onFailure { QuroDiag.log("GLB", qstr(R.string.qk_01784, (path).toString(), (it.message).toString())) }.getOrNull()
 
 /** 把 Draco 解码器（wasm + js 胶水）从 assets 提取到 cacheDir/three/draco/，供离线 GLTFLoader 解码 Draco 压缩模型。 */
 private fun extractDracoAssets(ctx: Context): Boolean = runCatching {
@@ -449,7 +452,7 @@ private fun extractDracoAssets(ctx: Context): Boolean = runCatching {
         }
     }
     true
-}.onFailure { QuroDiag.log("GLB", "Draco 资源提取失败：${it.message}") }.getOrDefault(false)
+}.onFailure { QuroDiag.log("GLB", qstr(R.string.qk_01785, (it.message).toString())) }.getOrDefault(false)
 
 private fun estimatedSpeakMs(text: String): Long = (text.length * 200L).coerceAtLeast(900L)
 
@@ -475,9 +478,9 @@ private fun speakReply(
     setStatus: (String) -> Unit,
     reply: String,
 ) {
-    if (reply.isBlank()) { setPhase("idle"); setStatus("点击话筒继续"); return }
+    if (reply.isBlank()) { setPhase("idle"); setStatus(qstr(R.string.qk_01786)); return }
     setPhase("speaking")
-    setStatus("数字人正在说…")
+    setStatus(qstr(R.string.qk_01787))
     scope.launch {
         val animJob = launch { animateMouth(scope, setMouth, estimatedSpeakMs(reply)) }
         runCatching { QuroTtsHolder.ensureReady(ctx) }
@@ -490,7 +493,7 @@ private fun speakReply(
                 setMouth(0f)
                 animJob.cancel()
                 setPhase("idle")
-                setStatus("点击话筒继续")
+                setStatus(qstr(R.string.qk_01786))
             }
         }
         // 主路径 speak 失败（未就绪/引擎异常）时回退到安全模式 speakMinimal；
@@ -519,10 +522,10 @@ private fun ask(
     if (t.isBlank()) return
     transcript.add("你" to t)
     setPhase("thinking")
-    setStatus("数字人思考中…")
+    setStatus(qstr(R.string.qk_01788))
     scope.launch {
         val reply = runCatching { vm.voiceBallTurn(t, cfg) }
-            .getOrDefault("⚠️ 出错了，请检查模型配置（离线模式请确认本地端点可用）")
+            .getOrDefault(qstr(R.string.qk_01789))
             .toString()
         // 显示用「干净文本」（剥离 (开心) 等情绪标签）；语音合成用「原始(带标签)文本」：
         // 云/MiMo 源会逐段解析标签做情感合成，本地源在 QuroTtsHolder 内自动剥离（无情感但至少显示干净）。
@@ -558,20 +561,20 @@ private suspend fun runListening(
     onResult: (String) -> Unit,
 ) {
     if (!QuroOnDeviceAsr.isReady()) {
-        onUi("listening", "端侧模型加载中…")
+        onUi("listening", qstr(R.string.qk_01790))
         if (!QuroOnDeviceAsr.ensureLoaded(context.applicationContext)) {
-            onUi("error", "端侧模型加载失败，请到 STT 设置重试")
+            onUi("error", qstr(R.string.qk_01791))
             return
         }
     }
     val minBuf = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-    if (minBuf <= 0) { onUi("error", "录音初始化失败"); return }
+    if (minBuf <= 0) { onUi("error", qstr(R.string.qk_01792)); return }
     val rec = try {
         AudioRecord(MediaRecorder.AudioSource.MIC, 16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minBuf * 2)
-    } catch (e: Throwable) { onUi("error", "无法创建录音器"); return }
+    } catch (e: Throwable) { onUi("error", qstr(R.string.qk_01793)); return }
     if (rec.state != AudioRecord.STATE_INITIALIZED) {
         try { rec.release() } catch (_: Throwable) {}
-        onUi("error", "录音器不可用")
+        onUi("error", qstr(R.string.qk_01794))
         return
     }
 
@@ -598,19 +601,19 @@ private suspend fun runListening(
         }
         rec.stop()
     } catch (e: Throwable) {
-        onUi("error", "录音异常：${e.message}")
+        onUi("error", qstr(R.string.qk_01795, (e.message).toString()))
     } finally {
         try { rec.release() } catch (_: Throwable) {}
     }
     active.set(false)
     if (pcm.size() <= 16000 * 16 / 8 * 0.3f) {
-        onUi("idle", "没听清，请重试")
+        onUi("idle", qstr(R.string.qk_01754))
         return
     }
-    onUi("recognizing", "识别中…")
+    onUi("recognizing", qstr(R.string.qk_01796))
     val text = QuroOnDeviceAsr.recognize(pcm.toByteArray())
     withContext(Dispatchers.Main) {
-        if (text.isNotBlank()) onResult(text) else onUi("idle", "没听清，请重试")
+        if (text.isNotBlank()) onResult(text) else onUi("idle", qstr(R.string.qk_01754))
     }
 }
 
@@ -656,7 +659,7 @@ private fun GLBAvatarView(modelFile: File?, mouthOpen: Float, phase: String) {
                     setBackgroundColor(0)
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, url: String?) {
-                            QuroDiag.log("GLB", "页面加载完成：$url")
+                            QuroDiag.log("GLB", qstr(R.string.qk_01798, (url).toString()))
                             super.onPageFinished(view, url)
                         }
                     }
@@ -678,20 +681,20 @@ private fun GLBAvatarView(modelFile: File?, mouthOpen: Float, phase: String) {
                         val dracoLoader = readAssetText(ctx, "www/three/DRACOLoader.js")
                         val orbit = readAssetText(ctx, "www/three/OrbitControls.js")
                         if (threeJs == null || gltfLoader == null || orbit == null) {
-                            QuroDiag.log("GLB", "离线引擎 assets 读取失败；threeJs=$threeJs gltfLoader=$gltfLoader orbit=$orbit")
-                            loadDataWithBaseURL(null, "<body style='margin:0;background:#15151a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;font-size:13px;text-align:center;padding:16px'>离线 3D 引擎缺失<br>请确认 APK 包含 assets/www/three/</body>", "text/html", "utf-8", null)
+                            QuroDiag.log("GLB", qstr(R.string.qk_01799, (threeJs).toString(), (gltfLoader).toString(), (orbit).toString()))
+                            loadDataWithBaseURL(null, qstr(R.string.qk_01800), "text/html", "utf-8", null)
                         } else {
                             val dracoOk = extractDracoAssets(ctx)
                             val dracoPath = "file://" + File(ctx.cacheDir, "three/draco").absolutePath + "/"
-                            QuroDiag.log("GLB", "Draco 提取=$dracoOk；dracoPath=$dracoPath")
+                            QuroDiag.log("GLB", qstr(R.string.qk_01801, (dracoOk).toString(), (dracoPath).toString()))
                             val b64 = Base64.encodeToString(modelFile.readBytes(), Base64.NO_WRAP)
                             val htmlFile = File(ctx.cacheDir, "quro_dh_gltf.html")
                             htmlFile.writeText(buildGltfHtml(b64, threeJs, bgUtils ?: "", gltfLoader, dracoLoader ?: "", dracoPath, orbit))
-                            QuroDiag.log("GLB", "HTML 已写入 ${htmlFile.absolutePath}；engine.len=${threeJs.length}；b64.len=${b64.length}")
+                            QuroDiag.log("GLB", qstr(R.string.qk_01802, (htmlFile.absolutePath).toString(), (threeJs.length).toString(), (b64.length).toString()))
                             loadUrl("file://" + htmlFile.absolutePath)
                         }
                     } else {
-                        loadDataWithBaseURL(null, "<body style='margin:0;background:#15151a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;font-size:13px'>未选择 GLB 模型</body>", "text/html", "utf-8", null)
+                        loadDataWithBaseURL(null, qstr(R.string.qk_01803), "text/html", "utf-8", null)
                     }
                 }.also { webViewRef.value = it }
             },
@@ -865,5 +868,4 @@ window.Zorv3D = {
   .replace("__DRACO__", dracoPath)
   .replace("__ORBIT__", orbit)
   .replace("__B64__", base64)
-
 

@@ -39,6 +39,9 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- 视频通话前台服务同时声明了 camera 类型，Android 14+ 缺此权限会抛
+         SecurityException / ForegroundServiceStartNotAllowedException。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <!-- Android 14+ 特殊用途前台服务（BotHub 也有此权限，覆盖桌面宠物/悬浮窗等场景） -->

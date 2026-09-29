@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ContentValues
 import android.content.Context
@@ -50,7 +52,7 @@ fun EditorScreen(
                     ctx,
                     JSONObject().apply { put("code", code); put("lang", lang) }.toString()
                 )
-            }.getOrElse { e -> "⚠️ 运行异常：${e.message}" }
+            }.getOrElse { e -> qstr(R.string.qk_00383, (e.message).toString()) }
 
             @JavascriptInterface
             fun onSaveCode(content: String, lang: String) {
@@ -130,18 +132,18 @@ private fun saveToDownloads(context: Context, fileName: String, content: String)
                     context.contentResolver.openOutputStream(it)?.use { outputStream ->
                         outputStream.write(content.toByteArray())
                     }
-                    Toast.makeText(context, "✅ 已保存到 Downloads/$fileName", Toast.LENGTH_SHORT).show()
-                } ?: Toast.makeText(context, "❌ 保存失败：无法创建文件", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, qstr(R.string.qk_00273, (fileName).toString()), Toast.LENGTH_SHORT).show()
+                } ?: Toast.makeText(context, qstr(R.string.qk_00274), Toast.LENGTH_SHORT).show()
             } else {
                 // Android 9 及以下使用直接写入
                 val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                 if (!downloadsDir.exists()) downloadsDir.mkdirs()
                 val file = java.io.File(downloadsDir, fileName)
                 file.writeText(content)
-                Toast.makeText(context, "✅ 已保存到 Downloads/$fileName", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, qstr(R.string.qk_00273, (fileName).toString()), Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
-            Toast.makeText(context, "❌ 保存失败：${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, qstr(R.string.qk_00275, (e.message).toString()), Toast.LENGTH_SHORT).show()
         }
     }
 }

@@ -1,4 +1,5 @@
 package com.ai.assistance.quro.service
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Intent
 import android.graphics.drawable.Icon
@@ -16,7 +17,7 @@ class QuroVideoCallTileService : TileService() {
         super.onStartListening()
         qsTile?.apply {
             state = Tile.STATE_INACTIVE
-            label = "Zorv 视频通话"
+            label = qstr(R.string.qk_03550)
             icon = Icon.createWithResource(this@QuroVideoCallTileService, R.mipmap.ic_launcher)
             updateTile()
         }

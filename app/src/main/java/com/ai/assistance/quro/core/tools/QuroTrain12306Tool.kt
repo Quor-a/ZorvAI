@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
@@ -15,7 +17,7 @@ import java.net.URLEncoder
  */
 class QuroTrain12306Tool : QuroTool {
     override val name = "train_12306"
-    override val description = "查询 12306 余票（车次/出发到达时间/历时/各席别余票）。" +
+    override val description = qstr(R.string.qk_03738) +
         "参数 {\"from\":\"出发站名（如 北京）\",\"to\":\"到达站名（如 上海）\",\"date\":\"出发日期 YYYY-MM-DD（必填）\",\"purpose\":\"ADULT（默认成人）\"}。" +
         "首次调用会拉取 12306 车站编码表并缓存。返回车次列表与余票。"
     override val parametersJson = """{
@@ -103,7 +105,7 @@ class QuroTrain12306Tool : QuroTool {
             sb.append("${i + 1}. ${trainNo}  ${from}→${to}  发$dep 到$arr  历时$dur\n")
             seatLabels.forEach { (idx, label) ->
                 val v = f.getOrNull(idx) ?: ""
-                if (v.isNotBlank() && v != "无" && v != "--" && v != "有") sb.append("   $label:$v")
+                if (v.isNotBlank() && v != qstr(R.string.qk_00464) && v != "--" && v != "有") sb.append("   $label:$v")
                 else if (v == "有") sb.append("   $label:有")
             }
             sb.append('\n')

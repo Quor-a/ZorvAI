@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.model
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.util.Log
@@ -133,7 +135,7 @@ class QuroHeartbeatService(private val context: Context) {
         val usagePercentage = (usedMemory.toDouble() / maxMemory * 100).toFloat()
         
         return HealthCheck(
-            name = "内存使用",
+            name = qstr(R.string.qk_03653),
             status = when {
                 usagePercentage > 90 -> HealthStatus.CRITICAL
                 usagePercentage > 75 -> HealthStatus.WARNING
@@ -161,7 +163,7 @@ class QuroHeartbeatService(private val context: Context) {
         }
         
         return HealthCheck(
-            name = "存储空间",
+            name = qstr(R.string.qk_03357),
             status = when {
                 usagePercentage > 95 -> HealthStatus.CRITICAL
                 usagePercentage > 85 -> HealthStatus.WARNING
@@ -179,7 +181,7 @@ class QuroHeartbeatService(private val context: Context) {
     private fun checkBatteryStatus(): HealthCheck {
         // 简化实现，实际需要注册 BroadcastReceiver 监听电池变化
         return HealthCheck(
-            name = "电池状态",
+            name = qstr(R.string.qk_03355),
             status = HealthStatus.HEALTHY,
             value = 100f,
             unit = "%",
@@ -193,7 +195,7 @@ class QuroHeartbeatService(private val context: Context) {
     private fun checkNetworkConnectivity(): HealthCheck {
         // 简化实现，实际需要 ConnectivityManager
         return HealthCheck(
-            name = "网络连接",
+            name = qstr(R.string.qk_03449),
             status = HealthStatus.HEALTHY,
             value = 1f,
             unit = "",
@@ -218,7 +220,7 @@ class QuroHeartbeatService(private val context: Context) {
         }
         
         return HealthCheck(
-            name = "提供商健康",
+            name = qstr(R.string.qk_03708),
             status = when {
                 healthPercentage < 50 -> HealthStatus.CRITICAL
                 healthPercentage < 80 -> HealthStatus.WARNING
@@ -236,7 +238,7 @@ class QuroHeartbeatService(private val context: Context) {
     private fun checkTerminalEnvironment(): HealthCheck {
         // 简化实现，实际需要检查终端环境状态
         return HealthCheck(
-            name = "终端环境",
+            name = qstr(R.string.qk_03690),
             status = HealthStatus.HEALTHY,
             value = 1f,
             unit = "",
@@ -250,7 +252,7 @@ class QuroHeartbeatService(private val context: Context) {
     private fun checkServiceStatus(): HealthCheck {
         // 检查关键服务是否运行
         return HealthCheck(
-            name = "服务状态",
+            name = qstr(R.string.qk_03553),
             status = HealthStatus.HEALTHY,
             value = 1f,
             unit = "",
@@ -337,9 +339,9 @@ class QuroHeartbeatService(private val context: Context) {
             maxMemoryMB = runtime.maxMemory() / 1024 / 1024,
             totalMemoryMB = runtime.totalMemory() / 1024 / 1024,
             freeMemoryMB = runtime.freeMemory() / 1024 / 1024,
-            javaVersion = System.getProperty("java.version") ?: "未知",
+            javaVersion = System.getProperty("java.version") ?: qstr(R.string.qk_00472),
             osName = System.getProperty("os.name") ?: "Android",
-            osVersion = System.getProperty("os.version") ?: "未知"
+            osVersion = System.getProperty("os.version") ?: qstr(R.string.qk_00472)
         )
     }
     

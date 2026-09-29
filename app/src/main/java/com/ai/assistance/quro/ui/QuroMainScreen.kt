@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import android.content.Context
 import androidx.compose.foundation.layout.*
@@ -83,12 +85,12 @@ fun QuroApp(
                     TextButton(onClick = {
                         clipboard.setText(AnnotatedString(crash ?: ""))
                         QuroCrashReporter.clear()
-                    }) { Text("复制并关闭") }
+                    }) { Text(stringResource(R.string.qk_02042)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { QuroCrashReporter.clear() }) { Text("仅关闭") }
+                    TextButton(onClick = { QuroCrashReporter.clear() }) { Text(stringResource(R.string.qk_02043)) }
                 },
-                title = { Text("⚠️ 运行出错（已捕获）") },
+                title = { Text(stringResource(R.string.qk_02044)) },
                 text = {
                     Box(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
                         Text(crash ?: "", style = MaterialTheme.typography.bodySmall)
@@ -126,10 +128,9 @@ private fun CrashViewerScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(20.dp),
             ) {
-                Text("上次运行崩溃（已捕获）", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.qk_02045), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "请把下方内容复制发给开发者，以便定位「设置闪退 / 无法对话」的真凶。",
+                Text(stringResource(R.string.qk_02046),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -137,9 +138,9 @@ private fun CrashViewerScreen(
                 Text(text, style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(20.dp))
                 Row {
-                    Button(onClick = onCopy) { Text("复制并关闭") }
+                    Button(onClick = onCopy) { Text(stringResource(R.string.qk_02042)) }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = onContinue) { Text("清除并继续") }
+                    Button(onClick = onContinue) { Text(stringResource(R.string.qk_02047)) }
                 }
             }
         }

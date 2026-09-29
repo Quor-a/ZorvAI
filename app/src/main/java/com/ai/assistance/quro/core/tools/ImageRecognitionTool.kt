@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.util.Log
@@ -17,7 +19,7 @@ import java.util.concurrent.TimeUnit
  */
 class ImageRecognitionTool : QuroTool {
     override val name = "image_recognition"
-    override val description = "🖼️ 图片内容识别：分析用户提供的图片文件，返回详细描述。" +
+    override val description = qstr(R.string.qk_03673) +
         "与 visual_analysis 的区别：image_recognition 分析用户发送的图片文件，visual_analysis 分析当前屏幕截图。" +
         "与 screenshot_base64 的区别：screenshot_base64 是截图并返回 Base64，image_recognition 是识别已有图片。" +
         "参数：{\"image_path\":\"图片路径\",\"question\":\"可选问题\"}。"

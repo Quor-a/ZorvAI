@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.service.QuroAiKeyboardService
@@ -16,7 +18,7 @@ import org.json.JSONObject
 class AiKeyboardTypeTool : QuroTool {
     override val name = "ai_type_text"
     override val description =
-        "通过 Zorv AI 智能体键盘，把文本直接打字进当前聚焦的输入框（如 WPS 文档）。" +
+        qstr(R.string.qk_03510) +
         "前置条件：在「系统设置→语言与输入法」启用并切到『Zorv AI 键盘』，且目标 App（如 WPS）的输入框已聚焦。" +
         "若未启用键盘，请改用 input_text（无障碍通道）。"
     override val parametersJson = """{
@@ -47,7 +49,7 @@ class AiKeyboardTypeTool : QuroTool {
 class AiKeyboardPressEnterTool : QuroTool {
     override val name = "ai_press_enter"
     override val description =
-        "通过 Zorv AI 智能体键盘发送回车键（提交/换行）。前置条件同 ai_type_text：已启用并切到『Zorv AI 键盘』且目标 App 输入框已聚焦。"
+        qstr(R.string.qk_03716)
     override val parametersJson = """{"type":"object","properties":{}}"""
 
     override fun run(context: Context, arguments: String): String {
@@ -64,7 +66,7 @@ class AiKeyboardPressEnterTool : QuroTool {
 class AiKeyboardSendTool : QuroTool {
     override val name = "ai_press_send"
     override val description =
-        "通过 Zorv AI 智能体键盘触发当前输入框的『发送』动作（EditorInfo.IME_ACTION_SEND），" +
+        qstr(R.string.qk_03440) +
         "适用于聊天/评论框（右下角动作是『发送』而非回车的场景）。" +
         "若输入框没有 SEND 动作，则自动降级为回车提交。" +
         "前置条件同 ai_type_text：已启用并切到『Zorv AI 键盘』且目标 App 输入框已聚焦。"

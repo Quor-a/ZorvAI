@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.websearch
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 /**
  * HanEntities —— 端侧中文 / 中英混排专有名词保护。
@@ -27,7 +29,7 @@ object HanEntities {
         "中国", "美国", "日本", "韩国", "俄罗斯", "德国", "法国", "英国", "印度", "巴西",
         // 品牌 / 产品母名
         "苹果", "华为", "小米", "三星", "OPPO", "vivo", "荣耀", "联想", "比亚迪", "特斯拉", "英伟达", "英特尔",
-        "微信", "抖音", "快手", "淘宝", "京东", "拼多多", "B站", "网易", "百度",
+        qstr(R.string.qk_00768), "抖音", qstr(R.string.qk_01022), "淘宝", "京东", "拼多多", "B站", "网易", "百度",
         // 赛事 / 作品
         "奥运会", "世界杯", "欧冠", "温网", "法网", "美网", "澳网", "亚运会"
     )

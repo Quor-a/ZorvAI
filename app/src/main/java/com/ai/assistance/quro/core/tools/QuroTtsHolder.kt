@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -602,7 +604,7 @@ class SpeakTool : QuroTool {
 }
 
 class StopSpeakTool : QuroTool {
-    override val name = "stop_speak"; override val description = "停止 TTS 朗读"
+    override val name = "stop_speak"; override val description = qstr(R.string.qk_03476)
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String = QuroTtsHolder.stop().run { "已停止朗读" }
 }

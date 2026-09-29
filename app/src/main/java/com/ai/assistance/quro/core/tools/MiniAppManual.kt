@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 /**
  * Web 应用手册 —— Web 应用（`miniapp`）的**唯一真相源**。
@@ -199,7 +201,7 @@ location  getLocation                                          获取定位
     fun section(topic: String): String {
         val t = topic.trim().lowercase()
         return when (t) {
-            "traps", "陷阱", "native", "原生", "原生ui", "errors", "错误", "错误清单",
+            "traps", "陷阱", "native", "原生", "原生ui", "errors", qstr(R.string.qk_00255), "错误清单",
             "compare", "对比", "对照" -> RETIRED
             // studio / 空 / all / 未知 topic → Web 应用手册（也是当前唯一的一册）
             else -> WEB_APP

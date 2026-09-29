@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.QuroBrowserBridge
@@ -16,7 +18,7 @@ import org.json.JSONObject
  */
 class BrowserActTool : QuroTool {
     override val name = "browser_act"
-    override val description = "AI 操控应用内置浏览器（接管当前显示的 WebView，页面已加载时可直接看到/操作内容）。" +
+    override val description = qstr(R.string.qk_03658) +
         "动作清单：open(网址或关键词,关键词会自动走搜索引擎) / status(返回 attached+loaded+url+title，先调它确认页面就绪) / " +
         "snapshot(取 url/title/ready + 所有可交互元素的 quro-id 列表 + 简化 DOM) / click(按 quro-id 点击) / " +
         "fill(按 quro-id 输入文本) / click_selector(按 CSS 选择器点击) / fill_selector(按 CSS 选择器输入) / " +

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.model
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.util.Log
@@ -92,7 +94,7 @@ class QuroHealthCheckService(private val context: Context) {
                 repository.updateHealthStatus(
                     config.id, 
                     QuroProviderConfig.HealthStatus.FAILED,
-                    e.message ?: "未知错误"
+                    e.message ?: qstr(R.string.qk_00503)
                 )
             }
         }

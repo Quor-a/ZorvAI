@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui.weather
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -73,7 +75,7 @@ fun VizButton(
                         .background(if (on) Color(0xFF39D98A) else Color.Gray), contentAlignment = Alignment.CenterEnd) {
                         Box(Modifier.size(16.dp).padding(end = 2.dp).clip(CircleShape).background(Color.White))
                     }
-                    Text(if (on) "  已开启" else "  已关闭", color = Color.White, fontSize = 14.sp,
+                    Text(if (on) stringResource(R.string.qk_03414) else stringResource(R.string.qk_03415), color = Color.White, fontSize = 14.sp,
                         modifier = Modifier.padding(start = 8.dp))
                 }
             }

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.skill.DEFAULT_SKILL_PARAMS
@@ -32,7 +34,7 @@ class QuroSkillTool(private val skillName: String, private val appCtx: Context) 
 
     override fun run(context: Context, arguments: String): String {
         val skill = QuroSkillStore.load(context).firstOrNull { QuroSkill.toolNameOf(it.name) == token && it.enabled }
-            ?: return "技能「$skillName」未启用或不存在"
+            ?: return qstr(R.string.qk_00253, (skillName).toString())
         val userInput = runCatching { JSONObject(arguments) }.getOrElse { JSONObject() }
             .optString("input", "").trim()
         return buildString {

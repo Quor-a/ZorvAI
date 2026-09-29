@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.agent.loop
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 /**
  * 闭环"校验"阶段的策略接口：判断工具返回是否"符合预期"。
@@ -17,7 +19,7 @@ fun interface Verifier {
  * 走到这里的 [ExecResult.Completed] 都是引擎判定为成功的，所以默认校验主要兜底"空返回"。
  */
 object DefaultVerifier : Verifier {
-    private val FAIL_MARKERS = listOf("工具执行失败", "工具执行异常", "工具执行超时", "未知工具", "需要权限")
+    private val FAIL_MARKERS = listOf("工具执行失败", qstr(R.string.qk_00248), "工具执行超时", "未知工具", "需要权限")
 
     override fun verify(name: String, arguments: String, raw: String, attempt: Int): List<LoopIssue> {
         val issues = mutableListOf<LoopIssue>()

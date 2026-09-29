@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
@@ -18,7 +20,7 @@ import java.io.File
  */
 class PythonRunTool : QuroTool {
     override val name = "python_run"
-    override val description = "在 proot Ubuntu 24.04 容器内执行 Python 代码并返回结果。" +
+    override val description = qstr(R.string.qk_03486) +
         "参数 {\"code\":\"Python 源码（必填）\",\"timeout_ms\":20000（最大 60000）}。" +
         "适用：AI 自己写 Python 做数据处理/正则/格式化/小型算法/抓取后的二次清洗等。" +
         "对 Web 抓取/搜索/读文章请用 ai_browser.automate/read；对长时任务请把代码拆小循环或加 print 看进度。" +

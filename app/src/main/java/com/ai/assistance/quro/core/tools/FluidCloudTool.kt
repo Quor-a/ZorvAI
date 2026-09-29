@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.fluidcloud.FluidCloudBridge
@@ -15,7 +17,7 @@ import org.json.JSONObject
  */
 class FluidCloudTool(private val appContext: Context) : QuroTool {
     override val name = "fluid_cloud_notify"
-    override val description = "在执行 AI 任务时，于状态栏显示流体云胶囊/实时更新通知（创建/更新/结束）。"
+    override val description = qstr(R.string.qk_03505)
     override val parametersJson = """{
         "type": "object",
         "properties": {
@@ -45,7 +47,7 @@ class FluidCloudTool(private val appContext: Context) : QuroTool {
             val args = JSONObject(arguments)
             val action = args.optString("action", "")
             val title = args.optString("title", "ZorvAI 任务")
-            val step = args.optString("step", "执行中")
+            val step = args.optString("step", qstr(R.string.qk_00954))
             val progress = args.optInt("progress", 0)
 
             when (action) {

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -219,7 +221,7 @@ class ScreenshotBase64Tool : QuroTool {
  */
 class VisualAnalysisTool : QuroTool {
     override val name = "visual_analysis"
-    override val description = "👁️ 屏幕视觉分析（真实视觉理解）：截取当前屏幕，把截图作为图片直接喂给当前多模态对话模型「亲眼」查看，" +
+    override val description = qstr(R.string.qk_03710) +
         "不再绕去独立视觉API。与 read_screen 区别：read_screen 读无障碍节点树（快/结构化兜底），" +
         "visual_analysis 让当前模型直接看截图（能识别游戏/WebView/Flutter/自绘UI、图标、文字、布局）。" +
         "可在任何场景调用：看屏幕内容、识别按钮/文字/图标、理解游戏或App界面、找元素、OCR。若当前模型不支持视觉，自动降级为视觉模型API或节点树。" +
@@ -780,7 +782,7 @@ class SetTimerTool : QuroTool {
     override fun run(context: Context, arguments: String): String {
         val args = try { org.json.JSONObject(arguments) } catch (e: Exception) { org.json.JSONObject() }
         val minutes = args.optInt("minutes", -1)
-        val label = args.optString("label", "倒计时")
+        val label = args.optString("label", qstr(R.string.qk_03378))
 
         if (minutes <= 0 || minutes > 1440) {
             return "❌ 倒计时必须在1-1440分钟之间"

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
@@ -24,7 +26,7 @@ import java.io.File
  */
 class PacketCaptureTool : QuroTool {
     override val name = "packet_capture"
-    override val description = "在 proot 容器内启动/停止/查询 mitmdump 抓包服务，flow 实时写入 /mnt/quro/mitm/。" +
+    override val description = qstr(R.string.qk_03487) +
         "参数 {\"action\":\"start|stop|status|dump|ca\",\"port\":8080（start 时可选）}。" +
         "返回 stdout/进程 PID/flow 文件路径/最近 N 条请求摘要。" +
         "注意：mitmdump 本身不强制路由流量；Android 应用流量默认不走本机代理，需用户配合（系统代理 / VPN / adb reverse）。"

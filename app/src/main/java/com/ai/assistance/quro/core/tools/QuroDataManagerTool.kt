@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.QuroToolResult
@@ -50,7 +52,7 @@ class QuroDataManagerTool(private val context: Context) : QuroTool {
         // 没有参数 DSL，必须直接构造 schema 字符串。
         return QuroToolSpec(
             name = "data_manager",
-            description = "管理数据导出、导入、备份、恢复和加密存储。支持 ZIP 格式导出、AES 加密、完整备份和选择性恢复。",
+            description = qstr(R.string.qk_03445),
             parametersJson = JSONObject().apply {
                 put("type", "object")
                 put("properties", JSONObject().apply {

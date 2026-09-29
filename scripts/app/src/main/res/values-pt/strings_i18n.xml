@@ -1,0 +1,2007 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="qk_00000" formatted="false">Não selecionado</string>
+    <string name="qk_00001" formatted="false">Selecionar app ACI</string>
+    <string name="qk_00002" formatted="false">Buscar</string>
+    <string name="qk_00003" formatted="false">Buscar app...</string>
+    <string name="qk_00004" formatted="false">Nenhum app ACI correspondente encontrado</string>
+    <string name="qk_00005" formatted="false">${app.capabilities.size} capabilities</string>
+    <string name="qk_00006" formatted="false">Selected: ${selectedApp.appName}</string>
+    <string name="qk_00007" formatted="false">Cancelar seleção</string>
+    <string name="qk_00008" formatted="false">Capabilities (${selectedApp.capabilities.size}):</string>
+    <string name="qk_00009" formatted="false">...and ${selectedApp.capabilities.size - 3} more capabilities</string>
+    <string name="qk_00010" formatted="false">Selecionar</string>
+    <string name="qk_00011" formatted="false">Cancelar</string>
+    <string name="qk_00012" formatted="false">Pequeno</string>
+    <string name="qk_00013" formatted="false">Padrão</string>
+    <string name="qk_00014" formatted="false">Grande</string>
+    <string name="qk_00015" formatted="false">Não configurado</string>
+    <string name="qk_00016" formatted="false">O modelo configurado atualmente.</string>
+    <string name="qk_00017" formatted="false">Nenhum modelo configurado</string>
+    <string name="qk_00018" formatted="false">Pré-visualização web (saída de IA)</string>
+    <string name="qk_00019" formatted="false">Pré-visualização de imagem (saída de IA)</string>
+    <string name="qk_00020" formatted="false">Nenhum app encontrado para abrir este documento. Tente o visualizador integrado ou instale WPS / Office</string>
+    <string name="qk_00021" formatted="false">Programação visual</string>
+    <string name="qk_00022" formatted="false">Environment Not Ready</string>
+    <string name="qk_00023" formatted="false">Copiado</string>
+    <string name="qk_00024" formatted="false">Permissão de captura de tela cancelada, com fallback para a árvore de nós de acessibilidade</string>
+    <string name="qk_00025" formatted="false">Área de trabalho</string>
+    <string name="qk_00026" formatted="false">Workspace: $wsName ($wsPath)</string>
+    <string name="qk_00027" formatted="false">ACI app: $aciName (package: $pkg)</string>
+    <string name="qk_00028" formatted="false">User selected: Visual Popup. Please call the visual_popup tool to create a visual popup now.</string>
+    <string name="qk_00029" formatted="false">User selected: Visual Question. Please call the visual_question tool to create a visual question now.</string>
+    <string name="qk_00030" formatted="false">User selected: Visual Card. Please output a self-developed visual card (metric/progress/structured block) using the ```quro-card fence. Plain text replies are forbidden.</string>
+    <string name="qk_00031" formatted="false">User selected: Dynamic UI. Please output a native interactive UI (form/panel/tool entry) using the ```quro-ui fence. Plain text replies are forbidden.</string>
+    <string name="qk_00032" formatted="false">User selected: AIP Layout. Please output a fully laid-out document/PPT/report (doc/deck/mindmap) using the ```aip fence (or aip_compose tool). Do not reply with plain text only.</string>
+    <string name="qk_00033" formatted="false">Enabled skills (${enabledSkillsCount}): ${enabledSkills.joinToString(</string>
+    <string name="qk_00034" formatted="false">Current configuration</string>
+    <string name="qk_00036" formatted="false">Custom</string>
+    <string name="qk_00037" formatted="false">Saved preset</string>
+    <string name="qk_00038" formatted="false">Other provider (self-hosted)</string>
+    <string name="qk_00039" formatted="false">Unnamed provider</string>
+    <string name="qk_00040" formatted="false">Other provider</string>
+    <string name="qk_00041" formatted="false">Local offline model</string>
+    <string name="qk_00043" formatted="false">Available models (API)</string>
+    <string name="qk_00044" formatted="false">From ${cfg.baseUrl}</string>
+    <string name="qk_00045" formatted="false">Conversation exported: $path</string>
+    <string name="qk_00046" formatted="false">QuroAI conversation exported. File saved to: $path</string>
+    <string name="qk_00047" formatted="false">Compartilhar conversa</string>
+    <string name="qk_00048" formatted="false">Falha na exportação, tente novamente</string>
+    <string name="qk_00049" formatted="false">Default ACI app set: $appName</string>
+    <string name="qk_00050" formatted="false">Paste</string>
+    <string name="qk_00051" formatted="false">Selected workspace: ${path.substringAfterLast(’/’)}</string>
+    <string name="qk_00052" formatted="false">Restored default workspace</string>
+    <string name="qk_00053" formatted="false">(Sem conteúdo)</string>
+    <string name="qk_00054" formatted="false">Entendi</string>
+    <string name="qk_00055" formatted="false">(Sem opções)</string>
+    <string name="qk_00056" formatted="false">A IA pode controlar este navegador com browser_act</string>
+    <string name="qk_00057" formatted="false">A IA pode rastrear em lote com web_crawler (rastreador web): indique a URL inicial</string>
+    <string name="qk_00058" formatted="false">A IA pode executar Python com python_run</string>
+    <string name="qk_00059" formatted="false">Mini janela do navegador</string>
+    <string name="qk_00060" formatted="false">Mini janela de chat</string>
+    <string name="qk_00061" formatted="false">Eu</string>
+    <string name="qk_00062" formatted="false">New Chat</string>
+    <string name="qk_00063" formatted="false">Expandir conversa</string>
+    <string name="qk_00064" formatted="false">File does not exist: $docViewerPath</string>
+    <string name="qk_00065" formatted="false">Fechar</string>
+    <string name="qk_00067" formatted="false">O dispositivo não suporta reconhecimento de voz</string>
+    <string name="qk_00068" formatted="false">Speech recognition error: $msg</string>
+    <string name="qk_00069" formatted="false">Cessão de leitura automática: a IA usou a ferramenta speak para controlar a ordem de reprodução nesta rodada</string>
+    <string name="qk_00070" formatted="false">Selecionado: Pop-up visual (acionado ao enviar)</string>
+    <string name="qk_00071" formatted="false">Cancelado: Pop-up visual</string>
+    <string name="qk_00072" formatted="false">Selecionado: Pergunta visual (acionado ao enviar)</string>
+    <string name="qk_00073" formatted="false">Cancelado: Pergunta visual</string>
+    <string name="qk_00074" formatted="false">Selecionado: Cartão visual (acionado ao enviar)</string>
+    <string name="qk_00075" formatted="false">Cancelado: Cartão visual</string>
+    <string name="qk_00076" formatted="false">Selecionado: Componente UI dinâmico (acionado ao enviar)</string>
+    <string name="qk_00077" formatted="false">Cancelado: Componente UI dinâmico</string>
+    <string name="qk_00078" formatted="false">Selecionado: Layout de documento AIP (acionado ao enviar)</string>
+    <string name="qk_00079" formatted="false">Cancelado: Layout de documento AIP</string>
+    <string name="qk_00080" formatted="false">MMM d</string>
+    <string name="qk_00081" formatted="false">Voltar ao final</string>
+    <string name="qk_00082" formatted="false">Pensar</string>
+    <string name="qk_00083" formatted="false">Ação</string>
+    <string name="qk_00084" formatted="false">Resultado</string>
+    <string name="qk_00085" formatted="false">Estado</string>
+    <string name="qk_00086" formatted="false">Compartilhar com</string>
+    <string name="qk_00087" formatted="false">Editar cartão de alma</string>
+    <string name="qk_00088" formatted="false">Copiar</string>
+    <string name="qk_00089" formatted="false">Pergunta de acompanhamento</string>
+    <string name="qk_00090" formatted="false">Compartilhar</string>
+    <string name="qk_00091" formatted="false">Excluir</string>
+    <string name="qk_00092" formatted="false">Tentar novamente</string>
+    <string name="qk_00093" formatted="false">Pensando</string>
+    <string name="qk_00094" formatted="false">Thinking process · ${msg.think.steps.size} steps</string>
+    <string name="qk_00095" formatted="false">· ${msg.tools.size} tools</string>
+    <string name="qk_00096" formatted="false">Pop-up visual</string>
+    <string name="qk_00097" formatted="false">Ver detalhes</string>
+    <string name="qk_00098" formatted="false">Abrir pop-up</string>
+    <string name="qk_00099" formatted="false">Pop-up personalizado</string>
+    <string name="qk_00100" formatted="false">Diagrama de fluxo / Visualização</string>
+    <string name="qk_00101" formatted="false">Baixar</string>
+    <string name="qk_00102" formatted="false">Ver imagem grande</string>
+    <string name="qk_00103" formatted="false">Pré-visualização de imagem indisponível</string>
+    <string name="qk_00104" formatted="false">Reproduzir</string>
+    <string name="qk_00105" formatted="false">Toque para pré-visualizar o layout no app</string>
+    <string name="qk_00106" formatted="false">Toque para abrir o arquivo</string>
+    <string name="qk_00107" formatted="false">Pré-visualização do conteúdo</string>
+    <string name="qk_00108" formatted="false">Recolher pré-visualização do layout</string>
+    <string name="qk_00109" formatted="false">Pré-visualizar layout na caixa de diálogo</string>
+    <string name="qk_00110" formatted="false">Pré-visualização em tela cheia</string>
+    <string name="qk_00111" formatted="false">File does not exist: ${att.path}</string>
+    <string name="qk_00112" formatted="false">Falha ao carregar imagem</string>
+    <string name="qk_00113" formatted="false">O arquivo de origem não existe</string>
+    <string name="qk_00114" formatted="false">Abrir arquivo</string>
+    <string name="qk_00115" formatted="false">Cannot open: ${it.message}</string>
+    <string name="qk_00116" formatted="false">Tool calls ×${tools.size}</string>
+    <string name="qk_00117" formatted="false">Executando…</string>
+    <string name="qk_00118" formatted="false">Rastreamento de execução</string>
+    <string name="qk_00119" formatted="false">(Ao vivo)</string>
+    <string name="qk_00120" formatted="false">Aguardando ação da IA…</string>
+    <string name="qk_00121" formatted="false">Layout de documento</string>
+    <string name="qk_00122" formatted="false">Controle de acessibilidade</string>
+    <string name="qk_00123" formatted="false">Permissões do sistema</string>
+    <string name="qk_00124" formatted="false">Execução no terminal</string>
+    <string name="qk_00125" formatted="false">Funções do sistema</string>
+    <string name="qk_00126" formatted="false">Ferramentas de arquivo</string>
+    <string name="qk_00127" formatted="false">Funções de rede</string>
+    <string name="qk_00128" formatted="false">Lembretes e etapas</string>
+    <string name="qk_00129" formatted="false">Controle de interface</string>
+    <string name="qk_00130" formatted="false">Geração de imagens</string>
+    <string name="qk_00131" formatted="false">Geração de vídeo</string>
+    <string name="qk_00132" formatted="false">Biblioteca de memória</string>
+    <string name="qk_00133" formatted="false">Resumo de contexto</string>
+    <string name="qk_00134" formatted="false">Incubação de personalidade</string>
+    <string name="qk_00135" formatted="false">Ferramentas</string>
+    <string name="qk_00136" formatted="false">Alto risco</string>
+    <string name="qk_00137" formatted="false">Risco médio</string>
+    <string name="qk_00138" formatted="false">Seguro</string>
+    <string name="qk_00139" formatted="false">Falha</string>
+    <string name="qk_00140" formatted="false">Aviso</string>
+    <string name="qk_00141" formatted="false">Sucesso</string>
+    <string name="qk_00142" formatted="false">Parâmetros</string>
+    <string name="qk_00143" formatted="false">Voltar</string>
+    <string name="qk_00144" formatted="false">
+
+[Export]</string>
+    <string name="qk_00145" formatted="false">Reabrir</string>
+    <string name="qk_00146" formatted="false">Executar novamente</string>
+    <string name="qk_00148" formatted="false">Código</string>
+    <string name="qk_00149" formatted="false">Imagem</string>
+    <string name="qk_00150" formatted="false">PDF saved to workspace; open it in the file manager</string>
+    <string name="qk_00151" formatted="false">· ${tools.size} tools</string>
+    <string name="qk_00152" formatted="false">Execution tracking</string>
+    <string name="qk_00153" formatted="false">AI is executing tools…</string>
+    <string name="qk_00154" formatted="false">  Parameters: ${formatJsonValue(t.args)}</string>
+    <string name="qk_00155" formatted="false">  Result: ${formatJsonValue(t.result)}</string>
+    <string name="qk_00156" formatted="false">Local Music</string>
+    <string name="qk_00157" formatted="false">Playing</string>
+    <string name="qk_00158" formatted="false">Paused</string>
+    <string name="qk_00159" formatted="false">Evaluate Arithmetic Expression</string>
+    <string name="qk_00160" formatted="false">🧩 ${enabledSkillsCount} skills</string>
+    <string name="qk_00161" formatted="false">Upload file</string>
+    <string name="qk_00162" formatted="false">Voice input</string>
+    <string name="qk_00163" formatted="false">Say something to Zorv…</string>
+    <string name="qk_00164" formatted="false">Stop generating</string>
+    <string name="qk_00165" formatted="false">Enviar</string>
+    <string name="qk_00166" formatted="false">Select skill</string>
+    <string name="qk_00167" formatted="false">Edit text</string>
+    <string name="qk_00168" formatted="false">Selecionado</string>
+    <string name="qk_00169" formatted="false">Visual Question</string>
+    <string name="qk_00170" formatted="false">Visual Card</string>
+    <string name="qk_00171" formatted="false">Dynamic UI</string>
+    <string name="qk_00172" formatted="false">AIP Layout</string>
+    <string name="qk_00173" formatted="false">Conversation</string>
+    <string name="qk_00174" formatted="false">Copy entire conversation</string>
+    <string name="qk_00175" formatted="false">Delete entire conversation</string>
+    <string name="qk_00176" formatted="false">Generative UI</string>
+    <string name="qk_00177" formatted="false">Generating</string>
+    <string name="qk_00178" formatted="false">Delete conversation</string>
+    <string name="qk_00179" formatted="false">Delete this conversation? This cannot be undone.</string>
+    <string name="qk_00180" formatted="false">Clear all conversations</string>
+    <string name="qk_00181" formatted="false">Delete all conversations? This cannot be undone.</string>
+    <string name="qk_00182" formatted="false">Delete all</string>
+    <string name="qk_00183" formatted="false">Video call</string>
+    <string name="qk_00184" formatted="false">Camera preview + real-time conversation + scene recognition</string>
+    <string name="qk_00185" formatted="false">Follow model default</string>
+    <string name="qk_00186" formatted="false">${historyRounds} rounds</string>
+    <string name="qk_00187" formatted="false">Rounds to keep</string>
+    <string name="qk_00188" formatted="false">10 rounds</string>
+    <string name="qk_00189" formatted="false">20 rounds</string>
+    <string name="qk_00190" formatted="false">50 rounds</string>
+    <string name="qk_00191" formatted="false">All (follow model default)</string>
+    <string name="qk_00192" formatted="false">User profile</string>
+    <string name="qk_00193" formatted="false">Import image</string>
+    <string name="qk_00194" formatted="false">Remove avatar</string>
+    <string name="qk_00195" formatted="false">Your name</string>
+    <string name="qk_00196" formatted="false">AI will know what to call you</string>
+    <string name="qk_00197" formatted="false">Personal signature (optional)</string>
+    <string name="qk_00198" formatted="false">Salvar</string>
+    <string name="qk_00199" formatted="false">Running</string>
+    <string name="qk_00200" formatted="false">&quot;Current configuration&quot; is the real model you set in Settings; &quot;Available models&quot; is the real list fetched from the API. Tap to switch.</string>
+    <string name="qk_00201" formatted="false">Fetching available models…</string>
+    <string name="qk_00202" formatted="false">Fetch available models from API (manual)</string>
+    <string name="qk_00203" formatted="false">Fetch failed: $fetchError. Go to &quot;Model Configuration&quot; and enter the correct Base URL / API Key, then retry.</string>
+    <string name="qk_00204" formatted="false">Currently only the &quot;Current configuration&quot; model is available. For more options, go to &quot;Model Configuration&quot; to enter Base URL and API Key to fetch, or enter a model name manually.</string>
+    <string name="qk_00205" formatted="false">Go to Model Configuration · set API Key / Base URL / parameters</string>
+    <string name="qk_00206" formatted="false">Currently selected: &quot;${selected.name}&quot; · applies on switch</string>
+    <string name="qk_00207" formatted="false">Select soul</string>
+    <string name="qk_00208" formatted="false">Each soul is a &quot;conversation partner&quot; with a different tone and expertise; switching changes how you interact.</string>
+    <string name="qk_00209" formatted="false">Soul injection · full profile (avatar/role/tone/tags)</string>
+    <string name="qk_00210" formatted="false">Persona only changes tone and expertise, not facts or capability boundaries</string>
+    <string name="qk_00211" formatted="false">Tap a tool below to run it quickly; you can also import tools or let AI write tools. Once imported, they become callable tools.</string>
+    <string name="qk_00212" formatted="false">Upload</string>
+    <string name="qk_00213" formatted="false">AI Browser</string>
+    <string name="qk_00214" formatted="false">Caixa de ferramentas</string>
+    <string name="qk_00215" formatted="false">Office documents (docx/xlsx/pptx): tap &quot;Open Preview&quot; top-right to view and edit text in-app. After editing, the RAG index is rebuilt automatically.</string>
+    <string name="qk_00216" formatted="false">Terminal</string>
+    <string name="qk_00217" formatted="false">Clear screen</string>
+    <string name="qk_00218" formatted="false">Skills</string>
+    <string name="qk_00219" formatted="false">Schedule</string>
+    <string name="qk_00220" formatted="false">Bot</string>
+    <string name="qk_00221" formatted="false">Select upload type (multi-select)</string>
+    <string name="qk_00222" formatted="false">File</string>
+    <string name="qk_00223" formatted="false">Video</string>
+    <string name="qk_00224" formatted="false">Please search online: $text</string>
+    <string name="qk_00225" formatted="false">Search / Open</string>
+    <string name="qk_00226" formatted="false">AI Browser · web search</string>
+    <string name="qk_00227" formatted="false">Search term or URL</string>
+    <string name="qk_00228" formatted="false">e.g. today’s news / https://example.com</string>
+    <string name="qk_00229" formatted="false">Enter a URL to open in the built-in browser; enter a keyword to let AI search online (runs in background).</string>
+    <string name="qk_00230" formatted="false">Entry point for TTS, speech recognition, and voice settings.</string>
+    <string name="qk_00231" formatted="false">Text-to-Speech</string>
+    <string name="qk_00232" formatted="false">Text-to-Speech (TTS)</string>
+    <string name="qk_00233" formatted="false">Speech Recognition</string>
+    <string name="qk_00234" formatted="false">Speech Recognition (STT)</string>
+    <string name="qk_00235" formatted="false">Configurações de voz</string>
+    <string name="qk_00236" formatted="false">Linked answer</string>
+    <string name="qk_00238" formatted="false">⚠️ Dynamic UI parse failed: ${parsed.reason}</string>
+    <string name="qk_00239" formatted="false">Nothing to copy</string>
+    <string name="qk_00240" formatted="false">No app specified to open</string>
+    <string name="qk_00241" formatted="false">Launch failed</string>
+    <string name="qk_00242" formatted="false">No screen specified to open</string>
+    <string name="qk_00243" formatted="false">No HTML content to render</string>
+    <string name="qk_00244" formatted="false">HTML preview</string>
+    <string name="qk_00245" formatted="false">No visual content to render</string>
+    <string name="qk_00246" formatted="false">No tool specified to call</string>
+    <string name="qk_00247">Please call tool %1$s</string>
+    <string name="qk_00248" formatted="false">Tool execution error</string>
+    <string name="qk_00249">Executed %1$s</string>
+    <string name="qk_00252" formatted="false">No skill specified to execute</string>
+    <string name="qk_00253">Skill “%1$s” is not enabled or does not exist</string>
+    <string name="qk_00254" formatted="false">Run failed</string>
+    <string name="qk_00255" formatted="false">Error</string>
+    <string name="qk_00256">Run failed: %1$s</string>
+    <string name="qk_00257" formatted="false">Preview</string>
+    <string name="qk_00258" formatted="false">Copy Code</string>
+    <string name="qk_00259" formatted="false">Download Code</string>
+    <string name="qk_00260" formatted="false">Code run error, please analyze and fix:</string>
+    <string name="qk_00261">Language: %1$s</string>
+    <string name="qk_00262" formatted="false">Code: </string>
+    <string name="qk_00263" formatted="false">Error message: </string>
+    <string name="qk_00264" formatted="false">Analyze the error, provide the fixed complete code, and explain the fix.</string>
+    <string name="qk_00265" formatted="false">Auto Fix</string>
+    <string name="qk_00266" formatted="false">🖼️ Image Content Recognition: analyze the image file provided by the user, return a detailed description.</string>
+    <string name="qk_00267" formatted="false">✅ Run result (interactive)</string>
+    <string name="qk_00268" formatted="false">Download HTML</string>
+    <string name="qk_00269" formatted="false">❌ Run result</string>
+    <string name="qk_00270" formatted="false">✅ Run Result</string>
+    <string name="qk_00271" formatted="false">Download Result</string>
+    <string name="qk_00272" formatted="false">Close Fullscreen</string>
+    <string name="qk_00273">✅ Saved to Downloads/%1$s</string>
+    <string name="qk_00274" formatted="false">❌ Save failed: cannot create file</string>
+    <string name="qk_00275">❌ Save failed: %1$s</string>
+    <string name="qk_00280" formatted="false">Smart Assistant</string>
+    <string name="qk_00281" formatted="false">Your AI assistant, always on call.</string>
+    <string name="qk_00282" formatted="false">Nova conversa</string>
+    <string name="qk_00283" formatted="false">Empty Chat</string>
+    <string name="qk_00284" formatted="false">Today</string>
+    <string name="qk_00285" formatted="false">This Week</string>
+    <string name="qk_00286" formatted="false">Earlier</string>
+    <string name="qk_00287" formatted="false">Attachments</string>
+    <string name="qk_00288">Downloaded: %1$s</string>
+    <string name="qk_00289">Saved to app dir: %1$s</string>
+    <string name="qk_00290">Download failed: %1$s</string>
+    <string name="qk_00291" formatted="false">Workflow Management</string>
+    <string name="qk_00292" formatted="false">New Workflow</string>
+    <string name="qk_00293" formatted="false">No workflows yet</string>
+    <string name="qk_00294" formatted="false">Tap + at top-right to create, or let AI build one for you</string>
+    <string name="qk_00295" formatted="false">Workflow execution finished</string>
+    <string name="qk_00296">Run failed: %1$s</string>
+    <string name="qk_00297">Trigger: %1$s | Nodes: %2$s</string>
+    <string name="qk_00298" formatted="false">Last status: ${workflow.lastStatus}</string>
+    <string name="qk_00299" formatted="false">Editar</string>
+    <string name="qk_00300" formatted="false">Edit workflow</string>
+    <string name="qk_00301" formatted="false">Workflow name</string>
+    <string name="qk_00302" formatted="false">Trigger type (manual/time/event)</string>
+    <string name="qk_00303" formatted="false">Schedule rule (e.g. daily:09:00)</string>
+    <string name="qk_00304" formatted="false">App private files</string>
+    <string name="qk_00305" formatted="false">App data (quro_data)</string>
+    <string name="qk_00306" formatted="false">Exports (quro_exports)</string>
+    <string name="qk_00307" formatted="false">Backups (quro_backups)</string>
+    <string name="qk_00308" formatted="false">Public downloads/QuroAI_logs</string>
+    <string name="qk_00309" formatted="false">Directory does not exist: ${dir.absolutePath}</string>
+    <string name="qk_00310" formatted="false">Please navigate in the system file manager to: ${dir.absolutePath}</string>
+    <string name="qk_00311" formatted="false">Path copied; paste it in the file manager: ${dir.absolutePath}</string>
+    <string name="qk_00312" formatted="false">Shared storage</string>
+    <string name="qk_00313" formatted="false">Mounted (on Android 11+, app private dirs are visible in the system file manager)</string>
+    <string name="qk_00314" formatted="false">Not mounted or unavailable</string>
+    <string name="qk_00315" formatted="false">Open in system file manager</string>
+    <string name="qk_00316" formatted="false">Path copied</string>
+    <string name="qk_00317" formatted="false">Copy path</string>
+    <string name="qk_00318" formatted="false">Calculating…</string>
+    <string name="qk_00319" formatted="false">Storage management</string>
+    <string name="qk_00320" formatted="false">Linux rootfs cache (usr/tmp) usage; after clearing, the terminal environment must be re-initialized.</string>
+    <string name="qk_00321" formatted="false">Cache cleared</string>
+    <string name="qk_00322" formatted="false">Install Sample Package</string>
+    <string name="qk_00323" formatted="false">Clear cache</string>
+    <string name="qk_00324" formatted="false">FTP file server</string>
+    <string name="qk_00325" formatted="false">Document:</string>
+    <string name="qk_00326" formatted="false">Stopped</string>
+    <string name="qk_00327" formatted="false">Text Design</string>
+    <string name="qk_00328" formatted="false">FTP server stopped</string>
+    <string name="qk_00329" formatted="false">✓ Login succeeded!</string>
+    <string name="qk_00330" formatted="false">Shizuku authorized ✓</string>
+    <string name="qk_00331" formatted="false">Stop server</string>
+    <string name="qk_00332" formatted="false">Start server</string>
+    <string name="qk_00333" formatted="false">Terminal rootfs files</string>
+    <string name="qk_00334" formatted="false">Pronto</string>
+    <string name="qk_00335" formatted="false">Export Knowledge Base (ZIP)</string>
+    <string name="qk_00336" formatted="false">Browse/read/write files inside the Ubuntu rootfs (/root, /etc, /sdcard…); shares the same filesystem with the terminal.</string>
+    <string name="qk_00337" formatted="false">rootfs path</string>
+    <string name="qk_00338" formatted="false">(Empty directory)</string>
+    <string name="qk_00339" formatted="false">Error: ${r.error}</string>
+    <string name="qk_00340" formatted="false">List</string>
+    <string name="qk_00341" formatted="false">Read ${r.output.length} chars (edit then &quot;Write&quot; back to the same path)</string>
+    <string name="qk_00342" formatted="false">Read</string>
+    <string name="qk_00343" formatted="false">Written: ${path.trim()}</string>
+    <string name="qk_00344" formatted="false">Write</string>
+    <string name="qk_00345" formatted="false">Deleted: ${path.trim()}</string>
+    <string name="qk_00346" formatted="false">File content (shown after read; edit then &quot;Write&quot;)</string>
+    <string name="qk_00347" formatted="false">Tip: After entering a path, tap &quot;List&quot; to view the directory, or directly &quot;Read / Write / Delete&quot; files.</string>
+    <string name="qk_00348" formatted="false">Storage overview</string>
+    <string name="qk_00349" formatted="false">Total cleanable size</string>
+    <string name="qk_00350" formatted="false">Sum of the categories below (excluding offline models and other external user files)</string>
+    <string name="qk_00351" formatted="false">Category cleanup (choose carefully; important data may be lost)</string>
+    <string name="qk_00352" formatted="false">App data</string>
+    <string name="qk_00353" formatted="false">Conversations / Settings / Model config</string>
+    <string name="qk_00354" formatted="false">Linux sandbox (rootfs)</string>
+    <string name="qk_00355" formatted="false">Ubuntu rootfs / cache; re-download required after cleanup</string>
+    <string name="qk_00356" formatted="false">Diagnostic logs</string>
+    <string name="qk_00357" formatted="false">Phone Download/QuroAI_logs</string>
+    <string name="qk_00358" formatted="false">Exported files</string>
+    <string name="qk_00359" formatted="false">Exported ZIP data packages</string>
+    <string name="qk_00360" formatted="false">Backup files</string>
+    <string name="qk_00361" formatted="false">Data backup archives</string>
+    <string name="qk_00362" formatted="false">Cache directory</string>
+    <string name="qk_00363" formatted="false">Images / WebView / temp cache</string>
+    <string name="qk_00364" formatted="false">Clean all</string>
+    <string name="qk_00365" formatted="false">Clean all of the above</string>
+    <string name="qk_00366" formatted="false">Delete app data / sandbox / logs / exports / backups / cache</string>
+    <string name="qk_00367" formatted="false">Clean app data</string>
+    <string name="qk_00368" formatted="false">Clean Linux sandbox</string>
+    <string name="qk_00369" formatted="false">Clean diagnostic logs</string>
+    <string name="qk_00370" formatted="false">Clean exported files</string>
+    <string name="qk_00371" formatted="false">Clean backup files</string>
+    <string name="qk_00372" formatted="false">Clean cache directory</string>
+    <string name="qk_00373" formatted="false">Log in to GitHub</string>
+    <string name="qk_00374" formatted="false">This will delete all conversations / settings / model config (unrecoverable). Are you sure?</string>
+    <string name="qk_00375" formatted="false">This will delete the Ubuntu rootfs and sandbox cache; CMS/terminal will need to re-download next time. Are you sure?</string>
+    <string name="qk_00376" formatted="false">This will delete the phone Download/QuroAI_logs diagnostic logs. Are you sure?</string>
+    <string name="qk_00377" formatted="false">This will delete all exported ZIP data packages. Are you sure?</string>
+    <string name="qk_00378" formatted="false">This will delete all data backup archives. Are you sure?</string>
+    <string name="qk_00379" formatted="false">This will delete the app cache directory. Are you sure?</string>
+    <string name="qk_00380" formatted="false">This will delete all of the above (excluding offline models and other external user files). Are you sure?</string>
+    <string name="qk_00381" formatted="false">Confirm cleanup?</string>
+    <string name="qk_00382" formatted="false">Deploy to Terminal</string>
+    <string name="qk_00383" formatted="false">⚠️ Runtime error: ${e.message}</string>
+    <string name="qk_00384" formatted="false">Restore</string>
+    <string name="qk_00385" formatted="false">Opening: ${file.name}</string>
+    <string name="qk_00386" formatted="false">Opened: ${file.name}</string>
+    <string name="qk_00387" formatted="false">Cannot open: ${file.name}</string>
+    <string name="qk_00388" formatted="false">No file</string>
+    <string name="qk_00389" formatted="false">Saving...</string>
+    <string name="qk_00390" formatted="false">Saved: ${file?.name}</string>
+    <string name="qk_00391" formatted="false">Saved to ${file?.absolutePath}</string>
+    <string name="qk_00392" formatted="false">Save failed</string>
+    <string name="qk_00393" formatted="false">Word document</string>
+    <string name="qk_00394" formatted="false">Word 97-2003 document</string>
+    <string name="qk_00395" formatted="false">Excel spreadsheet</string>
+    <string name="qk_00396" formatted="false">Excel 97-2003 spreadsheet</string>
+    <string name="qk_00397" formatted="false">PowerPoint presentation</string>
+    <string name="qk_00398" formatted="false">PowerPoint 97-2003 presentation</string>
+    <string name="qk_00399" formatted="false">Documento</string>
+    <string name="qk_00400" formatted="false">Office editor</string>
+    <string name="qk_00401" formatted="false">● Unsaved</string>
+    <string name="qk_00402" formatted="false">Saving</string>
+    <string name="qk_00403" formatted="false">Execute Shell Command</string>
+    <string name="qk_00404" formatted="false">More</string>
+    <string name="qk_00405" formatted="false">Lines $lineCount · Words $wordCount</string>
+    <string name="qk_00406" formatted="false">entry.sh Script</string>
+    <string name="qk_00407" formatted="false">Open Document</string>
+    <string name="qk_00408" formatted="false">Start editing document content...</string>
+    <string name="qk_00409" formatted="false">Plugin desktop</string>
+    <string name="qk_00410" formatted="false">Cannot read the selected file</string>
+    <string name="qk_00411" formatted="false">
+· Re-signed with &quot;$used&quot; (alias ${cfg.alias}) before installing</string>
+    <string name="qk_00412" formatted="false">
+· Re-signing failed; installed original package: $err</string>
+    <string name="qk_00413" formatted="false">Installed: ${r.pluginId}</string>
+    <string name="qk_00414" formatted="false">Install failed: ${r.message}</string>
+    <string name="qk_00415" formatted="false">Install error: ${it.message}</string>
+    <string name="qk_00416" formatted="false">Package Management</string>
+    <string name="qk_00417" formatted="false">Open homepage in browser</string>
+    <string name="qk_00418" formatted="false">Cannot read</string>
+    <string name="qk_00419" formatted="false">Search plugins / package names / AI tools</string>
+    <string name="qk_00420" formatted="false">Concluído</string>
+    <string name="qk_00421" formatted="false">Refreshed</string>
+    <string name="qk_00422" formatted="false">Reloaded: ${rec.pluginId}</string>
+    <string name="qk_00423" formatted="false">Reload failed: ${rec.pluginId}</string>
+    <string name="qk_00424" formatted="false">Uninstalled: ${rec.pluginId}</string>
+    <string name="qk_00425" formatted="false">Uninstall failed: ${rec.pluginId}</string>
+    <string name="qk_00426" formatted="false">Carregado</string>
+    <string name="qk_00427" formatted="false">Not Loaded</string>
+    <string name="qk_00428" formatted="false">Open UI</string>
+    <string name="qk_00429" formatted="false">Details</string>
+    <string name="qk_00430" formatted="false">Extension points / AI tools / version info</string>
+    <string name="qk_00431" formatted="false">Reload</string>
+    <string name="qk_00432" formatted="false">Re-instantiate the plugin entry; changes take effect immediately</string>
+    <string name="qk_00433" formatted="false">The data format returned by the AI is incorrect; please retry or adjust the description.</string>
+    <string name="qk_00434" formatted="false">Desinstalar</string>
+    <string name="qk_00435" formatted="false">Remove together with its contributed AI tools / ACI capabilities / interface</string>
+    <string name="qk_00436" formatted="false">Uninstall failed</string>
+    <string name="qk_00437" formatted="false">AI tools contributed by plugin (${allToolSpecs.size})</string>
+    <string name="qk_00438" formatted="false">These tools are already in the AI’s toolset; just state your need in the chat (e.g. &quot;check SF1234567890&quot; → express_query).</string>
+    <string name="qk_00440" formatted="false">No plugin tools yet. Install a few plugins first.</string>
+    <string name="qk_00441" formatted="false">Plugin engine ready</string>
+    <string name="qk_00442" formatted="false">Plugin engine not initialized</string>
+    <string name="qk_00443" formatted="false">Installed</string>
+    <string name="qk_00444" formatted="false">AI tools</string>
+    <string name="qk_00445" formatted="false">Built-in package</string>
+    <string name="qk_00446" formatted="false">$surfaceCount surfaces</string>
+    <string name="qk_00447" formatted="false">$toolCount tools</string>
+    <string name="qk_00448" formatted="false">No plugin matches &quot;$query&quot;</string>
+    <string name="qk_00449" formatted="false">No matching plugin</string>
+    <string name="qk_00450" formatted="false">Plugin desktop is still empty</string>
+    <string name="qk_00451" formatted="false">Rebind</string>
+    <string name="qk_00452" formatted="false">A plugin is a standalone APK; install it to add capabilities to the AI: AI tools / ACI capabilities / slash commands / its own UI, with no host code changes.</string>
+    <string name="qk_00453" formatted="false">Cannot share this file (path not allowed)</string>
+    <string name="qk_00454" formatted="false">Import Plugin APK</string>
+    <string name="qk_00455" formatted="false">Cannot read the selected file, import failed</string>
+    <string name="qk_00456" formatted="false">Import APK</string>
+    <string name="qk_00457" formatted="false">Built-in plugins${if (builtinCount &gt; 0)</string>
+    <string name="qk_00458" formatted="false">Plugin tools $toolCount</string>
+    <string name="qk_00459" formatted="false">Atualizar</string>
+    <string name="qk_00460" formatted="false">Entry: ${rec.entryClass}</string>
+    <string name="qk_00461" formatted="false">Installed at: ${formatTime(rec.installedAt)}</string>
+    <string name="qk_00462" formatted="false">Extension point</string>
+    <string name="qk_00463" formatted="false">AI tools contributed (${tools.size})</string>
+    <string name="qk_00464" formatted="false">Currently using the built-in debug.keystore (android/android/androiddebugkey).</string>
+    <string name="qk_00465" formatted="false">Bundled surfaces (${surfaces.size})</string>
+    <string name="qk_00466" formatted="false">Open $label</string>
+    <string name="qk_00467" formatted="false">Open failed: ${it.message}</string>
+    <string name="qk_00468" formatted="false">Host has no built-in sample plugin</string>
+    <string name="qk_00469" formatted="false">Built-in plugin installed: ${r.pluginId}</string>
+    <string name="qk_00470" formatted="false">Built-in plugin install failed: ${r.message}</string>
+    <string name="qk_00471" formatted="false">Built-in plugin install error: ${it.message}</string>
+    <string name="qk_00472" formatted="false">Desconhecido</string>
+    <string name="qk_00473" formatted="false">ACI capability</string>
+    <string name="qk_00474" formatted="false">Conversation card</string>
+    <string name="qk_00475" formatted="false">Inline component</string>
+    <string name="qk_00476" formatted="false">UI</string>
+    <string name="qk_00477" formatted="false">Model integration</string>
+    <string name="qk_00478" formatted="false">Knowledge source</string>
+    <string name="qk_00479" formatted="false">Slash command</string>
+    <string name="qk_00480" formatted="false">Settings item</string>
+    <string name="qk_00481" formatted="false">Scheduled task</string>
+    <string name="qk_00482" formatted="false">Message channel</string>
+    <string name="qk_00483" formatted="false">File handling</string>
+    <string name="qk_00484" formatted="false">Code runtime</string>
+    <string name="qk_00485" formatted="false">Voice</string>
+    <string name="qk_00486" formatted="false">Auto-re-sign when importing plugin</string>
+    <string name="qk_00487" formatted="false">Ready: ${cfg.keystoreName} (built-in)</string>
+    <string name="qk_00488" formatted="false">GenUI · Generative UI Chat</string>
+    <string name="qk_00489" formatted="false">Host signature: $hostFingerprint</string>
+    <string name="qk_00490" formatted="false">Plugin runtime initializing…</string>
+    <string name="qk_00491" formatted="false">Plugin runtime</string>
+    <string name="qk_00492" formatted="false">QuickJS Sandbox</string>
+    <string name="qk_00493" formatted="false">Plugin surface does not exist: $surfaceId
+(The plugin may have been uninstalled or reloaded)</string>
+    <string name="qk_00494" formatted="false">Plugin surface build failed: $surfaceId</string>
+    <string name="qk_00495" formatted="false">Plugin surface build failed: $surfaceId
+${ext.label}</string>
+    <string name="qk_00496" formatted="false">Cannot open link: $url</string>
+    <string name="qk_00497" formatted="false">About Zorv AI</string>
+    <string name="qk_00498" formatted="false">Open-source AI assistant · original build.</string>
+    <string name="qk_00499" formatted="false">Updates &amp; Support</string>
+    <string name="qk_00500" formatted="false">Check for updates</string>
+    <string name="qk_00501" formatted="false">Checking…</string>
+    <string name="qk_00502" formatted="false">Current version v$versionName</string>
+    <string name="qk_00503" formatted="false">Unknown error</string>
+    <string name="qk_00504" formatted="false">New version found v$lv</string>
+    <string name="qk_00505" formatted="false">Already the latest version v$versionName</string>
+    <string name="qk_00506" formatted="false">Update check failed: $errMsg</string>
+    <string name="qk_00507" formatted="false">Project address</string>
+    <string name="qk_00508" formatted="false">Star on GitHub</string>
+    <string name="qk_00509" formatted="false">If you like Zorv AI, feel free to give it a Star ⭐</string>
+    <string name="qk_00510" formatted="false">Open Source License Notice</string>
+    <string name="qk_00511" formatted="false">View licenses of third-party dependencies used by this app</string>
+    <string name="qk_00512" formatted="false">Legal &amp; Compliance</string>
+    <string name="qk_00513" formatted="false">Permission Usage Statement</string>
+    <string name="qk_00514" formatted="false">Description of the purposes of permissions requested by this app</string>
+    <string name="qk_00515" formatted="false">User Agreement</string>
+    <string name="qk_00516" formatted="false">Please read and understand before using this app</string>
+    <string name="qk_00517" formatted="false">Developer</string>
+    <string name="qk_00518" formatted="false">Zorv AI doesn’t store email; sending is done via your chosen email app.</string>
+    <string name="qk_00519" formatted="false">Zorv AI (this app)</string>
+    <string name="qk_00520" formatted="false">Source code is open-sourced under Apache-2.0; see the LICENSE file in the repository</string>
+    <string name="qk_00521" formatted="false">Google - core-ktx, appcompat, lifecycle, activity-compose, webkit, concurrent-futures, etc.</string>
+    <string name="qk_00522" formatted="false">Google - UI, Material3, icons-extended, etc.</string>
+    <string name="qk_00523" formatted="false">Square - HTTP client</string>
+    <string name="qk_00524" formatted="false">JetBrains - asynchronous programming framework</string>
+    <string name="qk_00525" formatted="false">Rikka - ADB-level IPC channel for root-free system command execution</string>
+    <string name="qk_00526" formatted="false">Vanniktech - image cropping component</string>
+    <string name="qk_00527" formatted="false">Apache Software Foundation - archive file handling</string>
+    <string name="qk_00528" formatted="false">Fabrice Bellard - lightweight JavaScript engine used for the plugin runtime</string>
+    <string name="qk_00529" formatted="false">k2-fsa - on-device speech recognition engine (SenseVoice)</string>
+    <string name="qk_00530" formatted="false">Mozilla - open-source browser engine, file-level Copyleft, source shipped with the package</string>
+    <string name="qk_00532" formatted="false">Google - Health Connect client</string>
+    <string name="qk_00533" formatted="false">JUnit team - unit testing framework (Eclipse Public License 2.0)</string>
+    <string name="qk_00534" formatted="false">Alibaba - on-device AI inference framework, source-compiled, full flavor</string>
+    <string name="qk_00535" formatted="false">ggml authors - local LLM inference engine, source-compiled, full flavor</string>
+    <string name="qk_00536" formatted="false">Tencent - high-performance neural network inference framework, prebuilt .so</string>
+    <string name="qk_00537" formatted="false">PRoot - root-free user-space chroot/mount emulation, prebuilt .so. Source: https://github.com/proot-me/proot</string>
+    <string name="qk_00538" formatted="false">Samba project - hierarchical memory allocator, prebuilt .so, dynamically linked. Source: https://talloc.samba.org</string>
+    <string name="qk_00539" formatted="false">Ubuntu 24.04 environment</string>
+    <string name="qk_00540" formatted="false">Includes glibc, coreutils, apt package manager, etc., for the in-app Linux environment</string>
+    <string name="qk_00541" formatted="false">Three.js Authors - 3D rendering engine used for GLB avatar display</string>
+    <string name="qk_00542" formatted="false">Google - 3D data compression/decompression library (draco_decoder.wasm)</string>
+    <string name="qk_00543" formatted="false">CodeMirror - code editor component (v5.65.16)</string>
+    <string name="qk_00544" formatted="false">Pierre Quentel - in-browser Python runtime</string>
+    <string name="qk_00545" formatted="false">Mermaid - chart/flowchart rendering library</string>
+    <string name="qk_00546" formatted="false">Mozilla - PDF rendering engine</string>
+    <string name="qk_00547" formatted="false">Adobe CMap resources</string>
+    <string name="qk_00548" formatted="false">Adobe Systems - PDF character mapping tables (cmaps/ directory)</string>
+    <string name="qk_00549" formatted="false">Michael Williamson - DOCX to HTML converter</string>
+    <string name="qk_00550" formatted="false">SheetJS - spreadsheet parsing/writing library (xlsx.js)</string>
+    <string name="qk_00551" formatted="false">Google/Red Hat - PDF standard fonts</string>
+    <string name="qk_00552" formatted="false">PDFium Authors (Google) - PDF standard fonts</string>
+    <string name="qk_00553" formatted="false">ACI console UI</string>
+    <string name="qk_00554" formatted="false">Self-developed by this app (core/aci + consolekit), no third-party dependencies</string>
+    <string name="qk_00555" formatted="false">New version found: v$updateVersion</string>
+    <string name="qk_00556" formatted="false">New version detected, downloading APK directly…</string>
+    <string name="qk_00557" formatted="false">If the download doesn’t start automatically, tap the button below to download manually:</string>
+    <string name="qk_00558" formatted="false">Voice description (e.g.: gentle girlish voice)</string>
+    <string name="qk_00559" formatted="false">Read the text file content at the specified relative path in the ZorvAI workspace (QuroWorkspace) and return the full text.</string>
+    <string name="qk_00560" formatted="false">Download ZorvAI update</string>
+    <string name="qk_00561" formatted="false">Downloading new version v$version...</string>
+    <string name="qk_00562" formatted="false">Starting update download…</string>
+    <string name="qk_00563" formatted="false">Download failed: ${e.message}</string>
+    <string name="qk_00564" formatted="false">This statement may change with app version updates; the latest version on this page prevails.</string>
+    <string name="qk_00680">Unknown capability: %1$s</string>
+    <string name="qk_00698" formatted="false">Console</string>
+    <string name="qk_00699" formatted="false">(Raw output, not recognized as SDUI snapshot)</string>
+    <string name="qk_00700" formatted="false">(Empty snapshot)</string>
+    <string name="qk_00701">Failed to open console (error code=%1$s): %2$s</string>
+    <string name="qk_00702" formatted="false">ACT associated launch</string>
+    <string name="qk_00703" formatted="false">Custom UA String</string>
+    <string name="qk_00704" formatted="false">Compile Project</string>
+    <string name="qk_00706" formatted="false">Package name or app name</string>
+    <string name="qk_00707" formatted="false">E.g. com.example.chat or WeChat</string>
+    <string name="qk_00708" formatted="false">Remind user to enable Accessibility Service</string>
+    <string name="qk_00709">Registered and started: %1$s</string>
+    <string name="qk_00711" formatted="false">Register and start by package name</string>
+    <string name="qk_00712">Started: %1$s</string>
+    <string name="qk_00714" formatted="false">Start</string>
+    <string name="qk_00715">Registered and started: %1$s</string>
+    <string name="qk_00716" formatted="false">Direct Official Gateway</string>
+    <string name="qk_00719" formatted="false">Discovery Stats (real-time)</string>
+    <string name="qk_00721">Total capabilities: %1$s</string>
+    <string name="qk_00730" formatted="false">ACI Controlled-side Integration Manual</string>
+    <string name="qk_00731" formatted="false">Example: my private service</string>
+    <string name="qk_00732" formatted="false">Save dependency template</string>
+    <string name="qk_00734" formatted="false">Repository</string>
+    <string name="qk_00735" formatted="false">Freeze or unfreeze a specified app (frozen apps don’t reside in memory or receive push).</string>
+    <string name="qk_00736" formatted="false">Apply for API key</string>
+    <string name="qk_00737" formatted="false">Apply for ACI API key</string>
+    <string name="qk_00738" formatted="false">Model Type</string>
+    <string name="qk_00739" formatted="false">File name (e.g. Main.kt / app.py / index.html)</string>
+    <string name="qk_00740" formatted="false">Example: com.example.myapp</string>
+    <string name="qk_00741" formatted="false">Try another keyword, or search for AI tool names contributed by plugins.</string>
+    <string name="qk_00742" formatted="false">Token copied to clipboard</string>
+    <string name="qk_00743" formatted="false">Copy Token</string>
+    <string name="qk_00745" formatted="false">Re-instantiate the plugin entry; changes take effect immediately</string>
+    <string name="qk_00746">Generation failed: %1$s</string>
+    <string name="qk_00747" formatted="false">Download Developer Docs</string>
+    <string name="qk_00751" formatted="false">(No capability: may not be bound yet, or the app has not declared any)</string>
+    <string name="qk_00753" formatted="false">Multi-step workflow orchestration engine: chain registered tools into a pipeline, supports variables, loops, conditions, error handling and timeouts; use it to orchestrate other tools to fill capability gaps.</string>
+    <string name="qk_00754" formatted="false">Open Console</string>
+    <string name="qk_00756" formatted="false">CapOS Audit</string>
+    <string name="qk_00757" formatted="false">Select Real-time Model</string>
+    <string name="qk_00758" formatted="false">Available</string>
+    <string name="qk_00759" formatted="false">Not Authorized</string>
+    <string name="qk_00760" formatted="false">Recent audit log</string>
+    <string name="qk_00761" formatted="false">No audit records yet. Any privilege escalation is recorded here.</string>
+    <string name="qk_00762" formatted="false">Clear Audit Log</string>
+    <string name="qk_00763">Are you sure you want to delete all %1$s audit records? This action cannot be undone.</string>
+    <string name="qk_00764" formatted="false">Limpar</string>
+    <string name="qk_00765" formatted="false">Find an input box on screen and fill in text. Locate it via hint/text/description.</string>
+    <string name="qk_00770" formatted="false">Desconectado</string>
+    <string name="qk_00771" formatted="false">Conectado</string>
+    <string name="qk_00772" formatted="false">Desconectar</string>
+    <string name="qk_00773" formatted="false">Local test</string>
+    <string name="qk_00774" formatted="false">llama.cpp folder (select folder)</string>
+    <string name="qk_00775" formatted="false">Send a message to try; replies show as bubbles</string>
+    <string name="qk_00776" formatted="false">Enter a test message…</string>
+    <string name="qk_00777" formatted="false">Disabled</string>
+    <string name="qk_00783" formatted="false">Direct official gateway</string>
+    <string name="qk_00784" formatted="false">Built-in always-on</string>
+    <string name="qk_00785" formatted="false">Reconectar</string>
+    <string name="qk_00792" formatted="false">Selecionar sessão</string>
+    <string name="qk_00794" formatted="false">No session yet, please create one first.</string>
+    <string name="qk_00798" formatted="false">WeChat iLink Bot</string>
+    <string name="qk_00799" formatted="false">Direct official domain, zero public endpoints</string>
+    <string name="qk_00803" formatted="false">Layout failed, shown as plain text</string>
+    <string name="qk_00805" formatted="false">Adapter not initialized; please restart the App</string>
+    <string name="qk_00806">Startup login failed: %1$s</string>
+    <string name="qk_00807" formatted="false">Get WeChat login QR code</string>
+    <string name="qk_00808" formatted="false">WeChat Login QR Code</string>
+    <string name="qk_00810" formatted="false">Please scan the QR code with WeChat to log in</string>
+    <string name="qk_00811" formatted="false">Fetching QR code...</string>
+    <string name="qk_00812" formatted="false">✓ Login succeeded!</string>
+    <string name="qk_00813" formatted="false">Share</string>
+    <string name="qk_00814" formatted="false">Refresh QR code</string>
+    <string name="qk_00815" formatted="false">Add and Select</string>
+    <string name="qk_00816" formatted="false">QR code expired</string>
+    <string name="qk_00818" formatted="false">Recolher</string>
+    <string name="qk_00819" formatted="false">Manually enter Bot Token</string>
+    <string name="qk_00820" formatted="false">Paste the token obtained from ilinkai.weixin.qq.com</string>
+    <string name="qk_00822" formatted="false">Go to Settings→Apps→Zorv AI→Notifications/Permissions to enable &quot;Exact Alarm&quot;</string>
+    <string name="qk_00824" formatted="false">Note: scanning requires the phone to reach ilinkai.weixin.qq.com; if you hit network issues, switch networks or manually fill the Token.</string>
+    <string name="qk_00825" formatted="false">Amu</string>
+    <string name="qk_00826" formatted="false">Statistics</string>
+    <string name="qk_00827" formatted="false">Remove</string>
+    <string name="qk_00828" formatted="false">Conversation tree does not exist</string>
+    <string name="qk_00829" formatted="false">Branch overview</string>
+    <string name="qk_00833">%1$s messages</string>
+    <string name="qk_00834" formatted="false">Current branch</string>
+    <string name="qk_00835" formatted="false">Switch to this branch</string>
+    <string name="qk_00836" formatted="false">Manage local models: load, unload, infer, view status, etc. Supports MNN, llama.cpp, LiteRT and other inference engines.</string>
+    <string name="qk_00837" formatted="false">Renomear</string>
+    <string name="qk_00838">↓ %1$s sub-branches</string>
+    <string name="qk_00839" formatted="false">Create new branch</string>
+    <string name="qk_00840" formatted="false">Branch Name</string>
+    <string name="qk_00841" formatted="false">Enter branch name</string>
+    <string name="qk_00842" formatted="false">☁ Cloud Port LLM</string>
+    <string name="qk_00843" formatted="false">Criar</string>
+    <string name="qk_00844" formatted="false">Rename branch</string>
+    <string name="qk_00845" formatted="false">Branch Stats</string>
+    <string name="qk_00850" formatted="false">Automático</string>
+    <string name="qk_00868">[%1$s] ⚠ Screenshot save failed: %2$s
+</string>
+    <string name="qk_00884" formatted="false">Enter URL…</string>
+    <string name="qk_00887" formatted="false">Eye Screenshot</string>
+    <string name="qk_00889" formatted="false">Desktop Website</string>
+    <string name="qk_00890" formatted="false">UA Switch</string>
+    <string name="qk_00891" formatted="false">Compatibility Mode</string>
+    <string name="qk_00892" formatted="false">Proxy Settings</string>
+    <string name="qk_00893" formatted="false">Skill Instruction (inject system prompt)</string>
+    <string name="qk_00894" formatted="false">Favorite this page</string>
+    <string name="qk_00895" formatted="false">Generate New Signature</string>
+    <string name="qk_00896" formatted="false">History</string>
+    <string name="qk_00897" formatted="false">Find</string>
+    <string name="qk_00898" formatted="false">Copy Link</string>
+    <string name="qk_00899" formatted="false">Open in system browser</string>
+    <string name="qk_00900" formatted="false">Run Script</string>
+    <string name="qk_00901" formatted="false">Import JSON</string>
+    <string name="qk_00903" formatted="false">No registered tool yet.</string>
+    <string name="qk_00907" formatted="false">Favorites</string>
+    <string name="qk_00908" formatted="false">No favorites yet; tap &quot;More → Favorite this page&quot; at top-right to add.</string>
+    <string name="qk_00909" formatted="false">No browsing history.</string>
+    <string name="qk_00910" formatted="false">Web page body</string>
+    <string name="qk_00911" formatted="false">LSPosed/Xposed manager not detected (this app runs without Xposed)</string>
+    <string name="qk_00912" formatted="false">Web automation script</string>
+    <string name="qk_00914" formatted="false">Testing…</string>
+    <string name="qk_00915">[%1$s] Saved: %2$s
+</string>
+    <string name="qk_00916" formatted="false">New</string>
+    <string name="qk_00918" formatted="false">Save and Continue Adding</string>
+    <string name="qk_00919" formatted="false">Confirm Cleanup</string>
+    <string name="qk_00920" formatted="false">👁 Eye screenshot (page pixels)</string>
+    <string name="qk_00921" formatted="false">Memory Details</string>
+    <string name="qk_00922" formatted="false">Select preset UA or custom</string>
+    <string name="qk_00923" formatted="false">Custom UA</string>
+    <string name="qk_00924" formatted="false">Custom UA string</string>
+    <string name="qk_00925" formatted="false">Apply custom UA</string>
+    <string name="qk_00926" formatted="false">Allow Permanently</string>
+    <string name="qk_00927" formatted="false">Disable JavaScript</string>
+    <string name="qk_00928" formatted="false">For old/incompatible websites</string>
+    <string name="qk_00929" formatted="false">Disable image loading</string>
+    <string name="qk_00930" formatted="false">Speed up loading, save traffic</string>
+    <string name="qk_00931" formatted="false">Current UA</string>
+    <string name="qk_00932" formatted="false">Enable Proxy</string>
+    <string name="qk_00933" formatted="false">Proxy Type</string>
+    <string name="qk_00934" formatted="false">Proxy address</string>
+    <string name="qk_00935" formatted="false">e.g. 127.0.0.1</string>
+    <string name="qk_00936" formatted="false">Port</string>
+    <string name="qk_00937" formatted="false">Copy to…</string>
+    <string name="qk_00938" formatted="false">Username (optional)</string>
+    <string name="qk_00939" formatted="false">Password (optional)</string>
+    <string name="qk_00942" formatted="false">Proxy Off</string>
+    <string name="qk_00944" formatted="false">Expand</string>
+    <string name="qk_00945" formatted="false">Clear all</string>
+    <string name="qk_00946" formatted="false">(Sem dados)</string>
+    <string name="qk_00948">… %1$s items omitted from rendering</string>
+    <string name="qk_00951" formatted="false">Enviar</string>
+    <string name="qk_00952" formatted="false">(No steps)</string>
+    <string name="qk_00953" formatted="false">Abrir</string>
+    <string name="qk_00956" formatted="false">Tool Call</string>
+    <string name="qk_00957" formatted="false">Waiting for output…</string>
+    <string name="qk_00958">Completed %1$s / %2$s</string>
+    <string name="qk_00959" formatted="false">(No suggestion)</string>
+    <string name="qk_00960" formatted="false">Configure Visual Question</string>
+    <string name="qk_00961" formatted="false">(No events)</string>
+    <string name="qk_00962">… %1$s events omitted from rendering</string>
+    <string name="qk_00963" formatted="false">Try describing specific colors, layout, features</string>
+    <string name="qk_00967" formatted="false">Source empty</string>
+    <string name="qk_00968" formatted="false">Flowchart</string>
+    <string name="qk_00970" formatted="false">Saved SVG to Download folder</string>
+    <string name="qk_00971" formatted="false">Chart not rendered yet, please wait</string>
+    <string name="qk_00972" formatted="false">© 2025 - 2026 Zorv AI. All rights reserved.</string>
+    <string name="qk_00974" formatted="false">Copiar código-fonte</string>
+    <string name="qk_00975" formatted="false">(No chart content)</string>
+    <string name="qk_00979" formatted="false">Export All Skills (JSON)</string>
+    <string name="qk_00984" formatted="false">(No Web App content)</string>
+    <string name="qk_00985" formatted="false">This is an old &quot;native mini-program&quot; card; the embedded engine has been removed. For native mini-programs, use the Tool Center now</string>
+    <string name="qk_00986" formatted="false">Cleared default ACI app</string>
+    <string name="qk_00987" formatted="false">Java Project → DEX → APK</string>
+    <string name="qk_00988" formatted="false">(Native Mini-program &quot;</string>
+    <string name="qk_00990" formatted="false">Show All</string>
+    <string name="qk_00991" formatted="false">Provider Overview</string>
+    <string name="qk_00993" formatted="false">Standalone</string>
+    <string name="qk_00995">This is a bot conversation from %1$s user %2$s</string>
+    <string name="qk_00999">[The following skills were auto-activated this round by trigger words; please answer the user based on them]
+%1$s</string>
+    <string name="qk_01006">Exception generating reply convId=%1$s</string>
+    <string name="qk_01012" formatted="false">Execution failed</string>
+    <string name="qk_01054" formatted="false">Caminho do arquivo</string>
+    <string name="qk_01057" formatted="false">Novo arquivo</string>
+    <string name="qk_01059" formatted="false">Conteúdo</string>
+    <string name="qk_01065" formatted="false">Format</string>
+    <string name="qk_01066" formatted="false">Título</string>
+    <string name="qk_01073" formatted="false">Question Content</string>
+    <string name="qk_01095" formatted="false">Tags</string>
+    <string name="qk_01134">The current user’s name is %1$s. You may address the user by this name when appropriate, but don’t force it into every sentence.
+</string>
+    <string name="qk_01430">(ACI not ready yet: %1$s)
+</string>
+    <string name="qk_01443">- Path rule: path is a **path relative to the workspace root** (e.g. MyApp/src/Main.java), without drive letter / absolute path, and without .. escape; after writing, tell the user the file is in &quot;Toolbox - Workspace&quot;, absolute path is %1$s/relative-path.
+</string>
+    <string name="qk_01467" formatted="false">Mermaid Source</string>
+    <string name="qk_01469" formatted="false">Cloud model config · speech synthesis</string>
+    <string name="qk_01470" formatted="false">Clear</string>
+    <string name="qk_01471" formatted="false">Select a cloud TTS provider and fill required params. After saving, &quot;Cloud Model Service&quot; is auto-enabled as the voice source; chat/voice-ball reading immediately uses the cloud, no need to manually switch in &quot;Speech Synthesis&quot;.</string>
+    <string name="qk_01472" formatted="false">Service Provider</string>
+    <string name="qk_01473">Tap a card to select a provider; after selecting, expand to see required parameters; the list scrolls up/down to browse all %1$s providers.</string>
+    <string name="qk_01478" formatted="false">⚠️ No params configured, please enter config first</string>
+    <string name="qk_01480" formatted="false">This provider needs no key/params to use (e.g. Edge TTS).</string>
+    <string name="qk_01484" formatted="false">Tap to select a preset voice / a created clone voice</string>
+    <string name="qk_01486" formatted="false">Voice name (free to fill)</string>
+    <string name="qk_01487" formatted="false">e.g. alloy / custom gateway voice ID / or select clone voice above</string>
+    <string name="qk_01488" formatted="false">Tip: After enabling &quot;Voice Cloning&quot; and creating a clone entry in &quot;Custom Voice&quot; above, you can select it directly from the &quot;Voice&quot; dropdown; or fill in a clone voice ID created on the official platform here.</string>
+    <string name="qk_01489" formatted="false">3D Model</string>
+    <string name="qk_01490" formatted="false">Output Format</string>
+    <string name="qk_01493" formatted="false">Real-time sentence-by-sentence audio to reduce first-byte latency. Already supports streaming playback: Edge / iFlytek (WebSocket) and MiMo / OpenAI / MiniMax (HTTP streaming). Volcano / Tencent currently play after full synthesis (their WebSocket streaming caused lag on some accounts, not yet enabled).</string>
+    <string name="qk_01494" formatted="false">Style Tag</string>
+    <string name="qk_01495" formatted="false">Each tag is an independent switch: on = allow the AI to freely combine this style during speech synthesis; off = disabled. All off by default, enable as needed; it won’t force &quot;use all&quot;.</string>
+    <string name="qk_01496" formatted="false">Custom tag</string>
+    <string name="qk_01497" formatted="false">Add custom tag</string>
+    <string name="qk_01498" formatted="false">Adicionar</string>
+    <string name="qk_01502" formatted="false">Voice name</string>
+    <string name="qk_01503" formatted="false">Type:</string>
+    <string name="qk_01504" formatted="false">Models running offline on the phone must be downloaded first. All built-in are streaming transducers (encoder/decoder/joiner trio), sorted by phone adaptation; the first item is recommended. Auto-unzip and deploy after download, ready to use immediately.</string>
+    <string name="qk_01505" formatted="false">Voice Cloning</string>
+    <string name="qk_01506" formatted="false">Voice description (e.g. gentle girlish voice)</string>
+    <string name="qk_01507" formatted="false">e.g. gentle girlish voice, 20-30 yo female</string>
+    <string name="qk_01508" formatted="false">Audio Sample (import/URI)</string>
+    <string name="qk_01509" formatted="false">Tap &quot;Import&quot; to select an audio file, or paste an audio URI/URL</string>
+    <string name="qk_01510" formatted="false">📁 Import audio file</string>
+    <string name="qk_01511" formatted="false">Or paste a publicly accessible audio URL</string>
+    <string name="qk_01512" formatted="false">Documents open and view directly in-app, no third-party office software needed.</string>
+    <string name="qk_01513" formatted="false">If not specified, use the current / most recent session.</string>
+    <string name="qk_01514" formatted="false">Required for SiliconFlow clone: the text content corresponding to the reference audio</string>
+    <string name="qk_01517" formatted="false">Add Custom Voice</string>
+    <string name="qk_01521">First create a cloned voice on the %1$s official platform, then fill the cloned voice ID/name in the &quot;Voice&quot; field (free text) to call it.</string>
+    <string name="qk_01522" formatted="false">Enable voice cloning</string>
+    <string name="qk_01523" formatted="false">Preview voice text</string>
+    <string name="qk_01524" formatted="false">Enter text to read aloud</string>
+    <string name="qk_01528" formatted="false">Save and preview voice</string>
+    <string name="qk_01529" formatted="false">Save only</string>
+    <string name="qk_01531" formatted="false">Saved CMS engine to Download/Quro/</string>
+    <string name="qk_01532">CMS engine import failed: %1$s</string>
+    <string name="qk_01535" formatted="false">No valid cms.io/v2 module recognized</string>
+    <string name="qk_01537" formatted="false">Query CMS v2 modules and recent task execution status (deploy state / running / task terminal), let the AI confirm &quot;deploy/call succeeded&quot;.</string>
+    <string name="qk_01538" formatted="false">Module</string>
+    <string name="qk_01539" formatted="false">Authorize</string>
+    <string name="qk_01540" formatted="false">Capability</string>
+    <string name="qk_01541" formatted="false">No module selected</string>
+    <string name="qk_01543" formatted="false">Select Module to Export</string>
+    <string name="qk_01544" formatted="false">No module available to export currently.</string>
+    <string name="qk_01553" formatted="false">Plugin runtime not ready, please wait…</string>
+    <string name="qk_01555" formatted="false">Implantando…</string>
+    <string name="qk_01557" formatted="false">Import CMS engine</string>
+    <string name="qk_01558" formatted="false">Export CMS Engine</string>
+    <string name="qk_01560" formatted="false">Collapse script</string>
+    <string name="qk_01561" formatted="false">Please copy the content below and send it to the developer to locate the real cause of &quot;settings crash / cannot chat&quot;.</string>
+    <string name="qk_01562" formatted="false">Terminal environment ready ✓</string>
+    <string name="qk_01564" formatted="false">Script copied</string>
+    <string name="qk_01565" formatted="false">Provisioner environment script</string>
+    <string name="qk_01567" formatted="false">Add Module</string>
+    <string name="qk_01568" formatted="false">One-click deploy to terminal</string>
+    <string name="qk_01569" formatted="false">(No instruction, won’t inject even if enabled)</string>
+    <string name="qk_01570" formatted="false">Import module</string>
+    <string name="qk_01571" formatted="false">💡 CMS modules deploy into the app’s in-app proot/Ubuntu Linux sandbox. First install the Linux environment on the &quot;Terminal&quot; page (≈30MB download); deploy runs apt-get install base packages on demand.</string>
+    <string name="qk_01572" formatted="false">No module yet. Tap &quot;Add module&quot; above to create a capability module (cms.io/v2).</string>
+    <string name="qk_01573" formatted="false">View add instructions</string>
+    <string name="qk_01575" formatted="false">Saved notes to Download/Quro/</string>
+    <string name="qk_01576" formatted="false">Download instructions</string>
+    <string name="qk_01577" formatted="false">How to add a CMS v2 module</string>
+    <string name="qk_01586" formatted="false">· Running</string>
+    <string name="qk_01587" formatted="false">⚠ Has dependencies to resolve</string>
+    <string name="qk_01588" formatted="false">Deploy to terminal</string>
+    <string name="qk_01589" formatted="false">Collapse entry.sh</string>
+    <string name="qk_01590" formatted="false">View/Edit entry.sh</string>
+    <string name="qk_01591" formatted="false">entry.sh script</string>
+    <string name="qk_01592" formatted="false">📦 Terminal deployed (not in module library)</string>
+    <string name="qk_01596" formatted="false">Permission Statement:</string>
+    <string name="qk_01602">Timeout=%1$ss</string>
+    <string name="qk_01603">Memory=%1$sMB</string>
+    <string name="qk_01606" formatted="false">Token (optional, Bearer)</string>
+    <string name="qk_01609" formatted="false">Add Capability Module</string>
+    <string name="qk_01611" formatted="false">Please select authorization level:</string>
+    <string name="qk_01612" formatted="false">Version</string>
+    <string name="qk_01613" formatted="false">Description</string>
+    <string name="qk_01614" formatted="false">GitHub Mirror (switch when official is unreachable)</string>
+    <string name="qk_01615" formatted="false">List currently connected external MCP servers (alias and address). View available servers with this tool before calling external tools.</string>
+    <string name="qk_01618" formatted="false">Reason</string>
+    <string name="qk_01619">Capability (%1$s)</string>
+    <string name="qk_01621" formatted="false">Capability ID</string>
+    <string name="qk_01622" formatted="false">Summary</string>
+    <string name="qk_01625" formatted="false">Constraints (optional, the more specific the safer)</string>
+    <string name="qk_01629" formatted="false">Max execution seconds</string>
+    <string name="qk_01630" formatted="false">Type</string>
+    <string name="qk_01631">Dependencies (%1$s)</string>
+    <string name="qk_01633" formatted="false">Optional Dependency</string>
+    <string name="qk_01634" formatted="false">Export Backup</string>
+    <string name="qk_01635" formatted="false">Importar</string>
+    <string name="qk_01636" formatted="false">No authorization records yet. When calling a capability on the &quot;Capabilities&quot; page, it requests from the user by 4 levels (temporary/session/permanent/global).</string>
+    <string name="qk_01637">Authorization level: %1$s</string>
+    <string name="qk_01638" formatted="false">No capabilities yet. Go to the &quot;Modules&quot; page to add a module with capabilities.</string>
+    <string name="qk_01641" formatted="false">Invoke</string>
+    <string name="qk_01642" formatted="false">Execute</string>
+    <string name="qk_01650" formatted="false">Proxy Address</string>
+    <string name="qk_01651" formatted="false">Cleanup</string>
+    <string name="qk_01652" formatted="false">No Web App yet. Tap &quot;New Example&quot; or &quot;Import HTML&quot;, or let the AI create one with the miniapp tool (preview right in the chat).</string>
+    <string name="qk_01653" formatted="false">AI-driven web crawler (uses the app’s built-in browser WebView to render and scrape page by page).</string>
+    <string name="qk_01654">Permission: %1$s [%2$s]</string>
+    <string name="qk_01657" formatted="false">Please select authorization level:</string>
+    <string name="qk_01658" formatted="false">Allow this time only (recommended)</string>
+    <string name="qk_01659" formatted="false">Initiate Authorization</string>
+    <string name="qk_01660" formatted="false">Allow permanently</string>
+    <string name="qk_01661" formatted="false">Allow Globally (Dangerous!)</string>
+    <string name="qk_01662" formatted="false">Deny</string>
+    <string name="qk_01667" formatted="false">Avaliação</string>
+    <string name="qk_01668" formatted="false">Tabela</string>
+    <string name="qk_01678" formatted="false">Visual Component Library</string>
+    <string name="qk_01682" formatted="false">Click any component; the real sample is sent to the chat card bar. ui_widget / ui_card / mermaid / miniapp are all real rendering capabilities, merged into this component library; the old hard-coded &quot;built-in components&quot; demo has been removed.</string>
+    <string name="qk_01687" formatted="false">About Zorv AI</string>
+    <string name="qk_01688" formatted="false">Detectando…</string>
+    <string name="qk_01691" formatted="false">Descrição</string>
+    <string name="qk_01696" formatted="false">Already default</string>
+    <string name="qk_01697" formatted="false">Compute Backend</string>
+    <string name="qk_01724" formatted="false">Dev Environment</string>
+    <string name="qk_01725" formatted="false">✅ Device architecture arm64-v8a, supports on-device offline recognition engine.</string>
+    <string name="qk_01726" formatted="false">Install the Linux environment on the Terminal page first, then deploy the dev environment.</string>
+    <string name="qk_01727" formatted="false">Terminal environment ready ✓</string>
+    <string name="qk_01728" formatted="false">Refresh Status</string>
+    <string name="qk_01729" formatted="false">Project Address</string>
+    <string name="qk_01732" formatted="false">Device Info</string>
+    <string name="qk_01733">✅ Delete command sent: %1$s</string>
+    <string name="qk_01734">❌ Delete command send failed: %1$s</string>
+    <string name="qk_01735" formatted="false">Send all install commands to terminal</string>
+    <string name="qk_01737" formatted="false">All install commands sent to terminal</string>
+    <string name="qk_01738" formatted="false">Sending…</string>
+    <string name="qk_01739" formatted="false">One-click send all install commands</string>
+    <string name="qk_01740" formatted="false">Local Recognition</string>
+    <string name="qk_01741" formatted="false">(No toolkit yet)</string>
+    <string name="qk_01742" formatted="false">Log copied to clipboard</string>
+    <string name="qk_01743" formatted="false">Copy All</string>
+    <string name="qk_01746" formatted="false">Display Name</string>
+    <string name="qk_01747" formatted="false">Send to Terminal</string>
+    <string name="qk_01748" formatted="false">View command</string>
+    <string name="qk_01749" formatted="false">Install Command</string>
+    <string name="qk_01750" formatted="false">Check Command</string>
+    <string name="qk_01754" formatted="false">Não entendi, tente novamente</string>
+    <string name="qk_01759" formatted="false">Chat Settings</string>
+    <string name="qk_01760" formatted="false">Settings</string>
+    <string name="qk_01761" formatted="false">Allow (allow all, no more asking)</string>
+    <string name="qk_01762" formatted="false">🔊 Offline TTS</string>
+    <string name="qk_01763" formatted="false">🖥 Offline LLM</string>
+    <string name="qk_01764" formatted="false">☁ Cloud port LLM</string>
+    <string name="qk_01765" formatted="false">Offline mode has no local endpoint configured: tap &quot;Settings&quot; top-right to fill baseUrl / model</string>
+    <string name="qk_01766" formatted="false">Você</string>
+    <string name="qk_01767" formatted="false">Type to talk with the digital human…</string>
+    <string name="qk_01773" formatted="false">No Client ID? Create one at github.com/settings/developers → New OAuth App (no callback URL needed), then paste the Client ID here.</string>
+    <string name="qk_01774" formatted="false">☁ Cloud port</string>
+    <string name="qk_01775" formatted="false">GenUI Generative Canvas</string>
+    <string name="qk_01776" formatted="false">Local Endpoint baseUrl</string>
+    <string name="qk_01777" formatted="false">API Key (optional)</string>
+    <string name="qk_01778" formatted="false">Model Name (e.g. llava / qwen2.5)</string>
+    <string name="qk_01779" formatted="false">Flowchart / Visualization</string>
+    <string name="qk_01783" formatted="false">3D preview has a built-in offline Three.js engine (assets/www/three/), no network needed to render.</string>
+    <string name="qk_01801">Draco extract=%1$s; dracoPath=%2$s</string>
+    <string name="qk_01802">HTML written to %1$s; engine.len=%2$s; b64.len=%3$s</string>
+    <string name="qk_01807" formatted="false">Novo documento</string>
+    <string name="qk_01814">Created and saved to %1$s</string>
+    <string name="qk_01829" formatted="false">Creating</string>
+    <string name="qk_01830" formatted="false">Toggle Format Bar</string>
+    <string name="qk_01831" formatted="false">Please save the document first, then share to other apps</string>
+    <string name="qk_01832" formatted="false">Download Instructions</string>
+    <string name="qk_01833" formatted="false">Cannot share this file (path not allowed)</string>
+    <string name="qk_01835" formatted="false">Save a Memory</string>
+    <string name="qk_01837" formatted="false">Start entering document content...</string>
+    <string name="qk_01838" formatted="false">Save changes</string>
+    <string name="qk_01839" formatted="false">Document modified; save changes?</string>
+    <string name="qk_01840" formatted="false">Give up</string>
+    <string name="qk_01841" formatted="false">Health data may come from multiple Apps (watch, Google Fit, this app, etc.). Grouped by DataOrigin.packageName, you can distinguish and prefer data entered by this app.</string>
+    <string name="qk_01843" formatted="false">Saved changes</string>
+    <string name="qk_01844" formatted="false">Open with WPS</string>
+    <string name="qk_01845" formatted="false">Other Apps</string>
+    <string name="qk_01848">Unsupported document type: %1$s
+Please open with &quot;Other Apps&quot;.</string>
+    <string name="qk_01850" formatted="false">File is large; in-app preview may be slow. If unresponsive for a long time, tap &quot;Other app&quot; to open.</string>
+    <string name="qk_01852">Cannot parse PPTX: %1$s</string>
+    <string name="qk_01857" formatted="false">File does not exist</string>
+    <string name="qk_01858" formatted="false">Cannot share this file (path not allowed)</string>
+    <string name="qk_01859" formatted="false">(No action)</string>
+    <string name="qk_01860" formatted="false">Cannot open this file</string>
+    <string name="qk_01861" formatted="false">No app found to open this file</string>
+    <string name="qk_01862" formatted="false">Model Name (can be entered manually)</string>
+    <string name="qk_01863" formatted="false">Voice Settings</string>
+    <string name="qk_01864" formatted="false">Custom Base URL (optional)</string>
+    <string name="qk_01865" formatted="false">Leave blank to use the main model’s URL</string>
+    <string name="qk_01866" formatted="false">Custom API key (optional)</string>
+    <string name="qk_01867" formatted="false">Leave blank to use the main model’s key</string>
+    <string name="qk_01874" formatted="false">Please select the render channel</string>
+    <string name="qk_01875" formatted="false">The AI assistant needs these permissions to read/write your files and documents, health and fitness data, recognize motion state, stay on lock screen/floating window, be set as default digital assistant, and set precise reminders. All requests go through the system standard authorization flow; you can revoke them anytime in system settings.</string>
+    <string name="qk_01876" formatted="false">Cannot initialize the permission manager in the current context (missing Activity); please contact the developer.</string>
+    <string name="qk_01879" formatted="false">Ir para configurações do app</string>
+    <string name="qk_01880" formatted="false">Files &amp; media</string>
+    <string name="qk_01886" formatted="false">User-Agent Switch</string>
+    <string name="qk_01895" formatted="false">Uninstall failed</string>
+    <string name="qk_01898" formatted="false">Lock screen display</string>
+    <string name="qk_01905" formatted="false">No document URI</string>
+    <string name="qk_01908" formatted="false">Local Office Editor</string>
+    <string name="qk_01915" formatted="false">What do you want to ask the user?</string>
+    <string name="qk_01921" formatted="false">Local diagnostics</string>
+    <string name="qk_01922" formatted="false">Text-to-speech config. Reading and the floating voice ball both follow this setting; the voice engine is taken over by the phone’s system default TTS engine (local system) or the selected cloud provider (cloud model service).</string>
+    <string name="qk_01923" formatted="false">System Version</string>
+    <string name="qk_01924" formatted="false">Declared SCHEDULE_EXACT_ALARM</string>
+    <string name="qk_01925" formatted="false">Yes ✓</string>
+    <string name="qk_01926" formatted="false">No ✗</string>
+    <string name="qk_01927" formatted="false">MANAGE_EXTERNAL_STORAGE declared</string>
+    <string name="qk_01929" formatted="false">Unavailable</string>
+    <string name="qk_01934" formatted="false">Data sources &amp; priority</string>
+    <string name="qk_01935" formatted="false">DataOrigin grouping · this app’s source is traceable</string>
+    <string name="qk_01936" formatted="false">Get Current Date and Time</string>
+    <string name="qk_01937" formatted="false">Read steps from each source</string>
+    <string name="qk_01938" formatted="false">Write Running Record</string>
+    <string name="qk_01939" formatted="false">Please authorize health data before using this demo.</string>
+    <string name="qk_01940" formatted="false">Steps in last 7 days (by source):</string>
+    <string name="qk_01941" formatted="false">No data</string>
+    <string name="qk_01944" formatted="false">💭 Thinking Process</string>
+    <string name="qk_01946" formatted="false">Sign out</string>
+    <string name="qk_01947" formatted="false">Log in to GitHub</string>
+    <string name="qk_01948" formatted="false">Please select date and time first</string>
+    <string name="qk_01949" formatted="false">Execute global system-level actions: back (return), home (home), recents (recent tasks), notifications (expand notification bar), lock_screen (lock screen).</string>
+    <string name="qk_01950" formatted="false">Wireless ADB enabled</string>
+    <string name="qk_01952" formatted="false">Official github.com</string>
+    <string name="qk_01956" formatted="false">Button</string>
+    <string name="qk_01957" formatted="false">No skill selected</string>
+    <string name="qk_01958" formatted="false">Tip: if the current network can’t reach official GitHub, device flow / PAT may both fail. Log in with PAT on a GitHub-reachable network first for safety.</string>
+    <string name="qk_01959" formatted="false">Log in with Personal Access Token</string>
+    <string name="qk_01960" formatted="false">Local Office Document</string>
+    <string name="qk_01963" formatted="false">Options are in the floating window on screen; just tap it</string>
+    <string name="qk_01964" formatted="false">Export</string>
+    <string name="qk_01965" formatted="false">Client ID registered at github.com/settings/developers</string>
+    <string name="qk_01968" formatted="false">Initiating…</string>
+    <string name="qk_01969" formatted="false">Unknown type</string>
+    <string name="qk_01970" formatted="false">Add Custom Tag</string>
+    <string name="qk_01971" formatted="false">Please open the following address in a browser and enter the verification code:</string>
+    <string name="qk_01976">Followers %1$s</string>
+    <string name="qk_01977">Following %1$s</string>
+    <string name="qk_01978" formatted="false">Open homepage in browser</string>
+    <string name="qk_01984" formatted="false">Sem resultados</string>
+    <string name="qk_01985" formatted="false">Search GitHub</string>
+    <string name="qk_01986" formatted="false">User</string>
+    <string name="qk_01987" formatted="false">AI Thinking Panel</string>
+    <string name="qk_01988" formatted="false">Save Only</string>
+    <string name="qk_01989">Import of this type is not yet supported: %1$s (only md/txt/json/csv/docx/xlsx/pptx)</string>
+    <string name="qk_01992" formatted="false">E.g. alloy / custom gateway voice ID / or select clone voice above</string>
+    <string name="qk_01993">Export failed: %1$s</string>
+    <string name="qk_01996" formatted="false">Load</string>
+    <string name="qk_01998" formatted="false">Rename failed</string>
+    <string name="qk_01999" formatted="false">No other app found to open this document</string>
+    <string name="qk_02000" formatted="false">Export knowledge base (ZIP)</string>
+    <string name="qk_02001" formatted="false">Hatching…</string>
+    <string name="qk_02002" formatted="false">Add Document</string>
+    <string name="qk_02003" formatted="false">Open preview (rich text / editable)</string>
+    <string name="qk_02004" formatted="false">Please allow CapOS in the Root manager</string>
+    <string name="qk_02005" formatted="false">Rename Document</string>
+    <string name="qk_02006" formatted="false">Delete Document</string>
+    <string name="qk_02009" formatted="false">Search file name…</string>
+    <string name="qk_02012" formatted="false">Kyoto Itinerary Planning</string>
+    <string name="qk_02014" formatted="false">Get WeChat Login QR Code</string>
+    <string name="qk_02016" formatted="false">New knowledge document</string>
+    <string name="qk_02017" formatted="false">Enter a document name to go straight into the rich editor (supports a Markdown toolbar and live preview).</string>
+    <string name="qk_02018" formatted="false">Document name</string>
+    <string name="qk_02019" formatted="false">E.g. coding standard (default .md)</string>
+    <string name="qk_02020" formatted="false">OK</string>
+    <string name="qk_02021" formatted="false">New file name</string>
+    <string name="qk_02022">Edit content · %1$s</string>
+    <string name="qk_02023" formatted="false">Document content</string>
+    <string name="qk_02024" formatted="false">LSPosed module</string>
+    <string name="qk_02025" formatted="false">Not installed</string>
+    <string name="qk_02035" formatted="false">Please install LSPosed manager first</string>
+    <string name="qk_02042" formatted="false">Copy and Close</string>
+    <string name="qk_02043" formatted="false">Only off</string>
+    <string name="qk_02044" formatted="false">⚠️ Runtime error (captured)</string>
+    <string name="qk_02045" formatted="false">Last run crashed (captured)</string>
+    <string name="qk_02046" formatted="false">Please copy the content below and send it to the developer to locate the real cause of &quot;settings crash / cannot chat&quot;.</string>
+    <string name="qk_02047" formatted="false">Clear and continue</string>
+    <string name="qk_02048" formatted="false">Start entering Markdown content...</string>
+    <string name="qk_02058" formatted="false">File does not exist, please save first</string>
+    <string name="qk_02060" formatted="false">(Claude Desktop / Cursor / MCP Inspector, etc.).</string>
+    <string name="qk_02061" formatted="false">New Branch</string>
+    <string name="qk_02063" formatted="false">Off (listen to no port)</string>
+    <string name="qk_02064" formatted="false">Export Artifact</string>
+    <string name="qk_02065" formatted="false">Copied connection address</string>
+    <string name="qk_02070" formatted="false">Technical Details</string>
+    <string name="qk_02072" formatted="false">New Chat</string>
+    <string name="qk_02073" formatted="false">Permission &amp; confirmation mechanism; sensitive operations (e.g. install/uninstall apps, ROOT commands) are still constrained by system permissions and runtime confirmation.</string>
+    <string name="qk_02074" formatted="false">MCP Client (connect external server)</string>
+    <string name="qk_02075" formatted="false">Add an external MCP server here (e.g. another AI client, a cloud tool gateway); once added, the AI can call its exposed tools via mcp_call.</string>
+    <string name="qk_02076">Connection successful, discovered %1$s tools</string>
+    <string name="qk_02077" formatted="false">Connection failed</string>
+    <string name="qk_02078" formatted="false">Test</string>
+    <string name="qk_02080" formatted="false">Alias</string>
+    <string name="qk_02082" formatted="false">No raw output yet</string>
+    <string name="qk_02083" formatted="false">Extension Point / AI Tools / Version Info</string>
+    <string name="qk_02085" formatted="false">Save and continue adding</string>
+    <string name="qk_02086" formatted="false">Zorv Build Console</string>
+    <string name="qk_02087" formatted="false">An MCP server created and deployed into this app by the AI via mcp_deploy. After deployment it auto-starts the endpoint on this device,</string>
+    <string name="qk_02088" formatted="false">Call it in chat by alias with mcp_call; deployed instances are listed below.</string>
+    <string name="qk_02089" formatted="false">Are you sure you want to perform this operation?</string>
+    <string name="qk_02092" formatted="false">Log Out</string>
+    <string name="qk_02094" formatted="false">Select Music</string>
+    <string name="qk_02095" formatted="false">Select Video</string>
+    <string name="qk_02098" formatted="false">Requires root / Shizuku to execute the local ADB shell</string>
+    <string name="qk_02099">Load failed: %1$s</string>
+    <string name="qk_02102" formatted="false">Private Database</string>
+    <string name="qk_02103" formatted="false">Model Config</string>
+    <string name="qk_02105" formatted="false">Local offline mode</string>
+    <string name="qk_02107" formatted="false">This model runs offline locally on the device, without any cloud service; no Base URL / API Key needed.</string>
+    <string name="qk_02108" formatted="false">Switch back to cloud model</string>
+    <string name="qk_02109">Selected custom provider: %1$s</string>
+    <string name="qk_02111" formatted="false">Connect</string>
+    <string name="qk_02113" formatted="false">Pulling…</string>
+    <string name="qk_02114" formatted="false">Pull Model List</string>
+    <string name="qk_02115" formatted="false">The following params only affect the local offline model, independent of cloud model settings.</string>
+    <string name="qk_02116" formatted="false">Temperature</string>
+    <string name="qk_02118" formatted="false">Max tokens per local-model reply. Phone CPU takes tens to hundreds of ms per token; 256–1024 recommended.</string>
+    <string name="qk_02119" formatted="false">Enable Tool Calling</string>
+    <string name="qk_02120" formatted="false">When on, local models can call tools via function calling. Off is pure chat mode, saving context window.</string>
+    <string name="qk_02121" formatted="false">Tip: thread count, context length, GPU layers, compute precision and other params are set in &quot;Import Model → Run Params&quot;.</string>
+    <string name="qk_02124" formatted="false">0 = unlimited (default): tool calls have no cap, the ReAct loop continues until the model gives a final answer; a positive number caps it. A built-in 200-round safety ceiling prevents runaway.</string>
+    <string name="qk_02126" formatted="false">Enter token budget (0=unlimited). Long chats auto-discard oldest rounds, always keep identity/persona/tool guidance, avoid window overflow causing lost context or broken tool calls. Xiaomi MiMo recommends 16000–32000.</string>
+    <string name="qk_02127" formatted="false">When on, the cloud model calls tools via function calling; when off, pure chat mode. If the model &quot;doesn’t proactively call tools&quot;, first confirm this switch is on.</string>
+    <string name="qk_02128" formatted="false">Full toolset</string>
+    <string name="qk_02129" formatted="false">On sends all ~50 tools (full capability); if your API relay is sensitive to tool count (&gt;25 may silently drop the tools field and break calls), turn off to send only the core 14.</string>
+    <string name="qk_02130" formatted="false">Save as Preset</string>
+    <string name="qk_02131" formatted="false">Save config</string>
+    <string name="qk_02132" formatted="false">Edit preset</string>
+    <string name="qk_02133" formatted="false">Loading</string>
+    <string name="qk_02136" formatted="false">Preset Name</string>
+    <string name="qk_02137" formatted="false">e.g. My DeepSeek</string>
+    <string name="qk_02138" formatted="false">Import from Link</string>
+    <string name="qk_02139">Provider: %1$s</string>
+    <string name="qk_02142" formatted="false">After changing the name, tap &quot;Save changes&quot; to update the preset display name. For other fields, delete and recreate.</string>
+    <string name="qk_02144" formatted="false">No model obtained; please check address / key.</string>
+    <string name="qk_02145" formatted="false">Pull failed</string>
+    <string name="qk_02153" formatted="false">Login denied or cancelled</string>
+    <string name="qk_02154" formatted="false">(No web content)</string>
+    <string name="qk_02155" formatted="false">MNN Model Directory (select folder)</string>
+    <string name="qk_02156" formatted="false">Send SMS</string>
+    <string name="qk_02157" formatted="false">Probing permissions…</string>
+    <string name="qk_02158" formatted="false">Verify built-in skill signature (signature troubleshooting)</string>
+    <string name="qk_02161" formatted="false">View/Edit Engine Script</string>
+    <string name="qk_02163" formatted="false">Tip: Local models run on-device offline via the native inference runtime (MNN / llama.cpp); once selected, chats use that model with no network needed.</string>
+    <string name="qk_02165" formatted="false">Blank / 0 means auto. After changing, re-tap &quot;Load&quot; to take effect.</string>
+    <string name="qk_02167" formatted="false">Context length n_ctx (auto: estimated from prompt)</string>
+    <string name="qk_02168" formatted="false">&quot;Mini-program (native engine)&quot; panel (let the AI generate WXML/WXSS/JS projects with the miniapp_sdk tool).</string>
+    <string name="qk_02169" formatted="false">Remove Favorite</string>
+    <string name="qk_02170" formatted="false">Use mmap to map weights</string>
+    <string name="qk_02171" formatted="false">Recommended off. When on, large GGUF on external storage reads disk page by page, often showing &quot;stuck at model loading&quot;.</string>
+    <string name="qk_02172" formatted="false">Unified KV cache</string>
+    <string name="qk_02173" formatted="false">Recommended on. Single-sequence inference allocates only one KV, saving memory and loading faster.</string>
+    <string name="qk_02174" formatted="false">Compute backend</string>
+    <string name="qk_02175" formatted="false">GPU backend (opencl/vulkan) is not available on all devices; on failure it falls back to CPU.</string>
+    <string name="qk_02176" formatted="false">Compute Precision</string>
+    <string name="qk_02177" formatted="false">On phone, low is recommended (half-precision/quantized ops are fastest); raise it only when output clearly drifts.</string>
+    <string name="qk_02178" formatted="false">Memory mode</string>
+    <string name="qk_02179" formatted="false">Select local document…</string>
+    <string name="qk_02180" formatted="false">Add Other Provider</string>
+    <string name="qk_02181" formatted="false">Enable Notification</string>
+    <string name="qk_02182" formatted="false">Supplier name</string>
+    <string name="qk_02183" formatted="false">Real-time Generation</string>
+    <string name="qk_02184" formatted="false">ACT associated launch (underlying protocol ACI, Agent Capability Interface) is a local Root-free AIDL call framework between Apps, letting the AI control third-party Apps that support the protocol.</string>
+    <string name="qk_02185" formatted="false">Default model name (optional)</string>
+    <string name="qk_02186" formatted="false">HTML Content Description</string>
+    <string name="qk_02187" formatted="false">Alarms and Reminders</string>
+    <string name="qk_02188" formatted="false">Search Provider</string>
+    <string name="qk_02212" formatted="false">Offline model download center</string>
+    <string name="qk_02213">Download failed: %1$s</string>
+    <string name="qk_02215">Downloaded, but engine load failed: %1$s</string>
+    <string name="qk_02219" formatted="false">Search GGUF models</string>
+    <string name="qk_02220" formatted="false">Search MNN models</string>
+    <string name="qk_02224" formatted="false">Downloading…</string>
+    <string name="qk_02225" formatted="false">Download and Load</string>
+    <string name="qk_02226">Registered %1$s models</string>
+    <string name="qk_02227" formatted="false">No model yet. Go to the GGUF / MNN tab above to search and download one.</string>
+    <string name="qk_02228">Type: %1$s</string>
+    <string name="qk_02229" formatted="false">Multi-provider management</string>
+    <string name="qk_02230" formatted="false">Failover Settings</string>
+    <string name="qk_02231" formatted="false">Health Check</string>
+    <string name="qk_02232" formatted="false">Add Provider</string>
+    <string name="qk_02233" formatted="false">Max Memory MB</string>
+    <string name="qk_02236" formatted="false">Health</string>
+    <string name="qk_02239" formatted="false">Priority</string>
+    <string name="qk_02240" formatted="false">Type</string>
+    <string name="qk_02241" formatted="false">Local Model</string>
+    <string name="qk_02242" formatted="false">No keystore selected yet (takes effect after generate or import).</string>
+    <string name="qk_02243" formatted="false">Move down</string>
+    <string name="qk_02244" formatted="false">Provider Name</string>
+    <string name="qk_02245" formatted="false">Provider Type</string>
+    <string name="qk_02246" formatted="false">API Base URL</string>
+    <string name="qk_02247" formatted="false">API Key</string>
+    <string name="qk_02248" formatted="false">Default Model</string>
+    <string name="qk_02249" formatted="false">Edit provider</string>
+    <string name="qk_02250" formatted="false">Enable</string>
+    <string name="qk_02251" formatted="false">Update</string>
+    <string name="qk_02252" formatted="false">Enable failover</string>
+    <string name="qk_02253" formatted="false">Failover strategy</string>
+    <string name="qk_02254" formatted="false">Fields (comma-separated)</string>
+    <string name="qk_02255" formatted="false">Preview Text</string>
+    <string name="qk_02256" formatted="false">Health check interval (minutes)</string>
+    <string name="qk_02257" formatted="false">Checking provider health status...</string>
+    <string name="qk_02258" formatted="false">Tap the button below to start the health check</string>
+    <string name="qk_02259" formatted="false">Preparing...</string>
+    <string name="qk_02260" formatted="false">Unhealthy</string>
+    <string name="qk_02261" formatted="false">Start check</string>
+    <string name="qk_02262" formatted="false">Music player</string>
+    <string name="qk_02263" formatted="false">Not Playing</string>
+    <string name="qk_02269" formatted="false">Please enter...</string>
+    <string name="qk_02270">Track %1$s</string>
+    <string name="qk_02271" formatted="false">Stop</string>
+    <string name="qk_02272" formatted="false">Close sandbox terminal</string>
+    <string name="qk_02273" formatted="false">Cannot read this document; please select a .docx/.xlsx/.pptx/.pdf file</string>
+    <string name="qk_02274" formatted="false">Generation failed</string>
+    <string name="qk_02275" formatted="false">Gerado</string>
+    <string name="qk_02277" formatted="false">Document:</string>
+    <string name="qk_02279">Create failed: %1$s</string>
+    <string name="qk_02280" formatted="false">⚠ Token expired, please tap &quot;Get WeChat Login QR Code&quot; below to scan again</string>
+    <string name="qk_02281" formatted="false">Supports Word / Excel / PPT / PDF / TXT / Markdown / code / images; TXT / Markdown / code can be edited in-app.</string>
+    <string name="qk_02282" formatted="false">Select local document…</string>
+    <string name="qk_02283" formatted="false">DataOrigin grouping · this app’s source is traceable</string>
+    <string name="qk_02284" formatted="false">No document yet. Use AI &quot;Document Generation&quot; to produce one, or tap the button above to select a local file.</string>
+    <string name="qk_02285" formatted="false">Memory Usage</string>
+    <string name="qk_02286" formatted="false">The AI can also directly call aiwps_create in chat to generate real .docx/.xlsx/.pptx documents.</string>
+    <string name="qk_02287" formatted="false">Exquisite Details</string>
+    <string name="qk_02288" formatted="false">Web</string>
+    <string name="qk_02289" formatted="false">Select document type</string>
+    <string name="qk_02290" formatted="false">Forbidden (any escalation is denied)</string>
+    <string name="qk_02294" formatted="false">Audit Log</string>
+    <string name="qk_02295" formatted="false">Layered, controlled, auditable: L1 Accessibility → L2 Shizuku → L3 Device Admin → L4 ROOT, escalating step by step. Any privilege escalation must pass four stages: intent → policy check → user confirmation → audit.</string>
+    <string name="qk_02296" formatted="false">Permission Mode</string>
+    <string name="qk_02297" formatted="false">Upgrade</string>
+    <string name="qk_02298" formatted="false">Forbidden (any escalation is denied)</string>
+    <string name="qk_02299" formatted="false">Say something...</string>
+    <string name="qk_02300" formatted="false">Accessibility Service</string>
+    <string name="qk_02304" formatted="false">Shizuku Service</string>
+    <string name="qk_02306" formatted="false">Requesting Shizuku permission…</string>
+    <string name="qk_02307" formatted="false">Shizuku not detected; please install it first then authorize</string>
+    <string name="qk_02308" formatted="false">Cannot auto-open the Shizuku manager; please manually open the Shizuku app and authorize this app</string>
+    <string name="qk_02309" formatted="false">Shizuku authorized ✓ ready to use</string>
+    <string name="qk_02310" formatted="false">Current context cannot pop system dialog; opened Shizuku app authorization</string>
+    <string name="qk_02311" formatted="false">Shizuku authorized ✓</string>
+    <string name="qk_02312" formatted="false">Shizuku permission denied</string>
+    <string name="qk_02313" formatted="false">Shizuku not running, opening and waiting for service to start…</string>
+    <string name="qk_02314" formatted="false">Shizuku still not ready: start the service in that app first (ADB wireless debugging/pairing), then tap this button to authorize</string>
+    <string name="qk_02315" formatted="false">No permission dialog appeared; opened the Shizuku app for you, please authorize this app manually</string>
+    <string name="qk_02316" formatted="false">Programmatic authorization failed; switched to authorizing in the Shizuku app</string>
+    <string name="qk_02317" formatted="false">Device Admin</string>
+    <string name="qk_02321" formatted="false">ROOT access</string>
+    <string name="qk_02323" formatted="false">Allow CapOS in the Root manager</string>
+    <string name="qk_02324">ROOT: %1$s (root commands are executed for real via root_exec / shizuku_root_exec tools, constrained by the &quot;Permission Mode&quot; policy)</string>
+    <string name="qk_02326" formatted="false">Enable &quot;Exact Alarm&quot; in system settings, then return and tap test again</string>
+    <string name="qk_02327" formatted="false">Go to Settings→Apps→Zorv AI→Notifications/Permissions to enable &quot;Exact Alarm&quot;</string>
+    <string name="qk_02328" formatted="false">Zorv AI test alarm</string>
+    <string name="qk_02329" formatted="false">Body copied</string>
+    <string name="qk_02330" formatted="false">Set; a reminder notification will pop up in about 10 seconds</string>
+    <string name="qk_02332" formatted="false">Configured</string>
+    <string name="qk_02333" formatted="false">Media read/write · Health data · Exact alarm · Data source priority</string>
+    <string name="qk_02334" formatted="false">Runtime permissions pop the system authorization dialog; ROOT / Shizuku / Device Admin require your active authorization in the system UI. All permission usage is recorded in the audit log.</string>
+    <string name="qk_02336">Channel: %1$s</string>
+    <string name="qk_02337" formatted="false">Request Authorization</string>
+    <string name="qk_02338" formatted="false">Video Playback</string>
+    <string name="qk_02339" formatted="false">In-app Verification</string>
+    <string name="qk_02340" formatted="false">Enable</string>
+    <string name="qk_02350">Incubation diagnostics double-write failed: %1$s</string>
+    <string name="qk_02352">Incubation timeout (%1$sms), suspected LLM call deadlock; aborted this card’s incubation</string>
+    <string name="qk_02368">File %1$s</string>
+    <string name="qk_02369" formatted="false">Query the deployment readiness, health, version, launched shared services (NODE/PYTHON/SSH/JAVA/RUST/GO runtimes), deploy progress and logs of the &quot;CMS Engine (system resource package)&quot;.</string>
+    <string name="qk_02377" formatted="false">Scheduled Tasks / Automation</string>
+    <string name="qk_02378" formatted="false">Add new</string>
+    <string name="qk_02379" formatted="false">No scheduled task yet</string>
+    <string name="qk_02381">One-time @ %1$s</string>
+    <string name="qk_02383" formatted="false">New Scheduled Task</string>
+    <string name="qk_02384" formatted="false">Feature Switch</string>
+    <string name="qk_02385" formatted="false">Instruction / reminder content (optional)</string>
+    <string name="qk_02386" formatted="false">One-time</string>
+    <string name="qk_02387" formatted="false">Repeat</string>
+    <string name="qk_02388" formatted="false">Trigger Time</string>
+    <string name="qk_02389" formatted="false">Script name…</string>
+    <string name="qk_02390" formatted="false">Select time</string>
+    <string name="qk_02391" formatted="false">Select date and time first</string>
+    <string name="qk_02392" formatted="false">Paste Mermaid source to view / edit (AI can write directly to a named project with the visual tool)</string>
+    <string name="qk_02397" formatted="false">Multi-engine web search aggregation (unified entry): supports duckduckgo (default, free no key), tavily (configure an API Key named tavily in auth_service first, type=apikey).</string>
+    <string name="qk_02399" formatted="false">Weekdays (multi-select)</string>
+    <string name="qk_02402" formatted="false">Package Management (Linux sandbox)</string>
+    <string name="qk_02403" formatted="false">Select End Date</string>
+    <string name="qk_02404" formatted="false">Target session</string>
+    <string name="qk_02405" formatted="false">Specified Session</string>
+    <string name="qk_02406" formatted="false">Auto-create Session</string>
+    <string name="qk_02407" formatted="false">No history session yet; you can use &quot;Auto-create session&quot;</string>
+    <string name="qk_02408" formatted="false">Import File</string>
+    <string name="qk_02409" formatted="false">Zorv AI only launches the system dialer, does not auto-call out.</string>
+    <string name="qk_02410" formatted="false">Launch App</string>
+    <string name="qk_02412" formatted="false">Confirmar</string>
+    <string name="qk_02414" formatted="false">Failed to read file or content is empty</string>
+    <string name="qk_02415" formatted="false">Need the GenUI native interface? Have the AI open the built-in GenUI Agent with genui_agent_open.</string>
+    <string name="qk_02417" formatted="false">Skill SKILL</string>
+    <string name="qk_02418" formatted="false">Export all skills (JSON)</string>
+    <string name="qk_02419" formatted="false">Java Source</string>
+    <string name="qk_02420" formatted="false">How to add skills (instructions)</string>
+    <string name="qk_02424">, unsigned %1$s</string>
+    <string name="qk_02425" formatted="false">Verify built-in skill signature (signature troubleshooting)</string>
+    <string name="qk_02428" formatted="false">Add Skill</string>
+    <string name="qk_02429" formatted="false">QuroWorkspace (app sandbox)</string>
+    <string name="qk_02430" formatted="false">Log in with OAuth device flow</string>
+    <string name="qk_02431" formatted="false">Generated</string>
+    <string name="qk_02432" formatted="false">How to Add Skills</string>
+    <string name="qk_02433" formatted="false">(No instruction, won’t inject even if enabled)</string>
+    <string name="qk_02438" formatted="false">Soul Card Name</string>
+    <string name="qk_02439">%1$s items</string>
+    <string name="qk_02440" formatted="false">Edit skill</string>
+    <string name="qk_02441" formatted="false">Name (required)</string>
+    <string name="qk_02442" formatted="false">Bio (optional)</string>
+    <string name="qk_02443" formatted="false">Skill instruction (inject system prompt)</string>
+    <string name="qk_02444" formatted="false">Trigger words / trigger (optional, comma-separated, for future auto-matching)</string>
+    <string name="qk_02446" formatted="false">Can be used as a tool call (registered as an AI-callable function)</string>
+    <string name="qk_02447" formatted="false">Persistent system prompt (if off, injected only when a trigger word matches)</string>
+    <string name="qk_02448" formatted="false">Enabled (disabled means system prompt won’t be injected)</string>
+    <string name="qk_02449" formatted="false">Soul Injection</string>
+    <string name="qk_02450" formatted="false">Each project uses a different package name, so installs won’t conflict (over-install also needs same signature).</string>
+    <string name="qk_02452" formatted="false">Heartbeat Hatching (auto-hatch every soul card in background)</string>
+    <string name="qk_02453" formatted="false">No soul card yet</string>
+    <string name="qk_02454" formatted="false">Enter token budget (0=unlimited). Long chats auto-discard oldest rounds, always keep identity/persona/tool guidance, avoid window overflow causing lost context or broken tool calls. Xiaomi MiMo recommends 16000–32000.</string>
+    <string name="qk_02455" formatted="false">No description yet</string>
+    <string name="qk_02457" formatted="false">Terminal · Node Runtime</string>
+    <string name="qk_02458">Incubated %1$s minutes ago</string>
+    <string name="qk_02461" formatted="false">Avatar</string>
+    <string name="qk_02462" formatted="false">Soul editing</string>
+    <string name="qk_02463" formatted="false">Image Avatar</string>
+    <string name="qk_02464" formatted="false">Replace / crop image</string>
+    <string name="qk_02465" formatted="false">Cannot render GenUI content</string>
+    <string name="qk_02466" formatted="false">Enter a third-party app package name; the system generates an ACI Token for authentication.</string>
+    <string name="qk_02467" formatted="false">Background generate real files (docx/xlsx/pptx/pdf are binary, md/txt/csv/html are plain text), openable with the in-app viewer or WPS / Office.</string>
+    <string name="qk_02468" formatted="false">Two independent controls, no mutual influence. On = 100% proactive use; Off = only when the user reminds.</string>
+    <string name="qk_02469" formatted="false">Opening Greeting</string>
+    <string name="qk_02470" formatted="false">Chat settings</string>
+    <string name="qk_02471" formatted="false">Audit Log (God’s-eye view)</string>
+    <string name="qk_02472" formatted="false">AI Hatching</string>
+    <string name="qk_02473" formatted="false">Token generated successfully</string>
+    <string name="qk_02474" formatted="false">Processing…</string>
+    <string name="qk_02475" formatted="false">Run</string>
+    <string name="qk_02476" formatted="false">Select a soul card; the AI will communicate with you as its identity</string>
+    <string name="qk_02477" formatted="false">Open the web browser and navigate to the specified URL</string>
+    <string name="qk_02478" formatted="false">Dynamic UI components</string>
+    <string name="qk_02481" formatted="false">Save soul card</string>
+    <string name="qk_02482" formatted="false">Tag management</string>
+    <string name="qk_02486" formatted="false">Name</string>
+    <string name="qk_02487" formatted="false">AI Hint Content</string>
+    <string name="qk_02488" formatted="false">JSON Config (optional, custom structured params)</string>
+    <string name="qk_02489" formatted="false">New Tab</string>
+    <string name="qk_02490" formatted="false">CMSv2 Module</string>
+    <string name="qk_02491" formatted="false">kind only supports http / intent / broadcast</string>
+    <string name="qk_02492" formatted="false">Search content / title / tag / group</string>
+    <string name="qk_02495" formatted="false">Memory details</string>
+    <string name="qk_02496" formatted="false">Title (optional)</string>
+    <string name="qk_02497" formatted="false">Group (optional, e.g. Preference / Work)</string>
+    <string name="qk_02498" formatted="false">Enable Local MCP Server</string>
+    <string name="qk_02499" formatted="false">Third-party App Package Name</string>
+    <string name="qk_02500" formatted="false">Your on-device AI agent</string>
+    <string name="qk_02508">Selected model: %1$s / %2$s / provider=%3$s</string>
+    <string name="qk_02511">Pulling models from %1$s…</string>
+    <string name="qk_02520">❌ This device’s architecture does not support on-device offline recognition; download disabled: %1$s</string>
+    <string name="qk_02531">Deleted model: %1$s</string>
+    <string name="qk_02538">Final recognition: %1$s</string>
+    <string name="qk_02540">Recognition error: %1$s ❌</string>
+    <string name="qk_02569">Final recognition (%1$s ms): %2$s</string>
+    <string name="qk_02578">Model: %1$s (provider=%2$s)</string>
+    <string name="qk_02583">Final transcript: %1$s</string>
+    <string name="qk_02591" formatted="false">Speech-to-text config; after setting, the floating voice ball’s recognition language takes effect. You can switch engines &quot;Local Recognition / AI Model / Local Model (on-device)&quot;; the local model is a Sherpa-NCNN streaming model running offline on the phone, min 22MB, auto-sentence-break after speaking.</string>
+    <string name="qk_02593" formatted="false">Local recognition</string>
+    <string name="qk_02594" formatted="false">License</string>
+    <string name="qk_02596" formatted="false">AI model</string>
+    <string name="qk_02597" formatted="false">Use the AI model configured in chat for transcription (opens in Phase 2)</string>
+    <string name="qk_02598" formatted="false">Local Model (on-device)</string>
+    <string name="qk_02599" formatted="false">Send HTTP request and return response</string>
+    <string name="qk_02601" formatted="false">Models running offline on the phone must be downloaded first. All built-in are streaming transducers (encoder/decoder/joiner trio), sorted by phone adaptation; the first item is recommended. Auto-unzip and deploy after download, ready to use immediately.</string>
+    <string name="qk_02602" formatted="false">Settings · Settings</string>
+    <string name="qk_02603">⚠️ %1$s Download and deployment disabled; please use the &quot;Local Recognition&quot; or &quot;AI Model&quot; engine instead.</string>
+    <string name="qk_02608" formatted="false">⚠️ The currently deployed model is an old version (SenseVoice / ONNX); this device’s engine has no matching implementation, recognition will stay unresponsive.</string>
+    <string name="qk_02612">Download size: %1$s</string>
+    <string name="qk_02613" formatted="false">✅ Deployed</string>
+    <string name="qk_02614" formatted="false">➕ Custom link (must be a Sherpa-NCNN streaming model)</string>
+    <string name="qk_02615" formatted="false">Custom Model Download Link</string>
+    <string name="qk_02616" formatted="false">Model type</string>
+    <string name="qk_02620" formatted="false">Follow current chat (auto)</string>
+    <string name="qk_02621">🎤 Supports voice transcription · %1$s</string>
+    <string name="qk_02622" formatted="false">Add to Desktop</string>
+    <string name="qk_02624" formatted="false">No history session yet; you can use &quot;Auto-create Session&quot;</string>
+    <string name="qk_02626" formatted="false">Use /chat/completions (multimodal audio)</string>
+    <string name="qk_02631" formatted="false">Detect Language</string>
+    <string name="qk_02632" formatted="false">Partial results</string>
+    <string name="qk_02635" formatted="false">When &quot;Local Model (on-device)&quot; is selected, this test uses the phone’s offline Sherpa-NCNN recognition; other engines use native SpeechRecognizer.</string>
+    <string name="qk_02636" formatted="false">Security note: the service binds only the loopback address; no external network request can reach it. Tool calls reuse the app’s same</string>
+    <string name="qk_02637" formatted="false">Bot Integration</string>
+    <string name="qk_02638" formatted="false">Exception</string>
+    <string name="qk_02639" formatted="false">Recognized text shows here</string>
+    <string name="qk_02640">📋 Bug logs (%1$s)</string>
+    <string name="qk_02641" formatted="false">Log copied to clipboard ✅ just paste it to me</string>
+    <string name="qk_02642" formatted="false">System Status</string>
+    <string name="qk_02643" formatted="false">Reload failed</string>
+    <string name="qk_02650" formatted="false">Permissions &amp; capabilities</string>
+    <string name="qk_02652" formatted="false">Probing permissions…</string>
+    <string name="qk_02653" formatted="false">Module runtime state</string>
+    <string name="qk_02654" formatted="false">From CMS v2 status system</string>
+    <string name="qk_02655" formatted="false">Key Points Summary</string>
+    <string name="qk_02656">Recent task: %1$s</string>
+    <string name="qk_02657" formatted="false">Persona heartbeat</string>
+    <string name="qk_02659" formatted="false">Read-only SQL (SELECT/PRAGMA/WITH)</string>
+    <string name="qk_02662" formatted="false">On</string>
+    <string name="qk_02663" formatted="false">Off</string>
+    <string name="qk_02666">%1$s minutes ago</string>
+    <string name="qk_02667">%1$s hours ago</string>
+    <string name="qk_02669" formatted="false">File Management</string>
+    <string name="qk_02670" formatted="false">View package name</string>
+    <string name="qk_02680">Generation failed: %1$s</string>
+    <string name="qk_02681" formatted="false">Enable Failover</string>
+    <string name="qk_02697" formatted="false">● Activated (resident in memory, reused across chat turns)</string>
+    <string name="qk_02698" formatted="false">Use the toolbar to quickly insert formatting; docx splits by newline into paragraphs; xlsx splits by newline into rows; md/txt/html written as-is</string>
+    <string name="qk_02699" formatted="false">GPU offload layers n_gpu_layers (default 0 = pure CPU)</string>
+    <string name="qk_02700" formatted="false">Open document</string>
+    <string name="qk_02701" formatted="false">Generate real files in the background (docx/xlsx/pptx/pdf are binary, md/txt/csv/html are plain text), openable with the in-app viewer or WPS / Office.</string>
+    <string name="qk_02702">Registered tools (%1$s)</string>
+    <string name="qk_02703" formatted="false">No registered tool yet.</string>
+    <string name="qk_02704" formatted="false">Import Tool (AI-written / paste JSON)</string>
+    <string name="qk_02705" formatted="false">name cannot be empty</string>
+    <string name="qk_02706" formatted="false">Terminal · Static HTTP Service</string>
+    <string name="qk_02707">JSON parse failed: %1$s</string>
+    <string name="qk_02708" formatted="false">Click to start editing...</string>
+    <string name="qk_02709" formatted="false">Supports kind: http / intent / broadcast. You can also let the AI generate JSON then paste to import (AI self-written tool).</string>
+    <string name="qk_02726">%1$s items</string>
+    <string name="qk_02732" formatted="false">Select Storage Location</string>
+    <string name="qk_02733" formatted="false">Nova pasta</string>
+    <string name="qk_02734" formatted="false">Search current directory…</string>
+    <string name="qk_02736" formatted="false">Open With (external)</string>
+    <string name="qk_02737" formatted="false">Copy to…</string>
+    <string name="qk_02738" formatted="false">Move to…</string>
+    <string name="qk_02739" formatted="false">Properties</string>
+    <string name="qk_02740" formatted="false">New Name</string>
+    <string name="qk_02741" formatted="false">File with same name already exists</string>
+    <string name="qk_02742" formatted="false">Renamed</string>
+    <string name="qk_02745" formatted="false">Deleted</string>
+    <string name="qk_02746" formatted="false">Delete failed</string>
+    <string name="qk_02747" formatted="false">GenUI SDK / A2UI / Markdown / HTML —— generation starts once selected</string>
+    <string name="qk_02748" formatted="false">Move to Directory</string>
+    <string name="qk_02749" formatted="false">Full path of target directory (must already exist):</string>
+    <string name="qk_02750" formatted="false">Target Directory Path</string>
+    <string name="qk_02751" formatted="false">Target directory does not exist</string>
+    <string name="qk_02752" formatted="false">Target has a same-name file</string>
+    <string name="qk_02753" formatted="false">Moved</string>
+    <string name="qk_02754">Name: %1$s</string>
+    <string name="qk_02756">Size: %1$s</string>
+    <string name="qk_02759">Readable: %1$s  Writable: %2$s</string>
+    <string name="qk_02760" formatted="false">Created</string>
+    <string name="qk_02761" formatted="false">Creation failed (or already exists)</string>
+    <string name="qk_02762" formatted="false">Enter the app display name (e.g. &quot;WeChat&quot; &quot;Kuaishou&quot;) to look up its exact package name.</string>
+    <string name="qk_02763" formatted="false">App Name</string>
+    <string name="qk_02764" formatted="false">Query Package Name</string>
+    <string name="qk_02766" formatted="false">Workspace root (QuroWorkspace)</string>
+    <string name="qk_02767" formatted="false">Back to list</string>
+    <string name="qk_02770" formatted="false">File Name</string>
+    <string name="qk_02771" formatted="false">Folder name</string>
+    <string name="qk_02772" formatted="false">Tool Center</string>
+    <string name="qk_02773" formatted="false">Isolated sandbox</string>
+    <string name="qk_02774" formatted="false">Private database</string>
+    <string name="qk_02775" formatted="false">Aplicativo web</string>
+    <string name="qk_02776" formatted="false">Node Editor</string>
+    <string name="qk_02777" formatted="false">Toolkit Runner</string>
+    <string name="qk_02778" formatted="false">Example: my DeepSeek</string>
+    <string name="qk_02779" formatted="false">Plugin</string>
+    <string name="qk_02796" formatted="false">Enter a shell command to run in the sandbox</string>
+    <string name="qk_02797" formatted="false">List Directory</string>
+    <string name="qk_02798" formatted="false">Clear Sandbox</string>
+    <string name="qk_02799" formatted="false">(No output)</string>
+    <string name="qk_02801" formatted="false">👁 Eye Screenshot (page pixels)</string>
+    <string name="qk_02803" formatted="false">Query</string>
+    <string name="qk_02804" formatted="false">Import failed: cannot read file</string>
+    <string name="qk_02805" formatted="false">Imported Mermaid source</string>
+    <string name="qk_02806" formatted="false">Validate whether a dynamic UI DSL (JSON) can be parsed correctly. Self-check before output avoids render failure.</string>
+    <string name="qk_02807" formatted="false">Already has privileged channel; can execute ADB shell directly in the terminal</string>
+    <string name="qk_02808" formatted="false">Sent to chat for rendering</string>
+    <string name="qk_02809" formatted="false">Render to chat</string>
+    <string name="qk_02810" formatted="false">Source is empty, cannot save</string>
+    <string name="qk_02811" formatted="false">Please fill in the project name first</string>
+    <string name="qk_02812">Saved to project &quot;%1$s&quot;</string>
+    <string name="qk_02813" formatted="false">Please wait for rendering to finish</string>
+    <string name="qk_02814" formatted="false">Source copied</string>
+    <string name="qk_02815" formatted="false">Project name</string>
+    <string name="qk_02818" formatted="false">You</string>
+    <string name="qk_02819" formatted="false">Paste Mermaid source to view / edit (AI can write directly to a named project with the visual tool)</string>
+    <string name="qk_02821">Saved to project &quot;%1$s&quot;</string>
+    <string name="qk_02822">Save failed: %1$s</string>
+    <string name="qk_02823" formatted="false">Workflow run succeeded ✅</string>
+    <string name="qk_02826" formatted="false">Copied to clipboard</string>
+    <string name="qk_02838">Deleted: %1$s</string>
+    <string name="qk_02839">Node editor load failed: %1$s (code=%2$s)</string>
+    <string name="qk_02840" formatted="false">Import HTML</string>
+    <string name="qk_02841" formatted="false">Call a capability exposed by a third-party App via ACI (Agent Capability Interface) (e.g. send message / check unread / create group / open web / run web JS / initiate HTTP request / shared workspace read-write workspace_write·workspace_read·workspace_list·workspace_delete).</string>
+    <string name="qk_02842" formatted="false">Cannot auto-open the Shizuku manager; please manually open the Shizuku app and authorize this app</string>
+    <string name="qk_02843" formatted="false">Sent to chat preview</string>
+    <string name="qk_02844" formatted="false">Open</string>
+    <string name="qk_02845" formatted="false">Deleted project</string>
+    <string name="qk_02846" formatted="false">No native mini-program yet. Let the AI create one with the miniapp_sdk tool (generate a WXML/WXSS/JS project right in the chat),</string>
+    <string name="qk_02847" formatted="false">The built-in demos hello / todo should also appear in the list.</string>
+    <string name="qk_02851" formatted="false">Environment not ready: install rootfs on the Terminal page first</string>
+    <string name="qk_02852" formatted="false">Enter the software name first</string>
+    <string name="qk_02853">Execute: %1$s</string>
+    <string name="qk_02854" formatted="false">Package management (Linux sandbox)</string>
+    <string name="qk_02855" formatted="false">Environment status</string>
+    <string name="qk_02856" formatted="false">Not ready (install rootfs on the Terminal page first)</string>
+    <string name="qk_02859" formatted="false">Search / install software name</string>
+    <string name="qk_02860" formatted="false">Install</string>
+    <string name="qk_02861" formatted="false">List installed</string>
+    <string name="qk_02862" formatted="false">Digital Human</string>
+    <string name="qk_02863" formatted="false">Default App</string>
+    <string name="qk_02864" formatted="false">Upgrade</string>
+    <string name="qk_02865" formatted="false">Output</string>
+    <string name="qk_02866" formatted="false">No output yet. Install/search/list command output appears here after execution (truncated to 4000 chars).</string>
+    <string name="qk_02867" formatted="false">Software source management</string>
+    <string name="qk_02868">Current source: %1$s</string>
+    <string name="qk_02874">Add custom %1$s source</string>
+    <string name="qk_02875" formatted="false">Source name</string>
+    <string name="qk_02876" formatted="false">Shizuku not running, opening and waiting for service to start…</string>
+    <string name="qk_02877">Saved to download directory: %1$s</string>
+    <string name="qk_02878">Saved to: %1$s</string>
+    <string name="qk_02880" formatted="false">KaleidoBox not initialized</string>
+    <string name="qk_02881">Installed %1$s tool packages</string>
+    <string name="qk_02886" formatted="false">This toolkit has no openable UI surface</string>
+    <string name="qk_02887" formatted="false">Ensured built-in sample package loaded</string>
+    <string name="qk_02888">%1$s built-in packages failed to load:
+</string>
+    <string name="qk_02889" formatted="false">Install sample package</string>
+    <string name="qk_02890" formatted="false">Package ID</string>
+    <string name="qk_02891" formatted="false">Import from File</string>
+    <string name="qk_02892" formatted="false">Collapse Layout Preview</string>
+    <string name="qk_02893" formatted="false">AI Generate Plugin</string>
+    <string name="qk_02895">Installed (%1$s)</string>
+    <string name="qk_02899">Uninstall failed: %1$s</string>
+    <string name="qk_02903" formatted="false">📦 List all AI tools provided by &quot;script packages (ToolPkg)&quot; under the workspace packages/ directory.</string>
+    <string name="qk_02905" formatted="false">No toolkit yet, and the plugin directory is empty. Tap &quot;Install sample package&quot; or &quot;AI generate plugin&quot; above.</string>
+    <string name="qk_02906" formatted="false">No toolkit yet. Tap &quot;Plugin Directory&quot; above to install one, or tap &quot;AI Generate Plugin&quot; to write Java that compiles and runs on-device.</string>
+    <string name="qk_02908" formatted="false">Export Module</string>
+    <string name="qk_02909" formatted="false">Plugin directory fully installed; tap &quot;Open&quot; to run the plugin.</string>
+    <string name="qk_02910" formatted="false">Use GitHub as a search engine inside the chat: directly search GitHub’s repositories / code / Issues / users.</string>
+    <string name="qk_02912" formatted="false">AI Generate Plugin (on-device compile)</string>
+    <string name="qk_02913" formatted="false">Paste Java source (implement KaleidoToolkit; the public class name must equal the last segment of the entry class below). Tap &quot;Compile and Install&quot; to compile and run on-device via ecj→d8.</string>
+    <string name="qk_02914" formatted="false">Full Entry Class Name</string>
+    <string name="qk_02915" formatted="false">HTML App</string>
+    <string name="qk_02916" formatted="false">Display Name</string>
+    <string name="qk_02917" formatted="false">Java source</string>
+    <string name="qk_02918" formatted="false">Optimize Old Website Rendering</string>
+    <string name="qk_02920">Compile/install failed: %1$s</string>
+    <string name="qk_02921" formatted="false">Avatar</string>
+    <string name="qk_02925">Init callback exception (ignored): %1$s</string>
+    <string name="qk_02926" formatted="false">Text-to-speech config. Reading and the floating voice ball both follow this setting; the voice engine is taken over by the phone’s system default TTS engine (local) or the selected cloud provider (cloud model service).</string>
+    <string name="qk_02930" formatted="false">Cloud Model Service (multi-provider)</string>
+    <string name="qk_02933" formatted="false">Voice engine: taken over by the phone’s system default TTS engine (Settings → Language &amp; input → Text-to-speech). No need to select here.</string>
+    <string name="qk_02935" formatted="false">No voice available for the current language; switch language or install the corresponding TTS voice pack.</string>
+    <string name="qk_02939" formatted="false">Range 0.5x – 2.0x, default 1.0x.</string>
+    <string name="qk_02940" formatted="false">Preview</string>
+    <string name="qk_02943">Audio environment: %1$s</string>
+    <string name="qk_02946">Initialization failed ❌
+Audio: %1$s
+Engine: %2$s</string>
+    <string name="qk_02954">Read-aloud still failed ❌
+%1$s</string>
+    <string name="qk_02957">Exception: %1$s</string>
+    <string name="qk_02960">Safe mode also failed (r=%1$s) ❌</string>
+    <string name="qk_02961" formatted="false">Safe Preview</string>
+    <string name="qk_02964" formatted="false">Reset</string>
+    <string name="qk_02967" formatted="false">Current provider</string>
+    <string name="qk_02969" formatted="false">✅ Parameters configured</string>
+    <string name="qk_02970" formatted="false">⚠️ No params configured, please enter config first</string>
+    <string name="qk_02971" formatted="false">Go to voice service settings ›</string>
+    <string name="qk_02972" formatted="false">Use the phone’s native SpeechRecognizer, offline-capable, works out of the box</string>
+    <string name="qk_02979" formatted="false">Restart</string>
+    <string name="qk_02980" formatted="false">Source Address</string>
+    <string name="qk_02981" formatted="false">Requires root / Shizuku to execute adb connect</string>
+    <string name="qk_02993" formatted="false">No root/Shizuku: use system wireless debugging pairing instead</string>
+    <string name="qk_02994">✅ TCP ADB enabled, listening on port %1$s
+%2$s</string>
+    <string name="qk_02997" formatted="false">Knowledge base exported</string>
+    <string name="qk_02998" formatted="false">Workspace Name</string>
+    <string name="qk_03000" formatted="false">Can escalate privileges</string>
+    <string name="qk_03001" formatted="false">Alias and address are required</string>
+    <string name="qk_03015" formatted="false">Default 5555, aligned with adb tcpip</string>
+    <string name="qk_03018" formatted="false">adb connect QR Code</string>
+    <string name="qk_03019" formatted="false">Scan the code to get the connection command (copy after scanning with another phone/PC camera), enabling phone/PC control</string>
+    <string name="qk_03023">No client connection yet (this device is only listening). After the other party runs adb connect %1$s:%2$s it will appear here.</string>
+    <string name="qk_03024">The above are control ends that have established a TCP connection with this device’s ADB port %1$s. To disconnect: turn off the &quot;Enable Wireless ADB&quot; switch above, or let the other party adb disconnect.</string>
+    <string name="qk_03025" formatted="false">The connection list does not auto-refresh</string>
+    <string name="qk_03028" formatted="false">Peer ip:port</string>
+    <string name="qk_03029" formatted="false">e.g. 192.168.1.10:5555</string>
+    <string name="qk_03030" formatted="false">Use Custom Signature</string>
+    <string name="qk_03040" formatted="false">Command</string>
+    <string name="qk_03041" formatted="false">e.g. getprop ro.build.version.release</string>
+    <string name="qk_03047" formatted="false">Share diagnostic info</string>
+    <string name="qk_03051" formatted="false">Confirm restart?</string>
+    <string name="qk_03052" formatted="false">Restart will immediately shut down the device; unsaved data may be lost.</string>
+    <string name="qk_03054" formatted="false">Connection command</string>
+    <string name="qk_03055" formatted="false">End date (optional, empty = repeat forever)</string>
+    <string name="qk_03057" formatted="false">Voice service</string>
+    <string name="qk_03063" formatted="false">Voice capability center</string>
+    <string name="qk_03064" formatted="false">Target has a same-name file</string>
+    <string name="qk_03065" formatted="false">Unified config for voice ball, auto-read, chat voice button and emotion / voice-tone capabilities. Each switch is independent.</string>
+    <string name="qk_03066" formatted="false">Device Admin Permission</string>
+    <string name="qk_03068" formatted="false">Ask render channel each round</string>
+    <string name="qk_03069" formatted="false">Auto-read</string>
+    <string name="qk_03070" formatted="false">Auto-read AI replies</string>
+    <string name="qk_03073" formatted="false">Allow Custom Input</string>
+    <string name="qk_03079" formatted="false">The chat button and voice ball share the global STT engine settings. Cloud / on-device engines must be configured with model and API Key on the &quot;Speech Recognition (STT)&quot; page first.</string>
+    <string name="qk_03080" formatted="false">Voice ball bound to chat</string>
+    <string name="qk_03082" formatted="false">Select target chat:</string>
+    <string name="qk_03083" formatted="false">Official github.com</string>
+    <string name="qk_03084" formatted="false">No other chat dialog yet.</string>
+    <string name="qk_03085" formatted="false">Ask (confirm each time)</string>
+    <string name="qk_03087" formatted="false">When enabled, the device tries to start the foreground voice-ball service after boot (notification bar only, no active recording). If the vendor ROM restricts auto-start, allow Zorv AI in system &quot;Battery / Auto-start management&quot;.</string>
+    <string name="qk_03088" formatted="false">LLM Emotion Tag</string>
+    <string name="qk_03093" formatted="false">Edit Content</string>
+    <string name="qk_03095">✅ Current playback provider: %1$s. Voice-color routing is now active—below is that provider’s real voice list; the AI will auto-cast roles from it (no longer hardcoding a single provider).</string>
+    <string name="qk_03101" formatted="false">List MCP Servers</string>
+    <string name="qk_03102" formatted="false">Bootstrap Script</string>
+    <string name="qk_03103" formatted="false">Dialog Title</string>
+    <string name="qk_03104" formatted="false">Built-in</string>
+    <string name="qk_03105" formatted="false">Dialog Content</string>
+    <string name="qk_03106" formatted="false">Describe the dialog content to display</string>
+    <string name="qk_03107" formatted="false">Card Title (optional)</string>
+    <string name="qk_03108" formatted="false">Title shown in the chat</string>
+    <string name="qk_03109" formatted="false">Card description (optional)</string>
+    <string name="qk_03110" formatted="false">Configure visual question</string>
+    <string name="qk_03111" formatted="false">e.g. Which style do you want?</string>
+    <string name="qk_03112" formatted="false">Preset options (one per line, optional)</string>
+    <string name="qk_03114" formatted="false">Save and Preview</string>
+    <string name="qk_03115" formatted="false">Popup title (optional)</string>
+    <string name="qk_03116" formatted="false">AI Question</string>
+    <string name="qk_03117" formatted="false">All-purpose AI assistant, rational, efficient, warm, at your service anytime.</string>
+    <string name="qk_03120" formatted="false">Enter custom answer</string>
+    <string name="qk_03121" formatted="false">Enter your answer</string>
+    <string name="qk_03122" formatted="false">Call CMS capability module (old interface, recommend cms_toolbox)</string>
+    <string name="qk_03123" formatted="false">Select Dialog Type</string>
+    <string name="qk_03129" formatted="false">e.g. Select an action</string>
+    <string name="qk_03130" formatted="false">Display Content</string>
+    <string name="qk_03131" formatted="false">Supports Markdown/HTML</string>
+    <string name="qk_03132" formatted="false">Hint Text</string>
+    <string name="qk_03133" formatted="false">Please select an action</string>
+    <string name="qk_03134" formatted="false">Buttons (comma-separated)</string>
+    <string name="qk_03135" formatted="false">View, edit, delete</string>
+    <string name="qk_03136" formatted="false">Form description</string>
+    <string name="qk_03137" formatted="false">Please fill in the following information</string>
+    <string name="qk_03138" formatted="false">Fields (comma-separated)</string>
+    <string name="qk_03139" formatted="false">Download APK Manually</string>
+    <string name="qk_03140" formatted="false">Confirm content</string>
+    <string name="qk_03141" formatted="false">Control the ACI HTTP mock server (used when the real ACI API is not done yet).</string>
+    <string name="qk_03142" formatted="false">Bot running in background</string>
+    <string name="qk_03143" formatted="false">Describe the interface you want, and the AI generates complete HTML</string>
+    <string name="qk_03144" formatted="false">Select question method</string>
+    <string name="qk_03148" formatted="false">Enter a keyword then tap search (repository / code / Issue / user)</string>
+    <string name="qk_03149" formatted="false">Options (comma-separated)</string>
+    <string name="qk_03150" formatted="false">Option A, Option B, Option C</string>
+    <string name="qk_03151" formatted="false">Bookmark</string>
+    <string name="qk_03152" formatted="false">Please enter your answer</string>
+    <string name="qk_03153" formatted="false">After selecting a type, a blank document is created and you enter the editor.</string>
+    <string name="qk_03154" formatted="false">Rate your experience 1-5</string>
+    <string name="qk_03155" formatted="false">Toggle Tab</string>
+    <string name="qk_03156" formatted="false">No local model yet. After importing by any of the above methods, tap the list item to set it as the current chat model.</string>
+    <string name="qk_03157" formatted="false">HTML Description</string>
+    <string name="qk_03158" formatted="false">Describe the question interface you want</string>
+    <string name="qk_03161">Call visual_custom_popup tool, params: %1$s</string>
+    <string name="qk_03164">(Please generate a rating UI: %1$s)</string>
+    <string name="qk_03166" formatted="false">Perguntar</string>
+    <string name="qk_03168" formatted="false">Local Git version control integration: run git commands on the device-storage repo inside the proot container.</string>
+    <string name="qk_03172" formatted="false">FTP server started</string>
+    <string name="qk_03173" formatted="false">File Tree</string>
+    <string name="qk_03176" formatted="false">When &quot;Local Model (on-device)&quot; is selected, this test uses the phone’s offline Sherpa-NCNN recognition; other engines use native SpeechRecognizer.</string>
+    <string name="qk_03179" formatted="false">🎙 Supports Speech Transcription</string>
+    <string name="qk_03180" formatted="false">Folder operations</string>
+    <string name="qk_03181" formatted="false">Orchestrate a group of terminal commands by dependency (DAG): no-dependency run in parallel, upstream stdout as downstream input, any failure aborts the rest.</string>
+    <string name="qk_03182">Renamed to %1$s</string>
+    <string name="qk_03189" formatted="false">Cannot get folder path</string>
+    <string name="qk_03190" formatted="false">Select Workspace</string>
+    <string name="qk_03191" formatted="false">This provider needs no key/params to use (e.g. Edge TTS).</string>
+    <string name="qk_03192" formatted="false">Default Workspace</string>
+    <string name="qk_03193" formatted="false">Select preset UA or custom</string>
+    <string name="qk_03194" formatted="false">Create Workspace</string>
+    <string name="qk_03195" formatted="false">Create a folder in the default workspace</string>
+    <string name="qk_03196" formatted="false">Custom Select Folder</string>
+    <string name="qk_03197" formatted="false">Select any folder on the phone as the workspace</string>
+    <string name="qk_03198" formatted="false">Deploy log:</string>
+    <string name="qk_03199" formatted="false">Example: MyProject</string>
+    <string name="qk_03205" formatted="false">Full screen</string>
+    <string name="qk_03209" formatted="false">Clearing…</string>
+    <string name="qk_03210" formatted="false">Layout failed, shown as plain text</string>
+    <string name="qk_03212" formatted="false">Copied layout content</string>
+    <string name="qk_03214" formatted="false">Layout Preview</string>
+    <string name="qk_03216" formatted="false">No scheduled task yet</string>
+    <string name="qk_03219" formatted="false">Deep Thinking</string>
+    <string name="qk_03221" formatted="false">Generating dependencies requires BouncyCastle, may be unavailable on some devices; if it fails use &quot;Import keystore&quot; (generate with keytool on PC then import).</string>
+    <string name="qk_03223" formatted="false">Thinking Process</string>
+    <string name="qk_03226" formatted="false">No persona card yet.</string>
+    <string name="qk_03231" formatted="false">Yansheng</string>
+    <string name="qk_03233" formatted="false">Code editing</string>
+    <string name="qk_03237">Close %1$s</string>
+    <string name="qk_03243" formatted="false">Yansheng</string>
+    <string name="qk_03262" formatted="false">Li Feng</string>
+    <string name="qk_03269" formatted="false">Checking provider health status...</string>
+    <string name="qk_03276" formatted="false">Meeting minutes action list</string>
+    <string name="qk_03278" formatted="false">Competitor Homepage Redesign Ideas</string>
+    <string name="qk_03280" formatted="false">Xiaohongshu Copy in 3 Versions</string>
+    <string name="qk_03283" formatted="false">Reading Notes · &quot;Quiet&quot;</string>
+    <string name="qk_03286" formatted="false">The connection list does not auto-refresh</string>
+    <string name="qk_03288" formatted="false">SQL Slow Query Troubleshooting</string>
+    <string name="qk_03304" formatted="false">OK, draft it with a more formal tone.</string>
+    <string name="qk_03355" formatted="false">Battery status</string>
+    <string name="qk_03357" formatted="false">Storage</string>
+    <string name="qk_03414" formatted="false">  Enabled</string>
+    <string name="qk_03415" formatted="false">  Off</string>
+    <string name="qk_03416" formatted="false">Back</string>
+    <string name="qk_03417" formatted="false">No video player found</string>
+    <string name="qk_03418" formatted="false">Real-time Inference</string>
+    <string name="qk_03419" formatted="false">Write File Content</string>
+    <string name="qk_03420" formatted="false">▶ Playing</string>
+    <string name="qk_03421" formatted="false">New Directory</string>
+    <string name="qk_03422" formatted="false">No UI records</string>
+    <string name="qk_03423" formatted="false">Chat History</string>
+    <string name="qk_03424" formatted="false">Generate</string>
+    <string name="qk_03425" formatted="false">Project Settings</string>
+    <string name="qk_03426" formatted="false">Set Alarm</string>
+    <string name="qk_03427" formatted="false">Control OPPO Fluid Cloud, show status-bar capsule and cards</string>
+    <string name="qk_03428" formatted="false">AI Paste Keyboard</string>
+    <string name="qk_03429" formatted="false">Run Code (Python/JS/Shell, etc.)</string>
+    <string name="qk_03430" formatted="false">Keep Accessibility Service running</string>
+    <string name="qk_03431" formatted="false">No message history</string>
+    <string name="qk_03432" formatted="false">My Pets</string>
+    <string name="qk_03433" formatted="false">Save an AI lesson (error/solution/tool pattern/version diff) so related future chats auto-reuse it. Call proactively when you encounter, solve, or could reuse a problem within a chat turn.</string>
+    <string name="qk_03434" formatted="false">Read Contacts</string>
+    <string name="qk_03435" formatted="false">Closed · no longer asks, uniformly uses GenUI SDK; if you name a channel in your words it will still comply</string>
+    <string name="qk_03436" formatted="false">Try These</string>
+    <string name="qk_03437" formatted="false">Instant Results</string>
+    <string name="qk_03438" formatted="false">Save or update a third-party service authorization, so http_request auto-attaches auth via the service parameter.</string>
+    <string name="qk_03439" formatted="false">SiliconFlow CosyVoice</string>
+    <string name="qk_03440" formatted="false">Trigger the current input box’s &quot;Send&quot; action (EditorInfo.IME_ACTION_SEND) via the Zorv AI agent keyboard.</string>
+    <string name="qk_03441" formatted="false">Directory Name</string>
+    <string name="qk_03442" formatted="false">Manage multi-provider configs with automatic failover, health checks and priority ordering. You can add, update, delete provider configs, run health checks, and view failover status.</string>
+    <string name="qk_03443" formatted="false">Image Recognition/Analysis</string>
+    <string name="qk_03444" formatted="false">Enter interactive game mode: guess number / tic-tac-toe / blackjack / memory flip / RPS, or let the user describe a new game and you make the rules on the spot</string>
+    <string name="qk_03445" formatted="false">Manage data export, import, backup, restore and encrypted storage. Supports ZIP export, AES encryption, full backup and selective restore.</string>
+    <string name="qk_03446" formatted="false">Save as Web App</string>
+    <string name="qk_03447" formatted="false">Ignite (immediately async-execute) an existing workflow and return runId. Pass either id (wf_&lt;name&gt;) or name. After execution, poll progress and result via wf_run_status with runId.</string>
+    <string name="qk_03448" formatted="false">Dial</string>
+    <string name="qk_03449" formatted="false">Network Connection</string>
+    <string name="qk_03450" formatted="false">Call tools of external MCP servers via ACI. This is the unified entry for calling MCP tools.</string>
+    <string name="qk_03451" formatted="false">Write Workspace File</string>
+    <string name="qk_03452" formatted="false">Run Node.js inside the proot/Ubuntu terminal (nodejs preinstalled by bootstrap). Ships a real entry script: after deploy it launches a local HTTP backend, as another implementation of &quot;terminal as backend&quot;, coexisting with the Python backend.</string>
+    <string name="qk_03453" formatted="false">Storage Permission</string>
+    <string name="qk_03454" formatted="false">Export build artifacts: export the APK generated by the build console to an accessible location (replaces the UI file picker; the AI can trigger it too)</string>
+    <string name="qk_03455" formatted="false">Zorv CMS Engine</string>
+    <string name="qk_03456" formatted="false">Tasker two-way integration: fire ignites a specified Tasker task; broadcast sends any custom broadcast (with extras); state queries whether Tasker is installed.</string>
+    <string name="qk_03457" formatted="false">Not connected to the controlled end</string>
+    <string name="qk_03458" formatted="false">Search the Crossref academic literature database (free, no auth): find papers/books/chapters by keyword, returning title, authors, year, DOI and links.</string>
+    <string name="qk_03459" formatted="false">Execute commands via Shizuku with ADB/Shell permission (higher than plain Runtime.exec).</string>
+    <string name="qk_03460" formatted="false">Zorv Chat</string>
+    <string name="qk_03461" formatted="false">Uses the built-in placeholder icon by default; after import this PNG replaces the APK desktop icon.</string>
+    <string name="qk_03462" formatted="false">Screen capture enabled; long-press to request again</string>
+    <string name="qk_03463" formatted="false">Pull the full quro-ui DSL spec (nodes/attributes/actions) to avoid keeping a long schema resident in the system prompt</string>
+    <string name="qk_03464" formatted="false">⚠️ [Mandatory] When a command is ambiguous or information is missing, you must call this tool to ask the user</string>
+    <string name="qk_03465" formatted="false">(RAG hybrid retrieval) Search the local knowledge base and return the most relevant document snippets. Prefer semantic (if an Embedding Key is configured),</string>
+    <string name="qk_03466" formatted="false">Requesting Root… please select Allow in the popup</string>
+    <string name="qk_03467" formatted="false">Start a static-file HTTP service inside proot (python3 -m http.server), turning the terminal into a backend serving files. This App acts as the frontend requesting resources from it, realizing &quot;mutual master-slave&quot;.</string>
+    <string name="qk_03468" formatted="false">I’ll talk to you through the UI; say something</string>
+    <string name="qk_03469" formatted="false">When leaving the app, receive AI replies as system pop-up (heads-up) reminders</string>
+    <string name="qk_03470" formatted="false">File name (e.g. Main.java)</string>
+    <string name="qk_03471" formatted="false">CMS Static Resource Service</string>
+    <string name="qk_03472" formatted="false">Disable or enable the device camera (requires L3 Device Admin activated).</string>
+    <string name="qk_03473" formatted="false">📝 Chat Document: write a document directly in the chat and render it (no file generated).</string>
+    <string name="qk_03474" formatted="false">Replay ▶</string>
+    <string name="qk_03475" formatted="false">Cannot return the conversation currently</string>
+    <string name="qk_03476" formatted="false">Stop TTS Reading</string>
+    <string name="qk_03477" formatted="false">Momo</string>
+    <string name="qk_03478" formatted="false">Go</string>
+    <string name="qk_03479" formatted="false">Install Linux Environment</string>
+    <string name="qk_03480" formatted="false">Open in Browser</string>
+    <string name="qk_03481" formatted="false">Visual Action Dialog: let the user pick one of several actions</string>
+    <string name="qk_03482" formatted="false">Message History</string>
+    <string name="qk_03483" formatted="false">📦 Call a tool from the workspace script package (ToolPkg): load the package entry module and execute its exported function.</string>
+    <string name="qk_03484" formatted="false">Open App (by package name)</string>
+    <string name="qk_03485" formatted="false">Run the full FFmpeg pipeline inside the proot container: media probe/transcode/crop/merge/audio-extract, etc.</string>
+    <string name="qk_03486" formatted="false">Execute Python code inside the proot Ubuntu 24.04 container and return the result.</string>
+    <string name="qk_03487" formatted="false">Start/stop/query the mitmdump packet-capture service inside the proot container; flows are written live to /mnt/quro/mitm/.</string>
+    <string name="qk_03488" formatted="false">Terminal session foreground keep-alive service</string>
+    <string name="qk_03489" formatted="false">Select or create a file in the left file tree to start coding…</string>
+    <string name="qk_03490" formatted="false">ROOT access permission</string>
+    <string name="qk_03491" formatted="false">Paste: first tap the input box in the target app, then tap &quot;Paste&quot; (via Accessibility SET_TEXT / PASTE). ZorvAI accessibility service must be enabled.</string>
+    <string name="qk_03492" formatted="false">▶️ Full JS/TS script runner (SandboxPackage): runs &quot;workspace script files&quot; or &quot;inline code snippets&quot; inside the QuickJS sandbox,</string>
+    <string name="qk_03493" formatted="false">APK-level plugin framework controller (ZorvAI’s plugin system has a single entry point: this tool).</string>
+    <string name="qk_03494" formatted="false">Bobo</string>
+    <string name="qk_03495" formatted="false">CMS modules &amp; engine management: view/invoke CMS modules, deploy/check CMS engine status, fix CMS deployment, AI self-writes CMS module scripts</string>
+    <string name="qk_03496" formatted="false">Read workspace file</string>
+    <string name="qk_03497" formatted="false">Visual analysis of the current screen screenshot (real visual understanding): uses a vision model to identify content; usable whenever the screen needs to be seen</string>
+    <string name="qk_03498" formatted="false">Enter &quot;interactive games with AI&quot; mode: guess the number / tic-tac-toe vs AI / blackjack / memory flip / rock-paper-scissors,</string>
+    <string name="qk_03499" formatted="false">Generate real Office files (docx/xlsx/pptx/pdf), downloadable/shareable</string>
+    <string name="qk_03500" formatted="false">Not detected yet; tap to refresh.</string>
+    <string name="qk_03501" formatted="false">Battery optimization exemption</string>
+    <string name="qk_03502" formatted="false">Invoke a third-party app’s ACI capability</string>
+    <string name="qk_03503" formatted="false">Stop listening</string>
+    <string name="qk_03504" formatted="false">Build log</string>
+    <string name="qk_03505" formatted="false">While running AI tasks, show a fluid cloud capsule / live update notification in the status bar (create/update/end).</string>
+    <string name="qk_03506" formatted="false">List all scheduled tasks / automation reminders. No parameters. Returns the task list (id/title/time/repeat type/status).</string>
+    <string name="qk_03507" formatted="false">Build APK</string>
+    <string name="qk_03508" formatted="false">Render channel</string>
+    <string name="qk_03509" formatted="false">Mini-program (native engine)·</string>
+    <string name="qk_03510" formatted="false">Via the Zorv AI agent keyboard, type text directly into the currently focused input box (e.g. a WPS document).</string>
+    <string name="qk_03511" formatted="false">Pinned to home screen (if supported)</string>
+    <string name="qk_03512" formatted="false">This plugin does not yet provide an interactive UI</string>
+    <string name="qk_03513" formatted="false">Enabled · before each generation a 4-choice pops up (GenUI / A2UI / Markdown / HTML); generation starts after selection</string>
+    <string name="qk_03514" formatted="false">📁 Workspace file write: write text to a relative-path file in the workspace (QuroWorkspace).</string>
+    <string name="qk_03515" formatted="false">UI as reply</string>
+    <string name="qk_03516" formatted="false">Import icon PNG</string>
+    <string name="qk_03517" formatted="false">Export JSON</string>
+    <string name="qk_03518" formatted="false">Toolchain status</string>
+    <string name="qk_03519" formatted="false">Start the service in the Shizuku app first, then return here and tap &quot;Request authorization&quot;</string>
+    <string name="qk_03520" formatted="false">Scripted UI automation: execute a sequence of UI actions (dump current UI / tap by text·id·description·coordinates / input text / swipe / scroll / wait).</string>
+    <string name="qk_03521" formatted="false">iFlytek TTS</string>
+    <string name="qk_03522" formatted="false">Manage the autonomous heartbeat service: start/stop heartbeat, view heartbeat status, run health checks, generate status reports.</string>
+    <string name="qk_03523" formatted="false">📝 Device File Write: write text to device storage (app-specific directory).</string>
+    <string name="qk_03524" formatted="false">Tuanzi</string>
+    <string name="qk_03525" formatted="false">Python Demo Module</string>
+    <string name="qk_03526" formatted="false">Add Document to Knowledge Base</string>
+    <string name="qk_03527" formatted="false">🧰 Create a project skeleton from built-in templates in the workspace (copy to Workspace/&lt;project name&gt;/, error if same-name dir exists).</string>
+    <string name="qk_03528" formatted="false">ZorvAI task real-time status (Fluid Cloud / live update)</string>
+    <string name="qk_03529" formatted="false">Control WiFi Switch</string>
+    <string name="qk_03530" formatted="false">Execute shell commands with ROOT permission (highest-risk channel! Use with care). Prefer Shizuku root channel, fall back to direct su.</string>
+    <string name="qk_03531" formatted="false">View Details</string>
+    <string name="qk_03532" formatted="false">Root authorized ✓</string>
+    <string name="qk_03533" formatted="false">Unified UI control tool: manipulate every corner of the interface (open UI / toggle switches / open popovers / chat management / render cards / components / query status / update props / scroll / focus / hide / show / navigate / permission control)</string>
+    <string name="qk_03534" formatted="false">Volcano Engine Doubao TTS</string>
+    <string name="qk_03535" formatted="false">AI Browser: web search, scrape pages, auto-research</string>
+    <string name="qk_03536" formatted="false">Read Current Screen Content</string>
+    <string name="qk_03537" formatted="false">Import keystore</string>
+    <string name="qk_03538" formatted="false">UI Replay · tap an item to restore to canvas</string>
+    <string name="qk_03539" formatted="false">Write a document directly in the chat and render it (no file generated)</string>
+    <string name="qk_03540" formatted="false">List all in-app alarms (id, time, repeat days, enabled, next ring time). No params.</string>
+    <string name="qk_03541" formatted="false">List currently deployed local MCP servers (created and deployed by the AI via mcp_deploy), with alias, tool count and connection address.</string>
+    <string name="qk_03542" formatted="false">Take Screenshot</string>
+    <string name="qk_03543" formatted="false">Perform a swipe gesture on screen. Supports preset directions or custom start/end coordinates.</string>
+    <string name="qk_03544" formatted="false">List all MCP tools callable via ACI (tools exposed by external MCP servers).</string>
+    <string name="qk_03545" formatted="false">Function Settings</string>
+    <string name="qk_03546" formatted="false">List all discovered ACI third-party Apps and their exposed capabilities (id / description / params / whether user confirmation is needed).</string>
+    <string name="qk_03547" formatted="false">Fine Design</string>
+    <string name="qk_03548" formatted="false">Terminal uses the privileged channel to execute commands (Shizuku→ROOT auto-downgrade).</string>
+    <string name="qk_03549" formatted="false">Force-lock the phone screen (requires L3 Device Admin activated).</string>
+    <string name="qk_03550" formatted="false">Zorv Video Call</string>
+    <string name="qk_03551" formatted="false">Instructions for the AI, e.g.: write a compliment for a friend</string>
+    <string name="qk_03552" formatted="false">Get device model and system version</string>
+    <string name="qk_03553" formatted="false">Service Status</string>
+    <string name="qk_03554" formatted="false">APK-level plugin framework master control (install/uninstall/reload plugins, view AI tools contributed by plugins, call plugin tools directly, open plugin UI)</string>
+    <string name="qk_03555" formatted="false">Read Current Web Content</string>
+    <string name="qk_03556" formatted="false">Swipe Screen</string>
+    <string name="qk_03557" formatted="false">Deep-read a single web page: scrape the URL body and extract readable text/key points for the AI to cite</string>
+    <string name="qk_03558" formatted="false">Read a local existing document and extract plain text, for the AI to understand and then rewrite/summarize.</string>
+    <string name="qk_03559" formatted="false">Send HTTP Request</string>
+    <string name="qk_03560" formatted="false">Zorv AI has no built-in PDF renderer yet</string>
+    <string name="qk_03561" formatted="false">Screen capture authorization failed; fell back to accessibility node tree</string>
+    <string name="qk_03562" formatted="false">Email</string>
+    <string name="qk_03563" formatted="false">Get the current UI control tree (UI Tree) for precise automation.</string>
+    <string name="qk_03564" formatted="false">100% open-source local video player: a full-featured in-app player plays device videos (supports play/pause, progress, speed, mute, landscape/portrait).</string>
+    <string name="qk_03565" formatted="false">No options shown? Go to system settings and grant this app &quot;floating window&quot; permission</string>
+    <string name="qk_03566" formatted="false">· Other files → put into assets/, packaged into the APK’s assets/ (code read via AssetManager).</string>
+    <string name="qk_03567" formatted="false">Edge TTS (Microsoft)</string>
+    <string name="qk_03568" formatted="false">Create Branch</string>
+    <string name="qk_03569" formatted="false">Export SKILL.md</string>
+    <string name="qk_03570" formatted="false">Chat Preview</string>
+    <string name="qk_03571" formatted="false">Import Document</string>
+    <string name="qk_03572" formatted="false">Background Auto-start</string>
+    <string name="qk_03573" formatted="false">No module runtime record yet (real-time status shows here after deploying a module).</string>
+    <string name="qk_03574" formatted="false">📄 Generate real Office files (docx/xlsx/pptx/pdf), self-built zero-dependency, generated in background for download/share.</string>
+    <string name="qk_03575" formatted="false">③ Directly select a single .gguf file (simplest, recommended). The model is fully copied to the app’s private directory and runs completely offline.</string>
+    <string name="qk_03576" formatted="false">The document rendering engine is bundled (mammoth.js / SheetJS / pdf.js), opens even offline.</string>
+    <string name="qk_03577" formatted="false">Phone runs Sherpa-NCNN streaming model offline, from 22MB, low latency, auto sentence-break after speaking</string>
+    <string name="qk_03578" formatted="false">Health and Fitness</string>
+    <string name="qk_03579" formatted="false">Function Permission Guide</string>
+    <string name="qk_03580" formatted="false">Each trigger creates an independent session, not polluting the current / history chats.</string>
+    <string name="qk_03581" formatted="false">Import failed: content is not a valid SKILL.md / skill JSON / tool spec JSON</string>
+    <string name="qk_03582" formatted="false">Login denied by user</string>
+    <string name="qk_03583" formatted="false">Configure Visual Dialog</string>
+    <string name="qk_03584" formatted="false">Role Setting (system prompt core)</string>
+    <string name="qk_03585" formatted="false">Requires clicking the link to view the answer</string>
+    <string name="qk_03586" formatted="false">Below you can manually add apps, view discovered app capabilities, and manually start or rebind.</string>
+    <string name="qk_03587" formatted="false">Preview layout in chat</string>
+    <string name="qk_03588" formatted="false">Terminal custom keybinding manager: save/query/delete/reset key→action mappings, persisted in the app’s private directory for the terminal to load.</string>
+    <string name="qk_03589" formatted="false">Compile and Install</string>
+    <string name="qk_03590" formatted="false">The operation below doesn’t work; please report this along with the QuroApplication / QuroPluginHost errors in logcat.</string>
+    <string name="qk_03591" formatted="false">Create Scheduled Task</string>
+    <string name="qk_03592" formatted="false">List Directory Contents</string>
+    <string name="qk_03593" formatted="false">Max Retry Count</string>
+    <string name="qk_03594" formatted="false">Logging in…</string>
+    <string name="qk_03595" formatted="false">Installed Version</string>
+    <string name="qk_03596" formatted="false">Current Workspace</string>
+    <string name="qk_03597" formatted="false">Authorize this app with your GitHub account. Both methods truly log into official GitHub.</string>
+    <string name="qk_03598" formatted="false">Import skill from SKILL.md / JSON / tool spec</string>
+    <string name="qk_03599" formatted="false">Privilege</string>
+    <string name="qk_03600" formatted="false">Read File Content</string>
+    <string name="qk_03601" formatted="false">Failure Threshold (circuit breaker)</string>
+    <string name="qk_03602" formatted="false">⚠️ mermaid node missing source (chart source)</string>
+    <string name="qk_03603" formatted="false">Exact Alarm</string>
+    <string name="qk_03604" formatted="false">Example: 1080</string>
+    <string name="qk_03605" formatted="false">No avatar set (shows first letter of name)</string>
+    <string name="qk_03606" formatted="false">Call</string>
+    <string name="qk_03607" formatted="false">WeChat iLink connects directly to ilinkai.weixin.qq.com via phone-side HTTP long polling, no public endpoint needed.</string>
+    <string name="qk_03608" formatted="false">New Example</string>
+    <string name="qk_03609" formatted="false">Floating Voice Ball</string>
+    <string name="qk_03610" formatted="false">Import plugin from link</string>
+    <string name="qk_03611" formatted="false">Execute commands in the self-developed sandbox terminal QuroTerm (ls/cd/cat/echo/grep/ps/top/netstat/ping/curl/wget/dns/</string>
+    <string name="qk_03612" formatted="false">Content</string>
+    <string name="qk_03613" formatted="false">Send install command to terminal</string>
+    <string name="qk_03614" formatted="false">After closing, auto-read / chat voice button etc. still work independently per their own switches.</string>
+    <string name="qk_03615" formatted="false">UI parse failed</string>
+    <string name="qk_03616" formatted="false">📐 Background AIP layout synthesis: structured layout for full long documents / PPT / reports / mind maps.</string>
+    <string name="qk_03617" formatted="false">Set as Default</string>
+    <string name="qk_03618" formatted="false">AI controls the app’s built-in browser (takes over the currently displayed WebView; when the page is loaded you can directly see/operate content).</string>
+    <string name="qk_03619" formatted="false">Find…</string>
+    <string name="qk_03620" formatted="false">Template (click to fill example)</string>
+    <string name="qk_03621" formatted="false">Register and Start</string>
+    <string name="qk_03622" formatted="false">Tap &quot;New&quot; to create your first soul card</string>
+    <string name="qk_03623" formatted="false">One-click Install Built-in Plugin</string>
+    <string name="qk_03624" formatted="false">Package name or app name</string>
+    <string name="qk_03625" formatted="false">⚠ Contains dependencies to resolve</string>
+    <string name="qk_03626" formatted="false">No other chat yet.</string>
+    <string name="qk_03627" formatted="false">Edit Preset</string>
+    <string name="qk_03628" formatted="false">Local Diagnostics</string>
+    <string name="qk_03629" formatted="false">Type:</string>
+    <string name="qk_03630" formatted="false">Set; a reminder notification will pop up in about 10 seconds</string>
+    <string name="qk_03631" formatted="false">Move to…</string>
+    <string name="qk_03632" formatted="false">No output yet. Install/search/list command output appears here after execution (truncated to 4000 chars).</string>
+    <string name="qk_03633" formatted="false">Tasker trigger missing workflow / workflow_id / prompt</string>
+    <string name="qk_03634" formatted="false">Favorite this page</string>
+    <string name="qk_03635" formatted="false">Bio (optional)</string>
+    <string name="qk_03636" formatted="false">Unified config for voice ball, auto-read, chat voice button and emotion / voice-role capabilities. Each switch is independent.</string>
+    <string name="qk_03637" formatted="false">All install commands sent to terminal</string>
+    <string name="qk_03638" formatted="false">Folder Name</string>
+    <string name="qk_03639" formatted="false">Disable Image Loading</string>
+    <string name="qk_03640" formatted="false">When on, local models can call tools via function calling. Off is pure chat mode, saving context window.</string>
+    <string name="qk_03641" formatted="false">Steps in last 7 days (by source):</string>
+    <string name="qk_03642" formatted="false">Repeat</string>
+    <string name="qk_03643" formatted="false">Render to Chat</string>
+    <string name="qk_03644" formatted="false">User</string>
+    <string name="qk_03645" formatted="false">Connection failed</string>
+    <string name="qk_03646" formatted="false">Update</string>
+    <string name="qk_03647" formatted="false">Generating</string>
+    <string name="qk_03648" formatted="false">Edit Provider</string>
+    <string name="qk_03649" formatted="false">Empty / 0 means auto. After changing, re-tap &quot;Load&quot; to take effect.</string>
+    <string name="qk_03650" formatted="false">Clear and Continue</string>
+    <string name="qk_03651" formatted="false">Create a folder in the default workspace</string>
+    <string name="qk_03652" formatted="false">Title shown in the chat</string>
+    <string name="qk_03653" formatted="false">Terminal Environment</string>
+    <string name="qk_03654" formatted="false">Expand Chat</string>
+    <string name="qk_03655" formatted="false">Voice Name (free to fill)</string>
+    <string name="qk_03656" formatted="false">Developer</string>
+    <string name="qk_03657" formatted="false">No thinking process yet</string>
+    <string name="qk_03658" formatted="false">Plugin Desktop</string>
+    <string name="qk_03659" formatted="false">Control Device Volume</string>
+    <string name="qk_03660" formatted="false">The following params only affect the local offline model, independent of cloud model settings.</string>
+    <string name="qk_03661" formatted="false">Select Question Method</string>
+    <string name="qk_03662" formatted="false">Recognized text shows here</string>
+    <string name="qk_03663" formatted="false">Save Changes</string>
+    <string name="qk_03664" formatted="false">Generate new signature</string>
+    <string name="qk_03665" formatted="false">Validate whether a dynamic UI DSL (JSON) can be parsed correctly. Self-check before output avoids render failure.</string>
+    <string name="qk_03666" formatted="false">Freeze or unfreeze a specified app (frozen apps don’t reside in memory or receive push).</string>
+    <string name="qk_03667" formatted="false">Options are in the floating window on screen; just tap it</string>
+    <string name="qk_03668" formatted="false">Call CMS capability module (old interface; cms_toolbox recommended)</string>
+    <string name="qk_03669" formatted="false">Tasker trigger missing workflow / workflow_id / prompt</string>
+    <string name="qk_03670" formatted="false">Unknown type</string>
+    <string name="qk_03671" formatted="false">Real-time generation</string>
+    <string name="qk_03672" formatted="false">Add to home screen</string>
+    <string name="qk_03673" formatted="false">🖼️ Image content recognition: analyze the image file provided by the user, return a detailed description.</string>
+    <string name="qk_03674" formatted="false">Query CMS v2 modules’ and recent tasks’ execution status (deploy state / running / terminal), letting the AI confirm &quot;deploy/call succeeded&quot;.</string>
+    <string name="qk_03675" formatted="false">Control the ACI HTTP mock server (used when the real ACI API is not done yet).</string>
+    <string name="qk_03676" formatted="false">Cannot render GenUI content</string>
+    <string name="qk_03677" formatted="false">Call a capability exposed by a third-party app via ACI (Agent Capability Interface) (e.g. send message / check unread / create group / open web / run web JS / initiate HTTP request / shared workspace read-write workspace_write·workspace_read·workspace_list·workspace_delete).</string>
+    <string name="qk_03678" formatted="false">Zorv AI doesn’t store email; sending is done via your chosen email app.</string>
+    <string name="qk_03679" formatted="false">Device admin permission</string>
+    <string name="qk_03680" formatted="false">Launch app</string>
+    <string name="qk_03681" formatted="false">The data format returned by the AI is incorrect; please retry or adjust the description.</string>
+    <string name="qk_03682" formatted="false">Evaluate arithmetic expression</string>
+    <string name="qk_03683" formatted="false">Terminal · Node runtime</string>
+    <string name="qk_03684" formatted="false">Query the deploy readiness, health, version, launched shared services (NODE/PYTHON/SSH/JAVA/RUST/GO runtimes), deploy progress and logs of the &quot;CMS Engine (system resource package)&quot;.</string>
+    <string name="qk_03685" formatted="false">List currently connected external MCP servers (alias and address). View available servers with this tool before calling external tools.</string>
+    <string name="qk_03686" formatted="false">Say something...</string>
+    <string name="qk_03687" formatted="false">AI thinking panel</string>
+    <string name="qk_03688" formatted="false">Use GitHub as a search engine inside the chat: directly search GitHub’s repositories / code / Issues / users.</string>
+    <string name="qk_03689" formatted="false">Paste</string>
+    <string name="qk_03690" formatted="false">Terminal environment</string>
+    <string name="qk_03691" formatted="false">Deploy a local MCP server: submit a set of tool definitions (JSON array), the app starts an MCP endpoint locally,</string>
+    <string name="qk_03692" formatted="false">Ask render channel each round</string>
+    <string name="qk_03693" formatted="false">No thinking process yet</string>
+    <string name="qk_03694" formatted="false">Java project → DEX → APK</string>
+    <string name="qk_03695" formatted="false">Multi-step workflow orchestration engine: chain registered tools into a pipeline, supports variables, loops, conditions, error handling and timeouts; use it to orchestrate other tools to fill capability gaps.</string>
+    <string name="qk_03696" formatted="false">Send SMS</string>
+    <string name="qk_03697" formatted="false">Control device volume</string>
+    <string name="qk_03698" formatted="false">Get current date and time</string>
+    <string name="qk_03699" formatted="false">Each project uses a different package name, so installs won’t conflict (over-install also needs same signature).</string>
+    <string name="qk_03700" formatted="false">Open the web browser and navigate to the specified URL</string>
+    <string name="qk_03701" formatted="false">Local Git version control integration: run git commands on the device-storage repo inside the proot container.</string>
+    <string name="qk_03702" formatted="false">Already has privileged channel; can execute ADB shell directly in the terminal</string>
+    <string name="qk_03703" formatted="false">ZorvAI sandbox terminal</string>
+    <string name="qk_03704" formatted="false">Terminal · Static HTTP service</string>
+    <string name="qk_03705" formatted="false">HTML app</string>
+    <string name="qk_03706" formatted="false">Enter…</string>
+    <string name="qk_03707" formatted="false">Enter message…</string>
+    <string name="qk_03708" formatted="false">Provider health</string>
+    <string name="qk_03709" formatted="false">Execute command in terminal</string>
+    <string name="qk_03710" formatted="false">👁️ Screen visual analysis (real visual understanding): capture the current screen, feed the screenshot as an image directly to the current multimodal chat model to &quot;see&quot; it,</string>
+    <string name="qk_03711" formatted="false">Proactively initiate screen capture (MediaProjection) system authorization: let AI see the screen/screenshot without the user manually holding the switch</string>
+    <string name="qk_03712" formatted="false">Search knowledge base</string>
+    <string name="qk_03713" formatted="false">Pet management</string>
+    <string name="qk_03714" formatted="false">&quot; and all its contents?</string>
+    <string name="qk_03715" formatted="false">Manage terminal sessions with tmux inside the proot container (multi-pane / background tasks / keyboard send).</string>
+    <string name="qk_03716" formatted="false">Send the Enter key via the Zorv AI agent keyboard (submit/newline). Preconditions same as ai_type_text: enabled and switched to ’Zorv AI Keyboard’, and the target app’s input box is focused.</string>
+    <string name="qk_03717" formatted="false">Toolchain</string>
+    <string name="qk_03718" formatted="false">List available ACI capabilities</string>
+    <string name="qk_03719" formatted="false">List CMS capability modules (old interface; cms_toolbox recommended)</string>
+    <string name="qk_03720" formatted="false">Manage virtual displays and background automation; supports starting/stopping virtual displays, creating and running automation tasks, screenshots, etc.</string>
+    <string name="qk_03721" formatted="false">Execute commands as Root via Shizuku (device must be rooted and Shizuku running in root mode).</string>
+    <string name="qk_03722" formatted="false">Quick actions</string>
+    <string name="qk_03723" formatted="false">Speak</string>
+    <string name="qk_03724" formatted="false">100% open-source local music player: plays local audio files in the background (keeps playing without a foreground window).</string>
+    <string name="qk_03725" formatted="false">Copy log</string>
+    <string name="qk_03726" formatted="false">Enabling the voice ball requires the &quot;floating window&quot; permission</string>
+    <string name="qk_03727" formatted="false">List workspace contents</string>
+    <string name="qk_03728" formatted="false">Generating…</string>
+    <string name="qk_03729" formatted="false">Enable ZorvAI accessibility service in system settings first</string>
+    <string name="qk_03730" formatted="false">Zorv AI scheduled-task due reminder</string>
+    <string name="qk_03731" formatted="false">No tool call yet</string>
+    <string name="qk_03732" formatted="false">Terminal · Python runtime</string>
+    <string name="qk_03733" formatted="false">Connected to ZorvAI persona card / memory / tag system, sharing the same identity as the main chat; no separate setup needed here</string>
+    <string name="qk_03734" formatted="false">Scroll the scrollable container (list/page) on the current screen.</string>
+    <string name="qk_03735" formatted="false">Identity &amp; model</string>
+    <string name="qk_03736" formatted="false">Multi-format document creation (md/txt/csv/json/html, 17 types)</string>
+    <string name="qk_03737" formatted="false">Answer with UI</string>
+    <string name="qk_03738" formatted="false">Query 12306 ticket availability (train / departure-arrival time / duration / seats per class).</string>
+    <string name="qk_03739" formatted="false">Read GitHub repo content: file source / directory list / Issue / PR file changes / PR diff.</string>
+    <string name="qk_03740" formatted="false">100% open-source local music player (playlist): plays multiple local audio files continuously in the background.</string>
+    <string name="qk_03741" formatted="false">Read text file content</string>
+    <string name="qk_03742" formatted="false">TTS speech synthesis</string>
+</resources>

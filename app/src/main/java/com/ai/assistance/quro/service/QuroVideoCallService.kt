@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.service
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -202,7 +205,7 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 status = "设备不支持语音识别（请在 STT 设置切换引擎）"; return
             }
             listening = true
-            status = "聆听中…"
+            status = qstr(R.string.qk_01757)
             QuroSttHolder.startListening(
                 context = this,
                 language = QuroSttPrefs.getLanguage(this),
@@ -251,7 +254,7 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 mainHandler.post { speaking = true; status = "回复中：${reply.take(40)}" }
                 speak(reply) {
                     speaking = false
-                    if (callActive) { status = "聆听中…"; startListening() }
+                    if (callActive) { status = qstr(R.string.qk_01757); startListening() }
                 }
             } catch (e: Throwable) {
                 mainHandler.post { status = "出错了：${e.message}" }
@@ -491,10 +494,10 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 Button(onClick = {
                     if (listening) QuroSttHolder.stopListening() else startListening()
                 }) {
-                    Text(if (listening) "停止聆听" else "说话")
+                    Text(if (listening) stringResource(R.string.qk_03503) else stringResource(R.string.qk_03723))
                 }
                 Spacer(Modifier.width(8.dp))
-                Button(onClick = { stopCall() }) { Text("结束") }
+                Button(onClick = { stopCall() }) { Text(stringResource(R.string.qk_03594)) }
             }
         }
     }

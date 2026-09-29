@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import java.io.File
@@ -41,7 +43,7 @@ private fun resolveInWorkspace(root: File, relative: String): File? {
 class WorkspaceWriteTool : QuroTool {
     override val name = "workspace_write"
     override val description =
-        "📁 工作区文件写入：把文本写入工作区（QuroWorkspace）的相对路径文件。" +
+        qstr(R.string.qk_03514) +
             "与 write_file 的区别：workspace_write 用相对路径（相对于工作区根目录），写入后用户在「工具箱-工作区」可见；" +
             "write_file 用绝对路径（如 /sdcard/...），写入设备任意位置。" +
             "与 workspace_doc 的区别：workspace_write 是通用写入；workspace_doc 自动添加扩展名并渲染预览。" +
@@ -77,7 +79,7 @@ class WorkspaceWriteTool : QuroTool {
 class WorkspaceReadTool : QuroTool {
     override val name = "workspace_read"
     override val description =
-        "读取 ZorvAI 工作区（QuroWorkspace）里指定相对路径的文本文件内容，返回完整文本。" +
+        qstr(R.string.qk_03631) +
             "用于：把源码写进去前先看现有内容、或构建台 build_apk 后回读产物细节。" +
             "参数：{\"path\":\"相对路径，如 MyApp/src/Main.java\"}。"
     override val parametersJson = """{
@@ -104,7 +106,7 @@ class WorkspaceReadTool : QuroTool {
 class WorkspaceListTool : QuroTool {
     override val name = "workspace_list"
     override val description =
-        "列出 ZorvAI 工作区（QuroWorkspace）里某个目录的内容（子目录/文件），默认列根目录。" +
+        qstr(R.string.qk_03583) +
             "用于：先看构建台 create_project 建了哪些工程文件夹、每个工程里有什么源文件。" +
             "参数：{\"path\":\"（可选）工作区内相对目录路径，默认空=根目录\"}。"
     override val parametersJson = """{

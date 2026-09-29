@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.QuroToolResult
@@ -48,7 +50,7 @@ class QuroVirtualDisplayTool(private val context: Context) : QuroTool {
     fun getToolSpec(): QuroToolSpec {
         return QuroToolSpec(
             name = "virtual_display",
-            description = "管理虚拟显示器和后台自动化，支持启动/停止虚拟显示器、创建和执行自动化任务、截图等。",
+            description = qstr(R.string.qk_03720),
             // QuroToolSpec 第三个参数是 parametersJson（JSON Schema 字符串）。项目只依赖 org.json，
             // 没有 parameters=mapOf(...) + QuroToolSpec.Parameter(...) 这套 DSL，必须手写 schema。
             parametersJson = JSONObject().apply {

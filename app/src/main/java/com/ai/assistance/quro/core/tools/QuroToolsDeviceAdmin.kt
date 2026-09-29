@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONObject
@@ -17,7 +19,7 @@ import org.json.JSONObject
 /** 强制锁屏。 */
 class LockScreenTool : QuroTool {
     override val name = "lock_screen"
-    override val description = "强制锁定手机屏幕（需 L3 设备管理员已激活）。"
+    override val description = qstr(R.string.qk_03549)
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
@@ -47,7 +49,7 @@ class DeviceAdminStatusTool : QuroTool {
 /** 禁用或启用摄像头。 */
 class SetCameraDisabledTool : QuroTool {
     override val name = "set_camera_disabled"
-    override val description = "禁用或启用设备的摄像头（需 L3 设备管理员已激活）。"
+    override val description = qstr(R.string.qk_03472)
     override val parametersJson = """{
         "type":"object",
         "properties":{

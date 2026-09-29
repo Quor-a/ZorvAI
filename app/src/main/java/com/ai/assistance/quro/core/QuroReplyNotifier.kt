@@ -1,4 +1,5 @@
 package com.ai.assistance.quro.core
+import com.ai.assistance.quro.util.qstr
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -51,7 +52,7 @@ object QuroReplyNotifier {
                     "AI 回复通知",
                     NotificationManager.IMPORTANCE_HIGH,
                 ).apply {
-                    description = "离开软件时收到 AI 回复以系统弹窗（heads-up）形式提醒"
+                    description = qstr(R.string.qk_03469)
                     setShowBadge(true)
                 }
                 nm.createNotificationChannel(ch)
@@ -108,7 +109,7 @@ object QuroReplyNotifier {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
             val snippet = text.lineSequence().firstOrNull { it.isNotBlank() }?.take(200) ?: "（空回复）"
-            val me = Person.Builder().setName("我").build()
+            val me = Person.Builder().setName(qstr(R.string.qk_00061)).build()
             val ai = Person.Builder().setName(sender).build()
             val style = NotificationCompat.MessagingStyle(me)
                 .addMessage(snippet, System.currentTimeMillis(), ai)
@@ -145,7 +146,7 @@ object QuroReplyNotifier {
                     "IM 消息通知",
                     NotificationManager.IMPORTANCE_HIGH,
                 ).apply {
-                    description = "来自飞书 / QQ / 微信 等机器人的消息（离开软件时系统弹窗）"
+                    description = qstr(R.string.qk_03569)
                     setShowBadge(true)
                 }
                 nm.createNotificationChannel(ch)

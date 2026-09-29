@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.cms
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.cms.AuthorizationLevel
@@ -48,7 +50,7 @@ class QuroCmsListTool : QuroTool {
 class QuroCmsCallTool : QuroTool {
     override val name = "cms_call"
     override val description =
-        "调用一个 CMS v2 能力模块暴露的应用内能力（如 run_node / device_model / open_url / web_search）。" +
+        qstr(R.string.qk_03573) +
             "参数：{\"capability_id\":\"能力id\",\"args\":{参数名:参数值}}。会经过权限策略门控，通过四类受控通道执行（intent 拉起其他 App / js QuickJS 沙箱 / api 应用内只读 / terminal proot-Ubuntu 沙箱）。部分能力声明 Elevated(Shizuku 已连) 或 Critical(ROOT 可用) 权限级别，仅在对应系统授权已授予时才放行，否则返回引导提示；不直接执行裸 shell 或无障碍自动化。"
     override val parametersJson = """{
         "type":"object",
@@ -129,7 +131,7 @@ class QuroCmsCallTool : QuroTool {
 class QuroCmsStatusTool : QuroTool {
     override val name = "cms_status"
     override val description =
-        "查询 CMS v2 各模块与最近任务的执行状态（部署态/运行中/任务终态），让 AI 确认「部署/调用是否成功」。" +
+        qstr(R.string.qk_03674) +
             "参数：{} 查全局摘要，或 {\"module_id\":\"模块id\"} 查指定模块部署态与日志。"
     override val parametersJson = """{"type":"object","properties":{"module_id":{"type":"string","description":"可选，指定模块 id 查看其部署态"}}}"""
 
@@ -222,7 +224,7 @@ class QuroCmsResultTool : QuroTool {
 class QuroCmsRunDagTool : QuroTool {
     override val name = "cms_run_dag"
     override val description =
-        "按依赖编排执行一组 terminal 命令（DAG）：无依赖并行、上游 stdout 作为下游输入、任一失败中止后续。" +
+        qstr(R.string.qk_03632) +
             "参数：{\"nodes\":[{\"id\":\"a\",\"action\":\"echo hi\",\"deps\":[],\"timeout_secs\":30}]}。"
     override val parametersJson = """{
         "type":"object",
@@ -381,7 +383,7 @@ class QuroCmsUndeployTool : QuroTool {
 class QuroCmsEngineStatusTool : QuroTool {
     override val name = "cms_engine_status"
     override val description =
-        "查询「CMS 引擎（系统资源包）」的部署就绪态、健康度、版本、拉起的共享服务（NODE/PYTHON/SSH/JAVA/RUST/GO 等运行时）、部署进度与日志。" +
+        qstr(R.string.qk_03684) +
             "这是 CMS 的一级运行引擎（区别于能力模块），是模块运行的基础底座。当用户问「CMS 引擎状态/部署好没/引擎就绪了吗/引擎拉起了哪些服务」时使用。参数为空 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
 
@@ -395,7 +397,7 @@ class QuroCmsEngineStatusTool : QuroTool {
             s.ready && s.health -> "● 就绪且健康"
             s.ready && !s.health -> "○ 已部署但健康检查未通过"
             s.deploying -> "◐ 部署中"
-            else -> "○ 未部署"
+            else -> qstr(R.string.qk_01585)
         }
         return buildString {
             append("CMS 引擎（系统资源包）状态：$status$deploying\n")

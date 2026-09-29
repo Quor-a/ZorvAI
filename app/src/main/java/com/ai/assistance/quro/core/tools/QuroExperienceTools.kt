@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.experience.ExperienceType
@@ -19,7 +21,7 @@ import org.json.JSONObject
 class QuroExperienceLogTool : QuroTool {
     override val name = "experience_log"
     override val description =
-        "沉淀一条 AI 经验（报错/解决方案/工具模式/版本差异），让下次相关对话自动复用。当一轮对话里你遇到、解决或可复用一个问题时主动调用。" +
+        qstr(R.string.qk_03433) +
             "参数：{\"type\":\"error|solution|pattern|compatibility\",\"title\":\"可选标题\",\"content\":\"经验内容(必填)\"," +
             "\"tags\":\"标签数组(可选，利于检索)\",\"platform\":\"平台/版本(可选)\"," +
             "\"valid_in\":\"版本区间数组(仅 compatibility 用,可选)\",\"broken_since\":\"失效版本(可选)\",\"workaround\":\"规避方案(可选)\"}。"

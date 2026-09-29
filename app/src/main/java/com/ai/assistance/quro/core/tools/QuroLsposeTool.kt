@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.os.Environment
@@ -25,7 +27,7 @@ import java.io.File
 class QuroLsposeTool : QuroTool {
     override val name = "lsposed"
     override val description =
-        "LSPosed/Xposed 模块 AI 直驱（完整对接）。" +
+        qstr(R.string.qk_03609) +
             "status=查安装/作用域状态+桥上报的前台App+当前配置；" +
             "foreground=读 LSPosed 跨应用注入桥最近上报的前台 App（补无障碍盲区）；" +
             "enable=写 lsposed_bridge.json 开启跨应用注入桥(可带 target_packages)与可选系统重定向桥；" +

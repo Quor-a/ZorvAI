@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONObject
@@ -16,7 +18,7 @@ import org.json.JSONObject
  */
 class ToolDiscoveryTool : QuroTool {
     override val name = "tool_discovery"
-    override val description = "工具发现：查询可用工具、根据意图匹配工具、获取工具使用指南"
+    override val description = qstr(R.string.qk_03604)
     override val parametersJson = """{
         "type": "object",
         "properties": {

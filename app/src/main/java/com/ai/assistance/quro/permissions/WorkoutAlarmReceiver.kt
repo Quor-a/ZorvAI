@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.permissions
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -18,7 +20,7 @@ class WorkoutAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val alarmId = intent.getStringExtra(QuroAlarmScheduler.EXTRA_ALARM_ID)
-        val title = intent.getStringExtra(EXTRA_TITLE) ?: "ZorvAI 提醒"
+        val title = intent.getStringExtra(EXTRA_TITLE) ?: qstr(R.string.qk_01891)
         val content = intent.getStringExtra(EXTRA_CONTENT) ?: ""
         AlarmPermissionHelper(context).postNotification(title, content)
         // 应用内闹钟：触发后续排下一次（重复）或置失效（一次性）

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -16,7 +18,7 @@ import org.json.JSONObject
  */
 class LocalMusicPlayerTool : QuroTool {
     override val name = "local_music_player"
-    override val description = "百分百开源的本地音乐播放器：在后台播放设备上的本地音频文件（不打开前台也能持续播放）。" +
+    override val description = qstr(R.string.qk_03724) +
         "参数 {\"uri\":\"音频文件的 content:// 或文件路径\",\"title\":\"可选，曲名\"}。" +
         "返回「正在后台播放」后，聊天界面会出现播放/暂停卡片，AI 也可随时调用以切换曲目。"
     override val parametersJson = """{
@@ -56,7 +58,7 @@ class LocalMusicPlayerTool : QuroTool {
  */
 class MusicPlayTool : QuroTool {
     override val name = "music_play"
-    override val description = "百分百开源的本地音乐播放器（播放列表）：后台连续播放多首本地音频文件。" +
+    override val description = qstr(R.string.qk_03740) +
         "参数 {\"tracks\":[{\"uri\":\"音频 URI\",\"title\":\"曲名\"}],\"index\":0}；也可兼容单首 {\"uri\":\"...\",\"title\":\"...\"}。" +
         "返回「正在后台播放列表」后，聊天界面出现播放卡片，AI 也可调用 ui_open_music_player 打开全屏播放器控制循环/随机/倍速。"
     override val parametersJson = """{
@@ -113,7 +115,7 @@ class MusicPlayTool : QuroTool {
  */
 class LocalVideoPlayerTool : QuroTool {
     override val name = "local_video_player"
-    override val description = "百分百开源的本地视频播放器：在应用内全功能播放器播放设备上的视频（支持播放/暂停、进度、倍速、静音、横竖屏）。" +
+    override val description = qstr(R.string.qk_03564) +
         "参数 {\"uri\":\"视频文件的 content:// 或文件路径或 http(s) 链接\",\"title\":\"可选，片名\"}。" +
         "对话中触发后即在应用内视频播放器播放该视频。"
     override val parametersJson = """{

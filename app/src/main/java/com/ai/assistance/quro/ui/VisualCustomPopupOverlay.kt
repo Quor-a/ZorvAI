@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
 
 import kotlin.math.roundToInt
 import android.webkit.JavascriptInterface
@@ -67,7 +69,7 @@ fun VisualCustomPopupOverlay(
                 // 拖动图标
                 Icon(
                     Icons.Filled.DragIndicator,
-                    contentDescription = "拖动",
+                    contentDescription = stringResource(R.string.qk_03117),
                     tint = cs.onPrimaryContainer.copy(alpha = 0.5f),
                     modifier = Modifier.size(20.dp)
                 )
@@ -98,7 +100,7 @@ fun VisualCustomPopupOverlay(
                 ) {
                     Icon(
                         Icons.Filled.Close,
-                        contentDescription = "关闭",
+                        contentDescription = stringResource(R.string.qk_00065),
                         tint = cs.onPrimaryContainer,
                         modifier = Modifier.size(18.dp)
                     )
@@ -194,7 +196,7 @@ fun VisualCustomPopupOverlay(
                 TextButton(onClick = onMinimize) {
                     Icon(Icons.Filled.Minimize, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("收起")
+                    Text(stringResource(R.string.qk_00818))
                 }
                 Spacer(Modifier.width(8.dp))
                 Button(onClick = {
@@ -203,7 +205,7 @@ fun VisualCustomPopupOverlay(
                         null
                     )
                 }) {
-                    Text("确认")
+                    Text(stringResource(R.string.qk_02412))
                 }
             }
         }

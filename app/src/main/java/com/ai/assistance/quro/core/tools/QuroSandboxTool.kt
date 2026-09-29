@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONArray
@@ -72,7 +74,7 @@ class QuroSandboxTool : QuroTool {
         } catch (e: SecurityException) {
             err("路径越界被拒绝：${e.message}")
         } catch (e: Exception) {
-            err("执行失败: ${e.message}")
+            err(qstr(R.string.qk_00296, (e.message).toString()))
         }
     }
 

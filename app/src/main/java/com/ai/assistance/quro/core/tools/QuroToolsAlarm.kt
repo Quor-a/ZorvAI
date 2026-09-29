@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -127,7 +129,7 @@ class CancelAlarmTool : QuroTool {
  */
 class ListAlarmsTool : QuroTool {
     override val name = "list_alarms"
-    override val description = "列出当前所有应用内闹钟（含 id、时间、重复日、是否启用、下次响铃时间）。无参数。"
+    override val description = qstr(R.string.qk_03540)
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String {
         val alarms = QuroAlarmScheduler(context).list()

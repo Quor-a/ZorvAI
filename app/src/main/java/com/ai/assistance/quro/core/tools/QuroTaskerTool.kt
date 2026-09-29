@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
@@ -14,7 +16,7 @@ import org.json.JSONObject
  */
 class QuroTaskerTool : QuroTool {
     override val name = "tasker"
-    override val description = "Tasker 双向集成：fire 点燃指定 Tasker 任务；broadcast 发送任意自定义广播（带 extras）；state 查询 Tasker 是否安装。" +
+    override val description = qstr(R.string.qk_03456) +
         "参数 {\"action\":\"fire|broadcast|state\"," +
         "\"task_name\":\"Tasker 任务名(fire)\"," +
         "\"intent_action\":\"广播 action(broadcast)\"," +

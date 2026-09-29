@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.fluidcloud
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -32,7 +34,7 @@ object FluidCloudLiveUpdate {
                 CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_DEFAULT  // 必须 DEFAULT 或以上，LOW 不会被 ColorOS 识别为流体云
             ).apply {
-                description = "ZorvAI 任务实时状态（流体云/实时更新）"
+                description = qstr(R.string.qk_03528)
                 setShowBadge(false)
             }
             val manager = context.getSystemService(NotificationManager::class.java)
@@ -103,7 +105,7 @@ object FluidCloudLiveUpdate {
      * 显示完成状态并移除通知。
      */
     fun finish(context: Context, title: String = "ZorvAI 任务完成") {
-        show(context, title, "完成", 100)
+        show(context, title, qstr(R.string.qk_00420), 100)
         // 延迟移除，让用户看到完成状态
         android.os.Handler(context.mainLooper).postDelayed({
             cancel(context)

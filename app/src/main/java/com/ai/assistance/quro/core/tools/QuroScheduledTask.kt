@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.AlarmManager
 import android.app.NotificationChannel
@@ -37,11 +39,11 @@ private val scheduleCompletionScope = CoroutineScope(SupervisorJob() + Dispatche
 /** 重复类型 */
 enum class TaskRepeatType(val label: String) {
     ONCE("仅一次"),
-    DAILY("每天"),
-    WEEKLY("每周"),
+    DAILY(qstr(R.string.qk_02393)),
+    WEEKLY(qstr(R.string.qk_02394)),
     BIWEEKLY("每双周"),
-    MONTHLY("每月"),
-    YEARLY("每年");
+    MONTHLY(qstr(R.string.qk_02395)),
+    YEARLY(qstr(R.string.qk_02396));
 }
 
 /**
@@ -418,10 +420,10 @@ object QuroScheduledTaskScheduler {
         val freq = p["FREQ"] ?: return rrule
         val interval = p["INTERVAL"]?.toIntOrNull() ?: 1
         return when (freq) {
-            "DAILY" -> if (interval > 1) "每${interval}天" else "每天"
+            "DAILY" -> if (interval > 1) "每${interval}天" else qstr(R.string.qk_02393)
             "WEEKLY" -> {
                 val days = p["BYDAY"]?.split(",")?.map { rruleDayLabel(it.trim()) }?.filter { it.isNotBlank() }
-                if (days.isNullOrEmpty()) "每周" else "每${if (interval > 1) interval else ""}周${days.joinToString("、")}"
+                if (days.isNullOrEmpty()) qstr(R.string.qk_02394) else "每${if (interval > 1) interval else ""}周${days.joinToString("、")}"
             }
             "MONTHLY" -> {
                 val d = p["BYMONTHDAY"]?.toIntOrNull()
@@ -436,7 +438,7 @@ object QuroScheduledTaskScheduler {
     }
 
     private fun rruleDayLabel(d: String): String = when (d.uppercase()) {
-        "MO" -> "一"; "TU" -> "二"; "WE" -> "三"; "TH" -> "四"; "FR" -> "五"; "SA" -> "六"; "SU" -> "日"
+        "MO" -> qstr(R.string.qk_02370); "TU" -> qstr(R.string.qk_02371); "WE" -> qstr(R.string.qk_02372); "TH" -> qstr(R.string.qk_02373); "FR" -> qstr(R.string.qk_02374); "SA" -> qstr(R.string.qk_02375); "SU" -> qstr(R.string.qk_02376)
         else -> ""
     }
 
@@ -450,7 +452,7 @@ object QuroScheduledTaskScheduler {
                     "定时任务提醒",
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
-                    description = "Zorv AI 定时任务到时提醒"
+                    description = qstr(R.string.qk_03730)
                 }
                 nm.createNotificationChannel(channel)
             }
@@ -695,7 +697,7 @@ class ScheduleTaskTool : QuroTool {
         QuroScheduledTaskScheduler.ensureChannel(context)
         QuroScheduledTaskScheduler.schedule(context, task)
         val next = QuroScheduledTaskScheduler.nextTriggerTime(task)
-        val nextStr = next?.let { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(it)) } ?: "未知"
+        val nextStr = next?.let { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(it)) } ?: qstr(R.string.qk_00472)
         val ruleStr = if (scheduleType == "once") "一次性 @ $scheduledAt"
         else QuroScheduledTaskScheduler.humanRrule(rrule).takeIf { it.isNotBlank() } ?: rrule
         return "已创建定时任务「$title」（$ruleStr，下次触发 $nextStr）"
@@ -705,7 +707,7 @@ class ScheduleTaskTool : QuroTool {
 /** 列出所有定时任务（AI 可调用） */
 class ListScheduledTasksTool : QuroTool {
     override val name = "list_scheduled_tasks"
-    override val description = "列出所有定时任务/自动化提醒。无参数。返回任务列表（id/标题/时间/重复类型/状态）。"
+    override val description = qstr(R.string.qk_03506)
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String {
         val tasks = QuroScheduledTaskStore.load(context)

@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.terminal
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -167,7 +169,7 @@ class TerminalBroadcastReceiver : BroadcastReceiver() {
         val execResult = try {
             QuroTerminalController.runCommand(command, timeout * 1000, context)
         } catch (e: Exception) {
-            ShellResult(output = "", exitCode = -1, error = e.message ?: "未知错误")
+            ShellResult(output = "", exitCode = -1, error = e.message ?: qstr(R.string.qk_00503))
         }
 
         result.putInt(RESULT_CODE, execResult.exitCode)

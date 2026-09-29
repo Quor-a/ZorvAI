@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.service
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -331,7 +333,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
 
     private fun startConversation() {
         conversationActive = true; emptyCount = 0
-        updateStatus("聆听中…"); startListening()
+        updateStatus(qstr(R.string.qk_01757)); startListening()
     }
 
     private fun stopConversation(reason: String? = null) {
@@ -339,7 +341,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         onDeviceRecording = false
         ttsBusy = false
         QuroTtsHolder.voiceBallOwnsSpeech = false
-        QuroSttHolder.stopListening(); stopCloudRecording(); updateStatus(reason ?: "已暂停")
+        QuroSttHolder.stopListening(); stopCloudRecording(); updateStatus(reason ?: qstr(R.string.qk_00158))
     }
 
     private fun onEmptyOrError(reason: String) {
@@ -378,7 +380,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                     }
                 }
             }
-            updateStatus("聆听中…")
+            updateStatus(qstr(R.string.qk_01757))
             listening = true
             QuroSttHolder.startListening(
                 context = this,
@@ -453,17 +455,17 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minBuf * 2
             )
         } catch (e: Throwable) {
-            stopConversation("无法创建录音器"); return
+            stopConversation(qstr(R.string.qk_01793)); return
         }
         if (rec.state != AudioRecord.STATE_INITIALIZED) {
             try { rec.release() } catch (_: Throwable) {}
-            stopConversation("录音器不可用"); return
+            stopConversation(qstr(R.string.qk_01794)); return
         }
 
         audioRecord = rec
         cloudRecording = true
         listening = true
-        updateStatus("聆听中（云端）…")
+        updateStatus(qstr(R.string.qk_02579))
         QuroSttHolder.pushLog("☁️ 云端转写录音启动：provider=$provider model=$modelName baseUrl=${cfg.baseUrl.take(40)}")
 
         launch(Dispatchers.IO) {
@@ -558,28 +560,28 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minBuf * 2
             )
         } catch (e: Throwable) {
-            stopConversation("无法创建录音器"); return
+            stopConversation(qstr(R.string.qk_01793)); return
         }
         if (rec.state != AudioRecord.STATE_INITIALIZED) {
             try { rec.release() } catch (_: Throwable) {}
-            stopConversation("录音器不可用"); return
+            stopConversation(qstr(R.string.qk_01794)); return
         }
         audioRecord = rec
         onDeviceRecording = true
         listening = true
-        updateStatus("聆听中（端侧）…")
+        updateStatus(qstr(R.string.qk_02548))
         QuroSttHolder.pushLog("📱 端侧转写录音启动")
 
         launch(Dispatchers.IO) {
             // 首次加载模型（应用私有目录内权重，可能耗时 1-3s）
             if (!QuroOnDeviceAsr.isReady()) {
-                mainHandler.post { updateStatus("端侧模型加载中…") }
+                mainHandler.post { updateStatus(qstr(R.string.qk_01790)) }
                 QuroSttHolder.pushLog("⏳ 加载端侧模型…")
                 if (!QuroOnDeviceAsr.ensureLoaded(applicationContext)) {
                     mainHandler.post { stopConversation("端侧模型加载失败") }
                     return@launch
                 }
-                QuroSttHolder.pushLog("✅ 端侧模型就绪")
+                QuroSttHolder.pushLog(qstr(R.string.qk_02561))
             }
             val pcm = ByteArrayOutputStream()
             try {
@@ -706,13 +708,13 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                     speaking = false
                     // 等 speak 工具的全部语音播报完毕，再续听，避免麦克风在 AI 说话时抢话/回声
                     QuroTtsHolder.runWhenIdle {
-                        if (conversationActive) { status = "聆听中…"; startListening() }
+                        if (conversationActive) { status = qstr(R.string.qk_01757); startListening() }
                     }
                 } else {
                     speak(reply) {
                         // 此 lambda 已在 main 线程（见下 speak 包装）
                         speaking = false
-                        if (conversationActive) { status = "聆听中…"; startListening() }
+                        if (conversationActive) { status = qstr(R.string.qk_01757); startListening() }
                     }
                 }
             } catch (e: Throwable) {

@@ -1,4 +1,7 @@
 package com.ai.assistance.quro.ui
+import androidx.compose.ui.res.stringResource
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -103,28 +106,28 @@ fun QuroToolCenterScreen(
         ) {
             if (selected != null) {
                 IconButton(onClick = { selected = null }) {
-                    LucideIcon("chevron_left", "返回", Modifier.size(22.dp), tint = cs.onBackground)
+                    LucideIcon("chevron_left", stringResource(R.string.qk_00143), Modifier.size(22.dp), tint = cs.onBackground)
                 }
             }
             Text(
-                text = if (selected == null) "工具中心" else                 when (selected) {
-                    "sandbox" -> "隔离沙箱"
-                    "db" -> "私有数据库"
-                    "workbench" -> "Web 应用"
-                    "vispro" -> "可视化编程"
-                    "flow" -> "节点编辑器"
-                    "miniapp" -> "Web 应用"
-                    "kaleidobox" -> "工具包运行器"
-                    "pkgmgr" -> "包管理"
-                    "plugins" -> "插件"
-                    else -> "工具中心"
+                text = if (selected == null) stringResource(R.string.qk_02772) else                 when (selected) {
+                    "sandbox" -> stringResource(R.string.qk_02773)
+                    "db" -> stringResource(R.string.qk_02774)
+                    "workbench" -> stringResource(R.string.qk_02775)
+                    "vispro" -> stringResource(R.string.qk_00021)
+                    "flow" -> stringResource(R.string.qk_02776)
+                    "miniapp" -> stringResource(R.string.qk_02775)
+                    "kaleidobox" -> stringResource(R.string.qk_02777)
+                    "pkgmgr" -> stringResource(R.string.qk_02778)
+                    "plugins" -> stringResource(R.string.qk_02779)
+                    else -> stringResource(R.string.qk_02772)
                 },
                 style = MaterialTheme.typography.titleLarge,
                 color = cs.onBackground,
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = onClose) {
-                LucideIcon("x", "关闭", Modifier.size(22.dp), tint = cs.onBackground)
+                LucideIcon("x", stringResource(R.string.qk_00065), Modifier.size(22.dp), tint = cs.onBackground)
             }
         }
         when (selected) {
@@ -146,18 +149,18 @@ fun QuroToolCenterScreen(
 private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val cards = listOf(
-        Triple("miniapp", "Web 应用", "Web 应用工程：AI 写 app.json + 多页面 HTML，native.* 原生桥调用真·Android 能力；支持导入 HTML、Python/JS/CSS 直接跑；可在对话框预览"),
-        Triple("miniapp_sdk", "小程序 (原生引擎)", "移植自 Quor-a/GenUI 的原生小程序引擎：自研 C++ JS 引擎 + WXML/WXSS + Flex 布局 + Canvas/GLES 自绘渲染，微信标准范式；AI 用 miniapp_sdk 工具生成工程，这里直接渲染"),
-        Triple("toolbox", "工具箱", "文件管理 / 浏览器 / IDE"),
-        Triple("pkgmgr", "包管理", "apt/apk/dnf/pacman 安装/卸载/升级/查询软件"),
-        Triple("sandbox", "隔离沙箱", "免权限文件沙箱与 shell"),
-        Triple("db", "私有数据库", "只读查询应用自有 SQLite"),
-        Triple("vispro", "可视化编程", "查看 / 编辑 Mermaid 源码，实时渲染并导出 SVG"),
-        Triple("flow", "节点编辑器", "拖拽式节点流编程，导出 Mermaid"),
-        Triple("browser_ai", "浏览器 AI 操控", "AI 用 browser_act 接管当前浏览器：snapshot/click/fill/eval（先 action=open）"),
-        Triple("build", "构建台", "端侧 APK 构建器：Java → DEX → APK，内置工具链（ecj/d8/apksig），免 aapt2，生成可独立安装的应用"),
-        Triple("kaleidobox", "工具包运行器", "KaleidoBox：进程内 JVM/Dex 引擎运行 Kotlin/Java 工具包，列包/装包/调 unit/渲染可交互 UI 表面（内置示例计数器开箱即玩）"),
-        Triple("plugins", "插件", "APK 级插件：装一个独立 APK 就给 AI 加工具（插件注册扩展点，宿主零改动）。查看/导入/重载/卸载，须与宿主同签名"),
+        Triple("miniapp", stringResource(R.string.qk_02775), stringResource(R.string.qk_02780)),
+        Triple("miniapp_sdk", stringResource(R.string.qk_02781), stringResource(R.string.qk_02782)),
+        Triple("toolbox", stringResource(R.string.qk_00214), stringResource(R.string.qk_02783)),
+        Triple("pkgmgr", stringResource(R.string.qk_02778), stringResource(R.string.qk_02784)),
+        Triple("sandbox", stringResource(R.string.qk_02773), stringResource(R.string.qk_02785)),
+        Triple("db", stringResource(R.string.qk_02774), stringResource(R.string.qk_02786)),
+        Triple("vispro", stringResource(R.string.qk_00021), stringResource(R.string.qk_02787)),
+        Triple("flow", stringResource(R.string.qk_02776), stringResource(R.string.qk_02788)),
+        Triple("browser_ai", stringResource(R.string.qk_02789), stringResource(R.string.qk_02790)),
+        Triple("build", stringResource(R.string.qk_02791), stringResource(R.string.qk_02792)),
+        Triple("kaleidobox", stringResource(R.string.qk_02777), stringResource(R.string.qk_02793)),
+        Triple("plugins", stringResource(R.string.qk_02779), stringResource(R.string.qk_02794)),
     )
     LazyColumn(
         Modifier.fillMaxSize().padding(16.dp),
@@ -197,7 +200,7 @@ private fun SandboxPanel(context: Context) {
         busy = true
         scope.launch(Dispatchers.IO) {
             val arg = JSONObject().put("action", action).apply(extra).toString()
-            val res = runCatching { tool.run(context, arg) }.getOrElse { "执行失败：${it.message}" }
+            val res = runCatching { tool.run(context, arg) }.getOrElse { qstr(R.string.qk_02795, (it.message).toString()) }
             withContext(Dispatchers.Main) { out = res; busy = false }
         }
     }
@@ -207,7 +210,7 @@ private fun SandboxPanel(context: Context) {
             TextField(
                 value = cmd,
                 onValueChange = { cmd = it },
-                placeholder = { Text("输入 shell 命令，在沙箱内执行", color = Muted) },
+                placeholder = { Text(stringResource(R.string.qk_02796), color = Muted) },
                 modifier = Modifier.weight(1f).heightIn(min = 56.dp),
                 colors = TextFieldDefaults.colors(),
                 singleLine = false,
@@ -216,22 +219,22 @@ private fun SandboxPanel(context: Context) {
             Button(
                 onClick = { runAction("exec") { put("command", cmd) } },
                 enabled = cmd.isNotBlank() && !busy,
-            ) { Text(if (busy) "执行中…" else "执行") }
+            ) { Text(if (busy) stringResource(R.string.qk_00117) else stringResource(R.string.qk_01642)) }
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth()) {
-            TextButton(onClick = { runAction("status") }, enabled = !busy) { Text("状态") }
-            TextButton(onClick = { runAction("list") }, enabled = !busy) { Text("列目录") }
-            TextButton(onClick = { runAction("reset") }, enabled = !busy) { Text("清空沙箱") }
+            TextButton(onClick = { runAction("status") }, enabled = !busy) { Text(stringResource(R.string.qk_00085)) }
+            TextButton(onClick = { runAction("list") }, enabled = !busy) { Text(qstr(R.string.qk_02797)) }
+            TextButton(onClick = { runAction("reset") }, enabled = !busy) { Text(qstr(R.string.qk_02798)) }
         }
         Spacer(Modifier.height(8.dp))
-        Text("结果", style = MaterialTheme.typography.labelMedium, color = Muted)
+        Text(stringResource(R.string.qk_00084), style = MaterialTheme.typography.labelMedium, color = Muted)
         Box(
             Modifier.fillMaxSize().weight(1f).clip(RoundedCornerShape(10.dp))
                 .background(cs.surfaceVariant).verticalScroll(rememberScrollState()).padding(12.dp),
         ) {
             Text(
-                out.ifBlank { "（暂无输出）" },
+                out.ifBlank { stringResource(R.string.qk_02799) },
                 fontFamily = FontFamily.Monospace,
                 color = cs.onSurface,
                 style = MaterialTheme.typography.bodySmall,
@@ -275,7 +278,7 @@ private fun DbPanel(context: Context) {
         TextField(
             value = sql,
             onValueChange = { sql = it },
-            placeholder = { Text("只读 SQL（SELECT/PRAGMA/WITH）", color = Muted) },
+            placeholder = { Text(stringResource(R.string.qk_02801), color = Muted) },
             modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             colors = TextFieldDefaults.colors(),
             singleLine = false,
@@ -284,7 +287,7 @@ private fun DbPanel(context: Context) {
         Button(
             onClick = {
                 if (chosen.isBlank()) {
-                    out = JSONObject().put("ok", false).put("error", "请先选择数据库").toString()
+                    out = JSONObject().put("ok", false).put("error", qstr(R.string.qk_02802)).toString()
                     return@Button
                 }
                 scope.launch(Dispatchers.IO) {
@@ -296,14 +299,14 @@ private fun DbPanel(context: Context) {
                 }
             },
             enabled = chosen.isNotBlank(),
-        ) { Text("查询") }
+        ) { Text(stringResource(R.string.qk_02803)) }
         Spacer(Modifier.height(8.dp))
         Box(
             Modifier.fillMaxSize().weight(1f).clip(RoundedCornerShape(10.dp))
                 .background(cs.surfaceVariant).verticalScroll(rememberScrollState()).padding(12.dp),
         ) {
             Text(
-                out.ifBlank { "（暂无输出）" },
+                out.ifBlank { stringResource(R.string.qk_02799) },
                 fontFamily = FontFamily.Monospace,
                 color = cs.onSurface,
                 style = MaterialTheme.typography.bodySmall,
@@ -350,11 +353,11 @@ private fun VisProPanel(
             context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
         }.getOrNull()
         if (txt.isNullOrBlank()) {
-            Toast.makeText(context, "导入失败：无法读取文件", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, qstr(R.string.qk_02804), Toast.LENGTH_SHORT).show()
         } else {
             src = txt
             doRender(wvRef.value)
-            Toast.makeText(context, "已导入 Mermaid 源码", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, qstr(R.string.qk_02805), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -379,45 +382,45 @@ private fun VisProPanel(
             Modifier.fillMaxWidth().padding(bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Mermaid 源码", style = MaterialTheme.typography.labelMedium, color = Muted, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.qk_02806), style = MaterialTheme.typography.labelMedium, color = Muted, modifier = Modifier.weight(1f))
             TextButton(
                 onClick = {
                     if (src.isBlank()) {
-                        Toast.makeText(context, "源码为空", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, qstr(R.string.qk_02807), Toast.LENGTH_SHORT).show()
                     } else {
-                        onRenderInChat("mermaid", src, "可视化编程")
-                        Toast.makeText(context, "已发送到对话框渲染", Toast.LENGTH_SHORT).show()
+                        onRenderInChat("mermaid", src, qstr(R.string.qk_00021))
+                        Toast.makeText(context, qstr(R.string.qk_02808), Toast.LENGTH_SHORT).show()
                     }
                 },
-            ) { Text("渲染到对话框") }
+            ) { Text(stringResource(R.string.qk_02809)) }
             TextButton(
                 onClick = {
                     if (src.isBlank()) {
-                        Toast.makeText(context, "源码为空，无法保存", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, qstr(R.string.qk_02810), Toast.LENGTH_SHORT).show()
                     } else if (projName.isBlank()) {
-                        Toast.makeText(context, "请先填写工程名", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, qstr(R.string.qk_02811), Toast.LENGTH_SHORT).show()
                     } else {
                         visproDir.mkdirs()
                         File(visproDir, "$projName.mmd").writeText(src, Charsets.UTF_8)
                         refreshKey++
-                        Toast.makeText(context, "已保存到工程「$projName」", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, qstr(R.string.qk_02812, (projName).toString()), Toast.LENGTH_SHORT).show()
                     }
                 },
-            ) { Text("保存") }
-            TextButton(onClick = { importLauncher.launch("text/plain,application/json") }) { Text("导入") }
+            ) { Text(stringResource(R.string.qk_00198)) }
+            TextButton(onClick = { importLauncher.launch("text/plain,application/json") }) { Text(stringResource(R.string.qk_01635)) }
             TextButton(
                 onClick = {
                     if (lastSvg.isBlank()) {
-                        Toast.makeText(context, "请先等待渲染完成", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, qstr(R.string.qk_02813), Toast.LENGTH_SHORT).show()
                     } else {
                         val name = "mermaid-${System.currentTimeMillis()}.svg"
                         Toast.makeText(context, saveTextFile(context, name, lastSvg), Toast.LENGTH_SHORT).show()
                     }
                 },
-            ) { Text("下载 SVG") }
+            ) { Text(stringResource(R.string.qk_00972)) }
             TextButton(
-                onClick = { copyText(context, src); Toast.makeText(context, "已复制源码", Toast.LENGTH_SHORT).show() },
-            ) { Text("复制源码") }
+                onClick = { copyText(context, src); Toast.makeText(context, qstr(R.string.qk_02814), Toast.LENGTH_SHORT).show() },
+            ) { Text(stringResource(R.string.qk_00974)) }
         }
 
         // 工程名 + 载入（与 AI 的 visual 工具共享同一份命名工程）
@@ -428,26 +431,26 @@ private fun VisProPanel(
             OutlinedTextField(
                 value = projName,
                 onValueChange = { projName = it },
-                label = { Text("工程名") },
+                label = { Text(stringResource(R.string.qk_02815)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f).heightIn(min = 52.dp),
                 colors = TextFieldDefaults.colors(),
             )
             TextButton(onClick = {
                 val name = projName.ifBlank { "" }
-                if (name.isBlank()) { Toast.makeText(context, "请先填写工程名", Toast.LENGTH_SHORT).show(); return@TextButton }
+                if (name.isBlank()) { Toast.makeText(context, qstr(R.string.qk_02811), Toast.LENGTH_SHORT).show(); return@TextButton }
                 val f = File(visproDir, "$name.mmd")
                 if (f.exists()) {
                     src = f.readText(); doRender(wvRef.value)
-                    Toast.makeText(context, "已载入工程「$name」", Toast.LENGTH_SHORT).show()
-                } else Toast.makeText(context, "工程不存在：$name", Toast.LENGTH_SHORT).show()
-            }) { Text("载入") }
+                    Toast.makeText(context, qstr(R.string.qk_02816, (name).toString()), Toast.LENGTH_SHORT).show()
+                } else Toast.makeText(context, qstr(R.string.qk_02817, (name).toString()), Toast.LENGTH_SHORT).show()
+            }) { Text(stringResource(R.string.qk_02818)) }
         }
 
         TextField(
             value = src,
             onValueChange = { src = it; doRender(wvRef.value) },
-            placeholder = { Text("粘贴 Mermaid 源码查看 / 编辑（AI 可用 visual 工具直接写入命名工程）", color = Muted) },
+            placeholder = { Text(stringResource(R.string.qk_02819), color = Muted) },
             modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 200.dp),
             colors = TextFieldDefaults.colors(),
             singleLine = false,
@@ -457,7 +460,7 @@ private fun VisProPanel(
         // 已保存的命名工程列表（打开 / 删除）
         if (savedFiles.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Text("已保存工程（${savedFiles.size}）", style = MaterialTheme.typography.labelSmall, color = Muted)
+            Text(stringResource(R.string.qk_02820, (savedFiles.size).toString()), style = MaterialTheme.typography.labelSmall, color = Muted)
             LazyColumn(
                 Modifier.fillMaxWidth().heightIn(max = 140.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -472,10 +475,10 @@ private fun VisProPanel(
                         TextButton(onClick = {
                             val f = File(visproDir, "$name.mmd")
                             if (f.exists()) { src = f.readText(); projName = name; doRender(wvRef.value) }
-                        }) { Text("打开") }
+                        }) { Text(stringResource(R.string.qk_00953)) }
                         TextButton(onClick = {
                             if (File(visproDir, "$name.mmd").delete()) { refreshKey++ }
-                        }) { Text("删除") }
+                        }) { Text(stringResource(R.string.qk_00091)) }
                     }
                 }
             }
@@ -537,7 +540,7 @@ private fun NodeEditorPanel(
         val raw = name.substringBeforeLast(".", name).ifBlank { name }.ifBlank { "default" }
         val base = raw.replace(Regex("[^A-Za-z0-9_.\\-]"), "_").replace("..", "_")
         val f = File(flowDir, "$base.qne")
-        return runCatching { f.writeText(content, Charsets.UTF_8); "已保存到工程「$base」"         }.getOrElse { "保存失败：${it.message}" }
+        return runCatching { f.writeText(content, Charsets.UTF_8); qstr(R.string.qk_02821, (base).toString())         }.getOrElse { qstr(R.string.qk_02822, (it.message).toString()) }
     }
 
     // 运行工作流：upsert 进仓库（id 稳定为 wf_<工程名>）→ 引擎执行 → 轮询 lastStatus 弹结果
@@ -560,15 +563,15 @@ private fun NodeEditorPanel(
                 val log = WorkflowRepository.get(wf.id)?.lastLog ?: ""
                 withContext(Dispatchers.Main) {
                     if (status == "success") {
-                        Toast.makeText(context, "工作流运行成功 ✅", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, qstr(R.string.qk_02823), Toast.LENGTH_LONG).show()
                     } else {
                         val tail = log.lines().lastOrNull { it.isNotBlank() } ?: ""
-                        Toast.makeText(context, "运行失败/超时 ❌ ${tail.take(60)}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, qstr(R.string.qk_02824, (tail.take(60)).toString()), Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "运行出错：${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, qstr(R.string.qk_02825, (e.message).toString()), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -579,7 +582,7 @@ private fun NodeEditorPanel(
             @JavascriptInterface
             fun copyText(text: String) {
                 copyText(context, text)
-                Toast.makeText(context, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, qstr(R.string.qk_02826), Toast.LENGTH_SHORT).show()
             }
 
             @JavascriptInterface
@@ -626,7 +629,7 @@ private fun NodeEditorPanel(
             context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
         }.getOrNull()
         if (txt.isNullOrBlank()) {
-            Toast.makeText(context, "导入失败：无法读取文件", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, qstr(R.string.qk_02804), Toast.LENGTH_SHORT).show()
             return@rememberLauncherForActivityResult
         }
         // __restore 返回 true/false：成功才提示「已导入」，失败提示「文件格式错误」
@@ -644,7 +647,7 @@ private fun NodeEditorPanel(
             }
             Toast.makeText(
                 context,
-                if (ok) "已导入工程到画布" else "导入失败：文件不是有效的工程格式",
+                if (ok) qstr(R.string.qk_02827) else qstr(R.string.qk_02828),
                 Toast.LENGTH_SHORT,
             ).show()
         }
@@ -655,16 +658,15 @@ private fun NodeEditorPanel(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "拖拽节点 / 端口连线 / 双击改名；AI 可直接用 node_editor 工具读写本工程",
+            Text(stringResource(R.string.qk_02829),
                 style = MaterialTheme.typography.labelSmall, color = Muted, modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = { importLauncher.launch("application/json,text/plain") }) { Text("导入工程") }
+            TextButton(onClick = { importLauncher.launch("application/json,text/plain") }) { Text(stringResource(R.string.qk_02830)) }
             TextButton(
                 onClick = {
                     wvRef.value?.evaluateJavascript("JSON.stringify([window.__snapshot()])") { r ->
                         val snap = decodeJsString(r)
-                        if (snap.isBlank()) Toast.makeText(context, "画布为空，无可保存内容", Toast.LENGTH_SHORT).show()
+                        if (snap.isBlank()) Toast.makeText(context, qstr(R.string.qk_02831), Toast.LENGTH_SHORT).show()
                         else {
                             val msg = writeFlow(flowName, snap)
                             flowRefresh++
@@ -673,25 +675,25 @@ private fun NodeEditorPanel(
                         }
                     }
                 },
-            ) { Text("保存工程") }
+            ) { Text(stringResource(R.string.qk_02832)) }
             TextButton(
                 onClick = {
                     wvRef.value?.evaluateJavascript("JSON.stringify([window.__getMermaid()])") { r ->
                         val txt = decodeJsString(r)
-                        if (txt.isBlank()) Toast.makeText(context, "画布为空，暂无可复制的 Mermaid", Toast.LENGTH_SHORT).show()
-                        else { copyText(context, txt); Toast.makeText(context, "已复制 Mermaid 源码", Toast.LENGTH_SHORT).show() }
+                        if (txt.isBlank()) Toast.makeText(context, qstr(R.string.qk_02833), Toast.LENGTH_SHORT).show()
+                        else { copyText(context, txt); Toast.makeText(context, qstr(R.string.qk_00973), Toast.LENGTH_SHORT).show() }
                     }
                 },
-            ) { Text("复制 Mermaid") }
+            ) { Text(qstr(R.string.qk_02834)) }
             TextButton(
                 onClick = {
                     wvRef.value?.evaluateJavascript("JSON.stringify([window.__getMermaid()])") { r ->
                         val txt = decodeJsString(r)
-                        if (txt.isBlank()) Toast.makeText(context, "画布为空，暂无可渲染内容", Toast.LENGTH_SHORT).show()
-                        else { onRenderInChat("mermaid", txt, "节点编辑器"); Toast.makeText(context, "已发送到对话框渲染", Toast.LENGTH_SHORT).show() }
+                        if (txt.isBlank()) Toast.makeText(context, qstr(R.string.qk_02835), Toast.LENGTH_SHORT).show()
+                        else { onRenderInChat("mermaid", txt, qstr(R.string.qk_02776)); Toast.makeText(context, qstr(R.string.qk_02808), Toast.LENGTH_SHORT).show() }
                     }
                 },
-            ) { Text("渲染到对话框") }
+            ) { Text(qstr(R.string.qk_02809)) }
         }
         // 工程名 + 项目列表（多工程并存，AI 写入的也在列表里）
         Row(
@@ -701,7 +703,7 @@ private fun NodeEditorPanel(
             OutlinedTextField(
                 value = flowName,
                 onValueChange = { flowName = it },
-                label = { Text("工程名") },
+                label = { Text(stringResource(R.string.qk_02815)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f).heightIn(min = 52.dp),
                 colors = TextFieldDefaults.colors(),
@@ -712,9 +714,9 @@ private fun NodeEditorPanel(
                     wvRef.value?.evaluateJavascript("window.__setFlowName(${JSONObject.quote(flowName.ifBlank { "default" })})") {}
                     wvRef.value?.evaluateJavascript("window.__restore(${JSONObject.quote(f.readText(Charsets.UTF_8))})") {}
                     lastLoadedMtime = f.lastModified()
-                    Toast.makeText(context, "已载入工程「${flowName}」", Toast.LENGTH_SHORT).show()
-                } else Toast.makeText(context, "工程不存在：$flowName", Toast.LENGTH_SHORT).show()
-            }) { Text("载入") }
+                    Toast.makeText(context, qstr(R.string.qk_02836, (flowName).toString()), Toast.LENGTH_SHORT).show()
+                } else Toast.makeText(context, qstr(R.string.qk_02837, (flowName).toString()), Toast.LENGTH_SHORT).show()
+            }) { Text(qstr(R.string.qk_02818)) }
         }
         if (flowProjects.isNotEmpty()) {
             LazyColumn(
@@ -733,10 +735,10 @@ private fun NodeEditorPanel(
                             wvRef.value?.evaluateJavascript("window.__restore(${JSONObject.quote(f.readText(Charsets.UTF_8))})") {}
                             flowName = name
                             lastLoadedMtime = f.lastModified()
-                        }) { Text("打开") }
+                        }) { Text(qstr(R.string.qk_00953)) }
                         TextButton(onClick = {
-                            if (File(flowDir, "$name.qne").delete()) { flowRefresh++; Toast.makeText(context, "已删除：$name", Toast.LENGTH_SHORT).show() }
-                        }) { Text("删除") }
+                            if (File(flowDir, "$name.qne").delete()) { flowRefresh++; Toast.makeText(context, qstr(R.string.qk_02838, (name).toString()), Toast.LENGTH_SHORT).show() }
+                        }) { Text(qstr(R.string.qk_00091)) }
                     }
                 }
             }
@@ -773,7 +775,7 @@ private fun NodeEditorPanel(
                             // 偶尔被 ROM 拦截时不应弹「加载失败」吓用户（编辑器本体已渲染，预览降级即可）。
                             val isMain = failingUrl == null || failingUrl.endsWith("node_editor.html")
                             if (isMain) {
-                                Toast.makeText(context, "节点编辑器加载失败: $description (code=$errorCode)", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, qstr(R.string.qk_02839, (description).toString(), (errorCode).toString()), Toast.LENGTH_LONG).show()
                             }
                         }
                     }
@@ -840,7 +842,7 @@ private fun MiniAppPanel(
             context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
         }.getOrNull()
         if (content.isNullOrBlank()) {
-            Toast.makeText(context, "导入失败：无法读取文件", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, qstr(R.string.qk_02804), Toast.LENGTH_SHORT).show()
             return@rememberLauncherForActivityResult
         }
         scope.launch(Dispatchers.IO) {
@@ -864,18 +866,18 @@ private fun MiniAppPanel(
     Column(Modifier.fillMaxSize()) {
         if (current == null) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Web 应用", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
-                TextButton(onClick = { importLauncher.launch("text/html") }) { Text("导入 HTML") }
+                Text(stringResource(R.string.qk_02775), style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
+                TextButton(onClick = { importLauncher.launch("text/html") }) { Text(stringResource(R.string.qk_02840)) }
                 TextButton(onClick = {
                     scope.launch(Dispatchers.IO) {
                         val res = MiniAppTool().run(context, JSONObject().put("action", "create").put("name", "demo").toString())
                         withContext(Dispatchers.Main) { refreshKey++; Toast.makeText(context, res.take(120), Toast.LENGTH_SHORT).show() }
                     }
-                }) { Text("新建示例") }
+                }) { Text(qstr(R.string.qk_02841)) }
             }
             Spacer(Modifier.height(8.dp))
             if (projects.isEmpty()) {
-                Text("还没有 Web 应用。点「新建示例」或「导入 HTML」，也可以让 AI 用 miniapp 工具创建（在对话框里就能预览）。", color = Muted, modifier = Modifier.padding(16.dp))
+                Text(stringResource(R.string.qk_02842), color = Muted, modifier = Modifier.padding(16.dp))
             } else {
                 LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(projects) { name ->
@@ -886,7 +888,7 @@ private fun MiniAppPanel(
                         ) {
                             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text(name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
-                                TextButton(onClick = { current = name }) { Text("打开") }
+                                TextButton(onClick = { current = name }) { Text(stringResource(R.string.qk_00953)) }
                             }
                         }
                     }
@@ -894,20 +896,20 @@ private fun MiniAppPanel(
             }
         } else {
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { current = null; engineRef.value = null }) { Text("← 返回列表") }
+                TextButton(onClick = { current = null; engineRef.value = null }) { Text(stringResource(R.string.qk_02767)) }
                 Text(current ?: "", Modifier.weight(1f).padding(12.dp), color = Muted)
                 TextButton(onClick = {
                     scope.launch(Dispatchers.IO) {
                         val html = MiniAppTool().run(context, JSONObject().put("action", "run").put("name", current).toString())
                         withContext(Dispatchers.Main) {
                             if (html.startsWith("❌")) Toast.makeText(context, html, Toast.LENGTH_SHORT).show()
-                            else { onRenderInChat("miniapp", html, current ?: "Web 应用"); Toast.makeText(context, "已发送到对话框预览", Toast.LENGTH_SHORT).show() }
+                            else { onRenderInChat("miniapp", html, current ?: qstr(R.string.qk_02775)); Toast.makeText(context, qstr(R.string.qk_02843), Toast.LENGTH_SHORT).show() }
                         }
                     }
-                }) { Text("对话框预览") }
+                }) { Text(qstr(R.string.qk_02844)) }
                 TextButton(onClick = {
-                    if (current != null && File(root, current!!).deleteRecursively()) { refreshKey++; current = null; Toast.makeText(context, "已删除工程", Toast.LENGTH_SHORT).show() }
-                }) { Text("删除") }
+                    if (current != null && File(root, current!!).deleteRecursively()) { refreshKey++; current = null; Toast.makeText(context, qstr(R.string.qk_02845), Toast.LENGTH_SHORT).show() }
+                }) { Text(qstr(R.string.qk_00091)) }
             }
             AndroidView(
                 modifier = Modifier.fillMaxSize().weight(1f),
@@ -957,19 +959,17 @@ private fun MiniAppSdkPanel(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    "小程序 (原生引擎)",
+                Text(stringResource(R.string.qk_02781),
                     style = MaterialTheme.typography.titleMedium,
                     color = cs.onSurface,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = { refreshKey++ }) { Text("刷新") }
+                TextButton(onClick = { refreshKey++ }) { Text(stringResource(R.string.qk_00459)) }
             }
             Spacer(Modifier.height(4.dp))
             if (appIds.isEmpty()) {
                 Text(
-                    "还没有原生小程序。让 AI 用 miniapp_sdk 工具创建（在对话框里就能生成 WXML/WXSS/JS 工程），" +
-                        "内置演示 hello / todo 也应出现在列表里。",
+                    stringResource(R.string.qk_02846) + stringResource(R.string.qk_02847),
                     color = Muted,
                     modifier = Modifier.padding(16.dp),
                 )
@@ -993,10 +993,10 @@ private fun MiniAppSdkPanel(
                                 if (!isBuiltin) {
                                     TextButton(onClick = {
                                         val dir = java.io.File(NativeMiniAppEngine.userAppsRoot(context), id)
-                                        if (dir.deleteRecursively()) { refreshKey++; Toast.makeText(context, "已删除 $id", Toast.LENGTH_SHORT).show() }
-                                    }) { Text("删除") }
+                                        if (dir.deleteRecursively()) { refreshKey++; Toast.makeText(context, qstr(R.string.qk_02848, (id).toString()), Toast.LENGTH_SHORT).show() }
+                                    }) { Text(qstr(R.string.qk_00091)) }
                                 }
-                                TextButton(onClick = { current = id }) { Text("打开") }
+                                TextButton(onClick = { current = id }) { Text(stringResource(R.string.qk_00953)) }
                             }
                         }
                     }
@@ -1007,15 +1007,14 @@ private fun MiniAppSdkPanel(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = { current = null }) { Text("← 返回列表") }
+                TextButton(onClick = { current = null }) { Text(stringResource(R.string.qk_02767)) }
                 Text(current ?: "", Modifier.weight(1f).padding(12.dp), color = Muted)
             }
             AndroidView(
                 modifier = Modifier.fillMaxSize().weight(1f),
                 factory = { ctx ->
                     NativeMiniAppEngine.createResolved(ctx, current!!) ?: android.widget.TextView(ctx).apply {
-                        text = "未找到小程序：${current}\n（工程需在 filesDir/miniapps/${current}/ 下含 app.json 与页面 wxml；" +
-                            "也可在 assets/miniprograms/ 下放内置演示）"
+                        text = qstr(R.string.qk_02849, (current).toString(), (current).toString()) + qstr(R.string.qk_02850)
                     }
                 },
                 onRelease = { view ->
@@ -1050,24 +1049,24 @@ private fun PackageManagerPanel(context: Context) {
     // 环境守卫：未就绪时 Toast 引导，而不是把按钮灰掉让人摸不着头脑
     fun requireEnv(): Boolean {
         if (envReady && pm != null) return true
-        Toast.makeText(context, "环境未就绪：请先在终端页安装 rootfs", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, qstr(R.string.qk_02851), Toast.LENGTH_SHORT).show()
         return false
     }
 
     fun requireQuery(): Boolean {
         if (query.isNotBlank()) return true
-        Toast.makeText(context, "请先输入软件名", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, qstr(R.string.qk_02852), Toast.LENGTH_SHORT).show()
         return false
     }
 
     fun runCmd(cmd: String) {
         if (running) return
         running = true
-        installed = "执行：$cmd"
+        installed = qstr(R.string.qk_02853, (cmd).toString())
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching { QuroTerminalBridge.run(context, cmd, timeoutMs = 300_000L) }
-            }.getOrElse { -1 to "执行失败：${it.message}" }
+            }.getOrElse { -1 to qstr(R.string.qk_02795, (it.message).toString()) }
             running = false
             installed = buildString {
                 appendLine("[exit=${result.first}] $cmd")
@@ -1088,16 +1087,16 @@ private fun PackageManagerPanel(context: Context) {
         Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("包管理（Linux 沙箱）", style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
+        Text(stringResource(R.string.qk_02854), style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
         Surface(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(cs.surfaceVariant),
         ) {
             Column(Modifier.padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("环境状态", fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+                    Text(stringResource(R.string.qk_02855), fontWeight = FontWeight.SemiBold, color = cs.onSurface)
                     Spacer(Modifier.weight(1f))
                     Text(
-                        if (envReady) "就绪" else "未就绪（请先在终端页安装 rootfs）",
+                        if (envReady) stringResource(R.string.qk_00334) else stringResource(R.string.qk_02856),
                         color = if (envReady) cs.primary else cs.error,
                         fontSize = 13.sp,
                     )
@@ -1116,7 +1115,7 @@ private fun PackageManagerPanel(context: Context) {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text("搜索 / 安装软件名") },
+            label = { Text(stringResource(R.string.qk_02859)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
@@ -1128,7 +1127,7 @@ private fun PackageManagerPanel(context: Context) {
                     if (!requireQuery()) return@Button
                     runCmd(pm!!.install(listOf(query.trim())))
                 },
-            ) { Text(if (running) "执行中…" else "安装") }
+            ) { Text(if (running) stringResource(R.string.qk_00117) else qstr(R.string.qk_02860)) }
             OutlinedButton(
                 enabled = !running,
                 onClick = {
@@ -1136,7 +1135,7 @@ private fun PackageManagerPanel(context: Context) {
                     if (!requireQuery()) return@OutlinedButton
                     runCmd(pm!!.search(query.trim()))
                 },
-            ) { Text("搜索") }
+            ) { Text(stringResource(R.string.qk_00002)) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(
@@ -1145,7 +1144,7 @@ private fun PackageManagerPanel(context: Context) {
                     if (!requireEnv()) return@OutlinedButton
                     runCmd(pm!!.listInstalled())
                 },
-            ) { Text("列表已装") }
+            ) { Text(qstr(R.string.qk_02861)) }
             OutlinedButton(
                 enabled = !running,
                 onClick = {
@@ -1153,14 +1152,14 @@ private fun PackageManagerPanel(context: Context) {
                     if (!requireQuery()) return@OutlinedButton
                     runCmd(pm!!.info(query.trim()))
                 },
-            ) { Text("查看信息") }
+            ) { Text(qstr(R.string.qk_02862)) }
             OutlinedButton(
                 enabled = !running,
                 onClick = {
                     if (!requireEnv()) return@OutlinedButton
                     runCmd(pm!!.update())
                 },
-            ) { Text("更新源") }
+            ) { Text(qstr(R.string.qk_02863)) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(
@@ -1170,30 +1169,30 @@ private fun PackageManagerPanel(context: Context) {
                     if (!requireQuery()) return@OutlinedButton
                     runCmd(pm!!.remove(listOf(query.trim())))
                 },
-            ) { Text("卸载") }
+            ) { Text(stringResource(R.string.qk_00434)) }
             OutlinedButton(
                 enabled = !running,
                 onClick = {
                     if (!requireEnv()) return@OutlinedButton
                     runCmd(pm!!.upgrade())
                 },
-            ) { Text("升级") }
+            ) { Text(qstr(R.string.qk_02864)) }
             OutlinedButton(
                 enabled = !running,
                 onClick = {
                     if (!requireEnv()) return@OutlinedButton
                     runCmd(pm!!.clean())
                 },
-            ) { Text("清理") }
+            ) { Text(stringResource(R.string.qk_00373)) }
         }
         Surface(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(cs.surface),
         ) {
             Column(Modifier.padding(12.dp)) {
-                Text("输出", fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+                Text(stringResource(R.string.qk_02865), fontWeight = FontWeight.SemiBold, color = cs.onSurface)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    installed ?: "尚无输出。安装/搜索/列表 命令执行后会在此显示（截取 4000 字）。",
+                    installed ?: stringResource(R.string.qk_02866),
                     fontSize = 12.sp,
                     color = cs.onSurfaceVariant,
                     fontFamily = FontFamily.Monospace,
@@ -1206,7 +1205,7 @@ private fun PackageManagerPanel(context: Context) {
             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(cs.surfaceVariant),
         ) {
             Column(Modifier.padding(12.dp)) {
-                Text("软件源管理", fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+                Text(stringResource(R.string.qk_02867), fontWeight = FontWeight.SemiBold, color = cs.onSurface)
                 Spacer(Modifier.height(6.dp))
                 sourcePms.forEach { pmType ->
                     val selected = remember(sourceRefresh, pmType) { sourceManager.getSelectedSource(pmType) }
@@ -1219,7 +1218,7 @@ private fun PackageManagerPanel(context: Context) {
                         Column(Modifier.weight(1f)) {
                             Text(pmType.displayName, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
                             Spacer(Modifier.height(2.dp))
-                            Text("当前源：${selected.name}", fontSize = 12.sp, color = cs.onSurfaceVariant)
+                            Text(qstr(R.string.qk_02868, (selected.name).toString()), fontSize = 12.sp, color = cs.onSurfaceVariant)
                         }
                         LucideIcon("chevron_right", null, Modifier.size(18.dp), tint = Muted)
                     }
@@ -1248,8 +1247,8 @@ private fun PackageManagerPanel(context: Context) {
             onDismissRequest = { sourceDialogPm = null },
             title = {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("选择 ${pmType.displayName} 源", Modifier.weight(1f))
-                    TextButton(onClick = { showAddCustom = true }) { Text("+ 自定义") }
+                    Text(qstr(R.string.qk_02869, (pmType.displayName).toString()), Modifier.weight(1f))
+                    TextButton(onClick = { showAddCustom = true }) { Text(qstr(R.string.qk_02870)) }
                 }
             },
             text = {
@@ -1269,7 +1268,7 @@ private fun PackageManagerPanel(context: Context) {
                                 TextButton(onClick = {
                                     sourceManager.deleteCustomSource(pmType, source.id)
                                     sourceRefresh++
-                                }) { Text("删除", color = cs.error) }
+                                }) { Text(qstr(R.string.qk_00091), color = cs.error) }
                             }
                         }
                     }
@@ -1290,22 +1289,22 @@ private fun PackageManagerPanel(context: Context) {
                         scope.launch {
                             val res = withContext(Dispatchers.IO) {
                                 runCatching { QuroTerminalBridge.run(context, cmd, timeoutMs = 60_000L) }
-                                    .getOrElse { -1 to "执行失败：${it.message}" }
+                                    .getOrElse { -1 to qstr(R.string.qk_02795, (it.message).toString()) }
                             }
-                            val msg = if (res.first == 0) "已切换 ${pmType.displayName} 源：${chosen.name}"
-                            else "源命令执行失败（exit=${res.first}）：${res.second.take(200)}"
+                            val msg = if (res.first == 0) qstr(R.string.qk_02871, (pmType.displayName).toString(), (chosen.name).toString())
+                            else qstr(R.string.qk_02872, (res.first).toString(), (res.second.take(200)).toString())
                             withContext(Dispatchers.Main) {
                                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                             }
                         }
                     } else if (chosen != null) {
-                        Toast.makeText(context, "Rust 镜像源已更新为: ${chosen.name}（下次安装 Rust 时生效）", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, qstr(R.string.qk_02873, (chosen.name).toString()), Toast.LENGTH_SHORT).show()
                     }
                     sourceRefresh++
                     sourceDialogPm = null
-                }) { Text("确认") }
+                }) { Text(qstr(R.string.qk_02412)) }
             },
-            dismissButton = { TextButton(onClick = { sourceDialogPm = null }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { sourceDialogPm = null }) { Text(qstr(R.string.qk_00011)) } },
         )
 
         if (showAddCustom) {
@@ -1330,13 +1329,13 @@ private fun AddCustomSourceDialog(
     var customUrl by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("添加自定义 ${pmType.displayName} 源") },
+        title = { Text(stringResource(R.string.qk_02874, (pmType.displayName).toString())) },
         text = {
             Column {
                 OutlinedTextField(
                     value = customName,
                     onValueChange = { customName = it },
-                    label = { Text("源名称") },
+                    label = { Text(qstr(R.string.qk_02875)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -1344,7 +1343,7 @@ private fun AddCustomSourceDialog(
                 OutlinedTextField(
                     value = customUrl,
                     onValueChange = { customUrl = it },
-                    label = { Text("源地址") },
+                    label = { Text(qstr(R.string.qk_02876)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -1358,9 +1357,9 @@ private fun AddCustomSourceDialog(
                     sourceManager.saveCustomSource(pmType, MirrorSource(id, customName, customUrl, true))
                     onAdded()
                 },
-            ) { Text("添加") }
+            ) { Text(qstr(R.string.qk_01498)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } },
     )
 }
 
@@ -1384,7 +1383,7 @@ private fun saveTextFile(context: Context, name: String, content: String): Strin
             val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv)
             if (uri != null) {
                 context.contentResolver.openOutputStream(uri)?.use { it.write(content.toByteArray(Charsets.UTF_8)) }
-                "已保存到下载目录：$name"
+                qstr(R.string.qk_02877, (name).toString())
             } else {
                 fallbackSave(context, name, content)
             }
@@ -1407,9 +1406,9 @@ private fun fallbackSaveToDir(dir: java.io.File?, name: String, content: String)
         dir?.mkdirs()
         val f = File(dir, name)
         f.writeText(content, Charsets.UTF_8)
-        "已保存到：${f.absolutePath}"
+        qstr(R.string.qk_02878, (f.absolutePath).toString())
     } catch (e: Exception) {
-        "保存失败：${e.message}"
+        qstr(R.string.qk_02879, (e.message).toString())
     }
 }
 
@@ -1494,7 +1493,7 @@ private fun KaleidoBoxPanel(
 
     fun refreshPackages() {
         packages = runtime?.installedPackages() ?: emptyList()
-        status = if (runtime == null) "KaleidoBox 未初始化" else "已安装 ${packages.size} 个工具包"
+        status = if (runtime == null) qstr(R.string.qk_02880) else qstr(R.string.qk_02881, (packages.size).toString())
     }
 
     // 导入本地 .zip 包（含 kaleido.json + classes.dex）
@@ -1512,7 +1511,7 @@ private fun KaleidoBoxPanel(
             context.contentResolver.openInputStream(uri)?.use { ins -> tmp.outputStream().use { ins.copyTo(it) } }; true
         }.getOrNull() == true
         if (!copied) {
-            Toast.makeText(context, "导入失败：无法读取文件", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, qstr(R.string.qk_02804), Toast.LENGTH_SHORT).show()
             return@rememberLauncherForActivityResult
         }
         scope.launch(Dispatchers.IO) {
@@ -1520,7 +1519,7 @@ private fun KaleidoBoxPanel(
             withContext(Dispatchers.Main) {
                 if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) {
                     refreshPackages(); Toast.makeText(context, "已安装：${out.value["id"]?.asString()}", Toast.LENGTH_SHORT).show()
-                } else Toast.makeText(context, "安装失败：${out.asString()}", Toast.LENGTH_LONG).show()
+                } else Toast.makeText(context, qstr(R.string.qk_02883, (out.asString()).toString()), Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -1534,8 +1533,8 @@ private fun KaleidoBoxPanel(
     var genSrc by remember { mutableStateOf("") }
     var genClass by remember { mutableStateOf("com.ai.assistance.quro.kaleidobox.gen.MyToolkit") }
     var genId by remember { mutableStateOf("dev.kaleidobox.gen.plugin") }
-    var genName by remember { mutableStateOf("我的工具") }
-    var genDesc by remember { mutableStateOf("AI 生成的 KaleidoBox 工具包") }
+    var genName by remember { mutableStateOf(qstr(R.string.qk_02884)) }
+    var genDesc by remember { mutableStateOf(qstr(R.string.qk_02885)) }
 
     LaunchedEffect(Unit) { refreshPackages() }
 
@@ -1545,7 +1544,7 @@ private fun KaleidoBoxPanel(
     fun openPlugin(pkgId: String) {
         val surfaceId = firstSurfaceOf(pkgId)
         if (surfaceId == null) {
-            Toast.makeText(context, "该工具包没有可打开的 UI 表面", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, qstr(R.string.qk_02886), Toast.LENGTH_SHORT).show()
             return
         }
         val intent = Intent(context, KaleidoActivity::class.java).apply {
@@ -1554,7 +1553,7 @@ private fun KaleidoBoxPanel(
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         runCatching { context.startActivity(intent) }
-            .onFailure { Toast.makeText(context, "打开失败：${it.message}", Toast.LENGTH_LONG).show() }
+            .onFailure { Toast.makeText(context, qstr(R.string.qk_00467, (it.message).toString()), Toast.LENGTH_LONG).show() }
     }
 
     fun installCatalog(id: String) {
@@ -1567,45 +1566,45 @@ private fun KaleidoBoxPanel(
                 if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) {
                     refreshPackages()
                     Toast.makeText(context, "已安装：${out.value["id"]?.asString()}", Toast.LENGTH_SHORT).show()
-                } else Toast.makeText(context, "安装失败：${out.asString()}", Toast.LENGTH_LONG).show()
+                } else Toast.makeText(context, qstr(R.string.qk_02883, (out.asString()).toString()), Toast.LENGTH_LONG).show()
             }
         }
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("工具包运行器", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.qk_02777), style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
             Button(onClick = {
-                if (runtime == null) { Toast.makeText(context, "KaleidoBox 未初始化", Toast.LENGTH_SHORT).show(); return@Button }
+                if (runtime == null) { Toast.makeText(context, qstr(R.string.qk_02880), Toast.LENGTH_SHORT).show(); return@Button }
                 val failed = runCatching { KaleidoCatalog.installBuiltins(runtime) }
                     .getOrElse { mapOf("<all>" to (it.message ?: it.javaClass.simpleName)) }
                 refreshPackages()
                 if (failed.isEmpty()) {
-                    Toast.makeText(context, "已确保内置示例包装载", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, qstr(R.string.qk_02887), Toast.LENGTH_SHORT).show()
                 } else {
                     // 不再无条件报"已装载"：把真正失败的包和原因摊开，否则界面只是"少了一个包"，无从排查。
                     Toast.makeText(
                         context,
-                        "有 ${failed.size} 个内置包装载失败：\n" + failed.entries.joinToString("\n") {
+                        qstr(R.string.qk_02888, (failed.size).toString()) + failed.entries.joinToString("\n") {
                             "${it.key} → ${it.value.lineSequence().firstOrNull() ?: "未知原因"}"
                         },
                         Toast.LENGTH_LONG,
                     ).show()
                 }
-            }) { Text("装示例包") }
+            }) { Text(stringResource(R.string.qk_02889)) }
         }
         Spacer(Modifier.height(4.dp))
-        Text(status.ifBlank { "（暂无工具包）" }, style = MaterialTheme.typography.bodySmall, color = Muted)
+        Text(status.ifBlank { stringResource(R.string.qk_02890) }, style = MaterialTheme.typography.bodySmall, color = Muted)
 
         // —— 导入入口：从文件 / 从链接 / AI 生成 ——（解决"kaleidobox 没有导入 UI"）
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { importLauncher.launch("application/zip") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("从文件导入") }
-            OutlinedButton(onClick = { urlDialog = true }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("从链接导入") }
+            OutlinedButton(onClick = { importLauncher.launch("application/zip") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.qk_02891)) }
+            OutlinedButton(onClick = { urlDialog = true }, enabled = !busy, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.qk_02892)) }
             Button(onClick = {
                 genSrc = PluginScaffold.fillTemplate("MyToolkit")
                 genDialog = true
-            }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("AI 生成插件") }
+            }, enabled = !busy, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.qk_02893)) }
         }
 
         // —— 已安装 / 插件目录：按「分组」分区展示，按「标签」筛选 ——
@@ -1637,7 +1636,7 @@ private fun KaleidoBoxPanel(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                KaleidoTagChip("全部", selected = tagFilter == null) { tagFilter = null }
+                KaleidoTagChip(stringResource(R.string.qk_02894), selected = tagFilter == null) { tagFilter = null }
                 allTags.forEach { t ->
                     KaleidoTagChip(
                         KaleidoCatalog.TagLabels.zhOf(t),
@@ -1650,14 +1649,14 @@ private fun KaleidoBoxPanel(
         // —— 已安装：每卡直接「打开」+「卸载」，不再点两次 ——
         if (shownInstalled.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
-            Text("已安装（${packages.size}）", style = MaterialTheme.typography.labelMedium, color = Muted)
+            Text(stringResource(R.string.qk_02895, (packages.size).toString()), style = MaterialTheme.typography.labelMedium, color = Muted)
             shownInstalled.forEach { (group, list) ->
                 KaleidoGroupHeader(group.label, list.size)
                 list.forEach { rec ->
                     val name = rec.manifest.name["zh"] ?: rec.manifest.name["en"] ?: rec.id
                     val cat = catalog.firstOrNull { it.id == rec.id }
                     val desc = cat?.descZh ?: rec.manifest.description["zh"] ?: rec.manifest.description["en"] ?: ""
-                    val surfaces = rec.manifest.ui.takeIf { it.isNotEmpty() }?.joinToString { it.id } ?: "无"
+                    val surfaces = rec.manifest.ui.takeIf { it.isNotEmpty() }?.joinToString { it.id } ?: qstr(R.string.qk_00464)
                     val tags = KaleidoCatalog.TagLabels.display(rec.manifest.keywords)
                     Card(
                         Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -1676,7 +1675,7 @@ private fun KaleidoBoxPanel(
                                     // 目录外的包（从文件/链接/AI 生成导入）没有分组也没有标签，给个来源标记
                                     if (cat == null) {
                                         Spacer(Modifier.width(6.dp))
-                                        KaleidoTagChip("外部导入")
+                                        KaleidoTagChip(qstr(R.string.qk_02896))
                                     }
                                 }
                                 if (tags.isNotEmpty()) {
@@ -1686,27 +1685,27 @@ private fun KaleidoBoxPanel(
                                     }
                                 }
                                 Text(desc, style = MaterialTheme.typography.bodySmall, color = Muted, maxLines = 2)
-                                Text("v${rec.version} · 表面=$surfaces", style = MaterialTheme.typography.bodySmall, color = Muted)
+                                Text(qstr(R.string.qk_02897, (rec.version).toString(), (surfaces).toString()), style = MaterialTheme.typography.bodySmall, color = Muted)
                             }
                             Spacer(Modifier.width(12.dp))
                             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Button(
                                     onClick = { openPlugin(rec.id) },
                                     enabled = !busy,
-                                ) { Text("打开") }
+                                ) { Text(qstr(R.string.qk_00953)) }
                                 TextButton(
                                     onClick = {
                                         scope.launch(Dispatchers.IO) {
                                             val out = KaleidoBoxBridge.uninstall(rec.id)
                                             withContext(Dispatchers.Main) {
                                                 if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) {
-                                                    refreshPackages(); Toast.makeText(context, "已卸载：${rec.id}", Toast.LENGTH_SHORT).show()
-                                                } else Toast.makeText(context, "卸载失败：${out.asString()}", Toast.LENGTH_LONG).show()
+                                                    refreshPackages(); Toast.makeText(context, qstr(R.string.qk_02898, (rec.id).toString()), Toast.LENGTH_SHORT).show()
+                                                } else Toast.makeText(context, qstr(R.string.qk_02899, (out.asString()).toString()), Toast.LENGTH_LONG).show()
                                             }
                                         }
                                     },
                                     enabled = !busy,
-                                ) { Text("卸载", color = cs.error) }
+                                ) { Text(qstr(R.string.qk_00434), color = cs.error) }
                             }
                         }
                     }
@@ -1724,7 +1723,7 @@ private fun KaleidoBoxPanel(
         // —— 插件目录：分组分区，只显示未安装的，点安装后直接可打开 ——
         if (shownCatalog.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            Text("插件目录（${availableCatalog.size} 个可安装）", style = MaterialTheme.typography.labelMedium, color = Muted)
+            Text(stringResource(R.string.qk_02902, (availableCatalog.size).toString()), style = MaterialTheme.typography.labelMedium, color = Muted)
             shownCatalog.forEach { (group, list) ->
                 KaleidoGroupHeader(group.label, list.size)
                 list.forEach { e ->
@@ -1753,7 +1752,7 @@ private fun KaleidoBoxPanel(
                             Button(
                                 onClick = { installCatalog(e.id) },
                                 enabled = !busy,
-                            ) { Text(if (e.kind == KaleidoCatalog.Kind.SRC) "编译并装" else "安装") }
+                            ) { Text(if (e.kind == KaleidoCatalog.Kind.SRC) qstr(R.string.qk_02903) else qstr(R.string.qk_02860)) }
                         }
                     }
                 }
@@ -1763,8 +1762,7 @@ private fun KaleidoBoxPanel(
         // 标签筛掉了整个目录时的提示（别让界面看起来像"目录空了"）
         if (shownCatalog.isEmpty() && shownInstalled.isEmpty() && tagFilter != null) {
             Spacer(Modifier.height(12.dp))
-            Text(
-                "标签「${KaleidoCatalog.TagLabels.zhOf(tagFilter!!)}」下没有可显示的工具包，点上方「全部」清除筛选。",
+            Text(stringResource(R.string.qk_02904, (KaleidoCatalog.TagLabels.zhOf(tagFilter!!)).toString()),
                 style = MaterialTheme.typography.bodySmall,
                 color = Muted,
             )
@@ -1773,17 +1771,17 @@ private fun KaleidoBoxPanel(
         // 空状态
         if (packages.isEmpty() && availableCatalog.isEmpty()) {
             Spacer(Modifier.height(12.dp))
-            Text("还没有工具包，且插件目录为空。点上方「装示例包」或「AI 生成插件」。", color = Muted)
+            Text(stringResource(R.string.qk_02905), color = Muted)
         } else if (packages.isEmpty()) {
             Spacer(Modifier.height(12.dp))
-            Text("还没有工具包。点上方「插件目录」一键装一个，或点「AI 生成插件」写一段 Java 让设备内编译运行。", color = Muted)
+            Text(stringResource(R.string.qk_02906), color = Muted)
             Spacer(Modifier.height(8.dp))
             Button(onClick = {
-                onAskAi("请使用 kaleido 工具为我安装一个 KaleidoBox 工具包（例如示例计数器或单位换算），并告诉我它提供了哪些 unit 和 UI 表面。")
-            }) { Text("让 AI 装一个包") }
+                onAskAi(qstr(R.string.qk_02907))
+            }) { Text(qstr(R.string.qk_02908)) }
         } else if (availableCatalog.isEmpty()) {
             Spacer(Modifier.height(12.dp))
-            Text("插件目录已全部安装，点击「打开」运行插件。", color = Muted)
+            Text(stringResource(R.string.qk_02909), color = Muted)
         }
     }
 
@@ -1791,10 +1789,10 @@ private fun KaleidoBoxPanel(
     if (urlDialog) {
         AlertDialog(
             onDismissRequest = { urlDialog = false },
-            title = { Text("从链接导入插件") },
+            title = { Text(stringResource(R.string.qk_02910)) },
             text = {
                 Column {
-                    Text("输入 .zip 包下载地址（含 kaleido.json + classes.dex）：", style = MaterialTheme.typography.bodySmall, color = Muted)
+                    Text(stringResource(R.string.qk_02911), style = MaterialTheme.typography.bodySmall, color = Muted)
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = urlText,
@@ -1815,12 +1813,12 @@ private fun KaleidoBoxPanel(
                         withContext(Dispatchers.Main) {
                             if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) {
                                 refreshPackages(); Toast.makeText(context, "已安装：${out.value["id"]?.asString()}", Toast.LENGTH_SHORT).show()
-                            } else Toast.makeText(context, "安装失败：${out.asString()}", Toast.LENGTH_LONG).show()
+                            } else Toast.makeText(context, qstr(R.string.qk_02883, (out.asString()).toString()), Toast.LENGTH_LONG).show()
                         }
                     }
-                }) { Text("导入") }
+                }) { Text(qstr(R.string.qk_01635)) }
             },
-            dismissButton = { TextButton(onClick = { urlDialog = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { urlDialog = false }) { Text(stringResource(R.string.qk_00011)) } },
         )
     }
 
@@ -1828,21 +1826,21 @@ private fun KaleidoBoxPanel(
     if (genDialog) {
         AlertDialog(
             onDismissRequest = { genDialog = false },
-            title = { Text("AI 生成插件（端侧编译）") },
+            title = { Text(stringResource(R.string.qk_02912)) },
             text = {
                 Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
-                    Text("粘贴 Java 源码（实现 KaleidoToolkit，public 类名须等于下面入口类的末段）。点「编译并安装」将在设备内 ecj→d8 编译运行。", style = MaterialTheme.typography.bodySmall, color = Muted)
+                    Text(stringResource(R.string.qk_02913), style = MaterialTheme.typography.bodySmall, color = Muted)
                     Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(value = genClass, onValueChange = { genClass = it }, label = { Text("入口类全名") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = genClass, onValueChange = { genClass = it }, label = { Text(qstr(R.string.qk_02914)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(4.dp))
-                    OutlinedTextField(value = genId, onValueChange = { genId = it }, label = { Text("包 id") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = genId, onValueChange = { genId = it }, label = { Text(stringResource(R.string.qk_02915)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(4.dp))
-                    OutlinedTextField(value = genName, onValueChange = { genName = it }, label = { Text("展示名") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = genName, onValueChange = { genName = it }, label = { Text(stringResource(R.string.qk_02916)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(4.dp))
                     OutlinedTextField(
                         value = genSrc,
                         onValueChange = { genSrc = it },
-                        label = { Text("Java 源码") },
+                        label = { Text(stringResource(R.string.qk_02917)) },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 180.dp),
                         textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                         singleLine = false,
@@ -1854,19 +1852,19 @@ private fun KaleidoBoxPanel(
                     val src = genSrc.trim()
                     val cls = genClass.trim()
                     genDialog = false
-                    if (src.isBlank() || cls.isBlank()) { Toast.makeText(context, "源码与入口类不能为空", Toast.LENGTH_SHORT).show(); return@TextButton }
+                    if (src.isBlank() || cls.isBlank()) { Toast.makeText(context, qstr(R.string.qk_02918), Toast.LENGTH_SHORT).show(); return@TextButton }
                     scope.launch(Dispatchers.IO) {
                         val manifest = PluginScaffold.buildManifest(genId.trim(), genName.trim(), genName.trim(), genDesc.trim(), cls)
                         val out = KaleidoBoxBridge.writeAndInstall(context, src, cls, manifest, genId.trim())
                         withContext(Dispatchers.Main) {
                             if (out is KValue.Obj && out.value["ok"]?.asBoolOr() == true) {
                                 refreshPackages(); Toast.makeText(context, "已编译并安装：${out.value["id"]?.asString()}", Toast.LENGTH_LONG).show()
-                            } else Toast.makeText(context, "编译/安装失败：${out.asString()}", Toast.LENGTH_LONG).show()
+                            } else Toast.makeText(context, qstr(R.string.qk_02920, (out.asString()).toString()), Toast.LENGTH_LONG).show()
                         }
                     }
-                }) { Text("编译并安装") }
+                }) { Text(qstr(R.string.qk_02921)) }
             },
-            dismissButton = { TextButton(onClick = { genDialog = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { genDialog = false }) { Text(stringResource(R.string.qk_00011)) } },
         )
     }
 }

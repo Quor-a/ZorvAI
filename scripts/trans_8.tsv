@@ -1,0 +1,338 @@
+﻿1466	Cloud model service saved and enabled ✓
+1468	Cleared saved config for "${def.name}"
+1474	No parameters required (free to use)
+1475	Required:
+1476	Available by default
+1477	Configured ✓
+1479	"${def.name}" parameter
+1481	Voice
+1482	Please select a voice
+1483	Clone: $cn${if (cv?.registeredId?.isNotBlank() == true)
+1485	Clone: ${cv.name}${if (cv.registeredId.isNotBlank())
+1491	Optional: ${def.formatOptions.joinToString(
+1492	Streaming
+1499	Custom voice (${if (def.id ==
+1500	Clone: ${cv.cloneUri}${if (cv.registeredId.isNotBlank())
+1501	Design: ${cv.designText}
+1515	Please import or paste a clone audio sample first
+1516	Silicon Flow cloning requires the "reference audio narration text"
+1518	Voice Cloning
+1519	MiMo is zero-shot inline cloning: add an "Audio Clone" entry under "Custom Voice" above and select it; no pre-registration needed, the sample is inlined at synthesis.
+1520	Registration-based cloning: add an "Audio Clone" entry under "Custom Voice" above (Silicon Flow requires narration text) and select it; at synthesis the sample is uploaded automatically and a cloned voice is created (first time online, then the registered ID is reused).
+1525	Previewing…
+1526	Preview started ✓
+1527	Preview failed ❌\n${e.message}
+1530	Tip: saving auto-enables the "Cloud Model Service" voice source (if required fields are blank, status shows "Params not configured"; switch back to local system in the "TTS" source).
+1533	Module export failed: ${it.message}
+1534	Imported $n modules
+1536	Module import failed: ${it.message}
+1542	Export selected (${selected.size})
+1545	🖥 Terminal
+1546	🔁 Both ends
+1547	📱 Phone
+1548	● Deploying…
+1549	● Engine ready
+1550	● Deployed (health check abnormal)
+1551	⛔ Deploy failed
+1552	○ Engine not deployed
+1554	 }} · ${es.services.size} shared services
+1556	Deploy CMS engine
+1559	Shared services: ${es.services.joinToString(
+1563	Bootstrap script
+1566	Provisioner script
+1574	CMSv2_add_module_notes.md
+1578	📱 Phone module (runs in-app)
+1579	🖥 Terminal module (runs in proot)
+1580	🔁 Dual-end module (phone / terminal)
+1581	Permissions ${m.permissions.size} · Capabilities ${m.capabilities.size}${if (m.dependencies.isNotEmpty())
+1582	Channel: $ats · Level ${m.maxRequiredLevel().name}
+1583	● Deploying ${deployTask?.progressPct ?: 0}%
+1584	● Deployed to terminal
+1585	○ Not deployed
+1593	● Deploying
+1594	● Deployed
+1595	Version: ${module.version} · Author: ${module.author.ifBlank {
+1597	Capabilities (${module.capabilities.size}):
+1598	   Required permissions: ${c.requiresPermissions.joinToString(
+1599	Path=${con.allowedPaths}
+1600	Command=${con.allowedCommands}
+1601	Domain=${con.allowedDomains}
+1604	   Constraints: ${conItems.joinToString(
+1605	Dependencies (${module.dependencies.size}):
+1607	Lifecycle: ${module.lifecycle} · Catalog: ${module.catalog.ifBlank {
+1608	Signature: ${module.signature.take(32)}…
+1610	Module ID *
+1616	Permission declarations (${perms.size})
+1617	+ Permission
+1620	+ Capability
+1623	Action (intent JSON / js script / api op / terminal command)
+1624	Required permission id (comma separated)
+1626	Command whitelist (comma separated)
+1627	Allowed paths (comma separated)
+1628	Allowed domains (comma separated)
+1632	+ Dependency
+1639	Host: ${c.runOn.joinToString(
+1640	Required permissions: ${c.requiresPermissions.joinToString(
+1643	Call capability · ${cap.id}
+1644	Module: ${module.name} · Channel level: ${module.maxRequiredLevel().name}
+1645	JS script (in-app QuickJS sandbox)
+1646	API operation
+1647	Terminal command (in-app proot/Ubuntu sandbox)
+1648	Intent (in-app dispatch)
+1649	Parameter $name
+1655	Reason: ${perm.rationale}
+1656	Scope: ${perm.scope}
+1663	Stat card
+1664	Progress card
+1665	List card
+1666	Pie chart
+1669	Reminder
+1670	Tabs
+1671	Steps
+1672	Timeline
+1673	Todo card
+1674	Note card
+1675	Action card
+1676	Mermaid flowchart
+1677	Web app MiniApp
+1679	Rich component (ui_widget)
+1680	Rich card (ui_card)
+1681	AI-written (mermaid / miniapp)
+1683	Sent: $label
+1684	Send failed: $label
+1685	Current system does not support this role (requires Android 10+)
+1686	Cannot launch system chooser: ${it.message}
+1689	Platform role (system role, API 29+)
+1690	Other default (set as default via system chooser)
+1692	After setting as default, Zorv AI takes over when opening the corresponding type (web / image / video / mail / doc / dialer / SMS / desktop).
+1693	Platform roles (desktop launcher / browser / dialer / SMS) are requested via the system role dialog; this app has no desktop UI, so "Desktop launcher" only submits a role request, and whether it takes effect depends on whether the system lists it as an eligible candidate.
+1694	Album / video / mail / doc have no system role; tapping "Set as default" opens the system chooser — pick Zorv AI and check "Always".
+1695	To clear default, go to System Settings → Apps → Zorv AI → Open by default / Default apps, or the default app management page for that type.
+1698	✓ Zorv AI is already default
+1699	Current default: ${shortPkg(holder)}
+1700	No default set
+1701	Check in system default app management
+1702	Python environment
+1703	Node.js environment
+1704	JavaScript runtime + npm
+1705	Fast package manager and TypeScript
+1706	SSH tool
+1707	Full SSH toolchain
+1708	SSH client + sshpass + sshd
+1709	Java environment
+1710	Build automation tool
+1711	Rust environment
+1712	Rust toolchain and Cargo package manager
+1713	Go environment
+1714	Go programming language dev environment
+1715	python3 --version && pip --version || echo 'not installed'
+1716	node -v && npm -v || echo 'not installed'
+1717	pnpm -v && tsc -v || echo 'not installed'
+1718	ssh -V && sshpass -V || echo 'not installed'
+1719	java -version 2>&1 | head -1 || echo 'not installed'
+1720	gradle --version | head -3 || echo 'not installed'
+1721	rustc --version && cargo --version || echo 'not installed'
+1722	go version || echo 'not installed'
+1723	echo 'unknown environment'
+1730	✅ Install command sent to terminal: ${envName}
+1731	❌ Failed to send command: ${e.message}
+1736	✅ Install command sent: ${envName}
+1744	● Installed
+1745	○ Not installed
+1751	Tap the mic to speak, or type below to talk with the digital human
+1752	Custom 3D model selected; tap the mic to talk
+1753	GLB file copy failed, please choose another file
+1755	Microphone permission required for voice input
+1756	Current STT engine is "AI model" transcription; deploy an on-device model in "Settings → Voice → STT" first, or switch to native/offline engine
+1757	Listening…
+1758	Stopped, tap the mic to continue
+1768	Listening
+1769	Recognizing
+1770	Replying
+1771	Error
+1772	Standby
+1780	Reselect GLB model
+1781	Select GLB model file
+1782	Loaded: ${dh.customModelPath.substringAfterLast(
+1784	Failed to read assets/$path: ${it.message}
+1785	Draco resource extraction failed: ${it.message}
+1786	Tap the mic to continue
+1787	Digital human is speaking…
+1788	Digital human is thinking…
+1789	⚠️ Error, please check model config (in offline mode confirm the local endpoint is available)
+1790	Loading on-device model…
+1791	On-device model load failed, retry in STT settings
+1792	Recorder init failed
+1793	Cannot create recorder
+1794	Recorder unavailable
+1795	Recording error: ${e.message}
+1796	Recognizing…
+1797	WebView created; modelFile=${modelFile?.absolutePath ?:
+1798	Page loaded: $url
+1799	Offline engine assets read failed; threeJs=$threeJs gltfLoader=$gltfLoader orbit=$orbit
+1800	<body style='margin:0;background:#15151a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;font-size:13px;text-align:center;padding:16px'>Offline 3D engine missing<br>Please confirm the APK contains assets/www/three/</body>
+1803	<body style='margin:0;background:#15151a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;font-size:13px'>No GLB model selected</body>
+1804	Reading: ${file.name}
+1805	Loaded: ${file.name}
+1806	Read failed: ${it.message}
+1808	Writing: ${file.absolutePath}
+1809	Saved: ${file.name}
+1810	Saved to ${file.absolutePath}
+1811	Document_$timestamp.md
+1812	Creating: ${newFile.absolutePath}
+1813	Created: $fileName
+1815	Save failed: ${it.message}
+1816	Bold
+1817	Italic
+1818	Heading 1
+1819	Heading 2
+1820	Heading 3
+1821	Unordered list
+1822	Ordered list
+1823	Quote
+1824	Code block
+1825	Divider
+1826	Link
+1827	[link text](url)
+1828	![image description](image link)
+1834	Share ${target.name}
+1836	File: ${file.name}
+1842	Open with
+1846	Cannot read document: $loadErr
+1847	File is large (about ${sizeBytes / 1024 / 1024} MB); in-app preview may be slow or memory-heavy. Tap "Other app" at top right to open with WPS / Office.
+1849	Load error
+1851	Document render failed: $loadErr\nTry opening with "Other app".
+1853	Previous page
+1854	Page ${idx + 1} / ${slides.size}
+1855	Next page
+1856	(Untitled)
+1868	<!doctype html><html><body><h1>ZorvAI export sample</h1><p>Exported by the feature-permission demo via MediaStore, no storage permission needed.</p></body></html>
+1869	Exported to Download/ZorvAI ✓
+1870	Export failed (please check storage availability)
+1871	ZorvAI running
+1872	Wrote a running record (source=this app) ✓
+1873	Write failed: ${it.message}
+1877	Export sample file
+1878	Request media permission
+1881	Read local assets and export generated results to public Download. Export uses MediaStore, no storage permission needed.
+1882	Permanently denied; go to "Settings → Apps → Permissions" to enable manually.
+1883	Open / install Health Connect
+1884	Manage Health Connect
+1885	Authorize health data
+1887	Read/write steps, heart rate, sleep and other health data, and prioritize among multiple sources.
+1888	Device does not provide Health Connect (should be a system module on Android 14+). Try installing from the app store, or integrate the vendor health SDK later.
+1889	Authorized ${manager.health.requiredPermissions.size} data types.
+1890	Test reminder (in 5 seconds)
+1891	ZorvAI reminder
+1892	This is a test reminder
+1893	Set precise alarm 5s later ✓
+1894	Enable precise alarm
+1896	Remind you to exercise, drink water, etc. at set times. Precise alarm is a special permission with no runtime popup; must be enabled in Settings.
+1897	Go to "Settings → Apps → Alarms & reminders" to enable manually.
+1899	Keep the AI assistant always visible as a floating window / lock-screen card, ready to summon chat and quick actions anytime. This is a special permission; enable in Settings.
+1900	Go to Settings (can close)
+1901	Enable lock-screen display
+1902	Authorized; can be turned off in system settings.
+1903	Go to "Settings → Apps → Special app access → Display over other apps" to enable manually.
+1904	Request fitness & activity permission
+1906	Read device activity recognition (walking / running etc.) and auto-record motion state, linked to health data. Requires runtime grant on Android 10+.
+1907	Current system version does not require this permission.
+1909	Access the entire device file system (docs, downloads, external SD) for cross-directory reading/organizing your files. Special permission; enable in Settings.
+1910	Enable all-files access
+1911	Go to "Settings → Apps → Special app access → All files access" to enable manually.
+1912	Current system version does not require this special permission.
+1913	Go to default assistant settings
+1914	Set as default digital assistant
+1916	Set Zorv AI as the system default digital assistant to take over the assistant gesture (long-press Home / side key), providing global voice/text assistant. Granted via the system role chooser.
+1917	Already the default digital assistant. Change in "Settings → Default apps → Digital assistant".
+1918	Current system version does not support the digital assistant role.
+1919	Granted via the system "Default digital assistant" chooser; confirm to wake globally.
+1920	Note: precise alarm is a special permission on Android 12+ with no system popup, only Settings redirect; media and health runtime requests pop up only on first ask or after denial (without "Don't ask again"), and downgrade to "go to Settings" once "Don't ask again" is checked.
+1928	Both are "Yes" but the system "Special app access" list still lacks this app: ① reopen Settings or reboot to let the system re-index; ② alarm & reminder list needs Android 12+, all-files access needs Android 11+; ③ confirm you installed this version, not an old package (old package still has USE_EXACT_ALARM and is hidden by the system).
+1930	Detecting
+1931	Authorized
+1932	Needs authorization
+1933	Go to Settings
+1942	$steps steps
+1943	Overview
+1945	Notifications
+1951	Select mirror
+1953	✅ Mirror reachable (about ${ms ?:
+1954	} ms), can log in
+1955	❌ Cannot connect to this mirror (cert expired / timeout / blocked). Pick another, or use a network that can reach GitHub
+1961	Please paste a Token first
+1962	Token invalid or network error, please check and retry
+1966	Please fill in Client ID
+1967	Failed to start device flow (invalid Client ID or no network)
+1972	Your verification code: ${d.userCode}
+1973	Login failed: token save error
+1974	Failed to fetch account (token invalid or network error)
+1975	Repos ${a.publicRepos}
+1979	No repos or fetch failed
+1980	Update ${repo.updatedAt}
+1981	Unstar
+1982	No Issues or fetch failed
+1983	No notifications or fetch failed
+1990	Import failed: ${it.message}
+1991	Imported: $safe
+1994	Reading…
+1995	(Cannot read content)
+1997	Renamed to: ${target.name}
+2007	Local knowledge base (RAG). Documents are stored in the app-private knowledge_base/ directory and vector-searched only on your device,
+2008	with no cloud upload. You can also tell the AI "save XX into the knowledge base".
+2010	Documents (${filtered.size})
+2011	Knowledge base is empty. Tap + at top right to add documents, or import from the system file picker.
+2013	Re-scan and vectorize all documents
+2015	Create failed: ${it.message}
+2026	Framework status
+2027	Detecting local framework…
+2028	Reading installed manager list
+2029	No LSPosed / Xposed detected
+2030	After installing LSPosed (zygisk), manager entries appear here
+2031	Installed · tap to open for scope / module management
+2032	Zorv AI scope
+2033	Add Zorv AI to scope
+2034	In the manager's "Apps", check this app so the framework hooks take effect on it
+2036	Activate Zorv AI module
+2037	Enable Zorv AI in LSPosed "Modules", and check this app in "Apps" to include it in scope
+2038	Zorv AI's terminal / ACI / automation capabilities run on their own pipeline (accessibility · Shizuku · device admin · ROOT) and work without Xposed.
+2039	Zorv AI now provides an opt-in LSPosed module: writing a scope marker when included in scope; optional cross-app injection / system redirect bridge (requires external lsposed_bridge.json, off by default). This page defines no ai.aci.permission.*.
+2040	Permission definitions (ai.aci.permission.* etc.) are maintained by the control-end project; this app only declares and uses them, no duplication.
+2041	Cannot open ${pkg}: ${it.message}
+2049	**Text**
+2050	*Text*
+2051	Strikethrough
+2052	~~Text~~
+2053	`Code`
+2054	Task list
+2055	```\nCode\n```
+2056	![image description](url)
+2057	| Col1 | Col2 |\n|------|------|\n| Content | Content |
+2059	Expose Zorv AI's $toolCount built-in tools to other local AI clients via MCP (Model Context Protocol)
+2062	Listening on 127.0.0.1:$port
+2066	Transport: JSON-RPC 2.0 over HTTP (single POST + plain JSON response)\n
+2067	Listen: 127.0.0.1 (local only, not reachable externally)\n
+2068	Methods: initialize / tools/list / tools/call\n
+2069	Tools: 100% same source as in-chat AI tools (total $toolCount)
+2071	Client config example (Claude Desktop / Cursor mcp.json):\n
+2079	Configured ${clientServers.size} external servers (keep adding; AI calls them by alias via mcp_call)
+2081	Server address (http(s)://host/path)
+2084	Added server: $a
+2090	${srv.url} · $n tools
+2091	Logged out: ${srv.alias}
+2093	Unknown file
+2096	Requires ${if (kind ==
+2097	} file permission to browse the media library.
+2100	No ${if (kind ==
+2101	} files found
+2104	Import model
+2106	Model path: ${cfg.localModelPath.ifBlank {
+2110	Select or customize an API provider to auto-fill the default address
+2112	Model name
+2117	Max generation tokens
+2122	Max tokens
+2123	Tool rounds
+2125	Context window
+2134	Delete preset
+2135	Preset ${savedProfiles.size + 1}
+2140	Model: ${ep.model.ifBlank {

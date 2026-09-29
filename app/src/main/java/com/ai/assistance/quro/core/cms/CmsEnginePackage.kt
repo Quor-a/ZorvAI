@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.cms
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import org.json.JSONObject
@@ -102,14 +104,14 @@ data class CmsEnginePackage(
         fun builtin(): CmsEnginePackage = signed(
             CmsEnginePackage(
                 engineId = "quro-engine",
-                name = "Zorv CMS引擎",
+                name = qstr(R.string.qk_03455),
                 engineVersion = "1.0.0",
                 bootstrapContent = BUILTIN_BOOTSTRAP,
                 provisionerContent = BUILTIN_PROVISIONER,
                 sharedServices = listOf(
                     EngineSvc(
                         id = "cms-static",
-                        name = "CMS 静态资源服务",
+                        name = qstr(R.string.qk_03471),
                         command = "python3 -m http.server 8080 --bind 0.0.0.0",
                         port = 8080,
                         enabled = true,

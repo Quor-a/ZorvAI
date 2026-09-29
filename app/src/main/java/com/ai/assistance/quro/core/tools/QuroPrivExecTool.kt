@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.core.tools
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import com.ai.assistance.quro.core.privilege.QuroLSPosed
@@ -20,7 +22,7 @@ import org.json.JSONObject
 class QuroPrivExecTool : QuroTool {
     override val name = "priv_exec"
     override val description =
-        "终端直用特权通道执行命令（Shizuku→ROOT 自动降级）。" +
+        qstr(R.string.qk_03548) +
             "action=run：以 root 权限执行 shell 命令（经 QuroRootGateway，Shizuku-root 优先、失败降级 su），返回所用通道与输出；" +
             "action=status：报告 Root / Shizuku / LSPosed / ZorvAI 授权 的可用状态。" +
             "参数 {\"action\":\"run|status\",\"command\":\"要执行的完整 shell 命令(run 用,无需自己加引号)\",\"timeout_ms\":15000}。"
@@ -58,7 +60,7 @@ class QuroPrivExecTool : QuroTool {
         sb.append("- Root(su)：").append(
             when (rootCached) {
                 true -> "可用（已探测）"
-                false -> "不可用"
+                false -> qstr(R.string.qk_01929)
                 null -> "未探测（用 run 触发一次真实探测）"
             },
         ).append('\n')
