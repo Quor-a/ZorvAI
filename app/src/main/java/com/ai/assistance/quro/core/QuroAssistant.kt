@@ -230,9 +230,16 @@ class QuroAssistant(
         onUpdate: (() -> Unit)? = null,
     ): String =
         withContext(Dispatchers.IO) {
+            // 「AI 回复语言」兜底网：ask() 是所有调用方（主对话 / 语音球 / 视频通话 /
+            // 粘贴键盘 / IM 机器人）共同的出口。把语言约束压到 system 消息最末尾
+            // （= 最高近因偏好），即使某个调用方自己的提示词漏了语言指令，也不会退回中文。
+            // 中文（默认）时 tailReminder() 返回空串 → 零 token 成本、零行为变化。
+            // 注：TranslateTool / WebSearchTools 直连 QuroLlmClient.chat()，不经过本函数，
+            // 因此「翻译成指定语言」这类需要覆盖 UI 语言的场景不受影响。
+            val langTail = if (systemPrompt.isBlank()) "" else QuroReplyLanguage.tailReminder(context)
             val system = QuroMessage(
                 role = "system",
-                content = systemPrompt + buildDeepThinkDirective(deepThink),
+                content = systemPrompt + buildDeepThinkDirective(deepThink) + langTail,
             )
             var lastText = ""
             // 流式占位：首个 token 到达时创建可见气泡，后续 token 增量更新其内容。
@@ -363,7 +370,17 @@ class QuroAssistant(
                 // 未知时回落 1048576 安全顶；contextWindow 是用户在总开关上设的预算（≤ 硬上限，0=用硬上限）。
                 val hardMax = if (cfg.modelContextLength > 0) cfg.modelContextLength else MODEL_MAX_INPUT_TOKENS
                 val effContextWindow = if (cfg.contextWindow > 0) cfg.contextWindow.coerceAtMost(hardMax) else hardMax
-                val llmMessages = runCatching { store.toLlmMessages(system, effContextWindow, effHistoryRounds) }.getOrElse { emptyList() }
+                val baseMessages = runCatching { store.toLlmMessages(system, effContextWindow, effHistoryRounds) }.getOrElse { emptyList() }
+                // 「AI 回复语言」最高近因注入：历史消息（尤其上一轮 AI 自己的回复）多为中文，
+                // 模型会顺着最近的历史继续说中文，system 提示词开头的语言指令会被稀释。
+                // 这里在本轮首次请求的 payload 末尾追加一条 system 提醒，使其成为生成前最近的一条指令。
+                // 只进 payload、不写 store → 不污染历史、不占后续轮次 token；中文时为空串 → 完全无影响。
+                val langNudge = if (round == 1) QuroReplyLanguage.turnNudge(context) else ""
+                val llmMessages = if (langNudge.isBlank()) {
+                    baseMessages
+                } else {
+                    baseMessages + QuroChatMessage("system", langNudge)
+                }
                 // 流式增量回调（云端 / 本地离线模型**共用**）。参数 acc 为「累计文本」。
                 // ⚠️ #1112 修复：此前本地（MNN / llama.cpp）路径压根不传 onToken，且下方 streaming
                 //   还对本地强制置 false —— 本地推理整条链零流式。手机 CPU 上一次生成动辄数十秒到
@@ -1041,7 +1058,13 @@ class QuroAssistant(
             return "⚠️ 子智能体未收到有效任务描述（参数 task 为空），已跳过派发。"
         }
         val subStore = QuroConversationStore()
-        val system = QuroMessage(role = "system", content = SUBAGENT_SYSTEM_PROMPT)
+        // 「AI 回复语言」：子智能体的产出会被主智能体直接采用（可能直接呈现给用户），
+        // 语言必须与当前界面语言一致；SUBAGENT_SYSTEM_PROMPT 通篇中文，必须显式约束。
+        // 同包（com.ai.assistance.quro.core），无需 import。
+        val system = QuroMessage(
+            role = "system",
+            content = QuroReplyLanguage.shortDirective(context) + SUBAGENT_SYSTEM_PROMPT,
+        )
         subStore.add(
             QuroMessage(
                 role = "user",

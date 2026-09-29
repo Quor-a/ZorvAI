@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.ai.assistance.quro.core.AppExecutors
 import com.ai.assistance.quro.core.QuroAssistant
 import com.ai.assistance.quro.core.QuroPlatformManifest
+import com.ai.assistance.quro.core.QuroReplyLanguage
 import com.ai.assistance.quro.core.QuroAttachment
 import com.ai.assistance.quro.core.QuroAttachmentKit
 import com.ai.assistance.quro.core.turn.QuroTurnController
@@ -1646,11 +1647,16 @@ $recent
                     append("但不要原样重复之前已经给出过的回复或旧轮次的任务结果。\n")
                 }.trimEnd()
             }
+            // 「AI 回复语言」：本地极简分支此前**完全没有**语言指令（云端那句在下方、本函数早已 return，
+            // 对本地永远不可达）→ 界面切英文/其他语言时，本地模型仍用中文作答。
+            // 本地模型上下文极紧，只用一句话版（shortDirective），且必须放在最前面。
+            val localized = QuroReplyLanguage.shortDirective(appContext) + out
             QuroDiag.log(
                 "SysPrompt",
-                "built | local=true | persona-core-only | chars=${out.length} | ~tokens=${out.length / 3 * 2}"
+                "built | local=true | persona-core-only | replyLang=${QuroReplyLanguage.resolveTag(appContext)}" +
+                    " | chars=${localized.length} | ~tokens=${localized.length / 3 * 2}"
             )
-            return out
+            return localized
         }
 
         // ══════════════ 以下为云端模型的完整系统提示�? ══════════════
@@ -1658,12 +1664,15 @@ $recent
         // 平台/品牌自我认知基座（永远最先，不被人格卡覆盖）
         sb.append(QuroPlatformManifest.SYSTEM).append("\n\n")
 
-        // 应用语言感知：让用户所选语言成为 AI 默认回复语言（用户改用其他语言时自然跟随）
-        val appLang = _appLanguage.value
-        if (appLang != "system") {
-            val langName = com.ai.assistance.quro.util.QuroLocale.LANGUAGE_NAMES[appLang] ?: appLang
-            sb.append("## 回复语言\n请用 ").append(langName).append(" 回复用户（除非用户用其他语言提问）。\n\n")
-        }
+        // ══════════════ 「AI 回复语言」统一注入（QuroReplyLanguage）══════════════
+        // 旧实现有三处硬伤，正是「界面切英文、AI 仍回中文」的根因：
+        //   ① app_language == "system"（跟随系统）时**整段不注入**，纯靠模型自觉；
+        //   ② 只存在于云端分支 —— 本地模型在上面 early-return，压根没有语言指令；
+        //   ③ 用中文语言名 + 「除非用户用其他语言提问」的软化措辞，约束力太弱；而基座提示词
+        //      （QuroPlatformManifest.SYSTEM + 工具清单 + 人格/记忆层）整篇中文，模型天然把
+        //      「指令语言」当成「回复语言」。
+        // 现改为：开头给完整指令（点破「提示词是中文 ≠ 回复用中文」），末尾再复述一次（见本函数结尾）。
+        sb.append(QuroReplyLanguage.directive(appContext))
 
         // ══════════════ 第一优先级：身份认知（人格卡 = AI 真实身份；Zorv AI = 开发者；运行环境靠工具自行发现） ══════════════
         // ══════════════ 灵魂层（人格/标签/语音/记忆）由自写编排引擎生成 ══════════════
@@ -2142,6 +2151,9 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         // ══════════════ 人格卡可视化开关【硬强制】放最末尾 = 最高近因偏好（仅云端路径）═════════════
         // 本地离线模型不走到这里（已在上面 isLocal 分支 early-return），本段只在云端路径注入。
         sb.append(buildVisualSwitchEnforcement())
+
+        // 「AI 回复语言」结尾复述（近因强化）：系统提示词上万字中文，开头那句容易被后续内容冲淡。
+        sb.append(QuroReplyLanguage.tailReminder(appContext))
 
         val out = sb.toString().trim()
         // #1113 诊断：把 system prompt 实际规模写进日志，避免再靠猜�?

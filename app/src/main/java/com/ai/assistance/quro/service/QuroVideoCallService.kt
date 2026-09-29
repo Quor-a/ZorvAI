@@ -79,6 +79,7 @@ import com.ai.assistance.quro.core.QuroAttachmentKit
 import com.ai.assistance.quro.core.QuroConversationStore
 import com.ai.assistance.quro.core.QuroMessage
 import com.ai.assistance.quro.core.QuroPlatformManifest
+import com.ai.assistance.quro.core.QuroReplyLanguage
 import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
 import com.ai.assistance.quro.core.model.QuroFunctionType
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
@@ -354,13 +355,11 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 "识别物体 / 文字 / 人物、给出操作建议，就像你真的在看着摄像头一样。" +
                 "若某轮没有附带画面，则用语言正常回答。\n"
         )
-        // 语言一致性：通话回复必须与用户当前界面语言一致（否则切了语言仍说中文）。
-        val tag = QuroLocale.currentTag(applicationContext)
-        if (tag != "zh" && tag != "system") {
-            sb.append("Always answer in the language of the user (current UI language tag: ")
-                .append(tag)
-                .append(").\n")
-        }
+        // 语言一致性：通话回复必须是用户当前的界面语言。
+        // 旧实现只在「显式选了非中文语言」时才补一句英文提示，「跟随系统」时整段跳过
+        // → 系统是英文时视频通话仍用中文说话（且 TTS 照念中文）。现统一走 QuroReplyLanguage。
+        sb.append(QuroReplyLanguage.directive(applicationContext))
+        sb.append(QuroReplyLanguage.tailReminder(applicationContext))
         return sb.toString()
     }
 

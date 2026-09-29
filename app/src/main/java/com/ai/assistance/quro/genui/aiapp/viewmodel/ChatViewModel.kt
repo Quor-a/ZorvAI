@@ -14,6 +14,7 @@ import com.ai.assistance.quro.genui.aiapp.core.GenUIChatMessage
 import com.ai.assistance.quro.genui.aiapp.core.GenUILlmResult
 import com.ai.assistance.quro.genui.aiapp.core.GenUIToolCall
 import com.ai.assistance.quro.genui.aiapp.core.GenUIToolSpec
+import com.ai.assistance.quro.core.QuroReplyLanguage
 import com.ai.assistance.quro.core.model.QuroModelConfig
 import com.ai.assistance.quro.core.tools.MiniAppTool
 import com.ai.assistance.quro.core.tools.VisualPendingQuestion
@@ -665,6 +666,20 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     /**
+     * 「AI 回复语言」最高近因注入（GenUI Agent 独立消息列表）。
+     *
+     * 本页历史存在 GenUISessionStore、绝大多数是中文，模型会顺着历史继续说中文；
+     * 只靠 system 开头的语言指令压不住。这里在生成位置前再补一条（与 renderRulesMessage 同一模式）：
+     * **只进本次 payload，不写入会话历史**。中文（默认）时返回 null → 零影响。
+     */
+    private fun replyLanguageMessage(): GenUIChatMessage? {
+        val nudge = runCatching {
+            QuroReplyLanguage.turnNudge(getApplication<Application>().applicationContext)
+        }.getOrDefault("")
+        return if (nudge.isBlank()) null else GenUIChatMessage(role = "system", content = nudge)
+    }
+
+    /**
      * 工具调用循环
      *
      * 多轮调用 LLM，处理工具调用，直到返回文本结果或达到最大轮次。
@@ -693,7 +708,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 messages = ChatHistory.toApiMessages(
                     currentState.conversationHistory,
                     maxTurns = maxHistoryTurns
-                ) + renderRulesMessage(forcedChannel),
+                ) + renderRulesMessage(forcedChannel) + listOfNotNull(replyLanguageMessage()),
                 temperature = config.temperature,
                 maxTokens = config.maxTokens,
                 tools = tools.ifEmpty { null },
