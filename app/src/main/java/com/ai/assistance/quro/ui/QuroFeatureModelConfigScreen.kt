@@ -47,7 +47,7 @@ import kotlinx.coroutines.launch
 
 /**
  * 功能模型配置（设置 → 功能模型配置）：参考 FunctionalConfigScreen 的「功能 → 配置」
- * 设计、移植。为 12 类 AI 能力各自绑定模型：默认「跟随主模型」，可切换为独立模型
+ * 设计、移植。为 13 类 AI 能力各自绑定模型：默认「跟随主模型」，可切换为独立模型
  * 并从全局接入点的模型列表中选取。
  *
  * 消费机制：引擎入口 [com.ai.assistance.quro.core.QuroAssistant.ask] 经
@@ -86,11 +86,11 @@ fun QuroFeatureModelConfigScreen(onBack: () -> Unit = {}) {
         ) {
             GroupCaption(stringResource(R.string.qk_03765))
             InfoBox(
-                text = stringResource(R.string.qk_03766),
+                text = stringResource(R.string.qk_03903),
                 tone = Accent,
             )
             InfoBox(
-                text = stringResource(R.string.qk_03767),
+                text = stringResource(R.string.qk_03904),
                 tone = Color(0xFF10B981),
             )
             Spacer(Modifier.height(10.dp))
@@ -323,7 +323,8 @@ private data class EngineWired(val label: String, val active: Boolean)
  * 各功能「独立模型绑定」是否真的改变引擎行为。
  * CHAT / PERSONA_INCUBATE / UI_CONTROL 已有独立调用点接入 resolveConfig，开关即时生效；
  * IMAGE_RECOGNITION 由 VisualAnalysisTool 的 Level2 降级路径接入 resolveConfig；
- * VIDEO_RECOGNITION 由 video_understanding 工具接入 resolveConfig；二者均真实消费绑定模型。
+ * VIDEO_RECOGNITION 由 video_understanding 工具接入 resolveConfig；
+ * VIDEO_CALL 由 QuroVideoCallService 的实时对话接入 resolveConfig；以上均真实消费绑定模型。
  * 其余功能在单接入点架构下作为主对话内的工具调用，独立绑定无单独 LLM 调用可路由，故跟随主对话。
  */
 private fun engineWired(type: QuroFunctionType): EngineWired = when (type) {
@@ -331,7 +332,8 @@ private fun engineWired(type: QuroFunctionType): EngineWired = when (type) {
     QuroFunctionType.PERSONA_INCUBATE,
     QuroFunctionType.UI_CONTROL,
     QuroFunctionType.IMAGE_RECOGNITION,
-    QuroFunctionType.VIDEO_RECOGNITION -> EngineWired(qstr(R.string.qk_03778), true)
+    QuroFunctionType.VIDEO_RECOGNITION,
+    QuroFunctionType.VIDEO_CALL -> EngineWired(qstr(R.string.qk_03778), true)
     else -> EngineWired(qstr(R.string.qk_03779), false)
 }
 
@@ -346,6 +348,7 @@ private fun featureIcon(type: QuroFunctionType): ImageVector = when (type) {
     QuroFunctionType.IMAGE_RECOGNITION -> Icons.Filled.Image
     QuroFunctionType.AUDIO_RECOGNITION -> Icons.Filled.Image
     QuroFunctionType.VIDEO_RECOGNITION -> Icons.Filled.Videocam
+    QuroFunctionType.VIDEO_CALL -> Icons.Filled.Videocam
     QuroFunctionType.IMAGE_GEN -> Icons.Filled.Image
     QuroFunctionType.VIDEO_GEN -> Icons.Filled.Videocam
 }

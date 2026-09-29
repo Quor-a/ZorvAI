@@ -1524,7 +1524,7 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01580" formatted="false">🔁 Dual-end module (phone / terminal)</string>
     <string name="qk_01581">Permissions %1$s · Capabilities %2$s${if (m.dependencies.isNotEmpty())</string>
     <string name="qk_01582">Channel: %1$s · Level %2$s</string>
-    <string name="qk_01583" formatted="false">● Deploying %1$s%</string>
+    <string name="qk_01583" formatted="false">● Deploying %1$s%%</string>
     <string name="qk_01584" formatted="false">● Deployed to terminal</string>
     <string name="qk_01585" formatted="false">○ Not deployed</string>
     <string name="qk_01586" formatted="false">· 実行中</string>
@@ -2019,7 +2019,7 @@ Try opening with &quot;Other app&quot;.</string>
 </string>
     <string name="qk_02068" formatted="false">Methods: initialize / tools/list / tools/call
 </string>
-    <string name="qk_02069" formatted="false">Tools: 100% same source as in-chat AI tools (total %1$s)</string>
+    <string name="qk_02069" formatted="false">Tools: 100%% same source as in-chat AI tools (total %1$s)</string>
     <string name="qk_02070" formatted="false">技術詳細</string>
     <string name="qk_02071" formatted="false">Client config example (Claude Desktop / Cursor mcp.json):
 </string>
@@ -2174,7 +2174,7 @@ Try opening with &quot;Other app&quot;.</string>
     <string name="qk_02220" formatted="false">MNN モデルを検索</string>
     <string name="qk_02221" formatted="false">(Full model package: config + all weight files)</string>
     <string name="qk_02222">サイズ約 %1$s MB</string>
-    <string name="qk_02223" formatted="false">%1$s% downloading…</string>
+    <string name="qk_02223" formatted="false">%1$s%% downloading…</string>
     <string name="qk_02224" formatted="false">ダウンロード中…</string>
     <string name="qk_02225" formatted="false">ダウンロードして読み込み</string>
     <string name="qk_02226">%1$s 個のモデルを登録しました</string>
@@ -2544,7 +2544,7 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02614" formatted="false">➕ カスタムリンク（Sherpa-NCNN ストリーミングモデルが必要）</string>
     <string name="qk_02615" formatted="false">カスタムモデルのダウンロードリンク</string>
     <string name="qk_02616" formatted="false">モデル種別</string>
-    <string name="qk_02617" formatted="false">Downloaded %1$s% (%2$s / %3$s)</string>
+    <string name="qk_02617" formatted="false">Downloaded %1$s%% (%2$s / %3$s)</string>
     <string name="qk_02618" formatted="false">本機では非対応</string>
     <string name="qk_02619" formatted="false">ダウンロードしてデプロイ</string>
     <string name="qk_02620" formatted="false">モデルを削除</string>
@@ -3851,4 +3851,36 @@ Create a file or folder at top right</string>
     <string name="qk_03870" formatted="false">ログイン後はリポジトリ / Issue / Star / 通知を管理。チャット内でGitHub検索も可能</string>
     <string name="qk_03871" formatted="false">オンにすると rm -rf / dd / mkfs などの危険コマンドは再送信か confirm が必要</string>
     <string name="qk_03872" formatted="false">システムに従う</string>
+    <string name="qk_03873" formatted="false">ビデオ通話中のリアルタイム会話と映像理解に使用するモデル（視覚対応が必要）</string>
+    <string name="qk_03874" formatted="false">タップしてビデオ通話を開始</string>
+    <string name="qk_03875" formatted="false">ビデオ通話スタンバイ</string>
+    <string name="qk_03876" formatted="false">カメラ起動中・マイクを押して話す</string>
+    <string name="qk_03877" formatted="false">ビデオ通話を終了しました</string>
+    <string name="qk_03878" formatted="false">オーバーレイ権限が必要です。システム設定で有効にしてください</string>
+    <string name="qk_03879">聞き取り中：%1$s</string>
+    <string name="qk_03880" formatted="false">聞き取れませんでした。もう一度お願いします</string>
+    <string name="qk_03881" formatted="false">音声認識を利用できません。STT設定でエンジンを切り替えてください</string>
+    <string name="qk_03882">認識エラー(%1$s)</string>
+    <string name="qk_03883" formatted="false">音声認識を開始できません</string>
+    <string name="qk_03884" formatted="false">APIキーが未設定です</string>
+    <string name="qk_03885" formatted="false">先にモデル設定ページでAPIキーを入力してください</string>
+    <string name="qk_03886" formatted="false">AIが返答中</string>
+    <string name="qk_03887">エラー：%1$s</string>
+    <string name="qk_03888" formatted="false">マイクをミュートしました</string>
+    <string name="qk_03889" formatted="false">マイクをオンにしました</string>
+    <string name="qk_03890" formatted="false">インカメラに切り替えました</string>
+    <string name="qk_03891" formatted="false">アウトカメラに切り替えました</string>
+    <string name="qk_03892" formatted="false">カメラ権限がないため音声のみで動作します</string>
+    <string name="qk_03893" formatted="false">ZorvAI ビデオ通話</string>
+    <string name="qk_03894" formatted="false">通話の切り替え</string>
+    <string name="qk_03895" formatted="false">チャット</string>
+    <string name="qk_03896" formatted="false">マイク</string>
+    <string name="qk_03897" formatted="false">ミュート</string>
+    <string name="qk_03898" formatted="false">カメラ切り替え</string>
+    <string name="qk_03899" formatted="false">通話終了</string>
+    <string name="qk_03900">あなた：%1$s</string>
+    <string name="qk_03901" formatted="false">ビデオ通話を開始するにはカメラとマイクの権限が必要です</string>
+    <string name="qk_03902" formatted="false">ビデオ通話画面を表示するにはオーバーレイ権限が必要です</string>
+    <string name="qk_03903" formatted="false">各機能は「メインモデルに従う」か専用モデルを指定できます。専用モデルの場合はベースURLとAPIキーも個別に入力できます。エンジンに接続済みで即時有効：通常対話、ペルソナ孵化、UI制御、画像認識、映像認識、ビデオ通話。</string>
+    <string name="qk_03904" formatted="false">視覚系機能：画像認識・映像認識・ビデオ通話はいずれも視覚対応モデル（GPT-4V など）が必要です。専用モデルとベースURL／APIキーを設定すると、視覚分析・映像理解・ビデオ通話がそのモデルに切り替わります。</string>
 </resources>

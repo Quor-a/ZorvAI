@@ -34,7 +34,7 @@ object IntentRouter {
 
     /** 强时效信号：出现即倾向检索 */
     private val TIME_SIGNALS = listOf(
-        qstr(R.string.qk_00284), "明天", "昨天", "现在", "目前", qstr(R.string.qk_02665), "最新", "近日", qstr(R.string.qk_00285), "本月",
+        "今天", "明天", "昨天", "现在", "目前", "刚刚", "最新", "近日", "本周", "本月",
         "今年", "最近", "实时", "当前", "今日", "这周", "几个月", "几年",
         "latest", "today", "now", "current", "recent", "2026", "2025", "2027"
     )
@@ -112,8 +112,8 @@ object IntentRouter {
         val hasTime = TIME_SIGNALS.any { lower.contains(it) }
         if (hasTime) {
             val f = when {
-                listOf(qstr(R.string.qk_00284), "现在", qstr(R.string.qk_02665), "实时", "今日", "today", "now").any { lower.contains(it) } -> Freshness.DAY
-                listOf(qstr(R.string.qk_00285), "这周", "近日", "最近", "recent").any { lower.contains(it) } -> Freshness.WEEK
+                listOf("今天", "现在", "刚刚", "实时", "今日", "today", "now").any { lower.contains(it) } -> Freshness.DAY
+                listOf("本周", "这周", "近日", "最近", "recent").any { lower.contains(it) } -> Freshness.WEEK
                 else -> Freshness.MONTH
             }
             return Decision(Action.SEARCH, 0.95, "含时效信号，必须联网核实", freshness = f)

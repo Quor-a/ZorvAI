@@ -196,7 +196,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(pi)
             .addAction(android.R.drawable.ic_btn_speak_now, "语音球", voicePi)
-            .addAction(android.R.drawable.ic_dialog_email, "聊天框", chatPi)
+            .addAction(android.R.drawable.ic_dialog_email, qstr(R.string.qk_03895), chatPi)
             .build()
     }
 
@@ -386,20 +386,20 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 context = this,
                 language = QuroSttPrefs.getLanguage(this),
                 partialResults = QuroSttPrefs.getPartial(this),
-                onPartial = { t -> if (t.isNotBlank()) updateStatus("聆听中：$t") },
+                onPartial = { t -> if (t.isNotBlank()) updateStatus(qstr(R.string.qk_03879, (t).toString())) },
                 onFinal = { text ->
                     if (!conversationActive) return@startListening
                     listening = false
                     if (text.isNotBlank()) {
                         emptyCount = 0
-                        updateStatus("你说：$text"); process(text)
+                        updateStatus(qstr(R.string.qk_03900, (text).toString())); process(text)
                     } else {
                         onEmptyOrError("没听清")
                     }
                 },
                 onError = { code, msg ->
                     if (!conversationActive) return@startListening
-                    listening = false; onEmptyOrError("识别出错($msg)")
+                    listening = false; onEmptyOrError(qstr(R.string.qk_03882, (msg).toString()))
                 },
             )
         } catch (e: Throwable) {
@@ -523,7 +523,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                         listening = false
                         if (text.isNotBlank()) {
                             emptyCount = 0
-                            updateStatus("你说：$text")
+                            updateStatus(qstr(R.string.qk_03900, (text).toString()))
                             process(text)
                         } else onEmptyOrError("没听清")
                     }
@@ -628,7 +628,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 listening = false
                 if (text.isNotBlank()) {
                     emptyCount = 0
-                    updateStatus("你说：$text")
+                    updateStatus(qstr(R.string.qk_03900, (text).toString()))
                     process(text)
                 } else onEmptyOrError("没听清")
             }
@@ -670,8 +670,8 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         QuroTtsHolder.speakToolFiredThisTurn = false
         val baseCfg = QuroModelConfigRepository(applicationContext).load()
         if (baseCfg.apiKey.isBlank()) {
-            updateStatus("未配置 API Key")
-            speak("请先在模型配置页填写 API Key")
+            updateStatus(qstr(R.string.qk_03884))
+            speak(qstr(R.string.qk_03885))
             return
         }
         // 语音球问答属于 CHAT 调用：接入「功能模型配置」的 CHAT 独立模型绑定，让开关真正生效
@@ -718,7 +718,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                     }
                 }
             } catch (e: Throwable) {
-                updateStatus("出错了：${e.message}")
+                updateStatus(qstr(R.string.qk_03887, (e.message).toString()))
             }
         }
     }

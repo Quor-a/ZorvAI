@@ -22081,5 +22081,197 @@
 "fmt": false,
 "file": "app/src/main/java/com/ai/assistance/quro/activity/QuroApplication.kt",
 "line": 155
+},
+{
+"text": "视频通话中的实时对话与画面理解所使用的模型（需支持视觉）",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "点我开始视频通话",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "视频通话待命",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "摄像头已开启 · 点麦克风开始说话",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "已结束视频通话",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "缺少悬浮窗权限，请在系统设置中开启",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "聆听中：$t",
+"fmt": true,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "没听清，请再说一次",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "语音识别不可用，请在 STT 设置中切换引擎",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "识别出错($msg)",
+"fmt": true,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "无法启动语音识别",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "未配置 API Key",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "请先在模型配置页填写 API Key",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "AI 回复中",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "出错了：${e.message}",
+"fmt": true,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "麦克风已静音",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "麦克风已开启",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "已切换到前置摄像头",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "已切换到后置摄像头",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "缺少相机权限，仅使用语音",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "ZorvAI 视频通话",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "开关通话",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "聊天框",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "麦克风",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "静音",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "切换摄像头",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "挂断",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "你说：$text",
+"fmt": true,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "需要相机与麦克风权限才能开始视频通话",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "需要悬浮窗权限才能显示视频通话界面",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "每个功能可「跟随主模型」或指定独立模型；指定独立模型时还可单独填写基础 URL 与 API Key。已接入引擎并实时生效：常规对话、人格孵化、UI 控制、图像识别、视频识别、视频通话。",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
+},
+{
+"text": "视觉类能力：图像识别、视频识别与视频通话都需要支持视觉能力的模型（如 GPT-4V）。为它们指定独立模型并填好基础 URL / API Key 后，视觉分析、视频画面理解与视频通话即改用该模型。",
+"fmt": false,
+"file": "app/src/main/java/com/ai/assistance/quro/service/QuroVideoCallService.kt",
+"line": 0
 }
 ]

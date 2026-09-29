@@ -1524,7 +1524,7 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_01580" formatted="false">🔁 Dual-end module (phone / terminal)</string>
     <string name="qk_01581">Permissions %1$s · Capabilities %2$s${if (m.dependencies.isNotEmpty())</string>
     <string name="qk_01582">Channel: %1$s · Level %2$s</string>
-    <string name="qk_01583" formatted="false">● Deploying %1$s%</string>
+    <string name="qk_01583" formatted="false">● Deploying %1$s%%</string>
     <string name="qk_01584" formatted="false">● Deployed to terminal</string>
     <string name="qk_01585" formatted="false">○ Not deployed</string>
     <string name="qk_01586" formatted="false">· Running</string>
@@ -2019,7 +2019,7 @@ Code
 </string>
     <string name="qk_02068" formatted="false">Methods: initialize / tools/list / tools/call
 </string>
-    <string name="qk_02069" formatted="false">Tools: 100% same source as in-chat AI tools (total %1$s)</string>
+    <string name="qk_02069" formatted="false">Tools: 100%% same source as in-chat AI tools (total %1$s)</string>
     <string name="qk_02070" formatted="false">Technical Details</string>
     <string name="qk_02071" formatted="false">Client config example (Claude Desktop / Cursor mcp.json):
 </string>
@@ -2174,7 +2174,7 @@ Code
     <string name="qk_02220" formatted="false">Search MNN models</string>
     <string name="qk_02221" formatted="false">(Full model package: config + all weight files)</string>
     <string name="qk_02222">About %1$s MB</string>
-    <string name="qk_02223" formatted="false">%1$s% downloading…</string>
+    <string name="qk_02223" formatted="false">%1$s%% downloading…</string>
     <string name="qk_02224" formatted="false">Downloading…</string>
     <string name="qk_02225" formatted="false">Download and Load</string>
     <string name="qk_02226">Registered %1$s models</string>
@@ -2544,7 +2544,7 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02614" formatted="false">➕ Custom link (must be a Sherpa-NCNN streaming model)</string>
     <string name="qk_02615" formatted="false">Custom Model Download Link</string>
     <string name="qk_02616" formatted="false">Model type</string>
-    <string name="qk_02617" formatted="false">Downloaded %1$s% (%2$s / %3$s)</string>
+    <string name="qk_02617" formatted="false">Downloaded %1$s%% (%2$s / %3$s)</string>
     <string name="qk_02618" formatted="false">Unsupported on this device</string>
     <string name="qk_02619" formatted="false">Download &amp; deploy</string>
     <string name="qk_02620" formatted="false">Recognized text shows here</string>
@@ -3851,4 +3851,36 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03870" formatted="false">Sign in to manage repos / issues / stars / notifications; search GitHub inside the chat</string>
     <string name="qk_03871" formatted="false">When on, dangerous commands (rm -rf / dd / mkfs) require a second send or confirm</string>
     <string name="qk_03872" formatted="false">Follow system</string>
+    <string name="qk_03873" formatted="false">Model used for the live conversation and scene understanding in a video call (must support vision)</string>
+    <string name="qk_03874" formatted="false">Tap to start the video call</string>
+    <string name="qk_03875" formatted="false">Video call on standby</string>
+    <string name="qk_03876" formatted="false">Camera on · tap the mic to speak</string>
+    <string name="qk_03877" formatted="false">Video call ended</string>
+    <string name="qk_03878" formatted="false">Overlay permission is required; please enable it in system settings</string>
+    <string name="qk_03879">Listening: %1$s</string>
+    <string name="qk_03880" formatted="false">Didn’t catch that, please say it again</string>
+    <string name="qk_03881" formatted="false">Speech recognition unavailable; switch the engine in STT settings</string>
+    <string name="qk_03882">Recognition error (%1$s)</string>
+    <string name="qk_03883" formatted="false">Cannot start speech recognition</string>
+    <string name="qk_03884" formatted="false">API Key not configured</string>
+    <string name="qk_03885" formatted="false">Please set the API Key on the model config page first</string>
+    <string name="qk_03886" formatted="false">AI is replying</string>
+    <string name="qk_03887">Error: %1$s</string>
+    <string name="qk_03888" formatted="false">Microphone muted</string>
+    <string name="qk_03889" formatted="false">Microphone on</string>
+    <string name="qk_03890" formatted="false">Switched to the front camera</string>
+    <string name="qk_03891" formatted="false">Switched to the back camera</string>
+    <string name="qk_03892" formatted="false">Camera permission missing; voice only</string>
+    <string name="qk_03893" formatted="false">ZorvAI Video Call</string>
+    <string name="qk_03894" formatted="false">Toggle call</string>
+    <string name="qk_03895" formatted="false">Chat</string>
+    <string name="qk_03896" formatted="false">Microphone</string>
+    <string name="qk_03897" formatted="false">Muted</string>
+    <string name="qk_03898" formatted="false">Switch camera</string>
+    <string name="qk_03899" formatted="false">Hang up</string>
+    <string name="qk_03900">You said: %1$s</string>
+    <string name="qk_03901" formatted="false">Camera and microphone permission is required to start a video call</string>
+    <string name="qk_03902" formatted="false">Overlay permission is required to show the video call screen</string>
+    <string name="qk_03903" formatted="false">Each feature can follow the main model or use a dedicated model; with a dedicated model you can also set its own base URL and API Key. Already wired to the engine and effective immediately: chat, persona incubation, UI control, image recognition, video recognition, video call.</string>
+    <string name="qk_03904" formatted="false">Vision features: image recognition, video recognition and video call all require a vision-capable model (e.g. GPT-4V). Assign a dedicated model with its own base URL / API Key and visual analysis, video scene understanding and video calls will switch to it.</string>
 </resources>

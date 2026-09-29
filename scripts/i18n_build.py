@@ -161,19 +161,61 @@ def dollar_to_positional(s):
     return _DOLLAR_RE.sub(rep, s).replace(_SENTINEL, '%s')
 
 
+# 「合法格式规格」白名单：只承认本流水线真正会产出的两种 ——
+#   %%       字面百分号
+#   %[N$]s   字符串占位（N 为参数序号）
+# 其余一律视为「裸 %」并转义。**不能**把 flags/width 写得宽松：那样
+# `100% same` 里的 `% s` 会被判成「空格 flag + 转换符 s」而漏网，
+# 运行期 String.format 照样 failMismatch 崩溃。
+_FORMAT_SPEC_RE = re.compile(r'%(?:\d+\$)?s')
+
+
+def escape_stray_percent(s):
+    """把「不属于格式规格」的裸 % 转义为 %%。
+
+    为什么必须做：`Resources.getString(id, *args)` 无条件执行 String.format，
+    与外层 xml 的 formatted="false" 无关。中文原文 `100% 同源（共 %1$s 个）` 里的
+    `% ` 会被 Java 当成「空格 flag + 转换符 s」→ FormatFlagsConversionMismatchException
+    崩溃（QuroMcpSettingsScreen 的 MCP 页真机崩溃即此）。
+    只对「源码会带参调用」的条目调用本函数（否则 %% 会原样显示成两个百分号）。
+    """
+    out = []
+    i = 0
+    n = len(s)
+    while i < n:
+        if s[i] != '%':
+            out.append(s[i]); i += 1; continue
+        if s[i:i + 2] == '%%':
+            out.append('%%'); i += 2; continue
+        m = _FORMAT_SPEC_RE.match(s, i)
+        if m is None:
+            out.append('%%'); i += 1; continue
+        out.append(m.group(0)); i = m.end()
+    return ''.join(out)
+
+
 def resolve_value(t, lang):
     """返回某语言下该串的资源文本。zh=中文；en=英文；其他=本语言翻译，缺则英文兜底。"""
     if lang == 'zh':
         if has_kotlin_tpl(t):
             ct = convert_template(t)
-            return ct[0] if ct else t
-        return t
-    if lang == 'en':
-        v = EN.get(t, t)
+            v = ct[0] if ct else t
+        else:
+            v = t
     else:
-        v = LANG_TRANS.get(lang, {}).get(t) or EN.get(t, t)  # 英文兜底（绝不放中文）
-    # 显式中文目录(values-zh)走 zh 分支；其余语言一律把残留模板转成定位占位符
-    return dollar_to_positional(v) if has_kotlin_tpl(v) else v
+        if lang == 'en':
+            v = EN.get(t, t)
+        else:
+            v = LANG_TRANS.get(lang, {}).get(t) or EN.get(t, t)  # 英文兜底（绝不放中文）
+        # 显式中文目录(values-zh)走 zh 分支；其余语言一律把残留模板转成定位占位符
+        if has_kotlin_tpl(v):
+            v = dollar_to_positional(v)
+    # 源码一定会带参调用（中文原文含 Kotlin 模板）→ 裸 % 必须转义成 %%，否则
+    # String.format 会把 `% ` / `%下` 当成非法规格直接抛异常崩溃。
+    # 注意：这一步必须在所有分支（含 zh）之后统一执行，zh 提前 return 曾漏掉此转义。
+    if has_kotlin_tpl(t):
+        v = escape_stray_percent(v)
+    return v
 
 
 # ---------- xml 转义 ----------
@@ -224,6 +266,21 @@ print('i18n 范围(英文已覆盖): %d / %d 条' % (scope_n, len(data)))
 print('各语言生成条目数:', counts)
 
 # ---------- 2) 安全替换源码字面量（仅 i18n 范围内的串） ----------
+# 「逻辑/关键词表」文件：这些文件里的中文字面量是**比较/匹配/分派的键**，不是给人看的
+# 文案。一旦被翻译，非中文语言下 contains/== 永不命中 —— 工具失败判定、交付判定、画布类型
+# 路由、意图识别、工具能力匹配、云 TTS 标签值会全部静默失效（不报错，只是"没反应"）。
+# 这类串必须整文件跳过 i18n（它们是数据，不是界面文案）。
+LOGIC_SKIP_FILES = {
+    'Verifier.kt',                # 工具输出失败标记
+    'DeliverabilityJudge.kt',     # 交付判定标记
+    'CanvasRouter.kt',            # 画布类型路由词
+    'QuroExperienceEngine.kt',    # 经验引擎意图关键词
+    'IntentRouter.kt',            # 搜索时效性关键词
+    'FluidCloudBridge.kt',        # 流程图节点标签数据
+    'QuroCloudTtsCatalog.kt',     # 云 TTS 标签值（直接进合成请求）
+    'ToolCapabilityDirectory.kt', # matchToolsByIntent 的子串匹配用例
+}
+
 VIEW_MODEL_FILES = {
     'QuroChatViewModel.kt', 'QuroPersonaViewModel.kt', 'QuroModelConfigViewModel.kt',
     'ChatData.kt',
@@ -585,7 +642,7 @@ for dp, _, fs in os.walk(ROOT):
     for fn in fs:
         if not fn.endswith('.kt'):
             continue
-        if fn in VIEW_MODEL_FILES:
+        if fn in VIEW_MODEL_FILES or fn in LOGIC_SKIP_FILES:
             continue
         p = os.path.join(dp, fn)
         if _ONLY and _ONLY not in p.replace('\\', '/'):
