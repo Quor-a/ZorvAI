@@ -1931,7 +1931,10 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[arm64-v8a-v1.0.97-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.97/arm64-v8a-v1.0.97-release.apk)**（约 371MB，Release 签名，**最新**）
+- 🟢 **[arm64-v8a-v1.1.0-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.1.0/arm64-v8a-v1.1.0-release.apk)**（约 374MB，Release 签名，**最新**）
+  - v1.1.0 变更：**AI 回复语言统一注入** —— 新增统一注入器，覆盖主对话（云端 + 本地离线）、语音球、视频通话、GenUI Agent、IM 机器人、子智能体六条路径，修「界面切成英文/其他语言，AI 仍回中文」；**视频通话**新增真实入口按钮与完整通话界面（悬浮窗实时相机预览 + 字幕 + 麦克风 / 前后摄 / 挂断），「功能模型配置」新增「视频通话模型」独立绑定（第 13 类）；**视觉分析**改为把截图注入当前多模态模型直接「看」；修复 **MCP 设置页**因文案含裸 `%` 被 `String.format` 解析导致的真机崩溃（此前 11 种语言全崩）。
+
+- 🟢 **[arm64-v8a-v1.0.97-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.97/arm64-v8a-v1.0.97-release.apk)**（约 371MB，Release 签名）
   - v1.0.97 变更：**新增长程任务编排（Long-Horizon Orchestration）**：落地「策划方案→规划方案→设计方案→执行→校验→修正→交付闸门」任务级闭环；交付闸门在产物不可交付时把原因/建议压回 Agent 继续编排执行，超上限再升级；该能力默认关闭（`taskPlanner`/`deliverabilityJudge` 为 null 时行为完全不变），不影响原有功能。
 
 - 🟢 **[arm64-v8a-v1.0.96-release.apk](https://github.com/Quor-a/ZorvAI/releases/download/v1.0.96/arm64-v8a-v1.0.96-release.apk)**（约 369MB，Release 签名）
