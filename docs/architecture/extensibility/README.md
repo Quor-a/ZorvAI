@@ -141,23 +141,23 @@ flowchart LR
 - 插件框架所有操作走一个工具、按 `action` 分发，避免工具集随插件数量膨胀。
 - 必须有 `call` 的原因：插件贡献的工具通常已进入会话工具集，但当工具集被裁剪、或插件刚装完还没轮到下一轮 function calling 时，`call` 保证 AI **永远能用到插件能力**，不会出现「插件装了但 AI 说用不了」的死角。
 
-### 4.4 界面必须宿主承载
+### 4.3 界面必须宿主承载
 
 - 插件不能自带 Activity：独立 APK 不是系统安装的应用，`Activity` 起不来；要界面就注册 `UI_SURFACE`，由宿主通用承载 Activity（`PluginSurfaceActivity`）显示，插件在 `UiSurfaceExtension.build` 里返回 View 树。返回键接管接口 `SurfaceBackHandler` 放在**契约层**而不是宿主 App —— 插件只编译期依赖契约，引用不到宿主的类。
 - 控制台走 SDUI 不走回环 HTTP：早期版本曾误建「app 自连 `127.0.0.1` 环回 HTTP 控制台」（`lanui` 模块），2026-07-31 彻底移除。现行方案是受控端只暴露 `console_ui` 与 `console_action` 两个能力，控制端 `QuroAidlAciCenterScreen` 经**同设备 Binder** 拉快照后用 `AciConsoleScreen` 本地渲染，纯本地、零网络；受控端实现 `AciConsoleContract`（`buildUiSnapshot` + `applyAction`）即可被驱动。
 
-### 4.5 能力描述写「什么时候用」，不是版本号
+### 4.4 能力描述写「什么时候用」，不是版本号
 
 - `Capability.create(id, description)` 的第 2 参是给 LLM 的自然语言描述，方法内部固定 `version="1.0"`。曾有人填版本号，导致 LLM 无法判断调用时机。
 - 同理插件 `aiTool` 的 `description` 也必须写清触发时机。
 
-### 4.6 技能系统的三条硬约束
+### 4.5 技能系统的三条硬约束
 
 - **内置技能默认不注册为工具**：旧版 `seedBuiltinZorvSkills` 把 62 个内置技能默认 `enabled=true && callable=true`，全部注册成 `skill__*` function-calling 工具；用户在「本地模型」开启工具调用后，整套云端工具集（含 60+ 技能工具）被塞给 1.2B 本地模型 → 一直「正在处理提示词」卡死、调一次工具就乱码。内置技能的定位是「注入系统提示词的行为约束」，不该默认成为工具，由 `KEY_BUILTIN_ZORV_CALLABLE_FIX` 幂等迁移。
 - **工具名必须可逆且在长度预算内**：`QuroSkill.toolNameOf(name)` = `skill__` + `QuroToolSpecGuard.sanitizeName(...)`，总长压进 64 字符（OpenAI function name 上限，超了整段 `tools` 会被拒收）。同一技能名永远得到同一工具名 → 反向查找 `toolNameOf(skill.name) == call.name` 成立，无需保存额外映射；净化丢失信息时追加**原名哈希尾缀**（`skill__tool-1a2b3c4d`）找回唯一性。
 - **两级信任**：内置技能随平台发布、默认可信；插件技能来自市场 / 仓库 / URL，安装前必须走 `skills-security-check`，输出 P0（致命）/ P1（警告）/ P2（安全），**P0 须用户显式确认**；两级落盘：用户级 `~/.workbuddy/skills/`（跨项目）、项目级 `{workspace}/.workbuddy/skills/`（团队）。
 
-### 4.7 提权必须四阶段，未授权返回引导
+### 4.6 提权必须四阶段，未授权返回引导
 
 - 「拥有权限」不等于「管理权限」。`QuroPrivilegeManager` 只做「探测 + 仲裁 + 审计」，不持有权限本身；提权统一走 `Intent → Policy Check（QuroPolicy）→ User Confirmation → Audit Log（QuroPrivilegeAudit）`。
 - 未授权时工具返回明确的引导提示，不静默越权。系统提示词里也明确写了这条约束。

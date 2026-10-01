@@ -218,6 +218,7 @@ OkHttp 对 4xx/5xx **不抛异常**，如果不主动检查 `resp.isSuccessful`�
 - **`handshake` 无法持久化**：`QuroMcpClientPrefs.load/save` 只读写 `alias/url/token/kind/toolDefs` 五个字段，`handshake` 不在其中。即使后续 UI 加了勾选框，重开也会丢失。
 - **`mcp_aci_call` 入参与 README 不符**：README 写 `serverAlias` / `toolName` / `arguments`，实际是 `capability`（`mcp_{工具名}`）/ `args`。
 - **`mcp_aci_bridge` 的 action 取值与 README 不符**：README 写 `refresh|list`，实际是 `refresh|status`。
+- **`mcp_deploy` / `mcp_undeploy` 入参与 README 不符**：README 写 `alias` / `toolDefs`，实际是 `name` / `tools` 与 `name`。
 - **ACI 能力 id 不含服务器别名**：`mcp_{toolName}` 不含 server，两个服务器暴露同名工具时后映射的会覆盖先映射的（`mcpToolToAciMap` 用 `alias::toolName` 做 key 不冲突，但能力 id 冲突，`extractMcpToolFromCapability` 只能返回第一个匹配）。
 - **`createCapabilityFromMcpTool` 的兜底分支有死代码**：`Capability.fromJSONArray` 返回空时，兜底分支里又判断了 `capabilities.isNotEmpty()`（必然为 false），最终必然抛 `IllegalStateException`，注释所说的「虚拟能力」实际不会被返回。
 - **`MCP_PACKAGE = "mcp_bridge"` 与能力 id 前缀 `mcp_` 不一致**：一个是含下划线的包名，一个是能力前缀，`isMcpAciCapability` 只认后者。

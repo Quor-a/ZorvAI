@@ -12,8 +12,9 @@
 | 幂等播种 | `QuroSkillStore.seedBuiltinZorvSkills` 用 `builtin_zorv_v1` 前缀守卫：已存在 id 跳过，用户删过不会被强制加回 |
 | 完整性签名 | 每项带 `signature`（HMAC-SHA256 of `id\|name\|content`，salt `zorv-ai-builtin-skill-sign-v1`）；播种时校验并写 `signState`：`verified` / `failed` / `unsigned` |
 | 签名排查 | 技能页「验证签名」调 `verifyBuiltinSignatures` 返回 `SkillVerifyReport(total, verified, failed, unsigned, failedNames)` |
-| 提示词注入 | `enabledList(context)`（enabled && prompt 非空）在 `QuroChatViewModel.buildSystemPrompt` 注入系统提示词 |
-| 按需触发 | `matchTriggerSkills(userText, context)` 按 SKILL.md 的 `trigger` 字段逗号分隔命中；未声明 `trigger` 时回落到技能名本身 |
+| 常驻注入 | `buildSystemPrompt`（`QuroChatViewModel.kt:1608`）只注入 `enabledList(appContext).filter { it.alwaysOn }`；且 `isLocal`（本地离线模型）时注入空列表（`:2026`） |
+| 按需注入 | 每轮发送时 `matchTriggerSkills(t, appContext).filter { !it.alwaysOn }`，命中结果作为 `hidden=true` 的 user 消息预注入本轮（`:751`、`:930`、`:957`） |
+| 手动选技能 | 对话框「选择技能」选中的技能同样作为隐藏 user 消息注入，仅作用于本轮（`:763`） |
 | 技能工具化 | `callableList(context)`（enabled && callable && prompt 非空）注册为 `skill__{name}` function-calling 工具，由 `QuroSkillTool` 执行 |
 | GenUI 强注入 | `designSkillsForGenUI` **忽略 enabled 开关**，永远给 GenUI 注入 design-studio 套件；用户技能库为空时直接从 assets 兜底解析 |
 | 三种导入 | `QuroSkillsScreen` 的导入按顺序试：SKILL.md → 应用内技能 JSON → 工具规格 JSON（`QuroSkill.fromToolSpec`，工具→技能转换） |
@@ -30,7 +31,16 @@ README 写「首次启动自动注入为默认启用」，源码是 `QuroSkill.k
 | `design-studio`（5 个） | `true` | `false` | `false` |
 | 其余套件（62 个） | `false` | `false` | `false` |
 
-也就是说 67 个技能**全部**会被播种进来，但只有 design-studio 套件默认生效。原因写在 `migrateBuiltinSkillsOff` 的注释里：旧版把 62 个技能默认 `enabled=true && callable=true`，一旦用户给本地 1.2B 模型开工具调用，整套云端工具集加 60+ 技能工具会把它压垮（表现为「一直提示正在处理」/ 一调工具就乱码）。
+也就是说 67 个技能**全部**会被播种进来，但只有 design-studio 套件默认生效（`enabled=true`）。原因写在 `migrateBuiltinSkillsOff` 的注释里：旧版把 62 个技能默认 `enabled=true && callable=true`，一旦用户给本地 1.2B 模型开工具调用，整套云端工具集加 60+ 技能工具会把它压垮（表现为「一直提示正在处理」/ 一调工具就乱码）。
+
+### 注入发生在两处（很重要）
+
+`alwaysOn` 决定技能走哪条路：
+
+- `alwaysOn = true` → 进 `buildSystemPrompt` 的「## 已启用技能（Skills）」段，**常驻**每条请求的系统提示词；
+- `alwaysOn = false` → 不进系统提示词，**只在 `trigger` 命中时**作为隐藏 user 消息注入本轮（注释：避免重复注入）。
+
+内置 Zorv 技能播种时 `alwaysOn=false`，且 `trigger` 缺省回落为技能名本身——意味着「只有用户消息里出现该技能名（或它声明的触发词）时才会被加载」。本地离线模型（provider = MNN / llama.cpp）直接走 `emptyList()`，**一个技能都不注入**。
 
 ## 2. 怎么用
 
@@ -43,10 +53,11 @@ README 写「首次启动自动注入为默认启用」，源码是 `QuroSkill.k
 
 ### 2.2 让 AI 用某个技能
 
-- **注入式（默认路径）**：在技能页开启后，AI 在拼系统提示词时就能读到该技能正文；`alwaysOn=false` 时靠 `trigger` 命中按需注入。
+- **注入式 / 触发式**：技能页开启（`enabled=true`）后，`alwaysOn=true` 的技能常驻系统提示词；`alwaysOn=false` 的技能要命中 `trigger` 才在本轮加载。二者互斥（源码里两侧各用 `.filter { it.alwaysOn }` 和 `.filter { !it.alwaysOn }` 分开处理），不会出现重复注入。
 - **调用式**：在编辑器里勾选「可作为工具调用」（`callable=true`），AI 就能用 `skill__{name}` 直接调用，入参按「参数 Schema」填。
 
 > 调用式受总开关 `QuroTool.skillToolsEnabled`（默认 `true`）与上限 `QuroTool.maxSkillTools`（默认 `16`）约束，取 `updatedAt` 最新的 16 个。
+> 本地离线模型不走这条路：`buildSystemPrompt` 在 `isLocal` 时技能列表直接给 `emptyList()`。
 
 ### 2.3 导入外部技能
 
@@ -116,7 +127,7 @@ sequenceDiagram
 **为什么 GenUI 强制注入 design-studio、忽略用户开关。**
 `designSkillsForGenUI` 的注释：GenUI 每轮都在写界面，没有「界面手艺 / 设计系统 / 自检评分」这套规范就会裸奔，表现为组件难看、大片空白、文字叠印。用户在技能页随手关掉不能让界面质量崩掉，所以 GenUI 走的是绕过开关的另一条读取路径。
 
-**为什么工具名要 `[sanitizeToolName]` 而不是简单地替换非法字符（issue #10）。**
+**为什么工具名要 `sanitizeToolName` 而不是简单地替换非法字符（issue #10）。**
 旧实现把每个非 ASCII 字符替换成 `-` 再折叠，结果是**所有中文技能名都坍缩成同一个 `skill__skill`**（「视频号账号诊断」「合同风险审查」「抖音热榜」→ 全部同名）。紧接着 `specs()` 的 `distinctBy { it.name }` 把它们去重到只剩一个——用户装了 N 个中文技能，AI 实际只能调用 1 个，且没有任何日志。现委托 `QuroToolSpecGuard.sanitizeName`：净化丢信息时追加原名哈希尾缀找回唯一性，并把总长压进 64 字符（OpenAI function name 上限，超了整段 tools 会被服务端拒收）。反向查找依赖「确定性」，即 `toolNameOf(skill.name) == call.name`，无需存额外映射。
 
 **为什么读取侧还要做 `dedupeById`（崩溃修复 #3）。**
@@ -124,6 +135,9 @@ sequenceDiagram
 
 **为什么 `QuroSkillTool.run()` 不真的执行动作。**
 技能没有独立执行逻辑——它的「执行」本质是把指令实时回灌进上下文，让 AI 严格按技能规则作答。`run()` 返回「【技能「X」已激活，请严格按以下规则回答用户，不要复述规则本身】+ 正文 + 本轮输入」。`QuroToolEngine.execute` 里的 `skill__` 分支行为一致，属于双保险。
+
+**为什么内置技能要分「常驻」和「按需」两条注入路径。**
+一次性把 60+ 技能正文塞进系统提示词，会挤掉真正重要的能力说明，也让每条请求的 token 开销不可控。所以 `buildSystemPrompt` 只收 `alwaysOn=true` 的技能，`alwaysOn=false` 的改由 `matchTriggerSkills` 在命中时作为隐藏 user 消息插进本轮——注释写明这是为了「避免重复」。内置 Zorv 技能全部走后者。
 
 **为什么导出要出两套格式。**
 `toSkillMd()` 面向生态互通（别的技能系统能读），`toExportJson()` 面向无损往返（含 `callable` / `alwaysOn` / `suite` / `signState` 这些 ZorvAI 私有字段，标准 SKILL.md 放不下）。
@@ -164,6 +178,7 @@ sequenceDiagram
 
 - **README 的技能数量不准确**：README 多处写「63 个」，源码 manifest 实测 **67** 条（分布在 25 个套件，`design-studio` 5 个 + 其余 62 个，正文总 size 586510 字节）；另有历史注释提到「62 个」（`migrateBuiltinSkillsOff`），是当时的另一版本。本档以源码为准。
 - **README 的「默认启用」不准确**：实际只有 design-studio 5 个默认启用，其余 62 个需手动开启（见 §1 表格与 §4 第一条）。
+- **本地离线模型完全拿不到技能**：`buildSystemPrompt` 在 `isLocal` 时把技能列表置空（`:2026`），这与「用本地模型也能用技能」的直觉不符，但是「不给小模型塞长提示词」这一取向的直接后果。
 - **trigger 命中是子串匹配**：`matchTriggerSkills` 用 `userText.lowercase().contains(it)`，短触发词容易误命中。
 - **`callableList` 只取最新 16 个**：用户开了超过 16 个 callable 技能时，早期的会被 `take(maxSkillTools)` 截掉，且 UI 不提示。
 - **签名校验对换行敏感**：`SkillSigner.verify` 未做换行归一化，而单元测试 `BuiltinSkillAssetsTest` 里明确做了 `\r\n → \n`。若 assets 文件被 Git 按 CRLF 检出，真机会误报 `failed`。建议把归一化下沉到 `SkillSigner`（待办）。
