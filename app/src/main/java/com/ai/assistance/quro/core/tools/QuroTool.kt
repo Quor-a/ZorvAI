@@ -257,11 +257,43 @@ class QuroToolRegistry {
         // + 已装插件动态贡献的 AI 工具。二者都由 QuroPluginHost 统一产出，
         // 保证「装了插件 → 下一轮 function calling 就能看到它的工具」。
         val pluginTools = runCatching { pluginHostToolSpecs() }.getOrElse { emptyList() }
-        return (base + imported + pluginTools).plus(skillSpecs()).distinctBy { it.name }
+        return guardSpecs((base + imported + pluginTools).plus(skillSpecs()))
     }
 
     /** 完整工具规格（全部内置工具 + 技能工具）。仅在 API 代理确认支持时使用（见 coreSpecs 说明）。 */
-    fun fullSpecs(): List<QuroToolSpec> = specs().plus(skillSpecs()).distinctBy { it.name }
+    fun fullSpecs(): List<QuroToolSpec> = guardSpecs(specs().plus(skillSpecs()))
+
+    /**
+     * 下发前的统一护栏（N5）：按名去重 + 剔除非法名，并把「被丢弃」变成**响亮日志**。
+     *
+     * 为什么不能只用 `distinctBy { it.name }`：它会**静默**丢掉同名工具。
+     * 这正是「装了技能却只有个别能被调用」的元凶 —— 全中文技能名曾全部坍缩成
+     * `skill__skill`，于是被去重到只剩一个，且没有任何线索。
+     * 现在只要发生重复，日志里就会列出每一个被丢掉的名字。
+     *
+     * 非法名（含超长）一律**剔除**：`tools` 是一整段 JSON，只要一个名字不合规，
+     * 严格上游就会整段 400 —— 结果是**所有工具调用一起失效**，而不是少一个工具。
+     * 剔除 + error 日志，是把「全挂」换成「少一个且看得见」的 fail-safe。
+     */
+    private fun guardSpecs(raw: List<QuroToolSpec>): List<QuroToolSpec> {
+        val result = QuroToolSpecGuard.dedupe(raw)
+        if (result.hadDuplicates) {
+            android.util.Log.w(
+                "QuroToolEngine",
+                "⚠️ 工具名重复，已丢弃 ${result.droppedDuplicates.size} 个：${result.droppedDuplicates.joinToString(", ")}。" +
+                    "同名工具对模型不可区分（模型只会调到先注册的那个）—— 若是技能，请改名以避免撞名。",
+            )
+        }
+        val (legal, illegal) = result.specs.partition { QuroToolSpecGuard.isLegalName(it.name) }
+        if (illegal.isNotEmpty()) {
+            android.util.Log.e(
+                "QuroToolEngine",
+                "🔴 丢弃 ${illegal.size} 个工具名非法的工具：${illegal.joinToString(", ") { it.name }}。" +
+                    "原因：上游会整段拒收 tools 数组（=所有工具调用一起失效）。请在注册处修正名字。",
+            )
+        }
+        return legal
+    }
 
     /**
      * 技能工具规格：把「可调用」的用户技能注册为 function-calling 工具下发。
@@ -281,7 +313,8 @@ class QuroToolRegistry {
             }
             // 下发前兜底：仅保留工具名合法者。sanitize 已保证合法，此处为防御性回退，
             // 防止任何异常路径注入非法名导致整轮 tools 被服务端 400 拒收（issue #10）。
-            .filter { it.name.matches(Regex("^skill__[A-Za-z0-9_-]+$")) }
+            // N5：改用统一的 isLegalName —— 它同时覆盖**长度上限 64**，旧正则只查字符集。
+            .filter { QuroToolSpecGuard.isLegalName(it.name) }
     }
 
     /** 把可调用技能注册为运行时工具实例（双保险：使 registry.get("skill__xxx") 也能命中）。 */
@@ -327,7 +360,7 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
                 name = call.name,
                 arguments = call.arguments,
                 execOnce = { attempt -> execOnce(call, context, attempt) },
-            ).toToolResult()
+            ).toToolResult(call.name)
         }
     }
 
@@ -338,10 +371,23 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
         else -> "tool"
     }
 
-    /** 统一结果 -> 对外 [QuroToolResult]（保持公共签名不变）。 */
-    private fun ToolOutcome.toToolResult(): QuroToolResult = when (this) {
+    /**
+     * 统一结果 -> 对外 [QuroToolResult]（N4：失败结果带上「类型 + 可执行指令」）。
+     *
+     * 🔑 这是全仓**唯一**覆盖所有工具失败的咽喉点：任何工具（droid-mcp 派发 / APK 插件 /
+     * 技能 / 权限前置检查 / 超时保护）的失败都会先汇聚成 [ToolOutcome.Failure]，再经此处出口。
+     * 所以只改这一处，就能让模型在**每一轮**都拿到「这类错重试有没有用、没用该改做什么」，
+     * 而不是像以前那样只收到一行原始错误文本、然后本能地原样重试
+     * （这正是「连续重复失败」检测被频繁触发的根因）。
+     *
+     * ⚠️ 成功结果**原样返回**、绝不包装：工具正常输出里可能恰好含 "not found"
+     * （例如搜索类工具的「no matches found」），把成功染上失败标记会凭空制造假故障。
+     */
+    private fun ToolOutcome.toToolResult(toolName: String): QuroToolResult = when (this) {
         is ToolOutcome.Success -> QuroToolResult.Success(raw)
-        is ToolOutcome.Failure -> QuroToolResult.Error(message)
+        is ToolOutcome.Failure -> QuroToolResult.Error(
+            QuroToolFeedback.compose(toolName, message, QuroToolFeedback.kindOf(failureType)),
+        )
     }
 
     /**

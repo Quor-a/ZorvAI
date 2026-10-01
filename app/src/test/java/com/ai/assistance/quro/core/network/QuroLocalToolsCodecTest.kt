@@ -493,4 +493,77 @@ class QuroLocalToolsCodecTest {
         assertEquals(1, result.calls.size)
         assertEquals("深圳", JSONObject(result.calls[0].arguments).getString("city"))
     }
+
+    // ──────────────── N11b · 降级注入指令里的少样本示例 ────────────────
+    //
+    // 只给占位符（<function-name>）时，端侧小模型的典型失败是原样照抄占位符。
+    // 示例必须(a)用真实工具名、(b)按 schema 的 required 生成参数骨架、
+    // (c)自身能被解析器往返还原——否则就是在教模型写解析器认不出的东西。
+
+    /** 示例必须用真实工具名，绝不能把占位符原样留在指令里。 */
+    @Test
+    fun `tool instruction embeds a concrete example instead of placeholders`() {
+        val toolsJson = QuroLocalToolsCodec.encodeTools(
+            listOf(
+                QuroToolSpec(
+                    "get_weather", "查询天气",
+                    """{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}""",
+                )
+            )
+        )
+
+        val instruction = QuroLocalToolsCodec.buildToolInstruction(toolsJson)
+
+        assertTrue(
+            "示例必须明确标注仅示范写法，否则模型会把示例工具当默认动作",
+            instruction.contains("do NOT copy the function name"),
+        )
+        assertTrue(
+            "示例段必须出现具体的真实工具名与必填字段：$instruction",
+            instruction.contains("\"name\": \"get_weather\"") && instruction.contains("\"city\""),
+        )
+        // 占位符只允许出现在「格式约定」那一行；跑到示例里就等于教模型照抄占位符。
+        assertEquals(
+            "占位符形态应恰好出现 1 次（格式约定行）",
+            1,
+            instruction.split("{\"name\": <function-name>").size - 1,
+        )
+    }
+
+    /** 示例必须能被自家解析器原样还原（教模型写的是解析器认得的格式）。 */
+    @Test
+    fun `example in tool instruction round trips through the parser`() {
+        val toolsJson = QuroLocalToolsCodec.encodeTools(
+            listOf(
+                QuroToolSpec(
+                    "get_weather", "查询天气",
+                    """{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}""",
+                )
+            )
+        )
+        val instruction = QuroLocalToolsCodec.buildToolInstruction(toolsJson)
+        // 抠出示例段（最后一个 <tool_call>…</tool_call>）
+        val example = instruction.substringAfterLast("<tool_call>\n").substringBeforeLast("\n</tool_call>")
+
+        val calls = QuroLocalToolsCodec.parseToolCalls(example)
+
+        assertEquals(1, calls.size)
+        assertEquals("get_weather", calls[0].name)
+        assertTrue(JSONObject(calls[0].arguments).has("city"))
+    }
+
+    /** schema 没声明 required 时示例退化为空参数对象，不得凭空造字段。 */
+    @Test
+    fun `example falls back to empty arguments when schema declares no required`() {
+        val toolsJson = QuroLocalToolsCodec.encodeTools(
+            listOf(QuroToolSpec("get_battery", "查询电量", """{"type":"object"}"""))
+        )
+
+        val instruction = QuroLocalToolsCodec.buildToolInstruction(toolsJson)
+
+        assertTrue(
+            "无 required 时应给出空参数对象：$instruction",
+            instruction.contains("\"name\": \"get_battery\"") && instruction.contains("\"arguments\": {}"),
+        )
+    }
 }

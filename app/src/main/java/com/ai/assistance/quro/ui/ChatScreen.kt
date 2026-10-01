@@ -453,7 +453,7 @@ fun ChatScreen(
     }
 
     // 当前会话 → MoWen Message 列表（工具调用可见化：把 hidden 管道消息配对成「🔧 工具调用」块）
-    val uiMessages = remember(messages, busy, selectedPersona, thinking) {
+    val uiMessages = remember(messages, busy, selectedPersona, thinking, cfg) {
         // 🔑 工具结果渲染策略（自包含为主 + 旧数据回退），同上
         val fallbackMap = messages
             .filter { it.role == "tool" && it.toolCallId != null }
@@ -567,8 +567,18 @@ fun ChatScreen(
         }
         flushAgg()
 
-        // 用户关闭「深度思考」时不渲染推理过程卡片（重建 Message 去掉 think）
-        if (!thinking) {
+        // 「深度思考」关闭时不渲染推理过程卡片 —— 但**仅对云端模型成立**（N12）。
+        //
+        // 这个开关的真实语义是「要不要命令云端模型想得更深」：它被编译成 reasoning_effort /
+        // thinking budget / enable_thinking 等**请求侧**字段（见 QuroReasoningControl）。
+        // 端侧（MNN / llama.cpp）根本不消费这个开关——思考与否由模型自带 chat_template 的
+        // enable_thinking 决定，引擎侧照旧会产出 reasoning。
+        //
+        // 此前把「不命令它想」直接当成「不许展示思考」，于是端侧模型产出的思考段被无条件丢弃，
+        // 用户看到的现象正是「对话框不支持 MNN + llama.cpp 的思考」。
+        // 判定必须同时看开关与引擎类型，二者不可互相顶替。
+        val localEngine = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
+        if (!thinking && !localEngine) {
             for (i in out.indices) {
                 val mm = out[i]
                 if (mm.think != null) out[i] = mm.copy(think = null)

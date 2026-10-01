@@ -15,10 +15,13 @@ import org.json.JSONObject
  *    输出格式与云端 [QuroLlmClient] 下发的 tools 字段完全一致，保证本地/云端行为对齐。
  * 2. [encodeMessages]：把 [QuroChatMessage] 列表序列化为 `[{role, content}]` JSON 数组，
  *    供原生层结构化聊天模板使用。
- * 3. [parseDetailed] / [parseToolCalls]：把模型输出解析为 [QuroToolCall] 列表。支持：
- *    - llama.cpp `parseToolCallResponse` 返回的 OpenAI 兼容 JSON `{"tool_calls":[...]}`
- *    - MNN 路径的 raw 模型文本（`<tool_call>...</tool_call>`，含被截断的未闭合形态）
- *    - ```` ```json ```` 代码块包裹、以及整段就是裸 JSON 对象 / 数组的形态
+ * 3. [parseDetailed] / [parseToolCalls]：把模型输出解析为 [QuroToolCall] 列表。
+ *    **解析本体已迁到 [QuroToolCallRepair]**（宽松 JSON 解析 + 多标签族 +
+ *    参数形态归一 + 工具名纠错），本对象只保留兼容包装与 tools/messages 编解码职责。
+ *    端侧模型吐单引号、裸键名、缺闭合括号、函数式调用等畸形形态时，
+ *    [QuroToolCallRepair] 负责抢救；本层不再自己解析。
+ * 4. [sanitizeForDisplay]：剥离正文里的工具调用标记，保证 `<tool_call>` 原文绝不上屏。
+ * 5. [toolNamesOf]：从 tools JSON 里取出工具名，供解析纠错使用。
  *
  * 设计取舍：
  * - 仅用 org.json，无额外依赖（与 QuroLlmClient 一致）。
@@ -89,7 +92,64 @@ object QuroLocalToolsCodec {
         sb.append("For each function call, return a json object with function name and arguments ")
         sb.append("within <tool_call></tool_call> XML tags:\n")
         sb.append("<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call>")
+
+        // 📌 少样本格式示例（N11b）。
+        //
+        // 只给 `<function-name>` / `<args-json-object>` 这类占位符时，端侧小模型的典型失败是
+        // **原样照抄占位符**（真的吐出 "<function-name>"）、漏引号、或把参数写成 `name=value`。
+        // 给一个用**真实工具名**拼出的具体示例，格式合法率显著上升——这是端侧 Agent 的通行做法
+        // （PokeClaw 把"harness 问题"与"模型能力问题"分开治理，格式示例属前者）。
+        //
+        // ⚠️ 必须显式声明"仅示范写法"：否则模型会把示例里的工具当成默认动作，对着任何问题都调它。
+        sampleCallFor(arr)?.let { sample ->
+            sb.append("\n\nExample (format only — do NOT copy the function name or the argument values):\n")
+            sb.append("<tool_call>\n").append(sample).append("\n</tool_call>")
+        }
         return sb.toString()
+    }
+
+    /**
+     * 用 tools 列表里第一个工具拼一个具体的调用示例。
+     *
+     * `arguments` 按该工具 JSON Schema 里声明的 `required` 字段生成骨架，
+     * 这样示例的参数形状与真实 schema 对齐（模型能顺带学到"必填字段长什么样"），
+     * 而不是给一个 `{}` 让人以为参数可以随便省。
+     *
+     * @param arr OpenAI 兼容的 tools 数组。
+     * @return 形如 `{"name":"x","arguments":{...}}` 的示例串；列表里没有合法工具时返回 null。
+     */
+    private fun sampleCallFor(arr: JSONArray): String? {
+        for (i in 0 until arr.length()) {
+            val item = arr.optJSONObject(i) ?: continue
+            val fn = item.optJSONObject("function") ?: item
+            val name = fn.optString("name", "")
+            if (name.isBlank()) continue
+
+            val params = fn.optJSONObject("parameters")
+            val props = params?.optJSONObject("properties")
+            val required = params?.optJSONArray("required")
+            val args = JSONObject()
+            if (props != null && required != null) {
+                for (j in 0 until required.length()) {
+                    val key = required.optString(j, "")
+                    if (key.isBlank() || !props.has(key)) continue
+                    args.put(key, placeholderFor(props.optJSONObject(key)?.optString("type", "string")))
+                }
+            }
+            // 手工拼串而不整体 JSONObject.toString()：真实 org.json 用 HashMap，
+            // key 顺序不稳定；示例串里 name 必须稳定出现在 arguments 之前。
+            return "{\"name\": \"" + name + "\", \"arguments\": " + args.toString() + "}"
+        }
+        return null
+    }
+
+    /** 按 JSON Schema 的 `type` 给一个占位值，让示例的参数形状与真实 schema 一致。 */
+    private fun placeholderFor(type: String?): Any = when (type?.lowercase()) {
+        "number", "integer" -> 0
+        "boolean" -> false
+        "array" -> JSONArray()
+        "object" -> JSONObject()
+        else -> ""
     }
 
     /**
@@ -199,29 +259,6 @@ object QuroLocalToolsCodec {
     }
 
     /**
-     * 把模型输出解析为工具调用列表。
-     *
-     * 支持两种输入格式：
-     *
-     * 1. **llama.cpp `parseToolCallResponse` 返回值**（OpenAI 兼容）：
-     *    ```json
-     *    {"tool_calls":[{"id":"...","type":"function","function":{"name":"...","arguments":"..."}}]}
-     *    ```
-     *    直接按 `tool_calls` 数组解析。
-     *
-     * 2. **MNN 路径 raw 模型文本**（含 `<tool_call>` 标签）：
-     *    ```
-     *    <tool_call>
-     *    {"name":"get_current_time","arguments":{}}
-     *    </tool_call>
-     *    ```
-     *    按 `<tool_call>...</tool_call>` 正则提取内部 JSON，解析 name + arguments。
-     *
-     * @return 解析出的工具调用列表；空列表表示无工具调用（调用方应走 Text 兜底）。
-     */
-    fun parseToolCalls(rawOrJson: String): List<QuroToolCall> = parseDetailed(rawOrJson).calls
-
-    /**
      * 与 [QuroLlmClient.normalizeToolCallMessages] 同语义、供本地模板用的工具调用顺序过滤。
      *
      * 任何带 tool_calls 的 assistant 消息之后必须紧跟覆盖每个 tool_call_id 的 role=tool 消息；
@@ -237,12 +274,14 @@ object QuroLocalToolsCodec {
                     open = m.toolCalls.map { it.id }.toCollection(linkedSetOf())
                     out.add(m)
                 }
+
                 m.role == "tool" -> {
                     if (m.toolCallId != null && m.toolCallId in open) {
                         out.add(m)
                         open.remove(m.toolCallId)
                     }
                 }
+
                 else -> {
                     if (open.isEmpty()) out.add(m)
                 }
@@ -252,295 +291,83 @@ object QuroLocalToolsCodec {
     }
 
     /**
+     * 把模型输出解析为工具调用列表。
+     *
+     * 本函数是 [QuroToolCallRepair.extract] 的兼容包装——解析逻辑已全部迁到
+     * [QuroToolCallRepair]（宽松 JSON 解析 + 多标签族 + 参数形态归一 + 工具名纠错），
+     * 这里只维持既有调用方的返回类型不变。
+     */
+    fun parseToolCalls(rawOrJson: String): List<QuroToolCall> = parseDetailed(rawOrJson).calls
+
+    /**
+     * 解析模型输出中的工具调用，并给出诊断信息。
+     *
+     * @param rawOrJson 模型原始输出，或 llama.cpp `parseToolCallResponse` 的返回值。
+     * @return 解析结果，绝不抛异常。
+     */
+    fun parseDetailed(rawOrJson: String): ParseResult = parseDetailed(rawOrJson, emptySet())
+
+    /**
+     * 带**已知工具名**的解析重载：启用工具名纠错（大小写 / 下划线 / 编辑距离最近匹配）。
+     *
+     * 端侧模型对工具名几乎无法逐字复制，一个字符的偏差在下游就是 `NOT_FOUND`，
+     * 整条任务链断掉。而候选集是本轮**实际下发**的封闭集合，最近邻纠正是有依据的。
+     *
+     * @param rawOrJson 模型原始输出。
+     * @param knownNames 本轮下发的工具名集合；传空集合则不纠正（保持与旧行为可对齐）。
+     */
+    fun parseDetailed(rawOrJson: String, knownNames: Collection<String>): ParseResult {
+        val outcome = QuroToolCallRepair.extract(rawOrJson, knownNames)
+        return ParseResult(outcome.calls, outcome.sawMarker, outcome.diagnostic)
+    }
+
+    /**
+     * 从 [encodeTools] 产出的 tools JSON 里取出全部工具名，供 [parseDetailed] 纠错使用。
+     *
+     * @param toolsJson OpenAI 兼容的 tools JSON 数组字符串。
+     * @return 工具名列表；解析失败返回空列表。
+     */
+    fun toolNamesOf(toolsJson: String?): List<String> {
+        if (toolsJson.isNullOrBlank()) return emptyList()
+        val arr = runCatching { JSONArray(toolsJson) }.getOrNull() ?: return emptyList()
+        val out = ArrayList<String>(arr.length())
+        for (i in 0 until arr.length()) {
+            val item = arr.optJSONObject(i) ?: continue
+            val fn = item.optJSONObject("function") ?: item
+            val name = fn.optString("name", "")
+            if (name.isNotBlank()) out.add(name)
+        }
+        return out
+    }
+
+    /**
+     * 面向 UI 的正文清洗：剥离全部工具调用标记。
+     *
+     * 无论解析成功与否，可见气泡里**绝不允许**出现 `<tool_call>` 原文。
+     * 旧实现在解析失败时把原文连同警告一起推给用户，观感就是「工具调用显示成了标签」。
+     *
+     * @param text 候选正文。
+     * @return 剥离后的正文；无可剥离内容时原样返回。
+     */
+    fun sanitizeForDisplay(text: String): String = QuroToolCallRepair.sanitizeVisible(text)
+
+    /**
      * 工具调用解析结果（含诊断信息）。
      *
      * 存在原因（B-2）：旧版解析失败一律静默返回空列表，模型明明想调工具、
-     * 只是格式差一点（少个闭合标签、多包了一层 ```json、参数里有嵌套对象），
-     * 用户侧只看到一段裸 JSON 文本，完全不知道"工具调用被吃掉了"。
-     * 现在把"看起来想调工具但没解析成功"这件事显式暴露出来。
+     * 只是格式差一点，用户侧只看到一段裸 JSON 文本，完全不知道"工具调用被吃掉了"。
+     * 现在把"看起来想调工具但没解析成功"显式暴露出来。
      *
      * @property calls 解析出的工具调用；空列表表示本轮没有工具调用。
      * @property sawMarker 文本里是否出现过工具调用特征（`<tool_call>` / `"tool_calls"` /
      *   `{"name":..,"arguments":..}`）。
-     * @property diagnostic 解析异常的可读说明；无异常为 null。
+     * @property diagnostic 解析过程中值得记录的情况：成功时是**修复动作**摘要
+     *   （如"检测到未闭合的 &lt;tool_call&gt;"），失败时是**失败原因**；
+     *   完全干净的一次解析为 null。
      */
     data class ParseResult(
         val calls: List<QuroToolCall>,
         val sawMarker: Boolean,
         val diagnostic: String?,
     )
-
-    /** 工具调用起始标签。 */
-    private const val TOOL_CALL_OPEN = "<tool_call>"
-
-    /** 工具调用结束标签。 */
-    private const val TOOL_CALL_CLOSE = "</tool_call>"
-
-    /**
-     * 解析模型输出中的工具调用，并给出诊断信息。
-     *
-     * 覆盖的输入形态（按优先级尝试）：
-     * 1. OpenAI 兼容 JSON：`{"tool_calls":[...]}`
-     * 2. `<tool_call>{...}</tool_call>`（标准形态，可多段）
-     * 3. `<tool_call>{...}`（生成被 max_tokens 截断，缺闭合标签）
-     * 4. ` ```json {...} ``` ` 代码块包裹
-     * 5. 整段输出就是一个裸 `{"name":..,"arguments":..}` 对象或对象数组
-     *
-     * 括号匹配采用**字符串感知的花括号配对扫描**，而不是正则 `\{.*?\}`——
-     * 后者遇到 `{"name":"x","arguments":{"a":1}}` 这种嵌套参数会在第一个 `}` 处截断。
-     *
-     * @param rawOrJson 模型原始输出，或 llama.cpp `parseToolCallResponse` 的返回值。
-     * @return 解析结果，绝不抛异常。
-     */
-    fun parseDetailed(rawOrJson: String): ParseResult {
-        if (rawOrJson.isBlank()) {
-            return ParseResult(emptyList(), sawMarker = false, diagnostic = null)
-        }
-
-        // 只在**强特征**下判定"模型想调工具"，避免把正文里恰好出现的 JSON 误报成失败的工具调用
-        // （误报会给用户凭空多出一段警告文字，比漏报更糟）。
-        val trimmed = rawOrJson.trim()
-        val sawMarker = rawOrJson.contains(TOOL_CALL_OPEN) ||
-            rawOrJson.contains("\"tool_calls\"") ||
-            ((trimmed.startsWith("{") || trimmed.startsWith("[")) &&
-                trimmed.contains("\"name\"") && trimmed.contains("\"arguments\""))
-
-        val failures = mutableListOf<String>()
-
-        // 路径 1：OpenAI 兼容 JSON（llama.cpp parseToolCallResponse 返回值）
-        parseOpenAiEnvelope(rawOrJson.trim(), failures)?.let { calls ->
-            if (calls.isNotEmpty()) return ParseResult(calls, sawMarker, null)
-        }
-
-        // 路径 2/3：<tool_call> 标签（含未闭合的截断形态）
-        val tagged = parseTaggedCalls(rawOrJson, failures)
-        if (tagged.isNotEmpty()) return ParseResult(tagged, sawMarker, diagnosticOf(failures))
-
-        // 路径 4/5：代码块 / 裸 JSON 对象或数组
-        val bare = parseBareJson(rawOrJson, failures)
-        if (bare.isNotEmpty()) return ParseResult(bare, sawMarker, diagnosticOf(failures))
-
-        if (sawMarker && failures.isEmpty()) {
-            failures.add("文本中出现工具调用特征，但没有找到可解析的 JSON 对象")
-        }
-        return ParseResult(emptyList(), sawMarker, diagnosticOf(failures))
-    }
-
-    /**
-     * 把失败原因列表压成一行诊断串。
-     *
-     * @param failures 失败原因；为空时返回 null。
-     */
-    private fun diagnosticOf(failures: List<String>): String? =
-        if (failures.isEmpty()) null else failures.distinct().joinToString("；")
-
-    /**
-     * 解析 `{"tool_calls":[...]}` 信封。
-     *
-     * @param text 已 trim 的候选文本。
-     * @param failures 失败原因收集器。
-     * @return 解析出的调用列表；输入不是该形态时返回 null。
-     */
-    private fun parseOpenAiEnvelope(text: String, failures: MutableList<String>): List<QuroToolCall>? {
-        if (!text.startsWith("{") || !text.contains("\"tool_calls\"")) return null
-        val root = runCatching { JSONObject(text) }.getOrElse {
-            failures.add("tool_calls 信封 JSON 解析失败：${it.message}")
-            return null
-        }
-        if (!root.has("tool_calls") || root.isNull("tool_calls")) return null
-        val arr = root.optJSONArray("tool_calls") ?: run {
-            failures.add("tool_calls 字段不是数组")
-            return null
-        }
-        val calls = mutableListOf<QuroToolCall>()
-        for (i in 0 until arr.length()) {
-            val tc = arr.optJSONObject(i) ?: continue
-            val fn = tc.optJSONObject("function") ?: tc
-            val name = fn.optString("name", "")
-            if (name.isBlank()) {
-                failures.add("第 ${i + 1} 个 tool_call 缺少 name 字段")
-                continue
-            }
-            calls.add(
-                QuroToolCall(
-                    id = tc.optString("id", "").ifBlank { "call_local_$i" },
-                    name = name,
-                    arguments = normalizeArguments(fn.opt("arguments")),
-                )
-            )
-        }
-        return calls
-    }
-
-    /**
-     * 解析 `<tool_call>` 标签包裹的调用（兼容缺失闭合标签的截断输出）。
-     *
-     * @param raw 模型原始输出。
-     * @param failures 失败原因收集器。
-     */
-    private fun parseTaggedCalls(raw: String, failures: MutableList<String>): List<QuroToolCall> {
-        val calls = mutableListOf<QuroToolCall>()
-        var cursor = 0
-        var index = 0
-        while (true) {
-            val open = raw.indexOf(TOOL_CALL_OPEN, cursor)
-            if (open < 0) break
-            val contentStart = open + TOOL_CALL_OPEN.length
-            val close = raw.indexOf(TOOL_CALL_CLOSE, contentStart)
-            val segment = if (close >= 0) {
-                raw.substring(contentStart, close)
-            } else {
-                // 未闭合：生成被截断。仍然尝试从剩余文本里抠出完整 JSON 对象。
-                failures.add("检测到未闭合的 <tool_call>（生成可能被最大长度截断），已尽力解析")
-                raw.substring(contentStart)
-            }
-            cursor = if (close >= 0) close + TOOL_CALL_CLOSE.length else raw.length
-
-            for (json in extractJsonObjects(segment)) {
-                appendCall(calls, json, index, failures)?.let { index = it }
-            }
-            if (close < 0) break
-        }
-        return calls
-    }
-
-    /**
-     * 解析代码块包裹或裸 JSON 形态的调用。
-     *
-     * @param raw 模型原始输出。
-     * @param failures 失败原因收集器。
-     */
-    private fun parseBareJson(raw: String, failures: MutableList<String>): List<QuroToolCall> {
-        // 去掉 ```json / ``` 围栏，只留内容。
-        val unfenced = raw.replace(Regex("```[a-zA-Z]*"), " ").replace("```", " ")
-        val trimmed = unfenced.trim()
-        // 🛡️ 收紧（离线工具误触发修复）：只有当文本「本身就是 JSON」时才把它当工具调用解析，
-        // 否则模型正文里偶发的 {"name":...,"arguments":...}（如返回结构化数据）会被误判成工具调用。
-        // <tool_call> 包裹的形态已由 parseTaggedCalls 在前面优先处理，这里只兜底「裸 JSON」与「代码块 JSON」。
-        // 判定标准：去围栏后整体首尾分别是 { [ 与 } ]（文本主体即那段 JSON），
-        // 或仅含单个顶层 JSON 对象且前后夹带的解释性文字极少（≤ 32 字符）。
-        val looksStandalone = (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
-            (trimmed.startsWith("[") && trimmed.endsWith("]"))
-        val objects = extractJsonObjects(unfenced)
-        val singleObj = objects.size == 1
-        val leadingTrailing = if (singleObj) {
-            val firstObj = objects.first()
-            val startIdx = unfenced.indexOf(firstObj)
-            val endIdx = startIdx + firstObj.length
-            startIdx + (unfenced.length - endIdx)
-        } else {
-            Int.MAX_VALUE
-        }
-        val acceptAsTool = looksStandalone || (singleObj && leadingTrailing <= 32)
-        if (!acceptAsTool) return emptyList()
-
-        val calls = mutableListOf<QuroToolCall>()
-        var index = 0
-        for (json in objects) {
-            // 只认带 name 的对象，避免把模型正文里的普通 JSON 误判成工具调用。
-            if (!json.contains("\"name\"")) continue
-            appendCall(calls, json, index, failures)?.let { index = it }
-        }
-        return calls
-    }
-
-    /**
-     * 把一段 JSON 对象文本解析成 [QuroToolCall] 并追加。
-     *
-     * @param sink 输出列表。
-     * @param json JSON 对象字符串。
-     * @param index 当前序号（用于生成默认 id）。
-     * @param failures 失败原因收集器。
-     * @return 追加成功时返回下一个序号；未追加返回 null。
-     */
-    private fun appendCall(
-        sink: MutableList<QuroToolCall>,
-        json: String,
-        index: Int,
-        failures: MutableList<String>,
-    ): Int? {
-        val obj = runCatching { JSONObject(json) }.getOrElse {
-            failures.add("工具调用 JSON 解析失败：${it.message}")
-            return null
-        }
-        // 兼容 {"function":{"name":..,"arguments":..}} 与 {"name":..,"arguments":..} 两种写法。
-        val fn = obj.optJSONObject("function") ?: obj
-        val name = fn.optString("name", "")
-        if (name.isBlank()) {
-            failures.add("工具调用缺少 name 字段")
-            return null
-        }
-        sink.add(
-            QuroToolCall(
-                id = obj.optString("id", "").ifBlank { "call_local_$index" },
-                name = name,
-                arguments = normalizeArguments(fn.opt("arguments") ?: fn.opt("parameters")),
-            )
-        )
-        return index + 1
-    }
-
-    /**
-     * 把 arguments 字段归一化为 JSON 对象字符串。
-     *
-     * 模型可能给出对象（`{"a":1}`）、字符串化对象（`"{\"a\":1}"`）或干脆缺省。
-     *
-     * @param value 原始 arguments 值。
-     * @return 始终是可被 `JSONObject` 解析的字符串；无法识别时返回 `"{}"`。
-     */
-    private fun normalizeArguments(value: Any?): String {
-        if (value == null || value == JSONObject.NULL) return "{}"
-        if (value is String) {
-            val trimmed = value.trim()
-            if (trimmed.isEmpty()) return "{}"
-            // 已经是 JSON 文本就直接用；否则包成 {"input": "..."} 之类不合适，退回空对象更安全。
-            return if (trimmed.startsWith("{")) trimmed else "{}"
-        }
-        return value.toString()
-    }
-
-    /**
-     * 从任意文本中扫描出所有**完整**的顶层 JSON 对象。
-     *
-     * 使用字符串感知的花括号配对：忽略双引号内的花括号，正确处理 `\"` 转义。
-     * 这是替换旧版正则 `\{.*?\}` 的关键——后者对嵌套 arguments 会截断。
-     *
-     * @param text 待扫描文本。
-     * @return 顶层 JSON 对象字符串列表（按出现顺序）。
-     */
-    private fun extractJsonObjects(text: String): List<String> {
-        val out = mutableListOf<String>()
-        var depth = 0
-        var start = -1
-        var inString = false
-        var escaped = false
-        for (i in text.indices) {
-            val c = text[i]
-            if (inString) {
-                when {
-                    escaped -> escaped = false
-                    c == '\\' -> escaped = true
-                    c == '"' -> inString = false
-                }
-                continue
-            }
-            when (c) {
-                '"' -> inString = true
-                '{' -> {
-                    if (depth == 0) start = i
-                    depth++
-                }
-                '}' -> {
-                    if (depth > 0) {
-                        depth--
-                        if (depth == 0 && start >= 0) {
-                            out.add(text.substring(start, i + 1))
-                            start = -1
-                        }
-                    }
-                }
-            }
-        }
-        return out
-    }
 }

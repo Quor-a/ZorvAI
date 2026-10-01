@@ -377,6 +377,47 @@ private fun keepAnswerTail(text: String): String {
  * [MNNLlmSession] 内部再叠加一层流式重复检测兜底（治标），命中时经 [QuroDiag] 落盘取证。
  * - 工具调用（grammar）走 llama 的 applyStructuredChatTemplate，归 Phase 3 流式/工具链接入。
  */
+/** 本地模型"只吐思考不吐正文"时的可见兜底文案（#offline-empty-answer）。 */
+private const val LOCAL_ANSWER_EMPTY_HINT = "（本地模型仅完成了思考过程，未生成可展示的回复。）"
+
+/**
+ * 开启工具调用时的本地采样温度上限（N12）。
+ *
+ * 依据来自端侧 Agent 的通行实践——PokeClaw 在 LiteRT-LM 上跑 Gemma 4 做工具调用时
+ * 直接把 temperature 压到 0.1。原因不是"模型喜欢低温"，而是**采样策略与结构化输出
+ * 存在固有矛盾**：温度越高，词表尾部采样越活跃，模型越容易在 JSON 结构字符
+ * （`{` `}` `"` `,`）上抖出畸形形态，再强的解析层也救不回来。
+ *
+ * 0.3 是折中值：比 0.1 保留一点措辞多样性（工具调用往往还带一句自然语言说明），
+ * 又足够低到让结构稳定。**只在带工具定义的那一轮生效**，普通对话完全不受影响。
+ */
+private const val TOOL_CALL_MAX_TEMPERATURE = 0.3f
+
+/**
+ * 端侧工具调用**解析失败**时的用户提示（N11）。
+ *
+ * 旧文案只有一句"该模型可能未针对工具调用训练，建议关闭「本地工具调用」"——
+ * 把责任全推给模型，用户除了关掉功能无路可走。现在 [QuroToolCallRepair] 已经
+ * 兜住了裸键名/单引号/缺闭合/函数式调用等一大批畸形形态，**还能走到这里说明是真难救**，
+ * 所以提示必须给出可操作的下一步，而不是一句定论。
+ *
+ * 三条建议都有实际依据：
+ * · 温度：采样越随机，越难吐出结构合法的调用（PokeClaw 在端侧把温度压到 0.1 正是为此）；
+ * · 换模型：不同模型对 `<tool_call>` 的训练充分度差异极大；
+ * · 关功能：关掉后模型会改用自然语言描述请求，至少对话本身不受影响。
+ *
+ * @param diagnostic 解析器给出的具体失败原因；为空时退化为通用措辞。
+ * @return 面向用户的中文提示，可直接拼在正文后面。
+ */
+private fun localToolParseFailureHint(diagnostic: String?): String {
+    val why = diagnostic?.takeIf { it.isNotBlank() }?.let { "（$it）" } ?: ""
+    return "\u26a0\ufe0f 模型尝试调用工具，但输出无法解析成本次可执行的调用$why。\n" +
+        "已自动兼容裸键名 / 单引号 / 缺闭合括号 / 函数式调用等多种写法仍未成功。可尝试：\n" +
+        "① 把「本地温度」调到 0.3 以下（采样越随机越难吐合法调用）；\n" +
+        "② 换用对工具调用训练更充分的模型；\n" +
+        "③ 在「模型配置」关闭「本地工具调用」，改用自然语言描述需求。"
+}
+
 class QuroLocalEngineNative : QuroLocalEngine {
 
     override fun run(
@@ -759,27 +800,24 @@ class QuroLocalEngineNative : QuroLocalEngine {
                         "answer预览=${split.answer.take(80).replace("\n", " ")}"
                 )
 
-                // 模型只吐了思考、正文为空：兜底说明，避免气泡空白 / 残留"思考中"占位（#offline-empty-answer）。
-                if (finalText.isEmpty()) {
-                    finalText = "（本地模型仅完成了思考过程，未生成可展示的回复。）"
-                }
-
-                // 把清洗后的干净文本（已切走思考段 / 裁掉退化尾巴）**无条件**补推给 UI，
-                // 确保界面最终态永远是干净答案，永远不会残留原始流缓冲里的 <think> 标签或复读片段。
-                // ⚠️ 必须是无条件：旧逻辑仅在 reasoning/degeneration != null 时才补推，但
-                // MnnThinkContent.split 没认出思考标签时 reasoning 为 null → 条件不成立 → 漏推，
-                // UI 一直挂着含 <think> 的原始流缓冲 → "思考泄漏"回归（症状 1）。
-                onToken?.let { cb -> runCatching { cb(finalText) } }
+                // N11：可见正文先剥掉工具调用标记 —— 「工具调用在对话框显示成标签」的直接修复。
+                // ⚠️ 只洗**展示**用的副本：解析仍用带标记的原文 finalText。
+                //    反过来先洗原文会让 <tool_call> 再也找不到，工具调用彻底失效。
+                val cleanAnswer = QuroLocalToolsCodec.sanitizeForDisplay(finalText)
 
                 // 结构化路径：检查模型输出是否包含工具调用。
+                var toolParse: QuroLocalToolsCodec.ParseResult? = null
                 if (toolSpecsJson != null) {
+                    // 工具名集合用于纠错：端侧模型几乎无法逐字复制工具名（大小写/下划线/复数常错），
+                    // 而候选集就是本轮下发的封闭集合，做最近邻纠正是有依据的。
+                    val knownNames = QuroLocalToolsCodec.toolNamesOf(toolSpecsJson)
                     // 先解析已剥离思考段的正文（常规：<tool_call> 在 </think> 之后）
-                    var parsed = QuroLocalToolsCodec.parseDetailed(finalText)
-                    // 🧠 修复（离线工具+思考不可用）：思考模型常把真实 <tool_call> 放在 <think> 块内输出，
+                    var parsed = QuroLocalToolsCodec.parseDetailed(finalText, knownNames)
+                    // 🔧 修复（离线工具+思考不可用）：思考模型常把真实 <tool_call> 放在 <think> 块内输出，
                     // 上面的 split 已把思考段切走，会导致工具调用被一并丢弃 → "有思考+工具却不能用"。
                     // 若正文里没解析到调用、但原始全文（含思考段）里有，则从全文恢复真实工具调用。
                     if (parsed.calls.isEmpty() && reasoning != null) {
-                        val fromFull = QuroLocalToolsCodec.parseDetailed(stripper.rawText())
+                        val fromFull = QuroLocalToolsCodec.parseDetailed(stripper.rawText(), knownNames)
                         if (fromFull.calls.isNotEmpty()) {
                             QuroDiag.log(
                                 "LocalEngine",
@@ -789,33 +827,27 @@ class QuroLocalEngineNative : QuroLocalEngine {
                             parsed = fromFull
                         }
                     }
+                    toolParse = parsed
                     if (parsed.calls.isNotEmpty()) {
                         QuroDiag.log(
                             "LocalEngine",
                             "✓ MNN tool calls detected | calls=${parsed.calls.size} | " +
                                 "names=${parsed.calls.joinToString(",") { it.name }}" +
-                                (parsed.diagnostic?.let { " | 诊断=$it" } ?: "")
+                                (parsed.diagnostic?.let { " | 修复=$it" } ?: "")
                         )
-                        return QuroLlmResult.ToolCalls(parsed.calls, reasoning = reasoning)
-                    }
-                    // 🛡️ B-2：模型看起来想调工具却没解析出来 —— 这种"无声失败"以前完全不可见。
-                    if (parsed.sawMarker) {
+                    } else if (parsed.sawMarker) {
+                        // ⚠ B-2：模型看起来想调工具却没解析出来 —— 这种"无声失败"以前完全不可见。
                         QuroDiag.log(
                             "LocalEngine",
                             "⚠ MNN 疑似工具调用解析失败 | 诊断=${parsed.diagnostic ?: "(无)"} | " +
                                 "原文前 200 字=${finalText.take(200)}"
                         )
-                        finalText = finalText + "\n\n⚠️ 模型尝试调用工具但输出格式不规范，" +
-                            "本次未能执行（${parsed.diagnostic ?: "格式无法识别"}）。" +
-                            "该模型可能未针对工具调用训练，建议在模型配置里关闭「本地工具调用」。"
-                        onToken?.let { cb -> runCatching { cb(finalText) } }
-                    }
-                    // 🔎 回归 #2 诊断（model did not emit tool_call）：工具已配置、模型也没吐
-                    // <tool_call> 标记，说明模板并未真正把工具描述交付给模型
-                    // （caps.supportsTools 误判的典型症状）。这一诊断替代此前"开了工具调用却
-                    // 毫无反应"的完全无声失败；结合上面的 withToolInstruction 注入，绝大多数
-                    // 模型现在应能拿到工具描述。
-                    if (!parsed.sawMarker) {
+                    } else {
+                        // 🔧 回归 #2 诊断（model did not emit tool_call）：工具已配置、模型也没吐
+                        // <tool_call> 标记，说明模板并未真正把工具描述交付给模型
+                        // （caps.supportsTools 误判的典型症状）。这一诊断替代此前"开了工具调用却
+                        // 毫无反应"的完全无声失败；结合上面的 withToolInstruction 注入，绝大多数
+                        // 模型现在应能拿到工具描述。
                         QuroDiag.log(
                             "LocalEngine",
                             "⚠ MNN 工具未触发 | 模型未输出 <tool_call> 标记（sawMarker=false），" +
@@ -823,7 +855,32 @@ class QuroLocalEngineNative : QuroLocalEngine {
                         )
                     }
                 }
-                QuroLlmResult.Text(finalText, reasoning = reasoning)
+
+                val detectedCalls = toolParse?.calls.orEmpty()
+                // 诊断先取出来：K2 会依据 parseFailed 的判定把 toolParse 智能转换为非空，
+                // 之后再写 toolParse?. 会被判为多余的 safe call（警告），取值语义也更直白。
+                val parseDiagnostic = toolParse?.diagnostic
+                val parseFailed = toolParse?.sawMarker == true && detectedCalls.isEmpty()
+                // 最终上屏正文：优先干净正文；调用已识别时不再补文案（工具卡片承载信息）；
+                // 兜底文案只在「既无正文又无调用」时出现，避免气泡空白 / 残留"思考中"占位
+                // （#offline-empty-answer）。
+                val body = when {
+                    detectedCalls.isNotEmpty() -> cleanAnswer
+                    cleanAnswer.isNotBlank() -> cleanAnswer
+                    else -> LOCAL_ANSWER_EMPTY_HINT
+                }
+                val displayText = if (parseFailed) {
+                    body + "\n\n" + localToolParseFailureHint(parseDiagnostic)
+                } else {
+                    body
+                }
+                // 把清洗后的干净文本（已切走思考段 / 裁掉退化尾巴 / 已剥工具标记）**无条件**补推给 UI，
+                // 确保界面最终态永远是干净答案，永远不会残留原始流缓冲里的 <think> / <tool_call> 标签。
+                onToken?.let { cb -> runCatching { cb(displayText) } }
+                if (detectedCalls.isNotEmpty()) {
+                    return QuroLlmResult.ToolCalls(detectedCalls, reasoning = reasoning)
+                }
+                QuroLlmResult.Text(displayText, reasoning = reasoning)
             }
         } catch (e: Throwable) {
             // 🔧 v454：取消信号必须原样向上抛，否则会被包成「MNN 推理异常」假错误气泡。
@@ -1074,11 +1131,26 @@ class QuroLocalEngineNative : QuroLocalEngine {
             runCatching { session.resetContext() }
             QuroDiag.log("LocalEngine", "✓ llama resetContext done")
 
+            // 🌡️ N12：带工具定义的那一轮收敛采样温度（见 TOOL_CALL_MAX_TEMPERATURE 的说明）。
+            // 只在开启工具时收敛：普通对话的措辞多样性是用户明确配置过的，不该被动过。
+            val effTemperature = if (toolSpecsJson != null) {
+                temperature.coerceAtMost(TOOL_CALL_MAX_TEMPERATURE)
+            } else {
+                temperature
+            }
+            if (effTemperature < temperature) {
+                QuroDiag.log(
+                    "LocalEngine",
+                    "🌡️ llama 工具调用温度收敛 | $temperature → $effTemperature" +
+                        "（提高工具调用格式合法率；如不需要可在模型配置关闭「本地工具调用」）"
+                )
+            }
+
             QuroDiag.log("LocalEngine", "▶ llama setSamplingParams start")
             // 设置采样参数（仅 temperature 来自调用方，其余取保守默认值）。
             runCatching {
                 session.setSamplingParams(
-                    temperature = temperature,
+                    temperature = effTemperature,
                     topP = 0.9f,
                     topK = 40,
                     repetitionPenalty = 1.1f,
@@ -1224,22 +1296,24 @@ class QuroLocalEngineNative : QuroLocalEngine {
                             if (split.answerFromReasoning) " | ⚠ 正文为空，已回退展示思考内容" else ""
                     )
                 }
-                // 终态无条件把干净正文（已切走思考段 + 剥离明文推理导言）补推给 UI，确保气泡最终态不含 <think> 残留。
-                val answer = if (split.answer.isEmpty()) "（本地模型仅完成了思考过程，未生成可展示的回复。）" else split.answer
-                val finalText = extractCleanAnswer(stripResidualThink(answer))
-                onToken?.let { cb -> runCatching { cb(finalText) } }
+                // N11：展示副本剥掉工具调用标记（与 MNN 路径同款）；解析仍用带标记的原文。
+                val availableAnswer = if (split.answer.isEmpty()) LOCAL_ANSWER_EMPTY_HINT else split.answer
+                val rawAnswer = extractCleanAnswer(stripResidualThink(availableAnswer))
+                val cleanAnswer = QuroLocalToolsCodec.sanitizeForDisplay(rawAnswer)
 
                 // 结构化路径：原生 parseToolCallResponse 优先；未命中（模板无 parser / 思考段内 <tool_call>）
                 // 时回退通用文本解析，避免工具调用被吞。
+                var toolParse: QuroLocalToolsCodec.ParseResult? = null
                 if (toolSpecsJson != null) {
-                    val detailed = QuroLocalToolsCodec.parseDetailed(finalText)
+                    val knownNames = QuroLocalToolsCodec.toolNamesOf(toolSpecsJson)
+                    val detailed = QuroLocalToolsCodec.parseDetailed(rawAnswer, knownNames)
                     val toolCallJson = runCatching { session.parseToolCallResponse(stripper.rawText()) }.getOrNull()
                     var calls = if (toolCallJson != null) QuroLocalToolsCodec.parseToolCalls(toolCallJson) else emptyList()
                     if (calls.isEmpty()) {
                         calls = detailed.calls
                         // 正文无调用但思考段内有真实 <tool_call>：从全文恢复（与 MNN 对齐）。
                         if (calls.isEmpty() && reasoning != null) {
-                            val fromFull = QuroLocalToolsCodec.parseDetailed(stripper.rawText())
+                            val fromFull = QuroLocalToolsCodec.parseDetailed(stripper.rawText(), knownNames)
                             if (fromFull.calls.isNotEmpty()) {
                                 QuroDiag.log(
                                     "LocalEngine",
@@ -1249,25 +1323,43 @@ class QuroLocalEngineNative : QuroLocalEngine {
                             }
                         }
                     }
+                    toolParse = detailed.copy(calls = calls)
                     if (calls.isNotEmpty()) {
                         QuroDiag.log(
                             "LocalEngine",
                             "✓ llama tool calls detected | calls=${calls.size} | names=${calls.joinToString(",") { it.name }}"
                         )
-                        return QuroLlmResult.ToolCalls(calls, reasoning = reasoning)
-                    }
-                    if (detailed.sawMarker) {
+                    } else if (detailed.sawMarker) {
                         QuroDiag.log(
                             "LocalEngine",
-                            "⚠ llama 疑似工具调用解析失败 | 诊断=${detailed.diagnostic ?: "(无)"} | 原文前 200 字=${finalText.take(200)}"
+                            "⚠ llama 疑似工具调用解析失败 | 诊断=${detailed.diagnostic ?: "(无)"} | 原文前 200 字=${rawAnswer.take(200)}"
                         )
-                        val withNote = finalText + "\n\n⚠️ 模型尝试调用工具但输出格式不规范，本次未能执行（${detailed.diagnostic ?: "格式无法识别"}）。建议关闭「本地工具调用」。"
-                        onToken?.let { cb -> runCatching { cb(withNote) } }
-                        return QuroLlmResult.Text(withNote, reasoning = reasoning)
+                    } else {
+                        QuroDiag.log("LocalEngine", "⚠ llama 工具未触发 | 模型未输出 <tool_call>（sawMarker=false）")
                     }
-                    QuroDiag.log("LocalEngine", "⚠ llama 工具未触发 | 模型未输出 <tool_call>（sawMarker=false）")
                 }
-                QuroLlmResult.Text(finalText, reasoning = reasoning)
+
+                val detectedCalls = toolParse?.calls.orEmpty()
+                // 同 MNN 路径：先把诊断取出来，避免 K2 智能转换后出现多余的 safe call 警告。
+                val parseDiagnostic = toolParse?.diagnostic
+                val parseFailed = toolParse?.sawMarker == true && detectedCalls.isEmpty()
+                val body = when {
+                    detectedCalls.isNotEmpty() -> cleanAnswer
+                    cleanAnswer.isNotBlank() -> cleanAnswer
+                    else -> LOCAL_ANSWER_EMPTY_HINT
+                }
+                val displayText = if (parseFailed) {
+                    body + "\n\n" + localToolParseFailureHint(parseDiagnostic)
+                } else {
+                    body
+                }
+                // 终态无条件把干净正文（已切走思考段 + 剥离明文推理导言 + 剥掉工具调用标记）补推给 UI，
+                // 确保气泡最终态不含 <think> / <tool_call> 残留。
+                onToken?.let { cb -> runCatching { cb(displayText) } }
+                if (detectedCalls.isNotEmpty()) {
+                    return QuroLlmResult.ToolCalls(detectedCalls, reasoning = reasoning)
+                }
+                QuroLlmResult.Text(displayText, reasoning = reasoning)
             }
         } catch (e: Throwable) {
             if (e is CancellationException) throw e
