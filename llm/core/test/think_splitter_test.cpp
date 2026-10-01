@@ -418,6 +418,102 @@ void caseChunkInvariance() {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 运行期标记注入（N8：模型的真实标签）
+// ─────────────────────────────────────────────────────────────────────────────
+// 默认标记集只覆盖 <think>/<thinking>/全角三种形态，而真实模型可能用 [THINK]、
+// <|channel|>analysis<|message|>、<|channel>thought 之类。llama.cpp 的模板
+// detector 知道答案，引擎会把探测到的标签在运行期补进来 —— 那一步必须真的能
+// 把非默认标签切开，否则用非标准标签的模型，思考原文会**直接上屏**。
+void caseRuntimeMarkers() {
+    // 本文件其余用例一律写完全限定名；这里显式引入，只是想让断言读起来短一点。
+    using quro::llm::ThinkSplit;
+    using quro::llm::ThinkSplitter;
+    // ① 未注入时默认集认不出 [THINK] —— 这就是"思考原文上屏"的成因本身
+    {
+        ThinkSplitter s;
+        const ThinkSplit r = s.feed("[THINK]推理[/THINK]正文");
+        checkEq(r.visible, "[THINK]推理[/THINK]正文", "默认集不该认 [THINK]（注入前）");
+        checkEq(r.thinking, "", "默认集下 [THINK] 不是思考标记");
+    }
+
+    // ② 注入后必须切开
+    {
+        ThinkSplitter s;
+        std::vector<ThinkSplitter::Marker> extra;
+        extra.push_back({"[THINK]", "", true});
+        extra.push_back({"[/THINK]", "", false});
+        s.addMarkers(extra);
+        const ThinkSplit r = s.feed("[THINK]推理[/THINK]正文");
+        checkEq(r.thinking, "推理", "注入后 [THINK] 段应归思考");
+        checkEq(r.visible, "正文", "注入后正文里不应再有标签");
+    }
+
+    // ③ 超长标签（28 字节，远超 maxTagLength=16）：走定长匹配，不受该上限约束
+    {
+        ThinkSplitter s;
+        const std::string openTag = "<|channel|>analysis<|message|>";
+        const std::string closeTag = "<|end|>";
+        std::vector<ThinkSplitter::Marker> extra;
+        extra.push_back({openTag, "", true});
+        extra.push_back({closeTag, "", false});
+        s.addMarkers(extra);
+        const ThinkSplit r = s.feed(openTag + "思考内容" + closeTag + "答案");
+        checkEq(r.thinking, "思考内容",
+                "28 字节长标签应能切开（定长匹配不受 maxTagLength 限制）");
+        checkEq(r.visible, "答案", "长标签之后的内容才是正文");
+    }
+
+    // ④ 幂等：引擎每轮渲染 prompt 都会调一次，重复注入**绝不能复位** ——
+    //    否则会把进行中的段打断，思考碎片漏进正文，且只在多轮对话里复现。
+    {
+        ThinkSplitter s;
+        std::vector<ThinkSplitter::Marker> extra;
+        extra.push_back({"[THINK]", "", true});
+        extra.push_back({"[/THINK]", "", false});
+        s.addMarkers(extra);
+        const ThinkSplit first = s.feed("[THINK]半段");
+        s.addMarkers(extra);   // 同样的标记，什么都不该发生
+        const ThinkSplit second = s.feed("继续[/THINK]正文");
+        checkEq(first.thinking + second.thinking, "半段继续", "重复注入不得复位进行中的段");
+        checkEq(second.visible, "正文", "重复注入后仍能正常切回正文");
+    }
+
+    // ⑤ 注入是**并集**：默认标签必须继续有效
+    {
+        ThinkSplitter s;
+        std::vector<ThinkSplitter::Marker> extra;
+        extra.push_back({"[THINK]", "", true});
+        extra.push_back({"[/THINK]", "", false});
+        s.addMarkers(extra);
+        const ThinkSplit a = s.feed("<think>默认段</think>");
+        const ThinkSplit b = s.feed("[THINK]新段[/THINK]尾");
+        checkEq(a.thinking, "默认段", "注入新标记后默认标记必须继续有效");
+        checkEq(b.thinking, "新段", "新标记也要有效");
+        checkEq(b.visible, "尾", "尾段归正文");
+    }
+
+    // ⑥ setConfig 必须复位：未闭合的旧段不能带着旧标记集继续
+    {
+        ThinkSplitter s;
+        s.feed("<think>未闭合");
+        ThinkSplitter::Config cfg;
+        cfg.markers.clear();   // 空 = 用默认集
+        s.setConfig(cfg);
+        const ThinkSplit r = s.feed("裸文本");
+        checkEq(r.visible, "裸文本", "setConfig 必须复位（旧段不能带过来）");
+    }
+
+    // ⑦ 空 markers 的注入是无害 no-op（探测器什么都没给时的常态）
+    {
+        ThinkSplitter s;
+        s.addMarkers({});
+        const ThinkSplit r = s.feed("<think>x</think>y");
+        checkEq(r.thinking, "x", "空注入不得影响默认集工作");
+        checkEq(r.visible, "y", "空注入后正文照常");
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -438,6 +534,7 @@ int main() {
     caseLongFillerBounded();
     caseRepeated();
     caseReset();
+    caseRuntimeMarkers();
     caseChunkInvariance();
     casePerf();
 

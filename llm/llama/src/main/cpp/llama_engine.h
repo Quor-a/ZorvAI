@@ -98,6 +98,30 @@ public:
     /// 关闭工具调用文法，回到自由文本。
     bool clearToolCallGrammar(std::string* err);
 
+    /// 开关思考段（与 MNN 的 setThinkingMode 语义对齐）。
+    ///
+    /// 🔎 supported / supportsThinking() 的**真实语义**（别被上游函数名骗了）：
+    ///   上游 API 叫 common_chat_templates_support_enable_thinking，但它返回的是
+    ///   params.supports_thinking，而后者由 autoparser 解析模板得出 ——
+    ///     chat.cpp:2869  supports_thinking = (autoparser.reasoning.mode != NONE)
+    ///   **与 enable_thinking 的取值毫无关系**。所以它问的是
+    ///   「这个模板**有**思考段结构」，等价于 MNN 侧 MnnModelCapabilities 的
+    ///   emitsThinkBlock（模板会产出 <think> 段），
+    ///   而**不是** supportsThinkingToggle（模板里出现 "enable_thinking" 字面）。
+    ///
+    ///   这个区分是有血债的：MNN 路径的注释记着 v1.0.50 那次修正 —— 拿 toggle
+    ///   语义当开启依据，会把「开了 think 却吐纯文本推理、不吐 <think> 标签」的
+    ///   小模型推进明文推理模式，思考段剥离逻辑完全失效，推理独白直接混进正文。
+    ///   所以驱动层必须用 emits 语义来决策，两端同一口径。
+    ///
+    /// **supported 不影响返回值** —— 配置写入成功即成功，模板是否采用由模板
+    /// 自己决定，这一点与 MNN 侧的 set_config 行为保持一致。
+    bool setThinkingMode(bool enabled, bool* supported, std::string* err);
+
+    /// 本模型模板是否**会产出思考段**（懒探测，结果缓存在会话里）。
+    /// 语义见 setThinkingMode 的说明；驱动层用它决定要不要开思考。
+    bool supportsThinking(std::string* err);
+
     /// 用 GGUF 内嵌的聊天模板渲染 prompt（roles/contents 逐条对应）。
     bool applyChatTemplate(const std::vector<std::string>& roles,
                            const std::vector<std::string>& contents,

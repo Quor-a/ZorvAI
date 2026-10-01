@@ -164,4 +164,97 @@ class MnnModelCapabilitiesTest {
         assertTrue(summary.contains("thinkingToggle="))
         assertTrue(summary.contains("thinkBlock="))
     }
+
+    // ─────────────────── N9：默认标记集**认不出**的思考段标签对 ───────────────────
+
+    /**
+     * `[THINK]` / `[/THINK]` —— 默认标记集（`<think>` / `<thinking>` / 全角）认不出。
+     *
+     * 这是 N9 之前的一个真实缺口：`emitsThinkBlock` 因此判为 false，于是思考开关不开、
+     * 原生分流器也切不开，整段推理会当正文推上屏。现在两条同时兜住：
+     * 能力位为真（开关开），标签注入给原生（切得开）。
+     */
+    @Test
+    fun `bracketed think tags are detected and handed to native splitter`() {
+        val caps = MnnModelCapabilities.probeFromConfig(
+            configWithTemplate("{{ '[THINK]' }}{{ '[/THINK]' }}")
+        )
+
+        assertTrue(caps.emitsThinkBlock)
+        assertEquals(listOf("[THINK]"), caps.thinkOpenTags)
+        assertEquals(listOf("[/THINK]"), caps.thinkCloseTags)
+        assertTrue(caps.note.contains("thinkTags=[THINK]"))
+        // 模板里根本没有 <think> 字面，note 就不该声称命中了它 ——
+        // 诊断日志的价值就是让人不用猜，不能自相矛盾。
+        assertFalse(caps.note.contains("<think>"))
+    }
+
+    /** GPT-OSS 系 channel 写法：开标签 28 字节，靠原生侧「定长匹配」才容纳得下。 */
+    @Test
+    fun `channel style think tags are detected`() {
+        val caps = MnnModelCapabilities.probeFromConfig(
+            configWithTemplate("{{ '<|channel|>analysis<|message|>' }}{{ '<|end|>' }}")
+        )
+
+        assertTrue(caps.emitsThinkBlock)
+        assertEquals(listOf("<|channel|>analysis<|message|>"), caps.thinkOpenTags)
+        assertEquals(listOf("<|end|>"), caps.thinkCloseTags)
+    }
+
+    /** 必须**成对**才算：正文里偶发一个 `[THINK]` 不足以判定模型会发射思考段。 */
+    @Test
+    fun `unpaired think tag does not claim thinking support`() {
+        val caps = MnnModelCapabilities.probeFromConfig(
+            configWithTemplate("{{ '[THINK] 只是注释里提到一次' }}")
+        )
+
+        assertFalse(caps.emitsThinkBlock)
+        assertTrue(caps.thinkOpenTags.isEmpty())
+        assertTrue(caps.thinkCloseTags.isEmpty())
+    }
+
+    /** 默认形态与额外形态并存时两组都要报（并集，不是替换）。 */
+    @Test
+    fun `default and extra think tags coexist`() {
+        val caps = MnnModelCapabilities.probeFromConfig(
+            configWithTemplate("{{ '<think>' }}{{ '[THINK]' }}{{ '[/THINK]' }}")
+        )
+
+        assertTrue(caps.emitsThinkBlock)
+        assertEquals(listOf("[THINK]"), caps.thinkOpenTags)
+        assertTrue(caps.note.contains("<think>"))
+        assertTrue(caps.note.contains("thinkTags=[THINK]"))
+    }
+
+    // ─────────────────── 工具锚点：条件分支的空白控制符变体 ───────────────────
+
+    /**
+     * 只写条件分支、不写循环的模板（`{%- if tools %}`）必须判为支持工具调用。
+     *
+     * 这是本次修掉的一个**真 bug**：锚点曾是子串 `"{% if tools"`，注释还写着
+     * "含 `{%- if tools` 变体"，但那条子串**匹配不到** `{%- if tools %}`
+     * （`{%` 之后多了个空白控制符 `-`）。而 Qwen3 / Hermes 系官方模板写的正是
+     * `{%- if tools %}`。长期没暴露，是因为那些模板同时含 `for tool in tools`，
+     * 被另一条锚点兜住了 —— 一旦模板只写分支不写循环就会误判为"不支持"，工具
+     * 定义被降级成 system 文本注入。
+     */
+    @Test
+    fun `conditional only tools template counts as supported`() {
+        val caps = MnnModelCapabilities.probeFromConfig(
+            configWithTemplate("{%- if tools %}{{ tools | tojson }}{%- endif %}")
+        )
+
+        assertTrue(caps.supportsTools)
+        assertTrue(caps.note.contains("tools"))
+    }
+
+    /** `{%+ if tools %}`（`+` 空白控制符）同样要认，空格数量也不应影响判定。 */
+    @Test
+    fun `plus whitespace control tools condition counts as supported`() {
+        val caps = MnnModelCapabilities.probeFromConfig(
+            configWithTemplate("{%+ if   tools %}{{ tools }}{% endif %}")
+        )
+
+        assertTrue(caps.supportsTools)
+    }
 }

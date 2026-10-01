@@ -162,6 +162,51 @@ class LlamaSession private constructor(
         )
     }
 
+    /**
+     * 装载工具调用文法（GBNF + 惰性触发模式），与 [clearToolCallGrammar] 配对。
+     * 此前 native 侧有完整实现却没有任何可达入口（注册表 + 本层声明双缺），
+     * 工具调用只能靠模型自由发挥 —— 本次接通。
+     *
+     * @param triggerPatterns 命中这些模式后才开始套用文法；空 = 全程约束。
+     */
+    fun setToolCallGrammar(
+        grammar: String,
+        triggerPatterns: List<String> = emptyList()
+    ): Boolean {
+        val ptr: Long
+        synchronized(lock) {
+            checkValid()
+            ptr = sessionPtr
+        }
+
+        return LlamaNative.nativeSetToolCallGrammar(ptr, grammar, triggerPatterns.toTypedArray())
+    }
+
+    /**
+     * 开关思考段（与 MNNLlmSession.setThinkingMode 对齐）。
+     * @return 是否写入成功；模板是否真支持请用 [supportsThinking]。
+     */
+    fun setThinkingMode(enabled: Boolean): Boolean {
+        val ptr: Long
+        synchronized(lock) {
+            checkValid()
+            ptr = sessionPtr
+        }
+
+        return LlamaNative.nativeSetThinkingMode(ptr, enabled)
+    }
+
+    /** 当前模型模板是否支持 enable_thinking（结果由 native 缓存）。 */
+    fun supportsThinking(): Boolean {
+        val ptr: Long
+        synchronized(lock) {
+            checkValid()
+            ptr = sessionPtr
+        }
+
+        return LlamaNative.nativeSupportsThinking(ptr)
+    }
+
     fun clearToolCallGrammar(): Boolean {
         val ptr: Long
         synchronized(lock) {

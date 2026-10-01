@@ -423,4 +423,74 @@ class QuroLocalToolsCodecTest {
         assertEquals("get_weather", result.calls[0].name)
         assertEquals("上海", JSONObject(result.calls[0].arguments).getString("city"))
     }
+
+    // ──────────────── N7 · 思考段 × 工具调用（真实漏网场景）────────────────
+    //
+    // 思考模型（Qwen3 / DeepSeek-R1 系）经常把工具调用写在 <think> 段**内部**：
+    // 先长篇推理"我得调 get_weather"，正文只剩一句"好的"。上层的恢复路径是
+    //   ① 先解析剥离后的正文；
+    //   ② 正文里没有 → 退回**完整原文**再解析一次。
+    // 两条走的是同一个解析器，所以它必须能吞下"被 <think> 包裹的调用"。
+    //
+    // ⚠️ ② 依赖完整原文里**仍然含思考段**。曾有一次改动让 native 侧的思考段
+    //    走独立通道上行、不再进剥离器，rawText() 就永久丢了那一段，② 静默失效
+    //    （不报错，只是工具再也不被调用）。剥离器那侧由 StreamingThinkStripperTest
+    //    守；这里守"解析器确实认得出来"。
+
+    /** 思考段内的 <tool_call> 必须能从完整原文里被抓出来。 */
+    @Test
+    fun `recovers tool call written inside thinking block`() {
+        val raw = "<think>用户想查天气，我需要调用 get_weather。" +
+            "<tool_call>{\"name\": \"get_weather\", \"arguments\": {\"city\": \"北京\"}}</tool_call>" +
+            "</think>好的，我来查一下。"
+
+        val result = QuroLocalToolsCodec.parseDetailed(raw)
+
+        assertEquals(1, result.calls.size)
+        assertEquals("get_weather", result.calls[0].name)
+        assertEquals("北京", JSONObject(result.calls[0].arguments).getString("city"))
+    }
+
+    /** 思考段里两个调用都要抓到（多步编排不能被截断成一个）。 */
+    @Test
+    fun `recovers multiple calls from thinking block`() {
+        val raw = "<think>先查天气再查时间。" +
+            "<tool_call>{\"name\": \"get_weather\", \"arguments\": {\"city\": \"上海\"}}</tool_call>" +
+            "<tool_call>{\"name\": \"get_time\", \"arguments\": {}}</tool_call>" +
+            "</think>马上。"
+
+        val calls = QuroLocalToolsCodec.parseToolCalls(raw)
+
+        assertEquals(2, calls.size)
+        assertEquals(listOf("get_weather", "get_time"), calls.map { it.name })
+    }
+
+    /** 思考段内与正文各有一个调用时，两个都要在（不能只取正文那个）。 */
+    @Test
+    fun `collects calls from both thinking and visible parts`() {
+        val raw = "<think>先查天气" +
+            "<tool_call>{\"name\": \"get_weather\", \"arguments\": {\"city\": \"广州\"}}</tool_call>" +
+            "</think>" +
+            "<tool_call>{\"name\": \"get_time\", \"arguments\": {}}</tool_call>"
+
+        val calls = QuroLocalToolsCodec.parseToolCalls(raw)
+
+        assertEquals(2, calls.size)
+    }
+
+    /**
+     * 结束标签缺失（maxTokens 正好打断在思考段中途）时，
+     * 已经产出的调用不能丢 —— 这是本地小上下文最常见的截断形态。
+     */
+    @Test
+    fun `recovers call when thinking block is truncated`() {
+        val raw = "<think>我需要" +
+            "<tool_call>{\"name\": \"get_weather\", \"arguments\": {\"city\": \"深圳\"}}</tool_call>" +
+            "然后还"
+
+        val result = QuroLocalToolsCodec.parseDetailed(raw)
+
+        assertEquals(1, result.calls.size)
+        assertEquals("深圳", JSONObject(result.calls[0].arguments).getString("city"))
+    }
 }

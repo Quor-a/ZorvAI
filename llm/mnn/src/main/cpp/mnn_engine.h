@@ -132,6 +132,19 @@ public:
     /// 注入配置（等价于 MNN 的 set_config）。可多次调用，必须在 load() 之前。
     bool setConfig(const std::string& configJson, std::string* err);
 
+    /// 注入模型**真实**使用的思考段标签（开 / 闭两组）。
+    ///
+    /// 与 llama 侧的 applyDetectedThinkingTags **同一口径**：那边标签由 llama.cpp 的
+    /// 模板 detector 自动给出，这边由 Kotlin 的 MnnModelCapabilities 从
+    /// `jinja.chat_template` 文本探测后传下来。原生把两组标签并进共用的
+    /// ThinkSplitter（幂等），于是 `[THINK]` / `<|channel|>analysis<|message|>`
+    /// 这类**默认标记集认不出**的形态也能被正确分流。
+    ///
+    /// 空数组 = 什么都不做（探测不到标签时的常态，行为与本改动之前一致）。
+    bool setThinkMarkers(const std::vector<std::string>& openTags,
+                         const std::vector<std::string>& closeTags,
+                         std::string* err);
+
     /// 模型自带 chat template 渲染（单条 user 内容）。
     bool applyChatTemplate(const std::string& userContent, std::string* out,
                            std::string* err);

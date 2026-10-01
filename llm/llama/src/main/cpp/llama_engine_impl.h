@@ -102,6 +102,18 @@ struct Session {
     ToolCallGrammarConfigNative toolCallGrammar;
     common_chat_parser_params toolCallParserParams;
     bool hasToolCallParser = false;
+
+    /// ── 思考段开关（对齐 MNN 的 MNNLlmSession.setThinkingMode）──
+    /// 三态：-1 = 上层未设置（沿用 llama.cpp 默认 true）、0 = 关、1 = 开。
+    /// 为什么不是 bool：MNN 侧不显式调用时模板走的是自身默认分支。若这里写死
+    /// bool true，那么"上层只对 MNN 调了关思考、忘了调 llama"就会静默分歧 ——
+    /// 而两栈分歧正是这次重构要消灭的那类 bug。
+    int32_t thinkingMode = -1;
+
+    /// 模板是否支持 enable_thinking 的懒探测缓存（-1 未探测 / 0 否 / 1 是）。
+    /// 探测要让上游真渲染一次模板（贵），而模板在 load 后不可变，故只算一次；
+    /// releaseResources 里必须连同 chatTemplates 一起失效。
+    int32_t supportsThinking = -1;
     std::atomic_bool cancel{false};
 
     /// ── 思考段 / 正文段 分流（L4，引擎无关实现见 quro/think_splitter.h）──

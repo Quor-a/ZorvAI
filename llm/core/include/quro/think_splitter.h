@@ -199,6 +199,27 @@ public:
     /// 注意 terminator 不含在 prefix 里：`<think >` 这类变体也认。
     static std::vector<Marker> defaultMarkers();
 
+    // ───────────── 运行期改标记集（引擎探测到真实标签后调用）─────────────
+    //
+    /// 把若干额外标记**并进**当前标记集（幂等：同 prefix 只保留一份）。
+    ///
+    /// 用途：引擎从上游探测到模型**真实**使用的思考标签后补进来
+    /// （llama.cpp 的 common_chat_params::thinking_start_tag / thinking_end_tags）。
+    /// 默认集只覆盖 `<think>` / `<thinking>` / 全角三种形态，而真实模型可能用
+    /// `[THINK]`、`<|channel|>analysis<|message|>`、`<|channel>thought` …… ——
+    /// 不补进来的话，那些模型的思考原文会**直接上屏**（分流器认不出开标签，
+    /// 整段推理被当成正文）。
+    ///
+    /// 语义是**并集而非替换**：探测可能为空（非 autoparser 路径），一个模型也
+    /// 可能同时用多种形态；并集在两种情况下都不会退化。
+    ///
+    /// 幂等：引擎每轮渲染 prompt 都会调一次，重复调用**不会复位** ——
+    /// 否则会把进行中的段打断。
+    void addMarkers(const std::vector<Marker>& extra);
+
+    /// 运行期整体替换配置（含复位与匹配缓存重建）。
+    void setConfig(const Config& config);
+
     /// 当前配置（只读）。
     const Config& config() const { return config_; }
 
@@ -233,6 +254,11 @@ private:
 
     /// 确保 expected_ / firstByteTable_ 与 segment_ 一致（不一致就重建）。
     void ensureExpected() const;
+
+    /// 按 config_ 重建 markers_（含 tool_call 两个边界）与那两个下标。
+    /// 构造函数 / setConfig / addMarkers 三处共用 —— 抽出来是为了让「改配置」
+    /// 只有**一条**路径，不会出现"构造函数改了、运行期忘了改"的漂移。
+    void rebuildMarkers();
 
     /// 把 @p text 按当前段归属写进 @p out。
     ///
